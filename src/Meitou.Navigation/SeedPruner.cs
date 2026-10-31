@@ -25,9 +25,10 @@ internal static class SeedPruner
         var queue = new Queue<int>();
         int matched = Match(mesh, g.Seeds, s, keep, queue);
         if (matched == 0 && g.NodeSeeds.Count > 0) matched = Match(mesh, g.NodeSeeds, s, keep, queue);
-        int border = g.TerrainHeight is { } terrain ? MatchBorder(mesh, g, terrain, keep, queue) : 0;
+        // Regions reaching the zone's border at ground level are kept when the zone is published, toward the sides whose neighbour is not loaded
+        // (ExtendBorder), and from the neighbours' kept polygons when it is (ZoneKeptClosure): the cached pruning is the zone's own.
 
-        if (matched == 0 && border == 0 && g.InteriorDestroyed)
+        if (matched == 0 && g.InteriorDestroyed)
         {
             // A destroyed building's interior (no door, so no seed): its ground floor, every region starting within DestroyedFloorBand of the lowest polygon.
             // Its largest region can be an upper floor or wall tops under a roof whose intact collision stays.
@@ -42,13 +43,13 @@ internal static class SeedPruner
             for (int p = 0; p < n; p++) mesh.Kept[p] = bottom[component[p]] <= floor + DestroyedFloorBand;
             return 0;
         }
-        if (matched == 0 && border == 0 && g.ClippedAtBorder)
+        if (matched == 0 && g.ClippedAtBorder)
         {
             // Part of an interior whose doors are across a zone border: the neighbour's kept border edges reach it (ZoneKeptClosure).
             for (int p = 0; p < n; p++) mesh.Kept[p] = false;
             return 0;
         }
-        if (matched == 0 && border == 0)
+        if (matched == 0)
         {
             // "All regions are below the area threshold and too far from a seed point. Keeping the largest region."
             var component = Components(mesh);
@@ -63,16 +64,41 @@ internal static class SeedPruner
         return matched;
     }
 
-    /// <summary>Also keeps the regions of <paramref name="mesh"/> that <paramref name="seeds"/> reach (no fallback); true when a polygon was added.</summary>
-    public static bool Extend(ZoneNavMesh mesh, IReadOnlyList<Vector3> seeds, NavBuildSettings s)
+    /// <summary>Also marks in <paramref name="keep"/> (a kept set over <paramref name="mesh"/>'s polygons) the regions that <paramref name="seeds"/> reach (no fallback); true when a polygon was added.</summary>
+    public static bool Extend(ZoneNavMesh mesh, bool[] keep, IReadOnlyList<Vector3> seeds, NavBuildSettings s)
     {
         if (mesh.PolygonCount == 0 || seeds.Count == 0) return false;
-        var keep = (bool[])mesh.Kept.Clone();
         var queue = new Queue<int>();
         Match(mesh, seeds, s, keep, queue);
         if (queue.Count == 0) return false;
         Spread(mesh, keep, queue);
-        for (int p = 0; p < keep.Length; p++) mesh.Kept[p] = keep[p];
+        return true;
+    }
+
+    /// <summary>
+    /// Marks in <paramref name="keep"/> the regions with an open edge on the zone's border line toward (<paramref name="dx"/>, <paramref name="dz"/>) at ground level
+    /// (the terrain, or the water's height over it, within <see cref="BorderGroundSlack"/>): the stand-in for the neighbour's seeds while that zone is not loaded.
+    /// The original seeds each zone from its built neighbours' open border edges and ships every tile built, so a region that goes on into the next zone is
+    /// kept wherever its seed is; pruned by its own seeds alone, a zone with few of them (Fog Islands 14.26: 1) kept 3 % of the original's area. Roofs and
+    /// walkways crossing the border stay pruned, and so, once the neighbour is loaded and reaches nothing there, does ground enclosed by a building that
+    /// straddles the line (World's End's Ancient Citadel, issue #144; docs/game/pathfinding.md, "Zone borders"). True when a polygon was added.
+    /// </summary>
+    public static bool ExtendBorder(ZoneNavMesh mesh, bool[] keep, int dx, int dz)
+    {
+        if (mesh.Terrain is not { } terrain) return false;
+        var queue = new Queue<int>();
+        foreach (var (p, k) in mesh.BorderEdges(dx, dz, skipLinked: false, all: true))
+        {
+            if (keep[p]) continue;
+            var poly = mesh.Polygons[p];
+            var mid = (mesh.Vertices[poly[k]] + mesh.Vertices[poly[(k + 1) % poly.Length]]) / 2;
+            if (!terrain.TryHeightAt(mid.X, mid.Z, out float ground)) continue;
+            if (MathF.Abs(mid.Y - MathF.Max(ground, WorldWater.Height)) > BorderGroundSlack) continue;
+            keep[p] = true;
+            queue.Enqueue(p);
+        }
+        if (queue.Count == 0) return false;
+        Spread(mesh, keep, queue);
         return true;
     }
 
@@ -113,41 +139,6 @@ internal static class SeedPruner
 
     /// <summary>How far (units) a border edge's middle may be from the ground (the terrain, or the water's height over it) to count as ground level (engine choice).</summary>
     public const float BorderGroundSlack = 30;
-
-    /// <summary>
-    /// Marks the polygons with an open edge on the zone's border line at ground level (queued when newly kept). The original seeds each zone from its built
-    /// neighbours' open border edges and ships every tile built, so a region that goes on into the next zone is kept wherever its seed is; pruned by its own
-    /// seeds alone, a zone with few of them (Fog Islands 14.26: 1) kept 3 % of the original's area. Roofs and walkways crossing the border stay pruned
-    /// (docs/game/pathfinding.md, "Zone borders"). Returns how many polygons it marked.
-    /// </summary>
-    static int MatchBorder(ZoneNavMesh mesh, ZoneGeometry g, Func<float, float, float> terrain, bool[] keep, Queue<int> queue)
-    {
-        const float onLine = 0.5f;
-        int marked = 0;
-        for (int p = 0; p < mesh.PolygonCount; p++)
-        {
-            if (keep[p]) continue;
-            var poly = mesh.Polygons[p];
-            for (int k = 0; k < poly.Length; k++)
-            {
-                if (mesh.Neighbours[p][k] >= 0) continue;
-                var a = mesh.Vertices[poly[k]];
-                var b = mesh.Vertices[poly[(k + 1) % poly.Length]];
-                bool onBorder = MathF.Abs(a.X - g.ZoneMin.X) < onLine && MathF.Abs(b.X - g.ZoneMin.X) < onLine
-                    || MathF.Abs(a.X - g.ZoneMax.X) < onLine && MathF.Abs(b.X - g.ZoneMax.X) < onLine
-                    || MathF.Abs(a.Z - g.ZoneMin.Y) < onLine && MathF.Abs(b.Z - g.ZoneMin.Y) < onLine
-                    || MathF.Abs(a.Z - g.ZoneMax.Y) < onLine && MathF.Abs(b.Z - g.ZoneMax.Y) < onLine;
-                if (!onBorder) continue;
-                var mid = (a + b) / 2;
-                if (MathF.Abs(mid.Y - MathF.Max(terrain(mid.X, mid.Z), WorldWater.Height)) > BorderGroundSlack) continue;
-                keep[p] = true;
-                queue.Enqueue(p);
-                marked++;
-                break;
-            }
-        }
-        return marked;
-    }
 
     static void Spread(ZoneNavMesh mesh, bool[] keep, Queue<int> queue)
     {

@@ -24,7 +24,9 @@ bin in original loader. XML is source of truth. Nonuniform Ogre scale maps(sx,sz
 ## Placement and groups
 
 **Verified** C(x,y,z)=(x,z,-y) wins398-part AABB comparison. World point=building.position+
-building.rotation*(scale*C(globalPose*(localPose*p))). Collision uses BUILDING node, not render
+building.rotation*(scale*C(globalPose*(localPose*p))). **Verified** for a shape with both poses translated (`ShieldBridge_COL.xml`: walkboard triangle
+mesh with localPose translation (845, 124, 0), boxes with globalPose translations; placed tilted at 47.16): the original tile's deck polygons lie at the
+walkboard's deck height to 0.1 ([pathfinding](../game/pathfinding.md), shells). Collision uses BUILDING node, not render
 part offset (**Observed** loader); door uses its own node and parent's scale. File groups are
 not final game groups: loaders assign per part/building/foliage, nav mask0x809de40. Group table
 and shape-to-triangle branches retain floors/stairs/doors/ground/obstacle distinctions. Do not

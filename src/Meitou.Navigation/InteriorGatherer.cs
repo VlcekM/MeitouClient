@@ -35,8 +35,7 @@ internal sealed partial class ZoneGeometryGatherer
         destroyed && part.GetPath("destroyed collision") is { Length: > 0 } dc ? dc : part.GetPath("xml collision");
 
     /// <summary>
-    /// The buildings whose interior reaches into a zone: an <c>interior mask</c> part with collision, and not a gateway (the approximation of
-    /// SHELL_WITH_INTERIOR used by the exterior carvers too), with the mask's box over the zone's. A building over a zone border is built in each zone it
+    /// The buildings whose interior reaches into a zone: shells with an interior (<see cref="IsShellWithInterior"/>), with the mask's box over the zone's. A building over a zone border is built in each zone it
     /// reaches, clipped at the border (<see cref="GatherInterior"/>).
     /// </summary>
     public IReadOnlyList<InteriorSite> InteriorSites(ZoneCoordinate zone)
@@ -47,13 +46,51 @@ internal sealed partial class ZoneGeometryGatherer
         var list = new List<InteriorSite>();
         foreach (var (b, record, position, destroyed) in NearBuildings(zone, min, max, 0))
         {
-            if (record.GetBool("is gateway")) continue;
+            if (!IsShellWithInterior(record)) continue;
             var points = MaskPoints(record, position, b.Rotation);
             if (points.Count < 4) continue;
             if (points.Max(p => p.X) < min.X || points.Min(p => p.X) >= max.X || points.Max(p => p.Z) < min.Y || points.Min(p => p.Z) >= max.Y) continue;
             list.Add(new InteriorSite(b, record, position, destroyed, zone));
         }
         return list;
+    }
+
+    /// <summary>
+    /// Whether a building is a shell with an interior: its interior mask carves the exterior mesh and its inside is built apart (docs/game/pathfinding.md,
+    /// "Generator", carvers and interiors). The original's rule: its <c>interior</c> list is real (<see cref="InteriorOf"/>), it is a plain building (class
+    /// SHELL_WITH_INTERIOR; the interior job leaves out only walls and gates, and no record with a real interior is one), and it has an interior mask with
+    /// collision, the hull both use.
+    /// </summary>
+    public bool IsShellWithInterior(GameRecord building) =>
+        InteriorOf(building) == InteriorKind.Real && IsPlainBuilding(building) && MaskParts(building).Any();
+
+    /// <summary>What a building's <c>interior</c> list makes of it (docs/game/pathfinding.md, "Generator", building shapes).</summary>
+    public enum InteriorKind { None, Blank, Real }
+
+    /// <summary>
+    /// None without an <c>interior</c> list; Blank when the list's first part has no <c>phs or mesh</c> and no <c>parts</c> (the "blank interior" parts of
+    /// walls, gates, the Ancient Factory, Cannibal Shack); Real otherwise.
+    /// </summary>
+    public InteriorKind InteriorOf(GameRecord building)
+    {
+        var list = building.GetReferences("interior");
+        if (list.Count == 0) return InteriorKind.None;
+        return db.Find(list[0].TargetStringId) is { } first
+            && (first.GetPath("phs or mesh").Length > 0 || first.GetString("phs or mesh").Length > 0 || first.GetReferences("parts").Count > 0)
+            ? InteriorKind.Real : InteriorKind.Blank;
+    }
+
+    /// <summary>
+    /// Whether the original makes the building a plain <c>Building</c> (class 0, which an <c>interior</c> list turns into SHELL_WITH_INTERIOR): not a wall gate
+    /// (a gateway), not <c>links together</c> (a wall), no <c>farm data</c>, and its <c>functionality</c>'s <c>function</c> absent, BF_ANY or BF_FLUFF.
+    /// </summary>
+    bool IsPlainBuilding(GameRecord building)
+    {
+        if (building.GetBool("is wall gate") || building.GetBool("links together") || building.GetReferences("farm data").Count > 0) return false;
+        var functionality = building.GetReferences("functionality");
+        if (functionality.Count == 0) return true;
+        int function = db.Find(functionality[0].TargetStringId)?.GetInt("function") ?? 0;
+        return function is 0 or 18;
     }
 
     /// <summary>The world-space vertices of a building's interior mask shapes.</summary>
@@ -83,7 +120,9 @@ internal sealed partial class ZoneGeometryGatherer
     /// square of whole tiles; where the hull crosses the zone's border the box ends on the border line, so the part beyond is the neighbour zone's and the
     /// two meet like the exteriors do (border links, <see cref="ZoneKeptClosure"/>). Null when the building has no usable hull in the zone.
     /// </summary>
-    public ZoneGeometry? GatherInterior(InteriorSite site, float tileWorld, float pad = 12, float agentHeight = 18)
+    /// <param name="ownOnly">Debug: only the building's own shapes, no furniture (the debug tool's <c>--own-only</c>).</param>
+    /// <param name="trackParts">Debug: record each part's triangle range (<see cref="ZoneGeometry.PartRanges"/>).</param>
+    public ZoneGeometry? GatherInterior(InteriorSite site, float tileWorld, float pad = 12, float agentHeight = 18, bool ownOnly = false, bool trackParts = false)
     {
         var node = NodeMatrix(site.Record, site.Position, site.Placement.Rotation);
         var points = MaskPoints(site.Record, site.Position, site.Placement.Rotation);
@@ -120,7 +159,7 @@ internal sealed partial class ZoneGeometryGatherer
         }
         var g = new ZoneGeometry
         {
-            Zone = site.Zone, ZoneMin = boxMin, ZoneMax = boxMin + new Vector2(side), Margin = 8, InteriorHull = hull, InteriorOf = site.Placement.Key,
+            Zone = site.Zone, ZoneMin = boxMin, ZoneMax = boxMin + new Vector2(side), Margin = 8, InteriorHull = hull, InteriorOf = site.Placement.Key, TrackParts = ownOnly || trackParts,
             ClippedAtBorder = crossLowX || crossLowZ || crossHighX || crossHighZ, InteriorDestroyed = site.Destroyed, DestroyedOutline = outline,
             InteriorDoorless = site.Destroyed ? outline is not null : !site.Record.GetReferences("doors").Any(),
         };
@@ -128,7 +167,7 @@ internal sealed partial class ZoneGeometryGatherer
         uint mask = site.Destroyed ? DestroyedInteriorGroupMask : InteriorGroupMask;
         AddBuilding(g, site.Record, site.Placement.Key, site.Position, site.Placement.Rotation, site.Destroyed, new InteriorContext(site.Placement.Key, site.Destroyed, mask, Own: true));
         // Its layouts' furniture: walkable pieces give floor, the rest cut. The first shopkeeper or general node is the seed when no door's is (SeedPruner).
-        foreach (var (item, at, rotation) in LayoutObjects(site.Placement, site.Record, site.Position, site.Destroyed))
+        foreach (var (item, at, rotation) in ownOnly ? [] : LayoutObjects(site.Placement, site.Record, site.Position, site.Destroyed))
         {
             if (g.NodeSeeds.Count == 0 && item.Building.GetBool("is node") && item.Building.GetInt("node type") is 0 or 1) g.NodeSeeds.Add(at);
             AddBuilding(g, item.Building, $"{site.Placement.Key}/{item.InstanceId}", at, rotation, destroyed: false, new InteriorContext(site.Placement.Key, false, mask, Own: false), item.Floor);
@@ -137,7 +176,7 @@ internal sealed partial class ZoneGeometryGatherer
         // Other buildings standing inside the hull (furniture placed in the zone file): walkable ones give floor, the rest cut.
         var (ox, oz) = WorldLayout.ZoneOrigin(site.Placement.Zone);
         var zmin = new Vector2((float)ox, (float)oz);
-        foreach (var (b, record, position, destroyed) in NearBuildings(site.Placement.Zone, zmin, zmin + new Vector2(WorldLayout.ZoneSize), 0))
+        foreach (var (b, record, position, destroyed) in ownOnly ? [] : NearBuildings(site.Placement.Zone, zmin, zmin + new Vector2(WorldLayout.ZoneSize), 0))
         {
             if (b.Key == site.Placement.Key || position.Y < yMin - 30 || position.Y > yMax + 30) continue;
             if (!NavGeometry.InsideConvex(hull.Polygon, new Vector2(position.X, position.Z), 5)) continue;

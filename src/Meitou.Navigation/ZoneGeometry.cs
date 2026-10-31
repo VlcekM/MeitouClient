@@ -101,6 +101,10 @@ internal sealed class ZoneGeometry
     /// (<see cref="ZoneKeptClosure"/>).
     /// </summary>
     public bool ClippedAtBorder { get; init; }
+    /// <summary>Debug (the navmesh tool): when set, every part's triangle range is recorded in <see cref="PartRanges"/>.</summary>
+    public bool TrackParts { get; init; }
+    /// <summary>Debug: per part with collision, its owner and part names, collision path and the triangles [First, Last) it emitted.</summary>
+    public List<(string Owner, string Part, string Path, int First, int Last)> PartRanges { get; } = [];
     /// <summary>
     /// For the interior of a destroyed building: no seed keeps its ground floor (instead of the largest region, <see cref="SeedPruner.DestroyedFloorBand"/>). It has
     /// no door, hence no seed, and its largest region can be an upper floor or wall tops under a roof whose intact collision stays (docs/game/pathfinding.md,
@@ -117,8 +121,6 @@ internal sealed class ZoneGeometry
     /// on the hull's line (docs/game/pathfinding.md, "Door joins").
     /// </summary>
     public bool InteriorDoorless { get; init; }
-    /// <summary>For a zone's exterior mesh: the terrain height; regions with an edge on the zone's border at ground level are kept (<see cref="SeedPruner"/>).</summary>
-    public Func<float, float, float>? TerrainHeight { get; init; }
     /// <summary>For a zone's exterior mesh: its heightmap samples (safe from the tile threads); walkable spans deep under the terrain are removed.</summary>
     public HeightWindow? Ground { get; init; }
 

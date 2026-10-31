@@ -962,4 +962,4 @@ original falls back to the template.
   range mode, and what `FUN_14025c6d0` (holding dismantle work) tests.
 - Event types of the queue at `DAT_1421346d8` other than 8 (research progress) and 11 (build work).
 - `vfunc_0x520` (a consumer counted as active): 1 for every class but `LightBuilding`, whose answer is in [lights](../formats/lights.md#when-a-light-is-on).
-- Option slider defaults; the third value of reference triples; the record field of `BuildingClassType`.
+- Option slider defaults; the third value of reference triples.

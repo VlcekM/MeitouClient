@@ -6,7 +6,7 @@ namespace Meitou.Tests.Navigation;
 
 /// <summary>
 /// Zones loaded without their neighbours (docs/game/pathfinding.md "Zone borders", "Long routes"), on the Fog Islands (zone 14.26, one seed) of the install:
-/// a zone built alone keeps the ground that goes on into the next zone, and a goal in another block of loaded zones is a long route through the zones between.
+/// a zone published alone keeps the ground that goes on into the next zone, and a goal in another block of loaded zones is a long route through the zones between.
 /// </summary>
 [Slow]
 public class ZoneBorderTests
@@ -22,13 +22,16 @@ public class ZoneBorderTests
         Assert.SkipWhen(install is null, "Kenshi install not found");
         using var gatherer = new ZoneGeometryGatherer(install!, InstallData.FullLoadOrder!, InstallData.Levels!, new CollisionCache(install!));
         var g = gatherer.Gather(FogIslands);
-        var mesh = NavMeshPipeline.BuildZone(gatherer, g, new NavBuildSettings(), out _, interiors: false);
+        var settings = new NavBuildSettings();
+        var built = NavMeshPipeline.BuildZone(gatherer, g, settings, out _, interiors: false);
         Assert.True(g.Seeds.Count <= 1, $"{g.Seeds.Count} seeds: no longer the one-seed case");
+        // The built mesh is pruned by its own seed only (269 of 8,292 polygons); the border rule applies when the zone is published with no neighbour loaded.
+        Assert.True(built.KeptCount < built.PolygonCount / 2, $"{built.KeptCount} of {built.PolygonCount} polygons kept before publishing");
+        var mesh = ZoneKeptClosure.ResolveAlone(built, settings);
         var here = new List<int>();
         mesh.PolygonsAt(Inland.X, Inland.Z, here);
         Assert.NotEmpty(here);
-        // Own seed alone: 598 of 12,862 polygons.
-        Assert.True(mesh.KeptCount > mesh.PolygonCount / 2, $"{mesh.KeptCount} of {mesh.PolygonCount} polygons kept");
+        Assert.True(mesh.KeptCount > built.PolygonCount / 2, $"{mesh.KeptCount} of {built.PolygonCount} polygons kept");
     }
 
     [Fact]

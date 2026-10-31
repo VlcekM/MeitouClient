@@ -510,12 +510,14 @@ is not stopped, and an unwalkable result falls back to its own step.
 ## Navmesh
 
 Own DotRecast builder/cache (`Meitou.Navigation`), not Havok runtime. Default cells 2, height 1,
-48-cell tiles, agent height 18/max climb 5; ground/water/door areas. A* checks portal clearance
-(radius per wall end, default radius 4), water factor and doors. `NavAdapter` exposes simulation interfaces;
+48-cell tiles (a building interior is one tile), agent height 18/max climb 5 (two cells connect over a shared free space of 18 − 5); ground/water/door
+areas. A* checks portal clearance (radius per wall end, default radius 4), water factor and doors. `NavAdapter` exposes simulation interfaces;
 `ZoneGate` holds population until ready. Collision and world placement rules:
 [collision.md](formats/collision.md), [pathfinding.md](game/pathfinding.md).
 Cache key: the zone's building hash, the build settings and a content hash (the data files in load order, `seeds.def` and the
-height, blend, biome and overlay maps by size and write time, the DotRecast version). Unloading a zone skips its queued build;
+height, blend, biome and overlay maps by size and write time, the DotRecast version). The cache holds the zone's own pruning; the kept set of every loaded
+zone is resolved again whenever one is published or unloaded (the border rule toward unloaded sides, the neighbours' kept edges, `KeepAt` points;
+[zone borders](game/pathfinding.md#own-builder)). Unloading a zone skips its queued build;
 a running one is still cached but not published, and its task is cancelled.
 
 ## Animation

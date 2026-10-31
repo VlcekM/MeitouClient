@@ -229,7 +229,7 @@ Authority: `tools/Meitou.Tools/Program.cs` (dispatch and usage), with the option
 | `image-diff <a.png> <b.png> [diff.png]` | | Mean difference and share of pixels over 12/255. |
 | `world-map <png> [step]` | step, default 16 | Top-down world map. |
 
-`navmesh` options: `--zone x,z`, `--town name`, `--around n`, `--geometry`, `--obj f.obj`, `--png f.png`, `--scale u`, `--box x0,z0,x1,z1`, `--path x0,z0,x1,z1` with `--from-y y`, `--to-y y`, `--closed`, `--near x,z,radius`, `--no-interiors`, `--repeat n`, `--fingerprint` (SHA-256 of the cache files), `--compare x,z ...`, `--verbose`.
+`navmesh` options: `--zone x,z`, `--town name`, `--around n`, `--geometry`, `--obj f.obj`, `--png f.png`, `--scale u`, `--box x0,z0,x1,z1`, `--path x0,z0,x1,z1` with `--from-y y`, `--to-y y`, `--closed`, `--near x,z,radius` (the buildings, carvers and solids reaching the point), `--no-interiors`, `--interior key` (one building's interior: parts, components, coverage), `--compare-interiors x,z ...` (the original tiles' interior faces our kept polygons cover; per group under 90 % the building and its uncovered faces by height, pruned or absent; with `--around n` the neighbours resolved too; `--verbose` each face and the furniture standing on original faces), `--repeat n`, `--fingerprint` (SHA-256 of the cache files), `--compare x,z ...`, `--own-only` (the building's own shapes only, no furniture or neighbouring buildings), `--verbose`; build settings (`NavBuildSettings`): `--cell u`, `--climb u`, `--tile n` (cells per tile), `--min-region n`, `--merge-region n` (region areas in cells), `--simplify e` (contour error in cells).
 
 `weather` options: `--region name`, `--at x,z`, `--days d0 d1`, `--seed n`, `--list` (regions and calendars), `--extents`.
 

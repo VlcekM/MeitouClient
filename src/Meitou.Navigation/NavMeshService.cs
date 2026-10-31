@@ -33,8 +33,11 @@ internal sealed class NavMeshService : IDisposable
     readonly ConcurrentDictionary<ZoneCoordinate, TaskCompletionSource<NavZoneReady>> pending = new();
     readonly Thread worker;
     readonly object publishLock = new();
-    // The loaded zones' meshes with their pruned polygons, for joining kept regions across borders (worker thread and Unload, under publishLock).
+    // The loaded zones' meshes with their pruned polygons, for resolving the kept regions (worker thread, KeepAt and Unload, under publishLock).
     readonly Dictionary<ZoneCoordinate, ZoneNavMesh> full = [];
+    // The kept sets the loaded world was published with, and the points whose regions KeepAt keeps.
+    readonly Dictionary<ZoneCoordinate, bool[]> live = [];
+    readonly Dictionary<ZoneCoordinate, List<Vector3>> standing = [];
     volatile bool disposed;
 
     public NavMeshService(GameInstall install, GameDatabase db, WorldLevelData levels, NavmeshWalkability walkability, NavBuildSettings? settings = null, NavMeshCache? cache = null,
@@ -94,13 +97,28 @@ internal sealed class NavMeshService : IDisposable
         var zone = WorldLayout.ZoneOf(at.X, at.Z);
         lock (publishLock)
         {
-            if (!full.TryGetValue(zone, out var mesh) || Walkability.World.Find(zone) is null || !SeedPruner.Extend(mesh, [at], Settings)) return false;
-            var world = Walkability.World;
-            foreach (var other in ZoneKeptClosure.Spread(full, zone, Settings))
-                if (other != zone && world.Find(other) is not null) world = world.With(full[other].WithoutPruned());
-            Walkability.SetWorld(world.With(mesh.WithoutPruned()));
+            if (!full.TryGetValue(zone, out var mesh) || !live.TryGetValue(zone, out var kept) || Walkability.World.Find(zone) is null) return false;
+            var test = (bool[])kept.Clone();
+            if (!SeedPruner.Extend(mesh, test, [at], Settings)) return false;
+            (standing.TryGetValue(zone, out var points) ? points : standing[zone] = []).Add(at);
+            Walkability.SetWorld(Publish(Walkability.World));
             return true;
         }
+    }
+
+    /// <summary>
+    /// Resolves the loaded zones' kept sets (<see cref="ZoneKeptClosure.Resolve"/>) and returns <paramref name="world"/> with every zone whose set changed, or
+    /// which it lacks, published again (<see cref="NavWorld.With"/> relinks its borders). Under <see cref="publishLock"/>.
+    /// </summary>
+    NavWorld Publish(NavWorld world)
+    {
+        foreach (var (zone, keep) in ZoneKeptClosure.Resolve(full, Settings, standing))
+        {
+            if (live.TryGetValue(zone, out var before) && before.AsSpan().SequenceEqual(keep) && world.Find(zone) is not null) continue;
+            live[zone] = keep;
+            world = world.With(full[zone].WithKept(keep).WithoutPruned());
+        }
+        return world;
     }
 
     /// <summary>
@@ -112,9 +130,13 @@ internal sealed class NavMeshService : IDisposable
         TaskCompletionSource<NavZoneReady>? tcs;
         lock (publishLock)
         {
-            Walkability.SetWorld(Walkability.World.Without(zone));
+            var world = Walkability.World.Without(zone);
             full.Remove(zone);
+            live.Remove(zone);
+            standing.Remove(zone);
             pending.TryRemove(zone, out tcs);
+            // Its neighbours' border regions toward it are kept again.
+            Walkability.SetWorld(full.Count > 0 ? Publish(world) : world);
         }
         tcs?.TrySetCanceled();
     }
@@ -152,13 +174,10 @@ internal sealed class NavMeshService : IDisposable
                     // Unloaded while it was built: only the cache keeps it (in `full` it would spread kept regions into its neighbours).
                     if (!pending.TryRemove(zone, out tcs)) continue;
                     full[zone] = mesh;
-                    var world = Walkability.World;
-                    // Neighbours whose kept regions grew from this zone's border are published again (With replaces them and relinks their borders).
-                    foreach (var other in ZoneKeptClosure.Spread(full, zone, Settings))
-                        if (other != zone && world.Find(other) is not null) world = world.With(full[other].WithoutPruned());
-                    var own = mesh.WithoutPruned();
-                    polygons = own.PolygonCount;
-                    Walkability.SetWorld(world.With(own));
+                    // Neighbours whose kept regions changed with this zone (grown from its border, or no longer kept toward it) are published again.
+                    var world = Publish(Walkability.World);
+                    polygons = world.Find(zone)!.PolygonCount;
+                    Walkability.SetWorld(world);
                 }
                 var ready = new NavZoneReady(zone, origin, watch.Elapsed.TotalMilliseconds, polygons);
                 tcs.TrySetResult(ready);
