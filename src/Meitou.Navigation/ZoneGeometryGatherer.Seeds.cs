@@ -78,9 +78,16 @@ internal sealed partial class ZoneGeometryGatherer
     {
         AddDoorMarkerSeeds(g);
         float water = WorldWater.Height;
-        // The original's ray rule (FUN_1403d4dd0): a seed.def point without a height (Y -99) that a ray from above hits on a building floor is moved onto it,
-        // one with a height that hits a building is dropped. Our building triangles are all the zone's building shapes of the mask, not only groups 9 and 10 (approximation).
-        bool HitsBuilding(float x, float z, out float y) => RayDown(g, x, z, highest: true, float.MinValue, g.BuildingFirstTriangle, g.BuildingLastTriangle, out y, anyArea: true);
+        // The original's ray rule (FUN_1403d4dd0): a seed.def point without a height (Y -99) that a ray from above hits on a floor-0/1 building part (groups 9
+        // and 10) is moved onto it, one with a height that hits one is dropped. A roof, an unwalkable roof (27), stairs or furniture does not count.
+        bool HitsBuilding(float x, float z, out float y)
+        {
+            y = float.MinValue;
+            bool hit = false;
+            foreach (var (first, last) in g.FloorRanges)
+                if (RayDown(g, x, z, highest: true, float.MinValue, first, last, out float h, anyArea: true) && h > y) { y = h; hit = true; }
+            return hit;
+        }
         var fileSeeds = FileSeeds(g.Zone);
         foreach (var s in fileSeeds)
         {

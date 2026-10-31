@@ -350,8 +350,10 @@ in the original but not reached in ours. **Observed** (225 zones, 1090 groups, 1
 interior (14.5 Outposts: our ruins cover 13 % of their faces), so those tiles were built with the building standing (**Unknown** how the original
 handles them). Of the 18 intact ones, by cause (**Observed**, `--interior`, `--probe`, the original's connection edges): unseeded doorless
 interiors (Ancient Labs `28.43:2-`, `37.35:2-`, Ash Domes `54.59:2-`, `4-`: no door, no node, so nothing of theirs was kept and a join took only kept
-polygons) are now joined by the rule below; Hive Commune Huts `39.54:44..54-` open onto a slope where the original has ground (34420,103262: its
-polygon at 1586) and ours none; Storm House `27.22:1821-`'s door landing (520..525) is cut off from its steps by a 5..6 step, a region of its own;
+polygons) are now joined by the rule below; Hive Commune Huts `39.54:44..54-` stood in a village whose ground was pruned: 6 of its 9 `seeds.def`
+points were dropped by the seed ray rule, which tested every building triangle, though their hits were roofs and domes 17..68 above them (the slope
+outside the huts is 22..40° in the original's polygons and ours, not too steep); the rule now tests floor-0/1 parts (groups 9 and 10) only, as the
+original (Generator, seeds), 4 are dropped, the zone keeps 6609 of 8122 polygons (778 before) and all six huts are reached; Storm House `27.22:1821-`'s door landing (520..525) is cut off from its steps by a 5..6 step, a region of its own;
 Stephouse `18.9:29-` and its neighbours `13-`, `27-` stand sunk 12 below the terrain at the door, where the original's interior edge meets the
 terrain's height (1630 against our floor 1611); Outpost s-I `24.18:8-` has its door shape 170 below its floor (painter y -84..-62, the original's
 edges at 100); `22.11:2-`, `24.18:15-` and `43.49:2-` (the original's exterior reaches 25 inside our hull there) are not examined further.

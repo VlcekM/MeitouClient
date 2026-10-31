@@ -147,6 +147,8 @@ internal sealed class ZoneGeometry
 
     /// <summary>The range of triangles (in triangle numbers) that came from buildings; for the seed rays.</summary>
     public int BuildingFirstTriangle, BuildingLastTriangle;
+    /// <summary>The triangle ranges of the exterior's floor-0 and floor-1 building parts (groups 9 and 10): what the seed ray rule tests.</summary>
+    public List<(int First, int Last)> FloorRanges { get; } = [];
     /// <summary>Hash of the zone's buildings (placement, rotation, record), the cache key of the built mesh (<see cref="ZoneGeometryGatherer.BuildingHash"/>); 0 for an interior mesh.</summary>
     public uint BuildingHash { get; set; }
     public GatherStats Stats { get; } = new();

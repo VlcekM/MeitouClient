@@ -176,7 +176,9 @@ internal sealed partial class ZoneGeometryGatherer
             if (((IncludedGroupMask | (upper ? UpperContentsMask : 0)) & (1u << group)) == 0) continue;
             g.Stats.Shapes++;
             bool walkable = mode == PathMode.Walkable && group != 27 && (open || group == 9 || group == 19);
+            int shapeFirst = g.TriangleCount;
             AddShape(g, shape, node, walkable ? BuildingSlopeDegrees : 0, carve: CarveConvexObstacles && !walkable);
+            if (group is 9 or 10 && g.TriangleCount > shapeFirst) g.FloorRanges.Add((shapeFirst, g.TriangleCount));
         }
         if (g.TrackParts && g.TriangleCount > firstTriangle) g.PartRanges.Add((owner.Name, part.Name, path, firstTriangle, g.TriangleCount));
         for (int i = firstSolid; i < g.Solids.Count; i++) g.Solids[i].Owner = $"{instanceId} {owner.Name} / {part.Name} (group {group}, mode {(int)mode})";
