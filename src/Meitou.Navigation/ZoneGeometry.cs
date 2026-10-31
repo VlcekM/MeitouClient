@@ -44,7 +44,7 @@ internal sealed class NavSolid(Vector4[] planes, Vector2 min, Vector2 max)
     public Vector4[] Planes { get; } = planes;
     /// <summary>Debug (the navmesh tool): the placement, owner and part the shape came from.</summary>
     public string? Owner { get; set; }
-    /// <summary>A map feature's shape (not a building's): a feature's surface running inside it does not lose its seam (<see cref="NavMeshSolid"/>).</summary>
+    /// <summary>A map feature's or foliage shape, not a building's: a feature's surface running inside it keeps its seam (<see cref="NavMeshSolid"/>).</summary>
     public bool Feature { get; set; }
     /// <summary>The shape's box on (X, Z).</summary>
     public Vector2 Min { get; } = min;
@@ -69,7 +69,7 @@ internal sealed class NavMeshSolid(Vector3[] triangles, Vector2 min, Vector2 max
 /// <summary>Counters of what a gather found, for logs and the debug tool.</summary>
 internal sealed class GatherStats
 {
-    public int Buildings, PartsWithCollision, Shapes, FoliageInstances, FoliageShapes, FoliageCutters, MissingFiles;
+    public int Buildings, PartsWithCollision, Shapes, FoliageInstances, FoliageShapes, FoliageMeshes, FoliageCutters, MissingFiles;
     public int WalkableTriangles, CuttingTriangles, TerrainTriangles, WaterTriangles;
     public int Carvers, Painters, DoorSeeds, SeedsDropped, WallSeeds, Solids, MapFeatures;
 }

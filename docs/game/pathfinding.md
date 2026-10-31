@@ -303,6 +303,11 @@ z 66,200..66,500 reached where the tube's 24° top rises out of the wall walkway
 solid, its surface within 2 cells (`FeatureSeamCells`) is removed, so the walkway and the feature are not neighbours; the tube then keeps 1,328 samples,
 34.46's floors under floors 5,183 → 544 (510 before features), other zones within 0.1 %. The coarse route's footprints and ragdoll collision do not take
 features yet.
+**Foliage meshes**: the same inside test applies to the triangle meshes of walkable foliage (FOLIAGE_MESH `walkable`), not to obstacle foliage (engine choice
+from the tiles). **Observed** (`--compare`): in 18.39 (Swamp Village; 371 of 383 foliage shapes are meshes, open below) the water and ground under walkable
+foliage domes (e.g. -60348,34444: water 100 under a face at 205) are ours only; with the test ours-only falls 6.6 → 5.0 %, floors under floors 395 → 286,
+original-only unchanged; 21.42 within 0.1 %. Obstacle foliage meshes are canopies open below: in 18.35 (Squin) the test removed ground the tile keeps
+(original-only 0.3 → 1.2 %, e.g. -60300,15908, terrain 421 under a face at 472), and closed obstacle meshes changed nothing in 18.39, 18.35, 21.42, 23.22.
 **Compare** (`meitou-tools navmesh --compare x,z ...`): samples each zone every 8 units against `tileX.Y.hkt`: points on both, only ours, only the
 original's, ours-only points in a building footprint, and points where ours has more layers than the original with one 10+ under our top (floors under
 floors). Interiors are not read from the tiles, so our interior floors count as ours-only; the original's big polygons float up to ~20 over hollows, so

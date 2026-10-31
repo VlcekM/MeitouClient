@@ -197,7 +197,7 @@ internal sealed partial class ZoneGeometryGatherer
     /// </summary>
     const float CarverDrop = 60;
 
-    /// <param name="meshSolid">A triangle mesh that encloses a volume (a map feature's rock) also removes the floor inside it (<see cref="NavMeshSolid"/>).</param>
+    /// <param name="meshSolid">A triangle mesh that encloses a volume (a map feature's rock, walkable foliage) also removes the floor inside it (<see cref="NavMeshSolid"/>).</param>
     void AddShape(ZoneGeometry g, PreparedShape shape, Matrix4x4 node, float walkableSlope, bool carve, bool meshSolid = false)
     {
         var pts = new Vector3[shape.Vertices.Length];
