@@ -873,6 +873,8 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     sealed class MeshAsset
     {
         public required FoliageMesh Mesh;
+        /// <summary>Its meshes are welded (<see cref="MeshWeld"/>, as it was when the decode began): its LOD levels must be made from the same vertices.</summary>
+        public bool Weld;
         public Task<(Model? Main, Model? Leaves)>? Job;
         public GpuMesh? Main, Leaves;
         public bool Resident, Failed, Uploading;
@@ -963,16 +965,22 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
             a.LeavesMaterial = new FoliageMaterial(textures.Get(mesh.LeavesTexture, false, deferred: true), textures.Get(mesh.LeavesNormal, false, deferred: true), null, null,
                 mesh.LeavesAlphaThreshold / 255f, true, false, Vector2.One, false, 0, MeshSurface.Foliage);
         string main = mesh.MeshPath, leaves = mesh.LeavesMesh ?? "";
-        a.Job = BackgroundWork.Run(() => (DecodeTrimmed(main, mesh, false), leaves.Length > 0 ? DecodeTrimmed(leaves, mesh, true) : null));
+        bool weld = a.Weld = MeshWeld.Enabled;
+        a.Job = BackgroundWork.Run(() => (DecodeTrimmed(main, mesh, false, weld), leaves.Length > 0 ? DecodeTrimmed(leaves, mesh, true, weld) : null));
         decoding.Add(a);
         return a;
     }
 
-    Model? Decode(string name)
+    Model? Decode(string name, bool weld)
     {
         var path = assets.Find(name) ?? assets.Find(Path.GetFileName(name.Replace('\\', '/')));
         if (path is null) { lock (Messages) Messages.Add($"foliage mesh not found: {name}"); return null; }
-        try { return Model.Build(OgreMeshReader.ReadFile(path), null); }
+        try
+        {
+            var mesh = OgreMeshReader.ReadFile(path);
+            if (weld) OgreMeshWeld.Apply(mesh);
+            return Model.Build(mesh, null);
+        }
         catch (Exception e) when (e is OgreFormatException or EndOfStreamException or IOException or InvalidDataException)
         {
             lock (Messages) Messages.Add($"foliage mesh {name}: {e.Message}");
@@ -1153,7 +1161,8 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         if (a.Resident || a.Failed || a.Job is not null || a.Uploading || guard is { Streaming: false }) return;
         string main = a.Mesh.MeshPath, leaves = a.Mesh.LeavesMesh ?? "";
         a.LastUsed = Environment.TickCount64;
-        a.Job = BackgroundWork.Run(() => (DecodeTrimmed(main, a.Mesh, false), leaves.Length > 0 ? DecodeTrimmed(leaves, a.Mesh, true) : null));
+        bool weld = a.Weld = MeshWeld.Enabled;
+        a.Job = BackgroundWork.Run(() => (DecodeTrimmed(main, a.Mesh, false, weld), leaves.Length > 0 ? DecodeTrimmed(leaves, a.Mesh, true, weld) : null));
         decoding.Add(a);
         meshReloads++;
     }

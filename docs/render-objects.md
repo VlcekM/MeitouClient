@@ -17,6 +17,13 @@ bakes 44 bytes (normal and tangent snorm16, colour half), characters 64 (colour 
 **Verified** (viewer, The Hub, two cameras): renders differ from the float layout less than two float-layout runs differ from each
 other; resident object meshes 174 → 98 MB.
 
+Switch `weld` (Meitou): objects, foliage, characters and debris weld their meshes as they load (`OgreMeshWeld`): vertices equal in
+everything but the tangent frame (same handedness, bone assignments and pose offsets) become one with the normalized sum of their
+tangents; indices, generated LOD levels, bone assignments and poses are renumbered. Faithful keeps the files' vertices. Read at
+decode, so a change applies to meshes loaded after it; LOD caches key on it (`MeshWeld.CacheVariant`). **Verified** (viewer, The
+Hub, TAA off): Faithful matches the build without the switch within run-to-run noise; Meitou changes buildings by 0.06/255 mean,
+object meshes 98 → 50 MB. About 115 ns per vertex on the decode thread.
+
 Faithful uses researched object/part distances; Meitou `reach` extends size-aware ranges and
 distant landmarks/towns. Distant town stand-ins fade separately from real parts. Source/manual
 and generated levels use projected demand with stable transitions. Do not treat a shorter part

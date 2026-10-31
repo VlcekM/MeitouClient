@@ -301,6 +301,8 @@ sealed unsafe class ObjectMeshCache(IGpuContext gpuContext, AssetLocator assets,
             lock (Messages) Messages.Add($"mesh {name}: {e.Message}");
             return null;
         }
+        bool weld = MeshWeld.Enabled;
+        if (weld) OgreMeshWeld.Apply(mesh);
         var model = Model.Build(mesh, null);
         if (distant)
             foreach (var part in model.Parts)
@@ -316,7 +318,7 @@ sealed unsafe class ObjectMeshCache(IGpuContext gpuContext, AssetLocator assets,
         var levels = MeshLod.Levels(mesh);
         // Generated levels among the file's (docs/render-objects.md, "Generated levels"): a mesh drawn through the normal path, not a distant one, without a skeleton.
         LodCurve? curve = null;
-        if (depth == 0 && !distant && !keep && mesh.SkeletonName is null && ObjectLodGen.PlanFor(name, path, model, radius, levels, PixelsPerRadian) is { } plan)
+        if (depth == 0 && !distant && !keep && mesh.SkeletonName is null && ObjectLodGen.PlanFor(name + MeshWeld.CacheVariant(weld), path, model, radius, levels, PixelsPerRadian, MeshWeld.CacheVariant(weld)) is { } plan)
         {
             levels = ObjectLodGen.Apply(plan, model, levels);
             curve = plan.Curve;

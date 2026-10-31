@@ -371,7 +371,11 @@ public sealed unsafe class DebrisRenderer : IDisposable
         Mesh? mesh = null;
         try
         {
-            if (find(Path.GetFileName(file.Replace('\\', '/'))) is { } path) mesh = Build(file, materialOf ?? file, OgreMeshReader.ReadFile(path), limb);
+            if (find(Path.GetFileName(file.Replace('\\', '/'))) is { } path) {
+                var ogre = OgreMeshReader.ReadFile(path);
+                if (MeshWeld.Enabled) OgreMeshWeld.Apply(ogre);
+                mesh = Build(file, materialOf ?? file, ogre, limb);
+            }
         }
         catch (Exception e) when (e is IOException or InvalidDataException or NotSupportedException)
         {

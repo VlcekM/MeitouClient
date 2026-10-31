@@ -285,6 +285,7 @@ internal sealed class CharacterContent : IDisposable
         try
         {
             var mesh = OgreMeshReader.ReadFile(path);
+            if (MeshWeld.Enabled) OgreMeshWeld.Apply(mesh);
             var model = Model.Build(mesh, boneCount, gameBinormals: !icon, tangentSign: icon);
             var morphs = MeshMorphs.From(mesh, model, messages, Path.GetFileName(path));
             if (limbs is not null || partMap is not null) MarkBody(model, limbs, partMap is null ? null : PartMapImage(partMap, messages));
