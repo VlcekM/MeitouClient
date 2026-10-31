@@ -1,0 +1,12 @@
+[
+  {"commit": "0ae1a5a7", "date": "2026-10-27", "label": "daily 2026-10-27 (1)", "kind": "daily", "note": "First maintainer benchmark."},
+  {"commit": "602c5df5", "date": "2026-10-27", "label": "daily 2026-10-27 (2)", "kind": "daily", "note": ""},
+  {"commit": "97282c6e", "date": "2026-10-27", "label": "daily 2026-10-27 (3)", "kind": "daily", "note": ""},
+  {"commit": "c7e3a42f", "date": "2026-10-28", "label": "v0.16.0", "kind": "release", "note": "Code-identical to upstream tag v0.16.0 (ec927b5b); c7e3a42f only adds a roadmap docs commit on top."},
+  {"commit": "5a9b2380", "date": "2026-10-28", "label": "daily 2026-10-28", "kind": "daily", "note": ""},
+  {"commit": "74a5e56a", "date": "2026-10-28", "label": "daily 2026-10-28 (2)", "kind": "daily", "note": ""},
+  {"commit": "0c05f929", "date": "2026-10-29", "label": "daily 2026-10-29", "kind": "daily", "note": ""},
+  {"commit": "0d95057f", "date": "2026-10-29", "label": "daily 2026-10-29 (2)", "kind": "daily", "note": ""},
+  {"commit": "59b96e4c", "date": "2026-10-30", "label": "daily 2026-10-30", "kind": "daily", "note": ""},
+  {"commit": "4c43cdb1", "date": "2026-10-31", "label": "daily 2026-10-31", "kind": "daily", "note": ""}
+]
