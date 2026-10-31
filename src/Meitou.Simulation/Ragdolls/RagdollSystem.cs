@@ -558,8 +558,8 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
     /// Soft limits: each limit gets an inner one this share of its range in from either end, a soft overdamped spring that brakes the joint as it nears the hard stop
     /// (engine choice, tuned by eye).
     /// </summary>
-    const float SoftBand = 0.2f;
-    static readonly SpringSettings SoftLimit = new(3, 3);
+    const float SoftBand = 0.25f;
+    static readonly SpringSettings SoftLimit = new(5, 3);
     /// <summary>The relaxed angle of a hinge: this share of the way from the binding pose (0) to the middle of its range (a knee bent about 50 degrees, an elbow about 45).</summary>
     const float RelaxedShare = 0.6f;
     /// <summary>The spin a blow's push gives an arm or a leg: rad/s per unit/s of push, at most this, scaled by a roll of 0.6 to 1.4.</summary>

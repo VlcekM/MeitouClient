@@ -233,7 +233,7 @@ partial ragdoll keep their own speed; a ragdoll restored from a save starts as s
 ### Advanced ragdolls (Meitou)
 
 Engine feature behind the same switch (`BodyOptions.AdvancedRagdolls`; Faithful: the original's hard limits and no pull), tuned by eye (**Unknown** against real motion):
-- **Soft limits**, every ragdoll: each limit gets an inner one 20% of its range in from either end (`SoftBand`; a spherical joint's swing cone too), a soft overdamped spring (3 Hz, ratio 3)
+- **Soft limits**, every ragdoll: each limit gets an inner one 25% of its range in from either end (`SoftBand`; a spherical joint's swing cone too), a soft overdamped spring (5 Hz, ratio 3)
   that brakes the joint before the hard stop instead of letting it hit it at full speed.
 - **Relaxed pull**, whole and carried ragdolls of an incapacitated character (not a conscious one's collapsed limbs, which hang loose): a capped `TwistServo` on each joint towards
   60% of the way from the binding pose to the middle of a hinge's range (knees about 50 degrees, elbows about 45, hips about 24 degrees, which way **Unknown**, spine straight; a shoulder's twist to 0, its swing left to
