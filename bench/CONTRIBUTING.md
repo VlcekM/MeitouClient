@@ -59,9 +59,8 @@ Open the pull request against `master`.
 
 ## What the automatic check verifies
 
-On every pull request the check (`bench/tools/generate.py --check`) fails if:
+On every pull request that touches `bench/data/`, the check (`bench/tools/generate.py --check`) fails if:
 
-- the PR changes anything outside `bench/data/machines/` and `bench/data/results/` (the repository owner is exempt);
 - a machine file is missing, misnamed or lacks a required field, or a results folder has no machine file;
 - a CSV is missing columns (the 19 columns of the kit; the 6 machine columns are optional) or a value is not a number;
 - `platform` is not `native`, `proton`, `windows` or `macos`;
@@ -70,7 +69,7 @@ On every pull request the check (`bench/tools/generate.py --check`) fails if:
 - the commit does not exist upstream or is not on upstream `master`;
 - a row is duplicated, there are more than two runs of a scenario for one commit and machine, or one machine mixes platforms (native, proton, windows, macos).
 
-Off-target commits do not fail the check; they are only flagged.
+Off-target commits do not fail the check; they are only flagged. Files changed outside `bench/data/machines/` and `bench/data/results/` are flagged for the reviewer too: keep a results PR to those two folders.
 
 ## Rules
 
