@@ -1,0 +1,26 @@
+{
+  "doublevoid": {
+    "commits": 18,
+    "areas": "Navmesh, Navmesh tool"
+  },
+  "asc3ns10n": {
+    "commits": 17,
+    "areas": "New game, Linux, Picking"
+  },
+  "rockchinq": {
+    "commits": 12,
+    "areas": "Towns, trading, New game"
+  },
+  "hazzael": {
+    "commits": 6,
+    "areas": "Localization, Pause, UI"
+  },
+  "bgasm": {
+    "commits": 2,
+    "areas": "Audio, Saves"
+  },
+  "gosuboy": {
+    "commits": 2,
+    "areas": "Metal, Material lookup"
+  }
+}
