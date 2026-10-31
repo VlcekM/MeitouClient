@@ -23,6 +23,7 @@ public sealed partial class CombatSystem
             float speed = Math.Clamp(damage * PushPerDamage, PushMin, PushMax);
             push = new Vector3(direction.X, PushLift, direction.Y) * speed;
         }
-        vc.Knockdown = (Vector3)(vc.Blow = motion + push);
+        vc.Blow = (motion + push, push);
+        vc.Knockdown = motion + push;
     }
 }
