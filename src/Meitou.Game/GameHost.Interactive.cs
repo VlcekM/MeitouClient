@@ -702,7 +702,6 @@ sealed partial class GameHost
                 if (!g.NoPopulation && !covered && panel?.Visible != true) player.Steer();
                 if (ui && overlay is not null && !g.NoPopulation)
                 {
-                    player.SelectionRings = config.SelectionRings;
                     player.Draw(overlay, size.X, size.Y);
                 }
                 if (ui && overlay is not null && IsSandbox) DrawSandbox(overlay, size.X, size.Y);

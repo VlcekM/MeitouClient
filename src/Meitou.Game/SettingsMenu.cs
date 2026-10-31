@@ -377,8 +377,6 @@ sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, 
                 Toggle: new("Pause after loading", () => config.PauseOnLoad, v => config.PauseOnLoad = v, OnOff: true)));
             result.Add(new("Hover outline", "Outline and tint the character under the cursor, in the colour of what a right click would do.",
                 Toggle: new("Hover outline", () => config.HoverOutline, v => config.HoverOutline = v, Remaster: true, OnOff: true)));
-            result.Add(new("Selection rings", "Draw the green ring on the ground under each selected character.",
-                Toggle: new("Selection rings", () => config.SelectionRings, v => config.SelectionRings = v, Remaster: true, OnOff: true)));
             result.Add(new("Portrait menu", "Holding the right button on a squad bar portrait opens that character's menu, as on the character itself; a quick right click still selects them and "
                 + "moves the camera to them. The game has no portrait menu.",
                 Toggle: new("Portrait menu", () => config.PortraitMenu, v => player.PortraitMenu = config.PortraitMenu = v, Remaster: true, OnOff: true)));
@@ -657,7 +655,6 @@ sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, 
         config.Tutorials = true;
         TutorialsChanged?.Invoke(true);
         config.HoverOutline = true;
-        config.SelectionRings = true;
         config.LuckyrenMode = false;
         config.GroundItemLimit = global::Meitou.Simulation.Items.GroundItems.DefaultLimit;
         player.SetUiMode(UiMode.Meitou);

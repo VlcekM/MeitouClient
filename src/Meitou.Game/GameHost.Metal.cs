@@ -1415,7 +1415,6 @@ sealed partial class GameHost
                     hud.Steer();
                     if (hud.UiVisible)
                     {
-                        hud.SelectionRings = config.SelectionRings;
                         hud.Draw(overlay, size.X, size.Y, overlayPass);
                         if (IsSandbox && !g.UiShowcase) DrawSandbox(overlay, size.X, size.Y);
                     }
