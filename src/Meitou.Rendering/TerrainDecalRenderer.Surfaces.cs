@@ -191,12 +191,17 @@ public sealed unsafe partial class TerrainDecalRenderer
         public uint Colour;
         public bool Floor;
         public Vector2 At;
-        /// <summary>The bleeder whose growing pool it is (<see cref="BleedSurface"/>), else null.</summary>
+        /// <summary>The bleeder whose growing pool it is (<see cref="BleedSurface"/>), else null, and the surface clock it last bled into it at.</summary>
         public long? Who;
+        public float Bled;
     }
 
     readonly List<SurfaceDecal> surfaces = [];
     readonly Dictionary<long, SurfaceDecal> surfacePools = [];
+    /// <summary>A pool bled into this recently (seconds of game time) is not given up for a new decal (engine choice: a bleeder marks every tick).</summary>
+    const float StillBleeding = 1;
+    /// <summary>The surface clock at which every decal was found a pool still bleeding (no room for a new pool until the clock moves), or −1.</summary>
+    float fullOfBleeding = -1;
     readonly List<(float Distance, SurfaceDecal Decal)> surfaceNear = [];
     float surfaceClock;
     GpuProgram? surfaceProgram;
@@ -308,12 +313,34 @@ public sealed unsafe partial class TerrainDecalRenderer
         if (surfacePools.TryGetValue(who, out var pool) && Vector2.DistanceSquared(pool.At, new Vector2(at.X, at.Z)) <= 10)
         {
             pool.Size = MathF.Min(pool.Size + grow / MathF.Max(1, pool.Size * 10), TerrainDecalStore.PoolMax);
+            pool.Bled = surfaceClock;
             return;
         }
+        // At the cap with every decal a pool still bleeding (more bleeders than decals): this one bleeds on the terrain only, rather than each new pool pushing out another
+        // bleeder's, which made one again the next tick (thousands a frame, none growing).
+        if (surfaces.Count >= MaxSurfaces && !MakeRoom()) return;
         pool = Make(TerrainDecalType.Pool, at, random.Next(variants), random.NextSingle() * MathF.Tau, grow, abgr);
-        pool.Who = who;
+        (pool.Who, pool.Bled) = (who, surfaceClock);
         Keep(pool);
         surfacePools[who] = pool;
+    }
+
+    bool Bleeding(SurfaceDecal d) => d.Who is long who && surfacePools.TryGetValue(who, out var pool) && pool == d && surfaceClock - d.Bled <= StillBleeding;
+
+    /// <summary>Removes the oldest decal that is not a pool still bleeding; false when there is none (remembered until the surface clock moves).</summary>
+    bool MakeRoom()
+    {
+        if (fullOfBleeding == surfaceClock) return false;
+        for (int i = 0; i < surfaces.Count; i++)
+        {
+            var d = surfaces[i];
+            if (Bleeding(d)) continue;
+            if (d.Who is long who && surfacePools.TryGetValue(who, out var pool) && pool == d) surfacePools.Remove(who);
+            surfaces.RemoveAt(i);
+            return true;
+        }
+        fullOfBleeding = surfaceClock;
+        return false;
     }
 
     SurfaceDecal Make(TerrainDecalType type, Vector3 at, int variant, float angle, float size, uint abgr)
@@ -338,7 +365,7 @@ public sealed unsafe partial class TerrainDecalRenderer
 
     void Keep(SurfaceDecal decal)
     {
-        if (surfaces.Count >= MaxSurfaces)
+        if (surfaces.Count >= MaxSurfaces && !MakeRoom())
         {
             var oldest = surfaces[0];
             // Its bleeder's pool by the key it keeps: a scan of the pools per new decal took most of a frame with thousands bleeding at the cap.
