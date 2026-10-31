@@ -32,7 +32,7 @@ internal sealed partial class ZoneGeometryGatherer
                 int solids = g.Solids.Count, meshSolids = g.MeshSolids.Count;
                 foreach (var shape in prepared.Shapes) AddShape(g, shape, node, TerrainSlopeDegrees, carve: false, meshSolid: true);
                 if (g.Solids.Count > solids || g.MeshSolids.Count > meshSolids) g.Stats.MapFeatures++;
-                for (int k = solids; k < g.Solids.Count; k++) g.Solids[k].Owner = $"feature {record.Name} [{f.StringId}]";
+                for (int k = solids; k < g.Solids.Count; k++) { g.Solids[k].Owner = $"feature {record.Name} [{f.StringId}]"; g.Solids[k].Feature = true; }
                 for (int k = meshSolids; k < g.MeshSolids.Count; k++) g.MeshSolids[k].Owner = $"feature {record.Name} [{f.StringId}]";
             }
         }

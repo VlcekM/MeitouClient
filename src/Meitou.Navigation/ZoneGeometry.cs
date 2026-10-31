@@ -44,6 +44,8 @@ internal sealed class NavSolid(Vector4[] planes, Vector2 min, Vector2 max)
     public Vector4[] Planes { get; } = planes;
     /// <summary>Debug (the navmesh tool): the placement, owner and part the shape came from.</summary>
     public string? Owner { get; set; }
+    /// <summary>A map feature's shape (not a building's): a feature's surface running inside it does not lose its seam (<see cref="NavMeshSolid"/>).</summary>
+    public bool Feature { get; set; }
     /// <summary>The shape's box on (X, Z).</summary>
     public Vector2 Min { get; } = min;
     public Vector2 Max { get; } = max;

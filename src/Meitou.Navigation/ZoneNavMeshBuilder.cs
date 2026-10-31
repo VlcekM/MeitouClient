@@ -173,7 +173,7 @@ internal static partial class ZoneNavMeshBuilder
 
         foreach (int c in carvers) Mark(ctx, g.Carvers[c], NavArea.Null, chf);
         foreach (int c in solids) RemoveInside(g.Solids[c], chf);
-        foreach (int c in meshSolids) RemoveInside(g.MeshSolids[c], chf);
+        foreach (int c in meshSolids) RemoveInside(g.MeshSolids[c], chf, g.Solids, solids);
         if (g.Ground is { } ground) RemoveUnderground(ground, s.AgentHeight, chf);
         foreach (int c in painters) Mark(ctx, g.Painters[c], NavArea.Door, chf, s.CellSize * s.DoorInflateCells);
 
@@ -342,7 +342,16 @@ internal static partial class ZoneNavMeshBuilder
     /// Removes the walkable spans inside a closed or bottom-open triangle mesh (<see cref="NavMeshSolid"/>): the nearest of its triangles above the span's floor, at
     /// the middle of the cell and more than <see cref="SolidTopInset"/> over it, faces up (docs/game/pathfinding.md, "Map features").
     /// </summary>
-    static void RemoveInside(NavMeshSolid solid, RcCompactHeightfield chf)
+    /// <summary>
+    /// How far (cells) from where a map feature's surface runs inside a building's solid that surface is removed (engine choice: two cells, so the building's
+    /// walkway and the feature's surface are not neighbours; docs/game/pathfinding.md, "Map features").
+    /// </summary>
+    const int FeatureSeamCells = 2;
+
+    /// <summary>How far (units) a span's floor may be over a feature triangle's height at the cell's middle and still stand on it (engine choice).</summary>
+    const float FeatureSurfaceReach = 2;
+
+    static void RemoveInside(NavMeshSolid solid, RcCompactHeightfield chf, List<NavSolid> allSolids, List<int> tileSolids)
     {
         float cs = chf.cs, ch = chf.ch;
         int x0 = Math.Max(0, (int)MathF.Floor((solid.Min.X - chf.bmin.X) / cs)), x1 = Math.Min(chf.width - 1, (int)MathF.Floor((solid.Max.X - chf.bmin.X) / cs));
@@ -371,19 +380,58 @@ internal static partial class ZoneNavMeshBuilder
                     (list ??= []).Add((u * a.Y + v * b.Y + wt * c.Y, up));
                 }
         }
+        // Where the feature's upward surface runs inside a building's solid (Mourn's tube through the defensive wall), it does not join the building's walkway:
+        // its own surface within FeatureSeamCells of there is removed.
+        var buried = new bool[hits.Length];
+        bool anyBuried = false;
         for (int z = z0; z <= z1; z++)
             for (int x = x0; x <= x1; x++)
             {
                 if (hits[(z - z0) * w + x - x0] is not { } list) continue;
+                float px = chf.bmin.X + (x + 0.5f) * cs, pz = chf.bmin.Z + (z + 0.5f) * cs;
+                foreach (int c in tileSolids)
+                {
+                    var b = allSolids[c];
+                    if (b.Feature || px < b.Min.X || px > b.Max.X || pz < b.Min.Y || pz > b.Max.Y) continue;
+                    foreach (var (y, faceUp) in list)
+                    {
+                        if (!faceUp) continue;
+                        bool inside = true;
+                        foreach (var plane in b.Planes)
+                            if (plane.X * px + plane.Y * (y - SolidTopInset) + plane.Z * pz + plane.W >= 0) { inside = false; break; }
+                        if (inside) { buried[(z - z0) * w + x - x0] = anyBuried = true; break; }
+                    }
+                    if (buried[(z - z0) * w + x - x0]) break;
+                }
+            }
+        bool NearBuried(int x, int z)
+        {
+            if (!anyBuried) return false;
+            for (int dz = -FeatureSeamCells; dz <= FeatureSeamCells; dz++)
+                for (int dx = -FeatureSeamCells; dx <= FeatureSeamCells; dx++)
+                {
+                    int bx = x + dx - x0, bz = z + dz - z0;
+                    if (bx >= 0 && bx < w && bz >= 0 && bz <= z1 - z0 && buried[bz * w + bx]) return true;
+                }
+            return false;
+        }
+        for (int z = z0; z <= z1; z++)
+            for (int x = x0; x <= x1; x++)
+            {
+                if (hits[(z - z0) * w + x - x0] is not { } list) continue;
+                bool seam = NearBuried(x, z);
                 var cell = chf.cells[x + z * chf.width];
                 for (int i = cell.index, end = cell.index + cell.count; i < end; i++)
                 {
                     if (chf.areas[i] == NavArea.Null) continue;
                     float floor = chf.bmin.Y + chf.spans[i].y * ch, nearest = float.MaxValue;
-                    bool up = false;
+                    bool up = false, onSurface = false;
                     foreach (var (y, faceUp) in list)
+                    {
                         if (y > floor + SolidTopInset && y < nearest) { nearest = y; up = faceUp; }
-                    if (up) chf.areas[i] = NavArea.Null;
+                        if (faceUp && floor >= y - SolidTopInset && floor - y <= FeatureSurfaceReach) onSurface = true;
+                    }
+                    if (up || seam && onSurface) chf.areas[i] = NavArea.Null;
                 }
             }
     }

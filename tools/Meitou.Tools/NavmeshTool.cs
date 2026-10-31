@@ -25,9 +25,9 @@ static class NavmeshTool
         var settings = new NavBuildSettings();
         int repeat = 1;
         float[]? box = null, pathArg = null;
-        bool doorsClosed = false, noInteriors = false; float? toY = null, fromY = null; float[]? near = null, probe = null;
+        bool doorsClosed = false, noInteriors = false; float? toY = null, fromY = null; float[]? near = null, probe = null; string? probeArg = null;
         int around = 0;
-        bool fingerprint = false;
+        bool fingerprint = false, featureTops = false;
         string? interiorKey = null;
         bool ownOnly = false;
         var compare = new List<ZoneCoordinate>();
@@ -44,7 +44,7 @@ static class NavmeshTool
                 case "--geometry": geometryOnly = true; break;
                 case "--near": near = args[++i].Split(',').Select(t => float.Parse(t, CultureInfo.InvariantCulture)).ToArray(); break;
                 case "--no-interiors": noInteriors = true; break;
-                case "--probe": probe = args[++i].Split(',').Select(t => float.Parse(t, CultureInfo.InvariantCulture)).ToArray(); break;
+                case "--probe": probeArg = args[++i]; probe = probeArg.Split(';')[0].Split(',').Select(t => float.Parse(t, CultureInfo.InvariantCulture)).ToArray(); break;
                 case "--to-y": toY = float.Parse(args[++i], CultureInfo.InvariantCulture); break;
                 case "--from-y": fromY = float.Parse(args[++i], CultureInfo.InvariantCulture); break;
                 case "--closed": doorsClosed = true; break;
@@ -52,6 +52,7 @@ static class NavmeshTool
                 case "--path": pathArg = args[++i].Split(',').Select(t => float.Parse(t, CultureInfo.InvariantCulture)).ToArray(); break;
                 case "--repeat": repeat = int.Parse(args[++i], CultureInfo.InvariantCulture); break;
                 case "--fingerprint": fingerprint = true; break;
+                case "--feature-tops": featureTops = true; break;
                 case "--compare":
                     while (i + 1 < args.Length && !args[i + 1].StartsWith("--", StringComparison.Ordinal))
                     {
@@ -148,7 +149,10 @@ static class NavmeshTool
         // The kept regions are resolved over the built zones as the game does for the loaded ones (NavMeshService): own seeds, the border rule toward
         // zones not built here, and the neighbours' kept border edges.
         foreach (var (c, keep) in ZoneKeptClosure.Resolve(full, settings)) world = world.With(full[c].WithKept(keep).WithoutPruned());
-        if (probe is { Length: 2 }) foreach (var line in Probe(install, gatherer, g, full[zone.Value], world, probe[0], probe[1])) Console.WriteLine("  " + line);
+        if (featureTops) foreach (var line in FeatureTops(install, db, collision, gatherer, g, full[zone.Value], world)) Console.WriteLine(line);
+        if (probe is { Length: 2 })
+            foreach (var point in probeArg!.Split(';').Select(t => t.Split(',').Select(v => float.Parse(v, CultureInfo.InvariantCulture)).ToArray()))
+                foreach (var line in Probe(install, gatherer, g, full[zone.Value], world, point[0], point[1])) Console.WriteLine("  " + line);
         if (probe is { Length: >= 4 }) foreach (var line in ProbeGrid(install, gatherer, g, full[zone.Value], world, probe[0], probe[1], probe[2], probe[3])) Console.WriteLine(line);
 
         List<Vector3>? path = null;
@@ -361,6 +365,81 @@ static class NavmeshTool
         yield return $"ground samples (within 12 of the terrain): both {both}, original only {onlyOriginal}, original and ours unkept {pruned}, ours only {onlyOurs}";
     }
 
+    /// <summary>
+    /// <c>--feature-tops</c>: for each map feature standing in the zone, samples every 8 units over its box where its topmost face is walkable (up to 40°) and
+    /// above the terrain by more than 12, and counts the samples where the original's tile, our mesh (unpruned) and our kept mesh have a polygon within 8 of it.
+    /// </summary>
+    static IEnumerable<string> FeatureTops(GameInstall install, GameDatabase db, CollisionCache collision, ZoneGeometryGatherer gatherer, ZoneGeometry g, ZoneNavMesh mesh, NavWorld world)
+    {
+        var original = OriginalNavTiles.LoadExterior(install, g.Zone);
+        if (original is null) { yield return "no original tile"; yield break; }
+        var buckets = new Dictionary<(int, int), List<int>>();
+        for (int p = 0; p < original.Polygons.Length; p++)
+        {
+            float x0 = float.MaxValue, x1 = float.MinValue, z0 = float.MaxValue, z1 = float.MinValue;
+            foreach (int v in original.Polygons[p]) { x0 = MathF.Min(x0, original.Vertices[v].X); x1 = MathF.Max(x1, original.Vertices[v].X); z0 = MathF.Min(z0, original.Vertices[v].Z); z1 = MathF.Max(z1, original.Vertices[v].Z); }
+            for (int i = (int)MathF.Floor(x0 / 64); i <= (int)MathF.Floor(x1 / 64); i++)
+                for (int j = (int)MathF.Floor(z0 / 64); j <= (int)MathF.Floor(z1 / 64); j++)
+                {
+                    if (!buckets.TryGetValue((i, j), out var l)) buckets[(i, j)] = l = [];
+                    l.Add(p);
+                }
+        }
+        bool OriginalAt(float x, float z, float y)
+        {
+            foreach (int p in buckets.GetValueOrDefault(((int)MathF.Floor(x / 64), (int)MathF.Floor(z / 64))) ?? [])
+            {
+                var poly = original.Polygons[p];
+                for (int k = 1; k + 1 < poly.Length; k++)
+                    if (NavGeometry.Barycentric(x, z, original.Vertices[poly[0]], original.Vertices[poly[k]], original.Vertices[poly[k + 1]], out float u, out float v, out float w) && u >= 0 && v >= 0 && w >= 0
+                        && MathF.Abs(u * original.Vertices[poly[0]].Y + v * original.Vertices[poly[k]].Y + w * original.Vertices[poly[k + 1]].Y - y) < 8) return true;
+            }
+            return false;
+        }
+        var kept = world.Find(g.Zone)!;
+        var list = new List<int>();
+        var file = MapFeatureFile.Open(install);
+        int index = g.Zone.Y * WorldLayout.ZoneCount + g.Zone.X;
+        float cos = MathF.Cos(40 * MathF.PI / 180);
+        foreach (var f in file.Zones[index])
+        {
+            if (db.Find(f.StringId) is not { } record || record.GetPath("collision") is not { Length: > 0 } path || collision.Get(path) is not { } prepared) continue;
+            var node = WorldObjectLayout.InstanceTransform(f.Position, f.Rotation, f.Scale);
+            var tris = new List<Vector3>();
+            foreach (var shape in prepared.Shapes)
+                foreach (int i in shape.Indices) tris.Add(Vector3.Transform(shape.Vertices[i], node));
+            float bx0 = tris.Min(v => v.X), bx1 = tris.Max(v => v.X), bz0 = tris.Min(v => v.Z), bz1 = tris.Max(v => v.Z), by0 = tris.Min(v => v.Y), by1 = tris.Max(v => v.Y);
+            int samples = 0, orig = 0, ours = 0, ourKept = 0;
+            for (float z = MathF.Ceiling(bz0 / 8) * 8; z <= bz1; z += 8)
+                for (float x = MathF.Ceiling(bx0 / 8) * 8; x <= bx1; x += 8)
+                {
+                    float top = float.MinValue; bool walk = false;
+                    for (int t = 0; t < tris.Count; t += 3)
+                    {
+                        var a = tris[t]; var b = tris[t + 1]; var c = tris[t + 2];
+                        if (!NavGeometry.Barycentric(x, z, a, b, c, out float u, out float v, out float w) || u < 0 || v < 0 || w < 0) continue;
+                        float y = u * a.Y + v * b.Y + w * c.Y;
+                        if (y <= top) continue;
+                        top = y;
+                        var n = Vector3.Cross(b - a, c - a);
+                        walk = n.Y / n.Length() >= cos;
+                    }
+                    if (!walk || top < gatherer.TerrainHeight(x, z) + 12) continue;
+                    samples++;
+                    bool o = OriginalAt(x, z, top);
+                    if (o) orig++;
+                    list.Clear(); mesh.PolygonsAt(x, z, list);
+                    bool any = list.Any(q => MathF.Abs(mesh.HeightAt(q, x, z) - top) < 8);
+                    if (any) ours++;
+                    list.Clear(); kept.PolygonsAt(x, z, list);
+                    bool k = list.Any(q => MathF.Abs(kept.HeightAt(q, x, z) - top) < 8);
+                    if (k) ourKept++;
+                }
+            if (samples > 0)
+                yield return $"feature {record.Name} at {f.Position.X:0},{f.Position.Y:0},{f.Position.Z:0} x {bx0:0}..{bx1:0} z {bz0:0}..{bz1:0} y {by0:0}..{by1:0}: {samples} walkable top samples above ground, original {orig}, ours {ours}, ours kept {ourKept}";
+        }
+    }
+
     static bool Inside(Vector2[] poly, Vector2 q)
     {
         bool inside = false;
@@ -398,7 +477,7 @@ static class NavmeshTool
                     var record = db.Find(f.StringId);
                     string path = record?.GetPath("collision") ?? "";
                     var prepared = path.Length > 0 ? collision.Get(path) : null;
-                    yield return $"feature {record?.Name} [{f.StringId}] at {f.Position.X:0},{f.Position.Y:0},{f.Position.Z:0} scale {f.Scale.X:0.##},{f.Scale.Y:0.##},{f.Scale.Z:0.##} collision {(path.Length == 0 ? "none" : path)}" +
+                    yield return $"feature {record?.Name} [{f.StringId}] at {f.Position.X:0},{f.Position.Y:0},{f.Position.Z:0} scale {f.Scale.X:0.##},{f.Scale.Y:0.##},{f.Scale.Z:0.##} rotation {f.Rotation.X:0.###},{f.Rotation.Y:0.###},{f.Rotation.Z:0.###},{f.Rotation.W:0.###} collision {(path.Length == 0 ? "none" : path)}" +
                         (prepared is null ? "" : $" ({prepared.Shapes.Length} shapes, {prepared.Shapes.Count(s => s.IsConvex)} convex; " + string.Join("; ", prepared.Shapes.Select(s => $"{s.Indices.Length / 3} triangles, {OpenEdges(s)} open edges, local y {s.Vertices.Min(v => v.Y):0}..{s.Vertices.Max(v => v.Y):0}")) + ")");
                 }
             }

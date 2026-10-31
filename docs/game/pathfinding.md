@@ -294,9 +294,15 @@ scaled (1.41/1.88); without features Meitou walked the terrain through both (iss
 nearest of its triangles above the span's floor (more than 1 over it, at the cell's middle) faces up, so the span sees its back; an overhang's underside faces
 down and keeps the ground under it. Whether the original drops `hidden` features' collision is **Unknown** (Meitou keeps it). **Observed** (`--compare`,
 before → after): ours-only area 21.19 19.1 → 10.7 %, 23.22 10.6 → 6.6 %, 34.46 3.7 → 2.6 %, 13.12 3.6 → 1.9 %, 21.32 5.8 → 4.8 %, 20.32 3.8 → 3.4 %;
-original-only 20.32 1.6 → 0.6 %, 18.35 1.1 → 0.3 %, 21.19 1.4 → 0.3 %; 19.29, 21.42, 21.31, 10.31, 20.29 unchanged. Floors under floors rose in 34.46
-(510 → 5,183 points): Mourn's `Vast_Land Tube 01` is walkable on top and joins the defensive wall's walkway, which the original prunes there; the
-original has no polygon on the tube. The coarse route's footprints and ragdoll collision do not take features yet.
+original-only 20.32 1.6 → 0.6 %, 18.35 1.1 → 0.3 %, 21.19 1.4 → 0.3 %; 19.29, 21.42, 21.31, 10.31, 20.29 unchanged. **Observed**
+(`--feature-tops`: samples every 8 units where a feature's top face is walkable and 12+ over the terrain, with a polygon within 8): the original walks
+feature tops reached from the ground (statue 3,281 of 4,026; Gravel-Pile02 2,144 of 2,551 and 1,912 of 2,132), but on Mourn's `Vast_Land Tube 01` (34.46)
+its 1,278 of 42,908 all lie where the defensive walls' walkway (y ~1,049, kept in its tile) coincides with the tube; Meitou kept 5,958, the flat band at
+z 66,200..66,500 reached where the tube's 24° top rises out of the wall walkway (`Defensive Wall IV 34.46:20-`). Why the original does not join them is
+**Unknown** (both walkable; Havok joins faces by edge matching, not by voxel steps). Engine choice: where a feature's upward surface runs inside a building's
+solid, its surface within 2 cells (`FeatureSeamCells`) is removed, so the walkway and the feature are not neighbours; the tube then keeps 1,328 samples,
+34.46's floors under floors 5,183 → 544 (510 before features), other zones within 0.1 %. The coarse route's footprints and ragdoll collision do not take
+features yet.
 **Compare** (`meitou-tools navmesh --compare x,z ...`): samples each zone every 8 units against `tileX.Y.hkt`: points on both, only ours, only the
 original's, ours-only points in a building footprint, and points where ours has more layers than the original with one 10+ under our top (floors under
 floors). Interiors are not read from the tiles, so our interior floors count as ours-only; the original's big polygons float up to ~20 over hollows, so
