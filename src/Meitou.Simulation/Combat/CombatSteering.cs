@@ -56,6 +56,8 @@ public static class CombatSteering
     public const int MaxRepulsions = 26;
     /// <summary>The nearest bodies the repulsion first gathers by distance alone, so a few out of the flocking list among them still leave it its 26 (engine choice).</summary>
     const int Gathered = 32;
+    /// <summary>The radius the gathering looks in first (engine choice: in a crowd the nearest 32 stand within it; <see cref="Nearest"/>).</summary>
+    const float NearFirst = 20;
     /// <summary>The flocking list's reach beyond the two radii and its height limit (<c>FUN_14085a070</c>).</summary>
     public const float FlockReach = 40, FlockHeight = 20;
     /// <summary>Speed caps in the footwork: sideways, backing off, and in all (not running).</summary>
@@ -180,6 +182,23 @@ public static class CombatSteering
     }
 
     /// <summary>
+    /// The nearest bodies <see cref="Gather"/> takes within <paramref name="reach"/> of <paramref name="me"/>: those of a circle of <see cref="NearFirst"/>, twice as wide while
+    /// it does not hold <see cref="Push.Capacity"/> of them nearer than its radius (none outside it is nearer), the whole reach last. Those beyond the circle count as left out
+    /// (when only these are in reach, the pushers' pass finds the same ones).
+    /// </summary>
+    static void Nearest(World world, Vector3 me, float reach, ref Push q)
+    {
+        for (float r = NearFirst; ; r *= 2)
+        {
+            (q.Count, q.Overflow, q.Reach) = (0, false, MathF.Min(r, reach));
+            world.Grid.Query(me.X, me.Z, q.Reach, ref q, Gather);
+            if (r >= reach) break;
+            if (q.Count == q.Capacity && q.Distances[q.Capacity - 1] < r * r) { q.Overflow = true; break; }
+        }
+        q.Reach = reach;
+    }
+
+    /// <summary>
     /// The steering velocity of fighter <paramref name="i"/> this tick (units per second, X and Z), with <paramref name="face"/> the flat unit vector to its target; zero when
     /// the target is gone. <paramref name="strafing"/> is its side-stepping state (the animation's, last tick); <paramref name="moving"/> whether it moved last tick (the dead
     /// zone's STOP or START). Reads the last tick's places only; partition-safe (writes the fighter's own smoothing).
@@ -212,17 +231,17 @@ public static class CombatSteering
         // The repulsion takes the nearest MaxRepulsions bodies that push (they push hardest). A body pushes only within both the flocking list's reach and its own
         // reach, so nothing farther than the nearer of the two (plus a large body's radius) is looked at. First the nearest by distance alone, the flocking list's
         // tests only for those; when too many of them are out of it to leave 26, again with the tests on every body (a crowd of the fallen).
-        q.Reach = MathF.Min(radius + FlockReach, MathF.Max(q.EnemyReach, q.AllyReach)) + CombatTuning.DefaultFootprint * 4;
+        float reach = MathF.Min(radius + FlockReach, MathF.Max(q.EnemyReach, q.AllyReach)) + CombatTuning.DefaultFootprint * 4;
         q.Capacity = Gathered;
-        world.Grid.Query(me.X, me.Z, q.Reach, ref q, Gather);
+        Nearest(world, me, reach, ref q);
         Vector2 enemies = Vector2.Zero, allies = Vector2.Zero;
         int pushes = 0;
         for (int k = 0; k < q.Count && pushes < MaxRepulsions; k++)
             pushes += Add(ref q, q.Slots[k], ref enemies, ref allies);
         if (pushes < MaxRepulsions && q.Overflow)
         {
-            (q.Count, q.Overflow, q.Capacity, q.Pushers) = (0, false, MaxRepulsions, true);
-            world.Grid.Query(me.X, me.Z, q.Reach, ref q, Gather);
+            (q.Capacity, q.Pushers) = (MaxRepulsions, true);
+            Nearest(world, me, reach, ref q);
             (enemies, allies) = (Vector2.Zero, Vector2.Zero);
             for (int k = 0; k < q.Count; k++) Add(ref q, q.Slots[k], ref enemies, ref allies);
         }

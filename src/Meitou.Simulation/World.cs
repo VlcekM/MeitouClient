@@ -49,8 +49,8 @@ public sealed record WorldSettings
     public int Threads { get; init; } = 1;
     /// <summary>Game seconds per tick (docs/simulation.md: 1/30).</summary>
     public float TickSeconds { get; init; } = 1f / 30;
-    /// <summary>Cell size of the neighbour grid, in world units.</summary>
-    public float GridCellSize { get; init; } = 100;
+    /// <summary>Cell size of the neighbour grid, in world units: a query scans whole cells, so near a crowd separation and fight steering pay for every body in them.</summary>
+    public float GridCellSize { get; init; } = 25;
     /// <summary>Build a <see cref="WorldSnapshot"/> at the end of each tick. A headless test can turn it off.</summary>
     public bool PublishSnapshots { get; init; } = true;
     /// <summary>Partitions per worker thread: more evens out uneven work, fewer cuts overhead.</summary>

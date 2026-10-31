@@ -941,12 +941,12 @@ public sealed class MovementSystem(PathService paths) : ITickSystem, IDisposable
             world.Grid.Query(p.Position.X, p.Position.Z, SeparationRadius, ref push, static (int other, ref SeparationState s) =>
                 {
                     if (other == s.Self || s.Count >= MaxSeparationContributions) return;
-                    // A carried body is on its carrier's shoulder and a downed or dead one lies out of the flocking list: neither is in anyone's way (docs/game/pathfinding.md "Bodies in the way").
-                    if (s.Table.Cold(other) is { } them && (!them.CarriedBy.IsNone || them.Medical is { Incapacitated: true })) return;
                     var all = s.Table.Previous;
                     var d = new Vector2(all[s.Self].Position.X - all[other].Position.X, all[s.Self].Position.Z - all[other].Position.Z);
                     float len = d.Length();
                     if (len >= SeparationRadius) return;
+                    // A carried body is on its carrier's shoulder and a downed or dead one lies out of the flocking list: neither is in anyone's way (docs/game/pathfinding.md "Bodies in the way").
+                    if (s.Table.Cold(other) is { } them && (!them.CarriedBy.IsNone || them.Medical is { Incapacitated: true })) return;
                     s.Near[s.Count++] = other;
                     // Exactly on top of each other: the lower slot is pushed one way, the other the opposite.
                     s.Sum += (len > 1e-4f ? d / len : (s.Self < other ? Vector2.UnitX : -Vector2.UnitX)) * (100 * (1 - len / SeparationRadius));
