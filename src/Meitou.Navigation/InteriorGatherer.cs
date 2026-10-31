@@ -35,8 +35,7 @@ internal sealed partial class ZoneGeometryGatherer
         destroyed && part.GetPath("destroyed collision") is { Length: > 0 } dc ? dc : part.GetPath("xml collision");
 
     /// <summary>
-    /// The buildings whose interior reaches into a zone: an <c>interior mask</c> part with collision, and not a gateway (the approximation of
-    /// SHELL_WITH_INTERIOR used by the exterior carvers too), with the mask's box over the zone's. A building over a zone border is built in each zone it
+    /// The buildings whose interior reaches into a zone: shells with an interior (<see cref="IsShellWithInterior"/>), with the mask's box over the zone's. A building over a zone border is built in each zone it
     /// reaches, clipped at the border (<see cref="GatherInterior"/>).
     /// </summary>
     public IReadOnlyList<InteriorSite> InteriorSites(ZoneCoordinate zone)
@@ -57,14 +56,42 @@ internal sealed partial class ZoneGeometryGatherer
     }
 
     /// <summary>
-    /// Whether a building is a shell with an interior (the original's BuildingClassType 12): its interior mask carves the exterior mesh and its inside is built
-    /// apart. An interior mask part with collision, and not a gateway, a wall gate (the mask is the gate's trigger box: Heft's Ancient Lab Ramp, issue #140),
-    /// `cavernous` (Ancient Lab, Ancient Citadel: their floors are in the original's exterior tiles and the tiles hold no interior group for them, #144) or
-    /// `interior terrain` (Ancient Factory, the same, #146). Observed against the original tiles; the record field the class is read from is Unknown
-    /// (docs/game/pathfinding.md, "Interiors").
+    /// Whether a building is a shell with an interior: its interior mask carves the exterior mesh and its inside is built apart (docs/game/pathfinding.md,
+    /// "Generator", carvers and interiors). The original's rule: its <c>interior</c> list is real (<see cref="InteriorOf"/>), it is a plain building (class
+    /// SHELL_WITH_INTERIOR; the interior job leaves out only walls and gates, and no record with a real interior is one), and it has an interior mask with
+    /// collision, the hull both use.
     /// </summary>
     public bool IsShellWithInterior(GameRecord building) =>
-        !building.GetBool("is gateway") && !building.GetBool("is wall gate") && !building.GetBool("cavernous") && !building.GetBool("interior terrain") && MaskParts(building).Any();
+        InteriorOf(building) == InteriorKind.Real && IsPlainBuilding(building) && MaskParts(building).Any();
+
+    /// <summary>What a building's <c>interior</c> list makes of it (docs/game/pathfinding.md, "Generator", building shapes).</summary>
+    public enum InteriorKind { None, Blank, Real }
+
+    /// <summary>
+    /// None without an <c>interior</c> list; Blank when the list's first part has no <c>phs or mesh</c> and no <c>parts</c> (the "blank interior" parts of
+    /// walls, gates, the Ancient Factory, Cannibal Shack); Real otherwise.
+    /// </summary>
+    public InteriorKind InteriorOf(GameRecord building)
+    {
+        var list = building.GetReferences("interior");
+        if (list.Count == 0) return InteriorKind.None;
+        return db.Find(list[0].TargetStringId) is { } first
+            && (first.GetPath("phs or mesh").Length > 0 || first.GetString("phs or mesh").Length > 0 || first.GetReferences("parts").Count > 0)
+            ? InteriorKind.Real : InteriorKind.Blank;
+    }
+
+    /// <summary>
+    /// Whether the original makes the building a plain <c>Building</c> (class 0, which an <c>interior</c> list turns into SHELL_WITH_INTERIOR): not a wall gate
+    /// (a gateway), not <c>links together</c> (a wall), no <c>farm data</c>, and its <c>functionality</c>'s <c>function</c> absent, BF_ANY or BF_FLUFF.
+    /// </summary>
+    bool IsPlainBuilding(GameRecord building)
+    {
+        if (building.GetBool("is wall gate") || building.GetBool("links together") || building.GetReferences("farm data").Count > 0) return false;
+        var functionality = building.GetReferences("functionality");
+        if (functionality.Count == 0) return true;
+        int function = db.Find(functionality[0].TargetStringId)?.GetInt("function") ?? 0;
+        return function is 0 or 18;
+    }
 
     /// <summary>The world-space vertices of a building's interior mask shapes.</summary>
     List<Vector3> MaskPoints(GameRecord building, Vector3 position, Quaternion rotation)

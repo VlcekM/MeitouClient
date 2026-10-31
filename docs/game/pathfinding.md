@@ -221,14 +221,17 @@ with the rule and lose them with Recast's default (issues #139, #142, #147). **I
 faces covered by a kept polygon within 12 units (`OriginalNavTiles.CoverInteriors`): **Observed** 18.35 68→86 %, 19.29 62→68 %, 50.33 69→71 %, 47.16 77→81 %,
 20.32 88→90 % with the two rules; 43.11 77 %, 26.13 81 %, 48.45 91 %. `InteriorCoverageTests` holds each of those zones at a point under its measure. The
 rest is mostly upper storeys: of 105 groups in those zones 59 still have uncovered faces, usually a 70..120-unit band (cause per building **Unknown**).
-**Shells and open structures**: a building is a shell with an interior (the original's class 12; its mask carves the exterior, its inside is an interior
-job) when it has an interior mask part with collision and is not `is gateway`, `is wall gate`, `cavernous` or `interior terrain`
-(`ZoneGeometryGatherer.IsShellWithInterior`; the record field the class comes from is **Unknown**). **Observed** against the original tiles: the Ancient Lab
-(47.16), Ancient Citadel (26.13, both `cavernous`) and Ancient Factory (34.28, `interior terrain`) have no interior group and their floors are in the
-exterior tile; Hive Commune Huts (7.30, no doors) have interior groups; Heft's Ancient Lab Ramp is an `is wall gate` whose mask is the gate's trigger box,
-and as a shell would carve its own ramp out of the exterior and cut the lab off (#140). Every other building is an open structure: all its WALKABLE shapes are
-walkable, not only its floor-0 parts, and its upper-floor contents (groups 17, 18, 20..22) are gathered, the original's rule for the flag the shell class
-clears (below, building shapes). **Observed**: Heft's Shield Bridge, an `is stairs` part, is walkable only by this rule (#141); its walkboard collision comes out 120..145
+**Shells and open structures**: as the original (**Verified** rule, "Generator" below: class, `interior` list), a building is a shell with an interior (its
+mask carves the exterior, its inside is an interior job) when its `interior` list is real, it is a plain building (class 12) and it has an interior mask
+with collision (`ZoneGeometryGatherer.IsShellWithInterior`, `InteriorOf`). A building with a blank interior has all its WALKABLE shapes walkable and its
+upper-floor contents (groups 17, 18, 20..22) gathered, unless it is a wall or wall gate; one without an `interior` list has all its WALKABLE shapes walkable
+only. **Verified** against the original tiles (probe of every placed building with an `interior` list or a mask, base game: a tile interior group over the
+building, and for 47.16 / 26.13 / 34.28 the exterior polygons inside its hull): every placement of a shell by this rule has an interior group (Ancient Lab
+17/17, Ancient Citadel 6/7, Ash Dome 6/6, houses all but 1..3 per type), none of a blank-interior one (Ancient Factory, Metal Warehouse, Ash Dome Ruin,
+Cannibal Shack, Swamp Platform Round; walls and gates only where a neighbour's group overlaps, under 4 %); the original's exterior has 0 polygons inside the Ancient Lab's hull at 47.16 and 499 inside the
+Ancient Factory's at 34.28. `cavernous` (Building +0xc2, read only outside the generator), `interior terrain` and `is gateway` play no part. Heft's Ancient
+Lab Ramp is an `is wall gate` (class 7) whose mask is the gate's trigger box; as a shell would carve its own ramp out of the exterior and cut the lab off (#140). The Ancient Lab sites (28.60, 42.22, 47.16, 41.35; reports #117, #129, #153) path from the street to every storey under this rule (**Observed**, `--path`).
+**Observed**: Heft's Shield Bridge, an `is stairs` part, is walkable only by this rule (#141); its walkboard collision comes out 120..145
 above where the original's tile has the deck (`y` 1160..1180 by its origin), which is **Unknown** (a pose or baked-scale question of that file).
 **Interior parts**: the `interior` list (laid out like `parts` after the same position-seeded reseed, as drawn) is collision too,
 none when destroyed; it holds interior stairs and upper floors. **Verified** (tile20.32 interior `600815`, the Hub Storm House
@@ -391,8 +394,10 @@ Hub→Stack 34054; Squin→Admag at 0.8 walks 132184 for 26834 straight (short r
   additional edges") then stitch; 2 interior (FUN_1403c7560, FUN_1403c9cb0) then stitch; 3 an interior with a given AABB:
   gather inputs and stitch with FUN_1403cbbf0; 4 stitch only (FUN_1403cb840 for exterior uids < 0xffff, FUN_1403cbbf0
   otherwise; FUN_1403cb280 stitches with completed tasks and existing or unloaded zones). Job adders: FUN_1403c6820 "Full",
-  1403c6a20 "Partial", 1403c6fd0 "Interior", 1403c71c0 "Stitch", 1403c6b60; the log prints "Job added: ...". Which adder
-  produces which numeric type is **Unknown**.
+  1403c6a20 "Partial", 1403c6fd0 "Interior", 1403c71c0 "Stitch", 1403c6b60; the log prints "Job added: ...". "Interior" makes type 3
+  (**Verified**: it writes 3 to `job+0x58`); the others' types are **Unknown**. The interior jobs of a zone (FUN_1403ab840, **Verified**) go to every
+  building in it with an interior object (+0x1f0) whose +0x2c flag is clear, that is neither a wall (virtual slot 0x2c8, non-null only for `WallBuilding`)
+  nor a gateway or door (slot 0x3d8, non-null only for `GatewayBuilding` and `DoorStuff`); the class is not checked there.
 - **Inputs** (the gather pass FUN_1403cbfa0, **Observed** unless marked; collision files, placement and groups in
   [../formats/collision.md](../formats/collision.md)). The job carries a zone (or, for interiors, a building), an AABB in
   Kenshi units and an origin; everything is put into one `hkGeometry` (triangles with a material int each) relative to
@@ -414,9 +419,22 @@ Hub→Stack 34054; Squin→Admag at 0.8 walks 132184 for 26834 straight (short r
       material 0; anything else is skipped.
     - owner a building with `path mode` IGNORE (0): skipped (and dropped from the list).
     - `path mode` WALKABLE (3): material 1, except 0 for an `is unwalkable roof` shape (group 27), and 0 for shapes outside
-      groups 9 and 19 when a building sub-object flag (+0x1f0 → +0x2c, meaning **Unknown**) is clear. When that flag is
-      set and the building is neither a child nor a door, its upper-floor contents are added too: shapes in groups 17, 18,
-      20, 21, 22 (mask 0x760000) through the interior collector below.
+      groups 9 and 19 when the building has an interior object with a real interior (+0x1f0 set, its +0x2c clear). When the
+      interior is blank (+0x2c set) and the building is neither a wall nor a gateway or door, its upper-floor contents are
+      added too: shapes in groups 17, 18, 20, 21, 22 (mask 0x760000) through the interior collector below. Without an
+      interior object every WALKABLE shape is material 1 and no upper-floor contents are added (**Verified**, FUN_1403c8660).
+    - **Interior object and class** (**Verified**, `FUN_140551b20`, run by the Building constructor `FUN_14055ca90`): a BUILDING
+      whose `interior` reference list is not empty gets the interior object (+0x1f0, 0x168 bytes, filled by `FUN_140551660`),
+      and its class (+0x198, read by virtual slot 0x358) becomes 12 BCTYPE_SHELL_WITH_INTERIOR when it is still 0. The base
+      constructor writes 0; subclass constructors then write their own (DoorStuff 1, UseableStuff 2, StorageBuilding 3,
+      GatewayBuilding 7, WallBuilding 9, LightBuilding 11, ...), so class 12 means a plain `Building`. The factory
+      (`FUN_14057cc70`) makes a plain `Building` unless the building is made as a door, is `is wall gate` (GatewayBuilding),
+      `links together` (WallBuilding), has `farm data`, or its `functionality` record's `function` is other than BF_ANY (0)
+      or BF_FLUFF (18) (switch table at 0x14057f174; BF_SHELL_WITH_INTERIOR 19 makes a UseableStuff). +0x2c is set when the
+      `interior` list's first BUILDING_PART has no `phs or mesh` and no `parts` (the "blank interior" / "interior blank"
+      parts): a blank interior. `is gateway` is read there only for an unrelated call; `cavernous` (+0xc2) and
+      `interior terrain` (+0xc1, set by `FUN_14029e0c0`) are not read by the generator (their readers: character
+      indoors and ray code at 0x1405ca260 and 0x140800481).
     - PROJECTED (1) and OBSTACLE (2): material 0. None of the nine functions that read `path mode` compares it with 1
       (**Verified** by reading each comparison), so **PROJECTED behaves exactly like OBSTACLE**; the tooltip's "2d
       projection" has no counterpart in the code.
@@ -426,7 +444,7 @@ Hub→Stack 34054; Squin→Admag at 0.8 walks 132184 for 26834 straight (short r
       (box, capsule as a 16-sided prism, convex hull, triangle mesh; planes and spheres give nothing).
   - **Carvers** (FUN_1403c4390, "N building carvers"): shapes of group 13 (the `interior mask` trigger hull) whose building
     has `BuildingClassType` 12 = BCTYPE_SHELL_WITH_INTERIOR (the class at +0x198, virtual slot 0x358; enum order from the
-    FCS) and the +0x1f0 → +0x2c flag clear; each becomes a carver (FUN_1403c1ae0 builds the volume, FUN_140dd9e80 wraps it as an `hkaiCarver`
+    FCS) and a real interior (+0x1f0 → +0x2c clear; both above, building shapes); each becomes a carver (FUN_1403c1ae0 builds the volume, FUN_140dd9e80 wraps it as an `hkaiCarver`
     with flags 0, i.e. without CARVER_ERODE_EDGES, the only flag). A carver removes the navmesh inside it, so the exterior navmesh has a hole where a house's interior is; the interior is built separately.
     **Observed** (original tiles 23.22, 24.22, point-in-polygon on a 5-unit grid within 40 of the origin): no exterior polygon under Old Storm
     House `407-`, Stephouse `560-`, Storm House `403-`/`671-`, Bughouse `433-` (0 of 289 points each), although their terrain lies 14..26 below
@@ -472,9 +490,9 @@ Hub→Stack 34054; Squin→Admag at 0.8 walks 132184 for 26834 straight (short r
     1 for WALKABLE and 0 otherwise; IGNORE ones are skipped. Vertices closer than 0.05 (squared, Havok) are merged. A
     destroyed building adds the triangle meshes of its `destroyed boundary` XML to the geometry (fcs.def calls it the
     "Navmesh cutter for destroyed interior"; the material it gets was not traced). 23 of the 68 buildings with `interior` parts have collision on them; `interior terrain` is set on 3
-    (**Verified** counts; Metal Warehouse, Ancient Factory, Ash Dome Ruin). **Observed** (tile 34.28): the Ancient Factory has no interior group and its
-    platforms are in the exterior tile, so `interior terrain` ("building interior includes terrain for generating navmesh") buildings are built as exterior
-    ("Own builder", shells); what the flag does in the generator's code was not traced.
+    (**Verified** counts; Metal Warehouse, Ancient Factory, Ash Dome Ruin). The generator never reads `interior terrain` ("building interior includes
+    terrain for generating navmesh", **Verified**: its only reader `FUN_14029e0c0` stores it at Building +0xc1, whose readers are character and ray code);
+    the three are built as exterior because their first `interior` part is blank (above, building shapes; **Observed** tile 34.28: no interior group).
   - BUILDING `path mode` counts 92/84/304/123 for 0/1/2/3 (**Verified**, 603 records). Enum names (FCS `PathMode`, the
     editor's enum): 0 NAVMESH_IGNORE, 1 NAVMESH_PROJECTED, 2 NAVMESH_OBSTACLE (default), 3 NAVMESH_WALKABLE (**Verified**).
     Other fields: `destroyed navmesh` (6 buildings, walls; read by `Building::setDestroyed` `FUN_140557280`, which rebuilds the navmesh in the building's bounds when set,
