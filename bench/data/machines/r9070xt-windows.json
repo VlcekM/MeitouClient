@@ -1,0 +1,13 @@
+{
+  "id": "r9070xt-windows",
+  "github": "LucasSKrewer",
+  "cpu": "AMD Ryzen 7 3700X",
+  "gpu": "AMD Radeon RX 9070 XT",
+  "ram_gb": 64,
+  "os": "Windows 10 Pro",
+  "screen": "3440x1440",
+  "resolution": "3440x1361",
+  "notes": "Desktop. Windows build (win-x64). Play scenario renders at 3440x1361 in a maximised window on a 3440x1440 ultrawide screen; the base switch opened at 1280x960. Steam copy of Kenshi 1.0.65 (integrity verified), no mods: data hard-linked into a separate folder with an empty mods.cfg and no settings.cfg/controls.cfg (game defaults).",
+  "added": "2026-10-31",
+  "os_family": "windows"
+}
