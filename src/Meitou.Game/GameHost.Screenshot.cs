@@ -198,7 +198,6 @@ sealed partial class GameHost
                 display.EndFrame();
                 Thread.Sleep(5);
             }
-            if (panelName == "editor") { for (int i = 0; i < 30; i++) { DrawWorld(w, h); display.EndFrame(); } context.Finish(); var sw = System.Diagnostics.Stopwatch.StartNew(); for (int i = 0; i < 120; i++) { DrawWorld(w, h); display.EndFrame(); } context.Finish(); Console.WriteLine($"TMPBENCH editor frame {sw.Elapsed.TotalMilliseconds / 120:0.00} ms (ready {editorBarReady})"); }
             DrawWorld(w, h);
             if (overlay is not null)
             {

@@ -64,7 +64,7 @@ sealed partial class GameHost
         var frame = new EditorBarFrame(camera.Target, camera.Yaw, camera.Pitch, camera.Distance, sky.Weather, gpu.Weather, gpu.WeatherParticles, gpu.Characters?.Fill ?? default, render.Water, render.Reflections);
         PlaceEditorCamera(bar, width, height);
         if (gpu.Characters is { } lit) lit.Fill = EditorBarCharacterFill;
-        if (Environment.GetEnvironmentVariable("TMPNOCAP") is null) (gpu.ViewCap, render.Water, render.Reflections) = (EditorBarViewCap, false, false);
+        (gpu.ViewCap, render.Water, render.Reflections) = (EditorBarViewCap, false, false);
         if (ActiveObjects is { } objects) objects.InteriorView = EditorBarView;
         sky.Weather = SkyWeather.Default;
         gpu.Weather = null;
