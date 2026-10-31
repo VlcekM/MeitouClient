@@ -159,6 +159,15 @@ BREAKDOWN_COLS = (
     [f'cpu_{_cn(s)}_{q}_ms' for s in F12_STAGES if s not in F12_GPU_ONLY for q in ('p50', 'p99')] + ['cpu_total_p50_ms', 'cpu_total_p99_ms'] +
     [f'gpu_{_cn(s)}_{q}_ms' for s in F12_STAGES if s not in F12_CPU_ONLY for q in ('p50', 'p99')] +
     ['gpu_other_p50_ms', 'gpu_other_p99_ms', 'gpu_total_p50_ms', 'gpu_total_p99_ms'])
+# Peak video memory (frames.csv vram_mb) over the frames after "settle", MB; blank = frames.csv without it (older builds, Metal). Last column.
+VRAM_COLS = ['vram_peak_mb']
+
+def vram_peak(path):
+    """The largest vram_mb of a frames.csv after "settle", formatted; '' when the file or the column is missing."""
+    if not os.path.isfile(path): return ''
+    with open(path, encoding='utf-8', newline='') as fh:
+        v = [float(r['vram_mb']) for r in csv.DictReader(fh) if r['segment'] != 'settle' and r.get('vram_mb')]
+    return f'{max(v):.0f}' if v else ''
 
 def breakdown(path):
     """dict column -> formatted ms (3 decimals) for BREAKDOWN_COLS from a frames.csv; {} when the file or its columns are missing."""
@@ -210,11 +219,11 @@ def history(csvpath, outdir, note, driver, machine='', cpu='', ram_gb='', os_nam
         rows.append([m.group(1) if m else '', m.group(2) if m else '', b[1], b[2] if len(b) > 2 else '', cfg.get('platform', ''), cfg.get('data', ''),
                      cfg.get('save', ''), cfg.get('segments', ''), num, f"{s['over33']:.1f}", fmt(s['p50']), fmt(s['p99']), fmt(s['mx'], 0), s['over100'],
                      fmt(s['sw_p99']), fmt(s['sw_max'], 0), gpu, driver, note, machine, cpu, ram_gb, os_name, kernel, res]
-                    + [bd.get(c, '') for c in BREAKDOWN_COLS])
+                    + [bd.get(c, '') for c in BREAKDOWN_COLS] + [vram_peak(os.path.join(d, 'bench', 'frames.csv'))])
     new = not os.path.isfile(csvpath) or os.path.getsize(csvpath) == 0
     with open(csvpath, 'a', newline='', encoding='utf-8') as f:
         w = csv.writer(f)
-        if new: w.writerow(HIST_COLS + EXTRA_COLS + BREAKDOWN_COLS)
+        if new: w.writerow(HIST_COLS + EXTRA_COLS + BREAKDOWN_COLS + VRAM_COLS)
         w.writerows(rows)
     print(f'history: {len(rows)} row(s) appended to {csvpath}')
     return 0

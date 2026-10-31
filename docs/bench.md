@@ -109,7 +109,7 @@ Each interaction targets the nearest candidate within 150 m and retries every 3 
 `MEITOU_BENCH_ONLY=settle,zoom` keeps only the named segments (the run is deterministic from the save, so a hitch comes back at its tick).
 
 `frames.csv` has one row per frame: interval, loop sections (`BenchLap`), render-thread stages (`StageClock`), GPU stages, world tick steps
-and the slowest system (the world's `TickProfile`, as F12's sim rows), GC counts, bytes and pause (`BenchGcListener`: the
+and the slowest system (the world's `TickProfile`, as F12's sim rows), video memory (`vram_mb`, Vulkan, read every 30 frames), GC counts, bytes and pause (`BenchGcListener`: the
 runtime's events in process), pipelines created while drawing. `summary.md` has per-segment percentiles, the largest stages, steps and
 systems, the stutters (over 20 ms and twice the segment's median) and the collections. A frame's interval holds the previous frame's tail.
 
