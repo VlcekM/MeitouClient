@@ -301,8 +301,8 @@ its 1,278 of 42,908 all lie where the defensive walls' walkway (y ~1,049, kept i
 z 66,200..66,500 reached where the tube's 24° top rises out of the wall walkway (`Defensive Wall IV 34.46:20-`). Why the original does not join them is
 **Unknown** (both walkable; Havok joins faces by edge matching, not by voxel steps). Engine choice: where a feature's upward surface runs inside a building's
 solid, its surface within 2 cells (`FeatureSeamCells`) is removed, so the walkway and the feature are not neighbours; the tube then keeps 1,328 samples,
-34.46's floors under floors 5,183 → 544 (510 before features), other zones within 0.1 %. The coarse route's footprints and ragdoll collision do not take
-features yet.
+34.46's floors under floors 5,183 → 544 (510 before features), other zones within 0.1 %. Features are obstacles of the long routes too (below); ragdoll
+collision does not take them yet.
 **Foliage meshes**: the same inside test applies to the triangle meshes of walkable foliage (FOLIAGE_MESH `walkable`), not to obstacle foliage (engine choice
 from the tiles). **Observed** (`--compare`): in 18.39 (Swamp Village; 371 of 383 foliage shapes are meshes, open below) the water and ground under walkable
 foliage domes (e.g. -60348,34444: water 100 under a face at 205) are ours only; with the test ours-only falls 6.6 → 5.0 %, floors under floors 395 → 286,
@@ -415,7 +415,12 @@ water costs; a step whose centre line crosses a building's footprint hull costs 
 walls and towns where open ground allows (a 5.5k-unit wall is walked round; 8× crossed it); the player's buildings are a second layer,
 redrawn on the pool when one is added or removed; IGNORE `path mode`, gateways, destroyed buildings and WALKABLE ones that are features or
 under the agent height, i.e. bridges, walkboards, pontoons, platforms, are left out; WALKABLE covers walls and houses too, **Verified**
-against the placed records); the navmesh part ends inside loaded zones, the rest is provisional and
+against the placed records). Map features cost the same: a feature is no convex block (Mourn's tube arches over the town), so it is sampled every 48 units
+(`BuildingFootprints.FeatureObstacles`), a sample solid where the navmesh's inside rule holds (the nearest face over the terrain faces up) and the top is more
+than the agent height over it; each row's run of samples is one rectangle. **Observed** (`meitou-tools navmesh --route`, base game and the three mods: 7,255
+building footprints, 17,085 feature rectangles, sampled in 1.2 s): across Rebirth west to east (-49500,-56080 → -45500,-56080) the samples of the route
+inside a feature fell 25 → 3 of ~360 (length 5,817 → 5,594), north to south past the statue (-47500,-58500 → -47500,-53500) 89 → 0 (5,318 → 6,054); at the
+Hub, past its cliff blocks (-52800,3000 → -51700,4800) 18 → 0 (3,764 → 3,775), (-53200,4500 → -51200,3400) 3 → 0. The navmesh part ends inside loaded zones, the rest is provisional and
 re-asked; its zones within `Lookahead` load early. When meshes go live the host sends one `RepathCommand` with those zones at most every second (`RepathCoalesceSeconds`), and only GoTo walkers whose path still to walk crosses one of them (or whose answer is pending) ask again: re-asking every walker at each zone turned long walks about again and again (issue #50). A goal in a loaded zone with no navmesh path is a long route too when its zone is
 in another block of side-by-side loaded zones than the walker's (two groups of walkers far apart); within one block, the navmesh's
 nearest reachable point and a straight provisional tail (the terrain search, under one lock for every path thread, is not run there;

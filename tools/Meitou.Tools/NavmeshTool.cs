@@ -25,7 +25,7 @@ static class NavmeshTool
         var settings = new NavBuildSettings();
         int repeat = 1;
         float[]? box = null, pathArg = null;
-        bool doorsClosed = false, noInteriors = false; float? toY = null, fromY = null; float[]? near = null, probe = null; string? probeArg = null;
+        bool doorsClosed = false, noInteriors = false; float? toY = null, fromY = null; float[]? near = null, probe = null, route = null; string? probeArg = null;
         int around = 0;
         bool fingerprint = false, featureTops = false;
         string? interiorKey = null;
@@ -53,6 +53,7 @@ static class NavmeshTool
                 case "--repeat": repeat = int.Parse(args[++i], CultureInfo.InvariantCulture); break;
                 case "--fingerprint": fingerprint = true; break;
                 case "--feature-tops": featureTops = true; break;
+                case "--route": route = args[++i].Split(',').Select(t => float.Parse(t, CultureInfo.InvariantCulture)).ToArray(); break;
                 case "--compare":
                     while (i + 1 < args.Length && !args[i + 1].StartsWith("--", StringComparison.Ordinal))
                     {
@@ -87,6 +88,7 @@ static class NavmeshTool
         Console.WriteLine($"game data and levels loaded ({watch.ElapsedMilliseconds} ms)");
         if (compare.Count > 0) return Compare(install, db, levels, compare, settings);
         if (compareInteriors.Count > 0) return CompareInteriors(install, db, levels, compareInteriors, settings, around);
+        if (route is { Length: 4 }) return Route(install, db, levels, route);
         if (fingerprint) return Fingerprint(install, db, levels, zone is { } only ? [only] : [new ZoneCoordinate(20, 32), new ZoneCoordinate(21, 32)], settings);
         if (zone is null)
         {
@@ -242,6 +244,49 @@ static class NavmeshTool
         {
             WriteGeometryObj(g, Path.ChangeExtension(obj, ".geometry.obj"));
             WriteMeshObj(mesh, obj);
+        }
+        return 0;
+    }
+
+    /// <summary>
+    /// <c>--route x0,z0,x1,z1</c>: the long-range route (<see cref="CoarseRoute"/>) between two points with the buildings' footprints, then with the map features' too, as the game
+    /// builds it: its length, its turns and the samples of it inside a feature footprint.
+    /// </summary>
+    static int Route(GameInstall install, GameDatabase db, WorldLevelData levels, float[] r)
+    {
+        using var map = TerrainHeightmap.Open(install);
+        Func<float, float, float> terrain = (x, z) => (float)map.HeightAt(x, z);
+        Func<double, double, float> placement = (x, z) => { lock (map) return (float)map.HeightAt(x, z); };
+        var raw = map.Downsample(2, out int size);
+        var grid = new HeightWindow(0, 0, 2, size, size, raw);
+        Func<float, float, float> slope = (x, z) => grid.TryHeightAt(x, z, out float h) ? h : terrain(x, z);
+        var footprints = new BuildingFootprints(install, db, levels);
+        var buildings = footprints.Obstacles(levels.Buildings(), levels, placement);
+        var watch = Stopwatch.StartNew();
+        var features = footprints.FeatureObstacles(placement);
+        Console.WriteLine($"{buildings.Count} building footprints, {features.Count} feature rectangles ({watch.ElapsedMilliseconds} ms)");
+        var from = new Vector3(r[0], terrain(r[0], r[1]), r[1]);
+        var to = new Vector3(r[2], terrain(r[2], r[3]), r[3]);
+        foreach (var (name, hulls) in new[] { ("buildings", buildings), ("buildings and features", (IReadOnlyList<Vector2[]>)[.. buildings, .. features]) })
+        {
+            var coarse = new CoarseRoute(terrain, () => slope, () => hulls);
+            var points = coarse.Find(from, to, Meitou.Simulation.WaterCost.Uniform(1));
+            float length = 0;
+            int inside = 0, samples = 0;
+            for (int i = 1; i < points.Count; i++)
+            {
+                length += Vector2.Distance(new(points[i - 1].X, points[i - 1].Z), new(points[i].X, points[i].Z));
+                int n = (int)MathF.Ceiling(Vector2.Distance(new(points[i - 1].X, points[i - 1].Z), new(points[i].X, points[i].Z)) / 16);
+                for (int k = 0; k < n; k++)
+                {
+                    var q = Vector3.Lerp(points[i - 1], points[i], k / (float)n);
+                    samples++;
+                    foreach (var f in features)
+                        if (q.X >= f[0].X && q.X <= f[1].X && q.Z >= f[0].Y && q.Z <= f[2].Y) { inside++; break; }
+                }
+            }
+            Console.WriteLine($"route with {name}: {points.Count} points, length {length:0}, {inside} of {samples} samples (every 16) inside a feature footprint");
+            if (verbose) foreach (var q in points) Console.WriteLine($"  {q.X:0},{q.Y:0},{q.Z:0}");
         }
         return 0;
     }
