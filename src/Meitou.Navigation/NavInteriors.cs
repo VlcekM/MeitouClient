@@ -65,12 +65,8 @@ internal static class NavInteriors
         int exteriorCount = exterior.PolygonCount;
         for (int k = 0; k < interiors.Count; k++)
             Join(vertices, polygons, neighbours, areas, kept, links, doorOf, doorIds, exteriorCount, offsets[k], interiors[k].PolygonCount, doorless?[k] ?? false, names?[k] ?? $"interior {k}", log);
-        var street = log is null ? null : Enumerable.Range(0, exteriorCount).Where(p => kept[p]).ToList();
-        var ownKept = log is null ? null : kept.ToArray();
 
         CarryKeep(polygons.Count, neighbours, links, areas, kept);
-
-        if (log is not null) LogReached(street!, neighbours, links, kept, ownKept!, offsets, interiors.Select(m => m.PolygonCount).ToList(), names, log);
 
         var heights = new List<HeightGrid?>();
         foreach (var m in interiors.Prepend(exterior))
@@ -106,37 +102,6 @@ internal static class NavInteriors
         {
             if (n < 0 || kept[n] || areas[n] == NavArea.Null) return;
             kept[n] = true;
-            queue.Enqueue(n);
-        }
-    }
-
-    /// <summary>
-    /// The join log's reach lines: each interior whose own kept part (any of it when its pruning kept nothing) is reached over kept polygons (neighbours
-    /// and links) from the exterior's own kept set, that is from the street (<c>meitou-tools navmesh --compare-interiors</c> counts these as joined).
-    /// </summary>
-    static void LogReached(List<int> street, List<int[]> neighbours, List<List<int>?> links, List<bool> kept, bool[] ownKept, List<int> offsets, List<int> counts, IReadOnlyList<string?>? names, Action<string> log)
-    {
-        var reached = new bool[kept.Count];
-        var queue = new Queue<int>();
-        foreach (int p in street) { reached[p] = true; queue.Enqueue(p); }
-        while (queue.Count > 0)
-        {
-            int p = queue.Dequeue();
-            foreach (int n in neighbours[p]) Visit(n);
-            if (links[p] is { } l) for (int i = 1; i < l.Count; i += 2) Visit(l[i]);
-        }
-        for (int k = 0; k < offsets.Count; k++)
-        {
-            // The interior's own kept part when it has one (a doorway strip kept only through the join is not the room), else any of it.
-            var range = Enumerable.Range(offsets[k], counts[k]);
-            bool own = range.Any(p => ownKept[p]);
-            if (range.Any(p => reached[p] && (!own || ownKept[p]))) log($"    interior {names?[k] ?? $"interior {k}"} reached from the exterior");
-        }
-
-        void Visit(int n)
-        {
-            if (n < 0 || reached[n] || !kept[n]) return;
-            reached[n] = true;
             queue.Enqueue(n);
         }
     }

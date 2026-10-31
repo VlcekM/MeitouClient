@@ -689,8 +689,9 @@ static class NavmeshTool
             if (groups.Count == 0) { Console.WriteLine($"{zone}: no interior groups"); continue; }
             var g = gatherer.Gather(zone);
             var joinLog = new List<string>();
-            var full = NavMeshPipeline.BuildZone(gatherer, g, settings, out _, interiors: true, log: joinLog.Add);
+            var full = NavMeshPipeline.BuildZone(gatherer, g, settings, out _, out var inner, interiors: true, log: joinLog.Add);
             ZoneNavMesh mesh;
+            bool[]? resolved = null;
             if (around == 0) mesh = ZoneKeptClosure.ResolveAlone(full, settings);
             else
             {
@@ -703,7 +704,8 @@ static class NavmeshTool
                             var n = new ZoneCoordinate(zone.X + dx, zone.Y + dz);
                             loaded[n] = NavMeshPipeline.BuildZone(gatherer, gatherer.Gather(n), settings, out _, interiors: true);
                         }
-                mesh = full.WithKept(ZoneKeptClosure.Resolve(loaded, settings)[zone]).WithoutPruned();
+                resolved = ZoneKeptClosure.Resolve(loaded, settings)[zone];
+                mesh = full.WithKept(resolved).WithoutPruned();
             }
             var all = full.WithKept(Enumerable.Repeat(true, full.PolygonCount).ToArray());
             // Each of our interiors' hull, to name the building an original group lies in (the one holding most of its face centres).
@@ -713,7 +715,7 @@ static class NavmeshTool
             if (verbose) FurnitureOverOriginal(gatherer, zone, groups, settings);
             int faces = coverage.Sum(c => c.Faces), covered = coverage.Sum(c => c.Covered);
             Console.WriteLine($"{zone}: {groups.Count} interior groups, {covered}/{faces} faces covered ({(faces > 0 ? 100.0 * covered / faces : 100):0.0} %)");
-            CompareJoins(gatherer, zone, groups, hulls, Joined(joinLog), settings);
+            CompareJoins(gatherer, zone, groups, hulls, Reached(zone, full, inner, joinLog, settings, resolved), settings);
             foreach (var c in coverage)
                 if (c.Faces > 0 && c.Covered < 0.9 * c.Faces)
                 {
@@ -729,17 +731,45 @@ static class NavmeshTool
         return 0;
     }
 
-    /// <summary>The interiors a build's log reports reached from the street (<see cref="NavInteriors"/>: "interior KEY reached from the exterior").</summary>
-    static HashSet<string> Joined(IEnumerable<string> log)
+    /// <summary>
+    /// The interiors of a zone's build reached from the street: the zone's kept set resolved alone (its seeds and the border rule, as with no neighbour
+    /// loaded) or with its neighbours (<paramref name="resolved"/>, <c>--around n</c>), walked over kept polygons, joins and links from its exterior's kept polygons; an interior counts when a polygon its own pruning kept is
+    /// reached (any of it when that kept nothing: a doorway strip kept only through a join is not the room). <paramref name="log"/> is the build's listing,
+    /// whose interior lines name the non-empty interiors in the order they were appended.
+    /// </summary>
+    static HashSet<string> Reached(ZoneCoordinate zone, ZoneNavMesh full, IReadOnlyList<ZoneNavMesh> inner, List<string> log, NavBuildSettings settings, bool[]? resolved = null)
     {
-        const string Head = "    interior ", Tail = " reached from the exterior";
-        return [.. log.Where(l => l.StartsWith(Head, StringComparison.Ordinal) && l.EndsWith(Tail, StringComparison.Ordinal)).Select(l => l[Head.Length..^Tail.Length])];
+        var names = new List<string>();
+        foreach (var line in log)
+        {
+            var m = System.Text.RegularExpressions.Regex.Match(line, @"^  interior (\S+): (\d+) polygons,");
+            if (m.Success && int.Parse(m.Groups[2].Value, CultureInfo.InvariantCulture) > 0) names.Add(m.Groups[1].Value);
+        }
+        var keep = resolved ?? ZoneKeptClosure.Resolve(new Dictionary<ZoneCoordinate, ZoneNavMesh> { [zone] = full }, settings)[zone];
+        int exterior = full.PolygonCount - inner.Sum(m => m.PolygonCount);
+        var reached = new bool[full.PolygonCount];
+        var queue = new Queue<int>();
+        for (int p = 0; p < exterior; p++) if (keep[p]) { reached[p] = true; queue.Enqueue(p); }
+        while (queue.Count > 0)
+            foreach (int n in full.NeighboursOf(queue.Dequeue()))
+                if (keep[n] && !reached[n]) { reached[n] = true; queue.Enqueue(n); }
+        var result = new HashSet<string>();
+        int offset = exterior;
+        for (int k = 0; k < inner.Count && k < names.Count; k++)
+        {
+            var own = inner[k].Kept;
+            bool any = own.Any(x => x);
+            for (int i = 0; i < own.Length; i++)
+                if (reached[offset + i] && (!any || own[i])) { result.Add(names[k]); break; }
+            offset += own.Length;
+        }
+        return result;
     }
 
     /// <summary>
     /// <c>--compare-interiors</c> joins: per original interior group, whether the original connects it to the exterior (mesh connections in its streaming
     /// set, docs/formats/havok-tagfile.md "Interior joins") and whether ours, the interior whose hull holds most of its faces, is reached from the street
-    /// (over kept polygons and joins from the exterior's own kept set). Lists the mismatches: connected in the original but not reached in ours (sealed), and
+    /// (<see cref="Reached"/>). Lists the mismatches: connected in the original but not reached in ours (sealed), and
     /// reached in ours but unconnected in the original. An interior not reached in this zone's build is looked up in the neighbours' builds (its door may
     /// lie over the border).
     /// </summary>
@@ -759,8 +789,8 @@ static class NavmeshTool
                         if (dx == 0 && dz == 0) continue;
                         var n = new ZoneCoordinate(zone.X + dx, zone.Y + dz);
                         var log = new List<string>();
-                        NavMeshPipeline.BuildZone(gatherer, gatherer.Gather(n), settings, out _, interiors: true, log: log.Add);
-                        neighbours.UnionWith(Joined(log));
+                        var built = NavMeshPipeline.BuildZone(gatherer, gatherer.Gather(n), settings, out _, out var nInner, interiors: true, log: log.Add);
+                        neighbours.UnionWith(Reached(n, built, nInner, log, settings));
                     }
             }
             return neighbours.Contains(key);

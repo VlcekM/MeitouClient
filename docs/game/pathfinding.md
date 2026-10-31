@@ -344,7 +344,8 @@ other interior in 18.35, 19.29, 20.32, 26.13, 43.11, 47.16, 48.45, 50.33 has one
 original leaves Small Shack `48.13:8-` (`110371`) unconnected too; Meitou joins it.
 **Join sweep**: `meitou-tools navmesh --compare-interiors x,z ... | towns` (`towns`: every zone holding a town placement) reports per original
 interior group whether the original connects it (mesh connections in its streaming set) and whether ours, the interior whose hull holds most of its
-faces, is reached from the street (over kept polygons and joins from the exterior's own kept set, in its zone or a neighbour's); SEALED marks connected
+faces, is reached from the street (over kept polygons, joins and links from the exterior's kept polygons once the zone's kept set is resolved alone or,
+with `--around n`, with its neighbours; a polygon its own pruning kept must be reached; in its zone or a neighbour's); SEALED marks connected
 in the original but not reached in ours. **Observed** (225 zones, 1090 groups, 1066 connected): 42 sealed, 7 reached in ours only. 24 of the sealed are ruins (`destroyed`), whose original groups mostly hold the intact
 interior (14.5 Outposts: our ruins cover 13 % of their faces), so those tiles were built with the building standing (**Unknown** how the original
 handles them). Of the 18 intact ones, by cause (**Observed**, `--interior`, `--probe`, the original's connection edges): unseeded doorless
