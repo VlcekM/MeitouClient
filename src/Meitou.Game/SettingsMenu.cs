@@ -83,6 +83,12 @@ sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, 
     Slider HarpoonLimitSlider => harpoonLimitSlider ??= new("Harpoon limit", global::Meitou.Simulation.Combat.RangedTuning.MinStuckLimit, global::Meitou.Simulation.Combat.RangedTuning.MaxStuckLimit, () => (config.Gameplay ??= new()).HarpoonLimit,
         v => SetGameplay((config.Gameplay ?? new()) with { HarpoonLimit = Math.Clamp((int)MathF.Round(v), global::Meitou.Simulation.Combat.RangedTuning.MinStuckLimit, global::Meitou.Simulation.Combat.RangedTuning.MaxStuckLimit) }), "0", Logarithmic: true,
         Faithful: global::Meitou.Simulation.Combat.RangedTuning.DefaultStuckLimit);
+    Slider? healingGoodwillSlider;
+    Slider HealingGoodwillSlider => healingGoodwillSlider ??= new("Goodwill per patient", 1, UserConfig.MaxHealingGoodwill, () => config.HealingGoodwillAmount, v =>
+    {
+        config.HealingGoodwillAmount = Math.Clamp(MathF.Round(v), 1, UserConfig.MaxHealingGoodwill);
+        GameplayChanged?.Invoke();
+    }, "0", Meitou: UserConfig.DefaultHealingGoodwill);
     Slider? groundItemsSlider;
     Slider GroundItemsSlider => groundItemsSlider ??= new("Dropped items kept", 16, global::Meitou.Simulation.Items.GroundItems.MaxLimit, () => config.GroundItemLimit,
         v => config.GroundItemLimit = Math.Clamp((int)MathF.Round(v), 1, global::Meitou.Simulation.Items.GroundItems.MaxLimit), "0", Logarithmic: true,
@@ -359,6 +365,10 @@ sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, 
                 Toggle: new("Production far away", () => config.UnloadedProduction, v => { config.UnloadedProduction = v; OffscreenChanged?.Invoke(); }, Remaster: true, OnOff: true)));
             result.Add(new("Doors close behind", "A door someone opened by walking through it closes again a few seconds after the last person went through. In the game doors stay open.",
                 Toggle: new("Doors close behind", () => config.DoorsCloseBehind, v => { config.DoorsCloseBehind = v; DoorsCloseChanged?.Invoke(v); }, Remaster: true, OnOff: true)));
+            result.Add(new("Healing goodwill", "Treating a knocked-out character of another faction, enemies included, wins its faction over: each patient your medics finish raises "
+                + "that faction's relation to you by the amount below, up to the point where it would become your ally. In the game first aid wins only a sliver, and never past a relation of 5.",
+                Toggle: new("Healing goodwill", () => config.HealingGoodwill, v => { config.HealingGoodwill = v; GameplayChanged?.Invoke(); }, Remaster: true, OnOff: true)));
+            result.Add(new(HealingGoodwillSlider.Label, "Relation points a faction gains for each of its downed people your medics treat (Healing goodwill; -30 or less is hostile, above 50 allied).", Slider: HealingGoodwillSlider));
             result.Add(new("Decapitation", "A blow that destroys a character's head cuts it off, by the same rule the Dismemberment setting cuts off limbs. In the game a destroyed head only kills.",
                 Toggle: new("Decapitation", () => config.Decapitation, v => { config.Decapitation = v; GameplayChanged?.Invoke(); }, Remaster: true, OnOff: true)));
             result.Add(new("Pause after loading", "A save starts paused once it has loaded, so nothing happens before you look around. In the game it runs at once.",
@@ -623,6 +633,8 @@ sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, 
         LateDefencesChanged?.Invoke(false);
         config.KeepRoamers = config.OffscreenFights = config.OffscreenHealing = config.CampaignAncestorsOnce = config.KeepWild = config.ResidentSchedule = config.UnloadedProduction = true;
         config.DoorsCloseBehind = true;
+        config.HealingGoodwill = true;
+        config.HealingGoodwillAmount = UserConfig.DefaultHealingGoodwill;
         config.Decapitation = true;
         DoorsCloseChanged?.Invoke(true);
         config.PauseOnLoad = false;

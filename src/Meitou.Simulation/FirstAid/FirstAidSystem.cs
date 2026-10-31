@@ -40,6 +40,12 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
     public ItemFactory Items { get; } = items;
     /// <summary>The relation event of bandaging an unconscious patient of another faction (<see cref="FactionDeeds.FirstAid"/>); null: none.</summary>
     public FactionDeeds? Deeds { get; set; }
+    /// <summary>
+    /// Meitou's Healing goodwill (0: off, the game's first-aid deed alone): a player medic that finishes treating a downed (unconscious or crawling) character of another faction raises
+    /// that faction's relation to the player by this many points, never past the ally line (<see cref="FactionRelations.AllyThreshold"/>); once per patient while it stays down.
+    /// </summary>
+    public float HealGoodwill { get; set; }
+    readonly HashSet<CharacterId> thanked = [];
     readonly XpService xp = new(constants, options);
     readonly BodyOptions bodyOptions = options;
 
@@ -345,6 +351,7 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
         {
             Say(world, m, medicCold.TreatTarget, HealingOtherFinished, BeingHealedFinished);
             patientCold.StuckBolts = null;   // the bolts go when first aid has nothing left to do (FUN_14064d800 -> FUN_14052bc10)
+            Goodwill(world, medicCold, p);
             End(world, m);   // nothing left to bandage
             return;
         }
@@ -359,6 +366,7 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
         float bandaged = body.Treat(dt, skill, quality, robot, ctx, out int touched);
         if (bandaged <= 0)
         {
+            Goodwill(world, medicCold, p);
             End(world, m);
             return;
         }
@@ -367,6 +375,20 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
         xp.Medic(stats, race, medicRace, dt, StatOf(robot));
         // An unconscious patient's faction is grateful to the medic's (engine choice: every update that bandages; the original's update fires it only when its loop got past the wounds).
         Deeds?.FirstAid(world, m, p, dt);
+    }
+
+    /// <summary>The <see cref="HealGoodwill"/> of a finished treatment of slot <paramref name="p"/>.</summary>
+    void Goodwill(World world, CharacterCold medic, int p)
+    {
+        var table = world.Characters;
+        if (HealGoodwill <= 0 || !medic.IsPlayer || Relations is not { } r || table.Cold(p) is not { Medical: { Dead: false } med } patient || !(med.Unconscious || med.Crawling)) return;
+        int player = r.PlayerFaction;
+        if (patient.Faction == player || !r.Contains(patient.Faction) || !r.Contains(player) || r.Factions[patient.Faction].NotReal) return;
+        // A patient that got up (or died) since may be thanked for again.
+        thanked.RemoveWhere(id => !table.TryResolveNext(id, out int s) || table.Cold(s) is not { Medical: { Dead: false } m } || !(m.Unconscious || m.Crawling));
+        if (!thanked.Add(table.IdOf(p))) return;
+        float now = r.Get(patient.Faction, player);
+        if (now < FactionRelations.AllyThreshold) PlayerRelations.Add(world, r, patient.Faction, player, MathF.Min(HealGoodwill, FactionRelations.AllyThreshold - now));
     }
 
     /// <summary>

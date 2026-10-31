@@ -69,6 +69,8 @@ public sealed class StandardSystemOptions
     public Meitou.Simulation.Crime.ArrestSettings? Arrest { get; init; }
     /// <summary>Meitou (on; Faithful off): doors walkers opened close behind them (<see cref="Meitou.Simulation.Locks.LockSystem.DoorsCloseBehind"/>).</summary>
     public bool DoorsCloseBehind { get; init; } = true;
+    /// <summary>Meitou's Healing goodwill points (<see cref="Meitou.Simulation.FirstAid.FirstAidSystem.HealGoodwill"/>; 0: off, as the game).</summary>
+    public float HealGoodwill { get; init; }
     public Meitou.Simulation.Kidnap.KidnapSettings? Kidnap { get; init; }
     public Meitou.Simulation.Kidnap.CaptiveSettings? Captives { get; init; }
     public Meitou.Simulation.Trading.TradeSettings? Trade { get; init; }
@@ -169,7 +171,7 @@ public static class StandardSystems
         if (combat is not null) (combat.TurretGuns, combat.Towns) = (new Meitou.Data.Gameplay.Combat.TurretCatalog(data.Db), data);
         if (Has(StandardParts.Pursuit)) systems.Add(new PursuitSystem(combat!));
         if (Has(StandardParts.Movement)) systems.Add(movement = new MovementSystem(new PathService(walkability, o.SynchronousPaths)));
-        if (Has(StandardParts.FirstAid)) systems.Add(new FirstAid.FirstAidSystem(data.Bodies.Constants, data.BodyOptions, data.Items, o.FirstAid) { Deeds = deeds, Relations = Has(StandardParts.Aggro) ? data.Relations : null });
+        if (Has(StandardParts.FirstAid)) systems.Add(new FirstAid.FirstAidSystem(data.Bodies.Constants, data.BodyOptions, data.Items, o.FirstAid) { Deeds = deeds, Relations = Has(StandardParts.Aggro) ? data.Relations : null, HealGoodwill = o.HealGoodwill });
         WeatherSystem? weather = null;
         if (Has(StandardParts.Body)) { systems.Add(new BodySystem(data.Bodies.Constants, data.BodyOptions, o.BodyTimeScale, data.Db)); systems.Add(weather = new WeatherSystem(data.Bodies.Constants) { Db = data.Db, Buildings = o.RagdollEnvironment }); }
         Meitou.Simulation.Carrying.CarrySystem? carry = null;

@@ -99,6 +99,15 @@ sealed class UserConfig
     public bool UnloadedProduction { get; set; } = true;
     /// <summary>Doors a walker opened close behind it after 5 s (Advanced settings; Faithful off: they stay open, as in the game; docs/simulation.md "Cages, beds and locks").</summary>
     public bool DoorsCloseBehind { get; set; } = true;
+    /// <summary>
+    /// Healing goodwill (Advanced settings; Faithful off: only the game's small first-aid deed): a player medic that finishes treating a downed character of another faction raises that
+    /// faction's relation to the player by <see cref="HealingGoodwillAmount"/> points, up to the ally line (<see cref="Meitou.Simulation.FirstAid.FirstAidSystem.HealGoodwill"/>).
+    /// </summary>
+    public bool HealingGoodwill { get; set; } = true;
+    public float HealingGoodwillAmount { get; set; } = DefaultHealingGoodwill;
+    public const float DefaultHealingGoodwill = 5, MaxHealingGoodwill = 25;
+    /// <summary>The points the simulation adds per patient: 0 while <see cref="HealingGoodwill"/> is off.</summary>
+    [JsonIgnore] public float HealGoodwillPoints => HealingGoodwill ? Math.Clamp(HealingGoodwillAmount, 1, MaxHealingGoodwill) : 0;
     /// <summary>A blow that destroys the head cuts it off, under the limbs' rule (Advanced settings; Faithful off: the game never does; docs/game/character-stats.md "Decapitation").</summary>
     public bool Decapitation { get; set; } = true;
     /// <summary>A loaded or imported save starts paused (Advanced settings, a plain on/off switch outside the Faithful / Meitou sides; off by default: it runs at once, as in the game). <c>--load</c> is not paused.</summary>
