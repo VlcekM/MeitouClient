@@ -9,8 +9,8 @@ namespace Meitou.Game;
 
 /// <summary>
 /// The Meitou UI's character editor scene (<see cref="EditorBar"/>, docs/characters.md "Character editor"): the world's renderers draw a copy of The Hub's bar at night
-/// with the edited character in it and the others being edited sat behind, from the editor's orbit. The original's stage (<see cref="DrawEditorStage"/>) stays for the
-/// faithful UI and the Metal renderer, and covers the bar until its parts are in.
+/// with the edited character in it and the others being edited sat behind, from the editor's orbit, on both hosts. The original's stage (<see cref="DrawEditorStage"/>) stays for the
+/// faithful UI, and covers the bar until its parts are in.
 /// </summary>
 sealed partial class GameHost
 {
@@ -24,28 +24,52 @@ sealed partial class GameHost
     /// <summary>The hour the bar is drawn at: night, its lamps lit.</summary>
     const float EditorBarHour = 23;
 
-    bool EditorBarWanted => player.EditorOpen && player.UiMode == UiMode.Meitou && !metalRenderer && popData is not null;
+    bool EditorBarWanted => player.EditorOpen && player.UiMode == UiMode.Meitou && popData is not null;
 
-    /// <summary>The editor's frame: the bar in the Meitou UI, else the original's stage.</summary>
+    /// <summary>What <see cref="BeginEditorBar"/> changed for the world's draw: the camera and the weather, which <see cref="EndEditorBar"/> puts back.</summary>
+    readonly record struct EditorBarFrame(Vector3 Target, float Yaw, float Pitch, float Distance, SkyWeather Sky, WorldWeather? Weather, bool WeatherParticles);
+
+    /// <summary>The Vulkan host's editor frame: the bar in the Meitou UI, else the original's stage.</summary>
     void DrawEditorScene(int width, int height)
+    {
+        if (BeginEditorBar(width, height) is not { } frame) return;
+        try { WorldFrame.Draw(gpu, scene, camera, render, width, height, EditorBarHour, (float)(session.Clock.GameSeconds / 600 % 1e4), o.FogDistance); }
+        finally { EndEditorBar(frame, width, height); }
+    }
+
+    /// <summary>
+    /// Before the world's draw (both hosts): in the Meitou UI the bar is put up, the camera set on the editor's orbit in it and the sky made a clear night with no weather
+    /// particles indoors and no placed fog; the world is then drawn at <see cref="EditorBarHour"/>. Null when the original's stage is drawn instead (drawn here).
+    /// </summary>
+    EditorBarFrame? BeginEditorBar(int width, int height)
     {
         if (!EditorBarWanted || EnsureEditorBar() is not { } bar)
         {
             ClearEditorBar();
             DrawEditorStage(width, height);
-            return;
+            return null;
         }
         if (!editorBarReady && EditorBarLoaded(bar)) editorBarReady = true;
         player.EditorInWorld = editorBarReady;
-        var (target, yaw, pitch, distance) = (camera.Target, camera.Yaw, camera.Pitch, camera.Distance);
-        try
-        {
-            PlaceEditorCamera(bar, width, height);
-            DrawEditorBar(width, height);
-        }
-        finally { (camera.Target, camera.Yaw, camera.Pitch, camera.Distance) = (target, yaw, pitch, distance); }
+        var sky = gpu.Sky;
+        var frame = new EditorBarFrame(camera.Target, camera.Yaw, camera.Pitch, camera.Distance, sky.Weather, gpu.Weather, gpu.WeatherParticles);
+        PlaceEditorCamera(bar, width, height);
+        if (ActiveObjects is { } objects) objects.InteriorView = EditorBarView;
+        sky.Weather = SkyWeather.Default;
+        gpu.Weather = null;
+        gpu.WeatherParticles = false;
+        if (gpu.FogVolumes is { } placedFog) placedFog.HidePlaced = true;
+        return frame;
+    }
+
+    /// <summary>After the world's draw: what <see cref="BeginEditorBar"/> changed goes back, and the stage is drawn over the bar until its parts are in.</summary>
+    void EndEditorBar(EditorBarFrame frame, int width, int height)
+    {
+        (camera.Target, camera.Yaw, camera.Pitch, camera.Distance) = (frame.Target, frame.Yaw, frame.Pitch, frame.Distance);
+        (gpu.Sky.Weather, gpu.Weather, gpu.WeatherParticles) = (frame.Sky, frame.Weather, frame.WeatherParticles);
+        if (gpu.FogVolumes is { } placedFog) placedFog.HidePlaced = false;
         if (editorBarReady) { if (gpu.Characters is { } characters) characters.StageRequest = null; }
-        else DrawEditorStage(width, height);   // the stage over the bar until its parts are in
+        else DrawEditorStage(width, height);
     }
 
     /// <summary>The bar for this opening of the editor, placed once above the character first shown: its parts join the objects and its lamps the lights.</summary>
@@ -69,7 +93,7 @@ sealed partial class GameHost
     void ClearEditorBar()
     {
         player.EditorInWorld = false;
-        editorBarReady = false;
+        (editorBarReady, editorBarLaidOut) = (false, null);
         if (!player.EditorOpen) editorBarMissing = false;
         if (editorBar is null) return;
         editorBar = null;
@@ -77,10 +101,23 @@ sealed partial class GameHost
         ActiveLamps?.RemoveRuntime(EditorBar.Key);
     }
 
-    /// <summary>The bar's room is laid out round the edited character, nothing is still streaming in and every character in it is prepared.</summary>
-    bool EditorBarLoaded(EditorBar bar) =>
-        ActiveObjects?.InteriorAt(bar.Stand + new Vector3(0, 2, 0)) is { PlacementId: EditorBar.Key } && gpu.Streamer is not { Idle: false } && !(gpu.Objects?.Pending > 0) &&
-        ActiveCharacters is { ContentPending: false };
+    /// <summary>
+    /// The bar's room is laid out round the edited character and nothing is still streaming in or being prepared, or the room has stood for <see cref="EditorBarPatience"/>
+    /// (the object and character counts are global: textures held back under memory pressure or looks warmed for later clicks can keep them up for good).
+    /// </summary>
+    bool EditorBarLoaded(EditorBar bar)
+    {
+        if (ActiveObjects?.InteriorAt(bar.Stand + new Vector3(0, 2, 0)) is not { PlacementId: EditorBar.Key }) return false;
+        double now = realTime.Elapsed.TotalSeconds;
+        editorBarLaidOut ??= now;
+        return now - editorBarLaidOut >= EditorBarPatience ||
+            gpu.Streamer is not { Idle: false } && !(gpu.Objects?.Pending > 0) && ActiveCharacters is { ContentPending: false };
+    }
+
+    /// <summary>When the bar's room was first found laid out (real seconds); null before.</summary>
+    double? editorBarLaidOut;
+    /// <summary>How long the stage covers a laid-out bar at most while its meshes and textures stream in.</summary>
+    const double EditorBarPatience = 3;
 
     /// <summary>
     /// The world camera on the editor's orbit (the stage's eye and pivot, <see cref="CharacterRenderer.EditorCamera"/>), the pivot moved sideways on the picture to the middle of the
@@ -108,24 +145,6 @@ sealed partial class GameHost
         var pivot = bar.Stand + new Vector3(0, 12, 0);
         var local = Vector3.Transform(new Vector3(0, 0, r.Distance), Quaternion.CreateFromAxisAngle(Vector3.UnitY, r.Yaw) * Quaternion.CreateFromAxisAngle(Vector3.UnitX, -r.Elevation));
         return (pivot + Vector3.Transform(local, Quaternion.CreateFromAxisAngle(Vector3.UnitY, bar.StandYaw)), pivot);
-    }
-
-    /// <summary>The world's frame at night under a clear sky, the bar open: no weather particles fall indoors and no placed fog drifts in.</summary>
-    void DrawEditorBar(int width, int height)
-    {
-        if (ActiveObjects is { } objects) objects.InteriorView = EditorBarView;
-        var sky = gpu.Sky;
-        var (weather, regions, particles) = (sky.Weather, gpu.Weather, gpu.WeatherParticles);
-        sky.Weather = SkyWeather.Default;
-        gpu.Weather = null;
-        gpu.WeatherParticles = false;
-        if (gpu.FogVolumes is { } placedFog) placedFog.HidePlaced = true;
-        try { WorldFrame.Draw(gpu, scene, camera, render, width, height, EditorBarHour, (float)(session.Clock.GameSeconds / 600 % 1e4), o.FogDistance); }
-        finally
-        {
-            (sky.Weather, gpu.Weather, gpu.WeatherParticles) = (weather, regions, particles);
-            if (gpu.FogVolumes is { } restoreFog) restoreFog.HidePlaced = false;
-        }
     }
 
     /// <summary>
