@@ -9,7 +9,7 @@ namespace Meitou.Engine.Cameras;
 /// the ground, no ceiling found; Observed). Everything about its feel is an engine choice: the velocity follows the wished
 /// direction (along the view for forward and back, sideways, straight up and down) with an exponential response; the speed grows
 /// with the height above the ground like the viewer's free flight (<see cref="CameraSettings.FreeSpeedPerHeight"/> per unit of
-/// height, between the minimum and maximum speed); the eye is kept <see cref="CameraSettings.FreeClearance"/> above the ground
+/// height, between the minimum and maximum speed), doubled while Shift is held; the eye is kept <see cref="CameraSettings.FreeClearance"/> above the ground
 /// under it. The mouse drag and the rotate and pitch keys turn the view; pitch is limited to +-1.5 radians as in the viewer.
 /// </summary>
 public sealed class FreeCamera
@@ -79,7 +79,8 @@ public sealed class FreeCamera
         flat = flat.LengthSquared() < 1e-6f ? new Vector3(-MathF.Sin(Yaw), 0, -MathF.Cos(Yaw)) : Vector3.Normalize(flat);
         var side = Vector3.Cross(flat, Vector3.UnitY);
         var wish = f * fwd + side * right + Vector3.UnitY * up;
-        var target = wish.LengthSquared() > 1e-6f ? Vector3.Normalize(wish) * Speed : Vector3.Zero;
+        bool shift = a.Input.IsDown(Key.LeftShift) || a.Input.IsDown(Key.RightShift);
+        var target = wish.LengthSquared() > 1e-6f ? Vector3.Normalize(wish) * Speed * (shift ? 2 : 1) : Vector3.Zero;
         Velocity = Vector3.Lerp(Velocity, target, 1 - MathF.Exp(-settings.FreeResponse * dt));
         Position += Velocity * dt;
         KeepAboveGround();
