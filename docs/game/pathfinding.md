@@ -361,15 +361,20 @@ points were dropped by the seed ray rule, which tested every building triangle, 
 outside the huts is 22..40° in the original's polygons and ours, not too steep); the rule now tests floor-0/1 parts (groups 9 and 10) only, as the
 original (Generator, seeds), 4 are dropped, the zone keeps 6609 of 8122 polygons (778 before) and all six huts are reached; Storm House `27.22:1821-`'s steps (a 43.7° ramp to 524, continuous as in the original's faces 511..525) met its door landing on an edge
 whose west end took the height of the raised cheek block beside the steps (525 against the ramp's 519), so the seam was not joined (rule below,
-now reached). Not fixed, **Unknown** (the original's tile shows a different building there, not something our build loses): Stephouse `18.9:29-`,
-Old Storm House `13-`, Small Shack `27-` (the original's groups are small patches at 1620, ~20 above our floors at 1600 and without our upper
-storeys; `48.13:12-`'s group matches our floor at 993, hence no join there); Old Storm House `22.11:2-` (the original's connected edge at 783,
-above our hull's top 773; our door at 696); Outpost s-I `24.18:8-` (placed rotated ~174° about a near-horizontal axis, origin y -56 under the
-water at 100; its door paints at -84..-62 inside the hull, the original's groups lie at 90..140 like our pruned floors and connect along the hull at
-100); Outpost s-II `24.18:15-` (the original's exterior has the door landing at ~121 outside the hull, our exterior only a pruned sliver at
-121..123 beside deep water) and `43.49:2-` (the original's exterior polygon at 52305,82100 lies ~23 inside our hull). The original's stitch joins
-edges within 10 in height (Generator, stitch), less than our `NavInteriors.JoinHeight` 12, so a 12..17 step is not what joins these in its tiles; as
-`48.13:12-` (step 12..15, unconnected in the original) shows, it leaves such steps open.
+now reached). Not fixed: seven whose tile interior differs from our build. **Verified** (interior hash, Generator; ours computed from our
+placement equals the tile group's `Hash`): Old Storm House `18.9:13-`, Small Shack `27-`, Stephouse `29-`, Outpost s-I `24.18:8-`, Outpost s-II
+`43.49:2-` match, so the original uses the shipped interior and its connections unchanged at run time (no rebuild, the stitch does not apply).
+Why their tile meshes differ from ours stays **Unknown** (the hash has no height, record or real rotation, so it cannot tell): `18.9`'s groups are
+small patches at 1620, ~20 above our floors at 1600 and without our upper storeys (`48.13:12-`'s group matches our floor at 993, hence no join there);
+`24.18:8-` is placed rotated ~174° about a near-horizontal axis, origin y −56 under the water at 100, its door painting at −84..−62 inside the hull,
+while the original's groups lie at 90..140 like our pruned floors and connect along the hull at 100; `43.49:2-`'s exterior polygon at 52305,82100
+lies ~23 inside our hull. Old Storm House `22.11:2-` and Outpost s-II `24.18:15-` have furniture (24 and 74 pieces in our layouts), whose part of
+the hash we do not reproduce (furnished houses that do match, `20.32:24-` and `4933-`, miss too), so whether they are rebuilt is **Unknown**.
+**Observed**: `22.11:2-`'s group lies ~65 higher against our hull than the other houses' (Info − hull minimum y +22, others −24..−67; x/z as theirs),
+i.e. its connected edge at 783 above our hull's top 773, our door at 696: a different height, which the hash would not notice; `24.18:15-`: the
+original's exterior has the door landing at ~121 outside the hull, ours only a pruned sliver at 121..123 beside deep water. Were either rebuilt, the
+original's stitch (10 in height, 2 apart, Generator) could not join our geometry either: their door steps are 12..17, as in `48.13:12-` (step 12..15),
+which the original leaves unconnected.
 After (with the seed and seam rules below, the 15 zones re-swept): 31 sealed (24 ruins), 7 reached in ours only; interior coverage rises in 11 zones (Ash Domes 54.59 51→98 %, Ancient Labs 28.43 0→48 %, 37.35 35→77 %), none falls.
 With the ruin rules ("Ruin joins", all 225 zones): 25 sealed (18 ruins), 6 reached in ours only (the Ancient Citadel `7.45:2-` now agrees); coverage
 rises in 14.5 13→40 %, 16.3 8→23 %, 18.45 0→89 %, 19.41 74→78 %, 53.26 62→74 %, none falls; `--compare` 20.32, 18.35, 21.42 unchanged.
@@ -601,7 +606,11 @@ Hub→Stack 34054; Squin→Admag at 0.8 walks 132184 for 26834 straight (short r
     (FUN_140557280) writes. Destroying removes the doors ("door in setDestroyed"; rebuilding makes them again from `doors`); with `destroyed navmesh`
     it also rebuilds the navmesh in the building's box, its max corner raised by 5 (FUN_1403a66c0); then a building with an interior object that is no gateway or door
     gets an Interior job (FUN_1403abf20 → 1403c6fd0) when its zone's navmesh is present (FUN_1403ac950). The interior hash (FUN_1403ab140) is the
-    building's hash (FUN_1403a1a80: position, rotation, and the destroyed flag only for doors and gateways), its contents' and +0x100 when destroyed; the
+    building's hash (FUN_1403a1a80: hash_combine `h ^= v + 0x9e3779b9 + (h << 6) + (h >> 2)` over world x and z, each truncated to an integer and
+    xored with 0xdeadbeef, then the orientation's x, y, z, w truncated the same way, so 0 unless ±1; then 1 if a door or gateway is destroyed; no height,
+    no record), then each item of the interior object's contents (FUN_140016185) by the same hash while the building's own `path mode` field is
+    present, and +0x100 when destroyed (**Verified**: computed from our placements it equals the tile group's `Hash` for all 19 Hub ruins in 20.32 and
+    14 unfurnished rebirth placements in 18.9, 24.18 and 43.49; furnished ones miss, our contents list or order differs); the
     zone hash (FUN_1403a1cb0) uses FUN_1403a1a80, so destroying a plain building leaves the exterior tile valid. At zone load FUN_1403ad940 looks up each
     building's interior hash among the tile's interior groups (`Hash`) and queues an Interior job ("No valid interior navmesh for ...") when none matches:
     a ruin whose tile was built intact gets its interior rebuilt as a ruin (the job above: groups 9, 10, 13, 19, the inverted hull, the boundary cutting,
