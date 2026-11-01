@@ -286,8 +286,10 @@ public sealed class FrameProfiler : IDisposable
         var slices = owners.Take(8).Select(o => (o.Name, o.DeviceLocal)).ToList();
         ulong ours = (ulong)owners.Sum(o => (double)o.DeviceLocal), shown = (ulong)slices.Sum(s => (double)s.DeviceLocal);
         if (ours > shown) slices.Add(("other of ours", ours - shown));
-        ulong blocks = alloc.TotalAllocatedBytes, used = alloc.TotalUsedBytes;
-        if (blocks > used) slices.Add(("free in our blocks", blocks - used));
+        // Device-local blocks only: the host-visible ones (staging, constants) are system memory, not in the driver's VRAM figure.
+        var (empty, spare, scattered, _) = alloc.Slack();
+        ulong free = empty + spare + scattered, blocks = ours + free;
+        if (free > 0) slices.Add(("free in our blocks", free));
         if (vram.Used > blocks) slices.Add(("driver and others", vram.Used - blocks));
         return slices;
     }
@@ -309,8 +311,9 @@ public sealed class FrameProfiler : IDisposable
         var heaps = native.Device.Heaps();
         for (int i = 0; i < heaps.Count; i++)
             w.WriteLine($"  heap {i}: {heaps[i].Size / 1048576.0:0} MB, ours {heaps[i].Usage / 1048576.0:0.0} MB of budget {heaps[i].Budget / 1048576.0:0.0} MB ({heaps[i].Flags})");
-        w.WriteLine($"ours: {blocks / 1048576.0:0.0} MB in {alloc.BlockCount} blocks, {alloc.TotalUsedBytes / 1048576.0:0.0} MB used by {alloc.AllocationCount} allocations; "
-            + $"driver and others {(used > blocks ? used - blocks : 0) / 1048576.0:0.0} MB");
+        ulong local = (ulong)alloc.Breakdown().Sum(o => (double)o.DeviceLocal) + empty + spare + scattered;
+        w.WriteLine($"ours: {blocks / 1048576.0:0.0} MB in {alloc.BlockCount} blocks ({local / 1048576.0:0.0} MB device-local), {alloc.TotalUsedBytes / 1048576.0:0.0} MB used by {alloc.AllocationCount} allocations; "
+            + $"driver and others {(used > local ? used - local : 0) / 1048576.0:0.0} MB");
         w.WriteLine($"room in device-local blocks: empty {empty / 1048576.0:0.0} MB, spare {spare / 1048576.0:0.0} MB, scattered {scattered / 1048576.0:0.0} MB in {partBlocks} blocks");
         w.WriteLine();
         w.WriteLine("owners (MB, device-local MB, count):");
