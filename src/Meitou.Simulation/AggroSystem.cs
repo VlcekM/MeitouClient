@@ -133,8 +133,9 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
     /// rules a pair checked less than <see cref="HearCooldownSeconds"/> ago gets the last answer (<paramref name="heard"/>, the listener's own list), and an alarmed pair doubles
     /// the chance. <paramref name="stealth"/>: the target's stealth when it sneaks, else below 0.
     /// </summary>
-    static bool Hears(World world, CharacterTable table, int listener, int target, float stealth, ulong roll, EffectBuffer effects, ref List<HeardPair>? heard)
+    static bool Hears(World world, CharacterTable table, int listener, int target, float stealth, ulong roll, EffectBuffer effects, ref List<HeardPair>? heard, out bool xpCheck)
     {
+        xpCheck = false;
         ref readonly var me = ref table.Previous[listener];
         ref readonly var other = ref table.Previous[target];
         var tc = table.Cold(target);
@@ -152,7 +153,7 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
         pair.Checked = world.Tick;
         // The XP step of the check (FUN_1408c7330) is reached by a mover that is not in combat mode, or one staying low or crippled (posture 1 or 2, the heard-ability gate FUN_1406643d0).
         bool xpGate = tc is not null && (speed > 0.01f && !combat || tc.Medical is { Prone: true });
-        pair.Heard = Roll(world, table, listener, target, stealth, roll, effects, d2, speed, place, sure, world.Tick < pair.AlarmUntil, xpGate);
+        pair.Heard = Roll(world, table, listener, target, stealth, roll, effects, d2, speed, place, sure, world.Tick < pair.AlarmUntil, xpGate, out xpCheck);
         if (k >= 0) heard![k] = pair;
         else AddHeard(ref heard, pair);
         return pair.Heard;
@@ -160,15 +161,12 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
 
     /// <summary>
     /// The noise range and the roll of <see cref="Hears"/>, past its gates and cooldown. Every roll that gets to the end of the original's check (a sure hearing returns before) with
-    /// <paramref name="xpGate"/> set emits a <see cref="HearingXpEffect"/> (<c>FUN_1408c7330</c>, <see cref="Apply"/>).
+    /// <paramref name="xpGate"/> set sets <paramref name="xpCheck"/>: the caller emits a <see cref="HearingXpEffect"/> (<c>FUN_1408c7330</c>, <see cref="Apply"/>).
     /// </summary>
-    static bool Roll(World world, CharacterTable table, int listener, int target, float stealth, ulong roll, EffectBuffer effects, float d2, float speed, float place, bool sure, bool alarmed, bool xpGate)
+    static bool Roll(World world, CharacterTable table, int listener, int target, float stealth, ulong roll, EffectBuffer effects, float d2, float speed, float place, bool sure, bool alarmed, bool xpGate,
+        out bool xpCheck)
     {
-        bool Rolled(bool heard)
-        {
-            if (xpGate) effects.Emit(listener, target, HearingXpEffect, heard ? 1 : 0);
-            return heard;
-        }
+        xpCheck = xpGate;
         ref readonly var other = ref table.Previous[target];
         bool asleep = Carrying.CarrySystem.Asleep(table, listener);
         if (!asleep) place *= AwakeHearing;
@@ -177,12 +175,16 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
             ? Orders.SneakHearChance(d, Orders.SneakNoise(stealth, Noise(table, target)) * place, stealth)
             : HearChance(d, NoiseRange(speed, other.MaxSpeed) * Noise(table, target) * place);
         if (alarmed) p *= AlarmHearing;
-        if (!(p > 0)) return Rolled(false);
-        if (sure) return true;
-        if (Rng.Float(roll) >= p) return Rolled(false);
-        if (!asleep || Rng.Float(Rng.Mix(roll + 1)) >= 0.5f) return Rolled(true);
+        if (!(p > 0)) return false;
+        if (sure)
+        {
+            xpCheck = false;
+            return true;
+        }
+        if (Rng.Float(roll) >= p) return false;
+        if (!asleep || Rng.Float(Rng.Mix(roll + 1)) >= 0.5f) return true;
         if (stealth >= 0 && PlayerSide(world, table.Cold(target))) effects.Emit(listener, target, AlmostWokeEffect, 0);
-        return Rolled(false);
+        return false;
     }
 
     /// <summary>A looker's faction attacks a freed target on sight for the relations only below this default relation (<c>FUN_14079c950</c>: strictly below -30, Verified constant).</summary>
@@ -882,7 +884,12 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
         }
         else seen = s.Sight.Sees(s.Self, slot, s.Eye, other.Position, s.Outdoor, stealth) > 0;
         if (!seen && s.Effects is { } fx)
-            heard = Hears(s.World, s.Table, s.Self, slot, stealth, Rng.Hash(s.Seed, s.Key, RngPurpose.Sense, (s.Tick << 20) ^ (ulong)(uint)slot), fx, ref s.Heard);
+        {
+            heard = Hears(s.World, s.Table, s.Self, slot, stealth, Rng.Hash(s.Seed, s.Key, RngPurpose.Sense, (s.Tick << 20) ^ (ulong)(uint)slot), fx, ref s.Heard, out bool xpCheck);
+            // The check's stealth XP (FUN_1408c7330): its a is slot 125, the looker regarding the heard as an enemy (FUN_14079c950).
+            if (xpCheck)
+                fx.Emit(s.Self, slot, HearingXpEffect, (heard ? 1 : 0) | (Fighting(ref s, slot) || Regards(ref s, slot, c, other.Position, out _) ? 2 : 0));
+        }
         return seen || heard;
     }
 
@@ -1273,7 +1280,7 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
         }
         if (e.Kind == HearingXpEffect)
         {
-            HearingXp(world, e.Source, e.Target, e.Amount > 0);
+            HearingXp(world, e.Source, e.Target, ((int)e.Amount & 2) != 0, ((int)e.Amount & 1) != 0);
             return;
         }
         if (e.Kind == AlmostWokeEffect)
@@ -1317,16 +1324,16 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
     }
 
     /// <summary>
-    /// One hearing check's stealth XP for the heard character (<c>FUN_1408c7330</c>, <b>Verified</b> amounts; docs/game/character-stats.md "Stealth (heard check)"): the listener is always
-    /// taken as regarding the heard as an enemy (engine: any look hears, so neutrals and allies over-pay), so 2, 2 more when the heard is in the listener's home, x20 when heard, times the exposure factor, which then falls x0.7. Nothing
+    /// One hearing check's stealth XP for the heard character (<c>FUN_1408c7330</c>, <b>Verified</b> amounts; docs/game/character-stats.md "Stealth (heard check)"): 2 when the listener
+    /// regards the heard as an enemy, 2 more when the heard is in the listener's home, x20 when heard, times the exposure factor, which then falls x0.7. Nothing
     /// for one down, carried or in a bed or cage (the factor still falls). The XP is added to <see cref="CharacterCold.HearingXp"/> for <see cref="BodySystem"/> to pay. Not gated to the player's
     /// faction (the original has no such test here; only the sneak update that resets the factor is).
     /// </summary>
-    static void HearingXp(World world, int listener, int target, bool heard)
+    static void HearingXp(World world, int listener, int target, bool enemy, bool heard)
     {
         var table = world.Characters;
         if (table.Cold(target) is not { Stats: not null, Medical: { } medical } cold) return;
-        float amount = Bodies.XpService.HearingAmount(true, InListenersHome(world, listener, target, cold) || cold.SlaveState == 1, heard);
+        float amount = Bodies.XpService.HearingAmount(enemy, InListenersHome(world, listener, target, cold) || cold.SlaveState == 1, heard);
         if (medical.Dead || medical.Incapacitated || !cold.CarriedBy.IsNone || cold.InSomething != Locks.HeldState.None) amount = 0;
         cold.HearingXp += amount * cold.StealthFactor;
         cold.StealthFactor *= Bodies.XpService.HearingFactorDecay;
