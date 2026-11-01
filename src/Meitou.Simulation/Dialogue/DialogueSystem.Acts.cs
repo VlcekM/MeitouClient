@@ -43,13 +43,16 @@ public sealed partial class DialogueSystem
     bool RegardsFriendly(World world, CharacterId a, CharacterCold ac, CharacterId b, CharacterCold bc)
     {
         if (ac.Faction == bc.Faction) return true;
-        if (Memory.HasShort(world, ac.SquadId, b, MemoryTag.TempEnemy)) return false;
+        // One memory lookup each way (A's squad on B, B's on A) for all the tag tests.
+        var (ab, abEntry) = Memory.Read(world, ac.SquadId, b);
+        if (Has(ab, MemoryTag.TempEnemy)) return false;
         if (ac.IsPlayer || ac.Faction == world.Player.Faction)
         {
-            if (Memory.HasShort(world, bc.SquadId, a, MemoryTag.TempEnemy)) return false;
-            if (Memory.HasShort(world, bc.SquadId, a, MemoryTag.TempAlly)) return true;
+            var (ba, _) = Memory.Read(world, bc.SquadId, a);
+            if (Has(ba, MemoryTag.TempEnemy)) return false;
+            if (Has(ba, MemoryTag.TempAlly)) return true;
         }
-        if (Memory.HasShort(world, ac.SquadId, b, MemoryTag.TempAlly) || Loves(world, ac, b)) return true;
+        if (Has(ab, MemoryTag.TempAlly) || (abEntry?.Long & MemoryTag.LoveMask) is > 0) return true;
         return data.Relations.Contains(ac.Faction) && data.Relations.Contains(bc.Faction) && data.Relations.IsAlly(ac.Faction, bc.Faction);
     }
 
@@ -107,9 +110,12 @@ public sealed partial class DialogueSystem
         var table = world.Characters;
         if (table.Cold(a) is not { } ac || table.Cold(b) is not { } bc || ac.Faction == bc.Faction) return 0;
         var (ida, idb) = (table.IdOf(a), table.IdOf(b));
-        if (Memory.HasShort(world, ac.SquadId, idb, MemoryTag.TempEnemy) || (ac.IsPlayer || ac.Faction == world.Player.Faction) && Memory.HasShort(world, bc.SquadId, ida, MemoryTag.TempEnemy)) return 1;
-        return Memory.HasShort(world, ac.SquadId, idb, MemoryTag.TempAlly) ? -1 : 0;
+        var (ab, _) = Memory.Read(world, ac.SquadId, idb);
+        if (Has(ab, MemoryTag.TempEnemy) || (ac.IsPlayer || ac.Faction == world.Player.Faction) && Has(Memory.Read(world, bc.SquadId, ida).Short, MemoryTag.TempEnemy)) return 1;
+        return Has(ab, MemoryTag.TempAlly) ? -1 : 0;
     }
+
+    static bool Has(uint tags, int tag) => (tags >> tag & 1) != 0;
 
     /// <summary>DC 52 I_LOVE_THIS_GUY (<c>FUN_140599590</c>): the squad's long-term tags on the character hold LIFESAVER or FREED_ME.</summary>
     bool Loves(World world, CharacterCold mc, CharacterId who) => (Memory.Find(world, mc.SquadId, who)?.Long & MemoryTag.LoveMask) is > 0;

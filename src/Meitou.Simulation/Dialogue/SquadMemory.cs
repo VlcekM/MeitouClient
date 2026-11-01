@@ -33,6 +33,8 @@ public sealed class SquadMemory
 
     readonly SortedDictionary<(int Squad, CharacterId Who), Entry> entries = new(Comparer<(int, CharacterId)>.Create((a, b) =>
         a.Item1 != b.Item1 ? a.Item1.CompareTo(b.Item1) : CompareIds(a.Item2, b.Item2)));
+    // The same entries hashed, for the lookups (the relation tests make several per pair of characters); the sorted map keeps the hash and save order.
+    readonly Dictionary<(int Squad, CharacterId Who), Entry> index = [];
     readonly SortedDictionary<int, Entry> player = [];
     readonly SortedSet<int> tempPlayerAlly = [];
     // Squads holding a TEMP_ENEMY tag on someone: the aggro scan's gate (a derived index, not hashed).
@@ -43,10 +45,20 @@ public sealed class SquadMemory
     static bool PlayerSide(World world, CharacterCold c) => c.IsPlayer || (world.Player.Faction >= 0 && c.Faction == world.Player.Faction);
 
     /// <summary>The entry a lookup finds (<c>FUN_140673a90</c>): the squad's player entry for a player-faction character, else the character's own; null: never remembered.</summary>
-    public Entry? Find(World world, int squad, CharacterId who)
+    public Entry? Find(World world, int squad, CharacterId who) => Read(world, squad, who).Found;
+
+    /// <summary>
+    /// <see cref="HasShort"/>'s tag bits and <see cref="Find"/>'s entry from one lookup, for a test that needs several of them: the short-term tags of the character's own entry, with
+    /// TEMP_ALLY of a player-faction character the squad's player flag; (0, null) when the squad or the character is not there.
+    /// </summary>
+    public (uint Short, Entry? Found) Read(World world, int squad, CharacterId who)
     {
-        if (squad < 0 || !world.Characters.TryResolveNext(who, out int s) || world.Characters.Cold(s) is not { } c) return null;
-        return PlayerSide(world, c) ? player.GetValueOrDefault(squad) : entries.GetValueOrDefault((squad, who));
+        if (squad < 0 || !world.Characters.TryResolveNext(who, out int s) || world.Characters.Cold(s) is not { } c) return (0, null);
+        index.TryGetValue((squad, who), out var own);
+        uint tags = own?.Short ?? 0;
+        if (!PlayerSide(world, c)) return (tags, own);
+        tags = tags & ~(1u << MemoryTag.TempAlly) | (tempPlayerAlly.Contains(squad) ? 1u << MemoryTag.TempAlly : 0);
+        return (tags, player.GetValueOrDefault(squad));
     }
 
     /// <summary>
@@ -55,7 +67,7 @@ public sealed class SquadMemory
     public void Remember(World world, int squad, CharacterId who, int tag)
     {
         if (squad < 0 || (uint)tag > 31 || !world.Characters.TryResolveNext(who, out int s) || world.Characters.Cold(s) is not { } c) return;
-        var e = PlayerSide(world, c) ? Get(player, squad) : Get(entries, (squad, who));
+        var e = PlayerSide(world, c) ? Get(player, squad) : Own(squad, who);
         e.Long |= 1u << tag;
         e.Time = world.GameHours;
     }
@@ -68,7 +80,7 @@ public sealed class SquadMemory
     {
         if (squad < 0 || (uint)tag > 31 || !world.Characters.TryResolveNext(who, out int s) || world.Characters.Cold(s) is not { } c) return;
         if (tag == MemoryTag.TempEnemy && world.Squads.Find(squad) is { } q && q.Faction == c.Faction) return;
-        var e = Get(entries, (squad, who));
+        var e = Own(squad, who);
         e.Short |= 1u << tag;
         e.Time = world.GameHours;
         if (tag == MemoryTag.TempEnemy) tempEnemySquads.Add(squad);
@@ -78,12 +90,7 @@ public sealed class SquadMemory
     }
 
     /// <summary>Whether the squad holds short-term <paramref name="tag"/> on the character (<c>FUN_140678830</c>): TEMP_ALLY on a player-faction character is the squad's player flag.</summary>
-    public bool HasShort(World world, int squad, CharacterId who, int tag)
-    {
-        if (squad < 0 || !world.Characters.TryResolveNext(who, out int s) || world.Characters.Cold(s) is not { } c) return false;
-        if (tag == MemoryTag.TempAlly && PlayerSide(world, c)) return tempPlayerAlly.Contains(squad);
-        return entries.TryGetValue((squad, who), out var e) && (e.Short >> tag & 1) != 0;
-    }
+    public bool HasShort(World world, int squad, CharacterId who, int tag) => (Read(world, squad, who).Short >> tag & 1) != 0;
 
     /// <summary>The hours since the squad last noted the character (<c>FUN_140673290</c>); 9999.99 when it never did.</summary>
     public double HoursSince(World world, int squad, CharacterId who) => Find(world, squad, who) is { } e ? world.GameHours - e.Time : 9999.99;
@@ -93,7 +100,7 @@ public sealed class SquadMemory
     /// </summary>
     public void Copy(int from, int to)
     {
-        foreach (var ((squad, who), e) in entries.Where(kv => kv.Key.Squad == from).ToArray()) entries[(to, who)] = new Entry { Time = e.Time, Long = e.Long, Short = e.Short };
+        foreach (var ((squad, who), e) in entries.Where(kv => kv.Key.Squad == from).ToArray()) entries[(to, who)] = index[(to, who)] = new Entry { Time = e.Time, Long = e.Long, Short = e.Short };
         if (player.TryGetValue(from, out var p)) player[to] = new Entry { Time = p.Time, Long = p.Long, Short = p.Short };
         if (tempPlayerAlly.Contains(from)) tempPlayerAlly.Add(to);
         if (tempEnemySquads.Contains(from)) tempEnemySquads.Add(to);
@@ -141,7 +148,7 @@ public sealed class SquadMemory
     {
         var data = Snapshot(squad);
         if (data is null) return null;
-        foreach (var item in data.Entries) entries.Remove((squad, item.Who));
+        foreach (var item in data.Entries) { entries.Remove((squad, item.Who)); index.Remove((squad, item.Who)); }
         player.Remove(squad);
         tempPlayerAlly.Remove(squad);
         tempEnemySquads.Remove(squad);
@@ -154,11 +161,17 @@ public sealed class SquadMemory
         if (squad < 0 || data is null) return;
         foreach (var item in data.Entries)
         {
-            entries[(squad, item.Who)] = new Entry { Time = item.Time, Long = item.Long, Short = item.Short };
+            entries[(squad, item.Who)] = index[(squad, item.Who)] = new Entry { Time = item.Time, Long = item.Long, Short = item.Short };
             if ((item.Short >> MemoryTag.TempEnemy & 1) != 0) tempEnemySquads.Add(squad);
         }
         if (data.Player is { } p) player[squad] = new Entry { Time = p.Time, Long = p.Long, Short = p.Short };
         if (data.TempAlly) tempPlayerAlly.Add(squad);
+    }
+
+    Entry Own(int squad, CharacterId who)
+    {
+        if (!index.TryGetValue((squad, who), out var e)) entries[(squad, who)] = index[(squad, who)] = e = new Entry();
+        return e;
     }
 
     static Entry Get<TKey>(SortedDictionary<TKey, Entry> map, TKey key) where TKey : notnull
