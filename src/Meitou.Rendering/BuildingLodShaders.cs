@@ -174,6 +174,27 @@ static class BuildingLodShaders
     /// has no dither): of an instance's two blending levels exactly one casts, and a distant town casts only where it is drawn (the camera's distance fade).
     /// Without that test the Hub's baked distant mesh, the intact town, cast its roofs' shadows into the ruins at every distance.
     /// </summary>
+    // The shadow side of the cut into viewed buildings (WorldObjectRenderer.ShadowCut): a caster fragment of a cut draw (fadeMode bit 2) inside a viewed
+    // building's hull (convex footprint and height range, the view's cut volumes) casts nothing.
+    const string ShadowCut = """
+        uniform int uFadeMode;
+        uniform uint uCutVolumes;
+        uniform vec4 uCutRanges[4];
+        uniform vec4 uCutPlanes[32];
+        bool inShadowCut(vec3 p)
+        {
+            for (uint v = 0u; v < uCutVolumes; v++)
+            {
+                vec4 r = uCutRanges[v];
+                if (p.y < r.z || p.y > r.w) continue;
+                bool inside = true;
+                for (int i = int(r.x); i < int(r.x + r.y) && inside; i++) inside = dot(uCutPlanes[i].xy, p.xz) >= uCutPlanes[i].z;
+                if (inside) return true;
+            }
+            return false;
+        }
+        """;
+
     static string Depth()
     {
         string f = ShadowShaders.MeshDepthFragment;
@@ -184,7 +205,8 @@ static class BuildingLodShaders
             flat in float vScaffold;
             float gridLine(float v) { float f = fract(v); return min(f, 1.0 - f); }
             """);
-        return Replace(f, @"void\s+main\s*\(\s*\)\s*\{", "uniform uint uSurface;\n" + ScaffoldFunctions + "\nvoid main()\n{\n    if (vRange.x > 0.5 || vRange.y <= 0.5) discard;\n" + ScaffoldTest);
+        return Replace(f, @"void\s+main\s*\(\s*\)\s*\{", "uniform uint uSurface;\n" + ScaffoldFunctions + "\n" + ShadowCut + "\nvoid main()\n{\n    if (vRange.x > 0.5 || vRange.y <= 0.5) discard;\n"
+            + "    if ((uFadeMode & 2) != 0 && inShadowCut(vWorld)) discard;\n" + ScaffoldTest);
     }
 
     // ---- the native model (docs/renderer-native.md 3.3, step O) ----
@@ -225,6 +247,7 @@ static class BuildingLodShaders
         ["uFadeMode"] = "pc.fadeMode", ["uFadeEye"] = "view.eye", ["uFadeRange"] = "pc.fadeRange",
         // The interior cut: the view's mask, for the draws of map features over it (fadeMode bit 2, WorldObjectRenderer.Batch.Cut).
         ["uInteriorCut"] = "(view.interiorCut != 0u && (pc.fadeMode & 2) != 0)",
+        ["uCutVolumes"] = "view.cutVolumes", ["uCutRanges"] = "view.cutRanges", ["uCutPlanes"] = "view.cutPlanes",
         ["uSkinned"] = "false", ["uHasHead"] = "false",
         // The scaffold grid (construction.dds): the push spare's upper bits hold its bindless index + 1 (WorldObjectRenderer.RecordDraws); read only when not 0.
         ["uScaffold"] = "textures2D[max(pc.spare >> 8u, 1u) - 1u]",

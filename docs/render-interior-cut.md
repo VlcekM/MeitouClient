@@ -47,8 +47,10 @@ grows through a bar's floorboards. `InteriorMaskRenderer`; consumers: terrain, f
   - other buildings' parts (Fixes settings, `Walls inside buildings`, on; off draws them, as the game): a part whose sphere overlaps the mask box of a
     building in the interior view takes the map features' cut batch (`WorldObjectRenderer.CutsIntoViewed`), so the Hub's wall stays out of the Shinobi
     Thieves tower ([data](formats/zones.md#interior-masks), issue #111). Not cut: parts of a building whose mask is drawn (the viewed one's own), doors,
-    layout objects, contained buildings, stand-ins. Limits: their shadows stay; the mask is shared, so such a part between two masks along a ray, or in
-    a non-convex mask's concavity, is cut too.
+    layout objects, contained buildings, stand-ins. Their shadows: in the shadow passes the same parts (sphere over a viewed building's hull) cast
+    nothing inside the hull (convex footprint and height range of up to 4 viewed buildings, 32 edges in all, in `ViewConstants.cutPlanes`; the
+    objects' depth program discards). Limits: the mask is shared, so such a part between two masks along a ray, or in a non-convex mask's concavity, is
+    cut too; a far cascade cached before the view opened keeps the shadow until it is redrawn.
 - Only the main view's near slice; not shadows, the water reflection or farther slices.
 - Engine limits: "inside" is decided by the hull, not per ray; foliage impostors and the grass motion pass (TAA velocity)
   are not cut.

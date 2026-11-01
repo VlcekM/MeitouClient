@@ -1578,6 +1578,7 @@ static class WorldFrame
         {
             gpu.InteriorMask ??= new InteriorMaskRenderer(post.Context, maskObjects);
             gpu.InteriorMask.Record(view * Jitter.Apply(camera.Projection(aspect, maskSlice.Near, maskSlice.Far), jitter, rw, rh), eye, post.RenderWidth, post.RenderHeight);
+            maskObjects.Masks = gpu.InteriorMask;
         }
         else if (gpu.InteriorMask is { } unused) unused.Record(default, eye, 0, 0);
         host.Open(5, post.WithShadingRate(post.SceneTargets), new ClearColour(light.FogColour.X, light.FogColour.Y, light.FogColour.Z, 0), clearDepth: true);   // alpha 0: no character (the SSAO mask)

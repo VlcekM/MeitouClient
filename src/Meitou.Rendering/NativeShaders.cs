@@ -104,6 +104,10 @@ static partial class NativeShaders
             vec2 jitterNdc;
             uint interiorMask;
             uint interiorCut;
+            uint cutVolumes;        // the shadow cut (WorldObjectRenderer.ShadowCut): how many of cutRanges apply
+            uint cutPad;
+            vec4 cutRanges[4];      // per volume: first plane, plane count, lowest and highest Y
+            vec4 cutPlanes[32];     // footprint edges: inward X/Z normal in xy, offset in z (inside when dot(n, p.xz) >= z)
         } view;
 
         """;
@@ -365,7 +369,7 @@ unsafe struct FrameConstants
 }
 
 /// <summary>The C# side of <see cref="NativeShaders.ViewBlock"/> (std140). Matrices as <c>WorldGl.Matrix</c> passes them (System.Numerics memory).</summary>
-[StructLayout(LayoutKind.Explicit, Size = 208)]
+[StructLayout(LayoutKind.Explicit, Size = 784)]
 struct ViewConstants
 {
     [FieldOffset(0)] public Matrix4x4 ViewProjection;
@@ -380,7 +384,17 @@ struct ViewConstants
     [FieldOffset(184)] public Vector2 JitterNdc;
     [FieldOffset(192)] public uint InteriorMask;
     [FieldOffset(196)] public uint InteriorCut;
+    [FieldOffset(200)] public uint CutVolumes;
+    [FieldOffset(204)] public uint CutPad;
+    [FieldOffset(208)] public CutVolumeArray CutRanges;
+    [FieldOffset(272)] public CutPlaneArray CutPlanes;
 }
+
+[System.Runtime.CompilerServices.InlineArray(4)]
+struct CutVolumeArray { Vector4 first; }
+
+[System.Runtime.CompilerServices.InlineArray(32)]
+struct CutPlaneArray { Vector4 first; }
 
 /// <summary>The C# side of <see cref="NativeShaders.MeshPushMembers"/> (std430 push constants, 128 bytes). GLSL bools are 32-bit (0 / 1).</summary>
 [StructLayout(LayoutKind.Explicit, Size = 128)]
