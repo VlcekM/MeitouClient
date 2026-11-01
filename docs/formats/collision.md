@@ -76,7 +76,7 @@ use every rendered triangle as collision or infer PhysX actor dynamics from appe
 | 6 | foliage collision, FOLIAGE_MESH `walkable` false (Foliage_PlaceOne FUN_1406d2410) |
 | 9, 10, 11, 12 | ordinary building parts, `building floor` 0, 1, 2, 3 (4 and up use 9, Observed in code: the switch only knows 1..3) |
 | 13 | the `interior mask` part's collision (indoor trigger hull, FUN_140553870) |
-| 14 | walkable foliage (`walkable` true), foliage-placed objects with an owner, and other `collision` users (FUN_140399ac0) |
+| 14 | walkable foliage (`walkable` true), foliage-placed objects with an owner, and map features (`MapFeature`, FUN_140399ac0, **Verified**) |
 | 15, 16, 17, 18 | `is stairs` parts, floor 0..3 |
 | 19, 20, 21, 22 | parts of `is exterior furniture` / `is interior furniture` buildings, by the building's floor |
 | 23, 24, 25, 26 | `passable` parts and every part of a `path mode` IGNORE building, by the building's floor (also FUN_1400dfb80: floor + 23) |
