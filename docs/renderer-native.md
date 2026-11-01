@@ -16,9 +16,9 @@ recording affects the whole submitted frame; never overwrite a used DeviceBuffer
 Buffers/Textures/Samplers define owned/borrowed resource bindings. FrameScratch per-slot bump
 allocation tracks120-frame maximum+25%headroom, shrinks at>2x need; Cap overflow fails and caller
 handles it. Staging can shed unused chunks; descriptor-referenced constants retain storage.
-GpuAllocator carves 64 MB blocks; a block goes back to the driver only when empty. Streamed world textures (`TextureDesc.Streamed`)
+GpuAllocator carves 64 MB blocks; a block goes back to the driver only when empty. Streamed world textures and impostor atlases (`TextureDesc.Streamed`)
 have pools of their own, filled fullest block first; one streamed block under half used is drained at a time (`IsDraining`): the texture
-caches move its images out (taken from another cache, or loaded again) and it is freed once empty (given up after 10 s without progress).
+caches move its images out (taken from another cache, or loaded again; an atlas is remade at its levels, one a second) and it is freed once empty (given up after 10 s without progress).
 **Observed** (VRAM dump, 2026-11-01, after ~40 min of play): 1286 MB free scattered over 64 image blocks shared by streamed textures and
 long-lived images, which pinned them.
 PipelineLibrary caches explicit descriptions and records late creation (LatePipelines). `Prepare` has no caller: the loading warm-up draws what makes them, with the reflection and cloud passes forced on ([bench](bench.md) "Play benchmark").

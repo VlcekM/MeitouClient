@@ -69,7 +69,7 @@ public sealed class ImpostorTextures : IDisposable
                 _ => InternalFormat.Rgba8,
             };
             int size = atlas.AtlasPixels >> skips[i];
-            maps[i] = batch.Create(new TextureDesc(format, size, size, LevelsOf(i), Name: AllocationName(order[i])));
+            maps[i] = batch.Create(new TextureDesc(format, size, size, LevelsOf(i), Name: AllocationName(order[i]), Streamed: true));   // atlases come and go with the view
             for (int l = skips[i]; l < texture.Levels.Length; l++) Bytes += texture.Levels[l].Length;
         }
     }
