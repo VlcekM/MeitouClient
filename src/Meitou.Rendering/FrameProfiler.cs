@@ -82,7 +82,7 @@ public sealed class FrameProfiler : IDisposable
     // --log-spikes (SpikeLog): per slot the frame number, its notes and its render-thread stages, kept until the GPU times arrive.
     readonly long[] slotFrame = new long[Slots];
     readonly string?[] slotNotes = new string?[Slots], slotCpu = new string?[Slots];
-    readonly double[] slotCpuTotal = new double[Slots];
+    readonly double[] slotCpuTotal = new double[Slots], slotCpuMedian = new double[Slots];
     readonly (QuerySlot Begin, QuerySlot PreEnd)[] slotStamps = new (QuerySlot, QuerySlot)[Slots];
     readonly (QuerySlot Begin, QuerySlot End)[] slotWhole = new (QuerySlot, QuerySlot)[Slots];   // each profiled frame's own first and last stamps (its GPU total)
     long frameCounter;
@@ -220,6 +220,7 @@ public sealed class FrameProfiler : IDisposable
             slotFrame[slot] = ++frameCounter;
             slotStamps[slot] = native.LastFrameStamps;
             slotCpuTotal[slot] = sum;
+            slotCpuMedian[slot] = CpuMedian();
             slotCpu[slot] = StageList(StageClock.Ms, 0.5);
             long uploaded = native.Frame.Stats.UploadBytes;
             slotNotes[slot] = (uploaded > 0 ? $"uploads total {uploaded / 1048576.0:0.00} MB; " : "") + SpikeLog.TakeFrame();
@@ -453,12 +454,23 @@ public sealed class FrameProfiler : IDisposable
             medianScratch.Sort();
             double median = have >= 30 ? medianScratch[have / 2] : 0;
             double pre = native.Frame.Timestamps.TryRead(slotStamps[s].Begin, out ulong pb) && native.Frame.Timestamps.TryRead(slotStamps[s].PreEnd, out ulong pe) && pe >= pb ? (pe - pb) / 1e6 : -1;
-            SpikeLog.Report(slotFrame[s], total, median, (pre >= 0 ? $"pre-frame {pre:0.0}, " : "") + StageList(gpuFrame, 0.3) + (total - sum >= 0.3 ? $", other {total - sum:0.0}" : ""), slotCpu[s] ?? "", notes, slotCpuTotal[s]);
+            SpikeLog.Report(slotFrame[s], total, median, (pre >= 0 ? $"pre-frame {pre:0.0}, " : "") + StageList(gpuFrame, 0.3) + (total - sum >= 0.3 ? $", other {total - sum:0.0}" : ""), slotCpu[s] ?? "", notes, slotCpuTotal[s], slotCpuMedian[s]);
             slotNotes[s] = null;
         }
         gpuHead = (gpuHead + 1) % History;
         gpuCount = Math.Min(gpuCount + 1, History);
         pending[s] = false;
+    }
+
+    /// <summary>The render thread's median frame total over the history (0 before 30 frames), the frame just kept included.</summary>
+    double CpuMedian()
+    {
+        int have = Math.Min(cpuCount + 1, History);
+        if (have < 30) return 0;
+        medianScratch.Clear();
+        for (int i = 0; i < have; i++) medianScratch.Add(cpu[Total][i]);
+        medianScratch.Sort();
+        return medianScratch[have / 2];
     }
 
     readonly List<float>[] runGpu = Enumerable.Range(0, Series).Select(_ => new List<float>()).ToArray();
