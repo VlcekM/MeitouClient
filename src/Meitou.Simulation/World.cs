@@ -228,6 +228,7 @@ public sealed partial class World : IDisposable
     {
         if (Tick != 0) throw new InvalidOperationException("systems are added before the first tick");
         systems.Add(system);
+        systemsByType.Clear();
         phases.Add(new SystemPhases(this, system, systems.Count - 1));
         animations ??= system as IAnimationSource;
         projectiles ??= system as IProjectileSource;

@@ -28,6 +28,10 @@ public sealed partial class FirstAidSystem
     bool sweeping;
     readonly List<int> sweepFresh = [];
     readonly HashSet<int> sweepCageFactions = [];
+    // The patients' organic and robot needs (AidNeed) by slot * 2 + robot, valid where their stamp is the sweep's.
+    float[] sweepNeeds = [];
+    int[] sweepNeedStamp = [];
+    int sweepStamp;
 
     /// <summary>
     /// Starts a sweep: the slots the grid snapshot cannot place (spawned, removed, or moved farther than <see cref="PatientGridJump"/> since it was taken: one pass over the table
@@ -44,6 +48,7 @@ public sealed partial class FirstAidSystem
         sweepCageFactions.Clear();
         for (int k = 0; k < world.Fixtures.All.Count; k++)
             if (world.Fixtures.All[k] is { Kind: FixtureKind.Cage } cage) sweepCageFactions.Add(cage.Owner);
+        sweepStamp++;
         sweeping = true;
     }
 
@@ -148,16 +153,36 @@ public sealed partial class FirstAidSystem
     {
         CharacterCold medic = world.Characters.Cold(medicSlot)!, patient = world.Characters.Cold(patientSlot)!;
         if (patient.InCombat) return 0;
-        bool kitless = !medic.IsPlayer && (patient.IsImprisoned || OwnedChained(medic, patient));
-        float need = 0;
-        if (kitless || organicKit) need += AidNeed(patient, false);
-        if (kitless || robotKit) need += AidNeed(patient, true);
+        float need = KitNeed(medic, patientSlot, patient, organicKit, robotKit);
         if (medic.Faction != patient.Faction)
         {
             float factor = Allied(world, medicSlot, patientSlot) ? 0.8f : Relations is { } r && r.Contains(medic.Faction) && r.Contains(patient.Faction) ? r.Get(medic.Faction, patient.Faction) * 0.01f : 0;
             need *= MathF.Max(factor, TakenWeight);
         }
         return need;
+    }
+
+    /// <summary>
+    /// <see cref="Need"/> before the fight test and the faction factor (at least 0.05, so it never turns a need to 0): the passes test it before the relation tests, which cost far more and
+    /// drop nobody that a need of 0 would keep. A sweep reads each patient's two needs once.
+    /// </summary>
+    float KitNeed(CharacterCold medic, int patientSlot, CharacterCold patient, bool organicKit, bool robotKit)
+    {
+        bool kitless = !medic.IsPlayer && (patient.IsImprisoned || OwnedChained(medic, patient));
+        float need = 0;
+        if (kitless || organicKit) need += SweepNeed(patientSlot, patient, false);
+        if (kitless || robotKit) need += SweepNeed(patientSlot, patient, true);
+        return need;
+    }
+
+    float SweepNeed(int slot, CharacterCold patient, bool robotKit)
+    {
+        if (!sweeping) return AidNeed(patient, robotKit);
+        int k = slot * 2 + (robotKit ? 1 : 0);
+        if (k >= sweepNeeds.Length) Array.Resize(ref sweepNeeds, Math.Max(k + 2, sweepNeeds.Length * 2));
+        if (sweepNeedStamp.Length != sweepNeeds.Length) Array.Resize(ref sweepNeedStamp, sweepNeeds.Length);
+        if (sweepNeedStamp[k] != sweepStamp) (sweepNeeds[k], sweepNeedStamp[k]) = (AidNeed(patient, robotKit), sweepStamp);
+        return sweepNeeds[k];
     }
 
     /// <summary>
@@ -283,6 +308,7 @@ public sealed partial class FirstAidSystem
             foreach (int s in candidates)
             {
                 if (!next[s].Alive || (next[s].Position - origin).LengthSquared() > range2 || table.Cold(s) is not { } other || Skip(s, other)) continue;
+                if (KitNeed(cold, s, other, organic, robotic) <= 0) continue;   // Need's 0: before the relation tests
                 if (!Allied(world, i, s) || EnemyOf(world, i, s) || other.Race!.IsRobot && !robotics || other.InCombat || Eaten(other) || CarriedByEnemy(other) || Dist2(s) > range2) continue;
                 if (!cold.IsPlayer && Maimed(other.Medical!)) continue;
                 float need = Need(world, i, s, organic, robotic);
@@ -316,6 +342,7 @@ public sealed partial class FirstAidSystem
             foreach (int s in candidates)
             {
                 if (!next[s].Alive || (next[s].Position - origin).LengthSquared() > range2 || table.Cold(s) is not { } other || Skip(s, other)) continue;
+                if (KitNeed(cold, s, other, organic, robotic) <= 0) continue;   // Need's 0: before the relation tests
                 if (other.Race!.IsRobot && !robotics || other.Animal is not null || Eaten(other) || other.InCombat || Dist2(s) > range2) continue;
                 bool enemy = EnemyOf(world, i, s);
                 if (enemy && !healAll) continue;
@@ -352,6 +379,7 @@ public sealed partial class FirstAidSystem
         foreach (int s in candidates)
         {
             if (!next[s].Alive || Dist2(s) > range2 || table.Cold(s) is not { } other || Skip(s, other) || !SquadSlave(cold, other)) continue;
+            if (KitNeed(cold, s, other, organic, robotic) <= 0) continue;
             if (other.Race!.IsRobot && !robotics || other.InCombat) continue;
             float need = Need(world, i, s, organic, robotic);
             if (need <= 0) continue;
@@ -363,6 +391,7 @@ public sealed partial class FirstAidSystem
             foreach (int s in candidates)
             {
                 if (!next[s].Alive || Dist2(s) > range2 || table.Cold(s) is not { } other || Skip(s, other) || other.CarriedBy.IsNone || other.Animal is not null || Eaten(other)) continue;
+                if (KitNeed(cold, s, other, organic, robotic) <= 0) continue;
                 if (other.Race!.IsRobot && !robotics) continue;
                 if (!table.TryResolveNext(other.CarriedBy, out int c) || table.Cold(c)?.Faction != cold.Faction) continue;
                 float need = Need(world, i, s, organic, robotic);

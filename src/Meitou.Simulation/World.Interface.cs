@@ -45,8 +45,10 @@ public sealed partial class World
         }
     }
 
-    /// <summary>The first system of type <typeparamref name="T"/> this world runs, or null.</summary>
-    internal T? SystemOf<T>() where T : class => systems.OfType<T>().FirstOrDefault();
+    /// <summary>The first system of type <typeparamref name="T"/> this world runs, or null. Remembered per type (the finders ask once per candidate pair; any thread).</summary>
+    internal T? SystemOf<T>() where T : class => (T?)systemsByType.GetOrAdd(typeof(T), static (_, list) => list.OfType<T>().FirstOrDefault(), systems);
+
+    readonly System.Collections.Concurrent.ConcurrentDictionary<Type, object?> systemsByType = new();
 
     /// <summary>
     /// Puts the item on the mouse back where it came from (<see cref="PlayerState.Held"/>, <see cref="PlayerSystem.ReturnHeldItem"/>): a save does this first, so the item is saved in its
