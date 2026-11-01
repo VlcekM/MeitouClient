@@ -1317,8 +1317,8 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
     }
 
     /// <summary>
-    /// One hearing check's stealth XP for the heard character (<c>FUN_1408c7330</c>, <b>Verified</b> amounts; docs/game/character-stats.md "Stealth (heard check)"): the listener's own check is always
-    /// of an enemy here (the looks that hear are enemy looks), so 2, 2 more when the heard is in the listener's home, x20 when heard, times the exposure factor, which then falls x0.7. Nothing
+    /// One hearing check's stealth XP for the heard character (<c>FUN_1408c7330</c>, <b>Verified</b> amounts; docs/game/character-stats.md "Stealth (heard check)"): the listener is always
+    /// taken as regarding the heard as an enemy (engine: any look hears, so neutrals and allies over-pay), so 2, 2 more when the heard is in the listener's home, x20 when heard, times the exposure factor, which then falls x0.7. Nothing
     /// for one down, carried or in a bed or cage (the factor still falls). The XP is added to <see cref="CharacterCold.HearingXp"/> for <see cref="BodySystem"/> to pay. Not gated to the player's
     /// faction (the original has no such test here; only the sneak update that resets the factor is).
     /// </summary>

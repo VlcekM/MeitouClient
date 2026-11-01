@@ -136,7 +136,7 @@ public sealed partial class CombatSystem
             D.ReactTech = -1;
         }
         else Stagger(world, ref D, d, dc, damage.Cut + damage.Blunt + damage.Pierce + damage.ExtraStun > DamageFormulas.StumbleThreshold(toughness, combat), now, CombatRolls.BlowCounter(a, seq, blow, 0));
-        GainCombatXp(ac, dc, XpEvent.HitDealt, XpEvent.HitTaken);
+        GainCombatXp(ac, dc, XpEvent.HitDealt, XpEvent.HitTaken, packet.Cut + packet.Blunt + packet.Pierce + packet.Stun);
         Sound(world, SoundKind.Hit, d, a, prev[d].Position, heavy: D.HitHeavy, unarmed: fighter.Unarmed, robot: ac.Race.IsRobot);
         Splash(world, d, dc, -new Vector2(toAttacker.X, toAttacker.Y), damage.Cut + damage.Blunt + damage.Pierce);
         if (knockout || death) Knockdown(world, d, dc, -toAttacker, damage.Cut + damage.Blunt + damage.Pierce);
@@ -241,7 +241,7 @@ public sealed partial class CombatSystem
         attacker.NextBlow = 0;
     }
 
-    void GainCombatXp(CharacterCold attacker, CharacterCold defender, XpEvent attackerEvent, XpEvent? defenderEvent)
+    void GainCombatXp(CharacterCold attacker, CharacterCold defender, XpEvent attackerEvent, XpEvent? defenderEvent, float damageTaken = 0)
     {
         var af = attacker.Fighter!;
         var df = defender.Fighter!;
@@ -251,7 +251,7 @@ public sealed partial class CombatSystem
         {
             float dStrength = StrengthFactor(defender, df);
             var weaponStat = df.Unarmed || ev == XpEvent.HitTaken ? StatsEnumerated.None : df.Weapon!.Skill;
-            xp.Combat(defender.Stats!, defender.Race!, ev, df.Unarmed, weaponStat, Eff(attacker, af.Unarmed ? StatsEnumerated.MartialArts : StatsEnumerated.MeleeAttack), dStrength);
+            xp.Combat(defender.Stats!, defender.Race!, ev, df.Unarmed, weaponStat, Eff(attacker, af.Unarmed ? StatsEnumerated.MartialArts : StatsEnumerated.MeleeAttack), dStrength, damageTaken);
         }
     }
 

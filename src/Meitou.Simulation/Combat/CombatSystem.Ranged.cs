@@ -681,7 +681,7 @@ public sealed partial class CombatSystem : IProjectileSource
         else if (damage.Cut + damage.Blunt + damage.Pierce + damage.ExtraStun > DamageFormulas.StumbleThreshold(toughness, combat))
             Stagger(world, ref D, v, dc, true, now, (ulong)(uint)p.Id ^ 0x424F4C54UL);
         if (dc.Stats is { } vs && dc.Fighter is { } vf)
-            xp.Combat(vs, dc.Race, XpEvent.HitTaken, vf.Unarmed, StatsEnumerated.None, p.ShooterSkill, StrengthFactor(dc, vf));
+            xp.Combat(vs, dc.Race, XpEvent.HitTaken, vf.Unarmed, StatsEnumerated.None, p.ShooterSkill, StrengthFactor(dc, vf), p.Damage);
         bool shooterAlive = p.Shooter < prev.Length && prev[p.Shooter].Alive && prev[p.Shooter].Generation == p.ShooterGeneration;
         if (shooterAlive && intended) write[p.Shooter].Landed++;
         if (shooterAlive) Crimes?.Hit(world, p.Shooter, v);

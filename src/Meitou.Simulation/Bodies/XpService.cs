@@ -76,11 +76,13 @@ public sealed class XpService(GameConstants constants, BodyOptions options)
     /// A combat event for one character (<c>FUN_1408c6980</c>). <paramref name="opponentSkill"/> is the opponent's defence for the attacker's events
     /// (<see cref="XpEvent.HitDealt"/>, <see cref="XpEvent.GlancingHit"/>) and the opponent's attack for <see cref="XpEvent.Defended"/> and
     /// <see cref="XpEvent.HitTaken"/>. <paramref name="weaponStat"/> is the current weapon's skill (none when unarmed); <paramref name="strengthFactor"/>
-    /// is <see cref="WeaponWeightStrengthFactor"/>, or for unarmed (1 - the encumbrance factor). The gains are scaled by the Global damage multiplier option.
-    /// <b>Verified</b> coefficients (decompile, docs/game/character-stats.md "Levelling"): per event, which stats gain and by how much. Toughness from a hit taken is <see cref="ToughnessFromDamage"/>.
+    /// is <see cref="WeaponWeightStrengthFactor"/>, or for unarmed (1 - the encumbrance factor). <paramref name="damageTaken"/> is the incoming packet's cut + blunt + pierce + stun
+    /// (<see cref="XpEvent.HitTaken"/> only). The gains are scaled by the Global damage multiplier option.
+    /// <b>Verified</b> coefficients (decompile, docs/game/character-stats.md "Levelling"): per event, which stats gain and by how much. A hit taken also pays
+    /// <see cref="ToughnessFromDamage"/> (the original's separate <c>FUN_1408c68e0</c> call).
     /// </summary>
     public void Combat(CharacterStats stats, RaceData race, XpEvent ev, bool unarmed, StatsEnumerated weaponStat, float opponentSkill, float strengthFactor,
-        float damageKind = 0)
+        float damageTaken = 0, float damageKind = 0)
     {
         var attackStat = unarmed ? StatsEnumerated.MartialArts : StatsEnumerated.MeleeAttack;
         float g = options.GlobalDamageMultiplier;
@@ -114,7 +116,13 @@ public sealed class XpService(GameConstants constants, BodyOptions options)
         // Strength tail of every event: core(0.075 x 0.55 x 2 x xp rate strength x race[1]), scaled per event and by the weight factor.
         stats.Gain(StatsEnumerated.Strength,
             0.075f * 0.55f * 2 * constants.XpRateStrength * race.StatMultiplier(StatsEnumerated.Strength) * strengthScale * strengthFactor * g);
-        if (ev == XpEvent.HitTaken) ToughnessFromDamage(stats, race, damageKind);
+        if (ev == XpEvent.HitTaken)
+        {
+            // Verified (FUN_1408c6980 event 4): toughness x CharStats +0x34 (the stat scale) against the packet's four terms, x xp rate toughness.
+            stats.Gain(StatsEnumerated.Toughness, EventUnit * g * constants.XpRateToughness
+                * SkillDifferenceFactor(stats[StatsEnumerated.Toughness] * stats.Scale, damageTaken) * race.StatMultiplier(StatsEnumerated.Toughness));
+            ToughnessFromDamage(stats, race, damageKind);
+        }
     }
 
     /// <summary>
