@@ -50,7 +50,7 @@ public sealed class Platoon
     public Ai.PlatoonJob Job { get; set; }
     /// <summary>A short-range patrol's next point (null: none; it goes to <see cref="Target"/> instead).</summary>
     public Vector2? Point { get; set; }
-    /// <summary>The save's platoon this stand-in is (null: one the population made): its characters are made from the save, not from <see cref="Key"/>.</summary>
+    /// <summary>The save's platoon this stand-in is (null: one the population made): its characters are made from the save, not from <see cref="Key"/> (a never-made one's from its template, <see cref="Unmade"/>).</summary>
     public Saving.SavedPlatoon? Saved { get; init; }
     /// <summary>
     /// A squad the population made, kept as its characters while it is not in the world (null: none): a town's squad since its town unloaded, or (the Meitou

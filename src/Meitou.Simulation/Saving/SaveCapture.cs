@@ -525,7 +525,7 @@ public static partial class SaveCapture
                 builder.RemovePlatoon(platoon);
                 continue;
             }
-            if (!sp.Touched) continue;   // a stand-in that travelled is written by WriteRoaming
+            if (!sp.Touched) continue;   // a stand-in that travelled is written by WriteRoaming, a never-made one once made by WriteFreshNpcs
             var p = sp.PlatoonId >= 0 ? world.Platoons.Find(sp.PlatoonId) : null;
             var squad = p is { State: PlatoonState.Loaded } ? world.Squads.Find(p.SquadId) : null;
             if (squad is not null && table.TryResolveNext(squad.Leader, out int leaderSlot)) platoon.Position = table.Previous[leaderSlot].Position;
