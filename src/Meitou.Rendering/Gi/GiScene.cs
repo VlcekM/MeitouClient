@@ -311,8 +311,8 @@ internal sealed unsafe class GiScene : IDisposable
             int count = part.Count[sourceLevel];
             if (count < 3) continue;
             ulong vertices = ctx.Device.Address(part.Vertices.Handle), indices = ctx.Device.Address(part.Indices.Handle) + (ulong)part.Offset[sourceLevel] * 4;
-            geometries.Add(new TriangleGeometry(vertices, (uint)Vertex.Size, (uint)(part.Vertices.Size / (ulong)Vertex.Size), indices, (uint)(count / 3)));
-            recs.Add(new GeometryRecord { Vertices = vertices, Indices = indices, Stride = (uint)Vertex.Size, Kind = GeometryRecord.Object });
+            geometries.Add(new TriangleGeometry(vertices, (uint)part.Stride, (uint)(part.Vertices.Size / (ulong)part.Stride), indices, (uint)(count / 3)));
+            recs.Add(new GeometryRecord { Vertices = vertices, Indices = indices, Stride = (uint)part.Stride, Kind = GeometryRecord.Object });
             partOf.Add(p);
         }
         return Build(gpu, sources, geometries, recs, partOf, "gi object");
@@ -332,10 +332,10 @@ internal sealed unsafe class GiScene : IDisposable
             if (part.IndexCount < 3) continue;
             ulong vertices = ctx.Device.Address(part.Vertices.Handle), indices = ctx.Device.Address(part.Indices.Handle);
             // Cut-out parts (leaves) are not opaque: the trace tests their alpha at each candidate hit.
-            geometries.Add(new TriangleGeometry(vertices, (uint)Vertex.Size, (uint)(part.Vertices.Size / (ulong)Vertex.Size), indices, (uint)(part.IndexCount / 3), part.AlphaThreshold <= 0));
+            geometries.Add(new TriangleGeometry(vertices, GpuVertex.ObjectSize, (uint)(part.Vertices.Size / GpuVertex.ObjectSize), indices, (uint)(part.IndexCount / 3), part.AlphaThreshold <= 0));
             recs.Add(new GeometryRecord
             {
-                Vertices = vertices, Indices = indices, Stride = (uint)Vertex.Size, AlphaThreshold = part.AlphaThreshold,
+                Vertices = vertices, Indices = indices, Stride = GpuVertex.ObjectSize, AlphaThreshold = part.AlphaThreshold,
                 Kind = mesh.Rock ? GeometryRecord.Terrain : GeometryRecord.Foliage,
             });
             partOf.Add(p);

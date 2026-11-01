@@ -23,6 +23,8 @@ sealed partial class GameHost
         public required Vector3 Start, Axis;
         /// <summary>Where it drifts to across the ground (x, z).</summary>
         public required Vector2 Aside;
+        /// <summary>The speed it is thrown with (units/s): the blow that cut it off's, as the body's ragdoll (<see cref="CharacterSnapshot.Knockdown"/>).</summary>
+        public required Vector3 Velocity;
         public required float Spin, Flight;
         public required ulong Blood;
         /// <summary>The shown tick its fall started (NaN until its look is drawn) and the seconds into it that it landed, at what height (NaN: still falling).</summary>
@@ -55,22 +57,28 @@ sealed partial class GameHost
         ulong roll = unchecked((ulong)from * 0x9E3779B97F4A7C15UL ^ (ulong)session.ShownTick * 0xBF58476D1CE4E5B9UL);   // a look, not the simulation's: no world roll
         roll ^= roll >> 31;
         float angle = (roll & 0xFFFF) / 65536f * MathF.Tau, reach = 3 + ((roll >> 16) & 0xFFFF) / 65536f * 4;
+        var thrown = c.Knockdown;
+        // Thrown: it tumbles over the way it flies, faster the faster it goes.
+        var flat = new Vector2(thrown.X, thrown.Z);
+        if (flat.LengthSquared() > 1) angle = MathF.Atan2(flat.Y, flat.X);
         var head = new FallingHead
         {
             Key = key, From = from, Look = before.SeveredHead(), World = world, Start = start,
             Aside = new Vector2(start.X + MathF.Cos(angle) * reach, start.Z + MathF.Sin(angle) * reach),
-            Axis = new Vector3(-MathF.Sin(angle), 0, MathF.Cos(angle)), Spin = 2.5f + ((roll >> 32) & 0xFFFF) / 65536f * 3,
+            Axis = new Vector3(-MathF.Sin(angle), 0, MathF.Cos(angle)), Spin = 2.5f + ((roll >> 32) & 0xFFFF) / 65536f * 3 + flat.Length() * 0.1f, Velocity = thrown,
             Flight = MathF.Sqrt(2 * MathF.Max(start.Y - session.World.Walkability.GroundHeight(start.X, start.Z, start.Y) - HeadRestHeight, 0) / FallGravity), Blood = c.BloodAmounts,
         };
         heads.Add(head);
         characters.Prefetch(head.Look);
+        Spurt(from, look, start);
         while (heads.Count > Math.Max(config.GroundItemLimit, 1)) heads.RemoveAt(0);
     }
 
     /// <summary>The heads, each placed where its fall has it now: the head bone along the drop, the whole head turned about it until it lands.</summary>
     void AddHeads(CharacterDrawList list)
     {
-        if (headsEpoch != worldEpoch) { heads.Clear(); headsSeen.Clear(); headsEpoch = worldEpoch; }
+        if (headsEpoch != worldEpoch) { heads.Clear(); headsSeen.Clear(); spurts.Clear(); headsEpoch = worldEpoch; }
+        UpdateSpurts();
         if (heads.Count == 0 || gpu.Characters is not { } characters) return;
         double clock = session.ShownTick + session.SimulationAlpha;
         float tick = session.World.TickSeconds;
@@ -81,7 +89,7 @@ sealed partial class GameHost
             float t = double.IsNaN(h.Tick) ? 0 : MathF.Max(0, (float)((clock - h.Tick) * tick));
             if (!float.IsNaN(h.Landed)) t = h.Landed;
             float s = h.Flight > 0 ? MathF.Min(t / h.Flight, 1) : 1;
-            var at = new Vector3(h.Start.X + (h.Aside.X - h.Start.X) * s, h.Start.Y - 0.5f * FallGravity * t * t, h.Start.Z + (h.Aside.Y - h.Start.Z) * s);
+            var at = new Vector3(h.Start.X + (h.Aside.X - h.Start.X) * s + h.Velocity.X * t, h.Start.Y + h.Velocity.Y * t - 0.5f * FallGravity * t * t, h.Start.Z + (h.Aside.Y - h.Start.Z) * s + h.Velocity.Z * t);
             if (float.IsNaN(h.Landed))
             {
                 float floor = SurfaceUnder(characters, new Vector2(at.X, at.Z), h) + HeadRestHeight;

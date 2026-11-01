@@ -143,6 +143,8 @@ sealed class WorldOptions
     public float FlyRadius = 12000, FlySpeed = 150;
     /// <summary>The benchmark without a wait for the GPU each frame and without the 60 fps pacing: up to two frames in flight (both backends), frame time = the interval between frames.</summary>
     public bool FlyPipelined;
+    /// <summary><c>--fly-csv &lt;file&gt;</c>: the benchmark writes one row per frame there (frame times, video memory) and the allocator owners every 30 frames to <c>&lt;file&gt;.owners.csv</c>.</summary>
+    public string? FlyCsv;
     /// <summary>
     /// The benchmark harness (docs/bench.md "Benchmark harness"): <c>--view</c> the named view, <c>--ab</c> the switch to alternate (<see cref="AbToggles"/>) with
     /// <c>--ab-period</c> frames per side, <c>--bench-frames</c> measured frames (default 600 with <c>--ab</c>), <c>--bench-out</c> the JSON, <c>--bench-motion</c>
@@ -217,7 +219,7 @@ sealed class WorldOptions
           --windowed                                     a bordered window: the --size asked, else maximized (default: borderless full screen; Alt+Enter toggles)
           --no-objects             skip buildings and map features
           --no-foliage             no trees, bushes, rocks or grass (F toggles)
-          --no-load-cache          do not read or write the load caches (the foliage layout and character LOD caches)
+          --no-load-cache          do not read or write the load caches (foliage layout, character LOD and terrain colour caches)
           --range-large <u>        foliage draw range of the large size class (the range switch, F6; default 50000; the medium and small ranges follow at 12000 : 3500 of it; Tab sliders)
           --impostor-budget <MB>   fixes the most video memory the resident impostor atlases may use (default: 8% of the card's budget, 5% on an integrated GPU, 48-1024 MB; docs/impostors.md section 10; atlases that do not fit are held at coarser mips, then stay meshes)
           --object-distance <u>    draw placed objects at full detail up to this distance (the reach switch, F8: default 20000 in Meitou, 12000 in Faithful); Meitou draws huge placed objects (world radius 2000 and up: the giant wrecks, skeletons, towers) 7.5 times as far
@@ -248,7 +250,7 @@ sealed class WorldOptions
           --no-vsync               start with vsync off (uncapped; Tab slider)
           --grass-density <x>      grass blades x this (0.1-2, default 1; Tab slider)
           --camera-code <hex>      start at a camera code (Ctrl+C in the viewer copies one), the world loaded round it
-          --faithful <all|ao,dither,haze,aa,shadows,range,impostors,reach,water,particles,lod,gi,tonemap,shafts,heathaze,night,planetshine,stars,nightgrade,clouds,cloudshadows,cloudfog,interiorgi,charlod,skin,interiorlamps,icons,blood,bloodsurfaces,parallax,displace>   the game's look instead of Meitou's enhancements (default: all Meitou; --meitou <...> turns them back on; these ids also name the --ab switches)
+          --faithful <all|ao,dither,haze,aa,shadows,range,impostors,reach,water,particles,lod,gi,tonemap,shafts,heathaze,night,planetshine,stars,nightgrade,clouds,cloudshadows,cloudfog,interiorgi,charlod,skin,interiorlamps,icons,blood,bloodsurfaces,parallax,displace,weld>   the game's look instead of Meitou's enhancements (default: all Meitou; --meitou <...> turns them back on; these ids also name the --ab switches)
           --show-keys              start with the key list overlay open (toggle with F10)
           --play-shots             start flying the saved camera keys (the F2 timeline) on a loop
           --log-spikes             print a line for every frame whose GPU time is over 1.5 x the median: stage times (GPU, render thread) and what it uploaded or rebuilt
@@ -256,6 +258,7 @@ sealed class WorldOptions
           --fly-benchmark <frames> offscreen, no window: fly the camera round a circle at 60 frames per second of wall time, print frame-time
                                    percentiles, the worst frames with their stage times and resident memory   --fly-radius <u> (12000)   --fly-speed <u per frame> (150)
                                    --fly-pipelined: no GPU wait per frame and no pacing, two frames in flight; reports the interval between frames
+                                   --fly-csv <file>: per-frame times and video memory as CSV, the allocator owners every 30 frames in <file>.owners.csv
           --view <name>            a named camera/world/weather (swamp, swamp-rain, dust, hub): options after it override its own
           --bench-frames <n>       offscreen: measure n frames after warm-up and write per-stage statistics as JSON (--bench-out, default in %TEMP%)
           --ab <name>              with it: alternate side A (Meitou, on) and side B (Faithful, off) of a switch (ao, shadows, lod, particles, ... or occlusion, fog-cull), per frame
@@ -405,6 +408,7 @@ sealed class WorldOptions
                 case "--fly-radius": o.FlyRadius = F(); break;
                 case "--fly-speed": o.FlySpeed = F(); break;
                 case "--fly-pipelined": o.FlyPipelined = true; break;
+                case "--fly-csv": o.FlyCsv = Next(); break;
                 case "--ab": o.Ab = Next(); break;
                 case "--ab-period": o.AbPeriod = Math.Max(int.Parse(Next(), CultureInfo.InvariantCulture), 1); break;
                 case "--bench-frames": o.BenchFrames = Math.Max(int.Parse(Next(), CultureInfo.InvariantCulture), 1); break;
@@ -657,6 +661,11 @@ static class WorldFrame
         /// <summary>The hover outline the game draws round the character under the mouse, and with Alt those near (null in the viewer); <see cref="HoverKeys"/> picks the characters by their draw-list keys, each with its colour (empty: none).</summary>
         public HoverOutlineRenderer? HoverOutline;
         public IReadOnlyList<(long Key, Vector4 Colour)> HoverKeys = [];
+        /// <summary>
+        /// A presentation cap on how far the frame reaches (the Meitou editor's bar, high above the world): the far plane and the shadow cascades end there, so the world below
+        /// leaves the view; null in play.
+        /// </summary>
+        public float? ViewCap;
         /// <summary>The Tab panel's weather particles at 0 and its particle density, given to <see cref="Particles"/> every frame (it is made only with the first weather).</summary>
         public bool WeatherParticles = true;
         public float ParticleDensity = 1;
@@ -798,6 +807,9 @@ static class WorldFrame
         Meitou.Data.Textures.TextureQuality.Level = o.TextureQuality;
         int layerSize = Math.Max(2048 >> Meitou.Data.Textures.TextureQuality.LevelsToDrop("terrain.dds", "Landscape"), 16);
         if (layerSize != 2048) Console.WriteLine($"textures  quality {o.TextureQuality} ({Meitou.Data.Textures.TextureQuality.Labels[o.TextureQuality]}): terrain layers {layerSize}² instead of 2048²");
+        // The terrain colour tiles BC3-encoded for the colour window, once (TerrainColourCache): a first start, or one after a tile changed, encodes them on workers.
+        var colourEncode = !o.NoTextures && terrainTextures && TerrainColourCache.Missing(install)
+            ? Task.Run(() => { var w = Stopwatch.StartNew(); int n = TerrainColourCache.EncodeMissing(install); return (n, w.ElapsedMilliseconds); }) : null;
         // The files the terrain textures and the water read and bake (seconds of CPU work) are read on workers while the steps before them run.
         var terrainSource = !o.NoTextures && terrainTextures && scene.Database is { } textureDb ? Task.Run(() => TerrainTextures.Prepare(install, textureDb)) : null;
         var waterSource = !o.NoWater && scene.Database is { } waterDb ? Task.Run(() => WaterRenderer.Prepare(install, waterDb, assets, scene.Coarse)) : null;
@@ -806,6 +818,12 @@ static class WorldFrame
         var terrain = new TerrainRenderer(context, scene.Coarse, scene.CoarseSize, scene.Window);
         Console.WriteLine($"uploaded  terrain heights: {terrain.LevelCount} LOD levels, finest {terrain.FinestSpacing:0.#} units ({watch.ElapsedMilliseconds} ms)");
         TerrainTextures? textures = null;
+        if (colourEncode is not null)
+        {
+            if (!colourEncode.IsCompleted) step?.Invoke("colourmap");
+            var (tiles, ms) = Ready(colourEncode);
+            Console.WriteLine($"colour    {tiles} terrain colour tiles encoded to BC3 and cached in {ms} ms");
+        }
         if (!o.NoTextures && terrainTextures && scene.Database is not null)
         {
             step?.Invoke("biomes");
@@ -1405,7 +1423,7 @@ static class WorldFrame
         gpu.Sky.PrepareCloudShadows();
         // Far enough that the haze is complete before the far plane and the water quad (1.5 × view distance wide) end,
         // so a high eye sees the sea fade into the sky instead of a cut-off edge.
-        camera.ViewDistance = Math.Max(camera.MinViewDistance, light.FogDistance / 0.7f);
+        camera.ViewDistance = Math.Min(Math.Max(camera.MinViewDistance, light.FogDistance / 0.7f), gpu.ViewCap ?? float.MaxValue);
         StageClock.Lap(3);
         // The weather's camera particles step on the caller's time (1/600 s units; the game's clock, so still while paused; constant, so still, in pictures).
         // They count as their own stage (the profiler's "particles", with their draw below).
@@ -1434,7 +1452,7 @@ static class WorldFrame
             gpu.Sky.CloudShadowScale = fogVolumes.CloudShadowScale;
         }
         StageClock.Lap(13);
-        if (gpu.Shadow is not null) gpu.Shadow.RangeCap = gpu.FogVolumes?.AtmosphereDistance;   // the cascades end where the weather fog hides everything
+        if (gpu.Shadow is not null) gpu.Shadow.RangeCap = gpu.ViewCap is { } cap ? Math.Min(cap, gpu.FogVolumes?.AtmosphereDistance ?? cap) : gpu.FogVolumes?.AtmosphereDistance;   // the cascades end where the weather fog hides everything (or at the cap)
         gpu.Shadow?.SetFogHide(gpu.FogVolumes?.ShadowHideDistance, gpu.FogVolumes?.ShadowHidePending == true);   // or where the placed fog block the eye is in hides the whole view
         if (gpu.Shadow is not null) { gpu.Shadow.Temporal = post.Temporal; DrawShadows(gpu, camera, render, light, rw, rh, gpu.Sky.ShadowSunHeight); }
 

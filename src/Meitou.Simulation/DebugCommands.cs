@@ -22,8 +22,17 @@ public sealed record DebugHeal(IReadOnlyList<CharacterId> Characters) : DebugCom
 /// <summary>Sets every stat of the characters to 100.</summary>
 public sealed record DebugMaxSkills(IReadOnlyList<CharacterId> Characters) : DebugCommand;
 
-/// <summary>One cut of <see cref="Cut"/> damage to each character, on a part chosen as a blow's is.</summary>
-public sealed record DebugDamage(IReadOnlyList<CharacterId> Characters, float Cut) : DebugCommand;
+/// <summary>
+/// One cut of <see cref="Cut"/> damage to each character: on the part whose template string id is <see cref="Part"/> (a character without one is skipped),
+/// else on a part chosen as a blow's is.
+/// </summary>
+public sealed record DebugDamage(IReadOnlyList<CharacterId> Characters, float Cut, string? Part = null) : DebugCommand;
+
+/// <summary>Makes every blow land on <see cref="Part"/> (template string id, name) from now on, or as usual when null (<see cref="BodyOptions.ForcedHitPart"/>).</summary>
+public sealed record DebugForceHits((string Id, string Name)? Part) : DebugCommand;
+
+/// <summary>Sets the <b>Global damage multiplier</b> (<see cref="BodyOptions.GlobalDamageMultiplier"/>) of the running world: blows and XP read it at once, a crossbow when it is next equipped.</summary>
+public sealed record DebugDamageMultiplier(float Multiplier) : DebugCommand;
 
 /// <summary>
 /// Puts <see cref="Quantity"/> of item record <see cref="Record"/> on the character, at <see cref="Quality"/> (0 to 100) for the types that have one: one unit into its free
@@ -94,7 +103,7 @@ static class DebugCheats
                 var events = new List<MedicalEvent>();
                 foreach (var id in damage.Characters)
                 {
-                    if (Body(world, data, id) is not ({ } medical, var ctx) || medical.ChoosePart(ctx) is not (var part and >= 0) || !table.TryResolveNext(id, out int slot)) continue;
+                    if (Body(world, data, id) is not ({ } medical, var ctx) || DamagePart(medical, ctx, damage.Part) is not (var part and >= 0) || !table.TryResolveNext(id, out int slot)) continue;
                     events.Clear();
                     medical.ApplyHit(part, new HitDamage(damage.Cut, 0, 0), ctx, events);
                     foreach (var e in events)
@@ -104,6 +113,12 @@ static class DebugCheats
                         else if (e.Kind == MedicalEventKind.Decapitated) table.LimbsChanged.Enqueue((slot, -1));
                     }
                 }
+                break;
+            case DebugForceHits force when data is not null:
+                data.BodyOptions.ForcedHitPart = force.Part;
+                break;
+            case DebugDamageMultiplier multiplier when data is not null:
+                data.BodyOptions.GlobalDamageMultiplier = multiplier.Multiplier;
                 break;
             case DebugUnlockResearch when data is not null:
                 world.Post($"Research unlocked: {world.Research.CompleteAll(data.Db)} finished.");
@@ -127,6 +142,14 @@ static class DebugCheats
                 world.Post($"{item.Quantity} x {item.Name} did not fit; dropped on the ground.");
                 break;
         }
+    }
+
+    static int DamagePart(MedicalState medical, in MedicalContext ctx, string? part)
+    {
+        if (part is null) return medical.ChoosePart(ctx);
+        for (int i = 0; i < medical.Parts.Count; i++)
+            if (medical.Parts[i].Template.StringId == part) return i;
+        return -1;
     }
 
     static (MedicalState, MedicalContext)? Body(World world, PopulationData data, CharacterId id)

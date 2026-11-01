@@ -448,42 +448,20 @@ static partial class WorldApp
                 string gpuText = gpuSamples > 0 ? $"{gpuMs / gpuSamples:0.00}" : "-";
                 stats.Clear();
                 // frame: the wall time from one frame to the next (mean and the longest since the last update), what the fps is made of.
-                stats.Add($"{frames / titleTimer:0} fps ({(display.VSync ? "vsync" : "uncapped")}), frame {titleTimer * 1000 / Math.Max(frames, 1):0.00} ms (max {frameMaxMs:0.0}), " +
-                    $"cpu {cpuMs / Math.Max(frames, 1):0.00} ms, gpu {gpuText} ms");
+                stats.Add("Performance");
+                stats.Add($"  frame rate    {frames / titleTimer:0} fps, {(display.VSync ? "vsync" : "uncapped")}; frame {titleTimer * 1000 / Math.Max(frames, 1):0.0} ms (longest {frameMaxMs:0.0}), " +
+                    $"cpu {cpuMs / Math.Max(frames, 1):0.0} ms, graphics card {gpuText} ms");
                 frameMaxMs = 0;
                 // The window title carries the frame rate too.
                 window.Title = $"Meitou world ({RendererName(o)}) | {frames / titleTimer:0} fps";
-                var (vramUsed, vramBudget) = display.Context.Device.VideoMemory();
-                var alloc = display.Context.Device.Allocator;
-                stats.Add($"vram        {vramUsed / 1073741824.0:0.00} of {vramBudget / 1073741824.0:0.0} GB; our blocks {alloc.TotalAllocatedBytes / 1073741824.0:0.00} GB, {alloc.TotalUsedBytes / 1073741824.0:0.00} used");
-                if (gpu.Guard is { } vramGuard) stats.Add($"  {vramGuard.Status}");
-                // The largest owners (GpuAllocator.Breakdown: names without their numbers), to see what fills the VRAM.
-                foreach (var (name, count, bytes, _) in alloc.Breakdown().Take(8))
-                    stats.Add($"  {name,-26} {bytes / 1048576.0,7:0} MB  x{count}");
-                if (gpu.Reflection is { Valid: true } refl && render.Reflections) stats.Add($"reflection  cpu {refl.CpuMs:0.00} ms, gpu {refl.GpuMs:0.00} ms");
-                gpu.Sky.Poll();
-                stats.Add($"sky         cpu {gpu.Sky.PrepareMs:0.00} ms, gpu {gpu.Sky.GpuMs:0.00} ms");
-                if (gpu.Post is { } post) stats.Add($"post gpu    {post.DescribeCosts()}");
-                if (gpu.Post is { } hazy && (hazy.HeatHazeAmount > 0 || gpu.HeatHazeTarget > 0))
-                    stats.Add($"heat haze   {hazy.HeatHazeAmount:0.00} (target {gpu.HeatHazeTarget:0.00}, weather {WorldStats.WeatherName(gpu)})" + (hazy.HeatHazeRuns ? "" : hazy.HasHeatHaze ? ", off" : ", no textures"));
-                WorldStats.AddWeather(stats, gpu);
-                if (audio is not null) stats.Add($"audio       {audio.StatsLine()}");
-                stats.Add($"camera      {t.X:0}, {t.Y:0}, {t.Z:0}, zone {WorldLayout.ZoneOf(t.X, t.Z)}");
-                stats.Add($"terrain     {gpu.Terrain.DrawnChunks} chunks, {gpu.Terrain.DrawnTriangles / 1000}k tris" + (gpu.Streamer is { Pending: > 0 } st ? $", loading {st.Pending}" : ""));
-                if (gpu.Objects is { } ob && render.Objects)
-                    stats.Add($"objects     {ob.DrawnInstances}, {ob.DrawCalls} calls, draw cpu {ob.LastDrawCpuMs:0.00} ms" + (ob.Pending > 0 ? $", loading {ob.Pending}" : ""));
-                if (gpu.Foliage is { Enabled: true } fo)
-                    stats.Add($"foliage     {fo.DrawnInstances} + {fo.DrawnBlades / 1000}k grass, {fo.DrawCalls} calls, cpu {fo.LastDrawCpuMs:0.00} ms, gpu {fo.GpuMs:0.00} ms" + (fo.Pending > 0 ? $", loading {fo.Pending}" : ""));
-                // Triangles of the main view (both depth slices; not the shadows or the reflection). Foliage comes from the GPU cull's indirect
-                // arguments, read back while the statistics are shown; grass counts two per blade (cross-quad grass has four, so it is a lower bound).
-                long terrainTris = gpu.Terrain.DrawnTriangles, objectTotal = gpu.Objects?.Totals[0, 1] ?? 0, objectTris = (objectTotal - lastObjectTris) / Math.Max(frames, 1), characterTris = gpu.Characters?.DrawnTriangles ?? 0;
-                double? foliageTris = gpu.Foliage is { Enabled: true } ft ? ft.ColourTrianglesPerFrame : 0;
-                long grassTris = gpu.Foliage is { Enabled: true } fg ? 2L * fg.DrawnBlades : 0;
+                // Triangles of the main view (both depth slices; not the shadows); the objects' from their running colour total.
+                long objectTotal = gpu.Objects?.Totals[0, 1] ?? 0;
+                int counted = Math.Max(frames, 1);
+                var tris = new WorldStats.Triangles(gpu.Terrain.DrawnTriangles, (objectTotal - lastObjectTris) / (double)counted,
+                    gpu.Foliage is { Enabled: true } ft ? ft.ColourTrianglesPerFrame : 0, gpu.Characters?.DrawnTriangles ?? 0, gpu.Foliage is { Enabled: true } fg ? fg.DrawnBlades : 0);
                 gpu.Foliage?.ResetDrawTally();
                 lastObjectTris = objectTotal;
-                static string M(double n) => n >= 1e6 ? $"{n / 1e6:0.00}M" : $"{n / 1e3:0}k";
-                stats.Add($"triangles   {M(terrainTris + objectTris + characterTris + (foliageTris ?? 0) + grassTris)}{(foliageTris is null ? " (foliage pending)" : "")}: " +
-                    $"terrain {M(terrainTris)}, objects {M(objectTris)}, foliage {(foliageTris is { } fv ? M(fv) : "-")}, grass ~{M(grassTris)}, characters {M(characterTris)}");
+                WorldStats.Add(stats, display.Context, gpu, t, in tris);
                 titleTimer = 0;
                 frames = 0;
                 cpuMs = gpuMs = 0;

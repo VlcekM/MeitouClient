@@ -285,6 +285,7 @@ internal sealed class CharacterContent : IDisposable
         try
         {
             var mesh = OgreMeshReader.ReadFile(path);
+            if (MeshWeld.Enabled) OgreMeshWeld.Apply(mesh);
             var model = Model.Build(mesh, boneCount, gameBinormals: !icon, tangentSign: icon);
             var morphs = MeshMorphs.From(mesh, model, messages, Path.GetFileName(path));
             if (limbs is not null || partMap is not null) MarkBody(model, limbs, partMap is null ? null : PartMapImage(partMap, messages));
@@ -348,16 +349,17 @@ internal sealed class CharacterContent : IDisposable
         foreach (var made in ready.Parts)
         {
             var part = made.Part;
-            int vertexBytes = part.Vertices.Length * Vertex.Size, indexBytes = made.All.Length * 4;
+            var packed = GpuVertex.PackCharacter(part.Vertices);
+            int vertexBytes = packed.Length, indexBytes = made.All.Length * 4;
             var vertices = DeviceBuffer.Create(gpu, (ulong)vertexBytes, BufferUse.Vertex, AllocationName);
             var indices = DeviceBuffer.Create(gpu, (ulong)indexBytes, BufferUse.Index, AllocationName);
-            uploads.Write(vertices, 0, MemoryMarshal.AsBytes(part.Vertices.AsSpan()));
+            uploads.Write(vertices, 0, packed);
             uploads.Write(indices, 0, MemoryMarshal.AsBytes(made.All.AsSpan()));
             var gp = new GpuObjectPart
             {
                 SubMeshIndex = part.SubMeshIndex, MaterialName = part.MaterialName, HasTangents = part.HasTangents, HasColours = part.HasColours,
                 Vertices = vertices, Indices = indices, Offset = made.Offset, Count = made.Count, UvScale = made.UvScale,
-                Attributes = ObjectMeshCache.VertexAttributes(vertices),
+                Attributes = GpuVertex.CharacterAttributes(vertices), Stride = GpuVertex.CharacterSize,
             };
             gpuMesh.Parts.Add(gp);
             gpuMesh.Bytes += vertexBytes + indexBytes;

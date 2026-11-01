@@ -1,5 +1,7 @@
 using System.Diagnostics;
+using System.Globalization;
 using System.Numerics;
+using System.Text;
 
 using Meitou.Rendering;
 using Meitou.Rendering.Gpu;
@@ -38,6 +40,8 @@ static partial class WorldApp
         var impostorPop = new List<(int NotAdmitted, int Missing, int Coarse, int Refining)>(o.FlyBenchmark);
         // Pipelined: no wait for the GPU after each frame (the context keeps its frames in flight), as the interactive viewer runs.
         bool pipelined = o.FlyPipelined;
+        var csv = o.FlyCsv is null ? null : new StringBuilder("frame,ms,cpu_ms,vram_used_mb,vram_budget_mb,blocks_mb,blocks_used_mb\n");
+        var owners = o.FlyCsv is null ? null : new StringBuilder("frame,owner,mb,device_local_mb,count\n");
         var interval = Stopwatch.StartNew();
         var meter = PassMeter.TryCreate(display);   // MEITOU_PASS_STATS=1: the frame cost breakdown (docs/engine.md)
         // MEITOU_BENCH_ORBIT=<pixels per frame>: the camera also turns round its target by this much a frame (0.005 rad per pixel), as a user dragging the view.
@@ -79,7 +83,18 @@ static partial class WorldApp
             interval.Restart();
             times.Add(ms);
             if (i % 150 == 0) resident.Add($"{(((gpu.Objects?.ResidentBytes ?? 0) + (gpu.Foliage?.ResidentBytes ?? 0)) / 1048576)}");
-            if (i % 30 == 0) vramPeak = Math.Max(vramPeak, device.VideoMemory().Used);
+            if (csv is not null)
+            {
+                // --fly-csv: this process's video memory (the driver's figure) and our allocator's blocks every frame; the owners (a walk over
+                // every live resource under the allocator's lock) only every 30 frames, after the frame's time is taken.
+                var (used, budget) = device.VideoMemory();
+                vramPeak = Math.Max(vramPeak, used);
+                csv.AppendLine(string.Create(CultureInfo.InvariantCulture, $"{i},{ms:0.000},{cpuMs:0.000},{used / 1048576.0:0.0},{budget / 1048576.0:0.0},{device.Allocator.TotalAllocatedBytes / 1048576.0:0.0},{device.Allocator.TotalUsedBytes / 1048576.0:0.0}"));
+                if (i % 30 == 0)
+                    foreach (var b in device.Allocator.Breakdown())
+                        owners!.AppendLine(string.Create(CultureInfo.InvariantCulture, $"{i},\"{b.Name}\",{b.Bytes / 1048576.0:0.00},{b.DeviceLocal / 1048576.0:0.00},{b.Count}"));
+            }
+            else if (i % 30 == 0) vramPeak = Math.Max(vramPeak, device.VideoMemory().Used);
             for (int k = 0; k < stageSums.Length; k++) { stageSums[k] += StageClock.Ms[k]; jobSums[k] += StageClock.JobMs[k]; }
             if (gpu.Shadow is { } shadowStats) for (int k = 0; k < 3; k++) shadowSums[k] += shadowStats.PhaseMs[k];
             long gcNow = GC.CollectionCount(2);
@@ -133,6 +148,12 @@ static partial class WorldApp
         Console.WriteLine($"vram      {vramUsed / 1048576.0:0} MB of {vramBudget / 1048576.0:0} MB budget at the end, peak {Math.Max(vramPeak, vramUsed) / 1048576.0:0} MB; our blocks {device.Allocator.TotalAllocatedBytes / 1048576.0:0} MB, {device.Allocator.TotalUsedBytes / 1048576.0:0} used");
         Console.WriteLine($"vram      owners (MB, device-local MB, count): {string.Join(", ", device.Allocator.Breakdown().OrderByDescending(b => b.Bytes).Select(b => $"{b.Name} {b.Bytes / 1048576.0:0.0} ({b.DeviceLocal / 1048576.0:0.0}) x{b.Count}"))}");
         Console.WriteLine($"vram      {VramWatch.Describe()}");
+        if (o.FlyCsv is { } csvPath)
+        {
+            File.WriteAllText(csvPath, csv!.ToString());
+            File.WriteAllText(csvPath + ".owners.csv", owners!.ToString());
+            Console.WriteLine($"vram      per-frame CSV written to {csvPath} (owners every 30 frames in {csvPath}.owners.csv)");
+        }
         if (gpu.Guard is { } vramGuard) Console.WriteLine($"guard     {vramGuard.Status}; entered pressure {vramGuard.Activations} times, lowest range scale x{vramGuard.LowestScale:0.00}");
         if (gpu.Foliage is { } scratchFoliage) Console.WriteLine($"scratch   {scratchFoliage.ScratchDescription}");
         int frames = Math.Max(o.FlyBenchmark, 1);

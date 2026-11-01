@@ -289,6 +289,7 @@ sealed partial class GameHost
                 list.Add(new CharacterInstance(DrawKey(c.Id) ^ (1L << 55), heldPending, position, yaw, poses) { Hidden = true });
         }
         if (editing is null) AddHeads(list);
+        else AddEditorCrowd(list);
     }
 
     readonly System.Runtime.CompilerServices.ConditionalWeakTable<Meitou.Data.Characters.CharacterAppearance, Dictionary<string, Meitou.Data.Characters.CharacterAppearance>> heldLooks = new();

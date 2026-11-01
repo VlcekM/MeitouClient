@@ -83,12 +83,6 @@ sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, 
     Slider HarpoonLimitSlider => harpoonLimitSlider ??= new("Harpoon limit", global::Meitou.Simulation.Combat.RangedTuning.MinStuckLimit, global::Meitou.Simulation.Combat.RangedTuning.MaxStuckLimit, () => (config.Gameplay ??= new()).HarpoonLimit,
         v => SetGameplay((config.Gameplay ?? new()) with { HarpoonLimit = Math.Clamp((int)MathF.Round(v), global::Meitou.Simulation.Combat.RangedTuning.MinStuckLimit, global::Meitou.Simulation.Combat.RangedTuning.MaxStuckLimit) }), "0", Logarithmic: true,
         Faithful: global::Meitou.Simulation.Combat.RangedTuning.DefaultStuckLimit);
-    Slider? healingGoodwillSlider;
-    Slider HealingGoodwillSlider => healingGoodwillSlider ??= new("Goodwill per patient", 1, UserConfig.MaxHealingGoodwill, () => config.HealingGoodwillAmount, v =>
-    {
-        config.HealingGoodwillAmount = Math.Clamp(MathF.Round(v), 1, UserConfig.MaxHealingGoodwill);
-        GameplayChanged?.Invoke();
-    }, "0", Meitou: UserConfig.DefaultHealingGoodwill);
     Slider? groundItemsSlider;
     Slider GroundItemsSlider => groundItemsSlider ??= new("Dropped items kept", 16, global::Meitou.Simulation.Items.GroundItems.MaxLimit, () => config.GroundItemLimit,
         v => config.GroundItemLimit = Math.Clamp((int)MathF.Round(v), 1, global::Meitou.Simulation.Items.GroundItems.MaxLimit), "0", Logarithmic: true,
@@ -365,18 +359,14 @@ sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, 
                 Toggle: new("Production far away", () => config.UnloadedProduction, v => { config.UnloadedProduction = v; OffscreenChanged?.Invoke(); }, Remaster: true, OnOff: true)));
             result.Add(new("Doors close behind", "A door someone opened by walking through it closes again a few seconds after the last person went through. In the game doors stay open.",
                 Toggle: new("Doors close behind", () => config.DoorsCloseBehind, v => { config.DoorsCloseBehind = v; DoorsCloseChanged?.Invoke(v); }, Remaster: true, OnOff: true)));
-            result.Add(new("Healing goodwill", "Treating a knocked-out character of another faction, enemies included, wins its faction over: each patient your medics finish raises "
-                + "that faction's relation to you by the amount below, up to the point where it would become your ally. In the game first aid wins only a sliver, and never past a relation of 5.",
-                Toggle: new("Healing goodwill", () => config.HealingGoodwill, v => { config.HealingGoodwill = v; GameplayChanged?.Invoke(); }, Remaster: true, OnOff: true)));
-            result.Add(new(HealingGoodwillSlider.Label, "Relation points a faction gains for each of its downed people your medics treat (Healing goodwill; -30 or less is hostile, above 50 allied).", Slider: HealingGoodwillSlider));
             result.Add(new("Decapitation", "A blow that destroys a character's head cuts it off, by the same rule the Dismemberment setting cuts off limbs. In the game a destroyed head only kills.",
                 Toggle: new("Decapitation", () => config.Decapitation, v => { config.Decapitation = v; GameplayChanged?.Invoke(); }, Remaster: true, OnOff: true)));
+            result.Add(new("Advanced ragdolls", "A character knocked down or killed by a blow falls with its own momentum and is pushed away from the hit, harder the heavier the blow, its arms and legs flung by it, and a cut-off head flies the same way. Limp bodies have joints that ease to a stop and a slight muscle tone, so they settle into natural poses. In the game a body drops where it stood, its joints stopping hard.",
+                Toggle: new("Advanced ragdolls", () => config.AdvancedRagdolls, v => { config.AdvancedRagdolls = v; GameplayChanged?.Invoke(); }, Remaster: true)));
             result.Add(new("Pause after loading", "A save starts paused once it has loaded, so nothing happens before you look around. In the game it runs at once.",
                 Toggle: new("Pause after loading", () => config.PauseOnLoad, v => config.PauseOnLoad = v, OnOff: true)));
             result.Add(new("Hover outline", "Outline and tint the character under the cursor, in the colour of what a right click would do.",
                 Toggle: new("Hover outline", () => config.HoverOutline, v => config.HoverOutline = v, Remaster: true, OnOff: true)));
-            result.Add(new("Selection rings", "Draw the green ring on the ground under each selected character.",
-                Toggle: new("Selection rings", () => config.SelectionRings, v => config.SelectionRings = v, Remaster: true, OnOff: true)));
             result.Add(new("Portrait menu", "Holding the right button on a squad bar portrait opens that character's menu, as on the character itself; a quick right click still selects them and "
                 + "moves the camera to them. The game has no portrait menu.",
                 Toggle: new("Portrait menu", () => config.PortraitMenu, v => player.PortraitMenu = config.PortraitMenu = v, Remaster: true, OnOff: true)));
@@ -633,9 +623,8 @@ sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, 
         LateDefencesChanged?.Invoke(false);
         config.KeepRoamers = config.OffscreenFights = config.OffscreenHealing = config.CampaignAncestorsOnce = config.KeepWild = config.ResidentSchedule = config.UnloadedProduction = true;
         config.DoorsCloseBehind = true;
-        config.HealingGoodwill = true;
-        config.HealingGoodwillAmount = UserConfig.DefaultHealingGoodwill;
         config.Decapitation = true;
+        config.AdvancedRagdolls = true;
         DoorsCloseChanged?.Invoke(true);
         config.PauseOnLoad = false;
         config.FixDoorBreak = config.FixAmbienceSuffix = config.FixWindStop = true;
@@ -654,7 +643,6 @@ sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, 
         config.Tutorials = true;
         TutorialsChanged?.Invoke(true);
         config.HoverOutline = true;
-        config.SelectionRings = true;
         config.LuckyrenMode = false;
         config.GroundItemLimit = global::Meitou.Simulation.Items.GroundItems.DefaultLimit;
         player.SetUiMode(UiMode.Meitou);

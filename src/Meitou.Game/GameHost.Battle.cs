@@ -20,9 +20,11 @@ sealed partial class GameHost
 
     /// <summary>The default spot (the owner's pick, 2026-10-23): a plateau about 1380 high, from camera code 01C69590C7EAFBAB44A4CE5146EAC4B2BFD203D43E755F7D44.</summary>
     public static readonly Vector2 BattleSpot = new(-74028, 13428);
+    /// <summary>The battle's starting hour (without <c>--time</c>).</summary>
+    public const float BattleHour = 15;
 
-    /// <summary><c>--battle-map fog</c>: a plateau in the Fog Islands about 880 high, level to 13 units over 800 x 800, inside its fog volumes and 10k from any building.</summary>
-    public static readonly Vector2 FogBattleSpot = new(-71170, -40200);
+    /// <summary><c>--battle-map fog</c>: a spot in the Fog Islands picked in the game view, about 460 units from the plateau first used (-71170, -40200: about 880 high, level to 13 units over 800 x 800, in its fog volumes, 10k from any building).</summary>
+    public static readonly Vector2 FogBattleSpot = new(-71560, -39953);
 
     bool IsBattle => g.Battle is not null;
     /// <summary>The floor is the sandbox's: the animation sandbox's, or the battle's with <c>--battle-map sandbox</c>.</summary>
