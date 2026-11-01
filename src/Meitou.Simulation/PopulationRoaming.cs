@@ -368,7 +368,7 @@ public sealed partial class PopulationSystem
             // Wiped out (or removed): the pool is free to make another (a saved platoon's characters are marked, for the next save).
             if (p.Saved is { } gone)
             {
-                Saving.SavedCharacters.Store(world, gone, p.Position);
+                if (p.Stored is null) Saving.SavedCharacters.Store(world, gone, p.Position);
                 gone.PlatoonId = -1;
             }
             if (squad is not null) world.Squads.Remove(squad.Id);
@@ -396,7 +396,7 @@ public sealed partial class PopulationSystem
                 Despawn(world, p);
                 return;
             }
-            if (p.Saved is { } saved) Saving.SavedCharacters.Store(world, saved, p.Position);
+            if (p.Saved is { } saved && p.Stored is null) Saving.SavedCharacters.Store(world, saved, p.Position);   // a made never-made one keeps its squad in Stored
             p.Money = squad.Money;
             // Meitou: a roaming squad the population made keeps its characters from now on.
             if (p.Stored is null && p.Saved is null && !p.Pinned) p.Stored = new StoredSquad { Name = squad.Name, Pinned = false };
@@ -633,6 +633,17 @@ public sealed partial class PopulationSystem
         ulong seed = world.Seed;
         var position = p.Position;
         int id = p.Id;
+        // A save's never-made squad: made from its template into this platoon (FUN_1404ffad0). With no one planned it has nothing to come as: it is dropped (its
+        // record stays in the save, which will try again at the next load).
+        if (p.Unmade)
+        {
+            if (MakeUnmade(world, p) is null)
+            {
+                if (p.Saved is { } none) none.PlatoonId = -1;
+                world.Platoons.Remove(p.Id);
+            }
+            return;
+        }
         // A town's squad that lost too many: made afresh (its characters are gone).
         if (p.Regenerate)
         {

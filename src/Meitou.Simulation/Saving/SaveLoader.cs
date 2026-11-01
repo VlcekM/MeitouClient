@@ -316,8 +316,10 @@ public static class SaveLoader
         // A platoon without characters (no file, or none in it) has nothing to make: a town's stays in the save as it is, a travelling one is a stand-in whose members the
         // template makes, as for the population's own.
         bool hasCharacters = platoon.IsLoaded && platoon.Characters.Count > 0;
-        if (!hasCharacters && !travels) return;
+        bool unmade = !hasCharacters && !travels && Unmade(platoon);
+        if (!hasCharacters && !travels && !unmade) return;
         SavedPlatoon? sp = null;
+        if (unmade) sp = new SavedPlatoon { Source = platoon, Pinned = true, Anchor = new Vector2(platoon.Position.X, platoon.Position.Z) };
         if (hasCharacters)
         {
             sp = new SavedPlatoon { Source = platoon, Pinned = !travels, Anchor = new Vector2(platoon.Position.X, platoon.Position.Z) };
@@ -330,7 +332,7 @@ public static class SaveLoader
             size = SquadFactory.Plan(data.Db, Meitou.Data.Gameplay.SquadTemplate.From(sizeRecord), 1, world.Seed, key, data.States).TotalMembers;
         var p = new Platoon
         {
-            Id = world.Platoons.NextId(),
+            Id = unmade ? world.Platoons.NextReservedId() : world.Platoons.NextId(),
             Origin = origin,
             TemplateId = platoon.SquadTemplate,
             Faction = faction >= 0 ? faction : siteFaction,
@@ -341,6 +343,7 @@ public static class SaveLoader
             State = PlatoonState.Unloaded,
             Package = package?.Id, Job = job,
             Saved = sp,
+            Unmade = unmade,
             Imprisoned = platoon.Record.Bools.GetValueOrDefault("imprisoned"),
             Dead = platoon.Record.Bools.GetValueOrDefault("dead"),
             IntactFlag = platoon.Record.Bools.GetValueOrDefault("intact", true),
@@ -353,9 +356,19 @@ public static class SaveLoader
             context.Platoons.Add(sp);
             context.ByName[sp.Name] = sp;
         }
+        if (unmade) loaded.Notes.Add($"{platoon.Name}: never made by the game; made from its template when it activates.");
         if (travels) loaded.RoamingPlatoons[p.Id] = platoon.Name;
         else loaded.TownBoundPlatoons++;
     }
+
+    /// <summary>
+    /// Whether a saved town platoon with no file is one the game never made: the original builds a <c>never been activated</c> platoon from its template on activation
+    /// (<c>FUN_1404ffad0</c>, <b>Verified</b>); the <c>char count</c> &gt; 0 and BUILDING <c>homebuilding</c> filter is Meitou's own (docs/formats/save.md "NPC platoons").
+    /// It becomes a stand-in (<see cref="Platoon.Unmade"/>) instead of staying in the save.
+    /// </summary>
+    internal static bool Unmade(SavePlatoon platoon) =>
+        !platoon.IsLoaded && platoon.Record.Bools.GetValueOrDefault("never been activated") && platoon.CharCount > 0
+        && Hand.Read(platoon.Record, "homebuilding") is { IsNull: false, Type: (int)FcsRecordType.BUILDING };
 
     /// <summary>
     /// Whether a saved NPC platoon travels and so gets a roaming stand-in (<b>engine rule</b>, from the five saves of docs/formats/save.md: residents are marked <c>is resident</c>, and

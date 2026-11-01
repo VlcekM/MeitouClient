@@ -417,6 +417,7 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
         bool replaced = Replace(world, site);
         bool held = !replaced && (HoldsSquads(world, site.Index) || PoolsOf(site.Index) is { Started: true });
         if (held) CheckRegeneration(world, site.Index);
+        else if (!replaced) DropUnmade(world, site.Index);
         if (work is null)
         {
             Spawn(world, BuildTown(site, loadId, seed, walk, held));
@@ -531,14 +532,28 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
     }
 
     /// <summary>
-    /// Whether a loaded save holds squads of the town: a pinned saved platoon of the site, made now or not. They are then the town's whole population and it makes no
-    /// residents or bar squads of its own (<see cref="BuildTown"/>, docs/simulation.md "Saves").
+    /// Whether a loaded save holds squads of the town: a pinned saved platoon of the site, made now or not, other than a never-made stand-in (<see cref="Platoon.Unmade"/>).
+    /// They are then the town's whole population and it makes no residents or bar squads of its own (<see cref="BuildTown"/>, docs/simulation.md "Saves").
     /// </summary>
     bool HoldsSquads(World world, int site)
     {
         foreach (var p in world.Platoons.All)
-            if (p.Pinned && p.Origin == site) return true;
+            if (p.Pinned && p.Origin == site && !p.Unmade) return true;
         return false;
+    }
+
+    /// <summary>
+    /// A town that makes its own residents at its load (not held: its pool not <c>started</c> and no other squad of the save's) drops its never-made stand-ins, which would
+    /// double them; their records stay in the save as they are (engine choice: an original save of a made town has <c>started</c>, so this is only a save without pool state).
+    /// </summary>
+    static void DropUnmade(World world, int site)
+    {
+        foreach (var p in world.Platoons.All.ToList())
+            if (p is { Unmade: true, State: PlatoonState.Unloaded } && p.Origin == site)
+            {
+                if (p.Saved is { } sp) sp.PlatoonId = -1;
+                world.Platoons.Remove(p.Id);
+            }
     }
 
 

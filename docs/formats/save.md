@@ -329,9 +329,23 @@ PLATOON keys (**Verified**):
   1, 2, 3, wade, new, quicksave and three autosaves: residents, bar squads and the player's, 0 exceptions) and false on most `sqt` 2 ones (some `sqt` 2
   town platoons are persistent, why **Unknown**; an occupation sets it, [ai.md](../game/ai.md#package-classes)). Meitou writes true with `sqt` 1 and false
   with 2 but while the platoon's package is an occupation; written false, the original would delete a resident squad when it leaves the loaded area.
-- `is resident` is set exactly on the platoons with a `homebuilding` (census of saves 1, 2, 3, wade: 0 exceptions); Meitou writes both for a squad with a home.
+- `is resident` (platoon +0x116, written by `FUN_140372ef0` from the object) is set exactly on the platoons with a `homebuilding` in the census of saves 1, 2, 3, wade
+  (0 exceptions); whether those saves hold never-activated platoons was not checked, so the rule is known for made platoons only. Meitou writes both for a squad with a home.
+  **Observed** exception on one save (a new game saved at once, unmodded; not a rule of fresh saves in general): `sqt` 1, `persistent` platoons with a `homebuilding`,
+  `is resident` false, `never been activated` true and no platoon file. The two of them with a `char count` in the camera block's zones next to the player's
+  appeared 4 to 6 simulated s after load (5 of 5 runs), one in the player's zone at once; their sizes varied by run.
+- `never been activated` is platoon +0x114 (**Verified**, by code). Activation (`FUN_1404ffad0`) builds the platoon's squad from its template into the same platoon object
+  (`FUN_140583a10`) when +0x114 is set (also when it has no characters and an empty string at its active object's +0x18, likely the file name, **Unknown**; both gated
+  by a pointer at +0x250 of its vfunc-0x58 object being null, **Unknown** what), else loads its file; it then clears +0x114. The saver
+  (`FUN_140372ef0`) writes a loaded platoon with `never been activated` 0, `content file` `platoon/<name>.platoon` and `char count` its members, an unloaded one
+  with +0x114 and its kept `char count`. Meitou (`SaveLoader.Unmade`, engine rule): only a file-less, never-activated town platoon with `char count` > 0 and a BUILDING
+  `homebuilding` becomes a stand-in made from its template on activation (in the player's box at load, else after its 5 s dwell, `PopulationSystem.ActivatesAtLoad`);
+  other file-less town platoons stay in the save as they are. Its pool counts `char count` until it is made, and a save then writes its squad into the same record
+  (name, handle, `is resident`, `sqt`, homes kept) with `never been activated` false. A town that makes its own residents (pool not `started`, no other squad of the
+  save) drops its unmade stand-ins instead, so they are not doubled.
 - `hometown` (handle) puts the platoon into that town's or nest's pool at load (`FUN_1407ec8d0`; the platoon's faction and player status must match the town's);
   the pool counts living characters, `char count` while the platoon is not active (`FUN_1408f6a40`). `basetown` is only kept as a TOWN record pointer.
+  Meitou rewrites `char count` from the platoon file when it saves, and keeps the save's value for a platoon with no file.
 - `homebuilding` (handle) is bound through the game's per-frame system-message queue (`FUN_1407b65b0`): only if the building resolves that frame, else the message is
   dropped (**Unknown** whether something rebinds it later). Meitou writes the handle of the building's state in the save's zone file (a Meitou save writes a file for
   every visited zone, [Zone files](#zone-files)), else its level-data handle ([handles](#object-handles-and-slot-lists)).

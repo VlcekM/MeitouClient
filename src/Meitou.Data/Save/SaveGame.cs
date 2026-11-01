@@ -179,7 +179,7 @@ public sealed partial class SaveGame
     // ------------------------------------------------------------------ derived data
 
     /// <summary>
-    /// Brings the parts that follow from the rest up to date: the CAMERA <c>zones</c> list from the zone files, every platoon's character count and file name,
+    /// Brings the parts that follow from the rest up to date: the CAMERA <c>zones</c> list from the zone files, the character count of every platoon with a file and the file name,
     /// slot lists 0 (platoon containers) and 1 (town containers) of <c>quick.save</c> (lists 2 and 3 are kept, or start as 1..4096: their meaning is Unknown), a zone file's
     /// slot list when it has none, each file's <c>nextId</c> (raised to its highest record id, never lowered) and the <c>byteSize</c> of the records that carry a child count.
     /// </summary>
@@ -188,7 +188,8 @@ public sealed partial class SaveGame
         Camera.SetZones(Zones.Keys);
         foreach (var p in Platoons)
         {
-            p.CharCount = p.Characters.Count;
+            // A platoon with no file has no characters to count: its count is the save's (the town pool counts it while the platoon is not active).
+            if (p.File is not null) p.CharCount = p.Characters.Count;
             if (p.Collection is { } c) c.Ints["char count"] = p.Characters.Count;
             if (p.File is not null && p.FileName is null) p.ContentFile = SaveFolder.PlatoonName(p.Record.StringId);
         }

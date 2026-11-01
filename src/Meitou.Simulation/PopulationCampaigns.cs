@@ -609,6 +609,8 @@ public sealed partial class PopulationSystem : IStateHashed
     {
         if (p.State == PlatoonState.Loaded && world.Squads.Find(p.SquadId) is { } squad) return squad.Members.Count(m => Living(world, m));
         if (p.Stored is { Members.Count: > 0 } stored) return stored.Members.Count(m => m.Cold.Medical is not { Dead: true });
+        // A save's never-made platoon: its `char count`, as the original's pool counts a platoon that is not active (FUN_1408f6a40).
+        if (p.Unmade) return p.Size;
         if (p.Saved is { } saved) return saved.Members.Count(m => !m.Dead && !m.Gone);
         return p.Size;
     }
