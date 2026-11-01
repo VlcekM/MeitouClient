@@ -185,7 +185,7 @@ public sealed partial class PlayerSystem(PopulationData? data = null) : ITickSys
     void RenameFaction(World world, string text)
     {
         var player = world.Player;
-        string name = text.Trim();
+        string name = text;   // FUN_1404923d0 keeps the text as typed (no trim)
         if (name.Length > FactionNameLength) name = name[..FactionNameLength];
         if (!player.Exists || name.Length == 0 || name == PlayerFactionName(world)) return;
         // FUN_1402e7950: any other faction already named so. (The data's names; the player's own old name is free again.)

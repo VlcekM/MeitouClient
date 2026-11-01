@@ -939,7 +939,7 @@ decompile unless marked; Meitou's adapter is `PlayerInterface.Map.cs`.
 Overview tab 1 (`FactionTab`), class `FactionsScreen` (RTTI; constructor `FUN_140493fe0`, update `FUN_140499960`). **Observed** (decompile, 2026-10-23)
 unless marked; Meitou: `PlayerInterface.Faction.cs`.
 - Captions: `lbFactionName` "Faction name", `lbFactionInfo` "Information". `FactionNameText` (EditBox) holds the player faction's name (PlayerInterface+8).
-  Accept or losing the key focus renames (`FUN_1404923d0`): a new name that no faction has yet (`FUN_1402e7950`) is written to PlayerInterface+8 and the
+  Accept or losing the key focus renames (`FUN_1404923d0`): a new name that no faction has yet (`FUN_1402e7950`) is written, exactly as typed (no trim), to PlayerInterface+8 and the
   player faction's name (+0x1a8); a taken one shows the message box "Faction Name" / "This faction name already exists" and the box reverts. While the box
   has the key focus the hotkeys are off (`DAT_142133440` = 0, back to 1 on focus loss).
 - `RelationsPanel` (ScrollView): one `Kenshi_FactionRelationsLine.layout` per faction (constructor `FUN_140491f60`: `FactionName` the faction's name,
