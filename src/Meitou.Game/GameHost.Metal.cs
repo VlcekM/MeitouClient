@@ -1570,7 +1570,7 @@ sealed partial class GameHost
             config.FullScreen = BorderlessFullScreen.IsOn(window);
             config.MetalUpscaler = mode;
             config.MetalRenderScale = ctx.RenderScale;
-            if (hud is not null) config.UiMode = hud.UiMode;
+            if (hud is not null && (!g.LowEnd || hud.UiMode != Meitou.Data.Ui.UiMode.Faithful)) config.UiMode = hud.UiMode;   // --low-end's Faithful UI is for the run
             config.Bindings = session.Bindings.ToDictionary();
             if (settingsValues is not null)
             {

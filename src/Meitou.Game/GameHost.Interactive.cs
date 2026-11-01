@@ -850,7 +850,7 @@ sealed partial class GameHost
                 panel.SavePreset();
             }
             config.Bindings = session.Bindings.ToDictionary();
-            config.UiMode = player.UiMode;
+            if (!g.LowEnd || player.UiMode != Meitou.Data.Ui.UiMode.Faithful) config.UiMode = player.UiMode;   // --low-end's Faithful UI is for the run
             config.Save();
         }
 
