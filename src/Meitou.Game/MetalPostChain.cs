@@ -37,8 +37,9 @@ sealed class MetalPostChain : IWorldPostChain, IDisposable
     sealed class LowTarget(int divisor)
     {
         public readonly int Divisor = divisor;
-        public GpuTexture? Accum, Depth;
-        public PassTargets Targets = null!;
+        /// <summary>The draw tested against each block's nearest depth, and the one tested against its farthest.</summary>
+        public GpuTexture? Accum, Depth, AccumFar, DepthFar;
+        public PassTargets Targets = null!, TargetsFar = null!;
         public bool Drawn;
     }
 
@@ -187,6 +188,7 @@ sealed class MetalPostChain : IWorldPostChain, IDisposable
         LowResParticles ? projectionM22 * (sceneColour?.Desc.Height ?? 0) * 0.5f : 0f;
 
     public PassTargets ParticleTargets(int divisor) => LowFor(divisor).Targets;
+    public PassTargets? ParticleTargetsFar(int divisor) => LowFor(divisor).TargetsFar;
 
     public void BeginParticlesLow(int divisor)
     {
@@ -199,17 +201,28 @@ sealed class MetalPostChain : IWorldPostChain, IDisposable
         {
             low.Accum?.Dispose();
             low.Depth?.Dispose();
+            low.AccumFar?.Dispose();
+            low.DepthFar?.Dispose();
             low.Accum = ctx.CreateTexture(new TextureDesc(InternalFormat.Rgba16f, w, h,
                 Use: TextureUse.ColourTarget | TextureUse.Sampled, Name: $"post particle accumulation 1/{div}"));
             low.Depth = ctx.CreateTexture(new TextureDesc(InternalFormat.DepthComponent24, w, h,
                 Use: TextureUse.DepthTarget | TextureUse.Sampled, Name: $"post particle depth 1/{div}"));
+            low.AccumFar = ctx.CreateTexture(new TextureDesc(InternalFormat.Rgba16f, w, h,
+                Use: TextureUse.ColourTarget | TextureUse.Sampled, Name: $"post particle accumulation far 1/{div}"));
+            low.DepthFar = ctx.CreateTexture(new TextureDesc(InternalFormat.DepthComponent24, w, h,
+                Use: TextureUse.DepthTarget | TextureUse.Sampled, Name: $"post particle depth far 1/{div}"));
         }
+        // Twice: each block's nearest depth, then its farthest; the particles are drawn against each (ParticleTargetsFar) and the composite takes
+        // each pixel's own surface from either (PostProcessShaders.ParticleUpsampleLayered).
         var depthCmd = (MetalCommandList)ctx.BeginNative("post particle depth");
-        composite.ParticleDepth(depthCmd, ctx.Depth, low.Depth!, sceneColour.Desc.Width, sceneColour.Desc.Height, div, low.Accum);
+        composite.ParticleDepth(depthCmd, ctx.Depth, low.Depth!, sceneColour.Desc.Width, sceneColour.Desc.Height, div, low.Accum, layer: 1);
+        composite.ParticleDepth(depthCmd, ctx.Depth, low.DepthFar!, sceneColour.Desc.Width, sceneColour.Desc.Height, div, low.AccumFar, layer: 2);
         ctx.EndNative(depthCmd);
         low.Drawn = false;
         var targets = PassTargets.Of(low.Accum, low.Depth);
         low.Targets = targets with { Colour = targets.Colour with { Load = LoadOp.Clear, Clear = default } };
+        var far = PassTargets.Of(low.AccumFar!, low.DepthFar);
+        low.TargetsFar = far with { Colour = far.Colour with { Load = LoadOp.Clear, Clear = default } };
     }
 
     public void CompositeParticlesLow(int divisor)
@@ -217,7 +230,7 @@ sealed class MetalPostChain : IWorldPostChain, IDisposable
         if (sceneColour is null) return;
         var low = LowFor(divisor);
         var cmd = (MetalCommandList)ctx.BeginNative("post particle composite");
-        composite.ParticleComposite(cmd, low.Accum!, low.Depth!, ctx.Depth, sceneColour, low.Divisor, nearPlane, farPlane);
+        composite.ParticleComposite(cmd, low.Accum!, low.Depth!, low.AccumFar!, low.DepthFar!, ctx.Depth, sceneColour, low.Divisor, nearPlane, farPlane);
         ctx.EndNative(cmd);
         low.Drawn = true;
     }
@@ -265,8 +278,8 @@ sealed class MetalPostChain : IWorldPostChain, IDisposable
         // reactive mask deliberately has no particle coverage.
         foreach (var low in lowTargets)
         {
-            if (!low.Drawn || low.Accum is null || low.Depth is null) continue;
-            composite.ParticleCoverage(cmd, low.Accum, low.Depth, ctx.Depth, target, low.Divisor, nearPlane, farPlane, mask);
+            if (!low.Drawn || low.Accum is null || low.Depth is null || low.AccumFar is null || low.DepthFar is null) continue;
+            composite.ParticleCoverage(cmd, low.Accum, low.Depth, low.AccumFar, low.DepthFar, ctx.Depth, target, low.Divisor, nearPlane, farPlane, mask);
         }
     }
 
@@ -287,6 +300,8 @@ sealed class MetalPostChain : IWorldPostChain, IDisposable
         {
             low.Accum?.Dispose();
             low.Depth?.Dispose();
+            low.AccumFar?.Dispose();
+            low.DepthFar?.Dispose();
         }
     }
 

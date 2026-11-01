@@ -506,7 +506,7 @@ public sealed unsafe class ParticleRenderer : IDisposable
         Matrix4x4? lowViewProjection = null, Matrix4x4? lowCloseViewProjection = null)
     {
         long start = Stopwatch.GetTimestamp();
-        PrepareInner(viewProjectionMatrix, closeViewProjection, nearPlane, view, eye, sunDirection, pixelsPerUnit, screenPixels, forcedDivisor);
+        PrepareInner(viewProjectionMatrix, closeViewProjection, nearPlane, view, eye, sunDirection, pixelsPerUnit, screenPixels, forcedDivisor, late: lowViewProjection is not null);
         // The low-resolution draws' own matrices: unjittered when they are blended after the upscaler (PostProcess.ParticlesAfterUpscale), whose output is.
         frameLowVp = lowViewProjection is { } lowVp ? Matrix4x4.CreateTranslation(eye) * lowVp : frameVp;
         frameLowCloseVp = lowCloseViewProjection is { } lowClose ? Matrix4x4.CreateTranslation(eye) * lowClose : frameCloseVp;
@@ -550,8 +550,10 @@ public sealed unsafe class ParticleRenderer : IDisposable
     /// <summary>Mean main-thread cost of Update and Draw (draw includes the wait for the simulation) per frame, in ms (for the benchmarks).</summary>
     public (double Update, double Draw) MeanMainThreadMilliseconds => (updateFrames == 0 ? 0 : updateTotal * 1000.0 / Stopwatch.Frequency / updateFrames, drawFrames == 0 ? 0 : drawTotal * 1000.0 / Stopwatch.Frequency / drawFrames);
 
-    void PrepareInner(Matrix4x4 viewProjectionMatrix, Matrix4x4 closeViewProjection, float nearPlane, Matrix4x4 view, Vector3 eye, Vector3 sunDirection, float pixelsPerUnit, float screenPixels, int forcedDivisor)
+    void PrepareInner(Matrix4x4 viewProjectionMatrix, Matrix4x4 closeViewProjection, float nearPlane, Matrix4x4 view, Vector3 eye, Vector3 sunDirection, float pixelsPerUnit, float screenPixels, int forcedDivisor, bool late)
     {
+        (lastDivisors, nextDivisors) = (nextDivisors, lastDivisors);
+        nextDivisors.Clear();
         Sync();
         Array.Clear(divisorCounts);
         drawnParticles = 0;
@@ -606,19 +608,28 @@ public sealed unsafe class ParticleRenderer : IDisposable
                 float fill = 0;
                 bool fire = placed && material.Blend == ParticleBlend.Add;
                 if (pixelsPerUnit > 0 && !rain && !fire && (material.Blend == ParticleBlend.Alpha || material.Blend == ParticleBlend.Add))
-                    (divisor, fill) = DivisorFor(scratch.AsSpan(0, written), forward, nearPlane, pixelsPerUnit, screenPixels, forcedDivisor);
+                {
+                    (divisor, fill) = DivisorFor(scratch.AsSpan(0, written), forward, nearPlane, pixelsPerUnit, screenPixels, forcedDivisor,
+                        lastDivisors.TryGetValue((u, t), out int last) ? last : 0);
+                    nextDivisors[(u, t)] = divisor;
+                }
                 draws.Add(new DrawItem { Instances = instances, Count = written, Close = close, Technique = def, Material = material, Texture = texture, Divisor = divisor, Fill = fill, Rain = rain, Fire = fire });
                 drawnParticles += written;
             }
         }
         if (Tracers.Count > 0) AddTracers(frame, eye, forward, nearPlane);
-        // A size is worth its two extra passes (the depth reduction, the composite) only when it saves enough fill: below MinLayers it stays full size.
+        // A size is worth its two extra passes (the depth reduction, the composite) only when it saves enough fill: it is taken up from MinLayers and left
+        // below half that (so a storm thickening or the view turning does not flip the dust between full size and low resolution, which looked
+        // different, every few frames). Not after a vendor upscaler: there the low-resolution draws are kept out of what it upscales, and full-size
+        // dust drifting in it trailed in streaks.
         if (forcedDivisor == 0)
-            foreach (int size in (ReadOnlySpan<int>)[2, 4])
+            for (int s = 0; s < 2; s++)
             {
+                int size = s == 0 ? 2 : 4;
                 float layers = 0;
                 foreach (var d in draws) if (d.Divisor == size) layers += d.Fill;
-                if (layers >= MinLayers) continue;
+                sizeInUse[s] = late || (sizeInUse[s] ? layers >= MinLayers * 0.5f : layers >= MinLayers);
+                if (sizeInUse[s]) continue;
                 for (int i = 0; i < draws.Count; i++)
                     if (draws[i].Divisor == size) { var d = draws[i]; d.Divisor = 1; draws[i] = d; }
             }
@@ -694,8 +705,17 @@ public sealed unsafe class ParticleRenderer : IDisposable
     /// <summary>Whether the last <see cref="Prepare"/> has low-resolution draws, whose coverage the post chain derives from the accumulation target (<see cref="PostProcess"/>).</summary>
     public bool HasLowCoverage => coveragePending && LowCount > 0;
 
-    /// <summary>The size a draw of these particles gets: the larger their mean screen size, the smaller the target (soft big sprites lose nothing at a fraction of the pixels; thin streaks keep their full size).</summary>
-    static (int Divisor, float Fill) DivisorFor(ReadOnlySpan<ParticleInstance> instances, Vector3 forward, float nearPlane, float pixelsPerUnit, float screenPixels, int forced)
+    /// <summary>Each unit's techniques' sizes last frame and this one (<see cref="DivisorFor"/>'s hysteresis), and whether each low-resolution size (half, quarter)
+    /// was in use last frame.</summary>
+    Dictionary<(EffectUnit, int), int> lastDivisors = [], nextDivisors = [];
+    readonly bool[] sizeInUse = new bool[2];
+
+    /// <summary>
+    /// The size a draw of these particles gets: the larger their mean screen size, the smaller the target (soft big sprites lose nothing at a fraction of the
+    /// pixels; thin streaks keep their full size). With <paramref name="last"/> (the size the same technique of the same unit had last frame) a size is
+    /// left only 15 % past its threshold, so a draw near one does not flip between sizes, which looked different, as the camera moves.
+    /// </summary>
+    static (int Divisor, float Fill) DivisorFor(ReadOnlySpan<ParticleInstance> instances, Vector3 forward, float nearPlane, float pixelsPerUnit, float screenPixels, int forced, int last = 0)
     {
         double area = 0;
         foreach (ref readonly var p in instances)
@@ -706,7 +726,12 @@ public sealed unsafe class ParticleRenderer : IDisposable
         float fill = (float)(area / screenPixels);
         if (forced > 0) return (forced >= 3 ? 4 : forced, fill);
         double size = Math.Sqrt(area / instances.Length);
-        return (size >= QuarterPixels ? 4 : size >= HalfPixels ? 2 : 1, fill);
+        int divisor = size >= QuarterPixels ? 4 : size >= HalfPixels ? 2 : 1;
+        if (last == 4 && size >= QuarterPixels * 0.85) divisor = 4;
+        else if (last >= 2 && divisor < 2 && size >= HalfPixels * 0.85) divisor = 2;
+        else if (last == 2 && divisor == 4 && size < QuarterPixels * 1.15) divisor = 2;
+        else if (last == 1 && divisor == 2 && size < HalfPixels * 1.15) divisor = 1;
+        return (divisor, fill);
     }
 
     void RecordDraws(IGpuCommandList cmd, in DrawState baseState, in PassTargets targets, bool hasDepth, bool hasColour,

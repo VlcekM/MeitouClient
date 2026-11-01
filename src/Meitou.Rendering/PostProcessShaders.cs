@@ -492,7 +492,7 @@ static class PostProcessShaders
     /// <summary>
     /// The low-resolution particles' depth (Meitou): each texel is the nearest or the farthest of the <c>uDiv</c> x <c>uDiv</c> block of the scene's depth it
     /// covers, written as the depth of a depth-only rendering, so the hardware test of the particle draws still rejects the sprite area hidden behind the scene
-    /// (early-Z). <c>uLayer</c> 1: the nearest, 2: the farthest (the Vulkan chain draws the particles once against each, <see cref="ParticleUpsampleLayered"/>);
+    /// (early-Z). <c>uLayer</c> 1: the nearest, 2: the farthest (the Vulkan chain draws the particles once against each, <see cref="ParticleUpsample"/>);
     /// 0: the nearest where x + y is even and the farthest where odd (the Metal chain: one draw, every 2 x 2 footprint of the upsample holds two of each).
     /// </summary>
     public const string ParticleDepth = """
@@ -515,8 +515,7 @@ static class PostProcessShaders
                         near = min(near, d);
                         far = max(far, d);
                     }
-            ivec2 t = ivec2(gl_FragCoord.xy);
-            gl_FragDepth = uLayer == 1 || (uLayer == 0 && ((t.x + t.y) & 1) == 0) ? near : far;
+            gl_FragDepth = uLayer == 2 ? far : near;
             fragColour = vec4(gl_FragDepth);   // the same depth as a colour, for the Meitou fog's soft fade (the depth attachment cannot be read while tested)
         }
         """;
@@ -531,96 +530,15 @@ static class PostProcessShaders
         """;
 
     /// <summary>
-    /// The depth-aware upsample of the low-resolution particles' accumulation, shared by <see cref="ParticleComposite"/> and <see cref="ParticleCoverage"/>:
-    /// the four nearest texels with their bilinear weights (plus a floor) divided by the square of how far each one's depth is from this pixel's (relative, in
-    /// linear depth), so the texels tested against this pixel's own surface (<see cref="ParticleDepth"/>) win and a sprite behind a near edge does not bleed
-    /// over it. Pixels whose four texels are empty skip the depth reads. With <c>footprint</c> (blended over a vendor upscaler's unjittered output) the pixel's
-    /// depth is the nearest of the 2 x 2 render texels round it, the ones its unjittered point can fall in whatever the jitter, not the one nearest texel.
-    /// </summary>
-    const string ParticleUpsample = """
-        uniform sampler2D uAccum, uLowDepth, uDepth;
-        uniform vec2 uLowSize;
-        uniform vec2 uNearPlanes;   // near, far of the depth slice the particles were tested against
-        uniform float uDiv;
-        uniform int uClipDepthZeroToOne;   // Metal's depth is 0..1; Vulkan's is recovered with 2d - 1
-        float linearZ(float d) { float zd = uClipDepthZeroToOne != 0 ? d : 2.0 * d - 1.0; return uNearPlanes.x * uNearPlanes.y / (uNearPlanes.y - zd * (uNearPlanes.y - uNearPlanes.x)); }
-        vec4 particlesAt(vec2 fc, bool footprint)
-        {
-            vec2 lp = fc / uDiv - 0.5;
-            vec2 f = lp - floor(lp);
-            ivec2 i0 = ivec2(floor(lp));
-            ivec2 hi = ivec2(uLowSize) - 1;
-            ivec2 q[4];
-            vec4 a[4];
-            float total = 0.0;
-            for (int i = 0; i < 4; i++)
-            {
-                q[i] = clamp(i0 + ivec2(i & 1, i >> 1), ivec2(0), hi);
-                a[i] = texelFetch(uAccum, q[i], 0);
-                total += a[i].a + a[i].r + a[i].g + a[i].b;
-            }
-            if (total <= 0.0) return vec4(0.0);
-            float d0 = texelFetch(uDepth, ivec2(fc), 0).r;
-            if (footprint)
-            {
-                ivec2 r0 = ivec2(floor(fc - 0.5)), rhi = textureSize(uDepth, 0) - 1;
-                d0 = min(min(texelFetch(uDepth, clamp(r0, ivec2(0), rhi), 0).r, texelFetch(uDepth, clamp(r0 + ivec2(1, 0), ivec2(0), rhi), 0).r),
-                         min(texelFetch(uDepth, clamp(r0 + ivec2(0, 1), ivec2(0), rhi), 0).r, texelFetch(uDepth, clamp(r0 + ivec2(1, 1), ivec2(0), rhi), 0).r));
-            }
-            float z0 = linearZ(d0);
-            float z[4];
-            float zMin = 1e30, zMax = 0.0;
-            for (int i = 0; i < 4; i++)
-            {
-                z[i] = linearZ(texelFetch(uLowDepth, q[i], 0).r);
-                zMin = min(zMin, z[i]);
-                zMax = max(zMax, z[i]);
-            }
-            if (zMax - zMin <= 0.04 * zMin)
-            {
-                // One surface under the footprint: the bilinear weights (with the same depth term, which is near 1 for all four).
-                vec4 sum = vec4(0.0);
-                float weights = 0.0;
-                for (int i = 0; i < 4; i++)
-                {
-                    float bw = ((i & 1) == 0 ? 1.0 - f.x : f.x) * ((i >> 1) == 0 ? 1.0 - f.y : f.y);
-                    float e = 0.02 + abs(z[i] - z0) / z0;
-                    float w = (bw + 0.05) / (e * e);
-                    sum += a[i] * w;
-                    weights += w;
-                }
-                return sum / weights;
-            }
-            // A depth edge: a joint bilateral filter over the 4 x 4 texels round the pixel (a smooth radial kernel times the depth match), so the texels tested
-            // against this pixel's surface (ParticleDepth's checkerboard holds both of a block's depths) blend among themselves. The four nearest alone gave one
-            // or two matching texels in turn along the edge: a row of beads two texels apart.
-            vec4 sum = vec4(0.0);
-            float weights = 0.0;
-            for (int y = -1; y <= 2; y++)
-                for (int x = -1; x <= 2; x++)
-                {
-                    ivec2 t = i0 + ivec2(x, y);
-                    float k = max(0.0, 1.0 - length(vec2(t) - lp) / 2.0);
-                    if (k <= 0.0) continue;
-                    ivec2 c = clamp(t, ivec2(0), hi);
-                    float e = 0.02 + abs(linearZ(texelFetch(uLowDepth, c, 0).r) - z0) / z0;
-                    float w = k * k / (e * e);
-                    sum += texelFetch(uAccum, c, 0) * w;
-                    weights += w;
-                }
-            return weights > 0.0 ? sum / weights : vec4(0.0);
-        }
-        """;
-
-    /// <summary>
-    /// The depth-aware upsample of the low-resolution particles drawn twice (the Vulkan chain): <c>uAccum</c> tested against each block's nearest depth
+    /// The depth-aware upsample of the low-resolution particles, drawn twice: <c>uAccum</c> tested against each block's nearest depth
     /// (<c>uLowDepth</c>), <c>uAccumFar</c> against its farthest (<c>uLowDepthFar</c>; <see cref="ParticleDepth"/> layers 1 and 2). Each of the four nearest
     /// texels offers both, each weighted bilinearly (plus a floor) and divided by the square of how far its depth is from this pixel's (relative, linear), so
     /// a pixel takes the sprites tested against its own surface from every texel round it: on a ridge the near draw's, on the land behind it the far draw's
-    /// (which holds what lies between the ridge and the land). The one-draw checkerboard (<see cref="ParticleUpsample"/>) had those texels only every other
-    /// one along an edge, and the dust behind a ridge followed it in steps of two texels. <c>footprint</c> as there.
+    /// (which holds what lies between the ridge and the land). One draw against a checkerboard of the two depths had those texels only every other one
+    /// along an edge, and the dust behind a ridge followed it in steps of two texels. With <c>footprint</c> (blended over a vendor upscaler's unjittered
+    /// output) the pixel's depth is the nearest of the 2 x 2 render texels round it.
     /// </summary>
-    const string ParticleUpsampleLayered = """
+    const string ParticleUpsample = """
         uniform sampler2D uAccum, uLowDepth, uAccumFar, uLowDepthFar, uDepth;
         uniform vec2 uLowSize;
         uniform vec2 uNearPlanes;   // near, far of the depth slice the particles were tested against
@@ -669,7 +587,7 @@ static class PostProcessShaders
 
     /// <summary>
     /// The low-resolution particles over the vendor upscaler's output (<c>PostProcess.CompositeLateParticlesFiltered</c>): both sizes (uHas: their divisors,
-    /// 0 for none; each as <see cref="ParticleUpsampleLayered"/>, the quarter size over the half), at the surfaces of the four render pixels round the display
+    /// 0 for none; each as <see cref="ParticleUpsample"/>, the quarter size over the half), at the surfaces of the four render pixels round the display
     /// pixel (the jitter undone: render pixel i shows the unjittered picture at i + 0.5 - jitter), weighted bilinearly; then the temporal filter: last
     /// frame's (uHistory, reprojected by the closest of the four's motion) kept within the four values and blended in. Off an outline the four agree, so
     /// drifting dust does not trail; on one they follow the jitter, which averages out into the upscaler's smooth edge instead of a staircase.
@@ -777,34 +695,8 @@ static class PostProcessShaders
         void main() { fragColour = texelFetch(uLayer, ivec2(gl_FragCoord.xy), 0); }
         """;
 
-    /// <summary><see cref="ParticleComposite"/> over <see cref="ParticleUpsampleLayered"/> (the Vulkan chain).</summary>
-    public const string ParticleCompositeLayered = """
-        #version 330 core
-        in vec2 vUv;
-        out vec4 fragColour;
-        uniform float uScale;   // render pixels per target pixel: 1 over the scene, render / display over the upscaler's output
-        uniform int uFootprint; // 1 over the upscaler's output (unjittered): the nearest of the render depth's 2 x 2 round the pixel
-        """ + "\n" + ParticleUpsampleLayered + "\n" + """
-        void main() { fragColour = particlesAt((floor(gl_FragCoord.xy) + 0.5) * uScale, uFootprint != 0); }
-        """;
-
-    /// <summary><see cref="ParticleCoverage"/> over <see cref="ParticleUpsampleLayered"/> (the Vulkan chain).</summary>
-    public const string ParticleCoverageLayered = """
-        #version 330 core
-        in vec2 vUv;
-        out vec4 fragColour;
-        uniform vec2 uFullSize;   // the render size (the target may differ)
-        uniform float uLimit;
-        """ + "\n" + ParticleUpsampleLayered + "\n" + """
-        void main()
-        {
-            vec4 a = particlesAt(floor(vUv * uFullSize) + 0.5, false);
-            fragColour = vec4(clamp(max(a.a, max(a.r, max(a.g, a.b))), 0.0, uLimit));
-        }
-        """;
-
     /// <summary>
-    /// The low-resolution particles' accumulation (rgb = colour added, a = opacity; <see cref="ParticleRenderer"/>) over the scene, as <c>scene * (1 - a) + rgb</c>
+    /// The low-resolution particles' accumulations (rgb = colour added, a = opacity; <see cref="ParticleRenderer"/>) over the scene, as <c>scene * (1 - a) + rgb</c>
     /// (blend one, one minus source alpha; red, green and blue only), upsampled by depth (<see cref="ParticleUpsample"/>).
     /// </summary>
     public const string ParticleComposite = """
@@ -818,8 +710,8 @@ static class PostProcessShaders
         """;
 
     /// <summary>
-    /// The low-resolution particles' coverage for the upscalers' reactive mask: the accumulation's opacity or brightest channel (no gain: rain and fire, which have
-    /// <see cref="ParticleRenderer"/>'s, are always full size), upsampled by depth as the composite is so it does not mark a near edge reactive.
+    /// The low-resolution particles' coverage for the upscalers' reactive mask: the accumulations' opacity or brightest channel (no gain: rain and fire, which
+    /// have <see cref="ParticleRenderer"/>'s, are always full size), upsampled by depth as the composite is so it does not mark a near edge reactive.
     /// </summary>
     public const string ParticleCoverage = """
         #version 330 core

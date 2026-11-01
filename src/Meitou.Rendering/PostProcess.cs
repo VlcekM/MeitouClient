@@ -318,12 +318,12 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         public ParticleSoftDepthPass(GpuContext gpu) : base(gpu, PostProcessShaders.ParticleSoftDepth, "post particle soft depth") => Depth = P.Sampler("uDepth");
     }
 
-    /// <summary>The low-resolution particles over the scene (<see cref="PostProcessShaders.ParticleCompositeLayered"/>).</summary>
+    /// <summary>The low-resolution particles over the scene (<see cref="PostProcessShaders.ParticleComposite"/>).</summary>
     sealed class ParticleCompositePass : FullscreenProgram
     {
         public readonly SamplerSlot Accum, LowDepth, AccumFar, LowDepthFar, Depth;
         public readonly UniformHandle LowSize, NearPlanes, Div, ClipDepthZeroToOne, Scale, Footprint;
-        public ParticleCompositePass(GpuContext gpu) : base(gpu, PostProcessShaders.ParticleCompositeLayered, "post particle composite")
+        public ParticleCompositePass(GpuContext gpu) : base(gpu, PostProcessShaders.ParticleComposite, "post particle composite")
         {
             (Accum, LowDepth, Depth) = (P.Sampler("uAccum"), P.Sampler("uLowDepth"), P.Sampler("uDepth"));
             (AccumFar, LowDepthFar) = (P.Sampler("uAccumFar"), P.Sampler("uLowDepthFar"));
@@ -332,12 +332,12 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         }
     }
 
-    /// <summary>The low-resolution particles' coverage for the upscalers' reactive mask (<see cref="PostProcessShaders.ParticleCoverageLayered"/>).</summary>
+    /// <summary>The low-resolution particles' coverage for the upscalers' reactive mask (<see cref="PostProcessShaders.ParticleCoverage"/>).</summary>
     sealed class ParticleCoveragePass : FullscreenProgram
     {
         public readonly SamplerSlot Accum, LowDepth, AccumFar, LowDepthFar, Depth;
         public readonly UniformHandle LowSize, NearPlanes, Div, FullSize, ClipDepthZeroToOne, Limit;
-        public ParticleCoveragePass(GpuContext gpu) : base(gpu, PostProcessShaders.ParticleCoverageLayered, "post particle coverage")
+        public ParticleCoveragePass(GpuContext gpu) : base(gpu, PostProcessShaders.ParticleCoverage, "post particle coverage")
         {
             (Accum, LowDepth, Depth) = (P.Sampler("uAccum"), P.Sampler("uLowDepth"), P.Sampler("uDepth"));
             (AccumFar, LowDepthFar) = (P.Sampler("uAccumFar"), P.Sampler("uLowDepthFar"));
@@ -1114,7 +1114,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
 
     /// <summary>What the low-resolution particles of one size are drawn into (valid after <see cref="BeginParticlesLow"/>): the accumulation target, cleared, and its depth.</summary>
     public PassTargets ParticleTargets(int divisor) => LowFor(divisor).Targets;
-    /// <summary>The second draw of the same particles: tested against each block's farthest depth (<see cref="PostProcessShaders.ParticleUpsampleLayered"/>).</summary>
+    /// <summary>The second draw of the same particles: tested against each block's farthest depth (<see cref="PostProcessShaders.ParticleUpsample"/>).</summary>
     public PassTargets? ParticleTargetsFar(int divisor) => LowFor(divisor).TargetsFar;
 
     /// <summary>

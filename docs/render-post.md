@@ -142,13 +142,16 @@ terrain can be original ambient-map colour rather than lamp/emissive input. Haze
 and sun; Meitou default strength0.5, game1, slider0..3.
 
 Weather particle resolution: off/quarter/half/auto/full; density multiplies emission and changes
-appearance/population, not just shading cost. The Vulkan chain draws the reduced-resolution particles twice, against each block's
+appearance/population, not just shading cost. Both chains draw the reduced-resolution particles twice, against each block's
 nearest depth and against its farthest (`ParticleTargetsFar`), and the composite and the reactive mask take, from each of the four
 nearest texels, both draws weighted bilinearly and by how close each draw's depth is to the pixel's (`ParticleUpsampleLayered`): on a
 ridge the near draw's, on the land behind it the far draw's, which holds what lies between them. A farthest-only reduction let dust
-behind thin characters bleed onto their silhouettes; one draw against a checkerboard of the two depths (still the Metal chain's, with
-a joint bilateral 4x4 filter at depth edges) left the matching texels every other one along an edge, so the dust behind a dune ridge
-followed it in steps (**Observed**, mec-tou-nu save: the ridge's outline in front of the far dust stepped, then smooth). With a vendor upscaler (DLSS, FSR) the low-resolution particles are
+behind thin characters bleed onto their silhouettes; one draw against a checkerboard of the two depths (with a joint bilateral 4x4
+filter at depth edges) left the matching texels every other one along an edge, so the dust behind a dune ridge followed it in steps
+(**Observed**, mec-tou-nu save, Vulkan: the ridge's outline in front of the far dust stepped, then smooth; the Metal chain's is not run).
+A draw's size follows its sprites' mean screen size (half from 20 px, quarter from 80) and a size is only used from 6 screens of
+overdraw: each is left 15 % past its threshold and a size below half its overdraw, so dust near one does not flip between looks as the
+view moves; with a vendor upscaler the overdraw rule is off (full-size dust would be in what DLSS upscales, and trail). With a vendor upscaler (DLSS, FSR) the low-resolution particles are
 blended over its output instead of the scene it upscales (`PostProcess.ParticlesAfterUpscale`, half then quarter size, the composite reading
 the render-size depth at `uScale` render pixels per output pixel), drawn with the unjittered projection, and left out of the reactive mask:
 DLSS took drifting see-through dust as standing still (its default preset ignores the reactive mask) and trailed it in rows of streaks
