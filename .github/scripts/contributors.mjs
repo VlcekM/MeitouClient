@@ -73,8 +73,13 @@ async function face(user, cx, cy, r, ring) {
   body += `<image href="${await avatar(user, r * 2)}" x="${cx - r}" y="${cy - r}" width="${r * 2}" height="${r * 2}" clip-path="url(#${id})"/>`;
   body += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${ring}" stroke-width="${ring === amber ? 4 : 2}"/>`;
 }
-const text = (x, y, size, fill, s, weight = 400) =>
-  `<text x="${x}" y="${y}" font-family="${font}" font-size="${size}" font-weight="${weight}" fill="${fill}" text-anchor="middle">${esc(s)}</text>`;
+const fonts = { font: { loadSystemFonts: true, defaultFontFamily: 'DejaVu Sans' } };
+// Centred text, shrunk to fit `max` pixels: the runner's fonts are wider than Windows' Segoe UI, so the width is measured, not assumed.
+function text(x, y, size, fill, s, weight = 400, max = 260) {
+  const el = sz => `<text x="${x}" y="${y}" font-family="${font}" font-size="${sz}" font-weight="${weight}" fill="${fill}" text-anchor="middle">${esc(s)}</text>`;
+  const box = new Resvg(`<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${y + size}">${el(size)}</svg>`, fonts).innerBBox();
+  return el(box && box.width > max ? Math.floor(size * max / box.width) : size);
+}
 
 let y = 4;
 
@@ -88,13 +93,14 @@ for (const [i, u] of team.entries()) {
 }
 y += coreH + 16;
 
-// Everyone else in balanced rows of at most five, their areas under the name; those with a role first, larger, in amber.
+// Everyone else in balanced rows of as many as fit, their areas under the name; those with a role first, larger, in amber.
 if (others.length) {
   const role = u => roles[key(u)];
   others.sort((a, b) => !!role(b) - !!role(a));
-  const cell = 270, perRow = Math.ceil(others.length / Math.ceil(others.length / 5)), r = 46, rr = 52;
-  for (let i = 0; i < others.length; i += perRow) {
-    const row = others.slice(i, i + perRow), x0 = (W - row.length * cell) / 2;
+  // Rows differ by one at most, the longer ones first (ten in fours: 4, 3, 3).
+  const cell = 270, rows = Math.ceil(others.length / Math.floor((W - 2 * P) / cell)), r = 46, rr = 52;
+  for (let k = 0, i = 0; k < rows; k++) {
+    const n = Math.floor(others.length / rows) + (k < others.length % rows ? 1 : 0), row = others.slice(i, i += n), x0 = (W - row.length * cell) / 2;
     const R = row.some(role) ? rr : r;
     for (const [j, u] of row.entries()) {
       const cx = x0 + j * cell + cell / 2, name = u.login.length > 18 ? `${u.login.slice(0, 17)}…` : u.login;
@@ -109,7 +115,7 @@ const H = y - 16;
 
 const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">`
   + `<defs>${defs}</defs>${body}</svg>`;
-const png = new Resvg(svg, { font: { loadSystemFonts: true, defaultFontFamily: 'DejaVu Sans' } }).render().asPng();
+const png = new Resvg(svg, fonts).render().asPng();
 await writeFile(out, png);
 // The README links the image with ?v=<its hash>: browsers and GitHub cache it by URL, so a redrawn one needs a new URL to show.
 const readme = new URL('../../README.md', import.meta.url), v = createHash('sha256').update(png).digest('hex').slice(0, 8);
