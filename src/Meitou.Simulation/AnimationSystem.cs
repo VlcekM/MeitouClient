@@ -781,13 +781,15 @@ public sealed class AnimationSystem(AnimationLibrary library, AnimationLengths l
         foreach (var (index, weight) in wanted) Scan(index, weight);
         for (int k = 0; k < a.Count; k++) Scan(a.Layers[k].Definition, a.Layers[k].Weight);
         bool leftFree = !leftBusy && medical.ArmWorks(left: true), rightFree = !rightBusy && medical.ArmWorks(left: false);
-        var hurt = new List<(float Fraction, string Record)>();
+        // Made only for a character with a hurt part (most have none), and no lambda over the loop's part: this runs for every character every tick.
+        List<(float Fraction, string Record)>? hurt = null;
         foreach (var part in medical.PartSpan)
         {
-            if (part.Template.PainAnim is not { } record || !(part.Fraction < part.Template.PainThreshold * 0.01f) || hurt.Any(h => h.Fraction == part.Fraction)) continue;
-            hurt.Add((part.Fraction, record));
+            if (part.Template.PainAnim is not { } record || !(part.Fraction < part.Template.PainThreshold * 0.01f) || hurt is not null && SameFraction(hurt, part.Fraction)) continue;
+            (hurt ??= []).Add((part.Fraction, record));
         }
-        hurt.Sort((x, y) => x.Fraction.CompareTo(y.Fraction));
+        if (hurt is null) return -1;
+        hurt.Sort(static (x, y) => x.Fraction.CompareTo(y.Fraction));
         foreach (var (_, record) in hurt)
         {
             int index = Library.IndexOfRecord(record);
@@ -798,6 +800,13 @@ public sealed class AnimationSystem(AnimationLibrary library, AnimationLengths l
             if (rightFree && Library.IndexOf(d.Name + "-R") is >= 0 and var mirror) return mirror;
         }
         return -1;
+    }
+
+    static bool SameFraction(List<(float Fraction, string Record)> hurt, float fraction)
+    {
+        foreach (var h in hurt)
+            if (h.Fraction == fraction) return true;
+        return false;
     }
 
     /// <summary>

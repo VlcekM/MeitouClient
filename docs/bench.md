@@ -135,6 +135,7 @@ post 0.9, objects 0.7, particles 0.5, shadows 0.45); render thread ~3 ms; world 
 
 Largest remaining allocation (shares of the ~160 MB/s before the fixes): the UI rebuilds its controls and their property dictionaries every frame (`MyGuiPresentation.Arrange`, ~6%),
 snapshot records per character (~2%), particle affector delegates (~1%).
+Simulation side (**Observed**, headless probe of a ~1600-character town save, 2026-11-01): ~1.45 MB a tick, of which the per-character `CharacterSnapshot` and its `AnimationLayer[]` (`World.Publish`) are ~1.25 MB; `BodySystem.HungerFloor` and `AnimationSystem.PainHold` no longer allocate per character (1.72 MB before).
 Pipelines are made on first use (`PipelineLibrary.Prepare` has no caller): the loading warm-up's frames make what they draw. Still made in play: the blood
 decals', a portrait's, the hover outline's and the build menu's icon pipelines (one each per session). Every frame's count is in `frames.csv` (`late_pipelines`).
 ReadyToRun does not compile Bepu's generic instantiations ahead, so it does not replace `RagdollPhysics.WarmUpOnce`; what the game thread still compiles is

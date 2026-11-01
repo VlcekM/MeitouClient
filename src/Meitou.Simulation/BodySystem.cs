@@ -403,8 +403,9 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
         if (cold.IsPlayer || world.Player.Faction >= 0 && cold.Faction == world.Player.Faction) return None;
         if (db is null) return None;   // a world without data (tests, tools): nobody is fed for free
         if (cold.SquadId < 0 || world.Squads.Find(cold.SquadId) is not { } squad) return MedicalState.MaxHunger;
-        return squadFloors.GetOrAdd(squad.Id, _ => db.Find(squad.TemplateId)?.GetBool("malnourished") == true
-            ? 1 + 1.2f * Rng.Float(Rng.Hash(world.Seed, (ulong)squad.Id, RngPurpose.Malnourished, 0)) : MedicalState.MaxHunger);
+        // A static factory with its argument: a capturing lambda would allocate a closure on every call (per character, per tick).
+        return squadFloors.GetOrAdd(squad.Id, static (id, a) => a.Db.Find(a.Template)?.GetBool("malnourished") == true
+            ? 1 + 1.2f * Rng.Float(Rng.Hash(a.Seed, (ulong)id, RngPurpose.Malnourished, 0)) : MedicalState.MaxHunger, (Db: db, Template: squad.TemplateId, world.Seed));
     }
 
     public void SlowWorld(World world)
