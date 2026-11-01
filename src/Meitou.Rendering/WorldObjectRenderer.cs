@@ -988,7 +988,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     bool InteriorHidden(PlacedMesh p)
     {
         if (p.Kind != PlacedKind.BuildingPart) return false;
-        if (p.DoorIndex >= 0) return p.Interior;
+        if (p.DoorIndex >= 0 && !p.Interior) return false;
         if (InteriorView.Count == 0 || !p.Interior && (p.Floor == 0 || AllFloors)) return p.Interior;
         // Layout objects (signs, furniture) go with their building.
         if (!InteriorView.TryGetValue(p.ParentPlacementId ?? p.PlacementId, out int floor)) return p.Interior;
