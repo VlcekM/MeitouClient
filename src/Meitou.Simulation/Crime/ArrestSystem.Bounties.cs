@@ -72,7 +72,7 @@ public sealed partial class ArrestSystem : IOrderOwner
         if (!c.IsImprisoned || c.Kidnapped || c.InWhat is not { } id || world.Fixtures.Find(id) is not { Kind: FixtureKind.Cage } cage) return null;
         int owner = cage.Owner;
         if (owner < 0 || owner == world.Player.Faction || Crimes.Factions.Lawless(owner)) return null;
-        long price = 2L * (c.Bounties?.AmountFor(owner) ?? 0);
+        long price = 2L * (c.Bounties?.BookedAmount(Crimes.Factions.Relations, owner) ?? 0);
         if (c.Faction != world.Player.Faction) price = Math.Max(price, MinNpcBail);
         return (int)Math.Min(price, int.MaxValue);
     }
@@ -138,7 +138,7 @@ public sealed partial class ArrestSystem : IOrderOwner
         var table = world.Characters;
         var prisoner = table.IdOf(p);
         world.Player.Money -= price;
-        if (pc.Bounties is { } ledger && ledger.Of(cage.Owner) is { } entry)
+        if (pc.Bounties is { } ledger && ledger.BookedFor(Crimes.Factions.Relations, cage.Owner) is { } entry)
         {
             ledger.Remove(entry);
             if (ledger.Count == 0) pc.Bounties = null;
@@ -267,7 +267,7 @@ public sealed partial class ArrestSystem : IOrderOwner
         if (table.Cold(carrier) is not { IsPlayer: true, Escaped: false } || !table.TryResolveNext(captive, out int b) || table.Cold(b) is not { IsPlayer: false, Escaped: false } bc) return 0;
         int owner = cage.Owner;
         if (cage.Kind != FixtureKind.Cage || owner < 0 || owner == world.Player.Faction || bc.Faction == world.Player.Faction || Crimes.Factions.Lawless(owner)) return 0;
-        if (bc.Bounties?.Of(owner) is not { Amount: > 0, Claimed: false } entry) return 0;
+        if (bc.Bounties?.BookedFor(Crimes.Factions.Relations, owner) is not { Amount: > 0, Claimed: false } entry) return 0;
         int amount = bc.Medical is { Dead: true } ? entry.Amount / 2 : entry.Amount;
         world.Player.Money += amount;
         entry.Claimed = true;
@@ -334,7 +334,7 @@ public sealed partial class ArrestSystem : IOrderOwner
         arrests.Add(arrest);
         gc.Engaged = true;
         if (tc.Medical is { Incapacitated: true } && Carry.BeginPickUp(world, g, target, source: TaskSource.Npc, row: TaskType.ARREST_TARGETS_CARRIED_PERSON)) arrest.Phase = ArrestPhase.Lift;
-        Note(world, ArrestEventKind.Arrest, guard, target, gc.Faction, tc.Bounties?.AmountFor(gc.Faction) ?? 0);
+        Note(world, ArrestEventKind.Arrest, guard, target, gc.Faction, tc.Bounties?.BookedAmount(Crimes.Factions.Relations, gc.Faction) ?? 0);
         return true;
     }
 

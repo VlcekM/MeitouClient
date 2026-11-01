@@ -736,7 +736,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
         if (table.Cold(carrier) is not { } c || table.Cold(body) is not { } b) return 0;
         if (AiSystem.TownAt(data, world, table.Next[carrier].Position).IsNone) return OutsideTownDesire;
         if (b.Fighter is { IsAnimal: true }) return 0;
-        if (b.SlaveState != 0 && (b.Bounties?.AmountFor(c.Faction) ?? 0) < 1 && world.SystemOf<Crime.CrimeSystem>()?.IsPoliceLike(world, c) == true) return PoliceSlaveDesire;
+        if (b.SlaveState != 0 && (b.Bounties?.BookedAmount(data.Relations, c.Faction) ?? 0) < 1 && world.SystemOf<Crime.CrimeSystem>()?.IsPoliceLike(world, c) == true) return PoliceSlaveDesire;
         if (carry.Friendly(c, b)) return 0;
         return b.Medical is { Dead: true } ? DeadDesire : AliveDesire;
     }

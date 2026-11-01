@@ -253,7 +253,7 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
                 if (table.Cold(w) is not { IsPlayer: false, IsImprisoned: false, Medical.Incapacitated: false, CarriedBy.IsNone: true } wc || !Crimes.Relations.Contains(wc.Faction)) continue;
                 float d2 = Vector3.DistanceSquared(next[w].Position, at);
                 if (d2 > range2) continue;
-                int bounty = c.Bounties?.Of(wc.Faction) is { Claimed: false } e ? e.Amount : 0;
+                int bounty = c.Bounties?.BookedFor(Crimes.Factions.Relations, wc.Faction) is { Claimed: false } e ? e.Amount : 0;
                 // A working disguise hides the bounty: only a looker that sees through it recognises it (Disguise; disguiseMods' bounty branch needs no disguise level).
                 bool spots = bounty > 0 && bounty >= SpotThreshold(wc.NpcClass) && SeenFaction(c) == c.Faction;
                 bool escapee = c.Escaped && Crimes.IsPoliceLike(world, wc) && InOwnTown(world, w);
@@ -411,7 +411,7 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
         var tc = table.Cold(t)!;
         var guard = table.IdOf(g);
         var target = table.IdOf(t);
-        int bounty = tc.Bounties?.AmountFor(gc.Faction) ?? 0;
+        int bounty = tc.Bounties?.BookedAmount(Crimes.Factions.Relations, gc.Faction) ?? 0;
         if (!capture || !InOwnTown(world, g))
         {
             Attack(world, g, t);
@@ -438,7 +438,7 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
         var table = world.Characters;
         if (table.Next[g].Task != (byte)CharacterTask.Attack) Attack(world, g, t);
         if (table.Cold(t)!.IsPlayer) world.Post($"{table.Cold(g)!.Name} is arresting {table.Cold(t)!.Name}!");
-        Note(world, ArrestEventKind.Arrest, arrest.Guard, arrest.Target, arrest.Faction, table.Cold(t)!.Bounties?.AmountFor(arrest.Faction) ?? 0);
+        Note(world, ArrestEventKind.Arrest, arrest.Guard, arrest.Target, arrest.Faction, table.Cold(t)!.Bounties?.BookedAmount(Crimes.Factions.Relations, arrest.Faction) ?? 0);
     }
 
     /// <summary>The guard and the free members of his squad within twice their sight of the target attack it from the next tick (the squad marking the target, engine reading).</summary>
@@ -486,7 +486,7 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
                 if (gap <= Settings.TalkRange)
                 {
                     TaskStart.Stand(table, g);
-                    if (world.Player.Money > a.Fine && tc.Bounties is { } ledger && ledger.Of(a.Faction) is { } entry)
+                    if (world.Player.Money > a.Fine && tc.Bounties is { } ledger && ledger.BookedFor(Crimes.Factions.Relations, a.Faction) is { } entry)
                     {
                         world.Player.Money -= a.Fine;
                         ledger.Remove(entry);

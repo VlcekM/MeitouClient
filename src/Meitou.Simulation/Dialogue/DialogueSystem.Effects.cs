@@ -89,8 +89,10 @@ public sealed partial class DialogueSystem
                     return;
                 case DialogueActions.AssignBounty when tc is not null && mc is not null && effect.Value > 0 && data.Relations.Contains(mc.Faction):
                 {
-                    tc.Bounties ??= new Crime.BountyLedger();
-                    tc.Bounties.Get(mc.Faction, data.Factions[mc.Faction].Name).Amount += effect.Value;
+                    // FUN_140853e20 (Verified): marks the pending crime booked, then adds the amount to the speaker's faction's booking entry (none kept without one).
+                    if (tc.Pending is { } pending) pending.Booked = true;
+                    if (Crime.CrimeFactions.BookingKey(data.Relations, mc.Faction) is var key and >= 0)
+                        (tc.Bounties ??= new Crime.BountyLedger()).Get(key, data.Factions[key].Name).Amount += effect.Value;
                     break;
                 }
                 // Without an amount only a speaker whose CHARACTER has `assigns bounties` books the target's pending crime (Character::canAssignBounties, Verified).
@@ -136,8 +138,8 @@ public sealed partial class DialogueSystem
                     Locks.FixtureRegistry.FreeSlave(world, freed, tc);
                     break;
                 case DialogueActions.ClearBounty when tc?.Bounties is { } ledger && mc is not null:
-                    if (ledger.Of(mc.Faction) is { } entry) ledger.Remove(entry);
-                    if (Position(world, target) is { } at && TownAt(at) is >= 0 and var town && town < data.SiteFactions.Count && ledger.Of(data.SiteFactions[town]) is { } local)
+                    if (ledger.BookedFor(data.Relations, mc.Faction) is { } entry) ledger.Remove(entry);
+                    if (Position(world, target) is { } at && TownAt(at) is >= 0 and var town && town < data.SiteFactions.Count && ledger.BookedFor(data.Relations, data.SiteFactions[town]) is { } local)
                         ledger.Remove(local);
                     if (ledger.Count == 0) tc.Bounties = null;
                     tc.Recognition = 0;

@@ -526,8 +526,8 @@ flag +0x1d0 (`not real`) and whose +0x1a0 → +0x88 object (**Observed**: the to
 else, when the bounty is below 1 and its NPC class (+0x1a0 → +0xdc) is not 8 (Bandit): 246 Kidnap, or 225 while imprisoned (+0x2f8 = 2); every other case 225. The bounty
 (`FUN_140854080(+0xf0, 0)`, **Verified**) is the amount (+8, claimed or not, [economy](economy.md#111-ledger)) of the ledger entry of the faction `FUN_140852010` picks with none given:
 the prison owner's booking faction when caged, else the booking faction (legal system, or itself when it books) of the faction owning the +0x88 town, not the target's own faction. Meitou
-(`World.VerbFactsOf`, `PlayerInterface.KidnapOffered`): the town is the one the target's point is in (`AiSystem.TownAt`, player towns included); the bounty is the larger of the town owner's own entry
-and its booking faction's, as Meitou books under the witness's own faction ([CrimeFactions.BookingOf](economy.md#112-how-a-bounty-is-gained)); outside every town the verb is Pick Up.
+(`World.VerbFactsOf`, `PlayerInterface.KidnapOffered`): the town is the one the target's point is in (`AiSystem.TownAt`, player towns included); the bounty is the town owner's booking faction's entry
+([BountyLedger.BookedAmount](economy.md#112-how-a-bounty-is-gained)); outside every town the verb is Pick Up.
 Kidnap's chance column is `Character::getKidnappingChance` ([carry-loot](carry-loot.md#kidnapping)). `FUN_140793d80` (**Verified**) adds one of two exclusive verbs by the +0x88 town:
 not set, or its faction not the player's: 223 when the target's home (slot 59) is a building handle whose faction is the player's; set and the player's: 273 when the target's `amInsideTownWalls`
 (slot 35) is above 0 and the LEAD does not regard the target as friendly (slot 126 called on the lead, so friendliness, not enmity). The "+0x88 is the town it stands in" reading is **Observed**.

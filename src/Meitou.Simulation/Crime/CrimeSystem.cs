@@ -60,7 +60,7 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
     public bool Friendly(int a, int b) => a == b || (Relations.Contains(a) && Relations.Contains(b) && Relations.IsAlly(a, b));
 
     /// <summary>The character has an unclaimed bounty of <paramref name="faction"/> (what a police-like NPC of that faction attacks it for).</summary>
-    public static bool IsWantedBy(CharacterCold c, int faction) => c.Bounties?.Of(faction) is { Amount: > 0, Claimed: false };
+    public bool IsWantedBy(CharacterCold c, int faction) => c.Bounties?.BookedFor(Factions.Relations, faction) is { Amount: > 0, Claimed: false };
 
     // ------------------------------------------------------------------ deeds
 
@@ -194,17 +194,27 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
     // ------------------------------------------------------------------ booking
 
     /// <summary>
-    /// Books the culprit's pending crime with <paramref name="faction"/> (the game's <c>FUN_140853ec0</c>, <b>Observed</b>): once per pending crime (the booked flag), not for a culprit of
-    /// <c>NPC class</c> BANDIT, DIPLOMAT or LAW_ENFORCEMENT, and Enslaving adds nothing. The amount of the crime table is added to the faction's entry, the crime's bit set and the time of
-    /// the last raise reset. The entry is the faction's own when it books bounties (<c>FUN_140852010</c>; its parent faction <c>+0x38</c> is <b>Unknown</b> and not used).
+    /// Books the culprit's pending crime with <paramref name="faction"/> (the game's <c>FUN_140853ec0</c>, <b>Verified</b>): once per pending crime (the booked flag), not for a culprit of
+    /// <c>NPC class</c> BANDIT, DIPLOMAT or LAW_ENFORCEMENT, and Enslaving adds nothing. The amount of the crime table is added to the ledger entry, the crime's bit set and the time of
+    /// the last raise reset. The entry is the booking faction's (<c>FUN_140852010</c>, <see cref="CrimeFactions.BookingOf"/>): of the culprit's prison owner while it is imprisoned in a
+    /// cage that resolves, else of <paramref name="faction"/>; its legal system when it has one, else itself when it books bounties. With no booking faction the crime is still marked
+    /// booked and the culprit recently wanted, but the original's entry has a null key that nothing reads, so no bounty is kept.
     /// </summary>
     public bool Book(World world, int culprit, int faction, CharacterId witness)
     {
         var c = world.Characters.Cold(culprit);
-        if (c?.Pending is not { Booked: false } p || !Factions.Books(faction)) return false;
+        if (c?.Pending is not { Booked: false } p) return false;
         if (c.NpcClass is FundamentalType.Bandit or FundamentalType.Diplomat or FundamentalType.LawEnforcement) return false;
         p.Booked = true;
         if (p.Code == CrimeCode.Enslaving) return false;
+        int owner = c.IsImprisoned && c.InWhat is { } cageId && world.Fixtures.Find(cageId) is { } cage ? cage.Owner : faction;
+        int key = Factions.BookingOf(owner);
+        if (key < 0)
+        {
+            c.RecentlyWanted = RecentlyWantedSeconds;
+            return false;
+        }
+        faction = key;
         var entry = (c.Bounties ??= new BountyLedger()).Get(faction, Factions.NameOf(faction));
         entry.Amount += CrimeTable.Amount(p.Code);
         entry.Crimes |= 1 << (int)p.Code;

@@ -48,9 +48,7 @@ public sealed partial class World
         int owner = town.Site >= 0 ? town.Site < data.SiteFactions.Count ? data.SiteFactions[town.Site] : -1 : Buildings.FindTown(town.PlayerTown)?.Owner ?? -1;
         var ownership = town.IsNone ? TownOwnership.None : owner >= 0 && owner == Player.Faction ? TownOwnership.Player : TownOwnership.Other;
         // The ledger entry of the booking faction of the town's owner (FUN_140852010 with no faction given); a caged target gets Pick Up whatever this says, so its prison owner is not asked.
-        // Meitou books under the witness's own faction (CrimeFactions.BookingOf), so the owner's own entry is read too.
-        int booking = owner >= 0 ? SystemOf<Crime.ArrestSystem>()?.Crimes.Factions.BookingOf(owner) ?? -1 : -1;
-        int bounty = tc.Bounties is { } ledger && owner >= 0 ? Math.Max(ledger.AmountFor(owner), booking >= 0 ? ledger.AmountFor(booking) : 0) : 0;
+        int bounty = tc.Bounties is { } ledger && owner >= 0 ? ledger.BookedAmount(data.Relations, owner) : 0;
         bool squadTrader = tc.SquadId >= 0 && Squads.Find(tc.SquadId) is { } squad && data.Db.Find(squad.TemplateId)?.GetBool("is trader") == true;
         bool notReal = (uint)tc.Faction < (uint)data.Factions.Count && data.Factions[tc.Faction].NotReal;
         bool inside = ownership != TownOwnership.None && (SystemOf<Kidnap.TownDutySystem>()?.AmInsideTownWalls(this, Characters.Next[t].Position) ?? false);

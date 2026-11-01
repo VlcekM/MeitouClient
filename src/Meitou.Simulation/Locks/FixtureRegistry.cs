@@ -824,7 +824,7 @@ public sealed partial class FixtureRegistry
         cage.Occupant = prisoner;
         if (cage.Lock is { } l) { l.Locked = true; l.PickTime = 0; l.NextRoll = LockState.FirstRoll; }
         Hold(table, s, c, cage.Position, cage.Yaw);
-        if (c.Bounties?.Of(cage.Owner) is { Amount: > 0 } entry)
+        if (world.SystemOf<Crime.CrimeSystem>() is { } law && c.Bounties?.BookedFor(law.Factions.Relations, cage.Owner) is { Amount: > 0 } entry)
         {
             c.SentenceStart = world.GameHours;
             c.SentenceLength = SentenceHours(entry.Amount, prisonTime);

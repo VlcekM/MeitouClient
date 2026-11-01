@@ -105,6 +105,12 @@ public sealed class BountyLedger
     /// <summary>The bounty <paramref name="faction"/> has on the character (0: none).</summary>
     public int AmountFor(int faction) => Of(faction)?.Amount ?? 0;
 
+    /// <summary>The entry <paramref name="faction"/>'s bounties are kept under: its booking faction's (<see cref="CrimeFactions.BookingKey"/>), or null.</summary>
+    public BountyEntry? BookedFor(FactionRelations relations, int faction) => CrimeFactions.BookingKey(relations, faction) is var key and >= 0 ? Of(key) : null;
+
+    /// <summary>The bounty <paramref name="faction"/> sees on the character: its booking faction's entry (0: none).</summary>
+    public int BookedAmount(FactionRelations relations, int faction) => BookedFor(relations, faction)?.Amount ?? 0;
+
     /// <summary>Any faction has a bounty on the character (the game's "has any bounty", which gives others permission to loot it).</summary>
     public bool Any
     {
@@ -258,16 +264,25 @@ public sealed class CrimeFactions
         {
             var data = relations.Factions[f];
             int legal = data.LegalSystem is { } id ? relations.IndexOf(id) : -1;
-            booking[f] = legal >= 0 ? legal : books[f] ? f : -1;
+            booking[f] = BookingKey(relations, f);
             hunters[f] = data.FundamentalType == FundamentalType.Adventurer && legal >= 0 && !data.NotReal;
         }
     }
 
     /// <summary>
-    /// The faction whose ledger entry <paramref name="f"/>'s bounties use (the game's <c>FUN_140851fb0</c>, economy.md 11.2, <b>Observed</b>): its <c>legal system</c> when it has one, else
-    /// itself when it books bounties, else -1. Only the bounty hunters' spotting reads it here (the booking keeps the witness's own faction).
+    /// The faction whose ledger entry <paramref name="f"/>'s bounties use (the game's <c>FUN_140851fb0</c> / <c>FUN_140852010</c>, economy.md 11.2, <b>Verified</b>): its <c>legal system</c>
+    /// when it has one, else itself when it books bounties, else -1 (no entry). The booking, the claims and every bounty lookup by a faction go through it.
     /// </summary>
     public int BookingOf(int f) => Relations.Contains(f) ? booking[f] : -1;
+
+    /// <summary><see cref="BookingOf"/> computed from the relations (for code without the crime system's cache).</summary>
+    public static int BookingKey(FactionRelations relations, int f)
+    {
+        if (!relations.Contains(f)) return -1;
+        var data = relations.Factions[f];
+        int legal = data.LegalSystem is { } id ? relations.IndexOf(id) : -1;
+        return legal >= 0 ? legal : data.BooksBounties ? f : -1;
+    }
 
     /// <summary>
     /// The faction's NPCs hunt bounties (economy.md 11.8). <b>Engine choice</b>: nothing in the data flags bounty hunters; read here as <c>fundamental type</c> ADVENTURER with a
