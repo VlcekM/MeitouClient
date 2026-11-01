@@ -69,6 +69,18 @@ public static class GroundRelief
     /// <summary>The cliff layer's depth (and its cap) as a multiple of the ground's.</summary>
     public static float CliffScale { get; set; } = 1;
 
+    /// <summary>
+    /// Biomes whose relief is scaled (BIOMES string id, so a translation mod keeps it; the rest 1): ground and cliff depth times this. ForestLand, all
+    /// of Shark's ground: its layers come out 37 to 85 cm deep, the swamp round it about 26 (docs/render-terrain.md, "Depth").
+    /// </summary>
+    public static readonly IReadOnlyDictionary<string, float> BiomeDepth = new Dictionary<string, float>
+    {
+        ["4442-Newwworld.mod"] = 1 / 3f,   // ForestLand
+    };
+
+    /// <summary>A biome's <see cref="BiomeDepth"/> factor, 1 when it has none.</summary>
+    public static float BiomeFactor(string stringId) => BiomeDepth.TryGetValue(stringId, out float f) ? f : 1;
+
     /// <summary>The share of relief the grass, slope, dirt and road layers get, each from its own height map, by how much of the pixel it shows (0: the
     /// base layer alone).</summary>
     public static float OverlayRelief { get; set; } = 1;

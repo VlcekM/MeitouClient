@@ -29,7 +29,7 @@ where occluders justify it. A depth prepass is extra geometry, not automatically
   `FarShift` (2) less the sampler bias it reads the near slot; otherwise, or without a slot, it reads the far array. For a DDS layer taken as stored,
   both tiers read the file's own mips, so from that level down they are the same texels. A resized layer is filtered separately at each size, so
   a faint seam is possible there (**Unknown** until seen in game).
-- Params texels 0 and 1 hold the far indices (the relief code reads these too); texels 13 and 14 hold the near slots, -1 for none.
+- Params texels 0 and 1 hold the far indices (the relief code reads these too), texel 1's W the biome's relief factor; texels 13 and 14 hold the near slots, -1 for none.
 - Before this the arrays held a full-size slot per pair within the 30 km material distance: 128 slots, about 1.07 GB, in the Great Desert
   (**Observed**, VRAM pie and log 2026-11-01).
 
@@ -84,6 +84,11 @@ flat, coarse ones not metres deep), capped at the max depth, times the depth sli
 scale. **Observed** (field tour): the integrated range or normal-map strength as the depth made broad noise deep
 (`BurntWoodLike`, `SharpblockLoop`) and fine textures flat or spiky; this rule gives at 20 cm e.g. `WadiGravel` 13–15 cm,
 `Rocksurface01` 13 cm, `BurntWoodLike` 29 cm, `SharpblockLoop` 30 cm (1.5× that at the default 30).
+A biome's ground and cliff depth are then times its `GroundRelief.BiomeDepth` factor (by BIOMES string id; 1 for the rest), so a
+biome's depth can be cut without touching textures other biomes share. ForestLand (`4442-Newwworld.mod`, all of Shark's ground,
+also Ancient Labs, Farm Ruin and patches north of Shark) has 1/3: **Observed** (blend and overlay maps sampled round Shark; depths
+from `LayerDepthCm` at 30 cm) its layers came out base 37 cm (`GrassBadTestNML`), slope and dirt 67–70 (`Lichen_Rock`), cliff 85,
+the swamp biomes round it about 26; those textures are shared by 9–12 other biomes.
 
 **Composite.** Every ground layer adds material; the relief height keeps the heaviest ground layers (base, grass, slope, dirt,
 road) by how much of the pixel each shows, from the blend map, overlay window and slope per pixel, not per patch, so neighbouring

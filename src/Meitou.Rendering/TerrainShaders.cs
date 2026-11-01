@@ -255,10 +255,10 @@ static partial class TerrainShaders
                             + reliefLayer(xz, la.y, sA.xy, uOverlayRelief * aboveSlope * w.x, height, segment)
                             + reliefLayer(xz, lb.x, sC.xy, uOverlayRelief * aboveDirt * map.b, height, segment)
                             + reliefLayer(xz, lb.y, sC.zw, uOverlayRelief * top * map.a, height, segment);
-                    ground += wk * sum;
+                    ground += wk * sum * lb.w;   // the biome's relief factor (GroundRelief.BiomeDepth)
                 }
                 if (w.y <= 0.0) continue;
-                float depth = reliefDepth(la.z, sA.zw) * uCliffScale;
+                float depth = reliefDepth(la.z, sA.zw) * uCliffScale * lb.w;
                 if (depth <= 0.0) continue;
                 if (!height) { cliff += wk * w.y * depth; continue; }
                 vec4 distort = reliefP(b, 10);
@@ -920,12 +920,12 @@ static partial class TerrainShaders
                 }
                 if (ground.n > 0)
                 {
-                    float depth = uParallax * ground.total * strength / 5000.0;   // the full depth in world units, in the unscaled coordinate (uv)
+                    float depth = uParallax * ground.total * strength * layersB.w / 5000.0;   // the full depth in world units (times the biome's factor, GroundRelief.BiomeDepth), in the unscaled coordinate (uv)
                     vec2 o;
                     shade = reliefMarch(ground, o, -v.xz / max(v.y, 0.25) * depth, sun.xz / max(sun.y, 0.15) * depth, sun.y > 0.0, strength, true);
                     res.ground = o;
                 }
-                float cliffDepth = w.y > 0.0 ? uParallax * reliefDepth(layersA.z, sA.zw) * uCliffScale * strength : 0.0;
+                float cliffDepth = w.y > 0.0 ? uParallax * reliefDepth(layersA.z, sA.zw) * uCliffScale * layersB.w * strength : 0.0;
                 if (cliffDepth > 0.0)
                 {
                     // A projection's coordinate is (along the surface, vert): vert runs down the world's y. Its depth runs along the surface's normal n, as the

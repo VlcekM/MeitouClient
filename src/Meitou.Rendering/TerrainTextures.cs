@@ -580,7 +580,7 @@ public sealed unsafe class TerrainTextures : IDisposable
     }
 
     /// <summary>A biome becomes resident once all its texture pairs are in the far arrays: its parameter row is written then (texels 0 and 1 the far
-    /// indices, 13 and 14 the near slots, -1 for none).</summary>
+    /// indices, 1's W the relief factor GroundRelief.BiomeFactor, 13 and 14 the near slots, -1 for none).</summary>
     void Refresh(int b)
     {
         var s = state[b];
@@ -593,7 +593,7 @@ public sealed unsafe class TerrainTextures : IDisposable
         Vector4[] row =
         [
             new(l[0], l[1], l[2], l[3]),
-            new(l[4], l[5], bt.BrightnessFix, 0),
+            new(l[4], l[5], bt.BrightnessFix, GroundRelief.BiomeFactor(bt.StringId)),
             new(tl[1].X, tl[1].Y, tl[2].X, tl[2].Y),   // slope, cliff
             new(tl[0].X, tl[0].Y, tl[3].X, tl[3].Y),   // base, grass
             new(tl[4].X, tl[4].Y, tl[5].X, tl[5].Y),   // dirt, road
@@ -1101,7 +1101,7 @@ public sealed unsafe class TerrainTextures : IDisposable
         var pair = state[e.Row].Pairs[(int)e.Layer];
         float tile = 5000 / Math.Max((biomes[e.Row].Tiling[(int)e.Layer].X + biomes[e.Row].Tiling[(int)e.Layer].Y) / 2, 1e-3f);
         return string.Create(System.Globalization.CultureInfo.InvariantCulture,
-            $"{i + 1}/{tiles.Length}  {e.Label}  tile {tile / 10:0.#} m, depth {GroundRelief.LayerDepthCm(pair.Steep, tile) * (e.Layer == TerrainLayer.Cliff ? GroundRelief.CliffScale : 1):0.#} cm");
+            $"{i + 1}/{tiles.Length}  {e.Label}  tile {tile / 10:0.#} m, depth {GroundRelief.LayerDepthCm(pair.Steep, tile) * GroundRelief.BiomeFactor(biomes[e.Row].StringId) * (e.Layer == TerrainLayer.Cliff ? GroundRelief.CliffScale : 1):0.#} cm");
     }
 
     /// <summary>The field's tiles, one texel each: R biome row, G layer, B 1 once the biome is resident (until then the tile shows the world).</summary>
