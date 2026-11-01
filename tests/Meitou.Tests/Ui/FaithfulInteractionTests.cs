@@ -252,7 +252,8 @@ public class FaithfulInteractionTests(ITestOutputHelper output)
         var lead = new CharacterSnapshot(new CharacterId(0, 0), null, Vector3.Zero, 0, [])
             { Hud = new HudView(150, 150, 0, 1, [new("Strength:", 99.4f, 100), new("Toughness:", 100, 100), new("Dodge:", 105, 100)]) };
         Assert.Equal(["STRENGTH: 99 (-1)", "TOUGHNESS: 100", "DODGE: 105 (+5)"], PlayerInterface.StatsLines(lead).Select(l => $"{l.Label} {l.Value}"));
-        var extended = lead with { Hud = lead.Hud! with { Extended = new ExtendedStats(1.5f, 0.25f, 3, -37.6f, 30, 40, 1.35f) } };
+        var extended = lead;
+        extended.Hud = lead.Hud! with { Extended = new ExtendedStats(1.5f, 0.25f, 3, -37.6f, 30, 40, 1.35f) };
         Assert.Equal(["Athletics XP: 150%", "Strength XP: 25%", "Toughness XP: 3x", "KO point: -37", "Run speed: 7 (-2) mph", "Hunger Rate: 135%"],
             PlayerInterface.ExtendedLines(extended).Select(l => $"{l.Label} {l.Value}"));
     }

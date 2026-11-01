@@ -17,6 +17,14 @@ clocks, input and camera, and disposes systems/services. Of a frame's ticks only
 a snapshot (`RunTick(publish)`), the pair the host interpolates between. Advanced → Pause after loading (`PauseOnLoad`, a plain on/off switch outside the Faithful / Meitou sides, default off as
 the game runs a loaded save at once, [game loop](game/game-loop.md)) pauses the speed after a menu load or import; `--load` runs.
 
+### Snapshots
+
+`World.Publish` reuses its `CharacterSnapshot` objects (**engine choice**): one per slot in each of three sets, filled in place (every property, every
+publish) into the set neither `Snapshot` nor `PreviousSnapshot` uses, so the shown pair stays untouched while a tick runs ahead and fills the third. A
+paused publish and loading keep `PreviousSnapshot`'s set out of the ring with it. Contract: a published snapshot's characters stay as they are until
+two more snapshots are published; hold them across frames, not across ticks (the host's per-id index and the HUD's selection are rebuilt when the
+snapshot object changes). `WorldSnapshot` itself is new on each publish.
+
 ### Tick ahead
 
 The game can run the next tick on its own thread (`WorldSession.BeginTickAhead`, thread `Meitou.Tick`) during the world draw (`WorldFrame.Draw`, after

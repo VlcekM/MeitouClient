@@ -102,7 +102,7 @@ public class AnimationTests
         int cut = lib.IndexOfAny("Cut left");
         var forward = Vector2.Zero;
         for (int i = 0; i < 12; i++) forward += system.Update(a, cold, 0, dt, 1, 1, 10 + i, combatView: CombatView.None with { Technique = cut, Progress = (i + 1) / 30f });
-        var layers = system.Publish(a);
+        var layers = system.Publish(a, []);
         Assert.Equal(0.4f, layers.Single(l => l.Name == "Cut left").Time, 3);
         Assert.DoesNotContain(layers, l => l.Name == "stand 1" && l.Weight > 0.01f);
         Assert.True(forward.Y > 0, $"the cut moved the character {forward}");
@@ -183,6 +183,6 @@ public class AnimationTests
         body.Tick(1e-4f, BodyFixtures.Context(toughness: 50));
         Assert.True(body.Crawling);
         for (int i = 0; i < 5; i++) system.Update(a, cold, 0, 1 / 30f, 1, 1, i);
-        Assert.Contains(system.Publish(a), l => l.Name == "crawl idle down" && l.Weight > 0.5f);
+        Assert.Contains(system.Publish(a, []), l => l.Name == "crawl idle down" && l.Weight > 0.5f);
     }
 }

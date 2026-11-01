@@ -22,7 +22,7 @@ public sealed partial class World
         if (Settings.PublishSnapshots)
         {
             Publish();
-            PreviousSnapshot = Snapshot;
+            KeepPrevious(Snapshot, shownBuffer);
         }
         return ready;
     }

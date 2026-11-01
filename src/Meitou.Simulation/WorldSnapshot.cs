@@ -159,173 +159,187 @@ public sealed record InventoryView(int Width, int Height, int BagWidth, int BagH
 }
 
 /// <summary>A character as the renderer needs it after one tick; <c>Appearance</c> is null for one that is simulated but has nothing to draw (a failed build, a world without looks): the host shows a marker (docs/simulation.md, "Threading", step 8).</summary>
-public sealed record CharacterSnapshot(CharacterId Id, CharacterAppearance? Appearance, Vector3 Position, float Yaw, IReadOnlyList<AnimationLayer> Animations)
+public sealed class CharacterSnapshot
 {
+    /// <summary>A snapshot to be filled by the publish (<see cref="World"/> reuses each one, docs/simulation.md "Snapshots").</summary>
+    internal CharacterSnapshot() { }
+
+    /// <summary>A snapshot made by hand (tests, tools).</summary>
+    public CharacterSnapshot(CharacterId id, CharacterAppearance? appearance, Vector3 position, float yaw, IReadOnlyList<AnimationLayer> animations) =>
+        (Id, Appearance, Position, Yaw, Animations) = (id, appearance, position, yaw, animations);
+
+    public CharacterId Id { get; internal set; }
+    public CharacterAppearance? Appearance { get; internal set; }
+    public Vector3 Position { get; internal set; }
+    public float Yaw { get; internal set; }
+    public IReadOnlyList<AnimationLayer> Animations { get; internal set; } = [];
+    /// <summary>The list <see cref="Animations"/> is published into when the animation system runs the character: owned by this snapshot, refilled on each publish.</summary>
+    internal readonly List<AnimationLayer> Layers = [];
     /// <summary>The facing the body is drawn at (<see cref="CharacterAnimation.DrawYaw"/>: it follows <see cref="Yaw"/> at a limited rate); NaN when the character has none yet (draw <see cref="Yaw"/>).</summary>
-    public float DrawYaw { get; init; } = float.NaN;
+    public float DrawYaw { get; internal set; } = float.NaN;
     /// <summary>The owner faction (a position in the world's faction list; -1 none), for debug markers.</summary>
-    public int Faction { get; init; } = -1;
+    public int Faction { get; internal set; } = -1;
     /// <summary>A weapon is in hand (<c>CharacterCold.DrawnWeapon</c>): the renderer shows the drawn weapon meshes instead of the sheathed one.</summary>
-    public bool WeaponDrawn { get; init; }
+    public bool WeaponDrawn { get; internal set; }
     /// <summary>The weapon in hand is the crossbow (ranged combat): the renderer shows the crossbow in the hands and the melee weapon sheathed.</summary>
-    public bool RangedDrawn { get; init; }
+    public bool RangedDrawn { get; internal set; }
     /// <summary>The melee weapon in hand is the back one (<see cref="Combat.Fighter.WeaponIsBack"/>): its drawn meshes show, the hip one's sheathed.</summary>
-    public bool BackDrawn { get; init; }
+    public bool BackDrawn { get; internal set; }
     /// <summary>A corpse with flies (<see cref="CharacterCold.HasFlies"/>): the host shows the Fly-Particle effect and plays the Corpse Flies ambient at it.</summary>
-    public bool HasFlies { get; init; }
+    public bool HasFlies { get; internal set; }
     /// <summary>The bolts loaded in its crossbow (<see cref="CharacterCold.CrossbowShots"/>).</summary>
-    public int CrossbowShots { get; init; }
+    public int CrossbowShots { get; internal set; }
     /// <summary>The bolts stuck in the character (<see cref="CharacterCold.StuckBolts"/>).</summary>
-    public IReadOnlyList<StuckBolt> StuckBolts { get; init; } = [];
-    public string Name { get; init; } = "";
-    public int SquadId { get; init; } = -1;
+    public IReadOnlyList<StuckBolt> StuckBolts { get; internal set; } = [];
+    public string Name { get; internal set; } = "";
+    public int SquadId { get; internal set; } = -1;
     /// <summary>One of the player's characters, and whether it is selected.</summary>
-    public bool IsPlayer { get; init; }
+    public bool IsPlayer { get; internal set; }
     /// <summary>A member of a squad with a shop (right click trades).</summary>
-    public bool IsTrader { get; init; }
-    public bool Selected { get; init; }
+    public bool IsTrader { get; internal set; }
+    public bool Selected { get; internal set; }
     /// <summary>Another faction's character the HUD shows (<see cref="InspectCommand"/>): it carries the same HUD details as a selected one but is not selected.</summary>
-    public bool Inspected { get; init; }
+    public bool Inspected { get; internal set; }
     /// <summary>The orders panel's toggles and the move speed mode (<see cref="CharacterCold.Orders"/>, <see cref="CharacterCold.RunSpeed"/>).</summary>
-    public CharacterOrders Orders { get; init; }
-    public byte RunSpeed { get; init; } = SpeedMode.Free;
+    public CharacterOrders Orders { get; internal set; }
+    public byte RunSpeed { get; internal set; } = SpeedMode.Free;
     /// <summary>The job list (<see cref="CharacterCold.Jobs"/>), first = highest priority.</summary>
-    public IReadOnlyList<Production.PermaJob> Jobs { get; init; } = [];
+    public IReadOnlyList<Production.PermaJob> Jobs { get; internal set; } = [];
     /// <summary>The path being followed from the next waypoint, for selected characters only (the host draws it).</summary>
-    public IReadOnlyList<Vector3> Path { get; init; } = [];
+    public IReadOnlyList<Vector3> Path { get; internal set; } = [];
     /// <summary>Null for a character without a body (an animal).</summary>
-    public BodyStatus? Body { get; init; }
+    public BodyStatus? Body { get; internal set; }
     /// <summary>The stat-driven body of a person (not a robot, not an animal), from its current stats and hunger; null for the others.</summary>
-    public Meitou.Data.Characters.BodyBuild? Build { get; init; }
+    public Meitou.Data.Characters.BodyBuild? Build { get; internal set; }
     /// <summary>What a selected character carries, one line per item (empty for the others).</summary>
-    public IReadOnlyList<string> Inventory { get; init; } = [];
+    public IReadOnlyList<string> Inventory { get; internal set; } = [];
     /// <summary>A selected character's bounties, one line per faction that wants it (empty for the others and for one nobody wants).</summary>
-    public IReadOnlyList<Crime.BountyLine> Bounties { get; init; } = [];
+    public IReadOnlyList<Crime.BountyLine> Bounties { get; internal set; } = [];
     /// <summary>Slave (state 1) or escaped slave (state 2) and its owner's name, for the status lines of the bounty panel's tooltip (docs/game/ui-screens.md section 4); null otherwise.</summary>
-    public SlaveView? Slave { get; init; }
+    public SlaveView? Slave { get; internal set; }
     /// <summary>The disguise of one of the player's characters while it has a level or a blown cooldown (<see cref="Crime.ArrestSystem"/>); null otherwise.</summary>
-    public DisguiseView? Disguise { get; init; }
+    public DisguiseView? Disguise { get; internal set; }
     /// <summary>The status line ahead of the bounty (docs/game/ui-screens.md section 4, <c>FUN_1405d4260</c>): campaign leader, kidnapped, committing a crime, escaped prisoner; null for none.</summary>
-    public StatusView? Status { get; init; }
+    public StatusView? Status { get; internal set; }
     /// <summary>A selected character's trained stats (the host formats them); null for the others and for a character without stats.</summary>
-    public SkillSummary? Skills { get; init; }
-    public IReadOnlyList<float> AllSkills { get; init; } = [];
-    public IReadOnlyList<float> SkillXpMultipliers { get; init; } = [];
-    public IReadOnlyList<HealthPartView> HealthParts { get; init; } = [];
+    public SkillSummary? Skills { get; internal set; }
+    public IReadOnlyList<float> AllSkills { get; internal set; } = [];
+    public IReadOnlyList<float> SkillXpMultipliers { get; internal set; } = [];
+    public IReadOnlyList<HealthPartView> HealthParts { get; internal set; } = [];
     /// <summary>The limbs' states (<c>MedicalState.LimbBits</c>: limb slot k's <c>LimbState</c> in bits 2k..2k+1; 0 when every limb is the original).</summary>
-    public int LimbBits { get; init; }
+    public int LimbBits { get; internal set; }
     /// <summary>The blood each of the first 8 body parts shows (<c>FUN_140530b30</c>: 1 - clamp((flesh - stun + bandage) / max, 0, 1), byte k = part k as 0 to 255; 0: unhurt).</summary>
-    public ulong BloodAmounts { get; init; }
+    public ulong BloodAmounts { get; internal set; }
     /// <summary>The speed (world units/s) the blow that last put it down gave its ragdoll (<c>CharacterCold.Knockdown</c>; Meitou); a cut-off head is thrown with it.</summary>
-    public Vector3 Knockdown { get; init; }
+    public Vector3 Knockdown { get; internal set; }
     /// <summary>The equipment sections disabled for the character (<see cref="Items.InventoryCommands.SectionClosed"/>; empty for most).</summary>
-    public IReadOnlyList<string> ClosedSlots { get; init; } = [];
+    public IReadOnlyList<string> ClosedSlots { get; internal set; } = [];
     /// <summary>The HUD's numbers for a selected character (null for the others).</summary>
-    public HudView? Hud { get; init; }
-    public InventoryView? ItemGrid { get; init; }
+    public HudView? Hud { get; internal set; }
+    public InventoryView? ItemGrid { get; internal set; }
     /// <summary>
     /// The character carrying this one (none when not carried). A carried body has its carrier's position and facing; it is drawn at <see cref="Carry"/> from them,
     /// with the <c>carry me</c> pose.
     /// </summary>
-    public CharacterId CarriedBy { get; init; } = CharacterId.None;
+    public CharacterId CarriedBy { get; internal set; } = CharacterId.None;
     /// <summary>Where a carried body hangs, in its carrier's frame (on the carrier's <c>Bip01 L UpperArm</c>); null when not carried.</summary>
-    public Carrying.CarryAttach? Carry { get; init; }
+    public Carrying.CarryAttach? Carry { get; internal set; }
     /// <summary>The ITEM (string id) held in the <c>hands</c> point while operating: the functionality's <c>special tool</c> (docs/game/buildings-production.md "Production"); null for none.</summary>
-    public string? HeldTool { get; init; }
+    public string? HeldTool { get; internal set; }
     /// <summary>The size the body is drawn at: an animal's lerp(age, <c>scale min</c>, <c>scale max</c>) (its <c>MedicalState.ScaleK</c>), 1 for people.</summary>
-    public float Scale { get; init; } = 1;
+    public float Scale { get; internal set; } = 1;
     /// <summary>The movement task (<see cref="CharacterTask"/>); the host's sounds follow building, treating and looting from it.</summary>
-    public CharacterTask Task { get; init; }
+    public CharacterTask Task { get; internal set; }
     /// <summary>Working on a cage's lock (the picker's order is given and it is in reach or walking there).</summary>
-    public bool PickingLock { get; init; }
+    public bool PickingLock { get; internal set; }
     /// <summary>Picking or cutting shackles (a <see cref="Locks.ShackleJob"/> of that work, in reach or walking there): the <c>Character_Unlock</c> loop. Breaking and putting on have none.</summary>
-    public bool WorkingShackles { get; init; }
+    public bool WorkingShackles { get; internal set; }
     /// <summary>Lying in a bed (<see cref="Locks.HeldState.Bed"/>).</summary>
-    public bool InBed { get; init; }
+    public bool InBed { get; internal set; }
     /// <summary>Held in a cage or restraint (<see cref="CharacterCold.InSomething"/>).</summary>
-    public bool Imprisoned { get; init; }
+    public bool Imprisoned { get; internal set; }
     /// <summary>Imprisoned in a cage whose lock is open (unlocked, broken or level 0): the escape tutorial's success.</summary>
-    public bool CageOpen { get; init; }
+    public bool CageOpen { get; internal set; }
     /// <summary>Crawling by choice (<see cref="Bodies.MedicalState.StayingLow"/>, not crippled): the context menu's Stand Up.</summary>
-    public bool StayingLow { get; init; }
+    public bool StayingLow { get; internal set; }
     /// <summary>In a fight (<see cref="CharacterCold.InCombat"/>).</summary>
-    public bool InCombat { get; init; }
+    public bool InCombat { get; internal set; }
     /// <summary>In combat mode (<c>Character::isInCombatMode(1, 1)</c>, <see cref="Combat.CombatSystem.IsInCombatMode"/>): the portrait's <c>Combat</c> overlay.</summary>
-    public bool CombatMode { get; init; }
+    public bool CombatMode { get; internal set; }
     /// <summary>An NPC whose fight's target is one of the player's characters, whatever its faction thinks of the player's (a robbery a dialogue line started, a retaliation).</summary>
-    public bool FightsPlayer { get; init; }
+    public bool FightsPlayer { get; internal set; }
     /// <summary>Looting its body is no theft in the pointer's eyes (<c>search</c> instead of <c>scavenge</c>): it is a bandit or a slave (NPC class 8 / 6), or its faction is not real (<c>FUN_1407fb410</c>, docs/game/ui-input.md "Quick right click").</summary>
-    public bool NoLootGuilt { get; init; }
+    public bool NoLootGuilt { get; internal set; }
     /// <summary>Its squad is a campaign force of its faction (<c>FactionWarMgr</c> has its platoon, <c>FUN_140796240</c>): a raiding or war party member the quick right click can still talk to.</summary>
-    public bool WarParty { get; init; }
+    public bool WarParty { get; internal set; }
     /// <summary>Wears locked armour (shackles, <see cref="Items.ItemInstance.IsLocked"/>): the portrait's <c>Slave</c> overlay.</summary>
-    public bool Shackled { get; init; }
+    public bool Shackled { get; internal set; }
     /// <summary>Its worn shackles are locked (<see cref="Locks.LockSystem.WornShackles"/>): the context menu offers Unlock Shackles, Use Tools and Use Strength.</summary>
-    public bool ShacklesLocked { get; init; }
+    public bool ShacklesLocked { get; internal set; }
     /// <summary>Alive, down or caged and wearing no shackles (<see cref="Locks.LockSystem.CanBeShackled"/>): the context menu offers Put on Shackles to a selection that carries some.</summary>
-    public bool CanBeShackled { get; init; }
+    public bool CanBeShackled { get; internal set; }
     /// <summary>A selected character carrying unworn shackles (<see cref="Locks.LockSystem.CarriedShackles"/>).</summary>
-    public bool CarriesShackles { get; init; }
+    public bool CarriesShackles { get; internal set; }
     /// <summary>The number that turns its portrait camera (<see cref="CharacterCold.PortraitSerial"/>).</summary>
-    public uint PortraitSerial { get; init; }
+    public uint PortraitSerial { get; internal set; }
     /// <summary>The character this one carries (none when not carrying).</summary>
-    public CharacterId Carrying { get; init; } = CharacterId.None;
+    public CharacterId Carrying { get; internal set; } = CharacterId.None;
     /// <summary>The goal the AI is acting out, in the game's words (<c>Patrolling town</c>, <c>Shopkeeper</c>); null when the AI does not run the character now.</summary>
-    public string? Activity { get; init; }
+    public string? Activity { get; internal set; }
     /// <summary>A player character's last decision (<see cref="DecisionSystem.Tracing"/>: which source won and why each one before it could not run); null while tracing is off. Debug only.</summary>
-    public DecisionTrace? Decision { get; init; }
+    public DecisionTrace? Decision { get; internal set; }
     /// <summary>The weather effect that hurt this player character last tick and the protection it shows (the status notice, docs/formats/weather.md); None otherwise. Display only.</summary>
-    public WeatherNotice WeatherNotice { get; init; }
-    public float WeatherNoticeProtection { get; init; }
+    public WeatherNotice WeatherNotice { get; internal set; }
+    public float WeatherNoticeProtection { get; internal set; }
     /// <summary>
     /// A sneaking player character's state for its stealth tag (docs/game/perception.md "Spotting a sneaker"): <see cref="StealthExposure.Detected"/> seen,
     /// <see cref="StealthExposure.Noticed"/> almost seen, anything lower hidden; null when not a sneaking player character.
     /// </summary>
-    public StealthExposure? Stealth { get; init; }
+    public StealthExposure? Stealth { get; internal set; }
     /// <summary>A sneaking player character's light level (<see cref="SightMap.Light"/>) for its tag's light icon; 1 otherwise.</summary>
-    public float Light { get; init; } = 1;
+    public float Light { get; internal set; } = 1;
     /// <summary>The floating progress bar over a player character picking a lock (docs/game/locks.md "Lockpicking"); null when none.</summary>
-    public TaskBar? Bar { get; init; }
+    public TaskBar? Bar { get; internal set; }
     /// <summary>
     /// The chance in per cent that the selection's first sneaking member knocks this character out from behind (<see cref="Carrying.CarrySystem.StealthKoChance"/>); null when no
     /// selected character is sneaking or this one cannot be knocked out (a player character, or already down).
     /// </summary>
-    public float? StealthKoChance { get; init; }
+    public float? StealthKoChance { get; internal set; }
     /// <summary>The chance in per cent that the selection's lead kidnaps this NPC (<see cref="Carrying.CarrySystem.KidnapChance"/>); null for a player character or with nothing selected.</summary>
-    public float? KidnapChance { get; init; }
+    public float? KidnapChance { get; internal set; }
     /// <summary>A player character's effective lockpicking (<see cref="Locks.Lockpicking.Skill"/>): the Pick Lock rows' chance column is <see cref="Locks.Lockpicking.Chance"/> of the lock's level and the lead's skill.</summary>
-    public float LockpickSkill { get; init; }
+    public float LockpickSkill { get; internal set; }
     /// <summary>Asleep (<see cref="Carrying.CarrySystem.Asleep"/>): not standing, so the menu offers the down verbs (Kidnap among them).</summary>
-    public bool Asleep { get; init; }
+    public bool Asleep { get; internal set; }
     /// <summary>Down as the original counts it (<see cref="CharacterFacts.Down"/>, <c>FUN_1405c9e10</c>): out cold, dead, playing dead or carried. The menu's down verbs read it.</summary>
-    public bool Down { get; init; }
+    public bool Down { get; internal set; }
     /// <summary>Conscious as Set Free's precondition 125 reads it (<see cref="CharacterFacts.Conscious"/>): not dead, out cold or carried.</summary>
-    public bool Conscious { get; init; }
+    public bool Conscious { get; internal set; }
     /// <summary>Awake: not dead or out cold (<see cref="CharacterFacts.Standing"/>), carried or not; the menu's attack and trade targets.</summary>
-    public bool Standing { get; init; }
+    public bool Standing { get; internal set; }
     /// <summary>An animal, which plans with the animal repertoire (<see cref="CharacterFacts.Animal"/>): the menu offers it only the verbs animals have.</summary>
-    public bool Animal { get; init; }
+    public bool Animal { get; internal set; }
     /// <summary>Hostile to the player: its faction is hostile to the player's, or it fights one of the player's characters (<see cref="CharacterFacts.HostileToPlayer"/>); the attack pointer and the menu's attack verbs.</summary>
-    public bool HostileToPlayer { get; init; }
+    public bool HostileToPlayer { get; internal set; }
     /// <summary>An <see cref="Carrying.OpenLootOrder"/> may open its inventory (<see cref="Carrying.CarrySystem.Openable"/>: down, playing dead or carried, the player's own, a sleeper or a prisoner as a pickpocket): the menu's Loot and Trade.</summary>
-    public bool CanOpenInventory { get; init; }
+    public bool CanOpenInventory { get; internal set; }
     /// <summary>In a cage: whether it is locked and the sentence (null: not imprisoned).</summary>
-    public PrisonView? Prison { get; init; }
+    public PrisonView? Prison { get; internal set; }
     /// <summary>The town turret this character stands at the gun of (the AI's turret goals, arrived and idle); null when it mans none. Read-only, for the host's turret sounds.</summary>
-    public MannedTurret? Turret { get; init; }
+    public MannedTurret? Turret { get; internal set; }
     /// <summary>A selected or inspected character's ranged controller State line (<see cref="Combat.CombatSystem.RangedLineOf"/>); null otherwise.</summary>
-    public Combat.RangedLineView? RangedLine { get; init; }
+    public Combat.RangedLineView? RangedLine { get; internal set; }
     /// <summary>A selected or inspected character's bed recovery rate above 1 (<see cref="BodySystem.BedRecoveryRate"/>); null otherwise.</summary>
-    public float? BedRecoveryRate { get; init; }
+    public float? BedRecoveryRate { get; internal set; }
     /// <summary>Another faction's character, down or asleep, in one of the player's buildings (<see cref="Production.ProductionSystem.InPlayerBuilding"/>): the menu's Throw out of home.</summary>
-    public bool InPlayerBuilding { get; init; }
+    public bool InPlayerBuilding { get; internal set; }
     /// <summary>The hostile NPCs that noticed or detected this sneaking player character in the last 4 s.</summary>
-    public IReadOnlyList<WatcherView> Watchers { get; init; } = [];
+    public IReadOnlyList<WatcherView> Watchers { get; internal set; } = [];
     /// <summary>
     /// The bones the character's ragdoll sets (<see cref="Ragdolls.RagdollSystem"/>), in the model space of its drawn placement (position, minus the shape's ground offset, a
     /// carried body's <see cref="Carry"/>, facing, size: <see cref="CharacterRigs.Placement"/>), to pose over the animation; null without a ragdoll. Immutable.
     /// </summary>
-    public BonePose? Ragdoll { get; init; }
+    public BonePose? Ragdoll { get; internal set; }
 }
 
 /// <summary>
@@ -370,7 +384,7 @@ public sealed record MannedTurret(string Key, string BuildingId, Vector3 Positio
 public readonly record struct SkillSummary(float Attack, float Defence, float Dodge, float Toughness, float Strength, float Athletics);
 
 /// <summary>
-/// What a tick publishes for drawing. Immutable once published: the host keeps the last two and interpolates between them by the
+/// What a tick publishes for drawing. Unchanged until two more are published (its characters are reused then, docs/simulation.md "Snapshots"): the host keeps the last two and interpolates between them by the
 /// frame's alpha, as it does for the camera; a character only in the newer one appears without interpolation.
 /// </summary>
 public sealed record WorldSnapshot(long Tick, IReadOnlyList<CharacterSnapshot> Characters)
