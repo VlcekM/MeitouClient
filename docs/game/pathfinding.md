@@ -690,6 +690,13 @@ player characters apart, ~1,400 characters loaded, 75 s of flights between them)
 the search was 77 % of the simulation's busy CPU. The golden section (was 14 ternary steps, 28 detours) answered 14 % more searches in the same
 time and moved pinned path points by about a unit.
 
+Unreachable goals were most of the rest. **Observed** (same run): a town's residents in zone 14.23 kept asking for goals in a building they cannot
+enter (way in narrower than their radius; the navmesh probe: goal reachable without clearance), 300-600 ms each: the exact search, up to four
+off-mesh start retries, then the nearest-point search, each exploring all the ground they reach. Engine choices since: a goal found unreachable
+is remembered (goal polygon, radius, door rule; same navmesh; `NavmeshWalkability.UnreachableSeconds`), and a walker that reaches its
+remembered nearest point gets the provisional route at once; retries skip start polygons a failed search reached (same region, same
+failure). GoTo answers went from ~95 to ~17 ms on average, polygons per search ~11,000 to ~5,800.
+
 ## Gate codes
 
 The original labels the walkable ground by the gates (**Verified** structure, decompile of 1.0.68):

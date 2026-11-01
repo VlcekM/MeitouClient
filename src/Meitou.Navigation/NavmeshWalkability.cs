@@ -217,6 +217,14 @@ public sealed partial class NavmeshWalkability : IWalkability
         var w = world;
         bool fromLoaded = w.Contains(WorldLayout.ZoneOf(from.X, from.Z));
         if (!fromLoaded || !w.Contains(WorldLayout.ZoneOf(to.X, to.Z))) return LongRoute(w, from, to, agent, fromLoaded);
+        // A goal just found unreachable (shut in, or a way in too narrow for the radius): a walker that can reach the nearest point found then is on the
+        // same ground, which does not reach the goal either, so it walks there instead of running the exact and the nearest-point searches, each of
+        // which explores all the ground it can reach.
+        var key = UnreachableKey(w, to, agent);
+        if (key is { } known && unreachable.TryGetValue(known, out var hit) && ReferenceEquals(hit.World, w)
+            && System.Diagnostics.Stopwatch.GetElapsedTime(hit.At).TotalSeconds < UnreachableSeconds
+            && new NavQuery(w, Doors).FindPath(from, hit.Nearest, agent, null, out _) is { Found: true } near)
+            return Provisional(w, FromWalker(from, near), to);
         var exact = Exact(w, from, to, agent);
         if (exact.Found) return exact;
         // A walker on a region its zone's pruning dropped (its way to a seed leads through a zone not loaded): that region is kept, and the path asked again.
@@ -234,10 +242,33 @@ public sealed partial class NavmeshWalkability : IWalkability
         var part = Toward(w, from, to, agent);
         if (!part.Found) return exact;
         if (Vector2.Distance(new(part.Points[^1].X, part.Points[^1].Z), new(to.X, to.Z)) <= NavQuery.GoalSnap) return part;
+        if (key is { } found)
+        {
+            if (unreachable.Count >= UnreachableLimit) unreachable.Clear();
+            unreachable[found] = (w, part.Points[^1], System.Diagnostics.Stopwatch.GetTimestamp());
+        }
+        return Provisional(w, part, to);
+    }
+
+    /// <summary>A navmesh part to the nearest reachable point, then on to the goal provisionally (asked again on the way, MovementSystem).</summary>
+    PathResult Provisional(NavWorld w, PathResult part, Vector3 to)
+    {
         List<Vector3> points = [.. part.Points, to];
         Ahead(w, points, part.Points.Count);
         return new PathResult(points) { Exact = part.Points.Count };
     }
+
+    /// <summary>How long (s) a goal found unreachable is remembered (engine choice: a door may open, and a door has no version).</summary>
+    public const double UnreachableSeconds = 10;
+    const int UnreachableLimit = 4096;
+
+    // Goals found unreachable over the loaded zones, by goal polygon and the agent's radius and door rule: the navmesh they were found on (any other
+    // mesh, after a zone went live or unloaded, asks again), the nearest reachable point and when. Each was 300-600 ms of searching, asked again
+    // and again by a town's residents walking to a goal they cannot reach (Observed, zone 14.23: a cabinet in a building, docs/game/pathfinding.md).
+    readonly System.Collections.Concurrent.ConcurrentDictionary<(NavRef Goal, float Radius, bool DoorsClosed), (NavWorld World, Vector3 Nearest, long At)> unreachable = new();
+
+    static (NavRef, float, bool)? UnreachableKey(NavWorld w, Vector3 to, NavAgent agent) =>
+        w.TryFindPolygon(to, NavQuery.GoalSnap, out var goal, out _) ? (goal, agent.Radius, agent.DoorsClosed) : null;
 
     /// <summary>How far (units) along the provisional part of a route the zones are asked for (<see cref="RouteZones"/>), so the walker finds rocks,
     /// walls and cliffs the terrain grid does not know before it gets there (engine choice: about a zone).</summary>
@@ -281,6 +312,8 @@ public sealed partial class NavmeshWalkability : IWalkability
         return path.Found ? FromWalker(from, path) : path;
     }
 
+    [ThreadStatic] static HashSet<long>? failedRegions;
+
     PathResult Exact(NavWorld w, Vector3 from, Vector3 to, NavAgent agent)
     {
         var query = new NavQuery(w, Doors);
@@ -290,11 +323,16 @@ public sealed partial class NavmeshWalkability : IWalkability
         // step along taken (docs/game/pathfinding.md "Own builder").
         if (start.Zone < 0 || IsOnMesh(w, from) || path.Found && Steppable(from, path.Points)) return path;
         var tried = new HashSet<NavRef> { start };
+        // The polygons a failed search reached are one region with its start: a search from any of them fails too, so they are not tried.
+        var failed = failedRegions ??= [];
+        failed.Clear();
+        NavQuery.AddReachedByFailed(failed);
         for (int k = 0; k < OffMeshStarts; k++)
         {
-            var other = OnGround(query.FindPath(from, to, agent, tried.Contains, out start));
+            var other = OnGround(query.FindPath(from, to, agent, at => tried.Contains(at) || failed.Contains(at.Key), out start));
             if (start.Zone < 0) break;
             tried.Add(start);
+            NavQuery.AddReachedByFailed(failed);
             if (other.Found && Steppable(from, other.Points)) return other;
         }
         return path;

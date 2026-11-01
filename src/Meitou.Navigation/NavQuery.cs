@@ -66,6 +66,8 @@ public sealed class NavQuery(NavWorld world, NavDoors? doors = null)
     {
         public readonly Dictionary<long, Node> Nodes = [];
         public readonly PriorityQueue<Node, float> Open = new();
+        /// <summary>Whether the last search explored all it could reach without finding its goal (not cut short by <see cref="MaxIterations"/>).</summary>
+        public bool Exhaustive;
         readonly List<Node> made = [];
         int used;
 
@@ -98,10 +100,20 @@ public sealed class NavQuery(NavWorld world, NavDoors? doors = null)
     public PathResult FindPath(Vector3 from, Vector3 to, NavAgent agent, Func<NavRef, bool>? skipStart, out NavRef start)
     {
         if (!World.TryFindPolygon(from, StartSnap, out start, out var startPoint, skipStart)) { start = new NavRef(-1, -1); return PathResult.NotFound; }
+        if (searchScratch is { } last) last.Exhaustive = false;
         if (!World.TryFindPolygon(to, GoalSnap, out var goal, out var goalPoint)) return PathResult.NotFound;
         var corridor = FindCorridor(start, startPoint, goal, goalPoint, agent);
         if (corridor is null) return PathResult.NotFound;
         return new PathResult(Pull(corridor, agent));
+    }
+
+    /// <summary>When the last search on this thread failed after reaching all it could, adds the polygons it reached to <paramref name="into"/>
+    /// (<see cref="NavRef.Key"/>): a search from any of them fails too.</summary>
+    public static void AddReachedByFailed(HashSet<long> into)
+    {
+        if (searchScratch is { Exhaustive: true } s)
+            foreach (var (key, node) in s.Nodes)
+                if (node.Closed) into.Add(key);
     }
 
     /// <summary>
@@ -172,6 +184,7 @@ public sealed class NavQuery(NavWorld world, NavDoors? doors = null)
         Interlocked.Increment(ref searches);
         Interlocked.Add(ref expanded, iterations);
         if (iterations > MaxIterations) Interlocked.Increment(ref exhausted);
+        scratch.Exhaustive = last is null && iterations <= MaxIterations;
         if (last is null && partial && nearest != first)
         {
             last = nearest;
