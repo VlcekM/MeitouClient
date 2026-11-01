@@ -825,6 +825,8 @@ sealed partial class GameHost
         profiler?.Flush();
         if (SpikeLog.Enabled) SpikeLog.PrintSummary();
         if (spikeGc is not null) PrintAllocations(spikeGc);
+        if (Meitou.Navigation.NavQuery.Stats is { Searches: > 0 } paths)
+            Console.WriteLine($"paths     {paths.Searches} searches, {paths.Expanded / paths.Searches} polygons each on average, {paths.Exhausted} ran to the limit of {Meitou.Navigation.NavQuery.MaxIterations}");
         profiler?.Dispose();
         player.DisposeUi();
         EndLoadingScreen();
