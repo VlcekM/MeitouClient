@@ -270,6 +270,28 @@ public static class CharacterShape
     }
 
     /// <summary>
+    /// How far the worn items lift the body off the ground (docs/animation.md, "Feet lift"): with prosthetics in both leg slots (52, 53), the lower of their
+    /// <c>offset</c>s, else the worn boots' <c>boot height</c> (0 without). Game: <c>FUN_140538630</c> stores it at the character's +0x2cc, and <c>FUN_1405f16a0</c>
+    /// places the body mesh's node that much higher.
+    /// </summary>
+    public static float FeetLiftOf(IEnumerable<CharacterPart> parts)
+    {
+        float boot = 0, left = 0, right = 0;
+        int flags = 0;
+        foreach (var p in parts)
+        {
+            if (p.Record.Type == FcsRecordType.ARMOUR && p.Slot == AttachSlot.Boots) boot = p.Record.GetFloat("boot height");
+            else if (p.Record.Type == FcsRecordType.LIMB_REPLACEMENT)
+                switch (p.Record.GetInt("slot"))
+                {
+                    case 52: flags |= 1; left = p.Record.GetFloat("offset"); break;
+                    case 53: flags |= 2; right = p.Record.GetFloat("offset"); break;
+                }
+        }
+        return flags == 3 ? Math.Min(left, right) : boot;
+    }
+
+    /// <summary>
     /// The calf length ratio (<c>read_boot_height_n7</c>, docs/animation.md): b the worn boots' <c>boot height</c>, L / R the <c>offset</c> of the LIMB_REPLACEMENT worn in
     /// slot 52 / 53 (a stump's mesh counts, offset 0). Left only: (b + 4) / (L + 4); right only: x = R against y = b; both: x = R, y = L. Then x &lt; y gives (x + 4) / (y + 4)
     /// (the left calf), y &lt; x gives -(y + 4) / (x + 4) (the right calf), equal nothing. Without a leg item it is not set (0).
