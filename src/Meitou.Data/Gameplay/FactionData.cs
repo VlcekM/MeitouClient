@@ -22,6 +22,9 @@ public readonly record struct RecordLink(string Id, int V0, int V1, int V2)
 /// </summary>
 public sealed record FactionData
 {
+    /// <summary>The player's faction (Nameless): found by this id, as the original does, so a translation that renames it changes nothing.</summary>
+    public const string PlayerId = "204-gamedata.base";
+
     /// <summary>The record's string id (<c>204-gamedata.base</c>).</summary>
     public required string Id { get; init; }
     public required string Name { get; init; }

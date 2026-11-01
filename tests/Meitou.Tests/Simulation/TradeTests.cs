@@ -22,7 +22,7 @@ public class TradeTests
     internal static PopulationData Data(params FcsRecord[] extra)
     {
         var db = Db([
-            Rec("p-t", FcsRecordType.FACTION, r => r.Name = "Nameless"),
+            Rec("204-gamedata.base", FcsRecordType.FACTION, r => r.Name = "Nameless"),
             Rec("f-t", FcsRecordType.FACTION, r => { r.Name = "Traders"; r.References["trade culture"] = [Ref("cf-t")]; }),
             Rec("cf-t", FcsRecordType.ITEMS_CULTURE, r => r.References["trade prices"] = [Ref("cloth-t", 200)]),
             Rec("ct-t", FcsRecordType.ITEMS_CULTURE, r => r.References["trade prices"] = [Ref("katana-t", 150)]),

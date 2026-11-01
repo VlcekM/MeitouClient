@@ -117,7 +117,7 @@ public sealed class PopulationData
     /// <summary>Rolls the characters' looks; null leaves them without (headless tests, markers only).</summary>
     public IAppearanceSource? Appearances { get; init; }
     public IWorldStates States { get; init; } = IWorldStates.None;
-    /// <summary>The player's faction (the FACTION named Nameless, 204-gamedata.base), a position in <see cref="Factions"/>; -1 when there is none.</summary>
+    /// <summary>The player's faction (FACTION <see cref="FactionData.PlayerId"/>, Nameless), a position in <see cref="Factions"/>; -1 when there is none.</summary>
     public int PlayerFaction { get; init; } = -1;
     /// <summary>
     /// The live relation table of the game (who is hostile to whom: roaming squads avoid hostile towns, <see cref="AggroSystem"/> starts fights by it);
@@ -349,7 +349,7 @@ public sealed class PopulationData
         }
         var factions = FactionData.LoadAll(db);
         var byId = BuildFactionIndex(factions);
-        int player = factions.FindIndex(f => f.BaseName == "Nameless");
+        int player = factions.FindIndex(f => f.Id == FactionData.PlayerId);
         var relations = FactionRelations.Build(factions);
         relations.PlayerFaction = player;
         return new PopulationData

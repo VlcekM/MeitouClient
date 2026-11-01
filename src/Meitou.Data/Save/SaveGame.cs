@@ -142,7 +142,7 @@ public sealed partial class SaveGame
 
     /// <summary>The player's faction: the one with a <c>known</c> list, else the one whose id is <c>204-gamedata.base</c>.</summary>
     public SaveFaction? PlayerFaction =>
-        Factions.FirstOrDefault(f => f.Record.References.ContainsKey("known")) ?? Factions.FirstOrDefault(f => f.Id == "204-gamedata.base");
+        Factions.FirstOrDefault(f => f.Record.References.ContainsKey("known")) ?? Factions.FirstOrDefault(f => f.Id == Gameplay.FactionData.PlayerId);
 
     /// <summary>
     /// The zone-file check the game runs at load and at save (docs/formats/save.md, <c>FUN_140a0bef0</c>): the CAMERA <c>zones</c> list against the files.

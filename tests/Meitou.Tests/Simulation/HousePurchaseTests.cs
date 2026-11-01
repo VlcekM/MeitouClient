@@ -17,7 +17,7 @@ public class HousePurchaseTests
     internal static (PopulationData Data, TownBuilding House) Setup(bool destroyed = false, bool sale = true, int townType = 2, bool inside = false)
     {
         var db = Db(
-            Rec("player", FcsRecordType.FACTION, r => r.Name = "Nameless"),
+            Rec("204-gamedata.base", FcsRecordType.FACTION, r => r.Name = "Nameless"),
             Rec("owner", FcsRecordType.FACTION, r => r.Floats["building cost mult"] = 1),
             Rec("town", FcsRecordType.TOWN, r => { r.Ints["type"] = townType; r.References["faction"] = [new("owner", 0, 0, 0)]; }),
             Rec("shell", FcsRecordType.BUILDING_FUNCTIONALITY, r => r.Ints["function"] = 19),
@@ -56,7 +56,7 @@ public class HousePurchaseTests
         Assert.Equal(20000 - price, world.Player.Money);
         var state = Rec("saved", FcsRecordType.GAMESTATE_BUILDING);
         Assert.True(world.Fixtures.WriteBuilding(house.Key, state));
-        Assert.Equal("player", state.Strings["owner faction ID"]); Assert.False(state.Bools["sell home"]);
+        Assert.Equal("204-gamedata.base", state.Strings["owner faction ID"]); Assert.False(state.Bools["sell home"]);
         using var loaded = World(data);
         loaded.Player.Faction = data.PlayerFaction;
         loaded.Fixtures.Saved = new Dictionary<string, FcsRecord> { [house.Key] = state };

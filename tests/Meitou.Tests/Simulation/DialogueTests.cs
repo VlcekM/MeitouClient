@@ -22,7 +22,7 @@ public class DialogueTests
     /// "plain" (score 0) says hello.
     /// </summary>
     static PopulationData Data() => PopulationData.Create(Db([
-        Rec("p-d", FcsRecordType.FACTION, r => r.Name = "Nameless"),
+        Rec("204-gamedata.base", FcsRecordType.FACTION, r => r.Name = "Nameless"),
         Rec("f-d", FcsRecordType.FACTION, r => r.Name = "Villagers"),
         Rec("npc-d", FcsRecordType.CHARACTER, r => { r.Name = "Villager"; r.References["dialogue"] = [Ref("rich-d"), Ref("plain-d")]; }),
         Rec("money-d", FcsRecordType.DIALOG_ACTION, r => r.Ints["condition name"] = DialogueConditions.PlayerMoney),
@@ -48,7 +48,7 @@ public class DialogueTests
     /// (c.10,000 and DA_INCREASE_FACTION_RANK capped at 1); at rank 1 (checked with `who` 1, which the game ignores) it offers to buy.
     /// </summary>
     static PopulationData Guild() => PopulationData.Create(Db([
-        Rec("p-d", FcsRecordType.FACTION, r => r.Name = "Nameless"),
+        Rec("204-gamedata.base", FcsRecordType.FACTION, r => r.Name = "Nameless"),
         Rec("f-d", FcsRecordType.FACTION, r => r.Name = "Thieves"),
         Rec("npc-d", FcsRecordType.CHARACTER, r => { r.Name = "Villager"; r.References["dialogue"] = [Ref("stranger-d"), Ref("member-d")]; }),
         Rec("rank-d", FcsRecordType.DIALOG_ACTION, r => r.Ints["condition name"] = 10),
@@ -177,7 +177,7 @@ public class DialogueTests
     public void A_greeting_between_npcs_sets_off_the_crowd_and_the_target_answers()
     {
         var data = PopulationData.Create(Db([
-            Rec("p-d", FcsRecordType.FACTION, r => r.Name = "Nameless"),
+            Rec("204-gamedata.base", FcsRecordType.FACTION, r => r.Name = "Nameless"),
             Rec("f-d", FcsRecordType.FACTION, r => r.Name = "Villagers"),
             Rec("guard-c", FcsRecordType.CHARACTER, r => { r.Name = "Guard"; r.References["dialogue package"] = [Ref("guard-p")]; }),
             Rec("guard-p", FcsRecordType.DIALOGUE_PACKAGE, r => r.References["dialogs"] = [Ref("hail-d", 3)]),
@@ -236,7 +236,7 @@ public class DialogueTests
     public void Talk_to_leader_sends_the_leader_to_open_a_conversation()
     {
         var data = PopulationData.Create(Db([
-            Rec("p-d", FcsRecordType.FACTION, r => r.Name = "Nameless"),
+            Rec("204-gamedata.base", FcsRecordType.FACTION, r => r.Name = "Nameless"),
             Rec("f-d", FcsRecordType.FACTION, r => r.Name = "Villagers"),
             Rec("guard-c", FcsRecordType.CHARACTER, r => { r.Name = "Guard"; r.References["dialogue"] = [Ref("ask-d")]; }),
             Rec("boss-c", FcsRecordType.CHARACTER, r => { r.Name = "Boss"; r.References["dialogue"] = [Ref("boss-d")]; }),

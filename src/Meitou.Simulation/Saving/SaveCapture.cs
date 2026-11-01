@@ -327,7 +327,7 @@ public static partial class SaveCapture
         var game = builder.Game;
         var table = world.Characters;
         var written = new Dictionary<CharacterId, SaveCharacter>();
-        string playerFactionId = data.PlayerFaction >= 0 ? data.Factions[data.PlayerFaction].Id : "204-gamedata.base";
+        string playerFactionId = data.PlayerFaction >= 0 ? data.Factions[data.PlayerFaction].Id : FactionData.PlayerId;
         string playerFactionName = world.Player.FactionName ?? (data.PlayerFaction >= 0 ? data.Factions[data.PlayerFaction].Name : "Nameless");
         var playerState = game.Factions.FirstOrDefault(f => f.Id == playerFactionId);
         int squads = 0, members = 0;
