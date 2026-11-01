@@ -953,10 +953,13 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
     /// <inheritdoc/>
     public bool FrameCompleted(long frame) => frameNumber - frame >= FrameRingDepth;
 
-    /// <summary>Matching depth textures use a native copy; colour textures use a sampling pass, which can scale.</summary>
-    internal void BlitScaled(MTLCommandBuffer command, GpuTexture src, GpuTexture dst, TextureMinFilter filter)
+    /// <summary>
+    /// A texture copied into another: depth by a native copy (same size, format and kind only), colour by a sampling pass, which
+    /// can scale (the impostor bake's supersampled row halved).
+    /// </summary>
+    internal void Blit(MTLCommandBuffer command, GpuTexture src, GpuTexture dst, TextureMinFilter filter)
     {
-        if (MetalConventions.IsDepthFormat(src.Desc.Format) || MetalConventions.IsDepthFormat(dst.Desc.Format))
+        if (src.Desc.IsDepth || dst.Desc.IsDepth)
         {
             if (src.Desc.Format != dst.Desc.Format || src.Desc.Width != dst.Desc.Width || src.Desc.Height != dst.Desc.Height
                 || src.Desc.Kind != TextureKind.Texture2D || dst.Desc.Kind != TextureKind.Texture2D

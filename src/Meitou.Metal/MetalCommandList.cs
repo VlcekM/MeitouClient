@@ -689,13 +689,13 @@ public sealed class MetalCommandList : IGpuCommandList
         encoder.EndEncoding();
     }
 
-    /// <summary>Copies a texture into another (scaled: the impostor bake halves its supersampled row): a fullscreen sampling pass.</summary>
+    /// <summary>Copies a texture into another: depth by a native copy, colour by a sampling pass that can scale (the impostor bake).</summary>
     public void Blit(GpuTexture src, GpuTexture dst, TextureMinFilter filter)
     {
         EndCompute();
         EndBlit();
         if (render.NativePtr != IntPtr.Zero) EndRendering();
-        ctx.BlitScaled(command, src, dst, filter);
+        ctx.Blit(command, src, dst, filter);
     }
 
     /// <summary>Copies a tightly packed region of a texture's level and layer into a buffer (the impostor bakes' readback).</summary>
