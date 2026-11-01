@@ -512,6 +512,26 @@ public sealed unsafe class CommandList : IGpuCommandList
         vk.CmdCopyBufferToImage(Handle, device.BufferAt(src.Index), device.NativeImage(dst), ImageLayout.General, 1, &copy);
     }
 
+    /// <inheritdoc/>
+    public void CopyLayers(GpuTexture src, GpuTexture dst, int layers)
+    {
+        var d = src.Desc;
+        int levels = Math.Min(d.Levels, dst.Desc.Levels);
+        if (layers <= 0 || levels <= 0) return;
+        var regions = stackalloc ImageCopy[levels];
+        var aspect = GlConventions.VkAspect(d);
+        for (int level = 0; level < levels; level++)
+            regions[level] = new ImageCopy
+            {
+                SrcSubresource = new ImageSubresourceLayers(aspect, (uint)level, 0, (uint)layers),
+                DstSubresource = new ImageSubresourceLayers(aspect, (uint)level, 0, (uint)layers),
+                Extent = new Extent3D((uint)Math.Max(d.Width >> level, 1), (uint)Math.Max(d.Height >> level, 1), 1),
+            };
+        Barrier(BarrierBatch.Full);
+        vk.CmdCopyImage(Handle, device.NativeImage(src), ImageLayout.General, device.NativeImage(dst), ImageLayout.General, (uint)levels, regions);
+        Barrier(BarrierBatch.Full);
+    }
+
     /// <summary>Resolves level 0 / layer 0 of a multisampled colour texture into a single-sampled one (the reflection's 4× target).</summary>
     public void Resolve(GpuTexture src, GpuTexture dst)
     {

@@ -18,6 +18,11 @@ world coordinates. `terrain-layer-skip` can omit insignificant layer work; thres
 choices requiring boundary/material checks. `terrain-late-colour` separates depth from shading
 where occluders justify it. A depth prepass is extra geometry, not automatically a speedup.
 
+**Layer arrays** (`TerrainTextures`): one BC3 diffuse and one BC1 normal slice (and an R8 height slice) per distinct texture pair of the
+biomes near the eye, kept points and arrival. They start with 32 slots (about 270 MB at 2048²). A pair that is no longer needed loses its slot
+to the next one, least recently needed first. When every slot is needed, the arrays double (new arrays, old slots copied on the GPU), up to
+one slot per pair in the world (at most 192). They never shrink. All slots at 2048² would be about 1.07 GB in the base game.
+
 **World colour map** (`TerrainTextures.PrepareWorld`): the 8 × 8 colour tiles box-filtered into one 2048² RGBA map for the far terrain
 and foliage. Cached raw (16 MB, no header) in `%LOCALAPPDATA%\Meitou\terrain\worldcolour_<hash>.bin`: hash of a version tag, the size and
 each tile's path, length and write time, so a mod's tile gets its own file; a file of the wrong length is rebuilt. Decoding the tiles

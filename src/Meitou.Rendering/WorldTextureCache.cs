@@ -98,8 +98,8 @@ public sealed class WorldTexture
 /// textures (through the <see cref="Uploader"/>), so loading a town's few hundred textures uses every core and never stalls a frame for long.
 /// Same lookup, sampling and swizzle detection as <see cref="Renderer"/>, and the images, levels, views and samplers the GL textures had
 /// through VkGl (docs/renderer-native.md 8, phase 8 stage 1).
-/// Textures nobody has read the key of for <see cref="IdleSeconds"/> are deleted (<see cref="Trim"/>), earlier when the cache holds more than
-/// <see cref="HighWaterMb"/>: the least recently used go first, down to three quarters of it. A deleted texture comes back by itself
+/// Textures nobody has read the key of for <see cref="IdleSeconds"/> are deleted (<see cref="Trim"/>), earlier when the cache, with the caches it shares
+/// images with (<see cref="TextureShare"/>), holds more than <see cref="HighWaterMb"/>: the least recently used go first, down to three quarters of it. A deleted texture comes back by itself
 /// (decode and upload again) the next time something asks for its key.
 /// </summary>
 public sealed unsafe class WorldTextureCache : IDisposable
@@ -141,7 +141,16 @@ public sealed unsafe class WorldTextureCache : IDisposable
     }
 
     /// <summary>GPU memory of the resident textures (all levels, RGBA8) and how many there are.</summary>
-    public long ResidentBytes { get; private set; }
+    public long ResidentBytes
+    {
+        get => residentBytes;
+        private set
+        {
+            if (Share is { } share) share.ResidentBytes += value - residentBytes;
+            residentBytes = value;
+        }
+    }
+    long residentBytes;
     public int ResidentCount { get; private set; }
     /// <summary>Changes whenever a texture's image comes or goes (a load, a swap, an unload), so its key and bindless index may differ: what a user that keeps them checks.</summary>
     public int Version { get; private set; }
@@ -166,8 +175,9 @@ public sealed unsafe class WorldTextureCache : IDisposable
     public long UnstreamedBytes { get; private set; }
 
     /// <summary>Unused for this long: unloaded.</summary>
-    public double IdleSeconds { get; set; } = 60;
-    /// <summary>Above this the least recently used textures that were unused for <see cref="PressureIdleSeconds"/> go too.</summary>
+    public double IdleSeconds { get; set; } = 20;
+    /// <summary>Above this the least recently used textures that were unused for <see cref="PressureIdleSeconds"/> go too. With a <see cref="Share"/> the mark is for
+    /// all the sharing caches together (<see cref="TextureShare.ResidentBytes"/>), not for each.</summary>
     public double HighWaterMb { get; set; } = TextureQuality.MemoryBudgetMb(TextureQuality.Level);
     public double PressureIdleSeconds { get; set; } = 8;
     /// <summary>The high-water mark as a share of the driver's video memory budget: the mark is the smaller of <see cref="HighWaterMb"/> and this share (the default share is what
@@ -475,7 +485,8 @@ public sealed unsafe class WorldTextureCache : IDisposable
         if (now - lastTrim < 1000) return;
         lastTrim = now;
         bool guarded = Guard?.Pressure ?? false;
-        bool pressure = ResidentBytes > MarkMb * 1048576;
+        long held = Share?.ResidentBytes ?? ResidentBytes;
+        bool pressure = held > MarkMb * 1048576;
         List<WorldTexture>? victims = null;
         foreach (var t in cache.Values)
         {
@@ -489,8 +500,10 @@ public sealed unsafe class WorldTextureCache : IDisposable
         foreach (var t in victims.Take(guarded ? 120 : 40))
         {
             bool old = (now - t.LastUsed) / 1000.0 > IdleSeconds;
-            if (!old && !guarded && ResidentBytes <= lowWater) break;
+            if (!old && !guarded && held <= lowWater) break;
+            long before = ResidentBytes;
             Unload(t);
+            held -= before - ResidentBytes;
         }
     }
 
@@ -815,6 +828,7 @@ public sealed unsafe class WorldTextureCache : IDisposable
             if (t.Pending is { IsCompletedSuccessfully: true, Result.Image: { } unused }) unused.Dispose();   // made on the worker, never uploaded
         }
         foreach (var t in cache.Values) Release(t);
+        ResidentBytes = 0;
     }
 }
 
@@ -850,6 +864,9 @@ public sealed class TextureShare
 
     /// <summary>The share of the caches on <paramref name="gpu"/>.</summary>
     public static TextureShare For(IGpuContext gpu) => shares.GetValue(gpu, _ => new TextureShare());
+
+    /// <summary>What the sharing caches hold together (each counts a shared image as its own), against which their one high-water mark is kept.</summary>
+    public long ResidentBytes { get; internal set; }
 
     internal IReadOnlyList<Image> Of(string path) => byPath.TryGetValue(path, out var list) ? list : [];
 

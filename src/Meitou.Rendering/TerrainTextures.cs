@@ -14,7 +14,7 @@ namespace Meitou.Rendering;
 /// GPU resources for texturing the terrain (docs/formats/terrain.md, "How the terrain is textured"), streamed to
 /// follow the camera: the biome layer textures of every biome that <c>blendinfo.dat</c> lists in a cell within the
 /// material distance of the eye (two texture arrays whose slots are handed out per distinct texture pair, least
-/// recently needed evicted first), a parameter texture with one row per biome, the cell table (what each biome slot
+/// recently needed evicted first; the arrays start small and grow when every slot is needed), a parameter texture with one row per biome, the cell table (what each biome slot
 /// of a cell is right now: a row, "still loading" or unused), the world blend map, and windows of the overlay and
 /// colour maps that move with the eye. Decoding runs on worker threads; every upload is made on the thread that calls
 /// <see cref="Update"/>, in steps through an <see cref="UploadQueue"/>. Native textures (phase 8), sampled as their GL versions were
@@ -24,6 +24,9 @@ public sealed unsafe class TerrainTextures : IDisposable
 {
     /// <summary>Most texture pairs resident at once (each costs a BC3 and a BC1 layer of <c>layerSize</c>² with mips, 8.4 MB at 2048).</summary>
     public const int MaxLayers = 192;
+
+    /// <summary>Slots the arrays start with (about 270 MB at 2048); they double, up to every pair the world has, when all their slots are needed at once.</summary>
+    public const int InitialLayers = 32;
 
     /// <summary>Cell table value of a biome slot that is used but not resident yet / of an unused slot.</summary>
     const byte Pending = 254, Unused = 255;
@@ -39,7 +42,7 @@ public sealed unsafe class TerrainTextures : IDisposable
     readonly BiomeState[] state;
     readonly Dictionary<(string?, string?), Pair> pairs = [];
     readonly Dictionary<Pair, List<int>> usedBy = [];
-    readonly Pair?[] owner;
+    Pair?[] owner;
     readonly ConcurrentQueue<Decoded> decoded = new();
     readonly ConcurrentQueue<string> problems = new();
     readonly int maxInFlight = Math.Clamp(Environment.ProcessorCount / 2, 2, 6);
@@ -106,7 +109,8 @@ public sealed unsafe class TerrainTextures : IDisposable
             }
             state[b] = new BiomeState { Pairs = layers };
         }
-        Capacity = Math.Min(pairs.Count, MaxLayers);
+        MaxCapacity = Math.Min(pairs.Count, MaxLayers);
+        Capacity = Math.Min(MaxCapacity, InitialLayers);
         owner = new Pair?[Capacity];
     }
 
@@ -119,7 +123,9 @@ public sealed unsafe class TerrainTextures : IDisposable
     public int MapState { get; private set; }
     /// <summary>x0, z0, 1/width, 1/depth of the overlay and colour windows in world units (the two cover the same square).</summary>
     public Vector4 Region { get; private set; }
-    public int Capacity { get; }
+    /// <summary>Slots the arrays have now (<see cref="Grow"/> adds to it), and the most they may get: one per texture pair of the world, at most <see cref="MaxLayers"/>.</summary>
+    public int Capacity { get; private set; }
+    public int MaxCapacity { get; }
     public int TotalBiomes => biomes.Count;
     public int TotalPairs => pairs.Count;
     /// <summary>Texture pairs being decoded plus map windows being cut or uploaded.</summary>
@@ -269,18 +275,16 @@ public sealed unsafe class TerrainTextures : IDisposable
         UploadCells();
 
         // Layers are handed out as texture pairs become resident; the arrays are allocated whole, with every mip level.
-        diffuseArray = AllocateArray(true);
-        normalArray = AllocateArray(false);
-        if (GroundRelief.Enabled)
-            heightArray = Make(InternalFormat.R8, HeightSize, HeightSize, (int)Math.Log2(HeightSize) + 1, Math.Max(Capacity, 1),
-                TextureMinFilter.LinearMipmapLinear, TextureMagFilter.Linear, TextureWrapMode.Repeat, "terrain textures height", kind: TextureKind.Texture2DArray);
+        diffuseArray = AllocateArray(true, Capacity);
+        normalArray = AllocateArray(false, Capacity);
+        if (GroundRelief.Enabled) heightArray = AllocateHeight(Capacity);
         // Each slot's steepness factor (1 / (side × its height's steepness); 0: flat), read by the slot's index: its depth (GroundRelief.LayerDepthCm).
         if (GroundRelief.Enabled)
         {
-            reliefTexture = Make(InternalFormat.R32f, Math.Max(Capacity, 1), 1, 1, 1, TextureMinFilter.Nearest, TextureMagFilter.Nearest,
+            reliefTexture = Make(InternalFormat.R32f, Math.Max(MaxCapacity, 1), 1, 1, 1, TextureMinFilter.Nearest, TextureMagFilter.Nearest,
                 TextureWrapMode.ClampToEdge, "terrain relief depths");
             using var batch = Gpu.Uploads.Begin();
-            batch.Write(reliefTexture.Texture, 0, 0, Rect(0, 0, Math.Max(Capacity, 1), 1), new byte[Math.Max(Capacity, 1) * 4]);
+            batch.Write(reliefTexture.Texture, 0, 0, Rect(0, 0, Math.Max(MaxCapacity, 1), 1), new byte[Math.Max(MaxCapacity, 1) * 4]);
         }
 
         // One parameter row per biome; its layer indices are written when the biome becomes resident.
@@ -332,21 +336,72 @@ public sealed unsafe class TerrainTextures : IDisposable
     }
 
     /// <summary>GPU memory of both layer arrays (all slots, all mip levels).</summary>
-    public long ArrayBytes => Enumerable.Range(0, levelCount).Sum(l => (long)(SliceBytes(true, l) + SliceBytes(false, l))) * Math.Max(Capacity, 1);
+    public long ArrayBytes => ArrayBytesOf(Capacity);
 
-    /// <summary>One layer array, every slot and mip level, trilinear and 8x anisotropic, repeating (the slices are written as pairs arrive).</summary>
-    TerrainTexture? AllocateArray(bool diffuse)
+    long ArrayBytesOf(int slots) => Enumerable.Range(0, levelCount).Sum(l => (long)(SliceBytes(true, l) + SliceBytes(false, l))) * Math.Max(slots, 1);
+
+    /// <summary>One layer array of <paramref name="slots"/> slots with every mip level, trilinear and 8x anisotropic, repeating (the slices are written as pairs arrive).</summary>
+    TerrainTexture? AllocateArray(bool diffuse, int slots)
     {
         try
         {
-            return Make(FormatOf(diffuse), layerSize, layerSize, levelCount, Math.Max(Capacity, 1), TextureMinFilter.LinearMipmapLinear,
-                TextureMagFilter.Linear, TextureWrapMode.Repeat, diffuse ? "terrain textures diffuse" : "terrain textures normal", anisotropy: 8, kind: TextureKind.Texture2DArray);
+            return MakeArray(FormatOf(diffuse), layerSize, levelCount, slots, 8, diffuse ? "terrain textures diffuse" : "terrain textures normal");
         }
         catch (Exception e)
         {
             Messages.Add($"terrain layer array allocation: {e.Message}; try a higher --texture-quality");
             return null;
         }
+    }
+
+    TerrainTexture AllocateHeight(int slots) => MakeArray(InternalFormat.R8, HeightSize, (int)Math.Log2(HeightSize) + 1, slots, 1, "terrain textures height");
+
+    /// <summary>A layer array (a copy source too, for <see cref="Grow"/>).</summary>
+    TerrainTexture MakeArray(InternalFormat format, int size, int levels, int slots, float anisotropy, string name)
+    {
+        using var batch = Gpu.Uploads.Begin();
+        var t = batch.Create(new TextureDesc(format, size, size, levels, Math.Max(slots, 1), Kind: TextureKind.Texture2DArray,
+            Use: TextureUse.Sampled | TextureUse.TransferDst | TextureUse.TransferSrc, Name: name, Private: PrivateStatics));
+        return new TerrainTexture(Gpu, t, TextureMinFilter.LinearMipmapLinear, TextureMagFilter.Linear, TextureWrapMode.Repeat, anisotropy);
+    }
+
+    /// <summary>
+    /// Doubles the slots of the layer arrays (up to <see cref="MaxCapacity"/>): new arrays, the old slots copied in on the GPU, the old arrays released after
+    /// the frames in flight. Upload steps queued for a slot write whichever array is current when they run. False when it cannot (at the cap, or an allocation failed).
+    /// </summary>
+    bool Grow()
+    {
+        if (Capacity >= MaxCapacity || diffuseArray is null || normalArray is null) return false;
+        int slots = Math.Min(Capacity * 2, MaxCapacity);
+        TerrainTexture? diffuse = null, normal = null, height = null;
+        try
+        {
+            diffuse = MakeArray(FormatOf(true), layerSize, levelCount, slots, 8, "terrain textures diffuse");
+            normal = MakeArray(FormatOf(false), layerSize, levelCount, slots, 8, "terrain textures normal");
+            if (heightArray is not null) height = AllocateHeight(slots);
+        }
+        catch (Exception e)
+        {
+            diffuse?.Dispose();
+            normal?.Dispose();
+            height?.Dispose();
+            Messages.Add($"terrain layer arrays could not grow to {slots} slots: {e.Message}");
+            return false;
+        }
+        using (var batch = Gpu.Uploads.Begin())
+        {
+            batch.Commands.CopyLayers(diffuseArray.Texture, diffuse.Texture, Capacity);
+            batch.Commands.CopyLayers(normalArray.Texture, normal.Texture, Capacity);
+            if (heightArray is not null && height is not null) batch.Commands.CopyLayers(heightArray.Texture, height.Texture, Capacity);
+        }
+        diffuseArray.Dispose();
+        normalArray.Dispose();
+        heightArray?.Dispose();
+        (diffuseArray, normalArray, heightArray) = (diffuse, normal, height ?? heightArray);
+        Console.WriteLine($"textures  terrain layer arrays grown from {Capacity} to {slots} slots ({ArrayBytesOf(slots) / 1048576} MB)");
+        Capacity = slots;
+        Array.Resize(ref owner, slots);
+        return true;
     }
 
     // ---- per-frame streaming -------------------------------------------------------------------------------
@@ -521,7 +576,7 @@ public sealed unsafe class TerrainTextures : IDisposable
         Pair? victim = null;
         foreach (var p in owner)
             if (p is not null && p.Needed != stamp && (victim is null || p.Used < victim.Used)) victim = p;
-        if (victim is null) return -1;
+        if (victim is null) return Grow() ? nextFree++ : -1;
         int slot = victim.Slot;
         victim.Slot = -1;
         owner[slot] = null;
@@ -1019,7 +1074,7 @@ public sealed unsafe class TerrainTextures : IDisposable
             TextureWrapMode.ClampToEdge, "terrain texture field");
         fieldDirty = true;
         int needed = pinned.SelectMany(b => state[b].Pairs).Distinct().Count();
-        Console.WriteLine($"field     {tiles.Length} ground textures from {pinned.Length} biomes ({needed} texture pairs kept resident, room for {Capacity}), {FieldColumns} a row, tiles {tile:0} units, " +
+        Console.WriteLine($"field     {tiles.Length} ground textures from {pinned.Length} biomes ({needed} texture pairs kept resident, room for {MaxCapacity}), {FieldColumns} a row, tiles {tile:0} units, " +
             $"from {FieldOrigin.X:0}, {FieldOrigin.Y:0}");
     }
 
