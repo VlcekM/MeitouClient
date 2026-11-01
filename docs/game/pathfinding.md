@@ -352,7 +352,7 @@ original leaves Small Shack `48.13:8-` (`110371`) unconnected too; Meitou joins 
 interior group whether the original connects it (mesh connections in its streaming set) and whether ours, the interior whose hull holds most of its
 faces, is reached from the street (over kept polygons, joins and links from the exterior's kept polygons once the zone's kept set is resolved alone or,
 with `--around n`, with its neighbours; a polygon its own pruning kept must be reached; in its zone or a neighbour's); SEALED marks connected
-in the original but not reached in ours. **Observed** (225 zones, 1090 groups, 1066 connected): 25 sealed (18 ruins, 7 intact), 6 reached in ours only;
+in the original but not reached in ours. **Observed** (225 zones, 1090 groups, 1066 connected): 25 sealed (18 ruins, 7 intact), 6 reached in ours only; **Verified** (`InteriorJoinSweepTests`): none intact sealed in the interior coverage zones, 28.43, 37.35 and 54.59 (87 connected intact matched);
 `--compare` 20.32, 18.35, 21.42 unchanged by the rules below. The ruins' original groups mostly hold the intact interior (14.5 Outposts: our ruins covered
 13 % of their faces), so those tiles were built with the building standing; the original rebuilds them as ruins at load ("Ruin joins" above; coverage
 rises in 14.5 13→40 %, 16.3 8→23 %, 18.45 0→89 %, 19.41 74→78 %, 53.26 62→74 %). The intact ones, by cause (**Observed**, `--interior`, `--probe`, the original's connection edges): unseeded doorless
