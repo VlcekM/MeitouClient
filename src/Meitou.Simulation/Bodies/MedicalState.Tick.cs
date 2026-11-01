@@ -190,7 +190,7 @@ public sealed partial class MedicalState
         float chance = ctx.Options.ChanceOfDeath;
         float hours = dt * GameHoursPerSecond;
         float medicalTime = dt + MathF.Max(0, ctx.BudgetSeconds);
-        LegKoPoint = KoPoint(c, ctx.Toughness);
+        LegKoPoint = KoPoint(c, ctx.Toughness * ctx.StatsScale);
 
         // Part healing rates. In a bed (kinds 6 and 0x19) degeneration is 0 and the bed scales the organic or the robotic rate; state 2 doubles the organic rate (HealMult).
         float degMult = ctx.Bed != BedKind.None ? 0 : DegenerationMult(c, ctx.Toughness);
@@ -320,7 +320,7 @@ public sealed partial class MedicalState
         Bleeding = 0;
         Blood = MathF.Min(Capacity(ctx), Blood + c.BloodRecoveryRate * seconds * ctx.Race.HealRate * c.RestingHealRateMult);
         if (Blood > 25) BloodKo = false;
-        if (Unconscious && !VitalPartsKeepDown(KoPoint(c, ctx.Toughness)) && Blood >= 0)
+        if (Unconscious && !VitalPartsKeepDown(KoPoint(c, ctx.Toughness * ctx.StatsScale)) && Blood >= 0)
         {
             Unconscious = false;
             PlayingDead = false;

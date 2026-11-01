@@ -392,9 +392,13 @@ public sealed partial class MedicalState
         return (100 - k * (foodInStomach ? 2 : 1)) / 100;
     }
 
-    /// <summary>The negative HP at which a character goes into a coma (<c>FUN_140643ae0</c>): -lerp(min, max toughness ko point, toughness x 0.01); -10 at toughness 0 and -85 at 100 in the base game. Clamped to toughness 0 to 100 here.</summary>
+    /// <summary>
+    /// The negative HP at which a character goes into a coma (<c>FUN_140643ae0</c>, <b>Verified</b>): -lerp(min, max toughness ko point, toughness x stats multiplier x 0.01) with the plain
+    /// unclamped lerp (<c>FUN_140015b63</c>), so toughness past 100 goes past the max; -10 at toughness 0 and -85 at 100 in the base game. <paramref name="toughness"/> is the stat times the
+    /// stats multiplier (<see cref="MedicalContext.StatsScale"/>).
+    /// </summary>
     public static float KoPoint(GameConstants c, float toughness) =>
-        -(c.MinToughnessKoPoint + (c.MaxToughnessKoPoint - c.MinToughnessKoPoint) * Math.Clamp(toughness * 0.01f, 0, 1));
+        -(c.MinToughnessKoPoint + (c.MaxToughnessKoPoint - c.MinToughnessKoPoint) * (toughness * 0.01f));
 
     /// <summary>The wound degeneration multiplier lerp(<c>degeneration mult 1</c>, <c>degeneration mult 99</c>, toughness / 100): toughness 1 deteriorates about 57 times faster than 99.</summary>
     public static float DegenerationMult(GameConstants c, float toughness) =>

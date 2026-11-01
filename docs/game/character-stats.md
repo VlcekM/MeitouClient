@@ -159,7 +159,7 @@ The KO timer +0xa0 falls by the medical update's time ([Time](#time): 1 to 2 x d
 starts at 1.0 (constructor `FUN_1406409f0`). So it is at most 1 and under 0 only while a part is below zero. Read by the HUD's health word, the hunger
 word and the Toughness XP multiplier ([ui-screens.md](ui-screens.md#4-hud-mainbargui)). Meitou: no single field; `HealthPart.Fraction` is per part.
 
-**Verified** coma point=-lerp(10,85,toughness/100). **Verified** KO time of a blood or vital knock-out (`FUN_1406447d0`, KenshiLib
+**Verified** coma point = -lerp(10, 85, toughness x stats multiplier / 100) (`FUN_140643ae0`: CharStats `+0x90` x `+0x34`, 1 for people and the age for animals, through the plain unclamped lerp `FUN_140015b63`, so toughness past 100 goes past 85). Meitou: `MedicalState.KoPoint`, `MedicalContext.StatsScale`. **Verified** KO time of a blood or vital knock-out (`FUN_1406447d0`, KenshiLib
 `startKnockoutTimer`): `knockout time base` (20, not scaled) + k x (per vital part 25 (M - h - s)/M + per part with h - s < 0 its
 `KO mult` x 100 |h - s|/M + 50 x missing blood / capacity), k as in the [expression reference](#expression-reference). So a part n % below 0 adds
 k x (25 + 2.25 n) for the head, k x (25 + 1.25 n) for the chest or stomach, k x 0.5 n for a limb. In game (1.0.65, issue #134: whole body 20 at
@@ -341,7 +341,7 @@ counts as health in the fraction, the down (h-s+rig<0) and sever tests, so a spl
 **Verified.** Three independent places agree on the numbering: the editor's `StatsEnumerated` enum (names), the
 per-stat accessor `FUN_140884190` (stat number to `CharStats` byte offset, a switch), and the stats save writer
 `FUN_14064a8f0` (offset to saved field name; read back by the loader `FUN_14064b6a0`, which stores at the same
-offsets). **Verified** (`FUN_14064b6a0`): a saved character without a `lockpicking` key loads it as `thievery` x 0.5; with the key the stored value is used.
+offsets). **Verified** (`FUN_14064b6a0`): a saved character without a `lockpicking` key loads it as `thievery` x 0.5, and one without `toughness2` loads toughness as its `defence` (+0x90 = +0x124); with the key the stored value is used. Meitou: `CharacterStats.ReadSave`.
 Stats are `float`s inside `CharStats`. The number is what RACE `heal stat`, `stats good<N>`,
 `stats bad<N>`, BUILDING `stat used` and all XP code pass around.
 
