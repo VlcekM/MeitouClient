@@ -83,7 +83,7 @@ OS file-cache state is separate. GPU setup, biome texture uploads, river-map gen
 streamer settling remain costs with warm caches. Separate start-up from steady-state frames.
 The game's `--quit-after` log reports exposed-menu FPS, longest frame and stalls over 100ms separately from covered loading work.
 With `--log-spikes`, the game's exit also prints the profiler's per-stage GPU run summary once the last frame's timestamps
-arrive. In an interactive game run, `--windowed --size WxH` holds that window size; without `--size` it starts maximized.
+arrive. A spike frame whose simulation took over 20 ms also notes each system and part of it from 2 ms (`sim <name>`). In an interactive game run, `--windowed --size WxH` holds that window size; without `--size` it starts maximized.
 
 The game/viewer disable tiered compilation and tiered PGO. Experiments can use
 `DOTNET_TieredCompilation` / `DOTNET_TieredPGO`; record these settings. ReadyToRun and tiering

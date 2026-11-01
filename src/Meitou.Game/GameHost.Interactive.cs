@@ -958,6 +958,8 @@ sealed partial class GameHost
     World? simNamesFor;
     string[] simNames = [];
     double[] simMs = [];
+    /// <summary>--log-spikes notes the simulation's systems of a frame whose ticks took longer than this.</summary>
+    const double SpikeSimMs = 20;
 
     /// <summary>Hands the frame's <paramref name="advanceMs"/> to the profiler with the world's tick profile split into phases and systems, and clears the profile.</summary>
     void SimProfile(FrameProfiler profiler, double advanceMs)
@@ -983,6 +985,10 @@ sealed partial class GameHost
         simMs[^1] = ahead;
         int paths = world.Systems.OfType<MovementSystem>().FirstOrDefault()?.Paths.Pending ?? 0;
         profiler.Outside(advanceMs, profile.Ticks, simNames, simMs, phases + 1, systems, paths);
+        // --log-spikes: a slow frame's simulation by system and part (the phases only add up what these hold).
+        if (SpikeLog.Enabled && advanceMs > SpikeSimMs)
+            for (int k = phases + 1; k < simMs.Length; k++)
+                if (simMs[k] >= 2) SpikeLog.Note($"sim {simNames[k]}", ms: simMs[k]);
         profile.Clear();
     }
 

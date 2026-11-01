@@ -139,3 +139,6 @@ marker drawn); `mouse_rotate` is the middle button or Ctrl (Ctrl+right click is 
 engine feel (its Q/E turn the view left/right as named, not as the strategy camera's). The sea height clamps the camera's ground
 (**Observed**: the water node's height is the water height, 100). The settings above are constants of `CameraSettings`, not read
 from `settings.cfg`; `.`/`,` are no longer the time-step keys (they tilt, as in the game).
+The free camera more than 3000 above the ground under its eye stops moving the world's focus (`GameHost.FocusCeiling`, engine choice; the
+strategy camera never gets that high): the loaded zones, their squads and navmesh stay where the flight left the ground and load round the
+focus again once it comes down, so a high flight spawns and builds nothing.
