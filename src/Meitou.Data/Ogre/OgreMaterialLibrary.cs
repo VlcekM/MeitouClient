@@ -95,6 +95,12 @@ public sealed class OgreMaterialLibrary
         return Load(resources.ScriptFiles("*.program", "*.material"), resources);
     }
 
+    /// <summary>
+    /// What Kenshi's Ogre compiles at start-up from <paramref name="resources"/>: with <see cref="OgreScriptResources.ForInstall"/>, the
+    /// <c>resources.cfg</c> folders, the language folder and the enabled mods' folders, in Ogre's order (a mod's redefinition of a name is rejected).
+    /// </summary>
+    public static OgreMaterialLibrary Load(OgreScriptResources resources) => Load(resources.ScriptFiles("*.program", "*.material"), resources);
+
     /// <summary>Every <c>.program</c>, then every <c>.material</c> anywhere under data/, imports resolved over all of data/.</summary>
     public static OgreMaterialLibrary LoadAll(GameInstall install, out OgreScriptResources resources)
     {

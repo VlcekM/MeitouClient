@@ -792,10 +792,10 @@ static class WorldFrame
     }
 
     /// <summary>The particle renderer (reads the scripts and materials, makes the pass's program) if there is none yet; for whoever feeds it a weather's effect list.</summary>
-    public static ParticleRenderer EnsureParticles(Gpu gpu, IGpuContext context, GameInstall install)
+    public static ParticleRenderer EnsureParticles(Gpu gpu, IGpuContext context, AssetLocator assets)
     {
         if (gpu.Particles is { } existing) return existing;
-        return gpu.Particles = ParticleRenderer.Create(context, install);
+        return gpu.Particles = ParticleRenderer.Create(context, assets);
     }
 
     /// <summary>The renderer for <paramref name="scene"/>. <paramref name="step"/> is called before each of its steps (terrain, biomes, sky, water, objects, foliage, shadows) with the step's name: the game draws a loading frame there.</summary>
@@ -878,7 +878,7 @@ static class WorldFrame
         if (particlesEnabled && !o.NoParticles && scene.Database is { } effectsDb)
         {
             var particleWatch = Stopwatch.StartNew();
-            var particles = EnsureParticles(gpu, context, install);
+            var particles = EnsureParticles(gpu, context, assets);
             particles.PrewarmSeconds = o.ParticlePrewarm;
             gpu.ParticleDensity = o.ParticleDensity;
             particles.World.GroundHeight = terrain.HeightAt;   // main thread only: the height grid swaps as the terrain streams

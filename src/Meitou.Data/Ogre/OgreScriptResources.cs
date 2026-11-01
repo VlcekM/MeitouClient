@@ -160,6 +160,9 @@ public sealed class OgreScriptResources
 
     public bool Contains(string name) => Find(name) is not null;
 
+    /// <summary>Whether <paramref name="group"/> itself has <paramref name="name"/> (Ogre's <c>resourceExists(group, name)</c>, no other group searched).</summary>
+    public bool Contains(string name, string group) => groups.TryGetValue(group, out var index) && Lookup(group, index, name) is not null;
+
     /// <summary>
     /// The resource group a file of the index belongs to (the first, in ordinal order, whose index maps its bare name to this path), or
     /// <c>General</c> for a file outside every location.

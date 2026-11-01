@@ -570,7 +570,8 @@ public sealed partial class FoliageRenderer
                 s.RefineLoad = null;
                 if (s.RefineAtlas is null) { s.RefineRetryAt = Environment.TickCount64 + 8000; impostorRefining.RemoveAt(i--); continue; }
             }
-            var atlas = s.RefineAtlas!;
+            // No load and no atlas: a stale entry (UnloadImpostor dropped the state and it was loaded again meanwhile, with no refine of its own).
+            if (s.RefineAtlas is not { } atlas) { impostorRefining.RemoveAt(i--); continue; }
             if (s.Next is null)
             {
                 if (s.Making is null)
