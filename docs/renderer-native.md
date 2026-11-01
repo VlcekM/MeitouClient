@@ -17,8 +17,8 @@ Buffers/Textures/Samplers define owned/borrowed resource bindings. FrameScratch 
 allocation tracks120-frame maximum+25%headroom, shrinks at>2x need; Cap overflow fails and caller
 handles it. Staging can shed unused chunks; descriptor-referenced constants retain storage.
 GpuAllocator carves 64 MB blocks; a block goes back to the driver only when empty. Streamed textures (`TextureDesc.Streamed`: world
-textures, impostor atlases) never share blocks with long-lived images: one made on a worker (`CreateTextureOffThread`, the world texture
-caches' decode) of 4 MB or more gets memory of its own, freed the moment it is unloaded; the rest take slots in pools of one size each
+textures, impostor atlases) never share blocks with long-lived images: each is made on a worker (`CreateTextureOffThread`: the world texture
+caches' decode, `ImpostorTextures.MakeOffThread`), so new memory costs no frame; one of 4 MB or more gets memory of its own, freed the moment it is unloaded; the rest take slots in pools of one size each
 (rounded to 64 KB, blocks of about 16 MB, filled fullest first, given back once empty), so a freed slot fits the next texture of its size.
 Texture sizes cluster (2026-11-01 town: 541 world textures in 15 sizes, 216 atlas maps in 8). **Observed** (VRAM dump, 2026-11-01, ~40 min
 of play): with variable-size carving in shared 64 MB blocks, 1286 MB was free but scattered over 64 blocks that long-lived images pinned.

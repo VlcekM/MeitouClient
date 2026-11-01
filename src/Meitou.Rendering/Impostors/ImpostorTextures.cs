@@ -47,20 +47,36 @@ public sealed class ImpostorTextures : IDisposable
         _ => "impostor atlas normal",
     };
 
+    static readonly ImpostorMap[] Order = [ImpostorMap.Albedo, ImpostorMap.Normal];
+
     /// <param name="batch">Where the textures' layout transitions are recorded (<see cref="Uploader.Begin"/>).</param>
     /// <param name="skip">Top levels of the albedo to leave out; <paramref name="surfaceSkip"/> those of the normal map (at
     /// most all but the last level).</param>
-    public ImpostorTextures(IGpuContext gpu, ImpostorAtlas atlas, IGpuUploadBatch batch, int skip = 0, int surfaceSkip = 0)
+    /// <param name="made">The maps <see cref="MakeOffThread"/> made with the same skips (an entry null: made here).</param>
+    public ImpostorTextures(IGpuContext gpu, ImpostorAtlas atlas, IGpuUploadBatch batch, int skip = 0, int surfaceSkip = 0, GpuTexture?[]? made = null)
     {
         this.gpu = gpu;
         Atlas = atlas;
         levels = atlas.Levels;
-        ImpostorMap[] order = [ImpostorMap.Albedo, ImpostorMap.Normal];
+        var descs = Shape(atlas, skip, surfaceSkip, skips);
+        for (int i = 0; i < 2; i++)
+        {
+            var texture = sources[i] = atlas[Order[i]]!;
+            if (made?[i] is { } image) batch.Commands.InitTexture(maps[i] = image);
+            else maps[i] = batch.Create(descs[i]);
+            for (int l = skips[i]; l < texture.Levels.Length; l++) Bytes += texture.Levels[l].Length;
+        }
+    }
+
+    /// <summary>The two maps' textures for <paramref name="skip"/> and <paramref name="surfaceSkip"/>, and the skips in effect into <paramref name="skips"/>.
+    /// Streamed (atlases come and go with the view).</summary>
+    static TextureDesc[] Shape(ImpostorAtlas atlas, int skip, int surfaceSkip, int[] skips)
+    {
+        var descs = new TextureDesc[2];
         for (int i = 0; i < 2; i++)
         {
             skips[i] = Math.Clamp(i == 0 ? skip : surfaceSkip, atlas.FirstLevel, atlas.Levels - 1);   // a level the atlas was read without would upload as nothing
-            var texture = atlas[order[i]] ?? throw new InvalidDataException($"impostor atlas {atlas.Name} has no {order[i]} map");
-            sources[i] = texture;
+            var texture = atlas[Order[i]] ?? throw new InvalidDataException($"impostor atlas {atlas.Name} has no {Order[i]} map");
             var format = texture.Encoding switch
             {
                 ImpostorEncoding.Bc3 => InternalFormat.CompressedRgbaS3TCDxt5Ext,
@@ -69,9 +85,26 @@ public sealed class ImpostorTextures : IDisposable
                 _ => InternalFormat.Rgba8,
             };
             int size = atlas.AtlasPixels >> skips[i];
-            maps[i] = batch.Create(new TextureDesc(format, size, size, LevelsOf(i), Name: AllocationName(order[i]), Streamed: true));   // atlases come and go with the view
-            for (int l = skips[i]; l < texture.Levels.Length; l++) Bytes += texture.Levels[l].Length;
+            descs[i] = new TextureDesc(format, size, size, atlas.Levels - skips[i], Name: AllocationName(Order[i]), Streamed: true);
         }
+        return descs;
+    }
+
+    /// <summary>
+    /// The maps for the constructor with the same skips, made on a worker (<see cref="IGpuContext.CreateTextureOffThread"/>: their memory, and a new
+    /// block for it, costs no frame); an entry is null where it could not be made there (the backend has no such path, or no memory now), and the
+    /// constructor makes that one. Any thread; what is returned is the render thread's to pass on or dispose.
+    /// </summary>
+    public static GpuTexture?[] MakeOffThread(IGpuContext gpu, ImpostorAtlas atlas, int skip, int surfaceSkip)
+    {
+        var descs = Shape(atlas, skip, surfaceSkip, new int[2]);
+        var made = new GpuTexture?[2];
+        for (int i = 0; i < 2; i++)
+        {
+            try { made[i] = gpu.CreateTextureOffThread(descs[i]); }
+            catch (Meitou.Rendering.Gpu.Core.VulkanException) { }   // no memory now: the constructor makes it (or fails) on the render thread
+        }
+        return made;
     }
 
     /// <summary>The GPU bytes an atlas takes with <paramref name="skip"/> top levels of its albedo and <paramref name="surfaceSkip"/> of its normal map left out.</summary>
