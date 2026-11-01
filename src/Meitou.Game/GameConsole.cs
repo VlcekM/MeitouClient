@@ -37,12 +37,39 @@ static partial class GameConsole
     /// <summary>Starts log.txt (after <see cref="AttachToParent"/>): output and error go to it as well, and so does an exception that ends the game.</summary>
     public static void StartLog()
     {
+        AppDomain.CurrentDomain.UnhandledException += (_, e) => ExplainBlocked(e.ExceptionObject as Exception);
         if (GameLog.Open() is not { } file) return;
         var shared = TextWriter.Synchronized(file);   // one lock for output and error
         log = shared;
         Bind(Console.Out, Console.Error);
         AppDomain.CurrentDomain.UnhandledException += (_, e) => shared.WriteLine($"unhandled {e.ExceptionObject}");
     }
+
+    // ERROR_SYSTEM_INTEGRITY_POLICY_VIOLATION: Smart App Control or an App Control (WDAC) policy refused to load a file (issue #127).
+    const int PolicyBlocked = unchecked((int)0x800711C7);
+
+    /// <summary>
+    /// When Windows refused one of our files, says so in a message box before the game closes: our binaries are not code-signed, and Smart App
+    /// Control blocks unsigned files it has no reputation for. Anything else is left to the log.
+    /// </summary>
+    static void ExplainBlocked(Exception? e)
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        for (; e is not null; e = e.InnerException)
+        {
+            if (e is not FileLoadException { HResult: PolicyBlocked } blocked) continue;
+            string file = Path.GetFileName(blocked.FileName ?? "") is { Length: > 0 } name ? name : "a game file";
+            string text = $"Windows blocked {file}, so Meitou has to close.\n\n" +
+                "Meitou's files are not code-signed yet, and Smart App Control blocks unsigned files that Microsoft does not know. To play, turn it off in " +
+                "Windows Security > App & browser control > Smart App Control settings. On some Windows versions it cannot be turned back on " +
+                "without reinstalling Windows.\n\nIf Smart App Control is already off, an App Control policy set by your organisation blocked the file.";
+            Console.Error.WriteLine($"blocked   {text.Replace("\n\n", " ")}");
+            MessageBoxW(0, text, "Meitou", MessageBoxIconError | MessageBoxTopmost | MessageBoxSetForeground);
+            return;
+        }
+    }
+
+    const uint MessageBoxIconError = 0x10, MessageBoxSetForeground = 0x10000, MessageBoxTopmost = 0x40000;
 
     static void Bind(TextWriter output, TextWriter error)
     {
@@ -85,4 +112,5 @@ static partial class GameConsole
     [LibraryImport("kernel32.dll")] private static partial int FreeConsole();
     [LibraryImport("kernel32.dll")] private static partial nint GetStdHandle(int handle);
     [LibraryImport("kernel32.dll")] private static partial uint GetFileType(nint file);
+    [LibraryImport("user32.dll", StringMarshalling = StringMarshalling.Utf16)] private static partial int MessageBoxW(nint owner, string text, string caption, uint type);
 }

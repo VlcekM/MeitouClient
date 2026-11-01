@@ -80,6 +80,14 @@ through a browser may be blocked outright.
 - Test the launcher's self-update path while unsigned; if macOS blocks it, a manual update is the fallback.
 - If the project ever gets a Developer ID, notarize the launcher and game binaries; no code change should be needed.
 
+## Unsigned Windows binaries
+
+No Windows exe or DLL we ship has an Authenticode signature (ours and NuGet ones like `DotRecast.*`, `BepuPhysics`).
+**Observed** (issue #127): Smart App Control refused `DotRecast.Recast.dll` (`FileLoadException`, `0x800711C7`) on one Windows 11
+machine while other unsigned files loaded; its verdict is per-file cloud reputation, so any of them can be the one refused. The game
+then shows a message box (`GameConsole.ExplainBlocked`) saying to turn Smart App Control off, and closes. Code signing every Windows
+binary in `package-release.ps1` is the real fix (not set up).
+
 ## Game zips per runtime
 
 `release.yml` and `nightly.yml` run `tools/scripts/package-release.ps1 -Rid <rid>` on one runner per RID (win-x64 on Windows, linux-x64 on Ubuntu,

@@ -162,6 +162,8 @@ Start
    meitou.user.json); in the viewer, start meitou-viewer-dlss.bat (or add --upscaler dlss).
 
 Requirements: Windows 10/11 x64, a Vulkan 1.3 GPU with a current driver.
+Meitou's files are not code-signed yet: if Windows 11's Smart App Control blocks one, the game says so and closes. Turn Smart App Control
+off in Windows Security > App & browser control to play (on some Windows versions it cannot be turned back on without reinstalling).
 
 Licences
 --------
