@@ -56,6 +56,9 @@ public sealed class NavSystem : IDisposable
 
     public NavmeshWalkability Walkability { get; }
 
+    /// <summary>A loading screen covers the game: zone builds take every core (<see cref="NavMeshService.Covered"/>).</summary>
+    public bool Covered { get => service.Covered; set => service.Covered = value; }
+
     /// <summary>Open or close a door by its building's instance id: <c>Doors.Close(id)</c>. No rebuild; the next query sees it.</summary>
     public NavDoors Doors => Walkability.Doors;
 

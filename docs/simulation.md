@@ -526,7 +526,9 @@ Cache key: the zone's building hash, the build settings and a content hash (the 
 height, blend, biome and overlay maps by size and write time, the DotRecast version). The cache holds the zone's own pruning; the kept set of every loaded
 zone is resolved again whenever one is published or unloaded (the border rule toward unloaded sides, the neighbours' kept edges, `KeepAt` points;
 [zone borders](game/pathfinding.md#own-builder)). Unloading a zone skips its queued build;
-a running one is still cached but not published, and its task is cancelled.
+a running one is still cached but not published, and its task is cancelled. A zone's tiles build in parallel on every core but one under a
+loading screen and on a quarter of the cores in play (`NavMeshService.Covered`): **Observed** (allocation trace, coming down into unbuilt zones) the tile
+builds allocated ~13 GB in 5 s and, on every core, starved every simulation system and the render thread into 100-180 ms frames.
 
 ## Animation
 

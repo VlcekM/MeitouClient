@@ -57,6 +57,14 @@ internal sealed class NavMeshService : IDisposable
 
     public NavmeshWalkability Walkability { get; }
     public NavBuildSettings Settings { get; }
+
+    /// <summary>
+    /// A loading screen covers the game (the host sets it): a zone's tiles are built on every core but one. Uncovered, on a quarter of them: the tile builds run on
+    /// the shared pool at normal priority and allocate gigabytes a zone, and on every core they starved the simulation and the render thread for 100-200 ms frames.
+    /// </summary>
+    public bool Covered { get; set; } = true;
+
+    NavBuildSettings BuildSettings => Covered || Settings.Threads > 0 ? Settings : Settings with { Threads = Math.Max(1, Environment.ProcessorCount / 4) };
     public NavMeshCache Cache { get; }
 
     /// <summary>Raised on the worker thread after a zone's mesh was published.</summary>
@@ -161,7 +169,7 @@ internal sealed class NavMeshService : IDisposable
                 {
                     var geometry = gatherer.Gather(zone, buildingHash: hash);
                     // Pruned by the zone's own seeds only, so the cached mesh does not depend on which neighbours were loaded (ZoneKeptClosure joins them).
-                    mesh = NavMeshPipeline.BuildZone(gatherer, geometry, Settings, out _);
+                    mesh = NavMeshPipeline.BuildZone(gatherer, geometry, BuildSettings, out _);
                     origin = NavMeshOrigin.Built;
                     try { Cache.Save(mesh, hash, settingsHash); }
                     catch (IOException) { /* a read-only or full disk only costs the next build */ }

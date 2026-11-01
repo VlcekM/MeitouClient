@@ -672,6 +672,7 @@ sealed partial class GameHost
                 if (gpu.Characters is { } coveredCharacters) coveredCharacters.Covered = streamsCovered;
                 if (gpu.Foliage is { } coveredFoliage) coveredFoliage.Covered = streamsCovered;
                 if (gpu.Objects is { } coveredObjects) coveredObjects.Covered = streamsCovered;
+                if (nav is not null) nav.Covered = covered;
                 // The loading screen follows the interface's mode as it is now (the settings can switch it at any time); only the Faithful mode counts loads.
                 bool faithfulUi = player.UiMode == Meitou.Data.Ui.UiMode.Faithful;
                 loadBar.Update(faithfulUi ? PendingLoads() : 0);
