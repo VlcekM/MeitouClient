@@ -17,10 +17,15 @@ public enum FixtureKind : byte
     Cage,
     /// <summary>A bed of an interior layout, or one the player built; no lock.</summary>
     Bed,
+    /// <summary>A training dummy of a town building (BF_TRAINING furniture, or the building itself): the production system works it as a machine (<c>ProductionSystem.TownDummy</c>).</summary>
+    Training,
 }
 
 /// <summary>A bed as the host picks it (<see cref="WorldSnapshot.Beds"/>): its fixture id, BUILDING record, where it is and its owner faction (-1: none).</summary>
 public sealed record BedSpot(string Id, string Record, Vector3 Position, int Owner = -1, float Yaw = 0);
+
+/// <summary>A town training dummy as the host picks it (<see cref="WorldSnapshot.Dummies"/>): its fixture id (the site its Training order names), BUILDING record, where it stands and its owner.</summary>
+public sealed record TrainingSpot(string Id, string Record, Vector3 Position, int Owner, float Yaw);
 
 /// <summary>
 /// What a bed's BUILDING says (docs/game/locks.md "Beds"): its functionality's <c>function</c> (6 BF_BED, 25 BF_SKELETON_BED), the clip it is lain in (the functionality's <c>animation</c>:

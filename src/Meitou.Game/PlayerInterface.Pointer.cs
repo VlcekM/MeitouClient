@@ -86,7 +86,7 @@ sealed partial class PlayerInterface
                     case Picked.GroundItem: chosen = ("pick_item", null); break;
                     case Picked.Container when PickContainer(mouse) is { } container: chosen = (ContainerPointer(container), null); break;
                     case Picked.Door when PickDoor(mouse) is { } door: chosen = (DoorPointer(door), null); break;
-                    case Picked.Bed or Picked.Cage: chosen = ("use", null); break;   // a bed's slot 130 pointer (UseableStuff, no inventory)
+                    case Picked.Bed or Picked.Cage or Picked.Dummy: chosen = ("use", null); break;   // a bed's slot 130 pointer (UseableStuff, no inventory)
                     case Picked.Rock: chosen = ("mine", null); break;   // a resource rock a right click would mine (the original's `mine` pointer)
                     case Picked.Site when SitePointer(mouse) is { } siteMode: chosen = (siteMode, null); break;
                 }

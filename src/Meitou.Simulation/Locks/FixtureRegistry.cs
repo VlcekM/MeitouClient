@@ -62,6 +62,20 @@ public sealed partial class FixtureRegistry
     /// <summary>Every bed, for the host's picking; rebuilt (serial phases) only when a building registers or goes.</summary>
     public IReadOnlyList<BedSpot> BedSpots => bedSpots ??= [.. all.Where(f => f.Kind == FixtureKind.Bed).Select(f => new BedSpot(f.Id, f.RecordId, f.Position, f.Owner, f.Yaw))];
 
+    IReadOnlyList<TrainingSpot>? dummySpots;
+
+    /// <summary>Every town training dummy, for the host's picking; rebuilt (serial phases) only when a building registers or goes.</summary>
+    public IReadOnlyList<TrainingSpot> TrainingSpots => dummySpots ??= [.. all.Where(f => f.Kind == FixtureKind.Training).Select(f => new TrainingSpot(f.Id, f.RecordId, f.Position, f.Owner, f.Yaw))];
+
+    /// <summary>The fixture id of a town building's <paramref name="index"/>th training dummy (its furniture in layout order): <c>&lt;building&gt;@dummy&lt;index&gt;</c>.</summary>
+    public static string DummyId(string building, int index) => string.Create(CultureInfo.InvariantCulture, $"{building}{DummyMark}{index}");
+
+    /// <summary>Whether an id names a town training dummy (<see cref="DummyId"/>), registered or not yet.</summary>
+    public static bool IsDummy(string id) => id.LastIndexOf(DummyMark, StringComparison.Ordinal) is var at and > 0 && at + DummyMark.Length < id.Length
+        && id.AsSpan(at + DummyMark.Length).IndexOfAnyExceptInRange('0', '9') < 0;
+
+    const string DummyMark = "@dummy";
+
     IReadOnlyList<DoorPick>? doorPicks;
 
     /// <summary>Every door, for the host's picking (<see cref="PublishedDoors"/> leaves closed unlocked town doors out); rebuilt (serial phases) only when a building registers or goes.</summary>
@@ -149,13 +163,23 @@ public sealed partial class FixtureRegistry
             });
             bed++;
         }
+        int dummy = 0;
+        foreach (var piece in b.Furniture)
+        {
+            if (piece.Kind != HomeSpotKind.Training || piece.Record is not { } dummyRecord) continue;
+            list.Add(new Fixture
+            {
+                Id = DummyId(b.Key, dummy++), Building = b.Key, Kind = FixtureKind.Training, Site = site, Owner = owner,
+                Position = piece.Position, Yaw = piece.Yaw, RecordId = dummyRecord, HostRecordId = b.BuildingId,
+            });
+        }
         if (list.Count == 0 && !properties.ContainsKey(b.Key)) return;
         byBuilding[b.Key] = list;
         buildings.Add(b.Key);
         foreach (var f in list) { all.Add(f); byId[f.Id] = f; }
         containerSpots = null;
         doorPicks = null; doorsByBuilding = null;
-        bedSpots = null; cageList = null;
+        bedSpots = null; cageList = null; dummySpots = null;
         usableData ??= data;
         levelPublic[b.Key] = Saved?.GetValueOrDefault(b.Key) is { } savedState ? savedState.Bools.GetValueOrDefault("is public day", true) : b.LevelState?.GetBool("is public day", true) ?? true;
         if (Saved?.GetValueOrDefault(b.Key) is { } nestedState ? nestedState.Bools.GetValueOrDefault("is inside building") : b.LevelState?.GetBool("is inside building") ?? false) nested.Add(b.Key);
@@ -220,7 +244,7 @@ public sealed partial class FixtureRegistry
         foreach (var f in list) { all.Add(f); byId[f.Id] = f; }
         containerSpots = null;
         doorPicks = null; doorsByBuilding = null;
-        bedSpots = null; cageList = null;
+        bedSpots = null; cageList = null; dummySpots = null;
         if (Saved?.GetValueOrDefault(Meitou.Data.World.BuildingKey.Of(site.Zone, site.Id)) is { } state) Restore(StateKeys.Of(state), site.Id, list, level: false);
         SyncDoors(site.Id);
         if (bed is not null) Bind(world);
@@ -277,7 +301,7 @@ public sealed partial class FixtureRegistry
         foreach (var f in list) { all.Remove(f); byId.Remove(f.Id); }
         containerSpots = null;
         doorPicks = null; doorsByBuilding = null;
-        bedSpots = null; cageList = null;
+        bedSpots = null; cageList = null; dummySpots = null;
         initialApplied.Remove(buildingInstance);
         doors?.SetDoorsBlocked(buildingInstance, false);
     }

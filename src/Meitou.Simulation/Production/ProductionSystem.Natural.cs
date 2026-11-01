@@ -51,8 +51,25 @@ public sealed partial class ProductionSystem
     /// <summary>Whether a site id names a rock (<see cref="NaturalId"/>).</summary>
     public static bool IsNatural(string id) => id.StartsWith(NaturalPrefix, StringComparison.Ordinal);
 
-    /// <summary>A player site of the registry, else the rock a natural id names; null for neither.</summary>
-    BuildSite? Site(World world, string id) => world.Buildings.Find(id) ?? Natural(id);
+    /// <summary>A player site of the registry, else the rock a natural id names, else a town training dummy; null for none.</summary>
+    BuildSite? Site(World world, string id) => world.Buildings.Find(id) ?? Natural(id) ?? TownDummy(world, id);
+
+    readonly Dictionary<string, BuildSite> dummySites = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// A town training dummy (<see cref="Locks.FixtureKind.Training"/>, docs/simulation.md "Production"): like a rock, no BuildSite of the registry, so it is neither drawn, saved nor built
+    /// again; a complete site of the town building's owner, made from the fixture once its town has registered. Its machine lives in World.Machines and is not saved.
+    /// </summary>
+    BuildSite? TownDummy(World world, string id)
+    {
+        if (dummySites.TryGetValue(id, out var known)) return known;
+        if (world.Fixtures.Find(id) is not { Kind: Locks.FixtureKind.Training } f || db.Find(f.RecordId) is not { Type: FcsRecordType.BUILDING } building) return null;
+        return dummySites[id] = new BuildSite
+        {
+            Id = id, Record = f.RecordId, Name = building.Name, Position = f.Position, Rotation = Quaternion.CreateFromAxisAngle(Vector3.UnitY, f.Yaw), Owner = f.Owner,
+            Materials = [], Complete = true,
+        };
+    }
 
     /// <summary>
     /// The rock a natural id names: a BUILDING with <c>is foliage</c> whose machine is an operable mine of a <c>world resource mining</c>; with a rock source, one of that BUILDING must

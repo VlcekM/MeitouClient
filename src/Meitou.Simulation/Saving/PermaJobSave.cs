@@ -45,8 +45,8 @@ public static class PermaJobSave
         for (int i = 0; ai.Ints.TryGetValue(Type + i, out int type); i++)
         {
             var hand = Hand.Read(ai, Target + i);
-            // A rock's natural id is kept as it is: its site is made from the id (ProductionSystem.Natural).
-            string? site = ai.Strings.TryGetValue(MeitouSite + i, out var id) && (sites.Find(id) is not null || instances.Contains(id) || ProductionSystem.IsNatural(id)) ? id
+            // A rock's natural id and a town dummy's are kept as they are: the site is found from the id once its town has registered (ProductionSystem.Natural, TownDummy).
+            string? site = ai.Strings.TryGetValue(MeitouSite + i, out var id) && (sites.Find(id) is not null || instances.Contains(id) || ProductionSystem.IsNatural(id) || Locks.FixtureRegistry.IsDummy(id)) ? id
                 : handles.Building(hand) is { } b && instanceOf.TryGetValue(b, out var key) && key.IndexOf(':') is var colon and >= 0 && sites.Find(key[(colon + 1)..]) is not null ? key[(colon + 1)..]
                 : null;
             PermaJobs.Add(cold, (TaskType)type, new PermaJob((TaskType)type, site, site is null ? hand : Hand.Null));

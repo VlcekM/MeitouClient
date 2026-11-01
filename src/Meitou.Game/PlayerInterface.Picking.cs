@@ -149,7 +149,7 @@ sealed partial class PlayerInterface
     }
 
     /// <summary>What a right click acts on, as <see cref="PickAt"/> chose it.</summary>
-    enum Picked { None, Character, GroundItem, Container, Door, Rock, Site, Bed, Cage }
+    enum Picked { None, Character, GroundItem, Container, Door, Rock, Site, Bed, Cage, Dummy }
 
     /// <summary>
     /// The right button's target under the pixel, with characters selected (docs/game/ui-input.md "Building picking and selection"): the nearest along the ray of a character with a quick
@@ -174,6 +174,7 @@ sealed partial class PlayerInterface
         Offer(Picked.Bed, bed?.T);
         var cage = PickCageAt(p);
         Offer(Picked.Cage, cage?.T);
+        Offer(Picked.Dummy, PickDummyAt(p)?.T);
         Offer(Picked.Rock, PickRockAt(p)?.T);
         if (PickSiteAt(p) is { } site && SiteIsObject(site.Site)) Offer(Picked.Site, site.T);
         // An item behind the container, bed or cage met first but lying inside its bounds takes the click (the original's walk, FUN_140800250: the building's box holds the item).

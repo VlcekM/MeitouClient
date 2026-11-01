@@ -433,6 +433,8 @@ public sealed record WorldSnapshot(long Tick, IReadOnlyList<CharacterSnapshot> C
     public IReadOnlyList<Locks.ContainerSpot> Containers { get; init; } = [];
     /// <summary>Every bed fixture, for picking (<see cref="Locks.FixtureRegistry.BedSpots"/>).</summary>
     public IReadOnlyList<Locks.BedSpot> Beds { get; init; } = [];
+    /// <summary>Every town training dummy, for picking (<see cref="Locks.FixtureRegistry.TrainingSpots"/>).</summary>
+    public IReadOnlyList<Locks.TrainingSpot> Dummies { get; init; } = [];
     /// <summary>Every cage fixture, for picking (<see cref="Locks.FixtureRegistry.CageSpots"/>); its occupant is as of this tick.</summary>
     public IReadOnlyList<Locks.CageSpot> Cages { get; init; } = [];
     /// <summary>Every door, where its leaf is, for the right click (<see cref="Locks.DoorOrder"/>); its state is in <see cref="Doors"/>.</summary>
