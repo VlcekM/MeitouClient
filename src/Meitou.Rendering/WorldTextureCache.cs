@@ -66,6 +66,8 @@ public sealed class WorldTexture
     internal long TooFineSince;
     /// <summary>The file could not be loaded with the asked number of dropped levels (a format that keeps its top mips): do not ask again.</summary>
     internal bool CannotDrop;
+    /// <summary>The replacement being loaded only moves the image out of a block being emptied (<see cref="WorldTextureCache.Relocate"/>).</summary>
+    internal bool Relocating;
     /// <summary>The replacement being loaded is a finer image (something came near): counted in <see cref="WorldTextureCache.Refining"/>.</summary>
     internal bool Refine;
     /// <summary>The smallest <see cref="Need"/> offered since the last <see cref="WorldTextureCache.CommitNeeds"/>.</summary>
@@ -208,7 +210,7 @@ public sealed unsafe class WorldTextureCache : IDisposable
         w.WriteLine();
     }
 
-    public string Describe() => $"{ResidentCount} textures {ResidentBytes / 1048576.0:0} MB ({Unloads} unloaded, {Reloads} reloaded so far{(Shares > 0 ? $", {Shares} taken from another cache" : "")}" +
+    public string Describe() => $"{ResidentCount} textures {ResidentBytes / 1048576.0:0} MB ({Unloads} unloaded, {Reloads} reloaded so far{(Shares > 0 ? $", {Shares} taken from another cache" : "")}{(Relocations > 0 ? $", {Relocations} moved out of emptying blocks" : "")}" +
         (Mips.Enabled ? $"; mip streaming: {Math.Max(UnstreamedBytes - ResidentBytes, 0) / 1048576.0:0} MB less than every mip, {Refined} refined, {Coarsened} coarsened)" : ")");
 
     /// <param name="deferred">The texture is not loaded now: it stays <see cref="WorldTexture.Residency.Unloaded"/> until something reads its
@@ -335,7 +337,7 @@ public sealed unsafe class WorldTextureCache : IDisposable
         TextureShare.Image? best = null;
         foreach (var e in Share.Of(t.Path!))
         {
-            if (e.QualityLevel != TextureQuality.Level || e == t.Shared) continue;
+            if (e.QualityLevel != TextureQuality.Level || e == t.Shared || Draining(e.Texture)) continue;
             int target = Math.Max(Mips.Drop(e.FileWidth, e.FileHeight, need), t.QualityDrop);
             if (exact ? e.Dropped == target : e.Dropped <= target && (best is null || e.Dropped > best.Dropped)) best = e;
         }
@@ -361,7 +363,7 @@ public sealed unsafe class WorldTextureCache : IDisposable
     /// </summary>
     void Publish(WorldTexture t, GpuTexture texture, TextureData data, int viewLevels, GpuSwizzle swizzle, long bytes)
     {
-        if (Share?.Of(t.Path!).FirstOrDefault(o => o.QualityLevel == t.QualityLevel && o.Dropped == data.Dropped && o.ViewLevels == viewLevels) is { } same && same != t.Shared)
+        if (Share?.Of(t.Path!).FirstOrDefault(o => o != t.Shared && o.QualityLevel == t.QualityLevel && o.Dropped == data.Dropped && o.ViewLevels == viewLevels && !Draining(o.Texture)) is { } same)
         {
             texture.Dispose();
             Adopt(t, same, replaced: t.Replacing);
@@ -379,6 +381,40 @@ public sealed unsafe class WorldTextureCache : IDisposable
         }
         (t.Native, t.ViewLevels, t.ViewSwizzle) = (texture, viewLevels, swizzle);
         Resident(t, bytes);
+    }
+
+    /// <summary>Whether the image's memory is in a block the allocator is emptying (Vulkan only).</summary>
+    bool Draining(GpuTexture texture) => gpu is GpuContext vk && vk.IsDraining(texture);
+
+    long lastRelocate;
+    /// <summary>Images moved out of blocks being emptied (loaded again, or taken from another cache).</summary>
+    public int Relocations { get; private set; }
+    /// <summary>Relocations started per pass (once a second), on top of the mip streaming's replacements.</summary>
+    const int MaxRelocations = 2;
+
+    /// <summary>
+    /// Once a second: resident images in a block the allocator is emptying (<see cref="GpuAllocator.IsDraining"/>) are taken from another cache
+    /// when one holds the file at the same levels outside it, else loaded again (the old image is drawn until the new lands in a fuller block),
+    /// so the block can go back to the driver. Not under the guard's pressure: a relocation allocates before it frees.
+    /// </summary>
+    void Relocate()
+    {
+        long now = Environment.TickCount64;
+        if (now - lastRelocate < 1000 || gpu is not GpuContext || Guard is { Pressure: true }) return;
+        lastRelocate = now;
+        int started = 0;
+        foreach (var t in cache.Values)
+        {
+            if (started >= MaxRelocations) break;
+            if (t.State != WorldTexture.Residency.Resident || t.Native is null || t.Replacing || t.Pending is not null || !Draining(t.Native)) continue;
+            Relocations++;
+            if (Share?.Of(t.Path!).FirstOrDefault(o => o != t.Shared && o.QualityLevel == TextureQuality.Level && o.Dropped == t.Dropped && o.ViewLevels == t.ViewLevels
+                && !Draining(o.Texture)) is { } other) { Adopt(t, other); continue; }
+            if (!MayStart(t)) break;
+            t.Relocating = true;
+            Start(t, replacing: true);
+            started++;
+        }
     }
 
     internal void Reload(WorldTexture t)
@@ -418,7 +454,7 @@ public sealed unsafe class WorldTextureCache : IDisposable
             var t = pending[found];
             var data = t.Pending!.Result;
             if (data is not null) QueueUpload(t, data);
-            else if (t.Replacing) { if (t.Refine) { t.Refine = false; Refining--; } t.Replacing = false; t.CannotDrop = true; Landed(t); }   // the old image stays
+            else if (t.Replacing) { if (t.Refine) { t.Refine = false; Refining--; } t.Replacing = false; t.CannotDrop |= !t.Relocating; t.Relocating = false; Landed(t); }   // the old image stays
             else { t.State = WorldTexture.Residency.Missing; Landed(t); }
             t.Pending = null;
             pending.RemoveAt(found);
@@ -427,6 +463,7 @@ public sealed unsafe class WorldTextureCache : IDisposable
         if (!wait)
         {
             var trim = System.Diagnostics.Stopwatch.StartNew();
+            Relocate();
             Trim();
             if (trim.Elapsed.TotalMilliseconds > 3) SpikeLog.Note("slow texture trim", ms: trim.Elapsed.TotalMilliseconds);
         }
@@ -511,7 +548,7 @@ public sealed unsafe class WorldTextureCache : IDisposable
         Mips.Extra = pressure ? 1 : 0;
         long unstreamed = 0;
         int replacing = 0;   // replacements being loaded: finer ones are limited so they do not crowd out the other streaming work on the few worker threads
-        foreach (var t in cache.Values) if (t.Replacing) replacing++;
+        foreach (var t in cache.Values) if (t.Replacing && !t.Relocating) replacing++;
         foreach (var t in cache.Values)
         {
             if (t.State != WorldTexture.Residency.Resident || t.Native is null) continue;
@@ -756,10 +793,11 @@ public sealed unsafe class WorldTextureCache : IDisposable
             t.Bytes = 0;
             if (t.State == WorldTexture.Residency.Resident) Swaps++;
         }
-        if (replaced && dropped == t.Dropped) t.CannotDrop = true;   // nothing changed: do not ask again
+        if (replaced && dropped == t.Dropped && !t.Relocating) t.CannotDrop = true;   // nothing changed: do not ask again
         t.CannotDrop |= !droppable;
         if (t.Refine) { t.Refine = false; Refining--; }
         t.Replacing = false;
+        t.Relocating = false;
         t.TooFineSince = 0;
         t.Dropped = dropped;
         t.FileWidth = fileWidth;

@@ -36,6 +36,10 @@ internal sealed class MemoryBlock
     public bool Optimal;
     /// <summary>In a pool of streamed textures (<see cref="PoolKey.Streamed"/>).</summary>
     public bool Streamed;
+    /// <summary>Being emptied (<see cref="GpuAllocator.IsDraining"/>): nothing new is placed in it, and it goes back to the driver once empty.
+    /// When it was last freed from, and until when it is not picked again (it stopped emptying).</summary>
+    public bool Draining;
+    public long DrainProgress, SkipUntil;
     public bool Dedicated;
     public bool Coherent;
     public ulong Used;
@@ -189,7 +193,7 @@ public sealed unsafe class GpuAllocator : IDisposable
                 rows.Add((i.Allocation.Size, $"{Mb(i.Allocation.Size),10:0.000}  {i.Kind,-11}  image   {i.Name}  [{i.Format} {i.Extent.Width}x{i.Extent.Height}"
                     + (i.Extent.Depth > 1 ? $"x{i.Extent.Depth}" : "") + $", {i.MipLevels} levels, {i.ArrayLayers} layers" + (i.Samples != SampleCountFlags.Count1Bit ? $", {i.Samples}" : "") + "]"));
             void Block(uint type, MemoryBlock b, bool spare) => blocks.Add((type, b.Size, $"{Mb(b.Size),10:0.000}  {Mb(b.Used),10:0.000}  {b.Free.Count,5}  type {type} "
-                + $"{memProps.MemoryTypes[(int)type].PropertyFlags}" + (b.Optimal ? " images" : " buffers") + (b.Streamed ? " streamed" : "") + (b.Dedicated ? " dedicated" : "")
+                + $"{memProps.MemoryTypes[(int)type].PropertyFlags}" + (b.Optimal ? " images" : " buffers") + (b.Streamed ? " streamed" : "") + (b.Draining ? " draining" : "") + (b.Dedicated ? " dedicated" : "")
                 + (spare ? " spare" : "")));
             foreach (var (key, list) in pools) foreach (var b in list) Block(key.Type, b, false);
             foreach (var (key, b) in spares) Block(key.Type, b, true);
@@ -463,6 +467,54 @@ public sealed unsafe class GpuAllocator : IDisposable
     }
 
     /// <summary>
+    /// Whether the allocation is in a streamed block being emptied: its owner should load the resource again (it lands in a fuller block) and free
+    /// this one. Plans the draining at most once a second: per streamed pool one block at a time, the emptiest under half used, picked only when the
+    /// pool's other blocks have that much room free; one that has not been freed from for <see cref="DrainStallMs"/> is left alone for a minute.
+    /// </summary>
+    public bool IsDraining(Allocation a)
+    {
+        lock (gate)
+        {
+            long now = Environment.TickCount64;
+            if (now - lastDrainPlan >= 1000) { lastDrainPlan = now; PlanDrain(now); }
+            return a.Block.Draining;
+        }
+    }
+
+    long lastDrainPlan;
+    /// <summary>Milliseconds a draining block may go without being freed from before it is given up.</summary>
+    const long DrainStallMs = 10_000;
+    /// <summary>Streamed blocks emptied by draining and given back.</summary>
+    public int Drained { get; private set; }
+
+    void PlanDrain(long now)
+    {
+        foreach (var (key, blocks) in pools)
+        {
+            if (!key.Streamed || lean) continue;
+            bool draining = false;
+            foreach (var b in blocks)
+            {
+                if (!b.Draining) continue;
+                if (now - b.DrainProgress > DrainStallMs) (b.Draining, b.SkipUntil) = (false, now + 60_000);
+                else draining = true;
+            }
+            if (draining) continue;
+            MemoryBlock? pick = null;
+            ulong room = 0;
+            foreach (var b in blocks)
+            {
+                if (b.Dedicated) continue;
+                room += b.Size - b.Used;
+                if (b.Used == 0 || b.Used * 2 >= b.Size || now < b.SkipUntil) continue;
+                if (pick is null || b.Used < pick.Used) pick = b;
+            }
+            if (pick is null || room - (pick.Size - pick.Used) < pick.Used) continue;
+            (pick.Draining, pick.DrainProgress) = (true, now);
+        }
+    }
+
+    /// <summary>
     /// The streamed pools' placement: the fullest regular block with room (the best fitting range in it), so the streamed textures gather in as few
     /// blocks as they can and the others empty as the view moves on; null when none has room.
     /// </summary>
@@ -473,7 +525,7 @@ public sealed unsafe class GpuAllocator : IDisposable
         ulong bestWaste = ulong.MaxValue;
         foreach (var b in blocks)
         {
-            if (b.Dedicated || bestBlock is not null && b.Used < bestBlock.Used) continue;
+            if (b.Dedicated || b.Draining || bestBlock is not null && b.Used < bestBlock.Used) continue;
             for (int i = 0; i < b.Free.Count; i++)
             {
                 var (off, len) = b.Free[i];
@@ -630,6 +682,7 @@ public sealed unsafe class GpuAllocator : IDisposable
             else
             {
                 InsertFree(b, a.Offset, a.Size);
+                if (b.Draining) b.DrainProgress = Environment.TickCount64;
                 if (b.Used == 0)
                 {
                     // Another empty block in the pool, or a spare made ahead, is the room to grow into: this one goes back.
@@ -642,7 +695,7 @@ public sealed unsafe class GpuAllocator : IDisposable
                             break;
                         }
                     }
-                    if (otherEmpty || lean)
+                    if (otherEmpty || lean || b.Draining)
                     {
                         ReleaseBlock(blocks, b);
                         release = b;
@@ -698,6 +751,7 @@ public sealed unsafe class GpuAllocator : IDisposable
     /// <summary>Under the lock: takes the block out of its pool and the totals; the caller gives it back to the driver (<see cref="GiveBack"/>) outside the lock.</summary>
     void ReleaseBlock(List<MemoryBlock> blocks, MemoryBlock b)
     {
+        if (b.Draining) Drained++;
         blocks.Remove(b);
         totalAllocated -= b.Size;
         blockCount--;

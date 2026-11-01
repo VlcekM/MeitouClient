@@ -267,6 +267,9 @@ public sealed unsafe partial class GpuContext : IDisposable, IGpuContext
         return buffer.Handle;
     }
 
+    /// <summary>Whether the texture's memory is in a block being emptied (<see cref="GpuAllocator.IsDraining"/>): its owner should load it again.</summary>
+    internal bool IsDraining(GpuTexture texture) => Device.TextureAt(texture.Index).Allocation is { } image && Device.Allocator.IsDraining(image.Allocation);
+
     /// <summary>Releases a device-local buffer (once every frame that could use it has finished).</summary>
     public void ReleaseBuffer(GpuBuffer buffer)
     {
