@@ -617,7 +617,7 @@ public sealed unsafe class WorldTextureCache : IDisposable
     /// </summary>
     GpuTexture Create(WorldTexture t, InternalFormat format, int width, int height, int levels, bool mipmaps) =>
         gpu.Frame.PreFrame.CreateTexture(new TextureDesc(format, width, height, levels,
-            Use: TextureUse.Sampled | TextureUse.TransferDst | (mipmaps ? TextureUse.TransferSrc : 0), Name: $"{allocationName} | {System.IO.Path.GetFileName(t.Path)}"));
+            Use: TextureUse.Sampled | TextureUse.TransferDst | (mipmaps ? TextureUse.TransferSrc : 0), Name: $"{allocationName} | {System.IO.Path.GetFileName(t.Path)}", Streamed: true));
 
     /// <summary>
     /// A stored (S3TC) texture's upload: the image is made with its full chain, each level is filled whole (up to about 512 KB) or in slabs of

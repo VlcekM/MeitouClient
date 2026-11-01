@@ -293,7 +293,7 @@ public sealed unsafe partial class GpuContext : IDisposable, IGpuContext
             Samples = (SampleCountFlags)desc.Samples, Tiling = ImageTiling.Optimal, Usage = usage, SharingMode = SharingMode.Exclusive,
             InitialLayout = ImageLayout.Undefined, Flags = desc.Kind == TextureKind.Cube ? ImageCreateFlags.CreateCubeCompatibleBit : 0,
         };
-        var image = Device.Allocator.CreateImage(in info, MemoryKind.DeviceLocal, desc.Name.Length > 0 ? desc.Name : "native texture");
+        var image = Device.Allocator.CreateImage(in info, MemoryKind.DeviceLocal, desc.Name.Length > 0 ? desc.Name : "native texture", desc.Streamed);
         bool immediate = cmd.Handle == 0;
         var cb = immediate ? Device.BeginImmediate() : cmd;
         ToGeneral(Device.Vk, cb, image.Image, GlConventions.VkAspect(desc));
