@@ -484,6 +484,9 @@ public sealed unsafe class CommandList : IGpuCommandList
     /// </summary>
     public GpuTexture CreateTexture(TextureDesc desc) => ctx.CreateTexture(desc, Handle);
 
+    /// <inheritdoc/>
+    public void InitTexture(GpuTexture texture) => ctx.InitTexture(texture, Handle);
+
     /// <summary>(Added for the Meitou water's ocean.) Copies tightly packed texels from <paramref name="src"/> at <paramref name="offset"/> over a
     /// whole level and layer of <paramref name="dst"/> (GENERAL layout). The caller orders it against the writes before and the reads after.</summary>
     public unsafe void CopyTextureToBuffer(GpuTexture src, int level, int layer, in PixelRect region, GpuBuffer dst, ulong offset)

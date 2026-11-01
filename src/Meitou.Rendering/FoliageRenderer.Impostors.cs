@@ -154,7 +154,7 @@ public sealed partial class FoliageRenderer
     /// <summary>Resident atlases being refined or coarsened (their new textures loading or uploading).</summary>
     readonly List<MeshAsset> impostorRefining = [];
     long impostorBytes, lastImpostorScan;
-    int impostorsBaked, impostorsLoaded, impostorUnloads, impostorRefined, impostorCoarsened, impostorRefused, impostorDropped, impostorRelocated;
+    int impostorsBaked, impostorsLoaded, impostorUnloads, impostorRefined, impostorCoarsened, impostorRefused, impostorDropped;
 
     /// <summary>What the last plan found (see <see cref="ImpostorPopIn"/>).</summary>
     int impostorWantedCount, impostorAdmittedCount, impostorMissingCount, impostorCoarseCount, impostorExtraCount;
@@ -171,7 +171,7 @@ public sealed partial class FoliageRenderer
     int ImpostorPending => impostorWork.Count + impostorBakes.Count + (impostorBake is null ? 0 : 1);
 
     string ImpostorDescription => $"{ImpostorAssets().Count(a => a.Impostor?.Stage == ImpostorStage.Ready)} impostor atlases {impostorBytes / 1048576.0:0} MB of {ImpostorLimitMb:0} MB " +
-        $"({impostorsLoaded} from the cache, {impostorsBaked} baked, {impostorUnloads} unloaded, {impostorRefined} refined, {impostorCoarsened} coarsened, {impostorRelocated} moved out of emptying blocks, {impostorDropped} dropped by the plan, {impostorRefused} refused; " +
+        $"({impostorsLoaded} from the cache, {impostorsBaked} baked, {impostorUnloads} unloaded, {impostorRefined} refined, {impostorCoarsened} coarsened, {impostorDropped} dropped by the plan, {impostorRefused} refused; " +
         $"plan {impostorAdmittedCount} of {impostorWantedCount} wanted, {impostorMissingCount} not resident, {impostorExtraCount} blurrier than needed, {impostorPlannedBytes / 1048576.0:0} MB planned)";
 
     // ---- TERRAIN-mode rocks (docs/impostors.md section 13) ----
@@ -506,25 +506,6 @@ public sealed partial class FoliageRenderer
         }
         (impostorMissingCount, impostorCoarseCount) = (missing, coarse);
         StartQueuedRefines(now);
-        RelocateImpostors(now);
-    }
-
-    /// <summary>
-    /// After the plan's refines: one atlas whose textures are in a block the allocator is emptying (<see cref="Meitou.Rendering.Gpu.Core.GpuAllocator.IsDraining"/>) is
-    /// remade at the levels it has (a refine to its own skip; the old textures are drawn until the new land in a fuller block), so the block can go
-    /// back to the driver. Not under the guard's pressure: the new textures are made before the old go.
-    /// </summary>
-    void RelocateImpostors(long now)
-    {
-        if (Gpu is not GpuContext vk || guard is { Pressure: true } || impostorRefining.Count >= ImpostorMaxRefines) return;
-        foreach (var a in assetsByMesh.Values)
-        {
-            if (a.Impostor is not { Stage: ImpostorStage.Ready, Textures: { } textures, Next: null, RefineLoad: null } s || now < s.RefineRetryAt || impostorRefining.Contains(a)) continue;
-            if (!vk.IsDraining(textures.Albedo) && !vk.IsDraining(textures.Normal)) continue;
-            impostorRelocated++;
-            StartRefine(a, s.Skip);
-            return;
-        }
     }
 
     /// <summary>Atlases the plan wants remade (finer or coarser), from the last scan: <see cref="StartQueuedRefines"/> starts them as slots free up.</summary>
@@ -590,7 +571,7 @@ public sealed partial class FoliageRenderer
             if (s.Next is null)
             {
                 long need = ImpostorTextures.BytesFor(atlas, s.RefineSkip, s.RefineSkip + 1);
-                bool finer = s.RefineSkip <= s.Skip;   // or a relocation: either needs room beside the old textures
+                bool finer = s.RefineSkip < s.Skip;
                 if (finer && (impostorBytes + need > impostorLimitBytes * ImpostorTransientShare || guard is { } g && !g.Allows((ulong)need))) { Abandon(s, impostorRefining, i--); continue; }   // no room beside the old textures: the plan is asked again at the next scan
                 using var first = Gpu.Uploads.Begin();
                 s.Next = new ImpostorTextures(Gpu, atlas, first, s.RefineSkip, s.RefineSkip + 1);

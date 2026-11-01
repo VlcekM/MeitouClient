@@ -267,9 +267,6 @@ public sealed unsafe partial class GpuContext : IDisposable, IGpuContext
         return buffer.Handle;
     }
 
-    /// <summary>Whether the texture's memory is in a block being emptied (<see cref="GpuAllocator.IsDraining"/>): its owner should load it again.</summary>
-    internal bool IsDraining(GpuTexture texture) => Device.TextureAt(texture.Index).Allocation is { } image && Device.Allocator.IsDraining(image.Allocation);
-
     /// <summary>Releases a device-local buffer (once every frame that could use it has finished).</summary>
     public void ReleaseBuffer(GpuBuffer buffer)
     {
@@ -280,6 +277,29 @@ public sealed unsafe partial class GpuContext : IDisposable, IGpuContext
     /// <summary>A new texture whose transition is recorded into <paramref name="cmd"/> (the frame's own command buffer) instead of submitted at once.</summary>
     internal GpuTexture CreateTexture(TextureDesc desc, CommandBuffer cmd)
     {
+        var info = ImageInfo(desc);
+        var image = Device.Allocator.CreateImage(in info, MemoryKind.DeviceLocal, desc.Name.Length > 0 ? desc.Name : "native texture", desc.Streamed);
+        bool immediate = cmd.Handle == 0;
+        var cb = immediate ? Device.BeginImmediate() : cmd;
+        ToGeneral(Device.Vk, cb, image.Image, GlConventions.VkAspect(desc));
+        if (immediate) Device.EndImmediate(cb);
+        return new GpuTexture(this, desc, Device.AddTexture(image.Image, image, owned: true, desc));
+    }
+
+    /// <inheritdoc/>
+    /// <remarks>A streamed texture of <see cref="GpuAllocator.OwnMemoryBytes"/> or more gets memory of its own here (the slow vkAllocateMemory is the worker's).</remarks>
+    public GpuTexture? CreateTextureOffThread(TextureDesc desc)
+    {
+        var info = ImageInfo(desc);
+        var image = Device.Allocator.CreateImage(in info, MemoryKind.DeviceLocal, desc.Name.Length > 0 ? desc.Name : "native texture", desc.Streamed, ownMemory: true);
+        return new GpuTexture(this, desc, Device.AddTexture(image.Image, image, owned: true, desc));
+    }
+
+    /// <summary>Records the transition of a texture made by <see cref="CreateTextureOffThread"/> into the layout every texture is used in.</summary>
+    internal void InitTexture(GpuTexture texture, CommandBuffer cmd) => ToGeneral(Device.Vk, cmd, Device.TextureAt(texture.Index).Image, GlConventions.VkAspect(texture.Desc));
+
+    static ImageCreateInfo ImageInfo(TextureDesc desc)
+    {
         var usage = (ImageUsageFlags)0;
         if (desc.Use.HasFlag(TextureUse.Sampled)) usage |= ImageUsageFlags.SampledBit;
         if (desc.Use.HasFlag(TextureUse.Storage)) usage |= ImageUsageFlags.StorageBit;
@@ -289,19 +309,13 @@ public sealed unsafe partial class GpuContext : IDisposable, IGpuContext
         if (desc.Use.HasFlag(TextureUse.TransferDst)) usage |= ImageUsageFlags.TransferDstBit;
         if (desc.Use.HasFlag(TextureUse.ShadingRate)) usage |= ImageUsageFlags.FragmentShadingRateAttachmentBitKhr;
         int layers = desc.Kind == TextureKind.Cube ? 6 * Math.Max(desc.Layers, 1) : desc.Layers;
-        var info = new ImageCreateInfo
+        return new ImageCreateInfo
         {
             SType = StructureType.ImageCreateInfo, ImageType = ImageType.Type2D, Format = GlConventions.VkFormat(desc.Format),
             Extent = new Extent3D((uint)desc.Width, (uint)desc.Height, 1), MipLevels = (uint)desc.Levels, ArrayLayers = (uint)layers,
             Samples = (SampleCountFlags)desc.Samples, Tiling = ImageTiling.Optimal, Usage = usage, SharingMode = SharingMode.Exclusive,
             InitialLayout = ImageLayout.Undefined, Flags = desc.Kind == TextureKind.Cube ? ImageCreateFlags.CreateCubeCompatibleBit : 0,
         };
-        var image = Device.Allocator.CreateImage(in info, MemoryKind.DeviceLocal, desc.Name.Length > 0 ? desc.Name : "native texture", desc.Streamed);
-        bool immediate = cmd.Handle == 0;
-        var cb = immediate ? Device.BeginImmediate() : cmd;
-        ToGeneral(Device.Vk, cb, image.Image, GlConventions.VkAspect(desc));
-        if (immediate) Device.EndImmediate(cb);
-        return new GpuTexture(this, desc, Device.AddTexture(image.Image, image, owned: true, desc));
     }
 
     internal static void ToGeneral(Vk vk, CommandBuffer cb, Image image, ImageAspectFlags aspect)

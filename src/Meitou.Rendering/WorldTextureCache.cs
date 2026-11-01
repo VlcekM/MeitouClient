@@ -66,8 +66,6 @@ public sealed class WorldTexture
     internal long TooFineSince;
     /// <summary>The file could not be loaded with the asked number of dropped levels (a format that keeps its top mips): do not ask again.</summary>
     internal bool CannotDrop;
-    /// <summary>The replacement being loaded only moves the image out of a block being emptied (<see cref="WorldTextureCache.Relocate"/>).</summary>
-    internal bool Relocating;
     /// <summary>The replacement being loaded is a finer image (something came near): counted in <see cref="WorldTextureCache.Refining"/>.</summary>
     internal bool Refine;
     /// <summary>The smallest <see cref="Need"/> offered since the last <see cref="WorldTextureCache.CommitNeeds"/>.</summary>
@@ -210,7 +208,7 @@ public sealed unsafe class WorldTextureCache : IDisposable
         w.WriteLine();
     }
 
-    public string Describe() => $"{ResidentCount} textures {ResidentBytes / 1048576.0:0} MB ({Unloads} unloaded, {Reloads} reloaded so far{(Shares > 0 ? $", {Shares} taken from another cache" : "")}{(Relocations > 0 ? $", {Relocations} moved out of emptying blocks" : "")}" +
+    public string Describe() => $"{ResidentCount} textures {ResidentBytes / 1048576.0:0} MB ({Unloads} unloaded, {Reloads} reloaded so far{(Shares > 0 ? $", {Shares} taken from another cache" : "")}" +
         (Mips.Enabled ? $"; mip streaming: {Math.Max(UnstreamedBytes - ResidentBytes, 0) / 1048576.0:0} MB less than every mip, {Refined} refined, {Coarsened} coarsened)" : ")");
 
     /// <param name="deferred">The texture is not loaded now: it stays <see cref="WorldTexture.Residency.Unloaded"/> until something reads its
@@ -316,12 +314,18 @@ public sealed unsafe class WorldTextureCache : IDisposable
         else t.State = WorldTexture.Residency.Loading;
         Func<TextureData?> load = () =>
         {
-            try { return Load(path, quality, need, enabled, perDistance, bias, extra); }
+            TextureData data;
+            try { data = Load(path, quality, need, enabled, perDistance, bias, extra); }
             catch (Exception e) when (e is DdsFormatException or InvalidOperationException or IOException or ArgumentException)
             {
                 lock (Messages) Messages.Add($"texture {name}: {e.Message}");
                 return null;
             }
+            // The image is made here too: a large one gets memory of its own (given back the moment it is unloaded, so it leaves no hole), and
+            // vkAllocateMemory takes from 0.3 ms to 50, which on the render thread would be a frame's.
+            try { data.Image = gpu.CreateTextureOffThread(DescOf(path, data)); }
+            catch (VulkanException) { }   // no memory now: the render thread makes it (or fails) as it did
+            return data;
         };
         t.Pending = Urgent ? BackgroundWork.RunUrgent(load) : BackgroundWork.Run(load);
         pending.Add(t);
@@ -337,7 +341,7 @@ public sealed unsafe class WorldTextureCache : IDisposable
         TextureShare.Image? best = null;
         foreach (var e in Share.Of(t.Path!))
         {
-            if (e.QualityLevel != TextureQuality.Level || e == t.Shared || Draining(e.Texture)) continue;
+            if (e.QualityLevel != TextureQuality.Level || e == t.Shared) continue;
             int target = Math.Max(Mips.Drop(e.FileWidth, e.FileHeight, need), t.QualityDrop);
             if (exact ? e.Dropped == target : e.Dropped <= target && (best is null || e.Dropped > best.Dropped)) best = e;
         }
@@ -363,7 +367,7 @@ public sealed unsafe class WorldTextureCache : IDisposable
     /// </summary>
     void Publish(WorldTexture t, GpuTexture texture, TextureData data, int viewLevels, GpuSwizzle swizzle, long bytes)
     {
-        if (Share?.Of(t.Path!).FirstOrDefault(o => o != t.Shared && o.QualityLevel == t.QualityLevel && o.Dropped == data.Dropped && o.ViewLevels == viewLevels && !Draining(o.Texture)) is { } same)
+        if (Share?.Of(t.Path!).FirstOrDefault(o => o != t.Shared && o.QualityLevel == t.QualityLevel && o.Dropped == data.Dropped && o.ViewLevels == viewLevels) is { } same)
         {
             texture.Dispose();
             Adopt(t, same, replaced: t.Replacing);
@@ -381,40 +385,6 @@ public sealed unsafe class WorldTextureCache : IDisposable
         }
         (t.Native, t.ViewLevels, t.ViewSwizzle) = (texture, viewLevels, swizzle);
         Resident(t, bytes);
-    }
-
-    /// <summary>Whether the image's memory is in a block the allocator is emptying (Vulkan only).</summary>
-    bool Draining(GpuTexture texture) => gpu is GpuContext vk && vk.IsDraining(texture);
-
-    long lastRelocate;
-    /// <summary>Images moved out of blocks being emptied (loaded again, or taken from another cache).</summary>
-    public int Relocations { get; private set; }
-    /// <summary>Relocations started per pass (once a second), on top of the mip streaming's replacements.</summary>
-    const int MaxRelocations = 2;
-
-    /// <summary>
-    /// Once a second: resident images in a block the allocator is emptying (<see cref="GpuAllocator.IsDraining"/>) are taken from another cache
-    /// when one holds the file at the same levels outside it, else loaded again (the old image is drawn until the new lands in a fuller block),
-    /// so the block can go back to the driver. Not under the guard's pressure: a relocation allocates before it frees.
-    /// </summary>
-    void Relocate()
-    {
-        long now = Environment.TickCount64;
-        if (now - lastRelocate < 1000 || gpu is not GpuContext || Guard is { Pressure: true }) return;
-        lastRelocate = now;
-        int started = 0;
-        foreach (var t in cache.Values)
-        {
-            if (started >= MaxRelocations) break;
-            if (t.State != WorldTexture.Residency.Resident || t.Native is null || t.Replacing || t.Pending is not null || !Draining(t.Native)) continue;
-            Relocations++;
-            if (Share?.Of(t.Path!).FirstOrDefault(o => o != t.Shared && o.QualityLevel == TextureQuality.Level && o.Dropped == t.Dropped && o.ViewLevels == t.ViewLevels
-                && !Draining(o.Texture)) is { } other) { Adopt(t, other); continue; }
-            if (!MayStart(t)) break;
-            t.Relocating = true;
-            Start(t, replacing: true);
-            started++;
-        }
     }
 
     internal void Reload(WorldTexture t)
@@ -454,7 +424,7 @@ public sealed unsafe class WorldTextureCache : IDisposable
             var t = pending[found];
             var data = t.Pending!.Result;
             if (data is not null) QueueUpload(t, data);
-            else if (t.Replacing) { if (t.Refine) { t.Refine = false; Refining--; } t.Replacing = false; t.CannotDrop |= !t.Relocating; t.Relocating = false; Landed(t); }   // the old image stays
+            else if (t.Replacing) { if (t.Refine) { t.Refine = false; Refining--; } t.Replacing = false; t.CannotDrop = true; Landed(t); }   // the old image stays
             else { t.State = WorldTexture.Residency.Missing; Landed(t); }
             t.Pending = null;
             pending.RemoveAt(found);
@@ -463,7 +433,6 @@ public sealed unsafe class WorldTextureCache : IDisposable
         if (!wait)
         {
             var trim = System.Diagnostics.Stopwatch.StartNew();
-            Relocate();
             Trim();
             if (trim.Elapsed.TotalMilliseconds > 3) SpikeLog.Note("slow texture trim", ms: trim.Elapsed.TotalMilliseconds);
         }
@@ -548,7 +517,7 @@ public sealed unsafe class WorldTextureCache : IDisposable
         Mips.Extra = pressure ? 1 : 0;
         long unstreamed = 0;
         int replacing = 0;   // replacements being loaded: finer ones are limited so they do not crowd out the other streaming work on the few worker threads
-        foreach (var t in cache.Values) if (t.Replacing && !t.Relocating) replacing++;
+        foreach (var t in cache.Values) if (t.Replacing) replacing++;
         foreach (var t in cache.Values)
         {
             if (t.State != WorldTexture.Residency.Resident || t.Native is null) continue;
@@ -649,12 +618,47 @@ public sealed unsafe class WorldTextureCache : IDisposable
     static int FullChain(int w, int h) => 1 + (int)Math.Floor(Math.Log2(Math.Max(Math.Max(w, h), 1)));
 
     /// <summary>
-    /// A new image for <paramref name="t"/> with <paramref name="levels"/> levels in GENERAL layout (the transition in the frame's upload commands, before
-    /// the copies), named "owner | file" (the VRAM pie groups by the owner, the VRAM dump lists the file).
+    /// The image a decoded file is uploaded into: a stored (S3TC) one with its format and full chain; an RGBA8 one with the full chain, its levels
+    /// made by blits when the file's do not reach 1 × 1. Named "owner | file" (the VRAM pie groups by the owner, the VRAM dump lists the file). Any thread.
     /// </summary>
-    GpuTexture Create(WorldTexture t, InternalFormat format, int width, int height, int levels, bool mipmaps) =>
-        gpu.Frame.PreFrame.CreateTexture(new TextureDesc(format, width, height, levels,
-            Use: TextureUse.Sampled | TextureUse.TransferDst | (mipmaps ? TextureUse.TransferSrc : 0), Name: $"{allocationName} | {System.IO.Path.GetFileName(t.Path)}", Streamed: true));
+    TextureDesc DescOf(string path, TextureData data)
+    {
+        string name = $"{allocationName} | {System.IO.Path.GetFileName(path)}";
+        if (data.Compressed is { } dds)
+            return new TextureDesc(FormatOf(dds.Format), dds.Width, dds.Height, FullChain(dds.Width, dds.Height), Use: TextureUse.Sampled | TextureUse.TransferDst, Name: name, Streamed: true);
+        var levels = data.Rgba.Levels;
+        var top = levels[0];
+        return new TextureDesc(InternalFormat.Rgba8, top.Width, top.Height, FullChain(top.Width, top.Height),
+            Use: TextureUse.Sampled | TextureUse.TransferDst | (GeneratesMips(data.Rgba) ? TextureUse.TransferSrc : 0), Name: name, Streamed: true);
+    }
+
+    /// <summary>The RGBA8 levels do not reach 1 × 1: the chain is made from level 0 by blits.</summary>
+    static bool GeneratesMips(LoadedTexture tex) => tex.Levels.Count == 1 || tex.Levels[^1].Width > 1 || tex.Levels[^1].Height > 1;
+
+    static InternalFormat FormatOf(DdsFormat format) => format switch
+    {
+        DdsFormat.Bc1 => InternalFormat.CompressedRgbaS3TCDxt1Ext,
+        DdsFormat.Bc2 => InternalFormat.CompressedRgbaS3TCDxt3Ext,
+        DdsFormat.Bc4 => InternalFormat.CompressedRedRgtc1,
+        DdsFormat.Bc5 => InternalFormat.CompressedRGRgtc2,
+        DdsFormat.Bc7 => InternalFormat.CompressedRgbaBptcUnorm,
+        _ => InternalFormat.CompressedRgbaS3TCDxt5Ext,
+    };
+
+    /// <summary>
+    /// The image for <paramref name="t"/>'s upload in GENERAL layout (the transition in the frame's upload commands, before the copies): the one the worker
+    /// made (<see cref="IGpuContext.CreateTextureOffThread"/>), else a new one.
+    /// </summary>
+    GpuTexture Create(WorldTexture t, TextureData data)
+    {
+        if (data.Image is { } image)
+        {
+            data.Image = null;
+            gpu.Frame.PreFrame.InitTexture(image);
+            return image;
+        }
+        return gpu.Frame.PreFrame.CreateTexture(DescOf(t.Path!, data));
+    }
 
     /// <summary>
     /// A stored (S3TC) texture's upload: the image is made with its full chain, each level is filled whole (up to about 512 KB) or in slabs of
@@ -664,18 +668,9 @@ public sealed unsafe class WorldTextureCache : IDisposable
     {
         var dds = data.Compressed!;
         t.Swizzled = data.Swizzled;
-        var format = dds.Format switch
-        {
-            DdsFormat.Bc1 => InternalFormat.CompressedRgbaS3TCDxt1Ext,
-            DdsFormat.Bc2 => InternalFormat.CompressedRgbaS3TCDxt3Ext,
-            DdsFormat.Bc4 => InternalFormat.CompressedRedRgtc1,
-            DdsFormat.Bc5 => InternalFormat.CompressedRGRgtc2,
-            DdsFormat.Bc7 => InternalFormat.CompressedRgbaBptcUnorm,
-            _ => InternalFormat.CompressedRgbaS3TCDxt5Ext,
-        };
         int blockBytes = BlockCompression.BlockBytes(dds.Format);
         GpuTexture? texture = null;
-        steps.Enqueue(() => texture = Create(t, format, dds.Width, dds.Height, FullChain(dds.Width, dds.Height), mipmaps: false));
+        steps.Enqueue(() => texture = Create(t, data));
         foreach (var surface in dds.Surfaces)
         {
             var s = surface;
@@ -713,10 +708,10 @@ public sealed unsafe class WorldTextureCache : IDisposable
         t.Swizzled = swizzled;
         var top = tex.Levels[0];
         int chain = FullChain(top.Width, top.Height);
-        bool generate = tex.Levels.Count == 1 || tex.Levels[^1].Width > 1 || tex.Levels[^1].Height > 1;
+        bool generate = GeneratesMips(tex);
         int uploaded = generate ? 1 : Math.Min(tex.Levels.Count, chain);
         GpuTexture? texture = null;
-        steps.Enqueue(() => texture = Create(t, InternalFormat.Rgba8, top.Width, top.Height, chain, mipmaps: generate));
+        steps.Enqueue(() => texture = Create(t, data));
         for (int level = 0; level < uploaded; level++)
         {
             var img = tex.Levels[level];
@@ -793,11 +788,10 @@ public sealed unsafe class WorldTextureCache : IDisposable
             t.Bytes = 0;
             if (t.State == WorldTexture.Residency.Resident) Swaps++;
         }
-        if (replaced && dropped == t.Dropped && !t.Relocating) t.CannotDrop = true;   // nothing changed: do not ask again
+        if (replaced && dropped == t.Dropped) t.CannotDrop = true;   // nothing changed: do not ask again
         t.CannotDrop |= !droppable;
         if (t.Refine) { t.Refine = false; Refining--; }
         t.Replacing = false;
-        t.Relocating = false;
         t.TooFineSince = 0;
         t.Dropped = dropped;
         t.FileWidth = fileWidth;
@@ -815,7 +809,11 @@ public sealed unsafe class WorldTextureCache : IDisposable
 
     public void Dispose()
     {
-        foreach (var t in pending) t.Pending?.Wait();
+        foreach (var t in pending)
+        {
+            t.Pending?.Wait();
+            if (t.Pending is { IsCompletedSuccessfully: true, Result.Image: { } unused }) unused.Dispose();   // made on the worker, never uploaded
+        }
         foreach (var t in cache.Values) Release(t);
     }
 }
@@ -823,6 +821,8 @@ public sealed unsafe class WorldTextureCache : IDisposable
 /// <summary>A decoded texture file: the RGBA8 levels (all of them, or for a stored S3TC texture only the one the swizzle test needs), and the DDS when its blocks are uploaded as they are.</summary>
 sealed record TextureData(LoadedTexture Rgba, DdsFile? Compressed, int Dropped = 0, int FileWidth = 0, int FileHeight = 0, bool Droppable = false)
 {
+    /// <summary>The image the worker made for it (<see cref="IGpuContext.CreateTextureOffThread"/>), until the upload takes it; null: made on the render thread.</summary>
+    public GpuTexture? Image { get; set; }
     /// <summary>Whether it looks like a "DXT5 normal" (X in alpha), tested on the worker: the full image can be megabytes.</summary>
     public bool Swizzled { get; } = WorldTextureCache.LooksSwizzled(Rgba.Levels.FirstOrDefault(l => l.Width <= 256 && l.Height <= 256) ?? Rgba.Levels[0]);
 }
