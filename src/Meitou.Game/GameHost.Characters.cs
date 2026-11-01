@@ -129,8 +129,8 @@ sealed partial class GameHost
                 var layer = c.Animations[i];
                 float time = layer.Time, weight = layer.Weight;
                 if (before is not null)
-                    foreach (var old in before.Animations)
-                        if (old.Name == layer.Name)
+                    for (int k = 0; k < before.Animations.Count; k++)   // indexed: a foreach over the interface boxes its enumerator
+                        if (before.Animations[k] is var old && old.Name == layer.Name)
                         {
                             time = LayerTime(old, layer, alpha);
                             weight = old.Weight + (layer.Weight - old.Weight) * alpha;
