@@ -25,7 +25,7 @@ sealed partial class PlayerInterface
         {
             if (buildHost?.Placement.Footprint(b.Record) is { } footprint)
             {
-                var yaw = Quaternion.CreateFromAxisAngle(Vector3.UnitY, b.Yaw);
+                var yaw = Quaternion.CreateFromAxisAngle(Vector3.UnitY, b.PlacementYaw);
                 if (BuildingRayT(ray, footprint.Place(b.Position, yaw), footprint.YMin, footprint.YMax, b.Record, b.Position, b.Position.Y, yaw) is { } t && t < bestT && AboveViewedFloor?.Invoke(b.Position) != true && !Hidden(ray, t))
                     (hit, bestT) = ((b, t), t);
                 continue;

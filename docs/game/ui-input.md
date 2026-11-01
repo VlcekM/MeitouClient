@@ -537,6 +537,10 @@ A right click on the ground (`PlayerInterface::playerMove`) is order 29 through 
 the sneak flag +0xd4 unless the fight is on (`isInCombatMode`, CombatClass +0x130); where a cage opens its menu at once. 28 Stand Up is AI task 28
 (`Task_UnCrouch`, [staying low](ragdolls.md#staying-low)); Meitou stands the selection at once.
 
+Seats (**Observed**, live vanilla Kenshi 1.0.68 on Windows, compared with Meitou Metal using the same copied tavern save): the central stool, wall bench and side stool offer Use on a held right click. Use walks to the seat, sits facing the nearby table and shows Operating machine. Stop stands and shows Aimless; a ground move exits sitting. Menu dimensions and title casing differ in Meitou. Thrones, floor seats, player-built seats and competing reservations remain **Unknown** in live comparison.
+
+Meitou keeps the furniture's placed rotation for collision picking separately from the sitter's table-facing yaw. Town seats remain derived fixture targets, not duplicate construction/render objects.
+
 Meitou seats (**Observed**, native Metal diagnostic with a copied tavern save): registered town chairs/thrones and player-built seats use the `use` pointer. Quick right click gives order 87; holding opens Use, with Shift adding the operating job. The existing operator path walks there, settles at the seat and plays its functionality’s clip. Town seats are derived fixture targets, not duplicate construction/render objects; already seated NPCs block the player order.
 
 Meitou (`PlayerInterface.ContextMenu.cs`; one method per target: characters, `ContainerVerbs`, `DoorVerbs`, `SiteVerbs` in `PlayerInterface.Build.cs`, `CageVerbs` in `PlayerInterface.Cages.cs`):

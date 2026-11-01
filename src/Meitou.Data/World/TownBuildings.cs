@@ -29,6 +29,8 @@ public enum HomeSpotKind : byte
 /// <summary>A spot inside a building in world space; <paramref name="Yaw"/> as the simulation measures it (0 along +Z, turning towards +X).</summary>
 public readonly record struct HomeSpot(HomeSpotKind Kind, Vector3 Position, float Yaw)
 {
+    /// <summary>The furniture's placed rotation, before the sitter turns towards a table; collision and picking keep this facing.</summary>
+    public float PlacementYaw { get; init; } = Yaw;
     /// <summary>A node's BUILDING <c>node type</c> (NodeType: 0 NODE_SHOPKEEPER, 1 NODE_GENERAL, 2 NODE_GUARD_POST, 3 NODE_TURRET, 4 NODE_USE, 5 NODE_LIGHT); -1 for a bed.</summary>
     public int NodeType { get; init; } = -1;
     /// <summary>A chair's sitting clip: the ANIMATION record its functionality's <c>animation</c> names ("sitting chair", "sitting idle" for floor seats); null otherwise.</summary>

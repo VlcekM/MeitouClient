@@ -5,7 +5,11 @@ using Meitou.Data.World;
 namespace Meitou.Simulation.Locks;
 
 /// <summary>A town chair or throne, in world space, for picking and the player's Use order.</summary>
-public sealed record SeatSpot(string Id, string Building, string Record, Vector3 Position, int Owner, float Yaw);
+public sealed record SeatSpot(string Id, string Building, string Record, Vector3 Position, int Owner, float Yaw)
+{
+    /// <summary>The furniture's physical facing; <see cref="Yaw"/> is the sitter's facing.</summary>
+    public float PlacementYaw { get; init; } = Yaw;
+}
 
 public sealed partial class FixtureRegistry
 {
@@ -21,7 +25,7 @@ public sealed partial class FixtureRegistry
         {
             if (spot.Kind is not (HomeSpotKind.Chair or HomeSpotKind.ThroneSeat) || spot.Record is null) continue;
             string id = $"{building.Key}@seat{(index++).ToString(CultureInfo.InvariantCulture)}";
-            seatSpots[id] = new(id, building.Key, spot.Record, spot.Position, owner, spot.Yaw);
+            seatSpots[id] = new(id, building.Key, spot.Record, spot.Position, owner, spot.Yaw) { PlacementYaw = spot.PlacementYaw };
         }
         publishedSeats = null;
     }
