@@ -22,6 +22,7 @@ where occluders justify it. A depth prepass is extra geometry, not automatically
 biomes near the eye, kept points and arrival. They start with 32 slots (about 270 MB at 2048²). A pair that is no longer needed loses its slot
 to the next one, least recently needed first. While the arrays can still grow, a pair needed in the last 120 frames keeps its slot. When no slot
 can be freed, the arrays double (new arrays, old slots copied on the GPU), up to one slot per pair in the world (at most 192). They never shrink.
+They grow only while the `VramGuard` streams and allows the new arrays beside the old; otherwise the least recently needed pair is evicted.
 All slots at 2048² would be about 1.07 GB in the base game (**Observed**, VRAM pie 2026-11-01).
 
 **World colour map** (`TerrainTextures.PrepareWorld`): the 8 × 8 colour tiles box-filtered into one 2048² RGBA map for the far terrain

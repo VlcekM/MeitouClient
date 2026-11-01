@@ -994,6 +994,7 @@ static class WorldFrame
                 if (gpu.Foliage is not null) gpu.Foliage.Guard = guard;
                 if (gpu.Shadow is not null) gpu.Shadow.Guard = guard;
                 if (gpu.Characters is not null) gpu.Characters.Guard = guard;
+                if (gpu.Terrain.TextureSet is { } layers) layers.Guard = guard;
             }
         }
         return gpu;

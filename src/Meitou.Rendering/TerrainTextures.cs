@@ -36,6 +36,8 @@ public sealed unsafe class TerrainTextures : IDisposable
 
     /// <summary>The native GPU API every texture is made with (phase 8: no GL texture of its own).</summary>
     public IGpuContext Gpu { get; }
+    /// <summary>The memory-pressure guard: the arrays grow only while it streams and lets the new ones be made beside the old (else a pair is evicted).</summary>
+    public VramGuard? Guard { get; set; }
     readonly GameInstall install;
     readonly AssetLocator assets;
     readonly int layerSize, levelCount;
@@ -376,6 +378,8 @@ public sealed unsafe class TerrainTextures : IDisposable
     {
         if (Capacity >= MaxCapacity || diffuseArray is null || normalArray is null) return false;
         int slots = Math.Min(Capacity * 2, MaxCapacity);
+        long heightBytes = heightArray is null ? 0 : (long)HeightSize * HeightSize * 4 / 3 * slots;
+        if (Guard is { } g && (!g.Streaming || !g.Allows((ulong)(ArrayBytesOf(slots) + heightBytes)))) return false;
         TerrainTexture? diffuse = null, normal = null, height = null;
         try
         {
@@ -576,18 +580,28 @@ public sealed unsafe class TerrainTextures : IDisposable
     int AllocateSlot()
     {
         if (nextFree < Capacity) return nextFree++;
-        Pair? victim = null;
         // While the arrays may still grow, a pair needed in the last RecentFrames stays: the eye wavering at a cell's edge grows them instead of reloading it.
-        long recent = Capacity < MaxCapacity ? frame - RecentFrames : long.MaxValue;
-        foreach (var p in owner)
-            if (p is not null && p.Needed != stamp && p.Used < recent && (victim is null || p.Used < victim.Used)) victim = p;
-        if (victim is null) return Grow() ? nextFree++ : -1;
+        var victim = Victim(Capacity < MaxCapacity ? frame - RecentFrames : long.MaxValue);
+        if (victim is null)
+        {
+            if (Grow()) return nextFree++;
+            if ((victim = Victim(long.MaxValue)) is null) return -1;   // no room to grow: the least recently needed goes after all
+        }
         int slot = victim.Slot;
         victim.Slot = -1;
         owner[slot] = null;
         foreach (int b in usedBy[victim])
             if (state[b].Resident) { state[b].Resident = false; cellsDirty = true; }
         return slot;
+    }
+
+    /// <summary>The least recently needed resident pair not needed now and last needed before <paramref name="before"/> (a frame), or null.</summary>
+    Pair? Victim(long before)
+    {
+        Pair? victim = null;
+        foreach (var p in owner)
+            if (p is not null && p.Needed != stamp && p.Used < before && (victim is null || p.Used < victim.Used)) victim = p;
+        return victim;
     }
 
     /// <summary>A biome becomes resident once all its texture pairs are: its parameter row is written then.</summary>
