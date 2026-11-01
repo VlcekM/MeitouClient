@@ -259,7 +259,7 @@ sealed partial class PlayerInterface
     /// A right click on an item of the shown inventory (the original's release handler <c>FUN_140714a20</c>, <b>Observed</b> by decompile): while a trade is open it moves one unit to the other
     /// side, buying a stock item or selling the customer's own; with Shift all the units (the original repeats the move until one fails, here the sim's affordable and fits clamp ends it).
     /// With another window open it moves to it (<see cref="WindowRightClick"/>). With only the character's own windows open a map item is read (<see cref="ReadMapItem"/>); anything else is
-    /// equipped, taken off, fitted or moved between the grid and the open bag, money turned into cats (<see cref="QuickMoveItem"/>).
+    /// equipped, taken off, fitted or moved between the grid and the open bag, money turned into cats (<see cref="QuickMoveItem"/>); with another character's window open it moves there.
     /// </summary>
     bool InventoryRightClick(Vector2 p, bool shift)
     {
@@ -283,9 +283,29 @@ sealed partial class PlayerInterface
             Sell(trade, token, shift ? item.Quantity : 1, null, 0);
             return true;
         }
+        if (trade is null && OtherCharacterWindow(picked.Screen, lead.Id) is { } other)
+        {
+            if (!InventoryCommands.IsMovableSection(item.Section)) return false;
+            bool otherBag = other == InventoryOwner()?.Id && faithfulScreens.IsOpen("bag");
+            Say(new QuickMoveItem(lead.Id, token, shift, false) { Tick = session.World.Tick, Into = other, IntoBag = otherBag });
+            return true;
+        }
         if (MapItemTowns?.Invoke(item.Record) is not null) Say(new ReadMapItem(lead.Id, token) { Tick = session.World.Tick });
         else Say(new QuickMoveItem(lead.Id, token, shift, faithfulScreens.IsOpen("bag") && !IsPinnedInventory(picked.Screen)) { Tick = session.World.Tick });
         return true;
+    }
+
+    /// <summary>
+    /// The other player character whose window a right click in <paramref name="screen"/> moves to (the inventory or a pinned one, docs/game/ui-screens.md section 6): of several, the one on
+    /// top (engine choice); null when only <paramref name="own"/>'s windows are open.
+    /// </summary>
+    CharacterId? OtherCharacterWindow(string screen, CharacterId own)
+    {
+        if (screen is not ("inventory" or "bag") && !IsPinnedInventory(screen)) return null;
+        var open = faithfulScreens.OpenScreens;
+        for (int i = open.Count - 1; i >= 0; i--)
+            if ((open[i] == "inventory" || IsPinnedInventory(open[i])) && WindowCharacter(open[i]) is { } other && other.Id != own) return other.Id;
+        return null;
     }
 
     /// <summary>

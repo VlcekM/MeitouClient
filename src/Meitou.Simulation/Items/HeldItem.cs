@@ -84,5 +84,12 @@ public sealed record ReturnHeld : HeldCommand;
 /// <summary>
 /// A right click on an item of a player character's own window with no other owner's window open (<c>FUN_140714a20</c>): a money item (function 14) is turned into cats; a grid item goes
 /// to the slot that takes it (equipped), a worn one to the grid, else a prosthetic to its limb, else between the grid and the bag (<see cref="BagOpen"/>). One unit, all with <see cref="All"/>.
+/// With <see cref="Into"/> (another player character's window open, a pinned one) it moves there instead, as into a loot (<see cref="InventoryCommands.MoveInto"/>).
 /// </summary>
-public sealed record QuickMoveItem(CharacterId Character, InventoryItemToken Item, bool All, bool BagOpen) : SimCommand;
+public sealed record QuickMoveItem(CharacterId Character, InventoryItemToken Item, bool All, bool BagOpen) : SimCommand
+{
+    /// <summary>The player character whose window takes the item; <see cref="CharacterId.None"/> for a move within the character's own windows.</summary>
+    public CharacterId Into { get; init; } = CharacterId.None;
+    /// <summary>The <see cref="Into"/> character's bag window is open: the item goes there first.</summary>
+    public bool IntoBag { get; init; }
+}

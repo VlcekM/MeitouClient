@@ -184,7 +184,7 @@ sealed partial class PlayerInterface
             case Meitou.Simulation.Trading.SellItem sell: Sound("Sell_Item", item: sell.Item.Record); return;
             // A right-click move (FUN_140713d20) sounds as a lift, not a drop; money turned into cats in the player's own window is silent.
             case Meitou.Simulation.Items.QuickMoveItem quick:
-                if (gameData?.Find(quick.Item.Record)?.GetInt("item function") != PlayerSystem.MoneyFunction) Sound("Item_Lift", item: quick.Item.Record);
+                if (quick.Into != CharacterId.None || gameData?.Find(quick.Item.Record)?.GetInt("item function") != PlayerSystem.MoneyFunction) Sound("Item_Lift", item: quick.Item.Record);
                 return;
             case Meitou.Simulation.Carrying.TakeLootItem take: Sound("Item_Lift", item: take.Item.Record); return;
             case Meitou.Simulation.Carrying.PutLootItem put: Sound("Item_Lift", item: put.Item.Record); return;
