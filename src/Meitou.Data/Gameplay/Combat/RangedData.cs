@@ -96,19 +96,20 @@ public sealed record CrossbowData
     /// <summary>
     /// The gun's numbers at quality fraction <paramref name="q"/> (<c>FUN_14043c180</c>, <b>Observed</b>, the float flow checked in the disassembly): every level-0/level-1 pair is
     /// lerped by q; the pierce ends are first scaled by <c>bow damage 1</c> (level 0) and <c>bow damage 99</c> (level 1), then lerped, multiplied by the global damage
-    /// multiplier and truncated: pierceMin = trunc(lerp(q, bow1 x min0, bow99 x min1) x G). A shot speed of 0 or less becomes 1.
+    /// multiplier and truncated: pierceMin = trunc(lerp(q, bow1 x min0, bow99 x min1) x G). The shot speed is the lerp of <c>shot speed</c> and <c>shot speed 1</c> with no clamp
+    /// (<b>Verified</b>: the constructor overwrites the loader's clamped value with it).
     /// </summary>
     public CrossbowStats At(float q, CombatConstants constants, float globalDamageMultiplier = 1) => Lerp(q, globalDamageMultiplier, constants.BowDamage1, constants.BowDamage99);
 
     CrossbowStats Lerp(float q, float g, float bow1, float bow99)
     {
         static float L(float a, float b, float t) => a + (b - a) * t;
-        float speed = L(ShotSpeed0, ShotSpeed1, q);
+        float speed = L(ShotSpeed0, ShotSpeed1, q);   // FUN_14043c180 stores this lerp over the loader's clamped speed, unclamped
         return new CrossbowStats(
             (int)(L(bow1 * PierceDamageMin0, bow99 * PierceDamageMin1, q) * g),
             (int)(L(bow1 * PierceDamageMax0, bow99 * PierceDamageMax1, q) * g),
             L(Range0, Range1, q), L(ReloadTimeMin0, ReloadTimeMin1, q), L(ReloadTimeMax0, ReloadTimeMax1, q),
-            L(AccuracyDeviation0, AccuracyDeviation1, q), speed > 0 ? speed : 1);
+            L(AccuracyDeviation0, AccuracyDeviation1, q), speed);
     }
 
     static string FirstReference(GameRecord r, string list)

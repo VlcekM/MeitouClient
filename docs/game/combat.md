@@ -862,7 +862,8 @@ below is what the engine uses.
 ### Record fields
 
 **Base-game data** (**Verified** by reading `gamedata.base`, `Newwworld.mod`, `Dialogue.mod` and `rebirth.mod`; the counts agree with "Data facts" below): 7 CROSSBOW,
-6 GUN_DATA. Every crossbow has `num shots` 1, `aim speed` 1 and the three target multipliers 1.
+6 GUN_DATA. Every crossbow has `num shots` 1, `aim speed` 1 and the three target multipliers 1. A crossbow's shot speed is the quality lerp of `shot speed` and `shot speed 1` with no clamp
+(**Verified**, `FUN_14043c180` overwrites the loader's ≤ 0 → 1 value at gun `+0x18`; every shipped crossbow is positive). Meitou: `CrossbowData.At`.
 
 | Crossbow | pierce min 0/1 | pierce max 0/1 | range 0/1 | reload min 0/1 | reload max 0/1 | deviation 0/1 | perfect skill | shot speed 0/1 | ammo (charges) |
 |---|---|---|---|---|---|---|---|---|---|
