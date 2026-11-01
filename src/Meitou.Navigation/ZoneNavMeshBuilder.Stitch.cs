@@ -16,7 +16,7 @@ internal static partial class ZoneNavMeshBuilder
         public Vector3 A, B;
     }
 
-    static ZoneNavMesh Stitch(ZoneGeometry g, NavBuildSettings s, RcPolyMesh?[] meshes, int tilesPerSide, float tileWorld)
+    internal static ZoneNavMesh Stitch(ZoneGeometry g, NavBuildSettings s, RcPolyMesh?[] meshes, int tilesPerSide, float tileWorld)
     {
         var vertices = new List<Vector3>();
         var polygons = new List<int[]>();
