@@ -9,8 +9,8 @@ namespace Meitou.Engine.Time;
 /// flag is "requested pause OR speed 0".
 /// A frame owes at most <see cref="MaxTicksPerFrame"/> x speed ticks; the rest are dropped, so the game then runs slower than asked
 /// (<see cref="AchievedSpeed"/>). Engine choice: the original caps the real frame time at 0.05 s BEFORE the speed multiplier (it slows
-/// below 20 fps at every speed, Verified, docs/game/game-loop.md "Frame clocks"); this budget is 0.2 s of game time at 1x and slows
-/// only below 5 fps. The tick count depends only on the
+/// below 20 fps at every speed, Verified, docs/game/game-loop.md "Frame clocks"); this budget is 2 ticks (0.067 s of game time) at 1x and slows
+/// below 15 fps: a larger one let a heavy world snowball, each late frame owing more ticks that made the next late too. The tick count depends only on the
 /// summed <c>real time x speed</c>, not on how frames split it (the <see cref="FixedStepClock"/> property), as long as no tick is dropped.
 /// </summary>
 public sealed class SimulationClock
@@ -19,8 +19,8 @@ public sealed class SimulationClock
     public static readonly double[] Speeds = [1, 2, 5];
     /// <summary>Simulation ticks per game second (owner decision 2).</summary>
     public const double TickRate = 30;
-    /// <summary>Default most ticks a frame may run at speed 1 (engine choice): 0.2 s of game time; times the speed at the others.</summary>
-    public const int DefaultMaxTicksPerFrame = 6;
+    /// <summary>Default most ticks a frame may run at speed 1 (engine choice): 1/15 s of game time; times the speed at the others.</summary>
+    public const int DefaultMaxTicksPerFrame = 2;
 
     readonly FixedStepClock steps = new(TickRate);
     double speed = 1;

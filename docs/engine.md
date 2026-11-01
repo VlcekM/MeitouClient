@@ -10,7 +10,7 @@ GPU and simulation ownership stay separate. [Simulation contracts](simulation.md
 
 WorldSession owns world, clocks, input/bindings, camera and last two snapshots. Control30Hz real
 (default config tickRate), max10 ticks/frame; simulation1/30 game second, speed0/1/2/5 and
-6*speed budget. Control precedes simulation; interpolation uses each clock's alpha, shortest
+2*speed budget. Control precedes simulation; interpolation uses each clock's alpha, shortest
 angle rotation and cuts on mode changes. The authoritative time/order/determinism details are
 in simulation. Host copies camera state into WorldCamera and snapshots into CharacterDrawList. The next world tick runs on its own
 thread during the world draw ([simulation](simulation.md#tick-ahead)).

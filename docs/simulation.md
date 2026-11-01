@@ -9,9 +9,9 @@ below do not claim original-game parity. Retain Verified/Observed/Unknown scopes
 Control: 30 Hz real time, input/UI/camera continue while paused. The interface's own commands (selection, order toggles, run speed, job lists,
 crafting/research queues, squads, inventory, shops, building settings, the Stop order and every order, [order queue](#order-queue)) apply between ticks while paused
 (`World.ApplyPausedInterfaceCommands`); orders only set tasks, nobody moves or fights until the next tick. Simulation: 1/30 s game time;
-accumulate `realDt*speed`, speeds 0/1/2/5. Budget `6*speed` ticks per frame; excess is dropped and
+accumulate `realDt*speed`, speeds 0/1/2/5. Budget `2*speed` ticks per frame; excess is dropped and
 `AchievedSpeed` reports slowdown. Engine choice: the original instead caps the real frame time at 0.05 s before the speed
-multiplier (slows below 20 fps; [game loop](game/game-loop.md#frame-clocks)); Meitou slows only below 5 fps. Control ticks precede simulation ticks; a speed change applies
+multiplier (slows below 20 fps; [game loop](game/game-loop.md#frame-clocks)); Meitou slows below 15 fps (a budget of 6 let a heavy world snowball: **Observed**, a save with 5 characters apart and 1374 characters loaded, ticks of 15-40 ms, frames running 6 of them, 200-470 ms). Control ticks precede simulation ticks; a speed change applies
 to the entire frame. `WorldSession` rejects unequal world/clock tick lengths, owns snapshots,
 clocks, input and camera, and disposes systems/services. Of a frame's ticks only the last two publish
 a snapshot (`RunTick(publish)`), the pair the host interpolates between. Advanced → Pause after loading (`PauseOnLoad`, a plain on/off switch outside the Faithful / Meitou sides, default off as
