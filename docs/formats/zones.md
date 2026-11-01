@@ -36,8 +36,8 @@ visibility and floor checks. Single-mesh/no-part buildings and MAP_FEATURES foll
 paths. A MAP_FEATURES record draws its mesh only while `hidden` is false, and makes every EFFECT
 instance at its node whatever `hidden` says (**Verified** (decompiled), FUN_14039c7e0, FUN_14039b130); an empty texture map
 is `white.dds`, an empty normal map `flat.dds` (**Verified** (decompiled), FUN_140841a50 via FUN_140843920). The `hidden` test
-is skipped while global `DAT_142134690+0x298` is set, which then draws `athene.mesh` for a feature with no mesh; that this flag
-is editor mode is **Observed** (inferred, not traced). Nest debris is population state.
+is skipped while global `DAT_142134690+0x298` is set, which then draws `athene.mesh` for a feature with no mesh (**Verified**
+(decompiled), FUN_14039c7e0); that this flag is editor mode is **Observed** (inferred, not traced). Nest debris is population state.
 Materials select local town/biome/climate inputs; do not substitute a material solely by mesh name.
 
 Original part view distances differ from whole-object reach. Distant towns use stand-ins/LOD and
