@@ -44,6 +44,11 @@ grows through a bar's floorboards. `InteriorMaskRenderer`; consumers: terrain, f
   - TERRAIN-mode features and rocks (the terrain's mesh path): placements over a box are drawn with the meshes' full
     colour program with `TerrainConstants.interiorCut` on (features and CPU-culled rocks in their own list; GPU-culled
     rocks get the fade 1.5 too and are drawn by the fading draw).
+  - other buildings' parts (Fixes settings, `Walls inside buildings`, on; off draws them, as the game): a part whose sphere overlaps the mask box of a
+    building in the interior view takes the map features' cut batch (`WorldObjectRenderer.CutsIntoViewed`), so the Hub's wall stays out of the Shinobi
+    Thieves tower ([data](formats/zones.md#interior-masks), issue #111). Not cut: parts of a building whose mask is drawn (the viewed one's own), doors,
+    layout objects, contained buildings, stand-ins. Limits: their shadows stay; the mask is shared, so such a part between two masks along a ray, or in
+    a non-convex mask's concavity, is cut too.
 - Only the main view's near slice; not shadows, the water reflection or farther slices.
 - Engine limits: "inside" is decided by the hull, not per ray; foliage impostors and the grass motion pass (TAA velocity)
   are not cut.

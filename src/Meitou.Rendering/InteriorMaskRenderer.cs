@@ -60,6 +60,8 @@ public sealed unsafe class InteriorMaskRenderer : IDisposable
     readonly Dictionary<string, MaskMesh> meshes = new(StringComparer.OrdinalIgnoreCase);
     readonly List<InteriorVolume> near = [];
     readonly List<(Vector2 Min, Vector2 Max)> boxes = [];
+    readonly List<string> boxOwners = [];   // the building of each box (its PlacementId)
+    readonly HashSet<string> drawnOwners = new(StringComparer.Ordinal);
     GpuTexture? target;
     (GpuTexture Texture, uint Index)? bindless;
 
@@ -99,6 +101,21 @@ public sealed unsafe class InteriorMaskRenderer : IDisposable
     public bool Overlaps(Vector3 centre, float radius) =>
         Overlaps(new Vector2(centre.X - radius, centre.Z - radius), new Vector2(centre.X + radius, centre.Z + radius));
 
+    /// <summary>Whether a sphere's X/Z square overlaps the drawn mask box of a building in <paramref name="buildings"/> (by placement id).</summary>
+    public bool Overlaps(Vector3 centre, float radius, IReadOnlyDictionary<string, int> buildings)
+    {
+        if (!Active) return false;
+        for (int i = 0; i < boxes.Count; i++)
+        {
+            var (lo, hi) = boxes[i];
+            if (centre.X - radius <= hi.X && centre.X + radius >= lo.X && centre.Z - radius <= hi.Y && centre.Z + radius >= lo.Y && buildings.ContainsKey(boxOwners[i])) return true;
+        }
+        return false;
+    }
+
+    /// <summary>Whether the last <see cref="Record"/> drew a mask of the building <paramref name="placementId"/>.</summary>
+    public bool Drew(string placementId) => drawnOwners.Contains(placementId);
+
     /// <summary>Turns the cut on in <paramref name="view"/> (programs made with <see cref="WithCut"/> on <see cref="ViewConstants"/>) when <paramref name="cut"/> drew a mask.</summary>
     internal static void Apply(ref ViewConstants view, InteriorMaskRenderer? cut)
     {
@@ -135,6 +152,8 @@ public sealed unsafe class InteriorMaskRenderer : IDisposable
         Active = false;
         Drawn = 0;
         boxes.Clear();
+        boxOwners.Clear();
+        drawnOwners.Clear();
         if (width <= 0 || height <= 0) return;
         objects.InteriorMasks(eye, Range, near);
         if (near.Count == 0) return;
@@ -182,7 +201,10 @@ public sealed unsafe class InteriorMaskRenderer : IDisposable
                     max = Vector2.Max(max, new Vector2(corner.X, corner.Z));
                 }
             }
-            if (any) boxes.Add((min, max));
+            if (!any) continue;
+            boxes.Add((min, max));
+            boxOwners.Add(v.PlacementId);
+            drawnOwners.Add(v.PlacementId);
         }
         cmd.EndRendering();
         cmd.Order();

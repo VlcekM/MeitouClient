@@ -1166,8 +1166,10 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
             site = true;
         }
         else if (inst.Tint < 0) m.M44 = inst.Tint;
-        // A map feature (CLIP_INTERIOR, docs/render-interior-cut.md) over a building's interior mask takes the cut; the rest keep the programs without it.
-        bool cut = !depthPass && inst.Placed.Kind == PlacedKind.MapFeature && InteriorCut is { Active: true } mask && mask.Overlaps(inst.Centre, inst.Radius);
+        // A map feature (CLIP_INTERIOR, docs/render-interior-cut.md) over a building's interior mask takes the cut, and so does another building's part over
+        // the mask of a building in the interior view (CutsIntoViewed); the rest keep the programs without it.
+        bool cut = !depthPass && InteriorCut is { Active: true } mask
+            && (inst.Placed.Kind == PlacedKind.MapFeature ? mask.Overlaps(inst.Centre, inst.Radius) : CutsIntoViewed(inst, mask));
         if (!blend.IsBlending)
         {
             Add(gpu, inst.Materials!, blend.Lower, m, 0, weight >= 0.999f ? 2 : weight, value, inst.Placed.Interior, site, highlight: highlight, cut: cut);
@@ -1175,6 +1177,20 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         }
         Add(gpu, inst.Materials!, blend.Upper, m, 0, blend.T * weight, value, inst.Placed.Interior, site, highlight: highlight, cut: cut);
         Add(gpu, inst.Materials!, blend.Lower, m, blend.T * weight, weight, value, inst.Placed.Interior, site, highlight: highlight, cut: cut);
+    }
+
+    /// <summary>
+    /// Leave out other buildings' parts inside a building in the interior view (Fixes settings, on by default; docs/render-interior-cut.md "Meitou"): the Hub's
+    /// town wall runs into the Shinobi Thieves tower (issue #111). Not the parts of a building with a drawn mask (the viewed one's own floors and interior), nor
+    /// doors, layout objects or buildings placed inside another.
+    /// </summary>
+    public bool CutIntoViewed { get; set; } = true;
+
+    bool CutsIntoViewed(ObjectStreamer.Instance inst, InteriorMaskRenderer mask)
+    {
+        var p = inst.Placed;
+        return CutIntoViewed && InteriorView.Count > 0 && !inst.Stand && p.Kind == PlacedKind.BuildingPart && p.DoorIndex < 0 && p.ParentPlacementId is null && !p.Contained
+            && mask.Overlaps(inst.Centre, inst.Radius, InteriorView) && !mask.Drew(p.PlacementId);
     }
 
     void Add(GpuObjectMesh gpu, ObjectMaterialSet materials, int level, Matrix4x4 m, float lo, float hi, float near, bool backCull = false, bool site = false, int ghost = 0, bool highlight = false, bool cut = false)
