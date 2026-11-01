@@ -57,6 +57,7 @@ sealed partial class GameHost
         HoldLeftOpen(objects);
         objects.InteriorView = interiorView;
         objects.CutIntoViewed = config.FixPartsInBuildings;
+        objects.CeilingShadows = config.FixCeilingShadows;
         objects.HiddenItems = hiddenGroundKeys;
         session.Camera.Floors ??= CameraFloor;
         foreach (var c in characters)
