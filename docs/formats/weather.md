@@ -266,6 +266,6 @@ Evidence scopes below apply only to their named sources/checks.
 - Spawning (Verified (decompiled), FUN_1409dcaf0, FUN_140103210; behaviour from fcs.def where marked)
 - The groups in detail (Verified (decompiled) where marked; the rest Observed)
 - The particle scripts (Observed: `data/particles/scripts/*.pu`; the format, the survey and the implementation: [particle-universe.md](particle-universe.md))
-- Effect placers on the map (Verified: records and `features.dat`)
+- Effect placers on the map (Verified: records and `features.dat`); a hidden MAP_FEATURES record still makes its effects: [zones.md](zones.md#placement-files-and-assembly)
 - Base-game data (Verified: merged base records, 2026-10-05)
 - Effects on characters (Verified (decompiled), FUN_1405cf790 and the functions named there; Verified probe of the merged data, 2026-10-23)
