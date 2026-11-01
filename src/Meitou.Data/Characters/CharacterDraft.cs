@@ -133,10 +133,13 @@ public sealed class CharacterDraft
     /// to be completely playable it must have a editor limits file and be on any race group"); groups left empty are not offered.
     /// </summary>
     public static IReadOnlyList<EditorRaceGroup> PlayableRaces(GameDatabase db) =>
-        [.. db.OfType(FcsRecordType.RACE_GROUP)
+        playableRaces.GetValue(db, static db => [.. db.OfType(FcsRecordType.RACE_GROUP)
             .Select(g => new EditorRaceGroup(g, [.. g.GetReferences("races").Select(r => db.Find(r.TargetStringId))
                 .Where(r => r is { Type: FcsRecordType.RACE } && r.GetBool("playable", true) && r.GetPath("editor limits").Length > 0).Select(r => r!)]))
-            .Where(g => g.Races.Count > 0)];
+            .Where(g => g.Races.Count > 0)]);
+
+    /// <summary>The playable races by database, made once: the editor's interface asks every frame, and the search walks every record.</summary>
+    static readonly System.Runtime.CompilerServices.ConditionalWeakTable<GameDatabase, IReadOnlyList<EditorRaceGroup>> playableRaces = new();
 
     /// <summary>
     /// <see cref="PlayableRaces(GameDatabase)"/> limited to <paramref name="only"/> (a start's <c>force race</c>); when that leaves none, the original says "Game start has

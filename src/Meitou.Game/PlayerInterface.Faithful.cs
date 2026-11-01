@@ -60,7 +60,10 @@ sealed partial class PlayerInterface
                 Meitou.Engine.Input.Key.Enter => UiListKey.Accept, _ => (UiListKey?)null,
             } is { } listKey && faithfulScreens.ListKey(listKey)) return true;
         if (DialogueKey(key)) return true;
-        if (faithfulScreens.HasModal) return true;
+        // A modal screen (the menu, a message box, the character editor) takes the keys, except the host's own: quicksave / quickload, the screenshot and the debug overlays.
+        if (faithfulScreens.HasModal)
+            return !(Bound(InputAction.QuickSave, key) || Bound(InputAction.QuickLoad, key) || Bound(InputAction.Screenshot, key) ||
+                Bound(InputAction.ToggleStats, key) || Bound(InputAction.ToggleFps, key) || Bound(InputAction.CycleProfiler, key));
         // change_squad (Tab by default): the squad bar shows the next squad with members (docs/game/ui-input.md section 6).
         if (Bound(InputAction.ChangeSquad, key) && !TitleOpen && !EditorOpen) { Say(new ActiveSquadCommand(-1) { Tick = session.World.Tick }); return true; }
         if (ReservedKeys.Contains(key)) return false;

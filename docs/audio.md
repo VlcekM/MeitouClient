@@ -210,7 +210,7 @@ gun's shot sounds on the building's object (see **Turrets**). `UI_Generator` (`F
 **Meitou:** door sounds as above (`Meitou.Audio.DoorSounds`, fed each frame by `GameHost.UpdateDoorSounds` from the snapshot's doors, which carry each door's
 position, record and broken flag). A door object takes the leaf's centre, else its building's origin. A door missing from the snapshot is closed, since the
 snapshot leaves out plainly closed doors. A door seen for the first time is assumed to have been closed (if it is opening) or open (if it is closing); one at rest is taken as it is, so a load is quiet. Doors over 3000 units from the eye are skipped
-(**engine choice**; the exe posts for every door). F11 counts the door sounds.
+(**engine choice**; the exe posts for every door). The `--quit-after` log counts the door sounds.
 
 **Break** (**Verified**, `DoorStuff::vfunc_62` `14029d690`, `WallBuilding::vfunc_62` `14029d560`; the damage entry of the building, called through the vtable). Given a hit's two floats (`p0`, `p1`; `p1` is the heavier term): a door that is not already broken takes
 `clamp(2·p1 + 0.5·p0, 20, 60)` and loses 0.015 × that of its integrity (wall: half the sum, clamped 10 to 60, 0.003 ×); when the integrity is 0 or less it is marked broken (virtual `+0x310`/`+0x340`) and `Break` posts on the building's object. **Neither
@@ -485,7 +485,7 @@ other sounds at the listener (dry or sent); a sound mixed in the last block coun
 are silent: one heard last block first fades out over a block, then its voice keeps its clock without decoding (`Voice.Skip`); back among the loudest it
 moves its place within the decoded frames, or reopens and seeks (an error ends the voice, never the mix), and fades in over one block; a one-shot that ran out
 meanwhile ends. Trimmed music clips are never
-capped. The game's own Wwise limits (`STMG` max voices and volume threshold, each node's max instances, read but not modelled) are not this rule. F11
+capped. The game's own Wwise limits (`STMG` max voices and volume threshold, each node's max instances, read but not modelled) are not this rule. The `--quit-after` log
 shows how many sounds were capped. After the mix a peak limiter (both modes, `AudioOutput.Limit`: ceiling 0.89, instant attack, 0.15 s release) turns a
 loud sum down instead of hard-clipping it at the 16-bit conversion.
 
@@ -522,7 +522,7 @@ banks left behind (they stay loaded: about 5 to 14 MB of Ogg each; the music ban
 ## In the viewer and the game
 
 On by default; `--no-audio` turns it off, `--audio-gain <dB>` raises or lowers everything. The console (the game's `log.txt`) prints the device, or
-why there is none: the host then runs silently. F11's statistics show the biome, day or night, rain, wind and the number of voices, and the music: the
+why there is none: the host then runs silently. The `--quit-after` log's `audio` line shows the biome, day or night, rain, wind and the number of voices, and the music: the
 main theme or the remembered biome music, seconds until the timer next posts it, music voices (`AudioSystem.StatsLine`; paused shows). Both hosts feed
 `AudioSystem.Update` each frame (region under the pivot, weather, hour, sunrise and sunset, eye height).
 
@@ -543,10 +543,10 @@ main theme or the remembered biome music, seconds until the timer next posts it,
     rain and wind end) and `StartMainTheme` runs again, so the menu sounds as at start-up; the next game's first update re-enters its biome.
   - **World sounds** (`GameHost.AudioWorld.cs`, each frame after the ambience): the building under the pivot (`InteriorSounds`, [Interiors](#interiors)) and the building emitters (`WorldEmitters`,
     [Point emitters](#point-emitters)) with the eye as the distance origin. The level's emitters are read once on a worker (`WorldObjects.Emitters`), a player-built site's when it completes. The main menu ends the
-    interior ambience and stops the emitters. `GameHost.AudioEffects.cs` adds the effect emitters (sky beams) and `GameHost.AudioTurrets.cs` the turrets' movement sounds ([Other world-side events](#other-world-side-events)); robot spiders are in `CharacterSounds`. The console prints the number of emitters read; the statistics line `world audio` (F11 and the end-of-run `audio     world:`) shows indoors or outdoors, emitters playing of
+    interior ambience and stops the emitters. `GameHost.AudioEffects.cs` adds the effect emitters (sky beams) and `GameHost.AudioTurrets.cs` the turrets' movement sounds ([Other world-side events](#other-world-side-events)); robot spiders are in `CharacterSounds`. The console prints the number of emitters read; the end-of-run line `audio     world:` shows indoors or outdoors, emitters playing of
     all, and the nearest one's name and distance.
   - **Characters and interface.** `UpdateAudio` also calls `UpdateCharacterAudio` (`GameHost.AudioCharacters.cs`, [Characters](#characters-footsteps-combat-voices)); the interface sounds are on from `AttachAudio`, also on the
-    title screen (`GameHost.AudioUi.cs`). `VO_Bank` loads with the first character. F11 and the `--quit-after` log show `characters: N characters, N footsteps, N swings, N impacts, N voices, N interface sounds`.
+    title screen (`GameHost.AudioUi.cs`). `VO_Bank` loads with the first character. The `--quit-after` log shows `characters: N characters, N footsteps, N swings, N impacts, N voices, N interface sounds`.
   - Not in screenshots, the headless paths or tests: only the interactive run creates the audio.
 
 ## Tools

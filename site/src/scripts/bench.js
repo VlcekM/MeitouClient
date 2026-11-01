@@ -6,7 +6,8 @@
     { key: "over33_pct", label: "Frames over 33 ms (%)", unit: "%", primary: true },
     { key: "p50_ms", label: "p50 frame time (ms)", unit: " ms" },
     { key: "slow_world_p99_ms", label: "Slow-world tick p99 (ms)", unit: " ms" },
-    { key: "avg_fps", label: "Average fps", unit: " fps", higher: true }
+    { key: "avg_fps", label: "Average fps", unit: " fps", higher: true, optional: true },
+    { key: "vram_peak_mb", label: "Peak video memory (MB)", unit: " MB", optional: true }
   ];
   var ALLM = METRICS.concat([
     { key: "max_ms", label: "Max frame (ms)", unit: " ms" },
@@ -60,15 +61,15 @@
   function mres(m) { return m.screen || m.resolution; }
   function mresTip(m) { return m.screen && m.screen !== m.resolution ? m.screen + " screen, renders at " + m.resolution : m.resolution; }
   function platLabel(m) { return PLAT[m.platform] || m.platform; }
-  // Does this machine have average-fps values at all? (older kit versions do not record it)
-  function hasFps(m) { return D.rows.some(function (r) { return r.machine === m.id && r.metrics.avg_fps != null; }); }
-  function anyFps(ms) { return ms.some(hasFps); }
+  // Does this machine have values of an optional metric at all? (older kit versions record neither average fps nor video memory)
+  function hasMetric(m, key) { return D.rows.some(function (r) { return r.machine === m.id && r.metrics[key] != null; }); }
+  function anyMetric(ms, key) { return ms.some(function (m) { return hasMetric(m, key); }); }
   // The one machine the headline and the timeline numbers come from: the one named by ?m= in the address, else the maintainer, else the first selected.
   function pageMachine() {
     var sel = selectedMachines();
     return sel.filter(function (m) { return m.id === state.hm; })[0] || sel.filter(function (m) { return m.maintainer; })[0] || sel[0];
   }
-  function metricsFor(mlist, list) { return list.filter(function (mt) { return mt.key !== "avg_fps" || anyFps(mlist); }); }
+  function metricsFor(mlist, list) { return list.filter(function (mt) { return !mt.optional || anyMetric(mlist, mt.key); }); }
   function mcolor(m) { return "var(--m" + (D.machines.indexOf(m) % 8) + ")"; }
   function mdot(m) { return '<span class="dot" style="background:' + mcolor(m) + '"></span>'; }
   function machineById(id) { return D.machines.filter(function (m) { return m.id === id; })[0]; }
@@ -493,7 +494,7 @@
 
   // Headline: the newest benchmarked commit against the one before it (upstream order), for the primary selected machine.
   // Tiles show the change first; every number uses the same basis as Compare (see val()).
-  var TILES = [["p99_ms", "p99 frame time", " ms"], ["over33_pct", "Frames over 33 ms", "%"], ["slow_world_p99_ms", "Slow-world tick p99", " ms"], ["avg_fps", "Average fps", " fps", true]];
+  var TILES = [["p99_ms", "p99 frame time", " ms"], ["over33_pct", "Frames over 33 ms", "%"], ["slow_world_p99_ms", "Slow-world tick p99", " ms"], ["avg_fps", "Average fps", " fps", true], ["vram_peak_mb", "Peak video memory", " MB"]];
   function renderHeadline() {
     var host = document.getElementById("headline");
     host.innerHTML = "";
@@ -523,7 +524,7 @@
         verdict.textContent = (dl.cls === "" ? "No clear change" : dl.d < 0 ? "Faster" : "Slower") + ": p99 " + (dl.pct == null ? dFmt(dl.d) : pctFmt(dl.pct));
       }
       card.appendChild(verdict);
-      TILES.filter(function (t) { return t[0] !== "avg_fps" || hasFps(mc); }).forEach(function (t) {
+      TILES.filter(function (t) { return (t[0] !== "avg_fps" && t[0] !== "vram_peak_mb") || hasMetric(mc, t[0]); }).forEach(function (t) {
         var v = val(mc, cur.commit, sid, t[0]), pv = prev ? val(mc, prev.commit, sid, t[0]) : null, big = "", cls = "", small = "";
         if (v != null && pv != null) {
           var d2 = delta(pv, v, t[3]);

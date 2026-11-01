@@ -24,8 +24,8 @@ public sealed record BodyOptions
     public float HungerTime { get; init; } = 1;
     /// <summary><b>Chance of death</b> (0.5 to 4): multiplies the bleed rate and the wound degeneration. Not starvation.</summary>
     public float ChanceOfDeath { get; init; } = 1;
-    /// <summary><b>Global damage multiplier</b> (0.5 to 4): scales combat XP (and damage, combat.md).</summary>
-    public float GlobalDamageMultiplier { get; init; } = 1;
+    /// <summary><b>Global damage multiplier</b> (0.5 to 4): scales combat XP (and damage, combat.md). Settable: the debug menu changes it in a running world (<see cref="DebugDamageMultiplier"/>).</summary>
+    public float GlobalDamageMultiplier { get; set; } = 1;
     /// <summary>Settable: the original reads its global when a part is damaged, so a change on the Gameplay page reaches the running world at once.</summary>
     public Dismemberment Dismemberment { get; set; } = Dismemberment.Rare;
     /// <summary>
@@ -33,4 +33,15 @@ public sealed record BodyOptions
     /// (<see cref="MedicalState.Decapitated"/>). Settable, as <see cref="Dismemberment"/>.
     /// </summary>
     public bool Decapitation { get; set; } = true;
+    /// <summary>
+    /// Meitou (on; Faithful off, the original starts a ragdoll at rest with hard joint limits): a new whole-body ragdoll goes on with the character's motion and the downing blow's push
+    /// (its arms and legs spun by it), its joints get soft limits and a limp body a relaxed pull (docs/game/ragdolls.md "Advanced ragdolls (Meitou)"), and a cut-off
+    /// head is thrown with it (<see cref="Ragdolls.RagdollSystem"/>, <c>CombatSystem.Knockdown</c>). Settable, as <see cref="Dismemberment"/>.
+    /// </summary>
+    public bool AdvancedRagdolls { get; set; } = true;
+    /// <summary>
+    /// Debug (F10 "Force hits to", <see cref="DebugForceHits"/>): every blow lands on the part of this template string id, else of this name, when the victim has it and a blow
+    /// could pick it; else as usual. Null: off. Not saved.
+    /// </summary>
+    public (string Id, string Name)? ForcedHitPart { get; set; }
 }

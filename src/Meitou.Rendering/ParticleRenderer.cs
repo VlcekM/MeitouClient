@@ -92,8 +92,10 @@ public sealed unsafe class ParticleRenderer : IDisposable
         uniform int uCoverage;                      // 0: colour; 1: the particle's alpha, 2: its brightest channel (the upscalers' reactive mask); 3 / 4: the low-resolution target's premultiplied alpha / additive
         void main()
         {
-            // basic.hlsl: texture * colour * vertex colour
-            vec4 c = texture(uTexture, vUv) * vColour;
+            // basic.hlsl: texture * colour * vertex colour. A recoloured burst (negative vertex rgb, Burst's recolour) takes that colour instead of the texture's hue, keeping its brightness.
+            vec4 t = texture(uTexture, vUv);
+            if (min(vColour.r, min(vColour.g, vColour.b)) < 0.0) t.rgb = vec3(max(t.r, max(t.g, t.b)));
+            vec4 c = t * abs(vColour);
             // Meitou fog: the sprite fades out over its last vSoft units before the surface behind it, instead of cutting into it.
             if (uSoft.x > 0.0)
             {
@@ -299,13 +301,14 @@ public sealed unsafe class ParticleRenderer : IDisposable
     /// <summary>
     /// Fires the particle system <paramref name="system"/> once at <paramref name="position"/>, its emitters turned by <paramref name="orientation"/>, emitting for
     /// <paramref name="seconds"/> of the frame clock, the particles <paramref name="size"/> times as big and <paramref name="lifeScale"/> times as long-lived
-    /// (luckyren Mode's blood). Drawn with the map's placers; an unknown system does nothing.
+    /// (luckyren Mode's blood). With <paramref name="recolour"/> the particles take that colour (rgb, 0 to about 2) in place of their texture's hue (a race's <c>blood colour</c>).
+    /// Drawn with the map's placers; an unknown system does nothing.
     /// </summary>
-    public void Burst(string system, Vector3 position, Quaternion orientation, float seconds, float size = 1, float lifeScale = 1)
+    public void Burst(string system, Vector3 position, Quaternion orientation, float seconds, float size = 1, float lifeScale = 1, Vector3? recolour = null)
     {
         if (!Enabled) return;
         Sync();
-        if (BurstGroup(system) is { } group) group.Spawn(position, orientation, seconds, size, lifeScale);
+        if (BurstGroup(system) is { } group) group.Spawn(position, orientation, seconds, size, lifeScale, recolour);
     }
 
     /// <summary>Makes the <see cref="Burst"/> groups of <paramref name="systems"/> and starts decoding their textures, so a first burst is not drawn without them.</summary>
