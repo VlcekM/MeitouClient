@@ -681,6 +681,15 @@ yellow. Original: polygons magenta, ends orange, edges joined to the next tile v
 **Observed** (Hub, zone 20.32): the original's polygons are large and simplified, building footprints are holes (interiors separate), and rock and cliff
 cuts follow the blocky 36-unit terrain grid (generator inputs, terrain). The original has no such view (`rebuild_navmesh` Ctrl+Shift+F11 only rebuilds).
 
+### Search cost
+
+Engine facts (our A*, not the original's Havok query). Each expanded polygon relaxes its neighbours; a relaxation places the crossing on the shared edge
+that makes the detour to the goal shortest (`BestCrossing`, a golden-section search: 12 steps, 14 detours, the interval narrowed to 0.3 %). The game's
+exit log prints the searches, the polygons each expanded on average and how many ran to `NavQuery.MaxIterations`. **Observed** (save with five
+player characters apart, ~1,400 characters loaded, 75 s of flights between them): ~12,000 searches of ~11,000 polygons each, under 1 % at the limit;
+the search was 77 % of the simulation's busy CPU. The golden section (was 14 ternary steps, 28 detours) answered 14 % more searches in the same
+time and moved pinned path points by about a unit.
+
 ## Gate codes
 
 The original labels the walkable ground by the gates (**Verified** structure, decompile of 1.0.68):
