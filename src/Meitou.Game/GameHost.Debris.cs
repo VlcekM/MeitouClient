@@ -275,6 +275,8 @@ sealed partial class GameHost
     /// <summary>The tracers drawn, by bolt id: one keeps shrinking after its bolt stops (<see cref="Trail.Stopped"/>) until it is gone.</summary>
     readonly Dictionary<int, Trail> trails = [];
     readonly List<int> trailsGone = [];
+    /// <summary>The <see cref="worldEpoch"/> <see cref="trails"/> belong to: a load or a new world drops the old world's.</summary>
+    int trailsEpoch = -1;
 
     sealed class Trail
     {
@@ -300,6 +302,7 @@ sealed partial class GameHost
     {
         if (gpu.Particles is not { } particles) return;
         particles.Tracers.Clear();
+        if (trailsEpoch != worldEpoch) { trails.Clear(); trailsEpoch = worldEpoch; }
         if (!o.MeitouTracers) { trails.Clear(); return; }
         double clock = (session.ShownTick + session.SimulationAlpha) * world.TickSeconds;
         foreach (var p in session.CurrentSnapshot.Projectiles)

@@ -822,7 +822,7 @@ renderer draws them (in flight interpolated between ticks); a stuck bolt sits 2 
 the random vertex), not saved.
 Meitou `tracers` switch (default; Faithful: none, as the game): a semi-transparent streak behind each drawn bolt in flight (`GameHost.AddTracers`, drawn by
 `ParticleRenderer.Tracers` with the particles), white and unlit, 0.2 s of its flight long (at most 500 units, never back past the muzzle); when the bolt sticks or goes, its tail
-flies on into the stop point within 0.2 s. Not a base-game behaviour!
+flies on into the stop point within 0.15 s. Needs the particle renderer: nothing shows with `--no-particles`. Not a base-game behaviour!
 
 ### Shot origin and flight collision
 
