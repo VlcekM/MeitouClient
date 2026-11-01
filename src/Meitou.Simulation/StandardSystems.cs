@@ -207,7 +207,7 @@ public static class StandardSystems
         {
             var library = o.AnimationLibrary ?? AnimationLibrary.FromDatabase(data.Db);
             var lengths = o.AnimationLengths ?? new AnimationLengths();
-            var animation = new AnimationSystem(library, lengths, o.AnimationBlendRate ?? 4, combat);
+            var animation = new AnimationSystem(library, lengths, o.AnimationBlendRate ?? 4, combat) { Rigs = o.Ragdolls };
             systems.Add(StandardParts.Animation, animation);
             // Ragdolls right after the animation: they start from and pin to this tick's pose, and the whole body's position is theirs before anything later reads it.
             if (o.Ragdolls is not null) systems.Add(StandardParts.Animation, ragdolls = new Meitou.Simulation.Ragdolls.RagdollSystem(o.Ragdolls, o.RagdollEnvironment, data.BodyOptions));

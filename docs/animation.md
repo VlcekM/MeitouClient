@@ -20,6 +20,10 @@ Hit reactions: the six ANIMATION records with `stumbles` all relocate; their `Bi
 `mid blow` 4.63 s peak 18 back (~45%) ending 4 back, `back blow light` 0.67 s ~0, `back blow low` 1.47 s 17.7
 forward, `mid blow drop` 6.57 s ~4 back, `back blow high` has no clip. When they play: [combat.md](game/combat.md#hit-reactions).
 
+### Clips a body lacks
+
+**Verified** (layer manager update `@ 1405b5c30`, with `FUN_1405b3090` / `FUN_14051caa0`): a layer whose animation the character's entity does not have (`hasAnimationState` false) is deleted before the weights are summed or scaled, so it takes no weight from the other layers. **Observed** (the base game plus a large mod list, rigs of the humanoid races): ~8 ANIMATION records resolve on no humanoid skeleton, e.g. `Block pole bottom` and `GROUNDED_BlowBack_Chest low`, whose clips only a mod's female animation file holds, and `stand 1 sword lefty`. Meitou: the renderer finds no layer for them, so before this a wanted one took the whole body half's weight (`Publish`) and the body stood in the binding pose until it ended. `AnimationSystem.Plays` (`CharacterRigs.Plays`, cached per appearance) drops such wanted layers, and a technique or hit reaction the body cannot play is not started (it stays in its stance; the combat system still holds it for the clip's length). **Unknown**: what the original picks when its hit reaction clip is missing.
+
 ### Clip times between ticks
 
 Engine choice (`GameHost.LayerTime`): the host draws a layer's clip time from the last tick's towards this one's by the shorter way round the clip (by the layer's

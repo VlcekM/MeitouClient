@@ -30,6 +30,9 @@ public sealed class CharacterAnimation
     public int Count;
     /// <summary>Phase of the synched movement clips in cycles (0..1): the lower and the upper body, and a walk fading into a run, stay in step.</summary>
     public float Phase;
+    /// <summary>Per definition whether this body's rig plays it (1 yes, -1 no, 0 not asked), for the appearance <see cref="PlaysFor"/>.</summary>
+    internal sbyte[]? Plays;
+    internal object? PlaysFor;
     /// <summary>Cycles per second the phase advances: written whenever the lower movement blend is picked (<b>Verified</b> <c>@ 14051d8e0</c>, <c>@ 14051d000</c>), kept while no such pick runs (standing out of combat, a technique): the legs go on stepping through their fade-out.</summary>
     public float PhaseRate;
     /// <summary>The idle chosen, and the seconds it still plays before another is chosen (-1 / 0: none yet).</summary>
@@ -141,6 +144,24 @@ public sealed class AnimationSystem(AnimationLibrary library, AnimationLengths l
     public AnimationLengths Lengths { get; } = lengths;
     /// <summary>The CONSTANTS <c>animation blend rate</c> (fcs.def default 4, "1 is very slow"): weight per second.</summary>
     public float BlendRate { get; } = blendRate;
+
+    /// <summary>
+    /// The skeleton rigs, to know which clips a body can play (<see cref="Plays"/>); null: every clip plays (tests, headless worlds).
+    /// </summary>
+    public Meitou.Data.Characters.CharacterRigs? Rigs { get; init; }
+
+    /// <summary>
+    /// Whether the character's skeleton has the clip of definition <paramref name="index"/>. <b>Verified</b> (<c>FUN_1405b5c30</c>, the layer manager's update): a layer whose animation
+    /// the entity lacks is deleted before the weights are summed or scaled, so it never takes weight from the others. A clip only a mod's other-sex animation file holds is such a one.
+    /// </summary>
+    bool Plays(CharacterAnimation a, CharacterCold cold, int index)
+    {
+        if (Rigs is null || cold.Appearance is not { } look) return true;
+        if (!ReferenceEquals(a.PlaysFor, look) || a.Plays is null) (a.PlaysFor, a.Plays) = (look, new sbyte[Library.Definitions.Count]);
+        ref sbyte known = ref a.Plays[index];
+        if (known == 0) known = (sbyte)(Rigs.Plays(look, Library.Definitions[index].Name) ? 1 : -1);
+        return known > 0;
+    }
     /// <summary>The ragdolls (null: none; the fall and lying clips stand in for them). Read in the parallel phase: the last tick's state.</summary>
     public Meitou.Simulation.Ragdolls.IRagdollState? Ragdolls { get; set; }
 
@@ -420,12 +441,13 @@ public sealed class AnimationSystem(AnimationLibrary library, AnimationLengths l
         a.WasDown = down;
         a.WasCrawling = cold.Medical is { Crawling: true };
         // The hit reaction the combat system picked (it holds the character helpless for the clip's length; see ChooseStumble).
-        if (!down && !carried && fight.StumbleClip >= 0 && fight.StumbleStart > a.SeenHit)
+        if (!down && !carried && fight.StumbleClip >= 0 && fight.StumbleStart > a.SeenHit && Plays(a, cold, fight.StumbleClip))
         {
             a.SeenHit = fight.StumbleStart;
             StartAction(a, fight.StumbleClip, true);
         }
         int technique = down || carried ? -1 : fight.Technique;   // a carried body plays nothing but its held pose
+        if (technique >= 0 && !Plays(a, cold, technique)) technique = -1;   // a blow or block its body has no clip for leaves it in its stance, not the binding pose
         bool fullTechnique = technique >= 0 && Library.Definitions[technique].Area == AnimationArea.All;
         // A technique cuts a reaction or getting up short, and so does walking off (except a hit reaction, which moves the character itself); a stumble the combat system
         // ended with a won break-out fades out (FUN_140609290 -> FUN_1405b36f0, docs/game/combat.md "Hit reactions").
@@ -552,6 +574,9 @@ public sealed class AnimationSystem(AnimationLibrary library, AnimationLengths l
             a.Idle = -1;
         }
 
+        if (Rigs is not null)
+            for (int k = wanted.Count - 1; k >= 0; k--)
+                if (!Plays(a, cold, wanted[k].Index)) { wanted.RemoveAt(k); if (k < legs) legs--; }
         return Settle(a, wanted, legs, lift, liftTime, technique, fight, speed, dt, Lengths, 1, seed, key, tick, legsShare);
     }
 
