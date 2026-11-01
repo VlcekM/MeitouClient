@@ -490,10 +490,10 @@ static class PostProcessShaders
         """;
 
     /// <summary>
-    /// The low-resolution particles' depth (Meitou): each texel is the nearest (texels with x + y even) or the farthest (odd) of the <c>uDiv</c> x <c>uDiv</c>
-    /// block of the scene's depth it covers, written as the depth of a depth-only rendering, so the hardware test of the particle draws still rejects the
-    /// sprite area hidden behind the scene (early-Z). Every 2 x 2 footprint of the upsample holds two of each, so a pixel on a thin near object (a character's
-    /// limb) finds texels tested against it and a pixel of the background behind it finds texels tested against the background.
+    /// The low-resolution particles' depth (Meitou): each texel is the nearest or the farthest of the <c>uDiv</c> x <c>uDiv</c> block of the scene's depth it
+    /// covers, written as the depth of a depth-only rendering, so the hardware test of the particle draws still rejects the sprite area hidden behind the scene
+    /// (early-Z). <c>uLayer</c> 1: the nearest, 2: the farthest (the Vulkan chain draws the particles once against each, <see cref="ParticleUpsampleLayered"/>);
+    /// 0: the nearest where x + y is even and the farthest where odd (the Metal chain: one draw, every 2 x 2 footprint of the upsample holds two of each).
     /// </summary>
     public const string ParticleDepth = """
         #version 330 core
@@ -502,6 +502,7 @@ static class PostProcessShaders
         uniform sampler2D uDepth;
         uniform vec2 uFullSize;
         uniform float uDiv;
+        uniform int uLayer;
         void main()
         {
             vec2 base = floor(gl_FragCoord.xy) * uDiv;
@@ -515,7 +516,7 @@ static class PostProcessShaders
                         far = max(far, d);
                     }
             ivec2 t = ivec2(gl_FragCoord.xy);
-            gl_FragDepth = ((t.x + t.y) & 1) == 0 ? near : far;
+            gl_FragDepth = uLayer == 1 || (uLayer == 0 && ((t.x + t.y) & 1) == 0) ? near : far;
             fragColour = vec4(gl_FragDepth);   // the same depth as a colour, for the Meitou fog's soft fade (the depth attachment cannot be read while tested)
         }
         """;
@@ -608,6 +609,197 @@ static class PostProcessShaders
                     weights += w;
                 }
             return weights > 0.0 ? sum / weights : vec4(0.0);
+        }
+        """;
+
+    /// <summary>
+    /// The depth-aware upsample of the low-resolution particles drawn twice (the Vulkan chain): <c>uAccum</c> tested against each block's nearest depth
+    /// (<c>uLowDepth</c>), <c>uAccumFar</c> against its farthest (<c>uLowDepthFar</c>; <see cref="ParticleDepth"/> layers 1 and 2). Each of the four nearest
+    /// texels offers both, each weighted bilinearly (plus a floor) and divided by the square of how far its depth is from this pixel's (relative, linear), so
+    /// a pixel takes the sprites tested against its own surface from every texel round it: on a ridge the near draw's, on the land behind it the far draw's
+    /// (which holds what lies between the ridge and the land). The one-draw checkerboard (<see cref="ParticleUpsample"/>) had those texels only every other
+    /// one along an edge, and the dust behind a ridge followed it in steps of two texels. <c>footprint</c> as there.
+    /// </summary>
+    const string ParticleUpsampleLayered = """
+        uniform sampler2D uAccum, uLowDepth, uAccumFar, uLowDepthFar, uDepth;
+        uniform vec2 uLowSize;
+        uniform vec2 uNearPlanes;   // near, far of the depth slice the particles were tested against
+        uniform float uDiv;
+        uniform int uClipDepthZeroToOne;   // Metal's depth is 0..1; Vulkan's is recovered with 2d - 1
+        float linearZ(float d) { float zd = uClipDepthZeroToOne != 0 ? d : 2.0 * d - 1.0; return uNearPlanes.x * uNearPlanes.y / (uNearPlanes.y - zd * (uNearPlanes.y - uNearPlanes.x)); }
+        vec4 particlesAt(vec2 fc, bool footprint)
+        {
+            vec2 lp = fc / uDiv - 0.5;
+            vec2 f = lp - floor(lp);
+            ivec2 i0 = ivec2(floor(lp));
+            ivec2 hi = ivec2(uLowSize) - 1;
+            ivec2 q[4];
+            vec4 an[4], af[4];
+            float total = 0.0;
+            for (int i = 0; i < 4; i++)
+            {
+                q[i] = clamp(i0 + ivec2(i & 1, i >> 1), ivec2(0), hi);
+                an[i] = texelFetch(uAccum, q[i], 0);
+                af[i] = texelFetch(uAccumFar, q[i], 0);
+                total += an[i].a + an[i].r + an[i].g + an[i].b + af[i].a + af[i].r + af[i].g + af[i].b;
+            }
+            if (total <= 0.0) return vec4(0.0);
+            float d0 = texelFetch(uDepth, ivec2(fc), 0).r;
+            if (footprint)
+            {
+                ivec2 r0 = ivec2(floor(fc - 0.5)), rhi = textureSize(uDepth, 0) - 1;
+                d0 = min(min(texelFetch(uDepth, clamp(r0, ivec2(0), rhi), 0).r, texelFetch(uDepth, clamp(r0 + ivec2(1, 0), ivec2(0), rhi), 0).r),
+                         min(texelFetch(uDepth, clamp(r0 + ivec2(0, 1), ivec2(0), rhi), 0).r, texelFetch(uDepth, clamp(r0 + ivec2(1, 1), ivec2(0), rhi), 0).r));
+            }
+            float z0 = linearZ(d0);
+            vec4 sum = vec4(0.0);
+            float weights = 0.0;
+            for (int i = 0; i < 4; i++)
+            {
+                float bw = ((i & 1) == 0 ? 1.0 - f.x : f.x) * ((i >> 1) == 0 ? 1.0 - f.y : f.y) + 0.05;
+                float en = 0.02 + abs(linearZ(texelFetch(uLowDepth, q[i], 0).r) - z0) / z0;
+                float ef = 0.02 + abs(linearZ(texelFetch(uLowDepthFar, q[i], 0).r) - z0) / z0;
+                float wn = bw / (en * en), wf = bw / (ef * ef);
+                sum += an[i] * wn + af[i] * wf;
+                weights += wn + wf;
+            }
+            return sum / weights;
+        }
+        """;
+
+    /// <summary>
+    /// The low-resolution particles over the vendor upscaler's output (<c>PostProcess.CompositeLateParticlesFiltered</c>): both sizes (uHas: their divisors,
+    /// 0 for none; each as <see cref="ParticleUpsampleLayered"/>, the quarter size over the half), at the surfaces of the four render pixels round the display
+    /// pixel (the jitter undone: render pixel i shows the unjittered picture at i + 0.5 - jitter), weighted bilinearly; then the temporal filter: last
+    /// frame's (uHistory, reprojected by the closest of the four's motion) kept within the four values and blended in. Off an outline the four agree, so
+    /// drifting dust does not trail; on one they follow the jitter, which averages out into the upscaler's smooth edge instead of a staircase.
+    /// </summary>
+    public const string ParticleLate = """
+        #version 330 core
+        in vec2 vUv;
+        out vec4 fragColour;
+        uniform sampler2D uAccumH, uLowDepthH, uAccumFarH, uLowDepthFarH, uAccumQ, uLowDepthQ, uAccumFarQ, uLowDepthFarQ;
+        uniform sampler2D uDepth;               // the scene's (near slice) depth at the render size
+        uniform sampler2D uHistory;             // last frame's result at the display size
+        uniform sampler2D uMotion;              // the motion target (rg: this frame's place minus last frame's, 0..1 units)
+        uniform vec2 uLowSizeH, uLowSizeQ;
+        uniform vec4 uHas;                      // x the half size's divisor, y the quarter's (0: not drawn)
+        uniform vec2 uNearPlanes;
+        uniform int uClipDepthZeroToOne;
+        uniform vec4 uLate;                     // xy render pixels per display pixel, zw the jitter (render pixels)
+        uniform vec4 uTarget;                   // xy the display size, z 1 with a history, w this frame's share
+        float linearZ(float d) { float zd = uClipDepthZeroToOne != 0 ? d : 2.0 * d - 1.0; return uNearPlanes.x * uNearPlanes.y / (uNearPlanes.y - zd * (uNearPlanes.y - uNearPlanes.x)); }
+
+        // One size at render position fc for the four surfaces' distances z: each of its four nearest texels offers the near and the far draw, weighted
+        // bilinearly (plus a floor) over the square of their depth's distance from the surface's.
+        bool layerAt(sampler2D accum, sampler2D lowDepth, sampler2D accumFar, sampler2D lowDepthFar, vec2 lowSize, float div, vec2 fc, float z[4], out vec4 v[4])
+        {
+            vec2 lp = fc / div - 0.5;
+            vec2 f = lp - floor(lp);
+            ivec2 i0 = ivec2(floor(lp));
+            ivec2 hi = ivec2(lowSize) - 1;
+            vec4 an[4], af[4];
+            float zn[4], zf[4], bw[4];
+            float total = 0.0;
+            for (int k = 0; k < 4; k++)
+            {
+                ivec2 q = clamp(i0 + ivec2(k & 1, k >> 1), ivec2(0), hi);
+                an[k] = texelFetch(accum, q, 0);
+                af[k] = texelFetch(accumFar, q, 0);
+                total += dot(an[k], vec4(1.0)) + dot(af[k], vec4(1.0));
+                zn[k] = linearZ(texelFetch(lowDepth, q, 0).r);
+                zf[k] = linearZ(texelFetch(lowDepthFar, q, 0).r);
+                bw[k] = ((k & 1) == 0 ? 1.0 - f.x : f.x) * ((k >> 1) == 0 ? 1.0 - f.y : f.y) + 0.05;
+            }
+            for (int i = 0; i < 4; i++) v[i] = vec4(0.0);
+            if (total <= 0.0) return false;
+            for (int i = 0; i < 4; i++)
+            {
+                vec4 sum = vec4(0.0);
+                float weights = 0.0;
+                for (int k = 0; k < 4; k++)
+                {
+                    float en = 0.02 + abs(zn[k] - z[i]) / z[i], ef = 0.02 + abs(zf[k] - z[i]) / z[i];
+                    float wn = bw[k] / (en * en), wf = bw[k] / (ef * ef);
+                    sum += an[k] * wn + af[k] * wf;
+                    weights += wn + wf;
+                }
+                v[i] = sum / weights;
+            }
+            return true;
+        }
+
+        void main()
+        {
+            vec2 rp = gl_FragCoord.xy * uLate.xy - 0.5 + uLate.zw;
+            vec2 b = floor(rp), f = rp - b;
+            ivec2 last = textureSize(uDepth, 0) - 1;
+            float z[4], bil[4];
+            float closest = 2.0;
+            ivec2 qClosest = ivec2(0);
+            for (int i = 0; i < 4; i++)
+            {
+                ivec2 q = clamp(ivec2(b) + ivec2(i & 1, i >> 1), ivec2(0), last);
+                float d = texelFetch(uDepth, q, 0).r;
+                z[i] = linearZ(d);
+                bil[i] = ((i & 1) == 0 ? 1.0 - f.x : f.x) * ((i >> 1) == 0 ? 1.0 - f.y : f.y);
+                if (d < closest) { closest = d; qClosest = q; }
+            }
+            vec2 fc = rp + 0.5;
+            vec4 h[4], qv[4];
+            bool anyHalf = uHas.x > 0.5 && layerAt(uAccumH, uLowDepthH, uAccumFarH, uLowDepthFarH, uLowSizeH, uHas.x, fc, z, h);
+            bool anyQuarter = uHas.y > 0.5 && layerAt(uAccumQ, uLowDepthQ, uAccumFarQ, uLowDepthFarQ, uLowSizeQ, uHas.y, fc, z, qv);
+            if (!anyHalf) for (int i = 0; i < 4; i++) h[i] = vec4(0.0);
+            if (!anyQuarter) for (int i = 0; i < 4; i++) qv[i] = vec4(0.0);
+            if (!anyHalf && !anyQuarter) { fragColour = vec4(0.0); return; }
+            vec4 sum = vec4(0.0), lo = vec4(1e30), hi = vec4(-1e30);
+            for (int i = 0; i < 4; i++)
+            {
+                // The quarter size over the half (the order the scene took them in), as one premultiplied layer.
+                vec4 l = vec4(h[i].rgb * (1.0 - qv[i].a) + qv[i].rgb, 1.0 - (1.0 - h[i].a) * (1.0 - qv[i].a));
+                sum += l * bil[i];
+                lo = min(lo, l);
+                hi = max(hi, l);
+            }
+            if (uTarget.z < 0.5) { fragColour = sum; return; }
+            vec2 prev = gl_FragCoord.xy / uTarget.xy - texelFetch(uMotion, qClosest, 0).rg;
+            if (any(lessThan(prev, vec2(0.0))) || any(greaterThan(prev, vec2(1.0)))) { fragColour = sum; return; }
+            fragColour = mix(clamp(textureLod(uHistory, prev, 0.0), lo, hi), sum, uTarget.w);
+        }
+        """;
+
+    /// <summary>The filtered layer of <see cref="ParticleLate"/> blended over the upscaler's output (premultiplied "over", red, green and blue).</summary>
+    public const string ParticleLateApply = """
+        #version 330 core
+        in vec2 vUv;
+        out vec4 fragColour;
+        uniform sampler2D uLayer;
+        void main() { fragColour = texelFetch(uLayer, ivec2(gl_FragCoord.xy), 0); }
+        """;
+
+    /// <summary><see cref="ParticleComposite"/> over <see cref="ParticleUpsampleLayered"/> (the Vulkan chain).</summary>
+    public const string ParticleCompositeLayered = """
+        #version 330 core
+        in vec2 vUv;
+        out vec4 fragColour;
+        uniform float uScale;   // render pixels per target pixel: 1 over the scene, render / display over the upscaler's output
+        uniform int uFootprint; // 1 over the upscaler's output (unjittered): the nearest of the render depth's 2 x 2 round the pixel
+        """ + "\n" + ParticleUpsampleLayered + "\n" + """
+        void main() { fragColour = particlesAt((floor(gl_FragCoord.xy) + 0.5) * uScale, uFootprint != 0); }
+        """;
+
+    /// <summary><see cref="ParticleCoverage"/> over <see cref="ParticleUpsampleLayered"/> (the Vulkan chain).</summary>
+    public const string ParticleCoverageLayered = """
+        #version 330 core
+        in vec2 vUv;
+        out vec4 fragColour;
+        uniform vec2 uFullSize;   // the render size (the target may differ)
+        uniform float uLimit;
+        """ + "\n" + ParticleUpsampleLayered + "\n" + """
+        void main()
+        {
+            vec4 a = particlesAt(floor(vUv * uFullSize) + 0.5, false);
+            fragColour = vec4(clamp(max(a.a, max(a.r, max(a.g, a.b))), 0.0, uLimit));
         }
         """;
 

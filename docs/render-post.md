@@ -122,7 +122,7 @@ Meitou fades each sprite over its last stretch before the surface behind it: a q
 side, 2 to 300 units (0.2 to 30 m), on alpha (alpha sprites), colour (additive) or towards white (modulate); the reactive mask
 fades the same. A draw cannot read the depth it tests against, so the fade reads a colour copy: an R32F copy of the scene depth
 for full-size sprites (`PrepareSoftParticleDepth`, only when some are drawn) and, for the low-resolution ones, the depth pass's
-checkerboard written to an R32F target beside it.
+nearest or farthest depth written to an R32F target beside it.
 **Observed** (the Eye's storm, quarter-size particles): the row of dark beads where the dust meets a dune ridge is fainter.
 The Metal chain has no copy: its sprites stay hard-edged.
 
@@ -142,19 +142,27 @@ terrain can be original ambient-map colour rather than lamp/emissive input. Haze
 and sun; Meitou default strength0.5, game1, slider0..3.
 
 Weather particle resolution: off/quarter/half/auto/full; density multiplies emission and changes
-appearance/population, not just shading cost. Reduced-resolution particles test against a
-checkerboard of each block's nearest/farthest depth, and both the composite and the reactive mask
-upsample by depth match; a farthest-only reduction let dust behind thin characters bleed onto
-their silhouettes, flickering under jitter. Where the four nearest texels span more than 4% in depth, the upsample is a joint
-bilateral filter over the 4x4 texels round the pixel (radial kernel to 2 texels, times the depth match): the four alone gave
-one or two matching texels in turn along an edge, a row of beads two texels apart (**Observed**, the Eye's storm at quarter
-size: the beads gone, a smooth band; elsewhere the picture within 12/255). With a vendor upscaler (DLSS, FSR) the low-resolution particles are
+appearance/population, not just shading cost. The Vulkan chain draws the reduced-resolution particles twice, against each block's
+nearest depth and against its farthest (`ParticleTargetsFar`), and the composite and the reactive mask take, from each of the four
+nearest texels, both draws weighted bilinearly and by how close each draw's depth is to the pixel's (`ParticleUpsampleLayered`): on a
+ridge the near draw's, on the land behind it the far draw's, which holds what lies between them. A farthest-only reduction let dust
+behind thin characters bleed onto their silhouettes; one draw against a checkerboard of the two depths (still the Metal chain's, with
+a joint bilateral 4x4 filter at depth edges) left the matching texels every other one along an edge, so the dust behind a dune ridge
+followed it in steps (**Observed**, mec-tou-nu save: the ridge's outline in front of the far dust stepped, then smooth). With a vendor upscaler (DLSS, FSR) the low-resolution particles are
 blended over its output instead of the scene it upscales (`PostProcess.ParticlesAfterUpscale`, half then quarter size, the composite reading
 the render-size depth at `uScale` render pixels per output pixel), drawn with the unjittered projection, and left out of the reactive mask:
 DLSS took drifting see-through dust as standing still (its default preset ignores the reactive mask) and trailed it in rows of streaks
-(motion vectors for the dust left about half of them). Over the unjittered output the pixel's depth for the depth match is the nearest
-of the 2 x 2 render texels round it (`uFootprint`), not the one nearest jittered texel; **Unknown** whether that stops dust edges
-shimmering against near silhouettes (not yet looked at). A vendor upscaler that fails that frame gets them in the scene before the TAA. **Observed** (a Hub
+(motion vectors for the dust left about half of them). Over the output both sizes go in one pass with their own temporal filter
+(`CompositeLateParticlesFiltered`, `ParticleLate`): each display pixel takes the particles at the surfaces of the four render pixels round
+it (the jitter undone), weighted bilinearly, then last frame's result (reprojected by the closest surface's motion, kept within the four
+values) blended in at 0.1. One surface per pixel (the nearest of the 2 x 2, before) put a hard pixel edge back on the upscaler's smooth
+outline wherever a ridge stood in front of the dust: a staircase. Off an outline the four agree, so drifting dust does not trail.
+**Observed** (mec-tou-nu save, DLSS, 1600 x 900): flicker between frames in the dust (99.9th percentile of the second difference) still
+camera 6.5 → 2.5/255, 0.25°-a-frame orbit 25 → 20.5; turning 1.5° and panning 30 units a frame, no trails. A vendor upscaler that fails
+that frame gets them in the scene before the TAA. Effect units beyond 4000 units are stepped at 20 Hz, beyond 9000 at 10 Hz (the cost);
+their particles are drawn ahead along their velocity by the time queued since the unit's last step (up to 0.1 s), so they move every
+frame instead of in jumps (**Observed**, mec-tou-nu save: the far dust's change from frame to frame, its spread over its mean 0.45 → 0.26;
+stepping every unit every frame gave 0.36). **Observed** (a Hub
 storm, DLSS): the dust the same as blended in the scene (mean difference 1.2/255, the dust's shapes only). TAA keeps them in the scene: its
 output is its next history. Texture anisotropy caps mipmapped samplers, distinct from texture
 resolution/LOD bias. [Particle simulation](formats/particle-universe.md).

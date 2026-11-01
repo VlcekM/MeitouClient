@@ -306,9 +306,9 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     sealed class ParticleDepthPass : FullscreenProgram
     {
         public readonly SamplerSlot Depth;
-        public readonly UniformHandle FullSize, Div;
+        public readonly UniformHandle FullSize, Div, Layer;
         public ParticleDepthPass(GpuContext gpu) : base(gpu, PostProcessShaders.ParticleDepth, "post particle depth") =>
-            (Depth, FullSize, Div) = (P.Sampler("uDepth"), P.Uniform("uFullSize"), P.Uniform("uDiv"));
+            (Depth, FullSize, Div, Layer) = (P.Sampler("uDepth"), P.Uniform("uFullSize"), P.Uniform("uDiv"), P.Uniform("uLayer"));
     }
 
     /// <summary>The scene's depth copied to a colour target for the soft fade (<see cref="PostProcessShaders.ParticleSoftDepth"/>).</summary>
@@ -318,27 +318,29 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         public ParticleSoftDepthPass(GpuContext gpu) : base(gpu, PostProcessShaders.ParticleSoftDepth, "post particle soft depth") => Depth = P.Sampler("uDepth");
     }
 
-    /// <summary>The low-resolution particles over the scene (<see cref="PostProcessShaders.ParticleComposite"/>).</summary>
+    /// <summary>The low-resolution particles over the scene (<see cref="PostProcessShaders.ParticleCompositeLayered"/>).</summary>
     sealed class ParticleCompositePass : FullscreenProgram
     {
-        public readonly SamplerSlot Accum, LowDepth, Depth;
+        public readonly SamplerSlot Accum, LowDepth, AccumFar, LowDepthFar, Depth;
         public readonly UniformHandle LowSize, NearPlanes, Div, ClipDepthZeroToOne, Scale, Footprint;
-        public ParticleCompositePass(GpuContext gpu) : base(gpu, PostProcessShaders.ParticleComposite, "post particle composite")
+        public ParticleCompositePass(GpuContext gpu) : base(gpu, PostProcessShaders.ParticleCompositeLayered, "post particle composite")
         {
             (Accum, LowDepth, Depth) = (P.Sampler("uAccum"), P.Sampler("uLowDepth"), P.Sampler("uDepth"));
+            (AccumFar, LowDepthFar) = (P.Sampler("uAccumFar"), P.Sampler("uLowDepthFar"));
             (LowSize, NearPlanes, Div) = (P.Uniform("uLowSize"), P.Uniform("uNearPlanes"), P.Uniform("uDiv"));
             (ClipDepthZeroToOne, Scale, Footprint) = (P.Uniform("uClipDepthZeroToOne"), P.Uniform("uScale"), P.Uniform("uFootprint"));
         }
     }
 
-    /// <summary>The low-resolution particles' coverage for the upscalers' reactive mask (<see cref="PostProcessShaders.ParticleCoverage"/>).</summary>
+    /// <summary>The low-resolution particles' coverage for the upscalers' reactive mask (<see cref="PostProcessShaders.ParticleCoverageLayered"/>).</summary>
     sealed class ParticleCoveragePass : FullscreenProgram
     {
-        public readonly SamplerSlot Accum, LowDepth, Depth;
+        public readonly SamplerSlot Accum, LowDepth, AccumFar, LowDepthFar, Depth;
         public readonly UniformHandle LowSize, NearPlanes, Div, FullSize, ClipDepthZeroToOne, Limit;
-        public ParticleCoveragePass(GpuContext gpu) : base(gpu, PostProcessShaders.ParticleCoverage, "post particle coverage")
+        public ParticleCoveragePass(GpuContext gpu) : base(gpu, PostProcessShaders.ParticleCoverageLayered, "post particle coverage")
         {
             (Accum, LowDepth, Depth) = (P.Sampler("uAccum"), P.Sampler("uLowDepth"), P.Sampler("uDepth"));
+            (AccumFar, LowDepthFar) = (P.Sampler("uAccumFar"), P.Sampler("uLowDepthFar"));
             (LowSize, NearPlanes, Div, FullSize, Limit) = (P.Uniform("uLowSize"), P.Uniform("uNearPlanes"), P.Uniform("uDiv"), P.Uniform("uFullSize"), P.Uniform("uLimit"));
             ClipDepthZeroToOne = P.Uniform("uClipDepthZeroToOne");
         }
@@ -1090,13 +1092,14 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     sealed class LowTarget(int divisor)
     {
         public readonly int Divisor = divisor;
-        public Target2D? Accum, Depth;
-        /// <summary>The depth the draws are tested against, as a colour (R32F): what the Meitou fog's soft fade reads.</summary>
-        public Target2D? Soft;
+        /// <summary>The draw tested against each block's nearest depth (<see cref="Depth"/>), and the one tested against its farthest (<see cref="DepthFar"/>).</summary>
+        public Target2D? Accum, Depth, AccumFar, DepthFar;
+        /// <summary>The depths the draws are tested against, as a colour (R32F): what the Meitou fog's soft fade reads.</summary>
+        public Target2D? Soft, SoftFar;
         public bool Drawn;
         /// <summary>Drawn this frame but blended after the upscaler (<see cref="ParticlesAfterUpscale"/>), not yet.</summary>
         public bool Late;
-        public PassTargets Targets = null!;
+        public PassTargets Targets = null!, TargetsFar = null!;
     }
 
     readonly LowTarget[] lowTargets = [new(2), new(4)];
@@ -1111,11 +1114,13 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
 
     /// <summary>What the low-resolution particles of one size are drawn into (valid after <see cref="BeginParticlesLow"/>): the accumulation target, cleared, and its depth.</summary>
     public PassTargets ParticleTargets(int divisor) => LowFor(divisor).Targets;
+    /// <summary>The second draw of the same particles: tested against each block's farthest depth (<see cref="PostProcessShaders.ParticleUpsampleLayered"/>).</summary>
+    public PassTargets? ParticleTargetsFar(int divisor) => LowFor(divisor).TargetsFar;
 
     /// <summary>
     /// Prepares one low-resolution particle pass (docs/render-post.md "Colour, night and particles"): the target pair at 1/<paramref name="divisor"/>
-    /// of the render size (made or remade when the size changed), the scene's depth reduced to it (nearest and farthest of each block in a checkerboard, as the
-    /// depth of a depth-only rendering).
+    /// of the render size (made or remade when the size changed), the scene's depth reduced to it twice (the nearest and the farthest of each block, each as the
+    /// depth of a depth-only rendering, for the two draws).
     /// Call after <see cref="RunFogVolumes"/> and before opening the host on <see cref="ParticleTargets"/>.
     /// </summary>
     public void BeginParticlesLow(int divisor)
@@ -1125,25 +1130,32 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         int lw = Math.Max((width + div - 1) / div, 1), lh = Math.Max((height + div - 1) / div, 1);
         if (low.Accum is null || low.Accum.Width != lw || low.Accum.Height != lh)
         {
-            low.Accum?.Texture.Dispose();
-            low.Depth?.Texture.Dispose();
-            low.Soft?.Texture.Dispose();
+            foreach (var t in (ReadOnlySpan<Target2D?>)[low.Accum, low.Depth, low.Soft, low.AccumFar, low.DepthFar, low.SoftFar]) t?.Texture.Dispose();
             using var batch = Gpu.Uploads.Begin();
             low.Accum = Make(batch, lw, lh, InternalFormat.Rgba16f, TextureMinFilter.Linear, $"post particle accumulation 1/{div}");
             low.Depth = Make(batch, lw, lh, InternalFormat.DepthComponent24, TextureMinFilter.Nearest, $"post particle depth 1/{div}");
             low.Soft = Make(batch, lw, lh, InternalFormat.R32f, TextureMinFilter.Nearest, $"post particle soft depth 1/{div}");
+            low.AccumFar = Make(batch, lw, lh, InternalFormat.Rgba16f, TextureMinFilter.Linear, $"post particle accumulation far 1/{div}");
+            low.DepthFar = Make(batch, lw, lh, InternalFormat.DepthComponent24, TextureMinFilter.Nearest, $"post particle depth far 1/{div}");
+            low.SoftFar = Make(batch, lw, lh, InternalFormat.R32f, TextureMinFilter.Nearest, $"post particle soft depth far 1/{div}");
         }
         CloseSegment();
         var d = particleDepthPass;
         Bind(d.P, d.Depth, sceneDepth);
         d.P.Set(d.FullSize, (float)width, (float)height);
         d.P.Set(d.Div, (float)div);
-        DrawPass(d.P, low.Soft!.Attachment with { Load = LoadOp.DontCare }, low.Soft.Format, low.Depth!.Attachment with { Load = LoadOp.Clear, DepthClear = 1f },
-            low.Depth.Format, lw, lh, lw, lh, PassState with { DepthTest = true, DepthWrite = true, Compare = DepthFunction.Always });
-        CloseSegment();
+        foreach (var (layer, soft, depth) in (ReadOnlySpan<(int, Target2D, Target2D)>)[(1, low.Soft!, low.Depth!), (2, low.SoftFar!, low.DepthFar!)])
+        {
+            d.P.Set(d.Layer, layer);
+            DrawPass(d.P, soft.Attachment with { Load = LoadOp.DontCare }, soft.Format, depth.Attachment with { Load = LoadOp.Clear, DepthClear = 1f },
+                depth.Format, lw, lh, lw, lh, PassState with { DepthTest = true, DepthWrite = true, Compare = DepthFunction.Always });
+            CloseSegment();
+        }
         Stamp("particle depth");
-        var targets = PassTargets.Of(low.Accum.Texture, low.Depth.Texture);
+        var targets = PassTargets.Of(low.Accum!.Texture, low.Depth!.Texture);
         low.Targets = targets with { Colour = targets.Colour with { Load = LoadOp.Clear, Clear = default } };
+        var far = PassTargets.Of(low.AccumFar!.Texture, low.DepthFar!.Texture);
+        low.TargetsFar = far with { Colour = far.Colour with { Load = LoadOp.Clear, Clear = default } };
     }
 
     Target2D? softDepth;
@@ -1177,6 +1189,10 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         return t is null ? null : new ParticleRenderer.SoftDepth(Sampled(t), nearPlanes.X, nearPlanes.Y, Gpu.ClipDepthZeroToOne);
     }
 
+    /// <summary>The far draw's depth for its soft fade (<see cref="ParticleTargetsFar"/>), or null (Faithful).</summary>
+    public ParticleRenderer.SoftDepth? SoftParticleDepthFar(int divisor) =>
+        Options.MeitouFog && divisor > 1 && LowFor(divisor).SoftFar is { } t ? new ParticleRenderer.SoftDepth(Sampled(t), nearPlanes.X, nearPlanes.Y, Gpu.ClipDepthZeroToOne) : null;
+
     /// <summary>
     /// Whether the low-resolution particles are blended over the vendor upscaler's output instead of the scene it upscales (docs/render-post.md "Colour,
     /// night and particles"): DLSS took drifting see-through dust as standing still (its default preset ignores the reactive mask) and trailed it in rows
@@ -1206,6 +1222,8 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         var c = particleCompositePass;
         Bind(c.P, c.Accum, low.Accum);
         Bind(c.P, c.LowDepth, low.Depth);
+        Bind(c.P, c.AccumFar, low.AccumFar);
+        Bind(c.P, c.LowDepthFar, low.DepthFar);
         Bind(c.P, c.Depth, sceneDepth);
         c.P.Set(c.LowSize, (float)low.Accum!.Width, (float)low.Accum.Height);
         c.P.Set(c.NearPlanes, nearPlanes.X, nearPlanes.Y);
@@ -1328,8 +1346,8 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
             Draw(t.P, output);
             ActiveUpscaler = width == displayWidth && height == displayHeight ? "taa" : $"taa {width}x{height}";
         }
-        // The vendor upscaler's output (not a history Meitou keeps): the low-resolution particles over it.
-        CompositeLateParticles(output, displayWidth, displayHeight);
+        // The vendor upscaler's output (not a history Meitou keeps): the low-resolution particles over it, through their own temporal filter.
+        CompositeLateParticlesFiltered(output, displayWidth, displayHeight, reset);
         historyValid = true;
         // Frame generation takes the depth and the motion this frame made, whatever upscaled (TAA, FSR); the vendor segment is closed above or no segment is open.
         if (FrameGen is { Wanted: true } frameGen && upscaleDepth is not null && motion is not null)
@@ -1407,6 +1425,8 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
             var c = particleCoveragePass;
             Bind(c.P, c.Accum, low.Accum);
             Bind(c.P, c.LowDepth, low.Depth);
+            Bind(c.P, c.AccumFar, low.AccumFar);
+            Bind(c.P, c.LowDepthFar, low.DepthFar);
             Bind(c.P, c.Depth, sceneDepth);
             c.P.Set(c.LowSize, (float)low.Accum!.Width, (float)low.Accum.Height);
             c.P.Set(c.NearPlanes, nearPlanes.X, nearPlanes.Y);
@@ -1643,6 +1663,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         DisposeShadingRate();
         DisposeShafts();
         DisposeSceneLayers();
+        DisposeLateParticles();
         DisposeMerged();
         DisposeBloom();
         Hiz?.Dispose();

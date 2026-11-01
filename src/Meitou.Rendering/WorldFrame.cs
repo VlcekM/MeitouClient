@@ -1735,6 +1735,13 @@ static class WorldFrame
                     host.Open(13, post.ParticleTargets(divisor));
                     particleDraw.Record(divisor, post.SoftParticleDepth(divisor));
                     host.Close();
+                    // Again against each block's farthest depth, where the chain keeps both (the depth-aware upsample takes each pixel's own surface from either).
+                    if (post.ParticleTargetsFar(divisor) is { } farTargets)
+                    {
+                        host.Open(13, farTargets);
+                        particleDraw.Record(divisor, post.SoftParticleDepthFar(divisor));
+                        host.Close();
+                    }
                     post.MarkParticleDraws();
                     post.CompositeParticlesLow(divisor);
                 }

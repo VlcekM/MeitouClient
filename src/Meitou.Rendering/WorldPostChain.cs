@@ -114,6 +114,10 @@ interface IWorldPostChain
 
     /// <summary>The low-resolution particle pass's targets, prepared by <see cref="BeginParticlesLow"/>.</summary>
     PassTargets ParticleTargets(int divisor);
+    /// <summary>The second draw of the same particles, tested against each block's farthest depth (null: a chain with one draw).</summary>
+    PassTargets? ParticleTargetsFar(int divisor) => null;
+    /// <summary>The second draw's depth for its soft fade, or null.</summary>
+    ParticleRenderer.SoftDepth? SoftParticleDepthFar(int divisor) => null;
     void BeginParticlesLow(int divisor);
     void CompositeParticlesLow(int divisor);
     /// <summary>Whether the low-resolution particles are blended after the upscaler (their draws then unjittered); a chain without it blends them into the scene.</summary>
