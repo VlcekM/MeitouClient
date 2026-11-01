@@ -57,6 +57,7 @@ public sealed partial class CombatSystem
         {
             D.Down = true;
             D.AttackTech = -1;
+            D.CancelTick = (int)world.Tick;
             D.NextBlow = 0;
             D.ReactTech = -1;
         }

@@ -771,6 +771,7 @@ public sealed partial class CombatSystem : IProjectileSource
         {
             D.Down = true;
             D.AttackTech = -1;
+            D.CancelTick = now;
             D.NextBlow = 0;
             D.ReactTech = -1;
             Sound(world, SoundKind.Down, v, p.Shooter, prev[v].Position, fatal: death);

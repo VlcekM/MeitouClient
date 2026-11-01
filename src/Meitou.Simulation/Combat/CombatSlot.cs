@@ -22,6 +22,8 @@ public struct CombatSlot
     public int AttackStart, AttackTicks, AttackEnd;
     /// <summary>The blow (1 or 2) that arrives next, 0 when all have; the attack number (raised per attack, part of the roll keys).</summary>
     public int NextBlow, AttackSeq;
+    /// <summary>The tick a hit, knock-out or kill took the attack away (-1: never): a blow thrown on that same tick before it never lands. Derived, not hashed.</summary>
+    public int CancelTick;
     /// <summary>Where the attack started (the original's +0x15c): the attack zone reaches the technique's attack distance less the way moved since.</summary>
     public System.Numerics.Vector3 AttackFrom;
     /// <summary>The attacker's rating at the start of the attack (melee attack x injury multiplier + weapon mod), what defenders compare their defence with.</summary>
@@ -103,7 +105,7 @@ public struct CombatSlot
 
     public static CombatSlot Fresh(int generation) => new()
     {
-        Generation = generation, TargetSlot = -1, TargetGeneration = 0, TaskSlot = -1, AttackTech = -1, ReactTech = -1, ReactedSlot = -1, ReactedSeq = -1, HitTick = -1, HitPart = -1, HitFrom = -1, StumbleClip = -1, YieldTo = -1, LastTech = -1,
+        Generation = generation, TargetSlot = -1, TargetGeneration = 0, TaskSlot = -1, AttackTech = -1, CancelTick = -1, ReactTech = -1, ReactedSlot = -1, ReactedSeq = -1, HitTick = -1, HitPart = -1, HitFrom = -1, StumbleClip = -1, YieldTo = -1, LastTech = -1,
     };
 
     public readonly bool Fighting => TargetSlot >= 0;
