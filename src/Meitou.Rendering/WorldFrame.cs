@@ -1717,6 +1717,7 @@ static class WorldFrame
         // Then the particles, blended over it and tested against the near slice's depth (they are not fogged; docs/formats/fogfeatures.md).
         if (gpu.Particles is { } particleDraw && particleNear > 0)
         {
+            particleDraw.RangeFade = post.Options.MeitouFog;
             particleDraw.Prepare(particleViewProjection, particleNearProjection, particleNear, view, eye, sun, post.ParticlePixelsPerUnit(camera.Projection(aspect, 1, 10).M22), (float)post.RenderWidth * post.RenderHeight, post.Options.ParticleDivisor,
                 lowViewProjection: post.ParticlesAfterUpscale ? particleLowProjection : null, lowCloseViewProjection: post.ParticlesAfterUpscale ? particleLowNearProjection : null);
             if (particleDraw.FullCount > 0)

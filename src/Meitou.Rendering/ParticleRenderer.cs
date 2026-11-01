@@ -152,6 +152,12 @@ public sealed unsafe class ParticleRenderer : IDisposable
     public bool Enabled { get; set; } = true;
     /// <summary>The Tab panel's weather particles slider at 0: the weather's groups are neither simulated nor drawn (the map's effect placers, fires and smoke, stay; so do the effects' fog volumes).</summary>
     public bool WeatherParticles { get; set; } = true;
+    /// <summary>
+    /// Meitou (the <c>fog</c> switch): each unit is drawn faded by its distance (<see cref="EffectUnit.RangeFade"/>). The game simulates an effect only within
+    /// a distance of the camera; a unit coming into it appeared with its whole cloud at once and one leaving it vanished (clouds of dust popping in and out
+    /// some 14 km away in the Great Desert's streamers).
+    /// </summary>
+    public bool RangeFade { get; set; }
     /// <summary>Seconds simulated before the first picture, for the new groups: null (the default) is each system's longest particle life, capped at <see cref="MaxAutoPrewarm"/>; 0 starts empty.</summary>
     public float? PrewarmSeconds { get => weatherGroups.PrewarmSeconds; set => weatherGroups.PrewarmSeconds = value; }
     public const float MaxAutoPrewarm = WeatherGroups.MaxAutoPrewarm;
@@ -581,6 +587,8 @@ public sealed unsafe class ParticleRenderer : IDisposable
         {
             var offset = u.Anchor - eye;
             if (u.Simulation is not { } sim || u.CatchingUp) continue;
+            float shown = RangeFade ? u.RangeFade : 1;
+            if (shown <= 0) continue;
             drawnUnits++;
             for (int t = 0; t < sim.Techniques.Count; t++)
             {
@@ -594,7 +602,7 @@ public sealed unsafe class ParticleRenderer : IDisposable
                 // writes and the partition's reads are slow (this was 5 ms for 18000 particles).
                 if (scratch.Length < n) scratch = new ParticleInstance[Math.Max(n, scratch.Length * 2)];
                 // A unit stepped at a lower rate (StartSimulation) is drawn ahead by the time it has queued since its last step, so it moves every frame.
-                int written = sim.Collect(t, scratch.AsSpan(0, n), u.Tint, u.Alpha * EffectOpacity(u.Effect.Name), offset, Math.Min(u.Pending, MaxDrawAhead));
+                int written = sim.Collect(t, scratch.AsSpan(0, n), material.Blend == ParticleBlend.Add ? u.Tint * shown : u.Tint, u.Alpha * EffectOpacity(u.Effect.Name) * shown, offset, Math.Min(u.Pending, MaxDrawAhead));
                 if (written == 0) continue;
                 int close = PartitionByDepth(scratch.AsSpan(0, written), forward, nearPlane);
                 // Metal's near-plane particle path is not safe yet: a large dust sprite crossing the close projection

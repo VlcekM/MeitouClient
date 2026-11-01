@@ -165,7 +165,11 @@ camera 6.5 → 2.5/255, 0.25°-a-frame orbit 25 → 20.5; turning 1.5° and pann
 that frame gets them in the scene before the TAA. Effect units beyond 4000 units are stepped at 20 Hz, beyond 9000 at 10 Hz (the cost);
 their particles are drawn ahead along their velocity by the time queued since the unit's last step (up to 0.1 s), so they move every
 frame instead of in jumps (**Observed**, mec-tou-nu save: the far dust's change from frame to frame, its spread over its mean 0.45 → 0.26;
-stepping every unit every frame gave 0.36). **Observed** (a Hub
+stepping every unit every frame gave 0.36). An effect is simulated only while the camera is within the active radius (6912) plus its view
+distance of its bounds, and stopped past 1.15 times that: a unit coming into range appeared with its whole cloud (its age caught up at
+once) and one leaving vanished. With the Meitou `fog` switch each unit is drawn faded by its distance, full to 85 % of that range and
+gone at it (`EffectUnit.RangeFade`), so both happen out of sight (**Observed**, mec-tou-nu save, the camera moving 40 units a frame: every
+unit stopped was at fade 0, every one started with an age at fade 0.2 or less). **Observed** (a Hub
 storm, DLSS): the dust the same as blended in the scene (mean difference 1.2/255, the dust's shapes only). TAA keeps them in the scene: its
 output is its next history. Texture anisotropy caps mipmapped samplers, distinct from texture
 resolution/LOD bias. [Particle simulation](formats/particle-universe.md).
