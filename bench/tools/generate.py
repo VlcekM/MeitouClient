@@ -34,7 +34,8 @@ METRICS = {  # public name -> CSV column
     "slow_world_max_ms": "slow_world_max_ms",
 }
 # Optional metric columns (missing column or blank cell -> null in the page data). avg_fps = 1000 / mean frame ms; higher is better.
-OPTIONAL_METRICS = {"avg_fps": "avg_fps"}
+# vram_peak_mb = peak video memory of the game process (dev kit, frames.csv vram_mb); lower is better.
+OPTIONAL_METRICS = {"avg_fps": "avg_fps", "vram_peak_mb": "vram_peak_mb"}
 REQUIRED_COLS = ["date", "time", "commit", "platform", "data", "save", "segments", "run"] + \
     list(METRICS.values()) + ["gpu", "nvidia_driver"]
 # Optional F12-profiler breakdown columns (see docs/scripts/bench-compare-table.py BREAKDOWN_COLS in the maintainer's notes):

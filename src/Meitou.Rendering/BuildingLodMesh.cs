@@ -32,6 +32,8 @@ sealed class PreparedPart
     public required uint[] All;
     public required int[] Offset, Count;
     public uint[][]? Levels;
+    /// <summary>The vertices in the GPU's object layout (<see cref="GpuVertex"/>), packed on the decoding thread.</summary>
+    public byte[] Packed = [];
     /// <summary>World length per texture-coordinate unit that nearly all of the part's surface is at least as stretched as (<see cref="MeshTexelScale.Of"/>).</summary>
     public float UvScale = float.PositiveInfinity;
 }
@@ -43,7 +45,9 @@ sealed class GpuObjectPart
     public required string MaterialName;
     public required bool HasTangents, HasColours;
     public required DeviceBuffer Vertices, Indices;
-    /// <summary>The vertex attributes at locations 0 to 6 as the GL vertex array had them (all null for a part without vertices).</summary>
+    /// <summary>Bytes per vertex in <see cref="Vertices"/>: <see cref="GpuVertex.ObjectSize"/>, or <see cref="GpuVertex.CharacterSize"/> for a character's part.</summary>
+    public int Stride = GpuVertex.ObjectSize;
+    /// <summary>The vertex attributes by location (<see cref="GpuVertex"/>; empty for a part without vertices).</summary>
     public LegacyProgram.Attribute?[] Attributes = [];
     /// <summary>First index and index count of each level in <see cref="Indices"/> (a manual level has none: count 0).</summary>
     public required int[] Offset, Count;
@@ -297,6 +301,8 @@ sealed unsafe class ObjectMeshCache(IGpuContext gpuContext, AssetLocator assets,
             lock (Messages) Messages.Add($"mesh {name}: {e.Message}");
             return null;
         }
+        bool weld = MeshWeld.Enabled;
+        if (weld) OgreMeshWeld.Apply(mesh);
         var model = Model.Build(mesh, null);
         if (distant)
             foreach (var part in model.Parts)
@@ -312,7 +318,7 @@ sealed unsafe class ObjectMeshCache(IGpuContext gpuContext, AssetLocator assets,
         var levels = MeshLod.Levels(mesh);
         // Generated levels among the file's (docs/render-objects.md, "Generated levels"): a mesh drawn through the normal path, not a distant one, without a skeleton.
         LodCurve? curve = null;
-        if (depth == 0 && !distant && !keep && mesh.SkeletonName is null && ObjectLodGen.PlanFor(name, path, model, radius, levels, PixelsPerRadian) is { } plan)
+        if (depth == 0 && !distant && !keep && mesh.SkeletonName is null && ObjectLodGen.PlanFor(name + MeshWeld.CacheVariant(weld), path, model, radius, levels, PixelsPerRadian, MeshWeld.CacheVariant(weld)) is { } plan)
         {
             levels = ObjectLodGen.Apply(plan, model, levels);
             curve = plan.Curve;
@@ -343,6 +349,7 @@ sealed unsafe class ObjectMeshCache(IGpuContext gpuContext, AssetLocator assets,
         if (minLevel >= levels.Count) minLevel = levels.Count - 1;   // the chain ended earlier than the distances said
         var result = new DecodedObjectMesh { Model = model, Levels = levels, Manual = manual, Centre = centre, Radius = radius, Top = top, Min = min, Max = max, Curve = curve, MinLevel = minLevel };
         foreach (var part in model.Parts) result.Prepared.Add(PreparePart(result, part, keep));
+        foreach (var prepared in result.Prepared) prepared.Packed = GpuVertex.PackObject(prepared.Part.Vertices);
         return result;
     }
 
@@ -450,7 +457,7 @@ sealed unsafe class ObjectMeshCache(IGpuContext gpuContext, AssetLocator assets,
     {
         var part = prepared.Part;
         GpuObjectPart? gp = null;
-        int vertexBytes = part.Vertices.Length * Vertex.Size, indexBytes = prepared.All.Length * 4;
+        int vertexBytes = prepared.Packed.Length, indexBytes = prepared.All.Length * 4;
         uploads.Add(() =>
         {
             gp = new GpuObjectPart
@@ -469,7 +476,7 @@ sealed unsafe class ObjectMeshCache(IGpuContext gpuContext, AssetLocator assets,
             {
                 gpuContext.EnsureFrame();
                 using var batch = gpuContext.Uploads.Begin();
-                batch.Write(gp!.Vertices, (ulong)start, System.Runtime.InteropServices.MemoryMarshal.AsBytes(part.Vertices.AsSpan()).Slice(start, length));
+                batch.Write(gp!.Vertices, (ulong)start, prepared.Packed.AsSpan(start, length));
             }, label + " (vertices)");
         }
         for (int at = 0; at < indexBytes; at += SlabBytes)
@@ -485,28 +492,10 @@ sealed unsafe class ObjectMeshCache(IGpuContext gpuContext, AssetLocator assets,
         uploads.Add(() =>
         {
             // The per-instance matrix rows (attributes 7 to 10) are bound per segment, from the frame's constants.
-            gp!.Attributes = part.Vertices.Length > 0 ? VertexAttributes(gp.Vertices) : [];
+            gp!.Attributes = part.Vertices.Length > 0 ? GpuVertex.ObjectAttributes(gp.Vertices) : [];
             gpu.Parts.Add(gp);
             gpu.Bytes += vertexBytes + indexBytes;
         }, label + " (vertex array)");
-    }
-
-    /// <summary>The vertex layout of <see cref="Vertex"/> (as <c>Renderer.Upload</c>; bones and weights stay zero: no skinning in the world view).</summary>
-    internal static readonly MeshAttribute[] Layout =
-    [
-        new(0, 3, 0), new(1, 3, 12), new(2, 2, 24), new(3, 4, 32), new(4, 4, 48), new(5, 4, 64, Integer: true), new(6, 4, 68),
-    ];
-
-    /// <summary>The attributes at locations 0 to 6 as VkGl exported the GL vertex array (one binding per attribute, at its offset).</summary>
-    internal static LegacyProgram.Attribute?[] VertexAttributes(DeviceBuffer vertices)
-    {
-        var result = new LegacyProgram.Attribute?[Layout.Length];
-        foreach (var a in Layout)
-        {
-            var format = a.Integer ? GlConventions.VertexFormat(GLEnum.UnsignedByte, a.Size, false, true) : GlConventions.VertexFormat(GLEnum.Float, a.Size, false, false);
-            result[a.Location] = new LegacyProgram.Attribute(new GpuBufferBinding(vertices.Handle, (ulong)a.Offset), format, (uint)Vertex.Size, false);
-        }
-        return result;
     }
 
     /// <summary>
@@ -530,7 +519,7 @@ sealed unsafe class ObjectMeshCache(IGpuContext gpuContext, AssetLocator assets,
                 batch.Write(elements, 0, System.Runtime.InteropServices.MemoryMarshal.AsBytes(indices.AsSpan()));
             part.PlainEbo[level] = elements;
         }
-        return part.PlainMesh[level] = MeshBindings.Of(VertexAttributes(part.Vertices), elements);
+        return part.PlainMesh[level] = MeshBindings.Of(part.Attributes, elements);
     }
 
     public int Unloads { get; private set; }

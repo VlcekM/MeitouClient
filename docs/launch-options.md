@@ -163,7 +163,7 @@ Authority: `src/Meitou.Rendering/WorldFrame.cs` (`Parse`, `Usage`), `src/Meitou.
 | `--range-large <u>` | units | 50000 | Foliage draw range of the large size class. |
 | `--distant-range <zones>` | zones | 10 | How far distant towns are drawn; 0 for none. |
 | `--impostor-budget <MB>` | MB | 8% of video memory (5% integrated), 48 to 1024 | Video memory for resident impostor atlases. |
-| `--no-load-cache` | | off | Do not read or write the load caches (foliage layout, character LOD and world colour map caches). |
+| `--no-load-cache` | | off | Do not read or write the load caches (foliage layout, character LOD, world colour map and terrain colour tile caches). |
 | `--low-end` | | off | Potato-PC preset: short draw distances, no shadows, reflections, AO, relief, light shafts or AA, 0.83 render scale, sparse grass and particles. Options after it override it. |
 
 ### Post-processing and upscaling (`PostProcessOptions.cs`)
@@ -185,7 +185,7 @@ Authority: `src/Meitou.Rendering/WorldFrame.cs` (`Parse`, `Usage`), `src/Meitou.
 | `--meitou <ids>` | comma list of ids, or `all` | all | Turns the listed Meitou enhancements on. |
 | `--faithful <ids>` | comma list of ids, or `all` | | Turns the listed enhancements off, giving the game's look. |
 
-Ids (`Enhancements.cs`): `ao`, `dither`, `haze`, `aa`, `shadows`, `range`, `impostors`, `reach`, `water`, `particles`, `lod`, `gi`, `tonemap`, `shafts`, `heathaze`, `night`, `planetshine`, `stars`, `nightgrade`, `clouds`, `cloudshadows`, `cloudfog`, `interiorgi`, `charlod`, `skin`, `interiorlamps`, `icons`, `blood`, `bloodsurfaces`. The strength of each is a Tab slider.
+Ids (`Enhancements.cs`): `ao`, `dither`, `haze`, `aa`, `shadows`, `range`, `impostors`, `reach`, `water`, `particles`, `lod`, `gi`, `tonemap`, `shafts`, `heathaze`, `night`, `planetshine`, `stars`, `nightgrade`, `clouds`, `cloudshadows`, `cloudfog`, `interiorgi`, `charlod`, `skin`, `interiorlamps`, `icons`, `blood`, `bloodsurfaces`, `parallax`, `displace`, `weld`. The strength of each is a Tab slider.
 
 ### Benchmarks and A/B (`--screenshot`, offscreen)
 
@@ -205,6 +205,7 @@ Ids (`Enhancements.cs`): `ao`, `dither`, `haze`, `aa`, `shadows`, `range`, `impo
 | `--fly-radius <u>` | units | 12000 | Radius of the fly benchmark circle. |
 | `--fly-speed <u/frame>` | units per frame | 150 | Speed of the fly benchmark. |
 | `--fly-pipelined` | | off | No GPU wait per frame; two frames in flight. |
+| `--fly-csv <file>` | file | off | Per-frame CSV of frame times and video memory; allocator owners every 30 frames in `<file>.owners.csv`. |
 
 ## Meitou.Tools (`meitou-tools`)
 

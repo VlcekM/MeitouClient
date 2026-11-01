@@ -4,18 +4,18 @@ using Meitou.Rendering;
 namespace Meitou.Game;
 
 /// <summary>
-/// Presentation-only flight through the sky; the simulation clock and camera rig never change. From the title the wanderer sits down while the hour runs
-/// forward to the destination's, then a hold; in play, or when the hour is near, the view climbs at once, the hour running on as it goes. The view pans
+/// Presentation-only flight through the sky; the simulation clock and camera rig never change. From the title the hour runs forward to the
+/// destination's, then a hold; in play, or when the hour is near, the view climbs at once, the hour running on as it goes. The view pans
 /// up to the sky and waits there for the load; the destination fades in from black with the camera high over it, which comes down orbiting onto the view.
 /// </summary>
 sealed class SkyArrival(WorldCamera source, float hour, float speed = 1, bool immediate = false)
 {
-    internal const double HoldSeconds = 0.5, SitSeconds = 1.8, AscentSeconds = 3.4, DescentSeconds = 3, FadeOutSeconds = 0.3, FadeInSeconds = 1.4;
+    internal const double HoldSeconds = 0.5,AscentSeconds = 3.4, DescentSeconds = 3, FadeOutSeconds = 0.3, FadeInSeconds = 1.4;
     internal const float MinSpeed = 0.25f, MaxSpeed = 4;
     internal const float SkyPitch = -1.45f;
     /// <summary>How far above its view the destination's camera starts, so nothing near blocks the first look; and how far it orbits round on the way down.</summary>
     internal const float ArrivalHeight = 300, ArrivalSweep = 1.2f;
-    /// <summary>The most hours the run forward may take for the title to climb at once, without sitting down or the hold.</summary>
+    /// <summary>The most hours the run forward may take for the title to climb at once, without the hold.</summary>
     internal const float NearHours = 3;
     enum Phase { Turn, Hold, Ascent, Stars, Arriving }
     readonly Vector3 sourceEye = source.Eye;
@@ -24,7 +24,7 @@ sealed class SkyArrival(WorldCamera source, float hour, float speed = 1, bool im
     readonly float flightSpeed = float.IsFinite(speed) ? Math.Clamp(speed, MinSpeed, MaxSpeed) : 1;
     float? destinationHour;
     Phase phase = immediate ? Phase.Ascent : Phase.Turn;
-    double elapsed, turnElapsed, sitAge;
+    double elapsed, turnElapsed;
     bool covering;
 
     public bool AtStars => phase >= Phase.Stars;
@@ -32,8 +32,6 @@ sealed class SkyArrival(WorldCamera source, float hour, float speed = 1, bool im
     public bool Arriving => phase == Phase.Arriving;
     /// <summary>How much of the frame is black, 0..1: drawn over the world while it warms up under it and as it fades in.</summary>
     public float Fade { get; private set; }
-    /// <summary>How far the title's wanderer has sat down, 0..1: once the flight knows it runs the long way, over <see cref="SitSeconds"/>.</summary>
-    public float Sit => Ease((float)(sitAge / SitSeconds), 0.5f, 0.5f);
     bool Near => destinationHour is { } to && ForwardHours(sourceHour, to) <= NearHours;
 
     /// <summary>The hour the flight runs forward to before it climbs; until it is known (a save still being read) the view holds at the source's.</summary>
@@ -57,13 +55,13 @@ sealed class SkyArrival(WorldCamera source, float hour, float speed = 1, bool im
         {
             case Phase.Turn when destinationHour is null: elapsed = 0; break;
             case Phase.Turn when Near: (phase, elapsed) = (Phase.Ascent, 0); break;
-            case Phase.Turn: sitAge += seconds * flightSpeed; if (turnElapsed >= TurnSeconds) (phase, elapsed) = (Phase.Hold, 0); break;
-            case Phase.Hold: sitAge += seconds * flightSpeed; if (elapsed >= HoldSeconds) (phase, elapsed) = (Phase.Ascent, 0); break;
+            case Phase.Turn when turnElapsed >= TurnSeconds: (phase, elapsed) = (Phase.Hold, 0); break;
+            case Phase.Hold when elapsed >= HoldSeconds: (phase, elapsed) = (Phase.Ascent, 0); break;
             case Phase.Ascent when elapsed >= AscentSeconds: (phase, elapsed) = (Phase.Stars, 0); break;
         }
     }
 
-    /// <summary>A new game: straight up at the source's hour, no sitting down, hold or run of the hour (the start hour comes in under the black).</summary>
+    /// <summary>A new game: straight up at the source's hour, no hold or run of the hour (the start hour comes in under the black).</summary>
     public void ClimbAtOnce() => (destinationHour, phase, elapsed) = (sourceHour, Phase.Ascent, 0);
 
     /// <summary>The load is done and the destination warms up under the flight: the sky fades to black over it.</summary>

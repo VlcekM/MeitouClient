@@ -28,9 +28,9 @@ public sealed unsafe partial class FoliageRenderer
     /// no tiling (the card's texture coordinates are the texture's). The mesh's bounds stay the untrimmed ones, so nothing that depends on them (size classes, impostor
     /// distances) moves.
     /// </summary>
-    Model? DecodeTrimmed(string name, FoliageMesh mesh, bool leaves)
+    Model? DecodeTrimmed(string name, FoliageMesh mesh, bool leaves, bool weld)
     {
-        var model = Decode(name);
+        var model = Decode(name, weld);
         if (model is null) return model;
         if (!leaves && mesh.MaterialType == 2 && RockSmoothing.Enabled) RockSmoothing.Apply(model);   // TERRAIN mode: the rocks' welded normals
         bool cutOut = leaves || mesh.MaterialType == 4;

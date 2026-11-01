@@ -29,6 +29,8 @@ sealed partial class GameHost
         public double GpuTotal;
         public int Gc0, Gc1, Gc2;
         public double AllocMb, PauseMs, WorkingSetMb;
+        /// <summary>This process's video memory (<c>VulkanDevice.VideoMemory</c>), MB: read every 30 frames (a driver call), carried between; NaN on Metal.</summary>
+        public double VramMb = double.NaN;
         public double[] Sections = new double[BenchSections.Length];
         public double CameraMs, HandlersMs, StartMs;
         /// <summary>The frame's slowest system phase ("System.phase") and its time.</summary>
@@ -72,6 +74,7 @@ sealed partial class GameHost
     int benchLateAt;
     int[] benchGcAt = new int[3];
     TimeSpan benchPauseAt;
+    double benchVramMb = double.NaN;
     BenchFrame? benchCurrent;
     Vector2 benchOrigin, benchDirection;
     CharacterId benchLeader;
@@ -173,6 +176,8 @@ sealed partial class GameHost
         }
         (benchGcAt, benchAllocAt, benchPauseAt) = (gc, alloc, pause);
         f.WorkingSetMb = Environment.WorkingSet / 1048576.0;
+        if (benchFrames.Count % 30 == 0 && gpu.Sky.Gpu is Meitou.Rendering.Gpu.GpuContext vk) benchVramMb = vk.Device.VideoMemory().Used / 1048576.0;
+        f.VramMb = benchVramMb;
         benchFrames.Add(f);
         benchCurrent = null;
     }
@@ -336,7 +341,7 @@ sealed partial class GameHost
         var ci = CultureInfo.InvariantCulture;
         var stages = StageClock.Names;
         var csv = new StringBuilder();
-        csv.Append("frame,segment,t,frame_ms,update_ms,busy_ms,ticks,characters,gpu_total_ms,gc0,gc1,gc2,alloc_mb,gc_pause_ms,working_set_mb");
+        csv.Append("frame,segment,t,frame_ms,update_ms,busy_ms,ticks,characters,gpu_total_ms,gc0,gc1,gc2,alloc_mb,gc_pause_ms,working_set_mb,vram_mb");
         foreach (var s in BenchSections) csv.Append(",loop_").Append(s);
         csv.Append(",control_camera_ms,control_handlers_ms,top_system,top_system_ms,late_pipelines");
         foreach (var s in TickProfile.PhaseNames) csv.Append(",sim_").Append(s.Replace(' ', '-'));
@@ -346,7 +351,7 @@ sealed partial class GameHost
         for (int i = 0; i < benchFrames.Count; i++)
         {
             var f = benchFrames[i];
-            csv.Append(ci, $"{i},{benchScript[f.Segment].Name},{f.T:0.000},{f.FrameMs:0.00},{f.UpdateMs:0.00},{f.Busy:0.00},{f.Ticks},{f.Characters},{f.GpuTotal:0.00},{f.Gc0},{f.Gc1},{f.Gc2},{f.AllocMb:0.00},{f.PauseMs:0.00},{f.WorkingSetMb:0}");
+            csv.Append(ci, $"{i},{benchScript[f.Segment].Name},{f.T:0.000},{f.FrameMs:0.00},{f.UpdateMs:0.00},{f.Busy:0.00},{f.Ticks},{f.Characters},{f.GpuTotal:0.00},{f.Gc0},{f.Gc1},{f.Gc2},{f.AllocMb:0.00},{f.PauseMs:0.00},{f.WorkingSetMb:0},{(double.IsNaN(f.VramMb) ? "" : f.VramMb.ToString("0", ci))}");
             foreach (var v in f.Sections) csv.Append(ci, $",{v:0.000}");
             csv.Append(ci, $",{f.CameraMs:0.000},{f.HandlersMs:0.000},{f.TopSystem},{f.TopSystemMs:0.000},{f.LatePipelines}");
             foreach (var v in f.Steps) csv.Append(ci, $",{v:0.000}");
@@ -451,6 +456,8 @@ sealed partial class GameHost
         }
         var last = benchFrames.Count > 0 ? benchFrames[^1] : null;
         sb.Append(ci, $"\nCollections over the run: gen0 {benchFrames.Sum(f => f.Gc0)}, gen1 {benchFrames.Sum(f => f.Gc1)}, gen2 {benchFrames.Sum(f => f.Gc2)}, pauses {benchFrames.Sum(f => f.PauseMs):0} ms; allocated {benchFrames.Sum(f => f.AllocMb):0} MB; working set at the end {last?.WorkingSetMb:0} MB.\n");
+        var vram = benchFrames.Where(f => !double.IsNaN(f.VramMb)).ToList();
+        if (vram.Count > 0) sb.Append(ci, $"Video memory: peak {vram.Max(f => f.VramMb):0} MB, at the end {vram[^1].VramMb:0} MB.\n");
         return sb.ToString();
     }
 }

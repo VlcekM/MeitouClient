@@ -249,14 +249,15 @@ public sealed unsafe class DebrisRenderer : IDisposable
         string vertex = NativeShaders.Port(Vertex, NativeShaders.Map(NativeOwn), PushMembers);
         string fragment = Gi.GiResolveShaders.WithAlbedo(NativeShaders.Port(Fragment, NativeShaders.Map(NativeOwn), PushMembers));
         program = new NativeProg(gpu, frame, vertex, fragment, "debris");
-        uint stride = (uint)Rendering.Vertex.Size;
+        // The object layout (GpuVertex), its colour at 3 and tangent at 4.
+        uint stride = GpuVertex.ObjectSize;
         layout = program.Layout(
         [
             new LegacyProgram.Attribute(default, InternalFormat.Rgb32f, stride, false),
-            new LegacyProgram.Attribute(default, InternalFormat.Rgb32f, stride, false),
+            new LegacyProgram.Attribute(default, InternalFormat.Rgba16Snorm, stride, false),
             new LegacyProgram.Attribute(default, InternalFormat.RG32f, stride, false),
-            new LegacyProgram.Attribute(default, InternalFormat.Rgba32f, stride, false),
-            new LegacyProgram.Attribute(default, InternalFormat.Rgba32f, stride, false),
+            new LegacyProgram.Attribute(default, InternalFormat.Rgba16f, stride, false),
+            new LegacyProgram.Attribute(default, InternalFormat.Rgba16Snorm, stride, false),
         ]);
         // The native model's bindless table is what keeps the full atmosphere inside Metal's direct-sampler budget.
         if (program.P.Info.FragmentReflection is { } reflection)
@@ -335,7 +336,7 @@ public sealed unsafe class DebrisRenderer : IDisposable
             var middle = mesh.Limb ? piece.Position + Vector3.Transform(mesh.Centre * piece.Scale, piece.Rotation) : piece.Position;
             if (!FrustumTests.SphereVisible(frustum, middle, mesh.Extent.Length() * piece.Scale * MathF.Max(piece.Stretch, 1))) continue;
             var m = Matrix4x4.CreateScale(piece.Scale, piece.Scale, piece.Scale * piece.Stretch) * Matrix4x4.CreateFromQuaternion(piece.Rotation) * Matrix4x4.CreateTranslation(piece.Position - eye);
-            for (int k = 0; k < 5; k++) bindings[k] = new GpuBufferBinding(mesh.Vertices.Handle, (ulong)(k == 3 ? 48 : k == 4 ? 32 : k * 12));
+            for (int k = 0; k < 5; k++) bindings[k] = new GpuBufferBinding(mesh.Vertices.Handle, (ulong)(k switch { 0 => 0, 1 => 12, 2 => 20, 3 => 36, _ => 28 }));
             cmd.BindVertexBuffers(0, bindings);
             cmd.BindIndexBuffer(new GpuBufferBinding(mesh.Indices.Handle, 0), IndexKind.U32);
             foreach (var part in mesh.Parts)
@@ -370,7 +371,11 @@ public sealed unsafe class DebrisRenderer : IDisposable
         Mesh? mesh = null;
         try
         {
-            if (find(Path.GetFileName(file.Replace('\\', '/'))) is { } path) mesh = Build(file, materialOf ?? file, OgreMeshReader.ReadFile(path), limb);
+            if (find(Path.GetFileName(file.Replace('\\', '/'))) is { } path) {
+                var ogre = OgreMeshReader.ReadFile(path);
+                if (MeshWeld.Enabled) OgreMeshWeld.Apply(ogre);
+                mesh = Build(file, materialOf ?? file, ogre, limb);
+            }
         }
         catch (Exception e) when (e is IOException or InvalidDataException or NotSupportedException)
         {
@@ -397,11 +402,12 @@ public sealed unsafe class DebrisRenderer : IDisposable
             foreach (var v in part.Vertices) vertices.Add(limb is null ? v with { Position = v.Position - centre } : v);   // a limb keeps the mesh's own space (its blood mapping reads x)
             indices.AddRange(part.Indices);
         }
-        var vb = DeviceBuffer.Create(gpu, (ulong)(vertices.Count * Rendering.Vertex.Size), BufferUse.Vertex, "debris " + file);
+        var packed = GpuVertex.PackObject(CollectionsMarshal.AsSpan(vertices));
+        var vb = DeviceBuffer.Create(gpu, (ulong)packed.Length, BufferUse.Vertex, "debris " + file);
         var ib = DeviceBuffer.Create(gpu, (ulong)indices.Count * sizeof(uint), BufferUse.Index, "debris " + file);
         using (var batch = gpu.Uploads.Begin())
         {
-            batch.Write(vb, 0, MemoryMarshal.AsBytes(CollectionsMarshal.AsSpan(vertices)));
+            batch.Write(vb, 0, packed);
             batch.Write(ib, 0, MemoryMarshal.AsBytes(CollectionsMarshal.AsSpan(indices)));
         }
         var result = new Mesh(vb, ib, [.. parts], (built.Max - built.Min) / 2) { Centre = centre };

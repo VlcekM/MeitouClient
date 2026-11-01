@@ -225,6 +225,23 @@ bodies zero velocity. The setter passes the character's movement velocity (Y zer
 |v|² > 100), but slot 10 never uses it (**Verified**: its register is reused after the clamp). No
 hit impulse exists. `FUN_1407d2d10` (per-limb speed caps) and `FUN_1407d2290` have no callers.
 
+Meitou ("Advanced ragdolls", Advanced settings, on; Faithful off; `BodyOptions.AdvancedRagdolls`): a new whole-body (not carried) ragdoll starts with every new body at one speed, capped at half `RagdollPhysics.MaxSpeed`: the
+`CharacterCold.Blow` that a downing melee hit or bolt left (`CombatSystem.Knockdown`: the victim's last-tick velocity plus a push along the blow of
+0.4 x (cut + blunt + pierce) units/s, 10 to 50, with 0.2 of it upward; executions set it too; also kept as `CharacterCold.Knockdown` for a cut-off head), else the character's last-tick velocity (a bleed-out while running). Bodies kept from a
+partial ragdoll keep their own speed; a ragdoll restored from a save starts as saved.
+
+### Advanced ragdolls (Meitou)
+
+Engine feature behind the same switch (`BodyOptions.AdvancedRagdolls`; Faithful: the original's hard limits and no pull), tuned by eye (**Unknown** against real motion):
+- **Soft limits**, every ragdoll: each limit gets an inner one 25% of its range in from either end (`SoftBand`; a spherical joint's swing cone too), a soft overdamped spring (5 Hz, ratio 3)
+  that brakes the joint before the hard stop instead of letting it hit it at full speed.
+- **Relaxed pull**, whole and carried ragdolls of an incapacitated character (not a conscious one's collapsed limbs, which hang loose): a capped `TwistServo` on each joint towards
+  60% of the way from the binding pose to the middle of a hinge's range (knees about 50 degrees, elbows about 45, hips about 24 degrees, which way **Unknown**, spine straight; a shoulder's twist to 0, its swing left to
+  gravity). Unconscious 1.5 Hz with at most 40 torque, dead 0.8 Hz with at most 12 (muscles go slack at death); the head keeps only the file's spring. Re-set when the state
+  changes (a knocked-out body dying), removed at the freeze. Gravity beats it, so it shapes the rest pose rather than holding one.
+- **Spin on impact**: a new ragdoll started by a blow (`CharacterCold.Blow`'s push) spins its upper arms along the push and its thighs against it (the feet held the ground),
+  0.15 rad/s per unit/s of push, at most 6, each limb by its own roll of 0.6 to 1.4 (`RngPurpose.RagdollSpin`).
+
 ## Per frame
 
 Driver `FUN_1405b8180` (AnimationClass), update `FUN_1407d3c00`:
