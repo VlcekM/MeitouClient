@@ -383,13 +383,15 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
 
     /// <summary>Points kept loaded besides the eye's (<see cref="ObjectStreamer.Kept"/>).</summary>
     public IReadOnlyList<Vector3> Kept { get => streamer.Kept; set => streamer.Kept = value; }
+    /// <summary>The camera's distance to its target (<see cref="ObjectStreamer.KeptViewDistance"/>).</summary>
+    public float KeptViewDistance { get => streamer.KeptViewDistance; set => streamer.KeptViewDistance = value; }
 
     /// <summary>Where the last need pass measured from, for the VRAM dump: the eye, the margin for its speed, the arrival point and the kept points.</summary>
     public void WriteViewReport(TextWriter w)
     {
         static string P(Vector3 v) => $"{v.X:0}, {v.Y:0}, {v.Z:0}";
         w.WriteLine($"object needs measured from: eye {P(lastMarkEye)}, speed margin {needMargin:0}{(streamer.Ahead is { } a ? $", arrival {P(a)}" : "")}");
-        w.WriteLine($"  kept points ({streamer.Kept.Count}, merged): {string.Join("; ", streamer.Kept.Select(P))}");
+        w.WriteLine($"  kept points ({streamer.Kept.Count}, merged, detail from at least {streamer.KeptViewDistance:0}): {string.Join("; ", streamer.Kept.Select(P))}");
         w.WriteLine();
     }
 
@@ -523,6 +525,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
             // During a flight the path asks for nothing finer: needs and mesh levels count only the arrival and the kept points (it keeps what it has).
             if (streamer.Ahead is not null && (value = streamer.LoadNear(eye, inst.Centre) - inst.Radius) >= limit) return;
             if (set.NeedStamp != markStamp) { set.NeedStamp = markStamp; set.Near = set.NearScaled = float.PositiveInfinity; markedSets.Add(set); }
+            value = streamer.DetailNear(eye, inst.Centre) - inst.Radius;
             float near = Math.Max(value - needMargin, 0);
             if (near < set.Near) set.Near = near;
             // A mesh is kept ready for where the camera will be by the next pass and the remake (1.5 s of its speed), a texture for half a second (its two levels of margin do the rest).
@@ -669,7 +672,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         // Mip streaming: this instance's distance is a use of the textures from now on (before the pass that would find it), and a new set's
         // textures are loaded now, knowing it (they were made without loading: deferred). Measured as the mark pass does (from the nearest kept point too),
         // or a kept point's textures load coarse for the far eye and wait in the refine queue.
-        float near = Math.Max(streamer.LoadNear(eyeNow, inst.Centre) - inst.Radius - needMargin, 0);
+        float near = Math.Max(streamer.DetailNear(eyeNow, inst.Centre) - inst.Radius - needMargin, 0);
         foreach (var part in set!.Parts) part.OfferNow(part.Triplanar ? near : near / Math.Max(scale, 1e-6f));
         if (made) set.Touch();
         return true;

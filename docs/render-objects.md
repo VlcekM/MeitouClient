@@ -71,7 +71,10 @@ Advanced "Keep textures at characters" (Meitou, default on, `UserConfig.KeepText
 the drawn position of every squad bar member each frame; its sub-option "Keep textures at all squads" (default off, shown only while the
 main one is on, `KeepTexturesAtAllSquads`) takes every player squad's members instead. `ObjectStreamer.Near` / zone layout count the nearest of eye, `Ahead` and `Kept`,
 so object meshes and texture mips stay loaded round each character (a resolving instance's first texture need is measured the same way, else
-its textures load coarse for the far eye and wait for refines); terrain biome textures gather cells round each (ranked after the
+its textures load coarse for the far eye and wait for refines). Detail (texture mips, mesh levels) counts a kept point from at least the camera's
+distance to its target (`KeptViewDistance`), the view a jump there would have; residency counts from the point itself. **Observed** (VRAM dump
+2026-11-01, squad member at a town gate): 189 MB of object textures at need 0; whether from the kept point or the bounding sphere is
+**Unknown** (that dump did not list the points; the dump's header now does); terrain biome textures gather cells round each (ranked after the
 eye's). `Kept` ranks after the eye in the load order. Foliage and grass pages follow only the eye and `Ahead`. Costs video memory
 (the VRAM guard still applies). `WorldFrame` merges the points first (`ObjectStreamer.MergeKept`): one within 500 units of the eye or of an
 earlier point is dropped, so a squad standing together is one point. Every distance test walks the kept points, and `ObjectStreamer.Scan`

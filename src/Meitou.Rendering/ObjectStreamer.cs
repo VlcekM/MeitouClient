@@ -277,6 +277,18 @@ sealed class ObjectStreamer(WorldObjects objects, ObjectMeshCache meshes) : IDis
     /// only from <see cref="Ahead"/> and <see cref="Kept"/>, so the flight path keeps what it has and loads nothing (docs/render-objects.md "Arrival prefetch").
     /// </summary>
     public float LoadNear(Vector3 eye, Vector3 p) => Ahead is { } a ? MathF.Min(Vector3.Distance(a, p), NearKept(p)) : Near(eye, p);
+
+    /// <summary>The camera's distance to its target: a kept point's detail (texture mips, mesh levels) is measured from at least this far, the view a
+    /// jump to that character would have, instead of from the ground at its feet. What is loaded and kept still counts from the point itself.</summary>
+    public float KeptViewDistance { get; set; }
+
+    /// <summary><see cref="LoadNear"/> for detail: a kept point counts from at least <see cref="KeptViewDistance"/>.</summary>
+    public float DetailNear(Vector3 eye, Vector3 p)
+    {
+        float kept = MathF.Max(NearKept(p), KeptViewDistance);
+        if (Ahead is { } a) return MathF.Min(Vector3.Distance(a, p), kept);
+        return MathF.Min(Vector3.Distance(eye, p), kept);
+    }
     float NearZone(double x0, double z0, Vector3 eye)
     {
         float d = MathF.Min(ZoneDistance(x0, z0, eye), NearKeptZone(x0, z0));

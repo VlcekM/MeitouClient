@@ -1380,7 +1380,7 @@ static class WorldFrame
         gpu.Guard?.Tick();
         var kept = ObjectStreamer.MergeKept(gpu.Kept, eye);
         if (gpu.Streamer is { } aheadTerrain) (aheadTerrain.Ahead, aheadTerrain.Kept) = (gpu.Ahead, kept);
-        if (gpu.Objects is { } aheadObjects) (aheadObjects.Ahead, aheadObjects.Kept) = (gpu.Ahead, kept);
+        if (gpu.Objects is { } aheadObjects) (aheadObjects.Ahead, aheadObjects.Kept, aheadObjects.KeptViewDistance) = (gpu.Ahead, kept, camera.Distance);
         if (gpu.Foliage is { } aheadFoliage) aheadFoliage.Ahead = gpu.Ahead;
         gpu.Streamer?.Update(eye);
         StageClock.Lap(0);
