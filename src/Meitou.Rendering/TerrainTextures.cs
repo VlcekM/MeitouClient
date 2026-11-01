@@ -30,8 +30,8 @@ public sealed unsafe class TerrainTextures : IDisposable
     /// FarShift down, so a sample whose level is at least FarShift reads the same texels from either (docs/render-terrain.md, "Layer arrays").</summary>
     public const int FarShift = 2;
 
-    /// <summary>Most texture pairs the far arrays hold (a pair past it stays in its ground colour).</summary>
-    const int MaxFarLayers = 2048;
+    /// <summary>Most texture pairs the far arrays hold, the array layers every Vulkan device has (a pair past it stays in its ground colour; the base game has 133).</summary>
+    const int MaxFarLayers = 256;
 
     /// <summary>
     /// A pair gets a near slot within this many of its tile's size (world units per repeat) times the pixels per radian over the layer size: there a pixel
@@ -307,7 +307,9 @@ public sealed unsafe class TerrainTextures : IDisposable
         normalArray = AllocateArray(false, Capacity, layerSize, levelCount, "terrain textures normal");
         diffuseFar = AllocateArray(true, FarSlots, farSize, farLevels, "terrain textures diffuse far");
         normalFar = AllocateArray(false, FarSlots, farSize, farLevels, "terrain textures normal far");
-        if (GroundRelief.Enabled) heightArray = MakeArray(InternalFormat.R8, HeightSize, (int)Math.Log2(HeightSize) + 1, FarSlots, 1, "terrain textures height");
+        if (GroundRelief.Enabled)
+            try { heightArray = MakeArray(InternalFormat.R8, HeightSize, (int)Math.Log2(HeightSize) + 1, FarSlots, 1, "terrain textures height"); }
+            catch (Exception e) { Messages.Add($"terrain height array allocation: {e.Message}; the ground has no relief"); }
         // Each pair's steepness factor (1 / (side × its height's steepness); 0: flat), read by its far index: its depth (GroundRelief.LayerDepthCm).
         if (GroundRelief.Enabled)
         {
@@ -372,7 +374,7 @@ public sealed unsafe class TerrainTextures : IDisposable
         }
         catch (Exception e)
         {
-            Messages.Add($"terrain layer array allocation: {e.Message}; try a higher --texture-quality");
+            Messages.Add($"terrain layer array allocation: {e.Message}; try a lower texture quality");
             return null;
         }
     }
