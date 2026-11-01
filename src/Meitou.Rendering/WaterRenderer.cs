@@ -51,7 +51,7 @@ public sealed unsafe class WaterRenderer : IDisposable
             vec4 fineRect;
             vec4 coarseCellsFineBand; // coarse cells xy, fine band, has fine
             vec4 fineCells;
-            vec4 depthPlanes;     // this slice's near and far planes, 1 with a scene depth copy (CaptureScene)
+            vec4 depthPlanes;     // this slice's near and far planes, 1 with a scene depth copy (CaptureScene), 1 with 0..1 clip depth
             uint colourMap;
             uint flowMap;
             uint foamMap;
@@ -142,12 +142,12 @@ public sealed unsafe class WaterRenderer : IDisposable
     const string ThicknessFunctions = """
 
         uniform sampler2D uSceneDepth;   // the slice's depth before the water (CaptureScene), read where uDepthPlanes.z is 1
-        uniform vec3 uDepthPlanes;       // the slice's near and far planes, 1 with a depth copy
+        uniform vec4 uDepthPlanes;       // the slice's near and far planes, 1 with a depth copy, the depth's convention (1: the clip depth itself; 0: half of it plus a half)
 
-        // The view depth of a stored depth (Vulkan: half the projection's 0..1 clip depth plus a half; the copy is Vulkan's only).
+        // The view depth of a stored depth.
         float waterViewZ(float d)
         {
-            float zd = 2.0 * d - 1.0;
+            float zd = uDepthPlanes.w > 0.5 ? d : 2.0 * d - 1.0;
             return uDepthPlanes.x * uDepthPlanes.y / (uDepthPlanes.y - zd * (uDepthPlanes.y - uDepthPlanes.x));
         }
 
@@ -157,6 +157,13 @@ public sealed unsafe class WaterRenderer : IDisposable
             if (uDepthPlanes.z < 0.5) return -1.0;
             float behind = waterViewZ(texelFetch(uSceneDepth, ivec2(gl_FragCoord.xy), 0).r);
             return max(dist * (behind / waterViewZ(gl_FragCoord.z) - 1.0), 0.0);
+        }
+
+        // The error of sceneThickness from the two stored depths' precision (a float's step near 1 is about 6e-8, times z^2 / near in view depth,
+        // doubled with the 2d - 1 convention, for each of the two): the edge fades over at least this, so distant shores do not shimmer.
+        float thicknessError(float dist)
+        {
+            return (uDepthPlanes.w > 0.5 ? 1.2e-7 : 2.4e-7) * dist * dist / max(uDepthPlanes.x, 1e-3);
         }
         """;
 
@@ -281,12 +288,13 @@ public sealed unsafe class WaterRenderer : IDisposable
             // Alpha as the game's water: see-through near the camera where shallow, opaque beyond 4000 units. Its depth is the game's, the
             // distance through the water to what is behind it; without a depth copy, the slant path down to the terrain's height.
             float depth = sceneThickness(dist);
+            float edgeWidth = depth >= 0.0 ? max(2.0, thicknessError(dist)) : 2.0;   // the game's 2 units, wider where the copy's precision is coarser
             if (depth < 0.0) depth = max(0.0, uWaterHeight - terrainHeight(vWorld.xz)) / max(toEyeDir.y, 0.05);
             if (outside > 0.0) depth = 1e4;   // past the edge of the world there is only open sea
             float fresnel = 1.0 - pow(1.0 - cosv, 2.0);
             float a = clamp(1.0 - (dist - 4000.0) / 1000.0, 0.0, 1.0);
             a *= mix(1.0, clamp(depth * pa.w, 0.0, 1.0), fresnel);
-            a *= clamp(depth / 2.0, 0.0, 1.0);
+            a *= clamp(depth / edgeWidth, 0.0, 1.0);
             a = mix(1.0, a, clamp((4000.0 - dist) / 400.0, 0.0, 1.0));
 
             fragColour = vec4(atmoApply(colour, uEye, vWorld), a * atmoWaterWeight(dist, uWaterFar));
@@ -522,6 +530,8 @@ public sealed unsafe class WaterRenderer : IDisposable
         uniform sampler2D uRefraction;  // the scene under the water, copied at half size before it (CaptureScene)
         uniform float uRefract;         // 1: refract it and composite here; 0: blend over the scene as the game's water
         uniform vec2 uScreen;           // 1 / the target's size: gl_FragCoord to the copy's coordinates
+        uniform vec2 uCentre;           // the grid's centre and its spacing over its radius (the vertex stage's), for the hump's vertex spacing
+        uniform float uGridStep;
         uniform vec3 uClarity;          // x: the absorption per unit of depth times this (1 / the Tab panel's clarity); y: the far water's clarity (0 the true slant path, 1 none); z: the see-through distance (the game: 4000)
 
         vec3 sampleNormal(vec2 coord, vec2 direction, float speed, float time)
@@ -783,7 +793,8 @@ public sealed unsafe class WaterRenderer : IDisposable
             if (thick >= 0.0 && !swash && fade > 0.0)
             {
                 float lift = uShore.y * s.open * max(s.size, s.sizeWet) * (1.0 - smoothstep(10.0, 60.0, s.dist)) * smoothstep(-140.0, -60.0, s.dist);
-                float hump = breakerScale(s) * pow(0.5 - 0.5 * cos(6.2831853 * s.g), 1.5);
+                float spacing = max(length(vBase - uCentre), 1.0) * uGridStep;
+                float hump = breakerScale(s) * pow(0.5 - 0.5 * cos(6.2831853 * s.g), 1.5) * smoothstep(0.45, 0.2, spacing / uShore.z);
                 thick = max(thick - max(lift - max(hump, level), 0.0) * fade / max(toEyeDir.y, 0.05), 0.0);
             }
             float depth = thick >= 0.0 && !swash ? thick * pow(max(toEyeDir.y, 0.05), uClarity.y)
@@ -934,7 +945,7 @@ public sealed unsafe class WaterRenderer : IDisposable
             // The last two units of water fade into what is behind it (the game's alpha term saturate(depth / 2), on the distance through the
             // water): no line where the surface meets the ground (displaced or not), a rock or a leg. The swash's raised surface lies nearly
             // along the beach, so it fades over half a unit where it meets the sand.
-            float edge = thick >= 0.0 ? clamp(thick / (swash ? 0.5 : 2.0), 0.0, 1.0) : 1.0;
+            float edge = thick >= 0.0 ? clamp(thick / max(swash ? 0.5 : 2.0, thicknessError(dist)), 0.0, 1.0) : 1.0;
             // Wet sand, behind the swash and under its front: darker and glossy, drying out until the next wave, faded out over the edge of its band.
             float wet = swash ? (1.0 - sinceCrest) * 0.6 * smoothstep(0.0, 0.3, max(level, wetLevel) - above) : 0.0;
             vec3 wetGloss = reflected * schlick * gloss + min(spec, 4.0) * uGlintColour * 0.15;
@@ -1001,7 +1012,7 @@ public sealed unsafe class WaterRenderer : IDisposable
         ["uParamsA"] = "textures2D[water.paramsA]", ["uParamsB"] = "textures2D[water.paramsB]",
         ["uReflection"] = "textures2D[water.reflectionMap]", ["uRefraction"] = "textures2D[water.refractionMap]",
         ["uOceanMaps"] = "textures2DArray[water.oceanMap]", ["uShoreField"] = "textures2D[water.shoreMap]", ["uRiverMap"] = "textures2D[water.riverMap]",
-        ["uSceneDepth"] = "textures2D[water.sceneDepthMap]", ["uDepthPlanes"] = "water.depthPlanes.xyz",
+        ["uSceneDepth"] = "textures2D[water.sceneDepthMap]", ["uDepthPlanes"] = "water.depthPlanes",
     };
 
     static readonly Dictionary<string, string> NativeMap = NativeShaders.Map(NativeOwn);
@@ -1394,12 +1405,13 @@ public sealed unsafe class WaterRenderer : IDisposable
     public const float FaithfulOpaqueDistance = 4000;
 
     /// <summary>Whether this slice's water reads the scene's depth (<see cref="CaptureScene"/>): Vulkan only (Metal keeps the terrain's height), and
-    /// only while water in it can be see-through (the bounds of <see cref="NeedsRefraction"/>; Faithful: nearer than <see cref="FaithfulOpaqueDistance"/>).</summary>
+    /// only while water in it can be see-through: Meitou with <see cref="Refraction"/> on, as <see cref="NeedsRefraction"/>; Faithful nearer than
+    /// <see cref="FaithfulOpaqueDistance"/>. With <see cref="NearestWater"/> unknown (reflections off) it is copied whether or not water is in view.</summary>
     internal bool NeedsDepth(float near)
     {
         if (Gpu is not GpuContext) return false;
         if (!Meitou) return near < FaithfulOpaqueDistance && (float.IsNaN(NearestWater) || NearestWater < FaithfulOpaqueDistance);
-        return (!Lean || SliceCanTransmit(near, ClearDistance)) && (float.IsNaN(NearestWater) || SliceCanTransmit(NearestWater, ClearDistance));
+        return NeedsRefraction(near);   // without refraction (`--no-water-refraction`) the Meitou water keeps the slant path: no pass restart or copy
     }
 
     /// <summary>Whether this slice needs <see cref="CaptureScene"/> before its water (<paramref name="depthSlice"/>: its depth can be copied).</summary>
@@ -1408,7 +1420,7 @@ public sealed unsafe class WaterRenderer : IDisposable
     /// <summary>
     /// Copies the scene drawn so far (the slice's opaque geometry, with no pass open) for the water: at half the size the colour the Meitou water
     /// refracts (the floor and whatever stands in the water, seen through the waves), and the depth, from which both waters measure the distance
-    /// through them (<see cref="ThicknessFunctions"/>). One native segment (a full barrier on each side) and a blit for each.
+    /// through them (<see cref="ThicknessFunctions"/>). One native segment (a full barrier on each side), a blit for the colour and a copy for the depth.
     /// </summary>
     public void CaptureScene(GpuTexture sceneColour, GpuTexture? sceneDepth, float near, float far)
     {
@@ -1438,7 +1450,15 @@ public sealed unsafe class WaterRenderer : IDisposable
                 sceneDepthCopy = vulkan.CreateTexture(new TextureDesc(d.Format, d.Width, d.Height,
                     Use: TextureUse.Sampled | TextureUse.TransferDst | TextureUse.DepthTarget, Name: "water scene depth"), ((CommandList)cmd).Handle);
             }
-            cmd.Blit(sceneDepth, sceneDepthCopy, TextureMinFilter.Nearest);
+            // Same size and format: a copy (blitting into a depth format is not guaranteed, BLIT_DST), as ShadowPass.CaptureDepth.
+            var region = new Silk.NET.Vulkan.ImageCopy
+            {
+                SrcSubresource = new Silk.NET.Vulkan.ImageSubresourceLayers(Silk.NET.Vulkan.ImageAspectFlags.DepthBit, 0, 0, 1),
+                DstSubresource = new Silk.NET.Vulkan.ImageSubresourceLayers(Silk.NET.Vulkan.ImageAspectFlags.DepthBit, 0, 0, 1),
+                Extent = new Silk.NET.Vulkan.Extent3D((uint)d.Width, (uint)d.Height, 1),
+            };
+            vulkan.Device.Vk.CmdCopyImage(((CommandList)cmd).Handle, vulkan.Device.NativeImage(sceneDepth), Silk.NET.Vulkan.ImageLayout.General,
+                vulkan.Device.NativeImage(sceneDepthCopy!), Silk.NET.Vulkan.ImageLayout.General, 1, &region);
             (sceneDepthFrame, sceneDepthPlanes) = (Gpu.Frame.Number, new Vector2(near, far));
         }
         Gpu.EndNative(cmd);
@@ -1548,7 +1568,7 @@ public sealed unsafe class WaterRenderer : IDisposable
             ? refractionMap.Index(new SampledTexture(Gpu.Samplers.Get(ClampLinear), refraction!.View()))
             : Gpu.StandIn2D;
         bool depth = sceneDepthCopy is not null && sceneDepthFrame == Gpu.Frame.Number;
-        c.DepthPlanes = new Vector4(sceneDepthPlanes, depth ? 1f : 0f, 0f);
+        c.DepthPlanes = new Vector4(sceneDepthPlanes, depth ? 1f : 0f, Gpu.ClipDepthZeroToOne ? 1f : 0f);
         c.SceneDepthMap = depth ? sceneDepthMap.Index(new SampledTexture(Gpu.Samplers.Get(ClampNearest), sceneDepthCopy!.View())) : Gpu.StandIn2D;
         return c;
     }
