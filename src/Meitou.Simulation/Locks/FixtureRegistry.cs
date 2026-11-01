@@ -137,6 +137,7 @@ public sealed partial class FixtureRegistry
         foreach (var f in b.Fixtures)
             if (db.Find(f.RecordId) is { } item && (Lockable(db, item) ?? (f.StorageWidth > 0 && f.StorageHeight > 0 ? FixtureKind.Container : null)) is { } kind)
                 list.Add(Make(world, db, kind, f.Id, b.Key, item, site, owner, faction, f.Position, f.Yaw, f.StorageWidth, f.StorageHeight));
+        RegisterSeats(b, owner);
         int bed = 0;
         foreach (var spot in b.Spots)
         {
@@ -149,7 +150,7 @@ public sealed partial class FixtureRegistry
             });
             bed++;
         }
-        if (list.Count == 0 && !properties.ContainsKey(b.Key)) return;
+        if (list.Count == 0 && !properties.ContainsKey(b.Key) && !seatSpots.Values.Any(s => s.Building == b.Key)) return;
         byBuilding[b.Key] = list;
         buildings.Add(b.Key);
         foreach (var f in list) { all.Add(f); byId[f.Id] = f; }
@@ -274,6 +275,7 @@ public sealed partial class FixtureRegistry
     {
         if (!byBuilding.Remove(buildingInstance, out var list)) return;
         buildings.Remove(buildingInstance);
+        RemoveSeats(buildingInstance);
         foreach (var f in list) { all.Remove(f); byId.Remove(f.Id); }
         containerSpots = null;
         doorPicks = null; doorsByBuilding = null;

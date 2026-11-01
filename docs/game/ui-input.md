@@ -537,6 +537,8 @@ A right click on the ground (`PlayerInterface::playerMove`) is order 29 through 
 the sneak flag +0xd4 unless the fight is on (`isInCombatMode`, CombatClass +0x130); where a cage opens its menu at once. 28 Stand Up is AI task 28
 (`Task_UnCrouch`, [staying low](ragdolls.md#staying-low)); Meitou stands the selection at once.
 
+Meitou seats (**Observed**, native Metal diagnostic with a copied tavern save): registered town chairs/thrones and player-built seats use the `use` pointer. Quick right click gives order 87; holding opens Use, with Shift adding the operating job. The existing operator path walks there, settles at the seat and plays its functionality’s clip. Town seats are derived fixture targets, not duplicate construction/render objects; already seated NPCs block the player order.
+
 Meitou (`PlayerInterface.ContextMenu.cs`; one method per target: characters, `ContainerVerbs`, `DoorVerbs`, `SiteVerbs` in `PlayerInterface.Build.cs`, `CageVerbs` in `PlayerInterface.Cages.cs`):
 the same labels and order (`VerbOrders`; Meitou's own verbs after), the animals-only filter, the chance column (Stealth KO, Kidnap), Shift on Use giving the job (and on the character verbs listed under [Ordering](ai-tasks.md#perma-jobs)).
 Containers and doors open their menu on a held press (a quick click as before); cages, and another faction's locked doors, open it on the press (above). Built: Put Down, Talk To, Attack Target (hostile), Attack

@@ -149,7 +149,7 @@ sealed partial class PlayerInterface
     }
 
     /// <summary>What a right click acts on, as <see cref="PickAt"/> chose it.</summary>
-    enum Picked { None, Character, GroundItem, Container, Door, Rock, Site, Bed, Cage }
+    enum Picked { None, Character, GroundItem, Container, Door, Rock, Site, Bed, Cage, Seat }
 
     /// <summary>
     /// The right button's target under the pixel, with characters selected (docs/game/ui-input.md "Building picking and selection"): the nearest along the ray of a character with a quick
@@ -170,6 +170,7 @@ sealed partial class PlayerInterface
         var container = PickContainerAt(p);
         Offer(Picked.Container, container?.T);
         Offer(Picked.Door, PickDoorAt(p)?.T);
+        Offer(Picked.Seat, PickSeatAt(p)?.T);
         var bed = PickBedAt(p);
         Offer(Picked.Bed, bed?.T);
         var cage = PickCageAt(p);

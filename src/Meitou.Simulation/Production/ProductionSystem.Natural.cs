@@ -52,7 +52,7 @@ public sealed partial class ProductionSystem
     public static bool IsNatural(string id) => id.StartsWith(NaturalPrefix, StringComparison.Ordinal);
 
     /// <summary>A player site of the registry, else the rock a natural id names; null for neither.</summary>
-    BuildSite? Site(World world, string id) => world.Buildings.Find(id) ?? Natural(id);
+    BuildSite? Site(World world, string id) => world.Buildings.Find(id) ?? Seat(world, id) ?? Natural(id);
 
     /// <summary>
     /// The rock a natural id names: a BUILDING with <c>is foliage</c> whose machine is an operable mine of a <c>world resource mining</c>; with a rock source, one of that BUILDING must

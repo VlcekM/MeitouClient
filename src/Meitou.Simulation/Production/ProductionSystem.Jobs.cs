@@ -349,6 +349,7 @@ public sealed partial class ProductionSystem
         switch (job.Type)
         {
             case TaskType.OPERATE_MACHINERY:
+                if (IsSeat(m)) return SeatOccupied(world, site) || OperatorsOf(world, id) - (cold.OperateSite == id ? 1 : 0) >= m.Data.MaxOperators;
                 if (!m.Data.Operable) return true;
                 if (OperatorsOf(world, id) - (cold.OperateSite == id ? 1 : 0) >= m.Data.MaxOperators || !HasWorkingArm(cold)) return true;
                 return !HasWork(world, site, m, cold);
