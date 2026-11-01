@@ -72,6 +72,8 @@ public sealed class WorldSession : IDisposable
 
     /// <summary>The wall time (ms) of the last tick run ahead, 0 once taken (for the profiler).</summary>
     public double TakeAheadMs() { double ms = aheadMs; aheadMs = 0; return ms; }
+    /// <summary>The last tick run ahead's ms, left for <see cref="TakeAheadMs"/>.</summary>
+    public double AheadMs => aheadMs;
     double aheadMs;
 
     /// <summary>A world tick's wall time (ms), smoothed over the last ten or so ticks, whether run in the frame or ahead (the host's dynamic tick ahead reads it).</summary>

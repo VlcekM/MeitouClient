@@ -553,7 +553,7 @@ sealed partial class GameHost
             // Edge scrolling (the game's default): the pointer at the edge of the window pans the camera, unless something else has the pointer.
             session.Camera.Settings.EdgeScroll = config.EdgeScroll != false;
             session.Camera.Strategy.EdgePointer = Covered || TitleVisible || panel?.Visible == true || interfaceHidden || cinemaHolds || cinema.EditorVisible ? null : WindowPointer.InWindow(window);
-            session.World.Profile.Enabled = profiler is { Showing: not FrameProfiler.Mode.Off } || g.PlayBench is not null;
+            session.World.Profile.Enabled = profiler is { Showing: not FrameProfiler.Mode.Off } || g.PlayBench is not null || SpikeLog.Enabled;
             if (!Covered) session.Advance(frameDt);   // loading and arrival preserve the loaded world's exact time
             DuelHoldClock();
             double advanceMs = Stopwatch.GetElapsedTime(a0).TotalMilliseconds;
@@ -1017,6 +1017,22 @@ sealed partial class GameHost
             for (int k = phases + 1; k < simMs.Length; k++)
                 if (simMs[k] >= 2) SpikeLog.Note($"sim {simNames[k]}", ms: simMs[k]);
         profile.Clear();
+    }
+
+    /// <summary>
+    /// --log-spikes: a tick run ahead over <see cref="SpikeSimMs"/>, by system and part, in the frame whose draw waited for it (its profile holds that tick
+    /// alone then: <see cref="SimProfile"/> cleared it before the draw).
+    /// </summary>
+    void NoteAheadTick()
+    {
+        if (!SpikeLog.Enabled || session.AheadMs <= SpikeSimMs) return;
+        var world = session.World;
+        var profile = world.Profile;
+        SpikeLog.Note("sim ahead tick", ms: session.AheadMs);
+        for (int k = 0; k < profile.SystemMs.Length && k < world.Systems.Count; k++)
+            if (profile.SystemMs[k] >= 2) SpikeLog.Note($"sim ahead {world.Systems[k].GetType().Name}", ms: profile.SystemMs[k]);
+        foreach (var (name, ms) in profile.Parts)
+            if (ms >= 2) SpikeLog.Note($"sim ahead {name}", ms: ms);
     }
 
     /// <summary>Between ticks: the world's messages for the player go to the HUD and the log, the fights hostility started to the log.</summary>

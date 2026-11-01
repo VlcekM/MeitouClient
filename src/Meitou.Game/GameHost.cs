@@ -548,6 +548,7 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
                 weatherHour: (float)session.Clock.HourOfDay);
         }
         finally { session.EndTickAhead(); }
+        if (tickAhead) NoteAheadTick();
     }
 
     /// <summary>This frame's world draw overlaps the next world tick (set by the interactive loop; never in stills, the duel, recorded flights or the play benchmark).</summary>
