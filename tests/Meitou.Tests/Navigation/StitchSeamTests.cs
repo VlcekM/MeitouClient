@@ -20,6 +20,32 @@ public class StitchSeamTests
     [InlineData(6, 7, false)]
     public void The_seam_joins_coinciding_edges_within_the_climb_along_two_cells(int gapAt10, int gapAt13, bool joined)
     {
+        var stitched = StitchPair(gapAt10, gapAt13, details: null);
+
+        Assert.Equal(joined, stitched.Neighbours[0].Contains(1));
+        Assert.Equal(joined, stitched.Neighbours[1].Contains(0));
+        Assert.True(stitched.LinksOf(0).IsEmpty && stitched.LinksOf(1).IsEmpty);
+    }
+
+    /// <summary>
+    /// The pair with corner gaps 0 and 6 (within the climb along part of the edge only) and each quad's own surface samples flat over the edge: the right one
+    /// <paramref name="surfaceGap"/> above the left. Level, they join; 10 apart (the corner at gap 0 took the other's height, as the Ancient Lab's stair under its
+    /// floor's edge, docs/game/pathfinding.md "Inner seams"), they do not.
+    /// </summary>
+    [Theory]
+    [InlineData(0, true)]
+    [InlineData(10, false)]
+    public void A_partial_seam_joins_only_where_the_polygons_own_surfaces_meet(float surfaceGap, bool joined)
+    {
+        static HeightGrid Flat(float y) => new(36, 16, 4, 4, 4, Enumerable.Repeat(y, 16).ToArray()) { Own = Enumerable.Repeat(true, 16).ToArray() };
+        var stitched = StitchPair(0, 6, details: [[Flat(9.5f), Flat(9.5f + surfaceGap)]]);
+
+        Assert.Equal(joined, stitched.Neighbours[0].Contains(1));
+        Assert.Equal(joined, stitched.Neighbours[1].Contains(0));
+    }
+
+    static ZoneNavMesh StitchPair(int gapAt10, int gapAt13, HeightGrid?[]?[]? details)
+    {
         var s = new NavBuildSettings();
         const int nvp = 6, none = RcRecast.RC_MESH_NULL_IDX;
         // Recast winding (clockwise with X right, Z up): left (10,10) (10,13) (20,13) (20,10); right (20,10) (20,13) (30,13) (30,10).
@@ -42,10 +68,6 @@ public class StitchSeamTests
         float size = s.TileCells * s.CellSize;
         var g = new ZoneGeometry { Zone = zone, ZoneMin = Vector2.Zero, ZoneMax = new(size) };
 
-        var stitched = ZoneNavMeshBuilder.Stitch(g, s, [mesh], 1, size);
-
-        Assert.Equal(joined, stitched.Neighbours[0].Contains(1));
-        Assert.Equal(joined, stitched.Neighbours[1].Contains(0));
-        Assert.True(stitched.LinksOf(0).IsEmpty && stitched.LinksOf(1).IsEmpty);
+        return ZoneNavMeshBuilder.Stitch(g, s, [mesh], 1, size, details);
     }
 }
