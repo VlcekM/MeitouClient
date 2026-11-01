@@ -16,7 +16,7 @@
   ]);
   var NS = "http://www.w3.org/2000/svg";
   var D = null;
-  var state = { tlAll: false, selected: {}, hm: "", runMode: "warm", relative: false, more: false, bdAll: {}, ref: "", bdStat: 0, bdMachine: "", bdOff: {}, bdOn: {} };
+  var state = { tlAll: false, selected: {}, hm: "", runMode: "warm", relative: false, more: false, covAll: false, bdAll: {}, ref: "", bdStat: 0, bdMachine: "", bdOff: {}, bdOn: {} };
   var tip = document.getElementById("tip");
 
   function el(tag, attrs, text) {
@@ -605,6 +605,7 @@
 
   // Machines x commits: which machine ran which benchmark target. Columns are in upstream commit order; a
   // code-identical variant shares the column of its target; off-target commits get their own faded column.
+  var COV_RECENT = 12;
   function renderCoverage() {
     var host = document.getElementById("coverage");
     var cur = currentTarget();
@@ -619,6 +620,10 @@
       if (!cols.some(function (x) { return x.t === t; })) cols.push({ key: t.commit, c: null, t: t, off: false, rank: 1e9 });
     });
     cols.sort(function (x, y) { return x.rank - y.rank; });
+    // The matrix gains a column per benchmarked commit: show the newest COV_RECENT unless asked for all of them.
+    var older = state.covAll ? 0 : Math.max(0, cols.length - COV_RECENT);
+    if (older) cols = cols.slice(older);
+    var prev = host.querySelector(".tablewrap"), prevLeft = prev ? prev.scrollLeft : -1;
     var html = '<div class="tablewrap"><table class="cov"><thead><tr><th>Machine</th>';
     cols.forEach(function (x) {
       var full = x.t ? x.t.commit_full : x.c.commit_full, hash = x.t ? x.t.commit : x.c.commit;
@@ -644,7 +649,12 @@
       html += "</tr>";
     });
     html += "</tbody></table></div>";
-    host.innerHTML = html + '<p class="muted small">Upstream commit order. Bold = release target; * = code-identical commit; faded = off-target.</p>';
+    var toggle = older ? '<button type="button" class="covtoggle">Show ' + older + ' older</button> ' : state.covAll && cols.length > COV_RECENT ? '<button type="button" class="covtoggle">Show only the newest ' + COV_RECENT + '</button> ' : "";
+    host.innerHTML = html + '<p class="muted small">' + toggle + 'Upstream commit order, newest on the right. Bold = release target; * = code-identical commit; faded = off-target.</p>';
+    var tw = host.querySelector(".tablewrap");
+    if (tw) tw.scrollLeft = prevLeft < 0 ? tw.scrollWidth : prevLeft;
+    var tb = host.querySelector(".covtoggle");
+    if (tb) tb.addEventListener("click", function () { state.covAll = !state.covAll; renderCoverage(); });
   }
 
   function renderStandard() {
