@@ -92,12 +92,13 @@ internal static partial class ZoneNavMeshBuilder
                 neighbours.Add(nb);
                 areas.Add((byte)m.areas[p]);
             }
-            JoinNearMisses(vBase);
+            JoinNearMisses(vBase, pBase, details?[tile]);
         }
 
         // Open edges of the tile still unjoined that face each other off line: opposite directions, sharing one end in X/Z (so not two floors either
-        // side of a thin wall), the other overlap end within NavGeometry.NearMissGap of the line, and within the climb at both overlap ends.
-        void JoinNearMisses(int vBase)
+        // side of a thin wall), the other overlap end within NavGeometry.NearMissGap of the line, and within the climb at both overlap ends: by the edges'
+        // own heights, else by the polygons' surfaces along the overlap (SurfacesStep).
+        void JoinNearMisses(int vBase, int pBase, HeightGrid?[]? grids)
         {
             var left = open.Values.ToArray();
             for (int i = 0; i < left.Length; i++)
@@ -110,9 +111,47 @@ internal static partial class ZoneNavMeshBuilder
                     if (!SameXZ(a0, b1) && !SameXZ(a1, b0)) continue;
                     if (!NavGeometry.FacingOverlap(a0, a1, b0, b1, NavGeometry.NearMissGap, out float lo, out float hi, out float yLo, out float yHi)) continue;
                     if ((hi - lo) * Vector2.Distance(new(a0.X, a0.Z), new(a1.X, a1.Z)) < s.CellSize / 2) continue;
-                    if (Math.Abs(float.Lerp(a0.Y, a1.Y, lo) - yLo) > climb || Math.Abs(float.Lerp(a0.Y, a1.Y, hi) - yHi) > climb) continue;
+                    if ((Math.Abs(float.Lerp(a0.Y, a1.Y, lo) - yLo) > climb || Math.Abs(float.Lerp(a0.Y, a1.Y, hi) - yHi) > climb)
+                        && !SurfacesStep(a0, a1, lo, hi, yLo, yHi, grids?[p - pBase], grids?[q - pBase])) continue;
                     nearSeams.Add((p, e, q, f));
                 }
+        }
+
+        // A long simplified edge runs straight in height across a kink of its polygon's surface (a stair's foot on flat ground: Recast simplifies contours in
+        // X/Z only), so its height at the overlap can be well off the ground beside. Along the overlap each side's surface (its own samples, else its edge)
+        // must be within the climb of the other's, at every cell; only with samples on at least one side (docs/game/pathfinding.md, "Inner seams").
+        bool SurfacesStep(Vector3 a0, Vector3 a1, float lo, float hi, float yLo, float yHi, HeightGrid? own, HeightGrid? facing)
+        {
+            if (own?.Own is null && facing?.Own is null) return false;
+            int cells = Math.Max(1, (int)MathF.Ceiling((hi - lo) * Vector2.Distance(new(a0.X, a0.Z), new(a1.X, a1.Z)) / s.CellSize));
+            for (int k = 0; k <= cells; k++)
+            {
+                float t = float.Lerp(lo, hi, k / (float)cells);
+                var at = Vector3.Lerp(a0, a1, t);
+                float a = own?.Own is not null && OwnHeightAt(own, at.X, at.Z, out float ha) ? ha : at.Y;
+                float b = facing?.Own is not null && OwnHeightAt(facing, at.X, at.Z, out float hb) ? hb : float.Lerp(yLo, yHi, k / (float)cells);
+                if (MathF.Abs(a - b) > climb) return false;
+            }
+            return true;
+        }
+
+        // The height at (x, z) between the four samples round it that are the polygon's own region (a nearest sample on a steep stair can be the ground
+        // beside it, a step's worth off), else the nearest own one.
+        static bool OwnHeightAt(HeightGrid grid, float x, float z, out float height)
+        {
+            float u = (x - grid.X0) / grid.Step, v = (z - grid.Z0) / grid.Step;
+            int i0 = (int)MathF.Floor(u), j0 = (int)MathF.Floor(v);
+            float sum = 0, weight = 0;
+            for (int j = j0; j <= j0 + 1; j++)
+                for (int i = i0; i <= i0 + 1; i++)
+                {
+                    if (i < 0 || j < 0 || i >= grid.Columns || j >= grid.Rows || !grid.Own![j * grid.Columns + i]) continue;
+                    float w = (1 - MathF.Abs(u - i)) * (1 - MathF.Abs(v - j));
+                    sum += w * grid.Values[j * grid.Columns + i];
+                    weight += w;
+                }
+            if (weight > 1e-4f) { height = sum / weight; return true; }
+            return NearestOwn(grid, x, z, out height);
         }
 
         // The sample of the polygon's own region nearest (x, z) within one sample step.
