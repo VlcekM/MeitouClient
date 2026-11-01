@@ -26,29 +26,31 @@ public sealed partial class FirstAidSystem
 
     // What one automatic sweep (SlowWorld) works out once instead of for every medic: nothing it reads changes while the sweep runs (a treatment only sets a task).
     bool sweeping;
-    readonly List<int> sweepFresh = [];
     readonly HashSet<int> sweepCageFactions = [];
-    // The patients' organic and robot needs (AidNeed) by slot * 2 + robot, valid where their stamp is the sweep's.
+    // Every character's organic and robot need (AidNeed) by slot * 2 + robot, and the slots with either above 0 in slot order.
     float[] sweepNeeds = [];
-    int[] sweepNeedStamp = [];
-    int sweepStamp;
+    readonly List<int> sweepNeedy = [];
 
     /// <summary>
-    /// Starts a sweep: the slots the grid snapshot cannot place (spawned, removed, or moved farther than <see cref="PatientGridJump"/> since it was taken: one pass over the table
-    /// instead of one per medic) and the factions that own a cage (one pass over the fixtures instead of one per medic).
+    /// Starts a sweep: every character's first-aid needs and the ones with a need (the passes skip a patient whose <see cref="KitNeed"/> is 0, so these are a medic's only
+    /// candidates: one pass over the table instead of a grid query per medic) and the factions that own a cage (one pass over the fixtures instead of one per medic).
     /// </summary>
     internal void BeginSweep(World world)
     {
         var table = world.Characters;
-        var previous = table.Previous;
         var next = table.Next;
-        sweepFresh.Clear();
-        for (int s = 0; s < previous.Length; s++)
-            if (previous[s].Alive != next[s].Alive || (previous[s].Position - next[s].Position).LengthSquared() > PatientGridJump * PatientGridJump) sweepFresh.Add(s);
+        if (sweepNeeds.Length < table.HighWater * 2) sweepNeeds = new float[table.HighWater * 2];
+        sweepNeedy.Clear();
+        for (int s = 0; s < table.HighWater; s++)
+        {
+            float organic = 0, robot = 0;
+            if (next[s].Alive && table.Cold(s) is { } c) (organic, robot) = (AidNeed(c, false), AidNeed(c, true));
+            (sweepNeeds[s * 2], sweepNeeds[s * 2 + 1]) = (organic, robot);
+            if (organic > 0 || robot > 0) sweepNeedy.Add(s);
+        }
         sweepCageFactions.Clear();
         for (int k = 0; k < world.Fixtures.All.Count; k++)
             if (world.Fixtures.All[k] is { Kind: FixtureKind.Cage } cage) sweepCageFactions.Add(cage.Owner);
-        sweepStamp++;
         sweeping = true;
     }
 
@@ -177,12 +179,7 @@ public sealed partial class FirstAidSystem
 
     float SweepNeed(int slot, CharacterCold patient, bool robotKit)
     {
-        if (!sweeping) return AidNeed(patient, robotKit);
-        int k = slot * 2 + (robotKit ? 1 : 0);
-        if (k >= sweepNeeds.Length) Array.Resize(ref sweepNeeds, Math.Max(k + 2, sweepNeeds.Length * 2));
-        if (sweepNeedStamp.Length != sweepNeeds.Length) Array.Resize(ref sweepNeedStamp, sweepNeeds.Length);
-        if (sweepNeedStamp[k] != sweepStamp) (sweepNeeds[k], sweepNeedStamp[k]) = (AidNeed(patient, robotKit), sweepStamp);
-        return sweepNeeds[k];
+        return sweeping ? sweepNeeds[slot * 2 + (robotKit ? 1 : 0)] : AidNeed(patient, robotKit);
     }
 
     /// <summary>
@@ -275,17 +272,17 @@ public sealed partial class FirstAidSystem
         var previous = table.Previous;
         // The grid is last tick's snapshot: a medic that spawned or jumped since (a teleport into a cage) is searched by the full scan.
         bool useGrid = previous[i].Alive && (previous[i].Position - origin).LengthSquared() <= PatientGridJump * PatientGridJump;
-        if (useGrid)
+        // A sweep's candidates are the characters with a need (in slot order, as the grid's): the passes test the range on each.
+        if (sweeping) candidates = sweepNeedy;
+        else if (useGrid)
         {
             patientCandidates.Clear();
             var collector = new CandidateCollector(patientCandidates);
             world.Grid.Query(previous[i].Position.X, previous[i].Position.Z, range + PatientGridMargin, ref collector, CandidateCollector.Add);
             // What the snapshot cannot place: a character spawned, removed or moved farther than the margin allows since it was taken (spawns, teleports into a
             // cage or an interior) is added by its slot; every other one moved less than PatientGridJump, inside the margin.
-            if (sweeping) patientCandidates.AddRange(sweepFresh);
-            else
-                for (int s = 0; s < previous.Length; s++)
-                    if (previous[s].Alive != next[s].Alive || (previous[s].Position - next[s].Position).LengthSquared() > PatientGridJump * PatientGridJump) patientCandidates.Add(s);
+            for (int s = 0; s < previous.Length; s++)
+                if (previous[s].Alive != next[s].Alive || (previous[s].Position - next[s].Position).LengthSquared() > PatientGridJump * PatientGridJump) patientCandidates.Add(s);
             patientCandidates.Sort();
             for (int k = patientCandidates.Count - 1; k > 0; k--)
                 if (patientCandidates[k] == patientCandidates[k - 1]) patientCandidates.RemoveAt(k);

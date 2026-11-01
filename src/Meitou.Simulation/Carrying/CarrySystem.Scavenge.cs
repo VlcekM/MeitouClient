@@ -27,6 +27,7 @@ public sealed partial class CarrySystem
         if (world.SystemOf<PopulationSystem>() is not { } population) return;
         var memory = world.SystemOf<DialogueSystem>()?.Memory;
         HashSet<int>? taken = null;
+        List<int>? bodies = null;
         Span<int> duty = stackalloc int[5];
         foreach (var squad in world.Squads.All)
         {
@@ -39,8 +40,9 @@ public sealed partial class CarrySystem
                 if (duty[role] < 0) duty[role] = population.GoalDuty(world, squad, (AiRole)role, TaskType.LOOT_THE_DEAD) ? 1 : 0;
                 if (duty[role] == 0) continue;
                 taken ??= Looting(table);
+                bodies ??= LootableBodies(table);
                 if (!TaskStart.Eligible(world, cold, TaskType.LOOT_THE_DEAD)) continue;
-                int target = LootTarget(world, table, slot, cold, taken, memory);
+                int target = LootTarget(world, table, slot, cold, taken, bodies, memory);
                 if (target < 0) continue;
                 taken.Add(target);
                 var task = (CharacterTask)table.Next[slot].Task;
@@ -54,13 +56,13 @@ public sealed partial class CarrySystem
     /// first the dead, then the downed living of factions neither its own nor allied (the kidnap finder's masks), not of the player's faction unless <see cref="PlayerState.BanditsLoot"/>,
     /// whom <see cref="ScrewsOver"/> allows. Engine choices: the nearest of each pass (the original takes its sensed-list order); a dead body of the looter's own faction is left. -1: none.
     /// </summary>
-    int LootTarget(World world, CharacterTable table, int slot, CharacterCold cold, HashSet<int> taken, SquadMemory? memory)
+    int LootTarget(World world, CharacterTable table, int slot, CharacterCold cold, HashSet<int> taken, List<int> bodies, SquadMemory? memory)
     {
         var next = table.Next;
         var at = new Vector2(next[slot].Position.X, next[slot].Position.Z);
         int dead = -1, down = -1;
         float dead2 = ScavengeRange * ScavengeRange, down2 = dead2;
-        for (int s = 0; s < table.HighWater; s++)
+        foreach (int s in bodies)
         {
             if (s == slot || !next[s].Alive || taken.Contains(s) || table.Cold(s) is not { } body || !CanBeLooted(body) || !body.CarriedBy.IsNone || body.IsImprisoned) continue;
             float d2 = Vector2.DistanceSquared(at, new Vector2(next[s].Position.X, next[s].Position.Z));
@@ -75,6 +77,15 @@ public sealed partial class CarrySystem
             (down, down2) = (s, d2);
         }
         return dead >= 0 ? dead : down;
+    }
+
+    /// <summary>The lootable characters (carried ones too: a looter that starts may drop its load), in slot order: what <see cref="LootTarget"/> tests, collected once a pass.</summary>
+    static List<int> LootableBodies(CharacterTable table)
+    {
+        var bodies = new List<int>();
+        for (int s = 0; s < table.HighWater; s++)
+            if (table.Next[s].Alive && table.Cold(s) is { } body && CanBeLooted(body)) bodies.Add(s);
+        return bodies;
     }
 
     /// <summary>
