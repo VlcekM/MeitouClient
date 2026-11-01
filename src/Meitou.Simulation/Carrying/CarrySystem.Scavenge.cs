@@ -18,7 +18,7 @@ public sealed partial class CarrySystem
     public const float FoodOnlyFloor = 2.8f;
 
     /// <summary>
-    /// Every <see cref="CarrySettings.AutoEveryTicks"/> ticks (serial, slot order): each member of an NPC squad whose running package lists goal 177 for its role in the hour's window
+    /// Each tick (serial, slot order), every <see cref="CarrySettings.AutoEveryTicks"/> ticks per character on its slot's turn (slot mod the period, so the looks spread over the ticks): each member of an NPC squad whose running package lists goal 177 for its role in the hour's window
     /// (<see cref="PopulationSystem.GoalDuty"/>) and that the AI runs now (<see cref="Ai.AiSystem.Holds"/>) walks to the body <see cref="LootTarget"/> picks and loots it
     /// (<see cref="CharacterTask.Loot"/>, <see cref="NpcLoot"/>).
     /// </summary>
@@ -26,6 +26,7 @@ public sealed partial class CarrySystem
     {
         if (world.SystemOf<PopulationSystem>() is not { } population) return;
         var memory = world.SystemOf<DialogueSystem>()?.Memory;
+        int every = Settings.AutoEveryTicks, phase = (int)(world.Tick % every);
         HashSet<int>? taken = null;
         List<int>? bodies = null;
         Span<int> duty = stackalloc int[5];
@@ -35,7 +36,7 @@ public sealed partial class CarrySystem
             duty.Fill(-1);
             foreach (var member in squad.Members)
             {
-                if (!table.TryResolveNext(member, out int slot) || table.Cold(slot) is not { IsPlayer: false, Inventory: not null } cold || !Ai.AiSystem.Holds(table.Next[slot], cold)) continue;
+                if (!table.TryResolveNext(member, out int slot) || slot % every != phase || table.Cold(slot) is not { IsPlayer: false, Inventory: not null } cold || !Ai.AiSystem.Holds(table.Next[slot], cold)) continue;
                 int role = (int)Ai.AiSystem.RoleOf(squad, member, cold);
                 if (duty[role] < 0) duty[role] = population.GoalDuty(world, squad, (AiRole)role, TaskType.LOOT_THE_DEAD) ? 1 : 0;
                 if (duty[role] == 0) continue;

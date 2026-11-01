@@ -19,7 +19,7 @@ namespace Meitou.Simulation.FirstAid;
 /// <item><b>Rate</b> (<b>Observed</b>, character-stats.md): <c>lerp(1, 15, min(skill, kit quality) x 0.01) x medic speed mult</c> (x <c>robot medic speed mult</c> for a robot kit) per unit of <c>dt</c> on the first part with room (the next only once it fills), after any open wound is closed;
 /// the kit's <c>charges</c> fall by <c>lerp(medkit drain 99, medkit drain 1, (100 - skill) / 100) x dt</c> per wound step or part bandaged (bandaging drains only the player's kits; character-stats.md "First aid update"). The skill is the medic's <c>medic</c> (first aid kit) or <c>robotics</c> (robot kit) times
 /// the stat multiplier of injuries and hunger. <c>dt</c> is <b>game seconds</b> (<b>engine choice</b>, the unit is <b>Unknown</b>).</item>
-/// <item><b>Auto</b> (<c>SlowWorld</c>, every <see cref="FirstAidSettings.AutoEveryTicks"/> ticks, serial in slot order): an idle, wandering or following NPC looks for a patient with the original's
+/// <item><b>Auto</b> (<c>SlowWorld</c>, each NPC every <see cref="FirstAidSettings.AutoEveryTicks"/> ticks on its slot's turn, serial in slot order): an idle, wandering or following NPC looks for a patient with the original's
 /// Medic finder (<see cref="FindPatient"/>, FirstAidSystem.Finder.cs), as the decision step asks for the player characters' medic, robotics and splint jobs (<see cref="RegisterSources"/>).</item>
 /// <item><b>Rest</b> (<see cref="CharacterTask.Rest"/>): <see cref="RestOrder"/>; <see cref="BodySystem"/> reads the task as <see cref="MedicalContext.Resting"/>. Lying in a bed is
 /// <see cref="Locks.BedSystem"/>'s (<see cref="CharacterTask.Sleep"/>); <see cref="BodySystem"/> gives it the bed's healing.</item>
@@ -507,14 +507,18 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
 
     public void SlowWorld(World world)
     {
-        if (Settings.AutoEveryTicks <= 0 || world.Tick % Settings.AutoEveryTicks != 0) return;
+        // Each NPC looks every AutoEveryTicks ticks, a slot's turn falling on its own tick (slot mod the period), so the looks spread over the ticks instead of all landing on one
+        // (the original runs its AI updates 8 characters a frame in turn, FUN_140786e30).
+        int every = Settings.AutoEveryTicks;
+        if (every <= 0) return;
         var table = world.Characters;
         var next = table.Next;
+        int phase = (int)(world.Tick % every);
         var taken = Treated(table);
         BeginSweep(world);
         try
         {
-            for (int i = 0; i < table.HighWater; i++)
+            for (int i = phase; i < table.HighWater; i += every)
             {
                 if (!next[i].Alive) continue;
                 var cold = table.Cold(i)!;
