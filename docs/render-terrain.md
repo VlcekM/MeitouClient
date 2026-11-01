@@ -45,7 +45,9 @@ the levels' blocks; ~5.6 MB a tile, 342 MB in all), hash of a version tag and th
 missing from it encodes them on workers in the loading step "terrain colour map (first start only)" (**Observed** 5.8 s on a 2026 desktop);
 the window then reads only the block rows it needs from those files (`TerrainColourCache.ReadBlocks`; no whole tile is loaded, which cost 11 MB of fresh arrays a tile per window move) instead of decoding PNGs (**Observed** at The Hub: first window 0.6 s instead of 1.6-3 s, a move 0.15 s instead of
 0.85 s). Every piece must start on a block at every level, so the window origin is aligned to 128 overlay pixels (256 colour pixels). Tiles
-that are not square multiples of 256 keep the RGBA8 path.
+that are not square multiples of 256 keep the RGBA8 path. The overlay window's decoded tiles (1024², the window's 3 x 3) stay between moves,
+so a move decodes a PNG only when the window reaches a new tile (**Observed**, headless: a move 13-45 ms and ~0.1 MB allocated, was 170-320 ms
+and 17-29 MB with the tiles dropped after each).
 
 ## Ground relief
 

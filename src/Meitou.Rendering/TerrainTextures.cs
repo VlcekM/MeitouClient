@@ -1230,9 +1230,9 @@ sealed class MapWindows
             size = cache.Get(0, 0)?.Width ?? throw new InvalidDataException($"cannot read {first}");
             return cache;
         }
-        // A 2048² overlay tile is 16 MB and a colour tile can be larger. The window spans only a few tiles; keep
-        // enough for one compose and clear them below, instead of pinning 24 + 12 full decoded maps for the session.
-        var o = Cache("new_overlay", 4, out int ot);
+        // The game's overlay tiles are 1024² (4 MB decoded) and the 2048-pixel window spans 3 x 3 of them: those nine stay between composes
+        // (Compose), the rest are dropped, instead of pinning every decoded map for the session.
+        var o = Cache("new_overlay", 9, out int ot);
         var firstColour = TerrainMaps.OverlayTile(install, "colour", 0, 0);
         try
         {
@@ -1312,9 +1312,9 @@ sealed class MapWindows
                     pieces.Add(new Piece(true, sx * ratio % cs, sz * ratio % cs, sw * ratio, sh * ratio, clevels));
                 }
         var update = new Update(px0, pz0, pieces);
-        // The pieces own pooled copies of what they need; the decoded tiles are large and a window moves only after
-        // 4,608 units, so retaining them for the next compose is not worth hundreds of MB of LOH.
-        overlay.Clear();
+        // The pieces own pooled copies of what they need. The overlay tiles stay (the window's 3 x 3, Open): the window moves every 4,608 units, a
+        // tile spans ~37,000, so the next compose cuts the same ones, and decoding their PNGs again was 6-29 MB of fresh arrays a move. The
+        // uncompressed colour tiles are larger and go.
         colour?.Clear();
         colourBlocks?.Clear();
         return update;
