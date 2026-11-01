@@ -50,10 +50,18 @@ public sealed class GeneratedAppearances(GameDatabase db, string installRoot) : 
         }
         catch (Exception e) when (e is IOException or FcsFormatException or KeyNotFoundException or InvalidDataException or UnauthorizedAccessException)
         {
+            Warn(recordId, e);
             return null;
         }
     }
 
+
+    // A record whose look fails is drawn as a marker; say so once per record, not per character.
+    readonly ConcurrentDictionary<string, byte> warned = new(StringComparer.Ordinal);
+    void Warn(string recordId, Exception e)
+    {
+        if (warned.TryAdd(recordId, 0)) Console.Error.WriteLine($"warning   no appearance for {recordId}: {e.Message}");
+    }
 
     public FcsRecord? Sanitize(FcsRecord proposed, GameRecord race) => CharacterDraft.Sanitize(db, installRoot, proposed, race);
 
@@ -68,6 +76,7 @@ public sealed class GeneratedAppearances(GameDatabase db, string installRoot) : 
         }
         catch (Exception e) when (e is IOException or FcsFormatException or KeyNotFoundException or InvalidDataException or UnauthorizedAccessException)
         {
+            Warn(recordId, e);
             return null;
         }
     }

@@ -185,8 +185,11 @@ public sealed class CharacterAppearance
         GameRecord? race = loadout?.Race ?? (record.Type == FcsRecordType.RACE ? record : null);
         race ??= Pick(db, character!.GetReferences("race"), random, r => r.Values.Value0);
         if (race is null && body?.RaceId is { } bodyRace) race = db.Find(bodyRace);
-        race ??= Find(db, "Greenlander", FcsRecordType.RACE);
-        if (race is null) throw new KeyNotFoundException($"'{record.Name}' has no race.");
+        if (race is null)
+        {
+            race = Find(db, CharacterGenerator.DefaultRaceId, FcsRecordType.RACE) ?? throw new KeyNotFoundException($"'{record.Name}' ({record.StringId}) has no race.");
+            notes.Add($"no race: default {CharacterGenerator.DefaultRaceId}");
+        }
 
         bool female = options.Female ?? loadout?.Female ?? body?.Female ?? (character is not null && character.GetInt("female chance") >= 50);
         if (female && race.GetBool("single gender")) { female = false; notes.Add("race is single gender: male mesh used"); }
