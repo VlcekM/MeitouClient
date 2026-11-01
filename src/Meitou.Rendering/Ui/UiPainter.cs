@@ -159,6 +159,21 @@ public sealed partial class UiPainter : IDisposable
     /// </summary>
     public void SetImage(string name, RgbaImage image, bool srgb = true) => Upload(name, image, srgb);
 
+    /// <summary>Frees texture <paramref name="name"/> (after the frames in flight); a later draw that names it loads it again.</summary>
+    public void Forget(string name)
+    {
+        if (textures.Remove(name, out var t)) t.Texture.Dispose();
+        masks.Remove(name);
+    }
+
+    /// <summary>Frees every texture loaded from files or images (not the fonts, nor those given with <see cref="SetTexture"/>); later draws load them again.</summary>
+    public void ReleaseTextures()
+    {
+        foreach (var t in textures.Values) t.Texture.Dispose();
+        textures.Clear();
+        masks.Clear();
+    }
+
     /// <summary>Whether <c>ImageTexture</c> <paramref name="name"/> is on the GPU.</summary>
     public bool HasTexture(string name) => textures.ContainsKey(name) || external.ContainsKey(name);
 
@@ -772,9 +787,7 @@ public sealed partial class UiPainter : IDisposable
 
     public void Dispose()
     {
-        foreach (var t in textures.Values) t.Texture.Dispose();
-        textures.Clear();
-        masks.Clear();
+        ReleaseTextures();
         stored.Clear();
         foreach (var font in uiFonts.Values) font.Dispose();
         uiFonts.Clear();

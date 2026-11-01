@@ -10,7 +10,7 @@ namespace Meitou.Rendering;
 static partial class TerrainShaders
 {
     /// <summary>Rows of the per-biome parameter texture (RGBA32F, one row per biome).</summary>
-    public const int ParamTexels = 13;
+    public const int ParamTexels = 15;
 
     /// <summary>GpuTexture units of the world-wide maps (TerrainTextures binds units 0..6 for the region).</summary>
     public const int HeightCoarseUnit = 7, HeightFineUnit = 8, GroundUnit = 9, WorldColourUnit = 10;
@@ -642,8 +642,11 @@ static partial class TerrainShaders
         uniform bool uHasWorldColour;  // whole-world colour map available
         uniform float uCliffEps;       // the cliff weights up to this are dropped, the next as much ramp in (0: every nonzero weight counts)
 
-        uniform sampler2DArray uDiffuse;
+        uniform sampler2DArray uDiffuse;     // near arrays: the pairs near the eye at full size, by near slot (params texels 13 and 14; -1 none)
         uniform sampler2DArray uNormal;
+        uniform sampler2DArray uDiffuseFar;  // far arrays: every resident pair, FarShift levels smaller, by far index (params texels 0 and 1)
+        uniform sampler2DArray uNormalFar;
+        uniform float uFarLod;         // the near level from which a sample reads the far arrays (the same texels; TerrainTextures.FarShift less the bias)
         uniform sampler2DArray uHeight;   // the layers' heights (GroundRelief): R from their normal maps, G from their diffuse; 1 the top, flat 1 without one
         uniform float uParallax;       // ground parallax: the depth of the height range in world units (1 unit = 10 cm); 0 off
         uniform float uDisplace;       // ground displacement (tessellated patches near the eye) in world units; 0 off. The parallax gives way to it there.
@@ -682,9 +685,22 @@ static partial class TerrainShaders
 
         // A layer's coordinate with its screen derivatives, taken before the layer branches below (derivatives inside a branch
         // that only some pixels of a 2 x 2 quad take are undefined), so a skipped neighbour cannot change a sampled pixel's mip.
-        struct GradCoord { vec2 p, dx, dy; };
-        GradCoord gradCoord(vec2 p) { GradCoord c; c.p = p; c.dx = dFdxCoarse(p); c.dy = dFdyCoarse(p); return c; }
+        // lod: the level the near arrays' sampler takes before its bias (8x anisotropic: the long axis over up to 8 taps, never under the short axis).
+        struct GradCoord { vec2 p, dx, dy; float lod; };
+        GradCoord gradCoord(vec2 p)
+        {
+            GradCoord c; c.p = p; c.dx = dFdxCoarse(p); c.dy = dFdyCoarse(p);
+            float size = float(textureSize(uDiffuse, 0).x), a = length(c.dx) * size, b = length(c.dy) * size;
+            float hi = max(a, b), lo = max(min(a, b), 1e-6);
+            c.lod = log2(max(hi / min(ceil(hi / lo), 8.0), 1e-6));
+            return c;
+        }
         vec4 tex(sampler2DArray s, GradCoord c, float layer) { return textureGrad(s, vec3(c.p, layer), c.dx, c.dy); }
+
+        // A layer from the near arrays where its pair has a slot there and the sample's level is under uFarLod, else from the far arrays: at uFarLod and
+        // beyond the far arrays' levels are the near arrays' (docs/render-terrain.md, "Layer arrays").
+        vec4 layerDiffuse(GradCoord c, float near, float far) { return near >= 0.0 && c.lod < uFarLod ? tex(uDiffuse, c, near) : tex(uDiffuseFar, c, far); }
+        vec4 layerNormal(GradCoord c, float near, float far) { return near >= 0.0 && c.lod < uFarLod ? tex(uNormal, c, near) : tex(uNormalFar, c, far); }
 
         // A layer weight with its small values dropped: 0 up to eps, rising smoothly to the weight itself at twice eps (continuous, so no seam where a
         // layer stops being sampled); eps 0 is the weight unchanged. docs/render-terrain.md, "Layer weight threshold".
@@ -948,7 +964,7 @@ static partial class TerrainShaders
         // One biome's surface (the layer model of docs/formats/terrain.md), its coordinates moved by the march's result (biomeRelief).
         Surface biome(int b, vec3 n, float slope, vec4 map, vec4 colour, float distance, ReliefOut relief)
         {
-            vec4 layersA = P(b, 0), layersB = P(b, 1);
+            vec4 layersA = P(b, 0), layersB = P(b, 1), nearA = P(b, 13), nearB = P(b, 14);
             vec4 sA = P(b, 2), sB = P(b, 3), sC = P(b, 4);
             vec4 omult = P(b, 8), fade = P(b, 9);
 
@@ -970,15 +986,15 @@ static partial class TerrainShaders
             cliffX.p += relief.cliffX * sA.zw; cliffZ.p += relief.cliffZ * sA.zw;
 
             Surface s;
-            s.albedo = (uParallax > 0.0 ? tex(uDiffuse, base, layersA.x) : tex(uDiffuse, base.p, layersA.x)) * colour;
-            if (map.r != 0.0) s.albedo = mix(s.albedo, tex(uDiffuse, grass, layersA.w) * mix(white, colour, omult.y), map.r);
-            if (w.x != 0.0) s.albedo = mix(s.albedo, tex(uDiffuse, slopeUv, layersA.y) * colour, w.x);
-            if (map.b != 0.0) s.albedo = mix(s.albedo, tex(uDiffuse, dirt, layersB.x) * mix(white, colour, omult.z), map.b);
+            s.albedo = layerDiffuse(base, nearA.x, layersA.x) * colour;
+            if (map.r != 0.0) s.albedo = mix(s.albedo, layerDiffuse(grass, nearA.w, layersA.w) * mix(white, colour, omult.y), map.r);
+            if (w.x != 0.0) s.albedo = mix(s.albedo, layerDiffuse(slopeUv, nearA.y, layersA.y) * colour, w.x);
+            if (map.b != 0.0) s.albedo = mix(s.albedo, layerDiffuse(dirt, nearB.x, layersB.x) * mix(white, colour, omult.z), map.b);
             s.albedo.rgb = mix(s.albedo.rgb, fade.rgb * colour.rgb, far);
-            if (map.a != 0.0) s.albedo.rgb = mix(s.albedo.rgb, (tex(uDiffuse, road, layersB.y) * mix(white, colour, omult.w)).rgb, map.a);
+            if (map.a != 0.0) s.albedo.rgb = mix(s.albedo.rgb, (layerDiffuse(road, nearB.y, layersB.y) * mix(white, colour, omult.w)).rgb, map.a);
             if (w.y != 0.0)
             {
-                vec4 cCliff = (tex(uDiffuse, cliffX, layersA.z) * cb.x + tex(uDiffuse, cliffZ, layersA.z) * cb.y) * mix(white, colour, omult.x);
+                vec4 cCliff = (layerDiffuse(cliffX, nearA.z, layersA.z) * cb.x + layerDiffuse(cliffZ, nearA.z, layersA.z) * cb.y) * mix(white, colour, omult.x);
                 s.albedo = mix(s.albedo, cCliff, w.y);
             }
             s.albedo.rgb *= layersB.z;
@@ -986,17 +1002,17 @@ static partial class TerrainShaders
 
             if (TERRAIN_NORMAL_MAPS)
             {
-                s.normal = uParallax > 0.0 ? tex(uNormal, base, layersA.x) : tex(uNormal, base.p, layersA.x);
-                if (map.r != 0.0) s.normal = mix(s.normal, tex(uNormal, grass, layersA.w), map.r);
-                if (w.x != 0.0) s.normal = mix(s.normal, tex(uNormal, slopeUv, layersA.y), w.x);
-                if (map.b != 0.0) s.normal = mix(s.normal, tex(uNormal, dirt, layersB.x), map.b);
+                s.normal = layerNormal(base, nearA.x, layersA.x);
+                if (map.r != 0.0) s.normal = mix(s.normal, layerNormal(grass, nearA.w, layersA.w), map.r);
+                if (w.x != 0.0) s.normal = mix(s.normal, layerNormal(slopeUv, nearA.y, layersA.y), w.x);
+                if (map.b != 0.0) s.normal = mix(s.normal, layerNormal(dirt, nearB.x, layersB.x), map.b);
                 s.normal = mix(s.normal, vec4(0.5, 0.5, 1.0, 1.0), far);
-                if (map.a != 0.0) s.normal = mix(s.normal, tex(uNormal, road, layersB.y), map.a);
+                if (map.a != 0.0) s.normal = mix(s.normal, layerNormal(road, nearB.y, layersB.y), map.a);
                 if (w.y != 0.0)
                 {
                     // The cliff projections' normals are turned into the surface frame: red flipped on both, green flipped on
                     // the (z, height) one where the surface faces -X and on the (x, height) one where it faces +Z (terrain.md).
-                    vec4 nCliffX = tex(uNormal, cliffX, layersA.z), nCliffZ = tex(uNormal, cliffZ, layersA.z);
+                    vec4 nCliffX = layerNormal(cliffX, nearA.z, layersA.z), nCliffZ = layerNormal(cliffZ, nearA.z, layersA.z);
                     nCliffX.rg = vec2(1.0 - nCliffX.r, n.x > 0.0 ? nCliffX.g : 1.0 - nCliffX.g);
                     nCliffZ.rg = vec2(1.0 - nCliffZ.r, n.z < 0.0 ? nCliffZ.g : 1.0 - nCliffZ.g);
                     s.normal = mix(s.normal, nCliffX * cb.x + nCliffZ * cb.y, w.y);
@@ -1301,6 +1317,9 @@ static partial class TerrainShaders
             float pixelScale;
             float broadCut;
             int reliefQuality;
+            uint diffuseFar;
+            uint normalFar;
+            float farLod;
         } terrain;
 
         """;
@@ -1327,6 +1346,7 @@ static partial class TerrainShaders
         ["uFeatureBiome"] = "terrain.featureBiome", ["uFarStart"] = "terrain.farStart", ["uFarEnd"] = "terrain.farEnd",
         ["uCliffEps"] = "terrain.cliffEps", ["uHasGround"] = "terrain.hasGround", ["uHasWorldColour"] = "terrain.hasWorldColour",
         ["uDiffuse"] = "textures2DArray[terrain.diffuse]", ["uNormal"] = "textures2DArray[terrain.normal]",
+        ["uDiffuseFar"] = "textures2DArray[terrain.diffuseFar]", ["uNormalFar"] = "textures2DArray[terrain.normalFar]", ["uFarLod"] = "terrain.farLod",
         ["uParams"] = "textures2D[terrain.params]", ["uCells"] = "utextures2D[terrain.cells]", ["uBlendMap"] = "textures2D[terrain.blendMap]",
         ["uOverlay"] = "textures2D[terrain.overlay]", ["uColour"] = "textures2D[terrain.colour]", ["uGround"] = "textures2D[terrain.ground]",
         ["uWorldColour"] = "textures2D[terrain.worldColour]", ["uRegion"] = "terrain.region", ["uCellGrid"] = "terrain.cellGrid",
@@ -1460,7 +1480,7 @@ static partial class TerrainShaders
 
 /// <summary>The C# side of <see cref="TerrainShaders.ConstantsBlock"/> (std140; offsets checked against the reflection by a test). GLSL bools
 /// are 32-bit (0 / 1).</summary>
-[System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Explicit, Size = 864)]
+[System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Explicit, Size = 880)]
 struct TerrainConstants
 {
     [System.Runtime.InteropServices.FieldOffset(0)] public System.Numerics.Vector4 CoarseRect;
@@ -1531,6 +1551,9 @@ struct TerrainConstants
     [System.Runtime.InteropServices.FieldOffset(844)] public float PixelScale;
     [System.Runtime.InteropServices.FieldOffset(848)] public float BroadCut;
     [System.Runtime.InteropServices.FieldOffset(852)] public int ReliefQuality;
+    [System.Runtime.InteropServices.FieldOffset(856)] public uint DiffuseFar;
+    [System.Runtime.InteropServices.FieldOffset(860)] public uint NormalFar;
+    [System.Runtime.InteropServices.FieldOffset(864)] public float FarLod;
 }
 
 /// <summary>The cells of <see cref="TerrainConstants.BloodCells"/>: column, row, layer (std140 <c>vec4[32]</c>).</summary>

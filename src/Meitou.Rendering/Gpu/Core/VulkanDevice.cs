@@ -339,6 +339,21 @@ public sealed unsafe class VulkanDevice : IDisposable
         return (HasMemoryBudget ? used : Allocator.TotalAllocatedBytes, Math.Min(total, BudgetOverride));
     }
 
+    /// <summary>Every memory heap: its flags, size, and this process's usage and budget (VK_EXT_memory_budget; 0 without it). For the VRAM dump.</summary>
+    public List<(MemoryHeapFlags Flags, ulong Size, ulong Usage, ulong Budget)> Heaps()
+    {
+        var budget = new PhysicalDeviceMemoryBudgetPropertiesEXT { SType = StructureType.PhysicalDeviceMemoryBudgetPropertiesExt };
+        var props = new PhysicalDeviceMemoryProperties2 { SType = StructureType.PhysicalDeviceMemoryProperties2, PNext = HasMemoryBudget ? &budget : null };
+        Vk.GetPhysicalDeviceMemoryProperties2(PhysicalDevice, &props);
+        var heaps = new List<(MemoryHeapFlags, ulong, ulong, ulong)>();
+        for (int i = 0; i < props.MemoryProperties.MemoryHeapCount; i++)
+        {
+            var heap = props.MemoryProperties.MemoryHeaps[i];
+            heaps.Add((heap.Flags, heap.Size, HasMemoryBudget ? budget.HeapUsage[i] : 0, HasMemoryBudget ? budget.HeapBudget[i] : 0));
+        }
+        return heaps;
+    }
+
     /// <summary>The device-local heaps' size: the card's video memory (an integrated GPU's share of the system's).</summary>
     public ulong DeviceLocalBytes()
     {
@@ -417,6 +432,13 @@ public sealed unsafe class VulkanDevice : IDisposable
         Allocator = new GpuAllocator(this);
         CreatePipelineCache();
         Frames = new FrameRing(this, options.FramesInFlight);
+        int renderThread = Environment.CurrentManagedThreadId;
+        Allocator.Reclaim = () =>
+        {
+            if (Environment.CurrentManagedThreadId != renderThread) return false;
+            bool retired = Frames.RetireSubmitted();
+            return Allocator.Trim() > 0 || retired;
+        };
         options.DeviceCreated?.Invoke(this);
     }
 

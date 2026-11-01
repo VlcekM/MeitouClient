@@ -40,7 +40,7 @@ Discovery (`FUN_14086f7a0`, launcher `FUN_140127890`) uses one name-keyed table:
 
 **Meitou difference:** `LoadOrder` cannot query subscriptions; it scans every downloaded item
 in `GameInstall.WorkshopDirectory`, in folder-name order. Each loaded mod retains its folder
-for art, translations and leveldata. A record path `.\mods\<name>\x` resolves into that mod's folder (Workshop or
+for art, translations and its world layer ([zones](zones.md#mods)). A record path `.\mods\<name>\x` resolves into that mod's folder (Workshop or
 local; `CollisionPaths.Resolve`), used for collision, interiors, body files, attachment points and race `editor limits` (#93).
 
 **Verified** launcher (`FUN_140125df0`, save `FUN_140120bd0`): active entries first in cfg order,
@@ -57,12 +57,29 @@ Nizu.mod, Mohamad.mod, rebirth.mod and also searches cfg entries under `data/`.
 **Observed:** `.info` XML `ModData` stores id/name/tags/visibility/lastUpdate; no defined `.info`
 string in the engine. Resource scan skips `_`-prefixed files.
 
-## Resource lookup and art overrides (Observed)
+## Resource lookup and mod overrides
 
 `resources.cfg` lists about 100 FileSystem folders in General. Ogre resolves bare filenames
-across folders; names must be unique. `mods/readme.txt` describes art replacement under
-`mods/<name>/<same relative path>`. **Unknown:** exact relative-path/bare-name precedence and
-multiple overrides; needs tests. Letter case of paths is not reliable in the original data: `resources.cfg` and the particle renderer say `data/particles/textures`, the folder is `Textures`; a mesh links `mammal_beak.skeleton`, the file is `Mammal_beak.skeleton`; a record names `automine.xml`, the file is `automine.XML`. `GameFiles.Resolve` finds the real path on a case-sensitive file system (**Verified** on Linux with an LD_PRELOAD check of failed lookups over load plus a minute of play on a large save: these three, all found afterwards; area switches, menus and the editor were not covered).
+across folders. `mods/readme.txt` describes art replacement under `mods/<name>/<same relative path>`.
+**Verified** (`FUN_140449e60` and about 50 other callers of `FUN_1409b4610`): record file fields are cut to
+the bare name before Ogre is asked, so the relative path does not matter; within a group the location
+registered last wins ([runtime-materials](runtime-materials.md)), i.e. the last enabled mod holding the name.
+**Observed** with a 1,174-mod list: 2,710 base files replaced this way by 95 mods (textures, meshes).
+Letter case of paths is not reliable in the original data: `resources.cfg` and the particle renderer say `data/particles/textures`, the folder is `Textures`; a mesh links `mammal_beak.skeleton`, the file is `Mammal_beak.skeleton`; a record names `automine.xml`, the file is `automine.XML`. `GameFiles.Resolve` finds the real path on a case-sensitive file system (**Verified** on Linux with an LD_PRELOAD check of failed lookups over load plus a minute of play on a large save: these three, all found afterwards; area switches, menus and the editor were not covered).
+
+How the game opens its other files decides whether a mod can replace them (**Verified**, decompiled):
+
+| File | Opened by | Mod copy applies |
+|---|---|---|
+| `.material`, `.program`, `*.pu` scripts | Ogre script parse of every location, mods' too | material: first definition wins (mods cannot redefine); PU system: last wins (`createParticleSystemTemplate` deletes the old template) |
+| `names*.txt`, `tips.txt` | `resourceExists`/`openResource`, group General (`FUN_140641d80`, `FUN_14091a280`) | yes |
+| `areasmap.tga` | `Image::load`, group Overlaymaps (`FUN_140408fa0`, `FUN_140408970`) | yes; mods may ship it RLE-compressed (TGA type 10) |
+| `fogfeatures.dat` | `openResource`, group Landscape (`FUN_14010f060`) | only from a folder mapped to Landscape |
+| `newland/land/fullmap.tif` | terrain plugin `fopen` of a fixed path (`FUN_140874930`) | no |
+| `*.bnk` | Wwise low-level IO, base path `data/audio/` (`FUN_140259620`) | no |
+
+**Observed:** mods that need the last three ship an `RE_Kenshi.json` for the third-party RE_Kenshi loader
+(`FileRebinds` path map, `SoundBanks` list; most such files list native `Plugins`); vanilla ignores it.
 
 **Verified** `FUN_140816d90`: after base folders, walk active mods in cfg order; add subfolders
 holding files to matching base resource group, default General. Skip `leveldata`,

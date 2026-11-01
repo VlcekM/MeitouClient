@@ -50,7 +50,7 @@ public class LevelFileTests
         var install = GameInstall.Locate();
         Assert.SkipWhen(install is null, $"No Kenshi install configured ({GameInstall.EnvironmentVariable}).");
 
-        var world = WorldLevelData.Load(install!);
+        var world = WorldLevelData.LoadBaseGame(install!);
         Assert.Equal(["(base)", "Newwworld", "Dialogue", "rebirth"], world.Layers.Select(l => l.ToString()));
         Assert.Equal(500, world.Zones.Count);
         Assert.All(world.Zones.Keys, z => Assert.True(z.IsInsideGrid));

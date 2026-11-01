@@ -134,7 +134,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         prepassSolidMesh = new NativeProg(gpu, nativeFrame, FoliageShaders.MeshVertexNative(), FoliageShaders.MeshPrepassNative(solid: true), "foliage mesh prepass solid");
         grassProgram = new NativeProg(gpu, nativeFrame, FoliageShaders.GrassVertexNative(), FoliageShaders.GrassFragmentNative(), "foliage grass");
         grassMotionProgram = new NativeProg(gpu, nativeFrame, FoliageShaders.GrassMotionVertexNative(), FoliageShaders.GrassMotionFragmentNative(), "foliage grass motion");
-        textures = new WorldTextureCache(gpu, assets, "foliage textures");
+        textures = new WorldTextureCache(gpu, assets, "foliage textures") { Share = TextureShare.For(gpu) };
         // Metal's GPU cull and its separate pre-frame command buffer are opt-in after the 2026-10-23 progress
         // timeouts; the CPU cull is the stable reference. Vulkan keeps the GPU path.
         bool metalGpuCull = Environment.GetEnvironmentVariable("MEITOU_METAL_GPU_CULL") is "1" or "true";
@@ -215,6 +215,8 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     public float LargeRange { get; set; } = FoliageSizes.DefaultLargeRange;
     /// <summary>The memory-pressure guard (<see cref="VramGuard"/>): every range here (and the reaches that decide which zones are laid out) is
     /// multiplied by its scale, nothing new is started while it is under pressure, and idle meshes are evicted sooner. Null: no clamp.</summary>
+    /// <summary>The foliage's texture cache (the VRAM dump lists it).</summary>
+    public WorldTextureCache Textures => textures;
     public VramGuard? Guard
     {
         get => guard;
@@ -264,11 +266,13 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     /// <summary>
     /// <see cref="Pending"/> as a loading screen waits for it: the grass only within the range the default grass distance gives (<see cref="DefaultGrassRange"/>). A longer
     /// setting's farther pages (four times the grass at twice the distance, a minute and more of generation) grow in, nearest first, once the screen lifts.
+    /// Of the impostor atlases only the uploads of those read from the cache are waited for (<see cref="ImpostorUploadsAwaited"/>): the meshes draw until each
+    /// atlas is ready, and after a mod list change hundreds are baked, 20 s and more.
     /// </summary>
-    public int LoadingPending => Pending - grassWaiting - zones.Values.Sum(z => z.GrassRunning) + grassNear;
+    public int LoadingPending => Pending - grassWaiting - zones.Values.Sum(z => z.GrassRunning) + grassNear - ImpostorPending + ImpostorUploadsAwaited;
 
     /// <summary>What <see cref="Pending"/> is made of, for the loading log.</summary>
-    public string PendingDetail => $"layouts {runningWhole + runningFar + zonesWaiting}, grass {grassWaiting + zones.Values.Sum(z => z.GrassRunning)}, meshes {decoding.Count} decoding {uploads.Count} upload steps, lods {lodRunning + lodWaiting}, textures {textures.AwaitedCount} loading {textures.UnresidentUsedCount} deferred, impostors {ImpostorPending}";
+    public string PendingDetail => $"layouts {runningWhole + runningFar + zonesWaiting}, grass {grassWaiting + zones.Values.Sum(z => z.GrassRunning)} ({grassNear} near), meshes {decoding.Count} decoding {uploads.Count} upload steps, lods {lodRunning + lodWaiting}, textures {textures.AwaitedCount} loading {textures.UnresidentUsedCount} deferred, impostors {ImpostorPending} ({ImpostorUploadsAwaited} cache uploads)";
 
     /// <summary>GPU memory held by foliage meshes, textures and grass pages.</summary>
     public long ResidentBytes => residentMeshBytes + textures.ResidentBytes + GrassBytes() + impostorBytes;
@@ -392,11 +396,12 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
 
     sealed class GrassPage
     {
-        public Task<(float[][] Blades, int[][] Prefixes)>? Job;
+        public Task<(float[][] Blades, int[] Floats, int[][] Prefixes)>? Job;
         public GrassBuffer[]? Buffers;
         public bool Dropped;
-        /// <summary>The generated blades while the arena or the slot table had no room (<see cref="FoliageGrassGpu.Misses"/>): placed again by <see cref="UpdateGrass"/>.</summary>
+        /// <summary>The generated blades while the arena or the slot table had no room (<see cref="FoliageGrassGpu.Misses"/>): placed again by <see cref="UpdateGrass"/>. Rented (<see cref="FoliageGrassField.RentBladesWithPrefixes"/>), the first <see cref="PendingFloats"/> of each in use; the page's last upload step returns them.</summary>
         public float[][]? PendingBlades;
+        public int[]? PendingFloats;
         public int[][]? PendingPrefixes;
     }
 
@@ -429,6 +434,23 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     /// </summary>
     public Vector3? Ahead { get; set; }
 
+    /// <summary>
+    /// The ground's height under the eye (the host sets it each frame before <see cref="Update(Vector3)"/>; unknown: none). Which zones and grass pages are laid
+    /// out and kept counts the eye's height above the game's highest camera (<see cref="Load"/>), so a free camera high above the land loads only what
+    /// can be seen from there; drawing still measures across the ground.
+    /// </summary>
+    public float GroundUnderEye { get; set; } = float.NegativeInfinity;
+
+    /// <summary>
+    /// A ground distance from the eye as the loading measures it: with the eye's height above <see cref="GroundUnderEye"/> beyond the game's camera heights
+    /// (<see cref="Meitou.Data.World.KenshiCamera.MaxHeightAbovePivot"/>) added as a third side, so those heights load as before.
+    /// </summary>
+    float Load(float groundDistance, Vector3 eye)
+    {
+        float lift = float.IsFinite(GroundUnderEye) ? Math.Max(0, eye.Y - GroundUnderEye - Meitou.Data.World.KenshiCamera.MaxHeightAbovePivot) : 0;
+        return lift == 0 ? groundDistance : MathF.Sqrt(groundDistance * groundDistance + lift * lift);
+    }
+
     void Update(Vector3 eye, bool settling)
     {
         updates++;
@@ -452,7 +474,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         }
         dropping.Clear();
         foreach (var state in zones.Values)
-            if (state.Job is null && ZoneDistance(state.Zone, eye) > farReach + WorldLayout.ZoneSize && !(Ahead is { } kept && ZoneDistance(state.Zone, kept) <= nearReach + WorldLayout.ZoneSize))
+            if (state.Job is null && Load(ZoneDistance(state.Zone, eye), eye) > farReach + WorldLayout.ZoneSize && !(Ahead is { } kept && ZoneDistance(state.Zone, kept) <= nearReach + WorldLayout.ZoneSize))
                 dropping.Add(state);
         foreach (var state in dropping) Drop(state);
 
@@ -494,7 +516,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         foreach (var z in candidates)
         {
             if (!z.IsInsideGrid) continue;
-            float d = ZoneDistance(z, eye), dp = ZoneDistance(z, predicted), da = arrival is { } a ? ZoneDistance(z, a) : float.PositiveInfinity;
+            float d = Load(ZoneDistance(z, eye), eye), dp = Load(ZoneDistance(z, predicted), eye), da = arrival is { } a ? ZoneDistance(z, a) : float.PositiveInfinity;
             bool landing = da <= arrivalReach;
             float soon = Math.Min(Math.Min(d, dp), da);
             if (d > farReach && !landing) continue;   // the prediction orders and adds whole layouts, it never adds zones
@@ -795,13 +817,13 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         {
             if (!state.Ready || state.Ground is null || state.Patches.Count == 0) continue;
             float range = state.Patches.Max(GrassRange), near = range * Math.Min(1, DefaultGrassRange / GrassRangeSetting);
-            if (state.Pages.Count == 0 && ZoneDistance(state.Zone, eye) > range + PageSize) continue;
+            if (state.Pages.Count == 0 && Load(ZoneDistance(state.Zone, eye), eye) > range + PageSize) continue;
             for (int pz = 0; pz < PagesPerZone; pz++)
                 for (int px = 0; px < PagesPerZone; px++)
                 {
                     int key = pz * PagesPerZone + px;
                     float x0 = state.X0 + px * PageSize, z0 = state.Z0 + pz * PageSize;
-                    float d = BoxDistance(x0, z0, PageSize, eye);
+                    float d = Load(BoxDistance(x0, z0, PageSize, eye), eye);
                     state.Pages.TryGetValue(key, out var page);
                     if (page?.Buffers is null && d < range * 0.8f) NearestMissingGrass = Math.Min(NearestMissingGrass, d);   // not sinking yet: would be seen
                     if (page is null)
@@ -825,9 +847,9 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
                         inFlight--;   // its slot is free for this frame's picks
                         page.Job = null;
                         var result = job.Result;
-                        TryQueuePage(state, key, page, result.Blades, result.Prefixes);
+                        TryQueuePage(state, key, page, result.Blades, result.Floats, result.Prefixes);
                     }
-                    else if (page.PendingBlades is not null) TryQueuePage(state, key, page, page.PendingBlades, page.PendingPrefixes!);   // no room last time
+                    else if (page.PendingBlades is not null) TryQueuePage(state, key, page, page.PendingBlades, page.PendingFloats!, page.PendingPrefixes!);   // no room last time
                 }
         }
         // Missing pages nearest first, a bounded number at a time. Pages hold the blades of the highest density setting,
@@ -855,10 +877,11 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
             page.Job = BackgroundWork.Run(() =>
             {
                 var blades = new float[patches.Count][];
+                var floats = new int[patches.Count];
                 var prefixes = new int[patches.Count][];
                 for (int i = 0; i < blades.Length; i++)
-                    blades[i] = FoliageGrassField.BladesWithPrefixes(patches[i], ground, x0, z0, PageSize, out prefixes[i], MaxGrassDensity);
-                return (blades, prefixes);
+                    blades[i] = FoliageGrassField.RentBladesWithPrefixes(patches[i], ground, x0, z0, PageSize, out prefixes[i], out floats[i], MaxGrassDensity);
+                return (blades, floats, prefixes);
             });
         }
     }
@@ -880,6 +903,9 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         public bool Resident, Failed, Uploading;
         public long LastUsed, Bytes;
         public FoliageMaterial? MainMaterial, LeavesMaterial;
+        /// <summary>World length per texture-coordinate unit of the mesh and of its leaves, before the instance's scale (<see cref="TexelScale"/>; infinity:
+        /// unknown, the textures keep every mip). Known with <see cref="HasBounds"/>.</summary>
+        public float MainTexel = float.PositiveInfinity, LeavesTexel = float.PositiveInfinity;
         public bool Terrain => Mesh.MaterialType == 2;
         public Vector3 Centre;
         public float Radius = 1;
@@ -1012,8 +1038,25 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
             a.Triangles = main.Parts.Sum(p => p.Indices.Length / 3) + (leaves?.Parts.Sum(p => p.Indices.Length / 3) ?? 0);
             a.HasBounds = true;
             a.TriExtent = FoliageScreenLod.TriangleExtent(Triangles(main).Concat(leaves is null ? [] : Triangles(leaves)));
+            a.MainTexel = a.Terrain ? float.PositiveInfinity : TexelScale(main, a.MainMaterial);
+            a.LeavesTexel = leaves is null ? float.PositiveInfinity : TexelScale(leaves, a.LeavesMaterial);
             QueueMesh(a, main, leaves);
         }
+    }
+
+    /// <summary>
+    /// Mip streaming: the world length one unit of the coordinates <paramref name="material"/> samples spans on <paramref name="model"/>, before the
+    /// instance's scale: the most stretched part's <see cref="MeshTexelScale"/> over the material's tiling, as for the objects. Infinity (every mip kept)
+    /// for a triplanar material, whose footprint has no such bound, and for a part without a usable mapping.
+    /// </summary>
+    static float TexelScale(Model model, FoliageMaterial? material)
+    {
+        if (material is null || material.Triplanar) return float.PositiveInfinity;
+        float tile = Math.Min(material.Tile.X, material.Tile.Y);
+        if (!(tile > 0)) return float.PositiveInfinity;
+        float uv = 0;
+        foreach (var part in model.Parts) if (part.Indices.Length > 0) uv = Math.Max(uv, MeshTexelScale.Of(part));
+        return uv > 0 ? uv / tile : float.PositiveInfinity;
     }
 
     /// <summary>The areas of a model's triangles, in mesh units squared.</summary>
@@ -1111,6 +1154,8 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     /// <summary>
     /// Once a second: marks the meshes (and their textures) of every zone group within its range as in use, whatever the camera looks at, and
     /// unloads the GPU meshes unused for <see cref="IdleSeconds"/>. A mesh needed again is decoded and uploaded afresh (<see cref="Reload"/>).
+    /// The same pass gives the textures their mip streaming need: the group's nearest instance over the texel size at its largest scale, offered
+    /// before the keys are read so a first load already drops what the view cannot sample.
     /// </summary>
     void TrimResident(Vector3 eye, bool force)
     {
@@ -1127,10 +1172,16 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
                 var a = g.Asset;
                 a.LastUsed = now;
                 if (!a.Resident) Reload(a);   // in range but unloaded (or never loaded after an unload): decode it again, wherever the camera looks
+                if (!a.HasBounds) continue;
+                float near = g.BoundsReady ? BoxDistance(g.BoundMin, g.BoundMax, eye) : zoneDistance, scale = Math.Max(g.MaxScale, 1e-6f);
+                Offer(a.MainMaterial, near / (a.MainTexel * scale));
+                Offer(a.LeavesMaterial, near / (a.LeavesTexel * scale));
                 foreach (var m in (ReadOnlySpan<FoliageMaterial?>)[a.MainMaterial, a.LeavesMaterial])
-                    if (m is not null && a.HasBounds) _ = (m.Diffuse?.Key, m.Normal?.Key, m.Diffuse2?.Key, m.Normal2?.Key);   // reading a key counts as use (WorldTexture.Key)
+                    if (m is not null) _ = (m.Diffuse?.Key, m.Normal?.Key, m.Diffuse2?.Key, m.Normal2?.Key);   // reading a key counts as use (WorldTexture.Key)
             }
         }
+        textures.CommitNeeds();
+        textures.Rebalance();
         foreach (var a in assetsByMesh.Values)
         {
             if (!a.Resident || (now - a.LastUsed) / 1000.0 <= (guard is { Pressure: true } ? Math.Min(IdleSeconds, GuardIdleSeconds) : IdleSeconds)) continue;
@@ -1144,6 +1195,22 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
             meshUnloads++;
         }
     }
+
+    /// <summary>A user of the material's textures at <paramref name="need"/> (<see cref="WorldTexture.OfferNow"/>: a texture loaded this pass takes it at once).</summary>
+    static void Offer(FoliageMaterial? m, float need)
+    {
+        if (m is null) return;
+        m.Diffuse?.OfferNow(need);
+        m.Normal?.OfferNow(need);
+        m.Diffuse2?.OfferNow(need);
+        m.Normal2?.OfferNow(need);
+    }
+
+    /// <summary>The distance from <paramref name="eye"/> to the box (0 inside).</summary>
+    static float BoxDistance(Vector3 min, Vector3 max, Vector3 eye) => Vector3.Distance(eye, Vector3.Clamp(eye, min, max));
+
+    /// <summary>Tells the foliage textures' mip streaming the camera: the render size in pixels and the vertical field of view (the upscaler's LOD bias is the context's).</summary>
+    public void SetView(int width, int height, float fieldOfView) => textures.Mips.SetView(width, height, fieldOfView, Gpu.LodBias);
 
     void DeleteMesh(GpuMesh m)
     {

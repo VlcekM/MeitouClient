@@ -953,9 +953,28 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
     /// <inheritdoc/>
     public bool FrameCompleted(long frame) => frameNumber - frame >= FrameRingDepth;
 
-    /// <summary>A texture copied into another, scaled (the impostor bake's supersampled row halved): a sampling pass into the destination.</summary>
-    internal void BlitScaled(MTLCommandBuffer command, GpuTexture src, GpuTexture dst, TextureMinFilter filter) =>
+    /// <summary>
+    /// A texture copied into another: depth by a native copy (same size, format and kind only), colour by a sampling pass, which
+    /// can scale (the impostor bake's supersampled row halved).
+    /// </summary>
+    internal void Blit(MTLCommandBuffer command, GpuTexture src, GpuTexture dst, TextureMinFilter filter)
+    {
+        if (src.Desc.IsDepth || dst.Desc.IsDepth)
+        {
+            if (src.Desc.Format != dst.Desc.Format || src.Desc.Width != dst.Desc.Width || src.Desc.Height != dst.Desc.Height
+                || src.Desc.Kind != TextureKind.Texture2D || dst.Desc.Kind != TextureKind.Texture2D
+                || src.Desc.Samples != 1 || dst.Desc.Samples != 1)
+                throw new NotSupportedException("Metal depth blits require matching single-sample 2D textures of the same size and format");
+            // The sampling pass below writes a colour attachment; depth formats cannot be bound there.
+            var blit = command.BlitCommandEncoder();
+            blit.CopyFromTexture(TextureAt(src), 0, 0, new MTLOrigin(),
+                new MTLSize { width = (ulong)src.Desc.Width, height = (ulong)src.Desc.Height, depth = 1 },
+                TextureAt(dst), 0, 0, new MTLOrigin());
+            blit.EndEncoding();
+            return;
+        }
         BlitScaled(command, TextureAt(src), TextureAt(dst), MetalConventions.Pixel(dst.Desc.Format), dst.Desc.Width, dst.Desc.Height, filter);
+    }
 
     /// <summary>
     /// A texture's level over another level of the same texture (the mip chain's step): a blit when the two levels are the same

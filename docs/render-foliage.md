@@ -9,6 +9,9 @@ Atlas format, transitions and residency: [impostors.md](impostors.md). GPU API: 
 overlay and random state. Fine/coarse tiers and velocity lookahead prepare zones before entry;
 layouts, GPU resources and visibility are separate lifetimes. Keep ready data until replacements
 publish. Instances draw in every intersecting depth slice, not only the near slice.
+Which zones are laid out and kept, and which grass pages made and kept, adds the eye's height above the ground beyond the game's highest camera
+(1840, `KenshiCamera.MaxHeightAbovePivot`) to the ground distance (`FoliageRenderer.Load`; engine choice): a free camera high above the land loads only
+what can be seen from there, the game's camera heights load as before. Drawing still measures across the ground.
 
 `FoliageRenderer`/`FoliageShaders`: race-independent world instances, material modes, alpha test,
 lighting/wind and shadows. Faithful uses layer ranges and full-detail rules. Meitou `range`
@@ -25,7 +28,9 @@ recording; workers record immutable draw jobs, never upload/allocate or mutate r
 
 ## Grass
 
-Worker-built 576-unit pages (8x8 per zone) use placement density and terrain rules from research.
+Worker-built 576-unit pages (8x8 per zone) use placement density and terrain rules from research. A page's blades are generated into pooled arrays
+(`FoliageGrassField.RentBladesWithPrefixes`) that go back once its last upload step has run: fresh arrays per page were ~4 GB in 50 s of flight
+(**Observed**, allocation trace).
 Near pages draw blades; ranges and paging determine coverage. The blades live in one store (`FoliageGrassGpu`), 160 MB and 32768 slots at
 the default grass distance (x 8 the layer ranges), times the distance ratio squared rounded up, at most 8 and an eighth of the memory budget (x 2: 640 MB); raising the setting
 past it builds a larger store and makes every page again (`GrowGrassStore`; not when `VramGuard` refuses it), lowering it keeps the store until restart. A page that finds the
@@ -42,6 +47,10 @@ Bounds/range/frustum, Hi-Z occlusion, fog culls and projected-size LOD are disti
 `VramGuard` scales demand under device-local pressure; textures, meshes, scratch and atlases
 must cooperate. Resident mip and mesh detail track projected demand; avoid refine/unload churn.
 FrameScratch overflow must leave the affected view safely rather than writing past allocations.
+Mesh textures stream mips as the objects' do (`MipStreaming`): the once-a-second residency pass offers each group's nearest box distance over
+the mesh's texel size (`MeshTexelScale` of its most stretched part over the material tile) at the group's largest scale, before reading the keys.
+Triplanar and TERRAIN materials and grass sprites keep every mip. **Observed** (VRAM dump, 2026-11-01): 808 MB of foliage textures, all at full
+resolution, before this.
 
 `early-depth` uses discard-free shaders only for opaque non-fading geometry. Cut-out and fading
 geometry retain tests. `foliage-prepass` draws cut-out/dither depth then colour at EQUAL;

@@ -25,7 +25,8 @@ Small class radius>=2,triangles>=100 uses32px/grid12, transition4000*radius/48. 
 Render each row at2NF by2F; output pre-lighting albedo/normal/gloss,2x downsample/readback after
 GPU completion. Texture bias log2(2F/projected mean-scale diameter), clamp0..4. Pull-push fill
 and per-frame coverage-preserving mips; BC1 covered-pixel principal-axis endpoints. Budget4million
-samples/frame, at least one row; keep meshes until atlas Ready. Reuse buffers/arrays, release
+samples/frame, at least one row; keep meshes until atlas Ready. A loading screen waits only for the uploads of atlases read
+from the cache, not for queued reads or bakes (**Observed** cold cache, 1,174 mods, the Hub: warm-up 34.7 -> 12.4 s). Reuse buffers/arrays, release
 pools10s idle. Prepare lazy frame globals outside rendering; warm programs/quad/pipelines safely.
 **Verified** pooled output MD5 for267 meshes and split tests; cold-cache validation named views.
 
@@ -33,6 +34,8 @@ Atlas budget min(clamp(share*deviceBudget,48MB,cap),12%budget):discrete8%/1024MB
 integrated5%/256MB, unknown192MB; pressure*0.75; explicit --impostor-budget overrides.
 Nearest-first plan degrades far mips before excluding; lookahead3s, one-level margin plus
 upscaler bias. Refine on approach, retain old atlas until ready; retry refused upload2s.
+Unwanted atlases unload after 20 s idle; after a jump of 10000+ units between scans (a save loaded from the menu's
+scene, a teleport) at once. **Observed** (2026-11-01): 1014 MB (the limit) just after a load, 310 MB later; the menu scene's atlases are the inferred cause, not measured.
 Integrated heap/budget adequacy unverified. Never reuse in-flight views/indices prematurely.
 
 ## Rock and fade rules

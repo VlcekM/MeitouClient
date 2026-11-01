@@ -91,8 +91,9 @@ sealed partial class GameHost
             if (!soundProfiles.TryGetValue(look, out var profile))
                 soundProfiles.Add(look, profile = CharacterSoundProfile.From(look, db));
             soundLayers.Clear();
-            foreach (var layer in c.Animations)
+            for (int k = 0; k < c.Animations.Count; k++)   // indexed: a foreach over the interface boxes its enumerator, per character per frame
             {
+                var layer = c.Animations[k];
                 var events = (uint)layer.Definition < (uint)definitionEvents!.Length ? definitionEvents[layer.Definition] : null;
                 soundLayers.Add(new SoundLayer(layer.Definition, events, layer.Length > 0 ? layer.Time / layer.Length : 0, layer.Weight, events is null ? null : definitionWeapons![layer.Definition]));
             }

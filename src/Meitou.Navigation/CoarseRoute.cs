@@ -66,6 +66,9 @@ public sealed class CoarseRoute
         cells = new Lazy<ushort[]>(Build, LazyThreadSafetyMode.ExecutionAndPublication);
     }
 
+    /// <summary>Builds the grid now (it is otherwise built by the first <see cref="Find"/>, which then holds every path thread asking meanwhile: ~3 s).</summary>
+    public void Warm() => _ = cells.Value;
+
     static float Origin => -WorldLayout.HalfWorldSize;
     static int CellOf(float v) => Math.Clamp((int)MathF.Floor((v - Origin) / Cell), 0, Side - 1);
     static Vector2 Centre(int x, int z) => new(Origin + (x + 0.5f) * Cell, Origin + (z + 0.5f) * Cell);

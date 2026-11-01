@@ -65,7 +65,7 @@ public sealed partial class PopulationSystem
     /// </summary>
     public Squad StartPlayer(World world, NewGameStart start)
     {
-        if (data.PlayerFaction < 0) throw new InvalidOperationException("the game data has no player faction (Nameless)");
+        if (data.PlayerFaction < 0) throw new InvalidOperationException($"the game data has no player faction (FACTION {FactionData.PlayerId})");
         ulong key = Rng.Mix(SeedSalts.PlayerStart ^ Rng.StableHash(start.Id));
         ApplyStartRelations(data.Relations, start);
         data.ClearReplacements();

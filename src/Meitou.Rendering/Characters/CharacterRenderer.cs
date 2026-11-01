@@ -25,9 +25,16 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
 {
     IGpuContext Gpu { get; }
 
-    /// <summary>Zeroed host-visible memory of this frame (the bone palettes, the material table and the instances are written into it).</summary>
-    Transient AllocateConstants(ulong bytes, ulong alignment) =>
-        Gpu.Frame.WriteConstants(new byte[checked((int)Math.Max(bytes, 1))], alignment);
+    /// <summary>
+    /// Zeroed host-visible memory of this frame (the bone palettes, the material table and the instances are written into it), cleared in place: a managed
+    /// array of this size (megabytes with a crowd) would land on the large object heap every frame and force gen2 collections.
+    /// </summary>
+    Transient AllocateConstants(ulong bytes, ulong alignment)
+    {
+        var slice = Gpu.Frame.AllocateConstants(Math.Max(bytes, 1), alignment);
+        slice.Bytes.Clear();
+        return slice;
+    }
 
     readonly NativeFrame nativeFrame;
     readonly ReflectedProgram colourProg, depthProg, motionProg;
@@ -328,6 +335,8 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
     }
 
     public VramGuard? Guard { get => content.Textures.Guard; set => content.Textures.Guard = value; }
+    /// <summary>The characters' texture cache (the VRAM dump lists it).</summary>
+    public WorldTextureCache Textures => content.Textures;
 
     /// <summary>The skeleton rigs and pose setups the characters are drawn with; the simulation's ragdolls pose from the same ones.</summary>
     public CharacterRigs Rigs => content.Rigs;

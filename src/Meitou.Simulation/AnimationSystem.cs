@@ -781,13 +781,15 @@ public sealed class AnimationSystem(AnimationLibrary library, AnimationLengths l
         foreach (var (index, weight) in wanted) Scan(index, weight);
         for (int k = 0; k < a.Count; k++) Scan(a.Layers[k].Definition, a.Layers[k].Weight);
         bool leftFree = !leftBusy && medical.ArmWorks(left: true), rightFree = !rightBusy && medical.ArmWorks(left: false);
-        var hurt = new List<(float Fraction, string Record)>();
+        // Made only for a character with a hurt part (most have none), and no lambda over the loop's part: this runs for every character every tick.
+        List<(float Fraction, string Record)>? hurt = null;
         foreach (var part in medical.PartSpan)
         {
-            if (part.Template.PainAnim is not { } record || !(part.Fraction < part.Template.PainThreshold * 0.01f) || hurt.Any(h => h.Fraction == part.Fraction)) continue;
-            hurt.Add((part.Fraction, record));
+            if (part.Template.PainAnim is not { } record || !(part.Fraction < part.Template.PainThreshold * 0.01f) || hurt is not null && SameFraction(hurt, part.Fraction)) continue;
+            (hurt ??= []).Add((part.Fraction, record));
         }
-        hurt.Sort((x, y) => x.Fraction.CompareTo(y.Fraction));
+        if (hurt is null) return -1;
+        hurt.Sort(static (x, y) => x.Fraction.CompareTo(y.Fraction));
         foreach (var (_, record) in hurt)
         {
             int index = Library.IndexOfRecord(record);
@@ -798,6 +800,13 @@ public sealed class AnimationSystem(AnimationLibrary library, AnimationLengths l
             if (rightFree && Library.IndexOf(d.Name + "-R") is >= 0 and var mirror) return mirror;
         }
         return -1;
+    }
+
+    static bool SameFraction(List<(float Fraction, string Record)> hurt, float fraction)
+    {
+        foreach (var h in hurt)
+            if (h.Fraction == fraction) return true;
+        return false;
     }
 
     /// <summary>
@@ -924,13 +933,13 @@ public sealed class AnimationSystem(AnimationLibrary library, AnimationLengths l
     }
 
     /// <summary>
-    /// The layers to publish for a snapshot: the record name (the renderer finds its track masks by it), the clip time in seconds and the weight. The
+    /// The layers to publish for a snapshot, written into <paramref name="into"/> (the snapshot's own list, cleared first): the record name (the renderer finds its track masks by it), the clip time in seconds and the weight. The
     /// weights are normalised as Kenshi's layers are (docs/animation.md "Layer managers"): the upper body (upper and whole-body clips) to a total of 1, the
     /// lower body to 1 minus the whole-body clips' weight (actions and <c>all</c> clips; a block is played without its lower-body tracks and keeps the legs'
     /// clips); overlays are left alone. Within a body half the layers fading out keep their weights and the wanted ones fill what is left (scaled up as well as
     /// down), so a cross-fade never lets the binding pose through; with only fading layers the total falls with them.
     /// </summary>
-    public IReadOnlyList<AnimationLayer> Publish(CharacterAnimation a)
+    public IReadOnlyList<AnimationLayer> Publish(CharacterAnimation a, List<AnimationLayer> into)
     {
         int visible = 0;
         float upperWanted = 0, upperFading = 0, fullWanted = 0, fullFading = 0, lowerWanted = 0, lowerFading = 0;
@@ -951,12 +960,12 @@ public sealed class AnimationSystem(AnimationLibrary library, AnimationLengths l
                     break;
             }
         }
-        if (visible == 0) return [];
+        into.Clear();
+        if (visible == 0) return into;
         var (upperWantedScale, upperFadingScale) = Fill(upperWanted, upperFading, 1);
         float lowerRoom = MathF.Max(0, 1 - fullWanted * upperWantedScale - fullFading * upperFadingScale);
         var (lowerWantedScale, lowerFadingScale) = Fill(lowerWanted, lowerFading, lowerRoom);
-        var list = new AnimationLayer[visible];   // the snapshot keeps its own copy, sized exactly
-        int n = 0;
+        into.EnsureCapacity(visible);
         for (int k = 0; k < a.Count; k++)
         {
             var layer = a.Layers[k];
@@ -969,9 +978,9 @@ public sealed class AnimationSystem(AnimationLibrary library, AnimationLengths l
                 AnimationArea.Overlay => 1,
                 _ => wanted ? upperWantedScale : upperFadingScale,
             };
-            list[n++] = new AnimationLayer(d.Name, layer.Time, layer.Weight * scale) { Length = layer.Length, Definition = layer.Definition };
+            into.Add(new AnimationLayer(d.Name, layer.Time, layer.Weight * scale) { Length = layer.Length, Definition = layer.Definition });
         }
-        return list;
+        return into;
     }
 
     /// <summary>
@@ -990,7 +999,8 @@ public sealed class AnimationSystem(AnimationLibrary library, AnimationLengths l
 /// <summary>What the world asks to turn a character's animation state into the layers a snapshot carries.</summary>
 public interface IAnimationSource
 {
-    IReadOnlyList<AnimationLayer> Publish(CharacterAnimation animation);
+    /// <summary>Writes the layers into <paramref name="into"/> (cleared first) and returns it.</summary>
+    IReadOnlyList<AnimationLayer> Publish(CharacterAnimation animation, List<AnimationLayer> into);
 }
 
 /// <summary>

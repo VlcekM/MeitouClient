@@ -51,7 +51,7 @@ public sealed unsafe partial class TerrainRenderer
             CoarseRect = CoarseRect, CoarseCells = new Vector2(coarseSize - 1f, coarseSize - 1f), FineRect = FineRect,
             FineCells = new Vector2(fine.Columns - 1f, fine.Rows - 1f), FineBand = fineBand, HasFine = 1,
             HeightCoarse = Index(coarseTexture, BindlessKind.Texture2D, standIn2D), HeightFine = Index(fineTexture, BindlessKind.Texture2D, standIn2D),
-            Diffuse = standInArray, Normal = standInArray, Height = standInArray, Relief = standIn2D, Params = standIn2D, Cells = standInUInt, BlendMap = standIn2D, Overlay = standIn2D,
+            Diffuse = standInArray, Normal = standInArray, DiffuseFar = standInArray, NormalFar = standInArray, Height = standInArray, Relief = standIn2D, Params = standIn2D, Cells = standInUInt, BlendMap = standIn2D, Overlay = standIn2D,
             Colour = standIn2D, Ground = standIn2D, WorldColour = standIn2D, Region = lastRegion, CellGrid = lastCellGrid,
             HeightNormals = 0, Feature = 1, FeatureBiome = row, SunColour = Vector3.One, AmbientSky = Vector3.One, AmbientGround = Vector3.One,
             WaterHeight = -1e6f, HalfWorld = (float)WorldLayout.HalfWorldSize, FarStart = 1e9f, FarEnd = 2e9f,
@@ -63,6 +63,9 @@ public sealed unsafe partial class TerrainRenderer
             var set = t.Textures;
             c.Diffuse = Index(set.Diffuse, BindlessKind.Texture2DArray, standInArray);
             c.Normal = Index(set.Normal, BindlessKind.Texture2DArray, standInArray);
+            c.DiffuseFar = Index(set.DiffuseFar, BindlessKind.Texture2DArray, standInArray);
+            c.NormalFar = Index(set.NormalFar, BindlessKind.Texture2DArray, standInArray);
+            c.FarLod = set.FarLod;
             c.Params = Index(set.Params, BindlessKind.Texture2D, standIn2D);
             c.Cells = Index(set.Cells, BindlessKind.UTexture2D, standInUInt);
             c.BlendMap = Index(set.BlendMap, BindlessKind.Texture2D, standIn2D);

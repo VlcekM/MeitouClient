@@ -82,6 +82,13 @@ public sealed unsafe class NavmeshOverlayRenderer : IDisposable
         origin = at;
     }
 
+    /// <summary>Frees the geometry (the view was hidden: tens of MB over a town); nothing is drawn until the next <see cref="SetMesh"/>.</summary>
+    public void Clear()
+    {
+        fill?.Dispose(); edges?.Dispose();
+        (fill, fillCount, edges, edgeCount) = (null, 0, null, 0);
+    }
+
     (DeviceBuffer?, int) Upload(float[] data, string name)
     {
         if (data.Length == 0) return (null, 0);

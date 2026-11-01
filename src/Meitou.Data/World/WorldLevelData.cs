@@ -44,18 +44,34 @@ public sealed class WorldLevelData
     public List<GameDataIssue> Issues { get; } = [];
 
     public static WorldLevelData Load(GameInstall install, bool includeInteriors = false) =>
-        Load(Path.Combine(install.DataDirectory, RelativeDirectory), LoadOrder.FromInstall(install).Entries.Select(e => e.Name), includeInteriors);
+        Load(Path.Combine(install.DataDirectory, RelativeDirectory), LoadOrder.FromInstall(install).Entries, includeInteriors);
+
+    /// <summary>The base game's world alone (the core files' layers, no mod's): what the install tests are written against.</summary>
+    public static WorldLevelData LoadBaseGame(GameInstall install, bool includeInteriors = false) =>
+        Load(Path.Combine(install.DataDirectory, RelativeDirectory), LoadOrder.BaseGame(install).Entries, includeInteriors);
+
+    /// <summary>A mod's own world layer, under its folder (docs/formats/zones.md "Mods").</summary>
+    public const string ModDirectory = "leveldata";
 
     /// <summary>Loads from <paramref name="directory"/>, with sub-folder layers named after <paramref name="loadOrder"/> files (extension dropped).</summary>
-    public static WorldLevelData Load(string directory, IEnumerable<string> loadOrder, bool includeInteriors = false)
+    public static WorldLevelData Load(string directory, IEnumerable<string> loadOrder, bool includeInteriors = false) =>
+        Load(directory, loadOrder.Select(name => new LoadOrderEntry(name, "")), includeInteriors);
+
+    /// <summary>
+    /// Loads from <paramref name="directory"/>, then one layer per <paramref name="loadOrder"/> file that has one, in load order: a core file's sub-folder named after it
+    /// (extension dropped), a mod's <c>leveldata</c> folder beside its <c>.mod</c> file (Workshop or <c>mods/</c>).
+    /// </summary>
+    public static WorldLevelData Load(string directory, IEnumerable<LoadOrderEntry> loadOrder, bool includeInteriors = false)
     {
         var world = new WorldLevelData();
         world.Layers.Add(new WorldLevelLayer("", directory));
-        foreach (var name in loadOrder)
+        foreach (var entry in loadOrder)
         {
-            var sub = Path.Combine(directory, Path.GetFileNameWithoutExtension(name));
+            string name = Path.GetFileNameWithoutExtension(entry.Name);
+            bool core = entry.Path.Length == 0 || LoadOrder.BaseFiles.Contains(entry.Name, StringComparer.OrdinalIgnoreCase);
+            var sub = core ? Path.Combine(directory, name) : GameFiles.Resolve(Path.Combine(Path.GetDirectoryName(entry.Path)!, ModDirectory));
             if (Directory.Exists(sub))
-                world.Layers.Add(new WorldLevelLayer(Path.GetFileNameWithoutExtension(name), sub));
+                world.Layers.Add(new WorldLevelLayer(name, sub));
         }
         if (includeInteriors) world.Interiors = new GameDatabase();
 
@@ -80,7 +96,14 @@ public sealed class WorldLevelData
     {
         var name = layer.Name.Length == 0 ? Path.GetFileName(path) : $"{layer.Name}/{Path.GetFileName(path)}";
         int before = db.Issues.Count;
-        var file = LevelFile.ReadFile(path);
+        LevelFile file;
+        try { file = LevelFile.ReadFile(path); }
+        catch (Exception e) when (e is FcsFormatException or EndOfStreamException or InvalidDataException or IOException)
+        {
+            // A mod's file the reader refuses is left out (Observed: Great Frontiers' interiors.level has every zero byte turned to a space; the game plays on).
+            Issues.Add(new GameDataIssue(GameDataIssueKind.LevelFileNotLoaded, name, null, e.Message));
+            return;
+        }
         if (zone is { } z)
         {
             if (!ZoneInfo.TryGetValue(z, out var info)) ZoneInfo[z] = info = new ZoneLevelInfo();

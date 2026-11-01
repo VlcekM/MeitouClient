@@ -18,6 +18,21 @@ world coordinates. `terrain-layer-skip` can omit insignificant layer work; thres
 choices requiring boundary/material checks. `terrain-late-colour` separates depth from shading
 where occluders justify it. A depth prepass is extra geometry, not automatically a speedup.
 
+**Layer arrays** (`TerrainTextures`), two tiers per texture pair (a BC3 diffuse and a BC1 normal):
+- **Far arrays** hold every pair of the biomes within the material distance at a quarter of the layer size (512² at 2048, about 0.5 MB a pair),
+  at a fixed index per pair, at most 256 (the array layers every Vulkan device has; a pair past that stays in ground colour). The R8 height array
+  and the relief texture use the same index. A biome is drawn once all its pairs are in.
+- **Near arrays** have 32 slots at the full size (about 270 MB at 2048²). A slot goes to a pair within its near range of the eye, least recently
+  needed first: the range is the pair's tile × pixels per radian ÷ layer size × 11.3, with an upscaler's negative bias widening it.
+  When no slot is left, a pair stays far.
+- Per sample the shader works out the near arrays' level (8x anisotropic: the long axis over up to 8 taps, never under the short axis). Below
+  `FarShift` (2) less the sampler bias it reads the near slot; otherwise, or without a slot, it reads the far array. For a DDS layer taken as stored,
+  both tiers read the file's own mips, so from that level down they are the same texels. A resized layer is filtered separately at each size, so
+  a faint seam is possible there (**Unknown** until seen in game).
+- Params texels 0 and 1 hold the far indices (the relief code reads these too); texels 13 and 14 hold the near slots, -1 for none.
+- Before this the arrays held a full-size slot per pair within the 30 km material distance: 128 slots, about 1.07 GB, in the Great Desert
+  (**Observed**, VRAM pie and log 2026-11-01).
+
 **World colour map** (`TerrainTextures.PrepareWorld`): the 8 × 8 colour tiles box-filtered into one 2048² RGBA map for the far terrain
 and foliage. Cached raw (16 MB, no header) in `%LOCALAPPDATA%\Meitou\terrain\worldcolour_<hash>.bin`: hash of a version tag, the size and
 each tile's path, length and write time, so a mod's tile gets its own file; a file of the wrong length is rebuilt. Decoding the tiles
@@ -28,9 +43,11 @@ window beside it is 2048² RGBA8). It is BC3 (21 MB instead of 85 MB RGBA8), not
 values, 30 % at 255). The 64 tiles are encoded once with 7 levels into `%LOCALAPPDATA%\Meitou\terrain\colour\<hash>.bc3` (magic `MTC3`, side,
 the levels' blocks; ~5.6 MB a tile, 342 MB in all), hash of a version tag and the tile's path, length and write time. A start with tiles
 missing from it encodes them on workers in the loading step "terrain colour map (first start only)" (**Observed** 5.8 s on a 2026 desktop);
-the window then copies blocks instead of decoding PNGs (**Observed** at The Hub: first window 0.6 s instead of 1.6-3 s, a move 0.15 s instead of
+the window then reads only the block rows it needs from those files (`TerrainColourCache.ReadBlocks`; no whole tile is loaded, which cost 11 MB of fresh arrays a tile per window move) instead of decoding PNGs (**Observed** at The Hub: first window 0.6 s instead of 1.6-3 s, a move 0.15 s instead of
 0.85 s). Every piece must start on a block at every level, so the window origin is aligned to 128 overlay pixels (256 colour pixels). Tiles
-that are not square multiples of 256 keep the RGBA8 path.
+that are not square multiples of 256 keep the RGBA8 path. The overlay window's decoded tiles (1024², the window's 3 x 3) stay between moves,
+so a move decodes a PNG only when the window reaches a new tile (**Observed**, headless: a move 13-45 ms and ~0.1 MB allocated, was 170-320 ms
+and 17-29 MB with the tiles dropped after each).
 
 ## Ground relief
 

@@ -256,7 +256,7 @@ sealed class WorldOptions
           --faithful <all|ao,dither,haze,aa,shadows,range,impostors,reach,water,particles,lod,gi,tonemap,shafts,heathaze,night,planetshine,stars,nightgrade,clouds,cloudshadows,cloudfog,interiorgi,charlod,skin,interiorlamps,icons,blood,bloodsurfaces,parallax,displace,weld,tracers,fog>   the game's look instead of Meitou's enhancements (default: all Meitou; --meitou <...> turns them back on; these ids also name the --ab switches)
           --show-keys              start with the key list overlay open (toggle with F10)
           --play-shots             start flying the saved camera keys (the F2 timeline) on a loop
-          --log-spikes             print a line for every frame whose GPU time is over 1.5 x the median: stage times (GPU, render thread) and what it uploaded or rebuilt
+          --log-spikes             print a line for every frame whose GPU time, or render-thread time over 20 ms, is over 1.5 x its median: stage times (GPU, render thread) and what it uploaded or rebuilt
           --fly-to <x>,<z>         with --screenshot: fly there first (streaming test, reports frame times), then take the picture
           --fly-benchmark <frames> offscreen, no window: fly the camera round a circle at 60 frames per second of wall time, print frame-time
                                    percentiles, the worst frames with their stage times and resident memory   --fly-radius <u> (12000)   --fly-speed <u per frame> (150)
@@ -792,10 +792,10 @@ static class WorldFrame
     }
 
     /// <summary>The particle renderer (reads the scripts and materials, makes the pass's program) if there is none yet; for whoever feeds it a weather's effect list.</summary>
-    public static ParticleRenderer EnsureParticles(Gpu gpu, IGpuContext context, GameInstall install)
+    public static ParticleRenderer EnsureParticles(Gpu gpu, IGpuContext context, AssetLocator assets)
     {
         if (gpu.Particles is { } existing) return existing;
-        return gpu.Particles = ParticleRenderer.Create(context, install);
+        return gpu.Particles = ParticleRenderer.Create(context, assets);
     }
 
     /// <summary>The renderer for <paramref name="scene"/>. <paramref name="step"/> is called before each of its steps (terrain, biomes, sky, water, objects, foliage, shadows) with the step's name: the game draws a loading frame there.</summary>
@@ -833,7 +833,7 @@ static class WorldFrame
             step?.Invoke("biomes");
             textures = TerrainTextures.Create(context, install, scene.Database, assets, layerSize, source: Ready(terrainSource!));
             foreach (var m in textures.Messages.Take(20)) Console.WriteLine($"warning   {m}");
-            Console.WriteLine($"biomes    {textures.TotalBiomes} in the world, {textures.TotalPairs} texture pairs, {textures.Capacity} slots of {layerSize}² BC3+BC1, {textures.ArrayBytes / 1048576} MB ({watch.ElapsedMilliseconds} ms)");
+            Console.WriteLine($"biomes    {textures.TotalBiomes} in the world, {textures.TotalPairs} texture pairs, {textures.Capacity} near slots of {layerSize}² and {textures.FarSlots} far of {textures.FarSize}², BC3+BC1, {textures.ArrayBytes / 1048576} MB ({watch.ElapsedMilliseconds} ms)");
             terrain.SetTextures(textures);
         }
         step?.Invoke("sky");
@@ -878,7 +878,7 @@ static class WorldFrame
         if (particlesEnabled && !o.NoParticles && scene.Database is { } effectsDb)
         {
             var particleWatch = Stopwatch.StartNew();
-            var particles = EnsureParticles(gpu, context, install);
+            var particles = EnsureParticles(gpu, context, assets);
             particles.PrewarmSeconds = o.ParticlePrewarm;
             gpu.ParticleDensity = o.ParticleDensity;
             particles.World.GroundHeight = terrain.HeightAt;   // main thread only: the height grid swaps as the terrain streams
@@ -1324,6 +1324,7 @@ static class WorldFrame
         var post = gpu.PostChain ?? throw new InvalidOperationException("the sky frame needs the post-processing chain");
         post.GiResolve = 0;
         post.Begin(width, height);
+        if (post is PostProcess { Unallocated: true }) return;
         float aspect = width / (float)Math.Max(height, 1);
         var eye = camera.Eye;
         var view = camera.View;
@@ -1368,25 +1369,29 @@ static class WorldFrame
         if (gpu.Post is { } giPost) giPost.GiResolve = giResolve ? gpu.GiResolve : 0;
         if (gpu.Probes is { } giProbes) giProbes.Resolve = giResolve;
         post.Begin(width, height);
+        if (post is PostProcess { Unallocated: true }) { gpu.Guard?.Tick(); return; }   // out of video memory: no world this frame
         // The scene is drawn at the render size (smaller than the display with an upscaler), its projection jittered by the upscaler.
         int rw = post.RenderWidth, rh = post.RenderHeight;
         // The terrain LOD measures its error in the pixels actually rendered (after the upscaler's render scale).
         render.TerrainPixelScale = TerrainLod.ProjectionScale(rh, camera.FieldOfView);
+        if (gpu.Terrain.TextureSet is { } nearRange) nearRange.PixelScale = render.TerrainPixelScale;   // the terrain layers' near ranges
         var jitter = post.JitterPixels;
         var eye = camera.Eye;
         gpu.Guard?.Tick();
         var kept = ObjectStreamer.MergeKept(gpu.Kept, eye);
         if (gpu.Streamer is { } aheadTerrain) (aheadTerrain.Ahead, aheadTerrain.Kept) = (gpu.Ahead, kept);
-        if (gpu.Objects is { } aheadObjects) (aheadObjects.Ahead, aheadObjects.Kept) = (gpu.Ahead, kept);
+        if (gpu.Objects is { } aheadObjects) (aheadObjects.Ahead, aheadObjects.Kept, aheadObjects.KeptViewDistance) = (gpu.Ahead, kept, camera.Distance);
         if (gpu.Foliage is { } aheadFoliage) aheadFoliage.Ahead = gpu.Ahead;
         gpu.Streamer?.Update(eye);
         StageClock.Lap(0);
         if (gpu.Objects is { } lodObjects) lodObjects.LodPixelsPerRadian = render.TerrainPixelScale;   // the generated object levels are placed by the pixel size too
         gpu.Objects?.SetView(rw, rh, camera.FieldOfView);   // the object textures' mip streaming measures pixels at the render size
+        gpu.Foliage?.SetView(rw, rh, camera.FieldOfView);
         gpu.Characters?.SetView(rw, rh, camera.FieldOfView);
         gpu.Objects?.Update(eye);
         StageClock.Lap(1);
         if (gpu.Foliage is { } lodFoliage) lodFoliage.LodPixelsPerRadian = render.TerrainPixelScale;   // the generated mesh levels measure their deviation in rendered pixels
+        if (gpu.Foliage is { } liftedFoliage) liftedFoliage.GroundUnderEye = gpu.Terrain.HeightAt(eye.X, eye.Z);
         gpu.Foliage?.Update(eye);
         StageClock.Lap(2);
         gpu.Characters?.Update(eye);
@@ -1746,6 +1751,7 @@ static class WorldFrame
             var (markerNear, markerFar) = slices[^1];
             marker.Record(picture, width, height, post.SceneDepth, post.RenderWidth, post.RenderHeight, view * camera.Projection(aspect, markerNear, markerFar), eye, sun);
         }
+        else gpu.Markers?.Idle();
         // The navmesh debug view over the finished picture (Meitou only).
         if (gpu.NavmeshOverlay is { Visible: true } navOverlay && post.Target is { } navPicture)
         {

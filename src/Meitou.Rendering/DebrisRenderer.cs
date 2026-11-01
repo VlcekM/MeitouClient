@@ -170,11 +170,14 @@ public sealed unsafe class DebrisRenderer : IDisposable
     };
 
     /// <summary>A loaded diffuse texture and its stable bindless entry. The sampler can change with the upscaler's LOD bias; the index
-    /// stays, so a draw recorded earlier in the frame keeps its view (the table's update-after-bind rules).</summary>
+    /// stays, so a draw recorded earlier in the frame keeps its view (the table's update-after-bind rules). Or a texture of a shared cache
+    /// (<see cref="SharedTextures"/>: the characters' own image, kept while drawn), whose index is the cache's.</summary>
     sealed class DebrisTexture : IDisposable
     {
         readonly IGpuContext gpu;
-        readonly SampledImage image;
+        readonly SampledImage? image;
+        readonly WorldTextureCache? cache;
+        readonly WorldTexture? shared;
         BindlessHandle handle;
         SampledTexture registered;
         bool hasEntry;
@@ -185,11 +188,24 @@ public sealed unsafe class DebrisRenderer : IDisposable
             this.image = image;
         }
 
-        /// <summary>The bindless index for <see cref="SampledImage.Sampled"/> now, registering or updating the entry.</summary>
+        public DebrisTexture(IGpuContext gpu, WorldTextureCache cache, WorldTexture shared)
+        {
+            this.gpu = gpu;
+            this.cache = cache;
+            this.shared = shared;
+        }
+
+        /// <summary>The bindless index for <see cref="SampledImage.Sampled"/> now, registering or updating the entry (a shared texture's: the
+        /// cache's entry, the stand-in until it is resident; reading it counts as use).</summary>
         public uint Index
         {
             get
             {
+                if (image is null)
+                {
+                    CachedIndex = cache!.Index(shared!.Key, gpu.LodBias, gpu.StandIn2D);
+                    return CachedIndex;
+                }
                 var sampled = image.Sampled();
                 if (!hasEntry)
                 {
@@ -212,7 +228,7 @@ public sealed unsafe class DebrisRenderer : IDisposable
         public void Dispose()
         {
             if (hasEntry) gpu.Bindless.Free(handle);
-            image.Dispose();
+            image?.Dispose();
         }
     }
 
@@ -237,6 +253,10 @@ public sealed unsafe class DebrisRenderer : IDisposable
     readonly GpuBufferBinding[] bindings = new GpuBufferBinding[5];
     readonly Dictionary<string, Mesh?> meshes = new(StringComparer.OrdinalIgnoreCase);
     readonly Dictionary<string, DebrisTexture?> textures = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>The cache whose images the debris textures share (the characters', which hold the same skins and items), when there is one by
+    /// the time a texture is first asked for; else each is loaded here and kept.</summary>
+    public Func<WorldTextureCache?>? SharedTextures { get; init; }
 
     /// <param name="resolver">Finds a mesh's textures (null: every mesh untextured).</param>
     /// <param name="find">A file name to its path in the install (the configured resource locations).</param>
@@ -420,6 +440,12 @@ public sealed unsafe class DebrisRenderer : IDisposable
         if (name is null) return null;
         if (textures.TryGetValue(name, out var known)) return known;
         DebrisTexture? texture = null;
+        if (SharedTextures?.Invoke() is { } cache)
+        {
+            if (cache.Get(name, border: false) is { } t && t.State != WorldTexture.Residency.Missing) texture = new DebrisTexture(gpu, cache, t);
+            textures[name] = texture;
+            return texture;
+        }
         try
         {
             if (find(name) is { } path)

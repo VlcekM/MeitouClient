@@ -6,7 +6,7 @@ namespace Meitou.Navigation;
 /// <summary>
 /// The original generator keeps only the regions within 4 units of a seed point (regionPruningSettings, minRegionArea 1e8 makes every region "too small" otherwise),
 /// and the largest region when none qualifies. This is that pass over the polygon graph: roofs, closed yards and cliff tops without a seed are dropped
-/// (docs/game/pathfinding.md, "Region pruning by seeds").
+/// (docs/game/pathfinding.md, Generator "Seeds" and `regionPruningSettings`).
 /// </summary>
 internal static class SeedPruner
 {
@@ -28,10 +28,12 @@ internal static class SeedPruner
         // Regions reaching the zone's border at ground level are kept when the zone is published, toward the sides whose neighbour is not loaded
         // (ExtendBorder), and from the neighbours' kept polygons when it is (ZoneKeptClosure): the cached pruning is the zone's own.
 
-        if (matched == 0 && g.InteriorDestroyed)
+        if (g.InteriorDestroyed)
         {
-            // A destroyed building's interior (no door, so no seed): its ground floor, every region starting within DestroyedFloorBand of the lowest polygon.
-            // Its largest region can be an upper floor or wall tops under a roof whose intact collision stays.
+            // A destroyed building's interior: the regions its seed reaches (the original's ray onto its floor, ZoneGeometryGatherer.OriginRaySeed), and its
+            // ground floor, every region starting within DestroyedFloorBand of the lowest polygon (engine choice: our mesh can split a ruin's floor that the
+            // original keeps whole, the Hub L-House 4645-). Its largest region can be an upper floor or wall tops under a roof whose intact collision stays.
+            if (matched > 0) Spread(mesh, keep, queue);
             var component = Components(mesh);
             var bottom = new Dictionary<int, float>();
             for (int p = 0; p < n; p++)
@@ -40,8 +42,8 @@ internal static class SeedPruner
                 bottom[component[p]] = bottom.TryGetValue(component[p], out float b) ? MathF.Min(b, y) : y;
             }
             float floor = bottom.Values.Min();
-            for (int p = 0; p < n; p++) mesh.Kept[p] = bottom[component[p]] <= floor + DestroyedFloorBand;
-            return 0;
+            for (int p = 0; p < n; p++) mesh.Kept[p] = keep[p] || bottom[component[p]] <= floor + DestroyedFloorBand;
+            return matched;
         }
         if (matched == 0 && g.ClippedAtBorder)
         {

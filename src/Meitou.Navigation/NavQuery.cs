@@ -66,8 +66,8 @@ public sealed class NavQuery(NavWorld world, NavDoors? doors = null)
 
         public void Reset()
         {
-            // A search that grew the table far (a long route) does not keep it.
-            if (Nodes.Count > 65536) { Nodes.Clear(); Nodes.TrimExcess(); made.Clear(); made.TrimExcess(); }
+            // Kept whatever a search grew it to (MaxIterations bounds it: tens of MB a path thread). Dropping it after a long search made every search that ran
+            // to the limit (an unreachable goal) rebuild it on the large object heap, ~280 MB/s of garbage in a town (issue #124, docs/bench.md).
             Nodes.Clear();
             Open.Clear();
             used = 0;

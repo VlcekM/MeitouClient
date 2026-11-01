@@ -39,9 +39,9 @@ public sealed partial class World
         foreach (var talk in systems.OfType<Dialogue.DialogueSystem>()) talk.RefreshView(this);
         if (Settings.PublishSnapshots)
         {
-            var previous = PreviousSnapshot;
+            var (previous, buffer) = (PreviousSnapshot, previousBuffer);
             Publish();
-            PreviousSnapshot = previous;
+            KeepPrevious(previous, buffer);
         }
     }
 

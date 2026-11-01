@@ -75,13 +75,17 @@ public sealed class VramGuard
     public float LowestScale { get; private set; } = 1f;
     public int Refusals { get; private set; }
 
+    /// <summary>The smallest and largest driver budgets sampled (0 before the first): the driver's budget shrinks while other programs hold video memory.</summary>
+    public long LowestBudget { get; private set; }
+    public long HighestBudget { get; private set; }
+
     /// <summary>Whether the guard is doing anything (pressure, or ranges not back at 1).</summary>
     public bool Active => pressure || scale < 1f;
 
     /// <summary>The statistics line (F11): idle, or the clamp and what is paused.</summary>
     public string Status =>
         Active ? $"guard: ranges x{scale:0.00}{(pressure ? ", streaming paused" : ", recovering")}, {Fraction * 100:0}% of the {budget / 1048576} MB budget{(Refusals > 0 ? $", {Refusals} allocations refused" : "")}{(PriorityGrants > 0 ? $", {PriorityGrants} scratch grants over the ceiling" : "")}"
-               : $"guard: ok, {Fraction * 100:0}% of the {budget / 1048576} MB budget";
+               : $"guard: ok, {Fraction * 100:0}% of the {budget / 1048576} MB budget{(LowestBudget < HighestBudget ? $" (sampled {LowestBudget / 1048576} to {HighestBudget / 1048576} MB)" : "")}";
 
     /// <summary>Once a frame: takes a sample when one is due and moves the state.</summary>
     public void Tick()
@@ -95,6 +99,7 @@ public sealed class VramGuard
         lastSample = now;
         var (u, b) = sample();
         (used, budget, reserved) = ((long)u, (long)b, 0);
+        if (budget > 0) (LowestBudget, HighestBudget) = (LowestBudget == 0 ? budget : Math.Min(LowestBudget, budget), Math.Max(HighestBudget, budget));
         Step(now);
     }
 
@@ -121,6 +126,24 @@ public sealed class VramGuard
         if (!pressure) Enter(now, (double)wanted / budget);
         return false;
     }
+
+    /// <summary>
+    /// Whether a lean texture (a small image of something drawn now, <see cref="WorldTextureCache.LeanSize"/>) may be loaded, under pressure too: the use
+    /// with <paramref name="pending"/> stays under <see cref="PriorityCeiling"/>. Never enters pressure; reserves what it grants.
+    /// </summary>
+    public bool AllowsLean(ulong bytes, ulong pending)
+    {
+        double now = clock();
+        if (now - lastSample >= FreshSeconds) Sample(now);
+        if (budget <= 0) return true;
+        if (used + reserved + (long)pending + (long)bytes > PriorityCeiling * budget) return false;
+        reserved += (long)bytes;
+        LeanGrants++;
+        return true;
+    }
+
+    /// <summary>Lean texture loads granted (<see cref="AllowsLean"/>).</summary>
+    public int LeanGrants { get; private set; }
 
     /// <summary>The most the per-frame scratch may take the use to (<see cref="Allows(ulong)"/> stops at <see cref="Ceiling"/>).</summary>
     public const double PriorityCeiling = 0.945;
@@ -171,6 +194,7 @@ public sealed class VramGuard
         Squeezes++;
     }
     double lastSqueeze = double.NegativeInfinity;
+    int seenFailures;
     /// <summary>Range steps taken early because a scratch was refused.</summary>
     public int Squeezes { get; private set; }
 
@@ -183,7 +207,7 @@ public sealed class VramGuard
         if (logged) return;
         logged = true;
         log?.Invoke(string.Create(CultureInfo.InvariantCulture,
-            $"vram      guard: device-local memory at {fraction * 100:0}% of the {budget / 1048576} MB budget: new streaming paused, idle textures and meshes evicted, " +
+            $"vram      guard: device-local memory at {fraction * 100:0}% of the {budget / 1048576} MB budget: new streaming paused (what is drawn loads small), idle textures and meshes evicted, " +
             $"draw and streaming ranges clamped (x{scale * StepDown:0.00} and falling while over {Low * 100:0}%); the statistics show it, this line is not repeated"));
     }
 
@@ -191,7 +215,11 @@ public sealed class VramGuard
     {
         if (budget <= 0) return;
         double f = Fraction;
-        if (!pressure && f >= High) Enter(now, f);
+        // An allocation the driver refused since the last sample: pressure, whatever the use reads.
+        int failures = Allocator?.Failures ?? 0;
+        bool failed = failures != seenFailures;
+        seenFailures = failures;
+        if (!pressure && (f >= High || failed)) Enter(now, f);
         else if (pressure && f < Low)
         {
             pressure = false;

@@ -141,7 +141,7 @@ const backgrounds = [1, 2, 3, 4].map((i) => `/roadmap-bg/bg-${i}.jpg`);
   @media (prefers-reduced-motion: no-preference) { .backdrop div { transition: opacity 1.5s ease; } }
 
   /* Everything the script draws sits under .bn (nested rules), so nothing leaks to other pages. */
-  .bn { max-width: 1080px; margin: 0 auto; padding: 8px 0 64px; color: var(--text); font: 15px/1.5 var(--font-exo); min-width: 0; }
+  .bn { margin: 0 auto; padding: 8px 0 64px; color: var(--text); font: 15px/1.5 var(--font-exo); min-width: 0; }
   .bn h1 { margin: 0 0 .5rem; font-size: 2.3rem; font-weight: 700; line-height: 1.1; letter-spacing: .01em; color: var(--text); }
   .bn > header p { margin: 0; color: var(--text); font-size: 1.05rem; }
   .bn :is(h2, h3) { color: var(--text); }
@@ -232,6 +232,8 @@ const backgrounds = [1, 2, 3, 4].map((i) => `/roadmap-bg/bg-${i}.jpg`);
   .cov td.yes{text-align:center;color:var(--good);font-weight:700}
   .cov td.no{text-align:center;color:var(--muted)}
   .cov th:first-child{text-align:left}
+  .cov th:first-child,.cov td:first-child{position:sticky;left:0;z-index:1;background:var(--panel)}
+  .covtoggle{font:inherit;cursor:pointer;color:var(--text);background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:2px 12px}
   .cmp-bar{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;margin:8px 0}
   .cmp-pick select{max-width:100%}
   .cmp-quick{display:flex;flex-wrap:wrap;gap:6px}

@@ -472,7 +472,7 @@ stomach gets min(floor - hunger, 0.04). Nobody but the player has to feed anyone
 
 | Character | Floor |
 | --- | --- |
-| animal (slot 0x248), unless the byte `142133599` (`GameplayOptions` +0x21, KenshiLib `animalsEat`, default 1; no UI binding) is set | 3 |
+| animal (slot 0x248), only while the byte `142133599` (`GameplayOptions` +0x21, KenshiLib `animalsEat`) is 0: never, it is 1 in every game ([options](#new-game-advanced-options-that-change-these-mechanics)), so animals take the other rows and the player's animals get hungry. Meitou: no animal row | 3 |
 | slave (status 1) | 1 |
 | imprisoned (+0x2f8 = 2): held by the player's faction / free / escaped slave | -10 / 2 / 1.15 |
 | player's faction | -10 (never) |

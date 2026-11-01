@@ -11,12 +11,18 @@ internal static class NavGeometry
     /// <summary>How close (units) both ends of an edge have to be to a zone's border line for the edge to lie on it.</summary>
     public const float BorderTolerance = 0.05f;
 
-    /// <summary>Twice the signed area of a polygon on (X, Z); positive when it winds counter-clockwise with X right and Z up.</summary>
+    /// <summary>
+    /// Twice the signed area of a polygon on (X, Z); positive when it winds counter-clockwise with X right and Z up. Summed from the first vertex in double:
+    /// at world coordinates (~1e5) the float products round by hundreds of square units, more than a door painter's whole area, so its winding came out at
+    /// random (docs/game/pathfinding.md, "Door painters").
+    /// </summary>
     public static float SignedArea(Vector2[] p)
     {
-        float area = 0;
-        for (int i = 0; i < p.Length; i++) area += p[i].X * p[(i + 1) % p.Length].Y - p[(i + 1) % p.Length].X * p[i].Y;
-        return area;
+        if (p.Length < 3) return 0;
+        double area = 0, ox = p[0].X, oy = p[0].Y;
+        for (int i = 1; i + 1 < p.Length; i++)
+            area += (p[i].X - ox) * (double)(p[i + 1].Y - oy) - (p[i + 1].X - ox) * (double)(p[i].Y - oy);
+        return (float)area;
     }
 
     /// <summary>Whether a point lies inside a convex polygon (either winding), allowing <paramref name="tolerance"/> outside it.</summary>

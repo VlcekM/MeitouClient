@@ -5,10 +5,11 @@ public enum TextureUse { Sampled = 1, Storage = 2, ColourTarget = 4, DepthTarget
 
 public enum TextureKind { Texture2D, Texture2DArray, Cube }
 
-/// <summary>What a <see cref="GpuTexture"/> is made from (docs/renderer-native.md 2.4).</summary>
+/// <summary>What a <see cref="GpuTexture"/> is made from (docs/renderer-native.md 2.4). <c>Streamed</c>: it comes and goes as the view moves (a world texture),
+/// so its memory is pooled apart from the long-lived images (<c>GpuAllocator</c>'s <c>PoolKey</c>).</summary>
 public sealed record TextureDesc(InternalFormat Format, int Width, int Height, int Levels = 1, int Layers = 1, int Samples = 1,
     TextureKind Kind = TextureKind.Texture2D, TextureUse Use = TextureUse.Sampled | TextureUse.TransferDst, string Name = "",
-    bool Private = false)
+    bool Private = false, bool Streamed = false)
 {
     public bool IsDepth => GlConventions.IsDepthFormat(Format);
 }

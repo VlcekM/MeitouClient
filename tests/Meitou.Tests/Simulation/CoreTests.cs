@@ -72,4 +72,57 @@ public class CoreTests
         Assert.Equal(a.Select(e => (e.Target, e.Source, e.Sequence)), b.Select(e => (e.Target, e.Source, e.Sequence)));
         Assert.Equal([(0, 9, 0), (1, 2, 0), (1, 2, 1), (1, 5, 0), (4, 3, 0)], a.Select(e => (e.Target, e.Source, e.Sequence)));
     }
+
+    /// <summary>
+    /// Character snapshots are reused, a set of three in turn (docs/simulation.md "Snapshots"). A slot's object that held a selected, knocked-out player character and is
+    /// refilled for a plain NPC matches the same NPC's in a world where the slot held a plain one; a paused publish leaves the previous snapshot's characters alone.
+    /// Catches a property the fill forgets to write, and the ring writing into the shown pair.
+    /// </summary>
+    [Fact]
+    public void A_reused_character_snapshot_carries_nothing_over_and_a_paused_publish_keeps_the_previous()
+    {
+        (CharacterSnapshot Npc, Meitou.Simulation.World World) Npc(bool heavy)
+        {
+            var world = new Meitou.Simulation.World(new WorldSettings { Seed = 3 }, new OpenGroundWalkability(SyntheticTown.Ground));
+            CharacterId Add(Vector3 at, Action<CharacterCold> shape)
+            {
+                var cold = new Meitou.Tests.Combat.Combatant().MakeCold();
+                shape(cold);
+                return world.Characters.Spawn(new CharacterHot { Position = at }, cold, 0);
+            }
+            world.Player.Faction = 1;
+            Add(new(100, 300, 100), c => (c.Faction, c.IsPlayer, c.Name) = (1, true, "own"));
+            var first = Add(new(140, 300, 100), c =>
+            {
+                if (!heavy) return;
+                (c.Faction, c.IsPlayer, c.Name, c.StuckBolts) = (1, true, "gone", [default]);
+                c.Medical!.KnockOut(1000);
+            });
+            world.Player.Selection.Add(first);
+            world.RunTicks(3);   // every buffer of the set holds the first one
+            world.Characters.Remove(first);
+            var npc = Add(new(180, 300, 100), c => (c.Faction, c.Name) = (2, "npc"));
+            Assert.Equal(first.Slot, npc.Slot);
+            world.RunTicks(3);
+            return (world.Snapshot.Characters.Single(c => c.Id == npc), world);
+        }
+        var (reused, a) = Npc(heavy: true);
+        using var worldA = a;
+        var (expected, b) = Npc(heavy: false);
+        using var worldB = b;
+        Assert.Equivalent(expected, reused, strict: true);
+
+        // Paused publishes: the previous snapshot keeps its characters while the current one moves on.
+        var previous = a.PreviousSnapshot;
+        var own = previous.Characters.Single(x => x.Name == "own");
+        a.Characters.Cold(own.Id.Slot)!.Name = "renamed";
+        for (int k = 0; k < 2; k++)
+        {
+            a.Commands.Enqueue(new InspectCommand(CharacterId.None) { Tick = a.Tick });   // a paused publish needs a command due
+            a.ApplyPausedInterfaceCommands();
+        }
+        Assert.Same(previous, a.PreviousSnapshot);
+        Assert.Equal("own", own.Name);
+        Assert.Equal("renamed", a.Snapshot.Characters.Single(x => x.Id == own.Id).Name);
+    }
 }

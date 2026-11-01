@@ -385,14 +385,14 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
 
     /// <summary>
     /// The hunger level a character is kept at for free (character slot <c>0x348</c>, <c>FUN_1405c9ca0</c>, <b>Verified</b> decompile; docs/game/character-stats.md "Free food"):
-    /// an animal 3; a slave 1; held in a cage or restraint, none when the player's faction holds it, else 2 (1.15 for an escaped slave); the player's faction none (-10); anyone else
+    /// a slave 1; held in a cage or restraint, none when the player's faction holds it, else 2 (1.15 for an escaped slave); the player's faction none (-10); anyone else
     /// its squad's level, 3, or 1 + 1.2 x a random number once per squad for a SQUAD_TEMPLATE with <c>malnourished</c> (the platoon constructor <c>FUN_1407ee2d0</c>). Without a
-    /// database (tests) only animals, slaves and prisoners are fed.
+    /// database (tests) only slaves and prisoners are fed. The original's first case, an animal 3, applies only with the gameplay option <c>animalsEat</c> off; it is on in every
+    /// game (default 1, no UI binding, never saved), so animals take the cases above like anyone else: the player's animals get hungry.
     /// </summary>
     internal float HungerFloor(World world, CharacterCold cold, MedicalState medical)
     {
         const float None = MedicalContext.NoHungerFloor;
-        if (!medical.HasStatsObject) return MedicalState.MaxHunger;
         if (cold.SlaveState == 1) return 1;
         if (cold.IsImprisoned)
         {
@@ -403,8 +403,9 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
         if (cold.IsPlayer || world.Player.Faction >= 0 && cold.Faction == world.Player.Faction) return None;
         if (db is null) return None;   // a world without data (tests, tools): nobody is fed for free
         if (cold.SquadId < 0 || world.Squads.Find(cold.SquadId) is not { } squad) return MedicalState.MaxHunger;
-        return squadFloors.GetOrAdd(squad.Id, _ => db.Find(squad.TemplateId)?.GetBool("malnourished") == true
-            ? 1 + 1.2f * Rng.Float(Rng.Hash(world.Seed, (ulong)squad.Id, RngPurpose.Malnourished, 0)) : MedicalState.MaxHunger);
+        // A static factory with its argument: a capturing lambda would allocate a closure on every call (per character, per tick).
+        return squadFloors.GetOrAdd(squad.Id, static (id, a) => a.Db.Find(a.Template)?.GetBool("malnourished") == true
+            ? 1 + 1.2f * Rng.Float(Rng.Hash(a.Seed, (ulong)id, RngPurpose.Malnourished, 0)) : MedicalState.MaxHunger, (Db: db, Template: squad.TemplateId, world.Seed));
     }
 
     public void SlowWorld(World world)

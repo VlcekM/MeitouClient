@@ -36,7 +36,6 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
     WorldSession session = null!;   // disposed with the host (Run)
     Meitou.Simulation.PopulationSystem? population;
     /// <summary>The fights started by faction hostility (printed to the log); null in the sandbox and without the population.</summary>
-    Meitou.Simulation.AggroSystem? aggro;
     // The game data the world was built from, kept to build the next world of a quickload (GameHost.Saving.cs).
     Meitou.Simulation.PopulationData? popData;
     IReadOnlyList<Meitou.Data.World.TownPlacement> townPlacements = [];
@@ -128,7 +127,7 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
             return (Grid: grid, Parts: BootSimulation(grid, interactive));
         });
         gpu = WorldFrame.CreateGpu(context, install, scene, assets, o, interactive, LoadingStep, AwaitLoading);
-        if (!o.NoParticles) titleParticleFactory = () => ParticleRenderer.Create(context, install, gpu.Particles?.Library);
+        if (!o.NoParticles) titleParticleFactory = () => ParticleRenderer.Create(context, assets, gpu.Particles?.Library);
         if (gpu.Post is { } vendorPost) vendorPost.UpscalerFactory = Meitou.Rendering.Upscalers.VendorUpscalers.Factory(display.Context, streamline, ngx);
         (camera, render) = WorldFrame.Setup(scene, o);
         render.Grid = IsFlat;
@@ -168,6 +167,9 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
                 nav = new Meitou.Navigation.NavSystem(install, gameDb, levels!, heights.HeightAt);
                 nav.ZoneReady += ready => { lock (navReady) navReady.Add(ready.Zone); };
                 walkability = new NavAdapter(nav.Walkability);
+                // The long-range grid built behind the loading: built by the first long route instead, it held the path threads ~3 s (issue #124).
+                var navForRoutes = nav;
+                _ = Task.Run(() => navForRoutes.Walkability.Coarse.Warm());
                 // Ragdolls land on the terrain and the buildings' collision (gathered per zone on a worker when a ragdoll comes near).
                 ragdollGeometry = new Meitou.Navigation.RagdollGeometry(install, gameDb, levels!, heights.HeightAt);
             }
@@ -212,7 +214,6 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
             simWalkability = walkability;
             var built = BuildSystems(interactive);
             population = built.Population;
-            aggro = built.Aggro;
             if (nav is not null) population!.ZoneGate = zone => nav.Walkability.World.Contains(zone);
             systems = built.Systems;
             constants = data.Bodies.Constants;

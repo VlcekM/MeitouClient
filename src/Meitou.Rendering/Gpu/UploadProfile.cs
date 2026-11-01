@@ -39,7 +39,7 @@ public static class UploadProfile
         End(created ? Part.NewBlock : Part.FreeBlock, start);
         double ms = (Stopwatch.GetTimestamp() - start) * 1000.0 / Stopwatch.Frequency;
         if (ms >= 1)
-            Console.WriteLine($"alloc     {(created ? "new" : "freed")} block {size >> 20} MB type {type}{(optimal ? " optimal" : "")}{(dedicated ? " dedicated" : "")}: {ms:0.0} ms on a {(Thread.CurrentThread.IsThreadPoolThread ? "worker" : "main")} thread");
+            Console.WriteLine($"alloc     {(created ? "new" : "freed")} block {size >> 20} MB type {type}{(optimal ? " optimal" : "")}{(dedicated ? " dedicated" : "")}: {ms:0.0} ms on a {(Thread.CurrentThread.Name is { } name ? name : Thread.CurrentThread.IsThreadPoolThread ? "worker" : "main")} thread");
     }
 
     /// <summary>The calling thread's parts since the last call ("NewBlock 12.1 ms x1, StagingCopy 0.4 ms x2 (1.0 MB), GC pause 14.2 ms"); empty when nothing was spent.</summary>

@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Numerics;
 using Meitou.Content;
 using Meitou.Data;
+using Meitou.Data.Fcs;
 using Meitou.Data.World;
 
 namespace Meitou.Navigation;
@@ -126,6 +127,83 @@ public sealed class BuildingFootprints
             if (Wait(r.Record.StringId) is { } footprint && !((PathMode)r.Record.GetInt("path mode", (int)PathMode.Obstacle) == PathMode.Walkable && footprint.YMax < agentHeight))
                 result.Add(footprint.Place(r.Position, r.Placement.Rotation));
         return result;
+    }
+
+    /// <summary>Spacing (units) of the samples a map feature's footprint is taken at (engine choice: a quarter of a coarse route cell).</summary>
+    public const float FeatureSample = 48;
+
+    /// <summary>
+    /// The map features' footprints (<c>features.dat</c> placements with a MAP_FEATURES <c>collision</c>, docs/game/pathfinding.md "Map features"): the long-range
+    /// grid's obstacles beside the buildings'. A feature is no convex block (Mourn's tube is an arch over the town, a cliff has bays), so it is sampled every
+    /// <see cref="FeatureSample"/> units: a sample is solid where the nearest of the feature's faces above the terrain faces up (the terrain is inside it, the
+    /// navmesh's rule) and lies more than the agent height over the terrain (lower tops are walked over, as low WALKABLE buildings). Each row's run of solid
+    /// samples becomes one rectangle.
+    /// </summary>
+    public IReadOnlyList<Vector2[]> FeatureObstacles(Func<double, double, float> terrainHeight)
+    {
+        var path = Path.Combine(install.DataDirectory, MapFeatureFile.RelativePath);
+        if (!System.IO.File.Exists(path)) return [];
+        var features = MapFeatureFile.Open(install).All().Select(t => t.Feature).ToList();
+        float agentHeight = new NavBuildSettings().AgentHeight;
+        var result = new ConcurrentBag<Vector2[]>();
+        var terrainGate = new object();
+        Parallel.ForEach(features, f =>
+        {
+            if (db.Find(f.StringId) is not { Type: FcsRecordType.MAP_FEATURES } record || record.GetPath("collision") is not { Length: > 0 } file
+                || collision.Get(file) is not { } prepared) return;
+            var node = WorldObjectLayout.InstanceTransform(f.Position, f.Rotation, f.Scale);
+            var tris = new List<Vector3>();
+            foreach (var shape in prepared.Shapes)
+                foreach (int i in shape.Indices) tris.Add(Vector3.Transform(shape.Vertices[i], node));
+            if (tris.Count == 0) return;
+            float x0 = tris.Min(v => v.X), x1 = tris.Max(v => v.X), z0 = tris.Min(v => v.Z), z1 = tris.Max(v => v.Z);
+            int columns = (int)MathF.Floor((x1 - x0) / FeatureSample) + 1, rows = (int)MathF.Floor((z1 - z0) / FeatureSample) + 1;
+            // The faces over each sample: height and whether it faces up.
+            var hits = new List<(float Y, bool Up)>?[columns * rows];
+            for (int t = 0; t < tris.Count; t += 3)
+            {
+                Vector3 a = tris[t], b = tris[t + 1], c = tris[t + 2];
+                float area = (b.X - a.X) * (c.Z - a.Z) - (b.Z - a.Z) * (c.X - a.X);
+                if (MathF.Abs(area) < 1e-6f) continue;
+                int i0 = Math.Max(0, (int)MathF.Ceiling((MathF.Min(a.X, MathF.Min(b.X, c.X)) - x0) / FeatureSample)), i1 = Math.Min(columns - 1, (int)MathF.Floor((MathF.Max(a.X, MathF.Max(b.X, c.X)) - x0) / FeatureSample));
+                int j0 = Math.Max(0, (int)MathF.Ceiling((MathF.Min(a.Z, MathF.Min(b.Z, c.Z)) - z0) / FeatureSample)), j1 = Math.Min(rows - 1, (int)MathF.Floor((MathF.Max(a.Z, MathF.Max(b.Z, c.Z)) - z0) / FeatureSample));
+                for (int j = j0; j <= j1; j++)
+                    for (int i = i0; i <= i1; i++)
+                    {
+                        float px = x0 + i * FeatureSample, pz = z0 + j * FeatureSample;
+                        if (!NavGeometry.Barycentric(px, pz, a, b, c, out float u, out float v, out float w) || u < 0 || v < 0 || w < 0) continue;
+                        (hits[j * columns + i] ??= []).Add((u * a.Y + v * b.Y + w * c.Y, area < 0));
+                    }
+            }
+            for (int j = 0; j < rows; j++)
+            {
+                int run = -1;
+                for (int i = 0; i <= columns; i++)
+                {
+                    bool solid = false;
+                    if (i < columns && hits[j * columns + i] is { } list && MathF.Abs(x0 + i * FeatureSample) < WorldLayout.HalfWorldSize && MathF.Abs(z0 + j * FeatureSample) < WorldLayout.HalfWorldSize)
+                    {
+                        float px = x0 + i * FeatureSample, pz = z0 + j * FeatureSample, ground, nearest = float.MaxValue, top = float.MinValue;
+                        lock (terrainGate) ground = terrainHeight(px, pz);   // the caller's height function need not be thread-safe (a heightmap file)
+                        bool up = false;
+                        foreach (var (y, faceUp) in list)
+                        {
+                            if (y > ground && y < nearest) { nearest = y; up = faceUp; }
+                            if (faceUp) top = MathF.Max(top, y);
+                        }
+                        solid = up && top - ground > agentHeight;
+                    }
+                    if (solid && run < 0) run = i;
+                    if (!solid && run >= 0)
+                    {
+                        float half = FeatureSample / 2, ax = x0 + run * FeatureSample - half, bx = x0 + (i - 1) * FeatureSample + half, z = z0 + j * FeatureSample;
+                        result.Add([new(ax, z - half), new(bx, z - half), new(bx, z + half), new(ax, z + half)]);
+                        run = -1;
+                    }
+                }
+            }
+        });
+        return [.. result];
     }
 
     /// <summary>

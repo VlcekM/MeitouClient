@@ -781,5 +781,5 @@ sealed partial class PlayerInterface
     }
 
     /// <summary>Something more specific than a building lies under the pixel: a character, an item on the ground, a container, a door or a resource rock. A plain building gives way to it.</summary>
-    bool SomethingInsideAt(Vector2 p) => PickWhere(p, _ => true) is not null || PickGroundItem(p) is not null || PickContainer(p) is not null || PickDoor(p) is not null || PickRock(p) is not null || PickBed(p) is not null || PickSeat(p) is not null;
+    bool SomethingInsideAt(Vector2 p) => PickWhere(p, _ => true) is not null || PickGroundItem(p) is not null || PickContainer(p) is not null || PickDoor(p) is not null || PickRock(p) is not null || PickBed(p) is not null || PickDummyAt(p) is not null || PickSeat(p) is not null;
 }

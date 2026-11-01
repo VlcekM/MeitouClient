@@ -389,6 +389,8 @@ public sealed class HeightGrid(float x0, float z0, float step, int columns, int 
     public int Columns { get; } = columns;
     public int Rows { get; } = rows;
     public float[] Values { get; } = values;
+    /// <summary>While the zone is built: per sample, whether it is a span of the polygon's own region (not the span nearest its plane); null once built or loaded.</summary>
+    internal bool[]? Own { get; set; }
 
     /// <summary>The height at (x, z) between the four samples round it, those that have none left out; false when none of the four has one.</summary>
     public bool TryHeightAt(float x, float z, out float height)

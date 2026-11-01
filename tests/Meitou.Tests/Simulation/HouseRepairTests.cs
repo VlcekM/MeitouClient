@@ -38,7 +38,7 @@ public class HouseRepairTests
             Data.Db.Apply(file, "test.mod");
             var constants = BaseGame with { BuildSpeed = 6 };
             Items = new ItemFactory(Data.Db, constants);
-            Construction = new ConstructionSystem(Data.Db, constants, BodyOptions.Default, Items, [], "player");
+            Construction = new ConstructionSystem(Data.Db, constants, BodyOptions.Default, Items, [], "204-gamedata.base");
             var production = new ProductionSystem(Data.Db, constants, BodyOptions.Default, Items, null) { Construction = Construction };
             World = new Meitou.Simulation.World(new WorldSettings { Seed = 1, TickSeconds = 1 }, new OpenGroundWalkability((_, _) => 0),
                 [new PlayerSystem(), Construction, production, new LockSystem(constants, BodyOptions.Default)]);

@@ -100,8 +100,8 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         colourProg = new ObjProg(gpu, nativeFrame, BuildingLodShaders.VertexNative(), BuildingLodShaders.FragmentNative(), "objects");
         solidProg = new ObjProg(gpu, nativeFrame, BuildingLodShaders.VertexNative(), BuildingLodShaders.FragmentNative(solid: true), "objects solid");
         depthProg = new ObjProg(gpu, nativeFrame, BuildingLodShaders.VertexNative(), BuildingLodShaders.DepthNative(), "objects depth");
-        textureCache = new WorldTextureCache(gpu, assets, "object textures");
-        var library = OgreMaterialLibrary.LoadConfigured(objects.Install, out _);
+        textureCache = new WorldTextureCache(gpu, assets, "object textures") { Share = TextureShare.For(gpu) };
+        var library = assets.Materials;
         resolver = new MaterialResolver(objects.Database, library, assets);
         meshes = new ObjectMeshCache(gpu, assets, uploads);
         meshes.Unloaded = gpu => { unloadedMeshes.Add(gpu); RemoveBatches(gpu); };
@@ -356,6 +356,8 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     /// <summary>A line about what is loaded, for the log.</summary>
     /// <summary>GPU memory held by streamed meshes and textures, for the stats line and the window title.</summary>
     public long ResidentBytes => meshes.Bytes + textureCache.ResidentBytes;
+    /// <summary>The objects' texture cache (the VRAM dump lists it).</summary>
+    public WorldTextureCache Textures => textureCache;
     public string ResidentDescription => $"{meshes.Bytes / 1048576.0:0} MB in {meshes.Resident} meshes ({meshes.Unloads} unloaded, {meshes.Reloads} reloaded, {meshes.Refined} remade finer, {meshes.Coarsened} coarser), {textureCache.Describe()}";
     public string Describe() =>
         $"{streamer.Loaded} zones, {streamer.Instances:N0} instances ({streamer.Resolved:N0} resolved{(streamer.LandmarkZone is { } lz ? $", of them {lz.Real.Count(i => i.Gpu is not null)} of {lz.Real.Count} landmarks" : "")}), {meshes.Resident}/{meshes.Total} meshes requested or resident, resident: {ResidentDescription}, " +
@@ -381,6 +383,17 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
 
     /// <summary>Points kept loaded besides the eye's (<see cref="ObjectStreamer.Kept"/>).</summary>
     public IReadOnlyList<Vector3> Kept { get => streamer.Kept; set => streamer.Kept = value; }
+    /// <summary>The camera's distance to its target (<see cref="ObjectStreamer.KeptViewDistance"/>).</summary>
+    public float KeptViewDistance { get => streamer.KeptViewDistance; set => streamer.KeptViewDistance = value; }
+
+    /// <summary>Where the last need pass measured from, for the VRAM dump: the eye, the margin for its speed, the arrival point and the kept points.</summary>
+    public void WriteViewReport(TextWriter w)
+    {
+        static string P(Vector3 v) => $"{v.X:0}, {v.Y:0}, {v.Z:0}";
+        w.WriteLine($"object needs measured from: eye {P(lastMarkEye)}, speed margin {needMargin:0}{(streamer.Ahead is { } a ? $", arrival {P(a)}" : "")}");
+        w.WriteLine($"  kept points ({streamer.Kept.Count}, merged, detail from at least {streamer.KeptViewDistance:0}): {string.Join("; ", streamer.Kept.Select(P))}");
+        w.WriteLine();
+    }
 
     public void Update(Vector3 eye) => Update(eye, Covered ? Math.Max(BudgetMs, CoveredBudgetMs) : BudgetMs);
 
@@ -512,6 +525,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
             // During a flight the path asks for nothing finer: needs and mesh levels count only the arrival and the kept points (it keeps what it has).
             if (streamer.Ahead is not null && (value = streamer.LoadNear(eye, inst.Centre) - inst.Radius) >= limit) return;
             if (set.NeedStamp != markStamp) { set.NeedStamp = markStamp; set.Near = set.NearScaled = float.PositiveInfinity; markedSets.Add(set); }
+            value = streamer.DetailNear(eye, inst.Centre) - inst.Radius;
             float near = Math.Max(value - needMargin, 0);
             if (near < set.Near) set.Near = near;
             // A mesh is kept ready for where the camera will be by the next pass and the remake (1.5 s of its speed), a texture for half a second (its two levels of margin do the rest).
@@ -658,7 +672,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         // Mip streaming: this instance's distance is a use of the textures from now on (before the pass that would find it), and a new set's
         // textures are loaded now, knowing it (they were made without loading: deferred). Measured as the mark pass does (from the nearest kept point too),
         // or a kept point's textures load coarse for the far eye and wait in the refine queue.
-        float near = Math.Max(streamer.LoadNear(eyeNow, inst.Centre) - inst.Radius - needMargin, 0);
+        float near = Math.Max(streamer.DetailNear(eyeNow, inst.Centre) - inst.Radius - needMargin, 0);
         foreach (var part in set!.Parts) part.OfferNow(part.Triplanar ? near : near / Math.Max(scale, 1e-6f));
         if (made) set.Touch();
         return true;

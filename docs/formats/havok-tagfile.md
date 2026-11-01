@@ -30,6 +30,11 @@ the same four plus `Info` (`uidhex;x;y;z`, world units) after its mesh. **Verifi
 - `hkaiNavMesh`: `faces` (`startEdgeIndex`, `numEdges`, `startUserEdgeIndex` −1, `clusterIndex`), `edges` (`a`, `b` vertex, `oppositeEdge`,
   `oppositeFace` −1 at an end, `flags` 4 on the sample), `vertices` vec4, `streamingSets` (per neighbour tile: `thisUid`, `oppositeUid`,
   `meshConnections` face/edge pairs joined across), `faceData` / `edgeData` (stride 1), `aabb`.
+- Interior joins: an interior mesh's `streamingSets` hold one set, `thisUid` its uid, `oppositeUid` the tile's exterior uid, whose
+  `meshConnections` (`faceIndex`, `edgeIndex`, `oppositeFaceIndex`, `oppositeEdgeIndex`) pair its door edges with exterior edges; the exterior carries
+  the matching set back. **Verified** (tiles 18.35, 19.29, 20.32, 26.13, 43.11, 47.16, 48.13, 48.45, 50.33): every interior has one except two in
+  48.13 (`110371`, `150371`); paired edges' midpoints lie within 2 in height for 21 of 21 connections in 18.35, 47 of 51 in 43.11 and
+  49 of 51 in 47.16 (the rest 7..24, not examined).
 - Exterior vertices: world = zone origin + 10 × (x, y, z). **Verified**: median height off the heightmap 0.0 in 5 zones; swapped axes do not fit.
 - Interior vertices: world = Info position + 10 × (x, y, z). **Observed** (tile20.32: `600815` lands on the Storm House `4933-Newwworld-INGAME`
   floor and upper storey, `190815` on Storm House `32-`'s floor; both Infos lie about (−155, −67, −153) from their Storm House's origin).

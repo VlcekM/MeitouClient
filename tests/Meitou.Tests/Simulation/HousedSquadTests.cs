@@ -21,7 +21,7 @@ public class HousedSquadTests(ITestOutputHelper output)
             if (cached is not null) return cached;
             var install = InstallData.Install!;
             var db = InstallData.FullLoadOrder!;
-            var levels = WorldLevelData.Load(install, includeInteriors: true);
+            var levels = WorldLevelData.LoadBaseGame(install, includeInteriors: true);
             using var map = TerrainHeightmap.Open(install);
             var buildings = TownBuildings.Build(db, levels, new BuildingLayouts(db, levels.Interiors), (x, z) => map.HeightAt((float)x, (float)z));
             return cached = PopulationData.Create(db, levels.Towns(), buildings: buildings);

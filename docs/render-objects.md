@@ -45,13 +45,36 @@ biome pairs and foliage layouts rank by distance from the arrival, and what is o
 (`WorldTextureCache.Urgent`, `BackgroundWork.RunUrgent`). The terrain height window and the grass pages still follow only the eye.
 The simulation focus moves to the landing character at once, so its towns populate during the flight.
 
+## Shared texture images
+
+The object, foliage and character texture caches share images (`TextureShare`, per GPU context): a file one cache holds at the current quality
+level is taken by another instead of loaded when it drops no more top levels than that cache's mip streaming would, and two loads of the same file
+and levels that land together keep one. An image goes with its last user; each cache still counts its bytes. **Observed** (VRAM dump, 2026-11-01):
+about 150 MB of the same files were resident twice before this.
+Debris (severed limbs, bolts) takes its textures from the character cache rather than loading its own copies (~30 MB of skins were held twice, VRAM dump 2026-11-01).
+
+The sharing caches also have one high-water mark together (`TextureShare.ResidentBytes` against `MarkMb`, 2 GB at full quality), not one each.
+Above it, textures unused for 8 s are unloaded, least recently used first, until the total is under three quarters of the mark. Below it,
+a texture is unloaded after 20 s unused.
+
+Under `VramGuard` pressure no texture is refined, but one that something draws still loads *lean*: top side at most 256
+(`WorldTextureCache.LeanSize`), while the use stays under 94.5% of the budget (`AllowsLean`). It is refined once the pressure ends. Before this, a
+6 GB laptop (3.5 GB budget, never back under 80%) drew characters with no texture at all (**Observed**, issue #135 log).
+An allocation the driver refuses is retried after the spare blocks are freed, then (render thread only) after the submitted frames are waited for,
+their deferred frees run and the empty blocks are given back (`GpuAllocator.Reclaim`). A refusal that survives puts the guard into pressure.
+The post targets of a resize can't use that path (the old ones are released in the same frame), so when they can't be made the frame draws no world
+and the next frame tries again (`PostProcess.Unallocated`). Before this, a 3840 → 1920 resize at 96% of a 3.5 GB budget crashed (**Observed**, #135 log).
+
 ## Kept points
 
 Advanced "Keep textures at characters" (Meitou, default on, `UserConfig.KeepTexturesAtCharacters`): the host sets `WorldFrame` `Kept` to
 the drawn position of every squad bar member each frame; its sub-option "Keep textures at all squads" (default off, shown only while the
 main one is on, `KeepTexturesAtAllSquads`) takes every player squad's members instead. `ObjectStreamer.Near` / zone layout count the nearest of eye, `Ahead` and `Kept`,
 so object meshes and texture mips stay loaded round each character (a resolving instance's first texture need is measured the same way, else
-its textures load coarse for the far eye and wait for refines); terrain biome textures gather cells round each (ranked after the
+its textures load coarse for the far eye and wait for refines). Detail (texture mips, mesh levels) counts a kept point from at least the camera's
+distance to its target (`KeptViewDistance`), the view a jump there would have; residency counts from the point itself. **Observed** (VRAM dump
+2026-11-01, squad member at a town gate): 189 MB of object textures at need 0; whether from the kept point or the bounding sphere is
+**Unknown** (that dump did not list the points; the dump's header now does); terrain biome textures gather cells round each (ranked after the
 eye's). `Kept` ranks after the eye in the load order. Foliage and grass pages follow only the eye and `Ahead`. Costs video memory
 (the VRAM guard still applies). `WorldFrame` merges the points first (`ObjectStreamer.MergeKept`): one within 500 units of the eye or of an
 earlier point is dropped, so a squad standing together is one point. Every distance test walks the kept points, and `ObjectStreamer.Scan`

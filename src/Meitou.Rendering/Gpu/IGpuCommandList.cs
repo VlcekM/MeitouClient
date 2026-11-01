@@ -103,6 +103,9 @@ public interface IGpuCommandList
     /// <summary>A new texture: the backend's own image, and its transition recorded into this command list.</summary>
     GpuTexture CreateTexture(TextureDesc desc);
 
+    /// <summary>Records the transition of a texture made by <see cref="IGpuContext.CreateTextureOffThread"/> (nothing where the backend has none).</summary>
+    void InitTexture(GpuTexture texture) { }
+
     // ---- transfers ----
 
     /// <summary>Fills a range of a buffer with a value.</summary>

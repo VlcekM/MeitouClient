@@ -168,6 +168,7 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
         n.TaskTime = 0;
         cold.TreatTarget = patient;
         cold.TreatSplint = splint;
+        cold.PathFailed = false;   // a failure from before is not this walk's
     }
 
     /// <summary>Dialogue events 18-22 (EV_HEALING_OTHER_START ... EV_FIRSTAID_KIT_EMPTY).</summary>
@@ -241,6 +242,17 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
             n.TaskTime -= dt;
             var goal = new Vector2(next[t].Position.X, next[t].Position.Z);
             bool asking = (n.Flags & (ushort)(MoveFlags.NeedPath | MoveFlags.Pending)) != 0;
+            // No way to the patient: no path, or one that ends short of the asked goal (the walkability answers an unreachable goal with the way to the reachable point nearest it). The
+            // original's task walk reports it (notifyPathImpossible): the patient goes on the medic's path failures for 20 s, which the finder skips, and the treatment ends. Without it
+            // a medic asked for the same hopeless path every half second (issue #124: searches run to the iteration limit, ~280 MB/s of garbage).
+            if (!asking && (cold.PathFailed || (n.Flags & (ushort)MoveFlags.HasPath) != 0 && cold.Path.Length > 0
+                && Vector2.Distance(new Vector2(cold.Path[^1].X, cold.Path[^1].Z), n.Goal) > Settings.Reach))
+            {
+                cold.PathFailed = false;
+                PursuitSystem.GiveUp(world, cold, table.IdOf(t));
+                End(world, i);
+                continue;
+            }
             bool stale = (n.Flags & (ushort)MoveFlags.HasPath) == 0 || Vector2.DistanceSquared(goal, n.Goal) > PursuitSystem.RepathDistance * PursuitSystem.RepathDistance;
             if (asking || !stale || n.TaskTime > 0) continue;
             n.Goal = goal;

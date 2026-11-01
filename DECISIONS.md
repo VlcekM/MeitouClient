@@ -16,7 +16,7 @@ Current choices; implementation details belong in the linked references.
 - **Visual modes:** Faithful follows the original. Meitou improvements use independent switches
   and adjustable ranges. Deterministic screenshot inputs; FSR comparisons account for baseline
   noise. [docs/viewer.md](docs/viewer.md).
-- **Latency:** tiered compilation/PGO off, the game's methods compiled ahead on a background thread; server GC with four heaps and a 16 MB gen0 budget cap, compacting collection after
+- **Latency:** tiered compilation/PGO off, the game's methods compiled ahead on a background thread; server GC with four unpinned heaps and a 16 MB gen0 budget cap, compacting collection after
   loading, SustainedLowLatency during play. Render jobs preserve execution order.
   [docs/engine.md](docs/engine.md), [docs/bench.md](docs/bench.md).
 - **Upscaling:** single-sample jittered HDR scene; shadow maps/reused reflections unjittered.

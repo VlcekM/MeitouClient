@@ -6,7 +6,8 @@ namespace Meitou.Rendering;
 
 /// <summary>
 /// <c>--log-spikes</c>: for every frame whose GPU time is over <see cref="Factor"/> times the median of the last
-/// frames, one line with the stage breakdown (GPU and render thread) and what the frame uploaded, rebuilt or baked (the places call
+/// frames, or whose render-thread time (the simulation's ticks included) is over that many of its own medians and <see cref="CpuMinMs"/>, one line with
+/// the stage breakdown (GPU and render thread) and what the frame uploaded, rebuilt or baked (the places call
 /// <see cref="Note"/>; the uploader notes every copy under the allocation's name). Off, a note costs one static read. The notes of a frame
 /// are taken when the <see cref="FrameProfiler"/> ends it and printed when its GPU times arrive (a few frames later).
 /// </summary>
@@ -18,6 +19,8 @@ public static class SpikeLog
     /// <summary>Frames at the start that print nothing (streaming settles: MEITOU_BENCH_SKIP).</summary>
     public static int SkipFrames { get; set; } = int.TryParse(Environment.GetEnvironmentVariable("MEITOU_BENCH_SKIP"), out int k) ? k : 0;
     public const double MinMs = 2;
+    /// <summary>A frame slow only on the render thread is a spike from this many ms (shorter ones are no stutter).</summary>
+    public const double CpuMinMs = 20;
 
     sealed class Tally { public int Count; public long Bytes; public double Ms; }
 
@@ -84,12 +87,14 @@ public static class SpikeLog
         return sb.ToString();
     }
 
-    /// <summary>Prints the line when <paramref name="total"/> is a spike against <paramref name="median"/>.</summary>
-    internal static void Report(long frame, double total, double median, string gpuStages, string cpuStages, string notes, double cpuTotal)
+    /// <summary>Prints the line when <paramref name="total"/> is a spike against <paramref name="median"/>, or <paramref name="cpuTotal"/> against <paramref name="cpuMedian"/>.</summary>
+    internal static void Report(long frame, double total, double median, string gpuStages, string cpuStages, string notes, double cpuTotal, double cpuMedian)
     {
-        if (frame <= SkipFrames || median <= 0 || total < MinMs || total < Factor * median) return;
+        bool gpu = median > 0 && total >= MinMs && total >= Factor * median;
+        bool cpu = cpuMedian > 0 && cpuTotal >= CpuMinMs && cpuTotal >= Factor * cpuMedian;
+        if (frame <= SkipFrames || !gpu && !cpu) return;
         Spikes++;
         Console.WriteLine(string.Create(CultureInfo.InvariantCulture,
-            $"spike    frame {frame}: gpu {total:0.0} ms (median {median:0.0}) [{gpuStages}] cpu {cpuTotal:0.0} ms [{cpuStages}] | {(notes.Length == 0 ? "no notes" : notes)}"));
+            $"spike    frame {frame}: gpu {total:0.0} ms (median {median:0.0}) [{gpuStages}] cpu {cpuTotal:0.0} ms (median {cpuMedian:0.0}) [{cpuStages}] | {(notes.Length == 0 ? "no notes" : notes)}"));
     }
 }

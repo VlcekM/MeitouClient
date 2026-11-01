@@ -12,6 +12,8 @@ sealed class GameOptions
     public bool SeedGiven;
     public bool? VSync;
     public Meitou.Data.Ui.UiMode? UiMode;
+    /// <summary><c>--low-end</c> (also passed on to WorldOptions): the Faithful UI for this run, whatever <c>--ui</c> or the saved mode says.</summary>
+    public bool LowEnd;
     public bool UiShowcase;
     /// <summary>With <c>--screenshot</c>: one HUD/panel to open for the picture (null: the HUD only).</summary>
     public string? UiPanel;
@@ -79,7 +81,7 @@ sealed class GameOptions
           --fps-limit <n>            frame limit when vsync is off (default 150 from meitou.user.json; 0 = unlimited)
           --vsync / --no-vsync       vsync (default off)
           --seed <n>                 the world seed (default 0)
-          --ui <faithful|meitou>      UI mode, independent of graphics; also available in the settings (default meitou)
+          --ui <faithful|meitou>      UI mode, independent of graphics; also available in the settings (default meitou; --low-end: faithful)
           --ui-showcase              with --screenshot: capture HUD, inventory, stats, map, menus, a trade with the nearest trader and a conversation in either UI mode
           --ui-panel <name>          with --screenshot: open one HUD/panel for the picture (hud, hud-expanded, inventory, stats, overview, menu, title, ...)
           --settings-showcase        with --screenshot: capture the settings menu's Graphics page (every tab, a preset with changes, the preset list, Save as, Low quality, Faithful)
@@ -225,9 +227,11 @@ sealed class GameOptions
                 case "--scene-every": g.SceneEvery = Math.Max(int.Parse(Next(), CultureInfo.InvariantCulture), 1); break;
                 case "--scene-npc": g.SceneNpc = Next(); break;
                 case "--scene-town": g.SceneTown = Next(); break;
+                case "--low-end": g.LowEnd = true; rest.Add(a); break;
                 default: rest.Add(a); break;
             }
         }
+        if (g.LowEnd) g.UiMode = Meitou.Data.Ui.UiMode.Faithful;
         return (g, rest.ToArray());
     }
 }

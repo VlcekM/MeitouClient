@@ -133,7 +133,7 @@ public static class OrderSave
     /// <summary>The site an order names: Meitou's id when the world has it (a build site, a fixture, a rock), else the instance a building handle named, as a build site or a fixture.</summary>
     static string? SiteOf(World world, SavedOrder o)
     {
-        if (o.Site is { } id) return world.Buildings.Find(id) is not null || world.Fixtures.Find(id) is not null || ProductionSystem.IsNatural(id) ? id : null;
+        if (o.Site is { } id) return world.Buildings.Find(id) is not null || world.Fixtures.Find(id) is not null || ProductionSystem.IsNatural(id) || Locks.FixtureRegistry.IsDummy(id) ? id : null;
         var key = o.InstanceKey!;
         int colon = key.IndexOf(':');
         if (colon >= 0 && world.Buildings.Find(key[(colon + 1)..]) is not null) return key[(colon + 1)..];

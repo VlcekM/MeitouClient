@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Diagnostics;
 using System.Numerics;
 using System.Runtime.InteropServices;
@@ -150,16 +151,16 @@ public sealed unsafe partial class FoliageRenderer
     /// in a full store scans the arena's free list under its lock and gives back what it took: with a longer grass distance than the store holds
     /// (the Ultra tier's x 2, four times the pages) thousands of pages were retried every frame, 15 ms of the render thread.
     /// </summary>
-    void TryQueuePage(ZoneState state, int key, GrassPage page, float[][] blades, int[][] prefixes)
+    void TryQueuePage(ZoneState state, int key, GrassPage page, float[][] blades, int[] floats, int[][] prefixes)
     {
         if (grassFull && grassTriedFull)
         {
             if (page.PendingBlades is null) grassStore.Misses++;
-            (page.PendingBlades, page.PendingPrefixes) = (blades, prefixes);
+            (page.PendingBlades, page.PendingFloats, page.PendingPrefixes) = (blades, floats, prefixes);
             return;
         }
         grassTriedFull |= grassFull;
-        grassFull = !QueuePage(state, key, page, blades, prefixes);
+        grassFull = !QueuePage(state, key, page, blades, floats, prefixes);
     }
 
     /// <summary>
@@ -167,14 +168,14 @@ public sealed unsafe partial class FoliageRenderer
     /// <see cref="UpdateGrass"/> tries again, <see cref="FoliageGrassGpu.Misses"/>), then the blades in steps of about 512 KB so no frame holds
     /// a whole page, then the slots, which make the page draw. Returns false when there was no room.
     /// </summary>
-    bool QueuePage(ZoneState state, int key, GrassPage page, float[][] blades, int[][] prefixes)
+    bool QueuePage(ZoneState state, int key, GrassPage page, float[][] blades, int[] floats, int[][] prefixes)
     {
         var store = grassStore;
         var buffers = new GrassBuffer[blades.Length];
         bool room = true;
         for (int i = 0; i < blades.Length && room; i++)
         {
-            var b = buffers[i] = new GrassBuffer { Count = blades[i].Length / FoliageGrassField.Stride, Prefixes = prefixes[i] };
+            var b = buffers[i] = new GrassBuffer { Count = floats[i] / FoliageGrassField.Stride, Prefixes = prefixes[i] };
             if (b.Count == 0) continue;
             b.Store = store;
             b.Range = store.AllocateBlades(b.Count);
@@ -187,10 +188,10 @@ public sealed unsafe partial class FoliageRenderer
         {
             ReleaseBuffers(buffers.Where(b => b is not null).ToArray());
             if (page.PendingBlades is null) store.Misses++;
-            (page.PendingBlades, page.PendingPrefixes) = (blades, prefixes);
+            (page.PendingBlades, page.PendingFloats, page.PendingPrefixes) = (blades, floats, prefixes);
             return false;
         }
-        (page.PendingBlades, page.PendingPrefixes) = (null, null);
+        (page.PendingBlades, page.PendingFloats, page.PendingPrefixes) = (null, null, null);
         if (state.GrassZone < 0) state.GrassZone = AllocGrassZone();
         uint zone = (uint)state.GrassZone, serial = ++grassPageSerial;
         float x0 = state.X0 + key % PagesPerZone * PageSize, z0 = state.Z0 + key / PagesPerZone * PageSize;
@@ -200,7 +201,7 @@ public sealed unsafe partial class FoliageRenderer
             var b = buffers[i];
             if (b.Count == 0) continue;
             var data = blades[i];
-            int bytes = data.Length * sizeof(float);
+            int bytes = floats[i] * sizeof(float);
             for (int at = 0; at < bytes; at += SlabBytes)
             {
                 int start = at, length = Math.Min(SlabBytes, bytes - at);
@@ -212,6 +213,8 @@ public sealed unsafe partial class FoliageRenderer
         }
         uploads.Enqueue(() =>
         {
+            // Every blade write is done: the rented blades go back.
+            foreach (var data in blades) if (data.Length > 0) ArrayPool<float>.Shared.Return(data);
             if (page.Dropped)
             {
                 ReleaseBuffers(buffers);   // the page went out of range while its blades were being written

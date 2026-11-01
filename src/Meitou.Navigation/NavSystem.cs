@@ -48,13 +48,16 @@ public sealed class NavSystem : IDisposable
             var raw = map.Downsample(2, out int size);
             var grid = new HeightWindow(0, 0, 2, size, size, raw);
             return (x, z) => grid.TryHeightAt(x, z, out float h) ? h : terrainHeight(x, z);
-        }, routeObstacles: () => footprints.Value.Obstacles(levels.Buildings(), levels, placementHeight));
+        }, routeObstacles: () => [.. footprints.Value.Obstacles(levels.Buildings(), levels, placementHeight), .. footprints.Value.FeatureObstacles(placementHeight)]);
         service = new NavMeshService(install, db, levels, Walkability, settings, cache, Runtime);
         Walkability.KeepStanding = service.KeepAt;
         Walkability.DoorGeometry = new NavDoorGeometry(install, db);
     }
 
     public NavmeshWalkability Walkability { get; }
+
+    /// <summary>A loading screen covers the game: zone builds take every core (<see cref="NavMeshService.Covered"/>).</summary>
+    public bool Covered { get => service.Covered; set => service.Covered = value; }
 
     /// <summary>Open or close a door by its building's instance id: <c>Doors.Close(id)</c>. No rebuild; the next query sees it.</summary>
     public NavDoors Doors => Walkability.Doors;

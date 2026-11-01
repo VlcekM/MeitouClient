@@ -7,7 +7,8 @@
     { key: "p50_ms", label: "p50 frame time (ms)", unit: " ms", primary: true },
     { key: "slow_world_p99_ms", label: "Slow-world tick p99 (ms)", unit: " ms" },
     { key: "avg_fps", label: "Average fps", unit: " fps", higher: true, optional: true },
-    { key: "vram_peak_mb", label: "Peak video memory (MB)", unit: " MB", primary: true, optional: true }
+    { key: "vram_peak_mb", label: "Peak video memory (MB)", unit: " MB", primary: true, optional: true },
+    { key: "sysmem_peak_mb", label: "Peak system memory (MB)", unit: " MB", optional: true }
   ];
   var ALLM = METRICS.concat([
     { key: "max_ms", label: "Max frame (ms)", unit: " ms" },
@@ -16,7 +17,7 @@
   ]);
   var NS = "http://www.w3.org/2000/svg";
   var D = null;
-  var state = { tlAll: false, selected: {}, hm: "", runMode: "warm", relative: false, more: false, bdAll: {}, ref: "", bdStat: 0, bdMachine: "", bdOff: {}, bdOn: {} };
+  var state = { tlAll: false, selected: {}, hm: "", runMode: "warm", relative: false, more: false, covAll: false, bdAll: {}, ref: "", bdStat: 0, bdMachine: "", bdOff: {}, bdOn: {} };
   var tip = document.getElementById("tip");
 
   function el(tag, attrs, text) {
@@ -494,7 +495,7 @@
 
   // Headline: the newest benchmarked commit against the one before it (upstream order), for the primary selected machine.
   // Tiles show the change first; every number uses the same basis as Compare (see val()).
-  var TILES = [["p99_ms", "p99 frame time", " ms"], ["over33_pct", "Frames over 33 ms", "%"], ["slow_world_p99_ms", "Slow-world tick p99", " ms"], ["avg_fps", "Average fps", " fps", true], ["vram_peak_mb", "Peak video memory", " MB"]];
+  var TILES = [["p99_ms", "p99 frame time", " ms"], ["over33_pct", "Frames over 33 ms", "%"], ["slow_world_p99_ms", "Slow-world tick p99", " ms"], ["avg_fps", "Average fps", " fps", true], ["vram_peak_mb", "Peak video memory", " MB"], ["sysmem_peak_mb", "Peak system memory", " MB"]];
   function renderHeadline() {
     var host = document.getElementById("headline");
     host.innerHTML = "";
@@ -524,7 +525,7 @@
         verdict.textContent = (dl.cls === "" ? "No clear change" : dl.d < 0 ? "Faster" : "Slower") + ": p99 " + (dl.pct == null ? dFmt(dl.d) : pctFmt(dl.pct));
       }
       card.appendChild(verdict);
-      TILES.filter(function (t) { return (t[0] !== "avg_fps" && t[0] !== "vram_peak_mb") || hasMetric(mc, t[0]); }).forEach(function (t) {
+      TILES.filter(function (t) { return (t[0] !== "avg_fps" && t[0] !== "vram_peak_mb" && t[0] !== "sysmem_peak_mb") || hasMetric(mc, t[0]); }).forEach(function (t) {
         var v = val(mc, cur.commit, sid, t[0]), pv = prev ? val(mc, prev.commit, sid, t[0]) : null, big = "", cls = "", small = "";
         if (v != null && pv != null) {
           var d2 = delta(pv, v, t[3]);
@@ -605,6 +606,7 @@
 
   // Machines x commits: which machine ran which benchmark target. Columns are in upstream commit order; a
   // code-identical variant shares the column of its target; off-target commits get their own faded column.
+  var COV_RECENT = 12;
   function renderCoverage() {
     var host = document.getElementById("coverage");
     var cur = currentTarget();
@@ -619,6 +621,10 @@
       if (!cols.some(function (x) { return x.t === t; })) cols.push({ key: t.commit, c: null, t: t, off: false, rank: 1e9 });
     });
     cols.sort(function (x, y) { return x.rank - y.rank; });
+    // The matrix gains a column per benchmarked commit: show the newest COV_RECENT unless asked for all of them.
+    var older = state.covAll ? 0 : Math.max(0, cols.length - COV_RECENT);
+    if (older) cols = cols.slice(older);
+    var prev = host.querySelector(".tablewrap"), prevLeft = prev ? prev.scrollLeft : -1;
     var html = '<div class="tablewrap"><table class="cov"><thead><tr><th>Machine</th>';
     cols.forEach(function (x) {
       var full = x.t ? x.t.commit_full : x.c.commit_full, hash = x.t ? x.t.commit : x.c.commit;
@@ -644,7 +650,12 @@
       html += "</tr>";
     });
     html += "</tbody></table></div>";
-    host.innerHTML = html + '<p class="muted small">Upstream commit order. Bold = release target; * = code-identical commit; faded = off-target.</p>';
+    var toggle = older ? '<button type="button" class="covtoggle">Show ' + older + ' older</button> ' : state.covAll && cols.length > COV_RECENT ? '<button type="button" class="covtoggle">Show only the newest ' + COV_RECENT + '</button> ' : "";
+    host.innerHTML = html + '<p class="muted small">' + toggle + 'Upstream commit order, newest on the right. Bold = release target; * = code-identical commit; faded = off-target.</p>';
+    var tw = host.querySelector(".tablewrap");
+    if (tw) tw.scrollLeft = prevLeft < 0 ? tw.scrollWidth : prevLeft;
+    var tb = host.querySelector(".covtoggle");
+    if (tb) tb.addEventListener("click", function () { state.covAll = !state.covAll; renderCoverage(); });
   }
 
   function renderStandard() {

@@ -437,7 +437,28 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         return new Target2D(texture, min, min == TextureMinFilter.Nearest ? TextureMagFilter.Nearest : TextureMagFilter.Linear);
     }
 
+    /// <summary>The targets could not be made (out of video memory): the frame draws no world, and the next <see cref="Begin"/> tries again (the old
+    /// targets, released this frame, are freed by then, and the guard has started evicting).</summary>
+    public bool Unallocated { get; private set; }
+    bool unallocatedLogged;
+
     void Allocate(int displayW, int displayH)
+    {
+        try
+        {
+            AllocateTargets(displayW, displayH);
+            Unallocated = false;
+        }
+        catch (Gpu.Core.VulkanException e) when (e.Result is Vk.Result.ErrorOutOfDeviceMemory or Vk.Result.ErrorOutOfHostMemory)
+        {
+            Free();
+            (displayWidth, displayHeight, Unallocated) = (0, 0, true);
+            if (!unallocatedLogged) Console.WriteLine($"vram      post targets for {displayW}x{displayH} not made ({e.Message}): the world is not drawn until they are");
+            unallocatedLogged = true;
+        }
+    }
+
+    void AllocateTargets(int displayW, int displayH)
     {
         Free();
         var up = Options.Upscale;
@@ -459,15 +480,10 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
                 upscaleDepth = Make(batch, w, h, InternalFormat.R32f, TextureMinFilter.Nearest, "post upscale depth");
                 // R32F, not R8: Streamline cannot size an R8_UNORM resource and drops it (DLSS's hint), FSR takes either.
                 reactive = Make(batch, w, h, InternalFormat.R32f, TextureMinFilter.Nearest, "post reactive");
-                historyA = Make(batch, displayW, displayH, InternalFormat.Rgba16f, TextureMinFilter.Linear, "post taa history");
+                // The output; the TAA's second history is made when it first runs (a vendor upscaler keeps its own history: one image does).
                 historyB = Make(batch, displayW, displayH, InternalFormat.Rgba16f, TextureMinFilter.Linear, "post taa history");
             }
-            // FXAA and the heat haze read the composite's LDR picture, as the game's run on its A8R8G8B8 buffers after the HDR composite
-            // (all always made, SMAA's too, so switching either at run time needs no new targets).
-            ldr = Make(batch, displayW, displayH, InternalFormat.Rgba8, TextureMinFilter.Linear, "post ldr");
-            ldrFxaa = Make(batch, displayW, displayH, InternalFormat.Rgba8, TextureMinFilter.Linear, "post ldr fxaa");
-            smaaEdges = Make(batch, displayW, displayH, InternalFormat.Rgba8, TextureMinFilter.Nearest, "post smaa edges");
-            smaaWeights = Make(batch, displayW, displayH, InternalFormat.Rgba8, TextureMinFilter.Nearest, "post smaa weights");
+            // The LDR, FXAA and SMAA targets are made when a frame first needs them (MakeLdrTargets).
             int hw = Math.Max((w + 1) / 2, 1), hh = Math.Max((h + 1) / 2, 1);
             aoA = Make(batch, hw, hh, InternalFormat.RG16f, TextureMinFilter.Linear, "post ssao");
             aoB = Make(batch, hw, hh, InternalFormat.RG16f, TextureMinFilter.Linear, "post ssao");
@@ -559,6 +575,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         var up = Options.Upscale;
         if (w != displayWidth || h != displayHeight || up.Kind != allocatedKind || up.EffectiveScale != allocatedScale)
             Allocate(w, h);
+        if (Unallocated) return;
         EnsureGi();
         Collect();
         stamps = freeStamps.Count > 0 ? freeStamps.Pop() : new StampSet();
@@ -800,9 +817,10 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         var bloom = RunBloom(postColour);
 
         // Composite: to the target, or to the LDR picture FXAA (or SMAA) and / or the heat haze then read (the game's order: FXAA, HeatHaze).
+        MakeLdrTargets(o.Smaa && !Temporal, o.Fxaa && !Temporal, HeatHazeWanted);
         bool smaa = o.Smaa && !Temporal && smaaWeights is not null;
         bool fxaa = o.Fxaa && !smaa && !Temporal && ldr is not null;
-        bool haze = HeatHazeRuns;
+        bool haze = HeatHazeRuns && (!(fxaa || smaa) || ldrFxaa is not null);
         var c = compositePass;
         Bind(c.P, c.Scene, postColour);
         Bind(c.P, c.Ao, aoB);
@@ -862,6 +880,29 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
             stamps = null;
         }
         (previousRotation, previousEye, previousFov, previousAspect, previousValid) = (viewRotation, eyeNow, fovNow, aspectNow, Temporal);
+    }
+
+    /// <summary>
+    /// FXAA, SMAA and the heat haze read the composite's LDR picture, as the game's run on its A8R8G8B8 buffers after the HDR composite. Each display-size
+    /// target is made the first frame that needs it (a temporal upscaler bypasses FXAA and SMAA, so it never has theirs), and kept until the next resize.
+    /// Out of video memory, the passes that lack theirs are skipped.
+    /// </summary>
+    void MakeLdrTargets(bool smaa, bool fxaa, bool haze)
+    {
+        bool wantLdr = smaa || fxaa || haze, wantSecond = haze && (smaa || fxaa);
+        if (displayWidth <= 0 || (!wantLdr || ldr is not null) && (!wantSecond || ldrFxaa is not null) && (!smaa || smaaWeights is not null)) return;
+        try
+        {
+            using var batch = Gpu.Uploads.Begin();
+            if (wantLdr) ldr ??= Make(batch, displayWidth, displayHeight, InternalFormat.Rgba8, TextureMinFilter.Linear, "post ldr");
+            if (wantSecond) ldrFxaa ??= Make(batch, displayWidth, displayHeight, InternalFormat.Rgba8, TextureMinFilter.Linear, "post ldr fxaa");
+            if (smaa && smaaWeights is null)
+            {
+                smaaEdges ??= Make(batch, displayWidth, displayHeight, InternalFormat.Rgba8, TextureMinFilter.Nearest, "post smaa edges");
+                smaaWeights = Make(batch, displayWidth, displayHeight, InternalFormat.Rgba8, TextureMinFilter.Nearest, "post smaa weights");
+            }
+        }
+        catch (Gpu.Core.VulkanException e) when (e.Result is Vk.Result.ErrorOutOfDeviceMemory or Vk.Result.ErrorOutOfHostMemory) { }
     }
 
     /// <summary>SMAA on the composite's LDR picture (docs/render-post.md "SMAA"): edges, blending weights, then the blend into the heat haze's input or the target.</summary>
@@ -1224,7 +1265,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
             Gpu.EndNative(cmd);
         }
         if (CloudMotion is { } clouds && !reset) RunCloudMotion(clouds);
-        (historyA, historyB) = (historyB, historyA);
+        if (historyA is not null) (historyA, historyB) = (historyB, historyA);
         var output = historyB!;
         bool done = false;
         sharpenAfter = true;
@@ -1268,6 +1309,13 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
             CompositeLateParticles(sceneColour!, width, height);
             // The particles' coverage into the motion target's alpha (the TAA's reactive channel; the water's analytic value is there already).
             if (Particles is { HasCoverage: true }) RunCoverage(motion!, ColorMask.A, clear: false);
+            if (historyA is null)
+            {
+                // The TAA's first frame on these targets: the history it reads (nothing in it yet, so it starts over).
+                using (var batch = Gpu.Uploads.Begin())
+                    historyA = Make(batch, displayWidth, displayHeight, InternalFormat.Rgba16f, TextureMinFilter.Linear, "post taa history");
+                reset = true;
+            }
             var t = taaPass;
             Bind(t.P, t.Colour, sceneColour);
             Bind(t.P, t.Motion, motion);
@@ -1453,7 +1501,8 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     /// <summary>Whether the heat-haze textures were found (else the pass never runs).</summary>
     public bool HasHeatHaze => flowTexture is not null && perturbationTexture is not null;
     /// <summary>Whether this frame ends with the heat haze: it is on, has its textures and an amount.</summary>
-    public bool HeatHazeRuns => Options.HeatHaze && HasHeatHaze && HeatHazeAmount * Options.HeatHazeScale > 0 && ldr is not null;
+    public bool HeatHazeRuns => HeatHazeWanted && ldr is not null;
+    bool HeatHazeWanted => Options.HeatHaze && HasHeatHaze && HeatHazeAmount * Options.HeatHazeScale > 0;
 
     /// <summary>
     /// Loads the heat haze's two textures from the install (<c>materials/FlowHAZE.dds</c> and <c>Perturber.dds</c>, BC1 2048² with

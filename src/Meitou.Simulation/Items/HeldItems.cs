@@ -600,6 +600,7 @@ public sealed partial class PlayerSystem
         var item = root.All().ElementAtOrDefault(quick.Item.Index);
         if (!Matches(item, quick.Item) || !(InventoryCommands.IsMovableSection(item!.Section) || InventoryCommands.IsLimbSection(item.Section)) || HolderOf(root, item) is not { } holder) return;
         if (item.LockedOn) { world.Post(LockedText); return; }
+        if (quick.Into != CharacterId.None) { QuickMoveInto(world, quick, cold, holder, item); return; }
         if (item.ItemFunction == MoneyFunction && cold.Faction == world.Player.Faction)
         {
             Cash(world, item, item.Quantity);
@@ -665,5 +666,24 @@ public sealed partial class PlayerSystem
             moved++;
         }
         if (moved > 0) assembly?.RefreshEquipment(cold);
+    }
+
+    /// <summary>
+    /// A right click into another player character's open window (<c>FUN_140713d20</c>): units into its bag window first when open, then its slots, then its grid
+    /// (<see cref="InventoryCommands.MoveInto"/>), money as one stack; no range limit, as a drag between the two windows. A worn bag with contents stays.
+    /// </summary>
+    void QuickMoveInto(World world, QuickMoveItem quick, CharacterCold from, Inventory holder, ItemInstance item)
+    {
+        var table = world.Characters;
+        if (quick.Into == quick.Character || !table.TryResolveNext(quick.Into, out int t) || table.Cold(t) is not { IsPlayer: true, Inventory: { } into } taker) return;
+        if (!InventoryCommands.IsMovableSection(item.Section) || item.Contents is not null && item.Section == "backpack_attach") return;
+        bool worn = InventoryCommands.IsEquipmentSection(item.Section);
+        if (InventoryCommands.MoveInto(holder, item, InventoryCommands.ClickCount(item, quick.All ? 0 : 1), into, quick.IntoBag, out bool wear, taker) == 0)
+        {
+            world.Post($"{taker.Name} has no room for {item.Name}.");
+            return;
+        }
+        if (worn) assembly?.RefreshEquipment(from);
+        if (wear) assembly?.RefreshEquipment(taker);
     }
 }

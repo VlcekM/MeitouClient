@@ -14,6 +14,9 @@ namespace Meitou.Data.Characters;
 /// </summary>
 public static class CharacterGenerator
 {
+    /// <summary>The RACE the original falls back to when a character has none (by id, so a mod that renames Greenlander keeps it; docs/characters.md).</summary>
+    public const string DefaultRaceId = "17-gamedata.quack";
+
     /// <summary>Kenshi's float-to-int rounding for sliders: halves round away from zero.</summary>
     public static int Round(float value) => value < 0 ? (int)MathF.Ceiling(value - 0.5f) : (int)MathF.Floor(value + 0.5f);
 
@@ -56,7 +59,11 @@ public static class CharacterGenerator
         if (race is null && bodyFile?.RaceId is { } bodyRace) race = db.Find(bodyRace);
         if (race is null && (faction ?? (character?.GetReferences("faction") is { Count: > 0 } own ? db.Find(own[0].TargetStringId) : null)) is { } races)
             race = PickRelative(rng, races.GetReferences("races").Select(r => (db.Find(r.TargetStringId), r.Values.Value0 > 0 ? (float)r.Values.Value0 : 1f)));
-        race ??= CharacterAppearance.Find(db, "Greenlander", FcsRecordType.RACE) ?? throw new KeyNotFoundException($"'{record.Name}' has no race.");
+        if (race is null)
+        {
+            race = CharacterAppearance.Find(db, DefaultRaceId, FcsRecordType.RACE) ?? throw new KeyNotFoundException($"'{record.Name}' ({record.StringId}) has no race.");
+            notes.Add($"no race: default {DefaultRaceId}");
+        }
 
         // Gender: "female chance" percent, never for a single-gender race.
         bool isFemale = female ?? bodyFile?.Female ?? (!race.GetBool("single gender") && rng.Unit() < (character?.GetInt("female chance") ?? 50) * 0.01f);

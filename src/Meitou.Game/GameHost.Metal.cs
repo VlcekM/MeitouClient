@@ -812,7 +812,7 @@ sealed partial class GameHost
         using var input = Silk.NET.Input.InputWindowExtensions.CreateInput(window);
         if (hud is not null)
         {
-            hud.ClipboardRead = () => input.Keyboards.Count > 0 ? input.Keyboards[0].ClipboardText : null;
+            hud.ClipboardRead = () => input.Keyboards.Count > 0 ? ClipboardText.Read(input.Keyboards[0]) : null;
             hud.ClipboardWrite = text => { if (input.Keyboards.Count > 0) input.Keyboards[0].ClipboardText = text; };
         }
         bool shiftDown = false, statsVisible = false, frameStatsVisible = showFrameStats, screenshotNow = false, gpuCaptureRequested = false;
@@ -886,7 +886,7 @@ sealed partial class GameHost
                         keyboard.ClipboardText = code;
                         Console.WriteLine($"camera    copied {code} ({WorldCameraCode.Describe(camera)})");
                     }
-                    else if (WorldCameraCode.Decode(keyboard.ClipboardText) is { } pose)
+                    else if (WorldCameraCode.Decode(ClipboardText.Read(keyboard)) is { } pose)
                     {
                         Vector3 back = new(MathF.Cos(pose.Pitch) * MathF.Sin(pose.Yaw), MathF.Sin(pose.Pitch),
                             MathF.Cos(pose.Pitch) * MathF.Cos(pose.Yaw));
@@ -1472,6 +1472,7 @@ sealed partial class GameHost
                     overlay.Target = backbuffer;
                     loading.Draw(size.X, size.Y);
                 }
+                else loading?.ReleaseWhenGone();
             }
             ctx.EndFrame();
             if (gpuCapture is not null)
@@ -1570,7 +1571,7 @@ sealed partial class GameHost
             config.FullScreen = BorderlessFullScreen.IsOn(window);
             config.MetalUpscaler = mode;
             config.MetalRenderScale = ctx.RenderScale;
-            if (hud is not null) config.UiMode = hud.UiMode;
+            if (hud is not null && (!g.LowEnd || hud.UiMode != Meitou.Data.Ui.UiMode.Faithful)) config.UiMode = hud.UiMode;   // --low-end's Faithful UI is for the run
             config.Bindings = session.Bindings.ToDictionary();
             if (settingsValues is not null)
             {

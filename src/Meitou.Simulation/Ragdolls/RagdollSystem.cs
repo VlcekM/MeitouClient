@@ -314,7 +314,7 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
     {
         var layers = new List<ActiveLayer>();
         if (cold.Animation is { } animation && animations is not null)
-            foreach (var layer in animations.Publish(animation))
+            foreach (var layer in animations.Publish(animation, []))
                 if (setup.Rig.Layer(rigs.Database, layer.Name, setup.Animal) is { } def) layers.Add(new ActiveLayer(def, MathF.Max(layer.Time, 0), layer.Weight));
         foreach (var (def, time) in setup.Fixed) layers.Add(new ActiveLayer(def, time, 1));
         scratch.PoseDerived(setup.Shape, System.Runtime.InteropServices.CollectionsMarshal.AsSpan(layers));

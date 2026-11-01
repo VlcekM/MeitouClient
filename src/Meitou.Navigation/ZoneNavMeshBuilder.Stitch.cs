@@ -5,6 +5,9 @@ namespace Meitou.Navigation;
 
 internal static partial class ZoneNavMeshBuilder
 {
+    /// <summary>How long (cells) the part of two coinciding edges within the climb must be for the stitcher to join them as neighbours (engine choice: 4 units).</summary>
+    const float SeamClimbCells = 2;
+
     // ---- stitching ----
 
     sealed class BorderEdge
@@ -13,7 +16,7 @@ internal static partial class ZoneNavMeshBuilder
         public Vector3 A, B;
     }
 
-    static ZoneNavMesh Stitch(ZoneGeometry g, NavBuildSettings s, RcPolyMesh?[] meshes, int tilesPerSide, float tileWorld)
+    internal static ZoneNavMesh Stitch(ZoneGeometry g, NavBuildSettings s, RcPolyMesh?[] meshes, int tilesPerSide, float tileWorld, HeightGrid?[]?[]? details = null)
     {
         var vertices = new List<Vector3>();
         var polygons = new List<int[]>();
@@ -66,8 +69,9 @@ internal static partial class ZoneNavMeshBuilder
                         else
                         {
                             // An open inner edge may face one whose end vertex Recast did not weld (see the seam pass below).
-                            if (open.TryGetValue((xb, zb, xa, za), out var other) && Math.Abs(m.verts[ia * 3 + 1] - m.verts[other.Ib * 3 + 1]) <= climbCells
-                                && Math.Abs(m.verts[ib * 3 + 1] - m.verts[other.Ia * 3 + 1]) <= climbCells)
+                            if (open.TryGetValue((xb, zb, xa, za), out var other) && SeamMeets(Math.Abs(m.verts[ia * 3 + 1] - m.verts[other.Ib * 3 + 1]),
+                                Math.Abs(m.verts[ib * 3 + 1] - m.verts[other.Ia * 3 + 1]), MathF.Sqrt((xb - xa) * (xb - xa) + (zb - za) * (zb - za)), out bool partial)
+                                && (!partial || SurfacesMeet(m, xa, za, xb, zb, details?[tile]?[p], details?[tile]?[other.Polygon - pBase])))
                             {
                                 open.Remove((xb, zb, xa, za));
                                 seams.Add((pBase + p, k, other.Polygon, other.Edge));
@@ -111,7 +115,58 @@ internal static partial class ZoneNavMeshBuilder
                 }
         }
 
+        // The sample of the polygon's own region nearest (x, z) within one sample step.
+        static bool NearestOwn(HeightGrid grid, float x, float z, out float height)
+        {
+            height = float.NaN;
+            float u = (x - grid.X0) / grid.Step, v = (z - grid.Z0) / grid.Step, best = 1.0001f;
+            int i0 = (int)MathF.Round(u), j0 = (int)MathF.Round(v);
+            for (int j = Math.Max(0, j0 - 1); j <= Math.Min(j0 + 1, grid.Rows - 1); j++)
+                for (int i = Math.Max(0, i0 - 1); i <= Math.Min(i0 + 1, grid.Columns - 1); i++)
+                {
+                    float d = (i - u) * (i - u) + (j - v) * (j - v);
+                    if (!grid.Own![j * grid.Columns + i] || d >= best) continue;
+                    best = d;
+                    height = grid.Values[j * grid.Columns + i];
+                }
+            return !float.IsNaN(height);
+        }
+
         static bool SameXZ(Vector3 a, Vector3 b) => a.X == b.X && a.Z == b.Z;
+
+        // Two coinciding edges (height gaps at their ends in cells, length in cells) meet when the gap stays within the climb along at least SeamClimbCells of
+        // them: a corner can take a higher neighbouring cell's height on one side (a stair's top beside a raised cheek, Storm House 27.22:1821-), which
+        // left one end over the climb although the rest of the edge steps less.
+        // partial: within the climb along part of it only, so the polygons' own surfaces are checked too (SurfacesMeet).
+        bool SeamMeets(int gapA, int gapB, float cells, out bool partial)
+        {
+            partial = false;
+            if (gapA <= climbCells && gapB <= climbCells) return true;
+            int lo = Math.Min(gapA, gapB), hi = Math.Max(gapA, gapB);
+            if (lo > climbCells) return false;
+            partial = true;
+            float within = cells * (climbCells - lo) / (float)(hi - lo);
+            return within >= SeamClimbCells;
+        }
+
+        // A seam within the climb along part of it only, by its corners' heights, is joined only when the two polygons' own surfaces (each one's region's
+        // height samples nearest the edge's cells) are within the climb along SeamClimbCells of it too: the corner within it can as well be the one that took a
+        // higher neighbouring cell's height, a floor's for a ramp passing under the floor's edge (engine choice; Observed: Ancient Lab with TwoStorey, zone
+        // 28.60, whose upper floor joined the middle of its spiral stair 8..17 below along the stairwell instead of the stair's top).
+        bool SurfacesMeet(RcPolyMesh m, int xa, int za, int xb, int zb, HeightGrid? own, HeightGrid? facing)
+        {
+            if (own?.Own is null || facing?.Own is null) return true;
+            int cells = Math.Max(1, (int)MathF.Ceiling(MathF.Sqrt((xb - xa) * (xb - xa) + (zb - za) * (zb - za))));
+            int within = 0, measured = 0;
+            for (int k = 0; k <= cells; k++)
+            {
+                float x = m.bmin.X + float.Lerp(xa, xb, k / (float)cells) * m.cs, z = m.bmin.Z + float.Lerp(za, zb, k / (float)cells) * m.cs;
+                if (!NearestOwn(own, x, z, out float a) || !NearestOwn(facing, x, z, out float b)) continue;
+                measured++;
+                if (MathF.Abs(a - b) <= climb) within++;
+            }
+            return measured == 0 || within >= SeamClimbCells;
+        }
 
         foreach (var (p, e, q, f) in seams)
             if (areas[p] != NavArea.Null && areas[q] != NavArea.Null) { neighbours[p][e] = q; neighbours[q][f] = p; }

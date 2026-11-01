@@ -26,8 +26,12 @@ public sealed class WeatherAreas
         this.colours = colours;
     }
 
-    /// <summary>The map of a game install (<c>data/newland/land/areasmap.tga</c>).</summary>
-    public static WeatherAreas Load(GameInstall install) => FromTga(File.ReadAllBytes(Path.Combine(install.DataDirectory, RelativePath)));
+    /// <summary>
+    /// The map of a game install: <c>areasmap.tga</c> of resource group <c>Overlaymaps</c> (<b>Verified</b> <c>FUN_140408fa0</c>, <c>FUN_140408970</c>: Ogre's
+    /// <c>resourceExists</c> then <c>Image::load</c> there, so an enabled mod's <c>newland/land/areasmap.tga</c> replaces it), else <c>data/newland/land/areasmap.tga</c>.
+    /// </summary>
+    public static WeatherAreas Load(GameInstall install) =>
+        FromTga(File.ReadAllBytes(Meitou.Data.Ogre.GameResources.Find(install, "areasmap.tga", "Overlaymaps") ?? Path.Combine(install.DataDirectory, RelativePath)));
 
     public static WeatherAreas FromTga(ReadOnlySpan<byte> tga) => FromImage(TgaReader.Read(tga));
 

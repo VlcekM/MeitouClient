@@ -161,7 +161,7 @@ internal sealed partial class ZoneGeometryGatherer
         {
             Zone = site.Zone, ZoneMin = boxMin, ZoneMax = boxMin + new Vector2(side), Margin = 8, InteriorHull = hull, InteriorOf = site.Placement.Key, TrackParts = ownOnly || trackParts,
             ClippedAtBorder = crossLowX || crossLowZ || crossHighX || crossHighZ, InteriorDestroyed = site.Destroyed, DestroyedOutline = outline,
-            InteriorDoorless = site.Destroyed ? outline is not null : !site.Record.GetReferences("doors").Any(),
+            InteriorDoorless = site.Destroyed || !site.Record.GetReferences("doors").Any(),
         };
 
         uint mask = site.Destroyed ? DestroyedInteriorGroupMask : InteriorGroupMask;
@@ -209,6 +209,9 @@ internal sealed partial class ZoneGeometryGatherer
             }
             g.Seeds[i] = new Vector3(s.X, height, s.Z);
         }
+        // No door and no node: the original drops a ray from above the building's origin onto its floor-0 part.
+        if (g.Seeds.Count == 0 && g.NodeSeeds.Count == 0 && OriginRaySeed(g, site.Position, site.Placement.Rotation, out var originSeed))
+            g.NodeSeeds.Add(originSeed);
         return g;
     }
 
@@ -238,14 +241,91 @@ internal sealed partial class ZoneGeometryGatherer
             if (!ctx.Own) return;
             int before = g.Painters.Count;
             AddVolume(g.Painters, shape, node, g.Stats, carver: false);
-            if (g.Painters.Count > before) g.Painters[^1].Owner = instanceId;
+            if (g.Painters.Count > before)
+            {
+                g.Painters[^1] = ReachIntoHull(g, g.Painters[^1], owner, shape, node);
+                g.Painters[^1].Owner = instanceId;
+            }
             AddInnerDoorSeed(g, owner, shape, node);
             return;
         }
         if ((ctx.Mask & (1u << group)) == 0) return;
         g.Stats.Shapes++;
         bool walkable = group != 27 && (ctx.Own || mode == PathMode.Walkable);
+        int first = g.TriangleCount;
         AddShape(g, shape, node, walkable ? BuildingSlopeDegrees : 0, carve: false);
+        if (group == 9 && g.TriangleCount > first) g.FloorRanges.Add((first, g.TriangleCount));
+    }
+
+    /// <summary>How far above the building's origin, along its up axis, the original's last-resort interior seed ray starts (FUN_1403cbfa0).</summary>
+    const float OriginRayRise = 1000;
+
+    /// <summary>
+    /// The original's interior seed when the building has no door and no shopkeeper or general node (a ruin, whose doors are removed, or a doorless interior):
+    /// a ray from <see cref="OriginRayRise"/> above the building's origin along its down axis, the nearest hit on a floor-0 part (group 9) is the seed, raised
+    /// to the water level when under it (FUN_1403cbfa0; docs/game/pathfinding.md "Interior seeds"). False when the ray hits nothing.
+    /// </summary>
+    static bool OriginRaySeed(ZoneGeometry g, Vector3 position, Quaternion rotation, out Vector3 seed)
+    {
+        var down = Vector3.Transform(-Vector3.UnitY, rotation);
+        var start = position - down * OriginRayRise;
+        seed = default;
+        float best = float.MaxValue;
+        var v = g.Vertices;
+        foreach (var (first, last) in g.FloorRanges)
+            for (int t = first; t < last; t++)
+            {
+                int ia = g.Indices[t * 3] * 3, ib = g.Indices[t * 3 + 1] * 3, ic = g.Indices[t * 3 + 2] * 3;
+                var a = new Vector3(v[ia], v[ia + 1], v[ia + 2]);
+                var e1 = new Vector3(v[ib], v[ib + 1], v[ib + 2]) - a;
+                var e2 = new Vector3(v[ic], v[ic + 1], v[ic + 2]) - a;
+                var p = Vector3.Cross(down, e2);
+                float det = Vector3.Dot(e1, p);
+                if (MathF.Abs(det) < 1e-9f) continue;
+                var o = start - a;
+                float u = Vector3.Dot(o, p) / det;
+                if (u < 0 || u > 1) continue;
+                var q = Vector3.Cross(o, e1);
+                float w = Vector3.Dot(down, q) / det;
+                if (w < 0 || u + w > 1) continue;
+                float d = Vector3.Dot(e2, q) / det;
+                if (d >= 0 && d < best) best = d;
+            }
+        if (best == float.MaxValue) return false;
+        seed = start + down * best;
+        seed.Y = MathF.Max(seed.Y, WorldWater.Height);
+        return true;
+    }
+
+    /// <summary>How deep (units) a door painter must reach into the interior hull to paint the interior's cells by the door (engine choice: two cells).</summary>
+    public const float DoorHullDepth = 4;
+
+    /// <summary>How far (units) a door painter is swept toward the inside at most to reach <see cref="DoorHullDepth"/> into the hull (engine choice).</summary>
+    public const float DoorHullReach = 12;
+
+    /// <summary>
+    /// A door painter whose leaf stands outside the interior hull, swept toward the door's inner marker until it reaches <see cref="DoorHullDepth"/> into the
+    /// hull (at most <see cref="DoorHullReach"/>). Unswept, such a door paints no cell of the interior, so the interior has no door polygons and no door join
+    /// (docs/game/pathfinding.md, "Door painters"; Heft's bar, the Outpost s-III `47.16:241-Newwworld-INGAME`, leaf 2..3 outside its hull). Unchanged when it
+    /// reaches that deep already or the door has no markers.
+    /// </summary>
+    NavVolume ReachIntoHull(ZoneGeometry g, NavVolume painter, GameRecord door, PreparedShape shape, Matrix4x4 node)
+    {
+        var hull = g.InteriorHull!.Polygon;
+        if (painter.Polygon.Any(p => NavGeometry.InsideConvex(hull, p, -DoorHullDepth)) || !DoorMarkers(door, shape, node, out var behind, out var ahead)) return painter;
+        var centre = hull.Aggregate(Vector2.Zero, (a, p) => a + p) / hull.Length;
+        Vector2 b = new(behind.X, behind.Z), a = new(ahead.X, ahead.Z);
+        var inward = Vector2.Distance(a, centre) < Vector2.Distance(b, centre) ? a - b : b - a;
+        if (inward.LengthSquared() < 1e-6f) return painter;
+        inward = Vector2.Normalize(inward);
+        for (float d = 1; d <= DoorHullReach; d++)
+        {
+            var moved = painter.Polygon.Select(p => p + inward * d).ToArray();
+            if (!moved.Any(p => NavGeometry.InsideConvex(hull, p, -DoorHullDepth))) continue;
+            var points = painter.Polygon.Concat(moved).Select(p => new Vector3(p.X, 0, p.Y)).ToList();
+            return NavGeometry.Footprint(points, painter.YMin, painter.YMax, 0);
+        }
+        return painter;
     }
 
     /// <summary>The door's inner marker: the one of the two points either side of the door that lies inside the interior hull (height resolved later).</summary>

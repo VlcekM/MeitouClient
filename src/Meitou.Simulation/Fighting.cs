@@ -240,6 +240,17 @@ public sealed class PursuitSystem(CombatSystem combat) : ITickSystem
         return path.Points.Count > 0 && !EndsShort(path.Points[^1], prev[t].Position, cold, table.Cold(t), endReach);
     }
 
+    /// <summary>
+    /// Puts <paramref name="target"/> on <paramref name="cold"/>'s path failures for <see cref="PathFailureSeconds"/> (<c>notifyPathImpossible</c> <c>FUN_140796ed0</c>, as a task walk that cannot get
+    /// to its target reports it: the AI plan step <c>FUN_14050d970</c> and <c>AI::isWithinChoppingRange</c> <c>FUN_14059c6d0</c>, <b>Verified</b> callers). Lapsed entries are dropped, not tested again.
+    /// </summary>
+    internal static void GiveUp(World world, CharacterCold cold, CharacterId target)
+    {
+        var failures = cold.PathFailures ??= [];
+        failures.RemoveAll(f => f.Target == target || f.Until <= world.Tick);
+        failures.Add((target, world.Tick + (long)MathF.Ceiling(PathFailureSeconds / world.TickSeconds)));
+    }
+
     /// <summary>Whether <paramref name="cold"/> found no path to <paramref name="target"/> within the last <see cref="PathFailureSeconds"/>.</summary>
     public static bool PathImpossible(CharacterCold cold, CharacterId target, long tick)
     {

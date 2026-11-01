@@ -84,11 +84,15 @@ internal sealed partial class ZoneGeometryGatherer
                 var prepared = collision.Get(o.Collision);
                 if (prepared is null) continue;
                 g.Stats.FoliageInstances++;
+                int solids = g.Solids.Count;
                 foreach (var shape in prepared.Shapes)
                 {
                     g.Stats.FoliageShapes++;
-                    AddShape(g, shape, o.Transform, o.Walkable ? TerrainSlopeDegrees : 0, carve: CarveConvexObstacles && !o.Walkable);
+                    if (!shape.IsConvex) g.Stats.FoliageMeshes++;
+                    // Walkable foliage meshes (swamp tree domes, open below) hold no ground under them in the original's tiles (docs/game/pathfinding.md, "Map features").
+                    AddShape(g, shape, o.Transform, o.Walkable ? TerrainSlopeDegrees : 0, carve: CarveConvexObstacles && !o.Walkable, meshSolid: o.Walkable);
                 }
+                for (int k = solids; k < g.Solids.Count; k++) g.Solids[k].Feature = true;
             }
     }
 }

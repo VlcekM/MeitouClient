@@ -70,8 +70,8 @@ public sealed unsafe class MarkerRenderer : IDisposable
         void main() { fragColour = texelFetch(uMarker, ivec2(gl_FragCoord.xy), 0); }
         """;
 
-    /// <summary>Samples per pixel of the markers (anti-aliasing: the meshes have many triangles under a pixel; at most what the device allows).</summary>
-    const int WantedSamples = 8;
+    /// <summary>Samples per pixel of the markers (anti-aliasing: the meshes have many triangles under a pixel; at most what the device allows). 4, not 8: 8 took 127 MB at 1080p.</summary>
+    const int WantedSamples = 4;
 
     readonly IGpuContext gpu;
     readonly LegacyProgram program;
@@ -87,6 +87,9 @@ public sealed unsafe class MarkerRenderer : IDisposable
     // The markers drawn multisampled with a depth of their own, at the picture's size, and resolved.
     GpuTexture? msColour, msDepth, resolved;
     int samples;
+    /// <summary>Milliseconds without a marker before the targets are freed (about 70 MB multisampled at 1080p; markers show only for a while after an order).</summary>
+    const long IdleReleaseMs = 10_000;
+    long idleSince;
     // The vertex ranges of the two meshes in the buffer (count 0: the mesh is missing).
     readonly (int First, int Count) marker, arrow, ring;
 
@@ -193,9 +196,10 @@ public sealed unsafe class MarkerRenderer : IDisposable
     public void Record(GpuTexture picture, int width, int height, GpuTexture nearDepth, int renderWidth, int renderHeight, Matrix4x4 nearViewProjection, Vector3 eye, Vector3 sunDirection)
     {
         if (!Active || width <= 0 || height <= 0) return;
+        idleSince = 0;
         if (msColour is null || msColour.Desc.Width != width || msColour.Desc.Height != height)
         {
-            msColour?.Dispose(); msDepth?.Dispose(); resolved?.Dispose();
+            ReleaseTargets();
             var sampled = samples > 1 ? TextureUse.TransferSrc : TextureUse.Sampled;
             msColour = gpu.CreateTexture(new TextureDesc(InternalFormat.Rgba8, width, height, Samples: samples, Use: TextureUse.ColourTarget | sampled, Name: "markers colour"));
             msDepth = gpu.CreateTexture(new TextureDesc(InternalFormat.DepthComponent24, width, height, Samples: samples, Use: TextureUse.DepthTarget, Name: "markers depth"));
@@ -286,6 +290,24 @@ public sealed unsafe class MarkerRenderer : IDisposable
 
     GpuSampler Nearest() => gpu.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Nearest, TextureMagFilter.Nearest, TextureWrapMode.ClampToEdge,
         TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, false, DepthFunction.Lequal, false, 1, false, 0));
+
+    /// <summary>A frame that draws no marker: the targets are freed once none has been drawn for <see cref="IdleReleaseMs"/>.</summary>
+    public void Idle()
+    {
+        if (msColour is null) return;
+        long now = Environment.TickCount64;
+        if (idleSince == 0) idleSince = now;
+        else if (now - idleSince >= IdleReleaseMs) ReleaseTargets();
+    }
+
+    void ReleaseTargets()
+    {
+        if (resolved != msColour) resolved?.Dispose();
+        msColour?.Dispose();
+        msDepth?.Dispose();
+        msColour = msDepth = resolved = null;
+        idleSince = 0;
+    }
 
     public void Dispose()
     {

@@ -587,6 +587,9 @@ public sealed class CharacterTable
         }
         state.Alive = true;
         state.Generation = generation;
+        // No goal yet is its own spot, not the world's origin: a follower waiting out its first think steers at its goal (MovementSystem), and walked off towards (0, 0)
+        // and asked for a path there, a long route across the world (issue #124).
+        if (state.Goal == Vector2.Zero) state.Goal = new Vector2(state.Position.X, state.Position.Z);
         cold.SpawnedTick = tick;
         cold.PortraitSerial ??= (uint)(Rng.Float(Rng.Mix(Rng.Key(new CharacterId(slot, generation)) ^ (ulong)tick * 0x9E3779B97F4A7C15UL)) * 4e9f);
         next[slot] = state;

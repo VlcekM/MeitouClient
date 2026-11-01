@@ -102,11 +102,16 @@ public sealed partial class FoliageRenderer
         public long FinerSince;
         /// <summary>Scans in a row the plan left this atlas out.</summary>
         public int DropScans;
+        /// <summary>The atlas was baked here, not read from the cache (a loading screen does not wait for its upload: <see cref="ImpostorUploadsAwaited"/>).</summary>
+        public bool Baked;
         /// <summary>A refine in flight: the cache read, the atlas, the new textures and the albedo skip they are made with.</summary>
         public Task<ImpostorAtlas?>? RefineLoad;
         public ImpostorAtlas? RefineAtlas;
         public ImpostorTextures? Next;
         public int RefineSkip;
+        /// <summary>The textures being made on a worker (<see cref="ImpostorTextures.MakeOffThread"/>) for the first upload or a refine, and the albedo skip.</summary>
+        public Task<GpuTexture?[]>? Making;
+        public int MakingSkip;
         public long RefineRetryAt;
     }
 
@@ -169,6 +174,19 @@ public sealed partial class FoliageRenderer
 
     /// <summary>Atlases loading, waiting to bake, baking or uploading (part of <see cref="Pending"/>).</summary>
     int ImpostorPending => impostorWork.Count + impostorBakes.Count + (impostorBake is null ? 0 : 1);
+    /// <summary>
+    /// The atlases a loading screen waits for: those read from the cache and uploading. Not the reads still queued (behind a long setting's far grass jobs
+    /// on the workers they can wait half a minute) nor the bakes and their uploads: the meshes draw until each atlas is ready.
+    /// </summary>
+    int ImpostorUploadsAwaited
+    {
+        get
+        {
+            int n = 0;
+            foreach (var a in impostorWork) if (a.Impostor is { Stage: ImpostorStage.Uploading, Baked: false }) n++;
+            return n;
+        }
+    }
 
     string ImpostorDescription => $"{ImpostorAssets().Count(a => a.Impostor?.Stage == ImpostorStage.Ready)} impostor atlases {impostorBytes / 1048576.0:0} MB of {ImpostorLimitMb:0} MB " +
         $"({impostorsLoaded} from the cache, {impostorsBaked} baked, {impostorUnloads} unloaded, {impostorRefined} refined, {impostorCoarsened} coarsened, {impostorDropped} dropped by the plan, {impostorRefused} refused; " +
@@ -520,7 +538,8 @@ public sealed partial class FoliageRenderer
             float bestKey = float.PositiveInfinity;
             for (int i = 0; i < impostorRefineQueue.Count; i++)
             {
-                if (impostorRefineQueue[i].Impostor is not { Stage: ImpostorStage.Ready, Next: null, RefineLoad: null } s || s.WantSkip == s.Skip || now < s.RefineRetryAt || (s.WantSkip < s.Skip && guard is { Pressure: true }))
+                // Not one already refining (its atlas loaded, its textures being made): a second refine would list it twice and free the atlas the first still uses.
+                if (impostorRefineQueue[i].Impostor is not { Stage: ImpostorStage.Ready, Next: null, RefineLoad: null, RefineAtlas: null, Making: null } s || s.WantSkip == s.Skip || now < s.RefineRetryAt || (s.WantSkip < s.Skip && guard is { Pressure: true }))
                 {
                     impostorRefineQueue.RemoveAt(i--);
                     continue;
@@ -567,14 +586,20 @@ public sealed partial class FoliageRenderer
                 s.RefineLoad = null;
                 if (s.RefineAtlas is null) { s.RefineRetryAt = Environment.TickCount64 + 8000; impostorRefining.RemoveAt(i--); continue; }
             }
-            var atlas = s.RefineAtlas!;
+            if (s.RefineAtlas is not { } atlas) { impostorRefining.RemoveAt(i--); continue; }   // abandoned or finished under another entry
             if (s.Next is null)
             {
-                long need = ImpostorTextures.BytesFor(atlas, s.RefineSkip, s.RefineSkip + 1);
-                bool finer = s.RefineSkip < s.Skip;
-                if (finer && (impostorBytes + need > impostorLimitBytes * ImpostorTransientShare || guard is { } g && !g.Allows((ulong)need))) { Abandon(s, impostorRefining, i--); continue; }   // no room beside the old textures: the plan is asked again at the next scan
+                if (s.Making is null)
+                {
+                    long need = ImpostorTextures.BytesFor(atlas, s.RefineSkip, s.RefineSkip + 1);
+                    bool finer = s.RefineSkip < s.Skip;
+                    if (finer && (impostorBytes + need > impostorLimitBytes * ImpostorTransientShare || guard is { } g && !g.Allows((ulong)need))) { Abandon(s, impostorRefining, i--); continue; }   // no room beside the old textures: the plan is asked again at the next scan
+                    StartMaking(s, atlas, s.RefineSkip);
+                    continue;
+                }
+                if (!s.Making.IsCompleted) continue;
                 using var first = Gpu.Uploads.Begin();
-                s.Next = new ImpostorTextures(Gpu, atlas, first, s.RefineSkip, s.RefineSkip + 1);
+                s.Next = new ImpostorTextures(Gpu, atlas, first, s.RefineSkip, s.RefineSkip + 1, TakeMade(s));
                 impostorBytes += s.Next.Bytes;
             }
             long budget = settling ? SettleUploadBytes : UploadBytesPerFrame;
@@ -592,7 +617,7 @@ public sealed partial class FoliageRenderer
             (s.Textures, s.Next) = (s.Next, null);
             impostorBytes -= old.Bytes;
             old.Dispose();
-            if (s.RefineSkip < s.Skip) impostorRefined++; else impostorCoarsened++;
+            if (s.RefineSkip < s.Skip) impostorRefined++; else if (s.RefineSkip > s.Skip) impostorCoarsened++;
             if (SpikeLog.Enabled) SpikeLog.Note($"impostor {(s.RefineSkip < s.Skip ? "refined" : "coarsened")} {Label(a)} skip {s.Skip}->{s.RefineSkip}");
             s.Skip = s.RefineSkip;
             Free(ref s.RefineAtlas);
@@ -681,6 +706,12 @@ public sealed partial class FoliageRenderer
             }
             PlanImpostors(now);
             ApplyImpostorPlan(now);
+            // A jump (a save loaded from the menu's scene, a teleport): the atlases the old place wanted go now, not after the idle time,
+            // so they do not hold the new place's to the limit meanwhile.
+            if (impostorScanEye is { } last && Vector3.Distance(last, eye) > ImpostorJumpDistance)
+                foreach (var a in ImpostorAssets())
+                    if (a.Impostor is { Stage: ImpostorStage.Ready } s && s.LastUsed != now) UnloadImpostor(a);
+            impostorScanEye = eye;
         }
         if (now - lastImpostorScan < 2000 || settling)
             foreach (var a in ImpostorAssets())
@@ -777,30 +808,54 @@ public sealed partial class FoliageRenderer
     const float ImpostorReferenceHeight = 1080;
     /// <summary>Impostor atlases unused this long are unloaded (shorter than the meshes' <see cref="IdleSeconds"/>: an atlas is 9 to 36 MB).</summary>
     const double ImpostorIdleSeconds = 20;
+    /// <summary>The eye moved at least this far between two scans: a jump, after which only what the plan admitted stays resident.</summary>
+    const float ImpostorJumpDistance = 10000;
+    Vector3? impostorScanEye;
 
     /// <summary>The top levels an atlas never needs at a transition distance (<see cref="SkipFor"/> with the atlas's own radius).</summary>
     internal static int LevelsToSkip(ImpostorAtlas atlas, float maxScale, float transition) => SkipFor(atlas.FramePixels, atlas.Levels, atlas.Radius * maxScale, transition);
 
-    /// <summary>The atlas's textures, level by level within the frame's upload budget; true when resident.</summary>
+    /// <summary>Makes the atlas's textures with <paramref name="skip"/> on a worker (<see cref="ImpostorTextures.MakeOffThread"/>); <see cref="TakeMade"/> takes them.</summary>
+    void StartMaking(ImpostorState s, ImpostorAtlas atlas, int skip)
+    {
+        var gpu = Gpu;
+        (s.Making, s.MakingSkip) = (BackgroundWork.Run(() => ImpostorTextures.MakeOffThread(gpu, atlas, skip, skip + 1)), skip);
+    }
+
+    static GpuTexture?[]? TakeMade(ImpostorState s)
+    {
+        var made = s.Making is { IsCompletedSuccessfully: true } making ? making.Result : null;
+        s.Making = null;
+        return made;
+    }
+
+    /// <summary>The atlas's textures (made on a worker first), level by level within the frame's upload budget; true when resident.</summary>
     bool UploadImpostor(MeshAsset a, long budget, ref long uploaded)
     {
         var s = a.Impostor!;
         if (s.Textures is null)
         {
-            // The albedo's top levels its nearest instance never samples are left out, and the normal map's one level more: it shapes the lighting,
-            // which varies slowly over a crown.
-            int levels = Math.Clamp(SkipFor(s.Atlas!.FramePixels, s.Atlas.Levels, s.Atlas.Radius * a.Mesh.MaxScale, Math.Max(s.Need, TransitionFor(a, s.Class, s.WorldRadius)))
-                + s.Extra, 0, s.Atlas.Levels - 1);
-            long need = ImpostorTextures.BytesFor(s.Atlas!, levels, levels + 1);
-            if (!MakeImpostorRoom(need, a) || guard is { } g && !g.Allows((ulong)need))
+            if (s.Making is null)
             {
-                impostorRefused++;
-                Free(ref s.Atlas);
-                (s.Stage, s.RetryAt, s.Meshes) = (ImpostorStage.None, Environment.TickCount64 + (long)(ImpostorRetrySeconds * 1000), null);
-                return true;
+                // The albedo's top levels its nearest instance never samples are left out, and the normal map's one level more: it shapes the lighting,
+                // which varies slowly over a crown.
+                int levels = Math.Clamp(SkipFor(s.Atlas!.FramePixels, s.Atlas.Levels, s.Atlas.Radius * a.Mesh.MaxScale, Math.Max(s.Need, TransitionFor(a, s.Class, s.WorldRadius)))
+                    + s.Extra, 0, s.Atlas.Levels - 1);
+                long need = ImpostorTextures.BytesFor(s.Atlas!, levels, levels + 1);
+                if (!MakeImpostorRoom(need, a) || guard is { } g && !g.Allows((ulong)need))
+                {
+                    impostorRefused++;
+                    Free(ref s.Atlas);
+                    (s.Stage, s.RetryAt, s.Meshes) = (ImpostorStage.None, Environment.TickCount64 + (long)(ImpostorRetrySeconds * 1000), null);
+                    return true;
+                }
+                StartMaking(s, s.Atlas!, levels);
+                return false;
             }
+            if (!s.Making.IsCompleted) return false;
+            int skip = s.MakingSkip;
             using var first = Gpu.Uploads.Begin();
-            s.Textures = new ImpostorTextures(Gpu, s.Atlas!, first, levels, levels + 1);
+            s.Textures = new ImpostorTextures(Gpu, s.Atlas!, first, skip, skip + 1, TakeMade(s));
             s.Skip = s.Textures.SkipOf(0);   // levels, or the atlas's first level when it was read without the finer ones (the plan then refines)
             impostorBytes += s.Textures.Bytes;
         }
@@ -860,6 +915,7 @@ public sealed partial class FoliageRenderer
             });
             st.Atlas = atlas;
             st.Stage = ImpostorStage.Uploading;
+            st.Baked = true;
             impostorWork.Add(a);
         }
         else
@@ -935,9 +991,15 @@ public sealed partial class FoliageRenderer
         atlas = null;
     }
 
-    /// <summary>Waits for the state's loads in flight and frees every atlas it holds (after its <see cref="ImpostorState.Next"/> textures, which read the refine's).</summary>
+    /// <summary>Waits for the state's loads in flight and frees every atlas it holds (after its <see cref="ImpostorState.Next"/> textures, which read the refine's),
+    /// and the textures made for it on a worker that were never used.</summary>
     static void FreeLoads(ImpostorState s)
     {
+        if (s.Making is { } making)
+        {
+            try { making.Wait(); foreach (var t in making.Result) t?.Dispose(); } catch (AggregateException) { }
+            s.Making = null;
+        }
         if (s.Load is { } load)
         {
             try { load.Wait(); load.Result.Atlas?.Dispose(); } catch (AggregateException) { }

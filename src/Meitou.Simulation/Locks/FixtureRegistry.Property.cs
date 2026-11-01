@@ -90,7 +90,7 @@ public sealed partial class FixtureRegistry
         resetBuildings.Remove(order.Building);
         ownedProperties = null;
         foreach (var f in OfBuilding(order.Building)) f.Owner = p.Owner;
-        containerSpots = null; doorPicks = null; bedSpots = null; cageList = null;
+        containerSpots = null; doorPicks = null; bedSpots = null; cageList = null; dummySpots = null;
         world.ItemSlots.TransferBuilding(world, p.Building, p.Owner);
         SetPublic(order.Building, false);
         RegisterTownConstruction(world, p);
@@ -132,7 +132,7 @@ public sealed partial class FixtureRegistry
         }
         Bind(world);
         ownedProperties = null;
-        containerSpots = null; doorPicks = null; bedSpots = null; cageList = null;
+        containerSpots = null; doorPicks = null; bedSpots = null; cageList = null; dummySpots = null;
     }
 
     // The buildings a town override reset to the level, with their level owner then: their saved record (patched, not rewritten, by a save) must not bring the old state back.

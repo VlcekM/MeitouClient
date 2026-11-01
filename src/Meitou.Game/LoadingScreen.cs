@@ -195,7 +195,18 @@ sealed class LoadingScreen : IDisposable
     }
 
     /// <summary>Starts the bar again (a new load between scenes), with a new tip and picture.</summary>
-    public void Restart() { shown = 0; from = to = 0; exitStart = null; drawn = false; Pick(); }
+    public void Restart() { shown = 0; from = to = 0; exitStart = null; drawn = false; released = false; Pick(); }
+
+    bool released;
+
+    /// <summary>Once the screen has gone, frees its pictures (the picture and the UI atlas, about 17 MB at 1080p); the next showing loads them again.
+    /// The host calls it on frames the screen is not drawn.</summary>
+    public void ReleaseWhenGone()
+    {
+        if (released || exitStart is null || ExitProgress < 1) return;
+        painter?.ReleaseTextures();
+        released = true;
+    }
 
     public void Draw(int width, int height, bool background = true)
     {
