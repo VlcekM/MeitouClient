@@ -234,6 +234,10 @@ half-height + 9 of the attacker's; the order is the target first, then by distan
 (the nearest edge of the wall line within the half-width) and doors (the leaf widened by its half-width), nearest first (`ApplyZoneBuildings`);
 a door takes it off its own progress as a bash does ([locks](locks.md#cutting-and-breaking-285--185-cut-286--186-break)). A defender that is not the attacker's target defends only with a block or dodge it is already playing.
 
+**Verified** (`FUN_14060a590`, `FUN_14060a2f0`): the zone and the impact check run inside the swing update itself, on the tick the blow index (+0x268) passes the previous tick's (+0x26c), and the hits apply at once. A blow therefore lands even when that same tick also ends the swing (a stop frame, a blocked frame at or past the end) or starts the next one. Meitou (`CombatSystem.Apply`): the blow effect carries its technique; only a hit, knock-out or kill applied earlier on that tick (`CombatSlot.CancelTick`) takes the swing from its attacker, and the attacker's swing state (stop, last outcome) is touched only while the effect's swing is still current; one that ended on that tick gets its pause from this outcome. Before, such blows were dropped (about 1 to 4 per cent of blows in battles of Shek vs bandits, more in the duel scenarios); measured in `--battle` runs.
+
+**Observed** (`FUN_1407862e0`, the one caller `FUN_1406087a0`): the overlap query is asked for objects of type 1 (characters) only, at most 20, in the physics scene's order; the building branch of the caller and of `attackImpactCheck` looks unreachable from this query, so whether melee blows reach walls and doors is **Unknown** (Meitou hits them with the hits left over).
+
 ### Facing and movement in a swing
 
 **Verified** (`FUN_14060a590` the swing update, `FUN_1402b4570` the attack start, `FUN_14065ffa0` the movement update, `FUN_14065e240`, `FUN_140665250`, `FUN_1406084e0`; constants read from the binary).
