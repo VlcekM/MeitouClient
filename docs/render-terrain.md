@@ -43,7 +43,7 @@ window beside it is 2048² RGBA8). It is BC3 (21 MB instead of 85 MB RGBA8), not
 values, 30 % at 255). The 64 tiles are encoded once with 7 levels into `%LOCALAPPDATA%\Meitou\terrain\colour\<hash>.bc3` (magic `MTC3`, side,
 the levels' blocks; ~5.6 MB a tile, 342 MB in all), hash of a version tag and the tile's path, length and write time. A start with tiles
 missing from it encodes them on workers in the loading step "terrain colour map (first start only)" (**Observed** 5.8 s on a 2026 desktop);
-the window then copies blocks instead of decoding PNGs (**Observed** at The Hub: first window 0.6 s instead of 1.6-3 s, a move 0.15 s instead of
+the window then reads only the block rows it needs from those files (`TerrainColourCache.ReadBlocks`; no whole tile is loaded, which cost 11 MB of fresh arrays a tile per window move) instead of decoding PNGs (**Observed** at The Hub: first window 0.6 s instead of 1.6-3 s, a move 0.15 s instead of
 0.85 s). Every piece must start on a block at every level, so the window origin is aligned to 128 overlay pixels (256 colour pixels). Tiles
 that are not square multiples of 256 keep the RGBA8 path.
 

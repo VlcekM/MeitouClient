@@ -1236,8 +1236,8 @@ sealed class MapWindows
         var firstColour = TerrainMaps.OverlayTile(install, "colour", 0, 0);
         try
         {
-            var tile = TerrainColourCache.Get(firstColour) ?? throw new FileNotFoundException($"missing {firstColour}");
-            return new MapWindows(o, null, new BlockTiles(install), ot, tile.Size);
+            int size = TerrainColourCache.Locate(firstColour)?.Size ?? TerrainColourCache.Get(firstColour)?.Size ?? throw new FileNotFoundException($"missing {firstColour}");
+            return new MapWindows(o, null, new BlockTiles(install), ot, size);
         }
         catch (InvalidDataException e)
         {
@@ -1369,51 +1369,66 @@ sealed class MapWindows
         var keys = new List<(int, int)>();
         for (int tz = tz0; tz <= tz1; tz++)
             for (int tx = tx0; tx <= tx1; tx++) keys.Add((tx, tz));
-        var tiles = new Dictionary<(int, int), TerrainColourCache.Tile?>();
-        Parallel.ForEach(keys, key =>
-        {
-            var t = cache.Get(key.Item1, key.Item2);
-            lock (tiles) tiles[key] = t?.Size == tile ? t : null;
-        });
         var levels = new byte[TerrainColourCache.Levels][];
         for (int l = 0; l < levels.Length; l++)
         {
-            // In blocks at this level.
-            int bx0 = (x0 >> l) / 4, bz0 = (z0 >> l) / 4, bw = (w >> l) / 4, bh = (h >> l) / 4, tb = (tile >> l) / 4;
-            var result = ArrayPool<byte>.Shared.Rent(bw * bh * 16);
-            Array.Clear(result, 0, bw * bh * 16);
-            foreach (var (tx, tz) in keys)
+            int bw = (w >> l) / 4, bh = (h >> l) / 4;
+            levels[l] = ArrayPool<byte>.Shared.Rent(bw * bh * 16);
+            Array.Clear(levels[l], 0, bw * bh * 16);
+        }
+        foreach (var (tx, tz) in keys)
+        {
+            var (stored, memory) = cache.Get(tx, tz);
+            if ((stored?.Size ?? memory?.Size) != tile) continue;   // missing, or of another size than the first: zero blocks
+            using var file = stored is not null ? File.OpenHandle(stored.Path) : null;
+            for (int l = 0; l < levels.Length; l++)
             {
-                if (tiles[(tx, tz)] is not { } t) continue;
+                // In blocks at this level.
+                int bx0 = (x0 >> l) / 4, bz0 = (z0 >> l) / 4, bw = (w >> l) / 4, bh = (h >> l) / 4, tb = (tile >> l) / 4;
                 int ax0 = Math.Max(bx0, tx * tb), ax1 = Math.Min(bx0 + bw, (tx + 1) * tb);
                 int az0 = Math.Max(bz0, tz * tb), az1 = Math.Min(bz0 + bh, (tz + 1) * tb);
                 for (int z = az0; z < az1; z++)
-                    Array.Copy(t.Levels[l], ((z - tz * tb) * tb + (ax0 - tx * tb)) * 16, result, ((z - bz0) * bw + (ax0 - bx0)) * 16, (ax1 - ax0) * 16);
+                {
+                    int from = ((z - tz * tb) * tb + (ax0 - tx * tb)) * 16, length = (ax1 - ax0) * 16;
+                    var into = levels[l].AsSpan(((z - bz0) * bw + (ax0 - bx0)) * 16, length);
+                    if (file is not null) TerrainColourCache.ReadBlocks(file, stored!, l, from, into);
+                    else memory!.Levels[l].AsSpan(from, length).CopyTo(into);
+                }
             }
-            levels[l] = result;
         }
         return levels;
     }
 
-    /// <summary>The encoded colour tiles one compose uses (<see cref="TerrainColourCache"/>), cleared after it like the decoded ones.</summary>
+    /// <summary>
+    /// The colour tiles' cache files (<see cref="TerrainColourCache.Locate"/>), kept for the session: a compose reads the block rows it needs from them. Without
+    /// a cache file (the caches off, a failed write) a tile's levels are read whole and dropped after the compose like the decoded tiles.
+    /// </summary>
     sealed class BlockTiles(GameInstall install)
     {
-        readonly Dictionary<(int, int), TerrainColourCache.Tile?> tiles = [];
+        readonly Dictionary<(int, int), TerrainColourCache.Stored?> stored = [];
+        readonly Dictionary<(int, int), TerrainColourCache.Tile?> memory = [];
 
-        public TerrainColourCache.Tile? Get(int tx, int tz)
+        public (TerrainColourCache.Stored? Stored, TerrainColourCache.Tile? Memory) Get(int tx, int tz)
         {
-            lock (tiles)
-                if (tiles.TryGetValue((tx, tz), out var hit)) return hit;
-            TerrainColourCache.Tile? tile;
-            try { tile = TerrainColourCache.Get(TerrainMaps.OverlayTile(install, "colour", tx, tz)); }
-            catch (InvalidDataException) { tile = null; }   // a tile of another size than the first: left out, as a missing one
-            lock (tiles) tiles[(tx, tz)] = tile;
-            return tile;
+            lock (stored)
+            {
+                if (stored.TryGetValue((tx, tz), out var file) && file is not null) return (file, null);
+                if (memory.TryGetValue((tx, tz), out var hit)) return (null, hit);
+            }
+            var path = TerrainMaps.OverlayTile(install, "colour", tx, tz);
+            try
+            {
+                if (TerrainColourCache.Locate(path) is { } found) { lock (stored) stored[(tx, tz)] = found; return (found, null); }
+                var tile = TerrainColourCache.Get(path);
+                lock (stored) memory[(tx, tz)] = tile;
+                return (null, tile);
+            }
+            catch (InvalidDataException) { lock (stored) memory[(tx, tz)] = null; return (null, null); }   // a tile unfit for blocks: left out, as a missing one
         }
 
         public void Clear()
         {
-            lock (tiles) tiles.Clear();
+            lock (stored) memory.Clear();
         }
     }
 

@@ -65,6 +65,54 @@ static class TerrainColourCache
         }
     }
 
+    /// <summary>A tile's valid cache file and its side: a window reads the block rows it needs from it (<see cref="ReadBlocks"/>) instead of the whole tile.</summary>
+    public sealed record Stored(string Path, int Size);
+
+    /// <summary>
+    /// The tile's cache file, encoded and written first when it has none; null when the tile does not exist, the caches are off or the file could not be
+    /// written (the caller takes <see cref="Get"/>'s levels).
+    /// </summary>
+    public static Stored? Locate(string path)
+    {
+        if (LoadCaches.Disabled || !File.Exists(path)) return null;
+        string cache = CachePath(path);
+        lock (gates.GetOrAdd(path, _ => new object()))
+        {
+            if (Header(cache) is { } size) return new Stored(cache, size);
+            var tile = Encode(path);
+            Write(cache, tile);
+            return Header(cache) is { } written ? new Stored(cache, written) : null;
+        }
+    }
+
+    /// <summary>Reads <paramref name="into"/>'s length of level <paramref name="level"/>'s blocks from <paramref name="offset"/> bytes into that level.</summary>
+    public static void ReadBlocks(Microsoft.Win32.SafeHandles.SafeFileHandle file, Stored tile, int level, long offset, Span<byte> into)
+    {
+        long at = 8 + LevelBytes(tile.Size, level) + offset;
+        while (into.Length > 0)
+        {
+            int read = RandomAccess.Read(file, into, at);
+            if (read <= 0) throw new IOException($"{tile.Path} ended early");
+            into = into[read..];
+            at += read;
+        }
+    }
+
+    // The side of a valid cache file (magic, a side fit for blocks, the length of its levels), else null.
+    static int? Header(string path)
+    {
+        try
+        {
+            if (!File.Exists(path)) return null;
+            using var file = File.OpenHandle(path);
+            Span<byte> head = stackalloc byte[8];
+            if (RandomAccess.Read(file, head, 0) != 8 || BitConverter.ToInt32(head) != Magic) return null;
+            int size = BitConverter.ToInt32(head[4..]);
+            return size > 0 && size % Granule == 0 && RandomAccess.GetLength(file) == 8 + LevelBytes(size, Levels) ? size : null;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return null; }
+    }
+
     static Tile Encode(string path)
     {
         var img = TextureLoader.LoadImage(File.ReadAllBytes(path));
