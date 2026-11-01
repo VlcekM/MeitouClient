@@ -4,10 +4,10 @@
   var METRICS = [
     { key: "p99_ms", label: "p99 frame time (ms)", unit: " ms", primary: true },
     { key: "over33_pct", label: "Frames over 33 ms (%)", unit: "%", primary: true },
-    { key: "p50_ms", label: "p50 frame time (ms)", unit: " ms" },
+    { key: "p50_ms", label: "p50 frame time (ms)", unit: " ms", primary: true },
     { key: "slow_world_p99_ms", label: "Slow-world tick p99 (ms)", unit: " ms" },
     { key: "avg_fps", label: "Average fps", unit: " fps", higher: true, optional: true },
-    { key: "vram_peak_mb", label: "Peak video memory (MB)", unit: " MB", optional: true }
+    { key: "vram_peak_mb", label: "Peak video memory (MB)", unit: " MB", primary: true, optional: true }
   ];
   var ALLM = METRICS.concat([
     { key: "max_ms", label: "Max frame (ms)", unit: " ms" },
