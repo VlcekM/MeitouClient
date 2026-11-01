@@ -51,6 +51,7 @@ The object, foliage and character texture caches share images (`TextureShare`, p
 level is taken by another instead of loaded when it drops no more top levels than that cache's mip streaming would, and two loads of the same file
 and levels that land together keep one. An image goes with its last user; each cache still counts its bytes. **Observed** (VRAM dump, 2026-11-01):
 about 150 MB of the same files were resident twice before this.
+Debris (severed limbs, bolts) takes its textures from the character cache rather than loading its own copies (~30 MB of skins were held twice, VRAM dump 2026-11-01).
 
 The sharing caches also have one high-water mark together (`TextureShare.ResidentBytes` against `MarkMb`, 2 GB at full quality), not one each.
 Above it, textures unused for 8 s are unloaded, least recently used first, until the total is under three quarters of the mark. Below it,

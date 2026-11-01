@@ -30,6 +30,7 @@ sealed partial class GameHost
         if (nav is null || navOverlayRenderer is not { } overlay) { Console.WriteLine("navmesh   no navmesh in this scene"); return; }
         navView = (NavView)(((int)navView + 1) % 4);
         overlay.Visible = navView != NavView.Off;
+        if (navView == NavView.Off) { overlay.Clear(); navOverlayShown = null; }
         Console.WriteLine(navView switch
         {
             NavView.Meitou => "navmesh   Meitou's (Shift+F11: the original's)",

@@ -1750,6 +1750,7 @@ static class WorldFrame
             var (markerNear, markerFar) = slices[^1];
             marker.Record(picture, width, height, post.SceneDepth, post.RenderWidth, post.RenderHeight, view * camera.Projection(aspect, markerNear, markerFar), eye, sun);
         }
+        else gpu.Markers?.Idle();
         // The navmesh debug view over the finished picture (Meitou only).
         if (gpu.NavmeshOverlay is { Visible: true } navOverlay && post.Target is { } navPicture)
         {
