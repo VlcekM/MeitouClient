@@ -686,7 +686,6 @@ sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, 
         bindings.ResetToDefaults();
         config.LookPreset = null;
         config.FaithfulLook = false;
-        config.QualityTier = HighPreset;
         config.KeepAtLow.Clear();
         activeLook = null;
         resetPending = false;

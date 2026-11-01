@@ -14,6 +14,12 @@ public sealed record LookPresetData(string Name, string Made, Dictionary<string,
 /// </summary>
 public static class LookPresetFile
 {
+    /// <summary>The longest preset name: what the name box takes, and where a longer one (a pasted code's, a hand-edited file's) is cut.</summary>
+    public const int MaxNameLength = 40;
+
+    /// <summary>The most a share code's JSON may inflate to; a code holding more is not a preset.</summary>
+    public const int MaxShareJson = 64 * 1024;
+
     public static LookPresetData? Read(string json)
     {
         try
@@ -22,9 +28,17 @@ public static class LookPresetFile
             var root = doc.RootElement;
             var values = new Dictionary<string, float>();
             foreach (var p in root.GetProperty("values").EnumerateObject()) values[p.Name] = p.Value.GetSingle();
-            return new(root.GetProperty("name").GetString() ?? "Unnamed", root.TryGetProperty("meitou", out var m) ? m.GetString() ?? "?" : "?", values);
+            return new(CleanName(root.GetProperty("name").GetString()), root.TryGetProperty("meitou", out var m) ? m.GetString() ?? "?" : "?", values);
         }
         catch (Exception e) when (e is JsonException or KeyNotFoundException or InvalidOperationException or FormatException) { return null; }
+    }
+
+    /// <summary>A name as a preset may have it: no control characters, trimmed, at most <see cref="MaxNameLength"/> characters; "Unnamed" when nothing is left.</summary>
+    static string CleanName(string? name)
+    {
+        string clean = string.Concat((name ?? "").Where(c => !char.IsControl(c))).Trim();
+        if (clean.Length > MaxNameLength) clean = clean[..MaxNameLength].TrimEnd();
+        return clean.Length > 0 ? clean : "Unnamed";
     }
 
     public static string Write(LookPresetData look)
@@ -55,12 +69,15 @@ public static class LookPresetFile
     public static LookPresetData? FromShareCode(string? code)
     {
         string text = string.Concat((code ?? "").Where(c => !char.IsWhiteSpace(c)));
-        if (!text.StartsWith("MT1:", StringComparison.Ordinal)) return null;
+        // The deflated JSON is smaller than its inflated cap (and base64 a third larger than that), so a longer code is not a preset.
+        if (!text.StartsWith("MT1:", StringComparison.Ordinal) || text.Length > 4 + MaxShareJson * 4 / 3 + 4) return null;
         try
         {
             using var deflate = new DeflateStream(new MemoryStream(Convert.FromBase64String(text[4..])), CompressionMode.Decompress);
-            using var reader = new StreamReader(deflate, Encoding.UTF8);
-            return Read(reader.ReadToEnd());
+            var inflated = new byte[MaxShareJson + 1];
+            int length = 0;
+            for (int read; length < inflated.Length && (read = deflate.Read(inflated, length, inflated.Length - length)) > 0;) length += read;
+            return length > MaxShareJson ? null : Read(Encoding.UTF8.GetString(inflated, 0, length));
         }
         catch (Exception e) when (e is FormatException or InvalidDataException) { return null; }
     }

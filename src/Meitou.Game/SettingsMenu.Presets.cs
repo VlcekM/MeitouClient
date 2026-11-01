@@ -145,6 +145,25 @@ sealed partial class SettingsMenu
         // At Low the look switches it holds off stay off, also where the launcher's look turned them on (unless kept on).
         foreach (var label in LowCut())
             if (values.Toggles.FirstOrDefault(t => t.Label == label && t.Get()) is { } toggle) toggle.Set(false);
+        lastTier = CurrentPreset();
+    }
+
+    /// <summary>The tier being applied (<see cref="ApplyPreset"/>, <see cref="SetFaithful"/>), so the Low cut follows it before the sliders reach it.</summary>
+    int? tierOverride;
+    /// <summary>The tier the settings sat at when last looked (<see cref="SyncTier"/>); -1 not yet.</summary>
+    int lastTier = -1;
+
+    /// <summary>The quality tier: the one the settings sit at (<see cref="CurrentPreset"/>), so a slider moved off it makes it Custom.</summary>
+    int Tier => tierOverride ?? CurrentPreset();
+
+    /// <summary>Once the settings leave Low (a slider moved), the look switches Low held off come back.</summary>
+    void SyncTier()
+    {
+        int now = CurrentPreset();
+        if (now == lastTier) return;
+        bool leftLow = lastTier == LowPreset;
+        lastTier = now;
+        if (leftLow && !FaithfulLook) ApplyLowCut();
     }
 
     /// <summary>Saves the preset the settings sit at (Custom when none), for the launcher to show.</summary>
@@ -153,7 +172,15 @@ sealed partial class SettingsMenu
     void ApplyPreset(int preset)
     {
         if (preset is < 0 or >= CustomPreset) return;
-        config.QualityTier = preset;
+        tierOverride = preset;
+        try { ApplyTier(preset); }
+        finally { tierOverride = null; }
+        lastTier = CurrentPreset();
+        notice = preset == LowPreset && LowCut().Any() ? $"Low quality applied: {string.Join(", ", LowCut())} off until you keep them on." : $"{PresetNames[preset]} quality applied.";
+    }
+
+    void ApplyTier(int preset)
+    {
         if (preset == LowPreset && values.Sliders.FirstOrDefault(s => s.Label == WorldFrame.ParticleSliders[0]) is { } particles) particles.Set(1);   // a quarter of the render size
         // The switches first: they move the distances that sit at their mode's default, and the mode decides the distances' base.
         if (!FaithfulLook)
@@ -174,7 +201,6 @@ sealed partial class SettingsMenu
         }
         foreach (var (p, slider) in PresetPairs()) slider.Set(PresetTarget(p, slider, preset));
         if (values.Toggles.FirstOrDefault(t => t.Label == FifthCascade) is { } cascade && cascade.Get() != CascadeFor(preset)) cascade.Set(CascadeFor(preset));
-        notice = preset == LowPreset && LowCut().Any() ? $"Low quality applied: {string.Join(", ", LowCut())} off until you keep them on." : $"{PresetNames[preset]} quality applied.";
     }
 
     /// <summary>

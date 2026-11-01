@@ -41,6 +41,7 @@ sealed partial class SettingsMenu
         new("Foliage ranges", "Foliage ranges", ["Foliage draw distance x", "Foliage LOD distance x (lod Meitou)", "Large foliage range (F6 Meitou)",
             "Medium foliage range", "Small foliage range", "Grass draw distance x", WorldFrame.GrassDensitySlider, "Foliage levels"]),
         new("Far impostors", "Far impostors", ["Impostor distance (F7 Meitou)", "Large impostor distance (F7 Meitou)"]),
+        new("Mesh welding", "Mesh welding", []),
         new("Water", "Water", ["Water clarity x (Meitou)", "Far water clarity (Meitou)", "Water see-through distance (Meitou, game 4000)",
             WorldFrame.WaterReflectionSlider, WorldFrame.ReflectionRangeSlider]),
         // Characters: the skin switch, then one row per race (added by Entries)

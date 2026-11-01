@@ -46,12 +46,12 @@ public class UserConfigTests : IDisposable
     [Fact]
     public void A_newer_release_file_keeps_its_version_and_unknown_keys()
     {
-        // A file from before versions keeps its values and is saved as version 1.
+        // A file from before versions keeps its values and is saved in the current layout.
         var (old, oldSaved, oldBackups) = RoundTrip("""{"fpsLimit": 90, "graphics": {"Object draw distance": 30000}}""");
 
         Assert.Equal(90, old.FpsLimit);
         Assert.Equal(30000, old.Graphics["Object draw distance"]);
-        Assert.Equal(1, (int)oldSaved["version"]!);
+        Assert.Equal(UserConfig.CurrentVersion, (int)oldSaved["version"]!);
         Assert.Empty(oldBackups);
 
         var (config, saved, backups) = RoundTrip("""{"version": 3, "fpsLimit": 60, "brandNewKey": {"a": [1, 2]}}""");

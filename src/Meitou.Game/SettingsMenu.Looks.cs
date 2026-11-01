@@ -17,7 +17,14 @@ sealed partial class SettingsMenu
 {
     /// <summary>The roles <see cref="Role"/> gives the look's settings (the rest are quality settings, which the tier sets).</summary>
     static readonly string[] LookRoles = ["Light", "Sky", "Colour", "Water", "Skin"];
-    internal const string MeitouVersion = "0.14";
+    /// <summary>This build's release (its git tag without the <c>v</c>, as the settings menu shows it), written into the presets it makes.</summary>
+    internal static string MeitouVersion => BuildVersion.Tag.TrimStart('v');
+
+    /// <summary>
+    /// Switches that save memory or time and leave the picture as it is (welded tangents, billboards past the impostor distance, generated levels): the look leaves
+    /// them alone, so Faithful costs no memory for nothing; they are quality settings the player sets.
+    /// </summary>
+    internal static readonly string[] PerformanceSwitches = ["Mesh welding", "Far impostors", "Foliage levels", "Character levels"];
 
     /// <summary>A look preset: what it sets, by the keys the settings are saved under (a slider's label, "Meitou: " and a switch's label); everything else is Meitou's.</summary>
     sealed record LookPreset(string Name, string Source, string Made, Dictionary<string, float> Values, string? File = null);
@@ -48,9 +55,10 @@ sealed partial class SettingsMenu
     internal static IReadOnlyList<(string Name, IReadOnlyDictionary<string, float> Values)> BuiltInLooks =>
         [.. new[] { MeitouLook }.Concat(ExampleLooks).Select(l => (l.Name, (IReadOnlyDictionary<string, float>)l.Values))];
 
-    /// <summary>The <c>graphics</c> keys a look sets: every Faithful / Meitou graphics switch (Faithful turns them all off; the fifth cascade is a quality switch) and the look tabs' sliders.</summary>
+    /// <summary>The <c>graphics</c> keys a look sets: every Faithful / Meitou graphics switch (Faithful turns them all off; the fifth cascade and the
+    /// <see cref="PerformanceSwitches"/> are quality switches) and the look tabs' sliders.</summary>
     internal static IEnumerable<string> LookKeys(IEnumerable<string> switchLabels, IEnumerable<string> sliderLabels) =>
-        switchLabels.Where(label => label != WorldFrame.FifthCascadeSwitch && GraphicsPages.Contains(GraphicsSection(label, true))).Select(SwitchKey)
+        switchLabels.Where(label => label != WorldFrame.FifthCascadeSwitch && !PerformanceSwitches.Contains(label) && GraphicsPages.Contains(GraphicsSection(label, true))).Select(SwitchKey)
             .Concat(sliderLabels.Where(label => Section(label) is not ("Display" or "Advanced") && IsLook(label, false)));
 
     /// <summary>The quality tiers' switches (their keys): the tier sets them under a Meitou look, so a look leaves them alone (Faithful turns them off).</summary>
@@ -154,8 +162,8 @@ sealed partial class SettingsMenu
     internal static bool IsLook(string label, bool toggle) => GraphicsSection(label, toggle) != "Hidden" && LookRoles.Contains(Role(label, toggle))
         && (toggle || !PresetSliders.Any(p => p.Label == label));
 
-    /// <summary>A Faithful / Meitou switch of the Graphics page (the gameplay one, Interior lamps, is not).</summary>
-    static bool IsGraphicsSwitch(Toggle t) => t.Remaster && GraphicsPages.Contains(GraphicsSection(t.Label, true));
+    /// <summary>A Faithful / Meitou switch of the Graphics page that Faithful turns off (not the gameplay one, Interior lamps, nor the <see cref="PerformanceSwitches"/>).</summary>
+    static bool IsGraphicsSwitch(Toggle t) => t.Remaster && !PerformanceSwitches.Contains(t.Label) && GraphicsPages.Contains(GraphicsSection(t.Label, true));
 
     /// <summary>
     /// How much a setting costs, as a level a player can use on any machine: ranked from the measured costs in the docs (RTX 4090, 1440p; docs/render-*.md),
@@ -173,7 +181,7 @@ sealed partial class SettingsMenu
         "Cloud shadows" or "Indoor GI" or "Planetshine" or "Night air" or "Night sky" or "Skin" or "Rock smoothing (tessellation)" or "Cloud shadows in fog"
             or "Terrain outline refinement (tessellation)" or "Small foliage range" or "Bloom strength (0 = game)" or WorldFrame.BloomSwitch or "Heat haze" or "Blood cells" or "Blood on surfaces" or "Item icons"
             or "Light shafts air (0 = none)" => "Low impact",
-        "Far impostors" or "Foliage levels" or "Character levels" or "Weather particles" => "Faster with Meitou",
+        "Far impostors" or "Foliage levels" or "Character levels" or "Weather particles" or "Mesh welding" => "Faster with Meitou",
         _ when label == WorldFrame.ParticleSliders[0] || label == WorldFrame.ParticleSliders[1] => "Medium impact",
         _ when IsLook(label, false) || IsLook(label, true) => "No impact",
         _ => null,
@@ -190,7 +198,7 @@ sealed partial class SettingsMenu
     bool PresetHas(string label) => LookToggles().FirstOrDefault(x => x.Toggle.Label == label) is { Toggle: not null } found && LookValue(ActiveLook, found.Key, found.Default ? 1 : 0) >= 0.5f;
 
     /// <summary>Whether Low quality holds this look switch off: one of <see cref="LowOffSwitches"/> the preset has on, at Low, not kept on.</summary>
-    bool CutAtLow(string label) => config.QualityTier == LowPreset && LowOffSwitches.Contains(label) && !config.KeepAtLow.Contains(label) && !FaithfulLook && PresetHas(label);
+    bool CutAtLow(string label) => LowOffSwitches.Contains(label) && !config.KeepAtLow.Contains(label) && !FaithfulLook && PresetHas(label) && Tier == LowPreset;
 
     IEnumerable<string> LowCut() => LowOffSwitches.Where(CutAtLow);
 
@@ -226,9 +234,11 @@ sealed partial class SettingsMenu
 
     /// <summary>
     /// Whether the look is Faithful (the game as it ships, every option still free to change) rather than a Meitou preset: saved (<see cref="UserConfig.FaithfulLook"/>);
-    /// unknown, it is Faithful when every Faithful / Meitou graphics switch is on the game's side (one that does not take, such as indirect light without ray queries, is ignored).
+    /// unknown, it is Faithful while every Faithful / Meitou effect switch is on the game's side (one that does not take, such as indirect light without ray queries, is
+    /// ignored; so are the tier's switches and the optional bloom). The guess is not saved: choosing a look saves it.
     /// </summary>
-    bool FaithfulLook => config.FaithfulLook ??= values.Toggles.Where(t => IsGraphicsSwitch(t) && !stuckSwitches.Contains(t.Label)).All(t => !t.Get());
+    bool FaithfulLook => config.FaithfulLook ?? values.Toggles
+        .Where(t => IsGraphicsSwitch(t) && !t.Optional && !PresetToggles.Any(p => p.Label == t.Label) && !stuckSwitches.Contains(t.Label)).All(t => !t.Get());
 
     void ApplyLook(LookPreset look)
     {
@@ -258,31 +268,42 @@ sealed partial class SettingsMenu
 
     void SetFaithful(bool faithful)
     {
-        config.FaithfulLook = faithful;
-        if (faithful)
+        // The tier stays: its sliders are measured from the switches' sides (Draw distances, Shadows), so they are set again for the new look.
+        int tier = CurrentPreset();
+        tierOverride = tier;
+        try
         {
-            foreach (var toggle in values.Toggles.Where(t => IsGraphicsSwitch(t) && t.Get()))
+            config.FaithfulLook = faithful;
+            if (faithful)
             {
-                toggle.Set(false);
-                if (toggle.Get()) stuckSwitches.Add(toggle.Label);
+                foreach (var toggle in values.Toggles.Where(t => IsGraphicsSwitch(t) && t.Get()))
+                {
+                    toggle.Set(false);
+                    if (toggle.Get()) stuckSwitches.Add(toggle.Label);
+                }
+                foreach (var (_, slider, meitou) in LookSliders()) slider.Set(GameValue(slider, meitou));
             }
-            foreach (var (_, slider, meitou) in LookSliders()) slider.Set(GameValue(slider, meitou));
-            notice = "Faithful: every graphics feature as the game ships it.";
-            return;
+            else
+            {
+                // The Meitou quality switches as the tier has them, then the active preset's look.
+                int switches = tier < CustomPreset ? tier : HighPreset;
+                for (int i = 0; i < values.Toggles.Count; i++)
+                    if (values.Toggles[i] is var t && IsGraphicsSwitch(t) && !IsLook(t.Label, true))
+                    {
+                        bool on = PresetToggles.FirstOrDefault(p => p.Label == t.Label) is { } tierSwitch ? SwitchTarget(tierSwitch, toggleDefaults[i], switches) : toggleDefaults[i];
+                        if (t.Get() != on) t.Set(on);
+                    }
+                ApplyLook(ActiveLook);
+            }
+            if (tier < CustomPreset) foreach (var (p, slider) in PresetPairs()) slider.Set(PresetTarget(p, slider, tier));
         }
-        // The Meitou performance switches as the tier has them, then the active preset's look.
-        int tier = config.QualityTier is >= 0 and < CustomPreset ? config.QualityTier : HighPreset;
-        for (int i = 0; i < values.Toggles.Count; i++)
-            if (values.Toggles[i] is var t && IsGraphicsSwitch(t) && !IsLook(t.Label, true))
-            {
-                bool on = PresetToggles.FirstOrDefault(p => p.Label == t.Label) is { } tierSwitch ? SwitchTarget(tierSwitch, toggleDefaults[i], tier) : toggleDefaults[i];
-                if (t.Get() != on) t.Set(on);
-            }
-        ApplyLook(ActiveLook);
-        notice = $"Meitou look: {ActiveLook.Name}.";
+        finally { tierOverride = null; }
+        lastTier = tier;
+        notice = faithful ? "Faithful: every graphics feature as the game ships it." : $"Meitou look: {ActiveLook.Name}.";
     }
 
-    LookPreset SaveLook(string name)
+    /// <summary>Saves the look as the player's preset <paramref name="name"/> and makes it the active one; null (the notice says why) when its file could not be written.</summary>
+    LookPreset? SaveLook(string name)
     {
         var set = new Dictionary<string, float>();
         foreach (var (key, toggle, meitou) in LookToggles())
@@ -292,9 +313,7 @@ sealed partial class SettingsMenu
         }
         foreach (var (key, slider, meitou) in LookSliders()) if (MathF.Abs(slider.Get() - meitou) > 0.002f * (slider.Max - slider.Min)) set[key] = MathF.Round(slider.Get(), 3);
         var saved = new LookPreset(name, "mine", MeitouVersion, set, Path.Combine(PresetFolder, MakeFileName(name)));
-        if (!NoDiskWrites)
-            try { Directory.CreateDirectory(PresetFolder); File.WriteAllText(saved.File!, WriteLook(saved)); }
-            catch (Exception e) when (e is IOException or UnauthorizedAccessException) { notice = "Could not write the preset: " + e.Message; }
+        if (!WritePreset(saved)) return null;
         var list = Looks();
         int at = list.FindIndex(l => l.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
         if (at >= 0) list[at] = saved; else list.Add(saved);
@@ -322,19 +341,25 @@ sealed partial class SettingsMenu
             notice = "The clipboard holds no preset code (MT1:…). Copy one with Share first.";
             return;
         }
-        var look = SaveLookAs(FreeName(pasted.Name), pasted.Values, pasted.Made);
-        notice = $"{look.Name} pasted and loaded (made on Meitou {look.Made}).";
+        if (SaveLookAs(FreeName(pasted.Name), pasted.Values, pasted.Made) is { } look) notice = $"{look.Name} pasted and loaded (made on Meitou {look.Made}).";
     }
 
-    LookPreset SaveLookAs(string name, Dictionary<string, float> set, string made)
+    /// <summary>Adds a preset of the player's and makes it the active one; null (the notice says why) when its file could not be written.</summary>
+    LookPreset? SaveLookAs(string name, Dictionary<string, float> set, string made)
     {
         var look = new LookPreset(name, "mine", made, set, Path.Combine(PresetFolder, MakeFileName(name)));
-        if (!NoDiskWrites)
-            try { Directory.CreateDirectory(PresetFolder); File.WriteAllText(look.File!, WriteLook(look)); }
-            catch (Exception e) when (e is IOException or UnauthorizedAccessException) { notice = "Could not write the preset: " + e.Message; }
+        if (!WritePreset(look)) return null;
         Looks().Add(look);
         ApplyLook(look);
         return look;
+    }
+
+    /// <summary>Writes a preset's file (the showcase writes none); false, with the reason in the notice, when it could not be written.</summary>
+    bool WritePreset(LookPreset look)
+    {
+        if (NoDiskWrites) return true;
+        try { Directory.CreateDirectory(PresetFolder); File.WriteAllText(look.File!, WriteLook(look)); return true; }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { notice = "Could not write the preset: " + e.Message; return false; }
     }
 
     // ---- naming a preset (Save as) ----
@@ -354,8 +379,7 @@ sealed partial class SettingsMenu
             return;
         }
         naming = false;
-        var saved = SaveLook(name);
-        notice = $"Saved as {saved.Name}.";
+        if (SaveLook(name) is { } saved) notice = $"Saved as {saved.Name}.";
     }
 
     bool NameKey(Key key)
@@ -368,7 +392,7 @@ sealed partial class SettingsMenu
 
     void NameText(char value)
     {
-        if (!char.IsControl(value) && nameText.Length < 40 && !Path.GetInvalidFileNameChars().Contains(value)) nameText += value;
+        if (!char.IsControl(value) && nameText.Length < global::Meitou.Settings.LookPresetFile.MaxNameLength && !Path.GetInvalidFileNameChars().Contains(value)) nameText += value;
     }
 
     void DrawNameDialog()
@@ -402,6 +426,7 @@ sealed partial class SettingsMenu
     {
         var keep = viewport;
         viewport = R(212, 96, 888, 72);
+        SyncTier();
         bool faithful = FaithfulLook;
         Text("Look", R(212, 98, 70, 30), 15, LightInk);
         Segmented(R(286, 101, 172, 24), faithful ? 0 : 1, i => SetFaithful(i == 0));
@@ -430,7 +455,7 @@ sealed partial class SettingsMenu
             }
             else Text(look.Source == "built in" ? "Built in" : look.Source == "example" ? "Example" : $"Mine · Meitou {look.Made}", R(684, 98, 120, 30), 12, MutedInk);
             const float x = 872;
-            if (mine && changes > 0) Button("Save", R(x - 64, 100, 58, 26), () => { SaveLook(look.Name); notice = $"{look.Name} saved."; });
+            if (mine && changes > 0) Button("Save", R(x - 64, 100, 58, 26), () => { if (SaveLook(look.Name) is not null) notice = $"{look.Name} saved."; });
             else if (mine)
                 Button("Delete", R(x - 70, 100, 64, 26), () =>
                 {

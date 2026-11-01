@@ -179,8 +179,8 @@ setting reaches the launcher with its release; the launcher knows none of them. 
   `looks.meitou`, marked `looks.made`.
 - `looks` (null in older schemas: no row) is the Look row: Faithful (`faithfulLook` true) or a Meitou look preset (`lookPreset`: one of
   `looks.presets`, the first saved as no key, or a player's JSON file in `looks.folder` beside `meitou.user.json`, its `name` and
-  `values`). A look is a set of `graphics` values, as the game's menu applies it: `looks.faithful` (every Faithful / Meitou graphics
-  switch off, the look sliders at the game's value) or `looks.meitou` with the preset's own values over them (the quality tier's
+  `values`). A look is a set of `graphics` values, as the game's menu applies it: `looks.faithful` (every Faithful / Meitou effect
+  switch off but the performance ones, the look sliders at the game's value) or `looks.meitou` with the preset's own values over them (the quality tier's
   switches are left to the tier). Choosing one writes them, so the rows show it at once and the game counts no change from it; at Low
   the game still holds the tier's look switches off at start unless kept on (`SettingsMenu.ApplySavedPreset`). No `faithfulLook`
   reads Faithful when every switch Faithful turns off is saved off, as the game does. A look slider's Default writes the look's value.

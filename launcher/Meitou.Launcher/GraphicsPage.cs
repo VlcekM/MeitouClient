@@ -344,7 +344,7 @@ public sealed partial class MainWindow
         if (namingLook is { } naming)
         {
             // Save as: the name, then Save or Cancel (Enter / Esc).
-            var name = new TextBox { Text = naming, Width = 260 };
+            var name = new TextBox { Text = naming, Width = 260, MaxLength = LookPresetFile.MaxNameLength };
             var save = new Button { Content = Tr("Save") };
             var cancel = new Button { Content = Tr("Cancel") };
             void Done(bool keep)
@@ -410,9 +410,9 @@ public sealed partial class MainWindow
         Dispatcher.UIThread.Post(ShowGraphics);
     }
 
-    /// <summary>Whether the look is Faithful: saved, else when every switch Faithful turns off is saved off (as the game reads it).</summary>
+    /// <summary>Whether the look is Faithful: saved, else when every switch Faithful turns off and Meitou turns on (not the tier's, not bloom) is saved off, as the game reads it.</summary>
     bool IsFaithful(SettingsLooks l) => game.GetBool(l.FaithfulKey)
-        ?? l.Faithful.Keys.Where(key => key.StartsWith("Meitou: ", StringComparison.Ordinal)).All(key => game.GetGraphics(key) is { } v && v < 0.5f);
+        ?? l.Faithful.Keys.Where(key => key.StartsWith("Meitou: ", StringComparison.Ordinal) && l.Meitou.TryGetValue(key, out float meitou) && meitou >= 0.5f).All(key => game.GetGraphics(key) is { } v && v < 0.5f);
 
     /// <summary>A Meitou look's values: Meitou's, with the preset's own over them.</summary>
     static Dictionary<string, float> LookValues(SettingsLooks l, SettingsLook look)
