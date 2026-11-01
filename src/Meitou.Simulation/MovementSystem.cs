@@ -769,6 +769,13 @@ public sealed class MovementSystem(PathService paths) : ITickSystem, IDisposable
                 cold.AgentSpeed = 0;
                 continue;
             }
+            if (n.Position != p.Position)
+            {
+                // Placed earlier this tick (a debug teleport): a step from last tick's position would put it back, as a neighbour's push does to one in a crowd.
+                n.Velocity = Vector3.Zero;
+                cold.AgentSpeed = 0;
+                continue;
+            }
             if (n.Task != (byte)CharacterTask.Attack && cold.StaggeredUntil > world.Tick || CharacterFacts.GettingUp(cold, world.Tick)
                 || n.Task != (byte)CharacterTask.Attack && cold.Animation is { HoldsStill: true } && ((MoveFlags)n.Flags & MoveFlags.AnyPath) != 0)
             {
