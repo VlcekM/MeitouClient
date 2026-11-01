@@ -814,6 +814,9 @@ default.
 - Texture views: the textures carry `PixelFormatView`; a non-identity `GpuSwizzle` is
   `newTextureViewWithPixelFormat:textureType:levels:slices:swizzle:` (the BC4 masks' `RrrOne`). Metal's blit cannot
   scale: `BlitLevel` copies equal-sized levels and renders a sampling pass over level views when they differ.
+  `Blit` copies matching single-sample 2D depth textures with a native blit; scaled or mismatched depth copies are unsupported.
+  **Observed** on macOS Metal with a saved surface-blood scene: the colour sampling path aborts pipeline creation
+  when given a depth target; native copies let both terrain/static blood-depth captures complete.
 - Partial clears: a fullscreen triangle under the rect's scissor (colour and/or depth outputs), then the previous
   viewport/scissor are restored and the pipeline filter reset. Sets the depth-stencil state for the clear.
 - A Metal `drawPrimitives…indirectBuffer` is one command; `DrawIndexedIndirect` loops, and the count variants issue

@@ -953,9 +953,25 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
     /// <inheritdoc/>
     public bool FrameCompleted(long frame) => frameNumber - frame >= FrameRingDepth;
 
-    /// <summary>A texture copied into another, scaled (the impostor bake's supersampled row halved): a sampling pass into the destination.</summary>
-    internal void BlitScaled(MTLCommandBuffer command, GpuTexture src, GpuTexture dst, TextureMinFilter filter) =>
+    /// <summary>Matching depth textures use a native copy; colour textures use a sampling pass, which can scale.</summary>
+    internal void BlitScaled(MTLCommandBuffer command, GpuTexture src, GpuTexture dst, TextureMinFilter filter)
+    {
+        if (MetalConventions.IsDepthFormat(src.Desc.Format) || MetalConventions.IsDepthFormat(dst.Desc.Format))
+        {
+            if (src.Desc.Format != dst.Desc.Format || src.Desc.Width != dst.Desc.Width || src.Desc.Height != dst.Desc.Height
+                || src.Desc.Kind != TextureKind.Texture2D || dst.Desc.Kind != TextureKind.Texture2D
+                || src.Desc.Samples != 1 || dst.Desc.Samples != 1)
+                throw new NotSupportedException("Metal depth blits require matching single-sample 2D textures of the same size and format");
+            // The sampling pass below writes a colour attachment; depth formats cannot be bound there.
+            var blit = command.BlitCommandEncoder();
+            blit.CopyFromTexture(TextureAt(src), 0, 0, new MTLOrigin(),
+                new MTLSize { width = (ulong)src.Desc.Width, height = (ulong)src.Desc.Height, depth = 1 },
+                TextureAt(dst), 0, 0, new MTLOrigin());
+            blit.EndEncoding();
+            return;
+        }
         BlitScaled(command, TextureAt(src), TextureAt(dst), MetalConventions.Pixel(dst.Desc.Format), dst.Desc.Width, dst.Desc.Height, filter);
+    }
 
     /// <summary>
     /// A texture's level over another level of the same texture (the mip chain's step): a blit when the two levels are the same
