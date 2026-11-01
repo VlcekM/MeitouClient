@@ -698,21 +698,17 @@ static class NavmeshTool
             }
             var all = full.WithKept(Enumerable.Repeat(true, full.PolygonCount).ToArray());
             // Each of our interiors' hull, to name the building an original group lies in (the one holding most of its face centres).
-            var hulls = gatherer.InteriorSites(zone).Select(s => (s.Placement.Key, Name: s.Destroyed ? s.Record.Name + " (destroyed)" : s.Record.Name, gatherer.GatherInterior(s, NavMeshPipeline.InteriorTileStep * settings.CellSize)?.InteriorHull))
-                .Where(h => h.InteriorHull is not null).ToList();
+            var sites = InteriorJoinSweep.Sites(gatherer, zone, settings);
             var coverage = OriginalNavTiles.CoverInteriors(groups, mesh, g.ZoneMin, g.ZoneMax);
             if (verbose) FurnitureOverOriginal(gatherer, zone, groups, settings);
             int faces = coverage.Sum(c => c.Faces), covered = coverage.Sum(c => c.Covered);
             Console.WriteLine($"{zone}: {groups.Count} interior groups, {covered}/{faces} faces covered ({(faces > 0 ? 100.0 * covered / faces : 100):0.0} %)");
-            CompareJoins(gatherer, zone, groups, hulls, Reached(zone, full, inner, settings, resolved), settings);
+            PrintJoins(InteriorJoinSweep.Compare(gatherer, zone, groups, sites, InteriorJoinSweep.Reached(zone, full, inner, settings, resolved), settings));
             foreach (var c in coverage)
                 if (c.Faces > 0 && c.Covered < 0.9 * c.Faces)
                 {
-                    var centres = c.Group.Polygons.Where(p => p.Length >= 3).Select(p => p.Aggregate(Vector3.Zero, (a, i) => a + c.Group.Vertices[i]) / p.Length).ToList();
-                    int Inside((string Key, string Name, NavVolume? InteriorHull) h) =>
-                        centres.Count(v => NavGeometry.InsideConvex(h.InteriorHull!.Polygon, new Vector2(v.X, v.Z), 2) && v.Y >= h.InteriorHull.YMin - 20 && v.Y <= h.InteriorHull.YMax + 20);
-                    var site = hulls.MaxBy(Inside);
-                    string owner = hulls.Count > 0 && Inside(site) > 0 ? $"{site.Key} {site.Name}, {Inside(site)} faces in its hull" : "no interior of ours";
+                    var site = InteriorJoinSweep.Owner(c.Group, sites);
+                    string owner = site is not null ? $"{site.Key} {SiteName(site)}, {InteriorJoinSweep.Inside(c.Group, site)} faces in its hull" : "no interior of ours";
                     Console.WriteLine($"    {c.Group.Uid} at {c.Group.Origin.X:0},{c.Group.Origin.Z:0} ({owner}): {c.Covered}/{c.Faces} faces covered, missing y {c.MissingLow:0}..{c.MissingHigh:0}");
                     Console.WriteLine($"      uncovered by height over the group's lowest face: {DescribeUncovered(c.Group, mesh, all, g.ZoneMin, g.ZoneMax)}");
                 }
@@ -720,81 +716,22 @@ static class NavmeshTool
         return 0;
     }
 
-    /// <summary>
-    /// The interiors of a zone's build reached from the street: the zone's kept set resolved alone (its seeds and the border rule, as with no neighbour
-    /// loaded) or with its neighbours (<paramref name="resolved"/>, <c>--around n</c>), walked over kept polygons, joins and links from its exterior's kept polygons; an interior counts when a polygon its own pruning kept is
-    /// reached (any of it when that kept nothing: a doorway strip kept only through a join is not the room). Keys are the interiors' building keys
-    /// (<see cref="InteriorMesh.Key"/>), in the order the build appended them.
-    /// </summary>
-    static HashSet<string> Reached(ZoneCoordinate zone, ZoneNavMesh full, IReadOnlyList<InteriorMesh> inner, NavBuildSettings settings, bool[]? resolved = null)
-    {
-        var keep = resolved ?? ZoneKeptClosure.Resolve(new Dictionary<ZoneCoordinate, ZoneNavMesh> { [zone] = full }, settings)[zone];
-        int exterior = full.PolygonCount - inner.Sum(m => m.Mesh.PolygonCount);
-        var reached = new bool[full.PolygonCount];
-        var queue = new Queue<int>();
-        for (int p = 0; p < exterior; p++) if (keep[p]) { reached[p] = true; queue.Enqueue(p); }
-        while (queue.Count > 0)
-            foreach (int n in full.NeighboursOf(queue.Dequeue()))
-                if (keep[n] && !reached[n]) { reached[n] = true; queue.Enqueue(n); }
-        var result = new HashSet<string>();
-        int offset = exterior;
-        for (int k = 0; k < inner.Count; k++)
-        {
-            var own = inner[k].Mesh.Kept;
-            bool any = own.Any(x => x);
-            for (int i = 0; i < own.Length; i++)
-                if (reached[offset + i] && (!any || own[i]) && inner[k].Key is { } key) { result.Add(key); break; }
-            offset += own.Length;
-        }
-        return result;
-    }
+    static string SiteName(InteriorJoinSweep.Site site) => site.Destroyed ? site.Name + " (destroyed)" : site.Name;
 
     /// <summary>
-    /// <c>--compare-interiors</c> joins: per original interior group, whether the original connects it to the exterior (mesh connections in its streaming
-    /// set, docs/formats/havok-tagfile.md "Interior joins") and whether ours, the interior whose hull holds most of its faces, is reached from the street
-    /// (<see cref="Reached"/>). Lists the mismatches: connected in the original but not reached in ours (sealed), and
-    /// reached in ours but unconnected in the original. An interior not reached in this zone's build is looked up in the neighbours' builds (its door may
-    /// lie over the border).
+    /// <c>--compare-interiors</c> joins (<see cref="InteriorJoinSweep.Compare"/>): lists the mismatches, connected in the original but not reached in ours
+    /// (sealed), and reached in ours but unconnected in the original.
     /// </summary>
-    static void CompareJoins(ZoneGeometryGatherer gatherer, ZoneCoordinate zone, List<OriginalInterior> groups, List<(string Key, string Name, NavVolume? InteriorHull)> hulls,
-        HashSet<string> joined, NavBuildSettings settings)
+    static void PrintJoins(List<InteriorJoinSweep.Join> joins)
     {
-        HashSet<string>? neighbours = null;
-        bool JoinedAnywhere(string key)
-        {
-            if (joined.Contains(key)) return true;
-            if (neighbours is null)
-            {
-                neighbours = [];
-                for (int dz = -1; dz <= 1; dz++)
-                    for (int dx = -1; dx <= 1; dx++)
-                    {
-                        if (dx == 0 && dz == 0) continue;
-                        var n = new ZoneCoordinate(zone.X + dx, zone.Y + dz);
-                        var built = NavMeshPipeline.BuildZone(gatherer, gatherer.Gather(n), settings, out _, out var nInner, interiors: true);
-                        neighbours.UnionWith(Reached(n, built, nInner, settings));
-                    }
-            }
-            return neighbours.Contains(key);
-        }
-        int connected = 0, matched = 0, ours = 0;
         var lines = new List<string>();
-        foreach (var group in groups)
+        foreach (var (group, site, original, join) in joins)
         {
-            bool original = group.Connections > 0;
-            if (original) connected++;
-            var centres = group.Polygons.Where(p => p.Length >= 3).Select(p => p.Aggregate(Vector3.Zero, (a, i) => a + group.Vertices[i]) / p.Length).ToList();
-            int Inside((string Key, string Name, NavVolume? InteriorHull) h) =>
-                centres.Count(v => NavGeometry.InsideConvex(h.InteriorHull!.Polygon, new Vector2(v.X, v.Z), 2) && v.Y >= h.InteriorHull.YMin - 20 && v.Y <= h.InteriorHull.YMax + 20);
-            var site = hulls.Count > 0 ? hulls.MaxBy(Inside) : default;
-            if (hulls.Count == 0 || Inside(site) == 0) { lines.Add($"    {group.Uid} at {group.Origin.X:0},{group.Origin.Z:0}: no interior of ours ({(original ? "connected" : "unconnected")} in the original)"); continue; }
-            matched++;
-            bool join = JoinedAnywhere(site.Key);
-            if (join) ours++;
-            if (original && !join) lines.Add($"    SEALED {group.Uid}: {site.Key} {site.Name} is not reached from the street; the original connects it ({group.Connections} connections)");
-            else if (!original && join) lines.Add($"    {group.Uid}: {site.Key} {site.Name} is reached from the street; the original does not connect it");
+            if (site is null) { lines.Add($"    {group.Uid} at {group.Origin.X:0},{group.Origin.Z:0}: no interior of ours ({(original ? "connected" : "unconnected")} in the original)"); continue; }
+            if (original && !join) lines.Add($"    SEALED {group.Uid}: {site.Key} {SiteName(site)} is not reached from the street; the original connects it ({group.Connections} connections)");
+            else if (!original && join) lines.Add($"    {group.Uid}: {site.Key} {SiteName(site)} is reached from the street; the original does not connect it");
         }
-        Console.WriteLine($"  joins: {groups.Count} original groups, {connected} connected; {matched} matched to ours, {ours} reached");
+        Console.WriteLine($"  joins: {joins.Count} original groups, {joins.Count(j => j.Original)} connected; {joins.Count(j => j.Site is not null)} matched to ours, {joins.Count(j => j.Ours)} reached");
         foreach (var line in lines) Console.WriteLine(line);
     }
 
