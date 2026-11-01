@@ -812,7 +812,7 @@ sealed partial class GameHost
         using var input = Silk.NET.Input.InputWindowExtensions.CreateInput(window);
         if (hud is not null)
         {
-            hud.ClipboardRead = () => input.Keyboards.Count > 0 ? input.Keyboards[0].ClipboardText : null;
+            hud.ClipboardRead = () => input.Keyboards.Count > 0 ? ClipboardText.Read(input.Keyboards[0]) : null;
             hud.ClipboardWrite = text => { if (input.Keyboards.Count > 0) input.Keyboards[0].ClipboardText = text; };
         }
         bool shiftDown = false, statsVisible = false, frameStatsVisible = showFrameStats, screenshotNow = false, gpuCaptureRequested = false;
@@ -886,7 +886,7 @@ sealed partial class GameHost
                         keyboard.ClipboardText = code;
                         Console.WriteLine($"camera    copied {code} ({WorldCameraCode.Describe(camera)})");
                     }
-                    else if (WorldCameraCode.Decode(keyboard.ClipboardText) is { } pose)
+                    else if (WorldCameraCode.Decode(ClipboardText.Read(keyboard)) is { } pose)
                     {
                         Vector3 back = new(MathF.Cos(pose.Pitch) * MathF.Sin(pose.Yaw), MathF.Sin(pose.Pitch),
                             MathF.Cos(pose.Pitch) * MathF.Cos(pose.Yaw));

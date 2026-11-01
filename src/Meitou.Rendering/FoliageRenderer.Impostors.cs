@@ -690,6 +690,12 @@ public sealed partial class FoliageRenderer
             }
             PlanImpostors(now);
             ApplyImpostorPlan(now);
+            // A jump (a save loaded from the menu's scene, a teleport): the atlases the old place wanted go now, not after the idle time,
+            // so they do not hold the new place's to the limit meanwhile.
+            if (impostorScanEye is { } last && Vector3.Distance(last, eye) > ImpostorJumpDistance)
+                foreach (var a in ImpostorAssets())
+                    if (a.Impostor is { Stage: ImpostorStage.Ready } s && s.LastUsed != now) UnloadImpostor(a);
+            impostorScanEye = eye;
         }
         if (now - lastImpostorScan < 2000 || settling)
             foreach (var a in ImpostorAssets())
@@ -786,6 +792,9 @@ public sealed partial class FoliageRenderer
     const float ImpostorReferenceHeight = 1080;
     /// <summary>Impostor atlases unused this long are unloaded (shorter than the meshes' <see cref="IdleSeconds"/>: an atlas is 9 to 36 MB).</summary>
     const double ImpostorIdleSeconds = 20;
+    /// <summary>The eye moved at least this far between two scans: a jump, after which only what the plan admitted stays resident.</summary>
+    const float ImpostorJumpDistance = 10000;
+    Vector3? impostorScanEye;
 
     /// <summary>The top levels an atlas never needs at a transition distance (<see cref="SkipFor"/> with the atlas's own radius).</summary>
     internal static int LevelsToSkip(ImpostorAtlas atlas, float maxScale, float transition) => SkipFor(atlas.FramePixels, atlas.Levels, atlas.Radius * maxScale, transition);

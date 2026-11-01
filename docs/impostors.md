@@ -33,6 +33,8 @@ Atlas budget min(clamp(share*deviceBudget,48MB,cap),12%budget):discrete8%/1024MB
 integrated5%/256MB, unknown192MB; pressure*0.75; explicit --impostor-budget overrides.
 Nearest-first plan degrades far mips before excluding; lookahead3s, one-level margin plus
 upscaler bias. Refine on approach, retain old atlas until ready; retry refused upload2s.
+Unwanted atlases unload after 20 s idle; after a jump of 10000+ units between scans (a save loaded from the menu's
+scene, a teleport) at once. **Observed** (2026-11-01): menu-scene atlases held the total at the limit (1014 MB) for ~20 s after a load.
 Integrated heap/budget adequacy unverified. Never reuse in-flight views/indices prematurely.
 
 ## Rock and fade rules

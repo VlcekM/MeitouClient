@@ -212,7 +212,7 @@ sealed partial class GameHost
 
         var silkInput = Silk.NET.Input.InputWindowExtensions.CreateInput(window);
         // The faithful windows' edit boxes copy and paste through the first keyboard's system clipboard.
-        player.ClipboardRead = () => silkInput.Keyboards.Count > 0 ? silkInput.Keyboards[0].ClipboardText : null;
+        player.ClipboardRead = () => silkInput.Keyboards.Count > 0 ? ClipboardText.Read(silkInput.Keyboards[0]) : null;
         player.ClipboardWrite = text => { if (silkInput.Keyboards.Count > 0) silkInput.Keyboards[0].ClipboardText = text; };
         Vector2? lastMouse = null;
         // Rotating pins the pointer. Windows and macOS put it back after every move (HoldPointer); Linux locks it (GLFW's disabled cursor),
@@ -309,7 +309,7 @@ sealed partial class GameHost
                     keyboard.ClipboardText = code;
                     Console.WriteLine($"camera    copied {code} ({WorldCameraCode.Describe(camera)})");
                 }
-                else if (WorldCameraCode.Decode(keyboard.ClipboardText) is { } pose)
+                else if (WorldCameraCode.Decode(ClipboardText.Read(keyboard)) is { } pose)
                 {
                     // The code's orbit (target, yaw, pitch, distance) as the free camera's eye and look direction.
                     Vector3 back = new(MathF.Cos(pose.Pitch) * MathF.Sin(pose.Yaw), MathF.Sin(pose.Pitch), MathF.Cos(pose.Pitch) * MathF.Cos(pose.Yaw));
