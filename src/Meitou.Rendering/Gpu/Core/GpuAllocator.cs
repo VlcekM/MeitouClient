@@ -133,17 +133,15 @@ public sealed unsafe class GpuAllocator : IDisposable
     public int LiveResourceCount { get { lock (gate) return liveBuffers.Count + liveImages.Count; } }
 
     /// <summary>
-    /// The live resources by owner, largest first: buffers and images grouped by their name with digits and what follows a digit removed
-    /// ("gl texture 12" is "gl texture"), with the count, the bytes of their allocations and how many of those bytes are device-local.
+    /// The live resources by owner, largest first: buffers and images grouped by <see cref="Owner"/>, with the count, the bytes of their
+    /// allocations and how many of those bytes are device-local.
     /// </summary>
     public List<(string Name, int Count, ulong Bytes, ulong DeviceLocal)> Breakdown()
     {
         var groups = new Dictionary<string, (int Count, ulong Bytes, ulong DeviceLocal)>();
         void Add(string name, ulong bytes, MemoryKind kind)
         {
-            int digit = name.AsSpan().IndexOfAnyInRange('0', '9');
-            string key = (digit >= 0 ? name[..digit] : name).TrimEnd(' ', '#', ':', '(');
-            if (key.Length == 0) key = "(unnamed)";
+            string key = Owner(name);
             var g = groups.GetValueOrDefault(key);
             groups[key] = (g.Count + 1, g.Bytes + bytes, g.DeviceLocal + (kind == MemoryKind.DeviceLocal ? bytes : 0));
         }
@@ -154,6 +152,47 @@ public sealed unsafe class GpuAllocator : IDisposable
         }
         return groups.Select(g => (g.Key, g.Value.Count, g.Value.Bytes, g.Value.DeviceLocal)).OrderByDescending(g => g.Bytes).ToList();
     }
+
+    /// <summary>
+    /// A resource's owner, from its name: what precedes " | " ("object textures | rock.dds" is "object textures"), else the name with its first
+    /// digit and what follows removed ("gl texture 12" is "gl texture").
+    /// </summary>
+    public static string Owner(string name)
+    {
+        int bar = name.IndexOf(" | ", StringComparison.Ordinal);
+        int cut = bar >= 0 ? bar : name.AsSpan().IndexOfAnyInRange('0', '9');
+        string key = (cut >= 0 ? name[..cut] : name).TrimEnd(' ', '#', ':', '(');
+        return key.Length == 0 ? "(unnamed)" : key;
+    }
+
+    /// <summary>
+    /// Writes every live resource (largest first: bytes, memory kind, name, and an image's format, extent, levels and layers or a buffer's usage)
+    /// and every block (memory type and its flags, size, used, free ranges) to <paramref name="w"/>, for the VRAM dump (Ctrl+Shift+F12 in the game).
+    /// </summary>
+    public void WriteReport(TextWriter w)
+    {
+        var rows = new List<(ulong Bytes, string Line)>();
+        var blocks = new List<(uint Type, ulong Size, string Line)>();
+        lock (gate)
+        {
+            foreach (var b in liveBuffers)
+                rows.Add((b.Allocation.Size, $"{Mb(b.Allocation.Size),10:0.000}  {b.Kind,-11}  buffer  {b.Name}  [{b.Size} bytes, {b.Usage}]"));
+            foreach (var i in liveImages)
+                rows.Add((i.Allocation.Size, $"{Mb(i.Allocation.Size),10:0.000}  {i.Kind,-11}  image   {i.Name}  [{i.Format} {i.Extent.Width}x{i.Extent.Height}"
+                    + (i.Extent.Depth > 1 ? $"x{i.Extent.Depth}" : "") + $", {i.MipLevels} levels, {i.ArrayLayers} layers" + (i.Samples != SampleCountFlags.Count1Bit ? $", {i.Samples}" : "") + "]"));
+            void Block(uint type, MemoryBlock b, bool spare) => blocks.Add((type, b.Size, $"{Mb(b.Size),10:0.000}  {Mb(b.Used),10:0.000}  {b.Free.Count,5}  type {type} "
+                + $"{memProps.MemoryTypes[(int)type].PropertyFlags}" + (b.Optimal ? " images" : " buffers") + (b.Dedicated ? " dedicated" : "") + (spare ? " spare" : "")));
+            foreach (var ((type, _), list) in pools) foreach (var b in list) Block(type, b, false);
+            foreach (var ((type, _), b) in spares) Block(type, b, true);
+        }
+        w.WriteLine($"resources ({rows.Count}, MB  memory  what  name  [details]):");
+        foreach (var (_, line) in rows.OrderByDescending(r => r.Bytes)) w.WriteLine(line);
+        w.WriteLine();
+        w.WriteLine($"blocks ({blocks.Count}, MB size  MB used  free ranges  memory type):");
+        foreach (var (_, _, line) in blocks.OrderBy(b => b.Type).ThenByDescending(b => b.Size)) w.WriteLine(line);
+    }
+
+    static double Mb(ulong bytes) => bytes / 1048576.0;
 
     /// <summary>
     /// Where the room in our blocks is (device-local blocks only): empty blocks kept to grow into, spares made ahead, and free ranges inside

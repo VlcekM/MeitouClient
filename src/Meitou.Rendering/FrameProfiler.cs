@@ -292,6 +292,30 @@ public sealed class FrameProfiler : IDisposable
         return slices;
     }
 
+    /// <summary>
+    /// Writes what is in video memory now to <paramref name="path"/> (Ctrl+Shift+F12 in the game): the driver's usage and budget, the room in our
+    /// blocks, the owners, then every resource and block (<see cref="GpuAllocator.WriteReport"/>). What the driver counts beyond our blocks
+    /// (swapchain, DLSS, its own) is only a total here: a RenderDoc or Nsight capture lists it.
+    /// </summary>
+    public void DumpVram(string path)
+    {
+        var alloc = native.Device.Allocator;
+        var (used, budget) = native.Device.VideoMemory();
+        var (empty, spare, scattered, partBlocks) = alloc.Slack();
+        ulong blocks = alloc.TotalAllocatedBytes;
+        using var w = new StreamWriter(path);
+        w.WriteLine($"VRAM dump {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+        w.WriteLine($"driver: used {used / 1048576.0:0.0} MB of budget {budget / 1048576.0:0.0} MB (memory budget extension: {native.Device.HasMemoryBudget})");
+        w.WriteLine($"ours: {blocks / 1048576.0:0.0} MB in {alloc.BlockCount} blocks, {alloc.TotalUsedBytes / 1048576.0:0.0} MB used by {alloc.AllocationCount} allocations; "
+            + $"driver and others {(used > blocks ? used - blocks : 0) / 1048576.0:0.0} MB");
+        w.WriteLine($"room in device-local blocks: empty {empty / 1048576.0:0.0} MB, spare {spare / 1048576.0:0.0} MB, scattered {scattered / 1048576.0:0.0} MB in {partBlocks} blocks");
+        w.WriteLine();
+        w.WriteLine("owners (MB, device-local MB, count):");
+        foreach (var o in alloc.Breakdown()) w.WriteLine($"{o.Bytes / 1048576.0,10:0.0}  {o.DeviceLocal / 1048576.0,10:0.0}  {o.Count,6}  {o.Name}");
+        w.WriteLine();
+        alloc.WriteReport(w);
+    }
+
     /// <summary>The VRAM pie at the top right is shown (Shift+F12 in the game), with the profiler chart or without it.</summary>
     public bool ShowVram { get; set; }
 

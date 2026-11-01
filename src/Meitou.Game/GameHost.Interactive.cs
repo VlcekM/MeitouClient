@@ -356,6 +356,7 @@ sealed partial class GameHost
                 if (shiftDown && key == EngineKey.F2 && switches.FirstOrDefault(e => e.Id == "skin") is { } skin)   // the skin switch alone, to compare faces
                 { skin.IsMeitou = !skin.IsMeitou; Console.WriteLine($"skin      {skin.State}"); return; }
                 if (shiftDown && key == EngineKey.F11) { ToggleNavOverlay(); return; }
+                if (shiftDown && ctrl && key == EngineKey.F12) { DumpVram(profiler); return; }
                 if (shiftDown && key == EngineKey.F12) { if (profiler is not null) profiler.ShowVram = !profiler.ShowVram; return; }   // the VRAM pie (F12 alone cycles the profiler)
                 if (player.BuildKey(key, shiftDown)) return;
                 session.Input.SetKey(key, true);
@@ -933,6 +934,15 @@ sealed partial class GameHost
         double remaining = end - clock.Elapsed.TotalSeconds;
         if (remaining > 0.002) Thread.Sleep(TimeSpan.FromSeconds(remaining - 0.0015));
         while (clock.Elapsed.TotalSeconds < end) Thread.SpinWait(64);
+    }
+
+    /// <summary>Ctrl+Shift+F12: what is in video memory now, to vram-&lt;time&gt;.txt beside log.txt (<see cref="FrameProfiler.DumpVram"/>).</summary>
+    static void DumpVram(FrameProfiler? profiler)
+    {
+        if (profiler is null) return;
+        string path = Path.Combine(AppContext.BaseDirectory, $"vram-{DateTime.Now:yyyyMMdd-HHmmss}.txt");
+        try { profiler.DumpVram(path); Console.WriteLine($"vram      dumped to {path}"); }
+        catch (IOException e) { Console.WriteLine($"vram      dump failed: {e.Message}"); }
     }
 
     // F12's sim parts: the names (the tick phases, the time outside the world's ticks, the world's systems), made again when the world is, and the frame's ms.

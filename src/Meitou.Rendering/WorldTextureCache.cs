@@ -107,7 +107,7 @@ public sealed unsafe class WorldTextureCache : IDisposable
     readonly List<WorldTexture> pending = [];
     readonly IGpuContext gpu;
     readonly AssetLocator assets;
-    /// <summary>The images' allocation name (the F12 VRAM pie groups by it).</summary>
+    /// <summary>The images' owner in their allocation names (the F12 VRAM pie groups by it).</summary>
     readonly string allocationName;
     long lastTrim;
 
@@ -527,10 +527,13 @@ public sealed unsafe class WorldTextureCache : IDisposable
     /// <summary>The number of levels down to 1 × 1 (the chain VkGl allocated for a texture's level 0).</summary>
     static int FullChain(int w, int h) => 1 + (int)Math.Floor(Math.Log2(Math.Max(Math.Max(w, h), 1)));
 
-    /// <summary>A new image with <paramref name="levels"/> levels in GENERAL layout (the transition in the frame's upload commands, before the copies).</summary>
-    GpuTexture Create(InternalFormat format, int width, int height, int levels, bool mipmaps) =>
+    /// <summary>
+    /// A new image for <paramref name="t"/> with <paramref name="levels"/> levels in GENERAL layout (the transition in the frame's upload commands, before
+    /// the copies), named "owner | file" (the VRAM pie groups by the owner, the VRAM dump lists the file).
+    /// </summary>
+    GpuTexture Create(WorldTexture t, InternalFormat format, int width, int height, int levels, bool mipmaps) =>
         gpu.Frame.PreFrame.CreateTexture(new TextureDesc(format, width, height, levels,
-            Use: TextureUse.Sampled | TextureUse.TransferDst | (mipmaps ? TextureUse.TransferSrc : 0), Name: allocationName));
+            Use: TextureUse.Sampled | TextureUse.TransferDst | (mipmaps ? TextureUse.TransferSrc : 0), Name: $"{allocationName} | {System.IO.Path.GetFileName(t.Path)}"));
 
     /// <summary>
     /// A stored (S3TC) texture's upload: the image is made with its full chain, each level is filled whole (up to about 512 KB) or in slabs of
@@ -551,7 +554,7 @@ public sealed unsafe class WorldTextureCache : IDisposable
         };
         int blockBytes = BlockCompression.BlockBytes(dds.Format);
         GpuTexture? texture = null;
-        steps.Enqueue(() => texture = Create(format, dds.Width, dds.Height, FullChain(dds.Width, dds.Height), mipmaps: false));
+        steps.Enqueue(() => texture = Create(t, format, dds.Width, dds.Height, FullChain(dds.Width, dds.Height), mipmaps: false));
         foreach (var surface in dds.Surfaces)
         {
             var s = surface;
@@ -597,7 +600,7 @@ public sealed unsafe class WorldTextureCache : IDisposable
         bool generate = tex.Levels.Count == 1 || tex.Levels[^1].Width > 1 || tex.Levels[^1].Height > 1;
         int uploaded = generate ? 1 : Math.Min(tex.Levels.Count, chain);
         GpuTexture? texture = null;
-        steps.Enqueue(() => texture = Create(InternalFormat.Rgba8, top.Width, top.Height, chain, mipmaps: generate));
+        steps.Enqueue(() => texture = Create(t, InternalFormat.Rgba8, top.Width, top.Height, chain, mipmaps: generate));
         for (int level = 0; level < uploaded; level++)
         {
             var img = tex.Levels[level];
