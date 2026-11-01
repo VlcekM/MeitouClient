@@ -232,6 +232,8 @@ const backgrounds = [1, 2, 3, 4].map((i) => `/roadmap-bg/bg-${i}.jpg`);
   .cov td.yes{text-align:center;color:var(--good);font-weight:700}
   .cov td.no{text-align:center;color:var(--muted)}
   .cov th:first-child{text-align:left}
+  .cov th:first-child,.cov td:first-child{position:sticky;left:0;z-index:1;background:var(--panel)}
+  .covtoggle{font:inherit;cursor:pointer;color:var(--text);background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:2px 12px}
   .cmp-bar{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;margin:8px 0}
   .cmp-pick select{max-width:100%}
   .cmp-quick{display:flex;flex-wrap:wrap;gap:6px}
