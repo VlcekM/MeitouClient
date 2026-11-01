@@ -47,6 +47,25 @@ static class StageClock
     }
 
     /// <summary>
+    /// The parts of the interface stage (<see cref="Ui"/>, everything from the world's last stage to the submission) the spike log lists under it (render
+    /// thread only): the end of the world's draw after its last stage, the markers, the walk steering, the HUD and panels, the debug overlays, the settings
+    /// panel, the cinema's layer, the loading screen, the pointer and the composite of the interface over the world.
+    /// </summary>
+    public static readonly string[] UiPartNames = ["world end", "markers", "steer", "hud", "debug", "settings", "cinema", "loading", "pointer", "composite"];
+    public const int UiWorldEnd = 0, UiMarkers = 1, UiSteer = 2, UiHud = 3, UiDebug = 4, UiSettings = 5, UiCinema = 6, UiLoading = 7, UiPointer = 8, UiComposite = 9;
+    /// <summary>This frame's render-thread ms per interface part (<see cref="UiPart"/>).</summary>
+    public static readonly double[] UiPartMs = new double[UiPartNames.Length];
+
+    /// <summary>Ends <paramref name="part"/> of the interface stage: the time since the last lap or part goes to it.</summary>
+    public static void UiPart(int part)
+    {
+        if (!Active) return;
+        long now = Stopwatch.GetTimestamp();
+        UiPartMs[part] += (now - partLast) * 1000.0 / Stopwatch.Frequency;
+        partLast = now;
+    }
+
+    /// <summary>
     /// The pass meter's hook (<c>MEITOU_PASS_STATS=1</c>, the viewer's PassMeter; docs/engine.md "Frame cost breakdown"): called with the label of
     /// what just ended and whether it is a part (<see cref="Sub"/>) of the enclosing stage or a stage of its own (<see cref="Lap"/>,
     /// <see cref="Phase"/>); null (the default) costs one compare. <see cref="OnStart"/> is called when a frame's clock starts.
@@ -66,7 +85,7 @@ static class StageClock
         if (Active && (uint)stage < (uint)JobMs.Length) JobMs[stage] += ticks * 1000.0 / Stopwatch.Frequency;
     }
 
-    public static void Start() { Active = true; SubmissionStarted = false; LastStage = -1; Array.Clear(Ms); Array.Clear(JobMs); Array.Clear(PartMs); last = partLast = Stopwatch.GetTimestamp(); OnStart?.Invoke(); }
+    public static void Start() { Active = true; SubmissionStarted = false; LastStage = -1; Array.Clear(Ms); Array.Clear(JobMs); Array.Clear(PartMs); Array.Clear(UiPartMs); last = partLast = Stopwatch.GetTimestamp(); OnStart?.Invoke(); }
 
     // Called before the window copy, or before submission for an offscreen frame.
     public static void BeginSubmission()

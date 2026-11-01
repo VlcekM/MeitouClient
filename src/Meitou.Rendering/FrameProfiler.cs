@@ -221,7 +221,7 @@ public sealed class FrameProfiler : IDisposable
             slotStamps[slot] = native.LastFrameStamps;
             slotCpuTotal[slot] = sum;
             slotCpuMedian[slot] = CpuMedian();
-            slotCpu[slot] = StageList(StageClock.Ms, 0.5);
+            slotCpu[slot] = StageList(StageClock.Ms, 0.5) + PartList("ui", StageClock.UiPartNames, StageClock.UiPartMs) + PartList("upd-chars", StageClock.PartNames, StageClock.PartMs);
             long uploaded = native.Frame.Stats.UploadBytes;
             slotNotes[slot] = (uploaded > 0 ? $"uploads total {uploaded / 1048576.0:0.00} MB; " : "") + SpikeLog.TakeFrame();
         }
@@ -492,6 +492,14 @@ public sealed class FrameProfiler : IDisposable
             double mean = keep.Length == 0 ? 0 : keep.Average(i => v[i]);
             Console.WriteLine(string.Create(CultureInfo.InvariantCulture, $"gpu-run     {Label(s),-12} {mean,6:0.00} {sorted[sorted.Length / 2],6:0.00} {sorted[(int)(sorted.Length * 0.95)],6:0.00} {sorted[^1],7:0.00}"));
         }
+    }
+
+    // A stage's parts of 1 ms or more, for the spike log: "; ui: hud 25.0, composite 3.1".
+    static string PartList(string stage, string[] names, double[] ms)
+    {
+        var parts = new List<string>();
+        for (int k = 0; k < names.Length; k++) if (ms[k] >= 1) parts.Add(string.Create(CultureInfo.InvariantCulture, $"{names[k]} {ms[k]:0.0}"));
+        return parts.Count == 0 ? "" : $"; {stage}: {string.Join(", ", parts)}";
     }
 
     static string StageList(double[] ms, double least)

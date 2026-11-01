@@ -687,6 +687,7 @@ sealed partial class GameHost
                     DrawWorld(size.X, size.Y);
                     tickAhead = false;
                 }
+                Meitou.Rendering.StageClock.UiPart(Meitou.Rendering.StageClock.UiWorldEnd);
                 // The sky arrival's fade to and from black, over the world and under everything else.
                 if (skyArrival is { Fade: > 0 } fading && overlay is not null)
                 {
@@ -706,13 +707,16 @@ sealed partial class GameHost
                 player.UiVisible = ui && !g.NoPopulation;
                 screenshotRequested = false;
                 if (ui && overlay is not null && !g.NoPopulation) DrawMarkers(overlay, size.X, size.Y);
+                Meitou.Rendering.StageClock.UiPart(Meitou.Rendering.StageClock.UiMarkers);
                 if (!g.NoPopulation && !covered && panel?.Visible != true) player.Steer();
+                Meitou.Rendering.StageClock.UiPart(Meitou.Rendering.StageClock.UiSteer);
                 if (ui && overlay is not null && !g.NoPopulation)
                 {
                     player.Draw(overlay, size.X, size.Y);
                 }
                 if (ui && overlay is not null && IsSandbox) DrawSandbox(overlay, size.X, size.Y);
                 if (ui && overlay is not null && IsBattle) DrawBattleCounter(overlay, size.X, size.Y);
+                Meitou.Rendering.StageClock.UiPart(Meitou.Rendering.StageClock.UiHud);
                 // The debug overlays are left out of saved pictures: the statistics at the top left, the key list below them, the profiler.
                 if (ui && overlay is not null && !shot && !feedbackShot)
                 {
@@ -740,9 +744,12 @@ sealed partial class GameHost
                     profiler?.Draw(overlay, size.X, size.Y);
                     profiler?.DrawVram(overlay, size.X, size.Y);
                 }
+                Meitou.Rendering.StageClock.UiPart(Meitou.Rendering.StageClock.UiDebug);
                 if (ui && !feedbackShot) panel?.Draw(size.X, size.Y);
+                Meitou.Rendering.StageClock.UiPart(Meitou.Rendering.StageClock.UiSettings);
                 // Over everything: the letterbox and the cinema's editor (F6, also with F7); the game hides its status line.
                 if (overlay is not null && !covered) cinema.Draw(overlay, size.X, size.Y, shot || take || feedbackShot || (interfaceHidden && !cinema.EditorVisible), showStatus: false);
+                Meitou.Rendering.StageClock.UiPart(Meitou.Rendering.StageClock.UiCinema);
                 // The loading screen over the whole frame while a scene loads or the world warms up.
                 if (covered && loading is not null && loadingOverlay is not null)
                 {
@@ -752,6 +759,7 @@ sealed partial class GameHost
                         loading.Draw(size.X, size.Y, background: false);
                 }
                 else loading?.ReleaseWhenGone();
+                Meitou.Rendering.StageClock.UiPart(Meitou.Rendering.StageClock.UiLoading);
                 // The mouse pointer over everything, as the original's Pointer layer; never in saved pictures. What the right button would do picks it,
                 // the arrow over the settings panel, the cinema's editor and the loading screen. The free camera hides it (the original's `invisible`);
                 // Hardware mouse shows Windows' cursor instead.
@@ -764,8 +772,10 @@ sealed partial class GameHost
                 }
                 // World and interface into the top-down picture the window shows (and a screenshot reads). With frame generation on this frame the window shows the
                 // world alone (the backbuffer, flipped by the present) and the layer lays the interface over every frame, generated ones too.
+                Meitou.Rendering.StageClock.UiPart(Meitou.Rendering.StageClock.UiPointer);
                 bool generating = frameGen is not null && frameGen.Finish(uiTarget);
                 var finalPicture = generating ? null : uiLayer.Composite(backbuffer);
+                Meitou.Rendering.StageClock.UiPart(Meitou.Rendering.StageClock.UiComposite);
                 display.Present(finalPicture);
                 profiler?.EndFrame();
                 BenchLap(7);
