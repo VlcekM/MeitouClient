@@ -80,6 +80,9 @@ DDS codec, Observed (source)).
 | uncompressed 16-bit X1R5G5B5 (`meshes/sky0026.dds`) | 1 |
 | **total** | **1,907** |
 
+- BC3 alpha is almost always used (**Observed** 2026-10-31, scratch survey of level 0 of every 2D BC3 file): only 23 of
+  1,157 files (63 of 5,842 MB) are alpha 255 throughout, none are 250–254. So re-encoding "opaque" BC3 as BC1 would save
+  about 1 % of BC3 memory; the rest carries gloss (diffuse) or cut-out/emissive (normal maps).
 - No DX10 headers, no volume textures, no BC4/BC5, no 24/32-bit uncompressed files.
 - 64 files have a single level (no mip chain); 64 have a non-power-of-two side. All sides are multiples of 4
   (Observed in a scratch survey, not in the test).

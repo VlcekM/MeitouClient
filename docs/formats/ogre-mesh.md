@@ -90,6 +90,18 @@ index map listing the bones its assignments use, ascending by handle. A vertex w
 other slots), so it follows the lowest used bone fully. Hair is the common case: `FemaleHaircutsSamuraiPony.mesh` leaves 1161 of 2015 vertices
 unassigned and uses only the head bone, so they move with the head. Implemented in `Model.Build`.
 
+### Vertex sharing
+
+**Verified** (all 3277 base-game `.mesh` files decoded through `Model.Build`, 2026-10-31): 22.7M vertices for 7.68M triangles
+(2.96 per triangle), no shared vertex data, near-unindexed. Byte-identical vertices: 19.2M (2.50/tri). The tangents are per face:
+ignoring them leaves 9.0M (1.18/tri); quantising them to 8 bits still leaves 15.6M. FIFO-16 ACMR as stored 2.97 (no reuse); after
+exact dedup and a cache-order pass (Tipsify) 2.52. `newland/` (terrain-scale objects) has the most duplication (3.00 → 2.25/tri).
+Averaging the tangents of vertices equal in all else (same handedness) moves them 4.1° on average: 56% under 1°, 6.5% by 15° or more
+(`newland/`, `items/`, `character/` most). After `Model.Build` (any binormal mode) every normal is unit length, tangent components
+and w lie in [-1, 1], weights and colours in [0, 1]. `OgreMeshWeld` (key also includes bone assignments, pose offsets and
+handedness) takes all 3277 files from 22.7M to 9.2M vertices (40.5%) and pose entries from 160,616 to 34,212, with every submesh, LOD,
+bone-assignment and pose index in range afterwards (scratch check over the install). CPU renders of six normal-mapped building meshes: mean pixel change 0.0–0.3/255.
+
 ## Open questions
 
 - How pose weights are derived from appearance values. Observed: body files store values under the pose

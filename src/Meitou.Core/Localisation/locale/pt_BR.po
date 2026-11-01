@@ -1173,12 +1173,6 @@ msgstr "Contorno ao passar o cursor"
 msgid "Outline and tint the character under the cursor, in the colour of what a right click would do."
 msgstr "Contorna e colore o personagem sob o cursor com a cor correspondente à ação de clicar com o botão direito."
 
-msgid "Selection rings"
-msgstr "Anéis de seleção"
-
-msgid "Draw the green ring on the ground under each selected character."
-msgstr "Exibe o anel verde no chão sob cada personagem selecionado."
-
 msgid "luckyren Mode"
 msgstr "Modo luckyren"
 

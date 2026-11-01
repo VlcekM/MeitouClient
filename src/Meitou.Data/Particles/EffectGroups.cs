@@ -737,9 +737,11 @@ public sealed class BurstEffectGroup(PuSystemDef system, int seed, EffectWorld w
     : EffectGroup(new EffectRecord(system.Name, EffectType.Point, system.Name, false, false, 1, 0, 0, Vector3.One, 1, false, 0, 0, 0, 0, 0), null, system, seed, world)
 {
     /// <summary>A unit at <paramref name="position"/>, turned by <paramref name="orientation"/>, emitting for <paramref name="seconds"/>, its particles <paramref name="size"/> times as big and <paramref name="lifeScale"/> times as long-lived.</summary>
-    public void Spawn(Vector3 position, Quaternion orientation, float seconds, float size, float lifeScale)
+    /// <param name="recolour">A colour the particles take in place of their texture's hue: kept as a negative tint, which the renderer's fragment program reads as that.</param>
+    public void Spawn(Vector3 position, Quaternion orientation, float seconds, float size, float lifeScale, Vector3? recolour = null)
     {
         var u = NewUnit(position);
+        if (recolour is { } colour) u.Tint = -Vector3.Max(colour, new Vector3(1e-4f));
         u.Orientation = orientation;
         u.Life = seconds;
         u.Size = size;

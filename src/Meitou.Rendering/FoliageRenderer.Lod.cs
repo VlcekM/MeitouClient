@@ -149,12 +149,12 @@ public sealed unsafe partial class FoliageRenderer
         foreach (var a in assetsByMesh.Values)
         {
             if (!a.Terrain || a.LodDone || !a.Resident || a.Main is null || a.Triangles < FoliageLodBuilder.MinTriangles) continue;
-            string name = a.Mesh.MeshPath;
-            if (!lodTasks.TryGetValue(name, out var task))
+            string name = a.Mesh.MeshPath, key = name + MeshWeld.CacheVariant(a.Weld);
+            if (!lodTasks.TryGetValue(key, out var task))
             {
                 if (lodRunning >= 3) { lodWaiting++; continue; }
                 lodRunning++;
-                lodTasks[name] = task = StartLods(name, a.Radius);
+                lodTasks[key] = task = StartLods(name, a.Radius, a.Weld);
             }
             if (!task.IsCompleted) continue;
             a.LodDone = true;   // an unloaded mesh makes them again with its next residency
@@ -166,17 +166,17 @@ public sealed unsafe partial class FoliageRenderer
     }
 
     // Apart from PumpLods: a lambda there made its captured variables a new object on every pass of the loop, every frame, started or not.
-    Task<LodResult> StartLods(string name, float radius) => BackgroundWork.Run(() => MakeLods(name, radius));
+    Task<LodResult> StartLods(string name, float radius, bool weld) => BackgroundWork.Run(() => MakeLods(name, radius, weld));
 
-    LodResult MakeLods(string name, float radius)
+    LodResult MakeLods(string name, float radius, bool weld)
     {
         var watch = Stopwatch.StartNew();
         var path = assets.Find(name) ?? assets.Find(Path.GetFileName(name.Replace('\\', '/')));
         if (path is null) return new LodResult(null, false, 0, 0);
-        var model = Decode(name);
+        var model = Decode(name, weld);
         if (model is null) return new LodResult(null, false, 0, 0);
         int parts = model.Parts.Count(p => p.Indices.Length > 0);
-        string cache = FoliageLodCache.PathFor(name, File.ReadAllBytes(path));
+        string cache = FoliageLodCache.PathFor(name, File.ReadAllBytes(path), variant: MeshWeld.CacheVariant(weld));
         var (hit, set) = FoliageLodCache.TryLoad(cache, parts);
         long bytes = 0;
         if (!hit)

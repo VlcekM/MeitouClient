@@ -55,6 +55,8 @@ public enum RngPurpose : uint
     Kidnap = 27,
     /// <summary>The steal roll (<see cref="Crime.CrimeSystem.StealChance"/>) and its in-bed coin flip.</summary>
     Steal = 28,
+    /// <summary>Advanced ragdolls: the spin a downing blow gives each arm and leg (<see cref="Ragdolls.RagdollSystem"/>), keyed by the character, counter the body.</summary>
+    RagdollSpin = 29,
 }
 
 /// <summary>

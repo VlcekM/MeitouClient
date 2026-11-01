@@ -42,7 +42,7 @@ In the game a --low-end run neither applies nor overwrites the sliders and switc
 ## Keys
 
 F10 key list is the current authority; F11 stats,F12 profiler,Shift+F12 VRAM pie,Tab settings,Alt+Enter fullscreen (a borderless window at the monitor's own corner on Windows, since GLFW's bounds are the work area and a taskbar or panel at the top or left would offset it; off Windows the window manager is asked for full screen, **Verified** on KDE: panel covered; full screen is entered and left through GLFW, on the primary monitor, keeping its own windowed place, and whether it is on is read from GLFW's window monitor: KDE keeps a maximized window maximized in full screen (**Observed** KDE Wayland and XWayland, GLFW 3.4), and Silk.NET's WindowState, which checks Maximized first, then says Maximized (**Verified** against Silk.NET 2.23's GlfwWindow.CoreWindowState)).
-F11 includes the opaque UI coverage: the share of the screen under fully opaque controls (solid
+`PlayerInterface.OpaqueUiCoverage` (not shown on F11) is the opaque UI coverage: the share of the screen under fully opaque controls (solid
 backgrounds, alpha-255 atlas slices at alpha 1; `UiPainter.OpaqueCoverage`), overlaps counted once.
 Panel skins have ragged translucent borders around a solid middle, so a slice counts as its largest
 all-255 rectangle (inset 1 texel for bilinear), stretched to the control;

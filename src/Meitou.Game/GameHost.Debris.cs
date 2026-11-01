@@ -39,6 +39,8 @@ sealed partial class GameHost
         public bool Resting, Landed, Flesh;
         public long Born;
         public uint Colour;
+        /// <summary>The splash particles' colour for a race whose blood is not red (<see cref="BloodRecolour"/>).</summary>
+        public Vector3? Recolour;
     }
 
     readonly List<Piece> pieces = [];
@@ -86,12 +88,13 @@ sealed partial class GameHost
         characterSounds?.Burst(centre);
         if (bleeds && gpu.Particles is { } particles)
         {
-            particles.Burst(BurstSplash, centre, Quaternion.Identity, 0.3f, MistSize, MistLife);
+            var recolour = BloodRecolour(m.Colour);
+            particles.Burst(BurstSplash, centre, Quaternion.Identity, 0.3f, MistSize, MistLife, recolour);
             for (int i = 0; i < SpraysPerBurst; i++)
             {
                 var d = Vector2.Normalize(RandomDirection() + blow * 0.6f);
                 var spray = Vector3.Normalize(new Vector3(d.X, 0.3f + bloodRandom.NextSingle() * 0.7f, d.Y));
-                particles.Burst(BurstSpray, centre, Turn(Vector3.UnitZ, spray), 0.4f + bloodRandom.NextSingle() * 0.3f, MistSize, MistLife);
+                particles.Burst(BurstSpray, centre, Turn(Vector3.UnitZ, spray), 0.4f + bloodRandom.NextSingle() * 0.3f, MistSize, MistLife, recolour);
             }
         }
         if (gpu.Debris is not { } debris) return;
@@ -117,7 +120,7 @@ sealed partial class GameHost
             var spinAxis = Vector3.Normalize(new Vector3(bloodRandom.NextSingle() - 0.5f, bloodRandom.NextSingle() - 0.5f, bloodRandom.NextSingle() - 0.5f) + new Vector3(1e-3f));
             pieces.Add(new Piece
             {
-                Mesh = mesh, Scale = scale, Extent = extent, Floor = floor, Born = world.Tick, Colour = bleeds ? 0xFF000000 | Abgr(m.Colour) : 0, Flesh = flesh,
+                Mesh = mesh, Scale = scale, Extent = extent, Floor = floor, Born = world.Tick, Colour = bleeds ? 0xFF000000 | Abgr(m.Colour) : 0, Recolour = BloodRecolour(m.Colour), Flesh = flesh,
                 Position = centre,
                 Velocity = new Vector3(d.X * speed, 30 + bloodRandom.NextSingle() * 50, d.Y * speed),
                 Rotation = Quaternion.Normalize(new Quaternion(bloodRandom.NextSingle() - 0.5f, bloodRandom.NextSingle() - 0.5f, bloodRandom.NextSingle() - 0.5f, bloodRandom.NextSingle() - 0.5f)),
@@ -365,7 +368,7 @@ sealed partial class GameHost
         if (!p.Landed && p.Flesh)
         {
             characterSounds?.Splat(p.Position);
-            if (p.Colour != 0) gpu.Particles?.Burst(BurstSplash, p.Position, Quaternion.Identity, 0.15f, 1.3f, 1.5f);
+            if (p.Colour != 0) gpu.Particles?.Burst(BurstSplash, p.Position, Quaternion.Identity, 0.15f, 1.3f, 1.5f, p.Recolour);
         }
         p.Landed = true;
         var flat = new Vector2(p.Velocity.X, p.Velocity.Z);
