@@ -28,6 +28,9 @@ public sealed unsafe class TerrainTextures : IDisposable
     /// <summary>Slots the arrays start with (about 270 MB at 2048); they double, up to every pair the world has, when all their slots are needed at once.</summary>
     public const int InitialLayers = 32;
 
+    /// <summary>Frames (about 2 s) a pair that stopped being needed is kept from eviction while the arrays can still grow (<see cref="AllocateSlot"/>).</summary>
+    const int RecentFrames = 120;
+
     /// <summary>Cell table value of a biome slot that is used but not resident yet / of an unused slot.</summary>
     const byte Pending = 254, Unused = 255;
 
@@ -574,8 +577,10 @@ public sealed unsafe class TerrainTextures : IDisposable
     {
         if (nextFree < Capacity) return nextFree++;
         Pair? victim = null;
+        // While the arrays may still grow, a pair needed in the last RecentFrames stays: the eye wavering at a cell's edge grows them instead of reloading it.
+        long recent = Capacity < MaxCapacity ? frame - RecentFrames : long.MaxValue;
         foreach (var p in owner)
-            if (p is not null && p.Needed != stamp && (victim is null || p.Used < victim.Used)) victim = p;
+            if (p is not null && p.Needed != stamp && p.Used < recent && (victim is null || p.Used < victim.Used)) victim = p;
         if (victim is null) return Grow() ? nextFree++ : -1;
         int slot = victim.Slot;
         victim.Slot = -1;
