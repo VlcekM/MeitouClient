@@ -18,8 +18,8 @@ namespace Meitou.Rendering;
 /// </summary>
 public sealed unsafe class ParticleRenderer : IDisposable
 {
-    const string Vertex = """
-        #version 330 core
+    static readonly string Vertex = "#version 330 core\n" + AtmosphereShaders.Functions + FogVolumeShaders.Functions + """
+
         layout(location = 0) in vec2 aCorner;       // the quad's corner, -0.5 .. 0.5, in triangle-strip order
         layout(location = 1) in vec4 aPositionRotation;   // camera-relative position, texture rotation (radians)
         layout(location = 2) in vec4 aDirectionWidth;     // unit direction of travel, width
@@ -37,6 +37,11 @@ public sealed unsafe class ParticleRenderer : IDisposable
         out vec4 vColour;
         out float vDepth;                           // the view depth (clip w), for the soft fade
         out float vSoft;                            // the soft fade's distance: a quarter of the sprite's size, 2 to 300 units
+        uniform vec4 uLitVertex;                    // x 1: lit (Meitou fog switch), z the glow towards the sun
+        uniform vec3 uParticleEye;                  // the eye in the world (the positions are relative to it)
+        out vec3 vHazeMul, vHazeAdd;                // the haze and the fog volumes in front of the corner: colour * mul + add
+        out vec3 vWorld;                            // the corner in the world (the sun's shadow)
+        out float vGlow;                            // the light scattered forward when the sprite is seen towards the sun
         void main()
         {
             vec3 position = aPositionRotation.xyz;
@@ -76,12 +81,41 @@ public sealed unsafe class ParticleRenderer : IDisposable
             vDepth = gl_Position.w;
             vUv = vec2(aCorner.x + 0.5, 0.5 - aCorner.y);
             vColour = vec4(aColour.rgb * uColourScale.rgb, aColour.a * uColourScale.a);
+            vWorld = uParticleEye + world;
+            vHazeMul = vec3(1.0);
+            vHazeAdd = vec3(0.0);
+            vGlow = 1.0;
+            if (uLitVertex.x > 0.5)
+            {
+                atmoApplyCoefficients(uParticleEye, vWorld, vHazeMul, vHazeAdd);
+                // And the placed fog volumes and the effects' fog spheres in front of it, blended over that as the game blends them over the hazed scene
+                // (the sprites came after them, so a dust cloud behind a fog bank showed through it).
+                float dist = length(world);
+                vec3 fogAdd;
+                float fogTrans;
+                fogVolumesAccumulate(uParticleEye, world / max(dist, 1e-3), dist, fogAdd, fogTrans);
+                vHazeMul *= fogTrans;
+                vHazeAdd = vHazeAdd * fogTrans + fogAdd;
+                vGlow = 1.0 + uLitVertex.z * pow(max(dot(normalize(world), uAtmoSun.xyz), 0.0), 8.0);
+            }
         }
         """;
 
-    const string Fragment = """
-        #version 330 core
+    static readonly string Fragment = "#version 330 core\n" + ShadowShaders.Functions + """
+
         in vec2 vUv;
+        in vec3 vHazeMul, vHazeAdd;
+        in vec3 vWorld;
+        in float vGlow;
+        uniform vec4 uLitFragment;                  // x 1: lit (Meitou fog switch), y how much of the light the sun's shadow takes, z 0 alpha blend, 1 additive, 2 neither
+        // The sun's visibility at a point of the air: one bilinear compare in the first cascade that holds it (1 beyond them).
+        float particleSun(vec3 w)
+        {
+            int c = shadowCascade(w);
+            if (c < 0) return 1.0;
+            vec3 tile = (uShadowTile[c] * vec4(w - uShadowOrigin.xyz, 1.0)).xyz;
+            return shadowCascadeLayer(tile.xy, c, tile.z);
+        }
         in vec4 vColour;
         in float vDepth;
         in float vSoft;
@@ -97,6 +131,18 @@ public sealed unsafe class ParticleRenderer : IDisposable
             vec4 t = texture(uTexture, vUv);
             if (min(vColour.r, min(vColour.g, vColour.b)) < 0.0) t.rgb = vec3(max(t.r, max(t.g, t.b)));
             vec4 c = t * abs(vColour);
+            // Meitou fog: dust and smoke lit as the scene is (the game's sprites are flat, and not fogged): darker where the sun is shadowed, brighter seen
+            // towards the sun, then seen through the haze in front of them like the land behind; an additive sprite (fire) only dimmed by the haze.
+            if (uLitFragment.x > 0.5 && uLitFragment.z < 1.5)
+            {
+                if (uLitFragment.z < 0.5)
+                {
+                    float sun = particleSun(vWorld);
+                    c.rgb *= (1.0 - uLitFragment.y * (1.0 - sun)) * mix(1.0, vGlow, sun);
+                    c.rgb = c.rgb * vHazeMul + vHazeAdd;
+                }
+                else c.rgb *= vHazeMul;
+            }
             // Meitou fog: the sprite fades out over its last vSoft units before the surface behind it, instead of cutting into it.
             if (uSoft.x > 0.0)
             {
@@ -130,6 +176,18 @@ public sealed unsafe class ParticleRenderer : IDisposable
     readonly VertexArrayBindings vertexSource;
     readonly GpuBufferBinding[] bindings = new GpuBufferBinding[5];
     readonly UniformHandle viewProjection, cameraRight, cameraUp, mode, anchor, commonDirection, commonUp, colourScale, coverageMode, coverageLimit, coverageGain, soft;
+    readonly UniformHandle litVertex, litFragment, particleEye;
+    /// <summary>
+    /// Meitou (the <c>fog</c> switch): alpha sprites lit as the scene is, darker where the sun is shadowed (by <see cref="SunShade"/>), brighter seen towards
+    /// the sun, and seen through the haze in front of them; additive ones dimmed by the haze. The game's are flat and not fogged, so a dust cloud had one
+    /// brightness everywhere, in sun and in shade, near and far (docs/render-post.md "Fog").
+    /// </summary>
+    public bool Lit { get; set; }
+    /// <summary>How much of the light on a sprite the sun's shadow takes (the light shafts' darkening: the sun's share of the light).</summary>
+    public float SunShade { get; set; }
+    /// <summary>How much brighter a sprite seen straight towards the sun is (forward scattering; falls off as the eighth power of the cosine).</summary>
+    public const float SunGlow = 0.5f;
+    Vector3 frameEye;
     readonly SamplerSlot textureSlot, softDepthSlot;
     readonly SampledImage white;
     readonly Dictionary<string, SampledImage?> textures = new(StringComparer.OrdinalIgnoreCase);
@@ -230,6 +288,7 @@ public sealed unsafe class ParticleRenderer : IDisposable
         textureSlot = program.Sampler("uTexture");
         softDepthSlot = program.Sampler("uSoftDepth");
         soft = program.Uniform("uSoft");
+        (litVertex, litFragment, particleEye) = (program.Uniform("uLitVertex"), program.Uniform("uLitFragment"), program.Uniform("uParticleEye"));
         float[] corners = [-0.5f, -0.5f, -0.5f, 0.5f, 0.5f, -0.5f, 0.5f, 0.5f];   // triangle strip
         quad = DeviceBuffer.Create(gpu, sizeof(float) * (ulong)corners.Length, BufferUse.Vertex, "particle quad");
         using (var batch = gpu.Uploads.Begin()) batch.Write(quad, 0, System.Runtime.InteropServices.MemoryMarshal.AsBytes(corners.AsSpan()));
@@ -650,7 +709,7 @@ public sealed unsafe class ParticleRenderer : IDisposable
         var right = new Vector3(view.M11, view.M21, view.M31);
         var up = new Vector3(view.M12, view.M22, view.M32);
         float ambient = Math.Clamp(sunDirection.Y * 5 + 0.2f, 0.1f, 1f);
-        (frameVp, frameCloseVp, frameRight, frameUp, frameAmbient) = (vp, closeVp, right, up, ambient);
+        (frameVp, frameCloseVp, frameRight, frameUp, frameAmbient, frameEye) = (vp, closeVp, right, up, ambient, eye);
         coveragePending = true;
     }
 
@@ -747,6 +806,7 @@ public sealed unsafe class ParticleRenderer : IDisposable
     {
         int coverage = kind == Kind.Coverage ? 1 : 0;
         var (vp, closeVp, right, up, ambient) = (frameVp, frameCloseVp, frameRight, frameUp, frameAmbient);
+        program.ApplyGlobals();   // the atmosphere's and the shadows' uniforms (the Meitou lit sprites)
         if (kind == Kind.Low) (vp, closeVp) = (frameLowVp, frameLowCloseVp);
         foreach (var d in draws)
         {
@@ -796,6 +856,10 @@ public sealed unsafe class ParticleRenderer : IDisposable
                 };
                 var sd = softDepth.GetValueOrDefault();
                 program.Set(soft, fade, sd.Near, sd.Far, sd.ZeroToOne ? 1f : 0f);
+                bool litOn = Lit && coverage == 0;
+                program.Set(litVertex, litOn ? 1 : 0, 0, SunGlow, 0);
+                program.Set(litFragment, litOn ? 1 : 0, Math.Clamp(SunShade, 0, 1), m.Blend == ParticleBlend.Alpha ? 0 : m.Blend == ParticleBlend.Add ? 1 : 2, 0);
+                program.Set(particleEye, frameEye);
                 program.Bind(softDepthSlot, softDepth is { } bound ? bound.Texture : white.Sampled());
                 cmd.SetRaster(state.Cull, state.Front);
                 cmd.SetDepth(state.DepthTest, state.DepthWrite, state.Compare);
