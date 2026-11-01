@@ -384,7 +384,7 @@ public class DialogueInstallTests
         Assert.SkipWhen(InstallData.Install is null, "Kenshi install not found");
         var install = InstallData.Install!;
         var db = InstallData.BaseGame!;
-        var levels = WorldLevelData.Load(install, includeInteriors: true);
+        var levels = WorldLevelData.LoadBaseGame(install, includeInteriors: true);
         using var map = TerrainHeightmap.Open(install);
         var buildings = TownBuildings.Build(db, levels, new BuildingLayouts(db, levels.Interiors), (x, z) => map.HeightAt((float)x, (float)z));
         var data = PopulationData.Create(db, levels.Towns(), buildings: buildings);

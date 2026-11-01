@@ -15,7 +15,7 @@ public class HubNavmeshTests
     static readonly Dictionary<ZoneCoordinate, (ZoneGeometry Geometry, ZoneNavMesh Full)> built = [];
 
     // With the zones' interior files, as the game and `meitou-tools navmesh --fingerprint` load them (the pins come from the latter).
-    static readonly Lazy<WorldLevelData?> levels = new(() => InstallData.Install is { } i ? WorldLevelData.Load(i, includeInteriors: true) : null);
+    static readonly Lazy<WorldLevelData?> levels = new(() => InstallData.Install is { } i ? WorldLevelData.LoadBaseGame(i, includeInteriors: true) : null);
 
     static (GameInstall Install, GameDatabase Db, WorldLevelData Levels)? Load() =>
         InstallData.Install is { } install ? (install, InstallData.FullLoadOrder!, levels.Value!) : null;

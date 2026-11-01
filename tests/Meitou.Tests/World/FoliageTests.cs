@@ -50,8 +50,8 @@ public class FoliageTests
         Assert.Contains(catalog.Layers.Values, l => l.IsGrass);
         Assert.Contains(catalog.Meshes.Values, m => m.LeavesMesh is not null);
         Assert.Contains(catalog.Meshes.Values, m => m.BuildingType is not null);   // mineable resource rocks
-        using var whole = new FoliageWorld(install!, db, WorldLevelData.Load(install!), catalog);
-        using var far = new FoliageWorld(install!, db, WorldLevelData.Load(install!), catalog);
+        using var whole = new FoliageWorld(install!, db, WorldLevelData.LoadBaseGame(install!), catalog);
+        using var far = new FoliageWorld(install!, db, WorldLevelData.LoadBaseGame(install!), catalog);
         int farZones = 0, farInstances = 0;
         // Desert and canyon zones around (-60564, -45142) with CinderBall01 and canyon blocks, the forest of 14.30, the Hub's south.
         foreach (var zone in new ZoneCoordinate[] { new(17, 21), new(18, 21), new(18, 22), new(19, 22), new(17, 23), new(14, 30), new(20, 29), new(21, 29), new(44, 23), new(31, 45) })

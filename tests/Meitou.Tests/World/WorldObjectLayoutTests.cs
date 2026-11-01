@@ -69,7 +69,7 @@ public class WorldObjectLayoutTests
         var install = GameInstall.Locate();
         Assert.SkipWhen(install is null, $"No Kenshi install configured ({GameInstall.EnvironmentVariable}).");
         var db = GameDatabase.Load(LoadOrder.BaseGame(install!));
-        var world = WorldLevelData.Load(install!);
+        var world = WorldLevelData.LoadBaseGame(install!);
         var towns = new BuildingTowns(db, world);
         int placed = 0, empty = 0, foliage = 0, withDoors = 0, noMaterial = 0;
         var emptyNames = new HashSet<string>();
@@ -109,7 +109,7 @@ public class WorldObjectLayoutTests
         var install = InstallData.Install;
         Assert.SkipWhen(install is null, $"No Kenshi install configured ({GameInstall.EnvironmentVariable}).");
         var db = InstallData.FullLoadOrder!;
-        var levels = WorldLevelData.Load(install!, includeInteriors: true);
+        var levels = WorldLevelData.LoadBaseGame(install!, includeInteriors: true);
         // The Hub's bar: a Storm House with the "Bar" interior layout (docs/formats/zones.md "Interior view").
         var b = levels.Buildings().Single(x => x.InstanceId == "4933-Newwworld-INGAME" && Math.Abs(x.Position.X + 51181) < 5);
         var record = db.Find(b.BuildingId)!;

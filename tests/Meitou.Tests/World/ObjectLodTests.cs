@@ -46,7 +46,7 @@ public class ObjectLodTests
         var install = GameInstall.Locate();
         Assert.SkipWhen(install is null, $"No Kenshi install configured ({GameInstall.EnvironmentVariable}).");
         var db = GameDatabase.Load(LoadOrder.BaseGame(install!));
-        var world = WorldLevelData.Load(install!);
+        var world = WorldLevelData.LoadBaseGame(install!);
         var towns = DistantTowns.Find(install!, db, world);
         // 89 baked meshes; 88 belong to a town with the distant mesh flag (Observed 2026-10-04: 75 of 88 equal, the rest differ by buildings the nearest-town rule assigns differently).
         Assert.InRange(towns.Count, 85, 89);

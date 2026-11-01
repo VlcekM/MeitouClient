@@ -259,6 +259,8 @@ public enum GameDataIssueKind
     RecordAlreadyDefined,
     /// <summary>A record has a different type than the record it changes; the original type is kept.</summary>
     ChangedRecordType,
+    /// <summary>A world level file could not be read (a mod's file with its zero bytes turned to spaces); it is left out.</summary>
+    LevelFileNotLoaded,
 }
 
 public sealed record GameDataIssue(GameDataIssueKind Kind, string File, string? StringId, string Message)
