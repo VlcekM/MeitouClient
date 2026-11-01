@@ -134,6 +134,16 @@ files are rewritten byte for byte (`LevelFileTests.Every_base_game_level_file_pa
 | `leveldata/shader_ball.mod/` | 2 | 15 | Test scene |
 | `leveldata.level`, `roads.level` | 2 | 15, 13 | Legacy: a 20-entry town list; an empty file |
 
+### Mods
+
+A mod's world edits are a flat `leveldata/` folder beside its `.mod` file (Workshop or `mods/<name>/`): zone files, `leveldata.level`,
+`interiors.level`. **Observed**: all 179 such folders in a 1368-mod install are flat and lower-case; the exe holds `/leveldata/` beside
+`./data/newland/leveldata/`; the original game showed one install's mod-expanded Hub from them (path rule not traced in code). Meitou
+(`WorldLevelData.Load`): after the core files' layers, one layer per enabled mod that has the folder, in `mods.cfg` order, merged as the
+core layers are. A file the reader refuses is left out with a `LevelFileNotLoaded` issue (**Observed**: Great Frontiers - World
+Overhaul's `interiors.level` has every zero byte turned to a space; the game plays with it enabled). **Observed** (that install, 1174
+mods enabled): 54 473 placed buildings in 1222 zones against 11 714 in 913 without the mod layers.
+
 ### `data/newland/land/features.dat` (`MapFeatureFile`) — layout/example
 
 ```

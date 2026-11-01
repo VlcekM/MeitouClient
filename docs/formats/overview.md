@@ -40,7 +40,7 @@ Discovery (`FUN_14086f7a0`, launcher `FUN_140127890`) uses one name-keyed table:
 
 **Meitou difference:** `LoadOrder` cannot query subscriptions; it scans every downloaded item
 in `GameInstall.WorkshopDirectory`, in folder-name order. Each loaded mod retains its folder
-for art, translations and leveldata. A record path `.\mods\<name>\x` resolves into that mod's folder (Workshop or
+for art, translations and its world layer ([zones](zones.md#mods)). A record path `.\mods\<name>\x` resolves into that mod's folder (Workshop or
 local; `CollisionPaths.Resolve`), used for collision, interiors, body files, attachment points and race `editor limits` (#93).
 
 **Verified** launcher (`FUN_140125df0`, save `FUN_140120bd0`): active entries first in cfg order,

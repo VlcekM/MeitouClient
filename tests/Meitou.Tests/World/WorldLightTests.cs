@@ -94,7 +94,7 @@ public class WorldLightTests
         var install = GameInstall.Locate();
         Assert.SkipWhen(install is null, $"No Kenshi install configured ({GameInstall.EnvironmentVariable}).");
         var db = GameDatabase.Load(LoadOrder.BaseGame(install!));
-        var levels = WorldLevelData.Load(install!, includeInteriors: true);
+        var levels = WorldLevelData.LoadBaseGame(install!, includeInteriors: true);
         using var map = TerrainHeightmap.Open(install!);
         var layouts = new BuildingLayouts(db, levels.Interiors);
 
