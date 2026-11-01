@@ -22,8 +22,8 @@ public sealed class PostOptions
     /// <summary>Meitou switch (<c>shafts</c>; docs/render-shafts.md): the haze and the weather's fog darkened where the sun is shadowed along the view ray, so shadows
     /// cast light shafts through the air; Faithful leaves the haze lit everywhere, as the game does.</summary>
     public bool LightShafts = true;
-    /// <summary>Meitou switch (<c>fog</c>; docs/render-post.md "Fog"): the weather's sprites fade out where they meet a surface instead of cutting into it, and the fog
-    /// volumes may be computed at half size (<see cref="PostProcess.FogHalf"/>); Faithful is the game's fog exactly: hard-edged sprites, the volumes at full size.</summary>
+    /// <summary>Meitou switch (<c>fog</c>; docs/render-post.md "Fog"): the particle sprites fade out where they meet a surface instead of cutting into it; Faithful
+    /// draws them hard-edged, as the game's particle materials are but its mist and steam (which fade; not drawn so yet).</summary>
     public bool MeitouFog = true;
     /// <summary>How much of the haze in shadow goes, before the sun's share of the light (1: all of it; the sky's ambient light keeps the rest).</summary>
     public float ShaftStrength = 0.8f;

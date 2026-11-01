@@ -204,12 +204,12 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     sealed class CloudMotionPass : FullscreenProgram
     {
         public readonly SamplerSlot NearDepth, FarDepth, Clouds, Distance;
-        public readonly UniformHandle ToPrev, Planes, JitterNdc, HasFar, ClipDepthZeroToOne, FlipDepthY, Tan, Right, Up, Back, Wind;
+        public readonly UniformHandle ToPrev, Planes, JitterNdc, HasFar, ClipDepthZeroToOne, Tan, Right, Up, Back, Wind, Sun, SunMotion;
         public CloudMotionPass(GpuContext gpu) : base(gpu, UpscaleShaders.CloudMotion, "post cloud motion")
         {
             (NearDepth, FarDepth, Clouds, Distance) = (P.Sampler("uNearDepth"), P.Sampler("uFarDepth"), P.Sampler("uClouds"), P.Sampler("uCloudDistance"));
             (ToPrev, Planes, JitterNdc, HasFar) = (P.Uniform("uToPrev"), P.Uniform("uPlanes"), P.Uniform("uJitterNdc"), P.Uniform("uHasFar"));
-            (ClipDepthZeroToOne, FlipDepthY, Tan) = (P.Uniform("uClipDepthZeroToOne"), P.Uniform("uFlipDepthY"), P.Uniform("uTan"));
+            (ClipDepthZeroToOne, Tan, Sun, SunMotion) = (P.Uniform("uClipDepthZeroToOne"), P.Uniform("uTan"), P.Uniform("uSun"), P.Uniform("uSunMotion"));
             (Right, Up, Back, Wind) = (P.Uniform("uRight"), P.Uniform("uUp"), P.Uniform("uBack"), P.Uniform("uWind"));
         }
     }
@@ -319,12 +319,12 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     sealed class ParticleCompositePass : FullscreenProgram
     {
         public readonly SamplerSlot Accum, LowDepth, Depth;
-        public readonly UniformHandle LowSize, NearPlanes, Div, ClipDepthZeroToOne, Scale;
+        public readonly UniformHandle LowSize, NearPlanes, Div, ClipDepthZeroToOne, Scale, Footprint;
         public ParticleCompositePass(GpuContext gpu) : base(gpu, PostProcessShaders.ParticleComposite, "post particle composite")
         {
             (Accum, LowDepth, Depth) = (P.Sampler("uAccum"), P.Sampler("uLowDepth"), P.Sampler("uDepth"));
             (LowSize, NearPlanes, Div) = (P.Uniform("uLowSize"), P.Uniform("uNearPlanes"), P.Uniform("uDiv"));
-            (ClipDepthZeroToOne, Scale) = (P.Uniform("uClipDepthZeroToOne"), P.Uniform("uScale"));
+            (ClipDepthZeroToOne, Scale, Footprint) = (P.Uniform("uClipDepthZeroToOne"), P.Uniform("uScale"), P.Uniform("uFootprint"));
         }
     }
 
@@ -395,7 +395,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     // ---- targets ----
 
     IEnumerable<Target2D> Targets() =>
-        new[] { sceneColour, sceneDepth, farDepth, motion, upscaleDepth, reactive, historyA, historyB, aoA, aoB, aoMask, ldr, ldrFxaa, smaaEdges, smaaWeights, luminance, adaptA, adaptB, lowTargets[0].Accum, lowTargets[0].Depth, lowTargets[1].Accum, lowTargets[1].Depth, rateDistance, rateImage, neutralRate, giAlbedo, giLow, shaftInjected, shaftLight }.OfType<Target2D>();
+        new[] { sceneColour, sceneDepth, farDepth, motion, upscaleDepth, reactive, historyA, historyB, aoA, aoB, aoMask, ldr, ldrFxaa, smaaEdges, smaaWeights, luminance, adaptA, adaptB, lowTargets[0].Accum, lowTargets[0].Depth, lowTargets[0].Soft, lowTargets[1].Accum, lowTargets[1].Depth, lowTargets[1].Soft, softDepth, rateDistance, rateImage, neutralRate, giAlbedo, giLow, shaftInjected, shaftLight, shaftScatter, shaftRaw, shaftHistory }.OfType<Target2D>();
 
     void Free()
     {
@@ -404,9 +404,9 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         sceneColour = sceneDepth = farDepth = motion = upscaleDepth = reactive = historyA = historyB = rateDistance = rateImage = neutralRate = null;
         rateBuiltFrame = long.MinValue;
         aoA = aoB = aoMask = ldr = ldrFxaa = smaaEdges = smaaWeights = luminance = adaptA = adaptB = null;
-        foreach (var l in lowTargets) l.Accum = l.Depth = null;
-        giAlbedo = giLow = shaftInjected = shaftLight = null;
-        adaptedValid = historyValid = false;
+        foreach (var l in lowTargets) l.Accum = l.Depth = l.Soft = null;
+        giAlbedo = giLow = shaftInjected = shaftLight = shaftScatter = shaftRaw = shaftHistory = softDepth = null;
+        adaptedValid = historyValid = shaftHistoryValid = softDepthReady = false;
         adaptedFrames = 0;
     }
 
@@ -563,6 +563,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         haveNearSlice = farSliceDrawn = false;
         foreach (var l in lowTargets) l.Drawn = l.Late = false;
         softDepthReady = false;
+        CloudMotion = null;   // WorldFrame.Draw sets this frame's; a sky-only frame has none
         sceneMarked = aoApplied = false;
         Stamp("start");
         frameIndex++;
@@ -613,7 +614,6 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         c.P.Set(c.JitterNdc, 2 * JitterPixels.X / width, 2 * JitterPixels.Y / height);
         c.P.Set(c.HasFar, far ? 1 : 0);
         c.P.Set(c.ClipDepthZeroToOne, Gpu.ClipDepthZeroToOne ? 1 : 0);
-        c.P.Set(c.FlipDepthY, Gpu.RenderTargetsBottomUp ? 0 : 1);
         float tanY = MathF.Tan(fovNow * 0.5f);
         c.P.Set(c.Tan, tanY * aspectNow, tanY);
         var r = viewRotation;
@@ -621,6 +621,8 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         c.P.Set(c.Up, r.M12, r.M22, r.M32);
         c.P.Set(c.Back, r.M13, r.M23, r.M33);
         c.P.Set(c.Wind, clouds.Wind.X, clouds.Wind.Y);
+        c.P.Set(c.Sun, sunMotion.Sun);
+        c.P.Set(c.SunMotion, sunMotion.Motion);
         Draw(c.P, motion!.Attachment, motion.Format, width, height, width, height,
             PassState with { Blend = new BlendState(true, BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha), ColourMask = ColorMask.R | ColorMask.G });
         CloseSegment();
@@ -1162,6 +1164,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         c.P.Set(c.Div, (float)low.Divisor);
         c.P.Set(c.ClipDepthZeroToOne, Gpu.ClipDepthZeroToOne ? 1 : 0);
         c.P.Set(c.Scale, (float)width / targetWidth);
+        c.P.Set(c.Footprint, target == sceneColour ? 0 : 1);   // over the upscaler's unjittered output: the jittered depth's footprint, not one texel
         Draw(c.P, target.Attachment, target.Format, targetWidth, targetHeight, targetWidth, targetHeight, ParticleLowState);
         CloseSegment();
     }

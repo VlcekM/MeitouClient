@@ -157,7 +157,7 @@ public static class Enhancements
             "the game's meshes store each corner once per triangle, with that triangle's own tangent, so normal-mapped surfaces show faint facets at the triangle edges; Meitou welds the corners that differ only in their tangent and averages it, which smooths the bump lighting (characters most) and keeps about 60% fewer vertices in video memory; applies to meshes as they load (docs/render-objects.md)"),
         new("fog", "Fog", "hard-edged", "soft",
             () => post.MeitouFog, v => post.MeitouFog = v,
-            "the game's dust, smoke and fog sprites cut straight into the ground and walls they cross, and its fog volumes are drawn at full size; Meitou fades each sprite out over the last stretch before a surface (a quarter of its size, 0.2 to 30 m), so dust clouds meet the ground softly, and computes the fog volumes at half size (docs/render-post.md \"Fog\")"),
+            "the game's dust and smoke sprites cut straight into the ground and walls they cross (all but its mist and steam, which fade; Faithful draws those hard-edged too); Meitou fades each sprite out over the last stretch before a surface (a quarter of its size, 0.2 to 30 m), so dust clouds meet the ground softly (docs/render-post.md \"Fog\")"),
     ];
 
     /// <summary><c>--meitou</c> / <c>--faithful &lt;all|id,id...&gt;</c>: turns those switches to Meitou or to Faithful.</summary>

@@ -135,8 +135,6 @@ static class LightShaftShaders
         }
         """;
 
-    /// <summary>The second pass, into a second atlas (R32F): per cell, the sun's share of the haze gathered from the eye to the far end of its slice
-    /// (the first pass's two sums over this slice and every nearer one; 1 where no haze has gathered yet).</summary>
     /// <summary>
     /// The sun's share averaged over frames (docs/render-shafts.md "Temporal"): with a temporal upscaler the injection's samples move every frame, and
     /// TAA, which clamps its history to the picture's neighbourhood, showed their noise as a shimmer in motion. Each cell's centre is taken back into
@@ -194,6 +192,8 @@ static class LightShaftShaders
         }
         """;
 
+    /// <summary>The second pass, into a second atlas (R32F): per cell, the sun's share of the haze gathered from the eye to the far end of its slice
+    /// (the first pass's two sums over this slice and every nearer one; 1 where no haze has gathered yet).</summary>
     public static readonly string Integrate = "#version 330 core\n" + Common + """
 
         out vec4 fragColour;

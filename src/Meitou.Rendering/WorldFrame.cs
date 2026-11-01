@@ -1331,6 +1331,7 @@ static class WorldFrame
         var particles = post.Particles;
         gpu.PostChain?.ObjectMotion = null;
         post.Particles = null;
+        post.SetCloudMotion(null);
         try { post.End(); }
         finally
         {

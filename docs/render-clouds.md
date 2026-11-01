@@ -30,10 +30,10 @@ Upscaler motion: the velocity pass gives sky pixels the far plane's motion (the 
 render pixels (`UpscaleShaders.CloudMotion`, 3x3 taps two cloud texels apart) takes the cloud's motion: the opacity-weighted point's parallax
 through the slice's reprojection plus the wind's shift, weighted by the strongest opacity (full from 0.03), after the history resolve (Vulkan
 chain only). Weighting by the pixel's own opacity left thin edges and pixels a cloud had just left with the sky's motion, so DLSS fetched
-last frame's cloud in place: rows of streaks behind drifting edges with the camera still (DLSS only; TAA clamps its history). The sky
-behind a cloud is a smooth gradient, so moving it with the cloud costs nothing visible. **Observed** (the live title scene, 2560x1440, DLSS,
-five F8 captures each, 16x16 sky blocks whose row-to-row second difference beats the column one by 1): 319 without cloud motion, 202 by
-the pixel's opacity, 186 with the neighbourhood, 185 under TAA.
+last frame's cloud in place: rows of streaks behind drifting edges with the camera still (DLSS only; TAA clamps its history). With the
+neighbourhood the streaks fall to TAA's level (**Observed**, the live title scene, 2560x1440, DLSS, a streak count over sky blocks).
+Round the sun (the velocity pass's sun term) only the pixel's own opacity counts, so the sun keeps its motion; stars and planets
+within the reach move with the cloud (**Unknown** how visible).
 Fog-hidden rays can skip marching; full-sky skip requires every direction conservatively hidden.
 Clock rewind/weather changes must refresh sky/fog histories and not retain stale colour.
 

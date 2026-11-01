@@ -68,7 +68,8 @@ static class UpscaleShaders
     /// The volumetric clouds' motion over the sky's (docs/render-clouds.md "Temporal, fog and shadows"): the velocity pass gives every sky pixel the motion of the
     /// far plane (the camera's turn alone), but a cloud is a few kilometres away and drifts with the wind, so the upscalers dragged its history (streaks). Here a
     /// sky pixel under a cloud takes the motion of the cloud's opacity-weighted point along its ray: its parallax through the slice's reprojection, plus the
-    /// wind's shift on screen. Blended over the velocity target by the cloud's opacity (red and green only; source alpha, one minus source alpha).
+    /// wind's shift on screen. Blended over the velocity target by the cloud's opacity (red and green only; source alpha, one minus source alpha); round the
+    /// sun by the pixel's own opacity only, so the sky there keeps the sun's motion (the velocity pass's term).
     /// </summary>
     public const string CloudMotion = """
         #version 330 core
@@ -77,22 +78,23 @@ static class UpscaleShaders
         uniform sampler2D uNearDepth, uFarDepth, uClouds, uCloudDistance;
         uniform mat4 uToPrev;                  // the far slice's reprojection (the near one's when there is no far slice)
         uniform vec2 uPlanes, uJitterNdc;
-        uniform int uHasFar, uClipDepthZeroToOne, uFlipDepthY;
+        uniform int uHasFar, uClipDepthZeroToOne;
         uniform vec2 uTan;                     // tan(fov / 2) * aspect, tan(fov / 2)
         uniform vec3 uRight, uUp, uBack;       // the view axes in the world
+        uniform vec4 uSun, uSunMotion;         // as the velocity pass's: the sun's direction and inner cos; its motion, outer cos, on
         uniform vec2 uWind;                    // the clouds' shift since the last frame (world x, z): last frame's content is at point + wind
         float ndcDepth(float d) { return uClipDepthZeroToOne != 0 ? d : 2.0 * d - 1.0; }
         vec2 project(vec3 v) { float z = -dot(v, uBack); return vec2(dot(v, uRight) / (z * uTan.x), dot(v, uUp) / (z * uTan.y)); }
         void main()
         {
-            vec2 depthUv = uFlipDepthY != 0 ? vec2(vUv.x, 1.0 - vUv.y) : vUv;
+            vec2 depthUv = vUv;
             if (textureLod(uNearDepth, depthUv, 0.0).r < 1.0 || (uHasFar != 0 && textureLod(uFarDepth, depthUv, 0.0).r < 1.0)) discard;
             // The cloud's motion wherever a cloud is near, not by this pixel's opacity: a pixel a cloud has just left (or its thin edge) kept the sky's
-            // motion, so DLSS fetched last frame's cloud in place and trailed it (rows of streaks behind drifting edges, camera still). The sky behind a
-            // cloud is a smooth gradient, so moving it with the cloud costs nothing visible. 3 x 3 taps two texels apart (about 4 render pixels round):
-            // the strongest opacity sets the weight, the opacity-weighted distance the depth.
+            // motion, so DLSS fetched last frame's cloud in place and trailed it (rows of streaks behind drifting edges, camera still). The cost: a star or
+            // planet within that reach moves with the cloud too. 3 x 3 taps two texels apart (about 4 render pixels round): the strongest opacity sets the
+            // weight, the opacity-weighted distance the depth.
             vec2 texel = 1.0 / vec2(textureSize(uClouds, 0));
-            float strongest = 0.0, opacitySum = 0.0, distanceSum = 0.0;
+            float strongest = 0.0, own = 0.0, opacitySum = 0.0, distanceSum = 0.0;
             for (int y = -1; y <= 1; y++)
                 for (int x = -1; x <= 1; x++)
                 {
@@ -100,15 +102,17 @@ static class UpscaleShaders
                     float a = textureLod(uClouds, uv, 0.0).a;
                     float d = textureLod(uCloudDistance, uv, 0.0).r;
                     if (d <= 0.0) continue;
+                    if (x == 0 && y == 0) own = a;
                     strongest = max(strongest, a);
                     opacitySum += a;
                     distanceSum += a * d;
                 }
-            float weight = smoothstep(0.0, 0.03, strongest);
-            if (weight <= 0.0 || opacitySum <= 0.0) discard;
-            float distance = distanceSum / opacitySum;
             vec2 ndc = vUv * 2.0 - 1.0;
             vec3 ray = normalize(uRight * ndc.x * uTan.x + uUp * ndc.y * uTan.y - uBack);
+            float sun = uSunMotion.w != 0.0 ? smoothstep(uSunMotion.z, uSun.w, dot(ray, uSun.xyz)) : 0.0;
+            float weight = mix(smoothstep(0.0, 0.03, strongest), own, sun);   // round the sun by this pixel's opacity: the sky keeps the sun's motion
+            if (weight <= 0.0 || opacitySum <= 0.0) discard;
+            float distance = distanceSum / opacitySum;
             vec3 point = ray * distance;
             float z = -dot(point, uBack);
             // The point's depth in the slice's projection, reprojected as the velocity pass reprojects a surface.

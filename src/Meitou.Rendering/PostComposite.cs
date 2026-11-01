@@ -584,6 +584,8 @@ sealed class PostComposite : IDisposable
         c.P.Set(c.NearPlanes, near, far);
         c.P.Set(c.Div, (float)divisor);
         c.P.Set(c.ClipDepthZeroToOne, ctx.ClipDepthZeroToOne ? 1 : 0);
+        c.P.Set(c.Scale, 1f);   // over the scene, at its size
+        c.P.Set(c.Footprint, 0);
         var formats = new AttachmentFormats(scene.Desc.Format, InternalFormat.None);
         var state = DrawState.For(formats, false) with
         {
@@ -791,12 +793,12 @@ sealed class PostComposite : IDisposable
     sealed class ParticleCompositePass : Pass
     {
         public readonly SamplerSlot Accum, LowDepth, Depth;
-        public readonly UniformHandle LowSize, NearPlanes, Div, ClipDepthZeroToOne;
+        public readonly UniformHandle LowSize, NearPlanes, Div, ClipDepthZeroToOne, Scale, Footprint;
         public ParticleCompositePass(IGpuContext ctx, string vertex) : base(ctx, vertex, PostProcessShaders.ParticleComposite, "post particle composite")
         {
             (Accum, LowDepth, Depth) = (P.Sampler("uAccum"), P.Sampler("uLowDepth"), P.Sampler("uDepth"));
             (LowSize, NearPlanes, Div) = (P.Uniform("uLowSize"), P.Uniform("uNearPlanes"), P.Uniform("uDiv"));
-            ClipDepthZeroToOne = P.Uniform("uClipDepthZeroToOne");
+            (ClipDepthZeroToOne, Scale, Footprint) = (P.Uniform("uClipDepthZeroToOne"), P.Uniform("uScale"), P.Uniform("uFootprint"));
         }
     }
 

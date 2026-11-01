@@ -69,7 +69,7 @@ sealed partial class SettingsMenu
         "Draw distances" => "Use extended object and landmark visibility ranges.",
         "Water" => "Add animated waves and shoreline surf.",
         "Weather particles" => "Render weather at an adaptive lower resolution.",
-        "Fog" => "Fade dust and fog sprites where they meet the ground and walls. Faithful keeps the game's fog exactly.",
+        "Fog" => "Fade dust and fog sprites where they meet the ground and walls. Off keeps them hard-edged.",
         "Foliage levels" => "Use generated simpler meshes for distant foliage.",
         "Indirect light" => "Use light probes for bounced and ambient lighting.",
         "Indoor GI" => "With Indirect light on, use bounced light indoors. Off keeps the original indoor ambient lighting.",

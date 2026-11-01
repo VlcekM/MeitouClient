@@ -100,19 +100,25 @@ GPU frame -0.15 ms, the picture within 4 levels. Sky/far-depth edges and
 transparent water/particles require explicit exclusion/compositing rules.
 `layer-merge`, `fog-half`, `shafts-half`, `layers-lean` combine shafts apply, placed fog and SSAO,
 using reduced targets plus depth-aware reconstruction/mask fallback. A texel that does not fit
-must use the full-resolution path. `fog-half` applies only with the Meitou `fog` switch (below).
-[Fog volumes](formats/fogfeatures.md), [shafts](render-shafts.md).
+must use the full-resolution path. [Fog volumes](formats/fogfeatures.md), [shafts](render-shafts.md).
 `post-merge` fuses velocity/exposure compute groups while preserving ordering and dependencies.
 
 ## Fog
 
-The `fog` switch (`PostOptions.MeitouFog`). Faithful is the game's fog exactly: the haze and weather fog of its fog shader
-([sky](formats/sky.md)), the fog volumes at full size, sprites tested against the depth with no fade (the game's particle shader
-is texture times colour). Meitou fades each sprite over its last stretch before the surface behind it: a quarter of its larger
+The `fog` switch (`PostOptions.MeitouFog`) changes the particle sprites only; the haze and weather fog are [sky](formats/sky.md)'s,
+the fog volumes [fogfeatures](formats/fogfeatures.md)'s (their half size is `fog-half`, above, whatever the switch).
+The game's sprites: **Verified** (the install's `materials/forward/basic.hlsl` `basic_fp`, `particles.hlsl`, the particle
+materials): its particle materials use `Basic_Texture_FP` / `Basic_Texture_Clipped_FP_HLSL`, texture times colour times vertex
+colour, depth-tested with no fade, except `Kenshi_mist_cloud` (the `fogislands`, `islandfog`, `Kenshi_Mist_Cloud`,
+`Kenshi_Rising_Steam(_slow)` and `SkyBeam` scripts), whose `Particle_Blend_Depth` scales alpha by `saturate(w / 10)` near the eye and by
+`saturate((scene - 100 - w) / 100)` before a surface (gbuffer depth; 0 within 100 units, full from 200). Faithful draws every
+sprite hard-edged, so those mist sprites are not the game's yet (**Unknown** how visible). The game draws fog volumes and particles
+into the full-size HDR target (**Verified**, `materials/compositors/main.compositor` `Lighting_HDR`, queues 82 to 85).
+Meitou fades each sprite over its last stretch before the surface behind it: a quarter of its larger
 side, 2 to 300 units (0.2 to 30 m), on alpha (alpha sprites), colour (additive) or towards white (modulate); the reactive mask
 fades the same. A draw cannot read the depth it tests against, so the fade reads a colour copy: an R32F copy of the scene depth
 for full-size sprites (`PrepareSoftParticleDepth`, only when some are drawn) and, for the low-resolution ones, the depth pass's
-checkerboard written to an R32F target beside it. The fog volumes run at half size (`fog-half`) only with Meitou.
+checkerboard written to an R32F target beside it.
 **Observed** (the Eye's storm, quarter-size particles): the row of dark beads where the dust meets a dune ridge is fainter.
 The Metal chain has no copy: its sprites stay hard-edged.
 
@@ -141,8 +147,10 @@ one or two matching texels in turn along an edge, a row of beads two texels apar
 size: the beads gone, a smooth band; elsewhere the picture within 12/255). With a vendor upscaler (DLSS, FSR) the low-resolution particles are
 blended over its output instead of the scene it upscales (`PostProcess.ParticlesAfterUpscale`, half then quarter size, the composite reading
 the render-size depth at `uScale` render pixels per output pixel), drawn with the unjittered projection, and left out of the reactive mask:
-DLSS took drifting see-through dust as standing still (its default preset ignores the reactive mask) and trailed it in rows of streaks; dust
-motion vectors had only halved them. A vendor upscaler that fails that frame gets them in the scene before the TAA. **Observed** (a Hub
+DLSS took drifting see-through dust as standing still (its default preset ignores the reactive mask) and trailed it in rows of streaks
+(motion vectors for the dust left about half of them). Over the unjittered output the pixel's depth for the depth match is the nearest
+of the 2 x 2 render texels round it (`uFootprint`), not the one nearest jittered texel; **Unknown** whether that stops dust edges
+shimmering against near silhouettes (not yet looked at). A vendor upscaler that fails that frame gets them in the scene before the TAA. **Observed** (a Hub
 storm, DLSS): the dust the same as blended in the scene (mean difference 1.2/255, the dust's shapes only). TAA keeps them in the scene: its
 output is its next history. Texture anisotropy caps mipmapped samplers, distinct from texture
 resolution/LOD bias. [Particle simulation](formats/particle-universe.md).
