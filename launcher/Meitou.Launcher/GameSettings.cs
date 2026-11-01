@@ -39,7 +39,7 @@ sealed class GameSettings
     }
 
     public bool? GetBool(string key) => root[key] is JsonValue v && v.TryGetValue(out bool b) ? b : null;
-    public float? GetNumber(string key) => root[key] is JsonValue v && v.TryGetValue(out double d) ? (float)d : null;
+    public float? GetNumber(string key) => Number(root[key]);
     public string? GetString(string key) => root[key] is JsonValue v && v.TryGetValue(out string? text) ? text : null;
     public void Set(string key, bool value) => root[key] = value;
     public void Set(string key, string value) => root[key] = value;
@@ -50,7 +50,14 @@ sealed class GameSettings
     public bool HasGraphics => root["graphics"] is JsonObject { Count: > 0 };
 
     /// <summary>A Tab panel slider's saved value (a switch's: 1 on, 0 off); null when it was never saved (the game then uses the mode's default).</summary>
-    public float? GetGraphics(string label) => root["graphics"] is JsonObject g && g[label] is JsonValue v && v.TryGetValue(out double d) ? (float)d : null;
+    public float? GetGraphics(string label) => root["graphics"] is JsonObject g ? Number(g[label]) : null;
+
+    /// <summary>
+    /// A number however it is held: read from the file (any number), or written this session as a float or, whole, an int (<see cref="Set(string, float)"/>);
+    /// a value made from one type does not read back as another.
+    /// </summary>
+    static float? Number(JsonNode? node) => node is not JsonValue v ? null
+        : v.TryGetValue(out double d) ? (float)d : v.TryGetValue(out float f) ? f : v.TryGetValue(out int i) ? i : null;
 
     /// <summary>Saves a slider's value, or removes it (null) so the game falls back to its default.</summary>
     public void SetGraphics(string label, float? value)
@@ -64,11 +71,15 @@ sealed class GameSettings
         else g.Remove(label);
     }
 
-    /// <summary>Removes every saved slider and switch, and the saved preset (<paramref name="presetKey"/>).</summary>
-    public void ResetGraphics(string? presetKey)
+    /// <summary>Removes a top-level key, so the game takes its default.</summary>
+    public void Remove(string key) => root.Remove(key);
+
+    /// <summary>Removes every saved slider and switch, and the saved preset and look (<paramref name="keys"/>).</summary>
+    public void ResetGraphics(params string?[] keys)
     {
         root.Remove("graphics");
-        if (presetKey is not null) root.Remove(presetKey);
+        foreach (var key in keys)
+            if (key is not null) root.Remove(key);
     }
 
     /// <summary>Writes the file; a new one gets <paramref name="version"/>, the layout the keys were written in.</summary>

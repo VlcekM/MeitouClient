@@ -29,7 +29,7 @@ sealed class UserConfig
     /// retyped or read with a new meaning, and convert older files in <see cref="Migrate"/>. A Tab panel slider whose numbering changes
     /// takes a new label instead (<c>WorldFrame.UpscalerSliders</c>), so its old value is not misread.
     /// </summary>
-    public const int CurrentVersion = 1;
+    public const int CurrentVersion = 2;
     /// <summary>The file's layout: <see cref="CurrentVersion"/>, or the newer one of a later release whose file this is (kept, so that
     /// release does not convert its own keys again).</summary>
     public int Version { get; set; } = CurrentVersion;
@@ -151,6 +151,13 @@ sealed class UserConfig
     /// <summary>The Graphics quality preset (Low, Medium, High, Ultra, Custom): the game saves the one its settings sit at; one the launcher chose is applied at start
     /// unless the settings already sit at it (<c>SettingsMenu.ApplySavedPreset</c>). Null: nothing saved yet.</summary>
     public string? GraphicsPreset { get; set; }
+    /// <summary>The active look preset's name (Graphics; null: Meitou); the presets are files in the <c>presets</c> folder beside this file (docs/native-ui.md "Settings").</summary>
+    public string? LookPreset { get; set; }
+    /// <summary>Whether the look is Faithful (the game as it ships, a starting point the player may change) rather than a Meitou preset (Graphics); null: decided
+    /// from the switches (all on the game's side: Faithful).</summary>
+    public bool? FaithfulLook { get; set; }
+    /// <summary>The costly look switches kept on at Low quality (their labels); at Low the others are held off.</summary>
+    public List<string> KeepAtLow { get; set; } = [];
     public Dictionary<string, string> Bindings { get; set; } = [];
     /// <summary>The Meitou skin per race, where chosen against the default (RACE string id to on or off; Graphics > Skin): <c>CharacterRenderer.SkinRaces</c>.</summary>
     public Dictionary<string, bool> SkinRaces { get; set; } = [];
@@ -224,8 +231,26 @@ sealed class UserConfig
     /// missing: the launcher may already have written it.</summary>
     static void Migrate(JsonObject json, int from)
     {
-        // No steps yet: 1 is the first layout. A raise to 2 adds `if (from < 2) { ... }`, and so on.
-        _ = (json, from);
+        if (from < 2 && json["graphics"] is JsonObject graphics)
+        {
+            // 2: haze, heat haze, night grading and the tone map became a switch and a Meitou strength kept while it is off. Layout 1 stored Faithful as the
+            // strength at the game's value, which would leave the switch's Meitou side looking the same: such a strength goes, so Meitou's default is used.
+            // The tone map slider lost its 0 (the clamp is the switch's Faithful side); a saved 0 goes, so it is not clamped to the shoulder curve.
+            float? Get(string key) => graphics[key] is JsonValue v && v.TryGetValue(out double d) ? (float)d : null;
+            bool AtGame(string key, float game) => Get(key) is { } v && MathF.Abs(v - game) < 1e-3f;
+            void Strength(string switchKey, float game, params string[] keys)
+            {
+                if (!keys.All(k => AtGame(k, game) || Get(k) is null) || !keys.Any(k => Get(k) is not null)) return;
+                float? on = Get(switchKey);
+                if (on is null) graphics[switchKey] = 0;   // layout 1 read the switch from the strength: at the game's value it was Faithful
+                if (on is null or < 0.5f) foreach (var k in keys) graphics.Remove(k);
+            }
+            Strength("Meitou: Haze", 1, "Haze strength (1 = game)");
+            Strength("Meitou: Heat haze", 1, "Heat haze strength (1 = game)");
+            Strength("Meitou: Night grading", 0, "Night grading strength (0 = game)");
+            Strength("Meitou: Tone map and grade", 0, "Tone map (0 = game)", "Grading (0 = game)");
+            if (AtGame("Tone map (0 = game)", 0)) graphics.Remove("Tone map (0 = game)");
+        }
     }
 
     /// <summary>Copies the file to <c>meitou.user.&lt;time&gt;.bak.json</c> beside it.</summary>

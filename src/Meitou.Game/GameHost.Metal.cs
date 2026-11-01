@@ -548,11 +548,11 @@ sealed partial class GameHost
                 "VSync", "Full screen", SettingsMenu.MetalPresetSlider, WorldFrame.UpscalerSliders[1],
             };
             foreach (var slider in settingsValues.Sliders)
-                if (!SessionSliders.Contains(slider.Label) && !metalDisplayKeys.Contains(slider.Label) &&
+                if (!RunOnlyKeys().Contains(slider.Label) && !metalDisplayKeys.Contains(slider.Label) &&
                     config.Graphics.TryGetValue(slider.Label, out float value))
                     slider.Set(Math.Clamp(value, slider.Min, slider.Max));
             foreach (var toggle in settingsValues.Toggles)
-                if (config.Graphics.TryGetValue(SettingsMenu.SwitchKeyPrefix + toggle.Label, out float value) && (value >= 0.5f) != toggle.Get())
+                if (!SettingsMenu.HiddenSwitch(toggle.Label) && !RunOnlyKeys().Contains(SettingsMenu.SwitchKeyPrefix + toggle.Label) && config.Graphics.TryGetValue(SettingsMenu.SwitchKeyPrefix + toggle.Label, out float value) && (value >= 0.5f) != toggle.Get())
                     toggle.Set(value >= 0.5f);
             settings.ApplySavedPreset();
             // The impostor atlas path is re-enabled after the frame-slot fence. Keep the diagnostic off switch as a
@@ -756,7 +756,7 @@ sealed partial class GameHost
 
             // Effects: the composite already supports the game's exposure/tone-map/grading path, even before the rest of
             // the Vulkan post chain is ported.
-            sliders.Add(new Slider("Tone map (0 = game)", 0, 3, () => (int)o.Post.ToneMap,
+            sliders.Add(new Slider("Tone map (0 = game)", 1, 3, () => (int)o.Post.ToneMap,
                 v => o.Post.ToneMap = (ToneMapOperator)(int)MathF.Round(v), "0",
                 Text: v => (ToneMapOperator)(int)MathF.Round(v) switch
                 {
@@ -1577,12 +1577,12 @@ sealed partial class GameHost
                 foreach (var slider in settingsValues.Sliders)
                 {
                     // These have their own config fields; the rest use the same graphics keys as the Vulkan settings.
-                    if (SessionSliders.Contains(slider.Label) || slider.Label is SettingsMenu.MetalPresetSlider ||
+                    if (RunOnlyKeys().Contains(slider.Label) || slider.Label is SettingsMenu.MetalPresetSlider ||
                         slider.Label == WorldFrame.UpscalerSliders[1]) continue;
                     config.Graphics[slider.Label] = slider.Get();
                 }
                 foreach (var toggle in settingsValues.Toggles)
-                    config.Graphics[SettingsMenu.SwitchKeyPrefix + toggle.Label] = toggle.Get() ? 1 : 0;
+                    if (!RunOnlyKeys().Contains(SettingsMenu.SwitchKeyPrefix + toggle.Label)) config.Graphics[SettingsMenu.SwitchKeyPrefix + toggle.Label] = toggle.Get() ? 1 : 0;
                 settings?.SavePreset();
             }
             config.Save();

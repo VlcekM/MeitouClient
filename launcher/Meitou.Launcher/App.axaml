@@ -7,6 +7,109 @@
   <Application.Resources>
     <ResourceDictionary>
       <!-- Tokens -->
+      <!--
+        Drop-downs: our own template, so the chevron is the Graphics features' fold arrow (the same brass path, turned down). The parts keep
+        Fluent's names (Background, PopupBorder) for the styles below; the items keep Fluent's ComboBoxItem.
+      -->
+      <ControlTheme x:Key="{x:Type ComboBox}" TargetType="ComboBox">
+        <Setter Property="Padding" Value="12,5,4,5" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="MaxDropDownHeight" Value="504" />
+        <Setter Property="PlaceholderForeground" Value="#8a8270" />
+        <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Auto" />
+        <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled" />
+        <Setter Property="Template">
+          <ControlTemplate>
+            <Grid ColumnDefinitions="*,32">
+              <Border Name="Background" Grid.ColumnSpan="2" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                      BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="{TemplateBinding CornerRadius}" />
+              <TextBlock Name="PlaceholderTextBlock" Margin="{TemplateBinding Padding}" Text="{TemplateBinding PlaceholderText}"
+                         Foreground="{TemplateBinding PlaceholderForeground}" HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                         VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                         IsVisible="{TemplateBinding SelectionBoxItem, Converter={x:Static ObjectConverters.IsNull}}" />
+              <ContentControl Name="ContentPresenter" Margin="{TemplateBinding Padding}" Content="{TemplateBinding SelectionBoxItem}"
+                              ContentTemplate="{TemplateBinding ItemTemplate}" HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
+                              VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}" />
+              <Path Name="DropDownGlyph" Grid.Column="1" Data="M 1,1 L 5,5 L 9,1" Stroke="#c4a062" StrokeThickness="1.8" Width="10" Height="7"
+                    HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False" />
+              <Popup Name="PART_Popup" IsOpen="{TemplateBinding IsDropDownOpen, Mode=TwoWay}" PlacementTarget="Background" IsLightDismissEnabled="True"
+                     MinWidth="{Binding Bounds.Width, RelativeSource={RelativeSource TemplatedParent}}" MaxHeight="{TemplateBinding MaxDropDownHeight}">
+                <Border Name="PopupBorder" BorderThickness="1" Padding="0,4" HorizontalAlignment="Stretch">
+                  <ScrollViewer HorizontalScrollBarVisibility="{TemplateBinding ScrollViewer.HorizontalScrollBarVisibility}"
+                                VerticalScrollBarVisibility="{TemplateBinding ScrollViewer.VerticalScrollBarVisibility}">
+                    <ItemsPresenter Name="PART_ItemsPresenter" Margin="2" ItemsPanel="{TemplateBinding ItemsPanel}" />
+                  </ScrollViewer>
+                </Border>
+              </Popup>
+            </Grid>
+          </ControlTemplate>
+        </Setter>
+        <Style Selector="^:disabled">
+          <Setter Property="Opacity" Value="0.5" />
+        </Style>
+      </ControlTheme>
+      <!-- Switches (Fluent's keys): a brass track while on, a dark framed one while off, as the game's. -->
+      <SolidColorBrush x:Key="ToggleSwitchFillOn" Color="#816635" />
+      <SolidColorBrush x:Key="ToggleSwitchFillOnPointerOver" Color="#9a7c45" />
+      <SolidColorBrush x:Key="ToggleSwitchFillOnPressed" Color="#9a7c45" />
+      <SolidColorBrush x:Key="ToggleSwitchFillOff" Color="#110f0d" />
+      <SolidColorBrush x:Key="ToggleSwitchFillOffPointerOver" Color="#1a1715" />
+      <SolidColorBrush x:Key="ToggleSwitchFillOffPressed" Color="#1a1715" />
+      <SolidColorBrush x:Key="ToggleSwitchStrokeOff" Color="#5e5849" />
+      <SolidColorBrush x:Key="ToggleSwitchStrokeOffPointerOver" Color="#afa68b" />
+      <SolidColorBrush x:Key="ToggleSwitchStrokeOffPressed" Color="#afa68b" />
+      <SolidColorBrush x:Key="ToggleSwitchKnobFillOff" Color="#8a8270" />
+      <SolidColorBrush x:Key="ToggleSwitchKnobFillOffPointerOver" Color="#afa68b" />
+      <SolidColorBrush x:Key="ToggleSwitchKnobFillOffPressed" Color="#afa68b" />
+      <SolidColorBrush x:Key="ToggleSwitchKnobFillOn" Color="#d9ceb8" />
+      <SolidColorBrush x:Key="ToggleSwitchKnobFillOnPointerOver" Color="#ffffff" />
+      <SolidColorBrush x:Key="ToggleSwitchKnobFillOnPressed" Color="#ffffff" />
+      <!-- Scroll bars: a rounded brass thumb on a dark track, always the same (Fluent's collapses to a thin line while auto-hidden). -->
+      <ControlTheme x:Key="{x:Type ScrollBar}" TargetType="ScrollBar">
+        <Setter Property="Cursor" Value="Arrow" />
+        <Style Selector="^:vertical">
+          <Setter Property="Width" Value="10" />
+          <Setter Property="Template">
+            <ControlTemplate>
+              <Border Background="#0b0a09" CornerRadius="5">
+                <Track Name="PART_Track" Orientation="Vertical" IsDirectionReversed="True" Minimum="{TemplateBinding Minimum}" Maximum="{TemplateBinding Maximum}"
+                       Value="{TemplateBinding Value, Mode=TwoWay}" ViewportSize="{TemplateBinding ViewportSize}">
+                  <Thumb Name="thumb" MinHeight="24" />
+                </Track>
+              </Border>
+            </ControlTemplate>
+          </Setter>
+        </Style>
+        <Style Selector="^:horizontal">
+          <Setter Property="Height" Value="10" />
+          <Setter Property="Template">
+            <ControlTemplate>
+              <Border Background="#0b0a09" CornerRadius="5">
+                <Track Name="PART_Track" Orientation="Horizontal" Minimum="{TemplateBinding Minimum}" Maximum="{TemplateBinding Maximum}"
+                       Value="{TemplateBinding Value, Mode=TwoWay}" ViewportSize="{TemplateBinding ViewportSize}">
+                  <Thumb Name="thumb" MinWidth="24" />
+                </Track>
+              </Border>
+            </ControlTemplate>
+          </Setter>
+        </Style>
+        <Style Selector="^ /template/ Thumb#thumb">
+          <Setter Property="Background" Value="#816635" />
+          <Setter Property="Template">
+            <ControlTemplate>
+              <Border Background="{TemplateBinding Background}" CornerRadius="5" />
+            </ControlTemplate>
+          </Setter>
+        </Style>
+        <Style Selector="^ /template/ Thumb#thumb:pointerover, ^ /template/ Thumb#thumb:pressed">
+          <Setter Property="Background" Value="#c4a062" />
+        </Style>
+        <!-- Nothing to scroll: no thumb, the track keeps its column. -->
+        <Style Selector="^:disabled /template/ Thumb#thumb">
+          <Setter Property="IsVisible" Value="False" />
+        </Style>
+      </ControlTheme>
       <Color x:Key="SystemAccentColor">#816635</Color>
       <Color x:Key="SystemAccentColorLight1">#9a7c45</Color>
       <Color x:Key="SystemAccentColorLight2">#b08f55</Color>
@@ -76,6 +179,10 @@
     <Style Selector="ScrollViewer">
       <Setter Property="AllowAutoHide" Value="False" />
     </Style>
+    <!-- A page's scroll bar keeps its column even when there is nothing to scroll, so the rows do not shift when it appears. -->
+    <Style Selector="ScrollViewer.page">
+      <Setter Property="VerticalScrollBarVisibility" Value="Visible" />
+    </Style>
     <Style Selector="TextBlock">
       <Setter Property="Foreground" Value="{StaticResource Main}" />
     </Style>
@@ -137,12 +244,39 @@
       <Setter Property="Padding" Value="0,6,0,8" />
     </Style>
 
+    <!-- A Graphics feature's settings, folded under its row: a darker band with a brass edge, smaller names, no dividers. -->
+    <Style Selector="Border.features">
+      <Setter Property="Background" Value="{StaticResource Field}" />
+      <Setter Property="BorderBrush" Value="{StaticResource Brass}" />
+      <Setter Property="BorderThickness" Value="2,0,0,0" />
+      <Setter Property="Padding" Value="14,2,0,4" />
+    </Style>
+    <Style Selector="Border.features Border.row">
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Padding" Value="0,4,0,4" />
+    </Style>
+    <Style Selector="Border.features TextBlock.name">
+      <Setter Property="FontSize" Value="14" />
+    </Style>
+
     <!-- Text -->
     <Style Selector="TextBlock.title">
       <Setter Property="FontSize" Value="20" />
     </Style>
     <Style Selector="TextBlock.name">
       <Setter Property="FontSize" Value="16" />
+    </Style>
+    <!-- A setting that differs from its default (the look's value or the game's): its name in brass, with a Reset link beside it -->
+    <Style Selector="TextBlock.name.changed">
+      <Setter Property="Foreground" Value="{StaticResource BrassLight}" />
+    </Style>
+    <Style Selector="TextBlock.reset">
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Foreground" Value="{StaticResource BrassLight}" />
+      <Setter Property="TextDecorations" Value="Underline" />
+    </Style>
+    <Style Selector="TextBlock.reset:pointerover">
+      <Setter Property="Foreground" Value="{StaticResource PaperLight}" />
     </Style>
     <Style Selector="TextBlock.desc">
       <Setter Property="FontSize" Value="12" />
@@ -368,6 +502,8 @@
     <!-- Lists: rows separated by hairlines, the selected one lifted -->
     <Style Selector="ListBox">
       <Setter Property="Background" Value="Transparent" />
+      <!-- The rows end 14 px before the scroll bar, as the pages' do. -->
+      <Setter Property="Padding" Value="0,0,14,0" />
     </Style>
     <Style Selector="ListBoxItem">
       <Setter Property="Padding" Value="10,6" />
@@ -507,5 +643,21 @@
       <Setter Property="BorderBrush" Value="#D9D9D9" />
       <Setter Property="BoxShadow" Value="none" />
     </Style>
+    <!-- An on / off setting's two halves (Faithful | Meitou, Off | On), as the game's: the active half lit in its colour and underlined,
+         brass for Meitou / On, the slider notches' grey-blue for Faithful / Off. -->
+    <Style Selector="ToggleButton.half:checked /template/ ContentPresenter#PART_ContentPresenter, ToggleButton.half:checked:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="#47816635" />
+      <Setter Property="BorderBrush" Value="#c4a062" />
+      <Setter Property="BorderThickness" Value="0,0,0,2" />
+      <Setter Property="Foreground" Value="#d9ceb8" />
+    </Style>
+    <Style Selector="ToggleButton.half.faithful:checked /template/ ContentPresenter#PART_ContentPresenter, ToggleButton.half.faithful:checked:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="#479ea8b3" />
+      <Setter Property="BorderBrush" Value="#9ea8b3" />
+    </Style>
+    <Style Selector="ToggleButton.half:not(:checked) /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Foreground" Value="#8a8270" />
+    </Style>
+
   </Application.Styles>
 </Application>

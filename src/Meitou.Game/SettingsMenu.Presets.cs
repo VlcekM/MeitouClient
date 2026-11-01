@@ -2,11 +2,11 @@ using Meitou.Rendering;
 
 namespace Meitou.Game;
 
-/// <summary>The Graphics page's quality presets and its all-Faithful / all-Meitou switch (docs/native-ui.md "Settings").</summary>
+/// <summary>The Graphics page's quality tiers (docs/native-ui.md "Settings"); the look and its presets are in SettingsMenu.Looks.cs.</summary>
 sealed partial class SettingsMenu
 {
     static readonly string[] PresetNames = ["Low", "Medium", "High", "Ultra", "Custom"];
-    const int HighPreset = 2, CustomPreset = 4;
+    const int LowPreset = 0, HighPreset = 2, CustomPreset = 4;
 
     /// <summary>
     /// A preset's slider: its value at Low, Medium and Ultra (High is the start default; NaN: the start default too), either fixed or a multiple of the start default.
@@ -21,9 +21,8 @@ sealed partial class SettingsMenu
     static readonly PresetSlider[] PresetSliders =
     [
         new(WorldFrame.ObjectDistanceSlider, WorldOptions.LowEndObjectDistance, 0.6f, 2, Mode: "Draw distances", LowFixed: true),
-        // --low-end's landmarks follow its object distance, at the Meitou defaults' ratio.
-        new(WorldFrame.LandmarkDistanceSlider, WorldOptions.LowEndObjectDistance * (Enhancements.MeitouLandmarkDistance / Enhancements.MeitouObjectDistance), 0.6f, 1.5f,
-            Scale: true, LowFixed: true),
+        // --low-end's landmarks follow its object distance, at the Meitou defaults' ratio; Faithful has none.
+        new(WorldFrame.LandmarkDistanceSlider, WorldOptions.LowEndObjectDistance / Enhancements.MeitouObjectDistance, 0.6f, 1.5f, Mode: "Draw distances"),
         new(WorldFrame.DistantTownsSlider, float.NaN, 6, float.NaN),
         new(WorldFrame.ObjectLodSlider, WorldOptions.LowEndObjectLod, 0.6f, 2),
         new(WorldFrame.TerrainErrorSlider, float.NaN, 1.5f, 0.6f, Mode: "Draw distances"),
@@ -48,10 +47,26 @@ sealed partial class SettingsMenu
         new(WorldFrame.FilteringSlider, 0, 2, 4, High: 4),
         // The start default is the saved level (applied before the menu exists), so High names the full size.
         new(WorldFrame.TextureQualitySlider, WorldOptions.LowEndTextureQuality, 1, 0, High: 0),
+        new(WorldFrame.GroundDisplaceDistanceSlider, 0.5f, 0.75f, 1.5f, Scale: true),
+        new(WorldFrame.GroundParallaxDistanceSlider, 0.5f, 0.75f, 1.5f, Scale: true),
     ];
 
-    /// <summary>The Meitou effects Low sets Faithful, as <c>--low-end</c> does; no preset turns a switch on.</summary>
-    static readonly string[] LowOffSwitches = ["Ambient occlusion", "Anti-aliasing", "Light shafts", "Water", "Shadows", "Ground parallax", "Ground displacement (tessellation)"];
+    /// <summary>A quality switch: on or off at Low, Medium and Ultra (High is its start default). Meitou features only: Faithful keeps them off whatever the tier.</summary>
+    sealed record PresetToggle(string Label, bool Low, bool Medium, bool Ultra);
+
+    // Costs (docs/render-terrain.md "Ground relief", RTX 4090): refinement +0.38 ms. Parallax and displacement are effects (Faithful / Meitou switches), not tiers.
+    static readonly PresetToggle[] PresetToggles =
+    [
+        new(WorldFrame.FifthCascadeSwitch, false, false, true),
+        new(WorldFrame.RockSmoothingSwitch, false, true, true),
+        new(WorldFrame.OutlineRefineSwitch, false, false, true),
+    ];
+
+    /// <summary>
+    /// The Meitou effects Low sets Faithful, as <c>--low-end</c> does. The look's ones (docs/native-ui.md "Settings") are held off without changing the preset,
+    /// unless kept on (<see cref="UserConfig.KeepAtLow"/>).
+    /// </summary>
+    static readonly string[] LowOffSwitches = ["Ambient occlusion", "Light shafts", "Water", "Shadows", "Ground parallax", "Ground displacement (tessellation)"];
     /// <summary>The on/off effects Low turns off too (the tessellation's outline refinement and rocks; they are not Faithful / Meitou switches).</summary>
     static readonly string[] LowOffToggles = [WorldFrame.OutlineRefineSwitch, WorldFrame.RockSmoothingSwitch];
     const string FifthCascade = WorldFrame.FifthCascadeSwitch;
@@ -59,9 +74,7 @@ sealed partial class SettingsMenu
     /// <summary>The Faithful / Meitou switches whose reading stays put when set (Indirect light without ray queries); the all switch ignores them.</summary>
     readonly HashSet<string> stuckSwitches = [];
 
-    internal const string PresetHint = "Sets draw distances, foliage, shadow, water, particle, texture, relief and light-shaft quality settings together; High is the default. "
-        + "Low is the --low-end option: it also turns ambient occlusion, anti-aliasing, light shafts, Meitou shadows, water and ground relief off and renders at 83%. "
-        + "The other presets leave anti-aliasing and render scale as they are.";
+    internal const string PresetHint = "Distances, shadows and detail together. Low is the same as --low-end.";
 
     Entry PresetEntry => new("Quality preset", PresetHint, Choice: new(() => PresetNames, CurrentPreset, ApplyPreset));
 
@@ -85,14 +98,22 @@ sealed partial class SettingsMenu
     IEnumerable<(PresetSlider Preset, Slider Slider)> PresetPairs() =>
         PresetSliders.Select(p => (p, values.Sliders.FirstOrDefault(s => s.Label == p.Label))).Where(x => x.Item2 is not null)!;
 
+    IEnumerable<(PresetToggle Preset, Toggle Toggle, bool Default)> PresetSwitches() =>
+        PresetToggles.Select(p => (p, Index: values.Toggles.ToList().FindIndex(t => t.Label == p.Label))).Where(x => x.Index >= 0)
+            .Select(x => (x.p, values.Toggles[x.Index], toggleDefaults[x.Index]));
+
+    static bool SwitchTarget(PresetToggle p, bool start, int preset) => preset switch { 0 => p.Low, 1 => p.Medium, 3 => p.Ultra, _ => start };
+
+    /// <summary>The tier every tier slider (and, with the Meitou look, every tier switch) sits at, else <see cref="CustomPreset"/>; the look switches do not count.</summary>
     bool CascadeFor(int preset) => preset switch { 0 or 1 => false, 3 => true, _ => toggleDefaults[values.Toggles.Select(t => t.Label).ToList().IndexOf(FifthCascade)] };
 
-    /// <summary>The preset every preset slider (and the fifth cascade) sits at, else <see cref="CustomPreset"/>; the switches do not count.</summary>
     int CurrentPreset()
     {
+        bool faithful = FaithfulLook;
         var cascade = values.Toggles.FirstOrDefault(t => t.Label == FifthCascade);
         for (int preset = 0; preset < CustomPreset; preset++)
             if (PresetPairs().All(x => MathF.Abs(x.Slider.FractionOf(x.Slider.Get()) - x.Slider.FractionOf(PresetTarget(x.Preset, x.Slider, preset))) <= 0.005f)
+                && (faithful || PresetSwitches().All(x => x.Toggle.Get() == SwitchTarget(x.Preset, x.Default, preset)))
                 && (cascade is null || cascade.Get() == CascadeFor(preset)))
                 return preset;
         return CustomPreset;
@@ -107,7 +128,7 @@ sealed partial class SettingsMenu
 
     /// <summary>The <c>graphics</c> keys a preset may set: a launcher that changes one of them no longer asks for a preset.</summary>
     internal static IEnumerable<string> PresetKeys() => PresetSliders.Select(p => p.Label).Append(WorldFrame.ParticleSliders[0]).Concat(WorldFrame.UpscalerSliders.Take(2))
-        .Concat(LowOffSwitches.Concat(LowOffToggles).Append(FifthCascade).Select(label => SwitchKeyPrefix + label)).Distinct();
+        .Concat(LowOffSwitches.Concat(LowOffToggles).Concat(PresetToggles.Select(p => p.Label)).Select(label => SwitchKeyPrefix + label)).Distinct();
 
     /// <summary>
     /// At start, after the saved sliders and switches: applies the saved preset when the settings do not sit at it, so a preset the launcher
@@ -116,9 +137,33 @@ sealed partial class SettingsMenu
     internal void ApplySavedPreset()
     {
         int preset = Array.IndexOf(PresetNames, config.GraphicsPreset);
-        if (preset is < 0 or >= CustomPreset || preset == CurrentPreset()) return;
-        ApplyPreset(preset);
-        notice = "";
+        if (preset is >= 0 and < CustomPreset && preset != CurrentPreset())
+        {
+            ApplyPreset(preset);
+            notice = "";
+        }
+        // At Low the look switches it holds off stay off, also where the launcher's look turned them on (unless kept on).
+        foreach (var label in LowCut())
+            if (values.Toggles.FirstOrDefault(t => t.Label == label && t.Get()) is { } toggle) toggle.Set(false);
+        lastTier = CurrentPreset();
+    }
+
+    /// <summary>The tier being applied (<see cref="ApplyPreset"/>, <see cref="SetFaithful"/>), so the Low cut follows it before the sliders reach it.</summary>
+    int? tierOverride;
+    /// <summary>The tier the settings sat at when last looked (<see cref="SyncTier"/>); -1 not yet.</summary>
+    int lastTier = -1;
+
+    /// <summary>The quality tier: the one the settings sit at (<see cref="CurrentPreset"/>), so a slider moved off it makes it Custom.</summary>
+    int Tier => tierOverride ?? CurrentPreset();
+
+    /// <summary>Once the settings leave Low (a slider moved), the look switches Low held off come back.</summary>
+    void SyncTier()
+    {
+        int now = CurrentPreset();
+        if (now == lastTier) return;
+        bool leftLow = lastTier == LowPreset;
+        lastTier = now;
+        if (leftLow && !FaithfulLook) ApplyLowCut();
     }
 
     /// <summary>Saves the preset the settings sit at (Custom when none), for the launcher to show.</summary>
@@ -127,20 +172,35 @@ sealed partial class SettingsMenu
     void ApplyPreset(int preset)
     {
         if (preset is < 0 or >= CustomPreset) return;
+        tierOverride = preset;
+        try { ApplyTier(preset); }
+        finally { tierOverride = null; }
+        lastTier = CurrentPreset();
+        notice = preset == LowPreset && LowCut().Any() ? $"Low quality applied: {string.Join(", ", LowCut())} off until you keep them on." : $"{PresetNames[preset]} quality applied.";
+    }
+
+    void ApplyTier(int preset)
+    {
+        if (preset == LowPreset && values.Sliders.FirstOrDefault(s => s.Label == WorldFrame.ParticleSliders[0]) is { } particles) particles.Set(1);   // a quarter of the render size
         // The switches first: they move the distances that sit at their mode's default, and the mode decides the distances' base.
-        if (preset == 0)
+        if (!FaithfulLook)
         {
-            foreach (var toggle in values.Toggles.Where(t => t.Remaster && LowOffSwitches.Contains(t.Label) && t.Get())) toggle.Set(false);
-            foreach (var label in LowOffToggles)
-                if (values.Toggles.FirstOrDefault(t => t.Label == label && t.Get()) is { } toggle) toggle.Set(false);
-            if (values.Sliders.FirstOrDefault(s => s.Label == WorldFrame.ParticleSliders[0]) is { } particles) particles.Set(1);   // a quarter of the render size
-            // No anti-aliasing at all (not even FXAA), at --low-end's render scale.
+            foreach (var (p, toggle, start) in PresetSwitches())
+                if (toggle.Get() != SwitchTarget(p, start, preset)) toggle.Set(SwitchTarget(p, start, preset));
+            ApplyLowCut();
+            if (preset == LowPreset)
+                foreach (var label in LowOffToggles)
+                    if (values.Toggles.FirstOrDefault(t => t.Label == label && t.Get()) is { } relief) relief.Set(false);
+        }
+        if (preset == LowPreset)
+        {
+            // --low-end's switches outside the look (anti-aliasing), then no anti-aliasing at all (not even FXAA) at its render scale.
+            foreach (var toggle in values.Toggles.Where(t => t.Remaster && LowOffSwitches.Contains(t.Label) && !IsLook(t.Label, true) && t.Get())) toggle.Set(false);
             if (values.Sliders.FirstOrDefault(s => s.Label == WorldFrame.UpscalerSliders[0]) is { } antiAliasing) antiAliasing.Set(0);
             if (values.Sliders.FirstOrDefault(s => s.Label == WorldFrame.UpscalerSliders[1]) is { } scale) scale.Set(WorldOptions.LowEndRenderScale);
         }
         foreach (var (p, slider) in PresetPairs()) slider.Set(PresetTarget(p, slider, preset));
         if (values.Toggles.FirstOrDefault(t => t.Label == FifthCascade) is { } cascade && cascade.Get() != CascadeFor(preset)) cascade.Set(CascadeFor(preset));
-        notice = $"{PresetNames[preset]} quality applied.";
     }
 
     /// <summary>
@@ -164,9 +224,6 @@ sealed partial class SettingsMenu
             foreach (var slider in sliders) slider.Set((meitou ? slider.Meitou : slider.Faithful)!.Value);
             notice = meitou ? $"Every {what} is Meitou." : $"Every {what} is as the game ships it.";
         }));
-
-    Entry LookEntry => SidesEntry("All graphics features", "Every graphics feature as the game ships it, or every Meitou improvement. The quality settings stay as they are.",
-        "graphics feature", values.Toggles.Where(t => t.Remaster).ToList(), []);
 
     /// <summary>The Advanced or Fixes page's all switch, over that page's Faithful / Meitou switches (not the plain on/off ones such as luckyren Mode) and sliders with both marks.</summary>
     Entry PageSidesEntry(List<Entry> entries, string label, string hint, string what) => SidesEntry(label, hint, what,

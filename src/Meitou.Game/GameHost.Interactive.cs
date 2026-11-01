@@ -102,6 +102,7 @@ sealed partial class GameHost
         // Keep the shared rendering settings' callbacks and persistence keys; the game supplies its own modal layout.
         // --low-end (WorldOptions.LowEnd) is a preset for this run: the saved sliders and switches would undo it, so they are left as saved and not applied.
         bool lowEnd = Environment.GetCommandLineArgs().Contains("--low-end");
+        var runOnly = RunOnlyKeys();   // the keys this run leaves as saved (--bloom)
         var settingsValues = overlay is null ? null : WorldFrame.CreateSettingsPanel(overlay, gpu, render,
             getHour: () => (float)session.Clock.HourOfDay, setHour: v => { session.Clock.SetHourOfDay(v); if (IsDuel) duelHour = v; },
             getVSync: () => display.VSync, setVSync: v => display.VSync = v, switches: switches,
@@ -151,15 +152,17 @@ sealed partial class GameHost
         player.ConfigureTutorials(tutorials);
         if (panel is not null && !lowEnd)
             foreach (var slider in panel.Sliders)
-                if (!SessionSliders.Contains(slider.Label) && config.Graphics.TryGetValue(slider.Label, out float v) && !(o.Post.Upscale.Explicit && WorldFrame.UpscalerSliders.Contains(slider.Label))
+                if (!runOnly.Contains(slider.Label) && config.Graphics.TryGetValue(slider.Label, out float v) && !(o.Post.Upscale.Explicit && WorldFrame.UpscalerSliders.Contains(slider.Label))
                     && !(slider.Label == WorldFrame.TextureQualitySlider && Environment.GetCommandLineArgs().Contains("--texture-quality")))   // the saved one was applied before the boot (Program)
                     slider.Set(Math.Clamp(v, slider.Min, slider.Max));
+        // The look as the command line chose it: Faithful or Meitou for "all", else read from the switches (not saved).
+        if (CommandLineLook() is var (given, faithfulLook) && given) config.FaithfulLook = faithfulLook;
         // The switches as saved, then the saved preset (one the launcher chose), unless the command line chose them (--meitou / --faithful):
         // switches it moved would read as another preset.
         if (panel is not null && !lowEnd && !Environment.GetCommandLineArgs().Any(a => a is "--meitou" or "--faithful"))
         {
             foreach (var toggle in panel.Toggles)
-                if (config.Graphics.TryGetValue(SwitchKey(toggle.Label), out float v) && (v >= 0.5f) != toggle.Get()) toggle.Set(v >= 0.5f);
+                if (!SettingsMenu.HiddenSwitch(toggle.Label) && !runOnly.Contains(SwitchKey(toggle.Label)) && config.Graphics.TryGetValue(SwitchKey(toggle.Label), out float v) && (v >= 0.5f) != toggle.Get()) toggle.Set(v >= 0.5f);
             panel.ApplySavedPreset();
         }
         var stats = new List<string>();
@@ -349,7 +352,7 @@ sealed partial class GameHost
             if (k == SilkKey.F9 && ctrl) { fpsVisible = !fpsVisible; return; }
             if (KeyMap.Map(k) is { } key)
             {
-                if (shiftDown && key == EngineKey.F1) { Console.WriteLine(meitou.Toggle()); return; }
+                if (shiftDown && key == EngineKey.F1) { Console.WriteLine(meitou.Toggle()); config.FaithfulLook = !meitou.On; return; }
                 if (shiftDown && key == EngineKey.F2 && switches.FirstOrDefault(e => e.Id == "skin") is { } skin)   // the skin switch alone, to compare faces
                 { skin.IsMeitou = !skin.IsMeitou; Console.WriteLine($"skin      {skin.State}"); return; }
                 if (shiftDown && key == EngineKey.F11) { ToggleNavOverlay(); return; }
@@ -840,8 +843,9 @@ sealed partial class GameHost
             if (panel is not null && !lowEnd)
             {
                 foreach (var slider in panel.Sliders)
-                    if (!SessionSliders.Contains(slider.Label)) config.Graphics[slider.Label] = slider.Get();
-                foreach (var toggle in panel.Toggles) config.Graphics[SwitchKey(toggle.Label)] = toggle.Get() ? 1 : 0;
+                    if (!runOnly.Contains(slider.Label)) config.Graphics[slider.Label] = slider.Get();
+                foreach (var toggle in panel.Toggles)
+                    if (!runOnly.Contains(SwitchKey(toggle.Label))) config.Graphics[SwitchKey(toggle.Label)] = toggle.Get() ? 1 : 0;
                 panel.SavePreset();
             }
             config.Bindings = session.Bindings.ToDictionary();
@@ -854,6 +858,35 @@ sealed partial class GameHost
 
     /// <summary>Panel rows that are the session's state, not graphics settings: kept out of <c>graphics</c> in meitou.user.json (vsync and full screen have their own keys).</summary>
     static readonly HashSet<string> SessionSliders = ["Time of day", "VSync", "Full screen"];
+
+    /// <summary>
+    /// The <c>graphics</c> keys this run neither reads from nor writes to meitou.user.json: <see cref="SessionSliders"/>, and the bloom's switch and strength
+    /// when <c>--bloom</c> sets them for one run.
+    /// </summary>
+    static HashSet<string> RunOnlyKeys()
+    {
+        var keys = new HashSet<string>(SessionSliders);
+        if (Environment.GetCommandLineArgs().Contains("--bloom")) { keys.Add(WorldFrame.BloomStrengthSlider); keys.Add(SettingsMenu.SwitchKeyPrefix + WorldFrame.BloomSwitch); }
+        return keys;
+    }
+
+    /// <summary>
+    /// The look the command line chose: Given when <c>--meitou</c> or <c>--faithful</c> is on it; Faithful by the last <c>all</c> (<c>--faithful all</c> true,
+    /// <c>--meitou all</c> false), null when only some switches are named (the menu then reads the look from the switches without saving it).
+    /// </summary>
+    static (bool Given, bool? Faithful) CommandLineLook()
+    {
+        var args = Environment.GetCommandLineArgs();
+        bool given = false;
+        bool? faithful = null;
+        for (int i = 0; i + 1 < args.Length; i++)
+            if (args[i] is "--meitou" or "--faithful")
+            {
+                given = true;
+                if (args[i + 1].Split(',', StringSplitOptions.TrimEntries).Contains("all")) faithful = args[i] == "--faithful";
+            }
+        return (given, faithful);
+    }
 
     /// <summary>The player moved, turned, zoomed or switched the camera this tick (what hands a camera the cinema left back to the rig).</summary>
     static bool CameraInput(ActionState a) =>

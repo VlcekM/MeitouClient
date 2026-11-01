@@ -12,7 +12,8 @@ namespace Meitou.Game;
 sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBindings bindings, Action save, Slider frameLimit, UserConfig config)
 {
     static readonly string[] Pages = ["Display", "Graphics", "Interface", "Controls", "Advanced", "Audio", "Gameplay", "Fixes"];
-    internal static readonly string[] GraphicsPages = ["World", "Lighting", "Water", "Effects", "Skin"];
+    /// <summary>The Graphics tabs: the look tabs, then the quality tabs (SettingsMenu.Looks.cs).</summary>
+    internal static readonly string[] GraphicsPages = ["Lighting", "Sky & weather", "Colour", "World", "Characters"];
     /// <summary>The Metal-only preset row (Native / MetalFX quality, balanced, performance / TAA), edited by the Metal settings panel.</summary>
     internal const string MetalPresetSlider = "Metal upscaling";
     readonly float[] defaults = values.Sliders.Select(s => s.Get()).ToArray();
@@ -107,7 +108,8 @@ sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, 
 
     sealed record Choice(Func<IReadOnlyList<string>> Options, Func<int> Current, Action<int> Choose);
     sealed record Entry(string Label, string Hint = "", Slider? Slider = null, Toggle? Toggle = null, Choice? Choice = null,
-        InputAction? Binding = null, Action? Run = null, string? Picture = null, bool Segmented = false);
+        InputAction? Binding = null, Action? Run = null, string? Picture = null, bool Segmented = false, bool Changed = false,
+        string? Impact = null, bool Warn = false, string? Raw = null, int Depth = 0, bool? Open = null, string? GroupId = null, Action? Reset = null);
     sealed record Hit(UiRect Bounds, Action Activate, Slider? Slider = null, UiRect? Track = null);
 
     public IReadOnlyList<Slider> Sliders => values.Sliders;
@@ -147,7 +149,7 @@ sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, 
         {
             if (visible == value) return;
             visible = value;
-            dragging = null; rebinding = null; openChoice = null; resetPending = false; focus = -1; notice = "";
+            dragging = null; rebinding = null; openChoice = null; resetPending = false; naming = false; focus = -1; notice = "";
             editingNumber = null;
             if (value) { lastFrameAt = 0; player.SetSettingsOpen(true); }
             if (!value) save();
@@ -162,23 +164,30 @@ sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, 
     {
         if (label is "Time of day" or "Time speed") return "Advanced";
         if (label is "VSync" or "Full screen" or MetalPresetSlider || WorldFrame.UpscalerSliders.Contains(label) || label == WorldFrame.FilteringSlider || label == WorldFrame.TextureQualitySlider) return "Display";
-        if (label.Contains("water", StringComparison.OrdinalIgnoreCase) || label.Contains("Reflection", StringComparison.Ordinal)) return "Water";
-        if (label.StartsWith("Shadow", StringComparison.Ordinal) || label.StartsWith("Light shafts", StringComparison.Ordinal) || label.StartsWith("Planetshine", StringComparison.Ordinal) || label.StartsWith("Haze", StringComparison.Ordinal) || label.StartsWith("Ambient", StringComparison.Ordinal) || label.StartsWith("Night ambient", StringComparison.Ordinal)) return "Lighting";
-        if (label.Contains("Tone", StringComparison.OrdinalIgnoreCase) || label.Contains("Grading", StringComparison.OrdinalIgnoreCase) || label.StartsWith("Heat", StringComparison.Ordinal) || WorldFrame.ParticleSliders.Contains(label)) return "Effects";
-        return "World";
+        return GraphicsSection(label, false);
     }
 
-    internal static string ToggleSection(string label) => label switch
+    /// <summary>The page a Tab panel switch is on: a Graphics sub-page (<see cref="GraphicsPages"/>), or Advanced (Interior lamps).</summary>
+    internal static string ToggleSection(string label) => GraphicsSection(label, true);
+
+    /// <summary>
+    /// A Graphics row, with its performance impact. A look row is marked when it differs from the game's (Faithful) or the active preset's value; a costly look switch
+    /// Low holds off says so, and turning it on keeps it on at Low.
+    /// </summary>
+    Entry LookRow(Entry entry, string key, string label, bool toggle, HashSet<string> changes)
     {
-        "Foliage ranges" or "Far impostors" or "Draw distances" or "Foliage levels" => "World",
-        // Beside the ground relief's sliders (World), which hide while these are off (ReliefSliderShown).
-        "Ground parallax" or "Ground displacement (tessellation)" or WorldFrame.RockSmoothingSwitch or WorldFrame.OutlineRefineSwitch => "World",
-        "Water" => "Water",
-        "Haze" or "Shadows" or "Indirect light" or "Indoor GI" or "Light shafts" or "Night air" or "Planetshine" or "Night sky" or "Clouds" or "Cloud shadows" or "Cloud shadows in fog" => "Lighting",
-        "Skin" => "Skin",
-        _ when label.StartsWith("Shadow", StringComparison.Ordinal) => "Lighting",
-        _ => "Effects",
-    };
+        entry = entry with { Impact = ImpactOf(label), Raw = label };
+        if (!IsLook(label, toggle)) return entry;
+        if (toggle && entry.Toggle is { } cut && CutAtLow(label) && !cut.Get())
+            return entry with
+            {
+                Warn = true, Hint = "Off at Low quality. Choose Meitou to keep it on at Low.",
+                Toggle = cut with { Set = v => { if (v && !config.KeepAtLow.Contains(label)) config.KeepAtLow.Add(label); cut.Set(v); } },
+            };
+        if (toggle && entry.Toggle is { } kept && config.KeepAtLow.Contains(label))
+            entry = entry with { Toggle = kept with { Set = v => { if (!v) config.KeepAtLow.Remove(label); kept.Set(v); } } };
+        return entry with { Changed = changes.Contains(key), Reset = () => ResetLook(key) };
+    }
 
     /// <summary>False for a ground relief slider whose effect is off: quality and depth need the parallax or the displacement, each distance its own.
     /// The displacement counts only where its switch is offered (tessellation; not on Metal).</summary>
@@ -194,58 +203,78 @@ sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, 
         };
     }
 
+    internal const string TickAheadHint = "Faithful runs the world, then draws it, as the game does. Meitou runs the next world tick while the frame is drawn "
+        + "whenever the world is busy (big fights, crowds), Always on every frame: much higher frame rates with many characters, up to 33 ms more input delay.";
+    internal static readonly string[] TickAheadChoices = ["Faithful (in series)", "Meitou (when busy)", "Always on"];
+
+    /// <summary>A Tab panel slider's key in the catalogue (<see cref="LauncherSchema.Find"/>): its label, or the top-level key of the display switches.</summary>
+    static string CatalogueKey(string label) => label switch { "Full screen" => "fullScreen", "VSync" => "vSync", _ => label };
+
+    /// <summary>
+    /// A Tab panel slider's row, as the launcher shows it: name, range, scale direction, value text and choices come from the catalogue
+    /// (<see cref="LauncherSchema.Find"/>); the panel's slider only reads and writes the value (and marks the Faithful / Meitou values).
+    /// </summary>
     Entry SliderEntry(Slider slider)
     {
         string key = slider.Label;
-        if (key is "VSync" or "Full screen" || key.StartsWith("Grading (", StringComparison.Ordinal))
-            return new(key == "Full screen" ? "Borderless full screen" : key == "VSync" ? "Vertical sync" : "Colour grading",
-                SliderHint(slider), Toggle: new(key, () => slider.Get() >= 0.5f, v => slider.Set(v ? 1 : 0)));
+        var d = LauncherSchema.Find(CatalogueKey(key));
+        if (d is { Kind: global::Meitou.Settings.SettingKind.Slider, Labels: null })
+            slider = slider with { Min = d.Min, Max = d.Max, Logarithmic = d.Logarithmic && d.Min > 0, Reversed = d.Reversed, Text = d.Text };
+        // An on / off setting in the catalogue (full screen, VSync; colour grading's two choices) is a switch, whatever the panel's slider.
+        if (d is { Kind: global::Meitou.Settings.SettingKind.Toggle } or { Labels.Length: 2 })
+            return new(d?.Name ?? Label(key), SliderHint(slider), Toggle: new(key, () => slider.Get() >= 0.5f, v => slider.Set(v ? 1 : 0)), Raw: CatalogueKey(key));
         string[]? options = key == MetalPresetSlider
             ? ["Native 1.00", "MetalFX Super Quality 0.77", "MetalFX Quality 0.67", "MetalFX Balanced 0.59", "MetalFX Performance 0.50", "MetalFX Temporal 0.40", "MetalFX Spatial 0.50 (alternative)", "MetalFX Spatial 0.40 (alternative)", "TAA 0.50 (experimental)", "Custom"]
-            : key == WorldFrame.UpscalerSliders[0] ? ["Off", "FXAA", "SMAA", "TAA", "FSR", "DLSS"]
-            : key == WorldFrame.TextureQualitySlider ? global::Meitou.Data.Textures.TextureQuality.Labels
-            : key == WorldFrame.ParticleSliders[0] ? ["Off", "Quarter resolution", "Half resolution", "Automatic", "Full resolution"]
-            : key.StartsWith("Tone map", StringComparison.Ordinal) ? ["Original", "Shoulder", "ACES", "Hybrid"]
-            : key.StartsWith("Shadow map", StringComparison.Ordinal) ? ["Low · 1024", "Medium · 2048", "High · 4096"]
-            : key == WorldFrame.GroundReliefQualitySlider ? ["Low", "Medium", "High"]
-            : key == WorldFrame.ShaftQualitySlider ? ["Low", "Medium", "High"]
-            : key.StartsWith("Water reflection", StringComparison.Ordinal) ? ["Off", "Landscape", "Characters", "Buildings", "Everything"]
-            : key == WorldFrame.FilteringSlider ? ["1x", "2x", "4x", "8x", "16x"] : null;
-        string label = key == WorldFrame.UpscalerSliders[0] ? "Anti-aliasing/upscaling" : key == WorldFrame.ParticleSliders[0] ? "Weather particles"
-            : key == WorldFrame.TextureQualitySlider ? "Texture quality" : key == WorldFrame.FilteringSlider ? "Texture filtering" : Label(key);
+            : d?.Labels;
+        string label = d?.Name ?? Label(key);
         string hint = key == MetalPresetSlider
             ? "MetalFX temporal is the default at every tier; spatial rows are explicit alternatives. The preset sets the render scale, so the separate scale slider is disabled."
             : key == WorldFrame.UpscalerSliders[0] ? "Smooths edges and upscales the render. Active: " + (UpscalerStatus?.Invoke() ?? "unavailable") : SliderHint(slider);
-        return options is { } items ? new(label, hint, Choice: new(() => items, () => (int)MathF.Round(slider.Get()), i => slider.Set(i)))
-            : new(label, hint, Slider: slider);
+        // The options are the slider's whole values from its left end.
+        float first = d?.Min ?? slider.Min;
+        return options is { } items ? new(label, hint, Choice: new(() => items, () => (int)MathF.Round(slider.Get() - first), i => slider.Set(i + first)), Raw: key)
+            : new(label, hint, Slider: slider, Raw: key);
     }
 
     List<Entry> Entries()
     {
         string section = page == 1 ? GraphicsPages[graphicsPage] : Pages[page];
-        var result = values.Sliders.Where(s => s.Label is not ("Time of day" or "Time speed") && Section(s.Label) == section && ReliefSliderShown(s.Label)).Select(SliderEntry).ToList();
+        // In the catalogue's order, the launcher's (LauncherSchema.Order).
+        var result = values.Sliders.Where(s => s.Label is not ("Time of day" or "Time speed") && Section(s.Label) == section && ReliefSliderShown(s.Label))
+            .OrderBy(s => LauncherSchema.Order(CatalogueKey(s.Label))).Select(SliderEntry).ToList();
         if (page == 1)
-            result.InsertRange(0, values.Toggles.Where(toggle => ToggleSection(toggle.Label) == section)
-                .Select(toggle => new Entry(Label(toggle.Label), ToggleHint(toggle.Label), Toggle: toggle)).Prepend(LookEntry).Prepend(PresetEntry));
-        // Graphics > Skin: after the switch, one row per person race of the loaded data (mods too), on or off against its default.
-        if (page == 1 && section == "Skin")
+        {
+            var changes = LookChanges();
+            result = values.Toggles.Where(toggle => ToggleSection(toggle.Label) == section).OrderBy(toggle => LauncherSchema.Order(SwitchKey(toggle.Label)))
+                .Select(toggle => LookRow(new Entry(Label(toggle.Label), ToggleHint(toggle.Label), Toggle: toggle), SwitchKey(toggle.Label), toggle.Label, true, changes))
+                .Concat(values.Sliders.Where(s => s.Label is not ("Time of day" or "Time speed") && Section(s.Label) == section && ReliefSliderShown(s.Label))
+                    .OrderBy(s => LauncherSchema.Order(s.Label)).Select(s => LookRow(SliderEntry(s), s.Label, s.Label, false, changes)))
+                .ToList();
+        }
+        // Graphics > Characters, in the Skin feature: after the switch, one row per person race of the loaded data (mods too), on or off against its default.
+        if (page == 1 && section == "Characters")
             foreach (var (id, name, byDefault) in SkinRaceList)
                 result.Add(new(name, byDefault ? "Skin scatters light on this race (the default)." : "A robot race: no skin scattering unless turned on.",
                     Toggle: new(name, () => config.SkinRaces.TryGetValue(id, out bool on) ? on : byDefault, v =>
                     {
                         if (v == byDefault) config.SkinRaces.Remove(id); else config.SkinRaces[id] = v;
                         SkinRacesChanged?.Invoke();
-                    }, OnOff: true)));
-        if (page == 0) result.Insert(2, new("Frame limit", "Used while vertical sync is off; 0 is unlimited.", Slider: frameLimit));
-        if (page == 0 && !OperatingSystem.IsMacOS())
-            result.Insert(3, new("Frame generation (FSR 3)", "Shows a generated frame between each two rendered ones through AMD's FSR 3 frame-interpolation layer: nearly twice the frames shown, with a little more input delay. Works with TAA, FSR and DLSS; needs the FidelityFX library. "
-                + "Takes effect after a restart. Now: " + (FrameGenerationStatus?.Invoke() ?? "off"),
-                Toggle: new("Frame generation (FSR 3)", () => config.FrameGeneration, v => config.FrameGeneration = v, OnOff: true)));
+                    }, OnOff: true), Raw: "race:" + id));
+        if (page == 1) result = Grouped([.. result.OrderBy(e => e.Raw is { } raw ? GroupRank(raw) : FeatureGroups.Length)]);
         if (page == 0)
-            result.Insert(OperatingSystem.IsMacOS() ? 3 : 4, new("World tick alongside drawing", "Faithful runs the world, then draws it, as the game does. Meitou runs the next world tick while the frame is drawn "
-                + "whenever the world is busy (big fights, crowds), Always on every frame: much higher frame rates with many characters. "
-                + "Running alongside can add up to 33 ms of input delay (one world tick).",
-                Choice: new(() => ["Faithful (in series)", "Meitou (when busy)", "Always on"], () => (int)config.TickAhead, i => config.TickAhead = (TickAheadMode)i)));
+        {
+            // The Display page in the catalogue's order, as the launcher's: full screen, VSync, frame limit, frame generation, world tick, then the display sliders.
+            var fps = LauncherSchema.Find("fpsLimit");
+            result.Add(new(fps?.Name ?? "Frame limit", fps?.Description ?? "", Slider: fps is null ? frameLimit
+                : frameLimit with { Min = fps.Min, Max = fps.Max, Text = fps.Text }, Raw: "fpsLimit"));
+            result.Add(new("World tick alongside drawing", TickAheadHint, Choice: new(() => TickAheadChoices, () => (int)config.TickAhead, i => config.TickAhead = (TickAheadMode)i),
+                Raw: "tickAhead"));
+            if (!OperatingSystem.IsMacOS())
+                result.Add(new("Frame generation (FSR 3)", "Shows a generated frame between each two rendered ones through AMD's FSR 3 frame-interpolation layer: nearly twice the frames shown, with a little more input delay. Works with TAA, FSR and DLSS; needs the FidelityFX library. "
+                    + "Takes effect after a restart. Now: " + (FrameGenerationStatus?.Invoke() ?? "off"),
+                    Toggle: new("Frame generation (FSR 3)", () => config.FrameGeneration, v => config.FrameGeneration = v, OnOff: true), Raw: "frameGeneration"));
+            result = [.. result.OrderBy(e => LauncherSchema.Order(e.Raw ?? ""))];
+        }
         if (page == 2)
             result.Add(new("UI style", "Choose original Kenshi skins or Meitou materials.", Choice: new(() => ["Faithful", "Meitou"],
                 () => (int)player.UiMode, i => player.SetUiMode((UiMode)i))));
@@ -337,6 +366,8 @@ sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, 
         }
         if (page == 4)
         {
+            // A graphics switch that changes play: the stealth sight counts the lamps it lights, so no look preset or Faithful sets it.
+            if (values.Toggles.FirstOrDefault(t => t.Label == "Interior lamps") is { } lamps) result.Add(new("Interior lamps", ToggleHint(lamps.Label), Toggle: lamps));
             result.Add(new(AttackSlotsSlider.Label, "How many enemies may swing at one character at once (the game: 1, plus its race's extra slots); the others wait at reach or circle.", Slider: AttackSlotsSlider));
             result.Add(new(HarpoonLimitSlider.Label, "How many bolts and harpoons stay stuck in the ground and buildings, per kind of bolt; past it the one that flew longest disappears (the game: 60).", Slider: HarpoonLimitSlider));
             result.Add(new("Late dodges and blocks", "Balance change: a dodge or block that succeeds its roll but starts a moment late still works, "
@@ -394,7 +425,7 @@ sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, 
             foreach (var action in values.Actions)
                 result.Add(new(action.Label, "Delete cached billboards; they are rebuilt when needed.", Run: () =>
                 {
-                    pendingAction = action.Run; confirmation = action.Question(); focus = -1;
+                    pendingAction = action.Run; confirmTitle = "Clear cached files?"; confirmation = action.Question(); focus = -1;
                 }));
         }
         if (page == 4)
@@ -406,7 +437,7 @@ sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, 
 
     static string ActionLabel(InputAction action) => Regex.Replace(action.ToString(), "(?<=[a-z0-9])(?=[A-Z])|(?<=[a-z])(?=[0-9])", " ");
     Func<string>? pendingAction;
-    string confirmation = "";
+    string confirmation = "", confirmTitle = "";
 
     public bool Contains(Vector2 _) => Visible;
 
@@ -499,6 +530,7 @@ sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, 
 
     public bool KeyDown(Key key, bool shift, bool ctrl)
     {
+        if (naming && Visible) return NameKey(key);
         if (editingNumber is null) return KeyDown(key, shift);
         switch (key)
         {
@@ -533,6 +565,7 @@ sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, 
 
     public void TextInput(char value)
     {
+        if (naming && Visible) { NameText(value); return; }
         if (editingNumber is null || !Visible) return;
         if (value is >= '0' and <= '9' or '.' or ',' or '-' or '+' or 'e' or 'E')
             ReplaceNumberSelection(value == ',' ? "." : value.ToString());
@@ -651,6 +684,10 @@ sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, 
         player.FeedbackButtonInPlay = config.FeedbackButton = true;
         config.TickAhead = TickAheadMode.Dynamic;
         bindings.ResetToDefaults();
+        config.LookPreset = null;
+        config.FaithfulLook = false;
+        config.KeepAtLow.Clear();
+        activeLook = null;
         resetPending = false;
         notice = "Default settings restored.";
     }

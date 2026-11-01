@@ -9,25 +9,50 @@ read-only binding copies, never mutable world. [MyGUI](formats/mygui.md), [parit
 
 ## Settings
 
-`SettingsMenu` shares category/row geometry and input between both modes: Display, Graphics
-(World/Lighting/Water/Effects), Interface, Controls and Advanced. Faithful uses MyGUI skins;
-Meitou uses the [UI kit](meitou-ui.md)'s rounded rust plates and paper Save action. Tab or Options
-opens it; Esc/the original Kenshi X/Save saves preferences and returns. Changes apply live, with the active
-upscaler shown separately from the requested one. Terrain texture quality needs a restart.
-Every Graphics sub-page starts with two rows (`SettingsMenu.Presets.cs`):
-- **Quality preset** Low / Medium / High / Ultra sets the distance, foliage, grass, reflection, shadow, particle density,
-  filtering, texture, ground-relief quality and light-shaft quality sliders; High is the start default (texture quality: full
-  size). Distances that follow a switch's side (object distance, terrain error: Draw distances; shadow distance: Shadows) are
-  multiples of that side's mark, so High reads High in either look. Low is `--low-end` (`WorldOptions.LowEnd*`, the same values):
-  its distances, grass and particle density, texture quality, 1x filtering, shadows off, AO / anti-aliasing / light shafts / water /
-  shadows Faithful, ground relief and its tessellation effects off, quarter-size particles, no anti-aliasing (not even FXAA) at 0.83
-  render scale; what `--low-end` leaves alone stays at High. Its VSync off and material distance are not Tab panel settings and are
-  not set. No preset turns a Meitou effect on; the others leave anti-aliasing and render scale alone. The shown preset is
-  derived (sliders and the fifth cascade only; Custom otherwise); its name is saved (`graphicsPreset`) for the launcher, and a saved one the settings do not sit at is applied at start ([launcher](launcher.md#graphics)).
-- **All graphics features** sets every Faithful / Meitou graphics switch to one side (gameplay switches and sliders
-  untouched); mixed switches show neither side. A switch that does not take (indirect light without ray queries) is ignored.
-  Advanced (**All gameplay changes**) and Fixes (**All fixes**) start with the same switch over their own page's
-  switches and sliders with both marks (attackers per target); luckyren Mode is left out.
+`SettingsMenu` shares category/row geometry and input between both modes: Display, Graphics, Interface, Controls, Advanced, Audio, Gameplay,
+Fixes. Faithful uses MyGUI skins; Meitou the [UI kit](meitou-ui.md)'s rust plates and paper Save. Tab or Options opens it;
+Esc/X/Save saves and returns. Changes apply live (the active upscaler shown beside the requested one); texture quality needs a
+restart. Display and Graphics rows come from the launcher's catalogue (`LauncherSchema.Find` / `Order`: name, range, direction,
+value text, choices, impact, order), so the game and the [launcher](launcher.md#graphics) show them alike; the Tab panel slider
+only reads and writes the value.
+
+Graphics (`SettingsMenu.Looks.cs`, `.Presets.cs`, `.Groups.cs`; `--settings-showcase` with `--screenshot` captures it) has two
+rows above its tabs:
+- **Look**: Faithful | Meitou (`faithfulLook`). Faithful is the game as it ships: every Faithful / Meitou effect switch off,
+  look sliders at the game's value (the one the label names, "(0 = game)"), a strength under a switch kept. It is a starting
+  point: changes from it are counted ("N changes from the game", Revert). It leaves the pure-performance switches alone (Mesh
+  welding, Far impostors, Foliage levels, Character levels: `PerformanceSwitches`), which save memory or time without changing
+  the picture. Meitou shows the active **preset** (`lookPreset`): Meitou (built in), examples (Hot and dry, Vanilla colours),
+  the player's. A preset is Meitou plus the look values it sets, keyed as `meitou.user.json` saves them; changes from it are
+  unsaved (Revert, Save for one's own; Save as, Delete). Files `presets/<name>.json` beside `meitou.user.json` (`format`,
+  `name`, `meitou` = the build's tag, `values`); Share copies `MT1:` + base64 of the deflated JSON, Paste adds one (at most
+  64 KiB inflated; names at most 40 characters, `LookPresetFile`, shared with the launcher). A preset whose file fails to write is
+  not added. Unsaved `faithfulLook` is guessed from the effect switches (tier switches and bloom ignored) and not saved;
+  `--faithful all` / `--meitou all` set it, a partial list leaves it guessed.
+- **Quality**: Low / Medium / High / Ultra / Custom, always the tier the settings sit at (`CurrentPreset`; a moved slider makes
+  it Custom). It sets the distance, foliage, grass, reflection, shadow, particle density, filtering, texture, ground relief and
+  shaft quality sliders, the fifth cascade and the relief switches (rock smoothing from Medium, outline refinement from High;
+  Meitou only). High is the start default; distances that follow a switch's side (Draw distances, Shadows) are multiples of that
+  side's mark, so a tier reads the same in either look. Low is `--low-end` (`WorldOptions.LowEnd*`): also shadows and relief
+  off, quarter-size particles, no anti-aliasing at 0.83 render scale. Low holds the costly look switches off (AO, light shafts,
+  water, Meitou shadows, parallax, displacement) without changing the preset; turning one on keeps it on at Low (`keepAtLow`),
+  leaving Low gives them back. The tier's name is saved (`graphicsPreset`); a saved name the settings do not sit at (one the
+  launcher chose) is applied at start.
+
+Effects with a strength are a switch plus a slider that keeps its value while off (haze, heat haze, tone map and grade, night
+grading, bloom). Bloom is optional (`Toggle.Optional`): off in both looks, Off | On, a preset may turn it on. Settings layout 2
+(`UserConfig.Migrate`) drops layout 1's strengths saved at the game's value with their switch off, and a tone map of 0 (the
+clamp is now the switch's off side). **Open:** presets and saved values are keyed by labels; renaming one loses them (no stable ids).
+
+Tabs by subject: Lighting, Sky & weather, Colour, World, Characters (`GraphicsSection`). Each lists features in `FeatureGroups`
+order (`GroupRank`, the launcher's too): a row headed by its switch or a title, its settings folded under it until opened,
+whether the look or the tier sets them (`Role`). A look row that differs from the preset has a brass name and Reset (a header for
+anything inside); a moved quality row shows as Custom. On / off settings are two-halves switches (Faithful | Meitou for an effect,
+Off | On otherwise); named values are drop-downs, amounts sliders with right = more (terrain error mirrored, `Slider.Reversed`).
+The `aa` and `particles` switches are hidden and not read back (`HiddenSwitch`): drop-downs cover them. Interior lamps is on
+Advanced (stealth counts its light). Each Graphics row names its **impact** (No, Low, Medium, High, or Faster with Meitou;
+`ImpactOf`, ranked from measured costs, RTX 4090 1440p: High about 1 ms or more, Medium a few tenths). Advanced and Fixes start
+with an all-Faithful / all-Meitou switch over their page's switches and two-mark sliders (luckyren Mode left out).
 The modal pauses simulation and captures world input; wheel/PageUp/PageDown scroll, Tab/arrows
 focus/adjust, Enter activates. Binding capture rejects conflicting/reserved controls; Esc cancels,
 Delete unbinds. Defaults and cache deletion ask first. The viewer retains its debug panel.
@@ -43,7 +68,7 @@ Motion changes opacity/position, keeping type size fixed and input aligned.
 Window art is a continuous surface baked at 2x the logical size;
 only buttons use nine-slice scaling. The dialog is 1120×720 logical pixels; selection uses
 pressed surfaces without yellow focus rings/underlines. Weather/time previews are omitted.
-Graphics includes the Meitou switches under their related tabs; Advanced contains cache actions.
+Advanced contains cache actions.
 Pages omit descriptive blurbs; field hints explain the setting's effect and useful constraints.
 The sidebar shows the build's nearest Git tag and short commit, embedded during compilation
 (`BuildGitTag`/`BuildGitCommit` can override them for source archives).

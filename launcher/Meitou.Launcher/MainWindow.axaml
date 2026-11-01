@@ -170,7 +170,7 @@
               </Button>
             </Panel>
           </Border>
-          <ScrollViewer>
+          <ScrollViewer Classes="page">
             <StackPanel x:Name="NewsPanel" Spacing="14" Margin="0,0,14,4" />
           </ScrollViewer>
         </DockPanel>
@@ -263,7 +263,7 @@
             </ListBox>
             <Border Grid.Column="1" Classes="vrule" HorizontalAlignment="Center" />
             <TextBlock Grid.Column="2" x:Name="NotesEmpty" Classes="empty" Text="Select a release to read its notes." />
-            <ScrollViewer Grid.Column="2">
+            <ScrollViewer Grid.Column="2" Classes="page">
               <!-- The notes' Markdown, drawn like the news posts (MarkdownView) -->
               <ContentControl x:Name="ReleaseNotes" Margin="0,0,14,0" />
             </ScrollViewer>
@@ -271,21 +271,26 @@
         </DockPanel>
 
         <!-- Graphics: the game's display settings and main sliders (GraphicsPage.cs), rows built in code -->
-        <ScrollViewer x:Name="GraphicsPage" IsVisible="False">
-          <StackPanel Margin="0,0,14,0">
-            <Border Classes="header" Margin="0,0,0,10">
-              <DockPanel>
-                <TextBlock x:Name="GraphicsFileText" DockPanel.Dock="Right" Classes="aside" />
-                <TextBlock Text="Graphics" />
-              </DockPanel>
-            </Border>
-            <StackPanel x:Name="GraphicsPanel" />
-          </StackPanel>
-        </ScrollViewer>
+        <DockPanel x:Name="GraphicsPage" IsVisible="False">
+          <!-- Footer: Reset graphics stays at the bottom of the panel while the rows scroll -->
+          <Border x:Name="GraphicsFooter" DockPanel.Dock="Bottom" BorderBrush="{StaticResource PlateRim}" BorderThickness="0,1,0,0"
+                  Margin="0,6,0,0" Padding="0,4,24,0" IsVisible="False" />
+          <ScrollViewer Classes="page">
+            <StackPanel Margin="0,0,14,0">
+              <Border Classes="header" Margin="0,0,0,10">
+                <DockPanel>
+                  <TextBlock x:Name="GraphicsFileText" DockPanel.Dock="Right" Classes="aside" />
+                  <TextBlock Text="Graphics" />
+                </DockPanel>
+              </Border>
+              <StackPanel x:Name="GraphicsPanel" />
+            </StackPanel>
+          </ScrollViewer>
+        </DockPanel>
 
         <!-- Settings: one row per option, name and description left, control right -->
-        <ScrollViewer x:Name="SettingsPage" IsVisible="False">
-          <StackPanel>
+        <ScrollViewer x:Name="SettingsPage" Classes="page" IsVisible="False">
+          <StackPanel Margin="0,0,14,0">
             <Border Classes="header" Margin="0,0,0,10">
               <TextBlock Text="Settings" />
             </Border>
@@ -418,14 +423,22 @@
 
     <!-- Resize grips over the plate's visible edge: 4 px outside it, 6 px inside (hidden while maximised) -->
     <Panel x:Name="Grips">
-      <Border Tag="North" Height="10" VerticalAlignment="Top" Margin="18,4,18,0" Background="Transparent" Cursor="SizeNorthSouth" PointerPressed="Grip_PointerPressed" />
-      <Border Tag="South" Height="10" VerticalAlignment="Bottom" Margin="18,0,18,4" Background="Transparent" Cursor="SizeNorthSouth" PointerPressed="Grip_PointerPressed" />
-      <Border Tag="West" Width="10" HorizontalAlignment="Left" Margin="4,18,0,18" Background="Transparent" Cursor="SizeWestEast" PointerPressed="Grip_PointerPressed" />
-      <Border Tag="East" Width="10" HorizontalAlignment="Right" Margin="0,18,4,18" Background="Transparent" Cursor="SizeWestEast" PointerPressed="Grip_PointerPressed" />
-      <Border Tag="NorthWest" Width="18" Height="18" Margin="4,4,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" Background="Transparent" Cursor="TopLeftCorner" PointerPressed="Grip_PointerPressed" />
-      <Border Tag="NorthEast" Width="18" Height="18" Margin="0,4,4,0" HorizontalAlignment="Right" VerticalAlignment="Top" Background="Transparent" Cursor="TopRightCorner" PointerPressed="Grip_PointerPressed" />
-      <Border Tag="SouthWest" Width="18" Height="18" Margin="4,0,0,4" HorizontalAlignment="Left" VerticalAlignment="Bottom" Background="Transparent" Cursor="BottomLeftCorner" PointerPressed="Grip_PointerPressed" />
-      <Border Tag="SouthEast" Width="18" Height="18" Margin="0,0,4,4" HorizontalAlignment="Right" VerticalAlignment="Bottom" Background="Transparent" Cursor="BottomRightCorner" PointerPressed="Grip_PointerPressed" />
+      <Border Tag="North" Height="10" VerticalAlignment="Top" Margin="18,4,18,0" Background="Transparent" Cursor="SizeNorthSouth" PointerPressed="Grip_PointerPressed" PointerMoved="Grip_PointerMoved"
+              PointerReleased="Grip_PointerReleased" PointerCaptureLost="Grip_PointerCaptureLost" />
+      <Border Tag="South" Height="10" VerticalAlignment="Bottom" Margin="18,0,18,4" Background="Transparent" Cursor="SizeNorthSouth" PointerPressed="Grip_PointerPressed" PointerMoved="Grip_PointerMoved"
+              PointerReleased="Grip_PointerReleased" PointerCaptureLost="Grip_PointerCaptureLost" />
+      <Border Tag="West" Width="10" HorizontalAlignment="Left" Margin="4,18,0,18" Background="Transparent" Cursor="SizeWestEast" PointerPressed="Grip_PointerPressed" PointerMoved="Grip_PointerMoved"
+              PointerReleased="Grip_PointerReleased" PointerCaptureLost="Grip_PointerCaptureLost" />
+      <Border Tag="East" Width="10" HorizontalAlignment="Right" Margin="0,18,4,18" Background="Transparent" Cursor="SizeWestEast" PointerPressed="Grip_PointerPressed" PointerMoved="Grip_PointerMoved"
+              PointerReleased="Grip_PointerReleased" PointerCaptureLost="Grip_PointerCaptureLost" />
+      <Border Tag="NorthWest" Width="18" Height="18" Margin="4,4,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" Background="Transparent" Cursor="TopLeftCorner" PointerPressed="Grip_PointerPressed" PointerMoved="Grip_PointerMoved"
+              PointerReleased="Grip_PointerReleased" PointerCaptureLost="Grip_PointerCaptureLost" />
+      <Border Tag="NorthEast" Width="18" Height="18" Margin="0,4,4,0" HorizontalAlignment="Right" VerticalAlignment="Top" Background="Transparent" Cursor="TopRightCorner" PointerPressed="Grip_PointerPressed" PointerMoved="Grip_PointerMoved"
+              PointerReleased="Grip_PointerReleased" PointerCaptureLost="Grip_PointerCaptureLost" />
+      <Border Tag="SouthWest" Width="18" Height="18" Margin="4,0,0,4" HorizontalAlignment="Left" VerticalAlignment="Bottom" Background="Transparent" Cursor="BottomLeftCorner" PointerPressed="Grip_PointerPressed" PointerMoved="Grip_PointerMoved"
+              PointerReleased="Grip_PointerReleased" PointerCaptureLost="Grip_PointerCaptureLost" />
+      <Border Tag="SouthEast" Width="18" Height="18" Margin="0,0,4,4" HorizontalAlignment="Right" VerticalAlignment="Bottom" Background="Transparent" Cursor="BottomRightCorner" PointerPressed="Grip_PointerPressed" PointerMoved="Grip_PointerMoved"
+              PointerReleased="Grip_PointerReleased" PointerCaptureLost="Grip_PointerCaptureLost" />
     </Panel>
   </Panel>
 </Window>
