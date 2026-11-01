@@ -61,6 +61,8 @@ Under `VramGuard` pressure no texture is refined, but one that something draws s
 6 GB laptop (3.5 GB budget, never back under 80%) drew characters with no texture at all (**Observed**, issue #135 log).
 An allocation the driver refuses is retried after the spare blocks are freed, then (render thread only) after the submitted frames are waited for,
 their deferred frees run and the empty blocks are given back (`GpuAllocator.Reclaim`). A refusal that survives puts the guard into pressure.
+The post targets of a resize can't use that path (the old ones are released in the same frame), so when they can't be made the frame draws no world
+and the next frame tries again (`PostProcess.Unallocated`). Before this, a 3840 → 1920 resize at 96% of a 3.5 GB budget crashed (**Observed**, #135 log).
 
 ## Kept points
 
