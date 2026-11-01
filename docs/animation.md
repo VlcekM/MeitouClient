@@ -214,6 +214,12 @@ stump remains unless hide-stump bits1/2 remove it. Thigh n0.8 when that leg is a
 Calf k uses the signed leg ratio (`@ read_boot_height_n7`, **Observed**): b = worn boots' `boot height`, L/R = the `offset` of a fitted
 left/right leg LIMB_REPLACEMENT (slot 52/53). Left only: (b+4)/(L+4); right only: x=R, y=b; both: x=R, y=L, then x<y gives
 (x+4)/(y+4), else -(y+4)/(x+4), equal 0. Positive scales the left calf, negative the right, 0 neither (`CharacterShape.LegRatioOf`). Movement translation scaleH unless two unidentified states.
+
+**Feet lift** (**Verified**, decompiled): the same pass (`FUN_140538630`) stores at the character's +0x2cc the lower leg `offset` when both leg slots (52, 53) hold
+a LIMB_REPLACEMENT, else the worn boots' `boot height` (0 without), and `FUN_1405f16a0` places the body mesh's node at Y = +0x2cc − +0x2c8, so the body is
+raised by it. Meitou subtracts it from the ground offset (`CharacterShape.FeetLiftOf`, `CharacterRigs`), so the ragdoll's placement takes it too. Base game: no
+boots have a `boot height`; two Scout legs lift 0.5, two Stealth legs -0.2. Mods use it for heels (issue #126; **Observed**: the Animation Collection Pack's
+2B Boots, `boot height` 1 on the female sandal mesh, a geta whose teeth sank into the ground before).
 Muscle normal blends, head poses and skinning follow their own data/shader rules, not bone scale.
 
 **Engine choice** GroundOffset compensates lowest foot/toe bind-pose height change per appearance;

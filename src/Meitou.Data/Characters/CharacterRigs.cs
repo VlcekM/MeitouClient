@@ -133,10 +133,12 @@ public sealed class CharacterRigs(GameDatabase db, Func<string, string?> findMes
     /// How far <paramref name="shape"/> raises the lowest foot bone in the bind pose over the neutral shape (docs/animation.md, "Body shape sliders"): the bone sizes
     /// scale the legs about the hips while <c>Bip01</c> keeps its height, so a short body floats and a tall one sinks. What grounds them in Kenshi was not found;
     /// lowering the character by this is an engine choice. It is measured with every limb: a lost leg's foot shrinks to its knee, and a body with no legs lowered by
-    /// that would lie under the ground while it crawls and sit low on a carrier's shoulder.
+    /// that would lie under the ground while it crawls and sit low on a carrier's shoulder. Less the game's lift from boots and prosthetic legs
+    /// (<see cref="CharacterShape.FeetLiftOf"/>): high-heeled boots raise the body.
     /// </summary>
     float GroundOffset(CharacterAppearance c, SkeletonRig rig, BodyShapeData? shape, BodyBuild? build = null) =>
-        shape is not null && (c.Shape ?? CharacterShape.InputFor(db, c)).Missing.Count > 0 ? GroundOffset(rig, Shape(c, rig, build, whole: true)) : GroundOffset(rig, shape);
+        (shape is not null && (c.Shape ?? CharacterShape.InputFor(db, c)).Missing.Count > 0 ? GroundOffset(rig, Shape(c, rig, build, whole: true)) : GroundOffset(rig, shape))
+        - CharacterShape.FeetLiftOf(c.Parts);
 
     static float GroundOffset(SkeletonRig rig, BodyShapeData? shape)
     {
