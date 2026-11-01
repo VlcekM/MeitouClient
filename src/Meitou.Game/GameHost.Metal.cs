@@ -1472,6 +1472,7 @@ sealed partial class GameHost
                     overlay.Target = backbuffer;
                     loading.Draw(size.X, size.Y);
                 }
+                else loading?.ReleaseWhenGone();
             }
             ctx.EndFrame();
             if (gpuCapture is not null)

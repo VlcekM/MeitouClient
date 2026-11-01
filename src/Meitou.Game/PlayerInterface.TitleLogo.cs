@@ -19,4 +19,10 @@ sealed partial class PlayerInterface
         painter.SetImage(TitleLogoTexture, image);
         return true;
     }
+
+    /// <summary>The wordmark's texture goes while the title is closed (its image stays, so it is uploaded again when the title opens).</summary>
+    void ReleaseTitleLogo()
+    {
+        if (uiPainter is { } painter && painter.HasTexture(TitleLogoTexture)) painter.Forget(TitleLogoTexture);
+    }
 }

@@ -480,7 +480,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
                 upscaleDepth = Make(batch, w, h, InternalFormat.R32f, TextureMinFilter.Nearest, "post upscale depth");
                 // R32F, not R8: Streamline cannot size an R8_UNORM resource and drops it (DLSS's hint), FSR takes either.
                 reactive = Make(batch, w, h, InternalFormat.R32f, TextureMinFilter.Nearest, "post reactive");
-                historyA = Make(batch, displayW, displayH, InternalFormat.Rgba16f, TextureMinFilter.Linear, "post taa history");
+                // The output; the TAA's second history is made when it first runs (a vendor upscaler keeps its own history: one image does).
                 historyB = Make(batch, displayW, displayH, InternalFormat.Rgba16f, TextureMinFilter.Linear, "post taa history");
             }
             // The LDR, FXAA and SMAA targets are made when a frame first needs them (MakeLdrTargets).
@@ -1265,7 +1265,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
             Gpu.EndNative(cmd);
         }
         if (CloudMotion is { } clouds && !reset) RunCloudMotion(clouds);
-        (historyA, historyB) = (historyB, historyA);
+        if (historyA is not null) (historyA, historyB) = (historyB, historyA);
         var output = historyB!;
         bool done = false;
         sharpenAfter = true;
@@ -1309,6 +1309,13 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
             CompositeLateParticles(sceneColour!, width, height);
             // The particles' coverage into the motion target's alpha (the TAA's reactive channel; the water's analytic value is there already).
             if (Particles is { HasCoverage: true }) RunCoverage(motion!, ColorMask.A, clear: false);
+            if (historyA is null)
+            {
+                // The TAA's first frame on these targets: the history it reads (nothing in it yet, so it starts over).
+                using (var batch = Gpu.Uploads.Begin())
+                    historyA = Make(batch, displayWidth, displayHeight, InternalFormat.Rgba16f, TextureMinFilter.Linear, "post taa history");
+                reset = true;
+            }
             var t = taaPass;
             Bind(t.P, t.Colour, sceneColour);
             Bind(t.P, t.Motion, motion);

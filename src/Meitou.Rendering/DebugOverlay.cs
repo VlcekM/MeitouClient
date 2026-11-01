@@ -98,12 +98,19 @@ public sealed unsafe class DebugOverlay : IDisposable
     DebugOverlay(IGpuContext gpu, byte[] font, float pixelHeight = 16)
     {
         Gpu = gpu;
-        (PixelHeight, AtlasSize) = (pixelHeight, pixelHeight > 32 ? 2048 : 512);
-        var pixels = new byte[AtlasSize * AtlasSize];
-        fixed (byte* f = font)
-        fixed (byte* p = pixels)
-        fixed (StbTrueType.stbtt_bakedchar* g = glyphs)
-            StbTrueType.stbtt_BakeFontBitmap(f, 0, PixelHeight, p, AtlasSize, AtlasSize, FirstChar, CharCount, g);
+        PixelHeight = pixelHeight;
+        // The smallest square the glyphs fit in (the baker says how many rows it used, negative when they did not fit), at most 2048.
+        byte[] pixels;
+        for (AtlasSize = 256; ; AtlasSize *= 2)
+        {
+            pixels = new byte[AtlasSize * AtlasSize];
+            int rows;
+            fixed (byte* f = font)
+            fixed (byte* p = pixels)
+            fixed (StbTrueType.stbtt_bakedchar* g = glyphs)
+                rows = StbTrueType.stbtt_BakeFontBitmap(f, 0, PixelHeight, p, AtlasSize, AtlasSize, FirstChar, CharCount, g);
+            if (rows > 0 || AtlasSize >= 2048) break;
+        }
         LineHeight = PixelHeight * 1.25f;
         CharWidth = glyphs['M' - FirstChar].xadvance;
 

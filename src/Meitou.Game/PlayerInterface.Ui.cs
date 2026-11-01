@@ -238,6 +238,7 @@ sealed partial class PlayerInterface
         AddJobRemoveButtons(controls);
         if (hud) AddTutorialPanel(controls);
         int modalFrom = -1;   // where the first modal screen (the Esc menu, save and load, message boxes) starts: the floaters go under it
+        if (!TitleOpen) ReleaseTitleLogo();
         foreach (var screen in faithfulScreens.Arrange(Width, Height, BindFaithfulScreen, AddFaithfulContent))
         {
             if (ShotWithoutMenus && FeedbackShotHides.Contains(screen.Id)) continue;
