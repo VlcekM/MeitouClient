@@ -305,6 +305,8 @@ public sealed partial class PopulationSystem
         p.Stored = new StoredSquad { Name = data.Db.Find(p.TemplateId)?.Name ?? p.TemplateId, HomeBuilding = home };
         p.Size = built.Plan.TotalMembers;
         p.Unmade = false;
+        // Activation clears +0x114 on the platoon itself: once made, no later save rebuilds it from the template, whatever becomes of its squad.
+        if (p.Saved is { } made) made.Source.Record.Bools["never been activated"] = false;
         p.State = PlatoonState.Loaded;
         p.SquadId = squad.Id;
         p.UnloadAtTick = -1;

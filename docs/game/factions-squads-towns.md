@@ -183,7 +183,7 @@ activates at once behind the loading screen); at game load each PLATOON is made 
 unloaded by its zone (`FUN_1407f85f0`). `declareDead` (`FUN_140797090`, **Verified**) runs once from the platoon's position function (`FUN_1404fed50`, every step of a platoon of a non-player
 faction) when no member is a character that is not dead: with the template's `regenerates` (+0xd9) and a town that is not `ded` it only marks the platoon to be remade at its next activation
 (and may run again); else it logs "Platoon::declareDead: <name>" to death.log, takes the platoon out of its town's pool set (lowering the pool by its living count, 0 here), sets the saved
-`dead` flag (+0x1f0) and clears `persistent` (destroyed at its next unload, its PLATOON record deleted by `FUN_1407ec5e0`; a campaign's platoon stays with its campaign, `FUN_1407ec570`).
+`dead` flag (+0x1f0) and clears `persistent` (destroyed at its next unload, its PLATOON record deleted by `FUN_1407ec5e0`; a campaign's platoon stays with its campaign, `FUN_1407ec570`); a save before then leaves it out unless the player is near ([save.md](../formats/save.md#npc-platoons-meitou-mapping)).
 Meitou: `Platoon.Dead` (saved as `dead`, read at load), set in `StepLoaded`; the platoon leaves the pool counts at once, is not kept and is despawned when it unloads (its dead lie where they fell).
 No distance, age or emptiness rule removes a persistent platoon. A wiped-out town refills only through its pools, with non-persistent squads;
 no path re-running the initial resident placement was found (**Unknown** whether one exists).

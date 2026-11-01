@@ -336,12 +336,16 @@ PLATOON keys (**Verified**):
   appeared 4 to 6 simulated s after load (5 of 5 runs), one in the player's zone at once; their sizes varied by run.
 - `never been activated` is platoon +0x114 (**Verified**, by code). Activation (`FUN_1404ffad0`) builds the platoon's squad from its template into the same platoon object
   (`FUN_140583a10`) when +0x114 is set (also when it has no characters and an empty string at its active object's +0x18, likely the file name, **Unknown**; both gated
-  by a pointer at +0x250 of its vfunc-0x58 object being null, **Unknown** what), else loads its file; it then clears +0x114. The saver
-  (`FUN_140372ef0`) writes a loaded platoon with `never been activated` 0, `content file` `platoon/<name>.platoon` and `char count` its members, an unloaded one
-  with +0x114 and its kept `char count`. Meitou (`SaveLoader.Unmade`, engine rule): only a file-less, never-activated town platoon with `char count` > 0 and a BUILDING
+  by a pointer at +0x250 of its vfunc-0x58 object being null, **Unknown** what), else loads its file; it then clears +0x114 (a `regenerates` remake, +0x118 = 1, sets it
+  first, **Verified** `FUN_1404ffad0`). The saver (`FUN_140372ef0`) writes a loaded platoon with `never been activated` 0, `content file` `platoon/<name>.platoon` and
+  `char count` its members, an unloaded one with +0x114 and its kept `char count`, so a made platoon is never written as never activated. A declared-dead one (`dead`
+  +0x1f0, a platoon of a faction whose vfunc-0x58 object has +0x250 null, likely not the player's, **Observed**) is not written (dropped from the save) unless it is
+  loaded and a member is alive (+0x5bc clear) or carried (+0x3d4), or a platoon of the player's list (`FUN_1407f2490`) is within 500 on X/Z (250000 squared); then it
+  is written as above with its dead (**Verified**, decompile). A wiped `regenerates` squad is not declared dead and is written as usual. Meitou (`SaveLoader.Unmade`, engine rule): only a file-less, never-activated town platoon with `char count` > 0 and a BUILDING
   `homebuilding` becomes a stand-in made from its template on activation (in the player's box at load, else after its 5 s dwell, `PopulationSystem.ActivatesAtLoad`);
   other file-less town platoons stay in the save as they are. Its pool counts `char count` until it is made, and a save then writes its squad into the same record
-  (name, handle, `is resident`, `sqt`, homes kept) with `never been activated` false. A town that makes its own residents (pool not `started`, no other squad of the
+  (name, handle, `is resident`, `sqt`, homes kept) with `never been activated` false; making it clears the flag on its record at once. Wiped out before a save, it
+  follows the rule above (a dead one dropped, else written with its dead or, unloaded, with none: Meitou stores no corpses), so it is never made again at a later load. A town that makes its own residents (pool not `started`, no other squad of the
   save) drops its unmade stand-ins instead, so they are not doubled.
 - `hometown` (handle) puts the platoon into that town's or nest's pool at load (`FUN_1407ec8d0`; the platoon's faction and player status must match the town's);
   the pool counts living characters, `char count` while the platoon is not active (`FUN_1408f6a40`). `basetown` is only kept as a TOWN record pointer.
