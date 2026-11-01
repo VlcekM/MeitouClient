@@ -13,7 +13,7 @@ namespace Meitou.Rendering;
 /// per frame slot, no stall) and drawn as one instanced quad strip with its material's texture and blend, after the opaque scene, depth tested and
 /// never written, and not fogged: the game draws them in queue 84, after the haze and every fog volume (queue 82), with materials that apply no fog
 /// (docs/formats/fogfeatures.md). The effects' fog volumes (the twisters' dust balls) are handed to <see cref="FogVolumes"/> (<see cref="CollectFogVolumes"/>).
-/// Nothing is recorded while no unit has a particle, so a clear weather with no placer in sight draws exactly what it did.
+/// Nothing is recorded while no unit has a particle and there is no <see cref="Tracers"/> streak, so a clear weather with no placer in sight draws exactly what it did.
 /// </summary>
 public sealed unsafe class ParticleRenderer : IDisposable
 {
@@ -154,6 +154,15 @@ public sealed unsafe class ParticleRenderer : IDisposable
     /// <summary>The entries of the weather's effect list that have no group (a type that is not a weather effect, or an unknown particle system).</summary>
     public IReadOnlyList<WeatherEffectEntry> Skipped => weatherGroups.Skipped;
 
+    /// <summary>A streak from <see cref="Tail"/> to <see cref="Head"/> (world positions), <see cref="Width"/> units wide, in <see cref="Colour"/> (its alpha at the head, fading to nothing at the tail).</summary>
+    public readonly record struct Tracer(Vector3 Head, Vector3 Tail, float Width, Vector4 Colour);
+
+    /// <summary>
+    /// The Meitou <c>tracers</c> switch's streaks behind the bolts (docs/game/combat.md "Bolt visuals"), which the game fills every frame: drawn after the effects as one
+    /// oriented_self technique, alpha blended, unlit (as bright by night as by day), always at full size, and counted in the upscalers' reactive mask as rain is (thin and fast).
+    /// </summary>
+    public List<Tracer> Tracers { get; } = [];
+
     struct DrawItem
     {
         public Transient Instances;
@@ -168,6 +177,8 @@ public sealed unsafe class ParticleRenderer : IDisposable
         /// <summary>Rain (a <c>CAMERA_RAIN</c> or <c>CAMERA_ACID_RAIN</c> effect's draw) and fire (a placed effect's additive draw: flames, sparks): full size
         /// at every setting, each with its own coverage (RecordDraws).</summary>
         public bool Rain, Fire;
+        /// <summary>The <see cref="Tracers"/>' draw: full size, counted in the reactive mask as rain.</summary>
+        public bool Tracer;
     }
 
     ParticleRenderer(IGpuContext gpu, string texturesDirectory, ParticleLibrary library)
@@ -199,6 +210,35 @@ public sealed unsafe class ParticleRenderer : IDisposable
             attributes[1 + a] = new LegacyProgram.Attribute(default, InternalFormat.Rgba32f, InstanceBytes, true);
         vertexSource = new VertexArrayBindings(attributes, default);
         white = SampledImage.Rgba8(gpu, 1, 1, [255, 255, 255, 255], repeat: false, mipmaps: false, "particle white");
+        tracerTexture = SampledImage.Rgba8(gpu, TracerTextureWidth, TracerTextureHeight, TracerPixels(), repeat: false, mipmaps: true, "particle tracer");
+    }
+
+    const int TracerTextureWidth = 16, TracerTextureHeight = 64;
+    static readonly PuTechniqueDef TracerTechnique = new()
+    {
+        Name = "meitou tracer", Renderer = new PuRendererDef { TypeName = "Billboard", BillboardType = "oriented_self" }, Source = new PuNode("technique", [], 0),
+    };
+    static readonly ParticleMaterial TracerMaterial = new("meitou tracer", null, ParticleBlend.Alpha, DepthCheck: true, DepthWrite: false, Ambient: false, Vector4.One, Clamp: true);
+    readonly SampledImage tracerTexture;
+
+    /// <summary>
+    /// The tracers' white streak: v 0 is the head (an oriented_self quad's top, along the travel), its alpha falling off linearly towards the tail at v 1 and softly
+    /// across the width, with a short taper at the very head so the front end is not a hard edge.
+    /// </summary>
+    static byte[] TracerPixels()
+    {
+        var rgba = new byte[TracerTextureWidth * TracerTextureHeight * 4];
+        for (int y = 0; y < TracerTextureHeight; y++)
+            for (int x = 0; x < TracerTextureWidth; x++)
+            {
+                float v = (y + 0.5f) / TracerTextureHeight, across = (x + 0.5f) / TracerTextureWidth * 2 - 1;
+                float along = (1 - v) * Math.Min(1, v / 0.04f);
+                float a = along * (1 - across * across);
+                int i = (y * TracerTextureWidth + x) * 4;
+                rgba[i] = rgba[i + 1] = rgba[i + 2] = 255;
+                rgba[i + 3] = (byte)MathF.Round(Math.Clamp(a, 0, 1) * 255);
+            }
+        return rgba;
     }
 
     public static ParticleRenderer Create(IGpuContext gpu, GameInstall install, ParticleLibrary? library = null)
@@ -486,7 +526,7 @@ public sealed unsafe class ParticleRenderer : IDisposable
         drawnParticles = 0;
         drawnUnits = 0;
         coveragePending = false;
-        if (!Enabled || (weatherGroups.Groups.Count == 0 && placerGroups.Count == 0)) return;
+        if (!Enabled || (weatherGroups.Groups.Count == 0 && placerGroups.Count == 0 && Tracers.Count == 0)) return;
         draws.Clear();
         var frame = gpu.Frame;
         var forward = -new Vector3(view.M13, view.M23, view.M33);   // the view's -Z axis in the world
@@ -539,6 +579,7 @@ public sealed unsafe class ParticleRenderer : IDisposable
                 drawnParticles += written;
             }
         }
+        if (Tracers.Count > 0) AddTracers(frame, eye, forward, nearPlane);
         // A size is worth its two extra passes (the depth reduction, the composite) only when it saves enough fill: below MinLayers it stays full size.
         if (forcedDivisor == 0)
             foreach (int size in (ReadOnlySpan<int>)[2, 4])
@@ -560,6 +601,26 @@ public sealed unsafe class ParticleRenderer : IDisposable
         float ambient = Math.Clamp(sunDirection.Y * 5 + 0.2f, 0.1f, 1f);
         (frameVp, frameCloseVp, frameRight, frameUp, frameAmbient) = (vp, closeVp, right, up, ambient);
         coveragePending = true;
+    }
+
+    /// <summary>The <see cref="Tracers"/> as one draw, after the effects': each a quad centred between its ends, as long as they are apart, its up along the travel.</summary>
+    void AddTracers(IGpuFrame frame, Vector3 eye, Vector3 forward, float nearPlane)
+    {
+        int n = 0;
+        if (scratch.Length < Tracers.Count) scratch = new ParticleInstance[Math.Max(Tracers.Count, scratch.Length * 2)];
+        foreach (var t in Tracers)
+        {
+            var along = t.Head - t.Tail;
+            float length = along.Length();
+            if (length < 1e-3f || Vector3.Distance(t.Head, eye) - length > DrawRange) continue;
+            scratch[n++] = new ParticleInstance { Position = (t.Head + t.Tail) * 0.5f - eye, Direction = along / length, Width = t.Width, Height = length, Colour = t.Colour };
+        }
+        if (n == 0) return;
+        int close = gpu.ClipDepthZeroToOne ? 0 : PartitionByDepth(scratch.AsSpan(0, n), forward, nearPlane);
+        var instances = frame.AllocateConstants((ulong)(n * InstanceBytes), 16);
+        scratch.AsSpan(0, n).CopyTo(new Span<ParticleInstance>(instances.Pointer, n));
+        draws.Add(new DrawItem { Instances = instances, Count = n, Close = close, Technique = TracerTechnique, Material = TracerMaterial, Texture = tracerTexture, Divisor = 1, Tracer = true });
+        drawnParticles += n;
     }
 
     Matrix4x4 frameVp, frameCloseVp;
@@ -644,7 +705,7 @@ public sealed unsafe class ParticleRenderer : IDisposable
                 // sprites count as they are: 30x on big soft ones (dust, smoke) would fill the mask and leave FSR and TAA no history (docs/render-post.md).
                 float all = rgb == ColorMask.A ? 2f : 1f;
                 program.Set(coverageLimit, d.Fire ? 0.9f * all : all);
-                program.Set(coverageGain, d.Rain ? 30f : 1f);
+                program.Set(coverageGain, d.Rain || d.Tracer ? 30f : 1f);
                 var matrix = close ? closeVp : vp;
                 program.Set(this.viewProjection, in matrix);
                 program.Set(cameraRight, right);
@@ -793,6 +854,7 @@ public sealed unsafe class ParticleRenderer : IDisposable
         simulator.Dispose();
         foreach (var t in textures.Values) t?.Dispose();
         white.Dispose();
+        tracerTexture.Dispose();
         quad.Dispose();
         program.Dispose();
     }

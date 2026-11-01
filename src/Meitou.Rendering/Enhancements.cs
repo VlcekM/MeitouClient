@@ -58,7 +58,7 @@ public static class Enhancements
         Func<bool>? interiorGi = null, Action<bool>? setInteriorGi = null, Func<bool>? characterLod = null, Action<bool>? setCharacterLod = null,
         Func<bool>? skin = null, Action<bool>? setSkin = null, Func<bool>? interiorLamps = null, Action<bool>? setInteriorLamps = null,
         Func<bool>? icons = null, Action<bool>? setIcons = null, Func<bool>? blood = null, Action<bool>? setBlood = null,
-        Func<bool>? bloodSurfaces = null, Action<bool>? setBloodSurfaces = null) =>
+        Func<bool>? bloodSurfaces = null, Action<bool>? setBloodSurfaces = null, Func<bool>? tracers = null, Action<bool>? setTracers = null) =>
     [
         new("ao", "Ambient occlusion", "off", "SSAO",
             () => post.Ssao, v => post.Ssao = v, "the game ships SSAO but has it disabled"),
@@ -155,6 +155,9 @@ public static class Enhancements
         new("weld", "Mesh welding", "per-face tangents", "welded, averaged tangents",
             () => MeshWeld.Enabled, v => MeshWeld.Enabled = v,
             "the game's meshes store each corner once per triangle, with that triangle's own tangent, so normal-mapped surfaces show faint facets at the triangle edges; Meitou welds the corners that differ only in their tangent and averages it, which smooths the bump lighting (characters most) and keeps about 60% fewer vertices in video memory; applies to meshes as they load (docs/render-objects.md)"),
+        new("tracers", "Bolt tracers", "none", "streaks",
+            tracers ?? (() => false), setTracers ?? (_ => { }),
+            "the game draws a bolt in flight as its mesh alone, stretched a little with its speed, which is hard to follow at a distance; Meitou draws a faint streak behind it that grows out of the crossbow and shrinks into where the bolt stops; drawn with the particles, so none with --no-particles (docs/game/combat.md \"Bolt visuals\")"),
     ];
 
     /// <summary><c>--meitou</c> / <c>--faithful &lt;all|id,id...&gt;</c>: turns those switches to Meitou or to Faithful.</summary>

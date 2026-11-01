@@ -164,6 +164,7 @@ sealed partial class GameHost
         pieces.RemoveAll(p => world.Tick - p.Born >= BodySystem.CorpseTicksOf(world));
         gpu.DebrisPieces.Clear();
         AddBolts();
+        AddTracers(world);
         UpdateFalls(world);
         AddRestingLimbs();
         if (pieces.Count == 0) return;
@@ -241,6 +242,7 @@ sealed partial class GameHost
     void AddBolts()
     {
         var now = session.CurrentSnapshot.Projectiles;
+        boltHeads.Clear();
         if (now.Count == 0) boltLaunches.Clear();
         if (now.Count == 0 || gpu.Debris is not { } debris) return;
         boltsBefore.Clear();
@@ -258,6 +260,7 @@ sealed partial class GameHost
                     boltLaunches[p.Id] = launch = (gpu.Characters?.Muzzle(DrawKey(p.Shooter)) is { } muzzle ? muzzle - at : Vector3.Zero, at);
                 float left = 1 - Vector3.Distance(at, launch.From) / LaunchBlend;
                 if (left > 0) at += launch.Gap * left;
+                boltHeads[p.Id] = (at, launch.From + launch.Gap);
             }
             else boltLaunches.Remove(p.Id);
             gpu.DebrisPieces.Add(new DebrisPiece(p.Mesh, 1, Turn(Vector3.UnitZ, p.Direction), at, p.Stuck ? 1 : p.Stretch));
@@ -265,6 +268,81 @@ sealed partial class GameHost
         if (boltLaunches.Count > now.Count)
             foreach (int id in boltLaunches.Keys.ToArray())
                 if (!now.Any(p => p.Id == id)) boltLaunches.Remove(id);
+    }
+
+    /// <summary>Where each bolt in flight is drawn this frame and the muzzle it left (by bolt id), for <see cref="AddTracers"/>.</summary>
+    readonly Dictionary<int, (Vector3 At, Vector3 Muzzle)> boltHeads = [];
+    /// <summary>The tracers drawn, by bolt id: one keeps shrinking after its bolt stops (<see cref="Trail.Stopped"/>) until it is gone.</summary>
+    readonly Dictionary<int, Trail> trails = [];
+    readonly List<int> trailsGone = [];
+    /// <summary>The <see cref="worldEpoch"/> <see cref="trails"/> belong to: a load or a new world drops the old world's.</summary>
+    int trailsEpoch = -1;
+
+    sealed class Trail
+    {
+        public Vector3 Head, Direction;
+        public float Length, Speed;
+        /// <summary>The game time (seconds) its bolt stuck or went; null while it flies.</summary>
+        public double? Stopped;
+    }
+
+    /// <summary>Seconds of a bolt's flight its tracer covers, and the longest one (units).</summary>
+    const float TracerSeconds = 0.2f, TracerMaxLength = 500;
+    /// <summary>The longest a stopped bolt's tracer takes to shrink into it (seconds; a fast bolt's goes at its speed, quicker).</summary>
+    const float TracerFade = 0.15f;
+    const float TracerWidth = 0.7f;
+    static readonly Vector4 TracerColour = new(1, 1, 1, 0.6f);
+
+    /// <summary>
+    /// The Meitou <c>tracers</c> switch (docs/game/combat.md "Bolt visuals"): a semi-transparent streak behind each drawn bolt in flight, <see cref="TracerSeconds"/> of
+    /// its flight long but never reaching back past the muzzle, so it grows out of the crossbow. When the bolt sticks or goes, the tail flies on into where it stopped and
+    /// the streak shrinks away; timed by the shown game time, so a paused game keeps its tracers.
+    /// </summary>
+    void AddTracers(World world)
+    {
+        if (gpu.Particles is not { } particles) return;
+        particles.Tracers.Clear();
+        if (trailsEpoch != worldEpoch) { trails.Clear(); trailsEpoch = worldEpoch; }
+        if (!o.MeitouTracers) { trails.Clear(); return; }
+        double clock = (session.ShownTick + session.SimulationAlpha) * world.TickSeconds;
+        foreach (var p in session.CurrentSnapshot.Projectiles)
+        {
+            if (p.Stuck)
+            {
+                if (trails.TryGetValue(p.Id, out var hit) && hit.Stopped is null) Stop(hit, p.Position, clock);
+                continue;
+            }
+            if (!boltHeads.TryGetValue(p.Id, out var head)) continue;
+            if (!trails.TryGetValue(p.Id, out var t) || t.Stopped is not null) trails[p.Id] = t = new Trail();
+            (t.Head, t.Direction, t.Speed) = (head.At, p.Direction, p.Speed);
+            t.Length = MathF.Min(MathF.Min(TracerMaxLength, p.Speed * TracerSeconds), Vector3.Distance(head.At, head.Muzzle));
+        }
+        trailsGone.Clear();
+        foreach (var (id, t) in trails)
+        {
+            // A bolt gone without sticking (recycled past its range, a glancing terrain hit) stops where it was last drawn.
+            if (t.Stopped is null && !boltHeads.ContainsKey(id)) Stop(t, t.Head, clock);
+            float length = t.Length;
+            if (t.Stopped is { } stopped)
+                length = clock < stopped ? 0 : length - (float)(clock - stopped) * MathF.Max(t.Speed, t.Length / TracerFade);   // back in time: a load
+            if (length <= 0)
+            {
+                if (t.Stopped is not null) trailsGone.Add(id);
+                continue;
+            }
+            particles.Tracers.Add(new(t.Head, t.Head - t.Direction * length, TracerWidth, TracerColour));
+        }
+        foreach (int id in trailsGone) trails.Remove(id);
+    }
+
+    /// <summary>A tracer's bolt stopped at <paramref name="at"/>: the tail stays where it was drawn and the head moves there, from which the streak shrinks.</summary>
+    static void Stop(Trail t, Vector3 at, double clock)
+    {
+        var tail = t.Head - t.Direction * t.Length;
+        t.Head = at;
+        t.Length = Vector3.Distance(tail, at);
+        if (t.Length > 1e-3f) t.Direction = (at - tail) / t.Length;
+        t.Stopped = clock;
     }
 
     /// <summary>A character's stuck bolts for the renderer, in its slot's array (<see cref="boltsBySlot"/>).</summary>

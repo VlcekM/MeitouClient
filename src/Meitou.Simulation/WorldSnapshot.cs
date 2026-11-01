@@ -466,6 +466,8 @@ public readonly record struct ProjectileSnapshot(int Id, Vector3 Position, Vecto
 {
     /// <summary>Who fired it (the renderer starts the drawn bolt at that character's crossbow).</summary>
     public CharacterId Shooter { get; init; }
+    /// <summary>Its speed in units a second (0 once stuck; the renderer's tracers are as long as a moment of it).</summary>
+    public float Speed { get; init; }
 }
 
 /// <summary>
