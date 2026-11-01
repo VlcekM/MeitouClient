@@ -266,7 +266,7 @@ public class KidnapInstallTests(ITestOutputHelper output)
             set = StandardSystems.Build(data, walk, new StandardSystemOptions
             {
                 Parts = StandardParts.Population | StandardParts.Player | StandardParts.Pursuit | StandardParts.Movement | StandardParts.Body | StandardParts.Combat | StandardParts.Retaliation
-                    | StandardParts.FirstAid | StandardParts.Aggro | StandardParts.Flee | StandardParts.Carry | StandardParts.Crime,
+                    | StandardParts.FirstAid | StandardParts.Aggro | StandardParts.Flee | StandardParts.Carry | StandardParts.Crime | StandardParts.Ai,
                 SynchronousPaths = true,
                 Population = settings,
                 Kidnap = new KidnapSettings { RecordLog = true },
