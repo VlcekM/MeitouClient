@@ -28,7 +28,9 @@
 
 After `resolution` come 94 optional F12-stage columns (the same names and order as the maintainers' `daily-bench.csv`): `cpu_<stage>_p50_ms` / `_p99_ms` for each stage (`-` written `_`, e.g. `cpu_upd_terrain_p50_ms`), `cpu_total_*`, `gpu_<stage>_*`, `gpu_other_*`, `gpu_total_*`, in ms with 3 decimals, computed from the same frames as above. Blank when the game's `frames.csv` has no stage columns.
 
-The last column, `vram_peak_mb`, is the peak of the game's `vram_mb` over the same frames: this process's device-local video memory as the driver reports it (`VK_EXT_memory_budget`, the driver's own allocations included; without the extension only Meitou's allocator, so not comparable), read every 30 frames. Blank for builds without the column and on macOS (Metal).
+The column `vram_peak_mb` is the peak of the game's `vram_mb` over the same frames: this process's device-local video memory as the driver reports it (`VK_EXT_memory_budget`, the driver's own allocations included; without the extension only Meitou's allocator, so not comparable), read every 30 frames. Blank for builds without the column and on macOS (Metal).
+
+The very last column, `avg_fps`, is the average frame rate over the same frames: 1000 divided by the mean `frame_ms`, one decimal (higher is better).
 
 The `settle` segment is always run first and left out of the numbers. Each folder under `play/` and `bases/` also keeps the game's per-frame `bench/frames.csv`, its `summary.md`, the MangoHud log and `game.log`.
 
