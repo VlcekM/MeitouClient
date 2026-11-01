@@ -254,7 +254,7 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
         for (int s = 0; s < table.HighWater; s++)
         {
             if (!next[s].Alive || !world.Turn(s, every) || table.Cold(s) is not { } c) continue;   // its turn (the far cadence, World.Turn)
-            if (c.Bounties is { } ledger && !c.IsImprisoned) Expire(world, s, c, ledger, hoursPerTick);   // paused while imprisoned (economy.md 11.3)
+            if (c.Bounties is { } ledger && !c.IsImprisoned) Expire(world, s, c, ledger, hoursPerTick, every);   // paused while imprisoned (economy.md 11.3)
             if (c.RecentlyWanted > 0) c.RecentlyWanted = MathF.Max(0, c.RecentlyWanted - seconds);
             Locks.FixtureRegistry.LayLow(world, c);
             if (c.Pending is { } p)
@@ -591,16 +591,20 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
         };
     }
 
-    /// <summary>Removes entries whose lifetime since their last raise is over (the game removes one per tick in its per-character tick; all at once here).</summary>
-    void Expire(World world, int slot, CharacterCold c, BountyLedger ledger, double hoursPerTick)
+    /// <summary>
+    /// Removes entries whose lifetime since their last raise is over (<c>FUN_1405cbb80</c>, <b>Verified</b>): the original removes the first expired entry it meets and stops, once per
+    /// character tick; this sweep runs every <paramref name="ticks"/> ticks, so it removes at most that many.
+    /// </summary>
+    void Expire(World world, int slot, CharacterCold c, BountyLedger ledger, double hoursPerTick, int ticks)
     {
-        for (int k = ledger.Count - 1; k >= 0; k--)
+        for (int k = ledger.Count - 1; k >= 0 && ticks > 0; k--)
         {
             var e = ledger.Entries[k];
             if (e.Amount <= 0) continue;
             double elapsed = (world.Tick - e.RaisedTick) * hoursPerTick;
             if (elapsed >= 0 && elapsed <= CrimeTable.LifetimeHours(e.Amount)) continue;
             ledger.Remove(e);
+            ticks--;
             Note(world, CrimeEventKind.Expired, slot, CrimeCode.None, e.Faction, e.Amount, CharacterId.None);
             if (c.IsPlayer) world.Post($"{c.Name} is no longer wanted by {e.FactionName}");
         }
