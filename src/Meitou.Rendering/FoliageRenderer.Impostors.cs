@@ -102,6 +102,8 @@ public sealed partial class FoliageRenderer
         public long FinerSince;
         /// <summary>Scans in a row the plan left this atlas out.</summary>
         public int DropScans;
+        /// <summary>The atlas was baked here, not read from the cache (a loading screen does not wait for its upload: <see cref="ImpostorUploadsAwaited"/>).</summary>
+        public bool Baked;
         /// <summary>A refine in flight: the cache read, the atlas, the new textures and the albedo skip they are made with.</summary>
         public Task<ImpostorAtlas?>? RefineLoad;
         public ImpostorAtlas? RefineAtlas;
@@ -172,6 +174,19 @@ public sealed partial class FoliageRenderer
 
     /// <summary>Atlases loading, waiting to bake, baking or uploading (part of <see cref="Pending"/>).</summary>
     int ImpostorPending => impostorWork.Count + impostorBakes.Count + (impostorBake is null ? 0 : 1);
+    /// <summary>
+    /// The atlases a loading screen waits for: those read from the cache and uploading. Not the reads still queued (behind a long setting's far grass jobs
+    /// on the workers they can wait half a minute) nor the bakes and their uploads: the meshes draw until each atlas is ready.
+    /// </summary>
+    int ImpostorUploadsAwaited
+    {
+        get
+        {
+            int n = 0;
+            foreach (var a in impostorWork) if (a.Impostor is { Stage: ImpostorStage.Uploading, Baked: false }) n++;
+            return n;
+        }
+    }
 
     string ImpostorDescription => $"{ImpostorAssets().Count(a => a.Impostor?.Stage == ImpostorStage.Ready)} impostor atlases {impostorBytes / 1048576.0:0} MB of {ImpostorLimitMb:0} MB " +
         $"({impostorsLoaded} from the cache, {impostorsBaked} baked, {impostorUnloads} unloaded, {impostorRefined} refined, {impostorCoarsened} coarsened, {impostorDropped} dropped by the plan, {impostorRefused} refused; " +
@@ -900,6 +915,7 @@ public sealed partial class FoliageRenderer
             });
             st.Atlas = atlas;
             st.Stage = ImpostorStage.Uploading;
+            st.Baked = true;
             impostorWork.Add(a);
         }
         else
