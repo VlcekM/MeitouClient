@@ -242,6 +242,7 @@ public sealed partial class NavmeshWalkability : IWalkability
         var part = Toward(w, from, to, agent);
         if (!part.Found) return exact;
         if (Vector2.Distance(new(part.Points[^1].X, part.Points[^1].Z), new(to.X, to.Z)) <= NavQuery.GoalSnap) return part;
+        // Also after a search cut short by its limit: the exact search would be cut short the same way, so the walker gets this same provisional route.
         if (key is { } found)
         {
             if (unreachable.Count >= UnreachableLimit) unreachable.Clear();
