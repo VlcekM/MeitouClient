@@ -58,7 +58,7 @@ public static class CharacterGenerator
                 .Select(r => (db.Find(r.TargetStringId), (float)r.Values.Value0)));
         if (race is null && bodyFile?.RaceId is { } bodyRace) race = db.Find(bodyRace);
         if (race is null && (faction ?? (character?.GetReferences("faction") is { Count: > 0 } own ? db.Find(own[0].TargetStringId) : null)) is { } races)
-            race = PickRelative(rng, races.GetReferences("races").Select(r => (db.Find(r.TargetStringId), r.Values.Value0 > 0 ? (float)r.Values.Value0 : 1f)));
+            race = PickRelative(rng, races.GetReferences("races").Where(r => r.Values.Value0 > 0).Select(r => (db.Find(r.TargetStringId), (float)r.Values.Value0)));   // FUN_1407fe270: weight <= 0 never drawn
         if (race is null)
         {
             race = CharacterAppearance.Find(db, DefaultRaceId, FcsRecordType.RACE) ?? throw new KeyNotFoundException($"'{record.Name}' ({record.StringId}) has no race.");
