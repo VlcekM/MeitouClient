@@ -227,16 +227,27 @@ public sealed class SaveBuilder
         r.Strings["faction name"] = factionName;
         r.Strings["faction stringID"] = factionId;
         r.Strings["squad template"] = squadTemplate;
-        r.Filenames["content file"] = SaveFolder.PlatoonName(name);
 
+        var platoon = new SavePlatoon(r, null);
+        GiveFile(platoon);
+        Game.Platoons.Add(platoon);
+        return platoon;
+    }
+
+    /// <summary>
+    /// Gives a platoon with no file an empty one (named <c>&lt;string id&gt;.platoon</c>, the record's <c>content file</c>) with the characters' INSTANCE_COLLECTION; a platoon
+    /// with a file keeps it.
+    /// </summary>
+    public void GiveFile(SavePlatoon platoon)
+    {
+        if (platoon.File is not null) return;
+        platoon.ContentFile = SaveFolder.PlatoonName(platoon.Record.StringId);
         var file = new SaveFile();
         var collection = new FcsRecord { Type = (int)FcsRecordType.INSTANCE_COLLECTION, Name = "0" };
         file.Records.Add(collection);
         collection.Ints["char count"] = 0;
         AssignId(file, collection, "");
-        var platoon = new SavePlatoon(r, file);
-        Game.Platoons.Add(platoon);
-        return platoon;
+        platoon.File = file;
     }
 
     /// <summary>Gives a record the next number of the file: id, string id <c>&lt;n&gt;-&lt;suffix&gt;-INGAME</c>.</summary>

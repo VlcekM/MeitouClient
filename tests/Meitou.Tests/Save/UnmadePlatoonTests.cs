@@ -52,7 +52,6 @@ public class UnmadePlatoonTests
         Assert.True(PopulationSystem.ActivatesAtLoad(inBox, box));
         Assert.False(PopulationSystem.ActivatesAtLoad(outside, box));
         Assert.True(PopulationSystem.ActivatesAtLoad(ordinary, box));
-        Assert.Equal(5, outside.DwellLeft);   // it waits its dwell from 5 s
     }
 
     // ------------------------------------------------------------------ through a save of the synthetic town
@@ -84,7 +83,7 @@ public class UnmadePlatoonTests
         save.Platoons.Where(p => p.FactionId == "20-t").ToDictionary(p => p.Name, StringComparer.Ordinal);
 
     [Fact]
-    public void An_unmade_platoon_saved_before_it_is_made_keeps_its_record_and_once_made_is_saved_once_as_its_fresh_squad()
+    public void An_unmade_platoon_saved_before_it_is_made_keeps_its_record_and_once_made_is_saved_into_that_record()
     {
         var data = SyntheticTown.Data(SyntheticTown.Database(anatomy: true));
         string root = Temp("unmade");
@@ -117,7 +116,7 @@ public class UnmadePlatoonTests
             void IsStandIn(SimWorld w, LoadedSave loaded)
             {
                 var p = w.Platoons.All.Single(x => x.Unmade);
-                Assert.Equal((PlatoonState.Unloaded, true, "10-t", new Vector2(at.X, at.Z)), (p.State, p.Regenerate, p.TemplateId, p.Position));
+                Assert.Equal((PlatoonState.Unloaded, 4, "10-t", new Vector2(at.X, at.Z)), (p.State, p.Size, p.TemplateId, p.Position));
                 Assert.Equal(UnmadeName, p.Saved!.Name);
                 Assert.Empty(p.Saved.Members);
                 Assert.True(p.Id > int.MaxValue - 4);   // a reserved id
@@ -137,22 +136,20 @@ public class UnmadePlatoonTests
             var loadedC = SaveLoader.Load(c, save1, data);
             IsStandIn(c, loadedC);
 
-            // (3) In the player's box it is made at load, last; the save then holds its fresh squad once and not its record.
+            // (3) In the player's box it is made at load, last, into the same platoon; the save then writes its squad into its own record.
             var stand = c.Platoons.All.Single(x => x.Unmade);
             var standIn = stand.Saved!;
             for (int i = 0; i < 20 && !c.PreparePopulation(SyntheticTown.Centre); i++) { }
-            Assert.Null(c.Platoons.Find(stand.Id));
-            Assert.True(standIn.Despawned);
-            var made = Assert.Single(c.Platoons.All, x => x.Id > int.MaxValue - 4);
-            Assert.Equal((PlatoonState.Loaded, "10-t", stand.Faction, false), (made.State, made.TemplateId, made.Faction, made.Unmade));
-            int members = c.Squads.Find(made.SquadId)!.Members.Count;
+            Assert.Same(stand, c.Platoons.Find(stand.Id));
+            Assert.Equal((PlatoonState.Loaded, false, false, stand.Id), (stand.State, stand.Unmade, standIn.Despawned, standIn.PlatoonId));
+            int members = c.Squads.Find(stand.SquadId)!.Members.Count;
             Assert.True(members > 0);
             var save2 = RoundTrip(SaveCapture.Capture(c, data, loadedC.Clock, loadedC), root);
             var after = NpcPlatoons(save2);
-            Assert.DoesNotContain(UnmadeName, after.Keys);
-            var fresh = Assert.Single(after.Values, p => !others0.Contains(p.Name));
-            Assert.Equal(("10-t", "30-t", members, members), (fresh.SquadTemplate, fresh.Record.Strings["basetown"], fresh.CharCount, fresh.Characters.Count));
-            Assert.False(fresh.Record.Bools.GetValueOrDefault("never been activated"));
+            Assert.Equal(others0.Append(UnmadeName).ToHashSet(), after.Keys.ToHashSet());   // no fresh platoon for it
+            var made = after[UnmadeName];
+            Assert.Equal((handle, "10-t", "30-t", home, true, members, members, false), (made.Handle, made.SquadTemplate, made.Record.Strings["basetown"],
+                Hand.Read(made.Record, "homebuilding"), made.IsLoaded, made.CharCount, made.Characters.Count, made.Record.Bools["never been activated"]));
         }
         finally
         {

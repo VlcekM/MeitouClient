@@ -343,7 +343,7 @@ public static class SaveLoader
             State = PlatoonState.Unloaded,
             Package = package?.Id, Job = job,
             Saved = sp,
-            Regenerate = unmade, Unmade = unmade,
+            Unmade = unmade,
             Imprisoned = platoon.Record.Bools.GetValueOrDefault("imprisoned"),
             Dead = platoon.Record.Bools.GetValueOrDefault("dead"),
             IntactFlag = platoon.Record.Bools.GetValueOrDefault("intact", true),
@@ -362,9 +362,9 @@ public static class SaveLoader
     }
 
     /// <summary>
-    /// Whether a saved town platoon with no file is one the game never made (<b>Observed</b> on one save only, a new game saved at once: such platoons, with
-    /// <c>never been activated</c>, a <c>char count</c> and a <c>homebuilding</c> BUILDING, are made from their template after load): it becomes a stand-in
-    /// (<see cref="Platoon.Unmade"/>) instead of staying in the save.
+    /// Whether a saved town platoon with no file is one the game never made: the original builds a <c>never been activated</c> platoon from its template on activation
+    /// (<c>FUN_1404ffad0</c>, <b>Verified</b>); the <c>char count</c> &gt; 0 and BUILDING <c>homebuilding</c> filter is Meitou's own (docs/formats/save.md "NPC platoons").
+    /// It becomes a stand-in (<see cref="Platoon.Unmade"/>) instead of staying in the save.
     /// </summary>
     internal static bool Unmade(SavePlatoon platoon) =>
         !platoon.IsLoaded && platoon.Record.Bools.GetValueOrDefault("never been activated") && platoon.CharCount > 0

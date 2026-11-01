@@ -27,8 +27,8 @@ public sealed class Platoon
     public required string TemplateId { get; init; }
     public int Faction { get; init; } = -1;
     public required ulong Key { get; init; }
-    /// <summary>Members when made: what the pool counts.</summary>
-    public int Size { get; init; }
+    /// <summary>Members when made: what the pool counts (a save's never-made platoon: its <c>char count</c> until it is made, <see cref="Unmade"/>).</summary>
+    public int Size { get; set; }
     public Vector2 Position { get; set; }
     /// <summary>The town it is travelling to (-1: none chosen, it waits).</summary>
     public int Target { get; set; } = -1;
@@ -54,7 +54,8 @@ public sealed class Platoon
     public Saving.SavedPlatoon? Saved { get; init; }
     /// <summary>
     /// A squad the population made, kept as its characters while it is not in the world (null: none): a town's squad since its town unloaded, or (the Meitou
-    /// <see cref="PopulationSystem.KeepRoamers"/> switch) a roaming one since it first left. Made of them again, never rolled anew.
+    /// <see cref="PopulationSystem.KeepRoamers"/> switch) a roaming one since it first left. Made of them again, never rolled anew. Set with <see cref="Saved"/> on a save's
+    /// never-made platoon once made (<see cref="Unmade"/>): this holds its squad, the save's record is written with it.
     /// </summary>
     public StoredSquad? Stored { get; set; }
     /// <summary>A platoon of its town's own (residents, bar squads, slaves; saved or stored): it never travels, its squad is run by the AI like the town's, and it is not in the roaming pool.</summary>
@@ -67,9 +68,10 @@ public sealed class Platoon
     public bool Regenerate { get; set; }
     /// <summary>
     /// A save's town squad the game never made (<see cref="Saving.SaveLoader"/> "unmade": no file, <c>never been activated</c>, a <c>char count</c> and a home building):
-    /// a stand-in with <see cref="Regenerate"/> set, made from its template when it activates. Not saved.
+    /// a stand-in made from its template when it activates (<c>FUN_1404ffad0</c>), into this same platoon: it then keeps the save's record (<see cref="Saved"/>, no members)
+    /// and holds its squad as a population's own (<see cref="Stored"/>), and this is cleared. Not saved.
     /// </summary>
-    public bool Unmade { get; init; }
+    public bool Unmade { get; set; }
     /// <summary>
     /// The faction campaign it marches in (null: none; <c>PopulationCampaigns.cs</c>): kept (never despawned) until the campaign is removed, moved by the campaign off
     /// screen and led to <see cref="CampaignGoal"/> while loaded, out of the roaming pools.
@@ -136,7 +138,7 @@ public sealed class PlatoonRegistry
 {
     readonly SortedDictionary<int, Platoon> platoons = [];
     int nextId;
-    // The ids of a save's never-made town squads (Platoon.Unmade) and of what they are made into, counted down from the top so that they leave every other
+    // The ids of a save's never-made town squads (Platoon.Unmade), counted down from the top so that they leave every other
     // platoon's id (and what is rolled from it) as it would be without them, and come last in id order.
     int nextReserved = int.MaxValue;
 

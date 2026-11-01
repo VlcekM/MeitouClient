@@ -217,7 +217,7 @@ public sealed partial class PopulationSystem
         int running = 0;
         foreach (var p in world.Platoons.All)
         {
-            if (p.Origin != site || !p.Pinned || p.State != PlatoonState.Unloaded) continue;
+            if (p.Origin != site || !p.Pinned || p.State != PlatoonState.Unloaded || p.Unmade) continue;
             // Residents only: the pool counts them (base saves: <c>pop</c> = the resident platoons' size, not the bar squads').
             if (p.Faction != data.SiteFactions[site]) continue;   // and of the town's faction (save 2: Squin's 36 = its Shek residents, without a Tech Hunters shop)
             if (p.Stored is { HomeBuilding: null } || p.Saved is { } r && !r.Source.Record.Bools.GetValueOrDefault("is resident")) continue;
@@ -251,18 +251,11 @@ public sealed partial class PopulationSystem
         var home = p.Stored?.HomeBuilding ?? (p.Saved is { } sp ? Saving.SavedCharacters.SavedHome(world, sp, site) : null);
         // Its unique members are freed first, so the fresh squad makes them again rather than their replacements.
         ReleaseUniques(world, p);
-        // A template whose members are each by chance can plan no one: a few rolls (engine choice).
-        BuiltSquad? built = null;
-        ulong key = 0;
-        for (int t = 0; t < 8 && built is null; t++)
-        {
-            key = Rng.Mix(SeedSalts.RoamingPool ^ (ulong)p.Id << 8 ^ (ulong)world.Tick << 24 ^ (ulong)t << 56);
-            built = BuildRoamer(p.TemplateId, p.Faction, key, world.Seed, p.Position);
-        }
+        var (built, key) = RollTemplate(world, p);
         if (built is null) return null;
         var fresh = new Platoon
         {
-            Id = p.Unmade ? world.Platoons.NextReservedId() : world.Platoons.NextId(), Origin = p.Origin, TemplateId = p.TemplateId, Faction = p.Faction, Key = key, Size = built.Plan.TotalMembers,
+            Id = world.Platoons.NextId(), Origin = p.Origin, TemplateId = p.TemplateId, Faction = p.Faction, Key = key, Size = built.Plan.TotalMembers,
             Position = p.Position, Money = p.Money, Package = p.Package, Stored = new StoredSquad { Name = data.Db.Find(p.TemplateId)?.Name ?? p.TemplateId, HomeBuilding = home },
             State = PlatoonState.Loaded,
         };
@@ -282,6 +275,41 @@ public sealed partial class PopulationSystem
         Despawn(world, p, release: false);   // its uniques were freed above and the fresh squad holds them
         if (townLog.Count >= 256) townLog.RemoveAt(0);
         townLog.Add($"{site.Town.Name}: {fresh.Stored.Name} made afresh ({squad.Members.Count})");
+        return squad;
+    }
+
+    /// <summary>A template whose members are each by chance can plan no one: a few rolls (engine choice). Null when none plans anyone.</summary>
+    (BuiltSquad? Built, ulong Key) RollTemplate(World world, Platoon p)
+    {
+        for (int t = 0; t < 8; t++)
+        {
+            ulong key = Rng.Mix(SeedSalts.RoamingPool ^ (ulong)p.Id << 8 ^ (ulong)world.Tick << 24 ^ (ulong)t << 56);
+            if (BuildRoamer(p.TemplateId, p.Faction, key, world.Seed, p.Position) is { } built) return (built, key);
+        }
+        return (null, 0);
+    }
+
+    /// <summary>
+    /// A save's never-made town squad (<see cref="Platoon.Unmade"/>) comes into the world made from its template into the same platoon, as the original builds the
+    /// platoon object it has (<c>FUN_1404ffad0</c>, +0x114 set): homed at its <c>homebuilding</c>, it keeps the save's record, which the next save writes back with its
+    /// characters and <c>never been activated</c> false (<c>FUN_140372ef0</c>). Returns its squad (null when the template plans no one).
+    /// </summary>
+    Squad? MakeUnmade(World world, Platoon p)
+    {
+        var site = data.Sites[p.Origin];
+        float radius = site.Town.SizeRadius * site.Town.TownRadiusMult;
+        var home = p.Saved is { } sp ? Saving.SavedCharacters.SavedHome(world, sp, site) : null;
+        if (RollTemplate(world, p).Built is not { } built) return null;
+        var squad = SpawnSquad(world, built with { Home = home }, site, radius, platoonId: p.Id, pinned: true);
+        squad.Money = p.Money;
+        p.Stored = new StoredSquad { Name = data.Db.Find(p.TemplateId)?.Name ?? p.TemplateId, HomeBuilding = home };
+        p.Size = built.Plan.TotalMembers;
+        p.Unmade = false;
+        p.State = PlatoonState.Loaded;
+        p.SquadId = squad.Id;
+        p.UnloadAtTick = -1;
+        if (townLog.Count >= 256) townLog.RemoveAt(0);
+        townLog.Add($"{site.Town.Name}: {p.Stored.Name} made from its template ({squad.Members.Count})");
         return squad;
     }
 
