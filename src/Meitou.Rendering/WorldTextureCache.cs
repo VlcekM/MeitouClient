@@ -185,6 +185,25 @@ public sealed unsafe class WorldTextureCache : IDisposable
     public VramGuard? Guard { get; set; }
     public double GuardIdleSeconds { get; set; } = 2;
 
+    /// <summary>
+    /// The resident textures for the VRAM dump (Ctrl+Shift+F12), largest first: MB, seconds since anything read the key, top levels dropped now,
+    /// what mip streaming would drop at the last need (the quality setting's drop included), the need, the file's size and the file.
+    /// </summary>
+    public void WriteReport(TextWriter w)
+    {
+        long now = Environment.TickCount64;
+        w.WriteLine($"{allocationName}: {Describe()}; mark {MarkMb:0} MB");
+        w.WriteLine("        MB   idle s  dropped  target      need       file size  flags  file");
+        foreach (var t in cache.Values.Where(t => t.State == WorldTexture.Residency.Resident).OrderByDescending(t => t.Bytes))
+        {
+            int target = t.KeepAllMips || t.FileWidth == 0 || !float.IsFinite(t.Need) ? t.QualityDrop : Math.Max(Mips.Drop(t.FileWidth, t.FileHeight, t.Need), t.QualityDrop);
+            string flags = (t.KeepAllMips ? "k" : "") + (t.CannotDrop ? "c" : "") + (t.Replacing ? "r" : "") + (t.TooFineSince != 0 ? "f" : "");
+            w.WriteLine($"{t.Bytes / 1048576.0,10:0.000} {(now - t.LastUsed) / 1000.0,8:0.0} {t.Dropped,8} {target,7} {t.Need,9:0.###} {t.FileWidth,9}x{t.FileHeight,-5} {flags,-5}  {t.Name}");
+        }
+        w.WriteLine("flags: k keeps every level, c cannot drop levels, r a replacement is loading, f finer than needed (waiting to coarsen)");
+        w.WriteLine();
+    }
+
     public string Describe() => $"{ResidentCount} textures {ResidentBytes / 1048576.0:0} MB ({Unloads} unloaded, {Reloads} reloaded so far" +
         (Mips.Enabled ? $"; mip streaming: {Math.Max(UnstreamedBytes - ResidentBytes, 0) / 1048576.0:0} MB less than every mip, {Refined} refined, {Coarsened} coarsened)" : ")");
 

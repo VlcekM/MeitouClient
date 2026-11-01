@@ -215,6 +215,8 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     public float LargeRange { get; set; } = FoliageSizes.DefaultLargeRange;
     /// <summary>The memory-pressure guard (<see cref="VramGuard"/>): every range here (and the reaches that decide which zones are laid out) is
     /// multiplied by its scale, nothing new is started while it is under pressure, and idle meshes are evicted sooner. Null: no clamp.</summary>
+    /// <summary>The foliage's texture cache (the VRAM dump lists it).</summary>
+    public WorldTextureCache Textures => textures;
     public VramGuard? Guard
     {
         get => guard;

@@ -75,13 +75,17 @@ public sealed class VramGuard
     public float LowestScale { get; private set; } = 1f;
     public int Refusals { get; private set; }
 
+    /// <summary>The smallest and largest driver budgets sampled (0 before the first): the driver's budget shrinks while other programs hold video memory.</summary>
+    public long LowestBudget { get; private set; }
+    public long HighestBudget { get; private set; }
+
     /// <summary>Whether the guard is doing anything (pressure, or ranges not back at 1).</summary>
     public bool Active => pressure || scale < 1f;
 
     /// <summary>The statistics line (F11): idle, or the clamp and what is paused.</summary>
     public string Status =>
         Active ? $"guard: ranges x{scale:0.00}{(pressure ? ", streaming paused" : ", recovering")}, {Fraction * 100:0}% of the {budget / 1048576} MB budget{(Refusals > 0 ? $", {Refusals} allocations refused" : "")}{(PriorityGrants > 0 ? $", {PriorityGrants} scratch grants over the ceiling" : "")}"
-               : $"guard: ok, {Fraction * 100:0}% of the {budget / 1048576} MB budget";
+               : $"guard: ok, {Fraction * 100:0}% of the {budget / 1048576} MB budget{(LowestBudget < HighestBudget ? $" (sampled {LowestBudget / 1048576} to {HighestBudget / 1048576} MB)" : "")}";
 
     /// <summary>Once a frame: takes a sample when one is due and moves the state.</summary>
     public void Tick()
@@ -95,6 +99,7 @@ public sealed class VramGuard
         lastSample = now;
         var (u, b) = sample();
         (used, budget, reserved) = ((long)u, (long)b, 0);
+        if (budget > 0) (LowestBudget, HighestBudget) = (LowestBudget == 0 ? budget : Math.Min(LowestBudget, budget), Math.Max(HighestBudget, budget));
         Step(now);
     }
 

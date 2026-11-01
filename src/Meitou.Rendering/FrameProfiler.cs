@@ -297,7 +297,7 @@ public sealed class FrameProfiler : IDisposable
     /// blocks, the owners, then every resource and block (<see cref="GpuAllocator.WriteReport"/>). What the driver counts beyond our blocks
     /// (swapchain, DLSS, its own) is only a total here: a RenderDoc or Nsight capture lists it.
     /// </summary>
-    public void DumpVram(string path)
+    public void DumpVram(string path, Action<TextWriter>? more = null)
     {
         var alloc = native.Device.Allocator;
         var (used, budget) = native.Device.VideoMemory();
@@ -306,6 +306,9 @@ public sealed class FrameProfiler : IDisposable
         using var w = new StreamWriter(path);
         w.WriteLine($"VRAM dump {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
         w.WriteLine($"driver: used {used / 1048576.0:0.0} MB of budget {budget / 1048576.0:0.0} MB (memory budget extension: {native.Device.HasMemoryBudget})");
+        var heaps = native.Device.Heaps();
+        for (int i = 0; i < heaps.Count; i++)
+            w.WriteLine($"  heap {i}: {heaps[i].Size / 1048576.0:0} MB, ours {heaps[i].Usage / 1048576.0:0.0} MB of budget {heaps[i].Budget / 1048576.0:0.0} MB ({heaps[i].Flags})");
         w.WriteLine($"ours: {blocks / 1048576.0:0.0} MB in {alloc.BlockCount} blocks, {alloc.TotalUsedBytes / 1048576.0:0.0} MB used by {alloc.AllocationCount} allocations; "
             + $"driver and others {(used > blocks ? used - blocks : 0) / 1048576.0:0.0} MB");
         w.WriteLine($"room in device-local blocks: empty {empty / 1048576.0:0.0} MB, spare {spare / 1048576.0:0.0} MB, scattered {scattered / 1048576.0:0.0} MB in {partBlocks} blocks");
@@ -313,6 +316,7 @@ public sealed class FrameProfiler : IDisposable
         w.WriteLine("owners (MB, device-local MB, count):");
         foreach (var o in alloc.Breakdown()) w.WriteLine($"{o.Bytes / 1048576.0,10:0.0}  {o.DeviceLocal / 1048576.0,10:0.0}  {o.Count,6}  {o.Name}");
         w.WriteLine();
+        more?.Invoke(w);
         alloc.WriteReport(w);
     }
 

@@ -328,6 +328,8 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
     }
 
     public VramGuard? Guard { get => content.Textures.Guard; set => content.Textures.Guard = value; }
+    /// <summary>The characters' texture cache (the VRAM dump lists it).</summary>
+    public WorldTextureCache Textures => content.Textures;
 
     /// <summary>The skeleton rigs and pose setups the characters are drawn with; the simulation's ragdolls pose from the same ones.</summary>
     public CharacterRigs Rigs => content.Rigs;

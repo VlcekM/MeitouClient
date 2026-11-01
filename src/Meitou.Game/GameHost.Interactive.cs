@@ -937,11 +937,18 @@ sealed partial class GameHost
     }
 
     /// <summary>Ctrl+Shift+F12: what is in video memory now, to vram-&lt;time&gt;.txt beside log.txt (<see cref="FrameProfiler.DumpVram"/>).</summary>
-    static void DumpVram(FrameProfiler? profiler)
+    void DumpVram(FrameProfiler? profiler)
     {
         if (profiler is null) return;
         string path = Path.Combine(AppContext.BaseDirectory, $"vram-{DateTime.Now:yyyyMMdd-HHmmss}.txt");
-        try { profiler.DumpVram(path); Console.WriteLine($"vram      dumped to {path}"); }
+        void Caches(TextWriter w)
+        {
+            if (gpu.Guard is { } guard) { w.WriteLine(guard.Status); w.WriteLine(); }
+            gpu.Objects?.Textures.WriteReport(w);
+            gpu.Foliage?.Textures.WriteReport(w);
+            gpu.Characters?.Textures.WriteReport(w);
+        }
+        try { profiler.DumpVram(path, Caches); Console.WriteLine($"vram      dumped to {path}"); }
         catch (IOException e) { Console.WriteLine($"vram      dump failed: {e.Message}"); }
     }
 

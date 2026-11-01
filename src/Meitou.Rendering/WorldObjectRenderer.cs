@@ -356,6 +356,8 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     /// <summary>A line about what is loaded, for the log.</summary>
     /// <summary>GPU memory held by streamed meshes and textures, for the stats line and the window title.</summary>
     public long ResidentBytes => meshes.Bytes + textureCache.ResidentBytes;
+    /// <summary>The objects' texture cache (the VRAM dump lists it).</summary>
+    public WorldTextureCache Textures => textureCache;
     public string ResidentDescription => $"{meshes.Bytes / 1048576.0:0} MB in {meshes.Resident} meshes ({meshes.Unloads} unloaded, {meshes.Reloads} reloaded, {meshes.Refined} remade finer, {meshes.Coarsened} coarser), {textureCache.Describe()}";
     public string Describe() =>
         $"{streamer.Loaded} zones, {streamer.Instances:N0} instances ({streamer.Resolved:N0} resolved{(streamer.LandmarkZone is { } lz ? $", of them {lz.Real.Count(i => i.Gpu is not null)} of {lz.Real.Count} landmarks" : "")}), {meshes.Resident}/{meshes.Total} meshes requested or resident, resident: {ResidentDescription}, " +
