@@ -185,6 +185,8 @@ public static class MetalConventions
         InternalFormat.Rgb32f => MTLVertexFormat.Float3,
         InternalFormat.Rgba32f => MTLVertexFormat.Float4,
         InternalFormat.Rgba16f => MTLVertexFormat.Half4,
+        InternalFormat.Rgba16 => MTLVertexFormat.UShort4Normalized,
+        InternalFormat.Rgba16Snorm => MTLVertexFormat.Short4Normalized,
         InternalFormat.Rgba8ui => MTLVertexFormat.UChar4,
         InternalFormat.Rgba32ui => MTLVertexFormat.UInt4,
         InternalFormat.Rgba32i => MTLVertexFormat.Int4,

@@ -61,9 +61,10 @@ internal sealed class ImpostorPreview : IDisposable
         foreach (var mp in model.Parts)
         {
             if (mp.Indices.Length == 0) continue;
-            var vertices = DeviceBuffer.Create(gpu, (ulong)(mp.Vertices.Length * Vertex.Size), BufferUse.Vertex, "impostor preview meshes");
+            var packed = GpuVertex.PackObject(mp.Vertices);
+            var vertices = DeviceBuffer.Create(gpu, (ulong)packed.Length, BufferUse.Vertex, "impostor preview meshes");
             var indices = DeviceBuffer.Create(gpu, (ulong)(mp.Indices.Length * sizeof(uint)), BufferUse.Index, "impostor preview meshes");
-            gpu.Uploads.Write(vertices, 0, MemoryMarshal.AsBytes(mp.Vertices.AsSpan()));
+            gpu.Uploads.Write(vertices, 0, packed);
             gpu.Uploads.Write(indices, 0, MemoryMarshal.AsBytes(mp.Indices.AsSpan()));
             Span<LegacyProgram.Attribute?> attributes = new LegacyProgram.Attribute?[16];
             FoliageRenderer.VertexAttributes(vertices).AsSpan().CopyTo(attributes);

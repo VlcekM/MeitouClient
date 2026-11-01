@@ -220,9 +220,9 @@ static class GiShaders
         vec2 hitUv(Geometry g, uvec3 tri, vec2 bary)
         {
             // The vertex texture coordinates are at byte 24 (Vertex.Uv).
-            vec2 ua = TexCoord(offsetBy(g.vertices, tri.x * g.stride + 24u)).v;
-            vec2 ub = TexCoord(offsetBy(g.vertices, tri.y * g.stride + 24u)).v;
-            vec2 uc = TexCoord(offsetBy(g.vertices, tri.z * g.stride + 24u)).v;
+            vec2 ua = TexCoord(offsetBy(g.vertices, tri.x * g.stride + {{GpuVertex.UvOffset}}u)).v;
+            vec2 ub = TexCoord(offsetBy(g.vertices, tri.y * g.stride + {{GpuVertex.UvOffset}}u)).v;
+            vec2 uc = TexCoord(offsetBy(g.vertices, tri.z * g.stride + {{GpuVertex.UvOffset}}u)).v;
             return ua * (1.0 - bary.x - bary.y) + ub * bary.x + uc * bary.y;
         }
         // A candidate hit on a cut-out geometry (leaves): kept where its map's alpha reaches the threshold, as the draws cut it.

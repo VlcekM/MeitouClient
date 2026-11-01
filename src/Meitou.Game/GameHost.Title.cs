@@ -136,7 +136,7 @@ sealed partial class GameHost
 
     void FillTitleCharacters(CharacterDrawList list)
     {
-        titleComposition?.Fill(list, skyArrival?.Sit ?? 0);
+        titleComposition?.Fill(list);
         titleBattle?.Fill(list);
     }
 

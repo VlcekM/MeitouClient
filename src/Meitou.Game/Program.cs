@@ -132,6 +132,7 @@ static class Program
             (world.X, world.Z, world.Town) = (spot.X, spot.Y, null);
             world.Distance ??= 150;
             world.Yaw ??= 90;
+            if (!rest.Contains("--time")) world.Hour = GameHost.BattleHour;
         }
         if (game.ListStarts || game.NewGame)
         {

@@ -98,7 +98,7 @@ python3 bench.py
 
    Options: `--runs N` (default 2), `--scenarios play` (no key sending needed), `--platform auto|native|proton|windows|macos`, `--build DIR`, `--out DIR`, `--note "text"`, `--machine`, `--who`, `--mangohud` (Linux, extra log). Env: `MEMORY_MAX=10G` (Linux: systemd user scope with a memory cap, if available), `KEYS_BACKEND`, `GAME_ARGS`, `TIMEOUT`, and more; `python3 bench.py --help` lists all of them. If the machine is a laptop, plug it in and do not change power profiles between runs.
 
-7. **Send back.** The output folder is `results/<date>-<commit>-<machine>/`. Fill the "Summary" and "Anything odd" parts of `report.md` and add the Kenshi store and version, then submit `results.csv` (and `report.md`) as described in "Submit your results" below. If something looks wrong, also send the `run.txt` and `game.log` of that run. Formats: `REPORT-TEMPLATE.md`, `results-format.md`.
+7. **Send back.** The output folder is `results/<date>-<commit>-<machine>/`. Fill the "Summary" and "Anything odd" parts of `report.md` and add the Kenshi store and version, then submit `results.csv` (and `report.md`) as described in "Submit your results" below. Besides the frame times, each row records the game's peak video memory (`vram_peak_mb`; builds from commit `21c41667` on, blank on macOS). If something looks wrong, also send the `run.txt` and `game.log` of that run. Formats: `REPORT-TEMPLATE.md`, `results-format.md`.
 
 ## How each OS starts the game and sends keys
 

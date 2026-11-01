@@ -13,10 +13,11 @@ sealed partial class GameHost
     DebugOverlay? loadingOverlay;
     LoadingScreen? loading;
     // The steps of a start, in order, with their shown names and about how many seconds each takes (measured 2026-10-14 on an RTX 4070 machine, a cold start at
-    // The Hub); the bar's share of a step is its time over the sum. The renderer's steps are named by WorldFrame.CreateGpu.
+    // The Hub); the bar's share of a step is its time over the sum. The renderer's steps are named by WorldFrame.CreateGpu. "colourmap" comes only on a start
+    // that has to encode the terrain colour cache (the first), so its share is kept small though it then takes the longest.
     static readonly (string Step, string Label, double Seconds)[] StartSteps =
     [
-        ("scene", "the world", 0.5), ("terrain", "terrain", 0.3), ("biomes", "terrain textures", 2.0), ("sky", "sky", 0.25), ("weather", "weather", 0.15),
+        ("scene", "the world", 0.5), ("terrain", "terrain", 0.3), ("colourmap", "terrain colour map (first start only)", 0.3), ("biomes", "terrain textures", 2.0), ("sky", "sky", 0.25), ("weather", "weather", 0.15),
         ("particles", "weather effects", 0.2), ("water", "water", 0.6), ("reflections", "water", 0.1), ("objects", "buildings", 0.4), ("foliage", "foliage", 0.35),
         ("shadows", "lighting", 0.3), ("gi", "lighting", 0.15), ("people", "people", 0.3), ("world", "the world", 0.1), ("interface", "the interface", 0.3),
         ("navmesh", "paths", 0.5), ("characters", "characters", 0.2), ("finishing", "finishing", 0.4), ("view", "the view", 1.2),

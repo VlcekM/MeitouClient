@@ -794,8 +794,8 @@ public sealed unsafe class TerrainTextures : IDisposable
 
     void AllocateMaps()
     {
-        overlayTexture = EmptyMap(mapWindows!.OverlayPixels, MapLevels, "terrain overlay map");
-        colourTexture = EmptyMap(mapWindows.ColourPixels, MapLevels, "terrain colour map");
+        overlayTexture = EmptyMap(InternalFormat.Rgba8, mapWindows!.OverlayPixels, MapLevels, "terrain overlay map");
+        colourTexture = EmptyMap(mapWindows.CompressedColour ? FormatOf(diffuse: true) : InternalFormat.Rgba8, mapWindows.ColourPixels, MapLevels, "terrain colour map");
     }
 
     void UpdateMaps(Vector3 eye, UploadQueue uploads)
@@ -822,20 +822,22 @@ public sealed unsafe class TerrainTextures : IDisposable
     void BeginMapUpload(MapWindows.Update update, UploadQueue uploads)
     {
         mapUploading = true;
-        // Every piece comes with its mip levels from the worker and goes up in slabs of about 2 MB.
+        // Every piece comes with its mip levels from the worker and goes up in slabs of about 2 MB: whole rows of pixels, of 4 × 4 blocks for BC3 colour.
         foreach (var piece in update.Pieces)
             for (int level = 0; level < piece.Levels.Length; level++)
             {
                 var (p, lv) = (piece, level);
                 int w = Math.Max(p.Width >> lv, 1), h = Math.Max(p.Height >> lv, 1), x = p.X >> lv, z = p.Z >> lv;
-                int rows = Math.Max(1, (2 << 20) / (w * 4));
-                for (int row = 0; row < h; row += rows)
+                bool blocks = p.Colour && mapWindows!.CompressedColour;
+                int unit = blocks ? 4 : 1, rowBytes = blocks ? w / 4 * 16 : w * 4, rowCount = h / unit;
+                int rows = Math.Max(1, (2 << 20) / rowBytes);
+                for (int row = 0; row < rowCount; row += rows)
                 {
-                    int r0 = row, n = Math.Min(rows, h - row);
+                    int r0 = row, n = Math.Min(rows, rowCount - row);
                     uploads.Add(() =>
                     {
                         using var batch = Gpu.Uploads.Begin();
-                        batch.Write((p.Colour ? colourTexture : overlayTexture)!.Texture, lv, 0, Rect(x, z + r0, w, n), p.Levels[lv].AsSpan(r0 * w * 4, n * w * 4));
+                        batch.Write((p.Colour ? colourTexture : overlayTexture)!.Texture, lv, 0, Rect(x, z + r0 * unit, w, n * unit), p.Levels[lv].AsSpan(r0 * rowBytes, n * rowBytes));
                     }, "map slab");
                 }
             }
@@ -850,8 +852,8 @@ public sealed unsafe class TerrainTextures : IDisposable
     }
 
     /// <summary>A window texture: <paramref name="levels"/> levels (the GL one had more allocated but sampled only these), trilinear, repeating.</summary>
-    TerrainTexture EmptyMap(int size, int levels, string name) =>
-        Make(InternalFormat.Rgba8, size, size, levels, 1, TextureMinFilter.LinearMipmapLinear, TextureMagFilter.Linear, TextureWrapMode.Repeat, name);
+    TerrainTexture EmptyMap(InternalFormat format, int size, int levels, string name) =>
+        Make(format, size, size, levels, 1, TextureMinFilter.LinearMipmapLinear, TextureMagFilter.Linear, TextureWrapMode.Repeat, name);
 
     // ---- whole-world maps ----------------------------------------------------------------------------------
 
@@ -1118,25 +1120,36 @@ internal sealed class TerrainTexture : IDisposable
 /// <summary>
 /// The overlay (36 units per pixel) and colour (18) maps of <c>overlaymaps/</c>, 8 × 8 tiles each, cut into windows
 /// of the same world square on a worker thread, with a small cache of decoded tiles so a moving window re-reads little.
+/// The colour window is BC3 cut from <see cref="TerrainColourCache"/>'s encoded tiles; RGBA8 from the PNGs when a tile's side does not allow blocks.
 /// </summary>
 sealed class MapWindows
 {
-    /// <summary>Window edge in overlay pixels (36 units each) and the alignment of its origin (the mip level 6 texel).</summary>
-    const int WindowPixels = 2048, Align = 64;
+    /// <summary>Window edge in overlay pixels (36 units each).</summary>
+    const int WindowPixels = 2048;
 
-    readonly TileCache overlay, colour;
+    readonly TileCache overlay;
+    readonly TileCache? colour;
+    readonly BlockTiles? colourBlocks;
     readonly int overlayTile, colourTile, ratio;
+    /// <summary>The alignment of the window's origin in overlay pixels: the mip level 6 texel (64), and for BC3 colour whole blocks at every colour level.</summary>
+    readonly int align;
     readonly double overlayUnit;
 
-    MapWindows(TileCache overlay, TileCache colour, int overlayTile, int colourTile)
+    MapWindows(TileCache overlay, TileCache? colour, BlockTiles? colourBlocks, int overlayTile, int colourTile)
     {
         this.overlay = overlay;
         this.colour = colour;
+        this.colourBlocks = colourBlocks;
         this.overlayTile = overlayTile;
         this.colourTile = colourTile;
         overlayUnit = (double)WorldLayout.WorldSize / (overlayTile * TerrainMaps.OverlayTiles);
         ratio = Math.Max((int)Math.Round((double)colourTile / overlayTile), 1);
         if (ratio * overlayTile != colourTile) throw new InvalidDataException($"colour tiles ({colourTile}) are not a whole multiple of overlay tiles ({overlayTile})");
+        align = 64;
+        if (colourBlocks is null) return;
+        while (align * ratio % TerrainColourCache.Granule != 0) align += 64;
+        if (OverlayPixels % align != 0 || overlayTile * TerrainMaps.OverlayTiles % align != 0)
+            throw new InvalidDataException($"the window ({OverlayPixels}) or the overlay map ({overlayTile * TerrainMaps.OverlayTiles}) is not a multiple of {align}");
     }
 
     public static MapWindows Open(GameInstall install, List<string> messages)
@@ -1152,21 +1165,35 @@ sealed class MapWindows
         // A 2048² overlay tile is 16 MB and a colour tile can be larger. The window spans only a few tiles; keep
         // enough for one compose and clear them below, instead of pinning 24 + 12 full decoded maps for the session.
         var o = Cache("new_overlay", 4, out int ot);
+        var firstColour = TerrainMaps.OverlayTile(install, "colour", 0, 0);
+        try
+        {
+            var tile = TerrainColourCache.Get(firstColour) ?? throw new FileNotFoundException($"missing {firstColour}");
+            return new MapWindows(o, null, new BlockTiles(install), ot, tile.Size);
+        }
+        catch (InvalidDataException e)
+        {
+            messages.Add($"colour map kept uncompressed: {e.Message}");
+        }
         var c = Cache("colour", 2, out int ct);
-        return new MapWindows(o, c, ot, ct);
+        return new MapWindows(o, c, null, ot, ct);
     }
+
+    /// <summary>Whether the colour window is BC3 (its pieces hold blocks).</summary>
+    public bool CompressedColour => colourBlocks is not null;
+
 
     public int OverlayPixels => Math.Min(WindowPixels, overlayTile * TerrainMaps.OverlayTiles);
     public int ColourPixels => OverlayPixels * ratio;
 
     /// <summary>When the window's origin (overlay pixels) differs by more than this from the desired one, it moves (4608 units).</summary>
-    public int RecentreOverlayPixels => Math.Max((int)(4608 / overlayUnit), Align);
+    public int RecentreOverlayPixels => Math.Max((int)(4608 / overlayUnit), align);
 
     /// <summary>Origin (overlay pixels) of a window centred on a point, aligned and kept inside the maps.</summary>
     public (int X, int Z) DesiredOrigin(double x, double z)
     {
         int full = overlayTile * TerrainMaps.OverlayTiles, size = OverlayPixels;
-        int Axis(double v) => Math.Clamp((int)Math.Round(((v + WorldLayout.HalfWorldSize) / overlayUnit - size / 2.0) / Align) * Align, 0, full - size);
+        int Axis(double v) => Math.Clamp((int)Math.Round(((v + WorldLayout.HalfWorldSize) / overlayUnit - size / 2.0) / align) * align, 0, full - size);
         return (Axis(x), Axis(z));
     }
 
@@ -1211,14 +1238,17 @@ sealed class MapWindows
                 {
                     var data = Cut(overlay, overlayTile, sx, sz, sw, sh);
                     pieces.Add(new Piece(false, sx % size, sz % size, sw, sh, TerrainTextures.Mips(data, sw, sh, 7, pooled: true)));
-                    var cdata = Cut(colour, colourTile, sx * ratio, sz * ratio, sw * ratio, sh * ratio);
-                    pieces.Add(new Piece(true, sx * ratio % cs, sz * ratio % cs, sw * ratio, sh * ratio, TerrainTextures.Mips(cdata, sw * ratio, sh * ratio, 7, pooled: true)));
+                    var clevels = colourBlocks is not null
+                        ? CutBlocks(colourBlocks, colourTile, sx * ratio, sz * ratio, sw * ratio, sh * ratio)
+                        : TerrainTextures.Mips(Cut(colour!, colourTile, sx * ratio, sz * ratio, sw * ratio, sh * ratio), sw * ratio, sh * ratio, 7, pooled: true);
+                    pieces.Add(new Piece(true, sx * ratio % cs, sz * ratio % cs, sw * ratio, sh * ratio, clevels));
                 }
         var update = new Update(px0, pz0, pieces);
         // The pieces own pooled copies of what they need; the decoded tiles are large and a window moves only after
         // 4,608 units, so retaining them for the next compose is not worth hundreds of MB of LOH.
         overlay.Clear();
-        colour.Clear();
+        colour?.Clear();
+        colourBlocks?.Clear();
         return update;
     }
 
@@ -1259,6 +1289,64 @@ sealed class MapWindows
         }
         cache.Trim(keys);
         return result;
+    }
+
+    /// <summary>
+    /// A piece's BC3 levels cut from the encoded colour tiles: rows of whole blocks (the alignment keeps every edge on a block at every level),
+    /// pooled like <see cref="Cut"/>'s; a missing tile leaves zero blocks.
+    /// </summary>
+    static byte[][] CutBlocks(BlockTiles cache, int tile, int x0, int z0, int w, int h)
+    {
+        int tx0 = x0 / tile, tx1 = (x0 + w - 1) / tile, tz0 = z0 / tile, tz1 = (z0 + h - 1) / tile;
+        var keys = new List<(int, int)>();
+        for (int tz = tz0; tz <= tz1; tz++)
+            for (int tx = tx0; tx <= tx1; tx++) keys.Add((tx, tz));
+        var tiles = new Dictionary<(int, int), TerrainColourCache.Tile?>();
+        Parallel.ForEach(keys, key =>
+        {
+            var t = cache.Get(key.Item1, key.Item2);
+            lock (tiles) tiles[key] = t?.Size == tile ? t : null;
+        });
+        var levels = new byte[TerrainColourCache.Levels][];
+        for (int l = 0; l < levels.Length; l++)
+        {
+            // In blocks at this level.
+            int bx0 = (x0 >> l) / 4, bz0 = (z0 >> l) / 4, bw = (w >> l) / 4, bh = (h >> l) / 4, tb = (tile >> l) / 4;
+            var result = ArrayPool<byte>.Shared.Rent(bw * bh * 16);
+            Array.Clear(result, 0, bw * bh * 16);
+            foreach (var (tx, tz) in keys)
+            {
+                if (tiles[(tx, tz)] is not { } t) continue;
+                int ax0 = Math.Max(bx0, tx * tb), ax1 = Math.Min(bx0 + bw, (tx + 1) * tb);
+                int az0 = Math.Max(bz0, tz * tb), az1 = Math.Min(bz0 + bh, (tz + 1) * tb);
+                for (int z = az0; z < az1; z++)
+                    Array.Copy(t.Levels[l], ((z - tz * tb) * tb + (ax0 - tx * tb)) * 16, result, ((z - bz0) * bw + (ax0 - bx0)) * 16, (ax1 - ax0) * 16);
+            }
+            levels[l] = result;
+        }
+        return levels;
+    }
+
+    /// <summary>The encoded colour tiles one compose uses (<see cref="TerrainColourCache"/>), cleared after it like the decoded ones.</summary>
+    sealed class BlockTiles(GameInstall install)
+    {
+        readonly Dictionary<(int, int), TerrainColourCache.Tile?> tiles = [];
+
+        public TerrainColourCache.Tile? Get(int tx, int tz)
+        {
+            lock (tiles)
+                if (tiles.TryGetValue((tx, tz), out var hit)) return hit;
+            TerrainColourCache.Tile? tile;
+            try { tile = TerrainColourCache.Get(TerrainMaps.OverlayTile(install, "colour", tx, tz)); }
+            catch (InvalidDataException) { tile = null; }   // a tile of another size than the first: left out, as a missing one
+            lock (tiles) tiles[(tx, tz)] = tile;
+            return tile;
+        }
+
+        public void Clear()
+        {
+            lock (tiles) tiles.Clear();
+        }
     }
 
     sealed class TileCache(GameInstall install, string kind, int max)

@@ -190,11 +190,12 @@ public sealed unsafe class ImpostorBaker : IDisposable
         foreach (var mp in model.Parts)
         {
             if (mp.Indices.Length == 0) continue;
-            var vertices = DeviceBuffer.Create(gpu, (ulong)(mp.Vertices.Length * Vertex.Size), BufferUse.Vertex, "impostor bake meshes");
+            var packed = GpuVertex.PackObject(mp.Vertices);
+            var vertices = DeviceBuffer.Create(gpu, (ulong)packed.Length, BufferUse.Vertex, "impostor bake meshes");
             var indices = DeviceBuffer.Create(gpu, (ulong)(mp.Indices.Length * sizeof(uint)), BufferUse.Index, "impostor bake meshes");
             using (var batch = gpu.Uploads.Begin())
             {
-                batch.Write(vertices, 0, MemoryMarshal.AsBytes(mp.Vertices.AsSpan()));
+                batch.Write(vertices, 0, packed);
                 batch.Write(indices, 0, MemoryMarshal.AsBytes(mp.Indices.AsSpan()));
             }
             if (rock)

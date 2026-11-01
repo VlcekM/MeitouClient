@@ -61,32 +61,33 @@ public static class ObjectLodGen
     /// The plan of a mesh (null: it gets no generated levels), made once per mesh and kept, so a mesh remade with another finest level keeps its level numbers.
     /// Only a mesh of unskinned parts without manual levels qualifies. <paramref name="pixelsPerRadian"/> is the render's, as it is when the mesh first loads.
     /// </summary>
-    public static Plan? PlanFor(string key, string path, Model model, float radius, IReadOnlyList<MeshLodLevel> fileLevels, float pixelsPerRadian)
+    /// <param name="variant">The disk cache's name part for how the mesh was decoded (<see cref="MeshWeld.CacheVariant"/>).</param>
+    public static Plan? PlanFor(string key, string path, Model model, float radius, IReadOnlyList<MeshLodLevel> fileLevels, float pixelsPerRadian, string variant = "")
     {
         if (!Enabled) return null;
         if (Plans.TryGetValue(key, out var known)) return known;
-        var plan = Make(path, model, radius, fileLevels, pixelsPerRadian);
+        var plan = Make(path, model, radius, fileLevels, pixelsPerRadian, variant);
         Plans[key] = plan;
         return plan;
     }
 
-    static Plan? Make(string path, Model model, float radius, IReadOnlyList<MeshLodLevel> fileLevels, float pixelsPerRadian)
+    static Plan? Make(string path, Model model, float radius, IReadOnlyList<MeshLodLevel> fileLevels, float pixelsPerRadian, string variant)
     {
         var parts = model.Parts.Where(p => p.Indices.Length > 0).ToList();
         if (parts.Count == 0 || parts.Any(p => p.Skinned) || fileLevels.Any(l => l.ManualMesh is not null)) { Interlocked.Increment(ref Skipped); return null; }
         int full = parts.Sum(p => p.Indices.Length / 3);
         if (full < MinTriangles) { Interlocked.Increment(ref Skipped); return null; }
-        var set = Load(path, model, radius);
+        var set = Load(path, model, radius, variant);
         if (set is null) return null;
         var file = FileTriangles(model, fileLevels);
         var generated = Distances(set, TriangleExtent(parts), radius, pixelsPerRadian);
         return Merge(fileLevels.Select(l => l.Distance).ToArray(), file, generated, set.Triangles, set);
     }
 
-    static FoliageLodSet? Load(string path, Model model, float radius)
+    static FoliageLodSet? Load(string path, Model model, float radius, string variant)
     {
         string file;
-        try { file = FoliageLodCache.PathFor(path, File.ReadAllBytes(path), Root, Version); }
+        try { file = FoliageLodCache.PathFor(path, File.ReadAllBytes(path), Root, Version, variant); }
         catch (IOException) { return null; }
         var parts = model.Parts.Count(p => p.Indices.Length > 0);
         var (hit, cached) = FoliageLodCache.TryLoad(file, parts, Version);

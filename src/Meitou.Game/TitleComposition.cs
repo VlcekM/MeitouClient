@@ -173,7 +173,7 @@ sealed class TitleComposition
     static GameRecord? RidgeRecord(GameDatabase database) => FeatureRecord(database, RidgeLook);
 
     /// <summary>The map feature, else the foliage mesh, drawing the mesh file named <paramref name="mesh"/>; null when the data has none.</summary>
-    static GameRecord? FeatureRecord(GameDatabase database, string mesh)
+    internal static GameRecord? FeatureRecord(GameDatabase database, string mesh)
     {
         GameRecord? Of(Meitou.Data.Fcs.FcsRecordType type) => database.Records.Values.FirstOrDefault(r => r.Type == type &&
             string.Equals(Path.GetFileName(r.GetPath("mesh").Replace('\\', '/')), mesh, StringComparison.OrdinalIgnoreCase));
@@ -258,10 +258,7 @@ sealed class TitleComposition
         return MathF.Atan2(ahead.Z, ahead.X) + SunBearing - MathF.Atan2(sun.Z, sun.X);
     }
 
-    /// <summary>The wanderer, held in one frame of the relaxed idle: a still figure, as on the poster. <paramref name="sit"/> (0..1) blends it into sitting on
-    /// the ground as a scene load starts (the game has no sit-down clip).</summary>
-    public void Fill(CharacterDrawList list, float sit = 0) =>
-        list.Add(new CharacterInstance(long.MinValue + 1, Appearance, Wanderer, WandererYaw,
-            sit <= 0 ? [new("idle_stand_confident", 0.5f, 1)] : sit >= 1 ? [new("sitting idle", 0.5f, 1)]
-                : [new("idle_stand_confident", 0.5f, 1 - sit), new("sitting idle", 0.5f, sit)]) { Build = SavedBuild });
+    /// <summary>The wanderer, held in one frame of the relaxed idle: a still figure, as on the poster.</summary>
+    public void Fill(CharacterDrawList list) =>
+        list.Add(new CharacterInstance(long.MinValue + 1, Appearance, Wanderer, WandererYaw, [new("idle_stand_confident", 0.5f, 1)]) { Build = SavedBuild });
 }
