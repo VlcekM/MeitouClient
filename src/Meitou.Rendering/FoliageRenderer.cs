@@ -396,11 +396,12 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
 
     sealed class GrassPage
     {
-        public Task<(float[][] Blades, int[][] Prefixes)>? Job;
+        public Task<(float[][] Blades, int[] Floats, int[][] Prefixes)>? Job;
         public GrassBuffer[]? Buffers;
         public bool Dropped;
-        /// <summary>The generated blades while the arena or the slot table had no room (<see cref="FoliageGrassGpu.Misses"/>): placed again by <see cref="UpdateGrass"/>.</summary>
+        /// <summary>The generated blades while the arena or the slot table had no room (<see cref="FoliageGrassGpu.Misses"/>): placed again by <see cref="UpdateGrass"/>. Rented (<see cref="FoliageGrassField.RentBladesWithPrefixes"/>), the first <see cref="PendingFloats"/> of each in use; the page's last upload step returns them.</summary>
         public float[][]? PendingBlades;
+        public int[]? PendingFloats;
         public int[][]? PendingPrefixes;
     }
 
@@ -829,9 +830,9 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
                         inFlight--;   // its slot is free for this frame's picks
                         page.Job = null;
                         var result = job.Result;
-                        TryQueuePage(state, key, page, result.Blades, result.Prefixes);
+                        TryQueuePage(state, key, page, result.Blades, result.Floats, result.Prefixes);
                     }
-                    else if (page.PendingBlades is not null) TryQueuePage(state, key, page, page.PendingBlades, page.PendingPrefixes!);   // no room last time
+                    else if (page.PendingBlades is not null) TryQueuePage(state, key, page, page.PendingBlades, page.PendingFloats!, page.PendingPrefixes!);   // no room last time
                 }
         }
         // Missing pages nearest first, a bounded number at a time. Pages hold the blades of the highest density setting,
@@ -859,10 +860,11 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
             page.Job = BackgroundWork.Run(() =>
             {
                 var blades = new float[patches.Count][];
+                var floats = new int[patches.Count];
                 var prefixes = new int[patches.Count][];
                 for (int i = 0; i < blades.Length; i++)
-                    blades[i] = FoliageGrassField.BladesWithPrefixes(patches[i], ground, x0, z0, PageSize, out prefixes[i], MaxGrassDensity);
-                return (blades, prefixes);
+                    blades[i] = FoliageGrassField.RentBladesWithPrefixes(patches[i], ground, x0, z0, PageSize, out prefixes[i], out floats[i], MaxGrassDensity);
+                return (blades, floats, prefixes);
             });
         }
     }
