@@ -688,6 +688,9 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
                 var set = t.Textures;
                 c.Diffuse = Index(set.Diffuse, BindlessKind.Texture2DArray, standInArray);
                 c.Normal = Index(set.Normal, BindlessKind.Texture2DArray, standInArray);
+                c.DiffuseFar = Index(set.DiffuseFar, BindlessKind.Texture2DArray, standInArray);
+                c.NormalFar = Index(set.NormalFar, BindlessKind.Texture2DArray, standInArray);
+                c.FarLod = set.FarLod;
                 c.Height = Index(set.Height, BindlessKind.Texture2DArray, standInArray);
                 c.Relief = Index(set.Relief, BindlessKind.Texture2D, standIn2D);
                 c.Parallax = textured && GroundRelief.ParallaxActive && set.Height is not null ? GroundRelief.Depth : 0;

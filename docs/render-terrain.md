@@ -18,12 +18,18 @@ world coordinates. `terrain-layer-skip` can omit insignificant layer work; thres
 choices requiring boundary/material checks. `terrain-late-colour` separates depth from shading
 where occluders justify it. A depth prepass is extra geometry, not automatically a speedup.
 
-**Layer arrays** (`TerrainTextures`): one BC3 diffuse and one BC1 normal slice (and an R8 height slice) per distinct texture pair of the
-biomes near the eye, kept points and arrival. They start with 32 slots (about 270 MB at 2048²). A pair that is no longer needed loses its slot
-to the next one, least recently needed first. While the arrays can still grow, a pair needed in the last 120 frames keeps its slot. When no slot
-can be freed, the arrays double (new arrays, old slots copied on the GPU), up to one slot per pair in the world (at most 192). They never shrink.
-They grow only while the `VramGuard` streams and allows the new arrays beside the old; otherwise the least recently needed pair is evicted.
-All slots at 2048² would be about 1.07 GB in the base game (**Observed**, VRAM pie 2026-11-01).
+**Layer arrays** (`TerrainTextures`), two tiers per texture pair (a BC3 diffuse and a BC1 normal):
+- **Far arrays** hold every pair of the biomes within the material distance at a quarter of the layer size (512² at 2048, about 0.5 MB a pair),
+  at a fixed index per pair. The R8 height array and the relief texture use the same index. A biome is drawn once all its pairs are in.
+- **Near arrays** have 32 slots at the full size (about 270 MB at 2048²). A slot goes to a pair within its near range of the eye, least recently
+  needed first: the range is the pair's tile × pixels per radian ÷ layer size × 11.3, with an upscaler's negative bias widening it.
+  When no slot is left, a pair stays far.
+- Per sample the shader works out the near arrays' level (8x anisotropic: the long axis over up to 8 taps, never under the short axis). Below
+  `FarShift` (2) less the sampler bias it reads the near slot; otherwise, or without a slot, it reads the far array. From that level down the far
+  levels are the near levels, so the switch has no seam.
+- Params texels 0 and 1 hold the far indices (the relief code reads these too); texels 13 and 14 hold the near slots, -1 for none.
+- Before this the arrays held a full-size slot per pair within the 30 km material distance: 128 slots, about 1.07 GB, in the Great Desert
+  (**Observed**, VRAM pie and log 2026-11-01).
 
 **World colour map** (`TerrainTextures.PrepareWorld`): the 8 × 8 colour tiles box-filtered into one 2048² RGBA map for the far terrain
 and foliage. Cached raw (16 MB, no header) in `%LOCALAPPDATA%\Meitou\terrain\worldcolour_<hash>.bin`: hash of a version tag, the size and

@@ -653,21 +653,6 @@ public sealed class MetalCommandList : IGpuCommandList
             ctx.TextureAt(dst), (ulong)layer, (ulong)level, new MTLOrigin());
     }
 
-    /// <summary>Copies the first layers of every level of a texture into another of the same format and size (the blit encoder's texture copy, a slice at a time).</summary>
-    public void CopyLayers(GpuTexture src, GpuTexture dst, int layers)
-    {
-        var d = src.Desc;
-        int levels = Math.Min(d.Levels, dst.Desc.Levels);
-        if (layers <= 0 || levels <= 0) return;
-        var blit = OpenBlit();
-        for (uint layer = 0; layer < (uint)layers; layer++)
-            for (int level = 0; level < levels; level++)
-                blit.CopyFromTexture(ctx.TextureAt(src), layer, (ulong)level, new MTLOrigin(),
-                    new MTLSize { width = (ulong)Math.Max(d.Width >> level, 1), height = (ulong)Math.Max(d.Height >> level, 1), depth = 1 },
-                    ctx.TextureAt(dst), layer, (ulong)level, new MTLOrigin());
-        EndBlit();
-    }
-
     /// <summary>Resolves a multisample texture into a single-sample one: a render pass whose only work is its resolve attachment.</summary>
     public void Resolve(GpuTexture src, GpuTexture dst)
     {

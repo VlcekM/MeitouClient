@@ -833,7 +833,7 @@ static class WorldFrame
             step?.Invoke("biomes");
             textures = TerrainTextures.Create(context, install, scene.Database, assets, layerSize, source: Ready(terrainSource!));
             foreach (var m in textures.Messages.Take(20)) Console.WriteLine($"warning   {m}");
-            Console.WriteLine($"biomes    {textures.TotalBiomes} in the world, {textures.TotalPairs} texture pairs, {textures.Capacity} slots of {layerSize}² BC3+BC1, {textures.ArrayBytes / 1048576} MB ({watch.ElapsedMilliseconds} ms)");
+            Console.WriteLine($"biomes    {textures.TotalBiomes} in the world, {textures.TotalPairs} texture pairs, {textures.Capacity} near slots of {layerSize}² and {textures.FarSlots} far of {textures.FarSize}², BC3+BC1, {textures.ArrayBytes / 1048576} MB ({watch.ElapsedMilliseconds} ms)");
             terrain.SetTextures(textures);
         }
         step?.Invoke("sky");
@@ -994,7 +994,6 @@ static class WorldFrame
                 if (gpu.Foliage is not null) gpu.Foliage.Guard = guard;
                 if (gpu.Shadow is not null) gpu.Shadow.Guard = guard;
                 if (gpu.Characters is not null) gpu.Characters.Guard = guard;
-                if (gpu.Terrain.TextureSet is { } layers) layers.Guard = guard;
             }
         }
         return gpu;
@@ -1375,6 +1374,7 @@ static class WorldFrame
         int rw = post.RenderWidth, rh = post.RenderHeight;
         // The terrain LOD measures its error in the pixels actually rendered (after the upscaler's render scale).
         render.TerrainPixelScale = TerrainLod.ProjectionScale(rh, camera.FieldOfView);
+        if (gpu.Terrain.TextureSet is { } nearRange) nearRange.PixelScale = render.TerrainPixelScale;   // the terrain layers' near ranges
         var jitter = post.JitterPixels;
         var eye = camera.Eye;
         gpu.Guard?.Tick();
