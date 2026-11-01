@@ -42,8 +42,9 @@ sealed partial class PlayerInterface
     /// <summary>The screens that show items: the held item goes back when none of them is open.</summary>
     static readonly string[] ItemScreens = ["inventory", "bag", "limbs", "loot", "loot-bag", "trader", "building", "bench", "storage"];
 
-    /// <summary>The character the inventory window (and its bag and limbs) shows: the lead selected character (a pinned window is its own screen, <see cref="SyncPinnedInventories"/>).</summary>
-    CharacterSnapshot? InventoryOwner() => Selected().FirstOrDefault();
+    /// <summary>The character the inventory window (and its bag and limbs) shows: the open trade's customer, else the lead selected character (a pinned window is its own screen, <see cref="SyncPinnedInventories"/>).</summary>
+    CharacterSnapshot? InventoryOwner() =>
+        session.CurrentSnapshot.Trade is { } trade && session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == trade.Customer) is { } customer ? customer : Selected().FirstOrDefault();
 
     /// <summary>The character a character window shows: a pinned window's, the loot's body, else the inventory owner.</summary>
     CharacterSnapshot? WindowCharacter(string screen) =>

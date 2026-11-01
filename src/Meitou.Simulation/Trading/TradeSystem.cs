@@ -169,9 +169,11 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
                     Close(world);
                     break;
                 case BuyItem buy when open:
+                    FollowSelection(world);
                     Buy(world, buy);
                     break;
                 case SellItem sell when open:
+                    FollowSelection(world);
                     Sell(world, sell);
                     break;
                 case ArrangeStock when open:
@@ -184,6 +186,7 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
     public void SlowWorld(World world)
     {
         if (world.Tick % Settings.CheckEveryTicks == 0) { Stock(world); PayWages(world); }
+        if (open) FollowSelection(world);
         if (!customer.IsNone)
         {
             if (!Resolve(world, out int c, out int t, out _)) Close(world);
@@ -223,6 +226,22 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
                 if (pay >= 1) squad.Money = pay;
             }
         }
+    }
+
+    /// <summary>
+    /// The open trade passes to another selected character of the player's in reach of the trader when its customer is no longer selected (the original buys into the window the stock is
+    /// dropped on, <c>FUN_140712490</c>, <b>Observed</b>); out of reach the customer stays.
+    /// </summary>
+    void FollowSelection(World world)
+    {
+        var selection = world.Player.Selection;
+        if (selection.Count == 0 || selection.Contains(customer) || !world.Characters.TryResolveNext(trader, out int t)) return;
+        foreach (var id in selection)
+            if (world.Characters.TryResolveNext(id, out int c) && world.Characters.Cold(c) is { IsPlayer: true, Inventory: not null, Medical: not { Incapacitated: true } } && InReach(world, c, t))
+            {
+                customer = id;
+                return;
+            }
     }
 
     internal void RefreshView(World world) =>
