@@ -739,7 +739,11 @@ when the host passes `CharacterRigs` (the game does; tests and goldens do not). 
   get-up blend); the renderer poses with it. While `Whole`, the character's position follows the root.
 - **Scene**: 32-unit tiles round each moving ragdoll, terrain sampled every 2 units, plus building
   collision from `Meitou.Navigation.RagdollGeometry` (per zone on a worker, doors and passable parts
-  skipped, ≤16 zones). A tile has ground only until its zones are gathered. Tiles unused for 90 ticks go.
+  skipped, ≤16 zones) and the map features' collision (rocks, cliff blocks, Rebirth's statue: each triangle in the zone its
+  centre lies in, as features reach past a building's 600; outdoor bodies hit group 14, the features' group (**Verified**,
+  [pathfinding](game/pathfinding.md#own-builder) "Map features"). **Observed** (`meitou-tools navmesh --ragdoll`): map
+  features add 8,475 triangles to 21.19's 9,617 (Rebirth), 2,702 to 20.32's 12,926, 4,355 to 23.22's 19,844, 792 to 34.46, 304 to 18.39;
+  a zone gathers in 70..200 ms. A tile has ground only until its zones are gathered. Tiles unused for 90 ticks go.
   The terrain is the full-resolution heightmap (blocks of 64 samples read on demand), not the simulation's `GroundHeights`:
   outside the area loaded at the start that is a coarse grid (a sample per 144 units) off the real ground by 2.4 units
   at the median and 15 at the 90th percentile over the land, so bodies met a ground the character was not standing on.

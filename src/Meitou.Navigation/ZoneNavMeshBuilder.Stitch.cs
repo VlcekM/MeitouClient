@@ -5,6 +5,9 @@ namespace Meitou.Navigation;
 
 internal static partial class ZoneNavMeshBuilder
 {
+    /// <summary>How long (cells) the part of two coinciding edges within the climb must be for the stitcher to join them as neighbours (engine choice: 4 units).</summary>
+    const float SeamClimbCells = 2;
+
     // ---- stitching ----
 
     sealed class BorderEdge
@@ -13,7 +16,7 @@ internal static partial class ZoneNavMeshBuilder
         public Vector3 A, B;
     }
 
-    static ZoneNavMesh Stitch(ZoneGeometry g, NavBuildSettings s, RcPolyMesh?[] meshes, int tilesPerSide, float tileWorld)
+    internal static ZoneNavMesh Stitch(ZoneGeometry g, NavBuildSettings s, RcPolyMesh?[] meshes, int tilesPerSide, float tileWorld)
     {
         var vertices = new List<Vector3>();
         var polygons = new List<int[]>();
@@ -66,8 +69,8 @@ internal static partial class ZoneNavMeshBuilder
                         else
                         {
                             // An open inner edge may face one whose end vertex Recast did not weld (see the seam pass below).
-                            if (open.TryGetValue((xb, zb, xa, za), out var other) && Math.Abs(m.verts[ia * 3 + 1] - m.verts[other.Ib * 3 + 1]) <= climbCells
-                                && Math.Abs(m.verts[ib * 3 + 1] - m.verts[other.Ia * 3 + 1]) <= climbCells)
+                            if (open.TryGetValue((xb, zb, xa, za), out var other) && SeamMeets(Math.Abs(m.verts[ia * 3 + 1] - m.verts[other.Ib * 3 + 1]),
+                                Math.Abs(m.verts[ib * 3 + 1] - m.verts[other.Ia * 3 + 1]), MathF.Sqrt((xb - xa) * (xb - xa) + (zb - za) * (zb - za))))
                             {
                                 open.Remove((xb, zb, xa, za));
                                 seams.Add((pBase + p, k, other.Polygon, other.Edge));
@@ -112,6 +115,18 @@ internal static partial class ZoneNavMeshBuilder
         }
 
         static bool SameXZ(Vector3 a, Vector3 b) => a.X == b.X && a.Z == b.Z;
+
+        // Two coinciding edges (height gaps at their ends in cells, length in cells) meet when the gap stays within the climb along at least SeamClimbCells of
+        // them: a corner can take a higher neighbouring cell's height on one side (a stair's top beside a raised cheek, Storm House 27.22:1821-), which
+        // left one end over the climb although the rest of the edge steps less.
+        bool SeamMeets(int gapA, int gapB, float cells)
+        {
+            if (gapA <= climbCells && gapB <= climbCells) return true;
+            int lo = Math.Min(gapA, gapB), hi = Math.Max(gapA, gapB);
+            if (lo > climbCells) return false;
+            float within = cells * (climbCells - lo) / (float)(hi - lo);
+            return within >= SeamClimbCells;
+        }
 
         foreach (var (p, e, q, f) in seams)
             if (areas[p] != NavArea.Null && areas[q] != NavArea.Null) { neighbours[p][e] = q; neighbours[q][f] = p; }

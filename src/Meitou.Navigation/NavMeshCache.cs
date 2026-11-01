@@ -13,7 +13,7 @@ namespace Meitou.Navigation;
 public sealed class NavMeshCache
 {
     /// <summary>Bump when the builder's output changes for the same input (a new rule in the gatherer or the pruner).</summary>
-    public const int BuilderVersion = 32;
+    public const int BuilderVersion = 39;
     const int FormatVersion = 5;
     static readonly byte[] Magic = "MNAV"u8.ToArray();
 
@@ -39,7 +39,7 @@ public sealed class NavMeshCache
 
     /// <summary>
     /// Hash of the inputs every zone shares, by size and write time (not contents): the data files in load order (record contents: buildings, layouts,
-    /// foliage), the seed, height, biome and overlay files the gather and the foliage placer read, and the DotRecast version. Collision files are not in it.
+    /// foliage), the seed, height, biome, map feature and overlay files the gather and the foliage placer read, and the DotRecast version. Collision files are not in it.
     /// </summary>
     public static uint ContentHash(GameInstall install, GameDatabase db)
     {
@@ -55,7 +55,7 @@ public sealed class NavMeshCache
         foreach (var name in db.Files)
             Stamp(LoadOrder.BaseFiles.Contains(name) ? Path.Combine(install.DataDirectory, name)
                 : mods.TryGetValue(Path.GetFileNameWithoutExtension(name), out var mod) ? mod : name);
-        foreach (var rel in new[] { NavSeeds.RelativePath, TerrainHeightmap.RelativePath, BlendInfoFile.RelativePath, TerrainMaps.BiomeMap })
+        foreach (var rel in new[] { NavSeeds.RelativePath, TerrainHeightmap.RelativePath, BlendInfoFile.RelativePath, TerrainMaps.BiomeMap, MapFeatureFile.RelativePath })
             Stamp(Path.Combine(install.DataDirectory, rel));
         if (Path.GetDirectoryName(TerrainMaps.OverlayTile(install, "new_overlay", 0, 0)) is { } overlays && System.IO.Directory.Exists(overlays))
             foreach (var tile in System.IO.Directory.GetFiles(overlays, "new_overlay.*").Order(StringComparer.OrdinalIgnoreCase)) Stamp(tile);

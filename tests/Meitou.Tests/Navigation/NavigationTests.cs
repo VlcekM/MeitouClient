@@ -198,7 +198,7 @@ public class NavigationTests
         var inside = ZoneNavMeshBuilder.Build(interior, Settings, out _);
         Assert.Contains(NavArea.Door, inside.Areas);
 
-        var combined = NavInteriors.Combine(exterior, [inside]);
+        var combined = NavInteriors.Combine(exterior, [new(inside)]);
         Assert.True(combined.PolygonCount > exterior.PolygonCount);
         var world = NavWorld.Empty.With(combined.WithoutPruned());
         var street = new Vector3(cx - 200, 10, cz);
@@ -267,7 +267,7 @@ public class NavigationTests
 
         var street = new Vector3(cx - 200, 10, cz);
         var room = new Vector3(cx + 30, 10, cz + 10);
-        var open = new NavQuery(NavWorld.Empty.With(NavInteriors.Combine(exterior, [inside], doorless: [true]).WithoutPruned()));
+        var open = new NavQuery(NavWorld.Empty.With(NavInteriors.Combine(exterior, [new(inside, Doorless: true)]).WithoutPruned()));
         var inward = open.FindPath(street, room);
         Assert.True(inward.Found, "no way in");
         // Through the doorway, not over the walls, and back out.
@@ -276,7 +276,7 @@ public class NavigationTests
         Assert.True(open.FindPath(room, street).Found, "no way out");
 
         // A destroyed building's interior (not doorless) is not joined.
-        var island = new NavQuery(NavWorld.Empty.With(NavInteriors.Combine(exterior, [inside], doorless: [false]).WithoutPruned()));
+        var island = new NavQuery(NavWorld.Empty.With(NavInteriors.Combine(exterior, [new(inside)]).WithoutPruned()));
         Assert.False(island.FindPath(street, room).Found);
     }
 }

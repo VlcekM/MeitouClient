@@ -42,7 +42,26 @@ internal sealed class NavVolume(Vector2[] polygon, float yMin, float yMax)
 internal sealed class NavSolid(Vector4[] planes, Vector2 min, Vector2 max)
 {
     public Vector4[] Planes { get; } = planes;
+    /// <summary>Debug (the navmesh tool): the placement, owner and part the shape came from.</summary>
+    public string? Owner { get; set; }
+    /// <summary>A map feature's or foliage shape, not a building's: a feature's surface running inside it keeps its seam (<see cref="NavMeshSolid"/>).</summary>
+    public bool Feature { get; set; }
     /// <summary>The shape's box on (X, Z).</summary>
+    public Vector2 Min { get; } = min;
+    public Vector2 Max { get; } = max;
+}
+
+/// <summary>
+/// A placed collision triangle mesh (a map feature's rock), as its triangles (three points each, outward-facing). The span of a column is inside when the nearest
+/// triangle above it faces up, i.e. the span sees its back: a rock sunk into the terrain is open at the bottom, so a parity count would not do; the underside of
+/// an overhang faces down and leaves the ground under it (docs/game/pathfinding.md, "Map features").
+/// </summary>
+internal sealed class NavMeshSolid(Vector3[] triangles, Vector2 min, Vector2 max)
+{
+    public Vector3[] Triangles { get; } = triangles;
+    /// <summary>Debug (the navmesh tool): what the mesh came from.</summary>
+    public string? Owner { get; set; }
+    /// <summary>The mesh's box on (X, Z).</summary>
     public Vector2 Min { get; } = min;
     public Vector2 Max { get; } = max;
 }
@@ -50,9 +69,9 @@ internal sealed class NavSolid(Vector4[] planes, Vector2 min, Vector2 max)
 /// <summary>Counters of what a gather found, for logs and the debug tool.</summary>
 internal sealed class GatherStats
 {
-    public int Buildings, PartsWithCollision, Shapes, FoliageInstances, FoliageShapes, FoliageCutters, MissingFiles;
+    public int Buildings, PartsWithCollision, Shapes, FoliageInstances, FoliageShapes, FoliageMeshes, FoliageCutters, MissingFiles;
     public int WalkableTriangles, CuttingTriangles, TerrainTriangles, WaterTriangles;
-    public int Carvers, Painters, DoorSeeds, SeedsDropped, WallSeeds, Solids;
+    public int Carvers, Painters, DoorSeeds, SeedsDropped, WallSeeds, Solids, MapFeatures;
 }
 
 /// <summary>
@@ -80,15 +99,17 @@ internal sealed class ZoneGeometry
     public List<NavVolume> Carvers { get; } = [];
     /// <summary>Closed convex shapes of walkable parts: the walkable spans inside them are removed.</summary>
     public List<NavSolid> Solids { get; } = [];
+    /// <summary>Placed triangle meshes of map features: the walkable spans inside them are removed (<see cref="NavMeshSolid"/>).</summary>
+    public List<NavMeshSolid> MeshSolids { get; } = [];
     /// <summary>Door hulls: walkable cells inside become <see cref="NavArea.Door"/>.</summary>
     public List<NavVolume> Painters { get; } = [];
     /// <summary>Exterior doors' outer markers with the height of the door's base, until every surface is gathered (then they become <see cref="Seeds"/>).</summary>
     public List<(Vector2 At, float Base)> DoorMarkers { get; } = [];
-    /// <summary>Seed points: regions of the mesh near one stay, the rest is pruned (docs/game/pathfinding.md, "Region pruning by seeds").</summary>
+    /// <summary>Seed points: regions of the mesh near one stay, the rest is pruned (docs/game/pathfinding.md, Generator "Seeds" and `regionPruningSettings`).</summary>
     public List<Vector3> Seeds { get; } = [];
     /// <summary>
-    /// For an interior mesh: its building's first shopkeeper or general node, the seed when <see cref="Seeds"/> (the inner door markers) find nothing
-    /// (docs/game/pathfinding.md, "Interior seeds").
+    /// For an interior mesh: its building's first shopkeeper or general node, else (no door either) the original's ray seed on its floor, the seed when
+    /// <see cref="Seeds"/> (the inner door markers) find nothing (docs/game/pathfinding.md, "Interior seeds").
     /// </summary>
     public List<Vector3> NodeSeeds { get; } = [];
 
@@ -106,9 +127,8 @@ internal sealed class ZoneGeometry
     /// <summary>Debug: per part with collision, its owner and part names, collision path and the triangles [First, Last) it emitted.</summary>
     public List<(string Owner, string Part, string Path, int First, int Last)> PartRanges { get; } = [];
     /// <summary>
-    /// For the interior of a destroyed building: no seed keeps its ground floor (instead of the largest region, <see cref="SeedPruner.DestroyedFloorBand"/>). It has
-    /// no door, hence no seed, and its largest region can be an upper floor or wall tops under a roof whose intact collision stays (docs/game/pathfinding.md,
-    /// "Destroyed interiors").
+    /// For the interior of a destroyed building: its ground floor is kept besides what its seed reaches (<see cref="SeedPruner.DestroyedFloorBand"/>), and it is
+    /// joined to the exterior along its hull (docs/game/pathfinding.md, "Destroyed interiors").
     /// </summary>
     public bool InteriorDestroyed { get; init; }
     /// <summary>
@@ -117,7 +137,7 @@ internal sealed class ZoneGeometry
     /// </summary>
     public List<(Vector2 A, Vector2 B)>? DestroyedOutline { get; init; }
     /// <summary>
-    /// For the interior of an intact building without doors (an open doorway, e.g. the Hive Commune Hut), or of a ruin with a <see cref="DestroyedOutline"/>: joined to the exterior wherever their edges meet
+    /// For the interior of an intact building without doors (an open doorway, e.g. the Hive Commune Hut), or of a ruin: joined to the exterior wherever their edges meet
     /// on the hull's line (docs/game/pathfinding.md, "Door joins").
     /// </summary>
     public bool InteriorDoorless { get; init; }
@@ -126,6 +146,8 @@ internal sealed class ZoneGeometry
 
     /// <summary>The range of triangles (in triangle numbers) that came from buildings; for the seed rays.</summary>
     public int BuildingFirstTriangle, BuildingLastTriangle;
+    /// <summary>The triangle ranges of the exterior's floor-0 and floor-1 building parts (groups 9 and 10), what the seed ray rule tests; in an interior, its floor-0 parts (group 9), what the origin ray seed tests.</summary>
+    public List<(int First, int Last)> FloorRanges { get; } = [];
     /// <summary>Hash of the zone's buildings (placement, rotation, record), the cache key of the built mesh (<see cref="ZoneGeometryGatherer.BuildingHash"/>); 0 for an interior mesh.</summary>
     public uint BuildingHash { get; set; }
     public GatherStats Stats { get; } = new();

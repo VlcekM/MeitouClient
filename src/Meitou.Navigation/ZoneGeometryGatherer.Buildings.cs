@@ -151,7 +151,7 @@ internal sealed partial class ZoneGeometryGatherer
         else if (owner.GetBool("is exterior furniture") || owner.GetBool("is interior furniture")) group = 19 + floor;
         else group = 9 + floor;
 
-        int firstTriangle = g.TriangleCount;
+        int firstTriangle = g.TriangleCount, firstSolid = g.Solids.Count;
         foreach (var shape in prepared.Shapes)
         {
             if (interior is not null)
@@ -176,9 +176,12 @@ internal sealed partial class ZoneGeometryGatherer
             if (((IncludedGroupMask | (upper ? UpperContentsMask : 0)) & (1u << group)) == 0) continue;
             g.Stats.Shapes++;
             bool walkable = mode == PathMode.Walkable && group != 27 && (open || group == 9 || group == 19);
+            int shapeFirst = g.TriangleCount;
             AddShape(g, shape, node, walkable ? BuildingSlopeDegrees : 0, carve: CarveConvexObstacles && !walkable);
+            if (group is 9 or 10 && g.TriangleCount > shapeFirst) g.FloorRanges.Add((shapeFirst, g.TriangleCount));
         }
         if (g.TrackParts && g.TriangleCount > firstTriangle) g.PartRanges.Add((owner.Name, part.Name, path, firstTriangle, g.TriangleCount));
+        for (int i = firstSolid; i < g.Solids.Count; i++) g.Solids[i].Owner = $"{instanceId} {owner.Name} / {part.Name} (group {group}, mode {(int)mode})";
     }
     // ---- shape placement ----
 
@@ -196,7 +199,8 @@ internal sealed partial class ZoneGeometryGatherer
     /// </summary>
     const float CarverDrop = 60;
 
-    void AddShape(ZoneGeometry g, PreparedShape shape, Matrix4x4 node, float walkableSlope, bool carve)
+    /// <param name="meshSolid">A triangle mesh that encloses a volume (a map feature's rock, walkable foliage) also removes the floor inside it (<see cref="NavMeshSolid"/>).</param>
+    void AddShape(ZoneGeometry g, PreparedShape shape, Matrix4x4 node, float walkableSlope, bool carve, bool meshSolid = false)
     {
         var pts = new Vector3[shape.Vertices.Length];
         var lo = new Vector3(float.MaxValue);
@@ -214,6 +218,11 @@ internal sealed partial class ZoneGeometryGatherer
         if ((walkableSlope > 0 || carve) && shape.IsConvex && Solid(pts, shape.Indices, lo, hi) is { } solid)
         {
             g.Solids.Add(solid);
+            g.Stats.Solids++;
+        }
+        if (meshSolid && !shape.IsConvex && MeshSolid(pts, shape.Indices, lo, hi) is { } mesh)
+        {
+            g.MeshSolids.Add(mesh);
             g.Stats.Solids++;
         }
     }
@@ -279,7 +288,7 @@ internal sealed partial class ZoneGeometryGatherer
 internal sealed partial class ZoneGeometryGatherer
 {
     /// <summary>
-    /// The collision triangles of the buildings placed in <paramref name="zone"/> (each placement once, in its own zone; its triangles may reach past the zone) that ragdolls land
+    /// The collision triangles of the buildings placed in <paramref name="zone"/> and of the map features whose triangles lie in it (<see cref="AddRagdollFeatures"/>) (each placement once, in its own zone; its triangles may reach past the zone) that ragdolls land
     /// on and hit (docs/game/ragdolls.md "Collision groups"): walls and floors, stairs, furniture and roofs; not doors, interior masks or passable parts. Three points per
     /// triangle, world space.
     /// </summary>
@@ -294,6 +303,7 @@ internal sealed partial class ZoneGeometryGatherer
             foreach (var (item, at, rotation) in LayoutObjects(b, record, position, destroyed))
                 AddRagdollBuilding(item.Building, $"{b.Key}/{item.InstanceId}", at, rotation, false, output);
         }
+        AddRagdollFeatures(zone, output);
     }
 
     void AddRagdollBuilding(GameRecord building, string placementId, Vector3 position, Quaternion rotation, bool destroyed, List<Vector3> output)

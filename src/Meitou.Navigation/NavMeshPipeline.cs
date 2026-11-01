@@ -9,8 +9,8 @@ internal static class NavMeshPipeline
     public static ZoneNavMesh BuildZone(ZoneGeometryGatherer gatherer, ZoneGeometry geometry, NavBuildSettings settings, out NavBuildTimes times, bool interiors = true, Action<string>? log = null)
         => BuildZone(gatherer, geometry, settings, out times, out _, interiors, log);
 
-    /// <summary>As above, also returning the separately built interior meshes (for the debug images). <paramref name="log"/> receives the debug listing of the interiors and door joins.</summary>
-    public static ZoneNavMesh BuildZone(ZoneGeometryGatherer gatherer, ZoneGeometry geometry, NavBuildSettings settings, out NavBuildTimes times, out IReadOnlyList<ZoneNavMesh> interiorMeshes, bool interiors = true, Action<string>? log = null)
+    /// <summary>As above, also returning the separately built interior meshes with their building keys (for the debug images and the join sweep). <paramref name="log"/> receives the debug listing of the interiors and door joins.</summary>
+    public static ZoneNavMesh BuildZone(ZoneGeometryGatherer gatherer, ZoneGeometry geometry, NavBuildSettings settings, out NavBuildTimes times, out IReadOnlyList<InteriorMesh> interiorMeshes, bool interiors = true, Action<string>? log = null)
     {
         interiorMeshes = [];
         var exterior = ZoneNavMeshBuilder.Build(geometry, settings, out times);
@@ -30,10 +30,11 @@ internal static class NavMeshPipeline
         });
         if (log is not null)
             for (int i = 0; i < built.Length; i++) DescribeInterior(geometries[i], built[i], log);
-        var nonEmpty = built.Where(m => m.PolygonCount > 0).ToList();
-        var doorless = geometries.Where((_, i) => built[i].PolygonCount > 0).Select(g => g.InteriorDoorless).ToList();
+        var nonEmpty = new List<InteriorMesh>();
+        for (int i = 0; i < built.Length; i++)
+            if (built[i].PolygonCount > 0) nonEmpty.Add(new InteriorMesh(built[i], geometries[i].InteriorOf, geometries[i].InteriorDoorless, geometries[i].InteriorDestroyed));
         interiorMeshes = nonEmpty;
-        var combined = NavInteriors.Combine(exterior, nonEmpty, log, doorless);
+        var combined = NavInteriors.Combine(exterior, nonEmpty, log);
         times.Interiors = watch.Elapsed.TotalMilliseconds;
         times.InteriorCount = built.Length;
         times.Total += times.Interiors;
@@ -48,7 +49,7 @@ internal static class NavMeshPipeline
 
     internal static void DescribeInterior(ZoneGeometry g, ZoneNavMesh m, Action<string> log)
     {
-        log($"  interior {g.InteriorOf}: {m.PolygonCount} polygons, {m.KeptCount} kept, {g.Seeds.Count} seeds ({string.Join(" ", g.Seeds.Select(s => $"{s.X:0},{s.Y:0},{s.Z:0}"))}), {m.Areas.Count(a => a == NavArea.Door)} door polygons, {g.Painters.Count} painters, hull y {g.InteriorHull!.YMin:0}..{g.InteriorHull!.YMax:0}");
+        log($"  interior {g.InteriorOf}: {m.PolygonCount} polygons, {m.KeptCount} kept, {g.Seeds.Count} seeds ({string.Join(" ", g.Seeds.Select(s => $"{s.X:0},{s.Y:0},{s.Z:0}"))}), {m.Areas.Count(a => a == NavArea.Door)} door polygons, {g.Painters.Count} painters{(g.InteriorDoorless ? ", doorless" : "")}{(g.InteriorDestroyed ? ", destroyed" : "")}, hull y {g.InteriorHull!.YMin:0}..{g.InteriorHull!.YMax:0}");
         // Its connected components (neighbours only, not links), largest first: a stair or upper floor the seed did not reach shows up as an unkept one.
         var component = new int[m.PolygonCount];
         Array.Fill(component, -1);
