@@ -96,7 +96,6 @@ sealed partial class GameHost
             // --battle-no-fear: no flee system, so nobody runs away.
             Parts = (IsSandbox || IsDuel || IsBattle ? Meitou.Simulation.StandardParts.All & ~Meitou.Simulation.StandardParts.Aggro : Meitou.Simulation.StandardParts.All)
                 & ~(IsBattle && g.BattleNoFear ? Meitou.Simulation.StandardParts.Flee : Meitou.Simulation.StandardParts.None),
-            Aggro = new Meitou.Simulation.AggroSettings { RecordLog = true },
             // NPCs that see a player character say a line as a speech bubble (docs/game/dialogue.md "Ambient conversations"); the sandbox, the duel and the battle stay silent.
             Dialogue = new Meitou.Simulation.Dialogue.DialogueSettings { AmbientEvents = !IsSandbox && !IsDuel && !IsBattle },
             Population = new Meitou.Simulation.PopulationSettings
@@ -358,7 +357,6 @@ sealed partial class GameHost
         difficulty = nextDifficulty;
         player.NewGameOptions = nextDifficulty;   // the New game window then shows the loaded save's options (the original loads them into its globals)
         population = built.Population;
-        aggro = built.Aggro;
         if (nav is not null) population!.ZoneGate = zone => nav.Walkability.World.Contains(zone);
         loadedSave = loaded;
         preparedBase = null;

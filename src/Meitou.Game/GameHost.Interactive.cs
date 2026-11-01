@@ -1004,11 +1004,5 @@ sealed partial class GameHost
         if (population is not null)
             foreach (var w in population.TakeWildLog())
                 Console.WriteLine($"wild      tick {w.Tick}: {w.Squad} ({w.Members}) from the {(w.Kind == Meitou.Simulation.WildKind.Nest ? "nest" : "sector of")} {w.Place}");
-        if (aggro is null || aggro.Log.Count == 0) return;
-        var table = world.Characters;
-        string Who(Meitou.Simulation.CharacterId id, int faction) =>
-            $"{(table.IsAlive(id) ? table.Cold(id.Slot)!.Name : "?")} ({(popData is { } d && faction >= 0 && faction < d.Factions.Count ? d.Factions[faction].Name : "no faction")})";
-        foreach (var e in aggro.TakeLog())
-            Console.WriteLine($"aggro     tick {e.Tick}: {Who(e.Attacker, e.AttackerFaction)} attacks {Who(e.Target, e.TargetFaction)} at {e.Distance:0}");
     }
 }

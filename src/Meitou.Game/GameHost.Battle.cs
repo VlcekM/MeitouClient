@@ -209,7 +209,6 @@ sealed partial class GameHost
         var built = BuildSystems(interactive: true);
         session.ReplaceWorld(built.Systems, world => BattleSetup(world, built.Population!));
         population = built.Population;
-        aggro = built.Aggro;
         worldEpoch++;
         indexedFor = null;
         previousById.Clear();

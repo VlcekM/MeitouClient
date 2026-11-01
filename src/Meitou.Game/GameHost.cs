@@ -36,7 +36,6 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
     WorldSession session = null!;   // disposed with the host (Run)
     Meitou.Simulation.PopulationSystem? population;
     /// <summary>The fights started by faction hostility (printed to the log); null in the sandbox and without the population.</summary>
-    Meitou.Simulation.AggroSystem? aggro;
     // The game data the world was built from, kept to build the next world of a quickload (GameHost.Saving.cs).
     Meitou.Simulation.PopulationData? popData;
     IReadOnlyList<Meitou.Data.World.TownPlacement> townPlacements = [];
@@ -212,7 +211,6 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
             simWalkability = walkability;
             var built = BuildSystems(interactive);
             population = built.Population;
-            aggro = built.Aggro;
             if (nav is not null) population!.ZoneGate = zone => nav.Walkability.World.Contains(zone);
             systems = built.Systems;
             constants = data.Bodies.Constants;

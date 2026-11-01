@@ -22,7 +22,7 @@ sealed partial class GameHost
         {
             var built = BuildSystems(interactive: true);
             session.ReplaceWorld(built.Systems);
-            population = built.Population; aggro = built.Aggro; playerSquad = null;
+            population = built.Population; playerSquad = null;
             if (nav is not null) population!.ZoneGate = zone => nav.Walkability.World.Contains(zone);
             loadedSave = null; preparedBase = null; saveInUse = null; worldEpoch++;
             SettleNewWorld();
@@ -61,7 +61,7 @@ sealed partial class GameHost
                 try { session.ReplaceWorld(built!.Systems, world => { world.RestoreSeed(seed); world.Player.BanditsLoot = nextDifficulty.BanditsLoot; spawned =built.Population!.StartPlayer(world, chosen); }); }
                 catch (Exception e) { Console.Error.WriteLine($"new game  {e}"); throw new SceneLoadFailed($"New game failed: {e.Message}"); }
                 popData = nextData; difficulty = nextDifficulty;
-                population = built.Population; aggro = built.Aggro; playerSquad = spawned;
+                population = built.Population; playerSquad = spawned;
                 if (nav is not null) population!.ZoneGate = zone => nav.Walkability.World.Contains(zone);
                 loadedSave = null; preparedBase = null; saveInUse = null; worldEpoch++;
                 session.Clock.SetTime(Meitou.Engine.Time.GameClock.DefaultStartDay, Meitou.Engine.Time.GameClock.DefaultStartHour);
