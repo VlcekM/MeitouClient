@@ -434,6 +434,23 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     /// </summary>
     public Vector3? Ahead { get; set; }
 
+    /// <summary>
+    /// The ground's height under the eye (the host sets it each frame before <see cref="Update(Vector3)"/>; unknown: none). Which zones and grass pages are laid
+    /// out and kept counts the eye's height above the game's highest camera (<see cref="Load"/>), so a free camera high above the land loads only what
+    /// can be seen from there; drawing still measures across the ground.
+    /// </summary>
+    public float GroundUnderEye { get; set; } = float.NegativeInfinity;
+
+    /// <summary>
+    /// A ground distance from the eye as the loading measures it: with the eye's height above <see cref="GroundUnderEye"/> beyond the game's camera heights
+    /// (<see cref="Meitou.Data.World.KenshiCamera.MaxHeightAbovePivot"/>) added as a third side, so those heights load as before.
+    /// </summary>
+    float Load(float groundDistance, Vector3 eye)
+    {
+        float lift = float.IsFinite(GroundUnderEye) ? Math.Max(0, eye.Y - GroundUnderEye - Meitou.Data.World.KenshiCamera.MaxHeightAbovePivot) : 0;
+        return lift == 0 ? groundDistance : MathF.Sqrt(groundDistance * groundDistance + lift * lift);
+    }
+
     void Update(Vector3 eye, bool settling)
     {
         updates++;
@@ -457,7 +474,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         }
         dropping.Clear();
         foreach (var state in zones.Values)
-            if (state.Job is null && ZoneDistance(state.Zone, eye) > farReach + WorldLayout.ZoneSize && !(Ahead is { } kept && ZoneDistance(state.Zone, kept) <= nearReach + WorldLayout.ZoneSize))
+            if (state.Job is null && Load(ZoneDistance(state.Zone, eye), eye) > farReach + WorldLayout.ZoneSize && !(Ahead is { } kept && ZoneDistance(state.Zone, kept) <= nearReach + WorldLayout.ZoneSize))
                 dropping.Add(state);
         foreach (var state in dropping) Drop(state);
 
@@ -499,7 +516,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         foreach (var z in candidates)
         {
             if (!z.IsInsideGrid) continue;
-            float d = ZoneDistance(z, eye), dp = ZoneDistance(z, predicted), da = arrival is { } a ? ZoneDistance(z, a) : float.PositiveInfinity;
+            float d = Load(ZoneDistance(z, eye), eye), dp = Load(ZoneDistance(z, predicted), eye), da = arrival is { } a ? ZoneDistance(z, a) : float.PositiveInfinity;
             bool landing = da <= arrivalReach;
             float soon = Math.Min(Math.Min(d, dp), da);
             if (d > farReach && !landing) continue;   // the prediction orders and adds whole layouts, it never adds zones
@@ -800,13 +817,13 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         {
             if (!state.Ready || state.Ground is null || state.Patches.Count == 0) continue;
             float range = state.Patches.Max(GrassRange), near = range * Math.Min(1, DefaultGrassRange / GrassRangeSetting);
-            if (state.Pages.Count == 0 && ZoneDistance(state.Zone, eye) > range + PageSize) continue;
+            if (state.Pages.Count == 0 && Load(ZoneDistance(state.Zone, eye), eye) > range + PageSize) continue;
             for (int pz = 0; pz < PagesPerZone; pz++)
                 for (int px = 0; px < PagesPerZone; px++)
                 {
                     int key = pz * PagesPerZone + px;
                     float x0 = state.X0 + px * PageSize, z0 = state.Z0 + pz * PageSize;
-                    float d = BoxDistance(x0, z0, PageSize, eye);
+                    float d = Load(BoxDistance(x0, z0, PageSize, eye), eye);
                     state.Pages.TryGetValue(key, out var page);
                     if (page?.Buffers is null && d < range * 0.8f) NearestMissingGrass = Math.Min(NearestMissingGrass, d);   // not sinking yet: would be seen
                     if (page is null)

@@ -1391,6 +1391,7 @@ static class WorldFrame
         gpu.Objects?.Update(eye);
         StageClock.Lap(1);
         if (gpu.Foliage is { } lodFoliage) lodFoliage.LodPixelsPerRadian = render.TerrainPixelScale;   // the generated mesh levels measure their deviation in rendered pixels
+        if (gpu.Foliage is { } liftedFoliage) liftedFoliage.GroundUnderEye = gpu.Terrain.HeightAt(eye.X, eye.Z);
         gpu.Foliage?.Update(eye);
         StageClock.Lap(2);
         gpu.Characters?.Update(eye);

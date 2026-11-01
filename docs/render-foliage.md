@@ -9,6 +9,9 @@ Atlas format, transitions and residency: [impostors.md](impostors.md). GPU API: 
 overlay and random state. Fine/coarse tiers and velocity lookahead prepare zones before entry;
 layouts, GPU resources and visibility are separate lifetimes. Keep ready data until replacements
 publish. Instances draw in every intersecting depth slice, not only the near slice.
+Which zones are laid out and kept, and which grass pages made and kept, adds the eye's height above the ground beyond the game's highest camera
+(1840, `KenshiCamera.MaxHeightAbovePivot`) to the ground distance (`FoliageRenderer.Load`; engine choice): a free camera high above the land loads only
+what can be seen from there, the game's camera heights load as before. Drawing still measures across the ground.
 
 `FoliageRenderer`/`FoliageShaders`: race-independent world instances, material modes, alpha test,
 lighting/wind and shadows. Faithful uses layer ranges and full-detail rules. Meitou `range`
