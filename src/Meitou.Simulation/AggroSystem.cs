@@ -491,10 +491,12 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
         if (present.Length != Relations.Count) { present = new bool[Relations.Count]; hasEnemy = new bool[Relations.Count]; }
         Array.Clear(present);
         sneakers.Clear();
+        playerSlots.Clear();
         for (int i = 0; i < n; i++)
         {
             int generation = next[i].Alive ? next[i].Generation : -1;
             if (slots[i].Generation != generation) slots[i] = new Slot { Generation = generation, Task = NoTask, ChaseStart = -1 };
+            if (generation >= 0 && table.Cold(i) is { IsPlayer: true }) playerSlots.Add(i);
             if (generation >= 0 && table.Cold(i) is { Medical: not null } c && Relations.Contains(c.Faction))
             {
                 present[c.Faction] = true;
@@ -514,6 +516,9 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
                 if (AttacksOnSight(Relations, f, g)) { hasEnemy[f] = true; break; }
         }
     }
+
+    /// <summary>The player's characters this tick (<see cref="Sync"/>; read only during the looks): a player's character always senses the others (<see cref="VisitKin"/>).</summary>
+    readonly List<int> playerSlots = [];
 
     /// <summary>Where the awake sneaking characters stand this tick (read only during the looks): a looker that picks no fights looks only when one is in its range.</summary>
     readonly List<Vector3> sneakers = [];
@@ -584,6 +589,8 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
         public int FightTarget;
         /// <summary>New characters gathered this look (<see cref="GatherCap"/>, <see cref="GatherExtra"/>).</summary>
         public int Gathered;
+        /// <summary>The player's characters this tick (<see cref="VisitKin"/>); null for a forced sense.</summary>
+        public List<int>? PlayerSlots;
         /// <summary>This look also gathers beyond <see cref="GatherNear"/> (<see cref="FarLooks"/>), and the gather is in that far pass.</summary>
         public bool Far, FarPass;
         /// <summary>This look works the entries' tags out in full (every <see cref="FarLooks"/>-th look and a forced sense; the fights and the KO and imprisoned bits are read at every look).</summary>
@@ -677,7 +684,7 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
             BestScore = float.NegativeInfinity, Combat = Combat, Fights = Combat ?? world.SystemOf<Combat.CombatSystem>(), Player = cold.IsPlayer, Hold = Orders.Holding(cold) && cold.Fighter?.Crossbow is null,
             HoldPost = Orders.Holding(cold) && !Orders.RangedExempt(cold), Prone = cold.Medical?.Prone == true, Animal = cold.Fighter?.IsAnimal == true, HoldPoint = Orders.HoldPointOf(cold, prev[i].Position),
             Seed = world.Seed, Key = Rng.Key(new CharacterId(i, prev[i].Generation)), Tick = (ulong)world.Tick,
-            Finder = finder, War = war, Towns = Towns,
+            Finder = finder, War = war, Towns = Towns, PlayerSlots = playerSlots,
             Employer = EmployerOf(world, cold, out bool allies), EmployerAllies = allies,
             Home = finder == FoeFinder.Territory ? Territory(cold) : default,
             Spots = slots[i].Spots, Heard = slots[i].Heard, Sightings = effects is null ? null : sightings ??= [], Effects = effects,
@@ -713,6 +720,7 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
             if (keep) list[w++] = e;
         }
         list.RemoveRange(w, list.Count - w);
+        VisitKin(ref s);
         s.Gathered = 0;
         s.FarPass = false;
         s.World.Grid.Query(s.Eye.X, s.Eye.Z, GatherNear, ref s, Visit);
@@ -841,8 +849,36 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
         if (s.NewEnemy < 0 && (e.Tags & (SenseTag.Enemy | SenseTag.Ko)) == SenseTag.Enemy) s.NewEnemy = slot;
     }
 
+    /// <summary>
+    /// The kin of a look: the looker's squad mates, and every other character of the player for one of the player's, are sensed at each look outside the gather's quota and may take the place of
+    /// a stranger's entry in a full block (<see cref="Insert"/>). The original's sensed map has no bound and no quota (<b>Verified</b>), and its protect goals (143, 15) read their mates in it;
+    /// Meitou's engine caps would otherwise leave a mate unsensed among the first strangers the grid hands the gather in a town, and nobody would come to its fight.
+    /// </summary>
+    static void VisitKin(ref Scan s)
+    {
+        if (s.Squad >= 0 && s.World.Squads.Find(s.Squad) is { } squad)
+            foreach (var m in squad.Members) VisitKin(ref s, m.Slot, m.Generation);
+        if (s.Player && s.PlayerSlots is { } players)
+            foreach (int slot in players) VisitKin(ref s, slot, s.Table.Previous[slot].Generation);
+    }
+
+    static void VisitKin(ref Scan s, int slot, int generation)
+    {
+        var prev = s.Table.Previous;
+        if (slot == s.Self || (uint)slot >= (uint)prev.Length || !prev[slot].Alive || prev[slot].Generation != generation) return;
+        var list = s.Block.entries;
+        int at = s.Block.LowerBound(slot);
+        if (at < list.Count && list[at].Target == slot) return;
+        if (s.Table.Cold(slot) is not { } c || !SenseOne(ref s, slot, c, out bool seen, out bool heard)) return;
+        var e = new SenseEntry { Target = slot, Generation = generation };
+        Refresh(ref s, ref e, slot, c, seen, heard);
+        Count(ref s, e, c);
+        Insert(s.Block, at, e, (long)s.Tick, kin: true);
+        if (s.NewEnemy < 0 && (e.Tags & (SenseTag.Enemy | SenseTag.Ko)) == SenseTag.Enemy) s.NewEnemy = slot;
+    }
+
     /// <summary>Puts a new entry at <paramref name="at"/>; with the block full the entry sensed longest ago (before <paramref name="tick"/>) makes room, else the new one is not kept.</summary>
-    static void Insert(SenseBlock b, int at, in SenseEntry e, long tick)
+    static void Insert(SenseBlock b, int at, in SenseEntry e, long tick, bool kin = false)
     {
         var list = b.entries;
         if (list.Count >= SenseBlock.Cap)
@@ -850,6 +886,10 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
             int oldest = -1;
             for (int k = 0; k < list.Count; k++)
                 if (list[k].Tick < tick && (oldest < 0 || list[k].Tick < list[oldest].Tick)) oldest = k;
+            // A kin entry takes the place of a neutral stranger when every entry was sensed at this look (the first one, in slot order).
+            if (oldest < 0 && kin)
+                for (int k = 0; k < list.Count; k++)
+                    if ((list[k].Tags & (SenseTag.Ally | SenseTag.Enemy | SenseTag.Ko)) == 0) { oldest = k; break; }
             if (oldest < 0) return;
             list.RemoveAt(oldest);
             if (oldest < at) at--;

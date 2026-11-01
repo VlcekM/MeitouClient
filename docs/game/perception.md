@@ -168,7 +168,10 @@ Hearing does not imply ordinary visual cone/line-of-sight eligibility.
 Meitou (`SenseBlock`, `CharacterFacts.Senses`): written by `AggroSystem`'s look in `Act` for every living character on its turn (one in `ScanEveryTicks` = 15, by slot), the looker's
 own slot only, and by `AggroSystem.Force` (serial: the alert, a landed blow, a bolt, an alarm; it also takes an existing entry's threat at once, standing for the pass the original runs before
 its chooser). Engine choices: at most 40 entries (`SenseBlock.Cap`; a new one replaces the one sensed
-longest ago), the gather takes up to 60 new characters within 250 then up to 40 in all within reach; a looker that neither fights nor may attack on sight gathers beyond 250 and works
+longest ago), the gather takes up to 60 new characters within 250 then up to 40 in all within reach (every character it visits counts, sensed or not, in the grid's order; **Measured** in the
+sandbox with 250 idle neutrals round a player squad: the player's characters kept 0 entries, so a squad mate never sensed its attacked mate and none joined, 15 Protect allies reading
+nothing; with the quota lifted all joined within 10 ticks). So a looker's **kin**, its squad mates and for a player's character every other player character, are sensed at each look
+before the gather, outside the quota, and take the place of a neutral stranger's entry in a full block (`AggroSystem.VisitKin`); enemies and strangers still wait for the quota (**open**: in a crowd a visible enemy can miss it too); a looker that neither fights nor may attack on sight gathers beyond 250 and works
 the relation part of its tags out only every 4th look (`FarLooks`); slot 125 also counts whoever fights the looker or is fought by it, of any faction (Meitou's scripted fights); the
 threat sums count 1 per threat (no aggression value). Without the Aggro part (sandbox, duel, battle) the look keeps the senses only (`AggroSettings.AttackOnSight` false).
 
