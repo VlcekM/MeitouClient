@@ -266,11 +266,13 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     /// <summary>
     /// <see cref="Pending"/> as a loading screen waits for it: the grass only within the range the default grass distance gives (<see cref="DefaultGrassRange"/>). A longer
     /// setting's farther pages (four times the grass at twice the distance, a minute and more of generation) grow in, nearest first, once the screen lifts.
+    /// Of the impostor atlases only the uploads of those read from the cache are waited for (<see cref="ImpostorUploadsAwaited"/>): the meshes draw until each
+    /// atlas is ready, and after a mod list change hundreds are baked, 20 s and more.
     /// </summary>
-    public int LoadingPending => Pending - grassWaiting - zones.Values.Sum(z => z.GrassRunning) + grassNear;
+    public int LoadingPending => Pending - grassWaiting - zones.Values.Sum(z => z.GrassRunning) + grassNear - ImpostorPending + ImpostorUploadsAwaited;
 
     /// <summary>What <see cref="Pending"/> is made of, for the loading log.</summary>
-    public string PendingDetail => $"layouts {runningWhole + runningFar + zonesWaiting}, grass {grassWaiting + zones.Values.Sum(z => z.GrassRunning)}, meshes {decoding.Count} decoding {uploads.Count} upload steps, lods {lodRunning + lodWaiting}, textures {textures.AwaitedCount} loading {textures.UnresidentUsedCount} deferred, impostors {ImpostorPending}";
+    public string PendingDetail => $"layouts {runningWhole + runningFar + zonesWaiting}, grass {grassWaiting + zones.Values.Sum(z => z.GrassRunning)} ({grassNear} near), meshes {decoding.Count} decoding {uploads.Count} upload steps, lods {lodRunning + lodWaiting}, textures {textures.AwaitedCount} loading {textures.UnresidentUsedCount} deferred, impostors {ImpostorPending} ({ImpostorUploadsAwaited} cache uploads)";
 
     /// <summary>GPU memory held by foliage meshes, textures and grass pages.</summary>
     public long ResidentBytes => residentMeshBytes + textures.ResidentBytes + GrassBytes() + impostorBytes;

@@ -39,18 +39,19 @@ public sealed record ParticleMaterial(string Name, string? Texture, ParticleBlen
 }
 
 /// <summary>
-/// The ParticleUniverse scripts (<c>data/particles/scripts/*.pu</c>) by system name, and the particle materials by name. A system is
-/// found by its own name, not its file's (<c>Ash-Flakes_Light</c> is in <c>Ashland_MultiFlakes.pu</c>, <c>Volk-Cloud</c> in <c>Volc-Pumper.pu</c>).
+/// The ParticleUniverse scripts (<c>*.pu</c>) by system name, and the particle materials by name. A system is found by its own name, not its
+/// file's (<c>Ash-Flakes_Light</c> is in <c>Ashland_MultiFlakes.pu</c>, <c>Volk-Cloud</c> in <c>Volc-Pumper.pu</c>); a later definition of a name
+/// replaces the earlier one, as the plugin's <c>createParticleSystemTemplate</c> does (docs/formats/particle-universe.md).
 /// </summary>
 public sealed class ParticleLibrary
 {
     public Dictionary<string, PuSystemDef> Systems { get; } = new(StringComparer.OrdinalIgnoreCase);
-    /// <summary>Every system read, in file order, including the ones whose name an earlier file took (<see cref="Duplicates"/>).</summary>
+    /// <summary>Every system read, in file order, including the ones a later definition replaced (<see cref="Duplicates"/>).</summary>
     public List<PuSystemDef> AllSystems { get; } = [];
     public Dictionary<string, ParticleMaterial> Materials { get; } = new(StringComparer.OrdinalIgnoreCase);
     /// <summary>Files that did not read, with the reason (empty for the base game).</summary>
     public List<string> Errors { get; } = [];
-    /// <summary>Systems whose name an earlier file already took (the first is kept).</summary>
+    /// <summary>Systems that replaced an earlier definition of their name (the last is kept).</summary>
     public List<string> Duplicates { get; } = [];
     public int ScriptFiles { get; private set; }
     public string? Directory { get; private set; }
@@ -58,8 +59,22 @@ public sealed class ParticleLibrary
     public PuSystemDef? FindSystem(string name) => Systems.GetValueOrDefault(name);
     public ParticleMaterial? FindMaterial(string name) => Materials.GetValueOrDefault(name);
 
-    /// <summary>Reads every <c>*.pu</c> of <c>data/particles/scripts</c> and every <c>*.material</c> of <c>data/particles/materials</c>.</summary>
+    /// <summary>Reads every <c>*.pu</c> of <c>data/particles/scripts</c> and every <c>*.material</c> of <c>data/particles/materials</c> (the base game only).</summary>
     public static ParticleLibrary Load(GameInstall install) => Load(Path.Combine(install.DataDirectory, "particles"));
+
+    /// <summary>
+    /// What the game compiles: every <c>*.pu</c> of <paramref name="resources"/>' locations (<c>resources.cfg</c> and the enabled mods' folders) in Ogre's
+    /// script order, and the particle materials from <paramref name="materials"/> (Ogre's material names are global; a particle may name any).
+    /// </summary>
+    public static ParticleLibrary Load(OgreScriptResources resources, OgreMaterialLibrary materials)
+    {
+        var library = new ParticleLibrary { Directory = resources.Root };
+        foreach (var file in resources.ScriptFiles("*.pu"))
+            library.AddScript(File.ReadAllText(file, System.Text.Encoding.Latin1), Path.GetRelativePath(resources.Root, file));
+        foreach (var (name, material) in materials.Materials) library.Materials[name] = ParticleMaterial.From(material);
+        foreach (var d in materials.Diagnostics.Where(d => d.Code == OgreScriptError.Fatal)) library.Errors.Add(d.ToString());
+        return library;
+    }
 
     /// <summary>Reads <c>scripts/*.pu</c> and <c>materials/*.material</c> under <paramref name="particlesDirectory"/>.</summary>
     public static ParticleLibrary Load(string particlesDirectory)
@@ -91,7 +106,8 @@ public sealed class ParticleLibrary
             {
                 var system = PuSystemDef.From(node, file);
                 AllSystems.Add(system);
-                if (!Systems.TryAdd(system.Name, system)) Duplicates.Add($"{system.Name} ({file})");
+                if (Systems.ContainsKey(system.Name)) Duplicates.Add($"{system.Name} ({file})");
+                Systems[system.Name] = system;
             }
         }
         catch (PuScriptException e)

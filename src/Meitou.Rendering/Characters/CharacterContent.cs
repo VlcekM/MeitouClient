@@ -212,7 +212,7 @@ internal sealed class CharacterContent : IDisposable
         this.gpu = gpu;
         this.assets = assets;
         this.db = db;
-        resolver = new MaterialResolver(db, OgreMaterialLibrary.LoadConfigured(install, out _), assets);
+        resolver = new MaterialResolver(db, assets.Materials, assets);
         Textures = new WorldTextureCache(gpu, assets, "character textures") { Share = TextureShare.For(gpu) };
         Morphs = new MorphArena(gpu);
         Materials = new CharacterMaterialTable(gpu);

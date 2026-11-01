@@ -11,6 +11,9 @@ blocks, optional technique/emitter names, property values and nested dynamic att
 No quoted/import/variable syntax observed in shipped scripts. Random attributes sample on use;
 life-fraction versus system-age input depends on the consumer. Emitter velocity/lifetime/dimensions
 use system age times scale_time; Scale uses life fraction unless since_start_system.
+**Verified plugin** `createParticleSystemTemplate`: a system name defined again replaces the earlier
+template (logged "already exists; old template deleted"); scripts come from every registered location,
+mods included ([overview](overview.md#resource-lookup-and-mod-overrides)).
 
 **Verified plugin** control points sort byX. Linear extrapolates first segment below firstX,
 holds lastY beyond last. Spline uses u=min(x/(lastX-firstX),1), WITHOUT subtracting firstX;

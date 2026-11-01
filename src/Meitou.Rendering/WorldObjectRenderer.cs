@@ -101,7 +101,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         solidProg = new ObjProg(gpu, nativeFrame, BuildingLodShaders.VertexNative(), BuildingLodShaders.FragmentNative(solid: true), "objects solid");
         depthProg = new ObjProg(gpu, nativeFrame, BuildingLodShaders.VertexNative(), BuildingLodShaders.DepthNative(), "objects depth");
         textureCache = new WorldTextureCache(gpu, assets, "object textures") { Share = TextureShare.For(gpu) };
-        var library = OgreMaterialLibrary.LoadConfigured(objects.Install, out _);
+        var library = assets.Materials;
         resolver = new MaterialResolver(objects.Database, library, assets);
         meshes = new ObjectMeshCache(gpu, assets, uploads);
         meshes.Unloaded = gpu => { unloadedMeshes.Add(gpu); RemoveBatches(gpu); };

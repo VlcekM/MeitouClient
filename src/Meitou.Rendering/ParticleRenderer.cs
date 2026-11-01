@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Numerics;
 using Meitou.Content;
+using Meitou.Data.Ogre;
 using Meitou.Data.Particles;
 using Meitou.Data.Textures;
 using Meitou.Rendering.Gpu;
@@ -121,7 +122,8 @@ public sealed unsafe class ParticleRenderer : IDisposable
     public const float DrawRange = 20400;
 
     readonly IGpuContext gpu;
-    readonly string texturesDirectory;
+    /// <summary>A material's texture name to its file: Ogre's lookup by bare name, mods' folders included (<see cref="AssetLocator"/>).</summary>
+    readonly Func<string, string?> findTexture;
     readonly LegacyProgram program;
     readonly NativeSegment segment;
     readonly DeviceBuffer quad;
@@ -200,10 +202,10 @@ public sealed unsafe class ParticleRenderer : IDisposable
         public bool Tracer;
     }
 
-    ParticleRenderer(IGpuContext gpu, string texturesDirectory, ParticleLibrary library)
+    ParticleRenderer(IGpuContext gpu, Func<string, string?> findTexture, ParticleLibrary library)
     {
         this.gpu = gpu;
-        this.texturesDirectory = texturesDirectory;
+        this.findTexture = findTexture;
         Library = library;
         weatherGroups = new WeatherGroups(library, World);
         program = LegacyProgram.Create(gpu, Vertex, Fragment, "particles");
@@ -262,10 +264,11 @@ public sealed unsafe class ParticleRenderer : IDisposable
         return rgba;
     }
 
-    public static ParticleRenderer Create(IGpuContext gpu, GameInstall install, ParticleLibrary? library = null)
+    /// <summary>The renderer over <paramref name="library"/>, or over the scripts and materials of the base game and the enabled mods (<see cref="ParticleLibrary.Load(OgreScriptResources, OgreMaterialLibrary)"/>).</summary>
+    public static ParticleRenderer Create(IGpuContext gpu, AssetLocator assets, ParticleLibrary? library = null)
     {
         BackgroundWork.Run(EffectGroups.PrimeJit);   // the group kinds' code is compiled off the render thread, before the first weather change needs it
-        return new(gpu, GameFiles.Resolve(Path.Combine(install.DataDirectory, "particles", "textures")), library ?? ParticleLibrary.Load(install));
+        return new(gpu, assets.Find, library ?? ParticleLibrary.Load(assets.Configured, assets.Materials));
     }
 
     /// <summary>
@@ -830,10 +833,10 @@ public sealed unsafe class ParticleRenderer : IDisposable
 
     Task<RgbaImage?> StartDecode(string name)
     {
-        string path = GameFiles.Resolve(Path.Combine(texturesDirectory, name));
+        string? path = findTexture(name);
         var task = BackgroundWork.Run<RgbaImage?>(() =>
         {
-            if (!File.Exists(path)) return null;
+            if (path is null || !File.Exists(path)) return null;
             try { return TextureLoader.LoadFile(path, allMips: false).Levels[0]; }
             catch (Exception e) when (e is IOException or InvalidDataException or NotSupportedException)
             {
