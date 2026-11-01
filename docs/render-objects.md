@@ -115,6 +115,10 @@ open amounts (`WorldObjectRenderer.Doors`, by placement id and index); `DrawReal
 `DoorLeaf.LocalOffset` ([motion](game/locks.md#doors)) along the axes of the part's collision box (`DoorFrame`, the first box of its
 `xml collision`, PhysX Z-up mapped to the part's Y-up), in world units, when its amount changed. Colour and shadow passes see the moved leaf; the GI acceleration structures take
 the instance transform only when they gather instances (not checked for leaves in motion).
+The interior view's floor never hides a door part (`WorldObjectRenderer.InteriorHidden`). **Verified** (probe over the base game's BUILDING `doors`): 15 of
+47 door entries have a leaf part with `building floor` 1 (Storm Houses A-H, the shacks, the swamp houses), so hiding by floor left their doorway empty at
+floor 0 (issue #170). In the game a door is a building of its own (`Building::createPhysical` makes one per entry); that its parent's floor view
+leaves it shown is **Unknown** in code, inferred from those common houses.
 
 ## Turrets
 

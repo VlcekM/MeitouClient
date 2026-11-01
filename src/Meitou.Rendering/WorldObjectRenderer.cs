@@ -981,11 +981,14 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
 
     /// <summary>
     /// Whether the interior view leaves a building part out: an interior part (or inside-only furniture) of a building seen from outside, or, in the view, a
-    /// part or object above the viewed floor. Floor 0 is never hidden (game: only the floor 1..3 lists are switched).
+    /// part or object above the viewed floor. Floor 0 is never hidden (game: only the floor 1..3 lists are switched). Nor is a door: in the game it is a building
+    /// of its own, which the view of the building it belongs to does not switch, and 15 of the base game's door leaves are floor-1 parts (Storm Houses, shacks),
+    /// which left the doorway empty at floor 0 (docs/render-objects.md "Doors").
     /// </summary>
     bool InteriorHidden(PlacedMesh p)
     {
         if (p.Kind != PlacedKind.BuildingPart) return false;
+        if (p.DoorIndex >= 0) return p.Interior;
         if (InteriorView.Count == 0 || !p.Interior && (p.Floor == 0 || AllFloors)) return p.Interior;
         // Layout objects (signs, furniture) go with their building.
         if (!InteriorView.TryGetValue(p.ParentPlacementId ?? p.PlacementId, out int floor)) return p.Interior;
