@@ -365,11 +365,7 @@ sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, 
                 Toggle: new("Weak punch reach", () => config.FixPunchReach, v => { config.FixPunchReach = v; PunchReachChanged?.Invoke(v); }, Remaster: true, OnOff: true)));
             result.Add(new("Walls inside buildings", "Seen into a building your characters are in, parts of other buildings that run through it are left out, such as the Hub's town wall in the Shinobi Thieves tower. "
                 + "The game's world places them there and draws them inside the room.",
-                Toggle: new("Walls inside buildings", () => config.FixPartsInBuildings, v => config.FixPartsInBuildings = v, Remaster: true, OnOff: true)));
-            result.Add(new("Ceiling shadows", "Seen into a lower floor of a building, the floors and roof hidden above it still cast their shadows, so the room stays shaded under its ceiling. "
-                + "Off, they are hidden from the sun as well and sunlight falls through onto the floor you look at.",
-                Toggle: new("Ceiling shadows", () => config.FixCeilingShadows, v => config.FixCeilingShadows = v, Remaster: true, OnOff: true)));
-        }
+                Toggle: new("Walls inside buildings", () => config.FixPartsInBuildings, v => config.FixPartsInBuildings = v, Remaster: true, OnOff: true)));        }
         if (page == 4)
         {
             // A graphics switch that changes play: the stealth sight counts the lamps it lights, so no look preset or Faithful sets it.

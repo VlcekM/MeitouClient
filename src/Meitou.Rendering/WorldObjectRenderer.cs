@@ -995,12 +995,6 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         return p.Floor > floor && !AllFloors;
     }
 
-    /// <summary>
-    /// The floors, roofs and objects the interior view hides above the viewed floor still cast shadows (Fixes settings, on by default; docs/render-objects.md
-    /// "Closed interiors"): without them the sun lit a lower floor through its ceiling (a watchtower's first floor).
-    /// </summary>
-    public bool CeilingShadows { get; set; } = true;
-
     /// <summary>What <see cref="InteriorHidden"/> leaves out whatever the viewed floor: an interior part of a building not in the interior view.</summary>
     bool OutsideHidden(PlacedMesh p) =>
         p.Kind == PlacedKind.BuildingPart && p.Interior && !InteriorView.ContainsKey(p.ParentPlacementId ?? p.PlacementId);
@@ -1119,9 +1113,9 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     {
         if (inst.Gpu is not { } gpu) return;
         if (!ReferenceEquals(inst.Mesh.Gpu, gpu)) { Unresolve(zone, inst); return; }
-        // A shadow pass keeps what the floor view hides above the viewed floor (CeilingShadows): only a closed building's interior parts stay out.
-        bool ceilings = depthPass && CeilingShadows;
-        if ((ceilings ? OutsideHidden(inst.Placed) : InteriorHidden(inst.Placed) || StandsAbove(inst)) || ClosedAround(inst)) return;
+        // A shadow pass keeps what the floor view hides above the viewed floor, so a lower floor stays shaded under its ceiling (docs/render-objects.md
+        // "Closed interiors"): only a closed building's interior parts stay out.
+        if ((depthPass ? OutsideHidden(inst.Placed) : InteriorHidden(inst.Placed) || StandsAbove(inst)) || ClosedAround(inst)) return;
         if (inst.Placed.DoorIndex >= 0) PoseDoor(inst, gpu);
         if (inst.Placed.Joints is not null) PoseJoints(inst, gpu);
         float value = Vector3.Distance(inst.Centre, eye) - inst.Radius;
