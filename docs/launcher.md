@@ -183,7 +183,7 @@ setting reaches the launcher with its release; the launcher knows none of them. 
   switch off but the performance ones, the look sliders at the game's value) or `looks.meitou` with the preset's own values over them (the quality tier's
   switches are left to the tier). Choosing one writes them, so the rows show it at once and the game counts no change from it; at Low
   the game still holds the tier's look switches off at start unless kept on (`SettingsMenu.ApplySavedPreset`). No `faithfulLook`
-  reads Faithful when every switch Faithful turns off is saved off, as the game does. A look slider's Default writes the look's value.
+  reads Faithful when every switch Faithful turns off and Meitou turns on is saved off, as the game does (unsaved, not written back). A look slider's Default writes the look's value.
 - `presets` (null in older schemas: no row) is the Quality preset row over the top-level `graphicsPreset`. The game saves the preset its
   settings sit at (Custom when none) and at start applies a saved one they do not sit at (not under `--low-end`, `--meitou` or `--faithful`), so a preset chosen in
   the launcher takes effect on the next start; the rows show the old values until then. Changing a row the preset sets (`presets.keys`)

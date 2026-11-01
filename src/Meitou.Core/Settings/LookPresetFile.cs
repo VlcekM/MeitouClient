@@ -90,7 +90,12 @@ public static class LookPresetFile
     {
         var names = taken.ToHashSet(StringComparer.OrdinalIgnoreCase);
         if (!names.Contains(stem)) return stem;
-        for (int i = 2; ; i++) if (!names.Contains($"{stem} {i}")) return $"{stem} {i}";
+        // The number fits within MaxNameLength, so the name reads back as written.
+        for (int i = 2; ; i++)
+        {
+            string suffix = $" {i}", name = stem[..Math.Min(stem.Length, MaxNameLength - suffix.Length)].TrimEnd() + suffix;
+            if (!names.Contains(name)) return name;
+        }
     }
 
     /// <summary>The player's presets in <paramref name="folder"/> (file path and preset), in file name order; unreadable files are left out.</summary>
