@@ -327,7 +327,7 @@ public sealed unsafe class WorldTextureCache : IDisposable
 
     /// <summary>
     /// An image of <paramref name="t"/>'s file another user already holds at the current quality level, with no more top levels dropped than mip streaming
-    /// would drop at <paramref name="need"/> (exactly as many when <paramref name="exact"/>), the finest such; null when none (or no <see cref="Share"/>).
+    /// would drop at <paramref name="need"/> (exactly as many when <paramref name="exact"/>), the one with the most dropped of those; null when none (or no <see cref="Share"/>).
     /// </summary>
     TextureShare.Image? Shared(WorldTexture t, float need, bool exact)
     {
@@ -343,10 +343,10 @@ public sealed unsafe class WorldTextureCache : IDisposable
     }
 
     /// <summary><paramref name="t"/> draws the shared image <paramref name="e"/> (in place of the one it has, if any): resident at once, nothing loaded.</summary>
-    void Adopt(WorldTexture t, TextureShare.Image e)
+    void Adopt(WorldTexture t, TextureShare.Image e, bool replaced = false)
     {
         e.Refs++;
-        BeginSwap(t, e.Dropped, e.Droppable, e.FileWidth, e.FileHeight);
+        BeginSwap(t, e.Dropped, e.Droppable, e.FileWidth, e.FileHeight, replaced);
         (t.Native, t.Shared, t.ViewLevels, t.ViewSwizzle, t.Swizzled) = (e.Texture, e, e.ViewLevels, e.ViewSwizzle, e.Swizzled);
         Resident(t, e.Bytes);
         Shares++;
@@ -364,7 +364,7 @@ public sealed unsafe class WorldTextureCache : IDisposable
         if (Share?.Of(t.Path!).FirstOrDefault(o => o.QualityLevel == t.QualityLevel && o.Dropped == data.Dropped && o.ViewLevels == viewLevels) is { } same && same != t.Shared)
         {
             texture.Dispose();
-            Adopt(t, same);
+            Adopt(t, same, replaced: t.Replacing);
             return;
         }
         BeginSwap(t, data.Dropped, data.Droppable, data.FileWidth, data.FileHeight, replaced: t.Replacing);
