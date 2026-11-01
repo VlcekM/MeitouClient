@@ -21,6 +21,11 @@ flags0 may still override. Exact original zone/mod merge behaviour remains partl
 outside the building's convex interior-mask hull (OgreMeshReader positions transformed into
 world space and compared with InteriorVolume footprint planes). A mask is not an exact visible-surface boundary.
 
+**Verified** (probe: placed part bounds, zone 20.33 in the `Newwworld` and `rebirth` layers, which agree): the Hub's two
+`Defensive Wall IV` (`14`, `66`) end in the Shinobi Thieves `Watchtower` (`2`, Storm House 09), the wall's corner: `66` runs
+about 150 inside its east side, `14` overlaps its north edge (bounds boxes). No part rule hides them and building parts take no interior cut
+([interior cut](../render-interior-cut.md)), so the game shows them inside the tower too (**Observed**: not seen in the game; issue #111).
+
 ## Placement files and assembly
 
 Zones indexed floor(coord/4608)+32; `.zone` contains building/loose-item instances, town and state
