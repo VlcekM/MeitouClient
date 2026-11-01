@@ -30,7 +30,9 @@ After `resolution` come 94 optional F12-stage columns (the same names and order 
 
 The column `vram_peak_mb` is the peak of the game's `vram_mb` over the same frames: this process's device-local video memory as the driver reports it (`VK_EXT_memory_budget`, the driver's own allocations included; without the extension only Meitou's allocator, so not comparable), read every 30 frames. Blank for builds without the column and on macOS (Metal).
 
-The very last column, `avg_fps`, is the average frame rate over the same frames: 1000 divided by the mean `frame_ms`, one decimal (higher is better).
+The column `avg_fps` is the average frame rate over the same frames: 1000 divided by the mean `frame_ms`, one decimal (higher is better).
+
+The very last column, `sysmem_peak_mb`, is the peak of the game's `working_set_mb` over the same frames: the game process's resident system memory as the operating system reports it (the .NET process working set; includes memory-mapped game data), on every platform. Blank for builds without the column.
 
 The `settle` segment is always run first and left out of the numbers. Each folder under `play/` and `bases/` also keeps the game's per-frame `bench/frames.csv`, its `summary.md`, the MangoHud log and `game.log`.
 
