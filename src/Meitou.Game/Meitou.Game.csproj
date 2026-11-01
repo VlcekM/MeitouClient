@@ -44,6 +44,8 @@
 
   <ItemGroup>
     <RuntimeHostConfigurationOption Include="System.GC.HeapCount" Value="4" />
+    <!-- GC threads not pinned to CPUs 0-3 (HeapCount pins them by default): a pinned thread waiting for its busy core stalled 1 in ~40 collections 100-290 ms (docs/engine.md "GC"). -->
+    <RuntimeHostConfigurationOption Include="System.GC.NoAffinitize" Value="true" />
     <!-- Gen0 budget at most 16 MB: the default let ~1 GB pile up between collections, and each gen0/gen1 paused every thread 20-190 ms (docs/engine.md "GC"). -->
     <RuntimeHostConfigurationOption Include="System.GC.Gen0MaxBudget" Value="16777216" />
     <!-- The Meitou title's wordmark (TitleLogo). -->

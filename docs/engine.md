@@ -50,13 +50,14 @@ The Faithful title does not wait: its picture is opaque, so the start ends with 
 The Meitou title waits for terrain, scenery, character assets and used textures (including deferred loads), then
 one full second of <40ms frames (max5s of ready content for frame pacing, so slow GPUs reach the menu). Its menu artwork/fonts/pipelines warm under the opaque cover too;
 streaming uploads retire and a compacting GC completes before that final smooth run.
-**GC:** the stock runtime (server GC, four heaps, gen0 budget at most 16 MB: `System.GC.Gen0MaxBudget`) in builds and release zips alike; the startup `gc` line names the collector (`GcName`).
+**GC:** the stock runtime (server GC, four heaps, gen0 budget at most 16 MB: `System.GC.Gen0MaxBudget`, GC threads not pinned: `System.GC.NoAffinitize`) in builds and release zips alike; the startup `gc` line names the collector (`GcName`).
 **Observed** (2026-10-24, play benchmark, 5 min, ~160 MB/s allocated, RTX 4090): the default budget let ~1 GB build up between collections, 27 gen0/gen1 collections paused
 20-190 ms (median ~26); at 16 MB, 330 collections paused 2.5 ms median and 31 ms at most, total pause about the same. 64 MB: max 122 ms; workstation concurrent GC: max 25 ms
 but 3.6 s of pauses in all; DATAS (`DynamicAdaptationMode=1`): max 66 ms. `System.GC.Gen0MaxBudget` is read from runtimeconfig (**Verified**: collection counts with
 and without it); `GCgen0MaxBudget` there is ignored and `DOTNET_GCgen0size` changed nothing. The
 experimental Satori GC (github.com/VSadov/Satori, `PublishWithSatoriGC` SDK) is not used in official builds. **Observed** earlier A/B (RTX 4070, 10.0.13
 Satori vs stock 10.0.12 fast flight): longest GC pause 15-21 ms stock vs 1-18 ms Satori, frames unchanged (long frames are foliage updates, docs/viewer.md).
+**Observed** (2026-11-01, headless simulation probe of a ~1600-character town save, Ryzen 5600X, 60 s runs): `HeapCount` pins the four GC threads to CPUs 0-3, and about 1 in 40 ephemeral collections paused 100-290 ms while doing 1.5-3 ms of GC work: the time is between the suspension finishing and the collection starting (GC events `SuspendEEStop` to `GCStart`). Pinned: 6 such pauses in 5 runs; `NoAffinitize`: none in 5 (max 2.6 ms); workstation GC: none in 3. Loading CPUs 0-3 with normal-priority busy loops did not reproduce it, so what holds the pinned core is **Unknown** (interrupt or driver work is a guess). The game was not measured.
 `GCConserveMemory` is not set. **Observed** A/B (`DOTNET_GCConserveMemory=5`, 3600-frame fly benchmark, 3 clean runs each): managed heap at the end
 1.42 vs 1.93 GB, working set 3.37 vs 3.93 GB, but gen2 GCs 12-14 vs 7-8 and pause totals 54-306 vs 36-53 ms (one run 64 frames over 33 ms).
 Process memory beyond the GC heap is mostly untouched write-combined commit (~6 GB at 6.7 GB of VRAM in use), not resident RAM.
