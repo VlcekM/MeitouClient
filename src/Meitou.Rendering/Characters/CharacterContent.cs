@@ -351,7 +351,8 @@ internal sealed class CharacterContent : IDisposable
             var part = made.Part;
             var packed = GpuVertex.PackCharacter(part.Vertices);
             int vertexBytes = packed.Length, indexBytes = made.All.Length * 4;
-            var vertices = DeviceBuffer.Create(gpu, (ulong)vertexBytes, BufferUse.Vertex, AllocationName);
+            // One vertex of slack: each attribute is bound at its own offset, and AMD reads the last vertex of an exactly sized buffer as zeros, a spike from its bind pose (VlcekM/MeitouClient#168).
+            var vertices = DeviceBuffer.Create(gpu, (ulong)(vertexBytes + Vertex.Size), BufferUse.Vertex, AllocationName);
             var indices = DeviceBuffer.Create(gpu, (ulong)indexBytes, BufferUse.Index, AllocationName);
             uploads.Write(vertices, 0, packed);
             uploads.Write(indices, 0, MemoryMarshal.AsBytes(made.All.AsSpan()));
