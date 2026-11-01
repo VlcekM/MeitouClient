@@ -89,7 +89,7 @@ internal static partial class ZoneNavMeshBuilder
         times.CpuRaster = ticks.Raster * ms; times.CpuCompact = ticks.Compact * ms; times.CpuRegions = ticks.Regions * ms; times.CpuContours = ticks.Contours * ms; times.CpuMesh = ticks.Mesh * ms; times.CpuDetail = ticks.Detail * ms;
 
         watch.Restart();
-        var mesh = Stitch(g, s, meshes, tilesPerSide, tileWorld);
+        var mesh = Stitch(g, s, meshes, tilesPerSide, tileWorld, details);
         AddDetail(mesh, meshes, details, g.Ground);
         AssignDoors(mesh, g, s);
         times.Stitch = watch.Elapsed.TotalMilliseconds;
@@ -245,6 +245,7 @@ internal static partial class ZoneNavMeshBuilder
             // Cell centres from the box's first cell, one column past its last cell so the far edge lies between samples.
             int columns = (x1 - 1 - x0) / HeightSampleCells + 2, rows = (z1 - 1 - z0) / HeightSampleCells + 2;
             var values = new float[columns * rows];
+            var own = new bool[columns * rows];
             for (int j = 0; j < rows; j++)
                 for (int i = 0; i < columns; i++)
                 {
@@ -258,14 +259,14 @@ internal static partial class ZoneNavMeshBuilder
                         {
                             if (chf.areas[s] == NavArea.Null) continue;
                             float top = chf.spans[s].y - 0.5f;
-                            if (reg != 0 && chf.spans[s].reg == reg) { y = top; break; }
+                            if (reg != 0 && chf.spans[s].reg == reg) { y = top; own[j * columns + i] = true; break; }
                             if (MathF.Abs(top - plane) < nearest) { nearest = MathF.Abs(top - plane); y = top; }
                         }
                         if (!float.IsNaN(y)) y = chf.bmin.Y + y * chf.ch;
                     }
                     values[j * columns + i] = y;
                 }
-            grids[p] = new HeightGrid(chf.bmin.X + (x0 + border + 0.5f) * chf.cs, chf.bmin.Z + (z0 + border + 0.5f) * chf.cs, step, columns, rows, values);
+            grids[p] = new HeightGrid(chf.bmin.X + (x0 + border + 0.5f) * chf.cs, chf.bmin.Z + (z0 + border + 0.5f) * chf.cs, step, columns, rows, values) { Own = own };
         }
         return grids;
     }
@@ -285,6 +286,7 @@ internal static partial class ZoneNavMeshBuilder
             for (int p = 0; p < m.npolys; p++, polygon++)
             {
                 if (details[tile]?[p] is not { } grid) continue;
+                grid.Own = null;   // only the stitch reads it
                 float off = 0;
                 bool onTerrain = ground is not null;
                 for (int j = 0; j < grid.Rows; j++)
