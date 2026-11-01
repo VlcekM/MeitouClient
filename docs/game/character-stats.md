@@ -478,6 +478,9 @@ stomach gets min(floor - hunger, 0.04). Nobody but the player has to feed anyone
 | player's faction | -10 (never) |
 | anyone else | its platoon's +0x110: 3, or for a SQUAD_TEMPLATE with `malnourished` 1 + 1.2 x rand (`FUN_1407ee2d0`) |
 
+`animalsEat` is 1 in every game ([options](#new-game-advanced-options-that-change-these-mechanics)), so the animal row never
+applies and animals take the other rows: the player's animals are never fed and get hungry. Meitou: no animal row.
+
 Drain and digestion (same function): stomach empty: hunger -= dt/T x race rate x situation (`FUN_1408837a0`:
 bed/KO/dead `bed hunger rate`; else in combat or moving (movement +0x24) 1 + (1 - e) `encumbrance hunger
 rate`; else an AI flag (AI +0x300 -> +0x70) 0.8; else CharStats +0x178 `currentOperatingMachineHungerRate`, the used BUILDING_FUNCTIONALITY `hunger rate` (chairs 0.66,
