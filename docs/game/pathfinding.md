@@ -713,7 +713,6 @@ own (gateway inside), which get codes of their own.
   building flag at +0x1f0 → +0x2c that gates carvers and part of the WALKABLE rule; the global seed list DAT_14212f470;
   the ray-hit kind that still allows a ground seed; whether OverrideSettings material −1 means "any material".
 - Whether the path request converts the footprint radius to Havok units.
-- Why our mesh of zone 43.11 (Sho-Battai) has kept regions not joined to the ground (**Observed**, issue #124 save, a path search with radius 0.01 and every door open still finds no way from the ground): the Longhouses `5563-` and `12-Newwworld-INGAME` (floors at +7 and +72 over the building), Outpost s-III `2-` (+182 and +228) and the Defensive Wall IV tops. NPCs whose relax, guard or patient goals lie there ask for hopeless paths, each exhausting the ~40000 reachable polygons several times.
 - The full avoidance parameters (the repulsion's absolute magnitude); how movement caps a follower's desired speed by its speed mode.
 - Whether face data values other than 3, 4, 5 and the gate nibble exist; how building construction and destruction
   update faces (path mode switches at runtime).
