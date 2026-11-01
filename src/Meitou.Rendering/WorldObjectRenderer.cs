@@ -384,6 +384,15 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     /// <summary>Points kept loaded besides the eye's (<see cref="ObjectStreamer.Kept"/>).</summary>
     public IReadOnlyList<Vector3> Kept { get => streamer.Kept; set => streamer.Kept = value; }
 
+    /// <summary>Where the last need pass measured from, for the VRAM dump: the eye, the margin for its speed, the arrival point and the kept points.</summary>
+    public void WriteViewReport(TextWriter w)
+    {
+        static string P(Vector3 v) => $"{v.X:0}, {v.Y:0}, {v.Z:0}";
+        w.WriteLine($"object needs measured from: eye {P(lastMarkEye)}, speed margin {needMargin:0}{(streamer.Ahead is { } a ? $", arrival {P(a)}" : "")}");
+        w.WriteLine($"  kept points ({streamer.Kept.Count}, merged): {string.Join("; ", streamer.Kept.Select(P))}");
+        w.WriteLine();
+    }
+
     public void Update(Vector3 eye) => Update(eye, Covered ? Math.Max(BudgetMs, CoveredBudgetMs) : BudgetMs);
 
     /// <summary>Colour draws of parts whose diffuse map was not resident (drawn grey) and, at the same moment, textures waiting for a finer image,

@@ -944,6 +944,7 @@ sealed partial class GameHost
         void Caches(TextWriter w)
         {
             if (gpu.Guard is { } guard) { w.WriteLine(guard.Status); w.WriteLine(); }
+            gpu.Objects?.WriteViewReport(w);
             gpu.Objects?.Textures.WriteReport(w);
             gpu.Foliage?.Textures.WriteReport(w);
             gpu.Characters?.Textures.WriteReport(w);
