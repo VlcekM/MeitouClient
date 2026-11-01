@@ -7,7 +7,8 @@
     { key: "p50_ms", label: "p50 frame time (ms)", unit: " ms", primary: true },
     { key: "slow_world_p99_ms", label: "Slow-world tick p99 (ms)", unit: " ms" },
     { key: "avg_fps", label: "Average fps", unit: " fps", higher: true, optional: true },
-    { key: "vram_peak_mb", label: "Peak video memory (MB)", unit: " MB", primary: true, optional: true }
+    { key: "vram_peak_mb", label: "Peak video memory (MB)", unit: " MB", primary: true, optional: true },
+    { key: "sysmem_peak_mb", label: "Peak system memory (MB)", unit: " MB", optional: true }
   ];
   var ALLM = METRICS.concat([
     { key: "max_ms", label: "Max frame (ms)", unit: " ms" },
@@ -494,7 +495,7 @@
 
   // Headline: the newest benchmarked commit against the one before it (upstream order), for the primary selected machine.
   // Tiles show the change first; every number uses the same basis as Compare (see val()).
-  var TILES = [["p99_ms", "p99 frame time", " ms"], ["over33_pct", "Frames over 33 ms", "%"], ["slow_world_p99_ms", "Slow-world tick p99", " ms"], ["avg_fps", "Average fps", " fps", true], ["vram_peak_mb", "Peak video memory", " MB"]];
+  var TILES = [["p99_ms", "p99 frame time", " ms"], ["over33_pct", "Frames over 33 ms", "%"], ["slow_world_p99_ms", "Slow-world tick p99", " ms"], ["avg_fps", "Average fps", " fps", true], ["vram_peak_mb", "Peak video memory", " MB"], ["sysmem_peak_mb", "Peak system memory", " MB"]];
   function renderHeadline() {
     var host = document.getElementById("headline");
     host.innerHTML = "";
@@ -524,7 +525,7 @@
         verdict.textContent = (dl.cls === "" ? "No clear change" : dl.d < 0 ? "Faster" : "Slower") + ": p99 " + (dl.pct == null ? dFmt(dl.d) : pctFmt(dl.pct));
       }
       card.appendChild(verdict);
-      TILES.filter(function (t) { return (t[0] !== "avg_fps" && t[0] !== "vram_peak_mb") || hasMetric(mc, t[0]); }).forEach(function (t) {
+      TILES.filter(function (t) { return (t[0] !== "avg_fps" && t[0] !== "vram_peak_mb" && t[0] !== "sysmem_peak_mb") || hasMetric(mc, t[0]); }).forEach(function (t) {
         var v = val(mc, cur.commit, sid, t[0]), pv = prev ? val(mc, prev.commit, sid, t[0]) : null, big = "", cls = "", small = "";
         if (v != null && pv != null) {
           var d2 = delta(pv, v, t[3]);
