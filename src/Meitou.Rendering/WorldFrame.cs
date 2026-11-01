@@ -1660,11 +1660,11 @@ static class WorldFrame
                 post.CharactersDrawn = characters.DrawnCharacters > 0;
                 StageClock.Lap(StageClock.Characters);   // the colour draw; the motion draw (post chain, upscalers only) laps itself in
             }
-            // Transparent water refracts the slice's scene. Fully opaque distant slices need no copy or pass restart.
-            if (render.Water && gpu.Water is { } refracting && refracting.NeedsRefraction(near))
+            // Transparent water refracts the slice's scene and measures its depth through it. Fully opaque distant slices need no copy or pass restart.
+            if (render.Water && gpu.Water is { } capturing && capturing.NeedsCapture(near, nearSlice))
             {
                 host.Close();
-                refracting.CaptureRefraction(post.SceneColour);
+                capturing.CaptureScene(post.SceneColour, nearSlice ? post.SceneDepth : null, near, far);   // the far slice's depth is a texture of its own
                 host.Open(9, post.WithShadingRate(post.SceneTargets));
             }
             host.Stage(9);

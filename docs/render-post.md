@@ -97,7 +97,11 @@ SSAO reads near depth; character mask controls character occlusion (default stre
 `ssao-mask-skip` may omit a mask read only when no character was drawn. The taps read the mask from a half-size R8 copy of the scene colour's
 alpha (`SsaoMask`), not the scene colour: **Observed** (Nsight, 2560x1440) SSAO 0.35 ms, L2-bound, 0.2 ms of it the scattered scene-colour reads;
 GPU frame -0.15 ms, the picture within 4 levels. Sky/far-depth edges and
-transparent water/particles require explicit exclusion/compositing rules.
+transparent water/particles require explicit exclusion/compositing rules. The water writes no depth, so a surface below the
+water plane fades out of the occlusion over the water's last 2 units along the ray, as the water's edge does
+([water](render-water.md) "Edges"). Passes rebuild view depth from the projection's 0..1 clip depth (`uClipDepthZeroToOne`:
+Vulkan stores half of it plus a half, Metal the clip depth); GL's -1..1 formula puts points about twice too far on Vulkan.
+SSAO: radius 6 units or 3 % of the distance, fade from 1600 to 6600 units.
 `layer-merge`, `fog-half`, `shafts-half`, `layers-lean` combine shafts apply, placed fog and SSAO,
 using reduced targets plus depth-aware reconstruction/mask fallback. A texel that does not fit
 must use the full-resolution path. [Fog volumes](formats/fogfeatures.md), [shafts](render-shafts.md).

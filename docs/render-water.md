@@ -37,6 +37,23 @@ target uses 4x MSAA by default on both backends (`--reflection-samples 1` disabl
 characters, level 3 placed objects and level 4 foliage. Fog in reflection must evaluate reflected world geometry
 against the appropriate air/water bounds; ordinary camera fog cannot be applied indiscriminately.
 
+## Edges
+
+Both waters measure their depth as the game does ([terrain](formats/terrain.md) "LOD, water and sun"): the distance
+along the view ray from the surface to what is behind it, from the near slice's depth copied before the water
+(`CaptureScene`, Vulkan only; Metal, the far slice and Meitou without refraction keep the slant path to the terrain's
+height). Faithful uses it as the game's alpha. Meitou absorbs along it and fades the last 2 units into the scene behind
+(0.5 for the swash); both widen that fade to the copy's depth precision (about 2.4e-7 z^2 / near), so distant shores
+do not shimmer. Ground relief, rocks and legs meet the water without a line. The swash keeps its sheet's thickness:
+its surface is raised over the beach and cut back to the run-up. Beside it, the raise above this moment's run-up is
+subtracted (the breaker hump only where the vertices carry it, as in the vertex stage), else the water stood a few
+units deep at a dry waterline (the stepped line along the heightmap contour). Wet sand blends over the full-size scene,
+not the half-size copy. SSAO fades under the water plane the same way ([post](render-post.md) "SSAO").
+The depth copy is gated like the refraction: Meitou only with refraction on (`--no-water-refraction` pays neither),
+Faithful only for slices nearer than 4000 units; with reflections off the nearest water is unknown, so it then runs
+whether or not water is in view. **Observed** (2560x1440, DLSS, RTX 4090, Shark): about 0.03 ms with Meitou water (its
+pass restart was there), 0.05 ms with Faithful (a pass restart plus a full-size depth copy).
+
 ## Safe work skips
 
 Surf branches only for surf/swash contribution. Zero ocean strength skips displacement/slope
