@@ -373,6 +373,10 @@ public enum SquadAi : ushort
     Feed = 128,
     /// <summary>Shoot first (+0x11a): the player's turret gunners also take dangerous neutrals (<see cref="SquadAiRules.ShootsFirstAt"/>).</summary>
     ShootFirst = 256,
+    /// <summary>Heal Neutrals (Meitou-only): player medics also treat downed characters of factions that are no enemy (<see cref="FirstAid.FirstAidSystem"/> pass 2).</summary>
+    HealNeutrals = 512,
+    /// <summary>Heal All (Meitou-only): as <see cref="HealNeutrals"/>, and downed enemies too.</summary>
+    HealAll = 1024,
     /// <summary>A new game's options (<b>Observed</b>: 511 of the owner's saves; heal and help are on in 4, rescue and shoot first in none).</summary>
     Defaults = Ditch | Sleep | Sit | Share | Feed,
 }
@@ -395,16 +399,22 @@ public static class SquadAiKeys
         (SquadAi.Share, "share"), (SquadAi.Feed, "feed"), (SquadAi.ShootFirst, "shootfirst"),
     ];
 
+    /// <summary>The Meitou-only options' CAMERA bools, written only while on.</summary>
+    public static readonly (SquadAi Option, string Key)[] MeitouKeys = [(SquadAi.HealNeutrals, "meitou heal neutrals"), (SquadAi.HealAll, "meitou heal all")];
+
     public static void Write(Meitou.Data.Fcs.FcsRecord camera, SquadAi options)
     {
         foreach (var (option, key) in Keys) camera.Bools[key] = (options & option) != 0;
+        foreach (var (option, key) in MeitouKeys)
+            if ((options & option) != 0) camera.Bools[key] = true;
+            else camera.Bools.Remove(key);
     }
 
     /// <summary>The options a CAMERA record holds; an absent key keeps the option's default (<see cref="SquadAi.Defaults"/>).</summary>
     public static SquadAi Read(Meitou.Data.Fcs.FcsRecord camera)
     {
         var options = SquadAi.Defaults;
-        foreach (var (option, key) in Keys)
+        foreach (var (option, key) in Keys.Concat(MeitouKeys))
             if (camera.Bools.TryGetValue(key, out bool on)) options = on ? options | option : options & ~option;
         return options;
     }

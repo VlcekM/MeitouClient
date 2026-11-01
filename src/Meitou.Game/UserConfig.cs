@@ -101,6 +101,8 @@ sealed class UserConfig
     public bool DoorsCloseBehind { get; set; } = true;
     /// <summary>A blow that destroys the head cuts it off, under the limbs' rule (Advanced settings; Faithful off: the game never does; docs/game/character-stats.md "Decapitation").</summary>
     public bool Decapitation { get; set; } = true;
+    /// <summary>A new ragdoll keeps the character's motion and the downing blow's push, its joints have soft limits and a relaxed pull, and a cut-off head is thrown with it (Advanced settings; Faithful off: the game starts a ragdoll at rest; docs/game/ragdolls.md "Initial state").</summary>
+    public bool AdvancedRagdolls { get; set; } = true;
     /// <summary>A loaded or imported save starts paused (Advanced settings, a plain on/off switch outside the Faithful / Meitou sides; off by default: it runs at once, as in the game). <c>--load</c> is not paused.</summary>
     public bool PauseOnLoad { get; set; }
     /// <summary>Fixes of the game's own bugs (Fixes settings; on: fixed, off: as the game does; docs/audio.md): doors and gates sound when they break,
@@ -129,12 +131,12 @@ sealed class UserConfig
     public bool HardwareMouse { get; set; }
     /// <summary>Outline and tint the character under the cursor (Advanced settings; Meitou only, the game has none).</summary>
     public bool HoverOutline { get; set; } = true;
-    /// <summary>The green ring under each selected character (Advanced settings; default on).</summary>
-    public bool SelectionRings { get; set; } = true;
     /// <summary>A character that takes a fatal hit explodes, covers everything around in blood and sends bones flying (Advanced settings; an easter egg, off by default, not part of the all Faithful / all Meitou switches; docs/game/luckyren.md).</summary>
     public bool LuckyrenMode { get; set; }
     /// <summary>How many items dropped in play stay on the ground before the oldest goes (Advanced settings; <see cref="Meitou.Simulation.Items.GroundItems.Limit"/>).</summary>
     public int GroundItemLimit { get; set; } = Meitou.Simulation.Items.GroundItems.DefaultLimit;
+    /// <summary>The <c>--sandbox</c> debug panel at the top right is folded to its button (a down arrow); a click on the button toggles it.</summary>
+    public bool SandboxPanelCollapsed { get; set; }
     /// <summary>The audio sliders (Audio settings): the original's six volumes and the music frequency; null until first used, then taken from the install's settings.cfg.</summary>
     public Meitou.Audio.AudioSettings? Audio { get; set; }
     /// <summary>The original's Gameplay options (Gameplay settings); null until first used, then taken from the install's settings.cfg.</summary>

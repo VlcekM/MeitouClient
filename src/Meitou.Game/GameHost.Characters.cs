@@ -226,7 +226,8 @@ sealed partial class GameHost
         player.FullRateCharacters(fullRate);
         foreach (var c in current.Characters)
         {
-            if (c.Appearance is null || editing is { } edited && c.Id != edited) continue;
+            var inBar = editing is { } shown ? EditorBarPlace(c.Id, shown) : null;
+            if (c.Appearance is null || editing is { } edited && c.Id != edited && inBar is null) continue;
             var position = c.Position;
             float yaw = DrawnYaw(c);
             CharacterSnapshot? before = null;
@@ -263,6 +264,13 @@ sealed partial class GameHost
                 poses[i] = new CharacterPose(layer.Name, time, weight);
             }
             if (player.EditorIdle(c.Id) is { } stance) poses = EditorStancePoses(c.Id, stance);
+            // The Meitou editor's bar (GameHost.EditorBar.cs): the shown character stands in it, the others sit on its seats.
+            if (inBar is { } place)
+            {
+                (position, yaw, rotation) = (place.Position, place.Yaw, null);
+                if (place.Clip is { } clip)
+                    poses = [new CharacterPose(clip, animationLibrary?.IndexOf(clip) is >= 0 and int k ? (float)realTime.Elapsed.TotalSeconds * animationLibrary.Definitions[k].PlaySpeed : 0, 1)];
+            }
             if (c.Id == sandboxHero && sandboxPicker?.Pose() is { } forced) poses = forced;   // the sandbox drop-down loops a picked clip on the hero
             var held = HeldLook(c.Appearance, c.HeldTool, out var heldPending);
             var look = player.EditorPreview(c.Id, c.Appearance) ?? held;
@@ -270,7 +278,7 @@ sealed partial class GameHost
             var glide = player.EditorBlend(c.Id);   // after the preview, which may just have swapped the look
             list.Add(new CharacterInstance(DrawKey(c.Id), look, position, yaw, poses)
             {
-                WeaponDrawn = c.WeaponDrawn, RangedDrawn = c.RangedDrawn, BackDrawn = c.BackDrawn, Shots = c.CrossbowShots, Bolts = BoltsOf(c), Scale = c.Scale, Hidden = hiddenIndoors.Contains(c.Id), FullRateAnimation = editing is not null || fullRate.Contains(c.Id) || c.Id == sandboxHero && sandboxPicker?.Current is not null,
+                WeaponDrawn = c.WeaponDrawn, RangedDrawn = c.RangedDrawn, BackDrawn = c.BackDrawn, Shots = c.CrossbowShots, Bolts = BoltsOf(c), Scale = c.Scale, Hidden = inBar is null && hiddenIndoors.Contains(c.Id), FullRateAnimation = editing is not null || fullRate.Contains(c.Id) || c.Id == sandboxHero && sandboxPicker?.Current is not null,
                 Bones = Blend(before is null || Reanchored(before, c) ? null : before.Ragdoll, c.Ragdoll, alpha, ref Slot(ref ragdollsBySlot, c.Id.Slot), ref Slot(ref spareRagdollsBySlot, c.Id.Slot)),
                 BlendFrom = glide?.From, Blend = glide?.Blend ?? 0, Build = c.Build, Rotation = rotation, Blood = c.BloodAmounts,
             });
@@ -281,6 +289,7 @@ sealed partial class GameHost
                 list.Add(new CharacterInstance(DrawKey(c.Id) ^ (1L << 55), heldPending, position, yaw, poses) { Hidden = true });
         }
         if (editing is null) AddHeads(list);
+        else AddEditorCrowd(list);
     }
 
     readonly System.Runtime.CompilerServices.ConditionalWeakTable<Meitou.Data.Characters.CharacterAppearance, Dictionary<string, Meitou.Data.Characters.CharacterAppearance>> heldLooks = new();

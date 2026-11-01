@@ -1255,6 +1255,9 @@ player squad for a new layout ([squads travelling together](pathfinding.md#squad
 `ditch`. Meitou: `SquadFormationCommand` sets `World.FactionFormations` (the movement rebuilds the slots when the type changes). New-game values (**Observed**, 511 of the owner's saves): ditch, sleep, sit, share,
 feed, eject on; heal, help off (on in 4), rescue, stay, shootfirst off. Readers (**Verified** by decompile):
 - **Heal Allies** (+0x110): the medic finder's other-faction test, pass 1 only ([Medic jobs](#medic-jobs)); "Characters with the medic job will also heal characters of allied factions".
+- Meitou-only lines after the nine (not in the original): **Heal Neutrals**, a player medic's pass 2 takes any free downed stranger that is no enemy and not carried by one, without the
+  `heals strangers`, class and `FUN_14059a670` tests; **Heal All**, the same with enemies too. CAMERA bools `meitou heal neutrals` / `meitou heal all`, written only while on; the
+  tab's lines shrink to fit the original panel.
 - **Help Allies** (+0x111): the protect-allies finder `FUN_14099ca10` (goals 15, 288; its same-town twin `FUN_14099cf80` is never registered) (sensed (1, 0x208), seen or heard): for a
   player-faction looker each fighting candidate's threat (`FUN_14099a190`) is × `FUN_1409b2380`(d², 10, 1000, 0.1); one of another faction is
   skipped with the option off and squared with it on. Result capped at 1.2.

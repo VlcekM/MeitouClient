@@ -29,7 +29,7 @@ public static class BuildingPlacements
         if (b.Position == Vector3.Zero) return null;
         if (db.Find(b.BuildingId) is not { } record) return null;
         float y = b.WorldY ?? terrainHeight(b.Position.X, b.Position.Z) + b.Position.Y;
-        var state = b.StateId is not null && levels.Zones.TryGetValue(b.Zone, out var zoneDb) ? zoneDb.Find(b.StateId) : null;
+        var state = b.StateId is not null && levels.Zones.TryGetValue(b.StateZone ?? b.Zone, out var zoneDb) ? zoneDb.Find(b.StateId) : null;
         return new ResolvedBuilding(b, record, new Vector3(b.Position.X, y, b.Position.Z), b.DestroyedOverride ?? state?.GetBool("destroyed") ?? false);
     }
 }

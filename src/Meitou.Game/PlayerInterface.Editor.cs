@@ -65,6 +65,10 @@ sealed partial class PlayerInterface
     public bool EditorOpen => editor is not null && faithfulScreens.IsOpen("editor");
     /// <summary>The character the editor shows and its tab, for the host's camera; null while the editor is closed.</summary>
     public (CharacterId Character, EditorTab Tab)? EditorFocus => EditorOpen ? (editor!.Current, editor.Tab) : null;
+    /// <summary>Every character the open editor edits, the shown one included; empty while it is closed.</summary>
+    public IReadOnlyList<CharacterId> EditorCharacters => EditorOpen ? editor!.Characters : [];
+    /// <summary>The host draws the editor's scene in the world (the Meitou bar, <see cref="EditorBar"/>): the backdrop is left out.</summary>
+    public bool EditorInWorld { get; set; }
 
     /// <summary>
     /// Opens the editor for <paramref name="characters"/> (the start's squad at creation; one character at a surgeon). Characters without a person's look (animals) are
@@ -214,7 +218,7 @@ sealed partial class PlayerInterface
     List<UiControl> EditorBackdrop()
     {
         var backdrop = new List<UiControl>();
-        if (uiPainter is not { } painter) return backdrop;
+        if (uiPainter is not { } painter || EditorInWorld) return backdrop;
         groundFile ??= findAsset?.Invoke("SandyGround.dds") ?? "";
         var all = new UiRect(0, 0, Width, Height);
         // A sand colour first, so the window is covered before the ground texture is decoded.

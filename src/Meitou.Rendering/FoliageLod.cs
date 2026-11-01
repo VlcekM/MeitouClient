@@ -262,12 +262,12 @@ public static class FoliageLodCache
 
     public static string Root { get; set; } = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Meitou", "lods");
 
-    public static string PathFor(string name, byte[] fileBytes, string? root = null, int version = FoliageLodBuilder.Version)
+    public static string PathFor(string name, byte[] fileBytes, string? root = null, int version = FoliageLodBuilder.Version, string variant = "")
     {
         var hash = Convert.ToHexString(SHA256.HashData(fileBytes))[..24].ToLowerInvariant();
         var safe = new string(Path.GetFileNameWithoutExtension(name).Select(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_' ? c : '_').ToArray());
         if (safe.Length > 40) safe = safe[..40];
-        return Path.Combine(root ?? Root, $"{safe}_{hash}_v{version}.mlod");
+        return Path.Combine(root ?? Root, $"{safe}_{hash}{variant}_v{version}.mlod");
     }
 
     /// <summary>The cached levels (null in the result's <c>Set</c>: the mesh has none), or <c>Hit</c> false when there is no readable file.</summary>

@@ -168,6 +168,16 @@ sealed partial class GameHost
         if (gpu?.Decals is { } decals) SaveSurfaceDecals.Write(record, decals.SavedSurfaces);
     }
 
+    /// <summary>The default <c>blood colour</c> (RACE, 0x800000), the red the blood particles' textures already are.</summary>
+    const uint DefaultBloodColour = 0x800000;
+
+    /// <summary>
+    /// The recolour a blood particle burst takes for a race's <c>blood colour</c> <paramref name="rgb"/> (<see cref="ParticleRenderer.Burst"/>): none for the default red, which the
+    /// textures show as they are; else the colour scaled as the default would be to full red, so a race's blood is as bright against its hue as red blood is.
+    /// </summary>
+    static Vector3? BloodRecolour(uint rgb) =>
+        rgb == DefaultBloodColour ? null : new Vector3(rgb >> 16 & 0xFF, rgb >> 8 & 0xFF, rgb & 0xFF) / 0x80;
+
     /// <summary>0xRRGGBB as the decal's ABGR colour bytes (alpha 0).</summary>
     static uint Abgr(uint rgb) => (rgb >> 16 & 0xFF) | (rgb & 0xFF00) | (rgb & 0xFF) << 16;
 

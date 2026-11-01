@@ -312,7 +312,7 @@ internal sealed unsafe class MetalProbeGi : IProbeGi
             var geometry = new MTLAccelerationStructureTriangleGeometryDescriptor
             {
                 VertexBuffer = ctx.BufferAt(part.Vertices.Handle),
-                VertexStride = (ulong)Vertex.Size,
+                VertexStride = (ulong)part.Stride,
                 VertexFormat = MTLAttributeFormat.Float3,
                 IndexBuffer = ctx.BufferAt(part.Indices.Handle),
                 IndexBufferOffset = (ulong)part.Offset[sourceLevel] * 4,

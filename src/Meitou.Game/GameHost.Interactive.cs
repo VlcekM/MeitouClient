@@ -288,7 +288,7 @@ sealed partial class GameHost
                 return;
             }
             // F10 (rebindable) opens the debug menu, which then takes every key until it closes.
-            if (KeyMap.Map(k) is { } mapped && session.Bindings.Get(InputAction.ToggleDebugMenu).Contains(Binding.Of(mapped))) { debugMenuOpen = !debugMenuOpen; return; }
+            if (KeyMap.Map(k) is { } mapped && session.Bindings.Get(InputAction.ToggleDebugMenu).Contains(Binding.Of(mapped))) { debugMenuOpen = !debugMenuOpen; debugParts = null; return; }
             if (debugMenuOpen)
             {
                 if ((k == SilkKey.KeypadEnter ? EngineKey.Enter : KeyMap.Map(k)) is { } menuKey) DebugMenuKey(menuKey);
@@ -375,7 +375,8 @@ sealed partial class GameHost
                 bool select = physical is { } pressed && PlayerButton(pressed) == EngineButton.Left;   // the Select button, whichever it is bound to
                 if (PanelLive() && physical is { } settingsButton && panel?.MouseDown(at, settingsButton) == true) { panelDrag = true; return; }
                 if (PanelLive() && panel?.Contains(at) == true) return;
-                if (select && PanelLive() && sandboxPicker?.MouseDown(at) == true) return;
+                if (select && PanelLive() && !config.SandboxPanelCollapsed && sandboxPicker?.MouseDown(at) == true) return;
+                if (select && PanelLive() && SandboxToggleClick(at)) return;
                 if (select && profiler?.Click(at) == true) { profilerClick = true; return; }   // F12's legend opens and closes rows
                 // The cinema's editor: its clicks never select or move characters.
                 if (select && cinema.MouseDown(at)) return;
@@ -431,7 +432,7 @@ sealed partial class GameHost
             mouse.Scroll += (m, wheel) =>
             {
                 if (Covered || PanelLive() && panel?.Scroll(wheel.Y) == true) return;
-                if (PanelLive() && sandboxPicker?.Scroll(wheel.Y) == true) return;
+                if (PanelLive() && !config.SandboxPanelCollapsed && sandboxPicker?.Scroll(wheel.Y) == true) return;
                 var at = Pixels(orbitAnchor ?? m.Position);
                 if (!cinema.Contains(at) && !player.UiScroll(at, wheel.Y) && !(PanelLive() && player.ContainsUi(at))) session.Input.AddWheel(wheel.Y);
             };
@@ -473,7 +474,7 @@ sealed partial class GameHost
                 actions.Pressed(InputAction.ToggleFreeCamera)) player.Follow = null;
             if (actions.Pressed(InputAction.ToggleSettings) && panel is not null) panel.Visible = !panel.Visible;
             if (actions.Pressed(InputAction.Screenshot)) screenshotRequested = true;
-            if (actions.Pressed(InputAction.ToggleStats)) statsVisible = !statsVisible;
+            if (actions.Pressed(InputAction.ToggleStats)) { statsVisible = !statsVisible; FoliageGpuCull.CountTriangles = statsVisible; }   // the foliage triangles are read from its GPU cull while shown
             if (actions.Pressed(InputAction.ToggleFps)) fpsVisible = !fpsVisible;
             if (actions.Pressed(InputAction.QuickSave)) quickSaveRequested = true;
             if (actions.Pressed(InputAction.QuickLoad)) quickLoadRequested = true;
@@ -497,6 +498,9 @@ sealed partial class GameHost
         double drawTotal = 0, gpuSum = 0, statsTimer = 0;
         int gpuSamples = 0, statsFrames = 0;
         long statsTicks = 0;
+        // The triangle counts summed over the statistics' second (the objects' from their running colour total).
+        double terrainTris = 0, characterTris = 0, grassBlades = 0;
+        long objectTris0 = 0;
         while (!window.IsClosing && !quit)
         {
             BenchLap(BenchTail);
@@ -700,7 +704,6 @@ sealed partial class GameHost
                 if (!g.NoPopulation && !covered && panel?.Visible != true) player.Steer();
                 if (ui && overlay is not null && !g.NoPopulation)
                 {
-                    player.SelectionRings = config.SelectionRings;
                     player.Draw(overlay, size.X, size.Y);
                 }
                 if (ui && overlay is not null && IsSandbox) DrawSandbox(overlay, size.X, size.Y);
@@ -763,6 +766,9 @@ sealed partial class GameHost
                 PlayBenchRendered(Stopwatch.GetElapsedTime(t0).TotalMilliseconds, display.Context.Pipelines.LatePipelines);
                 if (display.Context.GpuFrameMs > 0) { gpuSum += display.Context.GpuFrameMs; gpuSamples++; }
                 statsFrames++;
+                terrainTris += gpu.Terrain.DrawnTriangles;
+                characterTris += gpu.Characters?.DrawnTriangles ?? 0;
+                if (gpu.Foliage is { Enabled: true } drawnFoliage) grassBlades += drawnFoliage.DrawnBlades;
                 if (takeFile is not null) { FramebufferCapture.SavePng(display.Context, finalPicture ?? backbuffer, takeFile, size.X, size.Y, topDown: finalPicture is not null); cinema.FrameDone(); }
                 else if (shot) SaveScreenshot(display.Context, finalPicture ?? backbuffer, size.X, size.Y, topDown: finalPicture is not null);
                 if (feedbackShot)
@@ -774,17 +780,20 @@ sealed partial class GameHost
             statsTimer += dt;
             if (statsTimer >= 1)
             {
-                // Once a second: the frame, the simulation, then the renderer's lines.
+                // Once a second: the frame and the simulation, then the renderer's sections.
                 stats.Clear();
-                stats.Add($"{statsFrames / statsTimer:0} fps rendered{(frameGen is { Enabled: true } ? ", x2 shown with frame generation" : "")} ({(display.VSync ? "vsync" : fpsLimit > 0 ? $"limit {fpsLimit}{(frameGen is { Enabled: true } ? " shown" : "")}" : "uncapped")}), gpu {(gpuSamples > 0 ? $"{gpuSum / gpuSamples:0.00}" : "-")} ms");
+                stats.Add("Performance");
+                stats.Add($"  frame rate    {statsFrames / statsTimer:0} fps{(frameGen is { Enabled: true } ? " (x2 shown with frame generation)" : "")}, {(display.VSync ? "vsync" : fpsLimit > 0 ? $"limit {fpsLimit}" : "uncapped")}; graphics card {(gpuSamples > 0 ? $"{gpuSum / gpuSamples:0.0}" : "-")} ms a frame");
                 long ticks = session.Simulation.TotalTicks - statsTicks;
                 statsTicks = session.Simulation.TotalTicks;
-                stats.Add($"simulation  {ticks / statsTimer:0} ticks/s, {session.CurrentSnapshot.Characters.Count} characters, dropped {session.Simulation.DroppedTicks} ticks in all");
-                WorldStats.Add(stats, display.Context, gpu, render, camera.Eye);
-                stats.Add($"ui          {(interfaceHidden ? 0 : player.OpaqueUiCoverage):P0} of the screen under opaque controls");
-                if (audio is not null) stats.Add($"audio       {audio.StatsLine()}");
-                if (audio is not null) stats.Add($"world audio {WorldAudioStats()}");
-                if (audio is not null) stats.Add($"char audio  {CharacterAudioStats()}, {UiAudioStats()}");
+                stats.Add($"  simulation    {ticks / statsTimer:0} ticks/s, {session.CurrentSnapshot.Characters.Count} characters, {session.Simulation.DroppedTicks} ticks dropped since the start");
+                long objectTris = gpu.Objects?.Totals[0, 1] ?? 0;
+                int frames = Math.Max(statsFrames, 1);
+                WorldStats.Add(stats, display.Context, gpu, camera.Eye,
+                    new WorldStats.Triangles(terrainTris / frames, (objectTris - objectTris0) / (double)frames, gpu.Foliage?.ColourTrianglesPerFrame, characterTris / frames, grassBlades / frames));
+                gpu.Foliage?.ResetDrawTally();
+                objectTris0 = objectTris;
+                terrainTris = characterTris = grassBlades = 0;
                 statsTimer = gpuSum = 0;
                 statsFrames = gpuSamples = 0;
             }

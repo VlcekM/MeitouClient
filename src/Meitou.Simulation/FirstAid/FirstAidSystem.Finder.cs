@@ -224,7 +224,8 @@ public sealed partial class FirstAidSystem
     /// The medic itself scores its plain need. The highest wins.</item>
     /// <item><b>Strangers</b>, when pass 1 found nobody: sensed neutral, knocked-out, imprisoned or crawling ones that are no enemy; not an animal or a robot race, not of a not-real faction, not fighting.
     /// A free one needs the medic's faction to <c>heal strangers</c>, to be down and to pass <c>FUN_14059a670</c> (same NPC class unless bandits, or allied); a prisoner needs a cage of the medic's
-    /// faction and not to be a slave; a chained slave of the medic's faction counts too. Same building and town; a patient another medic works on is skipped.</item>
+    /// faction and not to be a slave; a chained slave of the medic's faction counts too. Same building and town; a patient another medic works on is skipped.
+    /// Meitou-only: a player medic with Heal Neutrals takes any free downed stranger not carried by an enemy, with Heal All enemies too.</item>
     /// <item><b>The squad's chained slaves</b> in sight (<see cref="SquadSlave"/>), <b>carried</b> patients of the medic's faction (outdoors), then <b>prisoners in the cages</b> of the medic's faction in its place at a flat 0.25.</item>
     /// </list>
     /// </summary>
@@ -241,6 +242,7 @@ public sealed partial class FirstAidSystem
         if (!cold.IsPlayer && !cold.Carrying.IsNone) return (-1, 0);
         bool organic = cold.Inventory is { } inv && Best(inv, ItemInfo.FirstAidKitFunction) is not null, robotic = cold.Inventory is { } inv2 && Best(inv2, ItemInfo.RobotKitFunction) is not null;
         bool healAllies = (world.Player.SquadAi & SquadAi.Heal) != 0;
+        bool healAll = cold.IsPlayer && (world.Player.SquadAi & SquadAi.HealAll) != 0, healNeutrals = healAll || cold.IsPlayer && (world.Player.SquadAi & SquadAi.HealNeutrals) != 0;
         bool heals = Relations is { } rel && rel.Contains(cold.Faction) && rel.Factions[cold.Faction].HealsStrangers;
         float range = AggroSystem.RangeOf(cold, AggroSystem.OutdoorSight), range2 = range * range;
         var origin = next[i].Position;   // the range gate first in both passes: it is the cheapest test and drops nearly every character of the big save before the path, ally and enemy tests
@@ -314,12 +316,16 @@ public sealed partial class FirstAidSystem
             foreach (int s in candidates)
             {
                 if (!next[s].Alive || (next[s].Position - origin).LengthSquared() > range2 || table.Cold(s) is not { } other || Skip(s, other)) continue;
-                if (other.Race!.IsRobot && !robotics || other.Animal is not null || Eaten(other) || other.InCombat || EnemyOf(world, i, s) || Dist2(s) > range2) continue;
+                if (other.Race!.IsRobot && !robotics || other.Animal is not null || Eaten(other) || other.InCombat || Dist2(s) > range2) continue;
+                bool enemy = EnemyOf(world, i, s);
+                if (enemy && !healAll) continue;
                 if (Relations is { } r2 && r2.Contains(other.Faction) && r2.Factions[other.Faction].NotReal) continue;
                 bool down = other.Medical!.Incapacitated || !other.CarriedBy.IsNone;
                 if (Allied(world, i, s) && !down && !other.IsImprisoned) continue;   // sensed as an ally only: pass 1's
                 bool ok;
-                if (!other.IsImprisoned)
+                if (!other.IsImprisoned && healNeutrals && down && !CarriedByEnemy(other)) ok = true;   // Heal Neutrals / Heal All (Meitou-only): no faction, class or relation test
+                else if (enemy) continue;
+                else if (!other.IsImprisoned)
                 {
                     if (other.NpcClass == FundamentalType.Bandit && other.NpcClass != cold.NpcClass) continue;
                     if (!Helps(world, i, s)) continue;   // FUN_14059a670

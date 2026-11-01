@@ -55,6 +55,7 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
 
     readonly CharacterRigs rigs;
     IRagdollEnvironment? environment;
+    readonly Bodies.BodyOptions? options;
     readonly RagdollPhysics physics = new();
     readonly Dictionary<CharacterId, Ragdoll> ragdolls = [];
     readonly List<CharacterId> order = [];
@@ -65,10 +66,12 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
     int nextTag = 1;
 
     /// <param name="environment">Ground and buildings; null: the world's walkable ground (<see cref="WalkabilityEnvironment"/>).</param>
-    public RagdollSystem(CharacterRigs rigs, IRagdollEnvironment? environment = null)
+    /// <param name="options">The body options whose <see cref="Bodies.BodyOptions.AdvancedRagdolls"/> gives a new ragdoll its start speed; null: at rest, as the original.</param>
+    public RagdollSystem(CharacterRigs rigs, IRagdollEnvironment? environment = null, Bodies.BodyOptions? options = null)
     {
         this.rigs = rigs;
         this.environment = environment;
+        this.options = options;
         RagdollPhysics.WarmUpOnce();
     }
 
@@ -91,6 +94,10 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
         public BodyHandle?[] Bodies = [];
         public bool[] Dynamic = [];
         public readonly List<ConstraintHandle> Joints = [];
+        /// <summary>Advanced ragdolls: the joints have soft limits (set when the bodies are built), and the relaxed pull of <see cref="Tone"/> (its servos in <see cref="Relax"/>).</summary>
+        public bool Soft;
+        public Tone Tone;
+        public readonly List<ConstraintHandle> Relax = [];
         /// <summary>By body: the last world pose (also kept for bodies not in the scene while getting up).</summary>
         public RigidTransform[] Pose = [];
         public bool Frozen;
@@ -178,6 +185,10 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
         for (int i = 0; i < next.Length; i++)
         {
             if (!next[i].Alive || table.Cold(i) is not { } cold) continue;
+            // Meitou (BodyOptions.AdvancedRagdolls): a new whole-body ragdoll goes on as the character moved, pushed by the blow that put it down (CombatSystem.Knockdown), else as it moved last tick.
+            bool advanced = options is { AdvancedRagdolls: true };
+            var (launch, push) = !advanced ? default : cold.Blow ?? (table.Previous[i].Velocity, Vector3.Zero);
+            cold.Blow = null;
             cold.CarryAttach = cold.CarriedBy.IsNone ? null : AttachOf(table, cold);
             var id = table.IdOf(i);
             ragdolls.TryGetValue(id, out var r);
@@ -214,7 +225,7 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
                     StartGetUp(world, r, ref next[i]);
                 animated = Animated(r, cold, placement);
                 bool restored = restore is not null && Fits(r, restore, next[i].Position);
-                Rebuild(r, wanted, restored ? restore!.Pose : animated);
+                Rebuild(r, wanted, restored ? restore!.Pose : animated, restored ? default : (launch, push), advanced, world.Seed);
                 if (restored)
                 {
                     r.Age = restore!.Age;
@@ -222,6 +233,7 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
                 }
             }
             if (r.Mask == RagdollPart.None) continue;
+            if (!r.Frozen && ToneOf(cold, r.Mask, advanced) is var tone && tone != r.Tone) SetTone(r, tone);
             if (!r.Frozen && r.Dynamic.Any(d => !d))
                 Pin(r, animated ?? Animated(r, cold, placement), dt);
             if (!r.Frozen) physics.Cover(r.Pose[r.Definition.Root].Position, 12 * r.Scale, env, tick);
@@ -364,10 +376,15 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
 
     /// <summary>
     /// Replaces the bodies for <paramref name="mask"/>: simulated bodies, and pinned (kinematic) ones joined to them. A body that was in the scene keeps its pose and velocity, a
-    /// new one starts at the animated pose at rest (the game starts from the animated pose with no velocity and no hit impulse).
+    /// new one starts at the animated pose at rest (the game starts from the animated pose with no velocity and no hit impulse). Meitou: a new body of a whole (not carried)
+    /// ragdoll starts at <paramref name="start"/>'s velocity (world units/s, at most half <see cref="RagdollPhysics.MaxSpeed"/>), its arms and legs spun by the push (<see cref="Spin"/>);
+    /// with <paramref name="soft"/> its joints get soft limits (<see cref="AddJoint"/>).
     /// </summary>
-    void Rebuild(Ragdoll r, RagdollPart mask, RigidTransform[] animated)
+    void Rebuild(Ragdoll r, RagdollPart mask, RigidTransform[] animated, (Vector3 Velocity, Vector3 Push) start = default, bool soft = false, ulong seed = 0)
     {
+        var launch = start.Velocity;
+        if ((mask & RagdollPart.Whole) == 0 || (mask & RagdollPart.CarryMode) != 0) (launch, start.Push) = (Vector3.Zero, Vector3.Zero);
+        else if (launch.Length() > RagdollPhysics.MaxSpeed / 2) launch = Vector3.Normalize(launch) * (RagdollPhysics.MaxSpeed / 2);
         var bodies = r.Definition.Bodies;
         var velocities = new BodyVelocity[bodies.Length];
         var had = new bool[bodies.Length];
@@ -382,6 +399,7 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
         Clear(r);
         r.Mask = mask;
         r.Frozen = false;
+        r.Soft = soft;
         if (mask == RagdollPart.None) return;
         if ((mask & RagdollPart.Whole) != 0 && !r.InScene) r.Age = 0;
         if ((mask & RagdollPart.Whole) == 0) r.Age = 0;
@@ -404,7 +422,7 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
             // and so does everything when the body is lifted onto a shoulder.
             bool keep = had[b] && dynamic[b] && (mask & RagdollPart.CarryMode) == 0;
             var pose = keep ? r.Pose[b] : lift > 0 ? animated[b] with { Position = animated[b].Position + new Vector3(0, lift, 0) } : animated[b];
-            var velocity = keep ? velocities[b] : default;
+            var velocity = keep ? velocities[b] : new BodyVelocity(launch, Spin(r, bodies[b].Name, b, start.Push, seed));
             if (!needed[b]) { r.Pose[b] = pose; continue; }
             r.Pose[b] = pose;
             var rigid = new RigidPose(pose.Position, pose.Rotation);
@@ -472,6 +490,11 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
                 if (j.Limits)
                     r.Joints.Add(solver.Add(a, b, new TwistLimit { LocalBasisA = j.BasisA, LocalBasisB = j.BasisB, MinimumAngle = j.Low, MaximumAngle = j.High, SpringSettings = spring }));
                 if (j.SpringStiffness > 0) r.Joints.Add(solver.Add(a, b, HingeSpring(r, j)));
+                if (j.Limits && r.Soft)
+                {
+                    float band = SoftBand * (j.High - j.Low);
+                    r.Joints.Add(solver.Add(a, b, new TwistLimit { LocalBasisA = j.BasisA, LocalBasisB = j.BasisB, MinimumAngle = j.Low + band, MaximumAngle = j.High - band, SpringSettings = SoftLimit }));
+                }
                 break;
             case PhysicsJointType.Spherical:
                 r.Joints.Add(solver.Add(a, b, new BallSocket { LocalOffsetA = j.OffsetA, LocalOffsetB = j.OffsetB, SpringSettings = spring }));
@@ -479,6 +502,12 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
                 {
                     r.Joints.Add(solver.Add(a, b, new SwingLimit { AxisLocalA = j.AxisA, AxisLocalB = j.AxisB, MaximumSwingAngle = j.Swing, SpringSettings = spring }));
                     r.Joints.Add(solver.Add(a, b, new TwistLimit { LocalBasisA = j.BasisA, LocalBasisB = j.BasisB, MinimumAngle = j.Low, MaximumAngle = j.High, SpringSettings = spring }));
+                    if (r.Soft)
+                    {
+                        float band = SoftBand * (j.High - j.Low);
+                        r.Joints.Add(solver.Add(a, b, new SwingLimit { AxisLocalA = j.AxisA, AxisLocalB = j.AxisB, MaximumSwingAngle = j.Swing * (1 - SoftBand), SpringSettings = SoftLimit }));
+                        r.Joints.Add(solver.Add(a, b, new TwistLimit { LocalBasisA = j.BasisA, LocalBasisB = j.BasisB, MinimumAngle = j.Low + band, MaximumAngle = j.High - band, SpringSettings = SoftLimit }));
+                    }
                 }
                 break;
             default:
@@ -518,6 +547,64 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
             }
         }
         return shapes[definition] = made;
+    }
+
+    // ---- advanced ragdolls (Meitou, BodyOptions.AdvancedRagdolls; docs/game/ragdolls.md "Advanced ragdolls (Meitou)") ----
+
+    /// <summary>The relaxed pull a ragdoll's joints get: none (awake, or Faithful), the weak one of a dead body, the resting muscle tone of an unconscious one.</summary>
+    internal enum Tone { None, Dead, Unconscious }
+
+    /// <summary>
+    /// Soft limits: each limit gets an inner one this share of its range in from either end, a soft overdamped spring that brakes the joint as it nears the hard stop
+    /// (engine choice, tuned by eye).
+    /// </summary>
+    const float SoftBand = 0.25f;
+    static readonly SpringSettings SoftLimit = new(5, 3);
+    /// <summary>The relaxed angle of a hinge: this share of the way from the binding pose (0) to the middle of its range (a knee bent about 50 degrees, an elbow about 45).</summary>
+    const float RelaxedShare = 0.6f;
+    /// <summary>The spin a blow's push gives an arm or a leg: rad/s per unit/s of push, at most this, scaled by a roll of 0.6 to 1.4.</summary>
+    const float SpinPerPush = 0.15f, MaxPushSpin = 6;
+
+    /// <summary>The tone of a whole or carried ragdoll; none for a conscious character's collapsed limbs (a broken limb hangs loose) or without advanced ragdolls.</summary>
+    static Tone ToneOf(CharacterCold cold, RagdollPart mask, bool advanced) =>
+        !advanced || (mask & (RagdollPart.Whole | RagdollPart.CarryMode)) == 0 || cold.Medical is not { Incapacitated: true } medical ? Tone.None
+        : medical.Dead ? Tone.Dead : Tone.Unconscious;
+
+    /// <summary>
+    /// Sets the relaxed pull: a weak, capped servo on each joint's twist (the hinge angle) towards its relaxed angle (<see cref="RelaxedShare"/> of a hinge's mid-range; a
+    /// shoulder's twist to its binding pose, its swing left to gravity), so a limp body drifts into a natural rest instead of floating to its limits. Gravity beats it.
+    /// Not on a joint with the file's own spring (the head's).
+    /// </summary>
+    void SetTone(Ragdoll r, Tone tone)
+    {
+        foreach (var held in r.Relax) physics.Simulation.Solver.Remove(held);
+        r.Relax.Clear();
+        r.Tone = tone;
+        if (tone == Tone.None) return;
+        var spring = tone == Tone.Dead ? new SpringSettings(0.8f, 1) : new SpringSettings(1.5f, 1);
+        var servo = new ServoSettings(float.MaxValue, 0, tone == Tone.Dead ? 12 : 40);
+        foreach (var j in r.Definition.Joints)
+        {
+            if (j.Type is not (PhysicsJointType.Revolute or PhysicsJointType.Spherical) || j.SpringStiffness > 0) continue;
+            if (r.Bodies[j.A] is not { } a || r.Bodies[j.B] is not { } b || !r.Dynamic[j.A] && !r.Dynamic[j.B]) continue;
+            float target = j.Type == PhysicsJointType.Revolute && j.Limits ? Math.Clamp(RelaxedShare * (j.Low + j.High) / 2, j.Low, j.High) : 0;
+            r.Relax.Add(physics.Simulation.Solver.Add(a, b, new TwistServo { LocalBasisA = j.BasisA, LocalBasisB = j.BasisB, TargetAngle = target, SpringSettings = spring, ServoSettings = servo }));
+        }
+    }
+
+    /// <summary>
+    /// The spin a blow's <paramref name="push"/> gives body <paramref name="b"/> (named <paramref name="name"/>) as it starts: the upper arms swing the way the push goes, the thighs
+    /// against it (the feet held the ground), each by its own roll, so a body thrown back trails its arms and kicks its legs forward. Zero for other bodies or no push.
+    /// </summary>
+    static Vector3 Spin(Ragdoll r, string name, int b, Vector3 push, ulong seed)
+    {
+        var flat = new Vector3(push.X, 0, push.Z);
+        float side = name is "Bip01 L UpperArm" or "Bip01 R UpperArm" ? 1 : name is "Bip01 L Thigh" or "Bip01 R Thigh" ? -1 : 0;
+        if (side == 0 || flat.LengthSquared() < 1e-6f) return Vector3.Zero;
+        float roll = 0.6f + 0.8f * Rng.Float(Rng.Hash(seed, Rng.Key(r.Id), RngPurpose.RagdollSpin, (ulong)b));
+        float speed = MathF.Min(flat.Length() * SpinPerPush, MaxPushSpin) * roll;
+        // A limb hanging down from its joint swings its far end along d when it turns about d x up.
+        return Vector3.Normalize(Vector3.Cross(flat, Vector3.UnitY)) * (side * speed);
     }
 
     /// <summary>Sets the pinned bodies to the animated pose with no velocity, as the original does: the joints and contacts see the jump, not a speed.</summary>
@@ -614,6 +701,7 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
         ReadBack(r);
         foreach (var joint in r.Joints) physics.Simulation.Solver.Remove(joint);
         r.Joints.Clear();
+        SetTone(r, Tone.None);
         for (int b = 0; b < r.Bodies.Length; b++)
             if (r.Bodies[b] is { } handle)
             {
@@ -677,6 +765,7 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
     {
         foreach (var joint in r.Joints) physics.Simulation.Solver.Remove(joint);
         r.Joints.Clear();
+        SetTone(r, Tone.None);
         for (int b = 0; b < r.Bodies.Length; b++)
             if (r.Bodies[b] is { } handle) physics.Simulation.Bodies.Remove(handle);
         r.Bodies = [];

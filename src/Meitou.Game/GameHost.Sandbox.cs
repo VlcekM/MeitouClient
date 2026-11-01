@@ -28,6 +28,16 @@ sealed partial class GameHost
     float patrolTarget;
     long patrolIssued = -1;
     SandboxAnimationPicker? sandboxPicker;   // made on the first draw (the library is loaded with the scene)
+    float toggleX0, toggleY0, toggleX1, toggleY1;   // the panel's collapse button, as last drawn (pixels)
+
+    /// <summary>A click on the panel's collapse button folds the panel to the button alone (a down arrow) or opens it again (<see cref="UserConfig.SandboxPanelCollapsed"/>).</summary>
+    bool SandboxToggleClick(Vector2 at)
+    {
+        if (!IsSandbox || g.UiShowcase || at.X < toggleX0 || at.X > toggleX1 || at.Y < toggleY0 || at.Y > toggleY1) return false;
+        config.SandboxPanelCollapsed = !config.SandboxPanelCollapsed;
+        config.Save();
+        return true;
+    }
 
     /// <summary>The CHARACTER record the sandbox spawns: the one asked for, else the first member of the default new-game start's squad.</summary>
     string SandboxRecord(Meitou.Data.GameDatabase db)
@@ -223,6 +233,19 @@ sealed partial class GameHost
     /// <summary>The debug panel, over the finished picture and the HUD (the floor's grid is the terrain's: <see cref="WorldRenderOptions.Grid"/>).</summary>
     void DrawSandbox(DebugOverlay o, int width, int height)
     {
+        float buttonW = o.CharWidth + 12, buttonH = o.LineHeight + 4;
+        void Toggle(float x1, float y0, string arrow)
+        {
+            (toggleX0, toggleY0, toggleX1, toggleY1) = (x1 - buttonW, y0, x1, y0 + buttonH);
+            o.Rect(toggleX0, toggleY0, toggleX1, toggleY1, new Vector4(0.2f, 0.2f, 0.22f, 1));
+            o.Text(arrow, toggleX0 + 6, y0 + 2, DebugOverlay.TextColour);
+        }
+        if (config.SandboxPanelCollapsed)
+        {
+            Toggle(width - 10, 10, "v");
+            o.Flush(width, height);
+            return;
+        }
         var white = DebugOverlay.TextColour;
         var lines = new List<(string Text, Vector4 Colour)>();
         void Add(string text, Vector4? colour = null) => lines.Add((text, colour ?? white));
@@ -235,9 +258,10 @@ sealed partial class GameHost
         Add("Z walk  X run  C free  [ ] fixed speed +-5  P patrol  G fight  Y follow  R stop", dim);
         sandboxPicker ??= animationLibrary is { } lib ? new SandboxAnimationPicker(lib, animationLengths) : null;
         if (sandboxPicker is not null) { Add(""); if (sandboxPicker.Status is { Length: > 0 } status) Add(status, dim); }   // the button on the blank row
-        float pad = 8, textW = lines.Max(l => l.Text.Length) * o.CharWidth, w = textW + 2 * pad, h = lines.Count * o.LineHeight + 2 * pad;
+        float pad = 8, textW = lines.Max(l => l.Text.Length) * o.CharWidth, w = textW + 2 * pad + buttonW, h = lines.Count * o.LineHeight + 2 * pad;
         float x0 = width - w - 10, y0 = 10;   // top right: the HUD holds the bottom and the top left, the character stands in the middle
         o.Rect(x0, y0, x0 + w, y0 + h, DebugOverlay.PanelColour);
+        Toggle(x0 + w, y0, "^");
         for (int i = 0; i < lines.Count; i++) o.Text(lines[i].Text, x0 + pad, y0 + pad + i * o.LineHeight, lines[i].Colour);
         sandboxPicker?.Draw(o, x0 + pad, y0 + pad + (lines.Count - (sandboxPicker.Status.Length > 0 ? 2 : 1)) * o.LineHeight - 2, textW);
         o.Flush(width, height);

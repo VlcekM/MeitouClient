@@ -873,6 +873,8 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     sealed class MeshAsset
     {
         public required FoliageMesh Mesh;
+        /// <summary>Its meshes are welded (<see cref="MeshWeld"/>, as it was when the decode began): its LOD levels must be made from the same vertices.</summary>
+        public bool Weld;
         public Task<(Model? Main, Model? Leaves)>? Job;
         public GpuMesh? Main, Leaves;
         public bool Resident, Failed, Uploading;
@@ -963,16 +965,22 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
             a.LeavesMaterial = new FoliageMaterial(textures.Get(mesh.LeavesTexture, false, deferred: true), textures.Get(mesh.LeavesNormal, false, deferred: true), null, null,
                 mesh.LeavesAlphaThreshold / 255f, true, false, Vector2.One, false, 0, MeshSurface.Foliage);
         string main = mesh.MeshPath, leaves = mesh.LeavesMesh ?? "";
-        a.Job = BackgroundWork.Run(() => (DecodeTrimmed(main, mesh, false), leaves.Length > 0 ? DecodeTrimmed(leaves, mesh, true) : null));
+        bool weld = a.Weld = MeshWeld.Enabled;
+        a.Job = BackgroundWork.Run(() => (DecodeTrimmed(main, mesh, false, weld), leaves.Length > 0 ? DecodeTrimmed(leaves, mesh, true, weld) : null));
         decoding.Add(a);
         return a;
     }
 
-    Model? Decode(string name)
+    Model? Decode(string name, bool weld)
     {
         var path = assets.Find(name) ?? assets.Find(Path.GetFileName(name.Replace('\\', '/')));
         if (path is null) { lock (Messages) Messages.Add($"foliage mesh not found: {name}"); return null; }
-        try { return Model.Build(OgreMeshReader.ReadFile(path), null); }
+        try
+        {
+            var mesh = OgreMeshReader.ReadFile(path);
+            if (weld) OgreMeshWeld.Apply(mesh);
+            return Model.Build(mesh, null);
+        }
         catch (Exception e) when (e is OgreFormatException or EndOfStreamException or IOException or InvalidDataException)
         {
             lock (Messages) Messages.Add($"foliage mesh {name}: {e.Message}");
@@ -1051,7 +1059,8 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
             GpuPart? gp = null;
             // The trimmed list (card trimming) follows the original one in the same buffer: the draws pick a range (FoliageRenderer.Trim.cs).
             var allIndices = p.TrimmedIndices is null ? p.Indices : [.. p.Indices, .. p.TrimmedIndices];
-            int vertexBytes = p.Vertices.Length * Vertex.Size, indexBytes = allIndices.Length * sizeof(uint);
+            var packed = GpuVertex.PackObject(p.Vertices);
+            int vertexBytes = packed.Length, indexBytes = allIndices.Length * sizeof(uint);
             tally[0] += vertexBytes + indexBytes;
             uploads.Enqueue(() =>
             {
@@ -1072,7 +1081,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
                     Gpu.EnsureFrame();
                 {
                     using var batch = Gpu.Uploads.Begin();
-                    batch.Write(gp!.Vertices, (ulong)start, System.Runtime.InteropServices.MemoryMarshal.AsBytes(p.Vertices.AsSpan()).Slice(start, length));
+                    batch.Write(gp!.Vertices, (ulong)start, packed.AsSpan(start, length));
                 }
                 });
             }
@@ -1152,23 +1161,14 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         if (a.Resident || a.Failed || a.Job is not null || a.Uploading || guard is { Streaming: false }) return;
         string main = a.Mesh.MeshPath, leaves = a.Mesh.LeavesMesh ?? "";
         a.LastUsed = Environment.TickCount64;
-        a.Job = BackgroundWork.Run(() => (DecodeTrimmed(main, a.Mesh, false), leaves.Length > 0 ? DecodeTrimmed(leaves, a.Mesh, true) : null));
+        bool weld = a.Weld = MeshWeld.Enabled;
+        a.Job = BackgroundWork.Run(() => (DecodeTrimmed(main, a.Mesh, false, weld), leaves.Length > 0 ? DecodeTrimmed(leaves, a.Mesh, true, weld) : null));
         decoding.Add(a);
         meshReloads++;
     }
 
-    /// <summary>The mesh layout: position, normal, texture coordinates, tangent, colour of <see cref="Vertex"/> (locations 0 to 4).</summary>
-    internal static readonly MeshAttribute[] MeshLayout = [new(0, 3, 0), new(1, 3, 12), new(2, 2, 24), new(3, 4, 32), new(4, 4, 48)];
-
-    /// <summary>The attributes at locations 0 to 4 as VkGl exported the GL vertex array (one binding per attribute, at its offset).</summary>
-    internal static LegacyProgram.Attribute?[] VertexAttributes(DeviceBuffer vertices)
-    {
-        var result = new LegacyProgram.Attribute?[MeshLayout.Length];
-        foreach (var a in MeshLayout)
-            result[a.Location] = new LegacyProgram.Attribute(new GpuBufferBinding(vertices.Handle, (ulong)a.Offset),
-                GlConventions.VertexFormat(GLEnum.Float, a.Size, false, false), (uint)Vertex.Size, false);
-        return result;
-    }
+    /// <summary>The attributes at locations 0 to 4 (position, normal, texture coordinates, tangent, colour) of the object layout (<see cref="GpuVertex"/>).</summary>
+    internal static LegacyProgram.Attribute?[] VertexAttributes(DeviceBuffer vertices) => GpuVertex.ObjectAttributes(vertices);
 
     /// <summary>The part for the terrain's mesh path (the attributes at 0 to 4 and the index buffer); made on first use.</summary>
     static MeshBindings PlainMesh(GpuPart gp) => gp.Plain ??= MeshBindings.Of(VertexAttributes(gp.Vertices), gp.Indices);
