@@ -218,20 +218,23 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
     public void SlowWorld(World world)
     {
         int every = Math.Max(1, Settings.SweepEveryTicks);
-        if (world.Tick % every != 0) return;
-        Sweep(world, every * world.TickSeconds);
+        // Each character every SweepEveryTicks on its slot's turn (slot mod the period), so the witness looks spread over the ticks (the original's AI updates run 8 characters a
+        // frame in turn, FUN_140786e30); a character's timers still lose the whole period each visit. The alarms keep the shared beat.
+        int phase = (int)(world.Tick % every);
+        Sweep(world, every * world.TickSeconds, phase, every);
+        if (phase != 0) return;
         if (alarms.Count > 0) Investigate(world, every * world.TickSeconds);
         // Alarms die 8 game seconds after their last raise, whether answered or not (AlarmManager update FUN_14092bfe0, Verified).
         for (int k = alarms.Count - 1; k >= 0; k--)
             if ((alarms[k].Life -= every * world.TickSeconds) < 0) alarms.RemoveAt(k);
     }
 
-    void Sweep(World world, float seconds)
+    void Sweep(World world, float seconds, int phase, int every)
     {
         var table = world.Characters;
         var next = table.Next;
         double hoursPerTick = world.TickSeconds * 11.0 / 1200.0;
-        for (int s = 0; s < table.HighWater; s++)
+        for (int s = phase; s < table.HighWater; s += every)
         {
             if (!next[s].Alive || table.Cold(s) is not { } c) continue;
             if (c.Bounties is { } ledger && !c.IsImprisoned) Expire(world, s, c, ledger, hoursPerTick);   // paused while imprisoned (economy.md 11.3)
