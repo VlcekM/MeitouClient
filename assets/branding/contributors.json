@@ -22,5 +22,17 @@
   "gosuboy": {
     "commits": 2,
     "areas": "Metal, Material lookup"
+  },
+  "crockmr": {
+    "commits": 2,
+    "areas": "Save system, Squads"
+  },
+  "dmlen": {
+    "commits": 1,
+    "areas": "Projectile tracers"
+  },
+  "lucasskrewer": {
+    "commits": 1,
+    "areas": ""
   }
 }
