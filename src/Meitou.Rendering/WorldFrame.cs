@@ -1383,6 +1383,7 @@ static class WorldFrame
         StageClock.Lap(0);
         if (gpu.Objects is { } lodObjects) lodObjects.LodPixelsPerRadian = render.TerrainPixelScale;   // the generated object levels are placed by the pixel size too
         gpu.Objects?.SetView(rw, rh, camera.FieldOfView);   // the object textures' mip streaming measures pixels at the render size
+        gpu.Foliage?.SetView(rw, rh, camera.FieldOfView);
         gpu.Characters?.SetView(rw, rh, camera.FieldOfView);
         gpu.Objects?.Update(eye);
         StageClock.Lap(1);

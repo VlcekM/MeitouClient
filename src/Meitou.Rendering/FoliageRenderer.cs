@@ -882,6 +882,9 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         public bool Resident, Failed, Uploading;
         public long LastUsed, Bytes;
         public FoliageMaterial? MainMaterial, LeavesMaterial;
+        /// <summary>World length per texture-coordinate unit of the mesh and of its leaves, before the instance's scale (<see cref="TexelScale"/>; infinity:
+        /// unknown, the textures keep every mip). Known with <see cref="HasBounds"/>.</summary>
+        public float MainTexel = float.PositiveInfinity, LeavesTexel = float.PositiveInfinity;
         public bool Terrain => Mesh.MaterialType == 2;
         public Vector3 Centre;
         public float Radius = 1;
@@ -1014,8 +1017,25 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
             a.Triangles = main.Parts.Sum(p => p.Indices.Length / 3) + (leaves?.Parts.Sum(p => p.Indices.Length / 3) ?? 0);
             a.HasBounds = true;
             a.TriExtent = FoliageScreenLod.TriangleExtent(Triangles(main).Concat(leaves is null ? [] : Triangles(leaves)));
+            a.MainTexel = a.Terrain ? float.PositiveInfinity : TexelScale(main, a.MainMaterial);
+            a.LeavesTexel = leaves is null ? float.PositiveInfinity : TexelScale(leaves, a.LeavesMaterial);
             QueueMesh(a, main, leaves);
         }
+    }
+
+    /// <summary>
+    /// Mip streaming: the world length one unit of the coordinates <paramref name="material"/> samples spans on <paramref name="model"/>, before the
+    /// instance's scale: the most stretched part's <see cref="MeshTexelScale"/> over the material's tiling, as for the objects. Infinity (every mip kept)
+    /// for a triplanar material, whose footprint has no such bound, and for a part without a usable mapping.
+    /// </summary>
+    static float TexelScale(Model model, FoliageMaterial? material)
+    {
+        if (material is null || material.Triplanar) return float.PositiveInfinity;
+        float tile = Math.Min(material.Tile.X, material.Tile.Y);
+        if (!(tile > 0)) return float.PositiveInfinity;
+        float uv = 0;
+        foreach (var part in model.Parts) if (part.Indices.Length > 0) uv = Math.Max(uv, MeshTexelScale.Of(part));
+        return uv > 0 ? uv / tile : float.PositiveInfinity;
     }
 
     /// <summary>The areas of a model's triangles, in mesh units squared.</summary>
@@ -1113,6 +1133,8 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     /// <summary>
     /// Once a second: marks the meshes (and their textures) of every zone group within its range as in use, whatever the camera looks at, and
     /// unloads the GPU meshes unused for <see cref="IdleSeconds"/>. A mesh needed again is decoded and uploaded afresh (<see cref="Reload"/>).
+    /// The same pass gives the textures their mip streaming need: the group's nearest instance over the texel size at its largest scale, offered
+    /// before the keys are read so a first load already drops what the view cannot sample.
     /// </summary>
     void TrimResident(Vector3 eye, bool force)
     {
@@ -1129,10 +1151,16 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
                 var a = g.Asset;
                 a.LastUsed = now;
                 if (!a.Resident) Reload(a);   // in range but unloaded (or never loaded after an unload): decode it again, wherever the camera looks
+                if (!a.HasBounds) continue;
+                float near = g.BoundsReady ? BoxDistance(g.BoundMin, g.BoundMax, eye) : zoneDistance, scale = Math.Max(g.MaxScale, 1e-6f);
+                Offer(a.MainMaterial, near / (a.MainTexel * scale));
+                Offer(a.LeavesMaterial, near / (a.LeavesTexel * scale));
                 foreach (var m in (ReadOnlySpan<FoliageMaterial?>)[a.MainMaterial, a.LeavesMaterial])
-                    if (m is not null && a.HasBounds) _ = (m.Diffuse?.Key, m.Normal?.Key, m.Diffuse2?.Key, m.Normal2?.Key);   // reading a key counts as use (WorldTexture.Key)
+                    if (m is not null) _ = (m.Diffuse?.Key, m.Normal?.Key, m.Diffuse2?.Key, m.Normal2?.Key);   // reading a key counts as use (WorldTexture.Key)
             }
         }
+        textures.CommitNeeds();
+        textures.Rebalance();
         foreach (var a in assetsByMesh.Values)
         {
             if (!a.Resident || (now - a.LastUsed) / 1000.0 <= (guard is { Pressure: true } ? Math.Min(IdleSeconds, GuardIdleSeconds) : IdleSeconds)) continue;
@@ -1146,6 +1174,22 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
             meshUnloads++;
         }
     }
+
+    /// <summary>A user of the material's textures at <paramref name="need"/> (<see cref="WorldTexture.OfferNow"/>: a texture loaded this pass takes it at once).</summary>
+    static void Offer(FoliageMaterial? m, float need)
+    {
+        if (m is null) return;
+        m.Diffuse?.OfferNow(need);
+        m.Normal?.OfferNow(need);
+        m.Diffuse2?.OfferNow(need);
+        m.Normal2?.OfferNow(need);
+    }
+
+    /// <summary>The distance from <paramref name="eye"/> to the box (0 inside).</summary>
+    static float BoxDistance(Vector3 min, Vector3 max, Vector3 eye) => Vector3.Distance(eye, Vector3.Clamp(eye, min, max));
+
+    /// <summary>Tells the foliage textures' mip streaming the camera: the render size in pixels and the vertical field of view (the upscaler's LOD bias is the context's).</summary>
+    public void SetView(int width, int height, float fieldOfView) => textures.Mips.SetView(width, height, fieldOfView, Gpu.LodBias);
 
     void DeleteMesh(GpuMesh m)
     {
