@@ -167,6 +167,9 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
                 nav = new Meitou.Navigation.NavSystem(install, gameDb, levels!, heights.HeightAt);
                 nav.ZoneReady += ready => { lock (navReady) navReady.Add(ready.Zone); };
                 walkability = new NavAdapter(nav.Walkability);
+                // The long-range grid built behind the loading: built by the first long route instead, it held the path threads ~3 s (issue #124).
+                var navForRoutes = nav;
+                _ = Task.Run(() => navForRoutes.Walkability.Coarse.Warm());
                 // Ragdolls land on the terrain and the buildings' collision (gathered per zone on a worker when a ragdoll comes near).
                 ragdollGeometry = new Meitou.Navigation.RagdollGeometry(install, gameDb, levels!, heights.HeightAt);
             }
