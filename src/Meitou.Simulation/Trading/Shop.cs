@@ -211,7 +211,10 @@ public static class ShopFiller
         for (int l = 0; l < lists.Count && totalWeight > 0; l++)
         {
             var (list, weight) = lists[l];
-            int count = l == lists.Count - 1 ? Math.Max(n - assigned, 0) : (int)MathF.Round((float)n * weight / totalWeight, MidpointRounding.AwayFromZero);
+            // FUN_140959800 (Verified): each list's own share is (v / sum) x n rounded half away from zero; the last adds what is left when that is above 0, so it takes
+            // max(n - assigned before it, its own share) and the total can exceed n.
+            int count = (int)MathF.Round((float)weight / totalWeight * n, MidpointRounding.AwayFromZero);
+            if (l == lists.Count - 1) count = Math.Max(n - assigned, count);
             assigned += count;
             var entries = list.Entries.Where(e => town?.Forbidden.Contains(e.Id) != true && own?.Forbidden.Contains(e.Id) != true).ToList();
             for (int k = 0; k < count && entries.Count > 0; k++)

@@ -134,7 +134,7 @@ Goal 118/119 shoppers: the sale is `FUN_14074a630`, called by [`FUN_1409a14b0`](
 - **Special items** (`FUN_140958740`, **Verified**): on a refresh with specials, the template's `special items` (ITEM, 34 templates), else `special map items` (MAP_ITEM, 10): v0 of each,
   in stacks of at most `stackable`, flagged unique with their quantity, offered to the building inventories first; what fits nowhere is destroyed. Meitou: on a squad's first fill, into
   the stock before the vendor items; the unique flag is not modelled.
-- **Count**: n = round(U(0.8, 1.2) x `vendors fill total amount` x wealth), at least 1. Items: the vendor lists share n by weight as for squads (`FUN_140959800`), but every list's
+- **Count**: n = round(U(0.8, 1.2) x `vendors fill total amount` x wealth), at least 1. Items: the vendor lists share n by weight as for squads (`FUN_140959800`, **Verified**: each list's share is (v / sum) x n rounded half away from zero, and the last list takes max(what is left, its own share), so the total can exceed n; Meitou `ShopFiller.Fill`), but every list's
   money roll (`money item prob` against U(0, 1), then U[`money item min`, `money item max`]) is summed into one stack of the money item first.
 - **Purse** (the platoon's money): `vendor money` < 1: trunc(clamp(0.25 x value of the placed items, 3000, 25000) x wealth); else trunc((`vendor money` + r) x wealth) with r an int from
   -0.4 x `vendor money` (the upper bound is not shown by the decompile).
@@ -356,7 +356,7 @@ Per-character hash map keyed by faction (`Character+0xf0`). Entry (`FUN_1405e7ee
 ### 11.3 Lifetime
 
 `FUN_140851f10`: `0.04 * amount` hours below 10000, else never ("Notorious"). The character tick `FUN_1405cbb80` removes at most
-one expired entry per tick and is skipped while `Character+0x2f8 == 2` (imprisoned); each crime resets the timestamp (**Observed**).
+one expired entry per tick and is skipped while `Character+0x2f8 == 2` (imprisoned); each crime resets the timestamp (**Verified**, `FUN_1405cbb80`). Meitou: `CrimeSystem.Expire`, at most one per tick of its sweep period.
 
 ### 11.4 Claiming
 
