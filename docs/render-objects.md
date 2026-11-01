@@ -56,6 +56,12 @@ The sharing caches also have one high-water mark together (`TextureShare.Residen
 Above it, textures unused for 8 s are unloaded, least recently used first, until the total is under three quarters of the mark. Below it,
 a texture is unloaded after 20 s unused.
 
+Under `VramGuard` pressure no texture is refined, but one that something draws still loads *lean*: top side at most 256
+(`WorldTextureCache.LeanSize`), while the use stays under 94.5% of the budget (`AllowsLean`). It is refined once the pressure ends. Before this, a
+6 GB laptop (3.5 GB budget, never back under 80%) drew characters with no texture at all (**Observed**, issue #135 log).
+An allocation the driver refuses is retried after the spare blocks are freed, then (render thread only) after the submitted frames are waited for,
+their deferred frees run and the empty blocks are given back (`GpuAllocator.Reclaim`). A refusal that survives puts the guard into pressure.
+
 ## Kept points
 
 Advanced "Keep textures at characters" (Meitou, default on, `UserConfig.KeepTexturesAtCharacters`): the host sets `WorldFrame` `Kept` to

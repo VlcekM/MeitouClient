@@ -171,6 +171,25 @@ public sealed unsafe class FrameRing : IDisposable
         destroy();
     }
 
+    /// <summary>
+    /// Out of memory: waits for the frames already submitted (not the one being recorded) and runs their deletions, so what they released is freed now
+    /// rather than frames later. Render thread only. False when none was in flight.
+    /// </summary>
+    public bool RetireSubmitted()
+    {
+        bool any = false;
+        for (int i = 0; i < slots.Length; i++)
+        {
+            var s = slots[i];
+            if (inFrame && i == Slot || !s.InFlight) continue;
+            var fence = s.Fence;
+            VulkanException.Check(vk.WaitForFences(dev.Device, 1, in fence, true, ulong.MaxValue), "vkWaitForFences");
+            Retire(s);
+            any = true;
+        }
+        return any;
+    }
+
     /// <summary>Waits for all submitted frames and runs all pending deletions.</summary>
     public void WaitAll()
     {

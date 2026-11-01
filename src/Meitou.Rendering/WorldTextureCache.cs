@@ -68,6 +68,9 @@ public sealed class WorldTexture
     internal bool CannotDrop;
     /// <summary>The replacement being loaded is a finer image (something came near): counted in <see cref="WorldTextureCache.Refining"/>.</summary>
     internal bool Refine;
+    /// <summary>The image was loaded lean (<see cref="WorldTextureCache.LeanSize"/>) under the guard's pressure: <see cref="WorldTextureCache.Rebalance"/>
+    /// refines it once the pressure ends, whether or not its need is known.</summary>
+    internal bool Lean;
     /// <summary>The smallest <see cref="Need"/> offered since the last <see cref="WorldTextureCache.CommitNeeds"/>.</summary>
     internal float NeedPass = float.PositiveInfinity;
 
@@ -191,13 +194,17 @@ public sealed unsafe class WorldTextureCache : IDisposable
         if (guard is not { BudgetBytes: > 0 } g || double.IsInfinity(highWaterMb) || highWaterMb >= double.MaxValue) return highWaterMb;
         return Math.Min(highWaterMb, g.BudgetBytes / 1048576.0 * share) * (g.Pressure ? 0.75 : 1);
     }
-    /// <summary>The memory-pressure guard (<see cref="VramGuard"/>): while it is under pressure nothing new is loaded (a texture asked for stays
-    /// unloaded, drawn with the stand-in, until it ends) and textures idle for <see cref="GuardIdleSeconds"/> are evicted, least recently used
-    /// first, whatever the high-water mark.</summary>
+    /// <summary>The memory-pressure guard (<see cref="VramGuard"/>): while it is under pressure no texture is refined and a texture something draws
+    /// loads lean (at most <see cref="LeanSize"/>, refined when the pressure ends), and textures idle for <see cref="GuardIdleSeconds"/> are evicted,
+    /// least recently used first, whatever the high-water mark.</summary>
     public VramGuard? Guard { get; set; }
     /// <summary>Images shared with the other caches on the same GPU (<see cref="TextureShare"/>); null: this cache's images are its own.</summary>
     public TextureShare? Share { get; init; }
     public double GuardIdleSeconds { get; set; } = 2;
+    /// <summary>The largest side of a texture loaded under the guard's pressure (a 256² BC3 image is 87 KB): blurry, not missing.</summary>
+    public const int LeanSize = 256;
+    /// <summary>What a lean load is counted as before its file is read (a 256² RGBA8 image with its levels).</summary>
+    const long LeanBytes = 512 << 10;
 
     /// <summary>
     /// The resident textures for the VRAM dump (Ctrl+Shift+F12), largest first: MB, seconds since anything read the key, top levels dropped now,
@@ -247,22 +254,36 @@ public sealed unsafe class WorldTextureCache : IDisposable
             Messages.Add($"texture not found: {name}");
             return t;
         }
-        if (deferred || !MayStart(t)) { t.State = WorldTexture.Residency.Unloaded; return t; }   // loaded when its key is read (and the guard lets it)
-        Start(t);
+        if (deferred || !MayStart(t, out bool lean)) { t.State = WorldTexture.Residency.Unloaded; return t; }   // loaded when its key is read (and the guard lets it)
+        Start(t, lean: lean);
         return t;
     }
 
     /// <summary>Whether the guard lets this texture's image be made now: not under pressure, and the file's size (the image is no larger) fits the room left (<see cref="VramGuard.Allows"/>).</summary>
-    bool MayStart(WorldTexture t)
+    bool MayStart(WorldTexture t) => MayStart(t, out _, wanted: false);
+
+    /// <summary>
+    /// <see cref="MayStart(WorldTexture)"/> for a texture something reads now: refused the whole image, it may still load <paramref name="lean"/> (top side
+    /// at most <see cref="LeanSize"/>) while that fits under the guard's <see cref="VramGuard.AllowsLean"/>, so what is drawn is never left without one.
+    /// </summary>
+    bool MayStart(WorldTexture t, out bool lean, bool wanted = true)
     {
+        lean = false;
         if (Guard is not { } guard) return true;
-        if (!guard.Streaming) return false;
-        long bytes;
-        try { bytes = new FileInfo(t.Path!).Length; }
-        catch (IOException) { bytes = 4 << 20; }
-        // What is loading is not in the guard's sample yet (the image is made when its decode lands): it counts against the room too.
-        if (!guard.Allows((ulong)bytes, (ulong)inFlight)) return false;
-        (t.InFlight, inFlight) = (bytes, inFlight + bytes);
+        if (guard.Streaming)
+        {
+            long bytes;
+            try { bytes = new FileInfo(t.Path!).Length; }
+            catch (IOException) { bytes = 4 << 20; }
+            // What is loading is not in the guard's sample yet (the image is made when its decode lands): it counts against the room too.
+            if (guard.Allows((ulong)bytes, (ulong)inFlight))
+            {
+                (t.InFlight, inFlight) = (bytes, inFlight + bytes);
+                return true;
+            }
+        }
+        if (!wanted || t.KeepAllMips || !guard.AllowsLean((ulong)LeanBytes, (ulong)inFlight)) return false;
+        (t.InFlight, inFlight, lean) = (LeanBytes, inFlight + LeanBytes, true);
         return true;
     }
     long inFlight;
@@ -307,7 +328,7 @@ public sealed unsafe class WorldTextureCache : IDisposable
     /// touches what a flight's arrival view uses (docs/render-objects.md "Arrival prefetch").</summary>
     public bool Urgent { get; set; }
 
-    void Start(WorldTexture t, bool replacing = false)
+    void Start(WorldTexture t, bool replacing = false, bool lean = false)
     {
         string path = t.Path!, name = t.Name;
         // The levels dropped on top of the quality setting's are decided on the worker once the file's size is known, from what the owner says
@@ -316,16 +337,18 @@ public sealed unsafe class WorldTextureCache : IDisposable
         t.QualityDrop = quality;
         t.QualityLevel = TextureQuality.Level;
         float need = t.KeepAllMips ? float.PositiveInfinity : t.Need;
+        t.Lean = false;   // an image taken from another cache is not lean
         if (!replacing && Shared(t, need, exact: false) is { } shared) { Adopt(t, shared); return; }
         bool enabled = Mips.Enabled;
         float perDistance = Mips.PixelsPerDistance, bias = Mips.Bias;
-        int extra = Mips.Extra;
+        int extra = Mips.Extra, leanSize = lean ? LeanSize : 0;
+        t.Lean = lean;
         if (replacing) t.Replacing = true;
         else t.State = WorldTexture.Residency.Loading;
         Func<TextureData?> load = () =>
         {
             TextureData data;
-            try { data = Load(path, quality, need, enabled, perDistance, bias, extra); }
+            try { data = Load(path, quality, need, enabled, perDistance, bias, extra, leanSize); }
             catch (Exception e) when (e is DdsFormatException or InvalidOperationException or IOException or ArgumentException)
             {
                 lock (Messages) Messages.Add($"texture {name}: {e.Message}");
@@ -400,9 +423,9 @@ public sealed unsafe class WorldTextureCache : IDisposable
     internal void Reload(WorldTexture t)
     {
         if (t.State != WorldTexture.Residency.Unloaded) return;
-        if (!MayStart(t)) return;
+        if (!MayStart(t, out bool lean)) return;
         if (t.EverResident) Reloads++;
-        Start(t);
+        Start(t, lean: lean);
     }
 
     /// <summary>Uploads finished decodes (all of them, waiting, when <paramref name="wait"/>; else steps until <paramref name="budgetMs"/> passes, at most <paramref name="max"/> textures started).</summary>
@@ -535,8 +558,9 @@ public sealed unsafe class WorldTextureCache : IDisposable
         {
             if (t.State != WorldTexture.Residency.Resident || t.Native is null) continue;
             unstreamed += t.Bytes << (2 * Math.Max(t.Dropped - t.QualityDrop, 0));
-            if (t.Replacing || t.Pending is not null || t.KeepAllMips || t.CannotDrop || t.FileWidth == 0 || !float.IsFinite(t.Need)) continue;
-            int target = Math.Max(Mips.Drop(t.FileWidth, t.FileHeight, t.Need), t.QualityDrop);
+            if (t.Replacing || t.Pending is not null || t.KeepAllMips || t.CannotDrop || t.FileWidth == 0 || !float.IsFinite(t.Need) && !t.Lean) continue;
+            // A lean image whose need is unknown is refined to the quality's levels.
+            int target = Math.Max(float.IsFinite(t.Need) ? Mips.Drop(t.FileWidth, t.FileHeight, t.Need) : 0, t.QualityDrop);
             // Another cache holds the file at the target levels: taken (a coarser one after the same wait as a load), nothing loaded.
             if ((target < t.Dropped || target > t.Dropped && (pressure || t.TooFineSince != 0 && now - t.TooFineSince >= CoarsenAfterSeconds * 1000))
                 && Shared(t, t.Need, exact: true) is { } shared) { Adopt(t, shared); continue; }
@@ -590,7 +614,8 @@ public sealed unsafe class WorldTextureCache : IDisposable
 
     // DDS textures in BC1, BC2, BC3, BC4 or BC5 with a full mip chain go to the GPU as they are stored (BC4 through a swizzle that shows it as grey);
     // the rest is decoded to RGBA8 on the CPU.
-    static TextureData Load(string path, int dropMips, float need, bool streaming, float perDistance, float bias, int extra)
+    /// <param name="leanSize">0, or the largest top side to keep (a lean load under the guard's pressure).</param>
+    static TextureData Load(string path, int dropMips, float need, bool streaming, float perDistance, float bias, int extra, int leanSize = 0)
     {
         using var file = File.OpenHandle(Meitou.Content.GameFiles.Resolve(path), FileMode.Open, FileAccess.Read, FileShare.Read, FileOptions.SequentialScan);
         Span<byte> magic = stackalloc byte[4];
@@ -599,7 +624,8 @@ public sealed unsafe class WorldTextureCache : IDisposable
             // GpuTexture quality: the game drops top mips as it loads (docs/formats/settings.md); mip streaming drops more where nothing near uses them.
             // Only the mips that are kept are read: a dropped top level is three quarters of the file, and was read, held and thrown away (docs/renderer-native.md 8.14).
             // The file's bytes are pooled (docs/engine.md, pooled buffers): an RGBA8 decode returns them here, a stored upload after its last step.
-            var dds = DdsReader.ReadKept(file, w => TextureQuality.DropTopMips(w, Math.Max(dropMips, MipStreaming.Drop(w.Width, w.Height, need, streaming, perDistance, bias, extra))), out var whole, ArrayPool<byte>.Shared);
+            var dds = DdsReader.ReadKept(file, w => TextureQuality.DropTopMips(w, Math.Max(Math.Max(dropMips, MipStreaming.Drop(w.Width, w.Height, need, streaming, perDistance, bias, extra)),
+                LevelsAbove(w.Width, w.Height, leanSize))), out var whole, ArrayPool<byte>.Shared);
             bool handedOver = false;
             try
             {
@@ -621,6 +647,14 @@ public sealed unsafe class WorldTextureCache : IDisposable
             }
         }
         return new TextureData(new LoadedTexture([TextureLoader.LoadImage(File.ReadAllBytes(Meitou.Content.GameFiles.Resolve(path)))], null), null);
+    }
+
+    /// <summary>Top levels to drop for the larger side to be at most <paramref name="size"/> (0: none).</summary>
+    static int LevelsAbove(int width, int height, int size)
+    {
+        int n = 0;
+        if (size > 0) while (Math.Max(width, height) >> n > size) n++;
+        return n;
     }
 
     static bool CanUploadCompressed(DdsFile dds) =>

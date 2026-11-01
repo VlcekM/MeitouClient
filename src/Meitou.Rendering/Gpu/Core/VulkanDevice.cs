@@ -432,6 +432,13 @@ public sealed unsafe class VulkanDevice : IDisposable
         Allocator = new GpuAllocator(this);
         CreatePipelineCache();
         Frames = new FrameRing(this, options.FramesInFlight);
+        int renderThread = Environment.CurrentManagedThreadId;
+        Allocator.Reclaim = () =>
+        {
+            if (Environment.CurrentManagedThreadId != renderThread) return false;
+            bool retired = Frames.RetireSubmitted();
+            return Allocator.Trim() > 0 || retired;
+        };
         options.DeviceCreated?.Invoke(this);
     }
 

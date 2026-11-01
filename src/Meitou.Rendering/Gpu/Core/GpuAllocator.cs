@@ -346,7 +346,7 @@ public sealed unsafe class GpuAllocator : IDisposable
             throw new VulkanException($"No memory type for {kind} (bits {req.MemoryTypeBits:X})");
         }
         VulkanException? last = null;
-        for (int attempt = 0; attempt < 2; attempt++)
+        for (int attempt = 0; attempt < 3; attempt++)
         {
             foreach (var type in candidates)
             {
@@ -359,11 +359,21 @@ public sealed unsafe class GpuAllocator : IDisposable
                     last = e;
                 }
             }
-            // Out of memory: the spares are only a convenience, give them up and try once more.
-            if (!ReleaseSpares()) break;
+            // Out of memory: the spares are only a convenience, give them up and try again; then what the finished frames released and the blocks that
+            // emptied (on the render thread, Reclaim), once.
+            if (!ReleaseSpares() && (attempt == 2 || Reclaim?.Invoke() != true)) break;
         }
+        Interlocked.Increment(ref failures);
         throw last ?? new VulkanException("Allocation failed");
     }
+
+    /// <summary>Out of memory with no spares left: frees what the submitted frames released and gives back the empty blocks; true when that may have made
+    /// room (the allocation is tried again). Set by the device; does nothing off the render thread.</summary>
+    public Func<bool>? Reclaim { get; set; }
+
+    /// <summary>Allocations the driver refused after every retry (the VRAM guard enters pressure when it sees one).</summary>
+    public int Failures => Volatile.Read(ref failures);
+    int failures;
 
     /// <summary>
     /// Whether a buffer of <paramref name="size"/> bytes in device-local memory would be carved from free space in blocks the driver already
