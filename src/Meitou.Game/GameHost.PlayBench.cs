@@ -328,10 +328,22 @@ sealed partial class GameHost
                 player.ShowUiPanel(null);
                 Look(benchOrigin, yaw0, 1.2f, Meitou.Data.World.KenshiCamera.MaxDistance);
             }),
+            // Every player character in turn, twice, 6 s each, as a double click on its portrait does (a character flight with "Character flights" on, else a cut).
+            new("flights", 6 * 2 * Math.Max(1, session.CurrentSnapshot.PlayerSquads.Sum(s => s.Members.Count)), (t, dt) =>
+            {
+                var members = session.CurrentSnapshot.PlayerSquads.SelectMany(s => s.Members).ToList();
+                int hop = (int)(t / 6);
+                if (members.Count == 0 || hop == flightHop) return;
+                flightHop = hop;
+                var id = members[hop % members.Count];
+                if (player.FlyTo?.Invoke(id) != true) player.Follow = id;
+                Console.WriteLine($"bench     flight {hop + 1} to {id}");
+            }, Begin: () => { player.ShowUiPanel(null); flightHop = -1; }),
         ];
     }
 
     string? benchPanel;
+    int flightHop = -1;
 
     /// <summary>Writes frames.csv and summary.md into the bench directory (after the loop).</summary>
     void WritePlayBench(Silk.NET.Maths.Vector2D<int> size)
