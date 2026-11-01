@@ -523,7 +523,8 @@ public sealed partial class FoliageRenderer
             float bestKey = float.PositiveInfinity;
             for (int i = 0; i < impostorRefineQueue.Count; i++)
             {
-                if (impostorRefineQueue[i].Impostor is not { Stage: ImpostorStage.Ready, Next: null, RefineLoad: null } s || s.WantSkip == s.Skip || now < s.RefineRetryAt || (s.WantSkip < s.Skip && guard is { Pressure: true }))
+                // Not one already refining (its atlas loaded, its textures being made): a second refine would list it twice and free the atlas the first still uses.
+                if (impostorRefineQueue[i].Impostor is not { Stage: ImpostorStage.Ready, Next: null, RefineLoad: null, RefineAtlas: null, Making: null } s || s.WantSkip == s.Skip || now < s.RefineRetryAt || (s.WantSkip < s.Skip && guard is { Pressure: true }))
                 {
                     impostorRefineQueue.RemoveAt(i--);
                     continue;
@@ -570,7 +571,7 @@ public sealed partial class FoliageRenderer
                 s.RefineLoad = null;
                 if (s.RefineAtlas is null) { s.RefineRetryAt = Environment.TickCount64 + 8000; impostorRefining.RemoveAt(i--); continue; }
             }
-            var atlas = s.RefineAtlas!;
+            if (s.RefineAtlas is not { } atlas) { impostorRefining.RemoveAt(i--); continue; }   // abandoned or finished under another entry
             if (s.Next is null)
             {
                 if (s.Making is null)
