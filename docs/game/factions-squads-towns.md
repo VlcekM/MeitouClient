@@ -312,9 +312,6 @@ included), else 0.025 (outside every town too).
 
 Meitou: `FactionDeeds` (blows, cagings, first aid), `CrimeSystem` (the ally witness), `PlayerRelations.DeclareWar` / `EndWar` / `Add`
 (the messages); [simulation](../simulation.md#hostility-and-relations).
-Meitou-only **Healing goodwill** (Advanced settings, on, Faithful off; `FirstAidSystem.HealGoodwill`): on top of kind 8, a player medic that finishes a treatment (nothing left to
-bandage) of a downed (unconscious or crawling) character of another real faction adds the "Goodwill per patient" slider's points (1 to 25, default 5) to that faction's
-relation to the player (`PlayerRelations.Add`), never past the ally line 50; once per patient until it gets up or dies.
 
 ### 3.6 Factions met
 
