@@ -96,6 +96,8 @@ sealed partial class GameHost
         if (gpu.Characters is { } portraits) { var (atlas, sampled) = portraits.PortraitAtlas; player.SetUiTexture(PlayerInterface.PortraitTexture, atlas, sampled); }
         // The debug overlays (docs/engine.md): F10 the debug menu (GameHost.DebugMenu.cs), F11 the frame statistics, F12 the profiler chart.
         var profiler = overlay is null ? null : new FrameProfiler(display.Context, () => display.Context.GpuFrameMs);
+        // --log-spikes: the run's allocations by type (the runtime's samples, one per ~100 KB), printed with the summary.
+        using var spikeGc = SpikeLog.Enabled ? new BenchGcListener() : null;
         // The Faithful / Meitou switches; Shift+F1 turns Meitou off and back on (plain F2..F4 and F8 are the game's speed and screenshot keys), the Tab panel sets them one by one.
         var switches = WorldFrame.LiveSwitches(o, () => gpu, () => camera, () => render);
         var meitou = new MeitouToggle(switches);
@@ -821,6 +823,7 @@ sealed partial class GameHost
         // otherwise dispose the profiler before the frame ring has delivered them.
         profiler?.Flush();
         if (SpikeLog.Enabled) SpikeLog.PrintSummary();
+        if (spikeGc is not null) PrintAllocations(spikeGc);
         profiler?.Dispose();
         player.DisposeUi();
         EndLoadingScreen();
@@ -935,6 +938,17 @@ sealed partial class GameHost
         double remaining = end - clock.Elapsed.TotalSeconds;
         if (remaining > 0.002) Thread.Sleep(TimeSpan.FromSeconds(remaining - 0.0015));
         while (clock.Elapsed.TotalSeconds < end) Thread.SpinWait(64);
+    }
+
+    /// <summary>--log-spikes, at exit: the most allocated types over the run and the collections by generation, their pauses summed.</summary>
+    static void PrintAllocations(BenchGcListener gc)
+    {
+        var (allocated, collections) = gc.Take();
+        long total = allocated.Values.Sum();
+        Console.WriteLine($"spikes    allocated {total / 1048576.0:0} MB over the run (sampled); collections {string.Join(", ", collections.GroupBy(c => c.Generation).OrderBy(g => g.Key)
+            .Select(g => $"gen{g.Key} x{g.Count()} {g.Sum(c => c.PauseMs):0} ms"))}; the most allocated types (MB):");
+        foreach (var (type, bytes) in allocated.OrderByDescending(p => p.Value).Take(30))
+            Console.WriteLine($"spikes      {type,-90} {bytes / 1048576.0,9:0}");
     }
 
     /// <summary>Ctrl+Shift+F12: what is in video memory now, to vram-&lt;time&gt;.txt beside log.txt (<see cref="FrameProfiler.DumpVram"/>).</summary>
