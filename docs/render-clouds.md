@@ -11,6 +11,9 @@ periodic64³ noise packed8x8 padded66² slices, negative coordinates and borders
 B weather noise; two atlas reads interpolate slices. Weather density/sky colour/wind/transitions
 are original inputs; engine coverage differs (overcast above0.75). Wind shift period120000,
 frequencies divide it; wrapping cannot jump density, pause freezes motion.
+No cover skips the shape; over the last 0.08 of cover the shape's threshold rises by up to 0.2 (0.83 at none, above 99.9 % of
+the shape). A cutoff at cover 0.01 let high shape values make a body just above it and cut it there, a straight edge along the
+weather's slowly varying contour (**Observed**, the title scene; reproduced by a CPU port of the march).
 
 Half resolution;96 samples (integrated64), step<=500, transmission early-out<1%, slab-distance
 cap500000. Shallow rays only integrate first48000/32000 units. Beer-Lambert extinction,
@@ -23,6 +26,14 @@ over atmosphere/stars/planets before weather fog, with geometry drawn over the s
 Independent main/reflection histories reproject opacity-weighted distance and wind;3x3 clips
 history. Reset on coverage/camera/light/ambient/size/continuity changes. Mirrored-eye preparation
 is required for reflection. Reprojection approximates a volume, not motion at every depth.
+Upscaler motion: the velocity pass gives sky pixels the far plane's motion (the turn alone); a sky pixel with a cloud within about 4
+render pixels (`UpscaleShaders.CloudMotion`, 3x3 taps two cloud texels apart) takes the cloud's motion: the opacity-weighted point's parallax
+through the slice's reprojection plus the wind's shift, weighted by the strongest opacity (full from 0.03), after the history resolve (Vulkan
+chain only). Weighting by the pixel's own opacity left thin edges and pixels a cloud had just left with the sky's motion, so DLSS fetched
+last frame's cloud in place: rows of streaks behind drifting edges with the camera still (DLSS only; TAA clamps its history). With the
+neighbourhood the streaks fall to TAA's level (**Observed**, the live title scene, 2560x1440, DLSS, a streak count over sky blocks).
+Round the sun (the velocity pass's sun term) only the pixel's own opacity counts, so the sun keeps its motion; stars and planets
+within the reach move with the cloud (**Unknown** how visible).
 Fog-hidden rays can skip marching; full-sky skip requires every direction conservatively hidden.
 Clock rewind/weather changes must refresh sky/fog histories and not retain stale colour.
 

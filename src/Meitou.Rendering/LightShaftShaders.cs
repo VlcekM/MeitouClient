@@ -135,6 +135,63 @@ static class LightShaftShaders
         }
         """;
 
+    /// <summary>
+    /// The sun's share averaged over frames (docs/render-shafts.md "Temporal"): with a temporal upscaler the injection's samples move every frame, and
+    /// TAA, which clamps its history to the picture's neighbourhood, showed their noise as a shimmer in motion. Each cell's centre is taken back into
+    /// last frame's grid (its camera and slices), the filtered share read there (bilinear in the slice, linear between slices), clamped to this frame's
+    /// 3 x 3 neighbourhood in the slice (no trails where shadows move) and blended with this frame's (<c>uShaftBlend</c> of it; 1: no history). Out:
+    /// the injection's layout, the share replaced.
+    /// </summary>
+    public static readonly string Resolve = "#version 330 core\n" + Common + """
+
+        out vec4 fragColour;
+        uniform sampler2D uShaftCurrent, uShaftHistory;
+        uniform vec4 uShaftPrevRange;
+        uniform vec3 uShaftPrevEye, uShaftPrevRight, uShaftPrevUp, uShaftPrevBack;
+        uniform vec2 uShaftPrevTan;
+        uniform float uShaftBlend;
+
+        float historyShare(vec2 uv, int slice)
+        {
+            ivec2 grid = ivec2(uShaftGrid.xy);
+            int perRow = int(uShaftGrid.w);
+            vec2 tile = vec2(slice % perRow, slice / perRow) * vec2(grid);
+            vec2 at = tile + clamp(uv * vec2(grid), vec2(0.5), vec2(grid) - 0.5);
+            return textureLod(uShaftHistory, at / vec2(textureSize(uShaftHistory, 0)), 0.0).b;
+        }
+
+        void main()
+        {
+            ivec2 p = ivec2(gl_FragCoord.xy);
+            ivec2 grid = ivec2(uShaftGrid.xy);
+            int column = p.x / grid.x, row = p.y / grid.y;
+            int k = row * int(uShaftGrid.w) + column;
+            vec4 now = texelFetch(uShaftCurrent, p, 0);
+            fragColour = now;
+            if (k >= int(uShaftGrid.z) || uShaftBlend >= 1.0) return;
+            ivec2 cell = p - ivec2(column, row) * grid;
+            vec3 point = shaftRay((vec2(cell) + 0.5) / uShaftGrid.xy) * shaftDistance(float(k) + 0.5) + uShaftEye - uShaftPrevEye;
+            float z = -dot(point, uShaftPrevBack);
+            if (z <= 1e-3) return;
+            vec2 uv = vec2(dot(point, uShaftPrevRight) / (z * uShaftPrevTan.x), dot(point, uShaftPrevUp) / (z * uShaftPrevTan.y)) * 0.5 + 0.5;
+            float s = log(max(length(point), 1e-3) / uShaftPrevRange.x) / uShaftPrevRange.z * uShaftGrid.z - 0.5;
+            if (any(lessThan(uv, vec2(0.0))) || any(greaterThan(uv, vec2(1.0))) || s < 0.0 || s > uShaftGrid.z - 1.0) return;
+            int s0 = int(floor(s));
+            float history = mix(historyShare(uv, s0), historyShare(uv, min(s0 + 1, int(uShaftGrid.z) - 1)), s - float(s0));
+            float lo = 1.0, hi = 0.0;
+            for (int y = -1; y <= 1; y++)
+                for (int x = -1; x <= 1; x++)
+                {
+                    ivec2 q = clamp(cell + ivec2(x, y), ivec2(0), grid - 1);
+                    float share = texelFetch(uShaftCurrent, ivec2(column, row) * grid + q, 0).b;
+                    lo = min(lo, share);
+                    hi = max(hi, share);
+                }
+            float lit = mix(clamp(history, lo, hi), now.b, uShaftBlend);
+            fragColour = vec4(now.g * lit, now.g, lit, 0.0);
+        }
+        """;
+
     /// <summary>The second pass, into a second atlas (R32F): per cell, the sun's share of the haze gathered from the eye to the far end of its slice
     /// (the first pass's two sums over this slice and every nearer one; 1 where no haze has gathered yet).</summary>
     public static readonly string Integrate = "#version 330 core\n" + Common + """

@@ -252,7 +252,7 @@ sealed class WorldOptions
           --no-vsync               start with vsync off (uncapped; Tab slider)
           --grass-density <x>      grass blades x this (0.1-2, default 1; Tab slider)
           --camera-code <hex>      start at a camera code (Ctrl+C in the viewer copies one), the world loaded round it
-          --faithful <all|ao,dither,haze,aa,shadows,range,impostors,reach,water,particles,lod,gi,tonemap,shafts,heathaze,night,planetshine,stars,nightgrade,clouds,cloudshadows,cloudfog,interiorgi,charlod,skin,interiorlamps,icons,blood,bloodsurfaces,parallax,displace,weld,tracers>   the game's look instead of Meitou's enhancements (default: all Meitou; --meitou <...> turns them back on; these ids also name the --ab switches)
+          --faithful <all|ao,dither,haze,aa,shadows,range,impostors,reach,water,particles,lod,gi,tonemap,shafts,heathaze,night,planetshine,stars,nightgrade,clouds,cloudshadows,cloudfog,interiorgi,charlod,skin,interiorlamps,icons,blood,bloodsurfaces,parallax,displace,weld,tracers,fog>   the game's look instead of Meitou's enhancements (default: all Meitou; --meitou <...> turns them back on; these ids also name the --ab switches)
           --show-keys              start with the key list overlay open (toggle with F10)
           --play-shots             start flying the saved camera keys (the F2 timeline) on a loop
           --log-spikes             print a line for every frame whose GPU time is over 1.5 x the median: stage times (GPU, render thread) and what it uploaded or rebuilt
@@ -1335,6 +1335,7 @@ static class WorldFrame
         var particles = post.Particles;
         gpu.PostChain?.ObjectMotion = null;
         post.Particles = null;
+        post.SetCloudMotion(null);
         try { post.End(); }
         finally
         {
@@ -1572,7 +1573,7 @@ static class WorldFrame
         post.SetCamera(eye, view, camera.FieldOfView, aspect);
         gpu.Terrain.BeginFrame();
         bool first = true, foliageDrawn = false;
-        Matrix4x4 particleViewProjection = default, particleNearProjection = default;
+        Matrix4x4 particleViewProjection = default, particleNearProjection = default, particleLowProjection = default, particleLowNearProjection = default;
         float particleNear = 0;
         foreach (var (near, far) in SceneSlices(post, camera))
         {
@@ -1675,6 +1676,9 @@ static class WorldFrame
             {
                 particleViewProjection = viewProjection;
                 particleNearProjection = view * Jitter.Apply(camera.Projection(aspect, Math.Min(0.5f, near * 0.5f), near), jitter, rw, rh);
+                // Unjittered, for low-resolution particles blended after the upscaler (its output is unjittered).
+                particleLowProjection = view * camera.Projection(aspect, near, far);
+                particleLowNearProjection = view * camera.Projection(aspect, Math.Min(0.5f, near * 0.5f), near);
                 particleNear = near;
             }
         }
@@ -1694,11 +1698,13 @@ static class WorldFrame
         // Then the particles, blended over it and tested against the near slice's depth (they are not fogged; docs/formats/fogfeatures.md).
         if (gpu.Particles is { } particleDraw && particleNear > 0)
         {
-            particleDraw.Prepare(particleViewProjection, particleNearProjection, particleNear, view, eye, sun, post.ParticlePixelsPerUnit(camera.Projection(aspect, 1, 10).M22), (float)post.RenderWidth * post.RenderHeight, post.Options.ParticleDivisor);
+            particleDraw.Prepare(particleViewProjection, particleNearProjection, particleNear, view, eye, sun, post.ParticlePixelsPerUnit(camera.Projection(aspect, 1, 10).M22), (float)post.RenderWidth * post.RenderHeight, post.Options.ParticleDivisor,
+                lowViewProjection: post.ParticlesAfterUpscale ? particleLowProjection : null, lowCloseViewProjection: post.ParticlesAfterUpscale ? particleLowNearProjection : null);
             if (particleDraw.FullCount > 0)
             {
+                post.PrepareSoftParticleDepth();
                 host.Open(13, post.SceneTargetsForParticles);
-                particleDraw.Record(1);
+                particleDraw.Record(1, post.SoftParticleDepth(1));
                 host.Close();
             }
             // Meitou: the alpha and additive sprites that are big on screen into low-resolution targets (half, then quarter size), each over the scene with a depth-aware upsample.
@@ -1708,7 +1714,7 @@ static class WorldFrame
                     if (particleDraw.CountFor(divisor) == 0) continue;
                     post.BeginParticlesLow(divisor);
                     host.Open(13, post.ParticleTargets(divisor));
-                    particleDraw.Record(divisor);
+                    particleDraw.Record(divisor, post.SoftParticleDepth(divisor));
                     host.Close();
                     post.MarkParticleDraws();
                     post.CompositeParticlesLow(divisor);
@@ -1717,6 +1723,7 @@ static class WorldFrame
         }
         post.MarkParticles();
         post.Particles = gpu.Particles;
+        post.SetCloudMotion(gpu.Sky.CloudMotion);
         post.End(); // SSAO, upscaler, exposure, tone map, FXAA into the chain's target
         var slices = SceneSlices(post, camera).ToList();
         // The movement marker and stealth arrows over the finished picture, in their materials' colours, sorted against the near slice's depth like the game's debug_marker.

@@ -33,6 +33,18 @@ public sealed unsafe partial class PostProcess
         public ShaftInjectPass(GpuContext gpu) : base(gpu, LightShaftShaders.Inject, "post shafts inject") => Samples = P.Uniform("uShaftSamples");
     }
 
+    sealed class ShaftResolvePass : ShaftPass
+    {
+        public readonly SamplerSlot Current, History;
+        public readonly UniformHandle PrevRange, PrevEye, PrevRight, PrevUp, PrevBack, PrevTan, Blend;
+        public ShaftResolvePass(GpuContext gpu) : base(gpu, LightShaftShaders.Resolve, "post shafts resolve")
+        {
+            (Current, History) = (P.Sampler("uShaftCurrent"), P.Sampler("uShaftHistory"));
+            (PrevRange, PrevEye, PrevRight, PrevUp) = (P.Uniform("uShaftPrevRange"), P.Uniform("uShaftPrevEye"), P.Uniform("uShaftPrevRight"), P.Uniform("uShaftPrevUp"));
+            (PrevBack, PrevTan, Blend) = (P.Uniform("uShaftPrevBack"), P.Uniform("uShaftPrevTan"), P.Uniform("uShaftBlend"));
+        }
+    }
+
     sealed class ShaftIntegratePass : ShaftPass
     {
         public readonly SamplerSlot Injected;
@@ -123,6 +135,15 @@ public sealed unsafe partial class PostProcess
     }
     static readonly bool ShaftStamps = Environment.GetEnvironmentVariable("MEITOU_SHAFT_STAMPS") == "1";
     ShaftInjectPass? shaftInject;
+    ShaftResolvePass? shaftResolve;
+    /// <summary>With a temporal upscaler: the injection's raw output and last frame's filtered atlas (<see cref="LightShaftShaders.Resolve"/>, into
+    /// <see cref="shaftInjected"/>, the two swapped each frame), and last frame's camera and slices.</summary>
+    Target2D? shaftRaw, shaftHistory;
+    bool shaftHistoryValid;
+    long shaftHistoryFrame = -10;
+    (Vector4 Range, Vector3 Eye, Vector3 Right, Vector3 Up, Vector3 Back, Vector2 Tan) shaftPrevious;
+    /// <summary>The share of this frame's sun share in the filtered one (0.1: about ten frames of jitter averaged).</summary>
+    public const float ShaftTemporalBlend = 0.1f;
     ShaftIntegratePass? shaftIntegrate;
     ShaftScatterPass? shaftScatterPass;
     ShaftApplyPass? shaftApply;
@@ -158,7 +179,9 @@ public sealed unsafe partial class PostProcess
         ShaftsDescribe = $"darkening {darkening:0.###}, grid {across} x {down} x {slices} ({Options.ShaftSamples} samples), {PostOptions.ShaftNear:0} to {far:0} units, air {(o.ShaftAir > 0 ? $"x{o.ShaftAir:0.##} x{airByTime:0.##} by the hour from {groundY:0} (scale height {PostOptions.ShaftAirHeight:0}, g {PostOptions.ShaftAirPhase:0.##})" : "off")}";
         if (shaftInjected is null || shaftInjected.Width != aw || shaftInjected.Height != ah)
         {
-            foreach (var t in new[] { shaftInjected, shaftLight, shaftScatter }.OfType<Target2D>()) t.Texture.Dispose();   // released after the frames in flight
+            foreach (var t in new[] { shaftInjected, shaftLight, shaftScatter, shaftRaw, shaftHistory }.OfType<Target2D>()) t.Texture.Dispose();   // released after the frames in flight
+            shaftRaw = shaftHistory = null;
+            shaftHistoryValid = false;
             using var batch = Gpu.Uploads.Begin();
             // Linear: the fog volumes pass reads the sun's share (blue) between cells.
             shaftInjected = Make(batch, aw, ah, InternalFormat.Rgba16f, TextureMinFilter.Linear, "post shafts injected");
@@ -193,7 +216,41 @@ public sealed unsafe partial class PostProcess
         Common(i);
         i.P.Set(i.Samples, Math.Clamp(Options.ShaftSamples, 1, 16));
         i.P.ApplyGlobals();   // the atmosphere's uniforms and the shadow receivers, through the frame globals
-        Draw(i.P, shaftInjected!);
+        if (Temporal)
+        {
+            // The jittered samples averaged over frames in the grid itself (LightShaftShaders.Resolve), not left to the upscaler.
+            if (shaftRaw is null || shaftHistory is null)
+            {
+                using var batch = Gpu.Uploads.Begin();
+                shaftRaw = Make(batch, aw, ah, InternalFormat.Rgba16f, TextureMinFilter.Nearest, "post shafts raw");
+                shaftHistory = Make(batch, aw, ah, InternalFormat.Rgba16f, TextureMinFilter.Linear, "post shafts history");
+                shaftHistoryValid = false;
+            }
+            Draw(i.P, shaftRaw);
+            (shaftHistory, shaftInjected) = (shaftInjected, shaftHistory);   // last frame's filtered atlas becomes the history; this frame's goes over the older one
+            var v = shaftResolve ??= new ShaftResolvePass(Gpu);
+            Common(v);
+            var prev = shaftPrevious;
+            bool continuous = shaftHistoryValid && Gpu.Frame.Number - shaftHistoryFrame <= 2 && Vector3.Distance(prev.Eye, eyeNow) < 2000;
+            Bind(v.P, v.Current, shaftRaw);
+            Bind(v.P, v.History, continuous ? shaftHistory : shaftRaw);   // never an uninitialised history
+            v.P.Set(v.PrevRange, prev.Range);
+            v.P.Set(v.PrevEye, prev.Eye);
+            v.P.Set(v.PrevRight, prev.Right);
+            v.P.Set(v.PrevUp, prev.Up);
+            v.P.Set(v.PrevBack, prev.Back);
+            v.P.Set(v.PrevTan, prev.Tan);
+            v.P.Set(v.Blend, continuous ? ShaftTemporalBlend : 1f);
+            Draw(v.P, shaftInjected!);
+            shaftHistoryValid = true;
+            shaftHistoryFrame = Gpu.Frame.Number;
+            shaftPrevious = (range, eyeNow, new Vector3(r.M11, r.M21, r.M31), new Vector3(r.M12, r.M22, r.M32), new Vector3(r.M13, r.M23, r.M33), new Vector2(tanY * aspectNow, tanY));
+        }
+        else
+        {
+            Draw(i.P, shaftInjected!);
+            shaftHistoryValid = false;
+        }
         if (ShaftStamps) Stamp("shafts-inject");
 
         if (ShaftScan && ShaftScanSupported)
@@ -253,6 +310,7 @@ public sealed unsafe partial class PostProcess
     void DisposeShafts()
     {
         shaftInject?.P.Dispose();
+        shaftResolve?.P.Dispose();
         shaftIntegrate?.P.Dispose();
         shaftApply?.P.Dispose();
         if (shaftScanProgram is { } scan) Gpu.Shaders.Dispose(scan);

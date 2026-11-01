@@ -516,15 +516,25 @@ static class PostProcessShaders
                     }
             ivec2 t = ivec2(gl_FragCoord.xy);
             gl_FragDepth = ((t.x + t.y) & 1) == 0 ? near : far;
-            fragColour = vec4(0.0);
+            fragColour = vec4(gl_FragDepth);   // the same depth as a colour, for the Meitou fog's soft fade (the depth attachment cannot be read while tested)
         }
+        """;
+
+    /// <summary>The scene's depth copied into a colour target at the render size, for the full-size particles' soft fade (the Meitou <c>fog</c> switch).</summary>
+    public const string ParticleSoftDepth = """
+        #version 330 core
+        in vec2 vUv;
+        out vec4 fragColour;
+        uniform sampler2D uDepth;
+        void main() { fragColour = vec4(texelFetch(uDepth, ivec2(gl_FragCoord.xy), 0).r); }
         """;
 
     /// <summary>
     /// The depth-aware upsample of the low-resolution particles' accumulation, shared by <see cref="ParticleComposite"/> and <see cref="ParticleCoverage"/>:
     /// the four nearest texels with their bilinear weights (plus a floor) divided by the square of how far each one's depth is from this pixel's (relative, in
     /// linear depth), so the texels tested against this pixel's own surface (<see cref="ParticleDepth"/>) win and a sprite behind a near edge does not bleed
-    /// over it. Pixels whose four texels are empty skip the depth reads.
+    /// over it. Pixels whose four texels are empty skip the depth reads. With <c>footprint</c> (blended over a vendor upscaler's unjittered output) the pixel's
+    /// depth is the nearest of the 2 x 2 render texels round it, the ones its unjittered point can fall in whatever the jitter, not the one nearest texel.
     /// </summary>
     const string ParticleUpsample = """
         uniform sampler2D uAccum, uLowDepth, uDepth;
@@ -533,7 +543,7 @@ static class PostProcessShaders
         uniform float uDiv;
         uniform int uClipDepthZeroToOne;   // Metal's depth is 0..1; Vulkan's is recovered with 2d - 1
         float linearZ(float d) { float zd = uClipDepthZeroToOne != 0 ? d : 2.0 * d - 1.0; return uNearPlanes.x * uNearPlanes.y / (uNearPlanes.y - zd * (uNearPlanes.y - uNearPlanes.x)); }
-        vec4 particlesAt(vec2 fc)
+        vec4 particlesAt(vec2 fc, bool footprint)
         {
             vec2 lp = fc / uDiv - 0.5;
             vec2 f = lp - floor(lp);
@@ -549,18 +559,55 @@ static class PostProcessShaders
                 total += a[i].a + a[i].r + a[i].g + a[i].b;
             }
             if (total <= 0.0) return vec4(0.0);
-            float z0 = linearZ(texelFetch(uDepth, ivec2(fc), 0).r);
-            vec4 sum = vec4(0.0);
-            float weights = 0.0;
+            float d0 = texelFetch(uDepth, ivec2(fc), 0).r;
+            if (footprint)
+            {
+                ivec2 r0 = ivec2(floor(fc - 0.5)), rhi = textureSize(uDepth, 0) - 1;
+                d0 = min(min(texelFetch(uDepth, clamp(r0, ivec2(0), rhi), 0).r, texelFetch(uDepth, clamp(r0 + ivec2(1, 0), ivec2(0), rhi), 0).r),
+                         min(texelFetch(uDepth, clamp(r0 + ivec2(0, 1), ivec2(0), rhi), 0).r, texelFetch(uDepth, clamp(r0 + ivec2(1, 1), ivec2(0), rhi), 0).r));
+            }
+            float z0 = linearZ(d0);
+            float z[4];
+            float zMin = 1e30, zMax = 0.0;
             for (int i = 0; i < 4; i++)
             {
-                float bw = ((i & 1) == 0 ? 1.0 - f.x : f.x) * ((i >> 1) == 0 ? 1.0 - f.y : f.y);
-                float e = 0.02 + abs(linearZ(texelFetch(uLowDepth, q[i], 0).r) - z0) / z0;
-                float w = (bw + 0.05) / (e * e);
-                sum += a[i] * w;
-                weights += w;
+                z[i] = linearZ(texelFetch(uLowDepth, q[i], 0).r);
+                zMin = min(zMin, z[i]);
+                zMax = max(zMax, z[i]);
             }
-            return sum / weights;
+            if (zMax - zMin <= 0.04 * zMin)
+            {
+                // One surface under the footprint: the bilinear weights (with the same depth term, which is near 1 for all four).
+                vec4 sum = vec4(0.0);
+                float weights = 0.0;
+                for (int i = 0; i < 4; i++)
+                {
+                    float bw = ((i & 1) == 0 ? 1.0 - f.x : f.x) * ((i >> 1) == 0 ? 1.0 - f.y : f.y);
+                    float e = 0.02 + abs(z[i] - z0) / z0;
+                    float w = (bw + 0.05) / (e * e);
+                    sum += a[i] * w;
+                    weights += w;
+                }
+                return sum / weights;
+            }
+            // A depth edge: a joint bilateral filter over the 4 x 4 texels round the pixel (a smooth radial kernel times the depth match), so the texels tested
+            // against this pixel's surface (ParticleDepth's checkerboard holds both of a block's depths) blend among themselves. The four nearest alone gave one
+            // or two matching texels in turn along the edge: a row of beads two texels apart.
+            vec4 sum = vec4(0.0);
+            float weights = 0.0;
+            for (int y = -1; y <= 2; y++)
+                for (int x = -1; x <= 2; x++)
+                {
+                    ivec2 t = i0 + ivec2(x, y);
+                    float k = max(0.0, 1.0 - length(vec2(t) - lp) / 2.0);
+                    if (k <= 0.0) continue;
+                    ivec2 c = clamp(t, ivec2(0), hi);
+                    float e = 0.02 + abs(linearZ(texelFetch(uLowDepth, c, 0).r) - z0) / z0;
+                    float w = k * k / (e * e);
+                    sum += texelFetch(uAccum, c, 0) * w;
+                    weights += w;
+                }
+            return weights > 0.0 ? sum / weights : vec4(0.0);
         }
         """;
 
@@ -572,8 +619,10 @@ static class PostProcessShaders
         #version 330 core
         in vec2 vUv;
         out vec4 fragColour;
+        uniform float uScale;   // render pixels per target pixel: 1 over the scene, render / display over the upscaler's output
+        uniform int uFootprint; // 1 over the upscaler's output (unjittered): the nearest of the render depth's 2 x 2 round the pixel
         """ + "\n" + ParticleUpsample + "\n" + """
-        void main() { fragColour = particlesAt(gl_FragCoord.xy); }
+        void main() { fragColour = particlesAt((floor(gl_FragCoord.xy) + 0.5) * uScale, uFootprint != 0); }
         """;
 
     /// <summary>
@@ -589,7 +638,7 @@ static class PostProcessShaders
         """ + "\n" + ParticleUpsample + "\n" + """
         void main()
         {
-            vec4 a = particlesAt(floor(vUv * uFullSize) + 0.5);
+            vec4 a = particlesAt(floor(vUv * uFullSize) + 0.5, false);
             fragColour = vec4(clamp(max(a.a, max(a.r, max(a.g, a.b))), 0.0, uLimit));
         }
         """;
