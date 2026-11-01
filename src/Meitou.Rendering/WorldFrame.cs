@@ -1325,6 +1325,7 @@ static class WorldFrame
         var post = gpu.PostChain ?? throw new InvalidOperationException("the sky frame needs the post-processing chain");
         post.GiResolve = 0;
         post.Begin(width, height);
+        if (post is PostProcess { Unallocated: true }) return;
         float aspect = width / (float)Math.Max(height, 1);
         var eye = camera.Eye;
         var view = camera.View;
@@ -1369,6 +1370,7 @@ static class WorldFrame
         if (gpu.Post is { } giPost) giPost.GiResolve = giResolve ? gpu.GiResolve : 0;
         if (gpu.Probes is { } giProbes) giProbes.Resolve = giResolve;
         post.Begin(width, height);
+        if (post is PostProcess { Unallocated: true }) { gpu.Guard?.Tick(); return; }   // out of video memory: no world this frame
         // The scene is drawn at the render size (smaller than the display with an upscaler), its projection jittered by the upscaler.
         int rw = post.RenderWidth, rh = post.RenderHeight;
         // The terrain LOD measures its error in the pixels actually rendered (after the upscaler's render scale).

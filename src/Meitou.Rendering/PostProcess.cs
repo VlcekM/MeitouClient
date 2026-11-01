@@ -437,7 +437,28 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         return new Target2D(texture, min, min == TextureMinFilter.Nearest ? TextureMagFilter.Nearest : TextureMagFilter.Linear);
     }
 
+    /// <summary>The targets could not be made (out of video memory): the frame draws no world, and the next <see cref="Begin"/> tries again (the old
+    /// targets, released this frame, are freed by then, and the guard has started evicting).</summary>
+    public bool Unallocated { get; private set; }
+    bool unallocatedLogged;
+
     void Allocate(int displayW, int displayH)
+    {
+        try
+        {
+            AllocateTargets(displayW, displayH);
+            Unallocated = false;
+        }
+        catch (Gpu.Core.VulkanException e) when (e.Result is Vk.Result.ErrorOutOfDeviceMemory or Vk.Result.ErrorOutOfHostMemory)
+        {
+            Free();
+            (displayWidth, displayHeight, Unallocated) = (0, 0, true);
+            if (!unallocatedLogged) Console.WriteLine($"vram      post targets for {displayW}x{displayH} not made ({e.Message}): the world is not drawn until they are");
+            unallocatedLogged = true;
+        }
+    }
+
+    void AllocateTargets(int displayW, int displayH)
     {
         Free();
         var up = Options.Upscale;
@@ -559,6 +580,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         var up = Options.Upscale;
         if (w != displayWidth || h != displayHeight || up.Kind != allocatedKind || up.EffectiveScale != allocatedScale)
             Allocate(w, h);
+        if (Unallocated) return;
         EnsureGi();
         Collect();
         stamps = freeStamps.Count > 0 ? freeStamps.Pop() : new StampSet();
