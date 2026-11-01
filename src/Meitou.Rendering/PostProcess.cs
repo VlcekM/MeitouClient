@@ -306,9 +306,9 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     sealed class ParticleDepthPass : FullscreenProgram
     {
         public readonly SamplerSlot Depth;
-        public readonly UniformHandle FullSize, Div, Layer;
+        public readonly UniformHandle FullSize, Div, Layer, Planes;
         public ParticleDepthPass(GpuContext gpu) : base(gpu, PostProcessShaders.ParticleDepth, "post particle depth") =>
-            (Depth, FullSize, Div, Layer) = (P.Sampler("uDepth"), P.Uniform("uFullSize"), P.Uniform("uDiv"), P.Uniform("uLayer"));
+            (Depth, FullSize, Div, Layer, Planes) = (P.Sampler("uDepth"), P.Uniform("uFullSize"), P.Uniform("uDiv"), P.Uniform("uLayer"), P.Uniform("uPlanes"));
     }
 
     /// <summary>The scene's depth copied to a colour target for the soft fade (<see cref="PostProcessShaders.ParticleSoftDepth"/>).</summary>
@@ -1144,6 +1144,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         Bind(d.P, d.Depth, sceneDepth);
         d.P.Set(d.FullSize, (float)width, (float)height);
         d.P.Set(d.Div, (float)div);
+        d.P.Set(d.Planes, nearPlanes.X, nearPlanes.Y, Gpu.ClipDepthZeroToOne ? 1 : 0);
         foreach (var (layer, soft, depth) in (ReadOnlySpan<(int, Target2D, Target2D)>)[(1, low.Soft!, low.Depth!), (2, low.SoftFar!, low.DepthFar!)])
         {
             d.P.Set(d.Layer, layer);

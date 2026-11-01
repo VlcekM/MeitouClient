@@ -492,8 +492,9 @@ static class PostProcessShaders
     /// <summary>
     /// The low-resolution particles' depth (Meitou): each texel is the nearest or the farthest of the <c>uDiv</c> x <c>uDiv</c> block of the scene's depth it
     /// covers, written as the depth of a depth-only rendering, so the hardware test of the particle draws still rejects the sprite area hidden behind the scene
-    /// (early-Z). <c>uLayer</c> 1: the nearest, 2: the farthest (the Vulkan chain draws the particles once against each, <see cref="ParticleUpsample"/>);
-    /// 0: the nearest where x + y is even and the farthest where odd (the Metal chain: one draw, every 2 x 2 footprint of the upsample holds two of each).
+    /// (early-Z). <c>uLayer</c> 1: the nearest, 2: the farthest (the particles are drawn once against each, <see cref="ParticleUpsample"/>). Where the two lie
+    /// within 4 % of each other the farthest is written as 0, so the second draw rejects every fragment there (the upsample then takes the first draw's, whose
+    /// depth matches): it shades only along depth edges, where the two differ.
     /// </summary>
     public const string ParticleDepth = """
         #version 330 core
@@ -503,6 +504,8 @@ static class PostProcessShaders
         uniform vec2 uFullSize;
         uniform float uDiv;
         uniform int uLayer;
+        uniform vec3 uPlanes;   // the scene depth's near and far planes, z 1 when the depth is 0..1
+        float planeZ(float d) { float zd = uPlanes.z > 0.5 ? d : 2.0 * d - 1.0; return uPlanes.x * uPlanes.y / (uPlanes.y - zd * (uPlanes.y - uPlanes.x)); }
         void main()
         {
             vec2 base = floor(gl_FragCoord.xy) * uDiv;
@@ -515,7 +518,8 @@ static class PostProcessShaders
                         near = min(near, d);
                         far = max(far, d);
                     }
-            gl_FragDepth = uLayer == 2 ? far : near;
+            bool oneSurface = near >= 1.0 || (far < 1.0 && planeZ(far) < planeZ(near) * 1.04);   // all sky, or one surface
+            gl_FragDepth = uLayer == 2 ? (oneSurface ? 0.0 : far) : near;
             fragColour = vec4(gl_FragDepth);   // the same depth as a colour, for the Meitou fog's soft fade (the depth attachment cannot be read while tested)
         }
         """;
@@ -609,8 +613,9 @@ static class PostProcessShaders
         float linearZ(float d) { float zd = uClipDepthZeroToOne != 0 ? d : 2.0 * d - 1.0; return uNearPlanes.x * uNearPlanes.y / (uNearPlanes.y - zd * (uNearPlanes.y - uNearPlanes.x)); }
 
         // One size at render position fc for the four surfaces' distances z: each of its four nearest texels offers the near and the far draw, weighted
-        // bilinearly (plus a floor) over the square of their depth's distance from the surface's.
-        bool layerAt(sampler2D accum, sampler2D lowDepth, sampler2D accumFar, sampler2D lowDepthFar, vec2 lowSize, float div, vec2 fc, float z[4], out vec4 v[4])
+        // bilinearly (plus a floor) over the square of their depth's distance from the surface's. With `one` (the four surfaces within 4 %: no outline) the
+        // first only, copied to the others.
+        bool layerAt(sampler2D accum, sampler2D lowDepth, sampler2D accumFar, sampler2D lowDepthFar, vec2 lowSize, float div, vec2 fc, float z[4], bool one, out vec4 v[4])
         {
             vec2 lp = fc / div - 0.5;
             vec2 f = lp - floor(lp);
@@ -633,6 +638,7 @@ static class PostProcessShaders
             if (total <= 0.0) return false;
             for (int i = 0; i < 4; i++)
             {
+                if (one && i > 0) { v[i] = v[0]; continue; }
                 vec4 sum = vec4(0.0);
                 float weights = 0.0;
                 for (int k = 0; k < 4; k++)
@@ -664,9 +670,11 @@ static class PostProcessShaders
                 if (d < closest) { closest = d; qClosest = q; }
             }
             vec2 fc = rp + 0.5;
+            float zNear = min(min(z[0], z[1]), min(z[2], z[3])), zFar = max(max(z[0], z[1]), max(z[2], z[3]));
+            bool one = zFar < zNear * 1.04;   // no outline among the four: one surface's evaluation serves them all
             vec4 h[4], qv[4];
-            bool anyHalf = uHas.x > 0.5 && layerAt(uAccumH, uLowDepthH, uAccumFarH, uLowDepthFarH, uLowSizeH, uHas.x, fc, z, h);
-            bool anyQuarter = uHas.y > 0.5 && layerAt(uAccumQ, uLowDepthQ, uAccumFarQ, uLowDepthFarQ, uLowSizeQ, uHas.y, fc, z, qv);
+            bool anyHalf = uHas.x > 0.5 && layerAt(uAccumH, uLowDepthH, uAccumFarH, uLowDepthFarH, uLowSizeH, uHas.x, fc, z, one, h);
+            bool anyQuarter = uHas.y > 0.5 && layerAt(uAccumQ, uLowDepthQ, uAccumFarQ, uLowDepthFarQ, uLowSizeQ, uHas.y, fc, z, one, qv);
             if (!anyHalf) for (int i = 0; i < 4; i++) h[i] = vec4(0.0);
             if (!anyQuarter) for (int i = 0; i < 4; i++) qv[i] = vec4(0.0);
             if (!anyHalf && !anyQuarter) { fragColour = vec4(0.0); return; }
@@ -679,7 +687,8 @@ static class PostProcessShaders
                 lo = min(lo, l);
                 hi = max(hi, l);
             }
-            if (uTarget.z < 0.5) { fragColour = sum; return; }
+            if (one || uTarget.z < 0.5) { fragColour = sum; return; }   // one surface: the four agree, the filter would keep this frame's
+
             vec2 prev = gl_FragCoord.xy / uTarget.xy - texelFetch(uMotion, qClosest, 0).rg;
             if (any(lessThan(prev, vec2(0.0))) || any(greaterThan(prev, vec2(1.0)))) { fragColour = sum; return; }
             fragColour = mix(clamp(textureLod(uHistory, prev, 0.0), lo, hi), sum, uTarget.w);

@@ -569,13 +569,14 @@ sealed class PostComposite : IDisposable
     /// fullscreen triangle with no colour attachment.
     /// </summary>
     public void ParticleDepth(IGpuCommandList cmd, GpuTexture sceneDepth, GpuTexture target, int fullWidth, int fullHeight, int divisor,
-        GpuTexture? colour = null, int layer = 1)
+        GpuTexture? colour = null, int layer = 1, float near = 1, float far = 1000)
     {
         var d = particleDepthP;
         d.P.Bind(d.Depth, pointSampler with { View = sceneDepth.View() });
         d.P.Set(d.FullSize, (float)fullWidth, (float)fullHeight);
         d.P.Set(d.Div, (float)divisor);
         d.P.Set(d.Layer, layer);
+        d.P.Set(d.Planes, near, far, ctx.ClipDepthZeroToOne ? 1 : 0);
         FullscreenDepth(cmd, d.P, target, colour, target.Desc.Width, target.Desc.Height);
     }
 
@@ -796,9 +797,9 @@ sealed class PostComposite : IDisposable
     sealed class ParticleDepthPass : Pass
     {
         public readonly SamplerSlot Depth;
-        public readonly UniformHandle FullSize, Div, Layer;
+        public readonly UniformHandle FullSize, Div, Layer, Planes;
         public ParticleDepthPass(IGpuContext ctx, string vertex) : base(ctx, vertex, PostProcessShaders.ParticleDepth, "post particle depth") =>
-            (Depth, FullSize, Div, Layer) = (P.Sampler("uDepth"), P.Uniform("uFullSize"), P.Uniform("uDiv"), P.Uniform("uLayer"));
+            (Depth, FullSize, Div, Layer, Planes) = (P.Sampler("uDepth"), P.Uniform("uFullSize"), P.Uniform("uDiv"), P.Uniform("uLayer"), P.Uniform("uPlanes"));
     }
 
     sealed class ParticleCompositePass : Pass

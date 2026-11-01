@@ -157,6 +157,10 @@ ridge the near draw's, on the land behind it the far draw's, which holds what li
 behind thin characters bleed onto their silhouettes; one draw against a checkerboard of the two depths (with a joint bilateral 4x4
 filter at depth edges) left the matching texels every other one along an edge, so the dust behind a dune ridge followed it in steps
 (**Observed**, mec-tou-nu save, Vulkan: the ridge's outline in front of the far dust stepped, then smooth; the Metal chain's is not run).
+Where a block's two depths lie within 4 % (or it is all sky) its farthest is written as 0, so the second draw rejects every fragment there and
+shades only along depth edges; likewise the filtered composite evaluates the four render pixels' surfaces only where they differ by
+more than 4 %. **Observed** (mec-tou-nu, 2560 x 1440, DLSS, 4090): the particle draws 0.05 → 0.04 ms (master 0.02, the rest the
+lighting below), the picture within 1/255 (99th percentile); the particle passes together within the run-to-run noise of master's.
 A draw's size follows its sprites' mean screen size (half from 20 px, quarter from 80) and a size is only used from 6 screens of
 overdraw: each is left 15 % past its threshold and a size below half its overdraw, so dust near one does not flip between looks as the
 view moves; with a vendor upscaler the overdraw rule is off (full-size dust would be in what DLSS upscales, and trail). With a vendor upscaler (DLSS, FSR) the low-resolution particles are
