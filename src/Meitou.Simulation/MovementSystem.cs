@@ -70,6 +70,26 @@ public sealed class MovementSystem(PathService paths) : ITickSystem, IDisposable
         return true;
     }
 
+    /// <summary>How far a walker's height may be from its path's before the step looks for a layer at the path's height (<see cref="CorridorHeight"/>).</summary>
+    const float CorridorSlack = 4;
+
+    /// <summary>
+    /// The height of the walker's navmesh path at (x, z): the leg to its next point, the point's height projected along it; null off a path or on its
+    /// provisional part (engine choice: the walker's own height alone is held to <c>StandDrop</c>, and a 17-unit stair top below a floor's edge, which the
+    /// mesh joins over a slope of ~2 units, stopped walkers there, Observed: Ancient Lab with TwoStorey, zone 28.60).
+    /// </summary>
+    static float? CorridorHeight(in CharacterHot n, CharacterCold cold, float x, float z)
+    {
+        if (((MoveFlags)n.Flags & MoveFlags.HasPath) == 0 || n.PathCursor >= cold.Path.Length || n.PathCursor >= cold.PathExact) return null;
+        var b = cold.Path[n.PathCursor];
+        if (n.PathCursor == 0) return b.Y;
+        var a = cold.Path[n.PathCursor - 1];
+        var leg = new Vector2(b.X - a.X, b.Z - a.Z);
+        float length2 = leg.LengthSquared();
+        float t = length2 < 1e-6f ? 1 : Math.Clamp(((x - a.X) * leg.X + (z - a.Z) * leg.Y) / length2, 0, 1);
+        return a.Y + (b.Y - a.Y) * t;
+    }
+
     /// <summary>
     /// How near the last point of a path counts as arrived (<b>Verified</b>, the nav agent's <c>FUN_140144440</c>: 0.01 squared Havok units, 1 unit); the agent brakes into it
     /// (<see cref="PathAcceleration"/>), so a walker stops on its goal rather than a stride short of it.
@@ -972,6 +992,10 @@ public sealed class MovementSystem(PathService paths) : ITickSystem, IDisposable
             {
                 // One already off every surface near its height (a stale height) is not held there: it steps down onto what is below.
                 if (!stands) stands = walk.TryStand(x, z, p.Position.Y, out y);
+                // On its navmesh path, a drop or climb beyond the stand limits that the corridor itself takes (a stair top short of a floor's edge) is stepped:
+                // the layer is looked for at the path's height there (docs/game/pathfinding.md "Heights").
+                if (!stands && !steering && CorridorHeight(n, cold, x, z) is { } along && MathF.Abs(along - p.Position.Y) > CorridorSlack)
+                    stands = walk.TryStand(x, z, along, out y);
                 if (stands || !walk.IsWalkable(p.Position.X, p.Position.Z, p.Position.Y) && walk.IsWalkable(x, z))
                 {
                     n.Position = new Vector3(x, y, z);

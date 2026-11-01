@@ -448,6 +448,7 @@ edge beside the spot, more than `StandRise` off a character within `StandRise` o
 of it (engine choice; **Observed**, zone 33.28, scratch probe: by the foot of a walkable top at ~560 west of Black Desert City, ground 537, polygons
 at ~550, walkers at 7245, -13968 stopped and dropped their order); with no layer in range, a
 polygon within `EdgeTolerance` counts. A character already off every layer near its height still steps down.
+A path walker whose step finds no layer in reach of its height, more than 4 off its path's height there (the leg to its next point), looks for one at the path's height (engine choice, `MovementSystem.CorridorHeight`; **Observed**, zone 28.60, Ancient Lab with TwoStorey, scratch walk along a `--path`: the stair top at 536 meets the upper floor at 553 over a ~2-unit mesh slope, and walkers stood at the floor's edge both ways; the original's cached interior also has the floor and stair faces side by side, 18 apart).
 A path point takes the height of the corridor polygon under it; of stacked ones the corridor crosses, the one nearest the point's own height (`NavQuery.OnSurface`;
 **Observed** with `meitou-tools navmesh --town Squin --path`: a route into a Bughouse and up onto its roof beds ended on the floor below, y 372 for 482).
 **Long routes** (engine choice): goals in unloaded zones use `CoarseRoute` (192-unit terrain grid, slope and
