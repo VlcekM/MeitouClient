@@ -134,7 +134,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         prepassSolidMesh = new NativeProg(gpu, nativeFrame, FoliageShaders.MeshVertexNative(), FoliageShaders.MeshPrepassNative(solid: true), "foliage mesh prepass solid");
         grassProgram = new NativeProg(gpu, nativeFrame, FoliageShaders.GrassVertexNative(), FoliageShaders.GrassFragmentNative(), "foliage grass");
         grassMotionProgram = new NativeProg(gpu, nativeFrame, FoliageShaders.GrassMotionVertexNative(), FoliageShaders.GrassMotionFragmentNative(), "foliage grass motion");
-        textures = new WorldTextureCache(gpu, assets, "foliage textures");
+        textures = new WorldTextureCache(gpu, assets, "foliage textures") { Share = TextureShare.For(gpu) };
         // Metal's GPU cull and its separate pre-frame command buffer are opt-in after the 2026-10-23 progress
         // timeouts; the CPU cull is the stable reference. Vulkan keeps the GPU path.
         bool metalGpuCull = Environment.GetEnvironmentVariable("MEITOU_METAL_GPU_CULL") is "1" or "true";

@@ -70,8 +70,8 @@ public sealed unsafe class MarkerRenderer : IDisposable
         void main() { fragColour = texelFetch(uMarker, ivec2(gl_FragCoord.xy), 0); }
         """;
 
-    /// <summary>Samples per pixel of the markers (anti-aliasing: the meshes have many triangles under a pixel; at most what the device allows).</summary>
-    const int WantedSamples = 8;
+    /// <summary>Samples per pixel of the markers (anti-aliasing: the meshes have many triangles under a pixel; at most what the device allows). 4, not 8: 8 took 127 MB at 1080p.</summary>
+    const int WantedSamples = 4;
 
     readonly IGpuContext gpu;
     readonly LegacyProgram program;

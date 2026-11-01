@@ -45,6 +45,13 @@ biome pairs and foliage layouts rank by distance from the arrival, and what is o
 (`WorldTextureCache.Urgent`, `BackgroundWork.RunUrgent`). The terrain height window and the grass pages still follow only the eye.
 The simulation focus moves to the landing character at once, so its towns populate during the flight.
 
+## Shared texture images
+
+The object, foliage and character texture caches share images (`TextureShare`, per GPU context): a file one cache holds at the current quality
+level is taken by another instead of loaded when it drops no more top levels than that cache's mip streaming would, and two loads of the same file
+and levels that land together keep one. An image goes with its last user; each cache still counts its bytes. **Observed** (VRAM dump, 2026-11-01):
+about 150 MB of the same files were resident twice before this.
+
 ## Kept points
 
 Advanced "Keep textures at characters" (Meitou, default on, `UserConfig.KeepTexturesAtCharacters`): the host sets `WorldFrame` `Kept` to
