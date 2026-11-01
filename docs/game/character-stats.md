@@ -472,14 +472,11 @@ stomach gets min(floor - hunger, 0.04). Nobody but the player has to feed anyone
 
 | Character | Floor |
 | --- | --- |
-| animal (slot 0x248), unless the byte `142133599` (`GameplayOptions` +0x21, KenshiLib `animalsEat`, default 1; no UI binding) is set | 3 |
+| animal (slot 0x248), only while the byte `142133599` (`GameplayOptions` +0x21, KenshiLib `animalsEat`) is 0: never, it is 1 in every game ([options](#new-game-advanced-options-that-change-these-mechanics)), so animals take the other rows and the player's animals get hungry. Meitou: no animal row | 3 |
 | slave (status 1) | 1 |
 | imprisoned (+0x2f8 = 2): held by the player's faction / free / escaped slave | -10 / 2 / 1.15 |
 | player's faction | -10 (never) |
 | anyone else | its platoon's +0x110: 3, or for a SQUAD_TEMPLATE with `malnourished` 1 + 1.2 x rand (`FUN_1407ee2d0`) |
-
-`animalsEat` is 1 in every game ([options](#new-game-advanced-options-that-change-these-mechanics)), so the animal row never
-applies and animals take the other rows: the player's animals are never fed and get hungry. Meitou: no animal row.
 
 Drain and digestion (same function): stomach empty: hunger -= dt/T x race rate x situation (`FUN_1408837a0`:
 bed/KO/dead `bed hunger rate`; else in combat or moving (movement +0x24) 1 + (1 - e) `encumbrance hunger
