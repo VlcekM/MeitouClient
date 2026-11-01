@@ -34,7 +34,7 @@ integrated5%/256MB, unknown192MB; pressure*0.75; explicit --impostor-budget over
 Nearest-first plan degrades far mips before excluding; lookahead3s, one-level margin plus
 upscaler bias. Refine on approach, retain old atlas until ready; retry refused upload2s.
 Unwanted atlases unload after 20 s idle; after a jump of 10000+ units between scans (a save loaded from the menu's
-scene, a teleport) at once. **Observed** (2026-11-01): menu-scene atlases held the total at the limit (1014 MB) for ~20 s after a load.
+scene, a teleport) at once. **Observed** (2026-11-01): 1014 MB (the limit) just after a load, 310 MB later; the menu scene's atlases are the inferred cause, not measured.
 Integrated heap/budget adequacy unverified. Never reuse in-flight views/indices prematurely.
 
 ## Rock and fade rules
