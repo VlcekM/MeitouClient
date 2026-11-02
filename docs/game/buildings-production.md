@@ -140,7 +140,7 @@ score and the 0.75 falloff spread them). Work distance: [below](#work-distance).
   movement flag (+0x640 +8, **Unknown**); or the character's movement reports touching the building's handle (+0x300 slot 1); or
 - the X/Z distance to `getPositionMarker(charPos)` (slot 0x470: the nearest valid usage node, else the construction position
   +0x26c when fewer than 2) is below `getReachRange()` (slot 0x350), **doubled when not moving**, and the character is on the
-  same floor (slot 0x60) or |dy| < 15: 130 for a door or a building with a door, 45 outdoors or ceiling-mounted (**Observed**, `AI::isWithinChoppingRange` `FUN_14059c6d0`).
+  same floor (slot 0x60) or |dy| below a limit: 130 when the door byte (+0x1a0) is set or the building has a door child (slot 0x3e0), else 45 when its containing-building handle (slot 0x1d8) is null (outside any building) or slot 0x428 is true, else 15 (**Verified**, `AI::isWithinChoppingRange` `FUN_14059c6d0`, constants 130 / 45 / 15 in `data_values.txt`; what slot 0x428 is stays **Observed**: ceiling-mounted class).
 - Otherwise not; once the path has ended at the target it logs "Task impossible: X can't get to Y". There is no settle slack.
 - That notice (**Verified**, `FUN_14059c6d0`, also the failure handlers `FUN_14033da80` / `FUN_140332150`) calls `FUN_140796ed0`: the target's handle goes into the AI's ignore map (AI +0x20 -> +0x218) with the timer 20.0, and the squad blackboard is told. Readers skip the handle: the loose-item source finder `FUN_14059d000` (before the ownership test), the engineer finder `FUN_1409a6900` (first condition), the turret finder `FUN_1405b0da0`, the corpse-machine finder ([ai-tasks](ai-tasks.md)). The entry's decay is **Unknown** (a 20 s timer is assumed). Meitou `ConstructionSystem.NoteUnreachable` (`CharacterCold.Unreachable`, not saved): a builder whose path ended short ignores that site or loose item for 20 s; a fetcher of a loose item goes back to its site and picks another source.
 
@@ -155,7 +155,7 @@ to the building's footprint hull (engine choice standing in for touching; a buil
 hull) or, unknown, its position. A rock's operator has arrived inside its mesh's bounds box as the instance places it, scaled 1.2
 (a circle of 1.2 x its radius without the mesh), or within the `use range` (doubled once stopped) of the box's centre, which
 stands in for the position marker (engine choice; a rock's origin can lie off its pile); it faces that centre. Taking its ore
-measures 40 to the box's edge. No height test.
+measures 40 to the box's edge. Height: Meitou has no floor id, so `SiteReach.AtHeight` requires |dy| below the limit above (130 door, 15 inside a building, else 45; slot 0x428 not read) for every site goal.
 
 Repair (**Verified**, Building slot 0x328 `FUN_1400f6b70`, `Task_Build` `FUN_14034a440`): a building needs repair when
 `progress < target`; building health is construction progress. Orders 2 and 95 are both `Task_Build`, which pushes the

@@ -21,4 +21,16 @@ public static class SiteReach
     /// <summary>Within <paramref name="reach"/>, or twice it when the character has no path (it has stopped).</summary>
     public static bool Within(in CharacterHot n, float gap, float reach) =>
         gap < reach || ((n.Flags & (ushort)MoveFlags.AnyPath) == 0 && gap < 2 * reach);
+
+    /// <summary>
+    /// The height difference below which a worker has arrived at a building when it is not on the building's floor (<c>AI::isWithinChoppingRange</c>, <b>Verified</b> <c>FUN_14059c6d0</c>):
+    /// 130 for a door or a building with a door, else 45 for a building standing outside any building, else 15 (the original's ceiling-mounted class, <c>vfunc 0x428</c>, also gets 45; it is not read).
+    /// </summary>
+    public static float HeightLimit(bool door, bool inBuilding) => door ? 130 : inBuilding ? 15 : 45;
+
+    /// <summary>
+    /// Whether the worker is at the site's height: Meitou has no floor id, so a height difference below <see cref="HeightLimit"/> stands for "the same floor, or close enough" (the original
+    /// passes the same floor whatever the difference).
+    /// </summary>
+    public static bool AtHeight(in CharacterHot n, BuildSite site, bool door) => MathF.Abs(n.Position.Y - site.Position.Y) < HeightLimit(door, site.Parent is not null);
 }

@@ -646,8 +646,9 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
     /// Whether the worker is near enough its goal (<see cref="SiteReach.Within"/>): a site by its footprint, a ground item by its position (within <see cref="PlayerSystem.PickUpReach"/>,
     /// twice that once stopped).
     /// </summary>
-    bool Arrived(in CharacterHot n, (Vector3 At, BuildSite? Site, float Reach) goal) =>
-        SiteReach.Within(n, goal.Site is { } site ? SiteReach.Gap(Settings.EdgeGap, site, n.Position) : Vector2.Distance(new(n.Position.X, n.Position.Z), new(goal.At.X, goal.At.Z)), goal.Reach);
+    bool Arrived(World world, in CharacterHot n, (Vector3 At, BuildSite? Site, float Reach) goal) =>
+        SiteReach.Within(n, goal.Site is { } site ? SiteReach.Gap(Settings.EdgeGap, site, n.Position) : Vector2.Distance(new(n.Position.X, n.Position.Z), new(goal.At.X, goal.At.Z)), goal.Reach)
+        && (goal.Site is not { } high || SiteReach.AtHeight(n, high, world.Fixtures.DoorsByBuilding[high.Id].Any()));
 
     /// <summary>
     /// Where a worker goes and from how near it works: the site, or for a fetcher its source (a storage by its machine's <c>use range</c>, the original's <c>UseableStuff::getReachRange</c>;
@@ -674,7 +675,7 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
         cold.BuildSite = site.Id;
         cold.BuildBar = 0;
         ClearFetch(cold);
-        if (!Arrived(n, (site.Position, site, ReachOf(site))))
+        if (!Arrived(world, n, (site.Position, site, ReachOf(site))))
         {
             n.Goal = new Vector2(site.Position.X, site.Position.Z);
             n.Flags |= (ushort)MoveFlags.NeedPath;
@@ -776,7 +777,7 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
                 continue;
             }
             const ushort Path = (ushort)MoveFlags.AnyPath;
-            if (Arrived(n, goal))
+            if (Arrived(world, n, goal))
             {
                 // There: stand still and let the slow world work.
                 if ((n.Flags & Path) != 0)
@@ -876,7 +877,7 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
                 BackToSite(table, i, cold);
                 continue;
             }
-            if (!Arrived(n, goal)) continue;
+            if (!Arrived(world, n, goal)) continue;
             if (cold.StaggeredUntil > world.Tick) continue;   // a stagger interrupts the work
             if (n.Velocity.X == 0 && n.Velocity.Z == 0) n.Yaw = MathF.Atan2(goal.At.X - n.Position.X, goal.At.Z - n.Position.Z);
             switch ((CharacterTask)n.Task)
