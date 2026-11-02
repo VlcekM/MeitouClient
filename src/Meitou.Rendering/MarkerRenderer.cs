@@ -41,7 +41,7 @@ public sealed unsafe class MarkerRenderer : IDisposable
         }
         """;
 
-    // The scene's near-slice depth decides which pass a fragment belongs to (the game's depth tests, against the scene only).
+    // The scene's depth decides which pass a fragment belongs to (the game's depth tests, against the scene only).
     const string Fragment = """
         #version 330 core
         in vec4 vColour;
@@ -49,10 +49,12 @@ public sealed unsafe class MarkerRenderer : IDisposable
         uniform sampler2D uSceneDepth;
         uniform vec2 uDepthScale;
         uniform int uHidden;
+        """ + DepthConvention.Glsl + """
         void main()
         {
             float scene = texelFetch(uSceneDepth, ivec2(gl_FragCoord.xy * uDepthScale), 0).r;
-            if ((gl_FragCoord.z > scene) != (uHidden != 0)) discard;
+            bool behind = depthNearerThan(scene, gl_FragCoord.z);
+            if (behind != (uHidden != 0)) discard;
             fragColour = vec4(vColour.rgb * vColour.a, vColour.a);   // premultiplied, over a clear target
         }
         """;
@@ -189,9 +191,9 @@ public sealed unsafe class MarkerRenderer : IDisposable
 
     /// <summary>
     /// Draws over the finished <paramref name="picture"/> (after the tone map, so the colours come out as the material gives them, whatever the
-    /// exposure): the visible parts, then the parts behind the scene, each fragment sorted by the near slice's <paramref name="nearDepth"/>
+    /// exposure): the visible parts, then the parts behind the scene, each fragment sorted by the scene's <paramref name="nearDepth"/>
     /// (<paramref name="renderWidth"/> × <paramref name="renderHeight"/> of it used). The markers are drawn multisampled into targets of their own
-    /// (their own depth hides their far sides), resolved, and blended over the picture. Depth is clamped, so a marker beyond the near slice is drawn whole.
+    /// (their own depth hides their far sides), resolved, and blended over the picture. Depth is clamped, so a marker beyond the far plane is drawn whole.
     /// </summary>
     public void Record(GpuTexture picture, int width, int height, GpuTexture nearDepth, int renderWidth, int renderHeight, Matrix4x4 nearViewProjection, Vector3 eye, Vector3 sunDirection)
     {
@@ -212,7 +214,7 @@ public sealed unsafe class MarkerRenderer : IDisposable
         t = t with
         {
             Colour = t.Colour with { Load = LoadOp.Clear, Clear = new ClearColour(0f, 0f, 0f, 0f) },
-            Depth = t.Depth with { Load = LoadOp.Clear, DepthClear = 1 },
+            Depth = t.Depth with { Load = LoadOp.Clear, DepthClear = DepthConvention.Clear },
         };
         cmd.BeginRendering(t.Rendering);
         var vp = Matrix4x4.CreateTranslation(eye) * nearViewProjection;
@@ -225,7 +227,7 @@ public sealed unsafe class MarkerRenderer : IDisposable
         {
             bool hidden = pass == 1;
             var state = DrawState.For(t.Formats, gpu.DepthClamp, cull: CullMode.Back, depthTest: true, depthWrite: !hidden,
-                compare: DepthFunction.Lequal, blend: premultiplied, depthClamp: gpu.DepthClamp, front: FrontFaceDirection.Ccw);
+                compare: DepthConvention.SceneCompare, blend: premultiplied, depthClamp: gpu.DepthClamp, front: FrontFaceDirection.Ccw);
             program.Set(hiddenPass, hidden ? 1 : 0);
             state.Record(cmd, t);
             cmd.BindPipeline(segment.Get(state, t.Formats, vertexSource));

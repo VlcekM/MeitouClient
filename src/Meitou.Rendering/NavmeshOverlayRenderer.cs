@@ -6,7 +6,7 @@ namespace Meitou.Rendering;
 
 /// <summary>
 /// A debug view of the navigation mesh (Meitou only, docs/game/pathfinding.md "Meitou debug view"): translucent polygons and their edges over the finished picture,
-/// fainter where the scene hides them (sorted against the near slice's depth like <see cref="MarkerRenderer"/>). The host hands it the geometry with
+/// fainter where the scene hides them (sorted against the scene's depth like <see cref="MarkerRenderer"/>). The host hands it the geometry with
 /// <see cref="SetMesh"/>, camera-independent, relative to an origin; nothing is drawn until then or while <see cref="Visible"/> is false.
 /// </summary>
 public sealed unsafe class NavmeshOverlayRenderer : IDisposable
@@ -34,10 +34,11 @@ public sealed unsafe class NavmeshOverlayRenderer : IDisposable
         out vec4 fragColour;
         uniform sampler2D uSceneDepth;
         uniform vec2 uDepthScale;
+        """ + DepthConvention.Glsl + """
         void main()
         {
             float scene = texelFetch(uSceneDepth, ivec2(gl_FragCoord.xy * uDepthScale), 0).r;
-            float a = gl_FragCoord.z > scene ? vColour.a * 0.25 : vColour.a;
+            float a = depthNearerThan(scene, gl_FragCoord.z) ? vColour.a * 0.25 : vColour.a;
             fragColour = vec4(vColour.rgb * a, a);   // premultiplied
         }
         """;
@@ -97,7 +98,7 @@ public sealed unsafe class NavmeshOverlayRenderer : IDisposable
         return (buffer, data.Length / Stride);
     }
 
-    /// <summary>Draws over the finished <paramref name="picture"/>, each fragment sorted against the near slice's <paramref name="nearDepth"/> (<paramref name="renderWidth"/> × <paramref name="renderHeight"/> of it used).</summary>
+    /// <summary>Draws over the finished <paramref name="picture"/>, each fragment sorted against the scene's <paramref name="nearDepth"/> (<paramref name="renderWidth"/> × <paramref name="renderHeight"/> of it used).</summary>
     public void Record(GpuTexture picture, int width, int height, GpuTexture nearDepth, int renderWidth, int renderHeight, Matrix4x4 nearViewProjection, Vector3 eye)
     {
         if (!Visible || fillCount + edgeCount == 0 || width <= 0 || height <= 0) return;

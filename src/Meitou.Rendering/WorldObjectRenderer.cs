@@ -139,7 +139,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     /// although within the object distance (in or out of view; a benchmark statistic).</summary>
     public int PartLimited { get; private set; }
 
-    /// <summary>Sums over every <see cref="Draw"/> since the start, [0, ...] colour (scene slices and reflection), [1, ...] depth (shadow cascades):
+    /// <summary>Sums over every <see cref="Draw"/> since the start, [0, ...] colour (scene and reflection), [1, ...] depth (shadow cascades):
     /// instances, triangles, draw calls, part-limited instances, calls of Draw (a benchmark statistic; the caller divides by its frames).</summary>
     public readonly long[,] Totals = new long[2, 5];
 
@@ -725,7 +725,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
 
     /// <summary>The fog cull (set by the world frame around the main camera's draw only): instances wholly hidden by the fog the eye is in are skipped.</summary>
     internal FogVolumes? FogCull { get; set; }
-    /// <summary>The interior cut (docs/render-interior-cut.md; set by the world frame around its near slice's colour draw, null otherwise): map features over a mask take it.</summary>
+    /// <summary>The interior cut (docs/render-interior-cut.md; set by the world frame around its scene's colour draw, null otherwise): map features over a mask take it.</summary>
     internal InteriorMaskRenderer? InteriorCut { get; set; }
 
     /// <summary>The water reflection's cull (set around the reflection pass's own draw): an instance (bounding sphere centre and radius) it answers false for is skipped.</summary>
@@ -1560,9 +1560,13 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         // block with its bindless indices), into a job that only records.
         var targets = Gpu.CurrentTargets();
         // The objects are drawn double-sided (the GL version turned the cull face off); the wireframe as lines pulled forward
-        // (GL's PolygonMode LINE with POLYGON_OFFSET_LINE and PolygonOffset(-1, -1)).
+        // (GL's PolygonMode LINE with POLYGON_OFFSET_LINE and PolygonOffset(-1, -1), toward the viewer in the scene's depth convention).
         var state = Gpu.CurrentState() with { Cull = CullMode.None };
-        if (wire) state = state with { Polygon = PolygonKind.Line, BiasEnable = true, BiasConstant = -1, BiasSlope = -1 };
+        if (wire)
+        {
+            var (biasConstant, biasSlope) = DepthConvention.TowardViewer(1);
+            state = state with { Polygon = PolygonKind.Line, BiasEnable = true, BiasConstant = biasConstant, BiasSlope = biasSlope };
+        }
         int segment = SegmentId(kind, prog.P, targets, state);
         // The fully visible draws of a colour pass use the program without a discard (own segment, own pipelines per part).
         int solidSegment = !depthPass && !wire ? SegmentId(4, solidProg.P, targets, state) : 0;

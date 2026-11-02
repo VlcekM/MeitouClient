@@ -30,7 +30,7 @@ public sealed class HoverOutlineRenderer
         uniform vec2 uScenePlanes;
         uniform vec4 uColour;
         uniform int uRadius;
-        float linearDepth(float d, vec2 planes) { return planes.x * planes.y / (planes.y - d * (planes.y - planes.x)); }
+        """ + DepthConvention.Glsl + """
         float coverage(ivec2 p)
         {
             ivec2 size = textureSize(uMask, 0);
@@ -41,8 +41,8 @@ public sealed class HoverOutlineRenderer
             ivec2 p = ivec2(gl_FragCoord.xy);
             if (coverage(p) > 0.5)
             {
-                float character = linearDepth(texelFetch(uMaskDepth, p, 0).r, uMaskPlanes);
-                float scene = linearDepth(texelFetch(uSceneDepth, ivec2(gl_FragCoord.xy * uDepthScale), 0).r, uScenePlanes);
+                float character = depthViewZ(texelFetch(uMaskDepth, p, 0).r, uMaskPlanes);
+                float scene = depthViewZ(texelFetch(uSceneDepth, ivec2(gl_FragCoord.xy * uDepthScale), 0).r, uScenePlanes);
                 if (character > scene * 1.01 + 1.0) discard;
                 float a = uColour.a * 0.11;
                 fragColour = vec4(uColour.rgb * a, a);
@@ -86,7 +86,7 @@ public sealed class HoverOutlineRenderer
     /// <summary>
     /// Blends the outline of each of <paramref name="masks"/> over <paramref name="picture"/> (<paramref name="width"/> × <paramref name="height"/>) in its tint, only
     /// inside its characters' projected bounding spheres (<paramref name="viewProjection"/>, unjittered) widened by the outline, the overlapping ones joined so no pixel
-    /// is blended twice. <paramref name="nearDepth"/> is the scene's near slice (<paramref name="sceneNear"/>..<paramref name="sceneFar"/>), <paramref name="renderWidth"/>
+    /// is blended twice. <paramref name="nearDepth"/> is the scene's depth (planes <paramref name="sceneNear"/>..<paramref name="sceneFar"/>), <paramref name="renderWidth"/>
     /// × <paramref name="renderHeight"/> of it used.
     /// </summary>
     internal void Record(GpuTexture picture, int width, int height, IReadOnlyList<HoverMask> masks,

@@ -46,7 +46,7 @@ internal sealed unsafe partial class CharacterRenderer
                 spheres.Add((live[i].Centre, live[i].Radius));
             }
             near = Math.Max(0.25f, near);
-            var projection = Matrix4x4.CreatePerspectiveFieldOfView(fieldOfView, width / (float)height, near, far);
+            var projection = DepthConvention.Perspective(fieldOfView, width / (float)height, near, far);
 
             var target = PassTargets.Of(colourTarget, depthTarget);
             for (int m = 0; m < members.Count; m++) DrawHoverMember(target, members[m], m == 0, view * projection, eye);
@@ -107,8 +107,8 @@ internal sealed unsafe partial class CharacterRenderer
         var load = first ? LoadOp.Clear : LoadOp.Load;
         cmd.BeginRendering(new RenderingDesc(
             target.Colour with { Load = load, Clear = new ClearColour(0f, 0f, 0f, 0f) },
-            target.Depth with { Load = load, DepthClear = 1f }, target.Width, target.Height));
-        Gpu.BeginHostPass(cmd, target, DrawState.Scene(target.Formats));
+            target.Depth with { Load = load, DepthClear = DepthConvention.Clear }, target.Width, target.Height));
+        Gpu.BeginHostPass(cmd, target, DrawState.SceneDepth(target.Formats));
         portraitLive = index;
         try
         {
