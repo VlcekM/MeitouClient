@@ -201,6 +201,9 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
 
     // ---- runtime buildings, construction sites and the placement ghost (docs/render-objects.md "Construction sites") ----
 
+    /// <summary>The key prefix of a ground item's placement (see <see cref="WorldObjects.GroundKeyPrefix"/>).</summary>
+    public const string GroundKeyPrefix = WorldObjects.GroundKeyPrefix;
+
     /// <summary>A building the player placed: part of its zone from now on (laid out apart from the rest of an already loaded zone).</summary>
     public void AddRuntime(BuildingPlacement placement)
     {

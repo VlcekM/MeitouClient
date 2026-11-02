@@ -115,7 +115,7 @@ sealed class WorldObjects : IDisposable
         lock (runtimeLock)
         {
             runtime[placement.Key] = placement;
-            Reindex();
+            Reindex(placement.Key);
         }
     }
 
@@ -125,7 +125,7 @@ sealed class WorldObjects : IDisposable
         lock (runtimeLock)
         {
             if (!runtime.Remove(instanceId, out var removed)) return null;
-            Reindex();
+            Reindex(instanceId);
             return removed;
         }
     }
@@ -145,10 +145,13 @@ sealed class WorldObjects : IDisposable
     /// <summary>Whether a runtime placement with this id is still in the store.</summary>
     public bool HasRuntime(string instanceId) { lock (runtimeLock) return runtime.ContainsKey(instanceId); }
 
-    void Reindex()
+    /// <summary>The key prefix of a ground item's placement: its comings and goings leave the building floors alone (a pick-up inside a building must not drop the camera to the terrain).</summary>
+    public const string GroundKeyPrefix = "ground:";
+
+    void Reindex(string? key = null)
     {
         runtimeByZone = runtime.Values.GroupBy(p => p.Zone).ToDictionary(g => g.Key, g => g.ToArray());
-        placementVersion++;
+        if (key is null || !key.StartsWith(GroundKeyPrefix, StringComparison.Ordinal)) placementVersion++;
     }
 
     IReadOnlyList<BuildingPlacement> RuntimeIn(ZoneCoordinate zone) => runtimeByZone.TryGetValue(zone, out var list) ? list : [];
@@ -156,7 +159,7 @@ sealed class WorldObjects : IDisposable
     volatile int placementVersion;
     BuildingFloors? floors;
 
-    /// <summary>Changes whenever a runtime placement is added or removed: what <see cref="Floors"/> listed before is stale.</summary>
+    /// <summary>Changes whenever a runtime placement other than a ground item is added or removed: what <see cref="Floors"/> listed before is stale.</summary>
     internal int PlacementVersion => placementVersion;
 
     /// <summary>The building floors under the characters' feet (the footstep surface, docs/audio.md "Surface") and under the camera; used from the main thread.</summary>

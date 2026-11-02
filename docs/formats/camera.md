@@ -87,7 +87,7 @@ not the game speed, so the camera works while the game is paused. Several inputs
   within 400 units are the pivot's ground, and a building in the interior view's parts up to the viewed floor (others stay at floor
   0, the +0x330 re-cast read as "not the viewed building"); the highest at the point, without the 3000 cap, the sweep, the group-14
   ray or the eye's lowering ray. A building's collision is read on a worker, so the first frames near it keep to the terrain; a runtime placement
-  added or removed (a building, a dropped or picked-up item) lists the zone's buildings again while the known floors keep answering
+  added or removed (a building; not a ground item's drop or pick-up, which leaves the lists alone, issue #204, **Observed** by code, not measured) lists the zone's buildings again while the known floors keep answering
   (the pivot does not drop to the terrain meanwhile), and an unchanged building keeps its collision.
 - **Default keys** (`controls.cfg`): `camera_forward` W, Up; `camera_back` S, Down; `camera_left` A, Left; `camera_right` D, Right;
   `camera_rotate_left` Q; `camera_rotate_right` E; `camera_tilt+` `,`; `camera_tilt-` `.`; `camera_zoom_in` Home; `camera_zoom_out`
