@@ -162,8 +162,9 @@ disturbed by other load, every stage up): one reversed scene depth ([renderer-na
 slices, render-thread medians idle / orbit: terrain 0.17-0.18 -> 0.08 ms, foliage 0.90-0.92 -> 0.72-0.74 / 0.71-0.72 -> 0.53-0.62, water
 0.06 -> 0.04, objects within noise (0.12-0.14); GPU frame 7.46-7.47 -> 7.07-7.13 ms idle, 7.48-7.55 -> 7.18 orbiting; frame p50 7.3-7.4
 -> 7.1-7.2 ms. Pictures (viewer, offscreen, 1600x900, upscaler off): the parity views within 0.07 mean levels of master except views
-that differ run to run on master itself (hub, forest at night: GI and sway noise of the same size); named views, TAA, DLSS and
-Faithful within 0.11.
+that differ run to run on master itself (hub: master against master 0.6-1.4, the branch against three master runs 0.2-1.6; forest at
+night: GI noise, 0.15 either way); named views, TAA, DLSS and Faithful within 0.11. Pass `--upscaler` (or `MEITOU_STREAMLINE_PATH`) to
+both sides: a build with the Streamline DLLs beside it takes the configured DLSS, one without falls back to TAA.
 
 Detailed logs/screenshots belong outside the repository. Evidence for original-game claims
 belongs with the corresponding research and its Verified/Observed/Unknown label.

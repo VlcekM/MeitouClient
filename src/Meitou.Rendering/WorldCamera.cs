@@ -5,7 +5,7 @@ namespace Meitou.Rendering;
 /// <summary>
 /// Camera for the world view, Y up: orbits a target point (left drag), looks around from the eye (right drag),
 /// flies with the keyboard. The scene is drawn into one depth buffer in <see cref="DepthConvention"/> (reversed on Vulkan), from
-/// <see cref="Near"/> (which follows the height above the terrain) to <see cref="ViewDistance"/>.
+/// <see cref="ClipNear"/> (which follows the height above the terrain) to <see cref="ViewDistance"/>.
 /// </summary>
 public sealed class WorldCamera
 {
@@ -32,11 +32,12 @@ public sealed class WorldCamera
 
     public float Near => Math.Clamp(Math.Min(EyeClearance, Distance) * 0.25f, 0.5f, MaxNear);
     /// <summary>
-    /// The scene projection's near plane: where the GL-mapped clip volume (-1..1 over a 0..1 depth matrix, before the reversed depth) clipped a
-    /// <see cref="Near"/> projection, <c>n f / (2 f - n)</c> with f = <see cref="ViewDistance"/>, about half of it. <see cref="Near"/> stays the rule
-    /// for the shadows' fit and the close particles' reach of other views; the reversed float depth keeps its precision at either.
+    /// The scene projection's near plane. Reversed (Vulkan): where the former GL-mapped clip volume (-1..1 over a 0..1 depth matrix) clipped a
+    /// <see cref="Near"/> projection, <c>n f / (2 f - n)</c> with f = <see cref="ViewDistance"/>, about half of it; the reversed float depth
+    /// keeps its precision there. Conventional (Metal, whose clip volume was always 0..1): <see cref="Near"/>. <see cref="Near"/> stays the
+    /// rule for the shadows' fit and the close particles.
     /// </summary>
-    public float ClipNear => Near * ViewDistance / (2 * ViewDistance - Near);
+    public float ClipNear => DepthConvention.Reversed ? Near * ViewDistance / (2 * ViewDistance - Near) : Near;
 
     /// <summary>The farthest the near plane may sit (200; the Meitou title lowers it to draw its wanderer close in front of a high eye).</summary>
     public float MaxNear { get; set; } = 200;
