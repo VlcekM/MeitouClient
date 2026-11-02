@@ -1075,28 +1075,46 @@ public sealed partial class PopulationSystem : IStateHashed
         return Ai.SquadIntact.Decide(up, squad.Members.Count, !squad.Leader.IsNone, Ai.SquadIntact.Down(table, squad.Leader), persistentHome: false);
     }
 
-    /// <summary>The player's characters in a town (XZ, its radius): (in all, up).</summary>
-    (int All, int Up) PlayersIn(World world, CampaignTown t)
+    /// <summary>The player's living characters in a town (XZ, its radius).</summary>
+    List<CharacterCold> PlayersAt(World world, CampaignTown t)
     {
         var at = CentreOf(world, t);
         float r = RadiusOf(world, t);
-        int all = 0, up = 0;
+        var found = new List<CharacterCold>();
         var prev = world.Characters.Previous;
         for (int i = 0; i < prev.Length; i++)
         {
             if (!prev[i].Alive || world.Characters.Cold(i) is not { IsPlayer: true } cold) continue;
-            if (Vector2.DistanceSquared(new Vector2(prev[i].Position.X, prev[i].Position.Z), at) > r * r) continue;
+            if (Vector2.DistanceSquared(new Vector2(prev[i].Position.X, prev[i].Position.Z), at) <= r * r) found.Add(cold);
+        }
+        return found;
+    }
+
+    /// <summary>The player's characters in a town: (in all, up).</summary>
+    (int All, int Up) PlayersIn(World world, CampaignTown t)
+    {
+        int all = 0, up = 0;
+        foreach (var cold in PlayersAt(world, t))
+        {
             all++;
             if (cold.DiedTick < 0 && cold.Medical is not { Unconscious: true } and not { Dead: true }) up++;
         }
         return (all, up);
     }
 
-    /// <summary>More than 2 player characters in the town, more than half of them up: an assault keeps going.</summary>
+    /// <summary>
+    /// More than 2 player characters in the town that are not sneaking out of a fight (the original's A, <c>FUN_1405c9750</c>), and more than half of A is B: the characters of the town
+    /// in posture 0 (not staying low, crawling, playing dead or knocked out; vfunc <c>0x368</c>) or in a bed (<c>+0x2f8</c> 1), stealthed ones included (<b>Verified</b>, <c>FUN_1409c70f0</c>): an assault keeps going.
+    /// </summary>
     bool PlayersHold(World world, CampaignTown t)
     {
-        var (all, up) = PlayersIn(world, t);
-        return all > 2 && up * 2 > all;
+        int seen = 0, standing = 0;
+        foreach (var cold in PlayersAt(world, t))
+        {
+            if ((cold.Orders & CharacterOrders.Sneak) == 0 || cold.InCombat) seen++;
+            if (cold.InSomething == Locks.HeldState.Bed || cold.DiedTick < 0 && cold.Medical is not { Incapacitated: true } and not { Prone: true }) standing++;
+        }
+        return seen > 2 && standing * 2 > seen;
     }
 
     bool PlayersStanding(World world, CampaignTown t) => PlayersIn(world, t).Up > 0;
