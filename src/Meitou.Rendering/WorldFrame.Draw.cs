@@ -556,22 +556,45 @@ static partial class WorldFrame
         }
     }
 
+    /// <summary>One depth slice's camera: its range, whether it is the near slice, and its projections (plain, jittered by the upscaler, with the view).</summary>
+    readonly record struct Slice(float Near, float Far, bool IsNear, Matrix4x4 Projection, Matrix4x4 Jittered, Matrix4x4 ViewProjection, Vector4[] Frustum);
+
     /// <summary>
     /// One depth slice from <paramref name="near"/> to <paramref name="far"/>: terrain, objects, foliage, the terrain's late colour and the debris,
     /// the surface blood, the characters (near slice), the water; each its own stage.
     /// </summary>
     static void DrawSlice(ref FrameState f, float near, float far, bool first, bool foliageDrawn)
     {
+        var s = BeginSlice(ref f, near, far, first);
         var gpu = f.Gpu;
+
+        // The blood on walls, buildings and objects (the bloodsurfaces switch) needs the depths the terrain and then the static scene wrote, to leave
+        // the terrain's pixels to its own blood.
+        bool surfaceBlood = s.IsNear && gpu.Decals is { Surfaces: true, SurfaceCount: > 0 } bloodDecals && gpu.DecalStore is not null && bloodDecals.SurfacesNear(f.Eye);
+
+        DrawSliceTerrain(ref f, s);
+        if (surfaceBlood) CaptureDepth(ref f, 7, gpu.Decals!.CaptureTerrainDepth);
+        DrawSliceObjects(ref f, s);
+        if (surfaceBlood) CaptureDepth(ref f, 8, gpu.Decals!.CaptureStaticDepth);
+        DrawSliceFoliage(ref f, s, foliageDrawn);
+        DrawSliceLate(ref f, s);
+        if (surfaceBlood) DrawSurfaceBlood(ref f, s);
+        DrawSliceCharacters(ref f, s);
+        DrawWater(ref f, near, far, s.IsNear, s.ViewProjection);
+        if (s.IsNear) KeepParticleViews(ref f, s);
+    }
+
+    /// <summary>
+    /// Opens the slice's pass (the slices draw into different framebuffers: the far slice has a depth of its own, which the fog volumes pass reads) and
+    /// works out its camera; the near slice attaches the motion vectors.
+    /// </summary>
+    static Slice BeginSlice(ref FrameState f, float near, float far, bool first)
+    {
         var post = f.Post;
         var host = f.Host;
         var camera = f.Camera;
-        var render = f.Render;
-        var light = f.Light;
-        var eye = f.Eye;
         bool nearSlice = near <= camera.Near;
 
-        // The slices draw into different framebuffers (the far slice has a depth of its own, which the fog volumes pass reads): one host per slice.
         host.Close();
         if (!first || nearSlice) post.BeginNearSlice(near, far);
         else post.BeginFarSlice(near, far);
@@ -583,114 +606,134 @@ static partial class WorldFrame
         var projection = camera.Projection(f.Aspect, near, far);
         var jittered = Jitter.Apply(projection, f.Jitter, f.RenderWidth, f.RenderHeight);
         var viewProjection = f.View * jittered;
-        var frustum = WorldCamera.FrustumPlanes(viewProjection);
-        if (nearSlice) AttachMotion(ref f, viewProjection, f.View * projection, frustum, f.Rotation * jittered, f.Rotation * projection);
+        var s = new Slice(near, far, nearSlice, projection, jittered, viewProjection, WorldCamera.FrustumPlanes(viewProjection));
+        if (nearSlice) AttachMotion(ref f, s.ViewProjection, f.View * projection, s.Frustum, f.Rotation * jittered, f.Rotation * projection);
+        return s;
+    }
 
-        // Terrain: its colour comes after the foliage (DrawDeferred) when late colour is on.
-        host.Stage(6);
-        var fogCull = gpu.FogVolumes;
-        gpu.Terrain.FogCull = fogCull;
-        gpu.Terrain.InteriorCut = nearSlice ? gpu.InteriorMask : null;
-        gpu.Terrain.Draw(viewProjection, eye, frustum, render, light, defer: TerrainLateColour.Enabled);
-        gpu.Terrain.InteriorCut = null;
-        gpu.Terrain.FogCull = null;
+    /// <summary>Closes the pass for <paramref name="capture"/> of the scene depth so far, and opens it again counting towards <paramref name="stage"/>.</summary>
+    static void CaptureDepth(ref FrameState f, int stage, Action<GpuTexture> capture)
+    {
+        f.Host.Close();
+        capture(f.Post.SceneDepth);
+        f.Host.Open(stage, f.Post.WithShadingRate(f.Post.SceneTargets));
+    }
+
+    /// <summary>The terrain; its colour comes after the foliage (<see cref="DrawSliceLate"/>) when late colour is on.</summary>
+    static void DrawSliceTerrain(ref FrameState f, in Slice s)
+    {
+        var terrain = f.Gpu.Terrain;
+        f.Host.Stage(6);
+        terrain.FogCull = f.Gpu.FogVolumes;
+        terrain.InteriorCut = s.IsNear ? f.Gpu.InteriorMask : null;
+        terrain.Draw(s.ViewProjection, f.Eye, s.Frustum, f.Render, f.Light, defer: TerrainLateColour.Enabled);
+        terrain.InteriorCut = null;
+        terrain.FogCull = null;
         StageClock.Lap(6);
+    }
 
-        // The blood on walls, buildings and objects (the bloodsurfaces switch) needs the depth the terrain alone wrote, to leave the terrain's pixels to its own blood.
-        bool surfaceBlood = nearSlice && gpu.Decals is { Surfaces: true, SurfaceCount: > 0 } bloodDecals && gpu.DecalStore is not null && bloodDecals.SurfacesNear(eye);
-        if (surfaceBlood)
-        {
-            host.Close();
-            gpu.Decals!.CaptureTerrainDepth(post.SceneDepth);
-            host.Open(7, post.WithShadingRate(post.SceneTargets));
-        }
-
-        // Objects.
-        host.Stage(7);
+    /// <summary>The objects, culled by the fog and (near slice) the interior masks.</summary>
+    static void DrawSliceObjects(ref FrameState f, in Slice s)
+    {
+        var gpu = f.Gpu;
+        var light = f.Light;
+        f.Host.Stage(7);
         if (gpu.Objects is { } objects)
         {
-            objects.FogCull = fogCull;
-            objects.InteriorCut = nearSlice ? gpu.InteriorMask : null;
-            if (render.Objects) objects.Draw(viewProjection, eye, frustum, render, light.SunDirection, light.FogColour, light.FogDistance, gpu.Terrain);
+            objects.FogCull = gpu.FogVolumes;
+            objects.InteriorCut = s.IsNear ? gpu.InteriorMask : null;
+            if (f.Render.Objects) objects.Draw(s.ViewProjection, f.Eye, s.Frustum, f.Render, light.SunDirection, light.FogColour, light.FogDistance, gpu.Terrain);
             objects.FogCull = null;
             objects.InteriorCut = null;
         }
         StageClock.Lap(7);
+    }
 
-        if (surfaceBlood)
-        {
-            host.Close();
-            gpu.Decals!.CaptureStaticDepth(post.SceneDepth);
-            host.Open(8, post.WithShadingRate(post.SceneTargets));
-        }
-
-        // Foliage in every depth slice (it reaches 32000+ units at the default x4), counted as one draw.
-        host.Stage(8);
+    /// <summary>Foliage in every depth slice (it reaches 32000+ units at the default x4), counted as one draw.</summary>
+    static void DrawSliceFoliage(ref FrameState f, in Slice s, bool continuation)
+    {
+        var gpu = f.Gpu;
+        var light = f.Light;
+        f.Host.Stage(8);
         if (gpu.Foliage is { } foliage)
         {
-            foliage.FogCull = fogCull;
-            foliage.Occlusion = post.OcclusionFor(eye);
-            foliage.InteriorCut = nearSlice ? gpu.InteriorMask : null;
+            foliage.FogCull = gpu.FogVolumes;
+            foliage.Occlusion = f.Post.OcclusionFor(f.Eye);
+            foliage.InteriorCut = s.IsNear ? gpu.InteriorMask : null;
             foliage.PrepassView = true;
-            if (nearSlice || FoliageFarSlice.Enabled)
-                foliage.Draw(viewProjection, eye, frustum, render, light.SunDirection, light.FogColour, light.FogDistance, gpu.Terrain, continuation: foliageDrawn);
+            if (s.IsNear || FoliageFarSlice.Enabled)
+                foliage.Draw(s.ViewProjection, f.Eye, s.Frustum, f.Render, light.SunDirection, light.FogColour, light.FogDistance, gpu.Terrain, continuation: continuation);
             foliage.PrepassView = false;
             foliage.FogCull = null;
             foliage.Occlusion = default;
             foliage.InteriorCut = null;
         }
         StageClock.Lap(8);
+    }
 
-        // The terrain colour where nothing nearer covers it (the depth is in from the draw above), and the debris.
-        host.Stage(6);
+    /// <summary>The terrain colour where nothing nearer covers it (the depth is in from the draw above), and (near slice) the debris and stuck bolts.</summary>
+    static void DrawSliceLate(ref FrameState f, in Slice s)
+    {
+        var gpu = f.Gpu;
+        f.Host.Stage(6);
         gpu.Terrain.DrawDeferred();
-        if (nearSlice && gpu.Debris is { } debris)
+        if (s.IsNear && gpu.Debris is { } debris)
         {
-            debris.Draw(CollectionsMarshal.AsSpan(gpu.DebrisPieces), viewProjection, eye, frustum, light,
+            debris.Draw(CollectionsMarshal.AsSpan(gpu.DebrisPieces), s.ViewProjection, f.Eye, s.Frustum, f.Light,
                 look => gpu.Characters is { } chars && chars.SkinOn(look.Race, look.SkinDefault) ? chars.SkinTable : 0);
-            if (gpu.BoltPieces.Count > 0) debris.Draw(CollectionsMarshal.AsSpan(gpu.BoltPieces), viewProjection, eye, frustum, light);
+            if (gpu.BoltPieces.Count > 0) debris.Draw(CollectionsMarshal.AsSpan(gpu.BoltPieces), s.ViewProjection, f.Eye, s.Frustum, f.Light);
         }
         StageClock.Lap(6);
+    }
 
-        // The blood on walls, buildings and objects (the bloodsurfaces switch): over the finished opaque scene, under the characters and the water.
-        if (surfaceBlood)
-        {
-            host.Close();
-            float tanY = MathF.Tan(camera.FieldOfView * 0.5f);
-            var jitterClip = new Vector2(2 * f.Jitter.X / f.RenderWidth, 2 * f.Jitter.Y / f.RenderHeight);
-            gpu.Decals!.RecordSurfaces(post.SceneColour, post.SceneDepth, near, far, f.Rotation, tanY * f.Aspect, tanY, eye, jitterClip);
-            host.Open(6, post.WithShadingRate(post.SceneTargets));
-            StageClock.Lap(StageClock.Blood, "blood surfaces");
-        }
+    /// <summary>The blood on walls, buildings and objects (the bloodsurfaces switch): over the finished opaque scene, under the characters and the water.</summary>
+    static void DrawSurfaceBlood(ref FrameState f, in Slice s)
+    {
+        var post = f.Post;
+        f.Host.Close();
+        float tanY = MathF.Tan(f.Camera.FieldOfView * 0.5f);
+        var jitterClip = new Vector2(2 * f.Jitter.X / f.RenderWidth, 2 * f.Jitter.Y / f.RenderHeight);
+        f.Gpu.Decals!.RecordSurfaces(post.SceneColour, post.SceneDepth, s.Near, s.Far, f.Rotation, tanY * f.Aspect, tanY, f.Eye, jitterClip);
+        f.Host.Open(6, post.WithShadingRate(post.SceneTargets));
+        StageClock.Lap(StageClock.Blood, "blood surfaces");
+    }
 
-        // Characters after the opaque geometry: they alone write the scene's alpha (SSAO's character mask), so nothing drawn later may cover them but water.
+    /// <summary>
+    /// Characters after the opaque geometry (near slice): they alone write the scene's alpha (SSAO's character mask), so nothing drawn later may cover them
+    /// but water. Their view-projection is the rotation-only one, for positions relative to the eye.
+    /// </summary>
+    static void DrawSliceCharacters(ref FrameState f, in Slice s)
+    {
+        var gpu = f.Gpu;
+        var light = f.Light;
         if (gpu.Characters is { } fogCharacters)
         {
-            fogCharacters.FogCull = fogCull;
+            fogCharacters.FogCull = gpu.FogVolumes;
             fogCharacters.InteriorObjects = gpu.Objects;
         }
-        if (nearSlice) post.CharactersDrawn = false;   // none this frame unless the near slice draws some below
-        if (nearSlice && gpu.Characters is { } characters)
-        {
-            host.Stage(StageClock.Characters);
-            characters.Draw(viewProjection, eye, frustum, light.SunDirection, light.FogColour, light.FogDistance, f.Rotation * jittered);
-            post.CharactersDrawn = characters.DrawnCharacters > 0;
-            StageClock.Lap(StageClock.Characters);   // the colour draw; the motion draw (post chain, upscalers only) laps itself in
-        }
+        if (!s.IsNear) return;
 
-        DrawWater(ref f, near, far, nearSlice, viewProjection);
+        f.Post.CharactersDrawn = false;   // none this frame unless the near slice draws some below
+        if (gpu.Characters is not { } characters) return;
+        f.Host.Stage(StageClock.Characters);
+        characters.Draw(s.ViewProjection, f.Eye, s.Frustum, light.SunDirection, light.FogColour, light.FogDistance, f.Rotation * s.Jittered);
+        f.Post.CharactersDrawn = characters.DrawnCharacters > 0;
+        StageClock.Lap(StageClock.Characters);   // the colour draw; the motion draw (post chain, upscalers only) laps itself in
+    }
 
-        // The weather particles come last, after the fog volumes (FinishScene): the game draws them in queue 84, the volumes in 82.
-        if (nearSlice)
-        {
-            float close = Math.Min(0.5f, near * 0.5f);
-            f.ParticleView = viewProjection;
-            f.ParticleClose = f.View * Jitter.Apply(camera.Projection(f.Aspect, close, near), f.Jitter, f.RenderWidth, f.RenderHeight);
-            // Unjittered, for low-resolution particles blended after the upscaler (its output is unjittered).
-            f.ParticleLow = f.View * projection;
-            f.ParticleLowClose = f.View * camera.Projection(f.Aspect, close, near);
-            f.ParticleNear = near;
-        }
+    /// <summary>
+    /// The near slice's views for the weather particles, which come last, after the fog volumes (FinishScene): the game draws them in queue 84, the
+    /// volumes in 82. The unjittered pair is for low-resolution particles blended after the upscaler (its output is unjittered).
+    /// </summary>
+    static void KeepParticleViews(ref FrameState f, in Slice s)
+    {
+        float close = Math.Min(0.5f, s.Near * 0.5f);
+        var closeProjection = f.Camera.Projection(f.Aspect, close, s.Near);
+        f.ParticleView = s.ViewProjection;
+        f.ParticleClose = f.View * Jitter.Apply(closeProjection, f.Jitter, f.RenderWidth, f.RenderHeight);
+        f.ParticleLow = f.View * s.Projection;
+        f.ParticleLowClose = f.View * closeProjection;
+        f.ParticleNear = s.Near;
     }
 
     /// <summary>
