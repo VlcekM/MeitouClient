@@ -337,10 +337,13 @@ sealed partial class PlayerInterface
     /// </summary>
     internal static (string Text, string? Colour) BurdenText(float factor) => factor switch
     {
-        >= 0.95f => ("-Weightless", null),
-        >= 0.75f => ("-Lightweight", null),
-        >= 0.5f => ("-Moderate", MainColour),
-        >= 0.1f => ("-Heavy", BadColour),
-        _ => ("-Overloaded", BadColour),
+        >= 0.95f => (Burden("Weightless"), null),
+        >= 0.75f => (Burden("Lightweight"), null),
+        >= 0.5f => (Burden("Moderate"), MainColour),
+        >= 0.1f => (Burden("Heavy"), BadColour),
+        _ => (Burden("Overloaded"), BadColour),
     };
+
+    /// <summary>A burden word with the original's leading dash, the dash being the panel's and the word the catalog's ("Weightless" is a msgid).</summary>
+    static string Burden(string word) => "-" + Loc.Tr(word);
 }
