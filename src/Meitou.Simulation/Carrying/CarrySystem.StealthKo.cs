@@ -46,8 +46,9 @@ public sealed partial class CarrySystem
     public static bool CanKnockOut(CharacterCold cold) =>
         cold is { Medical.Incapacitated: false, Race: not null, Stats: not null } && (cold.Orders & CharacterOrders.Sneak) != 0 && cold.Carrying.IsNone && cold.CarriedBy.IsNone;
 
-    /// <summary>A character that may be knocked out from behind: awake, with a body, not carried.</summary>
-    public static bool CanBeKnockedOut(CharacterCold cold) => cold is { Medical.Incapacitated: false, Race: not null } && cold.CarriedBy.IsNone;
+    /// <summary>A character that may be knocked out from behind: awake, with a body, not carried, not an animal (the verb list's <c>isAnimal</c> gate, so no cleansers).</summary>
+    public static bool CanBeKnockedOut(CharacterCold cold) =>
+        cold is { Medical.Incapacitated: false, Race: not null } && cold.CarriedBy.IsNone && !CharacterFacts.Animal(cold);
 
     /// <summary>
     /// The chance in per cent that a stealth knock-out lands (<c>FUN_1408852f0</c>, <b>Verified</b> literals; docs/game/combat.md "Stealth knock-out"). X = the attacker's assassination minus
