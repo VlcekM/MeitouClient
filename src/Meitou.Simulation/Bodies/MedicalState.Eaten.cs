@@ -25,16 +25,16 @@ public sealed partial class MedicalState
 
     /// <summary>
     /// One update of being eaten (<c>Task_EatPrisoner</c> calls the character's being-eaten virtual, <c>FUN_1404356f0</c> then <c>FUN_140650370</c>; docs/game/ai-tasks.md "Prisoner fate",
-    /// <b>Observed</b>): nothing happens to a robot. The parts are walked from the last down: a limb that is a stump or a prosthetic is passed over (engine reading of the original's
+    /// <b>Observed</b>): nothing happens to a robot, and nothing else is tested: a dead body is eaten the same way (the goals 230 and 233 use this action). The parts are walked from the last down: a limb that is a stump or a prosthetic is passed over (engine reading of the original's
     /// attached-limb test); the first part with h - 1.1 s above -M loses <paramref name="rate"/> x <paramref name="dt"/> from both its flesh and its treated pool, is checked as the
     /// medical tick checks a part (a vital part destroyed kills), and the update ends. A limb with nothing left is cut off on the way when <paramref name="limbLoss"/> (the original's global
     /// flag <c>DAT_142133504</c>, read as the dismemberment setting). When no part is left to eat the pass is counted; past <see cref="EatenPassesToDeath"/> the character dies
-    /// (<see cref="DeathCause.Eaten"/>, the original's death cause "eaten"). With <paramref name="vampiric"/> (the eater's race) it is drunk from instead. True when it is eaten alive by this call.
+    /// (<see cref="DeathCause.Eaten"/>, the original's death cause "eaten"). With <paramref name="vampiric"/> (the eater's race) it is drunk from instead. True when the meal is over by this call: an eaten-alive death, or for a body already dead the end of its parts (the original then destroys the character, reason "eaten").
     /// </summary>
     public bool BeingEaten(float rate, float dt, in MedicalContext ctx, bool limbLoss, List<MedicalEvent>? events = null, bool vampiric = false)
     {
         EatenCountdown = 7;
-        if (Dead || ctx.Race.IsRobot) return false;
+        if (ctx.Race.IsRobot) return false;   // no dead test: a dead body is bitten like a living one (FUN_1404356f0, FUN_140650370, Verified)
         if (vampiric)
         {
             // A vampiric eater (its race's vampiric flag, FUN_1404356f0 passes the EATER's, Verified) drinks instead: hunger and blood drain, no part is eaten, until the

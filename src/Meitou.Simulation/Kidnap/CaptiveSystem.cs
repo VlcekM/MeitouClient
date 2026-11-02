@@ -930,8 +930,8 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
 
     /// <summary>
     /// A meal on the ground (220 on a 230 / 233 target): the eater walks to the body, then eats it with the <c>eat</c> clip as a caged one is eaten (<see cref="Eat"/>), barking event 52. The
-    /// original's goal stays chosen while its finder still returns the body (TARGET_IS_EATEN is always false), so a corpse is eaten until <see cref="CaptiveSettings.GiveUpSeconds"/> ends
-    /// the job (engine choice); a living body until it dies. Carried away, caged or gone: over.
+    /// action has no dead test (<c>FUN_140353c50</c>, <b>Verified</b>): a corpse is bitten like a living body until its parts are gone and the passes run out, when it is removed; a living
+    /// body until it dies. Carried away, caged or gone: over.
     /// </summary>
     bool StepEatBody(World world, CaptiveJob j, int w, CharacterCold wc)
     {
@@ -965,8 +965,11 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
             j.NextBark = j.Time + Settings.BarkSeconds;
             world.Defer(new Dialogue.DialogueEvent(j.Worker, j.Captive, EatingSounds) { Tick = world.Tick + 1 });
         }
-        if (m.Dead) return true;
-        return Eat(world, j, c, cc, world.TickSeconds) ? End(world, j, CaptiveEventKind.Eaten) : true;
+        bool corpse = m.Dead;
+        if (!Eat(world, j, c, cc, world.TickSeconds)) return true;
+        // The meal over, the original destroys the character with the reason "eaten" (FUN_140799af0): a corpse is let go to the body system's removal (its decay clock run out).
+        if (corpse && cc.DiedTick >= 0) cc.DiedTick = Math.Max(0, world.Tick - BodySystem.CorpseTicksOf(world) - 1);
+        return End(world, j, CaptiveEventKind.Eaten);
     }
 
     /// <summary>
@@ -1037,6 +1040,7 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
             Seed = world.Seed,
             CharacterKey = Rng.Key(table.IdOf(c)),
         };
+        bool wasDead = medical.Dead;
         var events = new List<MedicalEvent>();
         // A meal still awake gains toughness XP: the generic continuous entry with amount 10 (FUN_1404356f0 calls FUN_1408c6430(stats, dt, 10, 21); Observed). Engine choice: "awake" for the
         // original's unnamed conscious test (vfunc 0x358).
@@ -1055,7 +1059,7 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
         }
         // "{1} has been eaten alive." for the player's own (FUN_140856bc0: of the player's faction, or of a squad that is).
         if (eaten && (cc.IsPlayer || world.Player.Faction >= 0 && cc.Faction == world.Player.Faction)) world.Post(Loc.Tr("{1} has been eaten alive.", cc.Name));
-        return medical.Dead;
+        return wasDead ? eaten : medical.Dead;
     }
 
     /// <summary>
