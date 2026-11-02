@@ -21,7 +21,7 @@ namespace Meitou.Simulation.Kidnap;
 /// over: each leaves the squad for a squad of its own, owned by the town's faction and put into a free cage of the town (<b>engine choice</b>: the original's handover goes through
 /// that dialogue, and no base-game dialogue answers event 39, <b>Unknown</b>).</item>
 /// <item><b>Get in the cage</b> (172 "Getting in my cage", a Slave AI Goal; <c>FUN_1408caaf0</c>, <b>Observed</b>): a slave not held walks to the nearest free cage of its owner's faction
-/// in its town and gets in (<c>Task_UseCage</c>).</item>
+/// in the 3x3 zone cells round it, in any town, and gets in (<c>Task_UseCage</c>).</item>
 /// </list>
 /// </summary>
 public sealed partial class CaptiveSystem
@@ -82,18 +82,17 @@ public sealed partial class CaptiveSystem
             case TaskType.SLAVE_GET_IN_MY_MASTERS_CAGE:
             {
                 if (cold.SlaveState != 1 || cold.SlaveOwner < 0 || cold.InSomething != HeldState.None || cold.IsPlayer) return null;
-                int site = board.Town >= 0 ? board.Town : TownAt(data, table.Next[slot].Position);
-                if (site < 0) return null;
+                // FUN_1408caaf0: the owner faction's free cages in the 3x3 zone cells round the slave, whatever the town (the finder's town argument is 0).
                 var at = table.Next[slot].Position;
                 Fixture? best = null;
                 float bestD = float.MaxValue;
-                foreach (var f in CagesOf(world, site))
+                foreach (var f in NearbyCages(world, -1, at, cold.SlaveOwner))
                 {
-                    if (f.Owner != cold.SlaveOwner || !FixtureRegistry.IsFree(table, f) || Taken(f.Id)) continue;
+                    if (!FixtureRegistry.IsFree(table, f) || Taken(f.Id)) continue;
                     float d = Vector2.DistanceSquared(new Vector2(at.X, at.Z), new Vector2(f.Position.X, f.Position.Z));
                     if (d < bestD) (best, bestD) = (f, d);
                 }
-                return best is null ? null : new CaptiveJob { Kind = CaptiveJobKind.CageSelf, Worker = worker, Captive = worker, Cage = best.Id, Faction = cold.Faction, Site = site };
+                return best is null ? null : new CaptiveJob { Kind = CaptiveJobKind.CageSelf, Worker = worker, Captive = worker, Cage = best.Id, Faction = cold.Faction, Site = best.Site };
             }
         }
         return null;
