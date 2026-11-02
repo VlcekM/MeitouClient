@@ -59,6 +59,18 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
     public Vector3? Ahead { get; set; }
     public IReadOnlyList<Vector3> Kept { get; set; } = [];
     public float KeptReach { get; set; } = 3000;
+    /// <summary>The camera's distance to its target: a kept character's texture needs count from at least this far (the view a jump there would have).</summary>
+    public float KeptViewDistance { get; set; }
+    /// <summary>Built characters out of the eye's reach but within <see cref="KeptReach"/> of a kept point, with that distance: their textures are offered
+    /// (and so marked used) as if seen from there, or the cache's idle limit unloaded them before a jump there.</summary>
+    readonly List<(CharacterAsset Asset, float Distance)> keptLooks = [];
+    float NearKept(Vector3 p)
+    {
+        float d = float.PositiveInfinity;
+        var kept = Kept;
+        for (int k = 0; k < kept.Count; k++) d = MathF.Min(d, Vector2.Distance(new Vector2(kept[k].X, kept[k].Z), new Vector2(p.X, p.Z)));
+        return d;
+    }
     /// <summary>Added to the reach for building, so a character is ready a little before it is drawn.</summary>
     const float BuildMargin = 300;
 
@@ -475,6 +487,7 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         double buildMs = 0;
         float reach = EyeLift.Of(eye, GroundUnderEye) > 0 ? Math.Min(DrawDistance, LiftedReach) : DrawDistance;
         var items = Draws.Items;
+        keptLooks.Clear();
         for (int i = 0; i < items.Count; i++)
         {
             var inst = items[i];
@@ -498,7 +511,11 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
             float scale = inst.Scale > 0 ? inst.Scale : 1;
             var centre = inst.Position + new Vector3(0, asset.Height * 0.5f * scale, 0);
             bool far = inst.Hidden || Vector3.Distance(eye, centre) - asset.Radius * scale > reach;
-            if (far && !portraitKeys.Contains(inst.Key)) continue;
+            if (far && !portraitKeys.Contains(inst.Key))
+            {
+                if (!inst.Hidden && Kept.Count > 0 && NearKept(centre) is var dk && dk <= KeptReach) keptLooks.Add((asset, dk));
+                continue;
+            }
             if (liveCount == live.Length) Array.Resize(ref live, liveCount * 2);
             ref var l = ref live[liveCount++];
             l.Asset = asset;
@@ -649,6 +666,14 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
                 foreach (var t in part.Material.Tex)
                     if (t is not null) { t.OfferNow(need); _ = t.Key; }
             }
+        if (budget.Due)
+            foreach (var (asset, distance) in keptLooks)
+                foreach (var part in asset.Parts)
+                {
+                    float need = Math.Max(Math.Max(distance, KeptViewDistance) - asset.Radius * 0.5f, 0.5f) / part.UvScale * budget.NeedScale;
+                    foreach (var t in part.Material.Tex)
+                        if (t is not null) { t.OfferNow(need); _ = t.Key; }
+                }
         budget.Update(content.Textures);
         // A record is written again only when something it reads changed (materialEpoch, or the material's own fields), and uploaded into the material table
         // (CharacterMaterialTable) only when it came out different or the material has no slot.

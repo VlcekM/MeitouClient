@@ -1399,7 +1399,7 @@ static class WorldFrame
         if (gpu.Streamer is { } aheadTerrain) (aheadTerrain.Ahead, aheadTerrain.Kept, aheadTerrain.Guard) = (gpu.Ahead, kept, gpu.Guard);
         if (gpu.Objects is { } aheadObjects) (aheadObjects.Ahead, aheadObjects.Kept, aheadObjects.KeptViewDistance) = (gpu.Ahead, kept, camera.Distance);
         if (gpu.Foliage is { } aheadFoliage) (aheadFoliage.Ahead, aheadFoliage.Kept, aheadFoliage.KeptViewDistance) = (gpu.Ahead, kept, camera.Distance);
-        if (gpu.Characters is { } aheadCharacters) (aheadCharacters.Ahead, aheadCharacters.Kept) = (gpu.Ahead, kept);
+        if (gpu.Characters is { } aheadCharacters) (aheadCharacters.Ahead, aheadCharacters.Kept, aheadCharacters.KeptViewDistance) = (gpu.Ahead, kept, camera.Distance);
         // The loading counts the eye's height over the ground beyond the game's cameras (EyeLift): terrain textures, object zones, foliage, characters. In flight the weather fog is off.
         float groundUnderEye = gpu.Terrain.HeightAt(eye.X, eye.Z);
         if (gpu.Streamer is { } liftedTerrain) liftedTerrain.GroundUnderEye = groundUnderEye;
