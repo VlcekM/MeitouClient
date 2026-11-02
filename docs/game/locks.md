@@ -137,7 +137,7 @@ Same targets as picking; Task_CutLock / Task_BruteForceLock share the shackle ta
     wants DOOR_IS_OPEN; its providers, in ascending type, are 72 Opening door, 81 and 287. Locked: 72 needs !54, which 78 (own door only) or 81 could give, and
     81 (B: not mine, not allied, a weapon, at the door) wins, walked to by 82. 287 is the break-out twin (LOCATION_IS_ACCESSIBLE 60 → 84 → 74 → !55).
   - **Desire** (`AI::scoreAggressiveAction` `FUN_14079d1a0`): 0 for a building in the basher's home town; 1.1 for a bandit (NPC type 8); a player character 1.1
-    when aggressive, against an enemy or a not-real faction, else 0; an NPC 0 towards an ally (or in a war campaign, flag **Unknown**), 1 towards an enemy, else 0
+    when aggressive, against an enemy or a not-real faction, else 0; an NPC 0 towards an ally (or in a war campaign, flag **Unknown**), 1 towards a hostile faction (**Verified**, `FUN_1406b26d0`: another faction, relation at or below the hostile threshold; the coexistence flag is not read; Meitou `FactionRelations.IsHostile`), else 0
     for trader, civilian, diplomat or adventurer factions and 1 otherwise. Picking and breaking score 0.1, so a bash beats them. Inference, not run: a bandit
     (1.1 > 72's 1) bashes even an unlocked closed door.
   - **Door and place**: the building's one door (`getDoor`); at it within the door's reach of its marker (25, 45 for a gateway; x2 standing), height 130.

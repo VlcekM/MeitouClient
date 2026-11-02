@@ -52,7 +52,7 @@ sealed class DoorPlan : IPlanWorld
 
     /// <summary>
     /// <c>AI::scoreAggressiveAction</c> for the building (docs/game/locks.md "Bash door", <b>Observed</b>): 0 in the basher's home town; a bandit 1.1; else 0 towards an ally,
-    /// 1 towards an enemy, and towards the rest 0 for a trader, civilian, diplomat or adventurer faction, else 1. Not modelled: the war-campaign case (its byte is <b>Unknown</b>).
+    /// 1 towards a hostile faction (relation at or below the hostile threshold, coexistence not read: FUN_1406b26d0, Verified), and towards the rest 0 for a trader, civilian, diplomat or adventurer faction, else 1. Not modelled: the war-campaign case (its byte is <b>Unknown</b>).
     /// </summary>
     internal static float AggressiveTowards(World world, CombatSystem? combat, CharacterCold cold, string building, Vector3 at)
     {
@@ -63,7 +63,7 @@ sealed class DoorPlan : IPlanWorld
         if (relations.Contains(owner))
         {
             if (relations.Get(cold.Faction, owner) >= FactionRelations.AllyThreshold) return 0;
-            if (AggroSystem.IsEnemy(relations, cold.Faction, owner)) return 1;
+            if (relations.IsHostile(cold.Faction, owner)) return 1;
         }
         return relations.Factions[cold.Faction].FundamentalType is FundamentalType.Trader or FundamentalType.Civilian or FundamentalType.Diplomat or FundamentalType.Adventurer ? 0 : 1;
     }
