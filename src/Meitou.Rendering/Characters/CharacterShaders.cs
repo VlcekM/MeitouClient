@@ -63,9 +63,9 @@ static class CharacterShaders
             uint vestCount;
             float alphaThreshold;
             uint tex[{{TextureSlotCount}}];
-            vec4 shirtColour;    // w: an item's gloss multiplier (an icon's material `specular mult`; 1 otherwise)
+            vec4 shirtColour;    // w: hair's attachment specular, or an item's gloss multiplier
             vec4 skinTone;
-            vec4 hairColour;
+            vec4 hairColour;     // rgb: tint; w: attachment mipmap bias
             vec4 hairAlpha;
             vec4 hairMult;
             vec4 beardAlpha;
@@ -190,6 +190,7 @@ static class CharacterShaders
     // derivatives of the quad are fine. The cut-outs discard after every lookup (no derivatives after an OpKill).
     const string Lookup = """
         vec4 tex(uint i, vec2 uv) { return texture(textures2D[nonuniformEXT(i)], uv); }
+        vec4 hairTex(CharMaterial m, vec2 uv) { return texture(textures2D[nonuniformEXT(m.tex[0])], uv, m.hairColour.w); }
         """;
 
     /// <summary>
@@ -206,7 +207,7 @@ static class CharacterShaders
 
     static string F(float v) => v.ToString("0.0########", System.Globalization.CultureInfo.InvariantCulture);
 
-    public static string Fragment() => "#version 450\n" + NativeShaders.Prelude(PushMembers) + "#define LAMP_SKIN\n" + NativeShaders.AtmosphereFunctions + Structs + Lookup + $$"""
+    public static string Fragment(bool lateDepth = false) => "#version 450\n" + NativeShaders.Prelude(PushMembers) + "#define LAMP_SKIN\n" + NativeShaders.AtmosphereFunctions + Structs + Lookup + $$"""
         in vec3 vWorld;
         in float vCurvature;
         in vec3 vNormal;
@@ -261,6 +262,8 @@ static class CharacterShaders
 
         void main()
         {
+            // The backend's discard workaround: preserve the rasterized depth, with writes deferred until after alpha rejection.
+            {{(lateDepth ? "gl_FragDepth = gl_FragCoord.z;" : "")}}
             vec3 geometric = normalize(vNormal);
             float curvature = vCurvature;
             if (vHidden > 0.0) discard;
@@ -269,7 +272,7 @@ static class CharacterShaders
             uint f = m.flags;
             if (flag(f, 32768u)) discard;   // its cut-out is still streaming in: a solid card would show
             vec3 n = geometric;
-            if (!gl_FrontFacing) n = -n;
+            if (m.shading != 2u && !gl_FrontFacing) n = -n;
             bool icon = view.fogDistance < 0.0 && view.fogDistance > -1.5;   // an inventory icon (CharacterRenderer.DrawIcon)
             vec2 uv = vUv;
             vec3 albedo = vec3(0.72);
@@ -282,11 +285,11 @@ static class CharacterShaders
 
             if (m.shading == 2u)
             {
-                vec4 t = flag(f, 1u) ? tex(m.tex[0], uv) : vec4(1.0);
+                vec4 t = flag(f, 1u) ? hairTex(m, uv) : vec4(1.0);
                 cut = flag(f, 1u) && dot(t, m.alphaChannel) < m.alphaThreshold;
                 float brightness = dot(t, m.diffuseChannel);
                 albedo = brightness * m.hairColour.rgb;
-                gloss = brightness * 0.3;
+                gloss = brightness * m.shirtColour.w;
             }
             else if (m.shading == 1u)
             {
@@ -472,7 +475,7 @@ static class CharacterShaders
             if ((f & 32768u) != 0u) discard;
             bool cut = false;
             if (m.shading == 2u && (f & 1u) != 0u)
-                cut = dot(tex(m.tex[0], vUv), m.alphaChannel) < m.alphaThreshold;
+                cut = dot(hairTex(m, vUv), m.alphaChannel) < m.alphaThreshold;
             else if (m.shading == 0u && (f & 512u) != 0u)
                 cut = tex(m.tex[1], vUv).a < 0.6;
             if (cut) discard;
@@ -501,7 +504,7 @@ static class CharacterShaders
             CharMaterial m = materials.items[vMaterial];
             uint f = m.flags;
             if ((f & 32768u) != 0u) discard;
-            if (m.shading == 2u && (f & 1u) != 0u) { if (dot(tex(m.tex[0], vUv), m.alphaChannel) < m.alphaThreshold) discard; }
+            if (m.shading == 2u && (f & 1u) != 0u) { if (dot(hairTex(m, vUv), m.alphaChannel) < m.alphaThreshold) discard; }
             else if (m.shading == 0u && (f & 512u) != 0u) { if (tex(m.tex[1], vUv).a < 0.6) discard; }
             float stored = texelFetch(textures2D[nonuniformEXT(pc.depthIndex)], ivec2(gl_FragCoord.xy), 0).r;
             if (stored >= 1.0) discard;

@@ -66,6 +66,11 @@ On Metal the stages have their own binding tables, so the Vulkan scheme (the fra
 bindings at 32, to keep them apart from the vertex stage's) is not needed: the fragment stage's
 bindings start at 0.
 
+**Observed**, macOS Metal with `Haircut08-hobo`: the shaded, depth-tested editor loses hair layers while an unlit mask agrees with native Kenshi 1.0.68 D3D11.
+Writing the unchanged `gl_FragCoord.z` to `gl_FragDepth` restores 98.9% mask overlap at matched cameras, with depth testing and writes enabled;
+the source alpha in mip levels 0–3, channel selection, threshold and bone transforms agree. `MetalShaders.DiscardNeedsLateDepth` requests this output
+from the character colour shader; the interface default is false. **Unknown**: the exact compiler/driver optimization responsible. Disabling fast math alone does not fix it.
+
 **The one binding table per stage.** Metal maps a resource to its MSL index by the binding
 decoration alone, set ignored, so two sets with the same binding number would land on one
 `[[buffer(n)]]` (the terrain's set 0 and set 2 both have a binding-0 block; the default block sits

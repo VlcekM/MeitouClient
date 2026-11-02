@@ -408,7 +408,9 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
     {
         Gpu = gpu;
         nativeFrame = new NativeFrame(gpu, extraStorage: 4);
-        colourProg = new ReflectedProgram(gpu, nativeFrame, CharacterShaders.Vertex(), Gi.GiResolveShaders.WithAlbedo(CharacterShaders.Fragment(), inShader: true), "characters", CharacterShaders.InstanceLocation);
+        var colourFragment = CharacterShaders.Fragment(gpu.Shaders.DiscardNeedsLateDepth);
+        colourProg = new ReflectedProgram(gpu, nativeFrame, CharacterShaders.Vertex(),
+            Gi.GiResolveShaders.WithAlbedo(colourFragment, inShader: true), "characters", CharacterShaders.InstanceLocation);
         depthProg = new ReflectedProgram(gpu, nativeFrame, CharacterShaders.DepthVertex(), CharacterShaders.DepthFragment(), "characters depth", CharacterShaders.InstanceLocation);
         motionProg = new ReflectedProgram(gpu, nativeFrame, CharacterShaders.MotionVertex(), CharacterShaders.MotionFragment(), "characters motion", CharacterShaders.InstanceLocation);
         content = new CharacterContent(gpu, install, db, assetLocator, rigs);
@@ -883,6 +885,8 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
 
         static void Offer(AssetPart part, float need)
         {
+            // Negative attachment bias needs finer resident mips as well as biased sampling.
+            need *= MathF.Pow(2, part.Material.MipmapBias);
             foreach (var t in part.Material.Tex)
                 if (t is not null)
                 {
@@ -1051,7 +1055,7 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         r.AlphaThreshold = m.AlphaThreshold;
         r.ShirtColour = new Vector4(m.ShirtColour, m.GlossMult);
         r.SkinTone = new Vector4(m.SkinTone, has[CharacterShaders.SlotBlendNormal] ? m.MuscleBlend : 0);
-        r.HairColour = new Vector4(m.HairColour, 1);
+        r.HairColour = new Vector4(m.HairColour, m.MipmapBias);
         r.HairAlpha = m.HairAlpha; r.HairMult = m.HairMult; r.BeardAlpha = m.BeardAlpha;
         r.DiffuseChannel = m.DiffuseChannel; r.AlphaChannel = m.AlphaChannel;
         r.Colour1 = m.Colour1; r.Colour2 = m.Colour2;

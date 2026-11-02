@@ -107,6 +107,9 @@ internal sealed class MetalProgram : IDisposable
 /// </summary>
 public sealed class MetalShaders : IGpuShaders
 {
+    /// <summary>The shaded character cut-outs must reject alpha before committing depth (docs/formats/runtime-materials.md).</summary>
+    public bool DiscardNeedsLateDepth => true;
+
     /// <summary>
     /// Metal's stages have one binding table per kind (<c>[[buffer(n)]]</c>, <c>[[texture(n)]]</c>), and its mapping is by
     /// the binding decoration alone — set included, since sets are not namespaced (docs/metal-backend.md). Every resource's

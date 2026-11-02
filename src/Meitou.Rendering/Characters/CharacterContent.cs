@@ -114,8 +114,10 @@ internal sealed class PartMaterial
     public bool HasShirtColour;
     public Vector4 HairAlpha, HairMult, BeardAlpha, DiffuseChannel = new(1, 0, 0, 0), AlphaChannel = new(1, 0, 0, 0), Colour1, Colour2;
     public float AlphaThreshold;
-    /// <summary>An item's gloss multiplier (an icon's material <c>specular mult</c>, rtticons.hlsl's <c>glossMult</c>); 1 for the others.</summary>
+    /// <summary>Hair's attachment <c>specular</c>, or an item's gloss multiplier (an icon's material <c>specular mult</c>); 1 for the others.</summary>
     public float GlossMult = 1;
+    /// <summary>Hair attachment mipmap bias, added to the sampler's upscaler bias in each hair cut-out pass.</summary>
+    public float MipmapBias;
     /// <summary>An icon whose mesh has vertex colours: they multiply the albedo (the game's <c>RTTIcons_Coloured</c>).</summary>
     public bool VertexColoured;
     /// <summary>Takes blood (<see cref="CharacterShaders.Bloody"/>; <see cref="BloodFull"/>: the whole mesh at the full amount, a stump): <see cref="Colour1"/> holds the blood colour, <see cref="Colour2"/> x and y the race's <c>blood horizontal</c> and <c>blood vertical</c>.</summary>
@@ -899,6 +901,8 @@ internal sealed class CharacterContent : IDisposable
         {
             // Hair and beards: brightness and alpha are channels of the diffuse texture.
             m.Shading = CharacterShaders.ShadeHair;
+            m.GlossMult = item.GetFloat("specular");
+            m.MipmapBias = item.GetFloat("mipmap bias");
             string? diffuse = Tex(item, "texture map" + f) ?? Tex(item, "texture map");
             m.Description = $"hair texture {Path.GetFileName(diffuse ?? "-")}";
             m.Tex[CharacterShaders.SlotDiffuse] = Texture(diffuse, false);
