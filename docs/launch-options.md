@@ -16,6 +16,7 @@ Authority: `src/Meitou.Game/GameOptions.cs` (`Split`, `Usage`), `src/Meitou.Game
 |---|---|---|---|
 | `--new-game [start]` | start name | Wanderer | New game: squad at its town, camera on it. |
 | `--list-starts` | | | Print the available starts and exit. |
+| `--data-check` | | | Print every game data and level file problem of the load order (missing mod, changed record type...) and exit: 0 none, 1 some. |
 | `--load <folder>` | save folder | none | Start in a save, Meitou's or the original game's. With `--screenshot` too. |
 | `--seed <n>` | integer | 0 | World seed. A new game from the menu keeps it once given. |
 | `--no-population` | | off | No residents or movement. |

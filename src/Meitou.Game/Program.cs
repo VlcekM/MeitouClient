@@ -57,6 +57,20 @@ static class Program
             Console.Error.WriteLine($"Kenshi install not found: set {GameInstall.EnvironmentVariable} or create {GameInstall.LocalConfigFile}.");
             return 1;
         }
+        if (game.DataCheck)
+        {
+            var checkedDb = Meitou.Data.GameDatabase.Load(Meitou.Data.LoadOrder.FromInstall(install));
+            var levels = Meitou.Data.World.WorldLevelData.Load(install, includeInteriors: true);
+            var levelProblems = levels.Problems();
+            Console.WriteLine($"load order: {string.Join(", ", checkedDb.Files)}");
+            foreach (var (what, issues) in new[] { ("game data", checkedDb.Issues), ("world levels", levelProblems) })
+            {
+                Console.WriteLine($"{what}: {issues.Count} problems");
+                foreach (var issue in issues) Console.WriteLine($"  {issue.Kind}: {issue}");
+            }
+            Console.WriteLine($"world levels: {levels.Issues.Count - levelProblems.Count} records a later layer defines again (how layers replace placements; not problems)");
+            return checkedDb.Issues.Count + levelProblems.Count == 0 ? 0 : 1;
+        }
         // Steamworks must start before Vulkan creates its device so Steam can hook the renderer for Shift+Tab. Not for pictures or a
         // listing: those must not count as Kenshi play time or get the overlay.
         using var steam = world.Screenshot is null && !game.ListStarts ? SteamSession.TryStart(install) : null;

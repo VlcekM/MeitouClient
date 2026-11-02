@@ -14,6 +14,8 @@ State ID=placementID+'-S'+hex type (35→S23,94→S5e), verified31849 records. D
 join merged game data, not names. Base placements/layers and save-state overrides are distinct.
 **Observed** WorldLevelData merges fields per key/instances per ID, empty target deletes;
 flags0 may still override. Exact original zone/mod merge behaviour remains partly unknown.
+**Observed** (`--data-check`, unmodded 1.0.68): later layers define 4047 earlier-layer ids again (all zone, level and interiors
+files; 957 in `rebirth/interiors.level`) and nothing else; that is how layers replace placements, so it is not reported as a problem.
 
 ## Interior masks
 

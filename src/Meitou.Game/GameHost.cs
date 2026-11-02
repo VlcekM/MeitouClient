@@ -362,7 +362,7 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
             () => Meitou.Data.Save.SaveCatalog.Scan(Meitou.Simulation.Saving.QuickSave.DefaultRoot, install.SaveDirectory,
                 Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "kenshi", "save")),
             assets.Find("credits.txt") is { } creditsFile ? File.ReadAllText(creditsFile) : "");
-        player.DataProblems = (scene.Database?.Issues.Count ?? 0) + (scene.Objects?.Levels.Issues.Count ?? 0);
+        player.DataProblems = (scene.Database?.Issues.Count ?? 0) + (scene.Objects?.Levels.Problems().Count ?? 0);
         if (OpensOnTitle(interactive)) player.ShowTitle();
         if (nav is not null && (start is not null || !interactive))
         {

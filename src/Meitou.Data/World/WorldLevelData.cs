@@ -43,6 +43,12 @@ public sealed class WorldLevelData
     /// <summary>Merge problems over all files (records defined twice, ...), tagged with the layer file.</summary>
     public List<GameDataIssue> Issues { get; } = [];
 
+    /// <summary>
+    /// The <see cref="Issues"/> worth a warning: not a record defined again, which is how a later layer replaces placements (Observed: the
+    /// unmodded 1.0.68 layers give 4047, all of that kind, and the game plays as shipped).
+    /// </summary>
+    public List<GameDataIssue> Problems() => [.. Issues.Where(i => i.Kind != GameDataIssueKind.RecordAlreadyDefined)];
+
     public static WorldLevelData Load(GameInstall install, bool includeInteriors = false) =>
         Load(Path.Combine(install.DataDirectory, RelativeDirectory), LoadOrder.FromInstall(install).Entries, includeInteriors);
 
