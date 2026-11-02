@@ -16,9 +16,8 @@ public sealed partial class ProductionSystem
 
     /// <summary>Ticks between the steps of a carrying job's carry under way (engine choice); its start is the decision step's.</summary>
     public const int ErrandEveryTicks = 15;
-    /// <summary>A body carried out is put down within this of its goal, or after <see cref="ErrandWalks"/> walks that ended short (engine choices).</summary>
+    /// <summary>A body carried out is put down within this of its goal (engine choice).</summary>
     public const float ErrandArrive = 40;
-    public const int ErrandWalks = 4;
     /// <summary>Game minutes an intruder carrier may stand still before it drops the body (<b>Verified</b>: 5, <c>FUN_1403356e0</c>).</summary>
     public const float CarryOutMinutes = 5;
     /// <summary>How far past a town's farthest building an intruder is carried out of the town (<b>Observed</b>: 200 beyond the town's edge).</summary>
@@ -33,7 +32,6 @@ public sealed partial class ProductionSystem
     {
         public ErrandKind Kind;
         public Vector2 Goal;
-        public int Tries;
         public CharacterId Body;
         /// <summary>The carrier's current GoTo is this job's own (else a GoTo task is an order of the player's).</summary>
         public bool Walking;
@@ -47,8 +45,6 @@ public sealed partial class ProductionSystem
 
     // Derived state, not saved or hashed: a lift under way is looked at again from the characters' own state when it is lost.
     readonly Dictionary<CharacterId, Errand> errands = [];
-    // Bodies a carrier gave up on (walks that kept ending short): the original's give-up list of the squad.
-    readonly HashSet<CharacterId> givenUp = [];
 
     /// <summary>The finders' kinds a job type runs, with the companion type that must be in the list for the carrying out.</summary>
     static ErrandKind? KindOf(TaskType type) => type switch
@@ -80,6 +76,7 @@ public sealed partial class ProductionSystem
         if (Carry is null || world.Tick % ErrandEveryTicks != 0 || errands.Count == 0) return;
         var table = world.Characters;
         foreach (var gone in errands.Keys.Where(k => !table.IsAlive(k)).ToList()) errands.Remove(gone);
+        foreach (var gone in impossible.Keys.Where(k => !table.IsAlive(k)).ToList()) impossible.Remove(gone);
         for (int i = 0; i < table.HighWater; i++)
             if (table.Next[i].Alive && table.Cold(i) is { IsPlayer: true } cold && errands.TryGetValue(table.IdOf(i), out var errand)) StepErrand(world, i, cold, errand);
     }
@@ -169,6 +166,7 @@ public sealed partial class ProductionSystem
         if (task is not (CharacterTask.GoTo or CharacterTask.Idle or CharacterTask.Wander or CharacterTask.Follow)) { errands.Remove(id); return; }
         bool wasWalking = e.Walking;
         if (task != CharacterTask.GoTo) e.Walking = false;
+        if (e.Kind == ErrandKind.Corpse && wasWalking && task != CharacterTask.GoTo) NoteWalkEnd(world, id, n, e);
         Vector2 goal = e.Goal;
         BuildSite? site = null;
         Machine? machine = null;
@@ -199,16 +197,6 @@ public sealed partial class ProductionSystem
             errands.Remove(id);
             return;
         }
-        if (++e.Tries > ErrandWalks)
-        {
-            if (e.Kind == ErrandKind.Corpse) GiveUp(world, i, e);
-            else
-            {
-                Carry!.BeginPutDown(world, i, TaskSource.Job);
-                errands.Remove(id);
-            }
-            return;
-        }
         e.Goal = goal;
         e.Walking = true;
         TaskStart.StepTo(table, i, goal, cold.RunSpeed);
@@ -224,13 +212,21 @@ public sealed partial class ProductionSystem
         return wasWalking || world.GameHours - e.StoppedAt.Value >= CarryOutMinutes / 60.0;
     }
 
-    /// <summary>The carrier drops the body where it stands and the job leaves it alone from now on (the squad's give-up list).</summary>
-    void GiveUp(World world, int i, Errand e)
+    // Derived state, not saved or hashed: the machines a carrier's path failed to, until the game tick (the AI's ignore map, 20 s).
+    readonly Dictionary<CharacterId, Dictionary<string, long>> impossible = [];
+
+    /// <summary>How long a machine whose path failed is skipped by that carrier (<c>FUN_140796ed0</c> stores 20.0, <b>Verified</b>; re-armed on each failed walk).</summary>
+    public const float PathImpossibleSeconds = 20;
+
+    /// <summary>The walk to the machine ended: if the carrier is not at it, the path failed and the carrier skips that machine for <see cref="PathImpossibleSeconds"/> (<c>FUN_1405b0290</c> in <c>FUN_1408d0770</c>).</summary>
+    void NoteWalkEnd(World world, CharacterId id, in CharacterHot n, Errand e)
     {
-        givenUp.Add(e.Body);
-        Carry!.LetGo(world, i);
-        errands.Remove(world.Characters.IdOf(i));
+        if (e.Site is not { } siteId || Site(world, siteId) is not { } site || world.Machines.Find(siteId) is not { } machine || AtSite(n, site, machine)) return;
+        if (!impossible.TryGetValue(id, out var map)) impossible[id] = map = new Dictionary<string, long>(StringComparer.Ordinal);
+        map[siteId] = world.Tick + (long)MathF.Ceiling(PathImpossibleSeconds / world.TickSeconds);
     }
+
+    bool PathImpossible(World world, CharacterId id, string siteId) => impossible.TryGetValue(id, out var map) && map.TryGetValue(siteId, out long until) && until > world.Tick;
 
     // ---- corpse disposal (137 / 138) ----
 
@@ -245,14 +241,13 @@ public sealed partial class ProductionSystem
         var body = cold.Carrying;
         if (!Carry!.LetGo(world, i) || !table.IsAlive(body)) return;
         if (machine.Data.Label.Length > 0) world.Floaters?.Enqueue(Floater.Label(site.Position + new Vector3(0, 5, 0), machine.Data.Label));
-        givenUp.Remove(body);
         world.Uniques.Left(body);
         table.Remove(body);
     }
 
     /// <summary>
     /// The finder of job 138 (<c>FUN_1408cfb00</c>, <b>Verified</b> by decompile): a dead, non-robot body in a cage of the character's town first (<c>FUN_1408cbea0</c> with the cage mask), else
-    /// the nearest dead body in sight that nobody carries (<c>FUN_1408ce170</c>), neither in the give-up list. Meitou's cages are the player's own, the town is the haul range, and sight is
+    /// the nearest dead body in sight that nobody carries (<c>FUN_1408ce170</c>). Meitou's cages are the player's own, the town is the haul range, and sight is
     /// <see cref="ErrandSight"/> (engine stand-ins). The goal is the machine (found again on each step).
     /// </summary>
     (CharacterId Id, Vector2 Goal)? FindCorpse(World world, int slot, CharacterCold cold, HashSet<CharacterId> lifted)
@@ -283,11 +278,11 @@ public sealed partial class ProductionSystem
     }
 
     /// <summary>
-    /// A dead body that can be lifted, that nobody has and that is not in the give-up list. Robots are skipped only in the cage stage (<b>Verified</b>: <c>FUN_1408cfb00</c> tests the race's robot
+    /// A dead body that can be lifted, and that nobody has. Robots are skipped only in the cage stage (<b>Verified</b>: <c>FUN_1408cfb00</c> tests the race's robot
     /// byte on the cage's occupant, the nearest-body finder <c>FUN_1408ce170</c> tests it only for an animal finder), so a human carrier lifts a dead robot lying outside.
     /// </summary>
     bool Liftable(World world, CharacterTable table, int s, CharacterId id, HashSet<CharacterId> lifted, bool cageStage) =>
-        table.Cold(s) is { Medical.Dead: true } body && (!cageStage || body.Race is { IsRobot: false }) && !lifted.Contains(id) && !givenUp.Contains(id)
+        table.Cold(s) is { Medical.Dead: true } body && (!cageStage || body.Race is { IsRobot: false }) && !lifted.Contains(id)
         && CarrySystem.CanBeLifted(world, body);
 
     /// <summary>The weight of a distance in the disposal finder: clamp(1 - d^2 / 4608^2, 1e-5, 1) (<c>FUN_1409b2380</c> with <c>DAT_14172e248</c> = 2.1233664e7, <b>Verified</b>).</summary>
@@ -310,7 +305,7 @@ public sealed partial class ProductionSystem
         {
             if (m.Data.Function != Meitou.Data.World.TownBuildings.CorpseDisposalFunction || Site(world, m.Site) is not { Complete: true } site || !MayUseDisposal(world, site)) continue;
             if (town is not null && Gap(site.Position, town.Position) > town.Radius * 1.1f) continue;
-            if (OperatorsOf(world, site.Id) >= m.Data.MaxOperators || claimed.Contains(site.Id)) continue;
+            if (OperatorsOf(world, site.Id) >= m.Data.MaxOperators || claimed.Contains(site.Id) || PathImpossible(world, self, site.Id)) continue;
             float weight = DisposalWeight(Vector3.DistanceSquared(site.Position, from)) * (site.Owner == world.Player.Faction ? OwnFactionWeight : 1);
             if (weight <= bestWeight) continue;
             (bestSite, best, bestWeight) = (site, m, weight);
@@ -381,7 +376,7 @@ public sealed partial class ProductionSystem
         {
             if (s == slot || !table.Next[s].Alive || table.Cold(s) is not { Medical.Incapacitated: true } body) continue;
             var id = table.IdOf(s);
-            if (lifted.Contains(id) || givenUp.Contains(id) || body.IsImprisoned || !body.CarriedBy.IsNone) continue;
+            if (lifted.Contains(id) || body.IsImprisoned || !body.CarriedBy.IsNone) continue;
             if (kind == ErrandKind.OutOfBuilding && body.InSomething != HeldState.None) continue;
             if (Carry!.Friendly(cold, body)) continue;
             if (EnclosedAt(world, table.Next[s].Position) != site) continue;
@@ -407,7 +402,7 @@ public sealed partial class ProductionSystem
         {
             if (s == slot || !table.Next[s].Alive || table.Cold(s) is not { Medical: { Unconscious: true, Dead: false } } body) continue;
             var id = table.IdOf(s);
-            if (lifted.Contains(id) || givenUp.Contains(id) || body.IsImprisoned || !body.CarriedBy.IsNone || !CarrySystem.CanBeLifted(body)) continue;
+            if (lifted.Contains(id) || body.IsImprisoned || !body.CarriedBy.IsNone || !CarrySystem.CanBeLifted(body)) continue;
             if (Carry!.Friendly(cold, body) || PlayerTownAt(world, table.Next[s].Position) != town) continue;
             if (walls is not null && !walls.AmInsideTownWalls(world, table.Next[s].Position)) continue;
             float d = Gap(at, table.Next[s].Position);
