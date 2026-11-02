@@ -285,7 +285,7 @@ shows the first failing message in this order (**Verified** unless marked):
   is valid with all node points in one player-owned building; otherwise only if it is `is exterior furniture` or
   `is node` (**Verified** by code). So interior-only furniture must be inside, while interior+exterior items (Campfire,
   Camp Bed, storage boxes, fish racks) go either way. Without `is interior furniture`
-  the check passes. `ceiling placement` uses the ceiling ghost (hangs 1 below the hit of an upward ray).
+  the check passes. `ceiling placement` uses the ceiling ghost: `PreviewBuilding_Ceiling` (vtable `1416e1b68`) overrides slots 4 (`FUN_1404fe0b0`, returns 1), 21 and 27. Slot 21 `FUN_1404d28a0` (**Verified**) is the position update: a ray from 5 above the cursor point (`DAT_141685340`) pointing UP, collision mask `0x8071c00` (groups 10, 11, 12, 16, 17, 18, 27: upper floors, their stairs, unwalkable roofs), result initialised to -99; on a hit the ghost's y = hit y - 1 (`DAT_14167c308`) and the hit object is kept (+0x130); on a miss y += 20 (`DAT_141683188`) and the valid-surface byte (+0x8a) is cleared. Slot 27 `FUN_1404fe0a0` compares an object with the kept hit. Meitou hangs the ghost 1 below the ceiling the room model finds (`Room.CeilingAbove`, `CeilingHang`), which approximates the ray (it does not apply the collision mask).
 - **Resources** (`FUN_1404d9ea0`): `world resource mining` STONE/WATER/GROUND from a noise field; IRON/COPPER/CARBON
   need the biome's `resources` and a resource node within 1500, falling off from the node radius (>= 25) to 1500.
   Farms: fertility `1 - (1 - v) x fertility effect` (0 at or below `minimum fertility`), yield = biome
