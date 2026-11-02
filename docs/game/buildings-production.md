@@ -727,13 +727,17 @@ catch up.
 
 **Farm catch-up** (**Verified**, `FarmBuilding::loadFromSerialise` / `timeSkip`): the farm saves `save time` (game hours) when its zone unloads
 and on every save. On load, h = now - save time; if h > 1 and the farm is built, `timeSkip(h, ignoreWater = owner is not the player)`:
-- Cycle C = G (`growth time` / fertility) + `harvest time` + `death time`; position p from `plant growth` (0..1 over G, 1..2 over harvest time,
+- Cycle C = G (`growth time` / fertility, no power factor) + `harvest time` + `death time`; position p from `plant growth` (0..1 over G, 1..2 over harvest time,
   then `plant death` x death time).
 - Water m = min over inputs of level + item count; watered hours w = m / (rate x h), rate the per-second water rate (+0x534, as the live
   tick uses it) and h in game hours (it mixes the units and divides by h too, as written; w = h with no rate).
-- h <= w or an NPC farm: p += h, death 0; a completed cycle replants.
-- Else p += w (wrapped), the other h - w hours grow at the drought multiplier (0: 1e-8) and, with a drought death time, death += (h - w) / `drought death time` (added to the saved death), past 1
-  replanting and keeping the fraction; watered, the death is first zeroed. A position left in the death phase then adds its remainder / death time.
+- h <= w or an NPC farm: p += h, death 0 (not added to); when p > C the harvested count resets and p wraps (`p - floor(p / C) x C`). Nothing replants (`FUN_1400e48e0` is not
+  called), and the plants' own growth values, harvest and clear progress are untouched.
+- Else p = (p + w) wrapped on C, Gd = G / `drought multiplier` (1e8, `DAT_1416888b0`, when that is 0) and the drought cycle Cd = Gd + harvest + death; p += h - w with no multiplier
+  (drought stretches only the growth phase). With a `drought death time` DDT > 0: death = saved death + (h - w) / DDT (the saved death is not zeroed here); above 1 the harvested count
+  resets, death keeps its fraction and p = that fraction x DDT; no replant. p then wraps on Cd; phases use Gd (p < Gd: growth p / Gd; then 1 + (p - Gd) / harvest time; else 2) and a
+  position in the death phase ADDS (p - Gd - harvest) / death time to the accumulated death.
+  Meitou also moves the plants by the growth change (an engine choice, **Unknown** in the original).
 - A player farm then uses its water, per input: need = w x rate x the input's amount - level, the level zeroed; need > 0 removes the whole
   stack when it holds no more than need, else floor(need) items with the level 1 - frac(need) (**Verified**, `FUN_1400df6e0`).
 

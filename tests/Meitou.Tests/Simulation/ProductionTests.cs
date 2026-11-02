@@ -764,11 +764,11 @@ public class ProductionTests
         Assert.Equal(5, wet.Inputs[0].Count);
         Assert.Equal(1, wet.Inputs[0].Level);
 
-        // Dry: 0.2 water over 4 h counts 0.2 / (1 x 4) = 0.05 h; the other 3.95 h at half speed reach 0.05 + 1.975 = 2.025 h of the cycle: ripening,
-        // 1 + 1.025 / 48 of the harvest time; the death 3.95 / 100. The water left is less than it needs: the level empties.
+        // Dry: 0.2 water over 4 h counts 0.2 / (1 x 4) = 0.05 h; the other 3.95 h pass unstretched (FUN_1400df6e0: the drought only stretches the growth phase, here 1 / 0.5 = 2 h)
+        // and reach 4 h of the cycle: ripening, 1 + (4 - 2) / 48 of the harvest time; the death 3.95 / 100. The water left is less than it needs: the level empties.
         var dry = Copy(0.2f, 0);
         rig.Production.TimeSkip(rig.World, dry, 4, false);
-        Assert.Equal(1 + 1.025f / 48, dry.Farm!.Growth, 4);
+        Assert.Equal(1 + 2f / 48, dry.Farm!.Growth, 4);
         Assert.Equal(0.0395f, dry.Farm.Death, 4);
         Assert.Equal(0, dry.Inputs[0].Level);
     }
