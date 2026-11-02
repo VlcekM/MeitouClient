@@ -745,10 +745,32 @@ public sealed partial class PopulationSystem
         }
         if (squad.SpawnSize == 0) squad.SpawnSize = p.Saved?.Members.Count ?? p.Size;
         squad.Money = p.Money;
+        MoveOutOfPlayerWalls(world, squad);
         p.State = PlatoonState.Loaded;
         p.SquadId = squad.Id;
         p.UnloadAtTick = -1;
         if (Goal(p) is not null && p.WaitLeft <= 0) OrderLeader(world, p, squad);
+    }
+
+    /// <summary>
+    /// The repair right after a squad's characters are made (<c>FUN_1404ffad0</c>, <b>Verified</b>): a squad of a faction that is not the player's whose place is in a player town but in the open (gate
+    /// code 0 there) has each member that is alive, up, not in a bed or cage and inside walls (its own code above 0) moved to the place, with a red message
+    /// "Character &lt;name&gt; of &lt;squad&gt; tried to spawn inside walls!" (the message is not coloured here). Nothing where the codes are unknown.
+    /// </summary>
+    void MoveOutOfPlayerWalls(World world, Squad squad)
+    {
+        int player = PlayerFactionOf(world);
+        if (player < 0 || squad.Faction == player || world.SystemOf<Locks.LockSystem>()?.Regions is not { } regions) return;
+        var place = squad.Position;
+        if (Ai.AiSystem.TownAt(data, world, place) is not { IsNone: false } town || FactionOfTown(world, town) != player || regions.CodeAt(place) != 0) return;
+        var table = world.Characters;
+        foreach (var id in squad.Members)
+        {
+            if (!table.TryResolveNext(id, out int slot) || table.Cold(slot) is not { } c) continue;
+            if (c.DiedTick >= 0 || c.Medical is { Incapacitated: true } || c.InSomething != Locks.HeldState.None || regions.CodeAt(table.Next[slot].Position) <= 0) continue;
+            table.Next[slot].Position = place;
+            world.Post(Loc.Tr("Character {1} of {2} tried to spawn inside walls!", c.Name, squad.Name));
+        }
     }
 
     /// <summary>
