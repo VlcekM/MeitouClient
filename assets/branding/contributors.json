@@ -20,8 +20,8 @@
     "areas": "Audio, Saves"
   },
   "gosuboy": {
-    "commits": 3,
-    "areas": "Metal rendering, Material lookup"
+    "commits": 6,
+    "areas": "Seats, Metal, Materials"
   },
   "crockmr": {
     "commits": 2,
@@ -32,8 +32,8 @@
     "areas": "Projectile tracers"
   },
   "lucasskrewer": {
-    "commits": 2,
-    "areas": ""
+    "commits": 3,
+    "areas": "Animal hunger"
   },
   "dxseba": {
     "commits": 1,
