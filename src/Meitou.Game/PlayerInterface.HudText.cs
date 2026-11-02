@@ -499,6 +499,12 @@ sealed partial class PlayerInterface
     readonly List<(string Bar, string Name, string Arrows)> medicalRows = [];
 
     /// <summary>
+    /// A bar's fraction in steps of 1/1024, about half a pixel of a bar on a 4K panel: hunger and blood creep every tick, and an unrounded fraction made the HUD's
+    /// bindings new each tick, so its cached layout (<see cref="ArrangeHud"/>) was made again for a change no one can see.
+    /// </summary>
+    static float BarStep(float fraction) => MathF.Round(fraction * 1024) / 1024;
+
+    /// <summary>
     /// The medical panel (docs/game/ui-screens.md section 4): Blood first, the body parts, Hunger last, each a name centred on its bar, arrows at its right end and
     /// its number in the value column. A part's bar is green to its flesh less stun, yellow to the bandage on top of that, red behind it to its maximum less stun (the lost
     /// part shows red) and white past the green by the splint; blood is green to its fraction of capacity; hunger (0..3) green to h - 2, yellow to h - 1, red to h.
@@ -543,15 +549,15 @@ sealed partial class PlayerInterface
             if (r.Crushed) b.Progress[name + "Crushed"] = 1;
             else b.Hidden.Add(name + "Crushed");
             // The splint layer is drawn only where it reaches past the green (with no splint it would sit under the green).
-            if (r.White > Math.Max(r.Green, 0)) b.Progress[name + "White"] = r.White;
+            if (r.White > Math.Max(r.Green, 0)) b.Progress[name + "White"] = BarStep(r.White);
             else b.Hidden.Add(name + "White");
             // The row's tooltip sits on its LifeBarNTooltip widget (FUN_1407228a0 sets a type 0 text there).
             if (r.Tooltip is { Length: > 0 } tip) b.Properties[name + "Tooltip"] = UiTooltips.TextProperties(tip, "fixed");
             else b.Hidden.Add(name + "Tooltip");
-            b.Progress[name + "Green"] = Math.Max(r.Green, 0);
-            b.Progress[name + "Yellow"] = Math.Max(r.Yellow, 0);
-            b.Progress[name + "Red"] = Math.Max(r.Red, 0);
-            if (r.Robot) b.Progress[name + "Robot"] = Math.Max(r.Green, 0); else b.Hidden.Add(name + "Robot");
+            b.Progress[name + "Green"] = BarStep(Math.Max(r.Green, 0));
+            b.Progress[name + "Yellow"] = BarStep(Math.Max(r.Yellow, 0));
+            b.Progress[name + "Red"] = BarStep(Math.Max(r.Red, 0));
+            if (r.Robot) b.Progress[name + "Robot"] = BarStep(Math.Max(r.Green, 0)); else b.Hidden.Add(name + "Robot");
             b.Text[name + "Datapanel"] = "";
             b.Text[name + "Value"] = r.Value;
             b.Properties[name + "Value"] = new Dictionary<string, string> { ["TextAlign"] = "Center", ["TextColour"] = MyGuiColours.TemplateInk(uiResources, "Kenshi_TextboxStandardText") };

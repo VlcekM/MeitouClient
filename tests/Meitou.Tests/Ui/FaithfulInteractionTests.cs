@@ -276,7 +276,7 @@ public class FaithfulInteractionTests(ITestOutputHelper output)
     }
 
     /// <summary>Names the HUD bindings carry for the Meitou mode's native HUD only; the faithful layout has no widget for them.</summary>
-    static readonly HashSet<string> NativeOnly = ["clock", "hunger", "condition", "blood", "body", "bloodFraction", "bodyFraction", "hungerFraction", "squad.count", "members"];
+    static readonly HashSet<string> NativeOnly = ["clock", "hunger", "condition", "blood", "body", "squad.count", "members"];
 
     [Fact, Slow]
     public void EveryWidgetTheFaithfulModeFillsExistsInTheOriginalLayout()

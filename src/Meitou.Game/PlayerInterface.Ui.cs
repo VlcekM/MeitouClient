@@ -143,9 +143,6 @@ sealed partial class PlayerInterface
         b.Text["condition"] = lead?.Body is { } status ? status.Dead ? "Dead" : status.Unconscious ? "Unconscious" : status.NeedsAid ? "Needs first aid" : "Conscious" : "No character selected";
         b.Text["blood"] = lead?.Body is { } blood ? $"Blood   {blood.Blood * 100:0}%" : "Blood --";
         b.Text["body"] = lead?.Body is { } worst ? $"Worst body part   {worst.WorstPart * 100:0}%" : "Body --";
-        b.Text["bloodFraction"] = (lead?.Body?.Blood ?? 0).ToString(CultureInfo.InvariantCulture);
-        b.Text["bodyFraction"] = (lead?.Body?.WorstPart ?? 0).ToString(CultureInfo.InvariantCulture);
-        b.Text["hungerFraction"] = ((lead?.Body?.Hunger ?? 0) / 3).ToString(CultureInfo.InvariantCulture);
         var roster = session.CurrentSnapshot.Characters.Where(c => c.IsPlayer).ToArray();
         b.Text["squad.count"] = roster.Length.ToString(CultureInfo.InvariantCulture);
         for (int i = 0; i < Math.Min(8, roster.Length); i++) b.Text[$"squad.{i}.name"] = roster[i].Name;
