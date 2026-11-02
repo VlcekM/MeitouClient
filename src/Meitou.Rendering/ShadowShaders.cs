@@ -139,19 +139,18 @@ static class ShadowShaders
 
     /// <summary>
     /// What every caster's fragment stage ends with: the game's caster bias on the 0..1 depth the cascade matrices produce, flattened
-    /// onto 0 when the caster lies between the box and the sun. The viewport's clip-depth mapping differs by backend: Vulkan's
-    /// depth clip control uses −1..1 (so window depth · 2 − 1 recovers the matrix's depth), Metal's NDC uses 0..1 (window depth is
-    /// already it). <c>uShadowBias.w</c> carries 2 or 1 for the two cases.
+    /// onto 0 when the caster lies between the box and the sun. Both backends map clip depth 0..1 straight to the window depth, so
+    /// <c>gl_FragCoord.z</c> is the matrix's depth. The shadow maps keep the conventional order (cleared to 1, compared with less).
     /// </summary>
     const string CasterDepth = $$"""
 
         layout(std140) uniform {{CasterBlock}}
         {
-            vec4 uShadowBias;   // x fixed, y slope, z max slope (depth units); w: the clip-depth scale (2: −1..1, 1: 0..1)
+            vec4 uShadowBias;   // x fixed, y slope, z max slope (depth units); w unused (written as 1)
         };
         void shadowWriteDepth()
         {
-            float z = gl_FragCoord.z * uShadowBias.w + (1.0 - uShadowBias.w);
+            float z = gl_FragCoord.z;
             float g = length(vec2(dFdx(z), dFdy(z)));
             gl_FragDepth = clamp(z + min(uShadowBias.z, uShadowBias.y * g) + uShadowBias.x, 0.0, 1.0);
         }
@@ -204,21 +203,22 @@ static class ShadowShaders
         """;
 
     /// <summary>
-    /// Debug view of the receiver: the scene's depth (near slice) back to world positions, then the shadow term. Mode 2: the term in white
-    /// and black, tinted by the cascade; mode 3: written as a multiplier over the finished picture (a preview of the lighting change).
+    /// Debug view of the receiver: the scene's depth (<see cref="DepthConvention"/>) back to world positions, then the shadow term.
+    /// Mode 2: the term in white and black, tinted by the cascade; mode 3: written as a multiplier over the finished picture (a preview
+    /// of the lighting change).
     /// </summary>
-    public static readonly string DebugFragment = "#version 330 core\n" + Functions + """
+    public static readonly string DebugFragment = "#version 330 core\n" + Functions + DepthConvention.Glsl + """
         in vec2 vUv;
         uniform sampler2D uSceneDepth;
-        uniform mat4 uInverse;       // NDC -> position relative to the eye (rotation-only view · near slice projection, inverted)
+        uniform mat4 uInverse;       // NDC -> position relative to the eye (rotation-only view · scene projection, inverted)
         uniform vec3 uEye;
         uniform int uMode;
         out vec4 fragColour;
         void main()
         {
             float d = texture(uSceneDepth, vUv).r;
-            if (d >= 1.0) { fragColour = uMode == 3 ? vec4(1.0) : vec4(0.2, 0.3, 0.5, 1.0); return; }
-            vec4 p = uInverse * vec4(vUv * 2.0 - 1.0, d * 2.0 - 1.0, 1.0);
+            if (depthIsSky(d)) { fragColour = uMode == 3 ? vec4(1.0) : vec4(0.2, 0.3, 0.5, 1.0); return; }
+            vec4 p = uInverse * vec4(vUv * 2.0 - 1.0, d, 1.0);
             vec3 world = uEye + p.xyz / p.w;
             // Without the G-buffer's normal the debug view takes the depth's own slope.
             vec3 n = normalize(cross(dFdx(world), dFdy(world)));

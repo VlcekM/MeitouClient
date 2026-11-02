@@ -180,7 +180,7 @@ public sealed unsafe partial class ShadowPass : IDisposable
             var (c, worldToClip, planes, lodEye) = casterViews[k];
             int x = (int)MathF.Round(c.Tile.X * atlasSize), y = (int)MathF.Round(c.Tile.Y * atlasSize), s = Settings.TileSize;
             SetTile(x, y, s);
-            SetCasterBias(new Vector4(c.FixedBias, KenshiShadows.SlopeBias, KenshiShadows.MaxSlopeBias, DepthScale));
+            SetCasterBias(new Vector4(c.FixedBias, KenshiShadows.SlopeBias, KenshiShadows.MaxSlopeBias, 1f));
             draw(c, worldToClip, planes, lodEye);
         }
         Array.Clear(casterViews);
@@ -195,9 +195,6 @@ public sealed unsafe partial class ShadowPass : IDisposable
     /// <summary>The casters' bias block of the cascade about to be drawn: the guests' segments take it when they are prepared (in the
     /// draw callback), a new slice after each write, as VkGl renamed the GL buffer written between their draws.</summary>
     void SetCasterBias(in Vector4 bias) => casterBias.Set([bias.X, bias.Y, bias.Z, bias.W]);
-
-    /// <summary>The scale <c>uShadowBias.w</c> the caster shader uses to undo the viewport's clip-depth mapping (2 for −1..1, 1 for 0..1).</summary>
-    float DepthScale => Gpu.ClipDepthZeroToOne ? 1f : 2f;
 
     /// <summary>
     /// Opens a rendering of one cascade's layer (or of <paramref name="target"/>, the landmark map) as a native host (docs/renderer-native.md 4.5):
@@ -381,7 +378,7 @@ public sealed unsafe partial class ShadowPass : IDisposable
 
     // ------------------------------------------------------------------ debug views
 
-    /// <summary>Copies the scene's depth (the near slice, what the depth buffer holds at the end of the frame) for <see cref="DrawDebug"/>. Call before the post-processing resolves.</summary>
+    /// <summary>Copies the scene's depth (in <see cref="DepthConvention"/>, what the depth buffer holds at the end of the frame) for <see cref="DrawDebug"/>. Call before the post-processing resolves.</summary>
     public void CaptureDepth(GpuTexture scene, int width, int height)
     {
         if (sceneDepth is null || width != sceneDepth.Desc.Width || height != sceneDepth.Desc.Height)
@@ -406,8 +403,8 @@ public sealed unsafe partial class ShadowPass : IDisposable
 
     /// <summary>
     /// Draws a debug view into <paramref name="target"/> after the frame: 1 the cascade maps in a corner, 2 the shadow term of the
-    /// scene's surfaces tinted by cascade, 3 the term multiplied over the picture. <paramref name="nearProjection"/>: the near slice's
-    /// projection (the captured depth's).
+    /// scene's surfaces tinted by cascade, 3 the term multiplied over the picture. <paramref name="nearProjection"/>: the scene's
+    /// projection (the captured depth's, in <see cref="DepthConvention"/>).
     /// </summary>
     public void DrawDebug(int mode, GpuTexture target, int width, int height, Matrix4x4 view, Matrix4x4 nearProjection, Vector3 eye)
     {
