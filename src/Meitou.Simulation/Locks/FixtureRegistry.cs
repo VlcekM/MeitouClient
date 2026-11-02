@@ -333,7 +333,40 @@ public sealed partial class FixtureRegistry
     /// Where a sleeper is put in a bed and the way it faces (<c>Building::getPositionMarker</c> / <c>getDirectionMarkerQuat</c>, docs/game/locks.md "Beds"): the bed's use node
     /// nearest <paramref name="from"/>, else the bed's own origin and facing.
     /// </summary>
-    public static (Vector3 At, float Yaw) LieSpot(Fixture bed, Vector3 from) => Nearest(bed, bed.Bed.Nodes, from) ?? (bed.Position, bed.Yaw);
+    public static (Vector3 At, float Yaw) LieSpot(Fixture bed, Vector3 from, double now = 0) =>
+        Nearest(bed, bed.Bed.Nodes, from, bed.BadNodes is { Count: > 0 } ? i => IsBad(bed, i, now) : null) ?? (bed.Position, bed.Yaw);
+
+    /// <summary>How long a use node a failed walk marked stays skipped: 0.5 on the original's world clock (<c>DAT_1421303d0 + 0xa0</c>, game hours, <b>Observed</b>: the 5-minute rule of Task_TakeIntruderOutside reads its differences x 60).</summary>
+    public const double BadNodeHours = 0.5;
+    /// <summary>A use node is marked when a path to the building fails within this (squared 400) of the failing position (<c>FUN_14054d410</c>).</summary>
+    const float BadNodeReach = 20;
+
+    static bool IsBad(Fixture bed, int node, double now)
+    {
+        foreach (var (n, stamp) in bed.BadNodes!) if (n == node && now <= stamp + BadNodeHours) return true;
+        return false;
+    }
+
+    /// <summary>
+    /// A walk to the bed failed at <paramref name="at"/> (<c>notifyPathImpossible</c> <c>FUN_140796ed0</c> over <c>FUN_14054d410</c>, <b>Verified</b>): the use node nearest it, within 20 units, is marked bad for
+    /// <see cref="BadNodeHours"/>; <see cref="LieSpot"/> skips it (and returns node 0 when every node is marked, <c>FUN_14054b850</c>). A bed with fewer than 2 nodes has nothing to mark. Serial phases only.
+    /// </summary>
+    public static void MarkBadNode(World world, Fixture bed, Vector3 at)
+    {
+        if (bed.Bed.Nodes is not { } nodes) return;
+        var turn = Matrix4x4.CreateRotationY(bed.Yaw);
+        int best = -1;
+        float bestD = BadNodeReach * BadNodeReach;
+        for (int i = 0; i < nodes.Length; i++)
+        {
+            float d = Vector3.DistanceSquared(bed.Position + Vector3.Transform(nodes[i].At, turn), at);
+            if (d < bestD) (best, bestD) = (i, d);
+        }
+        if (best < 0) return;
+        var list = bed.BadNodes ??= [];
+        list.RemoveAll(e => e.Node == best || world.GameHours > e.Stamp + BadNodeHours);
+        list.Add((best, world.GameHours));
+    }
 
     /// <summary>
     /// Where an occupant getting out of a cage stands (the original's hold clear <c>FUN_140661f90</c>, run while it is still held, docs/game/locks.md "Cages and beds"): the cage's use
@@ -342,20 +375,21 @@ public sealed partial class FixtureRegistry
     public static Vector3? ExitSpot(Fixture cage) => Nearest(cage, cage.UseNodes, cage.Position)?.At;
 
     /// <summary>The use node of <paramref name="f"/> nearest <paramref name="from"/> in the world (squared 3D distance), with its facing; null with no nodes.</summary>
-    static (Vector3 At, float Yaw)? Nearest(Fixture f, UseNode[]? nodes, Vector3 from)
+    static (Vector3 At, float Yaw)? Nearest(Fixture f, UseNode[]? nodes, Vector3 from, Func<int, bool>? skip = null)
     {
         if (nodes is null) return null;
 
         var turn = Matrix4x4.CreateRotationY(f.Yaw);
         (Vector3 At, float Yaw)? best = null;
         float bestD = float.MaxValue;
-        foreach (var n in nodes)
+        for (int i = 0; i < nodes.Length; i++)
         {
-            var at = f.Position + Vector3.Transform(n.At, turn);
+            if (skip?.Invoke(i) == true) continue;
+            var at = f.Position + Vector3.Transform(nodes[i].At, turn);
             float d = Vector3.DistanceSquared(at, from);
-            if (d < bestD) (best, bestD) = ((at, MathF.IEEERemainder(f.Yaw + n.Yaw, MathF.Tau)), d);
+            if (d < bestD) (best, bestD) = ((at, MathF.IEEERemainder(f.Yaw + nodes[i].Yaw, MathF.Tau)), d);
         }
-        return best;
+        return best ?? (nodes.Length > 0 ? (f.Position + Vector3.Transform(nodes[0].At, turn), MathF.IEEERemainder(f.Yaw + nodes[0].Yaw, MathF.Tau)) : null);   // every node skipped: node 0
     }
 
     /// <summary>Forgets a building's fixtures (a player building dismantled); its doors are opened in the navmesh.</summary>
@@ -431,7 +465,7 @@ public sealed partial class FixtureRegistry
             // still sleeping: a task other than Sleep would get it up (BedSystem).
             if (c.InSomething == HeldState.Bed)
             {
-                var (at, yaw) = LieSpot(f, next[s].Position);
+                var (at, yaw) = LieSpot(f, next[s].Position, world.GameHours);
                 table.Place(s, at, yaw, CharacterTask.Sleep);
             }
         }
@@ -908,7 +942,7 @@ public sealed partial class FixtureRegistry
         {
             if (f.Occupant.IsNone || !table.TryResolveNext(f.Occupant, out int s) || table.Cold(s) is not { InSomething: HeldState.Bed } c || c.InWhat != f.Id) continue;
             ref var n = ref table.Next[s];
-            var (at, yaw) = LieSpot(f, n.Position);
+            var (at, yaw) = LieSpot(f, n.Position, world.GameHours);
             if (n.Position != at || n.Yaw != yaw) table.Place(s, at, yaw);
         }
     }
@@ -1001,7 +1035,7 @@ public sealed partial class FixtureRegistry
         c.InWhat = bed.Id;
         bed.Occupant = sleeper;
         TaskStart.Stand(table, s);
-        var (at, yaw) = LieSpot(bed, table.Next[s].Position);
+        var (at, yaw) = LieSpot(bed, table.Next[s].Position, world.GameHours);
         Hold(table, s, c, at, yaw);
         TaskStart.Step(table, s, CharacterTask.Sleep);
         table.Next[s].Velocity = Vector3.Zero;

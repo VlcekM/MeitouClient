@@ -294,6 +294,7 @@ public sealed class BedSystem(PopulationData data, BedSettings? settings = null)
             if (++t.Tries > Settings.Walks)
             {
                 world.Fixtures.MarkUnreachable(world, bed, c.Faction);
+                FixtureRegistry.MarkBadNode(world, bed, n.Position);
                 if (c.IsPlayer) world.Post($"{c.Name} cannot get to the bed");
                 if (!carrying) TaskStart.Stand(table, s);
                 return false;

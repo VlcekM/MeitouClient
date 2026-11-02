@@ -109,6 +109,8 @@ public sealed class LockState
 /// </summary>
 public sealed class Fixture
 {
+    /// <summary>A bed's use nodes a failed walk marked bad (node index, game hour of the mark; <see cref="FixtureRegistry.MarkBadNode"/>), each skipped for <see cref="FixtureRegistry.BadNodeHours"/>. Runtime only: not saved or hashed.</summary>
+    internal List<(int Node, double Stamp)>? BadNodes;
     public required string Id { get; init; }
     /// <summary>The instance id of the placed building it belongs to (the house of a door, the building of an interior item): what <see cref="IDoorGate"/> and the save name.</summary>
     public required string Building { get; init; }
