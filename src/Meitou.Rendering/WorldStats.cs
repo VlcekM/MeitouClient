@@ -24,13 +24,13 @@ static class WorldStats
     {
         stats.Add("");
         stats.Add("Scene");
-        stats.Add($"  triangles     {Millions(tris.Total)} a frame: terrain {Millions(tris.Terrain)}, buildings {Millions(tris.Objects)}, " +
+        stats.Add($"  triangles     {Millions(tris.Total)} a frame: terrain {Millions(tris.Terrain)}, objects {Millions(tris.Objects)}, " +
                   $"plants {(tris.Foliage is { } f ? Millions(f) : "-")}, characters {Millions(tris.Characters)}");
         if (gpu.Foliage is { Enabled: true }) stats.Add($"  grass         {tris.GrassBlades / 1000:0}k blades (not in the triangles)");
         if (gpu.Characters is { } chars) stats.Add($"  characters    {chars.DrawnCharacters} drawn");
         int loadingTerrain = gpu.Streamer?.Pending ?? 0, loadingObjects = gpu.Objects?.Pending ?? 0, loadingFoliage = gpu.Foliage?.Pending ?? 0;
         if (loadingTerrain + loadingObjects + loadingFoliage > 0)
-            stats.Add($"  loading       terrain {loadingTerrain}, buildings {loadingObjects}, plants {loadingFoliage}");
+            stats.Add($"  loading       terrain {loadingTerrain}, objects {loadingObjects}, plants {loadingFoliage}");
 
         stats.Add("");
         stats.Add("Memory");
