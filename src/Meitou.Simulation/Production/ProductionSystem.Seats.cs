@@ -10,9 +10,10 @@ public sealed partial class ProductionSystem
     // Town-layout seats already carry their effective facing. A player-built chair must resolve its current house/outpost's furniture at use time.
     float SeatFacing(World world, BuildSite site, Machine m)
     {
+        if (world.Fixtures.FindSeat(site.Id) is { } seat) return world.BenchFacingFix ? seat.Yaw : seat.FaithfulYaw;
         float yaw = TownBuildings.YawOf(site.Rotation);
         if (m.Data.Function != TownBuildings.ChairFunction || m.Data.FunctionFlags is not (1 or 2) || world.Buildings.Find(site.Id) is null) return yaw;
-        return TownBuildings.SeatYaw(site.Position, yaw, m.Data.FunctionFlags, Targets());
+        return TownBuildings.SeatYaw(site.Position, yaw, m.Data.FunctionFlags, Targets(), faithful: !world.BenchFacingFix);
 
         IEnumerable<Vector3> Targets()
         {

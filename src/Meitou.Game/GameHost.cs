@@ -143,6 +143,7 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
                 Sunrise = (float)clock.Sunrise, Sunset = (float)clock.Sunset,
             },
             systems: systems, walkability: walkability);
+        session.World.BenchFacingFix = config.FixBenchFacing;
         BootPlayer(display, interactive);
     }
 

@@ -924,7 +924,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
                         {
                             // On the seat's origin, with no offset, facing its way (docs/game/ai-tasks.md "Chairs"): the sitting clip carries the pose.
                             n.Position = claimed.Position;
-                            n.Yaw = claimed.Yaw;
+                            n.Yaw = world.BenchFacingFix ? claimed.Yaw : claimed.FaithfulYaw;
                             mind.SitClip = claimed.SitClip;
                             mind.SitHungerRate = claimed.HungerRate;
                         }
@@ -1393,7 +1393,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// do not relax or sit. Relaxing takes a chair, else a bar node, else a general node (the original operates furniture of the bar, docs/game/ai-tasks.md "Town
     /// goals", Observed; the node fallbacks are an engine choice); staying home a chair only (the original's furniture not claimed by others, Observed; its mask also holds
     /// training furniture, which Meitou leaves out). Sitting around (275) claims in <see cref="ClaimSitting"/>. A member keeps the seat it had while it still relaxes or stays (engine choice:
-    /// reassigning every pass in member order moved every later sitter to another chair whenever one came or went); the seats kept are reserved for every squad first (<see cref="ReserveSeats"/>).
+    /// reassigning every pass in member order moved every later sitter to another chair whenever one came or went); the seats kept, and those a character sits on by an order (the player's Use), are reserved for every squad first (<see cref="ReserveSeats"/>).
     /// </summary>
     void ClaimSeats(World world, Blackboard board, Squad squad)
     {
@@ -1420,6 +1420,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             }
             if (taken is null && !seatTaken.TryGetValue(home, out taken)) seatTaken[home] = taken = [];
             int had = kept.TryGetValue(s, out var old) ? IndexOf(home, old) : -1;
+            if (had >= 0 && Operated(world, home.Spots[had].Position)) had = -1;
             if (!relaxes && !sits || cold.Ai.SeatUnreachable)   // one that gave its seat up leaves it to the next member
             {
                 if (had >= 0) taken.Remove(had);
@@ -1442,6 +1443,28 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     }
 
     readonly Dictionary<int, HomeSpot> kept = [];
+
+    /// <summary>Marks taken the chairs and thrones of <paramref name="home"/> a character sits on by an order (the player's Use, <see cref="CharacterTask.Operate"/>), so no member claims them.</summary>
+    static void TakeOperatedSeats(World world, TownBuilding home, HashSet<int> taken)
+    {
+        for (int i = 0; i < home.Spots.Count; i++)
+            if (home.Spots[i].Kind is HomeSpotKind.Chair or HomeSpotKind.ThroneSeat && !taken.Contains(i) && Operated(world, home.Spots[i].Position)) taken.Add(i);
+    }
+
+    struct OperatorScan { public CharacterTable Table; public Vector3 At; public bool Found; }
+
+    /// <summary>Whether a character working a machine (<see cref="CharacterTask.Operate"/>) is on the spot, as of the last tick.</summary>
+    static bool Operated(World world, Vector3 at)
+    {
+        var scan = new OperatorScan { Table = world.Characters, At = at };
+        world.Grid.Query(at.X, at.Z, 1, ref scan, static (int other, ref OperatorScan st) =>
+        {
+            var prev = st.Table.Previous;
+            if (st.Found || (uint)other >= (uint)prev.Length || !prev[other].Alive || prev[other].Task != (byte)CharacterTask.Operate) return;
+            st.Found = Vector2.DistanceSquared(Flat(prev[other].Position), Flat(st.At)) < 1 && MathF.Abs(prev[other].Position.Y - st.At.Y) <= FloorSlack;
+        });
+        return scan.Found;
+    }
     readonly Dictionary<int, SeatClaim> keptSits = [];
 
     /// <summary>The seats of <paramref name="building"/> taken in this cadence pass (indices of <see cref="TownBuilding.SeatAt"/>).</summary>
@@ -1525,6 +1548,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         foreach (var squad in world.Squads.All)
         {
             if (squad.Ai is not { } board) continue;
+            if (board.Home is { } h) TakeOperatedSeats(world, h, TakenOf(h));
             if (board.Home is { } home && board.SeatClaims.Count > 0)
             {
                 var taken = TakenOf(home);

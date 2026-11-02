@@ -9,6 +9,8 @@ public sealed record SeatSpot(string Id, string Building, string Record, Vector3
 {
     /// <summary>The furniture's physical facing; <see cref="Yaw"/> is the sitter's facing.</summary>
     public float PlacementYaw { get; init; } = Yaw;
+    /// <summary>The sitter's facing as the game has it (<see cref="HomeSpot.FaithfulYaw"/>).</summary>
+    public float FaithfulYaw { get; init; } = Yaw;
 }
 
 public sealed partial class FixtureRegistry
@@ -28,7 +30,7 @@ public sealed partial class FixtureRegistry
         {
             if (spot.Kind is not (HomeSpotKind.Chair or HomeSpotKind.ThroneSeat) || spot.Record is null) continue;
             string id = $"{building.Key}@seat{(index++).ToString(CultureInfo.InvariantCulture)}";
-            seatSpots[id] = new(id, building.Key, spot.Record, spot.Position, owner, spot.Yaw) { PlacementYaw = spot.PlacementYaw };
+            seatSpots[id] = new(id, building.Key, spot.Record, spot.Position, owner, spot.Yaw) { PlacementYaw = spot.PlacementYaw, FaithfulYaw = spot.FaithfulYaw };
         }
         publishedSeats = null;
     }

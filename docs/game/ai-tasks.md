@@ -1077,10 +1077,10 @@ update `FUN_140511130`, `Character::setupAI` `FUN_140621b70`; KenshiLib names **
 - Seat facing (same source): a BF_CHAIR's functionality `flags` picks the look point. 0 (`chair-fixed`,
   `throne chair`) the seat's own facing; 1 (`chair`: Stool, Old Stool, Sitting Box; `sit on floor`) the nearest building of function 16 BF_TABLE,
   11 BF_CORPSE_DISPOSAL or 4 BF_REFINERY (the seat's parent building's furniture, else ones near the sitter); 2 (`chair-fixed 180`: Bench) keeps the seat's
-  facing when that target is in front.
-  **Verified** (`FUN_14035b430`, branch `0x14035b936–0x14035b9b6`, Ogre imported unary minus):
-  behind it, the original negates the **absolute world-space look point**, not the forward vector. The resulting direction is `-(seatPosition + forward) - seatPosition`, generally toward the world origin, rather than a 180° turn about the seat.
-  **Observed** native 1.0.68 save: bench at XZ (-50595, -1005), placement yaw 0, table behind, seated yaw 1.5509452 rad, matching that calculation. With none found, the seat's facing. Layout stool rotations are arbitrary (Observed: the Hub's
+  facing when that target is in front; behind it the original negates the absolute world-space look point, not the forward vector, so the sitter faces
+  `-(seatPosition + forward) - seatPosition`, generally towards the world origin (**Verified**, `FUN_14035b430` branch `0x14035b936–0x14035b9b6`, Ogre's
+  unary minus; **Observed** native 1.0.68 save: bench at XZ (-50595, -1005), yaw 0, table behind, seated yaw 1.5509452 rad). Meitou's Fixes switch
+  "Bench facing" (on by default) turns it 180° instead; off gives the original's. With none found, the seat's facing. Layout stool rotations are arbitrary (Observed: the Hub's
   Storm House, up to 161° off their table).
 - **24 Wandering** (`FUN_140998040`): the nearest town (squared XZ distance from the character, its own town included) of any type but a nest marker (type 8): the town list search
   `FUN_140927f10` is called with type filter 10 ("any"), which still skips type 8 unless the filter is 8 (**Verified**); list A holds `atATown`, so it is dropped while in a town.

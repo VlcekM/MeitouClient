@@ -116,6 +116,8 @@ sealed class UserConfig
     public bool FixGunnerFacing { get; set; } = true;
     /// <summary>"ma badpunch"'s attack distance -4 reads as 4 (Fixes settings; off: as written, as the game does).</summary>
     public bool FixPunchReach { get; set; } = true;
+    /// <summary>A bench with its table behind is sat facing away from it (Fixes settings; off: towards the world origin, as the game does; docs/game/ai-tasks.md "Town goals").</summary>
+    public bool FixBenchFacing { get; set; } = true;
     /// <summary>Other buildings' parts (the Hub's wall in the Shinobi Thieves tower) are cut inside a building in the interior view (Fixes settings; off: drawn, as the game does; docs/render-interior-cut.md).</summary>
     public bool FixPartsInBuildings { get; set; } = true;    /// <summary>The strategy camera's turn and tilt rate in degrees per second per unit of input (Controls settings): the original's
     /// <c>mouse speed pan</c> / <c>mouse speed tilt</c> (slider 2 … 50, default 6), one value for both here.</summary>

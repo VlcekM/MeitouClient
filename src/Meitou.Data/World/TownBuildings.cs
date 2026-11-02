@@ -31,6 +31,8 @@ public readonly record struct HomeSpot(HomeSpotKind Kind, Vector3 Position, floa
 {
     /// <summary>The furniture's placed rotation, before the sitter turns towards a table; collision and picking keep this facing.</summary>
     public float PlacementYaw { get; init; } = Yaw;
+    /// <summary>The sitter's facing as the game has it; differs from <see cref="Yaw"/> only for a bench with its table behind (<see cref="TownBuildings.SeatYaw"/>).</summary>
+    public float FaithfulYaw { get; init; } = Yaw;
     /// <summary>A node's BUILDING <c>node type</c> (NodeType: 0 NODE_SHOPKEEPER, 1 NODE_GENERAL, 2 NODE_GUARD_POST, 3 NODE_TURRET, 4 NODE_USE, 5 NODE_LIGHT); -1 for a bed.</summary>
     public int NodeType { get; init; } = -1;
     /// <summary>A chair's sitting clip: the ANIMATION record its functionality's <c>animation</c> names ("sitting chair", "sitting idle" for floor seats); null otherwise.</summary>
@@ -265,7 +267,7 @@ public static class TownBuildings
                         (itemSlots ??= []).Add(new TownItemSlot($"{b.Key}/item{slot++}", group.Building.StringId, at, rotation, group.Floor));
                     }
                     if (seats is not null && faced is not null)
-                        foreach (var (s, flags) in seats) spots[s] = spots[s] with { Yaw = SeatYaw(spots[s].Position, spots[s].Yaw, flags, faced) };
+                        foreach (var (s, flags) in seats) spots[s] = spots[s] with { Yaw = SeatYaw(spots[s].Position, spots[s].Yaw, flags, faced), FaithfulYaw = SeatYaw(spots[s].Position, spots[s].Yaw, flags, faced, faithful: true) };
                     tables = faced;
                 }
             }
@@ -410,9 +412,9 @@ public static class TownBuildings
 
     /// <summary>
     /// The way a seat is sat facing (docs/game/ai-tasks.md "Chairs"): by its functionality's <c>flags</c>, 0 its own <paramref name="yaw"/>, 1 towards
-    /// the nearest of <paramref name="faced"/> (the building's tables, corpse disposals and refineries), 2 its own facing when that one is in front; behind it, the original reflects the absolute look point around the world origin.
+    /// the nearest of <paramref name="faced"/> (the building's tables, corpse disposals and refineries), 2 its own facing when that one is in front, else the opposite one. <paramref name="faithful"/>: behind it, as the game does, the absolute look point negated (generally towards the world origin).
     /// </summary>
-    public static float SeatYaw(Vector3 position, float yaw, int flags, IEnumerable<Vector3> faced)
+    public static float SeatYaw(Vector3 position, float yaw, int flags, IEnumerable<Vector3> faced, bool faithful = false)
     {
         if (flags is not (1 or 2)) return yaw;
         Vector3 nearest = position;
@@ -427,7 +429,8 @@ public static class TownBuildings
         if (flags == 1) return MathF.Atan2(to.X, to.Y);
         var forward = new Vector3(MathF.Sin(yaw), 0, MathF.Cos(yaw));
         if (Vector2.Dot(new Vector2(forward.X, forward.Z), to) >= 0) return yaw;
-        // Native compatibility: negate the world-space look point, not the forward vector (docs/game/ai-tasks.md "Seat facing").
+        if (!faithful) return MathF.IEEERemainder(yaw + MathF.PI, MathF.Tau);
+        // The game negates the world-space look point, not the forward vector (docs/game/ai-tasks.md "Seat facing").
         var reflected = -(position + forward) - position;
         return MathF.Atan2(reflected.X, reflected.Z);
     }
