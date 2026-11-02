@@ -1,0 +1,2459 @@
+# Meitou's own texts (launcher, title menu, settings menu) in Simplified Chinese.
+# Kenshi's own texts come from locale/zh_CN/LC_MESSAGES/main.mo; this file only adds what Meitou shows.
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: zh_CN\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+# Where an entry's msgid differs from the text an earlier pass translated, the msgid here is the
+# string the code shows, so the lookup matches.
+msgid "Frames per second while vertical sync is off."
+msgstr "关闭垂直同步时的每秒帧数。"
+
+msgid "Minimise"
+msgstr "最小化"
+
+msgid "Maximise"
+msgstr "最大化"
+
+msgid "Close"
+msgstr "关闭"
+
+msgid "Play"
+msgstr "开始游戏"
+
+msgid "Change the Kenshi folder"
+msgstr "更改 Kenshi 文件夹"
+
+msgid "Install latest"
+msgstr "安装最新版"
+
+msgid "Play latest"
+msgstr "游玩最新版"
+
+msgid "Choose the version to play"
+msgstr "选择要游玩的版本"
+
+msgid "Nightly builds"
+msgstr "每日构建"
+
+msgid "HOME"
+msgstr "主页"
+
+msgid "VERSIONS"
+msgstr "版本"
+
+msgid "GRAPHICS"
+msgstr "画面"
+
+msgid "SETTINGS"
+msgstr "设置"
+
+msgid "News"
+msgstr "新闻"
+
+msgid "Support me on Ko-fi"
+msgstr "在 Ko-fi 上支持我"
+
+msgid "Presets"
+msgstr "预设"
+
+msgid "Apply"
+msgstr "应用"
+
+msgid "Delete"
+msgstr "删除"
+
+msgid "Select all"
+msgstr "全选"
+
+msgid "Select none"
+msgstr "全不选"
+
+msgid "Refresh"
+msgstr "刷新"
+
+msgid "Save mod list"
+msgstr "保存模组列表"
+
+msgid "New preset name"
+msgstr "新预设名称"
+
+msgid "Save as preset"
+msgstr "另存为预设"
+
+msgid "Drag to change the load order"
+msgstr "拖动可调整加载顺序"
+
+msgid "Versions"
+msgstr "版本"
+
+msgid "Release page"
+msgstr "发布页面"
+
+msgid "Open folder"
+msgstr "打开文件夹"
+
+msgid "Uninstall"
+msgstr "卸载"
+
+msgid "Select"
+msgstr "选择"
+
+msgid "Install"
+msgstr "安装"
+
+msgid "Play this version"
+msgstr "游玩此版本"
+
+msgid "Play starts the latest installed version."
+msgstr "开始游戏会启动已安装的最新版本。"
+
+msgid "Play latest nightly"
+msgstr "游玩最新的每日构建"
+
+msgid "Check for releases"
+msgstr "检查新版本"
+
+msgid "Select a release to read its notes."
+msgstr "选择一个版本来查看更新说明。"
+
+msgid "Graphics"
+msgstr "画面"
+
+msgid "Kenshi folder"
+msgstr "Kenshi 文件夹"
+
+msgid "Find"
+msgstr "自动查找"
+
+msgid "Browse"
+msgstr "浏览"
+
+msgid "Install folder"
+msgstr "安装目录"
+
+msgid "Where versions are installed; changing it moves them."
+msgstr "各版本安装的位置；更改后会移动这些版本。"
+
+msgid "Open"
+msgstr "打开"
+
+msgid "Launch arguments"
+msgstr "启动参数"
+
+msgid "Passed to the game, e.g. --faithful or --windowed."
+msgstr "传给游戏的参数，例如 --faithful 或 --windowed。"
+
+msgid "Data folder"
+msgstr "数据目录"
+
+msgid "Launcher"
+msgstr "启动器"
+
+msgid "Update the launcher automatically"
+msgstr "自动更新启动器"
+
+msgid "At startup, install a new launcher version and restart into it."
+msgstr "启动时安装新的启动器版本，并重启到新版本。"
+
+msgid "Language"
+msgstr "语言"
+
+msgid "Of the game (written to Kenshi's settings.cfg) and of the launcher. Kenshi's own translations, plus Meitou's where they exist."
+msgstr "游戏（写入 Kenshi 的 settings.cfg）与启动器的语言。使用 Kenshi 自带的翻译，再加上 Meitou 已有翻译的部分。"
+
+msgid "Only nightly builds so far: tick Nightly builds beside Play to list them."
+msgstr "目前只有每日构建：在开始游戏旁勾选每日构建即可列出。"
+
+msgid "Reset"
+msgstr "重置"
+
+msgid "Click again"
+msgstr "再点一次确认"
+
+msgid "Default"
+msgstr "默认"
+
+msgid "Game default"
+msgstr "游戏默认"
+
+msgid "Reset graphics"
+msgstr "重置画面设置"
+
+msgid "Every graphics slider and Faithful / Meitou switch back to the game's defaults, also those only in the game's Tab panel."
+msgstr "所有画面滑块以及忠实/Meitou 开关都恢复为游戏默认值，仅存在于游戏 Tab 面板中的项目也同样恢复。"
+
+msgid "The game is running: it saves its settings when it closes, over changes made here."
+msgstr "游戏正在运行：它关闭时会保存自己的设置，并覆盖这里的改动。"
+
+msgid "The launch arguments have --low-end: the game ignores the graphics sliders while it is set."
+msgstr "启动参数中包含 --low-end：只要它生效，游戏就会忽略画面滑块。"
+
+msgid "Steam workshop"
+msgstr "Steam 创意工坊"
+
+msgid "Local mod"
+msgstr "本地模组"
+
+msgid "RE_Kenshi plugin: its DLLs are ignored in Meitou"
+msgstr "RE_Kenshi 插件：Meitou 会忽略它的 DLL"
+
+msgid "nightly"
+msgstr "每日构建"
+
+msgid "Installed"
+msgstr "已安装"
+
+msgid "Installed · Play"
+msgstr "已安装 · 游玩"
+
+msgid "Cancel"
+msgstr "取消"
+
+msgid "Selected"
+msgstr "已选中"
+
+msgid "No releases listed yet. Check for releases below."
+msgstr "还没有列出任何版本。请在下方检查新版本。"
+
+msgid "Full screen"
+msgstr "全屏"
+
+msgid "Fill the monitor with a borderless game window."
+msgstr "用无边框的游戏窗口铺满显示器。"
+
+msgid "Window"
+msgstr "窗口"
+
+msgid "Borderless"
+msgstr "无边框"
+
+msgid "Frame limit"
+msgstr "帧数上限"
+
+msgid "Texture quality"
+msgstr "贴图质量"
+
+msgid "Object draw distance"
+msgstr "物体绘制距离"
+
+msgid "Shadow distance"
+msgstr "阴影距离"
+
+msgid "Shadow map size"
+msgstr "阴影贴图尺寸"
+
+msgid "Anti-aliasing"
+msgstr "抗锯齿"
+
+msgid "Anti-aliasing/upscaling"
+msgstr "抗锯齿/画面放大"
+
+msgid "Render scale"
+msgstr "渲染比例"
+
+msgid "Anisotropic filtering"
+msgstr "各向异性过滤"
+
+msgid "Water reflection"
+msgstr "水面反射"
+
+msgid "Grass density multiplier"
+msgstr "草丛密度倍率"
+
+msgid "Weather particles"
+msgstr "天气粒子"
+
+msgid "Match the display refresh rate to prevent tearing."
+msgstr "与显示器刷新率同步，避免画面撕裂。"
+
+msgid "Frames per second when VSync is off."
+msgstr "关闭垂直同步时的每秒帧数。"
+
+msgid "Texture resolution; terrain changes need a restart."
+msgstr "贴图分辨率；调整地形相关选项需要重启游戏。"
+
+msgid "Maximum distance at which objects remain visible."
+msgstr "物体保持可见的最远距离。"
+
+msgid "How far shadows are drawn; zero disables them."
+msgstr "阴影绘制的距离；设为 0 则关闭阴影。"
+
+msgid "Higher resolution gives sharper shadow detail."
+msgstr "分辨率越高，阴影细节越清晰。"
+
+msgid "Adjust anti-aliasing: 0 off 1 fxaa 2 smaa 3 taa 4 fsr 5 dlss."
+msgstr "设置抗锯齿：0 关闭、1 FXAA、2 SMAA、3 TAA、4 FSR、5 DLSS。"
+
+msgid "Internal rendering resolution relative to the window."
+msgstr "内部渲染分辨率相对于窗口的比例。"
+
+msgid "Keep textures sharp when viewed at an angle."
+msgstr "斜角观看时保持贴图清晰。"
+
+msgid "Choose which parts of the scene appear in reflections."
+msgstr "选择哪些场景内容会出现在反射中。"
+
+msgid "Scale the number of grass instances drawn."
+msgstr "调整绘制出的草丛数量倍率。"
+
+msgid "Rendering resolution for rain, dust and other weather particles."
+msgstr "雨、尘等天气粒子的渲染分辨率。"
+
+msgid "Particle density multiplier"
+msgstr "粒子密度倍率"
+
+msgid "Scale the number of weather particles emitted."
+msgstr "调整天气粒子的发射数量倍率。"
+
+msgid "Maximum"
+msgstr "最高"
+
+msgid "Minimum"
+msgstr "最低"
+
+msgid "Medium"
+msgstr "中"
+
+msgid "Low"
+msgstr "低"
+
+msgid "Fugly"
+msgstr "极低"
+
+msgid "High"
+msgstr "高"
+
+msgid "Very High"
+msgstr "很高"
+
+msgid "Very Low"
+msgstr "很低"
+
+msgid "Custom"
+msgstr "自定义"
+
+msgid "On"
+msgstr "开"
+
+msgid "Off"
+msgstr "关"
+
+msgid "Landscape"
+msgstr "地形"
+
+msgid "Characters"
+msgstr "角色"
+
+msgid "Objects"
+msgstr "物体"
+
+msgid "Weather"
+msgstr "天气"
+
+msgid "Buildings"
+msgstr "建筑"
+
+msgid "Everything"
+msgstr "全部"
+
+msgid "None"
+msgstr "无"
+
+msgid "Quarter size"
+msgstr "四分之一尺寸"
+
+msgid "Half size"
+msgstr "一半尺寸"
+
+msgid "Full size"
+msgstr "完整尺寸"
+
+msgid "All fixes"
+msgstr "全部修复"
+
+msgid "Every bug on this page as the game ships it, or every fix."
+msgstr "本页所有问题都按游戏原样，或全部修复。"
+
+msgid "Raids as written"
+msgstr "袭击按原始数据"
+
+msgid "Raid and campaign data that builds on a base campaign counts the base's squads and follow-up campaigns once. The game counts them twice, so inherited squads come up more often and follow-up raids are about twice as likely."
+msgstr "袭击与战役数据建立在基础战役之上时，会把基础战役的所有小队和后续袭击都只计算一次。游戏会计算两次，导致继承来的小队出现得更频繁，后续袭击的概率也约翻倍。"
+
+msgid "Door break sound"
+msgstr "门被撞破的音效"
+
+msgid "Doors and gates make their breaking sound when they are bashed or broken open. The game never picks which breaking sound to play, so it plays none."
+msgstr "门和门闸在遭到撞击或被强行打开时会发出破坏音效。游戏从不挑选该播放哪段破坏音效，于是什么也不播放。"
+
+msgid "Ambience after loading"
+msgstr "载入后的环境音"
+
+msgid "A biome whose sounds were not loaded yet starts its day or night ambience by the time of day. The game plays the opposite one (night sounds by day) until the next biome or day change."
+msgstr "声音尚未载入的生物群系，会按当前时段开始播放白天或夜间的环境音。在切换到下一个生物群系或时段变化之前，游戏会播放相反的一套（白天放夜间的音效）。"
+
+msgid "Wind stops"
+msgstr "风声停止"
+
+msgid "The wind's sound ends when the wind dies down. The game asks for a stop sound that does not exist, so once the wind has blown it never goes quiet."
+msgstr "风变小的时候风声会结束。游戏请求播放一段并不存在的停止音效，于是一旦起过风，就再也安静不下来。"
+
+msgid "Load button"
+msgstr "载入按钮"
+
+msgid "The load window's Load button works only once a save that can be read is selected. The game keeps it live: with nothing selected a click does nothing, and an unreadable save fails to load."
+msgstr "载入窗口的载入按钮只有在选中了可读取的存档时才可用。游戏里它始终可点：什么都没选时点击没有反应，而选到无法读取的存档则会载入失败。"
+
+msgid "Turret gunners turn"
+msgstr "炮塔射手转身"
+
+msgid "A turret's gunner turns with the gun, facing where it aims. In the game the gunner keeps facing the turret, so once the gun swings toward a target the gunner looks off to the side."
+msgstr "炮塔的射手会随炮口一起转身，面朝瞄准的方向。在游戏里射手始终面朝炮塔，所以炮口一旦转向目标，射手看着就偏到了一边。"
+
+msgid "Volume of the biome music and the main theme."
+msgstr "生物群系音乐和主题曲的音量。"
+
+msgid "Volume of the weather and the world's ambience."
+msgstr "天气与环境氛围音的音量。"
+
+msgid "Volume of footsteps."
+msgstr "脚步声的音量。"
+
+msgid "Sfx volume"
+msgstr "音效音量"
+
+msgid "Volume of the interface sounds."
+msgstr "界面音效的音量。"
+
+msgid "Volume of the voices."
+msgstr "人声的音量。"
+
+msgid "Music frequency"
+msgstr "音乐频率"
+
+msgid "Average minutes of silence between pieces of biome music."
+msgstr "生物群系音乐之间平均静音的分钟数。"
+
+msgid "Sound voices"
+msgstr "同时发声数"
+
+msgid "The most sounds heard at once: the loudest play, quieter ones wait silently and come back when they are loud enough. Lower it if big fights stutter; All mixes every sound."
+msgstr "同一时刻最多听到的声音数：最响亮的优先播放，较安静的先静默，等够响了再接回来。大混战时若卡顿可以调低；全部则混合所有声音。"
+
+msgid "UI style"
+msgstr "界面风格"
+
+msgid "Choose original Kenshi skins or Meitou materials."
+msgstr "选择原版 Kenshi 皮肤或 Meitou 材质。"
+
+msgid "Speed units"
+msgstr "速度单位"
+
+msgid "The unit of the run speed in the character's information panel (the game: mph)."
+msgstr "角色信息面板中奔跑速度的单位（游戏为 mph）。"
+
+msgid "Damage floaters"
+msgstr "伤害飘字"
+
+msgid "Numbers that float over a character when a blow lands, with the damage armour stopped in brackets. Simple shows the total. Full shows the total, then armour per damage type and the part hit. Healing of your own characters floats up in green."
+msgstr "命中时在角色身上飘出的数字，括号内是护甲挡下的伤害。简要显示总量。完整先显示总量，再按伤害类型显示护甲值以及命中的部位。己方角色受到的治疗会以绿色向上飘出。"
+
+msgid "Hardware mouse"
+msgstr "硬件鼠标"
+
+msgid "Use the Windows cursor instead of the game's drawn pointer (no hover pointers)."
+msgstr "使用 Windows 光标，而不是游戏绘制的指针（悬停时也不会切换指针）。"
+
+msgid "Vertical sync"
+msgstr "垂直同步"
+
+msgid "Borderless full screen"
+msgstr "无边框全屏"
+
+msgid "Used while vertical sync is off; 0 is unlimited."
+msgstr "在关闭垂直同步时使用；0 表示不限。"
+
+msgid "World tick alongside drawing"
+msgstr "世界步进与绘制并行"
+
+msgid "Faithful runs the world, then draws it, as the game does. Meitou runs the next world tick while the frame is drawn whenever the world is busy (big fights, crowds). Always on every frame: much higher frame rates with many characters. Running alongside can add up to 33 ms of input delay (one world tick)."
+msgstr "忠实：先运行世界，再绘制，与游戏一致。Meitou：世界繁忙时（大混战、人群拥挤），在绘制这一帧的同时运行下一个世界步进。始终每帧并行：角色很多时帧率会高得多。并行运行最多会带来 33 毫秒的输入延迟（一个世界步进）。"
+
+msgid "Upscaler sharpness"
+msgstr "放大锐度"
+
+msgid "Sharpen the image after resolution reconstruction."
+msgstr "分辨率重建之后对画面做锐化。"
+
+msgid "Quality preset"
+msgstr "画质预设"
+
+msgid "Sets draw distances, foliage, shadow, water, particle and texture settings together. High is the default. Low also turns the costliest Meitou effects off (indirect light, light shafts, clouds, ambient occlusion, Meitou shadows and water). Anti-aliasing and render scale stay as they are."
+msgstr "同时设置绘制距离、植被、阴影、水面、粒子和贴图相关选项。高为默认值。低还会关闭 Meitou 中最耗性能的效果（间接光照、光柱、云、环境光遮蔽、Meitou 阴影与水面）。抗锯齿和渲染比例保持不变。"
+
+msgid "All graphics features"
+msgstr "全部画面特性"
+
+msgid "Every graphics feature as the game ships it, or every Meitou improvement. The quality settings stay as they are."
+msgstr "所有画面特性都按游戏原样，或全部启用 Meitou 改进。画质选项保持当前设置。"
+
+msgid "Foliage ranges"
+msgstr "植被范围"
+
+msgid "Set foliage visibility by mesh size rather than layer."
+msgstr "按网格大小而非图层来设置植被的可见范围。"
+
+msgid "Far impostors"
+msgstr "远景替身"
+
+msgid "Draw distant foliage using baked billboard images."
+msgstr "用烘焙好的广告牌图像绘制远处植被。"
+
+msgid "Draw distances"
+msgstr "绘制距离"
+
+msgid "Use extended object and landmark visibility ranges."
+msgstr "使用扩展后的物体与地标可见范围。"
+
+msgid "Foliage levels"
+msgstr "植被层级"
+
+msgid "Use generated simpler meshes for distant foliage."
+msgstr "远处植被使用生成的简化网格。"
+
+msgid "Landmark distance"
+msgstr "地标距离"
+
+msgid "Keep large wrecks, towers and landmarks visible farther away."
+msgstr "让大型残骸、塔楼和地标在更远处依然可见。"
+
+msgid "Distant towns"
+msgstr "远处城镇"
+
+msgid "How many surrounding zones can display distant towns."
+msgstr "周围可以显示远处城镇的区域数量。"
+
+msgid "Object LOD distance multiplier"
+msgstr "物体细节层级距离倍率"
+
+msgid "Higher values retain detailed object meshes farther away."
+msgstr "数值越高，越远处仍保留精细的物体网格。"
+
+msgid "Foliage draw distance multiplier"
+msgstr "植被绘制距离倍率"
+
+msgid "Scale how far trees and other foliage remain visible."
+msgstr "调整树木等植被保持可见的距离。"
+
+msgid "Settings"
+msgstr "设置"
+
+msgid "Display"
+msgstr "显示"
+
+msgid "Controls"
+msgstr "操作"
+
+msgid "Advanced"
+msgstr "高级"
+
+msgid "Audio"
+msgstr "音频"
+
+msgid "Fixes"
+msgstr "修复"
+
+msgid "World"
+msgstr "世界"
+
+msgid "Lighting"
+msgstr "光照"
+
+msgid "Water"
+msgstr "水面"
+
+msgid "Effects"
+msgstr "特效"
+
+msgid "Skin"
+msgstr "皮肤"
+
+msgid "Restore defaults"
+msgstr "恢复默认"
+
+msgid "Restore defaults?"
+msgstr "恢复默认值？"
+
+msgid "Restore all preferences and controls to their defaults?"
+msgstr "将所有偏好设置和按键都恢复为默认值？"
+
+msgid "Save"
+msgstr "保存"
+
+msgid "Confirm"
+msgstr "确认"
+
+msgid "Assign a control"
+msgstr "指定按键"
+
+msgid "Delete clears the binding. Esc cancels."
+msgstr "按删除键可清除绑定，按 Esc 取消。"
+
+msgid "Binding cleared."
+msgstr "绑定已清除。"
+
+msgid "Unbound"
+msgstr "未绑定"
+
+msgid "Unavailable"
+msgstr "不可用"
+
+msgid "Clear cache"
+msgstr "清除缓存"
+
+msgid "Clear cached files?"
+msgstr "清除缓存文件？"
+
+msgid "Faithful (off)"
+msgstr "忠实（关）"
+
+msgid "Meitou (on)"
+msgstr "Meitou（开）"
+
+msgid "All Faithful"
+msgstr "全部忠实"
+
+msgid "All Meitou"
+msgstr "全部 Meitou"
+
+msgid "Faithful (in series)"
+msgstr "忠实（依次）"
+
+msgid "Meitou (when busy)"
+msgstr "Meitou（繁忙时）"
+
+msgid "Always on"
+msgstr "始终开启"
+
+msgid "All"
+msgstr "全部"
+
+msgid "Shoulder"
+msgstr "肩部"
+
+msgid "Hybrid"
+msgstr "混合"
+
+msgid "Quarter resolution"
+msgstr "四分之一分辨率"
+
+msgid "Half resolution"
+msgstr "一半分辨率"
+
+msgid "Automatic"
+msgstr "自动"
+
+msgid "Full resolution"
+msgstr "完整分辨率"
+
+msgid "Low · 1024"
+msgstr "低 · 1024"
+
+msgid "Medium · 2048"
+msgstr "中 · 2048"
+
+msgid "High · 4096"
+msgstr "高 · 4096"
+
+msgid "Simple info"
+msgstr "简要信息"
+
+msgid "Full info"
+msgstr "完整信息"
+
+msgid "Colour grading"
+msgstr "色彩分级"
+
+msgid "Camera rotation speed"
+msgstr "镜头旋转速度"
+
+msgid "How fast the rotate and tilt keys and the mouse turn the camera (the game: 6)."
+msgstr "旋转和俯仰按键以及鼠标转动镜头的速度（游戏为 6）。"
+
+msgid "Numbers that float over a character when a blow lands, with the damage armour stopped in brackets. Simple shows the total, Full one number per damage type and the part hit. Healing of your own characters floats up in green."
+msgstr "命中时在角色身上飘出的数字，括号内是护甲挡下的伤害。简要显示总量，完整则按每种伤害类型各显示一个数字，并显示命中的部位。己方角色受到的治疗会以绿色向上飘出。"
+
+msgid "Skin scatters light on this race (the default)."
+msgstr "该种族皮肤会发生光线散射（默认）。"
+
+msgid "A robot race: no skin scattering unless turned on."
+msgstr "机器人种族：除非开启，否则皮肤不散射光线。"
+
+msgid "Adjust the camera rotation speed."
+msgstr "调整镜头旋转速度。"
+
+msgid "Every change on this page as the game plays, or every Meitou change."
+msgstr "本页所有改动都按游戏原样，或全部启用 Meitou 改动。"
+
+msgid "All gameplay changes"
+msgstr "全部玩法改动"
+
+msgid "Foliage LOD distance multiplier"
+msgstr "植被细节层级距离倍率"
+
+msgid "Higher values retain detailed foliage farther away."
+msgstr "数值越高，越远处仍保留精细的植被。"
+
+msgid "Large foliage range"
+msgstr "大型植被范围"
+
+msgid "Maximum visibility range for the largest foliage."
+msgstr "最大的植被的最远可见范围。"
+
+msgid "Impostor distance"
+msgstr "替身距离"
+
+msgid "Distance where foliage changes to billboard images."
+msgstr "植被切换为广告牌图像的距离。"
+
+msgid "Large impostor distance"
+msgstr "大型替身距离"
+
+msgid "Billboard transition distance for large foliage."
+msgstr "大型植被的广告牌切换距离。"
+
+msgid "Medium foliage range"
+msgstr "中型植被范围"
+
+msgid "Maximum visibility range for medium-sized foliage."
+msgstr "中型植被的最远可见范围。"
+
+msgid "Small foliage range"
+msgstr "小型植被范围"
+
+msgid "Maximum visibility range for small foliage."
+msgstr "小型植被的最远可见范围。"
+
+msgid "Grass draw distance multiplier"
+msgstr "草丛绘制距离倍率"
+
+msgid "Scale the distance at which grass disappears."
+msgstr "调整草丛消失的距离。"
+
+msgid "Terrain detail"
+msgstr "地形细节"
+
+msgid "Lower values keep the terrain mesh more detailed."
+msgstr "数值越低，地形网格越精细。"
+
+msgid "Reflection range multiplier"
+msgstr "反射范围倍率"
+
+msgid "Scale how far away reflected objects are drawn."
+msgstr "调整反射物体被绘制的距离。"
+
+msgid "Water clarity multiplier"
+msgstr "水体清澈度倍率"
+
+msgid "Adjust visibility beneath the water surface."
+msgstr "调整水面以下的可视程度。"
+
+msgid "Far water clarity"
+msgstr "远处水体清澈度"
+
+msgid "Adjust underwater visibility at a distance."
+msgstr "调整远处的水下可见度。"
+
+msgid "Water see-through distance"
+msgstr "水体透视距离"
+
+msgid "Distance over which submerged scenery stays visible."
+msgstr "水下景物保持可见的距离。"
+
+msgid "Shadow filter"
+msgstr "阴影过滤"
+
+msgid "Higher values smooth shadow edges with more samples."
+msgstr "数值越高，用更多采样让阴影边缘更平滑。"
+
+msgid "Haze strength"
+msgstr "雾霾强度"
+
+msgid "Scale the amount of atmospheric haze."
+msgstr "调整大气雾霾的浓度。"
+
+msgid "Planetshine strength"
+msgstr "星月微光强度"
+
+msgid "Scale night lighting from the planet and moon."
+msgstr "调整行星与月亮带来的夜间照明。"
+
+msgid "Ambient light strength"
+msgstr "环境光强度"
+
+msgid "Scale the sky's light in shade, at night and indoors."
+msgstr "调整背阴处、夜间和室内的天光强度。"
+
+msgid "Night ambient light strength"
+msgstr "夜间环境光强度"
+
+msgid "Brighten or darken nights further, on top of Ambient light strength."
+msgstr "在环境光强度之外进一步调亮或调暗夜晚。"
+
+msgid "Light shafts strength"
+msgstr "光柱强度"
+
+msgid "Adjust the brightness of light scattered through the air."
+msgstr "调整空气中散射光线的亮度。"
+
+msgid "Light shafts air"
+msgstr "光柱空气散射"
+
+msgid "Air scattering density; zero removes air scattering."
+msgstr "空气散射密度；设为 0 则取消空气散射。"
+
+msgid "Light shafts air at dawn and dusk"
+msgstr "黎明与黄昏的空气散射"
+
+msgid "Scale air scattering around sunrise and sunset."
+msgstr "调整日出日落前后的空气散射。"
+
+msgid "Tone map"
+msgstr "色调映射"
+
+msgid "Choose how bright scene colours fit the display range."
+msgstr "选择画面颜色以何种亮度映射到显示范围。"
+
+msgid "Hybrid tone map: ACES share"
+msgstr "混合色调映射：ACES 占比"
+
+msgid "Blend more ACES into the hybrid tone mapping curve."
+msgstr "在混合色调映射曲线中混入更多 ACES。"
+
+msgid "Heat haze strength"
+msgstr "热浪扭曲强度"
+
+msgid "Scale the distortion caused by hot air."
+msgstr "调整热空气造成的扭曲程度。"
+
+msgid "Night grading strength"
+msgstr "夜间分级强度"
+
+msgid "Adjust the blue shift of colours in low light."
+msgstr "调整暗光下的色彩偏蓝程度。"
+
+msgid "Ambient occlusion"
+msgstr "环境光遮蔽"
+
+msgid "Add contact shading around nearby surfaces and creases."
+msgstr "在相邻表面和缝隙周围添加接触阴影。"
+
+msgid "Dithering"
+msgstr "抖动"
+
+msgid "Reduce visible colour bands in smooth gradients."
+msgstr "减少平滑渐变中可见的色带。"
+
+msgid "Haze"
+msgstr "雾霾"
+
+msgid "Use Meitou's atmospheric haze tuning."
+msgstr "使用 Meitou 的大气雾霾调校。"
+
+msgid "Use temporal smoothing and upscaling instead of FXAA."
+msgstr "用时间性平滑与画面放大取代 FXAA。"
+
+msgid "Shadows"
+msgstr "阴影"
+
+msgid "Use soft shadows and include distant terrain."
+msgstr "使用柔和阴影，并把远处地形也纳入。"
+
+msgid "Add animated waves and shoreline surf."
+msgstr "添加动态波浪与岸边浪花。"
+
+msgid "Render weather at an adaptive lower resolution."
+msgstr "以自适应降低的分辨率渲染天气。"
+
+msgid "Indirect light"
+msgstr "间接光照"
+
+msgid "Use light probes for bounced and ambient lighting."
+msgstr "用光照探针处理反弹光与环境光。"
+
+msgid "Indoor GI"
+msgstr "室内全局光照"
+
+msgid "With Indirect light on, use bounced light indoors. Off keeps the original indoor ambient lighting."
+msgstr "开启间接光照时，室内也使用反弹光。关闭则保持原版的室内环境光。"
+
+msgid "Tone map and grade"
+msgstr "色调映射与分级"
+
+msgid "Use hybrid tone mapping and scene colour grading."
+msgstr "使用混合色调映射与场景色彩分级。"
+
+msgid "Let shadows shape the light scattered through haze."
+msgstr "让阴影塑造透过雾霾散射的光。"
+
+msgid "Heat haze"
+msgstr "热浪扭曲"
+
+msgid "Use Meitou's reduced heat distortion strength."
+msgstr "使用 Meitou 降低后的热浪扭曲强度。"
+
+msgid "Night air"
+msgstr "夜间空气"
+
+msgid "Add airglow to the night haze."
+msgstr "为夜间雾霾添加大气辉光。"
+
+msgid "Light the night scene from the planet and moon."
+msgstr "以行星和月亮照亮夜景。"
+
+msgid "Night sky"
+msgstr "夜空"
+
+msgid "Draw individual stars instead of a starfield texture."
+msgstr "绘制独立的星星，而不是星空贴图。"
+
+msgid "Night grading"
+msgstr "夜间分级"
+
+msgid "Shift dark scenes toward the blue of night vision."
+msgstr "让昏暗场景偏向夜视的蓝色。"
+
+msgid "Clouds"
+msgstr "云"
+
+msgid "Render clouds with volume and depth."
+msgstr "让云具有体积和纵深。"
+
+msgid "Cloud shadows"
+msgstr "云影"
+
+msgid "Let clouds cast shadows across land and water."
+msgstr "让云在陆地上和水面上投下阴影。"
+
+msgid "Cloud shadows in fog"
+msgstr "雾中的云影"
+
+msgid "Fade cloud shadows near and inside fog. Without it, places like the swamp or the Deadlands get too dark."
+msgstr "在雾气附近和雾气之中淡化云影。否则沼泽、死地这类地方会过暗。"
+
+msgid "Let sunlight soften and warm under bare skin instead of ending at a hard edge."
+msgstr "让阳光在裸露皮肤下柔和并偏暖，而不是在硬边缘处突然结束。"
+
+msgid "Shadow cascade 5 (Meitou)"
+msgstr "阴影级联 5（Meitou）"
+
+msgid "Add a fifth shadow cascade for distant scenery."
+msgstr "为远景增加第五级阴影级联。"
+
+msgid "Move the camera forward."
+msgstr "镜头前移。"
+
+msgid "Move the camera backward."
+msgstr "镜头后移。"
+
+msgid "Move the camera left."
+msgstr "镜头左移。"
+
+msgid "Move the camera right."
+msgstr "镜头右移。"
+
+msgid "Raise the camera in free camera mode."
+msgstr "自由镜头模式下升高镜头。"
+
+msgid "Lower the camera in free camera mode."
+msgstr "自由镜头模式下降低镜头。"
+
+msgid "Orbit the camera to the left round its target."
+msgstr "镜头绕目标向左环绕。"
+
+msgid "Orbit the camera to the right round its target."
+msgstr "镜头绕目标向右环绕。"
+
+msgid "Tilt the view upward: the camera comes down."
+msgstr "视角上仰：镜头下降。"
+
+msgid "Tilt the view downward: the camera rises."
+msgstr "视角下俯：镜头上升。"
+
+msgid "Move the view closer."
+msgstr "拉近视角。"
+
+msgid "Move the view farther away."
+msgstr "拉远视角。"
+
+msgid "Hold and move the mouse to turn the camera."
+msgstr "按住并移动鼠标来转动镜头。"
+
+msgid "Switch between orbit and free camera movement."
+msgstr "在环绕与自由镜头移动之间切换。"
+
+msgid "Pause or resume the simulation."
+msgstr "暂停或继续模拟。"
+
+msgid "Step up to the next simulation speed."
+msgstr "调到下一档模拟速度。"
+
+msgid "Step down to the previous simulation speed."
+msgstr "调回上一档模拟速度。"
+
+msgid "Run the simulation at normal speed."
+msgstr "以正常速度运行模拟。"
+
+msgid "Run the simulation at double speed."
+msgstr "以两倍速度运行模拟。"
+
+msgid "Run the simulation at five times normal speed."
+msgstr "以五倍正常速度运行模拟。"
+
+msgid "Save an image of the current view."
+msgstr "保存当前画面的截图。"
+
+msgid "Open or close this settings dialog."
+msgstr "打开或关闭此设置窗口。"
+
+msgid "Open or close the debug menu: teleport, spawn, items, money, heal and damage."
+msgstr "打开或关闭调试菜单：传送、生成、物品、金钱、治疗和伤害。"
+
+msgid "Show or hide frame statistics."
+msgstr "显示或隐藏帧统计。"
+
+msgid "Cycle GPU, CPU and hidden profiler views."
+msgstr "在 GPU、CPU 和隐藏的性能分析视图之间循环。"
+
+msgid "Save the game to the quicksave slot."
+msgstr "将游戏保存到快速存档槽。"
+
+msgid "Load the game from the quicksave slot."
+msgstr "从快速存档槽载入游戏。"
+
+msgid "View the next higher building floor."
+msgstr "查看建筑的上一层。"
+
+msgid "View the next lower building floor."
+msgstr "查看建筑的下一层。"
+
+msgid "Hold to highlight building signs and outline the characters about."
+msgstr "按住时高亮建筑招牌，并描边周围的角色。"
+
+msgid "Hide or show the whole interface."
+msgstr "隐藏或显示整个界面。"
+
+msgid "Open or close the selected character's inventory."
+msgstr "打开或关闭所选角色的物品栏。"
+
+msgid "Open or close the selected character's stats window."
+msgstr "打开或关闭所选角色的属性窗口。"
+
+msgid "Open the world map, or close it."
+msgstr "打开或关闭世界地图。"
+
+msgid "Open the faction page, or close it."
+msgstr "打开或关闭派系页面。"
+
+msgid "Open the research page, or close it."
+msgstr "打开或关闭研究页面。"
+
+msgid "Open the crafting page, or close it."
+msgstr "打开或关闭制作页面。"
+
+msgid "Show the next squad in the squad bar."
+msgstr "显示小队栏中的下一个小队。"
+
+msgid "Select the whole squad (Shift adds it to the selection)."
+msgstr "选中整个小队（按 Shift 则加入当前选择）。"
+
+msgid "Select this member of the squad bar (Shift adds them to the selection; press twice to centre on them)."
+msgstr "选中小队栏中的这名成员（按 Shift 则加入当前选择；连按两次以该角色为中心）。"
+
+msgid "Select the next member of the character's squad."
+msgstr "选中该角色所在小队的下一名成员。"
+
+msgid "Select the previous member of the character's squad."
+msgstr "选中该角色所在小队的上一名成员。"
+
+msgid "Centre the camera on the selected character."
+msgstr "把镜头对准所选角色。"
+
+msgid "Stop the selected characters."
+msgstr "让所选角色停下。"
+
+msgid "Open or close the build menu."
+msgstr "打开或关闭建造菜单。"
+
+msgid "Turn the Block order of the selection on or off."
+msgstr "开关所选角色的格挡指令。"
+
+msgid "Turn the Hold position order of the selection on or off."
+msgstr "开关所选角色的坚守指令。"
+
+msgid "Turn the Passive order of the selection on or off."
+msgstr "开关所选角色的被动指令。"
+
+msgid "Turn the Jobs order of the selection on or off."
+msgstr "开关所选角色的工作指令。"
+
+msgid "Turn the Ranged order of the selection on or off."
+msgstr "开关所选角色的远程指令。"
+
+msgid "Turn sneaking of the selection on or off."
+msgstr "开关所选角色的潜行。"
+
+msgid "Turn the Taunt order of the selection on or off."
+msgstr "开关所选角色的嘲讽指令。"
+
+msgid "Step the selection's movement speed: walk, jog, run, group."
+msgstr "切换所选角色的移动速度：步行、慢跑、奔跑、跟随队伍。"
+
+msgid "The selection looks for someone to treat (Shift: add the medic job)."
+msgstr "所选角色寻找需要治疗的人（按 Shift 则添加医疗工作）。"
+
+msgid "The selection looks for someone to rescue (Shift: add the rescue job)."
+msgstr "所选角色寻找需要救助的人（按 Shift 则添加救助工作）。"
+
+msgid "Prospect the ground with the selected character nearest the camera."
+msgstr "让镜头附近被选中的角色进行探矿。"
+
+msgid "The selection sits down to rest."
+msgstr "所选角色坐下休息。"
+
+msgid "The selected carriers put their bodies down."
+msgstr "被选中的背负者把背的人放下。"
+
+msgid "How many enemies may swing at one character at once (the game: 1, plus its race's extra slots); the others wait at reach or circle."
+msgstr "同一时间能有多少敌人对同一个角色出手（游戏为 1，加上种族额外的位置）；其余的在够不到的地方等待或绕圈。"
+
+msgid "Late dodges and blocks"
+msgstr "迟到的闪避与格挡"
+
+msgid "Balance change: a dodge or block that succeeds its roll but starts a moment late still works, instead of failing as in the game. Makes skilled fighters much harder to wear down when several enemies attack at once."
+msgstr "平衡性改动：闪避或格挡判定成功、只是稍晚一点开始的，依然有效，而不像游戏里那样算失败。多人围攻时，熟练的战士会变得更难被磨死。"
+
+msgid "Squads keep their people"
+msgstr "小队保留成员"
+
+msgid "Roaming squads keep their characters when they leave the area around your squads, and travel on as themselves. In the game they are removed and new ones are made later."
+msgstr "游荡的小队离开你所在小队周围后，会保留自己的角色，并以原班人马继续行进。在游戏里它们会被移除，之后再生成新的。"
+
+msgid "Fights far away"
+msgstr "远处的战斗"
+
+msgid "Hostile squads that meet far from your squads fight it out by strength; the loser is wiped out. In the game nothing happens far away."
+msgstr "敌对小队在你的小队远处相遇时按实力打一场，败方被消灭。在游戏里远处什么都不会发生。"
+
+msgid "Healing far away"
+msgstr "远处的治疗"
+
+msgid "A squad coming back into the area around your squads has healed for the time it was away. In the game it comes back as it left."
+msgstr "小队回到你的小队附近时，会按离开的时间完成治疗。在游戏里它们回来时还是离开时的样子。"
+
+msgid "Wild squads stay"
+msgstr "野生小队保留"
+
+msgid "Animals, bandits and other wild squads keep their characters, wounds and places when the area around them unloads, and are there again when you come back. In the game they are removed and new ones are made."
+msgstr "动物、盗匪等野生小队在周围区域卸载时会保留成员、伤势和位置，你回来时它们仍在原处。在游戏里它们会被移除并重新生成。"
+
+msgid "Towns keep their schedule"
+msgstr "城镇保持作息"
+
+msgid "Townspeople you come back to after an hour or more are where their day puts them: in bed at night, at the counter, at their posts and seats. In the game they are where they stood when you left."
+msgstr "一小时后或更久才回来的城镇居民，会按作息出现在该在的位置：夜里在床上，在柜台后，在岗位和座位上。在游戏里他们还站在你离开时的位置。"
+
+msgid "Doors close behind"
+msgstr "门会随手关上"
+
+msgid "A door someone opened by walking through it closes again a few seconds after the last person went through. In the game doors stay open."
+msgstr "有人走过而打开的门，在最后一个人通过几秒后会重新关上。在游戏里门会一直开着。"
+
+msgid "Hover outline"
+msgstr "悬停描边"
+
+msgid "Outline and tint the character under the cursor, in the colour of what a right click would do."
+msgstr "描边并染色光标下的角色，颜色表示右键点击会做什么。"
+
+msgid "luckyren Mode"
+msgstr "luckyren 模式"
+
+msgid "A character that takes a fatal hit explodes, covers everything around in blood and sends bones flying everywhere. Its gear falls to the ground around the spot."
+msgstr "受到致命一击的角色会爆开，四周溅满鲜血，骨头四处飞散。身上的装备则散落在原地周围。"
+
+msgid "Dropped items kept"
+msgstr "保留的掉落物"
+
+msgid "How many items dropped during play (severed limbs, luckyren Mode's gear) stay on the ground; past it the oldest disappears. Items that were on the ground in the save always stay."
+msgstr "游戏中掉落在地的物品（断肢、luckyren 模式的装备）在地面保留的件数；超出后最旧的会消失。存档里原本就在地上的物品则会一直保留。"
+
+msgid "Splash screens"
+msgstr "启动画面"
+
+msgid "Faithful shows the game's logos at startup (Faithful UI); a key or a click skips each one. Meitou shows the menu as soon as the game has loaded."
+msgstr "忠实会在启动时显示游戏的 logo（忠实界面）；按任意键或点击可跳过。Meitou 则在游戏加载完成后直接显示菜单。"
+
+msgid "Main menu scene transitions"
+msgstr "主菜单场景转场"
+
+msgid "Sky flight to/from the main menu (Meitou UI)."
+msgstr "进出主菜单的空中飞行（Meitou 界面）。"
+
+msgid "Main menu transition speed"
+msgstr "主菜单转场速度"
+
+msgid "Higher values make the camera ascend and descend faster."
+msgstr "数值越高，镜头升降越快。"
+
+msgid "In-game scene transitions"
+msgstr "游戏内场景转场"
+
+msgid "Sky flight for save loads/new games during play (Meitou UI)."
+msgstr "游戏中读档或新开游戏时的空中飞行（Meitou 界面）。"
+
+msgid "In-game transition speed"
+msgstr "游戏内转场速度"
+
+msgid "Character flights"
+msgstr "角色飞行"
+
+msgid "A double click on a squad member far from the view (or a double tap of their number) flies the camera there in an arc instead of cutting."
+msgstr "双击视角外的小队成员（或连按两次其数字键）时，镜头沿弧线飞过去，而不是直接切过去。"
+
+msgid "Keep textures at characters"
+msgstr "保留角色周边贴图"
+
+msgid "Keeps the meshes and textures around every squad member loaded, not only around the camera, so a flight or jump to them lands on finished detail. Costs video memory."
+msgstr "让每名小队成员周围的网格与贴图始终保持载入，而不只是镜头附近，这样飞过去或跳过去时看到的已是完整细节。会占用更多显存。"
+
+msgid "Character flight time"
+msgstr "角色飞行时间"
+
+msgid "Seconds a character flight takes, and each hop of the squad tour (numpad /)."
+msgstr "每次角色飞行以及小队巡览（小键盘 /）每一跳所需的秒数。"
+
+msgid "Delete cached billboards; they are rebuilt when needed."
+msgstr "删除缓存的广告牌图像；需要时会重新生成。"
+
+msgid "Choose the control for"
+msgstr "为以下操作指定按键："
+
+msgid "Sets draw distances, foliage, shadow, water, particle and texture settings together; High is the default. "
+msgstr "同时设置绘制距离、植被、阴影、水面、粒子和贴图相关选项；高为默认值。 "
+
+msgid "Low also turns the costliest Meitou effects off (indirect light, light shafts, clouds, ambient occlusion, Meitou shadows and water). Anti-aliasing and render scale stay as they are."
+msgstr "低还会关闭 Meitou 中最耗性能的效果（间接光照、光柱、云、环境光遮蔽、Meitou 阴影与水面）。抗锯齿和渲染比例保持不变。"
+
+msgid "FAITHFUL"
+msgstr "忠实"
+
+msgid "Planetshine"
+msgstr "星月微光"
+
+msgid "Texture filtering"
+msgstr "贴图过滤"
+
+msgid "Grading"
+msgstr "分级"
+
+msgid "Apply the scene's colour and contrast adjustments."
+msgstr "应用场景的色彩与对比度调整。"
+
+msgid "Music volume"
+msgstr "音乐音量"
+
+msgid "Ambient volume"
+msgstr "环境音量"
+
+msgid "Footstep volume"
+msgstr "脚步声音量"
+
+msgid "UI volume"
+msgstr "界面音量"
+
+msgid "VO volume"
+msgstr "人声音量"
+
+msgid "Volume of combat, building and other sound effects."
+msgstr "战斗、建造及其他音效的音量。"
+
+msgid "Attackers per target"
+msgstr "每个目标的攻击人数"
+
+msgid "Default settings restored."
+msgstr "已恢复默认设置。"
+
+msgid "That key is reserved. Choose another key, or Esc to cancel."
+msgstr "该按键已被占用。请另选一个键，或按 Esc 取消。"
+
+msgid "Enter a valid number, or press Esc to cancel."
+msgstr "请输入有效数字，或按 Esc 取消。"
+
+msgid "Low quality applied."
+msgstr "已应用低画质。"
+
+msgid "Medium quality applied."
+msgstr "已应用中画质。"
+
+msgid "High quality applied."
+msgstr "已应用高画质。"
+
+msgid "Ultra quality applied."
+msgstr "已应用极致画质。"
+
+msgid "Every graphics feature is Meitou."
+msgstr "所有画面特性均为 Meitou。"
+
+msgid "Every graphics feature is as the game ships it."
+msgstr "所有画面特性均按游戏原样。"
+
+msgid "Every gameplay change is Meitou."
+msgstr "所有玩法改动均为 Meitou。"
+
+msgid "Every gameplay change is as the game ships it."
+msgstr "所有玩法改动均按游戏原样。"
+
+msgid "Every fix is Meitou."
+msgstr "所有修复均为 Meitou。"
+
+msgid "Every fix is as the game ships it."
+msgstr "所有修复均按游戏原样。"
+
+msgid "Select All"
+msgstr "全选"
+
+msgid "Select Member 1"
+msgstr "选择成员 1"
+
+msgid "Select Member 2"
+msgstr "选择成员 2"
+
+msgid "Select Member 3"
+msgstr "选择成员 3"
+
+msgid "Select Member 4"
+msgstr "选择成员 4"
+
+msgid "Select Member 5"
+msgstr "选择成员 5"
+
+msgid "Select Member 6"
+msgstr "选择成员 6"
+
+msgid "Select Member 7"
+msgstr "选择成员 7"
+
+msgid "Select Member 8"
+msgstr "选择成员 8"
+
+msgid "Select Member 9"
+msgstr "选择成员 9"
+
+msgid "Select Member 10"
+msgstr "选择成员 10"
+
+msgid "Move Forward"
+msgstr "前进"
+
+msgid "Move Back"
+msgstr "后退"
+
+msgid "Move Left"
+msgstr "左移"
+
+msgid "Move Right"
+msgstr "右移"
+
+msgid "Move Up"
+msgstr "上升"
+
+msgid "Move Down"
+msgstr "下降"
+
+msgid "Rotate Left"
+msgstr "左转"
+
+msgid "Rotate Right"
+msgstr "右转"
+
+msgid "Pitch Up"
+msgstr "上仰"
+
+msgid "Pitch Down"
+msgstr "下俯"
+
+msgid "Zoom In"
+msgstr "拉近"
+
+msgid "Zoom Out"
+msgstr "拉远"
+
+msgid "Orbit"
+msgstr "环绕"
+
+msgid "Toggle Free Camera"
+msgstr "切换自由镜头"
+
+msgid "Pause"
+msgstr "暂停"
+
+msgid "Time Faster"
+msgstr "加速时间"
+
+msgid "Time Slower"
+msgstr "减速时间"
+
+msgid "Speed 1"
+msgstr "速度 1"
+
+msgid "Speed 2"
+msgstr "速度 2"
+
+msgid "Speed 3"
+msgstr "速度 3"
+
+msgid "Screenshot"
+msgstr "截图"
+
+msgid "Toggle Settings"
+msgstr "切换设置"
+
+msgid "Toggle Debug Menu"
+msgstr "切换调试菜单"
+
+msgid "Toggle Stats"
+msgstr "切换帧统计"
+
+msgid "Cycle Profiler"
+msgstr "循环性能分析"
+
+msgid "Quick Save"
+msgstr "快速保存"
+
+msgid "Quick Load"
+msgstr "快速载入"
+
+msgid "Floor Up"
+msgstr "上一层"
+
+msgid "Floor Down"
+msgstr "下一层"
+
+msgid "Highlight"
+msgstr "高亮"
+
+msgid "Toggle Interface"
+msgstr "切换界面"
+
+msgid "Toggle Inventory"
+msgstr "切换物品栏"
+
+msgid "Toggle Character Stats"
+msgstr "切换角色属性"
+
+msgid "Toggle Map"
+msgstr "切换地图"
+
+msgid "Toggle Faction"
+msgstr "切换派系"
+
+msgid "Toggle Research"
+msgstr "切换研究"
+
+msgid "Toggle Crafting"
+msgstr "切换制作"
+
+msgid "Change Squad"
+msgstr "切换小队"
+
+msgid "Next Character"
+msgstr "下一角色"
+
+msgid "Previous Character"
+msgstr "上一角色"
+
+msgid "Focus Character"
+msgstr "聚焦角色"
+
+msgid "Stop Movement"
+msgstr "停止移动"
+
+msgid "Toggle Build"
+msgstr "切换建造"
+
+msgid "Toggle Block"
+msgstr "切换格挡"
+
+msgid "Toggle Hold"
+msgstr "切换坚守"
+
+msgid "Toggle Passive"
+msgstr "切换被动"
+
+msgid "Toggle Jobs"
+msgstr "切换工作"
+
+msgid "Toggle Ranged"
+msgstr "切换远程"
+
+msgid "Toggle Sneak"
+msgstr "切换潜行"
+
+msgid "Toggle Taunt"
+msgstr "切换嘲讽"
+
+msgid "Cycle Run Speed"
+msgstr "循环移动速度"
+
+msgid "Medic"
+msgstr "医疗"
+
+msgid "Rescue"
+msgstr "救助"
+
+msgid "Prospect"
+msgstr "探矿"
+
+msgid "Rest"
+msgstr "休息"
+
+msgid "Put Down"
+msgstr "放下"
+
+msgid "no {1} build"
+msgstr "没有 {1} 构建"
+
+msgid "Smooths edges and upscales the render. Active: {1}"
+msgstr "平滑边缘并放大渲染。当前：{1}"
+
+msgid "Meitou's texts not yet translated"
+msgstr "Meitou 的文本尚未翻译"
+
+msgid "Skip v{1}"
+msgstr "跳过 v{1}"
+
+msgid "New version {1}"
+msgstr "新版本 {1}"
+
+msgid "Game language set to {1}. It applies when the game starts."
+msgstr "游戏语言已设为 {1}，游戏启动时生效。"
+
+msgid "Could not update Kenshi's language setting: {1}"
+msgstr "无法更新 Kenshi 的语言设置：{1}"
+
+msgid "No {1} found"
+msgstr "未找到 {1}"
+
+msgid "The preset sets the render scale; MetalFX temporal is the default and spatial is an alternative. Native is the fallback when MetalFX is unavailable."
+msgstr "预设决定渲染比例；默认为 MetalFX 时间性，空间性是备选。MetalFX 不可用时回退为原生。"
+
+msgid "How finely the terrain follows the ground."
+msgstr "地形贴合地面的精细程度。"
+
+msgid "How many layers and march steps the ground relief uses; lower is cheaper."
+msgstr "地面起伏使用的层数和步进次数；数值越低越省性能。"
+
+msgid "Lower is cheaper and softer."
+msgstr "数值越低越省性能，效果也越柔和。"
+
+msgid "How much of each pixel's light glows into its surroundings."
+msgstr "每个像素的光向周围溢出的程度。"
+
+msgid "Fade dust and fog sprites where they meet the ground and walls. Off keeps them hard-edged."
+msgstr "让尘土与雾气贴图在与地面、墙壁相接处淡出。关闭则保持硬边。"
+
+msgid "Bounced light indoors too."
+msgstr "室内也使用反弹光。"
+
+msgid "Let bright light glow softly into its surroundings, as in the eye."
+msgstr "让强光柔和地向四周晕开，如同人眼所见。"
+
+msgid "Fade cloud shadows in fog, so foggy places stay lit."
+msgstr "在雾中淡化云影，让有雾的地方依然明亮。"
+
+msgid "Splash blood on walls, buildings and rocks as well as the ground; pools stay on floors."
+msgstr "除了地面，墙壁、建筑和岩石上也会溅上血迹；血泊只出现在地板上。"
+
+msgid "Give the ground texture depth."
+msgstr "让地面贴图有纵深感。"
+
+msgid "Raise the nearby ground into real bumps and ridges that cast shadows."
+msgstr "把近处地面真正隆起成会投下阴影的凹凸和脊线。"
+
+msgid "Round off the flat facets of rocks and cliffs up close."
+msgstr "把近处岩石和崖壁的平直棱角磨圆。"
+
+msgid "Smooth the outline of hills and crests against the sky."
+msgstr "让山丘和山脊映在天边的轮廓更平滑。"
+
+msgid "Use generated simpler meshes for distant characters."
+msgstr "远处角色使用生成的简化网格。"
+
+msgid "Draw inventory item icons supersampled, without jagged edges."
+msgstr "以超采样绘制物品栏图标，边缘没有锯齿。"
+
+msgid "Draw blood on every terrain cell within decal range, not only the 8 nearest."
+msgstr "贴花范围内的每块地形都会绘制血迹，而不只是最近的 8 块。"
+
+msgid "Keep the lamps of building interiors lit by day too. Stealth counts their light."
+msgstr "白天也点亮建筑内部的灯。潜行判定会把它们的灯光算进去。"
+
+msgid "Select characters and press the interface (the game's left button). Binding it elsewhere moves the other buttons along."
+msgstr "选择角色并按下界面键（游戏里的左键）。改绑到别处时，其余按键会随之顺延。"
+
+msgid "Give orders and open menus (the game's right button)."
+msgstr "下达指令、打开菜单（游戏里的右键）。"
+
+msgid "Open the Tutorials window, or close it."
+msgstr "打开或关闭教程窗口。"
+
+msgid "Interface"
+msgstr "界面"
+
+msgid "Gameplay"
+msgstr "玩法"
+
+msgid "Sky & weather"
+msgstr "天空与天气"
+
+msgid "Colour"
+msgstr "色彩"
+
+msgid "VSync"
+msgstr "垂直同步"
+
+msgid "Frame generation (FSR 3)"
+msgstr "帧生成（FSR 3）"
+
+msgid "Ground relief quality"
+msgstr "地面起伏质量"
+
+msgid "Light shafts quality"
+msgstr "光柱质量"
+
+msgid "Ground relief depth"
+msgstr "地面起伏深度"
+
+msgid "Ground displacement distance"
+msgstr "地面置换距离"
+
+msgid "Ground parallax distance"
+msgstr "地面视差距离"
+
+msgid "Bloom strength"
+msgstr "泛光强度"
+
+msgid "Shadow cascade 5"
+msgstr "阴影级联 5"
+
+msgid "Bloom"
+msgstr "泛光"
+
+msgid "Ground parallax"
+msgstr "地面视差"
+
+msgid "Ground displacement"
+msgstr "地面置换"
+
+msgid "Rock smoothing"
+msgstr "岩石平滑"
+
+msgid "Terrain outline refinement"
+msgstr "地形轮廓细化"
+
+msgid "Light shafts"
+msgstr "光柱"
+
+msgid "Character levels"
+msgstr "角色层级"
+
+msgid "Interior lamps"
+msgstr "室内灯光"
+
+msgid "Item icons"
+msgstr "物品图标"
+
+msgid "Blood cells"
+msgstr "血迹地形格"
+
+msgid "Blood on surfaces"
+msgstr "表面血迹"
+
+msgid "Mesh welding"
+msgstr "网格合并"
+
+msgid "Bolt tracers"
+msgstr "弩箭弹道"
+
+msgid "Fog"
+msgstr "雾"
+
+msgid "Terrain relief"
+msgstr "地形起伏"
+
+msgid "Ambient light"
+msgstr "环境光"
+
+msgid "Strength"
+msgstr "强度"
+
+msgid "Air"
+msgstr "空气散射"
+
+msgid "Air at dawn and dusk"
+msgstr "黎明与黄昏散射"
+
+msgid "Sound range"
+msgstr "声音范围"
+
+msgid "Auto save time (minutes)"
+msgstr "自动存档间隔（分钟）"
+
+msgid "Harpoon limit"
+msgstr "鱼叉上限"
+
+msgid "Feedback button"
+msgstr "反馈按钮"
+
+msgid "Edge scrolling"
+msgstr "边缘滚屏"
+
+msgid "Hear from"
+msgstr "听音位置"
+
+msgid "Town attacks frequency"
+msgstr "城镇袭击频率"
+
+msgid "Dismemberment"
+msgstr "断肢"
+
+msgid "Auto save"
+msgstr "自动存档"
+
+msgid "Tutorials"
+msgstr "教程"
+
+msgid "Reset Tutorials"
+msgstr "重置教程"
+
+msgid "Weak punch reach"
+msgstr "弱拳攻击距离"
+
+msgid "Walls inside buildings"
+msgstr "建筑内的墙体"
+
+msgid "Production far away"
+msgstr "远处生产"
+
+msgid "Decapitation"
+msgstr "斩首"
+
+msgid "Advanced ragdolls"
+msgstr "高级布娃娃"
+
+msgid "Pause after loading"
+msgstr "载入后暂停"
+
+msgid "Portrait menu"
+msgstr "头像菜单"
+
+msgid "Keep textures at all squads"
+msgstr "所有小队保持贴图"
+
+msgid "Look"
+msgstr "外观"
+
+msgid "Quality"
+msgstr "画质"
+
+msgid "The game as it ships, or Meitou with a look preset."
+msgstr "按原版游戏的样子，或用 Meitou 的外观预设。"
+
+msgid "Distances, shadows and detail together. Low is the same as --low-end."
+msgstr "同时设置距离、阴影和细节。低等同于 --low-end。"
+
+msgid "High impact"
+msgstr "高开销"
+
+msgid "Medium impact"
+msgstr "中开销"
+
+msgid "Low impact"
+msgstr "低开销"
+
+msgid "No impact"
+msgstr "无开销"
+
+msgid "Ultra"
+msgstr "极高"
+
+msgid "Click to install"
+msgstr "点击安装"
+
+msgid "Steam sees the game as Kenshi: the overlay, play time and Steam's screenshot key. Needs the Steam copy of Kenshi."
+msgstr "让 Steam 把游戏当作 Kenshi：可以用覆盖层、记录游戏时长，也用 Steam 的截图键。需要使用 Steam 版 Kenshi。"
+
+msgid "Auto uses Vulkan when MoltenVK is installed, otherwise Metal. This overrides --renderer in Launch arguments."
+msgstr "自动：装了 MoltenVK 就用 Vulkan，否则用 Metal。此项会覆盖启动参数里的 --renderer。"
+
+msgid "A soft GPU allocation budget, not a hard reservation. Higher values keep more textures and draw distance resident; Metal uses unified memory shared with macOS and other apps."
+msgstr "显存预算只是给 GPU 的软上限，不是硬性预留。数值越高，常驻的贴图和绘制距离越多；Metal 用的是与 macOS 及其他应用共享的统一内存。"
+
+msgid "Launch as Kenshi on Steam"
+msgstr "以 Kenshi 身份在 Steam 上启动"
+
+msgid "Renderer"
+msgstr "渲染器"
+
+msgid "Metal memory budget"
+msgstr "Metal 显存预算"
+
+msgid "Setup"
+msgstr "配置"
+
+msgid "Check"
+msgstr "检查"
+
+msgid "Help"
+msgstr "帮助"
+
+msgid "MODS"
+msgstr "模组"
+
+msgid "Mods"
+msgstr "模组"
+
+msgid "Report to the roadmap"
+msgstr "报告给路线图"
+
+msgid "Set up Meitou"
+msgstr "设置 Meitou"
+
+msgid "Meitou needs Kenshi: it does not include Kenshi's data. You must own Kenshi and point Meitou at its folder."
+msgstr "Meitou 需要 Kenshi 本体：它不含 Kenshi 的游戏数据。你需要拥有 Kenshi，并把 Meitou 指向它的文件夹。"
+
+msgid "Where game versions are downloaded and installed (in its versions folder)."
+msgstr "游戏版本下载和安装的位置（各自放在 versions 文件夹里）。"
+
+msgid "How?"
+msgstr "怎么做？"
+
+msgid "These can be changed later in Settings. You can install Meitou now and add Kenshi afterwards."
+msgstr "这些之后都能在「设置」里修改。也可以现在就装 Meitou，之后再指定 Kenshi。"
+
+msgid "Auto uses Vulkan when MoltenVK is installed, otherwise Metal."
+msgstr "自动：装了 MoltenVK 就用 Vulkan，否则用 Metal。"
+
+msgid "The folder with data/gamedata.base."
+msgstr "含 data/gamedata.base 的文件夹。"
+
+msgid "The folder with data/gamedata.base; Steam workshop mods found."
+msgstr "含 data/gamedata.base 的文件夹；已找到 Steam 创意工坊模组。"
+
+msgid "Not found: browse to the folder with data/gamedata.base."
+msgstr "没找到：请浏览到含 data/gamedata.base 的文件夹。"
+
+msgid "Kenshi not found: set its folder in Settings"
+msgstr "未找到 Kenshi：请在「设置」里指定它的文件夹"
+
+msgid "Not found. Browse to your Kenshi folder (it contains data/gamedata.base)."
+msgstr "没找到。请浏览到你的 Kenshi 文件夹（里面应有 data/gamedata.base）。"
+
+msgid "Not a Kenshi folder: data/gamedata.base not found."
+msgstr "不是 Kenshi 文件夹：里面没有 data/gamedata.base。"
+
+msgid "Loading"
+msgstr "载入中"
+
+msgid "No news yet."
+msgstr "暂无新闻。"
+
+msgid "Could not read the mods: {1}"
+msgstr "无法读取模组：{1}"
+
+msgid "Version {1}. The update check failed: {2}"
+msgstr "版本 {1}。检查更新失败：{2}"
+
+msgid "Yes"
+msgstr "是"
+
+msgid "Install a version first (Versions): its settings are shown here."
+msgstr "先安装一个版本（版本页），这里才会显示它的设置。"
+
+msgid "Every graphics setting back to the game's defaults, also those only in the game's Tab panel."
+msgstr "把所有画面设置恢复为游戏默认值，包括只在游戏 Tab 面板里的那些。"
+
+msgid "{1}: {2} settings"
+msgstr "{1}：{2} 项设置"
+
+msgid "Faithful"
+msgstr "忠实"
+
+msgid "As the game ships"
+msgstr "与原版一致"
+
+msgid "1 change from the game"
+msgstr "与原版有 1 处不同"
+
+msgid "1 unsaved change"
+msgstr "1 处未保存的改动"
+
+msgid "Built in"
+msgstr "内置"
+
+msgid "Example"
+msgstr "示例"
+
+msgid "Revert"
+msgstr "还原"
+
+msgid "Save as"
+msgstr "另存为"
+
+msgid "Share"
+msgstr "分享"
+
+msgid "Paste"
+msgstr "粘贴"
+
+msgid "{1} deleted; the look is Meitou."
+msgstr "{1} 已删除；外观回到 Meitou。"
+
+msgid "{1}'s code is on the clipboard: paste it on Discord, or with Paste."
+msgstr "{1} 的分享码已在剪贴板：可以贴到 Discord，或用「粘贴」载入。"
+
+msgid "{1} pasted and loaded (made on Meitou {2})."
+msgstr "已粘贴并载入 {1}（制作于 Meitou {2}）。"
+
+msgid "The clipboard holds no preset code (MT1:...). Copy one with Share first."
+msgstr "剪贴板里没有预设分享码（MT1:...）。请先用「分享」复制一个。"
+
+msgid "Preset name"
+msgstr "预设名称"
+
+msgid "{1} saved."
+msgstr "{1} 已保存。"
+
+msgid "Detecting"
+msgstr "检测中"
+
+msgid "Detect"
+msgstr "检测"
+
+msgid "The game is running: close it before detecting the preset."
+msgstr "游戏正在运行：请先关闭再检测预设。"
+
+msgid "Detected: {1}"
+msgstr "已检测：{1}"
+
+msgid "Could not detect the hardware: {1}"
+msgstr "无法检测硬件：{1}"
+
+msgid "Back to the look's value"
+msgstr "恢复为外观设定的值"
+
+msgid "Graphics settings saved; the game reads them when it starts."
+msgstr "画面设置已保存；游戏启动时会读取。"
+
+msgid "Roadmap system"
+msgstr "路线图系统"
+
+msgid "Search"
+msgstr "搜索"
+
+msgid "No match"
+msgstr "没有匹配项"
+
+msgid "Works for me"
+msgstr "我用着正常"
+
+msgid "Broken"
+msgstr "有问题"
+
+msgid "Attach the end of this version's log.txt (it can show folder names, such as your user name)"
+msgstr "附上这个版本 log.txt 的末尾（其中可能露出文件夹名，例如你的用户名）"
+
+msgid "Send report"
+msgstr "发送报告"
+
+msgid "Tell the roadmap how one of Kenshi's systems plays in Meitou. Bugs with steps are best as a GitHub issue."
+msgstr "告诉路线图 Kenshi 的某个系统在 Meitou 里表现如何。能讲清步骤的 bug 最好提到 GitHub issue。"
+
+msgid "System"
+msgstr "系统"
+
+msgid "Meitou version"
+msgstr "Meitou 版本"
+
+msgid "Pick a system."
+msgstr "请选择一个系统。"
+
+msgid "Say what happened."
+msgstr "请说明发生了什么。"
+
+msgid "Sending…"
+msgstr "发送中…"
+
+msgid "Not sent"
+msgstr "未发送"
+
+msgid "Save as a new preset"
+msgstr "另存为新预设"
+
+msgid "Name"
+msgstr "名称"
+
+msgid "Save preset"
+msgstr "保存预设"
+
+msgid "Nightly builds are made twice a day from the newest code and are not tested. They may be unstable, crash, and corrupt your save files: back up your saves before playing one.\n\nContinue with nightly builds?"
+msgstr "每日构建每天用最新代码生成两次，而且未经过测试。它可能不稳定、崩溃，甚至损坏你的存档：玩之前请先备份存档。\n\n要继续使用每日构建吗？"
+
+msgid "No"
+msgstr "否"
+
+# ---- the launcher's texts built at run time, its tooltips and the 1.5.0 page ----
+
+msgid "latest nightly"
+msgstr "最新的每日构建"
+
+msgid "latest"
+msgstr "最新版"
+
+msgid "Play {1}"
+msgstr "开始游玩 {1}"
+
+msgid "Install {1}"
+msgstr "安装 {1}"
+
+msgid "Get launcher {1}"
+msgstr "获取启动器 {1}"
+
+msgid "Latest ({1})"
+msgstr "最新（{1}）"
+
+msgid "Download and install {1}"
+msgstr "下载并安装 {1}"
+
+msgid "Download and install {1}; the arrow plays an installed version"
+msgstr "下载并安装 {1}；箭头用于启动已安装的版本"
+
+msgid "Start Meitou {1}"
+msgstr "启动 Meitou {1}"
+
+msgid "No release with a {1} build found yet"
+msgstr "还没有 {1} 版本的发布"
+
+msgid "Cancel the download of {1}"
+msgstr "取消 {1} 的下载"
+
+msgid "Downloading {1}"
+msgstr "正在下载 {1}"
+
+msgid "Downloading {1}..."
+msgstr "正在下载 {1}……"
+
+msgid "Unpacking {1}..."
+msgstr "正在解包 {1}……"
+
+msgid "{1} installed."
+msgstr "{1} 已安装。"
+
+msgid "Download of {1} cancelled."
+msgstr "{1} 的下载已取消。"
+
+msgid "Install failed: {1}"
+msgstr "安装失败：{1}"
+
+msgid "{1} is not installed."
+msgstr "{1} 未安装。"
+
+msgid "{1} uninstalled."
+msgstr "{1} 已卸载。"
+
+msgid "Could not remove {1}: {2}"
+msgstr "无法删除 {1}：{2}"
+
+msgid "Launcher {1} is available."
+msgstr "启动器 {1} 可用。"
+
+msgid "Updating the launcher: {1}%"
+msgstr "正在更新启动器：{1}%"
+
+msgid "Launcher update failed: {1}"
+msgstr "启动器更新失败：{1}"
+
+msgid "Meitou {1} is not installed any more."
+msgstr "Meitou {1} 已不存在。"
+
+msgid "Meitou {1} started."
+msgstr "Meitou {1} 已启动。"
+
+msgid "Meitou {1} started with {2}{3}."
+msgstr "Meitou {1} 已用 {2}{3} 启动。"
+
+msgid "Meitou {1} stopped with an error (exit code {2}); its log is {3}"
+msgstr "Meitou {1} 出错停止（退出码 {2}）；日志在 {3}"
+
+msgid "Could not start Meitou {1}: {2}"
+msgstr "无法启动 Meitou {1}：{2}"
+
+msgid "Installing"
+msgstr "正在安装"
+
+msgid "click to cancel"
+msgstr "点击取消"
+
+msgid "The launcher's and the game's settings: {1}"
+msgstr "启动器与游戏的设置目录：{1}"
+
+msgid "'{1}' is not a Kenshi folder (data/gamedata.base not found)."
+msgstr "「{1}」不是 Kenshi 文件夹（找不到 data/gamedata.base）。"
+
+msgid "Renderer: {1}; Play starts the game with it."
+msgstr "渲染器：{1}；开始游戏时使用它。"
+
+msgid "Metal memory budget: {1} MB."
+msgstr "Metal 显存预算：{1} MB。"
+
+msgid "Copied '{1}' and opened brew.sh; install Homebrew, run it in Terminal, then press Check."
+msgstr "已复制「{1}」并打开 brew.sh；装好 Homebrew 后在终端运行它，再按“检查”。"
+
+msgid "Could not move the versions to {1}: {2}"
+msgstr "无法把版本移动到 {1}：{2}"
+
+msgid "Could not save the mod list: {1}"
+msgstr "无法保存模组列表：{1}"
+
+msgid "Mod list saved: {1} enabled."
+msgstr "模组列表已保存：已启用 {1} 个。"
+
+msgid "{1} of {2} enabled"
+msgstr "已启用 {1} / {2}"
+
+msgid "Needs {1}"
+msgstr "需要 {1}"
+
+msgid " (not enabled above it: {1})"
+msgstr "（未在上方启用：{1}）"
+
+msgid "Preset '{1}' saved."
+msgstr "预设「{1}」已保存。"
+
+msgid "Preset '{1}' applied (not saved yet)."
+msgstr "预设「{1}」已应用（尚未保存）。"
+
+msgid " Not on disk: {1}."
+msgstr " 不在磁盘上：{1}。"
+
+msgid "Preset '{1}' deleted."
+msgstr "预设「{1}」已删除。"
+
+msgid "Skipped {1}: the arrow's menu can still install it."
+msgstr "已跳过 {1}：仍可从箭头菜单安装它。"
+
+msgid "Play starts Meitou {1}."
+msgstr "开始游戏会启动 Meitou {1}。"
+
+msgid "{1} releases · {2} installed"
+msgstr "{1} 个发布 · 已安装 {2} 个"
+
+msgid "1 post"
+msgstr "1 篇文章"
+
+msgid "{1} posts"
+msgstr "{1} 篇文章"
+
+msgid "Offline: saved posts"
+msgstr "离线：显示已保存的文章"
+
+msgid "{1} changes from the game"
+msgstr "与游戏不同：{1} 处"
+
+msgid "{1} unsaved changes"
+msgstr "{1} 处未保存"
+
+msgid "Mine · Meitou {1}"
+msgstr "我的 · Meitou {1}"
+
+msgid "Could not delete the preset: {1}"
+msgstr "无法删除预设：{1}"
+
+msgid "Could not write the preset: {1}"
+msgstr "无法写入预设：{1}"
+
+msgid "Could not write {1}: {2}"
+msgstr "无法写入 {1}：{2}"
+
+msgid "Could not read the roadmap: {1}"
+msgstr "无法读取路线图：{1}"
+
+msgid "Not sent: {1}"
+msgstr "未发送：{1}"
+
+msgid "Could not use {1}: {2}"
+msgstr "无法使用 {1}：{2}"
+
+msgid "Checking GitHub for releases..."
+msgstr "正在检查 GitHub 上的发布……"
+
+msgid "No mods found in Kenshi's mods folder or among its Steam workshop items."
+msgstr "Kenshi 的 mods 文件夹和 Steam 创意工坊里都没有模组。"
+
+msgid "Check again for a Vulkan loader"
+msgstr "重新检查 Vulkan 加载器"
+
+msgid "Copy the Homebrew command for Vulkan, or open brew.sh"
+msgstr "复制 Vulkan 的 Homebrew 命令，或打开 brew.sh"
+
+msgid "How to get Kenshi on macOS"
+msgstr "如何在 macOS 上使用 Kenshi"
+
+msgid "It supports me in the development of Meitou. ko-fi.com/martinvlcek"
+msgstr "这能支持我开发 Meitou。ko-fi.com/martinvlcek"
+
+msgid "Open the installed version's folder"
+msgstr "打开已安装版本的文件夹"
+
+msgid "Tell the roadmap a system works or is broken"
+msgstr "告诉路线图某个功能是否正常"
+
+msgid "Write data/mods.cfg (Play does this too)"
+msgstr "写入 data/mods.cfg（开始游戏时也会写入）"
+
+msgid "Choose the preset for this computer's graphics card, memory and processor."
+msgstr "根据这台电脑的显卡、内存和处理器选择预设。"
+
+msgid "Don't offer this version again; a newer one will be"
+msgstr "不再提示这个版本；有更新版本时会再提示"
+
+msgid "Unstable: daily builds of the newest code, untested. They may crash or corrupt save files; off, only full releases are offered."
+msgstr "不稳定：每日构建来自最新代码，未经测试，可能崩溃或损坏存档；关闭后只提供正式版。"
+
+msgid "Clarity multiplier"
+msgstr "清澈度倍率"
+
+msgid "Reflection"
+msgstr "反射"
+
+msgid "See-through distance"
+msgstr "透视距离"
+
+msgid "Faster with Meitou"
+msgstr "Meitou 更快"
+
+msgid "How edges are smoothed."
+msgstr "边缘如何平滑。"
+
+msgid "The sky's light in shade, at night and indoors."
+msgstr "阴影处、夜间和室内的天光。"
+
+msgid "Depth on the ground and smoother rocks and hills, from tessellation and parallax."
+msgstr "用曲面细分和视差让地面有真实的起伏，岩石和山丘更平滑。"
+
+msgid "Safe: the conservative default; the guard shortens ranges and evicts caches sooner."
+msgstr "安全：保守的默认值；保护机制会更早缩短距离并清出缓存。"
+
+msgid "Auto: Vulkan."
+msgstr "自动：Vulkan。"
+
+msgid "Adjust ground relief depth."
+msgstr "调整地面浮雕深度。"
+
+msgid "Adjust ground displacement distance."
+msgstr "调整地面位移距离。"
+
+msgid "Adjust ground parallax distance."
+msgstr "调整地面视差距离。"
+
+msgid "Enable bolt tracers."
+msgstr "启用弩箭拖尾。"
+
+msgid "Enable mesh welding."
+msgstr "启用网格焊接。"
+
+msgid "Shows a generated frame between each two rendered ones through AMD's FSR 3 frame-interpolation layer: nearly twice the frames shown, with a little more input delay. Works with TAA, FSR and DLSS; needs the FidelityFX library (amd_fidelityfx_vk.dll, libamd_fidelityfx_vk.so). Takes effect at start-up."
+msgstr "通过 AMD 的 FSR 3 帧插值层，在每两帧已渲染的画面之间生成一帧：显示的帧数几乎翻倍，输入延迟略有增加。可与 TAA、FSR 和 DLSS 一起使用；需要 FidelityFX 库（amd_fidelityfx_vk.dll、libamd_fidelityfx_vk.so）。启动时生效。"
+
+msgid "Faithful runs the world, then draws it, as the game does. Meitou runs the next world tick while the frame is drawn whenever the world is busy (big fights, crowds), Always on every frame: much higher frame rates with many characters, up to 33 ms more input delay."
+msgstr "忠实：先运行世界再绘制，与游戏一致。Meitou／繁忙时：世界繁忙（大混战、人群拥挤）时，在绘制这一帧的同时运行下一个世界步进。Meitou／每帧：每帧都并行，角色很多时帧率会高得多，最多增加 33 毫秒输入延迟。"
+
+msgid "Faithful: 8 nearest"
+msgstr "忠实：最近 8 格"
+
+msgid "Faithful: CSM"
+msgstr "忠实：CSM"
+
+msgid "Faithful: black haze"
+msgstr "忠实：黑色雾气"
+
+msgid "Faithful: clip"
+msgstr "忠实：截断"
+
+msgid "Faithful: flat"
+msgstr "忠实：平面"
+
+msgid "Faithful: flat ambient"
+msgstr "忠实：均匀环境光"
+
+msgid "Faithful: flat haze"
+msgstr "忠实：均匀雾气"
+
+msgid "Faithful: flat night"
+msgstr "忠实：均匀夜景"
+
+msgid "Faithful: full"
+msgstr "忠实：完整"
+
+msgid "Faithful: full detail"
+msgstr "忠实：完整细节"
+
+msgid "Faithful: game-like"
+msgstr "忠实：接近原版"
+
+msgid "Faithful: hard-edged"
+msgstr "忠实：硬边"
+
+msgid "Faithful: original ambient"
+msgstr "忠实：原版环境光"
+
+msgid "Faithful: per layer"
+msgstr "忠实：按图层"
+
+msgid "Faithful: per-face tangents"
+msgstr "忠实：逐面切线"
+
+msgid "Faithful: plain"
+msgstr "忠实：普通"
+
+msgid "Faithful: starfield texture"
+msgstr "忠实：星空贴图"
+
+msgid "Faithful: strength 1"
+msgstr "忠实：强度 1"
+
+msgid "Faithful: terrain only"
+msgstr "忠实：仅地面"
+
+msgid "Faithful: the game's"
+msgstr "忠实：游戏自带"
+
+msgid "Faithful: the meshes' own"
+msgstr "忠实：网格自带"
+
+msgid "Meitou: SSAO"
+msgstr "Meitou：SSAO"
+
+msgid "Meitou: airglow"
+msgstr "Meitou：气辉"
+
+msgid "Meitou: billboards"
+msgstr "Meitou：广告牌"
+
+msgid "Meitou: bounced light"
+msgstr "Meitou：反弹光"
+
+msgid "Meitou: by size"
+msgstr "Meitou：按尺寸"
+
+msgid "Meitou: faded"
+msgstr "Meitou：淡出"
+
+msgid "Meitou: farther"
+msgstr "Meitou：更远"
+
+msgid "Meitou: generated levels"
+msgstr "Meitou：生成的层级"
+
+msgid "Meitou: hybrid, graded"
+msgstr "Meitou：混合 + 调色"
+
+msgid "Meitou: on"
+msgstr "Meitou：开"
+
+msgid "Meitou: on the land"
+msgstr "Meitou：投在地面"
+
+msgid "Meitou: planet light"
+msgstr "Meitou：行星光"
+
+msgid "Meitou: procedural"
+msgstr "Meitou：程序生成"
+
+msgid "Meitou: ray-traced probes"
+msgstr "Meitou：光线追踪探针"
+
+msgid "Meitou: relief march"
+msgstr "Meitou：浮雕步进"
+
+msgid "Meitou: scotopic blue"
+msgstr "Meitou：暗视蓝"
+
+msgid "Meitou: shadowed haze"
+msgstr "Meitou：带阴影的雾"
+
+msgid "Meitou: soft"
+msgstr "Meitou：柔和"
+
+msgid "Meitou: soft, far terrain"
+msgstr "Meitou：柔和，远处地形"
+
+msgid "Meitou: streaks"
+msgstr "Meitou：拖尾"
+
+msgid "Meitou: strength 0.5"
+msgstr "Meitou：强度 0.5"
+
+msgid "Meitou: strength 0.93"
+msgstr "Meitou：强度 0.93"
+
+msgid "Meitou: subsurface"
+msgstr "Meitou：次表面散射"
+
+msgid "Meitou: supersampled"
+msgstr "Meitou：超采样"
+
+msgid "Meitou: tessellated"
+msgstr "Meitou：曲面细分"
+
+msgid "Meitou: up to 32"
+msgstr "Meitou：最多 32"
+
+msgid "Meitou: volumetric"
+msgstr "Meitou：体积"
+
+msgid "Meitou: walls, floors, objects"
+msgstr "Meitou：墙面、地面和物体"
+
+msgid "Meitou: waves and surf"
+msgstr "Meitou：波浪与浪花"
+
+msgid "Meitou: welded, averaged tangents"
+msgstr "Meitou：焊接并平均切线"
+
+msgid "GitHub answered {1} {2}"
+msgstr "GitHub 返回 {1} {2}"
+
+msgid "; showing the last list"
+msgstr "；显示上次的列表"
+
+msgid "GitHub not reachable ({1})"
+msgstr "无法连接 GitHub（{1}）"
+
+msgid "News: GitHub answered {1}"
+msgstr "新闻：GitHub 返回 {1}"
+
+msgid "News: GitHub not reachable"
+msgstr "新闻：无法连接 GitHub"
+
+msgid "; showing what was read before"
+msgstr "；显示之前读取到的内容"
+
+msgid "Version {1} for {2}. Updates itself from GitHub."
+msgstr "版本 {1}（{2}）。从 GitHub 自动更新。"
+
+msgid "Version {1} for {2}. Not installed by its Setup, so updates open the release page."
+msgstr "版本 {1}（{2}）。不是由安装程序安装的，更新会打开发布页。"

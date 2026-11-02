@@ -48,9 +48,11 @@ Addresses are `kenshi_x64.exe` (1.0.68).
   campaigns, construction, fixtures, discoveries). Layout captions the original leaves English stay English.
 - **Meitou's own texts** (`MeitouTranslations`): the launcher, the title menu (`UpperTr`) and the settings menu's drawn captions, hints and choices
   are not in Kenshi's catalog, so after it `Loc.Tr` looks them up in a second gettext catalog: `src/Meitou.Core/Localisation/locale/<code>.po`
-  (embedded; `pt_BR` so far), with `locale/<code>/meitou.po` in the Kenshi folder read over it (a user or mod adds a language or overrides a
+  (embedded; `pt_BR` and `zh_CN` so far), with `locale/<code>/meitou.po` in the Kenshi folder read over it (a user or mod adds a language or overrides a
   string without a rebuild). Same format and rules as the game's catalog, exact lookups, English msgids; the launcher reads the same files for
-  its own labels. Settings rows measure the active font's wrapped label and hint and grow to fit.
+  its own labels. Settings rows measure the active font's wrapped label and hint and grow to fit. A text the code builds with a value in it
+  keeps the English sentence as its msgid with the game's `{1}`, `{2}` placeholders (`LauncherText.Translate("Version {1} for {2}.", …)`), so
+  the catalog matches it and a translation may reorder the holes.
 - **Fonts, tips, names**: through the overlay folder (`OgreScriptResources.ForInstall`) and `Loc.FindTextFile`.
 - **New-game option help**: `NewGameHelpCatalog` reads the installed English `main.pot` source references and passes the exact msgid through `Loc.Tr`; no paraphrases or translated paragraphs are embedded. Missing translations fall back to the original English; a missing template leaves help empty. Font resources use the active locale overlay.
 - All text files are read and written as UTF-8.

@@ -42,13 +42,24 @@ static class LauncherText
     }
 
     /// <summary>
+    /// <see cref="Translate(string)"/> of a text with holes: the catalog's key is the English text with the same <c>{1}</c>, <c>{2}</c> placeholders
+    /// the game's own messages use (1-based, so a translation may put them in its own order), filled with <paramref name="args"/> afterwards.
+    /// A text built at run time cannot be a key, so the code builds its template instead.
+    /// </summary>
+    public static string Translate(string text, params object?[] args) => Loc.Format(Translate(text), args);
+
+    /// <summary>
     /// Puts every label under <paramref name="root"/> in the active language; <paramref name="originals"/> remembers each control's English
-    /// so a later switch starts from it. Lists, combo boxes, the release notes and the news hold data, not labels, and are skipped.
+    /// so a later switch starts from it. Lists, combo boxes, the release notes and the news hold data, not labels, and are skipped, but a
+    /// placeholder and a tooltip are labels on any of them.
     /// </summary>
     public static void TranslateTree(Control root, IDictionary<Control, string> originals)
     {
         void Visit(Control control)
         {
+            // A placeholder is a label too, even on a control whose items hold data (a combo box's list, a text box's text).
+            if (control is TextBox textBox && textBox.PlaceholderText is { } placeholder) textBox.PlaceholderText = Translate(placeholder);
+            else if (control is ComboBox combo && combo.PlaceholderText is { } hint) combo.PlaceholderText = Translate(hint);
             if (control is ComboBox or ListBox or ContentControl { Name: "ReleaseNotes" } or StackPanel { Name: "NewsPanel" }) return;
             if (control is TextBlock text && text.Text is { } value)
             {
@@ -60,6 +71,7 @@ static class LauncherText
                 if (!originals.ContainsKey(control)) originals[control] = Source(content);
                 button.Content = Translate(originals[control]);
             }
+            if (ToolTip.GetTip(control) is string tip) ToolTip.SetTip(control, Translate(tip));
             foreach (var child in control.GetVisualChildren())
                 if (child is Control nested) Visit(nested);
         }

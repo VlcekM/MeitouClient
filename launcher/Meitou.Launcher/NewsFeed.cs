@@ -67,11 +67,11 @@ public sealed class NewsFeed(HttpClient http)
                 await File.WriteAllTextAsync(etagFile, response.Headers.ETag?.ToString() ?? "", ct);
             }
             else if (response.StatusCode == HttpStatusCode.NotFound) listJson = "[]";
-            else problem = $"News: GitHub answered {(int)response.StatusCode}";
+            else problem = LauncherText.Translate("News: GitHub answered {1}", (int)response.StatusCode);
         }
         catch (Exception e) when (e is HttpRequestException or OperationCanceledException or IOException)
         {
-            problem = "News: GitHub not reachable" + (listJson is null ? "" : "; showing what was read before");
+            problem = LauncherText.Translate("News: GitHub not reachable") + (listJson is null ? "" : LauncherText.Translate("; showing what was read before"));
         }
         if (listJson is null) return ([], problem);
 
