@@ -38,6 +38,8 @@ public sealed partial class FixtureRegistry
 
     public int? PropertyOwner(string building) => properties.TryGetValue(building, out var p) ? p.Owner : null;
 
+    internal Vector3? PropertyPosition(string building) => properties.TryGetValue(building, out var p) ? p.Building.Position : null;
+
     /// <summary>Whether <paramref name="faction"/> owns a house in the town site <paramref name="site"/> (a registered site's properties only).</summary>
     public bool OwnsPropertyIn(int site, int faction)
     {
