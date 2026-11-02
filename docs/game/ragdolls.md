@@ -124,7 +124,7 @@ and keeps those leg ragdoll bits on; the character tick `FUN_1405d00b0` sets pos
 - Posture ≠ 0 picks category 5 GROUNDED lower clips (`AnimHuman_LowerCombat` `FUN_14051fc60`); base data
   (rebirth.mod): `crawling move`, `crawl idle up` (any combat mode), `crawl idle down` (out of combat), `crawl use`.
 - Defence techniques must have `is prone` equal to posture ≠ 0 (`FUN_140887970`): a crawler has no block or
-  dodge (no prone one exists). The attack pick (`FUN_1408876d0`) applies the same test (**Observed**): a crawler
+  dodge (no prone one exists). The attack pick (`FUN_1408876d0`) applies the same test (**Verified**: disassembly 1408877d4-1408877f9 rejects burden above the maximum, then the prone mismatch, whatever the burden; the decompile prints a spurious `<` or `==` split): a crawler
   attacks only with `ground attack L/R`. Nothing in the fight code ends a crawler's fight.
 - Speed (`FUN_140886460`, **Verified**): a final override after the water and sneak caps, 5.0 crippled, 7.0 at posture 1. The crippled flag
   (medical +0x160) is set only by the medical tick, so nobody is crippled before their first one (Meitou: `Speed.Crippled`, `MedicalState.Crawling`).
