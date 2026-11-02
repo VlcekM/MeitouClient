@@ -28,8 +28,15 @@ sealed partial class PlayerInterface
             if (alpha <= 0 || Project(head) is not { } at) continue;
             // Kenshi_StandardFont_Large / _Medium: 24 / 20 points at resolution 50, i.e. size x 50 / 72 pixels on a 1080 high screen.
             float em = (bubble.Large ? 24 : 20) * 50f / 72f * scale, lineHeight = em * 1.25f;
-            var lines = Wrap(bubble.Text, w => painter.MeasureStandard(w, em), Width * 0.234375f * 0.855556f);
-            float textWidth = lines.Max(l => painter.MeasureStandard(l, em)) + 4, textHeight = lines.Count * lineHeight;
+            // The overlay font's advance for a CJK glyph is about half the width the game font draws it at, so those count full width here.
+            float Measure(string text)
+            {
+                float sum = 0;
+                foreach (var rune in text.EnumerateRunes()) sum += FullWidth(rune.Value) ? em : painter.MeasureStandard(rune.ToString(), em);
+                return sum;
+            }
+            var lines = Wrap(bubble.Text, Measure, Width * 0.234375f * 0.855556f);
+            float textWidth = lines.Max(Measure) + 4, textHeight = lines.Count * lineHeight;
             float w = textWidth / 0.855556f, h = MathF.Max(textHeight / 0.75f, Height * 0.0222222f);
             var panel = new UiRect(at.X - w / 2, at.Y - 4 * scale - h, w, h);
             string a = alpha.ToString("R", CultureInfo.InvariantCulture);
@@ -43,7 +50,10 @@ sealed partial class PlayerInterface
         }
     }
 
-    /// <summary>The words of <paramref name="text"/> in lines no wider than <paramref name="maxWidth"/> pixels (a longer word keeps its own line).</summary>
+    /// <summary>
+    /// The words of <paramref name="text"/> in lines no wider than <paramref name="maxWidth"/> pixels. A word wider than a line is broken between characters: Chinese,
+    /// Japanese and Korean are written without spaces, so the whole sentence would otherwise be one word on one line, wider than the bubble and clipped.
+    /// </summary>
     static List<string> Wrap(string text, Func<string, float> measure, float maxWidth)
     {
         var lines = new List<string>();
@@ -51,14 +61,23 @@ sealed partial class PlayerInterface
         foreach (string word in text.Split(' ', StringSplitOptions.RemoveEmptyEntries))
         {
             string tried = current.Length == 0 ? word : current + " " + word;
-            if (current.Length > 0 && measure(tried) > maxWidth)
+            if (measure(tried) <= maxWidth || current.Length == 0 && measure(word) <= maxWidth) { current = tried; continue; }
+            if (current.Length > 0) { lines.Add(current); current = ""; }
+            foreach (var rune in word.EnumerateRunes())
             {
-                lines.Add(current);
-                current = word;
+                string piece = rune.ToString();
+                if (current.Length > 0 && measure(current + piece) > maxWidth) { lines.Add(current); current = piece; }
+                else current += piece;
             }
-            else current = tried;
         }
         if (current.Length > 0 || lines.Count == 0) lines.Add(current);
         return lines;
     }
+
+    /// <summary>Whether a rune is drawn full width (CJK, kana, hangul, full-width forms).</summary>
+    static bool FullWidth(int codePoint) =>
+        codePoint is >= 0x1100 and <= 0x115F or >= 0x2E80 and <= 0x303E or >= 0x3041 and <= 0x33FF
+            or >= 0x3400 and <= 0x4DBF or >= 0x4E00 and <= 0x9FFF or >= 0xA000 and <= 0xA4CF
+            or >= 0xAC00 and <= 0xD7A3 or >= 0xF900 and <= 0xFAFF or >= 0xFE30 and <= 0xFE6F
+            or >= 0xFF00 and <= 0xFF60 or >= 0xFFE0 and <= 0xFFE6 or >= 0x20000 and <= 0x3FFFD;
 }
