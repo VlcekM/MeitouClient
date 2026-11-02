@@ -1112,7 +1112,7 @@ every 15 ticks, by `PopulationSystem.GoalDuty` (facts: [ai-tasks](game/ai-tasks.
 - **216 Ransacking town** (`AI::findRandomBuildingInTown`): a member draws a random standing building with an interior in its mission town (blackboard, else the campaign's
   destination, else where it stands), draws its weapon and runs into it; inside, the errand ends and the next look draws another.
 - **131 Looting food** (`AI::findSomethingToLootFoodFrom`, shared with 243): a member holding no food in any town (not only its own) walks to the nearest such store, not a
-  container of its own faction (engine reading of the own-shop skip), and takes every food item that fits (`Task_EmptyMachine` moves items while there is room).
+  container of its own faction (engine reading of the own-shop skip), and takes up to 10 units of the first food record it lists (`Task_EmptyMachine` 284 with flag 1, `FUN_14033cd10`, **Verified**: one unit per pass while the store still holds the record and there is room; what a storage lists first is **Unknown**, the first food stack stands in).
 - **212 Confiscating goods** (`AI::findPrisonerWithContraband`): in its town, the first occupied cage (list order) whose prisoner's inventory (not its bag) holds an item stolen for it; at the cage it waits 0.8 s and
   confiscates as a police looter does ([NPC looting](#carrying-rescue-and-looting)); engine choice: whatever the runner's class (base data: only law-enforcement packages list 212).
 - **184 Ditching loot** (`FUN_14059b040`, [rules](game/ai-tasks.md#arrest-and-prison-rows)): a member carrying an item stolen for it (state 121: inventory or worn backpack; none for a lawless faction) walks to the nearest

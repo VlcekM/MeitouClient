@@ -754,6 +754,25 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
         return world.Fixtures.FindCage(world, carrier, at, FixtureRegistry.HomeOf(world, carrier), f => !candidate(f) || duties.Any(o => !ReferenceEquals(o, self) && o.Target == f.Id));
     }
 
+    /// <summary>Units of one record the looting task (Task_EmptyMachine 284, <c>FUN_14033cd10</c>) takes per run.</summary>
+    public const int LootUnits = 10;
+
+    /// <summary>
+    /// Looting food from a store (284, <c>FUN_14033cd10</c>, <b>Verified</b>): the first record the store lists (the food filter stands in for the finder's listing, whose order for a storage is
+    /// <b>Unknown</b>), one unit at a time while the store still holds it and there is room, at most <see cref="LootUnits"/> in all.
+    /// </summary>
+    static void LootFirstFood(Inventory store, Inventory into)
+    {
+        if (store.Items.FirstOrDefault(i => i.IsFood)?.Record is not { } record) return;
+        int budget = LootUnits;
+        foreach (var item in store.Items.Where(i => i.Record == record).ToList())
+        {
+            int moved = InventoryCommands.MoveInto(store, item, budget, into, bagFirst: true, out _);
+            budget -= moved;
+            if (moved == 0 || budget <= 0) break;
+        }
+    }
+
     bool StepFood(World world, TownDuty d, int g, CharacterCold gc)
     {
         var table = world.Characters;
@@ -770,7 +789,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
         {
             TaskStart.Stand(table, g);
             if (d.Kind == TownDutyKind.LootFood)
-                foreach (var item in store.Items.Where(i => i.IsFood).ToList()) InventoryCommands.MoveInto(store, item, 0, into, bagFirst: true, out _);   // Task_EmptyMachine: while there is room
+                LootFirstFood(store, into);
             else if (store.Items.FirstOrDefault(i => Edible(i, d.PlayerSide && gc.Medical is { HasStatsObject: false })) is { } item
                 && InventoryCommands.MoveInto(store, item, 1, into, bagFirst: false, out _) == 0   // the grid, else the worn bag (state 82)
                 && InventoryCommands.MoveInto(store, item, 1, into, bagFirst: true, out _, bagOnly: true) == 0 && d.PlayerSide)
