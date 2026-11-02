@@ -704,6 +704,7 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
             c.InteriorMask = !cut ? standIn2D : patches ? cutMask : meshCut!.Index;
             c.InteriorCut = cut ? 1u : 0u;
             if (patches) Decals?.Apply(ref c);
+            if (patches) ApplyMaterialCache(ref c);
             c.FarStart = options.MaterialDistance * 0.8f;
             c.FarEnd = options.MaterialDistance;
             var t = textures;
@@ -1359,6 +1360,7 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
 
     public void Dispose()
     {
+        DisposeMaterialCache();
         gridVertices.Dispose();
         gridIndices.Dispose();
         coarseTexture.Dispose();

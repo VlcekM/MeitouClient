@@ -1550,6 +1550,7 @@ static class WorldFrame
         StageClock.Lap(14);
         // The blood on the ground near the eye (docs/game/blood-decals.md), before any terrain draw reads it.
         if (gpu.Decals is { } decals && gpu.DecalStore is { } decalStore) decals.Record(decalStore, eye);
+        gpu.Terrain.RecordMaterialCache(eye);
         gpu.Terrain.Decals = gpu.DecalStore is null ? null : gpu.Decals;
         StageClock.Lap(StageClock.Blood, "blood decals");
         // Water reflection: the mirrored scene into its own framebuffer (restores the bound one), before the main pass.

@@ -670,6 +670,18 @@ static partial class TerrainShaders
         uniform int uBloodCount;       // cells in use (0: no blood)
         uniform float uBloodCellSize;
         uniform vec4 uBloodCells[32];  // column, row, layer
+        uniform sampler2DArray uBakeAlbedo;   // the material cache (TerrainRenderer.MaterialCache), a layer per level, addressed toroidally: albedo, gloss
+        uniform sampler2DArray uBakeNormal;   // its shading normal (xyz * 0.5 + 0.5) and rain absorbance
+        uniform int uBakeLevels;              // its levels (0: none, every pixel shades the layers)
+        uniform vec4 uBakeOrigin[4];          // per level: x, z of its first texel's corner, the texel size, the side in texels (0: not valid)
+
+        // Whether cache level k holds xz (4 texels in from its edges), and its value there.
+        bool bakeHolds(int k, vec2 xz)
+        {
+            vec4 o = uBakeOrigin[k];
+            vec2 r = (xz - o.xy) / o.z;
+            return o.w > 0.0 && all(greaterThan(r, vec2(4.0))) && all(lessThan(r, vec2(o.w - 4.0)));
+        }
 
         vec4 P(int biome, int k) { return texelFetch(uParams, ivec2(k, biome), 0); }
 
@@ -1080,7 +1092,37 @@ static partial class TerrainShaders
             float absorbance = 0.5;   // the layers' rain absorbance; the ground colour (far, untextured) takes the old fixed 0.5
             float reliefShade = 1.0;   // the relief's own shadow on the sun (GroundRelief), given to the lighting
             vec3 shadingNormal = n;
-            if (nearWeight > 0.0)
+            bool baked = false;
+            #ifdef TERRAIN_BAKED
+            // The material cache (TerrainRenderer.MaterialCache): the level whose texel is the pixel's footprint (its short axis, as the layers' anisotropic
+            // sampling takes it), blended with the next coarser, the finest holding the point; beyond them the layers are shaded here.
+            if (uBakeLevels > 0 && !uFeature)
+            {
+                float a = max(length(texDx.xz), 1e-6), b = max(length(texDy.xz), 1e-6), hi = max(a, b), lo = min(a, b);
+                float level = log2(max(hi / min(ceil(hi / lo), 8.0), 1e-6) / uBakeOrigin[0].z);
+                int k = clamp(int(floor(level)), 0, uBakeLevels - 1);
+                float t = clamp(level - float(k), 0.0, 1.0);
+                while (k < uBakeLevels && !bakeHolds(k, texWorld.xz)) { k++; t = 0.0; }
+                if (k < uBakeLevels)
+                {
+                    float side = uBakeOrigin[k].z * uBakeOrigin[k].w;
+                    vec3 c = vec3(texWorld.xz / side, float(k));
+                    vec4 al = textureGrad(uBakeAlbedo, c, texDx.xz / side, texDy.xz / side), nb = textureGrad(uBakeNormal, c, texDx.xz / side, texDy.xz / side);
+                    if (t > 0.0 && k + 1 < uBakeLevels && bakeHolds(k + 1, texWorld.xz))
+                    {
+                        float side1 = uBakeOrigin[k + 1].z * uBakeOrigin[k + 1].w;
+                        vec3 c1 = vec3(texWorld.xz / side1, float(k + 1));
+                        al = mix(al, textureGrad(uBakeAlbedo, c1, texDx.xz / side1, texDy.xz / side1), t);
+                        nb = mix(nb, textureGrad(uBakeNormal, c1, texDx.xz / side1, texDy.xz / side1), t);
+                    }
+                    albedo = al;
+                    shadingNormal = normalize(nb.xyz * 2.0 - 1.0);
+                    absorbance = nb.w;
+                    baked = true;
+                }
+            }
+            #endif
+            if (!baked && nearWeight > 0.0)
             {
                 vec4 map = vec4(0.0);
                 vec4 colour = vec4(1.0);
@@ -1170,7 +1212,7 @@ static partial class TerrainShaders
                 }
                 else albedo = vec4(uHasMaps ? colour.rgb / 1.2 : heightTint(vWorld.y), 0.2);
             }
-            if (nearWeight < 1.0)
+            if (!baked && nearWeight < 1.0)
             {
                 // Far: the blended biome ground colour (what the textured layers fade to), tinted by the colour map.
                 vec3 far = uHasGround && uTextured ? texture(uGround, world01).rgb : heightTint(vWorld.y);
@@ -1338,6 +1380,10 @@ static partial class TerrainShaders
             uint diffuseFar;
             uint normalFar;
             float farLod;
+            uint bakeAlbedo;
+            uint bakeNormal;
+            int bakeLevels;
+            vec4 bakeOrigin[4];
         } terrain;
 
         """;
@@ -1377,6 +1423,7 @@ static partial class TerrainShaders
         ["uOverlayRelief"] = "terrain.overlayRelief", ["uSelfShadow"] = "terrain.selfShadow", ["uTessDetail"] = "terrain.tessDetail", ["uRockRound"] = "terrain.rockRound",
         ["uFieldTiles"] = "utextures2D[terrain.fieldTiles]", ["uFieldOrigin"] = "terrain.fieldOrigin", ["uFieldTile"] = "terrain.fieldTile",
         ["uFieldColumns"] = "terrain.fieldColumns", ["uFieldCount"] = "terrain.fieldCount", ["uMaxDepth"] = "terrain.maxDepth", ["uTargetSlope"] = "terrain.targetSlope", ["uScaleFollow"] = "terrain.scaleFollow", ["uCliffScale"] = "terrain.cliffScale", ["uRefine"] = "terrain.refine", ["uPixelScale"] = "terrain.pixelScale", ["uBroadCut"] = "terrain.broadCut", ["uReliefQuality"] = "terrain.reliefQuality",
+        ["uBakeAlbedo"] = "textures2DArray[terrain.bakeAlbedo]", ["uBakeNormal"] = "textures2DArray[terrain.bakeNormal]", ["uBakeLevels"] = "terrain.bakeLevels", ["uBakeOrigin"] = "terrain.bakeOrigin",
     };
 
     const string DerivativeControl = "#extension GL_ARB_derivative_control : require\n";
@@ -1465,7 +1512,49 @@ static partial class TerrainShaders
     public static string PatchControlNative() => Native(PatchControl);
     public static string PatchEvaluationNative() => Native(PatchEvaluation);
     public static string FragmentNative(bool interiorCut = false, bool march = true, bool? normalMaps = null, int? reliefQuality = null) =>
-        Gi.GiResolveShaders.WithAlbedo(Variant(Native(interiorCut ? InteriorMaskRenderer.WithCut(Marched(Fragment, march)) : Marched(Fragment, march)), normalMaps, reliefQuality));
+        Gi.GiResolveShaders.WithAlbedo(Variant(Native(Baked(interiorCut ? InteriorMaskRenderer.WithCut(Marched(Fragment, march)) : Marched(Fragment, march))), normalMaps, reliefQuality));
+
+    static string Baked(string fragment) => fragment.Insert(fragment.IndexOf('\n') + 1, "#define TERRAIN_BAKED\n");
+
+    /// <summary>The material cache's bake (TerrainRenderer.MaterialCache): a triangle over the level's image.</summary>
+    public static string MaterialBakeVertexNative() => Native("""
+        #version 330 core
+        void main() { gl_Position = vec4(vec2((gl_VertexID << 1) & 2, gl_VertexID & 2) * 2.0 - 1.0, 0.0, 1.0); }
+        """, RockBakePushMembers);
+
+    /// <summary>
+    /// The material cache's bake: <see cref="Fragment"/> run for the world point of each texel of level <c>bakePass >> 1</c> (its terrain height and
+    /// normal, the texel as the footprint, at distance 0, without the march), writing before the blood, the wetness and the lighting: the albedo and
+    /// gloss (<c>bakePass</c> even) or the shading normal and absorbance (odd).
+    /// </summary>
+    public static string MaterialBakeFragmentNative()
+    {
+        static string Patch(string text, string from, string to)
+        {
+            int at = text.IndexOf(from, StringComparison.Ordinal);
+            if (at < 0) throw new InvalidOperationException($"TerrainShaders.MaterialBakeFragmentNative: '{from}' not found in the terrain fragment shader; update the patch.");
+            return text.Remove(at, from.Length).Insert(at, to);
+        }
+        string f = Marched(Fragment, false);
+        f = Patch(f, "in vec3 vWorld;", "vec3 vWorld;");
+        f = Patch(f, "in vec3 vNormal;", "vec3 vNormal;");
+        f = Patch(f, "in vec2 vCliffBlend;", "vec2 vCliffBlend = vec2(0.5);");
+        f = Patch(f, "texWorld = uHeightNormals ? vNormal : vWorld;",
+            "vec4 bo = uBakeOrigin[pc.bakePass >> 1];\n"
+            + "vec2 start = mod(floor(bo.xy / bo.z + 0.5), bo.w);\n"
+            + "vec2 xz = bo.xy + (mod(floor(gl_FragCoord.xy) - start, bo.w) + 0.5) * bo.z;\n"
+            + "vec3 n = terrainNormal(xz);\n"
+            + "texWorld = vec3(xz.x, terrainHeight(xz), xz.y);\n"
+            + "vWorld = texWorld;\n"
+            + "vNormal = texWorld;");
+        f = Patch(f, "texDx = dFdxCoarse(texWorld);", "texDx = vec3(bo.z, -n.x / max(n.y, 0.05) * bo.z, 0.0);");
+        f = Patch(f, "texDy = dFdyCoarse(texWorld);", "texDy = vec3(0.0, -n.z / max(n.y, 0.05) * bo.z, bo.z);");
+        f = Patch(f, "vec3 n = uHeightNormals ? terrainNormal(texWorld.xz) : normalize(vNormal);", "");
+        f = Patch(f, "float distance = length(vWorld - uEye);", "float distance = 0.0;");
+        f = Patch(f, "// Blood on the ground", "if ((pc.bakePass & 1) == 0) { fragColour = albedo; return; }\n"
+            + "fragColour = vec4(shadingNormal * 0.5 + 0.5, absorbance);\nreturn;\n// Blood on the ground");
+        return Variant(Native(f, RockBakePushMembers), normalMaps: true, reliefQuality: 0);
+    }
 
     /// <summary>
     /// <paramref name="fragment"/> with the ground parallax's march (march false: left out, by defining NO_MARCH). Off it never runs (uParallax 0), but its registers were the
@@ -1498,7 +1587,7 @@ static partial class TerrainShaders
 
 /// <summary>The C# side of <see cref="TerrainShaders.ConstantsBlock"/> (std140; offsets checked against the reflection by a test). GLSL bools
 /// are 32-bit (0 / 1).</summary>
-[System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Explicit, Size = 880)]
+[System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Explicit, Size = 944)]
 struct TerrainConstants
 {
     [System.Runtime.InteropServices.FieldOffset(0)] public System.Numerics.Vector4 CoarseRect;
@@ -1572,6 +1661,17 @@ struct TerrainConstants
     [System.Runtime.InteropServices.FieldOffset(856)] public uint DiffuseFar;
     [System.Runtime.InteropServices.FieldOffset(860)] public uint NormalFar;
     [System.Runtime.InteropServices.FieldOffset(864)] public float FarLod;
+    [System.Runtime.InteropServices.FieldOffset(868)] public uint BakeAlbedo;
+    [System.Runtime.InteropServices.FieldOffset(872)] public uint BakeNormal;
+    [System.Runtime.InteropServices.FieldOffset(876)] public int BakeLevels;
+    [System.Runtime.InteropServices.FieldOffset(880)] public BakeOrigins BakeOrigin;
+}
+
+/// <summary>The material cache's levels for <see cref="TerrainConstants.BakeOrigin"/> (std140 <c>vec4[4]</c>): x, z of the first texel's corner, the texel, the side (0: not valid).</summary>
+[System.Runtime.CompilerServices.InlineArray(4)]
+struct BakeOrigins
+{
+    System.Numerics.Vector4 level;
 }
 
 /// <summary>The cells of <see cref="TerrainConstants.BloodCells"/>: column, row, layer (std140 <c>vec4[32]</c>).</summary>
