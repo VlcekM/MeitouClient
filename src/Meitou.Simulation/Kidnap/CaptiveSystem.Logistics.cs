@@ -104,31 +104,37 @@ public sealed partial class CaptiveSystem
         return null;
     }
 
-    /// <summary>The cage a gatherer takes a captive from (see the class remarks); the nearest (<c>BuildingFinder</c> slot 1).</summary>
+    /// <summary>The cage a gatherer takes a captive from (see the class remarks): 173 and 217 the nearest (<c>BuildingFinder</c> slot 1), 245 the first in the finder's order
+    /// whose occupant is a woman or of another race (<c>FUN_1408d1410</c>, <b>Verified</b>: no distance sort, and no test of the occupant being a player character, down or busy).</summary>
     Fixture? GatherTarget(World world, int slot, CharacterCold cold, int site, TaskType type)
     {
         var table = world.Characters;
         var at = table.Next[slot].Position;
         Fixture? best = null;
         float bestD = float.MaxValue;
-        bool export = type == TaskType.GATHER_SLAVES_FROM_CAGES_IF_ITS_AN_EXPORT_TOWN;
         foreach (var f in CagesOf(world, site))
         {
-            bool playerCage = f.Owner == world.Player.Faction && world.Player.Faction >= 0;
-            if (export ? SquadWorking(world, cold.SquadId, slot, f.Id, CharacterId.None) > 0 : Taken(f.Id)) continue;
-            if (!export && f.Owner != cold.Faction) continue;
-            if (OccupantSlot(world, f) is not (>= 0 and var s)) continue;
-            var c = table.Cold(s)!;
-            // 217 (FUN_1408cc600): a cage not owned by the player is dropped for a down or crippled occupant, or one two squad mates already work.
-            if (export ? !playerCage && (c.Medical is { Incapacitated: true } || CombatSystem.IsCrippled(c) || SquadWorking(world, cold.SquadId, slot, null, table.IdOf(s)) >= 2) : Busy(table.IdOf(s)))
-                continue;
-            if (playerCage) continue;
-            if (c.IsPlayer || !export && c.Medical is { Incapacitated: true }) continue;
-            if (type == TaskType.GATHER_SLAVES_FROM_CAGES_IF_FEMALE_OR_BEAST && c.Appearance is not { Female: true } && c.Race?.StringId == cold.Race?.StringId) continue;
+            if (f.Owner == world.Player.Faction && world.Player.Faction >= 0 || !GatherCage(world, slot, cold, f, type, out var c)) continue;
+            if (type == TaskType.GATHER_SLAVES_FROM_CAGES_IF_FEMALE_OR_BEAST) return f;
             float d = Vector2.DistanceSquared(new Vector2(at.X, at.Z), new Vector2(f.Position.X, f.Position.Z));
             if (d < bestD) (best, bestD) = (f, d);
         }
         return best;
+    }
+
+    /// <summary>Whether <paramref name="f"/> and its occupant pass the finder's tests of <paramref name="type"/>.</summary>
+    bool GatherCage(World world, int slot, CharacterCold cold, Fixture f, TaskType type, out CharacterCold c)
+    {
+        var table = world.Characters;
+        c = cold;
+        bool export = type == TaskType.GATHER_SLAVES_FROM_CAGES_IF_ITS_AN_EXPORT_TOWN, unholy = type == TaskType.GATHER_SLAVES_FROM_CAGES_IF_FEMALE_OR_BEAST;
+        if (export ? SquadWorking(world, cold.SquadId, slot, f.Id, CharacterId.None) > 0 : Taken(f.Id)) return false;
+        if (!export && f.Owner != cold.Faction || OccupantSlot(world, f) is not (>= 0 and var s)) return false;
+        c = table.Cold(s)!;
+        // 217 (FUN_1408cc600): dropped for a down or crippled occupant, or one two squad mates already work.
+        if (export) return !(c.IsPlayer || c.Medical is { Incapacitated: true } || CombatSystem.IsCrippled(c) || SquadWorking(world, cold.SquadId, slot, null, table.IdOf(s)) >= 2);
+        if (unholy) return c.Appearance is { Female: true } || c.Race?.StringId != cold.Race?.StringId;
+        return !(Busy(table.IdOf(s)) || c.IsPlayer || c.Medical is { Incapacitated: true });
     }
 
     /// <summary>How many jobs of the asker's squad mates (not the asker) work <paramref name="cage"/> or <paramref name="captive"/>
