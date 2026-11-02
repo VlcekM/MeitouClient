@@ -35,7 +35,8 @@ the default grass distance (x 8 the layer ranges), times the distance ratio squa
 past it builds a larger store and makes every page again (`GrowGrassStore`; not when `VramGuard` refuses it), lowering it keeps the store until restart. A page that finds the
 store full keeps its blades and waits; while full, one waiting page a frame is tried. **Observed** (save siwa-test4, x 2 in the 160 MB
 store): retrying every waiting page each frame cost 15.8 ms of the render thread (trace: `BufferArena.Allocate` and the release of the
-partial allocation), and the pages past the store were never drawn. Sway is held for deterministic
+partial allocation), and the pages past the store were never drawn. Pages round kept points ([render-objects.md](render-objects.md#kept-points))
+rank after the eye's and are freed for them when the store is full. Sway is held for deterministic
 screenshots unless deliberately stepped. `grass-velocity` supplies sway motion only where screen
 motion warrants it; camera reprojection handles the rest. Incorrect previous phase/camera/depth
 causes temporal ghosting. Keep blade motion consistent between colour/depth/velocity views.

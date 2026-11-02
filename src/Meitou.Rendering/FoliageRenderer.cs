@@ -436,7 +436,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
 
     /// <summary>
     /// Points kept loaded besides the eye's (the player's characters, "Keep textures at characters", docs/render-objects.md "Kept points"): zones within
-    /// the near reach of one are laid out and kept, after the eye's, and their meshes and textures stay loaded. The grass pages follow only the eye.
+    /// the near reach of one are laid out and kept, after the eye's, and their meshes and textures stay loaded, and grass pages are made there (<see cref="UpdateGrass"/>).
     /// </summary>
     public IReadOnlyList<Vector3> Kept { get; set; } = [];
 
@@ -604,7 +604,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         zonesWaiting = wanted.Count - started - keptWaiting;
         NearestMissingMesh = float.PositiveInfinity;
 
-        UpdateGrass(eye);
+        UpdateGrass(eye, keptPoints);
         PumpMeshes();
         PumpLods();
         Prune();
@@ -839,7 +839,11 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     readonly (float Distance, ZoneState State, int Key)[] grassPicks = new (float, ZoneState, int)[CoveredGrassJobs];
     int zonesWaiting, grassWaiting, grassNear;
 
-    void UpdateGrass(Vector3 eye)
+    /// <summary>
+    /// Makes and frees grass pages round the eye and the kept points (<see cref="Kept"/>). A kept point's pages rank after every page the eye wants, and
+    /// they give way to the eye's: while an eye page waits for room in the full store, the kept page farthest from its point is freed (one a frame).
+    /// </summary>
+    void UpdateGrass(Vector3 eye, IReadOnlyList<Vector3> kept)
     {
         GrowGrassStore();
         grassWanted.Clear();
@@ -848,29 +852,42 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         NearestMissingGrass = float.PositiveInfinity;
         int inFlight = 0;
         foreach (var state in zones.Values) inFlight += state.GrassRunning;
+        // The kept page to free for a waiting eye page (farthest from its point) and whether an eye page waits.
+        bool eyeWaiting = false;
+        GrassPage? victim = null;
+        ZoneState? victimState = null;
+        int victimKey = 0;
+        float victimDistance = float.NegativeInfinity;
         foreach (var state in zones.Values)
         {
             if (!state.Ready || state.Ground is null || state.Patches.Count == 0) continue;
             float range = state.Patches.Max(GrassRange), near = range * Math.Min(1, DefaultGrassRange / GrassRangeSetting);
-            if (state.Pages.Count == 0 && Load(ZoneDistance(state.Zone, eye), eye) > range + PageSize) continue;
+            float keptZone = float.PositiveInfinity;
+            foreach (var k in kept) keptZone = MathF.Min(keptZone, ZoneDistance(state.Zone, k));
+            if (state.Pages.Count == 0 && Load(ZoneDistance(state.Zone, eye), eye) > range + PageSize && keptZone > range + PageSize) continue;
             for (int pz = 0; pz < PagesPerZone; pz++)
                 for (int px = 0; px < PagesPerZone; px++)
                 {
                     int key = pz * PagesPerZone + px;
                     float x0 = state.X0 + px * PageSize, z0 = state.Z0 + pz * PageSize;
-                    float d = Load(BoxDistance(x0, z0, PageSize, eye), eye);
+                    float d = Load(BoxDistance(x0, z0, PageSize, eye), eye), dk = float.PositiveInfinity;
+                    if (keptZone <= range + PageSize * 2) foreach (var k in kept) dk = MathF.Min(dk, BoxDistance(x0, z0, PageSize, k));
+                    bool eyeWants = d < range + PageSize * 0.5f;
                     state.Pages.TryGetValue(key, out var page);
                     if (page?.Buffers is null && d < range * 0.8f) NearestMissingGrass = Math.Min(NearestMissingGrass, d);   // not sinking yet: would be seen
                     if (page is null)
                     {
-                        if (d < range + PageSize * 0.5f)
+                        if (eyeWants)
                         {
                             grassWanted.Add((d, state, key));
                             if (d < near) grassNear++;
                         }
+                        else if (dk < range + PageSize * 0.5f) grassWanted.Add((2 * range + PageSize + dk, state, key));   // after all of the eye's
                         continue;
                     }
-                    if (page.Job is null && d > range + PageSize * 2)
+                    if (eyeWants && page.PendingBlades is not null) eyeWaiting = true;
+                    if (!eyeWants && page.Buffers is not null && page.Job is null && dk > victimDistance && dk <= range + PageSize * 2) (victim, victimState, victimKey, victimDistance) = (page, state, key, dk);
+                    if (page.Job is null && MathF.Min(d, dk) > range + PageSize * 2)
                     {
                         FreePage(page);
                         state.Pages.Remove(key);
@@ -886,6 +903,12 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
                     }
                     else if (page.PendingBlades is not null) TryQueuePage(state, key, page, page.PendingBlades, page.PendingFloats!, page.PendingPrefixes!);   // no room last time
                 }
+        }
+        if (eyeWaiting && grassFull && victim is not null)
+        {
+            FreePage(victim);
+            victimState!.Pages.Remove(victimKey);
+            grassFull = false;   // the waiting page tries the room next frame
         }
         // Missing pages nearest first, a bounded number at a time. Pages hold the blades of the highest density setting,
         // so changing the setting never regenerates them (Draw shows a prefix). Only the nearest free jobs' worth is picked: sorting every

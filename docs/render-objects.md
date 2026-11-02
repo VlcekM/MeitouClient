@@ -78,8 +78,9 @@ distance to its target (`KeptViewDistance`), the view a jump there would have; r
 eye's); a pair within its near range of a point, measured from the point, takes a full-size near slot while the eye's leave one free.
 Foliage zones within the near reach of a point are laid out and kept, ranked after the eye's, and their meshes and textures stay resident
 (texture needs from at least `KeptViewDistance`); their waiting layouts do not hold up the loading screen. `Kept` ranks after the eye in the load order. The colour, overlay and fine height windows keep
-standby copies round far points ([render-terrain.md](render-terrain.md#geometry-and-material) "Standby windows"). Still eye-only, so they settle
-after a jump: grass pages and the ground relief field. Costs video memory
+standby copies round far points ([render-terrain.md](render-terrain.md#geometry-and-material) "Standby windows"). Grass pages are made round the points too,
+after the eye's, sharing the one store: while an eye page waits for room, the kept page farthest from its point is freed (one a frame). The ground
+relief needs nothing more (its heights come with the biome pairs' far tier). Costs video memory
 (the VRAM guard still applies). `WorldFrame` merges the points first (`ObjectStreamer.MergeKept`): one within 500 units of the eye or of an
 earlier point is dropped, so a squad standing together is one point. Every distance test walks the kept points, and `ObjectStreamer.Scan`
 tests each unresolved instance every frame. Out-of-range instances (stand-ins and unknown part distances included) are therefore parked per
