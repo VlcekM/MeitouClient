@@ -41,6 +41,8 @@ public sealed partial class ProductionSystem
         public double? StoppedAt;
         /// <summary>The player's Corpse Disposal order started it: the delivery needs no job in the list.</summary>
         public bool Ordered;
+        /// <summary>The corpse machine the carrier is taking the body to: claimed against its squad mates (the squad blackboard's goal list).</summary>
+        public string? Site;
     }
 
     // Derived state, not saved or hashed: a lift under way is looked at again from the characters' own state when it is lost.
@@ -69,8 +71,8 @@ public sealed partial class ProductionSystem
     /// Whether the delivery can run (<b>Verified</b>: the lifts 138 / 223 / 273 do not look at the companion job nor at a machine; only the delivery jobs 137 / 224 / 274 do): the companion is in
     /// the list (or the player ordered the delivery) and, for a corpse, a machine exists. Otherwise the carrier keeps the body and the errand waits.
     /// </summary>
-    bool DeliveryReady(World world, CharacterCold cold, ErrandKind kind, Vector3 at, bool ordered = false) =>
-        (ordered || PermaJobs.IndexOf(cold, CompanionOf(kind)) >= 0) && (kind != ErrandKind.Corpse || NearestIncinerator(world, at) is not null);
+    bool DeliveryReady(World world, CharacterId self, CharacterCold cold, ErrandKind kind, Vector3 at, bool ordered = false) =>
+        (ordered || PermaJobs.IndexOf(cold, CompanionOf(kind)) >= 0) && (kind != ErrandKind.Corpse || NearestIncinerator(world, at, self, cold.SquadId) is not null);
 
     /// <summary>The carrying errands under way (serial, slot order, every <see cref="ErrandEveryTicks"/> ticks): each is stepped. Their starts are the decision step's (<see cref="ErrandJobs"/>).</summary>
     void Errands(World world)
@@ -99,10 +101,10 @@ public sealed partial class ProductionSystem
             {
                 bool mine = e.Kind == kind && (cold.Carrying == e.Body || table.Next[slot].Task == (byte)CharacterTask.PickUp && cold.CarryTarget == e.Body);
                 if (!mine) return DecisionCheck.No("another errand");
-                return cold.Carrying.IsNone || owner.DeliveryReady(world, cold, kind, table.Next[slot].Position, e.Ordered) ? DecisionCheck.Runs : DecisionCheck.No("nothing to deliver to");
+                return cold.Carrying.IsNone || owner.DeliveryReady(world, table.IdOf(slot), cold, kind, table.Next[slot].Position, e.Ordered) ? DecisionCheck.Runs : DecisionCheck.No("nothing to deliver to");
             }
             if (!cold.Carrying.IsNone || !CarrySystem.CanCarry(world, cold, TaskType.DEAD_GUYS_GO_IN_THE_POT) || cold.Fleeing) return DecisionCheck.No("cannot carry");
-            var lifted = Lifted(table);
+            var lifted = Lifted(table, cold.SquadId);
             var body = kind == ErrandKind.Corpse ? owner.FindCorpse(world, slot, cold, lifted) : owner.FindIntruder(world, slot, cold, lifted, kind);
             if (body is not { } b) return DecisionCheck.No("nothing found");
             found = (world.Tick, slot, k, b.Id, b.Goal);
@@ -131,15 +133,18 @@ public sealed partial class ProductionSystem
         }
     }
 
-    /// <summary>The bodies being lifted or carried now.</summary>
-    static HashSet<CharacterId> Lifted(CharacterTable table)
+    /// <summary>
+    /// The bodies a finder of a character of squad <paramref name="squad"/> skips: every body carried (the carried byte, global), and the bodies its squad mates are lifting (their goal on the squad's
+    /// blackboard, <c>FUN_1402690e0</c>, <b>Verified</b>); another squad may go for the same body until the lift attaches.
+    /// </summary>
+    static HashSet<CharacterId> Lifted(CharacterTable table, int squad)
     {
         var set = new HashSet<CharacterId>();
         for (int i = 0; i < table.HighWater; i++)
             if (table.Next[i].Alive && table.Cold(i) is { } c)
             {
                 if (!c.Carrying.IsNone) set.Add(c.Carrying);
-                if (table.Next[i].Task == (byte)CharacterTask.PickUp && !c.CarryTarget.IsNone) set.Add(c.CarryTarget);
+                if (table.Next[i].Task == (byte)CharacterTask.PickUp && !c.CarryTarget.IsNone && squad >= 0 && c.SquadId == squad) set.Add(c.CarryTarget);
             }
         return set;
     }
@@ -167,11 +172,12 @@ public sealed partial class ProductionSystem
         Vector2 goal = e.Goal;
         BuildSite? site = null;
         Machine? machine = null;
-        if (e.Kind != ErrandKind.Corpse && !DeliveryReady(world, cold, e.Kind, n.Position, e.Ordered)) return;
+        if (e.Kind != ErrandKind.Corpse && !DeliveryReady(world, id, cold, e.Kind, n.Position, e.Ordered)) return;
         if (e.Kind == ErrandKind.Corpse)
         {
-            if (!DeliveryReady(world, cold, e.Kind, n.Position, e.Ordered)) return;   // the carrier keeps the body, the errand waits
-            (site, machine) = NearestIncinerator(world, n.Position)!.Value;
+            if (!DeliveryReady(world, id, cold, e.Kind, n.Position, e.Ordered)) return;   // the carrier keeps the body, the errand waits
+            (site, machine) = NearestIncinerator(world, n.Position, id, cold.SquadId)!.Value;
+            e.Site = site.Id;
             goal = GoalOf(world, site, machine);
         }
         bool arrived = site is not null ? AtSite(n, site, machine!) : Vector2.Distance(new Vector2(n.Position.X, n.Position.Z), goal) <= ErrandArrive;
@@ -293,8 +299,9 @@ public sealed partial class ProductionSystem
     /// first listed wins a tie (the weights of everything beyond 4608 are equal). The town is the one the carrier stands in, else the nearest within 1.5625e7 squared (<c>DAT_14172dd88</c>); with
     /// none, every town is searched. Stand-ins: the town is a player's town, and the squad's home town (the Ownerships' +0x38, <b>Unknown</b> for the player) and the home-building x100 are not read.
     /// </summary>
-    (BuildSite Site, Machine Machine)? NearestIncinerator(World world, Vector3 from)
+    (BuildSite Site, Machine Machine)? NearestIncinerator(World world, Vector3 from, CharacterId self, int squad)
     {
+        var claimed = MachinesClaimed(world, self, squad);
         var town = PlayerTownAt(world, from) ?? NearestPlayerTown(world, from, DisposalTownReach);
         BuildSite? bestSite = null;
         Machine? best = null;
@@ -303,12 +310,22 @@ public sealed partial class ProductionSystem
         {
             if (m.Data.Function != Meitou.Data.World.TownBuildings.CorpseDisposalFunction || Site(world, m.Site) is not { Complete: true } site || !MayUseDisposal(world, site)) continue;
             if (town is not null && Gap(site.Position, town.Position) > town.Radius * 1.1f) continue;
-            if (OperatorsOf(world, site.Id) >= m.Data.MaxOperators) continue;
+            if (OperatorsOf(world, site.Id) >= m.Data.MaxOperators || claimed.Contains(site.Id)) continue;
             float weight = DisposalWeight(Vector3.DistanceSquared(site.Position, from)) * (site.Owner == world.Player.Faction ? OwnFactionWeight : 1);
             if (weight <= bestWeight) continue;
             (bestSite, best, bestWeight) = (site, m, weight);
         }
         return best is null ? null : (bestSite!, best);
+    }
+
+    /// <summary>The machines another member of the squad is already taking a body to (<c>FUN_1402690e0</c> on the squad's goal list, <b>Verified</b>): not offered, even before it operates them.</summary>
+    HashSet<string> MachinesClaimed(World world, CharacterId self, int squad)
+    {
+        var set = new HashSet<string>(StringComparer.Ordinal);
+        if (squad < 0) return set;
+        foreach (var (id, e) in errands)
+            if (e.Site is not null && id != self && world.Characters.TryResolveNext(id, out int i) && world.Characters.Cold(i)?.SquadId == squad) set.Add(e.Site);
+        return set;
     }
 
     /// <summary>The weight factor of a building of the character's own faction (<c>DAT_141683250</c>, <b>Verified</b> 100).</summary>
