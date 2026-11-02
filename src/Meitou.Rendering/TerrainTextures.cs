@@ -147,7 +147,7 @@ public sealed unsafe class TerrainTextures : IDisposable
     /// <summary>x0, z0, 1/width, 1/depth of the overlay and colour windows in world units (the two cover the same square).</summary>
     public Vector4 Region { get; private set; }
     /// <summary>Slots of the near arrays (<see cref="NearLayers"/>, fewer when the world has fewer pairs), and of the far arrays (one per pair).</summary>
-    public int Capacity { get; }
+    public int Capacity { get; private set; }
     public int FarSlots { get; }
     /// <summary>Side of the far arrays' layers.</summary>
     public int FarSize => farSize;
@@ -403,6 +403,7 @@ public sealed unsafe class TerrainTextures : IDisposable
         {
             if (GroundRelief.FieldCentre is { } fieldCentre && tiles.Length == 0) SetField(fieldCentre, GroundRelief.FieldCliffs ? GroundRelief.FieldTile / 2 : GroundRelief.FieldTile);
             while (decoded.TryDequeue(out var d)) Install(d, uploads);
+            GrowNear();
             UpdateBiomes(eye, materialDistance, ahead, kept);
         }
         UpdateMaps(eye, uploads, kept);
@@ -577,6 +578,46 @@ public sealed unsafe class TerrainTextures : IDisposable
             int s = Math.Max(size >> level, 1);
             batch.Write(array.Texture, level, slot, Rect(0, 0, s, s), levels[level]);
         }
+    }
+
+    /// <summary>The most near slots <see cref="Areas"/> may grow the arrays to (the 128 a full-size slot per pair took before the two tiers, ~1.07 GB at 2048²).</summary>
+    const int MaxNearSlots = 128;
+    /// <summary>The slot count the guard last refused (not asked again for as many or more).</summary>
+    int nearRefused = int.MaxValue;
+
+    /// <summary>
+    /// Grows the near arrays to <see cref="NearLayers"/> slots per kept place (<see cref="Areas"/>, at most <see cref="MaxNearSlots"/>) when no layer is in
+    /// flight and the guard allows it: there is no image copy, so every pair loses its slot (its biomes read the far arrays) and loads near again,
+    /// nearest first. The arrays never shrink while running.
+    /// </summary>
+    void GrowNear()
+    {
+        int want = Math.Min(Math.Min(pairs.Count, NearLayers * Math.Max(Areas, 1)), MaxNearSlots);
+        if (want <= Capacity || want >= nearRefused || inFlight > 0 || nearLoading > 0 || diffuseArray is null || normalArray is null) return;
+        if (Guard is { } guard && !guard.Allows((ulong)Bytes(layerSize, levelCount, want)))
+        {
+            nearRefused = want;
+            Console.WriteLine($"terrain   near layer slots not grown to {want}: memory budget (VramGuard)");
+            return;
+        }
+        var diffuse = AllocateArray(true, want, layerSize, levelCount, "terrain textures diffuse");
+        var normal = AllocateArray(false, want, layerSize, levelCount, "terrain textures normal");
+        if (diffuse is null || normal is null)
+        {
+            diffuse?.Dispose();
+            normal?.Dispose();
+            nearRefused = want;
+            return;
+        }
+        var (oldDiffuse, oldNormal) = (diffuseArray, normalArray);
+        (diffuseArray, normalArray) = (diffuse, normal);
+        Gpu.DeferDelete(() => { oldDiffuse.Dispose(); oldNormal.Dispose(); });
+        foreach (var p in owner) if (p is not null) p.Slot = -1;
+        owner = new Pair?[want];
+        nextFree = 0;
+        Capacity = want;
+        for (int b = 0; b < state.Length; b++) WriteNear(b);
+        Console.WriteLine($"terrain   near layer slots grown to {want} for {Areas} kept places ({Bytes(layerSize, levelCount, want) >> 20} MB)");
     }
 
     /// <summary>A free near slot, else the least recently needed one's of a pair not wanted near now (its biomes' rows drop it at once: they read the far

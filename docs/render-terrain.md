@@ -22,7 +22,8 @@ where occluders justify it. A depth prepass is extra geometry, not automatically
 - **Far arrays** hold every pair of the biomes within the material distance at a quarter of the layer size (512² at 2048, about 0.5 MB a pair),
   at a fixed index per pair, at most 256 (the array layers every Vulkan device has; a pair past that stays in ground colour). The R8 height array
   and the relief texture use the same index. A biome is drawn once all its pairs are in.
-- **Near arrays** have 32 slots at the full size (about 270 MB at 2048²). A slot goes to a pair within its near range of the eye, then of a kept point while slots are left
+- **Near arrays** have 32 slots at the full size (about 270 MB at 2048²), 32 per kept place (`Areas`, render-objects.md "Kept points") up to 128 when
+  the guard allows: growing reallocates both arrays (no image copy), so every pair drops to far and loads near again; they never shrink. A slot goes to a pair within its near range of the eye, then of a kept point while slots are left
   ([render-objects.md](render-objects.md#kept-points)), least recently needed first: the range is the pair's tile × pixels per radian ÷ layer size × 11.3, with an upscaler's negative bias widening it.
   When no slot is left, a pair stays far.
 - Per sample the shader works out the near arrays' level (8x anisotropic: the long axis over up to 8 taps, never under the short axis). Below
@@ -52,8 +53,8 @@ and 17-29 MB with the tiles dropped after each).
 **Standby windows** ("Keep textures at characters", [render-objects.md](render-objects.md#kept-points)): a kept point outside the middle of the
 drawn window gets a standby copy, uploaded but not drawn, which is swapped in when the eye arrives there (the shaders read whichever is current, so
 nothing is composed or uploaded on the jump); the replaced copy stays as the standby for where the eye was. Colour/overlay
-(`TerrainTextures.MapStandby`, at most 2, ~45 MB each): for a point more than a quarter window from the drawn origin. Fine heights
-(`TerrainRenderer.FineStandby`, `TerrainStreamer`, at most 3, ~5 MB each at step 1): for a point beyond 0.3 of the window's width from its
+(`TerrainTextures.MapStandby`, one per kept place, 2 to 6, ~45 MB each): for a point more than a quarter window from the drawn origin. Fine heights
+(`TerrainRenderer.FineStandby`, `TerrainStreamer`, one per kept place, 3 to 8, ~5 MB each at step 1): for a point beyond 0.3 of the window's width from its
 centre; the bounds take a standby's patch at its first swap (they only widen). A standby goes when a new point needs its place and no kept point is
 in its middle. None is made under `VramGuard` pressure; once made they stay until exit. A standby's read or compose does not hold up the loading screen (its
 upload slabs do, for a few frames); a jump while one is read or uploaded waits for it. The first swap-in of a new pair may hitch once (a fresh

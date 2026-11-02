@@ -80,7 +80,12 @@ Foliage zones within the near reach of a point are laid out and kept, ranked aft
 (texture needs from at least `KeptViewDistance`); their waiting layouts do not hold up the loading screen. `Kept` ranks after the eye in the load order. The colour, overlay and fine height windows keep
 standby copies round far points ([render-terrain.md](render-terrain.md#geometry-and-material) "Standby windows"). Grass pages are made round the points too,
 after the eye's, sharing the one store: while an eye page waits for room, the kept page farthest from its point is freed (one a frame). The ground
-relief needs nothing more (its heights come with the biome pairs' far tier). Costs video memory
+relief needs nothing more (its heights come with the biome pairs' far tier). Built characters within `KeptReach` of a point but beyond the
+eye's reach offer their textures from the point (at least `KeptViewDistance`) each budget pass; before, nothing read them and the 20 s idle
+limit unloaded them whatever the mark. **Areas** (`WorldFrame` `Areas`): 1 + the merged points, held at its highest for 30 s. The shared texture
+mark and the mesh mark are that many times larger, their share of the memory budget at most half (`WorldTextureCache.MaxAreaShare`), so the
+character `NeedScale` blur also starts later; the grass store, standby counts and terrain near slots scale too (render-foliage.md, render-terrain.md).
+Costs video memory
 (the VRAM guard still applies). `WorldFrame` merges the points first (`ObjectStreamer.MergeKept`): one within 500 units of the eye or of an
 earlier point is dropped, so a squad standing together is one point. Every distance test walks the kept points, and `ObjectStreamer.Scan`
 tests each unresolved instance every frame. Out-of-range instances (stand-ins and unknown part distances included) are therefore parked per
