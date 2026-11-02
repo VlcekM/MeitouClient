@@ -2,6 +2,7 @@ using System.Numerics;
 using Meitou.Data.Gameplay;
 using Meitou.Data.Gameplay.Ai;
 using Meitou.Simulation.Ai;
+using Meitou.Simulation.Combat;
 using Meitou.Simulation.Locks;
 
 namespace Meitou.Simulation.Kidnap;
@@ -110,18 +111,38 @@ public sealed partial class CaptiveSystem
         var at = table.Next[slot].Position;
         Fixture? best = null;
         float bestD = float.MaxValue;
+        bool export = type == TaskType.GATHER_SLAVES_FROM_CAGES_IF_ITS_AN_EXPORT_TOWN;
         foreach (var f in CagesOf(world, site))
         {
-            if (f.Owner == world.Player.Faction && world.Player.Faction >= 0 || Taken(f.Id)) continue;
-            if (type != TaskType.GATHER_SLAVES_FROM_CAGES_IF_ITS_AN_EXPORT_TOWN && f.Owner != cold.Faction) continue;
-            if (OccupantSlot(world, f) is not (>= 0 and var s) || Busy(table.IdOf(s))) continue;
+            bool playerCage = f.Owner == world.Player.Faction && world.Player.Faction >= 0;
+            if (export ? SquadWorking(world, cold.SquadId, slot, f.Id, CharacterId.None) > 0 : Taken(f.Id)) continue;
+            if (!export && f.Owner != cold.Faction) continue;
+            if (OccupantSlot(world, f) is not (>= 0 and var s)) continue;
             var c = table.Cold(s)!;
-            if (c.IsPlayer || c.Medical is { Incapacitated: true }) continue;
+            // 217 (FUN_1408cc600): a cage not owned by the player is dropped for a down or crippled occupant, or one two squad mates already work.
+            if (export ? !playerCage && (c.Medical is { Incapacitated: true } || CombatSystem.IsCrippled(c) || SquadWorking(world, cold.SquadId, slot, null, table.IdOf(s)) >= 2) : Busy(table.IdOf(s)))
+                continue;
+            if (playerCage) continue;
+            if (c.IsPlayer || !export && c.Medical is { Incapacitated: true }) continue;
             if (type == TaskType.GATHER_SLAVES_FROM_CAGES_IF_FEMALE_OR_BEAST && c.Appearance is not { Female: true } && c.Race?.StringId == cold.Race?.StringId) continue;
             float d = Vector2.DistanceSquared(new Vector2(at.X, at.Z), new Vector2(f.Position.X, f.Position.Z));
             if (d < bestD) (best, bestD) = (f, d);
         }
         return best;
+    }
+
+    /// <summary>How many jobs of the asker's squad mates (not the asker) work <paramref name="cage"/> or <paramref name="captive"/>
+    /// (<c>Blackboard::howManyGuysWorkingOnThisSubTarget</c>, <c>FUN_1402690e0</c>: the squad's blackboard, not the give-up list).</summary>
+    int SquadWorking(World world, int squadId, int asker, string? cage, CharacterId captive)
+    {
+        var table = world.Characters;
+        int n = 0;
+        foreach (var j in jobs)
+        {
+            if (!table.TryResolveNext(j.Worker, out int w) || w == asker || table.Cold(w)?.SquadId != squadId) continue;
+            if (cage is not null ? j.Cage == cage : j.Captive == captive) n++;
+        }
+        return n;
     }
 
     bool StepLogistics(World world, CaptiveJob j, int w, CharacterCold wc)
