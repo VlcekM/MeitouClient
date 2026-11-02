@@ -32,11 +32,15 @@
     "areas": "Projectile tracers"
   },
   "lucasskrewer": {
-    "commits": 3,
-    "areas": "Animal hunger"
+    "commits": 4,
+    "areas": "Benchmarks, Animal hunger"
   },
   "dxseba": {
     "commits": 1,
     "areas": "Character meshes"
+  },
+  "dfdffish": {
+    "commits": 2,
+    "areas": "zh_CN locale, Launcher"
   }
 }
