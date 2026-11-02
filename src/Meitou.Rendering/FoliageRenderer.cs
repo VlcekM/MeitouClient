@@ -255,7 +255,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     Vector3? lastEye;
     double lastEyeTime;
     Vector2 velocity;
-    readonly List<(ZoneCoordinate Zone, Tier Tier, float Urgency)> wanted = [];
+    readonly List<(ZoneCoordinate Zone, Tier Tier, float Urgency, bool ForKept)> wanted = [];
     readonly List<ZoneState> dropping = [];
     readonly HashSet<ZoneCoordinate> candidates = [];
     public List<string> Messages { get; } = [];
@@ -491,7 +491,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         dropping.Clear();
         foreach (var state in zones.Values)
             if (state.Job is null && Load(ZoneDistance(state.Zone, eye), eye) > farReach + WorldLayout.ZoneSize && !(Ahead is { } arrivalAt && ZoneDistance(state.Zone, arrivalAt) <= nearReach + WorldLayout.ZoneSize)
-                && !(Kept.Count > 0 && NearKeptZone(state.Zone) <= nearReach + WorldLayout.ZoneSize))
+                && !(!settling && Kept.Count > 0 && NearKeptZone(state.Zone) <= nearReach + WorldLayout.ZoneSize))
                 dropping.Add(state);
         foreach (var state in dropping) Drop(state);
 
@@ -555,19 +555,20 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
             bool forKept = atKept && (d > farReach && !landing || TierAt(soon) != need);
             zones.TryGetValue(z, out var state);
             if (state is not null && Satisfies(state, need, meitou)) continue;   // has what it needs
-            if (d <= wholeReach) NearestIncompleteZone = Math.Min(NearestIncompleteZone, d);
-            if (state is not { Ready: true }) NearestUnlaidZone = Math.Min(NearestUnlaidZone, d);
+            if (d <= wholeReach && !forKept) NearestIncompleteZone = Math.Min(NearestIncompleteZone, d);
+            if (state is not { Ready: true } && !forKept) NearestUnlaidZone = Math.Min(NearestUnlaidZone, d);
             if (state?.Job is not null) continue;   // on its way
             // Whole layouts first (what is missing there is in view near the eye), then the large-only ones, then the far ones, each nearest
             // first (from the eye or where it will be, whichever is nearer).
             // During a flight the arrival's zones go first, then the flight path's (the eye's), each in the same order.
             float tierBase = need == Tier.Whole ? 0 : need == Tier.Meshes ? nearReach : farReach;
             wanted.Add((z, need, forKept ? (arrival is null ? 2 : 4) * farReach + tierBase + dk
-                : arrival is null ? tierBase + soon : landing ? tierBase + da : 2 * farReach + tierBase + Math.Min(d, dp)));
+                : arrival is null ? tierBase + soon : landing ? tierBase + da : 2 * farReach + tierBase + Math.Min(d, dp), forKept));
         }
         wanted.Sort((a, b) => a.Urgency.CompareTo(b.Urgency));
-        int started = 0;
-        foreach (var (zone, tier, _) in wanted)
+        int started = 0, keptWaiting = 0;
+        foreach (var w in wanted) if (w.ForKept) keptWaiting++;
+        foreach (var (zone, tier, _, forKept) in wanted)
         {
             if (guard is { Streaming: false }) break;   // memory pressure: no new layout is started
             bool whole = tier != Tier.Far;   // a Meshes layout is a whole one whose far-away groups are left out (Accept)
@@ -580,6 +581,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
             if (whole) runningWhole++; else runningFar++;
             state.JobTier = tier;
             started++;
+            if (forKept) keptWaiting--;
             bool farOnly = !whole;
             Func<GroupedFoliageZone> job = () =>
             {
@@ -598,7 +600,8 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
             // Whole layouts go ahead of the grass pages and texture decodes queued meanwhile (a dozen grass pages could hold every worker).
             state.Job = whole ? BackgroundWork.RunUrgent(job) : BackgroundWork.Run(job);
         }
-        zonesWaiting = wanted.Count - started;   // needed but not started yet (the workers are busy)
+        // Needed but not started yet (the workers are busy); a kept point's zones not counted, so a far squad member does not hold up the loading screen.
+        zonesWaiting = wanted.Count - started - keptWaiting;
         NearestMissingMesh = float.PositiveInfinity;
 
         UpdateGrass(eye);
