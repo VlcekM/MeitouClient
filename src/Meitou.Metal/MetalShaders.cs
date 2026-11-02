@@ -107,7 +107,7 @@ internal sealed class MetalProgram : IDisposable
 /// </summary>
 public sealed class MetalShaders : IGpuShaders
 {
-    /// <summary>The shaded character cut-outs must reject alpha before committing depth (docs/formats/runtime-materials.md).</summary>
+    /// <summary>The shaded character cut-outs must reject alpha before committing depth (docs/metal-backend.md).</summary>
     public bool DiscardNeedsLateDepth => true;
 
     /// <summary>
