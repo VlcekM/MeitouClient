@@ -1042,7 +1042,7 @@ sealed partial class GameHost
         void Add(string key, double ms) => simWindowMs[key] = simWindowMs.GetValueOrDefault(key) + ms;
         for (int p = 0; p < firstSystem - 1; p++) Add("#" + simNames[p], simMs[p]);
         for (int k = firstSystem; k < simMs.Length - 1; k++) Add((k >= firstPart ? "." : "") + simNames[k], simMs[k]);
-        for (int k = 0; k < profile.SlowWorldMs.Length && firstSystem + k < firstPart; k++) Add("~" + simNames[firstSystem + k], profile.SlowWorldMs[k]);
+        for (int k = 0; k < profile.SystemMs.Length && firstSystem + k < firstPart; k++) Add("~" + simNames[firstSystem + k], profile.Ms(TickProfile.SlowWorld, k));
         if (session.World.Systems.OfType<Meitou.Simulation.Ragdolls.RagdollSystem>().FirstOrDefault() is { } rag)
         {
             (simWindowRagdolls, simWindowMoving, simWindowAwake, simWindowStepping) = (simWindowRagdolls + rag.Count, simWindowMoving + rag.Moving, simWindowAwake + rag.AwakeBodies, simWindowStepping + (rag.Moving > 0 ? 1 : 0));

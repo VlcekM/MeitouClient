@@ -21,8 +21,13 @@ public sealed class TickProfile
     public double[] PhaseMs { get; } = new double[PhaseNames.Length];
     /// <summary>Ms per system, by its index in <see cref="World.Systems"/>, since the last <see cref="Clear"/>.</summary>
     public double[] SystemMs { get; private set; } = [];
-    /// <summary>The part of <see cref="SystemMs"/> spent in the slow world phase, by system.</summary>
-    public double[] SlowWorldMs { get; private set; } = [];
+    /// <summary>
+    /// <see cref="SystemMs"/> split by phase: phase x systems + system (<see cref="Ms"/>). The serial phases, the parallel ones up to their barrier and the
+    /// commit's apply; the grid, sight and publish have no system.
+    /// </summary>
+    public double[] PhaseSystemMs { get; private set; } = [];
+    /// <summary>A system's ms in one phase since the last <see cref="Clear"/>.</summary>
+    public double Ms(int phase, int system) => PhaseSystemMs[phase * SystemMs.Length + system];
 
     /// <summary>Ms per part a system marked inside its own span (<see cref="Part"/>), by name in the order first marked; they stay listed once seen.</summary>
     public List<(string Name, double Ms)> Parts { get; } = [];
@@ -32,13 +37,13 @@ public sealed class TickProfile
         Ticks = 0;
         Array.Clear(PhaseMs);
         Array.Clear(SystemMs);
-        Array.Clear(SlowWorldMs);
+        Array.Clear(PhaseSystemMs);
         for (int i = 0; i < Parts.Count; i++) Parts[i] = (Parts[i].Name, 0);
     }
 
     internal void Begin(int systems)
     {
-        if (SystemMs.Length != systems) (SystemMs, SlowWorldMs) = (new double[systems], new double[systems]);
+        if (SystemMs.Length != systems) (SystemMs, PhaseSystemMs) = (new double[systems], new double[systems * PhaseNames.Length]);
         Ticks++;
         last = partLast = Stopwatch.GetTimestamp();
     }
@@ -86,7 +91,7 @@ public sealed class TickProfile
         double ms = (now - last) * 1000.0 / Stopwatch.Frequency;
         PhaseMs[phase] += ms;
         if (system >= 0) SystemMs[system] += ms;
-        if (system >= 0 && phase == SlowWorld) SlowWorldMs[system] += ms;
+        if (system >= 0) PhaseSystemMs[phase * SystemMs.Length + system] += ms;
         last = now;
     }
 }
