@@ -274,7 +274,9 @@ public sealed partial class LockSystem : IStateHashed
     bool StartDoors(World world, int worker, RoundKind kind, string building, float extent)
     {
         var doors = new List<string>();
-        foreach (var f in world.Fixtures.OfBuilding(building)) if (f.Kind == FixtureKind.Door) doors.Add(f.Id);
+        foreach (var f in world.Fixtures.OfBuilding(building))
+            if (f.Kind == FixtureKind.Door && !(kind == RoundKind.LockDoors && f.DoorBroken)) doors.Add(f.Id);   // lock up is never planned on a smashed door (row 77 list B: !DOOR_IS_BROKEN)
+        if (doors.Count == 0 || kind == RoundKind.LockDoors && doors.TrueForAll(id => world.Fixtures.Find(id)!.Lock is { Locked: true })) return false;
         var first = world.Fixtures.Find(doors[0])!;
         return Start(world, worker, new Round
         {
@@ -427,8 +429,8 @@ public sealed partial class LockSystem : IStateHashed
                     world.Defer(new Dialogue.DialogueEvent(r.Worker, r.Prisoner, PrisonerFreeToGo) { Tick = world.Tick + 1 });
                 break;
             case RoundKind.LockDoors:
-                f.Motion = DoorMotion.Closed;   // locking closes the door first
-                f.OpenAmount = 0;
+                if (f.DoorBroken) break;
+                FixtureRegistry.CloseDoor(f);   // an open door starts to swing shut (Task_LockDoor, FUN_140337670); the lock is set at once
                 world.Fixtures.SetLocked(f, true);
                 // Each locked door of the home whose lock is the worker's faction's sets the house flag while no door of it is open or opening (Task_LockDoor's
                 // FUN_1407933a0, Verified): one locked door is enough, the others may just be closed.

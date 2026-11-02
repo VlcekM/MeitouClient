@@ -500,7 +500,7 @@ public sealed partial class FixtureRegistry
             {
                 case 1: l.Locked = false; l.Broken = false; d.DoorBroken = false; d.DoorProgress = 1; d.Motion = DoorMotion.Open; d.OpenAmount = 1; break;
                 case 2: l.Locked = true; l.Broken = false; d.DoorBroken = false; d.DoorProgress = 1; d.Motion = DoorMotion.Closed; d.OpenAmount = 0; break;
-                case 3: l.Broken = true; d.DoorBroken = true; d.DoorProgress = 0; break;
+                case 3: l.Locked = false; l.Broken = true; d.DoorBroken = true; d.DoorProgress = 0; d.Motion = DoorMotion.Closed; d.OpenAmount = 0; break;
                 default: l.Locked = false; l.Broken = false; d.DoorBroken = false; d.DoorProgress = 1; d.Motion = DoorMotion.Closed; d.OpenAmount = 0; break;
             }
         }
@@ -527,10 +527,10 @@ public sealed partial class FixtureRegistry
         return true;
     }
 
-    /// <summary>Starts closing an open door (<c>FUN_140298c50</c>, <b>Verified</b>: only from state 1). False when it was not open.</summary>
+    /// <summary>Starts closing an open door (<c>FUN_140298c50</c>, <b>Verified</b>: only from state 1, and never a smashed door). False when it was not open.</summary>
     public static bool CloseDoor(Fixture door)
     {
-        if (door.Kind != FixtureKind.Door || door.Motion != DoorMotion.Open) return false;
+        if (door.Kind != FixtureKind.Door || door.DoorBroken || door.Motion != DoorMotion.Open) return false;
         door.Motion = DoorMotion.Closing;
         door.AutoOpened = false;
         return true;
