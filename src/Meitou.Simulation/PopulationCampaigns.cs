@@ -492,7 +492,7 @@ public sealed partial class PopulationSystem : IStateHashed
     }
 
     /// <summary>
-    /// The squads (<c>uses_leader</c>), until the men exceed the need: the <c>special leader</c>'s platoon (or the template naming it leader, made near the faction's town nearest the
+    /// The squads (<c>uses_leader</c>), until the men exceed the need: the <c>special leader</c>'s platoon (joined whatever it is doing; or the template naming it leader, made near the faction's town nearest the
     /// target); then for each of the 4 own towns nearest the target its free roaming platoons, then new squads from <c>squads to use</c> by weight within 700 of the town (of the
     /// leader once there is one), up to 100 per town. Engine choices: homeless platoons and a town's own (residents, bar squads) are not drafted.
     /// </summary>
@@ -504,8 +504,8 @@ public sealed partial class PopulationSystem : IStateHashed
         {
             if (FindUniquePlatoon(world, leader) is { } p)
             {
-                if (!Free(p, m.Faction, null)) continue;
-                Join(world, inst, p, leads: true);
+                // No eligibility test (FUN_1409c4720 only returns when it is already in this campaign): the old campaign drops it at its next update.
+                if (p.Campaign != inst) Join(world, inst, p, leads: true);
                 break;
             }
             if (world.Uniques.IsClaimed(leader) || LeaderTemplate(leader) is not { } template) continue;

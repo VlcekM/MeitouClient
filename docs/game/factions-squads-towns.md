@@ -681,7 +681,7 @@ to now + 6 h and, only if the faction has no active campaign and no pending requ
 
 **Start** (`FUN_1409c9830`): home missing or disabled → the nearest own town to the target. Required men = int(`num forces` ×
 `raidSizeMult`) (**Verified** by disassembly). Gathering stops once men > required (each platoon adds its living members):
-1. the `special leader`'s platoon; if not spawned, the squad template naming it `leader`, spawned within 700 of the nearest own town;
+1. the `special leader`'s platoon, taken as leader without any eligibility test (**Verified**, `FUN_1409c5040` / join `FUN_1409c4720`: it only returns when the platoon is already in this campaign; the free-platoon passes below do test); if not spawned, the squad template naming it `leader`, spawned within 700 of the nearest own town;
 2. the faction's free, idle, intact homeless platoons (of a `squads to use` template when the list is set);
 3. for each of the 4 own towns nearest the target: such platoons homed there, then new squads drawn from `squads to use` by val0, within
    700 of the town (at the leader once there is one), up to 100 per town; none when the list is empty.
