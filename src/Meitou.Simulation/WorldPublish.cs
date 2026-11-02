@@ -207,7 +207,7 @@ public sealed partial class World
             s.CombatMode = cold is not null && combat is not null && CharacterFacts.InCombatMode(combat, table, id, cold, true, true);
             s.FightsPlayer = fightsPlayer;
             s.HostileToPlayer = cold is not null && CharacterFacts.HostileToPlayer(population?.Relations, Player.Faction, cold.Faction, fightsPlayer);
-            s.Shackled = cold?.Inventory is { } worn && worn.Items.Any(item => item.IsLocked && item.Section != "main");
+            s.Shackled = cold?.Inventory is { } worn && WearsLocked(worn);
             s.PortraitSerial = cold?.PortraitSerial ?? 0;
             s.ShacklesLocked = shown && Locks.LockSystem.WornShackles(cold) is not null;
             s.CanBeShackled = shown && cold is { IsPlayer: false } && Locks.LockSystem.CanBeShackled(cold, true);
@@ -434,12 +434,21 @@ public sealed partial class World
             robotics, gear, missingArm, (stats[stat] + bonus) * med.StatMultiplier(stat, Bodies.StatUse.All, factors), bonus);
     }
 
+    /// <summary>A locked item worn (not in the main grid): shackles. A loop, not Any with a lambda: it runs for every character on every publish.</summary>
+    static bool WearsLocked(Items.Inventory worn)
+    {
+        foreach (var item in worn.Items)
+            if (item.IsLocked && item.Section != "main") return true;
+        return false;
+    }
+
     static BodyStatus BodyOf(CharacterCold cold, Bodies.MedicalState med, RaceData race, byte task, float extraBloodLoss)
     {
         // The quick right click's tests (FUN_1407fb410): the organic need score above 0.01 is first aid (order 25), else the robot one is robot repair (60).
         float capacity = MathF.Max(Bodies.MedicalState.BloodCapacity(race, cold.Stats?.Strength ?? 50, med.HasStatsObject, med.ScaleK, med.ScaleZ), 1);
-        bool organic = med.FirstAidNeed(race, false, capacity, extraBloodLoss) > Bodies.MedicalState.AidNeedFloor;
-        bool robotNeed = med.FirstAidNeed(race, true, capacity, extraBloodLoss) > Bodies.MedicalState.AidNeedFloor;
+        var (organicNeed, robotScore) = med.FirstAidNeeds(race, capacity, extraBloodLoss);
+        bool organic = organicNeed > Bodies.MedicalState.AidNeedFloor;
+        bool robotNeed = robotScore > Bodies.MedicalState.AidNeedFloor;
         bool robot = !organic && robotNeed;
         return new(med.Blood / capacity, med.WorstPart, med.Hunger, med.Unconscious, med.Dead, organic || robot,
             task == (byte)CharacterTask.Treat ? CareKind.Treating : task == (byte)CharacterTask.Rest ? CareKind.Resting : CareKind.None, cold.MedicJob, cold.RescueJob,

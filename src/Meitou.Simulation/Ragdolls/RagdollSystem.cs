@@ -92,9 +92,6 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
     public int Tiles => physics.TileCount;
     // Real seconds of physics owed since the last step (SlowWorld); not saved or hashed.
     float physicsDue;
-    // Each slot's wanted parts this tick (SlowWorld's first step), and the slots a worker takes at a time.
-    RagdollPart[] wants = [];
-    const int WantChunk = 256;
     /// <summary>Bodies the physics steps (its awake set, ground tiles included).</summary>
     public int AwakeBodies => physics.Simulation.Bodies.ActiveSet.Count;
 
@@ -202,18 +199,8 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
             if (!table.TryResolveNext(id, out _)) Destroy(ragdolls[id]);
         order.RemoveAll(id => !ragdolls.ContainsKey(id));
 
-        // 1. Masks, building and pinning. What each character wants is worked out on the workers first (Wanted reads only its own character; the parts' walk was most of
-        // this step), the rest serially for the characters that want a ragdoll or have one.
+        // 1. Masks, building and pinning.
         var next = table.Next;
-        int count = next.Length;
-        if (wants.Length < count) wants = new RagdollPart[count];
-        var wanting = wants;
-        world.ParallelFor((count + WantChunk - 1) / WantChunk, chunk =>
-        {
-            var hot = table.Next;
-            for (int i = chunk * WantChunk, end = Math.Min(count, i + WantChunk); i < end; i++)
-                wanting[i] = hot[i].Alive && table.Cold(i) is { Appearance: not null } c ? Wanted(c) : RagdollPart.None;
-        });
         for (int i = 0; i < next.Length; i++)
         {
             if (!next[i].Alive || table.Cold(i) is not { } cold) continue;
@@ -225,7 +212,7 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
             var id = table.IdOf(i);
             ragdolls.TryGetValue(id, out var r);
             // The look's ragdoll file asked only of a character that wants one (two cache lookups per standing character every tick were most of this loop in a big battle).
-            var wanted = wants[i];
+            var wanted = cold.Appearance is null ? RagdollPart.None : Wanted(cold);
             if (wanted != RagdollPart.None && (wanted & ~RagdollPart.Limbs) == 0 && world.ViewPosition is { } eye)
             {
                 float reach = r is { Mask: not RagdollPart.None } ? LimbReach * 1.1f : LimbReach;

@@ -103,18 +103,20 @@ public readonly record struct WarTargets(int Faction, bool Everyone, CampaignTow
 /// <summary>The squads of a world, by id. Ids are never reused.</summary>
 public sealed class SquadRegistry
 {
+    // In id order for the walks (hash, refresh), and a hash index for the lookups: a find in the tree walked it, and the publish asks several per character.
     readonly SortedDictionary<int, Squad> squads = [];
+    readonly Dictionary<int, Squad> byId = [];
     int nextId;
 
     public int Count => squads.Count;
     public IEnumerable<Squad> All => squads.Values;
-    public Squad? Find(int id) => squads.GetValueOrDefault(id);
+    public Squad? Find(int id) => byId.GetValueOrDefault(id);
 
     public int NextId() => nextId++;
 
-    public void Add(Squad squad) => squads[squad.Id] = squad;
+    public void Add(Squad squad) => squads[squad.Id] = byId[squad.Id] = squad;
 
-    public bool Remove(int id) => squads.Remove(id);
+    public bool Remove(int id) => byId.Remove(id) & squads.Remove(id);
 
     /// <summary>After deaths and removals: drops dead members, and picks a new leader (the first member alive) when the old one is gone. Serial phases only.</summary>
     public void Refresh(CharacterTable table)

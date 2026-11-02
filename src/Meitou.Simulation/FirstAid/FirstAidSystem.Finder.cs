@@ -39,21 +39,15 @@ public sealed partial class FirstAidSystem
     {
         var table = world.Characters;
         if (sweepNeeds.Length < table.HighWater * 2) sweepNeeds = new float[table.HighWater * 2];
-        var needs = sweepNeeds;
-        // The needs on the workers (each reads only its own character), the list in slot order after.
-        int count = table.HighWater;
-        world.ParallelFor((count + SweepChunk - 1) / SweepChunk, chunk =>
-        {
-            for (int s = chunk * SweepChunk, end = Math.Min(count, s + SweepChunk); s < end; s++)
-            {
-                float organic = 0, robot = 0;
-                if (table.Next[s].Alive && table.Cold(s) is { } c) (organic, robot) = (AidNeed(c, false), AidNeed(c, true));
-                (needs[s * 2], needs[s * 2 + 1]) = (organic, robot);
-            }
-        });
+        var next = table.Next;
         sweepNeedy.Clear();
-        for (int s = 0; s < count; s++)
-            if (needs[s * 2] > 0 || needs[s * 2 + 1] > 0) sweepNeedy.Add(s);
+        for (int s = 0; s < table.HighWater; s++)
+        {
+            float organic = 0, robot = 0;
+            if (next[s].Alive && table.Cold(s) is { } c) (organic, robot) = AidNeeds(c);
+            (sweepNeeds[s * 2], sweepNeeds[s * 2 + 1]) = (organic, robot);
+            if (organic > 0 || robot > 0) sweepNeedy.Add(s);
+        }
         sweepCageFactions.Clear();
         for (int k = 0; k < world.Fixtures.All.Count; k++)
             if (world.Fixtures.All[k] is { Kind: FixtureKind.Cage } cage) sweepCageFactions.Add(cage.Owner);
@@ -61,9 +55,6 @@ public sealed partial class FirstAidSystem
     }
 
     internal void EndSweep() => sweeping = false;
-
-    /// <summary>Slots a worker takes at a time in <see cref="BeginSweep"/>.</summary>
-    const int SweepChunk = 256;
 
     struct CandidateCollector(List<int> slots)
     {
@@ -150,6 +141,11 @@ public sealed partial class FirstAidSystem
         && (medic.SquadId >= 0 && (slave.SlaveMaster == medic.SquadId || slave.SquadId == medic.SquadId) || slave.SlaveMaster < 0 && slave.SlaveOwner == medic.Faction);
 
     /// <summary>The patient's need score for a kit type (<see cref="MedicalState.FirstAidNeed"/>); 0 for a body without a medical state.</summary>
+    (float Organic, float Robot) AidNeeds(CharacterCold c) =>
+        c.Medical is { } med && c.Race is { } race
+            ? med.FirstAidNeeds(race, MathF.Max(MedicalState.BloodCapacity(race, c.Stats?.Strength ?? 50, med.HasStatsObject, med.ScaleK, med.ScaleZ), 1), Constants.ExtraBloodLossFromBodyparts)
+            : (0, 0);
+
     float AidNeed(CharacterCold c, bool robotKit) =>
         c.Medical is { } med && c.Race is { } race
             ? med.FirstAidNeed(race, robotKit, MathF.Max(MedicalState.BloodCapacity(race, c.Stats?.Strength ?? 50, med.HasStatsObject, med.ScaleK, med.ScaleZ), 1), Constants.ExtraBloodLossFromBodyparts)

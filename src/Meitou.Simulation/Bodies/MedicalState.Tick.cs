@@ -92,9 +92,13 @@ public sealed partial class MedicalState
     /// them, scaled by 0.01 and set to 1 above 0.999. need = max(0.5 x (1 - worst), 1 - worst vital); the blood term (1 - blood / capacity) x max(0, bleeding - 1.5 x <paramref name="extraBloodLoss"/>) x 10
     /// replaces it for the race's own kind of kit when larger and above 0.2. So 0 for a patient with everything bandaged.
     /// </summary>
-    public float FirstAidNeed(RaceData race, bool robotKit, float capacity, float extraBloodLoss)
+    public float FirstAidNeed(RaceData race, bool robotKit, float capacity, float extraBloodLoss) =>
+        FirstAidNeeds(race, capacity, extraBloodLoss) is var (organic, robot) && robotKit ? robot : organic;
+
+    /// <summary>Both of <see cref="FirstAidNeed"/>'s scores from one walk of the parts: the organic kit's and the robot kit's.</summary>
+    public (float Organic, float Robot) FirstAidNeeds(RaceData race, float capacity, float extraBloodLoss)
     {
-        if (Dead) return -0.1f;
+        if (Dead) return (-0.1f, -0.1f);
         float vitalOrganic = 100, anyOrganic = 100, vitalRobot = 100, anyRobot = 100;
         foreach (var p in parts)
         {
@@ -116,7 +120,7 @@ public sealed partial class MedicalState
         float robot = MathF.Max((2f - (Scaled(anyRobot) + 1f)) * 0.5f, 2f - (Scaled(vitalRobot) + 1f));
         if (!race.IsRobot && organic < blood && blood > 0.2) organic = blood;
         if (race.IsRobot && robot < blood && blood > 0.2) robot = blood;
-        return robotKit ? robot : organic;
+        return (organic, robot);
     }
 
     /// <summary>The need above which a patient counts as needing first aid (<c>0.01</c>, the quick right click's and the medic finders' floor, <b>Verified</b>: <c>DAT_141682ad8</c>).</summary>
