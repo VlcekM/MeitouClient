@@ -427,7 +427,7 @@ public sealed unsafe class ShaderLibrary : IGpuShaders
     public ShaderLibrary(VulkanDevice device)
     {
         this.device = device;
-        Compiler = new GlslProgramCompiler(new ShaderCompileOptions { RemapClipDepth = !device.HasDepthClipControl });
+        Compiler = new GlslProgramCompiler(new ShaderCompileOptions { DepthReversed = true });
     }
 
     /// <summary>The backend's identity of a program handle (the Vulkan-only internals resolve through this).</summary>

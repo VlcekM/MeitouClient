@@ -530,7 +530,7 @@ static class GiShaders
         """;
 
     /// <summary>
-    /// The debug view (<c>--gi-debug</c>): per pixel of the near slice's depth, the surface's position (the depth back through the projection) and a
+    /// The debug view (<c>--gi-debug</c>): per pixel of the scene depth, the surface's position (the depth back through the projection) and a
     /// normal from the depth's own slope, then rays into <see cref="GiScene"/>'s structure. Mode 1: one cosine-weighted ray, coloured by its hit
     /// distance (blue: it reached the sky). Mode 2: a grey "clay" picture lit by the sun (a shadow ray) and by what the bounce rays find: sunlit,
     /// ambient-lit grey surfaces where they hit, the sky's ambient where they miss (one bounce, no denoiser). Mode 3: rays from the eye through
@@ -551,7 +551,7 @@ static class GiShaders
         layout(set = 0, binding = 3, std430) readonly buffer Geometries { Geometry geometries[]; };
         layout(set = 0, binding = 4, std140) uniform Params
         {
-            mat4 inverse;      // NDC -> position relative to the eye (the rotation-only view and the near slice's projection, inverted)
+            mat4 inverse;      // NDC -> position relative to the eye (the rotation-only view and the scene's projection, inverted)
             vec4 eye;          // xyz: the eye relative to the traced origin
             vec4 sunDir;       // xyz: towards the sun, w: the bounce rays' length
             vec4 sunColour;
@@ -560,6 +560,7 @@ static class GiShaders
             uvec4 info;        // width, height, mode, frame
             vec4 extra;        // samples, exposure, albedo
         } p;
+        """ + DepthConvention.Glsl + """
 
         layout(buffer_reference, scalar, buffer_reference_align = 4) readonly buffer Position { vec3 v; };
         layout(buffer_reference, scalar, buffer_reference_align = 4) readonly buffer Triangle { uvec3 v; };
@@ -592,7 +593,7 @@ static class GiShaders
         vec3 surface(vec2 uv)
         {
             float d = textureLod(uDepth, uv, 0.0).r;
-            vec4 q = p.inverse * vec4(uv * 2.0 - 1.0, d * 2.0 - 1.0, 1.0);
+            vec4 q = p.inverse * vec4(uv * 2.0 - 1.0, d, 1.0);   // the stored depth is the clip depth
             return q.xyz / q.w;
         }
 
@@ -634,7 +635,7 @@ static class GiShaders
 
             if (mode == 3u)
             {
-                vec4 q = p.inverse * vec4(uv * 2.0 - 1.0, 1.0, 1.0);
+                vec4 q = p.inverse * vec4(uv * 2.0 - 1.0, DEPTH_NEAREST, 1.0);   // any point on the ray: the eye is the origin
                 vec3 dir = normalize(q.xyz / q.w);
                 rayQueryEXT rq;
                 rayQueryInitializeEXT(rq, uScene, gl_RayFlagsOpaqueEXT | gl_RayFlagsCullBackFacingTrianglesEXT, 0xFF, p.eye.xyz, 0.0, dir, 1e6);
@@ -651,7 +652,7 @@ static class GiShaders
             }
 
             float d = textureLod(uDepth, uv, 0.0).r;
-            if (d >= 1.0) { imageStore(uOut, px, vec4(mode == 1u ? vec3(0.25, 0.45, 0.8) : display(p.skyColour.rgb), 1.0)); return; }
+            if (depthIsSky(d)) { imageStore(uOut, px, vec4(mode == 1u ? vec3(0.25, 0.45, 0.8) : display(p.skyColour.rgb), 1.0)); return; }
             vec3 pos = surface(uv);
             // The normal from the neighbours on the side with the smaller step (an edge would bend it).
             vec3 l = surface(uv - vec2(texel.x, 0)), r = surface(uv + vec2(texel.x, 0));

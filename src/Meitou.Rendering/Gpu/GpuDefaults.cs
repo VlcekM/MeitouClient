@@ -73,7 +73,7 @@ public sealed unsafe class GpuDefaults : IDisposable
         vk.CmdPipelineBarrier2(cb, &dep);
         if (depth)
         {
-            var value = new ClearDepthStencilValue(1, 0);
+            var value = new ClearDepthStencilValue(1, 0);   // shadow samplers only (conventional maps): 1 is "lit"; not DepthConvention.Clear
             vk.CmdClearDepthStencilImage(cb, image.Image, ImageLayout.General, &value, 1, &range);
         }
         else

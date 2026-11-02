@@ -10,12 +10,12 @@ namespace Meitou.Rendering.Gpu.Shaders;
 /// <summary>
 /// Compiles the renderers' GLSL 3.30 programs (a vertex and a fragment shader linked by name, loose uniforms) to SPIR-V for Vulkan 1.3
 /// with shaderc: interface locations injected so the stages agree, the stages' resource bindings kept apart (vertex 0.., fragment 32..,
-/// descriptor set 0), optional clip depth remap, in-memory and on-disk caches. Names are kept in the SPIR-V for <see cref="SpirvReflection"/>.
+/// descriptor set 0), the depth convention's define, in-memory and on-disk caches. Names are kept in the SPIR-V for <see cref="SpirvReflection"/>.
 /// </summary>
 public sealed partial class GlslProgramCompiler
 {
     /// <summary>Part of the cache key; bump when the output for the same source and options can change.</summary>
-    public const int CacheVersion = 3;   // 3: bindings shifted after compiling, bundled shaderc pinned (2 was used by experiments)
+    public const int CacheVersion = 4;   // 4: clip depth remap removed, MEITOU_DEPTH_REVERSED; 3: bindings shifted after compiling, shaderc pinned
 
     readonly ConcurrentDictionary<string, CompiledProgram> memory = new();
 
@@ -57,8 +57,8 @@ public sealed partial class GlslProgramCompiler
         return program;
     }
 
-    /// <summary>Cache version of the native model and compute shaders (docs/renderer-native.md 3.4); the legacy version stays 3.</summary>
-    public const int NativeCacheVersion = 4;
+    /// <summary>Cache version of the native model and compute shaders (docs/renderer-native.md 3.4); the legacy one is <see cref="CacheVersion"/>.</summary>
+    public const int NativeCacheVersion = 5;   // 5: clip depth remap removed, MEITOU_DEPTH_REVERSED
 
     readonly ConcurrentDictionary<string, byte[]> nativeMemory = new();
 
@@ -68,21 +68,17 @@ public sealed partial class GlslProgramCompiler
     /// </summary>
     public byte[] CompileCompute(string glsl, ShaderCompileOptions? options = null) => CompileNativeStage(glsl, ShaderKind.ComputeShader, "compute", options);
 
-    /// <summary>A GLSL 450 vertex or fragment shader of the native model (strict rules, explicit layout; the clip depth remap still applies
-    /// when the options ask for it). Cached under <see cref="NativeCacheVersion"/>.</summary>
+    /// <summary>A GLSL 450 vertex or fragment shader of the native model (strict rules, explicit layout). Cached under
+    /// <see cref="NativeCacheVersion"/>.</summary>
     public byte[] CompileNative(string glsl, bool fragment, ShaderCompileOptions? options = null)
     {
-        options ??= DefaultOptions;
-        if (!fragment && options.RemapClipDepth) glsl = AppendDepthRemap(glsl);
         return CompileNativeStage(glsl, fragment ? ShaderKind.FragmentShader : ShaderKind.VertexShader, fragment ? "fragment" : "vertex", options);
     }
 
-    /// <summary>A GLSL 450 tessellation control or evaluation shader of the native model; the evaluation stage writes <c>gl_Position</c>, so it
-    /// takes the clip depth remap when the options ask for it. Cached under <see cref="NativeCacheVersion"/>.</summary>
+    /// <summary>A GLSL 450 tessellation control or evaluation shader of the native model. Cached under
+    /// <see cref="NativeCacheVersion"/>.</summary>
     public byte[] CompileNativeTessellation(string glsl, bool evaluation, ShaderCompileOptions? options = null)
     {
-        options ??= DefaultOptions;
-        if (evaluation && options.RemapClipDepth) glsl = AppendDepthRemap(glsl);
         return CompileNativeStage(glsl, evaluation ? ShaderKind.TessEvaluationShader : ShaderKind.TessControlShader, evaluation ? "tess evaluation" : "tess control", options);
     }
 
@@ -97,7 +93,7 @@ public sealed partial class GlslProgramCompiler
         if (options.UseDiskCache && ShaderCache.TryRead(dir, key, NativeCacheVersion, out var cached, out _)) spirv = cached;
         else
         {
-            spirv = CompileStage(glsl, kind, stage, 0, legacy: false);
+            spirv = CompileStage(Define(glsl, options), kind, stage, 0, legacy: false);
             // The cache file holds a pair; a single stage is stored twice.
             if (options.UseDiskCache) ShaderCache.Write(dir, key, NativeCacheVersion, spirv, spirv);
         }
@@ -105,32 +101,39 @@ public sealed partial class GlslProgramCompiler
         return spirv;
     }
 
-    /// <summary>The GLSL that is compiled: locations injected, and the depth remap appended to the vertex stage when asked for.</summary>
+    /// <summary>The GLSL that is compiled: locations injected, and the depth convention's define when the options ask for it.</summary>
     public static (string Vertex, string Fragment) Preprocess(string vertexGlsl, string fragmentGlsl, ShaderCompileOptions? options = null)
     {
         var (vs, fs) = InterfaceLocations.Apply(vertexGlsl, fragmentGlsl);
-        if (options?.RemapClipDepth == true) vs = AppendDepthRemap(vs);
-        return (vs, fs);
+        if (options is null)
+        {
+            return (vs, fs);
+        }
+        return (Define(vs, options), Define(fs, options));
     }
 
-    static string AppendDepthRemap(string vertex)
+    /// <summary>
+    /// Inserts <c>#define MEITOU_DEPTH_REVERSED 1</c> after the first <c>#version</c> line (at the top when there is none) when
+    /// <see cref="ShaderCompileOptions.DepthReversed"/> is set: it selects the reversed branch of <see cref="DepthConvention.Glsl"/>.
+    /// </summary>
+    static string Define(string glsl, ShaderCompileOptions o)
     {
-        var main = MainRegex();
-        if (!main.IsMatch(vertex)) throw new ShaderCompileException("The vertex shader has no main().", "vertex", "");
-        string renamed = main.Replace(vertex, "void meitou_original_main()", 1);
-        return renamed + """
-
-            void main()
-            {
-                meitou_original_main();
-                gl_Position.z = (gl_Position.z + gl_Position.w) * 0.5;
-            }
-
-            """;
+        if (!o.DepthReversed)
+        {
+            return glsl;
+        }
+        const string define = "#define MEITOU_DEPTH_REVERSED 1";
+        var version = VersionRegex().Match(glsl);
+        if (!version.Success)
+        {
+            return define + "\n" + glsl;
+        }
+        int at = version.Index + version.Length;
+        return glsl[..at] + "\n" + define + glsl[at..];
     }
 
-    [GeneratedRegex(@"\bvoid\s+main\s*\(\s*(?:void)?\s*\)")]
-    private static partial Regex MainRegex();
+    [GeneratedRegex(@"^[ \t]*#[ \t]*version[^\r\n]*", RegexOptions.Multiline)]
+    private static partial Regex VersionRegex();
 
     /// <summary>
     /// The shaderc this assembly ships (NuGet <c>Silk.NET.Shaderc.Native</c>), not whichever <c>shaderc_shared</c> comes first on the

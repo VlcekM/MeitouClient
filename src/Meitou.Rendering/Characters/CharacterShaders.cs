@@ -488,7 +488,7 @@ static class CharacterShaders
 
     /// <summary>
     /// The motion pass (<c>IWorldPostChain.ObjectMotion</c>): the character's own motion, as the grass writes its sway (UV units, this frame minus last, jitter removed), where
-    /// the character is what the near depth shows (<c>pc.depthIndex</c> carries the depth texture's bindless index in this pass).
+    /// the character is what the scene depth shows (<c>pc.depthIndex</c> carries the depth texture's bindless index in this pass).
     /// </summary>
     public static string MotionFragment() => "#version 450\n" + NativeShaders.Prelude(PushMembers) + Structs + Lookup + """
         in vec2 vUv;
@@ -497,7 +497,7 @@ static class CharacterShaders
         flat in uint vMaterial;
         in float vHidden;
         layout(location = 0) out vec4 fragColour;
-        float viewZ(float d) { float zd = 2.0 * d - 1.0; return view.nearPlanes.x * view.nearPlanes.y / (view.nearPlanes.y - zd * (view.nearPlanes.y - view.nearPlanes.x)); }
+        """ + DepthConvention.Glsl + """
         void main()
         {
             if (vHidden > 0.0) discard;
@@ -507,8 +507,8 @@ static class CharacterShaders
             if (m.shading == 2u && (f & 1u) != 0u) { if (dot(hairTex(m, vUv), m.alphaChannel) < m.alphaThreshold) discard; }
             else if (m.shading == 0u && (f & 512u) != 0u) { if (tex(m.tex[1], vUv).a < 0.6) discard; }
             float stored = texelFetch(textures2D[nonuniformEXT(pc.depthIndex)], ivec2(gl_FragCoord.xy), 0).r;
-            if (stored >= 1.0) discard;
-            float zs = viewZ(stored), zf = viewZ(gl_FragCoord.z);
+            if (depthIsSky(stored)) discard;
+            float zs = depthViewZ(stored, view.nearPlanes), zf = depthViewZ(gl_FragCoord.z, view.nearPlanes);
             if (abs(zs - zf) > 0.002 * zs + 0.05) discard;
             vec2 now = vNow.xy / vNow.w - view.jitterNdc, previous = vPrevious.xy / vPrevious.w;
             fragColour = vec4((now - previous) * 0.5, 0.0, 0.0);
@@ -532,7 +532,7 @@ struct CharacterMaterialRecord
 [InlineArray(CharacterShaders.TextureSlotCount)]
 struct TextureSlots { uint first; }
 
-/// <summary>The C# side of the push block (<c>flatColour</c>, <c>depthIndex</c>, <c>fill</c>, <c>skinLut</c>): 36 bytes. <c>DepthIndex</c> is the near depth texture's bindless index in the motion pass and 0 otherwise.</summary>
+/// <summary>The C# side of the push block (<c>flatColour</c>, <c>depthIndex</c>, <c>fill</c>, <c>skinLut</c>): 36 bytes. <c>DepthIndex</c> is the scene depth texture's bindless index in the motion pass and 0 otherwise.</summary>
 [StructLayout(LayoutKind.Sequential)]
 struct CharacterPush
 {

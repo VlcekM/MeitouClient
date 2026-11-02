@@ -29,7 +29,7 @@ public class VolumetricCloudNativeTests
                     using var target = ctx.CreateTexture(new TextureDesc(Meitou.Rendering.Gpu.InternalFormat.Rgba8, 96, 64,
                         Use: TextureUse.ColourTarget | TextureUse.TransferSrc, Name: "cloud test picture"));
                     var view = Matrix4x4.CreateLookAt(Vector3.Zero, Vector3.Normalize(new Vector3(0, 0.4f, -1)), Vector3.UnitY);
-                    var vp = view * Matrix4x4.CreatePerspectiveFieldOfView(1.0f, 1.5f, 1, 1000);
+                    var vp = view * DepthConvention.Perspective(1.0f, 1.5f, 1, 1000);
                     void Draw(int width, int height, bool reflection)
                     {
                         ctx.EnsureFrame();
@@ -72,7 +72,7 @@ public class VolumetricCloudNativeTests
                     sky.CloudDensityInput = 0.5f;
                     sky.HazeStrength = 1;
                     vp = Matrix4x4.CreateLookAt(Vector3.Zero, -Vector3.UnitZ, Vector3.UnitY)
-                        * Matrix4x4.CreatePerspectiveFieldOfView(0.08f, 1.5f, 1, 1000);
+                        * DepthConvention.Perspective(0.08f, 1.5f, 1, 1000);
                     Draw(96, 64, false);
                     byte[] horizon = ctx.ReadBack(target, 4);
                     const string referenceFragment = """
@@ -83,13 +83,14 @@ public class VolumetricCloudNativeTests
                         void main()
                         {
                             vec2 ndc = vUv * 2.0 - 1.0;
-                            vec4 a = uInverse * vec4(ndc, 0.0, 1.0), b = uInverse * vec4(ndc, 1.0, 1.0);
+                            vec4 a = uInverse * vec4(ndc, DEPTH_NEAREST, 1.0), b = uInverse * vec4(ndc, DEPTH_SKY, 1.0);
                             vec3 dir = normalize(b.xyz / b.w - a.xyz / a.w);
                             fragColour = vec4(atmoKenshiHaze(vec3(0.13, 0.27, 0.41), dir * uAtmoFog.w, uAtmoFog.w), 1.0);
                         }
                         """;
                     using var reference = LegacyProgram.Create(ctx, PostProcessShaders.Vertex,
-                        referenceFragment.Replace("in vec2 vUv;", AtmosphereShaders.Functions + "\nin vec2 vUv;"), "cloud horizon reference");
+                        referenceFragment.Replace("in vec2 vUv;", AtmosphereShaders.Functions + DepthConvention.Glsl
+                            + "\nin vec2 vUv;"), "cloud horizon reference");
                     var segment = new NativeSegment(ctx, reference, PrimitiveType.Triangles, "cloud horizon reference");
                     Matrix4x4.Invert(vp, out var inverse);
                     reference.Set(reference.Uniform("uInverse"), in inverse);

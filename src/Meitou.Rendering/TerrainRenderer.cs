@@ -186,7 +186,7 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
     public int DrawnChunks { get; private set; }
     public long DrawnTriangles { get; private set; }
 
-    /// <summary>Starts counting drawn nodes and triangles for a new frame (several depth slices add up).</summary>
+    /// <summary>Starts counting drawn nodes and triangles for a new frame (several views add up).</summary>
     public void BeginFrame()
     {
         (DrawnChunks, DrawnTriangles) = (0, 0);
@@ -374,7 +374,7 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
     }
 
     /// <summary>
-    /// The interior cut of the main view (docs/render-interior-cut.md; set by the world frame around its near slice's terrain draws, null otherwise): the
+    /// The interior cut of the main view (docs/render-interior-cut.md; set by the world frame around its scene's terrain draws, null otherwise): the
     /// mask's depth range, read by the cut programs, which only the patches overlapping a drawn building take (a <c>discard</c> costs the early depth test).
     /// </summary>
     internal InteriorMaskRenderer? InteriorCut { get; set; }
@@ -484,7 +484,8 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
         {
             lastGlState = pass;
             lastPatchState = pass with { Cull = CullMode.Back, Front = FrontFaceDirection.Ccw };
-            lastWireState = lastPatchState with { Polygon = PolygonKind.Line, BiasEnable = true, BiasConstant = -1, BiasSlope = -1 };
+            var (biasConstant, biasSlope) = DepthConvention.TowardViewer(1);   // GL's PolygonOffset(-1, -1), in the scene's convention
+            lastWireState = lastPatchState with { Polygon = PolygonKind.Line, BiasEnable = true, BiasConstant = biasConstant, BiasSlope = biasSlope };
             lastPrepassState = lastPatchState with { ColourMask = 0 };   // depth only
             lastLateState = lastPatchState with { DepthWrite = false };   // the prepass wrote it; equal depths pass (less-or-equal)
             lastLateEqualState = lastLateState with { Compare = DepthFunction.Equal };   // only where the prepass's own depth stayed

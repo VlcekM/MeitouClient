@@ -271,7 +271,7 @@ static class FoliageShaders
         """;
 
     /// <summary>
-    /// Writes the blade's motion (UV, current minus previous, jitter removed, as the velocity pass) where the blade is what the near depth slice
+    /// Writes the blade's motion (UV, current minus previous, jitter removed, as the velocity pass) where the blade is what the scene depth
     /// shows: its depth matches the depth buffer's within a small tolerance (the buffer is read, not tested, so the scene's depth stays untouched).
     /// </summary>
     public const string GrassMotionFragment = """
@@ -284,13 +284,13 @@ static class FoliageShaders
         uniform vec2 uNearPlanes;
         uniform vec2 uJitterNdc;
         out vec4 fragColour;
-        float viewZ(float d) { float zd = 2.0 * d - 1.0; return uNearPlanes.x * uNearPlanes.y / (uNearPlanes.y - zd * (uNearPlanes.y - uNearPlanes.x)); }
+        """ + DepthConvention.Glsl + """
         void main()
         {
             if (texture(uSprite, vUv).a < 0.6) discard;
             float stored = texelFetch(uNearDepth, ivec2(gl_FragCoord.xy), 0).r;
-            if (stored >= 1.0) discard;
-            float zs = viewZ(stored), zf = viewZ(gl_FragCoord.z);
+            if (depthIsSky(stored)) discard;
+            float zs = depthViewZ(stored, uNearPlanes), zf = depthViewZ(gl_FragCoord.z, uNearPlanes);
             if (abs(zs - zf) > 0.002 * zs + 0.05) discard;
             vec2 now = vNow.xy / vNow.w - uJitterNdc, previous = vPrevious.xy / vPrevious.w;
             fragColour = vec4((now - previous) * 0.5, 0.0, 0.0);

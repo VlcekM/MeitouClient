@@ -145,7 +145,7 @@ Metal-specific fallbacks or absent paths:
 | Foliage | Generated rock levels + GPU mesh/rock cull | **CPU cull**; generated levels are tied to the GPU path, so the Metal rock LOD detail/perf differs |
 | Post | SMAA, FogRate/VRS, particle coverage in the upscaler's reactive mask, sun-motion reprojection | **SMAA and sun-motion reprojection present**; FogRate/VRS is absent (performance-only); MetalFX gets no particle coverage (far-object shimmer), TAA keeps full- and low-resolution particles; TAA is experimental |
 | GI | `GiScene`/`GiProbes` when Vulkan ray queries exist | **no default path**; `MetalProbeGi` is experimental and opt-in; macOS Vulkan reports no ray queries, so local no-GI parity holds |
-| Temporal | Full TAA including character/grass motion and far-slice velocity | MetalFX is the default; TAA is exposed as experimental and still ghosts; no far slice |
+| Temporal | Full TAA including character/grass motion | MetalFX is the default; TAA is exposed as experimental and still ghosts |
 | Occlusion | Hi-Z foliage occlusion culling | **not implemented**; CPU cull remains correct but slower |
 
 The **new upstream effects are wired**: building effects (campfires, torches, furnace smoke), blood decals, item
@@ -397,13 +397,12 @@ deterministic still commands remain to check.
 ## Shared frame draw
 
 `WorldFrame.Draw` now runs behind `IWorldPostChain` (`WorldPostChain.cs`). Vulkan's `PostProcess` implements it;
-Metal's `MetalPostChain` wraps `PostComposite` + `PostTaa` and supplies the scene colour, the one depth slice, the
+Metal's `MetalPostChain` wraps `PostComposite` + `PostTaa` and supplies the scene colour, the scene depth, the
 jitter/temporal choice and the scene effects. Metal's host no longer has its local scene/post loop: it sets up the
 title staging, portrait/hover inputs and UI, then calls `WorldFrame.Draw` (which also draws the shared overlays).
 
-The chain reports what it lacks: Metal has one depth slice and no GI; the shared draw skips those paths. The
-reflection pass, Meitou water and low-resolution particles run on both; Vulkan still uses its far/near slices and
-GI.
+The chain reports what it lacks: Metal has no GI; the shared draw skips that path. Both draw the scene over one depth
+(Vulkan reversed, Metal conventional). The reflection pass, Meitou water and low-resolution particles run on both.
 
 Verification for this slice: Release build 0 warnings / 0 errors; quick suite 476 passed / 2 skipped.
 The normal Metal `--new-game Wanderer` run was accepted by the user on 2026-10-22; title, editor,

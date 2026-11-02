@@ -76,17 +76,14 @@ public sealed unsafe partial class TerrainDecalRenderer
             vec2 planes; uint terrainDepth; uint staticDepth;
             vec2 jitter;
         } pc;
-
-        // The depth along the view axis from a stored depth: the scene's depth is the projection's 0..1 depth moved to the clip space's 0.5..1 range (2d - 1 undoes it, as
-        // the fog volumes and the GI resolve read it).
-        float linearDepth(float stored) { float zd = 2.0 * stored - 1.0; return pc.planes.x * pc.planes.y / (pc.planes.y - zd * (pc.planes.y - pc.planes.x)); }
+        """ + DepthConvention.Glsl + """
 
         // The surface point under a depth texel, relative to the eye, and its linear depth. The depth was drawn with the projection moved by the jitter: the texel's ray
         // is the unjittered one at its centre less that move.
         vec3 posAt(ivec2 t, vec2 size, out float z)
         {
             t = clamp(t, ivec2(0), ivec2(size) - 1);
-            z = linearDepth(texelFetch(textures2D[pc.depth], t, 0).r);
+            z = depthViewZ(texelFetch(textures2D[pc.depth], t, 0).r, pc.planes);
             vec2 uvn = (vec2(t) + 0.5) / size * 2.0 - 1.0 - pc.jitter;
             vec2 xy = uvn * vec2(pc.tanX, pc.tanY) * z;
             return xy.x * pc.right + xy.y * pc.up - z * pc.back;
@@ -97,7 +94,7 @@ public sealed unsafe partial class TerrainDecalRenderer
             vec2 size = vec2(textureSize(textures2D[pc.depth], 0));
             ivec2 t = ivec2(gl_FragCoord.xy);
             float d0 = texelFetch(textures2D[pc.depth], t, 0).r;
-            if (d0 >= 0.99999) discard;
+            if (depthIsSky(d0)) discard;
             float z0;
             vec3 p = posAt(t, size, z0);
             vec3 rel = p - vCentre.xyz;
@@ -108,7 +105,7 @@ public sealed unsafe partial class TerrainDecalRenderer
             // terrain alone) is left out. An exact test: a floor or rock a few centimetres above the ground is an object's pixel, which a depth tolerance took for terrain.
             if (texelFetch(textures2D[pc.terrainDepth], t, 0).r == texelFetch(textures2D[pc.staticDepth], t, 0).r) discard;
             // Foliage, debris and anything else drawn after the static objects is nearer than the static depth: no blood on what sways.
-            if (abs(linearDepth(texelFetch(textures2D[pc.staticDepth], t, 0).r) - z0) > 0.02 + 0.0005 * z0) discard;
+            if (abs(depthViewZ(texelFetch(textures2D[pc.staticDepth], t, 0).r, pc.planes) - z0) > 0.02 + 0.0005 * z0) discard;
             float zl, zr, zu, zb;
             vec3 l = posAt(t - ivec2(1, 0), size, zl), r = posAt(t + ivec2(1, 0), size, zr);
             vec3 u = posAt(t + ivec2(0, 1), size, zu), b = posAt(t - ivec2(0, 1), size, zb);
@@ -425,7 +422,7 @@ public sealed unsafe partial class TerrainDecalRenderer
         TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, false, DepthFunction.Lequal, false, 1, false, 0));
 
     /// <summary>
-    /// Draws the decals near <paramref name="eye"/> over <paramref name="colour"/> from <paramref name="depth"/> (the near slice's, planes <paramref name="near"/> and
+    /// Draws the decals near <paramref name="eye"/> over <paramref name="colour"/> from <paramref name="depth"/> (the scene's, planes <paramref name="near"/> and
     /// <paramref name="far"/>). <paramref name="rotation"/> is the view without its translation. Between the scene's passes: the host is closed, and
     /// <see cref="CaptureTerrainDepth"/> ran this frame.
     /// </summary>

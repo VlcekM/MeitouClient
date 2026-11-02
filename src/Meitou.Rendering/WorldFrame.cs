@@ -513,20 +513,20 @@ sealed class WorldOptions
 
 /// <summary>
 /// The scene's passes as a native host (wave 4, docs/renderer-native.md 4.5 and 6; phase 8 stage 3, 8.9): <see cref="Open"/> begins a rendering
-/// of the slice's targets whose contents are secondaries, clearing them by load ops where asked, and hands the guests the targets and the scene's
-/// state; their segments are queued (<see cref="GpuContext.Record"/>) or recorded at once into secondaries of their own (sky, water, the grass,
-/// timestamps); <see cref="Close"/> records the queued jobs on the job threads and executes everything in order. <see cref="ClearDepth"/> clears
-/// the depth in its place among the guests.
+/// of the scene's targets whose contents are secondaries, clearing them by load ops where asked, and hands the guests the targets and the scene's
+/// state (the scene depth's convention, <see cref="DepthConvention"/>); their segments are queued (<see cref="GpuContext.Record"/>) or recorded at
+/// once into secondaries of their own (sky, water, the grass, timestamps); <see cref="Close"/> records the queued jobs on the job threads and executes
+/// everything in order.
 /// </summary>
 sealed class SceneHost(IGpuContext ctx)
 {
     IGpuCommandList? cmd;
-    PassTargets? targets;
 
     public bool IsOpen => cmd is not null;
 
     /// <summary>Opens the host on <paramref name="targets"/> (nothing when it is open already); its jobs count towards <paramref name="stage"/>.
-    /// <paramref name="clearColour"/> / <paramref name="clearDepth"/>: the attachments are cleared by the rendering's load ops (to the colour, to 1).
+    /// <paramref name="clearColour"/> / <paramref name="clearDepth"/>: the attachments are cleared by the rendering's load ops (to the colour, to
+    /// <see cref="DepthConvention.Clear"/>).
     /// Without secondaries (<see cref="IGpuContext.RecordsSecondaries"/>) the guests record straight into its rendering.</summary>
     public void Open(int stage, PassTargets targets, ClearColour? clearColour = null, bool clearDepth = false)
     {
@@ -534,12 +534,11 @@ sealed class SceneHost(IGpuContext ctx)
         var list = ctx.BeginNative("scene");
         bool secondaries = ctx.RecordsSecondaries;
         var colour = clearColour is { } c ? targets.Colour with { Load = LoadOp.Clear, Clear = c } : targets.Colour;
-        var depth = clearDepth ? targets.Depth with { Load = LoadOp.Clear, DepthClear = 1f } : targets.Depth;
+        var depth = clearDepth ? targets.Depth with { Load = LoadOp.Clear, DepthClear = DepthConvention.Clear } : targets.Depth;
         // The extra target (the GI resolve's albedo) is cleared to 0 with the colour: no surface there takes the probes' light in post.
         var extra = clearColour is not null && !targets.Extra.IsNull ? targets.Extra with { Load = LoadOp.Clear, Clear = default } : targets.Extra;
         list.BeginRendering(new RenderingDesc(colour, depth, targets.Width, targets.Height, 0, 0, targets.ShadingRate, targets.ShadingRateTexel, extra), secondaries);
-        this.targets = targets;
-        ctx.BeginHostPassParallel(list, targets, DrawState.Scene(targets.Formats, DrawState.Rgb), stage);   // alpha: the characters only (the SSAO character mask)
+        ctx.BeginHostPassParallel(list, targets, DrawState.SceneDepth(targets.Formats, DrawState.Rgb), stage);   // alpha: the characters only (the SSAO character mask)
         cmd = list;
     }
 
@@ -547,13 +546,6 @@ sealed class SceneHost(IGpuContext ctx)
     public void Stage(int stage)
     {
         if (cmd is not null) ctx.SetPassStage(stage);
-    }
-
-    /// <summary>Clears the open rendering's depth to 1 over the whole target, in its place among the guests' segments.</summary>
-    public void ClearDepth()
-    {
-        if (cmd is not { } list || targets is not { } t) throw new InvalidOperationException("ClearDepth without an open scene host");
-        ctx.ClearDepth(list, 1f, new PixelRect(0, 0, (uint)t.Width, (uint)t.Height));
     }
 
     public void Close()
@@ -565,7 +557,6 @@ sealed class SceneHost(IGpuContext ctx)
         ctx.EndHostPass(list);
         ctx.EndNative(list);
         cmd = null;
-        targets = null;
     }
 }
 
@@ -591,8 +582,8 @@ sealed class WorldScene : IDisposable
 }
 
 /// <summary>
-/// The world frame: loading the region, creating the renderers, and drawing a frame (shadows, reflection, sky, the depth
-/// slices, water, post-processing). Shared by the game (<c>meitou</c>) and the viewer (<c>meitou-viewer --world</c>).
+/// The world frame: loading the region, creating the renderers, and drawing a frame (shadows, reflection, sky, the scene,
+/// water, post-processing). Shared by the game (<c>meitou</c>) and the viewer (<c>meitou-viewer --world</c>).
 /// </summary>
 static partial class WorldFrame
 {
@@ -736,7 +727,6 @@ static partial class WorldFrame
             Yaw = (o.Yaw ?? 30) * MathF.PI / 180,
             Pitch = (o.Pitch ?? 35) * MathF.PI / 180,
             Distance = o.Distance ?? radius,
-            SplitDistance = Math.Max(20000, o.ObjectDistanceFor(o.MeitouReach) * 1.1f),
         };
         if (o.CameraPose is { } pose) WorldCameraCode.Apply(pose, camera);
         float terrainError = o.TerrainErrorFor(o.MeitouReach);
@@ -1250,12 +1240,6 @@ static partial class WorldFrame
         if (gpu.Characters is not null) gpu.Characters.Guard = guard;
     }
 
-    /// <summary>The depth slices this chain's scene targets can hold: Vulkan's far and near depth, or one slice for a backend with a
-    /// single scene depth target.</summary>
-    static IEnumerable<(float Near, float Far)> SceneSlices(IWorldPostChain post, WorldCamera camera) =>
-        post.DepthSlices ? camera.Slices() : [(camera.Near, camera.ViewDistance)];
-
-    /// <summary>Draws a frame: the sky, then the far depth slice (terrain, water), then the near one (terrain, objects, water).</summary>
     // The Tab panel: draw distances and LOD.
     /// <summary>The upscaler sliders' labels (the game keeps command-line upscaler options over the saved ones).</summary>
     // The anti-aliasing slider's label changes with its numbering ("0 off" 2026-10-09, SMAA 2026-10-19), so a value saved under an old one is not misread.
@@ -1347,7 +1331,6 @@ static partial class WorldFrame
                 {
                     if (MathF.Abs(ob.ObjectDistance - o.ObjectDistanceFor(was)) < 1) ob.ObjectDistance = o.ObjectDistanceFor(v);
                     if (MathF.Abs(ob.LandmarkDistance - o.LandmarkDistanceFor(was)) < 1) ob.LandmarkDistance = o.LandmarkDistanceFor(v);
-                    if (camera() is { } cam && MathF.Abs(cam.SplitDistance - Math.Max(20000, o.ObjectDistanceFor(was) * 1.1f)) < 1) cam.SplitDistance = Math.Max(20000, o.ObjectDistanceFor(v) * 1.1f);
                 }
                 if (gpu()?.Objects is { } sortObjects) sortObjects.SortNearestFirst = v;
                 if (render() is { } r && MathF.Abs(r.TerrainPixelError - o.TerrainErrorFor(was)) < 1e-3f) r.TerrainPixelError = o.TerrainErrorFor(v);
@@ -1708,8 +1691,7 @@ static partial class WorldFrame
         var (colours, _) = gpu.Sky.Prepare(scene.Clock.SunDirection(hour), eye.Y, fogDistance);
         post.AutoExposure = (gpu.Sky.MinLuminance, gpu.Sky.MaxLuminance);
         post.SetCamera(eye, view, camera.FieldOfView, aspect);
-        post.BeginNearSlice(1, 1000);
-        post.SetNearSlice(1, 1000, camera.FieldOfView, aspect);
+        post.BeginScene(1, 1000, camera.FieldOfView, aspect);
         var host = gpu.Scene ??= new SceneHost(post.Context);
         host.Open(5, post.SceneTargets, new ClearColour(0, 0, 0, 0), clearDepth: true);
         gpu.Sky.Draw(vp, colours);

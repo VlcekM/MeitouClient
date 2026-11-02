@@ -8,7 +8,7 @@ Atlas format, transitions and residency: [impostors.md](impostors.md). GPU API: 
 `FoliageWorld`/`FoliageLayout` build deterministic zone layouts on workers with separate height,
 overlay and random state. Fine/coarse tiers and velocity lookahead prepare zones before entry;
 layouts, GPU resources and visibility are separate lifetimes. Keep ready data until replacements
-publish. Instances draw in every intersecting depth slice, not only the near slice.
+publish.
 Which zones are laid out and kept, and which grass pages made and kept, adds the eye's height above the ground beyond the game's highest camera
 to the ground distance (`FoliageRenderer.Load`, [engine](engine.md#eye-height)). Drawing still measures across the ground.
 
@@ -20,7 +20,7 @@ are independent. Generated LOD/cache keys must track geometry changes; camera mo
 cause fine/coarse levels to oscillate or evict a still-needed mesh.
 
 `FoliageCull` supplies ordered zone/group/chunk work; `FoliageGpuCull` selects/compacts instances
-and indirect draws separately for scene slices, reflection and each shadow cascade.
+and indirect draws separately for the scene, the reflection and each shadow cascade.
 GPU grass uses selection/thinning kernels and indirect arguments. Stable selection and complementary
 mesh/impostor splits are tested against CPU reference. Prepare resources/constants before parallel
 recording; workers record immutable draw jobs, never upload/allocate or mutate render globals.

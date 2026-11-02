@@ -86,7 +86,7 @@ public sealed unsafe partial class SkyRenderer : IDisposable
         }
         """;
 
-    const string SimpleFragment = "#version 330 core\n" + """
+    const string SimpleFragment = "#version 330 core\n" + DepthConvention.Glsl + """
 
         in vec2 vNdc;
         out vec4 fragColour;
@@ -98,8 +98,8 @@ public sealed unsafe partial class SkyRenderer : IDisposable
         uniform float uSkyTwilight;
         void main()
         {
-            vec4 a = uInverseViewProjection * vec4(vNdc, 0.0, 1.0);
-            vec4 b = uInverseViewProjection * vec4(vNdc, 1.0, 1.0);
+            vec4 a = uInverseViewProjection * vec4(vNdc, DEPTH_NEAREST, 1.0);   // the near plane, then the far one, under either depth convention
+            vec4 b = uInverseViewProjection * vec4(vNdc, DEPTH_SKY, 1.0);
             vec3 dir = normalize(b.xyz / b.w - a.xyz / a.w);
             float up = clamp(dir.y, 0.0, 1.0);
             float t = pow(up, 0.45);
@@ -236,7 +236,7 @@ public sealed unsafe partial class SkyRenderer : IDisposable
 
         """;
 
-    static readonly string SkyFragment = "#version 330 core\n" + AtmosphereShaders.Functions + StarShader + $$"""
+    static readonly string SkyFragment = "#version 330 core\n" + DepthConvention.Glsl + AtmosphereShaders.Functions + StarShader + $$"""
 
         in vec2 vNdc;
         out vec4 fragColour;
@@ -286,8 +286,8 @@ public sealed unsafe partial class SkyRenderer : IDisposable
         float cloudsTileRed(vec2 uv) { if (uCloudMeitou.x > 0.5) return texture(uCloudsTileSmooth, uv).r; return texture(uCloudsTile, uv).r; }
         void main()
         {
-            vec4 a = uInverseViewProjection * vec4(vNdc, 0.0, 1.0);
-            vec4 b = uInverseViewProjection * vec4(vNdc, 1.0, 1.0);
+            vec4 a = uInverseViewProjection * vec4(vNdc, DEPTH_NEAREST, 1.0);   // the near plane, then the far one, under either depth convention
+            vec4 b = uInverseViewProjection * vec4(vNdc, DEPTH_SKY, 1.0);
             vec3 dir = normalize(b.xyz / b.w - a.xyz / a.w);
             float night;
             vec3 col = atmoSky(dir, night);

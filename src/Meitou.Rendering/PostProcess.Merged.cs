@@ -43,12 +43,12 @@ public sealed unsafe partial class PostProcess
     [StructLayout(LayoutKind.Sequential)]
     struct VelocityParams
     {
-        public Matrix4x4 NearToPrev, FarToPrev;
-        public Vector4 Planes;     // near slice, far slice
+        public Matrix4x4 ToPrev;
+        public Vector4 Planes;     // the scene's near and far (zw unused)
         public Vector4 Full;       // the upscalers' planes, the jitter in NDC
         public Vector4 TanEye;     // tan x, tan y, eye height, water height
         public Vector4 Right;      // xyz, the water's reactivity
-        public Vector4 Up;         // xyz, 1 when a far slice was drawn
+        public Vector4 Up;         // xyz (w unused)
         public Vector4 Back;       // xyz, the outputs: bit 0 the upscalers' depth, bit 1 the reactivity
         public Vector4 Sun;        // the direction to the sun, cos of the angle within which the sky takes all of its motion (PostProcess.SunMotion.cs)
         public Vector4 SunMotion;  // the sun's motion in the motion target's units, cos of the angle past which none, 1 when on
@@ -70,30 +70,28 @@ public sealed unsafe partial class PostProcess
         var r = viewRotation;
         var p = new VelocityParams
         {
-            NearToPrev = nearToPrevious, FarToPrev = farToPrevious,
-            Planes = new Vector4(nearPlanes.X, nearPlanes.Y, farPlanes.X, farPlanes.Y),
+            ToPrev = toPrevious,
+            Planes = new Vector4(planes.X, planes.Y, 0, 0),
             Full = new Vector4(UpscaleNear, UpscaleFar, 2 * JitterPixels.X / width, 2 * JitterPixels.Y / height),
             TanEye = new Vector4(tanY * aspectNow, tanY, eyeNow.Y, WaterHeight ?? float.MinValue),
             Right = new Vector4(r.M11, r.M21, r.M31, WaterReactive),
-            Up = new Vector4(r.M12, r.M22, r.M32, farSliceDrawn ? 1 : 0),
+            Up = new Vector4(r.M12, r.M22, r.M32, 0),
             Back = new Vector4(r.M13, r.M23, r.M33, (depthOut is not null ? 1 : 0) | (reactiveOut is not null ? 2 : 0) | (cleanColour ? 4 : 0)),
             Sun = sunMotion.Sun, SunMotion = sunMotion.Motion,
         };
         var data = Gpu.Frame.Constants.Write(new ReadOnlySpan<VelocityParams>(in p), 256);
         var cmd = Segment();
-        var near = Sampled(sceneDepth!);
-        var far = Sampled(farDepth!);
-        var bindings = stackalloc GpuBinding[7];
-        bindings[0] = GpuBinding.Sampled(0, new SampledTexture(Point(), near.View));
-        bindings[1] = GpuBinding.Sampled(1, new SampledTexture(Point(), far.View));
-        bindings[2] = GpuBinding.StorageImage(2, new SampledTexture(default, motionOut.Texture.View()));
-        bindings[3] = GpuBinding.StorageImage(3, new SampledTexture(default, (depthOut ?? motionOut).Texture.View()));
-        bindings[4] = GpuBinding.StorageImage(4, new SampledTexture(default, (reactiveOut ?? motionOut).Texture.View()));
-        bindings[5] = GpuBinding.Storage(5, new GpuBufferBinding(data.Handle, data.Offset, (ulong)sizeof(VelocityParams)));
-        bindings[6] = GpuBinding.StorageImage(6, new SampledTexture(default, (cleanColour ? sceneColour! : motionOut).Texture.View()));
+        var depth = Sampled(sceneDepth!);
+        var bindings = stackalloc GpuBinding[6];
+        bindings[0] = GpuBinding.Sampled(0, new SampledTexture(Point(), depth.View));
+        bindings[1] = GpuBinding.StorageImage(1, new SampledTexture(default, motionOut.Texture.View()));
+        bindings[2] = GpuBinding.StorageImage(2, new SampledTexture(default, (depthOut ?? motionOut).Texture.View()));
+        bindings[3] = GpuBinding.StorageImage(3, new SampledTexture(default, (reactiveOut ?? motionOut).Texture.View()));
+        bindings[4] = GpuBinding.Storage(4, new GpuBufferBinding(data.Handle, data.Offset, (ulong)sizeof(VelocityParams)));
+        bindings[5] = GpuBinding.StorageImage(5, new SampledTexture(default, (cleanColour ? sceneColour! : motionOut).Texture.View()));
         cmd.Order();
         cmd.BindPipeline(velocityPipeline!.Value);
-        cmd.BindProgramResources(velocityProgram!.Value, 0, new ReadOnlySpan<GpuBinding>(bindings, 7));
+        cmd.BindProgramResources(velocityProgram!.Value, 0, new ReadOnlySpan<GpuBinding>(bindings, 6));
         var size = new Vector2(width, height);
         cmd.PushConstants(velocityProgram!.Value, GpuStage.Compute, in size);
         cmd.Dispatch((uint)((width + 15) / 16), (uint)((height + 15) / 16));
@@ -156,20 +154,19 @@ static class MergedShaders
         #version 450
         layout(local_size_x = 16, local_size_y = 16) in;
         layout(set = 0, binding = 0) uniform sampler2D uNearDepth;
-        layout(set = 0, binding = 1) uniform sampler2D uFarDepth;
-        layout(set = 0, binding = 2, rgba16f) writeonly uniform image2D uMotion;
-        layout(set = 0, binding = 3, r32f) writeonly uniform image2D uUpscaleDepth;
-        layout(set = 0, binding = 4, r32f) writeonly uniform image2D uReactive;
-        layout(std430, set = 0, binding = 5) readonly buffer Params
+        layout(set = 0, binding = 1, rgba16f) writeonly uniform image2D uMotion;
+        layout(set = 0, binding = 2, r32f) writeonly uniform image2D uUpscaleDepth;
+        layout(set = 0, binding = 3, r32f) writeonly uniform image2D uReactive;
+        layout(std430, set = 0, binding = 4) readonly buffer Params
         {
-            mat4 nearToPrev; mat4 farToPrev;
+            mat4 toPrev;
             vec4 planes; vec4 full; vec4 tanEye; vec4 right; vec4 up; vec4 back; vec4 sun; vec4 sunMotion;
         } p;
-        layout(set = 0, binding = 6, rgba16f) uniform image2D uColour;
+        layout(set = 0, binding = 5, rgba16f) uniform image2D uColour;
         layout(push_constant) uniform Push { vec2 size; } pc;
+        """ + DepthConvention.Glsl + """
 
         float finite(float v) { return isnan(v) || isinf(v) ? 0.0 : v; }
-        float viewZ(float d, vec2 nf) { float zd = 2.0 * d - 1.0; return nf.x * nf.y / (nf.y - zd * (nf.y - nf.x)); }
 
         void main()
         {
@@ -177,24 +174,16 @@ static class MergedShaders
             if (px.x >= int(pc.size.x) || px.y >= int(pc.size.y)) return;
             vec2 uv = (vec2(px) + 0.5) / pc.size;
             float d = texelFetch(uNearDepth, px, 0).r;
-            mat4 toPrev = p.nearToPrev;
-            vec2 planes = p.planes.xy;
-            if (d >= 1.0 && p.up.w != 0.0)
-            {
-                d = texelFetch(uFarDepth, px, 0).r;
-                toPrev = p.farToPrev;
-                planes = p.planes.zw;
-            }
-            float z = viewZ(d, planes);
+            float z = depthViewZ(d, p.planes.xy);
             float depth = clamp(p.full.y * (z - p.full.x) / (z * (p.full.y - p.full.x)), 0.0, 1.0);
             vec2 ndc = uv * 2.0 - 1.0;
             vec2 tanXY = p.tanEye.xy;
             vec3 offset = (p.right.xyz * ndc.x * tanXY.x + p.up.xyz * ndc.y * tanXY.y - p.back.xyz) * z;
             float reactive = p.tanEye.z > p.tanEye.w && p.tanEye.z + offset.y < p.tanEye.w ? p.right.w : 0.0;
-            vec4 prev = toPrev * vec4(ndc, 2.0 * d - 1.0, 1.0);
+            vec4 prev = p.toPrev * vec4(ndc, d, 1.0);
             vec2 motion = ((ndc - p.full.zw) - prev.xy / prev.w) * 0.5;
             // The sky round the sun moves with the sun (PostProcess.SunMotion.cs).
-            if (p.sunMotion.w != 0.0 && d >= 1.0)
+            if (p.sunMotion.w != 0.0 && depthIsSky(d))
                 motion += p.sunMotion.xy * smoothstep(p.sunMotion.z, p.sun.w, dot(normalize(offset), p.sun.xyz));
             imageStore(uMotion, px, vec4(finite(motion.x), finite(motion.y), depth, reactive));
             int outputs = int(p.back.w);

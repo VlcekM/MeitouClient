@@ -9,7 +9,7 @@ Engine LOD/streaming rules below; GPU lifetime: [renderer-native.md](renderer-na
 CDLOD chooses patches by error in rendered pixels, morphing between levels without cracks.
 Whole-world coarse heights keep the horizon; a fine moving window follows the eye. Use fine
 height directly at weight1, blend at edges. Height/normal sampling must agree between terrain,
-objects, water/shore bakes and collision queries. Near/far slices retain consistent depth.
+objects, water/shore bakes and collision queries.
 TERRAIN-mode rock geometry is foliage work, not terrain-patch stage timing.
 
 Biome materials resolve blendinfo slots, mask/overlay/colour maps and layer colour/normal inputs.

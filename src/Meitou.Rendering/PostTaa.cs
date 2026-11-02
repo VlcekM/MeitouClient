@@ -16,9 +16,9 @@ sealed class PostTaa : IDisposable
 
     readonly IGpuContext ctx;
     readonly LegacyProgram velocity, taa;
-    readonly UniformHandle nearToPrevious, farToPrevious, nearPlanes, farPlanes, fullPlanes, jitterNdc, hasFar, mode,
-        clipDepthZeroToOne, flipDepthY, tan, right, up, back, eyeY, waterY, waterReactive, sun, sunMotion;
-    readonly SamplerSlot nearDepth, farDepth;
+    readonly UniformHandle nearToPrevious, nearPlanes, fullPlanes, jitterNdc, mode,
+        flipDepthY, tan, right, up, back, eyeY, waterY, waterReactive, sun, sunMotion;
+    readonly SamplerSlot nearDepth;
     readonly UniformHandle renderSize, displaySize, jitter, blend, reset;
     readonly SamplerSlot colour, motionSlot, history;
     readonly Dictionary<(GpuProgram Program, InternalFormat Format), GraphicsPipelineDesc> pipelines = [];
@@ -71,16 +71,11 @@ sealed class PostTaa : IDisposable
         taa = LegacyProgram.Create(ctx, PostProcessShaders.Vertex, UpscaleShaders.Taa, "post taa");
         var v = velocity;
         nearDepth = v.Sampler("uNearDepth");
-        farDepth = v.Sampler("uFarDepth");
         nearToPrevious = v.Uniform("uNearToPrev");
-        farToPrevious = v.Uniform("uFarToPrev");
         nearPlanes = v.Uniform("uNearPlanes");
-        farPlanes = v.Uniform("uFarPlanes");
         fullPlanes = v.Uniform("uFullPlanes");
         jitterNdc = v.Uniform("uJitterNdc");
-        hasFar = v.Uniform("uHasFar");
         mode = v.Uniform("uMode");
-        clipDepthZeroToOne = v.Uniform("uClipDepthZeroToOne");
         flipDepthY = v.Uniform("uFlipDepthY");
         tan = v.Uniform("uTan");
         right = v.Uniform("uRight");
@@ -125,27 +120,22 @@ sealed class PostTaa : IDisposable
         var rotation = view with { M41 = 0, M42 = 0, M43 = 0 };
         bool cut = previousValid && Vector3.Distance(eye, previousEye) > 5000;
         if (cut) sunTracker.Reset();
-        var projection = Jitter.Apply(Matrix4x4.CreatePerspectiveFieldOfView(fov, aspect, near, far), jitterPixels, width, height);
-        var previousProjection = previousValid ? Matrix4x4.CreatePerspectiveFieldOfView(previousFov, previousAspect, near, far) : projection;
+        // The scene's projections (DepthConvention: the stored depth is the clip z); the jitter first, the convention last.
+        var standard = Matrix4x4.CreatePerspectiveFieldOfView(fov, aspect, near, far);
+        var projection = DepthConvention.Apply(Jitter.Apply(standard, jitterPixels, width, height));
+        var previousProjection = previousValid ? DepthConvention.Perspective(previousFov, previousAspect, near, far) : projection;
         var toPrevious = previousValid
             ? Reprojection.ClipToPrevious(rotation, eye, projection, previousRotation, previousEye, previousProjection)
             : Matrix4x4.Identity;
 
-        // The motion: the near slice's depth carried into the previous frame (the Metal path has one depth slice).
+        // The motion: the scene's depth carried into the previous frame.
         var v = velocity;
         v.Bind(nearDepth, pointSampler with { View = depth.View() });
-        // Metal has one depth slice; uHasFar is 0, so the far sampler is never read. Bind the real depth rather than a dummy:
-        // Xcode reports a dummy here as a missing fragment texture.
-        v.Bind(farDepth, pointSampler with { View = depth.View() });
         v.Set(nearToPrevious, toPrevious);
-        v.Set(farToPrevious, Matrix4x4.Identity);
         v.Set(nearPlanes, near, far);
-        v.Set(farPlanes, near, far);
         v.Set(fullPlanes, 1f, 1_000_000f);
         v.Set(jitterNdc, 2 * jitterPixels.X / width, 2 * jitterPixels.Y / height);
-        v.Set(hasFar, 0);
         v.Set(mode, 0);
-        v.Set(clipDepthZeroToOne, ctx.ClipDepthZeroToOne ? 1 : 0);
         v.Set(flipDepthY, ctx.RenderTargetsBottomUp ? 0 : 1);
         float tanY = MathF.Tan(fov * 0.5f);
         v.Set(tan, tanY * aspect, tanY);
@@ -163,7 +153,6 @@ sealed class PostTaa : IDisposable
         {
             // The reactive pass is a second encoder of the same program: re-bind the depth views, or the new encoder starts with them missing.
             v.Bind(nearDepth, pointSampler with { View = depth.View() });
-            v.Bind(farDepth, pointSampler with { View = depth.View() });
             v.Set(waterY, waterHeight ?? float.MinValue);
             v.Set(waterReactive, 0.5f);
             v.Set(mode, 2);
@@ -189,9 +178,10 @@ sealed class PostTaa : IDisposable
 
         if (External is { } upscaler && externalOutput is { } externalTarget)
         {
-            var fullProjection = Matrix4x4.CreatePerspectiveFieldOfView(fov, aspect, near, far);
+            // MetalFX reads the scene's own depth: its projections follow the scene's convention.
+            var fullProjection = DepthConvention.Perspective(fov, aspect, near, far);
             var previousFullProjection = previousValid
-                ? Matrix4x4.CreatePerspectiveFieldOfView(previousFov, previousAspect, near, far)
+                ? DepthConvention.Perspective(previousFov, previousAspect, near, far)
                 : fullProjection;
             bool resetExternal = cut || !externalValid || !previousValid;
             bool done = upscaler.Dispatch(new UpscaleInputs

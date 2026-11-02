@@ -18,13 +18,13 @@ public sealed unsafe partial class PostProcess
     /// <summary>The nearest distance of each block of 4 x 4 pixels (<see cref="PostProcessShaders.FogRateDistance"/>).</summary>
     sealed class FogRateDistancePass : FullscreenProgram
     {
-        public readonly SamplerSlot NearDepth, FarDepth;
-        public readonly UniformHandle NearPlanes, FarPlanes, Tan, Right, Up, Back, Eye, Size, WaterY, HasFar;
+        public readonly SamplerSlot NearDepth;
+        public readonly UniformHandle NearPlanes, Tan, Right, Up, Back, Eye, Size, WaterY;
         public FogRateDistancePass(GpuContext gpu) : base(gpu, PostProcessShaders.FogRateDistance, "post fog rate distance")
         {
-            (NearDepth, FarDepth) = (P.Sampler("uNearDepth"), P.Sampler("uFarDepth"));
-            (NearPlanes, FarPlanes, Tan, Right, Up, Back) = (P.Uniform("uNearPlanes"), P.Uniform("uFarPlanes"), P.Uniform("uTan"), P.Uniform("uRight"), P.Uniform("uUp"), P.Uniform("uBack"));
-            (Eye, Size, WaterY, HasFar) = (P.Uniform("uEye"), P.Uniform("uSize"), P.Uniform("uWaterY"), P.Uniform("uHasFar"));
+            NearDepth = P.Sampler("uNearDepth");
+            (NearPlanes, Tan, Right, Up, Back) = (P.Uniform("uNearPlanes"), P.Uniform("uTan"), P.Uniform("uRight"), P.Uniform("uUp"), P.Uniform("uBack"));
+            (Eye, Size, WaterY) = (P.Uniform("uEye"), P.Uniform("uSize"), P.Uniform("uWaterY"));
         }
     }
 
@@ -104,7 +104,7 @@ public sealed unsafe partial class PostProcess
     /// </summary>
     public void BuildShadingRate(Vector3 eye)
     {
-        if (!FogVrs || !FogVrsSupported || sceneColour is null || !haveNearSlice)
+        if (!FogVrs || !FogVrsSupported || sceneColour is null || !haveScene)
         {
             rateBuiltFrame = long.MinValue;
             return;
@@ -132,9 +132,7 @@ public sealed unsafe partial class PostProcess
 
         var d = rateDistancePass;
         Bind(d.P, d.NearDepth, sceneDepth);
-        Bind(d.P, d.FarDepth, farSliceDrawn ? farDepth : null);
-        d.P.Set(d.NearPlanes, nearPlanes.X, nearPlanes.Y);
-        d.P.Set(d.FarPlanes, farPlanes.X, farPlanes.Y);
+        d.P.Set(d.NearPlanes, planes.X, planes.Y);
         d.P.Set(d.Tan, tan);
         d.P.Set(d.Right, r.M11, r.M21, r.M31);
         d.P.Set(d.Up, r.M12, r.M22, r.M32);
@@ -142,7 +140,6 @@ public sealed unsafe partial class PostProcess
         d.P.Set(d.Eye, eye);
         d.P.Set(d.Size, size);
         d.P.Set(d.WaterY, WaterHeight ?? float.MinValue);
-        d.P.Set(d.HasFar, farSliceDrawn ? 1 : 0);
         Draw(d.P, rateDistance!);
 
         var p = ratePass;

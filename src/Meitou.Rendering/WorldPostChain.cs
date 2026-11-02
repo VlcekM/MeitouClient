@@ -3,9 +3,9 @@ using Meitou.Rendering.Gpu;
 
 namespace Meitou.Rendering;
 
-/// <summary>What <see cref="IWorldPostChain.ObjectMotion"/> gets: the near slice's depth sampler, its planes, the jitter in NDC,
-/// and the render height over twice the tangent of half the field of view (pixels per unit at distance 1; 0: unknown).</summary>
-public readonly record struct MotionTargets(SampledTexture NearDepth, Vector2 NearPlanes, Vector2 JitterNdc, float FocalPixels = 0);
+/// <summary>What <see cref="IWorldPostChain.ObjectMotion"/> gets: the scene's depth sampler (<see cref="DepthConvention"/>), its planes, the jitter
+/// in NDC, and the render height over twice the tangent of half the field of view (pixels per unit at distance 1; 0: unknown).</summary>
+public readonly record struct MotionTargets(SampledTexture Depth, Vector2 Planes, Vector2 JitterNdc, float FocalPixels = 0);
 
 /// <summary>
 /// The frame's post chain as the shared world draw sees it. <see cref="PostProcess"/> is the Vulkan implementation; a backend
@@ -39,10 +39,6 @@ interface IWorldPostChain
     /// <summary>Whether frames are jittered and reconstructed over time (a temporal upscaler).</summary>
     bool Temporal { get; }
 
-    /// <summary>Whether the chain has separate far and near depth slices (Vulkan's 24-bit depth precision); a backend with one
-    /// scene depth target returns false and <see cref="WorldFrame"/> draws its single slice.</summary>
-    bool DepthSlices { get; }
-
     /// <summary>Still frames snap adaptation and weather timers.</summary>
     bool InstantAdaptation { get; set; }
 
@@ -55,7 +51,7 @@ interface IWorldPostChain
     /// <summary>The water plane the fog volumes and SSAO reconstruct against (null: no water).</summary>
     float? WaterHeight { get; set; }
 
-    /// <summary>Whether the near slice drew characters (the SSAO character mask).</summary>
+    /// <summary>Whether the scene drew characters (the SSAO character mask).</summary>
     bool CharactersDrawn { get; set; }
 
     /// <summary>The game's heat haze this frame: its amount, animation hour and far clip.</summary>
@@ -76,17 +72,12 @@ interface IWorldPostChain
     /// <summary>Begins a frame at the display size; the scene size comes from the chain's render scale.</summary>
     void Begin(int width, int height);
 
-    /// <summary>The main camera, before the slices, for the exposure, fog volumes, shafts and reprojection.</summary>
+    /// <summary>The main camera, before <see cref="BeginScene"/>, for the exposure, fog volumes, shafts and reprojection.</summary>
     void SetCamera(Vector3 eye, Matrix4x4 view, float fieldOfView, float aspect);
 
-    /// <summary>The near depth slice's planes and projection (the depth buffer left at the end of the frame).</summary>
-    void SetNearSlice(float near, float far, float fieldOfView, float aspect);
-
-    /// <summary>Before drawing the far slice (Vulkan gives it its own depth target); no-op without <see cref="DepthSlices"/>.</summary>
-    void BeginFarSlice(float near, float far);
-
-    /// <summary>Before drawing the near slice (the caller clears the depth after this).</summary>
-    void BeginNearSlice(float near, float far);
+    /// <summary>The scene's projection (<see cref="DepthConvention.Perspective"/>), called after <see cref="SetCamera"/>: sets
+    /// <see cref="SceneTargets"/>, the planes and the reprojection.</summary>
+    void BeginScene(float near, float far, float fieldOfView, float aspect);
 
     /// <summary>The scene targets with the previous frame's fog shading rate, where the backend has one.</summary>
     PassTargets WithShadingRate(PassTargets targets);

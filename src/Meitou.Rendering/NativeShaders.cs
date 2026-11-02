@@ -193,7 +193,7 @@ static partial class NativeShaders
         ["uViewProjection"] = "view.viewProjection", ["uPreviousViewProjection"] = "view.previousViewProjection", ["uEye"] = "view.eye",
         ["uTime"] = "view.time", ["uLightDir"] = "view.lightDir", ["uPreviousTime"] = "view.previousTime", ["uFogColour"] = "view.fogColour",
         ["uFogDistance"] = "view.fogDistance", ["uNearPlanes"] = "view.nearPlanes", ["uJitterNdc"] = "view.jitterNdc",
-        // The interior cut (InteriorMaskRenderer.WithCut; set by InteriorMaskRenderer.Apply for the main view's near slice only).
+        // The interior cut (InteriorMaskRenderer.WithCut; set by InteriorMaskRenderer.Apply for the main view only).
         ["uInteriorMask"] = "textures2D[view.interiorMask]", ["uInteriorCut"] = "(view.interiorCut != 0u)",
     };
 

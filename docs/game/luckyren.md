@@ -31,7 +31,7 @@ hit bursts. No original behaviour; every rule here is an engine choice. Implemen
   upper floor) they land on the burst's level.
 - They move in game time (tick count plus the simulation's alpha each frame, so smoothly at the display rate), last as long as a corpse (`BodySystem.CorpseHours`), at most 400, and are
   not saved; a new world clears them.
-- Drawn in the near slice's scene pass before the characters, colour only (the alpha is the
+- Drawn in the scene pass before the characters, colour only (the alpha is the
   characters' SSAO mask), lit with `kenshiLight` under the game sky; no shadows or motion vectors.
   Textures come from the object material resolver; a mesh without one is bone-coloured.
 - A race that bleeds also throws 4 pieces of raw meat (`Item_Meat_Raw.mesh`, rebirth.mod's "Raw Meat", a 39 × 26 cm slab, at 0.5–0.9 size).

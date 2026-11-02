@@ -261,7 +261,7 @@ sealed class PassMeter : IDisposable
         for (int s = 0; s < Slots; s++) Collect(s);
         if (measuredFrames == 0) { output.WriteLine($"passes    no frames measured (the first {skip} are skipped)"); return; }
         double f = measuredFrames;
-        // Per frame, like the CPU column: a stage that runs once per depth slice (terrain, objects, foliage, water) or a cascade drawn every
+        // Per frame, like the CPU column: a stage that runs more than once (a capture splitting the scene pass) or a cascade drawn every
         // second frame is summed over the frame, not averaged per run (until 2026-10-07 it was divided by its runs, which under-counted the
         // slices' stages: docs/render-distance-benchmark.md).
         double Gpu(Row r) => r.GpuSamples > 0 && gpuFrames > 0 ? r.Gpu / gpuFrames : double.NaN;

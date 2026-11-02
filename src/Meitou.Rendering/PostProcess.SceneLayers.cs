@@ -31,12 +31,12 @@ public sealed unsafe partial class PostProcess
     /// fog volumes' shadow from the shafts' first atlas.</summary>
     class LayerPass : FullscreenProgram
     {
-        public readonly SamplerSlot NearDepth, FarDepth, ShaftInjected, Light, Scatter;
-        public readonly UniformHandle NearPlanes, FarPlanes, WaterY, HasFar, FullSize, Grid, Range, Eye, Right, Up, Back, Tan, ShaftFog, Atlas, Params, Air, Layers;
+        public readonly SamplerSlot NearDepth, ShaftInjected, Light, Scatter;
+        public readonly UniformHandle NearPlanes, WaterY, FullSize, Grid, Range, Eye, Right, Up, Back, Tan, ShaftFog, Atlas, Params, Air, Layers;
         public LayerPass(GpuContext gpu, string fragment, string name) : base(gpu, fragment, name)
         {
-            (NearDepth, FarDepth, ShaftInjected) = (P.Sampler("uNearDepth"), P.Sampler("uFarDepth"), P.Sampler("uShaftInjected"));
-            (NearPlanes, FarPlanes, WaterY, HasFar, FullSize) = (P.Uniform("uNearPlanes"), P.Uniform("uFarPlanes"), P.Uniform("uWaterY"), P.Uniform("uHasFar"), P.Uniform("uFullSize"));
+            (NearDepth, ShaftInjected) = (P.Sampler("uNearDepth"), P.Sampler("uShaftInjected"));
+            (NearPlanes, WaterY, FullSize) = (P.Uniform("uNearPlanes"), P.Uniform("uWaterY"), P.Uniform("uFullSize"));
             (Grid, Range, Eye, Tan, ShaftFog) = (P.Uniform("uShaftGrid"), P.Uniform("uShaftRange"), P.Uniform("uShaftEye"), P.Uniform("uShaftTan"), P.Uniform("uShaftFog"));
             (Right, Up, Back) = (P.Uniform("uShaftRight"), P.Uniform("uShaftUp"), P.Uniform("uShaftBack"));
             (Light, Scatter) = (P.Sampler("uShaftLight"), P.Sampler("uShaftScatter"));
@@ -70,11 +70,8 @@ public sealed unsafe partial class PostProcess
     void SetLayerCommon(LayerPass p, (Vector4 Grid, Vector4 Range, Vector2 Tan, float Darkening) shaft)
     {
         Bind(p.P, p.NearDepth, sceneDepth);
-        Bind(p.P, p.FarDepth, farSliceDrawn ? farDepth : null);
-        p.P.Set(p.NearPlanes, nearPlanes.X, nearPlanes.Y);
-        p.P.Set(p.FarPlanes, farPlanes.X, farPlanes.Y);
+        p.P.Set(p.NearPlanes, planes.X, planes.Y);
         p.P.Set(p.WaterY, WaterHeight ?? float.MinValue);
-        p.P.Set(p.HasFar, farSliceDrawn ? 1 : 0);
         p.P.Set(p.FullSize, width, height);
         float tanY = MathF.Tan(fovNow * 0.5f);
         var r = viewRotation;
@@ -148,6 +145,7 @@ public sealed unsafe partial class PostProcess
             Bind(l.P, l.Ao, occlusion ? aoB : null);
             l.P.Set(l.Layers, shaftsPending ? 1 : 0, fogPending ? 1 : 0, occlusion ? 1 : 0, 0);
             l.P.ApplyGlobals();
+            // The mask's own depth protocol (clear 0, the shader writes 0 or 1), not the scene's DepthConvention.
             DrawPass(l.P, sceneColour!.Attachment, sceneColour.Format,
                 layerMask.Attachment with { Load = LoadOp.Clear, DepthClear = 0f }, layerMask.Format,
                 width, height, width, height, LeanState);

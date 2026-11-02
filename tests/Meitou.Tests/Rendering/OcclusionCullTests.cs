@@ -210,15 +210,10 @@ public class OcclusionCullTests
     }
 }
 
-/// <summary>The pyramid's kernels (<c>HizShaders</c>) against the CPU's: odd picture sizes, a near slice that is cleared in places and a far slice.</summary>
+/// <summary>The pyramid's kernels (<c>HizShaders</c>) against the CPU's: odd picture sizes, a scene depth (in <see cref="DepthConvention"/>'s
+/// convention) that is cleared in places.</summary>
 public class HizPyramidGpuTests
 {
-    static float ViewZ(float d, Vector2 nf)
-    {
-        float zd = 2 * d - 1;
-        return nf.X * nf.Y / (nf.Y - zd * (nf.Y - nf.X));
-    }
-
     [Fact]
     [Slow]
     public unsafe void The_kernels_build_the_least_and_greatest_distance_of_every_block_at_every_level()
@@ -231,16 +226,14 @@ public class HizPyramidGpuTests
         foreach (var (w, h) in new[] { (1000, 700), (1280, 720), (63, 37), (4, 4), (2049, 513) })
         {
             var random = new Random(w * 31 + h);
-            var nearPlanes = new Vector2(3.7f, 20400f);
-            var farPlanes = new Vector2(20000f, 80000f);
-            var near = new float[w * h];
-            var far = new float[w * h];
+            var planes = new Vector2(3.7f, 80000f);
+            var depth = new float[w * h];
             var z = new float[w * h];
-            for (int i = 0; i < near.Length; i++)
+            for (int i = 0; i < depth.Length; i++)
             {
-                near[i] = random.Next(3) == 0 ? 1f : 0.5f + 0.5f * (float)Math.Pow(random.NextDouble(), 0.05);
-                far[i] = random.Next(3) == 0 ? 1f : 0.5f + 0.5f * (float)Math.Pow(random.NextDouble(), 0.01);
-                z[i] = near[i] < 1f ? ViewZ(near[i], nearPlanes) : far[i] < 1f ? ViewZ(far[i], farPlanes) : 1e9f;
+                bool sky = random.Next(3) == 0;
+                z[i] = sky ? 1e9f : planes.X * MathF.Pow(planes.Y / planes.X, (float)random.NextDouble());   // view depths spread evenly in log
+                depth[i] = sky ? DepthConvention.Clear : DepthConvention.DepthOf(z[i], planes.X, planes.Y);
             }
             var levels = HizPyramid.Levels(w, h);
             int total = levels.Sum(l => l.W * l.H);
@@ -248,13 +241,11 @@ public class HizPyramidGpuTests
             {
                 ctx.EnsureFrame();
                 var desc = new Meitou.Rendering.Gpu.TextureDesc(InternalFormat.R32f, w, h, Use: Meitou.Rendering.Gpu.TextureUse.Sampled | Meitou.Rendering.Gpu.TextureUse.TransferDst, Name: "hiz test depth");
-                using var nearTexture = ctx.Frame.PreFrame.CreateTexture(desc);
-                using var farTexture = ctx.Frame.PreFrame.CreateTexture(desc);
+                using var depthTexture = ctx.Frame.PreFrame.CreateTexture(desc);
                 var region = new PixelRect(0, 0, (uint)w, (uint)h);
-                ctx.Uploads.Write(nearTexture, 0, 0, region, System.Runtime.InteropServices.MemoryMarshal.AsBytes(near.AsSpan()));
-                ctx.Uploads.Write(farTexture, 0, 0, region, System.Runtime.InteropServices.MemoryMarshal.AsBytes(far.AsSpan()));
+                ctx.Uploads.Write(depthTexture, 0, 0, region, System.Runtime.InteropServices.MemoryMarshal.AsBytes(depth.AsSpan()));
                 using var hiz = new HizPyramid(ctx);
-                hiz.Build(ctx.Frame.PreFrame, nearTexture, farTexture, nearPlanes, farPlanes, w, h, Vector3.Zero, Matrix4x4.Identity, 0.8f, 16f / 9);
+                hiz.Build(ctx.Frame.PreFrame, depthTexture, planes, w, h, Vector3.Zero, Matrix4x4.Identity, 0.8f, 16f / 9);
                 using var readback = Meitou.Rendering.Gpu.ReadbackBuffer.Create(ctx, (ulong)total * 8, "hiz readback");
                 ctx.Frame.PreFrame.CopyBuffer(hiz.Storage!.Handle, readback.Handle, new GpuBufferCopy(0, 0, (ulong)total * 8));
                 ctx.EndFrame();

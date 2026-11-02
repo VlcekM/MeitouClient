@@ -12,7 +12,8 @@ Current choices; implementation details belong in the linked references.
 - **Rendering:** Vulkan only; native API/Core/compiler in `Meitou.Rendering/Gpu/`, windowing in
   `Meitou.Rendering.Display`. Retain `LegacyProgram` and `GlConventions` while needed. Images use
   GENERAL. Require bindless descriptor indexing and multi-draw indirect; no native-model fallback.
-  [docs/renderer-native.md](docs/renderer-native.md).
+  [docs/renderer-native.md](docs/renderer-native.md). Scene depth: one reversed 32-bit float buffer, 0..1 clip depth, far =
+  view distance; shadow and preview targets conventional ([docs/renderer-native.md](docs/renderer-native.md) "Depth").
 - **Visual modes:** Faithful follows the original. Meitou improvements use independent switches
   and adjustable ranges. Deterministic screenshot inputs; FSR comparisons account for baseline
   noise. [docs/viewer.md](docs/viewer.md).

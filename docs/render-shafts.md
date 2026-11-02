@@ -13,7 +13,7 @@ along the view; k is strength (default0.8) times sun/(sun+sky) luminance share. 
 horizon; do not darken night ambient or double-apply haze over the sky.
 
 Froxel injection samples cascaded sun visibility; integration/air scatter share a compute scan
-walking each column once. Distances, projection and depth slices must match scene reconstruction.
+walking each column once. Distances and projection must match the scene depth's reconstruction (`depthViewZ`).
 Prepared depth/shadow/global constants and barriers precede compute/apply. Half-resolution
 scene-layer integration needs depth-aware fallback at discontinuities.
 

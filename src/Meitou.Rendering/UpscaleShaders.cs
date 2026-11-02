@@ -4,9 +4,9 @@ namespace Meitou.Rendering;
 static class UpscaleShaders
 {
     /// <summary>
-    /// Camera motion from depth: each render pixel's surface, taken from the near slice's depth (the far slice's where the near one is
-    /// empty), is carried back into the previous frame by one matrix per slice (this frame's jittered clip space to the previous frame's
-    /// unjittered one, built relative to the eye on the CPU). Writes RG = motion in UV (previous UV = UV − motion, jitter removed),
+    /// Camera motion from depth: each render pixel's surface, taken from the scene depth (<see cref="DepthConvention"/>), is carried back
+    /// into the previous frame by one matrix (this frame's jittered clip space to the previous frame's unjittered one, built relative to
+    /// the eye on the CPU). Writes RG = motion in UV (previous UV = UV − motion, jitter removed),
     /// B = the depth of one D3D-style projection with fixed planes (PostProcess.UpscaleNear .. UpscaleFar), for the upscalers and TAA's
     /// closest-sample pick. A = reactivity: how much the upscalers should trust this frame over the history, set on water (moving, see-through, no motion vectors).
     /// <c>uMode</c> 1 writes the depth alone (R32F for FSR / DLSS), 2 the reactivity alone (R8 for FSR).
@@ -15,22 +15,17 @@ static class UpscaleShaders
         #version 330 core
         in vec2 vUv;
         out vec4 fragColour;
-        uniform sampler2D uNearDepth, uFarDepth;
-        uniform mat4 uNearToPrev, uFarToPrev;
-        uniform vec2 uNearPlanes, uFarPlanes, uFullPlanes;
+        uniform sampler2D uNearDepth;
+        uniform mat4 uNearToPrev;
+        uniform vec2 uNearPlanes, uFullPlanes;
         uniform vec2 uJitterNdc;
-        uniform int uHasFar, uMode;            // 0: motion, depth, reactive; 1: depth alone; 2: reactive alone
-        uniform int uClipDepthZeroToOne;       // Metal's NDC depth is 0..1; Vulkan's is -1..1 (stored as 0..1)
+        uniform int uMode;                     // 0: motion, depth, reactive; 1: depth alone; 2: reactive alone
         uniform int uFlipDepthY;               // Metal's top-down targets: a standard fullscreen vUv reads the depth bottom-up
         uniform vec2 uTan;                     // tan(fov / 2) * aspect, tan(fov / 2)
         uniform vec3 uRight, uUp, uBack;       // the view axes in the world
         uniform float uEyeY, uWaterY, uWaterReactive;
         uniform vec4 uSun, uSunMotion;         // the sun's direction and its inner cos; its motion, outer cos, on (PostProcess.SunMotion.cs)
-
-        // Distance along the view axis from a depth-buffer value. System.Numerics' projection gives clip depth 0..1; Vulkan's
-        // viewport maps that from -1..1, while Metal's NDC depth is already 0..1.
-        float ndcDepth(float d) { return uClipDepthZeroToOne != 0 ? d : 2.0 * d - 1.0; }
-        float viewZ(float d, vec2 nf) { float zd = ndcDepth(d); return nf.x * nf.y / (nf.y - zd * (nf.y - nf.x)); }
+        """ + DepthConvention.Glsl + """
 
         void main()
         {
@@ -38,15 +33,7 @@ static class UpscaleShaders
             // order (Metal's targets are top-down, so its standard vUv reads the depth bottom-up).
             vec2 depthUv = uFlipDepthY != 0 ? vec2(vUv.x, 1.0 - vUv.y) : vUv;
             float d = textureLod(uNearDepth, depthUv, 0.0).r;
-            mat4 toPrev = uNearToPrev;
-            vec2 planes = uNearPlanes;
-            if (d >= 1.0 && uHasFar != 0)
-            {
-                d = textureLod(uFarDepth, depthUv, 0.0).r;
-                toPrev = uFarToPrev;
-                planes = uFarPlanes;
-            }
-            float z = viewZ(d, planes);
+            float z = depthViewZ(d, uNearPlanes);
             float depth = clamp(uFullPlanes.y * (z - uFullPlanes.x) / (z * (uFullPlanes.y - uFullPlanes.x)), 0.0, 1.0);
             if (uMode == 1) { fragColour = vec4(depth, 0.0, 0.0, 1.0); return; }
             vec2 ndc = vUv * 2.0 - 1.0;
@@ -55,10 +42,10 @@ static class UpscaleShaders
             vec3 offset = (uRight * ndc.x * uTan.x + uUp * ndc.y * uTan.y - uBack) * z;
             float reactive = uEyeY > uWaterY && uEyeY + offset.y < uWaterY ? uWaterReactive : 0.0;
             if (uMode == 2) { fragColour = vec4(reactive, 0.0, 0.0, 1.0); return; }
-            vec4 prev = toPrev * vec4(ndc, ndcDepth(d), 1.0);
+            vec4 prev = uNearToPrev * vec4(ndc, d, 1.0);   // the stored depth is the clip depth (0..1 on both backends)
             vec2 motion = ((ndc - uJitterNdc) - prev.xy / prev.w) * 0.5;
             // The sky round the sun moves with the sun (PostProcess.SunMotion.cs).
-            if (uSunMotion.w != 0.0 && d >= 1.0)
+            if (uSunMotion.w != 0.0 && depthIsSky(d))
                 motion += uSunMotion.xy * smoothstep(uSunMotion.z, uSun.w, dot(normalize(offset), uSun.xyz));
             fragColour = vec4(motion, depth, reactive);
         }
@@ -67,7 +54,7 @@ static class UpscaleShaders
     /// <summary>
     /// The volumetric clouds' motion over the sky's (docs/render-clouds.md "Temporal, fog and shadows"): the velocity pass gives every sky pixel the motion of the
     /// far plane (the camera's turn alone), but a cloud is a few kilometres away and drifts with the wind, so the upscalers dragged its history (streaks). Here a
-    /// sky pixel under a cloud takes the motion of the cloud's opacity-weighted point along its ray: its parallax through the slice's reprojection, plus the
+    /// sky pixel under a cloud takes the motion of the cloud's opacity-weighted point along its ray: its parallax through the scene's reprojection, plus the
     /// wind's shift on screen. Blended over the velocity target by the cloud's opacity (red and green only; source alpha, one minus source alpha); round the
     /// sun by the pixel's own opacity only, so the sky there keeps the sun's motion (the velocity pass's term).
     /// </summary>
@@ -75,20 +62,19 @@ static class UpscaleShaders
         #version 330 core
         in vec2 vUv;
         out vec4 fragColour;
-        uniform sampler2D uNearDepth, uFarDepth, uClouds, uCloudDistance;
-        uniform mat4 uToPrev;                  // the far slice's reprojection (the near one's when there is no far slice)
-        uniform vec2 uPlanes, uJitterNdc;
-        uniform int uHasFar, uClipDepthZeroToOne;
+        uniform sampler2D uNearDepth, uClouds, uCloudDistance;
+        uniform mat4 uToPrev;                  // the scene depth's reprojection
+        uniform vec2 uPlanes, uJitterNdc;      // uPlanes: near, far of the scene depth
         uniform vec2 uTan;                     // tan(fov / 2) * aspect, tan(fov / 2)
         uniform vec3 uRight, uUp, uBack;       // the view axes in the world
         uniform vec4 uSun, uSunMotion;         // as the velocity pass's: the sun's direction and inner cos; its motion, outer cos, on
         uniform vec2 uWind;                    // the clouds' shift since the last frame (world x, z): last frame's content is at point + wind
-        float ndcDepth(float d) { return uClipDepthZeroToOne != 0 ? d : 2.0 * d - 1.0; }
+        """ + DepthConvention.Glsl + """
         vec2 project(vec3 v) { float z = -dot(v, uBack); return vec2(dot(v, uRight) / (z * uTan.x), dot(v, uUp) / (z * uTan.y)); }
         void main()
         {
             vec2 depthUv = vUv;
-            if (textureLod(uNearDepth, depthUv, 0.0).r < 1.0 || (uHasFar != 0 && textureLod(uFarDepth, depthUv, 0.0).r < 1.0)) discard;
+            if (!depthIsSky(textureLod(uNearDepth, depthUv, 0.0).r)) discard;
             // The cloud's motion wherever a cloud is near, not by this pixel's opacity: a pixel a cloud has just left (or its thin edge) kept the sky's
             // motion, so DLSS fetched last frame's cloud in place and trailed it (rows of streaks behind drifting edges, camera still). The cost: a star or
             // planet within that reach moves with the cloud too. 3 x 3 taps two texels apart (about 4 render pixels round): the strongest opacity sets the
@@ -115,10 +101,9 @@ static class UpscaleShaders
             float distance = distanceSum / opacitySum;
             vec3 point = ray * distance;
             float z = -dot(point, uBack);
-            // The point's depth in the slice's projection, reprojected as the velocity pass reprojects a surface.
-            float stored = uPlanes.y * (1.0 - uPlanes.x / z) / (uPlanes.y - uPlanes.x);
-            float zd = uClipDepthZeroToOne != 0 ? stored : 2.0 * stored - 1.0;
-            vec4 prev = uToPrev * vec4(ndc, zd, 1.0);
+            // The point's depth in the scene's projection, reprojected as the velocity pass reprojects a surface.
+            float stored = depthOf(z, uPlanes);
+            vec4 prev = uToPrev * vec4(ndc, stored, 1.0);
             vec2 motion = ((ndc - uJitterNdc) - prev.xy / prev.w) * 0.5;
             // The wind: last frame this texel's cloud was at point + wind (VolumetricCloudShaders.Resolve).
             motion -= (project(point + vec3(uWind.x, 0.0, uWind.y)) - project(point)) * 0.5;

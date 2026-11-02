@@ -20,7 +20,7 @@ namespace Meitou.Rendering;
 /// </summary>
 public sealed class ReflectionPass : IDisposable
 {
-    /// <summary>Draws the scene's other geometry (characters, objects, foliage) with the given matrix, eye and frustum planes of one depth slice.</summary>
+    /// <summary>Draws the scene's other geometry (characters, objects, foliage) with the given matrix, eye and frustum planes.</summary>
     public delegate void SceneDraw(Matrix4x4 viewProjection, Vector3 eye, Vector4[] frustum);
 
     /// <summary>Size of the texture relative to the picture (the game's is a fixed 512Â²).</summary>
@@ -299,7 +299,8 @@ public sealed class ReflectionPass : IDisposable
         // and the sky, terrain, objects and foliage record into it through BeginNativeInPass, with the targets and state handed over here
         // (GpuContext.CurrentTargets, CurrentState).
         var rotation = view with { M41 = 0, M42 = 0, M43 = 0 };
-        var skyProjection = rotation * Perspective(camera.FieldOfView, aspect, 1, 1000);
+        // The sky derives its rays with the backend's clip depths (DEPTH_NEAREST, DEPTH_SKY), so its matrix follows the scene convention.
+        var skyProjection = rotation * DepthConvention.Apply(Perspective(camera.FieldOfView, aspect, 1, 1000));
         sky.PrepareClouds(skyProjection, width, height, mirroredEye, reflection: true);
         var cmd = Gpu.BeginNative("reflection");
         bool unlit = NoShadows && !FaithfulShadows;
@@ -309,11 +310,11 @@ public sealed class ReflectionPass : IDisposable
         bool secondaries = Gpu.RecordsSecondaries;
         cmd.BeginRendering(new RenderingDesc(
             target.Colour with { Load = LoadOp.Clear, Clear = new ClearColour(light.FogColour.X, light.FogColour.Y, light.FogColour.Z, 1) },
-            target.Depth with { Load = LoadOp.Clear, DepthClear = 1f },
+            target.Depth with { Load = LoadOp.Clear, DepthClear = DepthConvention.Clear },
             target.Width, target.Height), secondaries);
-        // What the guests draw with: the scene's state (depth tested with less-or-equal and written, no culling, blending or clamp, every channel).
-        // The sky turns the depth test off for itself.
-        Gpu.BeginHostPass(cmd, target, DrawState.Scene(target.Formats));
+        // What the guests draw with: the scene's state (depth tested in the scene convention and written, no culling, blending or clamp,
+        // every channel). The sky turns the depth test off for itself.
+        Gpu.BeginHostPass(cmd, target, DrawState.SceneDepth(target.Formats));
         if (secondaries && Gpu is GpuContext vulkanGpu) vulkanGpu.Frame.Parallel.Begin((CommandList)cmd, target.Formats, ReflectionStage);
         Lap(4);
         sky.Draw(skyProjection, colours);
@@ -331,27 +332,12 @@ public sealed class ReflectionPass : IDisposable
 
         terrain.BeginFrame();
         texelScale = 0.5f * height / (MathF.Tan(camera.FieldOfView / 2) * Margin);   // texels of the half-resolution image per unit of (size / distance)
-        bool first = true;
-        Matrix4x4 mapped = default, nearest = default;
-        foreach (var (near, far0) in camera.Slices())
-        {
-            float far = Math.Min(far0, MaxDistance);
-            if (far <= near * 1.5f) continue;
-            if (!first) Gpu.ClearDepth(cmd, 1f, new PixelRect(0, 0, (uint)target.Width, (uint)target.Height));
-            first = false;
-            var projection = Oblique(Perspective(camera.FieldOfView, aspect, near, far), view, clip);
-            var viewProjection = view * projection;
-            nearest = viewProjection;   // the slices run far to near: the last one's depth stays in the target
-            mapped = view * Perspective(camera.FieldOfView, aspect, near, far);
-            var frustum = Frustum(viewProjection, rect);
-            terrain.Draw(viewProjection, mirroredEye, frustum, options, light, plane - 1, secondary: true);
-            Lap(1);
-            if (near <= camera.Near) drawObjects?.Invoke(viewProjection, mirroredEye, frustum);
-        }
+        var drawn = DrawMirrored(camera, aspect, view, clip, rect, mirroredEye, terrain, light, drawObjects);
         if (unlit) Gpu.Globals.OverrideBlock(ShadowShaders.ReceiverBlock, null);
         (DrawnChunks, DrawnTriangles) = (terrain.DrawnChunks, terrain.DrawnTriangles);
+        var (mapped, nearest) = drawn ?? default;
         ViewProjection = mapped;   // x and y do not depend on the near plane
-        Valid = hasImage = !first;
+        Valid = hasImage = drawn is not null;
 
         if (Gpu is GpuContext parallelGpu && parallelGpu.Frame.Parallel.Open) parallelGpu.Frame.Parallel.End();
         cmd.EndRendering();
@@ -362,12 +348,32 @@ public sealed class ReflectionPass : IDisposable
             cmd.Resolve(msColour, colour!);
         }
         Gpu.EndHostPass(cmd);
-        // What lies beyond the near slice (20000 units on) is fogged as the sky, to the far clip.
         if (FogVolumes && hasImage) RunFog(cmd, nearest, mapped, mirroredEye);
         Gpu.EndNative(cmd);
         timer.End();
         CpuMs = watch.Elapsed.TotalMilliseconds;
         cpuSamples.Add(CpuMs);
+    }
+
+    /// <summary>
+    /// Draws the mirrored terrain and the scene callback in one pass, from the camera's near plane to its view distance (capped at
+    /// <see cref="MaxDistance"/>), the near plane replaced by the water plane <paramref name="clip"/>. Returns the plain mirrored view-projection
+    /// (what the water samples with) and the oblique one the depth was drawn with, or null when the range is too short to draw.
+    /// </summary>
+    (Matrix4x4 Mapped, Matrix4x4 Drawn)? DrawMirrored(WorldCamera camera, float aspect, Matrix4x4 view, Vector4 clip, Vector4 rect, Vector3 mirroredEye,
+        TerrainRenderer terrain, WorldLighting light, SceneDraw? drawObjects)
+    {
+        float near = camera.Near, far = Math.Min(camera.ViewDistance, MaxDistance);
+        if (far <= near * 1.5f) return null;
+
+        // The oblique clip assumes the standard 0..1 near and far planes, so the convention is applied after it (a linear map of clip z).
+        var standard = Perspective(camera.FieldOfView, aspect, near, far);
+        var viewProjection = view * DepthConvention.Apply(Oblique(standard, view, clip));
+        var frustum = Frustum(viewProjection, rect);
+        terrain.Draw(viewProjection, mirroredEye, frustum, options, light, WorldWater.Height - 1, secondary: true);
+        Lap(1);
+        drawObjects?.Invoke(viewProjection, mirroredEye, frustum);
+        return (view * DepthConvention.Apply(standard), viewProjection);
     }
 
     /// <summary>
@@ -415,20 +421,23 @@ public sealed class ReflectionPass : IDisposable
         return $"{cpuSamples.Count} passes drawn, {skipped} frames reused, {(samples == 0 ? "single-sample" : $"{samples}x samples")}; per frame mean cpu {perFrame(cpuSamples):0.00} ms, gpu {perFrame(gpuSamples):0.00} ms; per pass: gpu {One(gpuSamples)}, cpu {One(cpuSamples)} ms (cpu mean by part: terrain {PhaseMs[1] / Math.Max(cpuSamples.Count, 1):0.00}, objects {PhaseMs[2] / Math.Max(cpuSamples.Count, 1):0.00}, foliage {PhaseMs[3] / Math.Max(cpuSamples.Count, 1):0.00}); nearest water {NearestWater:0} units";
     }
 
-    /// <summary>OpenGL perspective (depth âˆ’1..1) with clip X negated: the mirror's reversed winding turns back to counter-clockwise.</summary>
+    /// <summary>
+    /// The mirror's perspective: clip X negated (the mirror's reversed winding turns back to counter-clockwise) and widened by <see cref="Margin"/>;
+    /// depth standard 0..1, reversed by the caller (<see cref="DepthConvention.Apply"/>) after the oblique clip.
+    /// </summary>
     static Matrix4x4 Perspective(float fov, float aspect, float near, float far)
     {
-        float f = 1 / MathF.Tan(fov / 2) / Margin;   // a little wider than the picture, so the distorted lookups near its edge still hit the image
-        return new Matrix4x4(
-            -f / aspect, 0, 0, 0,
-            0, f, 0, 0,
-            0, 0, (far + near) / (near - far), -1,
-            0, 0, 2 * far * near / (near - far), 0);
+        // A little wider than the picture, so the distorted lookups near its edge still hit the image.
+        var p = Matrix4x4.CreatePerspectiveFieldOfView(fov, aspect, near, far);
+        p.M11 = -p.M11 / Margin;
+        p.M22 /= Margin;
+        return p;
     }
 
     /// <summary>
-    /// Replaces the projection's near plane by <paramref name="plane"/> (world space, kept side positive), after Lengyel's
-    /// oblique near-plane clipping: only the third clip row changes, so x and y stay as they were.
+    /// Replaces the projection's near plane by <paramref name="plane"/> (world space, kept side positive), after Lengyel's oblique near-plane
+    /// clipping in its 0..1 depth form: the third clip column becomes a multiple of the plane, scaled so the far corner keeps z = w; x and y stay
+    /// as they were. Takes the standard 0..1 matrix; call before <see cref="DepthConvention.Apply"/>.
     /// </summary>
     static Matrix4x4 Oblique(Matrix4x4 p, Matrix4x4 view, Vector4 plane)
     {
@@ -438,7 +447,7 @@ public sealed class ReflectionPass : IDisposable
         var w = new Vector4(p.M14, p.M24, p.M34, p.M44);
         float denominator = Vector4.Dot(c, q);
         if (MathF.Abs(denominator) < 1e-12f) return p;
-        var z = c * (2 * Vector4.Dot(w, q) / denominator) - w;
+        var z = c * (Vector4.Dot(w, q) / denominator);
         p.M13 = z.X;
         p.M23 = z.Y;
         p.M33 = z.Z;
@@ -446,7 +455,7 @@ public sealed class ReflectionPass : IDisposable
         return p;
     }
 
-    /// <summary>The six planes (normals inwards) of an OpenGL-depth matrix; <see cref="WorldCamera.FrustumPlanes"/> assumes depth 0..1.</summary>
+    /// <summary>The six planes (normals inwards) of a 0..1-depth matrix, standard or reversed: the clip volume is 0 &lt;= z &lt;= w either way.</summary>
     static Vector4[] Frustum(Matrix4x4 m, Vector4 rect)
     {
         var c1 = new Vector4(m.M11, m.M21, m.M31, m.M41);
@@ -454,7 +463,7 @@ public sealed class ReflectionPass : IDisposable
         var c3 = new Vector4(m.M13, m.M23, m.M33, m.M43);
         var c4 = new Vector4(m.M14, m.M24, m.M34, m.M44);
         // The sides are those of the rectangle (x0, y0, x1, y1 in clip space) of the picture: x / w >= x0 is x - x0 w >= 0.
-        return [c1 - rect.X * c4, rect.Z * c4 - c1, c2 - rect.Y * c4, rect.W * c4 - c2, c4 + c3, c4 - c3];
+        return [c1 - rect.X * c4, rect.Z * c4 - c1, c2 - rect.Y * c4, rect.W * c4 - c2, c3, c4 - c3];
     }
 
     /// <summary>
@@ -511,32 +520,33 @@ public sealed class ReflectionPass : IDisposable
     GpuPipeline? fogPipeline;
 
     /// <summary>The fog pass over the reflection: the fog volume functions with the texel's distance rebuilt from the reflection's depth
-    /// (<paramref name="multisampled"/>: its first sample) through the inverse of the near slice's mirrored, oblique view-projection, and the ray's
-    /// direction through the plain one's.</summary>
+    /// (<paramref name="multisampled"/>: its first sample) through the inverse of the mirrored, oblique view-projection it was drawn with, and the
+    /// ray's direction through the plain one's.</summary>
     internal static string FogFragment(bool multisampled) => "#version 330 core\n" + AtmosphereShaders.Functions + FogVolumeShaders.Functions + $$"""
 
         in vec2 vUv;
         out vec4 fragColour;
         uniform {{(multisampled ? "sampler2DMS" : "sampler2D")}} uDepth;
-        uniform mat4 uInverse;        // clip (GL depth -1..1) to world: the near slice's mirrored, oblique view-projection inverted
+        uniform mat4 uInverse;        // clip (the stored depth, scene convention) to world: the mirrored, oblique view-projection inverted
         uniform mat4 uRayInverse;     // the same without the oblique near plane: its depth is no surface's, but its rays all point forwards
         uniform vec3 uMirroredEye;
         uniform float uWaterY;
+        {{DepthConvention.Glsl}}
 
         void main()
         {
             vec2 ndc = vUv * 2.0 - 1.0;
             float d = texelFetch(uDepth, ivec2(gl_FragCoord.xy), 0).r;
-            bool sky = d >= 1.0;
+            bool sky = depthIsSky(d);
             // The texel's ray from the plain projection: the oblique one's skewed far plane puts the mid-depth point of grazing rays (the mirrored
-            // horizon, where the water reflects most) behind the eye.
-            vec4 r = uRayInverse * vec4(ndc, 0.0, 1.0);
+            // horizon, where the water reflects most) behind the eye. Any clip depth between the planes gives a point on the ray.
+            vec4 r = uRayInverse * vec4(ndc, 0.5, 1.0);
             vec3 dir = normalize(r.xyz / r.w - uMirroredEye);
             // From under the water the ray climbs to the plane, where it is the real reflected ray from then on.
             if (dir.y < 1e-5) { fragColour = vec4(0.0, 0.0, 0.0, 1.0); return; }
             float tw = (uWaterY - uMirroredEye.y) / dir.y;
             // The surface the texel shows, by the depth the oblique projection wrote (the sky: the far clip).
-            vec4 h = uInverse * vec4(ndc, d * 2.0 - 1.0, 1.0);
+            vec4 h = uInverse * vec4(ndc, d, 1.0);
             float total = sky ? 1e9 : length(h.xyz / h.w - uMirroredEye);
             vec3 add;
             float trans;

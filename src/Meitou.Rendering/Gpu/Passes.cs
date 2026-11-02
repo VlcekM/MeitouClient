@@ -75,6 +75,12 @@ public sealed record DrawState(CullMode Cull, FrontFaceDirection Front, bool Dep
     public static DrawState Scene(in AttachmentFormats targets, ColorMask mask = Rgba) =>
         For(targets, false, depthTest: true, depthWrite: true, compare: DepthFunction.Lequal, mask: mask);
 
+    /// <summary>The scene's state on a target in the scene depth convention (the main view, the reflection, the hover mask): as
+    /// <see cref="Scene"/> but compared with <see cref="DepthConvention.SceneCompare"/> (GEQUAL when reversed). Conventional targets
+    /// (previews, icons, the object stage) keep <see cref="Scene"/>.</summary>
+    public static DrawState SceneDepth(in AttachmentFormats targets, ColorMask mask = Rgba) =>
+        For(targets, false, depthTest: true, depthWrite: true, compare: DepthConvention.SceneCompare, mask: mask);
+
     /// <summary>The pipeline for <paramref name="program"/> with this state.</summary>
     public GraphicsPipelineDesc Pipeline(GpuProgram program, VertexLayout vertex, PrimitiveType topology, AttachmentFormats targets, string name = "") =>
         new(program, vertex, topology, targets, Blend, ColourMask, Polygon, AlphaToCoverage, DepthClamp, name);
@@ -139,9 +145,6 @@ public sealed unsafe partial class GpuContext
 
     /// <inheritdoc/>
     public bool DepthClamp => Device.DepthClamp;
-
-    /// <inheritdoc/>
-    public bool ClipDepthZeroToOne => false;   // the Vulkan path's clip-depth mapping (2·z−1), extension or remap fallback
 
     /// <inheritdoc/>
     public bool RecordsSecondaries => Recording.Secondaries;

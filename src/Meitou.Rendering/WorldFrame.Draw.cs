@@ -38,7 +38,7 @@ static partial class WorldFrame
         public float Aspect;
         public Matrix4x4 View, Rotation;
 
-        // DrawSlice, for DrawParticles: the near slice's views (Near is 0 when no near slice was drawn).
+        // DrawScene, for DrawParticles: the scene's views (Near is 0 when no scene was drawn).
         public Matrix4x4 ParticleView, ParticleClose, ParticleLow, ParticleLowClose;
         public float ParticleNear;
     }
@@ -83,7 +83,7 @@ static partial class WorldFrame
         StageClock.Lap(4);
         DrawSky(ref f);
         StageClock.Lap(5);
-        DrawSlices(ref f);   // laps terrain, objects, foliage, characters and water per slice
+        DrawScene(ref f);   // laps terrain, objects, foliage, characters and water
         FinishScene(ref f);   // laps the GI resolve, the shafts and the fog volumes
         DrawParticles(ref f);   // laps particles when there are any
         FinishPicture(ref f);
@@ -190,7 +190,7 @@ static partial class WorldFrame
         {
             // The view the characters show in (CharacterRenderer.Shown): out to past their draw distance, the water's mirror image when the reflection draws them.
             float aspect = f.RenderWidth / (float)Math.Max(f.RenderHeight, 1);
-            shown.ShownView = WorldCamera.FrustumPlanes(camera.View * camera.Projection(aspect, camera.Near, Math.Max(camera.ViewDistance, 2 * shown.DrawDistance)));
+            shown.ShownView = WorldCamera.FrustumPlanes(camera.View * camera.Projection(aspect, camera.ClipNear, Math.Max(camera.ViewDistance, 2 * shown.DrawDistance)));
             shown.ShownMirror = render.Water && render.Reflections && gpu.Water is not null && gpu.Reflection is { Level: >= 2 } ? WorldWater.Height : null;
         }
         gpu.Characters?.Update(f.Eye);
@@ -483,8 +483,8 @@ static partial class WorldFrame
     }
 
     /// <summary>
-    /// The "sky-draw" stage: the scene's pass host opened on its targets, cleared to the fog colour and depth 1 (the rendering's load ops), the
-    /// interior masks, and the sky with its clouds.
+    /// The "sky-draw" stage: the scene's pass host opened on its targets, cleared to the fog colour and the scene depth's clear (the rendering's load
+    /// ops, <see cref="DepthConvention.Clear"/>), the interior masks, and the sky with its clouds.
     /// </summary>
     static void DrawSky(ref FrameState f)
     {
@@ -516,99 +516,78 @@ static partial class WorldFrame
         if (!skyHidden) gpu.Sky.Draw(skyProjection, f.Colours);
     }
 
-    /// <summary>The interior masks with the near slice's camera, before the scene's passes (the terrain of that slice reads them).</summary>
+    /// <summary>The interior masks with the scene's camera, before the scene's passes (the terrain reads them).</summary>
     static void RecordInteriorMask(ref FrameState f)
     {
         var gpu = f.Gpu;
         var post = f.Post;
         var camera = f.Camera;
-        if (f.Render.Objects && gpu.Objects is { } objects && SceneSlices(post, camera).FirstOrDefault(s => s.Near <= camera.Near) is { Far: > 0 } slice)
+        if (f.Render.Objects && gpu.Objects is { } objects)
         {
             gpu.InteriorMask ??= new InteriorMaskRenderer(post.Context, objects);
-            var projection = Jitter.Apply(camera.Projection(f.Aspect, slice.Near, slice.Far), f.Jitter, f.RenderWidth, f.RenderHeight);
+            var projection = Jitter.Apply(camera.Projection(f.Aspect, camera.ClipNear, camera.ViewDistance), f.Jitter, f.RenderWidth, f.RenderHeight);
             gpu.InteriorMask.Record(f.View * projection, f.Eye, post.RenderWidth, post.RenderHeight);
             objects.Masks = gpu.InteriorMask;
         }
         else gpu.InteriorMask?.Record(default, f.Eye, 0, 0);
     }
 
-    /// <summary>The depth slices, far to near, each with its own pass (<see cref="DrawSlice"/>); the last slice's jobs recorded and run.</summary>
-    static void DrawSlices(ref FrameState f)
-    {
-        var post = f.Post;
-        var host = f.Host;
-        post.SetCamera(f.Eye, f.View, f.Camera.FieldOfView, f.Aspect);
-        f.Gpu.Terrain.BeginFrame();
-
-        bool first = true, foliageDrawn = false;
-        foreach (var (near, far) in SceneSlices(post, f.Camera))
-        {
-            DrawSlice(ref f, near, far, first, foliageDrawn);
-            first = false;
-            foliageDrawn = true;
-        }
-
-        // Records the last slice's jobs and executes them: the render thread's share (the fork-join) counts as "water", the last stage of the host.
-        if (host.IsOpen)
-        {
-            host.Close();
-            StageClock.Lap(9);
-        }
-    }
-
-    /// <summary>One depth slice's camera: its range, whether it is the near slice, and its projections (plain, jittered by the upscaler, with the view).</summary>
-    readonly record struct Slice(float Near, float Far, bool IsNear, Matrix4x4 Projection, Matrix4x4 Jittered, Matrix4x4 ViewProjection, Vector4[] Frustum);
+    /// <summary>The scene's camera: its range, and its projections (plain, jittered by the upscaler, with the view).</summary>
+    readonly record struct SceneView(float Near, float Far, Matrix4x4 Projection, Matrix4x4 Jittered, Matrix4x4 ViewProjection, Vector4[] Frustum);
 
     /// <summary>
-    /// One depth slice from <paramref name="near"/> to <paramref name="far"/>: terrain, objects, foliage, the terrain's late colour and the debris,
-    /// the surface blood, the characters (near slice), the water; each its own stage.
+    /// The scene from the near plane to the view distance over one depth (<see cref="DepthConvention"/>): terrain, objects, foliage, the terrain's
+    /// late colour and the debris, the surface blood, the characters, the water; each its own stage. The jobs recorded and run at the end.
     /// </summary>
-    static void DrawSlice(ref FrameState f, float near, float far, bool first, bool foliageDrawn)
+    static void DrawScene(ref FrameState f)
     {
-        var s = BeginSlice(ref f, near, far, first);
+        var s = BeginScene(ref f);
         var gpu = f.Gpu;
 
         // The blood on walls, buildings and objects (the bloodsurfaces switch) needs the depths the terrain and then the static scene wrote, to leave
         // the terrain's pixels to its own blood.
-        bool surfaceBlood = s.IsNear && gpu.Decals is { Surfaces: true, SurfaceCount: > 0 } bloodDecals && gpu.DecalStore is not null && bloodDecals.SurfacesNear(f.Eye);
+        bool surfaceBlood = gpu.Decals is { Surfaces: true, SurfaceCount: > 0 } bloodDecals && gpu.DecalStore is not null && bloodDecals.SurfacesNear(f.Eye);
 
-        DrawSliceTerrain(ref f, s);
+        DrawSceneTerrain(ref f, s);
         if (surfaceBlood) CaptureDepth(ref f, 7, gpu.Decals!.CaptureTerrainDepth);
-        DrawSliceObjects(ref f, s);
+        DrawSceneObjects(ref f, s);
         if (surfaceBlood) CaptureDepth(ref f, 8, gpu.Decals!.CaptureStaticDepth);
-        DrawSliceFoliage(ref f, s, foliageDrawn);
-        DrawSliceLate(ref f, s);
+        DrawSceneFoliage(ref f, s);
+        DrawSceneLate(ref f, s);
         if (surfaceBlood) DrawSurfaceBlood(ref f, s);
-        DrawSliceCharacters(ref f, s);
-        DrawWater(ref f, near, far, s.IsNear, s.ViewProjection);
-        if (s.IsNear) KeepParticleViews(ref f, s);
+        DrawSceneCharacters(ref f, s);
+        DrawWater(ref f, s.Near, s.Far, s.ViewProjection);
+        KeepParticleViews(ref f, s);
+        CloseScene(f.Host);
     }
 
     /// <summary>
-    /// Opens the slice's pass (the slices draw into different framebuffers: the far slice has a depth of its own, which the fog volumes pass reads) and
-    /// works out its camera; the near slice attaches the motion vectors.
+    /// The scene's projection to the post chain (after its camera: the reprojection needs both) and its views, with the motion vectors attached. The
+    /// host <see cref="DrawSky"/> opened stays open: one depth, no second pass.
     /// </summary>
-    static Slice BeginSlice(ref FrameState f, float near, float far, bool first)
+    static SceneView BeginScene(ref FrameState f)
     {
         var post = f.Post;
-        var host = f.Host;
         var camera = f.Camera;
-        bool nearSlice = near <= camera.Near;
-
-        host.Close();
-        if (!first || nearSlice) post.BeginNearSlice(near, far);
-        else post.BeginFarSlice(near, far);
-        // A later slice starts on a cleared depth: in its place among the segments while the host stays open, else by the load op.
-        if (!first && host.IsOpen) host.ClearDepth();
-        host.Open(6, post.WithShadingRate(post.SceneTargets), clearDepth: !first && !host.IsOpen);
-        if (nearSlice) post.SetNearSlice(near, far, camera.FieldOfView, f.Aspect);
+        float near = camera.ClipNear, far = camera.ViewDistance;
+        post.SetCamera(f.Eye, f.View, camera.FieldOfView, f.Aspect);
+        post.BeginScene(near, far, camera.FieldOfView, f.Aspect);
+        f.Gpu.Terrain.BeginFrame();
 
         var projection = camera.Projection(f.Aspect, near, far);
         var jittered = Jitter.Apply(projection, f.Jitter, f.RenderWidth, f.RenderHeight);
         var viewProjection = f.View * jittered;
-        var s = new Slice(near, far, nearSlice, projection, jittered, viewProjection, WorldCamera.FrustumPlanes(viewProjection));
-        if (nearSlice) AttachMotion(ref f, s.ViewProjection, f.View * projection, s.Frustum, f.Rotation * jittered, f.Rotation * projection);
+        var s = new SceneView(near, far, projection, jittered, viewProjection, WorldCamera.FrustumPlanes(viewProjection));
+        AttachMotion(ref f, s.ViewProjection, f.View * projection, s.Frustum, f.Rotation * jittered, f.Rotation * projection);
         return s;
+    }
+
+    /// <summary>Records the scene's jobs and executes them: the render thread's share (the fork-join) counts as "water", the last stage of the host.</summary>
+    static void CloseScene(SceneHost host)
+    {
+        if (!host.IsOpen) return;
+        host.Close();
+        StageClock.Lap(9);
     }
 
     /// <summary>Closes the pass for <paramref name="capture"/> of the scene depth so far, and opens it again counting towards <paramref name="stage"/>.</summary>
@@ -619,21 +598,21 @@ static partial class WorldFrame
         f.Host.Open(stage, f.Post.WithShadingRate(f.Post.SceneTargets));
     }
 
-    /// <summary>The terrain; its colour comes after the foliage (<see cref="DrawSliceLate"/>) when late colour is on.</summary>
-    static void DrawSliceTerrain(ref FrameState f, in Slice s)
+    /// <summary>The terrain; its colour comes after the foliage (<see cref="DrawSceneLate"/>) when late colour is on.</summary>
+    static void DrawSceneTerrain(ref FrameState f, in SceneView s)
     {
         var terrain = f.Gpu.Terrain;
         f.Host.Stage(6);
         terrain.FogCull = f.Gpu.FogVolumes;
-        terrain.InteriorCut = s.IsNear ? f.Gpu.InteriorMask : null;
+        terrain.InteriorCut = f.Gpu.InteriorMask;
         terrain.Draw(s.ViewProjection, f.Eye, s.Frustum, f.Render, f.Light, defer: TerrainLateColour.Enabled);
         terrain.InteriorCut = null;
         terrain.FogCull = null;
         StageClock.Lap(6);
     }
 
-    /// <summary>The objects, culled by the fog and (near slice) the interior masks.</summary>
-    static void DrawSliceObjects(ref FrameState f, in Slice s)
+    /// <summary>The objects, culled by the fog and the interior masks.</summary>
+    static void DrawSceneObjects(ref FrameState f, in SceneView s)
     {
         var gpu = f.Gpu;
         var light = f.Light;
@@ -641,7 +620,7 @@ static partial class WorldFrame
         if (gpu.Objects is { } objects)
         {
             objects.FogCull = gpu.FogVolumes;
-            objects.InteriorCut = s.IsNear ? gpu.InteriorMask : null;
+            objects.InteriorCut = gpu.InteriorMask;
             if (f.Render.Objects) objects.Draw(s.ViewProjection, f.Eye, s.Frustum, f.Render, light.SunDirection, light.FogColour, light.FogDistance, gpu.Terrain);
             objects.FogCull = null;
             objects.InteriorCut = null;
@@ -649,8 +628,8 @@ static partial class WorldFrame
         StageClock.Lap(7);
     }
 
-    /// <summary>Foliage in every depth slice (it reaches 32000+ units at the default x4), counted as one draw.</summary>
-    static void DrawSliceFoliage(ref FrameState f, in Slice s, bool continuation)
+    /// <summary>The foliage (it reaches 32000+ units at the default x4).</summary>
+    static void DrawSceneFoliage(ref FrameState f, in SceneView s)
     {
         var gpu = f.Gpu;
         var light = f.Light;
@@ -659,10 +638,9 @@ static partial class WorldFrame
         {
             foliage.FogCull = gpu.FogVolumes;
             foliage.Occlusion = f.Post.OcclusionFor(f.Eye);
-            foliage.InteriorCut = s.IsNear ? gpu.InteriorMask : null;
+            foliage.InteriorCut = gpu.InteriorMask;
             foliage.PrepassView = true;
-            if (s.IsNear || FoliageFarSlice.Enabled)
-                foliage.Draw(s.ViewProjection, f.Eye, s.Frustum, f.Render, light.SunDirection, light.FogColour, light.FogDistance, gpu.Terrain, continuation: continuation);
+            foliage.Draw(s.ViewProjection, f.Eye, s.Frustum, f.Render, light.SunDirection, light.FogColour, light.FogDistance, gpu.Terrain);
             foliage.PrepassView = false;
             foliage.FogCull = null;
             foliage.Occlusion = default;
@@ -671,13 +649,13 @@ static partial class WorldFrame
         StageClock.Lap(8);
     }
 
-    /// <summary>The terrain colour where nothing nearer covers it (the depth is in from the draw above), and (near slice) the debris and stuck bolts.</summary>
-    static void DrawSliceLate(ref FrameState f, in Slice s)
+    /// <summary>The terrain colour where nothing nearer covers it (the depth is in from the draw above), and the debris and stuck bolts.</summary>
+    static void DrawSceneLate(ref FrameState f, in SceneView s)
     {
         var gpu = f.Gpu;
         f.Host.Stage(6);
         gpu.Terrain.DrawDeferred();
-        if (s.IsNear && gpu.Debris is { } debris)
+        if (gpu.Debris is { } debris)
         {
             debris.Draw(CollectionsMarshal.AsSpan(gpu.DebrisPieces), s.ViewProjection, f.Eye, s.Frustum, f.Light,
                 look => gpu.Characters is { } chars && chars.SkinOn(look.Race, look.SkinDefault) ? chars.SkinTable : 0);
@@ -687,7 +665,7 @@ static partial class WorldFrame
     }
 
     /// <summary>The blood on walls, buildings and objects (the bloodsurfaces switch): over the finished opaque scene, under the characters and the water.</summary>
-    static void DrawSurfaceBlood(ref FrameState f, in Slice s)
+    static void DrawSurfaceBlood(ref FrameState f, in SceneView s)
     {
         var post = f.Post;
         f.Host.Close();
@@ -699,10 +677,10 @@ static partial class WorldFrame
     }
 
     /// <summary>
-    /// Characters after the opaque geometry (near slice): they alone write the scene's alpha (SSAO's character mask), so nothing drawn later may cover them
+    /// Characters after the opaque geometry: they alone write the scene's alpha (SSAO's character mask), so nothing drawn later may cover them
     /// but water. Their view-projection is the rotation-only one, for positions relative to the eye.
     /// </summary>
-    static void DrawSliceCharacters(ref FrameState f, in Slice s)
+    static void DrawSceneCharacters(ref FrameState f, in SceneView s)
     {
         var gpu = f.Gpu;
         var light = f.Light;
@@ -711,9 +689,8 @@ static partial class WorldFrame
             fogCharacters.FogCull = gpu.FogVolumes;
             fogCharacters.InteriorObjects = gpu.Objects;
         }
-        if (!s.IsNear) return;
 
-        f.Post.CharactersDrawn = false;   // none this frame unless the near slice draws some below
+        f.Post.CharactersDrawn = false;   // none this frame unless some are drawn below
         if (gpu.Characters is not { } characters) return;
         f.Host.Stage(StageClock.Characters);
         characters.Draw(s.ViewProjection, f.Eye, s.Frustum, light.SunDirection, light.FogColour, light.FogDistance, f.Rotation * s.Jittered);
@@ -722,22 +699,24 @@ static partial class WorldFrame
     }
 
     /// <summary>
-    /// The near slice's views for the weather particles, which come last, after the fog volumes (FinishScene): the game draws them in queue 84, the
+    /// The scene's views for the weather particles, which come last, after the fog volumes (FinishScene): the game draws them in queue 84, the
     /// volumes in 82. The unjittered pair is for low-resolution particles blended after the upscaler (its output is unjittered).
     /// </summary>
-    static void KeepParticleViews(ref FrameState f, in Slice s)
+    static void KeepParticleViews(ref FrameState f, in SceneView s)
     {
-        float close = Math.Min(0.5f, s.Near * 0.5f);
-        var closeProjection = f.Camera.Projection(f.Aspect, close, s.Near);
+        // The close particles are those nearer than the camera's near rule (WorldCamera.Near), not the scene's clip plane (ClipNear).
+        float near = f.Camera.Near;
+        float close = Math.Min(0.5f, near * 0.5f);
+        var closeProjection = f.Camera.Projection(f.Aspect, close, near);
         f.ParticleView = s.ViewProjection;
         f.ParticleClose = f.View * Jitter.Apply(closeProjection, f.Jitter, f.RenderWidth, f.RenderHeight);
         f.ParticleLow = f.View * s.Projection;
         f.ParticleLowClose = f.View * closeProjection;
-        f.ParticleNear = s.Near;
+        f.ParticleNear = near;
     }
 
     /// <summary>
-    /// The near slice's motion vectors: the grass's sway, and the characters' with their view-projection for positions relative to the eye (the rotation
+    /// The scene's motion vectors: the grass's sway, and the characters' with their view-projection for positions relative to the eye (the rotation
     /// only, exact: the world matrix, with the eye's world position in its translation, has lost the digits far from the origin: CharacterRenderer.DrawView).
     /// </summary>
     static void AttachMotion(ref FrameState f, Matrix4x4 viewProjection, Matrix4x4 unjittered, Vector4[] frustum, Matrix4x4 relative, Matrix4x4 relativeUnjittered)
@@ -753,19 +732,19 @@ static partial class WorldFrame
     }
 
     /// <summary>
-    /// The "water" stage of a slice: transparent water refracts the slice's scene and measures its depth through it (fully opaque distant slices need
-    /// no copy or pass restart), then the water itself.
+    /// The "water" stage: transparent water refracts the scene and measures its depth through it (water that needs neither takes no copy or pass
+    /// restart), then the water itself.
     /// </summary>
-    static void DrawWater(ref FrameState f, float near, float far, bool nearSlice, Matrix4x4 viewProjection)
+    static void DrawWater(ref FrameState f, float near, float far, Matrix4x4 viewProjection)
     {
         var gpu = f.Gpu;
         var post = f.Post;
         var host = f.Host;
         bool water = f.Render.Water;
-        if (water && gpu.Water is { } capturing && capturing.NeedsCapture(near, nearSlice))
+        if (water && gpu.Water is { } capturing && capturing.NeedsCapture(near))
         {
             host.Close();
-            capturing.CaptureScene(post.SceneColour, nearSlice ? post.SceneDepth : null, near, far);   // the far slice's depth is a texture of its own
+            capturing.CaptureScene(post.SceneColour, post.SceneDepth, near, far);
             host.Open(9, post.WithShadingRate(post.SceneTargets));
         }
 
@@ -779,7 +758,7 @@ static partial class WorldFrame
     }
 
     /// <summary>
-    /// After the slices, over the finished scene: the GI resolve, the Meitou light shafts (docs/render-shafts.md: the haze darkened where the sun is
+    /// After the scene's passes, over the finished scene: the GI resolve, the Meitou light shafts (docs/render-shafts.md: the haze darkened where the sun is
     /// shadowed along the view, before the fog volumes blend over it), the placed fog volumes, then the SSAO.
     /// </summary>
     static void FinishScene(ref FrameState f)
@@ -810,7 +789,7 @@ static partial class WorldFrame
     }
 
     /// <summary>
-    /// The "particles" stage's draw: blended over the scene and tested against the near slice's depth (they are not fogged; docs/formats/fogfeatures.md);
+    /// The "particles" stage's draw: blended over the scene and tested against its depth (they are not fogged; docs/formats/fogfeatures.md);
     /// in Meitou the big alpha and additive sprites into low-resolution targets (half, then quarter size), each over the scene with a depth-aware upsample.
     /// </summary>
     static void DrawParticles(ref FrameState f)
@@ -859,7 +838,7 @@ static partial class WorldFrame
 
     /// <summary>
     /// The "post" stage: the post chain's end (SSAO, upscaler, exposure, tone map, FXAA into the chain's target), then what goes over the finished
-    /// picture, sorted against the near slice's depth: the movement marker and stealth arrows, the navmesh view, the hover outline, the shadow and GI debug views.
+    /// picture, sorted against the scene's depth: the movement marker and stealth arrows, the navmesh view, the hover outline, the shadow and GI debug views.
     /// </summary>
     static void FinishPicture(ref FrameState f)
     {
@@ -874,38 +853,35 @@ static partial class WorldFrame
         post.SetCloudMotion(gpu.Sky.CloudMotion);
         post.End();
 
-        // The nearest slice, asked only by an overlay that draws.
+        // The scene's projection, asked only by an overlay that draws.
         float aspect = f.Aspect;
         var view = f.View;
-        (float Near, float Far, Matrix4x4 Projection) Nearest()
-        {
-            var (near, far) = SceneSlices(post, camera).Last();
-            return (near, far, camera.Projection(aspect, near, far));
-        }
+        (float Near, float Far, Matrix4x4 Projection) SceneProjection() =>
+            (camera.ClipNear, camera.ViewDistance, camera.Projection(aspect, camera.ClipNear, camera.ViewDistance));
 
         // The movement marker and stealth arrows, in their materials' colours, like the game's debug_marker.
         if (gpu.Markers is { Active: true } marker && f.ParticleNear > 0 && post.Target is { } picture)
-            marker.Record(picture, width, height, post.SceneDepth, post.RenderWidth, post.RenderHeight, view * Nearest().Projection, eye, f.Sun);
+            marker.Record(picture, width, height, post.SceneDepth, post.RenderWidth, post.RenderHeight, view * SceneProjection().Projection, eye, f.Sun);
         else gpu.Markers?.Idle();
 
         // The navmesh debug view (Meitou only).
         if (gpu.NavmeshOverlay is { Visible: true } navOverlay && post.Target is { } navPicture)
-            navOverlay.Record(navPicture, width, height, post.SceneDepth, post.RenderWidth, post.RenderHeight, view * Nearest().Projection, eye);
+            navOverlay.Record(navPicture, width, height, post.SceneDepth, post.RenderWidth, post.RenderHeight, view * SceneProjection().Projection, eye);
 
         // The hover outline (Meitou only): the mask drawn after the portraits.
         if (gpu.HoverOutline is { } outline && gpu.Characters?.HoverMasks is { Count: > 0 } hover && post.Target is { } hoverPicture)
         {
-            var (near, far, projection) = Nearest();
+            var (near, far, projection) = SceneProjection();
             outline.Record(hoverPicture, width, height, hover, post.SceneDepth, post.RenderWidth, post.RenderHeight, near, far, view * projection);
         }
 
         if (gpu.DebugShadows > 0 && gpu.Shadow is not null)
-            gpu.Shadow.DrawDebug(gpu.DebugShadows, post.Target!, width, height, view, Nearest().Projection, eye);
+            gpu.Shadow.DrawDebug(gpu.DebugShadows, post.Target!, width, height, view, SceneProjection().Projection, eye);
 
         if (gpu.GiDebug > 0 && gpu.GiActive && gpu.Gi is { } traced && gpu.GiDebugPass is { } giDebug && post.Target is { } giTarget)
         {
-            // The near slice's depth back to positions relative to the eye: the rotation-only view and that slice's projection, inverted.
-            Matrix4x4.Invert(f.Rotation * Nearest().Projection, out var inverse);
+            // The scene depth back to positions relative to the eye: the rotation-only view and the scene's projection, inverted.
+            Matrix4x4.Invert(f.Rotation * SceneProjection().Projection, out var inverse);
             giDebug.Run(gpu.GiDebug, traced, post.SceneDepth, giTarget, post.RenderWidth, post.RenderHeight, inverse, eye, f.Light);
         }
     }
