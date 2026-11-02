@@ -304,10 +304,21 @@ public sealed class BedSystem(PopulationData data, BedSettings? settings = null)
         return true;
     }
 
-    /// <summary>The walker at its bed: the rent, then in (the original's <c>Task_UseBed</c> start <c>FUN_140357d00</c>). False: the trip is over either way.</summary>
+    /// <summary>
+    /// The walker at its bed: the rent, then in (the original's <c>Task_UseBed</c> start <c>FUN_140357d00</c>). A bed whose machine draws power and gets none refuses (<c>FUN_140357ad0</c> with
+    /// the power test <c>FUN_140299370</c>, <b>Verified</b>; only a bed the player built has a machine, and no base-game bed draws power): the task ends and the player hears "This bed needs power to operate.".
+    /// False: the trip is over either way.
+    /// </summary>
     bool LieIn(World world, int s, CharacterCold c, Fixture bed)
     {
         var table = world.Characters;
+        if (world.Machines.Find(bed.Building) is { Data.IsConsumer: true, HasPower: false })
+        {
+            if (c.IsPlayer) world.Post(Loc.Tr("This bed needs power to operate."));
+            TaskStart.Stand(table, s);
+            return false;
+        }
+
         if (!Pay(world, s, bed, Cost(world, bed, c.Faction)) || !world.Fixtures.EnterBed(world, table.IdOf(s), bed)) TaskStart.Stand(table, s);
         return false;
     }

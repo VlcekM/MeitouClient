@@ -282,9 +282,12 @@ Same targets as picking; Task_CutLock / Task_BruteForceLock share the shackle ta
   set (UseableStuff slot 159 `FUN_1400f8030`, refused once the set holds `max operators`); leaving (`FUN_140345620`) removes it and clears both.
   "Free for X" (slot 158 `FUN_1400f7bf0`): X is in the set or the set is below `max operators`.
 - **Task_UseBed** (98 USE_BED, 100 GET_PUT_IN_BED, 258 USE_BED_ORDER; slots 1 `FUN_140357d00`, 2 `FUN_140351770`, 5 `FUN_140347950`, 6 `FUN_140347ba0`):
-  the character is put at the bed's position marker and plays its clip (below, "Lie spot"); with the task's flag +0xa0 (set by which callers is **Unknown**) it first
-  checks power ("This bed needs power to operate.", `FUN_140299370`) and rent (`FUN_140357ad0`: a negative cost is passed on to the payment only when
-  the bed has a parent building, slot 59); sound `Character_Bed` / `Get_In`; then enters. Row 258 has no done-list (it runs until replaced), row 98's is
+  the character is put at the bed's position marker and plays its clip (below, "Lie spot"); with the task's flag +0xa0 (set by which callers is **Unknown**) the start first
+  checks rent (`FUN_140357ad0`: a negative cost is passed on to the payment only when the bed has a parent building, slot 59) and power; with the flag clear
+  the update (slot 2 `FUN_140351770`, gated by +0xa1 == 0) tests power once instead, so power is always tested (**Verified**). Power (`FUN_140299370`, the sound emitter's powered test, buildings-production.md):
+  true for a building with no power figure (`power output` + research bonus 0) or without a grid, else the grid must supply it. Refused: the task ends and the character is told "This bed needs power to operate."
+  (Meitou: `BedSystem.LieIn`, a bed the player built whose machine draws power and has none; no base-game bed has a negative `power output` (**Verified**, probe of every BUILDING with a bed functionality), some mods do);
+ sound `Character_Bed` / `Get_In`; then enters. Row 258 has no done-list (it runs until replaced), row 98's is
   `isFullyRested`, `isInBed` ([ai-tasks](ai-tasks.md)).
 - **Task_GetOutOfBed** (116, 208, 257; `FUN_140345760`, `FUN_140348480`): `Get_Out` sound; when the bed's clip is `gotobed` it is played backwards and
   the character leaves at 10 %, else at once.
