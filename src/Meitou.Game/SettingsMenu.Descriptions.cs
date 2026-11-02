@@ -42,6 +42,7 @@ sealed partial class SettingsMenu
         "Shadow map size" => "Higher resolution gives sharper shadow detail.",
         "Shadow filter" => "Higher values smooth shadow edges with more samples.",
         "Haze strength" => "Scale the amount of atmospheric haze.",
+        "Cloud height" => "How high the clouds' base sits above the ground.",
         "Planetshine strength" => "Scale night lighting from the planet and moon.",
         "Ambient light strength" => "Scale the sky's light in shade, at night and indoors.",
         "Night ambient light strength" => "Brighten or darken nights further, on top of Ambient light strength.",

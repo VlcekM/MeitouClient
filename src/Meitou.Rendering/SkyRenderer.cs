@@ -599,6 +599,9 @@ public sealed unsafe partial class SkyRenderer : IDisposable
     /// </summary>
     public bool CloudShadows { get; set; } = true;
 
+    /// <summary>The volumetric clouds' base height in world units (a Meitou slider; the slab keeps <see cref="VolumetricClouds.Thickness"/>).</summary>
+    public float CloudHeight { get; set; } = VolumetricClouds.Bottom;
+
     /// <summary>The eye in world units, for the Meitou clouds' parallax (the sky pass's matrix is a rotation only); the frame sets it.</summary>
     public Vector3 Eye { get; set; }
 
@@ -612,7 +615,7 @@ public sealed unsafe partial class SkyRenderer : IDisposable
     Vector4 CloudShadowUniform()
     {
         if (VolumeShadows)
-            return new Vector4(MeitouClouds.ShadowAt(state.Sun.Y) * FogScale, CloudDensity, VolumetricClouds.Bottom, 1);
+            return new Vector4(MeitouClouds.ShadowAt(state.Sun.Y) * FogScale, CloudDensity, CloudHeight, 1);
         bool on = CloudShadows && Physical && cloudsSmooth is not null && cloudsTileSmooth is not null && CloudDensity > 0;
         float strength = on ? MeitouClouds.ShadowAt(state.Sun.Y) * FogScale : 0;
         return new Vector4(strength, CloudLayer.DensityOffset(CloudDensity), MeitouClouds.PlaneHeight, 0);

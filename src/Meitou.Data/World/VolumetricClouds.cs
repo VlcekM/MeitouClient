@@ -5,22 +5,25 @@ namespace Meitou.Data.World;
 /// <summary>Meitou's procedural cloud volume; engine choices, not original-game constants.</summary>
 public static class VolumetricClouds
 {
-    public const float Bottom = 12000, Top = 19000, MaxDistance = 500000;
+    /// <summary>The slab's default base and top (the base is a Meitou setting, <c>SkyRenderer.CloudHeight</c>; the slab keeps its thickness).</summary>
+    public const float Bottom = 12000, Top = 19000, Thickness = Top - Bottom, MaxDistance = 500000;
+    public const float MinBottom = 4000, MaxBottom = 40000;
     public const float PatternPeriod = 120000, ShapePeriod = 40000, DetailPeriod = 10000;
     public const float Extinction = 0.0012f, ShadowSpan = 320000;
     public const int NoiseSize = 64, TileSize = NoiseSize + 2, AtlasSize = TileSize * 8;
 
     /// <summary>Intersection with the horizontal cloud slab, including views inside or above it.</summary>
-    public static bool Intersect(float eyeHeight, float rayY, out Vector2 interval)
+    public static bool Intersect(float eyeHeight, float rayY, out Vector2 interval, float bottom = Bottom)
     {
         interval = default;
+        float top = bottom + Thickness;
         if (MathF.Abs(rayY) < 1e-6f)
         {
-            if (eyeHeight <= Bottom || eyeHeight >= Top) return false;
+            if (eyeHeight <= bottom || eyeHeight >= top) return false;
             interval = new(0, MaxDistance);
             return true;
         }
-        float a = (Bottom - eyeHeight) / rayY, b = (Top - eyeHeight) / rayY;
+        float a = (bottom - eyeHeight) / rayY, b = (top - eyeHeight) / rayY;
         float near = MathF.Max(MathF.Min(a, b), 0), far = MathF.Min(MathF.Max(a, b), MaxDistance);
         if (far <= near) return false;
         interval = new(near, far);

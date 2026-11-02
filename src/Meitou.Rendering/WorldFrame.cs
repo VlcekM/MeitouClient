@@ -1055,6 +1055,7 @@ static class WorldFrame
         ShadowFilterSlider = "Shadow filter 0-2 (Meitou; 0 low-end)",
         HazeStrengthSlider = "Haze strength (1 = game)",
         PlanetshineStrengthSlider = "Planetshine strength (x physical)",
+        CloudHeightSlider = "Cloud height (Meitou)",
         AmbientStrengthSlider = "Ambient light strength (1 = game)",
         NightAmbientStrengthSlider = "Night ambient light strength (1 = 1.2x game)",
         ToneMapSlider = "Tone map (0 = game)",
@@ -1227,6 +1228,8 @@ static class WorldFrame
         sliders.Add(new Slider(HazeStrengthSlider, 0, 3, () => g.Sky.HazeStrength, v => g.Sky.HazeStrength = v, "0.00", Faithful: 1, Meitou: Enhancements.MeitouHazeStrength));
         // Ours (docs/formats/sky.md "Planetshine"): the planet's light at night, a multiple of the physical value.
         sliders.Add(new Slider(PlanetshineStrengthSlider, 0, 200, () => g.Sky.PlanetshineStrength, v => g.Sky.PlanetshineStrength = MathF.Round(v), "0"));
+        sliders.Add(new Slider(CloudHeightSlider, VolumetricClouds.MinBottom, VolumetricClouds.MaxBottom, () => g.Sky.CloudHeight,
+            v => g.Sky.CloudHeight = MathF.Round(v / 100) * 100, "0", Logarithmic: true));
         // Ours: the sky's ambient light (shade, nights, interiors), a multiple of the game's.
         sliders.Add(new Slider(AmbientStrengthSlider, 0, 3, () => g.Sky.AmbientStrength, v => g.Sky.AmbientStrength = MathF.Round(v * 20) / 20, "0.00"));
         // Ours: a further multiple by night (the exposure sits at its night floor there, so it is not adapted away).

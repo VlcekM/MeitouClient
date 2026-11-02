@@ -25,7 +25,7 @@ sealed partial class SettingsMenu
             "Ambient light", "The sky's light in shade, at night and indoors."),
         // Sky & weather
         new("Haze", "Haze", ["Haze strength (1 = game)"]),
-        new("Clouds", "Clouds", ["Cloud shadows", "Cloud shadows in fog"]),
+        new("Clouds", "Clouds", [WorldFrame.CloudHeightSlider, "Cloud shadows", "Cloud shadows in fog"]),
         new("Heat haze", "Heat haze", ["Heat haze strength (1 = game)"]),
         new("Weather particles", WorldFrame.ParticleSliders[0], [WorldFrame.ParticleSliders[1]]),
         new("Fog", "Fog", []),

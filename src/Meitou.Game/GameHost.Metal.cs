@@ -700,6 +700,8 @@ sealed partial class GameHost
                 v => sky.HazeStrength = v, "0.00", Faithful: 1, Meitou: Enhancements.MeitouHazeStrength));
             sliders.Add(new Slider("Planetshine strength (x physical)", 0, 200, () => sky.PlanetshineStrength,
                 v => sky.PlanetshineStrength = MathF.Round(v), "0"));
+            sliders.Add(new Slider(WorldFrame.CloudHeightSlider, Meitou.Data.World.VolumetricClouds.MinBottom, Meitou.Data.World.VolumetricClouds.MaxBottom,
+                () => sky.CloudHeight, v => sky.CloudHeight = MathF.Round(v / 100) * 100, "0", Logarithmic: true));
             sliders.Add(new Slider("Ambient light strength (1 = game)", 0, 3, () => sky.AmbientStrength,
                 v => sky.AmbientStrength = MathF.Round(v * 20) / 20, "0.00"));
             sliders.Add(new Slider("Night ambient light strength (1 = game)", 0, 5, () => sky.NightAmbientStrength,

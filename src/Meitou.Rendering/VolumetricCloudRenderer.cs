@@ -25,13 +25,16 @@ public sealed class VolumetricCloudRenderer : IDisposable
     public Vector2 ShadowOrigin { get; private set; }
     public SampledTexture ShadowMap => shadowMap is null ? default : Sample(shadowMap);
 
+    /// <summary>The slab's base height (the cloud height setting); the top follows at <see cref="VolumetricClouds.Thickness"/> above it.</summary>
+    public float Bottom { get; set; } = VolumetricClouds.Bottom;
+
     sealed class ViewHistory : IDisposable
     {
         public GpuTexture? Current, Distance, A, B;
         public Matrix4x4 Previous;
         public Vector3 Eye, Key, Light, Ambient, Forward;
         public Vector2 Wind;
-        public float Coverage;
+        public float Coverage, Bottom;
         public long Frame = -10;
         public void Dispose()
         {
@@ -72,6 +75,7 @@ public sealed class VolumetricCloudRenderer : IDisposable
         p.Bind(p.Sampler("uNoise"), noise.Sampled());
         p.Set(p.Uniform("uVolume"), coverage, wind.X, wind.Y, (gpu.Frame.Number % 16) * 0.618033989f);
         p.Set(p.Uniform("uEye"), eye);
+        p.Set(p.Uniform("uCloudSlab"), Bottom, Bottom + VolumetricClouds.Thickness);
     }
 
     void Draw(LegacyProgram p, NativeSegment segment, GpuTexture target, GpuTexture? extra = null)
@@ -142,7 +146,7 @@ public sealed class VolumetricCloudRenderer : IDisposable
         var rayB = Vector4.Transform(new Vector4(0, 0, 1, 1), inverse);
         var forward = Vector3.Normalize(new Vector3(rayB.X, rayB.Y, rayB.Z) / rayB.W - new Vector3(rayA.X, rayA.Y, rayA.Z) / rayA.W);
         bool valid = gpu.Frame.Number - h.Frame <= 2 && Vector3.DistanceSquared(eye, h.Eye) < 4000000
-            && MathF.Abs(coverage - h.Coverage) < 0.03f && Vector3.DistanceSquared(key, h.Key) < 0.0025f
+            && MathF.Abs(coverage - h.Coverage) < 0.03f && Bottom == h.Bottom && Vector3.DistanceSquared(key, h.Key) < 0.0025f
             && Vector3.Dot(light, h.Light) > 0.999f && Vector3.Dot(forward, h.Forward) > 0.9f
             && Vector3.DistanceSquared(ambient, h.Ambient) < 0.0025f && windDelta.LengthSquared() < 0.0001f;
         resolve.Bind(resolve.Sampler("uCurrent"), Sample(h.Current));
@@ -157,8 +161,8 @@ public sealed class VolumetricCloudRenderer : IDisposable
         (h.A, h.B) = (h.B, h.A);
         if (!reflection && valid)
             MainMotion = new CloudMotion(Sample(h.A!), Sample(h.Distance!), windDelta * VolumetricClouds.PatternPeriod, gpu.Frame.Number);
-        (h.Previous, h.Eye, h.Key, h.Light, h.Ambient, h.Forward, h.Wind, h.Coverage, h.Frame) =
-            (viewProjection, eye, key, light, ambient, forward, wind, coverage, gpu.Frame.Number);
+        (h.Previous, h.Eye, h.Key, h.Light, h.Ambient, h.Forward, h.Wind, h.Coverage, h.Bottom, h.Frame) =
+            (viewProjection, eye, key, light, ambient, forward, wind, coverage, Bottom, gpu.Frame.Number);
         timer.End();
         return Sample(h.A!);
     }

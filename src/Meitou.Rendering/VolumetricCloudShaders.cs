@@ -8,7 +8,7 @@ public static class VolumetricCloudShaders
         uniform sampler2D uNoise;
         uniform vec4 uVolume; // coverage, wrapped wind texture shift, frame jitter
         uniform vec3 uEye;
-        const float CLOUD_BOTTOM = {{F(Meitou.Data.World.VolumetricClouds.Bottom)}}, CLOUD_TOP = {{F(Meitou.Data.World.VolumetricClouds.Top)}};
+        uniform vec2 uCloudSlab; // the slab's base and top (the cloud height setting)
         const float CLOUD_EXTINCTION = {{F(Meitou.Data.World.VolumetricClouds.Extinction)}};
         vec3 cloudNoise(vec3 p)
         {
@@ -21,7 +21,7 @@ public static class VolumetricCloudShaders
         }
         float cloudDensityAt(vec3 p, bool detail)
         {
-            float h = (p.y - CLOUD_BOTTOM) / (CLOUD_TOP - CLOUD_BOTTOM);
+            float h = (p.y - uCloudSlab.x) / (uCloudSlab.y - uCloudSlab.x);
             if (h <= 0.0 || h >= 1.0 || uVolume.x <= 0.0) return 0.0;
             // The original wind texture shift corresponds to six times the ground wind at this altitude.
             p.xz += uVolume.yz * {{F(Meitou.Data.World.VolumetricClouds.PatternPeriod)}};
@@ -45,11 +45,11 @@ public static class VolumetricCloudShaders
             interval = vec2(0.0);
             if (abs(ray.y) < 1e-6)
             {
-                if (eye.y <= CLOUD_BOTTOM || eye.y >= CLOUD_TOP) return false;
+                if (eye.y <= uCloudSlab.x || eye.y >= uCloudSlab.y) return false;
                 interval = vec2(0.0, {{F(Meitou.Data.World.VolumetricClouds.MaxDistance)}});
                 return true;
             }
-            vec2 hits = (vec2(CLOUD_BOTTOM, CLOUD_TOP) - eye.y) / ray.y;
+            vec2 hits = (uCloudSlab - eye.y) / ray.y;
             interval = vec2(max(min(hits.x, hits.y), 0.0), min(max(hits.x, hits.y), {{F(Meitou.Data.World.VolumetricClouds.MaxDistance)}}));
             return interval.y > interval.x;
         }
@@ -118,7 +118,7 @@ public static class VolumetricCloudShaders
                     float optical = cloudOpticalDepth(p, uLight);
                     // A broad second lobe approximates multiple scattering without bleaching shaded cores.
                     float direct = exp(-optical) * phase + 0.45 * exp(-optical * 0.2);
-                    vec3 source = uKey * direct + uAmbient * mix(0.45, 1.25, clamp((p.y - CLOUD_BOTTOM) / 7000.0, 0.0, 1.0));
+                    vec3 source = uKey * direct + uAmbient * mix(0.45, 1.25, clamp((p.y - uCloudSlab.x) / 7000.0, 0.0, 1.0));
                     source *= min(1.0, 8.0 / max(max(source.r, source.g), max(source.b, 1e-5)));
                     float alpha = 1.0 - exp(-density * ds * CLOUD_EXTINCTION);
                     float weight = trans * alpha;
@@ -148,7 +148,7 @@ public static class VolumetricCloudShaders
         uniform vec2 uShadowOrigin;
         void main()
         {
-            vec3 p = vec3(uShadowOrigin.x + vUv.x * 320000.0, CLOUD_BOTTOM, uShadowOrigin.y + vUv.y * 320000.0);
+            vec3 p = vec3(uShadowOrigin.x + vUv.x * 320000.0, uCloudSlab.x, uShadowOrigin.y + vUv.y * 320000.0);
             float tau = cloudOpticalDepth(p + vec3(0.0, 0.01, 0.0), uLight);
             fragColour = vec4(exp(-tau));
         }

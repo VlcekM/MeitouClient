@@ -6,6 +6,8 @@ Meitou `clouds`: `VolumetricClouds`, `VolumetricCloudShaders`, `VolumetricCloudR
 
 ## Density and light
 
+Slab base `Cloud height (Meitou)` slider (4000..40000, default 12000; `SkyRenderer.CloudHeight`, shader `uCloudSlab`), fixed 7000 thick;
+changing it restarts the histories; shadows project to the same base.
 **Verified tests:** slab12000..19000, intersections below/inside/above/parallel, distance cap;
 periodic64³ noise packed8x8 padded66² slices, negative coordinates and borders. R shape/G erosion/
 B weather noise; two atlas reads interpolate slices. Weather density/sky colour/wind/transitions
