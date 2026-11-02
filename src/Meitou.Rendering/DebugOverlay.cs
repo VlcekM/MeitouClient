@@ -228,28 +228,38 @@ public sealed unsafe class DebugOverlay : IDisposable
         return result;
     }
 
-    /// <summary>A word as the pieces a line may break between: the word itself, but each ideograph, kana, hangul syllable or full-width form on its own.</summary>
+    /// <summary>
+    /// A word as the pieces a line may break between: the word itself, but each ideograph, kana, hangul syllable or full-width form on its own, except that closing
+    /// punctuation and small kana stay with the character before them and an opening bracket with the one after it (the CJK rule that a line starts or ends without them).
+    /// </summary>
     static IEnumerable<string> Pieces(string word)
     {
         bool wide = false;
         foreach (var rune in word.EnumerateRunes())
             if (IsBreakable(rune.Value)) { wide = true; break; }
         if (!wide) { yield return word; yield break; }
-        int start = 0;
+        int start = 0, previous = -1;
         for (int i = 0; i < word.Length;)
         {
             var rune = Rune.GetRuneAt(word, i);
-            int next = i + rune.Utf16SequenceLength;
-            if (IsBreakable(rune.Value))
+            if (previous >= 0 && BreaksBetween(previous, rune.Value))
             {
-                if (i > start) yield return word[start..i];
-                yield return word[i..next];
-                start = next;
+                yield return word[start..i];
+                start = i;
             }
-            i = next;
+            previous = rune.Value;
+            i += rune.Utf16SequenceLength;
         }
-        if (start < word.Length) yield return word[start..];
+        yield return word[start..];
     }
+
+    static bool BreaksBetween(int before, int after) =>
+        (IsBreakable(before) || IsBreakable(after)) && !Listed(NoLineStart, after) && !Listed(NoLineEnd, before);
+
+    const string NoLineStart = "、。，．,.：:；;？?！!）)」』】〕〉》］]｝}ー・…々ゝゞぁぃぅぇぉっゃゅょゎァィゥェォッャュョヮ";
+    const string NoLineEnd = "（(「『【〔〈《［[｛{";
+
+    static bool Listed(string set, int codePoint) => codePoint < 0x10000 && set.Contains((char)codePoint);
 
     static bool IsBreakable(int cp) => cp is >= 0x2E80 and <= 0x9FFF or >= 0xAC00 and <= 0xD7AF or >= 0xF900 and <= 0xFAFF or >= 0xFF00 and <= 0xFFEF or >= 0x20000 and <= 0x3FFFF;
 
