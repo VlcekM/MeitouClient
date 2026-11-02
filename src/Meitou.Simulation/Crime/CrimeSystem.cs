@@ -127,11 +127,17 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
     }
 
     /// <summary>
-    /// Whether the player's taking from a downed character is a theft: a take that is stealing at all (<see cref="IsStealing(World, CharacterCold)"/>) and the permission test of
-    /// <see cref="Loot"/> (<c>FUN_140793940</c>, <b>Observed</b>) failing. The carry system marks what such a loot takes as stolen from the victim's faction (<see cref="Items.ItemInstance.StolenFrom"/>).
+    /// Whether the player's taking from a downed character is a crime: a take that is stealing at all (<see cref="IsStealing(World, CharacterCold)"/>) and the permission test of
+    /// <see cref="Loot"/> (<c>FUN_140793940</c>, <b>Observed</b>) failing.
     /// </summary>
     public static bool IsLootTheft(World world, CharacterCold looter, CharacterCold victim) =>
-        looter.IsPlayer && !victim.IsPlayer && IsStealing(world, victim) && !LootAllowed(looter, victim);
+        MarksTheft(world, looter, victim) && !LootAllowed(looter, victim);
+
+    /// <summary>
+    /// Whether what the player takes from a character is marked stolen from it (<c>Item::notifyTheftFrom</c>, <b>Verified</b> call sites): <see cref="IsStealing(World, CharacterCold)"/>
+    /// alone, the loot permission aside, so a bandit's gear is stolen from the bandits too. Right click and drag mark only an item with no owner yet; a give overwrites.
+    /// </summary>
+    public static bool MarksTheft(World world, CharacterCold taker, CharacterCold victim) => taker.IsPlayer && !victim.IsPlayer && IsStealing(world, victim);
 
     /// <summary>
     /// <c>Character::isItOkForMeToLoot</c> (<c>FUN_140793940</c>, <b>Observed</b>) asked with no item: yes when the victim is a slave or escaped slave (slave state 1 or 2; Meitou also

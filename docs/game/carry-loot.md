@@ -133,7 +133,10 @@ player's) only when `InventoryGUI::isStealing(source window, other window)` (`FU
 - the source owner is a BUILDING whose `building category` is exactly `CAMPING` (Camp Bed, Campfire, tents);
 - the two windows trade for money (`isTradingForMoney`).
 
-Meitou: `CrimeSystem.IsStealing` (character and container overloads) gates `Pickpocket`, `Steal` and the marks (`IsLootTheft`, container takes);
+The mark does not ask `isItOkForMeToLoot` (that only picks the crime), so a bandit's or bounty holder's gear is stolen from its faction too.
+Right click and drag mark only an item with no owner yet; a give to a portrait (`FUN_140712490`) calls `notifyTheftFrom` whatever the owner (**Verified** call sites).
+
+Meitou: `CrimeSystem.IsStealing` (character and container overloads) gates `Pickpocket`, `Steal` and the marks (`MarksTheft`, container takes);
 the player's-windows and trade terms are the callers' own-faction tests and the separate trade window.
 
 ### Character fields used here

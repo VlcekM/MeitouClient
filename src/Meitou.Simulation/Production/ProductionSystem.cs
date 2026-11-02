@@ -1273,7 +1273,8 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         if (world.SystemOf<Crime.CrimeSystem>() is { } crimes && world.Characters.TryResolveNext(take.Character, out int thief)
             && crimes.Steal(world, thief, container, Crime.CrimeCode.Theft)) return;
         var mark = item.Mark;
-        if (container.Owner >= 0 && container.Owner != cold.Faction && Crime.CrimeSystem.IsStealing(world, container))
+        if (container.Owner >= 0 && container.Owner != cold.Faction && Crime.CrimeSystem.IsStealing(world, container)
+            && mark == StolenMark.None)
             item.StolenFrom = container.Owner;
         int moved = InventoryCommands.MoveInto(storage, item, InventoryCommands.ClickCount(item, take.Count), cold.Inventory!, take.BagFirst, out bool worn, cold);
         if (storage.Items.Contains(item)) item.Mark = mark;   // what stayed keeps its mark
