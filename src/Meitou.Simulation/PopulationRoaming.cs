@@ -359,6 +359,22 @@ public sealed partial class PopulationSystem
 
     // ---- loaded roaming squads ----
 
+    /// <summary>
+    /// A member is carrying a character of the player's faction: the platoon holds its loaded state whatever the zone at its place (<c>FUN_1404febd0</c>, <b>Verified</b>: a carry flag and a carried
+    /// hand whose owner faction is a player faction). The original tests it 0.5 s after the countdown began; here at once.
+    /// </summary>
+    bool SquadCarriesPlayer(World world, Squad squad)
+    {
+        var table = world.Characters;
+        int player = PlayerFactionOf(world);
+        foreach (var m in squad.Members)
+        {
+            if (!table.TryResolveNext(m, out int slot) || table.Cold(slot) is not { } c || c.Carrying.IsNone) continue;
+            if (table.TryResolveNext(c.Carrying, out int carried) && table.Cold(carried) is { } load && (load.IsPlayer || player >= 0 && load.Faction == player)) return true;
+        }
+        return false;
+    }
+
     void StepLoaded(World world, Platoon p, float dt)
     {
         var table = world.Characters;
@@ -379,7 +395,7 @@ public sealed partial class PopulationSystem
         if (!p.Dead && (p.Faction < 0 || p.Faction != PlayerFactionOf(world)) && AllDead(world, squad)) DeclareDead(p);
 
         // Away from every active zone for long enough: only the stand-in goes on.
-        if (Wanted(p)) p.UnloadAtTick = -1;
+        if (Wanted(p) || SquadCarriesPlayer(world, squad)) p.UnloadAtTick = -1;
         // A town's own squad keeps the town's grace (it leaves with its town), a roaming one the roaming grace.
         else if (p.UnloadAtTick < 0) p.UnloadAtTick = world.Tick + (long)Math.Ceiling((p.Pinned ? settings.UnloadGraceSeconds : settings.RoamUnloadGraceSeconds) / world.TickSeconds);
         // Faithful: a platoon the original does not keep is not unloaded whole: each member out of the zone is destroyed, and the platoon stays while any is left.
