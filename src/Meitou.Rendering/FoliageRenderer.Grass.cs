@@ -48,7 +48,8 @@ public sealed unsafe partial class FoliageRenderer
     int GrassStoreScale(float grassRange, ulong budget)
     {
         int fits = budget > 0 ? (int)Math.Clamp(budget / GrassStoreBudgetShare / GrassArenaBytes, 1, MaxGrassStoreScale) : MaxGrassStoreScale;
-        return Math.Min((int)Math.Ceiling(Math.Clamp(grassRange * grassRange / (DefaultGrassRange * DefaultGrassRange), 1, MaxGrassStoreScale)), fits);
+        // Each place kept loaded besides the eye's (Areas) holds its own pages: the store is that many times larger, within the same caps.
+        return Math.Min((int)Math.Ceiling(Math.Clamp(grassRange * grassRange / (DefaultGrassRange * DefaultGrassRange) * areas, 1, MaxGrassStoreScale)), fits);
     }
 
     void InitGrassStore(IGpuContext gpu)

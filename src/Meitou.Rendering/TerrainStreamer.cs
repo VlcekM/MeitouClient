@@ -79,8 +79,13 @@ public sealed class TerrainStreamer : IDisposable
     /// <summary>Uploaded windows round kept points far from the eye's window (<see cref="Kept"/>), swapped in when the eye arrives.</summary>
     readonly List<TerrainRenderer.FineStandby> standbys = [];
 
-    /// <summary>At most this many standby windows (about 5 MB of video memory and 5 MB of memory each at step 1).</summary>
-    const int MaxStandbys = 3;
+    /// <summary>At most this many standby windows (about 5 MB of video memory and 5 MB of memory each at step 1): one per kept place
+    /// (<see cref="Areas"/> less the eye's), at least 3, at most <see cref="StandbyCeiling"/>.</summary>
+    int MaxStandbys => Math.Clamp(Areas - 1, 3, StandbyCeiling);
+    const int StandbyCeiling = 8;
+
+    /// <summary>Places kept loaded (<see cref="WorldTextureCache.Areas"/>): the standby counts and the terrain layers' near slots scale with it.</summary>
+    public int Areas { get; set; } = 1;
 
     /// <summary>A kept point this near the drawn window's centre (a fraction of its width) needs no standby: a jump there keeps the
     /// window's fine heights in view while the window moves.</summary>
@@ -167,7 +172,7 @@ public sealed class TerrainStreamer : IDisposable
             else Read(column0, row0, standby: false);
         }
         else if (job is null && !swapping && !standbyUploading && step < WorldFrame.CoarseStep && Guard is not { Pressure: true }) PrepareStandby();
-        if (textures is not null) (textures.GroundUnderEye, textures.Guard) = (GroundUnderEye, Guard);
+        if (textures is not null) (textures.GroundUnderEye, textures.Guard, textures.Areas) = (GroundUnderEye, Guard, Areas);
         textures?.Update(eye, MaterialDistance, uploads, Ahead, Kept);
         uploads.Run(budgetMs);
     }

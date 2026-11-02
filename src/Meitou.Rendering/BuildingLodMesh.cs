@@ -531,7 +531,9 @@ sealed unsafe class ObjectMeshCache(IGpuContext gpuContext, AssetLocator assets,
     public double PressureIdleSeconds { get; set; } = 8;
     /// <summary>The high-water mark as a share of the driver's video memory budget (<see cref="WorldTextureCache.HighWaterShare"/>): 768 MB on the 11.4 GB card it was tuned on.</summary>
     public double HighWaterShare { get; set; } = 768 / 11453.0;
-    public double MarkMb => WorldTextureCache.EffectiveMark(HighWaterMb, HighWaterShare, Guard);
+    public double MarkMb => WorldTextureCache.EffectiveMark(HighWaterMb, HighWaterShare, Guard, Areas);
+    /// <summary>Places kept loaded (<see cref="WorldTextureCache.Areas"/>): the mark scales the same way.</summary>
+    public int Areas { get; set; } = 1;
     /// <summary>The memory-pressure guard (<see cref="VramGuard"/>): under pressure nothing new is decoded and meshes idle for <see cref="GuardIdleSeconds"/> go.</summary>
     public VramGuard? Guard { get; set; }
     public double GuardIdleSeconds { get; set; } = 2;

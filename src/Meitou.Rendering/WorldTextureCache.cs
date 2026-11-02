@@ -187,11 +187,21 @@ public sealed unsafe class WorldTextureCache : IDisposable
     /// the fixed mark was on the 11.4 GB card it was tuned on), and three quarters of it under the guard's pressure.</summary>
     public double HighWaterShare { get; set; } = TextureQuality.MemoryBudgetMb(0) / 11453.0;
     /// <summary>The mark in effect (MB).</summary>
-    public double MarkMb => EffectiveMark(HighWaterMb, HighWaterShare, Guard);
+    public double MarkMb => EffectiveMark(HighWaterMb, HighWaterShare, Guard, Areas);
 
-    internal static double EffectiveMark(double highWaterMb, double share, VramGuard? guard)
+    /// <summary>Places kept loaded ("Keep textures at characters": the eye's and each merged kept point's, docs/render-objects.md "Kept points"): the mark is
+    /// this many times larger, its share of the memory budget at most <see cref="MaxAreaShare"/> (never below the unscaled share).</summary>
+    public int Areas { get; set; } = 1;
+    /// <summary>The largest share of the driver's memory budget a mark scaled by <c>Areas</c> may take.</summary>
+    internal const double MaxAreaShare = 0.5;
+
+    internal static double EffectiveMark(double highWaterMb, double share, VramGuard? guard, int areas = 1)
     {
-        if (guard is not { BudgetBytes: > 0 } g || double.IsInfinity(highWaterMb) || highWaterMb >= double.MaxValue) return highWaterMb;
+        if (double.IsInfinity(highWaterMb) || highWaterMb >= double.MaxValue) return highWaterMb;
+        areas = Math.Max(areas, 1);
+        highWaterMb *= areas;
+        share = Math.Max(share, Math.Min(share * areas, MaxAreaShare));
+        if (guard is not { BudgetBytes: > 0 } g) return highWaterMb;
         return Math.Min(highWaterMb, g.BudgetBytes / 1048576.0 * share) * (g.Pressure ? 0.75 : 1);
     }
     /// <summary>The memory-pressure guard (<see cref="VramGuard"/>): while it is under pressure no texture is refined and a texture something draws

@@ -888,8 +888,11 @@ public sealed unsafe class TerrainTextures : IDisposable
     readonly List<MapStandby> mapStandbys = [];
     /// <summary>The standby the running compose and its upload write, or null: the drawn pair.</summary>
     MapStandby? mapTarget;
-    /// <summary>At most this many standby pairs (about 45 MB of video memory each: the 2048² RGBA8 overlay and the 4096² BC3 colour with their levels).</summary>
-    const int MaxMapStandbys = 2;
+    /// <summary>At most this many standby pairs (about 45 MB of video memory each: the 2048² RGBA8 overlay and the 4096² BC3 colour with their levels):
+    /// one per kept place (<see cref="Areas"/> less the eye's), at least 2, at most 6.</summary>
+    int MaxMapStandbys => Math.Clamp(Areas - 1, 2, 6);
+    /// <summary>Places kept loaded (<see cref="WorldTextureCache.Areas"/>, set by <see cref="TerrainStreamer"/>).</summary>
+    internal int Areas { get; set; } = 1;
     /// <summary>Video memory pressure: while it is on no standby pair is made or written.</summary>
     internal VramGuard? Guard { get; set; }
 

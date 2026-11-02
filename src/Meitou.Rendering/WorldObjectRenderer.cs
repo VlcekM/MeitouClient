@@ -388,6 +388,9 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     /// <summary>The camera's distance to its target (<see cref="ObjectStreamer.KeptViewDistance"/>).</summary>
     public float KeptViewDistance { get => streamer.KeptViewDistance; set => streamer.KeptViewDistance = value; }
 
+    /// <summary>Places kept loaded (<see cref="WorldTextureCache.Areas"/>): the texture and mesh marks scale with it.</summary>
+    public int Areas { set { textureCache.Areas = value; meshes.Areas = value; } }
+
     /// <summary>Where the last need pass measured from, for the VRAM dump: the eye, the margin for its speed, the arrival point and the kept points.</summary>
     public void WriteViewReport(TextWriter w)
     {

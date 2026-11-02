@@ -61,6 +61,8 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
     public float KeptReach { get; set; } = 3000;
     /// <summary>The camera's distance to its target: a kept character's texture needs count from at least this far (the view a jump there would have).</summary>
     public float KeptViewDistance { get; set; }
+    /// <summary>Places kept loaded (<see cref="WorldTextureCache.Areas"/>): the character textures' mark (and so <see cref="CharacterTextureBudget"/>) scales with it.</summary>
+    public int Areas { set => content.Textures.Areas = value; }
     /// <summary>Built characters out of the eye's reach but within <see cref="KeptReach"/> of a kept point, with that distance: their textures are offered
     /// (and so marked used) as if seen from there, or the cache's idle limit unloaded them before a jump there.</summary>
     readonly List<(CharacterAsset Asset, float Distance)> keptLooks = [];

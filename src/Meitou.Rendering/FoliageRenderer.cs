@@ -443,6 +443,11 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     /// <summary>The camera's distance to its target: a kept point's texture needs count from at least this far (the view a jump there would have).</summary>
     public float KeptViewDistance { get; set; }
 
+    /// <summary>Places kept loaded (<see cref="WorldTextureCache.Areas"/>): the foliage textures' mark scales with it, and the grass store
+    /// (<see cref="GrassStoreScale"/>) within its caps.</summary>
+    public int Areas { get => areas; set { areas = Math.Max(value, 1); textures.Areas = areas; } }
+    int areas = 1;
+
     float NearKeptZone(ZoneCoordinate zone)
     {
         float d = float.PositiveInfinity;

@@ -529,6 +529,8 @@ static class WorldFrame
 {
     /// <summary>Heightmap step of the whole-world height grid behind the loaded region (2049² samples, 144 units apart).</summary>
     public const int CoarseStep = 8;
+    /// <summary>How long <see cref="GpuState.Areas"/> holds its highest count before it may fall.</summary>
+    public const int AreasHoldMs = 30000;
 
     /// <summary>The weather scheduler's random seed (the default of <c>meitou-tools weather</c>, so the two agree).</summary>
     const int WeatherSeed = 1;
@@ -722,6 +724,10 @@ static class WorldFrame
         public Vector3? Ahead;
         /// <summary>Points whose surroundings stay loaded besides the camera's (the player's characters, "Keep textures at characters"): object meshes and textures, terrain biome textures.</summary>
         public IReadOnlyList<Vector3> Kept = [];
+        /// <summary>Places kept loaded: the eye's and each merged kept point's, held at its highest for <see cref="AreasHoldMs"/> (the merge flickers near
+        /// its distance, and the grass store and terrain arrays reallocate when it grows). The texture, mesh and grass budgets scale with it.</summary>
+        public int Areas = 1;
+        public long AreasAt;
         /// <summary>Keeps the video memory under the budget by clamping the ranges and pausing the streaming (null with <c>MEITOU_VRAM_GUARD=0</c>).</summary>
         public VramGuard? Guard;
         /// <summary>The scene's native host (wave 4), made at the first frame.</summary>
@@ -1396,6 +1402,12 @@ static class WorldFrame
         var eye = camera.Eye;
         gpu.Guard?.Tick();
         var kept = ObjectStreamer.MergeKept(gpu.Kept, eye);
+        long areasNow = Environment.TickCount64;
+        if (1 + kept.Count >= gpu.Areas || areasNow - gpu.AreasAt > AreasHoldMs) (gpu.Areas, gpu.AreasAt) = (1 + kept.Count, areasNow);
+        if (gpu.Objects is { } areaObjects) areaObjects.Areas = gpu.Areas;
+        if (gpu.Foliage is { } areaFoliage) areaFoliage.Areas = gpu.Areas;
+        if (gpu.Characters is { } areaCharacters) areaCharacters.Areas = gpu.Areas;
+        if (gpu.Streamer is { } areaTerrain) areaTerrain.Areas = gpu.Areas;
         if (gpu.Streamer is { } aheadTerrain) (aheadTerrain.Ahead, aheadTerrain.Kept, aheadTerrain.Guard) = (gpu.Ahead, kept, gpu.Guard);
         if (gpu.Objects is { } aheadObjects) (aheadObjects.Ahead, aheadObjects.Kept, aheadObjects.KeptViewDistance) = (gpu.Ahead, kept, camera.Distance);
         if (gpu.Foliage is { } aheadFoliage) (aheadFoliage.Ahead, aheadFoliage.Kept, aheadFoliage.KeptViewDistance) = (gpu.Ahead, kept, camera.Distance);
