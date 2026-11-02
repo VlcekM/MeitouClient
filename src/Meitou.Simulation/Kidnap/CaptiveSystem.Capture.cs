@@ -259,19 +259,22 @@ public sealed partial class CaptiveSystem
 
     /// <summary>
     /// <c>Task_StripWeapons</c> once its 0.8 s are up: the items of the target's <c>hip</c> and <c>back</c> sections go to the stripper's inventory (the ground when it is full; engine choice).
-    /// The original then sets the stripper's squad's short-term tag 6 on the target (a tag nothing reads, <b>Unknown</b> name).
+    /// After each item moved the original sets the stripper's squad's short-term tag 6 on the target (<c>FUN_14034e7b0</c> calling <c>FUN_1406744a0</c>, <b>Verified</b>): <see cref="Dialogue.MemoryTag.Looted"/>, which the NPC looting finder skips.
     /// </summary>
     void Strip(World world, int c, CharacterCold wc, CharacterCold cc)
     {
         if (cc.Inventory is not { } inv) return;
         var at = world.Characters.Next[c].Position;
+        bool moved = false;
         foreach (var item in inv.Items.ToList())
         {
             if (item.LockedOn || !IsWeaponSection(item.Section)) continue;
             inv.Items.Remove(item);
             item.Section = "main";
             if (wc.Inventory is not { } into || !into.Add(item)) world.GroundItems.Drop(item, at, 0);
+            moved = true;
         }
+        if (moved && wc.SquadId >= 0) world.SystemOf<Dialogue.DialogueSystem>()?.Memory.Flag(world, wc.SquadId, world.Characters.IdOf(c), Dialogue.MemoryTag.Looted);
         cc.DrawnWeapon = WeaponKinds.None;
         assembly.RefreshEquipment(cc);
     }
