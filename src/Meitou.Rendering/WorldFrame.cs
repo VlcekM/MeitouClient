@@ -170,6 +170,8 @@ sealed class WorldOptions
     public int? Monitor;
     /// <summary>Interactive window: a bordered, maximized window instead of borderless full screen (<c>--windowed</c>).</summary>
     public bool Windowed;
+    /// <summary>Interactive window: never shown (<c>--hidden-window</c>, for unattended runs such as <c>--play-bench</c>); implies <see cref="Windowed"/>.</summary>
+    public bool HiddenWindow;
     /// <summary>Offscreen pictures: seconds the grass sway advances every frame (tests the grass motion under a temporal upscaler; 0 holds it still).</summary>
     public float SwayStep;
     /// <summary>The character renderer's test harness (<c>--crowd N</c>, <see cref="Characters.CrowdHarness"/>): N generated characters round the start point.</summary>
@@ -427,6 +429,7 @@ sealed class WorldOptions
                 case "--orbit-step": o.OrbitStep = F() * MathF.PI / 180; break;
                 case "--monitor": o.Monitor = int.Parse(Next(), CultureInfo.InvariantCulture); break;
                 case "--windowed": o.Windowed = true; break;
+                case "--hidden-window": o.HiddenWindow = o.Windowed = true; break;
                 case "--sway-step": o.SwayStep = F(); break;
                 case "--crowd": o.Crowd = int.Parse(Next(), CultureInfo.InvariantCulture); break;
                 case "--fog": o.FogDistance = F(); break;

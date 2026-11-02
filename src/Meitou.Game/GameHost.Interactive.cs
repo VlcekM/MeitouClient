@@ -54,14 +54,16 @@ sealed partial class GameHost
         bool fullScreen = config.FullScreen && !o.Windowed;
         bool savedVSync = vsync, savedFullScreen = fullScreen;
         if (fullScreen) BorderlessFullScreen.Toggle(window);
-        else if (!o.SizeGiven) window.WindowState = WindowState.Maximized;
+        else if (!o.SizeGiven && !o.HiddenWindow) window.WindowState = WindowState.Maximized;   // maximising would show a hidden window
         BeginLoadingScreen(display);   // its textures and fonts are made before the window shows
         // The Faithful start shows the original's splash, as the game does before its title, instead of the loading screen (unless the Interface setting turns it off).
         if (loading is { Faithful: true } && config.SplashScreens && OpensOnTitle(interactive: true)) loading.StartSplash();
         // The first loading frame is in the swapchain when the window shows, and on screen before the splash closes. Not on Wayland: a window gets its
         // shell role when it shows, and a buffer attached to the surface before that makes the compositor drop the client ("attached a buffer before
         // configure event"), so there the window shows first and takes the compositor's configure before anything is drawn.
-        if (window.Native?.Wayland is not null)
+        // --hidden-window: drawn and presented as usual, never shown (an unattended run).
+        if (o.HiddenWindow) LoadingFrame();
+        else if (window.Native?.Wayland is not null)
         {
             window.IsVisible = true;
             window.DoEvents();
