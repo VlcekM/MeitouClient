@@ -670,8 +670,18 @@ static class PostProcessShaders
                 if (d < closest) { closest = d; qClosest = q; }
             }
             vec2 fc = rp + 0.5;
-            float zNear = min(min(z[0], z[1]), min(z[2], z[3])), zFar = max(max(z[0], z[1]), max(z[2], z[3]));
-            bool one = zFar < zNear * 1.04;   // no outline among the four: one surface's evaluation serves them all
+            // The nearest and farthest surface of the 3 x 3 render pixels round the four: the filter's range at an outline. From the four alone, a pixel
+            // beside an outline whose four all fell on one side (the jitter decides) clamped its history to that side, and the outline kept a staircase.
+            float zNear = 1e30, zFar = 0.0;
+            for (int y = -1; y <= 2; y++)
+                for (int x = -1; x <= 2; x++)
+                {
+                    if ((x == -1 || x == 2) && (y == -1 || y == 2)) continue;
+                    float zz = linearZ(texelFetch(uDepth, clamp(ivec2(b) + ivec2(x, y), ivec2(0), last), 0).r);
+                    zNear = min(zNear, zz);
+                    zFar = max(zFar, zz);
+                }
+            bool one = zFar < zNear * 1.04;   // no outline round the pixel: one surface's evaluation serves them all, and the filter keeps this frame's
             vec4 h[4], qv[4];
             bool anyHalf = uHas.x > 0.5 && layerAt(uAccumH, uLowDepthH, uAccumFarH, uLowDepthFarH, uLowSizeH, uHas.x, fc, z, one, h);
             bool anyQuarter = uHas.y > 0.5 && layerAt(uAccumQ, uLowDepthQ, uAccumFarQ, uLowDepthFarQ, uLowSizeQ, uHas.y, fc, z, one, qv);
@@ -686,6 +696,21 @@ static class PostProcessShaders
                 sum += l * bil[i];
                 lo = min(lo, l);
                 hi = max(hi, l);
+            }
+            if (!one)
+            {
+                // The range widened by the layer at the neighbourhood's nearest and farthest surfaces.
+                float ze[4] = float[4](zNear, zFar, zNear, zFar);
+                vec4 he[4], qe[4];
+                bool eh = uHas.x > 0.5 && layerAt(uAccumH, uLowDepthH, uAccumFarH, uLowDepthFarH, uLowSizeH, uHas.x, fc, ze, false, he);
+                bool eq = uHas.y > 0.5 && layerAt(uAccumQ, uLowDepthQ, uAccumFarQ, uLowDepthFarQ, uLowSizeQ, uHas.y, fc, ze, false, qe);
+                for (int i = 0; i < 2; i++)
+                {
+                    vec4 a = eh ? he[i] : vec4(0.0), q = eq ? qe[i] : vec4(0.0);
+                    vec4 l = vec4(a.rgb * (1.0 - q.a) + q.rgb, 1.0 - (1.0 - a.a) * (1.0 - q.a));
+                    lo = min(lo, l);
+                    hi = max(hi, l);
+                }
             }
             if (one || uTarget.z < 0.5) { fragColour = sum; return; }   // one surface: the four agree, the filter would keep this frame's
 

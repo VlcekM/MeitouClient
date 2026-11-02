@@ -170,7 +170,9 @@ DLSS took drifting see-through dust as standing still (its default preset ignore
 (motion vectors for the dust left about half of them). Over the output both sizes go in one pass with their own temporal filter
 (`CompositeLateParticlesFiltered`, `ParticleLate`): each display pixel takes the particles at the surfaces of the four render pixels round
 it (the jitter undone), weighted bilinearly, then last frame's result (reprojected by the closest surface's motion, kept within the four
-values) blended in at 0.1. One surface per pixel (the nearest of the 2 x 2, before) put a hard pixel edge back on the upscaler's smooth
+values, widened by the layer at the nearest and farthest surface of the 3 x 3 render pixels round them) blended in at 0.1. From the four
+alone, a pixel beside an outline whose four all fell on one side (as the jitter decides) clamped its history to that side and the outline
+kept a one-pixel staircase (**Observed**, mec-tou-nu save, still camera: hard steps, then intermediate shades as the upscaler's own edge). One surface per pixel (the nearest of the 2 x 2, before) put a hard pixel edge back on the upscaler's smooth
 outline wherever a ridge stood in front of the dust: a staircase. Off an outline the four agree, so drifting dust does not trail.
 **Observed** (mec-tou-nu save, DLSS, 1600 x 900): flicker between frames in the dust (99.9th percentile of the second difference) still
 camera 6.5 → 2.5/255, 0.25°-a-frame orbit 25 → 20.5; turning 1.5° and panning 30 units a frame, no trails. A vendor upscaler that fails
