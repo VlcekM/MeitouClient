@@ -4,6 +4,7 @@ Released with tags `launcher-v<version>` by `.github/workflows/launcher-release.
 
 ## v1.5.0
 
+- **Simplified Chinese** texts for the launcher and Meitou's own game menus.
 - **Every label is translatable now**: the texts the launcher builds at run time (statuses, tooltips, counts, the Graphics page's
   rows and the download and install lines) and the tooltips and placeholders the layout sets. A translated label no longer goes
   back to English on a language switch.
