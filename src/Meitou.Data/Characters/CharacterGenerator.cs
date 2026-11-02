@@ -389,12 +389,11 @@ public static class CharacterGenerator
         return (maker, model, level + (int)maker.GetFloat("overall level"));
     }
 
-    /// <summary>ARMOUR / item <c>races</c> (only these may equip it) and <c>races exclude</c>.</summary>
+    /// <summary>ARMOUR / item <c>races</c> (only these may equip it; <c>races exclude</c> is then not read) and <c>races exclude</c> (docs/game/ui-screens.md, <c>RaceLimiter</c>), as <c>ItemInstance.WearableBy</c>.</summary>
     static bool RaceAllowed(GameRecord item, GameRecord race)
     {
         var only = item.GetReferences("races");
-        if (only.Count > 0 && !only.Any(r => r.TargetStringId == race.StringId)) return false;
-        return !item.GetReferences("races exclude").Any(r => r.TargetStringId == race.StringId);
+        return only.Count > 0 ? only.Any(r => r.TargetStringId == race.StringId) : !item.GetReferences("races exclude").Any(r => r.TargetStringId == race.StringId);
     }
 
     // ---- Weighted picks ----------------------------------------------------------------------------------------
