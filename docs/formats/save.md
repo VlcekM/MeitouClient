@@ -476,8 +476,11 @@ Carry links (**Observed**, decompile: `FUN_1406280a0` writes, `FUN_140627b30` re
 
 Meitou (`Saving/HeldSave`): reads building keys from the zones' GAMESTATE_BUILDING records when the town registers and writes them back into
 them (the visited zones' files, [Zone files](#zone-files)); the save ids of generated interiors are not mapped, so interior cages and
-beds keep rolled state. `in what` resolves only to a placed building; Meitou-only keys `meitou in something` (int) / `meitou in what` (fixture id)
-carry the rest and win on load. Unchanged held state keeps the original keys as read; a changed one without a building handle writes `in something` 0
+beds keep rolled state. `in what` resolves to a placed building, or, for a prisoner, to a generated interior building: the zone building-list entry it names
+(record, position) is matched to Meitou's interior cage fixture of the same record within 1 unit (`FixtureRegistry.SavedSpots`). **Observed**: a Rebirth Slave
+Shop prisoner's cage (`1783-gamedata.base`, an `<n>-zoneX.Y-INGAME` entry of the shop's serialised interior) stands at distance 0 from Meitou's fixture made from
+the shop's `interior layout name`, the next cage 27.8 away; generated interior beds are not matched. Meitou-only keys `meitou in something` (int) /
+`meitou in what` (fixture id) carry the rest and win on load. Unchanged held state keeps the original keys as read; a changed one without a building handle writes `in something` 0
 and the null handle. `sentence`/`psts` are written while a sentence is set or the save had them; Meitou's start equals `World.GameHours` (day x 24 + hour).
 
 Job lists (`Saving/PermaJobSave`): the original's GAMESTATE_AI (`ai`) keys `jobs`, `pjob<i>`, `pjobT<i>` ([perma-jobs](../game/ai-tasks.md#perma-jobs)), plus

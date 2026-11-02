@@ -86,6 +86,7 @@ public static class SaveLoader
         // Building locks and doors are taken from the zones when their town registers; held characters name their bed or cage by building instance.
         var buildingStates = HeldSave.BuildingStates(save);
         world.Fixtures.Saved = buildingStates;
+        world.Fixtures.SavedSpots = HeldSave.BuildingSpots(save);
         world.Fixtures.Items = data.Items;
         var instanceOf = new Dictionary<Meitou.Data.Fcs.FcsRecord, string>(ReferenceEqualityComparer.Instance);
         foreach (var (instance, record) in buildingStates) instanceOf[record] = instance;

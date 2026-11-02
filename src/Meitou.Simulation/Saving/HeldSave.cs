@@ -30,6 +30,22 @@ public static class HeldSave
         return map;
     }
 
+    /// <summary>
+    /// The record and position of every placement in the zones' building lists, by <see cref="Meitou.Data.World.BuildingKey"/>: an <c>in what</c> naming a generated interior
+    /// building (its save id is not mapped) is matched by them to Meitou's interior fixture (<see cref="FixtureRegistry.SavedSpots"/>).
+    /// </summary>
+    public static Dictionary<string, SavedSpot> BuildingSpots(SaveGame save)
+    {
+        var map = new Dictionary<string, SavedSpot>(StringComparer.Ordinal);
+        foreach (var zone in save.Zones.Values)
+        {
+            if (zone.BuildingList is not { } list) continue;
+            foreach (var i in list.Instances)
+                if (i.Target.Length > 0) map[Meitou.Data.World.BuildingKey.Of(zone.Coordinate, i.Id)] = new SavedSpot(i.Target, i.Position);
+        }
+        return map;
+    }
+
     /// <summary>Reads a character's held state and sentence (the Meitou keys first; else <c>in what</c> resolved through <paramref name="handles"/> to a building key).</summary>
     public static void Read(FcsRecord? state, CharacterCold cold, SaveHandles handles, IReadOnlyDictionary<FcsRecord, string> instanceOf)
     {
