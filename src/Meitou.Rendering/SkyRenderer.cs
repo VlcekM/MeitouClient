@@ -651,8 +651,21 @@ public sealed unsafe partial class SkyRenderer : IDisposable
     /// <c>fogColour.a</c>), the colour and the distance where it is complete; null takes the forced <see cref="Weather"/> record's.
     /// </summary>
     public (float Weight, Vector3 Colour, float Distance)? FogInput { get; set; }
-    /// <summary>The eye is in flight (<see cref="KenshiCamera.FlightHeight"/> above the ground, the platoons' gate): the weather fog is off, as the weather's effects are.</summary>
-    public bool WeatherFogLifted { get; set; }
+    /// <summary>
+    /// The weather fog's share by the eye's height over the ground under it: 1 up to <see cref="FlightFogFade"/> below <see cref="KenshiCamera.FlightHeight"/>
+    /// (the platoons' gate), easing to 0 at it, where the weather's effects stop too. Set each frame by <see cref="SetFlightHeight"/>.
+    /// </summary>
+    public float WeatherFogScale { get; private set; } = 1;
+    /// <summary>How far below the flight height the weather fog starts to thin (viewer choice).</summary>
+    public const float FlightFogFade = 500;
+
+    /// <summary>Sets <see cref="WeatherFogScale"/> for an eye <paramref name="height"/> above the ground under it (1 with the ground unknown, not finite).</summary>
+    public void SetFlightHeight(float height)
+    {
+        if (!float.IsFinite(height)) { WeatherFogScale = 1; return; }
+        float t = Math.Clamp((KenshiCamera.FlightHeight - height) / FlightFogFade, 0, 1);
+        WeatherFogScale = t * t * (3 - 2 * t);
+    }
 
     (double X, double Z) cloudOffset;
     readonly Stopwatch cloudClock = new();
@@ -937,7 +950,7 @@ public sealed unsafe partial class SkyRenderer : IDisposable
         // The fog the weather system gives (weight, colour, distance), else the forced record's (on or off, complete at fog distance max).
         var (fogWeight, fogRgb, fogDistance) = FogInput ?? (w.FogEnabled ? 1f : 0f, w.FogColour, w.FogMax);
         float fogStart = FogInput is null ? w.FogMin : (w.FogMax > 0 ? fogDistance * w.FogMin / w.FogMax : 0f);
-        if (WeatherFogLifted) fogWeight = 0;
+        fogWeight *= WeatherFogScale;
         // The weather fog's colour times sunColour.w, the daylight scale (the game's global fog term).
         var fog = fogRgb * (Physical ? KenshiLighting.Daylight(s.Sun.Y) : 1f);
         var hc = s.Colours.Horizon;

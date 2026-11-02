@@ -788,8 +788,8 @@ static class WorldFrame
     static void UpdateParticles(Gpu gpu, WorldCamera camera)
     {
         if (gpu.Weather is not { } weather || gpu.MakeParticles is null) return;
-        // In flight (KenshiCamera.FlightHeight, the platoons' gate) the weather's effects stop, as its fog does (SkyRenderer.WeatherFogLifted).
-        var input = gpu.Sky.WeatherFogLifted ? Meitou.Data.Particles.WeatherEffectInput.None : weather.EffectInput();
+        // In flight (KenshiCamera.FlightHeight, the platoons' gate) the weather's effects stop, as its fog does (SkyRenderer.WeatherFogScale).
+        var input = gpu.Sky.WeatherFogScale == 0 ? Meitou.Data.Particles.WeatherEffectInput.None : weather.EffectInput();
         if (input.Effects.Count == 0 && gpu.Particles is null) return;
         var particles = gpu.Particles ??= gpu.MakeParticles();
         // The effects are placed in the camera's weather region: the area follows the cell the camera is in.
@@ -1402,7 +1402,7 @@ static class WorldFrame
         if (gpu.Streamer is { } liftedTerrain) liftedTerrain.GroundUnderEye = groundUnderEye;
         if (gpu.Objects is { } liftedObjects) liftedObjects.GroundUnderEye = groundUnderEye;
         if (gpu.Characters is { } liftedCharacters) liftedCharacters.GroundUnderEye = groundUnderEye;
-        gpu.Sky.WeatherFogLifted = eye.Y - groundUnderEye > Meitou.Data.World.KenshiCamera.FlightHeight;
+        gpu.Sky.SetFlightHeight(eye.Y - groundUnderEye);
         gpu.Streamer?.Update(eye);
         StageClock.Lap(0);
         if (gpu.Objects is { } lodObjects) lodObjects.LodPixelsPerRadian = render.TerrainPixelScale;   // the generated object levels are placed by the pixel size too
