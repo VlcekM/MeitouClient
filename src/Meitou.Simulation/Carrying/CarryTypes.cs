@@ -68,7 +68,7 @@ public sealed class CarrySettings
     public int AutoEveryTicks { get; init; } = 15;
     /// <summary>NPC squads pick up their knocked-out leader (the original's <c>FIND_AND_RESCUE_LEADER</c>, in 7 AI packages): a stand-in until the AI packages exist.</summary>
     public bool RescueNpcLeaders { get; init; } = true;
-    /// <summary>The daylight sight R before the race's <c>vision range mult</c>: how far a rescuer looks for a downed character (the original searches its sensed-character list, whose size is <b>Unknown</b>) and how far a witness sees a looter.</summary>
+    /// <summary>The daylight sight R before the race's <c>vision range mult</c>: how far a rescuer looks for a downed character (the original searches its sensed-character list, whose size is <b>Unknown</b>) and how far a witness sees a looter. The leader rescue has no range (FUN_140598540, Verified).</summary>
     public float Sight { get; init; } = AggroSystem.OutdoorSight;
     /// <summary>A body that is put down is placed this far beside its carrier (engine choice).</summary>
     public float PutDownSide { get; init; } = 3;

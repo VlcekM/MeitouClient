@@ -1127,9 +1127,8 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
             foreach (var m in squad.Members)
             {
                 if (!table.TryResolveNext(m, out int s) || s == l || !Free(world, s) || table.Cold(s)!.IsPlayer) continue;
-                float range = AggroSystem.RangeOf(table.Cold(s)!, Settings.Sight);
                 float d2 = Vector2.DistanceSquared(new Vector2(next[s].Position.X, next[s].Position.Z), new Vector2(next[l].Position.X, next[l].Position.Z));
-                if (d2 <= range * range && d2 < best2) { best = s; best2 = d2; }
+                if (d2 < best2) { best = s; best2 = d2; }
             }
             if (best < 0 || !Start(world, best, CharacterTask.PickUp, TaskType.FIND_AND_RESCUE_IF_THERES_BEDS, TaskSource.Npc, squad.Leader, (CharacterTask)next[best].Task)) continue;
             taken.Add(l);
