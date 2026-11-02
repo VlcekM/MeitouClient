@@ -343,8 +343,25 @@ public sealed partial class FixtureRegistry
             Clips = kind == FixtureKind.Cage && functionality is not null ? new CageClips(FirstClip(db, functionality, "animation"), FirstClip(db, functionality, "animation KO"), FirstClip(db, functionality, "animation dazed")) : default,
             Restrains = functionality?.GetBool("restrains movement") ?? false, OccupantSelection = kind == FixtureKind.Cage && (functionality?.GetBool("occupant selection") ?? false), UseRange = functionality is null ? 25 : FloatOf(functionality, "use range", 25),
             Contents = kind == FixtureKind.Container && storageWidth > 0 && storageHeight > 0 ? new Meitou.Simulation.Items.Inventory(storageWidth, storageHeight) { StackBonusMult = record.GetFloat("stackable bonus mult", 1) } : null,
+            Front = kind == FixtureKind.Cage ? Marker(db, record, at, yaw) : null,
             Lock = !locked ? null : new LockState { Level = RollLevel(world.Seed, id, faction, IntOf(record, "lock level bonus"), door: false), Hardness = FloatOf(record, "hardness") },
         };
+    }
+
+    /// <summary>
+    /// A building's position marker in the world (<c>Building::getPositionMarker</c>, docs/game/locks.md "Cages and beds"): the <c>is for position marker</c> part's offset,
+    /// which for a cage is the spot in front of its door. Null when the record has no such part, or a part sits at the origin (then it marks nothing).
+    /// </summary>
+    static Vector3? Marker(GameDatabase db, GameRecord record, Vector3 at, float yaw)
+    {
+        foreach (var reference in record.GetReferences("parts"))
+        {
+            if (db.Find(reference.TargetStringId) is not { } part || !part.GetBool("is for position marker")) continue;
+            var local = new Vector3(part.GetFloat("offset X"), part.GetFloat("offset Y"), part.GetFloat("offset Z"));
+            if (local == Vector3.Zero) continue;
+            return at + Vector3.Transform(local, Matrix4x4.CreateRotationY(yaw));
+        }
+        return null;
     }
 
     /// <summary>The lock level at creation (docs/game/locks.md "Lock object", <b>Verified</b> formula; the roll is Meitou's seeded stream).</summary>
@@ -845,11 +862,41 @@ public sealed partial class FixtureRegistry
         bool escape = cage is not null && !c.Kidnapped;
         if (cage is not null && cage.Occupant == prisoner) cage.Occupant = CharacterId.None;
         Clear(c);
+        // Left at the cage's own origin (where Hold puts an occupant) a character inside a hollow the navmesh does not cross could never walk out: it is stood in front of the
+        // cage instead, at the building's position marker (docs/game/locks.md "Cages and beds").
+        if (cage is not null && LeavesAt(world, cage) is { } front) Place(table, s, front);
         if (!(cage is not null && crimes?.Factions.NotReal(cage.Owner) == true)) c.Escaped = escape;
         if (escape && c.SlaveState == 1) SetSlave(world, c, 2, c.SlaveOwner);   // a slave getting out is an escaped slave (Task_GetOutOfCage)
         // The crime is set once the hold is cleared: the setter refuses an imprisoned culprit (FUN_1403554b0 sets it after FUN_140330600, FUN_140852c80).
         if (escape) crimes?.SetPending(world, s, CrimeCode.EscapingPrison, cage!.Owner, CharacterId.None, CrimeSystem.MinTimer);
         return true;
+    }
+
+    /// <summary>
+    /// Where a character that leaves <paramref name="cage"/> stands: its position marker when the ground there is standable, else the nearest standable point straight in front of it
+    /// (the cage's local +Z, its door side); null when neither is walkable (a cage built into a wall).
+    /// </summary>
+    static Vector3? LeavesAt(World world, Fixture cage)
+    {
+        var walk = world.Walkability;
+        if (cage.Front is { } front && walk.TryStand(front.X, front.Z, cage.Position.Y, out float frontY)) return new Vector3(front.X, frontY, front.Z);
+        var turn = Matrix4x4.CreateRotationY(cage.Yaw);
+        for (float distance = 6; distance <= 24; distance += 3)
+        {
+            var at = cage.Position + Vector3.Transform(new Vector3(0, 0, distance), turn);
+            if (walk.TryStand(at.X, at.Z, cage.Position.Y, out float y)) return new Vector3(at.X, y, at.Z);
+        }
+        return null;
+    }
+
+    /// <summary>Puts a character at <paramref name="at"/>, standing it there, its path and orders dropped (as the teleport of <see cref="Hold"/>).</summary>
+    static void Place(CharacterTable table, int slot, Vector3 at)
+    {
+        table.Place(slot, at, table.Next[slot].Yaw);
+        TaskStart.Step(table, slot, CharacterTask.Idle);
+        var c = table.Cold(slot)!;
+        c.Path = [];
+        c.OrderQueue.Clear();
     }
 
     /// <summary>

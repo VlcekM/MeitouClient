@@ -258,6 +258,9 @@ Same targets as picking; Task_CutLock / Task_BruteForceLock share the shackle ta
   refuses an imprisoned culprit. There is no sentence test: a prisoner whose sentence has run out who leaves through 207 or 256 still escapes. 133 (flag 0) is added by `Task_ReleasePrisoner` only for a releaser
   that books bounties or is the player's. Lifting a prisoner out of another faction's cage (`FUN_14034fbe0`): the lifter gets code 7; the prisoner gets the escaped flag and a code 0xc call made while it is still
   held (`+0x2f8` = 2), which the setter refuses ([carry-loot](carry-loot.md)), so no pending crime (**Verified**).
+  Where it stands afterwards: at the building's position marker (the `is for position marker` part, in front of the cage — the spot characters use the cage from, 12 units out on local +Z for `cage1.mesh`),
+  not at the origin it was held at (**Observed**: leaving a cannibal cage shows the character in front of it, and some cages' interiors are a hollow the navmesh does not cross, so it cannot walk out).
+  Meitou: `FixtureRegistry.GetOut` stands it there (`LeavesAt`), else on the nearest standable ground along local +Z.
 - **Release** (`Task_ReleasePrisoner` 110): clears the occupancy, "{1} has been released from prison." (**Observed**).
 - **Beds**: `+0x2f8 = 1`, bed handle +0x300 ([carry-loot](carry-loot.md)); beds have no lock. Details below.
 - Character save keys: `in something` (= +0x2f8) and `in what` (handle +0x300) (**Verified**, `FUN_1406280a0`); platoons
