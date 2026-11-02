@@ -492,6 +492,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
             state.Job = null;
             try { Accept(state, job.Result, state.JobTier); }
             catch (AggregateException e) { Messages.Add($"foliage zone {state.Zone}: {e.InnerException?.Message ?? e.Message}"); state.Ready = state.Complete = state.MeshLayers = true; }
+            grassVersion++;
         }
         dropping.Clear();
         foreach (var state in zones.Values)
@@ -609,7 +610,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         zonesWaiting = wanted.Count - started - keptWaiting;
         NearestMissingMesh = float.PositiveInfinity;
 
-        UpdateGrass(eye, keptPoints);
+        UpdateGrass(eye, keptPoints, settling);
         PumpMeshes();
         PumpLods();
         Prune();
@@ -806,10 +807,12 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         state.Pages.Clear();
         ReleaseGrassZone(state);
         zones.Remove(state.Zone);
+        grassVersion++;
     }
 
     void FreePage(GrassPage page)
     {
+        grassVersion++;
         page.Dropped = true;   // an upload still queued for it frees what it made instead of attaching it
         page.PendingBlades = null;
         page.PendingPrefixes = null;
@@ -847,12 +850,42 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     int zonesWaiting, grassWaiting, grassNear;
 
     /// <summary>
+    /// Bumped by every change the page walk (<see cref="UpdateGrass"/>) reads besides the eye and the kept points: a zone laid out or dropped, a page
+    /// freed or attached, the store replaced.
+    /// </summary>
+    int grassVersion;
+    /// <summary>
+    /// The last page walk left nothing in progress (no job, no blades waiting for room, no page without its buffers, none wanted), and what it was made
+    /// from: while those stay within <see cref="GrassWalkSlack"/> the walk would decide the same, so it is skipped.
+    /// </summary>
+    bool grassSettled;
+    (Vector3 Eye, float Ground, float Range, bool Streaming, int Version) grassWalk;
+    Vector3[] grassWalkKept = [];
+    /// <summary>How far the eye or a kept point may move before the page walk runs again: a quarter page, well inside the half page by which a page is wanted
+    /// before its grass range and the two by which it is freed after.</summary>
+    const float GrassWalkSlack = PageSize / 4;
+
+    bool GrassWalkCurrent(Vector3 eye, IReadOnlyList<Vector3> kept)
+    {
+        var w = grassWalk;
+        if (w.Version != grassVersion || w.Range != GrassRangeSetting * Scale || w.Streaming != guard is not { Streaming: false }) return false;
+        if (Vector3.DistanceSquared(eye, w.Eye) > GrassWalkSlack * GrassWalkSlack) return false;
+        if (GroundUnderEye != w.Ground && !(MathF.Abs(GroundUnderEye - w.Ground) <= GrassWalkSlack)) return false;
+        if (kept.Count != grassWalkKept.Length) return false;
+        for (int i = 0; i < kept.Count; i++) if (Vector3.DistanceSquared(kept[i], grassWalkKept[i]) > GrassWalkSlack * GrassWalkSlack) return false;
+        return true;
+    }
+
+    /// <summary>
     /// Makes and frees grass pages round the eye and the kept points (<see cref="Kept"/>). A kept point's pages rank after every page the eye wants, and
     /// they give way to the eye's: while an eye page waits for room in the full store, the kept page farthest from its point is freed (one a frame).
     /// </summary>
-    void UpdateGrass(Vector3 eye, IReadOnlyList<Vector3> kept)
+    void UpdateGrass(Vector3 eye, IReadOnlyList<Vector3> kept, bool settling)
     {
         GrowGrassStore();
+        // Nothing moving and nothing in progress since the last walk: it would decide the same (its results, NearestMissingGrass and the counts, stand).
+        if (!settling && grassSettled && GrassWalkCurrent(eye, kept)) return;
+        bool unsettled = false;
         grassWanted.Clear();
         grassNear = 0;
         grassTriedFull = false;
@@ -893,6 +926,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
                         continue;
                     }
                     if (eyeWants && page.PendingBlades is not null) eyeWaiting = true;
+                    if (page.Job is not null || page.PendingBlades is not null || page.Buffers is null) unsettled = true;
                     if (!eyeWants && page.Buffers is not null && page.Job is null && dk > victimDistance && dk <= range + PageSize * 2) (victim, victimState, victimKey, victimDistance) = (page, state, key, dk);
                     if (page.Job is null && MathF.Min(d, dk) > range + PageSize * 2)
                     {
@@ -914,6 +948,13 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
                 }
         }
         grassEyeWaited = eyeWaiting;
+        grassSettled = !unsettled && !eyeWaiting && grassWanted.Count == 0 && inFlight == 0;
+        if (grassSettled)
+        {
+            grassWalk = (eye, GroundUnderEye, GrassRangeSetting * Scale, guard is not { Streaming: false }, grassVersion);
+            if (grassWalkKept.Length != kept.Count) grassWalkKept = new Vector3[kept.Count];
+            for (int i = 0; i < kept.Count; i++) grassWalkKept[i] = kept[i];
+        }
         if (eyeWaiting && grassFull && victim is not null)
         {
             FreePage(victim);

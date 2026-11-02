@@ -37,7 +37,9 @@ store full keeps its blades and waits; while full, one waiting page a frame is t
 store): retrying every waiting page each frame cost 15.8 ms of the render thread (trace: `BufferArena.Allocate` and the release of the
 partial allocation), and the pages past the store were never drawn. Pages round kept points ([render-objects.md](render-objects.md#kept-points))
 rank after the eye's; while an eye page waits for room the kept pages queue nothing and the one farthest from its point is freed each frame
-(frees land after the frames in flight, so a few more may go than needed). The draw skips pages beyond their zone's longest grass range before sorting. Sway is held for deterministic
+(frees land after the frames in flight, so a few more may go than needed). The page walk (`UpdateGrass`) is skipped while its last walk left nothing in progress (no job,
+no blades waiting, no page without buffers, none wanted), no zone, page or store changed since, and neither the eye nor a kept point moved a quarter page: it would
+decide the same (**Observed**, stutter final boss save, paired play-bench runs: upd-foliage 1.1 -> 0.5 ms a frame). The draw skips pages beyond their zone's longest grass range before sorting. Sway is held for deterministic
 screenshots unless deliberately stepped. `grass-velocity` supplies sway motion only where screen
 motion warrants it; camera reprojection handles the rest. Incorrect previous phase/camera/depth
 causes temporal ghosting. Keep blade motion consistent between colour/depth/velocity views.

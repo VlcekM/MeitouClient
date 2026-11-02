@@ -104,6 +104,7 @@ public sealed unsafe partial class FoliageRenderer
             grassMeshMotionGpu = ArenaMesh(grassMotionGpuProgram);
         }
         grassFull = false;
+        grassVersion++;
         Gpu.DeferDelete(old.Dispose);
         Console.WriteLine($"foliage   grass store grown to {GrassArenaBytes * (ulong)scale >> 20} MB for grass distance x {GrassRangeSetting / DefaultGrassRange:0.##}");
     }
@@ -228,6 +229,7 @@ public sealed unsafe partial class FoliageRenderer
                 store.WriteSlot(b.Slot, new GrassSlot { X0 = x0, Z0 = z0, Y = y, FirstBlade = b.FirstBlade, Count = (uint)b.Count, Zone = zone, Local = (uint)i, Tie = serial << 8 | (uint)i }, b.Prefixes);
             }
             page.Buffers = buffers;
+            grassVersion++;
         });
         return true;
     }
