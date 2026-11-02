@@ -54,6 +54,7 @@ public sealed unsafe class DlssUpscaler : IUpscaler
     readonly ViewportHandle* viewport;
     uint frameIndex;
     (uint Mode, int Width, int Height) options = (uint.MaxValue, 0, 0);
+    (int Width, int Height) named;
     bool failed;
 
     public UpscalerKind Kind => UpscalerKind.Dlss;
@@ -121,6 +122,12 @@ public sealed unsafe class DlssUpscaler : IUpscaler
             int rc = sl.DlssSetOptions(viewport, &o);
             if (rc != 0) return Fail($"slDLSSSetOptions failed ({rc})");
             options = (mode, i.DisplayWidth, i.DisplayHeight);
+        }
+
+        // The render size moves within a mode (0.89 and 0.83 are both Quality), so the name follows it, not the options.
+        if (named != (i.RenderWidth, i.RenderHeight))
+        {
+            named = (i.RenderWidth, i.RenderHeight);
             Name = $"dlss {i.RenderWidth}x{i.RenderHeight}";
         }
 
