@@ -187,6 +187,16 @@ public sealed partial class UiPainter : IDisposable
         foreach (var t in textures.Values) t.Texture.Dispose();
         textures.Clear();
         masks.Clear();
+        skinsReleased = true;
+    }
+
+    /// <summary>The skins' atlases went with <see cref="ReleaseTextures"/>: skin parts are drawn only from loaded atlases, so the next <see cref="Draw"/> loads them again.</summary>
+    bool skinsReleased;
+
+    void LoadSkinTextures()
+    {
+        foreach (string name in resources.Skins.Values.Select(s => s.Texture).Where(s => s.Length > 0).Distinct()) LoadTexture(name);
+        skinsReleased = false;
     }
 
     /// <summary>Whether <c>ImageTexture</c> <paramref name="name"/> is on the GPU.</summary>
@@ -213,10 +223,7 @@ public sealed partial class UiPainter : IDisposable
                 paintedLarge = Fallback(painted, (int)LargePixels);
                 titleFont = DebugOverlay.FromFont(overlay.Gpu, painted, 144);   // a stamp of Latin capitals, baked large for the title
             }
-            foreach (string name in resources.Skins.Values.Select(s => s.Texture).Where(s => s.Length > 0).Distinct())
-            {
-                LoadTexture(name);
-            }
+            LoadSkinTextures();
         }
         catch { Dispose(); throw; }
     }
@@ -228,6 +235,7 @@ public sealed partial class UiPainter : IDisposable
         DebugOverlay.OverlayPass? pass = null)
     {
         for (int uploads = 0; uploads < IconUploadsPerFrame && decodedIcons.TryDequeue(out var icon); uploads++) Upload(icon.Name, icon.Image);
+        if (skinsReleased) LoadSkinTextures();
         bool owns = pass is null;
         pass ??= (overlayPass ??= new DebugOverlay.OverlayPass(overlay.Gpu, width, height)).Reset(width, height);
         using var owned = owns ? pass : null;
