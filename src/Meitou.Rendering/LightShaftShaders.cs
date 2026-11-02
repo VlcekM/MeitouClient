@@ -408,7 +408,7 @@ static class LightShaftShaders
 
     /// <summary>
     /// The apply pass over the scene colour, blended as <c>scene * alpha + colour</c> (the fog volumes' state). The pixel's distance is rebuilt as the
-    /// fog volumes pass rebuilds it (the near slice's depth, else the far slice's, the water plane where it lies in front); the sun's share there
+    /// fog volumes pass rebuilds it (the scene depth, the water plane where it lies in front); the sun's share there
     /// is read from the second atlas (bilinear across the cells, linear between the slices' far ends). A surface loses
     /// <c>darkening × (1 − share)</c> of its haze colour (a negative colour); the sky, which no haze covers, is scaled by
     /// <c>1 − darkening × (1 − share) × sky weight × alpha at the grid's end</c>.
@@ -417,35 +417,27 @@ static class LightShaftShaders
 
         in vec2 vUv;
         out vec4 fragColour;
-        uniform sampler2D uNearDepth, uFarDepth;
-        uniform vec2 uNearPlanes, uFarPlanes;
+        uniform sampler2D uNearDepth;
+        uniform vec2 uNearPlanes;   // near, far of the scene depth
         uniform float uWaterY;
-        uniform int uHasFar;
-
-        float viewZ(float d, vec2 nf) { float zd = 2.0 * d - 1.0; return nf.x * nf.y / (nf.y - zd * (nf.y - nf.x)); }
+        """ + DepthConvention.Glsl + """
 
         void main()
         {
             float d = textureLod(uNearDepth, vUv, 0.0).r;
-            vec2 planes = uNearPlanes;
-            if (d >= 1.0 && uHasFar != 0)
-            {
-                d = textureLod(uFarDepth, vUv, 0.0).r;
-                planes = uFarPlanes;
-            }
             vec2 ndc = vUv * 2.0 - 1.0;
             vec3 perZ = uShaftRight * ndc.x * uShaftTan.x + uShaftUp * ndc.y * uShaftTan.y - uShaftBack;
             float len = length(perZ);
             vec3 dir = perZ / len;
-            bool sky = d >= 1.0;
-            float dist = sky ? uShaftRange.y : viewZ(d, planes) * len;
+            bool sky = depthIsSky(d);
+            float dist = sky ? uShaftRange.y : depthViewZ(d, uNearPlanes) * len;
             float waterWeight = 1.0;
             if (uWaterY > -1e30 && abs(dir.y) > 1e-6)
             {
                 float tw = (uWaterY - uShaftEye.y) / dir.y;
                 // Water does not write depth. Rebuild its hit only inside the rendered frustum;
                 // an infinite plane otherwise turns the sky below the horizon into a hazed surface.
-                float waterFar = (uHasFar != 0 ? uFarPlanes.y : uNearPlanes.y) * len;
+                float waterFar = uNearPlanes.y * len;
                 if (tw > 0.0 && tw < waterFar && (sky || tw < dist))
                 {
                     dist = tw;

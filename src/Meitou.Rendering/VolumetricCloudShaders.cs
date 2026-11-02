@@ -66,7 +66,8 @@ public static class VolumetricCloudShaders
         }
         """;
 
-    public static readonly string March = "#version 330 core\n" + AtmosphereShaders.Functions + FogVolumeShaders.Functions + Common + """
+    public static readonly string March = "#version 330 core\n" + DepthConvention.Glsl + AtmosphereShaders.Functions + FogVolumeShaders.Functions
+        + Common + """
         in vec2 vUv;
         layout(location = 0) out vec4 fragColour;
         layout(location = 1) out float fragDistance;
@@ -84,7 +85,7 @@ public static class VolumetricCloudShaders
             for (int k = 0; k < 5; k++)
             {
                 vec2 o = k == 0 ? vec2(0.0) : vec2((k & 1) == 1 ? 1.0 : -1.0, k < 3 ? -1.0 : 1.0) * uFogSkip.yz;
-                vec4 a = uInverse * vec4(ndc + o, 0.0, 1.0), b = uInverse * vec4(ndc + o, 1.0, 1.0);
+                vec4 a = uInverse * vec4(ndc + o, DEPTH_NEAREST, 1.0), b = uInverse * vec4(ndc + o, DEPTH_SKY, 1.0);
                 vec3 d = normalize(b.xyz / b.w - a.xyz / a.w);
                 if (fogVolumesTransmittance(uFogVolumeEye.xyz, d, 1e9) > 0.0) return false;
             }
@@ -97,7 +98,7 @@ public static class VolumetricCloudShaders
         void main()
         {
             vec2 ndc = vUv * 2.0 - 1.0;
-            vec4 a = uInverse * vec4(ndc, 0.0, 1.0), b = uInverse * vec4(ndc, 1.0, 1.0);
+            vec4 a = uInverse * vec4(ndc, DEPTH_NEAREST, 1.0), b = uInverse * vec4(ndc, DEPTH_SKY, 1.0);   // near to far, either depth convention
             vec3 ray = normalize(b.xyz / b.w - a.xyz / a.w);
             vec2 span;
             fragColour = vec4(0.0); fragDistance = 0.0;
@@ -156,6 +157,7 @@ public static class VolumetricCloudShaders
 
     public const string Resolve = """
         #version 330 core
+        """ + DepthConvention.Glsl + """
         in vec2 vUv;
         out vec4 fragColour;
         uniform sampler2D uCurrent, uHistory, uDistance;
@@ -169,7 +171,7 @@ public static class VolumetricCloudShaders
             fragColour = now;
             if (uHistoryWeight <= 0.0 || now.a < 0.001) return;
             vec2 ndc = vUv * 2.0 - 1.0;
-            vec4 a = uInverse * vec4(ndc, 0.0, 1.0), b = uInverse * vec4(ndc, 1.0, 1.0);
+            vec4 a = uInverse * vec4(ndc, DEPTH_NEAREST, 1.0), b = uInverse * vec4(ndc, DEPTH_SKY, 1.0);   // near to far, either depth convention
             vec3 ray = normalize(b.xyz / b.w - a.xyz / a.w);
             vec3 point = uEye + ray * texture(uDistance, vUv).r;
             point.xz += uWindDelta;

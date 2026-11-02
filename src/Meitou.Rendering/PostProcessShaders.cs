@@ -35,13 +35,13 @@ static class PostProcessShaders
         uniform sampler2D uMask;            // the scene colour at the render size, whose alpha is 1 on characters (unbound with uCharacterOccluder 1)
         uniform float uCharacterOccluder;   // how much a character counts as an occluder of what is round it (1: as anything else)
         uniform vec2 uTan;      // tan(fov/2) * aspect, tan(fov/2)
-        uniform vec2 uNearFar;  // of the near depth slice
+        uniform vec2 uNearFar;  // of the scene depth
         uniform vec2 uSize;     // full-resolution size
         uniform float uRadius, uStrength, uFadeStart, uFadeEnd;
         uniform vec3 uRight, uUp, uBack;   // the camera's axes in the world (view space to world offsets)
         uniform vec3 uSsaoEye;
         uniform float uWaterY;               // the water plane's height (float min: no water)
-        uniform int uClipDepthZeroToOne;     // the depth's convention (Metal 1: the clip depth itself; Vulkan 0: half of it plus a half)
+        """ + DepthConvention.Glsl + """
 
         // The share of a surface's occlusion the water in front of it leaves. The water writes no depth, so the floor's occlusion fell on the
         // water's own surface; it fades in over the water's last two units along the ray, as the water's edge does (docs/render-water.md "Edges").
@@ -63,20 +63,13 @@ static class PostProcessShaders
             return dist < 1.0 ? visible : visible * fogVolumesTransmittance(uSsaoEye, offset / dist, dist);
         }
 
-        // The view depth of a stored depth. The projection's clip depth runs 0 to 1 (System.Numerics); Vulkan stores half of it plus a half, Metal
-        // the clip depth itself. GL's formula (clip depth -1 to 1) put every point about twice too far on Vulkan.
-        float viewZ(float d)
-        {
-            float zd = uClipDepthZeroToOne != 0 ? d : 2.0 * d - 1.0;
-            return uNearFar.x * uNearFar.y / (uNearFar.y - zd * (uNearFar.y - uNearFar.x));
-        }
         // A depth texel's own position: its depth with the screen position of its centre. The occlusion runs at half size, so its pixels' centres fall on
         // the corners between depth texels; reading the depth there and placing it at the unsnapped position let rounding pick the texel row by row,
         // which tilted the rebuilt normal on whole rows and banded flat ground seen at an angle.
         vec3 viewPosAt(ivec2 t)
         {
             t = clamp(t, ivec2(0), ivec2(uSize) - 1);
-            float z = viewZ(texelFetch(uDepth, t, 0).r);
+            float z = depthViewZ(texelFetch(uDepth, t, 0).r, uNearFar);
             vec2 uv = (vec2(t) + 0.5) / uSize;
             return vec3((uv * 2.0 - 1.0) * uTan * z, -z);
         }
@@ -85,7 +78,7 @@ static class PostProcessShaders
         {
             ivec2 c = ivec2(floor(vUv * uSize));
             float d = texelFetch(uDepth, c, 0).r;
-            if (d >= 0.99999) { fragColour = vec4(1.0, 60000.0, 0.0, 1.0); return; }
+            if (depthIsSky(d)) { fragColour = vec4(1.0, 60000.0, 0.0, 1.0); return; }
             vec3 p = viewPosAt(c);
             float z = -p.z;
             vec3 l = viewPosAt(c - ivec2(1, 0)), r = viewPosAt(c + ivec2(1, 0));
@@ -133,7 +126,7 @@ static class PostProcessShaders
 
     /// <summary>
     /// The placed fog volumes (docs/formats/fogfeatures.md), one pass over the whole scene instead of a term in every world shader. The pixel's
-    /// world offset is rebuilt from the depth as SSAO does (the near slice's, else the far slice's; none: the sky, at the far clip D), pulled in to
+    /// world offset is rebuilt from the scene depth as SSAO does (none: the sky, at the far clip D), pulled in to
     /// the water plane where that lies in front (the water writes no depth; its own surface is what the game's G-buffer reads, and the water
     /// shader used to fog it there). The shader accumulates every volume, farthest first, into (colour, transmittance), which the hardware blends
     /// as <c>scene * transmittance + colour</c> (blend one, source alpha; alpha of the scene untouched).
@@ -142,31 +135,22 @@ static class PostProcessShaders
 
         in vec2 vUv;
         out vec4 fragColour;
-        uniform sampler2D uNearDepth, uFarDepth;
-        uniform vec2 uNearPlanes, uFarPlanes;   // near, far of each depth slice
+        uniform sampler2D uNearDepth;
+        uniform vec2 uNearPlanes;               // near, far of the scene depth
         uniform vec2 uTan;                      // tan(fov/2) * aspect, tan(fov/2)
         uniform vec3 uRight, uUp, uBack;        // the camera's axes in the world
         uniform float uWaterY;                  // the water plane's height (float min: no water)
-        uniform int uHasFar;
-
-        // Distance along the view axis from a depth-buffer value (clip depth 0..1 stored as 0.5..1, as the velocity pass reads it).
-        float viewZ(float d, vec2 nf) { float zd = 2.0 * d - 1.0; return nf.x * nf.y / (nf.y - zd * (nf.y - nf.x)); }
+        """ + DepthConvention.Glsl + """
 
         void main()
         {
             float d = textureLod(uNearDepth, vUv, 0.0).r;
-            vec2 planes = uNearPlanes;
-            if (d >= 1.0 && uHasFar != 0)
-            {
-                d = textureLod(uFarDepth, vUv, 0.0).r;
-                planes = uFarPlanes;
-            }
             vec2 ndc = vUv * 2.0 - 1.0;
             vec3 perZ = uRight * ndc.x * uTan.x + uUp * ndc.y * uTan.y - uBack;   // the offset per unit of view depth
             float len = length(perZ);
             vec3 dir = perZ / len;
             vec3 eye = uFogVolumeEye.xyz;
-            float dist = d >= 1.0 ? 1e9 : viewZ(d, planes) * len;   // the sky: the volumes cap it at the far clip D
+            float dist = depthIsSky(d) ? 1e9 : depthViewZ(d, uNearPlanes) * len;   // the sky: the volumes cap it at the far clip D
             if (uWaterY > -1e30 && abs(dir.y) > 1e-6)
             {
                 float tw = (uWaterY - eye.y) / dir.y;
@@ -181,40 +165,32 @@ static class PostProcessShaders
 
     /// <summary>
     /// The pixel's ray and distance as the fog volumes and light shafts passes rebuild them, for the passes of <see cref="PostProcess"/>'s merged scene
-    /// layers: the near slice's depth, else the far slice's, else the sky (1e9); pulled in to the water plane where that lies in front (sky false
+    /// layers: the scene depth, else the sky (1e9); pulled in to the water plane where that lies in front (sky false
     /// then). The camera comes from the light shafts' uniforms (<see cref="LightShaftShaders.Common"/>, set whether the shafts run or not).
     /// </summary>
     const string SceneDistance = """
 
-        uniform sampler2D uNearDepth, uFarDepth;
-        uniform vec2 uNearPlanes, uFarPlanes;   // near, far of each depth slice
+        uniform sampler2D uNearDepth;
+        uniform vec2 uNearPlanes;               // near, far of the scene depth
         uniform float uWaterY;                  // the water plane's height (float min: no water)
-        uniform int uHasFar;
         uniform vec2 uFullSize;                 // the render size in pixels
-
-        float viewZ(float d, vec2 nf) { float zd = 2.0 * d - 1.0; return nf.x * nf.y / (nf.y - zd * (nf.y - nf.x)); }
+        """ + DepthConvention.Glsl + """
 
         float sceneDistance(ivec2 p, out vec3 dir, out bool sky, out float waterWeight)
         {
             float d = texelFetch(uNearDepth, p, 0).r;
-            vec2 planes = uNearPlanes;
-            if (d >= 1.0 && uHasFar != 0)
-            {
-                d = texelFetch(uFarDepth, p, 0).r;
-                planes = uFarPlanes;
-            }
             vec2 ndc = (vec2(p) + 0.5) / uFullSize * 2.0 - 1.0;
             vec3 perZ = uShaftRight * ndc.x * uShaftTan.x + uShaftUp * ndc.y * uShaftTan.y - uShaftBack;   // the offset per unit of view depth
             float len = length(perZ);
             dir = perZ / len;
-            sky = d >= 1.0;
+            sky = depthIsSky(d);
             waterWeight = 1.0;
-            float dist = sky ? 1e9 : viewZ(d, planes) * len;
+            float dist = sky ? 1e9 : depthViewZ(d, uNearPlanes) * len;
             if (uWaterY > -1e30 && abs(dir.y) > 1e-6)
             {
                 float tw = (uWaterY - uShaftEye.y) / dir.y;
                 // The water's analytic plane must stop at the same far clip as its rendered mesh.
-                float waterFar = (uHasFar != 0 ? uFarPlanes.y : uNearPlanes.y) * len;
+                float waterFar = uNearPlanes.y * len;
                 if (tw > 0.0 && tw < waterFar && tw < dist)
                 {
                     dist = tw;
@@ -375,22 +351,20 @@ static class PostProcessShaders
 
     /// <summary>
     /// Fog shading rate, first pass (<c>fog-vrs</c>, docs/render-post.md "Fog shading rate"): at a quarter of the render size, the distance to the nearest surface of each 4 x 4 block of pixels (red) and to the farthest (green: 1e9 where the block shows sky),
-    /// rebuilt from the scene depth as the fog pass does (the near slice's depth, else the far slice's, else the sky at 1e9; where the water plane lies in front, the water's).
+    /// rebuilt from the scene depth as the fog pass does (no surface: the sky at 1e9; where the water plane lies in front, the water's).
     /// </summary>
     public static readonly string FogRateDistance = "#version 330 core\n" + """
 
         in vec2 vUv;
         out vec4 fragColour;
-        uniform sampler2D uNearDepth, uFarDepth;
-        uniform vec2 uNearPlanes, uFarPlanes;   // near, far of each depth slice
+        uniform sampler2D uNearDepth;
+        uniform vec2 uNearPlanes;               // near, far of the scene depth
         uniform vec2 uTan;                      // tan(fov/2) * aspect, tan(fov/2)
         uniform vec3 uRight, uUp, uBack;        // the camera's axes in the world
         uniform vec3 uEye;
         uniform vec2 uSize;                     // the render size in pixels
         uniform float uWaterY;                  // the water plane's height (float min: no water)
-        uniform int uHasFar;
-
-        float viewZ(float d, vec2 nf) { float zd = 2.0 * d - 1.0; return nf.x * nf.y / (nf.y - zd * (nf.y - nf.x)); }
+        """ + DepthConvention.Glsl + """
 
         void main()
         {
@@ -402,16 +376,10 @@ static class PostProcessShaders
                 {
                     ivec2 p = min(base + ivec2(x, y), last);
                     float d = texelFetch(uNearDepth, p, 0).r;
-                    vec2 planes = uNearPlanes;
-                    if (d >= 1.0 && uHasFar != 0)
-                    {
-                        d = texelFetch(uFarDepth, p, 0).r;
-                        planes = uFarPlanes;
-                    }
                     vec2 ndc = (vec2(p) + 0.5) / uSize * 2.0 - 1.0;
                     vec3 perZ = uRight * ndc.x * uTan.x + uUp * ndc.y * uTan.y - uBack;
                     float len = length(perZ);
-                    float dist = d >= 1.0 ? 1e9 : viewZ(d, planes) * len;
+                    float dist = depthIsSky(d) ? 1e9 : depthViewZ(d, uNearPlanes) * len;
                     vec3 dir = perZ / len;
                     if (uWaterY > -1e30 && abs(dir.y) > 1e-6)
                     {
@@ -493,8 +461,8 @@ static class PostProcessShaders
     /// The low-resolution particles' depth (Meitou): each texel is the nearest or the farthest of the <c>uDiv</c> x <c>uDiv</c> block of the scene's depth it
     /// covers, written as the depth of a depth-only rendering, so the hardware test of the particle draws still rejects the sprite area hidden behind the scene
     /// (early-Z). <c>uLayer</c> 1: the nearest, 2: the farthest (the particles are drawn once against each, <see cref="ParticleUpsample"/>). Where the two lie
-    /// within 4 % of each other the farthest is written as 0, so the second draw rejects every fragment there (the upsample then takes the first draw's, whose
-    /// depth matches): it shades only along depth edges, where the two differ.
+    /// within 4 % of each other the farthest is written as the near plane's depth, so the second draw rejects every fragment there (the upsample
+    /// then takes the first draw's, whose depth matches): it shades only along depth edges, where the two differ.
     /// </summary>
     public const string ParticleDepth = """
         #version 330 core
@@ -504,22 +472,23 @@ static class PostProcessShaders
         uniform vec2 uFullSize;
         uniform float uDiv;
         uniform int uLayer;
-        uniform vec3 uPlanes;   // the scene depth's near and far planes, z 1 when the depth is 0..1
-        float planeZ(float d) { float zd = uPlanes.z > 0.5 ? d : 2.0 * d - 1.0; return uPlanes.x * uPlanes.y / (uPlanes.y - zd * (uPlanes.y - uPlanes.x)); }
+        uniform vec2 uPlanes;   // the scene depth's near and far planes
+        """ + DepthConvention.Glsl + """
         void main()
         {
             vec2 base = floor(gl_FragCoord.xy) * uDiv;
-            float near = 1.0, far = 0.0;
+            float nearest = DEPTH_SKY, farthest = DEPTH_NEAREST;
             for (int y = 0; y < 4; y++)
                 for (int x = 0; x < 4; x++)
                     if (float(x) < uDiv && float(y) < uDiv)
                     {
                         float d = texelFetch(uDepth, ivec2(min(base + vec2(x, y), uFullSize - 1.0)), 0).r;
-                        near = min(near, d);
-                        far = max(far, d);
+                        nearest = depthNearer(nearest, d);
+                        farthest = depthFarther(farthest, d);
                     }
-            bool oneSurface = near >= 1.0 || (far < 1.0 && planeZ(far) < planeZ(near) * 1.04);   // all sky, or one surface
-            gl_FragDepth = uLayer == 2 ? (oneSurface ? 0.0 : far) : near;
+            // All sky, or one surface.
+            bool oneSurface = depthIsSky(nearest) || (!depthIsSky(farthest) && depthViewZ(farthest, uPlanes) < depthViewZ(nearest, uPlanes) * 1.04);
+            gl_FragDepth = uLayer == 2 ? (oneSurface ? DEPTH_NEAREST : farthest) : nearest;
             fragColour = vec4(gl_FragDepth);   // the same depth as a colour, for the Meitou fog's soft fade (the depth attachment cannot be read while tested)
         }
         """;
@@ -545,10 +514,10 @@ static class PostProcessShaders
     const string ParticleUpsample = """
         uniform sampler2D uAccum, uLowDepth, uAccumFar, uLowDepthFar, uDepth;
         uniform vec2 uLowSize;
-        uniform vec2 uNearPlanes;   // near, far of the depth slice the particles were tested against
+        uniform vec2 uNearPlanes;   // near, far of the scene depth the particles were tested against
         uniform float uDiv;
-        uniform int uClipDepthZeroToOne;   // Metal's depth is 0..1; Vulkan's is recovered with 2d - 1
-        float linearZ(float d) { float zd = uClipDepthZeroToOne != 0 ? d : 2.0 * d - 1.0; return uNearPlanes.x * uNearPlanes.y / (uNearPlanes.y - zd * (uNearPlanes.y - uNearPlanes.x)); }
+        """ + DepthConvention.Glsl + """
+        float linearZ(float d) { return depthViewZ(d, uNearPlanes); }
         vec4 particlesAt(vec2 fc, bool footprint)
         {
             vec2 lp = fc / uDiv - 0.5;
@@ -570,8 +539,8 @@ static class PostProcessShaders
             if (footprint)
             {
                 ivec2 r0 = ivec2(floor(fc - 0.5)), rhi = textureSize(uDepth, 0) - 1;
-                d0 = min(min(texelFetch(uDepth, clamp(r0, ivec2(0), rhi), 0).r, texelFetch(uDepth, clamp(r0 + ivec2(1, 0), ivec2(0), rhi), 0).r),
-                         min(texelFetch(uDepth, clamp(r0 + ivec2(0, 1), ivec2(0), rhi), 0).r, texelFetch(uDepth, clamp(r0 + ivec2(1, 1), ivec2(0), rhi), 0).r));
+                for (int i = 0; i < 4; i++)
+                    d0 = depthNearer(i == 0 ? DEPTH_SKY : d0, texelFetch(uDepth, clamp(r0 + ivec2(i & 1, i >> 1), ivec2(0), rhi), 0).r);
             }
             float z0 = linearZ(d0);
             vec4 sum = vec4(0.0);
@@ -601,16 +570,16 @@ static class PostProcessShaders
         in vec2 vUv;
         out vec4 fragColour;
         uniform sampler2D uAccumH, uLowDepthH, uAccumFarH, uLowDepthFarH, uAccumQ, uLowDepthQ, uAccumFarQ, uLowDepthFarQ;
-        uniform sampler2D uDepth;               // the scene's (near slice) depth at the render size
+        uniform sampler2D uDepth;               // the scene's depth at the render size
         uniform sampler2D uHistory;             // last frame's result at the display size
         uniform sampler2D uMotion;              // the motion target (rg: this frame's place minus last frame's, 0..1 units)
         uniform vec2 uLowSizeH, uLowSizeQ;
         uniform vec4 uHas;                      // x the half size's divisor, y the quarter's (0: not drawn)
         uniform vec2 uNearPlanes;
-        uniform int uClipDepthZeroToOne;
         uniform vec4 uLate;                     // xy render pixels per display pixel, zw the jitter (render pixels)
         uniform vec4 uTarget;                   // xy the display size, z 1 with a history, w this frame's share
-        float linearZ(float d) { float zd = uClipDepthZeroToOne != 0 ? d : 2.0 * d - 1.0; return uNearPlanes.x * uNearPlanes.y / (uNearPlanes.y - zd * (uNearPlanes.y - uNearPlanes.x)); }
+        """ + DepthConvention.Glsl + """
+        float linearZ(float d) { return depthViewZ(d, uNearPlanes); }
 
         // One size at render position fc for the four surfaces' distances z: each of its four nearest texels offers the near and the far draw, weighted
         // bilinearly (plus a floor) over the square of their depth's distance from the surface's. With `one` (the four surfaces within 4 %: no outline) the
@@ -659,7 +628,7 @@ static class PostProcessShaders
             vec2 b = floor(rp), f = rp - b;
             ivec2 last = textureSize(uDepth, 0) - 1;
             float z[4], bil[4];
-            float closest = 2.0;
+            float closest = DEPTH_SKY;
             ivec2 qClosest = ivec2(0);
             for (int i = 0; i < 4; i++)
             {
@@ -667,7 +636,7 @@ static class PostProcessShaders
                 float d = texelFetch(uDepth, q, 0).r;
                 z[i] = linearZ(d);
                 bil[i] = ((i & 1) == 0 ? 1.0 - f.x : f.x) * ((i >> 1) == 0 ? 1.0 - f.y : f.y);
-                if (d < closest) { closest = d; qClosest = q; }
+                if (i == 0 || depthNearerThan(d, closest)) { closest = d; qClosest = q; }
             }
             vec2 fc = rp + 0.5;
             // The nearest and farthest surface of the 3 x 3 render pixels round the four: the filter's range at an outline. From the four alone, a pixel
@@ -1302,10 +1271,10 @@ static class PostProcessShaders
         uniform float uPhase;     // gameTime (game hours since the load) × 100
         uniform float uAmount;    // heatHaze
         uniform vec2 uTan;        // tan(fov/2) * aspect, tan(fov/2)
-        uniform vec2 uNearFar;    // of the near depth slice
+        uniform vec2 uNearFar;    // of the scene depth
         uniform float uFarClip;   // the game's far clip D: its G-buffer depth is distance / D
-        uniform int uHasDepth;    // 0: no near slice was drawn, everything counts as far
-        uniform int uClipDepthZeroToOne;   // the depth's convention (Metal 1: the clip depth itself; Vulkan 0: half of it plus a half)
+        uniform int uHasDepth;    // 0: no scene depth was drawn, everything counts as far
+        """ + DepthConvention.Glsl + """
 
         vec2 layer(vec2 uv, vec2 direction, float phase)
         {
@@ -1327,11 +1296,9 @@ static class PostProcessShaders
             // The game's depth is the distance from the eye over its far clip, and "nothing" counts as 1.
             float d = textureLod(uDepth, vUv, 0.0).r;
             float amplitude = 1.0;
-            if (uHasDepth != 0 && d < 0.99999)
+            if (uHasDepth != 0 && !depthIsSky(d))
             {
-                // The view depth (the projection's clip depth runs 0 to 1; GL's -1 to 1 formula made it about twice too far on Vulkan).
-                float zd = uClipDepthZeroToOne != 0 ? d : 2.0 * d - 1.0;
-                float z = uNearFar.x * uNearFar.y / (uNearFar.y - zd * (uNearFar.y - uNearFar.x));
+                float z = depthViewZ(d, uNearFar);
                 float distance = z * length(vec3((vUv * 2.0 - 1.0) * uTan, 1.0));
                 amplitude = clamp(6.0 * distance / uFarClip, 0.0, 1.0);
             }

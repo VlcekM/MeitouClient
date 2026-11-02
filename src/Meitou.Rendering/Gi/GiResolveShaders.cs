@@ -46,26 +46,22 @@ static partial class GiResolveShaders
             """;
     }
 
-    /// <summary>The scene's position from the two depth slices, shared by both passes.</summary>
+    /// <summary>The scene's position from the scene depth, shared by both passes.</summary>
     const string Reconstruct = """
-        uniform sampler2D uNearDepth, uFarDepth;
-        uniform vec2 uNearPlanes, uFarPlanes;   // near, far of each depth slice
+        uniform sampler2D uNearDepth;
+        uniform vec2 uNearPlanes;               // near, far of the scene depth
         uniform vec2 uTan;                      // tan(fov/2) * aspect, tan(fov/2)
         uniform vec3 uRight, uUp, uBack;        // the camera's axes in the world
         uniform vec3 uGiEye;
-        uniform int uHasFar;
         uniform vec2 uFullSize;                 // the render size
+        """ + DepthConvention.Glsl + """
 
-        float viewZ(float d, vec2 nf) { float zd = 2.0 * d - 1.0; return nf.x * nf.y / (nf.y - zd * (nf.y - nf.x)); }
-        // The depth along the view axis at a pixel of the render size (near slice, else far; 0: the sky).
+        // The depth along the view axis at a pixel of the render size (0: the sky).
         float depthAt(ivec2 px)
         {
             px = clamp(px, ivec2(0), ivec2(uFullSize) - 1);
             float d = texelFetch(uNearDepth, px, 0).r;
-            if (d < 1.0) return viewZ(d, uNearPlanes);
-            if (uHasFar == 0) return 0.0;
-            d = texelFetch(uFarDepth, px, 0).r;
-            return d < 1.0 ? viewZ(d, uFarPlanes) : 0.0;
+            return depthIsSky(d) ? 0.0 : depthViewZ(d, uNearPlanes);
         }
         vec3 positionAt(ivec2 px, float z)
         {

@@ -22,7 +22,7 @@ public readonly struct OcclusionView(GpuBufferBinding buffer, Vector4[] vectors)
 
 /// <summary>
 /// The previous frame's depth as a pyramid of the nearest and farthest view-space distance (z along the view axis) in each block of pixels, for the
-/// foliage cull's occlusion test (docs/formats/foliage.md "Occlusion culling"). Built at the end of every frame from the scene's depth buffers
+/// foliage cull's occlusion test (docs/formats/foliage.md "Occlusion culling"). Built at the end of every frame from the scene's depth buffer
 /// (<see cref="Build"/>: a compute kernel takes 4 x 4 pixels into each texel of level 0, then one per level halves it), read by the next frame's
 /// cull from a storage buffer (<c>vec2</c> per texel: the least and the greatest distance, concatenated by level). A pixel that no geometry covered
 /// (the sky, the cleared depth) is infinitely far. Render thread only.
@@ -85,14 +85,37 @@ public sealed unsafe class HizPyramid : IDisposable
     }
 
     /// <summary>
-    /// Records the pyramid of the scene's depth into <paramref name="cmd"/> (outside any rendering): the near slice's depth <paramref name="near"/>, and
-    /// where that is cleared the far slice's <paramref name="far"/> (null: none was drawn), each with the planes it was drawn with. <paramref name="viewRotation"/>
-    /// is the camera's view without its translation (the world to view rotation, as <c>PostProcess</c> keeps it), <paramref name="fieldOfView"/> and <paramref name="aspect"/> the
-    /// projection's.
+    /// Records the pyramid of the scene's depth <paramref name="depth"/>, drawn with the planes <paramref name="planes"/> (near, far), into
+    /// <paramref name="cmd"/> (outside any rendering). <paramref name="viewRotation"/> is the camera's view without its translation (the world to view
+    /// rotation, as <c>PostProcess</c> keeps it), <paramref name="fieldOfView"/> and <paramref name="aspect"/> the projection's.
     /// </summary>
-    public void Build(IGpuCommandList cmd, GpuTexture near, GpuTexture? far, Vector2 nearPlanes, Vector2 farPlanes, int w, int h, Vector3 eyePosition, Matrix4x4 viewRotation, float fieldOfView, float aspect)
+    public void Build(IGpuCommandList cmd, GpuTexture depth, Vector2 planes, int w, int h, Vector3 eyePosition, Matrix4x4 viewRotation,
+        float fieldOfView, float aspect)
     {
         var levels = Levels(w, h);
+        Allocate(levels, w, h);
+        KeepCamera(eyePosition, viewRotation, fieldOfView, aspect);
+
+        cmd.BeginLabel("hiz");
+        // The depth was just drawn (the scene's passes, in whichever layout they leave it: GENERAL), and the last frame's cull may still
+        // read the buffer.
+        cmd.Order();
+        RecordBase(cmd, depth, planes, levels);
+        if (levels.Count > FusedLevels)
+        {
+            cmd.Order();
+            RecordReduce(cmd, levels);
+        }
+        // The cull reads it in the next frame's pre-frame commands.
+        cmd.Order();
+        cmd.EndLabel();
+        builtFrame = ctx.Frame.Number;
+        Builds++;
+    }
+
+    /// <summary>Sizes the storage for the <paramref name="levels"/> of a <paramref name="w"/> x <paramref name="h"/> depth and lays them out.</summary>
+    void Allocate(List<(int W, int H)> levels, int w, int h)
+    {
         ulong texels = 0;
         foreach (var (lw, lh) in levels) texels += (ulong)lw * (ulong)lh;
         if (buffer is null || buffer.Size < texels * 8 || width != w || height != h)
@@ -102,52 +125,52 @@ public sealed unsafe class HizPyramid : IDisposable
         }
         (width, height, baseWidth, baseHeight, levelCount) = (w, h, levels[0].W, levels[0].H, levels.Count);
         uint offset = 0;
-        for (int i = 0; i < levels.Count; i++) { offsets[i] = offset; offset += (uint)(levels[i].W * levels[i].H); }
+        for (int i = 0; i < levels.Count; i++)
+        {
+            offsets[i] = offset;
+            offset += (uint)(levels[i].W * levels[i].H);
+        }
+    }
+
+    /// <summary>The camera the depth was drawn from, for <see cref="ViewFor"/>.</summary>
+    void KeepCamera(Vector3 eyePosition, Matrix4x4 viewRotation, float fieldOfView, float aspect)
+    {
         eye = eyePosition;
-        (right, up, back) = (new Vector3(viewRotation.M11, viewRotation.M21, viewRotation.M31), new Vector3(viewRotation.M12, viewRotation.M22, viewRotation.M32),
-            new Vector3(viewRotation.M13, viewRotation.M23, viewRotation.M33));
+        right = new Vector3(viewRotation.M11, viewRotation.M21, viewRotation.M31);
+        up = new Vector3(viewRotation.M12, viewRotation.M22, viewRotation.M32);
+        back = new Vector3(viewRotation.M13, viewRotation.M23, viewRotation.M33);
         tanY = MathF.Tan(fieldOfView * 0.5f);
         tanX = tanY * aspect;
+    }
 
-        var depthView = near.View();
-        var farView = (far ?? near).View();
-        cmd.BeginLabel("hiz");
-        // The depth was just drawn (the scene's passes, in whichever layout they leave it: GENERAL), and the last frame's cull may still read the buffer.
-        cmd.Order();
+    /// <summary>Levels 0 to 4 in one dispatch (a 16 x 16 tile of level 0 per workgroup, the rest through shared memory).</summary>
+    void RecordBase(IGpuCommandList cmd, GpuTexture depth, Vector2 planes, List<(int W, int H)> levels)
+    {
+        var bindings = stackalloc GpuBinding[2];
+        bindings[0] = GpuBinding.Sampled(0, new SampledTexture(sampler, depth.View()));
+        bindings[1] = GpuBinding.Storage(1, new GpuBufferBinding(buffer!.Handle, 0, buffer.Size));
+        cmd.BindPipeline(basePipeline);
+        cmd.BindProgramResources(baseProgram, 0, new ReadOnlySpan<GpuBinding>(bindings, 2));
+        var push = new BasePush
         {
-            // Levels 0 to 4 in one dispatch (a 16 x 16 tile of level 0 per workgroup, the rest through shared memory).
-            var bindings = stackalloc GpuBinding[3];
-            bindings[0] = GpuBinding.Sampled(0, new SampledTexture(sampler, depthView));
-            bindings[1] = GpuBinding.Sampled(1, new SampledTexture(sampler, farView));
-            bindings[2] = GpuBinding.Storage(2, new GpuBufferBinding(buffer.Handle, 0, buffer.Size));
-            cmd.BindPipeline(basePipeline);
-            cmd.BindProgramResources(baseProgram, 0, new ReadOnlySpan<GpuBinding>(bindings, 3));
-            var push = new BasePush
-            {
-                Near = nearPlanes, Far = farPlanes, Width = (uint)w, Height = (uint)h, BaseWidth = (uint)levels[0].W, BaseHeight = (uint)levels[0].H, HasFar = far is null ? 0u : 1u,
-                Levels = (uint)levels.Count, Offset0 = offsets[0], Offset1 = offsets[1], Offset2 = offsets[2], Offset3 = offsets[3], Offset4 = offsets[4],
-            };
-            cmd.PushConstants(baseProgram, GpuStage.Compute, in push);
-            cmd.Dispatch((uint)((levels[0].W + 15) / 16), (uint)((levels[0].H + 15) / 16));
-        }
-        if (levels.Count > FusedLevels)
-        {
-            // The rest (at most about a thousand texels a level) in one workgroup, a level at a time.
-            cmd.Order();
-            var bindings = stackalloc GpuBinding[1];
-            bindings[0] = GpuBinding.Storage(0, new GpuBufferBinding(buffer.Handle, 0, buffer.Size));
-            cmd.BindPipeline(reducePipeline);
-            cmd.BindProgramResources(reduceProgram, 0, new ReadOnlySpan<GpuBinding>(bindings, 1));
-            var push = new ReducePush { BaseWidth = (uint)levels[0].W, BaseHeight = (uint)levels[0].H, Levels = (uint)levels.Count };
-            for (int i = 0; i < MaxLevels; i++) push.Offsets[i] = i < levels.Count ? offsets[i] : 0;
-            cmd.PushConstants(reduceProgram, GpuStage.Compute, in push);
-            cmd.Dispatch(1);
-        }
-        // The cull reads it in the next frame's pre-frame commands.
-        cmd.Order();
-        cmd.EndLabel();
-        builtFrame = ctx.Frame.Number;
-        Builds++;
+            Planes = planes, Width = (uint)width, Height = (uint)height, BaseWidth = (uint)levels[0].W, BaseHeight = (uint)levels[0].H,
+            Levels = (uint)levels.Count, Offset0 = offsets[0], Offset1 = offsets[1], Offset2 = offsets[2], Offset3 = offsets[3], Offset4 = offsets[4],
+        };
+        cmd.PushConstants(baseProgram, GpuStage.Compute, in push);
+        cmd.Dispatch((uint)((levels[0].W + 15) / 16), (uint)((levels[0].H + 15) / 16));
+    }
+
+    /// <summary>The rest (at most about a thousand texels a level) in one workgroup, a level at a time.</summary>
+    void RecordReduce(IGpuCommandList cmd, List<(int W, int H)> levels)
+    {
+        var bindings = stackalloc GpuBinding[1];
+        bindings[0] = GpuBinding.Storage(0, new GpuBufferBinding(buffer!.Handle, 0, buffer.Size));
+        cmd.BindPipeline(reducePipeline);
+        cmd.BindProgramResources(reduceProgram, 0, new ReadOnlySpan<GpuBinding>(bindings, 1));
+        var push = new ReducePush { BaseWidth = (uint)levels[0].W, BaseHeight = (uint)levels[0].H, Levels = (uint)levels.Count };
+        for (int i = 0; i < MaxLevels; i++) push.Offsets[i] = i < levels.Count ? offsets[i] : 0;
+        cmd.PushConstants(reduceProgram, GpuStage.Compute, in push);
+        cmd.Dispatch(1);
     }
 
     /// <summary>Forgets the pyramid (the depth's size or the camera's continuity changed): no frame uses it until the next <see cref="Build"/>.</summary>
@@ -189,8 +212,8 @@ public sealed unsafe class HizPyramid : IDisposable
     [StructLayout(LayoutKind.Sequential)]
     struct BasePush
     {
-        public Vector2 Near, Far;
-        public uint Width, Height, BaseWidth, BaseHeight, HasFar, Levels, Offset0, Offset1, Offset2, Offset3, Offset4;
+        public Vector2 Planes;
+        public uint Width, Height, BaseWidth, BaseHeight, Levels, Offset0, Offset1, Offset2, Offset3, Offset4;
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -222,24 +245,23 @@ static class HizShaders
 
     /// <summary>
     /// Levels 0 to 4: a workgroup of 16 x 16 threads takes 64 x 64 pixels. Each thread makes a texel of level 0 (the least and greatest view distance over its 4 x 4
-    /// pixels; the distance is rebuilt from the depth as the velocity pass does, <c>UpscaleShaders.Velocity</c>: the near slice's depth, else the far slice's, GL's
-    /// 0.5..1 range of a D3D-style projection; a cleared pixel, 1.0, is infinitely far), and the later levels come through shared memory (a texel out of range is
-    /// the neutral (+inf, 0), which gives the clamped result of a ceiling-sized level). Level k at (x, y) is written when it exists (k below the level count).
+    /// pixels; the distance is rebuilt from the scene depth as the velocity pass does, <c>UpscaleShaders.Velocity</c>, through
+    /// <see cref="DepthConvention.Glsl"/>; a cleared pixel, the sky, is infinitely far), and the later levels come through shared memory (a texel
+    /// out of range is the neutral (+inf, 0), which gives the clamped result of a ceiling-sized level). Level k at (x, y) is written when it exists (k below the level count).
     /// </summary>
     public const string Base = """
         #version 450
         layout(local_size_x = 16, local_size_y = 16) in;
-        layout(set = 0, binding = 0) uniform sampler2D uNear;
-        layout(set = 0, binding = 1) uniform sampler2D uFar;
-        layout(std430, set = 0, binding = 2) writeonly buffer Hiz { vec2 hiz[]; };
+        layout(set = 0, binding = 0) uniform sampler2D uDepth;
+        layout(std430, set = 0, binding = 1) writeonly buffer Hiz { vec2 hiz[]; };
         layout(push_constant) uniform Push
         {
-            vec2 nearPlanes; vec2 farPlanes;
-            uint width; uint height; uint baseWidth; uint baseHeight; uint hasFar; uint levels;
+            vec2 planes;   // near, far of the scene depth
+            uint width; uint height; uint baseWidth; uint baseHeight; uint levels;
             uint off0; uint off1; uint off2; uint off3; uint off4;
         } pc;
         shared vec2 tile[256];
-        float viewZ(float d, vec2 nf) { float zd = 2.0 * d - 1.0; return nf.x * nf.y / (nf.y - zd * (nf.y - nf.x)); }
+        """ + DepthConvention.Glsl + """
         uint offsetOf(uint k) { return k == 0u ? pc.off0 : k == 1u ? pc.off1 : k == 2u ? pc.off2 : k == 3u ? pc.off3 : pc.off4; }
         void main()
         {
@@ -253,10 +275,8 @@ static class HizShaders
                     {
                         uvec2 p = t * 4u + uvec2(dx, dy);
                         if (p.x >= pc.width || p.y >= pc.height) continue;
-                        float d = texelFetch(uNear, ivec2(p), 0).r;
-                        vec2 planes = pc.nearPlanes;
-                        if (d >= 1.0 && pc.hasFar != 0u) { d = texelFetch(uFar, ivec2(p), 0).r; planes = pc.farPlanes; }
-                        float z = d >= 1.0 ? 1.0e9 : viewZ(d, planes);
+                        float d = texelFetch(uDepth, ivec2(p), 0).r;
+                        float z = depthIsSky(d) ? 1.0e9 : depthViewZ(d, pc.planes);
                         r = vec2(min(r.x, z), max(r.y, z));
                     }
                 hiz[pc.off0 + t.y * pc.baseWidth + t.x] = r;
