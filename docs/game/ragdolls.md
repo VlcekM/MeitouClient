@@ -201,6 +201,8 @@ marks each bone **pinned** (kinematic, follows animation) or **simulated** and c
 | CARRY_MODE, human | both Forearms, Head | the rest (animated carried pose) |
 | CARRY_MODE, animal | all but the carry bone | carry bone |
 
+The carry bone is a skeleton bone, not a body name: its body is the one the ragdoll file attaches to that bone (**Observed**, Pet Dog: bone `Bip01`, its ragdoll body is the unnamed "Actor"). Meitou matches by bone (`RagdollSystem.Simulates`); matching the name pinned nothing and the whole dog fell to the ground under its carrier (issue #176, parity s15-f24). Checked in `--sandbox`: the carried dog hangs from the shoulder.
+
 **Verified** (decompile of `FUN_1405b8720`, the `+0x5a` carry flag branch): a carried human keeps its animated "carry me" pose and only the two forearms and the head are simulated; every other bone,
 legs included, is pinned to the animation. The carried body's scene node is **not** moved to a ragdoll body (`FUN_1407d3c00` takes the root-body position only for WHOLE or a carried animal): the
 carry placement of [carry-loot](carry-loot.md) sets it each frame. The pick-up attach (`FUN_1405ced90`) clears the active mask (`+0x2f8` = 0) and the CARRY_MODE request then rebuilds the ragdoll from the
