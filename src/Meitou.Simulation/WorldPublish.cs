@@ -95,7 +95,7 @@ public sealed partial class World
     void KeepPrevious(WorldSnapshot previous, SnapshotBuffer? buffer) => (PreviousSnapshot, previousBuffer) = (previous, buffer);
 
     /// <summary>Builds the <see cref="WorldSnapshot"/> of the tick that just ended from the state it left in <see cref="CharacterTable.Previous"/>.</summary>
-    void Publish()
+    void Publish(TickProfile? prof = null)
     {
         var table = Characters;
         var state = table.Previous;
@@ -129,6 +129,7 @@ public sealed partial class World
         list.Clear();
         for (int i = 0; i < state.Length; i++)
             if (state[i].Alive) list.Add(slots[i]!);
+        prof?.Part("publish characters");   // F12, in a tick only (a paused publish has no lap to measure from)
 
         // Every property is written on every fill: the object held another character's last time.
         void Fill(CharacterSnapshot s, int i)
@@ -253,6 +254,7 @@ public sealed partial class World
             Buildings = Buildings.Published(), BuildingsRevision = Buildings.Revision, GroundItems = GroundItems.Published(), GroundItemsRevision = GroundItems.Revision, UnlockedBuildings = Research.Unlocked, Doors = Fixtures.PublishedDoors(), Containers = Fixtures.ContainerSpots, Beds = Fixtures.BedSpots, Dummies = Fixtures.TrainingSpots, Cages = Fixtures.CageSpots(Characters), DoorPicks = Fixtures.DoorPicks, OwnedTownBuildings = Fixtures.OwnedProperties(Player.Faction), InspectedBuilding = beds?.DetailOf(this, Player.InspectedBuilding) ?? Fixtures.DetailOf(Player.InspectedBuilding, Player.Faction), InspectedRichness = production?.RichnessOf(this, Player.InspectedBuilding), InspectedTurret = combat?.TurretPanelOf(this, Player.InspectedBuilding),
             Machines = OpenContainerView() is { } container ?[.. production is null ? [] : Machines.Published(production.Items), container] : production is null ? [] : Machines.Published(production.Items), MachinesVersion = Machines.Version, Research = production?.ResearchView(this) ?? Production.ResearchSnapshot.Empty, Outposts = production?.OutpostView(this) ?? [],
             Crafts = production?.CraftsView(this) ?? Snapshot.Crafts, Smiths = production?.SmithsView(this) ?? Snapshot.Smiths };
+        prof?.Part("publish views");
     }
 
     /// <summary>The dialogue's speech bubbles, then the <see cref="Bark"/>s still due whose speaker has no dialogue line on show; expired barks are dropped.</summary>

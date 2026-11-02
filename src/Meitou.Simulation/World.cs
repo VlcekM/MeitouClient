@@ -342,9 +342,10 @@ public sealed partial class World : IDisposable
         Player.Prune(table);
         table.Phase = TablePhase.Outside;
         table.EndTick();
+        prof?.Part("end tick");   // F12: the squads, the prune and the table's end, apart from the snapshot
         Tick++;
         GameHours += TickSeconds / SecondsPerGameHour;
-        if (publish && Settings.PublishSnapshots) Publish();
+        if (publish && Settings.PublishSnapshots) Publish(prof);
         prof?.Lap(TickProfile.Publish);
     }
 
