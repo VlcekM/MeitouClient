@@ -211,9 +211,10 @@ public sealed partial class CaptiveSystem
                 || g.Task.Type == TaskType.GIVE_ALL_MY_SLAVES_TO_IF_ITS_AN_IMPORT_TOWN && site.Town.Type is TownType.Prison or TownType.SlaveCamp)) hands = true;
         if (!hands) return End(world, j, CaptiveEventKind.GaveUp);
         int owner = j.Site < data.SiteFactions.Count && data.SiteFactions[j.Site] >= 0 ? data.SiteFactions[j.Site] : wc.Faction;
-        var receiver = Receiver(world, w, owner);
-        if (receiver is { } to) world.Defer(new Dialogue.DialogueEvent(j.Worker, to, SlaveDelivery) { Tick = world.Tick + 1 });
-        int master = receiver is { } by && table.Cold(by.Slot) is { } rc ? rc.SquadId : -1;
+        // The receiver finder (FUN_1408ca950) finding nobody makes the goal unwanted: nothing is handed over, the next sweep retries.
+        if (Receiver(world, w, owner, centre, r) is not { } to) return End(world, j, CaptiveEventKind.GaveUp);
+        world.Defer(new Dialogue.DialogueEvent(j.Worker, to, SlaveDelivery) { Tick = world.Tick + 1 });
+        int master = table.Cold(to.Slot) is { } rc ? rc.SquadId : -1;
         foreach (int s in SlavesOf(world, squad).ToList())
         {
             var sc = table.Cold(s)!;
@@ -234,17 +235,20 @@ public sealed partial class CaptiveSystem
         return End(world, j, null);
     }
 
-    /// <summary>The nearest live NPC of <paramref name="faction"/> or an ally within the town's reach of the leader (the original's designated-building finder, <c>FUN_1408ca950</c>, reduced).</summary>
-    CharacterId? Receiver(World world, int w, int faction)
+    /// <summary>The live NPC of <paramref name="faction"/> or an ally within <paramref name="radius"/> of the shipping town's <paramref name="centre"/> nearest to the leader
+    /// (the original's designated-building finder, <c>FUN_1408ca950</c>, reduced to its owner hand; its acceptance test is <b>Unknown</b>, s07-d083).</summary>
+    CharacterId? Receiver(World world, int w, int faction, Vector2 centre, float radius)
     {
         var table = world.Characters;
         var at = table.Next[w].Position;
         int best = -1;
-        float bestD = AggroSystem.OutdoorSight * AggroSystem.OutdoorSight;
+        float bestD = float.MaxValue;
         for (int s = 0; s < table.HighWater; s++)
         {
             if (s == w || !table.Next[s].Alive || table.Cold(s) is not { IsPlayer: false, SlaveState: 0, Medical.Incapacitated: false } c || c.Faction != faction && !Allied(faction, c.Faction)) continue;
-            float d = Vector3.DistanceSquared(at, table.Next[s].Position);
+            var p = table.Next[s].Position;
+            if (Vector2.Distance(new Vector2(p.X, p.Z), centre) > radius) continue;
+            float d = Vector3.DistanceSquared(at, p);
             if (d < bestD) (best, bestD) = (s, d);
         }
         return best < 0 ? null : table.IdOf(best);
