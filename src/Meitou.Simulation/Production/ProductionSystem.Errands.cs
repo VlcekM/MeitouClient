@@ -215,7 +215,7 @@ public sealed partial class ProductionSystem
         foreach (var f in world.Fixtures.All)
         {
             if (f.Kind != FixtureKind.Cage || f.Owner != world.Player.Faction || f.Occupant.IsNone || !table.TryResolveNext(f.Occupant, out int s)) continue;
-            if (!Liftable(world, table, s, f.Occupant, lifted)) continue;
+            if (!Liftable(world, table, s, f.Occupant, lifted, cageStage: true)) continue;
             float d = Gap(at, f.Position);
             if (d <= Settings.HaulRange && d < bestD) (best, bestD) = (f.Occupant, d);
         }
@@ -225,7 +225,7 @@ public sealed partial class ProductionSystem
             {
                 if (s == slot || !table.Next[s].Alive) continue;
                 var id = table.IdOf(s);
-                if (!Liftable(world, table, s, id, lifted)) continue;
+                if (!Liftable(world, table, s, id, lifted, cageStage: false)) continue;
                 float d = Gap(at, table.Next[s].Position);
                 if (d <= ErrandSight && d < bestD) (best, bestD) = (id, d);
             }
@@ -233,9 +233,13 @@ public sealed partial class ProductionSystem
         return best is { } body ? (body, Vector2.Zero) : null;
     }
 
-    /// <summary>A dead, non-robot body that can be lifted, that nobody has and that is not in the give-up list.</summary>
-    bool Liftable(World world, CharacterTable table, int s, CharacterId id, HashSet<CharacterId> lifted) =>
-        table.Cold(s) is { Medical.Dead: true } body && body.Race is { IsRobot: false } && !lifted.Contains(id) && !givenUp.Contains(id) && CarrySystem.CanBeLifted(world, body);
+    /// <summary>
+    /// A dead body that can be lifted, that nobody has and that is not in the give-up list. Robots are skipped only in the cage stage (<b>Verified</b>: <c>FUN_1408cfb00</c> tests the race's robot
+    /// byte on the cage's occupant, the nearest-body finder <c>FUN_1408ce170</c> tests it only for an animal finder), so a human carrier lifts a dead robot lying outside.
+    /// </summary>
+    bool Liftable(World world, CharacterTable table, int s, CharacterId id, HashSet<CharacterId> lifted, bool cageStage) =>
+        table.Cold(s) is { Medical.Dead: true } body && (!cageStage || body.Race is { IsRobot: false }) && !lifted.Contains(id) && !givenUp.Contains(id)
+        && CarrySystem.CanBeLifted(world, body);
 
     /// <summary>
     /// The corpse machine a body is taken to (<c>FUN_1408d0770</c> for function 11, <b>Verified</b> by decompile): the player's complete corpse-disposal building with an operator place free, the
@@ -261,7 +265,7 @@ public sealed partial class ProductionSystem
 
     /// <summary>
     /// The finders of jobs 223 (<c>FUN_14099c110</c>) and 273 (<c>FUN_14099c250</c>, whose own test is the carrier's town, docs/game/ai-tasks.md; the AI's: <see cref="Kidnap.TownDutySystem"/>) for a
-    /// player character, <b>Observed</b>: a downed character in the building the carrier stands in, not carried,
+    /// player character, <b>Verified</b> (<c>FUN_14099c110</c>: down by the character's isDown, not carried, special state 0, no race test, so a dead body or a non-carriable one counts and a refused lift leaves the finder returning it): a downed character in the building the carrier stands in, not carried,
     /// not caged (223: not in a bed either, special state 0). Engine choices: the building is the player's complete building with doors whose footprint holds the carrier (the original's
     /// "home" of 223 is the Ownerships' +0x38, whose value for the player faction is <b>Unknown</b>); an intruder is knocked out, alive, and neither of the carrier's faction nor an ally (the
     /// sensed list's exclude bits 0x201 are <b>Unknown</b>); 273 is a town finder (<see cref="FindTownIntruder"/>). The goal is outside the door (223 / 224,
@@ -277,9 +281,9 @@ public sealed partial class ProductionSystem
         float bestD = float.MaxValue;
         for (int s = 0; s < table.HighWater; s++)
         {
-            if (s == slot || !table.Next[s].Alive || table.Cold(s) is not { Medical: { Unconscious: true, Dead: false } } body) continue;
+            if (s == slot || !table.Next[s].Alive || table.Cold(s) is not { Medical.Incapacitated: true } body) continue;
             var id = table.IdOf(s);
-            if (lifted.Contains(id) || givenUp.Contains(id) || body.IsImprisoned || !body.CarriedBy.IsNone || !CarrySystem.CanBeLifted(body)) continue;
+            if (lifted.Contains(id) || givenUp.Contains(id) || body.IsImprisoned || !body.CarriedBy.IsNone) continue;
             if (kind == ErrandKind.OutOfBuilding && body.InSomething != HeldState.None) continue;
             if (Carry!.Friendly(cold, body)) continue;
             if (EnclosedAt(world, table.Next[s].Position) != site) continue;
