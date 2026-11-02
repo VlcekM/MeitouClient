@@ -67,10 +67,11 @@ public static partial class MyGuiPresentation
             bool progress = bindings.Progress.TryGetValue(w.Name, out float fraction);
             string? trackSkin = progress ? w.UserStrings.GetValueOrDefault("TrackSkin") : null;
             if (progress && trackSkin is null) bounds = bounds with { Width = bounds.Width * Math.Clamp(fraction, 0, 1) };
-            string caption = bindings.Coded(w.Name) ?? PartText(bindings, props) ?? props.GetValueOrDefault("Caption") ?? "";
+            // A caption written in the layout is the source string of the player's language (the layouts say "SKILLS", the catalog key is "Skills").
+            string caption = bindings.Coded(w.Name) ?? PartText(bindings, props) ?? Localisation.Loc.TrCaption(props.GetValueOrDefault("Caption") ?? "");
             if (props.TryGetValue("CaptionOwner", out string? owner))
             {
-                caption = bindings.Coded(owner) ?? layout.Find(owner)?.Properties.GetValueOrDefault("Caption") ?? "";
+                caption = bindings.Coded(owner) ?? Localisation.Loc.TrCaption(layout.Find(owner)?.Properties.GetValueOrDefault("Caption") ?? "");
                 // An EditBox's WordWrap is its text's, which the template's client draws.
                 if (!props.ContainsKey("WordWrap") && ((bindings.Properties.GetValueOrDefault(owner)?.GetValueOrDefault("WordWrap")) ?? layout.Find(owner)?.Properties.GetValueOrDefault("WordWrap")) is { } wrap)
                     props["WordWrap"] = wrap;
@@ -104,7 +105,9 @@ public static partial class MyGuiPresentation
                 // The selected tab is Checked, not a fixed State, so the painter shows the skin's hover and pushed states (amber caption under the mouse).
                 for (int i = 0; i < buttons; i++)
                     result.Add(new(w.Name + "@tab" + i, "Button", new(header.X + i * tabWidth, header.Y, tabWidth, header.Height),
-                        captions?[i] ?? bindings.Coded(w.Name + "@tab" + i) ?? pages[i].Properties.GetValueOrDefault("Caption") ?? pages[i].Name, $"mygui:tab:{w.Name}:{i}", "Kenshi_SquadTabButton1Skin", enabled,
+                        captions?[i] ?? bindings.Coded(w.Name + "@tab" + i)
+                            ?? (pages[i].Properties.GetValueOrDefault("Caption") is { Length: > 0 } tabText ? Localisation.Loc.TrCaption(tabText) : null)
+                            ?? pages[i].Name, $"mygui:tab:{w.Name}:{i}", "Kenshi_SquadTabButton1Skin", enabled,
                         new Dictionary<string, string> { ["Checked"] = i == selected ? "true" : "false", ["FontName"] = "Kenshi_PaintedTextFont_Medium", ["TextAlign"] = "Center" }, default, Clip: clip));
                 if (pages.Length > 0) Visit(pages[captions is null ? selected : 0], bounds, childClip, enabled, alpha);
             }

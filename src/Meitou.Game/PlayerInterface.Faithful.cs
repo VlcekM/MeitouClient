@@ -334,7 +334,8 @@ sealed partial class PlayerInterface
         }
         b.Lists["JobsPanel"] = jobs;
         if (jobs.Count > 0) b.Hidden.Add("JobsPanelInfo");
-        else b.Text["JobsPanelInfo"] = Loc.Tr("[No jobs assigned]") + "\n" + Loc.Tr("[To add jobs, hold shift key when giving an order]");
+        // The brackets are the panel's, not the catalog's (its keys have none: "No jobs assigned", "To add jobs, hold shift key when giving an order").
+        else b.Text["JobsPanelInfo"] = "[" + Loc.Tr("No jobs assigned") + "]\n[" + Loc.Tr("To add jobs, hold shift key when giving an order") + "]";
     }
 
     /// <summary>The X at the right end of each jobs row (the original's remove button, its tutorial: "remove a job at any time by pressing the X button").</summary>

@@ -49,6 +49,17 @@ public static class Loc
     public static string Tr(string english, params object?[] args) => Format(Tr(english), args);
 
     /// <summary>
+    /// A UI layout's caption in the active language (<c>docs/native-ui.md</c>): the exact <c>msgid</c>, else the same text ignoring case — the layouts
+    /// caption a section in capitals (<c>"SKILLS"</c>, <c>"WEAPON I"</c>) while the catalog keys are written normally (<c>"Skills"</c>, <c>"Weapon I"</c>).
+    /// Anything with no translation passes through.
+    /// </summary>
+    public static string TrCaption(string english)
+    {
+        if (!Translating || english.Length == 0) return english;
+        return catalog.Find(english) ?? meitou.Find(english) ?? catalog.FindIgnoringCase(english) ?? meitou.FindIgnoringCase(english) ?? english;
+    }
+
+    /// <summary>
     /// The plural message <paramref name="singular"/> / <paramref name="plural"/> for <paramref name="n"/> (<c>ngettext</c>): the catalog's form for
     /// <paramref name="n"/> by its <c>Plural-Forms</c> rule, else the English one. <paramref name="args"/> fill the placeholders (usually <paramref name="n"/> itself).
     /// </summary>

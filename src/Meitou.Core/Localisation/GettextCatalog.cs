@@ -16,6 +16,18 @@ public sealed class GettextCatalog
     // Key (msgid, or msgctxt 0x04 msgid) -> translated forms; a message without plural has one form.
     readonly Dictionary<string, string[]> messages = new(StringComparer.Ordinal);
 
+    // The same messages keyed without case, made on demand (see FindIgnoringCase): a UI layout captions a section "SKILLS" while the catalog's key is "Skills".
+    Dictionary<string, string[]>? byCase;
+    int byCaseVersion = -1;
+    int version;
+
+    /// <summary>Stores one message and marks the case-free index stale.</summary>
+    void Set(string key, string[] forms)
+    {
+        messages[key] = forms;
+        version++;
+    }
+
     public PluralRule Plurals { get; private set; } = PluralRule.Germanic;
 
     /// <summary>How many messages have a translation.</summary>
@@ -51,12 +63,28 @@ public sealed class GettextCatalog
     /// <summary>Puts <paramref name="later"/>'s messages over this catalog's (a later file overrides an earlier one); the plural rule stays.</summary>
     public void Add(GettextCatalog later)
     {
-        foreach (var (key, forms) in later.messages) messages[key] = forms;
+        foreach (var (key, forms) in later.messages) Set(key, forms);
     }
 
     /// <summary>The translation of <paramref name="msgid"/> (first form), or null when the catalog has none.</summary>
     public string? Find(string msgid, string? context = null) =>
         messages.TryGetValue(context is null ? msgid : context + ContextSeparator + msgid, out var forms) ? forms[0] : null;
+
+    /// <summary>
+    /// The translation of <paramref name="msgid"/> ignoring case, or null: a UI layout captions what the catalog keys, but in capitals
+    /// (<c>"SKILLS"</c>, <c>"WEAPON I"</c>). Built once after the catalog's last change.
+    /// </summary>
+    public string? FindIgnoringCase(string msgid)
+    {
+        if (byCaseVersion != version || byCase is null)
+        {
+            // Touched by hand: the catalog can hold the same word in two cases ("Map" and "MAP"), so the first spelling wins instead of throwing.
+            byCase = new(StringComparer.OrdinalIgnoreCase);
+            foreach (var message in messages) byCase.TryAdd(message.Key, message.Value);
+            byCaseVersion = version;
+        }
+        return byCase.TryGetValue(msgid, out var forms) ? forms[0] : null;
+    }
 
     /// <summary>The translated plural form for <paramref name="n"/> of the message whose singular source text is <paramref name="singular"/>, or null.</summary>
     public string? FindPlural(string singular, long n, string? context = null)
@@ -102,7 +130,7 @@ public sealed class GettextCatalog
             string key = Encoding.UTF8.GetString(zero < 0 ? original : original[..zero]);
             var forms = Encoding.UTF8.GetString(translated).Split('\0');
             if (forms.Length == 0 || forms[0].Length == 0) continue;   // untranslated: msgfmt leaves these out, a hand-made file might not
-            catalog.messages[key] = forms;
+            catalog.Set(key, forms);
         }
         return catalog;
     }
@@ -156,7 +184,7 @@ public sealed class GettextCatalog
                     if (plural.Count > 0) catalog.ReadHeader(plural[0]);
                 }
                 else if (!fuzzy && plural.Count > 0 && plural[0].Length > 0)
-                    catalog.messages[context is null ? id : context + ContextSeparator + id] = [.. plural];
+                    catalog.Set(context is null ? id : context + ContextSeparator + id, [.. plural]);
             }
             context = id = null;
             plural.Clear();

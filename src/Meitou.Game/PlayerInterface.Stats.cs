@@ -31,10 +31,11 @@ sealed partial class PlayerInterface
             bindings.RelativePositions[skills] = new(0.272f, 0.0163934f, 0.723f, 0.0327869f);
     }
 
+    // The category titles are the catalog's own words in dashes ("-Weapons-"): the layout has no text for them (docs/native-ui.md).
     static readonly (int Before, string Caption)[][] StatHeadings =
     [
-        [], [(0, "-Weapons-")], [(0, "-Combat-"), (4, "-Ranged-")],
-        [(0, "-Thievery-"), (4, "-Athletics-")], [(0, "-Sciences-"), (4, "-Trades-")],
+        [], [(0, "Weapons")], [(0, "Combat"), (4, "Ranged")],
+        [(0, "Thievery"), (4, "Athletics")], [(0, "Sciences"), (4, "Trades")],
     ];
 
     void AddStatsContent(List<UiControl> controls)
@@ -53,7 +54,7 @@ sealed partial class PlayerInterface
             {
                 foreach (var heading in StatHeadings[column].Where(h => h.Before == i))
                 {
-                    Text($"{name}-heading-{i}", heading.Caption, "Kenshi_StandardFont_Large", TitleColour, "Left VCenter", "", heading: true);
+                    Text($"{name}-heading-{i}", "-" + Loc.Tr(heading.Caption) + "-", "Kenshi_StandardFont_Large", TitleColour, "Left VCenter", "", heading: true);
                     y += rowHeight;
                 }
                 var stat = StatPanels[column][i];
