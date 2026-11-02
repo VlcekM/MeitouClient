@@ -152,7 +152,7 @@ and sun; Meitou default strength0.5, game1, slider0..3.
 Weather particle resolution: off/quarter/half/auto/full; density multiplies emission and changes
 appearance/population, not just shading cost. Both chains draw the reduced-resolution particles twice, against each block's
 nearest depth and against its farthest (`ParticleTargetsFar`), and the composite and the reactive mask take, from each of the four
-nearest texels, both draws weighted bilinearly and by how close each draw's depth is to the pixel's (`ParticleUpsampleLayered`): on a
+nearest texels, both draws weighted bilinearly and by how close each draw's depth is to the pixel's (`ParticleUpsample`): on a
 ridge the near draw's, on the land behind it the far draw's, which holds what lies between them. A farthest-only reduction let dust
 behind thin characters bleed onto their silhouettes; one draw against a checkerboard of the two depths (with a joint bilateral 4x4
 filter at depth edges) left the matching texels every other one along an edge, so the dust behind a dune ridge followed it in steps

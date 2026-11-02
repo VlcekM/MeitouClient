@@ -213,7 +213,7 @@ sealed class MetalPostChain : IWorldPostChain, IDisposable
                 Use: TextureUse.DepthTarget | TextureUse.Sampled, Name: $"post particle depth far 1/{div}"));
         }
         // Twice: each block's nearest depth, then its farthest; the particles are drawn against each (ParticleTargetsFar) and the composite takes
-        // each pixel's own surface from either (PostProcessShaders.ParticleUpsampleLayered).
+        // each pixel's own surface from either (PostProcessShaders.ParticleUpsample).
         var depthCmd = (MetalCommandList)ctx.BeginNative("post particle depth");
         composite.ParticleDepth(depthCmd, ctx.Depth, low.Depth!, sceneColour.Desc.Width, sceneColour.Desc.Height, div, low.Accum, layer: 1, near: nearPlane, far: farPlane);
         composite.ParticleDepth(depthCmd, ctx.Depth, low.DepthFar!, sceneColour.Desc.Width, sceneColour.Desc.Height, div, low.AccumFar, layer: 2, near: nearPlane, far: farPlane);
