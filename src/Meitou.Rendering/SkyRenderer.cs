@@ -651,6 +651,8 @@ public sealed unsafe partial class SkyRenderer : IDisposable
     /// <c>fogColour.a</c>), the colour and the distance where it is complete; null takes the forced <see cref="Weather"/> record's.
     /// </summary>
     public (float Weight, Vector3 Colour, float Distance)? FogInput { get; set; }
+    /// <summary>The eye is above the game's camera heights (<see cref="EyeLift"/>, the loading's gate): the weather fog is off, as the weather's effects are.</summary>
+    public bool WeatherFogLifted { get; set; }
 
     (double X, double Z) cloudOffset;
     readonly Stopwatch cloudClock = new();
@@ -935,6 +937,7 @@ public sealed unsafe partial class SkyRenderer : IDisposable
         // The fog the weather system gives (weight, colour, distance), else the forced record's (on or off, complete at fog distance max).
         var (fogWeight, fogRgb, fogDistance) = FogInput ?? (w.FogEnabled ? 1f : 0f, w.FogColour, w.FogMax);
         float fogStart = FogInput is null ? w.FogMin : (w.FogMax > 0 ? fogDistance * w.FogMin / w.FogMax : 0f);
+        if (WeatherFogLifted) fogWeight = 0;
         // The weather fog's colour times sunColour.w, the daylight scale (the game's global fog term).
         var fog = fogRgb * (Physical ? KenshiLighting.Daylight(s.Sun.Y) : 1f);
         var hc = s.Colours.Horizon;
