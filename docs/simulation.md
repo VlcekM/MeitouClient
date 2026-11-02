@@ -735,6 +735,9 @@ main grid, weight and burden only, grid size from its `inventory w` / `inventory
 
 `Ragdolls/RagdollSystem` (game behaviour: [ragdolls](game/ragdolls.md)) runs serially after animation
 when the host passes `CharacterRigs` (the game does; tests and goldens do not). Engine choices:
+- **Files**: a race's ragdoll `.phs` is read once per path (one a race and sex) and shared by every look; read per look, each character streamed in
+  read it in the tick that first asked (`AnimationSystem` asks `HasRagdoll` of every character), most of the long ticks' file time (**Observed**, CPU trace
+  of the play benchmark's flights, ~1,400 characters: 141 ticks over 25 ms before, 99 after).
 - **Physics**: BepuPhysics2, one scene stepped on the calling thread (deterministic, 2 solver
   iterations, 4 substeps per tick, fallback batch threshold 1024: Bepu 2.4.0's fallback batch throws
   when its last contact on a dynamic body is removed with one on a kinematic body, which big battles hit at the default 64). Bodies and joints come from the race's ragdoll `.phs`

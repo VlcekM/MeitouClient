@@ -60,6 +60,7 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
     readonly Dictionary<CharacterId, Ragdoll> ragdolls = [];
     readonly List<CharacterId> order = [];
     readonly ConcurrentDictionary<CharacterAppearance, Lazy<(PhysicsFile File, string Path)?>> files = new(ReferenceEqualityComparer.Instance);
+    readonly ConcurrentDictionary<string, Lazy<PhysicsFile?>> physicsFiles = new();
     readonly ConcurrentDictionary<(string Path, SkeletonRig Rig, int Scale), Lazy<RagdollDefinition?>> definitions = new();
     readonly Dictionary<RagdollDefinition, (TypedIndex Shape, BodyInertia Inertia)[]> shapes = new(ReferenceEqualityComparer.Instance);
     IAnimationSource? animations;
@@ -118,15 +119,19 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
 
     public BonePose? Publish(CharacterId id) => ragdolls.TryGetValue(id, out var r) ? r.Published : null;
 
-    // A static factory given the rigs: nothing allocated on a hit.
-    (PhysicsFile File, string Path)? FileOf(CharacterAppearance look) => files.GetOrAdd(look, static (a, rigs) => new(() =>
+    // A static factory given the system: nothing allocated on a hit. The file itself is read once per path (one a race and sex), not once per look: every
+    // character has a look of its own, and reading it again for each one put a file read in the tick of every character streamed in (docs/simulation.md "Ragdolls").
+    (PhysicsFile File, string Path)? FileOf(CharacterAppearance look) => files.GetOrAdd(look, static (a, self) => new(() =>
     {
         // RACE male ragdoll / female ragdoll (the female file only for a female look; docs/game/ragdolls.md "RagdollPart and requests").
         var name = a.Race.GetPath(a.Female ? "female ragdoll" : "male ragdoll") is { Length: > 0 } f ? f : a.Race.GetPath("male ragdoll");
-        if (string.IsNullOrEmpty(name) || rigs.Find(name) is not { } path) return null;
-        try { return (PhysicsFile.ReadFile(path), path); }
-        catch (Exception e) when (e is FormatException or IOException) { return null; }
-    }), rigs).Value;
+        if (string.IsNullOrEmpty(name) || self.rigs.Find(name) is not { } path) return null;
+        return self.physicsFiles.GetOrAdd(path, static p => new(() =>
+        {
+            try { return PhysicsFile.ReadFile(p); }
+            catch (Exception e) when (e is FormatException or IOException) { return null; }
+        })).Value is { } file ? (file, path) : null;
+    }), this).Value;
 
     RagdollDefinition? DefinitionOf(CharacterAppearance look, SkeletonRig rig, float scale)
     {
