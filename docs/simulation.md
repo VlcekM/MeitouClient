@@ -982,7 +982,7 @@ Arrests, the recognition meter and the marker are hashed only while set. What a 
   nearest within 1500, who walks there, unlocks and `Release`s in its faction's name; engine: in a cage of a faction that books bounties, none such,
   3 failed walks or 120 s, and the system frees it; the cages of non-booking factions wait for a 211 holder. **Lock-up** (155, 197): while
   a member has the goal in its hours a free member with it locks every door of the home (155 only with every member
-  inside, engine: within the home's farthest node + 10; neither with a stranger inside); when no member's goal is in its
+  inside, engine: within the home's farthest node + 10; neither with a stranger inside; a 197 worker prefers a member already outside and otherwise leaves the home first, then works each door within 45 of it, [locks](game/locks.md)); when no member's goal is in its
   hours, a free member with 86 Opening up in its hours unlocks what a round locked (squads without 86 stay locked, as the original). The house flag is set at each door the round locks (worker's faction's lock, no door of the home open or opening) and cleared by the unlock round (engine: the round unlocks rather than opens; a loaded night's locked homes come back flagged, `meitou house locked`). **Wardens**
   (195): occupied unlocked cages of the faction in its town are locked. **Keys** (engine): a worker whose target is behind
   its own faction's or home's shut doors unlocks them standing before it walks (the sim doesn't know door positions); an

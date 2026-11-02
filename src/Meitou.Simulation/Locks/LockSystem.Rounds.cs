@@ -8,8 +8,8 @@ namespace Meitou.Simulation.Locks;
 /// <summary>What a <see cref="Round"/> does: free a served prisoner (goal 211), lock a home's doors at night (155, 197), unlock them when that is over, lock a faction's cages (195).</summary>
 public enum RoundKind : byte { Release, LockDoors, UnlockDoors, LockCages }
 
-/// <summary>Where a round is: unlocking its own shut building to get in, walking to the next target, working the lock (the owner's 3.3 s).</summary>
-public enum RoundPhase : byte { Keys, Walk, Work }
+/// <summary>Where a round is: unlocking its own shut building to get in, walking to the next target, working the lock (the owner's 3.3 s), or (a lock-up from outside) leaving the home first.</summary>
+public enum RoundPhase : byte { Keys, Walk, Work, Leave }
 
 /// <summary>One NPC's round of lock work (serial state of the <see cref="LockSystem"/>): the fixtures it works, in order.</summary>
 public sealed class Round
@@ -24,6 +24,9 @@ public sealed class Round
     public CharacterId Prisoner { get; init; } = CharacterId.None;
     /// <summary>Within this of a target the worker works it (a cage's <c>use range</c> + <see cref="LockSystem.Reach"/>; for doors the home's extent).</summary>
     public required float Reach { get; init; }
+    /// <summary>A lock-up from outside (goal 197): the worker leaves the home first and works each door from its outer side, within <see cref="LockSystem.DoorReach"/> of it; <see cref="Extent"/> is the home's.</summary>
+    public bool FromOutside { get; init; }
+    public float Extent { get; init; }
     public int Index { get; set; }
     public RoundPhase Phase { get; set; }
     /// <summary>Game seconds in the phase, of the whole round, and walks that ended away from the target.</summary>
@@ -36,6 +39,7 @@ public sealed class Round
         h.Add((int)Kind); h.Add(Worker); h.Add(Faction); h.Add(Targets.Length);
         foreach (var t in Targets) h.Add(Rng.StableHash(t));
         h.Add(Prisoner); h.Add(Index); h.Add((int)Phase); h.Add(Time); h.Add(Age); h.Add(Walks);
+        if (FromOutside) { h.Add(1); h.Add(Extent); }
     }
 }
 
@@ -63,6 +67,10 @@ public sealed partial class LockSystem : IStateHashed
     /// <summary>Engine choices of the rounds (see the class remarks).</summary>
     public const int RoundEveryTicks = 30, MaxRounds = 8, MaxNewRounds = 4, RoundWalks = 3;
     public const float ReleaserRange = AggroSystem.OutdoorSight, ReleaseTimeout = 120, WalkSlack = 200;
+    /// <summary>The reach of state 126 AT_LOCATION_BUILDING_DOOR_OUTSIDE for a door (<c>FUN_140596e90</c> against the door's reach range, 45, <b>Observed</b>); a lock-up from outside works a door within it.</summary>
+    public const float DoorReach = 45;
+    /// <summary>How far past the home's extent a leaving worker walks (<b>engine choice</b>).</summary>
+    const float LeaveMargin = 10;
 
     readonly List<Round> rounds = [];
     // Homes a lock-up round locked (the squad's "house locked" flag), by building instance id; sorted so the hash has a fixed order.
@@ -220,17 +228,24 @@ public sealed partial class LockSystem : IStateHashed
             if (squad.Ai is not { } board) continue;
             int lockUp = -1, outside = -1, warden = -1, opener = -1;
             bool inside155 = false, from197 = false, cages = false;
+            var home = board.OwnHome;
+            float homeExtent = home is null ? 0 : Extent(home);
             foreach (var m in squad.Members)
             {
                 if (!table.TryResolveNext(m, out int s) || table.Cold(s) is not { } c) continue;
                 bool free = Free(world, s);
                 if (HasGoal(world, s, c, TaskType.LOCK_ALL_MY_DOORS, hour)) { inside155 = true; if (free && lockUp < 0) lockUp = s; }
-                if (HasGoal(world, s, c, TaskType.LOCK_ALL_MY_DOORS_FROM_OUTSIDE, hour)) { from197 = true; if (free && outside < 0) outside = s; }
+                if (HasGoal(world, s, c, TaskType.LOCK_ALL_MY_DOORS_FROM_OUTSIDE, hour))
+                {
+                    from197 = true;
+                    // A member that is already outside is preferred: the others would have to leave the home first.
+                    if (free && (outside < 0 || home is not null && Within(table.Next[outside], home, homeExtent) && !Within(table.Next[s], home, homeExtent))) outside = s;
+                }
                 if (HasGoal(world, s, c, TaskType.LOCK_ALL_THE_CAGES, hour)) { cages = true; if (free && warden < 0) warden = s; }
                 if (free && opener < 0 && HasGoal(world, s, c, TaskType.OPEN_UP_SHOP_DOORS, hour)) opener = s;
             }
             if (cages && warden >= 0 && board.Town >= 0) LockCages(world, squad, board, warden, ref started);
-            if (board.OwnHome is not { } home || world.Fixtures.DoorOwner(home.Key) < 0 || world.Fixtures.OwnsBuilding(home.Key, world.Player.Faction) || Targeted(home.Key)) continue;
+            if (home is null || world.Fixtures.DoorOwner(home.Key) < 0 || world.Fixtures.OwnsBuilding(home.Key, world.Player.Faction) || Targeted(home.Key)) continue;
             string building = home.Key;
             if (inside155 || from197)
             {
@@ -238,10 +253,10 @@ public sealed partial class LockSystem : IStateHashed
                 int worker = inside155 ? lockUp : outside;
                 if (worker < 0 && from197) worker = outside;
                 if (worker < 0 || Busy(table.IdOf(worker))) continue;   // the warden of this sweep may be it
-                float extent = Extent(home);
+                float extent = homeExtent;
                 if (inside155 && !AllInside(world, squad, home, extent)) continue;
                 if (StrangerInside(world, squad, home, extent)) continue;
-                if (StartDoors(world, worker, RoundKind.LockDoors, building, extent)) started++;
+                if (StartDoors(world, worker, RoundKind.LockDoors, building, extent, fromOutside: worker == outside && worker != lockUp)) started++;
             }
             else if (houseLocked.Contains(building))   // 86 Opening up (finder FUN_1408cb360): only a member whose package lists it, in its hours
             {
@@ -271,7 +286,7 @@ public sealed partial class LockSystem : IStateHashed
         }, first)) started++;
     }
 
-    bool StartDoors(World world, int worker, RoundKind kind, string building, float extent)
+    bool StartDoors(World world, int worker, RoundKind kind, string building, float extent, bool fromOutside = false)
     {
         var doors = new List<string>();
         foreach (var f in world.Fixtures.OfBuilding(building))
@@ -280,7 +295,8 @@ public sealed partial class LockSystem : IStateHashed
         var first = world.Fixtures.Find(doors[0])!;
         return Start(world, worker, new Round
         {
-            Kind = kind, Worker = world.Characters.IdOf(worker), Faction = world.Characters.Cold(worker)!.Faction, Targets = [.. doors], Building = building, Reach = extent,
+            Kind = kind, Worker = world.Characters.IdOf(worker), Faction = world.Characters.Cold(worker)!.Faction, Targets = [.. doors], Building = building,
+            Reach = fromOutside ? DoorReach : extent, FromOutside = fromOutside, Extent = extent,
         }, first);
     }
 
@@ -339,7 +355,21 @@ public sealed partial class LockSystem : IStateHashed
         rounds.Add(round);
         TaskStart.Stand(table, worker);   // up from its bed or post
         if (round.Kind is not (RoundKind.LockDoors or RoundKind.UnlockDoors) && NeedsKeys(world, round, c, first)) round.Phase = RoundPhase.Keys;
+        else if (round.FromOutside && LeavePoint(c, first, round.Extent) is { } leave && Within(table.Next[worker], c.Ai!.Squad.Ai!.OwnHome!, round.Extent))
+        {
+            round.Phase = RoundPhase.Leave;   // row 200 Leaving building achieves !107, which row 197 needs
+            TaskStart.StepTo(table, worker, leave, SpeedMode.Walk);
+        }
         else Walk(world, worker, round, first);
+    }
+
+    /// <summary>Where a worker leaving the home walks to: just past its extent on the first door's side (<b>engine choice</b>; the original goes to the door's outer side, state 126). Null without a home.</summary>
+    static Vector2? LeavePoint(CharacterCold c, Fixture door, float extent)
+    {
+        if (c.Ai?.Squad.Ai?.OwnHome is not { } home) return null;
+        var centre = new Vector2(home.Position.X, home.Position.Z);
+        var away = new Vector2(door.Position.X, door.Position.Z) - centre;
+        return centre + (away.LengthSquared() < 1e-4f ? Vector2.UnitX : Vector2.Normalize(away)) * (extent + LeaveMargin);
     }
 
     /// <summary>The target's building is shut by doors the worker may open: its faction's, or its squad's home.</summary>
@@ -381,6 +411,8 @@ public sealed partial class LockSystem : IStateHashed
                 world.Fixtures.SetDoorsLocked(f.Building, false);
                 Walk(world, w, r, f);
                 return true;
+            case RoundPhase.Leave:
+                return LeaveStep(world, r, w, wc, f);
             case RoundPhase.Walk:
             {
                 bool walking = n.Task == (byte)CharacterTask.GoTo;
@@ -413,6 +445,22 @@ public sealed partial class LockSystem : IStateHashed
                 if (r.Phase == RoundPhase.Walk && Distance(n, nextTarget) <= r.Reach) r.Phase = RoundPhase.Work;   // the next door is where it stands
                 return true;
         }
+        return true;
+    }
+
+    /// <summary>The leaving phase of a lock-up from outside: on the way out until the worker is past the home's extent, then it walks to the first door; a walk that ends short is tried again a few times.</summary>
+    bool LeaveStep(World world, Round r, int w, CharacterCold wc, Fixture first)
+    {
+        var table = world.Characters;
+        ref var n = ref table.Next[w];
+        if (wc.Ai?.Squad.Ai?.OwnHome is not { } home || !Within(n, home, r.Extent))
+        {
+            Walk(world, w, r, first);
+            return true;
+        }
+        if (n.Task == (byte)CharacterTask.GoTo) return true;
+        if (++r.Walks > RoundWalks) return End(world, r, fallback: true);
+        if (LeavePoint(wc, first, r.Extent) is { } leave) TaskStart.StepTo(table, w, leave, SpeedMode.Walk);
         return true;
     }
 

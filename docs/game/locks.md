@@ -215,6 +215,10 @@ Same targets as picking; Task_CutLock / Task_BruteForceLock share the shackle ta
 | Storage Guard, Slaver Storage Guard | 197 Lock all the doors - stay outside | 23-7 |
 | Cage Warden (and copy) | 195 Lock all my cages | 22-24 (leader), 19-21 (squad) |
 
+- **Lock up from outside** (197; **Verified** rows, `FUN_140596e90`): list B is `!strangers in house` and `!107` (107 I_AM_INSIDE_TARGET_BUILDING), and the lock row 198 needs state 126 AT_LOCATION_BUILDING_DOOR_OUTSIDE
+  (true when the character is within the door's reach range of the door's outer point, 45 for a door), so a 197 worker inside first leaves (row 200) and locks each door from its outer side. How far the
+  outer point lies from the door node is not visible in the decompile (**Unknown**). Meitou: a 197 round (`Round.FromOutside`) is given to a member already outside when there is one, else the worker first walks
+  just past the home's extent (engine choice), then works each door within 45 of it; 155 rounds are unchanged.
 - **Opening up** (86 `OPEN_UP_SHOP_DOORS`, Task_Blank, finder `FUN_1408cb360`, **Verified** decompile): the building the character stands in when
   its owner matches the AI's (an owner test, **Observed**), else its home; the target is the first door that is closed and not opening (the plan unlocks, then opens it). With none left
   the finder clears the squad's "house locked" flag. A = !87, so it scores only while the home counts as locked. Only squads whose packages list
