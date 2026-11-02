@@ -86,6 +86,10 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     readonly List<(CharacterId Member, double Until)> foodWaits = [];
 
     public TownDutySettings Settings { get; } = settings ?? new TownDutySettings();
+    /// <summary>The relation event of a caging (<see cref="FactionDeeds.Caged"/>, <c>FUN_140358670</c>); null: none.</summary>
+    public FactionDeeds? Deeds { get; set; }
+    /// <summary>The bounty claim after a caging (<see cref="Crime.ArrestSystem.Claim"/>, <c>FUN_140330d50</c>); it pays only a carrier of the player's faction. Null: none.</summary>
+    public Crime.ArrestSystem? Arrests { get; set; }
     public IReadOnlyList<TownDuty> Duties => duties;
 
     public void SlowWorld(World world)
@@ -684,6 +688,9 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
                 TaskStart.Stand(table, g);
                 carry.LetGo(world, g);
                 if (!world.Fixtures.Imprison(world, d.Body, cage, data.Bodies.Constants.PrisonTime, d.Member)) return End(world, d);
+                // Every cage put-in by this task: the captive's squad remembers the putter as captor and the relation event goes out, then the bounty claim (FUN_140358670).
+                Deeds?.Caged(world, g, b);
+                Arrests?.Claim(world, g, d.Body, cage);
                 if (body.IsPlayer) world.Post($"{body.Name} has been locked in a cage by {data.Factions[d.Faction].Name}");
                 return End(world, d);
             }

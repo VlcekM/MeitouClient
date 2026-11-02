@@ -376,7 +376,9 @@ money, mark the entry claimed (it never pays twice) and show "Received c.{1} rew
   player's, not `not real` and not BANDIT (`fundamental type` 8, `CharacterTypeEnum`), neither carrier nor captive has the escaped flag
   (status `+0xe8`), and not (cage faction SLAVER 7 or `FarmBuilding::vfunc_15(cage) +0xd8 == 5`, read as a town of type 5 `TOWN_SLAVE_CAMP`: the function walks the
   cage's parent chain to its root, not verified as the town) unless the carrier's status type (`FUN_1405c8aa0`: status `+0`, 1 slave, 2 escaped) is 0.
-  The amount is the captive's bounty for the cage owner's faction; plays `Bounty_Fulfilled`. The same put-in also sets the sentence (11.5).
+  The amount is the captive's bounty for the cage owner's faction; plays `Bounty_Fulfilled`. The same put-in also sets the sentence (11.5). The "carrier of the player faction" test reads the carrier's FACTION object (`+0x250`), not whether
+  the carrier is player-controlled; every cage put-in by the task also has the captive's squad remember the carrier as captor (`FUN_140673a20(captive, carrier, 5)`) and sends a kind-12 relation event. Meitou: `ArrestSystem.Claim` tests the carrier's faction;
+  `TownDutySystem` raises `FactionDeeds.Caged` and calls `Claim` after its cage put-in.
 - **Dialogue** `DA_PAY_BOUNTY` (10) (`FUN_140680560` case 10): pays for the body the talking player carries, with the speaker's
   booking faction; then the speaker takes the body (tasks 213 `LIFT_PERSON_SNATCHING_ALLOWED` and 112 `FIND_CAGE_AND_PUT_IN`, memory flag 5 on both),
   **whether or not a bounty was paid and in any town** (**Verified**, `FUN_140680560` case 10: the tail runs once the carried body resolves; Meitou hands the body over for DA 10 alone too).

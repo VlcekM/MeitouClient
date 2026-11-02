@@ -256,7 +256,8 @@ public sealed partial class ArrestSystem : IOrderOwner
     }
 
     /// <summary>
-    /// The reward for a captive the carrier just put in <paramref name="cage"/> (the game's <c>FUN_140330d50</c>, economy.md 11.4, <b>Observed</b>): a player carrier, a captive not of the
+    /// The reward for a captive the carrier just put in <paramref name="cage"/> (the game's <c>FUN_140330d50</c>, economy.md 11.4, <b>Observed</b>): a carrier whose faction is the player's (the faction object's player flag, not
+    /// whether the carrier is player-controlled, <b>Verified</b>), a captive not of the
     /// player's faction, a cage whose owner is not the player's faction and not lawless (<c>not real</c> or BANDIT), neither of them escaped; the captive's unclaimed entry for the cage owner's
     /// faction pays, halved (truncated) when the captive is dead, into the player's money, and is marked claimed. The slaver exception does not apply (the player's characters are never
     /// slaves here). Returns what it paid (0: nothing).
@@ -264,7 +265,7 @@ public sealed partial class ArrestSystem : IOrderOwner
     public int Claim(World world, int carrier, CharacterId captive, Fixture cage)
     {
         var table = world.Characters;
-        if (table.Cold(carrier) is not { IsPlayer: true, Escaped: false } || !table.TryResolveNext(captive, out int b) || table.Cold(b) is not { IsPlayer: false, Escaped: false } bc) return 0;
+        if (table.Cold(carrier) is not { Escaped: false } cc || !(cc.IsPlayer || world.Player.Faction >= 0 && cc.Faction == world.Player.Faction) || !table.TryResolveNext(captive, out int b) || table.Cold(b) is not { IsPlayer: false, Escaped: false } bc) return 0;
         int owner = cage.Owner;
         if (cage.Kind != FixtureKind.Cage || owner < 0 || owner == world.Player.Faction || bc.Faction == world.Player.Faction || Crimes.Factions.Lawless(owner)) return 0;
         if (bc.Bounties?.BookedFor(Crimes.Factions.Relations, owner) is not { Amount: > 0, Claimed: false } entry) return 0;
