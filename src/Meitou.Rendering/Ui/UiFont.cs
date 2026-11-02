@@ -53,6 +53,9 @@ internal sealed unsafe class UiFont : IDisposable
     /// <summary>The atlas side in texels.</summary>
     public int Side { get; private set; }
     public int Generation { get; private set; }
+
+    /// <summary>Counts every font's <see cref="Generation"/> changes and atlas releases (render thread): recorded glyph quads are stale once it moves.</summary>
+    public static int Changes { get; private set; }
     /// <summary>Glyphs are placed on whole pixels (Faithful, and Meitou fonts the original draws with <c>Antialias</c> false).</summary>
     public bool Snapped { get; }
     /// <summary>The line's height and the distance from its top to the baseline, in pixels.</summary>
@@ -297,6 +300,7 @@ internal sealed unsafe class UiFont : IDisposable
         pixels = larger;
         Side = side;
         Generation++;
+        Changes++;
     }
 
     /// <summary>Forgets every glyph and empties the atlas (it is full at its largest size).</summary>
@@ -309,6 +313,7 @@ internal sealed unsafe class UiFont : IDisposable
         Array.Clear(pixels);
         (cursorX, cursorY, rowHeight) = (pad, pad, 0);
         Generation++;
+        Changes++;
     }
 
     /// <summary>

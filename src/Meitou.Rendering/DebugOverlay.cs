@@ -557,6 +557,23 @@ public sealed unsafe class DebugOverlay : IDisposable
         GpuTexture? target;
         readonly record struct Run(SampledTexture Texture, bool Image, PixelRect Scissor, int First, int Count);
 
+        /// <summary>One <see cref="Add"/> as recorded: its arguments, the data at <paramref name="First"/> in the recording's floats.</summary>
+        public readonly record struct Recorded(DebugOverlay Owner, SampledTexture? Image, PixelRect Clip, SampledTexture? Atlas, int First, int Count);
+
+        List<Recorded>? recording;
+        List<float>? recordedFloats;
+
+        /// <summary>Until <see cref="EndRecording"/>, every <see cref="Add"/> is also written to <paramref name="adds"/> and <paramref name="floats"/>.</summary>
+        public void BeginRecording(List<Recorded> adds, List<float> floats) => (recording, recordedFloats) = (adds, floats);
+
+        public void EndRecording() => (recording, recordedFloats) = (null, null);
+
+        /// <summary>Adds again what was recorded.</summary>
+        public void Replay(float[] floats, Recorded[] adds)
+        {
+            foreach (var r in adds) Add(r.Owner, floats.AsSpan(r.First, r.Count), r.Image, r.Clip, r.Atlas);
+        }
+
         public OverlayPass Reset(int newWidth, int newHeight)
         {
             width = newWidth; height = newHeight;
@@ -571,6 +588,11 @@ public sealed unsafe class DebugOverlay : IDisposable
                 throw new InvalidOperationException("An overlay pass must share its GPU and target.");
             renderer ??= owner;
             target = owner.Target;
+            if (recording is not null && recordedFloats is not null)
+            {
+                recording.Add(new(owner, image, clip, atlas, recordedFloats.Count, data.Length));
+                recordedFloats.AddRange(data);
+            }
             // If no geometry reaches outside this scissor, the full viewport clips it identically.
             // Different widget clips can then share a draw without changing their pixels.
             bool contained = true, solid = true;
