@@ -445,8 +445,8 @@ money, mark the entry claimed (it never pays twice) and show "Received c.{1} rew
 - **Raising** (`FUN_1409335e0(town, code, position, culprit, faction, raiser)`): nothing for code 0. Called only by DA 33 CRIME_ALARM (the
   target's pending crime code and victim faction, at the target) and a failed kidnap ([carry-loot](carry-loot.md#kidnapping): code 15, the
   victim's faction, at the kidnapper). The town keeps its alarms per code; one of the same code and faction is moved (position, building,
-  floor), else a new one is made; both set `+0x24` = 8.0, a life in game seconds that the town update counts down (`FUN_14092bfe0`, `Town::periodicUpdate` dt), the alarm being
-  deleted below 0 whether answered or not (**Verified**). So an investigation ends about 8 game s after the last raise. "Alarm raised" when the culprit is the player's, at most every 30 s.
+  floor), else a new one is made; only the new one sets `+0x24` = 8.0 (the merge path leaves it alone), a life in game seconds that the town update counts down (`FUN_14092bfe0`, `Town::periodicUpdate` dt), the alarm being
+  deleted below 0 whether answered or not (**Verified**). So an alarm dies 8 game s after it was created, however often it is raised again; the next raise then makes a new one. "Alarm raised" when the culprit is the player's, at most every 30 s.
 - **Investigators**: goals 209 INVESTIGATE_ALARMS and 210 (the task's flag: only alarms of its own faction), Urgent, weight 0.1, 0-24 h, in 51
   packages of the merged load order (town and gate guards, police, shops, residents, throne rooms; **Verified** by probe). Row 209: effect
   !130 ALARMS_IN_THE_VICINITY, needs 86 atATown. Finder `FUN_14092a810(town, 0, 375, me, faction or 0)`: the nearest alarm of the An alarm raised in a building whose every entrance is closed (`FUN_1405499a0` false: doors present and none open or passable) is skipped for an investigator in the same building and halves the reach a second time otherwise (`FUN_14092a810`:52-62, **Verified**; Meitou `CrimeSystem.AlarmFor`, `FixtureRegistry.HasOpenDoor`).
@@ -455,7 +455,7 @@ money, mark the entry claimed (it never pays twice) and show "Received c.{1} rew
   after any walk); at 0 the alarm is deleted and the task ends (the only remover found). Farther: runs (mode 2) to 30 short of it on its
   own side, the count set to 10, and every sensed character (neutral or enemy, not down: `SenseItr(6, 8)`) with a pending crime whose
   victim faction is an ally of the investigator's (`FactionRelations::isAlly`: same, or 50+) is tagged TEMP ENEMY and attacked
-  (`Character::attackTarget`). **Verified** (decompile): no early exit and no can-attack test, on every update while it walks; each qualifying entry is tagged and the AI's attack hand is overwritten, so the last one scanned is the target (Meitou `CrimeSystem.Investigate`: all tagged, one order for the last, only by a character able to fight; the sight scan stands in for the sense list).
+  (`Character::attackTarget`, which only stores the target). **Verified** (decompile; `FUN_140354260`): the whole sense list is walked with no early exit and no can-attack test (the goal system decides who is offered the task), on every update while it walks; each qualifying entry is tagged and the AI's attack hand is overwritten, so the last one scanned is the target (Meitou `CrimeSystem.Investigate`: all tagged, one order for the last; the sight scan stands in for the sense list).
 
 Meitou (`CrimeSystem.TownAlarm` / `AlarmFor` / `Investigate`, `AiBehaviour.Investigate`): as above (reach by `TownAlarm.Place`, the culprit's `SightMap.PlaceOf`, and the more-than-one-floor skip by `Floor`); alarms are not saved; the closed-building
 halving and the `+0xc2` floor skip (meaning **Unknown**) are not modelled; "sensed" is the witnesses' sight test.

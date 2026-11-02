@@ -162,7 +162,7 @@ public sealed class BountyLedger
 
 /// <summary>
 /// A town's raised alarm (<c>FUN_1409335e0</c>'s record, <b>Observed</b>): the crime, the faction it was against, where it was raised. It stays until an investigator has looked about at
-/// it (<see cref="CrimeSystem.Investigate"/>; the original's field +0x24 = 8.0 is <b>Unknown</b>, no expiry was found). Not saved (engine choice).
+/// it (<see cref="CrimeSystem.Investigate"/>) or <see cref="CrimeSystem.AlarmLife"/> after its creation (the original's field +0x24, <b>Verified</b>). Not saved (engine choice).
 /// </summary>
 public sealed class TownAlarm
 {
@@ -174,7 +174,7 @@ public sealed class TownAlarm
     public int Place { get; set; } = -1;
     /// <summary>The culprit's floor when it was raised (the original's <c>+0x60</c>); only read for an alarm with a <see cref="Place"/>. Overwritten by a repeated raise.</summary>
     public int Floor { get; set; }
-    /// <summary>Game seconds it still lives: <see cref="CrimeSystem.AlarmLife"/> at each raise, counted down by the town update; gone below 0.</summary>
+    /// <summary>Game seconds it still lives: <see cref="CrimeSystem.AlarmLife"/> at creation (a repeated raise leaves it), counted down by the town update; gone below 0.</summary>
     public float Life { get; set; } = CrimeSystem.AlarmLife;
 }
 

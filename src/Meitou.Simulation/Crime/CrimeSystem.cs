@@ -444,7 +444,7 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
 
     /// <summary>
     /// The alarm of <paramref name="town"/> raised at <paramref name="target"/> (<c>FUN_1409335e0</c>, <b>Observed</b>), for the crime <paramref name="code"/> against
-    /// <paramref name="faction"/>: nothing for code 0; "Alarm raised" at most every 30 s for the player's; the town keeps one alarm per code and faction, a new one moving it to the target and restarting its <see cref="AlarmLife"/>.
+    /// <paramref name="faction"/>: nothing for code 0; "Alarm raised" at most every 30 s for the player's; the town keeps one alarm per code and faction, a repeated raise only moving it to the target (the life, set at the first raise, is not extended: <b>Verified</b>, the merge path of <c>FUN_1409335e0</c> leaves <c>+0x24</c> alone).
     /// The town's investigators answer it (<see cref="Investigate"/>).
     /// </summary>
     public void TownAlarm(World world, int target, int town, CrimeCode code, int faction)
@@ -464,7 +464,6 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
                 a.Position = at;
                 a.Place = place;
                 a.Floor = floor;
-                a.Life = AlarmLife;
                 return;
             }
         alarms.Add(new TownAlarm { Town = town, Code = code, Faction = faction, Position = at, Place = place, Floor = floor });
@@ -513,7 +512,7 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
     /// The investigators' serial step (<c>Task_InvestigateAlarms</c> update, <b>Observed</b>), for each NPC whose AI acts out goal 209 or 210 (<see cref="Ai.AiBehaviour.Investigate"/>):
     /// within <see cref="AlarmLookRange"/> of its alarm it counts <see cref="Ai.AiMind.LookAbout"/> down and clears the alarm when it runs out; on the way there it keeps the count at
     /// <see cref="LookAboutSeconds"/>, and every character it sees that is not down, not of its faction or an ally, and has a pending crime against its faction or an ally, its squad
-    /// tags TEMP_ENEMY (all of them) and it goes for the last (<c>Character::attackTarget</c>). Engine: "sees" is the witnesses' sight test, the original's sense list (seen or heard) is not.
+    /// tags TEMP_ENEMY (all of them) and it goes for the last (<c>Character::attackTarget</c>, which only stores the target: the last in slot order is attacked, <b>Verified</b>; the task tests no capability to fight). Engine: "sees" is the witnesses' sight test, the original's sense list (seen or heard) is not.
     /// </summary>
     void Investigate(World world, float seconds)
     {
@@ -532,7 +531,7 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
             }
             mind.LookAbout = LookAboutSeconds;
             // Every qualifying witness in sight is tagged and the last one scanned is the attack target (the original overwrites the AI's attack hand: FUN_140354260, Verified, no can-attack test
-            // on this path); the order is sent only for that last one, and only by a character able to fight.
+            // on this path); the order is sent only for that last one.
             float range = AggroSystem.RangeOf(cold, Settings.Sight);
             int last = -1;
             for (int c = 0; c < table.HighWater; c++)
@@ -542,7 +541,7 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
                 world.SystemOf<Dialogue.DialogueSystem>()?.TagEnemy(world, i, c);
                 last = c;
             }
-            if (last >= 0 && cold.Fighter?.CanAttack == true) world.Defer(new Combat.AttackOrder([table.IdOf(i)], table.IdOf(last)) { Tick = world.Tick + 1, Source = TaskSource.Npc });
+            if (last >= 0) world.Defer(new Combat.AttackOrder([table.IdOf(i)], table.IdOf(last)) { Tick = world.Tick + 1, Source = TaskSource.Npc });
         }
     }
 
@@ -559,7 +558,7 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
 
     /// <summary>The crime timer DA 33 sets (the literal 30.0 passed to <c>FUN_140851f40</c>), and how often "Alarm raised" may be posted (real seconds in the original; game seconds here).</summary>
     public const float AlarmTimer = 30, AlarmPostSeconds = 30;
-    /// <summary>The game seconds a town alarm lives after its last raise (<c>FUN_1409335e0</c> sets 8.0, <b>Verified</b>).</summary>
+    /// <summary>The game seconds a town alarm lives after it is created (<c>FUN_1409335e0</c> sets 8.0 for a new alarm only, a repeated raise does not extend it; the town update <c>FUN_14092bfe0</c> counts it down and deletes it below 0: <b>Verified</b>).</summary>
     public const float AlarmLife = 8;
     double lastAlarmHours = double.NegativeInfinity;
 
