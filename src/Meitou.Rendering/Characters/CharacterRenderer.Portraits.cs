@@ -83,61 +83,76 @@ internal sealed unsafe partial class CharacterRenderer
     public void DrawPortraits()
     {
         if (PortraitRequests.Count == 0) return;
-        var (atlas, _) = PortraitAtlas;
+        var atlas = PortraitAtlas.Texture;   // made on first use, with the depth
         liveByKey.Clear();
         for (int i = 0; i < liveCount; i++) liveByKey[live[i].Key] = i;
         bool any = !cleared;
         foreach (var request in PortraitRequests)
-            if (Due(request, out _)) { any = true; break; }
-        if (!any) return;
-        if (!cleared)
-        {
-            // The atlas starts transparent; each cell drawn clears its own square.
-            var clear = Gpu.BeginNative("portraits clear");
-            var whole = PassTargets.Of(atlas, portraitDepth);
-            clear.BeginRendering(new RenderingDesc(whole.Colour, whole.Depth, whole.Width, whole.Height));
-            Gpu.BeginHostPass(clear, whole, DrawState.Scene(whole.Formats));
-            clear.Clear(true, default, false, 1, new PixelRect(0, 0, (uint)whole.Width, (uint)whole.Height));
-            Gpu.EndHostPass(clear);
-            clear.EndRendering();
-            Gpu.EndNative(clear);
-            cleared = true;
-        }
-        if (look.Enhanced)
-        {
-            // Each cell alone, PortraitSupersample times larger each way into the half-float square, then resolved into its cell (a still: drawn once).
-            if (portraitHdr is null)
-                (portraitHdr, portraitHdrDepth, portraitHdrSampled) = PreviewResolve.Targets(Gpu, PortraitCell, PortraitCell, look with { Supersample = PortraitSupersample }, "portrait hdr");
-            preview ??= new PreviewResolve(Gpu);
-            foreach (var request in PortraitRequests)
+            if (Due(request, out _))
             {
-                if (!Due(request, out int index)) continue;
-                var cmd = Gpu.BeginNative("portrait");
-                var target = PassTargets.Of(portraitHdr, portraitHdrDepth);
-                cmd.BeginRendering(new RenderingDesc(target.Colour, target.Depth with { Load = LoadOp.Clear, DepthClear = 1f },
-                    target.Width, target.Height));
-                Gpu.BeginHostPass(cmd, target, DrawState.Scene(target.Formats));
-                var whole = new PixelRect(0, 0, (uint)target.Width, (uint)target.Height);
-                DrawPortraitCell(cmd, request, index, new PixelViewport(0, 0, target.Width, target.Height, 0, 1), whole);
-                Gpu.EndHostPass(cmd);
-                cmd.EndRendering();
-                Gpu.EndNative(cmd);
-                int x = request.Cell % PortraitColumns * PortraitCell, y = request.Cell / PortraitColumns * PortraitCell;
-                preview.Run(portraitHdrSampled, atlas, look with { Supersample = PortraitSupersample }, [new PixelRect(x, y, PortraitCell, PortraitCell)]);
+                any = true;
+                break;
             }
-            return;
+        if (!any) return;
+
+        if (!cleared) ClearPortraitAtlas(atlas);
+        if (look.Enhanced) DrawEnhancedPortraits(atlas);
+        else DrawFaithfulPortraits(atlas);
+    }
+
+    /// <summary>The atlas starts transparent, once; each cell drawn clears its own square.</summary>
+    void ClearPortraitAtlas(GpuTexture atlas)
+    {
+        var clear = Gpu.BeginNative("portraits clear");
+        var whole = PassTargets.Of(atlas, portraitDepth);
+        clear.BeginRendering(new RenderingDesc(whole.Colour, whole.Depth, whole.Width, whole.Height));
+        Gpu.BeginHostPass(clear, whole, DrawState.Scene(whole.Formats));
+        clear.Clear(true, default, false, 1, new PixelRect(0, 0, (uint)whole.Width, (uint)whole.Height));
+        Gpu.EndHostPass(clear);
+        clear.EndRendering();
+        Gpu.EndNative(clear);
+        cleared = true;
+    }
+
+    /// <summary>Meitou: each due cell alone, PortraitSupersample times larger each way into the half-float square, then resolved into its cell (a still: drawn once).</summary>
+    void DrawEnhancedPortraits(GpuTexture atlas)
+    {
+        var supersampled = look with { Supersample = PortraitSupersample };
+        if (portraitHdr is null)
+            (portraitHdr, portraitHdrDepth, portraitHdrSampled) = PreviewResolve.Targets(Gpu, PortraitCell, PortraitCell, supersampled, "portrait hdr");
+        preview ??= new PreviewResolve(Gpu);
+
+        foreach (var request in PortraitRequests)
+        {
+            if (!Due(request, out int index)) continue;
+            var cmd = Gpu.BeginNative("portrait");
+            var target = PassTargets.Of(portraitHdr, portraitHdrDepth);
+            cmd.BeginRendering(new RenderingDesc(target.Colour, target.Depth with { Load = LoadOp.Clear, DepthClear = 1f }, target.Width, target.Height));
+            Gpu.BeginHostPass(cmd, target, DrawState.Scene(target.Formats));
+            var whole = new PixelRect(0, 0, (uint)target.Width, (uint)target.Height);
+            DrawPortraitCell(cmd, request, index, new PixelViewport(0, 0, target.Width, target.Height, 0, 1), whole);
+            Gpu.EndHostPass(cmd);
+            cmd.EndRendering();
+            Gpu.EndNative(cmd);
+
+            int x = request.Cell % PortraitColumns * PortraitCell, y = request.Cell / PortraitColumns * PortraitCell;
+            preview.Run(portraitHdrSampled, atlas, supersampled, [new PixelRect(x, y, PortraitCell, PortraitCell)]);
         }
+    }
+
+    /// <summary>Faithful: every due cell in one pass over the atlas, the original's 128 px in the cell's corner, the whole cell cleared.</summary>
+    void DrawFaithfulPortraits(GpuTexture atlas)
+    {
         var pass = Gpu.BeginNative("portraits");
         var cells = PassTargets.Of(atlas, portraitDepth);
-        pass.BeginRendering(new RenderingDesc(cells.Colour, cells.Depth with { Load = LoadOp.Clear, DepthClear = 1f },
-            cells.Width, cells.Height));
+        pass.BeginRendering(new RenderingDesc(cells.Colour, cells.Depth with { Load = LoadOp.Clear, DepthClear = 1f }, cells.Width, cells.Height));
         Gpu.BeginHostPass(pass, cells, DrawState.Scene(cells.Formats));
         foreach (var request in PortraitRequests)
         {
             if (!Due(request, out int index)) continue;
-            // The original's 128 px in the cell's corner; the whole cell cleared.
             int x = request.Cell % PortraitColumns * PortraitCell, y = request.Cell / PortraitColumns * PortraitCell;
-            DrawPortraitCell(pass, request, index, new PixelViewport(x, y, FaithfulPortraitSize, FaithfulPortraitSize, 0, 1), new PixelRect(x, y, PortraitCell, PortraitCell));
+            var viewport = new PixelViewport(x, y, FaithfulPortraitSize, FaithfulPortraitSize, 0, 1);
+            DrawPortraitCell(pass, request, index, viewport, new PixelRect(x, y, PortraitCell, PortraitCell));
         }
         Gpu.EndHostPass(pass);
         pass.EndRendering();

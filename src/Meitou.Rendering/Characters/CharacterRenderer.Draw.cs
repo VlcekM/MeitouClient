@@ -143,13 +143,15 @@ internal sealed unsafe partial class CharacterRenderer
         for (int k = 0; k < views; k++) depthViews[k] = default;
     }
 
-    void DrawView(in ViewConstants worldView, Vector3 eye, Vector4[] frustum, float lodFloor = 0, float minRadius = 0, ViewBatches? prepared = null, Matrix4x4? relative = null, Matrix4x4? previousRelative = null)
+    void DrawView(in ViewConstants worldView, Vector3 eye, Vector4[] frustum, float lodFloor = 0, float minRadius = 0, ViewBatches? prepared = null,
+        Matrix4x4? relative = null, Matrix4x4? previousRelative = null)
     {
         var cpu = Stopwatch.StartNew();
         // Drawn relative to the view's eye (the vertex program adds it back for the shading): skinned in world floats, an animated vertex far from
         // the origin (the Hub, tens of thousands of units out) rounds to a different step every frame and the character visibly jiggles.
-        // The view-projection for those positions is the caller's rotation-only one when it has it: FromOrigin can cancel the eye's coordinates exactly, but not the rounding
-        // already in a matrix built with them (about 0.004 units at 50000, a different error every frame: 0.3 px at the closest zoom, and as much noise in the velocity).
+        // The view-projection for those positions is the caller's rotation-only one when it has it: FromOrigin can cancel the eye's coordinates exactly,
+        // but not the rounding already in a matrix built with them (about 0.004 units at 50000, a different error every frame: 0.3 px at the closest
+        // zoom, and as much noise in the velocity).
         var origin = worldView.Eye;
         var view = worldView;
         view.ViewProjection = relative ?? FromOrigin(origin, worldView.ViewProjection);
@@ -158,21 +160,31 @@ internal sealed unsafe partial class CharacterRenderer
         DrawnTriangles = 0;
         Array.Clear(LevelParts);
         Array.Clear(LevelTriangles);
+
         var vb = prepared ?? mainView;
         if (prepared is null) Collect(vb, eye, origin, frustum, lodFloor, minRadius);
         (DrawnCharacters, DrawnParts) = (vb.Characters, vb.Parts);
-        var active = vb.Active;
-        if (active.Count == 0) { LastDrawCpuMs = cpu.Elapsed.TotalMilliseconds; return; }
-        // The instances were laid out when the view was gathered (AllocateRows), each batch contiguous and reached by firstInstance.
-        var instances = vb.Instances;
+        if (vb.Active.Count > 0) RecordDraws(in view, vb);
 
-        // 3. One draw per batch.
+        LastDrawCpuMs = cpu.Elapsed.TotalMilliseconds;
+        if (!depthPass && portraitLive < 0 && vb.Active.Count > 0) drawCpu.Add(LastDrawCpuMs);
+    }
+
+    /// <summary>
+    /// 3. One draw per batch, into a job recorded with the pass's program. The instances were laid out when the view was gathered (AllocateRows), each
+    /// batch contiguous and reached by firstInstance.
+    /// </summary>
+    void RecordDraws(in ViewConstants view, ViewBatches vb)
+    {
+        var active = vb.Active;
+        var instances = vb.Instances;
         var prog = motionPass ? motionProg : depthPass ? depthProg : colourProg;
         string label = motionPass ? "characters motion" : depthPass ? "characters depth" : "characters";
         var targets = Gpu.CurrentTargets();
         var state = Gpu.CurrentState() with { Cull = CullMode.None };
         // The colour pass writes alpha 1 (the scene host masks it off for everything else): the SSAO character mask (PostProcess).
         if (!depthPass && !motionPass) state = state with { ColourMask = DrawState.Rgba };
+
         var job = drawJobs.Rent();
         (job.Owner, job.Targets, job.State, job.Program, job.Count) = (this, targets, state, prog.P, 0);
         job.Frame = nativeFrame.Prepare(in view, [bones.Binding, content.Materials.Binding(Gpu.Frame), content.Morphs.Binding(Gpu.Frame), previousBones.Binding]);
@@ -181,6 +193,7 @@ internal sealed unsafe partial class CharacterRenderer
         job.Push = new CharacterPush { DepthIndex = motionPass ? motionDepth : 0, Fill = new(Fill, 0), SkinLut = SkinShading ? skinScattering.Index : 0 };
         job.RowCount = motionPass ? 9 : 5;
         if (job.Draws.Length < active.Count) job.Draws = new DrawJob.Draw[Math.Max(active.Count, job.Draws.Length * 2)];
+
         int n = 0;
         foreach (var b in active)
         {
@@ -190,21 +203,31 @@ internal sealed unsafe partial class CharacterRenderer
             job.Draws[n++] = new DrawJob.Draw
             {
                 Pipeline = Gpu.Pipelines.Get(state.Pipeline(prog.P, native.Layout!, PrimitiveType.Triangles, targets.Formats, label)),
-                Vertices = native.Vertices, Elements = new GpuBufferBinding(native.Elements.Buffer, native.Elements.Offset + (ulong)part.Offset[b.Level] * 4),
-                IndexCount = (uint)part.Count[b.Level], Instances = (uint)b.Count, FirstInstance = (uint)b.Offset, TwoSided = b.DoubleSided,
+                Vertices = native.Vertices,
+                Elements = new GpuBufferBinding(native.Elements.Buffer, native.Elements.Offset + (ulong)part.Offset[b.Level] * 4),
+                IndexCount = (uint)part.Count[b.Level],
+                Instances = (uint)b.Count,
+                FirstInstance = (uint)b.Offset,
+                TwoSided = b.DoubleSided,
             };
-            DrawCalls++;
-            DrawnTriangles += (long)part.Count[b.Level] / 3 * b.Count;
-            LevelParts[Math.Min(b.Level, 7)] += b.Count;
-            LevelTriangles[Math.Min(b.Level, 7)] += (long)part.Count[b.Level] / 3 * b.Count;
+            CountDraw(part.Count[b.Level], b.Level, b.Count);
         }
         job.Count = n;
+
         var timer = depthPass ? depthTimer : colourTimer;
         if (portraitLive < 0) timer.Begin();
         Gpu.Record(label, job);
         if (portraitLive < 0) timer.End();
-        LastDrawCpuMs = cpu.Elapsed.TotalMilliseconds;
-        if (!depthPass && portraitLive < 0) drawCpu.Add(LastDrawCpuMs);
+    }
+
+    /// <summary>The statistics of one draw: <paramref name="instances"/> of a level of <paramref name="indices"/> indices.</summary>
+    void CountDraw(int indices, int level, int instances)
+    {
+        long triangles = (long)indices / 3 * instances;
+        DrawCalls++;
+        DrawnTriangles += triangles;
+        LevelParts[Math.Min(level, 7)] += instances;
+        LevelTriangles[Math.Min(level, 7)] += triangles;
     }
 
     /// <summary>
@@ -217,80 +240,129 @@ internal sealed unsafe partial class CharacterRenderer
         bool placed = portraitLive < 0 && partStamp == updateStamp && origin == partOrigin && eye == origin && (partMotion || !motionPass);
         if (placed)
         {
-            oneView[0] = new GatherView { Frustum = frustum, LodFloor = lodFloor, MinRadius = minRadius, Batches = vb };
-            Gather(oneView, 1, depthPass, motionPass);
-            oneView[0] = default;
-            AssignSlots(vb);
-            if (vb.Active.Count == 0) return;
-            AllocateRows(vb);
-            var view = vb;
-            Parallel.For(0, vb.ChunkCount, c => Scatter(view, c));
+            CollectPlaced(vb, frustum, lodFloor, minRadius);
             return;
         }
-        for (int i = portraitLive >= 0 ? portraitLive : 0, end = portraitLive >= 0 ? portraitLive + 1 : liveCount; i < end; i++)
+
+        int start = portraitLive >= 0 ? portraitLive : 0, end = portraitLive >= 0 ? portraitLive + 1 : liveCount;
+        for (int i = start; i < end; i++)
         {
             ref var l = ref live[i];
             if (portraitLive < 0 && (l.PortraitOnly || !FrustumTests.SphereVisible(frustum, l.Centre, l.Radius))) continue;
             if (!depthPass && portraitLive < 0 && FogCull?.Hidden(l.Centre, l.Radius, FogVolumes.CullKind.Characters) == true) continue;
             vb.Characters++;
-            bool interior = portraitLive < 0 && l.Interior;
-            var world = Relative(l.World, origin);
-            float worldScale = world.ScaleLength();
-            var parts = l.Asset.Parts;
-            for (int p = 0; p < parts.Count; p++)
-            {
-                var part = parts[p];
-                if (!part.ShowsWith(l.WeaponDrawn, l.RangedDrawn, l.Shots, l.BackDrawn)) continue;
-                Matrix4x4 model = world;
-                if (!part.Shared) model = attach[l.AttachBase + part.AttachIndex] * world;
-                float modelScale = part.Shared ? worldScale : model.ScaleLength();
-                var mesh = part.Mesh;
-                if (depthPass && part.BoundsRadius * modelScale < minRadius) continue;
-                int level;
-                if (!GeneratedLod)
-                {
-                    // Faithful: the file's own levels by the original's distance_sphere value (its stored radius, bias 1), the shadow passes as the picture
-                    // (docs/characters.md "LOD of character meshes").
-                    float own = MeshLod.Value(eye - origin, Vector3.Transform(part.BoundsCentre, model), part.FileRadius * modelScale);
-                    level = part.FileDistances is { } fileLevels && MeshLod.Select(fileLevels, own) is int f && f > 0 ? part.FileFirst + f - 1 : 0;
-                }
-                else
-                {
-                    // The model is relative to the view's eye (above), so the LOD eye is too: with the world eye every part far from the origin took its last level.
-                    float value = MeshLod.Value(eye - origin, Vector3.Transform(part.BoundsCentre, model), part.BoundsRadius * modelScale, depthPass ? LodBias * ShadowLodBias : LodBias);
-                    // In a shadow map hair is a silhouette, so it takes the rule's own distances there (its levels start CharacterContent.HairLodScale times farther for the picture).
-                    if (depthPass) value = Math.Max(part.Material.Shading == CharacterShaders.ShadeHair && !l.Asset.Animal ? value * CharacterContent.HairLodScale : value, lodFloor);
-                    level = MeshLod.Select(mesh.Distances, value);
-                    if (depthPass && part.ShadowDistances is { } shadowLevels && MeshLod.Select(shadowLevels, value) is int k && k > 0) level = part.ShadowFirst + k - 1;   // the body's shadow-only levels
-                }
-                bool twoSided = part.Material.DoubleSided;
-                bool headless = part.IsBody && l.Asset.Appearance is { Headless: true }, headOnly = part.IsBody && l.Asset.Appearance is { HeadOnly: true };
-                uint hidden = (part.IsBody && l.Asset.Appearance is { } look ? (uint)look.HiddenLimbs << 12 | (uint)(look.HiddenParts & 0x3FF) << 18 : 0u) | (uint)part.HideSide << 16 | (headless ? CharacterShaders.Headless : 0u) | (headOnly ? CharacterShaders.HeadOnly : 0u);
-                var instance = new CharInstance { Model = part.IsBody ? WithBlood(model, l.Blood) : model, BoneBase = (uint)l.BoneBase, Material = (uint)part.Material.Slot, Flags = (interior ? 1u : 0u) | hidden, MorphBase = part.Morphed ? l.Asset.MorphBase : 0 };
-                if (motionPass)
-                {
-                    var previousWorld = Relative(l.State.PreviousWorld, origin);
-                    instance.PreviousModel = part.Shared ? previousWorld : l.State.PreviousAttach[part.AttachIndex] * previousWorld;
-                }
-                vb.Parts++;
-                var gps = mesh.Parts;
-                for (int g = 0; g < gps.Count; g++)
-                {
-                    var gp = gps[g];
-                    int lv = Math.Min(level, gp.Count.Length - 1);
-                    while (lv > 0 && gp.Count[lv] == 0) lv--;
-                    if (gp.Count[lv] == 0) continue;
-                    var batch = vb.Get(BatchId(part, g, gp, lv, twoSided), this);
-                    if (batch.Count == 0) vb.Active.Add(batch);
-                    batch.Add(in instance);
-                }
-            }
+            CollectCharacter(vb, in l, eye, origin, lodFloor, minRadius);
         }
+
         if (vb.Active.Count == 0) return;
         AllocateRows(vb);
         var target = new Span<byte>(vb.Instances.Pointer, vb.Active.Sum(b => b.Count) * CharInstance.Size);
         foreach (var b in vb.Active)
             MemoryMarshal.AsBytes(b.Data.AsSpan(0, b.Count)).CopyTo(target[(b.Offset * CharInstance.Size)..]);
+    }
+
+    /// <summary>The view from the parts <see cref="Update"/> placed: gathered in parallel chunks, then the slots and rows laid out and scattered.</summary>
+    void CollectPlaced(ViewBatches vb, Vector4[] frustum, float lodFloor, float minRadius)
+    {
+        oneView[0] = new GatherView { Frustum = frustum, LodFloor = lodFloor, MinRadius = minRadius, Batches = vb };
+        Gather(oneView, 1, depthPass, motionPass);
+        oneView[0] = default;
+        AssignSlots(vb);
+        if (vb.Active.Count == 0) return;
+        AllocateRows(vb);
+        Parallel.For(0, vb.ChunkCount, c => Scatter(vb, c));
+    }
+
+    /// <summary>One character's shown parts placed relative to <paramref name="origin"/>, each part's level chosen and its instance added to the batches.</summary>
+    void CollectCharacter(ViewBatches vb, in Live l, Vector3 eye, Vector3 origin, float lodFloor, float minRadius)
+    {
+        bool interior = portraitLive < 0 && l.Interior;
+        var world = Relative(l.World, origin);
+        float worldScale = world.ScaleLength();
+        var parts = l.Asset.Parts;
+        for (int p = 0; p < parts.Count; p++)
+        {
+            var part = parts[p];
+            if (!part.ShowsWith(l.WeaponDrawn, l.RangedDrawn, l.Shots, l.BackDrawn)) continue;
+            var model = part.Shared ? world : attach[l.AttachBase + part.AttachIndex] * world;
+            float modelScale = part.Shared ? worldScale : model.ScaleLength();
+            if (depthPass && part.BoundsRadius * modelScale < minRadius) continue;
+
+            // The model is relative to the view's eye (above), so the LOD eye is too: with the world eye every part far from the origin took its last level.
+            var centre = Vector3.Transform(part.BoundsCentre, model);
+            int level;
+            if (!GeneratedLod) level = FileLevel(part, MeshLod.Value(eye - origin, centre, part.FileRadius * modelScale));
+            else
+            {
+                float value = MeshLod.Value(eye - origin, centre, part.BoundsRadius * modelScale, depthPass ? LodBias * ShadowLodBias : LodBias);
+                if (depthPass) value = Math.Max(HairInShadow(part, l.Asset) ? value * CharacterContent.HairLodScale : value, lodFloor);
+                level = GeneratedLevel(part, value, depthPass);
+            }
+
+            var instance = new CharInstance
+            {
+                Model = part.IsBody ? WithBlood(model, l.Blood) : model,
+                BoneBase = (uint)l.BoneBase,
+                Material = (uint)part.Material.Slot,
+                Flags = (interior ? 1u : 0u) | HiddenFlags(part, l.Asset),
+                MorphBase = part.Morphed ? l.Asset.MorphBase : 0,
+            };
+            if (motionPass)
+            {
+                var previousWorld = Relative(l.State.PreviousWorld, origin);
+                instance.PreviousModel = part.Shared ? previousWorld : l.State.PreviousAttach[part.AttachIndex] * previousWorld;
+            }
+
+            vb.Parts++;
+            var gps = part.Mesh.Parts;
+            for (int g = 0; g < gps.Count; g++)
+            {
+                if (GroupLevel(gps[g], level) is not int lv) continue;
+                var batch = vb.Get(BatchId(part, g, gps[g], lv, part.Material.DoubleSided), this);
+                if (batch.Count == 0) vb.Active.Add(batch);
+                batch.Add(in instance);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Faithful: the file's own level for its distance_sphere value (its stored radius, bias 1), the shadow passes as the picture (docs/characters.md
+    /// "LOD of character meshes").
+    /// </summary>
+    static int FileLevel(AssetPart part, float fileLod) =>
+        part.FileDistances is { } fileLevels && MeshLod.Select(fileLevels, fileLod) is int f && f > 0 ? part.FileFirst + f - 1 : 0;
+
+    /// <summary>The generated level for <paramref name="value"/>; in a shadow pass the body's shadow-only levels where it has them.</summary>
+    static int GeneratedLevel(AssetPart part, float value, bool depth)
+    {
+        int level = MeshLod.Select(part.Mesh.Distances, value);
+        if (depth && part.ShadowDistances is { } shadowLevels && MeshLod.Select(shadowLevels, value) is int s && s > 0) level = part.ShadowFirst + s - 1;
+        return level;
+    }
+
+    /// <summary>
+    /// In a shadow map hair is a silhouette, so it takes the rule's own distances there (its levels start CharacterContent.HairLodScale times farther
+    /// for the picture). Not on animals.
+    /// </summary>
+    static bool HairInShadow(AssetPart part, CharacterAsset asset) => part.Material.Shading == CharacterShaders.ShadeHair && !asset.Animal;
+
+    /// <summary>The mesh group's level for <paramref name="level"/>: the nearest coarser-or-equal one it has indices for, null when it has none.</summary>
+    static int? GroupLevel(GpuObjectPart gp, int level)
+    {
+        int lv = Math.Min(level, gp.Count.Length - 1);
+        while (lv > 0 && gp.Count[lv] == 0) lv--;
+        return gp.Count[lv] == 0 ? null : lv;
+    }
+
+    /// <summary>The instance flags of what the look hides on a part: the body's hidden limbs and parts, the part's hidden side, headless or head only.</summary>
+    static uint HiddenFlags(AssetPart part, CharacterAsset asset)
+    {
+        uint flags = (uint)part.HideSide << 16;
+        if (!part.IsBody || asset.Appearance is not { } look) return flags;
+        flags |= (uint)look.HiddenLimbs << 12 | (uint)(look.HiddenParts & 0x3FF) << 18;
+        if (look.Headless) flags |= CharacterShaders.Headless;
+        if (look.HeadOnly) flags |= CharacterShaders.HeadOnly;
+        return flags;
     }
 
     // ------------------------------------------------------------------ parts placed once a frame
@@ -380,66 +452,74 @@ internal sealed unsafe partial class CharacterRenderer
         return count;
     }
 
+    /// <summary>Chunk <paramref name="c"/>'s characters (<paramref name="from"/> to <paramref name="to"/>) into each view's chunk: culled per view, then their parts.</summary>
     void GatherChunk(int c, int from, int to, GatherView[] views, int viewCount, bool depth, bool motion)
     {
-        for (int k = 0; k < viewCount; k++) { var chunk = views[k].Batches.Chunks[c]; chunk.Count = chunk.Characters = chunk.Parts = 0; }
+        for (int k = 0; k < viewCount; k++)
+        {
+            var chunk = views[k].Batches.Chunks[c];
+            chunk.Count = chunk.Characters = chunk.Parts = 0;
+        }
+
         float bias = depth ? LodBias * ShadowLodBias : LodBias;
         for (int i = from; i < to; i++)
         {
             ref var l = ref live[i];
             if (l.PortraitOnly) continue;
-            uint seen = 0;
-            for (int k = 0; k < viewCount; k++)
-                if (FrustumTests.SphereVisible(views[k].Frustum, l.Centre, l.Radius) && (depth || FogCull?.Hidden(l.Centre, l.Radius, FogVolumes.CullKind.Characters) != true))
-                {
-                    seen |= 1u << k;
-                    views[k].Batches.Chunks[c].Characters++;
-                }
+            uint seen = SeenBy(in l, c, views, viewCount, depth);
             if (seen == 0) continue;
+
             var parts = l.Asset.Parts;
             for (int p = 0; p < parts.Count; p++)
             {
                 ref readonly var f = ref partFrames[l.PartBase + p];
-                if (!f.Shows) continue;
-                var part = parts[p];
-                var mesh = part.Mesh;
-                bool twoSided = part.Material.DoubleSided;
-                bool headless = part.IsBody && l.Asset.Appearance is { Headless: true }, headOnly = part.IsBody && l.Asset.Appearance is { HeadOnly: true };
-                uint hidden = (part.IsBody && l.Asset.Appearance is { } look ? (uint)look.HiddenLimbs << 12 | (uint)(look.HiddenParts & 0x3FF) << 18 : 0u) | (uint)part.HideSide << 16 | (headless ? CharacterShaders.Headless : 0u) | (headOnly ? CharacterShaders.HeadOnly : 0u);
-                var instance = new CharInstance
-                {
-                    Model = part.IsBody ? WithBlood(f.Model, l.Blood) : f.Model, BoneBase = (uint)l.BoneBase, Material = (uint)part.Material.Slot, Flags = (l.Interior ? 1u : 0u) | hidden,
-                    MorphBase = part.Morphed ? l.Asset.MorphBase : 0, PreviousModel = motion ? f.PreviousModel : default,
-                };
-                // In a shadow map hair is a silhouette, so it takes the rule's own distances there (its levels start CharacterContent.HairLodScale times farther for the picture).
-                float lod = f.Lod * bias;
-                if (depth && part.Material.Shading == CharacterShaders.ShadeHair && !l.Asset.Animal) lod *= CharacterContent.HairLodScale;
-                for (int k = 0; k < viewCount; k++)
-                {
-                    if ((seen & 1u << k) == 0) continue;
-                    ref readonly var v = ref views[k];
-                    if (depth && part.BoundsRadius * f.Scale < v.MinRadius) continue;
-                    int level;
-                    if (!GeneratedLod) level = part.FileDistances is { } fileLevels && MeshLod.Select(fileLevels, f.FileLod) is int fl && fl > 0 ? part.FileFirst + fl - 1 : 0;
-                    else
-                    {
-                        float value = depth ? Math.Max(lod, v.LodFloor) : lod;
-                        level = MeshLod.Select(mesh.Distances, value);
-                        if (depth && part.ShadowDistances is { } shadowLevels && MeshLod.Select(shadowLevels, value) is int s && s > 0) level = part.ShadowFirst + s - 1;   // the body's shadow-only levels
-                    }
-                    var chunk = v.Batches.Chunks[c];
-                    chunk.Parts++;
-                    var gps = mesh.Parts;
-                    for (int g = 0; g < gps.Count; g++)
-                    {
-                        var gp = gps[g];
-                        int lv = Math.Min(level, gp.Count.Length - 1);
-                        while (lv > 0 && gp.Count[lv] == 0) lv--;
-                        if (gp.Count[lv] == 0) continue;
-                        chunk.Add(BatchId(part, g, gp, lv, twoSided), in instance);
-                    }
-                }
+                if (f.Shows) GatherPart(in l, parts[p], in f, c, seen, views, viewCount, depth, motion, bias);
             }
+        }
+    }
+
+    /// <summary>The views (a bit each) whose frustum holds the character and, outside the shadow passes, whose fog does not hide it; counted in their chunks.</summary>
+    uint SeenBy(in Live l, int c, GatherView[] views, int viewCount, bool depth)
+    {
+        uint seen = 0;
+        for (int k = 0; k < viewCount; k++)
+        {
+            if (!FrustumTests.SphereVisible(views[k].Frustum, l.Centre, l.Radius)) continue;
+            if (!depth && FogCull?.Hidden(l.Centre, l.Radius, FogVolumes.CullKind.Characters) == true) continue;
+            seen |= 1u << k;
+            views[k].Batches.Chunks[c].Characters++;
+        }
+        return seen;
+    }
+
+    /// <summary>One placed part's instance, added to the chunk of every view in <paramref name="seen"/> at the level that view chooses.</summary>
+    void GatherPart(in Live l, AssetPart part, in PartFrame f, int c, uint seen, GatherView[] views, int viewCount, bool depth, bool motion, float bias)
+    {
+        var instance = new CharInstance
+        {
+            Model = part.IsBody ? WithBlood(f.Model, l.Blood) : f.Model,
+            BoneBase = (uint)l.BoneBase,
+            Material = (uint)part.Material.Slot,
+            Flags = (l.Interior ? 1u : 0u) | HiddenFlags(part, l.Asset),
+            MorphBase = part.Morphed ? l.Asset.MorphBase : 0,
+            PreviousModel = motion ? f.PreviousModel : default,
+        };
+        float lod = f.Lod * bias;
+        if (depth && HairInShadow(part, l.Asset)) lod *= CharacterContent.HairLodScale;
+
+        bool twoSided = part.Material.DoubleSided;
+        var gps = part.Mesh.Parts;
+        for (int k = 0; k < viewCount; k++)
+        {
+            if ((seen & 1u << k) == 0) continue;
+            ref readonly var v = ref views[k];
+            if (depth && part.BoundsRadius * f.Scale < v.MinRadius) continue;
+            int level = !GeneratedLod ? FileLevel(part, f.FileLod) : GeneratedLevel(part, depth ? Math.Max(lod, v.LodFloor) : lod, depth);
+
+            var chunk = v.Batches.Chunks[c];
+            chunk.Parts++;
+            for (int g = 0; g < gps.Count; g++)
+                if (GroupLevel(gps[g], level) is int lv) chunk.Add(BatchId(part, g, gps[g], lv, twoSided), in instance);
         }
     }
 

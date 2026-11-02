@@ -506,55 +506,84 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
     /// </summary>
     public void Update(Vector3 eye)
     {
-        if (SettleFirst && viewKnown)
-        {
-            SettleFirst = false;
-            var settleWatch = Stopwatch.StartNew();
-            Settle(eye);
-            Console.WriteLine($"characters built and loaded: {Describe()} ({settleWatch.ElapsedMilliseconds} ms)");
-            foreach (var m in Messages.Distinct().Take(20)) Console.WriteLine($"warning   {m}");
-            Messages.Clear();
-        }
+        if (SettleFirst && viewKnown) SettleNow(eye);
         PollTimers();
         var watch = Stopwatch.StartNew();
         Draws.Clear();
         Source?.Invoke(Draws);
         StageClock.Part(StageClock.PartFill);
+
         GatherPortraitKeys();
         content.Textures.Pump(wait: LoadBudget == 0, max: Covered ? 64 : 8, budgetMs: Covered ? CoveredBudgetMs : 1.0);
         StageClock.Part(StageClock.PartTextures);
+
         textureBias = Gpu.LodBias;
         textureStandIn = Gpu.StandIn2D;
         updateStamp++;
         poseSeconds = PoseClock?.Invoke() ?? Stopwatch.GetTimestamp() / (double)Stopwatch.Frequency;
 
-        // 1. Assets and the characters in range, with their layers resolved (the rig's caches are filled here, on this thread).
+        // 1. Assets and the characters in range, with their layers resolved (the rig's caches are filled here, on this thread), and which to pose.
+        var (boneTotal, partTotal) = GatherLive(eye);
+        ChooseReposes();
+        Posed = 0;
+        for (int i = 0; i < liveCount; i++) if (live[i].Repose) Posed++;
+        if (updateStamp % 120 == 0) EvictStates();
+        GatherIcons(eye, ref attachCount);
+        if (attach.Length < attachCount) attach = new Matrix4x4[Math.Max(attachCount, attach.Length * 2)];
+        StageClock.Part(StageClock.PartGather);
+        double gatherMs = watch.Elapsed.TotalMilliseconds;
+
+        // 2. The bone palettes, posed in parallel straight into the frame's memory.
+        PoseLive(eye, boneTotal, partTotal);
+        PoseIcons();
+        StageClock.Part(StageClock.PartPose);
+
+        // 3. The materials of the parts in range.
+        WriteMaterials(eye);
+        StageClock.Part(StageClock.PartMaterials);
+
+        LastUpdateMs = watch.Elapsed.TotalMilliseconds;
+        updateCount++;
+        updateCpu.Add(LastUpdateMs);
+        poseCpu.Add(LastPoseMs);
+        gatherCpu.Add(gatherMs);
+    }
+
+    /// <summary>The first update after <see cref="SettleFirst"/> and the view: every asset and texture waited for (stills).</summary>
+    void SettleNow(Vector3 eye)
+    {
+        SettleFirst = false;
+        var watch = Stopwatch.StartNew();
+        Settle(eye);
+        Console.WriteLine($"characters built and loaded: {Describe()} ({watch.ElapsedMilliseconds} ms)");
+        foreach (var m in Messages.Distinct().Take(20)) Console.WriteLine($"warning   {m}");
+        Messages.Clear();
+    }
+
+    /// <summary>
+    /// The live list: each drawn character within reach (or with a portrait) whose asset is built, with its layers; those beyond reach near a kept point
+    /// go to <see cref="keptLooks"/>. Builds new assets under the budget, then the distant list's share (<see cref="UpdateDistant"/>). Returns the bone
+    /// and part totals.
+    /// </summary>
+    (int Bones, int Parts) GatherLive(Vector3 eye)
+    {
         liveCount = layerCount = attachCount = 0;
         int built = 0, boneTotal = 0, partTotal = 0;
         double buildMs = 0;
         float reach = EyeLift.Of(eye, GroundUnderEye) > 0 ? Math.Min(DrawDistance, LiftedReach) : DrawDistance;
         var items = Draws.Items;
         keptLooks.Clear();
+
         for (int i = 0; i < items.Count; i++)
         {
             var inst = items[i];
-            if (!assets.TryGetValue(inst.Appearance, out var asset))
-            {
-                if (Deferred(inst)) continue;
-                if (!portraitKeys.Contains(inst.Key) && !WantsAsset(inst, eye, reach)) continue;
-                // Interactive: the files are read and the meshes prepared on a worker first (CharacterContent.Fetched), then a few a frame are uploaded.
-                if (LoadBudget > 0 && (!content.Fetched(inst.Appearance) || !Covered && built >= LoadBudget || buildMs >= (Covered ? CoveredBudgetMs : BuildBudgetMs))) continue;
-                long buildStart = Stopwatch.GetTimestamp();
-                asset = content.Build(inst.Appearance);
-                buildMs += Stopwatch.GetElapsedTime(buildStart).TotalMilliseconds;
-                assets[inst.Appearance] = asset;
-                built++;
-            }
-            if (asset is null) continue;
+            if (AssetFor(in inst, eye, reach, ref built, ref buildMs) is not { } asset) continue;
             if (inst.FreezeFrom is { } freezeFrom && !Freeze(inst.Key, freezeFrom, asset)) continue;
             if (inst.Build is { } build) ApplyBuild(asset, build);
-            if (inst.BlendFrom is { } blendFrom && inst.Blend < 1 && assets.TryGetValue(blendFrom, out var fromAsset) && fromAsset is not null) ApplyBlend(asset, fromAsset, inst.Blend);
+            if (inst.BlendFrom is { } blendFrom && inst.Blend < 1 && assets.TryGetValue(blendFrom, out var fromAsset) && fromAsset is not null)
+                ApplyBlend(asset, fromAsset, inst.Blend);
             else RestoreBlend(asset);
+
             float scale = inst.Scale > 0 ? inst.Scale : 1;
             var centre = inst.Position + new Vector3(0, asset.Height * 0.5f * scale, 0);
             bool far = inst.Hidden || Vector3.Distance(eye, centre) - asset.Radius * scale > reach;
@@ -563,182 +592,242 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
                 if (!inst.Hidden && Kept.Count > 0 && NearKept(centre) is var dk && dk <= KeptReach) keptLooks.Add((asset, dk));
                 continue;
             }
-            if (liveCount == live.Length) Array.Resize(ref live, liveCount * 2);
-            ref var l = ref live[liveCount++];
-            l.Asset = asset;
-            (l.Key, l.PortraitOnly) = (inst.Key, far);
-            // Lowered by the body shape's lift, so a short body's feet stay on the ground (CharacterAsset.GroundOffset); an animal scaled by its size (its node's scale).
-            // A carried body's whole rotation lowers it in its own frame (CharacterRigs.Placement, as the simulation poses its ragdoll).
-            l.World = inst.World ?? (inst.Rotation is { } rotation
-                ? Matrix4x4.CreateTranslation(0, -asset.GroundOffset, 0) * Matrix4x4.CreateFromQuaternion(rotation) * Matrix4x4.CreateTranslation(inst.Position)
-                : Matrix4x4.CreateRotationY(inst.Yaw) * Matrix4x4.CreateTranslation(inst.Position - new Vector3(0, asset.GroundOffset, 0)));
-            if (scale != 1 && inst.World is null) l.World = Matrix4x4.CreateScale(scale) * l.World;
-            (l.WeaponDrawn, l.RangedDrawn, l.BackDrawn, l.Shots, l.Bolts) = (inst.WeaponDrawn, inst.RangedDrawn, inst.BackDrawn, inst.Shots, inst.Bolts);
-            l.Centre = centre;
-            l.Radius = asset.Radius * scale;
+
+            ref var l = ref AddLive(in inst, asset, centre, scale, far, eye);
             l.BoneBase = boneTotal;
             boneTotal += asset.Rig.BoneCount;
-            l.AttachBase = attachCount;
-            attachCount += asset.AttachCount;
             l.PartBase = partTotal;
             partTotal += asset.Parts.Count;
-            if (!states.TryGetValue(inst.Key, out var state)) states[inst.Key] = state = new CharState();
-            state.Seen = updateStamp;
-            l.State = state;
-            l.Interior = !far && InteriorObjects?.InteriorAt(centre, ref state.Interior) is not null;
-            bool newAsset = !ReferenceEquals(state.Asset, asset);
-            (state.Asset, state.WeaponDrawn, state.RangedDrawn, state.BackDrawn, state.InWorld, state.Centre, state.Radius) = (asset, inst.WeaponDrawn, inst.RangedDrawn, inst.BackDrawn, !far, centre, l.Radius);
-            state.PreviousWorld = state.HasWorld ? state.World : l.World;
-            (state.World, state.HasWorld) = (l.World, true);
-            l.Bones = inst.Bones;
-            l.Blood = inst.Blood;
-            // A moving ragdoll is posed every frame: its bones move by physics, not by a clip the thinning could thin out (a frozen one hands over the same bones). A new asset (other gear, another rig) is posed at
-            // once: its parts' attach matrices and its arrays' sizes come from it. The rest are thinned by their size on screen after the gather (below).
-            l.Frozen = state.Frozen;
-            l.MustPose = !l.Frozen && (inst.FullRateAnimation || inst.Bones is not null && !ReferenceEquals(inst.Bones, state.PosedRagdoll) || state.Posed < 0 || newAsset);
-            // Off screen: no pose but the first one of an asset (its palette's size); back on screen: posed now, without motion from the held palette.
-            l.OffScreen = !l.Frozen && !portraitKeys.Contains(inst.Key) && !Shown(centre, l.Radius);
-            l.Snap = !l.OffScreen && state.OffScreen;
-            if (l.OffScreen) l.MustPose = state.Posed < 0 || newAsset;
-            else if (l.Snap) l.MustPose = !l.Frozen;
-            state.OffScreen = l.OffScreen;
-            l.Pixels = 2 * l.Radius * viewPixelsPerRadian / MathF.Max(1, Vector3.Distance(eye, centre));
-            l.LayerStart = layerCount;
-            l.LayerCount = 0;
             if (l.OffScreen && !l.MustPose) continue;   // not posed this frame: its clips need not be looked up
-            var rig = asset.Rig;
-            if (inst.Poses is { } poses)
-                for (int p = 0; p < poses.Count; p++)
-                    if (rig.Layer(content.Database, poses[p].Animation, asset.Animal) is { } def) AddLayer(new ActiveLayer(def, poses[p].Time, poses[p].Weight));
-            foreach (var (def, time) in asset.Fixed) AddLayer(new ActiveLayer(def, time, 1));
-            l.LayerCount = layerCount - l.LayerStart;
+            AddLayers(ref l, in inst);
         }
+
         UpdateDistant(eye, reach, ref built, ref buildMs);
+        return (boneTotal, partTotal);
+    }
+
+    /// <summary>
+    /// The character's asset, built now when it is missing and wanted (at most <see cref="LoadBudget"/> a frame, within the build budget); null when it is
+    /// not built (deferred, not wanted, over budget, or a failed build).
+    /// </summary>
+    CharacterAsset? AssetFor(in CharacterInstance inst, Vector3 eye, float reach, ref int built, ref double buildMs)
+    {
+        if (assets.TryGetValue(inst.Appearance, out var asset)) return asset;
+        if (Deferred(inst)) return null;
+        if (!portraitKeys.Contains(inst.Key) && !WantsAsset(inst, eye, reach)) return null;
+
+        // Interactive: the files are read and the meshes prepared on a worker first (CharacterContent.Fetched), then a few a frame are uploaded.
+        bool overBudget = !Covered && built >= LoadBudget || buildMs >= (Covered ? CoveredBudgetMs : BuildBudgetMs);
+        if (LoadBudget > 0 && (!content.Fetched(inst.Appearance) || overBudget)) return null;
+
+        long buildStart = Stopwatch.GetTimestamp();
+        asset = content.Build(inst.Appearance);
+        buildMs += Stopwatch.GetElapsedTime(buildStart).TotalMilliseconds;
+        assets[inst.Appearance] = asset;
+        built++;
+        return asset;
+    }
+
+    /// <summary>A new live entry for the character (<paramref name="far"/>: drawn for its portrait only), its state brought up to date.</summary>
+    ref Live AddLive(in CharacterInstance inst, CharacterAsset asset, Vector3 centre, float scale, bool far, Vector3 eye)
+    {
+        if (liveCount == live.Length) Array.Resize(ref live, liveCount * 2);
+        ref var l = ref live[liveCount++];
+        l.Asset = asset;
+        (l.Key, l.PortraitOnly) = (inst.Key, far);
+        l.World = WorldOf(in inst, asset, scale);
+        (l.WeaponDrawn, l.RangedDrawn, l.BackDrawn, l.Shots, l.Bolts) = (inst.WeaponDrawn, inst.RangedDrawn, inst.BackDrawn, inst.Shots, inst.Bolts);
+        l.Centre = centre;
+        l.Radius = asset.Radius * scale;
+        l.AttachBase = attachCount;
+        attachCount += asset.AttachCount;
+        l.Bones = inst.Bones;
+        l.Blood = inst.Blood;
+        l.Pixels = 2 * l.Radius * viewPixelsPerRadian / MathF.Max(1, Vector3.Distance(eye, centre));
+        l.LayerStart = layerCount;
+        l.LayerCount = 0;
+        Track(ref l, in inst, asset, far);
+        return ref l;
+    }
+
+    /// <summary>
+    /// The character's world matrix: lowered by the body shape's lift, so a short body's feet stay on the ground (CharacterAsset.GroundOffset); an animal
+    /// scaled by its size (its node's scale). A carried body's whole rotation lowers it in its own frame (CharacterRigs.Placement, as the simulation poses
+    /// its ragdoll).
+    /// </summary>
+    static Matrix4x4 WorldOf(in CharacterInstance inst, CharacterAsset asset, float scale)
+    {
+        if (inst.World is { } world) return world;
+        var placed = inst.Rotation is { } rotation
+            ? Matrix4x4.CreateTranslation(0, -asset.GroundOffset, 0) * Matrix4x4.CreateFromQuaternion(rotation) * Matrix4x4.CreateTranslation(inst.Position)
+            : Matrix4x4.CreateRotationY(inst.Yaw) * Matrix4x4.CreateTranslation(inst.Position - new Vector3(0, asset.GroundOffset, 0));
+        return scale != 1 ? Matrix4x4.CreateScale(scale) * placed : placed;
+    }
+
+    /// <summary>The character's kept state brought up to date, and whether it must be posed this frame and whether it can show.</summary>
+    void Track(ref Live l, in CharacterInstance inst, CharacterAsset asset, bool far)
+    {
+        if (!states.TryGetValue(inst.Key, out var state)) states[inst.Key] = state = new CharState();
+        state.Seen = updateStamp;
+        l.State = state;
+        l.Interior = !far && InteriorObjects?.InteriorAt(l.Centre, ref state.Interior) is not null;
+
+        bool newAsset = !ReferenceEquals(state.Asset, asset);
+        (state.Asset, state.WeaponDrawn, state.RangedDrawn, state.BackDrawn) = (asset, inst.WeaponDrawn, inst.RangedDrawn, inst.BackDrawn);
+        (state.InWorld, state.Centre, state.Radius) = (!far, l.Centre, l.Radius);
+        state.PreviousWorld = state.HasWorld ? state.World : l.World;
+        (state.World, state.HasWorld) = (l.World, true);
+
+        // A moving ragdoll is posed every frame: its bones move by physics, not by a clip the thinning could thin out (a frozen one hands over the same
+        // bones). A new asset (other gear, another rig) is posed at once: its parts' attach matrices and its arrays' sizes come from it. The rest are
+        // thinned by their size on screen after the gather (ChooseReposes).
+        l.Frozen = state.Frozen;
+        bool newRagdollPose = inst.Bones is not null && !ReferenceEquals(inst.Bones, state.PosedRagdoll);
+        l.MustPose = !l.Frozen && (inst.FullRateAnimation || newRagdollPose || state.Posed < 0 || newAsset);
+
+        // Off screen: no pose but the first one of an asset (its palette's size); back on screen: posed now, without motion from the held palette.
+        l.OffScreen = !l.Frozen && !portraitKeys.Contains(inst.Key) && !Shown(l.Centre, l.Radius);
+        l.Snap = !l.OffScreen && state.OffScreen;
+        if (l.OffScreen) l.MustPose = state.Posed < 0 || newAsset;
+        else if (l.Snap) l.MustPose = !l.Frozen;
+        state.OffScreen = l.OffScreen;
+    }
+
+    /// <summary>The animation layers the character plays (its poses' clips on its rig), then its asset's fixed ones.</summary>
+    void AddLayers(ref Live l, in CharacterInstance inst)
+    {
+        var asset = l.Asset;
+        var rig = asset.Rig;
+        if (inst.Poses is { } poses)
+            for (int p = 0; p < poses.Count; p++)
+                if (rig.Layer(content.Database, poses[p].Animation, asset.Animal) is { } def) AddLayer(new ActiveLayer(def, poses[p].Time, poses[p].Weight));
+        foreach (var (def, time) in asset.Fixed) AddLayer(new ActiveLayer(def, time, 1));
+        l.LayerCount = layerCount - l.LayerStart;
+    }
+
+    /// <summary>
+    /// Which characters are posed this frame: all that can show while fewer than <see cref="ThinFromCharacters"/> are in the world; else thinned by
+    /// their size on screen, the largest first (they keep the full rate up to the budget, the rest at least the second rate).
+    /// </summary>
+    void ChooseReposes()
+    {
         int inWorld = 0;
         for (int i = 0; i < liveCount; i++) if (!live[i].PortraitOnly) inWorld++;
         if (inWorld < ThinFromCharacters)
-            for (int i = 0; i < liveCount; i++) live[i].Repose = !live[i].Frozen && (!live[i].OffScreen || live[i].MustPose);
-        else
         {
-            // The largest on screen first: they keep the full rate up to the budget, the rest at least the second rate.
-            if (thinOrder.Length < liveCount) thinOrder = new int[Math.Max(liveCount, thinOrder.Length * 2)];
-            for (int i = 0; i < liveCount; i++) thinOrder[i] = i;
-            var order = thinOrder.AsSpan(0, liveCount);
-            var lives = live;
-            order.Sort((a, b) => lives[b].Pixels.CompareTo(lives[a].Pixels));
-            int full = 0;
-            foreach (int i in order)
-            {
-                ref var l = ref live[i];
-                if (l.OffScreen) { l.Repose = l.MustPose; continue; }
-                int interval = PoseInterval(l.Pixels);
-                if (interval == 1 && full++ >= FullRateBudget) interval = 2;
-                // In time, not frames (a slow frame rate must not thin the poses out further): a new pose each time the character's own clock enters a new period.
-                long bucket = interval == 1 ? updateStamp : (long)Math.Floor(poseSeconds * PoseRateHz / interval + unchecked((ulong)l.Key * 0x9E3779B97F4A7C15UL) / 18446744073709551616.0);
-                l.Repose = !l.Frozen && (l.MustPose || bucket != l.State.PoseBucket);
-                l.State.PoseBucket = bucket;
-            }
+            for (int i = 0; i < liveCount; i++) live[i].Repose = !live[i].Frozen && (!live[i].OffScreen || live[i].MustPose);
+            return;
         }
-        Posed = 0;
-        for (int i = 0; i < liveCount; i++) if (live[i].Repose) Posed++;
-        if (updateStamp % 120 == 0) EvictStates();
-        GatherIcons(eye, ref attachCount);
-        if (attach.Length < attachCount) attach = new Matrix4x4[Math.Max(attachCount, attach.Length * 2)];
 
-        // 2. The bone palettes, posed in parallel straight into the frame's memory.
-        StageClock.Part(StageClock.PartGather);
-        double gatherMs = watch.Elapsed.TotalMilliseconds;
-        var poseWatch = Stopwatch.StartNew();
+        if (thinOrder.Length < liveCount) thinOrder = new int[Math.Max(liveCount, thinOrder.Length * 2)];
+        for (int i = 0; i < liveCount; i++) thinOrder[i] = i;
+        var order = thinOrder.AsSpan(0, liveCount);
+        var lives = live;
+        order.Sort((a, b) => lives[b].Pixels.CompareTo(lives[a].Pixels));
+
+        int full = 0;
+        foreach (int i in order)
+        {
+            ref var l = ref live[i];
+            if (l.OffScreen)
+            {
+                l.Repose = l.MustPose;
+                continue;
+            }
+            int interval = PoseInterval(l.Pixels);
+            if (interval == 1 && full++ >= FullRateBudget) interval = 2;
+            // In time, not frames (a slow frame rate must not thin the poses out further): a new pose each time the character's own clock enters a new period.
+            double phase = unchecked((ulong)l.Key * 0x9E3779B97F4A7C15UL) / 18446744073709551616.0;
+            long bucket = interval == 1 ? updateStamp : (long)Math.Floor(poseSeconds * PoseRateHz / interval + phase);
+            l.Repose = !l.Frozen && (l.MustPose || bucket != l.State.PoseBucket);
+            l.State.PoseBucket = bucket;
+        }
+    }
+
+    /// <summary>The frame's bone palettes (and, with motion, last frame's), each character posed or its held palette copied in parallel, then its parts placed.</summary>
+    void PoseLive(Vector3 eye, int boneTotal, int partTotal)
+    {
+        var watch = Stopwatch.StartNew();
         bones = AllocateConstants((ulong)Math.Max(boneTotal, 1) * 64, 256);
         nint bonePointer = (nint)bones.Pointer;
         previousBones = Motion ? AllocateConstants((ulong)Math.Max(boneTotal, 1) * 64, 256) : bones;
         nint previousPointer = (nint)previousBones.Pointer;
         bool motion = Motion;
         if (partFrames.Length < partTotal) partFrames = new PartFrame[Math.Max(partTotal, partFrames.Length * 2)];
-        var liveArray = live;
-        var layerArray = layers;
-        var attachArray = attach;
-        long stamp = updateStamp;
-        if (liveCount > 0)
-            Parallel.For(0, liveCount, i =>
-            {
-                ref var l = ref liveArray[i];
-                var asset = l.Asset;
-                if (asset.IsIcon) return;
-                var rig = asset.Rig;
-                var state = l.State;
-                if (l.Repose)
-                {
-                    if (state.Bones.Length != rig.BoneCount || state.Attach.Length != asset.AttachCount) { state.Bones = new Matrix4x4[rig.BoneCount]; state.Previous = new Matrix4x4[rig.BoneCount]; state.Attach = new Matrix4x4[asset.AttachCount]; state.PreviousAttach = new Matrix4x4[asset.AttachCount]; state.Posed = -1; }
-                    (state.Bones, state.Previous) = (state.Previous, state.Bones);
-                    state.Attach.CopyTo(state.PreviousAttach, 0);
-                    var scratch = rig.Rent();
-                    scratch.Pose(asset.Shape, layerArray.AsSpan(l.LayerStart, l.LayerCount), state.Bones, l.Bones);
-                    foreach (var part in asset.Parts)
-                        if (part.AttachIndex >= 0) state.Attach[part.AttachIndex] = scratch.TagTransform(part.Bone, part.Offset);
-                    foreach (var lamp in asset.Lamps) state.Attach[lamp.AttachIndex] = lamp.Offset * scratch.BoneTransform(lamp.Bone);
-                    rig.Return(scratch);
-                    if (state.Posed < 0 || l.Snap) { state.Bones.CopyTo(state.Previous, 0); state.Attach.CopyTo(state.PreviousAttach, 0); }
-                    state.Posed = stamp;
-                    state.PosedRagdoll = l.Bones;
-                }
-                state.Bones.CopyTo(new Span<Matrix4x4>((byte*)bonePointer + (long)l.BoneBase * 64, rig.BoneCount));
-                state.Attach.CopyTo(attachArray, l.AttachBase);
-                if (motion)
-                {
-                    // Last frame's palette: what was posed before this repose, or the current one when this frame did not repose (no bone motion).
-                    (l.Repose ? state.Previous : state.Bones).CopyTo(new Span<Matrix4x4>((byte*)previousPointer + (long)l.BoneBase * 64, rig.BoneCount));
-                    if (!l.Repose) state.Attach.CopyTo(state.PreviousAttach, 0);
-                }
-                if (!l.PortraitOnly) PlaceParts(in l, eye, motion);
-            });
+        if (liveCount > 0) Parallel.For(0, liveCount, i => PoseOne(ref live[i], bonePointer, previousPointer, motion, eye));
         (partStamp, partOrigin, partMotion) = (updateStamp, eye, motion);
-        LastPoseMs = poseWatch.Elapsed.TotalMilliseconds;
-        PoseIcons();
-        StageClock.Part(StageClock.PartPose);
+        LastPoseMs = watch.Elapsed.TotalMilliseconds;
+    }
 
-        // 3. The materials of the parts in range.
-        slotParts.Clear();
-        for (int i = 0; i < liveCount; i++)
+    /// <summary>One character's palette: posed again when it reposes (its attach points and lamps too), then copied into the frame's palettes.</summary>
+    void PoseOne(ref Live l, nint bonePointer, nint previousPointer, bool motion, Vector3 eye)
+    {
+        var asset = l.Asset;
+        if (asset.IsIcon) return;
+        var rig = asset.Rig;
+        var state = l.State;
+        if (l.Repose) Repose(ref l, state);
+
+        state.Bones.CopyTo(new Span<Matrix4x4>((byte*)bonePointer + (long)l.BoneBase * 64, rig.BoneCount));
+        state.Attach.CopyTo(attach, l.AttachBase);
+        if (motion)
         {
-            float distance = Vector3.Distance(eye, live[i].Centre);
-            foreach (var part in live[i].Asset.Parts)
-            {
-                if (!part.ShowsWith(live[i].WeaponDrawn, live[i].RangedDrawn, live[i].Shots, live[i].BackDrawn)) continue;
-                if (part.MaterialFrame != updateStamp)
-                {
-                    part.MaterialFrame = updateStamp;
-                    part.Near = float.PositiveInfinity;
-                    slotParts.Add(part);
-                }
-                part.Near = Math.Min(part.Near, Math.Max(distance - live[i].Radius * 0.5f, 0.5f));
-            }
+            // Last frame's palette: what was posed before this repose, or the current one when this frame did not repose (no bone motion).
+            (l.Repose ? state.Previous : state.Bones).CopyTo(new Span<Matrix4x4>((byte*)previousPointer + (long)l.BoneBase * 64, rig.BoneCount));
+            if (!l.Repose) state.Attach.CopyTo(state.PreviousAttach, 0);
         }
-        // Mip streaming: each texture's nearest user over how large a texel of its part is there; textures load at the size that need allows. Offered on
-        // the frame the budget commits them (every 500 ms), which also marks the textures used (reading the key), long before the cache's idle limits.
-        if (budget.Due)
-            foreach (var part in slotParts)
-            {
-                float need = part.Near / part.UvScale * budget.NeedScale;
-                foreach (var t in part.Material.Tex)
-                    if (t is not null) { t.OfferNow(need); _ = t.Key; }
-            }
-        if (budget.Due)
-            foreach (var (asset, distance) in keptLooks)
-                foreach (var part in asset.Parts)
-                {
-                    float need = Math.Max(Math.Max(distance, KeptViewDistance) - asset.Radius * 0.5f, 0.5f) / part.UvScale * budget.NeedScale;
-                    foreach (var t in part.Material.Tex)
-                        if (t is not null) { t.OfferNow(need); _ = t.Key; }
-                }
+        if (!l.PortraitOnly) PlaceParts(in l, eye, motion);
+    }
+
+    /// <summary>Poses the character's bones, attach points and lamps; the last pose becomes the previous one, or the new one does on a first pose or a snap.</summary>
+    void Repose(ref Live l, CharState state)
+    {
+        var asset = l.Asset;
+        var rig = asset.Rig;
+        if (state.Bones.Length != rig.BoneCount || state.Attach.Length != asset.AttachCount)
+        {
+            state.Bones = new Matrix4x4[rig.BoneCount];
+            state.Previous = new Matrix4x4[rig.BoneCount];
+            state.Attach = new Matrix4x4[asset.AttachCount];
+            state.PreviousAttach = new Matrix4x4[asset.AttachCount];
+            state.Posed = -1;
+        }
+        (state.Bones, state.Previous) = (state.Previous, state.Bones);
+        state.Attach.CopyTo(state.PreviousAttach, 0);
+
+        var scratch = rig.Rent();
+        scratch.Pose(asset.Shape, layers.AsSpan(l.LayerStart, l.LayerCount), state.Bones, l.Bones);
+        foreach (var part in asset.Parts)
+            if (part.AttachIndex >= 0) state.Attach[part.AttachIndex] = scratch.TagTransform(part.Bone, part.Offset);
+        foreach (var lamp in asset.Lamps) state.Attach[lamp.AttachIndex] = lamp.Offset * scratch.BoneTransform(lamp.Bone);
+        rig.Return(scratch);
+
+        if (state.Posed < 0 || l.Snap)
+        {
+            state.Bones.CopyTo(state.Previous, 0);
+            state.Attach.CopyTo(state.PreviousAttach, 0);
+        }
+        state.Posed = updateStamp;
+        state.PosedRagdoll = l.Bones;
+    }
+
+    /// <summary>
+    /// The materials of the parts shown in range: their texture needs offered (<see cref="OfferTextureNeeds"/>), then each record written again only when
+    /// something it reads changed (materialEpoch, or the material's own fields), and uploaded into the material table (CharacterMaterialTable) only when
+    /// it came out different or the material has no slot.
+    /// </summary>
+    void WriteMaterials(Vector3 eye)
+    {
+        CollectSlotParts(eye);
+        if (budget.Due) OfferTextureNeeds();
         budget.Update(content.Textures);
-        // A record is written again only when something it reads changed (materialEpoch, or the material's own fields), and uploaded into the material table
-        // (CharacterMaterialTable) only when it came out different or the material has no slot.
+
         var inputs = (content.Textures.Version, textureBias, textureStandIn, Gpu.Samplers.Generation);
         if (inputs != materialInputs) (materialInputs, materialEpoch) = (inputs, materialEpoch + 1);
         var table = content.Materials;
         table.BeginFrame();
         if (updateStamp % 120 == 0) table.Sweep(updateStamp - CharacterMaterialTable.IdleUpdates);
+
         CharacterMaterialRecord record = default;
         for (int s = 0; s < slotParts.Count; s++)
         {
@@ -755,12 +844,52 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
             else if (m.Slot < 0) table.Place(m);
         }
         table.Flush();
-        StageClock.Part(StageClock.PartMaterials);
-        LastUpdateMs = watch.Elapsed.TotalMilliseconds;
-        updateCount++;
-        updateCpu.Add(LastUpdateMs);
-        poseCpu.Add(LastPoseMs);
-        gatherCpu.Add(gatherMs);
+    }
+
+    /// <summary>The parts shown on the live characters (<see cref="slotParts"/>, each once), with their nearest distance from <paramref name="eye"/>.</summary>
+    void CollectSlotParts(Vector3 eye)
+    {
+        slotParts.Clear();
+        for (int i = 0; i < liveCount; i++)
+        {
+            ref var l = ref live[i];
+            float distance = Vector3.Distance(eye, l.Centre);
+            foreach (var part in l.Asset.Parts)
+            {
+                if (!part.ShowsWith(l.WeaponDrawn, l.RangedDrawn, l.Shots, l.BackDrawn)) continue;
+                if (part.MaterialFrame != updateStamp)
+                {
+                    part.MaterialFrame = updateStamp;
+                    part.Near = float.PositiveInfinity;
+                    slotParts.Add(part);
+                }
+                part.Near = Math.Min(part.Near, Math.Max(distance - l.Radius * 0.5f, 0.5f));
+            }
+        }
+    }
+
+    /// <summary>
+    /// Mip streaming: each texture's nearest user over how large a texel of its part is there; textures load at the size that need allows. Offered on the
+    /// frame the budget commits them (every 500 ms), which also marks the textures used (reading the key), long before the cache's idle limits; the kept
+    /// points' looks too.
+    /// </summary>
+    void OfferTextureNeeds()
+    {
+        foreach (var part in slotParts)
+            Offer(part, part.Near / part.UvScale * budget.NeedScale);
+        foreach (var (asset, distance) in keptLooks)
+            foreach (var part in asset.Parts)
+                Offer(part, Math.Max(Math.Max(distance, KeptViewDistance) - asset.Radius * 0.5f, 0.5f) / part.UvScale * budget.NeedScale);
+
+        static void Offer(AssetPart part, float need)
+        {
+            foreach (var t in part.Material.Tex)
+                if (t is not null)
+                {
+                    t.OfferNow(need);
+                    _ = t.Key;
+                }
+        }
     }
 
     static bool SameRecord(in CharacterMaterialRecord a, in CharacterMaterialRecord b) =>

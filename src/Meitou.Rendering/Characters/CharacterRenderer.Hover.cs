@@ -30,34 +30,16 @@ internal sealed unsafe partial class CharacterRenderer
     {
         hoverMasks.Clear();
         if (wanted.Count == 0 || width <= 0 || height <= 0) return;
-        var groups = new List<(Vector4 Colour, List<int> Live)>();
-        var onScreen = view * Matrix4x4.CreatePerspectiveFieldOfView(fieldOfView, width / (float)height, 0.25f, 1e5f);
-        foreach (var (key, colour) in wanted)
-        {
-            int index = -1;
-            for (int i = 0; i < liveCount; i++)
-                if (live[i].Key == key) { index = i; break; }
-            if (index < 0 || live[index].PortraitOnly) continue;
-            ref var l = ref live[index];
-            if (HoverOutlineRenderer.Bounds(l.Centre, l.Radius, onScreen, width, height, 0) is null) continue;
-            int g = groups.FindIndex(x => x.Colour == colour);
-            if (g < 0) { g = groups.Count; groups.Add((colour, [])); }
-            groups[g].Live.Add(index);
-        }
+        var groups = HoverGroups(wanted, width, height, view, fieldOfView);
         for (int g = 0; g < groups.Count; g++)
         {
-            if (hoverTargets.Count <= g || hoverTargets[g].Colour.Desc.Width != width || hoverTargets[g].Colour.Desc.Height != height)
-            {
-                if (hoverTargets.Count > g) { hoverTargets[g].Colour.Dispose(); hoverTargets[g].Depth.Dispose(); }
-                // The portraits' formats, so the masks share their pipelines.
-                var pair = (Gpu.CreateTexture(new TextureDesc(InternalFormat.Srgb8Alpha8, width, height, Use: TextureUse.Sampled | TextureUse.ColourTarget, Name: "hover mask")),
-                    Gpu.CreateTexture(new TextureDesc(InternalFormat.DepthComponent24, width, height, Use: TextureUse.Sampled | TextureUse.DepthTarget, Name: "hover mask depth")));
-                if (hoverTargets.Count > g) hoverTargets[g] = pair; else hoverTargets.Add(pair);
-            }
-            var (colourTarget, depthTarget) = hoverTargets[g];
+            var (colourTarget, depthTarget) = HoverTarget(g, width, height);
+            var members = groups[g].Live;
+
+            // The mask's planes hug its characters, so their depth stays precise.
             float near = float.MaxValue, far = 0;
             var spheres = new List<(Vector3, float)>();
-            foreach (int i in groups[g].Live)
+            foreach (int i in members)
             {
                 float distance = Vector3.Distance(eye, live[i].Centre);
                 (near, far) = (Math.Min(near, distance - live[i].Radius * 2), Math.Max(far, distance + live[i].Radius * 2));
@@ -65,26 +47,80 @@ internal sealed unsafe partial class CharacterRenderer
             }
             near = Math.Max(0.25f, near);
             var projection = Matrix4x4.CreatePerspectiveFieldOfView(fieldOfView, width / (float)height, near, far);
+
             var target = PassTargets.Of(colourTarget, depthTarget);
-            bool first = true;
-            foreach (int i in groups[g].Live)
-            {
-                var cmd = Gpu.BeginNative("hover mask");
-                var load = first ? LoadOp.Clear : LoadOp.Load;
-                cmd.BeginRendering(new RenderingDesc(
-                    target.Colour with { Load = load, Clear = new ClearColour(0f, 0f, 0f, 0f) },
-                    target.Depth with { Load = load, DepthClear = 1f }, target.Width, target.Height));
-                Gpu.BeginHostPass(cmd, target, DrawState.Scene(target.Formats));
-                portraitLive = i;
-                try { DrawView(new ViewConstants { ViewProjection = view * projection, Eye = eye, LightDir = Vector3.UnitY }, eye, []); }
-                finally { portraitLive = -1; }
-                Gpu.EndHostPass(cmd);
-                cmd.EndRendering();
-                Gpu.EndNative(cmd);
-                first = false;
-            }
+            for (int m = 0; m < members.Count; m++) DrawHoverMember(target, members[m], m == 0, view * projection, eye);
             hoverMasks.Add(new HoverMask(colourTarget, depthTarget, near, far, groups[g].Colour, spheres));
         }
+    }
+
+    /// <summary>The wanted characters drawn in the world and on screen, grouped by colour (their live indices).</summary>
+    List<(Vector4 Colour, List<int> Live)> HoverGroups(IReadOnlyList<(long Key, Vector4 Colour)> wanted, int width, int height, Matrix4x4 view, float fieldOfView)
+    {
+        var groups = new List<(Vector4 Colour, List<int> Live)>();
+        var onScreen = view * Matrix4x4.CreatePerspectiveFieldOfView(fieldOfView, width / (float)height, 0.25f, 1e5f);
+        foreach (var (key, colour) in wanted)
+        {
+            int index = -1;
+            for (int i = 0; i < liveCount; i++)
+                if (live[i].Key == key)
+                {
+                    index = i;
+                    break;
+                }
+            if (index < 0 || live[index].PortraitOnly) continue;
+            ref var l = ref live[index];
+            if (HoverOutlineRenderer.Bounds(l.Centre, l.Radius, onScreen, width, height, 0) is null) continue;
+
+            int g = groups.FindIndex(x => x.Colour == colour);
+            if (g < 0)
+            {
+                g = groups.Count;
+                groups.Add((colour, []));
+            }
+            groups[g].Live.Add(index);
+        }
+        return groups;
+    }
+
+    /// <summary>Mask <paramref name="g"/>'s targets, made again at a new size (the portraits' formats, so the masks share their pipelines).</summary>
+    (GpuTexture Colour, GpuTexture Depth) HoverTarget(int g, int width, int height)
+    {
+        if (hoverTargets.Count > g && hoverTargets[g].Colour.Desc.Width == width && hoverTargets[g].Colour.Desc.Height == height) return hoverTargets[g];
+        if (hoverTargets.Count > g)
+        {
+            hoverTargets[g].Colour.Dispose();
+            hoverTargets[g].Depth.Dispose();
+        }
+
+        var colour = Gpu.CreateTexture(new TextureDesc(InternalFormat.Srgb8Alpha8, width, height, Use: TextureUse.Sampled | TextureUse.ColourTarget, Name: "hover mask"));
+        var depth = Gpu.CreateTexture(new TextureDesc(InternalFormat.DepthComponent24, width, height, Use: TextureUse.Sampled | TextureUse.DepthTarget, Name: "hover mask depth"));
+        if (hoverTargets.Count > g) hoverTargets[g] = (colour, depth);
+        else hoverTargets.Add((colour, depth));
+        return (colour, depth);
+    }
+
+    /// <summary>One character (live index <paramref name="index"/>) into the mask through the colour pass; the first clears it.</summary>
+    void DrawHoverMember(PassTargets target, int index, bool first, Matrix4x4 viewProjection, Vector3 eye)
+    {
+        var cmd = Gpu.BeginNative("hover mask");
+        var load = first ? LoadOp.Clear : LoadOp.Load;
+        cmd.BeginRendering(new RenderingDesc(
+            target.Colour with { Load = load, Clear = new ClearColour(0f, 0f, 0f, 0f) },
+            target.Depth with { Load = load, DepthClear = 1f }, target.Width, target.Height));
+        Gpu.BeginHostPass(cmd, target, DrawState.Scene(target.Formats));
+        portraitLive = index;
+        try
+        {
+            DrawView(new ViewConstants { ViewProjection = viewProjection, Eye = eye, LightDir = Vector3.UnitY }, eye, []);
+        }
+        finally
+        {
+            portraitLive = -1;
+        }
+        Gpu.EndHostPass(cmd);
+        cmd.EndRendering();
+        Gpu.EndNative(cmd);
     }
 
     void DisposeHover()
