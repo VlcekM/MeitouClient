@@ -52,6 +52,7 @@ public sealed partial class FixtureRegistry
     public IReadOnlyList<ContainerSpot> ContainerSpots => containerSpots ??= [.. all.Where(f => f.Contents is not null).Select(f => new ContainerSpot(f.Id, f.RecordId, f.Position, f.Owner, f.Lock is { EffectivelyLocked: true }, f.Lock?.Level ?? 0, f.Yaw))];
 
     List<Fixture>? cageList;
+    List<Fixture>? bedList;
 
     /// <summary>Every cage, for the host's picking; the list is rebuilt (serial phases) when a building registers or goes, the spots only when a cage's lock, occupant or owner changed.</summary>
     public IReadOnlyList<CageSpot> CageSpots(CharacterTable table)
@@ -202,7 +203,7 @@ public sealed partial class FixtureRegistry
         foreach (var f in list) { all.Add(f); byId[f.Id] = f; }
         containerSpots = null;
         doorPicks = null; doorsByBuilding = null;
-        bedSpots = null; cageList = null; doorList = null; publishedCages = null; dummySpots = null;
+        bedSpots = null; bedList = null; cageList = null; doorList = null; publishedCages = null; dummySpots = null;
         usableData ??= data;
         levelPublic[b.Key] = Saved?.GetValueOrDefault(b.Key) is { } savedState ? savedState.Bools.GetValueOrDefault("is public day", true) : b.LevelState?.GetBool("is public day", true) ?? true;
         if (Saved?.GetValueOrDefault(b.Key) is { } nestedState ? nestedState.Bools.GetValueOrDefault("is inside building") : b.LevelState?.GetBool("is inside building") ?? false) nested.Add(b.Key);
@@ -267,7 +268,7 @@ public sealed partial class FixtureRegistry
         foreach (var f in list) { all.Add(f); byId[f.Id] = f; }
         containerSpots = null;
         doorPicks = null; doorsByBuilding = null;
-        bedSpots = null; cageList = null; doorList = null; publishedCages = null; dummySpots = null;
+        bedSpots = null; bedList = null; cageList = null; doorList = null; publishedCages = null; dummySpots = null;
         if (Saved?.GetValueOrDefault(Meitou.Data.World.BuildingKey.Of(site.Zone, site.Id)) is { } state) Restore(StateKeys.Of(state), site.Id, list, level: false);
         SyncDoors(site.Id);
         if (bed is not null) Bind(world);
@@ -366,7 +367,7 @@ public sealed partial class FixtureRegistry
         foreach (var f in list) { all.Remove(f); byId.Remove(f.Id); }
         containerSpots = null;
         doorPicks = null; doorsByBuilding = null;
-        bedSpots = null; cageList = null; doorList = null; publishedCages = null; dummySpots = null;
+        bedSpots = null; bedList = null; cageList = null; doorList = null; publishedCages = null; dummySpots = null;
         initialApplied.Remove(buildingInstance);
         doors?.SetDoorsBlocked(buildingInstance, false);
     }
@@ -882,7 +883,7 @@ public sealed partial class FixtureRegistry
     /// <summary>
     /// Keeps every caged character at its cage's position and facing (the original's character update <c>FUN_1405cf130</c> sets both from the building every frame while the character
     /// is held in one, docs/game/locks.md "Facing in a cage"): a prisoner that came from a save or a spawn, or turned by anything else, faces the cage's local +Z (its door side) again.
-    /// Serial phases only.
+    /// Only the place is written (the original touches no path or order there, <b>Verified</b>); the sleepers are held the same way (<see cref="HoldSleepers"/>). Serial phases only.
     /// </summary>
     public void HoldCaged(World world)
     {
@@ -891,8 +892,24 @@ public sealed partial class FixtureRegistry
         {
             if (IsFree(table, f) || !table.TryResolveNext(f.Occupant, out int s) || table.Cold(s) is not { InSomething: HeldState.Imprisoned } c || c.InWhat != f.Id) continue;
             ref var n = ref table.Next[s];
-            if (n.Position == f.Position && n.Yaw == f.Yaw) continue;
-            Hold(table, s, c, f.Position, f.Yaw);
+            if (n.Position != f.Position || n.Yaw != f.Yaw) table.Place(s, f.Position, f.Yaw);
+        }
+        HoldSleepers(world);
+    }
+
+    /// <summary>
+    /// Re-places every sleeper at the bed's use node nearest where it is now, each update (<c>FUN_1405cf130</c> mode 1: the bed's position and direction markers are asked with the character's
+    /// current position, <c>FUN_14054b850</c>, and written to it, <b>Verified</b>): a sleeper moved off its node by anything else lies on the nearest one again.
+    /// </summary>
+    void HoldSleepers(World world)
+    {
+        var table = world.Characters;
+        foreach (var f in bedList ??= [.. all.Where(x => x.Kind == FixtureKind.Bed)])
+        {
+            if (f.Occupant.IsNone || !table.TryResolveNext(f.Occupant, out int s) || table.Cold(s) is not { InSomething: HeldState.Bed } c || c.InWhat != f.Id) continue;
+            ref var n = ref table.Next[s];
+            var (at, yaw) = LieSpot(f, n.Position);
+            if (n.Position != at || n.Yaw != yaw) table.Place(s, at, yaw);
         }
     }
 

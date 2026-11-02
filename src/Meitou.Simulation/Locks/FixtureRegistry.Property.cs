@@ -107,7 +107,7 @@ public sealed partial class FixtureRegistry
         bool ruin = IsDestroyed(p.Building);
         ownedProperties = null;
         foreach (var f in OfBuilding(key)) f.Owner = p.Owner;
-        containerSpots = null; doorPicks = null; bedSpots = null; cageList = null; dummySpots = null;
+        containerSpots = null; doorPicks = null; bedSpots = null; bedList = null; cageList = null; dummySpots = null;
         SetPublic(key, false);
         RegisterTownConstruction(world, p, ruin);
         DropRuin(key);   // its site shows it now
@@ -149,7 +149,7 @@ public sealed partial class FixtureRegistry
         }
         Bind(world);
         ownedProperties = null;
-        containerSpots = null; doorPicks = null; bedSpots = null; cageList = null; dummySpots = null;
+        containerSpots = null; doorPicks = null; bedSpots = null; bedList = null; cageList = null; dummySpots = null;
     }
 
     // The buildings a town override reset to the level, with their level owner then: their saved record (patched, not rewritten, by a save) must not bring the old state back.
