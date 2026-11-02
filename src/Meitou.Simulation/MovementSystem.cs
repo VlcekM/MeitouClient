@@ -56,6 +56,19 @@ public sealed class MovementSystem(PathService paths) : ITickSystem, IDisposable
     public const float CornerReach = 2;
 
     /// <summary>
+    /// Whether a walker off every surface (shoved into something that cuts a hole in the mesh) may step to (<paramref name="x"/>, <paramref name="z"/>): only nearer its path's current
+    /// point, and only when that point is a surface it can stand on, so it walks out and never further in (docs/game/pathfinding.md "Own builder", shoved into furniture).
+    /// </summary>
+    static bool EscapesToward(IWalkability walk, in CharacterHot n, CharacterCold cold, Vector3 from, float x, float z)
+    {
+        if ((n.Flags & (ushort)MoveFlags.HasPath) == 0 || n.PathCursor >= cold.Path.Length) return false;
+        var point = cold.Path[n.PathCursor];
+        var aim = new Vector2(point.X, point.Z);
+        if (Vector2.Distance(new Vector2(x, z), aim) >= Vector2.Distance(new Vector2(from.X, from.Z), aim)) return false;
+        return walk.TryStand(point.X, point.Z, from.Y, out _);
+    }
+
+    /// <summary>
     /// Whether a walker at <paramref name="from"/> can step straight toward <paramref name="to"/> for <see cref="ArriveRadius"/> units, its height carried on as each step's is: a corner
     /// is cut early only then (engine choice; Observed: zone 22.10, a walker beside a door stair's foot cut its corner up the stair's side and stood there).
     /// </summary>
@@ -1003,7 +1016,11 @@ public sealed class MovementSystem(PathService paths) : ITickSystem, IDisposable
                 // the layer is looked for at the path's height there (docs/game/pathfinding.md "Heights").
                 if (!stands && !steering && CorridorHeight(n, cold, x, z) is { } along && MathF.Abs(along - p.Position.Y) > CorridorSlack)
                     stands = walk.TryStand(x, z, along, out y);
-                if (stands || !walk.IsWalkable(p.Position.X, p.Position.Z, p.Position.Y) && walk.IsWalkable(x, z))
+                bool offSurface = !stands && !walk.IsWalkable(p.Position.X, p.Position.Z, p.Position.Y);
+                // Shoved into something that cuts a hole in the mesh (a market stall), it walks out along its path toward the surface the path starts on, at its own height.
+                bool escaping = offSurface && !steering && !walk.IsWalkable(x, z) && EscapesToward(walk, n, cold, p.Position, x, z);
+                if (escaping) y = p.Position.Y;
+                if (stands || offSurface && walk.IsWalkable(x, z) || escaping)
                 {
                     n.Position = new Vector3(x, y, z);
                     if (speed > 0.1f && !facing) n.Yaw = MathF.Atan2(dir.X, dir.Y);

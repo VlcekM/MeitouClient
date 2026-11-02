@@ -200,6 +200,10 @@ the first 10 units of the straight line to it, else it walks to within 2 of the 
 stands, up to 3 times since its last waypoint or order (`BlockedRepathLimit`), before the path and a GoTo order are dropped. **Observed** (zone 22.10, save "stuck", scratch sim): a walker on the terrain at
 Y392 beside the Old Storm House's (`6-rebirth-INGAME`) door stair snapped to the stair's corner (Recast corner vertices take the highest neighbouring cell, 408 over
 ground at 395); that polygon's only exits were narrower than the radius, the next start's path was cut up the stair's side, and the walker stood still. With the three rules it enters in 3 s.
+<a id="shoved-into-furniture"></a>A walker off every surface at its height and its next step (shoved into something that cuts a hole in the mesh) may step only nearer its path's current
+point, and only when it can stand there (engine choice, `MovementSystem.EscapesToward`); back on the mesh the normal rule holds. **Observed** (Hub market stall
+-51119,2797, scratch sim, PR #230): its path was found, every step was refused, the GoTo dropped after 3 asks and it stood for good; with the rule it walks out and arrives.
+Inside the Storm House's shop counter and tables the mesh is not cut, so a walker there just walks out. **Unknown** whether the original lets such a walker out (PR #230's author says so).
 A goal that cannot be reached is replaced by the reachable point nearest it in 3D (engine choice). **Observed** (Hub north wall, zone 20.32, scratch probe, issue #59):
 the walkway keeps corner pockets of 8..64 square units whose only exits are 3..8 wide between wall ends; nearest on the X/Z plane, a click there
 sent the walker to the ground beside the wall, 115..138 below; in 3D all such goals end on the walkway within 10. Cache key and unload rules: [simulation](../simulation.md#navmesh). Original Havok tiles are
