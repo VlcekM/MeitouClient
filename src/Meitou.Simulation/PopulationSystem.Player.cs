@@ -124,12 +124,16 @@ public sealed partial class PopulationSystem
         var plan = new SquadPlan(template ?? new SquadTemplate { Id = start.Id, Name = start.Name }, first, [], []);
         var built = new BuiltSquad(plan, at, data.PlayerFaction, members);
         var squad = SpawnSquad(world, built, null, town is null ? 100 : town.Town.SizeRadius * town.Town.TownRadiusMult, player: true, gated: fromTemplate);
-        // CHARACTER `slave` (fcs.def "sets initial slave state", SlaveStateEnum NOT_SLAVE 0, IS_SLAVE 1, ESCAPING_SLAVE 2, EX_SLAVE 3): The Slaves start's "start slave" is 1. The owner is
-        // the start town's faction (engine choice: the original's is Unknown); an escaped one is stamped now (lie low, FixtureRegistry.LayLow); an ex-slave start is left free.
+        // A start slave (CHARACTER `slave`, set for every new character in SpawnSquad) belongs to the start town's faction (engine choice: the original's owner is Unknown); an escaped one is
+        // stamped now (lie low, FixtureRegistry.LayLow); an ex-slave start is left free.
         int owner = town is not null && town.Index < data.SiteFactions.Count ? data.SiteFactions[town.Index] : -1;
-        foreach (var id in squad.Members)
-            if (world.Characters.Cold(id.Slot) is { } c && data.Db.Find(c.RecordId)?.GetInt("slave") is (1 or 2) and var state && owner >= 0)
-                (c.SlaveState, c.SlaveOwner, c.SlaveSince) = ((byte)state, owner, world.GameHours);
+        if (owner >= 0)
+            foreach (var id in squad.Members)
+                if (world.Characters.Cold(id.Slot) is { SlaveState: not 0 } c)
+                {
+                    c.SlaveOwner = owner;
+                    if (c.SlaveState == 2) c.SlaveSince = world.GameHours;
+                }
         // The first player squad reads like its platoon, the faction's name and 0 ("Nameless_0", docs/game/ui-screens.md "Squad tabs").
         squad.Name = $"{(data.Factions[data.PlayerFaction].Name is { Length: > 0 } f ? f : "Nameless")}_0";
         world.Player.Faction = data.PlayerFaction;

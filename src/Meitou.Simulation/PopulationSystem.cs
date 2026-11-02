@@ -738,6 +738,7 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
                 FootprintRadius = race?.GetFloat("pathfind footprint radius") ?? 0,
             };
             assembly.Attach(table.PeekNextId(), cold, ref hot, record, race, world.Seed, plan.IsAnimal ? plan.Age : 1);
+            ApplyRecordSlave(cold, record, site);
             // A new NPC's bounties (economy.md 11.2; engine: not the player's characters, nor the sandbox's idle spawns).
             if (!player && !idle) cold.Bounties = Crime.SpawnBounties.Roll(data, record, world.Seed, table.PeekNextId(), world.Tick);
             var id = table.Spawn(hot, cold, world.Tick);
@@ -749,6 +750,20 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
         if (squad.Leader.IsNone) squad.Leader = SquadRegistry.Successor(squad.Members, table);
         world.Squads.Add(squad);
         return squad;
+    }
+
+    /// <summary>
+    /// CHARACTER <c>slave</c> (SlaveStateEnum 1 slave, 2 escaped, 3 ex-slave) on a freshly made character, whatever squad it is in and with or without an owner (<c>FUN_14062b210</c>,
+    /// <b>Verified</b>; a saved character is not touched): 1 and 2 are kept, 3 is free. The owner is the faction of the town the squad belongs to, else none (-1). The setter's message
+    /// and obedient-slave job (<c>FUN_1405a4940</c>) are not run, as for the start squad before.
+    /// </summary>
+    void ApplyRecordSlave(CharacterCold cold, GameRecord? record, TownSite? site)
+    {
+        int state = record?.GetInt("slave") ?? 0;
+        if (state is not (1 or 2)) return;
+        cold.SlaveState = (byte)state;
+        cold.SlaveOwner = site is not null && site.Index < data.SiteFactions.Count ? data.SiteFactions[site.Index] : -1;
+        if (state == 2) cold.RecentlyWanted = Crime.CrimeSystem.RecentlyWantedSeconds;
     }
 
     /// <summary>A <c>named</c> CHARACTER's random name from its look's sex's list (docs/characters.md "Names"); null: the record's name.</summary>

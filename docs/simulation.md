@@ -1032,8 +1032,8 @@ Arrests, the recognition meter and the marker are hashed only while set. What a 
   sentence is never served; getting out of the cage makes it an escaped slave (2, recently wanted 250); a release or bail frees it (0); an owned slave caged in another owner's cage
   changes owner. Dialogue conditions 59, 61, 62 and 64 read it. Saved as `slavestate` and `meitou slave owner` (`SlaveSave`). An arrest with `Enslave` makes the slave at the
   caging; the slavers' own processing (182) of caged captives is [Captives](#captives). CHARACTER `slave` ("sets initial slave state"; **Verified**: fcs.def and the editor's `SlaveStateEnum` NOT_SLAVE 0, IS_SLAVE 1, ESCAPING_SLAVE 2, EX_SLAVE 3) is
-  applied to a new game's characters (`StartPlayer`; The Slaves' "start slave" is 1, in locked Prisoner Shackles), owned by the start town's faction (engine; the original's owner is
-  **Unknown**); 3 is free.
+  applied to every freshly made character (**Verified**, `FUN_14062b210`: gated only on there being no saved state, no record-type or squad test; the setter `FUN_1405a4940` stores it with no owner test), `PopulationSystem.SpawnSquad`; a saved one reads `slavestate`. The Slaves' "start slave" is 1, in locked Prisoner Shackles. Owner: the faction of the town the squad belongs to, the start town's for the start squad, else none (-1) (engine; the original's owner is
+  **Unknown**); 3 is free. The setter's "has been enslaved" message and obedient-slave job are not run for these.
 - **Slave squads** (`PopulationSystem.MakeSlaves`): a squad's planned `slaves` squads (the factory's role 4) are made at its spot as squads of their template's faction (else the
   owner's), every member a slave of the owner squad's faction, put into random free cages of the home after its prisoners (engine: their "Slave only squad" package's one goal is
   Slave get in Cage, 172; the rest stand by the owner). A slave is never police-like (engine: many slave records keep the default MILITARY class); an owned slave starts no fights and is no aggro target but for its owner's
