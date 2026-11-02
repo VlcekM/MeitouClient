@@ -509,12 +509,25 @@ public sealed class MovementSystem(PathService paths) : ITickSystem, IDisposable
             }
             else
             {
-                // No way there: the old path (an order given on the move) is dropped too.
-                cold.PathFailed = true;
-                n.Flags = (ushort)(n.Flags & ~(ushort)MoveFlags.HasPath);
-                n.PathCursor = 0;
-                n.TaskTime = FailedPathWait;
-                if (n.Task == (byte)CharacterTask.GoTo) { TaskStart.Step(table, slot, CharacterTask.Idle); cold.OrderQueue.Clear(); }
+                // A player ordered out of a spot no path can leave (shoved into a table or a wall) walks straight at the order's goal instead of losing the order:
+                // the ordinary step test still stops it at a wall, so this opens no shortcut through geometry.
+                if (cold.IsPlayer && n.Task == (byte)CharacterTask.GoTo)
+                {
+                    cold.PathFailed = false;
+                    cold.Path = [new Vector3(n.Goal.X, n.Position.Y, n.Goal.Y)];
+                    cold.PathExact = int.MaxValue;
+                    n.PathCursor = 0;
+                    n.Flags |= (ushort)MoveFlags.HasPath;
+                }
+                else
+                {
+                    // No way there: the old path (an order given on the move) is dropped too.
+                    cold.PathFailed = true;
+                    n.Flags = (ushort)(n.Flags & ~(ushort)MoveFlags.HasPath);
+                    n.PathCursor = 0;
+                    n.TaskTime = FailedPathWait;
+                    if (n.Task == (byte)CharacterTask.GoTo) { TaskStart.Step(table, slot, CharacterTask.Idle); cold.OrderQueue.Clear(); }
+                }
             }
         }
     }
@@ -1003,14 +1016,33 @@ public sealed class MovementSystem(PathService paths) : ITickSystem, IDisposable
                 // the layer is looked for at the path's height there (docs/game/pathfinding.md "Heights").
                 if (!stands && !steering && CorridorHeight(n, cold, x, z) is { } along && MathF.Abs(along - p.Position.Y) > CorridorSlack)
                     stands = walk.TryStand(x, z, along, out y);
-                if (stands || !walk.IsWalkable(p.Position.X, p.Position.Z, p.Position.Y) && walk.IsWalkable(x, z))
+                // A character whose own spot is not walkable at all (shoved into a table, a counter or a wall) is not held there: it walks out along its own step, and
+                // the test applies again as soon as it is back on a surface, so nothing can be walked through afterwards.
+                bool stranded = !walk.IsWalkable(p.Position.X, p.Position.Z, p.Position.Y);
+                if (stands || stranded || !walk.IsWalkable(p.Position.X, p.Position.Z, p.Position.Y) && walk.IsWalkable(x, z))
                 {
-                    n.Position = new Vector3(x, y, z);
+                    n.Position = new Vector3(x, stands ? y : p.Position.Y, z);
                     if (speed > 0.1f && !facing) n.Yaw = MathF.Atan2(dir.X, dir.Y);
                 }
                 else if (steering) speed = 0;   // into a wall or off the ground: it stands this tick
                 else
                 {
+                    // A player character shoved into a piece of furniture has no step it may take from where it stands: it shuffles toward the nearest walkable spot
+                    // each tick, so it can always walk out, and only onto a surface (never through one).
+                    if (cold.IsPlayer && WalkableSpots.Nearest(walk, new Vector2(p.Position.X, p.Position.Z), out var outSpot, 48)
+                        && walk.TryStand(outSpot.X, outSpot.Y, p.Position.Y, out float outY))
+                    {
+                        var escape = new Vector2(outSpot.X - p.Position.X, outSpot.Y - p.Position.Z);
+                        float room = escape.Length();
+                        if (room > 1e-3f)
+                        {
+                            escape /= room;
+                            float nudge = MathF.Min(room, MathF.Max(speed, 30f) * dt);
+                            n.Position = new Vector3(p.Position.X + escape.X * nudge, outY, p.Position.Z + escape.Y * nudge);
+                            n.Yaw = MathF.Atan2(escape.X, escape.Y);
+                            goto moved;
+                        }
+                    }
                     // Blocked on the provisional part of a long route (the terrain-only route met a wall or a building): stand and ask again.
                     // Blocked on its navmesh part: ask again from where it stands a few times before giving up.
                     if (n.PathCursor >= cold.PathExact ? ++cold.ProvisionalBlocked <= ProvisionalBlockedLimit : ++cold.BlockedRepaths <= BlockedRepathLimit)
