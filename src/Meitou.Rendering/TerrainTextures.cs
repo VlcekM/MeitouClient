@@ -424,7 +424,8 @@ public sealed unsafe class TerrainTextures : IDisposable
         var nearest = new Dictionary<int, double>();
         foreach (int b in pinned) nearest[b] = -1;   // the texture field's biomes first, wherever the eye is
         // During a flight the arrival's cells come first: the eye's (the flight path) count as farther than any of them.
-        void Gather(Vector3 at, double lead, float lift = 0)
+        var keptNear = new Dictionary<int, double>();   // the kept points' own distances (without their lead), for the near slots
+        void Gather(Vector3 at, double lead, float lift = 0, bool isKept = false)
         {
             int cx0 = (int)Math.Clamp(Math.Floor((at.X - radius + half) / cs), 0, CellsX - 1), cx1 = (int)Math.Clamp(Math.Floor((at.X + radius + half) / cs), 0, CellsX - 1);
             int cz0 = (int)Math.Clamp(Math.Floor((at.Z - radius + half) / cs), 0, CellsZ - 1), cz1 = (int)Math.Clamp(Math.Floor((at.Z + radius + half) / cs), 0, CellsZ - 1);
@@ -435,22 +436,33 @@ public sealed unsafe class TerrainTextures : IDisposable
                     double dx = Math.Max(Math.Max(x0 - at.X, at.X - (x0 + cs)), 0), dz = Math.Max(Math.Max(z0 - at.Z, at.Z - (z0 + cs)), 0);
                     double d = Math.Sqrt(dx * dx + dz * dz + (double)lift * lift);
                     if (d > radius) continue;
-                    d += lead;
                     for (int k = 0; k < BlendInfoFile.SlotsPerCell; k++)
-                        if (rowOf.TryGetValue(info.Slot(cx, cz, k), out int row) && (!nearest.TryGetValue(row, out double best) || d < best)) nearest[row] = d;
+                    {
+                        if (!rowOf.TryGetValue(info.Slot(cx, cz, k), out int row)) continue;
+                        if (!nearest.TryGetValue(row, out double best) || d + lead < best) nearest[row] = d + lead;
+                        if (isKept && (!keptNear.TryGetValue(row, out double own) || d < own)) keptNear[row] = d;
+                    }
                 }
         }
         if (ahead is { } arrival) Gather(arrival, 0);
         Gather(eye, ahead is null ? 0 : radius, EyeLift.Of(eye, GroundUnderEye));
         // Kept points (the player's characters) come after the eye's own cells.
-        if (kept is not null) foreach (var k in kept) Gather(k, radius * 2);
+        if (kept is not null) foreach (var k in kept) Gather(k, radius * 2, isKept: true);
         needed.AddRange(nearest.OrderBy(p => p.Value).Select(p => p.Key));
         // A pair within its near range of the eye (the arrival's, the field's) is wanted at full size; the pixels per radian at the sampler's level (an
         // upscaler's negative bias reads finer levels).
         double pixels = PixelScale * Math.Pow(2, -Gpu.LodBias);
+        int wantedNear = 0;
         foreach (int b in needed)
             foreach (var p in state[b].Pairs)
-                if (nearest[b] < pixels * p.Tile / layerSize * NearReach) (p.Needed, p.Used) = (stamp, frame);
+                if (p.Needed != stamp && nearest[b] < pixels * p.Tile / layerSize * NearReach) { (p.Needed, p.Used) = (stamp, frame); wantedNear++; }
+        // Then a pair within its near range of a kept point, measured from the point, while slots are left over (the eye's come first), so a jump
+        // to that character lands on full-size ground textures. Without the cap the kept pairs would hold slots the eye's need.
+        if (keptNear.Count > 0)
+            foreach (int b in needed)
+                if (keptNear.TryGetValue(b, out double own))
+                    foreach (var p in state[b].Pairs)
+                        if (wantedNear < Capacity && p.Needed != stamp && own < pixels * p.Tile / layerSize * NearReach) { (p.Needed, p.Used) = (stamp, frame); wantedNear++; }
         // Near slots free or held by a pair not wanted now, less the near decodes that will take one.
         int room = Capacity - nextFree - nearLoading;
         foreach (var p in owner) if (p is not null && p.Needed != stamp) room++;

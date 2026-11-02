@@ -74,8 +74,11 @@ so object meshes and texture mips stay loaded round each character (a resolving 
 its textures load coarse for the far eye and wait for refines). Detail (texture mips, mesh levels) counts a kept point from at least the camera's
 distance to its target (`KeptViewDistance`), the view a jump there would have; residency counts from the point itself. **Observed** (VRAM dump
 2026-11-01, squad member at a town gate): 189 MB of object textures at need 0; whether from the kept point or the bounding sphere is
-**Unknown** (that dump did not list the points; the dump's header now does); terrain biome textures gather cells round each (ranked after the
-eye's). `Kept` ranks after the eye in the load order. Foliage and grass pages follow only the eye and `Ahead`. Costs video memory
+**Unknown** (that dump did not list the points; the dump's header now does). Terrain biome pairs gather cells round each (ranked after the
+eye's); a pair within its near range of a point, measured from the point, takes a full-size near slot while the eye's leave one free.
+Foliage zones within the near reach of a point are laid out and kept, ranked after the eye's, and their meshes and textures stay resident
+(texture needs from at least `KeptViewDistance`). `Kept` ranks after the eye in the load order. Still eye-only, so they settle after a jump:
+grass pages, the colour and overlay windows, the fine height window and the ground relief field. Costs video memory
 (the VRAM guard still applies). `WorldFrame` merges the points first (`ObjectStreamer.MergeKept`): one within 500 units of the eye or of an
 earlier point is dropped, so a squad standing together is one point. Every distance test walks the kept points, and `ObjectStreamer.Scan`
 tests each unresolved instance every frame. Out-of-range instances (stand-ins and unknown part distances included) are therefore parked per

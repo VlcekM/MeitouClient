@@ -435,6 +435,23 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     public Vector3? Ahead { get; set; }
 
     /// <summary>
+    /// Points kept loaded besides the eye's (the player's characters, "Keep textures at characters", docs/render-objects.md "Kept points"): zones within
+    /// the near reach of one are laid out and kept, after the eye's, and their meshes and textures stay loaded. The grass pages follow only the eye.
+    /// </summary>
+    public IReadOnlyList<Vector3> Kept { get; set; } = [];
+
+    /// <summary>The camera's distance to its target: a kept point's texture needs count from at least this far (the view a jump there would have).</summary>
+    public float KeptViewDistance { get; set; }
+
+    float NearKeptZone(ZoneCoordinate zone)
+    {
+        float d = float.PositiveInfinity;
+        var kept = Kept;
+        for (int i = 0; i < kept.Count; i++) d = MathF.Min(d, ZoneDistance(zone, kept[i]));
+        return d;
+    }
+
+    /// <summary>
     /// The ground's height under the eye (the host sets it each frame before <see cref="Update(Vector3)"/>; unknown: none). Which zones and grass pages are laid
     /// out and kept counts the eye's height above the game's highest camera (<see cref="Load"/>), so a free camera high above the land loads only what
     /// can be seen from there; drawing still measures across the ground.
@@ -473,7 +490,8 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         }
         dropping.Clear();
         foreach (var state in zones.Values)
-            if (state.Job is null && Load(ZoneDistance(state.Zone, eye), eye) > farReach + WorldLayout.ZoneSize && !(Ahead is { } kept && ZoneDistance(state.Zone, kept) <= nearReach + WorldLayout.ZoneSize))
+            if (state.Job is null && Load(ZoneDistance(state.Zone, eye), eye) > farReach + WorldLayout.ZoneSize && !(Ahead is { } arrivalAt && ZoneDistance(state.Zone, arrivalAt) <= nearReach + WorldLayout.ZoneSize)
+                && !(Kept.Count > 0 && NearKeptZone(state.Zone) <= nearReach + WorldLayout.ZoneSize))
                 dropping.Add(state);
         foreach (var state in dropping) Drop(state);
 
@@ -512,15 +530,29 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
                 for (int dx = -around; dx <= around; dx++)
                     candidates.Add(new ZoneCoordinate(landing.X + dx, landing.Y + dz));
         }
+        var keptPoints = settling ? [] : Kept;
+        foreach (var point in keptPoints)
+        {
+            var home = WorldLayout.ZoneOf(point.X, point.Z);
+            int around = (int)Math.Ceiling(arrivalReach / WorldLayout.ZoneSize) + 1;
+            for (int dz = -around; dz <= around; dz++)
+                for (int dx = -around; dx <= around; dx++)
+                    candidates.Add(new ZoneCoordinate(home.X + dx, home.Y + dz));
+        }
+        bool meitou = MeitouRange;
+        Tier TierAt(float soon) => soon <= wholeReach + PrefetchMargin ? Tier.Whole : meitou && soon <= nearReach + PrefetchMargin ? Tier.Meshes : Tier.Far;
         foreach (var z in candidates)
         {
             if (!z.IsInsideGrid) continue;
             float d = Load(ZoneDistance(z, eye), eye), dp = Load(ZoneDistance(z, predicted), eye), da = arrival is { } a ? ZoneDistance(z, a) : float.PositiveInfinity;
             bool landing = da <= arrivalReach;
             float soon = Math.Min(Math.Min(d, dp), da);
-            if (d > farReach && !landing) continue;   // the prediction orders and adds whole layouts, it never adds zones
-            bool meitou = MeitouRange;
-            var need = soon <= wholeReach + PrefetchMargin ? Tier.Whole : meitou && soon <= nearReach + PrefetchMargin ? Tier.Meshes : Tier.Far;
+            float dk = keptPoints.Count > 0 ? NearKeptZone(z) : float.PositiveInfinity;
+            bool atKept = dk <= arrivalReach;
+            if (d > farReach && !landing && !atKept) continue;   // the prediction orders and adds whole layouts, it never adds zones
+            var need = TierAt(Math.Min(soon, dk));
+            // Wanted more for a kept point than for the eye or the arrival: ranked after all of theirs.
+            bool forKept = atKept && (d > farReach && !landing || TierAt(soon) != need);
             zones.TryGetValue(z, out var state);
             if (state is not null && Satisfies(state, need, meitou)) continue;   // has what it needs
             if (d <= wholeReach) NearestIncompleteZone = Math.Min(NearestIncompleteZone, d);
@@ -530,7 +562,8 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
             // first (from the eye or where it will be, whichever is nearer).
             // During a flight the arrival's zones go first, then the flight path's (the eye's), each in the same order.
             float tierBase = need == Tier.Whole ? 0 : need == Tier.Meshes ? nearReach : farReach;
-            wanted.Add((z, need, arrival is null ? tierBase + soon : landing ? tierBase + da : 2 * farReach + tierBase + Math.Min(d, dp)));
+            wanted.Add((z, need, forKept ? (arrival is null ? 2 : 4) * farReach + tierBase + dk
+                : arrival is null ? tierBase + soon : landing ? tierBase + da : 2 * farReach + tierBase + Math.Min(d, dp)));
         }
         wanted.Sort((a, b) => a.Urgency.CompareTo(b.Urgency));
         int started = 0;
@@ -1164,7 +1197,9 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         foreach (var state in zones.Values)
         {
             if (!state.Ready) continue;
-            float zoneDistance = ZoneDistance(state.Zone, eye);
+            // In range of the eye or of a kept point; a kept point's texture needs count from at least the camera's distance (KeptViewDistance).
+            float eyeZone = ZoneDistance(state.Zone, eye), keptZone = Kept.Count > 0 ? NearKeptZone(state.Zone) : float.PositiveInfinity;
+            float zoneDistance = MathF.Min(eyeZone, keptZone);
             foreach (var g in state.Groups)
             {
                 if (zoneDistance > RangeOf(g).Range + WorldLayout.ZoneSize * 0.5f) continue;
@@ -1172,7 +1207,13 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
                 a.LastUsed = now;
                 if (!a.Resident) Reload(a);   // in range but unloaded (or never loaded after an unload): decode it again, wherever the camera looks
                 if (!a.HasBounds) continue;
-                float near = g.BoundsReady ? BoxDistance(g.BoundMin, g.BoundMax, eye) : zoneDistance, scale = Math.Max(g.MaxScale, 1e-6f);
+                float near = g.BoundsReady ? BoxDistance(g.BoundMin, g.BoundMax, eye) : eyeZone, scale = Math.Max(g.MaxScale, 1e-6f);
+                if (float.IsFinite(keptZone))
+                {
+                    float kept = keptZone;
+                    if (g.BoundsReady) { kept = float.PositiveInfinity; foreach (var k in Kept) kept = MathF.Min(kept, BoxDistance(g.BoundMin, g.BoundMax, k)); }
+                    near = MathF.Min(near, MathF.Max(kept, KeptViewDistance));
+                }
                 Offer(a.MainMaterial, near / (a.MainTexel * scale));
                 Offer(a.LeavesMaterial, near / (a.LeavesTexel * scale));
                 foreach (var m in (ReadOnlySpan<FoliageMaterial?>)[a.MainMaterial, a.LeavesMaterial])
