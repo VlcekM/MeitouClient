@@ -122,9 +122,10 @@ public sealed unsafe class ParticleRenderer : IDisposable
         out vec4 fragColour;
         uniform sampler2D uTexture;
         uniform sampler2D uSoftDepth;               // the scene's depth at this target's size (the Meitou fog switch), as a colour
-        uniform vec4 uSoft;                         // x: 0 hard (the game's), 1 fade the alpha, 2 the colour and alpha (additive), 3 towards white (modulate); y, z: the depth slice's near, far; w: 1 when depth is 0..1
+        uniform vec4 uSoft;                         // x: 0 hard (the game's), 1 fade the alpha, 2 the colour and alpha (additive), 3 towards white (modulate); y, z: the scene depth's near, far; w unused
         uniform float uCoverageMax, uCoverageGain;
         uniform int uCoverage;                      // 0: colour; 1: the particle's alpha, 2: its brightest channel (the upscalers' reactive mask); 3 / 4: the low-resolution target's premultiplied alpha / additive
+        """ + DepthConvention.Glsl + """
         void main()
         {
             // basic.hlsl: texture * colour * vertex colour. A recoloured burst (negative vertex rgb, Burst's recolour) takes that colour instead of the texture's hue, keeping its brightness.
@@ -147,8 +148,7 @@ public sealed unsafe class ParticleRenderer : IDisposable
             if (uSoft.x > 0.0)
             {
                 float d = texelFetch(uSoftDepth, ivec2(gl_FragCoord.xy), 0).r;
-                float zd = uSoft.w != 0.0 ? d : 2.0 * d - 1.0;
-                float scene = uSoft.y * uSoft.z / (uSoft.z - zd * (uSoft.z - uSoft.y));
+                float scene = depthViewZ(d, uSoft.yz);
                 float fade = clamp((scene - vDepth) / vSoft, 0.0, 1.0);
                 if (uSoft.x == 1.0) c.a *= fade;
                 else if (uSoft.x == 2.0) c *= fade;
@@ -164,7 +164,7 @@ public sealed unsafe class ParticleRenderer : IDisposable
         """;
 
     const int InstanceBytes = 64;
-    /// <summary>The farthest a unit is drawn (the near depth slice's far plane is about this).</summary>
+    /// <summary>The farthest a unit is drawn.</summary>
     public const float DrawRange = 20400;
 
     readonly IGpuContext gpu;
@@ -576,9 +576,9 @@ public sealed unsafe class ParticleRenderer : IDisposable
     }
 
     /// <summary>
-    /// Writes this frame's instances into the frame's constants (the CPU half; <see cref="Record"/> draws them). Called in the near depth slice
+    /// Writes this frame's instances into the frame's constants (the CPU half; <see cref="Record"/> draws them). Called once per frame
     /// only (units beyond <see cref="DrawRange"/> are not drawn). The viewer's near plane grows with the camera's height (to 200), the game's is a few
-    /// units: a particle nearer than the slice's near plane (<paramref name="nearPlane"/>) is drawn with
+    /// units: a particle nearer than the camera's near plane (<paramref name="nearPlane"/>) is drawn with
     /// <paramref name="closeViewProjection"/> (a projection with a near plane of 0.5) and no depth test, which is right because nothing of
     /// the scene is nearer than that plane; the others as usual, tested against the scene's depth. Units are drawn far to near.
     /// </summary>
@@ -688,7 +688,7 @@ public sealed unsafe class ParticleRenderer : IDisposable
                 int close = PartitionByDepth(scratch.AsSpan(0, written), forward, nearPlane);
                 // Metal's near-plane particle path is not safe yet: a large dust sprite crossing the close projection
                 // produced a black frame and a GPU reset. Draw only the normal-depth set until that path is ported.
-                if (gpu.ClipDepthZeroToOne) close = 0;
+                if (gpu is not GpuContext) close = 0;
                 var instances = frame.AllocateConstants((ulong)(written * InstanceBytes), 16);
                 scratch.AsSpan(0, written).CopyTo(new Span<ParticleInstance>(instances.Pointer, written));
                 long collected = Stopwatch.GetTimestamp() - collectStart;
@@ -748,7 +748,7 @@ public sealed unsafe class ParticleRenderer : IDisposable
             scratch[n++] = new ParticleInstance { Position = (t.Head + t.Tail) * 0.5f - eye, Direction = along / length, Width = t.Width, Height = length, Colour = t.Colour };
         }
         if (n == 0) return;
-        int close = gpu.ClipDepthZeroToOne ? 0 : PartitionByDepth(scratch.AsSpan(0, n), forward, nearPlane);
+        int close = gpu is not GpuContext ? 0 : PartitionByDepth(scratch.AsSpan(0, n), forward, nearPlane);
         var instances = frame.AllocateConstants((ulong)(n * InstanceBytes), 16);
         scratch.AsSpan(0, n).CopyTo(new Span<ParticleInstance>(instances.Pointer, n));
         draws.Add(new DrawItem { Instances = instances, Count = n, Close = close, Technique = TracerTechnique, Material = TracerMaterial, Texture = tracerTexture, Divisor = 1, Tracer = true });
@@ -787,9 +787,9 @@ public sealed unsafe class ParticleRenderer : IDisposable
 
     /// <summary>
     /// The scene's depth for the Meitou <c>fog</c> switch's soft fade (docs/render-post.md "Fog"): a colour copy at the pass's size (the depth attachment itself
-    /// cannot be read while it is tested), with the depth slice's near and far planes and whether the depth is 0..1.
+    /// cannot be read while it is tested), with the scene projection's near and far planes.
     /// </summary>
-    public readonly record struct SoftDepth(SampledTexture Texture, float Near, float Far, bool ZeroToOne);
+    public readonly record struct SoftDepth(SampledTexture Texture, float Near, float Far);
 
     /// <summary>Whether the last <see cref="Prepare"/> has low-resolution draws, whose coverage the post chain derives from the accumulation target (<see cref="PostProcess"/>).</summary>
     public bool HasLowCoverage => coveragePending && LowCount > 0;
@@ -835,7 +835,7 @@ public sealed unsafe class ParticleRenderer : IDisposable
             if (d.Divisor != divisor) continue;
             var m = d.Material;
             var r = d.Technique.Renderer;
-            // The far particles first (tested against the scene's depth), then the ones nearer than the slice's near plane (no depth test).
+            // The far particles first (tested against the scene's depth), then the ones nearer than the near plane (no depth test).
             for (int pass = 0; pass < 2; pass++)
             {
                 bool close = pass == 1;
@@ -877,7 +877,7 @@ public sealed unsafe class ParticleRenderer : IDisposable
                     ParticleBlend.Alpha => 1, ParticleBlend.Add or ParticleBlend.ColourBlend => 2, ParticleBlend.Modulate => 3, _ => 0,
                 };
                 var sd = softDepth.GetValueOrDefault();
-                program.Set(soft, fade, sd.Near, sd.Far, sd.ZeroToOne ? 1f : 0f);
+                program.Set(soft, fade, sd.Near, sd.Far, 0f);
                 bool litOn = Lit && coverage == 0;
                 program.Set(litVertex, litOn ? 1 : 0, 0, SunGlow, 0);
                 program.Set(litFragment, litOn ? 1 : 0, Math.Clamp(SunShade, 0, 1), m.Blend == ParticleBlend.Alpha ? 0 : m.Blend == ParticleBlend.Add ? 1 : 2, 0);

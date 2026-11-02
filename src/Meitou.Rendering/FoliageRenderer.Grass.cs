@@ -362,7 +362,7 @@ public sealed unsafe partial class FoliageRenderer
         }
     }
 
-    /// <summary><see cref="DrawGrassMotion"/> on the GPU: the same cull for the near slice's camera over the patches that sway, one indirect draw.</summary>
+    /// <summary><see cref="DrawGrassMotion"/> on the GPU: the same cull for the scene camera over the patches that sway, one indirect draw.</summary>
     void DrawGrassMotionGpu(MotionTargets targets, Vector3 eye, float time, float previousTime, Matrix4x4 previous)
     {
         if (grassStore.SlotHigh == 0 || motionFrustum.Length > 8) return;
@@ -381,10 +381,10 @@ public sealed unsafe partial class FoliageRenderer
         var view = new ViewConstants
         {
             ViewProjection = motionViewProjection, PreviousViewProjection = previous, Eye = eye, Time = time, PreviousTime = previousTime,
-            NearPlanes = targets.NearPlanes, JitterNdc = targets.JitterNdc,
+            NearPlanes = targets.Planes, JitterNdc = targets.JitterNdc,
         };
         NewTextureSegment();
-        var tables = BindRows(NearDepthIndex(targets.NearDepth));
+        var tables = BindRows(NearDepthIndex(targets.Depth));
         var (prefixIndex, fraction) = FoliageGrassGpu.DensityStep(Math.Min(GrassDensitySetting, MaxGrassDensity) / MaxGrassDensity);
         var result = grassStore.Dispatch(motionFrustum, new Vector2(eye.X, eye.Z), PageSize, prefixIndex, fraction, in tables, motionScale);
         grassFrame!.Bind(cmd, p, in view, [tables.Patches.Binding]);

@@ -51,7 +51,7 @@ public sealed unsafe class WaterRenderer : IDisposable
             vec4 fineRect;
             vec4 coarseCellsFineBand; // coarse cells xy, fine band, has fine
             vec4 fineCells;
-            vec4 depthPlanes;     // this slice's near and far planes, 1 with a scene depth copy (CaptureScene), 1 with 0..1 clip depth
+            vec4 depthPlanes;     // the scene's near and far planes, 1 with a scene depth copy (CaptureScene); w unused
             uint colourMap;
             uint flowMap;
             uint foamMap;
@@ -136,34 +136,27 @@ public sealed unsafe class WaterRenderer : IDisposable
 
     /// <summary>
     /// The water's thickness along the view ray (docs/render-water.md "Edges"). The game's water reads its G-buffer's distance at the pixel and
-    /// takes its own off (forward/water.hlsl); here the slice's depth, copied before the water (<see cref="CaptureScene"/>), whatever stands in
-    /// the water included. -1 without a copy (Metal, or a slice whose water is opaque).
+    /// takes its own off (forward/water.hlsl); here the scene's depth, copied before the water (<see cref="CaptureScene"/>), whatever stands in
+    /// the water included. -1 without a copy (Metal, or a view whose water is opaque).
     /// </summary>
-    const string ThicknessFunctions = """
+    const string ThicknessFunctions = DepthConvention.Glsl + """
 
-        uniform sampler2D uSceneDepth;   // the slice's depth before the water (CaptureScene), read where uDepthPlanes.z is 1
-        uniform vec4 uDepthPlanes;       // the slice's near and far planes, 1 with a depth copy, the depth's convention (1: the clip depth itself; 0: half of it plus a half)
-
-        // The view depth of a stored depth.
-        float waterViewZ(float d)
-        {
-            float zd = uDepthPlanes.w > 0.5 ? d : 2.0 * d - 1.0;
-            return uDepthPlanes.x * uDepthPlanes.y / (uDepthPlanes.y - zd * (uDepthPlanes.y - uDepthPlanes.x));
-        }
+        uniform sampler2D uSceneDepth;   // the scene's depth before the water (CaptureScene), read where uDepthPlanes.z is 1
+        uniform vec4 uDepthPlanes;       // the scene's near and far planes, 1 with a depth copy; w unused
 
         // From this fragment (dist from the eye) to the surface behind it along the view ray, or -1 without a depth copy.
         float sceneThickness(float dist)
         {
             if (uDepthPlanes.z < 0.5) return -1.0;
-            float behind = waterViewZ(texelFetch(uSceneDepth, ivec2(gl_FragCoord.xy), 0).r);
-            return max(dist * (behind / waterViewZ(gl_FragCoord.z) - 1.0), 0.0);
+            float behind = depthViewZ(texelFetch(uSceneDepth, ivec2(gl_FragCoord.xy), 0).r, uDepthPlanes.xy);
+            return max(dist * (behind / depthViewZ(gl_FragCoord.z, uDepthPlanes.xy) - 1.0), 0.0);
         }
 
-        // The error of sceneThickness from the two stored depths' precision (a float's step near 1 is about 6e-8, times z^2 / near in view depth,
-        // doubled with the 2d - 1 convention, for each of the two): the edge fades over at least this, so distant shores do not shimmer.
+        // The error of sceneThickness from the two stored depths' precision (one float step each, depthStep): the edge fades over at
+        // least this, so distant shores do not shimmer.
         float thicknessError(float dist)
         {
-            return (uDepthPlanes.w > 0.5 ? 1.2e-7 : 2.4e-7) * dist * dist / max(uDepthPlanes.x, 1e-3);
+            return 2.0 * depthStep(dist, uDepthPlanes.xy);
         }
         """;
 
@@ -1363,9 +1356,9 @@ public sealed unsafe class WaterRenderer : IDisposable
     /// <summary>Whether the ocean's FFT has anything to feed this frame: water within <see cref="OceanFadeEnd"/> is in view, or that is unknown.</summary>
     bool OceanInView => float.IsNaN(NearestWater) || NearestWater <= OceanFadeEnd;
 
-    /// <summary>The slice near plane bounds every fragment's eye distance from below. Beyond both cutoffs neither
+    /// <summary>The camera's near plane bounds every fragment's eye distance from below. Beyond both cutoffs neither
     /// transmitted floor colour nor wet sand contributes, so the blended path is opaque and needs no copy. The same
-    /// bound holds for the nearest water in view: with none nearer, the slice shows no transmitting water at all.</summary>
+    /// bound holds for the nearest water in view: with none nearer, the view shows no transmitting water at all.</summary>
     internal bool NeedsRefraction(float near) => Meitou && Refraction &&
         (!Lean || SliceCanTransmit(near, ClearDistance)) &&
         (float.IsNaN(NearestWater) || SliceCanTransmit(NearestWater, ClearDistance));
@@ -1404,7 +1397,7 @@ public sealed unsafe class WaterRenderer : IDisposable
     /// <summary>The eye distance from which the Faithful water is opaque (the game's alpha: 1 from 4000 units), so needs no depth.</summary>
     public const float FaithfulOpaqueDistance = 4000;
 
-    /// <summary>Whether this slice's water reads the scene's depth (<see cref="CaptureScene"/>): Vulkan only (Metal keeps the terrain's height), and
+    /// <summary>Whether the scene's water reads its depth (<see cref="CaptureScene"/>): Vulkan only (Metal keeps the terrain's height), and
     /// only while water in it can be see-through: Meitou with <see cref="Refraction"/> on, as <see cref="NeedsRefraction"/>; Faithful nearer than
     /// <see cref="FaithfulOpaqueDistance"/>. With <see cref="NearestWater"/> unknown (reflections off) it is copied whether or not water is in view.</summary>
     internal bool NeedsDepth(float near)
@@ -1414,11 +1407,11 @@ public sealed unsafe class WaterRenderer : IDisposable
         return NeedsRefraction(near);   // without refraction (`--no-water-refraction`) the Meitou water keeps the slant path: no pass restart or copy
     }
 
-    /// <summary>Whether this slice needs <see cref="CaptureScene"/> before its water (<paramref name="depthSlice"/>: its depth can be copied).</summary>
+    /// <summary>Whether the scene needs <see cref="CaptureScene"/> before its water (<paramref name="depthSlice"/>: its depth can be copied).</summary>
     internal bool NeedsCapture(float near, bool depthSlice) => NeedsRefraction(near) || depthSlice && NeedsDepth(near);
 
     /// <summary>
-    /// Copies the scene drawn so far (the slice's opaque geometry, with no pass open) for the water: at half the size the colour the Meitou water
+    /// Copies the scene drawn so far (the opaque geometry, with no pass open) for the water: at half the size the colour the Meitou water
     /// refracts (the floor and whatever stands in the water, seen through the waves), and the depth, from which both waters measure the distance
     /// through them (<see cref="ThicknessFunctions"/>). One native segment (a full barrier on each side), a blit for the colour and a copy for the depth.
     /// </summary>
@@ -1568,7 +1561,7 @@ public sealed unsafe class WaterRenderer : IDisposable
             ? refractionMap.Index(new SampledTexture(Gpu.Samplers.Get(ClampLinear), refraction!.View()))
             : Gpu.StandIn2D;
         bool depth = sceneDepthCopy is not null && sceneDepthFrame == Gpu.Frame.Number;
-        c.DepthPlanes = new Vector4(sceneDepthPlanes, depth ? 1f : 0f, Gpu.ClipDepthZeroToOne ? 1f : 0f);
+        c.DepthPlanes = new Vector4(sceneDepthPlanes, depth ? 1f : 0f, 0f);
         c.SceneDepthMap = depth ? sceneDepthMap.Index(new SampledTexture(Gpu.Samplers.Get(ClampNearest), sceneDepthCopy!.View())) : Gpu.StandIn2D;
         return c;
     }

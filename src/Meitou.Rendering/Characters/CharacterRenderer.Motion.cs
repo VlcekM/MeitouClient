@@ -22,7 +22,7 @@ internal sealed unsafe partial class CharacterRenderer
     (SampledTexture Texture, uint Index)? motionDepthIndex;
 
     /// <summary>
-    /// The near slice's frame as the post chain's motion pass needs it (a no-op without a temporal upscaler): hooks the characters' motion into
+    /// The scene frame as the post chain's motion pass needs it (a no-op without a temporal upscaler): hooks the characters' motion into
     /// <paramref name="post"/>'s one object-motion callback beside the grass's (once), and gives <see cref="DrawMotion"/> this frame's camera.
     /// </summary>
     public void AttachMotion(IWorldPostChain? post, FoliageRenderer? foliage, Matrix4x4 viewProjection, Matrix4x4 unjittered, Vector3 eye, Vector4[] frustum,
@@ -39,7 +39,7 @@ internal sealed unsafe partial class CharacterRenderer
         if (motionHasRelative) (motionRelative, motionRelativeUnjittered) = (relative!.Value, relativeUnjittered!.Value);
     }
 
-    /// <summary>The near slice's camera for <see cref="DrawMotion"/> (the grass's <c>SetMotionCamera</c>): this frame's view-projection as drawn (jittered) and unjittered.</summary>
+    /// <summary>The scene camera for <see cref="DrawMotion"/> (the grass's <c>SetMotionCamera</c>): this frame's view-projection as drawn (jittered) and unjittered.</summary>
     void SetMotionCamera(Matrix4x4 viewProjection, Matrix4x4 unjittered, Vector3 eye, Vector4[] frustum)
     {
         (motionViewProjection, motionUnjittered, motionEye, motionFrustum) = (viewProjection, unjittered, eye, frustum);
@@ -48,8 +48,8 @@ internal sealed unsafe partial class CharacterRenderer
     }
 
     /// <summary>
-    /// The characters' own motion over the camera's, for the upscalers: the near slice's characters drawn with this and last frame's palettes and
-    /// transforms into the motion target (red and green), where they are what the near depth shows. Called inside the post chain's object-motion pass.
+    /// The characters' own motion over the camera's, for the upscalers: the scene's characters drawn with this and last frame's palettes and
+    /// transforms into the motion target (red and green), where they are what the scene depth shows. Called inside the post chain's object-motion pass.
     /// </summary>
     void DrawMotion(MotionTargets targets)
     {
@@ -68,18 +68,18 @@ internal sealed unsafe partial class CharacterRenderer
         (previousUnjittered, havePreviousCamera) = (motionUnjittered, true);
         if (liveCount == 0) return;
         motionCalls++;
-        if (motionDepthIndex is { } known && known.Texture == targets.NearDepth) motionDepth = known.Index;
+        if (motionDepthIndex is { } known && known.Texture == targets.Depth) motionDepth = known.Index;
         else
         {
             if (motionDepthIndex is { } old) Gpu.Bindless.Free(BindlessKind.Texture2D, old.Index);
-            motionDepthIndex = (targets.NearDepth, motionDepth = Gpu.Bindless.Register(BindlessKind.Texture2D, targets.NearDepth));
+            motionDepthIndex = (targets.Depth, motionDepth = Gpu.Bindless.Register(BindlessKind.Texture2D, targets.Depth));
         }
         motionPass = true;
         // This draw is the "characters" stage's, not the post chain's: the lap before ends the post time so far, the one after is the characters'.
         StageClock.Lap(StageClock.Post, "post to motion");
         try
         {
-            DrawView(new ViewConstants { ViewProjection = motionViewProjection, PreviousViewProjection = previous, Eye = motionEye, NearPlanes = targets.NearPlanes, JitterNdc = targets.JitterNdc }, motionEye, motionFrustum,
+            DrawView(new ViewConstants { ViewProjection = motionViewProjection, PreviousViewProjection = previous, Eye = motionEye, NearPlanes = targets.Planes, JitterNdc = targets.JitterNdc }, motionEye, motionFrustum,
                 relative: motionHasRelative ? motionRelative : null, previousRelative: previousRelative);
         }
         finally { motionPass = false; }

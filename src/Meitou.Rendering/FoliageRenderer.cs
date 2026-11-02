@@ -1409,7 +1409,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     }
     /// <summary>The fog cull (set by the world frame around the main camera's draw only): zones wholly hidden by the fog the eye is in are skipped (meshes and impostors; the grass is range-limited well inside the hide distance).</summary>
     internal FogVolumes? FogCull { get; set; }
-    /// <summary>The interior cut (docs/render-interior-cut.md; set by the world frame around its near slice's colour draw, null otherwise): the meshes and grass over a mask take it.</summary>
+    /// <summary>The interior cut (docs/render-interior-cut.md; set by the world frame around its scene colour draw, null otherwise): the meshes and grass over a mask take it.</summary>
     internal InteriorMaskRenderer? InteriorCut { get; set; }
     /// <summary>The last frame's depth pyramid for the occlusion cull (empty: none; set by the world frame around the main camera's draw only, like <see cref="FogCull"/>).</summary>
     internal OcclusionView Occlusion { get; set; }
@@ -2218,7 +2218,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         return pipeline;
     }
 
-    /// <summary>The scene's near depth (<see cref="MotionTargets.NearDepth"/>) in the bindless 2D float array the shaders index: registered
+    /// <summary>The scene depth (<see cref="MotionTargets.Depth"/>) in the bindless 2D float array the shaders index: registered
     /// again (the old index freed after the frames in flight) only when the texture or its sampler changed.</summary>
     uint NearDepthIndex(in SampledTexture nearDepth)
     {
@@ -2704,7 +2704,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     bool motionCamera, havePrevious;
     readonly List<MotionDraw> motionDraws = [];
 
-    /// <summary>The near depth slice's camera for <see cref="DrawGrassMotion"/>: this frame's view-projection as drawn (jittered) and unjittered.</summary>
+    /// <summary>The scene camera for <see cref="DrawGrassMotion"/>: this frame's view-projection as drawn (jittered) and unjittered.</summary>
     public void SetMotionCamera(Matrix4x4 viewProjection, Matrix4x4 unjittered, Vector3 eye, Vector4[] frustum)
     {
         (motionViewProjection, motionUnjittered, motionEye, motionFrustum) = (viewProjection, unjittered, eye, frustum);
@@ -2713,7 +2713,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
 
     /// <summary>
     /// The swaying grass's own motion over the camera motion, for the upscalers (<see cref="IWorldPostChain.ObjectMotion"/> binds the motion target,
-    /// red and green only, without depth test or blending): the near slice's blades of layers with wind, now and with last frame's sway phase
+    /// red and green only, without depth test or blending): the scene's blades of layers with wind, now and with last frame's sway phase
     /// and camera, written where they are what the depth buffer shows. Blades without sway move with the camera and need nothing.
     /// </summary>
     public void DrawGrassMotion(MotionTargets targets)
@@ -2743,7 +2743,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         RecordMotion(targets, eye, time, previousTime, previous);
     }
 
-    /// <summary>The motion draws of the pages in the near slice's view, in the zones' and pages' dictionary order (the CPU reference; the GPU path orders by distance, 5.6.2).</summary>
+    /// <summary>The motion draws of the pages in the scene camera's view, in the zones' and pages' dictionary order (the CPU reference; the GPU path orders by distance, 5.6.2).</summary>
     void PrepareMotion(Vector3 eye)
     {
         motionDraws.Clear();
@@ -2792,11 +2792,11 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         var view = new ViewConstants
         {
             ViewProjection = motionViewProjection, PreviousViewProjection = previous, Eye = eye, Time = time, PreviousTime = previousTime,
-            NearPlanes = targets.NearPlanes, JitterNdc = targets.JitterNdc,
+            NearPlanes = targets.Planes, JitterNdc = targets.JitterNdc,
         };
         nativeFrame.Bind(cmd, p, in view);
         NewTextureSegment();
-        uint nearDepth = NearDepthIndex(targets.NearDepth);
+        uint nearDepth = NearDepthIndex(targets.Depth);
         GrassPush last = default;
         bool pushed = false;
         cmd.BindPipeline(PipelineFor(ref grassMeshMotionCpu, gp, segment, drawState, pass.Formats, "foliage grass motion"));
