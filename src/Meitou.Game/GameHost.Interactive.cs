@@ -1016,7 +1016,39 @@ sealed partial class GameHost
         if (SpikeLog.Enabled && advanceMs > SpikeSimMs)
             for (int k = phases + 1; k < simMs.Length; k++)
                 if (simMs[k] >= 2) SpikeLog.Note($"sim {simNames[k]}", ms: simMs[k]);
+        if (SpikeLog.Enabled) SimWindow(profile.Ticks, advanceMs, ahead, phases + 1, parts);
         profile.Clear();
+    }
+
+    // --log-spikes: the simulation's steady cost, summed over a window of real time (the spike notes only see frames over SpikeSimMs).
+    const double SimWindowSeconds = 5;
+    readonly Dictionary<string, double> simWindowMs = [];
+    double simWindowStart = -1, simWindowMain, simWindowAhead;
+    long simWindowTicks;
+    int simWindowFrames;
+
+    /// <summary>--log-spikes: every <see cref="SimWindowSeconds"/> one line of the speed, ticks a second, the sim's ms a frame and each system's and part's ms a tick, biggest first.</summary>
+    void SimWindow(int ticks, double advanceMs, double ahead, int firstSystem, int firstPart)
+    {
+        double now = realTime.Elapsed.TotalSeconds;
+        if (simWindowStart < 0) simWindowStart = now;
+        (simWindowTicks, simWindowMain, simWindowAhead, simWindowFrames) = (simWindowTicks + ticks, simWindowMain + advanceMs, simWindowAhead + ahead, simWindowFrames + 1);
+        for (int k = firstSystem; k < simMs.Length - 1; k++)
+            simWindowMs[(k >= firstPart ? "." : "") + simNames[k]] = simWindowMs.GetValueOrDefault((k >= firstPart ? "." : "") + simNames[k]) + simMs[k];
+        double seconds = now - simWindowStart;
+        if (seconds < SimWindowSeconds) return;
+        if (simWindowTicks > 0)
+        {
+            var inv = CultureInfo.InvariantCulture;
+            string Top(bool partsOnly) => string.Join(", ", simWindowMs.Where(p => p.Key.StartsWith('.') == partsOnly && p.Value / simWindowTicks >= 0.01)
+                .OrderByDescending(p => p.Value).Take(12).Select(p => string.Create(inv, $"{p.Key.TrimStart('.')} {p.Value / simWindowTicks:0.00}")));
+            double tickMs = simWindowMs.Where(p => !p.Key.StartsWith('.') && p.Key != "outside ticks").Sum(p => p.Value) / simWindowTicks;
+            Console.WriteLine(string.Create(inv, $"simprof   {session.Simulation.Speed:0}x {simWindowFrames / seconds:0} fps, {simWindowTicks / seconds:0} ticks/s, {session.World.Snapshot.Characters.Count} characters; ") +
+                string.Create(inv, $"ms a frame: in frame {simWindowMain / simWindowFrames:0.00}, ahead {simWindowAhead / simWindowFrames:0.00}; ms a tick {tickMs:0.00}: ") +
+                $"{Top(false)}; parts: {Top(true)}");
+        }
+        simWindowMs.Clear();
+        (simWindowStart, simWindowTicks, simWindowMain, simWindowAhead, simWindowFrames) = (now, 0, 0, 0, 0);
     }
 
     /// <summary>

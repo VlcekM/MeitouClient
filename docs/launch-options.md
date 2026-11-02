@@ -120,7 +120,7 @@ Authority: `src/Meitou.Rendering/WorldFrame.cs` (`Parse`, `Usage`), `src/Meitou.
 | `--screenshot <out.png>` | file | none | Render offscreen to a PNG and exit. |
 | `--size <W>x<H>` | pixels | 1280x960 (1280x720 for bench and A/B runs) | Render size. |
 | `--no-vsync` | | vsync on (viewer) | Start with vsync off. The game takes it as its own option. |
-| `--log-spikes` | | off | Log frames whose GPU time, or render-thread time (over 20 ms), is over 1.5 times its median. |
+| `--log-spikes` | | off | Log frames whose GPU time, or render-thread time (over 20 ms), is over 1.5 times its median; every 5 s a `simprof` line: speed, ticks/s, sim ms a frame (in frame, ahead) and ms a tick by system and part. |
 | `--sway-step <s>` | seconds | | Grass sway advanced per frame (motion check, with screenshot or bench). |
 | `--orbit-step <deg>` | degrees | | With `--screenshot`: the camera orbits this much per frame (upscaler motion vectors). |
 | `--wireframe` | | off | Wireframe view. |
