@@ -206,6 +206,12 @@ sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, 
 
     internal const string TickAheadHint = "Faithful runs the world, then draws it, as the game does. Meitou runs the next world tick while the frame is drawn "
         + "whenever the world is busy (big fights, crowds), Always on every frame: much higher frame rates with many characters, up to 33 ms more input delay.";
+    const string FrameGenerationTemplate = "Shows a generated frame between each two rendered ones through AMD's FSR 3 frame-interpolation layer: "
+        + "nearly twice the frames shown, with a little more input delay. Works with TAA, FSR and DLSS; needs the FidelityFX library. "
+        + "Takes effect after a restart. Now: {1}";
+
+    string FrameGenerationHint() => Loc.Tr(FrameGenerationTemplate, Loc.Tr(FrameGenerationStatus?.Invoke() ?? "off"));
+
     internal static readonly string[] TickAheadChoices = ["Faithful (in series)", "Meitou (when busy)", "Always on"];
 
     /// <summary>A Tab panel slider's key in the catalogue (<see cref="LauncherSchema.Find"/>): its label, or the top-level key of the display switches.</summary>
@@ -230,7 +236,8 @@ sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, 
         string label = d?.Name ?? Label(key);
         string hint = key == MetalPresetSlider
             ? "MetalFX temporal is the default at every tier; spatial rows are explicit alternatives. The preset sets the render scale, so the separate scale slider is disabled."
-            : key == WorldFrame.UpscalerSliders[0] ? Loc.Tr("Smooths edges and upscales the render. Active: {1}", UpscalerStatus?.Invoke() ?? "unavailable") : SliderHint(slider);
+            : key == WorldFrame.UpscalerSliders[0] ? Loc.Tr("Smooths edges and upscales the render. Active: {1}", Loc.Tr(UpscalerStatus?.Invoke() ?? "unavailable"))
+            : SliderHint(slider);
         // The options are the slider's whole values from its left end.
         float first = d?.Min ?? slider.Min;
         return options is { } items ? new(label, hint, Choice: new(() => items, () => (int)MathF.Round(slider.Get() - first), i => slider.Set(i + first)), Raw: key)
@@ -271,7 +278,7 @@ sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, 
             result.Add(new("World tick alongside drawing", TickAheadHint, Choice: new(() => TickAheadChoices, () => (int)config.TickAhead, i => config.TickAhead = (TickAheadMode)i),
                 Raw: "tickAhead"));
             if (!OperatingSystem.IsMacOS())
-                result.Add(new("Frame generation (FSR 3)", Loc.Tr("Shows a generated frame between each two rendered ones through AMD's FSR 3 frame-interpolation layer: nearly twice the frames shown, with a little more input delay. Works with TAA, FSR and DLSS; needs the FidelityFX library. Takes effect after a restart. Now: {1}", FrameGenerationStatus?.Invoke() ?? "off"),
+                result.Add(new("Frame generation (FSR 3)", FrameGenerationHint(),
                     Toggle: new("Frame generation (FSR 3)", () => config.FrameGeneration, v => config.FrameGeneration = v, OnOff: true), Raw: "frameGeneration"));
             result = [.. result.OrderBy(e => LauncherSchema.Order(e.Raw ?? ""))];
         }

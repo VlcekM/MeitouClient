@@ -1292,18 +1292,6 @@ msgstr "该按键已被占用。请另选一个键，或按 Esc 取消。"
 msgid "Enter a valid number, or press Esc to cancel."
 msgstr "请输入有效数字，或按 Esc 取消。"
 
-msgid "Low quality applied."
-msgstr "已应用低画质。"
-
-msgid "Medium quality applied."
-msgstr "已应用中画质。"
-
-msgid "High quality applied."
-msgstr "已应用高画质。"
-
-msgid "Ultra quality applied."
-msgstr "已应用极致画质。"
-
 msgid "Every graphics feature is Meitou."
 msgstr "所有画面特性均为 Meitou。"
 
@@ -2730,3 +2718,18 @@ msgstr "已应用低画质：{1} 会关闭，直到你手动打开。"
 
 msgid "{1} quality applied."
 msgstr "已应用{1}画质。"
+
+msgid "Ground displacement (tessellation)"
+msgstr "地面置换（曲面细分）"
+
+msgid "off"
+msgstr "关"
+
+msgid "active"
+msgstr "已启用"
+
+msgid "unavailable"
+msgstr "不可用"
+
+msgid "unavailable (see the log), plain swapchain in use"
+msgstr "不可用（见日志），正在使用普通交换链"

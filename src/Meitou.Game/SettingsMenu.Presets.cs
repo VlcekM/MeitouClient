@@ -176,7 +176,9 @@ sealed partial class SettingsMenu
         try { ApplyTier(preset); }
         finally { tierOverride = null; }
         lastTier = CurrentPreset();
-        notice = preset == LowPreset && LowCut().Any() ? Loc.Tr("Low quality applied: {1} off until you keep them on.", string.Join(", ", LowCut())) : Loc.Tr("{1} quality applied.", PresetNames[preset]);
+        notice = preset == LowPreset && LowCut().Any()
+            ? Loc.Tr("Low quality applied: {1} off until you keep them on.", LowCutList())
+            : Loc.Tr("{1} quality applied.", Loc.Tr(PresetNames[preset]));
     }
 
     void ApplyTier(int preset)
