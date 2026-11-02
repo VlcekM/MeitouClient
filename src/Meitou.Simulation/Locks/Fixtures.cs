@@ -35,13 +35,14 @@ public sealed record TrainingSpot(string Id, string Record, Vector3 Position, in
 /// <summary>A cage's clips (ANIMATION names; null: none listed): standing in it, unconscious, dazed.</summary>
 public readonly record struct CageClips(string? Idle, string? Ko, string? Dazed);
 
-public readonly record struct BedData(int Function, string? Clip, float Materials, BedNode[]? Nodes = null);
+public readonly record struct BedData(int Function, string? Clip, float Materials, UseNode[]? Nodes = null);
 
 /// <summary>
-/// A <c>node type</c> 4 (NODE_USE) instance of a bed's BUILDING, in the bed's own space: where a sleeper is put and the way it faces (the node's yaw - 90°; a node looks
-/// along its local -X). <c>sleepinbed</c> holds <c>Bip01</c> about 12 units to the character's side, on the mattress (docs/game/locks.md "Beds").
+/// A <c>node type</c> 4 (NODE_USE) instance of a BUILDING, in the building's own space, and the way it faces (the node's yaw - 90°; a node looks along its local -X). A bed's is
+/// where a sleeper is put (<c>sleepinbed</c> holds <c>Bip01</c> about 12 units to the character's side, on the mattress); a cage's, where its occupant stands once out
+/// (docs/game/locks.md "Beds", "Cages and beds").
 /// </summary>
-public readonly record struct BedNode(Vector3 At, float Yaw);
+public readonly record struct UseNode(Vector3 At, float Yaw);
 
 /// <summary>A container with an inventory as the host picks it: its fixture id, BUILDING record, position, owner faction (-1: none), whether its lock is locked, its lock's level and its yaw.</summary>
 public sealed record ContainerSpot(string Id, string Record, Vector3 Position, int Owner = -1, bool Locked = false, int Level = 0, float Yaw = 0);
@@ -149,6 +150,8 @@ public sealed class Fixture
     public bool OccupantSelection { get; init; }
     /// <summary>Cages: the functionality's <c>animation</c>, <c>animation KO</c> and <c>animation dazed</c> clips, entry 0 of each (<c>UseableStuff::UseableStuff</c>, <b>Verified</b>); derived from the data.</summary>
     public CageClips Clips { get; init; }
+    /// <summary>Cages: the BUILDING's use nodes (null: none), the nearest of which an occupant leaving it is put at (<see cref="FixtureRegistry.ExitSpot"/>); derived from the data.</summary>
+    public UseNode[]? UseNodes { get; init; }
     public float UseRange { get; init; }
     public CharacterId Occupant { get; set; } = CharacterId.None;
     /// <summary>Beds: its record's <see cref="BedData"/>; derived from the data, not hashed or saved.</summary>

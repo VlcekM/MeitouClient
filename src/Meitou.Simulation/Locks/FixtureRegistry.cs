@@ -277,16 +277,16 @@ public sealed partial class FixtureRegistry
             foreach (var r in building.GetReferences(list))
                 if (db.Find(r.TargetStringId) is { Type: FcsRecordType.BUILDING_FUNCTIONALITY } f && f.GetInt("function") is TownBuildings.BedFunction or TownBuildings.SkeletonBedFunction)
                     return new BedData(f.GetInt("function"), f.GetReferences("animation").Select(a => db.Find(a.TargetStringId)?.Name).FirstOrDefault(n => n is not null),
-                        Meitou.Data.Gameplay.Construction.BuildingBuildData.From(building).Target, UseNodes(db, building));
+                        Meitou.Data.Gameplay.Construction.BuildingBuildData.From(building).Target, UseNodes(db, building) is { Length: >= 2 } nodes ? nodes : null);
         return null;
     }
 
-    /// <summary>A bed's NODE_USE instances (<see cref="BedNode"/>) in instance id order; null with fewer than 2 (the original then uses the bed's own origin).</summary>
-    static BedNode[]? UseNodes(GameDatabase db, GameRecord building)
+    /// <summary>A BUILDING's NODE_USE instances (<see cref="UseNode"/>) in instance id order; null with none (a bed with fewer than 2 is lain in at its own origin).</summary>
+    static UseNode[]? UseNodes(GameDatabase db, GameRecord building)
     {
-        BedNode[] nodes = [.. building.Instances.Values.Where(i => !i.IsCleared && db.Find(i.Target) is { } n && n.GetBool("is node") && n.GetInt("node type") == UseNodeType)
-            .OrderBy(i => i.Id, StringComparer.Ordinal).Select(i => new BedNode(i.Position, TownBuildings.YawOf(i.Rotation) - MathF.PI / 2))];
-        return nodes.Length >= 2 ? nodes : null;
+        UseNode[] nodes = [.. building.Instances.Values.Where(i => !i.IsCleared && db.Find(i.Target) is { } n && n.GetBool("is node") && n.GetInt("node type") == UseNodeType)
+            .OrderBy(i => i.Id, StringComparer.Ordinal).Select(i => new UseNode(i.Position, TownBuildings.YawOf(i.Rotation) - MathF.PI / 2))];
+        return nodes.Length > 0 ? nodes : null;
     }
 
     const int UseNodeType = 4;
@@ -295,17 +295,27 @@ public sealed partial class FixtureRegistry
     /// Where a sleeper is put in a bed and the way it faces (<c>Building::getPositionMarker</c> / <c>getDirectionMarkerQuat</c>, docs/game/locks.md "Beds"): the bed's use node
     /// nearest <paramref name="from"/>, else the bed's own origin and facing.
     /// </summary>
-    public static (Vector3 At, float Yaw) LieSpot(Fixture bed, Vector3 from)
+    public static (Vector3 At, float Yaw) LieSpot(Fixture bed, Vector3 from) => Nearest(bed, bed.Bed.Nodes, from) ?? (bed.Position, bed.Yaw);
+
+    /// <summary>
+    /// Where an occupant getting out of a cage stands (the original's hold clear <c>FUN_140661f90</c>, run while it is still held, docs/game/locks.md "Cages and beds"): the cage's use
+    /// node nearest the cage's own position (a Prisoner Cage's is on its door side, local +Z); null when the cage has none (the pole), where it stays.
+    /// </summary>
+    public static Vector3? ExitSpot(Fixture cage) => Nearest(cage, cage.UseNodes, cage.Position)?.At;
+
+    /// <summary>The use node of <paramref name="f"/> nearest <paramref name="from"/> in the world (squared 3D distance), with its facing; null with no nodes.</summary>
+    static (Vector3 At, float Yaw)? Nearest(Fixture f, UseNode[]? nodes, Vector3 from)
     {
-        if (bed.Bed.Nodes is not { } nodes) return (bed.Position, bed.Yaw);
-        var turn = Matrix4x4.CreateRotationY(bed.Yaw);
-        var best = (At: bed.Position, Yaw: bed.Yaw);
+        if (nodes is null) return null;
+
+        var turn = Matrix4x4.CreateRotationY(f.Yaw);
+        (Vector3 At, float Yaw)? best = null;
         float bestD = float.MaxValue;
         foreach (var n in nodes)
         {
-            var at = bed.Position + Vector3.Transform(n.At, turn);
+            var at = f.Position + Vector3.Transform(n.At, turn);
             float d = Vector3.DistanceSquared(at, from);
-            if (d < bestD) (best, bestD) = ((at, MathF.IEEERemainder(bed.Yaw + n.Yaw, MathF.Tau)), d);
+            if (d < bestD) (best, bestD) = ((at, MathF.IEEERemainder(f.Yaw + n.Yaw, MathF.Tau)), d);
         }
         return best;
     }
@@ -341,6 +351,7 @@ public sealed partial class FixtureRegistry
         {
             Id = id, Building = building, Kind = kind, RecordId = record.StringId, Site = site, Owner = owner, Position = at, Yaw = yaw, HostRecordId = host,
             Clips = kind == FixtureKind.Cage && functionality is not null ? new CageClips(FirstClip(db, functionality, "animation"), FirstClip(db, functionality, "animation KO"), FirstClip(db, functionality, "animation dazed")) : default,
+            UseNodes = kind == FixtureKind.Cage ? UseNodes(db, record) : null,
             Restrains = functionality?.GetBool("restrains movement") ?? false, OccupantSelection = kind == FixtureKind.Cage && (functionality?.GetBool("occupant selection") ?? false), UseRange = functionality is null ? 25 : FloatOf(functionality, "use range", 25),
             Contents = kind == FixtureKind.Container && storageWidth > 0 && storageHeight > 0 ? new Meitou.Simulation.Items.Inventory(storageWidth, storageHeight) { StackBonusMult = record.GetFloat("stackable bonus mult", 1) } : null,
             Lock = !locked ? null : new LockState { Level = RollLevel(world.Seed, id, faction, IntOf(record, "lock level bonus"), door: false), Hardness = FloatOf(record, "hardness") },
@@ -788,6 +799,12 @@ public sealed partial class FixtureRegistry
         }
     }
 
+    /// <summary>Puts a character leaving <paramref name="cage"/> at its <see cref="ExitSpot"/>, facing as it did; it stays where it is when the cage has no use node.</summary>
+    static void StepOut(CharacterTable table, int slot, Fixture cage)
+    {
+        if (ExitSpot(cage) is { } at) table.Place(slot, at, table.Next[slot].Yaw);
+    }
+
     static void Hold(CharacterTable table, int slot, CharacterCold c, Vector3 at, float yaw)
     {
         table.Place(slot, at, yaw);
@@ -799,8 +816,8 @@ public sealed partial class FixtureRegistry
     /// <summary>
     /// Frees a prisoner (Task_ReleasePrisoner, economy.md 11.5, <b>Observed</b>): the cage is unlocked and emptied, the state and sentence cleared (not the slave state: a slave released
     /// by a faction other than the player's becomes that faction's slave); when the releaser's faction books
-    /// bounties its entry and the jail's (the cage owner's) are erased. A player-faction prisoner gets "{1} has been released from prison.". The prisoner stays where it stands
-    /// (getting out of the cage is the caller's walk). False when the character is not imprisoned.
+    /// bounties its entry and the jail's (the cage owner's) are erased. A player-faction prisoner gets "{1} has been released from prison.". The prisoner is put in front of the
+    /// cage (<see cref="ExitSpot"/>). False when the character is not imprisoned.
     /// </summary>
     public bool Release(World world, CharacterId prisoner, int releaserFaction = -1, CrimeSystem? crimes = null)
     {
@@ -811,6 +828,7 @@ public sealed partial class FixtureRegistry
         {
             if (cage.Lock is { } l) l.Locked = false;
             if (cage.Occupant == prisoner) cage.Occupant = CharacterId.None;
+            StepOut(table, s, cage);
         }
         if (releaserFaction >= 0 && crimes is not null && crimes.Factions.Books(releaserFaction) && c.Bounties is { } ledger)
         {
@@ -844,6 +862,7 @@ public sealed partial class FixtureRegistry
         if (cage?.Lock is { EffectivelyLocked: true }) return false;
         bool escape = cage is not null && !c.Kidnapped;
         if (cage is not null && cage.Occupant == prisoner) cage.Occupant = CharacterId.None;
+        if (cage is not null) StepOut(table, s, cage);
         Clear(c);
         if (!(cage is not null && crimes?.Factions.NotReal(cage.Owner) == true)) c.Escaped = escape;
         if (escape && c.SlaveState == 1) SetSlave(world, c, 2, c.SlaveOwner);   // a slave getting out is an escaped slave (Task_GetOutOfCage)
