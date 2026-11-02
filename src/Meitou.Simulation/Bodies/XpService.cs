@@ -78,11 +78,10 @@ public sealed class XpService(GameConstants constants, BodyOptions options)
     /// <see cref="XpEvent.HitTaken"/>. <paramref name="weaponStat"/> is the current weapon's skill (none when unarmed); <paramref name="strengthFactor"/>
     /// is <see cref="WeaponWeightStrengthFactor"/>, or for unarmed (1 - the encumbrance factor). <paramref name="damageTaken"/> is the incoming packet's cut + blunt + pierce + stun
     /// (<see cref="XpEvent.HitTaken"/> only). The gains are scaled by the Global damage multiplier option.
-    /// <b>Verified</b> coefficients (decompile, docs/game/character-stats.md "Levelling"): per event, which stats gain and by how much. A hit taken also pays
-    /// <see cref="ToughnessFromDamage"/> (the original's separate <c>FUN_1408c68e0</c> call).
+    /// <b>Verified</b> coefficients (decompile, docs/game/character-stats.md "Levelling"): per event, which stats gain and by how much.
     /// </summary>
     public void Combat(CharacterStats stats, RaceData race, XpEvent ev, bool unarmed, StatsEnumerated weaponStat, float opponentSkill, float strengthFactor,
-        float damageTaken = 0, float damageKind = 0)
+        float damageTaken = 0)
     {
         var attackStat = unarmed ? StatsEnumerated.MartialArts : StatsEnumerated.MeleeAttack;
         float g = options.GlobalDamageMultiplier;
@@ -121,18 +120,17 @@ public sealed class XpService(GameConstants constants, BodyOptions options)
             // Verified (FUN_1408c6980 event 4): toughness x CharStats +0x34 (the stat scale) against the packet's four terms, x xp rate toughness.
             stats.Gain(StatsEnumerated.Toughness, EventUnit * g * constants.XpRateToughness
                 * SkillDifferenceFactor(stats[StatsEnumerated.Toughness] * stats.Scale, damageTaken) * race.StatMultiplier(StatsEnumerated.Toughness));
-            ToughnessFromDamage(stats, race, damageKind);
         }
     }
 
     /// <summary>
-    /// Toughness per damage received (<c>FUN_1408c68e0</c>): 0.075 x k x <c>xp rate toughness</c> x race[toughness], k = 0.05 normally, 0.25 for damage kind
-    /// 1 and 0.5 for kind 5 (the kinds are not decoded).
+    /// Toughness from a martial artist's own punch (<c>FUN_1408c68e0</c>, called only from <c>MedicalSystem::punchSomething</c>): 0.075 x k x <c>xp rate toughness</c> x
+    /// race[toughness] x the Global damage multiplier, k = 0.25 for hit material 1 (metal), 0.5 for 5 (blocked), else 0.05.
     /// </summary>
-    public float ToughnessFromDamage(CharacterStats stats, RaceData race, float damageKind = 0)
+    public float ToughnessFromDamage(CharacterStats stats, RaceData race, int material)
     {
-        float k = damageKind == 1 ? 0.25f : damageKind == 5 ? 0.5f : 0.05f;
-        return stats.Gain(StatsEnumerated.Toughness, 0.075f * k * constants.XpRateToughness * race.StatMultiplier(StatsEnumerated.Toughness));
+        float k = material == 1 ? 0.25f : material == 5 ? 0.5f : 0.05f;
+        return stats.Gain(StatsEnumerated.Toughness, 0.075f * k * constants.XpRateToughness * race.StatMultiplier(StatsEnumerated.Toughness) * options.GlobalDamageMultiplier);
     }
 
     /// <summary>Toughness from losing a limb (<c>FUN_14064edc0</c>): the generic entry with dt 1 and amount 300, a large one-off gain.</summary>

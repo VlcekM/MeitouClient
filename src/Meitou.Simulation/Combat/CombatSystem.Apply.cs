@@ -68,6 +68,7 @@ public sealed partial class CombatSystem
                 // A parry throws sparks at the parrying weapon (FUN_1404394f0, IsParry); a fist blow of a plain hand-to-hand impact does not.
                 if (!techniques[D.ReactTech].IsDodge && parry) world.BlockSparks?.Enqueue(Id(world, d));
                 Stop(ref A, tech, blow);
+                Punch(world, a, ac, dc, tech, blow, 5);
                 Record(now, a, d, blow, outcome, -1, default, false, false);
                 return;
             case BlowOutcome.Dodged:
@@ -76,6 +77,7 @@ public sealed partial class CombatSystem
                 GainCombatXp(ac, dc, XpEvent.GlancingHit, null);
                 var dodgeStats = dc.Stats;
                 xp.PerEvent(dodgeStats, dc.Race, StatsEnumerated.Dodge, 0.25f * xp.SkillDifferenceFactor(dodgeStats[StatsEnumerated.Dodge], Eff(ac, StatsEnumerated.MeleeAttack)));
+                Punch(world, a, ac, dc, tech, blow, 0);
                 Record(now, a, d, blow, outcome, -1, default, false, false);
                 return;
         }
@@ -137,6 +139,7 @@ public sealed partial class CombatSystem
         }
         else Stagger(world, ref D, d, dc, damage.Cut + damage.Blunt + damage.Pierce + damage.ExtraStun > DamageFormulas.StumbleThreshold(toughness, combat), now, CombatRolls.BlowCounter(a, seq, blow, 0));
         GainCombatXp(ac, dc, XpEvent.HitDealt, XpEvent.HitTaken, packet.Cut + packet.Blunt + packet.Pierce + packet.Stun);
+        Punch(world, a, ac, dc, tech, blow, 2);
         Sound(world, SoundKind.Hit, d, a, prev[d].Position, heavy: D.HitHeavy, unarmed: fighter.Unarmed, robot: ac.Race.IsRobot);
         Splash(world, d, dc, -new Vector2(toAttacker.X, toAttacker.Y), damage.Cut + damage.Blunt + damage.Pierce);
         if (knockout || death) Knockdown(world, d, dc, -toAttacker, damage.Cut + damage.Blunt + damage.Pierce);
@@ -153,6 +156,26 @@ public sealed partial class CombatSystem
         // A unique killed: dead in the registry, with the player flag when the killer is the player's (the body pass would mark it dead without).
         if (death && world.Uniques.RecordOf(world.Characters.IdOf(d)) is { } unique) world.Uniques.Died(unique, ac.IsPlayer, dc.Faction);
         Record(now, a, d, blow, outcome, part, damage, knockout, death);
+    }
+
+    /// <summary>
+    /// The martial artist's own limb takes its blow (<c>MedicalSystem::punchSomething</c> <c>FUN_140666780</c>, <b>Verified</b>, docs/game/combat.md "Punch self-damage"), at the end of
+    /// every take-hit: <paramref name="material"/> is the hit material, 5 blocked, 0 dodged, 2 hit, and 1 (metal) against a robot race. Only a person fighting with fists whose race is
+    /// not a robot, on the limb of the blow's impact point (<c>limb N</c>; 4, the weapon, takes none) unless a prosthetic is fitted there. Packet: cut 2 and blunt 2 on metal, cut 5 and
+    /// blunt 1 blocked, else blunt 1; times (1 - 0.5 x (fist rating + toughness x scale) / 100), unclamped, x the Global damage multiplier x the gear's <c>fist injury mult</c>.
+    /// The punch then pays the puncher's toughness XP (<see cref="XpService.ToughnessFromDamage"/>).
+    /// </summary>
+    void Punch(World world, int a, CharacterCold ac, CharacterCold dc, CombatTechnique tech, int blow, int material)
+    {
+        var f = ac.Fighter!;
+        if (!f.Unarmed || f.IsAnimal || ac.Race!.IsRobot) return;
+        int limb = blow <= 1 ? tech.Limb1 : tech.Limb2;
+        if (limb is < 0 or > 3) return;
+        if (dc.Race!.IsRobot) material = 1;
+        var (cut, blunt) = material switch { 1 => (2f, 2f), 5 => (5f, 1f), 6 => (1f, 1f), _ => (0f, 1f) };
+        var stats = ac.Stats!;
+        float k = (1 - 0.5f * (UnarmedRating(world, a, ac, f) + stats[StatsEnumerated.Toughness] * stats.Scale) * 0.01f) * options.GlobalDamageMultiplier * f.FistInjury;
+        if (ac.Medical!.PunchDamage(limb, cut * k, blunt * k, constants)) xp.ToughnessFromDamage(stats, ac.Race, material);
     }
 
     /// <summary>

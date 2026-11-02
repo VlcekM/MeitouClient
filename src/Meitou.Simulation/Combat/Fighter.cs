@@ -65,6 +65,8 @@ public sealed class Fighter
     public float UnarmedBonus { get; }
     /// <summary>Product of the pieces' <c>damage output mult</c>.</summary>
     public float DamageOutput { get; }
+    /// <summary>Product of the pieces' <c>fist injury mult</c> (CharStats <c>+0x4c</c>): scales the damage a fist blow does to the puncher's own limb.</summary>
+    public float FistInjury { get; }
     /// <summary>Product of the pieces' <c>dexterity mult</c>; 1.1 with no armour and no backpack (<see cref="Naked"/>).</summary>
     public float DexterityMult => Naked ? NakedBonus : dexterity;
     /// <summary>Product of the pieces' <c>dodge mult</c> (the gear's dodge value for <see cref="DefenceFormulas.DodgeSkill"/>, x 100); 1.1 when <see cref="Naked"/>.</summary>
@@ -111,7 +113,7 @@ public sealed class Fighter
         this.armour = armour is null ? [] : [.. armour];
         backpack = backpackStealth is not null;
         float seed = backpackStealth is { } b ? b < 0 ? 1 : b : 1;
-        float def = backpackSkill, atk = backpackSkill, unarmed = 0, output = 1, dex = 1, dodge = seed, speed = backpackSpeed, sneak = seed, runMax = 1, runMin = backpackAthletics;
+        float def = backpackSkill, atk = backpackSkill, unarmed = 0, output = 1, fist = 1, dex = 1, dodge = seed, speed = backpackSpeed, sneak = seed, runMax = 1, runMin = backpackAthletics;
         int perception = 0;
         assassin = ranged = 1;
         foreach (var p in this.armour)
@@ -123,6 +125,7 @@ public sealed class Fighter
             runMax = MathF.Max(runMax, p.Athletics);
             runMin = MathF.Min(runMin, p.Athletics);
             output *= p.Data.DamageOutputMult;
+            fist *= p.Data.FistInjuryMult;
             dex *= p.Data.DexterityMult;
             dodge *= p.Data.DodgeMult;
             speed *= p.CombatSpeed;
@@ -135,6 +138,7 @@ public sealed class Fighter
         AttackBonus = atk;
         UnarmedBonus = unarmed;
         DamageOutput = output;
+        FistInjury = fist;
         dexterity = dex;
         dodgeMult = dodge;
         CombatSpeed = speed;

@@ -359,7 +359,7 @@ Stats are `float`s inside `CharStats`. The number is what RACE `heal stat`, `sta
 | Being hit (event 4) | same | `defence` 2.0 of base (**Verified**: the stat written is the CharStats slot +0x124, the same slot event 2 uses for `defence`, and [combat.md](character-stats.md#stats-and-xp) lists the same; `FUN_1408c6360` handles stat-set kind 5), and `toughness` = 0.075 x `xp rate toughness` (1.33) x skill-diff(own, other) x `map[21]`, own = toughness x CharStats `+0x34` (the stat scale), other = cut + blunt + pierce + stun of the packet the hit carries (**Verified** `FUN_1408c6980`; callers the melee hit `FUN_1404394f0`, its copy of the blow's packet, and the bolt hit `FUN_140439c90`, pierce only; that the melee packet is the powered one is **Observed**). Meitou: `XpService.Combat` `damageTaken`; the hit also pays the per-damage gain below |
 | Event 6 | same | **Verified**: `attack`/`unarmed` 0.25 (`map[2]`) and weapon skill 0.1 against the opponent defence; no defence or dexterity gain (meaning of event 6 not decoded) |
 | Strength tail of every event | same | `strength` rises by `core(0.075 * 0.55 * 2*xp rate strength * map[1])` scaled x0.4 for event 2, x0.1 for event 4 (1 for events 0, 1 and 6, **Verified**), and by the weapon-weight factor below; for unarmed (kind 5) the weapon-weight factor is replaced by (1 - encumbrance factor) |
-| Toughness per damage received | `FUN_1408c68e0`, called from `FUN_140666780` | 0.075 x k x `xp rate toughness` x `map[21]`; k = 0.05 normally, 0.25 for damage kind 1, 0.5 for kind 5 (kind meanings not decoded) |
+| Own punch (attacker) | `FUN_1408c68e0`, called only from `MedicalSystem::punchSomething` `FUN_140666780` | **Verified**: 0.075 x k x `xp rate toughness` x `map[21]` x Global damage multiplier; k by hit material: 0.25 for 1 (metal), 0.5 for 5 (blocked), else 0.05. A hit taken does not call it ([punch self-damage](combat.md#punch-self-damage)) |
 | Toughness when knocked out | `FUN_1408c6720` (from the part damage `FUN_14064f300` when a hit knocks out, unless its fourth argument is set) | **Verified**: core(0.075 x `map[21]`) (`DAT_142134edc` = exp gain multiplier x 0.1, set in `FUN_1408c6980`) |
 | Toughness on an ordered get-up (`Task_GetUp` start `FUN_14033ca10`) | `FUN_1408c6780` | **Verified**: core(f x (n + 10) x 0.075 x `map[21]`), f the HUD's Toughness XP multiplier ([ui-screens.md](ui-screens.md#4-hud-mainbargui): 1, +1 left arm crippled, +2 right arm, +2 `bloodlossTrauma`, +2 always since `worstDamage` < 15), n the sensed `numEnemies` (SensoryData +0x94), only when the player ordered the get-up, something is sensed and no conscious ally ([ragdolls](ragdolls.md#playing-dead)); dialogue events 0x17 to 0x19. Meitou: `XpService.ToughnessFromGettingUp` (events not sent) |
 | Toughness from losing a limb | `FUN_14064edc0` via `FUN_1408c7310` | generic entry with dt 1, amount 300 into stat 21 (a large one-off gain) |
@@ -746,7 +746,6 @@ read and at least one consumer found through the data cross-references; base val
   character slot +0x248.
 - What the Hive Queen and Crimper (`is robot` races that eat and have blood) are meant to be in the flag semantics:
   whether `is robot` alone selects wear and robotic healing for them (it does in the part code, **Observed**).
-- Damage kinds 1, 5 and 6 passed to `FUN_140666780` / `FUN_1408c68e0`.
 
 ## Expression reference
 

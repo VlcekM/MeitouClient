@@ -619,6 +619,23 @@ against `FUN_1408a8f90`'s constants; caps 0.9 cut and 0.8 blunt; shirts (slot 8)
 with no `part coverage`, has quality 1 and skips the slot rules (shirt factors, the hat's stealth floor) (**Verified**, `FUN_140898e90` disassembly; `ArmourPiece.QualityOf`/`Graded`). Health, bandage, stun, blood and
 KO/coma/death thresholds use [character-stats](character-stats.md). Never tick medicine twice.
 
+### Punch self-damage
+
+**Verified** (`MedicalSystem::punchSomething` `FUN_140666780`, called on the attacker's medical at the end of the take-hit `FUN_1404394f0`; arguments material, target,
+technique, combo index per KenshiLib 1ce4a16; constants from `re/data_values.txt`). Every blow that reaches a defender hurts a martial artist's own limb:
+- Material: 5 blocked, 0 dodged, 2 hit (`HitMaterialType`: 0 missed, 1 metal, 2 flesh, 3 sand, 4 wood, 5 sword, 6 chain); 1 when the target's race `is robot`.
+  A swing that reaches nobody never calls it.
+- None unless the attacker's stat-set kind is 5 (fists), its race is not `is robot`, the blow's impact point `limb` (clamped combo index) is not 4, and
+  that limb (0 left arm, 1 right arm, 2 left leg, 3 right leg) has no fitted robot limb (part `+0x28`).
+- Packet: material 1 cut 2 blunt 2; 5 cut 5 blunt 1; 6 cut 1 blunt 1; else blunt 1. Times f = (1 - 0.5 x (fist rating + toughness x scale) / 100)
+  x Global damage multiplier x the gear's `fist injury mult` product (CharStats `+0x4c`); fist rating = `FUN_140884e00` with its flag, toughness the raw stat
+  (`+0x90`) x `+0x34`. No clamp: above 200 together f is negative and the blow heals the limb.
+- Written as `FUN_140644a70`: flesh -= cut + `blunt permanent organ damage` x blunt, stun += the rest of the blunt (no armour, wound, bleed or toughness
+  resistance). With the base organ damage 0 a landed or dodged punch only stuns the limb; blocked blows and robot targets cut it.
+- Then the part-down test asks for the collapse (`FUN_140649870`) and the attacker gains toughness ([character-stats](character-stats.md), `FUN_1408c68e0`).
+
+Meitou: `CombatSystem.Punch`, `MedicalState.PunchDamage`, `Fighter.FistInjury`; the medical tick sees the down part.
+
 ### Block sparks
 
 **Verified** (decompile of the take-hit `FUN_1404394f0`, outcome 5; test `FUN_140436980`; visibility `FUN_1405c9f60`; entity setter `FUN_1405b93a0`): a blocked blow plays the impact sound
