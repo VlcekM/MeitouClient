@@ -381,16 +381,19 @@ public sealed unsafe partial class ShadowPass : IDisposable
     /// <summary>Copies the scene's depth (in <see cref="DepthConvention"/>, what the depth buffer holds at the end of the frame) for <see cref="DrawDebug"/>. Call before the post-processing resolves.</summary>
     public void CaptureDepth(GpuTexture scene, int width, int height)
     {
-        if (sceneDepth is null || width != sceneDepth.Desc.Width || height != sceneDepth.Desc.Height)
-        {
-            sceneDepth?.Dispose();
-            sceneDepth = Gpu.CreateTexture(new TextureDesc(InternalFormat.DepthComponent24, width, height, Name: "shadow debug scene depth"));
-            sceneDepthSampled = Sampled(sceneDepth, TextureMinFilter.Nearest, TextureMagFilter.Nearest, TextureWrapMode.Repeat);
-        }
         // The debug view is Vulkan-only so far (its raw depth copy has no seam call yet).
         if (Gpu is not GpuContext vk) return;
         var source = vk.Device.NativeImage(scene);
         var cmd = vk.BeginNative("shadow debug depth copy");
+        if (sceneDepth is null || width != sceneDepth.Desc.Width || height != sceneDepth.Desc.Height || sceneDepth.Desc.Format != scene.Desc.Format)
+        {
+            // Made in the copy's own commands (its layout set there, before the copy) and as a depth target, as the water's copy
+            // (WaterRenderer.CaptureScene): made apart, the copy read blocks of undefined depth.
+            sceneDepth?.Dispose();
+            sceneDepth = vk.CreateTexture(new TextureDesc(scene.Desc.Format, width, height,
+                Use: TextureUse.Sampled | TextureUse.TransferDst | TextureUse.DepthTarget, Name: "shadow debug scene depth"), ((CommandList)cmd).Handle);
+            sceneDepthSampled = Sampled(sceneDepth, TextureMinFilter.Nearest, TextureMagFilter.Nearest, TextureWrapMode.Repeat);
+        }
         var region = new ImageCopy
         {
             SrcSubresource = new ImageSubresourceLayers(ImageAspectFlags.DepthBit, 0, 0, 1),
