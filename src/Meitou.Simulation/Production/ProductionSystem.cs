@@ -915,16 +915,17 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
     /// <summary>The factor of the rain's water (the exe's constant at <c>14168a254</c>, <b>Verified</b>).</summary>
     const float RainWaterFactor = 3;
 
-    /// <summary>The farm tick (<b>Observed</b>, <c>FarmBuilding::vfunc_28</c>), every tick whether anyone is there. An outdoor farm's first input is rained on first: level += wetness x water rate x rate x dt x 3, at most 1 (<b>Verified</b>, <c>FUN_1400e5580</c>).</summary>
+    /// <summary>The farm tick (<b>Observed</b>, <c>FarmBuilding::vfunc_28</c>), every tick whether anyone is there. A farm not inside a building (<see cref="Machine.Indoors"/>, slot 59; its own indoor flag, fertility effect 0, is not read) has its first input rained on first: level += wetness x water rate x rate x dt x 3, at most 1 (<b>Verified</b>, <c>FUN_1400e5580</c>).</summary>
     void FarmTick(World world, Machine m, float dt)
     {
         var f = m.Farm!;
         var fd = m.Data.Farm!;
         float h = dt / (MachineData.DaySeconds / 24);
-        if (m.Inputs.Length > 0 && !fd.Indoor && world.Weather?.At(m.Position.X, m.Position.Z) is { Wetness: > 0 } rain)
+        if (m.Inputs.Length > 0 && !m.Indoors && world.Weather?.At(m.Position.X, m.Position.Z) is { Wetness: > 0 } rain)
             m.Inputs[0].Level = MathF.Min(1, m.Inputs[0].Level + rain.Wetness * m.WaterRate * m.Inputs[0].Rate * dt * RainWaterFactor);
         bool watered = m.Inputs.Length == 0 || DrawWater(m, dt * m.WaterRate);
-        float inc = h * m.Yield * m.Power / fd.GrowthTime;
+        float inc = h * m.Yield / fd.GrowthTime;
+        if (Rated(world, m) != 0) inc *= m.Health * m.Power;   // slot 109 only for a farm that uses power (FUN_1402976a0)
         if (!watered) inc *= fd.DroughtMultiplier;
         bool changed = false;
         if (f.Growth >= 1)
@@ -953,7 +954,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         if (fd.DroughtDeathTime > 0 && f.Growth > 0 && f.Growth < 1)
         {
             if (!watered) f.Death += h / fd.DroughtDeathTime;
-            else if (f.Death > 0 && f.Death < 0.6f) f.Death = MathF.Max(0, f.Death - h / fd.DroughtDeathTime);
+            else if (f.Death > 0 && f.Death < 0.6f) f.Death -= h / fd.DroughtDeathTime;   // no floor: one step can overshoot below 0 (FUN_1400e5580)
             if (f.Death > 0) changed = true;
         }
         if (f.Death >= 1 || f.Harvested >= f.Plants.Length) Replant(world, m);
