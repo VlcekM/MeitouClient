@@ -172,8 +172,8 @@ measures the terrain's biome textures and which load at full size (`TerrainTextu
 (6000, 3000 while lifted, `CharacterRenderer.LiftedReach`) or 3000 of a kept point or a flight's arrival are built (meshes, textures); all were before,
 the draw list holding every loaded character. **Observed** (play benchmark flights, ~1,400 characters): character textures 576 MB to 122 MB. Drawing
 and the kept points and arrivals still measure as before.
-Past the same height the weather's fog and camera particle effects are off (`SkyRenderer.WeatherFogLifted`, `WorldFrame.UpdateParticles`): they
-surround a ground-level eye and would fill a flight's whole view.
+A free camera over 3000 above the ground under it (`KenshiCamera.FlightHeight`, the focus gate in [camera](formats/camera.md)) has the weather's fog and
+camera particle effects off (`SkyRenderer.WeatherFogLifted`): they surround a ground-level eye and would fill a flight's whole view.
 
 ## Rendering and upscaling
 

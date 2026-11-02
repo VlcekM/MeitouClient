@@ -788,9 +788,8 @@ static class WorldFrame
     static void UpdateParticles(Gpu gpu, WorldCamera camera)
     {
         if (gpu.Weather is not { } weather || gpu.MakeParticles is null) return;
-        // Above the game's camera heights (EyeLift, the loading's gate) the weather's effects stop, as its fog does (SkyRenderer.WeatherFogLifted).
-        var eye = camera.Eye;
-        var input = EyeLift.Of(eye, gpu.Terrain.HeightAt(eye.X, eye.Z)) > 0 ? Meitou.Data.Particles.WeatherEffectInput.None : weather.EffectInput();
+        // In flight (KenshiCamera.FlightHeight, the platoons' gate) the weather's effects stop, as its fog does (SkyRenderer.WeatherFogLifted).
+        var input = gpu.Sky.WeatherFogLifted ? Meitou.Data.Particles.WeatherEffectInput.None : weather.EffectInput();
         if (input.Effects.Count == 0 && gpu.Particles is null) return;
         var particles = gpu.Particles ??= gpu.MakeParticles();
         // The effects are placed in the camera's weather region: the area follows the cell the camera is in.
@@ -1398,12 +1397,12 @@ static class WorldFrame
         if (gpu.Objects is { } aheadObjects) (aheadObjects.Ahead, aheadObjects.Kept, aheadObjects.KeptViewDistance) = (gpu.Ahead, kept, camera.Distance);
         if (gpu.Foliage is { } aheadFoliage) aheadFoliage.Ahead = gpu.Ahead;
         if (gpu.Characters is { } aheadCharacters) (aheadCharacters.Ahead, aheadCharacters.Kept) = (gpu.Ahead, kept);
-        // The loading counts the eye's height over the ground beyond the game's cameras (EyeLift): terrain textures, object zones, foliage, characters; past it the weather fog is off.
+        // The loading counts the eye's height over the ground beyond the game's cameras (EyeLift): terrain textures, object zones, foliage, characters. In flight the weather fog is off.
         float groundUnderEye = gpu.Terrain.HeightAt(eye.X, eye.Z);
         if (gpu.Streamer is { } liftedTerrain) liftedTerrain.GroundUnderEye = groundUnderEye;
         if (gpu.Objects is { } liftedObjects) liftedObjects.GroundUnderEye = groundUnderEye;
         if (gpu.Characters is { } liftedCharacters) liftedCharacters.GroundUnderEye = groundUnderEye;
-        gpu.Sky.WeatherFogLifted = EyeLift.Of(eye, groundUnderEye) > 0;
+        gpu.Sky.WeatherFogLifted = eye.Y - groundUnderEye > Meitou.Data.World.KenshiCamera.FlightHeight;
         gpu.Streamer?.Update(eye);
         StageClock.Lap(0);
         if (gpu.Objects is { } lodObjects) lodObjects.LodPixelsPerRadian = render.TerrainPixelScale;   // the generated object levels are placed by the pixel size too

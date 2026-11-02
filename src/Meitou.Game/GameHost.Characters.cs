@@ -23,11 +23,8 @@ namespace Meitou.Game;
 /// <summary>The draw list from the snapshots, and markers for what has nothing to draw.</summary>
 sealed partial class GameHost
 {
-    /// <summary>
-    /// The free camera's eye this far above the ground under it keeps the last focus: the zones (squads, navmesh) stay where the flight left the ground and load
-    /// again once it comes down (docs/formats/camera.md "In the game"). The strategy camera never gets this high (<see cref="Meitou.Data.World.KenshiCamera.MaxHeightAbovePivot"/>).
-    /// </summary>
-    const float FocusCeiling = 3000;
+    /// <summary>The free camera's eye this far above the ground under it keeps the last focus: the zones load again once it comes down.</summary>
+    const float FocusCeiling = Meitou.Data.World.KenshiCamera.FlightHeight;
 
     /// <summary>Tells the world where the camera looks, when it has moved enough to matter (the zones follow it).</summary>
     void SendFocus(Vector3? at = null)

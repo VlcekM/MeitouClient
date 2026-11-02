@@ -74,6 +74,12 @@ public static class KenshiCamera
     /// <summary>The highest the camera gets above its pivot: the longest boom at the steepest view (1840).</summary>
     public const float MaxHeightAbovePivot = MaxDistance * -MinViewY;
 
+    /// <summary>
+    /// Engine choice: a free camera's eye this far above the ground under it is in flight. The world's focus (squads, navmesh) stays where it left the
+    /// ground (docs/formats/camera.md "In the game") and the weather's fog and effects are off. The strategy camera never gets this high (<see cref="MaxHeightAbovePivot"/>).
+    /// </summary>
+    public const float FlightHeight = 3000;
+
     // ------------------------------------------------------------------ the saved camera (docs/formats/camera.md "Saved camera")
 
     /// <summary>A saved pivot whose x or z is outside ±this is replaced on load (<c>FUN_1407ade60</c>).</summary>

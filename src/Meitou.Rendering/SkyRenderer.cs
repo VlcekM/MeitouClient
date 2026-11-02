@@ -651,7 +651,7 @@ public sealed unsafe partial class SkyRenderer : IDisposable
     /// <c>fogColour.a</c>), the colour and the distance where it is complete; null takes the forced <see cref="Weather"/> record's.
     /// </summary>
     public (float Weight, Vector3 Colour, float Distance)? FogInput { get; set; }
-    /// <summary>The eye is above the game's camera heights (<see cref="EyeLift"/>, the loading's gate): the weather fog is off, as the weather's effects are.</summary>
+    /// <summary>The eye is in flight (<see cref="KenshiCamera.FlightHeight"/> above the ground, the platoons' gate): the weather fog is off, as the weather's effects are.</summary>
     public bool WeatherFogLifted { get; set; }
 
     (double X, double Z) cloudOffset;
