@@ -73,7 +73,7 @@ sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, 
 
     Slider Volume(string label, Func<AudioSettings, float> get, Func<AudioSettings, float, AudioSettings> set) =>
         new(label, 0, 1, () => get(config.Audio ??= new()), v => { config.Audio = set(config.Audio ?? new(), Math.Clamp(v, 0, 1)); AudioChanged?.Invoke(); },
-            "0.00", Text: v => $"{v * 100:0}%", Faithful: 0.5f);
+            "0.00", Text: v => $"{v * 100:0}%", Faithful: 0.5f, Scale: 100);
     Slider? attackSlotsSlider;
     Slider AttackSlotsSlider => attackSlotsSlider ??= new("Attackers per target", 1, 5, () => config.AttackSlots, v =>
     {
@@ -220,7 +220,7 @@ sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, 
         string key = slider.Label;
         var d = LauncherSchema.Find(CatalogueKey(key));
         if (d is { Kind: global::Meitou.Settings.SettingKind.Slider, Labels: null })
-            slider = slider with { Min = d.Min, Max = d.Max, Logarithmic = d.Logarithmic && d.Min > 0, Reversed = d.Reversed, Text = d.Text };
+            slider = slider with { Min = d.Min, Max = d.Max, Logarithmic = d.Logarithmic && d.Min > 0, Reversed = d.Reversed, Text = d.Text, Scale = d.Scale };
         // An on / off setting in the catalogue (full screen, VSync; colour grading's two choices) is a switch, whatever the panel's slider.
         if (d is { Kind: global::Meitou.Settings.SettingKind.Toggle } or { Labels.Length: 2 })
             return new(d?.Name ?? Label(key), SliderHint(slider), Toggle: new(key, () => slider.Get() >= 0.5f, v => slider.Set(v ? 1 : 0)), Raw: CatalogueKey(key));
@@ -580,7 +580,7 @@ sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, 
     void BeginNumber(Slider slider, UiRect at)
     {
         editingNumber = slider;
-        numberText = slider.Get().ToString("G", CultureInfo.InvariantCulture);
+        numberText = MathF.Round(slider.Get() * slider.Scale, 4).ToString("G", CultureInfo.InvariantCulture);
         numberAnchor = 0;
         numberCaret = numberText.Length;
         numberBounds = at;
@@ -606,7 +606,7 @@ sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, 
             notice = "Enter a valid number, or press Esc to cancel.";
             return false;
         }
-        slider.Set(Math.Clamp(value, slider.Min, slider.Max));
+        slider.Set(Math.Clamp(value / slider.Scale, slider.Min, slider.Max));
         editingNumber = null;
         notice = "";
         return true;

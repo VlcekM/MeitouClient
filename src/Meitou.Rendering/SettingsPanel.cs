@@ -6,9 +6,10 @@ namespace Meitou.Rendering;
 /// One slider: a value between <see cref="Min"/> and <see cref="Max"/>, read and written through the callbacks. <see cref="Faithful"/> and <see cref="Meitou"/>, when known,
 /// are the game's value and Meitou's (the settings menu marks them on the track and offers a quick switch between them). <see cref="Reversed"/>: the value
 /// falls as the setting improves (terrain detail's error in pixels), so the track runs from <see cref="Max"/> on the left to <see cref="Min"/> on the right.
+/// <see cref="Scale"/>: what <see cref="Text"/> multiplies the value by (100 for a percentage), so a typed number is in the units shown.
 /// </summary>
 public sealed record Slider(string Label, float Min, float Max, Func<float> Get, Action<float> Set, string Format = "0.##", bool Logarithmic = false,
-    Func<float, string>? Text = null, float? Faithful = null, float? Meitou = null, bool Reversed = false)
+    Func<float, string>? Text = null, float? Faithful = null, float? Meitou = null, bool Reversed = false, float Scale = 1)
 {
     /// <summary>The value as the panel shows it (<see cref="Text"/> when given, else <see cref="Format"/>).</summary>
     public string Display => Text?.Invoke(Get()) ?? Get().ToString(Format, System.Globalization.CultureInfo.InvariantCulture);

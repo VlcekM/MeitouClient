@@ -299,7 +299,8 @@ sealed partial class SettingsMenu
         else if (entry.Slider is { } slider)
         {
             var valueAt = R(908, y, 192, 20);
-            bool editing = ReferenceEquals(editingNumber, slider);
+            // By label: the rows (and their sliders) are built again each frame.
+            bool editing = editingNumber?.Label == slider.Label;
             if (editing)
             {
                 numberBounds = valueAt;
