@@ -1163,13 +1163,20 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         foreach (var door in world.Fixtures.DoorsByBuilding[building.Key])
         {
             if (door.Spot is not { } s) continue;
-            var centre = new Vector2(s.Centre.X, s.Centre.Z);
-            var outward = new Vector2(s.Normal.X, s.Normal.Z);
-            if (Vector2.Dot(outward, centre - new Vector2(building.Position.X, building.Position.Z)) < 0) outward = -outward;
-            Vector2 a = centre + outward * 15, b = centre - outward * 15;
-            return a + (a - b) * 1.1f;
+            return DoorExit(new Vector2(s.Centre.X, s.Centre.Z), new Vector2(s.Normal.X, s.Normal.Z), new Vector2(building.Position.X, building.Position.Z));
         }
         return null;
+    }
+
+    /// <summary>
+    /// The point outside a door that <c>FUN_140296a40</c> yields (<b>Verified</b>): A + (A - B) x 1.1 with A and B the points 15 either side of the leaf along its normal; the outer side is the one
+    /// away from the building's origin (engine reading). Shared by the leave-building task and the intruder carry-out.
+    /// </summary>
+    internal static Vector2 DoorExit(Vector2 leafCentre, Vector2 normal, Vector2 building)
+    {
+        if (Vector2.Dot(normal, leafCentre - building) < 0) normal = -normal;
+        Vector2 a = leafCentre + normal * 15, b = leafCentre - normal * 15;
+        return a + (a - b) * 1.1f;
     }
 
     bool GoToSpot(World world, int slot, AiMind mind, Vector2 target, GiveUp giveUp, byte mode, float slack = 0, float? height = null)

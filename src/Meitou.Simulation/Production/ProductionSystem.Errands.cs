@@ -19,8 +19,8 @@ public sealed partial class ProductionSystem
     /// <summary>A body carried out is put down within this of its goal, or after <see cref="ErrandWalks"/> walks that ended short (engine choices).</summary>
     public const float ErrandArrive = 40;
     public const int ErrandWalks = 4;
-    /// <summary>How far past a door an intruder is carried (the original's point is the door's position pushed out by 1.1 of a reference vector, <b>Unknown</b>), and past a town's farthest building (<b>Observed</b>: 200 beyond the town's edge).</summary>
-    public const float OutsideDoor = 30, OutsideTown = 200;
+    /// <summary>How far past a town's farthest building an intruder is carried out of the town (<b>Observed</b>: 200 beyond the town's edge).</summary>
+    public const float OutsideTown = 200;
     /// <summary>The finders look this far for a body or an intruder (the sensed list's reach, an engine stand-in as the rescue job's).</summary>
     const float ErrandSight = 1600;
 
@@ -391,19 +391,22 @@ public sealed partial class ProductionSystem
     }
 
     /// <summary>
-    /// Where an intruder is put down: just past the building's door nearest the carrier (<see cref="OutsideDoor"/>), or past the farthest building of its town (<see cref="OutsideTown"/>) on the
-    /// side of the carrier. Pulled in towards the building until the ground is walkable.
+    /// Where an intruder is put down (<c>Task_TakeIntruderOutside</c>, <b>Verified</b>: <c>FUN_140335480</c>): the point outside the building's first door (lowest door index), A + (A - B) x 1.1
+    /// (<see cref="Ai.AiSystem.DoorExit"/>); a building without a door has the town's exit point (<see cref="OutsideTownGoal"/>, as the 274 variant does, which stands past the town's farthest
+    /// building on the side of the carrier). The original does not search for walkable ground; Meitou pulls an unwalkable point in towards the door (engine safeguard).
     /// </summary>
     Vector2 OutsideGoal(World world, BuildSite site, Vector3 from, ErrandKind kind)
     {
-        if (kind == ErrandKind.OutOfTown && world.Buildings.FindTown(site.Town) is { } town) return OutsideTownGoal(world, town, from);
-        var centre = new Vector2(site.Position.X, site.Position.Z);
-        var start = new Vector2(from.X, from.Z);
-        var door = world.Fixtures.DoorPicks.Where(d => d.Building == site.Id).OrderBy(d => Gap(d.Position, from)).FirstOrDefault();
-        var doorAt = door is null ? centre : new Vector2(door.Position.X, door.Position.Z);
-        var dir = door is null ? start - centre : doorAt - centre;
-        float distance = door is null ? (Settings.Footprint?.Invoke(site.Record) ?? 0) + OutsideDoor : OutsideDoor;
-        return Outward(world, doorAt, dir, distance);
+        var town = world.Buildings.FindTown(site.Town);
+        if (kind == ErrandKind.OutOfTown && town is not null) return OutsideTownGoal(world, town, from);
+        Locks.Fixture? door = null;
+        foreach (var f in world.Fixtures.OfBuilding(site.Id))
+            if (f.Kind == FixtureKind.Door && world.Fixtures.DoorSpotOf(f) is not null && (door is null || f.DoorIndex < door.DoorIndex)) door = f;
+        if (door is null || world.Fixtures.DoorSpotOf(door) is not { } leaf)
+            return town is not null ? OutsideTownGoal(world, town, from) : new Vector2(site.Position.X, site.Position.Z);
+        var centre = new Vector2(leaf.Centre.X, leaf.Centre.Z);
+        var exit = Ai.AiSystem.DoorExit(centre, new Vector2(leaf.Normal.X, leaf.Normal.Z), new Vector2(site.Position.X, site.Position.Z));
+        return world.Walkability.IsWalkable(exit.X, exit.Y) ? exit : Outward(world, centre, exit - centre, Vector2.Distance(exit, centre));
     }
 
     /// <summary>Past the town's farthest building by <see cref="OutsideTown"/>, on the side of <paramref name="from"/> (the carrier).</summary>
