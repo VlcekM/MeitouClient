@@ -1407,8 +1407,8 @@ public sealed unsafe class WaterRenderer : IDisposable
         return NeedsRefraction(near);   // without refraction (`--no-water-refraction`) the Meitou water keeps the slant path: no pass restart or copy
     }
 
-    /// <summary>Whether the scene needs <see cref="CaptureScene"/> before its water (<paramref name="depthSlice"/>: its depth can be copied).</summary>
-    internal bool NeedsCapture(float near, bool depthSlice) => NeedsRefraction(near) || depthSlice && NeedsDepth(near);
+    /// <summary>Whether the scene needs <see cref="CaptureScene"/> before its water.</summary>
+    internal bool NeedsCapture(float near) => NeedsRefraction(near) || NeedsDepth(near);
 
     /// <summary>
     /// Copies the scene drawn so far (the opaque geometry, with no pass open) for the water: at half the size the colour the Meitou water

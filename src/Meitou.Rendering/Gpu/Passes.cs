@@ -147,9 +147,6 @@ public sealed unsafe partial class GpuContext
     public bool DepthClamp => Device.DepthClamp;
 
     /// <inheritdoc/>
-    public bool ClipDepthZeroToOne => true;   // 0..1 clip depth, no GL mapping; removed in [P10]
-
-    /// <inheritdoc/>
     public bool RecordsSecondaries => Recording.Secondaries;
 
     /// <summary>The viewport and scissor (null: the whole viewport) the guests draw with from now on (a cascade's tile).</summary>

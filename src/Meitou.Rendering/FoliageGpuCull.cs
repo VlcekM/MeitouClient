@@ -91,7 +91,7 @@ public readonly record struct FoliageCullResult(GpuBuffer Rows, ulong RowsOffset
 /// The GPU foliage cull (docs/renderer-native.md 5.3, step A2): the instance arena (5.2: every group's <see cref="FoliageInstanceRecord"/>s,
 /// uploaded at their first cull), and per view the three kernels of <see cref="FoliageShaders"/> recorded into
 /// <see cref="GpuFrame.PreFrame"/>, so they run before every pass of the frame while the draws that read their output are recorded where the
-/// CPU path drew (a shadow cascade, a depth slice, the reflection). Per-view outputs live in device memory of the frame's slot.
+/// CPU path drew (a shadow cascade, the scene, the reflection). Per-view outputs live in device memory of the frame's slot.
 /// Render thread only.
 /// </summary>
 public sealed unsafe class FoliageGpuCull : IDisposable

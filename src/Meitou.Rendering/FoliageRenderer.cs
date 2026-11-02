@@ -1417,13 +1417,16 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     public int OccludedInstances { get; private set; }
 
     /// <summary>Draws the foliage seen from <paramref name="eye"/> through <paramref name="frustum"/>. Without <paramref name="grass"/> only the meshes (e.g. for a reflection).
-    /// <paramref name="continuation"/>: a further depth slice of the same frame, adding to the counts and the GPU time. <paramref name="maxRange"/> caps every layer's range (the reflection).</summary>
-    public void Draw(Matrix4x4 viewProjection, Vector3 eye, Vector4[] frustum, WorldRenderOptions options, Vector3 light, Vector3 fogColour, float fogDistance, TerrainRenderer terrain, bool grass = true, bool continuation = false, float maxRange = float.PositiveInfinity)
+    /// <paramref name="maxRange"/> caps every layer's range (the reflection).</summary>
+    public void Draw(Matrix4x4 viewProjection, Vector3 eye, Vector4[] frustum, WorldRenderOptions options, Vector3 light, Vector3 fogColour, float fogDistance, TerrainRenderer terrain, bool grass = true, float maxRange = float.PositiveInfinity)
     {
-        if (!continuation) { DrawnInstances = 0; DrawnBlades = 0; DrawCalls = 0; if (!depthPass) MainDetail = ""; }
+        DrawnInstances = 0;
+        DrawnBlades = 0;
+        DrawCalls = 0;
+        if (!depthPass) MainDetail = "";
         if (!Enabled) return;
         (rockTerrain, drawTextures, drawMaterialDistance) = (terrain, options.Textures, options.MaterialDistance);
-        int timer = grass ? BeginTimer(continuation) : -1;
+        int timer = grass ? BeginTimer() : -1;
         var cpu = Stopwatch.StartNew();
         drawStamp++;
         active.Clear();
@@ -1567,7 +1570,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
             else MainDetail += $" [{steps}]";
         }
         EndTimer(timer);
-        LastDrawCpuMs = (continuation ? LastDrawCpuMs : 0) + cpu.Elapsed.TotalMilliseconds;
+        LastDrawCpuMs = cpu.Elapsed.TotalMilliseconds;
     }
 
     // ---- culling (Draw step 1) ----
@@ -2815,11 +2818,10 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
 
     // GPU timing with the frame's timestamps (QueryArena), written where the GL version wrote its timestamp queries (through the seam's
     // Interleave: into the frame, or a host's inline secondary), read once the frame's slot has been collected (a frame ring later).
-    readonly record struct Timer(QuerySlot Start, QuerySlot End, bool Continuation);
+    readonly record struct Timer(QuerySlot Start, QuerySlot End);
 
     readonly List<Timer> timers = [];
     QuerySlot timerStart, pendingStamp;
-    bool timerContinuation;
     Action<IGpuCommandList>? recordStamp;
     double gpuSum;
     int gpuCount;
@@ -2830,11 +2832,10 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         Gpu.Interleave(recordStamp ??= cmd => cmd.Timestamp(Gpu.Frame.Timestamps, pendingStamp));
     }
 
-    int BeginTimer(bool continuation)
+    int BeginTimer()
     {
         if (timers.Count >= 64) return -1;
         Stamp(timerStart = Gpu.Frame.Timestamps.Allocate());
-        timerContinuation = continuation;
         return timerStart.IsValid ? 0 : -1;
     }
 
@@ -2843,7 +2844,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         if (index < 0) return;
         var end = Gpu.Frame.Timestamps.Allocate();
         Stamp(end);
-        if (end.IsValid) timers.Add(new Timer(timerStart, end, timerContinuation));
+        if (end.IsValid) timers.Add(new Timer(timerStart, end));
     }
 
     /// <summary>Collects finished timings into <see cref="GpuMs"/> (per <see cref="Update"/>, i.e. per frame). The timestamps are read once their
@@ -2858,7 +2859,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
             if (arena.TryRead(t.Start, out ulong start) && arena.TryRead(t.End, out ulong end))
             {
                 gpuSum += (end - start) / 1e6;
-                if (!t.Continuation) gpuCount++;
+                gpuCount++;
             }
             else if (Gpu.Frame.Number - t.Start.Frame <= 2 * Gpu.FramesInFlight) continue;   // not collected yet
             timers.RemoveAt(i--);

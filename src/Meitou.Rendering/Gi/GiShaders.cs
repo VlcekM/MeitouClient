@@ -635,7 +635,7 @@ static class GiShaders
 
             if (mode == 3u)
             {
-                vec4 q = p.inverse * vec4(uv * 2.0 - 1.0, 1.0, 1.0);
+                vec4 q = p.inverse * vec4(uv * 2.0 - 1.0, DEPTH_NEAREST, 1.0);   // any point on the ray: the eye is the origin
                 vec3 dir = normalize(q.xyz / q.w);
                 rayQueryEXT rq;
                 rayQueryInitializeEXT(rq, uScene, gl_RayFlagsOpaqueEXT | gl_RayFlagsCullBackFacingTrianglesEXT, 0xFF, p.eye.xyz, 0.0, dir, 1e6);

@@ -38,16 +38,6 @@ public sealed class WorldCamera
     public Matrix4x4 Projection(float aspect, float near, float far) =>
         DepthConvention.Perspective(FieldOfView, aspect, near, far);
 
-    /// <summary>Unused: the scene has one depth buffer. Kept only until WorldFrame stops setting it; removed in [P10].</summary>
-    public float SplitDistance { get; set; } = 20000;
-
-    /// <summary>The scene's one depth range, (<see cref="Near"/>, <see cref="ViewDistance"/>). Temporary single-slice stand-in for the
-    /// callers not yet converted (WorldFrame [P4], ReflectionPass [P7]); removed in [P10].</summary>
-    public IEnumerable<(float Near, float Far)> Slices()
-    {
-        yield return (Near, ViewDistance);
-    }
-
     /// <summary>Rotates the eye around the target.</summary>
     public void Orbit(float dx, float dy)
     {

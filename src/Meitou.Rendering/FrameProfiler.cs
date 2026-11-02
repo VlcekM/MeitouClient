@@ -7,7 +7,7 @@ namespace Meitou.Rendering;
 
 /// <summary>
 /// Where the frame time goes, per <see cref="StageClock"/> stage: the render thread's time (stopwatch laps) and the GPU's (a
-/// timestamp at every lap; a stage's time is the gap since the stamp before, summed when a stage runs once per depth slice).
+/// timestamp at every lap; a stage's time is the gap since the stamp before, summed when a stage runs more than once).
 /// Keeps the last <see cref="History"/> frames and draws them with the <see cref="DebugOverlay"/> as one chart, a line per stage.
 /// GPU timings are read a few frames late, without waiting.
 /// </summary>

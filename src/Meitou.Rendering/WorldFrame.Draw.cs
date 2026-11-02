@@ -739,7 +739,7 @@ static partial class WorldFrame
         var post = f.Post;
         var host = f.Host;
         bool water = f.Render.Water;
-        if (water && gpu.Water is { } capturing && capturing.NeedsCapture(near, true))
+        if (water && gpu.Water is { } capturing && capturing.NeedsCapture(near))
         {
             host.Close();
             capturing.CaptureScene(post.SceneColour, post.SceneDepth, near, far);

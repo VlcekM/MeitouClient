@@ -403,10 +403,10 @@ public sealed unsafe partial class ShadowPass : IDisposable
 
     /// <summary>
     /// Draws a debug view into <paramref name="target"/> after the frame: 1 the cascade maps in a corner, 2 the shadow term of the
-    /// scene's surfaces tinted by cascade, 3 the term multiplied over the picture. <paramref name="nearProjection"/>: the scene's
+    /// scene's surfaces tinted by cascade, 3 the term multiplied over the picture. <paramref name="sceneProjection"/>: the scene's
     /// projection (the captured depth's, in <see cref="DepthConvention"/>).
     /// </summary>
-    public void DrawDebug(int mode, GpuTexture target, int width, int height, Matrix4x4 view, Matrix4x4 nearProjection, Vector3 eye)
+    public void DrawDebug(int mode, GpuTexture target, int width, int height, Matrix4x4 view, Matrix4x4 sceneProjection, Vector3 eye)
     {
         if (mode <= 0) return;
         if (debugProgram is null)
@@ -428,7 +428,7 @@ public sealed unsafe partial class ShadowPass : IDisposable
         if (scene)
         {
             var rotation = view with { M41 = 0, M42 = 0, M43 = 0 };
-            Matrix4x4.Invert(rotation * nearProjection, out var inverse);
+            Matrix4x4.Invert(rotation * sceneProjection, out var inverse);
             var p = debugProgram;
             p.Set(debugInverse, inverse);
             p.Set(debugEye, eye);

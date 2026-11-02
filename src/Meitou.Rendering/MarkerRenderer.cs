@@ -191,11 +191,12 @@ public sealed unsafe class MarkerRenderer : IDisposable
 
     /// <summary>
     /// Draws over the finished <paramref name="picture"/> (after the tone map, so the colours come out as the material gives them, whatever the
-    /// exposure): the visible parts, then the parts behind the scene, each fragment sorted by the scene's <paramref name="nearDepth"/>
+    /// exposure): the visible parts, then the parts behind the scene, each fragment sorted by the scene's <paramref name="sceneDepthTexture"/>
     /// (<paramref name="renderWidth"/> × <paramref name="renderHeight"/> of it used). The markers are drawn multisampled into targets of their own
     /// (their own depth hides their far sides), resolved, and blended over the picture. Depth is clamped, so a marker beyond the far plane is drawn whole.
     /// </summary>
-    public void Record(GpuTexture picture, int width, int height, GpuTexture nearDepth, int renderWidth, int renderHeight, Matrix4x4 nearViewProjection, Vector3 eye, Vector3 sunDirection)
+    public void Record(GpuTexture picture, int width, int height, GpuTexture sceneDepthTexture, int renderWidth, int renderHeight,
+        Matrix4x4 sceneViewProjection, Vector3 eye, Vector3 sunDirection)
     {
         if (!Active || width <= 0 || height <= 0) return;
         idleSince = 0;
@@ -217,11 +218,11 @@ public sealed unsafe class MarkerRenderer : IDisposable
             Depth = t.Depth with { Load = LoadOp.Clear, DepthClear = DepthConvention.Clear },
         };
         cmd.BeginRendering(t.Rendering);
-        var vp = Matrix4x4.CreateTranslation(eye) * nearViewProjection;
+        var vp = Matrix4x4.CreateTranslation(eye) * sceneViewProjection;
         program.Set(viewProjection, in vp);
         program.Set(sun, sunDirection);
         program.Set(depthScale, renderWidth / (float)width, renderHeight / (float)height);
-        program.Bind(sceneDepth, new SampledTexture(Nearest(), nearDepth.View()));
+        program.Bind(sceneDepth, new SampledTexture(Nearest(), sceneDepthTexture.View()));
         var premultiplied = new BlendState(true, BlendingFactor.One, BlendingFactor.OneMinusSrcAlpha);
         for (int pass = 0; pass < 2; pass++)
         {

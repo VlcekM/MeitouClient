@@ -454,7 +454,7 @@ static partial class WorldApp
                 frameMaxMs = 0;
                 // The window title carries the frame rate too.
                 window.Title = $"Meitou world ({RendererName(o)}) | {frames / titleTimer:0} fps";
-                // Triangles of the main view (both depth slices; not the shadows); the objects' from their running colour total.
+                // Triangles of the main view (not the shadows); the objects' from their running colour total.
                 long objectTotal = gpu.Objects?.Totals[0, 1] ?? 0;
                 int counted = Math.Max(frames, 1);
                 var tris = new WorldStats.Triangles(gpu.Terrain.DrawnTriangles, (objectTotal - lastObjectTris) / (double)counted,

@@ -24,7 +24,7 @@ public sealed record LimbLook(string Diffuse, string? Mask, Vector3 SkinTone, Ve
 /// Loose meshes thrown about by the host (luckyren Mode's bones and limbs, docs/game/luckyren.md): each a static mesh, centred on its bounds, textured with
 /// its first resolved diffuse map and lit as the world's objects (<c>kenshiLight</c> under the game sky, the plain light otherwise, then the haze). The same
 /// fragment runs on Vulkan and Metal: every atmosphere/shadow texture and the debris diffuse map come through the bindless table, so Metal's 16 direct
-/// fragment samplers are no longer a constraint. Drawn in the scene pass of the near slice before the characters (colour only, leaving the alpha to them); they
+/// fragment samplers are no longer a constraint. Drawn in the scene pass before the characters (colour only, leaving the alpha to them); they
 /// cast no shadow. A mesh is loaded the first time its <see cref="Extent"/> is asked for.
 /// </summary>
 public sealed unsafe class DebrisRenderer : IDisposable

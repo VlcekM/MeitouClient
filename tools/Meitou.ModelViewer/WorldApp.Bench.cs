@@ -27,7 +27,7 @@ static partial class WorldApp
         AbToggles.Clear();
         AbToggles.RegisterEnhancements(LiveSwitches(o, () => gpu, () => camera, () => render));
         if (gpu.Water is { } water) AbToggles.Register("water-lean", () => water.Lean, v => water.Lean = v,
-            "skip zero-contribution surf, ocean and distant detail work and opaque slices' refraction copies; B: always evaluate/copy");
+            "skip zero-contribution surf, ocean and distant detail work and refraction copies of an opaque view; B: always evaluate/copy");
         AbToggles.Register("shadow-zone-box", () => ShadowZoneBox.Enabled, v => ShadowZoneBox.Enabled = v,
             "each shadow cascade's foliage work list box-tested by zone against the cascade's planes (A) against every zone within 1.2 x the shadow range (B)");
         AbToggles.Register("char-casters", () => ShadowPass.CharacterCasterCull, v => ShadowPass.CharacterCasterCull = v,
@@ -65,7 +65,6 @@ static partial class WorldApp
             AbToggles.Register("lod-far", () => grassPass.LodFar, v => grassPass.LodFar = v, "generated rock levels: the pixel tolerance growing with the distance (needs lod on)");
             AbToggles.Register("foliage-meshes", () => grassPass.DrawMeshes, v => grassPass.DrawMeshes = v, "foliage meshes and impostors, not the TERRAIN-mode rocks");
             AbToggles.Register("foliage-prepass", () => FoliagePrepass.Enabled, v => FoliagePrepass.Enabled = v, "the main view's foliage meshes drawn as a depth prepass (the fade dither and the cut-out) and then the colour with no discard and the depth test EQUAL; B: the colour once, as before");
-            AbToggles.Register("foliage-far", () => FoliageFarSlice.Enabled, v => FoliageFarSlice.Enabled = v, "the foliage drawn in the far depth slice, beyond 20000 units (A) against left out (B; a probe)");
             AbToggles.Register("impostor-prepass", () => Meitou.Rendering.Impostors.ImpostorPrepass.Enabled, v => Meitou.Rendering.Impostors.ImpostorPrepass.Enabled = v, "the main view's billboards drawn as a depth prepass (the fade, the frame pick, the cut-out) and then the lighting with no discard and the depth test EQUAL; B: the lighting for every pixel that passes, as before");
             AbToggles.Register("impostor-quad", () => Meitou.Rendering.Impostors.ImpostorQuad.Enabled, v => Meitou.Rendering.Impostors.ImpostorQuad.Enabled = v, "billboards drawn as the rectangle that holds the mesh's bounding box seen from the eye; B: the square of the bounding sphere's silhouette, as before");
             AbToggles.Register("card-trim", () => grassPass.CardTrim, v => grassPass.CardTrim = v, "alpha-tested foliage cards drawn cut to the opaque outline of their texture; B: the whole cards");

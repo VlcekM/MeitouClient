@@ -159,12 +159,6 @@ public interface IGpuContext
     /// <summary>The device clamps depth instead of clipping it (the shadow casters' state).</summary>
     bool DepthClamp { get; }
 
-    /// <summary>
-    /// Whether window depth equals clip depth (0..1). True on both backends: each stores the clip depth z/w directly. The scene
-    /// depth's convention (reversed or not) is <see cref="DepthConvention"/>. Removed in [P10].
-    /// </summary>
-    bool ClipDepthZeroToOne { get; }
-
     /// <summary>Hosts may open their rendering with secondaries (Vulkan's parallel recording; Metal records one encoder).</summary>
     bool RecordsSecondaries { get; }
 

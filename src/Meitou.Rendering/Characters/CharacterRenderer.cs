@@ -17,7 +17,7 @@ namespace Meitou.Rendering.Characters;
 /// <item><see cref="Update"/> once per frame, before the shadow cascades: asks the host's <see cref="Source"/> for the list, builds assets for
 /// appearances not seen yet, poses every character in range in parallel into the frame's bone-palette buffer, and writes the materials of the
 /// parts in view.</item>
-/// <item><see cref="Draw"/> / <see cref="DrawDepth"/> for each view (the scene's near slice, a shadow cascade): cull, pick each part's mesh LOD, group
+/// <item><see cref="Draw"/> / <see cref="DrawDepth"/> for each view (the scene, a shadow cascade): cull, pick each part's mesh LOD, group
 /// the instances by (mesh part, level) and record one instanced draw each.</item>
 /// </list>
 /// </summary>

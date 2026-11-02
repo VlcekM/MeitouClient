@@ -86,11 +86,11 @@ public sealed class HoverOutlineRenderer
     /// <summary>
     /// Blends the outline of each of <paramref name="masks"/> over <paramref name="picture"/> (<paramref name="width"/> × <paramref name="height"/>) in its tint, only
     /// inside its characters' projected bounding spheres (<paramref name="viewProjection"/>, unjittered) widened by the outline, the overlapping ones joined so no pixel
-    /// is blended twice. <paramref name="nearDepth"/> is the scene's depth (planes <paramref name="sceneNear"/>..<paramref name="sceneFar"/>), <paramref name="renderWidth"/>
-    /// × <paramref name="renderHeight"/> of it used.
+    /// is blended twice. <paramref name="sceneDepthTexture"/> is the scene's depth (planes <paramref name="sceneNear"/>..<paramref name="sceneFar"/>),
+    /// <paramref name="renderWidth"/> × <paramref name="renderHeight"/> of it used.
     /// </summary>
     internal void Record(GpuTexture picture, int width, int height, IReadOnlyList<HoverMask> masks,
-        GpuTexture nearDepth, int renderWidth, int renderHeight, float sceneNear, float sceneFar, Matrix4x4 viewProjection)
+        GpuTexture sceneDepthTexture, int renderWidth, int renderHeight, float sceneNear, float sceneFar, Matrix4x4 viewProjection)
     {
         int outline = Math.Clamp((int)MathF.Round(2.5f * height / 1080f), 1, 6);
         var nearest = gpu.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Nearest, TextureMagFilter.Nearest, TextureWrapMode.ClampToEdge,
@@ -109,7 +109,7 @@ public sealed class HoverOutlineRenderer
                 cmd.BeginRendering(over.Rendering);
                 program.Bind(mask, new SampledTexture(nearest, hover.Colour.View()));
                 program.Bind(maskDepth, new SampledTexture(nearest, hover.Depth.View()));
-                program.Bind(sceneDepth, new SampledTexture(nearest, nearDepth.View()));
+                program.Bind(sceneDepth, new SampledTexture(nearest, sceneDepthTexture.View()));
                 program.Set(depthScale, renderWidth / (float)width, renderHeight / (float)height);
                 program.Set(maskPlanes, hover.Near, hover.Far);
                 program.Set(scenePlanes, sceneNear, sceneFar);
