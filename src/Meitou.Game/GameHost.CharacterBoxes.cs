@@ -55,8 +55,12 @@ sealed partial class GameHost
         var viewProjection = camera.View * camera.Projection(width / (float)Math.Max(height, 1), camera.Near, camera.ViewDistance);
         characters.CountedBoxes(viewProjection, width, height, countedBoxes);
         const float line = 1.5f;
-        foreach (var b in countedBoxes)
+        foreach (var whole in countedBoxes)
         {
+            // A third of the bounding sphere's box each way, round its centre: the whole box spans weapons and ragdoll reach and hides the crowd.
+            var mid = new Vector2(whole.X + whole.Z, whole.Y + whole.W) * 0.5f;
+            var half = new Vector2(whole.Z - whole.X, whole.W - whole.Y) / 6;
+            var b = new Vector4(mid - half, (mid + half).X, (mid + half).Y);
             overlay.Rect(b.X, b.Y, b.Z, b.Y + line, CharacterBoxColour);
             overlay.Rect(b.X, b.W - line, b.Z, b.W, CharacterBoxColour);
             overlay.Rect(b.X, b.Y, b.X + line, b.W, CharacterBoxColour);
