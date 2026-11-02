@@ -299,8 +299,9 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
                     continue;
                 }
                 // 243 needs no own town (FUN_1408cb650); a player-side member takes only from its own faction's stores (FUN_1408dac20). 244 starts only with room for the item (state 82,
-                // FUN_14059bd80: the inventory, else the worn bag); state !12 (no sensed ally fighting) is not modelled: its per-ally score FUN_14099a190 is undecoded.
-                if (food[role] == 1 && !HoldsFood(cold) && Store(world, at, town, owner: cold.Faction == world.Player.Faction ? cold.Faction : -1) is var (id, spot) && FoodFits(world, id, cold))
+                // FUN_14059bd80: the inventory, else the worn bag) and with no sensed ally fighting (state !12, AiSystem.AlliesFighting).
+                if (food[role] == 1 && !HoldsFood(cold) && Store(world, at, town, owner: cold.Faction == world.Player.Faction ? cold.Faction : -1) is var (id, spot) && FoodFits(world, id, cold)
+                    && world.SystemOf<AiSystem>()?.AlliesFighting(world, slot) != true)
                 {
                     cold.Engaged = true;
                     duties.Add(new TownDuty { Member = member, Faction = cold.Faction, Town = town, Kind = TownDutyKind.Food, Target = id, Goal = spot });

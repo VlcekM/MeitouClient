@@ -414,7 +414,7 @@ from the decompile and agree with this table, except that the decompile shows no
 | 5 | `hasWeaponEquipped`: a weapon in hand that is not ranged (`FUN_140596a30`, **Verified**) |
 | 6 | `isNoEnemiesInVicinity` |
 | 7 | `isTargetDown` |
-| 12 | `isAlliesFighting`: `FUN_14099a350` (**Verified**) true when any sensed ally (sense filter 1, 8) scores above 0 in the fight threat `FUN_14099a190` ([combat goals](#combat-goals)). Row 244 needs it false; not modelled |
+| 12 | `isAlliesFighting`: `FUN_14099a350` (**Verified**) true when any sensed ally (sense filter 1, 8) scores above 0 in the fight threat `FUN_14099a190` ([combat goals](#combat-goals)). Row 244 needs it false. Meitou: `AiSystem.AlliesFighting`, asked only by the food errand (`TownDutySystem`); the planner leaves the state false (rows 13, 15, 288, 234 have their own finders) |
 | 13 | `isTargetEnemy` |
 | 15 | `isItemLootable` |
 | 16 | `isAggressionTowards` |

@@ -162,6 +162,24 @@ public sealed partial class AiSystem
     }
 
     /// <summary>
+    /// State 12 <c>isAlliesFighting</c> (<c>FUN_14099a350</c>, <b>Verified</b>): any entry of the looker's senses tagged ALLY and not KO (sense filter 1, 8; seen, heard or remembered) whose fight threat
+    /// (<c>FUN_14099a190</c>, <see cref="Combat.CombatSystem.FightThreat"/>) is above 0. Row 244 Grabbing food needs it false; only the food errand (<see cref="Kidnap.TownDutySystem"/>) asks it, the
+    /// planner's rows 13, 15, 288 and 234 have their own finders (<see cref="ProtectPick"/>), so <c>PlanContext.Holds</c> leaves the state false.
+    /// </summary>
+    internal bool AlliesFighting(World world, int slot)
+    {
+        var prev = world.Characters.Previous;
+        if (combat is not { } fights || aggro is not { } look || look.SensesOf(slot) is not { } senses) return false;
+        foreach (var e in senses.Entries)
+        {
+            int a = e.Target;
+            if (a == slot || (e.Tags & (SenseTag.Ally | SenseTag.Ko)) != SenseTag.Ally || (uint)a >= (uint)prev.Length || !prev[a].Alive || prev[a].Generation != e.Generation) continue;
+            if (fights.FightThreat(world, a, look.SensesOf(a)) > 0) return true;
+        }
+        return false;
+    }
+
+    /// <summary>
     /// Starts the fights the thinks asked for (serial, slot order; docs/game/ai-tasks.md "Combat goals"): an attack goal's as a goal's attack (row 16), a protect goal's and Self preservation's as a defence (row 13; a self-defence is not in the aggro log),
     /// both of the goal's provenance, for the next tick; the fight is the AI's own (<see cref="AiMind.FightFrom"/>), so the character thinks in it. A character fighting by then, or whose pick
     /// is gone or down, starts none (it thinks again). Each character asks for one fight at most, so none joins two in a tick. The squad mates of one that starts are asked to think at the next
