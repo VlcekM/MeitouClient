@@ -20,7 +20,7 @@ static class ShaderCache
             sha.TransformBlock(b, 0, b.Length, null, 0);
         }
         Add("v" + version);
-        Add($"remap={o.RemapClipDepth};vb={o.VertexBindingBase};fb={o.FragmentBindingBase}");
+        Add($"reversed={o.DepthReversed};vb={o.VertexBindingBase};fb={o.FragmentBindingBase}");
         Add(vertex);
         Add(fragment);
         sha.TransformFinalBlock([], 0, 0);

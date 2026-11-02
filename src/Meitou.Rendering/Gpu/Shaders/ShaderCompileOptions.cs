@@ -4,10 +4,10 @@ namespace Meitou.Rendering.Gpu.Shaders;
 public sealed record ShaderCompileOptions
 {
     /// <summary>
-    /// Append a clip depth remap (GL's -w..w to Vulkan's 0..w) to the vertex shader. A fallback for devices without
-    /// VK_EXT_depth_clip_control; with that extension the GL projection is used unchanged.
+    /// Defines <c>MEITOU_DEPTH_REVERSED</c> in every stage, which selects the reversed branch of <see cref="DepthConvention.Glsl"/>.
+    /// Set by the Vulkan backend (its scene depth is reversed), unset on Metal.
     /// </summary>
-    public bool RemapClipDepth { get; init; }
+    public bool DepthReversed { get; init; }
 
     /// <summary>Directory of the disk cache; null is <c>%LOCALAPPDATA%\Meitou\shader-cache</c>.</summary>
     public string? CacheDirectory { get; init; }

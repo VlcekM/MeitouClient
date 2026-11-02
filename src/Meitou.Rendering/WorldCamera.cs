@@ -4,8 +4,8 @@ namespace Meitou.Rendering;
 
 /// <summary>
 /// Camera for the world view, Y up: orbits a target point (left drag), looks around from the eye (right drag),
-/// flies with the keyboard. Near and far planes follow the height above the terrain so both close-ups and
-/// whole regions keep usable depth precision.
+/// flies with the keyboard. The scene is drawn into one depth buffer in <see cref="DepthConvention"/> (reversed on Vulkan), from
+/// <see cref="Near"/> (which follows the height above the terrain) to <see cref="ViewDistance"/>.
 /// </summary>
 public sealed class WorldCamera
 {
@@ -34,22 +34,18 @@ public sealed class WorldCamera
     /// <summary>The farthest the near plane may sit (200; the Meitou title lowers it to draw its wanderer close in front of a high eye).</summary>
     public float MaxNear { get; set; } = 200;
 
+    /// <summary>The scene projection in <see cref="DepthConvention"/> (reversed on Vulkan: depth 1 at the near plane, 0 at the far one).</summary>
     public Matrix4x4 Projection(float aspect, float near, float far) =>
-        Matrix4x4.CreatePerspectiveFieldOfView(FieldOfView, aspect, near, far);
+        DepthConvention.Perspective(FieldOfView, aspect, near, far);
 
-    /// <summary>
-    /// Where the near and far depth slices meet: the far slice (<see cref="SplitDistance"/> .. <see cref="ViewDistance"/>)
-    /// is drawn first, the depth buffer cleared, then the near slice (<see cref="Near"/> .. split), so a 24-bit depth
-    /// buffer keeps its precision from a few units out to the horizon.
-    /// </summary>
+    /// <summary>Unused: the scene has one depth buffer. Kept only until WorldFrame stops setting it; removed in [P10].</summary>
     public float SplitDistance { get; set; } = 20000;
 
-    /// <summary>The depth slices to draw, far first: (near, far) planes.</summary>
+    /// <summary>The scene's one depth range, (<see cref="Near"/>, <see cref="ViewDistance"/>). Temporary single-slice stand-in for the
+    /// callers not yet converted (WorldFrame [P4], ReflectionPass [P7]); removed in [P10].</summary>
     public IEnumerable<(float Near, float Far)> Slices()
     {
-        float split = Math.Max(SplitDistance, Near * 4);
-        if (ViewDistance > split) yield return (split, ViewDistance);
-        yield return (Near, Math.Min(split * 1.02f, ViewDistance));
+        yield return (Near, ViewDistance);
     }
 
     /// <summary>Rotates the eye around the target.</summary>
@@ -98,7 +94,8 @@ public sealed class WorldCamera
         var c2 = new Vector4(m.M12, m.M22, m.M32, m.M42);
         var c3 = new Vector4(m.M13, m.M23, m.M33, m.M43);
         var c4 = new Vector4(m.M14, m.M24, m.M34, m.M44);
-        // CreatePerspectiveFieldOfView maps depth to 0..1, so the near plane is c3 alone.
+        // Clip volume 0 <= z <= w for any 0..1 depth matrix: the same two planes (c3, c4 - c3) for the standard and the reversed
+        // one (only which of them is the near plane swaps).
         return [c4 + c1, c4 - c1, c4 + c2, c4 - c2, c3, c4 - c3];
     }
 

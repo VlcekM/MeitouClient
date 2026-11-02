@@ -160,9 +160,8 @@ public interface IGpuContext
     bool DepthClamp { get; }
 
     /// <summary>
-    /// Whether window depth equals clip depth (0..1, Metal) rather than the −1..1 clip-depth mapping the Vulkan path uses. A
-    /// shader that recovers a cascade matrix's depth from <c>gl_FragCoord.z</c> must undo the mapping: 2·z−1 on Vulkan (its
-    /// depth-clip-control path and the shader remap fallback both expose that window mapping), z itself on Metal.
+    /// Whether window depth equals clip depth (0..1). True on both backends: each stores the clip depth z/w directly. The scene
+    /// depth's convention (reversed or not) is <see cref="DepthConvention"/>. Removed in [P10].
     /// </summary>
     bool ClipDepthZeroToOne { get; }
 

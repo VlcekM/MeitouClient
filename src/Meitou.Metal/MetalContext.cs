@@ -153,6 +153,7 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
         this.device = device;
         this.queue = queue;
         this.presentFormat = presentFormat;
+        Meitou.Rendering.DepthConvention.Reversed = false;   // Metal keeps the conventional scene depth (docs/renderer-native.md)
         // Metal supports 2x/4x (and 8x on some discrete Macs) for the colour and depth targets the reflection uses. Ask the
         // device rather than assuming 4: the same reflection pass must fall back cleanly on a Mac without MSAA support.
         int supportedSamples = 1;
@@ -639,7 +640,7 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
     public bool DepthClamp => true;
 
     /// <inheritdoc/>
-    public bool ClipDepthZeroToOne => true;   // Metal's NDC depth is 0..1
+    public bool ClipDepthZeroToOne => true;   // Metal's NDC depth is 0..1, stored conventionally (DepthConvention.Reversed is false here)
 
     /// <inheritdoc/>
     public bool RecordsSecondaries => false;

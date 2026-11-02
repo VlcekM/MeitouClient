@@ -288,7 +288,6 @@ public sealed unsafe class VulkanDevice : IDisposable
     public bool ImageCubeArray { get; private set; }
     public bool HasPushDescriptor { get; private set; }
     public uint MaxPushDescriptors { get; private set; }
-    public bool HasDepthClipControl { get; private set; }
     /// <summary>Extension present and all of the five sub-features below supported.</summary>
     public bool HasExtendedDynamicState3 { get; private set; }
     public bool Eds3ColorBlendEnable { get; private set; }
@@ -380,7 +379,7 @@ public sealed unsafe class VulkanDevice : IDisposable
         sb.AppendLine($"extendedDynamicState2={HasExtendedDynamicState2} (logicOp={HasExtendedDynamicState2LogicOp}, patchControlPoints={HasExtendedDynamicState2PatchControlPoints})");
         sb.AppendLine($"fillModeNonSolid={FillModeNonSolid} depthClamp={DepthClamp} samplerAnisotropy={SamplerAnisotropy} tessellationShader={HasTessellation} textureCompressionBC={TextureCompressionBC} independentBlend={IndependentBlend} imageCubeArray={ImageCubeArray}");
         sb.AppendLine($"bindless={HasBindless} multiDrawIndirect={MultiDrawIndirect} drawIndirectFirstInstance={DrawIndirectFirstInstance} drawIndirectCount={DrawIndirectCount} shaderDrawParameters={ShaderDrawParameters}");
-        sb.AppendLine($"pushDescriptor={HasPushDescriptor} (max {MaxPushDescriptors}) depthClipControl={HasDepthClipControl} vertexInputDynamicState={HasVertexInputDynamicState} swapchain={HasSwapchain}");
+        sb.AppendLine($"pushDescriptor={HasPushDescriptor} (max {MaxPushDescriptors}) vertexInputDynamicState={HasVertexInputDynamicState} swapchain={HasSwapchain}");
         sb.AppendLine($"rayQuery={HasRayQuery} bufferDeviceAddress={HasBufferDeviceAddress}");
         sb.AppendLine($"fragmentShadingRate={HasFragmentShadingRate} (attachment texel {ShadingRateTexel}, largest square rate {MaxShadingRate}x{MaxShadingRate}, forced to 1x1 by depth writes {ShadingRateForcedByDepthWrite})");
         sb.AppendLine($"extendedDynamicState3={HasExtendedDynamicState3} (colorBlendEnable={Eds3ColorBlendEnable} colorWriteMask={Eds3ColorWriteMask} alphaToCoverage={Eds3AlphaToCoverageEnable} polygonMode={Eds3PolygonMode} depthClamp={Eds3DepthClampEnable})");
@@ -791,7 +790,6 @@ public sealed unsafe class VulkanDevice : IDisposable
         var v11 = new PhysicalDeviceVulkan11Features { SType = StructureType.PhysicalDeviceVulkan11Features };
         var eds2 = new PhysicalDeviceExtendedDynamicState2FeaturesEXT { SType = StructureType.PhysicalDeviceExtendedDynamicState2FeaturesExt };
         var eds3 = new PhysicalDeviceExtendedDynamicState3FeaturesEXT { SType = StructureType.PhysicalDeviceExtendedDynamicState3FeaturesExt };
-        var clip = new PhysicalDeviceDepthClipControlFeaturesEXT { SType = StructureType.PhysicalDeviceDepthClipControlFeaturesExt };
         var vid = new PhysicalDeviceVertexInputDynamicStateFeaturesEXT { SType = StructureType.PhysicalDeviceVertexInputDynamicStateFeaturesExt };
         var bary = new PhysicalDeviceFragmentShaderBarycentricFeaturesKHR { SType = StructureType.PhysicalDeviceFragmentShaderBarycentricFeaturesKhr };
         var accel = new PhysicalDeviceAccelerationStructureFeaturesKHR { SType = StructureType.PhysicalDeviceAccelerationStructureFeaturesKhr };
@@ -800,7 +798,6 @@ public sealed unsafe class VulkanDevice : IDisposable
 
         bool extEds2 = have.Contains("VK_EXT_extended_dynamic_state2");
         bool extEds3 = have.Contains("VK_EXT_extended_dynamic_state3");
-        bool extClip = have.Contains("VK_EXT_depth_clip_control");
         bool extVid = have.Contains("VK_EXT_vertex_input_dynamic_state");
         bool extPush = have.Contains("VK_KHR_push_descriptor");
         bool extBary = options.TriangleMeasurements && have.Contains("VK_KHR_fragment_shader_barycentric");
@@ -827,7 +824,6 @@ public sealed unsafe class VulkanDevice : IDisposable
         Link(ref v11, true);
         Link(ref eds2, extEds2);
         Link(ref eds3, extEds3);
-        Link(ref clip, extClip);
         Link(ref vid, extVid);
         Link(ref bary, extBary);
         Link(ref accel, extRay);
@@ -857,7 +853,6 @@ public sealed unsafe class VulkanDevice : IDisposable
         HasFragmentBarycentric = extBary && bary.FragmentShaderBarycentric;
         HasRayQuery = extRay && accel.AccelerationStructure && rayQuery.RayQuery && v12.BufferDeviceAddress;
         HasBufferDeviceAddress = (options.TriangleMeasurements || HasRayQuery) && v12.BufferDeviceAddress;
-        HasDepthClipControl = extClip && clip.DepthClipControl;
         Eds3ColorBlendEnable = extEds3 && eds3.ExtendedDynamicState3ColorBlendEnable;
         Eds3ColorWriteMask = extEds3 && eds3.ExtendedDynamicState3ColorWriteMask;
         Eds3AlphaToCoverageEnable = extEds3 && eds3.ExtendedDynamicState3AlphaToCoverageEnable;
@@ -934,12 +929,6 @@ public sealed unsafe class VulkanDevice : IDisposable
             ExtendedDynamicState3PolygonMode = Eds3PolygonMode,
             ExtendedDynamicState3DepthClampEnable = Eds3DepthClampEnable,
         };
-        clip = new PhysicalDeviceDepthClipControlFeaturesEXT
-        {
-            SType = StructureType.PhysicalDeviceDepthClipControlFeaturesExt,
-            PNext = clip.PNext,
-            DepthClipControl = HasDepthClipControl,
-        };
         vid = new PhysicalDeviceVertexInputDynamicStateFeaturesEXT
         {
             SType = StructureType.PhysicalDeviceVertexInputDynamicStateFeaturesExt,
@@ -992,7 +981,6 @@ public sealed unsafe class VulkanDevice : IDisposable
         if (HasSwapchain) names.Add("VK_KHR_swapchain");
         if (extEds2) names.Add("VK_EXT_extended_dynamic_state2");
         if (extEds3) names.Add("VK_EXT_extended_dynamic_state3");
-        if (extClip) names.Add("VK_EXT_depth_clip_control");
         if (extVid) names.Add("VK_EXT_vertex_input_dynamic_state");
         if (extPush) names.Add("VK_KHR_push_descriptor");
         if (extBary) names.Add("VK_KHR_fragment_shader_barycentric");

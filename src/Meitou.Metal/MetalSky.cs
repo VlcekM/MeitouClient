@@ -28,6 +28,7 @@ public sealed class MetalSky
     {
         // The fragment stage's bindings start at 0: Metal gives the stages their own binding tables, so the Vulkan scheme
         // (the fragment stage at 32, to keep it apart from the vertex stage) is not needed here.
+        // No DepthReversed: Metal's scene depth is conventional (DepthConvention).
         var compiler = new GlslProgramCompiler(new ShaderCompileOptions { FragmentBindingBase = 0, UseDiskCache = false, UseMemoryCache = false });
         var program = compiler.Compile(vertexGlsl, fragmentGlsl);
 

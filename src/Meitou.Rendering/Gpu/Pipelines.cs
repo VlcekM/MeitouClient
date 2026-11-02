@@ -62,8 +62,8 @@ public readonly record struct ComputePipelineDesc(GpuProgram Program, string Nam
 }
 
 /// <summary>
-/// Pipeline creation shared by VkGl and the native API: the fixed conventions that decide pixels (depth clip −1..1 through
-/// VK_EXT_depth_clip_control, line polygon mode only with fillModeNonSolid, the dynamic state set, add blending with one factor pair).
+/// Pipeline creation shared by VkGl and the native API: the fixed conventions that decide pixels (Vulkan's own 0..1 clip depth,
+/// no depth clip control; line polygon mode only with fillModeNonSolid, the dynamic state set, add blending with one factor pair).
 /// </summary>
 public static unsafe class PipelineFactory
 {
@@ -95,11 +95,9 @@ public static unsafe class PipelineFactory
             VertexAttributeDescriptionCount = (uint)n, PVertexAttributeDescriptions = vattr,
         };
         var assembly = new PipelineInputAssemblyStateCreateInfo { SType = StructureType.PipelineInputAssemblyStateCreateInfo, Topology = GlConventions.Topology(topology) };
-        var clip = new PipelineViewportDepthClipControlCreateInfoEXT { SType = StructureType.PipelineViewportDepthClipControlCreateInfoExt, NegativeOneToOne = true };
         var viewportState = new PipelineViewportStateCreateInfo
         {
             SType = StructureType.PipelineViewportStateCreateInfo, ViewportCount = 1, ScissorCount = 1,
-            PNext = device.HasDepthClipControl ? &clip : null,
         };
         var raster = new PipelineRasterizationStateCreateInfo
         {

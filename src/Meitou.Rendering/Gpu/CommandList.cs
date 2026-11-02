@@ -9,7 +9,8 @@ using Buffer = Silk.NET.Vulkan.Buffer;
 
 namespace Meitou.Rendering.Gpu;
 
-/// <summary>An attachment of a <see cref="RenderingDesc"/>: a view in GENERAL layout, its load op and clear value (stores always).</summary>
+/// <summary>An attachment of a <see cref="RenderingDesc"/>: a view in GENERAL layout, its load op and clear value (stores always). The depth
+/// clear defaults to 1 (conventional targets rely on it); scene-convention targets pass <see cref="DepthConvention.Clear"/>.</summary>
 public readonly record struct RenderTarget(GpuView View, LoadOp Load = LoadOp.Load, ClearColour Clear = default, float DepthClear = 1f)
 {
     public bool IsNull => View.IsNull;

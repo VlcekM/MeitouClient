@@ -99,6 +99,7 @@ public sealed unsafe partial class GpuContext : IDisposable, IGpuContext
         Device = device;
         Features = GpuFeatures.Of(device);
         Features.Require(device.DeviceName);
+        // The Vulkan backend relies on DepthConvention.Reversed keeping its default (true) before the defaults clear their depth.
         Defaults = new GpuDefaults(device);
         Samplers = new SamplerCache(device);
         Shaders = new ShaderLibrary(device);
