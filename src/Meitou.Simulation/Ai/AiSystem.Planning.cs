@@ -145,6 +145,10 @@ public sealed partial class AiSystem
 
         bool Settled(in PlanTarget t) => At(t) && (CharacterTask)Me.Task is CharacterTask.Rest or CharacterTask.Idle;
 
+        /// <summary>State 26: not crippled (a crawler, the flag set with posture 2; an incapacitated one stands in for it), then staying low, playing dead or in a bed.</summary>
+        static bool CrouchingOrLying(CharacterCold cold) =>
+            cold.Medical is { Crawling: false, Incapacitated: false } m && (m.StayingLow || m.PlayingDead || cold.InSomething == Locks.HeldState.Bed);
+
         /// <summary>
         /// A state's value for a target. States of rooms, doors, machines and fights the AI does not run into (it acts out goals only out of a fight, carrying nothing)
         /// have a fixed stand-in value; an unlisted state is false.
@@ -199,7 +203,8 @@ public sealed partial class AiSystem
                 StateType.hasTwoWorkingArm => cold.Medical is not { } arms2 || arms2.BothArmsWork,
                 // The turret goals' done test (149, 222, 234: list A "6*"): no enemy near, so guards man the turrets only while enemies come (docs/simulation.md "AI", turrets).
                 StateType.isNoEnemiesInVicinity => !EnemyNear(cold),
-                // (26, crouching or lying, stays false: standing up first is not modelled, SelfPreservation.Runs.)
+                // 26 IS_CROUCHING_OR_LYING (FUN_140599e90): false when crippled (a crawler: the flag is set with posture 2), else true staying low, playing dead or in a bed; the two unidentified flag reads are not modelled.
+                StateType.IS_CROUCHING_OR_LYING => CrouchingOrLying(cold),
                 // 141 (FUN_14060e640): the building to sleep in is private and a stranger stands in the home. 108 (no public test) is left to the lock-up round's own test.
                 StateType.strangers_in_house_P => system.StrangersInHouseP(world, board, slot),
                 // Held true: moving, standing up, power and buildings; doors are the movement's and the lock-up round's (docs/simulation.md "Planner").
