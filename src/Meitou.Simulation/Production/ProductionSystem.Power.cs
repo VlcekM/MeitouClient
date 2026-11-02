@@ -225,15 +225,7 @@ public sealed partial class ProductionSystem
         else
         {
             batteryMode[town] = false;
-            var cells = grid.Where(b => b.Data.IsBattery && b.PowerOn && b.Charge < Capacity(world, b)).ToList();
-            int n = cells.Count;
-            foreach (var b in cells)
-            {
-                float give = MathF.Min(MathF.Abs(Rated(world, b)), supply / Math.Max(1, n--));
-                supply -= give;
-                charged += give;
-                b.Granted = give;
-            }
+            charged = ChargeFromSurplus(world, grid, supply, batteries: grid.Count(b => b.Data.IsBattery));
         }
         foreach (var m in grid)
         {
@@ -246,6 +238,30 @@ public sealed partial class ProductionSystem
             }
         }
         townPower[town] = new(generated, demandTotal, charged, drained, 0, 0);
+    }
+
+    /// <summary>
+    /// The surplus among the batteries (<b>Verified</b>, <c>FUN_14092cd60</c>): in grid order every battery clears its grant; one that is on and below its capacity (the engine's reading of its
+    /// switch byte and of a rate that is 0 when full, <b>Observed</b>) takes min(surplus left / batteries still to come, its rate); the count falls by one for every battery, chargeable or not.
+    /// Returns the total charged.
+    /// </summary>
+    float ChargeFromSurplus(World world, List<Machine> grid, float surplus, int batteries)
+    {
+        float charged = 0;
+        foreach (var b in grid)
+        {
+            if (!b.Data.IsBattery) continue;
+            b.Granted = 0;
+            if (b.PowerOn && b.Charge < Capacity(world, b))
+            {
+                float give = MathF.Min(surplus / Math.Max(1, batteries), MathF.Abs(Rated(world, b)));
+                surplus -= give;
+                charged += give;
+                b.Granted = give;
+            }
+            batteries--;
+        }
+        return charged;
     }
 
     /// <summary>A generator burns fuel as a producer draws inputs (<c>vfunc_183</c>): <c>rate x dt x P x option</c>, times its load.</summary>
