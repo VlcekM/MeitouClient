@@ -125,6 +125,7 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
             else if (kind == Picked.Container && ContainerClick(p, alt)) { }
             else if (kind == Picked.Door && DoorClick(p, alt)) { }
             else if (kind == Picked.Bed && BedPress(p)) { }
+            else if (kind == Picked.Seat && SeatPress(p)) { }
             else if (kind == Picked.Cage && CageClick(p)) { }
             else if (kind == Picked.Dummy && DummyPress(p)) { }
             else if (kind == Picked.Rock && RockPress(p)) { }
@@ -258,7 +259,7 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
             return;
         }
         if (button == MouseButton.Right && MapRightUp(p)) return;
-        if (button == MouseButton.Right) { ContextRelease(); SiteRelease(); RockRelease(); BedRelease(); DummyRelease(); }
+        if (button == MouseButton.Right) { ContextRelease(); SiteRelease(); RockRelease(); BedRelease(); DummyRelease(); SeatRelease(); }
         if (button == MouseButton.Right && steering)
         {
             Steer(final: true);
@@ -310,6 +311,7 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
         UpdateTownName();
         UpdateBed();
         UpdateDummy();
+        UpdateSeat();
         UpdateMap();
         if (!final) UpdateBuild();
         if (!steering || OverHud(mouse)) return;

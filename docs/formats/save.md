@@ -57,7 +57,9 @@ scratch harness; pinned by `SaveReadTests`); with `Blood` off the loaded record 
 **Player-built buildings** (Meitou `Saving/BuildingSave`): an instance in the zone's `0-buildinglist` with id `<n>-zone<X>.<Y>-INGAME` and a
 GAMESTATE_BUILDING `<id>-S23` carrying `name`, `owner faction ID`, `floornum`, `destroyed`, `flags`, `is complete`, `pause`, `construction progress`,
 `<i>construction mats`, `world Y pos`, `handle`, `isInsideBuilding` (key set from the original's writer `FUN_1405547f0`, **Verified** by code; no
-sample save holds a player-built building, so a real file was not compared). A finished one with doors also gets the door keys of [locks](../game/locks.md#save-keys)
+original sample save held a player-built building). **Observed** native 1.0.68 authored-fixture round-trip: a new player-built placement's
+raw instance Y is a terrain offset (0 places it on the ground), while `world Y pos` is absolute; supplying the terrain height in both fields
+doubles its loaded height; NPC-generated `-INGAME` samples have absolute instance Y. Meitou writes the instance Y as the height above the terrain and reads `world Y pos`. A finished one with doors also gets the door keys of [locks](../game/locks.md#save-keys)
 (the original saves doors the same way for every building, **Observed** by code). Meitou-only `meitou parent` (instance id) names a parent the handle cannot.
 
 **Town-house repair** (Meitou): the original zone instance's GAMESTATE_BUILDING stores `destroyed`, `is complete`,

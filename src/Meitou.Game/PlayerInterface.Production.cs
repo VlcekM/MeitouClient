@@ -307,7 +307,7 @@ sealed partial class PlayerInterface
             verbs.Add(("Auto-Haul", () => Say(SlowModifier
                 ? (Meitou.Simulation.SimCommand)new AddJob(selection, Meitou.Data.Gameplay.Ai.TaskType.OPERATE_AUTOMATIC_MACHINERY, site.Id) { Tick = session.World.Tick }
                 : new OperateOrder(selection, site.Id) { Tick = session.World.Tick })));
-        else if (site.Complete && Machine(site.Id) is { Operable: true })
+        else if (site.Complete && Machine(site.Id) is { Operable: true } or { Function: Meitou.Data.World.TownBuildings.ChairFunction or Meitou.Data.World.TownBuildings.ThroneFunction })
             verbs.Add(("Use", () => Say(SlowModifier
                 ? (Meitou.Simulation.SimCommand)new AddJob(selection, Meitou.Data.Gameplay.Ai.TaskType.OPERATE_MACHINERY, site.Id) { Tick = session.World.Tick }
                 : new OperateOrder(selection, site.Id) { Tick = session.World.Tick })));

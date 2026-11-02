@@ -265,7 +265,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
                             if (table.TryResolveNext(id, out int hauler)) PlayerOrders.Give(world, hauler, new OrderEntry(TaskType.OPERATE_STORAGE, this) { Site = site.Id }, order.Queued);
                         break;
                     }
-                    if (!(machine.Data.Operable || machine.Data.IsTraining)) break;
+                    if (!(machine.Data.Operable || machine.Data.IsTraining || IsSeat(machine))) break;
                     var row = machine.Data.IsTraining ? TaskType.USE_TRAINING_DUMMY : TaskType.OPERATE_MACHINERY;
                     foreach (var id in Who(world, order.Characters))
                         if (table.TryResolveNext(id, out int slot) && PlayerOrders.Give(world, slot, new OrderEntry(row, this) { Site = site.Id }, order.Queued) is { Posted: true })
@@ -332,6 +332,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         if (order.Row == TaskType.OPERATE_STORAGE) return Able(cold) ? OrderCheck.Run : OrderCheck.Blocked();
         if (cold.OperateSite == id) return OrderCheck.Run;
         if (!Able(cold)) return OrderCheck.Blocked();
+        if (IsSeat(m) && SeatOccupied(world, site)) return OrderCheck.Blocked($"{site.Name} is already in use.", posted: true);
         return OperatorsOf(world, id) >= m.Data.MaxOperators ? OrderCheck.Blocked($"{site.Name} is already in use.", posted: true) : OrderCheck.Run;
     }
 
@@ -701,8 +702,13 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
                 Train(ref n, cold, site, m, dt);
                 continue;
             }
-            // A chair (an implicit job): sat on, no work.
-            if (!m.Data.Operable) { Settle(ref n, cold, site, m); continue; }
+            // A chair (an order or an implicit job): sat on, no work.
+            if (!m.Data.Operable)
+            {
+                if (IsSeat(m) && SeatOccupied(world, site)) { End(world, i); continue; }
+                Settle(world, ref n, cold, site, m);
+                continue;
+            }
             // An automatic machine (the 152 job): its hauler fills its inputs and carries its output away; the machine works by itself.
             if (m.Data.IsAutomatic)
             {

@@ -25,6 +25,8 @@ public sealed record MachineData
     public required string Name { get; init; }
     /// <summary>The functionality's <c>function</c> (BuildingFunction); -1 without a functionality.</summary>
     public int Function { get; init; } = -1;
+    /// <summary>The functionality's <c>flags</c>; a chair's facing rule.</summary>
+    public int FunctionFlags { get; init; }
     /// <summary><c>stat used</c> (a <c>StatsEnumerated</c> value); 0 for none.</summary>
     public int Stat { get; init; }
     /// <summary>How many characters may work it at once: the BUILDING's <c>max operators</c>, else the functionality's (at least 1).</summary>
@@ -195,6 +197,7 @@ public sealed record MachineData
             Id = building.StringId,
             Name = building.Name,
             Function = fn,
+            FunctionFlags = function?.GetInt("flags") ?? 0,
             Stat = function?.GetInt("stat used") ?? 0,
             MaxOperators = maxOperators,
             Rate = rate,

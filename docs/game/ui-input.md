@@ -537,6 +537,20 @@ A right click on the ground (`PlayerInterface::playerMove`) is order 29 through 
 the sneak flag +0xd4 unless the fight is on (`isInCombatMode`, CombatClass +0x130); where a cage opens its menu at once. 28 Stand Up is AI task 28
 (`Task_UnCrouch`, [staying low](ragdolls.md#staying-low)); Meitou stands the selection at once.
 
+Seats (**Observed**, live vanilla Kenshi 1.0.68 on Windows, compared with Meitou Metal using the same copied tavern save): the central stool, wall bench and side stool offer Use on a held right click. Use walks to the seat, sits facing the nearby table and shows Operating machine. Stop stands and shows Aimless; a ground move exits sitting. Menu dimensions and title casing differ in Meitou. An expanded **Observed** native-Windows/Meitou-Metal comparison used identical authored, player-owned vanilla fixtures for all nine BF_CHAIR/BF_THRONE building records:
+
+| Furniture | Native behavior checked |
+| --- | --- |
+| Stool, Old Stool, Sitting Box | Use, chair pose, facing the nearest table; Stop exits |
+| Sitting Pillow | Use, floor-sitting pose, facing the table; Stop exits |
+| Bench | Use, chair pose, table-behind facing quirk documented in [Seat facing](ai-tasks.md#town-goals); Stop exits |
+| Throne, Hive Queen Throne, Outhouse | Use, chair pose and fixed placement-facing direction; Stop exits |
+| Sitting spot (invisible) | No pointer Use target; the normal ground-move interaction applies |
+
+The native outdoor candidate-search boundary, competing reservations, multi-character orders and seated save/load are **Unknown**; authored placement does not establish build-menu availability or placement legality.
+
+Meitou (`PlayerInterface.Seats.cs`, `FixtureRegistry.Seats.cs`): town chairs and thrones are derived fixture targets (not construction or render objects), picked on their collision at the furniture's placed rotation (separate from the sitter's facing); a seat with neither parts nor collision (the invisible spot) is not picked, though AI still sits there. Town and player-built seats show `use`; a quick click is order 87, holding opens Use, Shift adds the operating job, through the operator walk and settle. A seated NPC blocks the order; a seat a character sits on by an order is not claimed by NPCs. Player-built chairs face by their functionality flags towards complete qualifying furniture in the same parent building (layout tables included), else the same player outpost.
+
 Meitou (`PlayerInterface.ContextMenu.cs`; one method per target: characters, `ContainerVerbs`, `DoorVerbs`, `SiteVerbs` in `PlayerInterface.Build.cs`, `CageVerbs` in `PlayerInterface.Cages.cs`):
 the same labels and order (`VerbOrders`; Meitou's own verbs after), the animals-only filter, the chance column (Stealth KO, Kidnap), Shift on Use giving the job (and on the character verbs listed under [Ordering](ai-tasks.md#perma-jobs)).
 Containers and doors open their menu on a held press (a quick click as before); cages, and another faction's locked doors, open it on the press (above). Built: Put Down, Talk To, Attack Target (hostile), Attack

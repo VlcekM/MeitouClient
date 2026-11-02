@@ -29,13 +29,17 @@ public enum HomeSpotKind : byte
 /// <summary>A spot inside a building in world space; <paramref name="Yaw"/> as the simulation measures it (0 along +Z, turning towards +X).</summary>
 public readonly record struct HomeSpot(HomeSpotKind Kind, Vector3 Position, float Yaw)
 {
+    /// <summary>The furniture's placed rotation, before the sitter turns towards a table; collision and picking keep this facing.</summary>
+    public float PlacementYaw { get; init; } = Yaw;
+    /// <summary>The sitter's facing as the game has it; differs from <see cref="Yaw"/> only for a bench with its table behind (<see cref="TownBuildings.SeatYaw"/>).</summary>
+    public float FaithfulYaw { get; init; } = Yaw;
     /// <summary>A node's BUILDING <c>node type</c> (NodeType: 0 NODE_SHOPKEEPER, 1 NODE_GENERAL, 2 NODE_GUARD_POST, 3 NODE_TURRET, 4 NODE_USE, 5 NODE_LIGHT); -1 for a bed.</summary>
     public int NodeType { get; init; } = -1;
     /// <summary>A chair's sitting clip: the ANIMATION record its functionality's <c>animation</c> names ("sitting chair", "sitting idle" for floor seats); null otherwise.</summary>
     public string? SitClip { get; init; }
     /// <summary>The seat's functionality <c>hunger rate</c> (chairs 0.66, sit on floor 0.75; 1 by default).</summary>
     public float HungerRate { get; init; } = 1;
-    /// <summary>A bed's or training dummy's BUILDING string id (a bed's <c>output rate</c> is how fast it heals, docs/game/character-stats.md "Beds"); null otherwise.</summary>
+    /// <summary>The BUILDING string id of a bed, seat or training dummy; null for other spots. A bed's output rate controls healing (docs/game/character-stats.md "Beds").</summary>
     public string? Record { get; init; }
     /// <summary>A node a goal may stand at: neither a bed, a seat nor a dummy.</summary>
     public bool IsNode => Kind is not (HomeSpotKind.Bed or HomeSpotKind.Chair or HomeSpotKind.ThroneSeat or HomeSpotKind.Training);
@@ -236,6 +240,7 @@ public static class TownBuildings
                             (seats ??= []).Add((spots.Count, function.GetInt("flags")));
                             spots.Add(new HomeSpot(HomeSpotKind.Chair, at, YawOf(rotation))
                             {
+                                Record = item.Building.StringId,
                                 SitClip = function.GetReferences("animation").Select(r => db.Find(r.TargetStringId)?.Name).FirstOrDefault(n => n is not null),
                                 HungerRate = function.GetFloat("hunger rate", 1),
                             });
@@ -262,7 +267,7 @@ public static class TownBuildings
                         (itemSlots ??= []).Add(new TownItemSlot($"{b.Key}/item{slot++}", group.Building.StringId, at, rotation, group.Floor));
                     }
                     if (seats is not null && faced is not null)
-                        foreach (var (s, flags) in seats) spots[s] = spots[s] with { Yaw = SeatYaw(spots[s], flags, faced) };
+                        foreach (var (s, flags) in seats) spots[s] = spots[s] with { Yaw = SeatYaw(spots[s].Position, spots[s].Yaw, flags, faced), FaithfulYaw = SeatYaw(spots[s].Position, spots[s].Yaw, flags, faced, faithful: true) };
                     tables = faced;
                 }
             }
@@ -309,9 +314,9 @@ public static class TownBuildings
         if (kind is not { } k) return null;
         return new HomeSpot(k, at, yaw)
         {
+            Record = building.StringId,
             SitClip = k == HomeSpotKind.Training ? null : function.GetReferences("animation").Select(r => db.Find(r.TargetStringId)?.Name).FirstOrDefault(n => n is not null),
             HungerRate = function.GetFloat("hunger rate", 1),
-            Record = k == HomeSpotKind.Training ? building.StringId : null,
         };
     }
 
@@ -406,17 +411,28 @@ public static class TownBuildings
     }
 
     /// <summary>
-    /// The way a seat is sat facing (docs/game/ai-tasks.md "Chairs"): by its functionality's <c>flags</c>, 0 its own facing (<paramref name="seat"/>'s yaw), 1 towards
-    /// the nearest of <paramref name="faced"/> (the building's tables, corpse disposals and refineries), 2 its own facing or the opposite one, whichever has that one in front.
+    /// The way a seat is sat facing (docs/game/ai-tasks.md "Chairs"): by its functionality's <c>flags</c>, 0 its own <paramref name="yaw"/>, 1 towards
+    /// the nearest of <paramref name="faced"/> (the building's tables, corpse disposals and refineries), 2 its own facing when that one is in front, else the opposite one. <paramref name="faithful"/>: behind it, as the game does, the absolute look point negated (generally towards the world origin).
     /// </summary>
-    static float SeatYaw(HomeSpot seat, int flags, List<Vector3> faced)
+    public static float SeatYaw(Vector3 position, float yaw, int flags, IEnumerable<Vector3> faced, bool faithful = false)
     {
-        if (flags is not (1 or 2)) return seat.Yaw;
-        var nearest = faced.MinBy(p => Vector3.DistanceSquared(p, seat.Position));
-        var to = new Vector2(nearest.X - seat.Position.X, nearest.Z - seat.Position.Z);
-        if (to.LengthSquared() < 1e-6f) return seat.Yaw;
+        if (flags is not (1 or 2)) return yaw;
+        Vector3 nearest = position;
+        float gap = float.MaxValue;
+        foreach (var p in faced)
+        {
+            float d = Vector3.DistanceSquared(p, position);
+            if (d < gap) (nearest, gap) = (p, d);
+        }
+        var to = new Vector2(nearest.X - position.X, nearest.Z - position.Z);
+        if (to.LengthSquared() < 1e-6f) return yaw;
         if (flags == 1) return MathF.Atan2(to.X, to.Y);
-        return Vector2.Dot(new Vector2(MathF.Sin(seat.Yaw), MathF.Cos(seat.Yaw)), to) >= 0 ? seat.Yaw : MathF.IEEERemainder(seat.Yaw + MathF.PI, MathF.Tau);
+        var forward = new Vector3(MathF.Sin(yaw), 0, MathF.Cos(yaw));
+        if (Vector2.Dot(new Vector2(forward.X, forward.Z), to) >= 0) return yaw;
+        if (!faithful) return MathF.IEEERemainder(yaw + MathF.PI, MathF.Tau);
+        // The game negates the world-space look point, not the forward vector (docs/game/ai-tasks.md "Seat facing").
+        var reflected = -(position + forward) - position;
+        return MathF.Atan2(reflected.X, reflected.Z);
     }
 
     /// <summary>The simulation's yaw (0 along +Z, turning towards +X) of a rotation.</summary>

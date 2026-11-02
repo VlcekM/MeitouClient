@@ -266,6 +266,7 @@ public sealed class WorldSession : IDisposable
         var list = systems.ToList();
         var next = new World(worldSettings, worldWalkability, list);
         next.Floaters = World.Floaters;   // the host keeps drawing the floaters across the swap
+        next.BenchFacingFix = World.BenchFacingFix;
         try { setup?.Invoke(next); }
         catch
         {

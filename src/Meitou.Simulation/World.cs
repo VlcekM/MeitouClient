@@ -157,6 +157,8 @@ public sealed partial class World : IDisposable
     public IReadOnlyList<int>? FactionFormations { get; set; }
     /// <summary>The squad templates whose <c>force speed</c> is 0, 1 or 2 (<see cref="Squad.ForceSpeed"/>), by record id; set by the population. Derived from the data: not saved or hashed.</summary>
     public IReadOnlyDictionary<string, byte>? ForcedSpeeds { get; set; }
+    /// <summary>A bench with its table behind is sat facing away from the table (Fixes settings, Meitou); off, towards the world origin, as the game does (docs/game/ai-tasks.md "Town goals").</summary>
+    public bool BenchFacingFix { get; set; } = true;
     /// <summary>The player: faction, money, selection.</summary>
     public PlayerState Player { get; } = new();
     /// <summary>Doors, lockable containers, cages and beds of the registered towns, with their occupants (docs/simulation.md "Cages, beds and locks").</summary>

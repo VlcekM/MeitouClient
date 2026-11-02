@@ -285,10 +285,10 @@ public sealed partial class ProductionSystem
     }
 
     /// <summary>A sitter or sleeper at its chair or bed: on the seat's origin facing its way, as the original's <c>Task_OperateMachine</c> (docs/game/ai-tasks.md "Town goals").</summary>
-    static void Settle(ref CharacterHot n, CharacterCold cold, BuildSite site, Machine m)
+    void Settle(World world, ref CharacterHot n, CharacterCold cold, BuildSite site, Machine m)
     {
         n.Position = site.Position;
-        n.Yaw = TownBuildings.YawOf(site.Rotation);
+        n.Yaw = SeatFacing(world, site, m);
         n.Velocity = default;
         m.Operators++;
         cold.Operating = true;
@@ -349,6 +349,7 @@ public sealed partial class ProductionSystem
         switch (job.Type)
         {
             case TaskType.OPERATE_MACHINERY:
+                if (IsSeat(m)) return SeatOccupied(world, site) || OperatorsOf(world, id) - (cold.OperateSite == id ? 1 : 0) >= m.Data.MaxOperators;
                 if (!m.Data.Operable) return true;
                 if (OperatorsOf(world, id) - (cold.OperateSite == id ? 1 : 0) >= m.Data.MaxOperators || !HasWorkingArm(cold)) return true;
                 return !HasWork(world, site, m, cold);

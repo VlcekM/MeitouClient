@@ -124,6 +124,7 @@ sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, 
     /// <summary>Applies the turret gunner facing fix to the running combat system.</summary>
     public Action<bool>? GunnerFacingChanged { get; init; }
     public Action<bool>? PunchReachChanged { get; init; }
+    public Action<bool>? BenchFacingChanged { get; init; }
     /// <summary>Called when an off-screen switch changes (the config holds the new values).</summary>
     public Action? OffscreenChanged { get; init; }
     /// <summary>The Tutorials option changed (the config holds it).</summary>
@@ -363,6 +364,9 @@ sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, 
             result.Add(new("Weak punch reach", "Fighters with martial arts of 20 or less throw their weak punch from a normal punching distance. "
                 + "The game's data gives it a negative reach, so they throw it only when nearly touching their target.",
                 Toggle: new("Weak punch reach", () => config.FixPunchReach, v => { config.FixPunchReach = v; PunchReachChanged?.Invoke(v); }, Remaster: true, OnOff: true)));
+            result.Add(new("Bench facing", "A character on a bench with the table behind it sits facing away from the table. "
+                + "The game mirrors the bench's look point through the middle of the world map, so the sitter faces an unrelated direction.",
+                Toggle: new("Bench facing", () => config.FixBenchFacing, v => { config.FixBenchFacing = v; BenchFacingChanged?.Invoke(v); }, Remaster: true, OnOff: true)));
             result.Add(new("Walls inside buildings", "Seen into a building your characters are in, parts of other buildings that run through it are left out, such as the Hub's town wall in the Shinobi Thieves tower. "
                 + "The game's world places them there and draws them inside the room.",
                 Toggle: new("Walls inside buildings", () => config.FixPartsInBuildings, v => config.FixPartsInBuildings = v, Remaster: true, OnOff: true)));        }
@@ -668,6 +672,8 @@ sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, 
         GunnerFacingChanged?.Invoke(true);
         config.FixPunchReach = true;
         PunchReachChanged?.Invoke(true);
+        config.FixBenchFacing = true;
+        BenchFacingChanged?.Invoke(true);
         OffscreenChanged?.Invoke();
         config.Audio = new();
         AudioChanged?.Invoke();
