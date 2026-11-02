@@ -265,9 +265,9 @@ public sealed class BedSystem(PopulationData data, BedSettings? settings = null)
         if (carrying ? c.Carrying != t.Body : c.InSomething != HeldState.None) return false;
         ref var n = ref table.Next[s];
         var bed = world.Fixtures.Find(t.Bed);
-        if (bed is null || !FixtureRegistry.IsFree(table, bed))
+        if (bed is null || !carrying && !FixtureRegistry.IsFree(table, bed))
         {
-            if (t.Fixed || world.Fixtures.FindBed(world, s, data.Relations, f => Reserved(f, t.Character)) is not { } other)
+            if (t.Fixed || carrying || world.Fixtures.FindBed(world, s, data.Relations, f => Reserved(f, t.Character)) is not { } other)
             {
                 if (c.IsPlayer) world.Post(carrying ? $"{c.Name}: no free bed nearby" : $"{c.Name}: the bed is taken");
                 if (!carrying) TaskStart.Stand(table, s);
@@ -330,6 +330,12 @@ public sealed class BedSystem(PopulationData data, BedSettings? settings = null)
     {
         var table = world.Characters;
         if (!table.TryResolveNext(body, out int b) || table.Cold(b) is not { } bc) return false;
+        if (!FixtureRegistry.IsFree(table, bed))
+        {
+            if (c.IsPlayer) world.Post($"{c.Name}: no free bed nearby");
+            return false;
+        }
+
         int cost = Cost(world, bed, c.Faction);
         if (cost != 0 && Cost(world, bed, bc.Faction) is var own and >= 0 && own < cost) cost = own;
         if (!Pay(world, s, bed, cost)) return false;

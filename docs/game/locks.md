@@ -293,7 +293,9 @@ Same targets as picking; Task_CutLock / Task_BruteForceLock share the shackle ta
   the character leaves at 10 %, else at once.
 - **Task_PutInSomething** for a bed (99; the body's task type 100; `FUN_140358170`, `FUN_140358670`): a player-faction carrier pays the rent first: its own
   cost, or the body's when that is non-negative and lower (a refusal fails the task). Once the put-down clip is below 0.2 and the bed is free for the
-  body, both are unlinked and the body enters the bed, then is placed at the bed's nearest type-4 node (`FUN_14038ab50`). A relation event follows
+  body, both are unlinked and the body enters the bed, then is placed at the bed's nearest type-4 node (`FUN_14038ab50`). A bed that is not free for the body at that moment ends the task
+  (**Verified**, `FUN_140358670`: no new bed search, the carrier keeps the body; nothing is tested while walking); Meitou: `BedSystem.Step` tests only on arrival (`LayIn`), put-in job 106 picks again. A relation event follows
+
   (faction vfunc 5 with the task's +0x7c; amount **Unknown**).
 - **Lie spot** (**Verified** by decompile: `FUN_140357d00` calls vfuncs 0x470 / 0x480, `Building::getPositionMarker` `FUN_14054b850` and
   `getDirectionMarkerQuat` `FUN_140549720`, names from KenshiLib 1ce4a16): with fewer than 2 usage nodes (Building+0x2f0) the position is the marker
