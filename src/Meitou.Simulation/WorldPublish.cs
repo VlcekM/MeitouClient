@@ -79,17 +79,17 @@ public sealed partial class World
     /// <summary>Slots a publish job takes at a time: the characters are made on the worker pool, each one reading only the tick's state.</summary>
     const int PublishChunk = 256;
     /// <summary>
-    /// A set of character snapshots the publish fills in place: one object per slot, reused tick after tick. Three of them: the shown pair (<see cref="Snapshot"/> and
-    /// <see cref="PreviousSnapshot"/>) stays untouched while the next tick, run ahead, fills the third (docs/simulation.md "Snapshots").
+    /// A set of character snapshots the publish fills in place: one object per slot, reused tick after tick. Four of them: the shown pair (<see cref="Snapshot"/> and
+    /// <see cref="PreviousSnapshot"/>) stays untouched while the next ticks, run ahead, publish twice into the other two (docs/simulation.md "Snapshots").
     /// </summary>
     sealed class SnapshotBuffer
     {
         public CharacterSnapshot?[] Slots = [];
         public readonly List<CharacterSnapshot> List = [];
     }
-    readonly SnapshotBuffer[] snapshotRing = [new(), new(), new()];
-    /// <summary>The buffers <see cref="Snapshot"/> and <see cref="PreviousSnapshot"/> were filled from (null: <see cref="WorldSnapshot.Empty"/>).</summary>
-    SnapshotBuffer? shownBuffer, previousBuffer;
+    readonly SnapshotBuffer[] snapshotRing = [new(), new(), new(), new()];
+    /// <summary>The buffers <see cref="Snapshot"/>, <see cref="PreviousSnapshot"/> and the snapshot before that were filled from (null: <see cref="WorldSnapshot.Empty"/>).</summary>
+    SnapshotBuffer? shownBuffer, previousBuffer, olderBuffer;
 
     /// <summary>Keeps <see cref="PreviousSnapshot"/> across a publish (a paused publish, loading): its buffer stays out of the ring with it.</summary>
     void KeepPrevious(WorldSnapshot previous, SnapshotBuffer? buffer) => (PreviousSnapshot, previousBuffer) = (previous, buffer);
@@ -114,7 +114,7 @@ public sealed partial class World
         var bodyConstants = systems.OfType<BodySystem>().FirstOrDefault()?.Constants;
         var population = systems.OfType<PopulationSystem>().FirstOrDefault()?.Data;
         float extraBloodLoss = systems.OfType<BodySystem>().FirstOrDefault()?.Constants.ExtraBloodLossFromBodyparts ?? 1;
-        var buffer = Array.Find(snapshotRing, b => b != shownBuffer && b != previousBuffer)!;
+        var buffer = Array.Find(snapshotRing, b => b != shownBuffer && b != previousBuffer && b != olderBuffer)!;
         if (buffer.Slots.Length < state.Length) Array.Resize(ref buffer.Slots, state.Length);
         var slots = buffer.Slots;
         ParallelFor((state.Length + PublishChunk - 1) / PublishChunk, chunk =>
@@ -243,7 +243,7 @@ public sealed partial class World
             s.KidnapChance = leadSlot >= 0 && i != leadSlot && cold is { IsPlayer: false } ? Carrying.CarrySystem.KidnapChance(table.Cold(leadSlot)!, cold, Tick) : null;
             s.LockpickSkill = cold is { IsPlayer: true } ? Locks.Lockpicking.Skill(cold) : 0;
         }
-        (previousBuffer, shownBuffer) = (shownBuffer, buffer);
+        (olderBuffer, previousBuffer, shownBuffer) = (previousBuffer, shownBuffer, buffer);
         PreviousSnapshot = Snapshot;
         Snapshot = new WorldSnapshot(Tick, list) { TutorialFacts = PublishTutorialFacts(population), Projectiles = projectiles?.PublishProjectiles() ?? [], Trade = trades?.PublishTrade(), Conversation = dialogues?.PublishConversation(), CharacterTrade = dialogues?.PublishCharacterTrade(), Speech = PublishSpeech(), DialogueRequest = dialogues?.PublishRequest(), Towns = Player.Towns, Camps = Player.Camps, KnownFactions = Player.KnownFactions, SquadAi = Player.SquadAi, PlayerSquads = PublishSquads(), ActiveSquad = Player.Squad, OpenLoot = Player.OpenLoot, LootOpener = Player.LootOpener,
             Held = Player.Held is { } held ? Items.HeldItemView.Of(held) : null, HeldSerial = Player.HeldSerial,

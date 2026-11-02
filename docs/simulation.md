@@ -19,23 +19,24 @@ the game runs a loaded save at once, [game loop](game/game-loop.md)) pauses the 
 
 ### Snapshots
 
-`World.Publish` reuses its `CharacterSnapshot` objects (**engine choice**): one per slot in each of three sets, filled in place (every property, every
-publish) into the set neither `Snapshot` nor `PreviousSnapshot` uses, so the shown pair stays untouched while a tick runs ahead and fills the third. A
+`World.Publish` reuses its `CharacterSnapshot` objects (**engine choice**): one per slot in each of four sets, filled in place (every property, every
+publish) into a set none of `Snapshot`, `PreviousSnapshot` and the one before them uses, so the shown pair stays untouched while ticks run ahead and publish twice. A
 paused publish and loading keep `PreviousSnapshot`'s set out of the ring with it. Contract: a published snapshot's characters stay as they are until
 two more snapshots are published; hold them across frames, not across ticks (the host's per-id index and the HUD's selection are rebuilt when the
 snapshot object changes). `WorldSnapshot` itself is new on each publish.
 
 ### Tick ahead
 
-The game can run the next tick on its own thread (`WorldSession.BeginTickAhead`, thread `Meitou.Tick`) during the world draw (`WorldFrame.Draw`, after
-`DrawWorld`'s host prefix), and joins it right after (`EndTickAhead`), so the frame costs about the slower of the two instead of their sum. The tick is
-ahead of the clock: it counts as the next one owed (`AdvanceSimulation` takes it, then runs the rest), and the game clock moves when it falls due.
-Until then `CurrentSnapshot`/`PreviousSnapshot` hold the pair from before it, so the picture is where it was; `ShownTick` is the world tick on
+The game can run the next ticks on their own thread (`WorldSession.BeginTickAhead`, thread `Meitou.Tick`) during the world draw (`WorldFrame.Draw`, after
+`DrawWorld`'s host prefix), and joins them right after (`EndTickAhead`), so the frame costs about the slower of the two instead of their sum. A batch runs as many ticks as a frame has owed
+lately (smoothed, rounded down; at least 1, at most the frame budget), so at 2x and 5x a frame's ticks overlap the draw instead of adding to it; only its
+last two publish. The ticks are ahead of the clock: they count as the next ones owed (`AdvanceSimulation` takes them, then runs the rest), and the game
+clock moves as each falls due. No new batch starts until the last is due; until then `CurrentSnapshot`/`PreviousSnapshot` hold the pair from before them, so the picture is where it was; `ShownTick` is the world tick on
 screen. Between `BeginTickAhead` and `EndTickAhead` nothing may touch the `World`: the renderer's host callbacks (`Source`, `PoseClock`) read only
 the session's snapshots, and the world reads the renderer only through the weather source (a reference and a float per region). Consequences
-(**engine choice**): a command lands one tick later (33 ms at 1x); blood marks and sounds come out with the tick, up to a tick before it shows; a
-pause with a tick ahead takes it at once (the picture jumps a tick, then the paused interface's republished snapshots show); a save takes it first
-(`SettleAhead`); `ReplaceWorld` drops it. Display → World tick alongside drawing (`TickAhead`): Faithful never (the world, then the draw); Meitou, the default, once
+(**engine choice**): a command lands a batch later (one tick, 33 ms, at 1x; about a frame's ticks at 5x); blood marks and sounds come out with the tick, up to a batch before it
+shows; a pause with ticks ahead takes them at once (the picture jumps, then the paused interface's republished snapshots show); a save takes them first
+(`SettleAhead`); `ReplaceWorld` drops them. Display → World tick alongside drawing (`TickAhead`): Faithful never (the world, then the draw); Meitou, the default, once
 a tick takes 4 ms (`WorldSession.TickMs`, smoothed over about ten ticks) until it is under 2 ms (a tick ahead is slower, sharing the cores); Always
 every frame. Off whatever the setting in stills, the duel, recorded flights and the play benchmark (their ticks stay in step with the frame).
 F12's `tick ahead` row is its wall time; `outside ticks` leaves it out.
