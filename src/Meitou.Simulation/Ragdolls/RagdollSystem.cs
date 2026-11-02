@@ -84,8 +84,8 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
     public int MovingWhole { get; private set; }
     public int MovingLimbs { get; private set; }
     public int Tiles => physics.TileCount;
-    /// <summary>Awake bodies from which the step runs on the worker threads (<b>engine choice</b>).</summary>
-    public const int ThreadedBodies = 500;
+    // Real seconds of physics owed since the last step (SlowWorld); not saved or hashed.
+    float physicsDue;
     /// <summary>Bodies the physics steps (its awake set, ground tiles included).</summary>
     public int AwakeBodies => physics.Simulation.Bodies.ActiveSet.Count;
 
@@ -263,14 +263,16 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
                 else if ((mask & RagdollPart.Whole) != 0) MovingWhole++;
                 else MovingLimbs++;
             }
-        // The physics on the world's thread count (its own workers: the world's pool is idle in this serial phase), once there are enough awake bodies to share out: below that
-        // the hand-offs of each substep cost more than the solving (Observed: 50-160 bodies took 0.5 ms a step on all threads). Deterministic, so the count does not change the result.
-        bool threaded = AwakeBodies >= ThreadedBodies && world.Settings.Threads > 1;
-        if (Moving > 0 && threaded && threads is null) threads = new BepuUtilities.ThreadDispatcher(world.Settings.Threads);
-        if (Moving > 0)
+        // The physics on the world's thread count (its own workers: the world's pool is idle in this serial phase).
+        if (Moving > 0 && threads is null && world.Settings.Threads > 1) threads = new BepuUtilities.ThreadDispatcher(world.Settings.Threads);
+        // Meitou: the real time steps up until it makes a step of 1x (every tick at 1x, every 5th at 5x), so the physics costs per real second what it does at 1x whatever the speed;
+        // a step costs about the same however short (Observed: 0.5 ms a tick for a few ragdolls at 1x and at 5x).
+        physicsDue = Moving > 0 ? physicsDue + stepDt : 0;
+        if (Moving > 0 && physicsDue >= RagdollPhysics.StepOf(dt, 1) - 1e-5f)
         {
-            foreach (var id in order) if (ragdolls[id] is { Frozen: false, Mask: not RagdollPart.None } floating) Buoy(world, floating, stepDt);
-            physics.Step(stepDt, threaded ? threads : null);
+            foreach (var id in order) if (ragdolls[id] is { Frozen: false, Mask: not RagdollPart.None } floating) Buoy(world, floating, physicsDue);
+            physics.Step(physicsDue, threads);
+            physicsDue = 0;
         }
         world.Profile.Part("rag step");
 

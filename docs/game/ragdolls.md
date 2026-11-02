@@ -26,7 +26,8 @@ the file allows).
   `FUN_140788a00` stores it as `DAT_142133790` and hands that to the physics kick (`FUN_1403beeb0`), while the speed-scaled value (`DAT_142133794`, `DAT_142133798`) goes to characters and weather.
   So at 2x and 5x ragdolls fall and settle at the real pace of 1x; the ragdoll's own timers (freeze after 2 to 7 s, the get-up blend) run on the scaled value (`FUN_1405b8180` passes
   `DAT_142133794` to `FUN_1407d3c00`, the blend `FUN_1407d28e0` adds `DAT_142133798`), so at 5x they run out 5 times sooner in real time. Meitou: `RagdollPhysics.StepOf`, a tick's step is
-  tick seconds / `World.PhysicsSpeed` (the host sets the clock's speed before each tick; 1 headless), clamped to 0.04; the timers stay in game seconds. The buoyancy (`FUN_1407d3c00`) is an
+  tick seconds / `World.PhysicsSpeed` (the host sets the clock's speed before each tick; 1 headless), clamped to 0.04; the timers stay in game seconds. The real steps add up until they make one of 1x (engine choice: every 2nd tick at 2x, every 5th at 5x), so
+  the physics costs the same per real second at every speed; a step's cost hardly depends on its length (**Observed**, a few ragdolls 0.5 ms a tick at 1x and 5x). The buoyancy (`FUN_1407d3c00`) is an
   acceleration handed to the actor (`+0x240`, mode 5, not multiplied by dt) that the physics step integrates, so `Buoy` uses the real step too; only the freeze timer's half speed in water
   (`param_3` x `DAT_14167e8d8`) is on the scaled dt.
 
