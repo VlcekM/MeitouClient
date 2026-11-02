@@ -253,6 +253,7 @@ shows the first failing message in this order (**Verified** unless marked):
   interior furniture and nodes) the ghost tilts to the ground and a slope over the limit fails; without it the tilt is
   blended by the player tilt factor and clamped, never failing. Also fails on an object surface more than 5 deg off
   the hit normal, or on ground with normal.y < 0.2 (`FUN_1404d5420`).
+  The slope block is wrapped in a call to vtable slot 3, which returns false for `PreviewBuilding`, `_Wall`, `_Resource` and `_Ceiling` (`FUN_14042de80`; only `_Snapping` overrides it with `FUN_1404fe140`), so it runs for an indoor ghost too (**Verified**, `vtables.txt`): one ray from 10 above the origin straight down against the viewed floors' collision, its hit normal (up if none) against `max slope`; the indoor ghost's forced `match slope` makes an over-steep floor (a stair) fail it (NotLevel). Meitou does not do this yet: `PlacementCheck` takes an indoor floor as level, because the ghost's floor query (`FloorAlong`, the cursor ray) carries no surface normal.
 - **Vertical margins** (**Verified**, `FUN_1404d9c00`, `FUN_1404d21e0`, `FUN_1404d23c0`, `FUN_1404d9530`, `FUN_1404d2080`, `FUN_1404d1680`
   and the frame update `FUN_1404dba40`; Meitou: `PlacementCheck.Margins`, `Settle`):
   - **Groups and nodes.** One group per BUILDING_PART with `affects footprint` (`FUN_1407e5f80`); its `above ground` bool picks
