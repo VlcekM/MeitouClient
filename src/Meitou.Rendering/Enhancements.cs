@@ -154,7 +154,7 @@ public static class Enhancements
             "the game's ground is its height map's mesh; Meitou tessellates the ground near the eye and raises it by the same relief (needs tessellation shaders; visual only: characters walk on the undisplaced ground)"),
         new("weld", "Mesh welding", "per-face tangents", "welded, averaged tangents",
             () => MeshWeld.Enabled, v => MeshWeld.Enabled = v,
-            "the game's meshes store each corner once per triangle, with that triangle's own tangent, so normal-mapped surfaces show faint facets at the triangle edges; Meitou welds the corners that differ only in their tangent and averages it, which smooths the bump lighting (characters most) and keeps about 60% fewer vertices in video memory; applies to meshes as they load (docs/render-objects.md)"),
+            "the game's meshes store most corners once for every triangle that uses them, each copy with its own triangle's tangent; Meitou merges the copies that differ only in that tangent into one vertex with their averaged tangent, so meshes keep about 60% fewer vertices (object meshes at The Hub take 50 MB of video memory instead of 98) and the bump lighting barely changes (tangents move 4° on average); applies to meshes loaded after the change (docs/render-objects.md)"),
         new("tracers", "Bolt tracers", "none", "streaks",
             tracers ?? (() => false), setTracers ?? (_ => { }),
             "the game draws a bolt in flight as its mesh alone, stretched a little with its speed, which is hard to follow at a distance; Meitou draws a faint streak behind it that grows out of the crossbow and shrinks into where the bolt stops; drawn with the particles, so none with --no-particles (docs/game/combat.md \"Bolt visuals\")"),
