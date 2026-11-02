@@ -2457,3 +2457,18 @@ msgstr "版本 {1}（{2}）。从 GitHub 自动更新。"
 
 msgid "Version {1} for {2}. Not installed by its Setup, so updates open the release page."
 msgstr "版本 {1}（{2}）。不是由安装程序安装的，更新会打开发布页。"
+
+msgid "Smooths edges and upscales the render. Active: {1}"
+msgstr "平滑边缘并放大渲染。当前：{1}"
+
+msgid "Shows a generated frame between each two rendered ones through AMD's FSR 3 frame-interpolation layer: nearly twice the frames shown, with a little more input delay. Works with TAA, FSR and DLSS; needs the FidelityFX library. Takes effect after a restart. Now: {1}"
+msgstr "通过 AMD FSR 3 的帧插值层，在每两帧渲染画面之间生成一帧：显示帧数接近翻倍，输入延迟略增。支持 TAA、FSR 与 DLSS；需要 FidelityFX 库。重启后生效。当前：{1}"
+
+msgid "Low holds off: {1}."
+msgstr "低画质下会关闭：{1}。"
+
+msgid "Low quality applied: {1} off until you keep them on."
+msgstr "已应用低画质：{1} 会关闭，直到你手动打开。"
+
+msgid "{1} quality applied."
+msgstr "已应用{1}画质。"

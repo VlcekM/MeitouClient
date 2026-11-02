@@ -230,7 +230,7 @@ sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, 
         string label = d?.Name ?? Label(key);
         string hint = key == MetalPresetSlider
             ? "MetalFX temporal is the default at every tier; spatial rows are explicit alternatives. The preset sets the render scale, so the separate scale slider is disabled."
-            : key == WorldFrame.UpscalerSliders[0] ? "Smooths edges and upscales the render. Active: " + (UpscalerStatus?.Invoke() ?? "unavailable") : SliderHint(slider);
+            : key == WorldFrame.UpscalerSliders[0] ? Loc.Tr("Smooths edges and upscales the render. Active: {1}", UpscalerStatus?.Invoke() ?? "unavailable") : SliderHint(slider);
         // The options are the slider's whole values from its left end.
         float first = d?.Min ?? slider.Min;
         return options is { } items ? new(label, hint, Choice: new(() => items, () => (int)MathF.Round(slider.Get() - first), i => slider.Set(i + first)), Raw: key)
@@ -271,8 +271,7 @@ sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, 
             result.Add(new("World tick alongside drawing", TickAheadHint, Choice: new(() => TickAheadChoices, () => (int)config.TickAhead, i => config.TickAhead = (TickAheadMode)i),
                 Raw: "tickAhead"));
             if (!OperatingSystem.IsMacOS())
-                result.Add(new("Frame generation (FSR 3)", "Shows a generated frame between each two rendered ones through AMD's FSR 3 frame-interpolation layer: nearly twice the frames shown, with a little more input delay. Works with TAA, FSR and DLSS; needs the FidelityFX library. "
-                    + "Takes effect after a restart. Now: " + (FrameGenerationStatus?.Invoke() ?? "off"),
+                result.Add(new("Frame generation (FSR 3)", Loc.Tr("Shows a generated frame between each two rendered ones through AMD's FSR 3 frame-interpolation layer: nearly twice the frames shown, with a little more input delay. Works with TAA, FSR and DLSS; needs the FidelityFX library. Takes effect after a restart. Now: {1}", FrameGenerationStatus?.Invoke() ?? "off"),
                     Toggle: new("Frame generation (FSR 3)", () => config.FrameGeneration, v => config.FrameGeneration = v, OnOff: true), Raw: "frameGeneration"));
             result = [.. result.OrderBy(e => LauncherSchema.Order(e.Raw ?? ""))];
         }
