@@ -72,7 +72,7 @@ public sealed class GettextCatalog
 
     /// <summary>
     /// The translation of <paramref name="msgid"/> ignoring case, or null: a UI layout captions what the catalog keys, but in capitals
-    /// (<c>"SKILLS"</c>, <c>"WEAPON I"</c>). Built once after the catalog's last change.
+    /// (<c>"SKILLS"</c>, <c>"WEAPON I"</c>). Built once after the catalog's last change, without a lock: UI thread only.
     /// </summary>
     public string? FindIgnoringCase(string msgid)
     {

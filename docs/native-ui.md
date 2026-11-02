@@ -129,5 +129,7 @@ index keeps the first spelling when the catalog holds both `Map` and `MAP`).
 
 Punctuation that belongs to the panel stays outside the lookup: the dashes of the skill column titles (`"-" + Loc.Tr("Weapons") + "-"`),
 the brackets of the jobs hint (`"[" + Loc.Tr("No jobs assigned") + "]"`) and the dash of the burden row (`"-" + Loc.Tr("Weightless")`)
-are added after the translation, so a translation only ever holds the words. Verified against the shipped data: `main.mo` has
-`Skills` and `Weapon I` but not `SKILLS` or `WEAPON I`, and every one of those groups renders translated in the original.
+are added after the translation, so a translation only ever holds the words. **Verified** (shipped `main.mo` of de/es/fr/ja/ko/pt_BR,
+`GettextCatalogTests`): the catalogs have `Skills`, `Weapon I`, `Weapons`, `No jobs assigned`, `Weightless` but not the capitalised or
+punctuated forms, and hold both `Map` and `MAP`. **Observed**: those captions render translated in the original, hence the case-free
+lookup; the original's lookup code is not located (**Unknown**).
