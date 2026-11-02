@@ -728,7 +728,7 @@ vfunc 5 `FUN_14050caf0`). TaskData fields: +0x108 desire (a member function, nea
 | 153, 239 Going to bed | 2 + r x 8 | 1 |
 | 190 Worker, 221 Operating machine | 0.5 + r x 2 | 1 |
 | 240 Capture Target | 0.05 + r x 0.5 | 1 |
-| 248 Attacking Squad | 0.3 + r x 2 | 1 |
+| 248 Attacking Squad | 0.3 + r x 2 (+0x20 and +0x21 set; **Verified**, the registration in `FUN_140319a60`; Meitou `TaskProfiles`) | 1 |
 | 45 Bodyguard | - | 0.9 |
 | 57, 58, 125, 237, 250 | - | 0.8 |
 

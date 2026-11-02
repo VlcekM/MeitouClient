@@ -43,6 +43,7 @@ public static class TaskProfiles
         [TaskType.BODYGUARD] = new(Special, Crowd: 0.9f),
         // Medic: the desire function's 1 times the finder's score (FUN_140998410); crowd factor 0.8 (FUN_140319a60, Observed).
         [TaskType.JOB_MEDIC] = new(Special, Crowd: 0.8f),
+        [TaskType.DEFEAT_SQUAD_LIMIT_CHASE_RANGE] = new(Special, 0.3f, 2, true),   // 248 Attacking Squad (FUN_140319a60: commitment 0.3 + rand x 2, +0x20 set)
         [TaskType.GO_HOME_AND_GO_TO_BED] = new(Special, 2, 8, true),
         [TaskType.GO_HOME_AND_GO_TO_BED_SECURE] = new(Special, 2, 8, true),
         [TaskType.RUN_AWAY_HOMETOWN] = new(Special, 0.05f, 0.15f),
