@@ -3,7 +3,7 @@ using System.Numerics;
 namespace Meitou.Simulation.Construction;
 
 /// <summary>One confirmed ghost: the BUILDING record, its absolute position, its rotation (tilt included), floor and parent building instance (null outdoors).</summary>
-public sealed record PlannedBuilding(string Record, Vector3 Position, Quaternion Rotation, int Floor = 0, string? Parent = null);
+public sealed record PlannedBuilding(string Record, Vector3 Position, Quaternion Rotation, int Floor = 0, string? Parent = null, Vector3 BoundsSize = default);
 
 /// <summary>Build mode's Confirm: creates a site per plan, in order, for the player faction (docs/simulation.md "Buildings"). A plan failing the data rules is dropped with a message.</summary>
 public sealed record PlaceBuildings(IReadOnlyList<PlannedBuilding> Plans) : SimCommand;

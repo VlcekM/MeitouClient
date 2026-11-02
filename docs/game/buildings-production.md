@@ -226,7 +226,7 @@ shows the first failing message in this order (**Verified** unless marked):
   building takes that building's town; else the nearest town of the player faction within 5000 (X/Z); else the town of
   the nearest player building within 2500 (the decompile adds an X/Z > 10000 test there that looks unreachable,
   **Observed**); else a `creates player town` building that is not a wall makes an outpost at its position
-  (node position plus bounding-box size, as decompiled), and every player building whose town is a player town or none
+  (the ghost node's position plus `Aabb::getSize` of the ghost's bounds, the full X, Y and Z extent, **Verified** `FUN_1404d6d90`; Meitou: `PlannedBuilding.BoundsSize`, the merge of the ghost parts' mesh bounds in their own space, from `PlayerInterface.GhostBoundsSize`), and every player building whose town is a player town or none
   and whose nearest town of any faction within 8000 is the new one moves into it. Walls (`links together`, ghost class
   `PreviewBuilding_Wall`) never make one there; after the pass, queued walls still without a town take the last player
   town among the queue's ghosts, else the nearest town of any faction within 16000 of their mean position, else a new

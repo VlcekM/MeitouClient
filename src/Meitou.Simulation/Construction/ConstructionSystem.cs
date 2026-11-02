@@ -401,7 +401,7 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
             Rate = data.Rate,
         };
         site.Complete = site.Target <= 0;   // a total of 0 completes at once (Verified)
-        site.Town = TownFor(world, site, data);
+        site.Town = TownFor(world, site, data, plan.BoundsSize);
         reg.Add(site);
         return site;
     }
@@ -420,9 +420,9 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
     /// <summary>
     /// The player town a new site belongs to (docs/game/buildings-production.md "Placement", Outposts): its parent building's; else the nearest player town within
     /// <see cref="JoinTownRange"/>; else the town of the nearest player building within <see cref="JoinBuildingRange"/>; else, for a <c>creates player town</c> building that is not a
-    /// wall, a new outpost at its position, which also takes in the player buildings whose nearest town within <see cref="AdoptRange"/> it is. 0 when none.
+    /// wall, a new outpost at its position plus the size of the ghost's bounds box (<b>Verified</b>, <c>FUN_1404d6d90</c>: <c>Aabb::getSize</c>, the full X, Y and Z extent), which also takes in the player buildings whose nearest town within <see cref="AdoptRange"/> it is. 0 when none.
     /// </summary>
-    int TownFor(World world, BuildSite site, BuildingBuildData data)
+    int TownFor(World world, BuildSite site, BuildingBuildData data, Vector3 boundsSize)
     {
         var reg = world.Buildings;
         if (site.Parent is { } parent && reg.Find(parent) is { } home) return home.Town;   // a level building's town is not a player town: the rules below
@@ -448,7 +448,7 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
         if (near is { Town: > 0 } && best < JoinBuildingRange) return near.Town;
 
         if (data.LinksTogether || !data.CreatesPlayerTown) return 0;
-        var town = reg.AddTown(site.Position, faction);
+        var town = reg.AddTown(site.Position + boundsSize, faction);   // the ghost's position plus its bounds' size (FUN_1404d6d90)
         foreach (var s in reg.All)
             if (s.Owner == faction && NearestTown(reg, s.Position, AdoptRange) == town.Number) s.Town = town.Number;
         return town.Number;

@@ -402,6 +402,23 @@ sealed partial class PlayerInterface
         ghostLift = 0;
     }
 
+    /// <summary>
+    /// The size of a ghost's bounding box (<c>Aabb::getSize</c> of the ghost's bounds, <c>FUN_1404d6d90</c>): the merge of its parts' mesh bounds in their own space, the full X, Y and Z extent.
+    /// Zero without readable mesh bounds.
+    /// </summary>
+    Vector3 GhostBoundsSize(BuildingBuildData building)
+    {
+        if (buildHost is not { } host) return default;
+        Vector3? min = null, max = null;
+        foreach (var part in host.Parts(building.Id))
+        {
+            if (host.Placement.PartBounds(part.MeshPath) is not { } box) continue;
+            min = min is { } lo ? Vector3.Min(lo, box.Min) : box.Min;
+            max = max is { } hi ? Vector3.Max(hi, box.Max) : box.Max;
+        }
+        return min is { } a && max is { } b ? b - a : default;
+    }
+
     void BuildUndo()
     {
         if (WallCancel()) return;
@@ -412,7 +429,7 @@ sealed partial class PlayerInterface
     {
         if (buildQueue.Count == 0) return;
         Sound("Building_Confirm");
-        Say(new PlaceBuildings([.. buildQueue.Select(q => new PlannedBuilding(q.Building.Id, q.Position, q.Rotation, q.Floor, q.Parent))]) { Tick = session.World.Tick });
+        Say(new PlaceBuildings([.. buildQueue.Select(q => new PlannedBuilding(q.Building.Id, q.Position, q.Rotation, q.Floor, q.Parent, GhostBoundsSize(q.Building)))]) { Tick = session.World.Tick });
         buildQueue.Clear();
         SetBuildMode(false);
     }
