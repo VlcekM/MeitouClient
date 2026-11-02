@@ -40,9 +40,6 @@ public sealed partial class PopulationSystem
     /// it there rather than milling a 300 disc into the town.
     /// </summary>
     const float TownPointRadius = 50, TownPointArrive = 100;
-    /// <summary>How far outside its gate or wall a patrol aims at a town (<c>Town::getPositionOutsideTownGates(200)</c>).</summary>
-    const float TownPointOffset = 200;
-
     void StepHomeless(World world)
     {
         if (wildSites is null || data.Biomes is null) return;
@@ -220,24 +217,14 @@ public sealed partial class PopulationSystem
 
     /// <summary>
     /// A town's patrol waypoint (<c>Town::getPositionOutsideTownGates(200)</c>): the first of its buildings, in list order, that is a gate with a door (not a ruin)
-    /// outside the town walls (gate code 0, or unknown) or a wall with <c>interior</c> references, moved <see cref="TownPointOffset"/> outward from the town's
+    /// outside the town walls (gate code 0, or unknown) or a wall with <c>interior</c> references, moved <see cref="TownExit.Offset"/> outward from the town's
     /// position; the town's position when there is none. The original moves the gate's door point and its direction is Observed; the building's origin and the
     /// outward direction are engine readings.
     /// </summary>
     Vector2 OutsideTown(World world, TownSite town)
     {
-        var centre = new Vector2(town.Position.X, town.Position.Z);
         locks ??= world.Systems.OfType<Locks.LockSystem>().FirstOrDefault();
-        foreach (var b in town.Buildings)
-        {
-            // Engine choice: an unknown gate code (off the navmesh, or no gate regions) counts as outside the walls.
-            bool gate = b.IsGate && !world.Fixtures.IsDestroyed(b) && !(locks?.Regions?.CodeAt(b.Position) > 0);
-            if (!(gate || b.IsWall && b.HasInterior)) continue;
-            var at = new Vector2(b.Position.X, b.Position.Z);
-            var d = at - centre;
-            return d.LengthSquared() > 0 ? at + Vector2.Normalize(d) * TownPointOffset : centre;
-        }
-        return centre;
+        return TownExit.Of(town, locks?.Regions, world.Fixtures.IsDestroyed);
     }
 
     /// <summary>

@@ -613,7 +613,7 @@ Meitou: [ground items](../simulation.md#items-and-eating).
   (`FUN_140929560`): one pass over the building list, returning at the first entry that is either a gateway (`isGate`) with
   `amInsideTownWalls` 0 and a door (`getDoor`), whose door point +0x3bc is moved 200 along a normalised direction (its origin is dropped
   by the decompile; outward from the town is **Observed** from the name), or a wall (`isAWall`) whose BUILDING record has `interior` references (`myInterior` +0x1f0, created only then by `Building::setup` `FUN_140551b20`; **Verified**, decompile), whose position
-  is moved the same way; neither: the town position. A town without buildings: a door point of the object under the town position
+  is moved the same way; neither: the town position. Meitou: `TownExit` serves the patrols and the intruder errand 274 (`TownDutySystem.Outside`; placed towns by their level buildings, a player town by its complete sites; the point's cache is **Unknown**, not modelled). A town without buildings: a door point of the object under the town position
   (`FUN_1409b2ab0`, a ray from 1000 above), else the position. So bandits never aim inside a walled town, the Hub included (its two
   `Defensive Gate IV` are ruins in the level data; a ruin has no door ([locks](locks.md#doors)), so the wall branch applies, skipping the first wall, a `Defensive Wall IV Connector` without `interior`; **Observed**).
   The move: `CharMovement::setPatrolInput` (`FUN_14065eaa0`, vtable +0xa0) in mode 3 (a `PatrolInfo` with a biome group) draws the point

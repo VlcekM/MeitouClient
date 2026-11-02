@@ -15,8 +15,6 @@ public sealed record TownDutySettings
     public int LookEveryTicks { get; init; } = 15;
     /// <summary>A member looks for an intruder within its sight (the sensed list's size is <b>Unknown</b>).</summary>
     public float Sight { get; init; } = AggroSystem.OutdoorSight;
-    /// <summary>An intruder is put down this far past the town's built-up area (<b>Observed</b>: the original's exit point is 200 beyond a door of one of the town's buildings).</summary>
-    public float OutsideTown { get; init; } = 200;
     /// <summary>A walk counts as arrived within this of its goal (a cage: its <c>use range</c> plus <see cref="CageReach"/>; a walk that ended within <see cref="CageSlack"/> of it does too).</summary>
     public float Arrive { get; init; } = 40;
     public float CageReach { get; init; } = 15;
@@ -68,7 +66,7 @@ public sealed class TownDuty
 /// <item><b>112 Find and put in cage</b> (a living body) or <b>281</b> (any body), while the package lists it: the best free cage in the town (the original's finder; an occupier may use the occupied town's, its use test passing
 /// for that town, <c>FUN_140621230</c>), where the intruder is locked up with the put-in's usual sentence (from a bounty with the cage owner's faction,
 /// docs/game/economy.md 11.5; none: served, so the jailer frees it); else</item>
-/// <item><b>274 Throwing out</b> (<c>Task_TakeIntruderOutsideTown</c>): carried past the town's built-up area (<see cref="TownDutySettings.OutsideTown"/>) on the member's side and put down.</item>
+/// <item><b>274 Throwing out</b> (<c>Task_TakeIntruderOutsideTown</c>): carried to the town's point outside its gates (<see cref="TownExit"/>, the same for every carrier) and put down.</item>
 /// <item><b>243 Getting food</b> (finder <c>FUN_1408cb650</c>, <c>BuildingFinder_LootFoodAndStuff</c>; then 244 <c>Task_grabOneFood</c>): a member holding no food walks to the nearest store with
 /// food in the town and takes one item of it (the goal holds while it has food, list A <c>gotAFoodItem</c>). The finder searches the blackboard's target town (<c>Blackboard.Destination</c>), else the town the member stands in,
 /// else the 3 x 3 zone cells round it; it need not be the squad's own, and a player-side member takes only from its faction's stores.</item>
@@ -441,7 +439,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
 
     /// <summary>
     /// The intruder finder's stand-in for <c>amInsideTownWalls</c> where the gate codes are unknown (<b>engine reading</b>): a placed town's radius, a player
-    /// town's farthest building from its centre. A body put down past it (<see cref="TownDutySettings.OutsideTown"/>) is not found again.
+    /// town's farthest building from its centre. A body put down at the exit point is normally outside it.
     /// </summary>
     bool BuiltUp(World world, CampaignTown town, Vector2 p) => Vector2.Distance(p, Centre(world, town)) <= Reach(world, town);
 
@@ -458,16 +456,25 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
         return far;
     }
 
-    /// <summary>Where an intruder is put down: past the built-up area by <see cref="TownDutySettings.OutsideTown"/> on the carrier's side, farther out until the ground is walkable.</summary>
-    Vector2 Outside(World world, CampaignTown town, Vector3 from)
+    /// <summary>
+    /// Where an intruder is put down: the town's point outside its gates (<see cref="TownExit"/>, <c>Town::getPositionOutsideTownGates(200)</c>, <b>Verified</b>), the same for every carrier. A player town's
+    /// is found over its complete sites: a gate outside the walls, or a wall with an interior.
+    /// </summary>
+    Vector2 Outside(World world, CampaignTown town)
     {
-        var centre = Centre(world, town);
-        var dir = Flat(from) - centre;
-        dir = dir.LengthSquared() > 1e-4f ? Vector2.Normalize(dir) : Vector2.UnitX;
-        float distance = Reach(world, town) + Settings.OutsideTown;
-        var p = centre + dir * distance;
-        for (int tries = 0; tries < 4 && !world.Walkability.IsWalkable(p.X, p.Y); tries++, distance *= 1.25f) p = centre + dir * distance;
-        return p;
+        locks ??= world.Systems.OfType<Locks.LockSystem>().FirstOrDefault();
+        if (town.Site >= 0) return TownExit.Of(data.Sites[town.Site], locks?.Regions, world.Fixtures.IsDestroyed);
+        return TownExit.Of(Centre(world, town), ExitCandidates(world, town));
+    }
+
+    IEnumerable<(Vector2, bool)> ExitCandidates(World world, CampaignTown town)
+    {
+        foreach (var site in world.Buildings.All)
+        {
+            if (site.Town != town.PlayerTown || !site.Complete || data.Db.Find(site.Record) is not { } r) continue;
+            bool gate = Meitou.Data.World.TownBuildings.IsGate(data.Db, r, gateFunctions) && !(locks?.Regions?.CodeAt(site.Position) > 0);
+            yield return (Flat(site.Position), gate || r.GetBool("links together") && r.GetReferences("interior").Count > 0);
+        }
     }
 
     static bool HoldsFood(CharacterCold cold) =>
@@ -737,7 +744,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
         }
         if (squad is not null && population.GoalDuty(world, squad, (AiRole)role, TaskType.TAKE_INTRUDER_OUTSIDE_TOWN))
         {
-            (d.Kind, d.Goal, d.Tries) = (TownDutyKind.Out, Outside(world, d.Town, gn.Position), 0);
+            (d.Kind, d.Goal, d.Tries) = (TownDutyKind.Out, Outside(world, d.Town), 0);
             TaskStart.Walk(world, g, d.Goal, SpeedMode.Free, RowOf(d.Kind), TaskSource.Goal);
             return true;
         }
