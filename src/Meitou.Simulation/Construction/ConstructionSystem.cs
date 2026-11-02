@@ -922,6 +922,7 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
         if (k > CounterRestart) k = site.BuilderCounter = 0;
         site.BuilderCounter++;
         float scaled = amount * Settings.BuildingSpeed * constants.BuildSpeed * Falloff[Math.Min(k, CounterCap)];
+        if (Data(site.Record) is { IsDoor: true }) scaled *= DoorWorkFactor;   // the door byte (+0x1a0) of a DoorStuff building, FUN_1405595a0
         site.Progress = site.Rate > 0 ? site.Progress + site.Rate * scaled : site.Target;
         if (site.Progress > 0) SetBroken(world, site, false);
         world.Buildings.Touch();
@@ -935,7 +936,11 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
 
     // ------------------------------------------------------------------ doors
 
-    /// <summary>A door's build work counts three times (Building slot 70 with the door byte <c>+0x1a0</c> set, <c>FUN_1405595a0</c>, <b>Verified</b>).</summary>
+    /// <summary>
+    /// A door's build work counts three times (Building slot 70 with the door byte <c>+0x1a0</c> set, <c>FUN_1405595a0</c>, <b>Verified</b>), for a door fixture and for a site whose record is a door. The
+    /// same function never completes a door by its own progress (the parent building does, <b>Verified</b>); Meitou's door fixtures are whole at progress 1 and no door site is a child that its
+    /// parent completes, so a door site keeps the progress test.
+    /// </summary>
     public const float DoorWorkFactor = 3;
 
     // Builders that have worked each door this tick (the 0.75 falloff counter of the door's own Building; per tick as for sites).

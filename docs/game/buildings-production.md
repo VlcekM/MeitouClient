@@ -24,7 +24,7 @@ initializer `FUN_14055ba20`, the tick `FUN_1405595a0` and the save writer/reader
 | +0x18c float | rate = `build speed mult` / (1200/11), i.e. per game hour converted to per second | - |
 | +0x190 int | builder counter of the 0.75 falloff | - |
 | +0x194 float | visual threshold = clamp(`build threshold` / 100, 0, 0.95) | - |
-| +0x1a0 byte | is a door (set by the DoorStuff constructor `FUN_14029fb40`): build work x3, never completes itself, no refund | - |
+| +0x1a0 byte | is a door (set by the DoorStuff constructor `FUN_14029fb40`): build work x3, never completes itself (neither by progress nor by the immediate finish; its parent building does, `FUN_1405595a0` lines 56-60 and 121-123, **Verified**), no refund | - |
 | +0x1a1 byte | destroyed | `destroyed` |
 
 Materials (**Verified**, `FUN_14055ba20`): one entry per BUILDING `construction` reference (item = the referenced
