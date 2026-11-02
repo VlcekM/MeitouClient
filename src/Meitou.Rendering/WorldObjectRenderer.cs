@@ -851,7 +851,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         for (int x = lo.X; x <= hi.X; x++)
             for (int y = lo.Y; y <= hi.Y; y++)
             {
-                if (streamer.ZoneAt(new ZoneCoordinate(x, y)) is not { Interiors.Count: > 0 } zone || ObjectStreamer.ZoneDistance(zone.X0, zone.Z0, p) > InteriorOver) continue;
+                if (streamer.ZoneAt(new ZoneCoordinate(x, y)) is not { Interiors.Length: > 0 } zone || ObjectStreamer.ZoneDistance(zone.X0, zone.Z0, p) > InteriorOver) continue;
                 foreach (var v in zone.Interiors)
                     if (v.Contains(p, margin))
                     {
@@ -874,7 +874,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         var (lo, hi) = (WorldLayout.ZoneOf(at.X - InteriorOver, at.Y - InteriorOver), WorldLayout.ZoneOf(at.X + InteriorOver, at.Y + InteriorOver));
         for (int x = lo.X; x <= hi.X; x++)
             for (int y = lo.Y; y <= hi.Y; y++)
-                if (streamer.ZoneAt(new ZoneCoordinate(x, y)) is { Interiors.Count: > 0 } zone)
+                if (streamer.ZoneAt(new ZoneCoordinate(x, y)) is { Interiors.Length: > 0 } zone)
                     foreach (var v in zone.Interiors)
                         if (ReferenceEquals(v, volume) || v.PlacementId == volume.PlacementId) return v;
         return null;
@@ -906,7 +906,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         for (int x = lo.X; x <= hi.X && found is null; x++)
             for (int y = lo.Y; y <= hi.Y && found is null; y++)
             {
-                if (streamer.ZoneAt(new ZoneCoordinate(x, y)) is not { Interiors.Count: > 0 } zone) continue;
+                if (streamer.ZoneAt(new ZoneCoordinate(x, y)) is not { Interiors.Length: > 0 } zone) continue;
                 float zoneDistance = ObjectStreamer.ZoneDistance(zone.X0, zone.Z0, p);
                 if (zoneDistance > reach) continue;
                 foreach (var v in zone.Interiors)
@@ -928,7 +928,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         InteriorVolume? best = null;
         foreach (var zone in streamer.AllZones)
         {
-            if (zone.Interiors.Count == 0 || ObjectStreamer.ZoneDistance(zone.X0, zone.Z0, new Vector3(x, 0, z)) > 200) continue;
+            if (zone.Interiors.Length == 0 || ObjectStreamer.ZoneDistance(zone.X0, zone.Z0, new Vector3(x, 0, z)) > 200) continue;
             foreach (var v in zone.Interiors)
                 if ((best is null || v.YMax > best.YMax) && v.ContainsGround(x, z)) best = v;
         }
@@ -962,7 +962,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         var q = new Vector2(eye.X, eye.Z);
         foreach (var zone in streamer.AllZones)
         {
-            if (zone.Interiors.Count == 0 || ObjectStreamer.ZoneDistance(zone.X0, zone.Z0, eye) > range + 200) continue;
+            if (zone.Interiors.Length == 0 || ObjectStreamer.ZoneDistance(zone.X0, zone.Z0, eye) > range + 200) continue;
             foreach (var v in zone.Interiors)
             {
                 if (v.MaskMeshes.Count == 0 || v.Footprint.Length == 0) continue;

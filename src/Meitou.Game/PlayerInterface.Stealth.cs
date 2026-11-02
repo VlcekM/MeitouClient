@@ -106,29 +106,38 @@ sealed partial class PlayerInterface
         if (taskBarLayout is not { Roots: [var root, ..] } || EditorOpen) return;
         float tag = Height * 0.0296296f, scale = Height / 1080f;
         int n = 0;
-        foreach (var c in session.CurrentSnapshot.Characters)
+        var all = session.CurrentSnapshot.Characters;
+        for (int i = 0; i < all.Count; i++)
         {
+            var c = all[i];
             if (c.Bar is not { } bar || c.CarriedBy != CharacterId.None) continue;
             var feet = where(c);
             if (Vector3.DistanceSquared(Eye, feet) >= NameTagRangeSquared) continue;
             if (Project(feet + new Vector3(0, CharacterHeight + 4, 0)) is not { } head) continue;
             float x = head.X / Width - root.Position.Width / 2, y = (head.Y - 8 * scale - tag) / Height - root.Position.Height;
-            var b = new UiBindings();
-            b.RelativePositions[root] = root.Position with { X = x, Y = y };
-            b.Text["Text"] = bar.Text;
-            string prefix = $"taskbar-{n++}-";
-            var parts = MyGuiPresentation.Arrange(taskBarLayout, Width, Height, b, uiResources.Layers)
-                .Select(u => u with { Name = u.Name.Length > 0 ? prefix + u.Name : u.Name, Pickable = false }).ToList();
-            // The fill is the skin's TrackSkin from the start of TrackPlace (MyGUI ProgressBar, as ResourceLoadBar draws it), under the frame that follows it.
-            int place = parts.FindIndex(u => u.Properties.GetValueOrDefault("TemplateOwner") == "ProgressBar" && u.Properties.GetValueOrDefault("TemplatePart") == "TrackPlace");
-            if (place >= 0 && TaskBarTrack() is { } track)
-            {
-                var bounds = parts[place].Bounds;
-                parts.Insert(place + 1, new UiControl(prefix + "track", "Widget", bounds with { Width = MathF.Round(bounds.Width * Math.Clamp(bar.Progress, 0, 1)) }, "", "", track, true,
-                    new Dictionary<string, string>(), Vector4.Zero, Pickable: false));
-            }
-            controls.AddRange(parts);
+            AddTaskBar(controls, taskBarLayout, root, root.Position with { X = x, Y = y }, bar, $"taskbar-{n++}-");
         }
+    }
+
+    /// <summary>One character's bar at <paramref name="at"/>: the layout's controls renamed with <paramref name="prefix"/>, not pickable, and its fill.</summary>
+    void AddTaskBar(List<UiControl> controls, MyGuiLayout layout, MyGuiWidget root, UiRect at, TaskBar bar, string prefix)
+    {
+        var b = new UiBindings();
+        b.RelativePositions[root] = at;
+        b.Text["Text"] = bar.Text;
+        var arranged = MyGuiPresentation.Arrange(layout, Width, Height, b, uiResources.Layers);
+        var parts = new List<UiControl>(arranged.Count + 1);
+        foreach (var u in arranged) parts.Add(u with { Name = u.Name.Length > 0 ? prefix + u.Name : u.Name, Pickable = false });
+
+        // The fill is the skin's TrackSkin from the start of TrackPlace (MyGUI ProgressBar, as ResourceLoadBar draws it), under the frame that follows it.
+        int place = parts.FindIndex(u => u.Properties.GetValueOrDefault("TemplateOwner") == "ProgressBar" && u.Properties.GetValueOrDefault("TemplatePart") == "TrackPlace");
+        if (place >= 0 && TaskBarTrack() is { } track)
+        {
+            var bounds = parts[place].Bounds;
+            parts.Insert(place + 1, new UiControl(prefix + "track", "Widget", bounds with { Width = MathF.Round(bounds.Width * Math.Clamp(bar.Progress, 0, 1)) }, "", "", track, true,
+                new Dictionary<string, string>(), Vector4.Zero, Pickable: false));
+        }
+        controls.AddRange(parts);
     }
 
     string? taskBarTrack;

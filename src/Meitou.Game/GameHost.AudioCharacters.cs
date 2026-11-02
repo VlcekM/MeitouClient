@@ -118,8 +118,17 @@ sealed partial class GameHost
             if (c.InBed != before.InBed) sounds.Job(key, "Character_Bed", CharacterSounds.EventLimit, "Bed", c.InBed ? "Get_In" : "Get_Out");
             if (carried != before.Carried && (carried || before.PutDown)) sounds.Carried(key, carried);
         }
-        bool putDown = carried && session.CurrentSnapshot.Characters.FirstOrDefault(x => x.Id == c.CarriedBy)?.Task == CharacterTask.PutDown;
+        bool putDown = carried && TaskOf(c.CarriedBy) == CharacterTask.PutDown;
         soundMemo[key] = new SoundMemo { Task = c.Task, InBed = c.InBed, Carried = carried, PutDown = putDown, Frame = soundFrame };
+    }
+
+    /// <summary>The shown task of <paramref name="id"/>, null when not in the snapshot. A plain loop: the lambda it replaced captured the character, a closure per character a frame.</summary>
+    CharacterTask? TaskOf(CharacterId id)
+    {
+        var all = session.CurrentSnapshot.Characters;
+        for (int i = 0; i < all.Count; i++)
+            if (all[i].Id == id) return all[i].Task;
+        return null;
     }
 
     void PlayCombatSound(CharacterSounds sounds, in SoundEvent e)

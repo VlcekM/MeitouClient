@@ -893,6 +893,14 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
     /// eater's sight (engine reading of its sensed list): 230 a dead body of a <c>carriable</c> race lying down, for an animal eater not a robot and not of its own race; 233 a dead or
     /// downed one not of an allied faction, not a robot and not of the eater's race. Not carried, not caged, and no other job's. -1: none.
     /// </summary>
+    /// <summary>Whether a job holds <paramref name="id"/> as its captive. A plain loop: a lambda capturing the id made a closure per character the scan looked at.</summary>
+    bool IsJobCaptive(CharacterId id)
+    {
+        foreach (var j in jobs)
+            if (j.Captive == id) return true;
+        return false;
+    }
+
     int BodyToEat(World world, int slot, CharacterCold cold, bool dead)
     {
         var table = world.Characters;
@@ -911,8 +919,7 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
                 if (!m.Dead || !race.Carriable || animal && (race.IsRobot || race.StringId == cold.Race?.StringId)) continue;
             }
             else if (!m.Incapacitated || race.IsRobot || race.StringId == cold.Race?.StringId || Allied(cold.Faction, body.Faction)) continue;
-            var id = table.IdOf(s);
-            if (jobs.Any(o => o.Captive == id)) continue;
+            if (IsJobCaptive(table.IdOf(s))) continue;
             (found, best) = (s, d2);
         }
         return found;

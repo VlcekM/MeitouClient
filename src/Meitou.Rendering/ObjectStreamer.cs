@@ -61,7 +61,7 @@ sealed class ObjectStreamer(WorldObjects objects, ObjectMeshCache meshes) : IDis
     /// <summary>Unloads <paramref name="coordinate"/>'s zone; a new <see cref="InteriorVersion"/> only when it had interiors.</summary>
     void Drop(ZoneCoordinate coordinate)
     {
-        if (zones.Remove(coordinate, out var gone) && gone.Interiors.Count > 0) InteriorVersion++;
+        if (zones.Remove(coordinate, out var gone) && gone.Interiors.Length > 0) InteriorVersion++;
     }
 
     public sealed class Zone
@@ -77,7 +77,8 @@ sealed class ObjectStreamer(WorldObjects objects, ObjectMeshCache meshes) : IDis
         public float ParkedLimit;
         public bool ParkedStand;
         /// <summary>The indoor volumes of the zone's buildings (<see cref="ZoneObjects.Interiors"/>).</summary>
-        public IReadOnlyList<InteriorVolume> Interiors = [];
+        /// <summary>An array, so the per-frame interior walks (camera, audio, lamps, GI) enumerate without allocating.</summary>
+        public InteriorVolume[] Interiors = [];
     }
 
     /// <summary>Zones laid out at once.</summary>
@@ -172,9 +173,9 @@ sealed class ObjectStreamer(WorldObjects objects, ObjectMeshCache meshes) : IDis
         z.Stand.RemoveAll(Match);
         z.Unresolved.RemoveAll(Match);
         z.Parked.RemoveAll(Match);
-        int had = z.Interiors.Count;
+        int had = z.Interiors.Length;
         z.Interiors = [.. z.Interiors.Where(v => v.PlacementId != instanceId)];
-        if (z.Interiors.Count != had) InteriorVersion++;
+        if (z.Interiors.Length != had) InteriorVersion++;
     }
 
     void EnsurePopulated(ZoneCoordinate zone)
@@ -223,7 +224,7 @@ sealed class ObjectStreamer(WorldObjects objects, ObjectMeshCache meshes) : IDis
     readonly List<Zone> near = [];
 
     public int Loaded => zones.Count;
-    public IEnumerable<Zone> AllZones => zones.Values;
+    public Dictionary<ZoneCoordinate, Zone>.ValueCollection AllZones => zones.Values;   // a struct enumerator: walked every frame
     public Zone? ZoneAt(ZoneCoordinate coordinate) => zones.GetValueOrDefault(coordinate);
     /// <summary>Zones in range not laid out yet, and those being laid out.</summary>
     public int Pending => jobs.Count + Wanted + fills.Count;
@@ -376,8 +377,8 @@ sealed class ObjectStreamer(WorldObjects objects, ObjectMeshCache meshes) : IDis
     void Add(ZoneObjects laid)
     {
         var (x0, z0) = WorldLayout.ZoneOrigin(laid.Zone);
-        var zone = new Zone { Coordinate = laid.Zone, X0 = x0, Z0 = z0, Interiors = laid.Interiors };
-        if (laid.Interiors.Count > 0 || zones.TryGetValue(laid.Zone, out var old) && old.Interiors.Count > 0) InteriorVersion++;
+        var zone = new Zone { Coordinate = laid.Zone, X0 = x0, Z0 = z0, Interiors = [.. laid.Interiors] };
+        if (laid.Interiors.Count > 0 || zones.TryGetValue(laid.Zone, out var old) && old.Interiors.Length > 0) InteriorVersion++;
         zones[laid.Zone] = zone;
         fills.Enqueue(new Fill { Zone = zone, Laid = laid });
     }

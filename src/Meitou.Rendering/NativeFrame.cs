@@ -44,6 +44,9 @@ sealed unsafe class NativeFrame : IDisposable
     ];
     const int BonesBytes = 128 * 64;
 
+    /// <summary>The empty bone block written once a frame (a new array each time was garbage).</summary>
+    static readonly byte[] NoBones = new byte[BonesBytes];
+
     /// <summary>Storage buffers a consumer's own programs read at set 0, bindings 6 and up (<c>readonly buffer</c> in the shader), given to <see cref="Bind"/>.</summary>
     readonly int extraStorage;
 
@@ -131,7 +134,7 @@ sealed unsafe class NativeFrame : IDisposable
         var viewSlice = frame.WriteConstants(MemoryMarshal.AsBytes(new ReadOnlySpan<ViewConstants>(in view)), align);
         frame.Stats.ConstantBytes += sizeof(ViewConstants);
         // Skinning matrices: no consumer skins yet; the block is valid memory that is never read (uSkinned is 0).
-        if (bonesFrame != frame.Number) { bones = frame.WriteConstants(new byte[BonesBytes], align); bonesFrame = frame.Number; }
+        if (bonesFrame != frame.Number) { bones = frame.WriteConstants(NoBones, align); bonesFrame = frame.Number; }
 
         int count = 6 + extraStorage;
         var result = new FrameBinding { Count = count };

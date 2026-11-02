@@ -194,6 +194,14 @@ public sealed unsafe class ParticleRenderer : IDisposable
     readonly WeatherGroups weatherGroups;
     readonly EffectSimulator simulator = new();
     readonly List<EffectGroup> placerGroups = [];
+
+    /// <summary>The weather's groups, then the placers': indexed so the per-frame walks allocate nothing (a Concat and the units' boxed enumerators did).</summary>
+    int GroupCount => weatherGroups.Groups.Count + placerGroups.Count;
+
+    EffectGroup GroupAt(int i) => i < weatherGroups.Groups.Count ? weatherGroups.Groups[i] : placerGroups[i - weatherGroups.Groups.Count];
+
+    readonly List<EffectUnit> simulationWork = [];
+    readonly List<(EffectUnit Unit, bool Rain, bool Placed)> drawUnits = [];
     readonly List<EffectGroup> toWarm = [];
     readonly List<DrawItem> draws = [];
     double lastSeconds = double.NaN;
@@ -450,9 +458,12 @@ public sealed unsafe class ParticleRenderer : IDisposable
     {
         into.Clear();
         if (!Enabled) return;
-        foreach (var g in weatherGroups.Groups.Concat(placerGroups))
-            foreach (var u in g.Units)
+        for (int gi = 0; gi < GroupCount; gi++)
+        {
+            var g = GroupAt(gi);
+            for (int ui = 0; ui < g.Units.Count; ui++)
             {
+                var u = g.Units[ui];
                 if (u.Effect.FogVolumes.Count == 0) continue;
                 float fade = u.FogFade;
                 if (fade <= 0) continue;
@@ -460,6 +471,7 @@ public sealed unsafe class ParticleRenderer : IDisposable
                     into.Add(new FogVolumes.EffectFog(f.Name, f.Cylinder, u.Position + f.Offset, u.Position + f.Offset2, f.Radius, f.Distance, f.Colour,
                         Math.Clamp(f.Alpha, 0, 1), f.Additive, fade));
             }
+        }
     }
 
     /// <summary>Engine choice (2026-10-12, the user's taste): weather effects drawn fainter than the game's data says. Vain's red rain (`Kenshi_red_Rain`) at half its opacity.</summary>
@@ -509,11 +521,15 @@ public sealed unsafe class ParticleRenderer : IDisposable
 
     void StartSimulation()
     {
-        var work = new List<EffectUnit>();
+        var work = simulationWork;
+        work.Clear();
         activeUnits = 0;
-        foreach (var g in weatherGroups.Groups.Concat(placerGroups))
-            foreach (var u in g.Units)
+        for (int gi = 0; gi < GroupCount; gi++)
+        {
+            var g = GroupAt(gi);
+            for (int ui = 0; ui < g.Units.Count; ui++)
             {
+                var u = g.Units[ui];
                 if (!u.Active) continue;
                 if (!WeatherParticles && g.Entry is not null) { u.Pending = 0; continue; }   // weather off: nothing queues up for when it comes back
                 activeUnits++;
@@ -522,6 +538,7 @@ public sealed unsafe class ParticleRenderer : IDisposable
                 float due = u.DistanceToCamera > 9000 ? 0.1f : u.DistanceToCamera > 4000 ? 0.05f : 0;
                 if (u.Pending > 0 && u.Pending >= due) work.Add(u);
             }
+        }
         if (work.Count == 0) { simulationTicks = 0; return; }
         // Heavier units first, so the last one run is a short one.
         work.Sort((a, b) => b.Pending.CompareTo(a.Pending));
@@ -629,10 +646,14 @@ public sealed unsafe class ParticleRenderer : IDisposable
         var frame = gpu.Frame;
         var forward = -new Vector3(view.M13, view.M23, view.M33);   // the view's -Z axis in the world
         var planes = WorldCamera.FrustumPlanes(viewProjectionMatrix);
-        var units = new List<(EffectUnit Unit, bool Rain, bool Placed)>();
-        foreach (var g in weatherGroups.Groups.Concat(placerGroups))
-            foreach (var u in g.Units)
+        var units = drawUnits;
+        units.Clear();
+        for (int gi = 0; gi < GroupCount; gi++)
+        {
+            var g = GroupAt(gi);
+            for (int ui = 0; ui < g.Units.Count; ui++)
             {
+                var u = g.Units[ui];
                 if (!WeatherParticles && g.Entry is not null) continue;
                 if (u.Radius != float.PositiveInfinity)
                 {
@@ -641,6 +662,7 @@ public sealed unsafe class ParticleRenderer : IDisposable
                 }
                 units.Add((u, g.Effect.Type is EffectType.CameraRain or EffectType.CameraAcidRain, g.Entry is null));
             }
+        }
         units.Sort((a, b) => b.Unit.DistanceToCamera.CompareTo(a.Unit.DistanceToCamera));
         foreach (var (u, rain, placed) in units)
         {
