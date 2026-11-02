@@ -10,10 +10,10 @@ namespace Meitou.Simulation.Saving;
 
 /// <summary>
 /// The player's buildings and construction sites in a save (docs/formats/zones.md "Placement keys", docs/formats/save.md). Each is an instance of its zone file's <c>0-buildinglist</c>, id
-/// <c>&lt;n&gt;-zone&lt;X&gt;.&lt;Y&gt;-INGAME</c>, with a GAMESTATE_BUILDING state <c>&lt;id&gt;-S23</c> in the keys of the original's writer (<c>FUN_1405547f0</c>, <b>Verified</b> by code; no player-built building
-/// is in the sample saves, so a real file with one has not been compared): <c>name</c>, <c>owner faction ID</c>, <c>floornum</c>, <c>destroyed</c>, <c>flags</c>, <c>is complete</c>, <c>pause</c>,
-/// <c>construction progress</c>, <c>&lt;i&gt;construction mats</c> (delivered of entry i), <c>world Y pos</c> (absolute) and the handles <c>handle</c>, <c>isInsideBuilding</c>, <c>town</c>, <c>residents</c>.
-/// The instance's Y is the height above the terrain, as the game loads a player placement (<b>Observed</b>, docs/formats/save.md; the game-made samples' instance Y equals <c>world Y pos</c> instead); reading takes <c>world Y pos</c>. Meitou's own key <c>meitou parent</c> (the parent's
+/// <c>&lt;n&gt;-zone&lt;X&gt;.&lt;Y&gt;-INGAME</c>, with a GAMESTATE_BUILDING state <c>&lt;id&gt;-S23</c> in the keys of the original's writer (<c>FUN_1405547f0</c>, <b>Verified</b> by code):
+/// <c>name</c>, <c>owner faction ID</c>, <c>floornum</c>, <c>destroyed</c>, <c>flags</c>, <c>is complete</c>, <c>pause</c>,
+/// <c>construction progress</c>, <c>&lt;i&gt;construction mats</c> (delivered of entry i), <c>world Y pos</c> (absolute), <c>player furniture Y offset</c> (relative to the parent's origin) and the handles <c>handle</c>, <c>isInsideBuilding</c>, <c>town</c>, <c>residents</c>.
+/// Instance Y is written relative to terrain outdoors, to the parent indoors (docs/formats/save.md); reading takes <c>world Y pos</c>. Meitou's own key <c>meitou parent</c> (the parent's
 /// instance id) carries a parent the original's handle cannot name, and wins on load. <c>town</c> is the handle of the player outpost the site belongs to (<see cref="WriteTowns"/>).
 /// </summary>
 public static class BuildingSave
@@ -41,12 +41,13 @@ public static class BuildingSave
             if (zone.BuildingList is { } list)
                 foreach (var i in list.Instances) reg.Reserve(i.Id);
         var states = HeldSave.BuildingStates(save);
-        // A parent named by handle comes back as its zone-file id (player buildings' ids are unique: every id in the save is reserved above).
+        // Player sites have globally reserved ids; level houses use their zone-qualified runtime identity.
         var idOf = new Dictionary<FcsRecord, string>(ReferenceEqualityComparer.Instance);
         foreach (var zone in save.Zones.Values)
             if (zone.BuildingList is { } ids)
                 foreach (var i in ids.Instances)
-                    if (states.TryGetValue(BuildingKey.Of(zone.Coordinate, i.Id), out var record)) idOf[record] = i.Id;
+                    if (states.TryGetValue(BuildingKey.Of(zone.Coordinate, i.Id), out var record))
+                        idOf[record] = IsPlayerBuilt(i.Id, record, playerFactionId) ? i.Id : BuildingKey.Of(zone.Coordinate, i.Id);
         var handles = save.BuildHandles();
         var townOf = ReadTowns(save, world, playerFactionId, playerIndex);
         int made = 0;
@@ -167,12 +168,24 @@ public static class BuildingSave
             {
                 state.Strings[MeitouParent] = parent;
                 state.Bools["is inside building"] = true;
-                (states.TryGetValue(BuildingKey.Of(site.Zone, parent), out var p) && Hand.IsComplete(p, "handle") ? Hand.Read(p, "handle") : Hand.Null).Write(state, "isInsideBuilding");
+                if (!states.TryGetValue(parent, out var p)) states.TryGetValue(BuildingKey.Of(site.Zone, parent), out p);
+                (p is not null && Hand.IsComplete(p, "handle") ? Hand.Read(p, "handle") : Hand.Null).Write(state, "isInsideBuilding");
+                float? parentY = reg.Find(parent)?.Position.Y ?? world.Fixtures.PropertyPosition(parent)?.Y;
+                if (parentY is null && p is not null && p.Floats.TryGetValue("world Y pos", out float savedY)) parentY = savedY;
+                if (parentY is { } y)
+                {
+                    float offset = site.Position.Y - y;
+                    state.Floats["player furniture Y offset"] = offset;
+                    // Zero means "use instance Y" to the original loader; keep that fallback parent-relative too.
+                    var instance = game.Zones[site.Zone].BuildingList!.Instances.First(i => i.Id == site.Id);
+                    instance.Position = instance.Position with { Y = offset };
+                }
             }
             else
             {
                 state.Strings.Remove(MeitouParent);
                 state.Bools["is inside building"] = false;
+                state.Floats["player furniture Y offset"] = 0;
                 Hand.Null.Write(state, "isInsideBuilding");
             }
         }
@@ -205,7 +218,7 @@ public static class BuildingSave
             list.Instances.Add(instance);
         }
         instance.Target = site.Record;
-        // The game loads a player placement's instance Y as a height above the terrain; world Y pos below is the absolute one (docs/formats/save.md).
+        // Outdoor height above terrain; the parent pass supplies indoor height (docs/formats/save.md).
         instance.Position = at with { Y = at.Y - walkability.TerrainHeight(at.X, at.Z) };
         instance.Rotation = site.Rotation;
         instance.States.Clear();
@@ -223,7 +236,6 @@ public static class BuildingSave
         if (!file.SlotLists[0].Contains(hand.I)) file.SlotLists[0] = [.. file.SlotLists[0].Append(hand.I).Order()];
 
         state.Floats["world Y pos"] = site.Position.Y;
-        state.Floats["player furniture Y offset"] = 0;
         state.Floats["construction progress"] = site.Progress;
         for (int i = 0; i < site.Materials.Length; i++) state.Floats[$"{i}construction mats"] = site.Materials[i].Delivered;
         state.Ints["version"] = StateVersion;
