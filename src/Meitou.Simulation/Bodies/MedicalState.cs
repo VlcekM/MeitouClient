@@ -258,10 +258,12 @@ public sealed partial class MedicalState
     /// <summary>The blood the first 8 parts show, a byte each (<see cref="BloodAmounts(MedicalState)"/>).</summary>
     public ulong ShownBlood => Summary.Blood;
 
-    // The part figures, kept while no part changed (HealthPart.Version only grows, so the sum moves with every change). One reference, swapped whole: the publish reads
-    // it from several threads.
-    sealed record PartSummary(int Version, BodyAggregates Aggregates, float Worst, ulong Blood);
-    PartSummary? summary;
+    // The part figures, kept while no part changed (HealthPart.Version only grows, so the sum moves with every change). A value under a lock: the publish reads it from several
+    // threads, and a new record on every change (a bleeding or healing character's every tick) was garbage.
+    readonly record struct PartSummary(int Version, BodyAggregates Aggregates, float Worst, ulong Blood);
+    PartSummary summary;
+    bool summaryKnown;
+    readonly Lock summaryLock = new();
 
     PartSummary Summary
     {
@@ -269,9 +271,13 @@ public sealed partial class MedicalState
         {
             int version = 0;
             foreach (var p in parts) version += p.Version;
-            var s = summary;
-            if (s is not null && s.Version == version) return s;
-            return summary = new(version, ComputeAggregates(), ComputeWorstPart(), BloodAmounts(this));
+            lock (summaryLock)
+            {
+                if (summaryKnown && summary.Version == version) return summary;
+                summary = new(version, ComputeAggregates(), ComputeWorstPart(), BloodAmounts(this));
+                summaryKnown = true;
+                return summary;
+            }
         }
     }
 

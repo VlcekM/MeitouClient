@@ -787,14 +787,29 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     /// <c>AI::findPrisonerWithContraband</c> (<c>FUN_1408cf6a0</c>, goal 212): the first cage of the town, in list order (no distance weighting), whose occupant carries a stolen item
     /// and is not another errand's. Engine choice: the original's room test for the item is left to the take.
     /// </summary>
+    // Plain loops, not lambdas: Contraband looks at every cage each pass, and the captures made two closures per cage.
+    bool HasDutyOn(CharacterId body)
+    {
+        foreach (var d in duties)
+            if (d.Body == body) return true;
+        return false;
+    }
+
+    bool CarriesStolen(Inventory inventory, int faction)
+    {
+        foreach (var item in inventory.Items)
+            if (item.IsStolenFor(faction, data)) return true;
+        return false;
+    }
+
     (Fixture? Cage, CharacterId Prisoner) Contraband(World world, CampaignTown town)
     {
         var table = world.Characters;
         if (town.Site >= 0) world.Fixtures.RegisterSite(world, data, town.Site);
         foreach (var f in world.Fixtures.All)
         {
-            if (f.Kind != FixtureKind.Cage || FixtureRegistry.IsFree(table, f) || !table.TryResolveNext(f.Occupant, out int s) || duties.Any(o => o.Body == f.Occupant)) continue;
-            if (table.Cold(s) is not { Inventory: { } inv } c || !inv.Items.Any(i => i.IsStolenFor(c.Faction, data)) || AiSystem.TownAt(data, world, f.Position) != town) continue;
+            if (f.Kind != FixtureKind.Cage || FixtureRegistry.IsFree(table, f) || !table.TryResolveNext(f.Occupant, out int s) || HasDutyOn(f.Occupant)) continue;
+            if (table.Cold(s) is not { Inventory: { } inv } c || !CarriesStolen(inv, c.Faction) || AiSystem.TownAt(data, world, f.Position) != town) continue;
             return (f, f.Occupant);
         }
         return (null, CharacterId.None);

@@ -30,7 +30,8 @@ public sealed class DoorSounds(WwisePlayer player)
         public DoorSoundState Last;
     }
 
-    readonly Dictionary<string, Door> doors = new(StringComparer.Ordinal);
+    /// <summary>The doors by building id and door index (the snapshot's key; a string made of the two per door a frame was garbage).</summary>
+    readonly Dictionary<(string Building, int Door), Door> doors = [];
     ulong next = FirstObject;
 
     /// <summary>Fix (default): set the <c>Break</c> switch before <c>Break</c>, so doors and gates sound when they break. Off: as the exe, which never sets it, so <c>Break</c> plays nothing.</summary>
@@ -39,23 +40,29 @@ public sealed class DoorSounds(WwisePlayer player)
     /// <summary>Events posted since the world was set (statistics and tests).</summary>
     public int Posted { get; private set; }
 
-    /// <summary>Steps every door to its state now. <paramref name="eye"/> is the camera eye (the range's origin).</summary>
-    public void Update(IEnumerable<KeyValuePair<string, DoorSoundState>> now, Vector3 eye)
+    /// <summary>Starts a frame's steps: every door is taken as gone until <see cref="Update"/> hands it.</summary>
+    public void Begin()
     {
         foreach (var d in doors.Values) d.Seen = false;
-        foreach (var (key, state) in now)
+    }
+
+    /// <summary>Steps door <paramref name="key"/> to its state now. <paramref name="eye"/> is the camera eye (the range's origin).</summary>
+    public void Update((string Building, int Door) key, DoorSoundState state, Vector3 eye)
+    {
+        if (!doors.TryGetValue(key, out var door))
         {
-            if (!doors.TryGetValue(key, out var door))
-            {
-                doors[key] = door = new Door(next++);
-                door.Motion = state.Motion switch { 2 => 0, 3 => 1, var m => m };
-                door.Broken = state.Broken;
-            }
-            door.Seen = true;
-            door.Last = state;
-            Step(door, state.Motion, state.Broken, eye);
+            doors[key] = door = new Door(next++);
+            door.Motion = state.Motion switch { 2 => 0, 3 => 1, var m => m };
+            door.Broken = state.Broken;
         }
-        // Gone from the list: closed and unlocked again, where it was last seen.
+        door.Seen = true;
+        door.Last = state;
+        Step(door, state.Motion, state.Broken, eye);
+    }
+
+    /// <summary>Ends a frame's steps: a door not handed since <see cref="Begin"/> is closed and unlocked again, where it was last seen.</summary>
+    public void End(Vector3 eye)
+    {
         foreach (var door in doors.Values)
             if (!door.Seen) Step(door, 0, door.Broken, eye);
     }

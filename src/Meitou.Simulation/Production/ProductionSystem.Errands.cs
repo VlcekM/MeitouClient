@@ -335,8 +335,10 @@ public sealed partial class ProductionSystem
     {
         BuildSite? best = null;
         float bestGap = float.MaxValue;
-        foreach (var site in world.Buildings.All)
+        var sites = world.Buildings.All;
+        for (int i = 0; i < sites.Count; i++)   // indexed: asked per character in the publish, a boxed enumerator each time
         {
+            var site = sites[i];
             float radius = Settings.Footprint?.Invoke(site.Record) ?? 0;
             if (!site.Complete || site.Owner != world.Player.Faction || radius <= 0) continue;
             float gap = Gap(site.Position, at);

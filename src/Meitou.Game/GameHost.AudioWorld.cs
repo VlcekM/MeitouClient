@@ -69,8 +69,10 @@ sealed partial class GameHost
             doorSoundsFor = session.World;
         }
         var db = scene.Database;
-        sounds.Update(session.CurrentSnapshot.Doors.Select(d => KeyValuePair.Create($"{d.Key.Building}#{d.Key.Door}",
-            new DoorSoundState(d.Value.Position, TypeOf(d.Value.Record), (int)d.Value.Motion, d.Value.Broken))), eye);
+        sounds.Begin();
+        foreach (var (key, door) in session.CurrentSnapshot.Doors)
+            sounds.Update(key, new DoorSoundState(door.Position, TypeOf(door.Record), (int)door.Motion, door.Broken), eye);
+        sounds.End(eye);
 
         int TypeOf(string record)
         {

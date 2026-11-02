@@ -606,6 +606,24 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
 
     // ------------------------------------------------------------------ the tick
 
+    /// <summary>
+    /// The number of the nearest town of <paramref name="cold"/>'s faction whose radius holds <paramref name="at"/>, 0 for none. A method of its own: lambdas capturing the
+    /// operator in the loop over every character made a closure per character each tick.
+    /// </summary>
+    static int NearestOwnTown(World world, CharacterCold cold, System.Numerics.Vector2 at)
+    {
+        int best = 0;
+        float bestD2 = float.MaxValue;
+        foreach (var t in world.Buildings.Towns)
+        {
+            var centre = new System.Numerics.Vector2(t.Position.X, t.Position.Z);
+            float d2 = System.Numerics.Vector2.DistanceSquared(centre, at);
+            if (t.Owner != cold.Faction || d2 > t.Radius * t.Radius || d2 >= bestD2) continue;
+            (best, bestD2) = (t.Number, d2);
+        }
+        return best;
+    }
+
     public void SlowWorld(World world)
     {
         ProspectStep(world);
@@ -680,9 +698,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
             if (cold.Faction == world.Player.Faction && site.Owner != cold.Faction && IsNatural(site.Id))
             {
                 site.Owner = cold.Faction;
-                var at = new System.Numerics.Vector2(site.Position.X, site.Position.Z);
-                site.Town = world.Buildings.Towns.Where(t => t.Owner == cold.Faction && System.Numerics.Vector2.Distance(new(t.Position.X, t.Position.Z), at) <= t.Radius)
-                    .OrderBy(t => System.Numerics.Vector2.DistanceSquared(new(t.Position.X, t.Position.Z), at)).Select(t => t.Number).FirstOrDefault();
+                site.Town = NearestOwnTown(world, cold, new System.Numerics.Vector2(site.Position.X, site.Position.Z));
             }
             // A turret: manned, facing it; the combat system fires it (docs/simulation.md "Combat", turrets). Its gunner counts as an operator, so it draws its power.
             if (m.Data.Function == Meitou.Data.World.ObjectRanges.TurretFunction)
