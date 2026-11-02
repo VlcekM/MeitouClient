@@ -19,6 +19,8 @@ public sealed partial class ProductionSystem
     /// <summary>A body carried out is put down within this of its goal, or after <see cref="ErrandWalks"/> walks that ended short (engine choices).</summary>
     public const float ErrandArrive = 40;
     public const int ErrandWalks = 4;
+    /// <summary>Game minutes an intruder carrier may stand still before it drops the body (<b>Verified</b>: 5, <c>FUN_1403356e0</c>).</summary>
+    public const float CarryOutMinutes = 5;
     /// <summary>How far past a town's farthest building an intruder is carried out of the town (<b>Observed</b>: 200 beyond the town's edge).</summary>
     public const float OutsideTown = 200;
     /// <summary>The finders look this far for a body or an intruder (the sensed list's reach, an engine stand-in as the rescue job's).</summary>
@@ -35,6 +37,8 @@ public sealed partial class ProductionSystem
         public CharacterId Body;
         /// <summary>The carrier's current GoTo is this job's own (else a GoTo task is an order of the player's).</summary>
         public bool Walking;
+        /// <summary>Intruder carry-out: the game hours at the first step the carrier was not moving (cleared while it moves).</summary>
+        public double? StoppedAt;
     }
 
     // Derived state, not saved or hashed: a lift under way is looked at again from the characters' own state when it is lost.
@@ -139,6 +143,7 @@ public sealed partial class ProductionSystem
         // An order of the player took the carrier elsewhere: the job is over, the body stays with it.
         if (task == CharacterTask.GoTo && !e.Walking) { errands.Remove(id); return; }
         if (task is not (CharacterTask.GoTo or CharacterTask.Idle or CharacterTask.Wander or CharacterTask.Follow)) { errands.Remove(id); return; }
+        bool wasWalking = e.Walking;
         if (task != CharacterTask.GoTo) e.Walking = false;
         Vector2 goal = e.Goal;
         BuildSite? site = null;
@@ -157,7 +162,17 @@ public sealed partial class ProductionSystem
             errands.Remove(id);
             return;
         }
-        if (task == CharacterTask.GoTo) return;   // on its way
+        if (task == CharacterTask.GoTo)
+        {
+            e.StoppedAt = null;
+            return;   // on its way
+        }
+        if (e.Kind != ErrandKind.Corpse && CarryOutOver(world, e, wasWalking))
+        {
+            Carry!.BeginPutDown(world, i, TaskSource.Job);
+            errands.Remove(id);
+            return;
+        }
         if (++e.Tries > ErrandWalks)
         {
             if (e.Kind == ErrandKind.Corpse) GiveUp(world, i, e);
@@ -171,6 +186,16 @@ public sealed partial class ProductionSystem
         e.Goal = goal;
         e.Walking = true;
         TaskStart.StepTo(table, i, goal, cold.RunSpeed);
+    }
+
+    /// <summary>
+    /// The update of <c>Task_TakeIntruderOutside</c> / <c>...OutsideTown</c> (slot 7 <c>FUN_1403356e0</c>, <b>Verified</b>), for a carrier that is not moving: it drops the body when its walk is over
+    /// (here: the walk this job started has ended, short of the goal or not) or when 5 game minutes of clock have passed since it first stood still (the timer is zeroed while it moves).
+    /// </summary>
+    static bool CarryOutOver(World world, Errand e, bool wasWalking)
+    {
+        e.StoppedAt ??= world.GameHours;
+        return wasWalking || world.GameHours - e.StoppedAt.Value >= CarryOutMinutes / 60.0;
     }
 
     /// <summary>The carrier drops the body where it stands and the job leaves it alone from now on (the squad's give-up list).</summary>
