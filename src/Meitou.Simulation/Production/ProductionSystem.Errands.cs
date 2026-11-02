@@ -39,11 +39,13 @@ public sealed partial class ProductionSystem
         public bool Walking;
         /// <summary>Intruder carry-out: the game hours at the first step the carrier was not moving (cleared while it moves).</summary>
         public double? StoppedAt;
+        /// <summary>The player's Corpse Disposal order started it: the delivery needs no job in the list.</summary>
+        public bool Ordered;
     }
 
     // Derived state, not saved or hashed: a lift under way is looked at again from the characters' own state when it is lost.
     readonly Dictionary<CharacterId, Errand> errands = [];
-    // Bodies a carrier gave up on (no machine to take them to, or walks that kept ending short): the original's give-up list of the squad.
+    // Bodies a carrier gave up on (walks that kept ending short): the original's give-up list of the squad.
     readonly HashSet<CharacterId> givenUp = [];
 
     /// <summary>The finders' kinds a job type runs, with the companion type that must be in the list for the carrying out.</summary>
@@ -54,6 +56,21 @@ public sealed partial class ProductionSystem
         TaskType.PICKUP_INTRUDERS_TOWN => ErrandKind.OutOfTown,
         _ => null,
     };
+
+    /// <summary>The delivery job that must be in the list for the carrying out.</summary>
+    static TaskType CompanionOf(ErrandKind kind) => kind switch
+    {
+        ErrandKind.Corpse => TaskType.DEAD_GUYS_GO_IN_THE_POT,
+        ErrandKind.OutOfBuilding => TaskType.TAKE_INTRUDER_OUTSIDE,
+        _ => TaskType.TAKE_INTRUDER_OUTSIDE_TOWN,
+    };
+
+    /// <summary>
+    /// Whether the delivery can run (<b>Verified</b>: the lifts 138 / 223 / 273 do not look at the companion job nor at a machine; only the delivery jobs 137 / 224 / 274 do): the companion is in
+    /// the list (or the player ordered the delivery) and, for a corpse, a machine exists. Otherwise the carrier keeps the body and the errand waits.
+    /// </summary>
+    bool DeliveryReady(World world, CharacterCold cold, ErrandKind kind, Vector3 at, bool ordered = false) =>
+        (ordered || PermaJobs.IndexOf(cold, CompanionOf(kind)) >= 0) && (kind != ErrandKind.Corpse || NearestIncinerator(world, at) is not null);
 
     /// <summary>The carrying errands under way (serial, slot order, every <see cref="ErrandEveryTicks"/> ticks): each is stepped. Their starts are the decision step's (<see cref="ErrandJobs"/>).</summary>
     void Errands(World world)
@@ -66,8 +83,8 @@ public sealed partial class ProductionSystem
     }
 
     /// <summary>
-    /// The carrying jobs as the decision step's contributor (step 5): a character carrying nothing, able to carry and not fleeing, with a job whose finder finds something, lifts it (the corpse
-    /// job needs its delivery 137 in the list, an intruder job its companion 224 / 274). It runs while its lift or its carry is under way.
+    /// The carrying jobs as the decision step's contributor (step 5): a character carrying nothing, able to carry and not fleeing, with a job whose finder finds something, lifts it (the lift
+    /// does not need the delivery job nor a machine). It runs while its lift is under way and while its delivery can run (<see cref="DeliveryReady"/>).
     /// </summary>
     sealed class ErrandJobs(ProductionSystem owner) : IJobSource
     {
@@ -79,10 +96,12 @@ public sealed partial class ProductionSystem
             var cold = table.Cold(slot)!;
             if (owner.Carry is null || KindOf(cold.Jobs[k].Type) is not { } kind) return DecisionCheck.No(null);
             if (owner.errands.TryGetValue(table.IdOf(slot), out var e))
-                return e.Kind == kind && (cold.Carrying == e.Body || table.Next[slot].Task == (byte)CharacterTask.PickUp && cold.CarryTarget == e.Body) ? DecisionCheck.Runs : DecisionCheck.No("another errand");
+            {
+                bool mine = e.Kind == kind && (cold.Carrying == e.Body || table.Next[slot].Task == (byte)CharacterTask.PickUp && cold.CarryTarget == e.Body);
+                if (!mine) return DecisionCheck.No("another errand");
+                return cold.Carrying.IsNone || owner.DeliveryReady(world, cold, kind, table.Next[slot].Position, e.Ordered) ? DecisionCheck.Runs : DecisionCheck.No("nothing to deliver to");
+            }
             if (!cold.Carrying.IsNone || !CarrySystem.CanCarry(world, cold, TaskType.DEAD_GUYS_GO_IN_THE_POT) || cold.Fleeing) return DecisionCheck.No("cannot carry");
-            var companion = kind switch { ErrandKind.Corpse => TaskType.DEAD_GUYS_GO_IN_THE_POT, ErrandKind.OutOfBuilding => TaskType.TAKE_INTRUDER_OUTSIDE, _ => TaskType.TAKE_INTRUDER_OUTSIDE_TOWN };
-            if (PermaJobs.IndexOf(cold, companion) < 0) return DecisionCheck.No("no companion job");
             var lifted = Lifted(table);
             var body = kind == ErrandKind.Corpse ? owner.FindCorpse(world, slot, cold, lifted) : owner.FindIntruder(world, slot, cold, lifted, kind);
             if (body is not { } b) return DecisionCheck.No("nothing found");
@@ -108,7 +127,7 @@ public sealed partial class ProductionSystem
         {
             if (!table.TryResolveNext(id, out int i) || table.Cold(i) is not { IsPlayer: true } cold || cold.Carrying.IsNone) continue;
             if (!table.TryResolveNext(cold.Carrying, out int b) || table.Cold(b)?.Medical is not { Dead: true }) continue;
-            errands[id] = new Errand { Kind = ErrandKind.Corpse, Body = cold.Carrying };
+            errands[id] = new Errand { Kind = ErrandKind.Corpse, Body = cold.Carrying, Ordered = true };
         }
     }
 
@@ -148,10 +167,11 @@ public sealed partial class ProductionSystem
         Vector2 goal = e.Goal;
         BuildSite? site = null;
         Machine? machine = null;
+        if (e.Kind != ErrandKind.Corpse && !DeliveryReady(world, cold, e.Kind, n.Position, e.Ordered)) return;
         if (e.Kind == ErrandKind.Corpse)
         {
-            if (NearestIncinerator(world, n.Position) is not { } found) { GiveUp(world, i, e); return; }
-            (site, machine) = found;
+            if (!DeliveryReady(world, cold, e.Kind, n.Position, e.Ordered)) return;   // the carrier keeps the body, the errand waits
+            (site, machine) = NearestIncinerator(world, n.Position)!.Value;
             goal = GoalOf(world, site, machine);
         }
         bool arrived = site is not null ? AtSite(n, site, machine!) : Vector2.Distance(new Vector2(n.Position.X, n.Position.Z), goal) <= ErrandArrive;
@@ -233,8 +253,6 @@ public sealed partial class ProductionSystem
     {
         var table = world.Characters;
         var at = table.Next[slot].Position;
-        Machine? any = NearestIncinerator(world, at) is { } inc ? inc.Machine : null;
-        if (any is null) return null;   // nothing to take it to: the job is blocked
         CharacterId? best = null;
         float bestD = float.MaxValue;
         foreach (var f in world.Fixtures.All)
