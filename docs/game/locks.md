@@ -151,7 +151,9 @@ Same targets as picking; Task_CutLock / Task_BruteForceLock share the shackle ta
     `DESTINATION_NOT_BLOCKED_BY_FORTIFICATIONS` (90; **Verified**, registered by name in the condition table `FUN_140610250`, evaluator
     `FUN_140597160` via `FUN_1405a28a0`): true when the walker's gate code (`amInsideTownWalls`, slot 0x118) equals the destination's, or
     either is -1; otherwise true only when the gate state between the two codes (`FUN_1402eb070`) is 1 (open or broken), or the target is a
-    building whose own code links to the walker's code with state 1. Providers of 90: 122 Open gate (needs !54 unlocked) and 270 Assaulting
+    building whose own code links to the walker's code with state 1 (**Verified**, `FUN_140597160`: only when the two codes differ and neither is -1; for a destination of type 0, a building: a gate building with a door tests the walker's code against the door's gate code, `+0x378`,
+    through the state map and passes on state 1; any other building passes when its own object's gate code, at its position, equals the walker's; then the pair test above). Meitou: `LockSystem.NotBlocked` compares the codes of two positions;
+    the planner's building destinations pass the door point (`DoorPlan`), which is that second test, and no gate building is a destination, so no overload is added. Providers of 90: 122 Open gate (needs !54 unlocked) and 270 Assaulting
     town; 123/290 give !54 and 56 at a gate (91, walked to by 121). So raiders breaking a locked gate is the planner's chain on gate codes
     (the chain itself is an inference from the table, as for 81; the user reports it in play). Codes and states: [gate codes](pathfinding.md#gate-codes).
     122 and 270 are restricted rows, offered to every NPC plan (**Verified**, `FUN_14051bae0`: the acting character's faction is not the player's, [planner](ai-tasks.md#planner)), so raiders plan the gate chain. Meitou: [simulation](../simulation.md#cages-beds-and-locks) ("Bashing gates").
