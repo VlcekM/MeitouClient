@@ -646,8 +646,8 @@ public sealed partial class PopulationSystem : IStateHashed
 
     /// <summary>
     /// Queues a campaign (<c>FUN_1409c9410</c>): handed to its <c>faction override</c> (home cleared); home missing → the receiving faction's town nearest the target, none → dropped;
-    /// dropped when the same campaign and target is queued, or (without <paramref name="callerFlag"/>) running; queued by the faction itself, dropped while one of its campaigns has
-    /// <c>trig</c>, else <c>trig</c> set on all of them. Due after uniform[<paramref name="minHours"/>, <paramref name="maxHours"/>) hours. Returns whether it was queued.
+    /// dropped when the same campaign and target is queued, or (without <paramref name="callerFlag"/>, which a moved request loses) running; queued by the faction itself, its campaigns
+    /// are walked in order: dropped at the first with <c>trig</c>, each before it having got <c>trig</c> set, else all have it. Due after uniform[<paramref name="minHours"/>, <paramref name="maxHours"/>) hours. Returns whether it was queued.
     /// </summary>
     bool Queue(World world, WarManager from, CampaignData c, CampaignTown target, CampaignTown home, int enemy, float minHours, float maxHours, double now, bool callerFlag)
     {
@@ -656,6 +656,7 @@ public sealed partial class PopulationSystem : IStateHashed
         {
             to = other;
             home = CampaignTown.None;
+            callerFlag = false;   // a moved request is always tested against the target faction's running campaigns
         }
         if (home.IsNone || !Exists(world, home)) home = NearestOwnTown(to.Faction, CentreOf(world, target));
         if (home.IsNone) return false;
@@ -663,8 +664,12 @@ public sealed partial class PopulationSystem : IStateHashed
         if (!callerFlag && to.Actives.Any(a => a.CampaignId == c.Id && a.Target == target)) return false;
         if (to == from)
         {
-            if (from.Actives.Any(a => a.Trig)) return false;
-            foreach (var a in from.Actives) a.Trig = true;
+            // In list order: the request is dropped at the first campaign already marked, the ones before it keep the mark set here.
+            foreach (var a in from.Actives)
+            {
+                if (a.Trig) return false;
+                a.Trig = true;
+            }
         }
         ulong roll = Rng.Hash(world.Seed, (ulong)to.Faction << 32 | (uint)to.Queued++, RngPurpose.Campaign, Rng.StableHash(c.Id) ^ SeedSalts.CampaignDelay);
         to.Requests.Add(new CampaignRequest { CampaignId = c.Id, Enemy = enemy, Due = now + minHours + Rng.Float(roll) * Math.Max(0, maxHours - minHours), Target = target, Home = home });
