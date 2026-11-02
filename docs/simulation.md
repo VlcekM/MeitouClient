@@ -29,7 +29,7 @@ snapshot object changes). `WorldSnapshot` itself is new on each publish.
 
 The game can run the next ticks on their own thread (`WorldSession.BeginTickAhead`, thread `Meitou.Tick`) during the world draw (`WorldFrame.Draw`, after
 `DrawWorld`'s host prefix), and joins them right after (`EndTickAhead`), so the frame costs about the slower of the two instead of their sum. A batch runs as many ticks as a frame has owed
-lately (smoothed, rounded down; at least 1, at most the frame budget), so at 2x and 5x a frame's ticks overlap the draw instead of adding to it; only its
+lately (smoothed, rounded down after adding 0.1; at least 1, at most the frame budget), so at 2x and 5x a frame's ticks overlap the draw instead of adding to it; only its
 last two publish. The ticks are ahead of the clock: they count as the next ones owed (`AdvanceSimulation` takes them, then runs the rest), and the game
 clock moves as each falls due. No new batch starts until the last is due; until then `CurrentSnapshot`/`PreviousSnapshot` hold the pair from before them, so the picture is where it was; `ShownTick` is the world tick on
 screen. Between `BeginTickAhead` and `EndTickAhead` nothing may touch the `World`: the renderer's host callbacks (`Source`, `PoseClock`) read only

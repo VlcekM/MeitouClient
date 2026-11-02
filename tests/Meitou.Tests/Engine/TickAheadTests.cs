@@ -49,4 +49,43 @@ public class TickAheadTests
         session.EndTickAhead();
         Assert.Equal(3, session.World.Tick);
     }
+
+    [Fact]
+    public void At_5x_a_frames_owed_ticks_run_ahead_as_one_batch_and_leave_the_shown_pair_alone()
+    {
+        using var session = new WorldSession(Vector3.Zero, (-100, -100, 100, 100), (_, _) => 0);
+        session.World.Characters.Spawn(new(), new() { Name = "A" }, 0);
+        double tick = session.Simulation.TickSeconds;
+        session.Simulation.SetSpeed(5);
+        // Frames owing 3 ticks each (a hair over, so the accumulator never falls short) settle the batch size at 3.
+        for (int i = 0; i < 12; i++) Assert.Equal(3, session.AdvanceSimulation(3.0001 * tick / 5));
+        var (shown, before, seconds, at) = (session.CurrentSnapshot, session.PreviousSnapshot, session.Clock.GameSeconds, session.World.Tick);
+        var heldCharacters = shown.Characters.Concat(before.Characters).ToList();
+
+        session.BeginTickAhead();
+        session.EndTickAhead();
+        Assert.Equal(at + 3, session.World.Tick);
+        Assert.Equal(at, session.ShownTick);
+        Assert.Equal(seconds, session.Clock.GameSeconds);
+        Assert.Same(shown, session.CurrentSnapshot);
+        Assert.Same(before, session.PreviousSnapshot);
+        // The batch's two publishes went into the other two buffers, not the shown pair's.
+        Assert.DoesNotContain(session.World.Snapshot.Characters.Concat(session.World.PreviousSnapshot.Characters), c => heldCharacters.Contains(c));
+
+        // A frame owing 1: it is taken from the batch, the clock moves a tick, the picture holds; no tick runs and no new batch starts.
+        Assert.Equal(1, session.AdvanceSimulation(tick / 5));
+        Assert.Equal(at + 3, session.World.Tick);
+        Assert.Equal(at, session.ShownTick);
+        Assert.Equal(seconds + tick, session.Clock.GameSeconds, 9);
+        Assert.Same(shown, session.CurrentSnapshot);
+        session.BeginTickAhead();
+        Assert.Equal(at + 3, session.World.Tick);
+
+        // A frame owing 2: the rest are due, the world's snapshots show.
+        Assert.Equal(2, session.AdvanceSimulation(2 * tick / 5));
+        Assert.Equal(at + 3, session.World.Tick);
+        Assert.Equal(at + 3, session.ShownTick);
+        Assert.Equal(seconds + 3 * tick, session.Clock.GameSeconds, 9);
+        Assert.Same(session.World.Snapshot, session.CurrentSnapshot);
+    }
 }
