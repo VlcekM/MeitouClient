@@ -183,7 +183,7 @@ Dismantle (**Verified**, `Task_Dismantle` `FUN_1403518c0`, Building slot 73 `FUN
 dismantle the furniture first." / "...unmount the buildings first." while those exist; a door redirects to its
 building. Animation `stonemine`, engineering XP as for building. Per update `amount = dt x lerp(0.05, 4, eng/100) x 4`;
 slot 73 clears complete (a complete building first drops to `target - 1`), then `progress -= amount x rate` (no option
-or CONSTANTS factor). At progress <= 0: mounted turrets released, +0x162 set, sound `Thing_Complete`, refund, building
+or CONSTANTS factor). At progress <= 0: every turret mounted on it (`BuildingFinderTurretsOnCertainBuilding`) is destroyed through `FUN_140799af0` with the reason "dismantled" (no refund, **Verified**; Meitou `DestroyMountedTurrets`), +0x162 set, sound `Thing_Complete`, refund, building
 removed.
 The menu offers it only when Building slot 79 (`FUN_14029c380`) holds (**Verified**): false unless the owner is a player faction, and false for a foliage building (flag `+0xc0`); true when the parent building is a player faction's; one more branch (a `creates player town` building whose related object has no player owner) can make it false and is not modelled (**Unknown**). Meitou gates the verb and `DismantleOrder` on the player's faction.
 

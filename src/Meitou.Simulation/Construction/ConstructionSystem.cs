@@ -1280,7 +1280,18 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
         foreach (var c in world.Buildings.All)
             if (c.WallParent == site.Id) Refund(world, c);   // nothing unless a save from before the link gave it materials
         world.EmitSound(SoundKind.DismantleDone, slot, world.Characters.Next[slot].Position);
+        DestroyMountedTurrets(world, site);
         Remove(world, site);
+    }
+
+    /// <summary>
+    /// The turrets mounted on a building go with it when its dismantle completes, without a refund (<b>Verified</b>, <c>FUN_1402a2860</c>: <c>BuildingFinderTurretsOnCertainBuilding</c> and the
+    /// destroy routine <c>FUN_140799af0</c> with the reason "dismantled"). A gunner's Operate task ends because its site is gone.
+    /// </summary>
+    void DestroyMountedTurrets(World world, BuildSite site)
+    {
+        foreach (var child in world.Buildings.All.Where(o => o.Parent == site.Id).ToList())
+            if (world.Machines.Find(child.Id) is { Data.Function: Meitou.Data.World.ObjectRanges.TurretFunction }) Remove(world, child);
     }
 
     /// <summary>The selection panel's refusal while other buildings are mounted on the site (<b>Verified</b> string, slot 84 <c>FUN_14054db30</c>).</summary>
