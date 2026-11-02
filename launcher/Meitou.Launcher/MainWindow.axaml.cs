@@ -32,7 +32,8 @@ public sealed partial class MainWindow : Window
     bool languageReady, populatingLanguages;
     int modsLoad;
     bool modsReady;
-    static string Tr(string text) => LauncherText.Translate(text);
+    string? launcherUpdateVersion;   // the launcher release the update button offers, for a language switch
+    static string Tr(string text, params object?[] args) => LauncherText.Translate(text, args);
 
     const uint WS_CAPTION = 0x00C00000, WS_SYSMENU = 0x00080000, WS_MINIMIZEBOX = 0x00020000, WS_MAXIMIZEBOX = 0x00010000;
 
@@ -78,11 +79,9 @@ public sealed partial class MainWindow : Window
         AutoUpdateBox.IsChecked = config.AutoUpdateLauncher;
         AutoUpdateBox.IsEnabled = updater.IsInstalled;
         ShowReportButton();
-        DataFolderText.Text = $"The launcher's and the game's settings: {LauncherConfig.DataDirectory}";
+        ShowBuiltTexts();
         InstallPathBox.Text = LauncherConfig.InstallDirectory;
         LauncherVersionText.Text = $"v{LauncherVersion} · {Releases.Rid}";
-        LauncherAbout.Text = $"Version {LauncherVersion} for {Releases.Rid}. "
-            + (updater.IsInstalled ? "Updates itself from GitHub." : "Not installed by its Setup, so updates open the release page.");
         RefreshPresets();
         RefreshInstalled();
         UseKenshi(found);
@@ -97,6 +96,23 @@ public sealed partial class MainWindow : Window
     }
 
     void Status(string text) => SetText(StatusText, text);
+
+    /// <summary>
+    /// The labels whose text holds a value (the data folder, the version, the launcher update) and so cannot be looked up whole:
+    /// they are built again for a language switch, which only walks the layout's own texts otherwise.
+    /// </summary>
+    void ShowBuiltTexts()
+    {
+        DataFolderText.Text = Tr("The launcher's and the game's settings: {1}", LauncherConfig.DataDirectory);
+        LauncherAbout.Text = Tr(updater.IsInstalled
+            ? "Version {1} for {2}. Updates itself from GitHub."
+            : "Version {1} for {2}. Not installed by its Setup, so updates open the release page.", LauncherVersion, Releases.Rid);
+        if (launcherUpdateVersion is { } version)
+        {
+            LauncherUpdateButton.Content = Tr(updater.IsInstalled ? "Update to {1}" : "Get launcher {1}", version);
+            TitleLauncherUpdateText.Text = Tr(updater.IsInstalled ? "Update launcher to {1}" : "Get launcher {1}", version);
+        }
+    }
 
     // ---- Language: one choice for the game (Kenshi's settings.cfg) and the launcher ----
 
@@ -116,14 +132,15 @@ public sealed partial class MainWindow : Window
             try
             {
                 KenshiLanguageSettings.SetLanguage(install, code);
-                Status(Loc.Format(Tr("Game language set to {1}. It applies when the game starts."), code));
+                Status(Tr("Game language set to {1}. It applies when the game starts.", code));
             }
             catch (Exception error) when (error is IOException or UnauthorizedAccessException)
             {
-                Status(Loc.Format(Tr("Could not update Kenshi's language setting: {1}"), error.Message));
+                Status(Tr("Could not update Kenshi's language setting: {1}", error.Message));
             }
         }
         LauncherText.TranslateTree(this, originalUiText);
+        ShowBuiltTexts();
         foreach (var row in mods) row.LanguageChanged();
         if (modsReady) ShowModCount();
         ShowReleases();
@@ -136,6 +153,7 @@ public sealed partial class MainWindow : Window
         LauncherText.Use(LauncherText.Code, install);
         PopulateLanguageOptions(install);
         LauncherText.TranslateTree(this, originalUiText);
+        ShowBuiltTexts();
     }
 
     /// <summary>English, Kenshi's own languages, the locale folders of the install and the languages Meitou has texts for; the current one selected.</summary>
@@ -224,7 +242,7 @@ public sealed partial class MainWindow : Window
         foreach (var post in posts) NewsPanel.Children.Add(PostCard(post));
         if (posts.Count == 0) NewsPanel.Children.Add(new TextBlock { Classes = { "desc" }, Text = problem ?? "No news yet." });
         NewsCount.Text = NewsFeed.LocalFolder is not null ? $"Debug: local news/, {posts.Count} posts"
-            : posts.Count == 0 ? "" : problem is not null ? "Offline: saved posts" : posts.Count == 1 ? "1 post" : $"{posts.Count} posts";
+            : posts.Count == 0 ? "" : problem is not null ? Tr("Offline: saved posts") : posts.Count == 1 ? Tr("1 post") : Tr("{1} posts", posts.Count);
     }
 
     Control PostCard(NewsPost post)
@@ -274,6 +292,7 @@ public sealed partial class MainWindow : Window
             LauncherText.Use(StartLanguage(found), found);
             PopulateLanguageOptions(found);
             LauncherText.TranslateTree(this, originalUiText);
+            ShowBuiltTexts();
         }
         LoadMods();
     }
@@ -296,7 +315,7 @@ public sealed partial class MainWindow : Window
     void SetKenshiPath(string path)
     {
         if (GameInstall.IsValid(path)) UseKenshi(GameInstall.Open(path));
-        else KenshiStatus.Text = $"'{path}' is not a Kenshi folder (data/gamedata.base not found).";
+        else KenshiStatus.Text = Tr("'{1}' is not a Kenshi folder (data/gamedata.base not found).", path);
     }
 
     void Arguments_LostFocus(object? sender, RoutedEventArgs e)
@@ -312,7 +331,7 @@ public sealed partial class MainWindow : Window
             config.Renderer = renderer;
             config.Save();
             UpdateRendererHint();
-            Status($"Renderer: {RendererLabel(MacSupport.Resolve(renderer))}; Play starts the game with it.");
+            Status(Tr("Renderer: {1}; Play starts the game with it.", RendererLabel(MacSupport.Resolve(renderer))));
         }
     }
 
@@ -334,7 +353,7 @@ public sealed partial class MainWindow : Window
         {
             config.MetalMemoryBudget = mb;
             UpdateMetalBudgetHint();
-            Status($"Metal memory budget: {config.MetalMemoryBudget} MB.");
+            Status(Tr("Metal memory budget: {1} MB.", config.MetalMemoryBudget));
         }
     }
 
@@ -361,7 +380,7 @@ public sealed partial class MainWindow : Window
         if (TopLevel.GetTopLevel(this)?.Clipboard is { } clipboard)
             await clipboard.SetValueAsync(DataFormat.Text, MacSupport.HomebrewVulkanCommand);
         await this.Launcher.LaunchUriAsync(new Uri("https://brew.sh"));
-        Status($"Copied '{MacSupport.HomebrewVulkanCommand}' and opened brew.sh; install Homebrew, run it in Terminal, then press Check.");
+        Status(Tr("Copied '{1}' and opened brew.sh; install Homebrew, run it in Terminal, then press Check.", MacSupport.HomebrewVulkanCommand));
     }
 
     void VulkanCheck_Click(object? sender, RoutedEventArgs e)
@@ -407,7 +426,7 @@ public sealed partial class MainWindow : Window
         try { await Task.Run(() => Releases.MoveInstalled(previous, path)); }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            InstallStatus.Text = $"Could not move the versions to {path}: {ex.Message}";
+            InstallStatus.Text = Tr("Could not move the versions to {1}: {2}", path, ex.Message);
             RefreshInstalled();
             return;
         }
@@ -471,7 +490,7 @@ public sealed partial class MainWindow : Window
             if (load != modsLoad) return;
             ModCount.Text = "";
             ModsEmpty.IsVisible = true;
-            ModsEmpty.Text = Loc.Format(Tr("Could not read the mods: {1}"), e.Message);
+            ModsEmpty.Text = Tr("Could not read the mods: {1}", e.Message);
             return;
         }
         if (load != modsLoad) return;
@@ -484,7 +503,7 @@ public sealed partial class MainWindow : Window
             : "No mods found in Kenshi's mods folder or among its Steam workshop items.");
     }
 
-    void ShowModCount() => ModCount.Text = mods.Count == 0 ? "No mods found" : $"{mods.Count(m => m.Enabled)} of {mods.Count} enabled";
+    void ShowModCount() => ModCount.Text = mods.Count == 0 ? Tr("No mods found") : Tr("{1} of {2} enabled", mods.Count(m => m.Enabled), mods.Count);
 
     // False while the list is loading or after it could not be read; Status says why.
     bool ModsReady()
@@ -504,14 +523,14 @@ public sealed partial class MainWindow : Window
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            Status($"Could not save the mod list: {e.Message}");
+            Status(Tr("Could not save the mod list: {1}", e.Message));
             return false;
         }
     }
 
     void SaveMods_Click(object? sender, RoutedEventArgs e)
     {
-        if (SaveMods()) Status($"Mod list saved: {mods.Count(m => m.Enabled)} enabled.");
+        if (SaveMods()) Status(Tr("Mod list saved: {1} enabled.", mods.Count(m => m.Enabled)));
     }
 
     void RefreshMods_Click(object? sender, RoutedEventArgs e) => LoadMods();
@@ -592,7 +611,7 @@ public sealed partial class MainWindow : Window
         if (header is { Dependencies.Count: > 0 })
         {
             var missing = header.Dependencies.Where(d => !IsAvailableBefore(d, row)).ToList();
-            parts.Add($"Needs {string.Join(", ", header.Dependencies)}" + (missing.Count > 0 ? $" (not enabled above it: {string.Join(", ", missing)})" : ""));
+            parts.Add(Tr("Needs {1}", string.Join(", ", header.Dependencies)) + (missing.Count > 0 ? Tr(" (not enabled above it: {1})", string.Join(", ", missing)) : ""));
         }
         parts.Add(row.Mod.Folder);
         ModDetails.Text = string.Join(" · ", parts);
@@ -628,7 +647,7 @@ public sealed partial class MainWindow : Window
         config.Save();
         PresetName.Text = "";
         RefreshPresets(name);
-        Status($"Preset '{name}' saved.");
+        Status(Tr("Preset '{1}' saved.", name));
     }
 
     void ApplyPreset_Click(object? sender, RoutedEventArgs e)
@@ -646,7 +665,7 @@ public sealed partial class MainWindow : Window
         mods.Clear();
         foreach (var row in ordered) mods.Add(row);
         ShowModCount();
-        Status($"Preset '{preset.Name}' applied (not saved yet)." + (missing.Count > 0 ? $" Not on disk: {string.Join(", ", missing)}." : ""));
+        Status(Tr("Preset '{1}' applied (not saved yet).", preset.Name) + (missing.Count > 0 ? Tr(" Not on disk: {1}.", string.Join(", ", missing)) : ""));
     }
 
     void DeletePreset_Click(object? sender, RoutedEventArgs e)
@@ -655,7 +674,7 @@ public sealed partial class MainWindow : Window
         config.Presets.Remove(preset);
         config.Save();
         RefreshPresets();
-        Status($"Preset '{preset.Name}' deleted.");
+        Status(Tr("Preset '{1}' deleted.", preset.Name));
     }
 
     // ---- Versions ----
@@ -694,20 +713,21 @@ public sealed partial class MainWindow : Window
             PlayVersionButton.Classes.Set("pending", pending);
             PlayIcon.IsVisible = !pending;
             UpdateIcon.IsVisible = pending;
-            SetText(PlayText, pending ? $"Update to {Releases.Display(LatestRelease!.Version)}" : picked is null ? $"Play {Latest}" : $"Play {Releases.Display(picked)}");
-            ToolTip.SetTip(PlayButton, pending ? $"Download and install {LatestRelease!.Title}; the arrow plays an installed version"
-                : PlayVersion is { } played ? $"Start Meitou {played}" : null);
+            SetText(PlayText, pending ? Tr("Update to {1}", Releases.Display(LatestRelease!.Version))
+                : picked is null ? Tr("Play {1}", Tr(Latest)) : Tr("Play {1}", Releases.Display(picked)));
+            ToolTip.SetTip(PlayButton, pending ? Tr("Download and install {1}; the arrow plays an installed version", LatestRelease!.Title)
+                : PlayVersion is { } played ? Tr("Start Meitou {1}", played) : null);
         }
         versionMenu.Items.Clear();
-        versionMenu.Items.Add(VersionItem(UpdatePending ? $"Latest (update to {Releases.Display(LatestRelease!.Version)})"
-            : installedVersions.FirstOrDefault() is { } newest ? $"Latest ({Releases.Display(newest)})" : "Latest", null, picked));
+        versionMenu.Items.Add(VersionItem(UpdatePending ? Tr("Latest (update to {1})", Releases.Display(LatestRelease!.Version))
+            : installedVersions.FirstOrDefault() is { } newest ? Tr("Latest ({1})", Releases.Display(newest)) : Tr("Latest"), null, picked));
         foreach (var version in installedVersions) versionMenu.Items.Add(VersionItem($"v{Releases.ParseVersion(version).Number}", version, picked));
         // Its settings are the played version's.
         if (GraphicsPage.IsVisible) ShowGraphics();
         // A skipped release stays installable from here.
         if (LatestRelease is { } latest && latest.Version == config.SkippedVersion && !installedVersions.Contains(latest.Version))
         {
-            var item = new MenuItem { Header = $"Install v{latest.Version} (skipped)" };
+            var item = new MenuItem { Header = Tr("Install v{1} (skipped)", latest.Version) };
             item.Click += async (_, _) =>
             {
                 config.SkippedVersion = null;
@@ -726,7 +746,7 @@ public sealed partial class MainWindow : Window
         config.SkippedVersion = release.Version;
         config.Save();
         ShowFooter();
-        Status($"Skipped {release.Title}: the arrow's menu can still install it.");
+        Status(Tr("Skipped {1}: the arrow's menu can still install it.", release.Title));
     }
 
     MenuItem VersionItem(string header, string? version, string? picked)
@@ -759,7 +779,7 @@ public sealed partial class MainWindow : Window
         config.Save();
         ShowPlay();
         ShowReleases();
-        Status(version is null ? "Play starts the latest installed version." : $"Play starts Meitou {version}.");
+        Status(version is null ? Tr("Play starts the latest installed version.") : Tr("Play starts Meitou {1}.", version));
     }
 
     void SelectVersion_Click(object? sender, RoutedEventArgs e)
@@ -781,16 +801,16 @@ public sealed partial class MainWindow : Window
         bool none = installed.Count == 0;
         PlayPanel.IsVisible = !none;
         InstallLatestButton.IsVisible = none;
-        SetText(InstallLatestText, $"Install {Latest}");
+        SetText(InstallLatestText, Tr("Install {1}", Tr(Latest)));
         InstallLatestButton.IsEnabled = latest is not null;
-        ToolTip.SetTip(InstallLatestButton, latest is not null ? $"Download and install {latest.Title}" : $"No release with a {Releases.Rid} build found yet");
+        ToolTip.SetTip(InstallLatestButton, latest is not null ? Tr("Download and install {1}", latest.Title) : Tr("No release with a {1} build found yet", Releases.Rid));
         // Playing the latest, Play itself is the update (ShowPlay); playing a picked version, this button beside it.
         UpdateButton.IsVisible = PickedVersion is not null && NewRelease is not null;
         SkipButton.IsVisible = NewRelease is not null;
-        SkipText.Text = Loc.Format(Tr("Skip v{1}"), NewRelease?.Version);
-        UpdateTitle.Text = Loc.Format(Tr("New version {1}"), latest?.Version);
+        SkipText.Text = Tr("Skip v{1}", NewRelease?.Version);
+        UpdateTitle.Text = Tr("New version {1}", latest?.Version);
         SetText(UpdateHint, "Click to install");
-        ToolTip.SetTip(UpdateButton, $"Download and install {latest?.Title}");
+        ToolTip.SetTip(UpdateButton, Tr("Download and install {1}", latest?.Title));
         ShowPlay();
     }
 
@@ -833,7 +853,7 @@ public sealed partial class MainWindow : Window
         ReleasesEmpty.IsVisible = rows.Count == 0;
         ReleasesEmpty.Text = Tr(allReleases.Any(r => r.Kind == ReleaseKind.Game) ? "Only nightly builds so far: tick Nightly builds beside Play to list them."
             : "No releases listed yet. Check for releases below.");
-        VersionCount.Text = $"{rows.Count} releases · {installed.Count} installed";
+        VersionCount.Text = Tr("{1} releases · {2} installed", rows.Count, installed.Count);
         ShowVersionButtons();
         ShowFooter();
     }
@@ -884,20 +904,20 @@ public sealed partial class MainWindow : Window
     void ShowProgress(double p)
     {
         var percent = $"{p,4:0%}";
-        InstallLatestText.Inlines = [new Run("Installing "), new Run(percent) { FontFamily = Mono }];
-        UpdateHint.Inlines = [new Run("Installing "), new Run(percent) { FontFamily = Mono }, new Run(" · click to cancel")];
+        InstallLatestText.Inlines = [new Run(Tr("Installing") + " "), new Run(percent) { FontFamily = Mono }];
+        UpdateHint.Inlines = [new Run(Tr("Installing") + " "), new Run(percent) { FontFamily = Mono }, new Run(" · " + Tr("click to cancel"))];
         if (PlayButton.Classes.Contains("pending"))
-            PlayText.Inlines = [new Run("Installing "), new Run(percent) { FontFamily = Mono }];
+            PlayText.Inlines = [new Run(Tr("Installing") + " "), new Run(percent) { FontFamily = Mono }];
     }
 
     // "Downloading <title>  12.3 / 456.7 MB · 85.2 Mbps" (MB = 10^6 bytes, Mbps = 10^6 bits a second), the figures in mono and
     // padded so the line keeps its width; "Unpacking <title>..." once every byte is in.
     void ShowDownloadStatus(Release release, long done, long total, double bitsPerSecond)
     {
-        if (total > 0 && done >= total) { Status($"Unpacking {release.Title}..."); return; }
+        if (total > 0 && done >= total) { Status(Tr("Unpacking {1}...", release.Title)); return; }
         var size = total > 0 ? $"{done / 1e6,6:0.0} / {total / 1e6:0.0} MB" : $"{done / 1e6:0.0} MB";
         var speed = bitsPerSecond > 0 ? $" · {bitsPerSecond / 1e6,5:0.0} Mbps" : "";
-        StatusText.Inlines = [new Run($"Downloading {release.Title}  "), new Run(size + speed) { FontFamily = Mono }];
+        StatusText.Inlines = [new Run(Tr("Downloading {1}", release.Title) + "  "), new Run(size + speed) { FontFamily = Mono }];
     }
 
     void SetText(TextBlock block, string text) => block.Inlines = [new Run(Tr(text))];
@@ -908,12 +928,12 @@ public sealed partial class MainWindow : Window
         ShowVersionButtons();
         ShowProgress(0);
         SkipButton.IsVisible = false;
-        ToolTip.SetTip(InstallLatestButton, $"Cancel the download of {release.Title}");
-        ToolTip.SetTip(UpdateButton, $"Cancel the download of {release.Title}");
-        if (PlayButton.Classes.Contains("pending")) ToolTip.SetTip(PlayButton, $"Cancel the download of {release.Title}");
+        ToolTip.SetTip(InstallLatestButton, Tr("Cancel the download of {1}", release.Title));
+        ToolTip.SetTip(UpdateButton, Tr("Cancel the download of {1}", release.Title));
+        if (PlayButton.Classes.Contains("pending")) ToolTip.SetTip(PlayButton, Tr("Cancel the download of {1}", release.Title));
         DownloadProgress.Value = StatusProgress.Value = 0;
         DownloadProgress.IsVisible = StatusProgress.IsVisible = true;
-        Status($"Downloading {release.Title}...");
+        Status(Tr("Downloading {1}...", release.Title));
         // The speed is smoothed over half-second samples, so the shown figure doesn't flicker with every 100 ms report.
         var clock = System.Diagnostics.Stopwatch.StartNew();
         double sampleTime = 0, bitsPerSecond = 0;
@@ -939,15 +959,15 @@ public sealed partial class MainWindow : Window
             config.Save();
             RefreshInstalled();
             ShowReleases();
-            Status($"{release.Title} installed.");
+            Status(Tr("{1} installed.", release.Title));
         }
         catch (OperationCanceledException) when (cts.IsCancellationRequested)
         {
-            Status($"Download of {release.Title} cancelled.");
+            Status(Tr("Download of {1} cancelled.", release.Title));
         }
         catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException or IOException or InvalidDataException or UnauthorizedAccessException or InvalidOperationException)
         {
-            Status($"Install failed: {ex.Message}");
+            Status(Tr("Install failed: {1}", ex.Message));
         }
         finally
         {
@@ -962,17 +982,17 @@ public sealed partial class MainWindow : Window
     {
         if (download is not null || ReleaseListBox.SelectedItem is not ReleaseRow { Release: var release }) return;
         var dir = Releases.VersionDirectory(release.Version);
-        if (!Directory.Exists(dir)) { Status($"{release.Title} is not installed."); return; }
+        if (!Directory.Exists(dir)) { Status(Tr("{1} is not installed.", release.Title)); return; }
         try
         {
             Directory.Delete(dir, true);
             RefreshInstalled();
             ShowReleases();
-            Status($"{release.Title} uninstalled.");
+            Status(Tr("{1} uninstalled.", release.Title));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            Status($"Could not remove {dir}: {ex.Message}");
+            Status(Tr("Could not remove {1}: {2}", dir, ex.Message));
         }
     }
 
@@ -980,7 +1000,7 @@ public sealed partial class MainWindow : Window
     {
         if (ReleaseListBox.SelectedItem is not ReleaseRow { Release: var release }) return;
         var dir = Releases.VersionDirectory(release.Version);
-        if (!Directory.Exists(dir)) { Status($"{release.Title} is not installed."); return; }
+        if (!Directory.Exists(dir)) { Status(Tr("{1} is not installed.", release.Title)); return; }
         await this.Launcher.LaunchUriAsync(new Uri(dir + Path.DirectorySeparatorChar));
     }
 
@@ -1000,7 +1020,7 @@ public sealed partial class MainWindow : Window
         if (updater.IsInstalled)
         {
             try { version = await updater.CheckAsync(); }
-            catch (Exception ex) { LauncherAbout.Text = Loc.Format(Tr("Version {1}. The update check failed: {2}"), LauncherVersion, ex.Message); return; }
+            catch (Exception ex) { LauncherAbout.Text = Tr("Version {1}. The update check failed: {2}", LauncherVersion, ex.Message); return; }
             LauncherUpdateButton.Tag = null;
         }
         else
@@ -1011,11 +1031,12 @@ public sealed partial class MainWindow : Window
             LauncherUpdateButton.Tag = page?.PageUrl;
         }
         LauncherUpdateButton.IsVisible = version is not null;
-        LauncherUpdateButton.Content = Loc.Format(Tr(updater.IsInstalled ? "Update to {1}" : "Get launcher {1}"), version);
+        launcherUpdateVersion = version;
+        LauncherUpdateButton.Content = Tr(updater.IsInstalled ? "Update to {1}" : "Get launcher {1}", version);
         TitleLauncherUpdateButton.IsVisible = version is not null;
-        TitleLauncherUpdateText.Text = Loc.Format(Tr(updater.IsInstalled ? "Update launcher to {1}" : "Get launcher {1}"), version);
+        TitleLauncherUpdateText.Text = Tr(updater.IsInstalled ? "Update launcher to {1}" : "Get launcher {1}", version);
         ToolTip.SetTip(TitleLauncherUpdateButton, updater.IsInstalled ? "Download the new launcher and restart into it" : "Open the launcher's release page");
-        if (version is not null) Status($"Launcher {version} is available.");
+        if (version is not null) Status(Tr("Launcher {1} is available.", version));
     }
 
     void Steam_Click(object? sender, RoutedEventArgs e)
@@ -1045,14 +1066,14 @@ public sealed partial class MainWindow : Window
             StatusProgress.IsVisible = true;
             await updater.UpdateAndRestartAsync(p => Dispatcher.UIThread.Post(() =>
             {
-                Status($"Updating the launcher: {p}%");
+                Status(Tr("Updating the launcher: {1}%", p));
                 StatusProgress.Value = p / 100.0;
             }), CancellationToken.None);
         }
         catch (Exception ex)
         {
             StatusProgress.IsVisible = false;
-            Status($"Launcher update failed: {ex.Message}");
+            Status(Tr("Launcher update failed: {1}", ex.Message));
             LauncherUpdateButton.IsEnabled = TitleLauncherUpdateButton.IsEnabled = true;
         }
     }
@@ -1150,7 +1171,7 @@ public sealed partial class MainWindow : Window
             if (PlayVersion is not { } selected) { Status("Install a version first (Versions)."); return; }
             version = selected;
             exe = Releases.FindGame(Releases.VersionDirectory(version));
-            if (exe is null) { Status($"Meitou {version} is not installed any more."); return; }
+            if (exe is null) { Status(Tr("Meitou {1} is not installed any more.", version)); return; }
         }
         else version = "Debug build";
         // A second game would share meitou.user.json and the mod list with the first; whichever closes last overwrites the other's.
@@ -1269,7 +1290,8 @@ public sealed partial class MainWindow : Window
             var game = Process.Start(start);
             running = game;
             string suffix = metalFallback ? " (Vulkan loader missing)" : "";
-            Status(renderer is null ? $"Meitou {version} started." : $"Meitou {version} started with {RendererLabel(renderer)}{suffix}.");
+            Status(renderer is null ? Tr("Meitou {1} started.", version)
+                : Tr("Meitou {1} started with {2}{3}.", version, RendererLabel(renderer), suffix));
             if (game is null) { RemoveSteamAppIds(); return; }
             // The game's window is all a player sees of it, so a crash (above all one before the window opens) is reported here.
             var log = Path.Combine(Path.GetDirectoryName(exe)!, "log.txt");
@@ -1287,14 +1309,14 @@ public sealed partial class MainWindow : Window
                 {
                     // On the UI thread, as Play: a game started since then has taken these files over and removes them itself.
                     if (running == game) RemoveSteamAppIds();
-                    if (code != 0) Status($"Meitou {version} stopped with an error (exit code {code}); its log is {log}");
+                    if (code != 0) Status(Tr("Meitou {1} stopped with an error (exit code {2}); its log is {3}", version, code, log));
                 });
             };
         }
         catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or IOException)
         {
             RemoveSteamAppIds();
-            Status($"Could not start Meitou {version}: {ex.Message}");
+            Status(Tr("Could not start Meitou {1}: {2}", version, ex.Message));
         }
     }
 

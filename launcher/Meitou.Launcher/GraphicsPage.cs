@@ -60,7 +60,7 @@ public sealed partial class MainWindow
         GraphicsFooter.Child = null;
         GraphicsFooter.IsVisible = false;
         bool found = game.Version is not null;
-        GraphicsFileText.Text = found ? GameSettings.FileName : Loc.Format(Tr("No {1} found"), GameSettings.FileName);
+        GraphicsFileText.Text = found ? GameSettings.FileName : Tr("No {1} found", GameSettings.FileName);
         ToolTip.SetTip(GraphicsFileText, GameSettings.FilePath);
         if (!found)
             GraphicsPanel.Children.Add(new TextBlock
@@ -220,7 +220,7 @@ public sealed partial class MainWindow
         foreach (var target in targets)
         {
             target.Cursor = new Cursor(StandardCursorType.Hand);
-            ToolTip.SetTip(target, Loc.Format(Tr("{1}: {2} settings"), name, members.Count));
+            ToolTip.SetTip(target, Tr("{1}: {2} settings", Tr(name), members.Count));
             target.PointerPressed += (_, e) => { if (e.GetCurrentPoint(target).Properties.IsLeftButtonPressed) { Fold(); e.Handled = true; } };
         }
         panel.Children.Add(new DockPanel { Children = { gutter, headerRow } });
@@ -280,10 +280,10 @@ public sealed partial class MainWindow
             box.SelectionChanged += (_, _) => { if (box.SelectedIndex >= 0 && all[box.SelectedIndex] != active) ApplyLook(l, false, all[box.SelectedIndex]); };
             controls.Children.Add(box);
         }
-        string status = faithful ? changes == 0 ? "As the game ships" : changes == 1 ? "1 change from the game" : $"{changes} changes from the game"
-            : changes > 0 ? changes == 1 ? "1 unsaved change" : $"{changes} unsaved changes"
-            : active.Source == "mine" ? $"Mine · Meitou {MadeOf(active)}" : active.Source == "built in" ? "Built in" : "Example";
-        var statusText = new TextBlock { Classes = { "desc" }, Text = Tr(status), VerticalAlignment = VerticalAlignment.Center, Margin = new(6, 0, 6, 0) };
+        string status = faithful ? changes == 0 ? Tr("As the game ships") : changes == 1 ? Tr("1 change from the game") : Tr("{1} changes from the game", changes)
+            : changes > 0 ? changes == 1 ? Tr("1 unsaved change") : Tr("{1} unsaved changes", changes)
+            : active.Source == "mine" ? Tr("Mine · Meitou {1}", MadeOf(active)) : active.Source == "built in" ? Tr("Built in") : Tr("Example");
+        var statusText = new TextBlock { Classes = { "desc" }, Text = status, VerticalAlignment = VerticalAlignment.Center, Margin = new(6, 0, 6, 0) };
         if (changes > 0 && Avalonia.Application.Current?.FindResource("BrassLight") is Avalonia.Media.IBrush brass) statusText.Foreground = brass;
         controls.Children.Add(statusText);
         Button Action(string text, Action run)
@@ -305,9 +305,9 @@ public sealed partial class MainWindow
                     // Two clicks: a preset file is not removed by a stray one.
                     if (delete.Tag is null) { delete.Tag = true; delete.Content = Tr("Click again"); return; }
                     try { if (active.File is { } file) File.Delete(file); }
-                    catch (Exception e) when (e is IOException or UnauthorizedAccessException) { Status($"Could not delete the preset: {e.Message}"); }
+                    catch (Exception e) when (e is IOException or UnauthorizedAccessException) { Status(Tr("Could not delete the preset: {1}", e.Message)); }
                     ApplyLook(l, false, all[0]);
-                    Status(Loc.Format(Tr("{1} deleted; the look is Meitou."), active.Look.Name));
+                    Status(Tr("{1} deleted; the look is Meitou.", active.Look.Name));
                 };
             }
             Action("Save as", () => { namingLook = LookPresetFile.FreeName("My look", all.Select(x => x.Look.Name)); ShowGraphics(); });
@@ -315,7 +315,7 @@ public sealed partial class MainWindow
             {
                 if (TopLevel.GetTopLevel(this)?.Clipboard is not { } clipboard) return;
                 await clipboard.SetValueAsync(Avalonia.Input.DataFormat.Text, LookPresetFile.ShareCode(new(active.Look.Name, MadeOf(active), active.Look.Values)));
-                Status(Loc.Format(Tr("{1}'s code is on the clipboard: paste it on Discord, or with Paste."), active.Look.Name));
+                Status(Tr("{1}'s code is on the clipboard: paste it on Discord, or with Paste.", active.Look.Name));
             });
             Action("Paste", async () =>
             {
@@ -327,9 +327,9 @@ public sealed partial class MainWindow
                 }
                 var saved = pasted with { Name = LookPresetFile.FreeName(pasted.Name, all.Select(x => x.Look.Name)) };
                 try { LookPresetFile.Save(folder, saved); }
-                catch (Exception e) when (e is IOException or UnauthorizedAccessException) { Status($"Could not write the preset: {e.Message}"); return; }
+                catch (Exception e) when (e is IOException or UnauthorizedAccessException) { Status(Tr("Could not write the preset: {1}", e.Message)); return; }
                 ApplyLook(l, false, new LookChoice(new SettingsLook { Name = saved.Name, Values = saved.Values }, null, "mine"));
-                Status(Loc.Format(Tr("{1} pasted and loaded (made on Meitou {2})."), saved.Name, saved.Made));
+                Status(Tr("{1} pasted and loaded (made on Meitou {2}).", saved.Name, saved.Made));
             });
         }
         var panel = new StackPanel
@@ -402,11 +402,11 @@ public sealed partial class MainWindow
                 if (MathF.Abs(value - meitou) > (toggle ? 0.5f : MathF.Max(s.Step, 1e-4f) / 2)) values[key] = toggle ? value >= 0.5f ? 1 : 0 : MathF.Round(value, 3);
             }
         try { LookPresetFile.Save(folder, new(name, l.Made, values)); }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { Status($"Could not write the preset: {e.Message}"); return; }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { Status(Tr("Could not write the preset: {1}", e.Message)); return; }
         game.Set(l.FaithfulKey, false);
         game.Set(l.PresetKey, name);
         SaveGame();
-        Status(Loc.Format(Tr("{1} saved."), name));
+        Status(Tr("{1} saved.", name));
         Dispatcher.UIThread.Post(ShowGraphics);
     }
 
@@ -446,7 +446,7 @@ public sealed partial class MainWindow
     Border PresetRow(SettingsPresets p)
     {
         string current = game.GetString(p.Key) is { } saved && p.Names.Contains(saved) ? saved : game.HasGraphics ? p.Custom : p.Default;
-        var box = new ComboBox { HorizontalAlignment = HorizontalAlignment.Stretch, ItemsSource = p.Names.Select(Tr).ToList(), SelectedIndex = p.Names.IndexOf(current) };
+        var box = new ComboBox { HorizontalAlignment = HorizontalAlignment.Stretch, ItemsSource = p.Names.Select(name => Tr(name)).ToList(), SelectedIndex = p.Names.IndexOf(current) };
         box.SelectionChanged += (_, _) =>
         {
             if (box.Tag is not null || box.SelectedIndex < 0) return;
@@ -461,8 +461,9 @@ public sealed partial class MainWindow
         DockPanel.SetDock(detect, Dock.Right);
         dock.Children.Add(detect);
         dock.Children.Add(box);
-        string description = p.Description;
-        return Row(p.Name, detected is { } line ? description + "\n" + line : description, dock, 330);
+        // The Detect line under the description: a text the walk cannot look up whole once it is appended, so the description is translated first.
+        string description = detected is { } line ? Tr(p.Description) + "\n" + line : p.Description;
+        return Row(p.Name, description, dock, 330);
     }
 
     /// <summary>
@@ -506,14 +507,14 @@ public sealed partial class MainWindow
             schemaVersion = schema.SettingsVersion;
             game.Set(p.Key, preset);
             SaveGame();
-            detected = Loc.Format(Tr("Detected: {1}"), summary);
+            detected = Tr("Detected: {1}", summary);
             Status(detected);
             done = true;
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or JsonException or InvalidOperationException or InvalidDataException
             or TimeoutException or System.ComponentModel.Win32Exception)
         {
-            detected = Loc.Format(Tr("Could not detect the hardware: {1}"), e.Message);
+            detected = Tr("Could not detect the hardware: {1}", e.Message);
             Status(detected);
         }
         finally
@@ -639,7 +640,7 @@ public sealed partial class MainWindow
     /// <summary>A drop-down over a setting's values (<paramref name="options"/>, the first one at <paramref name="first"/>), framed as every row is.</summary>
     Border DropDownRow(SettingDescription s, IReadOnlyList<string> options, float first, Action<float> write)
     {
-        var box = new ComboBox { HorizontalAlignment = HorizontalAlignment.Stretch, ItemsSource = options.Select(Tr).ToList() };
+        var box = new ComboBox { HorizontalAlignment = HorizontalAlignment.Stretch, ItemsSource = options.Select(text => Tr(text)).ToList() };
         bool loading = false;
         void Show()
         {
@@ -805,7 +806,7 @@ public sealed partial class MainWindow
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            Status($"Could not write {GameSettings.FileName}: {e.Message}");
+            Status(Tr("Could not write {1}: {2}", GameSettings.FileName, e.Message));
         }
     }
 }

@@ -70,7 +70,8 @@ public sealed class Releases(HttpClient http)
                 if (page == 1 && response.StatusCode == HttpStatusCode.NotModified) break;
                 if (!response.IsSuccessStatusCode)
                 {
-                    problem = $"GitHub answered {(int)response.StatusCode} {response.ReasonPhrase}" + (body is null ? "" : "; showing the last list");
+                    problem = LauncherText.Translate("GitHub answered {1} {2}", (int)response.StatusCode, response.ReasonPhrase)
+                        + (body is null ? "" : LauncherText.Translate("; showing the last list"));
                     pages.Clear();
                     break;
                 }
@@ -88,7 +89,7 @@ public sealed class Releases(HttpClient http)
         }
         catch (Exception e) when (e is HttpRequestException or OperationCanceledException or IOException)
         {
-            problem = $"GitHub not reachable ({e.Message})" + (body is null ? "" : "; showing the last list");
+            problem = LauncherText.Translate("GitHub not reachable ({1})", e.Message) + (body is null ? "" : LauncherText.Translate("; showing the last list"));
         }
         return (body is null ? [] : Parse(body), problem);
     }
