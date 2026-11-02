@@ -40,6 +40,13 @@ drop-in replacement that runs original content and mods unchanged.
 - The mod editor is .NET: `ilspycmd -p -o <dir outside the repo> "<Kenshi>/forgotten construction set.exe"`
   (`dotnet tool install -g ilspycmd`). Its `GameData` class is the reference for the `.mod` format.
 
+## Code style
+
+- Keep methods short: one job each, roughly a screen at most. Split a longer method into named steps, and split one you're
+  editing when it has grown past that.
+- Use whitespace: a blank line between logical groups, one statement per line, multi-statement `if` bodies in braces on their
+  own lines, and wrap lines past ~150 characters (or name a local).
+
 ## Branches
 
 - After merging a branch into master, remove its worktree (`git worktree remove`) and delete the branch
