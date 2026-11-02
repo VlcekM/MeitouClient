@@ -502,6 +502,8 @@ public sealed class CharacterCold
     public string? FetchSite { get; set; }
     /// <summary>The ground item (<see cref="Items.GroundItems"/> id) a <see cref="CharacterTask.FetchMaterials"/> builder picks up (null: none). Hashed with <see cref="BuildSite"/>.</summary>
     public int? FetchItem { get; set; }
+    /// <summary>Targets (a site id, or <c>item:</c> and a ground item's id) this builder's path ended short of, with the tick they are ignored until (the AI's ignore map, <c>FUN_140796ed0</c>: 20 s). Not saved or hashed.</summary>
+    public Dictionary<string, long>? Unreachable { get; set; }
     /// <summary>The material record a <see cref="CharacterTask.FetchMaterials"/> builder fetches (null: not fetching). Hashed with <see cref="BuildSite"/>.</summary>
     public string? FetchRecord { get; set; }
     /// <summary>The building the <see cref="CharacterTask.Operate"/> task works (<see cref="Construction.BuildSite.Id"/>; null: none). Serial phases only. Hashed only while set.</summary>

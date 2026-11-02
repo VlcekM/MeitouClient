@@ -790,6 +790,7 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
             }
             // On the way, or not started (a path that failed or ended short is asked for again after a wait).
             if ((n.Flags & Path) != 0) continue;
+            if (n.TaskTime > 0 && NoteUnreachable(world, i, cold, site)) continue;
             n.TaskTime -= dt;
             if (n.TaskTime > 0) continue;
             n.Goal = new Vector2(goal.At.X, goal.At.Z);
@@ -799,6 +800,31 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
         }
         if (reg.Count == 0 && !doorWork) sweep = false;
     }
+
+    // ------------------------------------------------------------------ unreachable targets
+
+    /// <summary>How long a target whose path ended short is ignored (<c>FUN_140796ed0</c> stores 20.0 in the AI's ignore map, <b>Verified</b>; its decay is <b>Unknown</b>, taken as seconds).</summary>
+    public const float UnreachableSeconds = 20;
+
+    static string ItemKey(int id) => "item:" + id;
+
+    /// <summary>
+    /// The path of a worker ended short of its target (<c>FUN_14059c6d0</c>, "Task impossible: X can't get to Y"): the site, or the loose item it fetches, is ignored for
+    /// <see cref="UnreachableSeconds"/> (readers: <see cref="EngineerSite"/>, <see cref="Source"/>). A fetcher of a loose item goes back to its site, which picks another source. True when the worker left its goal.
+    /// </summary>
+    bool NoteUnreachable(World world, int slot, CharacterCold cold, BuildSite site)
+    {
+        bool fetch = world.Characters.Next[slot].Task == (byte)CharacterTask.FetchMaterials;
+        string? key = !fetch ? site.Id : cold.FetchItem is { } item ? ItemKey(item) : null;
+        if (key is null) return false;
+        (cold.Unreachable ??= new Dictionary<string, long>(StringComparer.Ordinal))[key] = world.Tick + (long)MathF.Ceiling(UnreachableSeconds / world.TickSeconds);
+        if (!fetch) return false;
+        BackToSite(world.Characters, slot, cold);
+        return true;
+    }
+
+    static bool IsUnreachable(World world, CharacterCold cold, string key) =>
+        cold.Unreachable is { } map && map.TryGetValue(key, out long until) && until > world.Tick;
 
     // ------------------------------------------------------------------ the work
 
@@ -1099,6 +1125,7 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
             float best = GroundRadius * GroundRadius;
             foreach (var g in world.GroundItems.All)
             {
+                if (IsUnreachable(world, cold, ItemKey(g.Id))) continue;   // before the ownership test (FUN_14059d000)
                 if (g.Item.Record != want || g.Item.Quantity <= 0 || g.Item.Contents is not null || g.OwnedBy >= 0 && g.OwnedBy != cold.Faction) continue;
                 float d = Vector3.DistanceSquared(g.Position, at);
                 if (d <= best && (loose is null || d < best)) (loose, best) = (g.Id, d);
@@ -1331,6 +1358,7 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
         float bestScore = 0;
         foreach (var site in reg.All)
         {
+            if (IsUnreachable(world, cold, site.Id)) continue;   // the first condition of FUN_1409a6900
             if (!site.NeedsWork || site.Paused || site.Destroyed && IsShell(site.Record) || site.Dismantling || site.WallParent is not null || site.Owner != cold.Faction) continue;
             if (site.Stalled && !Carries(cold, site) && Source(world, slot, cold, site) is null) continue;
             float d2 = Vector3.DistanceSquared(at, site.Position);
