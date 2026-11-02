@@ -674,9 +674,11 @@ the [layout's plant count](#farm-plants), not `amount`.
   d += h / `death time`. While 0 < growth < 1 and `drought death time` > 0: a failed draw adds h / `drought death time`
   to d, a good one takes it off while 0 < d < 0.6 with no floor at 0 (**Verified**, `FUN_1400e5580`; one step can leave d below 0, nothing clamps it later). d >= 1 or every plant harvested: replant.
 - **Harvest** (an operator, skill factor s): when growth >= 1, d < `death threshold`, not every plant harvested and the
-  output is not full, harvest progress += health x powerSat x P x dt x s x harvest rate. At 1: the output gets, per whole
-  unit of `output per plant`, one item with probability e (the fraction rolled once); the plant's g = -10, `plants
-  harvested` += 1; the work point moves to the next plant. No room: status 1. A crop of zero items floats "Failed".
+  status is not 1, harvest progress += health x powerSat x P x dt x s x harvest rate (no room test yet). At 1 the output
+  section is asked for room for the item (**Verified**, `FUN_1400e59e0`): none sets status 1 and keeps the progress (the tick keeps 1 while the output
+  cannot take the item, else resets to 2; the work function does nothing at 1). With room, ceil(`output per plant`) rolls give one item each with probability e (a do-while: 1 to 2 rolls
+  for an output of 1 or 2; 0.5 gives one e-roll), then the fraction `output - int(output)` is rolled once against itself; the progress resets to 0, the plant's g = -10, `plants
+  harvested` += 1; the work point moves to the next plant. A crop of zero items floats "Failed".
   e (`FUN_1400dfe10`) = `clamp01(lerp(farming/100, 0.5, 2))` x C x F, C = sum of the farm's crop weights x the biome
   coverages (1 indoors), farming the operator's effective stat (**Verified**: the 0.01 at `141682ad8` and the call order).
 - **Clearing**: d >= `death threshold`: clear progress += health x powerSat x P x dt x s x clear rate; at 1 one plant is

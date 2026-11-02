@@ -966,8 +966,8 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
     }
 
     /// <summary>
-    /// One operator's work on a farm (<b>Observed</b>, <c>FarmBuilding::vfunc_150</c>): a ripe crop is harvested plant by plant (<c>health x powerSat x P x dt x s x harvest rate</c>,
-    /// each plant rolling its <c>output per plant</c> against the efficiency), a dead one cleared (<c>clear rate</c>, the same factors; slot 109, <b>Verified</b> <c>FUN_1400e59e0</c>).
+    /// One operator's work on a farm (<b>Observed</b>, <c>FarmBuilding::vfunc_150</c>): a ripe crop is harvested plant by plant (<c>health x powerSat x P x dt x s x harvest rate</c>;
+    /// when the progress completes the output's room is tested, else status 1 keeps the progress; then ceil(<c>output per plant</c>) rolls against the efficiency and the fraction once), a dead one cleared (<c>clear rate</c>, the same factors; slot 109, <b>Verified</b> <c>FUN_1400e59e0</c>).
     /// </summary>
     bool HarvestStep(World world, Machine m, float farming, float s, float dt)
     {
@@ -976,20 +976,21 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         float work = m.Health * m.Power * constants.ProductionSpeed * dt * s;
         if (f.Growth >= 1 && f.Death < fd.DeathThreshold && f.Harvested < f.Plants.Length)
         {
-            if (m.Output is not { } output) return false;
-            if (output.Full)
-            {
-                f.Status = FarmStatus.OutputFull;
-                return false;
-            }
+            if (m.Output is not { } output || f.Status == FarmStatus.OutputFull) return false;   // status 1: the work function does nothing (FUN_1400e59e0)
             f.HarvestProgress += work * fd.HarvestRate / MachineData.DaySeconds;
             if (f.HarvestProgress < 1) return true;
+            if (output.Full)
+            {
+                f.Status = FarmStatus.OutputFull;   // the progress is kept; the tick lets go of it once there is room
+                return false;
+            }
             float skill = farming < 0 ? 0.01f : farming * 0.01f;
             float e = Math.Clamp(Lerp(0.5f, 2, skill), 0, 1) * m.CropMatch * m.Yield;
             ulong key = Rng.StableHash(m.Site);
             int whole = (int)fd.OutputPerPlant;
             int made = 0;
-            for (int u = 0; u < whole; u++)
+            // ceil(output) rolls against e, then the fraction rolled once against itself (a do-while on a positive output).
+            for (float u = 0; u < fd.OutputPerPlant; u++)
                 if (Rng.Float(Rng.Hash(world.Seed, key, RngPurpose.Farm, (1UL << 40) | (uint)f.Rolls++)) < e) made++;
             float frac = fd.OutputPerPlant - whole;
             if (frac > 0 && Rng.Float(Rng.Hash(world.Seed, key, RngPurpose.Farm, (1UL << 40) | (uint)f.Rolls++)) < frac) made++;
