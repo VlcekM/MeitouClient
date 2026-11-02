@@ -122,17 +122,16 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
     public void Loot(World world, int looter, int victim)
     {
         var table = world.Characters;
-        if (table.Cold(looter) is not { } l || table.Cold(victim) is not { } v || !IsLootTheft(l, v)) return;
+        if (table.Cold(looter) is not { } l || table.Cold(victim) is not { } v || !IsLootTheft(world, l, v)) return;
         SetPending(world, looter, CrimeCode.Looting, v.Faction, table.IdOf(victim), MinTimer);
     }
 
     /// <summary>
-    /// Whether the player's taking from a downed character is a theft: the permission test of <see cref="Loot"/> (<c>FUN_140793940</c>, <b>Observed</b>). The carry system marks what such a
-    /// loot takes as stolen from the victim's faction (<see cref="Items.ItemInstance.StolenFrom"/>). Never from an animal without a backpack on (<c>InventoryGUI::isStealing</c>,
-    /// <b>Verified</b>), so a pack beast's load can be stolen but a carcass cannot.
+    /// Whether the player's taking from a downed character is a theft: a take that is stealing at all (<see cref="IsStealing(World, CharacterCold)"/>) and the permission test of
+    /// <see cref="Loot"/> (<c>FUN_140793940</c>, <b>Observed</b>) failing. The carry system marks what such a loot takes as stolen from the victim's faction (<see cref="Items.ItemInstance.StolenFrom"/>).
     /// </summary>
-    public static bool IsLootTheft(CharacterCold looter, CharacterCold victim) =>
-        looter.IsPlayer && !victim.IsPlayer && !(CharacterFacts.Animal(victim) && victim.Inventory?.Backpack is null) && !LootAllowed(looter, victim);
+    public static bool IsLootTheft(World world, CharacterCold looter, CharacterCold victim) =>
+        looter.IsPlayer && !victim.IsPlayer && IsStealing(world, victim) && !LootAllowed(looter, victim);
 
     /// <summary>
     /// <c>Character::isItOkForMeToLoot</c> (<c>FUN_140793940</c>, <b>Observed</b>) asked with no item: yes when the victim is a slave or escaped slave (slave state 1 or 2; Meitou also

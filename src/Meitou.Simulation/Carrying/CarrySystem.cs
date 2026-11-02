@@ -739,7 +739,7 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
         }
         int death = DeathUnits(victim.Inventory!);
         int cashed = cold.Faction == player.Faction ? CashMoney(world, victim.Inventory!) : 0;
-        var (taken, left) = TakeAll(bag, victim.Inventory!, Crime.CrimeSystem.IsLootTheft(cold, victim) ? StolenMark.Of(victim, world.Characters.IdOf(t)) : null);
+        var (taken, left) = TakeAll(bag, victim.Inventory!, Crime.CrimeSystem.IsLootTheft(world, cold, victim) ? StolenMark.Of(victim, world.Characters.IdOf(t)) : null);
         taken += cashed;
         Butcher(world, i, t, death);
         bool seen = Looted(world, table, i, t, taken, left, crime: true);
@@ -813,7 +813,7 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
         bool worn = InventoryCommands.IsEquipmentSection(item.Section);
         var mark = item.Mark;
         int death = DeathUnits(from);
-        if (Crime.CrimeSystem.IsLootTheft(cold, victim)) item.Mark = StolenMark.Of(victim, table.IdOf(t));
+        if (Crime.CrimeSystem.IsLootTheft(world, cold, victim)) item.Mark = StolenMark.Of(victim, table.IdOf(t));
         var owner = from.Items.Contains(item) ? from : from.Backpack?.Contents ?? from;
         // Money taken by the player's own becomes cats, as when it is dropped into their window (PlayerSystem.Place, FUN_140714a20).
         if (item.ItemFunction == PlayerSystem.MoneyFunction && cold.Faction == world.Player.Faction && Data is not null)

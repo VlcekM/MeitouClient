@@ -210,8 +210,9 @@ public sealed partial class PlayerSystem
         if (taker is null) return item.Mark;
         if (item.StolenFrom >= 0 && item.StolenFrom == taker.Faction) return StolenMark.None;
         if (held.From.Holder == ItemHolder.Character && table.TryResolveNext(held.From.Character, out int v) && table.Cold(v) is { IsPlayer: false } victim
-            && table.TryResolveNext(held.Actor, out int a) && Crime.CrimeSystem.IsLootTheft(table.Cold(a)!, victim)) return StolenMark.Of(victim, table.IdOf(v));
-        if (held.From.Holder == ItemHolder.Site && world.Fixtures.Find(held.From.Site) is { Owner: >= 0 } box && box.Owner != taker.Faction) return StolenMark.OfFaction(box.Owner);
+            && table.TryResolveNext(held.Actor, out int a) && Crime.CrimeSystem.IsLootTheft(world, table.Cold(a)!, victim)) return StolenMark.Of(victim, table.IdOf(v));
+        if (held.From.Holder == ItemHolder.Site && world.Fixtures.Find(held.From.Site) is { Owner: >= 0 } box && box.Owner != taker.Faction
+            && Crime.CrimeSystem.IsStealing(world, box)) return StolenMark.OfFaction(box.Owner);
         return item.Mark;
     }
 

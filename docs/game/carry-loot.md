@@ -121,11 +121,20 @@ faction. Same faction/lawless holder (faction `fundamental type` 8 or `not real`
 handle even if unresolved, strict0 also requires resolution. Dropping ownerless items can set
 dropper as owner. The save's `ownedby` is item+0x140 (**Observed**, `Item` vfunc 75/76); preserve handles, not a boolean only.
 
-A take from the inventory window marks an ownerless item (`Item::notifyTheftFrom`, vfunc 0x348, sets the owner to the source) and books its
-Theft/Looting only when `InventoryGUI::isStealing` (`FUN_140711740`) holds (`RClickAutoTrade` `FUN_140713d20`). **Verified**: that test is false for a
-source character that is an animal (`isAnimal`, vfunc 0x248) without a backpack on (`Character::hasABackpackOn` `FUN_1405cb320`), so a carcass
-(cleansers included) is never stolen from, a pack beast's load is. Its other terms (the window flags, a faction's `not real` +0x1d0, a CAMPING building)
-are **Observed**, not modelled. Meitou: `CrimeSystem.IsLootTheft`.
+A take from the inventory window (right click `RClickAutoTrade` `FUN_140713d20`, drag `FUN_140715560`) books its Theft/Looting, rolls
+`ImStealingDoYouNotice` and marks an ownerless item (`Item::notifyTheftFrom`, vfunc 0x348: owner = the source, unless the source window is the
+player's) only when `InventoryGUI::isStealing(source window, other window)` (`FUN_140711740`, **Verified**) holds. It is false when:
+
+- both windows are the player's (a per-window byte, copied to child windows by `ForgottenGUI::toggleInventory`; meaning **Observed**);
+- the source character is an animal (`isAnimal`, vfunc 0x248) without a backpack on (`Character::hasABackpackOn` `FUN_1405cb320`), unless the
+  window is the one open on a CONTAINER: a carcass (cleansers included) is never stolen from, a pack beast's load is;
+- the source owner's faction is `not real` (+0x1d0), e.g. Wildlife;
+- source and other window are the same;
+- the source owner is a BUILDING whose `building category` is exactly `CAMPING` (Camp Bed, Campfire, tents);
+- the two windows trade for money (`isTradingForMoney`).
+
+Meitou: `CrimeSystem.IsStealing` (character and container overloads) gates `Pickpocket`, `Steal` and the marks (`IsLootTheft`, container takes);
+the player's-windows and trade terms are the callers' own-faction tests and the separate trade window.
 
 ### Character fields used here
 
