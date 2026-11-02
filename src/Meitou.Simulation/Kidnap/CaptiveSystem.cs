@@ -14,7 +14,7 @@ namespace Meitou.Simulation.Kidnap;
 /// <summary>Settings of the <see cref="CaptiveSystem"/>: engine choices unless a doc label says otherwise.</summary>
 public sealed record CaptiveSettings
 {
-    /// <summary>The sweep for new jobs runs every this many ticks, starts at most <see cref="MaxNewJobs"/> and keeps at most <see cref="MaxJobs"/> running.</summary>
+    /// <summary>The sweep for new jobs looks at each character once in this many ticks (on its slot's turn), starts at most <see cref="MaxNewJobs"/> over the period (spread: at least one a tick) and keeps at most <see cref="MaxJobs"/> running.</summary>
     public int SweepEveryTicks { get; init; } = 30;
     public int MaxJobs { get; init; } = 32;
     public int MaxNewJobs { get; init; } = 8;
@@ -186,12 +186,13 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
             }
             else jobs.RemoveAt(k);
         }
-        if (world.Tick % Math.Max(1, Settings.SweepEveryTicks) == 0)
-        {
-            ExpireWaits(world.GameHours);
-            Sweep(world);
-            RunPlayerAnimalGoals(world);
-        }
+        // Each character is looked at once in SweepEveryTicks, on its slot's turn (slot mod the period), so the sweep spreads over the ticks instead of
+        // landing on one (8-11 ms a sweep with ~1,400 characters loaded, docs/simulation.md "Spread sweeps"; the original runs its AI updates 8 characters
+        // a frame in turn, FUN_140786e30).
+        int every = Math.Max(1, Settings.SweepEveryTicks), phase = (int)(world.Tick % every);
+        if (phase == 0) ExpireWaits(world.GameHours);
+        Sweep(world, every, phase);
+        RunPlayerAnimalGoals(world, every, phase);
     }
 
     /// <summary>
@@ -201,11 +202,11 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
     /// step's (<see cref="RaceGoals"/>: priority 3 at step 4, priority 2 at step 6); this pass runs them in list order for the other animals of the player's faction, idle only (engine).
     /// An order that runs ends one (<see cref="CaptiveJob.PlayerSide"/>).
     /// </summary>
-    void RunPlayerAnimalGoals(World world)
+    void RunPlayerAnimalGoals(World world, int every, int phase)
     {
         if (world.Player.Faction < 0) return;
         var table = world.Characters;
-        for (int s = 0; s < table.HighWater; s++)
+        for (int s = phase; s < table.HighWater; s += every)
         {
             if (!table.Next[s].Alive || table.Next[s].Task != (byte)CharacterTask.Idle || table.Cold(s) is not { Fighter.IsAnimal: true } c || !PlayerSquad(world, c) || DecisionSystem.Decides(c)) continue;
             if (!FreeForRaceGoal(world, s, c)) continue;
@@ -381,18 +382,20 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
         return table.Next[slot].Alive && table.Cold(slot) is { } c && AiSystem.Holds(table.Next[slot], c) && table.Next[slot].Task != (byte)CharacterTask.Rest && !Busy(table.IdOf(slot));
     }
 
-    void Sweep(World world)
+    void Sweep(World world, int every, int phase)
     {
         var table = world.Characters;
         int hour = world.Hour, started = 0;
+        // MaxNewJobs over the period, spread like the looks (at least one a tick).
+        int maxNew = Math.Max(1, (Settings.MaxNewJobs + every - 1) / every);
         foreach (var squad in world.Squads.All)
         {
-            if (jobs.Count >= Settings.MaxJobs || started >= Settings.MaxNewJobs) return;
+            if (jobs.Count >= Settings.MaxJobs || started >= maxNew) return;
             if (squad.Ai is not { } board || squad.Members.Count == 0) continue;
             foreach (var member in squad.Members)
             {
-                if (jobs.Count >= Settings.MaxJobs || started >= Settings.MaxNewJobs) return;
-                if (!table.TryResolveNext(member, out int slot) || !Free(world, slot)) continue;
+                if (jobs.Count >= Settings.MaxJobs || started >= maxNew) return;
+                if (!table.TryResolveNext(member, out int slot) || slot % every != phase || !Free(world, slot)) continue;
                 var cold = table.Cold(slot)!;
                 var roles = board.Roles[(int)AiSystem.RoleOf(squad, member, cold)];
                 for (int g = 0; g < roles.Count; g++)

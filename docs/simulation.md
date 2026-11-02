@@ -276,6 +276,13 @@ Body handles medical ticks before combat (`TickMedical=false`); carry sees knock
 combat and drops carried targets before attacking. Combat swaps before animation/retaliation;
 crime sees deeds and final positions/carry links. Game combat uses `SelfApproach=false`.
 
+### Spread sweeps
+
+Engine choice: a periodic per-character pass looks at each character on its slot's turn (slot mod the period), as the original runs its AI
+updates 8 characters a frame in turn ([game loop](game/game-loop.md#the-character-update-budget)), instead of all on one tick: Aggro, Crime,
+FirstAid, NPC looting, Captive (`SweepEveryTicks` 30; new jobs at most `MaxNewJobs` over the period, at least one a tick), Town duty and
+Kidnap (`LookEveryTicks` 15). **Observed** (`--log-spikes`, ~1,400 characters loaded): the captive sweep on one tick was 8-11 ms once a second.
+
 ## Population
 
 `PopulationSystem`, `SquadFactory`, `CharacterAssembly`, `GeneratedAppearances`: activate the loaded zones
