@@ -390,14 +390,20 @@ public sealed class AnimationSystem(AnimationLibrary library, AnimationLengths l
         var stance = StanceOf(cold) with { Combat = cold.InCombat && !approaching };
         bool down = cold.Medical is { Incapacitated: true };
         bool crawling = !carried && cold.Medical is { Prone: true };
-        if (HoldsForRagdoll(a, down, carried, ragdoll)) return Vector2.Zero;
-
         bool inBed = cold.InSomething == Locks.HeldState.Bed, inCage = cold.InSomething == Locks.HeldState.Imprisoned;
-        if (down && !a.WasDown && !carried && !ragdoll.Has && !inBed) StartAction(a, fall, false);   // a ragdoll falls instead; one in a bed lies on
+        // One held in a cage or on a pole is posed by the fixture's clip, not by a ragdoll: the fixture refuses the whole-body ragdoll
+        // (RagdollSystem.Wanted), so holding the pose here would leave it flat in whatever pose the knockout left (docs/game/locks.md "Cages and beds").
+        if (!inCage && HoldsForRagdoll(a, down, carried, ragdoll)) return Vector2.Zero;
+
+        // Held in a cage or on a pole, it plays the fixture's own pose whatever it was doing: a fall left over from before it was put in, or a get-up, would show over it
+        // (docs/game/locks.md "Cages and beds": a captive lies in a cage or stands on a pole, and an awake one stands at once).
+        if (inCage) a.Action = -1;
+        // A ragdoll falls instead; one in a bed lies on; one already held in a cage takes the cage's own out-cold pose (its `animation KO`) at once.
+        if (down && !a.WasDown && !carried && !ragdoll.Has && !inBed && !inCage) StartAction(a, fall, false);
         if (carried) a.Action = -1;   // held on the shoulder: no falling or getting up
         // Waking with a leg down there is nothing to get up on, and one staying low does not stand: the original's get-up ends with the bone blend and the posture's idle
-        // follows (docs/game/ragdolls.md "Getting up"). Waking in a bed it lies on (engine choice).
-        else if (!down && a.WasDown && (crawling || inBed || cold.Medical is { StayingLow: true })) a.Action = -1;
+        // follows (docs/game/ragdolls.md "Getting up"). Waking in a bed it lies on (engine choice); one held in a cage or on a pole stands up at once, no get-up clip.
+        else if (!down && a.WasDown && (crawling || inBed || inCage || cold.Medical is { StayingLow: true })) a.Action = -1;
         else if (!down && a.WasDown)
         {
             StartAction(a, getUp, false);
@@ -405,7 +411,7 @@ public sealed class AnimationSystem(AnimationLibrary library, AnimationLengths l
             if (ragdoll.WasWhole) a.ActionTime = -Meitou.Simulation.Ragdolls.RagdollSystem.GetUpBlend;
         }
         // The leg back up: posture 2 ends in 0 and the posture setter queues the get-up task 65 (FUN_1405c7e20), which plays `standing up 3`.
-        else if (a.WasCrawling && !down && !carried && !inBed && cold.Medical is { Crawling: false, Prone: false }) StartAction(a, getUp, false);
+        else if (a.WasCrawling && !down && !carried && !inBed && !inCage && cold.Medical is { Crawling: false, Prone: false }) StartAction(a, getUp, false);
         a.WasDown = down;
         a.WasCrawling = cold.Medical is { Crawling: true };
         // The hit reaction the combat system picked (it holds the character helpless for the clip's length; see ChooseStumble).
@@ -721,6 +727,8 @@ public sealed class AnimationSystem(AnimationLibrary library, AnimationLengths l
         if (a.Rate == 0) a.Rate = 1 / size;
         bool carried = !cold.CarriedBy.IsNone;
         bool down = cold.Medical?.Incapacitated ?? false;
+        // Held in a cage or on a pole, an animal is left as it is: the original shows a still frame there, no idle and no fall (docs/game/locks.md "Cages and beds").
+        if (cold.InSomething == Locks.HeldState.Imprisoned) return Vector2.Zero;
         if (HoldsForRagdoll(a, down, carried, ragdoll)) return Vector2.Zero;
         if (down && !a.WasDown && !carried && !ragdoll.Has) StartAction(a, plan.Fall, false);
         if (carried || !down) a.Action = -1;   // the fall is an animal's only one-shot clip
