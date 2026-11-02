@@ -128,9 +128,11 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
 
     /// <summary>
     /// Whether the player's taking from a downed character is a theft: the permission test of <see cref="Loot"/> (<c>FUN_140793940</c>, <b>Observed</b>). The carry system marks what such a
-    /// loot takes as stolen from the victim's faction (<see cref="Items.ItemInstance.StolenFrom"/>).
+    /// loot takes as stolen from the victim's faction (<see cref="Items.ItemInstance.StolenFrom"/>). Never from an animal without a backpack on (<c>InventoryGUI::isStealing</c>,
+    /// <b>Verified</b>), so a pack beast's load can be stolen but a carcass cannot.
     /// </summary>
-    public static bool IsLootTheft(CharacterCold looter, CharacterCold victim) => looter.IsPlayer && !victim.IsPlayer && !LootAllowed(looter, victim);
+    public static bool IsLootTheft(CharacterCold looter, CharacterCold victim) =>
+        looter.IsPlayer && !victim.IsPlayer && !(CharacterFacts.Animal(victim) && victim.Inventory?.Backpack is null) && !LootAllowed(looter, victim);
 
     /// <summary>
     /// <c>Character::isItOkForMeToLoot</c> (<c>FUN_140793940</c>, <b>Observed</b>) asked with no item: yes when the victim is a slave or escaped slave (slave state 1 or 2; Meitou also
