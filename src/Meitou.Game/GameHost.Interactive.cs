@@ -1026,6 +1026,9 @@ sealed partial class GameHost
     double simWindowStart = -1, simWindowMain, simWindowAhead;
     long simWindowTicks;
     int simWindowFrames;
+    // The ragdolls sampled once a frame: in play, moving, the physics' awake bodies, frames with any moving.
+    long simWindowRagdolls, simWindowMoving, simWindowAwake;
+    int simWindowStepping;
 
     /// <summary>
     /// --log-spikes: every <see cref="SimWindowSeconds"/> one line of the speed, ticks a second, the sim's ms a frame, then ms a tick by phase, by system, by system in the slow
@@ -1040,6 +1043,8 @@ sealed partial class GameHost
         for (int p = 0; p < firstSystem - 1; p++) Add("#" + simNames[p], simMs[p]);
         for (int k = firstSystem; k < simMs.Length - 1; k++) Add((k >= firstPart ? "." : "") + simNames[k], simMs[k]);
         for (int k = 0; k < profile.SlowWorldMs.Length && firstSystem + k < firstPart; k++) Add("~" + simNames[firstSystem + k], profile.SlowWorldMs[k]);
+        if (session.World.Systems.OfType<Meitou.Simulation.Ragdolls.RagdollSystem>().FirstOrDefault() is { } rag)
+            (simWindowRagdolls, simWindowMoving, simWindowAwake, simWindowStepping) = (simWindowRagdolls + rag.Count, simWindowMoving + rag.Moving, simWindowAwake + rag.AwakeBodies, simWindowStepping + (rag.Moving > 0 ? 1 : 0));
         double seconds = now - simWindowStart;
         if (seconds < SimWindowSeconds) return;
         if (simWindowTicks > 0)
@@ -1050,10 +1055,12 @@ sealed partial class GameHost
             double tickMs = simWindowMs.Where(p => p.Key[0] == '#').Sum(p => p.Value) / simWindowTicks;
             Console.WriteLine(string.Create(inv, $"simprof   {session.Simulation.Speed:0}x {simWindowFrames / seconds:0} fps, {simWindowTicks / seconds:0} ticks/s, {session.World.Snapshot.Characters.Count} characters; ") +
                 string.Create(inv, $"ms a frame: in frame {simWindowMain / simWindowFrames:0.00}, ahead {simWindowAhead / simWindowFrames:0.00}; ms a tick {tickMs:0.00}: ") +
-                $"phases: {Top('#', 10)}; systems: {Top(' ', 12)}; slow world: {Top('~', 12)}; parts: {Top('.', 12)}");
+                $"phases: {Top('#', 10)}; systems: {Top(' ', 12)}; slow world: {Top('~', 12)}; parts: {Top('.', 12)}; " +
+                string.Create(inv, $"ragdolls {(double)simWindowRagdolls / simWindowFrames:0.0}, moving {(double)simWindowMoving / simWindowFrames:0.0}, awake bodies {(double)simWindowAwake / simWindowFrames:0}, stepping {100.0 * simWindowStepping / simWindowFrames:0}% of frames"));
         }
         simWindowMs.Clear();
         (simWindowStart, simWindowTicks, simWindowMain, simWindowAhead, simWindowFrames) = (now, 0, 0, 0, 0);
+        (simWindowRagdolls, simWindowMoving, simWindowAwake, simWindowStepping) = (0, 0, 0, 0);
     }
 
     /// <summary>

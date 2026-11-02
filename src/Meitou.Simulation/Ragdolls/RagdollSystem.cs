@@ -80,6 +80,8 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
     public int Count => ragdolls.Count;
     public int Moving { get; private set; }
     public int Tiles => physics.TileCount;
+    /// <summary>Bodies the physics steps (its awake set, ground tiles included).</summary>
+    public int AwakeBodies => physics.Simulation.Bodies.ActiveSet.Count;
 
     sealed class Ragdoll
     {
