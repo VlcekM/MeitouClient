@@ -61,6 +61,10 @@ public sealed partial class FixtureRegistry
         };
     }
 
+    /// <summary>The key of the building the carrier's squad lives in, the home weight of <see cref="FindCage"/> (the ownerships' home building, <c>FUN_1407956a0</c> +0x38, <b>Verified</b>); null when none.</summary>
+    public static string? HomeOf(World world, CharacterCold carrier) =>
+        world.Squads.Find(carrier.SquadId) is { } squad ? (squad.Ai?.OwnHome ?? squad.HomeBuilding)?.Key : null;
+
     // A town's centre and TownReach x radius.
     static (Vector2 Centre, float Reach) Reach(World world, PopulationData data, CampaignTown town)
     {

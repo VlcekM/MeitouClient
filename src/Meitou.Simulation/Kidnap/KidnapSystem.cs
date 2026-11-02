@@ -315,7 +315,7 @@ public sealed class KidnapSystem(PopulationData data, PopulationSystem populatio
     Fixture? CageFor(World world, Vector3 at, CharacterCold carrier, Abduction? self)
     {
         var candidate = world.Fixtures.CageCandidates(world, data, carrier, at);
-        return world.Fixtures.FindCage(world, carrier, at, null, f => !candidate(f) || Reserved(f, self));
+        return world.Fixtures.FindCage(world, carrier, at, FixtureRegistry.HomeOf(world, carrier), f => !candidate(f) || Reserved(f, self));
     }
 
     bool Reserved(Fixture f, Abduction? self)
