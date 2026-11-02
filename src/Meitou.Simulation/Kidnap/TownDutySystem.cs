@@ -949,13 +949,18 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
 
     /// <summary>
     /// <c>AI::findRandomBuildingInTown</c> (<c>FUN_1408cb510</c>, goal 216): the squad's mission town (its blackboard's, else the campaign target it marches on), else the town the
-    /// member stands in; one of its standing buildings with an interior, drawn uniformly at random. Null: none.
+    /// member stands in; one of its standing buildings with an interior, drawn uniformly at random among those the planner would reach: row 156 Entering building (the only provider of effect 107, which
+    /// goal 216 wants) needs DESTINATION_IS_ACCESSIBLE (59: not shut) and DESTINATION_NOT_BLOCKED_BY_FORTIFICATIONS (90: no closed gate between), <b>Observed</b>. The original plans sub-steps (bash the door, open the
+    /// gate) for a building that fails them; here such a building is left out of the draw (<b>engine choice</b>: the attackers' door and gate plumbing, <see cref="Locks.DoorPlan"/>, is not wired to this errand). Null: none.
     /// </summary>
     Meitou.Data.World.TownBuilding? RansackTarget(World world, Squad squad, int slot)
     {
         int site = squad.Ai is { MissionTown: >= 0 } b ? b.MissionTown : squad.Ai is { Destination: { Site: >= 0 } dest } ? dest.Site : AiSystem.TownAt(data, world, world.Characters.Next[slot].Position).Site;
         if (site < 0) return null;
-        var rooms = data.Sites[site].Buildings.Where(x => !world.Fixtures.IsDestroyed(x) && (x.InteriorLayout.Length > 0 || x.InteriorLayouts.Count > 0)).ToList();
+        locks ??= world.Systems.OfType<Locks.LockSystem>().FirstOrDefault();
+        var from = world.Characters.Next[slot].Position;
+        var rooms = data.Sites[site].Buildings.Where(x => !world.Fixtures.IsDestroyed(x) && (x.InteriorLayout.Length > 0 || x.InteriorLayouts.Count > 0)
+            && !world.Fixtures.IsShut(x.Key) && (locks is null || locks.NotBlocked(world, from, x.Position))).ToList();
         if (rooms.Count == 0) return null;
         return rooms[Rng.Int(Rng.Hash(world.Seed, (ulong)Rng.Key(world.Characters.IdOf(slot)) ^ (ulong)world.Tick, RngPurpose.Slow, RansackSalt), rooms.Count)];
     }
