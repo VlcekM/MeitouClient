@@ -195,12 +195,12 @@ public sealed unsafe class WorldTextureCache : IDisposable
     /// <summary>The largest share of the driver's memory budget a mark scaled by <c>Areas</c> may take.</summary>
     internal const double MaxAreaShare = 0.5;
 
-    internal static double EffectiveMark(double highWaterMb, double share, VramGuard? guard, int areas = 1)
+    internal static double EffectiveMark(double highWaterMb, double share, VramGuard? guard, int areas = 1, double maxShare = MaxAreaShare)
     {
         if (double.IsInfinity(highWaterMb) || highWaterMb >= double.MaxValue) return highWaterMb;
         areas = Math.Max(areas, 1);
         highWaterMb *= areas;
-        share = Math.Max(share, Math.Min(share * areas, MaxAreaShare));
+        share = Math.Max(share, Math.Min(share * areas, maxShare));
         if (guard is not { BudgetBytes: > 0 } g) return highWaterMb;
         return Math.Min(highWaterMb, g.BudgetBytes / 1048576.0 * share) * (g.Pressure ? 0.75 : 1);
     }

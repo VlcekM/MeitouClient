@@ -23,7 +23,7 @@ where occluders justify it. A depth prepass is extra geometry, not automatically
   at a fixed index per pair, at most 256 (the array layers every Vulkan device has; a pair past that stays in ground colour). The R8 height array
   and the relief texture use the same index. A biome is drawn once all its pairs are in.
 - **Near arrays** have 32 slots at the full size (about 270 MB at 2048²), 32 per kept place (`Areas`, render-objects.md "Kept points") up to 128 when
-  the guard allows: growing reallocates both arrays (no image copy), so every pair drops to far and loads near again; they never shrink. A slot goes to a pair within its near range of the eye, then of a kept point while slots are left
+  the guard allows: growing reallocates both arrays (no image copy), so every pair drops to far and loads near again; they never shrink, and a refused size is not asked again. A slot goes to a pair within its near range of the eye, then of a kept point while slots are left
   ([render-objects.md](render-objects.md#kept-points)), least recently needed first: the range is the pair's tile × pixels per radian ÷ layer size × 11.3, with an upscaler's negative bias widening it.
   When no slot is left, a pair stays far.
 - Per sample the shader works out the near arrays' level (8x anisotropic: the long axis over up to 8 taps, never under the short axis). Below

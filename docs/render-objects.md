@@ -83,7 +83,7 @@ after the eye's, sharing the one store: while an eye page waits for room, the ke
 relief needs nothing more (its heights come with the biome pairs' far tier). Built characters within `KeptReach` of a point but beyond the
 eye's reach offer their textures from the point (at least `KeptViewDistance`) each budget pass; before, nothing read them and the 20 s idle
 limit unloaded them whatever the mark. **Areas** (`WorldFrame` `Areas`): 1 + the merged points, held at its highest for 30 s. The shared texture
-mark and the mesh mark are that many times larger, their share of the memory budget at most half (`WorldTextureCache.MaxAreaShare`), so the
+mark and the mesh mark are that many times larger, their shares of the memory budget at most 0.5 and 0.2 (`MaxAreaShare`; together under the budget), so the
 character `NeedScale` blur also starts later; the grass store, standby counts and terrain near slots scale too (render-foliage.md, render-terrain.md).
 Costs video memory
 (the VRAM guard still applies). `WorldFrame` merges the points first (`ObjectStreamer.MergeKept`): one within 500 units of the eye or of an
