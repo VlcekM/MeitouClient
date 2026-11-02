@@ -55,7 +55,9 @@ nothing is composed or uploaded on the jump); the replaced copy stays as the sta
 (`TerrainTextures.MapStandby`, at most 2, ~45 MB each): for a point more than a quarter window from the drawn origin. Fine heights
 (`TerrainRenderer.FineStandby`, `TerrainStreamer`, at most 3, ~5 MB each at step 1): for a point beyond 0.3 of the window's width from its
 centre; the bounds take a standby's patch at its first swap (they only widen). A standby goes when a new point needs its place and no kept point is
-in its middle. Standby work does not hold up the loading screen. A standby compose shares the nine-tile overlay cache, so the eye's next move may
+in its middle. None is made under `VramGuard` pressure; once made they stay until exit. A standby's read or compose does not hold up the loading screen (its
+upload slabs do, for a few frames); a jump while one is read or uploaded waits for it. The first swap-in of a new pair may hitch once (a fresh
+texture's first use stalled the driver ~50 ms, see the window comment in `TerrainTextures`). A standby compose shares the nine-tile overlay cache, so the eye's next move may
 decode its tiles again.
 
 ## Ground relief

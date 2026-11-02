@@ -890,6 +890,8 @@ public sealed unsafe class TerrainTextures : IDisposable
     MapStandby? mapTarget;
     /// <summary>At most this many standby pairs (about 45 MB of video memory each: the 2048² RGBA8 overlay and the 4096² BC3 colour with their levels).</summary>
     const int MaxMapStandbys = 2;
+    /// <summary>Video memory pressure: while it is on no standby pair is made or written.</summary>
+    internal VramGuard? Guard { get; set; }
 
     void AllocateMaps()
     {
@@ -941,7 +943,7 @@ public sealed unsafe class TerrainTextures : IDisposable
     /// </summary>
     void PrepareMapStandby(IReadOnlyList<Vector3>? kept)
     {
-        if (kept is null || kept.Count == 0 || mapWindows is not { } windows) return;
+        if (kept is null || kept.Count == 0 || mapWindows is not { } windows || Guard is { Pressure: true }) return;
         int recentre = windows.RecentreOverlayPixels, cover = windows.OverlayPixels / 4;
         bool Near(int ax, int az, int bx, int bz, int reach) => Math.Abs((long)ax - bx) <= reach && Math.Abs((long)az - bz) <= reach;
         foreach (var point in kept)

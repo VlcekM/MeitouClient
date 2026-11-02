@@ -123,6 +123,8 @@ public sealed class TerrainStreamer : IDisposable
 
     /// <summary>Points whose surrounding biome textures, colour and overlay windows and fine heights stay loaded besides the eye's ("Keep textures at characters").</summary>
     public IReadOnlyList<Vector3> Kept { get; set; } = [];
+    /// <summary>Video memory pressure: while it is on no standby window is made.</summary>
+    public VramGuard? Guard { get; set; }
     /// <summary>The ground's height under the eye, for which biome textures load (<see cref="TerrainTextures.GroundUnderEye"/>).</summary>
     public float GroundUnderEye { get; set; } = float.NegativeInfinity;
 
@@ -164,8 +166,8 @@ public sealed class TerrainStreamer : IDisposable
             if (ready >= 0) { standbys[ready] = terrain.SwapFine(standbys[ready]); HeightWindows++; }
             else Read(column0, row0, standby: false);
         }
-        else if (job is null && !swapping && !standbyUploading && step < WorldFrame.CoarseStep) PrepareStandby();
-        if (textures is not null) textures.GroundUnderEye = GroundUnderEye;
+        else if (job is null && !swapping && !standbyUploading && step < WorldFrame.CoarseStep && Guard is not { Pressure: true }) PrepareStandby();
+        if (textures is not null) (textures.GroundUnderEye, textures.Guard) = (GroundUnderEye, Guard);
         textures?.Update(eye, MaterialDistance, uploads, Ahead, Kept);
         uploads.Run(budgetMs);
     }
