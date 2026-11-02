@@ -184,7 +184,8 @@ public sealed partial class LockSystem : IStateHashed
             if (!next[s].Alive || table.Cold(s) is not { IsImprisoned: true, InWhat: { } where } c || c.Medical is { Incapacitated: true }) continue;
             if (!FixtureRegistry.SentenceServed(c, world.GameHours) || world.Fixtures.Find(where) is not { } cage) continue;
             var prisoner = table.IdOf(s);
-            if (Busy(prisoner)) continue;
+            // A jailer frees no prisoner it regards as an enemy (FUN_1408cf3c0 asks vfunc 0x3e8, isEnemy; the jailers are the cage owner's faction): the prisoner stays caged, the fallback included.
+            if (Busy(prisoner) || CharacterFacts.RegardsEnemy(Crimes.Relations, cage.Owner, c.Faction)) continue;
             int releaser = -1;
             float bestD2 = ReleaserRange * ReleaserRange;
             for (int w = 0; w < table.HighWater; w++)

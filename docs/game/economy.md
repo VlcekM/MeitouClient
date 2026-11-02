@@ -401,7 +401,7 @@ money, mark the entry claimed (it never pays twice) and show "Received c.{1} rew
   "FOREVER" for a length >= 2000, else "Waiting to be released" (**Observed**). Bounty expiry is paused meanwhile (11.3).
 - **Release** (`Task_ReleasePrisoner` 110, `FUN_1403570a0`; **Observed**): the jailer goal is AI_TASK "police free prisoners" (enum 211,
   only in AI_PACKAGE "addon- law enforcement"; the "- no freeing prisoners" variant lacks it; **Verified** by probe). Its finder
-  `FUN_1408cf3c0` picks an occupied `BF_CAGE` the jailer may use whose occupant is not down, served and not an enemy. For every releaser the
+  `FUN_1408cf3c0` picks an occupied `BF_CAGE` the jailer may use whose occupant is not down, served and not an enemy of the jailer (**Verified**: vfunc `0x3e8` = `isEnemy`, `FUN_14079c950`, called with the occupant and 1; Meitou `LockSystem.ReleaseSweep` reads its faction part, `CharacterFacts.RegardsEnemy`, and frees no enemy prisoner, not even by the booking-jail fallback). For every releaser the
   cage is unlocked and status `+0xea = 1`; then, if the releaser's faction has `+0x40`, the prisoner's entries for the releaser's booking faction and for the
   jail's booking faction are **erased** (`FUN_1408539f0`), the releaser says `EV_PRISONER_FREE_TO_GO`; if the releaser is a player
   (non-`+0x40` player faction), the prisoner says `EV_UNLOCK_MY_CAGE_OR_SHACKLES`. In those two cases the prisoner gets 133
