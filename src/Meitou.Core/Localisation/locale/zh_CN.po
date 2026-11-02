@@ -2718,3 +2718,15 @@ msgstr "有医疗工作的角色也会救治非敌对派系中倒下的人"
 
 msgid "Characters with the medic job will heal any downed character, enemies included"
 msgstr "有医疗工作的角色会救治任何倒下的人，包括敌人"
+
+msgid "Shows a generated frame between each two rendered ones through AMD's FSR 3 frame-interpolation layer: nearly twice the frames shown, with a little more input delay. Works with TAA, FSR and DLSS; needs the FidelityFX library. Takes effect after a restart. Now: {1}"
+msgstr "通过 AMD FSR 3 的帧插值层，在每两帧渲染画面之间生成一帧：显示帧数接近翻倍，输入延迟略增。支持 TAA、FSR 与 DLSS；需要 FidelityFX 库。重启后生效。当前：{1}"
+
+msgid "Low holds off: {1}."
+msgstr "低画质下会关闭：{1}。"
+
+msgid "Low quality applied: {1} off until you keep them on."
+msgstr "已应用低画质：{1} 会关闭，直到你手动打开。"
+
+msgid "{1} quality applied."
+msgstr "已应用{1}画质。"

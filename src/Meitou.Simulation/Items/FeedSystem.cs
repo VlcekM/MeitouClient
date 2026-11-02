@@ -246,7 +246,7 @@ public sealed class FeedSystem(ItemFactory items, FeedSettings? settings = null)
         }
         med.Fed = amount * 0.01f;
         var at = world.Characters.Next[slot].Position;
-        world.Floaters?.Enqueue(Floater.Text(world.Characters.IdOf(slot), at, "Ate " + item.Name));
+        world.Floaters?.Enqueue(Floater.Text(world.Characters.IdOf(slot), at, Meitou.Localisation.Loc.Tr("Ate {1}", item.Name)));
         world.EmitSound(SoundKind.Eat, slot, at);
     }
 }

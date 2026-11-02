@@ -470,7 +470,7 @@ sealed partial class SettingsMenu
         var q = R(286, 136, 172, 28);
         DropDown(PresetNames[CurrentPreset()], q, () => OpenChoice(QualityChoice, q));
         string cut = string.Join(", ", LowCut());
-        if (cut.Length > 0) Text($"Low holds off: {cut}.", R(474, 134, 626, 30), 12, Brass);
+        if (cut.Length > 0) Text(Loc.Tr("Low holds off: {1}.", cut), R(474, 134, 626, 30), 12, Brass);
         viewport = keep;
     }
 
