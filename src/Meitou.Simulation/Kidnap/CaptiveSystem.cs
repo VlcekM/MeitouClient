@@ -137,7 +137,7 @@ public readonly record struct CaptiveEvent(long Tick, CaptiveEventKind Kind, Cap
 /// <list type="bullet">
 /// <item><b>Kill</b> (135 "Kill random prisoner"; 282 "Dinner time" eats instead): wanted when the town's kill timer has run out or all the faction's cages there are full
 /// (<b>Observed</b>, AI slot 20 <c>FUN_14032e9b0</c>; the timer is set to now + uniform[1, 15) game hours when the town is first asked about and whenever a captive dies of a
-/// kill or a meal, <c>FUN_14034a810</c>). The target is the best occupied cage (the cage finder's weights and usable test, <c>FUN_1408d0770</c>, <see cref="FateTarget"/>), its occupant alive and not a robot;
+/// kill or a meal, <c>FUN_14034a810</c>). The target is the best occupied cage (the cage finder's weights and usable test, <c>FUN_1408d0770</c>, <see cref="FateTarget"/>), its occupant alive; when that best cage holds a robot there is no target this ask;
 /// the occupant says event 10 MARKED_FOR_DEATH to the worker. Its plan draws a weapon first (B list hasWeaponEquipped, <see cref="DrawWeapon"/>); with none to draw the goal does not plan. At the cage it plays <c>chop down static</c> and strikes once per clip at
 /// 0.55 of it (<see cref="CombatSystem.Execute"/>), the occupant crying event 11 SCREAMING_TORTURE each time, until it dies.</item>
 /// <item><b>Eat</b> (139 "Eat random prisoner", wanted always; 282 at the kill rate): the same target; the eater sheathes its weapon (B list !hasWeaponEquipped), plays <c>eat</c>,
@@ -586,14 +586,16 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
     /// The cage whose occupant a killer or eater takes (<c>FUN_1408d0d90</c> over the cage finder <c>FUN_1408d0770</c> in its occupied mode, <b>Verified</b>): <see cref="FixtureRegistry.FindCage"/> with
     /// <c>occupied</c>, over the candidates of the worker's town (<see cref="FixtureRegistry.CageCandidates"/>: its town, else its faction's nearest, plus its home's) with the faction and usable tests of
     /// the finder (a cage of another faction only when <see cref="FixtureRegistry.CanUse"/> passes) and the weights clamp(1 - d^2 / 4608^2, 1e-5, 1), x100 own faction, x100 in the worker's home. Not
-    /// one whose occupant is dead, a robot (RACE <c>robot</c>), or another job's.
+    /// one whose occupant is dead or another job's. A robot occupant (RACE <c>robot</c>) does not leave the cage out: the finder wrapper tests it only on the best cage, and then there is no target
+    /// this ask (<c>FUN_1408d0d90</c>, <b>Verified</b>).
     /// </summary>
     Fixture? FateTarget(World world, int slot, CharacterCold cold, string? home)
     {
         var table = world.Characters;
         var candidate = world.Fixtures.CageCandidates(world, data, cold, table.Next[slot].Position);
-        return world.Fixtures.FindCage(world, cold, table.Next[slot].Position, home,
-            f => !candidate(f) || Taken(f.Id) || OccupantSlot(world, f) is not (>= 0 and var s) || table.Cold(s)!.Race is { IsRobot: true } || Busy(table.IdOf(s)), occupied: true);
+        var best = world.Fixtures.FindCage(world, cold, table.Next[slot].Position, home,
+            f => !candidate(f) || Taken(f.Id) || OccupantSlot(world, f) is not (>= 0 and var s) || Busy(table.IdOf(s)), occupied: true);
+        return best is not null && OccupantSlot(world, best) is >= 0 and var occupant && table.Cold(occupant)!.Race is { IsRobot: true } ? null : best;
     }
 
     /// <summary>All the cages of <paramref name="faction"/> in the town are held by live characters, and there is one (<c>FUN_1405a1ab0</c>, the state CAGES_ARE_ALL_FULL).</summary>
