@@ -69,8 +69,8 @@ public sealed class TownDuty
 /// docs/game/economy.md 11.5; none: served, so the jailer frees it); else</item>
 /// <item><b>274 Throwing out</b> (<c>Task_TakeIntruderOutsideTown</c>): carried past the town's built-up area (<see cref="TownDutySettings.OutsideTown"/>) on the member's side and put down.</item>
 /// <item><b>243 Getting food</b> (finder <c>FUN_1408cb650</c>, <c>BuildingFinder_LootFoodAndStuff</c>; then 244 <c>Task_grabOneFood</c>): a member holding no food walks to the nearest store with
-/// food in the town and takes one item of it (the goal holds while it has food, list A <c>gotAFoodItem</c>). The town the original's finder searches is read as the one the member stands in;
-/// it need not be the squad's own, and a player-side member takes only from its faction's stores.</item>
+/// food in the town and takes one item of it (the goal holds while it has food, list A <c>gotAFoodItem</c>). The finder searches the blackboard's target town (<c>Blackboard.Destination</c>), else the town the member stands in,
+/// else the 3 x 3 zone cells round it; it need not be the squad's own, and a player-side member takes only from its faction's stores.</item>
 /// </list>
 /// </summary>
 public sealed class TownDutySystem(PopulationData data, PopulationSystem population, CarrySystem carry, TownDutySettings? settings = null) : ITickSystem, IStateHashed, IDecisionOwner
@@ -264,8 +264,9 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
                 }
                 var at = table.Next[slot].Position;
                 var town = AiSystem.TownAt(data, world, at);
-                // 131 Looting food, in whatever town it is in (the original's target town, else the current one).
-                if (loot[role] == 1 && !town.IsNone && !HoldsFood(cold) && Store(world, at, town, cold.Faction) is var (lootId, lootSpot))
+                // 131 Looting food and 243 below search the blackboard's target town (Blackboard.Destination), else the current one, else the 3 x 3 zone cells round the member (FUN_1408cb650).
+                var foodTown = squad.Ai is { Destination.IsNone: false } target ? target.Destination : town;
+                if (loot[role] == 1 && !HoldsFood(cold) && Store(world, at, foodTown, cold.Faction) is var (lootId, lootSpot))
                 {
                     cold.Engaged = true;
                     duties.Add(new TownDuty { Member = member, Faction = cold.Faction, Town = town, Kind = TownDutyKind.LootFood, Target = lootId, Goal = lootSpot });
@@ -280,8 +281,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
                     TaskStart.Walk(world, slot, stashSpot, SpeedMode.Walk, RowOf(TownDutyKind.Stash), TaskSource.Goal);
                     continue;
                 }
-                if (town.IsNone) continue;
-                bool mine = MyTown(world, squad, town);
+                bool mine = !town.IsNone && MyTown(world, squad, town);
                 if (mine && intruders[role] == 1 && downed.Count > 0 && Intruder(world, slot, cold, town) is >= 0 and var body
                     && carry.BeginPickUp(world, slot, table.IdOf(body), CharacterTask.Idle, source: TaskSource.Goal, row: TaskType.PICKUP_INTRUDERS_TOWN))
                 {
@@ -300,7 +300,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
                 }
                 // 243 needs no own town (FUN_1408cb650); a player-side member takes only from its own faction's stores (FUN_1408dac20). 244 starts only with room for the item (state 82,
                 // FUN_14059bd80: the inventory, else the worn bag) and with no sensed ally fighting (state !12, AiSystem.AlliesFighting).
-                if (food[role] == 1 && !HoldsFood(cold) && Store(world, at, town, owner: cold.Faction == world.Player.Faction ? cold.Faction : -1) is var (id, spot) && FoodFits(world, id, cold)
+                if (food[role] == 1 && !HoldsFood(cold) && Store(world, at, foodTown, owner: cold.Faction == world.Player.Faction ? cold.Faction : -1) is var (id, spot) && FoodFits(world, id, cold)
                     && world.SystemOf<AiSystem>()?.AlliesFighting(world, slot) != true)
                 {
                     cold.Engaged = true;
@@ -472,10 +472,10 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
         var here = Flat(at);
         (string, Vector2)? best = null;
         float bestD = float.MaxValue;
-        if (town.PlayerTown > 0)
+        if (town.PlayerTown > 0 || town.IsNone)
             foreach (var m in world.Machines.All)
             {
-                if (m.Storage is not { } s || !s.Items.Any(i => Edible(i, animal)) || world.Buildings.Find(m.Site) is not { Complete: true } site || site.Town != town.PlayerTown) continue;
+                if (m.Storage is not { } s || !s.Items.Any(i => Edible(i, animal)) || world.Buildings.Find(m.Site) is not { Complete: true } site || !InScope(world, town, at, CampaignTown.OfPlayer(site.Town), site.Position)) continue;
                 if (owner >= 0 && site.Owner != owner || animal && site.Parent is not null) continue;
                 float d = Vector2.DistanceSquared(here, Flat(site.Position));
                 if (d < bestD) (best, bestD) = ((m.Site, Flat(site.Position)), d);
@@ -483,11 +483,23 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
         foreach (var f in world.Fixtures.All)
         {
             if (looter >= 0 && f.Owner == looter || owner >= 0 && f.Owner != owner) continue;
-            if (f.Contents is not { } c || f.Lock is { EffectivelyLocked: true } || !c.Items.Any(i => Edible(i, animal)) || AiSystem.TownAt(data, world, f.Position) != town) continue;
+            if (f.Contents is not { } c || f.Lock is { EffectivelyLocked: true } || !c.Items.Any(i => Edible(i, animal)) || !InScope(world, town, at, AiSystem.TownAt(data, world, f.Position), f.Position)) continue;
             float d = Vector2.DistanceSquared(here, Flat(f.Position));
             if (d < bestD) (best, bestD) = ((f.Id, Flat(f.Position)), d);
         }
         return best;
+    }
+
+    /// <summary>
+    /// Whether a store belongs to the food finder's search (<c>FUN_1408cb650</c> over <c>FUN_1409fc540</c>, <b>Verified</b>): in the given town, or, with no town, within the 3 x 3 zone cells round the looter
+    /// (<paramref name="storeTown"/> is the store's town for a placed one and the player town's number for a player's site; a machine is in the town when it is that player town).
+    /// </summary>
+    static bool InScope(World world, CampaignTown town, Vector3 at, CampaignTown storeTown, Vector3 storePosition)
+    {
+        if (!town.IsNone) return storeTown == town;
+        var a = Meitou.Data.World.WorldLayout.ZoneOf(at.X, at.Z);
+        var b = Meitou.Data.World.WorldLayout.ZoneOf(storePosition.X, storePosition.Z);
+        return Math.Abs(a.X - b.X) <= 1 && Math.Abs(a.Y - b.Y) <= 1;
     }
 
     /// <summary>Food the finder looks for: <c>item function</c> 3, for an animal also raw food (15).</summary>
