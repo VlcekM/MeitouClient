@@ -979,7 +979,7 @@ Arrests, the recognition meter and the marker are hashed only while set. What a 
 - **Rounds** (`LockSystem.Rounds.cs`, serial; a sweep every 30 ticks starts at most 4, at most 8 run; the worker is
   `Engaged`; each lock takes the owner's 3.3 s): **release** (211): an awake prisoner whose sentence is served is freed by an NPC of the
   cage's faction with goal 211 in its role list and hours (the finder has no booking test, skips an occupant the jailer regards as an enemy, and only that goal frees, **Verified** `FUN_1408cf3c0`; police-like NPCs without it never do),
-  nearest within 1500, who walks there, unlocks and `Release`s in its faction's name; engine: in a cage of a faction that books bounties, none such,
+  driven by each such jailer (`FUN_1408cf3c0`, **Verified**: the first cage of the jailer's town and faction in the 3 x 3 zone cells round it, no radius), who walks there, unlocks and `Release`s in its faction's name; engine: in a cage of a faction that books bounties, no NPC of the faction holds the goal,
   3 failed walks or 120 s, and the system frees it; the cages of non-booking factions wait for a 211 holder. **Lock-up** (155, 197): while
   a member has the goal in its hours a free member with it locks every door of the home (155 only with every member
   inside, engine: within the home's farthest node + 10; neither with a stranger inside; a 197 worker prefers a member already outside and otherwise leaves the home first, then works each door within 45 of it, [locks](game/locks.md)); when no member's goal is in its

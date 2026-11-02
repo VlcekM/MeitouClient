@@ -49,8 +49,8 @@ public sealed class Round
 /// meanwhile (<see cref="CharacterCold.Engaged"/>). The work at a lock is the owner's lock/unlock time, 0.3 per second (<b>Verified</b>).
 /// <list type="bullet">
 /// <item><b>Release</b> (211 "police free prisoners", economy.md 11.5): an awake prisoner whose sentence is served is freed by an NPC of the cage's faction whose role list holds goal 211 in
-/// its hours (the finder <c>FUN_1408cf3c0</c> has no booking test and only that goal frees, <b>Verified</b>), the nearest within <see cref="ReleaserRange"/>: it walks there, unlocks the cage
-/// and lets the prisoner out (<see cref="FixtureRegistry.Release"/> in its faction's name). <b>Engine choice</b>: in a cage of a faction that books bounties, with no such NPC, or after
+/// its hours (the finder <c>FUN_1408cf3c0</c> has no booking test and only that goal frees, <b>Verified</b>), the first such jailer to find a cage of its town and faction within one zone cell: it walks there, unlocks the cage
+/// and lets the prisoner out (<see cref="FixtureRegistry.Release"/> in its faction's name). <b>Engine choice</b>: in a cage of a faction that books bounties, when no NPC of the faction holds the goal, or after
 /// <see cref="ReleaseTimeout"/>, the system frees it in the jail faction's name; cages of factions that book none (slavers, bandits, the player's) are freed by a 211 holder or nobody.</item>
 /// <item><b>Lock-up</b> (155, 197): while a member's role list holds the goal in its hours, a free member that has it locks every door of the squad's home, door by door; 155 only
 /// once every member is inside (engine: within the home's extent) and, for both, no stranger is (<c>!strangers in house</c>). When no member's goal is in its hours any more,
@@ -66,7 +66,7 @@ public sealed partial class LockSystem : IStateHashed
     public const float LockWorkSeconds = 1 / 0.3f;
     /// <summary>Engine choices of the rounds (see the class remarks).</summary>
     public const int RoundEveryTicks = 30, MaxRounds = 8, MaxNewRounds = 4, RoundWalks = 3;
-    public const float ReleaserRange = AggroSystem.OutdoorSight, ReleaseTimeout = 120, WalkSlack = 200;
+    public const float ReleaseTimeout = 120, WalkSlack = 200;
     /// <summary>The reach of state 126 AT_LOCATION_BUILDING_DOOR_OUTSIDE for a door (<c>FUN_140596e90</c> against the door's reach range, 45, <b>Observed</b>); a lock-up from outside works a door within it.</summary>
     public const float DoorReach = 45;
     /// <summary>How far past the home's extent a leaving worker walks (<b>engine choice</b>).</summary>
@@ -181,41 +181,58 @@ public sealed partial class LockSystem : IStateHashed
         LockUpSweep(world, ref started);
     }
 
+    /// <summary>
+    /// The release rounds are driven by each goal-211 jailer (the finder <c>FUN_1408cf3c0</c>, <b>Verified</b>): the cages of its town and faction within one zone cell of it (<c>FUN_1409fc450</c>,
+    /// <c>FUN_1409fb880</c>: the 3 x 3 cells round the jailer, a building of the given town and faction), the first in list order whose prisoner is held, up, served and not already being freed;
+    /// no radius, no nearest-jailer choice. <b>Engine choice</b>: a served prisoner of a booking faction is freed by the system only when no NPC of that faction holds goal 211 in its hours.
+    /// </summary>
     void ReleaseSweep(World world, ref int started)
     {
         if (Crimes is null) return;
         var table = world.Characters;
-        var next = table.Next;
         int hour = world.Hour;
-        for (int s = 0; s < table.HighWater; s++)
+        var holders = new HashSet<int>();
+        for (int w = 0; w < table.HighWater; w++)
         {
-            if (!next[s].Alive || table.Cold(s) is not { IsImprisoned: true, InWhat: { } where } c || c.Medical is { Incapacitated: true }) continue;
-            if (!FixtureRegistry.SentenceServed(c, world.GameHours) || world.Fixtures.Find(where) is not { } cage) continue;
-            var prisoner = table.IdOf(s);
-            // A jailer frees no prisoner it regards as an enemy (FUN_1408cf3c0 asks vfunc 0x3e8, isEnemy; the jailers are the cage owner's faction): the prisoner stays caged, the fallback included.
-            if (Busy(prisoner) || CharacterFacts.RegardsEnemy(Crimes.Relations, cage.Owner, c.Faction)) continue;
-            int releaser = -1;
-            float bestD2 = ReleaserRange * ReleaserRange;
-            for (int w = 0; w < table.HighWater; w++)
+            if (!table.Next[w].Alive || table.Cold(w) is not { IsPlayer: false } wc || !HasGoal(world, w, wc, TaskType.POLICE_FREE_PRISONERS_WHEN_DONE, hour)) continue;
+            holders.Add(wc.Faction);
+            if (!Free(world, w)) continue;
+            if (rounds.Count >= MaxRounds || started >= MaxNewRounds) continue;
+            if (FirstServed(world, w, wc) is not { } cage || table.IdOf(w) == cage.Occupant) continue;
+            if (Start(world, w, new Round
             {
-                if (w == s || !next[w].Alive || table.Cold(w) is not { IsPlayer: false } wc || wc.Faction != cage.Owner || !HasGoal(world, w, wc, TaskType.POLICE_FREE_PRISONERS_WHEN_DONE, hour) || !Free(world, w)) continue;
-                float d2 = Vector3.DistanceSquared(next[w].Position, cage.Position);
-                if (d2 >= bestD2 && releaser >= 0 || d2 > ReleaserRange * ReleaserRange) continue;
-                (releaser, bestD2) = (w, d2);
-            }
-            if (releaser < 0)
-            {
-                // Nobody to do it: a booking jail's faction frees it (engine); the rest of the cages wait for a 211 holder.
-                if (Crimes.Factions.Books(cage.Owner)) world.Fixtures.Release(world, prisoner, cage.Owner, Crimes);
-                continue;
-            }
-            if (rounds.Count >= MaxRounds || started >= MaxNewRounds) return;
-            if (Start(world, releaser, new Round
-            {
-                Kind = RoundKind.Release, Worker = table.IdOf(releaser), Faction = table.Cold(releaser)!.Faction, Targets = [cage.Id], Prisoner = prisoner,
-                Reach = cage.UseRange + Reach,
+                Kind = RoundKind.Release, Worker = table.IdOf(w), Faction = wc.Faction, Targets = [cage.Id], Prisoner = cage.Occupant, Reach = cage.UseRange + Reach,
             }, cage)) started++;
         }
+        for (int s = 0; s < table.HighWater; s++)
+            if (table.Next[s].Alive && Served(world, s) is { } cage && !holders.Contains(cage.Owner) && Crimes.Factions.Books(cage.Owner) && !Busy(table.IdOf(s)))
+                world.Fixtures.Release(world, table.IdOf(s), cage.Owner, Crimes);   // nobody to do it: a booking jail's faction frees it (engine)
+    }
+
+    /// <summary>
+    /// The cage of the prisoner in <paramref name="s"/> when it is held, awake, its sentence served and not an enemy of the cage's faction (<c>FUN_1408cf3c0</c> asks vfunc <c>0x3e8</c>, isEnemy:
+    /// a jailer frees no prisoner it regards as an enemy, the booking-jail fallback included, <b>Verified</b>); null otherwise.
+    /// </summary>
+    Fixture? Served(World world, int s) =>
+        world.Characters.Cold(s) is { IsImprisoned: true, InWhat: { } where } c && c.Medical is not { Incapacitated: true } && FixtureRegistry.SentenceServed(c, world.GameHours)
+            && world.Fixtures.Find(where) is { } cage && !CharacterFacts.RegardsEnemy(Crimes!.Relations, cage.Owner, c.Faction) ? cage : null;
+
+    /// <summary>The first cage in list order of the jailer's town and faction within one zone cell of it whose prisoner is due for release and not already in a round.</summary>
+    Fixture? FirstServed(World world, int jailer, CharacterCold jc)
+    {
+        var table = world.Characters;
+        var at = table.Next[jailer].Position;
+        var cell = WorldLayout.ZoneOf(at.X, at.Z);
+        int town = jc.Ai?.Squad.Ai?.Town ?? -1;
+        foreach (var f in world.Fixtures.All)
+        {
+            if (f.Kind != FixtureKind.Cage || f.Owner != jc.Faction || town >= 0 && f.Site != town || FixtureRegistry.IsFree(table, f)) continue;
+            var there = WorldLayout.ZoneOf(f.Position.X, f.Position.Z);
+            if (Math.Abs(there.X - cell.X) > 1 || Math.Abs(there.Y - cell.Y) > 1) continue;
+            if (!table.TryResolveNext(f.Occupant, out int p) || Served(world, p) != f || Busy(f.Occupant)) continue;
+            return f;
+        }
+        return null;
     }
 
     void LockUpSweep(World world, ref int started)
