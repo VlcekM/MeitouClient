@@ -231,6 +231,12 @@ skill x 0.8 when treating oneself and q = min(skill, kit quality):
   parts takes about n times as long, and n times the charges, as one with a single part of the same damage.
 - **Drain** = lerp(`medkit drain 99`, `medkit drain 1`, (100 - skill) / 100) x dt (skill, not q), x `robot medic speed mult` for a
   robot kit (function 12).
+- **Reach.** The original's reach rule is **Unknown**. **Observed** (one run, an original save with a prisoner caged upstairs in the Rebirth
+  Slave Shop): its two treating guards stood 17 and 23 units from the patient, on the patient's floor. Meitou (engine choice,
+  `FirstAidSettings`): within `Reach` 14 on X/Z and `ReachHeight` 35 in height of the treatment spot, walked to on its floor (`GoalHeight`).
+  The spot is the patient, or for a caged one its cage's use node in front of the door (`FixtureRegistry.ExitSpot`). With X/Z alone and the
+  patient as the spot, a medic stopped on the floor below (8 across, 65 down) and treated through it; with the patient's height but no
+  use node, it found no way into the cage and stayed below.
 - **Player only.** The bandaging step drains only when the medic's faction is the player's (Faction +0x250); NPC medics use up kits
   only on wounds.
 - **Kitless.** `Task_FirstAid` (`FUN_1403563a0`) skips the kit search when the medic is not the player's and the patient is

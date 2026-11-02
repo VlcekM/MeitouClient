@@ -27,6 +27,12 @@ public sealed class FirstAidSettings
 {
     /// <summary>The medic treats from this far (X/Z units) and a path to the patient ends here; above the movement system's arrival radius (10), so a medic that has walked up is in reach.</summary>
     public float Reach { get; init; } = 14;
+    /// <summary>
+    /// The most the medic and the treatment spot (the patient, or a caged one's cage use node) may differ in height and still be in reach: the same floor, as
+    /// <see cref="Dialogue.DialogueSystem.TalkHeight"/> for talking. Without it a medic under an upstairs patient treated through the floor (<b>Observed</b>: the original's
+    /// medics climb to a caged patient's floor, docs/game/character-stats.md "First aid").
+    /// </summary>
+    public float ReachHeight { get; init; } = 35;
     /// <summary>A moving medic or patient (units per second) is not still: the original needs the patient to stand still (<c>targetStandingStill</c>), a knocked-out one always does.</summary>
     public float StillSpeed { get; init; } = 1;
     /// <summary>A kit in a squad mate's inventory is used when this close (the same reach as sharing food).</summary>

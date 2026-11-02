@@ -202,10 +202,20 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
         cold.TreatKit = null;
     }
 
-    static float Gap(in CharacterHot a, in CharacterHot b)
+    /// <summary>
+    /// Where a medic treats <paramref name="patient"/> from: a caged one's cage use node (in front of its door, <see cref="FixtureRegistry.ExitSpot"/>; the medic cannot stand in
+    /// the cage), else where the patient is.
+    /// </summary>
+    static Vector3 TreatSpot(World world, CharacterCold patient, in CharacterHot at) =>
+        patient is { IsImprisoned: true, InWhat: { } id } && world.Fixtures.Find(id) is { Kind: FixtureKind.Cage } cage && FixtureRegistry.ExitSpot(cage) is { } door
+            ? door
+            : at.Position;
+
+    /// <summary>In reach of the treatment spot: within <see cref="FirstAidSettings.Reach"/> on X/Z and <see cref="FirstAidSettings.ReachHeight"/> in height (on its floor).</summary>
+    bool InReach(in CharacterHot medic, Vector3 spot)
     {
-        float dx = a.Position.X - b.Position.X, dz = a.Position.Z - b.Position.Z;
-        return MathF.Sqrt(dx * dx + dz * dz);
+        float dx = medic.Position.X - spot.X, dz = medic.Position.Z - spot.Z;
+        return dx * dx + dz * dz <= Settings.Reach * Settings.Reach && MathF.Abs(medic.Position.Y - spot.Y) <= Settings.ReachHeight;
     }
 
     // ------------------------------------------------------------------ walking to the patient
@@ -227,7 +237,8 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
                 continue;
             }
             const ushort Path = (ushort)MoveFlags.AnyPath;
-            if (t == i || Gap(next[i], next[t]) <= Settings.Reach)
+            var spot = TreatSpot(world, table.Cold(t)!, next[t]);
+            if (t == i || InReach(next[i], spot))
             {
                 // In reach (or treating itself): stand still and let the Act step work.
                 if ((n.Flags & Path) != 0)
@@ -240,13 +251,12 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
                 continue;
             }
             n.TaskTime -= dt;
-            var goal = new Vector2(next[t].Position.X, next[t].Position.Z);
+            var goal = new Vector2(spot.X, spot.Z);
             bool asking = (n.Flags & (ushort)(MoveFlags.NeedPath | MoveFlags.Pending)) != 0;
             // No way to the patient: no path, or one that ends short of the asked goal (the walkability answers an unreachable goal with the way to the reachable point nearest it). The
             // original's task walk reports it (notifyPathImpossible): the patient goes on the medic's path failures for 20 s, which the finder skips, and the treatment ends. Without it
             // a medic asked for the same hopeless path every half second (issue #124: searches run to the iteration limit, ~280 MB/s of garbage).
-            if (!asking && (cold.PathFailed || (n.Flags & (ushort)MoveFlags.HasPath) != 0 && cold.Path.Length > 0
-                && Vector2.Distance(new Vector2(cold.Path[^1].X, cold.Path[^1].Z), n.Goal) > Settings.Reach))
+            if (!asking && (cold.PathFailed || (n.Flags & (ushort)MoveFlags.HasPath) != 0 && cold.Path.Length > 0 && EndsShort(cold.Path[^1], n.Goal, spot.Y)))
             {
                 cold.PathFailed = false;
                 PursuitSystem.GiveUp(world, cold, table.IdOf(t));
@@ -256,11 +266,16 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
             bool stale = (n.Flags & (ushort)MoveFlags.HasPath) == 0 || Vector2.DistanceSquared(goal, n.Goal) > PursuitSystem.RepathDistance * PursuitSystem.RepathDistance;
             if (asking || !stale || n.TaskTime > 0) continue;
             n.Goal = goal;
+            (cold.GoalHeight, cold.GoalHeightAt) = (spot.Y, goal);   // the spot's floor: an upstairs patient is walked to up the stairs, not to the ground below it
             n.Mode = SpeedMode.Free;
             n.Flags |= (ushort)MoveFlags.NeedPath;
             n.TaskTime = PursuitSystem.RepathSeconds;
         }
     }
+
+    /// <summary>A path whose last waypoint is farther than the reach from the goal on X/Z, or off the treatment spot's floor: the patient cannot be got to.</summary>
+    bool EndsShort(Vector3 end, Vector2 goal, float spotHeight) =>
+        Vector2.Distance(new Vector2(end.X, end.Z), goal) > Settings.Reach || MathF.Abs(end.Y - spotHeight) > Settings.ReachHeight;
 
     // ------------------------------------------------------------------ the treatment
 
@@ -270,7 +285,6 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
         var prev = table.Previous;
         var next = table.Next;
         float still2 = Settings.StillSpeed * Settings.StillSpeed;
-        float reach = Settings.Reach;
         for (int i = part.Start; i < part.End; i++)
         {
             if (!prev[i].Alive || next[i].Task != (byte)CharacterTask.Treat) continue;
@@ -283,7 +297,7 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
             if (Speed2(prev[i].Velocity) > still2) continue;
             if (t != i)
             {
-                if (Gap(prev[i], prev[t]) > reach) continue;
+                if (!InReach(prev[i], TreatSpot(world, table.Cold(t)!, prev[t]))) continue;
                 if (!patient.Incapacitated && Speed2(prev[t].Velocity) > still2) continue;
             }
             effects.Emit(i, t, EffectTreat);
