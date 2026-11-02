@@ -162,7 +162,7 @@ public sealed unsafe class TerrainTextures : IDisposable
     public List<string> Messages { get; } = [];
 
     /// <summary>No decoding or uploading is outstanding for what the last <see cref="Update"/> needed.</summary>
-    public bool Idle => inFlight == 0 && nearPending == 0 && mapJob is null && !mapUploading && needed.All(b => state[b].Pairs.All(p => p.FarReady || p.Failed)) &&
+    public bool Idle => inFlight == 0 && nearPending == 0 && (mapJob is null && !mapUploading || mapTarget is not null) && needed.All(b => state[b].Pairs.All(p => p.FarReady || p.Failed)) &&
                         !pairs.Values.Any(p => p.Loading) && (MapState != 1 || mapWindows is null);
 
 
@@ -405,7 +405,7 @@ public sealed unsafe class TerrainTextures : IDisposable
             while (decoded.TryDequeue(out var d)) Install(d, uploads);
             UpdateBiomes(eye, materialDistance, ahead, kept);
         }
-        UpdateMaps(eye, uploads);
+        UpdateMaps(eye, uploads, kept);
         if (cellsDirty) { UploadCells(); fieldDirty = true; }
         if (fieldDirty) UploadField();
     }
@@ -875,13 +875,29 @@ public sealed unsafe class TerrainTextures : IDisposable
 
     int validPx = int.MinValue, validPz = int.MinValue;
 
+    /// <summary>
+    /// A window pair uploaded but not drawn, round a kept point outside the drawn window ("Keep textures at characters"): when the eye arrives there
+    /// it is swapped with the drawn pair (the shaders read whichever is current), and the pair it replaces stays as the standby for where the eye was.
+    /// </summary>
+    sealed class MapStandby
+    {
+        public TerrainTexture Overlay = null!, Colour = null!;
+        public int Px = int.MinValue, Pz = int.MinValue;
+        public bool Valid;
+    }
+    readonly List<MapStandby> mapStandbys = [];
+    /// <summary>The standby the running compose and its upload write, or null: the drawn pair.</summary>
+    MapStandby? mapTarget;
+    /// <summary>At most this many standby pairs (about 45 MB of video memory each: the 2048² RGBA8 overlay and the 4096² BC3 colour with their levels).</summary>
+    const int MaxMapStandbys = 2;
+
     void AllocateMaps()
     {
         overlayTexture = EmptyMap(InternalFormat.Rgba8, mapWindows!.OverlayPixels, MapLevels, "terrain overlay map");
         colourTexture = EmptyMap(mapWindows.CompressedColour ? FormatOf(diffuse: true) : InternalFormat.Rgba8, mapWindows.ColourPixels, MapLevels, "terrain colour map");
     }
 
-    void UpdateMaps(Vector3 eye, UploadQueue uploads)
+    void UpdateMaps(Vector3 eye, UploadQueue uploads, IReadOnlyList<Vector3>? kept)
     {
         if (mapWindows is null || MapState == 0) return;
         if (mapJob is { IsCompleted: true } job)
@@ -890,20 +906,70 @@ public sealed unsafe class TerrainTextures : IDisposable
             MapWindows.Update? result = null;
             try { result = job.Result; }
             catch (AggregateException e) { Console.WriteLine($"warning   overlay maps: {e.InnerException?.Message ?? e.Message}"); }
-            if (result is null) { if (MapState == 1) MapState = 0; }
-            else BeginMapUpload(result, uploads);
+            if (result is null) { if (MapState == 1 && mapTarget is null) MapState = 0; }
+            else BeginMapUpload(result, uploads, mapTarget);
         }
         if (mapJob is not null || mapUploading) return;
         var (px, pz) = mapWindows.DesiredOrigin(eye.X, eye.Z);
         // In 64 bits: the unset origin is int.MinValue, and 0 - int.MinValue wraps back to it in 32 (Math.Abs then throws).
-        bool far = Math.Abs((long)px - validPx) > mapWindows.RecentreOverlayPixels || Math.Abs((long)pz - validPz) > mapWindows.RecentreOverlayPixels;
-        if (MapState == 2 && !far) return;
+        bool Near(int ax, int az, int bx, int bz, int reach) => Math.Abs((long)ax - bx) <= reach && Math.Abs((long)az - bz) <= reach;
+        int recentre = mapWindows.RecentreOverlayPixels;
+        bool far = !Near(px, pz, validPx, validPz, recentre);
+        if (MapState == 2 && far && mapStandbys.Find(s => s.Valid && Near(px, pz, s.Px, s.Pz, recentre)) is { } ready)
+        {
+            // The eye jumped to a kept character: its standby is drawn at once (a move within the recentre distance follows as usual).
+            (overlayTexture, ready.Overlay) = (ready.Overlay, overlayTexture!);
+            (colourTexture, ready.Colour) = (ready.Colour, colourTexture!);
+            (validPx, ready.Px) = (ready.Px, validPx);
+            (validPz, ready.Pz) = (ready.Pz, validPz);
+            Region = mapWindows.RegionOf(validPx, validPz);
+            return;
+        }
+        if (MapState == 2 && !far)
+        {
+            PrepareMapStandby(kept);
+            return;
+        }
         (int, int)? old = MapState == 2 ? (validPx, validPz) : null;
+        mapTarget = null;
         mapJob = BackgroundWork.Run(() => mapWindows.Compose(px, pz, old));
     }
 
-    void BeginMapUpload(MapWindows.Update update, UploadQueue uploads)
+    /// <summary>
+    /// Starts composing a standby pair for the first kept point that is neither well inside the drawn window (a quarter of its width from its middle) nor
+    /// near a standby's origin, in place of a standby no kept point is near (or a new one, up to <see cref="MaxMapStandbys"/>).
+    /// </summary>
+    void PrepareMapStandby(IReadOnlyList<Vector3>? kept)
     {
+        if (kept is null || kept.Count == 0 || mapWindows is not { } windows) return;
+        int recentre = windows.RecentreOverlayPixels, cover = windows.OverlayPixels / 4;
+        bool Near(int ax, int az, int bx, int bz, int reach) => Math.Abs((long)ax - bx) <= reach && Math.Abs((long)az - bz) <= reach;
+        foreach (var point in kept)
+        {
+            var (kx, kz) = windows.DesiredOrigin(point.X, point.Z);
+            if (Near(kx, kz, validPx, validPz, cover) || mapStandbys.Any(s => s.Valid && Near(kx, kz, s.Px, s.Pz, recentre))) continue;
+            var slot = mapStandbys.Find(s => !kept.Any(k => { var (x, z) = windows.DesiredOrigin(k.X, k.Z); return s.Valid && Near(x, z, s.Px, s.Pz, recentre); }));
+            if (slot is null)
+            {
+                if (mapStandbys.Count >= MaxMapStandbys) return;
+                slot = new MapStandby
+                {
+                    Overlay = EmptyMap(InternalFormat.Rgba8, windows.OverlayPixels, MapLevels, "terrain overlay map standby"),
+                    Colour = EmptyMap(windows.CompressedColour ? FormatOf(diffuse: true) : InternalFormat.Rgba8, windows.ColourPixels, MapLevels, "terrain colour map standby"),
+                };
+                mapStandbys.Add(slot);
+            }
+            (int, int)? old = slot.Valid ? (slot.Px, slot.Pz) : null;
+            slot.Valid = false;   // written from now on
+            mapTarget = slot;
+            mapJob = BackgroundWork.Run(() => windows.Compose(kx, kz, old));
+            return;
+        }
+    }
+
+    void BeginMapUpload(MapWindows.Update update, UploadQueue uploads, MapStandby? target)
+    {
+        var (overlayTarget, colourTarget) = target is null ? (overlayTexture, colourTexture) : (target.Overlay, target.Colour);
         mapUploading = true;
         // Every piece comes with its mip levels from the worker and goes up in slabs of about 2 MB: whole rows of pixels, of 4 × 4 blocks for BC3 colour.
         foreach (var piece in update.Pieces)
@@ -920,15 +986,19 @@ public sealed unsafe class TerrainTextures : IDisposable
                     uploads.Add(() =>
                     {
                         using var batch = Gpu.Uploads.Begin();
-                        batch.Write((p.Colour ? colourTexture : overlayTexture)!.Texture, lv, 0, Rect(x, z + r0 * unit, w, n * unit), p.Levels[lv].AsSpan(r0 * rowBytes, n * rowBytes));
+                        batch.Write((p.Colour ? colourTarget : overlayTarget)!.Texture, lv, 0, Rect(x, z + r0 * unit, w, n * unit), p.Levels[lv].AsSpan(r0 * rowBytes, n * rowBytes));
                     }, "map slab");
                 }
             }
         uploads.Add(() =>
         {
-            Region = mapWindows!.RegionOf(update.Px0, update.Pz0);
-            (validPx, validPz) = (update.Px0, update.Pz0);
-            MapState = 2;
+            if (target is not null) (target.Px, target.Pz, target.Valid) = (update.Px0, update.Pz0, true);
+            else
+            {
+                Region = mapWindows!.RegionOf(update.Px0, update.Pz0);
+                (validPx, validPz) = (update.Px0, update.Pz0);
+                MapState = 2;
+            }
             mapUploading = false;
             update.Release();
         }, "map swap");
@@ -1136,6 +1206,7 @@ public sealed unsafe class TerrainTextures : IDisposable
     {
         foreach (var t in new[] { diffuseArray, normalArray, diffuseFar, normalFar, heightArray, reliefTexture, paramTexture, cellTexture, blendTexture, overlayTexture, colourTexture, groundTexture, worldColourTexture, fieldTexture })
             t?.Dispose();
+        foreach (var m in mapStandbys) { m.Overlay.Dispose(); m.Colour.Dispose(); }
     }
 }
 

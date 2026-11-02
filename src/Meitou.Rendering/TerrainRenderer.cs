@@ -229,7 +229,44 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
     /// Replaces the fine window: a new texture is filled in slabs through <paramref name="uploads"/> while the old
     /// one stays in use, then swapped in (so no frame waits for the whole upload).
     /// </summary>
-    public void BeginFineUpload(HeightWindow window, TerrainHeightBounds.Patch patch, UploadQueue uploads, Action? done = null)
+    public void BeginFineUpload(HeightWindow window, TerrainHeightBounds.Patch patch, UploadQueue uploads, Action? done = null) =>
+        UploadFine(window, patch, uploads, texture => { retired.Add((fineTexture, frameNumber)); Swap(new FineStandby(texture, window, patch)); }, done);
+
+    /// <summary>A fine window uploaded but not drawn ("Keep textures at characters": one round a character far from the eye), ready for <see cref="SwapFine"/>.</summary>
+    public sealed class FineStandby
+    {
+        internal FineStandby(TerrainTexture texture, HeightWindow window, TerrainHeightBounds.Patch? patch) => (Texture, Window, Patch) = (texture, window, patch);
+        internal TerrainTexture Texture { get; }
+        public HeightWindow Window { get; }
+        /// <summary>Applied to the bounds at the first swap (null once applied: the bounds only widen, so a window once drawn stays covered).</summary>
+        internal TerrainHeightBounds.Patch? Patch { get; set; }
+    }
+
+    /// <summary>Uploads a fine window as <see cref="BeginFineUpload"/> does, but hands it to <paramref name="ready"/> instead of drawing it.</summary>
+    public void BeginFineStandby(HeightWindow window, TerrainHeightBounds.Patch patch, UploadQueue uploads, Action<FineStandby> ready) =>
+        UploadFine(window, patch, uploads, texture => ready(new FineStandby(texture, window, patch)), null);
+
+    /// <summary>Draws <paramref name="next"/> from now on (no upload: it is resident) and returns the window it replaces as a standby.</summary>
+    public FineStandby SwapFine(FineStandby next)
+    {
+        var old = new FineStandby(fineTexture, fine, null);
+        Swap(next);
+        return old;
+    }
+
+    /// <summary>Lets a standby go (its texture is freed after the frames in flight).</summary>
+    public void DropFine(FineStandby standby) => retired.Add((standby.Texture, frameNumber));
+
+    void Swap(FineStandby next)
+    {
+        fineTexture = next.Texture;
+        fine = next.Window;
+        fineBand = BandOf(next.Window);
+        if (next.Patch is { } patch) bounds.Apply(patch);
+        next.Patch = null;
+    }
+
+    void UploadFine(HeightWindow window, TerrainHeightBounds.Patch patch, UploadQueue uploads, Action<TerrainTexture> finish, Action? done)
     {
         const int slabRows = 192;
         TerrainTexture? texture = null;
@@ -250,11 +287,7 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
         }
         uploads.Add(() =>
         {
-            retired.Add((fineTexture, frameNumber));
-            fineTexture = texture!;
-            fine = window;
-            fineBand = BandOf(window);
-            bounds.Apply(patch);
+            finish(texture!);
             done?.Invoke();
         }, "height swap");
     }

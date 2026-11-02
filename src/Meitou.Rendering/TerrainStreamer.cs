@@ -73,7 +73,18 @@ public sealed class TerrainStreamer : IDisposable
     readonly TerrainHeightmap map;
     readonly int cells, step;
     Task<(HeightWindow Window, TerrainHeightBounds.Patch Bounds)>? job;
-    bool swapping;
+    /// <summary>The standby the running job (and its upload) makes, or null: the job makes the drawn window.</summary>
+    bool jobStandby;
+    bool swapping, standbyUploading;
+    /// <summary>Uploaded windows round kept points far from the eye's window (<see cref="Kept"/>), swapped in when the eye arrives.</summary>
+    readonly List<TerrainRenderer.FineStandby> standbys = [];
+
+    /// <summary>At most this many standby windows (about 5 MB of video memory and 5 MB of memory each at step 1).</summary>
+    const int MaxStandbys = 3;
+
+    /// <summary>A kept point this near the drawn window's centre (a fraction of its width) needs no standby: a jump there keeps the
+    /// window's fine heights in view while the window moves.</summary>
+    const double CoverFraction = 0.3;
 
     /// <summary>Distance within which the full terrain material is wanted (biomes are loaded for the cells inside it).</summary>
     public float MaterialDistance { get; set; } = 30000;
@@ -97,7 +108,8 @@ public sealed class TerrainStreamer : IDisposable
         $"height windows {HeightWindows}" + (textures is null ? "" :
             $", biomes {textures.ResidentBiomes}/{textures.TotalBiomes} resident ({string.Join(", ", textures.Resident.Select(b => b.Name.Trim()))}), overlay/colour maps {(textures.MapState == 2 ? "loaded" : "missing")}");
 
-    public bool Idle => job is null && !swapping && uploads.Count == 0 && (textures?.Idle ?? true);
+    // A standby's read is not waited for (a far squad member does not hold up the loading screen).
+    public bool Idle => (job is null || jobStandby) && !swapping && uploads.Count == 0 && (textures?.Idle ?? true);
 
     /// <summary>Work in flight (decodes, window reads, queued upload steps), for the window title.</summary>
     public int Pending => (job is null ? 0 : 1) + uploads.Count + (textures?.Outstanding ?? 0);
@@ -109,7 +121,7 @@ public sealed class TerrainStreamer : IDisposable
     /// <summary>A character flight's arrival eye: the biome textures there load during the flight (the height window still moves only with the eye).</summary>
     public Vector3? Ahead { get; set; }
 
-    /// <summary>Points whose surrounding biome textures stay loaded besides the eye's ("Keep textures at characters").</summary>
+    /// <summary>Points whose surrounding biome textures, colour and overlay windows and fine heights stay loaded besides the eye's ("Keep textures at characters").</summary>
     public IReadOnlyList<Vector3> Kept { get; set; } = [];
     /// <summary>The ground's height under the eye, for which biome textures load (<see cref="TerrainTextures.GroundUnderEye"/>).</summary>
     public float GroundUnderEye { get; set; } = float.NegativeInfinity;
@@ -129,41 +141,83 @@ public sealed class TerrainStreamer : IDisposable
             try
             {
                 var (window, bounds) = done.Result;
-                swapping = true;
-                terrain.BeginFineUpload(window, bounds, uploads, () => { swapping = false; HeightWindows++; });
+                if (jobStandby)
+                {
+                    standbyUploading = true;
+                    terrain.BeginFineStandby(window, bounds, uploads, s => { standbys.Add(s); standbyUploading = false; });
+                }
+                else
+                {
+                    swapping = true;
+                    terrain.BeginFineUpload(window, bounds, uploads, () => { swapping = false; HeightWindows++; });
+                }
             }
             catch (AggregateException e)
             {
                 Console.WriteLine($"warning   height window: {e.InnerException?.Message ?? e.Message}");
             }
         }
-        if (job is null && !swapping && NeedsWindow(eye, out int column0, out int row0))
+        if (job is null && !swapping && !standbyUploading && NeedsWindow(terrain.Fine, eye, out int column0, out int row0))
         {
-            var watch = Stopwatch.StartNew();
-            job = BackgroundWork.Run(() =>
-            {
-                var window = map.ReadWindow(column0, row0, cells + 1, cells + 1, step);
-                var bounds = terrain.MeasureBounds(window);
-                LastWindowMs = watch.Elapsed.TotalMilliseconds;
-                return (window, bounds);
-            });
+            // A standby round where the eye now is (it jumped to a kept character): drawn at once, the window it replaces kept as a standby for where the eye was.
+            int ready = standbys.FindIndex(s => !NeedsWindow(s.Window, eye, out _, out _));
+            if (ready >= 0) { standbys[ready] = terrain.SwapFine(standbys[ready]); HeightWindows++; }
+            else Read(column0, row0, standby: false);
         }
+        else if (job is null && !swapping && !standbyUploading && step < WorldFrame.CoarseStep) PrepareStandby();
         if (textures is not null) textures.GroundUnderEye = GroundUnderEye;
         textures?.Update(eye, MaterialDistance, uploads, Ahead, Kept);
         uploads.Run(budgetMs);
     }
 
-    /// <summary>Whether the eye is outside the middle part of the current window, and where a window centred on it would start.</summary>
-    bool NeedsWindow(Vector3 eye, out int column0, out int row0)
+    void Read(int column0, int row0, bool standby)
+    {
+        var watch = Stopwatch.StartNew();
+        jobStandby = standby;
+        job = BackgroundWork.Run(() =>
+        {
+            var window = map.ReadWindow(column0, row0, cells + 1, cells + 1, step);
+            var bounds = terrain.MeasureBounds(window);
+            LastWindowMs = watch.Elapsed.TotalMilliseconds;
+            return (window, bounds);
+        });
+    }
+
+    /// <summary>
+    /// Starts reading a standby window for the first kept point that is neither near the drawn window's centre nor inside a standby's middle, in place of
+    /// a standby no kept point is in the middle of (or a new one, up to <see cref="MaxStandbys"/>).
+    /// </summary>
+    void PrepareStandby()
+    {
+        foreach (var point in Kept)
+        {
+            if (Within(terrain.Fine, point, CoverFraction) || standbys.Any(s => Within(s.Window, point, RecentreFraction))) continue;
+            if (standbys.Count >= MaxStandbys)
+            {
+                int idle = standbys.FindIndex(s => !Kept.Any(k => Within(s.Window, k, RecentreFraction)));
+                if (idle < 0) return;
+                terrain.DropFine(standbys[idle]);
+                standbys.RemoveAt(idle);
+            }
+            if (NeedsWindow(terrain.Fine, point, out int column0, out int row0)) Read(column0, row0, standby: true);
+            return;
+        }
+    }
+
+    static bool Within(HeightWindow w, Vector3 p, double fraction)
+    {
+        var (x0, z0) = w.WorldOf(0, 0);
+        double width = (w.Columns - 1) * (double)w.Spacing;
+        double dx = Math.Abs(p.X - (x0 + width / 2)), dz = Math.Abs(p.Z - (z0 + (w.Rows - 1) * (double)w.Spacing / 2));
+        return Math.Max(dx, dz) <= width * fraction;
+    }
+
+    /// <summary>Whether <paramref name="eye"/> is outside the middle part of <paramref name="fine"/>, and where a window centred on it would start.</summary>
+    bool NeedsWindow(HeightWindow fine, Vector3 eye, out int column0, out int row0)
     {
         (column0, row0) = (0, 0);
         if (step >= WorldFrame.CoarseStep) return false;   // as coarse as the whole-world grid: nothing to gain
-        var fine = terrain.Fine;
-        var (x0, z0) = fine.WorldOf(0, 0);
-        double width = (fine.Columns - 1) * (double)fine.Spacing;
-        double dx = Math.Abs(eye.X - (x0 + width / 2)), dz = Math.Abs(eye.Z - (z0 + (fine.Rows - 1) * (double)fine.Spacing / 2));
-        (column0, row0) = (0, 0);
-        if (Math.Max(dx, dz) <= width * RecentreFraction) return false;
+        if (Within(fine, eye, RecentreFraction)) return false;
         int align = step * 64, span = cells * step, max = map.Size - 1 - span;
         var (sc, sr) = WorldLayout.ToSample(eye.X, eye.Z);
         int Axis(double s) => Math.Clamp((int)Math.Round((s - span / 2.0) / align) * align, 0, Math.Max(max, 0));
@@ -189,6 +243,8 @@ public sealed class TerrainStreamer : IDisposable
     public void Dispose()
     {
         try { job?.Wait(5000); } catch (AggregateException) { }
+        foreach (var s in standbys) terrain.DropFine(s);
+        standbys.Clear();
         map.Dispose();
     }
 }

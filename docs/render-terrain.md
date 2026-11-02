@@ -49,6 +49,15 @@ that are not square multiples of 256 keep the RGBA8 path. The overlay window's d
 so a move decodes a PNG only when the window reaches a new tile (**Observed**, headless: a move 13-45 ms and ~0.1 MB allocated, was 170-320 ms
 and 17-29 MB with the tiles dropped after each).
 
+**Standby windows** ("Keep textures at characters", [render-objects.md](render-objects.md#kept-points)): a kept point outside the middle of the
+drawn window gets a standby copy, uploaded but not drawn, which is swapped in when the eye arrives there (the shaders read whichever is current, so
+nothing is composed or uploaded on the jump); the replaced copy stays as the standby for where the eye was. Colour/overlay
+(`TerrainTextures.MapStandby`, at most 2, ~45 MB each): for a point more than a quarter window from the drawn origin. Fine heights
+(`TerrainRenderer.FineStandby`, `TerrainStreamer`, at most 3, ~5 MB each at step 1): for a point beyond 0.3 of the window's width from its
+centre; the bounds take a standby's patch at its first swap (they only widen). A standby goes when a new point needs its place and no kept point is
+in its middle. Standby work does not hold up the loading screen. A standby compose shares the nine-tile overlay cache, so the eye's next move may
+decode its tiles again.
+
 ## Ground relief
 
 Meitou look, not in the game (`GroundRelief`). The parallax and the displacement are Faithful/Meitou switches `parallax` and
