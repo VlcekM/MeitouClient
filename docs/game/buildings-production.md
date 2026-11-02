@@ -660,7 +660,7 @@ the [layout's plant count](#farm-plants), not `amount`.
   Fertility factor F = `1 - (1 - f) x fertility effect`, 0 when f <= `minimum fertility`, f the GROUND resource
   (`FUN_1400e4320`, `vfunc_91`); F is also the yield. Both the water usage and F apply to indoor farms too, with no indoor branch
   (**Verified**, `FUN_1400e8420`): their effect 0 gives F = 1 unless the ground is at or below the minimum (the shipped indoor
-  FARM_DATA have `minimum fertility` -1, so never).
+  FARM_DATA have `minimum fertility` -1, so never). The biome crop terms of the crop match C (`FUN_1400dfe10`) and the rain top-up read where the farm stands instead (slot 59 `isIndoors`: interior furniture inside a building, **Verified**), not `fertility effect` 0, which is a separate byte: a hydroponic farm standing outdoors takes the biome match and rain; Meitou `Machine.Indoors`, set at creation and by the power tick. The ghost's popup keeps the flag (the ghost's parent is not read there, **Unknown**).
 - **Plants**: each has a growth g. Replant (`FUN_1400e48e0`): every g = -0.2 x U[0,1), `plant start` = their minimum,
   `plants harvested` 0, death d 0, clear progress 0, harvest progress 0, farm growth = `plant start`.
 - **Tick**, h = dt/(G/24): while the farm is not inside a building (slot 59 `isIndoors` null, **Verified**; or the byte at `+0x240` is set, meaning **Unknown**, treated as unset; the farm's own indoor flag, fertility effect 0, is not read, so a hydroponic farm standing outside is rained on; Meitou `Machine.Indoors`), rain fills the FIRST input's level by

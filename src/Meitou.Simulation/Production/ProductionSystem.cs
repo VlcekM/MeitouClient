@@ -140,10 +140,11 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         var p = site.Position;
         if (data.Farm is { } farm)
         {
-            // Indoor farms too (FUN_1400e8420): their fertility effect 0 makes the ground matter only at or below the minimum, and the biome's water usage applies.
+            // Every farm alike (FUN_1400e8420): the fertility effect 0 of a hydroponic one makes the ground matter only at or below the minimum, the biome's water usage applies, and the crop match is the biome's unless the farm stands inside a building.
             float fertility = resources.Value(MachineData.GroundResource, p.X, p.Y, p.Z);
             m.Yield = farm.FertilityFactor(fertility);
-            m.CropMatch = resources.CropMatch(farm, p.X, p.Z);
+            m.Indoors = data.InteriorFurniture && site.Parent is not null;   // slot 59 where the farm stands (the power tick keeps it)
+            m.CropMatch = resources.CropMatch(farm, p.X, p.Z, m.Indoors);
             m.WaterRate = farm.ConsumptionRate / MachineData.DaySeconds * resources.WaterUsage(p.X, p.Z);
             Replant(world, m);
         }

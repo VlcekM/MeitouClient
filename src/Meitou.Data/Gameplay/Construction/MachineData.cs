@@ -430,10 +430,13 @@ public sealed class ResourceField
         return band * r.GetFloat(p + " mult") + r.GetFloat(p + " min");
     }
 
-    /// <summary>The farm's crop match C = <c>arid</c> x the arid coverage + <c>green</c> x green + <c>swamp</c> x swamp (<b>Observed</b>, <c>FUN_1400dfe10</c>); 1 indoors.</summary>
-    public float CropMatch(FarmData farm, float x, float z)
+    /// <summary>
+    /// The farm's crop match C = <c>arid</c> x the arid coverage + <c>green</c> x green + <c>swamp</c> x swamp; 1 when the farm stands inside a building (<b>Verified</b>, <c>FUN_1400dfe10</c>: only
+    /// its isIndoors handle (slot 59) decides, not the farm's fertility effect 0).
+    /// </summary>
+    public float CropMatch(FarmData farm, float x, float z, bool indoors)
     {
-        if (farm.Indoor) return 1;
+        if (indoors || !HasMap) return 1;   // without an areas map (a bare sandbox) there is no biome to match: engine choice
         if (Resources(x, z) is not { } r) return 0;
         return farm.Arid * r.GetFloat("arid") + farm.Green * r.GetFloat("green") + farm.Swamp * r.GetFloat("swamp");
     }
