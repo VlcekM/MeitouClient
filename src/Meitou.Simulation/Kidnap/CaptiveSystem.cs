@@ -730,21 +730,22 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
 
     /// <summary>
     /// A character's "looks like a slave" level in 0..1 (status object +0xf4, shown by the inventory window's data panel and the status tooltip; <c>FUN_1405a51e0</c>, <b>Observed</b>, docs/game/ui-screens.md):
-    /// a sum over its worn kit, locked shackles 1; else the hat section empty 0.4 (when a character flag, <b>Unknown</b>, holds; taken as true), the body section empty 0.1, the legs section empty 0.1
-    /// or holding the owner's slave clothing 0.5, the boots section empty 0.1. An escaped slave (state 2) doubles it and keeps at least 0.1, an ex-slave (3) keeps at least 0.01; at most 1. Sections by the item slot ids: 3 head, 5 body (armour), 6 legs, 9 boots.
+    /// a sum over its worn kit: the hat section empty 0.4 (when a character flag, <b>Unknown</b>, holds; taken as true), the body section empty 0.1 or holding a locked piece 1, the legs section empty 0.1, a locked piece 1
+    /// or the owner's slave clothing 0.5, the boots section empty 0.1 or a locked piece 1 (a lock in any other section counts nothing). An escaped slave (state 2) doubles it and keeps at least 0.1, an ex-slave (3) keeps at least 0.01; at most 1. Sections by the item slot ids: 3 head, 5 body (armour), 6 legs, 9 boots.
     /// </summary>
     public float LooksLikeSlaveLevel(CharacterCold c)
     {
         if (c.Inventory is not { } inv) return 0;
-        if (LockSystem.WornShackles(c) is not null) return 1;
         string[] clothing = (uint)c.SlaveOwner < (uint)(data.Factions?.Count ?? 0) && data.Db.Find(data.Factions![c.SlaveOwner].Id) is { } owner
             ? [.. owner.GetReferences("slave clothing").Select(l => l.TargetStringId)] : [];
-        float level = 0;
-        if (!inv.Items.Any(i => i.Section == "head")) level += 0.4f;
-        if (!inv.Items.Any(i => i.Section == "armour")) level += 0.1f;
+        var armour = inv.Items.FirstOrDefault(i => i.Section == "armour");
         var legs = inv.Items.FirstOrDefault(i => i.Section == "legs");
-        level += legs is null ? 0.1f : clothing.Contains(legs.Record) ? 0.5f : 0;
-        if (!inv.Items.Any(i => i.Section == "boots")) level += 0.1f;
+        var boots = inv.Items.FirstOrDefault(i => i.Section == "boots");
+        // A locked piece counts 1 in the armour, legs and boots sections only (nothing in the head or any other section).
+        float level = inv.Items.Any(i => i.Section == "head") ? 0 : 0.4f;
+        level += armour is null ? 0.1f : armour.LockedOn ? 1 : 0;
+        level += legs is null ? 0.1f : legs.LockedOn ? 1 : clothing.Contains(legs.Record) ? 0.5f : 0;
+        level += boots is null ? 0.1f : boots.LockedOn ? 1 : 0;
         if (c.SlaveState == 2) level = MathF.Max(level * 2, 0.1f);
         if (c.SlaveState == 3) level = MathF.Max(level, 0.01f);
         return MathF.Min(level, 1);
