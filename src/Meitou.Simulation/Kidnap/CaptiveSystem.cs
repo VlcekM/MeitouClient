@@ -517,11 +517,11 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
 
     CaptiveJob? FateJob(World world, int slot, CharacterCold cold, Blackboard board, int site, CaptiveJobKind kind)
     {
-        if (FateTarget(world, slot, cold, board.OwnHome?.Key) is not { } cage || kind == CaptiveJobKind.Kill && !DrawWeapon(cold)) return null;
+        if (FateTarget(world, slot, cold, board.OwnHome?.Key, out bool fresh) is not { } cage || kind == CaptiveJobKind.Kill && !DrawWeapon(cold)) return null;
         var table = world.Characters;
         var worker = table.IdOf(slot);
-        // The finder has the occupant say "marked for death" to the one who picked it (event 10, FUN_1408d0d90).
-        world.Defer(new Dialogue.DialogueEvent(cage.Occupant, worker, MarkedForDeath) { Tick = world.Tick + 1 });
+        // A fresh choice has the occupant say "marked for death" to the one who picked it (event 10, FUN_1408d0d90; every character has a dialogue state, so the original's test for one never fails).
+        if (fresh) world.Defer(new Dialogue.DialogueEvent(cage.Occupant, worker, MarkedForDeath) { Tick = world.Tick + 1 });
         if (kind == CaptiveJobKind.Eat) cold.DrawnWeapon = WeaponKinds.None;   // 220's B list: !hasWeaponEquipped
         return new CaptiveJob { Kind = kind, Worker = worker, Captive = cage.Occupant, Cage = cage.Id, Faction = cold.Faction, Site = site };
     }
@@ -587,15 +587,27 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
     /// <c>occupied</c>, over the candidates of the worker's town (<see cref="FixtureRegistry.CageCandidates"/>: its town, else its faction's nearest, plus its home's) with the faction and usable tests of
     /// the finder (a cage of another faction only when <see cref="FixtureRegistry.CanUse"/> passes) and the weights clamp(1 - d^2 / 4608^2, 1e-5, 1), x100 own faction, x100 in the worker's home. Not
     /// one whose occupant is dead or another job's. A robot occupant (RACE <c>robot</c>) does not leave the cage out: the finder wrapper tests it only on the best cage, and then there is no target
-    /// this ask (<c>FUN_1408d0d90</c>, <b>Verified</b>).
+    /// this ask (<c>FUN_1408d0d90</c>, <b>Verified</b>). The wrapper remembers its choice (<see cref="AiMind.FateCage"/>, stored before the robot test): while the remembered cage holds a captive it is returned
+    /// as it is (no weighting, no robot test, <paramref name="fresh"/> false: no event 10); once it holds none the memory is cleared and the search runs again. <b>Engine choice</b>: a dead occupant counts as
+    /// none (the jobs work live captives only), and a remembered cage another job works is no target this ask.
     /// </summary>
-    Fixture? FateTarget(World world, int slot, CharacterCold cold, string? home)
+    Fixture? FateTarget(World world, int slot, CharacterCold cold, string? home, out bool fresh)
     {
+        fresh = false;
         var table = world.Characters;
+        var mind = cold.Ai;
+        if (mind?.FateCage is { } id)
+        {
+            if (world.Fixtures.Find(id) is { } kept && OccupantSlot(world, kept) is >= 0 and var held) return Taken(kept.Id) || Busy(table.IdOf(held)) ? null : kept;
+            mind.FateCage = null;
+        }
         var candidate = world.Fixtures.CageCandidates(world, data, cold, table.Next[slot].Position);
         var best = world.Fixtures.FindCage(world, cold, table.Next[slot].Position, home,
             f => !candidate(f) || Taken(f.Id) || OccupantSlot(world, f) is not (>= 0 and var s) || Busy(table.IdOf(s)), occupied: true);
-        return best is not null && OccupantSlot(world, best) is >= 0 and var occupant && table.Cold(occupant)!.Race is { IsRobot: true } ? null : best;
+        if (best is null) return null;
+        if (mind is not null) mind.FateCage = best.Id;
+        fresh = true;
+        return table.Cold(table.TryResolveNext(best.Occupant, out int o) ? o : slot)!.Race is { IsRobot: true } ? null : best;
     }
 
     /// <summary>All the cages of <paramref name="faction"/> in the town are held by live characters, and there is one (<c>FUN_1405a1ab0</c>, the state CAGES_ARE_ALL_FULL).</summary>

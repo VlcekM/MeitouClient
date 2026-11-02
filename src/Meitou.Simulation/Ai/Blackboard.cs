@@ -538,6 +538,11 @@ public sealed class AiMind
     public TownBuilding? ShopAt { get; set; }
     /// <summary>The world tick of its next unit at the shop (<c>Task_Shopping</c>, goal 119: a second after it arrived, then a second after each sale); 0: the task is not running. Not saved (the task is not).</summary>
     public long NextBuyTick { get; set; }
+    /// <summary>
+    /// The cage the kill and eat goals chose last (the AI memory's hand <c>+0x88</c>, <c>FUN_1408d0d90</c>, <b>Verified</b>): asked again while it still holds a captive, the finder returns it as it is. One memory
+    /// for goals 135, 139, 282 and the eat goals. Not saved.
+    /// </summary>
+    public string? FateCage { get; set; }
     /// <summary>The investigation's look-about count in seconds (<see cref="Crime.CrimeSystem.LookAboutSeconds"/>; the task starts it at 15).</summary>
     public float LookAbout { get; set; } = Crime.CrimeSystem.FirstLookAboutSeconds;
 
@@ -569,6 +574,7 @@ public sealed class AiMind
         if (Replan) hasher.Add(0x5265706C);
         if (LookAbout != Crime.CrimeSystem.FirstLookAboutSeconds) hasher.Add(LookAbout);
         if (NextBuyTick != 0) hasher.Add(NextBuyTick);
+        if (FateCage is { } fateCage) hasher.Add(Rng.StableHash(fateCage));
         Shopping.Hash(ref hasher);
     }
 }
