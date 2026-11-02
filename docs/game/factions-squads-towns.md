@@ -71,7 +71,7 @@ and `bar squads` (33). Two UNIQUE_SQUAD_TEMPLATEs exist (`General Epson Army`, `
   non-unique except `Protector Of The Flame`, which names itself, so it can be duplicated), or by nobody; a free one is claimed (handle
   reset) and created.
   So a dead unique (claimed stays set) never comes back, a v0 > 1 entry yields one copy plus replacements, and a missing leader does not stop the
-  squad (the first member made leads). The platoon's +0xac is set when a unique member is made (use **Unknown**).
+  squad (the first member made leads). The platoon's +0xac is set when a unique member is made (use **Unknown**). The new game's start (`FUN_140872e00` :661, :783) makes its template entries through `FUN_140583a10` with the player's faction, no exception, so those members are gated; its plain CHARACTER entries go to `FUN_140583400` ungated (**Verified** in the callee; which `squad` entry feeds which call is **Observed**). Meitou `StartPlayer` gates only what the templates made.
 - Death (`FUN_1407a6200`): state 0; player set (never cleared here) when the killer's faction is the player's. The dead unique's faction's
   "prosperity" (`FactionUniqueSquadManager` +8, see Special squads below) drops by 100, floor 0; the record's `unique` bool gates it (**Verified**, `FUN_1407a6200`). Meitou: `UniqueCharacters.Died` queues the faction of each unique that dies (once, on the change to dead), `PopulationSystem.StepProsperity` applies it at the next look.
 - Imprisoned in a cage or restraint (`FUN_140330600`): state ≠ 0 → 2, player set when the cage's owner is the player's. `DA_ENSLAVE_TARGETS_CARRIED_PERSON` / `DA_ARREST_TARGETS_CARRIED_PERSON` (0x28 / 0x1e), which

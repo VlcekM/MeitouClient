@@ -676,7 +676,7 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
         return list;
     }
 
-    Squad SpawnSquad(World world, BuiltSquad built, TownSite? site, float radius, bool player = false, int platoonId = -1, bool idle = false, float yaw = 0, bool pinned = false)
+    Squad SpawnSquad(World world, BuiltSquad built, TownSite? site, float radius, bool player = false, int platoonId = -1, bool idle = false, float yaw = 0, bool pinned = false, HashSet<int>? gated = null)
     {
         var table = world.Characters;
         var walk = world.Walkability;
@@ -694,7 +694,7 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
             HomeRadius = Math.Max(radius * 0.8f, 40),
             HomeBuilding = built.Home,
         };
-        var builtMembers = player || idle ? built.Members : GateUniques(world, built, squad.Id);
+        var builtMembers = idle || player && gated is null ? built.Members : GateUniques(world, built, squad.Id, gated);
         var leaderPlan = builtMembers.FirstOrDefault(m => m.Plan.Role == SquadRole.Leader)?.Plan;
         bool hasLeader = leaderPlan is not null;
         foreach (var member in builtMembers)
@@ -762,15 +762,15 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
     /// The unique-character gate (<c>FUN_1405836e0</c>, docs/game/factions-squads-towns.md "Unique characters") on the members of a squad about to be made, in the serial
     /// phase so two squads planned at once cannot both make one: a free unique is claimed and made; a claimed one (made elsewhere, dead) is replaced by its first
     /// <c>unique replacement spawn</c> (not gated, with a look rolled now; an animal keeps its look) or by nobody. The <c>animals</c> lists go through the same gate (<c>FUN_140583a10</c>). When the leader is
-    /// gone the first member left leads.
+    /// gone the first member left leads. <paramref name="only"/>: the member indexes to gate, the rest pass (a new game's squad: only what its templates made).
     /// </summary>
-    List<BuiltMember> GateUniques(World world, BuiltSquad built, int squadId)
+    List<BuiltMember> GateUniques(World world, BuiltSquad built, int squadId, HashSet<int>? only = null)
     {
         List<BuiltMember>? gated = null;
         for (int i = 0; i < built.Members.Count; i++)
         {
             var member = built.Members[i];
-            if (data.Db.Find(member.Plan.RecordId) is not { } record || !UniqueCharacters.IsUnique(record)
+            if (only is not null && !only.Contains(member.Plan.Index) || data.Db.Find(member.Plan.RecordId) is not { } record || !UniqueCharacters.IsUnique(record)
                 || world.Uniques.TryClaim(member.Plan.RecordId))
             {
                 gated?.Add(member);
