@@ -241,24 +241,47 @@ public sealed partial class ProductionSystem
         table.Cold(s) is { Medical.Dead: true } body && (!cageStage || body.Race is { IsRobot: false }) && !lifted.Contains(id) && !givenUp.Contains(id)
         && CarrySystem.CanBeLifted(world, body);
 
+    /// <summary>The weight of a distance in the disposal finder: clamp(1 - d^2 / 4608^2, 1e-5, 1) (<c>FUN_1409b2380</c> with <c>DAT_14172e248</c> = 2.1233664e7, <b>Verified</b>).</summary>
+    static float DisposalWeight(float distanceSquared) => Math.Clamp(1 - distanceSquared / 21233664f, 1e-5f, 1f);
+
     /// <summary>
-    /// The corpse machine a body is taken to (<c>FUN_1408d0770</c> for function 11, <b>Verified</b> by decompile): the player's complete corpse-disposal building with an operator place free, the
-    /// nearest weighing most (the original's weight is clamp(1 - d^2 / 2.1e7, 1e-5, 1), x100 for the character's own faction, the other factors do not apply to the player's own buildings).
+    /// The corpse machine a body is taken to (<c>FUN_1408d0770</c> for function 11, <b>Verified</b> by decompile): among the complete corpse-disposal buildings of the player with an operator place free
+    /// that lie within 1.1 x the radius of the carrier's town (<c>FUN_1408cbea0</c> / <c>FUN_140a00690</c>), the one of the greatest <see cref="DisposalWeight"/> of the 3D distance to the carrier; the
+    /// first listed wins a tie (the weights of everything beyond 4608 are equal). The town is the one the carrier stands in, else the nearest within 1.5625e7 squared (<c>DAT_14172dd88</c>); with
+    /// none, every town is searched. Stand-ins: the town is a player's town, and the squad's home town (the Ownerships' +0x38, <b>Unknown</b> for the player) and the home-building x100 are not read.
     /// </summary>
     (BuildSite Site, Machine Machine)? NearestIncinerator(World world, Vector3 from)
     {
+        var town = PlayerTownAt(world, from) ?? NearestPlayerTown(world, from, DisposalTownReach);
         BuildSite? bestSite = null;
         Machine? best = null;
-        float bestGap = float.MaxValue;
+        float bestWeight = -1;
         foreach (var m in world.Machines.All)
         {
             if (m.Data.Function != Meitou.Data.World.TownBuildings.CorpseDisposalFunction || Site(world, m.Site) is not { Complete: true } site || site.Owner != world.Player.Faction) continue;
+            if (town is not null && Gap(site.Position, town.Position) > town.Radius * 1.1f) continue;
             if (OperatorsOf(world, site.Id) >= m.Data.MaxOperators) continue;
-            float gap = Gap(site.Position, from);
-            if (gap > bestGap || (gap == bestGap && string.CompareOrdinal(m.Site, best?.Site) > 0)) continue;
-            (bestSite, best, bestGap) = (site, m, gap);
+            float weight = DisposalWeight(Vector3.DistanceSquared(site.Position, from));
+            if (weight <= bestWeight) continue;
+            (bestSite, best, bestWeight) = (site, m, weight);
         }
         return best is null ? null : (bestSite!, best);
+    }
+
+    /// <summary>The squared distance within which a carrier outside every town still takes the nearest town (<c>DAT_14172dd88</c>, <b>Verified</b> 1.5625e7).</summary>
+    const float DisposalTownReach = 15625000f;
+
+    /// <summary>The player's town nearest to a point by centre, if its squared distance is within <paramref name="reachSquared"/>.</summary>
+    static PlayerTown? NearestPlayerTown(World world, Vector3 at, float reachSquared)
+    {
+        PlayerTown? best = null;
+        float bestD = reachSquared;
+        foreach (var town in world.Buildings.Towns)
+        {
+            float d = Vector3.DistanceSquared(town.Position, at);
+            if (town.Owner == world.Player.Faction && d <= bestD) (best, bestD) = (town, d);
+        }
+        return best;
     }
 
     // ---- intruders (223 / 273) ----
