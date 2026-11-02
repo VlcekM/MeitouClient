@@ -222,7 +222,7 @@ sealed partial class PlayerInterface
         faithfulScreens.FocusRing = UiMode == UiMode.Meitou;
         bool hud =!TitleOpen && !EditorOpen && !conversationShown;   // the conversation panel covers the HUD bar (engine reading of its layout)
         SyncTownPanel(hud);
-        var controls = hud ? MyGuiPresentation.Arrange(faithfulHud, Width, Height, b, uiResources.Layers).ToList() : [];
+        var controls = hud ? ArrangeHud(b) : [];
         UiRect FaithfulSlot(string name) => controls.FirstOrDefault(c => c.Name == name)?.Bounds ?? default;
         var slots = new Dictionary<string, UiRect>
         {
@@ -275,6 +275,27 @@ sealed partial class PlayerInterface
         pointerOverUi = faithfulScreens.Contains(mouse) || MyGuiPresentation.HitTest(controls, mouse.X, mouse.Y) is not null;
         AddHoverLabel(controls);
         return controls;
+    }
+
+    /// <summary>
+    /// The HUD's last arrangement and what it was made from (<see cref="MyGuiPresentation.Arrange"/> depends on nothing else): reused while the bindings stay the same, so most
+    /// frames skip the layout; remade at least every <see cref="HudRearrangeCalls"/> calls in case a binding is missed by <see cref="UiBindings.ContentEquals"/>.
+    /// </summary>
+    UiBindings? hudBindings;
+    IReadOnlyList<UiControl> hudControls = [];
+    (MyGuiLayout Layout, int Width, int Height, IReadOnlyList<string> Layers, Meitou.Localisation.GameLanguage Language) hudKey;
+    int hudReuses;
+    const int HudRearrangeCalls = 30;
+
+    List<UiControl> ArrangeHud(UiBindings b)
+    {
+        (MyGuiLayout, int, int, IReadOnlyList<string>, Meitou.Localisation.GameLanguage) key = (faithfulHud, Width, Height, uiResources.Layers, Meitou.Localisation.Loc.Language);
+        if (hudBindings is null || !key.Equals(hudKey) || ++hudReuses >= HudRearrangeCalls || !b.ContentEquals(hudBindings))
+        {
+            hudControls = MyGuiPresentation.Arrange(faithfulHud, Width, Height, b, uiResources.Layers);
+            (hudBindings, hudKey, hudReuses) = (b, key, 0);
+        }
+        return [.. hudControls];
     }
 
     bool UiMouseDown(Vector2 p)

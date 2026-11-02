@@ -134,6 +134,21 @@ public sealed partial class UiPainter : IDisposable
     double? opaqueArea;
     int coverageWidth, coverageHeight;
     DebugOverlay.OverlayPass? overlayPass;
+    /// <summary>A caption's parsed colour tags, lines and their widths, by everything they are made from; entries not used for <see cref="TextLayoutLife"/> frames are dropped.</summary>
+    readonly Dictionary<TextLayoutKey, TextLayout> textLayouts = new();
+    /// <summary>The <c>FontName</c> a skin template sets, by skin (null: none, or no such template).</summary>
+    readonly Dictionary<string, string?> templateFonts = new(StringComparer.Ordinal);
+    long textFrame;
+    const int TextLayoutLife = 120;
+    readonly record struct TextLayoutKey(DebugOverlay Font, string Caption, float Width, float Scale, int Mode);
+    sealed class TextLayout(string text, IReadOnlyList<TextColourRun> runs, IReadOnlyList<string> lines, float[] widths)
+    {
+        public readonly string Text = text;
+        public readonly IReadOnlyList<TextColourRun> Runs = runs;
+        public readonly IReadOnlyList<string> Lines = lines;
+        public readonly float[] Widths = widths;
+        public long Used;
+    }
 
     /// <summary>
     /// The share of the viewport (0..1) under fully opaque pieces of the last <see cref="Draw"/>: solid backgrounds and atlas slices whose
@@ -331,10 +346,7 @@ public sealed partial class UiPainter : IDisposable
             var textArea = UiTextLayout.ContentRect(resources, c);
             if (textArea.Width <= 0 || textArea.Height <= 0) continue;
             var textClip = clip.Intersect(textArea);
-            string fontName = c.Properties.GetValueOrDefault("FontName")
-                ?? (resources.Templates.TryGetValue(c.Skin, out var template)
-                    ? template.Descendants("Property").FirstOrDefault(p => (string?)p.Attribute("key") == "FontName")?.Attribute("value")?.Value : null)
-                ?? "Kenshi_StandardFont_Medium";
+            string fontName = c.Properties.GetValueOrDefault("FontName") ?? TemplateFont(c.Skin) ?? "Kenshi_StandardFont_Medium";
             var font = fontName == "Meitou_TitleFont" ? titleFont ?? paintedFont ?? overlay :
                 fontName.Contains("Painted", StringComparison.Ordinal) || fontName.Contains("Banner", StringComparison.Ordinal) ? paintedFont ?? standardFont ?? overlay : standardFont ?? overlay;
             // A toggled button's caption takes the skin's *_checked colour too (the editor's selected tab is brighter).
@@ -376,15 +388,10 @@ public sealed partial class UiPainter : IDisposable
                 font = large;
                 font.Target = overlay.Target;
             }
-            string text = c.Caption.Replace("\\n", "\n", StringComparison.Ordinal);
-            // MyGUI's inline colour tags (an edited box shows its text as typed).
-            IReadOnlyList<TextColourRun> runs = [];
-            if (!focused) (text, runs) = MyGuiTextTags.Parse(text);
+            var laid = LayOutText(c.Caption, font, textArea.Width, scale, c.Properties.GetValueOrDefault("WordWrap") == "true", original,
+                focused, focused && c.Properties.GetValueOrDefault("Numeric") == "true");
+            var (text, runs, lines) = (laid.Text, laid.Runs, laid.Lines);
             int cursor = 0;
-            // A font resource's long line is cropped by the widget in the Faithful mode, as MyGUI does, never shortened with "...".
-            var lines = c.Properties.GetValueOrDefault("WordWrap") == "true" ? font.WrapText(text, textArea.Width, scale)
-                : FitLines(text, original, font, textArea.Width, scale);
-            if (focused && c.Properties.GetValueOrDefault("Numeric") == "true") lines = [text];
             string align = c.Properties.GetValueOrDefault("TextAlign") ?? "Left VCenter";
             // An EditBox scrolled by its bar (MyGuiPresentation: TextScroll pixels); the client clips the lines.
             float scrolled = float.TryParse(c.Properties.GetValueOrDefault("TextScroll"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float textScroll) ? textScroll : 0;
@@ -424,9 +431,10 @@ public sealed partial class UiPainter : IDisposable
                 }
                 overlay.Flush(width, height, textClip, pass);
             }
-            foreach (string line in lines)
+            for (int lineIndex = 0; lineIndex < lines.Count; lineIndex++)
             {
-                float textWidth = font.MeasureText(line, scale);
+                string line = lines[lineIndex];
+                float textWidth = laid.Widths[lineIndex];
                 float x = textArea.X + (align.Contains("Right", StringComparison.Ordinal) ? textArea.Width - textWidth : HasWord(align, "Center", "HCenter") ? (textArea.Width - textWidth) / 2 : 0);
                 if (c.Type == "EditBox" && lines.Count == 1) editBoxes.Add(new(clip.Intersect(b), font, scale, x, line));
                 if (new Meitou.Data.Ui.UiRect(x, y, textWidth, font.LineHeight * scale).Intersect(textClip).Width > 0)
@@ -449,6 +457,39 @@ public sealed partial class UiPainter : IDisposable
         }
         (coverageWidth, coverageHeight) = (width, height);
         opaqueRects.Clear();
+        if (++textFrame % TextLayoutLife == 0)
+            foreach (var (key, laid) in textLayouts)
+                if (laid.Used < textFrame - TextLayoutLife) textLayouts.Remove(key);
+    }
+
+    /// <summary>
+    /// <paramref name="caption"/> as drawn: its plain text and colour runs (MyGUI's inline tags; an edited box shows its text as typed), its lines (wrapped, or one per line
+    /// break and shortened with "..." to <paramref name="width"/>; a font resource's long line in the Faithful mode is cropped by the widget instead, as MyGUI does) and
+    /// their widths. Made once per caption, font, width and scale, not every frame.
+    /// </summary>
+    TextLayout LayOutText(string caption, DebugOverlay font, float width, float scale, bool wrap, bool original, bool focused, bool numeric)
+    {
+        var key = new TextLayoutKey(font, caption, width, scale, (wrap ? 1 : 0) | (original ? 2 : 0) | (focused ? 4 : 0) | (numeric ? 8 : 0));
+        if (!textLayouts.TryGetValue(key, out var laid))
+        {
+            string text = caption.Replace("\\n", "\n", StringComparison.Ordinal);
+            IReadOnlyList<TextColourRun> runs = [];
+            if (!focused) (text, runs) = MyGuiTextTags.Parse(text);
+            IReadOnlyList<string> lines = numeric ? [text] : wrap ? font.WrapText(text, width, scale) : FitLines(text, original, font, width, scale);
+            var widths = new float[lines.Count];
+            for (int i = 0; i < widths.Length; i++) widths[i] = font.MeasureText(lines[i], scale);
+            textLayouts[key] = laid = new(text, runs, lines, widths);
+        }
+        laid.Used = textFrame;
+        return laid;
+    }
+
+    string? TemplateFont(string skin)
+    {
+        if (!templateFonts.TryGetValue(skin, out var font))
+            templateFonts[skin] = font = resources.Templates.TryGetValue(skin, out var template)
+                ? template.Descendants("Property").FirstOrDefault(p => (string?)p.Attribute("key") == "FontName")?.Attribute("value")?.Value : null;
+        return font;
     }
 
     /// <summary>Records the part of <paramref name="dest"/> that is opaque: all of it when every texel of <paramref name="source"/> is, else (when <paramref name="allowCore"/>) the stretched image of the slice's largest opaque core, so ragged panel edges do not disqualify the solid middle.</summary>
