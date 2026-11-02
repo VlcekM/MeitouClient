@@ -91,6 +91,16 @@ public sealed class SquadMemory
         if (player.TryGetValue(squad, out var p)) p.Time = world.GameHours;
     }
 
+    /// <summary>
+    /// Clears a short-term tag on the character's own entry (<c>FUN_1406788d0</c>, <b>Verified</b>), the mirror of <see cref="Flag"/>; the time stays. <see cref="AnyTempEnemy"/> stays right.
+    /// </summary>
+    public void ClearShort(int squad, CharacterId who, int tag)
+    {
+        if (squad < 0 || (uint)tag > 31 || !index.TryGetValue((squad, who), out var e) || (e.Short >> tag & 1) == 0) return;
+        e.Short &= ~(1u << tag);
+        if (tag == MemoryTag.TempEnemy && !entries.Any(kv => kv.Key.Squad == squad && (kv.Value.Short >> MemoryTag.TempEnemy & 1) != 0)) tempEnemySquads.Remove(squad);
+    }
+
     /// <summary>Whether the squad holds short-term <paramref name="tag"/> on the character (<c>FUN_140678830</c>): TEMP_ALLY on a player-faction character is the squad's player flag.</summary>
     public bool HasShort(World world, int squad, CharacterId who, int tag) => (Read(world, squad, who).Short >> tag & 1) != 0;
 

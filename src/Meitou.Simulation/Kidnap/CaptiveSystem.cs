@@ -1129,6 +1129,33 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
         else FixtureRegistry.Enslave(world, cc, wc.Faction, wc.SquadId);
         // Then its orders object is reset: the one-shot orders and the perma-jobs are destroyed (FUN_140507530, FUN_140507280) and job 187 is added toward the owner (a player character's list; the AI's slaves run it as AiSystem.ObeyedRoles).
         ObedientSlave.Reset(world, cc);
+        ForgiveCaptive(world, w, wc, table.IdOf(c));
+    }
+
+    /// <summary>
+    /// What the end of the processing (<c>FUN_14067aca0</c> over <c>FUN_140289400</c>, <b>Verified</b>) does to memory: the short-term tags TEMP_ENEMY, criminal and aggressor on the captive are cleared in the
+    /// memory of the worker's squad, of the squads of the allies it senses (stand-in: allied characters within sight) and of every squad of its faction. The original also clears the ENEMY bit
+    /// of the captive's entry in the worker's sensor (the scan recomputes it here) and empties a list of its town (purpose <b>Unknown</b>); neither is modelled.
+    /// </summary>
+    void ForgiveCaptive(World world, int w, CharacterCold wc, CharacterId captive)
+    {
+        if (world.SystemOf<Dialogue.DialogueSystem>()?.Memory is not { } memory) return;
+        var squads = new SortedSet<int>();
+        if (wc.SquadId >= 0) squads.Add(wc.SquadId);
+        foreach (var squad in world.Squads.All) if (squad.Faction == wc.Faction) squads.Add(squad.Id);
+        var table = world.Characters;
+        var at = table.Next[w].Position;
+        for (int s = 0; s < table.HighWater; s++)
+        {
+            if (!table.Next[s].Alive || table.Cold(s) is not { SquadId: >= 0 } a || !Allied(wc.Faction, a.Faction)) continue;
+            if (Vector3.DistanceSquared(at, table.Next[s].Position) <= AggroSystem.OutdoorSight * AggroSystem.OutdoorSight) squads.Add(a.SquadId);
+        }
+        foreach (int squad in squads)
+        {
+            memory.ClearShort(squad, captive, Dialogue.MemoryTag.TempEnemy);
+            memory.ClearShort(squad, captive, Dialogue.MemoryTag.Criminal);
+            memory.ClearShort(squad, captive, Dialogue.MemoryTag.Aggressor);
+        }
     }
 
     /// <summary>The record types a new slave is stripped of, in the original's order.</summary>
