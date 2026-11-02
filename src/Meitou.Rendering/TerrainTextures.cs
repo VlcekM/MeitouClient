@@ -676,8 +676,12 @@ public sealed unsafe class TerrainTextures : IDisposable
         WriteRow(b, 13, [new(n[0], n[1], n[2], n[3]), new(n[4], n[5], 0, 0)]);
     }
 
+    /// <summary>Counts the writes to the biomes' parameter rows (a biome made resident, a pair's near slot): the terrain material cache bakes again on a change.</summary>
+    public int MaterialVersion { get; private set; }
+
     void WriteRow(int b, int texel, Vector4[] values)
     {
+        MaterialVersion++;
         var data = new float[values.Length * 4];
         for (int i = 0; i < values.Length; i++) (data[i * 4], data[i * 4 + 1], data[i * 4 + 2], data[i * 4 + 3]) = (values[i].X, values[i].Y, values[i].Z, values[i].W);
         using var batch = Gpu.Uploads.Begin();

@@ -182,6 +182,32 @@ and layer (`fieldTile`/`fieldMask`) instead of the blend; the relief fades to 0 
 is named at the top left with its tile size and depth. In the game's sandbox Esc opens the settings. The viewer's `--field-tour
 <dir> [--tour-distance u] [--tour-pitch deg]` saves a picture of every tile and an index.html (105 tiles in about 30 s).
 
+## Material cache
+
+Meitou, not in the game (`TerrainRenderer.MaterialCache`, A/B `terrain-material-cache`, B: every pixel shades the layers). The patches' layered
+material is baked into world-space levels round the eye, and a patch pixel within them reads the cache instead of shading up to five biomes of up
+to 14 layer samples each.
+- **Levels**: 4 of 2048² texels, level k's texel 0.25 × 2^k units (51, 102, 205, 410 m squares), RGBA8 albedo + gloss and RGBA8 tangent-space
+  normal x, y (z follows), rain absorbance, relief height: 128 MB, not made when `VramGuard` refuses it. Each is addressed toroidally (repeat
+  sampler, texel = world mod side), its origin snapped to 64 texels round the eye; as the eye moves a level bakes only the strips it gains, and is
+  built again only after moving a whole side. A first bake takes 256 rows a frame (its pixels shade the layers until it is whole).
+- **Bake** (`TerrainShaders.MaterialBakeFragmentNative`): the colour shader run per texel at its world point (terrain height and normal, the texel as
+  the sampling footprint, distance 0, no march), both targets in one pass, written before the blood, wetness and lighting. Its relief height is one
+  height field over `BakeSpan` (parallax depth × max depth × cliff scale): the ground's (the march's gather, depth × height) mixed by the cliff's
+  share with the cliff's (its projections' heights along the normal, ÷ n.y, held at n.y 0.3).
+- **Refresh**: the inputs (bindless indices, overlay window, `TerrainTextures.MaterialVersion` = writes to the biomes' parameter rows, relief settings)
+  are hashed each frame; a change re-bakes every level 64 rows a frame, finest first, drawn from meanwhile.
+- **Draw**: the level whose texel is the pixel's footprint (short axis, as the layers' 8x anisotropic sampling), blended with the next coarser;
+  beyond the levels, or beyond 0.3 × the nearest resident biome's fade distance (the bake has no distance fade), the layers are shaded. The
+  parallax marches the cached height with the march's steps and self-shadow (the sun's from two levels coarser; where displaced, only what the level
+  holds finer than one at half the mesh spacing): one read a step, no per-biome work. A per-pixel gather (cliff layers live over a cached ground,
+  per-biome fade) cost as much as it saved: terrain 4.0 ms against 3.9 live.
+- **Differences** (**Observed**, viewer A/B stills, 1920x1080 DLSS): mean 0.8-1.1 / 255, 0.35-1.4% of pixels over 12; the ripples' parallax phase
+  and self-shadow shift slightly; a steep cliff's parallax follows the height field instead of its projections. After a 90 m flight at 12 units a
+  frame: mean 1.27 against the live picture, no stale strips. The game's `--screenshot` does not run the cache (its frames skip the hook).
+- **Cost** (**Observed**, `--play-bench` on save "stutter final boss", RTX 4070, 1080p DLSS 0.83, interleaved with master): terrain 3.94 -> 2.33 ms
+  idle, orbit 3.98 -> 2.23, pan 3.77 -> 1.77; GPU frame 7.85 -> 6.20; frame p99 unchanged. Viewer A/B at two views: terrain -0.39 and -0.88 ms.
+
 ## Rocks
 
 Meitou look, not in the game (`RockSmoothing`; Tab: "Rock smoothing (tessellation)"). Many TERRAIN-mode rocks have hard

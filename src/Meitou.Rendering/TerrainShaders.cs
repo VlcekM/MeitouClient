@@ -674,6 +674,10 @@ static partial class TerrainShaders
         uniform sampler2DArray uBakeNormal;   // its shading normal (xyz * 0.5 + 0.5) and rain absorbance
         uniform int uBakeLevels;              // its levels (0: none, every pixel shades the layers)
         uniform vec4 uBakeOrigin[4];          // per level: x, z of its first texel's corner, the texel size, the side in texels (0: not valid)
+        uniform float uBakeReach;             // the cache is read nearer than this: beyond it a biome's distance fade (which the bake has not) may begin
+
+        // The span of the cache's relief height in world units (BakeOutput): the deepest a layer gets, the cliff's scale included.
+        #define BakeSpan (uParallax * uMaxDepth * max(uCliffScale, 1.0))
 
         // Whether cache level k holds xz (4 texels in from its edges), and its value there.
         bool bakeHolds(int k, vec2 xz)
@@ -683,9 +687,23 @@ static partial class TerrainShaders
             return o.w > 0.0 && all(greaterThan(r, vec2(4.0))) && all(lessThan(r, vec2(o.w - 4.0)));
         }
 
+        // The cache's relief height (0 to 1, as reliefHeight) at xz from level k; with kc another level, only what k holds finer than kc (+ 0.5),
+        // the whole as much as whole.
+        float bakedHeight(int k, int kc, float whole, vec2 xz)
+        {
+            float side = uBakeOrigin[k].z * uBakeOrigin[k].w;
+            float x = textureLod(uBakeNormal, vec3(xz / side, float(k)), 0.0).a;
+            if (kc == k || whole >= 1.0) return x;
+            float sideC = uBakeOrigin[kc].z * uBakeOrigin[kc].w;
+            return mix(clamp(x - textureLod(uBakeNormal, vec3(xz / sideC, float(kc)), 0.0).a + 0.5, 0.0, 1.0), x, whole);
+        }
+
         vec4 P(int biome, int k) { return texelFetch(uParams, ivec2(k, biome), 0); }
 
         struct Surface { vec4 albedo; vec4 normal; float absorb; float shade; };
+
+        // The ground layers' tangent-space normal of the pixel (main, the layers' path): the material cache's bake writes it.
+        vec3 bakeTangent = vec3(0.0, 0.0, 1.0);
 
         // Where the material is read: the patches' undisplaced point (vNormal carries it; the relief moves vWorld, and a cliff's projections would slide
         // with it), the meshes' own position. Set by main before biome().
@@ -988,6 +1006,29 @@ static partial class TerrainShaders
             wk = keepWeight(k < 4 ? weights[k] : rest, BiomeEps);
         }
 
+        // Biome b's cliff layer: its two projections blended by the facing, tinted (omult.x), moved by the march (relief.cliffX, cliffZ), its normal turned
+        // into the surface frame; biome() mixes it over the ground by the cliff weight.
+        void cliffLayer(int b, vec3 n, vec4 colour, ReliefOut relief, out vec4 albedo, out vec4 normal)
+        {
+            vec4 layersA = P(b, 0), nearA = P(b, 13), sA = P(b, 2), omult = P(b, 8);
+            vec2 vd;
+            float vert = cliffVert(b, vd);
+            vec2 cb = cliffBlend(n);
+            GradCoord cliffX = cliffCoordX(vert, vd, sA.zw), cliffZ = cliffCoordZ(vert, vd, sA.zw);
+            cliffX.p += relief.cliffX * sA.zw; cliffZ.p += relief.cliffZ * sA.zw;
+            albedo = (layerDiffuse(cliffX, nearA.z, layersA.z) * cb.x + layerDiffuse(cliffZ, nearA.z, layersA.z) * cb.y) * mix(vec4(1.0), colour, omult.x);
+            normal = vec4(0.5, 0.5, 1.0, 1.0);
+            if (TERRAIN_NORMAL_MAPS)
+            {
+                // The cliff projections' normals are turned into the surface frame: red flipped on both, green flipped on
+                // the (z, height) one where the surface faces -X and on the (x, height) one where it faces +Z (terrain.md).
+                vec4 nCliffX = layerNormal(cliffX, nearA.z, layersA.z), nCliffZ = layerNormal(cliffZ, nearA.z, layersA.z);
+                nCliffX.rg = vec2(1.0 - nCliffX.r, n.x > 0.0 ? nCliffX.g : 1.0 - nCliffX.g);
+                nCliffZ.rg = vec2(1.0 - nCliffZ.r, n.z < 0.0 ? nCliffZ.g : 1.0 - nCliffZ.g);
+                normal = nCliffX * cb.x + nCliffZ * cb.y;
+            }
+        }
+
         // One biome's surface (the layer model of docs/formats/terrain.md), its coordinates moved by the march's result (pixelRelief).
         Surface biome(int b, vec3 n, float slope, vec4 map, vec4 colour, float distance, ReliefOut relief)
         {
@@ -995,22 +1036,21 @@ static partial class TerrainShaders
             vec4 sA = P(b, 2), sB = P(b, 3), sC = P(b, 4);
             vec4 omult = P(b, 8), fade = P(b, 9);
 
-            vec2 vd;
-            float vert = cliffVert(b, vd);
-            vec2 cb = cliffBlend(n);
             vec4 w = layerWeights(b, slope, map);
             vec4 white = vec4(1.0);
+            bool cliff = w.y != 0.0;
 
             // A layer whose weight is exactly 0 at this pixel is not sampled: mixing in a weight of 0 leaves the value as it was
             // (x + 0 * (y - x) and x * 1 + y * 0 are both x). On the swamp the dirt weight is exactly 0 on 57 % of the ground, but the slope and
             // cliff weights almost never are, so this skips only some of the 14 layer samples per biome (docs/render-terrain.md, "Where the terrain's 0.99 ms goes").
             GradCoord base = groundCoord(sB.xy), grass = groundCoord(sB.zw), slopeUv = groundCoord(sA.xy), dirt = groundCoord(sC.xy), road = groundCoord(sC.zw);
-            GradCoord cliffX = cliffCoordX(vert, vd, sA.zw), cliffZ = cliffCoordZ(vert, vd, sA.zw);
             float far = clamp(distance * fade.a - 0.3, 0.0, 1.0);
 
             // The march's moves (pixelRelief; none without it, and adding 0 leaves a coordinate as it was).
             base.p += relief.ground * sB.xy; grass.p += relief.ground * sB.zw; slopeUv.p += relief.ground * sA.xy; dirt.p += relief.ground * sC.xy; road.p += relief.ground * sC.zw;
-            cliffX.p += relief.cliffX * sA.zw; cliffZ.p += relief.cliffZ * sA.zw;
+
+            vec4 cliffAlbedo = vec4(0.0), cliffNormal = vec4(0.5, 0.5, 1.0, 1.0);
+            if (cliff) cliffLayer(b, n, colour, relief, cliffAlbedo, cliffNormal);
 
             Surface s;
             s.albedo = layerDiffuse(base, nearA.x, layersA.x) * colour;
@@ -1019,11 +1059,7 @@ static partial class TerrainShaders
             if (map.b != 0.0) s.albedo = mix(s.albedo, layerDiffuse(dirt, nearB.x, layersB.x) * mix(white, colour, omult.z), map.b);
             s.albedo.rgb = mix(s.albedo.rgb, fade.rgb * colour.rgb, far);
             if (map.a != 0.0) s.albedo.rgb = mix(s.albedo.rgb, (layerDiffuse(road, nearB.y, layersB.y) * mix(white, colour, omult.w)).rgb, map.a);
-            if (w.y != 0.0)
-            {
-                vec4 cCliff = (layerDiffuse(cliffX, nearA.z, layersA.z) * cb.x + layerDiffuse(cliffZ, nearA.z, layersA.z) * cb.y) * mix(white, colour, omult.x);
-                s.albedo = mix(s.albedo, cCliff, w.y);
-            }
+            if (cliff) s.albedo = mix(s.albedo, cliffAlbedo, w.y);
             s.albedo.rgb *= layersB.z;
             s.shade = relief.shade;
 
@@ -1035,15 +1071,7 @@ static partial class TerrainShaders
                 if (map.b != 0.0) s.normal = mix(s.normal, layerNormal(dirt, nearB.x, layersB.x), map.b);
                 s.normal = mix(s.normal, vec4(0.5, 0.5, 1.0, 1.0), far);
                 if (map.a != 0.0) s.normal = mix(s.normal, layerNormal(road, nearB.y, layersB.y), map.a);
-                if (w.y != 0.0)
-                {
-                    // The cliff projections' normals are turned into the surface frame: red flipped on both, green flipped on
-                    // the (z, height) one where the surface faces -X and on the (x, height) one where it faces +Z (terrain.md).
-                    vec4 nCliffX = layerNormal(cliffX, nearA.z, layersA.z), nCliffZ = layerNormal(cliffZ, nearA.z, layersA.z);
-                    nCliffX.rg = vec2(1.0 - nCliffX.r, n.x > 0.0 ? nCliffX.g : 1.0 - nCliffX.g);
-                    nCliffZ.rg = vec2(1.0 - nCliffZ.r, n.z < 0.0 ? nCliffZ.g : 1.0 - nCliffZ.g);
-                    s.normal = mix(s.normal, nCliffX * cb.x + nCliffZ * cb.y, w.y);
-                }
+                if (cliff) s.normal = mix(s.normal, cliffNormal, w.y);
             }
             else s.normal = vec4(0.5, 0.5, 1.0, 1.0);
             if (uDebug == 2) { s.albedo = vec4(w.y, w.x, map.r, 1.0); }
@@ -1053,7 +1081,7 @@ static partial class TerrainShaders
             absorb = mix(absorb, ab0.y, w.x);
             absorb = mix(absorb, ab1.x, map.b);
             absorb = mix(absorb, ab1.y, map.a);
-            s.absorb = mix(absorb, ab0.z, w.y);
+            s.absorb = cliff ? mix(absorb, ab0.z, w.y) : absorb;
             return s;
         }
 
@@ -1094,9 +1122,11 @@ static partial class TerrainShaders
             vec3 shadingNormal = n;
             bool baked = false;
             #ifdef TERRAIN_BAKED
-            // The material cache (TerrainRenderer.MaterialCache): the level whose texel is the pixel's footprint (its short axis, as the layers' anisotropic
-            // sampling takes it), blended with the next coarser, the finest holding the point; beyond them the layers are shaded here.
-            if (uBakeLevels > 0 && !uFeature)
+            // The material cache (TerrainRenderer.MaterialCache): the layers' material from the level whose texel is the pixel's footprint (its short axis,
+            // as the layers' anisotropic sampling takes it), blended with the next coarser, the finest holding the point; beyond them, or beyond uBakeReach,
+            // the layers are shaded here. The relief march runs over the cache's height (the ground's and the cliff's relief as one height field, BakeOutput):
+            // one read a step and no per-biome work.
+            if (uBakeLevels > 0 && !uFeature && uTextured && nearWeight > 0.0 && distance < uBakeReach)
             {
                 float a = max(length(texDx.xz), 1e-6), b = max(length(texDy.xz), 1e-6), hi = max(a, b), lo = min(a, b);
                 float level = log2(max(hi / min(ceil(hi / lo), 8.0), 1e-6) / uBakeOrigin[0].z);
@@ -1105,19 +1135,85 @@ static partial class TerrainShaders
                 while (k < uBakeLevels && !bakeHolds(k, texWorld.xz)) { k++; t = 0.0; }
                 if (k < uBakeLevels)
                 {
+                    vec2 at = texWorld.xz;
+                    #ifndef NO_MARCH
+                    if (uParallax > 0.0 && distance < uParallaxEnd)
+                    {
+                        // pixelRelief's march over the stored span (BakeSpan × the distance's strength; the stored height is its share of it, so the march
+                        // reads it as pixelRelief reads a layer's): where the ground is displaced, only the detail finer than the mesh's spacing (the height
+                        // less a level whose texels are half that spacing), the whole again as the displacement fades.
+                        float strength = 1.0 - smoothstep(0.5 * uParallaxEnd, uParallaxEnd, distance);
+                        float far = clamp(distance / uParallaxEnd, 0.0, 1.0);
+                        int steps = int(round(mix(RELIEF_QUALITY >= 2 ? 16.0 : RELIEF_QUALITY >= 1 ? 6.0 : 4.0, RELIEF_QUALITY >= 2 ? 6.0 : RELIEF_QUALITY >= 1 ? 3.0 : 2.0, far)));
+                        int sunSteps = int(round(mix(RELIEF_QUALITY >= 2 ? 8.0 : RELIEF_QUALITY >= 1 ? 3.0 : 2.0, RELIEF_QUALITY >= 2 ? 3.0 : RELIEF_QUALITY >= 1 ? 2.0 : 1.0, far)));
+                        int kc = k;
+                        float whole = 1.0;
+                        if (uDisplace > 0.0 && distance < uDisplaceEnd)
+                        {
+                            whole = smoothstep(0.6 * uDisplaceEnd, uDisplaceEnd, distance);
+                            float segment = max(0.6, distance * 0.004) / uTessDetail;
+                            kc = clamp(int(ceil(log2(max(0.5 * segment / uBakeOrigin[0].z, 1.0)))), k, uBakeLevels - 1);
+                            if (!bakeHolds(kc, texWorld.xz)) kc = k;
+                            if (whole < 1.0) steps = min(RELIEF_QUALITY >= 2 ? 8 : 4, steps);
+                        }
+                        float depth = BakeSpan * strength;   // world units
+                        vec3 v = normalize(uEye - vWorld);
+                        vec3 sun = normalize(uLightDir);   // not "l": RockBakeFragment patches the lighting at that line
+                        vec2 viewSpan = -v.xz / max(v.y, 0.25) * depth, rayStep = viewSpan / float(steps);
+                        vec2 o = -0.5 * viewSpan;
+                        float rayH = 1.0, prevRay = 1.0;
+                        float h = bakedHeight(k, kc, whole, at + o), prevH = h;
+                        for (int i = 0; i < steps && h < rayH; i++)
+                        {
+                            prevH = h; prevRay = rayH;
+                            o += rayStep; rayH -= 1.0 / float(steps);
+                            h = bakedHeight(k, kc, whole, at + o);
+                        }
+                        if (h >= rayH && rayH < 1.0)
+                        {
+                            float above = prevRay - prevH, below = h - rayH;
+                            o -= rayStep * (below / max(above + below, 1e-5));
+                        }
+                        at += o;
+                        if (sun.y > 0.0 && uSelfShadow > 0.0)
+                        {
+                            // The sun's march reads two levels coarser (pixelRelief's blur 4): its shadow is soft.
+                            int ks = min(k + 2, uBakeLevels - 1);
+                            if (!bakeHolds(ks, at)) ks = k;
+                            float hp = bakedHeight(ks, ks, 1.0, at), occlusion = 0.0;
+                            vec2 lightStep = sun.xz / max(sun.y, 0.15) * depth / float(sunSteps);
+                            for (int s = 1; s <= sunSteps; s++)
+                            {
+                                float ray = hp + float(s) / float(sunSteps);
+                                if (ray >= 1.0) break;
+                                float above = bakedHeight(ks, ks, 1.0, at + lightStep * float(s)) - ray;
+                                occlusion = max(occlusion, above * (1.0 - float(s) / float(sunSteps + 1)));
+                            }
+                            reliefShade = 1.0 - uSelfShadow * clamp(occlusion * 4.0, 0.0, 1.0) * strength;
+                        }
+                    }
+                    #endif
                     float side = uBakeOrigin[k].z * uBakeOrigin[k].w;
-                    vec3 c = vec3(texWorld.xz / side, float(k));
+                    vec3 c = vec3(at / side, float(k));
                     vec4 al = textureGrad(uBakeAlbedo, c, texDx.xz / side, texDy.xz / side), nb = textureGrad(uBakeNormal, c, texDx.xz / side, texDy.xz / side);
                     if (t > 0.0 && k + 1 < uBakeLevels && bakeHolds(k + 1, texWorld.xz))
                     {
                         float side1 = uBakeOrigin[k + 1].z * uBakeOrigin[k + 1].w;
-                        vec3 c1 = vec3(texWorld.xz / side1, float(k + 1));
+                        vec3 c1 = vec3(at / side1, float(k + 1));
                         al = mix(al, textureGrad(uBakeAlbedo, c1, texDx.xz / side1, texDy.xz / side1), t);
                         nb = mix(nb, textureGrad(uBakeNormal, c1, texDx.xz / side1, texDy.xz / side1), t);
                     }
                     albedo = al;
-                    shadingNormal = normalize(nb.xyz * 2.0 - 1.0);
-                    absorbance = nb.w;
+                    absorbance = nb.z;
+                    if (TERRAIN_NORMAL_MAPS)
+                    {
+                        // The layers' tangent-space normal (x, y stored; z follows) in the game's tangent frame for terrain, as the layers' path.
+                        vec2 txy = nb.xy * 2.0 - 1.0;
+                        vec3 tn = vec3(txy, sqrt(max(1.0 - dot(txy, txy), 0.0)));
+                        vec3 bn = normalize(cross(n, vec3(-1.0, 0.0, 0.0)));
+                        vec3 tg = normalize(cross(bn, n));
+                        shadingNormal = normalize(mix(n, normalize(tg * tn.x + bn * tn.y + n * tn.z), nearWeight));
+                    }
                     baked = true;
                 }
             }
@@ -1195,7 +1291,7 @@ static partial class TerrainShaders
                         Surface s = biome(int(fallback), n, slope, map, colour, distance, ReliefOut(vec2(0.0), vec2(0.0), vec2(0.0), 1.0));
                         sumA = s.albedo; sumN = s.normal; sumAbsorb = s.absorb; sumShade = s.shade; total = 1.0;
                     }
-                    if (total > 0.0) { albedo = sumA / total; sumN /= total; absorbance = sumAbsorb / total; reliefShade = mix(1.0, sumShade / total, nearWeight); }
+                    if (total > 0.0) { albedo = sumA / total; sumN /= total; absorbance = sumAbsorb / total; reliefShade = mix(1.0, sumShade / total, nearWeight); bakeTangent = sumN.rgb * 2.0 - 1.0; }
                     else { albedo = vec4(0.6, 0.55, 0.45, 0.2); sumN = vec4(0.5, 0.5, 1.0, 1.0); }
                     // Biomes still loading show the ground colour in their share.
                     if (total > 0.0) nearWeight *= total / (total + pending);
@@ -1212,7 +1308,7 @@ static partial class TerrainShaders
                 }
                 else albedo = vec4(uHasMaps ? colour.rgb / 1.2 : heightTint(vWorld.y), 0.2);
             }
-            if (!baked && nearWeight < 1.0)
+            if (nearWeight < 1.0)
             {
                 // Far: the blended biome ground colour (what the textured layers fade to), tinted by the colour map.
                 vec3 far = uHasGround && uTextured ? texture(uGround, world01).rgb : heightTint(vWorld.y);
@@ -1384,6 +1480,7 @@ static partial class TerrainShaders
             uint bakeNormal;
             int bakeLevels;
             vec4 bakeOrigin[4];
+            float bakeReach;
         } terrain;
 
         """;
@@ -1423,7 +1520,7 @@ static partial class TerrainShaders
         ["uOverlayRelief"] = "terrain.overlayRelief", ["uSelfShadow"] = "terrain.selfShadow", ["uTessDetail"] = "terrain.tessDetail", ["uRockRound"] = "terrain.rockRound",
         ["uFieldTiles"] = "utextures2D[terrain.fieldTiles]", ["uFieldOrigin"] = "terrain.fieldOrigin", ["uFieldTile"] = "terrain.fieldTile",
         ["uFieldColumns"] = "terrain.fieldColumns", ["uFieldCount"] = "terrain.fieldCount", ["uMaxDepth"] = "terrain.maxDepth", ["uTargetSlope"] = "terrain.targetSlope", ["uScaleFollow"] = "terrain.scaleFollow", ["uCliffScale"] = "terrain.cliffScale", ["uRefine"] = "terrain.refine", ["uPixelScale"] = "terrain.pixelScale", ["uBroadCut"] = "terrain.broadCut", ["uReliefQuality"] = "terrain.reliefQuality",
-        ["uBakeAlbedo"] = "textures2DArray[terrain.bakeAlbedo]", ["uBakeNormal"] = "textures2DArray[terrain.bakeNormal]", ["uBakeLevels"] = "terrain.bakeLevels", ["uBakeOrigin"] = "terrain.bakeOrigin",
+        ["uBakeAlbedo"] = "textures2DArray[terrain.bakeAlbedo]", ["uBakeNormal"] = "textures2DArray[terrain.bakeNormal]", ["uBakeLevels"] = "terrain.bakeLevels", ["uBakeOrigin"] = "terrain.bakeOrigin", ["uBakeReach"] = "terrain.bakeReach",
     };
 
     const string DerivativeControl = "#extension GL_ARB_derivative_control : require\n";
@@ -1523,10 +1620,60 @@ static partial class TerrainShaders
         """, RockBakePushMembers);
 
     /// <summary>
-    /// The material cache's bake: <see cref="Fragment"/> run for the world point of each texel of level <c>bakePass >> 1</c> (its terrain height and
+    /// The material cache's bake: <see cref="Fragment"/> run for the world point of each texel of level <c>bakePass</c> (its terrain height and
     /// normal, the texel as the footprint, at distance 0, without the march), writing before the blood, the wetness and the lighting: the albedo and
-    /// gloss (<c>bakePass</c> even) or the shading normal and absorbance (odd).
+    /// gloss to the colour target, the shading normal and absorbance to the extra one.
     /// </summary>
+    /// <summary>The bake's outputs (<see cref="MaterialBakeFragmentNative"/>), before the blood: the layers' albedo and gloss; their tangent-space normal's
+    /// x and y (z follows), the rain absorbance and the relief as one height field over <c>BakeSpan</c> (0.5 the surface): the ground's (pixelRelief's
+    /// gather, depth and height) and the cliff's (its projections' heights along the normal, as a height), mixed by the cliff's share.</summary>
+    const string BakeOutput = """
+        fragColour = albedo;
+        float bakeHeight = 0.5;
+        if (uTextured && uParallax > 0.0)
+        {
+            vec4 bm = vec4(0.0);
+            if (uHasMaps) { bm = texture(uOverlay, fract((texWorld.xz + uHalfWorld) * uRegion.zw)); bm.r = max(bm.r, bm.g); }
+            ivec2 bc = clamp(ivec2(floor(world01 * uCellGrid)), ivec2(0), ivec2(uCellGrid) - 1);
+            uvec4 bs = texelFetch(uCells, ivec2(bc.x * 2, bc.y), 0);
+            uint b4 = texelFetch(uCells, ivec2(bc.x * 2 + 1, bc.y), 0).r;
+            vec4 bw = texture(uBlendMap, world01);
+            float brest = max(0.0, 1.0 - dot(bw, vec4(1.0)));
+            ReliefGather g = noGather();
+            for (int s = 0; s < 5; s++)
+            {
+                uint b; float wk;
+                blendSlot(s, bs, b4, bw, brest, b, wk);
+                if (b < 254u && wk > 0.0) gatherRelief(g, int(b), wk, slope, bm);
+            }
+            float h = 0.0;
+            if (g.share > 0.0)
+            {
+                // The ground's relief in world units (pixelRelief's depth × the gathered height, centred), and the cliff's: its projections'
+                // heights by the facing, along the surface's normal, as a height over the ground (÷ n.y, steep faces held at 0.3).
+                if (g.ground.n > 0) h = uParallax * g.ground.total / g.share * (reliefHeight(g.ground, vec2(0.0), false, 1.0) - 0.5);
+                if (g.cliffBiome >= 0)
+                {
+                    int cbm = g.cliffBiome;
+                    vec4 la = P(cbm, 0), lb = P(cbm, 1), sa = P(cbm, 2);
+                    vec2 vd;
+                    float vert = cliffVert(cbm, vd);
+                    vec2 cb = cliffBlend(n);
+                    Relief rx = noRelief(cliffCoordX(vert, vd, vec2(1.0))), rz = noRelief(cliffCoordZ(vert, vd, vec2(1.0)));
+                    addRelief(rx, sa.zw, la.z, 1.0, 1.0);
+                    addRelief(rz, sa.zw, la.z, 1.0, 1.0);
+                    float hc = (rx.n > 0 ? reliefHeight(rx, vec2(0.0), false, 1.0) : 0.5) * cb.x + (rz.n > 0 ? reliefHeight(rz, vec2(0.0), false, 1.0) : 0.5) * cb.y;
+                    float cliffDepth = uParallax * reliefDepth(la.z, sa.zw) * uCliffScale * lb.w;
+                    h = mix(h, cliffDepth * (hc - 0.5) / max(n.y, 0.3), g.cliffShare / g.share);
+                }
+            }
+            bakeHeight = clamp(h / BakeSpan + 0.5, 0.0, 1.0);
+        }
+        bakeNormalOut = vec4(bakeTangent.xy * 0.5 + 0.5, absorbance, bakeHeight);
+        return;
+        // Blood on the ground
+        """;
+
     public static string MaterialBakeFragmentNative()
     {
         static string Patch(string text, string from, string to)
@@ -1536,11 +1683,14 @@ static partial class TerrainShaders
             return text.Remove(at, from.Length).Insert(at, to);
         }
         string f = Marched(Fragment, false);
+        f = f.Insert(f.IndexOf('\n') + 1, "#define MATERIAL_BAKE\n");
+        f = Patch(f, "nearWeight *= 1.0 - smoothstep(uFarStart, uFarEnd, distance);", "nearWeight = 1.0;");
         f = Patch(f, "in vec3 vWorld;", "vec3 vWorld;");
         f = Patch(f, "in vec3 vNormal;", "vec3 vNormal;");
         f = Patch(f, "in vec2 vCliffBlend;", "vec2 vCliffBlend = vec2(0.5);");
+        f = Patch(f, "out vec4 fragColour;", "out vec4 fragColour;\nlayout(location = 1) out vec4 bakeNormalOut;");
         f = Patch(f, "texWorld = uHeightNormals ? vNormal : vWorld;",
-            "vec4 bo = uBakeOrigin[pc.bakePass >> 1];\n"
+            "vec4 bo = uBakeOrigin[pc.bakePass];\n"
             + "vec2 start = mod(floor(bo.xy / bo.z + 0.5), bo.w);\n"
             + "vec2 xz = bo.xy + (mod(floor(gl_FragCoord.xy) - start, bo.w) + 0.5) * bo.z;\n"
             + "vec3 n = terrainNormal(xz);\n"
@@ -1551,8 +1701,7 @@ static partial class TerrainShaders
         f = Patch(f, "texDy = dFdyCoarse(texWorld);", "texDy = vec3(0.0, -n.z / max(n.y, 0.05) * bo.z, bo.z);");
         f = Patch(f, "vec3 n = uHeightNormals ? terrainNormal(texWorld.xz) : normalize(vNormal);", "");
         f = Patch(f, "float distance = length(vWorld - uEye);", "float distance = 0.0;");
-        f = Patch(f, "// Blood on the ground", "if ((pc.bakePass & 1) == 0) { fragColour = albedo; return; }\n"
-            + "fragColour = vec4(shadingNormal * 0.5 + 0.5, absorbance);\nreturn;\n// Blood on the ground");
+        f = Patch(f, "// Blood on the ground", BakeOutput);
         return Variant(Native(f, RockBakePushMembers), normalMaps: true, reliefQuality: 0);
     }
 
@@ -1587,7 +1736,7 @@ static partial class TerrainShaders
 
 /// <summary>The C# side of <see cref="TerrainShaders.ConstantsBlock"/> (std140; offsets checked against the reflection by a test). GLSL bools
 /// are 32-bit (0 / 1).</summary>
-[System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Explicit, Size = 944)]
+[System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Explicit, Size = 960)]
 struct TerrainConstants
 {
     [System.Runtime.InteropServices.FieldOffset(0)] public System.Numerics.Vector4 CoarseRect;
@@ -1665,6 +1814,7 @@ struct TerrainConstants
     [System.Runtime.InteropServices.FieldOffset(872)] public uint BakeNormal;
     [System.Runtime.InteropServices.FieldOffset(876)] public int BakeLevels;
     [System.Runtime.InteropServices.FieldOffset(880)] public BakeOrigins BakeOrigin;
+    [System.Runtime.InteropServices.FieldOffset(944)] public float BakeReach;
 }
 
 /// <summary>The material cache's levels for <see cref="TerrainConstants.BakeOrigin"/> (std140 <c>vec4[4]</c>): x, z of the first texel's corner, the texel, the side (0: not valid).</summary>
