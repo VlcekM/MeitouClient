@@ -196,7 +196,7 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
             if (!carried) return lead.Id == id ? null : ("lift", id, Do(() => Say(new Meitou.Simulation.Carrying.PickUpOrder([], id) { Tick = tick })));
             return lead.Carrying == id ? ("lift", id, Do(() => Say(new Meitou.Simulation.Carrying.PutDownOrder([lead.Id]) { Tick = tick }))) : null;
         }
-        bool sneaking = c.StealthKoChance is not null;
+        bool sneaking = c.CanStealthKo;
         if (Hostile(c))
         {
             if (down) return ("search", id, loot);

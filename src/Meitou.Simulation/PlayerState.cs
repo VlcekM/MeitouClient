@@ -30,6 +30,16 @@ public sealed class PlayerState
     public IReadOnlyList<string> CreationRaces { get; set; } = [];
     /// <summary>The character of another faction the HUD shows (<see cref="InspectCommand"/>), or <see cref="CharacterId.None"/>. Display only: not hashed and not saved.</summary>
     public CharacterId Inspected { get; set; } = CharacterId.None;
+    /// <summary>
+    /// The character under the mouse pointer (the one a right click and its menu act on), or <see cref="CharacterId.None"/>: the publish gives it the menu's figures (kidnap and knock-out chances,
+    /// shackles), which it skips for the crowd. Set by the host as the pointer moves, not by a command (any thread). Display only: not hashed and not saved.
+    /// </summary>
+    public CharacterId Pointed
+    {
+        get { long v = Volatile.Read(ref pointed); return new((int)v, (int)(v >> 32)); }
+        set => Volatile.Write(ref pointed, (long)value.Generation << 32 | (uint)value.Slot);
+    }
+    long pointed = (long)CharacterId.None.Generation << 32 | (uint)CharacterId.None.Slot;
     /// <summary>The instance id of the building the HUD shows (<see cref="InspectBuildingCommand"/>), or null. Display only: not hashed and not saved.</summary>
     public string? InspectedBuilding { get; set; }
     /// <summary>The characters the pinned inventory windows show (<see cref="ShowInventoryCommand"/>). Display only: not hashed and not saved.</summary>

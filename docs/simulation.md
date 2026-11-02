@@ -56,6 +56,11 @@ rendering is camera-relative.
 Tick order: Inputs → Schedule → Think → Move → Act → ordered Apply → SlowWorld → Publish.
 Inputs/Schedule/Apply/SlowWorld are serial; each implemented parallel phase has a system barrier. Publish makes the character snapshots on the
 workers in 256-slot chunks (each reads only the tick's state), listed in slot order.
+Engine choice, to keep the publish small with ~1,400 characters: the context menu's figures (kidnap and stealth KO chances, shackles) and the AI goal text
+go only to the selected, inspected and pointed character (`PlayerState.Pointed`, set by the host as the mouse moves) and the player's (goal text);
+`CanStealthKo` tells the quick order and highlight for everyone. A body's part figures (aggregates, worst part, blood shown) are kept until a part's
+`HealthPart.Version` moves. The research view refreshes at once when the finished, queued or paid lists or the bench level change, else at most once a
+second (progress, bench stock, the focus zone). Cages and shown doors are new lists only when one changed.
 A system's `BeforeAct` runs right before its own `Act`, with a barrier between. Combat's body step runs there: the medical tick (`TickMedical`), the arms, getting up,
 and the fight's end on going down. Every fighter's body step therefore finishes before any fighter decides. Otherwise a decision that reads its target's knock-out
 or fight would depend on which partition ran first. A decision reads another fighter's fight as that fighter's body step left it, because a decision's own fight end

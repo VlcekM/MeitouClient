@@ -250,7 +250,46 @@ public sealed partial class MedicalState
     public bool BothArmsWork => ArmWorks(left: true) && ArmWorks(left: false);
 
     /// <summary>The aggregates of <c>FUN_140644e60</c>; <paramref name="exemptFromWear"/> gives the arm aggregate 1.0 (characters with the slot-0x248 object).</summary>
-    public BodyAggregates Aggregates(bool exemptFromWear = false)
+    public BodyAggregates Aggregates(bool exemptFromWear = false) => exemptFromWear ? Summary.Aggregates with { Arm = 1 } : Summary.Aggregates;
+
+    /// <summary>The lowest part fraction (1 for a body without parts), the way <c>Enumerable.Min</c> reads floats: a NaN wins.</summary>
+    public float WorstPart => Summary.Worst;
+
+    /// <summary>The blood the first 8 parts show, a byte each (<see cref="BloodAmounts(MedicalState)"/>).</summary>
+    public ulong ShownBlood => Summary.Blood;
+
+    // The part figures, kept while no part changed (HealthPart.Version only grows, so the sum moves with every change). One reference, swapped whole: the publish reads
+    // it from several threads.
+    sealed record PartSummary(int Version, BodyAggregates Aggregates, float Worst, ulong Blood);
+    PartSummary? summary;
+
+    PartSummary Summary
+    {
+        get
+        {
+            int version = 0;
+            foreach (var p in parts) version += p.Version;
+            var s = summary;
+            if (s is not null && s.Version == version) return s;
+            return summary = new(version, ComputeAggregates(), ComputeWorstPart(), BloodAmounts(this));
+        }
+    }
+
+    float ComputeWorstPart()
+    {
+        if (parts.Length == 0) return 1;
+        float worst = parts[0].Fraction;
+        if (float.IsNaN(worst)) return worst;
+        for (int k = 1; k < parts.Length; k++)
+        {
+            float f = parts[k].Fraction;
+            if (f < worst) worst = f;
+            else if (float.IsNaN(f)) return f;
+        }
+        return worst;
+    }
+
+    BodyAggregates ComputeAggregates()
     {
         float arm = 0, head = 1, torso = float.MaxValue;
         bool anyArm = false, anyTorso = false, left = false, right = false;
@@ -272,7 +311,7 @@ public sealed partial class MedicalState
                 case BodyPartType.Torso: anyTorso = true; torso = MathF.Min(torso, f); break;
             }
         }
-        return new BodyAggregates(exemptFromWear || !anyArm ? 1 : arm, head, anyTorso ? torso : 1, left, right);
+        return new BodyAggregates(!anyArm ? 1 : arm, head, anyTorso ? torso : 1, left, right);
     }
 
     /// <summary>The stat multiplier in [0, 1] (<c>FUN_1406457e0</c>); see <see cref="StatMultiplier"/>.</summary>

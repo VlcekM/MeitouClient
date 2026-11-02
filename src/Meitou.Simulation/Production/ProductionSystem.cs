@@ -64,6 +64,10 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
     Vector3? focus;
     /// <summary>The focus zone <see cref="publishedResearch"/> was built for.</summary>
     Meitou.Data.World.ZoneCoordinate? researchZone;
+    /// <summary>The research lists' sizes and the tick <see cref="publishedResearch"/> was built at (<see cref="ResearchView"/>).</summary>
+    (int, int, int, int) researchLists;
+    long researchBuilt;
+    const int ResearchRefreshTicks = 30;
     // Some character may still hold a machine that is gone.
     bool sweep;
 
@@ -1162,6 +1166,11 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
     {
         var zone = FocusZone();
         if (publishedResearch is not null && researchVersion == world.Research.Version && machinesVersion == world.Machines.Version && researchZone == zone) return publishedResearch;
+        // Progress, bench stock and the focus zone (each zone crossed in a flight) move often: those refresh at most once a second; finishing, queueing or paying at once.
+        var lists = (world.Research.Completed.Count, world.Research.Queue.Count, world.Research.Paid.Count, world.Research.BenchLevel);
+        if (publishedResearch is not null && researchLists == lists && (ulong)(world.Tick - researchBuilt) < ResearchRefreshTicks) return publishedResearch;
+        researchLists = lists;
+        researchBuilt = world.Tick;
         researchZone = zone;
         researchVersion = world.Research.Version;
         machinesVersion = world.Machines.Version;

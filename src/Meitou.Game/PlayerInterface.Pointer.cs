@@ -96,6 +96,7 @@ sealed partial class PlayerInterface
         // A hostile character shows the attack pointer and the red outline even with nobody selected to send at it.
         if (chosen.Name == "arrow" && chosen.Target is { } over && snapshot.Characters.FirstOrDefault(c => c.Id == over) is { } overChar && StandingHostile(overChar))
             chosen.Name = "attk";
+        session.World.Player.Pointed = chosen.Target ?? CharacterId.None;
         return pointer = (snapshot.Tick, mouse, CtrlHeld, AltHeld, chosen.Name, chosen.Target);
     }
 

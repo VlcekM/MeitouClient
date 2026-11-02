@@ -28,42 +28,46 @@ public sealed class HealthPart(BodyPartTemplate template, int hitWeight, float b
     public float HitMult { get; set; } = 1;
 
     /// <summary>Save key <c>flesh&lt;k&gt;</c>: flesh HP, h. May go negative, down to -3 times the maximum.</summary>
-    public float Flesh { get; set; }
+    public float Flesh { get; set { if (field != value) { field = value; Version++; } } }
 
     /// <summary>Save key <c>stun&lt;k&gt;</c>: s. Blunt damage lands here and recovers.</summary>
-    public float Stun { get; set; }
+    public float Stun { get; set { if (field != value) { field = value; Version++; } } }
 
     /// <summary>Save key <c>bandage&lt;k&gt;</c>: b, damage that has been treated and waits to be healed.</summary>
-    public float Bandage { get; set; }
+    public float Bandage { get; set { if (field != value) { field = value; Version++; } } }
 
     /// <summary>Save key <c>rig&lt;k&gt;</c>: the extra buffer used by the health fraction.</summary>
-    public float Rig { get; set; }
+    public float Rig { get; set { if (field != value) { field = value; Version++; } } }
 
     /// <summary>Save key <c>wear&lt;k&gt;</c>: w, the permanent loss of maximum (robots and fitted limbs).</summary>
-    public float Wear { get; set; }
+    public float Wear { get; set { if (field != value) { field = value; Version++; } } }
 
     /// <summary>The race's base HP for this part (100 for humans), before the stump and replacement rules.</summary>
-    public float BaseHp { get; set; } = baseHp;
+    public float BaseHp { get; set { if (field != value) { field = value; Version++; } } } = baseHp;
 
     /// <summary>The HP multiplier (the character's scale slot; 1.0 for humans).</summary>
-    public float HpMultiplier { get; set; } = 1;
+    public float HpMultiplier { get; set { if (field != value) { field = value; Version++; } } } = 1;
 
     /// <summary>The body scale (the character's scale slot; 1.0 for humans).</summary>
-    public float BodyScale { get; set; } = 1;
+    public float BodyScale { get; set { if (field != value) { field = value; Version++; } } } = 1;
 
     /// <summary>RACE <c>self healing</c>: untreated damage turns slowly into treated damage while the owner is conscious.</summary>
     public bool SelfHealing { get; set; }
 
-    public LimbState Limb { get; set; }
+    public LimbState Limb { get; set { if (field != value) { field = value; Version++; } } }
 
     /// <summary>The fitted prosthetic when <see cref="Limb"/> is <see cref="LimbState.Replaced"/>.</summary>
-    public LimbReplacement? Replacement { get; set; }
+    public LimbReplacement? Replacement { get; set { if (field != value) { field = value; Version++; } } }
 
     /// <summary>The prosthetic's quality interpolation parameter in [0, 1]: the item's level x 0.01.</summary>
-    public float ReplacementQuality { get; set; }
+    public float ReplacementQuality { get; set { if (field != value) { field = value; Version++; } } }
 
     /// <summary>The fitted prosthetic as an item (its level, quality and saved record), when <see cref="Limb"/> is <see cref="LimbState.Replaced"/>; null for one fitted without an item.</summary>
     public Items.ItemInstance? ReplacementItem { get; set; }
+
+    /// <summary>Counts the changes to the values the health figures read (flesh, stun, bandage, rig, wear, the maximum's terms, the limb): <see cref="MedicalState"/> keeps its
+    /// part summaries until it moves. Only grows.</summary>
+    internal int Version { get; private set; }
 
     /// <summary>The part's own state flag for edge detection of <see cref="MedicalEventKind.PartDown"/> events.</summary>
     internal bool WasDown { get; set; }

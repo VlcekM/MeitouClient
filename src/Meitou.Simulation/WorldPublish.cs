@@ -107,6 +107,8 @@ public sealed partial class World
         int leadSlot = -1;
         foreach (var s in Player.Selection)
             if (table.TryResolveNext(s, out int l)) { leadSlot = l; break; }
+        // The character under the pointer: with the selected and inspected ones it gets the context menu's figures, the crowd does not (docs/simulation.md, tick order).
+        var pointed = Player.Pointed;
         var aggro = koSlot >= 0 ? systems.OfType<AggroSystem>().FirstOrDefault() : null;
         var talk = systems.OfType<Dialogue.DialogueSystem>().FirstOrDefault();
         var combat = systems.OfType<Combat.CombatSystem>().FirstOrDefault();
@@ -136,6 +138,7 @@ public sealed partial class World
             var cold = table.Cold(i);
             // The details only the selection shows: asked once per character, the selection is a list.
             bool selected = cold is { IsPlayer: true } && Player.Selection.Contains(id), inspected = !selected && id == Player.Inspected, detailed = selected || inspected;
+            bool shown = detailed || id == pointed;
             bool sneaking = cold is { IsPlayer: true } && (cold.Orders & CharacterOrders.Sneak) != 0;
             var watchers = sneaking ? WatchersOf(cold!) : [];
             bool fightsPlayer = cold is { IsPlayer: false, InCombat: true } && combat?.StateOf(id) is { TargetSlot: >= 0 and var fought } fight
@@ -166,7 +169,7 @@ public sealed partial class World
             s.SkillXpMultipliers = detailed && cold!.Race is { } skillRace ? Array.AsReadOnly((float[])skillRace.StatMultipliers.Clone()) : [];
             s.Hud = detailed && cold!.Medical is { } hudMed && cold.Race is { } hudRace && cold.Stats is { } hudStats ? HudOf(id, cold, hudMed, hudRace, hudStats, state[i], combat, bodyConstants, !Sight.Outdoors(i), Sight.Inside(i), population?.Db) : null;
             s.LimbBits = cold?.Medical?.LimbBits ?? 0;
-            s.BloodAmounts = cold?.Medical is { } bloodMedical ? Bodies.MedicalState.BloodAmounts(bloodMedical) : 0UL;
+            s.BloodAmounts = cold?.Medical?.ShownBlood ?? 0UL;
             s.Knockdown = cold?.Knockdown ?? default;
             s.ClosedSlots = cold is null || !detailed ? [] : ClosedSlotsOf(cold);
             s.HealthParts = detailed && cold!.Medical is { } health && cold.Race is { } anatomy ? HealthPartsOf(health, anatomy) : [];
@@ -205,8 +208,8 @@ public sealed partial class World
             s.HostileToPlayer = cold is not null && CharacterFacts.HostileToPlayer(population?.Relations, Player.Faction, cold.Faction, fightsPlayer);
             s.Shackled = cold?.Inventory is { } worn && worn.Items.Any(item => item.IsLocked && item.Section != "main");
             s.PortraitSerial = cold?.PortraitSerial ?? 0;
-            s.ShacklesLocked = Locks.LockSystem.WornShackles(cold) is not null;
-            s.CanBeShackled = cold is { IsPlayer: false } && Locks.LockSystem.CanBeShackled(cold, true);
+            s.ShacklesLocked = shown && Locks.LockSystem.WornShackles(cold) is not null;
+            s.CanBeShackled = shown && cold is { IsPlayer: false } && Locks.LockSystem.CanBeShackled(cold, true);
             s.CarriesShackles = selected && Locks.LockSystem.CarriedShackles(cold) is not null;
             s.Orders = cold?.Orders ?? CharacterOrders.None;
             s.RunSpeed = cold?.RunSpeed ?? SpeedMode.Free;
@@ -214,7 +217,7 @@ public sealed partial class World
             s.Scale = cold?.Animal is { } animal ? animal.Scale(cold.ShownAge) : 1;   // the size last refreshed (BodySystem.Age)
             s.WeatherNotice = cold?.WeatherNotice ?? WeatherNotice.None; s.WeatherNoticeProtection = cold?.WeatherNoticeProtection ?? 0;
             s.Decision = Decisions.Tracing ? cold?.Decision : null;
-            s.Activity = cold is null ? null : Ai.AiSystem.ActivityText(state[i], cold);
+            s.Activity = cold is not null && (shown || cold.IsPlayer) ? Ai.AiSystem.ActivityText(state[i], cold) : null;
             // The turret the combat system runs with this gunner; else (no combat system) at the gun of the turret its squad gave it: the AI's turret goal, walked to and stood at
             // (derived from the claims, not hashed).
             s.Turret = combat?.TurretOf(cold?.Gunning) is { } gunned ? new MannedTurret(cold!.Gunning!, gunned.BuildingId, gunned.Position, gunned.Yaw, gunned.GunId) { Simulated = true, Aim = gunned.Aim, Angles = gunned.Angles }
@@ -232,15 +235,15 @@ public sealed partial class World
             s.Prison = cold is { IsImprisoned: true } ? new PrisonView(!(cold.InWhat is { } cageId && Fixtures.Find(cageId) is { } cage && cage.Lock is not { EffectivelyLocked: true }), cold.SentenceLength, cold.SentenceStart + cold.SentenceLength - GameHours) { CageOwner = cold.InWhat is { } owned && Fixtures.Find(owned) is { } jail ? jail.Owner : -1, CageId = cold.InWhat,
                 LockLevel = cold.InWhat is { } locked && Fixtures.Find(locked)?.Lock is { } cageLock ? cageLock.Level : -1 } : null;
             s.Ragdoll = ragdolls?.Publish(id);
-            s.StealthKoChance = koSlot >= 0 && i != koSlot && cold is { IsPlayer: false } && Carrying.CarrySystem.CanBeKnockedOut(cold)
-                ? Carrying.CarrySystem.StealthKoChance(table.Cold(koSlot)!, cold, aggro?.Spotted(i, table.IdOf(koSlot)) == true) : null;
+            s.CanStealthKo = koSlot >= 0 && i != koSlot && cold is { IsPlayer: false } && Carrying.CarrySystem.CanBeKnockedOut(cold);
+            s.StealthKoChance = s.CanStealthKo && shown ? Carrying.CarrySystem.StealthKoChance(table.Cold(koSlot)!, cold!, aggro?.Spotted(i, table.IdOf(koSlot)) == true) : null;
             s.Asleep = Carrying.CarrySystem.Asleep(table, i);
             s.Down = cold is not null && CharacterFacts.Down(cold);
             s.Conscious = cold is not null && CharacterFacts.Conscious(cold);
             s.Standing = cold is not null && CharacterFacts.Standing(cold);
             s.Animal = cold is not null && CharacterFacts.Animal(cold);
             s.CanOpenInventory = cold is not null && Carrying.CarrySystem.Openable(table, i);
-            s.KidnapChance = leadSlot >= 0 && i != leadSlot && cold is { IsPlayer: false } ? Carrying.CarrySystem.KidnapChance(table.Cold(leadSlot)!, cold, Tick) : null;
+            s.KidnapChance = shown && leadSlot >= 0 && i != leadSlot && cold is { IsPlayer: false } ? Carrying.CarrySystem.KidnapChance(table.Cold(leadSlot)!, cold, Tick) : null;
             s.LockpickSkill = cold is { IsPlayer: true } ? Locks.Lockpicking.Skill(cold) : 0;
         }
         (olderBuffer, previousBuffer, shownBuffer) = (previousBuffer, shownBuffer, buffer);
@@ -436,25 +439,9 @@ public sealed partial class World
         bool organic = med.FirstAidNeed(race, false, capacity, extraBloodLoss) > Bodies.MedicalState.AidNeedFloor;
         bool robotNeed = med.FirstAidNeed(race, true, capacity, extraBloodLoss) > Bodies.MedicalState.AidNeedFloor;
         bool robot = !organic && robotNeed;
-        return new(med.Blood / capacity, WorstPart(med), med.Hunger, med.Unconscious, med.Dead, organic || robot,
+        return new(med.Blood / capacity, med.WorstPart, med.Hunger, med.Unconscious, med.Dead, organic || robot,
             task == (byte)CharacterTask.Treat ? CareKind.Treating : task == (byte)CharacterTask.Rest ? CareKind.Resting : CareKind.None, cold.MedicJob, cold.RescueJob,
             med.NeedsSplint(race, 50), med.KoTimer, med.PlayingDead, med is { StayingLow: true, Prone: true, Crawling: false }, robot)
             { NeedsOrganicAid = organic, NeedsRepairs = robotNeed, BeingEaten = med.EatenCountdown > 0, Coma = med.Coma, Crawling = med.Crawling, RightArmDisabled = !med.ArmWorks(left: false) };
-    }
-
-    /// <summary>The lowest part fraction (1 for a body without parts), the way <c>Enumerable.Min</c> reads floats: a NaN wins.</summary>
-    static float WorstPart(Bodies.MedicalState med)
-    {
-        var parts = med.Parts;
-        if (parts.Count == 0) return 1;
-        float worst = parts[0].Fraction;
-        if (float.IsNaN(worst)) return worst;
-        for (int k = 1; k < parts.Count; k++)
-        {
-            float f = parts[k].Fraction;
-            if (f < worst) worst = f;
-            else if (float.IsNaN(f)) return f;
-        }
-        return worst;
     }
 }

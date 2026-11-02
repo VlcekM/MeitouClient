@@ -274,9 +274,9 @@ public sealed class CharacterSnapshot
     public bool WarParty { get; internal set; }
     /// <summary>Wears locked armour (shackles, <see cref="Items.ItemInstance.IsLocked"/>): the portrait's <c>Slave</c> overlay.</summary>
     public bool Shackled { get; internal set; }
-    /// <summary>Its worn shackles are locked (<see cref="Locks.LockSystem.WornShackles"/>): the context menu offers Unlock Shackles, Use Tools and Use Strength.</summary>
+    /// <summary>Its worn shackles are locked (<see cref="Locks.LockSystem.WornShackles"/>): the context menu offers Unlock Shackles, Use Tools and Use Strength. Set for a selected, inspected or pointed character only (<see cref="PlayerState.Pointed"/>).</summary>
     public bool ShacklesLocked { get; internal set; }
-    /// <summary>Alive, down or caged and wearing no shackles (<see cref="Locks.LockSystem.CanBeShackled"/>): the context menu offers Put on Shackles to a selection that carries some.</summary>
+    /// <summary>Alive, down or caged and wearing no shackles (<see cref="Locks.LockSystem.CanBeShackled"/>): the context menu offers Put on Shackles to a selection that carries some. Pointed only, as <see cref="ShacklesLocked"/>.</summary>
     public bool CanBeShackled { get; internal set; }
     /// <summary>A selected character carrying unworn shackles (<see cref="Locks.LockSystem.CarriedShackles"/>).</summary>
     public bool CarriesShackles { get; internal set; }
@@ -284,7 +284,7 @@ public sealed class CharacterSnapshot
     public uint PortraitSerial { get; internal set; }
     /// <summary>The character this one carries (none when not carrying).</summary>
     public CharacterId Carrying { get; internal set; } = CharacterId.None;
-    /// <summary>The goal the AI is acting out, in the game's words (<c>Patrolling town</c>, <c>Shopkeeper</c>); null when the AI does not run the character now.</summary>
+    /// <summary>The goal the AI is acting out, in the game's words (<c>Patrolling town</c>, <c>Shopkeeper</c>); null when the AI does not run the character now, and for anyone not the player's, selected, inspected or pointed.</summary>
     public string? Activity { get; internal set; }
     /// <summary>A player character's last decision (<see cref="DecisionSystem.Tracing"/>: which source won and why each one before it could not run); null while tracing is off. Debug only.</summary>
     public DecisionTrace? Decision { get; internal set; }
@@ -302,10 +302,13 @@ public sealed class CharacterSnapshot
     public TaskBar? Bar { get; internal set; }
     /// <summary>
     /// The chance in per cent that the selection's first sneaking member knocks this character out from behind (<see cref="Carrying.CarrySystem.StealthKoChance"/>); null when no
-    /// selected character is sneaking or this one cannot be knocked out (a player character, or already down).
+    /// selected character is sneaking or this one cannot be knocked out (a player character, or already down), and for anyone not selected, inspected or pointed (<see cref="PlayerState.Pointed"/>):
+    /// <see cref="CanStealthKo"/> tells the rest.
     /// </summary>
     public float? StealthKoChance { get; internal set; }
-    /// <summary>The chance in per cent that the selection's lead kidnaps this NPC (<see cref="Carrying.CarrySystem.KidnapChance"/>); null for a player character or with nothing selected.</summary>
+    /// <summary>A selected character is sneaking and could knock this one out from behind (<see cref="StealthKoChance"/> without the chance): the quick order and the highlight read it for everyone.</summary>
+    public bool CanStealthKo { get; internal set; }
+    /// <summary>The chance in per cent that the selection's lead kidnaps this NPC (<see cref="Carrying.CarrySystem.KidnapChance"/>); null for a player character, with nothing selected, or when not pointed (as <see cref="StealthKoChance"/>).</summary>
     public float? KidnapChance { get; internal set; }
     /// <summary>A player character's effective lockpicking (<see cref="Locks.Lockpicking.Skill"/>): the Pick Lock rows' chance column is <see cref="Locks.Lockpicking.Chance"/> of the lock's level and the lead's skill.</summary>
     public float LockpickSkill { get; internal set; }
