@@ -286,8 +286,7 @@ Same targets as picking; Task_CutLock / Task_BruteForceLock share the shackle ta
   checks rent (`FUN_140357ad0`: a negative cost is passed on to the payment only when the bed has a parent building, slot 59) and power; with the flag clear
   the update (slot 2 `FUN_140351770`, gated by +0xa1 == 0) tests power once instead, so power is always tested (**Verified**). Power (`FUN_140299370`, the sound emitter's powered test, buildings-production.md):
   true for a building with no power figure (`power output` + research bonus 0) or without a grid, else the grid must supply it. Refused: the task ends and the character is told "This bed needs power to operate."
-  (Meitou: `BedSystem.LieIn`, a bed the player built whose machine draws power and has none; no base-game bed has a negative `power output` (**Verified**, probe of every BUILDING with a bed functionality), some mods do);
- sound `Character_Bed` / `Get_In`; then enters. Row 258 has no done-list (it runs until replaced), row 98's is
+  (Meitou: `BedSystem.LieIn`, a bed the player built whose machine draws power and has none; no base-game bed has a negative `power output` (**Verified**, probe of every BUILDING with a bed functionality), some mods do); sound `Character_Bed` / `Get_In`; then enters. Row 258 has no done-list (it runs until replaced), row 98's is
   `isFullyRested`, `isInBed` ([ai-tasks](ai-tasks.md)).
 - **Task_GetOutOfBed** (116, 208, 257; `FUN_140345760`, `FUN_140348480`): `Get_Out` sound; when the bed's clip is `gotobed` it is played backwards and
   the character leaves at 10 %, else at once.
@@ -295,7 +294,6 @@ Same targets as picking; Task_CutLock / Task_BruteForceLock share the shackle ta
   cost, or the body's when that is non-negative and lower (a refusal fails the task). Once the put-down clip is below 0.2 and the bed is free for the
   body, both are unlinked and the body enters the bed, then is placed at the bed's nearest type-4 node (`FUN_14038ab50`). A bed that is not free for the body at that moment ends the task
   (**Verified**, `FUN_140358670`: no new bed search, the carrier keeps the body; nothing is tested while walking); Meitou: `BedSystem.Step` tests only on arrival (`LayIn`), put-in job 106 picks again. A relation event follows
-
   (faction vfunc 5 with the task's +0x7c; amount **Unknown**).
 - **Lie spot** (**Verified** by decompile: `FUN_140357d00` calls vfuncs 0x470 / 0x480, `Building::getPositionMarker` `FUN_14054b850` and
   `getDirectionMarkerQuat` `FUN_140549720`, names from KenshiLib 1ce4a16): with fewer than 2 usage nodes (Building+0x2f0) the position is the marker
@@ -329,7 +327,7 @@ Same targets as picking; Task_CutLock / Task_BruteForceLock share the shackle ta
   beds are not searched) in its town, else the nearest town within √1.5625e7 ≈ 3953, plus its home building's town (`FUN_1408cbea0`, the same gatherer as the cage finder and the kill/eat finder: [economy 11.7](economy.md#117-arrest)); each free one not in
   the squad's give-up list weighs 0.5 for the character's faction, 0.01 for a faction that counts it as an ally, else is skipped; x3 when its
   construction needs more than 1 material (Building+0x188), x2 with a parent building, x4 inside town walls (vfunc 0x118 `amInsideTownWalls` > 0,
-  KenshiLib 1ce4a16; not in Meitou). The heaviest wins (first on a tie, `FUN_1408daa90`). The town's beds are first filtered by the squad's
+  KenshiLib 1ce4a16; factor `DAT_14168bf24` = 4.0, **Verified**; Meitou: the gate code at the bed's position above 0, none where the codes are unknown). The heaviest wins (first on a tie, `FUN_1408daa90`). The town's beds are first filtered by the squad's
   `canIUseThisBuilding` (below; the gatherer `FUN_140a00690`). So an **allied** faction's bed (relation to the player >= 50, e.g. the Shinobi Thieves after
   joining, +100) is taken when no own bed is free; a merely neutral faction's never is (**Verified** by decompile, `FUN_1408cfe00`, `FUN_1406b2630`).
 - **canIUseThisBuilding** (`Ownerships::canIUseThisBuilding` `FUN_140621230(ownerships, building, character)`, **Verified** by decompile, names KenshiLib

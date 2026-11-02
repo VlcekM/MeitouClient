@@ -742,11 +742,15 @@ public sealed partial class FixtureRegistry
     /// squared 1.5625e7); Meitou has no player towns, so it takes the beds within it (<b>engine choice</b>).</summary>
     public const float BedSearchRange = 3952.85f;
 
+    /// <summary>The bed weight factor for a bed inside town walls (<c>amInsideTownWalls</c> above 0; <c>DAT_14168bf24</c> = 4.0, <b>Verified</b>, <c>FUN_1408cfe00</c>).</summary>
+    public const float InsideWallsBedFactor = 4;
+
+
     /// <summary>
     /// The bed search of a player-faction character (the original's <c>FUN_1408cfe00</c>, docs/game/locks.md "Beds", <b>Observed</b>): the bed it lies in; else among the complete BF_BED (6;
     /// a skeleton bed is not searched) beds that are free for it (<see cref="IsFree"/>) and <see cref="Reachable"/> (standing in for the original's give-up list), a bed of its own faction
     /// weighs 0.5, one of a faction that counts it as an ally (<paramref name="relations"/>, ally(bed's faction, character's)) 0.01, any other none; x3 when the bed needs more than one
-    /// construction material, x2 indoors. The heaviest wins, the first registered on a tie. The candidates are the beds within <see cref="BedSearchRange"/> (engine, for the town);
+    /// construction material, x2 indoors, x4 inside town walls (<see cref="InsideWallsBedFactor"/>). The heaviest wins, the first registered on a tie. The candidates are the beds within <see cref="BedSearchRange"/> (engine, for the town);
     /// <paramref name="skip"/> leaves out beds others are on their way to. Null when none.
     /// </summary>
     public Fixture? FindBed(World world, int slot, FactionRelations? relations, Func<Fixture, bool>? skip = null)
@@ -758,6 +762,7 @@ public sealed partial class FixtureRegistry
         if (!c.IsPlayer) return FindBedNpc(world, slot, c, skip);
         Fixture? best = null;
         float bestWeight = 0, r2 = BedSearchRange * BedSearchRange;
+        var regions = world.SystemOf<LockSystem>()?.Regions;
         foreach (var f in all)
         {
             if (f.Kind != FixtureKind.Bed || f.Bed.Function != TownBuildings.BedFunction || f.Owner < 0) continue;
@@ -766,6 +771,7 @@ public sealed partial class FixtureRegistry
             if (!IsFree(table, f) || !Reachable(world, f, c.Faction) || skip?.Invoke(f) == true) continue;
             if (f.Bed.Materials > 1) weight *= 3;
             if (f.Indoors) weight *= 2;
+            if (regions?.CodeAt(f.Position) is > 0) weight *= InsideWallsBedFactor;
             if (weight > bestWeight) (best, bestWeight) = (f, weight);
         }
         return best;
