@@ -1395,6 +1395,12 @@ static class WorldFrame
         if (gpu.Streamer is { } aheadTerrain) (aheadTerrain.Ahead, aheadTerrain.Kept) = (gpu.Ahead, kept);
         if (gpu.Objects is { } aheadObjects) (aheadObjects.Ahead, aheadObjects.Kept, aheadObjects.KeptViewDistance) = (gpu.Ahead, kept, camera.Distance);
         if (gpu.Foliage is { } aheadFoliage) aheadFoliage.Ahead = gpu.Ahead;
+        if (gpu.Characters is { } aheadCharacters) (aheadCharacters.Ahead, aheadCharacters.Kept) = (gpu.Ahead, kept);
+        // The loading counts the eye's height over the ground beyond the game's cameras (EyeLift): terrain textures, object zones, foliage, characters.
+        float groundUnderEye = gpu.Terrain.HeightAt(eye.X, eye.Z);
+        if (gpu.Streamer is { } liftedTerrain) liftedTerrain.GroundUnderEye = groundUnderEye;
+        if (gpu.Objects is { } liftedObjects) liftedObjects.GroundUnderEye = groundUnderEye;
+        if (gpu.Characters is { } liftedCharacters) liftedCharacters.GroundUnderEye = groundUnderEye;
         gpu.Streamer?.Update(eye);
         StageClock.Lap(0);
         if (gpu.Objects is { } lodObjects) lodObjects.LodPixelsPerRadian = render.TerrainPixelScale;   // the generated object levels are placed by the pixel size too
@@ -1404,7 +1410,7 @@ static class WorldFrame
         gpu.Objects?.Update(eye);
         StageClock.Lap(1);
         if (gpu.Foliage is { } lodFoliage) lodFoliage.LodPixelsPerRadian = render.TerrainPixelScale;   // the generated mesh levels measure their deviation in rendered pixels
-        if (gpu.Foliage is { } liftedFoliage) liftedFoliage.GroundUnderEye = gpu.Terrain.HeightAt(eye.X, eye.Z);
+        if (gpu.Foliage is { } liftedFoliage) liftedFoliage.GroundUnderEye = groundUnderEye;
         gpu.Foliage?.Update(eye);
         StageClock.Lap(2);
         gpu.Characters?.Update(eye);

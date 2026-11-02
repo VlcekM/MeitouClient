@@ -447,8 +447,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     /// </summary>
     float Load(float groundDistance, Vector3 eye)
     {
-        float lift = float.IsFinite(GroundUnderEye) ? Math.Max(0, eye.Y - GroundUnderEye - Meitou.Data.World.KenshiCamera.MaxHeightAbovePivot) : 0;
-        return lift == 0 ? groundDistance : MathF.Sqrt(groundDistance * groundDistance + lift * lift);
+        return EyeLift.Apply(groundDistance, EyeLift.Of(eye, GroundUnderEye));
     }
 
     void Update(Vector3 eye, bool settling)

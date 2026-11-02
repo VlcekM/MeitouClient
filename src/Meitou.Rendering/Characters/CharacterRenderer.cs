@@ -49,6 +49,30 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
 
     /// <summary>Characters farther than this from the eye are neither posed nor drawn.</summary>
     public float DrawDistance { get; set; } = 6000;
+    /// <summary>While the eye is above the game's camera heights (<see cref="EyeLift"/>): characters farther than this are neither built, posed nor drawn
+    /// (engine choice: a few pixels tall there).</summary>
+    public float LiftedReach { get; set; } = 3000;
+    /// <summary>The ground's height under the eye (set each frame; unknown: none), for <see cref="LiftedReach"/>.</summary>
+    public float GroundUnderEye { get; set; } = float.NegativeInfinity;
+    /// <summary>A character flight's arrival eye and the player's kept points: characters within <see cref="KeptReach"/> of them are built ahead (their
+    /// meshes and textures), the eye's own being only those it can draw.</summary>
+    public Vector3? Ahead { get; set; }
+    public IReadOnlyList<Vector3> Kept { get; set; } = [];
+    public float KeptReach { get; set; } = 3000;
+    /// <summary>Added to the reach for building, so a character is ready a little before it is drawn.</summary>
+    const float BuildMargin = 300;
+
+    /// <summary>Whether <paramref name="c"/>'s look is built: within <paramref name="reach"/> (and the margin) of the eye, or within <see cref="KeptReach"/> of
+    /// the arrival or a kept point. Every loaded character is in the draw list; built all, they loaded the textures of the whole loaded world.</summary>
+    bool WantsAsset(in CharacterInstance c, Vector3 eye, float reach)
+    {
+        if (Vector3.Distance(eye, c.Position) <= reach + BuildMargin) return true;
+        var at = new Vector2(c.Position.X, c.Position.Z);
+        if (Ahead is { } a && Vector2.Distance(new Vector2(a.X, a.Z), at) <= KeptReach) return true;
+        var kept = Kept;
+        for (int k = 0; k < kept.Count; k++) if (Vector2.Distance(new Vector2(kept[k].X, kept[k].Z), at) <= KeptReach) return true;
+        return false;
+    }
     /// <summary>A presentation fill light (linear colour, 0 in play): added ambient, three times as strong at the silhouette, so a backlit figure reads.</summary>
     public Vector3 Fill { get; set; }
     /// <summary>Assets built per <see cref="Update"/> (0: all of them, for stills), and no new one once <see cref="BuildBudgetMs"/> went on them.</summary>
@@ -449,6 +473,7 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         liveCount = layerCount = attachCount = 0;
         int built = 0, boneTotal = 0, partTotal = 0;
         double buildMs = 0;
+        float reach = EyeLift.Of(eye, GroundUnderEye) > 0 ? Math.Min(DrawDistance, LiftedReach) : DrawDistance;
         var items = Draws.Items;
         for (int i = 0; i < items.Count; i++)
         {
@@ -456,6 +481,7 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
             if (!assets.TryGetValue(inst.Appearance, out var asset))
             {
                 if (Deferred(inst)) continue;
+                if (!portraitKeys.Contains(inst.Key) && !WantsAsset(inst, eye, reach)) continue;
                 // Interactive: the files are read and the meshes prepared on a worker first (CharacterContent.Fetched), then a few a frame are uploaded.
                 if (LoadBudget > 0 && (!content.Fetched(inst.Appearance) || !Covered && built >= LoadBudget || buildMs >= (Covered ? CoveredBudgetMs : BuildBudgetMs))) continue;
                 long buildStart = Stopwatch.GetTimestamp();
@@ -471,7 +497,7 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
             else RestoreBlend(asset);
             float scale = inst.Scale > 0 ? inst.Scale : 1;
             var centre = inst.Position + new Vector3(0, asset.Height * 0.5f * scale, 0);
-            bool far = inst.Hidden || Vector3.Distance(eye, centre) - asset.Radius * scale > DrawDistance;
+            bool far = inst.Hidden || Vector3.Distance(eye, centre) - asset.Radius * scale > reach;
             if (far && !portraitKeys.Contains(inst.Key)) continue;
             if (liveCount == live.Length) Array.Resize(ref live, liveCount * 2);
             ref var l = ref live[liveCount++];

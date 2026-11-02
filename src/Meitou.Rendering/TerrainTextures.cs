@@ -411,6 +411,10 @@ public sealed unsafe class TerrainTextures : IDisposable
     }
 
     /// <summary>The biomes of the cells near <paramref name="eye"/> and, during a character flight, near its arrival eye <paramref name="ahead"/> (kept and loaded alike).</summary>
+    /// <summary>The ground's height under the eye (set each frame; unknown: none): the eye's cells count its height over it beyond the game's cameras
+    /// (<see cref="EyeLift"/>), so a camera high above the land loads neither all the biomes under it nor their full sizes.</summary>
+    public float GroundUnderEye { get; set; } = float.NegativeInfinity;
+
     void UpdateBiomes(Vector3 eye, float materialDistance, Vector3? ahead, IReadOnlyList<Vector3>? kept)
     {
         stamp++;
@@ -420,7 +424,7 @@ public sealed unsafe class TerrainTextures : IDisposable
         var nearest = new Dictionary<int, double>();
         foreach (int b in pinned) nearest[b] = -1;   // the texture field's biomes first, wherever the eye is
         // During a flight the arrival's cells come first: the eye's (the flight path) count as farther than any of them.
-        void Gather(Vector3 at, double lead)
+        void Gather(Vector3 at, double lead, float lift = 0)
         {
             int cx0 = (int)Math.Clamp(Math.Floor((at.X - radius + half) / cs), 0, CellsX - 1), cx1 = (int)Math.Clamp(Math.Floor((at.X + radius + half) / cs), 0, CellsX - 1);
             int cz0 = (int)Math.Clamp(Math.Floor((at.Z - radius + half) / cs), 0, CellsZ - 1), cz1 = (int)Math.Clamp(Math.Floor((at.Z + radius + half) / cs), 0, CellsZ - 1);
@@ -429,7 +433,7 @@ public sealed unsafe class TerrainTextures : IDisposable
                 {
                     double x0 = cx * cs - half, z0 = cz * cs - half;
                     double dx = Math.Max(Math.Max(x0 - at.X, at.X - (x0 + cs)), 0), dz = Math.Max(Math.Max(z0 - at.Z, at.Z - (z0 + cs)), 0);
-                    double d = Math.Sqrt(dx * dx + dz * dz);
+                    double d = Math.Sqrt(dx * dx + dz * dz + (double)lift * lift);
                     if (d > radius) continue;
                     d += lead;
                     for (int k = 0; k < BlendInfoFile.SlotsPerCell; k++)
@@ -437,7 +441,7 @@ public sealed unsafe class TerrainTextures : IDisposable
                 }
         }
         if (ahead is { } arrival) Gather(arrival, 0);
-        Gather(eye, ahead is null ? 0 : radius);
+        Gather(eye, ahead is null ? 0 : radius, EyeLift.Of(eye, GroundUnderEye));
         // Kept points (the player's characters) come after the eye's own cells.
         if (kept is not null) foreach (var k in kept) Gather(k, radius * 2);
         needed.AddRange(nearest.OrderBy(p => p.Value).Select(p => p.Key));

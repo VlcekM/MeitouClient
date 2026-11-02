@@ -291,7 +291,7 @@ sealed class ObjectStreamer(WorldObjects objects, ObjectMeshCache meshes) : IDis
     }
     float NearZone(double x0, double z0, Vector3 eye)
     {
-        float d = MathF.Min(ZoneDistance(x0, z0, eye), NearKeptZone(x0, z0));
+        float d = MathF.Min(EyeLift.Apply(ZoneDistance(x0, z0, eye), EyeLift.Of(eye, GroundUnderEye)), NearKeptZone(x0, z0));
         return Ahead is { } a ? MathF.Min(d, ZoneDistance(x0, z0, a)) : d;
     }
 
@@ -313,6 +313,10 @@ sealed class ObjectStreamer(WorldObjects objects, ObjectMeshCache meshes) : IDis
     }
 
     /// <summary>Distance on the ground plane from <paramref name="eye"/> to a zone's square.</summary>
+    /// <summary>The ground's height under the eye (set each frame; unknown: none): which zones are laid out, kept and unparked counts the eye's height
+    /// over it beyond the game's cameras (<see cref="EyeLift"/>), the kept points and a flight's arrival not.</summary>
+    public float GroundUnderEye { get; set; } = float.NegativeInfinity;
+
     public static float ZoneDistance(double x0, double z0, Vector3 eye)
     {
         double dx = Math.Max(Math.Max(x0 - eye.X, eye.X - (x0 + WorldLayout.ZoneSize)), 0);

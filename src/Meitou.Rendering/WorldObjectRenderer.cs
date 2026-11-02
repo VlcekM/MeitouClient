@@ -383,6 +383,8 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
 
     /// <summary>Points kept loaded besides the eye's (<see cref="ObjectStreamer.Kept"/>).</summary>
     public IReadOnlyList<Vector3> Kept { get => streamer.Kept; set => streamer.Kept = value; }
+    /// <summary>The ground's height under the eye, for the zones' loading (<see cref="ObjectStreamer.GroundUnderEye"/>).</summary>
+    public float GroundUnderEye { get => streamer.GroundUnderEye; set => streamer.GroundUnderEye = value; }
     /// <summary>The camera's distance to its target (<see cref="ObjectStreamer.KeptViewDistance"/>).</summary>
     public float KeptViewDistance { get => streamer.KeptViewDistance; set => streamer.KeptViewDistance = value; }
 

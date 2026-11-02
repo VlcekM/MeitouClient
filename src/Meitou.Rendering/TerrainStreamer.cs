@@ -111,6 +111,8 @@ public sealed class TerrainStreamer : IDisposable
 
     /// <summary>Points whose surrounding biome textures stay loaded besides the eye's ("Keep textures at characters").</summary>
     public IReadOnlyList<Vector3> Kept { get; set; } = [];
+    /// <summary>The ground's height under the eye, for which biome textures load (<see cref="TerrainTextures.GroundUnderEye"/>).</summary>
+    public float GroundUnderEye { get; set; } = float.NegativeInfinity;
 
     public void Update(Vector3 eye)
     {
@@ -146,6 +148,7 @@ public sealed class TerrainStreamer : IDisposable
                 return (window, bounds);
             });
         }
+        if (textures is not null) textures.GroundUnderEye = GroundUnderEye;
         textures?.Update(eye, MaterialDistance, uploads, Ahead, Kept);
         uploads.Run(budgetMs);
     }

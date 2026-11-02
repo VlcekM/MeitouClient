@@ -163,6 +163,16 @@ Title character preparation starts ahead of ordinary streaming during boot; the 
 `--title-preview --screenshot <path>` captures it for visual QA (`--settings-showcase` the settings menu's Graphics page in its states); `--ticks` advances the fight. Save arrival still uses the
 loader's leader-focused camera contract; saved camera pose restoration remains unimplemented.
 
+### Eye height
+
+Engine choice (`EyeLift`): loading adds the eye's height above the ground beyond the game's highest camera (1840, `KenshiCamera.MaxHeightAbovePivot`)
+to a distance across the ground, so the game's camera heights load as before and a free camera high above the land loads only what it can see. It
+measures the terrain's biome textures and which load at full size (`TerrainTextures.UpdateBiomes`), the object zones laid out, kept and unparked
+(`ObjectStreamer.NearZone`), foliage zones and grass pages ([render-foliage](render-foliage.md)). Characters: only those within drawing reach of the eye
+(6000, 3000 while lifted, `CharacterRenderer.LiftedReach`) or 3000 of a kept point or a flight's arrival are built (meshes, textures); all were before,
+the draw list holding every loaded character. **Observed** (play benchmark flights, ~1,400 characters): character textures 576 MB to 122 MB. Drawing
+and the kept points and arrivals still measure as before.
+
 ## Rendering and upscaling
 
 WorldFrame prepares/streams sky/shadows/reflection, scene depth slices and post. Algorithms
