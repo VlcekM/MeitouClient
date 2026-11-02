@@ -2457,3 +2457,290 @@ msgstr "版本 {1}（{2}）。从 GitHub 自动更新。"
 
 msgid "Version {1} for {2}. Not installed by its Setup, so updates open the release page."
 msgstr "版本 {1}（{2}）。不是由安装程序安装的，更新会打开发布页。"
+
+# Meitou 自带文本（启动器 / 标题菜单 / 设置菜单）的简体中文翻译。
+# Kenshi 本体文本来自 locale/zh_CN/LC_MESSAGES/main.mo；本文件只补 Meitou 自己显示的部分。
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: zh_CN\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+msgid "Frames per second while vertical sync is off."
+msgstr "关闭垂直同步时的每秒帧数。"
+
+msgid "Feedback"
+msgstr "反馈"
+
+msgid "Send feedback"
+msgstr "发送反馈"
+
+msgid "Send"
+msgstr "发送"
+
+msgid "Sending"
+msgstr "发送中"
+
+msgid "Exit game"
+msgstr "退出游戏"
+
+msgid "MAIN MENU"
+msgstr "主菜单"
+
+msgid "QUIT"
+msgstr "退出"
+
+msgid "Return to the main menu or quit the game? Unsaved progress will be lost."
+msgstr "返回主菜单还是退出游戏？未保存的进度会丢失。"
+
+msgid "A blow that destroys a character's head cuts it off, by the same rule the Dismemberment setting cuts off limbs. In the game a destroyed head only kills."
+msgstr "摧毁头部的打击会把头切下来，规则与“肢解”设置切断肢体相同。游戏里头部被摧毁只会致死。"
+
+msgid "A save starts paused once it has loaded, so nothing happens before you look around. In the game it runs at once."
+msgstr "读档后游戏是暂停的，你看清局势之前什么都不会发生。游戏里则会立刻开始运行。"
+
+msgid "Also keeps the surroundings of your other squads' members loaded, not only the squad on the squad bar. Costs more video memory."
+msgstr "让你其他小队成员的周边也保持加载，而不只是小队栏上的那一支。会占用更多显存。"
+
+msgid "Back to the game's value."
+msgstr "回到游戏原值。"
+
+msgid "Camera: you hear the world where the camera is. Character: you hear it where your first selected character stands (from the camera while nobody is selected)."
+msgstr "相机：以相机所在处听世界。角色：以你第一个选中角色所在处听（没人选中时按相机）。"
+
+msgid "Every tutorial can show again, the ones already seen included."
+msgstr "所有教程都可以重新显示，包括已经看过的。"
+
+msgid "Fade dust and fog sprites where they meet the ground and walls, light them by the sun and its shadows, and fog them like the land around them. Off keeps them hard-edged and flat."
+msgstr "让尘土与雾的贴片在与地面、墙面相接处淡出，由太阳和阴影照亮，并像周围地面一样被雾笼罩。关闭后它们保持硬边、扁平。"
+
+msgid "Faithful: every graphics feature as the game ships it."
+msgstr "忠实：所有画面特性都按游戏原样。"
+
+msgid "Farms, mines, wells and generators away from your squads keep working. In the game they stop while their area is unloaded, and only farms catch up when you come back."
+msgstr "离小队很远的农场、矿场、水井和发电机继续运作。游戏里它们所在区域卸载后会停工，只有农场会在你回来时补上。"
+
+msgid "How far away sounds are heard: 1x is the original, 4x hears fights, footsteps and machines four times as far. Higher values mix more sounds at once."
+msgstr "声音能传多远：1x 为原版，4x 能听到四倍距离外的战斗、脚步与机械。数值越高同时混合的声音越多。"
+
+msgid "How high the clouds' base sits above the ground."
+msgstr "云底离地的高度。"
+
+msgid "How long a faction waits between attacks on your towns by squads passing by (the game: Normal). Never stops them."
+msgstr "某个派系对你的城镇发动突袭之间要等多久（由路过的队伍执行；游戏：普通）。不会阻止突袭。"
+
+msgid "How many bolts and harpoons stay stuck in the ground and buildings, per kind of bolt; past it the one that flew longest disappears (the game: 60)."
+msgstr "每种弩矢有多少支钉在地面和建筑上；超过后飞得最远的那支消失（游戏：60）。"
+
+msgid "How many fighters a raid on your towns gathers (the game: 1)."
+msgstr "一次对你城镇的突袭会聚集多少名战斗者（游戏：1）。"
+
+msgid "How many squads roam and live in the wild (the game: 1). Affects performance."
+msgstr "荒野中游荡与生活的队伍数量（游戏：1）。影响性能。"
+
+msgid "How often factions start raids on your towns (the game: 1)."
+msgstr "派系对你的城镇发动突袭的频率（游戏：1）。"
+
+msgid "In the game the gunner keeps facing the turret, so once the gun swings toward a target the gunner looks off to the side."
+msgstr "游戏里射手始终面向炮塔，所以炮口转向目标后射手会朝侧面看。"
+
+msgid "In the game they are removed and new ones are made later."
+msgstr "游戏里它们会被移除，之后重新生成。"
+
+msgid "In the game they are removed and new ones are made."
+msgstr "游戏里它们会被移除并重新生成。"
+
+msgid "In the game they are where they stood when you left."
+msgstr "游戏里它们还站在你离开时的位置。"
+
+msgid "Items that were on the ground in the save always stay."
+msgstr "存档里原本在地上的物品永远保留。"
+
+msgid "Kenshi_UI.png not found or unreadable."
+msgstr "找不到 Kenshi_UI.png 或无法读取。"
+
+msgid "MetalFX temporal is the default at every tier; spatial rows are explicit alternatives. The preset sets the render scale, so the separate scale slider is disabled."
+msgstr "各档位默认都是 MetalFX 时域；空间重建的条目是显式备选。预设会决定渲染比例，所以单独的“渲染比例”滑条被禁用。"
+
+msgid "Minutes of unpaused play between autosaves (the game: 10)."
+msgstr "两次自动保存之间不暂停的游戏分钟数（游戏：10）。"
+
+msgid "Off at Low quality. Choose Meitou to keep it on at Low."
+msgstr "低画质下关闭。选择 Meitou 可在低画质下保持开启。"
+
+msgid "Saves the game on its own every few minutes of unpaused play, into three slots in turn (autosave0 to autosave2)."
+msgstr "每隔几分钟不暂停的游戏时间就自动保存一次，轮流写入三个存档位（autosave0 到 autosave2）。"
+
+msgid "Shows the tutorial hints as you play (the game: on)."
+msgstr "游戏过程中显示教程提示（游戏：开）。"
+
+msgid "Size of the squads made from now on: townspeople, roaming squads and raids (the game: 1). Affects performance."
+msgstr "此后新建队伍的人数：城镇居民、游荡队伍和突袭队（游戏：1）。影响性能。"
+
+msgid "The FEEDBACK button at the top right during play. Off, it still shows on the title screen and in the Esc menu."
+msgstr "游戏中右上角的 FEEDBACK 按钮。关闭后，它仍会显示在标题界面和 Esc 菜单里。"
+
+msgid "The camera moves when the pointer is at the edge of the screen."
+msgstr "指针移到屏幕边缘时相机移动。"
+
+msgid "The game counts them twice, so inherited squads come up more often and follow-up raids are about twice as likely."
+msgstr "游戏会把它们算作两次，所以继承的小队出现得更频繁，后续突袭的概率约为两倍。"
+
+msgid "The game keeps it live: with nothing selected a click does nothing, and an unreadable save fails to load."
+msgstr "游戏里它保持实时：没有选中任何东西时点击无效，无法读取的存档会加载失败。"
+
+msgid "The game mirrors the bench's look point through the middle of the world map, so the sitter faces an unrelated direction."
+msgstr "游戏会把长凳的朝向参考点经世界地图中心镜像，所以坐着的人朝向无关方向。"
+
+msgid "The game never picks which breaking sound to play, so it plays none."
+msgstr "游戏从不挑选播放哪个断裂音效，所以一个都不播。"
+
+msgid "The game plays the opposite one (night sounds by day) until the next biome or day change."
+msgstr "游戏会播放相反的那个（白天放夜晚音效），直到下一次生物群系或昼夜变化。"
+
+msgid "The game's data gives it a negative reach, so they throw it only when nearly touching their target."
+msgstr "游戏数据给的是负攻击距离，所以只有在几乎贴到目标时才会挥出。"
+
+msgid "The game's world places them there and draws them inside the room."
+msgstr "游戏的场景把它们放在那里，并把它们画进房间内。"
+
+msgid "Type a name, or press Esc to cancel."
+msgstr "输入一个名称，或按 Esc 取消。"
+
+msgid "When a destroyed limb is cut off: Rare only by a single heavy blow, Frequent also when a wound worsens (the game: Rare)."
+msgstr "被摧毁的肢体何时被切掉：稀有=只有单次重击才切；频繁=伤口恶化时也切（游戏：稀有）。"
+
+msgid "Distances"
+msgstr "距离"
+
+msgid "Hidden"
+msgstr "隐藏"
+
+msgid "Light"
+msgstr "光照"
+
+msgid "Sky"
+msgstr "天空"
+
+msgid "Cage"
+msgstr "笼子"
+
+msgid "Delivering materials"
+msgstr "运送材料"
+
+msgid "Dismantling"
+msgstr "拆解"
+
+msgid "Door"
+msgstr "门"
+
+msgid "Downgrade To:"
+msgstr "降级为："
+
+msgid "Giving first aid"
+msgstr "急救中"
+
+msgid "Hauling"
+msgstr "搬运"
+
+msgid "Only for:"
+msgstr "仅限："
+
+msgid "Picking up"
+msgstr "拾取"
+
+msgid "Resting"
+msgstr "休息"
+
+msgid "Sneak attack"
+msgstr "潜行攻击"
+
+msgid "Recovery rate: {1}x"
+msgstr "恢复速度：{1}x"
+
+msgid "The cage you are in is UNLOCKED.\nNobody knows this but you, you can escape any time you want."
+msgstr "你所在的笼子没锁。\n除了你没人知道，你随时可以逃出去。"
+
+msgid "This is a dangerous wound and is getting worse. If you can regain consciousness before it goes below {1,num} then you could save yourself.\nIf it goes below that then you will have to hope you get rescued by somebody else.\n"
+msgstr "这是危险的伤口，而且正在恶化。如果你能在它降到 {1,num} 以下之前恢复意识，还能自救。\n如果再低于那个值，就只能指望别人来救你了。\n"
+
+msgid "Upgrades To:"
+msgstr "升级为："
+
+msgid "Weather Protections"
+msgstr "天气防护"
+
+msgid "You are locked in a cage.\nThe lock has a difficulty level of {1,num}."
+msgstr "你被锁在笼子里。\n这把锁的难度等级为 {1,num}。"
+
+msgid "You will die at {1}"
+msgstr "你会在 {1} 死亡"
+
+msgid "[Crafted by {1}]"
+msgstr "[由 {1} 打造]"
+
+msgid "{1}-{2} seconds"
+msgstr "{1}-{2} 秒"
+
+msgid "Bench facing"
+msgstr "长凳朝向"
+
+msgid "Camera"
+msgstr "相机"
+
+msgid "Cloud height"
+msgstr "云底高度"
+
+msgid "Command"
+msgstr "指令"
+
+msgid "Global population multiplier"
+msgstr "全局人口倍数"
+
+msgid "Toggle Help"
+msgstr "切换帮助"
+
+msgid "Delete billboard cache"
+msgstr "删除广告牌缓存"
+
+msgid "The bounty will expire in {1,num} hrs"
+msgstr "赏金将在 {1,num} 小时后过期"
+
+msgid "A character knocked down or killed by a blow falls with its own momentum and is pushed away from the hit, harder the heavier the blow, its arms and legs flung by it, and a cut-off head flies the same way. Limp bodies have joints that ease to a stop and a slight muscle tone, so they settle into natural poses. In the game a body drops where it stood, its joints stopping hard."
+msgstr "被击倒或击杀的角色会随自身惯性倒下，并被撞离受击点：击打越重推得越远，四肢随之外甩，被砍下的头也以同样方式飞出。瘫软的身体关节会缓缓停住、带一点肌肉张力，因此会自然落地。游戏里身体就倒在原地，关节是硬生生停住的。"
+
+msgid "A character on a bench with the table behind it sits facing away from the table. The game mirrors the bench's look point through the middle of the world map, so the sitter faces an unrelated direction."
+msgstr "坐在背后有桌子的长凳上时，角色会背朝桌子坐。游戏会把长凳的朝向参考点经世界地图中心镜像，所以坐着的人朝向无关方向。"
+
+msgid "Fighters with martial arts of 20 or less throw their weak punch from a normal punching distance. The game's data gives it a negative reach, so they throw it only when nearly touching their target."
+msgstr "武术不超过 20 的角色，弱拳会在正常出拳距离上挥出。游戏数据给的是负攻击距离，所以只有几乎贴到目标时才会挥。"
+
+msgid "Seen into a building your characters are in, parts of other buildings that run through it are left out, such as the Hub's town wall in the Shinobi Thieves tower. The game's world places them there and draws them inside the room."
+msgstr "从你角色所在的建筑望进去时，穿过它的其他建筑构件会被舍去，例如忍者盗贼塔里那段枢纽镇城墙。游戏场景把它们放在那里，并把它们画进房间内部。"
+
+msgid "Holding the right button on a squad bar portrait opens that character's menu, as on the character itself; a quick right click still selects them and moves the camera to them. The game has no portrait menu."
+msgstr "在小队栏头像上按住右键会打开该角色的菜单（与在角色本体上操作相同）；快速点右键仍然是选中并把镜头移过去。游戏本身没有头像菜单。"
+
+msgid "Shows a generated frame between each two rendered ones through AMD's FSR 3 frame-interpolation layer: nearly twice the frames shown, with a little more input delay. Works with TAA, FSR and DLSS; needs the FidelityFX library. Takes effect after a restart. Now: {1}"
+msgstr "通过 AMD FSR 3 的帧插值层，在每两帧渲染画面之间生成一帧：显示帧数接近翻倍，输入延迟略增。支持 TAA、FSR 与 DLSS；需要 FidelityFX 库。重启后生效。当前：{1}"
+
+msgid "Low holds off: {1}."
+msgstr "低画质下会关闭：{1}。"
+
+msgid "Low quality applied: {1} off until you keep them on."
+msgstr "已应用低画质：{1} 会关闭，直到你手动打开。"
+
+msgid "{1} quality applied."
+msgstr "已应用{1}画质。"
+
+msgid "Heal Neutrals"
+msgstr "治疗中立者"
+
+msgid "Heal All"
+msgstr "治疗所有人"
+
+msgid "Characters with the medic job will also heal downed characters of factions that are not hostile"
+msgstr "有医疗工作的角色也会救治非敌对派系中倒下的人"
+
+msgid "Characters with the medic job will heal any downed character, enemies included"
+msgstr "有医疗工作的角色会救治任何倒下的人，包括敌人"
