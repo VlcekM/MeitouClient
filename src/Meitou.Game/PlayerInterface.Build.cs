@@ -140,6 +140,7 @@ sealed partial class PlayerInterface
     /// </summary>
     public bool BuildKey(Key key, bool shift)
     {
+        uiInput++;
         if (!buildMode) return false;
         switch (key)
         {
@@ -157,7 +158,11 @@ sealed partial class PlayerInterface
         }
     }
 
-    public void BuildKeyUp(Key key) => buildHeld.Remove(key);
+    public void BuildKeyUp(Key key)
+    {
+        uiInput++;
+        buildHeld.Remove(key);
+    }
 
     /// <summary>Once a frame: the held keys move the ghost at the documented speeds, the ghost follows the cursor, is judged and drawn.</summary>
     void UpdateBuild()

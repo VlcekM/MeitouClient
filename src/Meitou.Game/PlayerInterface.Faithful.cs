@@ -21,6 +21,7 @@ sealed partial class PlayerInterface
     void UpdateMenuPause() => session.Simulation.RequestedPause = settingsOpen || faithfulScreens.HasModal;
     public bool UiKey(Key key, bool ctrl = false, bool shift = false)
     {
+        uiInput++;
         if (!UiVisible) return false;
         if (key == Meitou.Engine.Input.Key.Escape && CancelInventoryDrag()) return true;
         if (key == Meitou.Engine.Input.Key.Escape)
@@ -86,9 +87,15 @@ sealed partial class PlayerInterface
         }
         return false;
     }
-    public void UiText(char value) { if (UiVisible) faithfulScreens.TextInput(value); }
+    public void UiText(char value)
+    {
+        uiInput++;
+        if (UiVisible) faithfulScreens.TextInput(value);
+    }
+
     public bool UiScroll(Vector2 p, float steps)
     {
+        uiInput++;
         if (!UiVisible) return false;
         ArrangeUi();
         if (InventoryWheel(p, steps)) return true;

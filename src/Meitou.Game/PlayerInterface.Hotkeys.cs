@@ -38,6 +38,7 @@ sealed partial class PlayerInterface
 
     public void Key(EngineKey key, bool shift)
     {
+        uiInput++;
         // select_0..9 (events 100..109, keys 1..9 and 0 by default): the active squad's members; a second press within half a second centres on the member.
         if (Array.FindIndex(SelectMemberActions, a => Bound(a, key)) is var member and >= 0)
         {

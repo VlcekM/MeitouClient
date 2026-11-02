@@ -75,6 +75,7 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
     public bool MouseDown(MouseButton button, Vector2 p, bool shift, bool ctrl = false, bool alt = false)
     {
         mouse = p;
+        uiInput++;
         (pressShift, pressCtrl) = (shift, ctrl);
         HideTooltip();   // a press captures the mouse, which hides a tooltip (MyGUI)
         if (button == MouseButton.Left && FeedbackButtonDown(p)) return true;
@@ -242,6 +243,7 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
     public void MouseUp(MouseButton button, Vector2 p, bool shift)
     {
         mouse = p;
+        uiInput++;
         EditorPointerUp(button);
         if (ContextMenuRelease(button, p)) return;
         if (button == MouseButton.Left && labelPress is { } labelled)
