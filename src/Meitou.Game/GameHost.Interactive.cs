@@ -1016,7 +1016,7 @@ sealed partial class GameHost
         if (SpikeLog.Enabled && advanceMs > SpikeSimMs)
             for (int k = phases + 1; k < simMs.Length; k++)
                 if (simMs[k] >= 2) SpikeLog.Note($"sim {simNames[k]}", ms: simMs[k]);
-        if (SpikeLog.Enabled) SimWindow(profile.Ticks, advanceMs, ahead, phases + 1, parts);
+        if (SpikeLog.Enabled) SimWindow(profile, advanceMs, ahead, phases + 1, parts);
         profile.Clear();
     }
 
@@ -1027,25 +1027,30 @@ sealed partial class GameHost
     long simWindowTicks;
     int simWindowFrames;
 
-    /// <summary>--log-spikes: every <see cref="SimWindowSeconds"/> one line of the speed, ticks a second, the sim's ms a frame and each system's and part's ms a tick, biggest first.</summary>
-    void SimWindow(int ticks, double advanceMs, double ahead, int firstSystem, int firstPart)
+    /// <summary>
+    /// --log-spikes: every <see cref="SimWindowSeconds"/> one line of the speed, ticks a second, the sim's ms a frame, then ms a tick by phase, by system, by system in the slow
+    /// world phase and by part, biggest first. Keys carry their list's prefix: '#' phase, '~' slow world, '.' part.
+    /// </summary>
+    void SimWindow(TickProfile profile, double advanceMs, double ahead, int firstSystem, int firstPart)
     {
         double now = realTime.Elapsed.TotalSeconds;
         if (simWindowStart < 0) simWindowStart = now;
-        (simWindowTicks, simWindowMain, simWindowAhead, simWindowFrames) = (simWindowTicks + ticks, simWindowMain + advanceMs, simWindowAhead + ahead, simWindowFrames + 1);
-        for (int k = firstSystem; k < simMs.Length - 1; k++)
-            simWindowMs[(k >= firstPart ? "." : "") + simNames[k]] = simWindowMs.GetValueOrDefault((k >= firstPart ? "." : "") + simNames[k]) + simMs[k];
+        (simWindowTicks, simWindowMain, simWindowAhead, simWindowFrames) = (simWindowTicks + profile.Ticks, simWindowMain + advanceMs, simWindowAhead + ahead, simWindowFrames + 1);
+        void Add(string key, double ms) => simWindowMs[key] = simWindowMs.GetValueOrDefault(key) + ms;
+        for (int p = 0; p < firstSystem - 1; p++) Add("#" + simNames[p], simMs[p]);
+        for (int k = firstSystem; k < simMs.Length - 1; k++) Add((k >= firstPart ? "." : "") + simNames[k], simMs[k]);
+        for (int k = 0; k < profile.SlowWorldMs.Length && firstSystem + k < firstPart; k++) Add("~" + simNames[firstSystem + k], profile.SlowWorldMs[k]);
         double seconds = now - simWindowStart;
         if (seconds < SimWindowSeconds) return;
         if (simWindowTicks > 0)
         {
             var inv = CultureInfo.InvariantCulture;
-            string Top(bool partsOnly) => string.Join(", ", simWindowMs.Where(p => p.Key.StartsWith('.') == partsOnly && p.Value / simWindowTicks >= 0.01)
-                .OrderByDescending(p => p.Value).Take(12).Select(p => string.Create(inv, $"{p.Key.TrimStart('.')} {p.Value / simWindowTicks:0.00}")));
-            double tickMs = simWindowMs.Where(p => !p.Key.StartsWith('.') && p.Key != "outside ticks").Sum(p => p.Value) / simWindowTicks;
+            string Top(char kind, int count) => string.Join(", ", simWindowMs.Where(p => (p.Key[0] is '#' or '~' or '.' ? p.Key[0] : ' ') == kind && p.Value / simWindowTicks >= 0.01)
+                .OrderByDescending(p => p.Value).Take(count).Select(p => string.Create(inv, $"{p.Key.TrimStart('#', '~', '.')} {p.Value / simWindowTicks:0.00}")));
+            double tickMs = simWindowMs.Where(p => p.Key[0] == '#').Sum(p => p.Value) / simWindowTicks;
             Console.WriteLine(string.Create(inv, $"simprof   {session.Simulation.Speed:0}x {simWindowFrames / seconds:0} fps, {simWindowTicks / seconds:0} ticks/s, {session.World.Snapshot.Characters.Count} characters; ") +
                 string.Create(inv, $"ms a frame: in frame {simWindowMain / simWindowFrames:0.00}, ahead {simWindowAhead / simWindowFrames:0.00}; ms a tick {tickMs:0.00}: ") +
-                $"{Top(false)}; parts: {Top(true)}");
+                $"phases: {Top('#', 10)}; systems: {Top(' ', 12)}; slow world: {Top('~', 12)}; parts: {Top('.', 12)}");
         }
         simWindowMs.Clear();
         (simWindowStart, simWindowTicks, simWindowMain, simWindowAhead, simWindowFrames) = (now, 0, 0, 0, 0);

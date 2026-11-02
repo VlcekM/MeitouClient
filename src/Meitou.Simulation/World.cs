@@ -326,10 +326,11 @@ public sealed partial class World : IDisposable
         {
             systems[k].SlowWorld(this);
             prof?.Lap(TickProfile.SlowWorld, k);
-            if (k == decideAfter) Decisions.Run(this, paused: false);
+            if (k == decideAfter) RunDecisions(prof);
         }
-        if (decideAfter < 0) Decisions.Run(this, paused: false);
+        if (decideAfter < 0) RunDecisions(prof);
         TaskStart.CheckStarts(this);
+        prof?.Part("task starts");
 
         // 8. Publish.
         Squads.Refresh(table);
@@ -340,6 +341,14 @@ public sealed partial class World : IDisposable
         GameHours += TickSeconds / SecondsPerGameHour;
         if (publish && Settings.PublishSnapshots) Publish();
         prof?.Lap(TickProfile.Publish);
+    }
+
+    // The decisions pass: its own part of the slow world phase, not the next system's.
+    void RunDecisions(TickProfile? prof)
+    {
+        Decisions.Run(this, paused: false);
+        prof?.Part("decisions");
+        prof?.Lap(TickProfile.SlowWorld);
     }
 
     /// <summary>The ticks' time per phase and system (off unless the host turns it on; F12's sim rows).</summary>
