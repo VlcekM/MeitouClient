@@ -48,6 +48,12 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
     public const float TileSize = 32;
     /// <summary>Freezing (docs/game/ragdolls.md "Sleep and limits"): not before this age, then when this share of the bodies is still; at the latest after <see cref="FreezeLatest"/>.</summary>
     public const float FreezeEarliest = 2, FreezeShare = 0.6f, FreezeLatest = 7;
+    /// <summary>
+    /// Meitou (<b>engine choice</b>): a collapsed limb of a character still up dangles only within this of the camera (<see cref="World.ViewPosition"/>; about where the human body's first
+    /// reduced mesh level starts), and one already dangling until 10 % farther; beyond, the limb follows the animation and the physics need not step for it. The original dangles them at
+    /// any distance (docs/game/ragdolls.md "Sleep and limits").
+    /// </summary>
+    public const float LimbReach = 300;
     /// <summary>A body is still under these squared speeds (the game's PhysX sleep velocities: linear² 2.25, angular² 1.96).</summary>
     const float StillLinear = 2.25f, StillAngular = 1.96f;
     /// <summary>How far under the terrain a body's centre must get, in world units, to count as through it (engine choice; a resting limb's centre is at least its radius, 0.4 and up, above it).</summary>
@@ -207,6 +213,11 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
             ragdolls.TryGetValue(id, out var r);
             // The look's ragdoll file asked only of a character that wants one (two cache lookups per standing character every tick were most of this loop in a big battle).
             var wanted = cold.Appearance is null ? RagdollPart.None : Wanted(cold);
+            if (wanted != RagdollPart.None && (wanted & ~RagdollPart.Limbs) == 0 && world.ViewPosition is { } eye)
+            {
+                float reach = r is { Mask: not RagdollPart.None } ? LimbReach * 1.1f : LimbReach;
+                if (Vector3.DistanceSquared(next[i].Position, eye) > reach * reach) wanted = RagdollPart.None;
+            }
             if (wanted != RagdollPart.None && !HasRagdoll(cold)) wanted = RagdollPart.None;
             // A ragdoll a save holds (Saving.RagdollSave): taken the first time the character is seen, used when it starts as a whole body.
             SavedRagdoll? restore = null;

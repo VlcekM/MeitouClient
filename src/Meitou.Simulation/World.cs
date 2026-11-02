@@ -216,6 +216,11 @@ public sealed partial class World : IDisposable
     /// not hashed, not saved.
     /// </summary>
     public float PhysicsSpeed { get; set; } = 1;
+    /// <summary>
+    /// Where the player's camera is (null without one: headless runs, tests). For looks only: the ragdoll system dangles a collapsed limb near it (<see cref="Ragdolls.RagdollSystem.LimbReach"/>).
+    /// An input like <see cref="GameHours"/>: not hashed, not saved.
+    /// </summary>
+    public System.Numerics.Vector3? ViewPosition { get; set; }
     /// <summary>The integer hour of day, 0 to 23 (the game's sky controller hour that the AI compares windows with).</summary>
     public int Hour => Math.Clamp((int)(((GameHours % 24) + 24) % 24), 0, 23);
     public float TickSeconds => Settings.TickSeconds;

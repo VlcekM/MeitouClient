@@ -151,6 +151,7 @@ public sealed class WorldSession : IDisposable
         double seconds = Clock.GameSeconds;
         for (int i = 0; i < count; i++, seconds += Simulation.TickSeconds) starts[i] = (Clock.TotalHoursAt(seconds), Clock.IsDaytimeAt(seconds));
         World.PhysicsSpeed = (float)Simulation.Speed;   // the ragdoll physics steps in real time
+        World.ViewPosition = Camera.Current.Eye;
         runner ??= new TickRunner();
         runner.Start(World, starts);
         running = true;
@@ -246,6 +247,7 @@ public sealed class WorldSession : IDisposable
         World.GameHours = Clock.TotalHours;
         World.Daytime = Clock.IsDaytime;
         World.PhysicsSpeed = (float)(Simulation.Speed > 0 ? Simulation.Speed : Simulation.LastNonZeroSpeed);   // the ragdoll physics steps in real time
+        World.ViewPosition = Camera.Current.Eye;
         long t0 = System.Diagnostics.Stopwatch.GetTimestamp();
         World.RunTick(publish);
         Measure(System.Diagnostics.Stopwatch.GetElapsedTime(t0).TotalMilliseconds);
