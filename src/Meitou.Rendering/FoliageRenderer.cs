@@ -836,6 +836,8 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     const int MaxGrassJobs = 12;
     static readonly int CoveredGrassJobs = Math.Max(MaxGrassJobs, 4 * BackgroundWork.Threads);
     readonly List<(float Distance, ZoneState State, int Key)> grassWanted = [];
+    /// <summary>An eye page waited for room in the grass store last frame (<see cref="UpdateGrass"/>): kept pages are not queued meanwhile.</summary>
+    bool grassEyeWaited;
     readonly (float Distance, ZoneState State, int Key)[] grassPicks = new (float, ZoneState, int)[CoveredGrassJobs];
     int zonesWaiting, grassWaiting, grassNear;
 
@@ -899,11 +901,14 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
                         inFlight--;   // its slot is free for this frame's picks
                         page.Job = null;
                         var result = job.Result;
-                        TryQueuePage(state, key, page, result.Blades, result.Floats, result.Prefixes);
+                        // While an eye page waits for room, a kept page's blades wait too: the room a freed kept page leaves goes to the eye's.
+                        if (!eyeWants && grassEyeWaited) (page.PendingBlades, page.PendingFloats, page.PendingPrefixes) = (result.Blades, result.Floats, result.Prefixes);
+                        else TryQueuePage(state, key, page, result.Blades, result.Floats, result.Prefixes);
                     }
-                    else if (page.PendingBlades is not null) TryQueuePage(state, key, page, page.PendingBlades, page.PendingFloats!, page.PendingPrefixes!);   // no room last time
+                    else if (page.PendingBlades is not null && (eyeWants || !grassEyeWaited)) TryQueuePage(state, key, page, page.PendingBlades, page.PendingFloats!, page.PendingPrefixes!);   // no room last time
                 }
         }
+        grassEyeWaited = eyeWaiting;
         if (eyeWaiting && grassFull && victim is not null)
         {
             FreePage(victim);
@@ -2510,9 +2515,13 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         grassDraws.Clear();
         grassOrder.Clear();
         foreach (var st in zones.Values)
+        {
+            if (st.Pages.Count == 0 || st.Patches.Count == 0) continue;
+            float reach = st.Patches.Max(GrassRange);   // pages kept round a far character (Kept) are not sorted and tested each frame
             foreach (var (k, pg) in st.Pages)
-                if (pg.Buffers is not null)
-                    grassOrder.Add((BoxDistance(st.X0 + k % PagesPerZone * PageSize, st.Z0 + k / PagesPerZone * PageSize, PageSize, eye), st, k, pg));
+                if (pg.Buffers is not null && BoxDistance(st.X0 + k % PagesPerZone * PageSize, st.Z0 + k / PagesPerZone * PageSize, PageSize, eye) is var d && d < reach)
+                    grassOrder.Add((d, st, k, pg));
+        }
         grassOrder.Sort((a, b) => a.Distance.CompareTo(b.Distance));
         foreach (var (d, state, key, page) in grassOrder)
         {
