@@ -157,5 +157,13 @@ wait-for-idles, but leaving out the native segments' seam barriers saved only 0.
 "objects" stage is stage-switch timestamps: the object draws themselves take ~0.06 ms. Terrain's remaining 2.4 ms is its materials: GI, haze or the
 shadow filter off change it by 0.1 ms at most, anisotropy off by 0.12.
 
+**Observed** (2026-11-02, stutter final boss save, 1920x1080 DLSS, RTX 4070, two interleaved pairs; the second branch run's orbit was
+disturbed by other load, every stage up): one reversed scene depth ([renderer-native](renderer-native.md) "Depth") against the two
+slices, render-thread medians idle / orbit: terrain 0.17-0.18 -> 0.08 ms, foliage 0.90-0.92 -> 0.72-0.74 / 0.71-0.72 -> 0.53-0.62, water
+0.06 -> 0.04, objects within noise (0.12-0.14); GPU frame 7.46-7.47 -> 7.07-7.13 ms idle, 7.48-7.55 -> 7.18 orbiting; frame p50 7.3-7.4
+-> 7.1-7.2 ms. Pictures (viewer, offscreen, 1600x900, upscaler off): the parity views within 0.07 mean levels of master except views
+that differ run to run on master itself (hub, forest at night: GI and sway noise of the same size); named views, TAA, DLSS and
+Faithful within 0.11.
+
 Detailed logs/screenshots belong outside the repository. Evidence for original-game claims
 belongs with the corresponding research and its Verified/Observed/Unknown label.
