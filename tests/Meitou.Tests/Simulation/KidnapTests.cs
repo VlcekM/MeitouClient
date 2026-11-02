@@ -244,6 +244,84 @@ public class KidnapTests
         SlaveSave.Write(record, cold, data);
         Assert.False(record.Strings.ContainsKey(SlaveSave.OwnerKey));
     }
+
+    static (SimWorld World, CharacterCold Cold, int City, PopulationData Data) SlaveRig()
+    {
+        var data = ArrestTests.Town();
+        var world = new SimWorld(new WorldSettings { PublishSnapshots = false }, new OpenGroundWalkability((_, _) => 150));
+        var cold = new Combatant().MakeCold();
+        cold.Faction = data.Relations.PlayerFaction;
+        var squad = new Squad { Id = 1, TemplateId = "t", Faction = data.Relations.PlayerFaction };
+        world.Squads.Add(squad);
+        Add(world, cold, Vector2.Zero, squad);
+        return (world, cold, data.FactionIndex("50-a"), data);
+    }
+
+    [Fact]
+    public void Escaping_stamps_the_game_hours_and_staying_escaped_keeps_the_stamp()
+    {
+        var (world, cold, city, _) = SlaveRig();
+        using var owned = world;
+        world.GameHours = 100;
+        FixtureRegistry.Enslave(world, cold, city);
+        Assert.Equal(0, cold.SlaveSince);   // state 1 is not stamped
+        FixtureRegistry.TagEscaped(world, cold);
+        Assert.Equal(100, cold.SlaveSince);
+        world.GameHours = 105;
+        FixtureRegistry.TagEscaped(world, cold);
+        Assert.Equal(100, cold.SlaveSince);
+    }
+
+    [Fact]
+    public void An_escaped_slave_lies_low_to_ex_slave_after_12_hours_then_free_after_4_days_and_a_future_stamp_frees_at_once()
+    {
+        var (world, cold, city, _) = SlaveRig();
+        using var owned = world;
+        world.GameHours = 100;
+        FixtureRegistry.Enslave(world, cold, city);
+        cold.SlaveSince = 200;   // a slave (1) never lies low, whatever its stamp
+        FixtureRegistry.LayLow(world, cold);
+        Assert.Equal((1, city), (cold.SlaveState, cold.SlaveOwner));
+
+        FixtureRegistry.TagEscaped(world, cold);
+        world.GameHours = 112;
+        FixtureRegistry.LayLow(world, cold);
+        Assert.Equal(2, cold.SlaveState);   // not more than 12 hours
+        world.GameHours = 112.5;
+        FixtureRegistry.LayLow(world, cold);
+        Assert.Equal((3, city, 112.5), (cold.SlaveState, cold.SlaveOwner, cold.SlaveSince));
+        world.GameHours = 112.5 + 96;
+        FixtureRegistry.LayLow(world, cold);
+        Assert.Equal(3, cold.SlaveState);   // not more than 4 days
+        world.GameHours = 112.5 + 96.5;
+        FixtureRegistry.LayLow(world, cold);
+        Assert.Equal((0, -1), (cold.SlaveState, cold.SlaveOwner));
+
+        // A stamp later than the clock (a save's ssct ahead of the clock it loads with) frees at once.
+        FixtureRegistry.Enslave(world, cold, city);
+        FixtureRegistry.TagEscaped(world, cold);
+        world.GameHours -= 0.001;
+        FixtureRegistry.LayLow(world, cold);
+        Assert.Equal((0, -1), (cold.SlaveState, cold.SlaveOwner));
+    }
+
+    [Fact]
+    public void The_save_keeps_the_ex_slave_state_and_the_ssct_stamp()
+    {
+        var (world, cold, city, data) = SlaveRig();
+        using var owned = world;
+        (cold.SlaveState, cold.SlaveOwner, cold.SlaveSince) = (3, city, 34.00063);
+        var record = SyntheticTown.Rec("1-s", FcsRecordType.CHARACTER, "state");
+        SlaveSave.Write(record, cold, data);
+        Assert.Equal(34.00063f, record.Floats[SlaveSave.SinceKey]);
+        var loaded = new Combatant().MakeCold();
+        SlaveSave.Read(record, loaded, data);
+        Assert.Equal((3, city, (double)34.00063f), (loaded.SlaveState, loaded.SlaveOwner, loaded.SlaveSince));
+
+        record.Ints[SlaveSave.StateKey] = 4;   // out of range: free
+        SlaveSave.Read(record, loaded, data);
+        Assert.Equal((0, -1), (loaded.SlaveState, loaded.SlaveOwner));
+    }
 }
 
 /// <summary>The Skin Bandits' small raid against an outpost of the installed game's data. Skipped without the game.</summary>
