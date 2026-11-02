@@ -70,7 +70,7 @@ public static class SquadFactory
     /// <summary>Offset of member number <paramref name="i"/> from the squad position.</summary>
     public static Vector2 Offset(int i, float spacing = 3) => new(spacing * (i % 8), spacing * (i / 8) + (i % 2));
 
-    public static SquadPlan Plan(GameDatabase db, SquadTemplate template, float multiplier, ulong seed, ulong key, IWorldStates? states = null)
+    public static SquadPlan Plan(GameDatabase db, SquadTemplate template, float multiplier, ulong seed, ulong key, IWorldStates? states = null, bool checkWorldState = true)
     {
         states ??= IWorldStates.None;
         var members = new List<MemberPlan>();
@@ -89,8 +89,8 @@ public static class SquadFactory
 
         bool Gated(string recordId) => db.Find(recordId) is { } r && r.GetReferences("world state").Any(w => !IWorldStates.Passes(states, db, w.TargetStringId, w.Values.Value0));
 
-        // The squad itself can be gated by its own world state (section 4: the AND gate for the spawn).
-        if (template.WorldState.Any(w => !IWorldStates.Passes(states, db, w.Id, w.V0)))
+        // The squad itself can be gated by its own world state (section 4: the AND gate for the spawn); not a slave squad made by its owner's recursion (FUN_140583a10 never tests it).
+        if (checkWorldState && template.WorldState.Any(w => !IWorldStates.Passes(states, db, w.Id, w.V0)))
         {
             problems.Add($"squad '{template.Name}' is gated by a world state that does not hold");
             return new SquadPlan(template, [], [], problems);
@@ -145,7 +145,7 @@ public static class SquadFactory
                 problems.Add($"Missing squad slaves data reference ({slave.Id}) for squad '{template.Name}'");
                 continue;
             }
-            slaves.Add(Plan(db, SquadTemplate.From(record), multiplier, seed, Rng.Mix(key ^ (ulong)slaves.Count + SeedSalts.SlaveSquad), states));
+            slaves.Add(Plan(db, SquadTemplate.From(record), multiplier, seed, Rng.Mix(key ^ (ulong)slaves.Count + SeedSalts.SlaveSquad), states, checkWorldState: false));
         }
         return new SquadPlan(template, members, slaves, problems);
     }
