@@ -1742,6 +1742,8 @@ static class WorldFrame
         // Then the particles, blended over it and tested against the near slice's depth (they are not fogged; docs/formats/fogfeatures.md).
         if (gpu.Particles is { } particleDraw && particleNear > 0)
         {
+            particleDraw.RangeFade = particleDraw.Lit = post.Options.MeitouFog;
+            particleDraw.SunShade = ShaftDarkening(post.Options, light, sun.Y) * ShaftCloudFade(Overcast(gpu));
             particleDraw.Prepare(particleViewProjection, particleNearProjection, particleNear, view, eye, sun, post.ParticlePixelsPerUnit(camera.Projection(aspect, 1, 10).M22), (float)post.RenderWidth * post.RenderHeight, post.Options.ParticleDivisor,
                 lowViewProjection: post.ParticlesAfterUpscale ? particleLowProjection : null, lowCloseViewProjection: post.ParticlesAfterUpscale ? particleLowNearProjection : null);
             if (particleDraw.FullCount > 0)
@@ -1760,6 +1762,13 @@ static class WorldFrame
                     host.Open(13, post.ParticleTargets(divisor));
                     particleDraw.Record(divisor, post.SoftParticleDepth(divisor));
                     host.Close();
+                    // Again against each block's farthest depth, where the chain keeps both (the depth-aware upsample takes each pixel's own surface from either).
+                    if (post.ParticleTargetsFar(divisor) is { } farTargets)
+                    {
+                        host.Open(13, farTargets);
+                        particleDraw.Record(divisor, post.SoftParticleDepthFar(divisor));
+                        host.Close();
+                    }
                     post.MarkParticleDraws();
                     post.CompositeParticlesLow(divisor);
                 }

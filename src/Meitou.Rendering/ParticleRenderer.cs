@@ -18,8 +18,8 @@ namespace Meitou.Rendering;
 /// </summary>
 public sealed unsafe class ParticleRenderer : IDisposable
 {
-    const string Vertex = """
-        #version 330 core
+    static readonly string Vertex = "#version 330 core\n" + AtmosphereShaders.Functions + FogVolumeShaders.Functions + """
+
         layout(location = 0) in vec2 aCorner;       // the quad's corner, -0.5 .. 0.5, in triangle-strip order
         layout(location = 1) in vec4 aPositionRotation;   // camera-relative position, texture rotation (radians)
         layout(location = 2) in vec4 aDirectionWidth;     // unit direction of travel, width
@@ -37,6 +37,11 @@ public sealed unsafe class ParticleRenderer : IDisposable
         out vec4 vColour;
         out float vDepth;                           // the view depth (clip w), for the soft fade
         out float vSoft;                            // the soft fade's distance: a quarter of the sprite's size, 2 to 300 units
+        uniform vec4 uLitVertex;                    // x 1: lit (Meitou fog switch), z the glow towards the sun
+        uniform vec3 uParticleEye;                  // the eye in the world (the positions are relative to it)
+        out vec3 vHazeMul, vHazeAdd;                // the haze and the fog volumes in front of the corner: colour * mul + add
+        out vec3 vWorld;                            // the corner in the world (the sun's shadow)
+        out float vGlow;                            // the light scattered forward when the sprite is seen towards the sun
         void main()
         {
             vec3 position = aPositionRotation.xyz;
@@ -76,12 +81,41 @@ public sealed unsafe class ParticleRenderer : IDisposable
             vDepth = gl_Position.w;
             vUv = vec2(aCorner.x + 0.5, 0.5 - aCorner.y);
             vColour = vec4(aColour.rgb * uColourScale.rgb, aColour.a * uColourScale.a);
+            vWorld = uParticleEye + world;
+            vHazeMul = vec3(1.0);
+            vHazeAdd = vec3(0.0);
+            vGlow = 1.0;
+            if (uLitVertex.x > 0.5)
+            {
+                atmoApplyCoefficients(uParticleEye, vWorld, vHazeMul, vHazeAdd);
+                // And the placed fog volumes and the effects' fog spheres in front of it, blended over that as the game blends them over the hazed scene
+                // (the sprites came after them, so a dust cloud behind a fog bank showed through it).
+                float dist = length(world);
+                vec3 fogAdd;
+                float fogTrans;
+                fogVolumesAccumulate(uParticleEye, world / max(dist, 1e-3), dist, fogAdd, fogTrans);
+                vHazeMul *= fogTrans;
+                vHazeAdd = vHazeAdd * fogTrans + fogAdd;
+                vGlow = 1.0 + uLitVertex.z * pow(max(dot(normalize(world), uAtmoSun.xyz), 0.0), 8.0);
+            }
         }
         """;
 
-    const string Fragment = """
-        #version 330 core
+    static readonly string Fragment = "#version 330 core\n" + ShadowShaders.Functions + """
+
         in vec2 vUv;
+        in vec3 vHazeMul, vHazeAdd;
+        in vec3 vWorld;
+        in float vGlow;
+        uniform vec4 uLitFragment;                  // x 1: lit (Meitou fog switch), y how much of the light the sun's shadow takes, z 0 alpha blend, 1 additive, 2 neither
+        // The sun's visibility at a point of the air: one bilinear compare in the first cascade that holds it (1 beyond them).
+        float particleSun(vec3 w)
+        {
+            int c = shadowCascade(w);
+            if (c < 0) return 1.0;
+            vec3 tile = (uShadowTile[c] * vec4(w - uShadowOrigin.xyz, 1.0)).xyz;
+            return shadowCascadeLayer(tile.xy, c, tile.z);
+        }
         in vec4 vColour;
         in float vDepth;
         in float vSoft;
@@ -97,6 +131,18 @@ public sealed unsafe class ParticleRenderer : IDisposable
             vec4 t = texture(uTexture, vUv);
             if (min(vColour.r, min(vColour.g, vColour.b)) < 0.0) t.rgb = vec3(max(t.r, max(t.g, t.b)));
             vec4 c = t * abs(vColour);
+            // Meitou fog: dust and smoke lit as the scene is (the game's sprites are flat, and not fogged): darker where the sun is shadowed, brighter seen
+            // towards the sun, then seen through the haze in front of them like the land behind; an additive sprite (fire) only dimmed by the haze.
+            if (uLitFragment.x > 0.5 && uLitFragment.z < 1.5)
+            {
+                if (uLitFragment.z < 0.5)
+                {
+                    float sun = particleSun(vWorld);
+                    c.rgb *= (1.0 - uLitFragment.y * (1.0 - sun)) * mix(1.0, vGlow, sun);
+                    c.rgb = c.rgb * vHazeMul + vHazeAdd;
+                }
+                else c.rgb *= vHazeMul;
+            }
             // Meitou fog: the sprite fades out over its last vSoft units before the surface behind it, instead of cutting into it.
             if (uSoft.x > 0.0)
             {
@@ -130,6 +176,18 @@ public sealed unsafe class ParticleRenderer : IDisposable
     readonly VertexArrayBindings vertexSource;
     readonly GpuBufferBinding[] bindings = new GpuBufferBinding[5];
     readonly UniformHandle viewProjection, cameraRight, cameraUp, mode, anchor, commonDirection, commonUp, colourScale, coverageMode, coverageLimit, coverageGain, soft;
+    readonly UniformHandle litVertex, litFragment, particleEye;
+    /// <summary>
+    /// Meitou (the <c>fog</c> switch): alpha sprites lit as the scene is, darker where the sun is shadowed (by <see cref="SunShade"/>), brighter seen towards
+    /// the sun, and seen through the haze in front of them; additive ones dimmed by the haze. The game's are flat and not fogged, so a dust cloud had one
+    /// brightness everywhere, in sun and in shade, near and far (docs/render-post.md "Fog").
+    /// </summary>
+    public bool Lit { get; set; }
+    /// <summary>How much of the light on a sprite the sun's shadow takes (the light shafts' darkening: the sun's share of the light).</summary>
+    public float SunShade { get; set; }
+    /// <summary>How much brighter a sprite seen straight towards the sun is (forward scattering; falls off as the eighth power of the cosine).</summary>
+    public const float SunGlow = 0.5f;
+    Vector3 frameEye;
     readonly SamplerSlot textureSlot, softDepthSlot;
     readonly SampledImage white;
     readonly Dictionary<string, SampledImage?> textures = new(StringComparer.OrdinalIgnoreCase);
@@ -152,6 +210,12 @@ public sealed unsafe class ParticleRenderer : IDisposable
     public bool Enabled { get; set; } = true;
     /// <summary>The Tab panel's weather particles slider at 0: the weather's groups are neither simulated nor drawn (the map's effect placers, fires and smoke, stay; so do the effects' fog volumes).</summary>
     public bool WeatherParticles { get; set; } = true;
+    /// <summary>
+    /// Meitou (the <c>fog</c> switch): each unit is drawn faded by its distance (<see cref="EffectUnit.RangeFade"/>). The game simulates an effect only within
+    /// a distance of the camera; a unit coming into it appeared with its whole cloud at once and one leaving it vanished (clouds of dust popping in and out
+    /// some 14 km away in the Great Desert's streamers).
+    /// </summary>
+    public bool RangeFade { get; set; }
     /// <summary>Seconds simulated before the first picture, for the new groups: null (the default) is each system's longest particle life, capped at <see cref="MaxAutoPrewarm"/>; 0 starts empty.</summary>
     public float? PrewarmSeconds { get => weatherGroups.PrewarmSeconds; set => weatherGroups.PrewarmSeconds = value; }
     public const float MaxAutoPrewarm = WeatherGroups.MaxAutoPrewarm;
@@ -224,6 +288,7 @@ public sealed unsafe class ParticleRenderer : IDisposable
         textureSlot = program.Sampler("uTexture");
         softDepthSlot = program.Sampler("uSoftDepth");
         soft = program.Uniform("uSoft");
+        (litVertex, litFragment, particleEye) = (program.Uniform("uLitVertex"), program.Uniform("uLitFragment"), program.Uniform("uParticleEye"));
         float[] corners = [-0.5f, -0.5f, -0.5f, 0.5f, 0.5f, -0.5f, 0.5f, 0.5f];   // triangle strip
         quad = DeviceBuffer.Create(gpu, sizeof(float) * (ulong)corners.Length, BufferUse.Vertex, "particle quad");
         using (var batch = gpu.Uploads.Begin()) batch.Write(quad, 0, System.Runtime.InteropServices.MemoryMarshal.AsBytes(corners.AsSpan()));
@@ -400,6 +465,9 @@ public sealed unsafe class ParticleRenderer : IDisposable
     /// <summary>Engine choice (2026-10-12, the user's taste): weather effects drawn fainter than the game's data says. Vain's red rain (`Kenshi_red_Rain`) at half its opacity.</summary>
     static float EffectOpacity(string effect) => effect.Equals("Kenshi_red_Rain", StringComparison.OrdinalIgnoreCase) ? 0.5f : 1;
 
+    /// <summary>The most a unit's particles are drawn ahead along their velocity (its slowest step, 10 Hz).</summary>
+    const float MaxDrawAhead = 0.1f;
+
     public void Update(double seconds, WorldCamera camera)
     {
         long start = Stopwatch.GetTimestamp();
@@ -503,7 +571,7 @@ public sealed unsafe class ParticleRenderer : IDisposable
         Matrix4x4? lowViewProjection = null, Matrix4x4? lowCloseViewProjection = null)
     {
         long start = Stopwatch.GetTimestamp();
-        PrepareInner(viewProjectionMatrix, closeViewProjection, nearPlane, view, eye, sunDirection, pixelsPerUnit, screenPixels, forcedDivisor);
+        PrepareInner(viewProjectionMatrix, closeViewProjection, nearPlane, view, eye, sunDirection, pixelsPerUnit, screenPixels, forcedDivisor, late: lowViewProjection is not null);
         // The low-resolution draws' own matrices: unjittered when they are blended after the upscaler (PostProcess.ParticlesAfterUpscale), whose output is.
         frameLowVp = lowViewProjection is { } lowVp ? Matrix4x4.CreateTranslation(eye) * lowVp : frameVp;
         frameLowCloseVp = lowCloseViewProjection is { } lowClose ? Matrix4x4.CreateTranslation(eye) * lowClose : frameCloseVp;
@@ -547,8 +615,10 @@ public sealed unsafe class ParticleRenderer : IDisposable
     /// <summary>Mean main-thread cost of Update and Draw (draw includes the wait for the simulation) per frame, in ms (for the benchmarks).</summary>
     public (double Update, double Draw) MeanMainThreadMilliseconds => (updateFrames == 0 ? 0 : updateTotal * 1000.0 / Stopwatch.Frequency / updateFrames, drawFrames == 0 ? 0 : drawTotal * 1000.0 / Stopwatch.Frequency / drawFrames);
 
-    void PrepareInner(Matrix4x4 viewProjectionMatrix, Matrix4x4 closeViewProjection, float nearPlane, Matrix4x4 view, Vector3 eye, Vector3 sunDirection, float pixelsPerUnit, float screenPixels, int forcedDivisor)
+    void PrepareInner(Matrix4x4 viewProjectionMatrix, Matrix4x4 closeViewProjection, float nearPlane, Matrix4x4 view, Vector3 eye, Vector3 sunDirection, float pixelsPerUnit, float screenPixels, int forcedDivisor, bool late)
     {
+        (lastDivisors, nextDivisors) = (nextDivisors, lastDivisors);
+        nextDivisors.Clear();
         Sync();
         Array.Clear(divisorCounts);
         drawnParticles = 0;
@@ -576,6 +646,8 @@ public sealed unsafe class ParticleRenderer : IDisposable
         {
             var offset = u.Anchor - eye;
             if (u.Simulation is not { } sim || u.CatchingUp) continue;
+            float shown = RangeFade ? u.RangeFade : 1;
+            if (shown <= 0) continue;
             drawnUnits++;
             for (int t = 0; t < sim.Techniques.Count; t++)
             {
@@ -588,7 +660,8 @@ public sealed unsafe class ParticleRenderer : IDisposable
                 // Built in ordinary memory and copied over in one go: the frame constants are write-combined upload memory, where per-field
                 // writes and the partition's reads are slow (this was 5 ms for 18000 particles).
                 if (scratch.Length < n) scratch = new ParticleInstance[Math.Max(n, scratch.Length * 2)];
-                int written = sim.Collect(t, scratch.AsSpan(0, n), u.Tint, u.Alpha * EffectOpacity(u.Effect.Name), offset);
+                // A unit stepped at a lower rate (StartSimulation) is drawn ahead by the time it has queued since its last step, so it moves every frame.
+                int written = sim.Collect(t, scratch.AsSpan(0, n), material.Blend == ParticleBlend.Add ? u.Tint * shown : u.Tint, u.Alpha * EffectOpacity(u.Effect.Name) * shown, offset, Math.Min(u.Pending, MaxDrawAhead));
                 if (written == 0) continue;
                 int close = PartitionByDepth(scratch.AsSpan(0, written), forward, nearPlane);
                 // Metal's near-plane particle path is not safe yet: a large dust sprite crossing the close projection
@@ -602,19 +675,28 @@ public sealed unsafe class ParticleRenderer : IDisposable
                 float fill = 0;
                 bool fire = placed && material.Blend == ParticleBlend.Add;
                 if (pixelsPerUnit > 0 && !rain && !fire && (material.Blend == ParticleBlend.Alpha || material.Blend == ParticleBlend.Add))
-                    (divisor, fill) = DivisorFor(scratch.AsSpan(0, written), forward, nearPlane, pixelsPerUnit, screenPixels, forcedDivisor);
+                {
+                    (divisor, fill) = DivisorFor(scratch.AsSpan(0, written), forward, nearPlane, pixelsPerUnit, screenPixels, forcedDivisor,
+                        lastDivisors.TryGetValue((u, t), out int last) ? last : 0);
+                    nextDivisors[(u, t)] = divisor;
+                }
                 draws.Add(new DrawItem { Instances = instances, Count = written, Close = close, Technique = def, Material = material, Texture = texture, Divisor = divisor, Fill = fill, Rain = rain, Fire = fire });
                 drawnParticles += written;
             }
         }
         if (Tracers.Count > 0) AddTracers(frame, eye, forward, nearPlane);
-        // A size is worth its two extra passes (the depth reduction, the composite) only when it saves enough fill: below MinLayers it stays full size.
+        // A size is worth its two extra passes (the depth reduction, the composite) only when it saves enough fill: it is taken up from MinLayers and left
+        // below half that (so a storm thickening or the view turning does not flip the dust between full size and low resolution, which looked
+        // different, every few frames). Not after a vendor upscaler: there the low-resolution draws are kept out of what it upscales, and full-size
+        // dust drifting in it trailed in streaks.
         if (forcedDivisor == 0)
-            foreach (int size in (ReadOnlySpan<int>)[2, 4])
+            for (int s = 0; s < 2; s++)
             {
+                int size = s == 0 ? 2 : 4;
                 float layers = 0;
                 foreach (var d in draws) if (d.Divisor == size) layers += d.Fill;
-                if (layers >= MinLayers) continue;
+                sizeInUse[s] = late || (sizeInUse[s] ? layers >= MinLayers * 0.5f : layers >= MinLayers);
+                if (sizeInUse[s]) continue;
                 for (int i = 0; i < draws.Count; i++)
                     if (draws[i].Divisor == size) { var d = draws[i]; d.Divisor = 1; draws[i] = d; }
             }
@@ -627,7 +709,7 @@ public sealed unsafe class ParticleRenderer : IDisposable
         var right = new Vector3(view.M11, view.M21, view.M31);
         var up = new Vector3(view.M12, view.M22, view.M32);
         float ambient = Math.Clamp(sunDirection.Y * 5 + 0.2f, 0.1f, 1f);
-        (frameVp, frameCloseVp, frameRight, frameUp, frameAmbient) = (vp, closeVp, right, up, ambient);
+        (frameVp, frameCloseVp, frameRight, frameUp, frameAmbient, frameEye) = (vp, closeVp, right, up, ambient, eye);
         coveragePending = true;
     }
 
@@ -690,8 +772,17 @@ public sealed unsafe class ParticleRenderer : IDisposable
     /// <summary>Whether the last <see cref="Prepare"/> has low-resolution draws, whose coverage the post chain derives from the accumulation target (<see cref="PostProcess"/>).</summary>
     public bool HasLowCoverage => coveragePending && LowCount > 0;
 
-    /// <summary>The size a draw of these particles gets: the larger their mean screen size, the smaller the target (soft big sprites lose nothing at a fraction of the pixels; thin streaks keep their full size).</summary>
-    static (int Divisor, float Fill) DivisorFor(ReadOnlySpan<ParticleInstance> instances, Vector3 forward, float nearPlane, float pixelsPerUnit, float screenPixels, int forced)
+    /// <summary>Each unit's techniques' sizes last frame and this one (<see cref="DivisorFor"/>'s hysteresis), and whether each low-resolution size (half, quarter)
+    /// was in use last frame.</summary>
+    Dictionary<(EffectUnit, int), int> lastDivisors = [], nextDivisors = [];
+    readonly bool[] sizeInUse = new bool[2];
+
+    /// <summary>
+    /// The size a draw of these particles gets: the larger their mean screen size, the smaller the target (soft big sprites lose nothing at a fraction of the
+    /// pixels; thin streaks keep their full size). With <paramref name="last"/> (the size the same technique of the same unit had last frame) a size is
+    /// left only 15 % past its threshold, so a draw near one does not flip between sizes, which looked different, as the camera moves.
+    /// </summary>
+    static (int Divisor, float Fill) DivisorFor(ReadOnlySpan<ParticleInstance> instances, Vector3 forward, float nearPlane, float pixelsPerUnit, float screenPixels, int forced, int last = 0)
     {
         double area = 0;
         foreach (ref readonly var p in instances)
@@ -702,7 +793,12 @@ public sealed unsafe class ParticleRenderer : IDisposable
         float fill = (float)(area / screenPixels);
         if (forced > 0) return (forced >= 3 ? 4 : forced, fill);
         double size = Math.Sqrt(area / instances.Length);
-        return (size >= QuarterPixels ? 4 : size >= HalfPixels ? 2 : 1, fill);
+        int divisor = size >= QuarterPixels ? 4 : size >= HalfPixels ? 2 : 1;
+        if (last == 4 && size >= QuarterPixels * 0.85) divisor = 4;
+        else if (last >= 2 && divisor < 2 && size >= HalfPixels * 0.85) divisor = 2;
+        else if (last == 2 && divisor == 4 && size < QuarterPixels * 1.15) divisor = 2;
+        else if (last == 1 && divisor == 2 && size < HalfPixels * 1.15) divisor = 1;
+        return (divisor, fill);
     }
 
     void RecordDraws(IGpuCommandList cmd, in DrawState baseState, in PassTargets targets, bool hasDepth, bool hasColour,
@@ -710,6 +806,7 @@ public sealed unsafe class ParticleRenderer : IDisposable
     {
         int coverage = kind == Kind.Coverage ? 1 : 0;
         var (vp, closeVp, right, up, ambient) = (frameVp, frameCloseVp, frameRight, frameUp, frameAmbient);
+        program.ApplyGlobals();   // the atmosphere's and the shadows' uniforms (the Meitou lit sprites)
         if (kind == Kind.Low) (vp, closeVp) = (frameLowVp, frameLowCloseVp);
         foreach (var d in draws)
         {
@@ -759,6 +856,10 @@ public sealed unsafe class ParticleRenderer : IDisposable
                 };
                 var sd = softDepth.GetValueOrDefault();
                 program.Set(soft, fade, sd.Near, sd.Far, sd.ZeroToOne ? 1f : 0f);
+                bool litOn = Lit && coverage == 0;
+                program.Set(litVertex, litOn ? 1 : 0, 0, SunGlow, 0);
+                program.Set(litFragment, litOn ? 1 : 0, Math.Clamp(SunShade, 0, 1), m.Blend == ParticleBlend.Alpha ? 0 : m.Blend == ParticleBlend.Add ? 1 : 2, 0);
+                program.Set(particleEye, frameEye);
                 program.Bind(softDepthSlot, softDepth is { } bound ? bound.Texture : white.Sampled());
                 cmd.SetRaster(state.Cull, state.Front);
                 cmd.SetDepth(state.DepthTest, state.DepthWrite, state.Compare);

@@ -635,7 +635,9 @@ public sealed class ParticleSimulation
     // ---- reading ----
 
     /// <summary>Technique <paramref name="index"/>'s particles into <paramref name="destination"/> (at least its <see cref="TechniqueParticleCount"/> long); returns how many were written. The colour is multiplied by <paramref name="tint"/> (rgb) and <paramref name="alpha"/>; <paramref name="worldOffset"/> is added to every position (the sim keeps small numbers near its own origin; the caller adds where that origin is).</summary>
-    public int Collect(int index, Span<ParticleInstance> destination, Vector3 tint, float alpha, Vector3 worldOffset = default)
+    /// <param name="ahead">Seconds the particles are drawn ahead along their velocity (time queued but not yet simulated, so a unit stepped at a lower rate
+    /// still moves every frame).</param>
+    public int Collect(int index, Span<ParticleInstance> destination, Vector3 tint, float alpha, Vector3 worldOffset = default, float ahead = 0)
     {
         var t = techniques[index];
         int n = Math.Min(t.Count, destination.Length);
@@ -646,7 +648,7 @@ public sealed class ParticleSimulation
             float len = v.Length();
             destination[i] = new ParticleInstance
             {
-                Position = new Vector3(t.X[i], t.Y[i], t.Z[i]) + offset,
+                Position = new Vector3(t.X[i], t.Y[i], t.Z[i]) + offset + v * ahead,
                 Rotation = t.Rotation[i],
                 Direction = len > 1e-4f ? v / len : Vector3.Zero,
                 Width = t.Width[i], Height = t.Height[i], Depth = t.Depth[i],

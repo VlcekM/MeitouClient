@@ -197,6 +197,12 @@ public sealed class EffectUnit
         }
     }
 
+    /// <summary>
+    /// How much of the unit is shown by its distance (Meitou, <c>ParticleRenderer.RangeFade</c>): 1 out to 85 % of the distance it is simulated within, falling
+    /// to 0 at that distance, so it is out of sight when it starts being simulated (a cloud of its whole age at once) and when it stops (all its particles gone).
+    /// </summary>
+    public float RangeFade { get; set; } = 1;
+
     public void Activate()
     {
         Simulation = new ParticleSimulation(System, Seed) { EmissionStopped = Stopped, Orientation = Orientation, Size = Size, LifeScale = LifeScale };
@@ -381,6 +387,7 @@ public abstract class EffectGroup
         float reach = float.IsPositiveInfinity(u.Radius) ? 0 : u.Radius;
         bool near = alwaysActive || u.DistanceToCamera - reach <= range;
         bool far = !alwaysActive && u.DistanceToCamera - reach > range * 1.15f;
+        u.RangeFade = alwaysActive ? 1 : Math.Clamp((range - (u.DistanceToCamera - reach)) / (0.15f * range), 0, 1);
         if (!u.Active && near && !u.Done)
         {
             u.Activate();
