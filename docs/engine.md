@@ -12,7 +12,7 @@ WorldSession owns world, clocks, input/bindings, camera and last two snapshots. 
 (default config tickRate), max10 ticks/frame; simulation1/30 game second, speed0/1/2/5 and
 2*speed budget. Control precedes simulation; interpolation uses each clock's alpha, shortest
 angle rotation and cuts on mode changes. The authoritative time/order/determinism details are
-in simulation. Host copies camera state into WorldCamera and snapshots into CharacterDrawList. The next world tick runs on its own
+in simulation. Host copies camera state into WorldCamera and snapshots into CharacterDrawList (every frame for characters in reach; those beyond it in `Distant`, refilled only when the snapshot changes). The next world tick runs on its own
 thread during the world draw ([simulation](simulation.md#tick-ahead)).
 
 KenshiCamera follows pivot/boom/zoom/pitch/ground constraints from [camera](formats/camera.md).

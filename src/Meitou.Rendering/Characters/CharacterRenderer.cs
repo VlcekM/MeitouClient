@@ -185,12 +185,15 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
             pendingLooks.Clear();
             foreach (var c in Draws.Items)
                 if (!assets.ContainsKey(c.Appearance)) pendingLooks.Add(c.Appearance);
+            foreach (var c in Draws.Distant)
+                if (!assets.ContainsKey(c.Appearance)) pendingLooks.Add(c.Appearance);
             return pendingLooks.Count + content.Textures.AwaitedCount + content.Textures.UnresidentUsedCount;
         }
     }
     readonly HashSet<CharacterAppearance> pendingLooks = new(ReferenceEqualityComparer.Instance);
     /// <summary>Current appearances still being prepared/uploaded, or textures still being loaded. Failed assets count as finished.</summary>
-    public bool ContentPending => Draws.Items.Any(c => !Deferred(c) && !assets.ContainsKey(c.Appearance)) || content.Textures.AwaitedCount > 0 || content.Textures.UnresidentUsedCount > 0;
+    public bool ContentPending => Draws.Items.Any(c => !Deferred(c) && !assets.ContainsKey(c.Appearance)) || Draws.Distant.Any(c => !Deferred(c) && !assets.ContainsKey(c.Appearance))
+        || content.Textures.AwaitedCount > 0 || content.Textures.UnresidentUsedCount > 0;
 
     /// <summary>
     /// While set (a game's loading screen): only the characters within <see cref="LoadingReach"/> of this point (x, z) are prepared and counted by <see cref="ContentPending"/>; the
@@ -610,6 +613,7 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
             foreach (var (def, time) in asset.Fixed) AddLayer(new ActiveLayer(def, time, 1));
             l.LayerCount = layerCount - l.LayerStart;
         }
+        UpdateDistant(eye, reach, ref built, ref buildMs);
         int inWorld = 0;
         for (int i = 0; i < liveCount; i++) if (!live[i].PortraitOnly) inWorld++;
         if (inWorld < ThinFromCharacters)
@@ -763,6 +767,58 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         MemoryMarshal.AsBytes(new ReadOnlySpan<CharacterMaterialRecord>(in a)).SequenceEqual(MemoryMarshal.AsBytes(new ReadOnlySpan<CharacterMaterialRecord>(in b)));
 
     readonly List<long> staleKeys = [];
+
+    // The distant list's share of an update (CharacterDrawList.Distant): what it asks for, found when it or what it is judged by changes.
+    readonly List<CharacterAppearance> distantBuilds = [];
+    readonly List<(CharacterAsset Asset, float Distance)> distantKept = [];
+    (int Version, int Inputs) distantScanned = (-1, 0);
+
+    /// <summary>
+    /// The characters beyond reach (<see cref="CharacterDrawList.Distant"/>): scanned when the host refills them or the rules for them change (the loading focus, the
+    /// arrival, the kept points), for the looks to build ahead (<see cref="WantsAsset"/>) and the built ones near a kept point (<see cref="keptLooks"/>); every update then
+    /// builds what is left of the first under the same budget as the drawn ones and adds the second. Touches no character state: such a character may also be drawn.
+    /// </summary>
+    void UpdateDistant(Vector3 eye, float reach, ref int built, ref double buildMs)
+    {
+        var distant = Draws.Distant;
+        var inputs = new HashCode();
+        inputs.Add(LoadingFocus);
+        inputs.Add(Ahead is { } a ? Quantized(a) : default);
+        foreach (var k in Kept) inputs.Add(Quantized(k));
+        var key = (Draws.DistantVersion, inputs.ToHashCode());
+        if (key != distantScanned)
+        {
+            distantScanned = key;
+            distantBuilds.Clear();
+            distantKept.Clear();
+            foreach (ref readonly var d in System.Runtime.InteropServices.CollectionsMarshal.AsSpan(distant))
+            {
+                if (!assets.TryGetValue(d.Appearance, out var asset))
+                {
+                    if (!Deferred(d) && WantsAsset(d, eye, reach)) distantBuilds.Add(d.Appearance);
+                    continue;
+                }
+                if (asset is null) continue;
+                if (d.Build is { } build) ApplyBuild(asset, build);
+                float scale = d.Scale > 0 ? d.Scale : 1;
+                if (!d.Hidden && Kept.Count > 0 && NearKept(d.Position + new Vector3(0, asset.Height * 0.5f * scale, 0)) is var dk && dk <= KeptReach) distantKept.Add((asset, dk));
+            }
+        }
+        for (int i = 0; i < distantBuilds.Count; i++)
+        {
+            var look = distantBuilds[i];
+            if (assets.ContainsKey(look)) { distantBuilds.RemoveAt(i--); continue; }
+            if (LoadBudget > 0 && (!content.Fetched(look) || !Covered && built >= LoadBudget || buildMs >= (Covered ? CoveredBudgetMs : BuildBudgetMs))) continue;
+            long buildStart = Stopwatch.GetTimestamp();
+            assets[look] = content.Build(look);
+            buildMs += Stopwatch.GetElapsedTime(buildStart).TotalMilliseconds;
+            built++;
+        }
+        keptLooks.AddRange(distantKept);
+
+        // A kept point or the arrival moving less than this keeps the scan: KeptReach is 3000.
+        static (int, int) Quantized(Vector3 p) => ((int)MathF.Floor(p.X / 250), (int)MathF.Floor(p.Z / 250));
+    }
 
     /// <summary>Forgets the characters not seen for 60 updates.</summary>
     void EvictStates()

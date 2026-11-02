@@ -52,13 +52,24 @@ public readonly record struct CharacterInstance(long Key, CharacterAppearance Ap
 
 /// <summary>
 /// The characters of one frame. The renderers know nothing of the simulation (docs/engine.md): the host fills this list from the
-/// simulation's snapshots each frame, as it copies the camera into <see cref="WorldCamera"/>.
+/// simulation's snapshots each frame, as it copies the camera into <see cref="WorldCamera"/>; those beyond reach only when the snapshot changes (<see cref="Distant"/>).
 /// </summary>
 public sealed class CharacterDrawList
 {
+    /// <summary>The characters that may be drawn or posed this frame: emptied by the renderer (<see cref="Clear"/>) and filled again each frame.</summary>
     public List<CharacterInstance> Items { get; } = [];
+    /// <summary>
+    /// The characters beyond the renderer's reach (<see cref="Characters.CharacterRenderer.InReach"/>), with only their look, place and what loading reads: kept across
+    /// frames and filled again by the host when its simulation snapshot changes (<see cref="BeginDistant"/>), as nothing in them moves between ticks. Read only to build
+    /// looks ahead and to keep the textures round kept points; a character that came within reach since is in <see cref="Items"/> as well.
+    /// </summary>
+    public List<CharacterInstance> Distant { get; } = [];
+    /// <summary>Counts the refills of <see cref="Distant"/>.</summary>
+    public int DistantVersion { get; private set; }
     public void Clear() => Items.Clear();
     public void Add(in CharacterInstance instance) => Items.Add(instance);
+    /// <summary>Empties <see cref="Distant"/> to be filled again.</summary>
+    public void BeginDistant() { Distant.Clear(); DistantVersion++; }
 }
 
 /// <summary>A bolt stuck in a character: its mesh, the bone it is on and its flight direction in the character's frame (its yaw taken off) when it struck.</summary>

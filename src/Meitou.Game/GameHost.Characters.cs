@@ -209,6 +209,18 @@ sealed partial class GameHost
 
     readonly HashSet<CharacterId> fullRate = [];
     readonly HashSet<long> portraitKeys = [];
+    /// <summary>The snapshot the distant list was made from (<see cref="AddDistant"/>), its tick and the world.</summary>
+    (WorldSnapshot?, long, int) distantFor;
+
+    /// <summary>A character beyond reach into the distant list: its look (with its tool), its snapshot place, and what loading and the kept textures read.</summary>
+    void AddDistant(CharacterDrawList list, CharacterSnapshot c)
+    {
+        var look = HeldLook(c.Appearance!, c.HeldTool, out var heldPending);
+        CutHead(c, look);
+        bool hidden = hiddenIndoors.Contains(c.Id);
+        list.Distant.Add(new CharacterInstance(DrawKey(c.Id), look, c.Position, DrawnYaw(c), []) { Scale = c.Scale, Hidden = hidden, Build = c.Build });
+        if (heldPending is not null) list.Distant.Add(new CharacterInstance(DrawKey(c.Id) ^ (1L << 55), heldPending, c.Position, DrawnYaw(c), []) { Hidden = true });
+    }
     // By character slot, what the draw list hands the renderer, refilled every frame instead of made anew (the renderer reads them only in that frame's update):
     // the poses, the stuck bolts and the ragdoll between ticks.
     CharacterPose[]?[] posesBySlot = [];
@@ -231,15 +243,26 @@ sealed partial class GameHost
         // The character editor is a scene of its own (GameHost.Editor.cs): only the character being edited is posed and drawn.
         var editing = player.EditorFocus?.Character;
         player.FullRateCharacters(fullRate);
-        // Beyond the renderer's reach a character needs its look and place only (to load it), not its poses or ragdoll: the editor's scene is posed whole.
-        var reachOf = editing is null ? gpu.Characters : null;
+        // Beyond the renderer's reach a character needs its look and place only (to load it), not its poses or ragdoll; those go in the distant list, made again only
+        // when the snapshot changes (CharacterDrawList.Distant). The editor's scene is listed whole every frame.
+        var reachOf = editing is null && !player.EditorOpen ? gpu.Characters : null;
         var eye = camera.Eye;
         portraitKeys.Clear();
         if (reachOf is not null) foreach (var r in reachOf.PortraitRequests) portraitKeys.Add(r.Key);
+        var distantKey = (current, current.Tick, worldEpoch);
+        bool distant = reachOf is not null && distantKey != distantFor;
+        if (reachOf is null ? list.Distant.Count > 0 : distant) list.BeginDistant();
+        distantFor = reachOf is null ? default : distantKey;
         foreach (var c in current.Characters)
         {
             var inBar = editing is { } shown ? EditorBarPlace(c.Id, shown) : null;
             if (c.Appearance is null || editing is { } edited && c.Id != edited && inBar is null) continue;
+            // The snapshot's place: a tick's motion is well inside InReach's margin.
+            if (reachOf is not null && !reachOf.InReach(c.Position, eye) && !portraitKeys.Contains(DrawKey(c.Id)) && c.Id != sandboxHero)
+            {
+                if (distant) AddDistant(list, c);
+                continue;
+            }
             var position = c.Position;
             float yaw = DrawnYaw(c);
             CharacterSnapshot? before = null;
@@ -259,7 +282,8 @@ sealed partial class GameHost
                 yaw = CarrierYaw(current, c, yaw, alpha);
                 (position, rotation) = MixCarry(before?.Carry, carry, alpha).World(position, yaw);
             }
-            bool posed = reachOf is null || reachOf.InReach(position, eye) || portraitKeys.Contains(DrawKey(c.Id));
+            // A character hidden indoors is not drawn (CharacterRenderer: as one out of reach) unless for its portrait: its poses are not read either.
+            bool posed = reachOf is null || !hiddenIndoors.Contains(c.Id) || portraitKeys.Contains(DrawKey(c.Id));
             var poses = !posed ? [] : Slot(ref posesBySlot, c.Id.Slot) is { } kept && kept.Length == c.Animations.Count ? kept : posesBySlot[c.Id.Slot] = new CharacterPose[c.Animations.Count];
             for (int i = 0; i < poses.Length; i++)
             {
