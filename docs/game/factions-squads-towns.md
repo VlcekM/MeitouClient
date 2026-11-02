@@ -524,8 +524,8 @@ Meitou: [ground items](../simulation.md#items-and-eating).
   non-ally keeps it intact, and a platoon of the player's faction is always intact, `FUN_14079acf0`) keeps the town at once; one that resolves and is not intact is skipped; a handle that does not resolve to a
   platoon counts, and with any counted (or over 200) the town is kept. The flag is saved as `intact`. Meitou (`CheckTownWipes`, each roam check): resident = any town squad or pinned platoon with a home that is
   intact (a loaded squad's AI flag, an unloaded platoon's flag; for the unloaded Meitou also wants someone alive, as its off-screen fights kill members the flag never saw), except a `roaming military` template's squads, which are roaming-pool members (counted with the roaming living); a town still loading is not judged.
-  The check runs only while the zone at the town's position is loaded (zone byte +0xb1, **Verified** `FUN_1408f6760`). The wipe gates have no faction test; Meitou keeping a town of the player's faction is an
-  engine choice (the town list's caller was not read).
+  The check runs only while the zone at the town's position is loaded (zone byte +0xb1, **Verified** `FUN_1408f6760`). There is no faction test anywhere on the path (**Verified**: the town list's tick `FUN_14092d850`
+  -> each town `FUN_14092cd20` -> `FUN_1408f6760` runs the check for every town whose zone is loaded), so Meitou judges the player's towns too.
 - **`regenerates`** (SQUAD_TEMPLATE, 18 true; `Platoon::declareDead`, **Verified**): when the last member dies and the home town is not `ded`, the platoon is not declared
   dead but set to CM_REFRESH (remade on next activation). Meitou: a loaded pinned platoon whose members are all dead (`DeclareDead`), a town squad that unloads with no one alive, or an
   empty pinned platoon at the town's load, is marked to regenerate (whatever the budget).

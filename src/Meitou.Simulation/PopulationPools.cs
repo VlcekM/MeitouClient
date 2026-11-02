@@ -170,9 +170,6 @@ public sealed partial class PopulationSystem
             if (s < states.Length && (states[s].Status == SiteStatus.Loading || states[s].Pending)) continue;
             // Judged only while the zone at the town's position is loaded (zone byte +0xb1, FUN_1408f6760).
             if (world.LoadedZones is { } loaded && !loaded.Contains(Meitou.Data.World.WorldLayout.ZoneOf(data.Sites[s].Position.X, data.Sites[s].Position.Z))) continue;
-            // Engine choice: a town of the player's faction is kept (as the repopulation and remake passes leave it alone); the original's wipe gates have no faction test,
-            // though the town list's caller of them was not read.
-            if (data.SiteFactions[s] is >= 0 and var owner && owner == PlayerFactionOf(world)) continue;
             if (townPools[s] is not { Started: true, Ded: false } pools || resident[s] || pools.Roaming.Current > WipeRoamingPool || roamers[s] > WipeRoamingLiving) continue;
             pools.Ded = true;
             pools.DiedAt = (float)Hours(world);
