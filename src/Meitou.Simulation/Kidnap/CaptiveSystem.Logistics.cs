@@ -1,6 +1,7 @@
 using System.Numerics;
 using Meitou.Data.Gameplay;
 using Meitou.Data.Gameplay.Ai;
+using Meitou.Data.World;
 using Meitou.Simulation.Ai;
 using Meitou.Simulation.Combat;
 using Meitou.Simulation.Locks;
@@ -66,17 +67,11 @@ public sealed partial class CaptiveSystem
             case TaskType.GATHER_SLAVES_FROM_CAGES_IF_ITS_AN_EXPORT_TOWN:
             {
                 int site = TownAt(data, table.Next[slot].Position);
-                if (site < 0) return null;
-                if (type == TaskType.GATHER_SLAVES_FROM_CAGES_IF_ITS_AN_EXPORT_TOWN)
-                {
-                    if (data.Sites[site].Town.Type is not (TownType.Town or TownType.Outpost)) return null;
-                    // The desire (AI slot 64): a town of the player's faction or of an anti-slavery one is gathered from by its allies only (FUN_140597b80).
-                    int owner = site < data.SiteFactions.Count ? data.SiteFactions[site] : -1;
-                    if (owner >= 0 && (owner == world.Player.Faction || owner < data.Factions.Count && data.Factions[owner].AntiSlavery) && !Allied(cold.Faction, owner)) return null;
-                }
-                else if (SlavesOf(world, squad).Count(s => table.Cold(s)!.InSomething == HeldState.None && table.Cold(s)!.Medical is not { Incapacitated: true }) > 3) return null;
-                return GatherTarget(world, slot, cold, site, type) is { } cage
-                    ? new CaptiveJob { Kind = CaptiveJobKind.Gather, Worker = worker, Captive = cage.Occupant, Cage = cage.Id, Faction = cold.Faction, Site = site }
+                bool export = type == TaskType.GATHER_SLAVES_FROM_CAGES_IF_ITS_AN_EXPORT_TOWN;
+                if (export ? !ExportTown(world, cold, site) : SlavesOf(world, squad).Count(s => table.Cold(s)!.InSomething == HeldState.None && table.Cold(s)!.Medical is not { Incapacitated: true }) > 3) return null;
+                var cages = export ? CagesOf(world, site) : NearbyCages(world, site, table.Next[slot].Position, cold.Faction);
+                return GatherTarget(world, slot, cold, cages, type) is { } cage
+                    ? new CaptiveJob { Kind = CaptiveJobKind.Gather, Worker = worker, Captive = cage.Occupant, Cage = cage.Id, Faction = cold.Faction, Site = cage.Site }
                     : null;
             }
             case TaskType.GO_TO_SOMEWHERE_FOR_DELIVERING_SLAVES:
@@ -104,15 +99,38 @@ public sealed partial class CaptiveSystem
         return null;
     }
 
+    /// <summary>The desire of 217 (AI slot 64, <c>FUN_140597b80</c>): the gatherer stands in a town or outpost, and when its owner is the player's faction or an anti-slavery one, is an ally of it.</summary>
+    bool ExportTown(World world, CharacterCold cold, int site)
+    {
+        if (site < 0 || data.Sites[site].Town.Type is not (TownType.Town or TownType.Outpost)) return false;
+        int owner = site < data.SiteFactions.Count ? data.SiteFactions[site] : -1;
+        return owner < 0 || !(owner == world.Player.Faction || owner < data.Factions.Count && data.Factions[owner].AntiSlavery) || Allied(cold.Faction, owner);
+    }
+
+    /// <summary>
+    /// The cages 173 and 245 search (<c>FUN_1409fc450</c> with the town the gatherer stands in, <b>Verified</b>): those of the gatherer's faction in the 3x3 zone cells round it, of that town
+    /// when it is in one, of any town when not (the finder's town is only a filter, null passes everything). Only fixtures of towns already registered exist.
+    /// </summary>
+    IEnumerable<Fixture> NearbyCages(World world, int site, Vector3 at, int faction)
+    {
+        var here = WorldLayout.ZoneOf(at.X, at.Z);
+        IEnumerable<Fixture> all = site >= 0 ? CagesOf(world, site) : world.Fixtures.All.Where(f => f.Kind == FixtureKind.Cage);
+        foreach (var f in all)
+        {
+            var cell = WorldLayout.ZoneOf(f.Position.X, f.Position.Z);
+            if (f.Owner == faction && Math.Abs(cell.X - here.X) <= 1 && Math.Abs(cell.Y - here.Y) <= 1) yield return f;
+        }
+    }
+
     /// <summary>The cage a gatherer takes a captive from (see the class remarks): 173 and 217 the nearest (<c>BuildingFinder</c> slot 1), 245 the first in the finder's order
     /// whose occupant is a woman or of another race (<c>FUN_1408d1410</c>, <b>Verified</b>: no distance sort, and no test of the occupant being a player character, down or busy).</summary>
-    Fixture? GatherTarget(World world, int slot, CharacterCold cold, int site, TaskType type)
+    Fixture? GatherTarget(World world, int slot, CharacterCold cold, IEnumerable<Fixture> cages, TaskType type)
     {
         var table = world.Characters;
         var at = table.Next[slot].Position;
         Fixture? best = null;
         float bestD = float.MaxValue;
-        foreach (var f in CagesOf(world, site))
+        foreach (var f in cages)
         {
             if (f.Owner == world.Player.Faction && world.Player.Faction >= 0 || !GatherCage(world, slot, cold, f, type, out var c)) continue;
             if (type == TaskType.GATHER_SLAVES_FROM_CAGES_IF_FEMALE_OR_BEAST) return f;
