@@ -10,8 +10,11 @@ sealed partial class PlayerInterface
     public bool CtrlHeld, AltHeld;
     // Whether the mouse was over a control in the last arranged UI (ArrangeUi), so the pointer needs no arrange of its own.
     bool pointerOverUi;
-    // The pointer and the character it is over, chosen again only when the tick, the mouse or a modifier changed (the picks walk every character).
+    // The pointer and the character it is over, chosen again when the mouse, the camera or a modifier changed, and every RepickTicks ticks while only the
+    // world moves (the picks walk every character, item and building near the ray: 0.5 ms).
     (long Tick, Vector2 Mouse, bool Ctrl, bool Alt, string Name, CharacterId? Target) pointer = (-1, default, false, false, "arrow", null);
+    Matrix4x4 pointerView;
+    const long RepickTicks = 3;
 
     /// <summary>
     /// The mouse pointer (kenshi_pointers.xml) for what the right button would do under the cursor (docs/game/ui-input.md, pointers): the quick order's pointer
@@ -73,7 +76,8 @@ sealed partial class PlayerInterface
         if (UiVisible && pointerOverUi || UiCapturesPointer || ContextMenuOpen || ModalOpen || dragging || settingsOpen || TitleOpen) return (-1, mouse, CtrlHeld, AltHeld, "arrow", null);
         if (BuildPointer() is { } building) return (-1, mouse, CtrlHeld, AltHeld, building, null);
         var snapshot = session.CurrentSnapshot;
-        if (pointer.Tick == snapshot.Tick && pointer.Mouse == mouse && pointer.Ctrl == CtrlHeld && pointer.Alt == AltHeld) return pointer;
+        if (pointer.Tick >= 0 && (ulong)(snapshot.Tick - pointer.Tick) < RepickTicks && pointer.Mouse == mouse && pointer.Ctrl == CtrlHeld && pointer.Alt == AltHeld
+            && pointerView == ViewProjection) return pointer;
         (string Name, CharacterId? Target) chosen = ("arrow", null);
         if (SelectedIds().Count > 0)
         {
@@ -97,6 +101,7 @@ sealed partial class PlayerInterface
         if (chosen.Name == "arrow" && chosen.Target is { } over && snapshot.Characters.FirstOrDefault(c => c.Id == over) is { } overChar && StandingHostile(overChar))
             chosen.Name = "attk";
         session.World.Player.Pointed = chosen.Target ?? CharacterId.None;
+        pointerView = ViewProjection;
         return pointer = (snapshot.Tick, mouse, CtrlHeld, AltHeld, chosen.Name, chosen.Target);
     }
 

@@ -1384,6 +1384,12 @@ static class WorldFrame
         }
     }
 
+    /// <summary>
+    /// One world frame, in order: the updates (terrain, objects, foliage, characters; each a profiler stage, <see cref="StageClock"/>), then the sky,
+    /// reflection, shadows, GI, the scene passes, post-processing and the overlays, into a <paramref name="width"/> × <paramref name="height"/> output.
+    /// <paramref name="hour"/> is the time of day, <paramref name="time"/> the animation clock in seconds, <paramref name="weatherHour"/> the hour the weather
+    /// schedule reads when it is not <paramref name="hour"/>. Render thread.
+    /// </summary>
     public static void Draw(Gpu gpu, WorldScene scene, WorldCamera camera, WorldRenderOptions render, int width, int height, float hour, float time, float fogDistance, float? weatherHour = null)
     {
         gpu.Terrain.Activate();
