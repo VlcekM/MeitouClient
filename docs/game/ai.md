@@ -170,7 +170,7 @@ A slave's Slave role list runs through the Obedient Slave job (187): [role lists
    package as just activated, then calls the goal loader (`FUN_140270850`).
 2. `inherits from` is processed first, recursively, so a parent's entries are added first. Adding goes through `FUN_140268e10`, which
    calls `FUN_14027b3a0`; that skips an entry whose task type and target hand equal one already in the list, so **the parent's
-   entry wins**.
+   entry wins**. The hand (`FUN_1400cd060`) is equal when both are null or kind and all four id words match; at load (`FUN_1402704e0`) only `targeting` 2 LEADER, 3 SQUAD_MISSION and 4 HOME_GATE fill it, so two same-type entries with `targeting` SPECIFIC and/or SELF (hands null; SELF's is filled at goal sync, after) count as duplicates (**Verified**; Meitou `AiData.SameHand`; a LEADER or SQUAD_MISSION hand that is null at activation would also match them in the original, not modelled).
    One base-game record has two parents (`warrior guild`: `Guard building, residents` and `Shop-24hr`, which share an ancestor; **Observed** in the data 2026-10-14); Meitou
    loads them in the listed order and counts only a true cycle as a problem. Whether the original walks every parent is **Unknown**.
 3. Entries go into five role lists on the Blackboard (index to offset is identical in `FUN_140268e10` and the sync `FUN_14026b790`,
