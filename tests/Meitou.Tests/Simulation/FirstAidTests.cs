@@ -8,6 +8,7 @@ using Meitou.Simulation.Bodies;
 using Meitou.Simulation.Combat;
 using Meitou.Simulation.FirstAid;
 using Meitou.Simulation.Items;
+using Meitou.Simulation.Locks;
 using SimWorld = Meitou.Simulation.World;
 using static Meitou.Tests.Bodies.BodyFixtures;
 
@@ -291,6 +292,73 @@ public class FirstAidTests
         Assert.False(body.NeedsAid(Human, false));
         Assert.True(body.Parts[RLeg].Flesh + body.Parts[RLeg].Bandage >= body.Parts[RLeg].MaxHp - 0.01f, "the leg is bandaged up to its maximum");
         Assert.True(world.Characters.Cold(prisoner.Slot)!.IsImprisoned, "the prisoner stays in its cage");
+    }
+
+    /// <summary>
+    /// docs/game/character-stats.md "First aid update" (Reach): a guard treats a caged prisoner from the cage's use node, on that node's floor. With the node a floor up (an upstairs
+    /// cage; the open ground has no way up) the prisoner is not treated through the floor: the walk ends off that floor and the treatment gives up.
+    /// </summary>
+    [Theory]
+    [InlineData(0f, true)]
+    [InlineData(65f, false)]
+    public void A_guard_treats_a_caged_prisoner_from_the_cage_door_on_its_floor(float rise, bool treated)
+    {
+        // The cage record with a use node 30 to its side (local +X), raised by `rise`.
+        var node = SyntheticTown.Rec("56-a", FcsRecordType.BUILDING, "Use node");
+        node.Bools["is node"] = true;
+        node.Ints["node type"] = 4;
+        var data = ArrestTests.Town([node]);
+        var withDoor = SyntheticTown.Rec("54-a", FcsRecordType.BUILDING, "Prisoner Cage");   // a later file adds the node to the cage, as a mod would
+        withDoor.Instances.Add(new FcsInstance { Id = "door", Target = "56-a", Position = new Vector3(30, rise, 0) });
+        var edit = new FcsFile();
+        edit.Records.Add(withDoor);
+        data.Db.Apply(edit, "door.mod");
+        int city = data.FactionIndex("50-a"), stranger = data.FactionIndex("204-gamedata.base");
+        var walk = new OpenGroundWalkability((_, _) => 150);
+        var items = new ItemFactory(KitDatabase(), BaseGame);
+        var systems = new List<ITickSystem>
+        {
+            new PlayerSystem(), new MovementSystem(new PathService(walk, true)), new FirstAidSystem(BaseGame, BodyOptions.Default, items) { Relations = data.Relations },
+            new BodySystem(BaseGame, BodyOptions.Default),
+        };
+        using var world = new SimWorld(new WorldSettings { Seed = 7, PublishSnapshots = false, MinPartitionSize = 1 }, walk, systems);
+        world.Fixtures.RegisterSite(world, data, 0);
+        var cage = world.Fixtures.Find("0.0:cageA")!;
+        var door = FixtureRegistry.ExitSpot(cage)!.Value;
+        CharacterId Spawn(Vector3 at, int faction, int squad)
+        {
+            var stats = new CharacterStats();
+            stats[StatsEnumerated.Medic] = 50;
+            stats[StatsEnumerated.Strength] = 50;
+            var cold = new CharacterCold { Name = "C" + squad, Race = Human, Stats = stats, Medical = MedicalState.Create(Human, 50), Inventory = new Inventory(), Faction = faction, SquadId = squad };
+            var id = world.Characters.Spawn(new CharacterHot { Position = at, MaxSpeed = 40, WalkSpeed = 15, Task = (byte)CharacterTask.Idle }, cold, 0);
+            world.Squads.Add(new Squad { Id = squad, TemplateId = "t", Faction = faction, Members = { id } });
+            return id;
+        }
+        var guard = Spawn(cage.Position + new Vector3(0, 0, -300), city, 1);
+        var prisoner = Spawn(cage.Position, stranger, 2);
+        Assert.True(world.Fixtures.Imprison(world, prisoner, cage));
+        var body = world.Characters.Cold(prisoner.Slot)!.Medical!;
+        body.Parts[RLeg].Flesh = body.Parts[RLeg].MaxHp * 0.4f;
+        bool walking = false;
+        for (int t = 0; t < 900 && Bandage(body) == 0; t++)
+        {
+            world.RunTick();
+            walking |= (CharacterTask)world.Characters.Previous[guard.Slot].Task == CharacterTask.Treat;
+            if (walking && (CharacterTask)world.Characters.Previous[guard.Slot].Task != CharacterTask.Treat) break;
+        }
+        Assert.True(walking, "the guard took the prisoner as its patient");
+        Assert.Equal(treated, Bandage(body) > 0);
+        var at = world.Characters.Previous[guard.Slot].Position;
+        if (treated)
+        {
+            // At the use node, not against the bars by the prisoner (the node is 30 from it).
+            Assert.True(Vector2.Distance(new Vector2(at.X, at.Z), new Vector2(door.X, door.Z)) <= 14, $"the guard treats from the use node, stands at {at}");
+            return;
+        }
+        // Not treated from the floor below: the walk could not reach the node's floor, so the patient went on the guard's path failures.
+        Assert.NotEqual(CharacterTask.Treat, (CharacterTask)world.Characters.Previous[guard.Slot].Task);
+        Assert.True(PursuitSystem.PathImpossible(world.Characters.Cold(guard.Slot)!, prisoner, world.Tick));
     }
 }
 
