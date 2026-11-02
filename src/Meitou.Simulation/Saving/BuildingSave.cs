@@ -13,7 +13,7 @@ namespace Meitou.Simulation.Saving;
 /// <c>&lt;n&gt;-zone&lt;X&gt;.&lt;Y&gt;-INGAME</c>, with a GAMESTATE_BUILDING state <c>&lt;id&gt;-S23</c> in the keys of the original's writer (<c>FUN_1405547f0</c>, <b>Verified</b> by code; no player-built building
 /// is in the sample saves, so a real file with one has not been compared): <c>name</c>, <c>owner faction ID</c>, <c>floornum</c>, <c>destroyed</c>, <c>flags</c>, <c>is complete</c>, <c>pause</c>,
 /// <c>construction progress</c>, <c>&lt;i&gt;construction mats</c> (delivered of entry i), <c>world Y pos</c> (absolute) and the handles <c>handle</c>, <c>isInsideBuilding</c>, <c>town</c>, <c>residents</c>.
-/// The instance's position is the absolute one (<b>Observed</b>: in the samples all 11405 game-made `-zoneX.Y-INGAME` buildings have an instance Y equal to <c>world Y pos</c>; the placements of the level data differ by a height above the terrain). Meitou's own key <c>meitou parent</c> (the parent's
+/// The NPC-generated samples have absolute instance Y (all 11405 game-made `-zoneX.Y-INGAME` buildings equal <c>world Y pos</c>). New player placements differ: native loading treats their instance Y as a terrain offset (docs/formats/save.md); those samples do not validate the writer's absolute instance Y for native interoperability. Meitou's own key <c>meitou parent</c> (the parent's
 /// instance id) carries a parent the original's handle cannot name, and wins on load. <c>town</c> is the handle of the player outpost the site belongs to (<see cref="WriteTowns"/>).
 /// </summary>
 public static class BuildingSave

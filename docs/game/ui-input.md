@@ -537,7 +537,17 @@ A right click on the ground (`PlayerInterface::playerMove`) is order 29 through 
 the sneak flag +0xd4 unless the fight is on (`isInCombatMode`, CombatClass +0x130); where a cage opens its menu at once. 28 Stand Up is AI task 28
 (`Task_UnCrouch`, [staying low](ragdolls.md#staying-low)); Meitou stands the selection at once.
 
-Seats (**Observed**, live vanilla Kenshi 1.0.68 on Windows, compared with Meitou Metal using the same copied tavern save): the central stool, wall bench and side stool offer Use on a held right click. Use walks to the seat, sits facing the nearby table and shows Operating machine. Stop stands and shows Aimless; a ground move exits sitting. Menu dimensions and title casing differ in Meitou. Thrones, floor seats, player-built seats and competing reservations remain **Unknown** in live comparison.
+Seats (**Observed**, live vanilla Kenshi 1.0.68 on Windows, compared with Meitou Metal using the same copied tavern save): the central stool, wall bench and side stool offer Use on a held right click. Use walks to the seat, sits facing the nearby table and shows Operating machine. Stop stands and shows Aimless; a ground move exits sitting. Menu dimensions and title casing differ in Meitou. An expanded **Observed** native-Windows/Meitou-Metal comparison used identical authored, player-owned vanilla fixtures for all nine BF_CHAIR/BF_THRONE building records:
+
+| Furniture | Native behavior checked |
+| --- | --- |
+| Stool, Old Stool, Sitting Box | Use, chair pose, facing the nearest table; Stop exits |
+| Sitting Pillow | Use, floor-sitting pose, facing the table; Stop exits |
+| Bench | Use, chair pose, table-behind facing quirk documented in [Seat facing](ai-tasks.md#town-goals); Stop exits |
+| Throne, Hive Queen Throne, Outhouse | Use, chair pose and fixed placement-facing direction; Stop exits |
+| Sitting spot (invisible) | No pointer Use target; the normal ground-move interaction applies |
+
+Meitou's picking fallback excludes a seat with neither parts nor collision geometry; its logical sitting behavior remains available to AI. Player-built chairs resolve facing from their functionality flags and complete qualifying furniture in the same parent building (including original layout tables), or same player outpost outdoors. The exact native outdoor candidate-search boundary, competing reservations, multi-character orders and seated save/load remain **Unknown** in this live comparison. Authored placement does not establish normal build-menu availability or placement legality.
 
 Meitou keeps the furniture's placed rotation for collision picking separately from the sitter's table-facing yaw. Town seats remain derived fixture targets, not duplicate construction/render objects.
 

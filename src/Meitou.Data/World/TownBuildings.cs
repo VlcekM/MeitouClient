@@ -265,7 +265,7 @@ public static class TownBuildings
                         (itemSlots ??= []).Add(new TownItemSlot($"{b.Key}/item{slot++}", group.Building.StringId, at, rotation, group.Floor));
                     }
                     if (seats is not null && faced is not null)
-                        foreach (var (s, flags) in seats) spots[s] = spots[s] with { Yaw = SeatYaw(spots[s], flags, faced) };
+                        foreach (var (s, flags) in seats) spots[s] = spots[s] with { Yaw = SeatYaw(spots[s].Position, spots[s].Yaw, flags, faced) };
                     tables = faced;
                 }
             }
@@ -409,17 +409,27 @@ public static class TownBuildings
     }
 
     /// <summary>
-    /// The way a seat is sat facing (docs/game/ai-tasks.md "Chairs"): by its functionality's <c>flags</c>, 0 its own facing (<paramref name="seat"/>'s yaw), 1 towards
-    /// the nearest of <paramref name="faced"/> (the building's tables, corpse disposals and refineries), 2 its own facing or the opposite one, whichever has that one in front.
+    /// The way a seat is sat facing (docs/game/ai-tasks.md "Chairs"): by its functionality's <c>flags</c>, 0 its own <paramref name="yaw"/>, 1 towards
+    /// the nearest of <paramref name="faced"/> (the building's tables, corpse disposals and refineries), 2 its own facing when that one is in front; behind it, the original reflects the absolute look point around the world origin.
     /// </summary>
-    static float SeatYaw(HomeSpot seat, int flags, List<Vector3> faced)
+    public static float SeatYaw(Vector3 position, float yaw, int flags, IEnumerable<Vector3> faced)
     {
-        if (flags is not (1 or 2)) return seat.Yaw;
-        var nearest = faced.MinBy(p => Vector3.DistanceSquared(p, seat.Position));
-        var to = new Vector2(nearest.X - seat.Position.X, nearest.Z - seat.Position.Z);
-        if (to.LengthSquared() < 1e-6f) return seat.Yaw;
+        if (flags is not (1 or 2)) return yaw;
+        Vector3 nearest = position;
+        float gap = float.MaxValue;
+        foreach (var p in faced)
+        {
+            float d = Vector3.DistanceSquared(p, position);
+            if (d < gap) (nearest, gap) = (p, d);
+        }
+        var to = new Vector2(nearest.X - position.X, nearest.Z - position.Z);
+        if (to.LengthSquared() < 1e-6f) return yaw;
         if (flags == 1) return MathF.Atan2(to.X, to.Y);
-        return Vector2.Dot(new Vector2(MathF.Sin(seat.Yaw), MathF.Cos(seat.Yaw)), to) >= 0 ? seat.Yaw : MathF.IEEERemainder(seat.Yaw + MathF.PI, MathF.Tau);
+        var forward = new Vector3(MathF.Sin(yaw), 0, MathF.Cos(yaw));
+        if (Vector2.Dot(new Vector2(forward.X, forward.Z), to) >= 0) return yaw;
+        // Native compatibility: negate the world-space look point, not the forward vector (docs/game/ai-tasks.md "Seat facing").
+        var reflected = -(position + forward) - position;
+        return MathF.Atan2(reflected.X, reflected.Z);
     }
 
     /// <summary>The simulation's yaw (0 along +Z, turning towards +X) of a rotation.</summary>

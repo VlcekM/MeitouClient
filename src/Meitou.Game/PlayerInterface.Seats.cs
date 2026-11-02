@@ -30,6 +30,8 @@ sealed partial class PlayerInterface
                     (hit, bestT) = ((b, t), t);
                 continue;
             }
+            // An invisible sitting node has no player-selectable shape; only visible seats get the pending-collision magnet.
+            if (buildHost?.Parts(b.Record).Count == 0) continue;
             var middle = b.Position + new Vector3(0, 0.5f, 0);
             if (Project(middle) is not { } at) continue;
             float d = Vector2.Distance(at, pixel), distance = Vector3.Distance(ray.Origin, middle);

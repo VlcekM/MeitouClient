@@ -534,7 +534,10 @@ sealed partial class PlayerInterface
         foreach (var site in session.CurrentSnapshot.Buildings)
         {
             var yaw = Quaternion.CreateFromAxisAngle(Vector3.UnitY, PlacementCheck.YawOf(site.Rotation));
-            float? t = host.Placement.Footprint(site.Record) is { } footprint
+            // No selectable geometry: an invisible sitting node must leave the click to ground movement.
+            var bounds = host.Placement.Footprint(site.Record);
+            if (bounds is null && Machine(site.Id)?.Function is TownBuildings.ChairFunction or TownBuildings.ThroneFunction && host.Parts(site.Record).Count == 0) continue;
+            float? t = bounds is { } footprint
                 ? BuildingRayT(ray, footprint.Place(site.Position, yaw), footprint.YMin, footprint.YMax, site.Record, site.Position, site.Position.Y, yaw)
                 : host.Placement.Plot(site.Record) is { } plot ? PlotT(ray, plot.Place(site.Position, yaw), ground < float.MaxValue ? ground : null)
                 : RaySegment(ray.Origin, ray.Direction, site.Position, site.Position + new Vector3(0, 16, 0), 12);

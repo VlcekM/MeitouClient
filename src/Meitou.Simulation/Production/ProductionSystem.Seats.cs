@@ -1,4 +1,5 @@
 using System.Numerics;
+using Meitou.Data.World;
 using Meitou.Simulation.Construction;
 using Meitou.Simulation.Locks;
 
@@ -6,6 +7,24 @@ namespace Meitou.Simulation.Production;
 
 public sealed partial class ProductionSystem
 {
+    // Town-layout seats already carry their effective facing. A player-built chair must resolve its current house/outpost's furniture at use time.
+    float SeatFacing(World world, BuildSite site, Machine m)
+    {
+        float yaw = TownBuildings.YawOf(site.Rotation);
+        if (m.Data.Function != TownBuildings.ChairFunction || m.Data.FunctionFlags is not (1 or 2) || world.Buildings.Find(site.Id) is null) return yaw;
+        return TownBuildings.SeatYaw(site.Position, yaw, m.Data.FunctionFlags, Targets());
+
+        IEnumerable<Vector3> Targets()
+        {
+            if (site.Parent is { } parent)
+                foreach (var at in world.Fixtures.TablesOfBuilding(parent)) yield return at;
+            foreach (var other in world.Buildings.All)
+                if (other.Complete && !other.Destroyed && other.Parent == site.Parent && (site.Parent is not null || other.Town == site.Town)
+                    && Data(other.Record)?.Function is TownBuildings.TableFunction or TownBuildings.CorpseDisposalFunction or TownBuildings.RefineryFunction)
+                    yield return other.Position;
+        }
+    }
+
     static bool SeatOccupied(World world, BuildSite site)
     {
         var table = world.Characters;

@@ -702,7 +702,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
             if (!m.Data.Operable)
             {
                 if (IsSeat(m) && SeatOccupied(world, site)) { End(world, i); continue; }
-                Settle(ref n, cold, site, m);
+                Settle(world, ref n, cold, site, m);
                 continue;
             }
             // An automatic machine (the 152 job): its hauler fills its inputs and carries its output away; the machine works by itself.
