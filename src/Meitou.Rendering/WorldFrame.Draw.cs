@@ -190,7 +190,7 @@ static partial class WorldFrame
         {
             // The view the characters show in (CharacterRenderer.Shown): out to past their draw distance, the water's mirror image when the reflection draws them.
             float aspect = f.RenderWidth / (float)Math.Max(f.RenderHeight, 1);
-            shown.ShownView = WorldCamera.FrustumPlanes(camera.View * camera.Projection(aspect, camera.Near, Math.Max(camera.ViewDistance, 2 * shown.DrawDistance)));
+            shown.ShownView = WorldCamera.FrustumPlanes(camera.View * camera.Projection(aspect, camera.ClipNear, Math.Max(camera.ViewDistance, 2 * shown.DrawDistance)));
             shown.ShownMirror = render.Water && render.Reflections && gpu.Water is not null && gpu.Reflection is { Level: >= 2 } ? WorldWater.Height : null;
         }
         gpu.Characters?.Update(f.Eye);
@@ -525,7 +525,7 @@ static partial class WorldFrame
         if (f.Render.Objects && gpu.Objects is { } objects)
         {
             gpu.InteriorMask ??= new InteriorMaskRenderer(post.Context, objects);
-            var projection = Jitter.Apply(camera.Projection(f.Aspect, camera.Near, camera.ViewDistance), f.Jitter, f.RenderWidth, f.RenderHeight);
+            var projection = Jitter.Apply(camera.Projection(f.Aspect, camera.ClipNear, camera.ViewDistance), f.Jitter, f.RenderWidth, f.RenderHeight);
             gpu.InteriorMask.Record(f.View * projection, f.Eye, post.RenderWidth, post.RenderHeight);
             objects.Masks = gpu.InteriorMask;
         }
@@ -569,7 +569,7 @@ static partial class WorldFrame
     {
         var post = f.Post;
         var camera = f.Camera;
-        float near = camera.Near, far = camera.ViewDistance;
+        float near = camera.ClipNear, far = camera.ViewDistance;
         post.SetCamera(f.Eye, f.View, camera.FieldOfView, f.Aspect);
         post.BeginScene(near, far, camera.FieldOfView, f.Aspect);
         f.Gpu.Terrain.BeginFrame();
@@ -704,13 +704,15 @@ static partial class WorldFrame
     /// </summary>
     static void KeepParticleViews(ref FrameState f, in SceneView s)
     {
-        float close = Math.Min(0.5f, s.Near * 0.5f);
-        var closeProjection = f.Camera.Projection(f.Aspect, close, s.Near);
+        // The close particles are those nearer than the camera's near rule (WorldCamera.Near), not the scene's clip plane (ClipNear).
+        float near = f.Camera.Near;
+        float close = Math.Min(0.5f, near * 0.5f);
+        var closeProjection = f.Camera.Projection(f.Aspect, close, near);
         f.ParticleView = s.ViewProjection;
         f.ParticleClose = f.View * Jitter.Apply(closeProjection, f.Jitter, f.RenderWidth, f.RenderHeight);
         f.ParticleLow = f.View * s.Projection;
         f.ParticleLowClose = f.View * closeProjection;
-        f.ParticleNear = s.Near;
+        f.ParticleNear = near;
     }
 
     /// <summary>
@@ -855,7 +857,7 @@ static partial class WorldFrame
         float aspect = f.Aspect;
         var view = f.View;
         (float Near, float Far, Matrix4x4 Projection) SceneProjection() =>
-            (camera.Near, camera.ViewDistance, camera.Projection(aspect, camera.Near, camera.ViewDistance));
+            (camera.ClipNear, camera.ViewDistance, camera.Projection(aspect, camera.ClipNear, camera.ViewDistance));
 
         // The movement marker and stealth arrows, in their materials' colours, like the game's debug_marker.
         if (gpu.Markers is { Active: true } marker && f.ParticleNear > 0 && post.Target is { } picture)

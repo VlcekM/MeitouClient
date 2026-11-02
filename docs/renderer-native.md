@@ -57,6 +57,9 @@ reversed 32-bit float buffer on Vulkan: cleared to 0, near plane 1, far plane (t
 by the `MEITOU_DEPTH_REVERSED` define the Vulkan compiler adds). Renderers keep stating GL compare semantics; `GlConventions` maps them
 literally. Shadow maps, previews, icons and bakes stay conventional (clear 1, Less). Metal is conventional (`DepthConvention.Reversed`
 false). View-depth step of one float ulp, derived: reversed `1.2e-7 z` at any distance; conventional `1.2e-7 z^2 / near`.
+The scene's near clip plane is `WorldCamera.ClipNear` = `n f / (2 f - n)` (about half of `Near`): **Verified** (swamp-low screenshot,
+master against the branch, mean difference 4.0 -> 0.04) that the former -1..1 clip volume over a 0..1 depth matrix drew down to there, and a
+near chimney vanished when the reversed scene clipped at `Near`. `Near` stays the rule for the shadows' fit and the close particles.
 The resources and the commands below them are the same question: [resource-layer](resource-layer.md).
 
 BindlessTable has seven typed sampler arrays (BindlessKind bindings0..6). Per-slot descriptor

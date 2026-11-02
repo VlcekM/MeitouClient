@@ -31,6 +31,13 @@ public sealed class WorldCamera
     public Matrix4x4 View => Matrix4x4.CreateLookAt(Eye, Target, Vector3.UnitY);
 
     public float Near => Math.Clamp(Math.Min(EyeClearance, Distance) * 0.25f, 0.5f, MaxNear);
+    /// <summary>
+    /// The scene projection's near plane: where the GL-mapped clip volume (-1..1 over a 0..1 depth matrix, before the reversed depth) clipped a
+    /// <see cref="Near"/> projection, <c>n f / (2 f - n)</c> with f = <see cref="ViewDistance"/>, about half of it. <see cref="Near"/> stays the rule
+    /// for the shadows' fit and the close particles' reach of other views; the reversed float depth keeps its precision at either.
+    /// </summary>
+    public float ClipNear => Near * ViewDistance / (2 * ViewDistance - Near);
+
     /// <summary>The farthest the near plane may sit (200; the Meitou title lowers it to draw its wanderer close in front of a high eye).</summary>
     public float MaxNear { get; set; } = 200;
 
