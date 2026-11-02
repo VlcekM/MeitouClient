@@ -472,7 +472,7 @@ from the decompile and agree with this table, except that the decompile shows no
 | 77 | `isCarriedDudeInBed` |
 | 78 | `TARGET_IS_IMPRISONED` |
 | 79 | `I_AM_IMPRISONED` |
-| 80 | `isCarryingArmOK` |
+| 80 | `isCarryingArmOK` (evaluator `1405c7930`, **Verified**): the character's medical byte `+0x166`, the left arm works; failure line "My arm is messed up too badly to lift anything." Meitou: `PlanContext.Holds` (`CarrySystem.LeftArmUsable`) |
 | 81 | `CARRIED_DUDE_NOW_IN_CAGE` |
 | 82 | `gotInventoryRoomForResources`: `FUN_14059bd80` (**Verified**) true when the looker's inventory has room for the target's item type, else its worn backpack has, else the animal-carry path (`FUN_14042ee50`); its failure line is "I don't have space to pick that up!". Row 244 needs it to start. Meitou: `Inventory.HasRoomFor`, tested before an NPC food run starts (`TownDutySystem`) |
 | 83 | `isInBed` |

@@ -200,6 +200,8 @@ public sealed partial class AiSystem
                 // are never done; for the player's a medical float above 0.9 (MedicalSystem +0xb0, meaning Unknown), here "not incapacitated".
                 StateType.isFullyRested => playerSide && cold.Medical is not { Incapacitated: true },
                 StateType.hasOneWorkingArm => cold.Medical is not { } arms || arms.ArmWorks(left: true) || arms.ArmWorks(left: false),
+                // 80 (evaluator 1405c7930, Verified): the medical left-arm byte +0x166; the lift rows 213, 240, 225, 246, 68 and 170 need it. States 7 and 48 are not wired: no goal reaches those rows.
+                StateType.isCarryingArmOK => cold.Medical is not { } carrier || Carrying.CarrySystem.LeftArmUsable(carrier),
                 StateType.hasTwoWorkingArm => cold.Medical is not { } arms2 || arms2.BothArmsWork,
                 // The turret goals' done test (149, 222, 234: list A "6*"): no enemy near, so guards man the turrets only while enemies come (docs/simulation.md "AI", turrets).
                 StateType.isNoEnemiesInVicinity => !EnemyNear(cold),
