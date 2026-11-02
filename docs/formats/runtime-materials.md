@@ -22,6 +22,19 @@ Caller template/flags and dye colour-mask texture rules must be preserved per it
 building/feature. Script defaults remain when a field is absent; a guessed shader input is not
 proof the game supplies it. Unknown paths and custom-parameter interpretation remain scoped.
 
+### Hair and beards
+
+**Verified**, native 1.0.68 `FUN_140532600`: the attachment's float `mipmap bias` is passed to
+`TextureUnitState::setTextureMipmapBias`; float `specular` is passed to the hair shader's `specularMult`.
+`character.hlsl` `hair_fs` writes gloss = selected diffuse-channel brightness × `specularMult`, clips the selected alpha channel
+against `threshold`, and writes the normalized interpolated normal without a back-face sign change. `Hair` disables culling (`character.material`).
+**Verified** (vanilla records and a native 1.0.68 D3D11 editor frame), `Haircut08-hobo` and `ark_beard09`: both use diffuse blue, alpha A, trilinear filtering,
+mipmap bias -2 and specular 0; their shader alpha thresholds are 120/255 and 70/255.
+Vanilla attachment census (slots 2 and 13): 102 records, all specular 0; mip bias -2 in 86, -1 in one, 0 in 15.
+Meitou carries these fields per attachment: hair gloss uses the material multiplier; the fragment texture bias adds to the upscaler sampler bias
+in colour, shadow and motion cut-outs; mip streaming reserves the corresponding finer levels. Hair keeps its interpolated normal on both sides; other shading modes retain their back-face handling.
+The Metal colour pass also needs the [discard/depth workaround](../metal-backend.md#the-shader-chain).
+
 ### The builder: `getObjectMaterial` (FUN_140841a50)
 
 | Flag | Unit name | Texture |

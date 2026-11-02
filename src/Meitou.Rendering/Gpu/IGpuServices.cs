@@ -7,6 +7,9 @@ namespace Meitou.Rendering.Gpu;
 /// </summary>
 public interface IGpuShaders
 {
+    /// <summary>Whether a fragment shader that discards needs an unchanged depth output to keep rejected fragments from occluding later layers.</summary>
+    bool DiscardNeedsLateDepth => false;
+
     /// <summary>Compiles (or takes from the caches) the GLSL pair as a legacy program (docs/renderer-native.md 3.2).</summary>
     GpuProgram Legacy(string vertexGlsl, string fragmentGlsl, string name);
 

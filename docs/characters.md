@@ -274,7 +274,8 @@ exe decompile unless marked; Meitou: `CharacterDraft` (data), `EditCharacter` / 
   editor opens, every pair's look is the template reset (`FUN_14007a490` with 1: first head, no hair or beard, the race's first `hair colors`,
   face sliders at mid) and then a hair roll, nothing else. Meitou (`CharacterDraft.SwitchedLook`): the same when a pair is first shown (sliders at mid).
 - **Preview**: a separate scene. **Verified** (install's compositor files): workspace `Kenshi_Character_Editor` = `GBuffer_Minimal` (characters only,
-  render queues 50-70) then a `Character_Editor` node, then the GUI. The background is a full-screen `render_quad` of
+  render queues 50-70) then a `Character_Editor` node, then the GUI. Its G-buffer uses output dimensions (`target_width target_height`) and `no_fsaa`
+  (`workspace.compositor`, verified against vanilla 1.0.68): no supersampling or multisampling. The background is a full-screen `render_quad` of
   `data/gui/gfx/SandyGround.dds` (1920x1080 DXT1, no depth). Lighting (`charedit.compositor`, `rtt.hlsl`, `lightingFunctions.hlsl`): world
   direction (-3, 2, -3) towards the light, colour 0.6: `CalcPunctualLight` (diffuse π·N.L·(1-0.04), GGX for roughness 1-0.99·gloss, specular
   colour 0.04) plus `CalcEnvironmentLight` (`mp_irradiance` mip 3 ·a·4, `mp_specularity` mip (1-gloss)·7 ·a·10, Lazarov BRDF), times exposure
@@ -327,6 +328,8 @@ what the original does with another race in mode 1 is **Unknown**. **Verified** 
 type 15, one record, id 1, `1--INGAME`, name `default` or `0`, and round-trip byte-exact. Meitou (`CharacterDraft.Import`/`Export`,
 `PlayerInterface.Editor`): export writes that layout, overwriting a file of the same name; import sanitizes the file for its race and refuses a
 race the editor doesn't offer (creation) or another race or sex (surgeon).
+**Observed** (native 1.0.68 editor import/export): an imported appearance with head `99184-Newwworld.mod` exports with a different head id and explicit neutral face-slider defaults.
+For rendering comparisons, use the native editor's exported result on both sides; importing the same input alone does not establish identical appearance data. The head fallback rule is **Unknown**.
 Dialog (`FUN_1401a0b10`, refresh `FUN_14019fd70`, **Observed**): `CurrentFolder` shows the folder as kept (no trailing separator; "./data"
 when empty); `ListFiles` gets "[..]" and the subfolders as "[name]", then (open mode) the matching files by file name with extension, item data
 folder + "/" + name; ButtonUp cuts the folder at its last `\` or `/`; ButtonCancel is `Tr("Cancel")`, ButtonOpenSave `Tr("Import")` here, both
