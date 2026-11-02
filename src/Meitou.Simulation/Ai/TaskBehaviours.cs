@@ -110,7 +110,7 @@ public static class TaskBehaviours
         [TaskType.SIT_ON_THRONE] = (AiBehaviour.Post, "Reigning"),
         [TaskType.FOLLOW_SQUADLEADER] = (AiBehaviour.Follow, "Following leader"),
         [TaskType.FOLLOW_SLAVEMASTER] = (AiBehaviour.Follow, "Following master"),
-        [TaskType.BODYGUARD] = (AiBehaviour.Follow, "Bodyguard"),
+        // 45 Bodyguard has no behaviour of its own (FUN_14032ebd0 builds Task_Blank for it): the following of a bodyguard contract is goal 44's.
         [TaskType.FOLLOW_PLAYER_ORDER] = (AiBehaviour.Follow, "Following"),
         [TaskType.GO_HOME_AND_GO_TO_BED] = (AiBehaviour.Sleep, "Going to bed"),
         [TaskType.GO_HOME_AND_GO_TO_BED_SECURE] = (AiBehaviour.Sleep, "Going to bed"),

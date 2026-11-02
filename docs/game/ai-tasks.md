@@ -298,7 +298,7 @@ A/B/effect use StateType IDs below; `isAtLocation` is two ids, 1 and 46 (67 Runn
 | 21 | Attacking others | 0x61 | - | - | 7 |
 | 144 | Home territory aggression | 0x61 | - | - | 6 |
 | 32 | Self preservation | 0x65 | !iAmBeingMeleeAttacked general | - | !39 |
-| 45 | Bodyguard | 0x61 | - | !16, !39 | - |
+| 45 | Bodyguard | 0x61 | - | !16, !39 | - | (Task_Blank, **Verified**: no effect and no act; a contract's following is goal 44's; Meitou: no `TaskBehaviours` entry) |
 | 44 | Following | 0x61 | 28 | !16, 60, 90, 59 | - |
 | 253 | Following | 0x61 | 28 | !7, 60, 90, 59 | - |
 | 40 | Following | 0x61 | 28 | !7, !16, 60, 90, 59 | - |
