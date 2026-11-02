@@ -180,7 +180,7 @@ public sealed class TownAlarm
 
 /// <summary>
 /// A crime the character committed that nobody has booked yet (economy.md 11.6, carry-loot.md 4.3: code, victim faction, victim, a freshness timer; the "booked" flag). One per
-/// character, as in the game. <see cref="Timer"/> is in game seconds and counts down (the game's countdown was not found: engine choice); a witness sets it to 20 again.
+/// character, as in the game. <see cref="Timer"/> is in game seconds and counts down (the tail of the per-character crime tick <c>FUN_1405cbb80</c>: cleared once it is at or below 0, else reduced by the tick delta; <b>Verified</b>, not run for a dead character); a witness sets it to 20 again.
 /// </summary>
 public sealed class PendingCrime
 {

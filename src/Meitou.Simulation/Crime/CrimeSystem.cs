@@ -254,13 +254,16 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
         for (int s = 0; s < table.HighWater; s++)
         {
             if (!next[s].Alive || !world.Turn(s, every) || table.Cold(s) is not { } c) continue;   // its turn (the far cadence, World.Turn)
-            if (c.Bounties is { } ledger && !c.IsImprisoned) Expire(world, s, c, ledger, hoursPerTick, every);   // paused while imprisoned (economy.md 11.3)
             if (c.RecentlyWanted > 0) c.RecentlyWanted = MathF.Max(0, c.RecentlyWanted - seconds);
             Locks.FixtureRegistry.LayLow(world, c);
+            // The crime tick FUN_1405cbb80 is skipped for a dead character (FUN_1405d00b0): its bounties never expire and its pending crime stays frozen (no countdown, no witness search).
+            if (c.Medical is { Dead: true }) continue;
+            if (c.Bounties is { } ledger && !c.IsImprisoned) Expire(world, s, c, ledger, hoursPerTick, every);   // paused while imprisoned (economy.md 11.3)
             if (c.Pending is { } p)
             {
-                p.Timer -= seconds;
+                // Check, then subtract (FUN_1405cbb80 tail): cleared on the first call after the timer reached 0.
                 if (p.Timer <= 0) c.Pending = null;
+                else p.Timer -= seconds;
             }
             if (!c.CarriedBy.IsNone) continue;   // a carried suspect is not looked at (the game's witness function)
             if (!c.IsPlayer)

@@ -213,6 +213,7 @@ no artifacts, as Meitou adds no state for a town a loaded save lacks. Tests: `Ar
 ## Crimes, bounties and prisoners
 
 Ledgers are per wanted faction; crimes pending at deed time and witness booking are distinct.
+The per-character crime tick `FUN_1405cbb80` (bounty expiry, skipped while imprisoned; then the pending timer at ledger `+0x90`: at or below 0.0 clears the code and victim, else it is reduced by the tick delta) is jumped over by the character tick `FUN_1405d00b0` for a dead character (`+0x5bc`): **Verified**. A dead body's bounties never expire and its pending crime stays frozen.
 CONSTANTS categories define theft/assault/murder/looting values. Expiry is0.04 hours/cat and
 permanent from10000; capture, claiming, bail and prison sentences use separate paths.
 Witness/innocence details remain partly unknown; a killing is no crime (11.6), only relation events.
