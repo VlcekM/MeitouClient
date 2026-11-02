@@ -228,6 +228,19 @@ public sealed unsafe class WorldTextureCache : IDisposable
     public string Describe() => $"{ResidentCount} textures {ResidentBytes / 1048576.0:0} MB ({Unloads} unloaded, {Reloads} reloaded so far{(Shares > 0 ? $", {Shares} taken from another cache" : "")}" +
         (Mips.Enabled ? $"; mip streaming: {Math.Max(UnstreamedBytes - ResidentBytes, 0) / 1048576.0:0} MB less than every mip, {Refined} refined, {Coarsened} coarsened)" : ")");
 
+    /// <summary>Vanilla references to files the game never shipped (docs/formats/dds.md "Dead references"): not warned about.</summary>
+    static readonly HashSet<string> DeadVanillaTextures = new(StringComparer.OrdinalIgnoreCase)
+        { "Geobased_Rockloop_DIF_HI.dds", "Geobased_Rockloop_NML_HI.dds", "Rockloop09_DIF_HI.dds", "Rockloop09_NML_HI.dds" };
+    /// <summary>Missing names already warned about by any cache (each cache resolves the same foliage names): one warning per name per run.</summary>
+    static readonly HashSet<string> WarnedMissing = new(StringComparer.OrdinalIgnoreCase);
+
+    static bool ShouldWarnMissing(string name)
+    {
+        string file = System.IO.Path.GetFileName(name.Replace('\\', '/'));
+        if (DeadVanillaTextures.Contains(file)) return false;
+        lock (WarnedMissing) return WarnedMissing.Add(file);
+    }
+
     /// <param name="deferred">The texture is not loaded now: it stays <see cref="WorldTexture.Residency.Unloaded"/> until something reads its
     /// <see cref="WorldTexture.Key"/> (the foliage makes its meshes' textures this way and reads the keys only of groups within their range).</param>
     public WorldTexture? Get(string? name, bool border, bool deferred = false)
@@ -251,7 +264,7 @@ public sealed unsafe class WorldTextureCache : IDisposable
         if (t.Path is null)
         {
             t.State = WorldTexture.Residency.Missing;
-            Messages.Add($"texture not found: {name}");
+            if (ShouldWarnMissing(name)) Messages.Add($"texture not found: {name}");
             return t;
         }
         if (deferred || !MayStart(t, out bool lean)) { t.State = WorldTexture.Residency.Unloaded; return t; }   // loaded when its key is read (and the guard lets it)

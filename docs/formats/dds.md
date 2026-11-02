@@ -106,6 +106,15 @@ listener (FUN_14082ddc0), so every layer loses `level` top mips (`Landscape` get
 High. **Observed** (not run): a biome mixing the 1024²/512² files above with 2048² ones would fail that check in the game; Meitou
 rescales every layer to one size instead.
 
+## Dead references
+
+**Verified** (1.0.68 gamedata dump vs `data/newland/land/textures`): six `Newwworld.mod` FOLIAGE_MESH records (four
+`Foliage_1K_RockStack02` variants, two using `BoulderCluster_DualTex01.mesh`) name `Geobased_Rockloop_{DIF,NML}_HI.dds` /
+`Rockloop09_{DIF,NML}_HI.dds` as `texture map` / `normal map`; only the names without `_HI` exist. **Verified** (decompiled): the
+`_HI.` literal's only user is the quality listener above, so the game has no `_HI` → base-name fallback; Ogre fails the lookup.
+Meitou does not warn about these four names. **Unknown**: how the original draws these meshes (a blank unit; a blank normal map
+may also clip them, its alpha being the cut-out mask).
+
 ## Channel conventions in Kenshi's textures
 
 Not part of the DDS format, but needed to use the files (details in [../viewer.md](../viewer.md)):
