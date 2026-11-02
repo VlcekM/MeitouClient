@@ -683,18 +683,25 @@ static partial class TerrainShaders
 
         vec4 tex(sampler2DArray s, vec2 uv, float layer) { return texture(s, vec3(uv, layer)); }
 
-        // A layer's coordinate with its screen derivatives, taken before the layer branches below (derivatives inside a branch
-        // that only some pixels of a 2 x 2 quad take are undefined), so a skipped neighbour cannot change a sampled pixel's mip.
-        // lod: the level the near arrays' sampler takes before its bias (8x anisotropic: the long axis over up to 8 taps, never under the short axis).
+        // A layer's coordinate with its screen derivatives. lod: the level the near arrays' sampler takes before its bias (8x anisotropic: the long axis
+        // over up to 8 taps, never under the short axis). The derivatives follow from the material point's (texDx, texDy), taken once at the top of main
+        // in uniform control flow (derivatives inside a branch that only some pixels of a 2 x 2 quad take are undefined), by the chain rule: every layer
+        // coordinate is the point scaled, but the cliff's vertical one (cliffVert), whose derivative cliffVert works out.
         struct GradCoord { vec2 p, dx, dy; float lod; };
-        GradCoord gradCoord(vec2 p)
+        vec3 texDx, texDy;
+        GradCoord gradCoord(vec2 p, vec2 dx, vec2 dy)
         {
-            GradCoord c; c.p = p; c.dx = dFdxCoarse(p); c.dy = dFdyCoarse(p);
-            float size = float(textureSize(uDiffuse, 0).x), a = length(c.dx) * size, b = length(c.dy) * size;
+            GradCoord c; c.p = p; c.dx = dx; c.dy = dy;
+            float size = float(textureSize(uDiffuse, 0).x), a = length(dx) * size, b = length(dy) * size;
             float hi = max(a, b), lo = max(min(a, b), 1e-6);
             c.lod = log2(max(hi / min(ceil(hi / lo), 8.0), 1e-6));
             return c;
         }
+        // A ground layer's coordinate at tiling s (texWorld.xz / 5000 is the unscaled one).
+        GradCoord groundCoord(vec2 s) { return gradCoord(texWorld.xz / 5000.0 * s, texDx.xz / 5000.0 * s, texDy.xz / 5000.0 * s); }
+        // The cliff's two projections at tiling s: (z, vert) and (x, vert), vert from cliffVert with its derivatives (vd).
+        GradCoord cliffCoordX(float vert, vec2 vd, vec2 s) { return gradCoord(vec2(texWorld.z / 5000.0, vert) * s, vec2(texDx.z / 5000.0, vd.x) * s, vec2(texDy.z / 5000.0, vd.y) * s); }
+        GradCoord cliffCoordZ(float vert, vec2 vd, vec2 s) { return gradCoord(vec2(texWorld.x / 5000.0, vert) * s, vec2(texDx.x / 5000.0, vd.x) * s, vec2(texDy.x / 5000.0, vd.y) * s); }
         vec4 tex(sampler2DArray s, GradCoord c, float layer) { return textureGrad(s, vec3(c.p, layer), c.dx, c.dy); }
 
         // A layer from the near arrays where its pair has a slot there and the sample's level is under uFarLod, else from the far arrays: at uFarLod and
@@ -716,58 +723,41 @@ static partial class TerrainShaders
 
         Relief noRelief(GradCoord base) { Relief r; r.base = base; r.n = 0; r.total = 0.0; return r; }
 
-        void addRelief(inout Relief r, vec2 scale, float layer, float share)
+        // share: how much of the pixel the layer shows; factor: its biome's relief factor (GroundRelief.BiomeDepth).
+        void addRelief(inout Relief r, vec2 scale, float layer, float share, float factor)
         {
             // A layer showing under 5% of the pixel is left out, fading in to 15% (continuous: no seam where it drops out); the march's cost is per layer.
-            float w = share * smoothstep(0.05, 0.15, share) * reliefDepth(layer, scale);
+            float w = share * smoothstep(0.05, 0.15, share) * reliefDepth(layer, scale) * factor;
             if (w <= 0.0) return;
-            // High keeps the first ReliefMax layers as they come (the sort below is for the smaller caps).
-            if (RELIEF_QUALITY >= 2)
+            // The heaviest layers are kept, sorted, so a later heavy layer replaces a light one; the height is a weighted average, so the order only
+            // matters for the cap. The same layer from another biome (biomes share textures) adds to its entry.
+            int cap = RELIEF_QUALITY >= 2 ? ReliefMax : RELIEF_QUALITY >= 1 ? 2 : 1;
+            r.total += w;
+            int at = r.n;
+            for (int i = 0; i < r.n; i++)
+                if (r.layer[i].z == layer && r.layer[i].xy == scale) { w += r.layer[i].w; at = i; break; }
+            if (at == r.n)
             {
-                if (r.n >= ReliefMax) return;
-                r.layer[r.n] = vec4(scale, layer, w);
-                r.n++;
-                r.total += w;
-                return;
+                if (r.n < cap) r.n++;
+                else if (w > r.layer[cap - 1].w) { r.total -= r.layer[cap - 1].w; at = cap - 1; }
+                else { r.total -= w; return; }
             }
-            // Medium and Low keep their heaviest layers, sorted, so a later heavy layer replaces a light one. The height is a weighted average, so the
-            // order only matters for the cap.
-            int cap = RELIEF_QUALITY >= 1 ? 2 : 1;
-            if (r.n < cap)
+            while (at > 0 && r.layer[at - 1].w < w)
             {
-                int at = r.n;
-                while (at > 0 && r.layer[at - 1].w < w)
-                {
-                    r.layer[at] = r.layer[at - 1];
-                    at--;
-                }
-                r.layer[at] = vec4(scale, layer, w);
-                r.n++;
-                r.total += w;
+                r.layer[at] = r.layer[at - 1];
+                at--;
             }
-            else if (w > r.layer[cap - 1].w)
-            {
-                r.total += w - r.layer[cap - 1].w;
-                int at = cap - 1;
-                while (at > 0 && r.layer[at - 1].w < w)
-                {
-                    r.layer[at] = r.layer[at - 1];
-                    at--;
-                }
-                r.layer[at] = vec4(scale, layer, w);
-            }
+            r.layer[at] = vec4(scale, layer, w);
         }
 
         // Where the ground is displaced (ReliefFunctions), the mesh carries the relief down to its spacing there (reliefSegment, world units; 0 not
         // displaced); the view ray marches what is finer, the height less its level at that spacing, as much as 1 - reliefWhole (all of it again where the
-        // displacement fades out). Set per pixel in biome().
+        // displacement fades out). Set per pixel in pixelRelief().
         float reliefSegment = 0.0, reliefWhole = 1.0;
 
-        // The march's steps (view ray, sun), fewer with distance (set in biomeRelief(): high 16 and 8 near, 6 and 3 at the parallax's end; medium 6 and 3
-        // to 3 and 2; low 4 and 2 to 2 and 1), and the share of the pixel the biome being marched has (main sets it before biomeRelief(): a biome showing
-        // little is not marched).
+        // The march's steps (view ray, sun), fewer with distance (set in pixelRelief(): high 16 and 8 near, 6 and 3 at the parallax's end; medium 6 and 3
+        // to 3 and 2; low 4 and 2 to 2 and 1).
         int reliefSteps = 16, reliefShadowSteps = 8;
-        float biomeShare = 1.0;
 
         // The relief's height at offset o (1 the top): the layers' heights by weight; finer: only the detail the displaced mesh leaves out (above).
         // Sampled with the unmoved coordinates' derivatives, so the mip does not jump.
@@ -835,10 +825,12 @@ static partial class TerrainShaders
             return 1.0 - uSelfShadow * clamp(occlusion * 4.0, 0.0, 1.0) * strength;
         }
 
-        // The cliff projections' vertical coordinate of biome b (its distortion).
-        float cliffVert(int b)
+        // The cliff projections' vertical coordinate of biome b (its distortion), and its screen derivatives (vd: x, y) from the point's.
+        float cliffVert(int b, out vec2 vd)
         {
             vec4 distort = P(b, 10);
+            float k = -distort.x * distort.y, sx = sin(texWorld.x * distort.x), sz = sin(texWorld.z * distort.x);
+            vd = vec2(-texDx.y / 5000.0 + k * (sx * texDx.x + sz * texDx.z), -texDy.y / 5000.0 + k * (sx * texDy.x + sz * texDy.z));
             return 1.0 - texWorld.y / 5000.0 + (cos(texWorld.x * distort.x) + cos(texWorld.z * distort.x)) * distort.y;
         }
 
@@ -863,113 +855,136 @@ static partial class TerrainShaders
             return w;
         }
 
-        // What the relief march gives a biome: the moves of the ground layers' and of the cliff projections' unscaled coordinates, and the shadow on the sun.
+        // What the relief march gives the pixel: the moves of the ground layers' and of the cliff projections' unscaled coordinates, and the shadow on the sun.
         struct ReliefOut { vec2 ground; vec2 cliffX; vec2 cliffZ; float shade; };
 
-        // Biome b's relief march, run for every biome before any is shaded (main): inside biome() the march's registers stacked on the shading's, which
-        // halved the pixels in flight (docs/render-terrain.md "Registers"). Without it (NO_MARCH, Marched) no move and no shadow.
-        ReliefOut biomeRelief(int b, vec3 n, float slope, vec4 map, float distance)
+        // The pixel's relief, gathered over the biomes blended (gatherRelief) and marched once (pixelRelief): the ground layers of every biome by their
+        // share of the pixel in one Relief (the heaviest ReliefMax, two or one by the quality), so every biome's ground coordinates move alike; the
+        // cliff on the projections of the biome whose cliff relief weighs most, its moves applied to every biome's cliff. A march per biome (up to
+        // five a pixel) kept a result each through the shading (docs/render-terrain.md "Registers").
+        struct ReliefGather { Relief ground; int cliffBiome; float cliffWeight, cliffShare, share; };
+
+        ReliefGather noGather()
         {
-            ReliefOut res = ReliefOut(vec2(0.0), vec2(0.0), vec2(0.0), 1.0);
-            #ifndef NO_MARCH
+            ReliefGather g;
+            g.ground = noRelief(groundCoord(vec2(1.0)));
+            g.cliffBiome = -1; g.cliffWeight = 0.0; g.cliffShare = 0.0; g.share = 0.0;
+            return g;
+        }
+
+        // Biome b, showing wk of the pixel, into the gather.
+        void gatherRelief(inout ReliefGather g, int b, float wk, float slope, vec4 map)
+        {
             vec4 layersA = P(b, 0), layersB = P(b, 1);
             vec4 sA = P(b, 2), sB = P(b, 3), sC = P(b, 4);
-            vec2 uv = texWorld.xz / 5000.0;
-            float vert = cliffVert(b);
-            vec2 cb = cliffBlend(n);
             vec4 w = layerWeights(b, slope, map);
-            // The march's unscaled coordinates (Relief), taken outside the branch for their derivatives.
-            GradCoord groundBase = gradCoord(uv), cliffBaseX = gradCoord(vec2(uv.y, vert)), cliffBaseZ = gradCoord(vec2(uv.x, vert));
-            // Ground parallax (GroundRelief, docs/render-terrain.md): the ground layers' relief, uParallax world units deep (times each layer's own factor and
-            // how much of the pixel it shows), and the cliff layer's on its two projections, each into the surface along the projection's axis (the cliff's on
-            // map features too: the rocks).
-            if (uParallax > 0.0 && distance < uParallaxEnd && biomeShare > 0.1)
+            // What each layer shows, in the material's order (biome(): base, grass, slope, dirt, road, the cliff over all): the base layer, and the
+            // others at uOverlayRelief's share.
+            float top = 1.0 - w.y, aboveDirt = top * (1.0 - map.a), aboveSlope = aboveDirt * (1.0 - map.b);
+            addRelief(g.ground, sB.xy, layersA.x, wk * aboveSlope * (1.0 - w.x) * (1.0 - map.r), layersB.w);
+            if (uOverlayRelief > 0.0)
             {
-                // A biome showing under 10% of the pixel is not marched, fading in to 30% (the march runs once per biome blended).
-                float strength = (1.0 - smoothstep(0.5 * uParallaxEnd, uParallaxEnd, distance)) * smoothstep(0.1, 0.3, biomeShare);
-                float far = clamp(distance / uParallaxEnd, 0.0, 1.0), shade = 1.0;
-                float viewNear = RELIEF_QUALITY >= 2 ? 16.0 : RELIEF_QUALITY >= 1 ? 6.0 : 4.0;
-                float viewFar = RELIEF_QUALITY >= 2 ? 6.0 : RELIEF_QUALITY >= 1 ? 3.0 : 2.0;
-                float sunNear = RELIEF_QUALITY >= 2 ? 8.0 : RELIEF_QUALITY >= 1 ? 3.0 : 2.0;
-                float sunFar = RELIEF_QUALITY >= 2 ? 3.0 : RELIEF_QUALITY >= 1 ? 2.0 : 1.0;
-                reliefSteps = int(round(mix(viewNear, viewFar, far)));
-                reliefShadowSteps = int(round(mix(sunNear, sunFar, far)));
-                vec3 v = normalize(uEye - vWorld);
-                vec3 sun = normalize(uLightDir);   // not "l": RockBakeFragment patches the lighting at that line
-                // Where the geometry is displaced (ReliefFunctions, to uDisplaceEnd) the view ray marches only the detail finer than the mesh's spacing
-                // there (PatchControl: max(0.6, 0.004 × distance) over the detail), the whole height again as the displacement fades; the ground's and the
-                // cliff's alike.
-                reliefWhole = 1.0;
-                reliefSegment = 0.0;
-                if (uDisplace > 0.0 && distance < uDisplaceEnd)
-                {
-                    reliefWhole = smoothstep(0.6 * uDisplaceEnd, uDisplaceEnd, distance);
-                    reliefSegment = max(0.6, distance * 0.004) / uTessDetail;
-                }
-                // What each layer shows, in the material's order below (base, grass, slope, dirt, road, the cliff over all): the base layer, and the
-                // others at uOverlayRelief's share. One march over their heights by weight moves every layer's coordinate alike.
-                float top = 1.0 - w.y, aboveDirt = top * (1.0 - map.a), aboveSlope = aboveDirt * (1.0 - map.b);
-                Relief ground = noRelief(groundBase);
-                addRelief(ground, sB.xy, layersA.x, aboveSlope * (1.0 - w.x) * (1.0 - map.r));
-                if (uOverlayRelief > 0.0)
-                {
-                    addRelief(ground, sB.zw, layersA.w, uOverlayRelief * aboveSlope * (1.0 - w.x) * map.r);
-                    addRelief(ground, sA.xy, layersA.y, uOverlayRelief * aboveSlope * w.x);
-                    addRelief(ground, sC.xy, layersB.x, uOverlayRelief * aboveDirt * map.b);
-                    addRelief(ground, sC.zw, layersB.y, uOverlayRelief * top * map.a);
-                }
-                if (ground.n > 0)
-                {
-                    float depth = uParallax * ground.total * strength * layersB.w / 5000.0;   // the full depth in world units (times the biome's factor, GroundRelief.BiomeDepth), in the unscaled coordinate (uv)
-                    vec2 o;
-                    shade = reliefMarch(ground, o, -v.xz / max(v.y, 0.25) * depth, sun.xz / max(sun.y, 0.15) * depth, sun.y > 0.0, strength, true);
-                    res.ground = o;
-                }
-                float cliffDepth = w.y > 0.0 ? uParallax * reliefDepth(layersA.z, sA.zw) * uCliffScale * layersB.w * strength : 0.0;
-                if (cliffDepth > 0.0)
-                {
-                    // A projection's coordinate is (along the surface, vert): vert runs down the world's y. Its depth runs along the surface's normal n, as the
-                    // displacement moves it (reliefMove): a ray point s along the view ray is s (v · n) under the surface, over the point s (v − n (v · n))
-                    // back along the surface, which is what the projection's coordinate moves by (on a vertical wall: along its axis, as before). Both read the
-                    // height as stored: the shading turns the normal map round (below), but a texel's height does not change with that (cracks stay low).
-                    float depth = cliffDepth / 5000.0;
-                    vec3 tv = n * dot(v, n) - v, ts = sun - n * dot(sun, n);
-                    float vn = max(dot(v, n), 0.25), sn = max(dot(sun, n), 0.15);
-                    bool lit = dot(sun, n) > 0.0;
-                    float shadeX = 1.0, shadeZ = 1.0;
-                    vec2 o;
-                    if (cb.x > 0.1)
-                    {
-                        Relief r = noRelief(cliffBaseX);
-                        addRelief(r, sA.zw, layersA.z, 1.0);
-                        shadeX = reliefMarch(r, o, vec2(tv.z, -tv.y) / vn * depth, vec2(ts.z, -ts.y) / sn * depth, lit, strength, true);
-                        res.cliffX = o;
-                    }
-                    if (cb.y > 0.1)
-                    {
-                        Relief r = noRelief(cliffBaseZ);
-                        addRelief(r, sA.zw, layersA.z, 1.0);
-                        shadeZ = reliefMarch(r, o, vec2(tv.x, -tv.y) / vn * depth, vec2(ts.x, -ts.y) / sn * depth, lit, strength, true);
-                        res.cliffZ = o;
-                    }
-                    shade = mix(shade, shadeX * cb.x + shadeZ * cb.y, w.y);
-                }
-                res.shade = shade;
+                addRelief(g.ground, sB.zw, layersA.w, wk * uOverlayRelief * aboveSlope * (1.0 - w.x) * map.r, layersB.w);
+                addRelief(g.ground, sA.xy, layersA.y, wk * uOverlayRelief * aboveSlope * w.x, layersB.w);
+                addRelief(g.ground, sC.xy, layersB.x, wk * uOverlayRelief * aboveDirt * map.b, layersB.w);
+                addRelief(g.ground, sC.zw, layersB.y, wk * uOverlayRelief * top * map.a, layersB.w);
             }
+            float cliff = wk * w.y * reliefDepth(layersA.z, sA.zw) * layersB.w;
+            if (cliff > g.cliffWeight) { g.cliffBiome = b; g.cliffWeight = cliff; }
+            g.cliffShare += wk * w.y;
+            g.share += wk;
+        }
 
-            #endif
+        // The march over the gathered layers (GroundRelief, docs/render-terrain.md): the ground's, then the cliff's two projections.
+        ReliefOut pixelRelief(ReliefGather g, vec3 n, float distance)
+        {
+            ReliefOut res = ReliefOut(vec2(0.0), vec2(0.0), vec2(0.0), 1.0);
+            if (g.share <= 0.0) return res;
+            float strength = 1.0 - smoothstep(0.5 * uParallaxEnd, uParallaxEnd, distance);
+            float far = clamp(distance / uParallaxEnd, 0.0, 1.0), shade = 1.0;
+            float viewNear = RELIEF_QUALITY >= 2 ? 16.0 : RELIEF_QUALITY >= 1 ? 6.0 : 4.0;
+            float viewFar = RELIEF_QUALITY >= 2 ? 6.0 : RELIEF_QUALITY >= 1 ? 3.0 : 2.0;
+            float sunNear = RELIEF_QUALITY >= 2 ? 8.0 : RELIEF_QUALITY >= 1 ? 3.0 : 2.0;
+            float sunFar = RELIEF_QUALITY >= 2 ? 3.0 : RELIEF_QUALITY >= 1 ? 2.0 : 1.0;
+            reliefSteps = int(round(mix(viewNear, viewFar, far)));
+            reliefShadowSteps = int(round(mix(sunNear, sunFar, far)));
+            vec3 v = normalize(uEye - vWorld);
+            vec3 sun = normalize(uLightDir);   // not "l": RockBakeFragment patches the lighting at that line
+            // Where the geometry is displaced (ReliefFunctions, to uDisplaceEnd) the view ray marches only the detail finer than the mesh's spacing
+            // there (PatchControl: max(0.6, 0.004 × distance) over the detail), the whole height again as the displacement fades; the ground's and the
+            // cliff's alike.
+            reliefWhole = 1.0;
+            reliefSegment = 0.0;
+            if (uDisplace > 0.0 && distance < uDisplaceEnd)
+            {
+                reliefWhole = smoothstep(0.6 * uDisplaceEnd, uDisplaceEnd, distance);
+                reliefSegment = max(0.6, distance * 0.004) / uTessDetail;
+            }
+            if (g.ground.n > 0)
+            {
+                // The full depth in world units, the biomes' depths by their share (each layer's weight holds its biome's share and factor), in the
+                // unscaled coordinate (uv).
+                float depth = uParallax * g.ground.total / g.share * strength / 5000.0;
+                vec2 o;
+                shade = reliefMarch(g.ground, o, -v.xz / max(v.y, 0.25) * depth, sun.xz / max(sun.y, 0.15) * depth, sun.y > 0.0, strength, true);
+                res.ground = o;
+            }
+            if (g.cliffBiome >= 0)
+            {
+                // A projection's coordinate is (along the surface, vert): vert runs down the world's y. Its depth runs along the surface's normal n, as the
+                // displacement moves it (reliefMove): a ray point s along the view ray is s (v · n) under the surface, over the point s (v − n (v · n))
+                // back along the surface, which is what the projection's coordinate moves by (on a vertical wall: along its axis, as before). Both read the
+                // height as stored: the shading turns the normal map round (biome()), but a texel's height does not change with that (cracks stay low).
+                int b = g.cliffBiome;
+                vec4 layersA = P(b, 0), layersB = P(b, 1), sA = P(b, 2);
+                float depth = uParallax * reliefDepth(layersA.z, sA.zw) * uCliffScale * layersB.w * strength / 5000.0;
+                vec2 vd;
+                float vert = cliffVert(b, vd);
+                vec2 cb = cliffBlend(n);
+                vec3 tv = n * dot(v, n) - v, ts = sun - n * dot(sun, n);
+                float vn = max(dot(v, n), 0.25), sn = max(dot(sun, n), 0.15);
+                bool lit = dot(sun, n) > 0.0;
+                float shadeX = 1.0, shadeZ = 1.0;
+                vec2 o;
+                if (cb.x > 0.1)
+                {
+                    Relief r = noRelief(cliffCoordX(vert, vd, vec2(1.0)));
+                    addRelief(r, sA.zw, layersA.z, 1.0, 1.0);
+                    shadeX = reliefMarch(r, o, vec2(tv.z, -tv.y) / vn * depth, vec2(ts.z, -ts.y) / sn * depth, lit, strength, true);
+                    res.cliffX = o;
+                }
+                if (cb.y > 0.1)
+                {
+                    Relief r = noRelief(cliffCoordZ(vert, vd, vec2(1.0)));
+                    addRelief(r, sA.zw, layersA.z, 1.0, 1.0);
+                    shadeZ = reliefMarch(r, o, vec2(tv.x, -tv.y) / vn * depth, vec2(ts.x, -ts.y) / sn * depth, lit, strength, true);
+                    res.cliffZ = o;
+                }
+                shade = mix(shade, shadeX * cb.x + shadeZ * cb.y, g.cliffShare / g.share);
+            }
+            res.shade = shade;
             return res;
         }
 
-        // One biome's surface (the layer model of docs/formats/terrain.md), its coordinates moved by the march's result (biomeRelief).
+        // A blend slot's biome row (slots 0..3 by the blend map's weights, slot 4 the rest) and its share of the pixel. A share up to BiomeEps is dropped
+        // and the next BiomeEps ramp in (keepWeight: continuous, no seam where a biome stops being shaded); the shares left are normalised by their sum.
+        // Every biome shaded costs up to 14 layer samples, and the blend map's bilinear fringes gave many pixels a biome at a few percent.
+        const float BiomeEps = 0.03;
+        void blendSlot(int k, uvec4 slots, uint slot4, vec4 weights, float rest, out uint b, out float wk)
+        {
+            b = k < 4 ? slots[k] : slot4;
+            wk = keepWeight(k < 4 ? weights[k] : rest, BiomeEps);
+        }
+
+        // One biome's surface (the layer model of docs/formats/terrain.md), its coordinates moved by the march's result (pixelRelief).
         Surface biome(int b, vec3 n, float slope, vec4 map, vec4 colour, float distance, ReliefOut relief)
         {
             vec4 layersA = P(b, 0), layersB = P(b, 1), nearA = P(b, 13), nearB = P(b, 14);
             vec4 sA = P(b, 2), sB = P(b, 3), sC = P(b, 4);
             vec4 omult = P(b, 8), fade = P(b, 9);
 
-            vec2 uv = texWorld.xz / 5000.0;
-            float vert = cliffVert(b);
+            vec2 vd;
+            float vert = cliffVert(b, vd);
             vec2 cb = cliffBlend(n);
             vec4 w = layerWeights(b, slope, map);
             vec4 white = vec4(1.0);
@@ -977,11 +992,11 @@ static partial class TerrainShaders
             // A layer whose weight is exactly 0 at this pixel is not sampled: mixing in a weight of 0 leaves the value as it was
             // (x + 0 * (y - x) and x * 1 + y * 0 are both x). On the swamp the dirt weight is exactly 0 on 57 % of the ground, but the slope and
             // cliff weights almost never are, so this skips only some of the 14 layer samples per biome (docs/render-terrain.md, "Where the terrain's 0.99 ms goes").
-            GradCoord base = gradCoord(uv * sB.xy), grass = gradCoord(uv * sB.zw), slopeUv = gradCoord(uv * sA.xy), dirt = gradCoord(uv * sC.xy), road = gradCoord(uv * sC.zw);
-            GradCoord cliffX = gradCoord(vec2(uv.y, vert) * sA.zw), cliffZ = gradCoord(vec2(uv.x, vert) * sA.zw);
+            GradCoord base = groundCoord(sB.xy), grass = groundCoord(sB.zw), slopeUv = groundCoord(sA.xy), dirt = groundCoord(sC.xy), road = groundCoord(sC.zw);
+            GradCoord cliffX = cliffCoordX(vert, vd, sA.zw), cliffZ = cliffCoordZ(vert, vd, sA.zw);
             float far = clamp(distance * fade.a - 0.3, 0.0, 1.0);
 
-            // The march's moves (biomeRelief; none without it, and adding 0 leaves a coordinate as it was).
+            // The march's moves (pixelRelief; none without it, and adding 0 leaves a coordinate as it was).
             base.p += relief.ground * sB.xy; grass.p += relief.ground * sB.zw; slopeUv.p += relief.ground * sA.xy; dirt.p += relief.ground * sC.xy; road.p += relief.ground * sC.zw;
             cliffX.p += relief.cliffX * sA.zw; cliffZ.p += relief.cliffZ * sA.zw;
 
@@ -1042,6 +1057,8 @@ static partial class TerrainShaders
         {
             if (uWireframe) { fragColour = vec4(0.1, 0.1, 0.1, 1.0); return; }
             texWorld = uHeightNormals ? vNormal : vWorld;
+            texDx = dFdxCoarse(texWorld);
+            texDy = dFdyCoarse(texWorld);
             vec3 n = uHeightNormals ? terrainNormal(texWorld.xz) : normalize(vNormal);
             float distance = length(vWorld - uEye);
             // Map features clamp the slope at 1, so overhangs (normal pointing down) keep the cliff layer.
@@ -1089,38 +1106,40 @@ static partial class TerrainShaders
                     ivec2 field = uFeature ? ivec2(-1) : fieldTile(texWorld.xz, fieldInside);
                     fieldLayer = field.y;
                     int single = field.x >= 0 ? field.x : uFeatureBiome;
+                    // The pixel's relief first, once for all its biomes (pixelRelief), then the shading. Without the march (NO_MARCH) none.
+                    ReliefOut relief = ReliefOut(vec2(0.0), vec2(0.0), vec2(0.0), 1.0);
+                    #ifndef NO_MARCH
+                    if (uParallax > 0.0 && distance < uParallaxEnd)
+                    {
+                        ReliefGather g = noGather();
+                        if (single >= 0) gatherRelief(g, single, 1.0, slope, map);
+                        else
+                        {
+                            for (int k = 0; k < 5; k++)
+                            {
+                                uint b; float wk;
+                                blendSlot(k, slots, slot4, weights, rest, b, wk);
+                                if (b < 254u && wk > 0.0) gatherRelief(g, int(b), wk, slope, map);
+                            }
+                        }
+                        relief = pixelRelief(g, n, distance);
+                    }
+                    #endif
                     if (single >= 0)
                     {
                         // A map feature has one biome for its whole surface (the game builds its material for the biome at its origin).
-                        Surface s = biome(single, n, slope, map, colour, distance, biomeRelief(single, n, slope, map, distance));
+                        Surface s = biome(single, n, slope, map, colour, distance, relief);
                         sumA = s.albedo; sumN = s.normal; sumAbsorb = s.absorb; sumShade = s.shade; total = 1.0;
                     }
                     else
                     {
-                        // Every biome's march first, then the shading (biomeRelief). Without the march (NO_MARCH) the results' array is left out: kept with
-                        // constants, it still cost the pass 0.28 ms.
-                        #ifndef NO_MARCH
-                        ReliefOut reliefs[5];
                         for (int k = 0; k < 5; k++)
                         {
-                            uint b = k < 4 ? slots[k] : slot4;
-                            float wk = k < 4 ? weights[k] : rest;
-                            reliefs[k] = ReliefOut(vec2(0.0), vec2(0.0), vec2(0.0), 1.0);
-                            if (b >= 254u || wk < 0.004) continue;
-                            biomeShare = wk;
-                            reliefs[k] = biomeRelief(int(b), n, slope, map, distance);
-                        }
-                        #define RELIEF_OF(k) reliefs[k]
-                        #else
-                        #define RELIEF_OF(k) ReliefOut(vec2(0.0), vec2(0.0), vec2(0.0), 1.0)
-                        #endif
-                        for (int k = 0; k < 5; k++)
-                        {
-                            uint b = k < 4 ? slots[k] : slot4;
-                            float wk = k < 4 ? weights[k] : rest;
-                            if (b == 254u && wk >= 0.004) pending += wk;   // biome still loading: its share shows the ground colour
-                            if (b >= 254u || wk < 0.004) continue;
-                            Surface s = biome(int(b), n, slope, map, colour, distance, RELIEF_OF(k));
+                            uint b; float wk;
+                            blendSlot(k, slots, slot4, weights, rest, b, wk);
+                            if (b == 254u && wk > 0.0) pending += wk;   // biome still loading: its share shows the ground colour
+                            if (b >= 254u || wk <= 0.0) continue;
+                            Surface s = biome(int(b), n, slope, map, colour, distance, relief);
                             sumA += s.albedo * wk;
                             sumN += s.normal * wk;
                             sumAbsorb += s.absorb * wk;
@@ -1131,8 +1150,7 @@ static partial class TerrainShaders
                     uint fallback = slot4 < 254u ? slot4 : slots.x;
                     if (total <= 0.0 && pending <= 0.0 && fallback < 254u)
                     {
-                        biomeShare = 1.0;
-                        Surface s = biome(int(fallback), n, slope, map, colour, distance, biomeRelief(int(fallback), n, slope, map, distance));
+                        Surface s = biome(int(fallback), n, slope, map, colour, distance, ReliefOut(vec2(0.0), vec2(0.0), vec2(0.0), 1.0));
                         sumA = s.albedo; sumN = s.normal; sumAbsorb = s.absorb; sumShade = s.shade; total = 1.0;
                     }
                     if (total > 0.0) { albedo = sumA / total; sumN /= total; absorbance = sumAbsorb / total; reliefShade = mix(1.0, sumShade / total, nearWeight); }

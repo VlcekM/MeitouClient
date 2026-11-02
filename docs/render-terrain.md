@@ -104,8 +104,11 @@ the swamp biomes round it about 26; those textures are shared by 9–12 other bi
 
 **Composite.** Every ground layer adds material; the relief height keeps the heaviest ground layers (base, grass, slope, dirt,
 road) by how much of the pixel each shows, from the blend map, overlay window and slope per pixel, not per patch, so neighbouring
-patches meet on the same heights: five at High quality, two at Medium, one at Low. The cliff over all has its own march. A biome
-under 10% of the pixel is not marched (fading in to 30%), a layer under 5% is left out (to 15%).
+patches meet on the same heights: five at High quality, two at Medium, one at Low. One march a pixel (`pixelRelief`): the layers of every
+biome blended are gathered by their share of the pixel times the biome's factor (a layer two biomes share is one entry), so all biomes'
+ground coordinates move alike. The cliff has its own march, on the projections of the biome whose cliff weighs most, its moves applied to
+every biome's cliff. A layer under 5% of the pixel is left out (fading in to 15%). A biome under 3% of the pixel is not shaded at all
+(`BiomeEps`, ramping in to 6%; the rest renormalised): each costs up to 14 layer samples.
 
 **Displacement** (needs `tessellationShader`): main-view patches within the displacement distance + 10 units (interior-cut ones
 too) draw with tessellated colour and prepass programs (patch lists of 3, culling off, `fractional_odd_spacing`). The vertex
@@ -159,9 +162,10 @@ depth test off. Their prepass already discards the cut, so the late colour draws
 run the same vertex and tessellation stages, invariant positions): GPU frame 6.14 -> 5.80 ms, the picture unchanged (one pixel over 8 levels at a town view).
 With the parallax on (60 m, displacement 60 m), nearly all the visible terrain is relief patches. The march held their pixel warps to 12% (21% without it) at the
 same register file use, with the SM throughput at 20% (39%). On the RTX path the march's sampling hardly counts: no self-shadow, or the base layer alone,
-changed nothing. Every biome's march now runs before any is shaded (`biomeRelief`, then `biome` with its result), so the march's state no longer sits on
-the shading's: terrain 4.4 -> 4.0 ms, the picture unchanged. Without the march (`NO_MARCH`) that loop and its results' array are left out; kept with
-constants, they cost 0.28 ms. Drawing patches beyond the parallax's end with the march-free program saved nothing there.
+changed nothing. The march runs before any biome is shaded, so its state does not sit on the shading's: terrain 4.4 -> 4.0 ms, the picture
+unchanged. One march a pixel instead of one a biome, the biome threshold and the layer derivatives taken once from the point's (chain rule):
+terrain 3.90 -> 3.77 ms (**Observed**, `--play-bench` idle/orbit on save "stutter final boss", RTX 4070 1080p DLSS; screenshot diff 0.001% of pixels
+over 12/255). Drawing patches beyond the parallax's end with the march-free program saved nothing there.
 **Metal (Observed, 2026-10-25, a town view at 1024x640 scene / 2560x1600 output):** the interior-cut colour draw took 11.25 ms of a 31.03 ms frame,
 with a 6.2 KB register spill. With the march off it took 4.28 ms and the frame 19.75 ms, the spill 48 B. That run used an 8/4-step, three-layer march; High's 5 layers and
 16/8 steps are **Unknown** on Metal (Medium or Low cut the cost); Metal's shader compiler and tile-memory architecture make the march much more expensive than the RTX path.
