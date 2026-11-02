@@ -510,7 +510,7 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
     /// The investigators' serial step (<c>Task_InvestigateAlarms</c> update, <b>Observed</b>), for each NPC whose AI acts out goal 209 or 210 (<see cref="Ai.AiBehaviour.Investigate"/>):
     /// within <see cref="AlarmLookRange"/> of its alarm it counts <see cref="Ai.AiMind.LookAbout"/> down and clears the alarm when it runs out; on the way there it keeps the count at
     /// <see cref="LookAboutSeconds"/>, and every character it sees that is not down, not of its faction or an ally, and has a pending crime against its faction or an ally, its squad
-    /// tags TEMP_ENEMY and it goes for (<c>Character::attackTarget</c>). Engine: "sees" is the witnesses' sight test, the original's sense list (seen or heard) is not.
+    /// tags TEMP_ENEMY (all of them) and it goes for the last (<c>Character::attackTarget</c>). Engine: "sees" is the witnesses' sight test, the original's sense list (seen or heard) is not.
     /// </summary>
     void Investigate(World world, float seconds)
     {
@@ -528,16 +528,18 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
                 continue;
             }
             mind.LookAbout = LookAboutSeconds;
-            if (cold.Fighter?.CanAttack != true) continue;
+            // Every qualifying witness in sight is tagged and the last one scanned is the attack target (the original overwrites the AI's attack hand: FUN_140354260, Verified, no can-attack test
+            // on this path); the order is sent only for that last one, and only by a character able to fight.
             float range = AggroSystem.RangeOf(cold, Settings.Sight);
+            int last = -1;
             for (int c = 0; c < table.HighWater; c++)
             {
                 if (c == i || !next[c].Alive || table.Cold(c) is not { Pending: { } p, Medical.Incapacitated: false } cc || Friendly(cold.Faction, cc.Faction) || !Friendly(cold.Faction, p.VictimFaction)) continue;
                 if (Vector3.DistanceSquared(next[c].Position, next[i].Position) > range * range || world.Sight.Sees(i, c, next[i].Position, next[c].Position, range) <= 0) continue;
                 world.SystemOf<Dialogue.DialogueSystem>()?.TagEnemy(world, i, c);
-                world.Defer(new Combat.AttackOrder([table.IdOf(i)], table.IdOf(c)) { Tick = world.Tick + 1, Source = TaskSource.Npc });
-                break;
+                last = c;
             }
+            if (last >= 0 && cold.Fighter?.CanAttack == true) world.Defer(new Combat.AttackOrder([table.IdOf(i)], table.IdOf(last)) { Tick = world.Tick + 1, Source = TaskSource.Npc });
         }
     }
 

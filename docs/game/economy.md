@@ -454,7 +454,7 @@ money, mark the entry claimed (it never pays twice) and show "Received c.{1} rew
   after any walk); at 0 the alarm is deleted and the task ends (the only remover found). Farther: runs (mode 2) to 30 short of it on its
   own side, the count set to 10, and every sensed character (neutral or enemy, not down: `SenseItr(6, 8)`) with a pending crime whose
   victim faction is an ally of the investigator's (`FactionRelations::isAlly`: same, or 50+) is tagged TEMP ENEMY and attacked
-  (`Character::attackTarget`).
+  (`Character::attackTarget`). **Verified** (decompile): no early exit and no can-attack test, on every update while it walks; each qualifying entry is tagged and the AI's attack hand is overwritten, so the last one scanned is the target (Meitou `CrimeSystem.Investigate`: all tagged, one order for the last, only by a character able to fight; the sight scan stands in for the sense list).
 
 Meitou (`CrimeSystem.TownAlarm` / `AlarmFor` / `Investigate`, `AiBehaviour.Investigate`): as above (reach by `TownAlarm.Place`, the culprit's `SightMap.PlaceOf`, and the more-than-one-floor skip by `Floor`); alarms are not saved; the closed-building
 halving and the `+0xc2` floor skip (meaning **Unknown**) are not modelled; "sensed" is the witnesses' sight test.
