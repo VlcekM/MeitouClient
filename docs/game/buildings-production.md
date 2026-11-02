@@ -376,8 +376,10 @@ short; a piece runs from its position along its own +Z for `link length` x `scal
   = first with length < remaining + 10 (full pieces, then shorts; overshoot <= 10). A bend > 10 deg to the previous
   piece puts the shortest piece centred on the joint along the bisector (crest, not when the shortest is a single), < -10
   the wedge at the joint (valley). Stops when < 10 remains, past the end, or after 500 pieces; a leftover shorter than
-  the shortest piece - 10 stays open. A climb steeper than `max slope` continues straight until the hill rises
-  `building height` - 10 above it (`FUN_14042a2b0`, **Observed**). With a snapped end, later frames shorten every piece
+  the shortest piece - 10 stays open. A rising piece (its end higher than the current point) whose pitch from level exceeds the wall's `max slope` (the wall object's +0x88, strictly greater;
+  **Verified**, `FUN_14042a4b0`) is not placed: `FUN_14042a2b0` lays pieces of the LONGEST length along the previous piece's direction (3D), for as long as half a piece is less than the distance left (a
+  single only once), where the distance is to the first profile point from the cursor on at which the ground stands `building height` (+0x8c) - 10 above the line (the constant `DAT_14167fad4` = 10), else to
+  the point of greatest rise; then the run ends (Meitou `WallLine.Straight`). With a snapped end, later frames shorten every piece
   by remaining / count so the run closes on the point (**Observed**).
 - **Orientation** (`FUN_1404278b0`): +Z towards the piece's end (pitching with the slope), +X level (Y x Z).
 - **Snapping** (`FUN_1404289f0`, `FUN_140427950`): candidates are the queued wall ghosts and every loaded building with
