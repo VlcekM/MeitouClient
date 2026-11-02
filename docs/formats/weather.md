@@ -88,7 +88,8 @@ remains unexplained. Gameplay effects: [Effects on characters](#effects-on-chara
 ## Effects on characters
 
 **Verified (decompiled)**, the character's weather update `FUN_1405cf790` (CharacterHuman vtable +0x288, called from the
-character update `FUN_1405d00b0` with the character's dt, seconds of character time). Each call, in order:
+character update `FUN_1405d00b0` with the character's dt, seconds of character time). Meitou (engine choice, `WeatherSystem.EveryTicks`)
+calls it every 5th tick per character, on its slot's turn, with 5 ticks of time. Each call, in order:
 
 1. Clear the character's weather (animation holder `+0x198` kind, `+0x1a0` strength, `+0x190` overlay flag). Skip all while
    `DAT_142134690+0x2f0` is set (**Unknown** switch); stop (also skipping step 5's smoke) when the position has no BIOME_GROUP.

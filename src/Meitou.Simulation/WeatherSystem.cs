@@ -7,7 +7,7 @@ namespace Meitou.Simulation;
 
 /// <summary>
 /// What the weather does to characters (docs/formats/weather.md "Effects on characters"; the character's weather update <c>FUN_1405cf790</c>, <b>Verified</b> by
-/// decompilation). Every tick, for each living character with a body, in the slow-world phase (serial) with the tick's seconds of character time:
+/// decompilation). For each living character with a body every <see cref="EveryTicks"/> ticks, in the slow-world phase (serial), with that many ticks of character time:
 /// <list type="number">
 /// <item>Acid, unless the race is immune to it: swimming (water state 3) in a region with <c>acidic water</c> burns every part; otherwise, outdoors, standing (not down or
 /// carried), not in a bed or cage and with an empty boots slot, <c>acidic ground</c> burns the legs.</item>
@@ -49,6 +49,12 @@ public sealed class WeatherSystem(GameConstants constants) : ITickSystem
     /// <summary>The roof must be more than this over the character's feet (the original's <c>+10</c>).</summary>
     public const float RoofClearance = 10;
 
+    /// <summary>
+    /// Meitou (<b>engine choice</b>): a character is updated every this many ticks, on its slot's turn, with that many ticks of time (the original updates each one every frame); the
+    /// harm is the same, it lands in steps of a sixth of a game second.
+    /// </summary>
+    public const int EveryTicks = 5;
+
     readonly Dictionary<(CharacterId, int), long> eventAfter = [];
     readonly Dictionary<string, bool> shelterRecords = new(StringComparer.Ordinal);
 
@@ -57,9 +63,10 @@ public sealed class WeatherSystem(GameConstants constants) : ITickSystem
         if (world.Weather is not { } source) return;
         var table = world.Characters;
         var next = table.Next;
-        float dt = world.TickSeconds;
+        // Each character every EveryTicks ticks on its slot's turn, with that many ticks of time.
+        float dt = world.TickSeconds * EveryTicks;
         var zones = source.Zones;
-        for (int i = 0; i < table.HighWater; i++)
+        for (int i = (int)(world.Tick % EveryTicks); i < table.HighWater; i += EveryTicks)
         {
             if (!next[i].Alive || table.Cold(i) is not { } cold) continue;
             cold.Weather = WeatherAffecting.None;
