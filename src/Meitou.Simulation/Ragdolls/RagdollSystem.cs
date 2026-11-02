@@ -79,7 +79,13 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
     /// <summary>Ragdolls in play (frozen ones included) and how many are moving.</summary>
     public int Count => ragdolls.Count;
     public int Moving { get; private set; }
+    /// <summary>The moving ones by kind: carried, whole-body (falling or settling) and limbs only (a collapsed arm or leg of a character still up).</summary>
+    public int MovingCarried { get; private set; }
+    public int MovingWhole { get; private set; }
+    public int MovingLimbs { get; private set; }
     public int Tiles => physics.TileCount;
+    /// <summary>Awake bodies from which the step runs on the worker threads (<b>engine choice</b>).</summary>
+    public const int ThreadedBodies = 500;
     /// <summary>Bodies the physics steps (its awake set, ground tiles included).</summary>
     public int AwakeBodies => physics.Simulation.Bodies.ActiveSet.Count;
 
@@ -248,14 +254,23 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
 
         world.Profile.Part("rag setup");   // F12: the masks, the builds, the pins and the ground tiles
         // 2. The step.
-        Moving = 0;
-        foreach (var id in order) if (ragdolls[id] is { Frozen: false, Mask: not RagdollPart.None }) Moving++;
-        // The physics on the world's thread count (its own workers: the world's pool is idle in this serial phase).
-        if (Moving > 0 && threads is null && world.Settings.Threads > 1) threads = new BepuUtilities.ThreadDispatcher(world.Settings.Threads);
+        (Moving, MovingCarried, MovingWhole, MovingLimbs) = (0, 0, 0, 0);
+        foreach (var id in order)
+            if (ragdolls[id] is { Frozen: false, Mask: not RagdollPart.None and var mask })
+            {
+                Moving++;
+                if ((mask & RagdollPart.CarryMode) != 0) MovingCarried++;
+                else if ((mask & RagdollPart.Whole) != 0) MovingWhole++;
+                else MovingLimbs++;
+            }
+        // The physics on the world's thread count (its own workers: the world's pool is idle in this serial phase), once there are enough awake bodies to share out: below that
+        // the hand-offs of each substep cost more than the solving (Observed: 50-160 bodies took 0.5 ms a step on all threads). Deterministic, so the count does not change the result.
+        bool threaded = AwakeBodies >= ThreadedBodies && world.Settings.Threads > 1;
+        if (Moving > 0 && threaded && threads is null) threads = new BepuUtilities.ThreadDispatcher(world.Settings.Threads);
         if (Moving > 0)
         {
             foreach (var id in order) if (ragdolls[id] is { Frozen: false, Mask: not RagdollPart.None } floating) Buoy(world, floating, stepDt);
-            physics.Step(stepDt, threads);
+            physics.Step(stepDt, threaded ? threads : null);
         }
         world.Profile.Part("rag step");
 

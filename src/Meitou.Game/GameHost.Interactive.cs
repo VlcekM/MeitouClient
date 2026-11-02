@@ -1027,7 +1027,7 @@ sealed partial class GameHost
     long simWindowTicks;
     int simWindowFrames;
     // The ragdolls sampled once a frame: in play, moving, the physics' awake bodies, frames with any moving.
-    long simWindowRagdolls, simWindowMoving, simWindowAwake;
+    long simWindowRagdolls, simWindowMoving, simWindowAwake, simWindowCarried, simWindowWhole, simWindowLimbs;
     int simWindowStepping;
 
     /// <summary>
@@ -1044,7 +1044,10 @@ sealed partial class GameHost
         for (int k = firstSystem; k < simMs.Length - 1; k++) Add((k >= firstPart ? "." : "") + simNames[k], simMs[k]);
         for (int k = 0; k < profile.SlowWorldMs.Length && firstSystem + k < firstPart; k++) Add("~" + simNames[firstSystem + k], profile.SlowWorldMs[k]);
         if (session.World.Systems.OfType<Meitou.Simulation.Ragdolls.RagdollSystem>().FirstOrDefault() is { } rag)
+        {
             (simWindowRagdolls, simWindowMoving, simWindowAwake, simWindowStepping) = (simWindowRagdolls + rag.Count, simWindowMoving + rag.Moving, simWindowAwake + rag.AwakeBodies, simWindowStepping + (rag.Moving > 0 ? 1 : 0));
+            (simWindowCarried, simWindowWhole, simWindowLimbs) = (simWindowCarried + rag.MovingCarried, simWindowWhole + rag.MovingWhole, simWindowLimbs + rag.MovingLimbs);
+        }
         double seconds = now - simWindowStart;
         if (seconds < SimWindowSeconds) return;
         if (simWindowTicks > 0)
@@ -1056,11 +1059,11 @@ sealed partial class GameHost
             Console.WriteLine(string.Create(inv, $"simprof   {session.Simulation.Speed:0}x {simWindowFrames / seconds:0} fps, {simWindowTicks / seconds:0} ticks/s, {session.World.Snapshot.Characters.Count} characters; ") +
                 string.Create(inv, $"ms a frame: in frame {simWindowMain / simWindowFrames:0.00}, ahead {simWindowAhead / simWindowFrames:0.00}; ms a tick {tickMs:0.00}: ") +
                 $"phases: {Top('#', 10)}; systems: {Top(' ', 12)}; slow world: {Top('~', 12)}; parts: {Top('.', 12)}; " +
-                string.Create(inv, $"ragdolls {(double)simWindowRagdolls / simWindowFrames:0.0}, moving {(double)simWindowMoving / simWindowFrames:0.0}, awake bodies {(double)simWindowAwake / simWindowFrames:0}, stepping {100.0 * simWindowStepping / simWindowFrames:0}% of frames"));
+                string.Create(inv, $"ragdolls {(double)simWindowRagdolls / simWindowFrames:0.0}, moving {(double)simWindowMoving / simWindowFrames:0.0} (carried {(double)simWindowCarried / simWindowFrames:0.0}, whole {(double)simWindowWhole / simWindowFrames:0.0}, limbs {(double)simWindowLimbs / simWindowFrames:0.0}), awake bodies {(double)simWindowAwake / simWindowFrames:0}, stepping {100.0 * simWindowStepping / simWindowFrames:0}% of frames"));
         }
         simWindowMs.Clear();
         (simWindowStart, simWindowTicks, simWindowMain, simWindowAhead, simWindowFrames) = (now, 0, 0, 0, 0);
-        (simWindowRagdolls, simWindowMoving, simWindowAwake, simWindowStepping) = (0, 0, 0, 0);
+        (simWindowRagdolls, simWindowMoving, simWindowAwake, simWindowStepping, simWindowCarried, simWindowWhole, simWindowLimbs) = (0, 0, 0, 0, 0, 0, 0);
     }
 
     /// <summary>
