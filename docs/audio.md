@@ -28,6 +28,9 @@ of the pivot at the zoom distance).
   Boneyard, Canyons, Coast, Desert, Forest, Jungle, Plains, Swamplands, Tarsands; default Desert) names the bank `SFX_Amb_<name>`. Its
   `music` field (enum `BiomeMusic`: Dunes, Savanah, Swamp, Tarsands, None) picks the music in the same step. Base game: 74 regions; Plains
   15, Desert 14, Canyons 12, Coast 10, Boneyard 7, Tarsands 5, Forest 4, Swamplands 3, Ashlands 2, Jungle 2 (Verified, records).
+  The Crater and Border Zone are Canyons, Shun is Coast (Verified, records). `Enter_Canyons_Night` starts layer `0C07AA21` (two loops) and
+  random one-shots `221D4A37`; the loops are tonal, peaking near 1.5-2 kHz and 4.5 kHz like an insect chorus, the day loop is low wind
+  (Observed: band energies of the exported wems), so crickets there at night are the data's.
 - **Day** is `sunrise < hour < sunset` strictly (GLOBAL CONSTANTS, 5 and 23; `FUN_14066cb20`), otherwise night.
 - Each frame the game compares one number, the biome index with bit 8 set at night, with the last (−1 at start). No delay, no hysteresis.
   On a change: if the biome changed (not only the time), `Leave_<OldBiome>`; then `Enter_<Biome>_Day` or `Enter_<Biome>_Night`. So day to

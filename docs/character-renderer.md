@@ -76,7 +76,7 @@ other squads in order) and the first selected one (`PlayerInterface.FullRateChar
 A character that cannot show (`CharacterRenderer.Shown`: its sphere, its shadow swept from the light, its water mirror image all outside the view; no portrait) is not
 posed at all, its held palette still drawn (far cascades are reused for up to 32 frames), and is posed without motion the frame it returns; the host fills no poses or
 ragdoll beyond the draw distance + 2000 (`InReach`): it lists those in `CharacterDrawList.Distant`, once a tick, which the renderer scans only when it changes (looks to build, kept-point textures). Engine choices. **Observed** (stutter final boss save, ~1000 characters, ~400 in reach, ~280 of them off screen).
-F11's characters line counts what the last colour view culled in (frustum and fog only: covered, indoors-hidden-by-terrain and sub-pixel ones count);
+F11's characters line counts what the last colour view culled in (frustum and fog only: those behind terrain or buildings and sub-pixel ones count too);
 its `[ ] boxes` checkbox outlines those over everything (`CountedBoxes`).
 Clamp stored bounds to real mesh extent. Animation rendering does not independently integrate
 walk-loop root movement; simulation owns relocation. Quads/morph and motion buffers retain
