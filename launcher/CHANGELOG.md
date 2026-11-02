@@ -4,6 +4,9 @@ Released with tags `launcher-v<version>` by `.github/workflows/launcher-release.
 
 ## v1.5.0
 
+- **Every label is translatable now**: the texts the launcher builds at run time (statuses, tooltips, counts, the Graphics page's
+  rows and the download and install lines) and the tooltips and placeholders the layout sets. A translated label no longer goes
+  back to English on a language switch.
 - **Look** row on the Graphics page, as in the game: Faithful or Meitou, its example looks or your own, with **Save**,
   **Save as**, **Share** (a code to paste on Discord), **Paste** and **Delete**. The presets are the same files as the game's.
 - Each effect is a **Faithful | Meitou** switch, as in the game, with what each side does in its tooltip; other on / off

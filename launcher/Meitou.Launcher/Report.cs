@@ -35,7 +35,7 @@ public sealed partial class MainWindow
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)
         {
-            Status($"Could not read the roadmap: {ex.Message}");
+            Status(LauncherText.Translate("Could not read the roadmap: {1}", ex.Message));
             return;
         }
         if (rows.Count == 0) { Status("The roadmap lists no systems."); return; }
@@ -159,7 +159,7 @@ public sealed partial class MainWindow
             }
             catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)
             {
-                problem.Text = $"{LauncherText.Translate("Not sent")}: {ex.Message}";
+                problem.Text = LauncherText.Translate("Not sent: {1}", ex.Message);
                 send.IsEnabled = true;
             }
         };

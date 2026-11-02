@@ -119,7 +119,7 @@ public sealed partial class SetupOverlay : UserControl
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            Problem.Text = $"Could not use {folder}: {ex.Message}";
+            Problem.Text = LauncherText.Translate("Could not use {1}: {2}", folder, ex.Message);
             IsEnabled = true;
             return;
         }
