@@ -28,7 +28,7 @@ grows through a bar's floorboards. `InteriorMaskRenderer`; consumers: terrain, f
 
 ## Meitou
 
-- The mask: masks of loaded buildings within 3000 of the eye, drawn before the scene with the near slice's camera into
+- The mask: masks of loaded buildings within 3000 of the eye, drawn before the scene with the scene's camera into
   RGBA16F; every face writes depth + 1, min into R, max into A (the nearest and farthest face, the same as the game's facing
   split for a closed mesh seen from outside; not dependent on the meshes' winding). With the eye inside a building's
   trigger hull its masks write R = 0 (the game's value there: every face seen is a back face). `Boxes` are the drawn mask
@@ -51,6 +51,6 @@ grows through a bar's floorboards. `InteriorMaskRenderer`; consumers: terrain, f
     nothing inside the hull (convex footprint and height range of up to 4 viewed buildings, 32 edges in all, in `ViewConstants.cutPlanes`; the
     objects' depth program discards). Limits: the mask is shared, so such a part between two masks along a ray, or in a non-convex mask's concavity, is
     cut too; a far cascade cached before the view opened keeps the shadow until it is redrawn.
-- Only the main view's near slice; not shadows, the water reflection or farther slices.
+- Only the main view; not shadows or the water reflection.
 - Engine limits: "inside" is decided by the hull, not per ray; foliage impostors and the grass motion pass (TAA velocity)
   are not cut.

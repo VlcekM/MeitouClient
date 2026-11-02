@@ -177,7 +177,7 @@ camera particle effects off, the fog thinning over the 500 below it (`SkyRendere
 
 ## Rendering and upscaling
 
-WorldFrame prepares/streams sky/shadows/reflection, scene depth slices and post. Algorithms
+WorldFrame prepares/streams sky/shadows/reflection, the scene (one depth) and post. Algorithms
 live in render-* references; Data holds backend-independent terrain/placement/light rules.
 Own GLSL compiles through bundled shaderc, explicit native resource/state recording and ordered
 secondary jobs. [Native API](renderer-native.md).

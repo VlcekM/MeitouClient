@@ -49,6 +49,14 @@ BlendOperation, ColorMask, PrimitiveType, PixelViewport, PixelRect, InternalForm
 ClearColour, IndexKind, TextureMinFilter, TextureMagFilter, TextureWrapMode. GlConventions maps
 them to Vulkan (the front face flips: GL's counter-clockwise is Vulkan's clockwise; GL's 24-bit
 depth is a 32-bit float). A second backend maps them to itself.
+Depth: clip depth is 0..1 on both backends (no `VK_EXT_depth_clip_control`, no vertex remap); the stored depth is z/w. The scene
+targets (scene depth, reflection, hover mask, markers, the particle and water depth copies derived from the scene's) are one
+reversed 32-bit float buffer on Vulkan: cleared to 0, near plane 1, far plane (the view distance) 0, compared GREATER/GEQUAL.
+`DepthConvention` is the one place for the clear, the compare, the projection (`Perspective`, `Apply`), the wireframe bias
+(`TowardViewer`) and the GLSL helper (`Glsl`: `depthIsSky`, `depthViewZ`, `depthOf`, `depthStep`, `DEPTH_SKY`/`DEPTH_NEAREST`, selected
+by the `MEITOU_DEPTH_REVERSED` define the Vulkan compiler adds). Renderers keep stating GL compare semantics; `GlConventions` maps them
+literally. Shadow maps, previews, icons and bakes stay conventional (clear 1, Less). Metal is conventional (`DepthConvention.Reversed`
+false). View-depth step of one float ulp, derived: reversed `1.2e-7 z` at any distance; conventional `1.2e-7 z^2 / near`.
 The resources and the commands below them are the same question: [resource-layer](resource-layer.md).
 
 BindlessTable has seven typed sampler arrays (BindlessKind bindings0..6). Per-slot descriptor

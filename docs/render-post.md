@@ -7,7 +7,7 @@ Original exposure/FXAA/haze rules: [formats/post-processing.md](formats/post-pro
 ## Frame contract
 
 Scene shaders write unclamped HDR. Colour/depth/motion targets belong to PostProcess; scenes
-must preserve requested attachments and near/far depth history. Scene rendering is at render
+must preserve requested attachments and the scene depth's history (one depth, [renderer-native](renderer-native.md) "Depth"). Scene rendering is at render
 scale; reconstruction precedes display-sized composite/exposure/grading. Single sampling with
 TAA/FSR/DLSS; jitter scene/sky, never shadow maps or reused reflections. Fade/dither/noise must
 agree across colour/depth/velocity passes. Transparent layers do not overwrite opaque depth.
@@ -93,14 +93,14 @@ swapchain code needs Vulkan headers 1.3.237+, so the script uses Khronos' 1.3.29
 
 ## SSAO, fog and layers
 
-SSAO reads near depth; character mask controls character occlusion (default strength0.25).
+SSAO reads the scene depth; character mask controls character occlusion (default strength0.25).
 `ssao-mask-skip` may omit a mask read only when no character was drawn. The taps read the mask from a half-size R8 copy of the scene colour's
 alpha (`SsaoMask`), not the scene colour: **Observed** (Nsight, 2560x1440) SSAO 0.35 ms, L2-bound, 0.2 ms of it the scattered scene-colour reads;
 GPU frame -0.15 ms, the picture within 4 levels. Sky/far-depth edges and
 transparent water/particles require explicit exclusion/compositing rules. The water writes no depth, so a surface below the
 water plane fades out of the occlusion over the water's last 2 units along the ray, as the water's edge does
-([water](render-water.md) "Edges"). Passes rebuild view depth from the projection's 0..1 clip depth (`uClipDepthZeroToOne`:
-Vulkan stores half of it plus a half, Metal the clip depth); GL's -1..1 formula puts points about twice too far on Vulkan.
+([water](render-water.md) "Edges"). Passes rebuild view depth through `DepthConvention.Glsl` (`depthViewZ`, `depthIsSky`):
+reversed on Vulkan, conventional on Metal; no shader hand-writes the mapping.
 SSAO: radius 6 units or 3 % of the distance, fade from 1600 to 6600 units.
 `layer-merge`, `fog-half`, `shafts-half`, `layers-lean` combine shafts apply, placed fog and SSAO,
 using reduced targets plus depth-aware reconstruction/mask fallback. A texel that does not fit
@@ -237,5 +237,5 @@ upside down, so depth rectangles must be mirrored in Y.
 named swamp screenshot test; DLSS/FSR outputs require baseline-noise comparison. Other layer,
 mask, half-resolution and fog-rate changes are not blanket pixel-parity claims. Compare still
 and moving views at matched time/weather/upscaler. [bench.md](bench.md).
-**Limits:** near-only SSAO, screen-space information, temporal disocclusion, coarse fog shading,
+**Limits:** screen-space information, temporal disocclusion, coarse fog shading,
 and lost GI specular occlusion on resolved surfaces; see feature docs for uncertainty.

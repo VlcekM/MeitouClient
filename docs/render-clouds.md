@@ -30,7 +30,7 @@ history. Reset on coverage/camera/light/ambient/size/continuity changes. Mirrore
 is required for reflection. Reprojection approximates a volume, not motion at every depth.
 Upscaler motion: the velocity pass gives sky pixels the far plane's motion (the turn alone); a sky pixel with a cloud within about 4
 render pixels (`UpscaleShaders.CloudMotion`, 3x3 taps two cloud texels apart) takes the cloud's motion: the opacity-weighted point's parallax
-through the slice's reprojection plus the wind's shift, weighted by the strongest opacity (full from 0.03), after the history resolve (Vulkan
+through the scene's reprojection (the distance re-encoded with `depthOf`) plus the wind's shift, weighted by the strongest opacity (full from 0.03), after the history resolve (Vulkan
 chain only). Weighting by the pixel's own opacity left thin edges and pixels a cloud had just left with the sky's motion, so DLSS fetched
 last frame's cloud in place: rows of streaks behind drifting edges with the camera still (DLSS only; TAA clamps its history). With the
 neighbourhood the streaks fall to TAA's level (**Observed**, the live title scene, 2560x1440, DLSS, a streak count over sky blocks).

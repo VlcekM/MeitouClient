@@ -26,7 +26,7 @@ CharacterShaders set0 bindings: bones6, materials7 (persistent), morphs8, previo
 slots. CharacterLayoutTests pins CPU/GLSL layouts. Push depthIndex is near-depth bindless index
 for motion,0 otherwise. Camera-relative transforms preserve precision; previous bone/transform
 state must match motion history. Skin/body/head/hair/item modes share world lighting/haze.
-The colour and motion views use the near slice's rotation-only view-projection (`WorldFrame` passes it, jittered and unjittered; the
+The colour and motion views use the scene's rotation-only view-projection (`WorldFrame` passes it, jittered and unjittered; the
 previous frame's is moved by the eye difference in double), not the world one with the eye's position cancelled afterwards
 (`FromOrigin`, still used by the other views): the world matrix's translation already holds the eye's rounding.
 **Observed** (sandbox hero spawned at x = -50874, `--upscaler off`, camera locked on the leader at the minimum boom 10, CPU replay of the

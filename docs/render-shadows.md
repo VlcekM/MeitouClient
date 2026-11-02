@@ -10,6 +10,8 @@ ranges, stable grids and soft filtering, plus terrain-horizon shadow beyond loca
 Shadow-quality default2 uses4096²; Tab supports1024/2048/4096. Cascade arrays include a fifth
 Meitou cascade; consumers must use current layer count/splits, not assume four tiles everywhere.
 Depth-array views, samplers, receiver blocks and frame-global publication must agree.
+Shadow maps keep conventional depth (cleared to 1, compared Less), unlike the scene's reversed one; casters write the
+cascade matrix's 0..1 depth as `gl_FragCoord.z` on both backends (no depth scale; `uShadowBias.w` is written 1, unused).
 
 Meitou bias and stability (`MeitouShadowFit`, `ShadowPass.Meitou`): caster bias in the cascade's
 texels, 1 fixed plus 2 x the slope capped at 4 (the game's 0.75 world units and up to 2 % of the

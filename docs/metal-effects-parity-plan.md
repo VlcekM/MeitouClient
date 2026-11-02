@@ -18,8 +18,8 @@ The code is implemented and the MetalFX path is accepted in game (desert/dust/LO
   coverage stay in TAA's motion alpha (the MetalFX spatial path has no temporal mask and is unaffected).
 - **Sun motion** moved into the shared `SunMotionTracker`, used by both `PostProcess` (Vulkan) and `PostTaa` (Metal),
   so Metal no longer passes zero sun uniforms.
-- **TAA velocity depth** now follows the backend's clip convention (`uClipDepthZeroToOne`): Metal's depth buffer is
-  0..1, while Vulkan's is recovered with `2d - 1`. It also flips the depth sample for Metal's top-down targets
+- **TAA velocity depth** follows the scene depth convention (`DepthConvention.Glsl`): conventional 0..1 on Metal,
+  reversed on Vulkan. It also flips the depth sample for Metal's top-down targets
   (`uFlipDepthY`) while keeping the projection NDC for the motion vector. This also makes the motion vectors and
   water reactivity use the correct view depth on Metal.
 - **TAA reset** now includes a camera cut (>5000 units), and MetalFX gets the same reset.

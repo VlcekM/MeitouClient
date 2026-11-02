@@ -516,8 +516,8 @@ context is Vulkan; the reflection pass and Meitou water are seam-neutral. Metal 
 `WorldFrame.Draw` now runs through that interface and owns the shared frame: weather and sky preparation, streaming,
 shadows, the scene host, the post-chain scene effects (fog volumes, shafts, SSAO), particles, the post chain,
 and the finished-picture overlays. Metal's local scene/post loop is gone; its host keeps the title staging, the
-interface and the present. Vulkan still uses `PostProcess`'s GI and far-depth slice; Metal's chain reports one depth
-slice and no GI. The shared draw runs the reflection pass and low-resolution particles on both backends.
+interface and the present. Both backends draw the scene over one depth (Vulkan reversed, Metal conventional:
+[renderer-native](renderer-native.md) "Depth"); Metal's chain has no GI. The shared draw runs the reflection pass and low-resolution particles on both backends.
 
 **Combat feedback and deterministic stills (2026-10-22).** `SetUpBlood` takes `IGpuContext`; Metal checks the blood
 setting and makes the decal store and debris renderer before a loaded save's decals are read. `UpdateBlood` runs
@@ -672,9 +672,9 @@ colour draws. The mask's `texelFetch` reads the same pixel grid as the scene, so
 the Hub: entering a house shows its floor and furniture and hides the near walls and roof; its indoor characters
 are drawn, and characters above the viewed floor are left out.
 
-**Shadow casters now write the right depths on Metal.** The shared caster shader recovers the cascade matrix's
-depth from `gl_FragCoord.z` with `uShadowBias.w`: 2 for Vulkan's −1..1 depth-clip-control mapping, 1 for Metal's
-0..1 NDC (`IGpuContext.ClipDepthZeroToOne`). Before this Metal applied the Vulkan recovery, so every caster's depth
+**Shadow casters now write the right depths on Metal.** The shared caster shader writes the cascade matrix's 0..1
+depth as `gl_FragCoord.z` on both backends (Vulkan has no depth-clip-control mapping any more; `uShadowBias.w` is
+written 1 and unused). Before, Metal applied the Vulkan −1..1 recovery, so every caster's depth
 was shifted toward the sun: cast shadows were misplaced or missing and moved with the view. The Metal host now also
 passes the sky's real sun height, the fog/atmosphere range caps, far-cascade coarse casters to terrain and objects,
 the landmark shadow map, and the temporal shadow noise. The map's world-derived lookup also flips v on Metal: Vulkan's raw
@@ -853,8 +853,8 @@ default.
   `UpscaleShaders.Taa` (into a display-size RGBA16F history pair); the scene projection is jittered with
   `Jitter.Apply` and `PostTaa.Offset` (the phase count follows render/display scale), the depth target is `DepthTarget
   | Sampled`. TAA resets on the first frame, a resize and a camera cut (>5000 units), and MetalFX resets on the same
-  cut. The velocity pass's far-slice inputs are disabled; it reads the shared `SunMotionTracker`, accounts for
-  Metal's 0..1 depth (`uClipDepthZeroToOne`) and flips the depth lookup for top-down targets (`uFlipDepthY`).
+  cut. The velocity pass reads the one scene depth through `DepthConvention.Glsl` (conventional on Metal: no
+  `MEITOU_DEPTH_REVERSED` define), the shared `SunMotionTracker`, and flips the depth lookup for top-down targets (`uFlipDepthY`).
   Weather-particle coverage is written into TAA's motion alpha only (full- and low-resolution particles). MetalFX
   gets no particle coverage: full-size rain/dust in its reactive mask made distant objects shimmer. The grass and
   characters write their own motion through `IWorldPostChain.ObjectMotion`.
@@ -915,6 +915,11 @@ plumbing, profiling, docs) need no Vulkan run.
 ## Open questions
 
 - Metal's GPU timestamps (MTLCounterSampleBuffer), when the pass timings matter on Metal.
+- Scene depth: Metal stays conventional (`MetalContext` sets `DepthConvention.Reversed = false`; its compilers add no
+  `MEITOU_DEPTH_REVERSED`). The chain's edits for the one-depth interface (`MetalPostChain.BeginScene`, `PostTaa`/`PostComposite`
+  without far-depth or clip-convention uniforms) are **Unknown**: `MetalPostChain.cs` is compiled only on macOS, so they are
+  unverified until a macOS build runs the Metal screenshot checks. Going reversed later: `Reversed = true`, the define in
+  `MetalShaders`/`MetalSky`, the chain's depth clears ([renderer-native](renderer-native.md) "Depth").
 
 (Resolved in the plan: per-entry sampler state — sized sampler arrays in the argument buffer.
 Resolved: the vertex-stage binding table — the kind-aware flatten, in the road table.)
