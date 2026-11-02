@@ -545,7 +545,7 @@ static class WorldFrame
         {
             db = preloaded ?? GameDatabase.Load(LoadOrder.FromInstall(install));
             Console.WriteLine($"game data {db.Records.Count} records ({watch.ElapsedMilliseconds} ms)");
-            LogIssues(db);
+            LogIssues("game data", db.Issues);
         }
 
         double x = 0, z = 0;
@@ -602,20 +602,20 @@ static class WorldFrame
     /// A flat world for the game's animation sandbox: the whole terrain at one height (a 256² window of heights round the origin and a flat whole-world grid),
     /// no heightmap file, no objects. The caller turns textures, objects, foliage and water off in <paramref name="o"/>.
     /// </summary>
-    /// <summary>The load's data problems (a missing mod, a record defined twice or with another type...) to the log: a count by kind, then the first few.</summary>
-    static void LogIssues(GameDatabase db)
+    /// <summary>A load's data problems (a missing mod, a record defined twice or with another type, a level file left out...) to the log: a count by kind, then the first few.</summary>
+    internal static void LogIssues(string what, List<GameDataIssue> issues)
     {
-        if (db.Issues.Count == 0) return;
-        Console.WriteLine($"game data {db.Issues.Count} problems: {string.Join(", ", db.Issues.GroupBy(i => i.Kind).Select(g => $"{g.Key} {g.Count()}"))}");
+        if (issues.Count == 0) return;
+        Console.WriteLine($"{what} {issues.Count} problems: {string.Join(", ", issues.GroupBy(i => i.Kind).Select(g => $"{g.Key} {g.Count()}"))}");
         const int shown = 20;
-        foreach (var issue in db.Issues.Take(shown))
+        foreach (var issue in issues.Take(shown))
             Console.WriteLine($"  {issue.Kind}: {issue}");
-        if (db.Issues.Count > shown) Console.WriteLine($"  ... and {db.Issues.Count - shown} more");
+        if (issues.Count > shown) Console.WriteLine($"  ... and {issues.Count - shown} more");
     }
 
     public static WorldScene LoadFlat(WorldOptions o, GameDatabase db, ushort raw = 3344)
     {
-        LogIssues(db);
+        LogIssues("game data", db.Issues);
         const int cells = 256;   // 4608 units: one zone
         var (c0, r0) = ((int)Math.Round(WorldLayout.ToSample(0, 0).Column) - cells / 2, (int)Math.Round(WorldLayout.ToSample(0, 0).Row) - cells / 2);
         var flat = new ushort[(cells + 1) * (cells + 1)];

@@ -153,6 +153,19 @@ sealed partial class PlayerInterface
         controls.InsertRange(0, art);
     }
 
+    /// <summary>The load's game data and level file problems (<see cref="GameDatabase.Issues"/>, <see cref="WorldLevelData.Issues"/>); listed in log.txt.</summary>
+    public int DataProblems { get; set; }
+
+    /// <summary>The title's notice of <see cref="DataProblems"/>, bottom right (a missing mod or a data conflict would otherwise look like a clean install).</summary>
+    void AddDataProblems(List<UiControl> controls)
+    {
+        if (DataProblems == 0) return;
+        float s = MenuScale;
+        string text = DataProblems == 1 ? "1 game data problem, see log.txt" : $"{DataProblems} game data problems, see log.txt";
+        controls.Add(new("MeitouDataProblems", "TextBox", new(Width - 420 * s, Height - MenuBottom * s - 20 * s, 400 * s, 20 * s), text, "", "", true,
+            new Dictionary<string, string> { ["TextAlign"] = "Right VCenter" }, Vector4.Zero, InkDanger, Pickable: false, TextScale: 13 * s / 16));
+    }
+
     /// <summary>A title button with nothing drawn: no skin, caption or background, the same bounds and action.</summary>
     static UiControl Hollow(UiControl c) => c with { Skin = "", Caption = "", Background = Vector4.Zero };
 

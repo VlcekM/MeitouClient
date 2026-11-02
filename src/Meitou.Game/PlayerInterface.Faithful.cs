@@ -229,7 +229,7 @@ sealed partial class PlayerInterface
     };
     void AddFaithfulContent(string id, List<UiControl> controls)
     {
-        if (id == "title" && UiMode == UiMode.Meitou) { MeitouTitleMenu(controls); return; }
+        if (id == "title") { if (UiMode == UiMode.Meitou) MeitouTitleMenu(controls); AddDataProblems(controls); return; }
         if (id == "stats") { AddStatsContent(controls); return; }
         if (id == "new-game") { AddStartLines(controls); AddAdvancedContent(controls); return; }
         if (id == "message") { StyleMessageBox(controls); return; }

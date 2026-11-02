@@ -73,6 +73,7 @@ sealed class WorldObjects : IDisposable
     {
         var watch = Stopwatch.StartNew();
         var levels = WorldLevelData.Load(install, includeInteriors: true);
+        WorldFrame.LogIssues("world levels", levels.Issues);
         var objects = new WorldObjects
         {
             Database = db,
