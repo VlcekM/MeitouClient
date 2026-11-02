@@ -696,8 +696,10 @@ Meitou: [simulation, captives](../simulation.md#captives).
   The packages that list 167 and 168 are slaver, guard and workmaster packages ("addon- slave catching", "wandering slaver base", "slave worker day guard", the Rebirth and Holy Nation guards).
 - **Looks like a slave**: processing (182) makes state 120 TARGET_LOOKS_LIKE_A_SLAVE true. The watchers' "needs processing" test `FUN_1408ca3d0` (**Verified**): a character with no owner needs it; one with an owner who is not an ally (`FUN_1406b2630`; same faction counts), carried, dead or an animal (vfunc `0x248`) never does; one with an owner of an
   allied faction needs it unless its slave state is not 2 or 3 and vfunc `0x3e0` is true and `FUN_1405a6bb0(platoon, character)` holds. That function (**Observed**, outline): an animal is fine, NPC
-  class 1 or 5 is not; otherwise the torso and leg slots (inventory sections 5 and 6) must be empty, shackles or items of the owner faction's `slave clothing` list, and the shackle slot (section 9) must hold a locked item.
-  Meitou's reading (**engine choice**): wearing locked shackles or any of the owner's slave clothing; an owner with none always passes.
+  class 1 or 5 is not; otherwise the torso and leg slots (inventory sections 5 and 6) must be empty, shackles or items of `slave clothing` list, and the shackle slot (section 9) must hold a locked item. The list is the
+  record at `+0x240` of the faction of the character that owns the AI task system (`FUN_1405a6bb0` lines 92-107, **Verified**), i.e. the **watcher's** faction, not the slave's owner (processing, `FUN_14035aa20`, reads the same worker-side list;
+  the status-panel level `FUN_1405a51e0` is a separate function that keeps the owner list).
+  Meitou's reading (**engine choice**): wearing locked shackles or any of the watcher faction's slave clothing (`CaptiveSystem.LooksLikeSlave`); a faction with none always passes.
 - **Cage memory**: `Task_PutInSomething` for a cage (`FUN_140358670`) makes the prisoner's squad remember the putter as captor (`FUN_140673a20(prisoner, putter, 5)`) and calls `FUN_14067aca0`, which
   adds the prisoner to the putter's, its allies' and its squad members' platoon lists (the "slave list"). [Squad memory](dialogue.md#squad-memory) has the other writers.
 
