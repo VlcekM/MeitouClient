@@ -53,14 +53,13 @@ public sealed unsafe partial class PostProcess
 
     sealed class ShaftApplyPass : ShaftPass
     {
-        public readonly SamplerSlot NearDepth, FarDepth, Light, Scatter;
-        public readonly UniformHandle NearPlanes, FarPlanes, WaterY, HasFar, Atlas, Params, Air;
+        public readonly SamplerSlot NearDepth, Light, Scatter;
+        public readonly UniformHandle NearPlanes, WaterY, Atlas, Params, Air;
         public ShaftApplyPass(GpuContext gpu) : base(gpu, LightShaftShaders.Apply, "post shafts apply")
         {
-            (NearDepth, FarDepth, Light, Scatter) = (P.Sampler("uNearDepth"), P.Sampler("uFarDepth"), P.Sampler("uShaftLight"), P.Sampler("uShaftScatter"));
+            (NearDepth, Light, Scatter) = (P.Sampler("uNearDepth"), P.Sampler("uShaftLight"), P.Sampler("uShaftScatter"));
             Air = P.Uniform("uShaftAir");
-            (NearPlanes, FarPlanes, WaterY, HasFar, Atlas, Params) = (P.Uniform("uNearPlanes"), P.Uniform("uFarPlanes"), P.Uniform("uWaterY"), P.Uniform("uHasFar"),
-                P.Uniform("uShaftAtlas"), P.Uniform("uShaftParams"));
+            (NearPlanes, WaterY, Atlas, Params) = (P.Uniform("uNearPlanes"), P.Uniform("uWaterY"), P.Uniform("uShaftAtlas"), P.Uniform("uShaftParams"));
         }
     }
 
@@ -174,7 +173,7 @@ public sealed unsafe partial class PostProcess
         var o = Options;
         shaftFrame.Darkening = 0;
         ShaftsDescribe = !o.LightShafts ? "off" : $"darkening {darkening:0.###} (none: no passes)";
-        if (!o.LightShafts || darkening <= 0 || sceneColour is null || !haveNearSlice) return;
+        if (!o.LightShafts || darkening <= 0 || sceneColour is null || !haveScene) return;
         var (across, down, slices, aw, ah) = ShaftLayout();
         ShaftsDescribe = $"darkening {darkening:0.###}, grid {across} x {down} x {slices} ({Options.ShaftSamples} samples), {PostOptions.ShaftNear:0} to {far:0} units, air {(o.ShaftAir > 0 ? $"x{o.ShaftAir:0.##} x{airByTime:0.##} by the hour from {groundY:0} (scale height {PostOptions.ShaftAirHeight:0}, g {PostOptions.ShaftAirPhase:0.##})" : "off")}";
         if (shaftInjected is null || shaftInjected.Width != aw || shaftInjected.Height != ah)
@@ -291,14 +290,11 @@ public sealed unsafe partial class PostProcess
         var a = shaftApply;
         Common(a);
         Bind(a.P, a.NearDepth, sceneDepth);
-        Bind(a.P, a.FarDepth, farSliceDrawn ? farDepth : null);
         Bind(a.P, a.Light, shaftLight);
         Bind(a.P, a.Scatter, shaftScatter);
         a.P.Set(a.Air, air);
-        a.P.Set(a.NearPlanes, nearPlanes.X, nearPlanes.Y);
-        a.P.Set(a.FarPlanes, farPlanes.X, farPlanes.Y);
+        a.P.Set(a.NearPlanes, planes.X, planes.Y);
         a.P.Set(a.WaterY, WaterHeight ?? float.MinValue);
-        a.P.Set(a.HasFar, farSliceDrawn ? 1 : 0);
         a.P.Set(a.Atlas, aw, ah);
         a.P.Set(a.Params, parameters);
         a.P.ApplyGlobals();

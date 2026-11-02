@@ -15,14 +15,14 @@ public sealed partial class PostProcess
     sealed class LateParticlesPass : FullscreenProgram
     {
         public readonly SamplerSlot AccumH, LowDepthH, AccumFarH, LowDepthFarH, AccumQ, LowDepthQ, AccumFarQ, LowDepthFarQ, Depth, History, Motion;
-        public readonly UniformHandle LowSizeH, LowSizeQ, Has, NearPlanes, ClipDepthZeroToOne, Late, Target;
+        public readonly UniformHandle LowSizeH, LowSizeQ, Has, NearPlanes, Late, Target;
         public LateParticlesPass(GpuContext gpu) : base(gpu, PostProcessShaders.ParticleLate, "post late particles")
         {
             (AccumH, LowDepthH, AccumFarH, LowDepthFarH) = (P.Sampler("uAccumH"), P.Sampler("uLowDepthH"), P.Sampler("uAccumFarH"), P.Sampler("uLowDepthFarH"));
             (AccumQ, LowDepthQ, AccumFarQ, LowDepthFarQ) = (P.Sampler("uAccumQ"), P.Sampler("uLowDepthQ"), P.Sampler("uAccumFarQ"), P.Sampler("uLowDepthFarQ"));
             (Depth, History, Motion) = (P.Sampler("uDepth"), P.Sampler("uHistory"), P.Sampler("uMotion"));
             (LowSizeH, LowSizeQ, Has, NearPlanes) = (P.Uniform("uLowSizeH"), P.Uniform("uLowSizeQ"), P.Uniform("uHas"), P.Uniform("uNearPlanes"));
-            (ClipDepthZeroToOne, Late, Target) = (P.Uniform("uClipDepthZeroToOne"), P.Uniform("uLate"), P.Uniform("uTarget"));
+            (Late, Target) = (P.Uniform("uLate"), P.Uniform("uTarget"));
         }
     }
 
@@ -73,8 +73,7 @@ public sealed partial class PostProcess
         p.P.Set(p.LowSizeH, (float)(half.Accum?.Width ?? 1), (float)(half.Accum?.Height ?? 1));
         p.P.Set(p.LowSizeQ, (float)(quarter.Accum?.Width ?? 1), (float)(quarter.Accum?.Height ?? 1));
         p.P.Set(p.Has, h ? half.Divisor : 0, q ? quarter.Divisor : 0, 0, 0);
-        p.P.Set(p.NearPlanes, nearPlanes.X, nearPlanes.Y);
-        p.P.Set(p.ClipDepthZeroToOne, Gpu.ClipDepthZeroToOne ? 1 : 0);
+        p.P.Set(p.NearPlanes, planes.X, planes.Y);
         p.P.Set(p.Late, (float)width / targetWidth, (float)height / targetHeight, JitterPixels.X, JitterPixels.Y);
         p.P.Set(p.Target, targetWidth, targetHeight, history ? 1 : 0, LateParticlesBlend);
         Draw(p.P, lateParticlesNow.Attachment, lateParticlesNow.Format, targetWidth, targetHeight, targetWidth, targetHeight, PassState);

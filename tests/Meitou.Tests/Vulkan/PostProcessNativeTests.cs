@@ -39,18 +39,16 @@ public unsafe class PostProcessNativeTests
                 {
                     post.Begin(w, h);
                     post.SetCamera(Vector3.Zero, Matrix4x4.Identity, 1, w / (float)h);
-                    post.BeginFarSlice(1000, 10000);
-                    post.BeginNearSlice(1, 1000);
+                    post.BeginScene(1, 1000, 1, w / (float)h);
                     // A grey scene: luminance 0.5 everywhere, so the measured mean and the adapted value are 0.5.
                     var t = post.SceneTargets;
                     var cmd = ctx.BeginNative("test scene clear");
                     cmd.BeginRendering(new RenderingDesc(
                         t.Colour with { Load = LoadOp.Clear, Clear = new ClearColour(0.5f, 0.5f, 0.5f, 1) },
-                        t.Depth with { Load = LoadOp.Clear, DepthClear = 1f },
+                        t.Depth with { Load = LoadOp.Clear, DepthClear = DepthConvention.Clear },
                         t.Width, t.Height));
                     cmd.EndRendering();
                     ctx.EndNative(cmd);
-                    post.SetNearSlice(1, 1000, 1, w / (float)h);
                     post.End();
                     ctx.Finish();
                 }
@@ -60,7 +58,7 @@ public unsafe class PostProcessNativeTests
                 foreach (var name in new[] { "post scene colour", "post scene depth", "post ldr", "post ssao", "post luminance", "post exposure adapted" })
                     Assert.Contains(name, names);
                 if (upscaler != UpscalerKind.Off)
-                    foreach (var name in new[] { "post far slice depth", "post motion", "post upscale depth", "post reactive", "post taa history" })
+                    foreach (var name in new[] { "post motion", "post upscale depth", "post reactive", "post taa history" })
                         Assert.Contains(name, names);
 
                 var (adapted, mean) = post.ReadExposure();

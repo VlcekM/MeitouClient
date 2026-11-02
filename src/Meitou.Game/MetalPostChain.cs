@@ -71,7 +71,6 @@ sealed class MetalPostChain : IWorldPostChain, IDisposable
     public int RenderHeight => sceneColour?.Desc.Height ?? 0;
     public Vector2 JitterPixels { get; private set; }
     public bool Temporal => temporal();
-    public bool DepthSlices => false;
     public bool InstantAdaptation { get; set; } = true;
     public int GiResolve { get; set; }
     public (float Min, float Max)? AutoExposure { get; set; }
@@ -135,24 +134,13 @@ sealed class MetalPostChain : IWorldPostChain, IDisposable
         this.aspect = aspect;
     }
 
-    public void SetNearSlice(float near, float far, float fieldOfView, float aspect)
+    /// <summary>The scene's projection; the scene targets (one depth, ctx.Depth) are set by Begin.</summary>
+    public void BeginScene(float near, float far, float fieldOfView, float aspect)
     {
         nearPlane = near;
         farPlane = far;
         fov = fieldOfView;
         this.aspect = aspect;
-    }
-
-    public void BeginFarSlice(float near, float far)
-    {
-        nearPlane = near;
-        farPlane = far;
-    }
-
-    public void BeginNearSlice(float near, float far)
-    {
-        nearPlane = near;
-        farPlane = far;
     }
 
     public PassTargets WithShadingRate(PassTargets targets) => targets;
@@ -269,7 +257,7 @@ sealed class MetalPostChain : IWorldPostChain, IDisposable
         if (clear) targets = targets with { Colour = targets.Colour with { Load = LoadOp.Clear, Clear = default } };
         cmd.BeginRendering(targets.Rendering);
         ctx.BeginHostPass((MetalCommandList)cmd, targets,
-            DrawState.For(targets.Formats, ctx.DepthClamp, depthTest: true, depthWrite: false, compare: DepthFunction.Lequal, mask: mask));
+            DrawState.For(targets.Formats, ctx.DepthClamp, depthTest: true, depthWrite: false, compare: DepthConvention.SceneCompare, mask: mask));
         particles.DrawCoverage(mask, depthTest: true);
         cmd.EndRendering();
         ctx.EndHostPass(cmd);
