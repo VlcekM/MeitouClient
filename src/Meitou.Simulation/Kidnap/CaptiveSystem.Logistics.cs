@@ -74,7 +74,7 @@ public sealed partial class CaptiveSystem
                     int owner = site < data.SiteFactions.Count ? data.SiteFactions[site] : -1;
                     if (owner >= 0 && (owner == world.Player.Faction || owner < data.Factions.Count && data.Factions[owner].AntiSlavery) && !Allied(cold.Faction, owner)) return null;
                 }
-                else if (SlavesOf(world, squad).Count(s => !table.Cold(s)!.IsImprisoned && table.Cold(s)!.Medical is not { Incapacitated: true }) > 3) return null;
+                else if (SlavesOf(world, squad).Count(s => table.Cold(s)!.InSomething == HeldState.None && table.Cold(s)!.Medical is not { Incapacitated: true }) > 3) return null;
                 return GatherTarget(world, slot, cold, site, type) is { } cage
                     ? new CaptiveJob { Kind = CaptiveJobKind.Gather, Worker = worker, Captive = cage.Occupant, Cage = cage.Id, Faction = cold.Faction, Site = site }
                     : null;
