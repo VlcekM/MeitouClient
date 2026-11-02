@@ -879,18 +879,35 @@ public sealed partial class FixtureRegistry
 
     /// <summary>
     /// The slave state setter (<c>FUN_1405a4940</c>, <b>Observed</b>): free to slave posts "{1} has been enslaved" for a player-faction character; becoming an escaped slave sets the
-    /// recently-wanted marker to 250 (status <c>+0x110</c>), so a looker who knows recognises it at once.
+    /// recently-wanted marker to 250 (status <c>+0x110</c>), so a looker who knows recognises it at once; a change to a state above 1 stamps the game hours (status <c>+0x8</c>,
+    /// <see cref="CharacterCold.SlaveSince"/>; docs/game/carry-loot.md "Escaped slaves lie low").
     /// </summary>
     static void SetSlave(World world, CharacterCold c, byte state, int owner)
     {
         byte before = c.SlaveState;
         if (c.SlaveState == 0 && state == 1 && (c.IsPlayer || world.Player.Faction >= 0 && c.Faction == world.Player.Faction)) world.Post(Loc.Tr("{1} has been enslaved", c.Name));
         if (state == 2) c.RecentlyWanted = Crime.CrimeSystem.RecentlyWantedSeconds;
+        if (state > 1 && before != state) c.SlaveSince = world.GameHours;
         c.SlaveState = state;
         c.SlaveOwner = state == 0 ? -1 : owner;
         if (state == 0) c.SlaveMaster = -1;
         // The state setter then fixes the orders object of one that changed (FUN_14032e0d0): a slave gets job 187 Obedient Slave, one that stops being a slave loses it.
         if (before != state) Kidnap.ObedientSlave.StateChanged(world, c, state);
+    }
+
+    /// <summary>
+    /// An escaped slave lies low (docs/game/carry-loot.md "Escaped slaves lie low", <b>Verified</b>): for a state above 1, with <c>elapsed</c> the game hours since
+    /// <see cref="CharacterCold.SlaveSince"/>, a stamp in the future (elapsed below 0) frees it at once; an ex-slave (3) is free after more than 4 days, its owner cleared; an escaped
+    /// slave (2) becomes an ex-slave after more than 12 hours, stamped again. The original writes these states directly, not through the setter, so no message, marker or job
+    /// change follows; it keeps the owner on the first path, Meitou clears it (engine choice: a free character has no owner here, in the hash and in saves). Called from the crime
+    /// sweep (engine choice: the original's per-character status update runs on a cadence that is <b>Unknown</b>).
+    /// </summary>
+    public static void LayLow(World world, CharacterCold c)
+    {
+        if (c.SlaveState <= 1) return;
+        double elapsed = world.GameHours - c.SlaveSince;
+        if (elapsed < 0 || c.SlaveState == 3 && elapsed / 24 > 4) (c.SlaveState, c.SlaveOwner, c.SlaveMaster) = (0, -1, -1);
+        else if (c.SlaveState == 2 && elapsed > 12) (c.SlaveState, c.SlaveSince) = (3, world.GameHours);
     }
 
     static void Clear(CharacterCold c)
