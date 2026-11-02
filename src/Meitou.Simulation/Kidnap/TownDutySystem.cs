@@ -671,7 +671,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
             {
                 TaskStart.Stand(table, g);
                 carry.LetGo(world, g);
-                if (!world.Fixtures.Imprison(world, d.Body, cage, 1, d.Member)) return End(world, d);
+                if (!world.Fixtures.Imprison(world, d.Body, cage, data.Bodies.Constants.PrisonTime, d.Member)) return End(world, d);
                 if (body.IsPlayer) world.Post($"{body.Name} has been locked in a cage by {data.Factions[d.Faction].Name}");
                 return End(world, d);
             }

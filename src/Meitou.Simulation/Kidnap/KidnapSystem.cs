@@ -277,7 +277,7 @@ public sealed class KidnapSystem(PopulationData data, PopulationSystem populatio
                 {
                     TaskStart.Stand(table, g);
                     carry.LetGo(world, g);
-                    if (!world.Fixtures.Imprison(world, a.Victim, cage, 1, a.Carrier)) return Retry(world, a, g);
+                    if (!world.Fixtures.Imprison(world, a.Victim, cage, data.Bodies.Constants.PrisonTime, a.Carrier)) return Retry(world, a, g);
                     if (table.TryResolveNext(a.Victim, out int caged)) Deeds?.Caged(world, g, caged);
                     tc.Kidnapped = true;
                     if (tc.IsPlayer) world.Post($"{tc.Name} has been kidnapped by {data.Factions[a.Faction].Name}");
