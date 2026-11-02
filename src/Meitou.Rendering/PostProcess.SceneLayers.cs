@@ -145,6 +145,7 @@ public sealed unsafe partial class PostProcess
             Bind(l.P, l.Ao, occlusion ? aoB : null);
             l.P.Set(l.Layers, shaftsPending ? 1 : 0, fogPending ? 1 : 0, occlusion ? 1 : 0, 0);
             l.P.ApplyGlobals();
+            // The mask's own depth protocol (clear 0, the shader writes 0 or 1), not the scene's DepthConvention.
             DrawPass(l.P, sceneColour!.Attachment, sceneColour.Format,
                 layerMask.Attachment with { Load = LoadOp.Clear, DepthClear = 0f }, layerMask.Format,
                 width, height, width, height, LeanState);
