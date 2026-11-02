@@ -79,6 +79,9 @@ Save sample (autosave of the owner's game, 51 zone files): `lock lvl` values spa
   game-speed-scaled seconds since its last full update, see [game-loop](game-loop.md#the-character-update-budget)) to the accumulator. When it passes the
   next-roll time it resets to 0 and rolls `rand() < p`: success clears the locked flag; failure draws the next interval uniform
   in [5, 20] s. The first roll comes after 5 s. Expected time to open is therefore about `5 + 12.5 x (1/p - 1)` s.
+  Meitou rolls on every sim tick with `world.TickSeconds` (`Picking.Step`, engine simplification): the original calls the roll once per task update, i.e. at the character's update cadence
+  with the time accumulated since its last full update (coarser for characters outside the every-frame tier). The accumulated total is the same, so the time to open is statistically equal; a roll
+  can come up to one update interval earlier and the crime booking is per tick. Per-character update tiers are not modelled (negligible effect).
 - **Animation**: the cage functionality's `animation lockpick` when imprisoned, else `medic` (`crawl use` when crawling),
   played at speed `clamp(0.01 x skill, 0.55, 2.0)` (**Verified**, speed is cosmetic: it does not change the roll timing).
 - **XP** (`FUN_1408c62e0`, **Verified**): after each roll, stat 37 gains `k x map[37] x ((101 - stat) / 101)^2` with
