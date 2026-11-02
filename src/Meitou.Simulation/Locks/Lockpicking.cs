@@ -166,12 +166,12 @@ public sealed class Lockpicking(GameConstants constants, BodyOptions options)
     /// <summary>
     /// Another character's shackles: code 7 against the faction that owns the wearer as a slave (status <c>+0xe0</c>, <c>FUN_140359d90</c>, <c>FUN_140359f80</c>, <c>FUN_140352c50</c>, <b>Verified</b>), booked
     /// every update before the roll. A wearer without an owner (-1) books nothing: <see cref="CrimeSystem.SetPending"/> refuses a faction that does not exist (the original sets the crime against
-    /// a null faction, whose booking is <b>Unknown</b>), as it refuses the culprit's own faction. The wearer stays the crime's victim character (the original passes the wearer's owner handle).
+    /// a null faction, whose booking is <b>Unknown</b>), as it refuses the culprit's own faction. The wearer stays the crime's victim character (the original passes the wearer's owner handle); a self-target is not special-cased (the worker's own slave owner).
     /// </summary>
     static void ShackleCrime(World world, int worker, CharacterId wearer, CrimeSystem? crimes)
     {
         var table = world.Characters;
-        if (crimes is null || wearer == table.IdOf(worker) || !table.TryResolveNext(wearer, out int w) || table.Cold(w) is not { } victim) return;
+        if (crimes is null || !table.TryResolveNext(wearer, out int w) || table.Cold(w) is not { } victim) return;
         if (victim.SlaveOwner >= 0) crimes.SetPending(world, worker, CrimeCode.Terrorism, victim.SlaveOwner, wearer, CrimeSystem.MinTimer);
     }
 
@@ -193,15 +193,20 @@ public sealed class Lockpicking(GameConstants constants, BodyOptions options)
     }
 
     /// <summary>
-    /// The pending crime of every update (<b>Observed</b>): a cage holding another character is code 7 against the cage's owner (the captive's owner faction, read here as the jail's);
-    /// any other fixture owned by another faction is Burglary (2) against its owner. <see cref="CrimeSystem.SetPending"/> refuses own-faction and lawless victims.
+    /// The pending crime of every update (<b>Verified</b>, <c>FUN_140359160</c>, <c>FUN_140359d90</c>): a cage holding a character resolves the task's target to that character, so it books
+    /// code 7 against the captive's slave owner faction (a captive that is no slave books nothing, as <see cref="CrimeSystem.SetPending"/> refuses a faction that does not exist; the original
+    /// books it against a null faction, <b>Unknown</b>); a self-pick is the same case. Any other fixture owned by another faction is Burglary (2) against its owner.
     /// </summary>
     static void Crime(World world, int picker, CharacterCold c, Fixture target, CrimeSystem? crimes)
     {
-        if (crimes is null || target.Owner < 0) return;
+        if (crimes is null) return;
         var table = world.Characters;
-        bool captive = target.Kind == FixtureKind.Cage && !FixtureRegistry.IsFree(table, target) && target.Occupant != table.IdOf(picker);
-        if (captive) crimes.SetPending(world, picker, CrimeCode.Terrorism, target.Owner, target.Occupant, CrimeSystem.MinTimer);
-        else if (target.Owner != c.Faction) crimes.SetPending(world, picker, CrimeCode.Burglary, target.Owner, CharacterId.None, CrimeSystem.MinTimer);
+        bool captive = target.Kind == FixtureKind.Cage && !FixtureRegistry.IsFree(table, target);
+        if (captive)
+        {
+            if (table.TryResolveNext(target.Occupant, out int o) && table.Cold(o) is { SlaveOwner: >= 0 } oc)
+                crimes.SetPending(world, picker, CrimeCode.Terrorism, oc.SlaveOwner, target.Occupant, CrimeSystem.MinTimer);
+        }
+        else if (target.Owner >= 0 && target.Owner != c.Faction) crimes.SetPending(world, picker, CrimeCode.Burglary, target.Owner, CharacterId.None, CrimeSystem.MinTimer);
     }
 }
