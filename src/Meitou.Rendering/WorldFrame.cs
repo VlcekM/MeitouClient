@@ -1430,6 +1430,12 @@ static class WorldFrame
         if (gpu.Foliage is { } liftedFoliage) liftedFoliage.GroundUnderEye = groundUnderEye;
         gpu.Foliage?.Update(eye);
         StageClock.Lap(2);
+        if (gpu.Characters is { } shown)
+        {
+            // The view the characters show in (CharacterRenderer.Shown): out to past their draw distance, the water's mirror image when the reflection draws them.
+            shown.ShownView = WorldCamera.FrustumPlanes(camera.View * camera.Projection(rw / (float)Math.Max(rh, 1), camera.Near, Math.Max(camera.ViewDistance, 2 * shown.DrawDistance)));
+            shown.ShownMirror = render.Water && render.Reflections && gpu.Water is not null && gpu.Reflection is { Level: >= 2 } ? WorldWater.Height : null;
+        }
         gpu.Characters?.Update(eye);
         if (gpu.Characters is { } posed && gpu.Debris is { } boltMeshes)
         {

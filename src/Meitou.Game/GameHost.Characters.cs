@@ -94,7 +94,8 @@ sealed partial class GameHost
     void FillDrawList(CharacterDrawList list)
     {
         long f0 = Stopwatch.GetTimestamp();
-        try { FillDrawListCore(list); FillPortraits(); }
+        // The portraits first: their characters are posed however far (FillDrawListCore).
+        try { FillPortraits(); FillDrawListCore(list); }
         finally { fillTotal += Stopwatch.GetElapsedTime(f0).TotalMilliseconds; fillCalls++; }
     }
 
@@ -207,6 +208,7 @@ sealed partial class GameHost
     }
 
     readonly HashSet<CharacterId> fullRate = [];
+    readonly HashSet<long> portraitKeys = [];
     // By character slot, what the draw list hands the renderer, refilled every frame instead of made anew (the renderer reads them only in that frame's update):
     // the poses, the stuck bolts and the ragdoll between ticks.
     CharacterPose[]?[] posesBySlot = [];
@@ -229,6 +231,11 @@ sealed partial class GameHost
         // The character editor is a scene of its own (GameHost.Editor.cs): only the character being edited is posed and drawn.
         var editing = player.EditorFocus?.Character;
         player.FullRateCharacters(fullRate);
+        // Beyond the renderer's reach a character needs its look and place only (to load it), not its poses or ragdoll: the editor's scene is posed whole.
+        var reachOf = editing is null ? gpu.Characters : null;
+        var eye = camera.Eye;
+        portraitKeys.Clear();
+        if (reachOf is not null) foreach (var r in reachOf.PortraitRequests) portraitKeys.Add(r.Key);
         foreach (var c in current.Characters)
         {
             var inBar = editing is { } shown ? EditorBarPlace(c.Id, shown) : null;
@@ -252,7 +259,8 @@ sealed partial class GameHost
                 yaw = CarrierYaw(current, c, yaw, alpha);
                 (position, rotation) = MixCarry(before?.Carry, carry, alpha).World(position, yaw);
             }
-            var poses = Slot(ref posesBySlot, c.Id.Slot) is { } kept && kept.Length == c.Animations.Count ? kept : posesBySlot[c.Id.Slot] = new CharacterPose[c.Animations.Count];
+            bool posed = reachOf is null || reachOf.InReach(position, eye) || portraitKeys.Contains(DrawKey(c.Id));
+            var poses = !posed ? [] : Slot(ref posesBySlot, c.Id.Slot) is { } kept && kept.Length == c.Animations.Count ? kept : posesBySlot[c.Id.Slot] = new CharacterPose[c.Animations.Count];
             for (int i = 0; i < poses.Length; i++)
             {
                 var layer = c.Animations[i];
@@ -284,7 +292,7 @@ sealed partial class GameHost
             list.Add(new CharacterInstance(DrawKey(c.Id), look, position, yaw, poses)
             {
                 WeaponDrawn = c.WeaponDrawn, RangedDrawn = c.RangedDrawn, BackDrawn = c.BackDrawn, Shots = c.CrossbowShots, Bolts = BoltsOf(c), Scale = c.Scale, Hidden = inBar is null && hiddenIndoors.Contains(c.Id), FullRateAnimation = editing is not null || fullRate.Contains(c.Id) || c.Id == sandboxHero && sandboxPicker?.Current is not null,
-                Bones = Blend(before is null || Reanchored(before, c) ? null : before.Ragdoll, c.Ragdoll, alpha, ref Slot(ref ragdollsBySlot, c.Id.Slot), ref Slot(ref spareRagdollsBySlot, c.Id.Slot)),
+                Bones = !posed ? null : Blend(before is null || Reanchored(before, c) ? null : before.Ragdoll, c.Ragdoll, alpha, ref Slot(ref ragdollsBySlot, c.Id.Slot), ref Slot(ref spareRagdollsBySlot, c.Id.Slot)),
                 BlendFrom = glide?.From, Blend = glide?.Blend ?? 0, Build = c.Build, Rotation = rotation, Blood = c.BloodAmounts,
             });
             // The editor's next preview look, listed hidden so the renderer prepares it while the last one is still shown.

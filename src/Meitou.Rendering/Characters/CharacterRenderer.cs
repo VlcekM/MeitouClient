@@ -249,6 +249,10 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         public bool Interior;
         /// <summary>Holds bones taken from another character (<see cref="CharacterInstance.FreezeFrom"/>): never posed.</summary>
         public bool Frozen;
+        /// <summary>Neither it, its shadow nor its mirror image can be in view (<see cref="Shown"/>), and it is no portrait: not posed, its last palette held.</summary>
+        public bool OffScreen;
+        /// <summary>Posed this frame with no motion from its last palette: it has none yet, or it comes back on screen after poses were skipped.</summary>
+        public bool Snap;
     }
 
     /// <summary>What the renderer keeps of a character between frames (by <see cref="CharacterInstance.Key"/>): its last posed palette and the one before.</summary>
@@ -273,6 +277,8 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         public bool Frozen;
         /// <summary>The ragdoll bones it was last posed with: the same object again (a frozen ragdoll) needs no pose every frame.</summary>
         public BonePose? PosedRagdoll;
+        /// <summary>Off screen at the last update (<see cref="Live.OffScreen"/>).</summary>
+        public bool OffScreen;
     }
 
     /// <summary>
@@ -319,6 +325,42 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
     public Func<double>? PoseClock { get; set; }
 
     double poseSeconds;
+
+    /// <summary>
+    /// Whether a character placed at <paramref name="position"/> can come within <see cref="DrawDistance"/> of <paramref name="eye"/> this frame, with a margin for the largest
+    /// bodies' size: the host leaves out the poses and the ragdoll of the rest, which <see cref="Update"/> never reads (only their look and place, for loading).
+    /// </summary>
+    public bool InReach(Vector3 position, Vector3 eye) => Vector3.DistanceSquared(position, eye) <= (DrawDistance + ReachMargin) * (DrawDistance + ReachMargin);
+    const float ReachMargin = 2000;
+
+    /// <summary>
+    /// The planes of the view the characters are shown in this frame (the host sets them before <see cref="Update"/>), for the off-screen rule (<see cref="Shown"/>);
+    /// null: every character in range counts as shown.
+    /// </summary>
+    public Vector4[]? ShownView { get; set; }
+    /// <summary>The water's height while the water reflection shows characters (else null): a character whose mirror image is in view counts as shown.</summary>
+    public float? ShownMirror { get; set; }
+    /// <summary>The light the last colour view was drawn with (towards the sun or moon): its shadows are cast away from it.</summary>
+    Vector3 shownLight = Vector3.UnitY;
+
+    /// <summary>
+    /// Whether a character's sphere can show in this frame's view (engine choice, a performance measure): the sphere itself, its shadow (the sphere swept away from the light as
+    /// far as a shadow of its size can fall, at a light at least 3° high) or its mirror image in the water. A character not shown is not posed: its held palette is still drawn
+    /// (a far shadow cascade is kept for up to 32 frames, and would miss it when it comes into view), and it is posed again, with no motion from that palette, the frame it comes back.
+    /// </summary>
+    bool Shown(Vector3 centre, float radius)
+    {
+        if (ShownView is not { } planes) return true;
+        var r = new Vector3(radius);
+        if (WorldCamera.Intersects(planes, centre - r, centre + r)) return true;
+        var light = shownLight;
+        float up = MathF.Max(MathF.Abs(light.Y), 0.05f);
+        var tip = centre - new Vector3(light.X, up, light.Z) * (2 * radius / up);
+        if (WorldCamera.Intersects(planes, Vector3.Min(centre, tip) - r, Vector3.Max(centre, tip) + r)) return true;
+        if (ShownMirror is not { } water) return false;
+        var mirrored = new Vector3(centre.X, 2 * water - centre.Y, centre.Z);
+        return WorldCamera.Intersects(planes, mirrored - r, mirrored + r);
+    }
 
     int PoseInterval(float pixels)
     {
@@ -551,8 +593,16 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
             // once: its parts' attach matrices and its arrays' sizes come from it. The rest are thinned by their size on screen after the gather (below).
             l.Frozen = state.Frozen;
             l.MustPose = !l.Frozen && (inst.FullRateAnimation || inst.Bones is not null && !ReferenceEquals(inst.Bones, state.PosedRagdoll) || state.Posed < 0 || newAsset);
+            // Off screen: no pose but the first one of an asset (its palette's size); back on screen: posed now, without motion from the held palette.
+            l.OffScreen = !l.Frozen && !portraitKeys.Contains(inst.Key) && !Shown(centre, l.Radius);
+            l.Snap = !l.OffScreen && state.OffScreen;
+            if (l.OffScreen) l.MustPose = state.Posed < 0 || newAsset;
+            else if (l.Snap) l.MustPose = !l.Frozen;
+            state.OffScreen = l.OffScreen;
             l.Pixels = 2 * l.Radius * viewPixelsPerRadian / MathF.Max(1, Vector3.Distance(eye, centre));
             l.LayerStart = layerCount;
+            l.LayerCount = 0;
+            if (l.OffScreen && !l.MustPose) continue;   // not posed this frame: its clips need not be looked up
             var rig = asset.Rig;
             if (inst.Poses is { } poses)
                 for (int p = 0; p < poses.Count; p++)
@@ -563,7 +613,7 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         int inWorld = 0;
         for (int i = 0; i < liveCount; i++) if (!live[i].PortraitOnly) inWorld++;
         if (inWorld < ThinFromCharacters)
-            for (int i = 0; i < liveCount; i++) live[i].Repose = !live[i].Frozen;
+            for (int i = 0; i < liveCount; i++) live[i].Repose = !live[i].Frozen && (!live[i].OffScreen || live[i].MustPose);
         else
         {
             // The largest on screen first: they keep the full rate up to the budget, the rest at least the second rate.
@@ -576,6 +626,7 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
             foreach (int i in order)
             {
                 ref var l = ref live[i];
+                if (l.OffScreen) { l.Repose = l.MustPose; continue; }
                 int interval = PoseInterval(l.Pixels);
                 if (interval == 1 && full++ >= FullRateBudget) interval = 2;
                 // In time, not frames (a slow frame rate must not thin the poses out further): a new pose each time the character's own clock enters a new period.
@@ -623,7 +674,7 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
                         if (part.AttachIndex >= 0) state.Attach[part.AttachIndex] = scratch.TagTransform(part.Bone, part.Offset);
                     foreach (var lamp in asset.Lamps) state.Attach[lamp.AttachIndex] = lamp.Offset * scratch.BoneTransform(lamp.Bone);
                     rig.Return(scratch);
-                    if (state.Posed < 0) { state.Bones.CopyTo(state.Previous, 0); state.Attach.CopyTo(state.PreviousAttach, 0); }
+                    if (state.Posed < 0 || l.Snap) { state.Bones.CopyTo(state.Previous, 0); state.Attach.CopyTo(state.PreviousAttach, 0); }
                     state.Posed = stamp;
                     state.PosedRagdoll = l.Bones;
                 }
