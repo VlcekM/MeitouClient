@@ -2458,17 +2458,6 @@ msgstr "版本 {1}（{2}）。从 GitHub 自动更新。"
 msgid "Version {1} for {2}. Not installed by its Setup, so updates open the release page."
 msgstr "版本 {1}（{2}）。不是由安装程序安装的，更新会打开发布页。"
 
-# Meitou 自带文本（启动器 / 标题菜单 / 设置菜单）的简体中文翻译。
-# Kenshi 本体文本来自 locale/zh_CN/LC_MESSAGES/main.mo；本文件只补 Meitou 自己显示的部分。
-msgid ""
-msgstr ""
-"Content-Type: text/plain; charset=UTF-8\n"
-"Language: zh_CN\n"
-"Plural-Forms: nplurals=1; plural=0;\n"
-
-msgid "Frames per second while vertical sync is off."
-msgstr "关闭垂直同步时的每秒帧数。"
-
 msgid "Feedback"
 msgstr "反馈"
 
@@ -2555,9 +2544,6 @@ msgstr "游戏里它们还站在你离开时的位置。"
 
 msgid "Items that were on the ground in the save always stay."
 msgstr "存档里原本在地上的物品永远保留。"
-
-msgid "Kenshi_UI.png not found or unreadable."
-msgstr "找不到 Kenshi_UI.png 或无法读取。"
 
 msgid "MetalFX temporal is the default at every tier; spatial rows are explicit alternatives. The preset sets the render scale, so the separate scale slider is disabled."
 msgstr "各档位默认都是 MetalFX 时域；空间重建的条目是显式备选。预设会决定渲染比例，所以单独的“渲染比例”滑条被禁用。"
@@ -2720,18 +2706,6 @@ msgstr "从你角色所在的建筑望进去时，穿过它的其他建筑构件
 
 msgid "Holding the right button on a squad bar portrait opens that character's menu, as on the character itself; a quick right click still selects them and moves the camera to them. The game has no portrait menu."
 msgstr "在小队栏头像上按住右键会打开该角色的菜单（与在角色本体上操作相同）；快速点右键仍然是选中并把镜头移过去。游戏本身没有头像菜单。"
-
-msgid "Shows a generated frame between each two rendered ones through AMD's FSR 3 frame-interpolation layer: nearly twice the frames shown, with a little more input delay. Works with TAA, FSR and DLSS; needs the FidelityFX library. Takes effect after a restart. Now: {1}"
-msgstr "通过 AMD FSR 3 的帧插值层，在每两帧渲染画面之间生成一帧：显示帧数接近翻倍，输入延迟略增。支持 TAA、FSR 与 DLSS；需要 FidelityFX 库。重启后生效。当前：{1}"
-
-msgid "Low holds off: {1}."
-msgstr "低画质下会关闭：{1}。"
-
-msgid "Low quality applied: {1} off until you keep them on."
-msgstr "已应用低画质：{1} 会关闭，直到你手动打开。"
-
-msgid "{1} quality applied."
-msgstr "已应用{1}画质。"
 
 msgid "Heal Neutrals"
 msgstr "治疗中立者"
