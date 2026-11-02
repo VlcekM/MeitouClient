@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Numerics;
 
 namespace Meitou.Rendering.Characters;
 
@@ -23,6 +24,43 @@ internal sealed unsafe partial class CharacterRenderer
             for (int i = n; i >= 1; i--) sum += values[(Count - i) % Capacity];
             return sum / n;
         }
+    }
+
+    // The last colour view's culling, which DrawnCharacters counts by (CountedBoxes).
+    Vector4[]? countedFrustum;
+    FogVolumes? countedFog;
+
+    /// <summary>
+    /// The screen rectangles (x0, y0, x1, y1 in pixels of a <paramref name="width"/> × <paramref name="height"/> picture seen through
+    /// <paramref name="viewProjection"/>) of the characters the last colour view counted in <see cref="DrawnCharacters"/>: in its frustum and not
+    /// hidden by fog (the F11 boxes). Those partly behind the eye are left out.
+    /// </summary>
+    public void CountedBoxes(Matrix4x4 viewProjection, int width, int height, List<Vector4> into)
+    {
+        into.Clear();
+        if (countedFrustum is not { } frustum) return;
+        for (int i = 0; i < liveCount; i++)
+        {
+            ref var l = ref live[i];
+            if (l.PortraitOnly || !FrustumTests.SphereVisible(frustum, l.Centre, l.Radius)) continue;
+            if (countedFog?.Hidden(l.Centre, l.Radius, FogVolumes.CullKind.Characters) == true) continue;
+            if (ScreenBox(l.Centre, l.Radius, viewProjection, width, height) is { } box) into.Add(box);
+        }
+    }
+
+    /// <summary>The pixel rectangle of the box round a sphere; null when a corner is behind the eye.</summary>
+    static Vector4? ScreenBox(Vector3 centre, float radius, Matrix4x4 viewProjection, int width, int height)
+    {
+        var box = new Vector4(float.MaxValue, float.MaxValue, float.MinValue, float.MinValue);
+        for (int corner = 0; corner < 8; corner++)
+        {
+            var p = centre + new Vector3((corner & 1) == 0 ? -radius : radius, (corner & 2) == 0 ? -radius : radius, (corner & 4) == 0 ? -radius : radius);
+            var clip = Vector4.Transform(new Vector4(p, 1), viewProjection);
+            if (clip.W <= 0.01f) return null;
+            float x = (clip.X / clip.W * 0.5f + 0.5f) * width, y = (0.5f - clip.Y / clip.W * 0.5f) * height;
+            box = new Vector4(MathF.Min(box.X, x), MathF.Min(box.Y, y), MathF.Max(box.Z, x), MathF.Max(box.W, y));
+        }
+        return box;
     }
 
     readonly SampleRing colourGpu = new(), depthGpu = new(), updateCpu = new(), poseCpu = new(), drawCpu = new(), gatherCpu = new();

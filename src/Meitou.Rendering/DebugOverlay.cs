@@ -291,9 +291,11 @@ public sealed unsafe class DebugOverlay : IDisposable
 
     /// <summary>
     /// Draws a titled panel at the left edge, below <paramref name="top"/>, listing <paramref name="lines"/> in as many
-    /// columns as the height left needs; returns the panel's bottom (where a next panel can start).
+    /// columns as the height left needs; returns the panel's bottom (where a next panel can start). <paramref name="laidOut"/> gets each
+    /// drawn (wrapped) line and its pixel rectangle (x0, y0, x1, y1), for clicks on it.
     /// </summary>
-    public float Panel(int width, int height, string title, IReadOnlyList<string> lines, float top = 0, float scale = 1)
+    public float Panel(int width, int height, string title, IReadOnlyList<string> lines, float top = 0, float scale = 1,
+        List<(string Line, Vector4 Rect)>? laidOut = null)
     {
         if (width <= 0 || height <= 0) return top;
         const float margin = 16, pad = 12, gap = 28;
@@ -317,8 +319,13 @@ public sealed unsafe class DebugOverlay : IDisposable
 
         Rect(margin, y, margin + panelW, y + panelH, PanelColour);
         TextScaled(title, margin + pad, y + pad, TextColour, scale);
+        laidOut?.Clear();
         for (int i = 0; i < lines.Count; i++)
-            TextScaled(lines[i], margin + pad + i / rows * (columnWidth + gap), y + pad + (i % rows + 1.5f) * lineHeight, TextColour, scale);
+        {
+            float x = margin + pad + i / rows * (columnWidth + gap), lineTop = y + pad + (i % rows + 1.5f) * lineHeight;
+            TextScaled(lines[i], x, lineTop, TextColour, scale);
+            laidOut?.Add((lines[i], new Vector4(x, lineTop, x + lines[i].Length * charWidth, lineTop + lineHeight)));
+        }
         Flush(width, height);
         return y + panelH;
     }

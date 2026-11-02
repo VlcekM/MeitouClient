@@ -164,6 +164,7 @@ internal sealed unsafe partial class CharacterRenderer
         var vb = prepared ?? mainView;
         if (prepared is null) Collect(vb, eye, origin, frustum, lodFloor, minRadius);
         (DrawnCharacters, DrawnParts) = (vb.Characters, vb.Parts);
+        if (!depthPass && !motionPass && portraitLive < 0) (countedFrustum, countedFog) = (frustum, FogCull);
         if (vb.Active.Count > 0) RecordDraws(in view, vb);
 
         LastDrawCpuMs = cpu.Elapsed.TotalMilliseconds;

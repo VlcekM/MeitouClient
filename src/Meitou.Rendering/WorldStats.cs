@@ -20,14 +20,17 @@ static class WorldStats
         public double Total => Terrain + Objects + (Foliage ?? 0) + Characters;
     }
 
-    public static void Add(List<string> stats, GpuContext context, WorldFrame.Gpu gpu, Vector3 camera, in Triangles tris)
+    /// <summary>The characters line's checkbox (<see cref="Add"/> with <c>characterBoxes</c>): the host ticks it as its switch stands and toggles it on a click.</summary>
+    public const string CharacterBoxesOff = "[ ] boxes", CharacterBoxesOn = "[x] boxes";
+
+    public static void Add(List<string> stats, GpuContext context, WorldFrame.Gpu gpu, Vector3 camera, in Triangles tris, bool characterBoxes = false)
     {
         stats.Add("");
         stats.Add("Scene");
         stats.Add($"  triangles     {Millions(tris.Total)} a frame: terrain {Millions(tris.Terrain)}, objects {Millions(tris.Objects)}, " +
                   $"plants {(tris.Foliage is { } f ? Millions(f) : "-")}, characters {Millions(tris.Characters)}");
         if (gpu.Foliage is { Enabled: true }) stats.Add($"  grass         {tris.GrassBlades / 1000:0}k blades (not in the triangles)");
-        if (gpu.Characters is { } chars) stats.Add($"  characters    {chars.DrawnCharacters} drawn");
+        if (gpu.Characters is { } chars) stats.Add($"  characters    {chars.DrawnCharacters} drawn{(characterBoxes ? "   " + CharacterBoxesOff : "")}");
         int loadingTerrain = gpu.Streamer?.Pending ?? 0, loadingObjects = gpu.Objects?.Pending ?? 0, loadingFoliage = gpu.Foliage?.Pending ?? 0;
         if (loadingTerrain + loadingObjects + loadingFoliage > 0)
             stats.Add($"  loading       terrain {loadingTerrain}, objects {loadingObjects}, plants {loadingFoliage}");
