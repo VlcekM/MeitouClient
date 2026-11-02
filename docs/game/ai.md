@@ -125,7 +125,7 @@ A slave's Slave role list runs through the Obedient Slave job (187): [role lists
   within 2500 of it (and Town vfunc 0x2f0, +0x3b0 set, **Unknown**). Start: the wait for next time by `attacks` (`FUN_140286a70`, uniform, game hours **Observed**: 0 none, 1 [6, 48),
   2 [32, 96), 3 [72, 144), 4 [130, 188)), the town as mission town and target, its faction the enemy (+0x100), start hour, and the enemy's people within 2500 as targets;
   each one seen later is added and tagged squad memory 4. End: the faction's running count drops, at 0 the last-end hour is set. Finished: not intact (spent); else not
-  before 0.25 h, not while a target stands (alive, up, in the town; the town-compare polarity is **Observed**), then (spent) with at least 2 members up. May lead
+  before 0.25 h, not while a target stands (**Verified**, `FUN_14028eca0` and the hand-over `FUN_14028ea90`: its current town is the mission town — the hand compare vfunc `0x10`, `FUN_1400cd0b0`, returns "differs", the test wants it false — with the inside-town-walls value `0x118` non-zero, not unconscious or dead, `+0x2f8` not 2 caged, posture 0; Meitou `AiSystem.DefenderStanding`, the walls value not modelled), then (spent) with at least 2 members up. May lead
   (to the occupation): intact, no target standing, at least 2 up. Data (rebirth.mod): 33 bandit/raider templates have it at slot 1-3 with `hostile occupy town` above it.
 - **Sensing hooks** (package slots 10 `assessNeutral` and 11 `assessEnemy`, **Verified**; called from `FUN_140859680`, which `FUN_14085a5f0` feeds one sensed-list entry per Character update
   (`FUN_1405c7d40`, vfunc 79) through a cursor at `+0x100` that wraps at the list's end, so every entry is visited in turn; the hook runs only when the listener or the target is on

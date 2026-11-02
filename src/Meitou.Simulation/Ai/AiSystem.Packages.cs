@@ -188,20 +188,19 @@ public sealed partial class AiSystem
         return n;
     }
 
-    /// <summary>Whether someone of <paramref name="faction"/> (the player's characters for the player's faction) is up within <paramref name="range"/> of a point, or (range 0) in the board's mission town.</summary>
-    bool FactionNear(World world, Blackboard board, int faction, Vector2 at, float range)
+    /// <summary>Whether someone of <paramref name="faction"/> (the player's characters for the player's faction) is up within <paramref name="range"/> of a point.</summary>
+    bool FactionNear(World world, int faction, Vector2 at, float range)
     {
         var table = world.Characters;
-        int player = world.Player.Faction >= 0 ? world.Player.Faction : data.PlayerFaction;
         for (int i = 0; i < table.Previous.Length; i++)
         {
-            if (!table.Previous[i].Alive || table.Cold(i) is not { } c || c.Medical is { Incapacitated: true }) continue;
-            if (c.Faction != faction && !(c.IsPlayer && faction == player)) continue;
-            var p = table.Previous[i].Position;
-            if (range > 0 ? Vector2.DistanceSquared(Flat(p), at) <= range * range : CurrentTown(world, p) == board.Destination) return true;
+            if (!table.Previous[i].Alive || table.Cold(i) is not { } c || c.Medical is { Incapacitated: true } || !OfFaction(world, c, faction)) continue;
+            if (Vector2.DistanceSquared(Flat(table.Previous[i].Position), at) <= range * range) return true;
         }
         return false;
     }
+
+    bool OfFaction(World world, CharacterCold c, int faction) => c.Faction == faction || c.IsPlayer && faction == (world.Player.Faction >= 0 ? world.Player.Faction : data.PlayerFaction);
 
     /// <summary>
     /// Whether a passing-by assault may start (vtable +0x60, <c>FUN_140290450</c>): attacks not set to Never; not spent; its leader in a player town whose faction it is not allied
@@ -222,7 +221,7 @@ public sealed partial class AiSystem
             }
             else assaultEnds[squad.Faction] = world.GameHours;
         }
-        return FactionNear(world, board, town.Owner, Flat(town.Position), AssaultReach);
+        return FactionNear(world, town.Owner, Flat(town.Position), AssaultReach);
     }
 
     /// <summary>Whether another squad of the faction runs a passing-by assault now.</summary>
@@ -270,9 +269,22 @@ public sealed partial class AiSystem
         if (!Assaulting(world, squad.Faction, squad)) assaultEnds[squad.Faction] = world.GameHours;
     }
 
-    /// <summary>Someone of the attacked faction still stands in the town (engine reading of the original's target set: those within 2500 at the start and those seen since).</summary>
-    bool DefenderStanding(World world, Blackboard board) =>
-        board.AssaultEnemy >= 0 && FactionNear(world, board, board.AssaultEnemy, default, 0);
+    /// <summary>
+    /// Someone of the attacked faction still stands in the mission town (engine reading of the original's target set: those within 2500 at the start and those seen since). The end
+    /// and hand-over tests (<c>FUN_14028eca0</c>, <c>FUN_14028ea90</c>, <b>Verified</b>) count a target only when its current town is the mission town and it is not unconscious or
+    /// dead, not caged and at posture 0 (staying low, crawling and playing dead do not count); the inside-town-walls value (vfunc 0x118, non-zero) is not modelled.
+    /// </summary>
+    bool DefenderStanding(World world, Blackboard board)
+    {
+        if (board.AssaultEnemy < 0) return false;
+        var table = world.Characters;
+        for (int i = 0; i < table.Previous.Length; i++)
+        {
+            if (!table.Previous[i].Alive || table.Cold(i) is not { IsImprisoned: false } c || c.Medical is { Incapacitated: true } or { StayingLow: true } or { Crawling: true } or { PlayingDead: true }) continue;
+            if (OfFaction(world, c, board.AssaultEnemy) && CurrentTown(world, table.Previous[i].Position) == board.Destination) return true;
+        }
+        return false;
+    }
 
     /// <summary>
     /// Whether the assault is over (vtable +0x68, <c>FUN_14028eca0</c>): the squad no longer intact ends it for good; not before 0.25 h; while a defender stands it goes on; then it
