@@ -120,9 +120,7 @@ public sealed class FleeSystem(FactionRelations relations, CombatSystem combat, 
         foreach (int s in standing)
         {
             if (table.Cold(s)!.Fleeing) continue;
-            var centre = Vector3.Zero;
-            int k = 0;
-            Enemies(world, table, s, null, (_, p) => { centre += p; k++; });
+            var (centre, k) = Centre(world, table, s);
             table.Cold(s)!.FleesAlone = false;
             Begin(world, table, s, centre, k);
         }
@@ -145,9 +143,7 @@ public sealed class FleeSystem(FactionRelations relations, CombatSystem combat, 
             return;
         }
         if (standingAt != world.Tick) { StandingFactions(table); standingAt = world.Tick; }
-        var centre = Vector3.Zero;
-        int k = 0;
-        Enemies(world, table, s, null, (_, p) => { centre += p; k++; });
+        var (centre, k) = Centre(world, table, s);
         cold.FleesAlone = false;
         Begin(world, table, s, centre, k);
     }
@@ -183,6 +179,32 @@ public sealed class FleeSystem(FactionRelations relations, CombatSystem combat, 
     {
         float level = combat.ThreatLevel(world, s, out _);
         return level <= 0 || !Ai.SelfPreservation.Runs(cold, level);
+    }
+
+    /// <summary>
+    /// The centre <c>Task_Runaway</c> runs from (<c>FUN_14034b440</c>, <b>Verified</b>): the sum of the positions and the count of the runner's sense entries tagged NEUTRAL or ENEMY (include mask 6)
+    /// and neither KO, bit 4 nor imprisoned (exclude 0x218; <c>FUN_140853960</c>), neutrals included, that intend aggression: the status float +0xac, the intended aggression of the entry's current
+    /// goal (<see cref="Ai.TaskAggression.OfGoal"/>), must be above 0. The original adds the running task's +0xa0 when the entry's target matches a handle of the sense record (which one:
+    /// <b>Unknown</b>, not modelled). A runner without senses falls back to the enemies standing in its sight range.
+    /// </summary>
+    (Vector3 Centre, int Count) Centre(World world, CharacterTable table, int s)
+    {
+        var centre = Vector3.Zero;
+        int k = 0;
+        if (world.SystemOf<AggroSystem>()?.SensesOf(s) is not { } senses)
+        {
+            Enemies(world, table, s, null, (_, p) => { centre += p; k++; });
+            return (centre, k);
+        }
+        foreach (var e in senses.Entries)
+        {
+            var tags = e.Tags;
+            if ((tags & (SenseTag.Neutral | SenseTag.Enemy)) == 0 || (tags & (SenseTag.Ko | SenseTag.Imprisoned)) != 0 || e.Target == s || (uint)e.Target >= (uint)table.HighWater) continue;
+            if (!table.Next[e.Target].Alive || table.Next[e.Target].Generation != e.Generation || table.Cold(e.Target) is not { } c || Ai.TaskAggression.OfGoal(c) <= 0) continue;
+            centre += table.Next[e.Target].Position;
+            k++;
+        }
+        return (centre, k);
     }
 
     // The tick StandingFactions was last built on (a request may come on any tick, the periodic check on every CheckEveryTicks).

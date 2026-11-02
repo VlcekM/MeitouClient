@@ -199,6 +199,7 @@ Where a vanilla NPC does run (**Observed**, base data and decompile, 2026-10):
 Nothing else issues `Task_Runaway` for a fighting NPC that I could find; a scan for `FUN_1405d20d0` calls with task 0x23 found only `FUN_140353c50` (a follow-type task update on a target flagged at `+0x278`, **Unknown** purpose). Meitou's `FleeSystem` squad break (everyone standing runs) is therefore off by default (`FleeSystem.SquadBreak`, **Unknown** whether the game ever shows
 one); the AI's own requests (a lone crippled runner, a goal 35) run regardless. Leash/home/running state must
 not be equated with the attack planner or discarded immediately after a lost sighting.
+- `Task_Runaway`'s centre (`FUN_14034b440`, **Verified**): the mean position of the runner's sense entries tagged NEUTRAL or ENEMY (include 6) and not KO, bit 4 or bit 9 (exclude 0x218; `FUN_140853960` keeps an entry when `(tag & include) != 0 && (tag & exclude) == 0`), neutrals included, but an entry counts only when its status float `+0xac` (intended aggression of its current goal) is above 0; the original adds the running task's `+0xa0` when a status handle (`+0x18`, set from the target's `vfunc 0x58`) equals one of the sense record, which handle is **Unknown**, not modelled. With none counted it uses its own position. Meitou: `FleeSystem.Centre` (`TaskAggression.OfGoal`; no senses: the enemies in sight range).
 
 ### Sense tags: who is an enemy
 
