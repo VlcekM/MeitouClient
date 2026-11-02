@@ -1437,14 +1437,18 @@ static class WorldFrame
         // haze takes longer to close in the higher the eye.
         var sun = scene.Clock.SunDirection(hour);
         // The weather at the camera (before the sky's tables are prepared: the colour multiplier feeds them). A held frame (a screenshot) has dt 0, the first frame snaps.
+        long skyStep = Stopwatch.GetTimestamp();
         bool held = post.InstantAdaptation;
         if (gpu.Weather is { } weather)
         {
             float scheduleHour = weatherHour ?? hour;
             weather.Update(eye, scheduleHour, scene.Clock.SunDirection(scheduleHour).Y, held);
+            SkyStep("weather update", ref skyStep);
             weather.Apply(gpu.Sky);
+            SkyStep("weather apply", ref skyStep);
         }
         gpu.Surfaces?.Apply(gpu.WeatherState);
+        SkyStep("surfaces", ref skyStep);
         // The night sky's clocks: the starfield shifts with the game hours since the load, the planets turn with the day and hour.
         gpu.Sky.StarHours = gpu.GameHours ?? gpu.HeatHazeHours;
         gpu.Sky.Day = gpu.Weather?.Day ?? 0;
@@ -1453,6 +1457,7 @@ static class WorldFrame
         gpu.Sky.StarSeconds = (float)(gpu.HeatHazeHours / HeatHaze.HoursPerSecond % 3600);   // the twinkle's clock: still for a picture
         gpu.Sky.Eye = new Vector3((float)eye.X, (float)eye.Y, (float)eye.Z);
         var (colours, light) = gpu.Sky.Prepare(sun, eye.Y, fogDistance + 3 * Math.Max(eye.Y, 0));
+        SkyStep("sky tables", ref skyStep);
         // The game's exposure (0.55 over the mean luminance, clamped to its band) goes with the game's sky and light.
         post.AutoExposure = (gpu.Sky.MinLuminance, gpu.Sky.MaxLuminance);
         post.WaterHeight = render.Water && gpu.Water is not null ? WorldWater.Height : null;
@@ -1460,6 +1465,7 @@ static class WorldFrame
         // The Meitou water's waves on the game clock (the heat haze's, held still for a still picture), led by the wind at the camera.
         gpu.Water?.Animate(gpu.GameHours ?? gpu.HeatHazeHours,gpu.WeatherState.WindDirection, gpu.WeatherState.WindSpeed);
         gpu.Water?.Track(eye, gpu.Terrain.Snapshot());
+        SkyStep("water", ref skyStep);
         // The clouds drift on the frame clock (game-speed seconds, 0 while paused), held still for a still picture.
         if (gpu.Weather is { } drift) gpu.Sky.StepClouds(drift.Times.Game); else gpu.Sky.StepClouds(held);
         gpu.Sky.PrepareCloudShadows();
@@ -1796,6 +1802,15 @@ static class WorldFrame
             giDebug.Run(gpu.GiDebug, traced, post.SceneDepth, giTarget, post.RenderWidth, post.RenderHeight, inverse, eye, light);
         }
         StageClock.Lap(10);
+    }
+
+    /// <summary>--log-spikes: a step of the sky-prepare stage over 5 ms is noted (<c>slow sky &lt;step&gt;</c>), the time since <paramref name="since"/>, which moves on.</summary>
+    static void SkyStep(string step, ref long since)
+    {
+        long now = Stopwatch.GetTimestamp();
+        double ms = (now - since) * 1000.0 / Stopwatch.Frequency;
+        since = now;
+        if (ms > 5) SpikeLog.Note($"slow sky {step}", ms: ms);
     }
 
     /// <summary>The air layer's density by the time of day (docs/render-shafts.md "Air layer"): <c>ShaftAirDawn</c> at sunrise and at sunset, easing (smoothstep) to
