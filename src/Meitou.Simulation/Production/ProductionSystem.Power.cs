@@ -44,26 +44,29 @@ public sealed partial class ProductionSystem
     public IReadOnlyList<OutpostSnapshot> OutpostView(World world) => world.Buildings.Towns.Count == 0 ? []
         : [.. world.Buildings.Towns.Select(t => new OutpostSnapshot(t.Number, t.Name, t.Position, t.Radius, t.Owner, t.Public, townPower.GetValueOrDefault(t.Number)))];
 
+    /// <summary>The towns' round-robin cursor of the power frame (the static <c>DAT_14213543c</c>, advanced before each use); not saved.</summary>
+    int powerCursor;
+
     void PowerTick(World world, float dt)
     {
         foreach (var list in grids.Values) list.Clear();
-        townPower.Clear();
         foreach (var m in world.Machines.All)
         {
-            m.Power = 1;
             // Slot 59 (isIndoors): interior furniture standing in a building; slot 164: a light building outdoors works only while it is not daytime.
             m.Indoors = m.Data.InteriorFurniture && Site(world, m.Site)?.Parent is not null;
             m.Active = !m.Data.IsLight || m.Indoors || !world.Daytime;
             if (m.Data.IsWind) (m.Wind, m.WindRated) = (WindShare(world, m), Rated(world, m));
             if (m.Data.Function == MachineData.RainCollectorFunction)
                 m.Rain = !m.Indoors && world.Weather?.At(m.Position.X, m.Position.Z) is { Affect: not WeatherAffecting.Acid } here ? here.Wetness : 0;
-            if (!m.Data.IsConsumer && !m.Data.IsGenerator && !m.Data.IsBattery) continue;
-            if (Site(world, m.Site) is not { Complete: true } site) continue;
+            if (!m.Data.IsConsumer && !m.Data.IsGenerator && !m.Data.IsBattery || Site(world, m.Site) is not { Complete: true } site)
+            {
+                m.Power = 1;
+                continue;
+            }
             if (!grids.TryGetValue(site.Town, out var grid)) grids[site.Town] = grid = [];
             grid.Add(m);
         }
-        foreach (var (town, grid) in grids)
-            if (grid.Count > 0) Share(world, town, grid, dt);
+        ShareOneTown(world, dt);
         foreach (var m in world.Machines.All)
             if (m.Data.IsGenerator)
             {
@@ -88,6 +91,41 @@ public sealed partial class ProductionSystem
                 m.GridDraining = grid.Draining > 0;
             }
         }
+    }
+
+    /// <summary>
+    /// One town's power frame per pass, the next town in ascending number after the cursor (<b>Verified</b>: <c>FUN_14092d850</c> advances the cursor and calls the town's <c>vfunc 0x2b8</c> for that
+    /// one town only; the original cycles over every eligible town of the world per rendered frame, so the cadence per town is an engine choice). The other towns keep their last grants, power shares,
+    /// totals and supply; the batteries of every town integrate their last grant each pass.
+    /// </summary>
+    void ShareOneTown(World world, float dt)
+    {
+        var towns = grids.Where(g => g.Value.Count > 0).Select(g => g.Key).Order().ToList();
+        foreach (var gone in townPower.Keys.Where(t => !towns.Contains(t)).ToList()) townPower.Remove(gone);
+        if (towns.Count == 0) return;
+        powerCursor++;
+        if (powerCursor >= towns.Count) powerCursor = 0;
+        int picked = towns[powerCursor];
+        foreach (var m in grids[picked]) m.Power = 1;
+        Share(world, picked, grids[picked]);
+        foreach (var town in towns) ChargeBatteries(world, town, grids[town], dt);
+    }
+
+    /// <summary>
+    /// The store of each battery moves by flow / rate x dt seconds, between 0 and the capacity (<c>FarmBuilding::vfunc_27</c> on batteries); the town's charge totals follow.
+    /// </summary>
+    void ChargeBatteries(World world, int town, List<Machine> grid, float dt)
+    {
+        float charge = 0, capacity = 0;
+        foreach (var b in grid)
+        {
+            if (!b.Data.IsBattery) continue;
+            float rate = Rated(world, b);
+            b.Store = Capacity(world, b);
+            if (rate > 0) b.Charge = Math.Clamp(b.Charge + b.Granted / rate * dt, 0, b.Store);
+            (charge, capacity) = (charge + b.Charge, capacity + b.Store);
+        }
+        if (townPower.TryGetValue(town, out var power)) townPower[town] = power with { Charge = charge, Capacity = capacity };
     }
 
     /// <summary>
@@ -136,7 +174,7 @@ public sealed partial class ProductionSystem
     /// left (<c>FUN_140927350</c> sorts); when batteries were in use last tick, consumers left short that get battery power share the batteries' output. With nothing left over the
     /// batteries drain by what was drawn; with a surplus they charge from it (each at most its rate) and the grid leaves battery mode.
     /// </summary>
-    void Share(World world, int town, List<Machine> grid, float dt)
+    void Share(World world, int town, List<Machine> grid)
     {
         bool mode = batteryMode.GetValueOrDefault(town);
         float supply = 0, batteries = 0, demandTotal = 0;
@@ -197,7 +235,6 @@ public sealed partial class ProductionSystem
                 b.Granted = give;
             }
         }
-        float charge = 0, capacity = 0;
         foreach (var m in grid)
         {
             if (m.Data.IsConsumer) m.Power = m.Demand > 0 ? m.Granted / m.Demand : 1;
@@ -207,16 +244,8 @@ public sealed partial class ProductionSystem
                 float rated = Rated(world, m);
                 m.Usage = generated > 0 && rated > 0 ? MathF.Min(1, m.Demand / rated * (charged + demandTotal) / generated) : 0;
             }
-            else if (m.Data.IsBattery)
-            {
-                // The store moves by flow / rate x dt seconds, between 0 and the capacity (FarmBuilding::vfunc_27 on batteries).
-                float rate = Rated(world, m);
-                m.Store = Capacity(world, m);
-                if (rate > 0) m.Charge = Math.Clamp(m.Charge + m.Granted / rate * dt, 0, Capacity(world, m));
-                (charge, capacity) = (charge + m.Charge, capacity + m.Store);
-            }
         }
-        townPower[town] = new(generated, demandTotal, charged, drained, charge, capacity);
+        townPower[town] = new(generated, demandTotal, charged, drained, 0, 0);
     }
 
     /// <summary>A generator burns fuel as a producer draws inputs (<c>vfunc_183</c>): <c>rate x dt x P x option</c>, times its load.</summary>
