@@ -464,6 +464,7 @@ public sealed partial class PopulationSystem
             state.Squads.Add(squad.Id);
             if (wildLog.Count < 256) wildLog.Add(new WildSpawn(world.Tick, site.Kind, site.Kind == WildKind.Nest ? site.Nest!.Name : data.Biomes!.Groups[site.Group].Name, squad.Name, squad.Members.Count));
         }
+        if (!b.TopUp && site.Kind == WildKind.Nest) ScatterNest(world, site, b.Centre);
         state.Status = SiteStatus.Loaded;
         if (!b.TopUp) state.UnloadAtTick = -1;
         if (site.Kind == WildKind.Nest && b.Exhausted) CheckWipe(world, site, state);

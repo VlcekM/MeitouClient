@@ -36,6 +36,8 @@ internal static class SeedSalts
     public const ulong NestPick = 7;
     /// <summary>Counter base of a rolled nest's place (marker or cell and spots), apart from its TOWN pick so a changed world-state gate never moves it.</summary>
     public const ulong NestPlace = 1UL << 20;
+    /// <summary>XORed with the nest centre's bits into the key of the debris and loot a nest lays out (<see cref="PopulationSystem.ScatterNest"/>).</summary>
+    public const ulong NestDebris = 0x4E357DBUL;
     /// <summary>Counter base of the placement tries of a wild squad (the try is added).</summary>
     public const ulong WildPlace = 2000;
 
