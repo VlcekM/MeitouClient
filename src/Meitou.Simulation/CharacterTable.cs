@@ -189,6 +189,8 @@ public sealed class CharacterCold
     public Meitou.Simulation.Items.Inventory? Inventory { get; set; }
     /// <summary>The tick it died at (-1: alive); the corpse decays 12 game hours later (<see cref="BodySystem.SlowWorld"/>, which holds the clock back while it is carried or held).</summary>
     public long DiedTick { get; set; } = -1;
+    /// <summary>The tick of the body system's last step for it (<see cref="BodySystem"/>, 2x and 5x step in turns); -1 before the first. Derived, not hashed or saved.</summary>
+    public long BodyStepTick { get; set; } = -1;
     /// <summary>A corpse with flies (docs/game/character-stats.md "Corpses": 4 game hours after death while the weather leaves characters alone); it smells of blood (<see cref="SmellSystem"/>).</summary>
     public bool HasFlies { get; set; }
     /// <summary>Where the character came from in a loaded save, with the saved stats and medical state (null for a character the game made itself); see <c>Meitou.Simulation.Saving</c>.</summary>

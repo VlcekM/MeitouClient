@@ -217,7 +217,7 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
 
     public void SlowWorld(World world)
     {
-        int every = Math.Max(1, Settings.SweepEveryTicks);
+        int every = world.Every(Settings.SweepEveryTicks);
         // Each character every SweepEveryTicks on its slot's turn (slot mod the period), so the witness looks spread over the ticks (the original's AI updates run 8 characters a
         // frame in turn, FUN_140786e30); a character's timers still lose the whole period each visit. The alarms keep the shared beat.
         int phase = (int)(world.Tick % every);

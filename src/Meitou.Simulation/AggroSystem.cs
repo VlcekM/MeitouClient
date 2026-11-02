@@ -630,7 +630,7 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
         var table = world.Characters;
         var prev = table.Previous;
         var next = table.Next;
-        int every = Math.Max(1, Settings.ScanEveryTicks);
+        int every = world.Every(Settings.ScanEveryTicks);
         int phase = (int)(world.Tick % every);
         int first = part.Start + ((phase - part.Start % every) % every + every) % every;
         for (int i = first; i < part.End; i += every)

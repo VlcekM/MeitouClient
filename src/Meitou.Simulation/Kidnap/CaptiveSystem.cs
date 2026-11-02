@@ -189,7 +189,7 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
         // Each character is looked at once in SweepEveryTicks, on its slot's turn (slot mod the period), so the sweep spreads over the ticks instead of
         // landing on one (8-11 ms a sweep with ~1,400 characters loaded, docs/simulation.md "Spread sweeps"; the original runs its AI updates 8 characters
         // a frame in turn, FUN_140786e30).
-        int every = Math.Max(1, Settings.SweepEveryTicks), phase = (int)(world.Tick % every);
+        int every = world.Every(Settings.SweepEveryTicks), phase = (int)(world.Tick % every);
         if (phase == 0) ExpireWaits(world.GameHours);
         Sweep(world, every, phase);
         RunPlayerAnimalGoals(world, every, phase);

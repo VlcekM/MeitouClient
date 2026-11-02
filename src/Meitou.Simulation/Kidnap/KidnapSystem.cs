@@ -145,7 +145,7 @@ public sealed class KidnapSystem(PopulationData data, PopulationSystem populatio
             else abductions.RemoveAt(k);
         }
         // Each kidnapper looks once in LookEveryTicks, on its slot's turn (slot mod the period): the looks spread over the ticks (docs/simulation.md "Spread sweeps").
-        int every = Math.Max(1, Settings.LookEveryTicks);
+        int every = world.Every(Settings.LookEveryTicks);
         Look(world, every, (int)(world.Tick % every));
     }
 
@@ -259,7 +259,7 @@ public sealed class KidnapSystem(PopulationData data, PopulationSystem populatio
                 // Every look the best free cage of its faction in range. A marching carrier looks only within a town of its faction (any on the way: the original's cage finder weighs
                 // the home x100 but does not require it) and drops the captive when its home town (any, without a HomeSite) has no free cage; any other carrier waits a while for one
                 // (engine choices; the original's give-up rule is Unknown).
-                if ((world.Tick + g) % Math.Max(1, Settings.LookEveryTicks) != 0) return true;
+                if ((world.Tick + g) % world.Every(Settings.LookEveryTicks) != 0) return true;
                 int town = TownOf(world, gn.Position, gc.Faction);
                 if (a.Marching && town < 0) return true;
                 if (CageFor(world, gn.Position, gc, a) is { } found) return ToCage(world, a, g, found);

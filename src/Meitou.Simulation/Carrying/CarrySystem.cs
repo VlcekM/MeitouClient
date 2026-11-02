@@ -512,7 +512,7 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
         KeepLinks(world);
         if (Settings.AutoEveryTicks > 0)
         {
-            bool beat = world.Tick % Settings.AutoEveryTicks == 0;
+            bool beat = world.Tick % world.Every(Settings.AutoEveryTicks) == 0;
             if (beat) Rescue(world, table);
             Scavenge(world, table);   // each looter on its slot's turn
             if (beat) Arm(world, table);

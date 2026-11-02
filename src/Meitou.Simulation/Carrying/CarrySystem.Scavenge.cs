@@ -26,7 +26,7 @@ public sealed partial class CarrySystem
     {
         if (world.SystemOf<PopulationSystem>() is not { } population) return;
         var memory = world.SystemOf<DialogueSystem>()?.Memory;
-        int every = Settings.AutoEveryTicks, phase = (int)(world.Tick % every);
+        int every = world.Every(Settings.AutoEveryTicks), phase = (int)(world.Tick % every);
         HashSet<int>? taken = null;
         List<int>? bodies = null;
         Span<int> duty = stackalloc int[5];

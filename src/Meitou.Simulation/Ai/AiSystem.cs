@@ -121,7 +121,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     {
         var table = world.Characters;
         var prev = table.Previous;
-        int every = Math.Max(1, Settings.ThinkEveryTicks);
+        int every = world.Every(Settings.ThinkEveryTicks);
         int hour = world.Hour;
         for (int i = part.Start; i < part.End; i++)
         {
@@ -1240,7 +1240,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         if (Interlocked.Exchange(ref assaulting, 0) != 0) SendAssaults(world);
         if (Interlocked.Exchange(ref fighting, 0) != 0) SendFights(world);
         if (Interlocked.Exchange(ref leaving, 0) != 0) LeaveFights(world);
-        bool cadence = world.Tick % Math.Max(1, Settings.PackageEveryTicks) == 0;
+        bool cadence = world.Tick % world.Every(Settings.PackageEveryTicks) == 0;
         // Each town's turrets are claimed once per cadence, by the squads in squad order (derived, not hashed).
         if (cadence) { turretTaken.Clear(); seatTaken.Clear(); ReserveSeats(world); RefreshPlaces(world); }
         foreach (var squad in world.Squads.All)

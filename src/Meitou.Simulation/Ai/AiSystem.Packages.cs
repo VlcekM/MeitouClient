@@ -389,7 +389,7 @@ public sealed partial class AiSystem
                 board.OccupyAway = 0;
                 return false;
             }
-        board.OccupyAway += Settings.PackageEveryTicks * world.TickSeconds;
+        board.OccupyAway += world.Every(Settings.PackageEveryTicks) * world.TickSeconds;
         return board.OccupyAway > OccupyGiveUp;
     }
 

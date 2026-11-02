@@ -521,8 +521,8 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
     {
         // Each NPC looks every AutoEveryTicks ticks, a slot's turn falling on its own tick (slot mod the period), so the looks spread over the ticks instead of all landing on one
         // (the original runs its AI updates 8 characters a frame in turn, FUN_140786e30).
-        int every = Settings.AutoEveryTicks;
-        if (every <= 0) return;
+        if (Settings.AutoEveryTicks <= 0) return;
+        int every = world.Every(Settings.AutoEveryTicks);
         var table = world.Characters;
         var next = table.Next;
         int phase = (int)(world.Tick % every);

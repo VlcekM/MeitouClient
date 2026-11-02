@@ -17,6 +17,15 @@ clocks, input and camera, and disposes systems/services. Of a frame's ticks only
 a snapshot (`RunTick(publish)`), the pair the host interpolates between. Advanced → Pause after loading (`PauseOnLoad`, a plain on/off switch outside the Faithful / Meitou sides, default off as
 the game runs a loaded save at once, [game loop](game/game-loop.md)) pauses the speed after a menu load or import; `--load` runs.
 
+### Speed steps
+
+**Engine choice.** `World.SpeedSteps` is 1 at 1x and headless, 2 at 2x, 5 at 5x (from `World.PhysicsSpeed`, set by the host before each tick). The staggered looks
+take their period through `World.Every`, so each character looks as often per real second at every speed: Aggro's scan, the AI's think and package cadence,
+TownDuty, Captive, Kidnap, Crime, FirstAid's auto look and the carry system's rescue, arm and scavenge. A period that also times something (Aggro's sightings,
+the AI's away time) uses the stretched one. The body tick (`BodySystem.Act`) steps a character on its slot's turn with the ticks since its last step, unless
+it is a player character, in combat, incapacitated or bleeding (those step every tick). At 5x reactions come later in game time, as in the original, whose
+one update a frame covers frame time x speed ([game loop](game/game-loop.md#frame-clocks)). 1x and the goldens are unchanged.
+
 ### Snapshots
 
 `World.Publish` reuses its `CharacterSnapshot` objects (**engine choice**): one per slot in each of four sets, filled in place (every property, every

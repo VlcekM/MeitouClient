@@ -217,6 +217,13 @@ public sealed partial class World : IDisposable
     /// </summary>
     public float PhysicsSpeed { get; set; } = 1;
     /// <summary>
+    /// Meitou (<b>engine choice</b>, docs/simulation.md "Speed steps"): how many ticks make one tick of real time at the host's speed: 1 at 1x (and headless), 2 at 2x, 5 at 5x.
+    /// The periodic looks (<see cref="Every"/>) and the body step stretch by it, so they cost per real second what they do at 1x.
+    /// </summary>
+    public int SpeedSteps => PhysicsSpeed >= 1.5f ? (int)MathF.Round(PhysicsSpeed) : 1;
+    /// <summary>A look's period of <paramref name="ticks"/> stretched by <see cref="SpeedSteps"/> (at least 1).</summary>
+    public int Every(int ticks) => Math.Max(1, ticks) * SpeedSteps;
+    /// <summary>
     /// Where the player's camera is (null without one: headless runs, tests). For looks only: the ragdoll system dangles a collapsed limb near it (<see cref="Ragdolls.RagdollSystem.LimbReach"/>).
     /// An input like <see cref="GameHours"/>: not hashed, not saved.
     /// </summary>

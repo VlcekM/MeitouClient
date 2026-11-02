@@ -96,7 +96,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
             else duties.RemoveAt(k);
         }
         // Each member looks once in LookEveryTicks, on its slot's turn (slot mod the period): the looks spread over the ticks (docs/simulation.md "Spread sweeps").
-        int every = Math.Max(1, Settings.LookEveryTicks), phase = (int)(world.Tick % every);
+        int every = world.Every(Settings.LookEveryTicks), phase = (int)(world.Tick % every);
         Look(world, every, phase);
         LookPlayerFood(world, every, phase);
     }
@@ -663,7 +663,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
         if (d.Kind == TownDutyKind.Cage)
         {
             // The carried-body desire is read every update of the plan: at 0 the cage goal drops out and the body is thrown out or put down.
-            if ((world.Tick + g) % Math.Max(1, Settings.LookEveryTicks) == 0 && CageDesire(world, g, b) <= 0) return Dispose(world, d, g, b, cageable: false);
+            if ((world.Tick + g) % world.Every(Settings.LookEveryTicks) == 0 && CageDesire(world, g, b) <= 0) return Dispose(world, d, g, b, cageable: false);
             var cage = d.Target is { } id ? world.Fixtures.Find(id) : null;
             if (cage is null || !FixtureRegistry.IsFree(table, cage)) return PutDown(world, d, g);
             if (gap <= cage.UseRange + Settings.CageReach || !walking && gap <= Settings.CageSlack)
