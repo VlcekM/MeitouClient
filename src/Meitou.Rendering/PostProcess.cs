@@ -1568,6 +1568,22 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     /// <summary>Skip the smoothing: the exposure settles at once (screenshots, benchmarks).</summary>
     public bool InstantAdaptation { get; set; }
 
+    float? exposureHold;
+    int exposureHoldFrames;
+
+    /// <summary>
+    /// Pins the adapted luminance to <paramref name="adapted"/> for the next <paramref name="frames"/> exposure passes (the band collapses to it), so a picture drawn at another size
+    /// (the size change drops the adaptation history) keeps the exposure of the live view: the original's tiled screenshot zeroes the adaptation rate for the same reason.
+    /// </summary>
+    public void HoldExposure(float adapted, int frames) => (exposureHold, exposureHoldFrames) = (adapted, frames);
+
+    (float Min, float Max) ExposureBand()
+    {
+        if (exposureHold is not { } held) return AutoExposure!.Value;
+        if (--exposureHoldFrames <= 0) exposureHold = null;
+        return (held, held);
+    }
+
     /// <summary>The last frame's adapted luminance and measured mean (the composite's scale is 0.55 / adapted; the mean is smoothed at the same rate, without the band, and is the raw mean when adaptation is instant); waits for the GPU and reads it
     /// back (<see cref="GpuContext.ReadBack"/>), so for reports only, outside a frame.</summary>
     public (float Adapted, float Mean) ReadExposure()
@@ -1586,7 +1602,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
             // Seed both ping-pong targets before smoothing; the next frame reads the other one.
             float mblend = InstantAdaptation || !adaptedValid || adaptedFrames < 2 ? 1 : 1 - MathF.Exp(-mdt * AdaptationRate);
             (adaptA, adaptB) = (adaptB, adaptA);
-            ExposureMerged(mblend, AutoExposure!.Value);
+            ExposureMerged(mblend, ExposureBand());
             adaptedValid = true;
             adaptedFrames = Math.Min(adaptedFrames + 1, 2);
             return;
@@ -1608,7 +1624,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         Bind(ap.P, ap.Last, previous);
         ap.P.Set(ap.Level, MathF.Log2(LuminanceSize));
         ap.P.Set(ap.Blend, blend);
-        var band = AutoExposure!.Value;
+        var band = ExposureBand();
         ap.P.Set(ap.Band, band.Min, band.Max);
         Draw(ap.P, adaptB!);
         adaptedValid = true;

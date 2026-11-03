@@ -23,6 +23,15 @@ static class GameScreenshots
         return Path.Combine(root, Folder, $"screenshot_{number.ToString(CultureInfo.InvariantCulture)}.{format}");
     }
 
+    /// <summary>The <c>multiplier</c> key of <paramref name="root"/>'s <c>screens.cfg</c> (<c>atoi</c>, 1 when absent or below 2): the shot is n times the window in each direction.</summary>
+    public static int Multiplier(string root)
+    {
+        string config = Path.Combine(root, ConfigFile);
+        if (!File.Exists(config)) return 1;
+        try { return Math.Max(1, AtoI(Get(File.ReadAllLines(config).ToList(), "multiplier"))); }
+        catch (IOException) { return 1; }
+    }
+
     /// <summary>bmp, png or jpg exactly (the comparison is case-sensitive); anything else is jpg.</summary>
     public static string FormatOf(string? value) => value is "bmp" or "png" ? value : "jpg";
 

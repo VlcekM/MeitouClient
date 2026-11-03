@@ -816,6 +816,7 @@ sealed partial class GameHost
                 characterTris += gpu.Characters?.DrawnTriangles ?? 0;
                 if (gpu.Foliage is { Enabled: true } drawnFoliage) grassBlades += drawnFoliage.DrawnBlades;
                 if (takeFile is not null) { FramebufferCapture.SavePng(display.Context, finalPicture ?? backbuffer, takeFile, size.X, size.Y, topDown: finalPicture is not null); cinema.FrameDone(); }
+                else if (shot && GameScreenshots.Multiplier(install.Root) is >= 2 and var multiplier) SaveSupersampled(display.Context, multiplier, size.X, size.Y);
                 else if (shot) SaveScreenshot(display.Context, finalPicture ?? backbuffer, size.X, size.Y, topDown: finalPicture is not null);
                 if (shot) player.EndScreenshot();
                 if (feedbackShot)
@@ -974,6 +975,33 @@ sealed partial class GameHost
         var file = GameScreenshots.Next(install.Root);
         FramebufferCapture.SavePng(context, picture, file, width, height, topDown);
         Console.WriteLine($"saved     {file}");
+    }
+
+    /// <summary>
+    /// The tiled shot of <c>screens.cfg</c>'s <c>multiplier</c> n (docs/game/ui-input.md "Screenshots"): the world alone, no interface, n times the window in each direction. The original
+    /// renders n x n tiles of window size with a frustum offset each; here one frame is drawn at the full size (a sub-window frustum would reach about 15 stages), so the image
+    /// has no seams but screen-space effects measured in pixels (ambient occlusion radius, bloom) are n times smaller. The exposure of the live view is pinned for the shot and the frame after.
+    /// </summary>
+    void SaveSupersampled(GpuContext context, int n, int width, int height)
+    {
+        var file = GameScreenshots.Next(install.Root);
+        var post = gpu.Post!;
+        int big = n * width, tall = n * height, warm = post.WarmupFrames;
+        var (adapted, _) = post.ReadExposure();
+        if (!float.IsNaN(adapted)) post.HoldExposure(adapted, warm + 2);
+        var live = post.Target;
+        using var picture = context.CreateTexture(new Meitou.Rendering.Gpu.TextureDesc(Meitou.Rendering.Gpu.InternalFormat.Rgba8, big, tall,
+            Use: Meitou.Rendering.Gpu.TextureUse.ColourTarget | Meitou.Rendering.Gpu.TextureUse.TransferSrc | Meitou.Rendering.Gpu.TextureUse.Sampled, Name: "supersampled picture"));
+        post.Target = picture;
+        for (int i = 0; i <= warm; i++)
+        {
+            DrawWorld(big, tall);
+            context.EndFrame();   // headless frames: the window's own frame was presented already
+        }
+        context.Finish();
+        post.Target = live;
+        FramebufferCapture.SavePng(context, picture, file, big, tall);
+        Console.WriteLine($"saved     {file} ({big} x {tall}, multiplier {n})");
     }
 
     /// <summary>Waits until <paramref name="period"/> has passed since <paramref name="start"/>: sleeps most of it, spins the last 1.5 ms.</summary>
