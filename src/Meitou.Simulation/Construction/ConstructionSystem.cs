@@ -167,7 +167,8 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
                 if (world.Fixtures.Find(id) is not { Kind: Locks.FixtureKind.Door } door || door.Owner != world.Player.Faction || !DoorNeedsWork(door)) return OrderCheck.Gone;
                 return Able(cold) ? OrderCheck.Run : OrderCheck.Blocked();
             case TaskType.DISMANTLE:
-                if (reg.Find(id) is not { LevelPlacement: null } doomed || doomed.Owner != world.Player.Faction || Blocker(reg, doomed) is not null) return OrderCheck.Gone;
+                if (reg.Find(id) is not { LevelPlacement: null } doomed || doomed.Owner != world.Player.Faction) return OrderCheck.Gone;
+                if (Blocker(reg, doomed) is { } refusal) return OrderCheck.Blocked(refusal);   // the builder says it (a bark), as the task's first update does
                 return Able(cold) ? OrderCheck.Run : OrderCheck.Blocked();
             default:
                 if (reg.Find(id) is not { NeedsWork: true } site || site.Owner != world.Player.Faction) return OrderCheck.Gone;
@@ -223,11 +224,7 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
                 case DismantleOrder order:
                 {
                     if (Root(reg, reg.Find(order.Site)) is not { LevelPlacement: null } site || site.Owner != world.Player.Faction) break;
-                    if (Blocker(reg, site) is { } text)
-                    {
-                        world.Post(text);
-                        break;
-                    }
+                    // Taking apart a building with furniture or mounted buildings is refused by the builder when the task runs (Task_Dismantle update FUN_1403518c0: it speaks, then ends), not at the order.
                     foreach (var id in Who(world, order.Characters))
                         if (table.TryResolveNext(id, out int slot)) PlayerOrders.Give(world, slot, new OrderEntry(TaskType.DISMANTLE, this) { Site = site.Id }, order.Queued);
                     break;

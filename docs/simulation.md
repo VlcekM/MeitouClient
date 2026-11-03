@@ -1289,7 +1289,7 @@ optional), `EdgeGap` (site, point -> gap to its footprint hull; the host's).
   `BuildOrder` (player characters, awake, not carried or caged, with a working arm: row 2 needs state 38 `hasOneWorkingArm`, **Observed**, and the engineer job likewise; Build and Repair alike work a site that `NeedsWork`:
   unfinished, or complete with progress below its target, the original's damage) and `DismantleOrder` set the
   `CharacterTask`s `Build` / `Dismantle` and `CharacterCold.BuildSite`
-  (the selection when the list is empty). Dismantling is refused with the original's texts while a site stands in the
+  (the selection when the list is empty). Dismantling is refused, by the builder's bark when the order starts, with the original's texts while a site stands in the
   site ("I have to dismantle the furniture first." for interior furniture and nodes, else "I have to unmount the
   buildings first."). `CancelSite` removes an incomplete site with nothing delivered, else posts "Dismantle it to get the
   materials back."; `PauseSite` sets `Paused` (only the auto-job skips it). `PlaceBuildings`, `CancelSite`, `ConfirmDismantle` and `PauseSite`

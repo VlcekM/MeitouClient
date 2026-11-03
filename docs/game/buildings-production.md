@@ -180,8 +180,8 @@ repair above. Meitou uses the destroyed-building transition and material gate al
 order; the exact original activation timing remains **Unknown**. Implementation and regression coverage:
 [town-house repairs](../simulation.md#buildings).
 
-Dismantle (**Verified**, `Task_Dismantle` `FUN_1403518c0`, Building slot 73 `FUN_1402a2860`): refused with "I have to
-dismantle the furniture first." / "...unmount the buildings first." while those exist; a door redirects to its
+Dismantle (**Verified**, `Task_Dismantle` `FUN_1403518c0`, Building slot 73 `FUN_1402a2860`): refused by the builder itself when the task runs (a speech bark, then the task ends): "I have to
+dismantle the furniture first." / "...unmount the buildings first." while those exist (Meitou: the order is accepted and the builder barks it, `OrderCheck.Blocked`); a door redirects to its
 building. Animation `stonemine`, engineering XP as for building. Per update `amount = dt x lerp(0.05, 4, eng/100) x 4`;
 slot 73 clears complete (a complete building first drops to `target - 1`), then `progress -= amount x rate` (no option
 or CONSTANTS factor). At progress <= 0: every turret mounted on it (`BuildingFinderTurretsOnCertainBuilding`) is destroyed through `FUN_140799af0` with the reason "dismantled" (no refund, **Verified**; Meitou `DestroyMountedTurrets`), +0x162 set, sound `Thing_Complete`, refund, building
