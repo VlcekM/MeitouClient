@@ -143,10 +143,16 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
 
     static IReadOnlyList<CharacterId> Who(World world, IReadOnlyList<CharacterId> ids) => ids.Count > 0 ? ids : world.Player.Selection.ToArray();
 
+    /// <summary>
+    /// Whether the player may order work on a site (the build verb, <c>FUN_1407a6bc0</c>, Verified): its own, and any other faction's that is unfinished and standing; a destroyed site
+    /// of another faction has no menu. <b>Engine reading</b>: the original's Task_Build body is not readable, so the work itself is as for an own site.
+    /// </summary>
+    static bool MayBeBuilt(World world, BuildSite site) => site.Owner == world.Player.Faction || !site.Complete && !site.Destroyed;
+
     void OrderBuild(World world, IReadOnlyList<CharacterId> who, BuildSite? target, bool queued)
     {
         // Build and Repair are both Task_Build: an unfinished site is built, a damaged one (progress below its target) repaired; a whole building has nothing to do.
-        if (target is not { NeedsWork: true } site || site.Owner != world.Player.Faction) return;
+        if (target is not { NeedsWork: true } site || !MayBeBuilt(world, site)) return;
         var table = world.Characters;
         foreach (var id in who)
             if (table.TryResolveNext(id, out int slot)) PlayerOrders.Give(world, slot, new OrderEntry(TaskType.BUILD, this) { Site = site.Id }, queued);
@@ -171,7 +177,7 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
                 if (Blocker(reg, doomed) is { } refusal) return OrderCheck.Blocked(refusal);   // the builder says it (a bark), as the task's first update does
                 return Able(cold) ? OrderCheck.Run : OrderCheck.Blocked();
             default:
-                if (reg.Find(id) is not { NeedsWork: true } site || site.Owner != world.Player.Faction) return OrderCheck.Gone;
+                if (reg.Find(id) is not { NeedsWork: true } site || !MayBeBuilt(world, site)) return OrderCheck.Gone;
                 return Able(cold) && HasWorkingArm(cold) ? OrderCheck.Run : OrderCheck.Blocked();
         }
     }
