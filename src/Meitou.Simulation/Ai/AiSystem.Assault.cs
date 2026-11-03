@@ -34,8 +34,8 @@ public sealed partial class AiSystem
             // Known: an entry of its senses, any tag or age (FUN_140855960 without its flag), or the contract's own target (the branch of the test that reads a stored hand is
             // Unknown, docs/game/ai-tasks.md).
             if (m != mission && !CharacterFacts.Knows(world, slot, m)) continue;
-            // Area: its home town, or ROAM_FAR's reach, or fighting it.
-            if (!(board.Town >= 0 && TownAt(at) == board.Town) && System.Numerics.Vector3.DistanceSquared(here, at) >= Production.ProductionSystem.JobRangeSq
+            // Area: its home town, or the manoeuvre mode's reach (ROAM_FAR by default), or fighting it.
+            if (!(board.Town >= 0 && TownAt(at) == board.Town) && !Orders.InArea(me.Manoeuvre, here, me.CentreOfMovement, at)
                 && !(fight.TargetSlot == slot && fight.TargetGeneration == prev[slot].Generation)) continue;
             // Allies by faction are left out of the choice, a slave never is.
             if (c.SlaveState != 1 && (c.Faction == me.Faction || Relations.Contains(c.Faction) && Relations.Contains(me.Faction) && Relations.IsAlly(me.Faction, c.Faction))) continue;
