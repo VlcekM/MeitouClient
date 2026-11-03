@@ -479,8 +479,16 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         var shops = new HashSet<TownBuilding>(ReferenceEqualityComparer.Instance);
         var bars = new HashSet<TownBuilding>(ReferenceEqualityComparer.Instance);
         var publicFlag = new Dictionary<TownBuilding, bool>(ReferenceEqualityComparer.Instance);
+        // The building's own record (designation, last template, public day), else (engine choice, a town not made yet) the template of its level data's residents.
         void Note(TownBuilding b, SquadTemplate? t)
         {
+            if (world.Fixtures.RecordOf(b.Key) is { } record)
+            {
+                if (record.Template is { } id && TemplateOf(id).Template is { HasShop: true }) shops.Add(b);
+                if (record.Designation == DesignationBar) bars.Add(b);
+                if (record.PublicDay is { } open) publicFlag[b] = open;
+                return;
+            }
             if (t is null) return;
             if (t.HasShop) shops.Add(b);
             if (t.BuildingDesignation == DesignationBar) bars.Add(b);
@@ -1884,7 +1892,10 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     {
         var (packages, template) = TemplateOf(squad.TemplateId);
         // A platoon's squad on the road has no building of its own to claim (only one its town gave it).
+        bool given = squad.HomeBuilding is not null;
         var home = PlatoonOf(world, squad) is null ? AssignHome(world, squad, template) : squad.HomeBuilding;
+        // A building the squad claims itself takes its template (FUN_140553210); one its town gave it was noted when it was made, a saved squad's (from a save with no building record) now.
+        if (home is not null && template is not null && (!given || world.Fixtures.RecordOf(home.Key) is null)) world.Fixtures.NoteAssigned(home.Key, template);
         // The template's initial door state applies to the home it is given (docs/game/locks.md "Doors"); the first squad's wins, a saved building keeps its own.
         if (home is not null) world.Fixtures.ApplyInitialDoorState(home.Key, template?.InitialDoorState ?? 0);
         ulong roll = Rng.Hash(world.Seed, (ulong)squad.Id, RngPurpose.Think, SeedSalts.AiPatrol);

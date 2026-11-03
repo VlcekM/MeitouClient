@@ -332,7 +332,7 @@ Same targets as picking; Task_CutLock / Task_BruteForceLock share the shackle ta
   (+0xd8, **Observed**) 0 Nest, 4 Ruins or 9 PointOfInterest. Meitou uses the placed town of the bed's site (none for a player-built bed). -1 when `canIUseThisBuilding` (below; Meitou `BedSystem.MayUse`: hostile owner, or a
   building not public, without the squad-town clauses) fails or the house has no
   resident squad, or its template's `public beds` is false, unless the building's designation (+0xc4, set from the `building designation` of the
-  first squad to take it as home: `FUN_140553210`, `FUN_14057f1f0`) is 3 BD_BAR; else the template's `bed usage cost`,
+  first squad to take it as home: `FUN_140553210`, `FUN_14057f1f0`) is 3 BD_BAR (the house record below); else the template's `bed usage cost`,
   x4 for a BF_SKELETON_BED (25), negative read as 0. Data (**Verified**): 928 templates `public beds` false, 31 true (bars and shops, 0 to 750 cats);
   40 have designation 3, 20 of them with `public beds` false (Shop bar holy / old / black desert, Smugglers Bar, bakeries, bounty hunters, 100 cats).
 - **Payment** (`FUN_1403576c0`, player faction only): -1 → the character says "This isn't mine", refused; > 0 → free when this bed was paid less than
@@ -370,6 +370,11 @@ Same targets as picking; Task_CutLock / Task_BruteForceLock share the shackle ta
 - **UI**: a quick right click on a bed (function 6 or 25) gives 258 (UseableStuff slot 131 `FUN_140299230`), sent to every selected character (`FUN_1407f9e20`, **Verified**: no gate for 258); the first to arrive takes the bed, the others are refused at it; the held menu (`FUN_1407a6bc0`) offers
   99 "Put in Bed" when the last selected player character carries someone, else 258 "Sleep" (verb names `FUN_14079b2d0`).
 - Meitou: [simulation](../simulation.md#cages-beds-and-locks).
+
+
+### Building record
+
+The house keeps, from the squads housed in it (**Verified**, decompile): designation `+0xc4`, public byte `+0xc8` and the squad template `+0xf0`. `FUN_14057f1f0` (house setup for a template) writes the template's `building designation` only while the house has none and its `public day` every time (the last setup wins); `FUN_14057f4c0` (a platoon made at the building) writes the designation over any value, a 0 included; `FUN_140553210` (a squad assigned) stores its template every time and the designation while none is set; `FUN_140792570` (a saved platoon's home handle at load) writes the designation while none is set. Readers: the bar, shop and public tests of the town places, `FUN_140330ab0` (bed cost: `public beds` and `bed usage cost` of the stored template, the stored designation for the bar exception). Meitou: `FixtureRegistry.RecordOf` (`BuildingRecord`), written by `PopulationSystem.Spawn` / `SpawnSquad` and `AiSystem.Attach`, hashed with the registry, saved into the building's state of a registered building as `meitou designation`, `meitou template` and `is public day` (the player's toggle wins). A building with no record (a town not made yet, a save from before) falls back to its level data's residents template.
 
 ## Containers (Meitou)
 

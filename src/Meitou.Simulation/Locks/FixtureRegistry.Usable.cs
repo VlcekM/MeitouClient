@@ -24,7 +24,7 @@ public sealed partial class FixtureRegistry
     public bool IsInside(Fixture f) => f.Id != f.Building || nested.Contains(f.Building);
 
     /// <summary>Whether a building is open to the public (the original's <c>Building::isPublic</c> <c>+0xc8</c>, <b>Observed</b>): as the player set it, else as its state reads, else public.</summary>
-    public bool IsPublic(string building) => PublicOf(building) ?? (levelPublic.TryGetValue(building, out bool open) ? open : true);
+    public bool IsPublic(string building) => PublicFlagOf(building) ?? (levelPublic.TryGetValue(building, out bool open) ? open : true);
 
     /// <summary>The town a fixture's building stands in (<c>FUN_1400f6c20</c>): its site, else the town whose radius holds it.</summary>
     CampaignTown TownOfFixture(World world, Fixture f) =>

@@ -658,6 +658,8 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
         world.Fixtures.RegisterSite(world, data, town.Site);
         world.ItemSlots.RegisterSite(world, data, town.Site);
         StandTownCamp(world, site);
+        // Each home is set up for its template before its residents are made (FUN_14057f1f0).
+        foreach (var (home, template) in town.Homes) world.Fixtures.NoteSetup(home.Key, template);
         // A town made counts as visited in every zone of its buildings (engine choice: its residents and its buildings' locks are saved whole, docs/formats/save.md "Zone files"),
         // but for the centre zone of another town: a file there would tell the original that town was made, with no residents saved for it.
         foreach (var b in site.Buildings)
@@ -783,6 +785,11 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
             HomeRadius = Math.Max(radius * 0.8f, 40),
             HomeBuilding = built.Home,
         };
+        if (built.Home is { } residence0)
+        {
+            world.Fixtures.NoteMade(residence0.Key, built.Plan.Template);
+            world.Fixtures.NoteAssigned(residence0.Key, built.Plan.Template);
+        }
         var builtMembers = idle || player && gated is null ? built.Members : GateUniques(world, built, squad.Id, gated);
         var leaderPlan = builtMembers.FirstOrDefault(m => m.Plan.Role == SquadRole.Leader)?.Plan;
         bool hasLeader = leaderPlan is not null;

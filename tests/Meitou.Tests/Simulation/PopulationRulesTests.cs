@@ -90,4 +90,23 @@ public class PopulationRulesTests
         Assert.Equal(5, PopulationSystem.MemberSpot(Building(Node(0, 5)), 1, 0)!.Value.X);
         Assert.Null(PopulationSystem.MemberSpot(Building(Node(2, 5)), 1, 0));
     }
+
+    /// <summary>FUN_14057f1f0 / FUN_14057f4c0 / FUN_140553210: the first designation set wins unless a platoon is made at the building (it overwrites); the public day and the template are the last written.</summary>
+    [Fact]
+    public void A_buildings_record_keeps_the_first_designation_the_last_template_and_the_last_public_day()
+    {
+        using var world = new Meitou.Simulation.World(new WorldSettings { PublishSnapshots = false }, new OpenGroundWalkability((_, _) => 0));
+        SquadTemplate T(string id, int designation, bool open) => new() { Id = id, Name = id, BuildingDesignation = designation, PublicDay = open };
+        var fixtures = world.Fixtures;
+        fixtures.NoteSetup("b", T("bar", 3, false));
+        fixtures.NoteSetup("b", T("shop", 1, true));
+        Assert.Equal(3, fixtures.RecordOf("b")!.Designation);   // first set wins
+        Assert.True(fixtures.PublicDayOf("b"));                 // last setup wins
+        fixtures.NoteAssigned("b", T("a", 1, true));
+        fixtures.NoteAssigned("b", T("c", 0, true));
+        Assert.Equal("c", fixtures.RecordOf("b")!.Template);    // last assignment wins
+        Assert.Equal(3, fixtures.RecordOf("b")!.Designation);
+        fixtures.NoteMade("b", T("c", 0, true));
+        Assert.Equal(0, fixtures.RecordOf("b")!.Designation);   // a platoon made at the building overwrites, a zero too
+    }
 }

@@ -210,6 +210,7 @@ public sealed partial class FixtureRegistry
         if (Saved?.GetValueOrDefault(b.Key) is { } state)
         {
             Restore(StateKeys.Of(state), b.Key, list, level: false);
+            ReadRecord(b.Key, state);
             if (owner >= 0 && owner == world.Player.Faction && state.Bools.TryGetValue("is public day", out bool open)) publicFlags[b.Key] = open;
         }
         else if (b.LevelState is { } levelState) Restore(StateKeys.Of(levelState), b.Key, list, level: true);
@@ -1265,6 +1266,7 @@ public sealed partial class FixtureRegistry
         WriteReset(buildingInstance, state);
         WriteProperty(buildingInstance, state);
         if (publicFlags.TryGetValue(buildingInstance, out bool open)) state.Bools["is public day"] = open;
+        WriteRecord(buildingInstance, state);
         foreach (var f in list)
         {
             if (f.Contents is { } grid && ContainerSave.KeyOf(f, buildingInstance) is { } contentsKey)
@@ -1379,6 +1381,7 @@ public sealed partial class FixtureRegistry
         h.Add(all.Count);
         foreach (var f in all) f.Hash(ref h);
         h.Add(initialApplied.Count);
+        HashRecords(ref h);
         if (publicFlags.Count > 0)
             foreach (var (b, open) in publicFlags.OrderBy(p => p.Key, StringComparer.Ordinal)) { h.Add(Rng.StableHash(b)); h.Add(open); }
         if (unreachable.Count == 0) return;   // only once a walk failed, so worlds without one hash as before

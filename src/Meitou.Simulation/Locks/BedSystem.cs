@@ -365,10 +365,9 @@ public sealed class BedSystem(PopulationData data, BedSettings? settings = null)
         if (owner < data.Factions.Count && data.Factions[owner].FundamentalType == FundamentalType.Bandit) return 0;
         if (bed.Site >= 0 && bed.Site < data.Sites.Count && data.Sites[bed.Site].Town.Type is TownType.Nest or TownType.Ruins or TownType.PointOfInterest) return 0;
         if (!MayUse(world, bed, faction)) return -1;
-        Squad? residents = null;
-        foreach (var squad in world.Squads.All)
-            if ((squad.Ai?.OwnHome ?? squad.HomeBuilding)?.Key == bed.Building) { residents = squad; break; }
-        if (residents is null || data.Db.Find(residents.TemplateId) is not { } template || !template.GetBool("public beds") && template.GetInt("building designation") != BarDesignation) return -1;
+        // The building's record: the template of the last squad assigned to it and the designation it was given first (FUN_140330ab0 reads the house, not its residents).
+        if (world.Fixtures.RecordOf(bed.Building) is not { Template: { } templateId } record || data.Db.Find(templateId) is not { } template
+            || !template.GetBool("public beds") && record.Designation != BarDesignation) return -1;
         int cost = template.GetInt("bed usage cost");
         if (bed.Bed.Function == Meitou.Data.World.TownBuildings.SkeletonBedFunction) cost *= 4;
         return Math.Max(cost, 0);
@@ -384,7 +383,7 @@ public sealed class BedSystem(PopulationData data, BedSettings? settings = null)
         int owner = bed.Owner;
         if (faction < 0) return true;
         if (data.Relations.Contains(owner) && data.Relations.Contains(faction) && data.Relations.IsHostile(faction, owner)) return false;
-        return world.Fixtures.PublicOf(bed.Building) != false && !(faction < data.Factions.Count && data.Factions[faction].NotReal);
+        return world.Fixtures.PublicFlagOf(bed.Building) != false && !(faction < data.Factions.Count && data.Factions[faction].NotReal);
     }
 
     internal BuildingDetail? DetailOf(World world, string? instance)
