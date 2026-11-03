@@ -977,7 +977,11 @@ public sealed partial class FixtureRegistry
         if (master >= 0) c.SlaveMaster = master;
         SetSlave(world, c, 1, owner);
         // Handed to another master (engine choice: the original resets and re-adds job 187 where it chains or processes, FUN_14032e590, FUN_14035aa20): its job names the new one.
-        if (handed) Kidnap.ObedientSlave.Reset(world, c);
+        if (handed)
+        {
+            Kidnap.ObedientSlave.Reset(world, c);
+            c.Save?.DropSlaver();   // the save's owner character is not its owner any more
+        }
     }
 
     /// <summary>Clears a character's slave state and owner (state 0) without DA 53's "Free!" (a slave bought free, <c>FUN_1406add20</c>).</summary>
@@ -1014,6 +1018,7 @@ public sealed partial class FixtureRegistry
         c.SlaveState = state;
         c.SlaveOwner = state == 0 ? -1 : owner;
         if (state == 0) c.SlaveMaster = -1;
+        if (state == 0 && before != 0) c.Save?.DropSlaver();
         // The state setter then fixes the orders object of one that changed (FUN_14032e0d0): a slave gets job 187 Obedient Slave, one that stops being a slave loses it.
         if (before != state) Kidnap.ObedientSlave.StateChanged(world, c, state);
     }

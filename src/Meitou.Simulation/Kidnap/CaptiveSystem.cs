@@ -175,6 +175,7 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
     public void SlowWorld(World world)
     {
         var table = world.Characters;
+        if (world.Tick % RestoreEveryTicks == 0) RestoreSlavers(world);
         for (int k = 0; k < jobs.Count;)
         {
             var j = jobs[k];
@@ -397,7 +398,8 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
                 if (jobs.Count >= Settings.MaxJobs || started >= maxNew) return;
                 if (!table.TryResolveNext(member, out int slot) || !world.Turn(slot, every) || !Free(world, slot)) continue;
                 var cold = table.Cold(slot)!;
-                var roles = board.Roles[(int)AiSystem.RoleOf(squad, member, cold)];
+                // An obeying slave takes its master squad's Slave AI Goals instead of its own lists, as the AI's goal pick does (job 187).
+                var roles = AiSystem.ObeyedRoles(world, squad, cold) ?? board.Roles[(int)AiSystem.RoleOf(squad, member, cold)];
                 for (int g = 0; g < roles.Count; g++)
                 {
                     if (!roles[g].InWindow(hour)) continue;
