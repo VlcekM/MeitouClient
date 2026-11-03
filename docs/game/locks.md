@@ -189,8 +189,8 @@ Same targets as picking; Task_CutLock / Task_BruteForceLock share the shackle ta
 - **Who opens and closes** (**Observed**, callers of the two functions): opening: Task_OpenDoor (its start and update; the update
   fails on a locked lock), the door panel button, a broken lock (bashing), dialogue effect 0x36 (the speaker's building's door).
   Closing: Task_CloseDoor, Task_LockDoor and the door panel. The planner opens doors for walks: Moving (1, 29, 67) lists states 59
-  `DESTINATION_IS_ACCESSIBLE` and 60 `LOCATION_IS_ACCESSIBLE` in list B, which tasks 85 / 84 (Task_OpenDoor) make true by opening
-  the door ([ai-tasks](ai-tasks.md)). Nothing closes a door behind a walker: only the lock tasks list a closed door (`!52`), and no
+  `DESTINATION_IS_ACCESSIBLE` and 60 `LOCATION_IS_ACCESSIBLE` in list B, which tasks 85 / 84 make true: they are `Task_Blank` goal-style rows (**Verified**, the factory list) whose finder picks the door and whose effect 52 / 53 is
+  provided by `Task_OpenDoor` 72 / 74, the task that opens it ([ai-tasks](ai-tasks.md)). Nothing closes a door behind a walker: only the lock tasks list a closed door (`!52`), and no
   AI package lists tasks 73/75 (**Observed**: TaskData and package census). How states 59/60 pick their door is **Unknown**.
 - **Door panel** (player's building, the HUD lines of a selected house: [ui-screens](ui-screens.md#selected-building)): open/close button `FUN_140546fb0`: an open door closes; otherwise an effectively locked
   one is unlocked first, then opened (**Verified**). Meitou: a door still moving counts by where it heads and turns back (an opening one closes, a
