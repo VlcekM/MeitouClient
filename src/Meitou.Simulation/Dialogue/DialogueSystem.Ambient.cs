@@ -109,7 +109,7 @@ public sealed partial class DialogueSystem
         var near = new List<(int Slot, float D2)>();
         for (int i = 0; i < table.HighWater; i++)
         {
-            if (!table.Next[i].Alive || table.Next[i].Task == (byte)CharacterTask.Rest || table.Cold(i) is not { IsPlayer: false, SquadId: >= 0, Engaged: false, InCombat: false, Fleeing: false, IsImprisoned: false } nc) continue;
+            if (!table.Next[i].Alive || table.Next[i].Task == (byte)CharacterTask.Rest || table.Cold(i) is not { IsPlayer: false, SquadId: >= 0, Engaged: false, InCombat: false, Fleeing: false, IsImprisoned: false, SlaveState: not 1 } nc) continue;   // a slave (state 1) says nothing (FUN_1408529c0)
             if (nc.Fighter?.IsAnimal == true || nc.Appearance?.Animal is not null || !data.Relations.Contains(nc.Faction) || !Awake(table, i)) continue;
             float reach = MathF.Max(world.Sight.MaxRange(i, AggroSystem.RangeOf(nc, AggroSystem.OutdoorSight)), Settings.AmbientRange);
             float nearest = float.MaxValue;
@@ -159,8 +159,11 @@ public sealed partial class DialogueSystem
             }
             // The squad's cooldown starts only once a line is said: the original asks again on every perception update and rolls `chance temporary` afresh each time
             // (the Red Sabres' attack root is 20%), so a failed look is tried again on the next scan. A player character it has nothing to say to leaves the turn to the NPCs.
-            if (best >= 0 && !Recent(world, nc.SquadId, table.IdOf(best))
-                && TrySay(world, i, nc.SquadId, best, data.Relations.IsHostile(nc.Faction, world.Player.Faction) ? 66 : data.Relations.IsAlly(nc.Faction, world.Player.Faction) ? 67 : 3))
+            // Events 66 and 3 (the non-friend branch) need a looker that is no slave and has not escaped; 67 (the friend branch) does not (FUN_140859680).
+            int sight = data.Relations.IsHostile(nc.Faction, world.Player.Faction) ? 66 : data.Relations.IsAlly(nc.Faction, world.Player.Faction) ? 67 : 3;
+            bool free = nc is { SlaveState: 0, Escaped: false };
+            if (best >= 0 && (sight == 67 || free) && !Recent(world, nc.SquadId, table.IdOf(best))
+                && TrySay(world, i, nc.SquadId, best, sight))
             {
                 said++;
                 continue;
@@ -173,7 +176,32 @@ public sealed partial class DialogueSystem
                 float d2 = Vector3.DistanceSquared(table.Next[i].Position, table.Next[o].Position);
                 if (d2 <= best2 && !Recent(world, nc.SquadId, table.IdOf(o))) (best, best2) = (o, d2);
             }
-            if (best >= 0 && TrySay(world, i, nc.SquadId, best, 3)) said++;
+            if (best >= 0 && free && TrySay(world, i, nc.SquadId, best, 3)) said++;
+        }
+        SeeAnimals(world, near, said);
+    }
+
+    /// <summary>I_SEE_ANIMAL_SQUAD: an NPC looker that passes the same filter and sees an awake animal fires it at the animal (<c>FUN_140859680</c> :54-64, before the friend/enemy split).</summary>
+    const int SeeAnimalSquad = 27;
+
+    void SeeAnimals(World world, List<(int Slot, float D2)> near, int said)
+    {
+        var table = world.Characters;
+        var animals = new List<int>();
+        for (int a = 0; a < table.HighWater; a++)
+            if (table.Next[a].Alive && Awake(table, a) && table.Cold(a) is { } ac && (ac.Fighter?.IsAnimal == true || ac.Appearance?.Animal is not null)) animals.Add(a);
+        if (animals.Count == 0) return;
+        foreach (var (i, _) in near)
+        {
+            if (said >= Settings.AmbientPerScan) return;
+            var nc = table.Cold(i)!;
+            float outdoor = AggroSystem.RangeOf(nc, AggroSystem.OutdoorSight);
+            foreach (int a in animals)
+                if (world.Sight.Sees(i, a, table.Next[i].Position, table.Next[a].Position, outdoor, -1) > 0 && !Recent(world, nc.SquadId, table.IdOf(a)) && TrySay(world, i, nc.SquadId, a, SeeAnimalSquad))
+                {
+                    said++;
+                    break;
+                }
         }
     }
 

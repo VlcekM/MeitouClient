@@ -292,7 +292,7 @@ not given a speaker of its own in `FUN_140683f90`; Meitou says it as its resolve
 that is not the owner's).
 
 **Sight** (`FUN_140859680`, **Observed**, partly read): event 3 fires for a seen character outside the player's faction too (an NPC of
-another squad); 66 and 67 need a player-faction target. It runs only for a sensed-list entry with its seen or heard flag (`+0x38` / `+0x39`,
+another squad); 66 and 67 need a player-faction target. **Looker gates** (**Verified**, `FUN_1408529c0`, `FUN_140859680` :52-72, 106-115): a slave (state 1) says nothing; 66 and the non-friend 3 also need slave state 0 and no escape; 67 stays open to state 2 and escaped lookers. An awake animal the looker sees gets event 27 (I_SEE_ANIMAL_SQUAD) first (Meitou `DialogueSystem.SeeAnimals`; two flags of the original gate, target vfunc 0x240 and +0x1a9, are not decoded and left out). It runs only for a sensed-list entry with its seen or heard flag (`+0x38` / `+0x39`,
 `FUN_140855710`), and only when Dialogue `+0x28` is set: `FUN_14067e220` sets it when a package with lines for 3, 4, 17, 27, 34, 36, 40, 66 or
 67 is added (**Observed**). A fired event is refused while its timer in Dialogue `+0xd0` is above 0; firing sets it to 1.0 (`FUN_140684990`,
 **Observed**). No start-of-game delay was found. **Observed** (user, vanilla): a new game in the Hub, the barman greets the player character
