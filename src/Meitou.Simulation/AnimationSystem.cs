@@ -936,6 +936,7 @@ public sealed class AnimationSystem(AnimationLibrary library, AnimationLengths l
         {
             Right = new HandHold(cold.DrawnWeapon), Combat = cold.InCombat, Stealth = (cold.Orders & CharacterOrders.Sneak) != 0, CarryingLeft = !cold.Carrying.IsNone, BeingCarried = !cold.CarriedBy.IsNone,
             Prone = cold.CarriedBy.IsNone && cold.Medical is { Prone: true },   // the crawl records are prone; no standing clip (stumbles included) fits a crawler
+            Crouched = cold.Crouched && !(cold.CarriedBy.IsNone && cold.Medical is { Prone: true }),   // never together with prone (FUN_14051dda0)
         };
         if (cold.Medical is not { } body) return stance;
         float left = 100, right = 100;

@@ -337,6 +337,11 @@ public sealed class CharacterCold
     public bool Snatching { get; set; }
     /// <summary>The <see cref="CharacterTask.Loot"/> is the foraging job's (Task_Loot_ResourcesWeHaveStorageFor, row 241): it takes only what the faction's storages accept, after a wait. Runtime only; hashed with the task.</summary>
     public bool Foraging { get; set; }
+    /// <summary>
+    /// The animation class's crouched byte (AnimationClass +0x21c, written with prone by <c>FUN_14051dda0</c>; both set clears crouched): set by Task_Crouch (27) once its <c>squat T</c> clip has passed a progress threshold
+    /// (<c>FUN_140346440</c>), cleared by Task_UnCrouch (28) and the end of many tasks. The base data has no crouch task; nothing sets it yet (the task trigger is missing). Hashed only while set.
+    /// </summary>
+    public bool Crouched { get; set; }
     /// <summary>The NPC <see cref="CharacterTask.Loot"/>'s start flags (<see cref="Carrying.LootStart"/>), fixed when the task starts (<see cref="LiftTime"/> below 0); cleared with the task. Runtime only; hashed with the task.</summary>
     public Carrying.LootStart LootFlags { get; set; }
     /// <summary>The rescue job (148 <c>FIND_AND_RESCUE_IF_THERES_BEDS</c>, NUM8) is in <see cref="Jobs"/>: an idle character picks up a downed member of its faction by itself.</summary>
@@ -771,6 +776,7 @@ public sealed class CharacterTable
             if (k.Freed) hasher.Add(0x46726564);
             if (k.Ordered) hasher.Add(0x4F72646E);
             if (k.SlaveState != 0) { hasher.Add(0x536C7653); hasher.Add(k.SlaveState); hasher.Add(k.SlaveOwner); if (k.SlaveState > 1) hasher.Add(k.SlaveSince); }
+            if (k.Crouched) hasher.Add(0x43726F63);
             if (k.PickingLock is { } pick) { hasher.Add(0x5069636B); hasher.Add(Rng.StableHash(pick)); }
             if (k.Bashing is { } bash) { hasher.Add(0x42617368); hasher.Add(Rng.StableHash(bash)); hasher.Add(k.BashTime); if (k.BashOrdered) hasher.Add(0x4F726473); }
             if (k.ForcingLock is { } force) { hasher.Add(0x466F7263); hasher.Add(Rng.StableHash(force)); hasher.Add((int)k.Force); }
