@@ -206,6 +206,22 @@ sealed class WorldOptions
         (Anisotropy, TextureQuality, MaterialDistance) = (1, LowEndTextureQuality, 15000);
     }
 
+    /// <summary>
+    /// <c>--benchmark-baseline</c>: the parts of the benchmark baseline that must be set before the device and the post chain exist, where it stands
+    /// among the options: no ray-traced GI (the device is made without ray queries), no ground parallax or tessellation, no upscaler, SMAA at full size,
+    /// texture quality 1. The game sets the rest of the Medium tier through the settings (SettingsMenu.ApplyBenchmarkBaseline).
+    /// </summary>
+    void ApplyBenchmarkBaseline()
+    {
+        Gi = false;
+        Enhancements.Apply(Switches(this), "gi,interiorgi,parallax,displace", meitou: false);
+        RockSmoothing.TessellateActive = false;
+        GroundRelief.RefinePixels = 0;
+        (Post.Upscale.Kind, Post.Upscale.Scale, Post.Upscale.Explicit) = (UpscalerKind.Off, 1, true);
+        Post.Smaa = true;
+        TextureQuality = 1;
+    }
+
     /// <summary><c>--low-end</c>'s values, which the Low graphics preset sets too (<c>SettingsMenu.Presets</c>).</summary>
     public const float LowEndObjectDistance = 5000, LowEndObjectLod = 0.25f, LowEndLargeRange = 5050, LowEndImpostorDistance = 1150, LowEndLargeImpostorDistance = 1100,
         LowEndGrassDensity = 0.1f, LowEndRenderScale = 0.83f, LowEndParticleDensity = 0.1f;
@@ -252,6 +268,7 @@ sealed class WorldOptions
           --no-audio               no sound (the biome ambience and weather beds from the game's Wwise banks)   --audio-gain <dB> raise or lower the whole mix (0 = the game's levels)
           --no-particles           no weather particles  --particle-prewarm <s> seconds simulated before the first picture (default: the longest particle life; 0 starts empty)   --particle-density <x> the effects' emission rate x (0.1-1, the Tab slider)   --anisotropy <n> the most anisotropic filtering any texture gets (1-16, the Tab slider; 16 default)
           --low-end                potato-PC settings: short draw distances, no shadows, reflections, AO, ground relief, light shafts or anti-aliasing, 0.83 render scale, sparse grass and particles (options after it override)
+          --benchmark-baseline     the benchmarks' settings: the Medium tier with no GI, ground parallax or tessellation, no upscaler, SMAA (options after it override)
           --no-vsync               start with vsync off (uncapped; Tab slider)
           --grass-density <x>      grass blades x this (0.1-2, default 1; Tab slider)
           --camera-code <hex>      start at a camera code (Ctrl+C in the viewer copies one), the world loaded round it
@@ -464,6 +481,7 @@ sealed class WorldOptions
             case "--meitou": Enhancements.Apply(Switches(o), r.Next(), meitou: true); break;
             case "--faithful": Enhancements.Apply(Switches(o), r.Next(), meitou: false); break;
             case "--low-end": o.ApplyLowEnd(); break;
+            case "--benchmark-baseline": o.ApplyBenchmarkBaseline(); break;
             case "--anisotropy": o.Anisotropy = (int)r.Float(); break;
             case "--clouds": o.Clouds = r.Float(); break;
             case "--fog": o.FogDistance = r.Float(); break;

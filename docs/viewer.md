@@ -37,7 +37,8 @@ Water reflection0..4 determines included classes. Texture quality0..4 skips mips
 --low-end: objects/landmarks5000, quarter LOD distance, short foliage/10%grass/particles,
 quarter particles, no reflection/shadows/AO/AA, flat water, scale0.83, anisotropy1, textureLow3,
 material distance15000, VSync off. It is a tunable preset, not an automatic hardware guarantee.
-In the game a --low-end run neither applies nor overwrites the sliders and switches saved in `meitou.user.json`.
+--benchmark-baseline: no GI, ground parallax or tessellation, no upscaler, SMAA at scale 1, texture quality 1; the game adds the Medium tier
+(SettingsMenu.ApplyBenchmarkBaseline). In the game a --low-end or --benchmark-baseline run neither applies nor overwrites the sliders and switches saved in `meitou.user.json`.
 
 ## Keys
 

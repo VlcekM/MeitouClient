@@ -6,7 +6,7 @@ namespace Meitou.Game;
 sealed partial class SettingsMenu
 {
     static readonly string[] PresetNames = ["Low", "Medium", "High", "Ultra", "Custom"];
-    const int LowPreset = 0, HighPreset = 2, CustomPreset = 4;
+    const int LowPreset = 0, MediumPreset = 1, HighPreset = 2, CustomPreset = 4;
 
     /// <summary>
     /// A preset's slider: its value at Low, Medium and Ultra (High is the start default; NaN: the start default too), either fixed or a multiple of the start default.
@@ -145,6 +145,21 @@ sealed partial class SettingsMenu
         // At Low the look switches it holds off stay off, also where the launcher's look turned them on (unless kept on).
         foreach (var label in LowCut())
             if (values.Toggles.FirstOrDefault(t => t.Label == label && t.Get()) is { } toggle) toggle.Set(false);
+        lastTier = CurrentPreset();
+    }
+
+    /// <summary>
+    /// <c>--benchmark-baseline</c>, at start instead of the saved settings: the Medium tier, then no GI, ground parallax or tessellation (Medium's rock
+    /// smoothing too), no upscaler and SMAA at full size. Nothing is saved (GameHost leaves the saved graphics as they are).
+    /// </summary>
+    internal void ApplyBenchmarkBaseline()
+    {
+        ApplyPreset(MediumPreset);
+        string[] off = ["Indirect light", "Indoor GI", WorldFrame.GroundParallaxSwitch, WorldFrame.GroundDisplaceSwitch, WorldFrame.RockSmoothingSwitch, WorldFrame.OutlineRefineSwitch];
+        foreach (var toggle in values.Toggles.Where(t => off.Contains(t.Label) && t.Get())) toggle.Set(false);
+        if (values.Sliders.FirstOrDefault(s => s.Label == WorldFrame.UpscalerSliders[0]) is { } antiAliasing) antiAliasing.Set(2);   // SMAA
+        if (values.Sliders.FirstOrDefault(s => s.Label == WorldFrame.UpscalerSliders[1]) is { } scale) scale.Set(1);
+        notice = "";
         lastTier = CurrentPreset();
     }
 

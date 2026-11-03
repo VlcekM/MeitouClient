@@ -14,6 +14,8 @@ sealed class GameOptions
     public Meitou.Data.Ui.UiMode? UiMode;
     /// <summary><c>--low-end</c> (also passed on to WorldOptions): the Faithful UI for this run, whatever <c>--ui</c> or the saved mode says.</summary>
     public bool LowEnd;
+    /// <summary><c>--benchmark-baseline</c> (also passed on to WorldOptions): the benchmarks' settings for this run, the saved graphics neither applied nor overwritten.</summary>
+    public bool BenchmarkBaseline;
     public bool UiShowcase;
     /// <summary>With <c>--screenshot</c>: one HUD/panel to open for the picture (null: the HUD only).</summary>
     public string? UiPanel;
@@ -117,6 +119,8 @@ sealed class GameOptions
                                      a container, doors, a pick-up, path requests, a walk, a fight, loot, the panels, a horizon view, the overview), every frame measured
                                      (frame, update, world tick steps and systems, render stages, GPU stages, collections); writes frames.csv and summary.md there and
                                      quits; frame limit and vsync off; MEITOU_BENCH_ONLY=a,b keeps those segments
+          --benchmark-baseline       the settings benchmarks for the site use (bench/kit): the Medium tier, no GI, ground parallax or tessellation, no upscaler, SMAA;
+                                     like --low-end, the saved graphics are neither applied nor overwritten
           --load <save folder>       start in a save, Meitou's or the original game's (%LOCALAPPDATA%\kenshi\save\<name>), loaded as the game menu's Load does; works with --screenshot
           --renderer <vulkan|metal>  the renderer for the whole frame: vulkan (the default) or metal (macOS: the scene, HUD and faithful panels, the port's current slice)
           --yaw/--pitch/--distance   start view: heading, pitch above the horizon and boom (Kenshi: 30 degrees, boom 150; clamped to 10..2000)
@@ -230,6 +234,7 @@ sealed class GameOptions
                 case "--scene-npc": g.SceneNpc = Next(); break;
                 case "--scene-town": g.SceneTown = Next(); break;
                 case "--low-end": g.LowEnd = true; rest.Add(a); break;
+                case "--benchmark-baseline": g.BenchmarkBaseline = true; rest.Add(a); break;
                 default: rest.Add(a); break;
             }
         }

@@ -82,6 +82,7 @@ public sealed partial class MainWindow
         if (locked is not null) notes.Add(locked);
         if (running is { HasExited: false }) notes.Add("The game is running: it saves its settings when it closes, over changes made here.");
         if (SplitArguments(config.LaunchArguments).Contains("--low-end")) notes.Add("The launch arguments have --low-end: the game ignores the graphics sliders while it is set.");
+        if (SplitArguments(config.LaunchArguments).Contains("--benchmark-baseline")) notes.Add("The launch arguments have --benchmark-baseline: the game ignores the graphics sliders while it is set.");
         foreach (var note in notes) GraphicsPanel.Children.Add(new TextBlock { Classes = { "warn" }, Text = note, TextWrapping = Avalonia.Media.TextWrapping.Wrap, Margin = new(0, 0, 0, 6) });
 
         var rows = new StackPanel { IsEnabled = locked is null };

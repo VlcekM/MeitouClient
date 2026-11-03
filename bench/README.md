@@ -16,7 +16,7 @@ Release targets (kind `release`, label = the upstream tag) are anchors every mac
 ## How the numbers are made
 
 - Native Linux build of upstream `master` (contributors may add `proton`, `windows` or `macos` machines; a machine keeps one platform).
-- Clean, unmodded game data (GOG copy), the frozen save `bench-bases-2026-10-27`, full graphics settings.
+- Clean, unmodded game data (GOG copy), the frozen save `bench-bases-2026-10-27`, the graphics of `--benchmark-baseline` (Medium tier, no GI, ground parallax or tessellation, no upscaler, SMAA; from series 3, before it full settings).
 - Frame metrics come from the game's own bench frames (MangoHud is an optional extra log on Linux).
 - Two scenarios: the play benchmark (upstream's `--play-bench`: idle, orbit, zoom, pan) and a base switch (four camera jumps between the two bases). Metrics: share of frames over 33 ms, p50 / p99 / max frame time, frames over 100 ms, slow-world tick p99 / max; optional F12 profiler stages and peak video memory (Vulkan builds whose `frames.csv` has `vram_mb`). Lower is better, except avg fps.
 - Each benchmark runs twice back-to-back. Run 1 may be cache-cold; runs are never averaged.

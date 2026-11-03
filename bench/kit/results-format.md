@@ -18,7 +18,7 @@
 | slow_world_p99_ms, slow_world_max_ms | p99 and maximum of the slow-world simulation tick (column `sim_slow-world` of the game's frames.csv), ms |
 | gpu | GPU name as the game's own `bench/summary.md` reports it |
 | nvidia_driver | GPU driver version (name kept for merging; holds Mesa/AMD/Intel versions too) |
-| note | free text; the script starts it with `series 2: 2 runs per scenario (run 1 may be cache-cold); dev kit` and appends `--note` |
+| note | free text; the script starts it with `series 3: 2 runs per scenario (run 1 may be cache-cold); dev kit` and appends `--note` |
 | machine | short label of the machine (`MACHINE`) |
 | cpu | CPU model |
 | ram_gb | installed RAM, GB |

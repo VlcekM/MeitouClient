@@ -193,7 +193,7 @@ setting reaches the launcher with its release; the launcher knows none of them. 
   the game still holds the tier's look switches off at start unless kept on (`SettingsMenu.ApplySavedPreset`). No `faithfulLook`
   reads Faithful when every switch Faithful turns off and Meitou turns on is saved off, as the game does (unsaved, not written back). A look slider's Default writes the look's value.
 - `presets` (null in older schemas: no row) is the Quality preset row over the top-level `graphicsPreset`. The game saves the preset its
-  settings sit at (Custom when none) and at start applies a saved one they do not sit at (not under `--low-end`, `--meitou` or `--faithful`), so a preset chosen in
+  settings sit at (Custom when none) and at start applies a saved one they do not sit at (not under `--low-end`, `--benchmark-baseline`, `--meitou` or `--faithful`), so a preset chosen in
   the launcher takes effect on the next start; the rows show the old values until then. Changing a row the preset sets (`presets.keys`)
   saves Custom, so the game keeps that change. No saved preset shows High without saved graphics, else Custom.
 - Detect (when `presets.detect` names the game's option, `--recommend-preset <file>`) runs the played version's game, which makes a
@@ -216,7 +216,7 @@ setting reaches the launcher with its release; the launcher knows none of them. 
 - A slider marked `reversed` (terrain detail's error in pixels) is drawn mirrored (`min + max - value`; logarithmic: `min x max / value`),
   so right is always the better end; the value written is unchanged. Texture quality, also reversed, is a drop-down, best first.
 - Read-only when the file is unreadable, or its `version` differs from the schema's `settingsVersion` (another layout: the keys may
-  mean something else). Warnings: the game is running (it writes the file on exit), `--low-end` (the game ignores `graphics`).
+  mean something else). Warnings: the game is running (it writes the file on exit), `--low-end` or `--benchmark-baseline` (the game ignores `graphics`).
 
 The Settings page's Language picks the game's and the launcher's language: English, Kenshi's nine languages, the install's `locale/` folders and the
 languages Meitou has texts for, marked when Meitou's own texts are not translated. Choosing one writes only the `language` line of the Kenshi

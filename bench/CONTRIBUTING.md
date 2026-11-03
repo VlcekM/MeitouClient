@@ -77,6 +77,7 @@ Off-target commits do not fail the check; they are only flagged. Files changed o
 
 - Your GitHub handle is shown on the site, linked to your profile, with your hardware and resolution. Do not submit if you do not want that.
 - Do not edit other people's files. Corrections to your own data are fine (a new commit in your PR).
+- Run with the kit's `bench.py`, which starts the game with `--benchmark-baseline` (the benchmarks' graphics, see `kit/README.md`); do not add graphics options through `GAME_ARGS`.
 - Do not submit modded runs or runs with changed settings. The kit refuses a changed `meitou.user.json` and a save that differs from the checksums; if something was odd (a different window size, background load, a crash), say so in the `note` column or the report instead of changing the numbers.
 - Only the `bench-bases-2026-10-27` save is accepted. Numbers from different save files or settings cannot be compared.
 - Run 1 may be cache-cold; that is normal and both runs are kept.

@@ -34,7 +34,7 @@ Env (optional):
   ALLOW_SAVE_MISMATCH=1 / ALLOW_SETTINGS_DIFF=1   go on although the save or the settings differ from the kit's; the report says so
   CPU RAM_GB GPU_NAME GPU_DRIVER OS_NAME DISPLAY_RES   override the hardware probes
   Proton only: PROTON_BIN (the `proton` script, required), STEAM_COMPAT_DATA_PATH (default <kit>/proton-prefix), STEAM_COMPAT_CLIENT_INSTALL_PATH (default ~/.local/share/Steam)
-What it does for every run: refuses if a game is running or RAM is short; starts the game windowed, full settings (no --low-end), waits for the benchmark to
+What it does for every run: refuses if a game is running or RAM is short; starts the game windowed with --benchmark-baseline (the Medium tier, no GI, parallax or tessellation, SMAA), waits for the benchmark to
   end by itself (the game quits), and for the base-switch scenario double-taps 2 then 1 at 1 s and 6 s into each of the segments idle and return (four
   switches). The game must keep focus: do not click elsewhere during a run.
 Exit codes: 0 all runs fine, 1 a run failed, 2 refused or bad usage.
@@ -139,7 +139,8 @@ def game_launch(cfg, run_dir, mdir):
         env["MANGOHUD_CONFIGFILE"] = cfg["mh_conf"]
     if osname == "linux" and not cfg.get("keep_wayland"):
         unset.append("WAYLAND_DISPLAY")
-    args = ["--windowed", "--load", z + cfg["save_copy"], "--play-bench", z + os.path.join(run_dir, "bench")]
+    # --benchmark-baseline: the graphics every result on the benchmarks page uses (series 3; docs/launch-options.md), whatever the settings file says.
+    args = ["--windowed", "--benchmark-baseline", "--load", z + cfg["save_copy"], "--play-bench", z + os.path.join(run_dir, "bench")]
     if osname == "macos":
         args += ["--renderer", "vulkan"]   # the play benchmark is Vulkan-only (docs/metal-backend.md); MoltenVK is the Vulkan driver there
         vk = cfg["mac_vulkan_dir"]
@@ -509,7 +510,7 @@ def main(argv):
     # ---- results
     if os.path.isfile(sums) and not K.verify_save(save_copy, sums)[0]:
         warn.append("the save copy changed while the game ran (autosave?): later runs started from a changed save")
-    note_text = f"series 2: {runs} runs per scenario (run 1 may be cache-cold); dev kit" + (f"; {note}" if note else "")
+    note_text = f"series 3: {runs} runs per scenario (run 1 may be cache-cold); dev kit" + (f"; {note}" if note else "")
     csvp = os.path.join(out, "results.csv")
     for s in scenarios:
         T.history(csvp, os.path.join(out, s), note_text, hw["gpu_driver"], machine, hw["cpu"], hw["ram_gb"], hw["os"], hw["kernel"])

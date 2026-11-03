@@ -25,6 +25,12 @@
       "start": "2026-10-28 07:34:17",
       "label": "Series 2",
       "description": "Two runs per scenario, back-to-back. Run 1 may be cache-cold (disk cache, shader cache), run 2 warm."
+    },
+    {
+      "id": 3,
+      "start": "2026-11-04 00:00:00",
+      "label": "Series 3",
+      "description": "--benchmark-baseline graphics: Medium tier, no GI, ground parallax or tessellation, no upscaler, SMAA. Two runs per scenario."
     }
   ],
   "buckets": [

@@ -104,8 +104,8 @@ sealed partial class GameHost
         var switches = WorldFrame.LiveSwitches(o, () => gpu, () => camera, () => render);
         var meitou = new MeitouToggle(switches);
         // Keep the shared rendering settings' callbacks and persistence keys; the game supplies its own modal layout.
-        // --low-end (WorldOptions.LowEnd) is a preset for this run: the saved sliders and switches would undo it, so they are left as saved and not applied.
-        bool lowEnd = Environment.GetCommandLineArgs().Contains("--low-end");
+        // --low-end (WorldOptions.LowEnd) and --benchmark-baseline are presets for this run: the saved sliders and switches would undo them, so they are left as saved and not applied.
+        bool lowEnd = Environment.GetCommandLineArgs().Contains("--low-end") || g.BenchmarkBaseline;
         var runOnly = RunOnlyKeys();   // the keys this run leaves as saved (--bloom)
         var settingsValues = overlay is null ? null : WorldFrame.CreateSettingsPanel(overlay, gpu, render,
             getHour: () => (float)session.Clock.HourOfDay, setHour: v => { session.Clock.SetHourOfDay(v); if (IsDuel) duelHour = v; },
@@ -170,6 +170,7 @@ sealed partial class GameHost
                 if (!SettingsMenu.HiddenSwitch(toggle.Label) && !runOnly.Contains(SwitchKey(toggle.Label)) && config.Graphics.TryGetValue(SwitchKey(toggle.Label), out float v) && (v >= 0.5f) != toggle.Get()) toggle.Set(v >= 0.5f);
             panel.ApplySavedPreset();
         }
+        if (g.BenchmarkBaseline) panel?.ApplyBenchmarkBaseline();
         var stats = new List<string>();
         bool statsVisible = false, fpsVisible = false;
         string fpsText = "";
