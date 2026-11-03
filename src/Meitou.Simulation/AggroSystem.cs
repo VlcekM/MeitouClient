@@ -652,7 +652,7 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
         int every = world.Every(Settings.ScanEveryTicks);
         for (int i = part.Start; i < part.End; i++)
         {
-            if (!prev[i].Alive || i >= slots.Length || !world.Turn(i, every)) continue;   // its turn (the far cadence, World.Turn)
+            if (!prev[i].Alive || prev[i].Dormant || i >= slots.Length || !world.Turn(i, every)) continue;   // its turn (the far cadence, World.Turn)
             if (slots[i].Heard is { } heard) slots[i].Heard = PruneHeard(heard, world);
             if (table.Cold(i) is not { Medical: not null } cold) continue;
             byte task = next[i].Task;

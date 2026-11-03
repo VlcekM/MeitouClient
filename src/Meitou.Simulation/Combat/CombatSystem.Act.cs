@@ -156,7 +156,7 @@ public sealed partial class CombatSystem
         List<MedicalEvent>? events = null;
         for (int i = part.Start; i < part.End; i++)
         {
-            if (!prev[i].Alive || !world.Steps(i)) continue;   // the far cadence: a skipped fighter's tick timers run on, it acts on them at its step
+            if (!prev[i].Alive || prev[i].Dormant || !world.Steps(i)) continue;   // the far cadence: a skipped fighter's tick timers run on, it acts on them at its step
             var cold = table.Cold(i)!;
             Body(world, i, cold, ref write[i], now, dt, ref events);
             inFight[i] = cold.InCombat;
@@ -252,7 +252,7 @@ public sealed partial class CombatSystem
         float dt = world.TickSeconds;
         for (int i = part.Start; i < part.End; i++)
         {
-            if (!prev[i].Alive || !world.Steps(i)) continue;
+            if (!prev[i].Alive || prev[i].Dormant || !world.Steps(i)) continue;
             var cold = table.Cold(i)!;
             if (cold.Fighter is null || cold.Stats is null || cold.Medical is null || cold.Race is null) continue;
             ref var s = ref write[i];

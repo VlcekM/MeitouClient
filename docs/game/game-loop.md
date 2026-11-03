@@ -108,6 +108,10 @@ character's faction is the player's (Faction `+0x250` `isPlayer`), Character `+0
 (**Unknown**). Otherwise set when the character is in view (`+0x1a9`: within `npc range`, `DAT_1421334c8`, of the camera's node `FUN_1407f2a20`, and passing the
 visible-area and frustum tests) and its platoon tests pass (**Unknown** in detail). Meitou: `MedicalTimeBudget`, [character-stats](character-stats.md#time).
 
+### Inactive characters
+
+`FUN_1405c9410` (a virtual of the logic tick, **Verified**): the zone record at the character's X/Z (vfunc `0xc8`; none, off the grid: nothing happens); a character that is not active (vfunc `0xf8`, flag `+0x608`) in a zone whose loaded flag holds (`FUN_140a090b0`) is activated (vfunc `0x200`, `FUN_1405cc310`: scene node, physics, lists), an active one in a zone that is not loaded is deactivated (vfunc `0x208`, `FUN_1405c9490`: clears the flag and releases the scene and physics objects). An inactive character is out of the active set the update walks, so it neither thinks, moves nor ages while its zone is unloaded, even when its platoon stays loaded (the platoon keeps relevance by its effective leader's place). Meitou: `World.MarkDormant` sets `CharacterHot.Dormant` from `World.LoadedZones` once a tick (none: everyone active); the AI think, movement, body, combat, first-aid, aggro scan and animation loops skip a dormant slot. Serial duties (carrying, captives, production) still look at it but act on tasks the frozen movement no longer advances.
+
 ### Settings and constants
 
 Values from the install through the repo's readers (**Verified**, `GameDatabase.Load(LoadOrder.FromInstall)`, one `GLOBAL CONSTANTS` record, `110-gamedata.quack`, modified by `Newwworld.mod` and `rebirth.mod`; `LoadOrder.BaseGame` gives the same numbers, but note that it still includes those two mods, which are part of the core file list; the `fcs.def` defaults differ, e.g. `max faction size` 100, `starvation time` 24, `build speed` 1):

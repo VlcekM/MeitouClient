@@ -154,7 +154,7 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
         List<MedicalEvent>? events = null;
         for (int i = part.Start; i < part.End; i++)
         {
-            if (!prev[i].Alive || !world.Steps(i)) continue;
+            if (!prev[i].Alive || prev[i].Dormant || !world.Steps(i)) continue;
             var cold = table.Cold(i)!;
             if (cold.Medical is not { } medical || cold.Race is not { } race || cold.Stats is not { } stats) continue;
             ref var n = ref next[i];

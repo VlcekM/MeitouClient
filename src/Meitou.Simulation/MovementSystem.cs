@@ -599,7 +599,7 @@ public sealed class MovementSystem(PathService paths) : ITickSystem, IDisposable
         var next = table.Next;
         for (int i = part.Start; i < part.End; i++)
         {
-            if (!prev[i].Alive || !world.Steps(i)) continue;
+            if (!prev[i].Alive || prev[i].Dormant || !world.Steps(i)) continue;
             float dt = world.StepSeconds(i);   // a far character's step covers the ticks since its last (the far cadence, World.StepTicks)
             ref var n = ref next[i];
             var task = (CharacterTask)n.Task;
@@ -861,7 +861,7 @@ public sealed class MovementSystem(PathService paths) : ITickSystem, IDisposable
         var walk = world.Walkability;
         for (int i = part.Start; i < part.End; i++)
         {
-            if (!prev[i].Alive || !world.Steps(i)) continue;
+            if (!prev[i].Alive || prev[i].Dormant || !world.Steps(i)) continue;
             float dt = world.StepSeconds(i);   // a far character's step covers the ticks since its last (the far cadence, World.StepTicks)
             ref readonly var p = ref prev[i];
             ref var n = ref next[i];

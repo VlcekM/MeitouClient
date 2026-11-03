@@ -343,6 +343,7 @@ public sealed partial class World : IDisposable
         Grid.Build(table.Previous);
         RefreshCadence();
         prof?.Lap(TickProfile.Grid);
+        MarkDormant();
         Sight.Update(this);
         prof?.Lap(TickProfile.Sight);
         MakePartitions();
@@ -396,6 +397,24 @@ public sealed partial class World : IDisposable
         GameHours += TickSeconds / SecondsPerGameHour;
         if (publish && Settings.PublishSnapshots) Publish(prof, farShared: true);
         prof?.Lap(TickProfile.Publish);
+    }
+
+    /// <summary>
+    /// The activity gate (<c>FUN_1405c9410</c>, each logic tick per character, <b>Verified</b>): a character whose zone record is not loaded is deactivated, one whose zone is loaded active again,
+    /// and one off the zone grid keeps its state. A deactivated character is not updated (<see cref="CharacterHot.Dormant"/>). Without a loaded set (a world with no population) every one is active.
+    /// </summary>
+    void MarkDormant()
+    {
+        var table = Characters;
+        var loaded = LoadedZones;
+        for (int i = 0; i < table.HighWater; i++)
+        {
+            var at = table.Previous[i];
+            if (!at.Alive) continue;
+            if (loaded is null) { if (at.Dormant) table.SetDormant(i, false); continue; }
+            var zone = Meitou.Data.World.WorldLayout.ZoneOf(at.Position.X, at.Position.Z);
+            if (zone.IsInsideGrid && at.Dormant == loaded.Contains(zone)) table.SetDormant(i, !loaded.Contains(zone));
+        }
     }
 
     // The decisions pass: its own part of the slow world phase, not the next system's.

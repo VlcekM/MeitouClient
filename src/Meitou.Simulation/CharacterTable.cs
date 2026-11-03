@@ -12,6 +12,11 @@ public struct CharacterHot
 {
     /// <summary>The slot holds a character. A dead slot's other fields are stale.</summary>
     public bool Alive;
+    /// <summary>
+    /// Its zone is not loaded: the character is deactivated and takes no part in the update (<c>FUN_1405c9410</c>, docs/game/game-loop.md "Inactive characters"). Set on <see cref="CharacterTable.Previous"/> once a tick by
+    /// <see cref="World"/>; derived (not hashed).
+    /// </summary>
+    public bool Dormant;
     /// <summary>The slot's generation: raised each time the slot is used again, so an old <see cref="CharacterId"/> never names the new character.</summary>
     public int Generation;
     /// <summary>World position: X/Z on the map, Y the height the character stands at.</summary>
@@ -604,6 +609,9 @@ public sealed class CharacterTable
 
     /// <summary>The ticks begun (a paused interface step counts): the start path's debug stamp (<see cref="CharacterCold.TaskSetTick"/>).</summary>
     internal long Ticks { get; private set; }
+
+    /// <summary>Sets the activity flag of a slot on the previous tick's state (<see cref="CharacterHot.Dormant"/>; serial phases).</summary>
+    internal void SetDormant(int slot, bool dormant) => previous[slot].Dormant = dormant;
 
     internal void BeginTick()
     {

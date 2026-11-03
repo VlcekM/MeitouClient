@@ -311,7 +311,7 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
         float still2 = Settings.StillSpeed * Settings.StillSpeed;
         for (int i = part.Start; i < part.End; i++)
         {
-            if (!prev[i].Alive || !world.Steps(i) || next[i].Task != (byte)CharacterTask.Treat) continue;
+            if (!prev[i].Alive || prev[i].Dormant || !world.Steps(i) || next[i].Task != (byte)CharacterTask.Treat) continue;
             var cold = table.Cold(i)!;
             if (cold.Medical is not { Incapacitated: false } medical || cold.InCombat || medical.Aggregates().BothArmsDisabled || cold.StaggeredUntil > world.Tick) continue;
             var target = cold.TreatTarget;
