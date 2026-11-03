@@ -43,6 +43,10 @@ public sealed class SavedMember
 /// </summary>
 public sealed class SavedPlatoon
 {
+    /// <summary>Set on platoons Meitou writes with the town they belong to now as <c>basetown</c> (replacement-aware, as the original's).</summary>
+    public const string BaseTownKey = "meitou basetown";
+    /// <summary>A platoon of an older Meitou save: its <c>basetown</c> is the placement's own id even in a replaced town, so it is taken to fit (the original's test is not applied).</summary>
+    public bool LegacyBaseTown { get; init; }
     public required SavePlatoon Source { get; init; }
     public string Name => Source.Name;
     public required bool Pinned { get; init; }
@@ -83,6 +87,8 @@ public sealed record SavedNest(string Instance, string TownId, Vector3 Position,
 /// <summary>What a world loaded from a save needs to make the save's NPC platoons later (<see cref="World.Saved"/>), and the platoons themselves.</summary>
 public sealed class SavedPopulation
 {
+    /// <summary>The save was written by Meitou (its CAMERA holds the seed key): its platoons without <see cref="SavedPlatoon.BaseTownKey"/> predate the replacement-aware <c>basetown</c>.</summary>
+    public bool MeitouWritten { get; init; }
     public required SaveHandles Handles { get; init; }
     public required IReadOnlyDictionary<FcsRecord, string> InstanceOf { get; init; }
     /// <summary>The instance ids of <see cref="InstanceOf"/>, as a set (made on first use).</summary>

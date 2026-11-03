@@ -24,4 +24,13 @@ public class PlatoonKeepTests
     {
         Assert.False(PopulationSystem.CampaignKept(Of(Instance(0), replacedHome: true)));
     }
+
+    [Fact]
+    public void Home_test_refuses_a_vanilla_platoon_of_a_replaced_town_but_not_an_older_meitou_one()
+    {
+        Assert.False(PopulationSystem.HomeFits(false, "own", "own", "repl"));
+        Assert.True(PopulationSystem.HomeFits(false, "repl", "own", "repl"));
+        Assert.True(PopulationSystem.HomeFits(false, "own", "own", null));
+        Assert.True(PopulationSystem.HomeFits(true, "own", "own", "repl"));
+    }
 }

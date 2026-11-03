@@ -654,7 +654,7 @@ public static partial class SaveCapture
                 }
             }
             var record = platoon.Record;
-            if (into is null) record.Strings["basetown"] = site.Replacement?.Id ?? site.Record.Id;   // the TOWN the town is now (FUN_1404ffad0 compares it with the town's replacement)
+            if (into is null) { record.Strings["basetown"] = site.Replacement?.Id ?? site.Record.Id; record.Bools[SavedPlatoon.BaseTownKey] = true; }   // the TOWN the town is now (FUN_1404ffad0 compares it with the town's replacement)
             record.Bools["imprisoned"] = imprisoned;
             record.Bools["dead"] = dead;
             record.Bools["intact"] = intact;

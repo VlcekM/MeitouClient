@@ -108,7 +108,7 @@ public static class SaveLoader
         // The NPC platoons are made when their zones load; what that needs stays with the world (docs/simulation.md "Saves").
         var context = new SavedPopulation
         {
-            Handles = handles, InstanceOf = instanceOf, Appearances = options.Appearances, Clock = loaded.Clock, PlayerFaction = playerIndex,
+            MeitouWritten = save.Camera.Record.Strings.ContainsKey(SeedKey), Handles = handles, InstanceOf = instanceOf, Appearances = options.Appearances, Clock = loaded.Clock, PlayerFaction = playerIndex,
         };
         world.Saved = context;
         context.Memory = world.Systems.OfType<Dialogue.DialogueSystem>().FirstOrDefault()?.Memory;
@@ -325,10 +325,10 @@ public static class SaveLoader
         bool unmade = !hasCharacters && !travels && Unmade(platoon);
         if (!hasCharacters && !travels && !unmade) return;
         SavedPlatoon? sp = null;
-        if (unmade) sp = new SavedPlatoon { Source = platoon, Pinned = true, Anchor = new Vector2(platoon.Position.X, platoon.Position.Z) };
+        if (unmade) sp = new SavedPlatoon { Source = platoon, Pinned = true, LegacyBaseTown = context.MeitouWritten && !platoon.Record.Bools.ContainsKey(SavedPlatoon.BaseTownKey), Anchor = new Vector2(platoon.Position.X, platoon.Position.Z) };
         if (hasCharacters)
         {
-            sp = new SavedPlatoon { Source = platoon, Pinned = !travels, Anchor = new Vector2(platoon.Position.X, platoon.Position.Z) };
+            sp = new SavedPlatoon { Source = platoon, Pinned = !travels, LegacyBaseTown = context.MeitouWritten && !platoon.Record.Bools.ContainsKey(SavedPlatoon.BaseTownKey), Anchor = new Vector2(platoon.Position.X, platoon.Position.Z) };
             foreach (var sc in platoon.Characters) sp.Members.Add(new SavedMember { Source = sc });
         }
         ulong key = Rng.Mix(Rng.StableHash(platoon.Name));

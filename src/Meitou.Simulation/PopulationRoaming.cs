@@ -695,12 +695,11 @@ public sealed partial class PopulationSystem
     }
 
     /// <summary>The home-hand test of activation: the platoon's <c>basetown</c> (unset: its town's own TOWN) names the town's own TOWN when it has no replacement, else the replacement.</summary>
-    bool HomeFits(Platoon p)
-    {
-        var site = data.Sites[p.Origin];
-        string home = p.Saved!.Source.Record.Strings.GetValueOrDefault("basetown", "");
-        return home.Length == 0 || home == site.Record.Id ? site.Replacement is null : home == site.Replacement?.Id;
-    }
+    bool HomeFits(Platoon p) => HomeFits(p.Saved!.LegacyBaseTown, p.Saved.Source.Record.Strings.GetValueOrDefault("basetown", ""), data.Sites[p.Origin].Record.Id, data.Sites[p.Origin].Replacement?.Id);
+
+    /// <summary>The activation's home test: an older Meitou save's platoon always fits; else an unset or own <paramref name="home"/> fits only a town with no replacement, otherwise <paramref name="home"/> must be the replacement.</summary>
+    internal static bool HomeFits(bool legacy, string home, string own, string? replacement) =>
+        legacy || (home.Length == 0 || home == own ? replacement is null : home == replacement);
 
     void Activate(World world, Platoon p)
     {
