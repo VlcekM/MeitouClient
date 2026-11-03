@@ -86,8 +86,8 @@ Binding maps: general map at Controls+0x28, build-mode map at +0x50 (checked fir
 | character_next / prev | `]` / `[` | 0x26 / 0x27 | event |
 | build_undo / build_apply | Backspace / Space | 0xb / 0xc | event, build map |
 | build_rotate_left / right | `,` / `.` | - | build map |
-| build_move_up / down | `=` / `-` (+ NUM+ / NUM- registered) | - | build map |
-| build_tilt_increase / decrease | `]` / `[` (+ NUM+ / NUM-) | - | build map |
+| build_move_up / down | `=` / `-` (NUM+ / NUM- registered too, overwritten by the tilt pair) | - | build map |
+| build_tilt_increase / decrease | `]` / `[` and NUM+ / NUM- (**Verified**: `FUN_1403636c0` registers all four with second keys 0x4e / 0x4a, move first, tilt after; `FUN_140362260` stores key to binding in a `std::map` with assignment, so the later tilt registration wins) | - | build map |
 | editor_toggle | Shift+F12 | 9 | event; opens the level / fog editor (`FUN_1407f3720` to `FUN_14077be90`, windows `FUN_140773480` and `FUN_14010d8d0`); not built (**Verified**) |
 | editor_delete | Delete | - | event |
 | reload_biomes | Ctrl+F6 | 900 | event; reloads textures / materials of loaded GameData of type 0x1c (`FUN_140a0a260`), then per zone map `FUN_1409f9560`; developer tool, not built |
@@ -95,7 +95,7 @@ Binding maps: general map at Controls+0x28, build-mode map at +0x50 (checked fir
 | gizmo_move / rotate / scale | H / J / K | 0x398 / 0x399 / 0x39a | event; with an active object `FUN_14096d680` / `FUN_140970880(mode)` (functions not read); developer tools, not built |
 
 Meitou's build map (`PlayerInterface.Build.cs`) is live only in build mode and takes its keys before anything else: the
-documented speeds, Shift as the slow modifier of the up/down move; the numpad aliases are not mapped. `[` `]` tilt there, not
+documented speeds, Shift as the slow modifier of the up/down move; NUM+ / NUM- tilt (and are not the cinema camera's while building). `[` `]` tilt there, not
 character_next / prev. Left click queues the ghost. A right click over the world drops the held building (the next one is chosen from the lists again) and leaves the queued ghosts (`FUN_1404e27e0`, **Verified**; the guard flag `DAT_1421337b8` is **Unknown**). The Commands text lists, in this order: Place Building: Left-Click; Clear Building: Right-Click; Rotate: {1} or {2} keys; Change Height: {1} and {2}; Change Slope: {1} and {2}; Undo: Backspace; Cancel All: Esc; a closing "Press [Confirm] when finished" (`FUN_1404d7d90`, **Verified**; the key strings read from the exe data: Rotate `<>` or `,.`, Height `+` and `-`, Slope `[` and `]`, Undo Backspace; each line a `#140806` label, a space and a `#afa68b` value, joined by line breaks; fixed texts, not the bindings above; `PlayerInterface.BuildCommandsText`). Escape discards every ghost and leaves build mode (`FUN_1404d4320`).
 
 Meitou's game view (`PlayerInterface.Hotkeys.cs`, `InputBindings`): every event action above is an `InputAction` with the table's default

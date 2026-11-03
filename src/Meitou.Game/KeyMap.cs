@@ -24,6 +24,8 @@ static class KeyMap
         >= SilkKey.Number0 and <= SilkKey.Number9 => EngineKey.D0 + (k - SilkKey.Number0),
         >= SilkKey.F1 and <= SilkKey.F12 => EngineKey.F1 + (k - SilkKey.F1),
         >= SilkKey.Keypad0 and <= SilkKey.Keypad9 => EngineKey.Keypad0 + (k - SilkKey.Keypad0),
+        SilkKey.KeypadAdd => EngineKey.KeypadAdd,
+        SilkKey.KeypadSubtract => EngineKey.KeypadSubtract,
         SilkKey.Left => EngineKey.Left,
         SilkKey.Right => EngineKey.Right,
         SilkKey.Up => EngineKey.Up,

@@ -139,8 +139,7 @@ sealed partial class PlayerInterface
 
     /// <summary>
     /// A key press while build mode is on: the build map (docs/game/ui-input.md section 4, checked first in build mode) takes <c>,</c> <c>.</c> rotate, <c>-</c> <c>=</c> move down / up,
-    /// <c>[</c> <c>]</c> tilt, Backspace undo and Space apply. Returns true when the key was taken, so the host does not also pause or turn the camera. The numpad aliases of the original
-    /// are not mapped (the numpad is the cinema camera's).
+    /// <c>[</c> <c>]</c> tilt, Backspace undo and Space apply. Returns true when the key was taken, so the host does not also pause or turn the camera. NUM+ / NUM- are the original's second keys of both the move and the tilt pairs, and the later registration (tilt) wins in its key map, so they tilt (<c>FUN_1403636c0</c>, <c>FUN_140362260</c>).
     /// </summary>
     public bool BuildKey(Key key, bool shift)
     {
@@ -148,7 +147,7 @@ sealed partial class PlayerInterface
         if (!buildMode) return false;
         switch (key)
         {
-            case EngineKey.Comma or EngineKey.Period or EngineKey.Minus or EngineKey.Equal or EngineKey.LeftBracket or EngineKey.RightBracket:
+            case EngineKey.Comma or EngineKey.Period or EngineKey.Minus or EngineKey.Equal or EngineKey.LeftBracket or EngineKey.RightBracket or EngineKey.KeypadAdd or EngineKey.KeypadSubtract:
                 buildHeld.Add(key);
                 return true;
             case EngineKey.Backspace:
@@ -161,6 +160,9 @@ sealed partial class PlayerInterface
                 return false;
         }
     }
+
+    /// <summary>Whether <paramref name="key"/> is a build map key that the cinema's numpad must not take (NUM+ / NUM- while building).</summary>
+    public bool OwnsBuildNumpad(Key key) => buildMode && key is EngineKey.KeypadAdd or EngineKey.KeypadSubtract;
 
     public void BuildKeyUp(Key key)
     {
@@ -186,7 +188,7 @@ sealed partial class PlayerInterface
         if (buildHeld.Contains(EngineKey.Equal) && ghostMargins.Up > 0) ghostLift += MathF.Min(lift, ghostMargins.Up);
         else if (buildHeld.Contains(EngineKey.Minus) && ghostMargins.Down > 0) ghostLift -= MathF.Min(lift, ghostMargins.Down);
         if (MathF.Abs(ghostLift) > MaxLift) ghostLift = 0;
-        ghostTilt = Math.Clamp(ghostTilt + Held(EngineKey.RightBracket, EngineKey.LeftBracket) * TiltPerSecond * dt, 0, 1);
+        ghostTilt = Math.Clamp(ghostTilt + Math.Clamp(Held(EngineKey.RightBracket, EngineKey.LeftBracket) + Held(EngineKey.KeypadAdd, EngineKey.KeypadSubtract), -1, 1) * TiltPerSecond * dt, 0, 1);
 
         ghost = null;
         ghostMargins = PlacementCheck.VerticalMargins.Unlimited;

@@ -359,7 +359,7 @@ sealed partial class GameHost
                 return;
             }
             // A numpad key bound to a game hotkey (the orders, NUM0..NUM8 by default) is the game's, except with Ctrl (saving a shot) or the cinema's editor open (F6).
-            bool hotkey = !IsDuel && !ctrl && !cinema.EditorVisible && KeyMap.Map(k) is { } gameKey && player.IsHotkey(gameKey);
+            bool hotkey = !IsDuel && !ctrl && !cinema.EditorVisible && KeyMap.Map(k) is { } gameKey && (player.IsHotkey(gameKey) || player.OwnsBuildNumpad(gameKey));
             if (!hotkey && Enum.TryParse(k.ToString(), out CinemaKey cinemaKey) && cinema.OnKey(cinemaKey, ctrl, shiftDown)) return;
             // F9 is the game's quickload; the fps counter is on Ctrl+F9 (a modifier, so the key never reaches the input bindings).
             if (k == SilkKey.F9 && ctrl) { fpsVisible = !fpsVisible; return; }
