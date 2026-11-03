@@ -397,6 +397,8 @@ public interface IRagdollEnvironment
     /// <summary>Adds the triangles (three points each, world space, any winding) of the building collision between <paramref name="min"/> and <paramref name="max"/> (X and Z).</summary>
     /// <returns>False while some of them are not known yet (being read): the tile asks again.</returns>
     bool Buildings(Vector3 min, Vector3 max, List<Vector3> triangles);
+    /// <summary>The triangles of collision groups 23..26 only (passable parts, buildings paths ignore) between the corners, what the weather's shelter ray tests; the same meaning of the result. Environments without them answer with the ordinary buildings.</summary>
+    bool Roofs(Vector3 min, Vector3 max, List<Vector3> triangles) => Buildings(min, max, triangles);
 }
 
 /// <summary>The stand-in environment: the world's walkable ground, no buildings.</summary>

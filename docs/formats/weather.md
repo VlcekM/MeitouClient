@@ -160,7 +160,7 @@ character at most every 8 s per event (`WeatherSystem.EventPause`, **engine choi
 `is shelter` stops acid rain (the holder is still set). **Verified** probe: 3 of 603 buildings in the merged data have the flag, all tents of the mod `small_changes_otto` (`Tente
 Mercenaire`, `Abri Plat`, `Tente de fortune`; no function, 2 parts, no interior mask), so the base game has no shelter. Meitou (`WeatherSystem.Sheltered`, **engine choice**): the
 collision query does not say which building a triangle belongs to, so a complete shelter of the player's within 120 units of the character is assumed to be the one hit, and the ray
-counts when it meets any building's collision more than 10 over the feet; town buildings are not asked.
+counts when it meets the collision of groups 23..26 more than 10 over the feet (the ray's include mask is 0x7800000, **Verified**: the passable parts and every part of a path-mode IGNORE building, not the ragdoll set; `ZoneGeometryGatherer.RoofTriangles`, `IRagdollEnvironment.Roofs`); town buildings are not asked.
 
 ### WEATHER (type 80; Verified: fcs.def and the loader FUN_1409de7b0)
 

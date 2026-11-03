@@ -335,21 +335,29 @@ internal sealed partial class ZoneGeometryGatherer
     /// on and hit (docs/game/ragdolls.md "Collision groups"): walls and floors, stairs, furniture and roofs; not doors, interior masks or passable parts. Three points per
     /// triangle, world space.
     /// </summary>
-    public void RagdollTriangles(ZoneCoordinate zone, List<Vector3> output)
+    public void RagdollTriangles(ZoneCoordinate zone, List<Vector3> output) => BuildingTriangles(zone, output, roofs: false);
+
+    /// <summary>
+    /// The collision triangles of collision groups 23..26 only, the parts the weather's shelter ray tests (<c>FUN_1405cf790</c>, include mask 0x7800000, <b>Verified</b>): the passable parts and every
+    /// part of the buildings that paths ignore, the complement of <see cref="RagdollTriangles"/> (no map features, no doors). Three points per triangle, world space.
+    /// </summary>
+    public void RoofTriangles(ZoneCoordinate zone, List<Vector3> output) => BuildingTriangles(zone, output, roofs: true);
+
+    void BuildingTriangles(ZoneCoordinate zone, List<Vector3> output, bool roofs)
     {
         var (ox, oz) = WorldLayout.ZoneOrigin(zone);
         var min = new Vector2((float)ox, (float)oz);
         foreach (var (b, record, position, destroyed) in NearBuildings(zone, min, min + new Vector2(WorldLayout.ZoneSize), 0))
         {
             if (b.Zone != zone) continue;
-            AddRagdollBuilding(record, b.Key, position, b.Rotation, destroyed, output);
+            AddRagdollBuilding(record, b.Key, position, b.Rotation, destroyed, output, roofs);
             foreach (var (item, at, rotation) in LayoutObjects(b, record, position, destroyed))
-                AddRagdollBuilding(item.Building, $"{b.Key}/{item.InstanceId}", at, rotation, false, output);
+                AddRagdollBuilding(item.Building, $"{b.Key}/{item.InstanceId}", at, rotation, false, output, roofs);
         }
-        AddRagdollFeatures(zone, output);
+        if (!roofs) AddRagdollFeatures(zone, output);
     }
 
-    void AddRagdollBuilding(GameRecord building, string placementId, Vector3 position, Quaternion rotation, bool destroyed, List<Vector3> output)
+    void AddRagdollBuilding(GameRecord building, string placementId, Vector3 position, Quaternion rotation, bool destroyed, List<Vector3> output, bool roofs)
     {
         var node = NodeMatrix(building, position, rotation);
         var doors = building.GetReferences("doors").Select(r => r.TargetStringId).ToHashSet();
@@ -359,7 +367,8 @@ internal sealed partial class ZoneGeometryGatherer
             string path = CollisionPathOf(part, destroyed);
             if (path.Length == 0 || part.GetBool("is door") || mesh.Owner.GetBool("is door") || doors.Contains(mesh.Owner.StringId)) continue;
             // Groups 23..26: a building that is ignored by paths, or a passable part (ragdolls do not collide with them).
-            if ((PathMode)mesh.Owner.GetInt("path mode", (int)PathMode.Obstacle) == PathMode.Ignore || part.GetBool("passable")) continue;
+            bool passable = (PathMode)mesh.Owner.GetInt("path mode", (int)PathMode.Obstacle) == PathMode.Ignore || part.GetBool("passable");
+            if (passable != roofs) continue;
             if (collision.Get(path) is not { } prepared) continue;
             foreach (var shape in prepared.Shapes)
                 foreach (int i in shape.Indices) output.Add(Vector3.Transform(shape.Vertices[i], node));
