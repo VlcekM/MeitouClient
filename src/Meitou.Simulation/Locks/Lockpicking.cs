@@ -107,11 +107,11 @@ public sealed class Lockpicking(GameConstants constants, BodyOptions options)
         return Roll(world, c, l, ShackleKey(wearer, item), dt);
     }
 
-    /// <summary>The effective strength the cut and break tests use (the stat-scale term taken as 1, locks.md Unknowns).</summary>
-    static float Strength(CharacterCold c) => (c.Stats?[StatsEnumerated.Strength] ?? 0) * (c.Medical?.StatMultiplier(StatsEnumerated.Strength) ?? 1);
+    /// <summary>The effective strength the cut and break tests use (stat x the CharStats scale +0x34, FUN_140641480: 1 for people, the age for animals).</summary>
+    static float Strength(CharacterCold c) => (c.Stats?[StatsEnumerated.Strength] ?? 0) * (c.Stats?.Scale ?? 1) * (c.Medical?.StatMultiplier(StatsEnumerated.Strength) ?? 1);
 
     /// <summary>The strength the cut tasks use (<c>FUN_140359f80</c>): the stat times the multiplier asked with the hunger term only (<c>FUN_1406457e0(stats, 1, 1)</c>), no limb, light or damage terms.</summary>
-    static float CutStrength(CharacterCold c) => (c.Stats?[StatsEnumerated.Strength] ?? 0) * (c.Medical?.StatMultiplier(StatsEnumerated.Strength, StatUse.Hunger) ?? 1);
+    static float CutStrength(CharacterCold c) => (c.Stats?[StatsEnumerated.Strength] ?? 0) * (c.Stats?.Scale ?? 1) * (c.Medical?.StatMultiplier(StatsEnumerated.Strength, StatUse.Hunger) ?? 1);
 
     /// <summary>The best tool the character carries (ITEM <c>item function</c> 9, the condition <c>hasTools</c>: Hacksaw, Tools), by quality; null: "I don't have any tools".</summary>
     public static Items.ItemInstance? BestTool(CharacterCold c) =>
@@ -188,7 +188,7 @@ public sealed class Lockpicking(GameConstants constants, BodyOptions options)
         var c = world.Characters.Cold(picker);
         if (c is null || target.Lock is not { } l || l.Broken) return false;
         Crime(world, picker, c, target, crimes);
-        float strength = (c.Stats?[StatsEnumerated.Strength] ?? 0) * (c.Medical?.StatMultiplier(StatsEnumerated.Strength) ?? 1);
+        float strength = (c.Stats?[StatsEnumerated.Strength] ?? 0) * (c.Stats?.Scale ?? 1) * (c.Medical?.StatMultiplier(StatsEnumerated.Strength) ?? 1);
         if (strength <= 3 * l.Hardness) return false;
         l.Hardness = 0;
         l.Broken = true;
