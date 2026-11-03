@@ -37,7 +37,8 @@ public sealed partial class FixtureRegistry
     /// Which cages the finder of goals 112/281 considers for <paramref name="carrier"/> at <paramref name="at"/> (the gatherer <c>FUN_1408cbea0</c> with <c>FUN_140a00690</c>, <b>Verified</b>): the town it stands in,
     /// else its faction's nearest town within <see cref="BedSearchRange"/> (squared 1.5625e7; nest markers, town type 8, left out), the cages within <see cref="TownReach"/> x that town's radius of its centre;
     /// plus those of the town of its squad's home when that differs. With no town at all every cage of the world qualifies. The towns' fixtures are registered (a town no one has loaded has its cages
-    /// all the same). Pass the result to <see cref="FindCage"/> as part of its skip test; serial phases only.
+    /// all the same). A nest building's cage of the carrier's faction always qualifies (<see cref="Fixture.Nest"/>; the original's nest is a town of its own, which the town lookup here
+    /// does not list: engine reading). Pass the result to <see cref="FindCage"/> as part of its skip test; serial phases only.
     /// </summary>
     public Func<Fixture, bool> CageCandidates(World world, PopulationData data, CharacterCold carrier, Vector3 at)
     {
@@ -45,6 +46,7 @@ public sealed partial class FixtureRegistry
         var town = AiSystem.TownAt(data, world, at);
         if (town.IsNone) town = NearestTownOf(world, data, carrier.Faction, at);
         if (town.IsNone) return static _ => true;
+        int faction = carrier.Faction;
         var home = world.Squads.Find(carrier.SquadId) is { Town: >= 0 } squad ? CampaignTown.OfSite(squad.Town) : CampaignTown.None;
         if (home == town) home = CampaignTown.None;
         var (centre, reach) = Reach(world, data, town);
@@ -53,6 +55,7 @@ public sealed partial class FixtureRegistry
         if (home.Site >= 0) RegisterSite(world, data, home.Site);
         return f =>
         {
+            if (f.Nest && f.Owner == faction) return true;
             var p = new Vector2(f.Position.X, f.Position.Z);
             return Vector2.DistanceSquared(p, centre) <= reach * reach || !home.IsNone && Vector2.DistanceSquared(p, homeCentre) <= homeReach * homeReach;
         };

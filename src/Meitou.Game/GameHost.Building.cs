@@ -9,11 +9,12 @@ namespace Meitou.Game;
 /// The host's side of player construction (docs/simulation.md "Buildings", "Host seam: snapshot diff"): the snapshot's <see cref="WorldSnapshot.Buildings"/> are diffed by id
 /// whenever <see cref="WorldSnapshot.BuildingsRevision"/> changes. A new site goes into the renderer's runtime placements and, when it qualifies, the navmesh overlay; a removed
 /// one leaves both; a completed one enters the navmesh and lights its lamps. The scaffold of a site that is not finished is read from <c>Progress / Target</c> every frame.
+/// The loaded nests' buildings (<see cref="WorldSnapshot.NestBuildings"/>) go through the same diff as complete sites.
 /// </summary>
 sealed partial class GameHost
 {
     World? buildingsWorld;
-    long buildingsRevision = -1;
+    long buildingsRevision = -1, nestBuildingsRevision = -1;
     // What the overlays were last told, by instance id.
     readonly Dictionary<string, BuildingSnapshot> shownBuildings = new(StringComparer.Ordinal);
     readonly HashSet<string> navBuildings = new(StringComparer.Ordinal), litBuildings = new(StringComparer.Ordinal), effectBuildings = new(StringComparer.Ordinal);
@@ -34,10 +35,11 @@ sealed partial class GameHost
             buildingsWorld = session.World;
         }
         var snapshot = session.CurrentSnapshot;
-        if (snapshot.BuildingsRevision != buildingsRevision)
+        if (snapshot.BuildingsRevision != buildingsRevision || snapshot.NestBuildingsRevision != nestBuildingsRevision)
         {
             DiffBuildings(snapshot);
             buildingsRevision = snapshot.BuildingsRevision;
+            nestBuildingsRevision = snapshot.NestBuildingsRevision;
         }
         UpdateCorpseFlies();
         // A lit building's lamps burn at its power share (granted / demand, 1 for one that draws nothing): dark without supply (docs/formats/lights.md "When a light is on").
@@ -73,6 +75,7 @@ sealed partial class GameHost
         var current = new Dictionary<string, BuildingSnapshot>(StringComparer.Ordinal);
         foreach (var site in snapshot.Buildings)
             if (site.LevelPlacement is null || !site.Destroyed) current[site.Id] = site;
+        foreach (var site in snapshot.NestBuildings) current[site.Id] = site;   // the loaded nests' buildings, complete
         foreach (string id in shownBuildings.Keys.Where(id => !current.ContainsKey(id)).ToArray())
         {
             ActiveObjects?.RemoveRuntime(id);
@@ -176,6 +179,7 @@ sealed partial class GameHost
         shownBuildings.Clear();
         constructionLook.Clear();
         buildingsRevision = -1;
+        nestBuildingsRevision = -1;
         if (ActiveObjects is { } objects) objects.Construction = null;
     }
 

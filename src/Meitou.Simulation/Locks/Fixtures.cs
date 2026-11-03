@@ -118,6 +118,8 @@ public sealed class Fixture
     /// <summary>The town site it was registered with, and the owner faction (a position in the data's factions; -1 none).</summary>
     public int Site { get; init; } = -1;
     public int Owner { get; set; } = -1;
+    /// <summary>A nest building's (<see cref="NestBuildings"/>): its faction's kidnappers use it wherever they stand.</summary>
+    public bool Nest { get; set; }
     /// <summary>Where an occupant is held, and which way it faces (the item's origin: the cage's attach node is not read, an engine choice).</summary>
     public Vector3 Position { get; init; }
     public float Yaw { get; init; }

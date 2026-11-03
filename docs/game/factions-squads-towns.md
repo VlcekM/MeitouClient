@@ -514,11 +514,21 @@ Meitou: [ground items](../simulation.md#items-and-eating).
 - **Nest furniture** (**Verified** by code unless marked): when an area loads (`FUN_1409fdbd0` → `FUN_1408f5e70`), each of its nests runs `Nest` slot 64
   (`FUN_1409278a0`), which queues its TOWN record at its position, owner none; the queue (`FUN_140928410`, "delayedSpawningChecks") runs `TownBase` slot 113
   (`FUN_140938440`) once the zone is loaded. That seeds `srand` from the nest's X/Z and places: `debris` (ITEM / NEST_ITEM, `FUN_140937510`, within
-  `size radius`); `debris building` × `num centrepoints` centre points (`FUN_140927600`), each entry's count from v0 (0: a coin flip for one; > 1: ±a
-  fraction, `FUN_1409b3b40`) placed by `FUN_140930120` (v1 / v2 read as min / max distance: **Observed**); `loot spawn` ITEM lists. Nest buildings are not
-  saved ([save](../formats/save.md)), so they come back from the seed each load (**Observed**). The fog nests' Prisoner Poles come from here (`Fog Deathyard`
-  6, `ruin- fogman resident` 4, `Cannibals` 5; `Nest of Beak Things` has `Beak Thing Egg` debris). Meitou: **not built** (issue 132), so nest squads
-  that kidnap find no cage.
+  `size radius`); `debris building` round `num centrepoints` centres (none when 0); `loot spawn` ITEM lists. Nest buildings are not saved
+  ([save](../formats/save.md)), so they come back from the seed each load (**Observed**). The fog nests' Prisoner Poles come from here (`Fog Deathyard`
+  6, `ruin- fogman resident` 4, `Cannibals` 5; `Nest of Beak Things` has `Beak Thing Egg` debris). Towns with `spawn in town centre` (`Cannibal Village`,
+  `Deadhive Overrun` and overrides) queue the same at their own position from `Town::setup` (`FUN_1409353c0` → `FUN_140929340`), run on load (`FUN_14092f260`).
+  - Centres (disassembly): each a random direction (X, Z uniform in [-1, 1], normalised) × uniform [0, `size radius`] from the nest, snapped to the navmesh
+    (`FUN_140927600`); one within 140 of an earlier centre is put 190 from it, along the line between them.
+  - Per centre, per `debris building` entry: count from v0 (0: one on a coin flip; 1: one; more: v0 + an int in [-v0/2, v0/2]); each piece (`FUN_140930120`)
+    a random direction × uniform [v1, v2] from the centre, put 25 from a piece of the same entry within 17 (the list is cleared per entry), dropped when the
+    navmesh query (`FUN_1403a2300`, box half-size 60 round the point at the centre's height) finds nothing or a piece of the entry is within 12; ground and
+    normal from a ray down from 10000; facing a random yaw, tilted to the normal, a tilt over the BUILDING's `max slope` (degrees) slerped back to it
+    (t = max slope / tilt); owned by the nest's faction.
+  - Meitou (`NestFurniture`): the buildings, as above, when a nest's zone activates, removed when it unloads (NPCs in its cages let out). Its own
+    rolls keyed by the nest's place; the navmesh query is the walkability at the centre's height within 60. A nest's cage of a kidnapper's faction is
+    always a candidate, and a standing nest is a town for the fogman worship finder (nest markers skipped). Debris, loot and the towns' `spawn in town
+    centre` scatter are **not built**.
 - **Homeless squads** (area tick `FUN_1408f9240`, every 2 s, per island): the island's load (sum over its loaded sectors of intact +
   0.5 × not-intact squads, [counts](#off-screen-world) above; clamped to [0, 2] for a sector with its own town or the town flag `FUN_1408f62e0` / +0x30) is compared with `FUN_1408f5ca0`, the sum of P × `homeless spawn
   amount` over the loaded zones of the island; while below, one sector is picked by weight max(0, P × amount + 1 − load), halved when its own town stands in it (`FUN_1408f62e0`; only a

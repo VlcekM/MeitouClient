@@ -274,6 +274,36 @@ public sealed partial class FixtureRegistry
     }
 
     /// <summary>
+    /// Registers a nest building's cage or lock (<see cref="NestBuildings"/>: a Prisoner Pole of a fog nest), owned by the nest's faction and marked as a nest's
+    /// (<see cref="Fixture.Nest"/>), then binds the held characters whose <see cref="CharacterCold.InWhat"/> names it. A piece with neither is left out.
+    /// </summary>
+    public void RegisterNestBuilding(World world, PopulationData data, NestPiece piece, int owner)
+    {
+        if (byBuilding.ContainsKey(piece.Id) || data.Db.Find(piece.Record) is not { } record || Lockable(data.Db, record) is not { } kind) return;
+        var faction = owner >= 0 && owner < data.Factions.Count ? data.Factions[owner] : null;
+        var made = Make(world, data.Db, kind, piece.Id, piece.Id, record, -1, owner, faction, piece.Position, TownBuildings.YawOf(piece.Rotation), host: record.StringId);
+        made.Nest = true;
+        byBuilding[piece.Id] = [made];
+        buildings.Add(piece.Id);
+        all.Add(made);
+        byId[made.Id] = made;
+        containerSpots = null;
+        cageList = null; publishedCages = null;
+        Bind(world);
+    }
+
+    /// <summary>A nest's buildings leave the world: whoever its cages hold is let out first.</summary>
+    public void UnregisterNestBuildings(World world, IEnumerable<NestPiece> pieces)
+    {
+        foreach (var piece in pieces)
+        {
+            foreach (var f in OfBuilding(piece.Id))
+                if (!f.Occupant.IsNone) Release(world, f.Occupant);
+            Unregister(piece.Id);
+        }
+    }
+
+    /// <summary>
     /// A BUILDING's bed data when one of its functionalities is a bed (<c>function</c> 6 BF_BED or 25 BF_SKELETON_BED): the function, the functionality's <c>animation</c> (the clip it is
     /// lain in) and the sum of its construction materials (<see cref="Meitou.Data.Gameplay.Construction.BuildingBuildData.Target"/>). Null for anything else.
     /// </summary>

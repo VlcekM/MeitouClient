@@ -428,6 +428,9 @@ public sealed record WorldSnapshot(long Tick, IReadOnlyList<CharacterSnapshot> C
     public IReadOnlyList<Construction.BuildingSnapshot> Buildings { get; init; } = [];
     /// <summary>Bumped when a building is added, completed, destroyed or removed (not on progress): the host diffs <see cref="Buildings"/> by id when it changes.</summary>
     public long BuildingsRevision { get; init; }
+    /// <summary>The loaded nests' buildings (<see cref="NestBuildings"/>), complete and of the nest's faction, and their revision (bumped when a nest's come or go).</summary>
+    public IReadOnlyList<Construction.BuildingSnapshot> NestBuildings { get; init; } = [];
+    public long NestBuildingsRevision { get; init; }
     /// <summary>The player outposts with their power totals (the town panel, docs/game/ui-screens.md "Town panel").</summary>
     public IReadOnlyList<Production.OutpostSnapshot> Outposts { get; init; } = [];
     /// <summary>Loose items lying in the world (<see cref="Items.GroundItems"/>), oldest first.</summary>

@@ -178,6 +178,8 @@ public sealed partial class World : IDisposable
     public UniqueCharacters Uniques { get; } = new();
     /// <summary>The player-built buildings and construction sites, in creation order (docs/simulation.md "Buildings").</summary>
     public Construction.BuildingRegistry Buildings { get; } = new();
+    /// <summary>The buildings the loaded nests stood up round themselves (docs/game/factions-squads-towns.md "Nest furniture"); not saved.</summary>
+    public NestBuildings NestBuildings { get; } = new();
     /// <summary>Loose items lying in the world, so far the severed limbs combat drops (docs/simulation.md "Ground items").</summary>
     public Items.GroundItems GroundItems { get; } = new();
     /// <summary>The loose-item slots of the towns' interiors (docs/simulation.md "Ground items"); hashed once a town with any registered.</summary>

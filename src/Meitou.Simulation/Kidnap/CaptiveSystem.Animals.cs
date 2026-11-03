@@ -17,22 +17,33 @@ public sealed partial class CaptiveSystem
 
     /// <summary>
     /// <c>AI::findFogmanWorshipTarget</c> (<c>FUN_1408ce880</c>): in the town nearest the worshipper, the first cage (list order) whose occupant is being eaten. Null: none.
+    /// A standing nest counts as a town (the original's town list holds the nests), its cages those of its buildings (<see cref="NestBuildings"/>); the nest markers do not.
     /// </summary>
     Fixture? WorshipTarget(World world, int slot)
     {
         var at = world.Characters.Next[slot].Position;
-        int site = -1;
+        var here = new Vector2(at.X, at.Z);
+        int site = -1, nest = -1;
         float best = float.MaxValue;
         for (int s = 0; s < data.Sites.Count; s++)
         {
-            float d = Vector2.DistanceSquared(new Vector2(at.X, at.Z), new Vector2(data.Sites[s].Position.X, data.Sites[s].Position.Z));
+            if (data.Sites[s].Town.Type == Meitou.Data.Gameplay.TownType.NestMarker) continue;   // a nest stands on it
+            float d = Vector2.DistanceSquared(here, new Vector2(data.Sites[s].Position.X, data.Sites[s].Position.Z));
             if (d < best) (best, site) = (d, s);
         }
-        if (site < 0) return null;
-        foreach (var cage in CagesOf(world, site))
+        foreach (var (n, centre) in world.NestBuildings.Standing)
+        {
+            float d = Vector2.DistanceSquared(here, centre);
+            if (d < best) (best, nest) = (d, n);
+        }
+        var cages = nest >= 0 ? NestCages(world, nest) : site >= 0 ? CagesOf(world, site) : [];
+        foreach (var cage in cages)
             if (OccupantSlot(world, cage) >= 0 && jobs.Any(j => j.Kind == CaptiveJobKind.Eat && j.Captive == cage.Occupant && j.Phase == CaptivePhase.Work)) return cage;
         return null;
     }
+
+    static IEnumerable<Fixture> NestCages(World world, int nest) =>
+        world.NestBuildings.Of(nest).SelectMany(p => world.Fixtures.OfBuilding(p.Id)).Where(f => f.Kind == FixtureKind.Cage);
 
     /// <summary>
     /// <c>Task_WorshipTarget</c> (236 on 237's target): farther than <see cref="WorshipReach"/> from the cage it walks there; within, it stops, faces it, bows, and every 3-14 game seconds
