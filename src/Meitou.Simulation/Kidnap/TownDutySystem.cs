@@ -1,5 +1,6 @@
 using System.Numerics;
 using Meitou.Data.Gameplay.Ai;
+using Meitou.Data.Gameplay.Bodies;
 using Meitou.Simulation.Ai;
 using Meitou.Simulation.Carrying;
 using Meitou.Simulation.Items;
@@ -158,7 +159,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
             else if (HasGates(world, town)) { why = "outside an occupied town's walls"; return 0; }
         }
         if (!hungry) { why = "not hungry"; return 0; }
-        if (Store(world, at, town, owner: c.Faction, animal: animal) is not var (storeId, spot)) { why = "no store with food"; return 0; }
+        if (Store(world, at, town, owner: c.Faction, animal: animal, race: race) is not var (storeId, spot)) { why = "no store with food"; return 0; }
         store = (town, storeId, spot);
         return desire;
     }
@@ -477,7 +478,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     /// of the player town, or a container that is not locked inside the town. Its id and where the member walks. With <paramref name="owner"/> (a player-side run) only stores of that
     /// faction; for an <paramref name="animal"/> raw food counts too and a store inside another building is skipped (the finder's animal tests).
     /// </summary>
-    (string Id, Vector2 Spot)? Store(World world, Vector3 at, CampaignTown town, int looter = -1, int owner = -1, bool animal = false)
+    (string Id, Vector2 Spot)? Store(World world, Vector3 at, CampaignTown town, int looter = -1, int owner = -1, bool animal = false, RaceData? race = null)
     {
         var here = Flat(at);
         (string, Vector2)? best = null;
@@ -485,7 +486,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
         if (town.PlayerTown > 0 || town.IsNone)
             foreach (var m in world.Machines.All)
             {
-                if (m.Storage is not { } s || !s.Items.Any(i => Edible(i, animal)) || world.Buildings.Find(m.Site) is not { Complete: true } site || !InScope(world, town, at, CampaignTown.OfPlayer(site.Town), site.Position)) continue;
+                if (m.Storage is not { } s || !s.Items.Any(i => Edible(i, animal, race)) || world.Buildings.Find(m.Site) is not { Complete: true } site || !InScope(world, town, at, CampaignTown.OfPlayer(site.Town), site.Position)) continue;
                 if (owner >= 0 && site.Owner != owner || animal && site.Parent is not null) continue;
                 float d = Vector2.DistanceSquared(here, Flat(site.Position));
                 if (d < bestD) (best, bestD) = ((m.Site, Flat(site.Position)), d);
@@ -493,7 +494,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
         foreach (var f in world.Fixtures.All)
         {
             if (looter >= 0 && f.Owner == looter || owner >= 0 && f.Owner != owner) continue;
-            if (f.Contents is not { } c || f.Lock is { EffectivelyLocked: true } || !c.Items.Any(i => Edible(i, animal)) || !InScope(world, town, at, AiSystem.TownAt(data, world, f.Position), f.Position)) continue;
+            if (f.Contents is not { } c || f.Lock is { EffectivelyLocked: true } || !c.Items.Any(i => Edible(i, animal, race)) || !InScope(world, town, at, AiSystem.TownAt(data, world, f.Position), f.Position)) continue;
             float d = Vector2.DistanceSquared(here, Flat(f.Position));
             if (d < bestD) (best, bestD) = ((f.Id, Flat(f.Position)), d);
         }
@@ -512,12 +513,13 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
         return Math.Abs(a.X - b.X) <= 1 && Math.Abs(a.Y - b.Y) <= 1;
     }
 
-    /// <summary>Food the finder looks for: <c>item function</c> 3, for an animal also raw food (15).</summary>
-    static bool Edible(ItemInstance item, bool animal) => item.IsFood || animal && item.ItemFunction == FeedSystem.RawFoodFunction;
+    /// <summary>Food the finder looks for (<c>FUN_14042ee50</c>): <c>item function</c> 3, and raw food (15) for an animal or when the race's special food lists it.</summary>
+    static bool Edible(ItemInstance item, bool animal, RaceData? race = null) =>
+        item.IsFood || item.ItemFunction == FeedSystem.RawFoodFunction && (animal || race?.SpecialFood.Contains(item.Record) == true);
 
     /// <summary>Whether the member has room for the item <see cref="StepFood"/> would take from the store (<see cref="Inventory.HasRoomFor"/>).</summary>
     bool FoodFits(World world, string storeId, CharacterCold cold) =>
-        StoreInventory(world, storeId) is { } store && cold.Inventory is { } inv && store.Items.FirstOrDefault(i => Edible(i, false)) is { } item && inv.HasRoomFor(item);
+        StoreInventory(world, storeId) is { } store && cold.Inventory is { } inv && store.Items.FirstOrDefault(i => Edible(i, false, cold.Race)) is { } item && inv.HasRoomFor(item);
 
     Inventory? StoreInventory(World world, string id) => world.Machines.Find(id)?.Storage ?? world.Fixtures.Find(id)?.Contents;
 
@@ -801,6 +803,18 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
         }
     }
 
+    /// <summary>
+    /// Grabbing one food (244, <c>FUN_140340850</c>, <b>Verified</b>): the first raw-food item (function 15) the character accepts (an animal, or the race's special food), else the first food
+    /// (function 3); one unit goes into the worn backpack when it takes it, else the character's inventory. Returns the units moved (0: nothing to take, or no room).
+    /// </summary>
+    static int GrabFood(Inventory store, CharacterCold c, Inventory into)
+    {
+        bool animal = c.Medical is { HasStatsObject: false };
+        var item = store.Items.FirstOrDefault(i => i.ItemFunction == FeedSystem.RawFoodFunction && Edible(i, animal, c.Race))
+            ?? store.Items.FirstOrDefault(i => i.IsFood);
+        return item is null ? 1 : InventoryCommands.MoveInto(store, item, 1, into, bagFirst: true, out _);   // nothing listed is no failure of room
+    }
+
     bool StepFood(World world, TownDuty d, int g, CharacterCold gc)
     {
         var table = world.Characters;
@@ -818,9 +832,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
             TaskStart.Stand(table, g);
             if (d.Kind == TownDutyKind.LootFood)
                 LootFirstFood(store, into);
-            else if (store.Items.FirstOrDefault(i => Edible(i, d.PlayerSide && gc.Medical is { HasStatsObject: false })) is { } item
-                && InventoryCommands.MoveInto(store, item, 1, into, bagFirst: false, out _) == 0   // the grid, else the worn bag (state 82)
-                && InventoryCommands.MoveInto(store, item, 1, into, bagFirst: true, out _, bagOnly: true) == 0 && d.PlayerSide)
+            else if (GrabFood(store, gc, into) == 0 && d.PlayerSide)
                 foodWaits.Add((d.Member, world.GameHours + Settings.RefuseHours));   // no room for it: not again for a while
             world.Machines.Touch();
             return End(world, d);

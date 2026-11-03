@@ -48,6 +48,7 @@ Factory mappings grouped by identical class; each ID occurs exactly once:
 - Task_GoHomeTown: 128
 - Task_GoHomeTownFast: 127
 - Task_grabOneFood: 244
+  Update `FUN_140340850` (**Verified**): the candidates are the building's food list, else its inventory items of function 15 first, then 3; function 3 is always accepted, function 15 for an animal or when the race's `special food` lists it (`FUN_14042ee50`); the first accepted goes into the worn backpack when it takes it, else into the character's inventory, one item, then the task completes (fails with none). Meitou: `TownDutySystem.GrabFood`.
 - Task_HuntingSmell: 176
 - Task_InvestigateAlarms: 209, 210
 - Task_Kidnapping: 246
