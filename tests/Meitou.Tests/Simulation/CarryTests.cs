@@ -336,4 +336,18 @@ public class CarryTests
         Assert.True(carry.WakesIntoPutDown(Make(0, false), Make(2, true)));
         Assert.True(carry.WakesIntoPutDown(Make(0, false), Make(0, true)));
     }
+
+    [Fact]
+    public void Goal_169_puts_a_woken_body_down_only_for_a_carrier_whose_goal_lists_hold_it()
+    {
+        // The AI scores only the goals of its lists: a carrier whose race goals (or package) lack 169 keeps the awake body on its shoulder.
+        using var rig = new Rig(1, minPartition: 1, seed: 21);
+        var carrier = rig.Add(1000, 2000, player: false, squad: 1, faction: 0);
+        var goal = new Meitou.Data.Gameplay.Ai.AiGoal(new Meitou.Data.Gameplay.Ai.AiTask("169", "Putting down", Meitou.Data.Gameplay.Ai.TaskType.PUT_DOWN_CARRIED_DUDE_IF_THEY_CAN_WALK, Meitou.Data.Gameplay.Ai.TaskPriority.Urgent, Meitou.Data.Gameplay.Ai.TaskTargetType.Self, Meitou.Data.Gameplay.Ai.TaskEndEvent.Nothing), 0, 24, 1);
+        var squad = rig.World.Squads.Find(1)!;
+        rig.Cold(carrier).Ai = new Meitou.Simulation.Ai.AiMind { Squad = squad };
+        Assert.False(rig.Carry.ListsPutDown(rig.World, carrier.Slot, rig.Cold(carrier)));
+        rig.Cold(carrier).Ai = new Meitou.Simulation.Ai.AiMind { Squad = squad, RaceGoals = [goal] };
+        Assert.True(rig.Carry.ListsPutDown(rig.World, carrier.Slot, rig.Cold(carrier)));
+    }
 }

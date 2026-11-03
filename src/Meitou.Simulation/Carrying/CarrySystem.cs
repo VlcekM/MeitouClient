@@ -15,8 +15,8 @@ namespace Meitou.Simulation.Carrying;
 /// bone, <see cref="AttachBone"/>), weighs <c>carry person weight</c> in the carrier's load (<see cref="BodySystem"/>) and lifts a carrier's speed mode from walk to run (<see cref="MovementSystem"/>).</item>
 /// <item><b>Pick up</b> (<see cref="CharacterTask.PickUp"/>): the walk to the body (the first aid pattern), then the <c>shoulder lift left</c> clip: attached at 0.4 of it, done at 0.95.
 /// <b>Put down</b> (<see cref="CharacterTask.PutDown"/>): the clip backwards, let go below 0.2; a body the carrier does not regard as friendly is knocked out again.</item>
-/// <item><b>Dropped</b> at once when the carrier is knocked out or dies or its left arm fails or is cut off. A body that comes round is put down by an NPC carrier unless it is chained and the carrier's enemy (goal 169, <see cref="WakesIntoPutDown"/>), which is knocked out again on the
-/// shoulder (engine choice); a player-side carrier sets only a friendly one down. A squad mate lifted awake (<see cref="CharacterCold.CarriedAwake"/>) rides until put down.</item>
+/// <item><b>Dropped</b> at once when the carrier is knocked out or dies or its left arm fails or is cut off. A body that comes round is put down by an NPC carrier when the carrier's lists hold goal 169 (<see cref="ListsPutDown"/>) unless it is chained and the carrier's enemy (<see cref="WakesIntoPutDown"/>); any other rides on awake (a player-side body that is no friend is knocked out again on the
+/// shoulder, engine choice); a player-side carrier sets only a friendly one down. A squad mate lifted awake (<see cref="CharacterCold.CarriedAwake"/>) rides until put down.</item>
 /// <item><b>Rescue</b>: the rescue job, and NPC squads' knocked-out leaders (<see cref="CarrySettings.RescueNpcLeaders"/>).</item>
 /// <item><b>Loot</b> (<see cref="CharacterTask.Loot"/>): the walk, then everything of the main inventory and the backpack that fits moves to the looter (<see cref="LootOrder"/>), or the body's
 /// inventory opens in a window to take from (<see cref="OpenLootOrder"/>); a member of the victim's faction who sees it makes it a theft. NPCs with goal 177 loot by the original's
@@ -681,6 +681,19 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
         return !chained || !enemy;
     }
 
+    /// <summary>
+    /// Whether the carrier's goal lists hold goal 169 now (<b>Verified</b>, the AI scores only the goals of its lists: the role list of its squad's running package, or its campaign phase's, and its race's
+    /// <c>AI Goals</c>, in the goal's hour window; docs/game/carry-loot.md "Goal 169"). A character with no squad or AI lists none.
+    /// </summary>
+    internal bool ListsPutDown(World world, int slot, CharacterCold carrier)
+    {
+        int hour = world.Hour;
+        foreach (var g in carrier.Ai?.RaceGoals ?? [])
+            if (g.Task.Type == TaskType.PUT_DOWN_CARRIED_DUDE_IF_THEY_CAN_WALK && g.InWindow(hour)) return true;
+        return world.SystemOf<PopulationSystem>() is { } population && world.Squads.Find(carrier.SquadId) is { } squad
+            && population.GoalDuty(world, squad, Ai.AiSystem.RoleOf(squad, world.Characters.IdOf(slot), carrier), TaskType.PUT_DOWN_CARRIED_DUDE_IF_THEY_CAN_WALK);
+    }
+
     /// <summary>The put-down KO of a body its carrier does not regard as friendly (nothing for the dead).</summary>
     void KnockOutHeld(CharacterCold carrier, CharacterCold body)
     {
@@ -716,11 +729,12 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
             if (body.Medical is { Incapacitated: true }) body.CarriedAwake = false;   // knocked out on the shoulder: set down when it comes round
             else if (body.Medical is not null && !body.CarriedAwake)
             {
-                // The body came round. The AI's goal 169 PUT_DOWN_CARRIED_DUDE_IF_THEY_CAN_WALK puts it down unless it is chained and the carrier's enemy (see WakesIntoPutDown);
-                // the put-down task knocks a body the carrier does not regard as friendly out again on the ground. A kept captive is knocked out again on the shoulder (engine stand-in: no awake carried body).
+                // The body came round. The AI's goal 169 PUT_DOWN_CARRIED_DUDE_IF_THEY_CAN_WALK puts it down when the carrier's package lists it, unless the body is chained and the carrier's enemy
+                // (see WakesIntoPutDown); the put-down task knocks a body the carrier does not regard as friendly out again on the ground. Any other awake body rides on (no goal puts it down).
                 if (PlayerSide(world, cold)) { if (Friendly(cold, body)) { Unlink(world, i, b, drop: false); continue; } KnockOutHeld(cold, body); }
+                else if (!ListsPutDown(world, i, cold)) body.CarriedAwake = true;
                 else if (WakesIntoPutDown(cold, body)) BeginPutDown(world, i);
-                else KnockOutHeld(cold, body);
+                else body.CarriedAwake = true;
             }
             ref var bn = ref next[b];
             bn.Position = next[i].Position;
