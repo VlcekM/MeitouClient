@@ -130,6 +130,7 @@ sealed class ObedientJobs : IJobSource, ITaskHandler
     {
         public required TownBuilding Building;
         public required string Clip;
+        public string? Functionality;
         public int Epoch;
         public int Fails;
     }
@@ -267,7 +268,7 @@ sealed class ObedientJobs : IJobSource, ITaskHandler
         // A new pick: another roll each time it starts working anew.
         int epoch = spot is null ? 0 : spot.Epoch + 1;
         if (ai.WorkAt(world, id, at, epoch) is not { } found) return;
-        works[id] = new WorkSpot { Building = found.Building, Clip = found.Clip, Epoch = epoch };
+        works[id] = new WorkSpot { Building = found.Building, Clip = found.Clip, Functionality = found.Functionality, Epoch = epoch };
         if (Near(table.Next[slot].Position, found.Building)) Work(world, slot, k, type);
         else Walk(world, slot, k, type, found.Building);
     }
@@ -301,12 +302,17 @@ sealed class ObedientJobs : IJobSource, ITaskHandler
         float dx = spot.Building.Position.X - n.Position.X, dz = spot.Building.Position.Z - n.Position.Z;
         if (dx * dx + dz * dz > 1e-4f) n.Yaw = MathF.Atan2(dx, dz);
         cold.ActionClip = spot.Clip;
+        cold.ActionWork = AiSystem.StandingWork(spot.Functionality, spot.Clip);
     }
 
     /// <summary>Another task takes the worker: the work clip goes.</summary>
     void ITaskHandler.End(World world, int slot, CharacterTask task, TaskEnd reason)
     {
         var cold = world.Characters.Cold(slot)!;
-        if (works.TryGetValue(world.Characters.IdOf(slot), out var spot) && cold.ActionClip == spot.Clip) cold.ActionClip = null;
+        if (works.TryGetValue(world.Characters.IdOf(slot), out var spot) && cold.ActionClip == spot.Clip)
+        {
+            cold.ActionClip = null;
+            cold.ActionWork = null;
+        }
     }
 }

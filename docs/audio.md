@@ -292,8 +292,20 @@ through one helper (`FUN_1405c9a70(char, event, maxSqDist)`): **dropped when the
   `stonemine`, plays) and of `Task_UseTrainingDummy` (slot 2 `FUN_14035c1e0`) adds the BUILDING_FUNCTIONALITY's `animation events` to that clip on the operator (`FUN_140065280`, `FUN_140064e10`;
   time = value x 0.01): a sorted insert that skips an event record already there at that time and moves the clip's next-event index past an event inserted before its last fraction
   (`FUN_140064870`). No removal was found: they last as long as the clip's instance (**Observed**). Data (base game and rebirth, **Verified** by probe): mines `Impact` with `Impacts` =
-  `Ore` / `Stone` / `Copper` at 30 %, plates and weapon smiths `Plate` 30 %, farms `Character_farm` 30 % (its `ground effect` is not implemented), sword and assassin training `Dummy` 40 %;
+  `Ore` / `Stone` / `Copper` at 30 %, plates and weapon smiths `Plate` 30 %, farms `Character_farm` 30 % (with a ground effect, below), sword and assassin training `Dummy` 40 %;
   the `stonemine` clip's own `Pickaxe` is `Attack` with `Weapons` = `Work_Pick` at 10 %. SFX_General_Bank has those `Impacts` cases and `Attack`'s `Work_Pick` (**Verified**, hashed names).
+  The AI's worker goals act out through the same task (87 / 221, [ai-tasks](game/ai-tasks.md#slave-work-shout-and-capture)), so NPC town workers and obedient slaves sound alike.
+- **Ground effect** (a particle, not a sound; **Verified**, decompile, unless marked): an ANIMATION_EVENT with `ground effect` set also becomes an `AnimationGroundEvent` on the clip
+  (`FUN_140064e10`; it keeps the `bone`). Base game and rebirth (**Verified**, probe): `Footstep R` / `Footstep L` (bones `Bip01 R/L Foot`) and the farms' `Impact Farm` (no bone).
+  Firing (`FUN_140065330`): nothing while a character flag at `+0x1a9` is clear (**Unknown** meaning) or without a body entity. The point is the named bone's world position (the character's
+  without a bone or when the bone's height comes out 0). Under the water height: the BIOMES record's `water effects` entry (v0 depth, v1 speed) with the greatest v0 at
+  most the depth, then greatest v1 at most the speed, at the water surface. Dry: only when the ground ray's hit has the null handle (type `0xb`, the terrain; **Observed**); the biome's
+  `ground effects` slot for the overlay channel at the point (`FUN_140a16f70`, the footsteps' channel pick), fired when the speed is at least its min speed and `rand()`/32768 is at most
+  its chance; a bone puts the point on the terrain. Slots (biome loader `FUN_140a13750`): an entry's v0 above 2 is lowered by one, then 0..4 picks the slot; v1 is the min speed, v2 x 0.01
+  the chance. The effect spawns through a pool (none when full) only inside the camera frustum (`FUN_140a08c00`). Data (`gamedata.base` dump): 59 BIOMES list `ground effects`
+  (`Dustkick01`, `01a`, `01b`, `01c`; min speed 0, 30 or 40; chance 100), 70 list `water effects` (`Watersplash` v0 0, `WadingFoam` v0 3); a farmer standing at work (speed 0) kicks
+  dust only where the slot's min speed is 0 (**Observed**). **Not in Meitou**, for footsteps or farms: `ParticleRenderer.Burst` can fire a system, but how a one-shot EFFECT instance
+  maps onto it, the `+0x1a9` flag and the v0 slot shift are **Unknown**.
 
 Meitou (`CharacterSounds`, `AnimationSoundEvents`, `GroundSurfaces` in `Meitou.Audio`; `GameHost.AudioCharacters.cs`): characters within 1100 units of the eye get an object (dropped past 1400, or when they leave the snapshot);
 the host hands each character's place, facing, speed (horizontal distance between the last two snapshots over the tick) and animation layers (`AnimationLayer.Length` and `.Definition`, added to the snapshot) every frame.
@@ -317,9 +329,10 @@ warden locks one, `Character_Pick_Up_Ground` on a character that takes a ground 
 on the GUI object with `Inventory_Items` of the item, `FUN_140715560`), that `Item_Drop` through `UiSounds` when the shackles are on. The exe's AI cuffing (`Task_CuffTarget`: "Restraining" bar, `medic` animation) posts no event (**Verified**: no `PostEvent` caller in it), so a put-on by anyone but the player is silent. The RE found no task sound for dismantling (order 96; only `Task_Build`, orders 2 and 95, loops: **Observed**), so it is silent but for `Thing_Complete` when done. **No trigger in Meitou:** `Character_Inspect` (loot targets
 only characters), `Character_Unlock_Fail` as a sound of its own (it is only the loop's Stop; a failed roll posts nothing, as in the exe), `Character_Building_Materials` (no bank has it), `Sell_Item` from NPC shoppers, `Character_Drop_Person` from the corpse machine.
 Meitou's wardens have no unlock loop (their rounds only start the click); the player's lock picking loops as the exe's `Task_PickLock`.
-Machine work: while an operator works, the snapshot's `WorkEvents` (functionality and clip) has the host give that clip's layer its events with the functionality's added
-(`AnimationSoundEvents.Attach`), kept until the layer is gone (engine choice: another machine's events replace them where the exe's instance would hold both; NPC town workers and
-obedient slaves, which Meitou runs outside `Task_OperateMachine`, get none). The simulation's time of a looping clip that is neither synched nor a side step runs on past its length; the host wraps
+Machine work: while an operator works (the player's operate task, or an AI worker's or obedient slave's standing work at its building's functionality clip: `CharacterCold.ActionWork`),
+the snapshot's `WorkEvents` (functionality and clip) has the host give that clip's layer its events with the functionality's added (`AnimationSoundEvents.Attach`), kept until the layer
+is gone; a clip still playing when its worker starts at another machine takes that machine's events too, as the exe's instance would. Not covered: the town's training dummies, which
+Meitou's AI stands at with no clip. The simulation's time of a looping clip that is neither synched nor a side step runs on past its length; the host wraps
 its fraction, so the events of `stonemine`, `chop down static` and the swim clips fire on every pass, as the exe's cursor does.
 
 **Unarmed `Weapons`** (`FUN_1402b4570`, when a technique is chosen): the switch becomes `HtH_Punch` when the technique's last blow uses limb 0 or 1 (the arms, **Verified**) else `HtH_Kick`, with `_Robot` appended for a robot (**Observed**: the exe also appends it when a limb check on the attacker's race says robotic limbs). Meitou applies it when the animation of a COMBAT_TECHNIQUE valid

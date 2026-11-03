@@ -647,7 +647,8 @@ Meitou: [simulation, captives](../simulation.md#captives).
   (`Blackboard +0x88`) for a building through `BuildingFinder_SpecialFunction` (mask 0x41a read as bits, **Observed**: 1 MINE, 3 RESEARCH, 4 REFINERY, 10 CRAFTING) and takes one at random
   (slot 2 `FUN_1409fb020`: index `FUN_1409b3b40(0, n - 1)`); the town test is the one in the table above. Acting out is 87 (real: needs the machine's inputs and output room, power, a free operator slot) or
   221 (pretend); both `Task_OperateMachine` ([sitting and the held tool](ai-tasks.md#town-goals), [production](buildings-production.md#production)). Meitou's NPC towns have no running machines, so both are
-  the same standing at the building at its functionality's clip (`stonemine` by default): **engine choice**, the building's `use range` is not read (30 units).
+  the same standing at the building at its functionality's clip (`stonemine` by default) with its `animation events` ([audio](../audio.md#characters-footsteps-combat-voices) "Machine work"):
+  **engine choice**, the building's `use range` is not read (30 units).
 - **Obedient Slave** (187, flags 0x75, TaskData kind +4 = 1 and +8 = 0 like a plain job, no lists, no desire or finder of its own, task class `Task_Blank`). Meitou:
   [simulation, captives](../simulation.md#captives). A **perma-job** (it sits in the character's job list, `+0x88`), not a goal, whoever the character is.
   - **Added and removed** (**Verified**, `FUN_1405a4940` slave state setter -> `FUN_14032e0d0`): when the slave state *changes* (the setter does nothing for the same state), a change **to 1**

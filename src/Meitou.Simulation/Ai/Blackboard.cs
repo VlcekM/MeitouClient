@@ -467,6 +467,8 @@ public sealed class AiMind
     public bool WorkActive { get; set; }
     /// <summary>The clip it plays at its work (the ANIMATION its building's functionality names), cleared with <see cref="CharacterCold.ActionClip"/> when it stops; null when not working.</summary>
     public string? WorkClip { get; set; }
+    /// <summary>Its work building's BUILDING_FUNCTIONALITY (string id; null without one), whose <c>animation events</c> sound on <see cref="WorkClip"/>. Set with it, so not hashed.</summary>
+    public string? WorkFunctionality { get; set; }
     /// <summary>Its work building's functionality <c>hunger rate</c> (1 by default), what <c>Task_OperateMachine</c> gives its operator. Set with <see cref="WorkClip"/>, so not hashed.</summary>
     public float WorkHungerRate { get; set; } = 1;
     /// <summary>Its first think puts it where its plan's walk ends (<see cref="Squad.Resume"/>: back from its town's time unloaded); cleared by that think.</summary>
