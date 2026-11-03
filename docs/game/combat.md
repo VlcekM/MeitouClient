@@ -161,8 +161,11 @@ side" is the same as a failed roll. Each defence tick replays the technique thro
 continues it too, a different one clears the layers and starts fresh (`FUN_1405b7800`). A block is not ended by its clip: it lasts while any incoming swing has 0 < v < 1, then ends with the wait
 (+0x148); a dodge ends past 0.98 (state 4). Whether a block clip held past its length loops or stays on its last frame is **Unknown** (a fading block layer, +0x62, plays backwards).
 The front/rear heading is the movement object's current unit heading (+0x640 +0xd0, [fight steering](#fight-steering)).
-Each defence tick also turns the defender towards the followed attacker (`FUN_140666400(this, +0x1a8)`, the call that turns a swinger to its target when over 5 away). Meitou: not
-modelled; a defender steers at its fight target (`Fighting.cs`). Animals never defend: a defender whose vfunc 0x248 is set gets a 2 s no-defence timer (`FUN_140609290`); Meitou: not modelled.
+**Verified** (`FUN_140666400`, `FUN_14060a190`): each defence tick turns the defender at once towards the followed attacker when it is over 5 away (3D, 25 = 5²) and sets the movement's look-at to it,
+except while the current technique is a block (+0x2c) of direction 7, 8 or 9, which is met turned away. The defending band (slot 12) is kept to the followed attacker (limit 16), or, with a
+focused target (+0x2c8, orders 5 and 61), to that one (powerThrough, limit 18). Which of the two headings wins for a focused defender (the turn, or the steering facing its band target later in
+the frame) is **Unknown**. Meitou: `Fighting.BandTarget` (the band and so the steering's facing; the player's pick is the focused target), `CombatSystem.DefenceAim` (the turn when not
+steering, e.g. on Hold). Animals never defend: a defender whose vfunc 0x248 is set gets a 2 s no-defence timer (`FUN_140609290`); Meitou: not modelled.
 Meitou: `CombatSystem.MostAdvanced` (the followed swing; an exact tie keeps the followed one, else the lower slot, since the grid's order is not stable), `React` (start),
 `Reconsider` (the update), `ReactionEnds` (a blow counts as on its way until the attacker's state shows it struck: strikes apply after every Act, a far attacker's at its own step), `CombatTuning.DefenceStartProgress`. A held block's progress
 is clamped at 1, so it keeps blocking (the engine's reading of the loop question). A blow decided again rolls the same: Meitou's rolls are fixed per blow, the original draws afresh.
@@ -528,8 +531,8 @@ Each frame it builds a velocity from forces, not a path:
   +0x110 = CombatClass +0x278 = 1.5 × the raw footprint × the size k (**Verified**: `FUN_14060ce30` rewrites it every tick from `myRadiusX` × the double at `0x1416b3be0` = 1.5, then × Character vfunc 0x390; `FUN_1402ae6d0` copies it; the 1.4 written here before was wrong). Calls: attack start and state 5 (n = 1.4r, f = max' of `FUN_14060cd20`, powerThrough on);
   state 5 escorting (+0x178 → +0x20 set: n = max', f = 50); state 6 (n = N/4 + 15, f = 3N + 25, the drawn side speed); the walk
   of `AttackState.Enter` when no technique is in reach (slot 1 `1402b4af0` → `FUN_1402b4570`: n = 0.7r, f = max'/2, powerThrough; **a swing itself has no band**, see
-  [Facing and movement in a swing](#facing-and-movement-in-a-swing)); defending (slot 12: n = r + 7.5, f = r + 19, limit 16, or 18 with powerThrough on a designated
-  target +0x2c8); the defaults are 10, 20, limit 200. The **circling speed +0x114 is written but never read** (no read of +0x114 or
+  [Facing and movement in a swing](#facing-and-movement-in-a-swing)); defending (slot 12: n = r + 7.5, f = r + 19, kept to the followed attacker +0x1a8 with limit 16, or to a designated
+  target +0x2c8 with powerThrough and limit 18); the defaults are 10, 20, limit 200. The **circling speed +0x114 is written but never read** (no read of +0x114 or
   CharMovement +0x22c anywhere): state 6 does not orbit.
 - **Seek** along the facing (the unit vector to the target, or the lead point while chasing): with d = centre distance and R = own radius
   `+0xe0` + target radius (`getRadius`, footprint × size), m(X) = (d / (R + X) − 1) × 100; outside max the seek is m(max) × 2 × speed mult

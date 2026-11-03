@@ -635,6 +635,30 @@ public sealed partial class CombatSystem
         return true;
     }
 
+    /// <summary>
+    /// The defence update's turn (<c>FUN_140666400</c>, called every tick from <c>FUN_140609c70</c>): a defending fighter faces the attacker its defence follows at once when that one is over 5 away,
+    /// except while it plays a block of a rear direction (7, 8 or 9), which is met turned away. A steering defender faces it through its band (Fighting.BandTarget).
+    /// </summary>
+    public bool DefenceAim(World world, int i, out Vector2 dir)
+    {
+        dir = default;
+        var prev = world.Characters.Previous;
+        if ((uint)i >= (uint)prev.Length) return false;
+        ref readonly var s = ref read[i];
+        int a = s.ReactedSlot;
+        if (s.ReactTech < 0 || (uint)a >= (uint)prev.Length || a == i || !prev[a].Alive) return false;
+        var tech = techniques[s.ReactTech];
+        if (tech.IsBlock && tech.AttackDirection1 is 7 or 8 or 9) return false;
+
+        var to = prev[a].Position - prev[i].Position;
+        if (!(to.LengthSquared() > 25)) return false;
+        dir = new Vector2(to.X, to.Z);
+        float len = dir.Length();
+        if (len < 1e-4f) return false;
+        dir /= len;
+        return true;
+    }
+
     /// <summary>Any leg part is down (flesh - stun + rig &lt; 0): the original's two leg parts at medical +0x4d8 / +0x4e0 in the kick factor (<c>FUN_140886030</c>).</summary>
     static bool LegDown(MedicalState medical)
     {

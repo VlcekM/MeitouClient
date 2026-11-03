@@ -929,6 +929,7 @@ public sealed class MovementSystem(PathService paths) : ITickSystem, IDisposable
             }
 
             if (!steering && n.Task == (byte)CharacterTask.Attack && Fights is not null && Fights.SwingAim(world, i, out var swingAim)) n.Yaw = MathF.Atan2(swingAim.X, swingAim.Y);   // a swing turns at once to its target (FUN_140666400, FUN_14060a590)
+            else if (!steering && n.Task == (byte)CharacterTask.Attack && Fights is not null && Fights.DefenceAim(world, i, out var defenceAim)) n.Yaw = MathF.Atan2(defenceAim.X, defenceAim.Y);   // a defence turns at once to the swing it follows (FUN_140609c70)
             if (steering) { }   // its velocity is the steering's
             else if (finished)
             {
