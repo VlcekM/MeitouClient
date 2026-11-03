@@ -71,7 +71,7 @@ sealed partial class PlayerInterface
         else SleepIn(pending.Bed);
     }
 
-    /// <summary>Once a frame: a bed press held long enough opens its menu (the original's <c>FUN_1407a6bc0</c>: 99 when the selection carries someone, else the bed's order 258).</summary>
+    /// <summary>Once a frame: a bed press held long enough opens its menu (the original's <c>FUN_1407a6bc0</c>: 99 when the last selected character carries someone, else the bed's order 258).</summary>
     void UpdateBed()
     {
         if (bedPending is not { } pending || System.Diagnostics.Stopwatch.GetElapsedTime(pending.Since).TotalSeconds < ContextHoldSeconds) return;
@@ -79,7 +79,7 @@ sealed partial class PlayerInterface
         if (SelectedIds().Count == 0) return;
         var bed = pending.Bed;
         var carriers = Carriers();
-        var verbs = new List<(string Caption, Action Give)> { carriers.Length > 0 ? ("Put in Bed", () => PutIn(bed, carriers)) : ("Sleep", () => SleepIn(bed)) };
+        var verbs = new List<(string Caption, Action Give)> { Selected().LastOrDefault() is { } lead && !lead.Carrying.IsNone ? ("Put in Bed", () => PutIn(bed, carriers)) : ("Sleep", () => SleepIn(bed)) };
         // A bed the player built: its site's verbs too (dismantle...), which its quick click no longer reaches.
         if (session.CurrentSnapshot.Buildings.FirstOrDefault(s => bed.Id == s.Id + "@bed0") is { } site) verbs.AddRange(SiteVerbs(site));
         contextMenu = new(buildHost?.ItemName(bed.Record) ?? bed.Record, pending.At, verbs);
