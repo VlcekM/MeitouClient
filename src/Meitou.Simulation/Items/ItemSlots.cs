@@ -56,27 +56,40 @@ public sealed class ItemSlots
     public void RegisterSite(World world, PopulationData data, int site)
     {
         if (site < 0 || site >= data.Sites.Count || !sites.Add(site)) return;
+        foreach (var b in data.Sites[site].Buildings) AddBuilding(world, data, site, b);
+    }
+
+    /// <summary>
+    /// A building of a registered town laid out afresh (a town override's residents, <see cref="PopulationData.Relay"/>): its old slots go with the items lying in
+    /// them, and its new layout's come.
+    /// </summary>
+    public void RelayBuilding(World world, PopulationData data, int site, TownBuilding old, TownBuilding relaid)
+    {
+        if (!sites.Contains(site)) return;
+        EmptyBuilding(world, old);
+        AddBuilding(world, data, site, relaid);
+    }
+
+    void AddBuilding(World world, PopulationData data, int site, TownBuilding b)
+    {
+        if (b.ItemSlots.Count == 0 || world.Fixtures.IsEmptied(b.Key)) return;   // a bought house has none (EmptyBuilding)
         int townFaction = site < data.SiteFactions.Count ? data.SiteFactions[site] : -1;
-        foreach (var b in data.Sites[site].Buildings)
+        int owner = b.OwnerFactionId is { } o && data.FactionIndex(o) is var fi and >= 0 ? fi : townFaction;
+        owner = world.Fixtures.PropertyOwner(b.Key) ?? owner;
+        foreach (var s in b.ItemSlots)
         {
-            if (b.ItemSlots.Count == 0 || world.Fixtures.IsEmptied(b.Key)) continue;   // a bought house has none (EmptyBuilding)
-            int owner = b.OwnerFactionId is { } o && data.FactionIndex(o) is var fi and >= 0 ? fi : townFaction;
-            owner = world.Fixtures.PropertyOwner(b.Key) ?? owner;
-            foreach (var s in b.ItemSlots)
+            if (Group(data.Db, s.GroupId) is not { } group) continue;
+            var slot = new Slot
             {
-                if (Group(data.Db, s.GroupId) is not { } group) continue;
-                var slot = new Slot
-                {
-                    Id = s.Id, GroupId = s.GroupId, Position = s.Position, Yaw = TownBuildings.YawOf(s.Rotation), Owner = owner,
-                    Zone = WorldLayout.ZoneOf(s.Position.X, s.Position.Z),
-                };
-                if (Lying(world, slot, group) is { } found)
-                {
-                    world.GroundItems.Claim(found, slot.Id, owner);
-                    slot.Item = found;
-                }
-                all.Add(slot);
+                Id = s.Id, GroupId = s.GroupId, Position = s.Position, Yaw = TownBuildings.YawOf(s.Rotation), Owner = owner,
+                Zone = WorldLayout.ZoneOf(s.Position.X, s.Position.Z),
+            };
+            if (Lying(world, slot, group) is { } found)
+            {
+                world.GroundItems.Claim(found, slot.Id, owner);
+                slot.Item = found;
             }
+            all.Add(slot);
         }
     }
 

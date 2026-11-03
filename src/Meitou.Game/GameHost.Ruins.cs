@@ -5,9 +5,9 @@ using Meitou.Simulation.Locks;
 namespace Meitou.Game;
 
 /// <summary>
-/// The town buildings a town override ruined or stood up again (<see cref="WorldSnapshot.Ruins"/>, docs/game/buildings-production.md "Ruined by residents"): each replaces its
-/// level placement in the renderer's runtime placements, the navmesh overlay and the lamps, by its key, with <see cref="BuildingPlacement.DestroyedOverride"/> set; a
-/// ruin's particle effects go, a standing one's come.
+/// The town buildings a town override ruined or stood up again, or that were laid out afresh (<see cref="WorldSnapshot.Ruins"/>, docs/game/buildings-production.md
+/// "Ruined by residents", docs/game/factions-squads-towns.md "Town residents"): each replaces its level placement in the renderer's runtime placements, the navmesh
+/// overlay and the lamps, by its key, with <see cref="BuildingPlacement.DestroyedOverride"/> set and its layout names; a ruin's particle effects go, a standing one's come.
 /// </summary>
 sealed partial class GameHost
 {
@@ -30,7 +30,10 @@ sealed partial class GameHost
         foreach (var r in snapshot.Ruins) current[r.Building.Key] = r;
         foreach (string key in shownRuins.Keys.Where(k => !current.ContainsKey(k)).ToArray()) HideRuin(key);
         foreach (var r in current.Values)
-            if (!shownRuins.TryGetValue(r.Building.Key, out var shown) || shown.Destroyed != r.Destroyed) ShowRuin(r);
+        {
+            bool same = shownRuins.TryGetValue(r.Building.Key, out var shown) && shown.Destroyed == r.Destroyed && ReferenceEquals(shown.Building, r.Building);
+            if (!same) ShowRuin(r);
+        }
     }
 
     void ShowRuin(RuinedBuilding ruin)

@@ -9,13 +9,13 @@ namespace Meitou.Data.World;
 /// <item>the ruins (docs/game/buildings-production.md "Ruined by residents"): the original's squad setup <c>FUN_14057f1f0</c> destroys a home whose template has
 /// <c>building ruined</c> when the building can be (<c>FUN_14055b520</c>);</item>
 /// <item>the layouts (docs/game/factions-squads-towns.md "Town residents"): the original gives a home its template's <c>layout interior</c> and <c>layout exterior</c>
-/// (<c>FUN_140552140</c>), so a building whose level state names no layout is furnished by its residents.</item>
+/// (<c>FUN_140552140</c>), replacing or clearing what the level state names.</item>
 /// </list>
 /// </summary>
 public static class ResidentRuins
 {
     /// <summary>
-    /// Sets the level-data state's <c>destroyed</c> of each building its residents ruin and names its residents' layouts where the state names none; returns how
+    /// Sets the level-data state's <c>destroyed</c> of each building its residents ruin and names each home's layouts as its residents' template does; returns how
     /// many it ruined. A second call on the same levels does nothing.
     /// </summary>
     public static int Apply(GameDatabase db, WorldLevelData levels, BuildingLayouts layouts)
@@ -35,7 +35,7 @@ public static class ResidentRuins
                 foreach (var (b, t) in ResidentHomes.Assign(db, town, faction, list, player))
                 {
                     if (t.BuildingRuined && Ruin(db, levels, b)) ruined++;
-                    LayOut(db, layouts, b, t);
+                    LayOut(levels, b, t);
                 }
             }
             return ruined;
@@ -51,21 +51,33 @@ public static class ResidentRuins
     }
 
     /// <summary>
-    /// Names the template's layouts on its standing home where the level state names none and the building offers them. The original names them whatever the state
-    /// said (an empty one clearing the interior), ruins too; Meitou keeps a named layout (engine choice, <see cref="ResidentHomes.Assign"/>) and leaves a ruin bare,
-    /// as it draws no layout for one.
+    /// Names the template's <c>layout interior</c> and <c>layout exterior</c> on its home whatever the level state said, an empty one clearing it, ruins too (the
+    /// original's <c>FUN_140552140</c>; a name the building has no layout for places nothing, as in the original). Nothing reads a ruin's layouts.
     /// </summary>
-    static void LayOut(GameDatabase db, BuildingLayouts layouts, TownBuilding b, SquadTemplate t)
+    static void LayOut(WorldLevelData levels, TownBuilding b, SquadTemplate t)
     {
-        if (b.LevelState is not { } state || state.GetBool("destroyed") || db.Find(b.BuildingId) is not { } record) return;
-        Name(layouts, record, state, "interior layout name", t.LayoutInterior, exterior: false);
-        Name(layouts, record, state, "exterior layout name", t.LayoutExterior, exterior: true);
+        if (b.LevelState is not { } state) return;
+        var level = (state.GetString(InteriorKey), state.GetString(ExteriorKey));
+        if (level != (t.LayoutInterior, t.LayoutExterior)) levels.LevelLayoutNames.TryAdd(b.Key, level);
+        foreach (var (key, layout) in Names(t)) state.StringTable[key] = layout;
     }
 
-    static void Name(BuildingLayouts layouts, GameRecord record, GameRecord state, string key, string layout, bool exterior)
+    /// <summary>The level-state keys housing <paramref name="t"/> names, with the layout names it gives them (<see cref="LayOut"/>).</summary>
+    public static IEnumerable<(string Key, string Layout)> Names(SquadTemplate t) =>
+        [(InteriorKey, t.LayoutInterior), (ExteriorKey, t.LayoutExterior)];
+
+    public const string InteriorKey = "interior layout name", ExteriorKey = "exterior layout name";
+
+    /// <summary>
+    /// The interior and exterior layout names housing <paramref name="town"/>'s residents afresh in <paramref name="buildings"/> gives its homes (a town override,
+    /// <see cref="LayOut"/>), by building key; buildings it houses nobody in are not listed. <paramref name="playerOwned"/> as for <see cref="RuinedHomes"/>.
+    /// </summary>
+    public static Dictionary<string, (string Interior, string Exterior)> HomeLayouts(GameDatabase db, TownData town, FactionData? faction,
+        IReadOnlyList<TownBuilding> buildings, string? playerFactionId, IReadOnlySet<string>? playerOwned = null)
     {
-        if (layout.Length == 0 || state.GetString(key).Length > 0 || layouts.Find(record, layout, exterior) is null) return;
-        state.StringTable[key] = layout;
+        var result = new Dictionary<string, (string Interior, string Exterior)>(StringComparer.Ordinal);
+        foreach (var (b, t) in ResidentHomes.Assign(db, town, faction, buildings, playerFactionId, playerOwned)) result[b.Key] = (t.LayoutInterior, t.LayoutExterior);
+        return result;
     }
 
     /// <summary>

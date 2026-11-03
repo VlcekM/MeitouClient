@@ -102,8 +102,29 @@ public sealed record TownSite(int Index, TownData Record, Vector3 Position, Zone
 
     /// <summary>The placement's instance id in the level data (<c>9-rebirth-INGAME</c>), which the save's town state names.</summary>
     public string InstanceId { get; init; } = "";
-    /// <summary>The town's placed buildings with their beds and nodes (<see cref="TownBuildings"/>), the AI's homes; empty when the host gave none.</summary>
-    public IReadOnlyList<TownBuilding> Buildings { get; init; } = [];
+    /// <summary>
+    /// The town's placed buildings with their beds and nodes (<see cref="TownBuildings"/>), the AI's homes; empty when the host gave none. A building laid out
+    /// afresh (<see cref="PopulationData.Relay"/>) takes its old one's place.
+    /// </summary>
+    public IReadOnlyList<TownBuilding> Buildings { get => buildings; init => buildings = [.. value]; }
+    List<TownBuilding> buildings = [];
+    // The buildings as the boot laid them out, by position, of those laid out afresh since.
+    readonly Dictionary<int, TownBuilding> booted = [];
+
+    internal void Relay(TownBuilding old, TownBuilding relaid)
+    {
+        int index = buildings.FindIndex(x => ReferenceEquals(x, old));
+        if (index < 0) return;
+        booted.TryAdd(index, old);
+        buildings[index] = relaid;
+    }
+
+    /// <summary>The buildings laid out afresh go back to the boot's.</summary>
+    internal void ClearRelays()
+    {
+        foreach (var (i, b) in booted) buildings[i] = b;
+        booted.Clear();
+    }
     /// <summary>The zones the town's level state lists, as the original files them at load, which discovery counts as well as <see cref="Zone"/> (docs/game/ui-screens.md "Map"); empty for a Nest and when the host gave none.</summary>
     public IReadOnlyList<ZoneCoordinate> Coverage { get; init; } = [];
 }
@@ -145,6 +166,32 @@ public sealed class PopulationData
     {
         foreach (var s in Sites)
             if (s.Replacement is not null) SetReplacement(s.Index, null);
+        ClearRelays();
+    }
+
+    /// <summary>The building layouts, for laying a town building out afresh (<see cref="Relay"/>); null: buildings keep the boot's layouts.</summary>
+    public BuildingLayouts? Layouts { get; set; }
+
+    /// <summary>
+    /// Lays building <paramref name="b"/> of town <paramref name="site"/> out with other layout names (a town override's or a loaded save's residents, docs/game/factions-squads-towns.md
+    /// "Town residents"): the new building takes its place in <see cref="TownSite.Buildings"/> and is returned; <paramref name="b"/> itself when the names are its own
+    /// already or there are no layouts.
+    /// </summary>
+    public TownBuilding Relay(int site, TownBuilding b, string interior, string exterior)
+    {
+        if (Layouts is null || b.LayoutName(exterior: false) == interior && b.LayoutName(exterior: true) == exterior) return b;
+        var relaid = TownBuildings.Relay(Db, Layouts, b, interior, exterior);
+        if (ReferenceEquals(relaid, b)) return b;
+        Sites[site].Relay(b, relaid);
+        lock (turrets) turrets.Remove(site);
+        return relaid;
+    }
+
+    /// <summary>Every building back to the boot's layouts (with <see cref="ClearReplacements"/>, a new game or a save starting).</summary>
+    void ClearRelays()
+    {
+        foreach (var s in Sites) s.ClearRelays();
+        lock (turrets) turrets.Clear();
     }
 
     /// <summary>The nearest placed town whose radius holds a point (the game's position lookup, <c>FUN_140928890</c>), -1 when none.</summary>

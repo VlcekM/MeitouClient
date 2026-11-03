@@ -296,7 +296,7 @@ sealed partial class GameHost
                     : state?.GetString("name") is { Length: > 0 } own ? own : recordName;
                 string? type = name != recordName ? recordName : null;
                 // A shop whose state only carries its layout's generic name ("Shop", "Big Shop"): the Meitou UI calls it after what it sells.
-                string? sells = squad is { } s && s.GetBool("is trader") && state?.GetString("interior layout name") is { } layout && layout.Contains("Shop", StringComparison.Ordinal) && name == layout
+                string? sells = squad is { } s && s.GetBool("is trader") && placement.LayoutName(state, exterior: false) is { } layout && layout.Contains("Shop", StringComparison.Ordinal) && name == layout
                     && s.GetReferences("vendors").FirstOrDefault().TargetStringId is { } vendor && db.Find(vendor)?.Name is { Length: > 0 } list
                     ? char.ToUpperInvariant(list[0]) + list[1..] : null;
                 var (town, owner) = townOf is not null && townOf.TryGetValue((zone, instance), out var info) ? (info.Town, info.Owner) : (null, null);
