@@ -701,6 +701,12 @@ public sealed partial class PopulationSystem
             else work.Add(() => builtRoamers.Enqueue(new BuiltRoamer(id, null, Saving.SavedCharacters.Prepare(saved, data, context.Appearances, context))));
             return;
         }
+        // A player-owned platoon with nobody to bring is never filled from its template (FUN_1404ffad0, Verified): it is removed.
+        if (p.Faction >= 0 && p.Faction == PlayerFactionOf(world))
+        {
+            world.Platoons.Remove(p.Id);
+            return;
+        }
         if (work is null) FinishRoamer(world, new BuiltRoamer(id, BuildRoamer(p.TemplateId, p.Faction, p.Key, seed, position)));
         else
         {
