@@ -8,10 +8,13 @@ namespace Meitou.Game;
 /// <summary>The windowing library's keys and buttons as the engine's (null for the ones the engine has no name for).</summary>
 static class KeyMap
 {
+    /// <summary>The original's `swap mouse buttons`: the left and right buttons trade places (set from the settings). The original swaps only the GUI's presses; Meitou's GUI and game view share one press path, so the game view swaps too.</summary>
+    public static bool SwapButtons { get; set; }
+
     public static EngineButton? Map(SilkButton b) => b switch
     {
-        SilkButton.Left => EngineButton.Left,
-        SilkButton.Right => EngineButton.Right,
+        SilkButton.Left => SwapButtons ? EngineButton.Right : EngineButton.Left,
+        SilkButton.Right => SwapButtons ? EngineButton.Left : EngineButton.Right,
         SilkButton.Middle => EngineButton.Middle,
         SilkButton.Button4 => EngineButton.Button4,
         SilkButton.Button5 => EngineButton.Button5,

@@ -99,6 +99,13 @@ sealed partial class PlayerInterface
 
     /// <summary>The original's <c>Show names</c> option (<c>FUN_1406e2fd0</c>): off, the name tag keeps only its icons.</summary>
     public bool ShowNames { get; set; } = true;
+    /// <summary>The <c>font size2</c> option: points added to every GUI font's default height (applied to the painter once it exists).</summary>
+    public float FontSize
+    {
+        get => fontSize;
+        set { fontSize = value; if (uiPainter is not null) uiPainter.FontSizeSetting = value; }
+    }
+    float fontSize = Meitou.Data.Ui.KenshiFontSize.DefaultSetting;
 
     MyGuiLayout? taskBarLayout;
 

@@ -136,9 +136,14 @@ sealed class UserConfig
     /// <summary>The original's `invert X` (default off) and `invert Y` (default on); Controls settings. Null until first used, then taken from the install's settings.cfg.</summary>
     public bool? InvertX { get; set; }
     public bool? InvertY { get; set; }
+    /// <summary>The original's `swap mouse buttons` (default off; Controls settings): the left and right buttons trade places in the GUI and the game view. Null until first used, then taken from the install's settings.cfg.</summary>
+    public bool? SwapMouseButtons { get; set; }
+    /// <summary>The original's `font size2` (slider -10 … 32, default 3; Interface settings): points added to every GUI font's default height (<see cref="Meitou.Data.Ui.KenshiFontSize"/>). Null until first used, then taken from the install's settings.cfg.</summary>
+    public float? FontSize { get; set; }
     /// <summary>The original's `camera speed` (150 … 1000, default 500) and `camera zoom` (10 … 200, default 125); Controls settings. Null until first used, then taken from the install's settings.cfg.</summary>
     public float? CameraMoveSpeed { get; set; }
     public float? CameraZoomSpeed { get; set; }
+    public const float MinFontSize = -10, MaxFontSize = 32;
     public const float MinCameraMoveSpeed = 150, MaxCameraMoveSpeed = 1000, MinCameraZoomSpeed = 10, MaxCameraZoomSpeed = 200;
 
     /// <summary>Fills the camera options still unset from the install's settings.cfg (the original's missing-key defaults).</summary>
@@ -146,6 +151,8 @@ sealed class UserConfig
     {
         InvertX ??= Meitou.Audio.AudioSystem.Setting(install, "invert X", 0) != 0;
         InvertY ??= Meitou.Audio.AudioSystem.Setting(install, "invert Y", 1) != 0;
+        SwapMouseButtons ??= Meitou.Audio.AudioSystem.Setting(install, "swap mouse buttons", 0) != 0;
+        FontSize ??= Meitou.Audio.AudioSystem.Setting(install, "font size2", Meitou.Data.Ui.KenshiFontSize.DefaultSetting, MinFontSize, MaxFontSize);
         CameraMoveSpeed ??= Meitou.Audio.AudioSystem.Setting(install, "camera speed", Meitou.Data.World.KenshiCamera.DefaultMoveSpeed, MinCameraMoveSpeed, MaxCameraMoveSpeed);
         CameraZoomSpeed ??= Meitou.Audio.AudioSystem.Setting(install, "camera zoom", Meitou.Data.World.KenshiCamera.DefaultZoomSpeed, MinCameraZoomSpeed, MaxCameraZoomSpeed);
     }

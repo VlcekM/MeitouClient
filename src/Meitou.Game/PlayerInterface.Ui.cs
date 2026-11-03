@@ -99,7 +99,7 @@ sealed partial class PlayerInterface
 
     public void CreateUiPainter(DebugOverlay overlay, Func<string, string?> resolve)
     {
-        uiPainter = new(overlay, uiResources, resolve) { Mode = UiMode };
+        uiPainter = new(overlay, uiResources, resolve) { Mode = UiMode, FontSizeSetting = fontSize };
         findAsset = resolve;
         // The screens' pictures are read ahead (the overview's map is 43 MB), so that opening a screen only uploads them.
         uiPainter.Prefetch(FaithfulScreenFiles.SelectMany(s => faithfulScreens.Layout(s.Id).Widgets).Concat(faithfulHud.Widgets)

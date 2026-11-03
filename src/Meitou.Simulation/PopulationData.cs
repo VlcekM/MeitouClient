@@ -437,7 +437,7 @@ public sealed class PopulationSettings
     /// <summary>The <c>Squad size multiplier</c> setting (factions-squads-towns.md section 9).</summary>
     public float SquadSizeMultiplier { get; set; } = 1;
     /// <summary>The <c>Fast zone hopping</c> setting: a ring of one more zone round each box the player's characters ask for (<c>FUN_140a0f640</c>'s flag, <b>Verified</b>; the camera's block is not ringed).</summary>
-    public bool FastZoneHopping { get; init; }
+    public bool FastZoneHopping { get; set; }
     /// <summary>
     /// Game seconds a zone stays loaded after nothing asks for it. The original has three real-time countdowns whose lengths are
     /// Unknown (game-loop.md); this is an engine choice, long enough that walking back and forth over a zone edge never reloads.

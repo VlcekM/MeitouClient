@@ -156,6 +156,8 @@ sealed partial class GameHost
         config.Tutorials ??= Meitou.Audio.AudioSystem.Setting(install, "tutorials", 1) != 0;
         config.SeedCamera(install);
         config.ApplyCamera(session.Camera.Settings);
+        KeyMap.SwapButtons = config.SwapMouseButtons == true;
+        player.FontSize = config.FontSize ?? Meitou.Data.Ui.KenshiFontSize.DefaultSetting;
         config.MovementMarker ??= Meitou.Audio.AudioSystem.Setting(install, "Movement marker", 1) != 0;
         config.RotationMarker ??= Meitou.Audio.AudioSystem.Setting(install, "Rotation marker", 1) != 0;
         (player.MovementMarker, player.RotationMarker) = (config.MovementMarker == true, config.RotationMarker == true);

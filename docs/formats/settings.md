@@ -96,7 +96,7 @@ i.e. everything).
 | `camera zoom` | float; slider 10 … 200 | 125 | Camera Zoom Speed | Zoom step speed (+0x0C) |
 | `invert X` | bool | 0 | Invert mouse X | Stored as a ±1 factor at +0x10 |
 | `invert Y` | bool | **1** | Invert mouse Y | Stored as a ±1 factor at +0x14 (inverted by default) |
-| `swap mouse buttons` | bool | 0 | Swap mouse buttons | Swaps left and right buttons on the GUI |
+| `swap mouse buttons` | bool | 0 | Swap mouse buttons | Swaps left and right buttons on the GUI (Meitou: Controls page, `KeyMap.SwapButtons`; the game view swaps too, as its GUI and game presses share one path) |
 | `hardware_mouse` | bool | 0 | Hardware Mouse | Windows cursor instead of the drawn one; the tooltip says it needs a restart |
 | `Edge scrolling` | bool | 1 | Edge scrolling | Camera moves when the pointer is at the screen edge |
 | `mouse speed horizontal` | float | 1.5 (see text) | none | Scales the raw mouse x movement |
@@ -110,7 +110,7 @@ i.e. everything).
 | `Movement marker` | bool | 1 | Show movement marker | The green marker where you click (Meitou: Interface page, `UserConfig.MovementMarker`) |
 | `Rotation marker` | bool | 1 | Show rotation marker | The green marker while rotating the camera (Meitou: Interface page, `UserConfig.RotationMarker`) |
 | `floaters` | int 0 … 2 | 1 | Show damage floaters: Off = 0, Simple info = 1, Full info = 2 | Damage numbers; only shown within 4000 units (squared distance 1.6e7, FUN_1406508d0); 2 splits them by damage type. Layout: [ui-screens](../game/ui-screens.md#8-damage-floaters); stored at options +0x7c |
-| `font size2` | int (stored as float); slider −10 … 32 | 3 | Font Size | GUI font size: added in points to every font's MyGUI default height ([mygui.md](mygui.md)) |
+| `font size2` | int (stored as float); slider −10 … 32 | 3 | Font Size | GUI font size: added in points to every font's MyGUI default height ([mygui.md](mygui.md)) (Meitou: Interface page, `UiPainter.FontSizeSetting`) |
 | `tutorials` | bool | 1 | Tutorials | In-game tutorials ("Reset Tutorials" is a button, not a key) |
 | `censorship` | bool | 0 | Language censorship | Filters swearing in dialogue (FUN_14067e8b0) |
 | `language` | string, locale code | see text | none in options | The locale folder `locale/<code>/` used for translations; empty falls back to `steam_language`, unknown is `en_GB` ([localisation](localisation.md)). Meitou reads it; the launcher's Language setting writes this line, nothing else of the file ([launcher](../launcher.md)) |
@@ -143,7 +143,7 @@ into bus gains ([audio.md](../audio.md#volumes)). Meitou applies them at once fr
 | `attacks` | int 0 … 5 | 2 | Town attacks frequency: Bombardment = 0, High = 1, Normal = 2, Fewer = 3, Rare = 4, Never = 5 | A faction's wait between passing-by assaults on the player's towns, uniform, in game hours (**Observed**: the elapsed-time helper `FUN_140791bf0` read as hours): 0, [6, 48), [32, 96), [72, 144), [130, 188); 5 stops them (`FUN_140286a70`, `FUN_140290450`; [ai.md](../game/ai.md#package-classes)) |
 | `Dismemberment` | int 0 … 2 | 1 | Dismemberment: Never = 0, Rare = 1, Frequent = 2 | The options page binds the drop-down to the global `DAT_142133504` (`FUN_1403f0260`), which the hit, degeneration and eaten code read when a part is damaged (`FUN_14064f300`, `FUN_14064f5c0`, `FUN_140650370`, `FUN_14029af90`), so a change applies at once (**Verified**, decompile). [combat.md](../game/combat.md), [character-stats.md](../game/character-stats.md) |
 | `civilians` | bool | 1 | none | Loaded and saved; **no reader found** (no instruction addresses its global other than the writer; an access through the block's base pointer would not show up, so **Unknown**) |
-| `Fast zone hopping` | bool | 0 | Fast zone hopping | Keeps a larger area loaded so switching between distant characters skips loading: a ring of one more zone round the box of each player character ([character-stats](../game/character-stats.md#corpses), FUN_140a0f640; storage `DAT_142133518`, **Verified**) |
+| `Fast zone hopping` | bool | 0 | Fast zone hopping | Keeps a larger area loaded (Meitou: Gameplay page, applies to the running world)  so switching between distant characters skips loading: a ring of one more zone round the box of each player character ([character-stats](../game/character-stats.md#corpses), FUN_140a0f640; storage `DAT_142133518`, **Verified**) |
 | `Auto save` | bool | 1 | Auto save | [save.md](save.md#autosave-fun_14047be70) |
 | `Auto save time (minutes)` | float; slider 1 … 30 | 10 | Auto save time (minutes) | same |
 | `User save location` | bool | 1 (see save.md) | User Save Location | Saves in `%LOCALAPPDATA%\kenshi\save` (1) or the install (0); [save.md](save.md) |
