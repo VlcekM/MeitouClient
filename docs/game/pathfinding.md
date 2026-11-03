@@ -283,7 +283,7 @@ outside it, `14.5:2-` probe: neither mesh at 2 outside the hull, both at 4), so 
 the original's inputs; its run-time mesh is not in the tiles). Hub: all 19 ruins have a boundary; floor points inside each outline are reached from the
 street (L-House `4645-Newwworld-INGAME` 39/39), as walkers enter it in the original (user report).
 **Doors**: every part of a `doors`-list building is group 5. **Observed** (35 door records): only
-`Defensive Gate level 4/5 Door` lack `is door`, yet open in game; without the rule Squin was sealed.
+`Defensive Gate level 4/5 Door` lack `is door`, yet open in game; without the rule Squin was sealed. **Verified** (decompile, s17-f13): the original reads no `is door` string anywhere; a building is a door by being made from a `doors` list (`FUN_140557280` factory `FUN_14057cc70`; DoorStuff constructor `FUN_14029fb40` sets the byte +0x1a0). Probe over the merged base and mod data: no BUILDING record has `is door`; 36 BUILDING_PART records have it, and two of them (`moor27-door2` of `Shop Door B`, `Storm_House_03_Door02` of `Storm House Door C II`) belong to buildings in no `doors` list, so Meitou keeps the flag test as well (the part flag, kept on purpose; no change).
 **Entrance seeds** (engine choice): cross the door's width axis. An exterior seed stands on the highest walkable surface at its marker at most
 `DoorSeedRise` (5) above the door box's base (the original drops the marker with a ray), else on the terrain or water; an interior seed on the lowest
 collision floor with agent-height headroom. **Observed** (Defensive Gate IV `2934-Walls2.mod`, zone 24.27, "this gate is fucked" save): its walkable
