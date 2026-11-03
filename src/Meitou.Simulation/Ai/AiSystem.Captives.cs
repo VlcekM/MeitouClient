@@ -130,5 +130,5 @@ public sealed partial class AiSystem
 
     /// <summary><c>GoOutOnPatrol_Cannibal</c> slot 12 (<c>FUN_140289d80</c>): no patrol while every cage of the squad's faction in its town is taken (CAGES_ARE_ALL_FULL).</summary>
     bool CannibalPatrolHeld(World world, Squad squad, Blackboard board, AiPackage package) =>
-        package.Signal == 4 && board.Town >= 0 && CaptiveSystem.CagesFull(world, data, board.Town, squad.Faction);
+        package.Signal == 4 && board.Town >= 0 && world.Characters.TryResolveNext(squad.Leader, out int leader) && world.Characters.Cold(leader) is { } who && CaptiveSystem.CagesFull(world, data, board.Town, who);
 }

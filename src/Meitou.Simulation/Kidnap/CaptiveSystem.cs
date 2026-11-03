@@ -460,13 +460,13 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
             case TaskType.KILL_A_RANDOM_CAGE_OCCUPANT:
                 site = FateTown(world, slot, board);
                 // The desire reads the town and creates its timer before any other test; the weapon is the plan's equip step (FateJob), not a condition of the goal.
-                if (site < 0 || !KillDue(world, site, cold.Faction) || combat is null) return null;
+                if (site < 0 || !KillDue(world, site, cold) || combat is null) return null;
                 return FateJob(world, slot, cold, board, site, CaptiveJobKind.Kill);
             case TaskType.EAT_A_RANDOM_CAGE_OCCUPANT:
                 return FateJob(world, slot, cold, board, FateTown(world, slot, board), CaptiveJobKind.Eat);   // no town test: the finder falls back to the nearest town
             case TaskType.EAT_A_RANDOM_CAGE_OCCUPANT_MEASURED_RATE:
                 site = FateTown(world, slot, board);
-                return site < 0 || !KillDue(world, site, cold.Faction) ? null : FateJob(world, slot, cold, board, site, CaptiveJobKind.Eat);
+                return site < 0 || !KillDue(world, site, cold) ? null : FateJob(world, slot, cold, board, site, CaptiveJobKind.Eat);
             case TaskType.EAT_A_RANDOM_DEAD_BODY:
             case TaskType.EAT_A_RANDOM_KO_BODY:
                 return BodyToEat(world, slot, cold, dead: type == TaskType.EAT_A_RANDOM_DEAD_BODY) is >= 0 and var meal
@@ -610,26 +610,31 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
         return table.Cold(table.TryResolveNext(best.Occupant, out int o) ? o : slot)!.Race is { IsRobot: true } ? null : best;
     }
 
-    /// <summary>All the cages of <paramref name="faction"/> in the town are held by live characters, and there is one (<c>FUN_1405a1ab0</c>, the state CAGES_ARE_ALL_FULL).</summary>
-    public bool CagesFull(World world, int site, int faction) => CagesFull(world, data, site, faction);
+    /// <summary>
+    /// The state CAGES_ARE_ALL_FULL (<c>FUN_1405a1ab0</c>, <c>FUN_1408cbea0</c> mask 0x100, <c>FUN_140a00690</c>): every cage of the character's town and of its squad's home town that
+    /// <see cref="FixtureRegistry.CanUse"/> (<c>canIUseThisBuilding</c>) passes for it holds a live character, and there is at least one.
+    /// </summary>
+    public bool CagesFull(World world, int site, CharacterCold who) => CagesFull(world, data, site, who);
 
-    public static bool CagesFull(World world, PopulationData data, int site, int faction)
+    public static bool CagesFull(World world, PopulationData data, int site, CharacterCold who)
     {
+        int home = world.Squads.Find(who.SquadId)?.Town ?? -1;
         bool any = false;
-        foreach (var f in CagesOf(world, data, site))
-        {
-            if (f.Owner != faction) continue;
-            if (OccupantSlot(world, f) < 0) return false;
-            any = true;
-        }
+        foreach (int town in home >= 0 && home != site ? new[] { site, home } : [site])
+            foreach (var f in CagesOf(world, data, town))
+            {
+                if (!world.Fixtures.CanUse(world, who, f)) continue;
+                if (OccupantSlot(world, f) < 0) return false;
+                any = true;
+            }
         return any;
     }
 
     /// <summary>The kill rate (AI slot 20, <c>FUN_14032e9b0</c>): the town's timer has run out, or all the faction's cages there are full. The first ask sets the timer.</summary>
-    bool KillDue(World world, int site, int faction)
+    bool KillDue(World world, int site, CharacterCold who)
     {
         if (!killAt.TryGetValue(site, out double at)) killAt[site] = at = NextKill(world, site);
-        return world.GameHours >= at || CagesFull(world, site, faction);
+        return world.GameHours >= at || CagesFull(world, site, who);
     }
 
     /// <summary>now + uniform[1, 15) game hours (<c>FUN_14034a810</c>).</summary>
