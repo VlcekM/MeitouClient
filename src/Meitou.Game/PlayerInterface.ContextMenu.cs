@@ -221,6 +221,8 @@ sealed partial class PlayerInterface
             if (target.CanOpenInventory) verbs.Add(InventoryVerb(target));
             if (!target.CarriedBy.IsNone) return;   // no pick-up verb or Throw out of home for a carried body
             verbs.Add(PickUpVerb(target));
+            if (target.StealthKoChance is { } downChance)   // 228 on a down character too (FUN_1407a6bc0:583-594)
+                verbs.Add((WithChance("Stealth KO", downChance), () => Say(new Meitou.Simulation.Carrying.StealthKoOrder(selection, id) { Tick = session.World.Tick })));
             ThrowOutVerb(verbs, target, selection);
             return;
         }

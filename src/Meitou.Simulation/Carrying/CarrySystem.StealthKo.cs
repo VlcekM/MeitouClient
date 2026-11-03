@@ -52,9 +52,9 @@ public sealed partial class CarrySystem
     static bool CanRunKnockOut(CharacterCold cold) =>
         cold is { Medical.Incapacitated: false, Race: not null, Stats: not null } && cold.Carrying.IsNone && cold.CarriedBy.IsNone;
 
-    /// <summary>A character that may be knocked out from behind: awake, with a body, not carried, not an animal (the verb list's <c>isAnimal</c> gate, so no cleansers).</summary>
+    /// <summary>A character that may be knocked out from behind: alive (a downed one too, the verb list offers 228 on it), with a body, not carried, not an animal (the verb list's <c>isAnimal</c> gate, so no cleansers).</summary>
     public static bool CanBeKnockedOut(CharacterCold cold) =>
-        cold is { Medical.Incapacitated: false, Race: not null } && cold.CarriedBy.IsNone && !CharacterFacts.Animal(cold);
+        cold is { Medical.Dead: false, Race: not null } && cold.CarriedBy.IsNone && !CharacterFacts.Animal(cold);
 
     /// <summary>
     /// The chance in per cent that a stealth knock-out lands (<c>FUN_1408852f0</c>, <b>Verified</b> literals; docs/game/combat.md "Stealth knock-out"). X = the attacker's assassination minus
@@ -229,7 +229,7 @@ public sealed partial class CarrySystem
                 table.Next[t].Velocity = Vector3.Zero;
             }
         }
-        else
+        else if (!target.Medical!.Incapacitated)
         {
             // A miss (Task_StealthKO, FUN_14034cd80, Verified): the victim says event 56 ASSASSINATION_FAILED at the attacker, notices it (its hearing of it is alarmed for 5 s), each
             // side's squad tags the other TEMP_ENEMY, and the victim goes for the attacker (Character::attackTarget; no assault is booked for that, so the order is a defensive one).
