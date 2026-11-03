@@ -132,7 +132,7 @@ public sealed partial class PopulationSystem
         float hours = (world.Tick - stored.StoredTick) * BodySystem.HoursPerTick;
         foreach (var m in stored.Members)
             if (m.Cold is { Medical: { } medical, Race: { } race } cold)
-                medical.Recover(hours, new MedicalContext(data.Bodies.Constants, data.Bodies.Options, race) { Toughness = cold.Stats?.Toughness ?? 1, Strength = cold.Stats?.Strength ?? 50, Resting = true });
+                medical.Recover(hours, new MedicalContext(data.Bodies.Constants, data.Bodies.Options, race) { Toughness = cold.Stats?.ScaledToughness ?? 1, Strength = cold.Stats?.Strength ?? 50, Resting = true });
         stored.StoredTick = world.Tick;
     }
 
@@ -148,7 +148,7 @@ public sealed partial class PopulationSystem
             {
                 if (m.Medical is not { } medical || m.Gone || m.Dead || data.Db.Find(m.Source.RecordId) is not { } record) continue;
                 if (CharacterAssembly.RaceId(record) is not { } raceId || CharacterAssembly.RaceDataOf(data.Db, raceId, recoverRaces) is not { } race) continue;
-                medical.Recover(hours, new MedicalContext(constants, options, race) { Toughness = m.Stats?.Toughness ?? 1, Strength = m.Stats?.Strength ?? 50, Resting = true });
+                medical.Recover(hours, new MedicalContext(constants, options, race) { Toughness = m.Stats?.ScaledToughness ?? 1, Strength = m.Stats?.Strength ?? 50, Resting = true });
             }
             saved.StoredTick = world.Tick;
         }

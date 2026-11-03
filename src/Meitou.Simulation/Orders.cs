@@ -139,7 +139,7 @@ public static class Orders
         float s = stats[StatsEnumerated.Stealth] * stats.Scale * (cold.Fighter is { } f ? f.EncumbranceFactor * f.StealthMult : 1);
         if (cold.Medical is { } medical)
         {
-            s *= medical.StealthBodyFactor(stats[StatsEnumerated.Toughness] * stats.Scale)
+            s *= medical.StealthBodyFactor(stats.ScaledToughness)
                 * Bodies.StatMultiplier.LimbItemFactor(medical, StatsEnumerated.Stealth, medical.Aggregates());
             if (medical.Prone) s *= 2;
         }

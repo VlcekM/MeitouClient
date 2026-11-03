@@ -21,7 +21,7 @@ public sealed partial class CombatSystem
     internal HudCombat? HudNumbers(World world, int slot, CharacterCold cold)
     {
         if (cold is not { Fighter: { } fighter, Stats: { } stats, Medical: not null }) return null;
-        float str = Eff(cold, StatsEnumerated.Strength), dex = Eff(cold, StatsEnumerated.Dexterity) * fighter.DexterityMult, tough = stats.Toughness * stats.Scale;
+        float str = Eff(cold, StatsEnumerated.Strength), dex = Eff(cold, StatsEnumerated.Dexterity) * fighter.DexterityMult, tough = stats.ScaledToughness;
         var fists = DamageFormulas.Unarmed(UnarmedRating(world, slot, cold, fighter), tough, str, combat);
         float cut = fists.Cut, blunt = fists.Blunt;
         if (!fighter.Unarmed)

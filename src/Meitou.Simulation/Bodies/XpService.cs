@@ -119,7 +119,7 @@ public sealed class XpService(GameConstants constants, BodyOptions options)
         {
             // Verified (FUN_1408c6980 event 4): toughness x CharStats +0x34 (the stat scale) against the packet's four terms, x xp rate toughness.
             stats.Gain(StatsEnumerated.Toughness, EventUnit * g * constants.XpRateToughness
-                * SkillDifferenceFactor(stats[StatsEnumerated.Toughness] * stats.Scale, damageTaken) * race.StatMultiplier(StatsEnumerated.Toughness));
+                * SkillDifferenceFactor(stats.ScaledToughness, damageTaken) * race.StatMultiplier(StatsEnumerated.Toughness));
         }
     }
 

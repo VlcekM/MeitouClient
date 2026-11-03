@@ -1050,7 +1050,7 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
         var medical = cc.Medical!;
         var ctx = new MedicalContext(data.Bodies.Constants, data.BodyOptions, cc.Race!)
         {
-            Toughness = cc.Stats?.Toughness ?? 0,
+            Toughness = cc.Stats?.ScaledToughness ?? 0,
             Strength = cc.Stats?.Strength ?? 50,
             HasStats = cc.Stats is not null,
             Seed = world.Seed,

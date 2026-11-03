@@ -180,7 +180,7 @@ public sealed partial class CombatSystem
         if (dc.Race!.IsRobot) material = 1;
         var (cut, blunt) = material switch { 1 => (2f, 2f), 5 => (5f, 1f), 6 => (1f, 1f), _ => (0f, 1f) };
         var stats = ac.Stats!;
-        float k = (1 - 0.5f * (UnarmedRating(world, a, ac, f) + stats[StatsEnumerated.Toughness] * stats.Scale) * 0.01f) * options.GlobalDamageMultiplier * f.FistInjury;
+        float k = (1 - 0.5f * (UnarmedRating(world, a, ac, f) + stats.ScaledToughness) * 0.01f) * options.GlobalDamageMultiplier * f.FistInjury;
         if (ac.Medical!.PunchDamage(limb, cut * k, blunt * k, constants)) xp.ToughnessFromDamage(stats, ac.Race, material);
     }
 

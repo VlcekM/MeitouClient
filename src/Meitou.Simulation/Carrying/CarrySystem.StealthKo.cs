@@ -209,7 +209,7 @@ public sealed partial class CarrySystem
         {
             if (target.Medical is { } medical && target.Race is { } targetRace)
             {
-                var ctx = new MedicalContext(Constants, bodyOptions, targetRace) { Toughness = target.Stats?.Toughness ?? 0, Strength = target.Stats?.Strength ?? 50, HasStats = target.Stats is not null };
+                var ctx = new MedicalContext(Constants, bodyOptions, targetRace) { Toughness = target.Stats?.ScaledToughness ?? 0, Strength = target.Stats?.Strength ?? 50, HasStats = target.Stats is not null };
                 float assassination = (cold.Stats?[StatsEnumerated.Assassination] ?? 0) * (cold.Medical?.StatMultiplier(StatsEnumerated.Assassination) ?? 1);
                 medical.KnockOut(medical.PutDownKoSeconds(ctx, assassination * 0.01f));
                 TaskStart.Stand(table, t);

@@ -465,7 +465,7 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
     MedicalContext MakeContext(World world, int slot, CharacterCold cold) =>
         new(constants, options, cold.Race!)
         {
-            Toughness = cold.Stats![StatsEnumerated.Toughness],
+            Toughness = cold.Stats!.ScaledToughness,
             Strength = cold.Stats[StatsEnumerated.Strength],
             EncumbranceFactor = cold.Fighter?.EncumbranceFactor ?? 1,
             Seed = world.Seed,

@@ -665,7 +665,7 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
     void KnockOutHeld(CharacterCold carrier, CharacterCold body)
     {
         if (body.Medical is not { Dead: false } medical || body.Race is not { } race) return;
-        var ctx = new MedicalContext(Constants, bodyOptions, race) { Toughness = body.Stats?.Toughness ?? 0, Strength = body.Stats?.Strength ?? 50, HasStats = body.Stats is not null };
+        var ctx = new MedicalContext(Constants, bodyOptions, race) { Toughness = body.Stats?.ScaledToughness ?? 0, Strength = body.Stats?.Strength ?? 50, HasStats = body.Stats is not null };
         medical.KnockOut(medical.PutDownKoSeconds(ctx, MedicalState.PutDownKoFactor(carrier.Stats?[StatsEnumerated.Assassination] ?? 0)));
     }
 

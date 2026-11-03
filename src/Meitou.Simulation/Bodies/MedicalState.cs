@@ -456,7 +456,7 @@ public sealed partial class MedicalState
     public float KoTerms(in MedicalContext ctx)
     {
         var c = ctx.Constants;
-        float k = c.KnockoutMult1 + (c.KnockoutMult99 - c.KnockoutMult1) * ctx.Toughness / 100;
+        float k = c.KnockoutMult1 + (c.KnockoutMult99 - c.KnockoutMult1) * (ctx.Toughness / 100);
         float sum = 0;
         foreach (var p in parts)
         {

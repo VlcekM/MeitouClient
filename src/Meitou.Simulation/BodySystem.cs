@@ -185,7 +185,7 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
             var ctx = new MedicalContext(Constants, Options, race)
             {
                 EncumbranceFactor = encumbrance,
-                Toughness = stats.Toughness * stats.Scale,
+                Toughness = stats.ScaledToughness,
                 Strength = stats.Strength,
                 Seed = world.Seed,
                 CharacterKey = Rng.Key(table.IdOf(i)),
@@ -313,7 +313,7 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
         bool rest = ctx.Resting || medical.Unconscious || medical.Dead;
         float hunger = race.HungerRate * MedicalState.HungerSituationFactor(Constants, rest, ctx.Still, ctx.Idle, encumbrance, ctx.UseHungerRate);
         return new ExtendedStats(XpService.AthleticsRate(encumbrance, speed, runValue), xp.StrengthCarryRate(encumbrance, carrying), toughness,
-            MedicalState.KoPoint(Constants, stats.Toughness * stats.Scale), speed, runValue, hunger, rest, WorkHungerRate: ctx.UseHungerRate, Idle: ctx.Idle);
+            MedicalState.KoPoint(Constants, stats.ScaledToughness), speed, runValue, hunger, rest, WorkHungerRate: ctx.UseHungerRate, Idle: ctx.Idle);
     }
 
     /// <summary>

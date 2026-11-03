@@ -41,6 +41,8 @@ public sealed class CharacterStats
     public float Strength => values[(int)StatsEnumerated.Strength];
     public float Dexterity => values[(int)StatsEnumerated.Dexterity];
     public float Toughness => values[(int)StatsEnumerated.Toughness];
+    /// <summary>The toughness every read of the original uses: stat x the stats multiplier (<c>+0x90</c> x <c>+0x34</c>), see <see cref="Scale"/>.</summary>
+    public float ScaledToughness => Toughness * Scale;
     public float Athletics => values[(int)StatsEnumerated.Athletics];
 
     /// <summary>A copy of the values by stat number.</summary>
