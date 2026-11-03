@@ -354,7 +354,7 @@ Per-character hash map keyed by faction (`Character+0xf0`). Entry (`FUN_1405e7ee
   event-17 lines' data (**Verified** by probe: "Intruder!" with DA 6, "Leave my abode" with DA 12 then DA 33/34, "/GUARDS/!" with DA 33).
 - **Spawn bounties** (`FUN_14062b210`, **Observed**): CHARACTER `bounty chance` vs an inclusive roll 0..100 (`roll < chance`);
   amount `trunc(bounty amount + 0.5*k)`, `k` an integer in `[0, 2*bounty amount fuzz]` (the fuzz only adds), for each
-  `bounty factions` entry (else `defaultEmpireFactionSID`), added without a crime bit (`FUN_140853e20`), under that faction's booking key
+  `bounty factions` entry (else the faction whose string id is the literal `defaultEmpireFactionSID`, looked up by `FUN_1402e7a20`; in gamedata.base that is United Cities, **Verified** by the install's bytes), added without a crime bit (`FUN_140853e20`), under that faction's booking key
   (`FUN_140852010`: its legal system, else itself when it books, else a null key nothing reads; argument passing read from registers, **Observed**). fcs.def: "Defaults to the
   empire"; 117 base CHARACTER records have a chance, 64 of them no `bounty factions` (**Verified** by probe). Whether the fuzz is rolled
   per faction is **Unknown**.
