@@ -263,6 +263,8 @@ sealed partial class PlayerInterface
         verbs.Add(("Attack Unprovoked", () => Say(new Meitou.Simulation.Combat.AttackOrder(selection, id) { Tick = session.World.Tick, Picked = true, Unprovoked = true })));
         verbs.Add(("Bodyguard", () => Say(new FollowOrder(selection, id) { Guard = true, Tick = session.World.Tick })));
         verbs.Add(("Follow", () => Say(new FollowOrder(selection, id) { Tick = session.World.Tick })));
+        if (!target.IsDiplomat && Selected().LastOrDefault() is { } lead && session.World.VerbFactsOf(lead.Id, id) is { RegardsLead: true })
+            verbs.Add(("Pick Up", () => Say(new Meitou.Simulation.Carrying.PickUpOrder([], id) { Tick = session.World.Tick })));   // a plain 225 here: never Kidnap (FUN_1407a6bc0)
     }
 
     /// <summary>How far from the clicked enemy Attack All looks for the others (an engine choice: the original's order 16 is "Attacking enemies", whose reach is <b>Unknown</b>).</summary>

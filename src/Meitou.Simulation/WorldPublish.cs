@@ -226,6 +226,7 @@ public sealed partial class World
             s.SquadId = cold?.SquadId ?? -1;
             s.IsPlayer = cold?.IsPlayer ?? false;
             s.IsTrader = talk?.Trades(this, i) ?? (cold is { IsPlayer: false, SquadId: >= 0 } && Squads.Find(cold.SquadId)?.Shop is not null);
+            s.IsDiplomat = cold?.NpcClass == FundamentalType.Diplomat;
             s.Selected = selected;
             s.Inspected = inspected;
             s.Skills = detailed && cold!.Stats is { } sk ? new SkillSummary(sk[StatsEnumerated.MeleeAttack], sk[StatsEnumerated.MeleeDefence], sk[StatsEnumerated.Dodge], sk.Toughness, sk.Strength, sk.Athletics) : null;

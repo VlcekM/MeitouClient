@@ -203,6 +203,8 @@ public sealed class CharacterSnapshot
     public bool IsPlayer { get; internal set; }
     /// <summary>A member of a squad with a shop (right click trades).</summary>
     public bool IsTrader { get; internal set; }
+    /// <summary>The character's NPC class is Diplomat (the standing Pick Up verb skips it, <c>FUN_1407a6bc0</c>).</summary>
+    public bool IsDiplomat { get; internal set; }
     public bool Selected { get; internal set; }
     /// <summary>Another faction's character the HUD shows (<see cref="InspectCommand"/>): it carries the same HUD details as a selected one but is not selected.</summary>
     public bool Inspected { get; internal set; }
