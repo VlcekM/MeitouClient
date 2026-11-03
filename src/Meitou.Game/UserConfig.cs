@@ -133,6 +133,10 @@ sealed class UserConfig
     public bool? EdgeScroll { get; set; }
     /// <summary>The in-game tutorials (the original's <c>tutorials</c>, default on; Gameplay settings); null until first used, then taken from the install's settings.cfg.</summary>
     public bool? Tutorials { get; set; }
+    /// <summary>The green marker where a move order was given (the original's `Movement marker`, default on; Interface settings); null until first used, then taken from the install's settings.cfg.</summary>
+    public bool? MovementMarker { get; set; }
+    /// <summary>The marker on the camera's pivot while it is turned (the original's `Rotation marker`, default on; Interface settings); null until first used, then taken from the install's settings.cfg.</summary>
+    public bool? RotationMarker { get; set; }
     /// <summary>Sounds are heard from the first selected character instead of the camera (Audio settings; off, the default: the camera, as the game does).</summary>
     public bool HearFromSelected { get; set; }
     /// <summary>The Windows cursor instead of the game's drawn pointer (the original's <c>hardware_mouse</c>, default off; Interface settings).</summary>

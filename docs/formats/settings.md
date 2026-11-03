@@ -107,8 +107,8 @@ i.e. everything).
 | Key | Type, range | Missing → | Options label | What it does |
 | --- | --- | --- | --- | --- |
 | `Show names` | bool | 1 | Show character names | Names above the player's characters |
-| `Movement marker` | bool | 1 | Show movement marker | The green marker where you click |
-| `Rotation marker` | bool | 1 | Show rotation marker | The green marker while rotating the camera |
+| `Movement marker` | bool | 1 | Show movement marker | The green marker where you click (Meitou: Interface page, `UserConfig.MovementMarker`) |
+| `Rotation marker` | bool | 1 | Show rotation marker | The green marker while rotating the camera (Meitou: Interface page, `UserConfig.RotationMarker`) |
 | `floaters` | int 0 … 2 | 1 | Show damage floaters: Off = 0, Simple info = 1, Full info = 2 | Damage numbers; only shown within 4000 units (squared distance 1.6e7, FUN_1406508d0); 2 splits them by damage type. Layout: [ui-screens](../game/ui-screens.md#8-damage-floaters); stored at options +0x7c |
 | `font size2` | int (stored as float); slider −10 … 32 | 3 | Font Size | GUI font size: added in points to every font's MyGUI default height ([mygui.md](mygui.md)) |
 | `tutorials` | bool | 1 | Tutorials | In-game tutorials ("Reset Tutorials" is a button, not a key) |

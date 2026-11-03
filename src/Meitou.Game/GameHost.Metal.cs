@@ -512,6 +512,9 @@ sealed partial class GameHost
         ApplyCameraRotateSpeed(config.CameraRotateSpeed);
         config.EdgeScroll ??= Meitou.Audio.AudioSystem.Setting(install, "Edge scrolling", 1) != 0;
         config.Tutorials ??= Meitou.Audio.AudioSystem.Setting(install, "tutorials", 1) != 0;
+        config.MovementMarker ??= Meitou.Audio.AudioSystem.Setting(install, "Movement marker", 1) != 0;
+        config.RotationMarker ??= Meitou.Audio.AudioSystem.Setting(install, "Rotation marker", 1) != 0;
+        if (hud is not null) (hud.MovementMarker, hud.RotationMarker) = (config.MovementMarker == true, config.RotationMarker == true);
         tutorials ??= new TutorialManager(Path.Combine(Directory.GetCurrentDirectory(), TutorialManager.FileName));
         tutorials.Enabled = config.Tutorials == true;
         hud?.ConfigureTutorials(tutorials);

@@ -191,7 +191,7 @@ behind-the-scene pass 1 adds nothing (**Observed** reading) and the visible part
 (`NORMALS`: `rgb *= saturate(N·sun) * contrast + 1 - contrast`, contrast 0.5) and `Basic_FP` (`colour × vertex colour`).
 Meitou (`MarkerRenderer`) draws both passes after the tone map, so the colours show as given whatever the exposure, sorting fragments by
 the scene depth, multisampled (up to 8×) and resolved over the picture: the mesh's rough band at the cone's widest part
-and the notch on the stem are in `position.mesh` itself; on every ground move, following the cursor each frame while the button steers, always on (settings.cfg is not read yet). The rotation marker is drawn in the visible pass only, while the Orbit binding is held, at the camera rig's target + (0, 1, 0), scaled max(3, 0.06 x distance) (the zoom node's z read as the rig distance), always on.
+and the notch on the stem are in `position.mesh` itself; on every ground move, following the cursor each frame while the button steers, gated by `Movement marker` (**Verified** `FUN_1407f2660`, `FUN_140800250` test `DAT_142133511` where they show it; settings.cfg when unset, then the Interface page's "Show movement marker"). The rotation marker is drawn in the visible pass only, while the Orbit binding is held, at the camera rig's target + (0, 1, 0), scaled max(3, 0.06 x distance) (the zoom node's z read as the rig distance), gated by `Rotation marker` (**Verified** `FUN_1406b0f90` tests `DAT_142133510`; "Show rotation marker").
 
 ### Quick right click on a character
 

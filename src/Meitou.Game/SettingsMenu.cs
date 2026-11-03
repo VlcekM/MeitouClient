@@ -296,6 +296,12 @@ sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, 
             result.Add(new("Show names", "The name over each of your characters (the game's Show names option). Off, only the stealth and light icons stay.",
                 Toggle: new("Show names", () => config.ShowNames, v => player.ShowNames = config.ShowNames = v, OnOff: true)));
         if (page == 2)
+            result.Add(new("Show movement marker", "The green marker where a move order sends your characters (the game: on).",
+                Toggle: new("Show movement marker", () => config.MovementMarker != false, v => player.MovementMarker = (config.MovementMarker = v) == true, OnOff: true)));
+        if (page == 2)
+            result.Add(new("Show rotation marker", "The green marker on the camera's pivot while you turn it (the game: on).",
+                Toggle: new("Show rotation marker", () => config.RotationMarker != false, v => player.RotationMarker = (config.RotationMarker = v) == true, OnOff: true)));
+        if (page == 2)
             result.Add(new("Censorship", "Swaps a few strong words in the dialogue for milder ones (the game's censorship option).",
                 Toggle: new("Censorship", () => config.Censorship, v => config.Censorship = v, OnOff: true)));
         if (page == 2)
@@ -690,6 +696,8 @@ sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, 
         CameraRotateSpeed.Set(global::Meitou.Data.World.KenshiCamera.DefaultRotateSpeed);
         config.EdgeScroll = true;
         config.Tutorials = true;
+        player.MovementMarker = player.RotationMarker = true;
+        config.MovementMarker = config.RotationMarker = true;
         TutorialsChanged?.Invoke(true);
         config.HoverOutline = true;
         config.LuckyrenMode = false;
