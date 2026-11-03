@@ -407,6 +407,7 @@ town building list, fixtures, turrets and the drawn world alike, so it needs one
   and the weapon is made by it (**Verified**, `FUN_1409540d0` / `FUN_140580750`): with no manufacturer no item is made and the slot stays empty (tried again next update); a model from its `weapon models` (v1 weight) whose v0 is the level, and a manufacturer with no model or a level-0 model is replaced by manufacturer `1057-gamedata.base` with model `1058-gamedata.base` (level from the 1057 entry for 1058, plus the 1057 `overall level`; shops use the same factory). Every item gets the quality of a weighted grade (0..5 -> 5, 20, 40, 60, 80, 95); the grade weights' source is **Unknown** (the item-list
   object is cached per group record and a value of the building, probably its faction). The item gets a value of the group (**Observed**: likely the owner faction) and is put
   at the slot. A picked BLUEPRINT or MAP_ITEM record is also taken out of the group's pool (`FUN_140969100` from `FUN_1409540d0`); how it comes back is **Unknown** (not built).
+- The faction's weighted grade (5/20/40/60/80/95, `FUN_140952320`) is the 6th argument of the item factory for every pick but a WEAPON (**Verified**): it becomes the level of ARMOUR, CROSSBOW and LIMB_REPLACEMENT; its effect on a plain ITEM is **Unknown** (Meitou `ShopFiller.Roll` passes it to those three only).
 - Saved per group (in its generated interior): `base data sid`, `floornum`, `isInsideBuilding` handle, `is inside building`, `respawn time`, then its item.
 
 Meitou: [ground items](../simulation.md#items-and-eating).

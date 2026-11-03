@@ -112,7 +112,8 @@ public sealed class ItemFactory(GameDatabase db, GameConstants constants, Func<M
                 : null,
             Quantity = Math.Max(quantity, 1),
             Quality = quality,
-            Level = info.Type == FcsRecordType.ARMOUR ? (int)quality : 0,   // an armour piece's stats follow its level, which a made piece takes from its grade quality
+            // An armour piece's stats follow its level, which a made piece takes from its grade quality; so do a crossbow's and a limb's (FUN_140580750 hands the grade to those constructors).
+            Level = info.Type is FcsRecordType.ARMOUR or FcsRecordType.CROSSBOW or FcsRecordType.LIMB_REPLACEMENT ? (int)quality : 0,
             ItemFunction = info.Function,
             Charges = info.Type == FcsRecordType.ITEM ? maxCharges : 1,   // only an ITEM starts full
             MaxCharges = maxCharges,
