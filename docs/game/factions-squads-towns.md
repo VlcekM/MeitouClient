@@ -134,7 +134,7 @@ World-state replacement towns and faction ownership affect both population and b
   resident data is set up again; the town goes into the ZoneManager set `updatedTownOverrides` (+0x168148). The zone file is then trimmed (`FUN_1409fe340`): of the
   `0-buildinglist` entries (only those with a field at +0x88 of -1, meaning **Unknown**), the first GAMESTATE_BUILDING state decides: not the player's and naming
   this town (`townC` / `townCS`) drops the entry; an ITEM_PLACEMENT_GROUP state drops it whatever the town. Every `1-itemlist` item goes, and the zone counts as
-  fresh, so the residents are made again. Only the town's own zone is trimmed. Existing platoons are untouched.
+  fresh, so the residents are made again ([their ruins](buildings-production.md#ruined-by-residents)). Only the town's own zone is trimmed. Existing platoons are untouched.
 - `updatedTownOverrides`: while a town is in it, the check answers "repopulate" at once (no new choice), so each load trims the zone again. The pass that places
   residents after zones load (`FUN_140a0e760`, ZoneManager state 2) places them for the collected towns not of the player's faction and erases them (`FUN_140a22ef0`).
   Nothing else touches it, and it is not saved.

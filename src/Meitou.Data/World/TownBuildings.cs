@@ -97,6 +97,8 @@ public sealed record TownBuilding(string InstanceId, string BuildingId, string N
     public bool HasInterior { get; init; }
     /// <summary>The level-data state's <c>destroyed</c>: a ruin, which has no doors (docs/game/locks.md "Doors").</summary>
     public bool Destroyed { get; init; }
+    /// <summary>A ruin only by its residents (<see cref="ResidentRuins.Apply"/>): its level file has it standing.</summary>
+    public bool RuinedByResidents { get; init; }
     /// <summary>The level data's <c>residents template</c> of its state (a SQUAD_TEMPLATE id; empty when none).</summary>
     public string ResidentsTemplate { get; init; } = "";
     /// <summary>Its level-data GAMESTATE_BUILDING (null when it has none): the lock and door state it starts with when no save has one (docs/game/locks.md "Save keys").</summary>
@@ -288,6 +290,7 @@ public static class TownBuildings
                 IsWall = record.GetBool("links together"),
                 HasInterior = record.GetReferences("interior").Count > 0,
                 Destroyed = resolved.Destroyed,
+                RuinedByResidents = levels.ResidentRuined.Contains(b.Key),
                 Turret = turret,
                 ResidentsTemplate = state?.GetString("residents template") ?? "",
                 LevelState = state,

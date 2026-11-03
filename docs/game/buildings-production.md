@@ -967,7 +967,14 @@ Meitou (`ResidentRuins`): before anything reads the level data's `destroyed`, ev
 and each home of a ruined template that has a destroyed mesh is set destroyed in its level state; 71 base-game buildings (Old Village 10 of 10, Abandoned Town 9 of 9,
 the library ruins). A saved `destroyed` false does not undo a level ruin unless the player's repair saved it (`meitou town construction`; engine choice: saves
 made before this pass wrote those buildings intact). A town's baked distant mesh is a fixed file of the install, drawn as it is (as in the original). Not modelled: the int +0x198 test; setting a level ruin intact (13 level ruins get a template that is not ruined, e.g. Bast's and Endin's
-`Trashed building w/squatters`, yet those towns are ruins in the original, so where the original skips the call is **Unknown**); ruins made by a town override at run time.
+`Trashed building w/squatters`, yet those towns are ruins in the original, so where the original skips the call is **Unknown**).
+
+A [town override](factions-squads-towns.md#town-overrides) reads its zone back from the level file and houses the replacement's residents, so Meitou
+(`FixtureRegistry.ApplyTownRuins`) sets each of the town's buildings in its own zone that is not the player's: a home of a ruined template that can be destroyed is a
+ruin, any other as its level file has it (a resident ruin of the old town stands again). A loaded save applies them again from its replacements; the building states
+it writes carry them. The host replaces those buildings' level placements (drawing, navmesh, lamps); doors, locks and indoor sight follow. **Observed** (data):
+95 overrides change ruins, e.g. Stoat (override) half destroyed 8, Catun (override) fishman takeover 14; Free Settlement to The Free City stands 7 up again.
+Not modelled: homes of the replacement outside the town's zone (the original keeps their state but ruins a ruined template's home).
 
 ## Unknowns
 

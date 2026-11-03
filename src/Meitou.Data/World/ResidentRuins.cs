@@ -25,17 +25,30 @@ public static class ResidentRuins
                 var town = TownData.From(record);
                 var faction = town.Faction is { } id && db.Find(id) is { Type: Fcs.FcsRecordType.FACTION } f ? FactionData.From(f) : null;
                 foreach (var (b, t) in ResidentHomes.Assign(db, town, faction, list, player))
-                    if (t.BuildingRuined && Ruin(db, b)) ruined++;
+                    if (t.BuildingRuined && Ruin(db, levels, b)) ruined++;
             }
             return ruined;
         }
     }
 
-    static bool Ruin(GameDatabase db, TownBuilding b)
+    static bool Ruin(GameDatabase db, WorldLevelData levels, TownBuilding b)
     {
         if (b.Destroyed || b.LevelState is not { } state || db.Find(b.BuildingId) is not { } record || !CanBeDestroyed(db, record)) return false;
         state.BoolTable["destroyed"] = true;
+        levels.ResidentRuined.Add(b.Key);
         return true;
+    }
+
+    /// <summary>
+    /// The keys of the homes <paramref name="town"/>'s residents ruin when they are housed in <paramref name="buildings"/> afresh (a town override): homes of a ruined
+    /// template that can be destroyed.
+    /// </summary>
+    public static HashSet<string> RuinedHomes(GameDatabase db, TownData town, FactionData? faction, IReadOnlyList<TownBuilding> buildings, string? playerFactionId)
+    {
+        var result = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var (b, t) in ResidentHomes.Assign(db, town, faction, buildings, playerFactionId))
+            if (t.BuildingRuined && db.Find(b.BuildingId) is { } record && CanBeDestroyed(db, record)) result.Add(b.Key);
+        return result;
     }
 
     /// <summary>

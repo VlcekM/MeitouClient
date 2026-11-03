@@ -231,7 +231,7 @@ public sealed partial class PopulationSystem
         foreach (var b in town.Buildings)
         {
             // Engine choice: an unknown gate code (off the navmesh, or no gate regions) counts as outside the walls.
-            bool gate = b.IsGate && !b.Destroyed && !(locks?.Regions?.CodeAt(b.Position) > 0);
+            bool gate = b.IsGate && !world.Fixtures.IsDestroyed(b) && !(locks?.Regions?.CodeAt(b.Position) > 0);
             if (!(gate || b.IsWall && b.HasInterior)) continue;
             var at = new Vector2(b.Position.X, b.Position.Z);
             var d = at - centre;

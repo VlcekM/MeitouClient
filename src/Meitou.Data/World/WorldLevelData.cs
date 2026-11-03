@@ -28,6 +28,9 @@ public sealed class WorldLevelData
     /// <summary>Whether <see cref="ResidentRuins.Apply"/> has set the ruins the residents make.</summary>
     public bool ResidentRuinsApplied { get; internal set; }
 
+    /// <summary>The keys of the buildings <see cref="ResidentRuins.Apply"/> ruined (their level files have them standing).</summary>
+    public HashSet<string> ResidentRuined { get; } = new(StringComparer.Ordinal);
+
     /// <summary>Merged zone files by grid cell.</summary>
     public SortedDictionary<ZoneCoordinate, GameDatabase> Zones { get; } = new(Comparer<ZoneCoordinate>.Create((a, b) => a.Y != b.Y ? a.Y.CompareTo(b.Y) : a.X.CompareTo(b.X)));
 

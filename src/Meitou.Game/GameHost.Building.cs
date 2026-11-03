@@ -36,6 +36,7 @@ sealed partial class GameHost
             buildingsWorld = session.World;
         }
         var snapshot = session.CurrentSnapshot;
+        UpdateRuins(snapshot);
         if (snapshot.BuildingsRevision != buildingsRevision || snapshot.NestBuildingsRevision != nestBuildingsRevision)
         {
             DiffBuildings(snapshot);
@@ -76,7 +77,7 @@ sealed partial class GameHost
     {
         var current = new Dictionary<string, BuildingSnapshot>(StringComparer.Ordinal);
         foreach (var site in snapshot.Buildings)
-            if (site.LevelPlacement is null || !site.Destroyed) current[site.Id] = site;
+            if (site.LevelPlacement is not { } level || site.Destroyed != LevelDestroyed(level)) current[site.Id] = site;   // a level ruin left a ruin needs no overlay
         foreach (var site in snapshot.NestBuildings) current[site.Id] = site;   // the loaded nests' buildings, complete
         foreach (string id in shownBuildings.Keys.Where(id => !current.ContainsKey(id)).ToArray())
         {
@@ -197,6 +198,7 @@ sealed partial class GameHost
         litBuildings.Clear();
         levelOwners = null;
         ForgetGroundItems();
+        ForgetRuins();
         ForgetFarms();
         foreach (string id in navBuildings) nav?.RemoveRuntimeBuilding(id);
         navBuildings.Clear();
@@ -297,7 +299,7 @@ sealed partial class GameHost
                     ? char.ToUpperInvariant(list[0]) + list[1..] : null;
                 var (town, owner) = townOf is not null && townOf.TryGetValue((zone, instance), out var info) ? (info.Town, info.Owner) : (null, null);
                 return new(name, type, town, owner, state?.GetBool("is public day") ?? false, state?.GetBool("is public night") ?? false, sells,
-                    placement.DestroyedOverride ?? state?.GetBool("destroyed") ?? false);
+                    shownRuins.TryGetValue(placement.Key, out var ruin) ? ruin.Destroyed : placement.DestroyedOverride ?? state?.GetBool("destroyed") ?? false);
             },
             Towns = () => towns ??= popData is { } d ? [.. d.Sites.Select(s => new Meitou.Data.Gameplay.Construction.PlacementTown(s.Town, new(s.Position.X, s.Position.Z)))] : [],
             PlayerFactionId = () => popData is { } d && d.PlayerFaction is >= 0 and var mine && mine < d.Factions.Count ? d.Factions[mine].Id : "",

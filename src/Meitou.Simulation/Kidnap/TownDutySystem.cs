@@ -923,7 +923,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     {
         int site = squad.Ai is { MissionTown: >= 0 } b ? b.MissionTown : squad.Ai is { Destination: { Site: >= 0 } dest } ? dest.Site : AiSystem.TownAt(data, world, world.Characters.Next[slot].Position).Site;
         if (site < 0) return null;
-        var rooms = data.Sites[site].Buildings.Where(x => !x.Destroyed && (x.InteriorLayout.Length > 0 || x.InteriorLayouts.Count > 0)).ToList();
+        var rooms = data.Sites[site].Buildings.Where(x => !world.Fixtures.IsDestroyed(x) && (x.InteriorLayout.Length > 0 || x.InteriorLayouts.Count > 0)).ToList();
         if (rooms.Count == 0) return null;
         return rooms[Rng.Int(Rng.Hash(world.Seed, (ulong)Rng.Key(world.Characters.IdOf(slot)) ^ (ulong)world.Tick, RngPurpose.Slow, RansackSalt), rooms.Count)];
     }

@@ -48,6 +48,9 @@ public sealed class SightMap
     readonly record struct Lamp(WorldLight Light, int Room);
 
     readonly HashSet<string> added = new(StringComparer.Ordinal);
+    // Each added building's room (-1: none) and lamps, and those a ruin took out of the cells (Remove).
+    readonly Dictionary<string, (int Room, List<int> Lamps)> entries = new(StringComparer.Ordinal);
+    readonly HashSet<string> hidden = new(StringComparer.Ordinal);
     readonly List<Room> rooms = [];
     readonly Dictionary<string, int> roomOf = new(StringComparer.Ordinal);
     readonly Dictionary<(int, int), List<int>> roomCells = [];
@@ -79,26 +82,75 @@ public sealed class SightMap
         this.source ??= source;
         if (building.Destroyed || !added.Add(building.Key)) return;
         int room = -1;
-        if (!building.Destroyed && source.Room(building) is { } volume)
+        if (source.Room(building) is { } volume)
         {
             room = rooms.Count;
             rooms.Add(new Room(building.Key, volume, source.EnforcesCeiling(building)));
             roomOf[building.Key] = room;
-            var min = new Vector2(volume.Footprint.Min(p => p.X), volume.Footprint.Min(p => p.Y));
-            var max = new Vector2(volume.Footprint.Max(p => p.X), volume.Footprint.Max(p => p.Y));
-            for (int x = CellOf(min.X); x <= CellOf(max.X); x++)
-                for (int z = CellOf(min.Y); z <= CellOf(max.Y); z++)
-                    Into(roomCells, (x, z), room);
+            RoomCells(room, add: true);
         }
+        var own = new List<int>();
         foreach (var l in source.Lights(building))
         {
             if (!(l.Intensity > 0) || !(l.Radius > 0)) continue;
-            int lamp = lamps.Count;
+            own.Add(lamps.Count);
             lamps.Add(new Lamp(l, l.Interior ? room : -1));
-            for (int x = CellOf(l.Position.X - l.Radius); x <= CellOf(l.Position.X + l.Radius); x++)
-                for (int z = CellOf(l.Position.Z - l.Radius); z <= CellOf(l.Position.Z + l.Radius); z++)
-                    Into(lampCells, (x, z), lamp);
+            LampCells(lamps.Count - 1, add: true);
         }
+        entries[building.Key] = (room, own);
+    }
+
+    /// <summary>A registered building became a ruin (a town override's residents, docs/game/buildings-production.md "Ruined by residents"): its room and lamps go.</summary>
+    public void Remove(string building)
+    {
+        if (!entries.TryGetValue(building, out var e) || !hidden.Add(building)) return;
+        if (e.Room >= 0)
+        {
+            RoomCells(e.Room, add: false);
+            roomOf.Remove(building);
+        }
+        foreach (int k in e.Lamps) LampCells(k, add: false);
+    }
+
+    /// <summary>A ruin stands again: the room and lamps it had come back, or are added now when it was a ruin when its town registered.</summary>
+    public void Restore(ISightSource source, TownBuilding building)
+    {
+        if (!hidden.Remove(building.Key))
+        {
+            Add(source, building with { Destroyed = false, Resolved = building.Resolved is { } r ? r with { Destroyed = false } : null });
+            return;
+        }
+        var e = entries[building.Key];
+        if (e.Room >= 0)
+        {
+            RoomCells(e.Room, add: true);
+            roomOf[building.Key] = e.Room;
+        }
+        foreach (int k in e.Lamps) LampCells(k, add: true);
+    }
+
+    void RoomCells(int room, bool add)
+    {
+        var footprint = rooms[room].Volume.Footprint;
+        var min = new Vector2(footprint.Min(p => p.X), footprint.Min(p => p.Y));
+        var max = new Vector2(footprint.Max(p => p.X), footprint.Max(p => p.Y));
+        for (int x = CellOf(min.X); x <= CellOf(max.X); x++)
+            for (int z = CellOf(min.Y); z <= CellOf(max.Y); z++)
+                Toggle(roomCells, (x, z), room, add);
+    }
+
+    void LampCells(int lamp, bool add)
+    {
+        var l = lamps[lamp].Light;
+        for (int x = CellOf(l.Position.X - l.Radius); x <= CellOf(l.Position.X + l.Radius); x++)
+            for (int z = CellOf(l.Position.Z - l.Radius); z <= CellOf(l.Position.Z + l.Radius); z++)
+                Toggle(lampCells, (x, z), lamp, add);
+    }
+
+    static void Toggle(Dictionary<(int, int), List<int>> cells, (int, int) key, int item, bool add)
+    {
+        if (add) Into(cells, key, item);
+        else if (cells.TryGetValue(key, out var list)) list.Remove(item);
     }
 
     static int CellOf(float v) => (int)MathF.Floor(v / Cell);
