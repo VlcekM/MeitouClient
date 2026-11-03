@@ -289,7 +289,7 @@ public sealed partial class ProductionSystem
     static float DisposalWeight(float distanceSquared) => Math.Clamp(1 - distanceSquared / 21233664f, 1e-5f, 1f);
 
     /// <summary>
-    /// The corpse machine a body is taken to (<c>FUN_1408d0770</c> for function 11, <b>Verified</b> by decompile): among the complete corpse-disposal buildings of the player and of allied factions (<see cref="MayUseDisposal"/>) with an operator place free
+    /// The corpse machine a body is taken to (<c>FUN_1408d0770</c> for function 11, <b>Verified</b> by decompile): among the complete corpse-disposal buildings of the player and of allied factions ((<see cref="Locks.FixtureRegistry.CanUse(World, CharacterCold, int, Locks.Fixture?)"/>)) with an operator place free
     /// that lie within 1.1 x the radius of the carrier's town (<c>FUN_1408cbea0</c> / <c>FUN_140a00690</c>), the one of the greatest <see cref="DisposalWeight"/> of the 3D distance to the carrier (x100 for the player's own); the
     /// first listed wins a tie (the weights of everything beyond 4608 are equal). The town is the one the carrier stands in, else the nearest within 1.5625e7 squared (<c>DAT_14172dd88</c>); with
     /// none, every town is searched. Stand-ins: the town is a player's town, and the squad's home town (the Ownerships' +0x38, <b>Unknown</b> for the player) and the home-building x100 are not read.
@@ -297,13 +297,14 @@ public sealed partial class ProductionSystem
     (BuildSite Site, Machine Machine)? NearestIncinerator(World world, Vector3 from, CharacterId self, int squad)
     {
         var claimed = MachinesClaimed(world, self, squad);
+        if (!world.Characters.TryResolveNext(self, out int me) || world.Characters.Cold(me) is not { } carrier) return null;
         var town = PlayerTownAt(world, from) ?? NearestPlayerTown(world, from, DisposalTownReach);
         BuildSite? bestSite = null;
         Machine? best = null;
         float bestWeight = -1;
         foreach (var m in world.Machines.All)
         {
-            if (m.Data.Function != Meitou.Data.World.TownBuildings.CorpseDisposalFunction || Site(world, m.Site) is not { Complete: true } site || !MayUseDisposal(world, site)) continue;
+            if (m.Data.Function != Meitou.Data.World.TownBuildings.CorpseDisposalFunction || Site(world, m.Site) is not { Complete: true } site || !world.Fixtures.CanUse(world, carrier, site.Owner, null)) continue;
             if (town is not null && Gap(site.Position, town.Position) > town.Radius * 1.1f) continue;
             if (OperatorsOf(world, site.Id) >= m.Data.MaxOperators || claimed.Contains(site.Id) || PathImpossible(world, self, site.Id)) continue;
             float weight = DisposalWeight(Vector3.DistanceSquared(site.Position, from)) * (site.Owner == world.Player.Faction ? OwnFactionWeight : 1);
@@ -325,18 +326,6 @@ public sealed partial class ProductionSystem
 
     /// <summary>The weight factor of a building of the character's own faction (<c>DAT_141683250</c>, <b>Verified</b> 100).</summary>
     const float OwnFactionWeight = 100;
-
-    /// <summary>
-    /// Whether the player's character may use a corpse machine of a faction (the ally test <c>FUN_140621230</c>, <b>Verified</b> for a standalone building): its own faction's; else the
-    /// building's faction is not hostile to the character's (relation of the building's faction at -30 or lower, <c>FUN_1406b26d0</c>) and is its ally (the same faction, relation 50 or more,
-    /// <c>FUN_1406b2630</c>). Stand-ins: no designation record, the occupied town of the Ownerships (+0x80) and the nested-building branches are not read, nor the allied flag.
-    /// </summary>
-    bool MayUseDisposal(World world, BuildSite site)
-    {
-        int mine = world.Player.Faction;
-        if (site.Owner == mine) return true;
-        return Carry?.Relations is { } relations && relations.Contains(site.Owner) && !relations.IsHostile(site.Owner, mine) && relations.IsAlly(site.Owner, mine);
-    }
 
     /// <summary>The squared distance within which a carrier outside every town still takes the nearest town (<c>DAT_14172dd88</c>, <b>Verified</b> 1.5625e7).</summary>
     const float DisposalTownReach = 15625000f;

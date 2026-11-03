@@ -99,22 +99,24 @@ public sealed partial class FixtureRegistry
     /// else when the owner regards the squad's faction as an ally. The original also lets a carrier with a slave state use any cage, but its gatherer (<c>FUN_140a00690</c>) tests with no character
     /// and so drops these first: not modelled. Without population data only the carrier's own faction passes.
     /// </summary>
-    public bool CanUse(World world, CharacterCold carrier, Fixture f)
+    public bool CanUse(World world, CharacterCold carrier, Fixture f) => CanUse(world, carrier, f.Owner, f);
+
+    /// <summary>
+    /// The one <c>canIUseThisBuilding</c> test (<c>FUN_140621230</c>) of every function-mask building finder: <paramref name="f"/> is the building's fixture, or null for a standalone building that is no
+    /// fixture (a player's machine, with no town of its own), whose owner faction is <paramref name="owner"/>.
+    /// </summary>
+    public bool CanUse(World world, CharacterCold carrier, int owner, Fixture? f)
     {
         var squad = world.Squads.Find(carrier.SquadId);
         int faction = squad?.Faction ?? carrier.Faction;
-        if (faction < 0 || f.Owner == faction) return true;
+        if (faction < 0 || owner == faction) return true;
         if (usableData is not { } data) return false;
-        if (squad?.Ai is { CurrentClass: PackageClass.OccupyTown, Destination.IsNone: false } board && TownOfFixture(world, f) == board.Destination) return true;
-        int owner = f.Owner;
+        if (f is not null && squad?.Ai is { CurrentClass: PackageClass.OccupyTown, Destination.IsNone: false } board && TownOfFixture(world, f) == board.Destination) return true;
         var relations = data.Relations;
         bool known = owner >= 0 && relations.Contains(owner) && relations.Contains(faction);
-        if (known && relations.IsHostile(owner, faction) || f.Contents is not null) return false;
-        if (!IsInside(f))
-        {
-            if (squad is { Town: >= 0 } && f.Site == squad.Town) return true;
-        }
-        else if (IsPublic(f.Building) && faction < data.Factions.Count && !data.Factions[faction].NotReal && owner != world.Player.Faction) return true;
+        if (known && relations.IsHostile(owner, faction) || f?.Contents is not null) return false;
+        if (f is not null && !IsInside(f) && squad is { Town: >= 0 } && f.Site == squad.Town) return true;
+        if (f is not null && IsInside(f) && IsPublic(f.Building) && faction < data.Factions.Count && !data.Factions[faction].NotReal && owner != world.Player.Faction) return true;
         return known && relations.IsAlly(owner, faction);
     }
 }
