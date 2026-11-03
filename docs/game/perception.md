@@ -229,8 +229,8 @@ entry has a tag word (entry +0x30 → +0x30): bit 0 SENSE_ALLY, 1 SENSE_NEUTRAL,
 
 **Observed** (decompile; goal 16's finder, [ai-tasks](ai-tasks.md#combat-goals)). A sensed character of a faction that
 is not the looker's ally becomes a target only when both tests pass:
-- **Area** (`FUN_140599f30`): true when the target stands in the looker's own building (character vfunc +0x98's
-  +0x30 equals the target's vfunc +0x78). Else the AI's area test `FUN_140597790` by its manoeuvre mode (AI +0x2bc
+- **Area** (`FUN_140599f30`, **Verified** by decompile): true when the target's current town (vfunc +0x78) is the looker's
+  squad home town (character vfunc +0x98, `Ownerships::_homeTown` +0x30). Else the AI's area test `FUN_140597790` by its manoeuvre mode (AI +0x2bc
   `ordersMovement`, KenshiLib `AIManuverabilityOrders`: 0 HOLD_GROUND, 1 STAY_CLOSE, 2 ROAM_FAR): ROAM_FAR around the
   looker itself (AI +0x2c0 set to its position), in when d^2 < 42467328 (about 6517 units); HOLD_GROUND around the
   centre of movement AI +0x2c0 (height from the state broadcast's position, AI +0x18 +0xcc), in when d < R + 40 + R'
@@ -241,6 +241,7 @@ is not the looker's ally becomes a target only when both tests pass:
   `AI::setManuveringFreedomLevel` from standing orders 8/9 ([combat](combat.md#fight-lifecycle-and-orders)); the centre by
   `AI::setCenterOfMovement`, which every player order calls with its point (`Character::addOrder`) and which in
   HOLD_GROUND / STAY_CLOSE also installs the hold-position task 30 / 31. The radii are the constructor's (`AI::AI`: meiDistance 18, tolerance 5; no other writer found), so HOLD_GROUND reaches 63 and STAY_CLOSE 223.
+  An NPC keeps the constructor's ROAM_FAR unless ordered, and sight (1500) is well inside 6517, so for a sensed target the test only bites on player characters with a standing order.
 - **Post** (`AI::isTargetInRangeForHOLDMode_hostiles` `FUN_140598630`): only for a character on Hold (`CharStats::holdPositionMode`
   `FUN_1402b2b90`: CharStats +0x12b and not sneaking) that is not `FUN_1407f2840` (**Verified**: Ranged toggle on, posture 0, and manning a turret, or both arms working with a ranged weapon in hand or on the back; Meitou `Orders.RangedExempt`): a target slower than 2 (movement
   +0xb8), or in its own state > 1 (crawling, playing dead), or with the movement's animation-driven flag +0x37c set (every swing sets it, [combat](combat.md), "A swing has no steering"), must be within 40 of the looker; a target more than 80 from the hold point
