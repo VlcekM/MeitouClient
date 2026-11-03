@@ -167,7 +167,7 @@ public sealed partial class DialogueSystem
             // The squad's cooldown starts only once a line is said: the original asks again on every perception update and rolls `chance temporary` afresh each time
             // (the Red Sabres' attack root is 20%), so a failed look is tried again on the next scan. A player character it has nothing to say to leaves the turn to the NPCs.
             // Events 66 and 3 (the non-friend branch) need a looker that is no slave and has not escaped; 67 (the friend branch) does not (FUN_140859680).
-            int sight = data.Relations.IsHostile(nc.Faction, world.Player.Faction) ? 66 : data.Relations.IsAlly(nc.Faction, world.Player.Faction) ? 67 : 3;
+            int sight = SightEvent(world, i, nc, best >= 0 ? best : -1);
             bool free = nc is { SlaveState: 0, Escaped: false };
             if (best >= 0 && (sight == 67 || free) && !Recent(world, nc.SquadId, table.IdOf(best))
                 && TrySay(world, i, nc.SquadId, best, sight))
@@ -187,6 +187,25 @@ public sealed partial class DialogueSystem
         }
         SeeAnimals(world, near, said);
     }
+
+    /// <summary>EV_USING_MY_TRAINING_EQUIPMENT (<c>FUN_140859680</c>).</summary>
+    const int UsingMyTrainingEquipment = 59;
+
+    /// <summary>
+    /// The event an NPC fires at a seen player character (<c>FUN_140859680</c>, <b>Verified</b>): 67 for an ally; else 59 when the target is training on a dummy owned by the looker's faction
+    /// (the target's <c>+0x158</c> holds the faction of the dummy it uses, set by <c>Task_UseTrainingDummy</c>'s update and reset every character tick) while the looker senses no enemy,
+    /// else 66 for an enemy of the player and 3 for the rest.
+    /// </summary>
+    int SightEvent(World world, int looker, CharacterCold nc, int target)
+    {
+        if (data.Relations.IsAlly(nc.Faction, world.Player.Faction)) return 67;
+        if (target >= 0 && TrainingDummyOwner(world, target) == nc.Faction && world.SystemOf<AggroSystem>()?.SensesOf(looker) is not { Enemies: > 0 }) return UsingMyTrainingEquipment;
+        return data.Relations.IsHostile(nc.Faction, world.Player.Faction) ? 66 : 3;
+    }
+
+    /// <summary>The faction owning the training dummy the character is using now (Character <c>+0x158</c>); -1 when it uses none.</summary>
+    internal static int TrainingDummyOwner(World world, int slot) =>
+        world.Characters.Cold(slot) is { OperateSite: { } site } && world.Fixtures.Find(site) is { Kind: Locks.FixtureKind.Training } dummy ? dummy.Owner : -1;
 
     /// <summary>I_SEE_ANIMAL_SQUAD: an NPC looker that passes the same filter and sees an awake animal fires it at the animal (<c>FUN_140859680</c> :54-64, before the friend/enemy split).</summary>
     const int SeeAnimalSquad = 27;

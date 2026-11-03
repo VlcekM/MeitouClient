@@ -1046,7 +1046,22 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
             if (s.War.IsSet && WarEnemy(ref s, c, other.Position)) fx.Emit(s.Self, slot, TagEffect, Dialogue.MemoryTag.TempEnemy);
             if (s.War.IsSet && (WarEnemy(ref s, c, other.Position) || AssaultSensed(ref s, e, c, other.Position))) fx.Emit(s.Self, slot, AssaultTargetEffect, 0);
             if (s.EmployerTags && s.Employer >= 0 && c.Faction == s.Employer) fx.Emit(s.Self, slot, TagEffect, Dialogue.MemoryTag.TempAlly);
+            if (BanditFightTag(ref s, e, c, other.Position)) fx.Emit(s.Self, slot, TagEffect, Dialogue.MemoryTag.TempEnemy);
         }
+    }
+
+    /// <summary>
+    /// The sight pass's squad-memory tag (<c>FUN_140859680</c> ending in <c>FUN_1406744a0(looker, target, 4)</c>, <b>Verified</b>; "event 4" in the swarm notes is the memory tag TEMP_ENEMY, not a dialogue event): a sensed
+    /// character that is no ally and not down or an animal, while the looker or it is in combat mode or it has a pending crime, outside every town, with a bandit (NPC class 8) as looker or target, is tagged
+    /// TEMP_ENEMY by the looker's squad (<c>FUN_1406744a0</c> skips an allied faction and one the looker regards as friendly: the ALLY tag). The original's gates on the looker's view flag (<c>+0x1a9</c>) and
+    /// its sleeping are treated as open (engine choice, as the assault hooks above).
+    /// </summary>
+    static bool BanditFightTag(ref Scan s, in SenseEntry e, CharacterCold c, Vector3 at)
+    {
+        if (s.Cold is not { } me || (e.Tags & (SenseTag.Ally | SenseTag.Ko)) != 0 || c.Fighter?.IsAnimal == true || me.SlaveState == 1 || me.IsImprisoned) return false;
+        if (!(me.InCombat || c.InCombat || c.Pending is not null)) return false;
+        if (me.NpcClass != FundamentalType.Bandit && c.NpcClass != FundamentalType.Bandit) return false;
+        return s.Towns is { } towns && Ai.AiSystem.TownAt(towns, s.World, at).IsNone;
     }
 
     /// <summary>
