@@ -79,7 +79,7 @@ public sealed partial class LockSystem
             if (c.Force == LockForce.Strength)
             {
                 c.ForcingLock = null;
-                if (Picking.Break(world, s, f, Crimes)) { world.EmitSound(SoundKind.Unlocked, s, next[s].Position); if (c.IsPlayer) world.Post($"{c.Name}: *Crunck*"); }
+                if (Picking.Break(world, s, f, Crimes)) BruteForced(world, s, c, f.Kind == FixtureKind.Cage ? f.Occupant : CharacterId.None);
                 else if (c.IsPlayer) world.Post($"{c.Name}: I'm not strong enough to do that");
                 continue;
             }

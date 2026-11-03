@@ -162,6 +162,7 @@ public sealed class Lockpicking(GameConstants constants, BodyOptions options)
         if (c is null || item.Lock is not { Broken: false } l) return false;
         ShackleCrime(world, breaker, wearer, crimes);
         if (Strength(c) <= 3 * l.Hardness) return false;
+        l.Hardness = 0;
         l.Broken = true;
         return true;
     }
@@ -189,6 +190,7 @@ public sealed class Lockpicking(GameConstants constants, BodyOptions options)
         Crime(world, picker, c, target, crimes);
         float strength = (c.Stats?[StatsEnumerated.Strength] ?? 0) * (c.Medical?.StatMultiplier(StatsEnumerated.Strength) ?? 1);
         if (strength <= 3 * l.Hardness) return false;
+        l.Hardness = 0;
         l.Broken = true;
         if (target.Kind == FixtureKind.Door) target.DoorBroken = true;
         world.Fixtures.Touch(target);

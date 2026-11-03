@@ -115,7 +115,7 @@ Same targets as picking; Task_CutLock / Task_BruteForceLock share the shackle ta
   best tool is consumed (a tool: ITEM `item function` 9, e.g. Hacksaw; `hasTools` `FUN_1405989e0` tests item `+0x124 == 9`, **Verified**) (aborts if none), the lock's broken flag is set, "Shackles broken!" (also for locks).
   The bar shows hardness x 10. Same crime rule as picking (2 for own-target / buildings, 7 for another character).
 - **Break** (`Task_BruteForceShackles` slot 2, **Observed**): instant; succeeds when effective strength x stat scale > 3 x hardness,
-  else "I'm not strong enough to do that". Sets broken, "*Crunck*".
+  else "I'm not strong enough to do that". Sets broken and the hardness to 0, plays Character_Unlock_Success, logs "Shackles broken!" and floats "*Crunck*" (both, **Verified** `FUN_140352c50`), and fires event 13 UNLOCK_MY_CAGE_OR_SHACKLES at the freed character (a cage's occupant, the shackles' wearer) from the breaker (`LockSystem.BruteForced`).
 - **Taking off** (`Task_TakeOffCuffs` 219, **Verified**): its update (slot 2, `FUN_140349d00`) queues a world event (kind 5, the
   character's own hand, de-duplicated on the GameWorld list `+0x5c8`) that `FUN_1407b65b0` replays as `Character::setChainedMode(character, false)` (`FUN_14032e590`): the chained flag `+0x320` is cleared and the worn locked
   armour (`LockedArmour`, vfunc `0x2f0`; boots section 9, else section 5, `FUN_1405c8a10`) is removed through the inventory (vfunc `0x30`; whether the item goes to the pack or is destroyed is **Unknown**);
