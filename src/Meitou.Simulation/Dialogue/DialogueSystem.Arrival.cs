@@ -24,8 +24,10 @@ public sealed partial class DialogueSystem
         foreach (var id in squad.Members)
         {
             if (!table.TryResolveNext(id, out int s) || table.Cold(s) is not { } c) continue;
+            // Only a member that is up, free, not an animal and out of melee counts for the enemy test, which aborts the whole arrival; the town filter comes after it (FUN_1407ffe40 :100-121).
+            if (!Awake(table, s) || !c.CarriedBy.IsNone || c.InSomething != Locks.HeldState.None || SquadRegistry.IsAnimal(c) || c.InCombat) continue;
             if (SensesEnemy(world, s, c)) return;
-            if (!Awake(table, s) || !c.CarriedBy.IsNone || c.InSomething != Locks.HeldState.None || SquadRegistry.IsAnimal(c) || c.InCombat || data.TownAt(table.Next[s].Position) >= 0) continue;
+            if (data.TownAt(table.Next[s].Position) >= 0) continue;
             candidates.Add(id);
         }
         if (candidates.Count < 2) return;
