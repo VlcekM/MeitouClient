@@ -34,7 +34,8 @@ slot 8 (the drawn node turns toward the character's facing by at most 2 rad/s ×
 rate is CONSTANTS `animation blend rate` × 2, 1.25, 1, 0.5, 0.5 (`@ 140636dc0`). Manager 1 is normalised to 1, manager 0 to 1 minus the weights
 of manager 1's flagged (`+0x5c`) layers, manager 2 not at all: lower (×2), upper and whole body (×1.25), overlay (×1); this mapping is
 **Observed** (from that order); **Verified** for record clips (`FUN_1405ba280`, `FUN_1405b7540`): the ANIMATION record's `layer` picks the manager, `lower` 0, `overlay` 2, two other
-names 4 and 3, `all` and anything else 1, and a layer is flagged +0x5c when its record is `is action` or `layer` `all` (a technique's when it is not a plain block). Per manager (`@ 1405b5c30`), with an active and a fading-out list:
+names 4 and 3, `all` and anything else 1. A layer is flagged +0x5c when its record is `is action` or `layer` `all`, a technique's when it is not a plain block (**Observed**: `FUN_1405b5270`
+computes that value; that it lands in +0x5c rests on a reading of the stack arguments, backed by manager 0 giving way only to manager 1's flagged, whole-body, layers). Per manager (`@ 1405b5c30`), with an active and a fading-out list:
 - a fading layer's time advances only when it loops (+0x5d); a fading one-shot stands still, except a block replayed by `FUN_1405b7600` (+0x62), which plays backwards (**Verified**;
   Meitou: `AnimationSystem.RunsFading`, `FadingTime`, the block at its last forward rate, `Layer.Rate`). A defence start (`FUN_140609290`) first moves manager 1's flagged layers to the fading list (`FUN_1405b36f0`).
 - a fading layer falls to 0 at the manager rate; an active one moves toward its target at the manager rate × its play rate clamped to 0.5..10

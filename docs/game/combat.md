@@ -169,7 +169,8 @@ direction, on a failed one only rows of another direction in the same group (`FU
 side" is the same as a failed roll. Each defence tick replays the technique through `FUN_1405b7600`, which finds the playing layer by name and continues it; a re-pick to the same technique
 continues it too, a different one clears the layers and starts fresh (`FUN_1405b7800`). A block is not ended by its clip: it lasts while any incoming swing has 0 < v < 1, then ends with the wait
 (+0x148); a dodge ends past 0.98 (state 4). A held block stays on its last frame (**Observed**, static reading of `FUN_1405b7600`'s stack arguments: its replay passes the loop flag
-+0x5d off, so the layer's time clamps at the clip's end and its progress +0x54 stays 1).
++0x5d off, so the layer's time clamps at the clip's end and its progress +0x54 stays 1). When a start from deciding fails on its outer path (no swing under 1, or the attacker
+itself blocking) with a plain block current, `FUN_140609200` replays that block at -0.3 x its speed (`DAT_1416f6648`), lowering it slowly (**Observed**, rarely reached; Meitou: not modelled).
 The front/rear heading is the movement object's current unit heading (+0x640 +0xd0, [fight steering](#fight-steering)).
 **Verified** (`FUN_140666400`, `FUN_14060a190`): each defence tick turns the defender at once towards the followed attacker when it is over 5 away (3D, 25 = 5²) and sets the movement's look-at to it,
 except while the current technique is a block (+0x2c) of direction 7, 8 or 9, which is met turned away. The defending band (slot 12) is kept to the followed attacker (limit 16), or, with a
