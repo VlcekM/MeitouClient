@@ -185,7 +185,20 @@ public sealed partial class LockSystem
             if (!table.TryResolveNext(prisoner, out int ps) || table.Cold(ps) is not { } pc || !Conscious(pc)) continue;
             // Letting a prisoner out of another faction's cage is the crime of lifting it out (FixtureRegistry.LiftOut): a pending code 7 against the cage's owner.
             if (cage.Owner >= 0 && cage.Owner != c.Faction) Crimes?.SetPending(world, s, CrimeCode.Terrorism, cage.Owner, prisoner, CrimeSystem.MinTimer);
-            if (world.Fixtures.Release(world, prisoner, c.Faction, Crimes)) world.EmitSound(SoundKind.Unlocked, s, next[s].Position);
+            if (FreeBy(world, table.IdOf(s), c.Faction, prisoner)) world.EmitSound(SoundKind.Unlocked, s, next[s].Position);
         }
+    }
+
+    /// <summary>
+    /// The start of Task_ReleasePrisoner (<c>FUN_1403570a0</c>, Verified): the prisoner is marked freed (status <c>+0xea</c>; not a kidnapped one, never booked, whose mark would drop on its next AI update),
+    /// released, then a releaser of a faction that books bounties tells it it may go (event 46 from the releaser), else a releaser of the player's faction is thanked (event 13 from the prisoner).
+    /// </summary>
+    bool FreeBy(World world, CharacterId releaser, int faction, CharacterId prisoner)
+    {
+        if (world.Characters.TryResolveNext(prisoner, out int p) && world.Characters.Cold(p) is { Kidnapped: false } pc) pc.Freed = true;
+        if (!world.Fixtures.Release(world, prisoner, faction, Crimes)) return false;
+        if (Crimes?.Factions.Books(faction) == true) world.Defer(new Dialogue.DialogueEvent(releaser, prisoner, PrisonerFreeToGo) { Tick = world.Tick + 1 });
+        else if (faction == world.Player.Faction) world.Defer(new Dialogue.DialogueEvent(prisoner, releaser, UnlockMyCageOrShackles) { Tick = world.Tick + 1 });
+        return true;
     }
 }

@@ -487,11 +487,7 @@ public sealed partial class LockSystem : IStateHashed
         {
             case RoundKind.Release:
                 world.Fixtures.SetLocked(f, false);
-                // The prisoner is marked freed (status +0xea, Task_ReleasePrisoner), unless it was kidnapped: never booked, its mark would drop on its next AI update.
-                if (world.Characters.TryResolveNext(r.Prisoner, out int freed) && world.Characters.Cold(freed) is { Kidnapped: false } fc) fc.Freed = true;
-                // A releaser of a faction that books bounties tells the prisoner it may go (EV_PRISONER_FREE_TO_GO, Task_ReleasePrisoner, economy.md 11.5).
-                if (world.Fixtures.Release(world, r.Prisoner, r.Faction, Crimes) && Crimes?.Factions.Books(r.Faction) == true)
-                    world.Defer(new Dialogue.DialogueEvent(r.Worker, r.Prisoner, PrisonerFreeToGo) { Tick = world.Tick + 1 });
+                FreeBy(world, r.Worker, r.Faction, r.Prisoner);
                 break;
             case RoundKind.LockDoors:
                 if (f.DoorBroken) break;
