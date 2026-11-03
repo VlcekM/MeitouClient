@@ -952,6 +952,7 @@ unload, hashed only once non-empty. Facts: [locks](game/locks.md), [economy 11.5
 
 `Crime/ArrestSystem` (serial `SlowWorld`, after `CrimeSystem`) and `Locks/LockSystem`. Facts: [economy 11.5, 11.7, 11.8](game/economy.md#117-arrest).
 Arrests, the recognition meter and the marker are hashed only while set. What a save keeps of them: [Saves](#saves).
+**Engine choice**: the arrest (`ArrestSystem`) runs one private fight / lift / `FindCage` / walk / `Imprison` state machine. The original reaches the same outcome (fight, lift, cage) through tasks: DA 29 gives the speaker 240 (capture, needs the target down) and 112 (find cage and put in) aimed at the target ([economy 11.7](game/economy.md#117-arrest), **Observed**), and bounty hunting 204 plans goal 203 (list B: down, unarmed, carried) and the cage goals; goals 203, 112 and 281 are not in `TaskBehaviours.Table`.
 - **Triggers**: a police-like witness that books a crime acts at once (`CrimeSystem.BookingsOf`, the witnessed-crime
   events); every 15 ticks an awake NPC within 400 that sees a player character (`Visibility`/`SneakVisibility`) whose
   bounty with its faction reaches its class threshold spots it, at once while `RecentlyWanted` > 0 (250 game seconds after

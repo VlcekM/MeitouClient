@@ -580,6 +580,7 @@ from the decompile and agree with this table, except that the decompile shows no
 ## Arrest and prison rows
 
 Rules: [economy 11.5, 11.7](economy.md#115-bail-and-sentence). **Observed** (evaluators and TaskData hooks resolved from the exe's thunk bytes):
+Meitou does not plan these chains: `ArrestSystem` (fight, lift, cage, walk, imprison) stands in for tasks 240 / 112 and goals 203 / 204 with the same outcome ([simulation](../simulation.md#arrest-and-jail), engine choice).
 
 | Id | Semantics |
 | --- | --- |
