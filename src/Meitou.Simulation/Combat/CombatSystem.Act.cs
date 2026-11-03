@@ -340,8 +340,9 @@ public sealed partial class CombatSystem
                 continue;
             }
 
-            // 4. The reaction and the attack in progress. A block that ends leaves a short wait (a dodge goes straight back to deciding).
-            if (s.ReactTech >= 0 && now >= s.ReactStart + s.ReactTicks)
+            // 4. The reaction and the attack in progress. A block that ends leaves a short wait (a dodge goes straight back to deciding). A block stays up past the end of its
+            // clip until the blow it was started for lands: the original keeps the defence up through the swing, so it is not dropped as soon as the clip runs out.
+            if (s.ReactTech >= 0 && now >= s.ReactStart + s.ReactTicks && now > s.ReactLands)
             {
                 if (!techniques[s.ReactTech].IsDodge) s.ReadyTick = Math.Max(s.ReadyTick, now + (int)MathF.Ceiling(CombatTuning.AfterBlockPause / dt));
                 s.ReactTech = -1;
@@ -842,12 +843,16 @@ public sealed partial class CombatSystem
         var attack = read[attacker];
         var atkTech = techniques[attack.AttackTech];
         int direction = HitOutcomes.Facing(atkTech.DirectionOf(blow), HitOutcomes.Behind(prev[attacker].Position, prev[i].Position, prev[i].Yaw));
-        if (reconsider && s.ReactTech >= 0 && techniques[s.ReactTech].AttackDirection1 == direction && s.ReactStart + s.ReactTicks <= first) return;   // the block ends before this blow: it is handled once the clip is over
+        // A guard already up is not restarted for a blow that lands no sooner (a tie keeps it too), or for one on the same side: restarting the clip every tick
+        // for attackers whose blows land together left the fighter flickering between two blocks and never past its blocked frame.
+        if (reconsider && s.ReactTech >= 0)
+        {
+            if (first >= s.ReactLands) return;
+            if (techniques[s.ReactTech].AttackDirection1 == direction) return;
+        }
         s.ReactedSlot = attacker;
         s.ReactedSeq = attack.AttackSeq;
         s.ReactedBlow = blow;
-        // A block already playing covers a later blow of its own direction (FUN_140665fa0 compares the current technique with each blow); only a different direction starts a new one.
-        if (reconsider && s.ReactTech >= 0 && techniques[s.ReactTech].AttackDirection1 == direction) return;
 
         var fighter = cold.Fighter!;
         float meleeDefence = Trained(cold, StatsEnumerated.MeleeDefence);
@@ -880,11 +885,16 @@ public sealed partial class CombatSystem
         }
         var reaction = techniques[pick];
         int ticks = Ticks(reaction, PlayRate(world, i, cold, reaction, attack: false), dt, cold);
-        // The reaction is timed so that it is at its "blocked frame" when the blow arrives; with less lead time it starts at once and is less far along,
-        // With LateDefences (Meitou balance choice, docs/simulation.md "Combat") never too little for the roll it passed to count: a late one joins its clip partway.
+        // The guard goes up as soon as the swing is seen and is held until that blow lands (the original turns on the one whose blow is most advanced and keeps the defence
+        // through the swing, switching to the next attacker once the hit has resolved): the clip plays at once and holds its last frame, so it is past its blocked frame well
+        // before the blow instead of being timed to land on it.
         int strike = first;
-        int start = Math.Max(now, strike - (int)MathF.Round(reaction.StrikeProgress(1) * ticks));
-        if (LateDefences)
+        int start = now;
+        // A fighter in a running exchange has been guarding already: a clip started for a blow that is at the door is the same guard and is not measured from its own first
+        // frame, or a blow that comes in while the last one is still being answered could never be met. With LateDefences (Meitou balance choice, docs/simulation.md "Combat")
+        // it always counts, however long the gap since the last defence.
+        bool continuous = s.ReactTech >= 0 || (s.ReactLands >= 0 && now - s.ReactLands <= (int)MathF.Ceiling(CombatTuning.GuardContinuationSeconds / dt));
+        if (LateDefences || continuous)
         {
             float least = reaction.IsBlock ? HitOutcomes.BlockProgress : HitOutcomes.DodgeFrom;
             start = Math.Min(start, strike - (int)MathF.Ceiling(least * ticks) - 1);
@@ -892,6 +902,8 @@ public sealed partial class CombatSystem
         s.ReactTech = pick;
         s.ReactStart = start;
         s.ReactTicks = ticks;
+        s.ReactLands = strike;   // held until this blow lands, then dropped and the next attacker faced
+        s.ReactDir = direction;   // the side the guard was raised on: the blow is judged against it, not against where the fighter turns later
         s.LastTech = -1;   // the original's current technique (+0x150) is now a defence, which the next attack choice does not count as its last
 
     }

@@ -28,6 +28,10 @@ public struct CombatSlot
     public float AttackSkill;
     /// <summary>The reaction technique (index), -1 when not reacting; its start tick and length in ticks.</summary>
     public int ReactTech, ReactStart, ReactTicks;
+    /// <summary>The tick the blow the reaction is for lands on: the defence is held until then and is dropped after it (-1: none).</summary>
+    public int ReactLands;
+    /// <summary>The blow's direction relative to the fighter when the reaction was picked (1 to 9, <see cref="HitOutcomes.Facing"/>): the outcome is judged against it.</summary>
+    public int ReactDir;
     /// <summary>The last blow the character made a reaction decision about (attacker slot, attack number, blow), so each blow is decided once.</summary>
     public int ReactedSlot, ReactedSeq, ReactedBlow;
     /// <summary>The earliest tick a new attack may start, and the tick until which a hit reaction holds the character helpless.</summary>
@@ -101,7 +105,7 @@ public struct CombatSlot
 
     public static CombatSlot Fresh(int generation) => new()
     {
-        Generation = generation, TargetSlot = -1, TargetGeneration = 0, TaskSlot = -1, AttackTech = -1, ReactTech = -1, ReactedSlot = -1, ReactedSeq = -1, HitTick = -1, HitPart = -1, HitFrom = -1, StumbleClip = -1, YieldTo = -1, LastTech = -1,
+        Generation = generation, TargetSlot = -1, TargetGeneration = 0, TaskSlot = -1, AttackTech = -1, ReactTech = -1, ReactLands = -1, ReactedSlot = -1, ReactedSeq = -1, HitTick = -1, HitPart = -1, HitFrom = -1, StumbleClip = -1, YieldTo = -1, LastTech = -1,
     };
 
     public readonly bool Fighting => TargetSlot >= 0;
@@ -125,6 +129,8 @@ public struct CombatSlot
         h.Add(ReactTech);
         h.Add(ReactStart);
         h.Add(ReactTicks);
+        h.Add(ReactLands);
+        h.Add(ReactDir);
         h.Add(ReactedSlot);
         h.Add(ReactedSeq);
         h.Add(ReactedBlow);

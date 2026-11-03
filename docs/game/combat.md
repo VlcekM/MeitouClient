@@ -156,6 +156,16 @@ a failed block roll is rare at skill 100). The original's own rate was not measu
 **Measured** (Meitou scripted world, base data, katana, defence 86 with heavy plate and attack 60 against four at attack 62 / 37 / 32 / 98, hit reactions on, 60 seeds, to incapacitation): 70 % of blows blocked
 (attack 98: 20 %, its block chance is 40 %; the others 64-79 %). Of the 120 blows that landed: stumbling 41 %, a failed roll that played a block of the wrong direction 35 %, mid-swing past 50 % 14 %, a block started
 too late for its clip to pass 0.5 (right after the defender's own swing's wait) 8 %. Without hit reactions 68 % blocked and the late blocks lead (95 of 169 landed). No hit met the 1.2 s no-defence lockout. All follow the rules above; the original's rate was not measured.
+**Observed** (in play, the original game; this model comes from fighting in it, not from a decompiled original). A fighter that is swung at has its guard up as the swing starts and still has it when
+the blow lands: a second blow of the same side is met without the block clip starting again, blows of different sides are met one after another, and it swings back between defences. A blow that comes in
+while it is turned away is met on the side it is turned away from (the rear directions), i.e. the side is the one the guard went up on, not one read again when the blow lands.
+Meitou before this: the clip was timed so that its blocked frame fell on the impact and was dropped when the clip ran out; the side was worked out again at the impact, from where the defender had turned to
+by then; and a guard meeting two blows that land on one tick was re-picked on every tick, restarting the clip at its first frame. Measured on a session log (a stat-100 character against Holy Nation
+soldiers, 125 blows at it): 60 blows had a different side at the impact than at the pick and 56 of those were hits, 74 % of the blows that landed. On the bench (`tools/probe-combat`, stat-100 defender,
+block stance, 5 attackers): 79 % of the blows blocked before, 92 % after with katana attackers, 98 % with sabre and 99 % with heavy ones; 2 and 3 attackers 86 / 88 -> 96 / 97 (katana).
+Meitou: the guard is raised at the swing start and held until its own blow lands (`CombatSlot.ReactLands`), a defence within 0.6 s of the last blow is still the same guard
+(`CombatTuning.GuardContinuationSeconds`), the outcome is judged on the side it was raised on (`CombatSlot.ReactDir`), and a guard is only replaced by a blow that lands sooner or comes from another side
+(`React(reconsider: true)`).
 
 **Observed** (decompiled, not measured in game), with several attackers: a target answering a request is asked by
 anyone, not only its own target, and the winner of the roll turns to attack the asker (`FUN_140666a30`). Deciding

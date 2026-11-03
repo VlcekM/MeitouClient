@@ -47,7 +47,9 @@ public sealed partial class CombatSystem
         // The defender was in the attack zone when the blow arrived (Strike); its own block or dodge decides the outcome.
         CombatTechnique? reaction = D.ReactTech >= 0 && !D.Down && now >= D.StunUntil ? techniques[D.ReactTech] : null;
         float progress = reaction is not null ? Math.Clamp((now - D.ReactStart) / (float)D.ReactTicks, 0, 1) : 0;
-        var outcome = HitOutcomes.Decide(reaction, progress, direction);
+        // Judged against the side the guard was raised on: the direction is worked out again here from where the defender has turned, and turning between the pick and
+        // the blow (it may face another attacker) would otherwise turn a block it chose into a hit.
+        var outcome = HitOutcomes.Decide(reaction, progress, D.ReactDir != 0 ? D.ReactDir : direction);
 
         A.LastOutcome = outcome;
         // A blow that lands or is blocked takes the defender off the attacker's list of fighters it lets close in (attackImpactCheck → CombatClass::removeAttackerH on

@@ -21,6 +21,11 @@ public static class CombatTuning
     public const float BreakOutFrom = 0.1f, BreakOutTo = 0.99f;
     /// <summary>Seconds without any defence after a defence roll found nothing (<b>Verified</b>, the original's +0x14c), and the wait after a block ends with nothing coming (+0x148, 0.2 s).</summary>
     public const float NoDefenceSeconds = 1.2f, AfterBlockPause = 0.2f;
+    /// <summary>
+    /// Seconds after a block's blow has landed within which the next defence still counts as the same guard (a fighter in a running exchange keeps its guard up rather than
+    /// measuring every new clip from its first frame).
+    /// </summary>
+    public const float GuardContinuationSeconds = 0.6f;
     /// <summary>A swing is given up to defend while it is under this far through and a blow coming at the fighter is past this far (<b>Verified</b>, FUN_1406083d0(0.5, 0.5)).</summary>
     public const float AbortOwnProgress = 0.5f, AbortIncomingProgress = 0.5f;
     /// <summary>
