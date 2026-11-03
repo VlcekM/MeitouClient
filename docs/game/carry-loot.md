@@ -198,7 +198,7 @@ it is not part of target eligibility.
 "Patrol map (short range) LOOTING" and the Starving Bandits' packages that inherit it. 131 "Looting food" and 243 "Getting food" find buildings, not bodies. 177's effect is
 `isSubjectInInventory` (3), provided by row 3 `PICKUP` "Collecting item" (`Task_Loot_AI`, B list `isItemLootable`, `isAtLocation`): the plan walks to the target, then loots it.
 
-- **Finder** (`FUN_14099ae10(ai, animalsOnly)`; 177 passes 0). Two passes over the sensed list, each target within 100 units (Ogre squaredDistance, full 3D, <= 10000; **Verified**; Meitou `LootTarget` measures it in 3D), not carried (`+0x3d4`),
+- **Finder** (`FUN_14099ae10(ai, animalsOnly)`; 177 passes 0). Two passes over the sensed list, each target within 100 units (Ogre squaredDistance, full 3D, <= 10000; **Verified**; Meitou `LootTarget` measures it in 3D), not carried (`+0x3d4`), Neither pass tests imprisoned (**Verified**, `FUN_14099ae10`; `FUN_140597030` is true for a caged occupant), so a downed prisoner in a cage is a target.
   reachable (both passes, **Verified**: `FUN_140597160` = DESTINATION_NOT_BLOCKED_BY_FORTIFICATIONS, [locks](locks.md): the gate codes match, either is -1, or the route between is open; and
   `FUN_140597030` = `AI::isDestinationAccessible`: true with no building around the body, when the looter is in it, or for a caged occupant; for a plain building (no parent) the
   looter may use (`CharacterHuman` slot `0x328` is always true; the animal's is **Unknown**) it needs `Building::hasAnOpenDoor` `FUN_1405499a0`: no doors, or one open, opening or broken; Meitou `CarrySystem.Reachable`), not in the squad's give-up list, and not short-term tagged 6 by the looter's squad

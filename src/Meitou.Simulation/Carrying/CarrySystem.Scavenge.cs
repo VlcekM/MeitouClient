@@ -65,7 +65,7 @@ public sealed partial class CarrySystem
         float dead2 = ScavengeRange * ScavengeRange, down2 = dead2;
         foreach (int s in bodies)
         {
-            if (s == slot || !next[s].Alive || goals.Working(cold.SquadId, table.IdOf(slot), GoalTarget.Of(table.IdOf(s))) > 0 || table.Cold(s) is not { } body || !CanBeLooted(body) || !body.CarriedBy.IsNone || body.IsImprisoned) continue;
+            if (s == slot || !next[s].Alive || goals.Working(cold.SquadId, table.IdOf(slot), GoalTarget.Of(table.IdOf(s))) > 0 || table.Cold(s) is not { } body || !CanBeLooted(body) || !body.CarriedBy.IsNone) continue;   // no imprisoned test in either pass (FUN_14099ae10): a downed prisoner in a cage is scavenged
             float d2 = Vector3.DistanceSquared(at, next[s].Position);   // Ogre squaredDistance: full 3D, strict bound
             if (d2 > down2 && d2 > dead2) continue;
             if (memory is not null && memory.HasShort(world, cold.SquadId, table.IdOf(s), MemoryTag.Looted)) continue;
