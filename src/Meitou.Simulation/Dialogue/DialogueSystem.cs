@@ -284,11 +284,19 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
         if (world.Characters.TryResolveNext(id, out int slot) && world.Characters.Cold(slot) is { } c) c.Engaged = false;
     }
 
+    /// <summary>The farthest the talking player character may be from the camera for a player conversation to start (<c>FUN_140684320</c>, constant 9216).</summary>
+    public const float CameraReach = 9216;
+
+    /// <summary>Whether the talker is more than <see cref="CameraReach"/> from the camera focus (no focus known: never; headless runs and tests have none).</summary>
+    bool TooFarFromCamera(CharacterTable table, CharacterId talker) =>
+        population?.Focus is { } focus && table.TryResolveNext(talker, out int p) && Vector3.Distance(table.Next[p].Position, focus) > CameraReach;
+
     /// <summary>Fires <paramref name="ev"/> at <paramref name="npc"/> with <paramref name="player"/> as its target and opens the conversation (docs/game/dialogue.md "Player conversation").</summary>
     void Start(World world, CharacterId npc, CharacterId player, int ev, bool quiet = false)
     {
         var table = world.Characters;
         if (!table.TryResolveNext(npc, out int n) || table.Cold(n) is not { } nc) return;
+        if (ev == DialogueEvents.PlayerTalkToMe && TooFarFromCamera(table, player)) return;
         var c = new Conversation { Npc = npc, Player = player, Event = ev };
         IReadOnlyList<DialogueNode> roots = interrupts.Remove(npc, out var pending) && dialogue.Node(pending) is { IsRoot: true } interrupt ? [interrupt] : SetOf(world, n).For(ev);
         var picked = Pick(world, c, roots);
