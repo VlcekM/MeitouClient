@@ -112,10 +112,11 @@ public static class ResidentRuins
 
     /// <summary>
     /// Whether a building can be ruined (<c>FUN_14055b520</c>, Verified decompile): it or a part reached through <c>parts</c> (followed to any depth) has a
-    /// <c>destroyed mesh</c>. The original also says yes when the building's int at +0x198 is 7 (its meaning is Unknown; not modelled).
+    /// <c>destroyed mesh</c>. The original also says yes when the building's class (+0x358, +0x198) is 7, GatewayBuilding, the building the factory makes for an `is wall gate` record (**Verified**, class table in docs/game/pathfinding.md): a gate can be ruined.
     /// </summary>
     public static bool CanBeDestroyed(GameDatabase db, GameRecord building)
     {
+        if (building.GetBool("is wall gate")) return true;
         var queue = new Queue<GameRecord>([building]);
         var seen = new HashSet<string>(StringComparer.Ordinal) { building.StringId };
         while (queue.TryDequeue(out var r))
