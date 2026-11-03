@@ -152,4 +152,16 @@ public class PopulationRulesTests
         Assert.False(MedicalClock.OnScreen(view, new Vector3(0, 0, 4000)));       // beyond the range
         Assert.False(MedicalClock.OnScreen(view, new Vector3(5000, 0, 1500)));    // far to the side
     }
+
+    /// <summary>FUN_1408cbea0 / FUN_140a00690: the buildings a finder looks at are those within 1.1 x the radius of the character's town; none of them beyond.</summary>
+    [Fact]
+    public void The_material_finder_looks_at_buildings_within_the_characters_town_only()
+    {
+        var data = SyntheticTown.Data(SyntheticTown.Database());
+        using var world = new Meitou.Simulation.World(new WorldSettings { PublishSnapshots = false }, new OpenGroundWalkability((_, _) => 0));
+        var cold = new CharacterCold { Faction = data.SiteFactions[0] };
+        var inTown = world.Fixtures.TownCandidates(world, data, cold, SyntheticTown.Centre);
+        Assert.True(inTown(SyntheticTown.Centre + new Vector3(50, 0, 0)));
+        Assert.False(inTown(SyntheticTown.Centre + new Vector3(3000, 0, 0)));
+    }
 }

@@ -95,7 +95,7 @@ Fetching (**Verified**, TaskData rows of `FUN_140319a60`, finder `FUN_1405a2a60`
 case 247, `FUN_14033cd10`): the planner chain is 2 Building (needs 51) <- 71 Adding materials (needs 50) <- 115 "Finding
 building mats" (effect 150, a target finder) <- 247 "Collecting resource". The 115 finder takes the site's materials with
 `required - delivered > 0` (`FUN_14054a450`) in list order and returns the first one's source (factor 1; 0 when none):
-1. a source remembered for that item (a per-item map in the AI, re-used while valid);
+1. a source remembered for that item (a per-item map in the AI, kept in the AI's per-update cache, which is emptied at the start and end of each update, so it changes no answer; Meitou keeps none);
 2. a loose item within 1200 of the character with the same record, not blacklisted and not lying in another faction's
    building (`FUN_140997d80`, **Observed**); the first the world grid query meets;
 3. a complete building of the character's town (its current town, else the nearest town within 3953, plus its home
@@ -103,7 +103,7 @@ building mats" (effect 150, a target finder) <- 247 "Collecting resource". The 1
    owner it may use, that is not the excluded one, holds the item and has items: storages (`StorageBuilding`, slot
    0x3b0 null) first, then production buildings (their output); nearest within the AI's range. An item matches when
    it is the same record, or, when neither is an ITEM (type 4), any record of the same type.
-The range is the AI's mode `AI+0x2bc` (**Verified**, constructor `FUN_1406236d0` sets 2; character orders 8/9 of
+The town candidates are the buildings found by a spatial query round the town (`FUN_140a00690`: within the town's radius x 1.1 of its position, filtered by the Ownerships' `canIUseThisBuilding`), not the buildings registered to the town, so a player outpost's storages count by where they stand (**Verified**; Meitou `FixtureRegistry.TownCandidates`, shared with the cage finders). The range is the AI's mode `AI+0x2bc` (**Verified**, constructor `FUN_1406236d0` sets 2; character orders 8/9 of
 `FUN_1405caa50` change it, which HUD buttons send them is **Unknown**): mode 2 squared distance <= 4.246733e7 (about 6517)
 from the character; mode 0 `(18 + 40 + 5)`, mode 1 `(18 + 200 + 5)` (AI+8 = 18, AI+0xc = 5), others 1000.
 Task 247 is `Task_EmptyMachine_BuildMats` (+0x78 clear) for a building target, `Task_Pickup` for an item. At the building

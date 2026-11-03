@@ -42,6 +42,17 @@ public sealed partial class FixtureRegistry
     /// </summary>
     public Func<Fixture, bool> CageCandidates(World world, PopulationData data, CharacterCold carrier, Vector3 at)
     {
+        var inReach = TownCandidates(world, data, carrier, at);
+        return f => f.Nest && f.Owner == carrier.Faction || inReach(f.Position);
+    }
+
+    /// <summary>
+    /// The building gatherer's town rule (<c>FUN_1408cbea0</c> -> <c>FUN_140a00690</c>, <b>Verified</b>) as a test on a position: within <see cref="TownReach"/> x the radius of the town the character stands in, else of its
+    /// faction's nearest, or of its squad's home town; membership is by the spatial query, not the building's own town, so an outpost's storages count by where they stand. Every position when it has no town at all.
+    /// Used by the cage finders and the material finder (<c>FUN_14059d000</c>, mask <c>0x4002436</c>).
+    /// </summary>
+    public Func<Vector3, bool> TownCandidates(World world, PopulationData data, CharacterCold carrier, Vector3 at)
+    {
         usableData ??= data;
         var town = AiSystem.TownAt(data, world, at);
         if (town.IsNone) town = NearestTownOf(world, data, carrier.Faction, at);
@@ -53,10 +64,9 @@ public sealed partial class FixtureRegistry
         var (homeCentre, homeReach) = home.IsNone ? default : Reach(world, data, home);
         if (town.Site >= 0) RegisterSite(world, data, town.Site);
         if (home.Site >= 0) RegisterSite(world, data, home.Site);
-        return f =>
+        return position =>
         {
-            if (f.Nest && f.Owner == faction) return true;
-            var p = new Vector2(f.Position.X, f.Position.Z);
+            var p = new Vector2(position.X, position.Z);
             return Vector2.DistanceSquared(p, centre) <= reach * reach || !home.IsNone && Vector2.DistanceSquared(p, homeCentre) <= homeReach * homeReach;
         };
     }
