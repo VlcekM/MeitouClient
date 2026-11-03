@@ -51,6 +51,11 @@ public sealed class MovementSystem(PathService paths) : ITickSystem, IDisposable
     /// <summary>A character within this distance of a waypoint has reached it.</summary>
     public const float ArriveRadius = 10;
     /// <summary>
+    /// How far (units) a player's order with no path at all may stand in for one by walking straight at its goal (a few metres, the width of a room: one shoved into furniture
+    /// is that close). A goal further off is off the mesh as a rule, and walking at it would go on for ever, so the order is dropped as the original does.
+    /// </summary>
+    public const float StraightOrderReach = 64;
+    /// <summary>
     /// How near (units) a walker comes to a corner it may not cut (<see cref="CanCut"/>) before it turns for the next waypoint (engine choice: about a step).
     /// </summary>
     public const float CornerReach = 2;
@@ -522,12 +527,28 @@ public sealed class MovementSystem(PathService paths) : ITickSystem, IDisposable
             }
             else
             {
-                // No way there: the old path (an order given on the move) is dropped too.
-                cold.PathFailed = true;
-                n.Flags = (ushort)(n.Flags & ~(ushort)MoveFlags.HasPath);
-                n.PathCursor = 0;
-                n.TaskTime = FailedPathWait;
-                if (n.Task == (byte)CharacterTask.GoTo) { TaskStart.Step(table, slot, CharacterTask.Idle); cold.OrderQueue.Clear(); }
+                // A player ordered out of a spot no path can leave (shut in a hollow the navmesh does not cross, or shoved into one) walks straight at the order's goal instead of
+                // losing the order: the ordinary step test still refuses what it cannot walk, and EscapesToward above clears the step out of a hole that cuts the mesh. Only a short
+                // order with a goal on the mesh: a goal off it (a click that hit nothing, an order restored from a save) would be walked at for ever, through walls, so it keeps the drop.
+                float toGoal = new Vector2(n.Goal.X - n.Position.X, n.Goal.Y - n.Position.Z).Length();
+                bool shortHop = toGoal <= StraightOrderReach && world.Walkability.IsWalkable(n.Goal.X, n.Goal.Y, n.Position.Y);
+                if (cold.IsPlayer && n.Task == (byte)CharacterTask.GoTo && shortHop)
+                {
+                    cold.PathFailed = false;
+                    cold.Path = [new Vector3(n.Goal.X, n.Position.Y, n.Goal.Y)];
+                    cold.PathExact = int.MaxValue;
+                    n.PathCursor = 0;
+                    n.Flags |= (ushort)MoveFlags.HasPath;
+                }
+                else
+                {
+                    // No way there: the old path (an order given on the move) is dropped too.
+                    cold.PathFailed = true;
+                    n.Flags = (ushort)(n.Flags & ~(ushort)MoveFlags.HasPath);
+                    n.PathCursor = 0;
+                    n.TaskTime = FailedPathWait;
+                    if (n.Task == (byte)CharacterTask.GoTo) { TaskStart.Step(table, slot, CharacterTask.Idle); cold.OrderQueue.Clear(); }
+                }
             }
         }
     }
