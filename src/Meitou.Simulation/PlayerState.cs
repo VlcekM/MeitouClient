@@ -239,8 +239,12 @@ public sealed partial class PlayerSystem(PopulationData? data = null) : ITickSys
             switch (command)
             {
                 case SelectCommand select:
-                    var selectable = select.Characters.Where(id =>
+                    var candidates = select.Characters.Where(id =>
                         table.TryResolveNext(id, out int slot) && table.Cold(slot)!.IsPlayer).ToArray();
+                    if (candidates.Length == 0) break;
+                    // A non-additive select with any candidate clears the selection first; the gate then keeps out the dead (FUN_1407f3b50, FUN_1407f7f20).
+                    if (!select.Additive && !(select.Toggle && candidates.Length == 1 && player.Selection.Contains(candidates[0]))) player.Selection.Clear();
+                    var selectable = candidates.Where(id => !(table.TryResolveNext(id, out int living) && table.Cold(living)!.Medical is { Dead: true })).ToArray();
                     if (selectable.Length == 0) break;
                     // A shift-click on a selected character takes it out, never emptying the selection (it stays when it is the only one).
                     if (select.Toggle && selectable.Length == 1 && player.Selection.Contains(selectable[0]))

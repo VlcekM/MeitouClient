@@ -36,15 +36,28 @@ sealed partial class PlayerInterface
         : Bound(InputAction.ToggleRanged, key) ? CharacterOrders.Ranged : Bound(InputAction.ToggleSneak, key) ? CharacterOrders.Sneak
         : Bound(InputAction.ToggleTaunt, key) ? CharacterOrders.Taunt : null;
 
+    /// <summary>
+    /// The double-tap pairing of <c>FUN_140788100</c>: the last single event's action is remembered (any bound hotkey, not only the digits) with its time; an event is a double when it
+    /// is the same action again less than half a second later. A double does not clear the memory (a third press is a double again); a different action replaces it, and two
+    /// events in one frame forget it.
+    /// </summary>
+    bool HotkeyDoubleTap(EngineKey key)
+    {
+        var action = HotkeyActions.Where(a => Bound(a, key)).Select(a => (InputAction?)a).FirstOrDefault();
+        if (action is null) return false;
+        long now = System.Diagnostics.Stopwatch.GetTimestamp();
+        bool doubleTap = ++hotkeyEventsThisFrame == 1 && action == lastHotkey && System.Diagnostics.Stopwatch.GetElapsedTime(lastHotkeyAt, now).TotalSeconds < DoubleTapSeconds;
+        (lastHotkey, lastHotkeyAt) = hotkeyEventsThisFrame == 1 ? (action, now) : (null, now);
+        return doubleTap;
+    }
+
     public void Key(EngineKey key, bool shift)
     {
         uiInput++;
+        bool doubleTap = HotkeyDoubleTap(key);
         // select_0..9 (events 100..109, keys 1..9 and 0 by default): the active squad's members; a second press within half a second centres on the member.
         if (Array.FindIndex(SelectMemberActions, a => Bound(a, key)) is var member and >= 0)
         {
-            long now = System.Diagnostics.Stopwatch.GetTimestamp();
-            bool doubleTap = key == lastSelectKey && System.Diagnostics.Stopwatch.GetElapsedTime(lastSelectAt, now).TotalSeconds <= DoubleTapSeconds;
-            (lastSelectKey, lastSelectAt) = (doubleTap ? default : key, now);
             SelectMember(member, shift, doubleTap);
             return;
         }

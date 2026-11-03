@@ -127,9 +127,9 @@ identified; pause 0x12 is only blocked by the second). While the MainBar object 
 | any other id | forwarded to the orders panel handler FUN_1407226e0 (**Observed**), which calls the panel buttons' own click handlers: 0x17 Block, 0x18 Hold, 0x19 Passive, 0x1a Jobs, 0x1b Ranged, 0x1c Sneak, 0x1d Taunt, 0x1e the right speed arrow (`FUN_140722630`, so cycle_run_speed steps up and wraps), 0x1f Medic, 0x20 Rescue, 0x21 Prospect; it ignores the rest |
 | 8 | not in the hotkey function: handled in the action switch by FUN_1406e2a20, which flips the GUI-hidden flag at GUI+0x330 ("toggle whole GUI") |
 
-Squad events (**Observed**): select_0..9 (100..109, `FUN_1407f90b0`) and select_all 0x22 (`FUN_1407f8d00`) act on the active squad's members
+Squad events (**Observed**): select_0..9 (100..109, `FUN_1407f90b0`) and select_all 0x22 (`FUN_1407f8d00`) act on the active squad's members (`FUN_1407f5520`, **Verified**: the cached squad; if unset the squad of the first selected character; if still unset the first roster squad; none without a roster, then the keys do nothing)
 ([squad tabs](ui-screens.md#4-hud-mainbargui)); change_squad 0x23 (`FUN_1407f6380`) with more than one squad makes the next one in order (wrapping) that has
-members active, and leaves the selection alone. character_next / prev 0x26 / 0x27 (`FUN_1407f9130(+1 / -1)`, **Observed**): nothing unless the
+members active, and leaves the selection alone. Double tap (`FUN_140788100`:270-339, **Verified**): select_N is a double when its binding is the one remembered from the last frame with a single event and under 0.5 s passed; a double does not clear the memory (a third press is a double again); any other single bound action replaces it, two events in one frame clear it. character_next / prev 0x26 / 0x27 (`FUN_1407f9130(+1 / -1)`, **Observed**): nothing unless the
 active squad has at least two members; when the focus character (`DAT_142133a50`) is a living one of the player's faction, the next (previous) member
 of its own squad, wrapping, is selected alone (`FUN_1407f9000`); otherwise the current selected character is selected alone and focused, or with no
 selection the first entry of a list at PlayerInterface+0x2c0 (**Unknown** which). Meitou (`StepCharacter`): the HUD's character (the inspected one
@@ -444,7 +444,7 @@ highlight or outline call was found for a selected building (**Unknown** whether
 The object stays selected until something replaces or clears it: a left click on another building or another faction's character replaces it.
 Selecting one of the player's characters without Shift (click, drag box, number keys, `[` / `]`) runs `FUN_1407f3b50`, which clears the
 squad selection, the object slot and the focus. With Shift the object slot stays but the focus (the HUD) moves to the character. A click on the
-ground and Esc do not clear it (**Observed** by absence: `FUN_140800250` has no such path, and `FUN_140917120` does not use the focus handle).
+ground and Esc do not clear it (**Observed** by absence: `FUN_140800250` has no such path, and `FUN_140917120` does not use the focus handle). Every select source goes through the gate `FUN_1407f7f20`, which refuses a dead character (`FUN_1406215b0`, byte +0x5bc): a drag box over only dead characters still clears the selection (the non-additive clear comes first, `FUN_140800f10`:176-186) and selects nothing (**Verified**, decompile).
 
 Shift toggles (**Verified**): on a single player character a Shift-click in the world (`FUN_140800250` -> `FUN_1407fb410` -> `FUN_1407f9000`), a Shift-click on a squad-bar portrait
 (`FUN_140413cd0`) or Shift with a number key (`FUN_140788100` -> `FUN_1407f90b0` -> `FUN_1407f8f60`) takes it out of the selection when it is in it and the selection holds two or more
