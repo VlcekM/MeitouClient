@@ -375,6 +375,17 @@ public sealed partial class FixtureRegistry
     /// </summary>
     public static Vector3? ExitSpot(Fixture cage) => Nearest(cage, cage.UseNodes, cage.Position)?.At;
 
+    /// <summary>
+    /// <c>Building::getPositionMarker(from)</c> (vtable slot 0x470, FUN_14054b850, <b>Verified</b>) of a bed or cage by fixture id: with two or more use nodes the nearest one to <paramref name="from"/>
+    /// (a bed skips its marked-bad nodes), else the building's position marker (<see cref="Fixture.Marker"/>, its position without one); null for an unknown id.
+    /// </summary>
+    public Vector3? PositionMarker(string fixtureId, Vector3 from, double now = 0)
+    {
+        if (Find(fixtureId) is not { } f) return null;
+        if (f.Kind == FixtureKind.Bed) return LieSpot(f, from, now).At;
+        return Nearest(f, f.UseNodes is { Length: >= 2 } nodes ? nodes : null, from)?.At ?? f.Marker ?? f.Position;
+    }
+
     /// <summary>The use node of <paramref name="f"/> nearest <paramref name="from"/> in the world (squared 3D distance), with its facing; null with no nodes.</summary>
     static (Vector3 At, float Yaw)? Nearest(Fixture f, UseNode[]? nodes, Vector3 from, Func<int, bool>? skip = null)
     {

@@ -94,7 +94,21 @@ public sealed partial class CarrySystem
     static Vector2 Behind(in CharacterHot target) =>
         new(target.Position.X - MathF.Sin(target.Yaw) * KnockoutBehind, target.Position.Z - MathF.Cos(target.Yaw) * KnockoutBehind);
 
-    /// <summary>The walk of a stealth knock-out (Schedule, serial): to the point behind the target, re-aimed as it moves; within reach the swing starts.</summary>
+    /// <summary>
+    /// Where the attacker walks (<c>Task_StealthKO</c> <c>FUN_14034cd80</c>, <b>Verified</b>): the point behind the target, or, for a target in a bed or imprisoned, that building's position marker
+    /// nearest the attacker (<see cref="Locks.FixtureRegistry.PositionMarker"/>: the nearest use node, else its marker).
+    /// </summary>
+    static Vector2 KnockoutGoal(World world, CharacterCold target, in CharacterHot targetHot, in CharacterHot attacker)
+    {
+        if (target.InSomething != Locks.HeldState.None && target.InWhat is { } id
+            && world.Fixtures.PositionMarker(id, attacker.Position, world.GameHours) is { } marker) return new Vector2(marker.X, marker.Z);
+        return Behind(targetHot);
+    }
+
+    /// <summary>
+    /// The walk of a stealth knock-out (Schedule, serial): to the goal behind the target, re-aimed as it moves, through the swing too (the goal is set every update before the state logic, and
+    /// the knockout clip has no <c>disables movement</c>, so only reaching the point stops the attacker); within reach the swing starts.
+    /// </summary>
     void ScheduleKnockOuts(World world)
     {
         var table = world.Characters;
@@ -105,7 +119,6 @@ public sealed partial class CarrySystem
             ref var n = ref next[i];
             if (!n.Alive || n.Task != (byte)CharacterTask.StealthKo) continue;
             var cold = table.Cold(i)!;
-            if (cold.LiftTime >= 0) continue;   // swinging: SlowWorld has it
             // Only the target's sensing the attacker cancels the walk (FUN_14034cd80, no combat-state test of either side: orders beat goals); the roll's fight zero is in Strike.
             if (cold.Medical is not { Incapacitated: false } || !table.TryResolveNext(cold.CarryTarget, out int t) || table.Cold(t) is not { } target
                 || !CanBeKnockedOut(target) || Senses(world, table, t, i))
@@ -113,21 +126,15 @@ public sealed partial class CarrySystem
                 End(world, i);
                 continue;
             }
-            var goal = Behind(next[t]);
-            if (Vector2.Distance(new Vector2(n.Position.X, n.Position.Z), goal) < KnockoutStartRange)
+            var goal = KnockoutGoal(world, target, next[t], n);
+            if (cold.LiftTime < 0 && Vector2.Distance(new Vector2(n.Position.X, n.Position.Z), goal) < KnockoutStartRange)
             {
-                // Only the path is dropped: MovementSystem.Stop would end the task too, and the swing with it.
-                n.Flags = (ushort)(n.Flags & ~(ushort)MoveFlags.AnyPath);
-                n.PathCursor = 0;
-                cold.PathRequest = 0;
                 // The target's sense entry: heard on this last step (the sneaking hearing roll at the step's speed; the original's pass cadence is not traced).
                 float stealth = Orders.Stealth(cold), step = new Vector2(n.Velocity.X, n.Velocity.Z).Length();
                 float hear = step > 0.01f ? Orders.SneakHearChance(Vector3.Distance(n.Position, next[t].Position), Orders.SneakNoise(stealth, WeatherSystem.NoiseFactor(cold)), stealth, !Asleep(table, t)) : 0;
                 cold.KnockoutHeard = hear > 0 && Rng.Float(Rng.Hash(world.Seed, Rng.Key(table.IdOf(i)), RngPurpose.KnockoutHear, (ulong)world.Tick)) < hear;
-                n.Velocity = Vector3.Zero;
                 cold.LiftTime = 0;
                 Face(ref n, next[t]);
-                continue;
             }
             n.TaskTime -= dt;
             bool asking = (n.Flags & (ushort)(MoveFlags.NeedPath | MoveFlags.Pending)) != 0;
