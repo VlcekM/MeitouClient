@@ -38,8 +38,11 @@ public readonly struct MedicalContext(GameConstants constants, BodyOptions optio
     /// <summary>Character state 1: in a bed. Hunger uses <c>bed hunger rate</c> and blood recovers at <c>resting heal rate mult</c>.</summary>
     public bool Resting { get; init; }
 
-    /// <summary>Using a machine: the hunger rate factor is 0.8 (probably the BUILDING's <c>hunger rate</c>).</summary>
-    public bool UsingMachine { get; init; }
+    /// <summary>
+    /// Standing still out of combat with no task (the original's <c>CharBody::amIdle</c>, KenshiLib 1ce4a16): the hunger rate factor is <see cref="MedicalState.IdleHungerRate"/>
+    /// (<c>FUN_1408837a0</c>, <b>Verified</b> in game, #134), unless <see cref="UseHungerRate"/> is set.
+    /// </summary>
+    public bool Idle { get; init; }
 
     /// <summary>Idle on a machine or a chair (not moving, not fighting): its functionality's <c>hunger rate</c> is the factor (CharStats <c>+0x178</c>, <c>FUN_1408837a0</c>, <b>Verified</b>); null: none.</summary>
     public float? UseHungerRate { get; init; }

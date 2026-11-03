@@ -194,6 +194,7 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
                 HealMult = cold.InSomething == Locks.HeldState.Imprisoned ? 2 : 1,
                 PlayDead = i < playDead.Length && playDead[i],
                 UseHungerRate = UseHungerRate(cold, in n),
+                Idle = Idle(cold, in n),
             };
             // The combat system's own context (hits) reads the encumbrance from the fighter, so it matches the one used here.
             if (cold.Fighter is { } fighter) fighter.EncumbranceFactor = encumbrance;
@@ -221,7 +222,7 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
                 var exposure = PaidExposureOf(world, cold);
                 if (exposure != StealthExposure.Unobserved || SomeoneAbout(world, i)) xp.Sneaking(stats, race, exposure, dt);
             }
-            if (cold.IsPlayer || table.IdOf(i) == world.Player.Inspected) cold.Extended = ExtendedOf(cold, stats, race, medical, n.MaxSpeed, encumbrance, ctx.Resting, carrying, ctx.UseHungerRate);
+            if (cold.IsPlayer || table.IdOf(i) == world.Player.Inspected) cold.Extended = ExtendedOf(cold, stats, race, medical, n.MaxSpeed, encumbrance, in ctx, carrying);
             n.Health = Math.Clamp(medical.Blood / MathF.Max(MedicalState.BloodCapacity(race, stats.Strength), 1) * 100, 0, 100);
             foreach (var e in events)
             {
@@ -287,14 +288,20 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
         return null;
     }
 
-    ExtendedStats ExtendedOf(CharacterCold cold, CharacterStats stats, RaceData race, MedicalState medical, float speed, float encumbrance, bool resting, bool carrying, float? useRate)
+    /// <summary>
+    /// Standing still out of combat with no task (<see cref="MedicalContext.Idle"/>): the original's <c>CharBody::amIdle</c>, set while the character has no current action
+    /// (<c>FUN_1405c6d20</c>), which <c>FUN_1408837a0</c> reads after the moving and fighting test.
+    /// </summary>
+    static bool Idle(CharacterCold cold, in CharacterHot n) => !cold.InCombat && n.Velocity.LengthSquared() <= 1 && n.Task == (byte)CharacterTask.Idle;
+
+    ExtendedStats ExtendedOf(CharacterCold cold, CharacterStats stats, RaceData race, MedicalState medical, float speed, float encumbrance, in MedicalContext ctx, bool carrying)
     {
         float runValue = Speed.RunValue(race, stats.Athletics);
         float toughness = XpService.ToughnessFactor(medical);
-        bool rest = resting || medical.Unconscious || medical.Dead;
-        float hunger = race.HungerRate * MedicalState.HungerSituationFactor(Constants, rest, false, encumbrance, useRate);
+        bool rest = ctx.Resting || medical.Unconscious || medical.Dead;
+        float hunger = race.HungerRate * MedicalState.HungerSituationFactor(Constants, rest, ctx.Idle, encumbrance, ctx.UseHungerRate);
         return new ExtendedStats(XpService.AthleticsRate(encumbrance, speed, runValue), xp.StrengthCarryRate(encumbrance, carrying), toughness,
-            MedicalState.KoPoint(Constants, stats.Toughness), speed, runValue, hunger, rest, WorkHungerRate: useRate);
+            MedicalState.KoPoint(Constants, stats.Toughness), speed, runValue, hunger, rest, WorkHungerRate: ctx.UseHungerRate, Idle: ctx.Idle);
     }
 
     /// <summary>
