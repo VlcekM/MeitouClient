@@ -158,6 +158,8 @@ public sealed class CharacterCold
     public float RoadPreference { get; set; }
     /// <summary>The water state 0..3 (<see cref="Meitou.Simulation.Bodies.Speed.WaterState"/>) <see cref="MovementSystem"/> found at the character's position, and its swim speed (<see cref="Meitou.Simulation.Bodies.Speed.Swim"/>) <see cref="BodySystem"/> keeps up to date. Derived each tick: not hashed, not saved.</summary>
     public byte WaterState { get; set; }
+    /// <summary>The ground height under a ragdolled body (the original's Character +0x698, set from the ragdoll's ground probe; 0: none yet). Derived: not hashed, not saved.</summary>
+    public float StandHeight { get; set; }
     public float SwimSpeed { get; set; }
     /// <summary>
     /// The weather acting on the character (the original's animation holder <c>+0x198</c> / <c>+0x1a0</c>, docs/formats/weather.md "Effects on characters"): its kind, the

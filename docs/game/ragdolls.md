@@ -270,6 +270,10 @@ Driver `FUN_1405b8180` (AnimationClass), update `FUN_1407d3c00`:
 - Character simulation position `+0x48` = root body position while ragdolled or carried
   (`CharacterAnimal::vfunc_28` via `FUN_1407d16f0`): looting, carrying and AI distances use it.
 
+## Water state of a ragdolled body
+
+**Verified** (decompile, `FUN_1405d00b0` Character::threadedUpdatePeriodic, `FUN_1405c7fd0`): every update, a ragdolled or carried character whose movement position differs from the body position (Character `+0x48`) casts a ray straight down from the body (raised by a constant) against the physics world; a hit above 0 is stored as the stand height `+0x698` (a miss keeps the last) and the body position is pushed into the movement. `FUN_1405c7fd0` reads `+0x698` for the water state (ground + 2 at or under the water level 100: 15 x size deep, 6 x size waist) and a carried body follows its carrier. Ray mask: `0x7de04` outdoors (location type 0xb) or when the building test passes (groups 2 terrain, 9-12 floors, 14 walkable foliage, 15-18 stairs), else `0x7f9e00` (groups 9-12 and 15-22: no terrain or foliage, furniture 19-22 included); ragdoll bodies (groups 28-31) collide with neither 6 nor 14. Meitou: `RagdollSystem.StandOn` takes the ragdoll environment's ground height (terrain or the building floor near the body) as the probe, `CharacterCold.StandHeight`, and sets `WaterState` for a non-carried whole-body ragdoll; the carried body's state is its carrier's in `WeatherSystem`. **Observed**: the two masks are folded into `IRagdollEnvironment.GroundHeight`; walkable foliage is not probed.
+
 ## Sleep and limits
 
 Freeze = every body put to sleep and updates skipped (`FUN_1407d1f70`), WHOLE only:

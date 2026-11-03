@@ -358,6 +358,7 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
                     else if (r.Age >= FreezeLatest || r.Age >= FreezeEarliest && StillShare(r) >= FreezeShare) Freeze(r);
                     hot.Position = r.Pose[r.Definition.Root].Position;
                     hot.Velocity = Vector3.Zero;
+                    if (cold.CarriedBy.IsNone) StandOn(cold, ground);
                 }
             }
             if (r.BlendLeft > 0) r.BlendLeft = MathF.Max(0, r.BlendLeft - dt);
@@ -369,6 +370,18 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
         world.Profile.Part("rag back");
         physics.Sweep(tick);
         world.Profile.Part("rag sweep");
+    }
+
+    /// <summary>
+    /// A ragdolled body's water state comes from a ground-height probe below it, not from its pose (<c>Character::threadedUpdatePeriodic</c> <c>FUN_1405d00b0</c>, <b>Verified</b>): the ray's hit
+    /// height above 0 is stored as the stand height (<see cref="CharacterCold.StandHeight"/>, a miss keeps the last), which the water-state function <c>FUN_1405c7fd0</c> reads. The probe is the
+    /// environment's ground height (terrain or the building floor near the body, as <see cref="IRagdollEnvironment"/> answers; the original's indoor/outdoor ray masks are folded into it). A carried
+    /// body takes its carrier's state instead (<see cref="WeatherSystem"/>).
+    /// </summary>
+    static void StandOn(CharacterCold cold, float ground)
+    {
+        if (ground > 0) cold.StandHeight = ground;
+        if (cold.Race is { } race && cold.StandHeight > 0) cold.WaterState = (byte)Bodies.Speed.WaterState(cold.StandHeight, 1, race.Swims);
     }
 
     /// <summary>The character's drawn placement: position, facing (a carried body's on its carrier's shoulder: <see cref="CarryPose"/>), size; the renderer's world matrix.</summary>
