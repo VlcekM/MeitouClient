@@ -8,7 +8,7 @@ using Vk = Silk.NET.Vulkan;
 namespace Meitou.Rendering;
 
 /// <summary>
-/// Reads a target back into a PNG (screenshots). Native (docs/renderer-native.md 7.5, 8.9): the frame so far is submitted and waited for
+/// Reads a target back into a picture file (screenshots; PNG, or JPEG and BMP by the extension, <see cref="PictureWriter"/>). Native (docs/renderer-native.md 7.5, 8.9): the frame so far is submitted and waited for
 /// (<see cref="GpuContext.Finish"/>), then the target's image is copied to host memory. The target is RGBA8 with one sample, at least
 /// <c>w</c> × <c>h</c>.
 /// </summary>
@@ -19,7 +19,7 @@ public static unsafe class FramebufferCapture
         var picture = ReadPicture(ctx, target, w, h, topDown);
         var dir = Path.GetDirectoryName(Path.GetFullPath(path));
         if (dir is not null) Directory.CreateDirectory(dir);
-        PngWriter.Write(path, w, h, picture);
+        PictureWriter.Write(path, w, h, picture);
     }
 
     /// <summary>The target as a picture: RGBA8 rows from the top, alpha opaque.</summary>

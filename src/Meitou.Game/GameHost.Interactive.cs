@@ -967,9 +967,9 @@ sealed partial class GameHost
         session.Input.SetMousePosition(anchor.X, anchor.Y);
     }
 
-    static void SaveScreenshot(GpuContext context, GpuTexture picture, int width, int height, bool topDown = false)
+    void SaveScreenshot(GpuContext context, GpuTexture picture, int width, int height, bool topDown = false)
     {
-        var file = Path.Combine(Directory.CreateDirectory(@"C:\Temp").FullName, $"meitou-{DateTime.Now:yyyyMMdd-HHmmss}.png");
+        var file = GameScreenshots.Next(install.Root);
         FramebufferCapture.SavePng(context, picture, file, width, height, topDown);
         Console.WriteLine($"saved     {file}");
     }

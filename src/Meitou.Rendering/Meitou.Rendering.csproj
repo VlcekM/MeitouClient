@@ -6,6 +6,7 @@
 
   <ItemGroup>
     <PackageReference Include="StbTrueTypeSharp" Version="1.26.12" />
+    <PackageReference Include="StbImageWriteSharp" Version="1.16.7" />
     <PackageReference Include="FreeTypeSharp" Version="3.1.0" />
     <PackageReference Include="Silk.NET.Vulkan" Version="2.23.0" />
     <PackageReference Include="Silk.NET.Vulkan.Extensions.EXT" Version="2.23.0" />

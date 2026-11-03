@@ -127,6 +127,7 @@ Used as packages (not copied into this repository); each is distributed under it
 | Silk.NET.Shaderc 2.23.0 | `src/Meitou.Rendering` (GLSL to SPIR-V at run time) | MIT |
 | Silk.NET.Shaderc.Native 2.23.0 (ships `shaderc_shared.dll`: Google's shaderc with glslang and SPIRV-Tools) | `src/Meitou.Rendering` | Apache-2.0 (shaderc, SPIRV-Tools); glslang under its own BSD-3-Clause / MIT-style terms |
 | StbTrueTypeSharp 1.26.12 | `src/Meitou.Rendering` (debug overlay text from a system monospace font, else the installed game's Exo2 SemiBold, kerning pairs of UI fonts; no font is shipped) | Public domain |
+| StbImageWriteSharp 1.16.7 | `src/Meitou.Rendering` (screenshots saved as JPEG or BMP) | Public domain |
 | FreeTypeSharp 3.1.0 (ships `freetype.dll`, `libfreetype.so`, `libfreetype.dylib`: FreeType 2.13.2) | `src/Meitou.Rendering` (UI font rasterisation and hinting). Portions of this software are copyright The FreeType Project (www.freetype.org). All rights reserved. | MIT (FreeTypeSharp); FreeType License (FTL) or GPLv2, used here under the FTL |
 | Avalonia, Avalonia.Desktop, Avalonia.Themes.Fluent 12.1.4 (with SkiaSharp and HarfBuzzSharp) | `launcher/Meitou.Launcher` (UI) | MIT |
 | Velopack 1.2.161 | `launcher/Meitou.Launcher` (install and self-update) | MIT |
