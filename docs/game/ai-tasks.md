@@ -682,7 +682,7 @@ Meitou: [simulation, captives](../simulation.md#captives).
     later-listed) among **171** (the owner, else the master squad's leader), **189 / 190** (a random mine, research bench, refinery or crafting bench of the town the slave's squad leader stands in,
     walked to and stood at at its work clip, the AI's engine choice; no machine runs and the hunger rate is not taken) and **14**. Not acted out for a player character (**gap**): 172 (night cage), 41, 143 and 35
     (the slave does not fight or flee, as the original's step 3 already comes before its own Self preservation). A faction owner with no squad has no master: the job is held but nothing runs. The job names the master squad's leader (the original's handle names a character or a squad). `SlaveMaster` is
-    runtime only: after a load the owner is found again from the job's saved handle when it names a character.
+    runtime only: after a load it is the squad of the owner character the save's `slaver` handle names ([save](../formats/save.md)), else the owner is found again from the job's saved handle when it names a character.
 - **Shout** (188, `Task_TalktoPlayer`, slots 1 and 2 `FUN_14034c5a0` / `FUN_14034c7c0`): the event is the row's (TaskData `+0x130`: **Verified** 0x26 for 188, 0x27 for 194 and 218, 9 for 158 and 283).
   Start fires it at the target (`FUN_140684990`); each update walks to the target (vfunc `0x3b0`), repeats event 9, gives up after 25 minutes with event 60, and ends when the dialogue is free.
   The slavers' event-38 lines ("shout at slave worker": chance temporary 10, six lines) are in "slaver guard MAIN" and "Holy Nation Paladin". Meitou paces it: a worker shouts at most every 60 to 180 game seconds.

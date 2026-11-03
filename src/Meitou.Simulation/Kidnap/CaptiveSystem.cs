@@ -175,6 +175,7 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
     public void SlowWorld(World world)
     {
         var table = world.Characters;
+        if (world.Tick % RestoreEveryTicks == 0) RestoreSlavers(world);
         for (int k = 0; k < jobs.Count;)
         {
             var j = jobs[k];
