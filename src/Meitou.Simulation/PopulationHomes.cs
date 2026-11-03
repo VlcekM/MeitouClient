@@ -14,88 +14,16 @@ public sealed partial class PopulationSystem
     /// <summary>NodeType values of the spots a resident squad is made at.</summary>
     const int NodeShopkeeper = 0, NodeGeneral = 1, NodeGuardPost = 2;
 
-    sealed class Entry
-    {
-        public required string Id;
-        public required SquadTemplate Template;
-        public int Count;
-        public int Priority;
-        public required HashSet<string> Preferred, Disliked;
-    }
-
     /// <summary>
-    /// Houses the town's resident entries in its buildings and builds their squads into <paramref name="squads"/>, each building with its template into <paramref name="homes"/>; returns
-    /// the town's bars (for the bar squads).
-    /// Order of the buildings: a seeded shuffle (the original's is its handles' serials, which are random). Steps:
-    /// <list type="number">
-    /// <item>priorities 5 down to 0: first (<b>engine choice</b>) a building whose level-data state names a template of this priority keeps it while the entry has
-    /// squads left (the level data's assignment is one the original's rules made, and Meitou draws interiors from its layout names; the original rerolls at a new
-    /// game); then the original's rule (Observed, <c>FUN_1409370d0</c>, <c>FUN_14092e870</c>): each entry of the priority one building per pass,
-    /// passes repeated while one placed a squad and has more; the building is the free one of the highest weight, the first of them on a tie (Meitou first prefers
-    /// one whose current interior layout is the template's); an entry with no building left makes no more squads;</item>
-    /// <item>every free building left gets the <c>default resident</c> when it takes the template's <c>layout interior</c>;</item>
-    /// <item>each housed template's squads: its <c>housemates</c> (v0, or v0..v1 when v1 &gt; 0), then itself.</item>
-    /// </list>
+    /// Houses the town's resident entries in its buildings (<see cref="ResidentHomes.Assign"/>) and builds their squads into <paramref name="squads"/>, each building
+    /// with its template into <paramref name="homes"/>; returns the town's bars (for the bar squads). Each housed template's squads: its <c>housemates</c> (v0, or
+    /// v0..v1 when v1 &gt; 0), then itself.
     /// </summary>
-    List<TownBuilding> HouseResidents(TownSite site, List<RecordLink> table, FactionData? faction, int factionIndex, ulong seed, IWalkability walk,
+    List<TownBuilding> HouseResidents(TownSite site, FactionData? faction, int factionIndex, ulong seed, IWalkability walk,
         List<BuiltSquad> squads, List<(TownBuilding Building, SquadTemplate Template)> homes)
     {
         string? player = data.PlayerFaction >= 0 ? data.Factions[data.PlayerFaction].Id : null;
-        var order = site.Buildings.Where(b => b.CanHouse && (player is null || b.OwnerFactionId != player)).ToList();
-        for (int i = order.Count - 1; i > 0; i--)
-        {
-            int j = Rng.Int(Rng.Hash(seed, (ulong)site.Index, RngPurpose.Spawn, SeedSalts.HomeOrder + (ulong)i), i + 1);
-            (order[i], order[j]) = (order[j], order[i]);
-        }
-        var entries = new List<Entry>();
-        foreach (var link in table)
-        {
-            if (data.Db.Find(link.Id) is not { } record || !SquadFactory.IsTemplate(record)) continue;
-            var t = SquadTemplate.From(record);
-            int count = link.V0;
-            entries.Add(new Entry
-            {
-                Id = link.Id, Template = t, Count = count, Priority = link.V1 == 100 ? 0 : link.V1,
-                Preferred = [.. t.Buildings.Select(b => b.Id)], Disliked = [.. t.BuildingDislike.Select(b => b.Id)],
-            });
-        }
-        var housed = new List<(TownBuilding Building, SquadTemplate Template)>();
-        var taken = new HashSet<TownBuilding>(ReferenceEqualityComparer.Instance);
-        for (int priority = 5; priority >= 0; priority--)
-        {
-            // The level data's homes of this priority's entries first (engine choice, see above).
-            foreach (var b in order)
-                if (b.ResidentsTemplate.Length > 0 && !taken.Contains(b)
-                    && entries.FirstOrDefault(e => e.Id == b.ResidentsTemplate && e.Count > 0 && e.Priority == priority) is { } e && Weight(e, b) > 0)
-                {
-                    e.Count--;
-                    taken.Add(b);
-                    housed.Add((b, e.Template));
-                }
-            bool again;
-            do
-            {
-                again = false;
-                foreach (var e in entries)
-                {
-                    if (e.Count <= 0 || e.Priority != priority || Choose(e, order, taken) is not { } b) continue;
-                    e.Count--;
-                    taken.Add(b);
-                    housed.Add((b, e.Template));
-                    if (e.Count > 0) again = true;
-                }
-            } while (again);
-        }
-        if (DefaultResident(site.Town, faction) is { } dr && data.Db.Find(dr.Id) is { } drRecord && SquadFactory.IsTemplate(drRecord))
-        {
-            var d = SquadTemplate.From(drRecord);
-            foreach (var b in order)
-                if (!taken.Contains(b) && (d.LayoutInterior.Length == 0 || b.InteriorLayouts.Contains(d.LayoutInterior)))
-                {
-                    taken.Add(b);
-                    housed.Add((b, d));
-                }
-        }
+        var housed = ResidentHomes.Assign(data.Db, site.Town, faction, site.Buildings, player);
         for (int h = 0; h < housed.Count; h++)
         {
             var (b, t) = housed[h];
@@ -124,44 +52,6 @@ public sealed partial class PopulationSystem
 
     /// <summary>BuildingDesignation BD_BAR.</summary>
     const int DesignationBar = 3;
-
-    /// <summary>
-    /// The weight of building <paramref name="b"/> for entry <paramref name="e"/> (0: not a candidate; Observed, <c>FUN_14092e870</c>): a template with a
-    /// <c>layout interior</c> needs a building that takes it (gates excepted); a gate houses only an entry that names buildings; an entry naming buildings without a
-    /// layout interior takes only those. Weight 1, x 0.4 when the template's <c>layout exterior</c> does not fit, x 10 for a named building, x 0.05 for a disliked one.
-    /// </summary>
-    static float Weight(Entry e, TownBuilding b)
-    {
-        var t = e.Template;
-        if (!b.IsGate)
-        {
-            if (t.LayoutInterior.Length > 0 && !b.InteriorLayouts.Contains(t.LayoutInterior)) return 0;
-        }
-        else if (e.Preferred.Count == 0) return 0;
-        bool preferred = e.Preferred.Contains(b.BuildingId);
-        if (t.LayoutInterior.Length == 0 && e.Preferred.Count > 0 && !preferred) return 0;
-        float w = t.LayoutExterior.Length > 0 && !b.ExteriorLayouts.Contains(t.LayoutExterior) ? 0.4f : 1;
-        if (preferred) w *= 10;
-        if (e.Disliked.Contains(b.BuildingId)) w *= 0.05f;
-        return w;
-    }
-
-    /// <summary>The free building of the highest weight for <paramref name="e"/>, the first in order on a tie after one already laid out as its template wants.</summary>
-    static TownBuilding? Choose(Entry e, List<TownBuilding> order, HashSet<TownBuilding> taken)
-    {
-        TownBuilding? best = null;
-        float bestWeight = 0;
-        bool bestLaid = false;
-        foreach (var b in order)
-        {
-            if (taken.Contains(b)) continue;
-            float w = Weight(e, b);
-            if (w <= 0) continue;
-            bool laid = e.Template.LayoutInterior.Length > 0 && string.Equals(b.InteriorLayout, e.Template.LayoutInterior, StringComparison.OrdinalIgnoreCase);
-            if (w > bestWeight || w == bestWeight && laid && !bestLaid) (best, bestWeight, bestLaid) = (b, w, laid);
-        }
-        return best;
-    }
 
     /// <summary>
     /// A floor of <paramref name="home"/> for a resident whose spot at height <paramref name="y"/> has none near it (engine choice; null: none, the spot's height

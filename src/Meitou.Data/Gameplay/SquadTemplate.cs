@@ -63,6 +63,8 @@ public sealed record SquadTemplate
     public int InitialDoorState { get; init; }
     /// <summary><c>public day</c> (fcs.def default true): written over the home building's public flag when it is assigned (docs/game/locks.md "Data").</summary>
     public bool PublicDay { get; init; } = true;
+    /// <summary><c>building ruined</c>: the home building is ruined when assigned, if it can be (docs/game/buildings-production.md "Ruined by residents").</summary>
+    public bool BuildingRuined { get; init; }
     /// <summary><c>nest</c> links.</summary>
     public IReadOnlyList<RecordLink> Nest { get; init; } = [];
 
@@ -135,6 +137,7 @@ public sealed record SquadTemplate
             BuildingDesignation = r.GetInt("building designation"),
             InitialDoorState = r.GetInt("initial door state"),
             PublicDay = RecordReading.Bool(r, "public day", true),
+            BuildingRuined = r.GetBool("building ruined"),
             Nest = Links("nest"),
             IsTrader = RecordReading.Bool(r, "is trader", false),
             Vendors = Links("vendors"),

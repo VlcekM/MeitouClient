@@ -48,7 +48,7 @@ public class HubTests
         using var world = Make(data, hub, 1);
         world.RunTick();
         var faction = data.Factions.First(f => f.Id == hub.Town.Faction);
-        var entries = PopulationSystem.ResidentEntries(hub.Town, faction);
+        var entries = Meitou.Data.World.ResidentHomes.Entries(hub.Town, faction);
         Assert.NotEmpty(entries);
 
         // The camera's 3 x 3 block of zones is loaded, so a neighbouring town gets its residents too: only the Hub's are counted.

@@ -69,7 +69,7 @@ public class UniqueNpcTests(ITestOutputHelper output)
         {
             int fi = s.Town.Faction is { } f ? data.FactionIndex(f) : -1;
             var faction = fi >= 0 ? data.Factions[fi] : null;
-            foreach (var e in PopulationSystem.ResidentEntries(s.Town, faction).Concat(PopulationSystem.BarEntries(s.Town, faction)))
+            foreach (var e in Meitou.Data.World.ResidentHomes.Entries(s.Town, faction).Concat(PopulationSystem.BarEntries(s.Town, faction)))
                 if (db.Find(e.Id)?.GetReferences("leader") is [{ TargetStringId: var leader }, ..] && UniqueCharacters.IsUnique(db.Find(leader)))
                     targets.Add((s, leader));
         }

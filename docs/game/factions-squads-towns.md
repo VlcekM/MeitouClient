@@ -446,7 +446,8 @@ Meitou: [ground items](../simulation.md#items-and-eating).
 - **New game vs level data**: level-data building states carry `residents template` / `squad template`; save 2 against
   them has the same multiset per town but shuffled across buildings (223 same, 125 moved), so a new game rerolls homes
   (**Observed**). Destroyed buildings stay candidates (the Hub's ruins house squatters).
-- **Meitou engine choices**: the level data's assignment is kept where it fits the rules (interiors are drawn from it,
+- **Meitou engine choices**: buildings are taken in a fixed order (a hash of their keys), not rerolled per game, so the boot can lay out the
+  [ruins the homes make](buildings-production.md#ruined-by-residents); the level data's assignment is kept where it fits the rules (interiors are drawn from it,
   not relaid to the template's layout); on a tie a building already laid out as the template wants wins; bar squads
   stand in the town's bars and take the nearest bar as home (their templates, e.g. `Bar thugs`, have designation 0, **Verified** in the data); a loaded town keeps its saved squads, homes and bar squads and rolls no new bar squads.
 

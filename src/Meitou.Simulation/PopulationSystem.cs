@@ -20,7 +20,7 @@ namespace Meitou.Simulation;
 /// its characters are removed (the original turns the squads into abstract "unloaded" ones, which the AI stage will do). The
 /// characters are built on a background thread when <see cref="PopulationSettings.Background"/> is set and taken in at the first tick
 /// after they are ready.
-/// <para>Residents (docs/game/factions-squads-towns.md "Town residents"): the resident table (<see cref="ResidentEntries"/>) is housed in the town's buildings
+/// <para>Residents (docs/game/factions-squads-towns.md "Town residents"): the resident table (<see cref="ResidentHomes.Entries"/>) is housed in the town's buildings
 /// and each squad made at a node of its home (<c>PopulationHomes.cs</c>); a town without building data puts each entry's v0 squads at random spots within
 /// <see cref="PopulationSettings.PlacementRadiusShare"/> of the town radius round its placed position, on dry ground (engine choice). Bar squads, the roaming squads (<c>PopulationRoaming.cs</c>) and the wild, homeless squads and nests (<c>PopulationWild.cs</c>), are made here too.</para>
 /// </summary>

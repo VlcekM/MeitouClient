@@ -25,6 +25,9 @@ public sealed class WorldLevelData
     /// <summary>Layers in the order they were applied.</summary>
     public List<WorldLevelLayer> Layers { get; } = [];
 
+    /// <summary>Whether <see cref="ResidentRuins.Apply"/> has set the ruins the residents make.</summary>
+    public bool ResidentRuinsApplied { get; internal set; }
+
     /// <summary>Merged zone files by grid cell.</summary>
     public SortedDictionary<ZoneCoordinate, GameDatabase> Zones { get; } = new(Comparer<ZoneCoordinate>.Create((a, b) => a.Y != b.Y ? a.Y.CompareTo(b.Y) : a.X.CompareTo(b.X)));
 

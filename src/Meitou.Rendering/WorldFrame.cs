@@ -1100,7 +1100,9 @@ static partial class WorldFrame
         var levels = new Lazy<(WorldLevelData Levels, BuildingLayouts Layouts)>(() =>
         {
             var l = WorldLevelData.Load(install, includeInteriors: true);
-            return (l, new BuildingLayouts(lampDb, l.Interiors));
+            var layouts = new BuildingLayouts(lampDb, l.Interiors);
+            ResidentRuins.Apply(lampDb, l, layouts);
+            return (l, layouts);
         });
 
         gpu.Lamps = new WorldLamps(b.Context, () => WorldLights.ForWorld(lampDb, levels.Value.Levels, lampMap.HeightAt, levels.Value.Layouts))

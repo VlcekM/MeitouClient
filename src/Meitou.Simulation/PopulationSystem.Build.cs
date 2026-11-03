@@ -11,29 +11,6 @@ using Meitou.Data.World;
 namespace Meitou.Simulation;
 public sealed partial class PopulationSystem
 {
-    /// <summary>
-    /// The resident table of a town (docs/game/factions-squads-towns.md "Town residents", Observed): without <c>residents override</c> the faction's
-    /// <c>residents</c> first, then the town's; with it the town's only. A template listed again is dropped (the first entry wins); then v0 = 0 entries are dropped.
-    /// A town with no faction has none (<c>FUN_140936e60</c> returns first).
-    /// </summary>
-    public static List<RecordLink> ResidentEntries(TownData town, FactionData? faction)
-    {
-        var list = new List<RecordLink>();
-        if (faction is null) return list;
-        if (!town.ResidentsOverride) list.AddRange(faction.Residents);
-        list.AddRange(town.Residents);
-        var seen = new HashSet<string>(StringComparer.Ordinal);
-        list.RemoveAll(e => !seen.Add(e.Id));
-        list.RemoveAll(e => e.V0 <= 0);
-        return list;
-    }
-
-    /// <summary>The town's <c>default resident</c> (first entry), else (without <c>residents override</c>) the faction's; null when neither names one or the town has no faction.</summary>
-    public static RecordLink? DefaultResident(TownData town, FactionData? faction) =>
-        faction is null ? null
-        : town.DefaultResident.Count > 0 ? town.DefaultResident[0]
-        : !town.ResidentsOverride && faction.DefaultResident.Count > 0 ? faction.DefaultResident[0] : null;
-
     // ---- building (pure given the seed; safe on another thread) ----
 
     internal sealed record BuiltMember(MemberPlan Plan, CharacterAppearance? Appearance);
@@ -55,10 +32,10 @@ public sealed partial class PopulationSystem
         var faction = factionIndex >= 0 ? data.Factions[factionIndex] : null;
         var squads = new List<BuiltSquad>();
         var homes = new List<(TownBuilding, SquadTemplate)>();
-        var entries = ResidentEntries(town, faction);
+        var entries = ResidentHomes.Entries(town, faction);
         List<TownBuilding>? bars = null;
         if (site.Buildings.Any(b => b.CanHouse))
-            bars = HouseResidents(site, entries, faction, factionIndex, seed, walk, squads, homes);
+            bars = HouseResidents(site, faction, factionIndex, seed, walk, squads, homes);
         else
         {
             // No building data (headless worlds): every entry's squads at spots round the centre (engine choice).

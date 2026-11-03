@@ -876,8 +876,7 @@ and `power capacity` (battery store, "in seconds" per fcs.def), plus research ([
 - **What damages a building** (**Verified**, decompile): hits go to slot 62, which is `FUN_1402972c0` (returns 1, no effect) for every UseableStuff class (machines,
   turrets, storages, lights) and `FUN_1400d20b0` (returns 0, no effect either) for plain and gate buildings; only WallBuilding (`FUN_14029d560`, [walls](#walls)) and doors (`FUN_14029d690`)
   lose health, a wall at 0 becoming destroyed (slot 104). Destroyed (+0x1a1) is otherwise set only by SQUAD_TEMPLATE `building ruined` (28 true; `FUN_14057f1f0` from `RootObjectFactory::createRandomUnloadedSquad`, **Verified**: the squad's
-  building gets the template's `building designation` if it has none, its `public day`, and is destroyed when ruined and destructible; not modelled: Meitou's town buildings take
-  destroyed only from the level and saves) and
+  building gets the template's `building designation` if it has none, its `public day`, and is destroyed when ruined and destructible: [ruined by residents](#ruined-by-residents)) and
   its own deferred replay: slot 104 (`FUN_140557280`) called while `FUN_14025c6d0(DAT_1421348a0)` holds queues message 0x10 (`FUN_140349be0` on
   `DAT_142134110`) instead, replayed by `FUN_1407b65b0` from the GameWorld update `FUN_140786e30` (**Observed**, decompile), so it adds no source; the first build step on it ruins the building ([construction tick](#construction-tick)). Dismantle (slot 73, its
   only damage path for machines) is offered only when slot 79 (`FUN_14029c380`) holds: the owner is a player faction. So raids and fights never break a
@@ -955,6 +954,19 @@ interior meshes but no functionality record, their level states lack `sell home`
 (`44421-rebirth.mod`, `44426-rebirth.mod`) set it; target 16, owner's `building cost mult` 2: 0.375 × 16 × 2 × 400 = 4,800.
 Meitou reads `sell home` from the saved state, else the level state, else the resident template; **Unknown** whether the
 original falls back to the template.
+
+## Ruined by residents
+
+**Verified** (decompile): the squad setup `FUN_14057f1f0` calls slot 104 (set destroyed) on the squad's home with `building ruined` of its template and slot 105
+(`FUN_14055b520`, can be destroyed): true when the building's int +0x198 is 7 (meaning **Unknown**) or it, or a part reached through `parts` at any depth, has a
+`destroyed mesh`. So a home whose template is not ruined is set intact. **Observed** (data, base game and its mods): 26 SQUAD_TEMPLATEs set `building ruined`, among
+them `_ruined empty building (DEFAULT)` (`44421-rebirth.mod`), the `default resident` of Old Village (Deadcat, `50243-rebirth.mod`), whose level states are
+intact and name no template. Its houses are ruins in the original (issue #145).
+
+Meitou (`ResidentRuins`): before anything reads the level data's `destroyed`, every town is housed by the population's rule ([town residents](factions-squads-towns.md#town-residents))
+and each home of a ruined template that has a destroyed mesh is set destroyed in its level state; 71 base-game buildings (Old Village 10 of 10, Abandoned Town 9 of 9,
+the library ruins). Not modelled: the int +0x198 test; setting a level ruin intact (13 level ruins get a template that is not ruined, e.g. Bast's and Endin's
+`Trashed building w/squatters`, yet those towns are ruins in the original, so where the original skips the call is **Unknown**); ruins made by a town override at run time.
 
 ## Unknowns
 

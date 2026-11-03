@@ -660,7 +660,7 @@ public static partial class SaveCapture
                 record.Bools["persistent"] = !roaming || Ai.AiSystem.Occupies(data.Ai, package);
                 // A squad with a home is a resident (every platoon of the samples with a file and a `homebuilding` has `is resident`, and only those): a default resident too.
                 record.Bools["is resident"] = !roaming && (homeBuilding is not null
-                    || PopulationSystem.ResidentEntries(site.Town, siteFaction >= 0 ? data.Factions[siteFaction] : null).Any(e => e.Id == templateId));
+                    || ResidentHomes.Entries(site.Town, siteFaction >= 0 ? data.Factions[siteFaction] : null).Any(e => e.Id == templateId));
             }
             if (package is not null) record.Strings["currentPackage"] = package;
             ShopSave.Write(record, shop, world);

@@ -85,6 +85,7 @@ sealed class WorldObjects : IDisposable
             DistantTowns = Meitou.Data.World.DistantTowns.Find(install, db, levels),
         };
         foreach (var t in objects.DistantTowns) objects.bakedTowns.Add(t.InstanceId);
+        int ruins = ResidentRuins.Apply(db, levels, objects.Layouts);
         foreach (var b in levels.Buildings())
         {
             if (!objects.buildingsByZone.TryGetValue(b.Zone, out var list)) objects.buildingsByZone[b.Zone] = list = [];
@@ -93,7 +94,7 @@ sealed class WorldObjects : IDisposable
         objects.interiorCollisions = new InteriorCollisions(install);
         objects.heights = new ThreadLocal<TerrainHeightmap>(() => TerrainHeightmap.Open(install), trackAllValues: true);
         Console.WriteLine($"objects   {objects.buildingsByZone.Values.Sum(l => l.Count)} placed buildings and {objects.Features.All().Count()} map features in {objects.PopulatedZones.Count()} zones, " +
-            $"{objects.DistantTowns.Count} towns with a distant mesh, {objects.Layouts.Count} building layouts ({watch.ElapsedMilliseconds} ms)");
+            $"{objects.DistantTowns.Count} towns with a distant mesh, {objects.Layouts.Count} building layouts, {ruins} ruined by their residents ({watch.ElapsedMilliseconds} ms)");
         return objects;
     }
 
