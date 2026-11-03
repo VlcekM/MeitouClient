@@ -305,8 +305,7 @@ sealed partial class GameHost
             if (inBar is { } place)
             {
                 (position, yaw, rotation) = (place.Position, place.Yaw, null);
-                if (place.Clip is { } clip)
-                    poses = [new CharacterPose(clip, animationLibrary?.IndexOf(clip) is >= 0 and int k ? (float)realTime.Elapsed.TotalSeconds * animationLibrary.Definitions[k].PlaySpeed : 0, 1)];
+                if (place.Clip is { } clip) poses = [new CharacterPose(clip, EditorClipTime(clip, (float)realTime.Elapsed.TotalSeconds), 1)];
             }
             if (c.Id == sandboxHero && sandboxPicker?.Pose() is { } forced) poses = forced;   // the sandbox drop-down loops a picked clip on the hero
             var held = HeldLook(c.Appearance, c.HeldTool, out var heldPending);
