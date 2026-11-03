@@ -55,6 +55,8 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
     public const int TagEffect = 4;
     /// <summary>The <see cref="Effect.Kind"/> of a hearing check that reached the stealth XP step: <c>Source</c> the listener, <c>Target</c> the heard character, <c>Amount</c> 1 when it was heard (<c>FUN_1408c7330</c>).</summary>
     public const int HearingXpEffect = 5;
+    /// <summary>The <see cref="Effect.Kind"/> of a sensed character the looker's passing-by assault adds to its target set (<c>Target</c>; <see cref="Ai.Blackboard.AssaultTargets"/>).</summary>
+    public const int AssaultTargetEffect = 6;
     /// <summary>The dialogue event a sleeper says when it nearly wakes at a sneaking player (ALMOST_WOKE_UP, docs/game/dialogue.md).</summary>
     public const int AlmostWokeUpEvent = 47;
     const byte NoTask = 0xFF;
@@ -1030,6 +1032,7 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
             // The sighting hooks of the assault packages (passing-by assault FUN_1402903c0, occupation FUN_140286c40, the war assault FUN_14028a3f0) tag each sensed enemy with squad memory 4; the tag has no expiry and the
             // package's end does not clear it. Their "in view" gate (Character +0x1a9) is treated as always true: the simulation does not depend on the camera (engine choice).
             if (s.War.IsSet && WarEnemy(ref s, c, other.Position)) fx.Emit(s.Self, slot, TagEffect, Dialogue.MemoryTag.TempEnemy);
+            if (s.War.IsSet && (WarEnemy(ref s, c, other.Position) || AssaultSensed(ref s, e, c, other.Position))) fx.Emit(s.Self, slot, AssaultTargetEffect, 0);
             if (s.EmployerAllies && s.Employer >= 0 && c.Faction == s.Employer) fx.Emit(s.Self, slot, TagEffect, Dialogue.MemoryTag.TempAlly);
         }
     }
@@ -1410,6 +1413,14 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
     static bool AiSleeper(CharacterCold? cold) => cold?.Ai is { Behaviour: Ai.AiBehaviour.Sleep or Ai.AiBehaviour.Sit };
 
     /// <summary>
+    /// The passing-by assault's update adds to its target set every character in its members' sensed lists with the enemy tag and not the KO one that is in a town, alive, awake and at
+    /// posture 0 (<c>FUN_140294980</c>, <b>Verified</b>).
+    /// </summary>
+    static bool AssaultSensed(ref Scan s, in SenseEntry e, CharacterCold c, Vector3 at) =>
+        (e.Tags & (SenseTag.Enemy | SenseTag.Ko)) == SenseTag.Enemy && c.Medical is { Dead: false, Incapacitated: false } && CharacterFacts.PostureZero(c)
+        && s.Towns is { } towns && !Ai.AiSystem.TownAt(towns, s.World, at).IsNone;
+
+    /// <summary>
     /// A campaign assault's extra enemy (<see cref="WarTargets"/>): of the target faction, or with <c>Everyone</c> the characters <c>Package_WarAssault</c>'s sensing hook takes
     /// (<c>FUN_14028a3f0</c>, <b>Verified</b>): not of the looker's faction, no animal, of a faction that is real and not a bandit one (the faction's <c>fundamental type</c> 8, not the
     /// character's class), and in no town or in the assault's target town (no distance test).
@@ -1463,6 +1474,12 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
         if (e.Kind == AlmostWokeEffect)
         {
             world.Defer(new Dialogue.DialogueEvent(world.Characters.IdOf(e.Source), world.Characters.IdOf(e.Target), AlmostWokeUpEvent) { Tick = world.Tick + 1 });
+            return;
+        }
+        if (e.Kind == AssaultTargetEffect)
+        {
+            if (world.Characters.Cold(e.Source) is { SquadId: >= 0 } member && world.Squads.Find(member.SquadId)?.Ai is { CurrentClass: Ai.PackageClass.PassingAssault } board)
+                board.AssaultTargets.Add(world.Characters.IdOf(e.Target));
             return;
         }
         if (e.Kind == TagEffect)

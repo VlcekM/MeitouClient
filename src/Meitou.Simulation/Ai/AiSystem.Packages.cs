@@ -23,7 +23,7 @@ public sealed partial class AiSystem
     }
 
     /// <summary>A passing-by assault looks for the town faction's people within this of the town (<b>Verified</b>, 2500 in <c>FUN_140290450</c>).</summary>
-    const float AssaultReach = 2500;
+    internal const float AssaultReach = 2500;
     /// <summary>The assault is not over before this many game hours (<b>Verified</b>, 0.25 in its finished test).</summary>
     const double AssaultMinHours = 0.25;
     /// <summary>The occupation ends after this long with no able member in the town (<b>Observed</b>: 4 of the timer the finished test adds to, read as game seconds).</summary>
@@ -243,6 +243,8 @@ public sealed partial class AiSystem
         board.Destination = board.InTown;
         board.AssaultStart = world.GameHours;
         board.AssaultEnemy = world.Buildings.FindTown(board.InTown.PlayerTown)?.Owner ?? -1;
+        board.AssaultTargets.Clear();
+        SeedAssaultTargets(world, board);
         if (DestinationCentre(world, board) is { } centre) PostsInto(world, squad, centre, null);
     }
 
@@ -270,7 +272,7 @@ public sealed partial class AiSystem
     }
 
     /// <summary>
-    /// Someone of the attacked faction still stands in the mission town (engine reading of the original's target set: those within 2500 at the start and those seen since). The end
+    /// Someone of the assault's target set (<see cref="Blackboard.AssaultTargets"/>: the attacked faction's people within 2500 at the start and those its members sense since; none leaves it) still stands in the mission town. The end
     /// and hand-over tests (<c>FUN_14028eca0</c>, <c>FUN_14028ea90</c>, <b>Verified</b>) count a target only when its current town is the mission town and it is not unconscious or
     /// dead, not caged and at posture 0 (staying low, crawling and playing dead do not count); the inside-town-walls value (vfunc 0x118, non-zero) is not modelled.
     /// </summary>
@@ -278,12 +280,25 @@ public sealed partial class AiSystem
     {
         if (board.AssaultEnemy < 0) return false;
         var table = world.Characters;
-        for (int i = 0; i < table.Previous.Length; i++)
+        if (!board.AssaultSeeded) SeedAssaultTargets(world, board);
+        foreach (var id in board.AssaultTargets)
         {
-            if (!table.Previous[i].Alive || table.Cold(i) is not { IsImprisoned: false } c || !CharacterFacts.PostureZero(c)) continue;
-            if (OfFaction(world, c, board.AssaultEnemy) && CurrentTown(world, table.Previous[i].Position) == board.Destination) return true;
+            if (!table.TryResolveNext(id, out int i) || !table.Previous[i].Alive || table.Cold(i) is not { IsImprisoned: false } c || !CharacterFacts.PostureZero(c)) continue;
+            if (CurrentTown(world, table.Previous[i].Position) == board.Destination) return true;
         }
         return false;
+    }
+
+    /// <summary>The start rule's part of the target set: every person of the attacked faction within <see cref="AssaultReach"/> of the mission town (<c>FUN_1402900c0</c>).</summary>
+    void SeedAssaultTargets(World world, Blackboard board)
+    {
+        board.AssaultSeeded = true;
+        var at = DestinationCentre(world, board);
+        if (at is not { } centre) return;
+        var table = world.Characters;
+        for (int i = 0; i < table.Previous.Length; i++)
+            if (table.Previous[i].Alive && table.Cold(i) is { } c && OfFaction(world, c, board.AssaultEnemy) && Vector2.DistanceSquared(Flat(table.Previous[i].Position), centre) <= AssaultReach * AssaultReach)
+                board.AssaultTargets.Add(table.IdOf(i));
     }
 
     /// <summary>

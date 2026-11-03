@@ -202,6 +202,12 @@ public sealed class Blackboard
     public int AssaultEnemy { get; set; } = -1;
     public bool AssaultDone { get; set; }
     public float AssaultCooldown { get; set; }
+    /// <summary>
+    /// The passing-by assault's target set (+0xd8): the town faction's people within <see cref="AiSystem.AssaultReach"/> of the town at the start, plus every character its members sense as enemies (<c>AggroSystem.AssaultTargetEffect</c>).
+    /// Nothing leaves it while the package runs (<c>FUN_1402900c0</c>, <c>FUN_1402903c0</c>, <c>FUN_140294980</c>). Not saved or hashed: a loaded assault seeds it again from the start rule (<see cref="AssaultSeeded"/>) and refills from the scan.
+    /// </summary>
+    public HashSet<CharacterId> AssaultTargets { get; } = [];
+    public bool AssaultSeeded { get; set; }
     /// <summary>The occupation's clock (<c>Package_OccupyTown</c> +0xc0): game seconds in a row with no able member in the town; past 4 it ends.</summary>
     public float OccupyAway { get; set; }
     /// <summary>The refugee package (<c>Package_Refugee</c>): the squad was not intact when it started (+0xb0), and the squad it makes for to join (its mission target, +0x28; -1: none yet).</summary>
