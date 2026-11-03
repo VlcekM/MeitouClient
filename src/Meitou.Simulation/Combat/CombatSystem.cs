@@ -159,20 +159,27 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
             Array.Resize(ref read, size);
             Array.Resize(ref write, size);
             for (int i = old; i < size; i++) { read[i] = CombatSlot.Fresh(-1); write[i] = CombatSlot.Fresh(-1); }
+            ResizeZones(size);
         }
         if (inFight.Length < read.Length) inFight = new bool[read.Length];
         var next = table.Next;
         for (int i = 0; i < n; i++)
         {
             int generation = next[i].Alive ? next[i].Generation : -1;
-            if (read[i].Generation != generation) read[i] = CombatSlot.Fresh(generation);
+            if (read[i].Generation == generation) continue;
+            read[i] = CombatSlot.Fresh(generation);
+            zoneCountRead[i] = 0;
         }
     }
 
     public void Hash(ref StateHasher hasher)
     {
         hasher.Add(read.Length);
-        for (int i = 0; i < read.Length; i++) read[i].Hash(ref hasher);
+        for (int i = 0; i < read.Length; i++)
+        {
+            read[i].Hash(ref hasher);
+            HashZone(ref hasher, i);
+        }
         hasher.Add(log.Count);
         HashRanged(ref hasher);
         HashTurrets(ref hasher);
@@ -392,6 +399,7 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
     {
         Sync(world.Characters);
         Array.Copy(read, write, world.Characters.HighWater);
+        CopyZones(world.Characters.HighWater);
         FlyProjectiles(world);
         TickTurrets(world);
         index.Build(read, world.Characters, world.Grid);
@@ -464,6 +472,7 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
     public void SlowWorld(World world)
     {
         (read, write) = (write, read);
+        SwapZones();
         swappedTick = world.Tick;
     }
 

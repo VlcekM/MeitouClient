@@ -107,8 +107,8 @@ stumbling (`FUN_140435570`), takes only `is stumble dodge` rows; with none it ge
 The stumble clip is faded out, not cut, either way (**Verified**, decompile and base data): `FUN_140609290` (called with 0 from state 3) first moves every layer of manager 1 flagged +0x5c
 to the fading list (`FUN_1405b36f0`), and a stumble dodge then clears manager 1 too (`FUN_1405b7800` -> `FUN_1405b35c0`). +0x5c is the ANIMATION record's `is action` or `layer` "all"
 (`FUN_1405ba280`; `layer` "all" and any name but lower / overlay / two others puts the layer in manager 1), and every stumble record of the base game is `layer all`, `is action`. The fade
-needs a swing still incoming on that tick (the start's `FUN_140665e00` pick); without one the clip plays on (**Observed**). Meitou: `Act`, step 2; the animation fades the stumble only when a
-technique starts (`AnimationSystem`, the action is cut): with none the clip plays to its end (not the original).
+needs a swing still incoming on that tick (the start's `FUN_140665e00` pick); without one the clip plays on (**Observed**). Meitou: `Act`, step 2 (`StumbleClip` dropped only with such a
+swing), `AnimationSystem` (a stumble action whose `StumbleClip` is gone fades out; a fading one-shot layer then freezes, [animation](../animation.md#layer-managers)).
 Knockback is the clips' root motion only (**Observed**: no impulse in these functions; [animation](../animation.md); ragdolls: [ragdolls](ragdolls.md)).
 A blocked blow neither staggers nor pushes (`FUN_140665540`). A shackled defender is knocked out instead 25% of the time; a defender whose fight is off: [stagger outside a fight](#fight-lifecycle-and-orders).
 **Verified** (`FUN_140520490` → `FUN_14051eab0`; `FUN_140435570` → `FUN_1405b3a40`): the clip plays at its record's play speed
@@ -161,12 +161,15 @@ defender that turns between the pick and the blow is judged on the new side (Mei
 limit on blocks other than this: a fighter blocks one blow at a time, its swing or wait excluding it. Meitou: `CombatSystem.SwingProgress` (before this the clip's own progress was used, so
 a swing was never cut short for a blow before its impact: a skilled fighter alone against four blocked 17 % of the blows at it in a sandbox battle, 34 % with it), `Reconsider`.
 **Verified** (defence start and hold; `FUN_140609290`, `FUN_140609c70`, `FUN_140665e00`, `FUN_140887970`, `FUN_1405b7600`/`7800`). The incoming pick takes the largest v with `<=`, so on a tie the
-later one in the +0x220 list wins and stays picked (no flip-flop). A defence starts only once that v is 0.1 or more (below: no technique, retry in 0.1 s, +0x274 = 0.25; a started one sets +0x14c to 0.2), and its clip
+later one in the +0x220 list wins and stays picked (no flip-flop). The pick takes only 0 < v < 1 (a blow landing now starts nothing). A defence starts only once that v is 0.1 or more
+and the defender is in that attacker's attack zone list (`FUN_140608460` over +0x1e0, the list `FUN_1406087a0` builds at the attack start `FUN_1402b4570` and at each blow's impact
+`FUN_14060a590`); else no technique, retry in 0.1 s, +0x274 = 0.25 (a started one sets +0x14c to 0.2). The break-out's start goes the same way. Its clip
 starts **at once**: nothing times it so its blocked frame meets the impact; speed = CombatClass+400 +0x18c x technique +0x28. The chooser pools, on a passed roll, only rows of the blow's
 direction, on a failed one only rows of another direction in the same group (`FUN_140665630`); an empty pool returns none and the caller sets 1.2 s (+0x14c) either way, so "no row for that
 side" is the same as a failed roll. Each defence tick replays the technique through `FUN_1405b7600`, which finds the playing layer by name and continues it; a re-pick to the same technique
 continues it too, a different one clears the layers and starts fresh (`FUN_1405b7800`). A block is not ended by its clip: it lasts while any incoming swing has 0 < v < 1, then ends with the wait
-(+0x148); a dodge ends past 0.98 (state 4). Whether a block clip held past its length loops or stays on its last frame is **Unknown** (a fading block layer, +0x62, plays backwards).
+(+0x148); a dodge ends past 0.98 (state 4). A held block stays on its last frame (**Observed**, static reading of `FUN_1405b7600`'s stack arguments: its replay passes the loop flag
++0x5d off, so the layer's time clamps at the clip's end and its progress +0x54 stays 1).
 The front/rear heading is the movement object's current unit heading (+0x640 +0xd0, [fight steering](#fight-steering)).
 **Verified** (`FUN_140666400`, `FUN_14060a190`): each defence tick turns the defender at once towards the followed attacker when it is over 5 away (3D, 25 = 5²) and sets the movement's look-at to it,
 except while the current technique is a block (+0x2c) of direction 7, 8 or 9, which is met turned away. The defending band (slot 12) is kept to the followed attacker (limit 16), or, with a
@@ -181,7 +184,8 @@ goes back to deciding at once for want of a technique (`FUN_140609290`, **Verifi
 the stumble state (8) is planned only with a clip (`FUN_140665490`) (**Verified**); Meitou matches (`AnimationSystem.ChooseStumble` returns none for an animal).
 Meitou: `CombatSystem.MostAdvanced` (the followed swing; an exact tie keeps the followed one, else the lower slot, since the grid's order is not stable), `React` (start),
 `Reconsider` (the update), `ReactionEnds` (a blow counts as on its way until the attacker's state shows it struck: strikes apply after every Act, a far attacker's at its own step), `CombatTuning.DefenceStartProgress`. A held block's progress
-is clamped at 1, so it keeps blocking (the engine's reading of the loop question). A blow decided again rolls the same: Meitou's rolls are fixed per blow, the original draws afresh.
+is clamped at 1, so it keeps blocking. A blow decided again draws afresh (`ChooseDefence` salts the blow's roll counter with the tick). The zone list: `CombatSystem.InZone`, double-buffered,
+so a defender sees the list an attacker built last tick (the original reads it in its own update order).
 
 **Observed** (decompiled, not measured in game), with several attackers: a target answering a request is asked by
 anyone, not only its own target, and the winner of the roll turns to attack the asker (`FUN_140666a30`). Deciding

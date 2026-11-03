@@ -273,12 +273,12 @@ public sealed partial class CombatSystem
                 {
                     // Due, the timer stays out until a swing is in the window, then rolls on that tick; a failed roll starts it again (FUN_1406085e0).
                     // A won roll ends the stumble and clears the no-defence timer, then starts a defence (FUN_1406085e0 -> state 3 -> FUN_140609290): a stumble-dodge row,
-                    // or with none no technique and the no-defence time.
+                    // or with none no technique and the no-defence time. That start fades the stumble clip out (FUN_1405b36f0) once it has a swing to answer; without one it plays on.
                     if (BreaksOut(world, i, cold, key, now, out bool rolled))
                     {
                         s.StunUntil = now;
-                        s.StumbleClip = -1;
                         s.DefendReadyTick = Math.Min(s.DefendReadyTick, now);
+                        if (MostAdvanced(world, i, now, s.ReactedSlot, landing: false).Attacker >= 0) s.StumbleClip = -1;
                         React(world, i, ref s, cold, key, now, dt, stumbling: true);
                     }
                     else if (rolled) s.BreakOutTick = now + every;
@@ -487,6 +487,7 @@ public sealed partial class CombatSystem
         s.NextBlow = 1;
         s.LastOutcome = BlowOutcome.Missed;
         s.AttackFrom = prev[i].Position;
+        RecordZone(world, i, in s, cold, tech, 1);   // the attack start builds the zone list (FUN_1402b4570 -> FUN_1406087a0)
         // The bonus with the weapon's indoors modifier inside, less the dust's "Weather penalty" (FUN_140643a30, docs/formats/weather.md "Effects on characters"); unarmed, the fist rating.
         s.AttackSkill = AttackRating(world, i, cold, fighter);
     }
@@ -854,9 +855,9 @@ public sealed partial class CombatSystem
     /// <summary>
     /// The swing at <paramref name="i"/> that is furthest on (the original's followed attacker +0x1a8, <c>FUN_140665e00</c>: the largest progress), from those swinging at it within
     /// ReactionScanRadius whose blow has not landed. An exact tie keeps <paramref name="keep"/>, else the lower slot (the original's <c>&lt;=</c> keeps one stable; Meitou's grid order is
-    /// not, so the slot breaks it). Attacker -1: nobody.
+    /// not, so the slot breaks it). <paramref name="landing"/>: a blow landing now counts (the hold); the defence start and update pick only among 0 &lt; v &lt; 1. Attacker -1: nobody.
     /// </summary>
-    IncomingBlow MostAdvanced(World world, int i, int now, int keep)
+    IncomingBlow MostAdvanced(World world, int i, int now, int keep, bool landing)
     {
         var prev = world.Characters.Previous;
         var range = world.Grid.Range(prev[i].Position.X, prev[i].Position.Z, CombatTuning.ReactionScanRadius);
@@ -871,7 +872,7 @@ public sealed partial class CombatSystem
             // A blow is on its way until the attacker's state shows it struck (a far attacker strikes at its own step, after the landing tick; strikes apply after every Act).
             int lands = a.AttackStart + (int)MathF.Ceiling(techniques[a.AttackTech].StrikeProgress(a.NextBlow) * a.AttackTicks);
             float v = SwingProgress(in a, now);
-            if (v <= 0) continue;
+            if (v <= 0 || !landing && v >= 1) continue;
             if (best.Attacker >= 0 && !Ahead(v, other, in best, keep)) continue;
             best = new IncomingBlow(other, a.AttackSeq, a.NextBlow, v, lands);
         }
@@ -889,7 +890,7 @@ public sealed partial class CombatSystem
     {
         wait = false;
         if (s.ReactTech < 0) return false;
-        if (MostAdvanced(world, i, now, s.ReactedSlot).Attacker < 0)
+        if (MostAdvanced(world, i, now, s.ReactedSlot, landing: true).Attacker < 0)
         {
             wait = true;
             return true;
@@ -898,15 +899,15 @@ public sealed partial class CombatSystem
     }
 
     /// <summary>
-    /// Starts a defence against the swing furthest on (the original's <c>FUN_140609290</c>): only once that swing is 0.1 of the way to its blow (before that it tries again in 0.1 s). A blow
-    /// decided again (after a dodge, or the no-defence time) rolls the same as before: Meitou's rolls are fixed per blow, the original draws afresh.
+    /// Starts a defence against the swing furthest on (the original's <c>FUN_140609290</c>): only once that swing is 0.1 of the way to its blow and the fighter is in that attacker's
+    /// attack zone list (<c>FUN_140608460</c>); else it tries again in 0.1 s. A blow decided again rolls afresh.
     /// </summary>
     /// <param name="stumbling">A break-out from a stumble that won its roll: the reaction is one of the <c>is stumble dodge</c> rows, without a block or dodge roll.</param>
     void React(World world, int i, ref CombatSlot s, CharacterCold cold, ulong key, int now, float dt, bool stumbling = false)
     {
-        var swing = MostAdvanced(world, i, now, s.ReactedSlot);
+        var swing = MostAdvanced(world, i, now, s.ReactedSlot, landing: false);
         if (swing.Attacker < 0) return;
-        if (!stumbling && swing.Progress < CombatTuning.DefenceStartProgress)
+        if (!Startable(in swing, i))
         {
             s.DefendReadyTick = now + (int)MathF.Ceiling(CombatTuning.EarlyDefenceSeconds / dt);
             return;
@@ -927,7 +928,7 @@ public sealed partial class CombatSystem
     /// </summary>
     void Reconsider(World world, int i, ref CombatSlot s, CharacterCold cold, ulong key, int now, float dt)
     {
-        var swing = MostAdvanced(world, i, now, s.ReactedSlot);
+        var swing = MostAdvanced(world, i, now, s.ReactedSlot, landing: false);
         if (swing.Attacker < 0) return;
         bool changed = swing.Attacker != s.ReactedSlot || swing.Seq != s.ReactedSeq || swing.Blow != s.ReactedBlow;
         if (!changed && now < s.ReactCheckTick) return;
@@ -937,15 +938,18 @@ public sealed partial class CombatSystem
         s.ReactedSeq = swing.Seq;
         s.ReactedBlow = swing.Blow;
         if (techniques[s.ReactTech].AttackDirection1 == BlowSide(world, i, in swing)) return;
-        if (swing.Progress < CombatTuning.DefenceStartProgress)
+        if (!Startable(in swing, i))
         {
-            // A new start too early fails, which ends the defence (state 4).
+            // A new start that fails (too early, or not in the attacker's zone) ends the defence (state 4).
             s.ReactTech = -1;
             s.DefendReadyTick = now + (int)MathF.Ceiling(CombatTuning.EarlyDefenceSeconds / dt);
             return;
         }
         StartDefence(world, i, ref s, cold, key, now, dt, in swing, stumbling: false, reconsider: true);
     }
+
+    /// <summary>The defence start's tests on the swing it picked (<c>FUN_140609290</c>): the fighter is in the attacker's zone list and the swing is 0.1 of the way to its blow.</summary>
+    bool Startable(in IncomingBlow swing, int i) => InZone(swing.Attacker, i) && swing.Progress >= CombatTuning.DefenceStartProgress;
 
     /// <summary>The side the blow comes from as the fighter stands now (<c>FUN_140436520</c>): the swing's own direction, or its rear counterpart when the attacker is behind.</summary>
     int BlowSide(World world, int i, in IncomingBlow swing)
@@ -960,7 +964,7 @@ public sealed partial class CombatSystem
         s.ReactedSlot = swing.Attacker;
         s.ReactedSeq = swing.Seq;
         s.ReactedBlow = swing.Blow;
-        int pick = ChooseDefence(world, i, cold, key, in swing, stumbling);
+        int pick = ChooseDefence(world, i, cold, key, now, in swing, stumbling);
         if (pick < 0)
         {
             // No defence (a failed roll or no row for the side, alike: FUN_140887970 returns none for both): none is tried again for a while (the original's +0x14c).
@@ -989,14 +993,14 @@ public sealed partial class CombatSystem
         s.ReactTicks = ticks;
     }
 
-    /// <summary>The block or dodge roll against the swing's attacker, and the technique it picks for the blow's side (-1: none).</summary>
-    int ChooseDefence(World world, int i, CharacterCold cold, ulong key, in IncomingBlow swing, bool stumbling)
+    /// <summary>The block or dodge roll against the swing's attacker, and the technique it picks for the blow's side (-1: none); each decision draws afresh (the tick salts the blow's counter).</summary>
+    int ChooseDefence(World world, int i, CharacterCold cold, ulong key, int now, in IncomingBlow swing, bool stumbling)
     {
         var table = world.Characters;
         ref readonly var attack = ref read[swing.Attacker];
         var fighter = cold.Fighter!;
         float meleeDefence = Trained(cold, StatsEnumerated.MeleeDefence);
-        ulong counter = CombatRolls.BlowCounter(swing.Attacker, attack.AttackSeq, swing.Blow, 0);
+        ulong counter = CombatRolls.BlowCounter(swing.Attacker, attack.AttackSeq, swing.Blow, 0) ^ (ulong)(uint)now * 0x9E3779B97F4A7C15UL;
         float chanceRoll = CombatRolls.Float(world.Seed, key, CombatRoll.Block, counter);
         float pickRoll = CombatRolls.Float(world.Seed, key, CombatRoll.Reaction, counter);
         float block, dodge = 0;
