@@ -326,6 +326,12 @@ public sealed class CharacterSounds
                 // An unarmed technique choosing its blow (FUN_1402b4570): the fist or the foot, the robot variant for a robot.
                 if (layer.Weapons is { } hth) player.SetSwitch("Weapons", e.Profile.Robot ? hth + "_Robot" : hth, e.Object);
             }
+            else if (!ReferenceEquals(cursor.Events, events))
+            {
+                // A machine's events added to (or gone from) the playing clip.
+                cursor.Events = events;
+                cursor.State.Rebase(events);
+            }
             cursor.Frame = frame;
             cursor.State.Update(events, Math.Clamp(layer.Fraction, 0, 1), i == dominant, ev => Fire(e, ev, d2));
         }

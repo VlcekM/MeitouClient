@@ -480,6 +480,8 @@ public sealed class CharacterCold
     public string? OperateClip { get; set; }
     /// <summary>The clips of the cage it is held in (<see cref="Locks.Fixture.Clips"/>), set when it is caged; read only while <see cref="InSomething"/> is imprisoned. Derived, not hashed.</summary>
     public Locks.CageClips CageClips { get; set; }
+    /// <summary>The BUILDING_FUNCTIONALITY (string id) of the machine its operate task runs, whose <c>animation events</c> sound on <see cref="OperateClip"/>; derived, not hashed.</summary>
+    public string? OperateFunctionality { get; set; }
     /// <summary>The ITEM the operator holds while its operate task runs (the functionality's <c>special tool</c>); derived, not hashed.</summary>
     public string? OperateTool { get; set; }
     /// <summary>The machine's <see cref="Meitou.Data.Gameplay.Construction.MachineData.HungerRate"/> while its operate task runs; derived, not hashed.</summary>
