@@ -964,6 +964,14 @@ original falls back to the template.
 them `_ruined empty building (DEFAULT)` (`44421-rebirth.mod`), the `default resident` of Old Village (Deadcat, `50243-rebirth.mod`), whose level states are
 intact and name no template. Its houses are ruins in the original (issue #145).
 
+**A ruin holds no furniture.** **Verified** (decompile): set destroyed (`FUN_140557280`) destroys the interior's internal buildings and furniture (`FUN_14054f4d0`,
+`FUN_140548580`), after the squad setup has loaded the template's interior; the layout names stay, and housing names a ruin's layouts as any home's
+([layouts](factions-squads-towns.md#town-residents)). **Observed** (saves METARU, autosaves 1 and 2, redev, Beep Fan Club 1): no saved building lies inside any ruin
+(0 of 56, 56, 23, 23, 62), while 283 of 284 standing buildings with an interior name hold furniture; every saved ruin names no interior layout (its template
+names none). Whether a ruin's interior is laid out again when it next loads (the interior loader `FUN_1405621e0` has no destroyed test) is **Unknown**: no save
+has a ruin whose name is set. Meitou: no reader lays out a ruin's layouts (drawing, lamps, effects, emitters, navmesh, and `TownBuildings`: no beds, nodes,
+fixtures or item slots).
+
 Meitou (`ResidentRuins`): before anything reads the level data's `destroyed`, every town is housed by the population's rule ([town residents](factions-squads-towns.md#town-residents))
 and each home of a ruined template that has a destroyed mesh is set destroyed in its level state; 71 base-game buildings (Old Village 10 of 10, Abandoned Town 9 of 9,
 the library ruins). A saved `destroyed` false does not undo a level ruin unless the player's repair saved it (`meitou town construction`; engine choice: saves

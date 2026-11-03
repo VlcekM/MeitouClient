@@ -51,10 +51,9 @@ public static class ResidentHomes
     /// are random, so it rerolls homes at a new game; a fixed order lets the boot lay out the ruins the homes make). Steps:
     /// <list type="number">
     /// <item>priorities 5 down to 0: first (<b>engine choice</b>) a building whose level-data state names a template of this priority keeps it while the entry has
-    /// squads left (the level data's assignment is one the original's rules made, and Meitou draws interiors from its layout names); then the original's rule (Observed,
+    /// squads left (the level data's assignment is one the original's rules made); then the original's rule (Observed,
     /// <c>FUN_1409370d0</c>, <c>FUN_14092e870</c>): each entry of the priority one building per pass, passes repeated while one placed a squad and has more; the building
-    /// is the free one of the highest weight, the first of them on a tie (Meitou first prefers one whose current interior layout is the template's); an entry with no
-    /// building left makes no more squads;</item>
+    /// is the free one of the highest weight, the first of them on a tie; an entry with no building left makes no more squads;</item>
     /// <item>every free building left gets the <c>default resident</c> when it takes the template's <c>layout interior</c>.</item>
     /// </list>
     /// </summary>
@@ -171,19 +170,19 @@ public static class ResidentHomes
         return w;
     }
 
-    /// <summary>The free building of the highest weight for <paramref name="e"/>, the first in order on a tie after one already laid out as its template wants.</summary>
+    /// <summary>
+    /// The free building of the highest weight for <paramref name="e"/>, the first in order on a tie. Nothing here reads the state's layout names, which housing
+    /// rewrites (<see cref="ResidentRuins.Apply"/>), so the assignment is the same before and after it.
+    /// </summary>
     static TownBuilding? Choose(Entry e, List<TownBuilding> order, HashSet<TownBuilding> taken)
     {
         TownBuilding? best = null;
         float bestWeight = 0;
-        bool bestLaid = false;
         foreach (var b in order)
         {
             if (taken.Contains(b)) continue;
             float w = Weight(e, b);
-            if (w <= 0) continue;
-            bool laid = e.Template.LayoutInterior.Length > 0 && string.Equals(b.InteriorLayout, e.Template.LayoutInterior, StringComparison.OrdinalIgnoreCase);
-            if (w > bestWeight || w == bestWeight && laid && !bestLaid) (best, bestWeight, bestLaid) = (b, w, laid);
+            if (w > bestWeight) (best, bestWeight) = (b, w);
         }
         return best;
     }

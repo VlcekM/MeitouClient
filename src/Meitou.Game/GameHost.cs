@@ -168,6 +168,8 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
             var levels = IsSandbox || IsDuel || IsBattle ? null : scene.Objects?.Levels ?? Meitou.Data.World.WorldLevelData.Load(install, includeInteriors: true);
             if (levels is not null)
             {
+                // The homes' ruins and layouts before anything reads the levels (done already when the renderer read them).
+                Meitou.Data.World.ResidentRuins.Apply(gameDb, levels, scene.Objects?.Layouts ?? new Meitou.Data.World.BuildingLayouts(gameDb, levels.Interiors));
                 nav = new Meitou.Navigation.NavSystem(install, gameDb, levels!, heights.HeightAt);
                 nav.ZoneReady += ready => { lock (navReady) navReady.Add(ready.Zone); };
                 walkability = new NavAdapter(nav.Walkability);
@@ -191,7 +193,6 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
             {
                 var watch = System.Diagnostics.Stopwatch.StartNew();
                 var layouts = scene.Objects?.Layouts ?? new Meitou.Data.World.BuildingLayouts(gameDb, levels.Interiors);
-                Meitou.Data.World.ResidentRuins.Apply(gameDb, levels, layouts);   // done already when the renderer read these levels
                 buildings = Meitou.Data.World.TownBuildings.Build(gameDb, levels, layouts, (x, z) => heights.HeightAt((float)x, (float)z));
                 Console.WriteLine($"homes     {buildings.Values.Sum(l => l.Count)} town buildings, {buildings.Values.Sum(l => l.Sum(b => b.Beds))} beds, " +
                     $"{buildings.Values.Sum(l => l.Sum(b => b.Spots.Count - b.Beds))} nodes in {buildings.Count} towns ({watch.ElapsedMilliseconds} ms)");

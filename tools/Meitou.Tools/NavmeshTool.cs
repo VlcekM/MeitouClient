@@ -88,6 +88,7 @@ static class NavmeshTool
         var watch = Stopwatch.StartNew();
         var db = GameDatabase.Load(LoadOrder.FromInstall(install));
         var levels = WorldLevelData.Load(install, includeInteriors: true);
+        ResidentRuins.Apply(db, levels, new BuildingLayouts(db, levels.Interiors));   // the homes' ruins and layouts, as the game lays them out
         Console.WriteLine($"game data and levels loaded ({watch.ElapsedMilliseconds} ms)");
         if (compare.Count > 0) return Compare(install, db, levels, compare, settings);
         if (compareTowns)

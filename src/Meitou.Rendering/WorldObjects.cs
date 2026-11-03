@@ -275,8 +275,9 @@ sealed class WorldObjects : IDisposable
                 Interlocked.Increment(ref buildings);
                 // The state's exterior layout (signs and banners) and interior layout (furniture), placed relative to the building, each object on its
                 // layout floor. An interior layout's object shows only in the interior view unless its state is flagged outside (game: the closed interior hides
-                // its contained objects but those; "is exterior furniture" plays no part). Skipped for a destroyed building (Unknown); the interior one also for a
-                // bought town house, whose furniture the purchase destroyed (BuildingPlacement.WithoutInterior).
+                // its contained objects but those; "is exterior furniture" plays no part). Skipped for a ruin, which holds no furniture
+                // (docs/game/buildings-production.md "Ruined by residents"); the interior one also for a bought town house, whose furniture the purchase
+                // destroyed (BuildingPlacement.WithoutInterior).
                 foreach (bool exterior in (ReadOnlySpan<bool>)[true, false])
                 {
                     if (isDestroyed || !exterior && b.WithoutInterior) continue;

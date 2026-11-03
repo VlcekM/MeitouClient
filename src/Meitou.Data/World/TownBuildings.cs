@@ -85,8 +85,8 @@ public sealed record TownBuilding(string InstanceId, string BuildingId, string N
     /// </summary>
     public bool CanHouse { get; init; }
     /// <summary>
-    /// It has <c>interior</c> parts and its interior layout, when the level data names one, places at least one object (the original's interior holding internal buildings,
-    /// docs/game/economy.md "Artifacts"; one no layout is named for counts, as the residents' template may name one, <see cref="ResidentRuins.Apply"/>).
+    /// It has <c>interior</c> parts, is not a ruin, and its named interior layout places at least one object (the original's interior holding internal buildings,
+    /// docs/game/economy.md "Artifacts"; the name is its residents' since <see cref="ResidentRuins.Apply"/>). Without contents laid out: it has <c>interior</c> parts.
     /// </summary>
     public bool Furnished { get; init; }
     /// <summary><c>is wall gate</c>: a town gate, housing only resident entries that name it in <c>building</c>.</summary>
@@ -222,9 +222,10 @@ public static class TownBuildings
                     shop = exterior.GetInt("is shop") != 0;
                     bar = exterior.GetInt("is bar") != 0;
                 }
-                // A named layout the data lacks gives the original an interior with no objects.
-                if (state.GetString("interior layout name").Length > 0) furnished = false;
-                if (layouts.Find(record, state.GetString("interior layout name"), exterior: false) is { } interior)
+                // Its interior holds objects only from a named layout the data has (none named, or one the data lacks, loads nothing); a ruin holds none, as
+                // destroying it clears them (docs/game/buildings-production.md "Ruined by residents").
+                furnished = false;
+                if (!resolved.Destroyed && layouts.Find(record, state.GetString("interior layout name"), exterior: false) is { } interior)
                 {
                     int index = 0;
                     List<Vector3>? faced = null;
