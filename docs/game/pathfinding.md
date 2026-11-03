@@ -308,7 +308,7 @@ every feature of the zone, with no `hidden` test (only the render entity, `FUN_1
 pass (`FUN_1403c8660`) takes features as owner-less group 14 (a non-BUILDING handle resolves no owner): material −1, the walkable-foliage path,
 not the building one (groups 9, 10, 13, 19 and `path mode` play no part). **Observed** (`meitou-tools navmesh --probe`, zone 21.19): the
 original's tile walks the top of `Huge_Stone_Emperor_Statue`'s foundation (y 755.8, terrain 735) and has no ground inside the gravel piles, also those placed
-scaled (1.41/1.88); without features Meitou walked the terrain through both (issue #161). Their collision is a triangle mesh, mostly open at the bottom
+scaled (1.41/1.88); without features Meitou walked the terrain through both (issue #161). **Observed** (scratch probe, zones 14.22, 14.23, 15.22): the fog camps' `Mafic_HugeRockSlabs` by the nest markers south of Mongrel have no walkable span inside them in either navmesh (issue #132's walk-through was before features were gathered). Their collision is a triangle mesh, mostly open at the bottom
 (gravel piles: 24 open edges; Hub cliff blocks closed). Engine choice: a feature's triangle mesh is a `NavMeshSolid`; a walkable span is removed when the
 nearest of its triangles above the span's floor (more than 1 over it, at the cell's middle) faces up, so the span sees its back; an overhang's underside faces
 down and keeps the ground under it. `hidden` features keep their collision (above), as in Meitou. **Observed** (`--compare`,
