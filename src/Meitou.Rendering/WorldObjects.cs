@@ -277,6 +277,7 @@ sealed class WorldObjects : IDisposable
                 // Resource buildings ("is foliage", no parts) are drawn by the foliage system as a FOLIAGE_MESH naming them as "building type".
                 if (parts.Count == 0 && record.GetBool("is foliage")) Interlocked.Increment(ref foliage);
                 else if (parts.Count == 0) Interlocked.Increment(ref empty);
+                parts.RemoveAll(m => m.RenderHidden);   // collision only (a destroyed building's upper-floor part with no destroyed mesh)
                 // Inside another building and not outside: hidden while that one is closed (a player's own building says so; a zone's by its state).
                 if (b.Contained || state is not null && state.GetBool("is inside building") && !BuildingLayouts.IsOutside(state))
                     for (int k = 0; k < parts.Count; k++) parts[k] = parts[k] with { Contained = true, ContainerId = b.ContainerId };

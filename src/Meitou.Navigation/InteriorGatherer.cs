@@ -30,10 +30,6 @@ internal sealed partial class ZoneGeometryGatherer
     static Matrix4x4 NodeMatrix(GameRecord building, Vector3 position, Quaternion rotation) =>
         WorldObjectLayout.InstanceTransform(position, rotation, new Vector3(BuildingScale(building)));
 
-    /// <summary>A part's collision file: the destroyed one for a destroyed building when it has one, else the intact one (empty when none).</summary>
-    static string CollisionPathOf(GameRecord part, bool destroyed) =>
-        destroyed && part.GetPath("destroyed collision") is { Length: > 0 } dc ? dc : part.GetPath("xml collision");
-
     /// <summary>
     /// The buildings whose interior reaches into a zone: shells with an interior (<see cref="IsShellWithInterior"/>), with the mask's box over the zone's. A building over a zone border is built in each zone it
     /// reaches, clipped at the border (<see cref="GatherInterior"/>).

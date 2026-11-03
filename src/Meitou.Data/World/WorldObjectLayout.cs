@@ -47,6 +47,15 @@ public sealed record PlacedMesh(string MeshPath, Matrix4x4 Transform, GameRecord
 
     /// <summary>For a <see cref="Contained"/> player building: the building it was placed in (its parent, a site's id or a level building's instance id); null when unknown.</summary>
     public string? ContainerId { get; init; }
+
+    /// <summary>A destroyed building's upper-floor part with no destroyed mesh: kept for its collision, never drawn.</summary>
+    public bool RenderHidden { get; init; }
+
+    /// <summary>A destroyed building's stairs or upper-floor part whose destroyed mesh stands in for a blank own mesh: its collision is the <c>destroyed collision</c> only, never <c>xml collision</c>.</summary>
+    public bool BlankXmlCollision { get; init; }
+
+    /// <summary>The collision file the part has in this placement (<see cref="WorldObjectLayout.DestroyedCollision"/>); empty for none.</summary>
+    public string CollisionPath(bool destroyed) => WorldObjectLayout.DestroyedCollision(Source, destroyed, BlankXmlCollision);
 }
 
 /// <summary>
@@ -267,15 +276,8 @@ public static class WorldObjectLayout
     {
         below = joints;
         var mesh = part.GetPath("phs or mesh");
-        bool entity = true;
-        if (a.State.Destroyed)
-        {
-            // fcs.def: "Ground floor will use normal mesh if blank. Upper floors will be removed if blank."; stairs go too.
-            var destroyed = part.GetPath("destroyed mesh");
-            if (destroyed.Length > 0) mesh = destroyed;
-            else if (part.GetBool("is stairs")) return null;
-            else if (part.GetInt("building floor") != 0) entity = false;
-        }
+        bool entity = true, blankCollision = false;
+        if (a.State.Destroyed && !DestroyedPart(part, ref mesh, out entity, out blankCollision)) return null;
         if (mesh.Length == 0 || !mesh.Contains(".mesh", StringComparison.Ordinal)) return null;
 
         var offset = part.GetBool("is for position marker")
@@ -287,7 +289,7 @@ public static class WorldObjectLayout
 
         // Rotating parts (no collision file, a rotation function on the part or its holder; RotatingEnt's constructor) roll a speed variation (unless
         // ROTATION_WIND_SPEED) and a start angle about their axis. The viewer leaves turret parts (ROTATION_TARGET) unrotated.
-        string collision = a.State.Destroyed && part.GetPath("destroyed collision") is { Length: > 0 } dc ? dc : part.GetPath("xml collision");
+        string collision = DestroyedCollision(part, a.State.Destroyed, blankCollision);
         RotorSpec? rotor = null;
         var rotorAxis = Vector3.Zero;
         if (collision.Length == 0 && (part.GetInt("rotation function") > 0 || holder.GetInt("rotation function") > 0))
@@ -310,7 +312,13 @@ public static class WorldObjectLayout
         }
         local *= Matrix4x4.CreateTranslation(offset);
         var node = local * parentNode;
-        if (!entity) return null;
+        if (!entity)
+        {
+            // A part of an upper floor with no destroyed mesh keeps its mesh as collision only (FUN_14055f6e0 mode 2: render skipped, collision made); children hang from the building.
+            a.Result.Add(new PlacedMesh(mesh, node, part, a.Building, a.Identity, PlacedKind.BuildingPart)
+                { Floor = Math.Clamp(part.GetInt("building floor"), 0, 3), Interior = a.Interior, DoorIndex = a.DoorIndex, RenderHidden = true });
+            return null;
+        }
         // A part that turns by itself is a joint too: it and everything hanging from it turn about its node's axis.
         if (rotor is not null)
         {
@@ -324,9 +332,41 @@ public static class WorldObjectLayout
             var axis = yaw ? new Vector3(node.M21, node.M22, node.M23) : new Vector3(node.M11, node.M12, node.M13);
             if (axis.LengthSquared() > 1e-12f) below = [.. joints ?? [], new TurnJoint(part.StringId, node.Translation, Vector3.Normalize(axis), yaw)];
         }
-        a.Result.Add(new PlacedMesh(mesh, node, part, a.Building, a.Identity, PlacedKind.BuildingPart) { Material = PartMaterial(a, part), Floor = Math.Clamp(part.GetInt("building floor"), 0, 3), Interior = a.Interior, DoorIndex = a.DoorIndex, Joints = below });
+        a.Result.Add(new PlacedMesh(mesh, node, part, a.Building, a.Identity, PlacedKind.BuildingPart) { Material = PartMaterial(a, part), Floor = Math.Clamp(part.GetInt("building floor"), 0, 3), Interior = a.Interior, DoorIndex = a.DoorIndex, Joints = below, BlankXmlCollision = blankCollision });
         return node;
     }
+
+    /// <summary>
+    /// A destroyed building's part (FUN_14055f6e0:144-176, <b>Verified</b>; fcs.def: "Ground floor will use normal mesh if blank. Upper floors will be removed if blank."). Returns false when the part
+    /// is dropped (stairs without a destroyed mesh). <paramref name="mesh"/> becomes the destroyed mesh when it has one. <paramref name="entity"/> is false for a non-stairs part above the ground floor
+    /// with no destroyed mesh: its normal mesh stays for collision only, not drawn. <paramref name="blankXmlCollision"/>: a stairs or upper-floor part whose destroyed mesh replaces a blank own mesh
+    /// loses its <c>xml collision</c> (the original blanks it in the shared record, so the intact building's part loses it too once any destroyed one was made; not modelled).
+    /// </summary>
+    static bool DestroyedPart(GameRecord part, ref string mesh, out bool entity, out bool blankXmlCollision)
+    {
+        entity = true;
+        blankXmlCollision = false;
+        var destroyed = part.GetPath("destroyed mesh");
+        bool stairs = part.GetBool("is stairs");
+        if (stairs && destroyed.Length == 0) return false;
+        bool upper = part.GetInt("building floor") != 0;
+        if (!stairs && !upper)
+        {
+            if (destroyed.Length > 0) mesh = destroyed;
+            return true;
+        }
+        if (destroyed.Length == 0) entity = false;
+        else
+        {
+            blankXmlCollision = mesh.Length == 0;
+            mesh = destroyed;
+        }
+        return true;
+    }
+
+    /// <summary>A part's collision file: the destroyed building's <c>destroyed collision</c> when it has one, else <c>xml collision</c> (blank when <paramref name="blankXml"/>).</summary>
+    public static string DestroyedCollision(GameRecord part, bool destroyed, bool blankXml) =>
+        destroyed && part.GetPath("destroyed collision") is { Length: > 0 } dc ? dc : blankXml ? "" : part.GetPath("xml collision");
 
     /// <summary>
     /// A record's instances after its parts, with the rolls the game draws for them: two per LIGHT (its brightness variance, then a

@@ -110,7 +110,7 @@ internal sealed partial class ZoneGeometryGatherer
         var node = NodeMatrix(item.Building, at, rotation);
         foreach (var mesh in WorldObjectLayout.Building(db, item.Building, item.InstanceId, at, rotation, new BuildingState(false)))
         {
-            if (CollisionPathOf(mesh.Source, false) is not { Length: > 0 } path || collision.Get(path) is not { } prepared || mesh.Source.GetBool("passable")) continue;
+            if (mesh.CollisionPath(false) is not { Length: > 0 } path || collision.Get(path) is not { } prepared || mesh.Source.GetBool("passable")) continue;
             foreach (var shape in prepared.Shapes)
             {
                 var pts = shape.Vertices.Select(v => Vector3.Transform(v, node)).ToArray();
@@ -155,7 +155,7 @@ internal sealed partial class ZoneGeometryGatherer
         foreach (var mesh in placed)
         {
             var part = mesh.Source;
-            string path = CollisionPathOf(part, destroyed);
+            string path = mesh.CollisionPath(destroyed);
             if (path.Length == 0) continue;
             // Every part of a building placed from a `doors` list is a door, flagged or not (Observed: the level 4 and 5 gates' door parts lack `is door`).
             bool isDoor = part.GetBool("is door") || mesh.Owner.GetBool("is door") || doors.Contains(mesh.Owner.StringId);
@@ -364,7 +364,7 @@ internal sealed partial class ZoneGeometryGatherer
         foreach (var mesh in WorldObjectLayout.Building(db, building, placementId, position, rotation, new BuildingState(destroyed)))
         {
             var part = mesh.Source;
-            string path = CollisionPathOf(part, destroyed);
+            string path = mesh.CollisionPath(destroyed);
             if (path.Length == 0 || part.GetBool("is door") || mesh.Owner.GetBool("is door") || doors.Contains(mesh.Owner.StringId)) continue;
             // Groups 23..26: a building that is ignored by paths, or a passable part (ragdolls do not collide with them).
             bool passable = (PathMode)mesh.Owner.GetInt("path mode", (int)PathMode.Obstacle) == PathMode.Ignore || part.GetBool("passable");

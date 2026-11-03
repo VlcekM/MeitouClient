@@ -261,7 +261,7 @@ none when destroyed; it holds interior stairs and upper floors. **Verified** (ti
 inside the bounds of `Storm_House_01_Interior-stairs` (`is stairs`, only in `interior`). **Observed** (scratch NavSystem probe):
 without the list that storey and the Watchtower `2-Newwworld-INGAME` floors +130/+190/+290 were unkept; with it paths from the door seed reach them.
 **Destroyed interiors**: a part with a `destroyed mesh` but no `destroyed collision` keeps its intact `xml collision` (**Verified**,
-`FUN_14055f6e0`; with no `phs or mesh` its `xml collision` is cleared instead). The original rebuilds a ruin's interior at load or when it is destroyed
+`FUN_14055f6e0`; with no `phs or mesh` its `xml collision` is cleared instead, see below). The original rebuilds a ruin's interior at load or when it is destroyed
 and stitches it to the tile's exterior (**Verified**, Generator, "Destroyed at run time"); Meitou builds it the same way. A ruin has no doors, so its seed
 is a node, else the original's ray from above its origin onto its floor-0 part (`ZoneGeometryGatherer.OriginRaySeed`). **Observed** (original tiles
 20.32, 18.35, 19.29, 20.29, built with these buildings destroyed; interior groups matched to ours by box): the original keeps a mesh on the ground floor
@@ -512,6 +512,11 @@ failures (Meitou: the nearest reachable point and a straight tail). Both would s
 measurement shows the cost, since most in-town trips exceed 1000 units.
 **Observed** (scratch harness, nothing loaded): Hub→Squin 17657 straight walks 25522 at 0.3 (99 % within 400 of a road; 43 % at 0);
 Hub→Stack 34054; Squin→Admag at 0.8 walks 132184 for 26834 straight (short road `length` values, as off screen).
+Destroyed-part rules (**Verified**, `FUN_14055f6e0` l.144-176): a stairs part with no `destroyed mesh` is dropped. A non-stairs part with `building floor` != 0 and no `destroyed mesh` keeps its
+normal mesh in mode 2: not drawn, but its collision is made (`destroyed collision`, else `xml collision`). A stairs or upper-floor part whose `destroyed mesh` replaces a blank own `phs or mesh` has
+its `xml collision` cleared, so only `destroyed collision` applies; a ground-floor non-stairs part is never cleared. (The original clears the shared part record, so intact buildings using the part
+lose the collision too once a destroyed one was made; Meitou clears it per placement only.) Meitou: `WorldObjectLayout.AddPart` (`PlacedMesh.RenderHidden`, `BlankXmlCollision`,
+`PlacedMesh.CollisionPath`); the renderer skips hidden parts, the navmesh gatherers use them.
 
 ### Generator (runtime and tool-time navmesh building)
 
