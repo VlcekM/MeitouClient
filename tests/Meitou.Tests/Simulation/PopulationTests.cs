@@ -66,6 +66,23 @@ public class PopulationTests
         Assert.Single(Enumerable.Range(0, table.HighWater), i => table.Next[i].Alive && table.Cold(i) is { DiedTick: >= 0 });
     }
 
+    /// <summary>FUN_140a0f820: a zone counts as loaded only once it is requested and ready; the requested set (what the host builds the navmesh for) is wider.</summary>
+    [Fact]
+    public void A_requested_zone_is_loaded_only_once_it_is_ready()
+    {
+        using var world = SyntheticTown.World(5, 1, 3, new PopulationSettings { UnloadGraceSeconds = 10, CheckEveryTicks = 1 });
+        var population = (PopulationSystem)world.Systems[0];
+        var zone = Meitou.Data.World.WorldLayout.ZoneOf(SyntheticTown.Centre.X, SyntheticTown.Centre.Z);
+        bool ready = false;
+        population.ZoneGate = z => z != zone || ready;
+        world.RunTicks(5);
+        Assert.Contains(zone, population.ActiveZones);
+        Assert.DoesNotContain(zone, world.LoadedZones!);
+        ready = true;
+        world.RunTicks(5);
+        Assert.Contains(zone, world.LoadedZones!);
+    }
+
     [Fact]
     public void A_town_squad_in_an_active_zone_stays_loaded_as_a_platoon_when_its_town_unloads()
     {

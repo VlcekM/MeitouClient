@@ -368,8 +368,15 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
         List<ZoneCoordinate>? gone = null;
         foreach (var (zone, t) in loadedUntil) if (t < now) (gone ??= []).Add(zone);
         if (gone is not null) foreach (var zone in gone) loadedUntil.Remove(zone);
-        world.LoadedZones = new HashSet<ZoneCoordinate>(loadedUntil.Keys);
+        world.LoadedZones = Ready(loadedUntil.Keys);
     }
+
+    /// <summary>
+    /// The requested zones that are also ready (<see cref="ZoneGate"/>: the host's navmesh for it exists; none set: all): the zones the original flags loaded (<c>FUN_140a0f820</c>:66-96 sets the loaded flags only once
+    /// every zone of the load list is accepted, state 4 to 5, <b>Verified</b>). Characters, corpses and zone content follow this set; the squads' own relevance and the host's navmesh loading follow the requested one.
+    /// </summary>
+    HashSet<ZoneCoordinate> Ready(IEnumerable<ZoneCoordinate> requested) =>
+        ZoneGate is { } gate ? [.. requested.Where(z => gate(z))] : [.. requested];
 
     /// <summary>
     /// A loaded town asks for every zone of its list, its own and its coverage, with no ring and the largest timer among those already loaded (<c>FUN_140929b20</c>, <b>Verified</b>), so the
@@ -422,8 +429,8 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
         (active, spareActive) = (spareActive, active);
         active.Clear();
         foreach (var zone in loadedUntil.Keys) active.Add(zone);
-        world.VisitedZones.UnionWith(active);
-        world.ActiveZones = active;
+        world.ActiveZones = world.LoadedZones;   // the ready ones (RefreshLoaded)
+        world.VisitedZones.UnionWith(world.ActiveZones!);
         long grace = (long)Math.Ceiling(settings.UnloadGraceSeconds / world.TickSeconds);
         long townGrace = (long)Math.Ceiling(settings.TownUnloadGraceSeconds / world.TickSeconds);
         foreach (var site in data.Sites)
