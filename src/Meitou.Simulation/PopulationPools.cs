@@ -267,6 +267,7 @@ public sealed partial class PopulationSystem
         }
         var squad = SpawnSquad(world, built with { Home = home }, site, radius, platoonId: fresh.Id, pinned: true);
         squad.Money = p.Money;
+        MoveOutOfPlayerWalls(world, squad);
         fresh.SquadId = squad.Id;
         world.Platoons.Add(fresh);
         Despawn(world, p, release: false);   // its uniques were freed above and the fresh squad holds them
@@ -299,6 +300,7 @@ public sealed partial class PopulationSystem
         if (RollTemplate(world, p).Built is not { } built) return null;
         var squad = SpawnSquad(world, built with { Home = home }, site, radius, platoonId: p.Id, pinned: true);
         squad.Money = p.Money;
+        MoveOutOfPlayerWalls(world, squad);
         p.Stored = new StoredSquad { Name = data.Db.Find(p.TemplateId)?.Name ?? p.TemplateId, HomeBuilding = home };
         p.Size = built.Plan.TotalMembers;
         p.Unmade = false;
