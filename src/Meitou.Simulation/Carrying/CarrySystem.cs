@@ -574,7 +574,8 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
                 return;
             }
         }
-        cold.LiftTime += dt;
+        // In deep water (water state 3) the lift plays no clip and reads its position as 1.0: it links and finishes at once (FUN_14034f990, FUN_140354ff0).
+        cold.LiftTime = MovementSystem.WaterStateAt(world.Walkability, table.Next[i].Position, cold) == 3 ? LiftSeconds : cold.LiftTime + dt;
         bool attached = !cold.Carrying.IsNone && cold.Carrying == cold.CarryTarget;
         if (!attached && cold.LiftTime > CarrySettings.AttachAt * LiftSeconds)
         {
