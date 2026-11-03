@@ -999,6 +999,7 @@ update `FUN_140511130`, `Character::setupAI` `FUN_140621b70`; KenshiLib names **
 
 **Observed** (target finders named; TaskData effects lead the planner to the task that acts them out):
 
+- **127 Retreating fast / 128 Retreating** (desire AI slot 56 `FUN_1405a3710`, **Verified**): wanted when away from the status town `+0x88` and the way home is reachable (`FUN_1405a2710`); 0.01 (`DAT_141682ad8`) for a slave (state 1) that is not with the player (`FUN_140856bc0`), else 0.5 (`DAT_14167e8d8`). Meitou `AiSystem.GoHomeDesire` (owner path: the slave's owner faction). Not modelled: the early zeros (a carrier of a body, a captive).
 - **37 Wandering town** (`FUN_140999a60`): keeps a target that is still a general node; else one building drawn uniformly from the **public**
   buildings of the character's town in the zone it stands in (`FUN_1409fc6c0` over `FUN_1409fbb00`: the zone's building list, Building vfunc 82, which
   returns +0xc8, the `public day` flag, see [locks](locks.md)), then a random node of type 1 (NODE_GENERAL) in it whose owner is unset or the

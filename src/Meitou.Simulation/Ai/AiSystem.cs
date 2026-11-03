@@ -381,7 +381,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             // A goal aimed at the squad's mission follows the contract's target (a bodyguard its employer), wanted only while there is one alive.
             AiBehaviour.Follow when targeting == TaskTargetType.SquadMission => board.MissionTarget.IsNone || board.MissionTarget == self || !world.Characters.IsAlive(board.MissionTarget) ? 0 : 1,
             AiBehaviour.Follow => squad.Leader.IsNone || squad.Leader == self || !world.Characters.IsAlive(squad.Leader) ? 0 : 1,
-            AiBehaviour.GoHome => AtHomeTown(world, squad, board, self) ? 0 : 0.5f,
+            AiBehaviour.GoHome => AtHomeTown(world, squad, board, self) ? 0 : GoHomeDesire(world, self),
             // A turret is only wanted by a member its squad gave one (the nearest free one in <see cref="ClaimTurrets"/>).
             AiBehaviour.Turret => board.TurretClaims.ContainsKey(self.Slot) ? 1 : 0,
             AiBehaviour.TownNode => WanderIn(board.Town, world.Characters.Previous[self.Slot].Position).Count > 0 || OccupiedBuildings(world, board) > 0 ? 1 : 0,
@@ -412,6 +412,15 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             AiBehaviour.Medic => world.Characters.IsAlive(mind.MedicPatient) ? mind.MedicScore : 0,
             _ => 1,
         };
+    }
+
+    /// <summary>Going home while away (AI slot 56, <c>FUN_1405a3710</c>, Verified): 0.5, but 0.01 for a slave (state 1) that is not with the player (<c>FUN_140856bc0</c>: its faction or its owner's is the player's).</summary>
+    static float GoHomeDesire(World world, CharacterId self)
+    {
+        if (world.Characters.Cold(self.Slot) is not { SlaveState: 1 } c) return 0.5f;
+        int player = world.Player.Faction;
+        bool withPlayer = c.IsPlayer || player >= 0 && (c.Faction == player || c.SlaveOwner == player);
+        return withPlayer ? 0.5f : 0.01f;
     }
 
     /// <summary>The nearest town whose <see cref="TownData.Radius"/> holds a point (as the game's position lookup, <c>FUN_140928890</c>), -1 when none.</summary>
