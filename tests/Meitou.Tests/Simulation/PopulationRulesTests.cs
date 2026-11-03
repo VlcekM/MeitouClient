@@ -1,4 +1,6 @@
 using System.Numerics;
+using Meitou.Data;
+using Meitou.Data.Fcs;
 using Meitou.Data.Gameplay;
 using Meitou.Data.World;
 using Meitou.Simulation.Dialogue;
@@ -163,5 +165,31 @@ public class PopulationRulesTests
         var inTown = world.Fixtures.TownCandidates(world, data, cold, SyntheticTown.Centre);
         Assert.True(inTown(SyntheticTown.Centre + new Vector3(50, 0, 0)));
         Assert.False(inTown(SyntheticTown.Centre + new Vector3(3000, 0, 0)));
+    }
+
+    /// <summary>FUN_1407f4770: the first set holding the building answers; no replacement skips it, one gives it, several pick by cumulative weight; none leaves the building.</summary>
+    [Fact]
+    public void A_factions_first_swap_holding_the_building_skips_replaces_or_picks_it_by_weight()
+    {
+        FcsRecord Swap(string id, string replace, params (string With, int Weight)[] with)
+        {
+            var r = SyntheticTown.Rec(id, FcsRecordType.BUILDINGS_SWAP, id);
+            r.References["to replace"] = [SyntheticTown.Ref(replace)];
+            r.References["replace with"] = [.. with.Select(w => SyntheticTown.Ref(w.With, w.Weight))];
+            return r;
+        }
+        var faction = SyntheticTown.Rec("f-t", FcsRecordType.FACTION, "F");
+        faction.References["buildings replacements"] = [SyntheticTown.Ref("s1"), SyntheticTown.Ref("s2"), SyntheticTown.Ref("s3"), SyntheticTown.Ref("s4")];
+        var file = new FcsFile();
+        file.Records.AddRange([faction, Swap("s1", "carpet"), Swap("s2", "chair", ("metal chair", 1)), Swap("s3", "table", ("a", 1), ("b", 3)), Swap("s4", "carpet", ("never", 1))]);
+        var db = new GameDatabase();
+        db.Apply(file, "test.mod");
+        var swaps = BuildingSwaps.From(db);
+        Assert.Equal("", swaps.Replacement("f-t", "carpet", 0.5f));                 // the first set holding it has no replacement
+        Assert.Equal("metal chair", swaps.Replacement("f-t", "chair", 0.9f));       // one entry
+        Assert.Equal("a", swaps.Replacement("f-t", "table", 0.2f));                 // cumulative 1 of 4 is above 0.8
+        Assert.Equal("b", swaps.Replacement("f-t", "table", 0.3f));
+        Assert.Null(swaps.Replacement("f-t", "bench", 0.1f));                       // no set holds it
+        Assert.Null(swaps.Replacement("other", "chair", 0.1f));                     // not this faction's
     }
 }

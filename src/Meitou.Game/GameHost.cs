@@ -152,6 +152,9 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
         BootPlayer(display, interactive);
     }
 
+    /// <summary>The level data read afresh (no scene objects to share), with the factions' building swaps applied as the scene's are.</summary>
+    Meitou.Data.World.WorldLevelData LoadedLevels(Meitou.Data.GameDatabase gameDb) { var levels = Meitou.Data.World.WorldLevelData.Load(install, includeInteriors: true); Meitou.Data.World.BuildingSwapPass.ApplyBuildingSwaps(levels, gameDb); return levels; }
+
     /// <summary>
     /// The simulation's side of <see cref="Boot"/>, on a worker (it reads the game data and the scene's level data and makes no GPU resource): the navmesh system, the
     /// population's data and its systems. Returns the walkability, the systems and the game constants for the session.
@@ -167,7 +170,7 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
         {
             // The sandbox, the duel and the battle walk on open ground (the heightmap): the sandbox has no world, and the duel's spot may be a navmesh island the build prunes.
             // None has towns: their own characters are the only ones.
-            var levels = IsSandbox || IsDuel || IsBattle ? null : scene.Objects?.Levels ?? Meitou.Data.World.WorldLevelData.Load(install, includeInteriors: true);
+            var levels = IsSandbox || IsDuel || IsBattle ? null : scene.Objects?.Levels ?? LoadedLevels(gameDb);
             if (levels is not null)
             {
                 // The homes' ruins and layouts before anything reads the levels (done already when the renderer read them).

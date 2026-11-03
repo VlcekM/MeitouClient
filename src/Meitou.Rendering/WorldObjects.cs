@@ -74,6 +74,8 @@ sealed class WorldObjects : IDisposable
         var watch = Stopwatch.StartNew();
         var levels = WorldLevelData.Load(install, includeInteriors: true);
         WorldFrame.LogIssues("world levels", levels.Problems());
+        int swapped = levels.ApplyBuildingSwaps(db);   // the factions' building swaps, once, for every consumer of the placements
+        if (swapped > 0) Console.WriteLine($"world     {swapped} building(s) replaced or skipped by the factions' swaps");
         var objects = new WorldObjects
         {
             Database = db,
