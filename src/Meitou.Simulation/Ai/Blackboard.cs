@@ -510,6 +510,10 @@ public sealed class AiMind
     public float MedicScore { get; set; }
     /// <summary>The think chose the Medic goal: the serial step of the same tick starts the treatment (<see cref="FirstAid.FirstAidSystem.SendGoalTreatments"/>) and clears it (not hashed).</summary>
     public bool MedicAsk { get; set; }
+    /// The Assault order a dialogue attack effect gave this character (<c>FUN_140680560</c> cases 6, 0x37 and 0x39 order goal 101, or 248 for 0x37, on the effect's target): the member of the target's squad
+    /// it attacks, picked again whenever it is free (<see cref="AiSystem.AssaultTargetFor"/>); none when it has no such order. Not saved; hashed while set.
+    /// </summary>
+    public CharacterId ForcedAssault { get; set; } = CharacterId.None;
     /// <summary>
     /// What the think asks of the <see cref="FleeSystem"/> this tick: to run the character from its threats (Self preservation's provider 35) or from the enemies it senses (a goal 35 of its
     /// lists). Set by the think on the mind's own character, taken and cleared by the serial flee step of the same tick, so it is never set between ticks (not hashed).
@@ -583,6 +587,7 @@ public sealed class AiMind
         if (!FollowTarget.IsNone) hasher.Add(FollowTarget);
         if (!AssaultTarget.IsNone) hasher.Add(AssaultTarget);
         if (MedicScore != 0) { hasher.Add(MedicPatient); hasher.Add(MedicScore); }
+        if (!ForcedAssault.IsNone) { hasher.Add(0x466F7241); hasher.Add(ForcedAssault); }
         if (FightFrom != 0) hasher.Add(FightFrom);
         if (Replan) hasher.Add(0x5265706C);
         if (LookAbout != Crime.CrimeSystem.FirstLookAboutSeconds) hasher.Add(LookAbout);

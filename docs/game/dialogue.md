@@ -365,6 +365,7 @@ me, 5 captor, 6 friendly, 7 defeated my squad, 8 I beat his squad, 9 killed my f
 - **Short-term write** (`FUN_140674300`): never TEMP ENEMY on the squad's own faction; a TEMP ALLY on a player character sets the bool;
   for a player character the squad's player entry takes the time. The character-level wrapper `FUN_1406744a0` also skips TEMP ENEMY on
   an allied faction or one the character regards as friendly. Cleared by `FUN_1406788d0` (contract code clears 4, 7, 2).
+- **Attack effects 6, 55, 57** (`FUN_140680560`, **Verified**): forced sense of the target, the speaker's queue cleared, the squad TEMP ENEMY tag, then only for a speaker whose faction is not the player's (or whose AI's `+0x20` object `+0x60` is 0) `FUN_1405d20d0(speaker, 0, 0x65 | 0xf8, target)`: an Assault order, goal 101 (248 for 55: list B `!159`, a 0.3 + 2r h commitment). Its finder `FUN_140793eb0` takes the best known, in-area, standing, not imprisoned member of the target's squad. Meitou: `AiSystem.OrderAssault` (`AiMind.ForcedAssault`, re-picked by `SendAssaults` while free); a player-faction speaker gets no order; 248's extras are not modelled.
 - **Attacks write TEMP ENEMY** (**Observed**, decompile; names KenshiLib 1ce4a16): the attacked character's squad tags its attacker 4
   through the wrapper in `AI::underMeleeAttack` (also reached from being targeted, [combat](combat.md#fight-lifecycle-and-orders)),
   `AI::underRangedAttack`, `Character::hitByMeleeAttack`, `CombatClass::_iHitYouAreYouHit` and `Character::iShotYou`. So an assault on one

@@ -1464,7 +1464,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         combat ??= world.SystemOf<Combat.CombatSystem>();
         aggro ??= world.SystemOf<AggroSystem>();
         locks ??= world.SystemOf<Locks.LockSystem>();
-        if (Interlocked.Exchange(ref assaulting, 0) != 0) SendAssaults(world);
+        if (Interlocked.Exchange(ref assaulting, 0) != 0 | Volatile.Read(ref forcedAssaults) != 0) SendAssaults(world);
         if (Interlocked.Exchange(ref fighting, 0) != 0) SendFights(world);
         if (Interlocked.Exchange(ref treating, 0) != 0) (firstAid ??= world.SystemOf<FirstAid.FirstAidSystem>())?.SendGoalTreatments(world);
         if (Interlocked.Exchange(ref leaving, 0) != 0) LeaveFights(world);

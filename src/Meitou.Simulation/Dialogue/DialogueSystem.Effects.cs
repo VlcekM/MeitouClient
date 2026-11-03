@@ -305,6 +305,7 @@ public sealed partial class DialogueSystem
         var table = world.Characters;
         if (!table.TryResolveNext(target, out _) || !table.TryResolveNext(me, out int s) || !table.Next[s].Alive) return;
         TaskStart.Stand(table, s);
+        if (world.SystemOf<Ai.AiSystem>() is { } ai && table.Cold(s) is { IsPlayer: false, IsImprisoned: false, Medical.Incapacitated: false, Fighter.CanAttack: true } && ai.OrderAssault(world, me, target)) return;
         if (table.Cold(s) is { IsPlayer: false, IsImprisoned: false, Medical.Incapacitated: false, Fighter.CanAttack: true })
             world.Defer(new Combat.AttackOrder([me], target) { Tick = world.Tick + 1, Source = TaskSource.Npc });
     }
