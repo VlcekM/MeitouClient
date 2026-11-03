@@ -723,6 +723,8 @@ vfunc 5 `FUN_14050caf0`). TaskData fields: +0x108 desire (a member function, nea
 | 37 Wandering town, 118 Shopping | 0.25 + r x 1.5 | 1 |
 | 43 Staying home, 255 Reigning, 275 Sitting around | 0.2 + r x 0.8 | 1 |
 | 38, 268 Static guard | 0.1 + r x 0.5 | 1 |
+
+38 Static guard's finder (`FUN_14099edd0`, **Verified**; registration thunk chain to `FUN_14099f650`) returns the factor 0.5 (`DAT_14167e8d8`) on its normal exit (nodes via `FUN_14099e920`) and 1.0 only on its visitor branch: a building of type 1, 3 or 8 whose faction is real and whose vfunc 0x290 holds, with a sensed (filter 2, 0x2a9) uncarried stranger whose home is not this building, then a node beside the stranger. The desire 0.5 is multiplied by it (row 38 has an effect), so a guard scores 0.25; Meitou applies the 0.5 (`AiSystem.Desire`), the visitor branch is not modelled. 268's finder was not checked, **Unknown**.
 | 157 Static town guard | 0.1 + r x 1 | 1 |
 | 47 general node | 0.03 + r x 0.1 | 1 |
 | 153, 239 Going to bed | 2 + r x 8 | 1 |

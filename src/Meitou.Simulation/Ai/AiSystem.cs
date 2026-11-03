@@ -382,6 +382,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             AiBehaviour.Follow when targeting == TaskTargetType.SquadMission => board.MissionTarget.IsNone || board.MissionTarget == self || !world.Characters.IsAlive(board.MissionTarget) ? 0 : 1,
             AiBehaviour.Follow => squad.Leader.IsNone || squad.Leader == self || !world.Characters.IsAlive(squad.Leader) ? 0 : 1,
             AiBehaviour.GoHome => AtHomeTown(world, squad, board, self) ? 0 : GoHomeDesire(world, self),
+            // Static guard's finder (FUN_14099edd0, Verified) returns 0.5 on its normal exit; only its visitor branch (a node beside a neutral stranger, not modelled) returns 1.
+            AiBehaviour.Post when type == TaskType.STAND_AT_GUARD_NODE_HOMEBUILDING => 0.5f,
             // A turret is only wanted by a member its squad gave one (the nearest free one in <see cref="ClaimTurrets"/>).
             AiBehaviour.Turret => board.TurretClaims.ContainsKey(self.Slot) ? 1 : 0,
             AiBehaviour.TownNode => WanderIn(board.Town, world.Characters.Previous[self.Slot].Position).Count > 0 || OccupiedBuildings(world, board) > 0 ? 1 : 0,
