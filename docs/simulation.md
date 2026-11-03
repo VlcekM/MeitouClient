@@ -1523,7 +1523,7 @@ crafting benches, generators and batteries. Facts: [production](game/buildings-p
     a full output no storage takes). A farmer at a growing farm with water tends it: it plays the farm's clip (engine reading of task 87, [farming](game/buildings-production.md#farming)).
   - 124 Hauling to (`CharacterTask.Haul`): the nearest player machine within `HaulRange` of the storage whose output the storage takes is
     emptied into the hauler's pack and carried there; items the hauler already carries that some machine makes go first. Blocked with neither.
-  - 152 Operating automatic machine (Shift + Auto-Haul on an automatic machine; its companion 124 lands on the same machine): the operator above at the machine, hauling only.
+  - 152 Operating automatic machine (Shift + Auto-Haul on an automatic machine; its companion 124 lands on the same machine): the operator above at the machine, hauling only. Its done list is `!62` (machineHasEmptyInputs false, **Verified**, TaskData row 152): the job is finished, and the list moves on to the 124 companion, as soon as no input of the machine is empty (`ProductionSystem.Blocked`).
     Blocked unless it is mid-trip for it, carries an item an input has room for, an empty input's item is in a storage, or a full or carried output has a storage that takes it
     (engine reading of the row's goal "no empty inputs", `AutoWork`). 124 on an automatic machine runs the same way, blocked unless it carries an item an input has room for.
   - 125 Engineer (ordered as 2 Build or 95 Repair; Shift + quick right click on an unfinished site): builds `ConstructionSystem.EngineerSite`'s
