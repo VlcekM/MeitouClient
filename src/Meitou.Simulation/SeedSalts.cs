@@ -68,9 +68,9 @@ internal static class SeedSalts
     /// <summary>A platoon's short-range patrol point off screen (<see cref="Ai.PlatoonJobs"/>).</summary>
     public const ulong PlatoonPatrol = 0x5050UL;
 
-    /// <summary>Town residents in their buildings (<c>PopulationHomes.cs</c>): the counter of the node a squad is made at, counter base of the housemate counts, and
+    /// <summary>Town residents in their buildings (<c>PopulationHomes.cs</c>): the counter of the node a squad is made at, of a member's own node, counter base of the housemate counts, and
     /// the salt XORed into a housed squad's key.</summary>
-    public const ulong HomeSpot = 0x40DE5UL, Housemates = 0x40A7E00UL, ResidentHome = 0x2E51DUL;
+    public const ulong HomeSpot = 0x40DE5UL, MemberSpot = 0x40DE6UL, Housemates = 0x40A7E00UL, ResidentHome = 0x2E51DUL;
     /// <summary>A housed squad's <c>prisoners</c> (<c>PopulationSystem.MakePrisoners</c>): the salt XORed into a prisoner squad's key, and counter base of the cage picks.</summary>
     public const ulong PrisonerSquad = 0x9215EUL, PrisonerCage = 0x921CA00UL;
     /// <summary>A housed squad's <c>slaves</c> (<c>PopulationSystem.MakeSlaves</c>): counter base of the slaves' looks, and of their cage picks.</summary>

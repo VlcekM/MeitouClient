@@ -1,5 +1,6 @@
 using System.Numerics;
 using Meitou.Data.Gameplay;
+using Meitou.Data.World;
 using Meitou.Simulation.Dialogue;
 using Meitou.Simulation;
 using static Meitou.Tests.Simulation.SyntheticTown;
@@ -76,5 +77,17 @@ public class PopulationRulesTests
         // 41 entries: the 40 old ones go, the fresher one stays.
         Assert.Null(memory.Find(world, 7, others[0]));
         Assert.NotNull(memory.Find(world, 7, others[40]));
+    }
+
+    /// <summary>FUN_14057f820:86-103: a resident member stands at a general node, else a shopkeeper node, else (null) at the platoon point.</summary>
+    [Fact]
+    public void A_resident_member_takes_a_general_node_before_a_shopkeeper_node()
+    {
+        HomeSpot Node(int type, float x) => new(HomeSpotKind.Other, new Vector3(x, 0, 0), 0) { NodeType = type };
+        TownBuilding Building(params HomeSpot[] spots) => new("i", "b", "n", Vector3.Zero, 0, false, false, spots);
+        var both = Building(Node(0, 5), Node(1, 9));
+        for (ulong salt = 0; salt < 8; salt++) Assert.Equal(9, PopulationSystem.MemberSpot(both, 1, salt)!.Value.X);
+        Assert.Equal(5, PopulationSystem.MemberSpot(Building(Node(0, 5)), 1, 0)!.Value.X);
+        Assert.Null(PopulationSystem.MemberSpot(Building(Node(2, 5)), 1, 0));
     }
 }

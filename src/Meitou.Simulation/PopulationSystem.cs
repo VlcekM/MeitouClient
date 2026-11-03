@@ -790,10 +790,14 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
         {
             var plan = member.Plan;
             float x = built.Position.X + plan.Offset.X, z = built.Position.Y + plan.Offset.Y;
-            if (!(built.NearY is { } nearY ? walk.IsWalkable(x, z, nearY) : walk.IsWalkable(x, z))) (x, z) = (built.Position.X, built.Position.Y);
+            float? memberY = built.NearY;
+            // A resident is made at a node of its own (FUN_14057f820), not round the platoon point.
+            if (built.Home is { } residence && built.NearY is not null && MemberSpot(residence, world.Seed, (ulong)squad.Id << 8 | (uint)plan.Index) is { } spot)
+                (x, z, memberY) = (spot.X, spot.Z, spot.Y);
+            if (!(memberY is { } nearY ? walk.IsWalkable(x, z, nearY) : walk.IsWalkable(x, z))) (x, z, memberY) = (built.Position.X, built.Position.Y, built.NearY);
             // Inside, on the floor and not on the ground showing through a hole furniture cuts in it (the spot's height is its own plus SpotLift).
-            float? standY = built.NearY;
-            if (built.NearY is { } floorY)
+            float? standY = memberY;
+            if (memberY is { } floorY)
             {
                 // A building without nodes makes them at its origin, often under a raised floor: that floor first (the ground under it is near the origin).
                 bool atOrigin = built.Home is { } h && !HasNode(h);
