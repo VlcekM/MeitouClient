@@ -176,6 +176,8 @@ public sealed partial class World : IDisposable
     public Locks.FixtureRegistry Fixtures { get; } = new();
     /// <summary>The squads' goal list across ticks (<see cref="GoalClaims"/>).</summary>
     public GoalClaims Claims { get; } = new();
+    /// <summary>The camera the host last passed (<see cref="CameraViewCommand"/>); null: none, nothing is tested against a screen.</summary>
+    public CameraViewCommand? View { get; internal set; }
     readonly bool hasGoalSources;
     /// <summary>The characters' places and light levels for the sight tests (docs/game/perception.md "Sight"), worked out each tick.</summary>
     public SightMap Sight { get; } = new();

@@ -42,7 +42,7 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
     public void Inputs(World world, IReadOnlyList<SimCommand> commands)
     {
         foreach (var c in commands)
-            if (c is CameraViewCommand v) view = v;
+            if (c is CameraViewCommand v) (view, world.View) = (v, v);
     }
 
     /// <summary>The <see cref="MedicalContext.BodyTimeScale"/> every character gets (default 1: the documented rates).</summary>

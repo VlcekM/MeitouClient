@@ -1039,7 +1039,7 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
             if (c.Medical is { Incapacitated: false, Prone: false, Dead: false }) b.Allies++;
             else b.AlliesDown++;
         }
-        if (s.Effects is { } fx && s.Squad >= 0 && s.Memory is not null)
+        if (s.Effects is { } fx && s.Squad >= 0 && s.Memory is not null && HookRuns(ref s, slot, other.Position))
         {
             // The sighting hooks of the assault packages (passing-by assault FUN_1402903c0, occupation FUN_140286c40, the war assault FUN_14028a3f0) tag each sensed enemy with squad memory 4; the tag has no expiry and the
             // package's end does not clear it. Their "in view" gate (Character +0x1a9) is treated as always true: the simulation does not depend on the camera (engine choice).
@@ -1446,6 +1446,17 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
     static bool AssaultSensed(ref Scan s, in SenseEntry e, CharacterCold c, Vector3 at) =>
         (e.Tags & (SenseTag.Enemy | SenseTag.Ko)) == SenseTag.Enemy && c.Medical is { Dead: false, Incapacitated: false } && CharacterFacts.PostureZero(c)
         && s.Towns is { } towns && !Ai.AiSystem.TownAt(towns, s.World, at).IsNone;
+
+    /// <summary>
+    /// Whether the package sensing hooks run for a sensed character (<c>FUN_140859680</c>, <b>Verified</b>): when the listener or the target is on screen (<c>+0x1a9</c>, <see cref="MedicalClock.OnScreen"/>) or the
+    /// target is of the player's side (<c>FUN_140856bc0</c>). A world that was never told a camera has nothing to test and runs them (engine choice).
+    /// </summary>
+    static bool HookRuns(ref Scan s, int target, Vector3 targetAt)
+    {
+        if (s.World.View is not { } view) return true;
+        var prev = s.Table.Previous;
+        return PlayerSide(s.World, s.Table.Cold(target)) || MedicalClock.OnScreen(view, prev[s.Self].Position) || MedicalClock.OnScreen(view, targetAt);
+    }
 
     /// <summary>
     /// A campaign assault's extra enemy (<see cref="WarTargets"/>): of the target faction, or with <c>Everyone</c> the characters <c>Package_WarAssault</c>'s sensing hook takes
