@@ -97,6 +97,8 @@ public enum LootStart : byte
     FoodOnly = 8,
     /// <summary>+0x84: the victim is an animal.</summary>
     Animal = 16,
+    /// <summary>Meitou: the loot window of this looter is open; the looter stays in the task until it closes (Task_Loot_Order's update, <c>FUN_140354ef0</c>).</summary>
+    WindowHeld = 32,
 }
 
 /// <summary>What one loot took: the items moved into the looter's inventory, the ones that did not fit and stay, and whether a member of the victim's faction saw it.</summary>

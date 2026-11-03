@@ -722,6 +722,13 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
         var cold = table.Cold(i)!;
         if (!table.TryResolveNext(cold.CarryTarget, out int t) || Gap(table.Next[i], table.Next[t]) > ReachOf(world, table.Cold(t)!)) return;   // still walking (Schedule ends a loot whose target went)
         var victim = table.Cold(t)!;
+        // The loot window is open: the looter stays in the task (squatting, no other task) for as long as it stays open, then ends it (Task_Loot_Order, FUN_140354ef0).
+        if ((cold.LootFlags & LootStart.WindowHeld) != 0)
+        {
+            if (world.Player.OpenLoot == cold.CarryTarget && world.Player.LootOpener == table.IdOf(i)) return;
+            End(world, i);
+            return;
+        }
         bool opening = Opening(world, i);
         if (cold.Inventory is not { } bag || !(opening ? Openable(table, t) : CanBeLooted(victim)))
         {
@@ -743,7 +750,7 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
         {
             // An open-loot order: the window opens instead of a take-all.
             (player.OpenLoot, player.LootOpener, player.OpeningLoot) = (player.OpeningLoot, player.LootWalker, CharacterId.None);
-            End(world, i);
+            cold.LootFlags |= LootStart.WindowHeld;
             return;
         }
         int death = DeathUnits(victim.Inventory!);

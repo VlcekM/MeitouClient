@@ -346,3 +346,5 @@ Evidence scopes below apply only to their named sources/checks.
 - 4.1 What may be looted (`isItemLootable`, state 0xf, `FUN_14059dcc0`, **Observed**)
 - 4.4 The stolen flag (`FUN_14079e550(item, strict)`, **Observed**; answers part of the economy.md Unknown)
 - 4.6 Carrying people past witnesses (`FUN_1408549f0`, **Observed**)
+
+**Loot order window** (26, `Task_Loot_Order`, **Verified**, decompile): the start `FUN_140354dc0` opens the loot window (`FUN_140791830`, mode 3) and plays Character_Loot (Character_Inspect for a non-character); the update `FUN_140354ef0` counts updates and, after 5, ends the task once the window is closed (`FUN_1406e2df0` == 0); a character flag (+0x2b0) aborts it; the end `FUN_1403466a0` plays 'squat T' and sets the Hold point (CharStats +0x130). So the looter stays in the task, with no other task, while the window is open. Meitou: `CarrySystem.Loot` keeps the open-loot walker in the task while `PlayerState.OpenLoot` is its body (`LootStart.WindowHeld`) and ends it when the window closes (the 5-update minimum, the abort flag and the squat clip are not modelled).
