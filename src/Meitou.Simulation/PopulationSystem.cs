@@ -209,9 +209,11 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
         viewers.Clear();
         for (int i = 0; i < prev.Length; i++)
             if (prev[i].Alive && world.Characters.Cold(i) is { IsPlayer: true }) viewers.Add(Viewer(prev[i].Position));
+        AddFocusViewer(world);
         foreach (var site in data.Sites)
         {
             if (site.Town.Type is TownType.NestMarker) continue;   // the original skips only type 8
+            if (site.Index < player.Towns.Length && (player.Towns[site.Index] & TownKnowledge.Explored) != 0) continue;   // an explored town is skipped (vfunc 0x340, FUN_14092f6b0:317-319)
             float d2 = NearestViewer(new(site.Position.X, site.Position.Z), site.Zone, site.Coverage), far = DiscoverRangeOf(site.Town.Type);
             if (d2 < ExploreRange * ExploreRange)
             {
@@ -235,6 +237,24 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
         foreach (var camp in player.Camps)
             if (camp.Position is null && camp.Site >= 0 && camp.Site < wildCentres.Length && WildSites[camp.Site].Nest?.Id == camp.TownId && wildCentres[camp.Site] is { } c)
                 player.KnowCamp(camp with { Position = new Vector3(c.X, 0, c.Y) }, TownKnowledge.None);
+    }
+
+    /// <summary>The farthest the camera focus can be from the nearest player character: <c>FUN_1406ae990</c> pulls the camera back to this (2250).</summary>
+    const float CameraReach = 2250;
+
+    /// <summary>
+    /// The camera focus counts as one more viewer when it lies inside the zone grid (<c>FUN_14092f6b0</c>:166-173). Meitou's camera is unclamped, so the original's pull-in is applied first:
+    /// beyond <see cref="CameraReach"/> (XZ) of the nearest player character the focus is taken that far from it, toward the focus.
+    /// </summary>
+    void AddFocusViewer(World world)
+    {
+        if (focus is not { } f || viewers.Count == 0) return;
+        var at = new Vector2(f.X, f.Z);
+        var nearest = viewers.Select(v => v.At).MinBy(p => Vector2.DistanceSquared(p, at));
+        float away = Vector2.Distance(nearest, at);
+        if (away > CameraReach) at = nearest + (at - nearest) * (CameraReach / away);
+        var zone = WorldLayout.ZoneOf(at.X, at.Y);
+        if (zone.X is >= 0 and < WorldLayout.ZoneCount && zone.Y is >= 0 and < WorldLayout.ZoneCount) viewers.Add((at, zone));
     }
 
     /// <summary>A sense update that finds this many characters in sight range also takes everyone within <see cref="CrowdReach"/> (<c>FUN_1407866d0</c>).</summary>

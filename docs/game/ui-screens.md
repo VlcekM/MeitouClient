@@ -908,8 +908,7 @@ decompile unless marked; Meitou's adapter is `PlayerInterface.Map.cs`.
   Saved as GAMESTATE_TOWN with `is nest` (`1403709d0`); the original's town loaders skip those. Meitou writes its own with `instance`
   `meitou-nest:<wild site>:<TOWN id>` and reads them back; the place is filled in when the nest next loads.
 - **Discovery** (`FUN_14092f6b0`): once a second of real time, not while paused (`FUN_140787940`), and only with player characters. Viewers: the
-  player's characters and the camera focus, the camera only inside the zone grid (kept within 2250 of the nearest character, `FUN_1406ae990`; Meitou:
-  characters only, its camera having no such limit). A viewer counts only for towns filed under its [zone](../formats/terrain.md#world-coordinates)
+  player's characters and the camera focus, the camera only inside the zone grid (kept within 2250 of the nearest character, `FUN_1406ae990`; Meitou: the focus too, pulled in to 2250 of the nearest character by `AddFocusViewer`, its camera being unclamped). An explored town is skipped (vfunc 0x340 reads the `explored` byte at +0x181, `FUN_14092f6b0`:317-319, **Verified**). A viewer counts only for towns filed under its [zone](../formats/terrain.md#world-coordinates)
   (`FUN_1409b2d90`) or the eight round it. Filing: a town's own zone when it joins the town list (`FUN_14092d690` → `FUN_140929d40`); on a new game,
   load or import also the zones its level GAMESTATE_TOWN records list ([keys](../formats/zones.md#placement-keys); `FUN_14036efd0`), inside the grid
   and with both keys (a count below 1 lists none), a record stopping once the town has 6, none from a record with one more than 2 zones from the
