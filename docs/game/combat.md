@@ -717,7 +717,7 @@ values; trajectory, aim timing and obstruction uncertainties remain labelled.
 - **Controller tick** (`FUN_140438c70`): sets the trigger flag `+0x34` every tick (so the fire gate `FUN_14043aee0`, run from the character update `FUN_1405cf130`, works every
   frame); chooses the target; none → state 3. Empty gun → state 2. In range (`FUN_140436860`: squared distance gunner→target < h × range², h the height factor from the gunner):
   XP perception and the stat (`FUN_1408c7250`: turrets 1.0, perception 3.0 per second), then the fire decision. With a turret it never walks to the target (blocked or out of range: wait).
-  A crossbowman out of range or blocked walks to the target (state 1, `FUN_1405c68a0`) unless Hold position (CharStats `+0x12b`) or the target is off its navmesh island (`FUN_140597160`);
+  A crossbowman out of range or blocked walks to the target (state 1, `FUN_1405c68a0` → `CharMovement::setDestination(Character)`, slot 0x80) unless Hold position (CharStats `+0x12b`) or the target is off its navmesh island (`FUN_140597160`);
   entering state 1 sets the closing timer `+0x7c` to 0. In state 1 (**Observed**): in range, the closing ray ([line of fire](#line-of-fire-and-the-hit-shape)) passing adds the frame
   time to `+0x7c`, and past 0.3 (`DAT_14168955c`) the walk halts and the state is 0 (the fire decision runs from the next tick); a ray that does not pass sets it to 0;
   then `CharMovement::pathFailed` (slot 0x50) halts and sets state 3, else a walker that stopped (`+0x24` clear) is sent to the target again. A new target (`FUN_1404371f0`) sets
@@ -914,9 +914,10 @@ bonedogs 10 × 15 × 10, spiders 25 × 22 × 25, Leviathan and Big-Bones 75 × 9
 still running answers "pending". Group 1's contents are **Unknown**.
 **Line of fire** (`FUN_140437ad0`): from the muzzle along the aim direction, mask `0x87f9e07` (groups 0–2, 9–12, 15–22, 27). Pending: hold. The first shape met names its object by
 the shape's handle: a character that is not the shooter and not an enemy (`Character::isEnemy` slot 0x3e8, disguises counted) holds (2); any enemy, the target or another, fires (1);
-another object (a building) blocks (0) unless the shooter is nearer the target than the hit point (feet to feet, `FUN_1404346d0`); a shape without an object (the terrain) and no
-hit at all fire. So packed ranks hold: a rear rank's line runs into the front rank's hulls (5 wide, 6 apart in Meitou's battle) unless they stand aside.
-**Closing ray** (`FUN_140438c70`, state 1): from the muzzle along (target feet + 5 up) − (own feet + 5 up), mask `0x87f9e04` (no characters); it passes when it meets something
+another object (a building) blocks (0) unless the shooter is nearer the target than the hit point (feet to feet, `FUN_1404346d0`); a shape without an object and no hit at all
+fire. The terrain is such a shape (`FUN_1407eaf90`: heightfield, group 2, no user data and no handle set), so a hill in the way fires into the hill. So packed ranks hold: a rear rank's line runs into the front rank's hulls (5 wide, 6 apart in Meitou's battle) unless they stand aside.
+**Closing ray** (`FUN_140438c70`, state 1): from the muzzle along (target feet + 5 up) − (own feet + 5 up) (read through the decompiler's garbled Ogre operators: the feet-to-feet
+line), mask `0x87f9e04` (no characters); it passes when it meets something
 farther from the shooter than the target is. Meeting nothing does not pass, so on open ground a walker goes on until its path fails or the planner turns it to melee.
 Meitou: `CombatSystem.HullHalf`, `HitHull`, `LineOfFire`, `ClosingRayPasses`; a down character has no hull (every Meitou knock-out is ragdolled).
 

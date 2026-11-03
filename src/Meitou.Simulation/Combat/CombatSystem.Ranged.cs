@@ -222,24 +222,29 @@ public sealed partial class CombatSystem : IProjectileSource
         if (length < 1e-3f) return 1;
         seg *= MathF.Max(length, reach) / length;
         length = MathF.Max(length, reach);
-        float solid = SolidHits.Hit(world.Walkability, Buildings, from, seg, RangedTuning.TerrainStep, out bool building);
-        int hit = FirstHull(world, self, from, seg, length, solid >= 0 ? solid : 1);
+        int hit = FirstHull(world, self, from, seg, length, out float atHull);
+        // The terrain and the buildings only up to the first hull: whichever comes first decides.
+        var solidSeg = hit >= 0 ? seg * atHull : seg;
+        float solid = SolidHits.Hit(world.Walkability, Buildings, from, solidSeg, RangedTuning.TerrainStep, out bool building);
         var prev = world.Characters.Previous;
-        if (hit >= 0) return Hostile(world.Characters, self, prev[self].Generation, faction, target, hit) ? 1 : 2;
+        if (solid < 0 && hit >= 0) return Hostile(world.Characters, self, prev[self].Generation, faction, target, hit) ? 1 : 2;
         if (solid < 0 || !building) return 1;
-        var at = from + seg * solid;
+        var at = from + solidSeg * solid;
         return Vector3.DistanceSquared(prev[self].Position, prev[target].Position) < Vector3.DistanceSquared(at, prev[self].Position) ? 1 : 0;
     }
 
-    /// <summary>The character whose click hull the segment enters first before fraction <paramref name="limit"/> (the shooter's own left out), -1 for none; the grid is queried piece by piece.</summary>
-    int FirstHull(World world, int self, Vector3 from, Vector3 seg, float length, float limit)
+    /// <summary>
+    /// The character whose click hull the segment enters first (the shooter's own left out), -1 for none, and where (<paramref name="at"/>, a fraction of the segment). The grid is
+    /// queried piece by piece from the start; a piece's query finds every hull entered within it, so a hull entered within the pieces done ends the search.
+    /// </summary>
+    int FirstHull(World world, int self, Vector3 from, Vector3 seg, float length, out float at)
     {
-        var scan = new LineScan { Table = world.Characters, Self = self, From = from, Seg = seg, Best = limit, Hit = -1 };
-        int chunks = Math.Max(1, (int)MathF.Ceiling(length * limit / RangedTuning.LineChunk));
+        var scan = new LineScan { Table = world.Characters, Self = self, From = from, Seg = seg, Best = 1, Hit = -1 };
+        int chunks = Math.Max(1, (int)MathF.Ceiling(length / RangedTuning.LineChunk));
         for (int k = 0; k < chunks; k++)
         {
-            var mid = from + seg * (limit * (k + 0.5f) / chunks);
-            world.Grid.Query(mid.X, mid.Z, length * limit / chunks * 0.5f + RangedTuning.MaxHullReach, ref scan, static (int other, ref LineScan st) =>
+            var mid = from + seg * ((k + 0.5f) / chunks);
+            world.Grid.Query(mid.X, mid.Z, length / chunks * 0.5f + RangedTuning.MaxHullReach, ref scan, static (int other, ref LineScan st) =>
             {
                 if (other == st.Self || other == st.Hit) return;
                 var state = st.Table.Previous;
@@ -250,7 +255,9 @@ public sealed partial class CombatSystem : IProjectileSource
                     st.Hit = other;
                 }
             });
+            if (scan.Hit >= 0 && scan.Best <= (k + 1f) / chunks) break;
         }
+        at = scan.Best;
         return scan.Hit;
     }
 
@@ -304,7 +311,7 @@ public sealed partial class CombatSystem : IProjectileSource
         {
             // Still in the fight without a target (the controller's state 3): the controller runs on, its reload with it (FUN_140438c70 sets the fire gate's flag before it
             // looks for a target).
-            if (s.Ranged && cold.InCombat) return;
+            if (s.Ranged && cold.InCombat && CanShoot(s, cold, x)) return;
             if (s.Ranged || s.RangedState != 0 || s.ClearTime != 0 || s.Steady != 0)
             {
                 // The fight is over: the controller stops (a reload in progress is paused; the bolts loaded stay loaded).
@@ -316,11 +323,7 @@ public sealed partial class CombatSystem : IProjectileSource
             }
             return;
         }
-        bool hasAmmo = x.InfiniteAmmo || Ammunition.Find(cold.Inventory, x.Data.AmmoId) is not null;
-        // A crossbow (weapon category Bow) needs both arms (FUN_1407f2840, FUN_1409991d0); losing one puts it away (FUN_1405cc230) and the fight goes on in melee.
-        // The same gate needs the posture (vfunc 0x368) 0: staying low or crawling it does not shoot (docs/game/combat.md "Arms"); and the shooting rows want !me swim (139): not
-        // while swimming (water state 3).
-        bool can = (s.Loaded > 0 || hasAmmo) && cold.Medical is not { BothArmsWork: false } && cold.Medical is not { Prone: true } && cold.WaterState != 3;
+        bool can = CanShoot(s, cold, x);
         if (s.Dry == can) s.Dry = !can;
         // Ranged mode takes the crossbow however close the target is (between swings): melee is x0.1 against shooting's 1, and a threat within 40 refuses the shooting rows.
         bool rangedMode = Orders.RangedMode(cold);
@@ -333,6 +336,16 @@ public sealed partial class CombatSystem : IProjectileSource
         s.Steady = want ? RangedFormulas.SteadyAim : 0;
         s.ClearTime = 0;
         cold.DrawnWeapon = want ? HandHold.OfCategory((int)WeaponCategory.Bow).Weapon : MeleeDrawn(fighter);
+    }
+
+    /// <summary>
+    /// The shooting gate (<c>FUN_1407f2840</c>, docs/game/combat.md "Arms"): bolts loaded or ammunition, both arms (a crossbow is weapon category Bow, <c>FUN_1409991d0</c>; losing one puts it
+    /// away, <c>FUN_1405cc230</c>), the posture (vfunc 0x368) 0 (not staying low or crawling) and, for the shooting rows' <c>!me swim</c> (139), not swimming (water state 3).
+    /// </summary>
+    static bool CanShoot(in CombatSlot s, CharacterCold cold, CrossbowInstance x)
+    {
+        bool hasAmmo = x.InfiniteAmmo || Ammunition.Find(cold.Inventory, x.Data.AmmoId) is not null;
+        return (s.Loaded > 0 || hasAmmo) && cold.Medical is not { BothArmsWork: false } && cold.Medical is not { Prone: true } && cold.WaterState != 3;
     }
 
     /// <summary>
