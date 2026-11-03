@@ -385,6 +385,34 @@ public class AiTests(ITestOutputHelper output)
         };
     }
 
+    /// <summary>A character carrying items at a storage target (kind 8): machine states false (a storage has no production component), the rest held true.</summary>
+    sealed class DitchStub(bool room) : IPlanWorld
+    {
+        public int Category => 1;
+        public bool Squadless => false;
+        public float Desire(TaskDataRow row, in PlanTarget target) => 1;
+        public PlanTarget Find(TaskDataRow row, in PlanTarget from) => new(8, new Vector3(10, 0, 10));
+        public bool Holds(TaskCondition c, in PlanTarget target) => c.Holds == c.State switch
+        {
+            StateType.machineHasEmptyInputs or StateType.isMachineInputInvalid or StateType.isMachineOutputFull => false,
+            StateType.gotInventoryRoomForResources => room,
+            _ => true,
+        };
+    }
+
+    [Fact]
+    public void Ditching_plans_the_fill_step_into_a_storage_although_its_effect_state_already_holds()
+    {
+        // Row 114's effect !62 (no empty inputs) holds at once for a storage, yet the search follows the effect unconditionally (FUN_14051bae0): 93 Filling machine puts the carried items in.
+        var plan = new List<PlanStep>();
+        Assert.True(TaskPlanner.Local.Plan(TaskDataTable.Of(TaskType.GET_RID_OF_RESOURCES_IN_MY_INVENTORY)!, 1, default, new DitchStub(room: false), [], plan) > 0);
+        Assert.Equal([TaskType.FILL_MACHINE, TaskType.GET_RID_OF_RESOURCES_IN_MY_INVENTORY], plan.Select(s => s.Type));
+        // A full inventory under row 92 (B: 82 room) is made room for by a ditch first.
+        Assert.True(TaskPlanner.Local.Plan(TaskDataTable.Of(TaskType.COLLECT_OUTPUT_RESOURCE)!, 1, new PlanTarget(6, new Vector3(1, 0, 1)), new DitchStub(room: false), [], plan) > 0);
+        Assert.Equal(TaskType.FILL_MACHINE, plan[0].Type);
+        Assert.Contains(plan, st => st.Type is TaskType.GET_RID_OF_RESOURCES_IN_MY_INVENTORY or TaskType.EMPTY_MACHINE_OUTPUTS);
+    }
+
     [Fact]
     public void A_goal_plans_through_the_TaskData_rows_and_one_without_a_plan_gives_way_to_the_next()
     {

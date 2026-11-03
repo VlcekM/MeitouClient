@@ -445,7 +445,7 @@ public sealed partial class ProductionSystem
     /// What 242 Ditch all resources carries off (finder <c>FUN_1405a59a0</c>, its item collection <c>FUN_140749490</c>, <b>Verified</b>): ITEMs with <c>item function</c> 0 or 15, and food
     /// (function 3) but the first, in inventory order.
     /// </summary>
-    static IEnumerable<Items.ItemInstance> Ditchable(Items.Inventory inv)
+    internal static IEnumerable<Items.ItemInstance> Ditchable(Items.Inventory inv)
     {
         bool fed = false;
         foreach (var item in inv.All())

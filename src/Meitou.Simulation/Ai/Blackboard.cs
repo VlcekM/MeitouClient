@@ -483,6 +483,8 @@ public sealed class AiMind
     /// <summary>The town building it operates this tick (Task_OperateMachine, row 87, at the building) or empties the output of (row 92), and the faction owning its machine; set by the think, applied by <see cref="Production.ProductionSystem"/> (derived, not hashed).</summary>
     public Meitou.Data.World.TownBuilding? WorkOperate { get; set; }
     public Meitou.Data.World.TownBuilding? CollectFrom { get; set; }
+    /// <summary>The plan's step 93 Filling machine into the ditch target (rows 113, 114, 242) is due: the think sets it, <see cref="Kidnap.TownDutySystem"/> starts the errand and clears it (derived, not hashed).</summary>
+    public bool DitchRequest { get; set; }
     public int WorkOwner { get; set; }
     /// <summary>The building its work goals picked (set with <see cref="WorkClip"/>).</summary>
     public Meitou.Data.World.TownBuilding? WorkBuilding { get; set; }

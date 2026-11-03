@@ -946,9 +946,13 @@ CONTAINER (backpacks). Shop counters (function 9) have no type limit in Meitou (
 - **Who empties it** (**Verified**, a scan of every AI package in the merged data): rows 87, 92, 93, 113, 114, 124, 152, 221, 242 and 247 are in no package; NPCs reach them only through
   the planner from goal 189 (effect IS_WORKING, provider 87: needs !63, !62, !89, !169) and the player's jobs. For a full output the provider of !63 is 92 (`Task_EmptyMachine`,
   `FUN_14033cd10`: needs 82 room for the machine's output item and isAtLocation); for no room the provider of 82 is 114 (a `Task_Blank` goal with effect !62; its finder `FUN_1405a70a0` = the nearest storage or machine that accepts a carried item type; the
-  filler of 62 is 93 `Task_FillMachine`, `FUN_140344510`, which puts the carried items into a storage through `FUN_140340da0`). **Unknown:** how a storage target makes !62 unmet: state 62
-  (`FUN_1405974e0`) reads the building's production component (virtual `0x2f8`), which a pure storage lacks (`FUN_140344510` takes its storage branch on exactly that), so 62 reads false and the
-  row would already hold; static reading cannot tell, a runtime trace of a player ditch (job 242) could. A workplace the plan cannot make runnable (inputs to fetch: 94 then 66 from another machine's output, 113) fails goal 189, and goal 190
+  filler of 62 is 93 `Task_FillMachine`, `FUN_140344510`, which puts the carried items into a storage through `FUN_140340da0`). **Verified** (state 62 on a storage is not the question): state 62
+  (`FUN_1405974e0`) reads the building's production component (virtual `0x2f8`, which a pure storage lacks: `FUN_140344510` takes its storage branch on exactly that), so 62 is false for a storage and
+  the effect `!62` of rows 113 / 114 / 242 already holds there, but the planner never tests an effect before following it: the node expansion `FUN_14051bae0` puts the effect first in the list of states
+  it opens children for, B entries after it only when unmet, and the child maker `FUN_14051c240` asks nothing of the state; so the providers of `!62` (93 alone: the only row listing `!62` in A)
+  are made whether or not it holds, with the effect target (the finder's storage) as their target. Row 242, 114 and 113 share the finder (`FUN_1405a59a0` through the stub `FUN_1405a70a0`:
+  the nearest storage taking a carried item). "Can run" (`FUN_14060f940`) tests B first, then the effect on its target (false and the effect reported unmet when it does not hold); it only gates the accepting of a finder-less acting node. Row 93 then needs 67 (carries something the target
+  takes), 2, `!169` and isAtLocation, and acts (`FUN_140344510`): a ditch into a storage is plan `[93, 114, ...]`, not blocked by 62. A workplace the plan cannot make runnable (inputs to fetch: 94 then 66 from another machine's output, 113) fails goal 189, and goal 190
   (pretend, row 221, which asks nothing of the machine) is what the NPC does.
 - **Task_EmptyMachine** (`FUN_14033cd10`, **Verified**): at the building, takes its output item types in order and moves units into the character's inventory while there is room
   (backpack included); a production building at status 1 goes to 2 after a take; ends when nothing is left.
@@ -958,8 +962,7 @@ CONTAINER (backpacks). Shop counters (function 9) have no type limit in Meitou (
 - **Meitou** (`ProductionSystem.TownWork`, `AiSystem.WorkAtMachine`): the town building a worker of goal 189 stands at is a virtual complete site `townwork:<building key>` of the town's
   faction (like a rock or a training dummy: no registry site, not drawn, saved or built; its machine is kept in memory), made when the first worker arrives. A worker whose plan starts with
   87 operates it every tick (skill factor, operating XP: the player's operator lines), with 92 empties it into its inventory. Only producers run: a research bench counts for the player's
-  research alone and a crafting bench with no queue refuses an operator, so both stay pretence. Not modelled: rows 94/113/93/114 (fetching inputs from other machines, ditching into a
-  storage: NPC town storages are not machines), so a refinery's workers pretend and a worker with a full inventory pretends. Unpowered: town machines draw no player grid (power held true).
+  research alone and a crafting bench with no queue refuses an operator, so both stay pretence. Ditching: rows 113 / 114 / 93 (`TownDutySystem.DitchStore` and the Ditch errand, [ai-tasks](ai-tasks.md#ditching)); not modelled: row 94 and its finder `FUN_14059d9b0` (fetching inputs from other machines' outputs: town machines are made lazily, empty, when a worker arrives, so there is no output to fetch), so a refinery's workers pretend. Unpowered: town machines draw no player grid (power held true).
   A town machine is no player machine for the hauling jobs (`ProductionSystem.Takes`).
 ### Hauling
 

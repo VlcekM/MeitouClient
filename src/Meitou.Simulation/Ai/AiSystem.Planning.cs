@@ -9,7 +9,7 @@ public sealed partial class AiSystem
     /// <summary>Kinds of <see cref="PlanTarget"/> the finders give.</summary>
     static class Targets
     {
-        public const byte Spot = 1, Bed = 2, Seat = 3, Turret = 4, Town = 5, Work = 6, Machine = 7;
+        public const byte Spot = 1, Bed = 2, Seat = 3, Turret = 4, Town = 5, Work = 6, Machine = 7, Store = 8;
     }
 
     /// <summary>How near a home's position counts as at home (units; engine stand-in for the original's inside-the-building test).</summary>
@@ -23,7 +23,7 @@ public sealed partial class AiSystem
     /// </summary>
     static bool Carried(TaskType step) => step is TaskType.MOVE_ON_FREE_WILL or TaskType.MOVE_ON_FREE_WILL_FAST or TaskType.TRAVEL_TO_TARGET_TOWN
         or TaskType.TRAVEL_TO_TARGET_TOWN_FAST or TaskType.STAND_AT_NODE or TaskType.BUY_SHIT
-        or TaskType.USE_BED or TaskType.USE_BED_ORDER or TaskType.USE_TURRET or TaskType.OPERATE_MACHINERY or TaskType.COLLECT_OUTPUT_RESOURCE or TaskType.PRETEND_TO_OPERATE_MACHINERY or TaskType.UNEQUIP_WEAPON
+        or TaskType.USE_BED or TaskType.USE_BED_ORDER or TaskType.USE_TURRET or TaskType.OPERATE_MACHINERY or TaskType.COLLECT_OUTPUT_RESOURCE or TaskType.FILL_MACHINE or TaskType.PRETEND_TO_OPERATE_MACHINERY or TaskType.UNEQUIP_WEAPON
         or TaskType.GET_OUT_OF_BED or TaskType.GET_OUT_OF_BED_IF_ITS_EMERGENCY or TaskType.GET_OUT_OF_BED_ONCE_HEALED
         or TaskType.EQUIP_WEAPON or TaskType.EQUIP_CROSSBOW or TaskType.GO_HOMEBUILDING or TaskType.GET_NEAR_TO
         or TaskType.ENTER_BUILDING or TaskType.LEAVE_BUILDING;
@@ -125,7 +125,7 @@ public sealed partial class AiSystem
             if (t.IsNone) return true;
             if (world.Characters.Cold(slot)?.Ai?.ArrivedAt is { } arrived && Flat(t.Position) == arrived) return true;   // its walk there ended on its own (isAtLocation)
             var p = Me.Position;
-            float slack = t.Kind == Targets.Turret ? TurretSlack : t.Kind == Targets.Work ? WorkReach : system.Settings.PostSlack;
+            float slack = t.Kind == Targets.Store ? StoreSlack : t.Kind == Targets.Turret ? TurretSlack : t.Kind == Targets.Work ? WorkReach : system.Settings.PostSlack;
             if (Vector2.DistanceSquared(Flat(p), Flat(t.Position)) > slack * slack) return false;
             // A spot on a floor counts on that floor only (NaN: no floor).
             return float.IsNaN(t.Position.Y) || MathF.Abs(p.Y - t.Position.Y) <= FloorSlack;
@@ -167,6 +167,8 @@ public sealed partial class AiSystem
                 StateType.isMachineJammed => MachineAt(target)?.Jammed == true,
                 // 82 of a machine target (FUN_14059bd80): room in the inventory or the worn backpack for a unit of its output item.
                 StateType.gotInventoryRoomForResources => MachineAt(target) is { Output: { } room } && cold.Inventory is { } bag && system.Data.Items.Create(room.Recipe.Item, 1) is { } unit && bag.HasRoomFor(unit),
+                // 67 for the ditch target (a storage the finder found takes a carried item, FUN_1405a59a0): the character still carries something the collection lists.
+                StateType.haveSomeResourcesFor => target.Kind == Targets.Store && cold.Inventory is { } carried && Production.ProductionSystem.Ditchable(carried).Any(),
                 // 5: a weapon in hand that is not ranged; 156: a ranged one (FUN_140596a30 / FUN_140596a70, Verified); 157's evaluator is an undecoded stub.
                 StateType.hasWeaponEquipped => cold.DrawnWeapon != WeaponKinds.None && cold.DrawnWeapon != BowHold,
                 StateType.hasWeaponEquipped_156 => cold.DrawnWeapon == BowHold,
@@ -287,6 +289,10 @@ public sealed partial class AiSystem
                     if (mind.Behaviour == AiBehaviour.Work && mind.Goal?.Task.Type == type && mind.Target is { } current) return new PlanTarget(Targets.Work, current);
                     return system.PickWork(world, world.Characters.IdOf(slot), board.Town, mind.WorkEpoch + (mind.WorkActive ? 1 : 0)) is { } work
                         ? new PlanTarget(Targets.Work, new Vector3(work.Position.X, float.NaN, work.Position.Z)) : default;
+                case TaskType.GET_RID_OF_RESOURCES_IN_MY_INVENTORY or TaskType.EMPTY_MACHINE_OUTPUTS or TaskType.DITCH_ALL_RESOURCES:
+                    // Rows 114, 113 and 242 share the finder FUN_1405a59a0: the nearest storage taking a carried item (TownDutySystem.DitchStore, a read-only look here).
+                    return world.SystemOf<Kidnap.TownDutySystem>() is { } duties && world.Characters.Cold(slot) is { } carrier
+                        && duties.DitchStore(world, mind.Squad, carrier, Me.Position, register: false) is var (_, spot) ? new PlanTarget(Targets.Store, new Vector3(spot.X, float.NaN, spot.Y)) : default;
                 case TaskType.MAN_A_TURRET or TaskType.MAN_A_TURRET_ON_BUILDING or TaskType.MAN_A_TURRET_PLAYER_JOB or TaskType.USE_TURRET:
                     return board.TurretClaims.TryGetValue(slot, out int t) && (uint)t < (uint)board.Turrets.Count && board.Turrets[t].Turret is { } turret
                         ? new PlanTarget(Targets.Turret, TurretSpot(world, turret)) : default;

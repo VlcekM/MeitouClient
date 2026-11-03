@@ -24,7 +24,7 @@ public sealed record TownDutySettings
     public double RefuseHours { get; init; } = 2;
 }
 
-public enum TownDutyKind : byte { Lift, Out, Cage, Food, Confiscate, LootFood, Shoo, Ransack, Stash }
+public enum TownDutyKind : byte { Lift, Out, Cage, Food, Confiscate, LootFood, Shoo, Ransack, Stash, Ditch }
 
 /// <summary>One member's errand of the <see cref="TownDutySystem"/>: an intruder it lifts and carries out or to a cage, or a store it fetches food from.</summary>
 public sealed class TownDuty
@@ -101,6 +101,45 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
         int every = world.Every(Settings.LookEveryTicks);
         Look(world, every);
         LookPlayerFood(world, every);
+        StartRequestedDitches(world);
+    }
+
+    /// <summary>
+    /// Row 114's finder (<c>FUN_1405a70a0</c>, which is row 242's <c>FUN_1405a59a0</c>, <b>Verified</b>): the nearest storage in reach that takes one of the character's carried items
+    /// (<see cref="Production.ProductionSystem.Ditchable"/>). Engine choice: only storages of its own faction or the town's, in the town it stands in (<see cref="StoreFor"/>; the finder's own owner
+    /// test is <b>Unknown</b>). <paramref name="register"/> false is a read-only look (the planner's, on a worker).
+    /// </summary>
+    public (string Id, Vector2 Spot)? DitchStore(World world, Squad squad, CharacterCold cold, Vector3 at, bool register)
+    {
+        var town = AiSystem.TownAt(data, world, at);
+        if (town.IsNone || cold.Inventory is not { } inv) return null;
+        return StoreFor(world, squad, cold, at, town, [.. Production.ProductionSystem.Ditchable(inv)], register);
+    }
+
+    /// <summary>
+    /// The plan's step 93 Filling machine at a storage (<see cref="AiMind.DitchRequest"/>, set by the think when the plan's first step walks to or fills the ditch target): a <see cref="TownDutyKind.Ditch"/>
+    /// errand walks there and puts the carried items in; the AI plans again when it ends.
+    /// </summary>
+    void StartRequestedDitches(World world)
+    {
+        var table = world.Characters;
+        for (int s = 0; s < table.HighWater; s++)
+        {
+            if (!table.Next[s].Alive || table.Cold(s) is not { Ai: { DitchRequest: true } mind } c) continue;
+            mind.DitchRequest = false;
+            var id = table.IdOf(s);
+            if (c.Engaged || c.InCombat || c.Fleeing || Busy(id)) continue;
+            var at = table.Next[s].Position;
+            if (DitchStore(world, mind.Squad, c, at, register: true) is not var (storeId, spot)) { mind.Replan = true; continue; }
+            StartDitch(world, s, c, AiSystem.TownAt(data, world, at), storeId, spot);
+        }
+    }
+
+    void StartDitch(World world, int slot, CharacterCold cold, CampaignTown town, string storeId, Vector2 spot)
+    {
+        cold.Engaged = true;
+        duties.Add(new TownDuty { Member = world.Characters.IdOf(slot), Faction = cold.Faction, Town = town, Kind = TownDutyKind.Ditch, Target = storeId, Goal = spot });
+        TaskStart.Walk(world, slot, spot, SpeedMode.Walk, RowOf(TownDutyKind.Ditch), TaskSource.Goal);
     }
 
     /// <summary>
@@ -303,9 +342,15 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
                 }
                 // 243 needs no own town (FUN_1408cb650); a player-side member takes only from its own faction's stores (FUN_1408dac20). 244 starts only with room for the item (state 82,
                 // FUN_14059bd80: the inventory, else the worn bag) and with no sensed ally fighting (state !12, AiSystem.AlliesFighting).
-                if (food[role] == 1 && !HoldsFood(cold) && Store(world, at, foodTown, owner: cold.Faction == world.Player.Faction ? cold.Faction : -1, asker: cold) is var (id, spot) && FoodFits(world, id, cold)
+                if (food[role] == 1 && !HoldsFood(cold) && Store(world, at, foodTown, owner: cold.Faction == world.Player.Faction ? cold.Faction : -1, asker: cold) is var (id, spot)
                     && world.SystemOf<AiSystem>()?.AlliesFighting(world, slot) != true)
                 {
+                    if (!FoodFits(world, id, cold))
+                    {
+                        // 244's B list asks state 82 (room); its provider is row 114 Ditching to make space, whose plan is 93 into the nearest storage (a2-039): the food run waits for the next look.
+                        if (!town.IsNone && DitchStore(world, squad, cold, at, register: true) is var (ditchId, ditchSpot)) StartDitch(world, slot, cold, town, ditchId, ditchSpot);
+                        continue;
+                    }
                     cold.Engaged = true;
                     duties.Add(new TownDuty { Member = member, Faction = cold.Faction, Town = town, Kind = TownDutyKind.Food, Target = id, Goal = spot });
                     TaskStart.Walk(world, slot, spot, SpeedMode.Walk, RowOf(TownDutyKind.Food), TaskSource.Goal);
@@ -576,13 +621,15 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     /// walks. A member with a home town standing in a TOWN-type town reads the <i>home</i> town's storages (any owner); otherwise the current town's, owned by the member's faction or the town's
     /// (the nearest-allies finder's building test, <c>FUN_1408ca5d0</c> with <c>FUN_140621230</c>, <b>Observed</b>: a storage has an inventory, so only those two owners pass).
     /// </summary>
-    (string Id, Vector2 Spot)? StashStore(World world, Squad squad, CharacterCold cold, Vector3 at, CampaignTown town)
+    (string Id, Vector2 Spot)? StashStore(World world, Squad squad, CharacterCold cold, Vector3 at, CampaignTown town) => StoreFor(world, squad, cold, at, town, [.. LootOf(world, cold)], register: true);
+
+    /// <summary>The storage <see cref="StashStore"/>'s search finds for <paramref name="loot"/> (any carried items); <paramref name="register"/> false is a read-only look (the planner's finder, run on a worker).</summary>
+    (string Id, Vector2 Spot)? StoreFor(World world, Squad squad, CharacterCold cold, Vector3 at, CampaignTown town, List<ItemInstance> loot, bool register)
     {
-        var loot = LootOf(world, cold).ToList();
         if (loot.Count == 0) return null;
         bool listed = squad.Town >= 0 && town.Site >= 0 && data.Sites[town.Site].Town.Type == Meitou.Data.Gameplay.TownType.Town;
         var search = listed ? CampaignTown.OfSite(squad.Town) : town;
-        if (search.Site >= 0) world.Fixtures.RegisterSite(world, data, search.Site);
+        if (register && search.Site >= 0) world.Fixtures.RegisterSite(world, data, search.Site);
         int townOwner = search.PlayerTown > 0 ? world.Buildings.FindTown(search.PlayerTown)?.Owner ?? -1 : search.Site < data.SiteFactions.Count ? data.SiteFactions[search.Site] : -1;
         bool Usable(int owner) => listed || owner == cold.Faction || townOwner < 0 || owner == townOwner;
         (string, Vector2)? best = null;
@@ -604,7 +651,8 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     }
 
     /// <summary>
-    /// 184 at its storage (the plan's row 93 Filling machine, whose item choice is <b>Unknown</b>; engine choice: what list A <c>!121</c> asks for): every stolen item the storage takes goes in, whole
+    /// 184 and 114 at their storage (row 93 Filling machine, <c>FUN_140344510</c>, <b>Verified</b>: a target with no production component is a storage that takes the carried items): for 184 every
+    /// stolen item the storage takes (engine choice: what list A <c>!121</c> asks for), for 114 what the finder's collection lists (<see cref="Production.ProductionSystem.Ditchable"/>), whole
     /// stacks while there is room; what does not fit stays carried.
     /// </summary>
     bool StepStash(World world, TownDuty d, int g, CharacterCold gc)
@@ -620,7 +668,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
         if (gap <= Settings.Arrive || !walking && gap <= Settings.CageSlack)
         {
             TaskStart.Stand(table, g);
-            foreach (var item in LootOf(world, gc).Where(i => machine is not null ? Production.ProductionSystem.Stores(machine, i) : Takes(box!, i)).ToList())
+            foreach (var item in (d.Kind == TownDutyKind.Ditch ? Production.ProductionSystem.Ditchable(inv) : LootOf(world, gc)).Where(i => machine is not null ? Production.ProductionSystem.Stores(machine, i) : Takes(box!, i)).ToList())
             {
                 inv.Remove(item);
                 if (store.Add(item)) continue;
@@ -663,6 +711,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
         TownDutyKind.LootFood => TaskType.LOOT_FOOD_AND_STUFF,
         TownDutyKind.Shoo => TaskType.SHOO_STRANGERS_OUT_OF_MY_BUILDING,
         TownDutyKind.Ransack => TaskType.RUN_AROUND_TOWN_LOOKING_FOR_PEOPLE,
+        TownDutyKind.Ditch => TaskType.GET_RID_OF_RESOURCES_IN_MY_INVENTORY,
         _ => TaskType.PUT_LOOT_IN_STORAGE,
     };
 
@@ -675,7 +724,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
         if (gc.InCombat) return d.PlayerSide && gc.IsPlayer ? End(world, d) : true;   // a player character's food run is a goal its fight replaced: the decision step chooses again
         ref var gn = ref table.Next[g];
         if (d.Kind is TownDutyKind.Food or TownDutyKind.LootFood) return StepFood(world, d, g, gc);
-        if (d.Kind == TownDutyKind.Stash) return StepStash(world, d, g, gc);
+        if (d.Kind is TownDutyKind.Stash or TownDutyKind.Ditch) return StepStash(world, d, g, gc);
         if (d.Kind == TownDutyKind.Confiscate) return StepConfiscate(world, d, g, gc);
         if (d.Kind == TownDutyKind.Shoo) return StepShoo(world, d, g, gc);
         if (d.Kind == TownDutyKind.Ransack) return StepRansack(world, d, g);
@@ -1057,6 +1106,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
         {
             gc.Engaged = false;
             if (table.Next[g].Task == (byte)CharacterTask.GoTo) TaskStart.Stand(table, g);
+            if (d.Kind == TownDutyKind.Ditch && gc.Ai is { } mind) mind.Replan = true;   // the plan's step 93 is done: the planner asks again with the inventory as it is now
         }
         return false;
     }

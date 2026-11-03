@@ -80,6 +80,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
 
     /// <summary>How near a turret's gunner spot counts as arrived (units): well inside the turret's <c>use range</c>, which is 10 for the base game's turrets.</summary>
     public const float TurretSlack = 3;
+    /// <summary>How near a ditch target counts as at it for the planner (units; the errand walks the rest, <see cref="Kidnap.TownDutySystem"/>).</summary>
+    const float StoreSlack = 20;
     /// <summary>How near an enemy must be for <c>isNoEnemiesInVicinity</c> to fail (units; <b>engine choice</b>, about a turret's range: the original's radius is <b>Unknown</b>).</summary>
     public const float EnemyVicinity = 1000;
     FactionRelations Relations => data.Relations;
@@ -879,6 +881,11 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
                 // 200 Task_LeaveBuilding: to 1.1 of the door's span past its outer point (A + (A - B) x 1.1) of the home's first door, until outside.
                 if (LeavePoint(world, leaving) is { } outside && !GoToSpot(world, slot, mind, outside, GiveUp.Target, SpeedMode.Walk, slack: 10)) return;
                 break;
+            case TaskType.MOVE_ON_FREE_WILL or TaskType.MOVE_ON_FREE_WILL_FAST or TaskType.FILL_MACHINE when mind.Plan[0].Target.Kind == Targets.Store:
+                // Step 93 into the ditch target (rows 113, 114, 242), and the walk to it: the town duty system walks there and puts the carried items in, then the AI plans again.
+                mind.DitchRequest = true;
+                Become(world, slot, CharacterTask.Idle);
+                return;
             case TaskType.GET_NEAR_TO when !mind.Plan[0].Target.IsNone:
                 // 40 Following to within 10 of the plan's target, then the goal's own act-out.
                 if (!GoToSpot(world, slot, mind, Flat(mind.Plan[0].Target.Position), GiveUp.Target, SpeedMode.Walk, slack: 10)) return;
