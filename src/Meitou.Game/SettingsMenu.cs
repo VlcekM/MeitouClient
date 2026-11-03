@@ -293,6 +293,9 @@ sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, 
                 + "and the part hit. Healing of your own characters floats up in green.", Choice: new(() => ["Off", "Simple info", "Full info"],
                 () => (int)config.Floaters, i => player.Floaters = config.Floaters = (FloaterMode)i)));
         if (page == 2)
+            result.Add(new("Censorship", "Swaps a few strong words in the dialogue for milder ones (the game's censorship option).",
+                Toggle: new("Censorship", () => config.Censorship, v => config.Censorship = v, OnOff: true)));
+        if (page == 2)
             result.Add(new("Feedback button", "The FEEDBACK button at the top right during play. Off, it still shows on the title screen and in the Esc menu.",
                 Toggle: new("Feedback button", () => config.FeedbackButton, v => player.FeedbackButtonInPlay = config.FeedbackButton = v, OnOff: true)));
         if (page == 2)

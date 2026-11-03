@@ -60,6 +60,8 @@ public sealed class DialogueSettings
     public int AmbientEveryTicks { get; init; } = 30;
     public int AmbientPerScan { get; init; } = 2;
     public float AmbientRepeatHours { get; init; } = 0.5f;
+    /// <summary>Whether the displayed lines go through <see cref="Censorship"/> (the player's setting, read when a line is built).</summary>
+    public Func<bool>? Censored { get; init; }
 }
 
 /// <summary>
@@ -345,7 +347,7 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
         c.Line = line;
         c.Speaker = speaker;
         MarkUsed(world, c, line);
-        string text = Expand(world, c, line, PickText(world, speaker, line), speaker, c.Player);
+        string text = Said(Expand(world, c, line, PickText(world, speaker, line), speaker, c.Player));
         text += MoneySuffix(line);
         c.Text = text;
         c.Log.Add($"{NameOf(world, speaker)}: {text}");
@@ -370,7 +372,7 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
                 c.Choices.Add((null, "[...]"));
                 return;
             }
-            string label = Expand(world, c, child, PickText(world, c.Player, child), c.Player, c.Npc) + MoneySuffix(child);
+            string label = Said(Expand(world, c, child, PickText(world, c.Player, child), c.Player, c.Npc)) + MoneySuffix(child);
             if (label.Length > 0) c.Choices.Add((child, label));   // a choice with no text and no cost is never offered (FUN_140680130)
         }
         if (c.Choices.Count == 0) c.Choices.Add((null, "[Leave]"));
@@ -398,7 +400,7 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
         else
         {
             c.Choices.Clear();
-            string label = Expand(world, c, p.Line, PickText(world, c.Player, p.Line), c.Player, c.Npc) + MoneySuffix(p.Line);
+            string label = Said(Expand(world, c, p.Line, PickText(world, c.Player, p.Line), c.Player, c.Npc)) + MoneySuffix(p.Line);
             if (label.Length == 0) c.Ended = true;   // nothing to offer: the conversation ends
             else c.Choices.Add((p.Line, label));
         }

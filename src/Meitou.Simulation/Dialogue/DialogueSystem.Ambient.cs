@@ -316,7 +316,7 @@ public sealed partial class DialogueSystem
                 continue;
             }
             MarkUsed(world, c, line);
-            string text = Expand(world, c, line, PickText(world, speaker, line), speaker, speaker == c.Player ? c.Npc : c.Player) + MoneySuffix(line);
+            string text = Said(Expand(world, c, line, PickText(world, speaker, line), speaker, speaker == c.Player ? c.Npc : c.Player)) + MoneySuffix(line);
             RunEffects(world, c, line, chained ? speaker : c.Npc);   // locks, unlocks, interrupt and the rest land on the state of whoever says a chained line
             // A crowd trigger's forced starts drop other characters' bubbles from the list: find this one again.
             if ((k = bubbles.FindIndex(b => ReferenceEquals(b, current))) < 0) continue;

@@ -52,6 +52,8 @@ sealed class UserConfig
     public SpeedUnit SpeedUnit { get; set; } = SpeedUnit.Mph;
     /// <summary>The damage floaters (Interface settings): the original's <c>floaters</c> option, Simple by default; Meitou also floats a green "+N" over a player character that heals.</summary>
     public FloaterMode Floaters { get; set; } = FloaterMode.Simple;
+    /// <summary>The original's <c>censorship</c> option (Interface settings, off by default): five words swapped in the displayed dialogue.</summary>
+    public bool Censorship { get; set; }
     /// <summary>The FEEDBACK button at the top right during play (Interface settings, default on); off, it shows only on the title and with the game menu open.</summary>
     public bool FeedbackButton { get; set; } = true;
     /// <summary>The original's splash at startup in the Faithful UI (Advanced settings: the switch's Faithful side), off by default; off, the menu shows as soon as the game has loaded.</summary>

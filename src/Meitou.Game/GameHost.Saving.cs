@@ -97,7 +97,7 @@ sealed partial class GameHost
             Parts = (IsSandbox || IsDuel || IsBattle ? Meitou.Simulation.StandardParts.All & ~Meitou.Simulation.StandardParts.Aggro : Meitou.Simulation.StandardParts.All)
                 & ~(IsBattle && g.BattleNoFear ? Meitou.Simulation.StandardParts.Flee : Meitou.Simulation.StandardParts.None),
             // NPCs that see a player character say a line as a speech bubble (docs/game/dialogue.md "Ambient conversations"); the sandbox, the duel and the battle stay silent.
-            Dialogue = new Meitou.Simulation.Dialogue.DialogueSettings { AmbientEvents = !IsSandbox && !IsDuel && !IsBattle },
+            Dialogue = new Meitou.Simulation.Dialogue.DialogueSettings { AmbientEvents = !IsSandbox && !IsDuel && !IsBattle, Censored = () => config.Censorship },
             Population = new Meitou.Simulation.PopulationSettings
             {
                 Background = interactive && !IsDuel && !IsBattle, KeepRoamers = config.KeepRoamers, OffscreenFights = config.OffscreenFights, OffscreenHealing = config.OffscreenHealing,

@@ -314,6 +314,9 @@ public sealed partial class DialogueSystem
     /// The text tokens (docs/game/dialogue.md "Tokens"): <c>/NAME/</c> pairs until none is left; COST, MYNAME, YOURNAME, TARGETFACTION and PLAYERFACTION are built in, any other name
     /// is the WORD_SWAPS record of that name (its lines chosen like a line's children, one of their texts; none: empty). A token at the start or after ". ", "! ", "? " is capitalised.
     /// </summary>
+    /// <summary>A built line as shown: through the censorship when the player turned it on.</summary>
+    string Said(string text) => Settings.Censored?.Invoke() == true ? Censorship.Apply(text) : text;
+
     string Expand(World world, Conversation c, DialogueNode line, string text, CharacterId me, CharacterId other, int depth = 0)
     {
         if (depth > 4 || text.IndexOf('/') < 0) return text;
