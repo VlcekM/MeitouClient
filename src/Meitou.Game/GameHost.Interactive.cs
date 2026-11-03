@@ -644,6 +644,7 @@ sealed partial class GameHost
             bool Held(SilkKey a, SilkKey b) => silkInput.Keyboards.Any(k => k.IsKeyPressed(a) || k.IsKeyPressed(b));
             player.CtrlHeld = Held(SilkKey.ControlLeft, SilkKey.ControlRight);
             player.AltHeld = Held(SilkKey.AltLeft, SilkKey.AltRight);
+            screenshotRequested = player.GateScreenshot(screenshotRequested);
             // The Highlight key (Alt) lights up the signs, outlines the characters near the focus and labels the ground items there.
             bool highlighting = highlightHeld && windowFocused && !Covered && !session.Camera.IsFree &&
                 panel?.Visible != true && !interfaceHidden && !cinema.Clean && !cinemaHolds && !cinema.EditorVisible;
@@ -816,6 +817,7 @@ sealed partial class GameHost
                 if (gpu.Foliage is { Enabled: true } drawnFoliage) grassBlades += drawnFoliage.DrawnBlades;
                 if (takeFile is not null) { FramebufferCapture.SavePng(display.Context, finalPicture ?? backbuffer, takeFile, size.X, size.Y, topDown: finalPicture is not null); cinema.FrameDone(); }
                 else if (shot) SaveScreenshot(display.Context, finalPicture ?? backbuffer, size.X, size.Y, topDown: finalPicture is not null);
+                if (shot) player.EndScreenshot();
                 if (feedbackShot)
                 {
                     player.ShotWithoutMenus = false;

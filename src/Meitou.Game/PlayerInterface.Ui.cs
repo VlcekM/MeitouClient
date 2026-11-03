@@ -434,6 +434,29 @@ sealed partial class PlayerInterface
 
     /// <summary>The rule-of-thirds camera grid (Shift+;, toggle_camera_grid, event 0x29: the widget "CameraGrid", <c>FUN_1406e5fc0</c>), under the interface.</summary>
     bool cameraGrid;
+    int gridHold;
+    bool gridRestore;
+
+    /// <summary>
+    /// The screenshot event with the camera grid shown (the frame-end callback <c>FUN_14082b6e0</c>, <b>Verified</b>): the "CameraGrid" widget is hidden and the picture is taken two frames later,
+    /// when the widget is shown again (<see cref="EndScreenshot"/>); with the grid hidden or missing the picture is taken at once. Returns whether the picture is taken this frame.
+    /// </summary>
+    public bool GateScreenshot(bool requested)
+    {
+        if (gridHold > 0) return --gridHold == 0;
+        if (!requested) return false;
+        if (!cameraGrid) return true;
+        (cameraGrid, gridRestore, gridHold) = (false, true, 2);
+        return false;
+    }
+
+    /// <summary>The picture is taken: the camera grid hidden for it is shown again.</summary>
+    public void EndScreenshot()
+    {
+        if (!gridRestore) return;
+        (cameraGrid, gridRestore) = (true, false);
+    }
+
 
     static void DrawCameraGrid(DebugOverlay overlay, int width, int height)
     {
