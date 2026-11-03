@@ -454,7 +454,7 @@ Meitou: [ground items](../simulation.md#items-and-eating).
   (**Observed**). Destroyed buildings stay candidates (the Hub's ruins house squatters).
 - **Meitou engine choices**: buildings are taken in a fixed order (a hash of their keys), not rerolled per game, so the boot can lay out the
   [ruins the homes make](buildings-production.md#ruined-by-residents) and name the homes' layouts (`ResidentRuins.Apply`); the level data's assignment is kept
-  where it fits the rules, and a layout the level state names is kept, not relaid to the template's (75 homes differ; an empty template layout does not clear one); on a tie a building already laid out as the template wants wins; bar squads
+  where it fits the rules, and a layout the level state names is kept, not relaid to the template's (75 homes differ; an empty template layout does not clear one), and a ruin gets none; on a tie a building already laid out as the template wants wins; bar squads
   stand in the town's bars and take the nearest bar as home (their templates, e.g. `Bar thugs`, have designation 0, **Verified** in the data); a loaded town keeps its saved squads, homes and bar squads and rolls no new bar squads.
 
 ### Off-screen world

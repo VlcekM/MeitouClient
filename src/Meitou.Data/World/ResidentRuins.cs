@@ -51,12 +51,13 @@ public static class ResidentRuins
     }
 
     /// <summary>
-    /// Names the template's layouts on its home where the level state names none and the building offers them. The original names them whatever the state said (an
-    /// empty one clearing the interior); Meitou keeps a named layout (engine choice, <see cref="ResidentHomes.Assign"/>).
+    /// Names the template's layouts on its standing home where the level state names none and the building offers them. The original names them whatever the state
+    /// said (an empty one clearing the interior), ruins too; Meitou keeps a named layout (engine choice, <see cref="ResidentHomes.Assign"/>) and leaves a ruin bare,
+    /// as it draws no layout for one.
     /// </summary>
     static void LayOut(GameDatabase db, BuildingLayouts layouts, TownBuilding b, SquadTemplate t)
     {
-        if (b.LevelState is not { } state || db.Find(b.BuildingId) is not { } record) return;
+        if (b.LevelState is not { } state || state.GetBool("destroyed") || db.Find(b.BuildingId) is not { } record) return;
         Name(layouts, record, state, "interior layout name", t.LayoutInterior, exterior: false);
         Name(layouts, record, state, "exterior layout name", t.LayoutExterior, exterior: true);
     }
