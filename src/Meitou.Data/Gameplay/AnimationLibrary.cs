@@ -231,7 +231,8 @@ public sealed record AnimationDefinition
         bool useLeft = left <= right;
         float health = useLeft ? left : right;
         float min = LegFloor(useLeft ? LeftLegMin : RightLegMin), ideal = useLeft ? LeftLegIdeal : RightLegIdeal, max = LegCeil(useLeft ? LeftLegMax : RightLegMax);
-        return Ramp(health, min, ideal, max, false, false);
+        if (health < -40 && min < -40) return 1;   // the ramp's own shortcut (FUN_14051cd10): a value and a minimum both under -40
+        return Ramp(health, min, ideal, max, min < 1, false);
     }
 
     static float Ramp(float v, float min, float peak, float max, bool flatBelow, bool lineAbove)
@@ -540,29 +541,37 @@ public sealed class AnimationLibrary
 
     readonly System.Collections.Concurrent.ConcurrentDictionary<AnimationStance, (int Index, float Weight)[]> crawlIdles = new();
 
+    /// <summary>The stance with the legs neutral: the idle caches hold the clips that fit apart from the legs, which weigh in per call (<see cref="LegWeighted"/>).</summary>
+    static AnimationStance NoLegs(in AnimationStance s) => s with { LeftLeg = 0, RightLeg = 0 };
+
+    /// <summary>
+    /// An idle draw's weights (<c>FUN_14051ec80</c>, <b>Verified</b>): <c>idle chance</c> x the leg ramp (<see cref="AnimationDefinition.LegWeight"/>, the same as a movement clip's) of the more hurt leg,
+    /// only candidates above 0 kept. With <paramref name="firstInDataOrder"/> a draw that keeps none takes the first in data order (the draw never comes back empty; the crawl idles, whose -999 minimum reads as -101).
+    /// </summary>
+    IReadOnlyList<(int Index, float Weight)> LegWeighted((int Index, float Weight)[] fits, in AnimationStance s, bool firstInDataOrder = false)
+    {
+        var list = new List<(int, float)>(fits.Length);
+        foreach (var (i, chance) in fits)
+            if (all[i].LegWeight(s.LeftLeg, s.RightLeg) is var leg and > 0) list.Add((i, chance * leg));
+        if (list.Count == 0 && firstInDataOrder && fits.Length > 0)
+        {
+            var first = fits.OrderBy(f => DataOrder(f.Index)).First();
+            list.Add(first);
+        }
+        return list;
+    }
+
     /// <summary>The crawling idles that fit <paramref name="stance"/> (<c>crawl idle up</c>, and out of combat <c>crawl idle down</c>), by <c>idle chance</c>; empty when none fits.</summary>
-    public IReadOnlyList<(int Index, float Weight)> CrawlIdles(in AnimationStance stance) => crawlIdles.GetOrAdd(Canonical(stance), static (s, self) =>
+    public IReadOnlyList<(int Index, float Weight)> CrawlIdles(in AnimationStance stance) => LegWeighted(crawlIdles.GetOrAdd(NoLegs(stance), static (s, self) =>
     {
         var list = new List<(int, float)>();
         foreach (int i in self.grounded)
         {
             var d = self.all[i];
-            if (d.Idle && !d.IsAction && d.MoveSpeed == 0 && d.Fits(s)) list.Add((i, Math.Max(d.IdleChance, 0)));
-        }
-        // The original's idle draw (FUN_14051ec80) never comes back empty: with no record fitting it takes the first of its list. The records' -999 leg minimum is read as -101, so a leg
-        // past that (a severed one) fits none; the leg ranges are dropped then and the first in data order plays (docs/animation.md "Choosing candidates").
-        if (list.Count == 0)
-        {
-            int first = -1;
-            foreach (int i in self.grounded)
-            {
-                var d = self.all[i];
-                if (d.Idle && !d.IsAction && d.MoveSpeed == 0 && d.FitsExceptLegs(s) && (first < 0 || self.DataOrder(i) < self.DataOrder(first))) first = i;
-            }
-            if (first >= 0) list.Add((first, Math.Max(self.all[first].IdleChance, 0)));
+            if (d.Idle && !d.IsAction && d.MoveSpeed == 0 && d.FitsExceptLegs(s)) list.Add((i, Math.Max(d.IdleChance, 0)));
         }
         return [.. list];
-    }, this);
+    }, this), stance, firstInDataOrder: true);
 
     readonly System.Collections.Concurrent.ConcurrentDictionary<(AnimationArea, AnimationStance), int[]> candidates = new();
     readonly System.Collections.Concurrent.ConcurrentDictionary<AnimationStance, (int Index, float Weight)[]> idles = new();
@@ -659,7 +668,7 @@ public sealed class AnimationLibrary
     /// idle list by weapon type and carrying.
     /// Without any, the whole-body idles that fit apart from the combat mode.
     /// </summary>
-    public IReadOnlyList<(int Index, float Weight)> CombatIdles(in AnimationStance stance) => combatIdles.GetOrAdd(Canonical(stance), static (s, self) =>
+    public IReadOnlyList<(int Index, float Weight)> CombatIdles(in AnimationStance stance) => LegWeighted(combatIdles.GetOrAdd(NoLegs(stance), static (s, self) =>
     {
         var list = new List<(int, float)>();
         for (int i = 0; i < self.all.Count; i++)
@@ -671,22 +680,22 @@ public sealed class AnimationLibrary
             for (int i = 0; i < self.all.Count; i++)
             {
                 var d = self.all[i];
-                if (d.Category == 0 && d.Idle && !d.IsAction && d.Area == AnimationArea.All && d.Fits(s with { Combat = d.CombatMode == 1 })) list.Add((i, Math.Max(d.IdleChance, 0)));
+                if (d.Category == 0 && d.Idle && !d.IsAction && d.Area == AnimationArea.All && d.FitsExceptLegs(s with { Combat = d.CombatMode == 1 })) list.Add((i, Math.Max(d.IdleChance, 0)));
             }
         return list.ToArray();
-    }, this);
+    }, this), stance);
 
     /// <summary>The standing animations valid for the stance: <c>idle</c> clips of the whole body (not actions, not carry overlays) with their <c>idle chance</c>.</summary>
-    public IReadOnlyList<(int Index, float Weight)> Idles(in AnimationStance stance) => idles.GetOrAdd(Canonical(stance), static (s, self) =>
+    public IReadOnlyList<(int Index, float Weight)> Idles(in AnimationStance stance) => LegWeighted(idles.GetOrAdd(NoLegs(stance), static (s, self) =>
     {
         var list = new List<(int, float)>();
         for (int i = 0; i < self.all.Count; i++)
         {
             var d = self.all[i];
-            if (d.Category == 0 && d.Idle && !d.IsAction && d.Area == AnimationArea.All && d.Fits(s)) list.Add((i, Math.Max(d.IdleChance, 0)));
+            if (d.Category == 0 && d.Idle && !d.IsAction && d.Area == AnimationArea.All && d.FitsExceptLegs(s)) list.Add((i, Math.Max(d.IdleChance, 0)));
         }
         return list.ToArray();
-    }, this);
+    }, this), stance);
 
     readonly System.Collections.Concurrent.ConcurrentDictionary<AnimationStance, int> strafes = new();
 

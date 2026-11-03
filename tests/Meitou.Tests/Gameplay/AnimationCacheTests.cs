@@ -35,7 +35,7 @@ public class AnimationCacheTests
             {
                 var stance = new AnimationStance { LeftLeg = left, RightLeg = right };
                 var wantIdles = Enumerable.Range(0, lib.Definitions.Count)
-                    .Where(i => lib.Definitions[i].Idle && lib.Definitions[i].Area == AnimationArea.All && lib.Definitions[i].Fits(stance)).ToArray();
+                    .Where(i => lib.Definitions[i].Idle && lib.Definitions[i].Area == AnimationArea.All && lib.Definitions[i].FitsExceptLegs(stance) && lib.Definitions[i].LegWeight(left, right) > 0).ToArray();   // an idle weighs the leg ramp like a movement clip (FUN_14051ec80)
                 Assert.Equal(wantIdles, lib.Idles(stance).Select(p => p.Index).ToArray());
 
                 // Movement weighs the legs per call: every lower clip whose speed and leg weights are positive, normalised.
