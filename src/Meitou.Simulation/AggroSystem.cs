@@ -172,7 +172,7 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
         if (!asleep) place *= AwakeHearing;
         float d = MathF.Sqrt(d2);
         float p = stealth >= 0
-            ? Orders.SneakHearChance(d, Orders.SneakNoise(stealth, Noise(table, target)) * place, stealth)
+            ? Orders.SneakHearChance(d, Orders.SneakNoise(stealth, Noise(table, target)) * place, stealth, !asleep)
             : HearChance(d, NoiseRange(speed, other.MaxSpeed) * Noise(table, target) * place);
         if (alarmed) p *= AlarmHearing;
         if (!(p > 0)) return false;

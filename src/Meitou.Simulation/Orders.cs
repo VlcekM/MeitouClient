@@ -169,9 +169,12 @@ public static class Orders
     /// <summary>A sneaking mover's noise range: lerp(s, 450 f, 80) (docs/game/perception.md "Hearing", Verified constants), f the weather's factor (<see cref="WeatherSystem.NoiseFactor"/>, 1 in clear weather).</summary>
     public static float SneakNoise(float stealth, float weather = 1) => 450 * weather + (80 - 450 * weather) * stealth;
 
-    /// <summary>The chance to hear a sneaking target at <paramref name="distance"/>: 0.1 x (1 - s) x (1 - d^2 / N^2) ("Hearing"; the 0.05 squad case is not modelled).</summary>
-    public static float SneakHearChance(float distance, float noise, float stealth) =>
-        noise > 0 && distance < noise ? 0.1f * (1 - stealth) * (1 - distance * distance / (noise * noise)) : 0;
+    /// <summary>The base chance to hear a sneaking target: 0.05 for an awake listener (StateBroadcast <c>+0xb4</c> 0), 0.1 for a sleeper (<c>FUN_140857500</c>, Verified constants).</summary>
+    public static float SneakHearBase(bool awake) => awake ? 0.05f : 0.1f;
+
+    /// <summary>The chance to hear a sneaking target at <paramref name="distance"/>: base x (1 - s) x (1 - d^2 / N^2) ("Hearing").</summary>
+    public static float SneakHearChance(float distance, float noise, float stealth, bool awake) =>
+        noise > 0 && distance < noise ? SneakHearBase(awake) * (1 - stealth) * (1 - distance * distance / (noise * noise)) : 0;
 
     /// <summary>
     /// The Hold order's post test (<c>AI::isTargetInRangeForHOLDMode_hostiles</c>, docs/game/perception.md "The attack-on-sight tests", <b>Verified</b>): a target slower than 2,

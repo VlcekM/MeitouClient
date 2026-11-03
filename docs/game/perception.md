@@ -135,7 +135,7 @@ ALMOST_WOKE_UP. Sneaking or crawling targets get stealth XP ([character-stats](c
 attack-on-sight look and the chaser's look): the player pair (player faction only: `FUN_140856bc0`'s owner path for slaves and pets is not modelled), the moving or combat-mode
 gate (a fighter standing still makes noise 350 f), the interior, floor, door and sure-hearing rules, the awake halving and the sleeper's coin flip with event 47 (asleep =
 `CarrySystem.Asleep`, in a bed or resting with the sleep behaviour; 1 and 2 are not told apart), the cooldown (2 s of simulated time, game speed not applied; per-listener
-list `AggroSystem.Slot.Heard`) and the alarm doubling (set only by DA_MASSIVE_ALARM through `AggroSystem.Alarm`; the other alarm sources are not wired); not the sneaking 0.05.
+list `AggroSystem.Slot.Heard`) and the alarm doubling (set only by DA_MASSIVE_ALARM through `AggroSystem.Alarm`; the other alarm sources are not wired); the sneaking base is 0.05 for an awake listener, 0.1 for a sleeper (`Orders.SneakHearChance`).
 Hearing does not imply ordinary visual cone/line-of-sight eligibility.
 
 ## Senses

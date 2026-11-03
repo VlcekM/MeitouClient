@@ -116,7 +116,7 @@ public sealed partial class CarrySystem
                 cold.PathRequest = 0;
                 // The target's sense entry: heard on this last step (the sneaking hearing roll at the step's speed; the original's pass cadence is not traced).
                 float stealth = Orders.Stealth(cold), step = new Vector2(n.Velocity.X, n.Velocity.Z).Length();
-                float hear = step > 0.01f ? Orders.SneakHearChance(Vector3.Distance(n.Position, next[t].Position), Orders.SneakNoise(stealth, WeatherSystem.NoiseFactor(cold)), stealth) : 0;
+                float hear = step > 0.01f ? Orders.SneakHearChance(Vector3.Distance(n.Position, next[t].Position), Orders.SneakNoise(stealth, WeatherSystem.NoiseFactor(cold)), stealth, !Asleep(table, t)) : 0;
                 cold.KnockoutHeard = hear > 0 && Rng.Float(Rng.Hash(world.Seed, Rng.Key(table.IdOf(i)), RngPurpose.KnockoutHear, (ulong)world.Tick)) < hear;
                 n.Velocity = Vector3.Zero;
                 cold.LiftTime = 0;
