@@ -2,8 +2,10 @@ using System.Numerics;
 using Meitou.Data;
 using Meitou.Data.Fcs;
 using Meitou.Data.Gameplay;
+using Meitou.Data.Gameplay.Ai;
 using Meitou.Data.Gameplay.Bodies;
 using Meitou.Simulation;
+using Meitou.Simulation.Ai;
 using Meitou.Simulation.Bodies;
 using Meitou.Simulation.Combat;
 using Meitou.Simulation.FirstAid;
@@ -350,43 +352,8 @@ public class FirstAidTests
     [InlineData(65f, false)]
     public void A_guard_treats_a_caged_prisoner_from_the_cage_door_on_its_floor(float rise, bool treated)
     {
-        // The cage record with a use node 30 to its side (local +X), raised by `rise`.
-        var node = SyntheticTown.Rec("56-a", FcsRecordType.BUILDING, "Use node");
-        node.Bools["is node"] = true;
-        node.Ints["node type"] = 4;
-        var data = ArrestTests.Town([node]);
-        var withDoor = SyntheticTown.Rec("54-a", FcsRecordType.BUILDING, "Prisoner Cage");   // a later file adds the node to the cage, as a mod would
-        withDoor.Instances.Add(new FcsInstance { Id = "door", Target = "56-a", Position = new Vector3(30, rise, 0) });
-        var edit = new FcsFile();
-        edit.Records.Add(withDoor);
-        data.Db.Apply(edit, "door.mod");
-        int city = data.FactionIndex("50-a"), stranger = data.FactionIndex("204-gamedata.base");
-        var walk = new OpenGroundWalkability((_, _) => 150);
-        var items = new ItemFactory(KitDatabase(), BaseGame);
-        var systems = new List<ITickSystem>
-        {
-            new PlayerSystem(), new MovementSystem(new PathService(walk, true)), new FirstAidSystem(BaseGame, BodyOptions.Default, items) { Relations = data.Relations },
-            new BodySystem(BaseGame, BodyOptions.Default),
-        };
-        using var world = new SimWorld(new WorldSettings { Seed = 7, PublishSnapshots = false, MinPartitionSize = 1 }, walk, systems);
-        world.Fixtures.RegisterSite(world, data, 0);
-        var cage = world.Fixtures.Find("0.0:cageA")!;
-        var door = FixtureRegistry.ExitSpot(cage)!.Value;
-        CharacterId Spawn(Vector3 at, int faction, int squad)
-        {
-            var stats = new CharacterStats();
-            stats[StatsEnumerated.Medic] = 50;
-            stats[StatsEnumerated.Strength] = 50;
-            var cold = new CharacterCold { Name = "C" + squad, Race = Human, Stats = stats, Medical = MedicalState.Create(Human, 50), Inventory = new Inventory(), Faction = faction, SquadId = squad };
-            var id = world.Characters.Spawn(new CharacterHot { Position = at, MaxSpeed = 40, WalkSpeed = 15, Task = (byte)CharacterTask.Idle }, cold, 0);
-            world.Squads.Add(new Squad { Id = squad, TemplateId = "t", Faction = faction, Members = { id } });
-            return id;
-        }
-        var guard = Spawn(cage.Position + new Vector3(0, 0, -300), city, 1);
-        var prisoner = Spawn(cage.Position, stranger, 2);
-        Assert.True(world.Fixtures.Imprison(world, prisoner, cage));
-        var body = world.Characters.Cold(prisoner.Slot)!.Medical!;
-        body.Parts[RLeg].Flesh = body.Parts[RLeg].MaxHp * 0.4f;
+        using var c = CagedPrisoner(rise);
+        var (world, guard, prisoner, body, door) = (c.World, c.Guard, c.Prisoner, c.Body, c.Door);
         bool walking = false;
         for (int t = 0; t < 900 && Bandage(body) == 0; t++)
         {
@@ -406,6 +373,88 @@ public class FirstAidTests
         // Not treated from the floor below: the walk could not reach the node's floor, so the patient went on the guard's path failures.
         Assert.NotEqual(CharacterTask.Treat, (CharacterTask)world.Characters.Previous[guard.Slot].Task);
         Assert.True(PursuitSystem.PathImpossible(world.Characters.Cold(guard.Slot)!, prisoner, world.Tick));
+    }
+
+    sealed record CagedWorld(SimWorld World, CharacterId Guard, CharacterId Prisoner, MedicalState Body, Vector3 Door) : IDisposable
+    {
+        public void Dispose() => World.Dispose();
+    }
+
+    /// <summary>
+    /// A city guard 300 from a cage holding a stranger hurt in the right leg; the cage has a use node 30 to its side (local +X), raised by <paramref name="rise"/>. With
+    /// <paramref name="goals"/> the AI runs the guard's squad by them (all its roles), else the guard is an NPC the AI does not run.
+    /// </summary>
+    static CagedWorld CagedPrisoner(float rise, AiGoal[]? goals = null)
+    {
+        // The cage record with a use node 30 to its side (local +X), raised by `rise`.
+        var node = SyntheticTown.Rec("56-a", FcsRecordType.BUILDING, "Use node");
+        node.Bools["is node"] = true;
+        node.Ints["node type"] = 4;
+        var data = ArrestTests.Town([node]);
+        var withDoor = SyntheticTown.Rec("54-a", FcsRecordType.BUILDING, "Prisoner Cage");   // a later file adds the node to the cage, as a mod would
+        withDoor.Instances.Add(new FcsInstance { Id = "door", Target = "56-a", Position = new Vector3(30, rise, 0) });
+        var edit = new FcsFile();
+        edit.Records.Add(withDoor);
+        data.Db.Apply(edit, "door.mod");
+        int city = data.FactionIndex("50-a"), stranger = data.FactionIndex("204-gamedata.base");
+        var walk = new OpenGroundWalkability((_, _) => 150);
+        var items = new ItemFactory(KitDatabase(), BaseGame);
+        ITickSystem[] systems =
+        [
+            .. goals is null ? Array.Empty<ITickSystem>() : [new AiSystem(data)],
+            new PlayerSystem(), new MovementSystem(new PathService(walk, true)), new FirstAidSystem(BaseGame, BodyOptions.Default, items) { Relations = data.Relations },
+            new BodySystem(BaseGame, BodyOptions.Default),
+        ];
+        var world = new SimWorld(new WorldSettings { Seed = 7, PublishSnapshots = false, MinPartitionSize = 1 }, walk, systems);
+        world.Fixtures.RegisterSite(world, data, 0);
+        var cage = world.Fixtures.Find("0.0:cageA")!;
+        var door = FixtureRegistry.ExitSpot(cage)!.Value;
+        CharacterId Spawn(Vector3 at, int faction, int squad)
+        {
+            var stats = new CharacterStats();
+            stats[StatsEnumerated.Medic] = 50;
+            stats[StatsEnumerated.Strength] = 50;
+            var cold = new CharacterCold { Name = "C" + squad, Race = Human, Stats = stats, Medical = MedicalState.Create(Human, 50), Inventory = new Inventory(), Faction = faction, SquadId = squad };
+            var id = world.Characters.Spawn(new CharacterHot { Position = at, MaxSpeed = 40, WalkSpeed = 15, Task = (byte)CharacterTask.Idle }, cold, 0);
+            world.Squads.Add(new Squad { Id = squad, TemplateId = "t", Faction = faction, Members = { id } });
+            return id;
+        }
+        var guard = Spawn(cage.Position + new Vector3(0, 0, -300), city, 1);
+        var prisoner = Spawn(cage.Position, stranger, 2);
+        Assert.True(world.Fixtures.Imprison(world, prisoner, cage));
+        var body = world.Characters.Cold(prisoner.Slot)!.Medical!;
+        body.Parts[RLeg].Flesh = body.Parts[RLeg].MaxHp * 0.4f;
+        if (goals is not null) GiveGoals(world, 1, goals);
+        return new CagedWorld(world, guard, prisoner, body, door);
+    }
+
+    /// <summary>Gives a squad one AI package with <paramref name="goals"/> in every role, and the AI's first serial step its minds.</summary>
+    static void GiveGoals(SimWorld world, int squad, AiGoal[] goals)
+    {
+        var board = new Blackboard([new(0, new AiPackage { Id = "p", Name = "p", Roles = [goals, goals, goals, [], []] })]);
+        board.Update();
+        world.Squads.Find(squad)!.Ai = board;
+        world.RunTick();
+    }
+
+    static AiGoal Goal(TaskType type, TaskPriority priority) =>
+        new(new AiTask("t", type.ToString(), type, priority, TaskTargetType.Specific, TaskEndEvent.Nothing), 0, 100, 1);
+
+    /// <summary>
+    /// docs/game/ai-tasks.md "Medic jobs": an NPC the AI runs treats as its Medic goal (58, Urgent in the guard packages), scored at the patient finder's kept score, so a guard holding
+    /// its post leaves it for a caged prisoner; one whose lists hold no 58 never treats. Catches the old rule, under which only an idle NPC looked for a patient (issue #163).
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void A_guard_on_its_post_treats_a_caged_prisoner_by_its_medic_goal(bool listsMedic)
+    {
+        var post = Goal(TaskType.HOLD_POSITION, TaskPriority.NonUrgent);
+        AiGoal[] goals = listsMedic ? [post, Goal(TaskType.JOB_MEDIC, TaskPriority.Urgent)] : [post];
+        using var c = CagedPrisoner(0, goals);
+        Assert.NotNull(c.World.Characters.Cold(c.Guard.Slot)!.Ai);
+        for (int t = 0; t < 3000 && Bandage(c.Body) == 0; t++) c.World.RunTick();
+        Assert.Equal(listsMedic, Bandage(c.Body) > 0);
     }
 }
 
