@@ -1450,12 +1450,13 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     }
 
     /// <summary>
-    /// Sets <see cref="Blackboard.Gate"/>: the home when it is a gate, else, for a squad with a gate guard, the town's gate nearest the squad (the original's
+    /// Sets <see cref="Blackboard.Gate"/>: the cached home (<see cref="Blackboard.GateHome"/>) when it is a gate, else, for a squad with a gate guard, the town's gate nearest the squad (the original's
     /// <c>HOME_GATE</c> chain, docs/game/ai-tasks.md "Town goals"); its first door's leaf, from the door gate (none headless). Kept while the gate stays the same.
     /// </summary>
     void FindGate(World world, Blackboard board, Squad squad)
     {
-        TownBuilding? gate = board.Home is { IsGate: true } home ? home : null;
+        board.GateHome ??= board.OwnHome;   // the HOME_GATE hand is cached on its first resolve and never follows a later change of the home
+        TownBuilding? gate = board.GateHome is { IsGate: true } home ? home : null;
         if (gate is null && board.Crowd.ContainsKey(TaskType.MAN_THE_GATE) && board.Town >= 0)
         {
             float best = float.MaxValue;

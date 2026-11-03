@@ -160,6 +160,8 @@ public sealed class Blackboard
     public Dictionary<int, SeatClaim> SitClaims { get; } = [];
     /// <summary>The gate the squad guards (its home when that is a gate, else for a gate guard goal the town's gate nearest the squad), as the last serial step found it (derived, not hashed); null: none, or its door's place not known.</summary>
     public GatePost? Gate { get; set; }
+    /// <summary>The home the gate guard post was first resolved to (the blackboard's HOME_GATE hand, <c>FUN_14026b410</c>): taken from <see cref="OwnHome"/> once it is set, then kept even when the home changes.</summary>
+    public TownBuilding? GateHome { get; set; }
     public TownBuilding? OwnHome { get; set; }
     /// <summary>The template's <c>public day</c>, which the original writes over <see cref="OwnHome"/>'s public flag (docs/game/locks.md "Data"): what trespassing reads.</summary>
     public bool HomePublic { get; init; } = true;
