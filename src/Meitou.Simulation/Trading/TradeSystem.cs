@@ -440,8 +440,13 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
     bool HoldsStock(SquadTemplate template, Meitou.Data.GameRecord? faction) =>
         ShopFiller.VendorLinks(template, faction).Count > 0 || data.Db.Find(template.Id) is { } r && (r.GetReferences("special items").Count > 0 || r.GetReferences("special map items").Count > 0);
 
+    /// <summary>
+    /// The building filler (<c>FUN_14095b210</c>, <b>Observed</b>) returns at once for a building that is another object's child: its location hand <c>+0x88</c> not null (set only from a parent), its parent
+    /// <c>+0x238</c> set (a turret mounted on a building) or its door flag <c>+0x1a0</c> (<c>DoorStuff</c>, made only for a parent building's door). A level-data home is none of these; a turret post is.
+    /// </summary>
     void StockHome(World world, Meitou.Data.World.TownBuilding home, SquadTemplate template, Trader terms, ulong key, bool first)
     {
+        if (home.Turret is not null) return;
         var boxes = new List<Locks.Fixture>();
         foreach (var f in home.Fixtures)
             if (f.HoldsShopStock && world.Fixtures.Find(f.Id) is { Contents: not null } box) boxes.Add(box);

@@ -50,6 +50,8 @@ slots 0 to 3 = `frameStarted`, `frameRenderingQueued`, `framePostAnimationUpdate
 | 2. `frameRenderingQueued` | `FUN_14082ac70` | **Measures the frame time** (below). |
 | 4. `frameEnded` | `FUN_14082b6e0` | Cursor visibility; in menu/title state (`DAT_142133320` set) it only calls the new-game/import handler `FUN_14047c310` and returns; otherwise calls **`GameWorld::vfunc_0` = `FUN_140788a00(&GameWorld, dt)`**, the whole world update; then a **floating-origin rebase**: when the camera is more than 10000 units (squared distance 1e8, x/z) from the scene's relative origin, the origin is moved and zone-manager/terrain data re-based (calls `FUN_140409c70`, `FUN_140a08d10`, `FUN_1406083b0`); then hotkey state handling. |
 
+**The `DAT_142133308` object in `frameStarted`** (**Verified**, decompile): the global is field `+8` of the engine singleton at `0x142133300` (the world object whose `+0x20` is the title screen, `DAT_142133320`); `FUN_14086cf90` (start-up, log lines "Renderer Created" / "Root Initialised") writes it with a new `Renderer` (`FUN_140815ab0`, base `RendererT` with a list of `RenderEntityT`; fields `+0x58` camera, `+0x60` scene manager, `+0x68` root). Its vfunc 8 (`FUN_14082e580`) refreshes the camera's parent node transform and calls vfunc 1 of each registered render entity: Ogre scene-side visual updates with no simulation state. Meitou's renderers update their own scenes from the published snapshot, so there is no counterpart to compare (not a difference).
+
 ### The three time values
 
 `FUN_140788a00` (which `docs/formats/weather.md` already lists as "Time bases", **Verified**) sets three globals every frame, with
