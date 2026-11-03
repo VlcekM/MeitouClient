@@ -637,7 +637,7 @@ public sealed partial class CombatSystem
 
     /// <summary>
     /// The defence update's turn (<c>FUN_140666400</c>, called every tick from <c>FUN_140609c70</c>): a defending fighter faces the attacker its defence follows at once when that one is over 5 away,
-    /// except while it plays a block of a rear direction (7, 8 or 9), which is met turned away. A steering defender faces it through its band (Fighting.BandTarget).
+    /// except while it plays a block of a rear direction (7, 8 or 9), which is met turned away. A steering defender faces it through its band (PursuitSystem.BandTarget).
     /// </summary>
     public bool DefenceAim(World world, int i, out Vector2 dir)
     {
@@ -647,8 +647,7 @@ public sealed partial class CombatSystem
         ref readonly var s = ref read[i];
         int a = s.ReactedSlot;
         if (s.ReactTech < 0 || (uint)a >= (uint)prev.Length || a == i || !prev[a].Alive) return false;
-        var tech = techniques[s.ReactTech];
-        if (tech.IsBlock && tech.AttackDirection1 is 7 or 8 or 9) return false;
+        if (!DefenceFaces(s.ReactTech)) return false;
 
         var to = prev[a].Position - prev[i].Position;
         if (!(to.LengthSquared() > 25)) return false;
@@ -658,6 +657,9 @@ public sealed partial class CombatSystem
         dir /= len;
         return true;
     }
+
+    /// <summary>Whether a defence with technique <paramref name="tech"/> turns to the swing it follows: not a block of a rear direction (7, 8 or 9, <c>FUN_140666400</c>).</summary>
+    internal bool DefenceFaces(int tech) => !(techniques[tech].IsBlock && techniques[tech].AttackDirection1 is 7 or 8 or 9);
 
     /// <summary>Any leg part is down (flesh - stun + rig &lt; 0): the original's two leg parts at medical +0x4d8 / +0x4e0 in the kick factor (<c>FUN_140886030</c>).</summary>
     static bool LegDown(MedicalState medical)

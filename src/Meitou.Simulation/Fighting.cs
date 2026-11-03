@@ -147,6 +147,7 @@ public sealed class PursuitSystem(CombatSystem combat) : ITickSystem
         var steer = cold.Steer ??= new SteerState();
         bool was = steer.Active;
         steer.Active = false;
+        steer.Face = LookAt(world, in st, t, steer.Face);
         // A swing has no steering: the movement is animation driven (the attack start and every swing tick set the movement's lock, FUN_14065e240; CharMovement update
         // FUN_14065ffa0 then moves it by the clip's root motion only), so it stands in its place (MovementSystem turns it, CombatSystem.SwingAim).
         if (cold.CombatRunning || st.Ranged || holding || st.Down || st.AttackTech >= 0) return false;
@@ -193,7 +194,19 @@ public sealed class PursuitSystem(CombatSystem combat) : ITickSystem
     }
 
     /// <summary>
-    /// Whom the band is kept to and faced (<c>FUN_14060a190</c>): a defender's is the swing its defence follows, unless it has a focused target (the player's pick, CombatClassAI +0x2c8);
+    /// The look-at it faces (<see cref="SteerState.Face"/>): its target while it swings (the attack start, <c>FUN_140666400</c>; the swing update <c>FUN_14060a590</c>) and in its footwork (state 5,
+    /// <c>FUN_1402b3180</c>), the swing its defence follows (the defence update, not during a block of a rear direction), else the last one (the wait, state 6, writes none).
+    /// </summary>
+    int LookAt(World world, in CombatSlot st, int t, int last)
+    {
+        bool waiting = st.AttackTech < 0 && st.ReactTech < 0 && world.Tick < st.PauseUntil;
+        if (st.ReactTech >= 0) return combat.DefenceFaces(st.ReactTech) && (uint)st.ReactedSlot < (uint)world.Characters.Previous.Length ? st.ReactedSlot : last;
+        if (st.AttackTech >= 0 || st.Engaged && !waiting) return t;
+        return last;
+    }
+
+    /// <summary>
+    /// Whom the band is kept to (<c>FUN_14060a190</c>): a defender's is the swing its defence follows, unless it has a focused target (the player's pick, CombatClassAI +0x2c8);
     /// in every other state the fight target.
     /// </summary>
     static int BandTarget(World world, in CombatSlot st, int t)

@@ -11,6 +11,11 @@ public sealed class SteerState
     /// <summary>Steering this tick (else the fighter walks paths or stands), at the target in <see cref="Target"/>.</summary>
     public bool Active;
     public int Target = -1;
+    /// <summary>
+    /// Whom it faces (the original's look-at hand, <c>FUN_1402ae2e0</c>; -1: none, it faces <see cref="Target"/>): set by the attack start and the swing (its target), the defence update (the
+    /// swing it follows, not during a rear block) and state 5 (its target); nothing clears it, so the waiting state 6 keeps the last one.
+    /// </summary>
+    public int Face = -1;
     /// <summary>The band of the centre distance beyond the two radii it keeps (min and max of <see cref="CombatSteering.Band"/>), the speed limit, and <c>powerThrough</c>.</summary>
     public float Min = 10, Max = 20, Limit = 200;
     public bool PowerThrough;
@@ -29,7 +34,7 @@ public sealed class SteerState
     internal void Hash(ref StateHasher h)
     {
         h.Add(0x53746572);
-        h.Add(Active); h.Add(Target); h.Add(Min); h.Add(Max); h.Add(Limit); h.Add(PowerThrough); h.Add(LineTick); h.Add(LineClear);
+        h.Add(Active); h.Add(Target); h.Add(Face); h.Add(Min); h.Add(Max); h.Add(Limit); h.Add(PowerThrough); h.Add(LineTick); h.Add(LineClear);
         for (int k = 0; k < CombatSteering.FilterLength; k++) { h.Add(HistX[k]); h.Add(HistZ[k]); }
     }
 
@@ -199,8 +204,9 @@ public static class CombatSteering
     }
 
     /// <summary>
-    /// The steering velocity of fighter <paramref name="i"/> this tick (units per second, X and Z), with <paramref name="face"/> the flat unit vector to its target; zero when
-    /// the target is gone. <paramref name="strafing"/> is its side-stepping state (the animation's, last tick); <paramref name="moving"/> whether it moved last tick (the dead
+    /// The steering velocity of fighter <paramref name="i"/> this tick (units per second, X and Z), with <paramref name="face"/> the flat unit vector to whom it faces
+    /// (<see cref="SteerState.Face"/>, else its band target); zero when the band target is gone. The seek and the power-through cone go along the line to the band target, the
+    /// side-step snap and the speed caps along the facing (<c>FUN_1402af1e0</c> overwrites its direction with the look-at's after the forces). <paramref name="strafing"/> is its side-stepping state (the animation's, last tick); <paramref name="moving"/> whether it moved last tick (the dead
     /// zone's STOP or START). Reads the last tick's places only; partition-safe (writes the fighter's own smoothing).
     /// </summary>
     public static Vector2 Velocity(World world, CombatSystem combat, int i, CharacterCold cold, SteerState s, float maxSpeed, bool strafing, bool moving, out Vector2 face)
@@ -213,7 +219,8 @@ public static class CombatSteering
         var to = prev[t].Position;
         var flat = new Vector2(to.X - me.X, to.Z - me.Z);
         if (flat.LengthSquared() < 1e-6f) return Vector2.Zero;
-        face = Vector2.Normalize(flat);
+        var line = Vector2.Normalize(flat);
+        face = Facing(prev, i, s, line);
         float mult = cold.Race?.CombatMoveSpeedMult ?? 1;
         float radius = Radius(cold);
         float rs = radius + Radius(world.Characters.Cold(t));
@@ -225,7 +232,7 @@ public static class CombatSteering
         var (enemyDist, allyDist, stop, start) = Draws(world.Seed, Rng.Key(world.Characters.IdOf(i)), cold);
         var q = new Push
         {
-            World = world, Combat = combat, Me = i, Target = t, Faction = cold.Faction, At = me, Radius = rs, Own = radius, Face = face, Turn = s.PowerThrough,
+            World = world, Combat = combat, Me = i, Target = t, Faction = cold.Faction, At = me, Radius = rs, Own = radius, Face = line, Turn = s.PowerThrough,
             EnemyReach = rs + enemyDist, AllyReach = rs + allyDist,
         };
         // The repulsion takes the nearest MaxRepulsions bodies that push (they push hardest). A body pushes only within both the flocking list's reach and its own
@@ -245,7 +252,7 @@ public static class CombatSteering
             (enemies, allies) = (Vector2.Zero, Vector2.Zero);
             for (int k = 0; k < q.Count; k++) Add(ref q, q.Slots[k], ref enemies, ref allies);
         }
-        var vel = (enemies + allies * AllyWeight) * RepulsionDamping + face * seek;
+        var vel = (enemies + allies * AllyWeight) * RepulsionDamping + line * seek;
 
         // The dead zone: under STOP while moving, under START while standing, it stands.
         if (!s.PowerThrough && vel.Length() < (moving ? stop : start)) vel = Vector2.Zero;
@@ -268,6 +275,15 @@ public static class CombatSteering
 
         vel = new Vector2(Filter(s.HistX, vel.X, world.TickSeconds), Filter(s.HistZ, vel.Y, world.TickSeconds));
         return vel * mult;
+    }
+
+    /// <summary>The flat unit vector to the character it faces, or <paramref name="line"/> (to the band target) when that one is unset, gone or on its spot.</summary>
+    static Vector2 Facing(ReadOnlySpan<CharacterHot> prev, int i, SteerState s, Vector2 line)
+    {
+        int f = s.Face;
+        if (f == s.Target || (uint)f >= (uint)prev.Length || f == i || !prev[f].Alive) return line;
+        var flat = new Vector2(prev[f].Position.X - prev[i].Position.X, prev[f].Position.Z - prev[i].Position.Z);
+        return flat.LengthSquared() < 1e-6f ? line : Vector2.Normalize(flat);
     }
 
     /// <summary>
