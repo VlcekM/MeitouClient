@@ -184,6 +184,16 @@ A slave's Slave role list runs through the Obedient Slave job (187): [role lists
 | 3 | (unused) | +0x1e0 | never filled by this loader |
 | 4 | Slave | +0x1f8 | `Slave AI Goals` only |
 
+### Requests
+
+A Blackboard also holds requests one character makes of another (map at +0x158, keyed by the asker's hand). **Verified** (`FUN_140269ff0` add, `FUN_14026a320`
+countdown, `FUN_140269240` reader): an entry has the asker, a task type, a subject hand, a target hand, a tier, a float and a time to live of 3.0 s; the asker
+asking itself adds nothing, asking again renews the entry, and the Blackboard update counts the time down by its dt and erases it below 0. The tier pass
+(`FUN_140510d60`, [precedence](ai-tasks.md#precedence) step 4) adds the entries of its tier whose subject is none or the character itself as candidates.
+The float (1.4 in both callers) is read as the candidate's weight (**Observed**). Callers: `FUN_1403346d0` (`Task_MakeTargetStandStill`, and every update of
+the first aid tasks, [medic jobs](ai-tasks.md#medic-jobs)) asks 62 Standing still of the target at tier 3 on the target's platoon Blackboard (`FUN_140791ba0`).
+Meitou models only that caller ([medic jobs](ai-tasks.md#medic-jobs)).
+
 ## Unknowns
 
 - Which of the six category registries (flag bits 1, 2, 4, 0x10, 0x20, 0x40; [planner](ai-tasks.md#planner)) a character plans with; the meaning of the `*` marker on some

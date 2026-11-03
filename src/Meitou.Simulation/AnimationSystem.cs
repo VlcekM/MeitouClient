@@ -165,7 +165,9 @@ public sealed class AnimationSystem(AnimationLibrary library, AnimationLengths l
     // Resting on a chair plays the clip its functionality names ("sitting chair"), else sitting on the floor.
     int HeldClip(CharacterTask task, CharacterCold cold) => task switch
     {
-        CharacterTask.Treat or CharacterTask.Build or CharacterTask.DeliverMaterials or CharacterTask.Prospect => TreatingClip,
+        CharacterTask.Build or CharacterTask.DeliverMaterials or CharacterTask.Prospect => TreatingClip,
+        // A medic kneels only at a patient keeping still (Task_FirstAid's update plays the clip; FirstAidSystem); waiting for one that moves it stands.
+        CharacterTask.Treat => cold.TreatKneels ? TreatingClip : -1,
         // An NPC looting a body it has reached (Observed, Task_Loot_AI) or a forager waiting at one (Task_Loot_ResourcesWeHaveStorageFor); the player's own take is instant.
         CharacterTask.Loot when (!cold.IsPlayer || cold.Foraging) && cold.LiftTime >= 0 => TreatingClip,
         CharacterTask.Rest => cold.Ai?.SitClip is { } sit && SitClipOf(sit) is >= 0 and var chair ? chair : RestingClip,
