@@ -51,7 +51,7 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
     /// </summary>
     public bool IsPoliceLike(World world, CharacterCold c)
     {
-        if (c.IsPlayer || c.SlaveState != 0 || Factions.Bandit(c.Faction)) return false;   // engine: a slave is never police, whatever its record's class
+        if (c.IsPlayer || Factions.Bandit(c.Faction)) return false;
         if (c.NpcClass == FundamentalType.LawEnforcement) return true;
         return c.NpcClass == FundamentalType.Military && c.SquadId >= 0 && world.Squads.Find(c.SquadId) is { TownOwn: true } squad && squad.Faction == c.Faction;
     }

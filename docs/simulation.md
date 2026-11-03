@@ -1044,7 +1044,7 @@ Arrests, the recognition meter and the marker are hashed only while set. What a 
   **Unknown**); 3 (ex-slave) is kept, shown with its owner, its looks-like-slave level floored at 0.01 and not doubled (`FUN_1405a51e0`, **Verified**: floor 0.01, state 2 doubled with a 0.1 floor); the other rules test it as the original does, non-zero tests count it as a slave. The setter's "has been enslaved" message and obedient-slave job are not run for these.
 - **Slave squads** (`PopulationSystem.MakeSlaves`): a squad's planned `slaves` squads (the factory's role 4) are made at its spot as squads of their template's faction (else the
   owner's), every member a slave of the owner squad's faction, put into random free cages of the home after its prisoners (engine: their "Slave only squad" package's one goal is
-  Slave get in Cage, 172; the rest stand by the owner). A slave is never police-like (engine: many slave records keep the default MILITARY class); an owned slave starts no fights and is no aggro target but for its owner's
+  Slave get in Cage, 172; the rest stand by the owner). A slave is police-like by its class like anyone (`FUN_140599600` tests no slave state, **Verified**; every Meitou caller mirrors an original caller of it); an owned slave starts no fights and is no aggro target but for its owner's
   enemies (engine: Heng's Outlaw slaves, uncaged without building data, drew its Samurai into fights). **Observed** (real-data
   probe 2026-10-21): Rebirth's 10 Rebirth Cage Guards squads make 34 caged Rebirth Slaves.
 - **Slave catching** (`ArrestSystem.CatchSlave`, the spotting sweep; the packages' Capture Slaves, 167, in `addon- slave catching`, which Rebirth's gate guards and garrison inherit;
