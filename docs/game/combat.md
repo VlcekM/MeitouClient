@@ -275,7 +275,7 @@ path-facing branches set the heading at once (before, `Turn` at 4π rad/s, which
   so 5 fighters at most. A refused asker adds to a two-frame overflow counter (+0x210/+0x214, swapped by
   `FUN_14060cc50`). `FUN_14060c670` joins before it checks reach. A blow that lands or is blocked takes its
   defender off the *attacker's* list (`FUN_14060a2f0` → `removeAttackerH` `FUN_1406657d0` on its own +0x1f8; not after a dodge, **Verified**). The fight task's end (`FUN_1406659b0` mode 2, **Verified**) zeroes the leaver's own list count (+0x200) and +0x228 at once; the attackers keep their target and ask again. Meitou: `Engaged` is a flag on the attacker, so a fight's end raises the leaver's `CombatSlot.ListEpoch` (`EndFight`), a fighter stores the target's epoch when it joins (`JoinedEpoch`), and `CombatSystem.Listed` counts it only while they match; the attacker drops `Engaged` in its own Act and asks again in the same step when it is free to decide.
-- **Slots** (+0x8, `FUN_140666310`): count = clamp(`max num attack slots` + RACE `extra attack slots`, 1, 5),
+- **Slots** (Meitou's Faithful setting passes null, so the loaded `max num attack slots` is used: `UserConfig.AttackSlotsOption`, `CombatSystem.UseAttackSlots`; `FUN_1406661d0`, **Verified**) (+0x8, `FUN_140666310`): count = clamp(`max num attack slots` + RACE `extra attack slots`, 1, 5),
   `FUN_1406661d0`. It is 1 while the target is attacking (state 0) or stumbling (its AnimationClass +0x448 has a current stumble clip +0x228; **Verified**).
   The CombatClass constructor also clamps the CONSTANTS value to 1..5.
 - A slot is granted by `FUN_140666a30` and kept until the swing's last blow (`FUN_14060a590` → `FUN_140665910`).

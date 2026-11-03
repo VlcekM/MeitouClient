@@ -82,6 +82,9 @@ sealed class UserConfig
     /// <summary>How many enemies may swing at one target at once (Advanced settings, 1-5; plus the race's extra slots): Faithful 1 (the game's CONSTANTS, the default), Meitou 3.</summary>
     public int AttackSlots { get; set; } = FaithfulAttackSlots;
     public const int FaithfulAttackSlots = 1, MeitouAttackSlots = 3;
+
+    /// <summary>The setting for the combat system: null (the loaded CONSTANTS <c>max num attack slots</c>, 1 in the base game) at the Faithful value, else the chosen 1 to 5.</summary>
+    public int? AttackSlotsOption => AttackSlots == FaithfulAttackSlots ? null : Math.Clamp(AttackSlots, 1, 5);
     /// <summary>A late but successfully rolled dodge or block still counts (Advanced settings; off by default and in both presets, so fights feel as the game's): a balance change for fights against several enemies.</summary>
     public bool LateDefences { get; set; } = false;
     /// <summary>The off-screen switches (Advanced settings; Faithful off, Meitou on; docs/simulation.md "Off-screen tier"): roaming squads keep their characters off screen,

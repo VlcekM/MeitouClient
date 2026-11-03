@@ -45,7 +45,7 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
         this.options = options;
         this.lengths = lengths;
         Settings = settings ?? new CombatOptions();
-        AttackSlots = Math.Max(1, Settings.AttackSlots ?? combat.MaxNumAttackSlots);
+        UseAttackSlots(Settings.AttackSlots);
         LateDefences = Settings.LateDefences;
         GunnerFacesBarrel = Settings.GunnerFacesBarrel;
         PunchReachFix = Settings.PunchReachFix;
@@ -57,6 +57,9 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
 
     /// <summary>How many enemies may melee one target at once, before the target race's <c>extra attack slots</c>: CONSTANTS <c>max num attack slots</c> (1, Faithful) unless a setting changes it.</summary>
     public int AttackSlots { get; set; }
+
+    /// <summary>Sets <see cref="AttackSlots"/> to a setting's value, or to the loaded CONSTANTS <c>max num attack slots</c> for null (the Faithful meaning, <c>FUN_1406661d0</c>, <b>Verified</b>).</summary>
+    public void UseAttackSlots(int? slots) => AttackSlots = Math.Max(1, slots ?? combat.MaxNumAttackSlots);
 
     /// <summary>Stuck bolts kept in the world per bolt mesh (the settings' <c>harpoonLimit</c>, <see cref="CombatOptions.StuckLimit"/>): past it the one that flew longest goes (<c>FUN_14043acf0</c>).</summary>
     public int StuckLimit { get; set; }

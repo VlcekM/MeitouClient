@@ -78,7 +78,7 @@ sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, 
     Slider AttackSlotsSlider => attackSlotsSlider ??= new("Attackers per target", 1, 5, () => config.AttackSlots, v =>
     {
         config.AttackSlots = Math.Clamp((int)MathF.Round(v), 1, 5);
-        AttackSlotsChanged?.Invoke(config.AttackSlots);
+        AttackSlotsChanged?.Invoke(config.AttackSlotsOption);
     }, "0", Faithful: UserConfig.FaithfulAttackSlots, Meitou: UserConfig.MeitouAttackSlots);
     Slider? harpoonLimitSlider;
     Slider HarpoonLimitSlider => harpoonLimitSlider ??= new("Harpoon limit", global::Meitou.Simulation.Combat.RangedTuning.MinStuckLimit, global::Meitou.Simulation.Combat.RangedTuning.MaxStuckLimit, () => (config.Gameplay ??= new()).HarpoonLimit,
@@ -118,7 +118,7 @@ sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, 
     /// <summary>What the Frame generation row reports as its state ("active", "off", ...); null on a host without that setting.</summary>
     public Func<string>? FrameGenerationStatus { get; init; }
     /// <summary>Applies a new attackers-per-target setting to the running combat system.</summary>
-    public Action<int>? AttackSlotsChanged { get; init; }
+    public Action<int?>? AttackSlotsChanged { get; init; }
     /// <summary>Applies the late-dodges setting to the running combat system.</summary>
     public Action<bool>? LateDefencesChanged { get; init; }
     /// <summary>Applies the turret gunner facing fix to the running combat system.</summary>
