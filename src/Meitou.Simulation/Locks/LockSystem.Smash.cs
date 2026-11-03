@@ -45,7 +45,7 @@ public sealed partial class LockSystem
 
     /// <summary>
     /// One update of a wall basher (<c>FUN_140348c10</c> for 272): it ends when the wall is destroyed, the attacker is down or no longer attacking; it walks to the wall's reach
-    /// (<see cref="GatePlan.AtWall"/>), faces it and, every <see cref="BashSwingSeconds"/>, strikes it with its blow's damage (<see cref="CombatSystem.StrikeWall"/>, the wall line's formula).
+    /// (<see cref="GatePlan.AtWall"/>), faces it and, at 0.6 of every <see cref="BashClipSeconds"/>, strikes it with its blow's damage (<see cref="CombatSystem.StrikeWall"/>, the wall line's formula).
     /// No crime is booked: only doors book Burglary.
     /// </summary>
     void Smash(World world, int s, CharacterCold c, string wallId)
@@ -73,9 +73,7 @@ public sealed partial class LockSystem
         var face = new Vector2(wall.Position.X, wall.Position.Z) - Flat(n.Position);
         if (face.LengthSquared() > 1e-4f) n.Yaw = MathF.Atan2(face.X, face.Y);
         if (c.BashTime < 0) c.BashTime = 0;
-        c.BashTime += world.TickSeconds;
-        if (c.BashTime < BashSwingSeconds) return;
-        c.BashTime = 0;
+        if (!BashBlowLands(c, world.TickSeconds)) return;
         float force = Packet(c) is var (cut, blunt, animal) ? (2 * blunt + 0.5f * cut) * (animal ? 0.25f : 1) : 0;
         if (CombatSystem.StrikeWall(world, wall, force, s)) StopBashing(table, s, c);
     }

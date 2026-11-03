@@ -131,7 +131,7 @@ public class DoorTests(ITestOutputHelper output)
         // A bonedog's blows do the minimum (a quarter of its packet is under 20): 0.3 of the door's progress each, one every 1.5 s.
         bool bashed = false;
         Vector3 at = default;
-        int ticks = (int)((MathF.Ceiling(door.DoorProgress / (20 * LockSystem.ProgressPerDamage)) + 4) * LockSystem.BashSwingSeconds / world.TickSeconds) + 900;
+        int ticks = (int)((MathF.Ceiling(door.DoorProgress / (20 * LockSystem.ProgressPerDamage)) + 4) * LockSystem.DefaultBashClipSeconds / world.TickSeconds) + 900;
         for (int t = 0; t < ticks && !door.DoorBroken; t++)
         {
             world.RunTick();
@@ -341,5 +341,20 @@ public class DoorTests(ITestOutputHelper output)
         Assert.Equal(2, gates.Count(b => b.Destroyed));
         Assert.All(gates.Where(b => b.Destroyed), g => Assert.DoesNotContain(world.Fixtures.OfBuilding(g.Key), f => f.Kind == FixtureKind.Door));
         Assert.Contains(hub.Buildings.Where(b => !b.Destroyed), b => world.Fixtures.OfBuilding(b.Key).Any(f => f.Kind == FixtureKind.Door));
+    }
+
+    [Fact]
+    public void A_bash_blow_lands_once_per_clip_cycle_at_six_tenths_of_it()
+    {
+        // Task_BashDoor (FUN_140348c10): the blow fires when the stonemine progress crosses 0.6, the first at 0.6 into the first cycle.
+        float phase = 0;
+        var blows = new List<float>();
+        for (int i = 1; i <= 400; i++)
+        {
+            if (LockSystem.BlowLands(phase, 0.01f, 2, out phase)) blows.Add(i * 0.01f);
+        }
+        Assert.Equal(2, blows.Count);
+        Assert.InRange(blows[0], 1.19f, 1.22f);
+        Assert.InRange(blows[1], 3.19f, 3.22f);
     }
 }

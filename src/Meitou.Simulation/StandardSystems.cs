@@ -204,11 +204,13 @@ public static class StandardSystems
         Meitou.Simulation.Production.ProductionSystem? production = null;
         if (Has(StandardParts.Production)) systems.Add(StandardParts.Production, production = new Meitou.Simulation.Production.ProductionSystem(data, o.Production) { Assembly = new CharacterAssembly(data), Construction = construction, Beds = beds, Carry = carry });
         if (Has(StandardParts.Combat)) systems.Add(StandardParts.Combat, combat!);
+        float bashCycle = 0;   // the stonemine cycle the bashers swing by (Task_BashDoor), 0: no animation data
         if (Has(StandardParts.Animation))
         {
             var library = o.AnimationLibrary ?? AnimationLibrary.FromDatabase(data.Db);
             var lengths = o.AnimationLengths ?? new AnimationLengths();
             var animation = new AnimationSystem(library, lengths, o.AnimationBlendRate ?? 4, combat) { Rigs = o.Ragdolls };
+            if (library.IndexOf("stonemine") is >= 0 and var mine) bashCycle = lengths.Of(library.Definitions[mine].Clip) / (library.Definitions[mine].PlaySpeed > 0 ? library.Definitions[mine].PlaySpeed : 1);
             systems.Add(StandardParts.Animation, animation);
             // Ragdolls right after the animation: they start from and pin to this tick's pose, and the whole body's position is theirs before anything later reads it.
             if (o.Ragdolls is not null) systems.Add(StandardParts.Animation, ragdolls = new Meitou.Simulation.Ragdolls.RagdollSystem(o.Ragdolls, o.RagdollEnvironment, data.BodyOptions));
@@ -245,6 +247,7 @@ public static class StandardSystems
             arrest.Captives = captives;
             if (townDuty is not null) townDuty.Arrests = arrest;
             systems.Add(StandardParts.Crime, locks = new Meitou.Simulation.Locks.LockSystem(data.Bodies.Constants, data.BodyOptions) { Crimes = crime, DoorsCloseBehind = o.DoorsCloseBehind, Assembly = new CharacterAssembly(data), Combat = combat, CombatConstants = data.Combat.Constants });
+            if (bashCycle > 0) locks.BashClipSeconds = bashCycle;
             if (combat is not null) combat.Locks = locks;
         }
         Meitou.Simulation.Trading.TradeSystem? trade = null;

@@ -955,7 +955,7 @@ unload, hashed only once non-empty. Facts: [locks](game/locks.md), [economy 11.5
   original's rows (85 → 72 / 81 / 287 → 82); a plan with a bash takes the building's main door (lowest door index with a spot) (`CharacterCold.Bashing`).
   Only door states and 90 DESTINATION_NOT_BLOCKED_BY_FORTIFICATIONS (`LockSystem.NotBlocked`, as for gates) are evaluated (the rest of row 4 is held); the desire is `scoreAggressiveAction` (no war-campaign case); an animal's natural weapon
   counts. The pursuit leaves it alone; it walks to 12 out from the leaf until within the door's reach (25, x2 standing, the leaf for the marker, no
-  gateway 45) and swings every 1.5 s (engine; the clip length is not read); a character ahead within 10 ends it until the next check. A closed unlocked
+  gateway 45) and swings at 0.6 of every `stonemine` cycle (`LockSystem.BashClipSeconds`, 1.5 s only without animation data); a character ahead within 10 ends it until the next check. A closed unlocked
   door is passed by the walk, so the bandit branch (bashing unlocked doors) and the break-out (287) are not acted out.
   Broken: lock unlocked, door broken and opening, the pursuit resumes. Engine: no crime for NPCs, the `Unlocked` sound for
   `Break`; headless (no door gate, no spots) nothing is bashed. Player characters never bash.

@@ -14,8 +14,31 @@ public sealed partial class LockSystem
 {
     /// <summary>Ticks between looks for attackers whose target is shut in (engine choice).</summary>
     public const int BashCheckTicks = 30;
-    /// <summary>Game seconds between swings (engine choice: the original swings at 0.6 of its <c>stonemine</c> clip, whose length Meitou does not read).</summary>
-    public const float BashSwingSeconds = 1.5f;
+    /// <summary>The cycle length used when the host gives none (worlds without the animation data).</summary>
+    public const float DefaultBashClipSeconds = 1.5f;
+    /// <summary>Where in the clip's cycle a blow lands (<c>Task_BashDoor</c> update <c>FUN_140348c10</c>, <b>Verified</b>: the blow fires when the <c>stonemine</c> progress crosses 0.6).</summary>
+    public const float BashBlowProgress = 0.6f;
+    /// <summary>
+    /// Game seconds one <c>stonemine</c> cycle takes (the clip's length over its record's play speed; set by the host from the animation data). A human basher's blow lands at 0.6 of every cycle,
+    /// the first at 0.6 into the first (the task starts with its previous progress at 1). Meitou also uses it for an animal, whose own attack clip the original plays instead (<b>Unknown</b>: its length).
+    /// </summary>
+    public float BashClipSeconds { get; set; } = DefaultBashClipSeconds;
+
+    /// <summary>Advances a basher's clip phase (<see cref="CharacterCold.BashTime"/>, seconds into the cycle) by <paramref name="dt"/>; true on the tick the phase crosses <see cref="BashBlowProgress"/>.</summary>
+    bool BashBlowLands(CharacterCold c, float dt)
+    {
+        bool lands = BlowLands(c.BashTime, dt, BashClipSeconds, out float phase);
+        c.BashTime = phase;
+        return lands;
+    }
+
+    internal static bool BlowLands(float phase, float dt, float cycle, out float next)
+    {
+        float blowAt = BashBlowProgress * cycle, t = phase + dt;
+        next = t >= cycle ? t - cycle : t;
+        return phase < blowAt && t >= blowAt;
+    }
+
     /// <summary>How far out from the leaf the basher walks to (engine choice: a walk goal on the outside; arriving is <see cref="DoorPlan.AtDoor"/>).</summary>
     public const float BashStandOff = 12;
     /// <summary>How near the stand spot by a door a lock worker counts as there.</summary>
@@ -83,9 +106,7 @@ public sealed partial class LockSystem
             // Every update in reach books Burglary against the door's owner, before the blow, for any basher (Task_BashDoor, shared by rows 81/123/226/272/287/290, locks.md).
             if (Crimes is not null && door.Owner >= 0 && door.Owner != c.Faction) Crimes.SetPending(world, s, Crime.CrimeCode.Burglary, door.Owner, CharacterId.None, Crime.CrimeSystem.MinTimer);
             if (c.BashTime < 0) c.BashTime = 0;
-            c.BashTime += world.TickSeconds;
-            if (c.BashTime < BashSwingSeconds) continue;
-            c.BashTime = 0;
+            if (!BashBlowLands(c, world.TickSeconds)) continue;
             // A break's only sound is the door's Break (Task_BashDoor posts no unlock sound), played by the host's door sounds.
             if (Hit(door, c))
             {
