@@ -21,6 +21,11 @@ public static class CombatTuning
     public const float BreakOutFrom = 0.1f, BreakOutTo = 0.99f;
     /// <summary>Seconds without any defence after a defence roll found nothing (<b>Verified</b>, the original's +0x14c), and the wait after a block ends with nothing coming (+0x148, 0.2 s).</summary>
     public const float NoDefenceSeconds = 1.2f, AfterBlockPause = 0.2f;
+    /// <summary>
+    /// A defence starts once the swing furthest on is this far to its blow (<b>Verified</b>, <c>FUN_140609290</c>); before that it tries again in EarlyDefenceSeconds (+0x14c 0.1 s). A started
+    /// defence sets +0x14c to DefenceStartedSeconds, and the defence update looks at the blow's side again every DefenceRecheckSeconds (+0x274, <c>FUN_1408862c0</c> 1.0).
+    /// </summary>
+    public const float DefenceStartProgress = 0.1f, EarlyDefenceSeconds = 0.1f, DefenceStartedSeconds = 0.2f, DefenceRecheckSeconds = 1f;
     /// <summary>A swing is given up to defend while it is under this far through and a blow coming at the fighter is past this far (<b>Verified</b>, FUN_1406083d0(0.5, 0.5)).</summary>
     public const float AbortOwnProgress = 0.5f, AbortIncomingProgress = 0.5f;
     /// <summary>

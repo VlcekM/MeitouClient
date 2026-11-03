@@ -152,22 +152,18 @@ when the front/rear test `FUN_140435600` (the attacker's current position agains
 defender that turns between the pick and the blow is judged on the new side (Meitou matches: `Apply` reads `HitOutcomes.Facing`/`Behind` again); the defence update re-picks (`FUN_140609290`) when the most advanced incoming swing changes, its blow index changes or the 1 s timer
 (+0x274) runs out, only for a non-dodge technique whose direction differs from the new blow's; a failed new start ends the defence (state 4, no defence for 1.2 s). Dodges are never re-picked. There is no
 limit on blocks other than this: a fighter blocks one blow at a time, its swing or wait excluding it. Meitou: `CombatSystem.SwingProgress` (before this the clip's own progress was used, so
-a swing was never cut short for a blow before its impact: a skilled fighter alone against four blocked 17 % of the blows at it in a sandbox battle, 34 % with it), `React(reconsider: true)`.
+a swing was never cut short for a blow before its impact: a skilled fighter alone against four blocked 17 % of the blows at it in a sandbox battle, 34 % with it), `Reconsider`.
 **Verified** (defence start and hold; `FUN_140609290`, `FUN_140609c70`, `FUN_140665e00`, `FUN_140887970`, `FUN_1405b7600`/`7800`). The incoming pick takes the largest v with `<=`, so on a tie the
-later one in the +0x220 list wins and stays picked (no flip-flop). A defence starts only once that v is 0.1 or more (below: no technique, retry in 0.1 s, +0x274 = 0.25), and its clip
+later one in the +0x220 list wins and stays picked (no flip-flop). A defence starts only once that v is 0.1 or more (below: no technique, retry in 0.1 s, +0x274 = 0.25; a started one sets +0x14c to 0.2), and its clip
 starts **at once**: nothing times it so its blocked frame meets the impact; speed = CombatClass+400 +0x18c x technique +0x28. The chooser pools, on a passed roll, only rows of the blow's
 direction, on a failed one only rows of another direction in the same group (`FUN_140665630`); an empty pool returns none and the caller sets 1.2 s (+0x14c) either way, so "no row for that
 side" is the same as a failed roll. Each defence tick replays the technique through `FUN_1405b7600`, which finds the playing layer by name and continues it; a re-pick to the same technique
 continues it too, a different one clears the layers and starts fresh (`FUN_1405b7800`). A block is not ended by its clip: it lasts while any incoming swing has 0 < v < 1, then ends with the wait
 (+0x148); a dodge ends past 0.98 (state 4). Whether a block clip held past its length loops or stays on its last frame is **Unknown** (a fading block layer, +0x62, plays backwards).
 The front/rear heading is the movement object's current unit heading (+0x640 +0xd0, [fight steering](#fight-steering)).
-Meitou differs (current `React`/`Act`): the start is delayed so the blocked frame lands on the impact, the block is dropped when its clip runs out (+0.2 s), ties go to the first attacker scanned, and
-skipping already-decided blows lets two tied attackers re-pick each other every tick.
-**Measured** (Meitou `--battle`, sandbox floor, base data, 1800 ticks): 1 v 1 Samurai Heavy 62-75 % of blows blocked; 6 v 6 70 %; one stat-100 Samurai Heavy against 4: 36 % (most of the rest were seen with too little lead for the block clip to pass 0.5, or hit it while it swung, waited or was staggered:
-a failed block roll is rare at skill 100). The original's own rate was not measured in play (no original binary run here).
-**Measured** (Meitou scripted world, base data, katana, defence 86 with heavy plate and attack 60 against four at attack 62 / 37 / 32 / 98, hit reactions on, 60 seeds, to incapacitation): 70 % of blows blocked
-(attack 98: 20 %, its block chance is 40 %; the others 64-79 %). Of the 120 blows that landed: stumbling 41 %, a failed roll that played a block of the wrong direction 35 %, mid-swing past 50 % 14 %, a block started
-too late for its clip to pass 0.5 (right after the defender's own swing's wait) 8 %. Without hit reactions 68 % blocked and the late blocks lead (95 of 169 landed). No hit met the 1.2 s no-defence lockout. All follow the rules above; the original's rate was not measured.
+Meitou: `CombatSystem.MostAdvanced` (the followed swing; an exact tie keeps the followed one, else the lower slot, since the grid's order is not stable), `React` (start),
+`Reconsider` (the update), `ReactionEnds` (a blow landing this tick still counts as on its way: strikes apply after every Act), `CombatTuning.DefenceStartProgress`. A held block's progress
+is clamped at 1, so it keeps blocking (the engine's reading of the loop question). A blow decided again rolls the same: Meitou's rolls are fixed per blow, the original draws afresh.
 
 **Observed** (decompiled, not measured in game), with several attackers: a target answering a request is asked by
 anyone, not only its own target, and the winner of the roll turns to attack the asker (`FUN_140666a30`). Deciding
@@ -175,8 +171,8 @@ anyone, not only its own target, and the winner of the roll turns to attack the 
 to deciding, except in the wait after its own swing (above). During its own swing a fighter aborts to defend only while under 50% of it with an incoming blow past
 50% (`FUN_14060a970` → `FUN_1406083d0(0.5, 0.5)`); while anyone attacks it the swing ends at the current blow's stop
 frame (`FUN_14060a590`). The defence covers the most advanced incoming blow from anyone; a failed defence roll means
-no defence for 1.2 s (+0x14c). A dodge plays its whole clip at its own speed, then decides at once; a block that
-ends leaves 0.2 s.
+no defence for 1.2 s (+0x14c). A dodge ends past 0.98 of its clip and decides at once; a defence with no swing left at it
+ends with 0.2 s (Pacing above).
 
 **Verified** (decompile; the waits are `deadTimer` +0x148): there is no wait before the first swing (`startupState`, state 3, enters the
 planned state at once). Deciding sets the wait to 0.5 s before it asks; the impact check overwrites it by outcome, so a swing that finds

@@ -28,8 +28,10 @@ public struct CombatSlot
     public float AttackSkill;
     /// <summary>The reaction technique (index), -1 when not reacting; its start tick and length in ticks.</summary>
     public int ReactTech, ReactStart, ReactTicks;
-    /// <summary>The last blow the character made a reaction decision about (attacker slot, attack number, blow), so each blow is decided once.</summary>
+    /// <summary>The swing the defence follows (attacker slot, attack number, blow; the original's +0x1a8 and +0x1d0): a change of it makes the defence update look again.</summary>
     public int ReactedSlot, ReactedSeq, ReactedBlow;
+    /// <summary>The tick the defence update looks at the followed blow's side again even when the swing has not changed (the original's 1 s timer +0x274).</summary>
+    public int ReactCheckTick;
     /// <summary>The earliest tick a new attack may start, and the tick until which a hit reaction holds the character helpless.</summary>
     public int ReadyTick, StunUntil;
     /// <summary>
@@ -128,6 +130,7 @@ public struct CombatSlot
         h.Add(ReactedSlot);
         h.Add(ReactedSeq);
         h.Add(ReactedBlow);
+        h.Add(ReactCheckTick);
         h.Add(ReadyTick);
         h.Add(StunUntil);
         h.Add(PauseUntil);
