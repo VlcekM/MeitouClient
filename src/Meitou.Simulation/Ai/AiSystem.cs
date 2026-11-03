@@ -397,7 +397,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             AiBehaviour.Shop => !mind.Shopping.Pending(ShoppingList.DayOf(world.GameHours), world.Hour, board.Town) ? 0
                 : ShopFor(Places(board.Town), mind, TargetRoll(world, self, behaviour), RandomShopping(world, board.Town)) is { } picked ? ShopFactor(Places(board.Town), picked) : 0,
             // A worker needs a mine, bench or refinery in its town (the finders return 0 without one).
-            AiBehaviour.Work => Places(board.Town).Workplaces.Count > 0 ? 1 : 0,
+            AiBehaviour.Work => Places(board.Town).Workplaces.Count > 0 && WorkAllowed(world, self.Slot, board.Town) ? 1 : 0,
             // Relaxing needs a free seat of the package's bar, sitting around a free chair of the home (claimed in <see cref="ClaimSeats"/>); the original's finder returns 0 without one (FUN_1408caf00).
             AiBehaviour.Relax => board.BarTable >= 0 && board.SeatClaims.ContainsKey(self.Slot) && !mind.SeatUnreachable ? 1 : 0,
             AiBehaviour.Sit => board.SitClaims.ContainsKey(self.Slot) && !mind.SeatUnreachable ? 1 : 0,
@@ -590,8 +590,21 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     TownBuilding? PickWork(World world, CharacterId self, int town, int epoch)
     {
         var list = Places(town).Workplaces;
-        if (list.Count == 0) return null;
+        if (list.Count == 0 || !WorkAllowed(world, self.Slot, town)) return null;
         return list[Rng.Int(Rng.Hash(world.Seed, Rng.Key(self), RngPurpose.Think, SeedSalts.AiTarget ^ (ulong)epoch << 20 ^ 0x57), list.Count)];
+    }
+
+    /// <summary>
+    /// The player-flag gate of the building finders of goals 189 / 190 (<c>FUN_1408cac60</c> / <c>FUN_1408cadb0</c>, <b>Verified</b>): the town's owner and the character must agree on being the player's
+    /// faction; a player-faction character in a town that is not the player's works only as an owned slave (slave state 1).
+    /// </summary>
+    bool WorkAllowed(World world, int slot, int town)
+    {
+        int player = world.Player.Faction >= 0 ? world.Player.Faction : data.PlayerFaction;
+        if (player < 0 || world.Characters.Cold(slot) is not { } cold) return true;
+        bool townIsPlayer = town >= 0 && town < data.SiteFactions.Count && data.SiteFactions[town] == player;
+        bool charIsPlayer = cold.Faction == player;
+        return townIsPlayer == charIsPlayer || charIsPlayer && cold.SlaveState == 1;
     }
 
     static bool IsGeneralNode(HomeSpot s) => s.NodeType == NodeGeneral;
