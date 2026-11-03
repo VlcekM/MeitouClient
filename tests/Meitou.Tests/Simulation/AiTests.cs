@@ -218,6 +218,32 @@ public class AiTests(ITestOutputHelper output)
         }
     }
 
+    /// <summary>
+    /// A goal it committed to goes on past a step of its own once that step is done (docs/simulation.md "Planner"): sleepers with a weapon drawn
+    /// sheathe it, then walk to their beds. Catches the kept plan repeating its done first step, which held a character where it stood for the whole
+    /// commitment.
+    /// </summary>
+    [Fact]
+    public void A_committed_goal_goes_on_past_its_done_first_step_so_armed_sleepers_sheathe_and_go_to_bed()
+    {
+        var data = WithHomes(Database(2), out _, out var house);
+        using var world = Town(1, out _, data, null);
+        world.RunTicks(400);
+        var squad = world.Squads.All.Single(s => s.TemplateId == "10-t" && s.Ai!.Home == house);
+        var sleepers = squad.Members.Where(m => m != squad.Leader).ToList();
+        Assert.NotEmpty(sleepers);
+        foreach (var m in sleepers) world.Characters.Cold(m.Slot)!.DrawnWeapon = Meitou.Data.Gameplay.WeaponKinds.Katana;
+
+        world.GameHours = 24 + 22.5;
+        world.RunTicks(1200);
+        var beds = house.Of(HomeSpotKind.Bed).Select(b => b.Position).ToList();
+        foreach (var m in sleepers)
+        {
+            Assert.Equal(Meitou.Data.Gameplay.WeaponKinds.None, world.Characters.Cold(m.Slot)!.DrawnWeapon);
+            Assert.InRange(beds.Min(b => Off(world, m, b)), 0, 13);
+        }
+    }
+
     /// <summary>A character's world for the planner: in bed or not, at the node or not; nothing drawn, carried or attacking; the rest held true.</summary>
     sealed class PlanStub(bool inBed, bool atNode, int category = 1) : IPlanWorld
     {
