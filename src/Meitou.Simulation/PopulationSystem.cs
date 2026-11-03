@@ -754,13 +754,13 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
 
     /// <summary>
     /// CHARACTER <c>slave</c> (SlaveStateEnum 1 slave, 2 escaped, 3 ex-slave) on a freshly made character, whatever squad it is in and with or without an owner (<c>FUN_14062b210</c>,
-    /// <b>Verified</b>; a saved character is not touched): 1 and 2 are kept, 3 is free. The owner is the faction of the town the squad belongs to, else none (-1). The setter's message
+    /// <b>Verified</b>; a saved character is not touched): 1, 2 and 3 are kept. The owner is the faction of the town the squad belongs to, else none (-1). The setter's message
     /// and obedient-slave job (<c>FUN_1405a4940</c>) are not run, as for the start squad before.
     /// </summary>
     void ApplyRecordSlave(CharacterCold cold, GameRecord? record, TownSite? site)
     {
         int state = record?.GetInt("slave") ?? 0;
-        if (state is not (1 or 2)) return;
+        if (state is not (>= 1 and <= 3)) return;
         cold.SlaveState = (byte)state;
         cold.SlaveOwner = site is not null && site.Index < data.SiteFactions.Count ? data.SiteFactions[site.Index] : -1;
         if (state == 2) cold.RecentlyWanted = Crime.CrimeSystem.RecentlyWantedSeconds;

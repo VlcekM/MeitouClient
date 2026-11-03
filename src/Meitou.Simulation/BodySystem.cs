@@ -437,7 +437,7 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
         {
             var holder = cold.InWhat is { } id ? world.Fixtures.Find(id) : null;
             if (holder is not null && holder.Owner >= 0 && holder.Owner == world.Player.Faction) return None;
-            return cold.SlaveState == 0 ? 2 : 1.15f;
+            return !cold.Enslaved ? 2 : 1.15f;
         }
         if (cold.IsPlayer || world.Player.Faction >= 0 && cold.Faction == world.Player.Faction) return None;
         if (db is null) return None;   // a world without data (tests, tools): nobody is fed for free

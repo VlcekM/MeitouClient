@@ -70,7 +70,7 @@ public sealed partial class World
             return new(systems.OfType<PopulationSystem>().FirstOrDefault()?.CampaignOf(inst.CampaignId)?.IsHostile == true ? StatusKind.WarLeader : StatusKind.Leader);
         if (c.Kidnapped) return new(StatusKind.Kidnapped);
         if (c.NpcClass == FundamentalType.Diplomat) return new(StatusKind.Diplomatic);
-        if (c.SlaveState != 0) return null;
+        if (c.Enslaved) return null;
         if (c.Pending is { } crime)
             return new(StatusKind.Crime, Crime.CrimeTable.Name(crime.Code), (int)crime.Timer, c.Bounties is null ? 0 : Crime.CrimeSystem.Lines(c, Tick, TickSeconds, LocalFaction(c, at, data)).FirstOrDefault(b => b.Local).Amount);
         return c.Escaped ? new(StatusKind.EscapedPrisoner) : null;

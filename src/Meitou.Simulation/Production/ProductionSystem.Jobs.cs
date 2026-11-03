@@ -198,7 +198,7 @@ public sealed partial class ProductionSystem
         var cold = table.Cold(slot)!;
         var options = world.Player.SquadAi;
         // None while sneaking (FUN_1405c9750; a fighting character is not Able anyway).
-        if ((cold.Orders & CharacterOrders.Jobs) == 0 || (cold.Orders & CharacterOrders.Sneak) != 0 || cold.SlaveState != 0 || options == SquadAi.None) return null;
+        if ((cold.Orders & CharacterOrders.Jobs) == 0 || (cold.Orders & CharacterOrders.Sneak) != 0 || cold.Enslaved || options == SquadAi.None) return null;
         var at = table.Next[slot].Position;
         var on = PermaJobs.ListJob(cold, (CharacterTask)table.Next[slot].Task) is { Implicit: true } running ? running.Row : TaskType.None;
         if ((options & SquadAi.Ditch) != 0)

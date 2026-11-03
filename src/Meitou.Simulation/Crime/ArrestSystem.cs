@@ -242,7 +242,7 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
             if (!Suspect(world, s)) continue;
             var c = table.Cold(s)!;
             bool wanted = c.Bounties is { Any: true };
-            if (c.SlaveState != 0 && CatchSlave(world, s, c)) continue;
+            if (c.Enslaved && CatchSlave(world, s, c)) continue;
             if (!wanted && !c.Escaped) { c.Recognition = 0; continue; }
             var at = next[s].Position;
             bool sneaking = (c.Orders & CharacterOrders.Sneak) != 0;
@@ -315,7 +315,7 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
         for (int w = 0; w < table.HighWater; w++)
         {
             if (w == s || !next[w].Alive) continue;
-            if (table.Cold(w) is not { IsPlayer: false, IsImprisoned: false, Medical.Incapacitated: false, CarriedBy.IsNone: true, SlaveState: 0 } wc || wc.Faction != c.SlaveOwner) continue;
+            if (table.Cold(w) is not { IsPlayer: false, IsImprisoned: false, Medical.Incapacitated: false, CarriedBy.IsNone: true, SlaveState: not (1 or 2) } wc || wc.Faction != c.SlaveOwner) continue;
             float d2 = Vector3.DistanceSquared(next[w].Position, at), range = AggroSystem.RangeOf(wc, AggroSystem.OutdoorSight);
             if (d2 > range * range || !InTownOf(world, w, next[w].Position)) continue;
             float v = world.Sight.Sees(w, s, next[w].Position, at, range, sneaking ? stealth : -1);

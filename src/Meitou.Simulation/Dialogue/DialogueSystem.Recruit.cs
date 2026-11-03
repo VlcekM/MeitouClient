@@ -101,7 +101,7 @@ public sealed partial class DialogueSystem
         if (mc.SquadId < 0 || world.Squads.Find(mc.SquadId) is not { } squad) return;
         foreach (var id in squad.Members.ToArray())
         {
-            if (id == me || !table.TryResolveNext(id, out int s) || table.Cold(s) is not { SlaveState: not 0, Medical.Dead: false } slave) continue;
+            if (id == me || !table.TryResolveNext(id, out int s) || table.Cold(s) is not { SlaveState: 1 or 2, Medical.Dead: false } slave) continue;
             byte state = slave.SlaveState;
             if (slave.IsImprisoned) world.Fixtures.Release(world, id);
             if (tc.IsPlayer || tc.Faction == world.Player.Faction)

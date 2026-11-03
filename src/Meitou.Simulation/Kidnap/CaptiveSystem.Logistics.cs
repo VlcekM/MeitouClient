@@ -276,7 +276,7 @@ public sealed partial class CaptiveSystem
         float bestD = float.MaxValue;
         for (int s = 0; s < table.HighWater; s++)
         {
-            if (s == w || !table.Next[s].Alive || table.Cold(s) is not { IsPlayer: false, SlaveState: 0, Medical.Incapacitated: false } c || c.Faction != faction && !Allied(faction, c.Faction)) continue;
+            if (s == w || !table.Next[s].Alive || table.Cold(s) is not { IsPlayer: false, SlaveState: not (1 or 2), Medical.Incapacitated: false } c || c.Faction != faction && !Allied(faction, c.Faction)) continue;
             var p = table.Next[s].Position;
             if (Vector2.Distance(new Vector2(p.X, p.Z), centre) > radius) continue;
             float d = Vector3.DistanceSquared(at, p);

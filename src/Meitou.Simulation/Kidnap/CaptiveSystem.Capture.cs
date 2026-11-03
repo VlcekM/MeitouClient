@@ -119,7 +119,7 @@ public sealed partial class CaptiveSystem
         if (!c.CarriedBy.IsNone || c.InSomething != HeldState.None || c.IsImprisoned || c.Fighter is { IsAnimal: true } || c.Appearance?.Animal is not null || c.Race is null) return false;
         var id = table.IdOf(v);
         if (Busy(id) || Waiting(givenUp, id, world.GameHours) || Kidnap is { } k && k.Abductions.Any(a => a.Victim == id)) return false;
-        if (!capture) return c.SlaveState != 0 && c.SlaveOwner == me.Faction && c.Medical is not { Unconscious: false, Crawling: false, StayingLow: true };
+        if (!capture) return c.Enslaved && c.SlaveOwner == me.Faction && c.Medical is not { Unconscious: false, Crawling: false, StayingLow: true };
         if (c.SlaveState == 1 || c.NpcClass is FundamentalType.LawEnforcement or FundamentalType.Trader or FundamentalType.Diplomat || Maimed(c.Medical!) || LockSystem.WornShackles(c) is not null) return false;
         return c.Faction != me.Faction && !Allied(me.Faction, c.Faction);
     }
