@@ -11,6 +11,9 @@ namespace Meitou.Simulation;
 /// </summary>
 public static class CharacterFacts
 {
+    /// <summary>Posture 0 (vfunc <c>0x368</c>, <b>Verified</b> in <c>FUN_14028eca0</c> and <c>FUN_1409c70f0</c>): not knocked out or dead, not staying low, crawling or playing dead.</summary>
+    public static bool PostureZero(CharacterCold cold) => cold.Medical is not ({ Incapacitated: true } or { StayingLow: true } or { Crawling: true } or { PlayingDead: true });
+
     /// <summary>
     /// State 26 IS_CROUCHING_OR_LYING (<c>FUN_140599e90</c>, <b>Verified</b>), read by the planner and by the slave delivery: false when crippled (a crawler; an incapacitated one stands in for it), else true staying low (posture 1), playing dead (3) or in a bed. A knocked-out character is posture 4 and does not count.
     /// </summary>

@@ -280,7 +280,7 @@ public sealed partial class AiSystem
         var table = world.Characters;
         for (int i = 0; i < table.Previous.Length; i++)
         {
-            if (!table.Previous[i].Alive || table.Cold(i) is not { IsImprisoned: false } c || c.Medical is { Incapacitated: true } or { StayingLow: true } or { Crawling: true } or { PlayingDead: true }) continue;
+            if (!table.Previous[i].Alive || table.Cold(i) is not { IsImprisoned: false } c || !CharacterFacts.PostureZero(c)) continue;
             if (OfFaction(world, c, board.AssaultEnemy) && CurrentTown(world, table.Previous[i].Position) == board.Destination) return true;
         }
         return false;

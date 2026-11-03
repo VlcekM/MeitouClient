@@ -1112,7 +1112,7 @@ public sealed partial class PopulationSystem : IStateHashed
         foreach (var cold in PlayersAt(world, t))
         {
             if ((cold.Orders & CharacterOrders.Sneak) == 0 || cold.InCombat) seen++;
-            if (cold.InSomething == Locks.HeldState.Bed || cold.DiedTick < 0 && cold.Medical is not { Incapacitated: true } and not { Prone: true }) standing++;
+            if (cold.InSomething == Locks.HeldState.Bed || cold.DiedTick < 0 && CharacterFacts.PostureZero(cold)) standing++;
         }
         return seen > 2 && standing * 2 > seen;
     }
