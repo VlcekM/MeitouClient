@@ -81,6 +81,7 @@ generated LOD, Hi-Z/fog culls and atlas residency live in the renderer reference
 
 ## Expression reference
 
+  **Verified** (`FUN_1406d2410` l.146-156): a mesh with a `building type` (a resource rock) is not rejected inside the range of a town whose owner faction is the player's; every other mesh, and rocks near other towns, are. Meitou: `FoliageTown.Owned` from `FoliageWorld.PlayerTowns`, a snapshot of the player's towns taken when a world is made or loaded (`GameHost.SnapshotPlayerTowns`); a town founded or captured later changes resource-rock placement only when its zone is placed again. The layout cache key includes the owned flags and the cache is bypassed when the snapshot differs from the one it was keyed with. No placement test (needs a full zone input).
 - Noise: `n = x + 57 z`; `n ^= n << 13`
 - Materials: `windFactorX/Z = wind factor × 0.25`
 - TERRAIN-mode meshes: `slope = min(1, 1 − normal.y)`

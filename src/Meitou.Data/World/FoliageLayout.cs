@@ -38,8 +38,8 @@ public sealed class FoliageZoneInput
     public required IReadOnlyList<uint> Biomes { get; init; }
     /// <summary>Biome index colour at a world point (biomemap.png).</summary>
     public required Func<float, float, uint> BiomeAt { get; init; }
-    /// <summary>The nearest town (not a nest marker) to a point: X/Z and its <c>no-foliage range</c>; null when there is none.</summary>
-    public Func<float, float, (Vector2 At, float Range)?>? NearestTown { get; init; }
+    /// <summary>The nearest town (not a nest marker) to a point: X/Z, its <c>no-foliage range</c> and whether the player's faction owns it; null when there is none.</summary>
+    public Func<float, float, FoliageTown?>? NearestTown { get; init; }
     /// <summary>Water surface height for <c>floating</c> meshes.</summary>
     public float WaterHeight { get; init; } = WorldWater.Height;
 }
@@ -185,7 +185,8 @@ public static class FoliageLayout
         if (slope > mesh.MaxSlope || slope < mesh.MinSlope) return false;
         if (p.X < c.X0 || p.X > c.X1 || p.Y < c.Z0 || p.Y > c.Z1) return true;
         bool rejected = false;
-        if (mesh.AvoidTowns && input.NearestTown?.Invoke(p.X, p.Y) is { } town &&
+        // A resource mesh (one with a building type) is not rejected inside the no-foliage range of a town the player's faction owns (FUN_1406d2410:146-156, Verified).
+        if (mesh.AvoidTowns && input.NearestTown?.Invoke(p.X, p.Y) is { } town && !(mesh.BuildingType is not null && town.Owned) &&
             Vector2.DistanceSquared(town.At, p) < town.Range * town.Range)
             rejected = true;
         float y = input.Ground.Height(p.X, p.Y);

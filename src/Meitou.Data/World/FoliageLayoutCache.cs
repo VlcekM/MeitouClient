@@ -57,14 +57,19 @@ public sealed class FoliageLayoutCache
     readonly string directory;
     readonly byte[] key;
     int hits, misses, rejected, written, maintained;
+    // The player-owned towns the key was made with; the cache is bypassed when the world's snapshot has a different number (a load after the cache was opened).
+    readonly int keyedOwned;
+    bool Stale => FoliageWorld.PlayerTowns.Count != keyedOwned;
     long loadTicks, computeTicks, savedMicros, bytesRead, bytesWritten;
 
-    public FoliageLayoutCache(GameInstall install, FoliageCatalog catalog, IEnumerable<(Vector2 At, float Range)> towns, string? root = null, long? maxBytes = null)
+    public FoliageLayoutCache(GameInstall install, FoliageCatalog catalog, IEnumerable<FoliageTown> towns, string? root = null, long? maxBytes = null)
     {
         this.catalog = catalog;
         Root = root ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Meitou", "foliage");
         MaxBytes = maxBytes ?? DefaultMaxBytes;
-        key = ComputeKey(install, catalog, towns);
+        var list = towns as IReadOnlyCollection<FoliageTown> ?? [.. towns];
+        keyedOwned = list.Count(t => t.Owned);
+        key = ComputeKey(install, catalog, list);
         KeyName = Convert.ToHexString(key.AsSpan(0, 8)).ToLowerInvariant();
         directory = Path.Combine(Root, KeyName);
     }
@@ -83,7 +88,7 @@ public sealed class FoliageLayoutCache
     // ------------------------------------------------------------------ key
 
     /// <summary>The 32-byte key (see the class summary).</summary>
-    public static byte[] ComputeKey(GameInstall install, FoliageCatalog catalog, IEnumerable<(Vector2 At, float Range)> towns)
+    public static byte[] ComputeKey(GameInstall install, FoliageCatalog catalog, IEnumerable<FoliageTown> towns)
     {
         using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
         var text = new StringBuilder();
@@ -172,7 +177,7 @@ public sealed class FoliageLayoutCache
 
     Decoded? Fetch(ZoneCoordinate zone, bool farOnly, bool grouped)
     {
-        if (LoadCaches.Disabled) return null;
+        if (LoadCaches.Disabled || Stale) return null;
         var path = PathFor(zone, farOnly);
         long t0 = System.Diagnostics.Stopwatch.GetTimestamp();
         byte[]? bytes = null;
@@ -376,7 +381,7 @@ public sealed class FoliageLayoutCache
     /// <summary>Records the time a miss took to place (for the summary) and writes the zone; failures are ignored, the cache is only a cache.</summary>
     public void Save(ZoneCoordinate zone, bool farOnly, FoliageZone laid, FoliageGround ground, double computeMs)
     {
-        if (LoadCaches.Disabled) return;
+        if (LoadCaches.Disabled || Stale) return;
         Interlocked.Add(ref computeTicks, (long)(computeMs * System.Diagnostics.Stopwatch.Frequency / 1000));
         try
         {

@@ -19,7 +19,7 @@ public sealed class FoliageWorld : IDisposable
     TerrainHeightmap? map;
     BlendInfoFile? blend;
     FoliageBiomeMap? biomes;
-    List<(Vector2 At, float Range)>? towns;
+    List<FoliageTown>? towns;
     readonly Dictionary<(int, int), byte[]> tiles = [];
     readonly System.Collections.Concurrent.ConcurrentDictionary<(int, int), Lazy<byte[]>>? sharedTiles;
 
@@ -36,13 +36,22 @@ public sealed class FoliageWorld : IDisposable
 
     public FoliageCatalog Catalog { get; }
 
+    /// <summary>
+    /// The towns the player's faction owned when the world was loaded, by <see cref="TownKey"/> (set by the host after a load or a new game; a snapshot: a town founded or captured later changes
+    /// the placement of resource rocks only when its zone is placed again, docs/formats/foliage.md "Towns").
+    /// </summary>
+    public static IReadOnlySet<(int X, int Z)> PlayerTowns { get; set; } = new HashSet<(int, int)>();
+
+    /// <summary>A town's key in <see cref="PlayerTowns"/>: its X/Z rounded to whole units.</summary>
+    public static (int X, int Z) TownKey(float x, float z) => ((int)MathF.Round(x), (int)MathF.Round(z));
+
     /// <summary>The towns that keep foliage away (not nest markers): X/Z and <c>no-foliage range</c>.</summary>
-    public static List<(Vector2 At, float Range)> ReadTowns(GameDatabase db, WorldLevelData world)
+    public static List<FoliageTown> ReadTowns(GameDatabase db, WorldLevelData world)
     {
-        var list = new List<(Vector2, float)>();
+        var list = new List<FoliageTown>();
         foreach (var t in world.Towns())
             if (db.Find(t.TownId) is { } record && record.GetInt("type") != BuildingTowns.NestMarkerType)
-                list.Add((new Vector2(t.Position.X, t.Position.Z), record.GetFloat("no-foliage range", 2000)));
+                list.Add(new FoliageTown(new Vector2(t.Position.X, t.Position.Z), record.GetFloat("no-foliage range", 2000), PlayerTowns.Contains(TownKey(t.Position.X, t.Position.Z))));
         return list;
     }
 
@@ -73,10 +82,10 @@ public sealed class FoliageWorld : IDisposable
         return list;
     }
 
-    (Vector2 At, float Range)? NearestTown(float x, float z)
+    FoliageTown? NearestTown(float x, float z)
     {
         var at = new Vector2(x, z);
-        (Vector2, float)? best = null;
+        FoliageTown? best = null;
         float bestDistance = float.MaxValue;
         foreach (var t in towns!)
         {
