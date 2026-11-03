@@ -117,4 +117,60 @@ public class TownOverrideSaveTests
         }
         finally { Directory.Delete(Path.GetDirectoryName(folder)!, recursive: true); }
     }
+
+    /// <summary>
+    /// Five houses with a door and a destroyed mesh, the last two in the next zone; B's default resident is a ruined template (docs/game/buildings-production.md
+    /// "Ruined by residents"), its one resident entry takes a house.
+    /// </summary>
+    static (PopulationData Data, List<TownBuilding> Houses) RuinData(IWorldStates states)
+    {
+        var door = SyntheticTown.Rec("60-t", FcsRecordType.BUILDING, "Door");
+        var house = SyntheticTown.Rec("61-t", FcsRecordType.BUILDING, "House");
+        house.References["doors"] = [SyntheticTown.Ref("60-t")];
+        house.Filenames["destroyed mesh"] = "ruin.mesh";
+        var ruined = SyntheticTown.Rec("70-t", FcsRecordType.SQUAD_TEMPLATE, "Ruined");
+        ruined.Bools["building ruined"] = true;
+        var b = new FcsRecord { StringId = "51-t", Flags = 0x11, Name = "B (override)", RecordType = FcsRecordType.TOWN };
+        b.References["default resident"] = [SyntheticTown.Ref("70-t")];
+        var db = PopulationTests.OverrideDb(extra: [door, house, ruined, b]);
+        var next = new ZoneCoordinate(Zone.X + 1, Zone.Y);
+        var houses = Enumerable.Range(0, 5).Select(i => new TownBuilding($"h{i}", "61-t", $"h{i}", SyntheticTown.Centre + new Vector3(40 * i, 0, 50), 0, false, false, [])
+            { Zone = i >= 3 ? next : Zone, CanHouse = true }).ToList();
+        var made = PopulationData.Create(db, Placements, buildings: new Dictionary<string, List<TownBuilding>> { ["inst"] = houses });
+        return (PopulationTests.WithStates(made, states), houses);
+    }
+
+    [Fact]
+    public void A_replaced_towns_ruined_residents_ruin_their_homes_in_and_out_of_its_zone_and_a_save_keeps_them()
+    {
+        var states = new PopulationTests.FixedStates();
+        var (data, houses) = RuinData(states);
+        using var a = World(data);
+        Focus(a, SyntheticTown.Centre, 2);
+        Assert.Empty(a.Fixtures.Ruins);
+
+        // B takes over: every house but the one its resident entry takes is a ruin, without its door, in the next zone too.
+        Focus(a, new Vector3(-50000, 0, -50000), 180);
+        states.Holding.UnionWith(["91-t", "92-t"]);
+        Focus(a, SyntheticTown.Centre, 2);
+        Assert.Equal(4, a.Fixtures.Ruins.Count);
+        Assert.Contains(a.Fixtures.Ruins, r => r.Building.Zone != Zone);
+        foreach (var h in houses) Assert.Equal(!a.Fixtures.IsDestroyed(h), a.Fixtures.Find(h.Key + "#0") is not null);
+
+        // Saved and loaded: the same ruins.
+        var options = new SaveCaptureOptions { Placements = Placements };
+        var save = SaveCapture.Capture(a, data, new SaveClock(3, 7, 45), null, options, SaveCapture.PrepareBase(data, null, options));
+        string folder = Path.Combine(Temp("override-ruins"), QuickSave.Name);
+        try
+        {
+            save.Write(folder);
+            data.ClearReplacements();
+            using var b = World(data);
+            SaveLoader.Load(b, SaveGame.Load(folder), data);
+            Assert.Equal(a.Fixtures.Ruins.Select(r => r.Building.Key).Order(), b.Fixtures.Ruins.Select(r => r.Building.Key).Order());
+            b.Fixtures.RegisterSite(b, data, 0);
+            foreach (var h in houses) Assert.Equal(!b.Fixtures.IsDestroyed(h), b.Fixtures.Find(h.Key + "#0") is not null);
+        }
+        finally { Directory.Delete(Path.GetDirectoryName(folder)!, recursive: true); }
+    }
 }
