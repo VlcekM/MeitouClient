@@ -96,7 +96,7 @@ i.e. everything).
 | `camera zoom` | float; slider 10 … 200 | 125 | Camera Zoom Speed | Zoom step speed (+0x0C) |
 | `invert X` | bool | 0 | Invert mouse X | Stored as a ±1 factor at +0x10 |
 | `invert Y` | bool | **1** | Invert mouse Y | Stored as a ±1 factor at +0x14 (inverted by default) |
-| `swap mouse buttons` | bool | 0 | Swap mouse buttons | Swaps left and right buttons on the GUI (Meitou: Controls page, `KeyMap.SwapButtons`; the game view swaps too, as its GUI and game presses share one path) |
+| `swap mouse buttons` | bool | 0 | Swap mouse buttons | Tooltip: swaps left and right on the GUI. **Verified** (OIS press and release callbacks `FUN_14082a090` / `FUN_14082a1e0`, global `DAT_14213346b`): the button is swapped (0 and 1 trade) once, before both the key code posted to the game's input (`(button + 1) * 0x1000`) and MyGUI's inject; so the game view swaps too, as Meitou does (Controls page, `KeyMap.SwapButtons`) |
 | `hardware_mouse` | bool | 0 | Hardware Mouse | Windows cursor instead of the drawn one; the tooltip says it needs a restart |
 | `Edge scrolling` | bool | 1 | Edge scrolling | Camera moves when the pointer is at the screen edge |
 | `mouse speed horizontal` | float | 1.5 (see text) | none | Scales the raw mouse x movement |

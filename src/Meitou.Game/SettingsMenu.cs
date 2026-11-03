@@ -336,7 +336,7 @@ sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, 
             result.Add(new("Invert mouse Y", "Reverses the camera's tilt, for the mouse and the keys (the game: on).",
                 Toggle: new("Invert mouse Y", () => config.InvertY != false, v => { config.InvertY = v; CameraChanged?.Invoke(); }, OnOff: true)));
         if (page == 3)
-            result.Add(new("Swap mouse buttons", "Swap the left and right mouse buttons (the game: off; it swaps the GUI's, here the game view follows).",
+            result.Add(new("Swap mouse buttons", "Swap the left and right mouse buttons (the game: off; the game view follows, as in the original).",
                 Toggle: new("Swap mouse buttons", () => config.SwapMouseButtons == true, v => KeyMap.SwapButtons = (config.SwapMouseButtons = v) == true, OnOff: true)));
         if (page == 3)
             result.Add(new("Edge scrolling", "The camera moves when the pointer is at the edge of the screen.",
