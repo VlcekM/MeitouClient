@@ -31,9 +31,9 @@ public sealed record LoadoutWeapon(GameRecord Weapon)
 
 /// <summary>
 /// A limb that is not the natural one (docs/game/character-stats.md "Limb replacements and robots"): <see cref="State"/> 1 stump, 2 replaced, 3 crushed (the medical
-/// <c>LimbState</c>), and for a replaced limb its LIMB_REPLACEMENT record.
+/// <c>LimbState</c>), and for a replaced limb its LIMB_REPLACEMENT record and the item level it is made at (a CHARACTER <c>robot limbs</c> entry's v0).
 /// </summary>
-public sealed record LoadoutLimb(int State, GameRecord? Prosthetic = null);
+public sealed record LoadoutLimb(int State, GameRecord? Prosthetic = null, int Level = 0);
 
 /// <summary>
 /// What <see cref="CharacterGenerator"/> rolled for one character: race, gender, a body-file-like appearance (head, hair,

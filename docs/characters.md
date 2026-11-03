@@ -27,7 +27,8 @@ that bucket's run): human bodies draw group 1 before group 0. Sliders and colour
 (mesh name))` when its mesh is made, so draws after the appearance (money, bounty, name) follow a reseeded or uncached sequence. **Unknown**: the
 Character constructor's own draws (it runs before the race pick), where equipment is rolled, the faction field skipping the skin re-roll and morph,
 the morph mesh name. Meitou (`CharacterGenerator`, `MsvcRandom`): the same generator and appearance order, one sequence per character from its
-seed (scrambled, as neighbouring `srand` seeds start alike), equipment after the morph index, the poses from FNV-1a of race/gender/index; money,
+seed (scrambled, as neighbouring `srand` seeds start alike), equipment after the morph index (backpack, `robot limbs`, clothing, crossbows,
+weapons: `setupInventorySections` order, **Verified**), the poses from FNV-1a of race/gender/index; money,
 names and personality keep their own per-purpose seeds.
 
 ### Random appearance
