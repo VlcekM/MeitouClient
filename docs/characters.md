@@ -268,7 +268,7 @@ exe decompile unless marked; Meitou: `CharacterDraft` (data), `EditCharacter` / 
   (`FUN_14007f040`), then face poses; the rest stays. Draws as in [Original random sequence](#assembly-and-generation). RESET ALL = the appearance template's defaults (hair, beard,
   colours, `Posture`, idle stance `idle_stand_normal`; slider values **Unknown**, Meitou: XML mid, poses 0, Posture 20); CLOTHES toggles worn
   clothing in the preview; IMPORT/EXPORT: see [below](#import-and-export). CONFIRM asks first when some
-  characters were never shown, closes, unpauses at speed 1; it charges nothing. No cancel widget; Esc opens the game menu over the editor
+  characters were never shown, closes, unpauses and sets the speed to Normal (`FUN_1405e9f40`, **Verified**; the generic editor confirm, so surgery too); it charges nothing. No cancel widget; Esc opens the game menu over the editor
   (**Observed**, vanilla play; Meitou does so in both modes).
 - **Race and gender switches** (`FUN_1405ef390`, `FUN_1405eadc0`, **Observed**): each character keeps a look per (race, gender); a switch stores
   the current look under the old pair and loads the new pair's, keeping the idle stance. **Verified** (decompilation, `FUN_1405f03c0`): when the

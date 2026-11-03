@@ -364,6 +364,7 @@ sealed partial class PlayerInterface
                 Say(new EditCharacter(id, CharacterDraft.Copy(draft.Record), draft.Name, s.Kind) { Tick = tick, Surgeon = s.Surgeon, Paid = s.Paid });
         if (s.Kind == EditKind.Creation) Say(new FinishCreation { Tick = tick });
         CloseEditor();
+        session.Simulation.SetSpeed(1);   // CONFIRM unpauses and sets the speed to Normal for every kind of editor (FUN_1405e9f40)
     }
 
     /// <summary>For the screenshot showcase: the open editor's character gets a new random look and name, and CONFIRM is pressed (the creation path end to end).</summary>
