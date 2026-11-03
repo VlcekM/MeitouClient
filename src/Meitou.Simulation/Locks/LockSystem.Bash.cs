@@ -20,22 +20,34 @@ public sealed partial class LockSystem
     public const float BashBlowProgress = 0.6f;
     /// <summary>
     /// Game seconds one <c>stonemine</c> cycle takes (the clip's length over its record's play speed; set by the host from the animation data). A human basher's blow lands at 0.6 of every cycle,
-    /// the first at 0.6 into the first (the task starts with its previous progress at 1). Meitou also uses it for an animal, whose own attack clip the original plays instead (<b>Unknown</b>: its length).
+    /// the first at 0.6 into the first (the task starts with its previous progress at 1). An animal swings its own attack clip instead (<see cref="BashBlowLands"/>).
     /// </summary>
     public float BashClipSeconds { get; set; } = DefaultBashClipSeconds;
 
-    /// <summary>Advances a basher's clip phase (<see cref="CharacterCold.BashTime"/>, seconds into the cycle) by <paramref name="dt"/>; true on the tick the phase crosses <see cref="BashBlowProgress"/>.</summary>
+    /// <summary>
+    /// How far into an animal's own attack clip it restarts (<c>Task_BashDoor</c>, <b>Verified</b> <c>FUN_140348c10</c>: it restarts the clip once its progress reads past 0.98, double <c>0x1416c0b90</c>);
+    /// a human's looping <c>stonemine</c> has no restart.
+    /// </summary>
+    public const float AnimalRestartProgress = 0.98f;
+
+    /// <summary>
+    /// Advances a basher's clip phase (<see cref="CharacterCold.BashTime"/>, seconds into the cycle) by <paramref name="dt"/>; true on the tick the phase crosses <see cref="BashBlowProgress"/>.
+    /// An animal swings its own attack technique's clip (<see cref="CombatSystem.AnimalBashSeconds"/>, <c>FUN_140887420</c>) and restarts it at <see cref="AnimalRestartProgress"/>.
+    /// </summary>
     bool BashBlowLands(CharacterCold c, float dt)
     {
-        bool lands = BlowLands(c.BashTime, dt, BashClipSeconds, out float phase);
+        float own = Combat?.AnimalBashSeconds(c) ?? 0;
+        bool lands = own > 0 ? BlowLands(c.BashTime, dt, own, out float phase, AnimalRestartProgress * own) : BlowLands(c.BashTime, dt, BashClipSeconds, out phase);
         c.BashTime = phase;
         return lands;
     }
 
-    internal static bool BlowLands(float phase, float dt, float cycle, out float next)
+    /// <summary>One step of a swing cycle: the blow lands when the phase crosses 0.6 of the clip (<paramref name="cycle"/>); the phase wraps at <paramref name="period"/> (the clip's length unless given).</summary>
+    internal static bool BlowLands(float phase, float dt, float cycle, out float next, float period = 0)
     {
+        if (period <= 0) period = cycle;
         float blowAt = BashBlowProgress * cycle, t = phase + dt;
-        next = t >= cycle ? t - cycle : t;
+        next = t >= period ? t - period : t;
         return phase < blowAt && t >= blowAt;
     }
 

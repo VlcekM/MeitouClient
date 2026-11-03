@@ -88,6 +88,22 @@ public sealed partial class CombatSystem
     }
 
     /// <summary>
+    /// The seconds one swing of an animal's door bash takes (<c>Task_BashDoor</c>, <c>FUN_140887420</c>, <b>Verified</b>): the first attack technique, in data order, that fits the animal's weapon
+    /// category (not <c>disabled</c>, no block or dodge) plays at speed 1; its clip's length from the animal's own skeleton over the technique's <c>anim speed mult</c>. 0 when there is none
+    /// or the clip is unknown (the caller keeps the human cycle).
+    /// </summary>
+    public float AnimalBashSeconds(CharacterCold cold)
+    {
+        if (cold.Fighter is not { IsAnimal: true } f) return 0;
+        foreach (var t in asWritten)
+        {
+            if (t.Disabled || t.IsBlock || t.IsDodge || !TechniqueChooser.Fits(t, f.AnimalCategory)) continue;
+            return lengths.For(cold.Race?.StringId).Of(t.AnimName) / MathF.Max(t.AnimSpeedMult, 0.1f);
+        }
+        return 0;
+    }
+
+    /// <summary>
     /// The playback rate of a technique (docs/game/combat.md "Animation speed", <b>Verified</b>): attacks lerp(t, 0.8, 1.2) x G capped at 1.2, blocks lerp(t, 0.6, 4) x G
     /// capped at 4, with t = 0.01 (0.6 dexterity + 0.4 skill) (attack, or defence with the bonuses); dodges 1. G = (0.5 + 0.5 min(1, e + 0.5) (1 - f)) x the gear's
     /// <c>combat speed mult</c>, e the encumbrance factor and f the weapon-weight-over-strength factor of the strength XP.

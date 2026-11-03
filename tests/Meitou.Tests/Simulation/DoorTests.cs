@@ -357,4 +357,19 @@ public class DoorTests(ITestOutputHelper output)
         Assert.InRange(blows[0], 1.19f, 1.22f);
         Assert.InRange(blows[1], 3.19f, 3.22f);
     }
+
+    [Fact]
+    public void An_animals_bash_clip_restarts_when_its_progress_passes_98_percent()
+    {
+        // Task_BashDoor (FUN_140348c10): an animal's own attack clip is restarted once it reads past 0.98, so the cycle is 0.98 of the clip and the blow stays at 0.6 of the clip.
+        float phase = 0;
+        var blows = new List<float>();
+        for (int i = 1; i <= 400; i++)
+        {
+            if (LockSystem.BlowLands(phase, 0.01f, 2, out phase, LockSystem.AnimalRestartProgress * 2)) blows.Add(i * 0.01f);
+        }
+        Assert.Equal(2, blows.Count);
+        Assert.InRange(blows[0], 1.19f, 1.22f);
+        Assert.InRange(blows[1], 3.15f, 3.19f);
+    }
 }
