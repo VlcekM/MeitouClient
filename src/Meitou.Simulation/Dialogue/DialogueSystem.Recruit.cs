@@ -50,6 +50,16 @@ public sealed partial class DialogueSystem
         return SquadManagement.PlayerSquads(world).FirstOrDefault();
     }
 
+    /// <summary>
+    /// <c>FUN_1407ff8b0</c>: with the faction under its head cap, a recruit that overfills the active squad and the squad count at its cap make one extra, empty squad of the active squad's
+    /// template at its position before the recruit is added (the recruit does not join it, so it stays empty, docs/game/dialogue.md "Recruiting").
+    /// </summary>
+    void ExtraSquadAtTheCap(World world, Squad active, Meitou.Data.Gameplay.GameConstants limits)
+    {
+        if (PlayerHeads(world) >= limits.MaxFactionSize || active.Members.Count + 1 <= limits.MaxSquadSize || SquadManagement.PlayerSquads(world).Count < limits.MaxSquads) return;
+        SquadManagement.NewSquad(world, data.Db, active.Position, data.Factions[world.Player.Faction].Name is { Length: > 0 } f ? f : "Nameless", active.TemplateId);
+    }
+
     /// <summary>The character at <paramref name="slot"/> leaves its squad and joins the player's active squad (or a new blank squad when it is full) as a player character.</summary>
     bool JoinPlayer(World world, int slot, CharacterCold talker)
     {
@@ -58,6 +68,7 @@ public sealed partial class DialogueSystem
         var mc = table.Cold(slot)!;
         var limits = data.Bodies.Constants;
         if (ActiveSquad(world) is not { } squad) return false;
+        ExtraSquadAtTheCap(world, squad, limits);
         if (squad.Members.Count >= limits.MaxSquadSize)
             squad = SquadManagement.NewSquad(world, data.Db, table.Next[slot].Position, data.Factions[world.Player.Faction].Name is { Length: > 0 } f ? f : "Nameless");
 

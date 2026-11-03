@@ -67,12 +67,12 @@ public static class SquadManagement
     }
 
     /// <summary>
-    /// A new, empty squad of the player's faction at <paramref name="at"/>, of the SQUAD_TEMPLATE "blank squad" (the original's <c>FUN_1407f4420</c> with no template), last in
+    /// A new, empty squad of the player's faction at <paramref name="at"/>, of the SQUAD_TEMPLATE "blank squad" (the original's <c>FUN_1407f4420</c> with no template; <paramref name="templateId"/>: that template), last in
     /// the order and named like the original's platoons, the faction's name and a number (<c>Nameless_1</c>).
     /// </summary>
-    public static Squad NewSquad(World world, GameDatabase db, Vector3 at, string factionName)
+    public static Squad NewSquad(World world, GameDatabase db, Vector3 at, string factionName, string? templateId = null)
     {
-        var template = db.OfType(FcsRecordType.SQUAD_TEMPLATE).FirstOrDefault(r => r.BaseName == "blank squad");
+        var template = templateId is not null ? db.Find(templateId) : db.OfType(FcsRecordType.SQUAD_TEMPLATE).FirstOrDefault(r => r.BaseName == "blank squad");
         var squads = PlayerSquads(world);
         int n = squads.Count;
         while (squads.Any(s => s.Name == $"{factionName}_{n}")) n++;

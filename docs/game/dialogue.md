@@ -510,7 +510,7 @@ squad simply takes the speaker in, unless a target flag at +0x1d0 is set):
   faction's platoon list at +0x210/+0x218). No `max squads` check there.
 - **Before the loop**, when the active squad's count plus the recruits exceeds `max squad size` and the faction already has `max squads`
   platoons, `FUN_1407f4420` also makes one platoon of the active squad's template (disassembly `1407ff928`-`1407ff978`); the recruits
-  still go through the rule above, so that platoon stays empty (**Observed**, static).
+  still go through the rule above, so that platoon stays empty (**Observed**, static). Meitou: `DialogueSystem.ExtraSquadAtTheCap` (also with the faction under its head cap, as `FUN_1407ff8b0` tests; **Verified** by the decompile).
 - **Each recruit**: speed mode set to 2 (RUN; the same field DA 23 writes), NPC class (`+0x1a0 -> +0xdc`) set to 9 ADVENTURER (the
   value every player-faction character gets when made, `FUN_14062b210`); a character without its own dialogue package (+0x248) gets
   its record's `dialogue package player` (none: the player faction's `dialog default`) as its dialogue; every armour piece it carries
