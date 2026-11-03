@@ -371,10 +371,13 @@ public sealed class SaveBuilder
     /// <summary>The STATS floats a record always has that the stat system does not write (the legacy ones): zero.</summary>
     public static readonly string[] LegacyStatKeys = ["xp", "free attribute points", "warrior spirit", "endurance", "ff", "hackers", "survival", "arrow defence"];
 
-    /// <summary>Fills the legacy STATS floats a real record always has (zero unless already set).</summary>
-    public static void FillLegacyStats(FcsRecord stats)
+    /// <summary>
+    /// Fills the legacy STATS floats a real record always has (zero unless already set); a new character's <c>warrior spirit</c> is the STATS template's
+    /// (<paramref name="warriorSpirit"/>, <c>FUN_14064b6a0</c> reads it into CharStats, <c>FUN_14064a8f0</c> writes it back).
+    /// </summary>
+    public static void FillLegacyStats(FcsRecord stats, float warriorSpirit = 0)
     {
-        foreach (var k in LegacyStatKeys) stats.Floats.TryAdd(k, 0);
+        foreach (var k in LegacyStatKeys) stats.Floats.TryAdd(k, k == "warrior spirit" ? warriorSpirit : 0);
     }
 }
 

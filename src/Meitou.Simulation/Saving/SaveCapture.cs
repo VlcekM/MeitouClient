@@ -486,13 +486,17 @@ public static partial class SaveCapture
         return sc;
     }
 
+    /// <summary>The <c>warrior spirit</c> of the character record's STATS template (0 without one or without the field).</summary>
+    static float WarriorSpiritOf(GameDatabase db, string recordId) =>
+        db.Find(recordId)?.GetReferences("stats").Where(r => r.Values.Value0 > 0).Select(r => db.Find(r.TargetStringId)).FirstOrDefault(s => s?.Type == FcsRecordType.STATS)?.GetFloat("warrior spirit") ?? 0;
+
     static void WriteBody(SaveCharacter sc, string recordId, CharacterStats? stats, MedicalState? medical, bool isNew, PopulationData data, Dictionary<string, RaceData?> races)
     {
         if (stats is null && isNew) stats = new CharacterStats();
         if (stats is not null && sc.Stats is { } sr)
         {
             stats.WriteSave(sr.Floats);
-            SaveBuilder.FillLegacyStats(sr);
+            SaveBuilder.FillLegacyStats(sr, isNew ? WarriorSpiritOf(data.Db, recordId) : 0);
         }
         if (medical is null && isNew && RaceOf(recordId, data.Db, races) is { } race)
             medical = MedicalState.Create(race, stats?.Strength ?? 50);
