@@ -74,12 +74,26 @@ async function face(user, cx, cy, r, ring) {
   body += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${ring}" stroke-width="${ring === amber ? 4 : 2}"/>`;
 }
 const fonts = { font: { loadSystemFonts: true, defaultFontFamily: 'DejaVu Sans' } };
-// Centred text, shrunk to fit `max` pixels: the runner's fonts are wider than Windows' Segoe UI, so the width is measured, not assumed.
-function text(x, y, size, fill, s, weight = 400, max = 260) {
-  const el = sz => `<text x="${x}" y="${y}" font-family="${font}" font-size="${sz}" font-weight="${weight}" fill="${fill}" text-anchor="middle">${esc(s)}</text>`;
-  const box = new Resvg(`<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${y + size}">${el(size)}</svg>`, fonts).innerBBox();
-  return el(box && box.width > max ? Math.floor(size * max / box.width) : size);
+// Centred text wrapped at spaces to fit `max` pixels, a word wider than that shrunk: the runner's fonts are wider than Windows' Segoe UI,
+// so the width is measured, not assumed. Returns the SVG and its line count.
+function wrapped(x, y, size, fill, s, weight = 400, max = 260) {
+  const el = (sz, t, ty) => `<text x="${x}" y="${ty}" font-family="${font}" font-size="${sz}" font-weight="${weight}" fill="${fill}" `
+    + `text-anchor="middle">${esc(t)}</text>`;
+  const width = t => new Resvg(`<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${y + size}">${el(size, t, y)}</svg>`, fonts)
+    .innerBBox()?.width ?? 0;
+  const lines = [];
+  for (const word of s.split(' ')) {
+    const joined = lines.length ? `${lines.at(-1)} ${word}` : word;
+    if (lines.length && width(joined) <= max) lines[lines.length - 1] = joined;
+    else lines.push(word);
+  }
+  const svg = lines.map((t, i) => {
+    const w = width(t);
+    return el(w > max ? Math.floor(size * max / w) : size, t, y + i * Math.round(size * 1.2));
+  }).join('');
+  return { svg, lines: lines.length };
 }
+const text = (...a) => wrapped(...a).svg;
 
 let y = 4;
 
@@ -102,13 +116,18 @@ if (others.length) {
   for (let k = 0, i = 0; k < rows; k++) {
     const n = Math.floor(others.length / rows) + (k < others.length % rows ? 1 : 0), row = others.slice(i, i += n), x0 = (W - row.length * cell) / 2;
     const R = row.some(role) ? rr : r;
+    let lines = 0;
     for (const [j, u] of row.entries()) {
       const cx = x0 + j * cell + cell / 2, name = u.login.length > 18 ? `${u.login.slice(0, 17)}…` : u.login;
       await face(u, cx, y + R + 8, role(u) ? rr : r, role(u) ? amber : muted);
       body += text(cx, y + 2 * R + 44, 24, muted, name, role(u) ? 700 : 600);
-      if (areas(u)) body += text(cx, y + 2 * R + 72, 19, role(u) ? amber : muted, areas(u), role(u) ? 600 : 400);
+      if (areas(u)) {
+        const t = wrapped(cx, y + 2 * R + 72, 19, role(u) ? amber : muted, areas(u), role(u) ? 600 : 400, cell - 20);
+        body += t.svg;
+        lines = Math.max(lines, t.lines);
+      }
     }
-    y += 2 * R + (row.some(areas) ? 104 : 76);
+    y += 2 * R + (lines ? 104 + (lines - 1) * 23 : 76);
   }
 }
 const H = y - 16;
