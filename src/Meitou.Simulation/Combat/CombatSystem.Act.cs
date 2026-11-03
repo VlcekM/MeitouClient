@@ -423,7 +423,7 @@ public sealed partial class CombatSystem
                 bool paused = now < s.PauseUntil;
                 if (!aborted && fighting && !paused && (now >= s.ReadyTick || incoming >= 0 || yielded))
                 {
-                    StartAttack(world, i, ref s, cold, key, now, dt);
+                    StartAttack(world, i, ref s, cold, key, now, dt, effects);
                     // A failed ask: with a blow coming it defends (below), else an engaged fighter goes to state 5 (FUN_14060c8b0); an attack ends it.
                     s.CircleState = s.Engaged && s.AttackTech < 0 && incoming < 0;
                 }
@@ -437,7 +437,7 @@ public sealed partial class CombatSystem
         }
     }
 
-    void StartAttack(World world, int i, ref CombatSlot s, CharacterCold cold, ulong key, int now, float dt)
+    void StartAttack(World world, int i, ref CombatSlot s, CharacterCold cold, ulong key, int now, float dt, EffectBuffer effects)
     {
         var table = world.Characters;
         var prev = table.Previous;
@@ -476,7 +476,7 @@ public sealed partial class CombatSystem
         int pick = TechniqueChooser.ChooseAttack(techniques, query, roll, out s.Reach);
         if (pick < 0) return;
         // In reach with a technique: ask the target (and hold an attack slot).
-        if (!HasSlot(world, i, t, tc, now) || !HasInitiative(world, i, ref s, t, cold, tc, now)) return;
+        if (!HasSlot(world, i, t, tc, now) || !HasInitiative(world, i, ref s, t, cold, tc, now, effects)) return;
         var tech = techniques[pick];
         s.AttackSeq++;
         s.AttackTech = pick;
@@ -498,13 +498,14 @@ public sealed partial class CombatSystem
     /// or not fighting it; otherwise an initiative roll on both attack skills (the skill roll with <c>attack chance factor</c>, 50/50 at equal skill),
     /// drawn from the pair and tick so both sides agree. The loser yields: the winner may swing at it at once (the original sets the winner to attack).
     /// </summary>
-    bool HasInitiative(World world, int i, ref CombatSlot s, int t, CharacterCold cold, CharacterCold tc, int now)
+    bool HasInitiative(World world, int i, ref CombatSlot s, int t, CharacterCold cold, CharacterCold tc, int now, EffectBuffer effects)
     {
         ref readonly var target = ref read[t];
         var prev = world.Characters.Previous;
         bool atMe = target.TargetSlot == i && target.TargetGeneration == prev[i].Generation;
         if (target.YieldTo == i && now < target.YieldUntil) return true;
         if (atMe && SwingProgress(in target, now) is > 0 and < 1) return false;   // its swing at me is on the way to its blow (progress strictly between 0 and 1, FUN_140665420): I defend (FUN_140666a30)
+        if (MassCombatAnswer(world, t, in target, atMe, now)) effects.Emit(i, t, MassCombatEffect);
         if (Open(t, tc, now)) return true;
         if (s.YieldTo == t && now < s.YieldUntil) return false;
         // The target is free (deciding or in its pause): one draw for the pair and tick, the lower slot's view.
@@ -522,6 +523,20 @@ public sealed partial class CombatSystem
         s.YieldTo = t;
         s.YieldUntil = from + Math.Max(1, (int)MathF.Ceiling(CombatTuning.YieldSeconds / world.TickSeconds));
         return false;
+    }
+
+    /// <summary>The <see cref="Effect.Kind"/> of an ask whose answer adds mass combat experience to the asked character (<c>FUN_1408c5e80</c>, <c>Target</c>).</summary>
+    public const int MassCombatEffect = 5;
+
+    /// <summary>
+    /// Whether the answer to an ask (<c>FUN_140666a30</c>, <b>Verified</b>) gives the asked character mass combat XP: it is stumbling, or it fights someone other than the asker with its dead-time
+    /// flag clear (no block or dodge playing) and is defending (blows coming at it; engine reading of state 1) or attacking. A target without a target gives none.
+    /// </summary>
+    bool MassCombatAnswer(World world, int t, in CombatSlot target, bool atMe, int now)
+    {
+        if (now < target.StunUntil) return true;
+        if (target.TargetSlot < 0 || atMe || target.Down || target.ReactTech >= 0) return false;
+        return target.AttackTech >= 0 || Incoming(world, t, now, out _) > 0;
     }
 
     /// <summary>

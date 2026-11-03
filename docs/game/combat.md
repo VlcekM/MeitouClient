@@ -298,6 +298,7 @@ path-facing branches set the heading at once (before, `Turn` at 4π rad/s, which
   `setAttackTargetHandle` does nothing when the asker already is its target (hand vfunc +8 is "equal"), else stores the asker's handle in +0x2a0..+0x2b0
   and notifies both characters ([being targeted](#fight-lifecycle-and-orders)). A focused fighter is turned this way too, but its next pick, at most 1 s
   later, returns the focused target.
+  Meitou (`CombatSystem.MassCombatAnswer`, `MassCombatEffect`): the three XP cases once per answered ask, on the target's stat 31 (save-only, nothing reads it); "defending" is read as blows coming at the target (engine reading of state 1) and dead time as a block or dodge playing.
 - **Mass combat XP** (`FUN_1408c5e80`) therefore fires on the *target's* stats, once per ask answered in those three cases: being hit at while
   stumbling or already fighting someone. It adds exp gain multiplier × 0.05 to the save-only stat (no consumer found), so it changes nothing
   visible; Meitou does not call `XpService.MassCombat` (the stat is not read anywhere).

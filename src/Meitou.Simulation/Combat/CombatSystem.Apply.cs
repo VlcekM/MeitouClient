@@ -31,6 +31,7 @@ public sealed partial class CombatSystem
         if (e.Kind == FireEffect) { ApplyFire(world, e); return; }
         if (e.Kind == ReloadEffect) { ApplyReload(world, e); return; }
         if (e.Kind == ZoneBuildingsEffect) { ApplyZoneBuildings(world, e); return; }
+        if (e.Kind == MassCombatEffect) { if (world.Characters.Cold(e.Target) is { Stats: { } asked }) xp.MassCombat(asked); return; }
         if (e.Kind != BlowEffect) return;
         var table = world.Characters;
         int a = e.Source, d = e.Target, blow = e.Arg, seq = (int)e.Amount, now = (int)world.Tick;
