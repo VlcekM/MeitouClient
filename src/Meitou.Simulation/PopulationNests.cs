@@ -50,16 +50,7 @@ public sealed partial class PopulationSystem
             {
                 var at = Around(centre, nest.SizeRadius, ref rng);
                 float ground = walk.TerrainHeight(at.X, at.Y);
-                var pick = ShopFiller.Pick(list.Entries, ref rng);
-                float quality = pick.Type == FcsRecordType.ARMOUR ? Meitou.Data.Characters.CharacterGenerator.QualityOfGrade(ShopFiller.Grade(null, ref rng)) : 0;
-                if (ground < 1 || data.Items.Create(pick.Id, 1, quality) is not { } item) continue;
-                if (pick.Type == FcsRecordType.WEAPON)
-                {
-                    if (ShopFiller.Maker(list, data.Db, ref rng) is not { } made) continue;
-                    item.CompanyId = made.Maker.StringId;
-                    item.MaterialId = made.Model ?? "";
-                    item.Level = made.Level;
-                }
+                if (Items.ItemSlots.Roll(data, list, -1, ref rng).Item is not { } item || ground < 1) continue;
                 world.GroundItems.Place(item, new Vector3(at.X, ground, at.Y), rng.NextFloat() * MathF.Tau, NestTag, -1);
             }
         }

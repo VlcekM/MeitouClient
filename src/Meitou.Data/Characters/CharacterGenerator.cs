@@ -345,7 +345,7 @@ public static class CharacterGenerator
         foreach (var r in character.GetReferences("robot limbs"))
         {
             if (db.Find(r.TargetStringId) is not { Type: FcsRecordType.LIMB_REPLACEMENT } limb) continue;
-            if (r.Values.Value0 >= 0 && (limb.GetReferences("material").Count == 0 || !RaceAllowed(limb, race))) continue;
+            if (r.Values.Value0 >= 0 && (limb.GetReferences("material").Count == 0 || !Gameplay.RaceLimiter.Allows(limb, race))) continue;
             int slot = limb.GetInt("slot") - Gameplay.Bodies.LimbReplacement.FirstSlot;
             if ((uint)slot < (uint)options.Length) (options[slot] ??= []).Add((r, r.Values.Value1));
         }
