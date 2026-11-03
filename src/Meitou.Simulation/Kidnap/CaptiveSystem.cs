@@ -643,7 +643,7 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
 
     /// <summary>
     /// A captive a slaver processes (<c>FUN_1408cc110</c> for 260, <c>FUN_1408cd630</c> for 183, through <c>BuildingFinder_SlavesToProcess</c>, <b>Observed</b>): a cage of the town whose
-    /// owner is not the player's faction and is the worker's or an ally of it (engine reading of the finder's town test), holding a live character no other job works. 260 takes an
+    /// owner is not the player's faction and that the worker may use (<c>Ownerships::canIUseThisBuilding</c>, <see cref="Locks.FixtureRegistry.CanUse(World, CharacterCold, Locks.Fixture)"/>: its own faction, a non-enemy cage outdoors in its home town, one indoors in a public building, else an ally; <c>FUN_1408db510</c>), holding a live character no other job works. 260 takes an
     /// awake occupant that is no slave; 183 one on the worker's floor and in its building (or both outdoors) within <see cref="CaptiveSettings.WatchRange"/> in 3D, whose owner (if any) is an ally and that is not a slave
     /// of an owner that still looks one (<c>FUN_1408ca3d0</c>; its flag <c>0x3e0</c> is taken as slave state 1, <b>Unknown</b>).
     /// </summary>
@@ -653,7 +653,7 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
         var at = table.Next[slot].Position;
         foreach (var f in CagesOf(world, site))
         {
-            if (f.Owner < 0 || f.Owner == world.Player.Faction || f.Owner != cold.Faction && !Allied(cold.Faction, f.Owner) || Taken(f.Id)) continue;
+            if (f.Owner < 0 || f.Owner == world.Player.Faction || !world.Fixtures.CanUse(world, cold, f) || Taken(f.Id)) continue;
             if (OccupantSlot(world, f) is not (>= 0 and var s) || Busy(table.IdOf(s))) continue;
             var c = table.Cold(s)!;
             if (watching)

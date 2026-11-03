@@ -797,6 +797,8 @@ every message {1} is the campaign's name and {2} the target town's (the cancel m
 | area tick | 2 s scaled | 6.2 |
 | min distance of a homeless spawn from the player | 1382.4 | 6.2 |
 
+- **Member placement does not snap to the ground** (**Verified**, `FUN_1405ca680`, `FUN_14065e940`, `FUN_14065e870`, `FUN_140145e50`): placing a squad member stores the position in `+0x48` and calls the movement's vfunc `0xb8`, which rejects a non-finite position and otherwise stores it as given and hands it to the nav agent (it finds the nearest nav polygon for it and does not move the character). No walkable snap; walls are handled only by `FUN_1404ffad0`'s "tried to spawn inside walls!" log and the player-town re-placement. Meitou places members on the walkable ground of the spot it picked (engine choice).
+
 ## Unknowns
 
 - What sets the character status threat float `+0xac` and the killer handle `+0x2c0` (3.5); what the
