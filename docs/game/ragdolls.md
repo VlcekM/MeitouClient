@@ -153,7 +153,7 @@ and keeps those leg ragdoll bits on; the character tick `FUN_1405d00b0` sets pos
   speed S = 7 (5 with a leg down, [pathfinding](pathfinding.md#speed-and-orders)).
 - Stand Up (order 28, also shown for 65): `Character::addOrder` queues AI task 28 "Standing", built as `Task_UnCrouch`
   ([ai-tasks](ai-tasks.md)): it plays `squat T` backwards and sets posture 0 once the clip is under 0.1. While getting up the
-  tick queues task 52 `GET_UP_STAY_DOWN_THOUGH` (posture 1/2) or 65 `GET_UP_STAND_UP` (posture 0).
+  tick queues task 52 `GET_UP_STAY_DOWN_THOUGH` (posture 1/2) or 65 `GET_UP_STAND_UP` (posture 0). Animals always post 65 (one branch, no posture computation, no 52). Meitou: `CharacterFacts.GetUpGoal` (derived from `GettingUpUntil` and the posture; no consumer yet).
 - The posture is not saved: neither the character writer (`FUN_1406280a0`) nor the medical writer (`FUN_14064ea50`) has a
   key for it; the health panel (`MedicalSystem::getMedicalGUIData`) shows "Staying low" for 1 and "Playing dead..." for 3.
 - Meitou: `MedicalState.StayingLow` (not saved), `MedicalState.Prone` (posture ≠ 0) read wherever posture ≠ 0 is; set on
