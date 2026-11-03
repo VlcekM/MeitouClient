@@ -1066,7 +1066,7 @@ public sealed partial class PopulationSystem : IStateHashed
         if (Ai.SquadIntact.Held(table, squad, data.Relations)) return true;
         int up = 0;
         foreach (var m in squad.Members)
-            if (table.TryResolveNext(m, out int s) && table.Next[s].Alive && table.Cold(s)?.Medical is not { Incapacitated: true }) up++;
+            if (table.TryResolveNext(m, out int s) && table.Next[s].Alive && table.Cold(s) is { } c && Ai.SquadIntact.Able(world, c, false)) up++;
         return Ai.SquadIntact.Decide(up, squad.Members.Count, !squad.Leader.IsNone, Ai.SquadIntact.Down(table, squad.Leader), persistentHome: false);
     }
 

@@ -98,8 +98,8 @@ public sealed class FleeSystem(FactionRelations relations, CombatSystem combat, 
     void Consider(World world, CharacterTable table, Squad squad)
     {
         if (!Relations.Contains(squad.Faction)) return;
-        int size = 0;
-        bool fighting = false;
+        int size = 0, able = 0;
+        bool fighting = false, home = Ai.SquadIntact.PersistentHome(squad);
         standing.Clear();
         foreach (var m in squad.Members)
         {
@@ -107,6 +107,7 @@ public sealed class FleeSystem(FactionRelations relations, CombatSystem combat, 
             // A member running alone (Self preservation) does not stop its squad from breaking; it counts as the others do and is not started again.
             if (c.IsPlayer || c.Fleeing && !c.FleesAlone) return;
             size++;
+            if (Ai.SquadIntact.Able(world, c, home)) able++;
             bool down = c.Medical is { Incapacitated: true };
             if (down || c.Fighter is null) continue;
             standing.Add(s);
@@ -115,7 +116,7 @@ public sealed class FleeSystem(FactionRelations relations, CombatSystem combat, 
         // The squad-intact test (Ai.SquadIntact, FUN_14079acf0, docs/game/perception.md "Fleeing"): a member caged or carried off by a non-ally keeps it intact; else it
         // needs a leader and someone able; under 4 members it holds while the leader is up, from 4 while those able to fight are a share of the squad. No enemy is counted.
         if (!fighting || standing.Count == 0 || Ai.SquadIntact.Held(table, squad, Relations)) return;
-        if (Ai.SquadIntact.Decide(standing.Count, size, !squad.Leader.IsNone, Ai.SquadIntact.Down(table, squad.Leader), Ai.SquadIntact.PersistentHome(squad))) return;
+        if (Ai.SquadIntact.Decide(able, size, !squad.Leader.IsNone, Ai.SquadIntact.Down(table, squad.Leader), home)) return;
         Broken++;
         foreach (int s in standing)
         {

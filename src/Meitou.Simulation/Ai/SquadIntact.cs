@@ -13,6 +13,29 @@ static class SquadIntact
     /// <summary>The share of the squad's size that must be able (<c>DAT_1416885d8</c>), and with the leader down (<c>DAT_141696c90</c>).</summary>
     public const float Ratio = 0.2f, LeaderDownRatio = 0.4f;
 
+    /// <summary>A down member still counts as able below this organic first aid need: 0.8 for a persistent platoon with a home (<c>DAT_141693ea8</c>), else 0.2 (<c>DAT_14168a4a8</c>).</summary>
+    public const float AbleNeedHome = 0.8f, AbleNeed = 0.2f;
+
+    /// <summary>
+    /// A member that counts as able (<c>FUN_14079acf0</c>'s loop, <b>Verified</b>): not dead (<c>FUN_1406215b0</c>, medical <c>+0x164</c>), and either not down (<see cref="CharacterFacts.Down"/>)
+    /// or down with its organic first aid need (Character <c>+0x504</c> = medical <c>+0xac</c>, <see cref="Bodies.MedicalState.FirstAidNeeds"/>) under the threshold, so a knocked-out
+    /// but barely hurt member still counts.
+    /// </summary>
+    public static bool Able(World world, CharacterCold c, bool persistentHome)
+    {
+        if (c.Medical is not { } med) return true;
+        if (med.Dead) return false;
+        return !CharacterFacts.Down(c) || DownIsAble(Need(world, c, med), persistentHome);
+    }
+
+    /// <summary>A down member counts as able while its organic first aid need is strictly under the threshold (<c>need &lt; t</c>: the original's <c>need &lt;= t &amp;&amp; need != t</c>).</summary>
+    public static bool DownIsAble(float need, bool persistentHome) => need < (persistentHome ? AbleNeedHome : AbleNeed);
+
+    static float Need(World world, CharacterCold c, Bodies.MedicalState med) =>
+        c.Race is { } race
+            ? med.FirstAidNeeds(race, MathF.Max(Bodies.MedicalState.BloodCapacity(race, c.Stats?.Strength ?? 50, med.HasStatsObject, med.ScaleK, med.ScaleZ), 1), world.SystemOf<BodySystem>()?.Constants.ExtraBloodLossFromBodyparts ?? 1).Organic
+            : 0;
+
     /// <summary>
     /// A member in a cage or restraint, or carried by a character not allied with it (<c>FUN_14079ab40</c>, <b>Verified</b>): the squad stays intact, so it neither
     /// retreats nor breaks. A carrier that no longer resolves is ignored.
@@ -44,8 +67,7 @@ static class SquadIntact
     /// <summary>
     /// The verdict once no member is <see cref="Held"/>: a squad without a leader or with no able member is not intact; under <see cref="MinForRatio"/> members a
     /// persistent squad with a home is intact while anyone is able, any other while its leader is up; from that many, while the able are at least
-    /// <see cref="Ratio"/> of the size (<see cref="LeaderDownRatio"/> with the leader down). The original's able test also passes a down member whose
-    /// <c>+0x504</c> is under 0.8 (persistent with a home) or 0.2 (meaning <b>Unknown</b>); Meitou counts the alive and not incapacitated.
+    /// <see cref="Ratio"/> of the size (<see cref="LeaderDownRatio"/> with the leader down). <paramref name="able"/> counts <see cref="Able"/> members.
     /// </summary>
     public static bool Decide(int able, int size, bool hasLeader, bool leaderDown, bool persistentHome)
     {
