@@ -596,6 +596,7 @@ Meitou: [ground items](../simulation.md#items-and-eating).
   group, has-home flag and home town position, sector range near/far, `patrol approaches towns`, a smell factor) is made once; the
   start sets the range to (1, 2), or (0, 1) when the platoon has a home town, then orders a move whose destination (`CharMovement`
   slot 20, mode 3) is drawn by `FUN_1408fc730` from the leader's position:
+  The picker's only callers are the `Task_Patrol` thunks `FUN_1408fd6c0` and `FUN_1408fe0d0` (**Verified**; off screen uses `FUN_1407ee790`), so every loaded squad whose leader acts a PATROL goal outside a patrol package walks sector to sector, homeless or not. Meitou: `PopulationSystem.PatrolStep` for the homeless sectors' squads and `PatrolLoadedSquads` for all others (a town's, a platoon's).
   1. A coin flip takes the four diagonal or the four straight neighbouring sectors; those of the same biome group with sector flag
      +0x32 clear (its writer not found: **Unknown**) and weight > 0 enter a cumulative pick.
   2. Weight (`FUN_1408f5ad0`): 1 for a sector whose zone is not active. Active: n = its counted platoons + 0.5 × the others (the area

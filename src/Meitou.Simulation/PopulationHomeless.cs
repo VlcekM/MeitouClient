@@ -71,20 +71,10 @@ public sealed partial class PopulationSystem
                 sectorSeen.Add(id);
                 var zone = WorldLayout.ZoneOf(table.Previous[slot].Position.X, table.Previous[slot].Position.Z);
                 if (zone != site.Zone && SectorAt(zone) is var to and >= 0 && MayRefile(world, id, to, zone, slot)) refiles.Add((id, i, to));
-                // Not on a patrol package's route (laid only round a home town, so a homeless squad's patrol package walks the sectors too), nor with a mission town (a
-                // trader on its way, an assault or occupation roaming the town it took).
-                if (table.Cold(slot)?.Ai is not { Behaviour: AiBehaviour.Patrol } || squad.Ai is { CurrentClass: PackageClass.Patrol or PackageClass.PatrolRunning } board
-                    && board.RouteIndex < board.Route.Length || squad.Ai is { Destination.IsNone: false }) continue;
-                patrolSeen.Add(id);
-                var at = new Vector2(table.Previous[slot].Position.X, table.Previous[slot].Position.Z);
-                homelessPatrols.TryGetValue(id, out var patrol);
-                if (patrol.Picks > 0 && Vector2.DistanceSquared(at, patrol.Point) > patrol.Arrive * patrol.Arrive) continue;
-                if (PatrolPoint(world, squad, site, at, patrol.Picks) is not { } next) continue;
-                homelessPatrols[id] = (next.Point, patrol.Picks + 1, PointArrive);
-                squad.HomeCentre = next.Point;
-                squad.HomeRadius = PointRadius;
+                PatrolStep(world, squad, slot, site.Group, site.Zone);
             }
         }
+        PatrolLoadedSquads(world);
         foreach (var (id, from, to) in refiles) Refile(world, id, from, to);
         if (homelessPatrols.Count > patrolSeen.Count)
             foreach (int id in homelessPatrols.Keys.Where(k => !patrolSeen.Contains(k)).ToList()) homelessPatrols.Remove(id);
@@ -159,19 +149,51 @@ public sealed partial class PopulationSystem
     }
 
     /// <summary>
+    /// One squad's patrol (<c>Task_Patrol</c>): when its leader acts a PATROL goal that is not on a patrol package's route nor under a mission town (a trader on its way, an assault or
+    /// occupation roaming the town it took), it draws the next point once it has reached the last (<see cref="PatrolPoint"/>) and wanders round it. Every squad does, homeless or not:
+    /// the picker's only caller is the patrol task (<c>FUN_1408fd6c0</c>, <c>FUN_1408fe0d0</c>, <b>Verified</b>).
+    /// </summary>
+    void PatrolStep(World world, Squad squad, int slot, int group, ZoneCoordinate zone)
+    {
+        var table = world.Characters;
+        if (table.Cold(slot)?.Ai is not { Behaviour: AiBehaviour.Patrol } || squad.Ai is { CurrentClass: PackageClass.Patrol or PackageClass.PatrolRunning } board
+            && board.RouteIndex < board.Route.Length || squad.Ai is { Destination.IsNone: false }) return;
+        patrolSeen.Add(squad.Id);
+        var at = new Vector2(table.Previous[slot].Position.X, table.Previous[slot].Position.Z);
+        homelessPatrols.TryGetValue(squad.Id, out var patrol);
+        if (patrol.Picks > 0 && Vector2.DistanceSquared(at, patrol.Point) > patrol.Arrive * patrol.Arrive) return;
+        if (PatrolPoint(world, squad, group, zone, at, patrol.Picks) is not { } next) return;
+        homelessPatrols[squad.Id] = (next.Point, patrol.Picks + 1, PointArrive);
+        squad.HomeCentre = next.Point;
+        squad.HomeRadius = PointRadius;
+    }
+
+    /// <summary>The loaded squads outside the homeless sectors (a town's, a platoon's) whose leader acts a PATROL goal outside a patrol package walk from sector to sector as well (a2-011).</summary>
+    void PatrolLoadedSquads(World world)
+    {
+        var table = world.Characters;
+        foreach (var squad in world.Squads.All)
+        {
+            if (sectorSeen.Contains(squad.Id) || !table.TryResolveNext(squad.Leader, out int slot) || !table.IsAlive(squad.Leader)) continue;
+            var p = table.Previous[slot].Position;
+            var (cx, cz) = WeatherAreas.CellOf(p.X, p.Z);
+            if (data.Biomes!.GroupOf(cx, cz) is var group and >= 0) PatrolStep(world, squad, slot, group, new ZoneCoordinate(cx, cz));
+        }
+    }
+
+    /// <summary>
     /// The next point of a patrol from <paramref name="at"/> (<c>FUN_1408fc730</c>): a neighbouring sector of the group by <see cref="SectorWeight"/>, then in it a town (a player's at even odds with
     /// weight 1, another's at 1 in 4 with weight 0.2) when the template approaches towns, whose point is <see cref="OutsideTown"/> (<c>Town</c> true), else a placed spot
     /// (<c>FUN_1408f50d0</c>); null when none is found.
     /// </summary>
-    (Vector2 Point, bool Town)? PatrolPoint(World world, Squad squad, WildSite site, Vector2 at, int picks)
+    (Vector2 Point, bool Town)? PatrolPoint(World world, Squad squad, int group, ZoneCoordinate zone, Vector2 at, int picks)
     {
         var biomes = data.Biomes!;
-        int group = site.Group;
         ulong key = Rng.Mix(SeedSalts.HomelessPatrol ^ (ulong)squad.Id << 20 ^ (uint)picks);
         ulong n = 0;
         ulong Roll() => Rng.Hash(world.Seed, key, RngPurpose.Wander, n++);
         var (cx, cz) = WeatherAreas.CellOf(at.X, at.Y);
-        if (!homelessHomes.TryGetValue(squad.Id, out var home)) homelessHomes[squad.Id] = home = HomeCell(squad, site, at);
+        if (!homelessHomes.TryGetValue(squad.Id, out var home)) homelessHomes[squad.Id] = home = HomeCell(squad, zone, at);
         Span<(int X, int Z)> near = stackalloc (int, int)[4];
         Span<float> weight = stackalloc float[4];
         bool diagonal = Rng.Float(Roll()) < 0.5f;
@@ -194,12 +216,12 @@ public sealed partial class PopulationSystem
         var (tx, tz) = count > 0 ? near[drawn] : home is { } back ? back : (cx, cz);
         if (ApproachesTowns(squad.TemplateId))
         {
-            var zone = new ZoneCoordinate(tx, tz);
+            var target = new ZoneCoordinate(tx, tz);
             float total = 0;
             TownSite? pick = null;
             foreach (var s in data.Sites)
             {
-                if (s.Town.Type is TownType.NestMarker or TownType.PointOfInterest or TownType.Null || WorldLayout.ZoneOf(s.Position.X, s.Position.Z) != zone) continue;
+                if (s.Town.Type is TownType.NestMarker or TownType.PointOfInterest or TownType.Null || WorldLayout.ZoneOf(s.Position.X, s.Position.Z) != target) continue;
                 bool players = data.PlayerFaction >= 0 && data.SiteFactions[s.Index] == data.PlayerFaction;
                 if (Rng.Float(Roll()) >= (players ? 0.5f : 0.25f)) continue;
                 float w = players ? 1 : 0.2f;
@@ -253,10 +275,10 @@ public sealed partial class PopulationSystem
     /// its sector's centre when it is of the squad's faction; else the faction's nearest town, or its nearest nest when that is 9216 nearer, none beyond 50000;
     /// null when none (no faction, or no town of it). Engine choice: decided at its first patrol rather than as it is made, so saved and kept squads get one too.
     /// </summary>
-    (int X, int Z)? HomeCell(Squad squad, WildSite sector, Vector2 at)
+    (int X, int Z)? HomeCell(Squad squad, ZoneCoordinate zone, Vector2 at)
     {
         if (squad.Faction < 0) return null;
-        var (minX, minZ, maxX, maxZ) = WeatherAreas.CellRect(sector.Zone.X, sector.Zone.Y);
+        var (minX, minZ, maxX, maxZ) = WeatherAreas.CellRect(zone.X, zone.Y);
         Vector2? home = null;
         if (NearestTown(new Vector2((minX + maxX) / 2, (minZ + maxZ) / 2), out _) is { } local && data.SiteFactions[local.Index] == squad.Faction)
             home = new Vector2(local.Position.X, local.Position.Z);
