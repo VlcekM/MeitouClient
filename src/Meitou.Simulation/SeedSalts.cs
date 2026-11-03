@@ -43,6 +43,8 @@ internal static class SeedSalts
     public const ulong BarChance = 77;
     /// <summary>Counter (under <see cref="RngPurpose.Think"/>) of the roll that picks which of a town's bars a squad starting a bar package goes to.</summary>
     public const ulong BarPick = 78;
+    /// <summary>Counter base (under <see cref="RngPurpose.Think"/>, xor the mind's node epoch) of the roll that draws which node a standing goal takes in its building (FUN_14099f280: uniform among the free nodes, kept until the goal is renewed).</summary>
+    public const ulong NodePick = 0x4E6F6465_50696B21;
     /// <summary>Counter of the roll that picks which squad template a town's roaming pool draws.</summary>
     public const ulong RoamingPick = 5;
     /// <summary>Counter base of the roll for the look of member n of a town squad (n is added).</summary>

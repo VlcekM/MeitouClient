@@ -1012,7 +1012,7 @@ update `FUN_140511130`, `Character::setupAI` `FUN_140621b70`; KenshiLib names **
   character's faction (`FUN_14038c2f0`); none (no public building, or the drawn one has no such node): 0. Effect `atNode`, acted out by 51 Stand at
   node. Vfunc 82 is false for some building kinds (1, 0x22) under a player-side condition (**Unknown**); the flag's default on buildings without a
   resident template is **Unknown**.
-- **47 general node / 20 Shopkeeper** (`FUN_14099f280` / `FUN_14099e920`): a node of that type in the home building (owner unset or own faction),
+- **47 general node / 20 Shopkeeper** (`FUN_14099f280` / `FUN_14099e920`): a node of that type in the home building, drawn uniformly at random among those whose owner is unset or accepted by the finder's functor (**Verified**, `FUN_14099f280` / `FUN_14099f1a0`; a kept target is reused while it is still a node; there is no reservation, a node another character stands at is not excluded; who sets a node's owner is **Unknown**, so every node counts). Meitou: `AiMind.NodeRoll`, drawn when a goal is taken up anew (`AiSystem.Pick`), beds stay round robin.
   reserved; guard posts fall back to general nodes. A node marker faces along its local −X: for 784 of 990 shopkeeper nodes in base-game town interiors,
   yaw − 90° points at the nearest Shop Counter's side the node stands on (**Verified**, layouts placed by `TownBuildings`, compared with each counter's
   yaw; the rest are corner or odd-angled counters). The engine turns a character arriving at a node that way.

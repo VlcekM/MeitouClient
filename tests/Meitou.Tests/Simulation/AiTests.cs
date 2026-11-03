@@ -15,6 +15,24 @@ namespace Meitou.Tests.Simulation;
 public class AiTests(ITestOutputHelper output)
 {
     /// <summary>Going home away from home is wanted at 0.5, but at 0.01 by a slave not with the player (AI slot 56, <c>FUN_1405a3710</c>); with the player (its owner's faction) 0.5 again.</summary>
+
+    /// <summary>A node finder draws uniformly among a building's nodes by the goal's roll and keeps the pick (<c>FUN_14099f280</c>); a goal without a roll falls back to the member's round robin, and beds stay round robin.</summary>
+    [Fact]
+    public void A_standing_goal_draws_its_node_uniformly_from_its_roll()
+    {
+        Vector3 At(float x) => new(x, 0, 0);
+        var home = new TownBuilding("h", "b", "House", At(0), 0, false, false,
+            [new HomeSpot(HomeSpotKind.General, At(1), 0), new HomeSpot(HomeSpotKind.General, At(2), 0), new HomeSpot(HomeSpotKind.General, At(3), 0)]);
+        var hits = new int[3];
+        for (ulong roll = 1; roll <= 300; roll++)
+        {
+            var first = AiSystem.Pick(home, HomeSpotKind.General, 0, Rng.Hash(7, roll, RngPurpose.Think, 1));
+            Assert.Equal(first, AiSystem.Pick(home, HomeSpotKind.General, 5, Rng.Hash(7, roll, RngPurpose.Think, 1)));   // the member index no longer matters
+            hits[(int)(first!.Value.Position.X - 1)]++;
+        }
+        Assert.All(hits, h => Assert.InRange(h, 60, 140));
+        Assert.Equal(At(2), AiSystem.Pick(home, HomeSpotKind.General, 4)!.Value.Position);   // no roll: round robin (4 % 3)
+    }
     [Fact]
     public void Going_home_is_barely_wanted_by_a_slave_not_with_the_player()
     {

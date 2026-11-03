@@ -776,6 +776,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             mind.Walking = false;
             mind.FailedWalks = 0;
             mind.Target = null;
+            mind.NodeRoll = Rng.Hash(world.Seed, Rng.Key(table.IdOf(slot)), RngPurpose.Think, SeedSalts.NodePick ^ (ulong)++mind.NodeEpoch);   // a renewed goal draws its node anew
             // A spot given up is tried again from wherever the character is now (engine choice: the walk may have failed from the old place only).
             mind.HomeUnreachable = false;
             if (type is not (TaskType.RELAX_IN_TOWN_PACKAGE or TaskType.SIT_AROUND)) mind.SeatUnreachable = false;
@@ -1110,11 +1111,12 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             TaskType.SIT_ON_THRONE => HomeSpotKind.Throne,
             _ => HomeSpotKind.General,
         };
-        if (Pick(home, kind, mind.MemberIndex) is { } spot) return (Flat(spot.Position), true, spot.Position.Y, spot.IsNode ? spot.Yaw : null);
+        ulong roll = kind == HomeSpotKind.Bed ? 0 : mind.NodeRoll;   // beds stay round robin (the bed search is not the node finders')
+        if (Pick(home, kind, mind.MemberIndex, roll) is { } spot) return (Flat(spot.Position), true, spot.Position.Y, spot.IsNode ? spot.Yaw : null);
         // Guard posts fall back to general nodes (docs/game/ai-tasks.md "Town goals"); the counter is the shopkeeper's, so only its goal falls back onto it.
-        if (kind == HomeSpotKind.Guard && Pick(home, HomeSpotKind.General, mind.MemberIndex) is { } general)
+        if (kind == HomeSpotKind.Guard && Pick(home, HomeSpotKind.General, mind.MemberIndex, roll) is { } general)
             return (Flat(general.Position), true, general.Position.Y, general.Yaw);
-        if (kind != HomeSpotKind.Bed && Pick(home, null, mind.MemberIndex, kind != HomeSpotKind.Shopkeeper) is { } any) return (Flat(any.Position), true, any.Position.Y, any.Yaw);
+        if (kind != HomeSpotKind.Bed && Pick(home, null, mind.MemberIndex, roll, kind != HomeSpotKind.Shopkeeper) is { } any) return (Flat(any.Position), true, any.Position.Y, any.Yaw);
         // No bed: it sleeps in the house; a node goal without nodes stays at its own post, except staying home.
         if (kind == HomeSpotKind.Bed || type == TaskType.STAY_IN_HOME) return (Flat(home.Position), true, null, null);
         return (mind.Post, false, null, null);
@@ -1122,15 +1124,15 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
 
     /// <summary>
     /// The <paramref name="index"/>-th spot of a kind (null: any node, <see cref="HomeSpot.IsNode"/>, shopkeeper nodes left out with <paramref name="notCounter"/>) of a
-    /// building, round robin; null when it has none.
+    /// building, uniformly at random by the goal's <paramref name="roll"/> (<see cref="AiMind.NodeRoll"/>; the node finders draw uniformly and keep the pick until the goal is renewed), else round robin; null when it has none.
     /// </summary>
-    static HomeSpot? Pick(TownBuilding home, HomeSpotKind? kind, int index, bool notCounter = false)
+    internal static HomeSpot? Pick(TownBuilding home, HomeSpotKind? kind, int index, ulong roll = 0, bool notCounter = false)
     {
         bool Takes(HomeSpot s) => kind is { } k ? s.Kind == k : s.IsNode && !(notCounter && s.Kind == HomeSpotKind.Shopkeeper);
         int count = 0;
         foreach (var s in home.Spots) if (Takes(s)) count++;
         if (count == 0) return null;
-        int want = index % count;
+        int want = roll != 0 ? Rng.Int(roll, count) : index % count;
         foreach (var s in home.Spots)
             if (Takes(s) && want-- == 0) return s;
         return null;

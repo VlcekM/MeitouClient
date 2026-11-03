@@ -470,6 +470,9 @@ public sealed class AiMind
     /// building (the pick is a roll of this and the character), and whether it is working now.
     /// </summary>
     public int WorkEpoch { get; set; }
+    /// <summary>The roll that picks this goal's node among the home's (uniform; 0: not drawn yet, the member's round robin stands in) and the number of draws: renewed when a goal is taken up anew.</summary>
+    public ulong NodeRoll { get; set; }
+    public int NodeEpoch { get; set; }
     public bool WorkActive { get; set; }
     /// <summary>The town building it operates this tick (Task_OperateMachine, row 87, at the building) or empties the output of (row 92), and the faction owning its machine; set by the think, applied by <see cref="Production.ProductionSystem"/> (derived, not hashed).</summary>
     public Meitou.Data.World.TownBuilding? WorkOperate { get; set; }
@@ -564,6 +567,7 @@ public sealed class AiMind
         hasher.Add(CommitUntil);
         hasher.Add(Target ?? new Vector3(float.NaN));
         if (WorkActive || WorkEpoch != 0) { hasher.Add(WorkEpoch); hasher.Add(WorkActive); }
+        if (NodeRoll != 0) hasher.Add(NodeRoll);
         if (Resume) hasher.Add(0x52657375);
         if (PlaceAt is { } place) hasher.Add(place);
         if (BedAt is { } bed) hasher.Add(Rng.StableHash(bed));
