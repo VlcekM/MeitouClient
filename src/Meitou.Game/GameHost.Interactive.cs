@@ -589,6 +589,7 @@ sealed partial class GameHost
                 : [.. player.SquadBarMembers().Select(c => TourPosition(c.Id)).OfType<Vector3>()];
             string? takeFile = cinema.TakeFrame();
             // A flight puts the focus on where it lands from the first frame (the towns there populate during the flight), not on the arc.
+            viewAspect = window.Size.X / (float)Math.Max(window.Size.Y, 1);
             SendFocus(tour.Active && tour.Current is { } landing && TourPosition(landing) is { } landingAt ? landingAt : cinemaHolds ? camera.Target : null);
             if (!cinemaHolds) SandboxFollowCamera();
             if (!cinemaHolds) FollowCamera();

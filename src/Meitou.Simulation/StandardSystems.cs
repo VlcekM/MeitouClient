@@ -52,6 +52,8 @@ public sealed class StandardSystemOptions
     public bool SynchronousPaths { get; init; }
     /// <summary>Multiplies the time of the body-part and blood rates (<see cref="BodySystem"/>).</summary>
     public float BodyTimeScale { get; init; } = 1;
+    /// <summary>The medical clock runs as the original's update tiers give it (<see cref="BodySystem.UpdateTiers"/>); the game's, off for tests and the scripted duel and battle.</summary>
+    public bool UpdateTiers { get; init; }
     /// <summary>The game's: the path service walks attackers to their targets and the body system ticks the medical state.</summary>
     public CombatOptions Combat { get; init; } = new() { SelfApproach = false, TickMedical = false };
     /// <summary>Null: the clip lengths of an empty set (every attack takes its default time).</summary>
@@ -173,7 +175,7 @@ public static class StandardSystems
         if (Has(StandardParts.Movement)) systems.Add(StandardParts.Movement, movement = new MovementSystem(new PathService(walkability, o.SynchronousPaths)));
         if (Has(StandardParts.FirstAid)) systems.Add(StandardParts.FirstAid, new FirstAid.FirstAidSystem(data.Bodies.Constants, data.BodyOptions, data.Items, o.FirstAid) { Deeds = deeds, Relations = Has(StandardParts.Aggro) ? data.Relations : null });
         WeatherSystem? weather = null;
-        if (Has(StandardParts.Body)) { systems.Add(StandardParts.Body, new BodySystem(data.Bodies.Constants, data.BodyOptions, o.BodyTimeScale, data.Db)); systems.Add(StandardParts.Body, weather = new WeatherSystem(data.Bodies.Constants) { Db = data.Db, Buildings = o.RagdollEnvironment }); }
+        if (Has(StandardParts.Body)) { systems.Add(StandardParts.Body, new BodySystem(data.Bodies.Constants, data.BodyOptions, o.BodyTimeScale, data.Db) { UpdateTiers = o.UpdateTiers }); systems.Add(StandardParts.Body, weather = new WeatherSystem(data.Bodies.Constants) { Db = data.Db, Buildings = o.RagdollEnvironment }); }
         Meitou.Simulation.Carrying.CarrySystem? carry = null;
         Meitou.Simulation.Kidnap.KidnapSystem? kidnap = null;
         Meitou.Simulation.Kidnap.TownDutySystem? townDuty = null;

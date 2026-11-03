@@ -123,6 +123,7 @@ adds to its own time (`MedicalContext.BudgetSeconds`) for the part, blood and KO
 a frame is, so the mapping keeps the factor at any frame rate or speed. Flagged: the player's characters, and NPCs within `npc range` (3250) of `World.ViewPosition`
 (the game's in-view test has a camera frustum the simulation lacks, so a crowd round the camera counts more flagged characters than in the game; an NPC engaged
 with a player, always flagged in the game, is flagged only near the camera); NPCs never without a camera.
+`MedicalClock` (`BodySystem.UpdateTiers`, off by default) also derives a per-character `ClockFactor` from the camera frustum (`CameraViewCommand`, `FUN_1405c9f60`: the flag's frustum test); the medical update does not read it, `MedicalTimeBudget` above is what runs. The command also carries the camera to `World.View`.
 
 ### Part tick (`FUN_14064f5c0`, **Verified** decompile)
 

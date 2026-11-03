@@ -1192,6 +1192,7 @@ sealed partial class GameHost
                 if (!tourHolds && hud is not null) ApplyTitleCamera();
                 // A flight puts the focus where it lands, so the towns there populate during the flight; otherwise the
                 // followed character's pivot is already in the rig.
+                viewAspect = window.Size.X / (float)Math.Max(window.Size.Y, 1);
                 SendFocus(tour.Active && tour.Current is { } tourLanding && TourPosition(tourLanding) is { } tourAt ? tourAt
                     : tourHolds ? camera.Target : null);
                 // The strategy camera's eye clearance for the followed character and the tour's arcs over hills.

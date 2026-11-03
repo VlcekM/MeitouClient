@@ -93,6 +93,9 @@ public readonly struct MedicalContext(GameConstants constants, BodyOptions optio
     /// </summary>
     public float BodyTimeScale { get; init; } = 1;
 
+    /// <summary>The factor of the character's clock for everything but hunger (part, blood, clot and KO-timer rates, <see cref="Meitou.Simulation.MedicalClock"/>); 1 is the documented rates.</summary>
+    public float ClockFactor { get; init; } = 1;
+
     /// <summary>The world seed and the character's key (<see cref="Rng.Key"/>), for the rolls of hits, severed limbs and KO timers.</summary>
     public ulong Seed { get; init; }
     public ulong CharacterKey { get; init; }

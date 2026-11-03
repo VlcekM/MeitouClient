@@ -26,10 +26,21 @@ sealed partial class GameHost
     /// <summary>The free camera's eye this far above the ground under it keeps the last focus: the zones load again once it comes down.</summary>
     const float FocusCeiling = Meitou.Data.World.KenshiCamera.FlightHeight;
 
+    /// <summary>Tells the world the camera it is looked at through, every frame (the medical clock's on-screen flag, <see cref="Meitou.Simulation.MedicalClock"/>).</summary>
+    /// <summary>The window's aspect ratio, kept by the frame loop for <see cref="SendView"/>.</summary>
+    float viewAspect = 16f / 9;
+
+    void SendView()
+    {
+        if (IsBattle) return;
+        session.World.Commands.Enqueue(new Meitou.Simulation.CameraViewCommand(camera.Eye, camera.Forward, camera.FieldOfView, viewAspect, GameplaySettings.NpcRange(install)) { Tick = session.World.Tick });
+    }
+
     /// <summary>Tells the world where the camera looks, when it has moved enough to matter (the zones follow it).</summary>
     void SendFocus(Vector3? at = null)
     {
         if (IsDuel) return;   // the duel's worlds keep the focus on its spot (DuelSetup), wherever the camera flies
+        SendView();
         var current = session.Camera.Current;
         if (at is null && sentFocus && current.IsFree && current.Eye.Y - session.Camera.EyeGroundAt(current.Eye.X, current.Eye.Z) > FocusCeiling) return;
         var target = at ?? current.Target;   // the cinema's camera while it holds the view

@@ -116,6 +116,7 @@ sealed partial class GameHost
             AnimationLengths = animationLengths,
             AnimationLibrary = animationLibrary,
             AnimationBlendRate = popData!.Bodies.Constants.AnimationBlendRate,
+            UpdateTiers = !IsDuel && !IsBattle,
             Ragdolls = characterRigs,
             RagdollEnvironment = ragdollGeometry,
             Extensions = mods?.Simulation,
