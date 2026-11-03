@@ -16,7 +16,7 @@ public static class ResidentRuins
         {
             if (levels.ResidentRuinsApplied) return 0;
             levels.ResidentRuinsApplied = true;
-            var buildings = TownBuildings.Build(db, levels, layouts, (_, _) => 0f);
+            var buildings = TownBuildings.Build(db, levels, layouts, (_, _) => 0f, contents: false);
             string? player = db.Find(FactionData.PlayerId) is not null ? FactionData.PlayerId : null;
             int ruined = 0;
             foreach (var placement in levels.Towns())

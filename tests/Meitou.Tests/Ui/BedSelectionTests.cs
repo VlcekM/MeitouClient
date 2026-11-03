@@ -61,7 +61,7 @@ public class BedSelectionTests
         };
         ui.Eye = new(100, 80, 0);
         ui.ViewProjection = Matrix4x4.CreateLookAt(ui.Eye, bed.Position + new Vector3(0, 0.5f, 0), Vector3.UnitY)
-            * Matrix4x4.CreatePerspectiveFieldOfView(1, 1600 / 900f, 0.1f, 1000);
+            * Meitou.Rendering.DepthConvention.Perspective(1, 1600 / 900f, 0.1f, 1000);
         try
         {
             ui.SetBuilding(new("Bar", "House", "Owner", "Town", null, house.Key, house.Position, null, Record: house.BuildingId));

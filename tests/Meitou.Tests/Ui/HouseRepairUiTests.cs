@@ -45,7 +45,7 @@ public class HouseRepairUiTests
         };
         ui.Eye = new(100, 80, 0);
         ui.ViewProjection = Matrix4x4.CreateLookAt(ui.Eye, house.Position + new Vector3(0, 8, 0), Vector3.UnitY)
-            * Matrix4x4.CreatePerspectiveFieldOfView(1, 1600 / 900f, 0.1f, 1000);
+            * Meitou.Rendering.DepthConvention.Perspective(1, 1600 / 900f, 0.1f, 1000);
         try
         {
             var point = new Vector2(800, 450);
@@ -73,6 +73,7 @@ public class HouseRepairUiTests
             world.RunTick();
             Assert.False(world.Buildings.Find(house.Key)!.Destroyed);
             Assert.False(world.Buildings.Find(house.Key)!.Complete);
+            world.RunTick(); world.RunTick();   // a still mouse's pointer is picked again every 3 ticks (PlayerInterface.RepickTicks)
             point = new Vector2(800, 450);
             ui.MouseMove(point);
             _ = ui.UiFrame; // Arrange hover hit testing for the new mouse position, as the host does each frame.

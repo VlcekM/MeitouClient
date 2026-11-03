@@ -965,7 +965,8 @@ intact and name no template. Its houses are ruins in the original (issue #145).
 
 Meitou (`ResidentRuins`): before anything reads the level data's `destroyed`, every town is housed by the population's rule ([town residents](factions-squads-towns.md#town-residents))
 and each home of a ruined template that has a destroyed mesh is set destroyed in its level state; 71 base-game buildings (Old Village 10 of 10, Abandoned Town 9 of 9,
-the library ruins). Not modelled: the int +0x198 test; setting a level ruin intact (13 level ruins get a template that is not ruined, e.g. Bast's and Endin's
+the library ruins). A saved `destroyed` false does not undo a level ruin unless the player's repair saved it (`meitou town construction`; engine choice: saves
+made before this pass wrote those buildings intact). A town's baked distant mesh is a fixed file of the install, drawn as it is (as in the original). Not modelled: the int +0x198 test; setting a level ruin intact (13 level ruins get a template that is not ruined, e.g. Bast's and Endin's
 `Trashed building w/squatters`, yet those towns are ruins in the original, so where the original skips the call is **Unknown**); ruins made by a town override at run time.
 
 ## Unknowns

@@ -176,8 +176,12 @@ public static class TownBuildings
     /// <summary>BF_RESOURCE_STORAGE, BF_SHOP, BF_GENERAL_STORAGE: the containers a building shop's stock goes into (<see cref="TownFixture.HoldsShopStock"/>).</summary>
     public const int ResourceStorageFunction = 2, ShopFunction = 9, GeneralStorageFunction = 13;
 
-    /// <summary>The buildings by town placement id (<see cref="TownPlacement.InstanceId"/>), each list in placement order.</summary>
-    public static Dictionary<string, List<TownBuilding>> Build(GameDatabase db, WorldLevelData levels, BuildingLayouts? layouts, Func<double, double, float> terrainHeight)
+    /// <summary>
+    /// The buildings by town placement id (<see cref="TownPlacement.InstanceId"/>), each list in placement order. Without <paramref name="contents"/> their interior
+    /// layouts are not laid out (no spots, fixtures, item slots, tables or furniture, no shop or bar): enough to house residents (<see cref="ResidentHomes.Assign"/>).
+    /// </summary>
+    public static Dictionary<string, List<TownBuilding>> Build(GameDatabase db, WorldLevelData levels, BuildingLayouts? layouts, Func<double, double, float> terrainHeight,
+        bool contents = true)
     {
         var towns = new List<(TownPlacement Placement, Gameplay.TownData Town)>();
         foreach (var t in levels.Towns())
@@ -209,7 +213,7 @@ public static class TownBuildings
                 : null;
             var spots = new List<HomeSpot>();
             bool shop = false, bar = false, furnished = record.GetReferences("interior").Count > 0;
-            if (layouts is not null && state is not null)
+            if (contents && layouts is not null && state is not null)
             {
                 if (layouts.Find(record, state.GetString("exterior layout name")) is { } exterior)
                 {
@@ -272,7 +276,7 @@ public static class TownBuildings
                 }
             }
             // Standing alone in the town, a chair, throne or dummy is a piece of furniture itself.
-            if (functionality is not null && FurnitureOf(db, record, functionality, resolved.Position, YawOf(b.Rotation)) is { } alone) (furniture ??= []).Add(alone);
+            if (contents && functionality is not null && FurnitureOf(db, record, functionality, resolved.Position, YawOf(b.Rotation)) is { } alone) (furniture ??= []).Add(alone);
             if (!result.TryGetValue(town.InstanceId, out var list)) result[town.InstanceId] = list = [];
             string? owner = state?.GetString("owner faction ID") is { Length: > 0 } o ? o : null;
             list.Add(new TownBuilding(b.InstanceId, record.StringId, record.Name, resolved.Position, YawOf(b.Rotation), shop, bar, spots)

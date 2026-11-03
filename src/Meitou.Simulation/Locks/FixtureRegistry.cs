@@ -146,8 +146,7 @@ public sealed partial class FixtureRegistry
         foreach (var b in data.Sites[site].Buildings)
         {
             RegisterBuilding(world, data, site, b, townFaction);
-            if (data.Sight is { } sight) world.Sight.Add(sight, SightBuilding(b,
-                Saved?.GetValueOrDefault(b.Key)?.Bools.GetValueOrDefault("destroyed", b.Destroyed) ?? b.Destroyed));
+            if (data.Sight is { } sight) world.Sight.Add(sight, SightBuilding(b, IsDestroyed(b)));
         }
         Bind(world);
     }
@@ -165,7 +164,7 @@ public sealed partial class FixtureRegistry
         var list = new List<Fixture>();
         var record = db.Find(b.BuildingId);
         // A destroyed building has no doors and no lock of its own (docs/game/locks.md "Doors"); its interior's fixtures stay.
-        if (record is not null && !(Saved?.GetValueOrDefault(b.Key)?.Bools.GetValueOrDefault("destroyed", b.Destroyed) ?? b.Destroyed))
+        if (record is not null && !IsDestroyed(b))
         {
             AddDoors(world, db, record, b.Key, site, owner, faction, b.Position, b.Yaw, list);
             if (Lockable(db, record) is { } own) list.Add(Make(world, db, own, b.Key, b.Key, record, site, owner, faction, b.Position, b.Yaw));

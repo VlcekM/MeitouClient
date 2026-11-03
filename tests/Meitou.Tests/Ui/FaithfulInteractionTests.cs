@@ -193,7 +193,7 @@ public class FaithfulInteractionTests(ITestOutputHelper output)
         {
             var eye = new Vector3(0, 6, -14);
             ui.Eye = eye;
-            ui.ViewProjection = Matrix4x4.CreateLookAt(eye, new(0, 1, 0), Vector3.UnitY) * Matrix4x4.CreatePerspectiveFieldOfView(1, 1600 / 900f, 0.1f, 1000);
+            ui.ViewProjection = Matrix4x4.CreateLookAt(eye, new(0, 1, 0), Vector3.UnitY) * Meitou.Rendering.DepthConvention.Perspective(1, 1600 / 900f, 0.1f, 1000);
             var at = ui.Project(new Vector3(3, 1, 0))!.Value;
             ui.MouseDown(MouseButton.Right, at, false);
             ui.Steer(); Assert.False(ui.ContextMenuOpen);   // not held long enough yet

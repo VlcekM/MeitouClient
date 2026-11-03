@@ -75,7 +75,7 @@ public sealed partial class FixtureRegistry
             : data.Db.Find(p.Building.ResidentsTemplate)?.GetBool("sell home") ?? (saved is null && state is null);
         bool inside = saved is not null ? saved.Bools.GetValueOrDefault("is inside building") : state?.GetBool("is inside building") ?? false;
         if (!sale || inside || data.Db.Find(p.Building.BuildingId) is not { } record) return null;
-        bool destroyed = saved?.Bools.GetValueOrDefault("destroyed") ?? p.Building.Destroyed;
+        bool destroyed = IsDestroyed(p.Building);
         float multiplier = data.Db.Find(data.Factions[p.Owner].Id)?.GetFloat("building cost mult", 1) ?? 1;
         float price = (destroyed ? 0.375f : 1) * BuildingBuildData.From(record).Target * multiplier * 400;
         return float.IsFinite(price) && price >= 0 && price <= int.MaxValue ? (long)price : null;
@@ -161,6 +161,13 @@ public sealed partial class FixtureRegistry
             if (states.TryGetValue(building, out var state)) WriteReset(building, state);
     }
 
+    /// <summary>
+    /// Whether a town building is a ruin: its saved <c>destroyed</c>, but a level ruin stays one unless the player's repair saved it (<c>meitou town construction</c>):
+    /// a save from before the residents' ruins were laid out (docs/game/buildings-production.md "Ruined by residents") wrote those buildings intact.
+    /// </summary>
+    bool IsDestroyed(TownBuilding b) => Saved?.GetValueOrDefault(b.Key) is not { } saved ? b.Destroyed
+        : saved.Bools.GetValueOrDefault("destroyed", b.Destroyed) || b.Destroyed && !saved.Bools.GetValueOrDefault("meitou town construction");
+
     void WriteProperty(string building, FcsRecord state)
     {
         if (!properties.TryGetValue(building, out var p)) return;
@@ -187,7 +194,7 @@ public sealed partial class FixtureRegistry
         bool Bool(string key, bool fallback) => saved?.Bools.GetValueOrDefault(key, fallback) ?? b.LevelState?.GetBool(key, fallback) ?? fallback;
         float Float(string key, float fallback) => saved?.Floats.GetValueOrDefault(key, fallback) ?? b.LevelState?.GetFloat(key, fallback) ?? fallback;
         var data = BuildingBuildData.From(p.Data.Db.Find(b.BuildingId)!);
-        bool destroyed = Bool("destroyed", b.Destroyed), complete = Bool("is complete", true);
+        bool destroyed = IsDestroyed(b), complete = Bool("is complete", true);
         float progress = Math.Clamp(Float("construction progress", data.Target), 0, data.Target);
         // Keep a repaired level ruin in the overlay even after completion, to replace its original ruin mesh.
         if (!destroyed && complete && progress >= data.Target && !b.Destroyed && !(saved?.Bools.GetValueOrDefault("meitou town construction") ?? false)) return;
