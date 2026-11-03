@@ -476,6 +476,24 @@ public sealed partial class FirstAidSystem
         return best;
     }
 
+    /// <summary>
+    /// State 22 <c>needsFirstAid</c> (<c>FUN_14099d8f0</c>, <b>Verified</b>): a non-robot patient whose organic first aid need is above <see cref="MedicalState.AidNeedFloor"/>.
+    /// </summary>
+    public static bool NeedsFirstAid(World world, CharacterCold c) =>
+        c is { Race: { IsRobot: false } race, Medical: { } med } && med.FirstAidNeed(race, false,
+            MathF.Max(MedicalState.BloodCapacity(race, c.Stats?.Strength ?? 50, med.HasStatsObject, med.ScaleK, med.ScaleZ), 1), world.SystemOf<BodySystem>()?.Constants.ExtraBloodLossFromBodyparts ?? 1) > MedicalState.AidNeedFloor;
+
+    /// <summary>
+    /// The planner's first step ahead of a lift that wants <c>!22</c> (row 25 First aid, the provider of the unmet state; its list B needs a first aid kit, state 23, and an arm, 38): the carrier treats
+    /// the patient, the lift follows once the need is gone. False when it holds no kit or has no working arm, so the plan fails.
+    /// </summary>
+    internal static bool TreatBeforeLift(World world, int carrier, int patient)
+    {
+        var table = world.Characters;
+        if (table.Cold(carrier) is not { Medical: { } arms } cold || !HoldsKit(cold, ItemInfo.FirstAidKitFunction) || !(arms.ArmWorks(left: true) || arms.ArmWorks(left: false))) return false;
+        return StartJob(world, carrier, patient, SquadGoals.Of(world), new TaskRequest(CharacterTask.Treat, TaskType.FIRST_AID_ORDER, TaskSource.Goal));
+    }
+
     /// <summary>The Splint Rigging job's treatment (row 250).</summary>
     static TaskRequest Splinting(int job) => new(CharacterTask.Treat, TaskType.SPLINT_JOB, TaskSource.Job) { Job = job };
 

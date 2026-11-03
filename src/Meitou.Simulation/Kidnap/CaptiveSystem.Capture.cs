@@ -161,6 +161,12 @@ public sealed partial class CaptiveSystem
                 // 168's desire is the rescue one (FUN_140599480): 0 on the raw Hold bit (also while sneaking) or while carrying. 167 has no Hold test.
                 if (!capture && (cold.Orders & CharacterOrders.Hold) != 0) return null;
                 int v = NearestDown(world, slot, cold, capture);
+                // Row 170 (the lift 168 plans through) wants !22: a victim that needs first aid is treated first (row 25, with a kit and an arm), else the plan fails and nothing is lifted.
+                if (!capture && v >= 0 && table.Cold(v) is { } hurt && FirstAid.FirstAidSystem.NeedsFirstAid(world, hurt))
+                {
+                    FirstAid.FirstAidSystem.TreatBeforeLift(world, slot, v);
+                    return null;
+                }
                 // No cage to take it to: not started, so no one is cuffed and left (engine; the carry, goal 112, needs a free cage as the arrest goal does).
                 return v < 0 || !Kidnap.HasCage(world, table.Next[v].Position, cold) ? null : new CaptiveJob
                 {
