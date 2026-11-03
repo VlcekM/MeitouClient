@@ -86,7 +86,9 @@ not the game speed, so the camera works while the game is paused. Several inputs
   leaves the height alone (**Observed**). Placing the camera finds the goal at once. Engine: every building's floor-0 ordinary parts
   within 400 units are the pivot's ground, and a building in the interior view's parts up to the viewed floor (others stay at floor
   0, the +0x330 re-cast read as "not the viewed building"); the highest at the point, without the 3000 cap, the sweep, the group-14
-  ray or the eye's lowering ray. A building's collision is read on a worker, so the first frames near it keep to the terrain.
+  ray or the eye's lowering ray. A building's collision is read on a worker, so the first frames near it keep to the terrain; a runtime placement
+  added or removed (a building, a dropped or picked-up item) lists the zone's buildings again while the known floors keep answering
+  (the pivot does not drop to the terrain meanwhile), and an unchanged building keeps its collision.
 - **Default keys** (`controls.cfg`): `camera_forward` W, Up; `camera_back` S, Down; `camera_left` A, Left; `camera_right` D, Right;
   `camera_rotate_left` Q; `camera_rotate_right` E; `camera_tilt+` `,`; `camera_tilt-` `.`; `camera_zoom_in` Home; `camera_zoom_out`
   End; `mouse_rotate` Left Control or Mouse3; `toggle_fps_camera` `;`; `focus_char` F (held flags and events:

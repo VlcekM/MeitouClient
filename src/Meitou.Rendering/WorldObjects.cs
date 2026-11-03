@@ -177,6 +177,7 @@ sealed class WorldObjects : IDisposable
             result.Add(new BuildingFloor
             {
                 Key = b.Key,
+                Placement = b,
                 Position = position,
                 Interior = record.GetInt("interior material", 3),
                 Exterior = record.GetInt("exterior material", 2),
