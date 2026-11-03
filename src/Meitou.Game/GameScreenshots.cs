@@ -4,7 +4,7 @@ namespace Meitou.Game;
 
 /// <summary>
 /// Where a screenshot goes (docs/game/ui-input.md "Screenshots", the frame-end callback <c>FUN_14082b6e0</c>, <b>Verified</b>): <c>_screens/screenshot_&lt;n&gt;.&lt;format&gt;</c> in the install folder,
-/// <c>n</c> one more than the <c>count</c> of <c>screens.cfg</c> (a <c>key=value</c> file, the count is written back), the format its <c>format</c> (bmp, png or jpg; anything else, or none, jpg).
+/// <c>n</c> one more than the <c>count</c> of <c>screens.cfg</c> (a <c>key=value</c> file, the count is written back), always PNG (a deliberate departure: the original also writes the <c>format</c> key's bmp or jpg).
 /// </summary>
 static class GameScreenshots
 {
@@ -16,11 +16,10 @@ static class GameScreenshots
     {
         string config = Path.Combine(root, ConfigFile);
         var lines = File.Exists(config) ? File.ReadAllLines(config).ToList() : [];
-        string format = FormatOf(Get(lines, "format"));
         int number = (short)AtoI(Get(lines, "count")) + 1;
         Set(lines, "count", number.ToString(CultureInfo.InvariantCulture));
         try { File.WriteAllLines(config, lines); } catch (IOException) { } catch (UnauthorizedAccessException) { }
-        return Path.Combine(root, Folder, $"screenshot_{number.ToString(CultureInfo.InvariantCulture)}.{format}");
+        return Path.Combine(root, Folder, $"screenshot_{number.ToString(CultureInfo.InvariantCulture)}.png");
     }
 
     /// <summary>The <c>multiplier</c> key of <paramref name="root"/>'s <c>screens.cfg</c> (<c>atoi</c>, 1 when absent or below 2): the shot is n times the window in each direction.</summary>
@@ -31,9 +30,6 @@ static class GameScreenshots
         try { return Math.Max(1, AtoI(Get(File.ReadAllLines(config).ToList(), "multiplier"))); }
         catch (IOException) { return 1; }
     }
-
-    /// <summary>bmp, png or jpg exactly (the comparison is case-sensitive); anything else is jpg.</summary>
-    public static string FormatOf(string? value) => value is "bmp" or "png" ? value : "jpg";
 
     /// <summary>C's <c>atoi</c>: an optional sign and the leading digits, else 0.</summary>
     public static int AtoI(string? text)
