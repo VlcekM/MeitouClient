@@ -205,25 +205,20 @@ public sealed partial class FirstAidSystem
         return MathF.Max(MathF.Min(1 - d2 / PatientFalloff2, 1), floor);
     }
 
-    /// <summary>The medics working on a patient other than itself and the patient (<c>Blackboard::howManyGuysWorkingOnThisSubTarget</c>, <c>FUN_1402690e0</c>).</summary>
-    static int OthersOn(List<(int Medic, int Patient)> taken, int medic, int patient)
-    {
-        int n = 0;
-        foreach (var (m, p) in taken)
-            if (p == patient && m != medic && m != patient) n++;
-        return n;
-    }
+    /// <summary>The squad mates working on a patient other than the medic itself and the patient (<c>Blackboard::howManyGuysWorkingOnThisSubTarget</c>, <c>FUN_1402690e0</c>, <see cref="SquadGoals"/>).</summary>
+    static int OthersOn(CharacterTable table, SquadGoals taken, int medic, int patient) =>
+        taken.Working(table.Cold(medic)!.SquadId, table.IdOf(medic), GoalTarget.Of(table.IdOf(patient)));
 
     /// <summary>The patient is being eaten (<c>isGettingEaten</c>, +0x279 &amp; 7): passes 1, 2 and 4 of the medic finder skip it; pass 3, pass 5 and the splint finder do not.</summary>
     static bool Eaten(CharacterCold patient) => patient.Medical is { EatenCountdown: > 0 };
 
-    /// <summary>The patients being treated now as (medic, patient) slot pairs (the blackboard's sub-target list).</summary>
-    static List<(int Medic, int Patient)> Treated(CharacterTable table)
+    /// <summary>The patients being treated now, in the squad's goal list (<see cref="SquadGoals"/>).</summary>
+    void IGoalSource.Publish(World world, SquadGoals goals)
     {
-        var taken = new List<(int, int)>();
+        var table = world.Characters;
         for (int i = 0; i < table.HighWater; i++)
-            if (table.Next[i].Alive && table.Next[i].Task == (byte)CharacterTask.Treat && table.TryResolveNext(table.Cold(i)!.TreatTarget, out int busy)) taken.Add((i, busy));
-        return taken;
+            if (table.Next[i].Alive && table.Next[i].Task == (byte)CharacterTask.Treat && table.Cold(i) is { TreatTarget.IsNone: false } c && table.TryResolveNext(c.TreatTarget, out int busy))
+                goals.Add(c.SquadId, table.IdOf(i), GoalTarget.Of(table.IdOf(busy)));
     }
 
     // ------------------------------------------------------------------ the finder
@@ -243,7 +238,7 @@ public sealed partial class FirstAidSystem
     /// <item><b>The squad's chained slaves</b> in sight (<see cref="SquadSlave"/>), <b>carried</b> patients of the medic's faction (outdoors), then <b>prisoners in the cages</b> of the medic's faction in its place at a flat 0.25.</item>
     /// </list>
     /// </summary>
-    (int Slot, float Score) FindPatient(World world, int i, List<(int Medic, int Patient)> taken, bool robotics, bool ordered = false)
+    (int Slot, float Score) FindPatient(World world, int i, SquadGoals taken, bool robotics, bool ordered = false)
     {
         var table = world.Characters;
         var next = table.Next;
@@ -306,8 +301,8 @@ public sealed partial class FirstAidSystem
                 float score = need * Nearness(world, i, cold, s);
                 bool same = other.Faction == cold.Faction;
                 if (!same && !(score >= StrangerMinScore && (!cold.IsPlayer || healAllies))) continue;
-                if (score > StickyMinScore && taken.Contains((i, s))) return (s, MathF.Max(score, StickyFloor));   // the running pair: taken at once, nothing else is looked at
-                if (OthersOn(taken, i, s) > 0) score *= TakenWeight;
+                if (score > StickyMinScore && taken.IsMine(table.IdOf(i), GoalTarget.Of(table.IdOf(s)))) return (s, MathF.Max(score, StickyFloor));   // the running pair: taken at once, nothing else is looked at
+                if (OthersOn(table, taken, i, s) > 0) score *= TakenWeight;
                 if (score > bestScore)
                 {
                     best = s;
@@ -359,8 +354,8 @@ public sealed partial class FirstAidSystem
                 float need = Need(world, i, s, organic, robotic);
                 if (need <= 0) continue;
                 float score = need * Nearness(world, i, cold, s);
-                if (score > StickyMinScore && taken.Contains((i, s))) return (s, MathF.Max(score, StickyFloor));
-                if (OthersOn(taken, i, s) > 0 || score <= bestScore) continue;
+                if (score > StickyMinScore && taken.IsMine(table.IdOf(i), GoalTarget.Of(table.IdOf(s)))) return (s, MathF.Max(score, StickyFloor));
+                if (OthersOn(table, taken, i, s) > 0 || score <= bestScore) continue;
                 best = s;
                 bestScore = score;
             }
@@ -430,7 +425,7 @@ public sealed partial class FirstAidSystem
     /// Starts the Medic / Robotics job's (<paramref name="job"/>), an NPC's or the button's treatment of the best patient the finder gives; false when none. The button (<see cref="TaskSource.Order"/>, row
     /// 25) makes a fighting medic look too, and one that finds a patient leaves its fight (<see cref="TaskStart.Start"/>).
     /// </summary>
-    bool HealSomeone(World world, int i, List<(int Medic, int Patient)> taken, bool robotics, TaskSource source, int job = -1)
+    bool HealSomeone(World world, int i, SquadGoals taken, bool robotics, TaskSource source, int job = -1)
     {
         bool ordered = source == TaskSource.Order;
         var (patient, _) = FindPatient(world, i, taken, robotics, ordered);
@@ -443,7 +438,7 @@ public sealed partial class FirstAidSystem
     /// race, not carried by an enemy, of the medic's own faction only, whose <c>needsSplint</c>(X) holds weigh 0.1 x <see cref="Nearness"/> (x 0.05 when another medic works on it); the medic itself 0.1. A patient the medic already treats (a pair on the sub-target list) is taken at once.
     /// Returns the patient's slot, -1 for none.
     /// </summary>
-    int FindSplint(World world, int i, List<(int Medic, int Patient)> taken)
+    int FindSplint(World world, int i, SquadGoals taken)
     {
         var table = world.Characters;
         var next = table.Next;
@@ -464,8 +459,8 @@ public sealed partial class FirstAidSystem
             var d = next[s].Position - next[i].Position;
             if (d.LengthSquared() > range * range) continue;
             float score = SplintWeight * Nearness(world, i, cold, s);
-            if (score > StickyMinScore && taken.Contains((i, s))) return s;   // the running pair is taken at once
-            if (OthersOn(taken, i, s) > 0) score *= TakenWeight;
+            if (score > StickyMinScore && taken.IsMine(table.IdOf(i), GoalTarget.Of(table.IdOf(s)))) return s;   // the running pair is taken at once
+            if (OthersOn(table, taken, i, s) > 0) score *= TakenWeight;
             if (score <= bestScore) continue;
             best = s;
             bestScore = score;
@@ -478,12 +473,13 @@ public sealed partial class FirstAidSystem
     static TaskRequest Splinting(int job) => new(CharacterTask.Treat, TaskType.SPLINT_JOB, TaskSource.Job) { Job = job };
 
     /// <summary>Starts a treatment of <paramref name="patient"/> (<paramref name="request"/> without its target); an NPC medic goes back afterwards to its standing task (<see cref="TaskStart.Standing"/>).</summary>
-    static bool StartJob(World world, int i, int patient, List<(int Medic, int Patient)> taken, TaskRequest request)
+    static bool StartJob(World world, int i, int patient, SquadGoals taken, TaskRequest request)
     {
         var next = world.Characters.Next;
         var resume = TaskStart.ResumeOf(world, i, CharacterTask.Treat, TaskStart.Standing(world.Characters.Cold(i)!, (CharacterTask)next[i].Task));
         if (TaskStart.Start(world, i, request with { Target = new CharacterId(patient, next[patient].Generation), Resume = resume }) != StartResult.Started) return false;
-        taken.Add((i, patient));
+        var table = world.Characters;
+        if (table.Cold(i) is { } medic) taken.Add(medic.SquadId, table.IdOf(i), GoalTarget.Of(table.IdOf(patient)));
         return true;
     }
 

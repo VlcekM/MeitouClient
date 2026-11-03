@@ -150,7 +150,7 @@ public readonly record struct CaptiveEvent(long Tick, CaptiveEventKind Kind, Cap
 /// </list>
 /// The jobs and the kill timers are not saved (the original keeps the timers in a global map it does not save, <b>Observed</b>); hashed only while any exist.
 /// </summary>
-public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? combat, CaptiveSettings? settings = null) : ITickSystem, IStateHashed, IDecisionOwner
+public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? combat, CaptiveSettings? settings = null) : ITickSystem, IStateHashed, IDecisionOwner, IGoalSource
 {
     readonly List<CaptiveJob> jobs = [];
     readonly List<CaptiveEvent> log = [];

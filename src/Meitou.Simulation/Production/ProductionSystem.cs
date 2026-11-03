@@ -44,7 +44,7 @@ public sealed class ProductionSettings
 /// </list>
 /// Placed after construction and before combat; everything here is serial and reads only the world's state and the command order.
 /// </summary>
-public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHandler, IOrderOwner, IDecisionOwner
+public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHandler, IOrderOwner, IDecisionOwner, IGoalSource
 {
     /// <summary>The research falloff per earlier contribution in the same tick (<b>Observed</b>, <c>FUN_140836b70</c>).</summary>
     public const float ResearchFalloff = 0.6f;

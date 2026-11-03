@@ -25,7 +25,7 @@ namespace Meitou.Simulation.Carrying;
 /// Everything runs in the serial phases (<c>Inputs</c>, <c>Schedule</c>, <c>SlowWorld</c>), in slot order, so the result does not depend on threads or partitions. Placed after the body system (its
 /// <c>SlowWorld</c> sees this tick's knock-outs and the corpses already removed) and before combat.
 /// </summary>
-public sealed partial class CarrySystem(GameConstants constants, BodyOptions options, float liftSeconds = 1, CarrySettings? settings = null) : ITickSystem, ITaskOwner, ITaskHandler, IOrderOwner, IDecisionOwner
+public sealed partial class CarrySystem(GameConstants constants, BodyOptions options, float liftSeconds = 1, CarrySettings? settings = null) : ITickSystem, ITaskOwner, ITaskHandler, IOrderOwner, IDecisionOwner, IGoalSource
 {
     /// <summary>The bone of the carrier the body hangs from (the original's <c>Bip01 L UpperArm</c> for the left side, <b>Verified</b>).</summary>
     public const string AttachBone = "Bip01 L UpperArm";

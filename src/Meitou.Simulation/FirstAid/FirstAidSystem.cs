@@ -27,7 +27,7 @@ namespace Meitou.Simulation.FirstAid;
 /// </list>
 /// Placed after the movement system (a later move order replaces a treatment, since it sets the task) and before the body system.
 /// </summary>
-public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions options, ItemFactory items, FirstAidSettings? settings = null) : ITickSystem, ITaskOwner, ITaskHandler, IOrderOwner, IDecisionOwner
+public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions options, ItemFactory items, FirstAidSettings? settings = null) : ITickSystem, ITaskOwner, ITaskHandler, IOrderOwner, IDecisionOwner, IGoalSource
 {
     /// <summary>The effect kind: one tick of treatment from the source (medic) on the target (patient).</summary>
     public const int EffectTreat = 1;
@@ -105,7 +105,7 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
     {
         if (order.Detail == MedicButton)
         {
-            HealSomeone(world, slot, Treated(world.Characters), robotics: false, TaskSource.Order);
+            HealSomeone(world, slot, SquadGoals.Of(world), robotics: false, TaskSource.Order);
             return;
         }
         if (order.Row == TaskType.REST)
@@ -552,7 +552,7 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
         var table = world.Characters;
         var next = table.Next;
         // The treated list and the sweep are made on the turn's first idle NPC (a turn with none, most of them in a quiet world, makes neither).
-        List<(int Medic, int Patient)>? taken = null;
+        SquadGoals? taken = null;
         try
         {
             for (int i = 0; i < table.HighWater; i++)
@@ -566,7 +566,7 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
                     if ((ai ??= world.SystemOf<AiSystem>())?.ListsGoal(world, i, TaskType.JOB_MEDIC) != true) mind.MedicScore = 0;
                     else
                     {
-                        if (taken is null) { taken = Treated(table); BeginSweep(world); }
+                        if (taken is null) { taken = SquadGoals.Of(world); BeginSweep(world); }
                         KeepPick(world, i, mind, taken);
                     }
                     continue;
@@ -574,7 +574,7 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
                 // An NPC the AI does not run (an engine mind, or none) treats when idle: no task, following, wandering or an implicit job.
                 bool idle = next[i].Task is (byte)CharacterTask.Idle or (byte)CharacterTask.Wander or (byte)CharacterTask.Follow || Production.PermaJobs.ListJob(cold, (CharacterTask)next[i].Task) is { Implicit: true };
                 if (!idle) continue;
-                if (taken is null) { taken = Treated(table); BeginSweep(world); }
+                if (taken is null) { taken = SquadGoals.Of(world); BeginSweep(world); }
                 HealSomeone(world, i, taken, robotics: false, TaskSource.Npc);
             }
         }
@@ -582,7 +582,7 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
     }
 
     /// <summary>The Medic goal's finder result for the think (<see cref="AiMind.MedicPatient"/>, <see cref="AiMind.MedicScore"/>; none and 0 without a patient).</summary>
-    void KeepPick(World world, int i, AiMind mind, List<(int Medic, int Patient)> taken)
+    void KeepPick(World world, int i, AiMind mind, SquadGoals taken)
     {
         var (patient, score) = FindPatient(world, i, taken, robotics: false);
         mind.MedicPatient = patient >= 0 ? world.Characters.IdOf(patient) : CharacterId.None;
@@ -596,7 +596,7 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
     internal void SendGoalTreatments(World world)
     {
         var table = world.Characters;
-        List<(int Medic, int Patient)>? taken = null;
+        SquadGoals? taken = null;
         try
         {
             for (int s = 0; s < table.HighWater; s++)
@@ -604,7 +604,7 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
                 if (table.Cold(s)?.Ai is not { MedicAsk: true } mind) continue;
                 mind.MedicAsk = false;
                 if (!table.Next[s].Alive) continue;
-                if (taken is null) { taken = Treated(table); BeginSweep(world); }
+                if (taken is null) { taken = SquadGoals.Of(world); BeginSweep(world); }
                 if (HealSomeone(world, s, taken, robotics: false, TaskSource.Npc)) continue;
                 mind.MedicPatient = CharacterId.None;
                 mind.MedicScore = 0;
@@ -633,7 +633,7 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
             var cold = table.Cold(slot)!;
             var type = cold.Jobs[k].Type;
             if (cold.Running is { Source: TaskSource.Job } run && run.Job == k && run.Runs((CharacterTask)table.Next[slot].Task) && run.Task == CharacterTask.Treat) return DecisionCheck.Runs;
-            var taken = Treated(table);
+            var taken = SquadGoals.Of(world);
             int patient = type == TaskType.SPLINT_JOB ? owner.FindSplint(world, slot, taken) : owner.FindPatient(world, slot, taken, robotics: type == TaskType.JOB_REPAIR_ROBOT).Slot;
             if (patient < 0) return DecisionCheck.No("no patient");
             found = (world.Tick, slot, k, patient);
@@ -645,7 +645,7 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
             if (found.Tick != world.Tick || found.Slot != slot || found.K != k) return;
             var type = world.Characters.Cold(slot)!.Jobs[k].Type;
             var request = type == TaskType.SPLINT_JOB ? Splinting(k) : new TaskRequest(CharacterTask.Treat, type == TaskType.JOB_REPAIR_ROBOT ? TaskType.JOB_REPAIR_ROBOT : TaskType.JOB_MEDIC, TaskSource.Job) { Job = k };
-            StartJob(world, slot, found.Patient, Treated(world.Characters), request);
+            StartJob(world, slot, found.Patient, SquadGoals.Of(world), request);
         }
     }
 

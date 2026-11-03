@@ -27,7 +27,7 @@ public sealed partial class CarrySystem
         if (world.SystemOf<PopulationSystem>() is not { } population) return;
         var memory = world.SystemOf<DialogueSystem>()?.Memory;
         int every = world.Every(Settings.AutoEveryTicks);
-        HashSet<int>? taken = null;
+        SquadGoals? goals = null;
         List<int>? bodies = null;
         Span<int> duty = stackalloc int[5];
         foreach (var squad in world.Squads.All)
@@ -40,12 +40,12 @@ public sealed partial class CarrySystem
                 int role = (int)Ai.AiSystem.RoleOf(squad, member, cold);
                 if (duty[role] < 0) duty[role] = population.GoalDuty(world, squad, (AiRole)role, TaskType.LOOT_THE_DEAD) ? 1 : 0;
                 if (duty[role] == 0) continue;
-                taken ??= Looting(table);
+                goals ??= SquadGoals.Of(world);
                 bodies ??= LootableBodies(table);
                 if (!TaskStart.Eligible(world, cold, TaskType.LOOT_THE_DEAD)) continue;
-                int target = LootTarget(world, table, slot, cold, taken, bodies, memory);
+                int target = LootTarget(world, table, slot, cold, goals, bodies, memory);
                 if (target < 0) continue;
-                taken.Add(target);
+                goals.Add(cold.SquadId, table.IdOf(slot), GoalTarget.Of(table.IdOf(target)));
                 var task = (CharacterTask)table.Next[slot].Task;
                 Start(world, slot, CharacterTask.Loot, TaskType.LOOT_THE_DEAD, TaskSource.Npc, table.IdOf(target), TaskStart.Standing(cold, task));
             }
@@ -53,11 +53,11 @@ public sealed partial class CarrySystem
     }
 
     /// <summary>
-    /// Goal 177's finder (<c>FUN_14099ae10(ai, 0)</c>): within <see cref="ScavengeRange"/> in 3D (<c>FUN_14099ae10</c> :42, :88), not carried, not looted by another and not tagged <see cref="MemoryTag.Looted"/> by the looter's squad;
+    /// Goal 177's finder (<c>FUN_14099ae10(ai, 0)</c>): within <see cref="ScavengeRange"/> in 3D (<c>FUN_14099ae10</c> :42, :88), not carried, not worked by a squad mate (the squad's goal list) and not tagged <see cref="MemoryTag.Looted"/> by the looter's squad;
     /// first the dead, then the downed living of factions neither its own nor allied (the kidnap finder's masks), not of the player's faction unless <see cref="PlayerState.BanditsLoot"/>,
     /// whom <see cref="ScrewsOver"/> allows. Engine choices: the nearest of each pass (the original takes its sensed-list order); the dead pass has no faction test, so a body of the looter's own faction is looted too (Verified). -1: none.
     /// </summary>
-    int LootTarget(World world, CharacterTable table, int slot, CharacterCold cold, HashSet<int> taken, List<int> bodies, SquadMemory? memory)
+    int LootTarget(World world, CharacterTable table, int slot, CharacterCold cold, SquadGoals goals, List<int> bodies, SquadMemory? memory)
     {
         var next = table.Next;
         var at = next[slot].Position;
@@ -65,7 +65,7 @@ public sealed partial class CarrySystem
         float dead2 = ScavengeRange * ScavengeRange, down2 = dead2;
         foreach (int s in bodies)
         {
-            if (s == slot || !next[s].Alive || taken.Contains(s) || table.Cold(s) is not { } body || !CanBeLooted(body) || !body.CarriedBy.IsNone || body.IsImprisoned) continue;
+            if (s == slot || !next[s].Alive || goals.Working(cold.SquadId, table.IdOf(slot), GoalTarget.Of(table.IdOf(s))) > 0 || table.Cold(s) is not { } body || !CanBeLooted(body) || !body.CarriedBy.IsNone || body.IsImprisoned) continue;
             float d2 = Vector3.DistanceSquared(at, next[s].Position);   // Ogre squaredDistance: full 3D, strict bound
             if (d2 > down2 && d2 > dead2) continue;
             if (memory is not null && memory.HasShort(world, cold.SquadId, table.IdOf(s), MemoryTag.Looted)) continue;
@@ -78,6 +78,15 @@ public sealed partial class CarrySystem
             (down, down2) = (s, d2);
         }
         return dead >= 0 ? dead : down;
+    }
+
+    /// <summary>The bodies the characters are lifting or looting, in the squad's goal list (<see cref="SquadGoals"/>).</summary>
+    void IGoalSource.Publish(World world, SquadGoals goals)
+    {
+        var table = world.Characters;
+        for (int i = 0; i < table.HighWater; i++)
+            if (table.Next[i].Alive && table.Next[i].Task is (byte)CharacterTask.PickUp or (byte)CharacterTask.Loot && table.Cold(i) is { CarryTarget.IsNone: false } c)
+                goals.Add(c.SquadId, table.IdOf(i), GoalTarget.Of(c.CarryTarget));
     }
 
     /// <summary>The lootable characters (carried ones too: a looter that starts may drop its load), in slot order: what <see cref="LootTarget"/> tests, collected once a pass.</summary>

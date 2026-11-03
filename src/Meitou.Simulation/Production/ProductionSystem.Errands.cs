@@ -100,7 +100,7 @@ public sealed partial class ProductionSystem
                 return cold.Carrying.IsNone || owner.DeliveryReady(world, table.IdOf(slot), cold, kind, table.Next[slot].Position, e.Ordered) ? DecisionCheck.Runs : DecisionCheck.No("nothing to deliver to");
             }
             if (!cold.Carrying.IsNone || !CarrySystem.CanCarry(world, cold, TaskType.DEAD_GUYS_GO_IN_THE_POT) || cold.Fleeing) return DecisionCheck.No("cannot carry");
-            var lifted = Lifted(table, cold.SquadId);
+            var lifted = Lifted(world, cold.SquadId, table.IdOf(slot));
             var body = kind == ErrandKind.Corpse ? owner.FindCorpse(world, slot, cold, lifted) : owner.FindIntruder(world, slot, cold, lifted, kind);
             if (body is not { } b) return DecisionCheck.No("nothing found");
             found = (world.Tick, slot, k, b.Id, b.Goal);
@@ -130,19 +130,29 @@ public sealed partial class ProductionSystem
     }
 
     /// <summary>
-    /// The bodies a finder of a character of squad <paramref name="squad"/> skips: every body carried (the carried byte, global), and the bodies its squad mates are lifting (their goal on the squad's
-    /// blackboard, <c>FUN_1402690e0</c>, <b>Verified</b>); another squad may go for the same body until the lift attaches.
+    /// The bodies a finder of a character of squad <paramref name="squad"/> skips: every body carried (the carried byte, global), and the bodies its squad mates work on (their goal on the squad's
+    /// blackboard, <see cref="SquadGoals"/>, <b>Verified</b>); another squad may go for the same body until the lift attaches.
     /// </summary>
-    static HashSet<CharacterId> Lifted(CharacterTable table, int squad)
+    static LiftedBodies Lifted(World world, int squad, CharacterId asker)
     {
-        var set = new HashSet<CharacterId>();
+        var table = world.Characters;
+        var carried = new HashSet<CharacterId>();
         for (int i = 0; i < table.HighWater; i++)
-            if (table.Next[i].Alive && table.Cold(i) is { } c)
-            {
-                if (!c.Carrying.IsNone) set.Add(c.Carrying);
-                if (table.Next[i].Task == (byte)CharacterTask.PickUp && !c.CarryTarget.IsNone && squad >= 0 && c.SquadId == squad) set.Add(c.CarryTarget);
-            }
-        return set;
+            if (table.Next[i].Alive && table.Cold(i) is { } c && !c.Carrying.IsNone) carried.Add(c.Carrying);
+        return new LiftedBodies(carried, SquadGoals.Of(world), squad, asker);
+    }
+
+    /// <summary>The bodies a finder skips (<see cref="Lifted"/>).</summary>
+    sealed class LiftedBodies(HashSet<CharacterId> carried, SquadGoals goals, int squad, CharacterId asker)
+    {
+        public bool Contains(CharacterId body) => carried.Contains(body) || goals.Working(squad, asker, GoalTarget.Of(body)) > 0;
+    }
+
+    /// <summary>The corpse machines the carriers of the squad are taking a body to, in the squad's goal list.</summary>
+    void IGoalSource.Publish(World world, SquadGoals goals)
+    {
+        foreach (var (id, e) in errands)
+            if (e.Site is not null && world.Characters.TryResolveNext(id, out int i) && world.Characters.Cold(i) is { } c) goals.Add(c.SquadId, id, GoalTarget.At(e.Site));
     }
 
     // ---- stepping a carrying job ----
@@ -243,7 +253,7 @@ public sealed partial class ProductionSystem
     /// the nearest dead body in sight that nobody carries (<c>FUN_1408ce170</c>). Meitou's cages are the player's own, the town is the haul range, and sight is
     /// <see cref="ErrandSight"/> (engine stand-ins). The goal is the machine (found again on each step).
     /// </summary>
-    (CharacterId Id, Vector2 Goal)? FindCorpse(World world, int slot, CharacterCold cold, HashSet<CharacterId> lifted)
+    (CharacterId Id, Vector2 Goal)? FindCorpse(World world, int slot, CharacterCold cold, LiftedBodies lifted)
     {
         var table = world.Characters;
         var at = table.Next[slot].Position;
@@ -274,7 +284,7 @@ public sealed partial class ProductionSystem
     /// A dead body that can be lifted, and that nobody has. Robots are skipped only in the cage stage (<b>Verified</b>: <c>FUN_1408cfb00</c> tests the race's robot
     /// byte on the cage's occupant, the nearest-body finder <c>FUN_1408ce170</c> tests it only for an animal finder), so a human carrier lifts a dead robot lying outside.
     /// </summary>
-    bool Liftable(World world, CharacterTable table, int s, CharacterId id, HashSet<CharacterId> lifted, bool cageStage) =>
+    bool Liftable(World world, CharacterTable table, int s, CharacterId id, LiftedBodies lifted, bool cageStage) =>
         table.Cold(s) is { Medical.Dead: true } body && (!cageStage || body.Race is { IsRobot: false }) && !lifted.Contains(id)
         && CarrySystem.CanBeLifted(world, body);
 
@@ -289,7 +299,7 @@ public sealed partial class ProductionSystem
     /// </summary>
     (BuildSite Site, Machine Machine)? NearestIncinerator(World world, Vector3 from, CharacterId self, int squad)
     {
-        var claimed = MachinesClaimed(world, self, squad);
+        var goals = SquadGoals.Of(world);
         if (!world.Characters.TryResolveNext(self, out int me) || world.Characters.Cold(me) is not { } carrier) return null;
         var town = PlayerTownAt(world, from) ?? NearestPlayerTown(world, from, DisposalTownReach);
         BuildSite? bestSite = null;
@@ -299,7 +309,7 @@ public sealed partial class ProductionSystem
         {
             if (m.Data.Function != Meitou.Data.World.TownBuildings.CorpseDisposalFunction || Site(world, m.Site) is not { Complete: true } site || !world.Fixtures.CanUse(world, carrier, site.Owner, null)) continue;
             if (town is not null && Gap(site.Position, town.Position) > town.Radius * 1.1f) continue;
-            if (OperatorsOf(world, site.Id) >= m.Data.MaxOperators || claimed.Contains(site.Id) || PathImpossible(world, self, site.Id)) continue;
+            if (OperatorsOf(world, site.Id) >= m.Data.MaxOperators || MachineClaimed(goals, self, squad, site.Id) || PathImpossible(world, self, site.Id)) continue;
             float weight = DisposalWeight(Vector3.DistanceSquared(site.Position, from)) * (site.Owner == world.Player.Faction ? OwnFactionWeight : 1);
             if (weight <= bestWeight) continue;
             (bestSite, best, bestWeight) = (site, m, weight);
@@ -307,15 +317,8 @@ public sealed partial class ProductionSystem
         return best is null ? null : (bestSite!, best);
     }
 
-    /// <summary>The machines another member of the squad is already taking a body to (<c>FUN_1402690e0</c> on the squad's goal list, <b>Verified</b>): not offered, even before it operates them.</summary>
-    HashSet<string> MachinesClaimed(World world, CharacterId self, int squad)
-    {
-        var set = new HashSet<string>(StringComparer.Ordinal);
-        if (squad < 0) return set;
-        foreach (var (id, e) in errands)
-            if (e.Site is not null && id != self && world.Characters.TryResolveNext(id, out int i) && world.Characters.Cold(i)?.SquadId == squad) set.Add(e.Site);
-        return set;
-    }
+    /// <summary>Whether another member of the squad is already taking a body to the machine at <paramref name="site"/> (<c>FUN_1402690e0</c> on the squad's goal list, <b>Verified</b>): not offered, even before it operates it.</summary>
+    static bool MachineClaimed(SquadGoals goals, CharacterId self, int squad, string site) => goals.Working(squad, self, GoalTarget.At(site)) > 0;
 
     /// <summary>The weight factor of a building of the character's own faction (<c>DAT_141683250</c>, <b>Verified</b> 100).</summary>
     const float OwnFactionWeight = 100;
@@ -346,7 +349,7 @@ public sealed partial class ProductionSystem
     /// sensed list's exclude bits 0x201 are <b>Unknown</b>); 273 is a town finder (<see cref="FindTownIntruder"/>). The goal is outside the door (223 / 224,
     /// <c>Task_TakeIntruderOutside</c>) or outside the town (273 / 274, <c>Task_TakeIntruderOutsideTown</c>).
     /// </summary>
-    (CharacterId Id, Vector2 Goal)? FindIntruder(World world, int slot, CharacterCold cold, HashSet<CharacterId> lifted, ErrandKind kind)
+    (CharacterId Id, Vector2 Goal)? FindIntruder(World world, int slot, CharacterCold cold, LiftedBodies lifted, ErrandKind kind)
     {
         var table = world.Characters;
         var at = table.Next[slot].Position;
@@ -372,7 +375,7 @@ public sealed partial class ProductionSystem
     /// The finder of job 273 (<c>FUN_14099c250</c>, <b>Observed</b>): the carrier stands in a town of the player's and a downed character, not carried or caged, stands in that same town inside its
     /// walls (<c>amInsideTownWalls</c>, <see cref="Kidnap.TownDutySystem.AmInsideTownWalls"/>; true without that system); no building is needed, so a body in a courtyard counts.
     /// </summary>
-    (CharacterId Id, Vector2 Goal)? FindTownIntruder(World world, int slot, CharacterCold cold, HashSet<CharacterId> lifted)
+    (CharacterId Id, Vector2 Goal)? FindTownIntruder(World world, int slot, CharacterCold cold, LiftedBodies lifted)
     {
         var table = world.Characters;
         var at = table.Next[slot].Position;
