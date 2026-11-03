@@ -115,7 +115,7 @@ public static class WorldLights
     static void AddLayout(GameDatabase db, BuildingLayouts layouts, ResolvedBuilding building, string name, bool exterior, List<WorldLight> result)
     {
         if (name.Length == 0 || layouts.Find(building.Record, name, exterior) is not { } layout) return;
-        foreach (var item in layouts.Items(layout))
+        foreach (var item in layouts.Items(layout, building.Placement))
         {
             var (at, rotation) = BuildingLayouts.Place(building.Position, building.Placement.Rotation, item);
             var placed = new List<PlacedLight>();

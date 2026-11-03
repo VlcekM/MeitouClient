@@ -127,7 +127,7 @@ internal sealed partial class ZoneGeometryGatherer
             if (!exterior && b.WithoutInterior) continue;
             string? name = !exterior && InteriorLayoutOverrides.TryGetValue(b.Key, out var chosen) ? chosen : b.LayoutName(state, exterior);
             if (name is not { Length: > 0 } || layouts.Find(record, name, exterior) is not { } layout) continue;
-            foreach (var item in layouts.Items(layout))
+            foreach (var item in layouts.Items(layout, b))
             {
                 var (at, rotation) = BuildingLayouts.Place(position, b.Rotation, item);
                 yield return (item, at, rotation);

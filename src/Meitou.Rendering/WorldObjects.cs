@@ -74,8 +74,7 @@ sealed class WorldObjects : IDisposable
         var watch = Stopwatch.StartNew();
         var levels = WorldLevelData.Load(install, includeInteriors: true);
         WorldFrame.LogIssues("world levels", levels.Problems());
-        int swapped = levels.ApplyBuildingSwaps(db);   // the factions' building swaps, once, for every consumer of the placements
-        if (swapped > 0) Console.WriteLine($"world     {swapped} building(s) replaced or skipped by the factions' swaps");
+
         var objects = new WorldObjects
         {
             Database = db,
@@ -86,6 +85,9 @@ sealed class WorldObjects : IDisposable
             Layouts = new BuildingLayouts(db, levels.Interiors),
             DistantTowns = Meitou.Data.World.DistantTowns.Find(install, db, levels),
         };
+        // The factions' building swaps, once, for every consumer of the placements and of their layouts' furniture.
+        int swapped = levels.ApplyBuildingSwaps(db, objects.Layouts);
+        if (swapped > 0) Console.WriteLine($"world     {swapped} building(s) replaced or skipped by the factions' swaps");
         foreach (var t in objects.DistantTowns) objects.bakedTowns.Add(t.InstanceId);
         int ruins = ResidentRuins.Apply(db, levels, objects.Layouts);
         foreach (var b in levels.Buildings())
@@ -215,7 +217,7 @@ sealed class WorldObjects : IDisposable
             string key = b.Key;
             if (sounds && BuildingEmitters.For(Database, record, key, position, b.Rotation) is { } emitter) result.Add(emitter);
             foreach (var layout in layouts)
-                foreach (var item in Layouts.Items(layout))
+                foreach (var item in Layouts.Items(layout, b))
                 {
                     if (item.Building.GetReferences("sounds").Count == 0) continue;
                     var (at, rotation) = BuildingLayouts.Place(position, b.Rotation, item);
@@ -286,7 +288,7 @@ sealed class WorldObjects : IDisposable
                     if (b.LayoutName(state, exterior) is not { Length: > 0 } layoutName) continue;
                     if (Layouts.Find(record, layoutName, exterior) is not { } layout) { Interlocked.Increment(ref layoutsNotFound); continue; }
                     Interlocked.Increment(ref layouts);
-                    foreach (var item in Layouts.Items(layout))
+                    foreach (var item in Layouts.Items(layout, b))
                     {
                         var (at, rotation) = BuildingLayouts.Place(position, b.Rotation, item);
                         var placed = WorldObjectLayout.Building(db, item.Building, $"{b.InstanceId}/{item.InstanceId}", at, rotation,

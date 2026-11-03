@@ -192,4 +192,40 @@ public class PopulationRulesTests
         Assert.Null(swaps.Replacement("f-t", "bench", 0.1f));                       // no set holds it
         Assert.Null(swaps.Replacement("other", "chair", 0.1f));                     // not this faction's
     }
+
+    /// <summary>The furniture of an interior layout goes through its building owner's swaps too: a skipped piece is left out, a replaced one is the new building in place.</summary>
+    [Fact]
+    public void A_layouts_furniture_is_swapped_by_the_buildings_owner()
+    {
+        var faction = SyntheticTown.Rec("f-t", FcsRecordType.FACTION, "F");
+        faction.References["buildings replacements"] = [SyntheticTown.Ref("s1"), SyntheticTown.Ref("s2")];
+        var carpet = SyntheticTown.Rec("s1", FcsRecordType.BUILDINGS_SWAP, "s1");
+        carpet.References["to replace"] = [SyntheticTown.Ref("carpet")];
+        var chair = SyntheticTown.Rec("s2", FcsRecordType.BUILDINGS_SWAP, "s2");
+        chair.References["to replace"] = [SyntheticTown.Ref("chair")];
+        chair.References["replace with"] = [SyntheticTown.Ref("metal", 100)];
+        var records = new List<FcsRecord> { faction, carpet, chair };
+        foreach (var id in new[] { "carpet", "chair", "metal", "bldg" }) records.Add(SyntheticTown.Rec(id, FcsRecordType.BUILDING, id));
+        var layout = SyntheticTown.Rec("lay", FcsRecordType.INSTANCE_COLLECTION, "lay");
+        layout.Strings["associated building"] = "bldg";
+        layout.Instances.Add(new FcsInstance { Id = "a", Target = "carpet", Position = new Vector3(1, 0, 0) });
+        layout.Instances.Add(new FcsInstance { Id = "b", Target = "chair", Position = new Vector3(2, 0, 0) });
+        var file = new FcsFile();
+        file.Records.AddRange(records);
+        var db = new GameDatabase();
+        db.Apply(file, "test.mod");
+        var interiorsFile = new FcsFile();
+        interiorsFile.Records.Add(layout);
+        var interiors = new GameDatabase();
+        interiors.Apply(interiorsFile, "interiors.level");
+        var layouts = new Meitou.Data.World.BuildingLayouts(db, interiors);
+        var placement = new Meitou.Data.World.BuildingPlacement(new Meitou.Data.World.ZoneCoordinate(1, 1), "p", "bldg", new Vector3(1, 1, 1), Quaternion.Identity, null, null);
+        var layoutRecord = interiors.Find("lay")!;
+        Assert.Equal(["carpet", "chair"], layouts.Items(layoutRecord, placement).Select(i => i.Building.StringId));
+        layouts.UseSwaps(BuildingSwaps.From(db), new Dictionary<string, string> { [placement.Key] = "f-t" });
+        var items = layouts.Items(layoutRecord, placement).ToList();
+        var only = Assert.Single(items);
+        Assert.Equal("metal", only.Building.StringId);
+        Assert.Equal(new Vector3(2, 0, 0), only.Position);
+    }
 }

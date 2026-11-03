@@ -13,10 +13,11 @@ namespace Meitou.Data.World;
 public static class BuildingSwapPass
 {
     /// <summary>Applies the swaps of <paramref name="db"/> to <paramref name="levels"/>; returns how many placements changed or went.</summary>
-    public static int ApplyBuildingSwaps(this WorldLevelData levels, GameDatabase db)
+    public static int ApplyBuildingSwaps(this WorldLevelData levels, GameDatabase db, BuildingLayouts? layouts = null)
     {
         var swaps = BuildingSwaps.From(db);
         if (!swaps.Any) return 0;
+        var owners = new Dictionary<string, string>(StringComparer.Ordinal);
         var towns = new List<(Vector3 At, float Radius, string Faction)>();
         foreach (var t in levels.Towns())
             if (db.Find(t.TownId) is { Type: Fcs.FcsRecordType.TOWN } record && TownData.From(record) is { Faction: { } faction, Radius: > 0 } data)
@@ -30,11 +31,14 @@ public static class BuildingSwapPass
                 if (instance.IsCleared || zoneDb.Find(instance.Target) is not null) continue;
                 string? state = instance.States.Count > 0 ? instance.States[0] : null;
                 string? owner = state is not null && zoneDb.Find(state) is { } stateRecord && stateRecord.GetString("owner faction ID") is { Length: > 0 } id ? id : TownFaction(towns, instance.Position);
-                if (owner is null || swaps.Replacement(owner, instance.Target, Roll(zone, instance.Id)) is not { } answer) continue;
+                if (owner is null) continue;
+                owners[BuildingKey.Of(zone, instance.Id)] = owner;
+                if (swaps.Replacement(owner, instance.Target, Roll($"{zone.X}.{zone.Y}:{instance.Id}")) is not { } answer) continue;
                 instance.Target = answer;
                 changed++;
             }
         }
+        layouts?.UseSwaps(swaps, owners);
         return changed;
     }
 
@@ -50,11 +54,11 @@ public static class BuildingSwapPass
         return best;
     }
 
-    /// <summary>A draw in [0, 1) fixed by the placement (FNV-1a over its zone and id).</summary>
-    static float Roll(ZoneCoordinate zone, string instanceId)
+    /// <summary>A draw in [0, 1) fixed by a name (FNV-1a).</summary>
+    internal static float Roll(string name)
     {
         ulong h = 14695981039346656037UL;
-        foreach (char c in $"{zone.X}.{zone.Y}:{instanceId}") h = (h ^ c) * 1099511628211UL;
+        foreach (char c in name) h = (h ^ c) * 1099511628211UL;
         h ^= h >> 33;
         h *= 0xff51afd7ed558ccdUL;
         h ^= h >> 33;

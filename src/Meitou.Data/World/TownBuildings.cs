@@ -327,7 +327,7 @@ public static class TownBuildings
         var spots = c.Spots;
         int index = 0;
         List<(int Spot, int Flags)>? seats = null;
-        foreach (var item in layouts.Items(interior))
+        foreach (var item in layouts.Items(interior, b))
         {
             var (at, rotation) = BuildingLayouts.Place(resolved.Position, b.Rotation, item);
             bool node = item.Building.GetBool("is node");

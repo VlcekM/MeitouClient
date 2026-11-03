@@ -78,6 +78,31 @@ public sealed class BuildingLayouts
     /// <summary>The layout's objects whose target is a BUILDING of the game data, in instance id order.</summary>
     public IEnumerable<LayoutItem> Items(GameRecord layout) => Placed(layout, FcsRecordType.BUILDING);
 
+    Gameplay.BuildingSwaps? swaps;
+    IReadOnlyDictionary<string, string>? swapOwners;
+
+    /// <summary>Turns on the factions' building swaps for the furniture of <see cref="Items(GameRecord, BuildingPlacement)"/>: <paramref name="owners"/> is the owner faction of each placement by key (<see cref="BuildingSwapPass"/>).</summary>
+    public void UseSwaps(Gameplay.BuildingSwaps swaps, IReadOnlyDictionary<string, string> owners) => (this.swaps, swapOwners) = (swaps, owners);
+
+    /// <summary>
+    /// The layout's furniture as <paramref name="placement"/>'s owner faction has it made: each piece goes through the faction's building swaps as <c>createBuilding</c> asks them (<c>FUN_14057cc70</c>), a
+    /// skipped one is left out and a replaced one is the new building in the same place. Without swaps, <see cref="Items(GameRecord)"/>.
+    /// </summary>
+    public IEnumerable<LayoutItem> Items(GameRecord layout, BuildingPlacement placement)
+    {
+        if (swaps is null || swapOwners is null || !swapOwners.TryGetValue(placement.Key, out var owner)) return Items(layout);
+        return Swapped(Items(layout), owner, placement.Key);
+    }
+
+    IEnumerable<LayoutItem> Swapped(IEnumerable<LayoutItem> items, string owner, string key)
+    {
+        foreach (var item in items)
+        {
+            if (swaps!.Replacement(owner, item.Building.StringId, BuildingSwapPass.Roll($"{key}/{item.InstanceId}")) is not { } answer) yield return item;
+            else if (answer.Length > 0 && db.Find(answer) is { } replacement) yield return item with { Building = replacement };
+        }
+    }
+
     /// <summary>
     /// The layout's loose-item slots: its objects whose target is an ITEM_PLACEMENT_GROUP (<see cref="LayoutItem.Building"/> is then the group; docs/game/factions-squads-towns.md
     /// "Loose items in buildings"), in instance id order.
