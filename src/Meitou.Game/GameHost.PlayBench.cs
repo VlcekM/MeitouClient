@@ -22,7 +22,7 @@ sealed partial class GameHost
     {
         public int Segment;
         public double T, FrameMs, UpdateMs, Busy;
-        public int Ticks, Characters;
+        public int Ticks, Characters, Far;
         public double[] Steps = new double[TickProfile.PhaseNames.Length];
         public double[] Cpu = new double[StageClock.Names.Length];
         public double[]? Gpu;
@@ -122,7 +122,7 @@ sealed partial class GameHost
             player.ShowUiPanel(null);
         }
         benchScript[benchSegment].Frame?.Invoke(t, dt);
-        benchCurrent = new BenchFrame { Segment = benchSegment, T = benchClock, FrameMs = dt * 1000, Characters = session.CurrentSnapshot.Characters.Count, StartMs = benchGc?.NowMs ?? 0 };
+        benchCurrent = new BenchFrame { Segment = benchSegment, T = benchClock, FrameMs = dt * 1000, Characters = session.CurrentSnapshot.Characters.Count, Far = session.World.FarSkipped, StartMs = benchGc?.NowMs ?? 0 };
         if (profiler is not null) profiler.Tag = benchFrames.Count;
         session.World.Profile.Clear();
         (session.CameraMs, session.HandlersMs) = (0, 0);
@@ -353,7 +353,7 @@ sealed partial class GameHost
         var ci = CultureInfo.InvariantCulture;
         var stages = StageClock.Names;
         var csv = new StringBuilder();
-        csv.Append("frame,segment,t,frame_ms,update_ms,busy_ms,ticks,characters,gpu_total_ms,gc0,gc1,gc2,alloc_mb,gc_pause_ms,working_set_mb,vram_mb");
+        csv.Append("frame,segment,t,frame_ms,update_ms,busy_ms,ticks,characters,far,gpu_total_ms,gc0,gc1,gc2,alloc_mb,gc_pause_ms,working_set_mb,vram_mb");
         foreach (var s in BenchSections) csv.Append(",loop_").Append(s);
         csv.Append(",control_camera_ms,control_handlers_ms,top_system,top_system_ms,late_pipelines");
         foreach (var s in TickProfile.PhaseNames) csv.Append(",sim_").Append(s.Replace(' ', '-'));
@@ -363,7 +363,7 @@ sealed partial class GameHost
         for (int i = 0; i < benchFrames.Count; i++)
         {
             var f = benchFrames[i];
-            csv.Append(ci, $"{i},{benchScript[f.Segment].Name},{f.T:0.000},{f.FrameMs:0.00},{f.UpdateMs:0.00},{f.Busy:0.00},{f.Ticks},{f.Characters},{f.GpuTotal:0.00},{f.Gc0},{f.Gc1},{f.Gc2},{f.AllocMb:0.00},{f.PauseMs:0.00},{f.WorkingSetMb:0},{(double.IsNaN(f.VramMb) ? "" : f.VramMb.ToString("0", ci))}");
+            csv.Append(ci, $"{i},{benchScript[f.Segment].Name},{f.T:0.000},{f.FrameMs:0.00},{f.UpdateMs:0.00},{f.Busy:0.00},{f.Ticks},{f.Characters},{f.Far},{f.GpuTotal:0.00},{f.Gc0},{f.Gc1},{f.Gc2},{f.AllocMb:0.00},{f.PauseMs:0.00},{f.WorkingSetMb:0},{(double.IsNaN(f.VramMb) ? "" : f.VramMb.ToString("0", ci))}");
             foreach (var v in f.Sections) csv.Append(ci, $",{v:0.000}");
             csv.Append(ci, $",{f.CameraMs:0.000},{f.HandlersMs:0.000},{f.TopSystem},{f.TopSystemMs:0.000},{f.LatePipelines}");
             foreach (var v in f.Steps) csv.Append(ci, $",{v:0.000}");
@@ -420,6 +420,7 @@ sealed partial class GameHost
         var stages = StageClock.Names;
         string device = gpu.Sky.Gpu is Meitou.Rendering.Gpu.GpuContext vk ? vk.Device.DeviceName : "Metal";
         sb.Append(ci, $"# Play benchmark\n\n{benchFrames.Count} frames, {sz.X}x{sz.Y}, {device}, upscaler {o.Post.Upscale.Kind} at {o.Post.Upscale.EffectiveScale:0.00}; frame limit and vsync off.\n\n");
+        if (gpu.Shadow is { Meitou: true } shadowPass) sb.Append(ci, $"Shadows: {shadowPass.DescribeMeitou()}.\n\n");
         sb.Append("| segment | frames | fps | frame ms p50 | p95 | p99 | max | update ms | ticks/frame | sim ms/tick | gpu ms | render cpu ms | alloc MB/s | gen2 |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n");
         for (int s = 0; s < benchScript!.Length; s++)
         {

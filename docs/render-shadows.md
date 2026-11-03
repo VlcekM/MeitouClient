@@ -32,6 +32,8 @@ blending levels; a distant town only beyond the camera's fade). Ignoring it, the
 mesh (the intact town) cast roof shadows into its ruins and platforms at every distance (**Observed**,
 Hub 14:00: matches `--distant-range 0` after the fix, not before).
 
+**Flights** (Meitou, engine choice): while the host flies the camera (a character flight or a squad tour hop under way, `WorldFrame.CameraFlying`, not the hold between hops, nor a cut or a pan) the far cascades are not drawn, a map drawn now covering the wrong ground the next frame; the near cascade (and cascade 1 of five) is. A far cascade drawn before the flight is stale: the published cascades stop before the first stale one, so the receivers shadow only within the near cascade's depth (plus the terrain and landmark maps) until the camera lands and the far cascades are drawn again as uncovered, over the budget's frames (one a frame, forced after three). The log's shadow line and the play bench's summary count the frames skipped (**Observed**: the flight phases of the flights segment, 0 on the settle, idle, orbit, zoom, pan, travel and overview segments). An eye-speed rule was tried first (15,000 units a second on two frames running) and fired on eased camera cuts.
+
 `shadow-coarse` / generated object levels select geometry against cascade texel size, not colour
 pixel size. Preserve silhouette and alpha coverage; impostor casters have their own fade/plane.
 `shadow-fogcap` can shorten reach only when placed fog conservatively hides every relevant

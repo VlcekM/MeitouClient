@@ -28,6 +28,8 @@ sealed class SquadTour
     bool holding;
 
     public bool Active { get; private set; }
+    /// <summary>The camera is on a hop now (not on a hold between hops).</summary>
+    public bool Moving => Active && !holding;
 
     /// <summary>Starts at the camera's view of <paramref name="members"/>[0] (flying there first when the view is elsewhere).</summary>
     public void Start(WorldCamera camera, IReadOnlyList<CharacterId> members, Func<CharacterId, Vector3?> position)

@@ -581,6 +581,7 @@ sealed partial class GameHost
             if (tour.Active && !tour.Advance(dt, camera, TourPosition)) EndTour();
             gpu.Ahead = tour.ArrivalEye(TourPosition);   // the streaming loads the landing view during the flight
             session.ViewEye = cinemaHolds ? camera.Eye : null;   // the simulation's far cadence follows the flying camera, not the rig it left
+            gpu.CameraFlying = tour.Moving;   // the far shadow cascades wait for the landing (docs/render-shadows.md "Flights")
             gpu.Kept = !config.KeepTexturesAtCharacters ? []
                 : config.KeepTexturesAtAllSquads ? [.. session.CurrentSnapshot.PlayerSquads.SelectMany(s => s.Members).Select(TourPosition).OfType<Vector3>()]
                 : [.. player.SquadBarMembers().Select(c => TourPosition(c.Id)).OfType<Vector3>()];

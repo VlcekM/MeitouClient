@@ -807,6 +807,8 @@ static partial class WorldFrame
         public TerrainStreamer? Streamer;
         /// <summary>Where the camera is about to arrive (a character flight's end view's eye; null otherwise): the object and terrain texture streaming load there too.</summary>
         public Vector3? Ahead;
+        /// <summary>The host flies the camera this frame (a character flight or squad tour hop under way, not its hold): the far shadow cascades are not drawn (docs/render-shadows.md "Flights").</summary>
+        public bool CameraFlying;
         /// <summary>Points whose surroundings stay loaded besides the camera's (the player's characters, "Keep textures at characters"): object meshes and textures, terrain biome textures.</summary>
         public IReadOnlyList<Vector3> Kept = [];
         /// <summary>Places kept loaded: the eye's and each merged kept point's, held at its highest for <see cref="AreasHoldMs"/> (the merge flickers near
@@ -1804,6 +1806,7 @@ static partial class WorldFrame
             ? new ShadowPass.LandmarkCasters(spheres => lo.LandmarkCasters(camera.Eye, spheres),
                 (_, worldToClip, planes, lodEye) => lo.DrawLandmarksDepth(worldToClip, lodEye, planes, render, gpu.Terrain))
             : (ShadowPass.LandmarkCasters?)null;
+        shadow.CameraFlying = gpu.CameraFlying;
         shadow.Render(view, light.SunDirection, casters.Draw, sunHeight, landmarks, casters.Prepare);
         shadow.CasterStats = casters.Stats();
     }
