@@ -33,4 +33,20 @@ public class PopulationRulesTests
         Assert.False(population.FreeAgain(world, cold, open, -1));
         Assert.True(population.FreeAgain(world, cold, open, cold.Faction));
     }
+
+    /// <summary>FUN_140998fa0 calls the day's reset (FUN_140998e40): standing in another town than the last purchase's clears the list and records the day.</summary>
+    [Fact]
+    public void A_shopper_in_another_town_starts_its_list_over_and_the_day_is_recorded()
+    {
+        var list = new Meitou.Simulation.Ai.ShoppingList([3], [1]);
+        list.Begin(1, 4, 9);
+        list.Use(0);
+        Assert.False(list.Pending(4, 9, 1));
+        Assert.True(list.Pending(4, 9, 2));
+        list.Use(0);
+        // At 03:00 of the next day another town clears it and records that day, so the 07:00 reset does not clear it a second time.
+        Assert.True(list.Pending(5, 3, 2));
+        list.Use(0);
+        Assert.False(list.Pending(5, 9, 1));
+    }
 }
