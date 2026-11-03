@@ -340,7 +340,7 @@ public sealed partial class CombatSystem
             {
                 EndReaction(world, i, ref s, now, dt);
                 if (s.ReactTech < 0 && s.AttackTech < 0) React(world, i, ref s, cold, key, now, dt);
-                else if (s.ReactTech >= 0 && !techniques[s.ReactTech].IsDodge) Reconsider(world, i, ref s, cold, key, now, dt);
+                else if (s.ReactTech >= 0) Reconsider(world, i, ref s, cold, key, now, dt);
                 TickRanged(world, i, ref s, cold, effects, now, world.StepSeconds(i));   // its timers are seconds: a far character's step covers several ticks
                 continue;
             }
@@ -431,8 +431,8 @@ public sealed partial class CombatSystem
                 // Only a fighter defends: a target whose fight is off is simply hit (the ask answers "attack", docs/game/combat.md "Fight lifecycle and orders").
                 if (s.AttackTech < 0 && !paused && now >= s.DefendReadyTick && (fighting || cold.InCombat)) React(world, i, ref s, cold, key, now, dt);
             }
-            else if (s.ReactTech >= 0 && s.AttackTech < 0 && !techniques[s.ReactTech].IsDodge && (fighting || cold.InCombat))
-                // A block in progress meets another blow: the defence update (FUN_140609c70, which does not read the +0x14c timer) follows the most advanced incoming swing.
+            else if (s.ReactTech >= 0 && s.AttackTech < 0 && (fighting || cold.InCombat))
+                // A defence in progress meets another blow: the defence update (FUN_140609c70, which does not read the +0x14c timer) follows the most advanced incoming swing.
                 Reconsider(world, i, ref s, cold, key, now, dt);
         }
     }
@@ -923,20 +923,20 @@ public sealed partial class CombatSystem
     }
 
     /// <summary>
-    /// The defence update for a block in progress (<c>FUN_140609c70</c>): it follows the swing furthest on, and when that swing or its blow changes, or every 1 s, it starts a new defence
-    /// if the blow's side (worked out now, so an attacker that walked round counts) differs from the block's. A block of the same side carries on.
+    /// The defence update (<c>FUN_140609c70</c>): a defence follows the swing furthest on (a dodge too, so it turns to it); for a block, when that swing or its blow changes, or every 1 s,
+    /// it starts a new defence if the blow's side (worked out now, so an attacker that walked round counts) differs from the block's. A block of the same side carries on; a dodge is never re-picked.
     /// </summary>
     void Reconsider(World world, int i, ref CombatSlot s, CharacterCold cold, ulong key, int now, float dt)
     {
         var swing = MostAdvanced(world, i, now, s.ReactedSlot, landing: false);
         if (swing.Attacker < 0) return;
         bool changed = swing.Attacker != s.ReactedSlot || swing.Seq != s.ReactedSeq || swing.Blow != s.ReactedBlow;
-        if (!changed && now < s.ReactCheckTick) return;
-
-        s.ReactCheckTick = now + (int)MathF.Ceiling(CombatTuning.DefenceRecheckSeconds / dt);
         s.ReactedSlot = swing.Attacker;
         s.ReactedSeq = swing.Seq;
         s.ReactedBlow = swing.Blow;
+        if (techniques[s.ReactTech].IsDodge || !changed && now < s.ReactCheckTick) return;
+
+        s.ReactCheckTick = now + (int)MathF.Ceiling(CombatTuning.DefenceRecheckSeconds / dt);
         if (techniques[s.ReactTech].AttackDirection1 == BlowSide(world, i, in swing)) return;
         if (!Startable(in swing, i))
         {
