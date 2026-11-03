@@ -53,20 +53,20 @@ public sealed partial class CarrySystem
     }
 
     /// <summary>
-    /// Goal 177's finder (<c>FUN_14099ae10(ai, 0)</c>): within <see cref="ScavengeRange"/>, not carried, not looted by another and not tagged <see cref="MemoryTag.Looted"/> by the looter's squad;
+    /// Goal 177's finder (<c>FUN_14099ae10(ai, 0)</c>): within <see cref="ScavengeRange"/> in 3D (<c>FUN_14099ae10</c> :42, :88), not carried, not looted by another and not tagged <see cref="MemoryTag.Looted"/> by the looter's squad;
     /// first the dead, then the downed living of factions neither its own nor allied (the kidnap finder's masks), not of the player's faction unless <see cref="PlayerState.BanditsLoot"/>,
     /// whom <see cref="ScrewsOver"/> allows. Engine choices: the nearest of each pass (the original takes its sensed-list order); the dead pass has no faction test, so a body of the looter's own faction is looted too (Verified). -1: none.
     /// </summary>
     int LootTarget(World world, CharacterTable table, int slot, CharacterCold cold, HashSet<int> taken, List<int> bodies, SquadMemory? memory)
     {
         var next = table.Next;
-        var at = new Vector2(next[slot].Position.X, next[slot].Position.Z);
+        var at = next[slot].Position;
         int dead = -1, down = -1;
         float dead2 = ScavengeRange * ScavengeRange, down2 = dead2;
         foreach (int s in bodies)
         {
             if (s == slot || !next[s].Alive || taken.Contains(s) || table.Cold(s) is not { } body || !CanBeLooted(body) || !body.CarriedBy.IsNone || body.IsImprisoned) continue;
-            float d2 = Vector2.DistanceSquared(at, new Vector2(next[s].Position.X, next[s].Position.Z));
+            float d2 = Vector3.DistanceSquared(at, next[s].Position);   // Ogre squaredDistance: full 3D, strict bound
             if (d2 > down2 && d2 > dead2) continue;
             if (memory is not null && memory.HasShort(world, cold.SquadId, table.IdOf(s), MemoryTag.Looted)) continue;
             if (body.Medical!.Dead)
