@@ -36,7 +36,7 @@ public sealed record TrainingSpot(string Id, string Record, Vector3 Position, in
 /// (null with fewer than 2: it is lain in at its own origin and facing).
 /// </summary>
 /// <summary>A cage's clips (ANIMATION names; null: none listed): standing in it, unconscious, dazed.</summary>
-public readonly record struct CageClips(string? Idle, string? Ko, string? Dazed);
+public readonly record struct CageClips(string? Idle, string? Ko, string? Dazed, string? Lockpick = null);
 
 public readonly record struct BedData(int Function, string? Clip, float Materials, UseNode[]? Nodes = null);
 

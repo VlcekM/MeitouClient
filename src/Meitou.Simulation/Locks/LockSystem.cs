@@ -94,6 +94,9 @@ public sealed partial class LockSystem(GameConstants constants, BodyOptions opti
         }
     }
 
+    /// <summary>The play speed of the picking clip: the lerp 0.55 to 2.0 over 0.01 x skill (<c>FUN_140015b63</c>, Verified literals).</summary>
+    internal static float PickPlayRate(float skill) => 0.55f + (2.0f - 0.55f) * (skill * 0.01f);
+
     public void SlowWorld(World world)
     {
         world.Fixtures.HoldCaged(world);
@@ -125,6 +128,7 @@ public sealed partial class LockSystem(GameConstants constants, BodyOptions opti
                 if (next[s].Task == (byte)CharacterTask.GoTo) AtWork(world, s);
             }
             if (c.StaggeredUntil > world.Tick) continue;   // a stagger interrupts the picking
+            c.PickWork = (world.Tick, f.Clips.Lockpick, PickPlayRate(Lockpicking.Skill(c)));
             switch (Picking.Step(world, s, f, world.TickSeconds, Crimes))
             {
                 case PickOutcome.Open: c.PickingLock = null; world.EmitSound(SoundKind.Unlocked, s, next[s].Position); break;

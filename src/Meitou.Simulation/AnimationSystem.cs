@@ -51,6 +51,9 @@ public sealed class CharacterAnimation
     public bool WasCrawling;
     /// <summary>The body's playback factor F = 2 - H (H the skeleton's movement scale; docs/animation.md "Movement"); 0 until the first tick sets it.</summary>
     public float Rate;
+    /// <summary>The held clip (a work clip) the character plays this tick (-1: none) and the factor its play speed is scaled by (the lock picker's skill speed). Derived, not hashed.</summary>
+    public int HeldIndex = -1;
+    public float HeldRate = 1;
     /// <summary>The last <see cref="SpeedWindow"/> speeds, oldest overwritten first (<see cref="SmoothSpeed"/>).</summary>
     public readonly float[] Speeds = new float[SpeedWindow];
     public int SpeedCount;
@@ -184,8 +187,10 @@ public sealed class AnimationSystem(AnimationLibrary library, AnimationLengths l
 
     // Building, delivering materials and prospecting play the medic clip (Verified, Task_Build, Task_AddMaterialsToBuilding and Task_Prospecting).
     // Resting on a chair plays the clip its functionality names ("sitting chair"), else sitting on the floor.
-    int HeldClip(CharacterTask task, CharacterCold cold) => task switch
+    int HeldClip(CharacterTask task, CharacterCold cold, long tick) => task switch
     {
+        // The lock picker plays the cage's `animation lockpick`, else the medic clip every update it picks (Task_PickLock, FUN_140359160; the crawler's kneeling clip is chosen in Crawl).
+        _ when cold.PickingLock is not null && cold.PickWork.Tick >= tick - 1 => (cold.PickWork.Clip is { } pick ? SitClipOf(pick) : -1) is >= 0 and var picking ? picking : TreatingClip,
         CharacterTask.Build or CharacterTask.DeliverMaterials or CharacterTask.Prospect => TreatingClip,
         // A medic kneels only at a patient keeping still (Task_FirstAid's update plays the clip; FirstAidSystem); waiting for one that moves it stands.
         CharacterTask.Treat => cold.TreatKneels ? TreatingClip : -1,
@@ -407,6 +412,7 @@ public sealed class AnimationSystem(AnimationLibrary library, AnimationLengths l
         var fight = combatView ?? CombatView.None;
         var lower = lowerScratch ?? [];
         var upper = upperScratch ?? [];
+        a.HeldIndex = -1;
         lower.Clear();
         upper.Clear();
         if (Library.Animal(cold.RecordId) is { } animal) return UpdateAnimal(a, cold, PlanOf(animal), speed, dt, seed, key, tick, lower, fight, ragdoll);
@@ -470,7 +476,7 @@ public sealed class AnimationSystem(AnimationLibrary library, AnimationLengths l
         else if (down)
         {
             // Down in a bed: its clip (the sleeper's), so it lies where a sleeper lies.
-            if (inBed && HeldClip(CharacterTask.Sleep, cold) is >= 0 and var lain) wanted.Add((lain, 1));
+            if (inBed && HeldClip(CharacterTask.Sleep, cold, tick) is >= 0 and var lain) wanted.Add((lain, 1));
             // Out cold in a cage: its `animation KO` (the Cage's foetal; the out-of-combat pick @ 140520500, docs/animation.md "In a bed or a cage").
             else if (inCage && cold.CageClips.Ko is { } ko && SitClipOf(ko) is >= 0 and var foetal) wanted.Add((foetal, 1));
             else if (LyingClip >= 0) wanted.Add((LyingClip, 1));
@@ -515,7 +521,7 @@ public sealed class AnimationSystem(AnimationLibrary library, AnimationLengths l
                 wanted.AddRange(upper);
                 if (stance.Combat && technique < 0 && Library.CombatGuard(stance, speed) is >= 0 and var guard) { wanted.Add((guard, 1)); a.Idle = -1; }
             }
-            else if (technique < 0 && HeldClip(task, cold) is >= 0 and var held) { wanted.Add((held, 1)); a.Idle = -1; }
+            else if (technique < 0 && HeldClip(task, cold, tick) is >= 0 and var held) { a.HeldIndex = held; a.HeldRate = cold.PickingLock is not null && cold.PickWork.Tick >= tick - 1 ? cold.PickWork.Rate : 1; wanted.Add((held, 1)); a.Idle = -1; }
             else if (technique < 0)
             {
                 // A carrier standing: a whole-body idle as if it carried nothing, with the carrying arm pose (stand carrying left) over it (engine choice: the data has no whole-body carrying idle).
@@ -614,7 +620,7 @@ public sealed class AnimationSystem(AnimationLibrary library, AnimationLengths l
             Library.CrawlMovement(speed, stance, wanted);
             if (wanted.Count > 0) { a.Idle = -1; legs = wanted.Count; return true; }
         }
-        if (HeldClip(task, cold) is >= 0 and var held && held == TreatingClip && CrawlUseClip >= 0)
+        if (HeldClip(task, cold, tick) is >= 0 and var held && held == TreatingClip && CrawlUseClip >= 0)
         {
             wanted.Add((CrawlUseClip, 1));
             a.Idle = -1;
@@ -695,7 +701,7 @@ public sealed class AnimationSystem(AnimationLibrary library, AnimationLengths l
             else if (IsStrafe(d)) layer.Time = Wrap(layer.Time + dt * a.Rate * d.PlaySpeed * a.StrafeSpeed, length);   // signed: a step the other way plays it backwards
             else if (synched) layer.Time = (a.Phase + d.SynchOffset - MathF.Floor(a.Phase + d.SynchOffset)) * length;
             else if (d.MoveSpeed != 0) layer.Time += dt * a.Rate * d.PlaySpeed * speed;
-            else layer.Time += dt * (d.PlaySpeed > 0 ? d.PlaySpeed : d.Technique ? 1 : 0);
+            else layer.Time += dt * (d.PlaySpeed > 0 ? d.PlaySpeed : d.Technique ? 1 : 0) * (layer.Definition == a.HeldIndex ? a.HeldRate : 1);
             if (!d.Loop && !synched && !IsStrafe(d)) layer.Time = Math.Clamp(layer.Time, 0, length * 0.999f);   // a one-shot clip holds its last frame
             if (layer.Time > before && dt > 0) layer.Rate = (layer.Time - before) / dt;
             if (d.Relocates && layer.Time > before) root += (lengths.Root(d.Clip, layer.Time) - lengths.Root(d.Clip, before)) * layer.Weight;

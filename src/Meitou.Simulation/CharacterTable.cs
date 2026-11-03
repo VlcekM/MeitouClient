@@ -465,6 +465,8 @@ public sealed class CharacterCold
     public int SpeedGroup { get; set; } = -1;
     /// <summary>The fixture this character is picking the lock of (<see cref="Locks.LockSystem"/>; null: none). Hashed only while set.</summary>
     public string? PickingLock { get; set; }
+    /// <summary>The picker's work this update (Task_PickLock, <c>FUN_140359160</c>): the tick, the cage's <c>animation lockpick</c> clip (null: the medic clip) and the play speed 0.55 + 1.45 x 0.01 x skill (cosmetic). Not hashed: it follows from <see cref="PickingLock"/>.</summary>
+    public (long Tick, string? Clip, float Rate) PickWork { get; set; } = (-1, null, 1);
     /// <summary>The door this character is bashing in (<see cref="Locks.LockSystem"/>; null: none). Hashed only while set.</summary>
     public string? Bashing { get; set; }
     /// <summary>Whether <see cref="Bashing"/> was ordered by the player (Smash, 226) rather than found by the pursuit: the basher then needs no attack target. Hashed with <see cref="Bashing"/>.</summary>
