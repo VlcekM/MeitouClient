@@ -195,7 +195,7 @@ child's (`FUN_1406ad9d0`).
    [memory](#squad-memory) tags on the target: all required set, no forbidden; never noted: passes only when nothing is required; no
    target: not tested.
 2. A squad test for flagged lines and a per-character line flag (purposes **Unknown**).
-3. `unique` (no current field sets it).
+3. `unique` (no current field sets it). **Verified** meaning (`FUN_1400cd0b0` is the hand's `operator!=`): a node with `unique` set and a stored speaker hand (`+0x248`, type not none) fails the line when the current speaker's hand differs from the stored one; the hand is filled from the speaker after the chance-permanent roll succeeds, for unique nodes only. So a unique line sticks to the first speaker that used it. No base DIALOGUE_LINE sets it (the field exists only on CHARACTER and ANIMAL_CHARACTER records), so there is no vanilla effect; Meitou's `DialogueNode` has no such rule.
 4. `chance temporary` below 99: a fresh 0-100 roll every check.
 5. `in town of` (the speaker's current town's faction), `my faction`, `target faction`, `has package` (any of the speaker's
    packages), `is character` (the speaker's record), `target carrying character` (for each listed character in turn, the first
