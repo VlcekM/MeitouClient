@@ -203,6 +203,9 @@ legs included, is pinned to the animation. The carried body's scene node is **no
 carry placement of [carry-loot](carry-loot.md) sets it each frame. The pick-up attach (`FUN_1405ced90`) clears the active mask (`+0x2f8` = 0) and the CARRY_MODE request then rebuilds the ragdoll from the
 animated pose; put-down / drop (`FUN_1405ce9c0(0)`) requests CARRY_MODE off, the medical tick requests WHOLE again for a still-unconscious body. Meitou: `RagdollSystem` (`Simulates`, `Rebuild`) does the
 same; the limbs that swing are the forearms and the head, so a body's upper arms and legs follow only the `carry me` clip (`play speed` 0.006: almost still).
+The animal's pinned body is matched by **bone**, not by actor name: `FUN_1405b8720` keys its pin map by the bone names it hands to `disableBone`. **Verified** (probe of the shipped
+`.phs` files): Bonedog `dog1.phs`, River Raptor, Small Spider, Spider and Skimmer name their root actor `Actor` (bone `Bip01`), and the Bonedog, River Raptor and Small Spider have no `carry bone`, so
+their root fallback `Bip01` is that actor; matched by name, nothing would be pinned and the carried body would fall off the shoulder. Meitou: `RagdollSystem.CarryBoneOf` (a bone handle).
 
 Activating a simulated body: clear kinematic, ENERGY_SLEEP_TEST, linear damping 0.05, angular 0.01,
 sleep energy threshold 5.0, wake 0.4 if asleep. No joint motors or springs are set: a "powered"

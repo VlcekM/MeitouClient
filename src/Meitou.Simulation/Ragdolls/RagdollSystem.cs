@@ -120,8 +120,11 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
         public required RagdollDefinition Definition;
         public required CharacterPoseSetup Setup;
         public required float Scale;
-        /// <summary>An animal's carry bone (RACE <c>carry bone</c>, else the skeleton's root; <c>FUN_1407d3850</c>).</summary>
-        public string CarryBone = "";
+        /// <summary>
+        /// An animal's carry bone handle (RACE <c>carry bone</c>, else the skeleton's root; <c>FUN_1407d3850</c>), -1 without one. A bone, not an actor name: the dog ragdoll's root
+        /// actor is named <c>Actor</c> and moves <c>Bip01</c>.
+        /// </summary>
+        public int CarryBone = -1;
         public RagdollPart Mask;
         public int Tag;
         /// <summary>By body: its handle when it is in the scene.</summary>
@@ -171,6 +174,14 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
         if (FileOf(look) is not { } file) return null;
         int key = (int)MathF.Round(scale * 100);
         return definitions.GetOrAdd((file.Path, rig, key), _ => new(() => RagdollDefinition.Build(file.File, rig, key / 100f, Hull))).Value;
+    }
+
+    /// <summary>The bone a carried animal's ragdoll is pinned by: RACE <c>carry bone</c> when the skeleton has it, else the skeleton's root (<c>FUN_1407d3850</c>); -1 for neither.</summary>
+    static int CarryBoneOf(CharacterAppearance look, SkeletonRig rig)
+    {
+        if (look.Race.GetString("carry bone") is { Length: > 0 } named && rig.Handle(named) is int bone) return bone;
+        var root = rig.Skeleton.Bones.FirstOrDefault(b => b.Parent is null)?.Name;
+        return root is not null && rig.Handle(root) is int handle ? handle : -1;
     }
 
     Vector3[]? Hull(string cooked)
@@ -270,9 +281,7 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
             {
                 var setup = rigs.For(cold.Appearance!)!;
                 if (DefinitionOf(cold.Appearance!, setup.Rig, scale) is not { } definition) continue;
-                var carryBone = cold.Appearance!.Race.GetString("carry bone");
-                if (string.IsNullOrEmpty(carryBone) || setup.Rig.Handle(carryBone) is null) carryBone = setup.Rig.Skeleton.Bones.FirstOrDefault(b => b.Parent is null)?.Name ?? "";
-                r = new Ragdoll { Id = id, Definition = definition, Setup = setup, Scale = scale, CarryBone = carryBone };
+                r = new Ragdoll { Id = id, Definition = definition, Setup = setup, Scale = scale, CarryBone = CarryBoneOf(cold.Appearance!, setup.Rig) };
                 r.Pose = new RigidTransform[definition.Bodies.Length];
                 ragdolls[id] = r;
                 order.Add(id);
@@ -437,7 +446,7 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
         string n = body.Name;
         if ((mask & RagdollPart.CarryMode) != 0)
         {
-            if (r.Setup.Animal) return n != r.CarryBone;
+            if (r.Setup.Animal) return body.Bone != r.CarryBone;
             return n is "Bip01 L Forearm" or "Bip01 R Forearm" or "Bip01 Head";
         }
         return (mask & RagdollPart.LeftArm) != 0 && n is "Bip01 L UpperArm" or "Bip01 L Forearm"
