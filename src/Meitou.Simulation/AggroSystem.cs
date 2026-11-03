@@ -1226,7 +1226,7 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
     /// (Character +0x148, <c>committingCrime</c>: <see cref="CharacterCold.Pending"/>); then the attacker's faction is a bandit one or not real, or else the victim does not regard the
     /// looker's faction as hostile (relations, the victim's side) and is no animal or slave. So the police defend a stranger from bandits.
     /// </summary>
-    bool Innocent(CharacterCold looker, CharacterCold attacker, CharacterCold victim)
+    internal bool Innocent(CharacterCold looker, CharacterCold attacker, CharacterCold victim)
     {
         if (victim.NpcClass is FundamentalType.Slaver or FundamentalType.Bandit || victim.Bounties?.AmountFor(looker.Faction) >= 1 || victim.Pending is not null) return false;
         if (Relations.Contains(attacker.Faction) && Relations.Factions[attacker.Faction] is { NotReal: true } or { FundamentalType: FundamentalType.Bandit }) return true;

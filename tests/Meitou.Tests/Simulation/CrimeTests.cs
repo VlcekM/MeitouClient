@@ -129,6 +129,25 @@ public class CrimeTests
 
     static readonly Vector2 O = new(2000, 2000);
 
+    /// <summary>
+    /// Only Attack Unprovoked (row 61) books an Assault and marks the attacker ordered (<c>Task_FocusedMeleeAttack</c>'s flag, docs/game/combat.md); Attack Target (row 5) does neither. Catches every
+    /// picked attack booking.
+    /// </summary>
+    [Fact]
+    public void Attack_unprovoked_books_an_assault_and_marks_the_attacker_ordered_but_attack_target_does_not()
+    {
+        foreach (bool unprovoked in new[] { false, true })
+        {
+            using var t = new Town();
+            var me = t.PlayerCharacter(O);
+            var victim = t.Npc(City, O + new Vector2(0, 20), name: "victim");
+            t.Say(new AttackOrder([me], victim) { Tick = t.World.Tick, Picked = true, Unprovoked = unprovoked });
+            t.World.RunTicks(10);
+            Assert.Equal(unprovoked, t.Cold(me).Pending?.Code == CrimeCode.Assault);
+            Assert.Equal(unprovoked, t.Cold(me).Ordered);
+        }
+    }
+
     // ------------------------------------------------------------------ witnesses
 
     [Fact]

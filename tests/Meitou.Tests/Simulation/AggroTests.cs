@@ -521,6 +521,51 @@ public class AggroTests
     }
 
     /// <summary>
+    /// A law enforcer (34) defends an innocent who is no ally (docs/game/ai-tasks.md, <c>FUN_14099b820</c>): the victim of another, peaceful faction, with no pending crime and no bounty, is one;
+    /// a victim with a pending crime or a bandit is not. Catches 34 defending only allies.
+    /// </summary>
+    [Fact]
+    public void A_law_enforcer_counts_a_peaceful_stranger_as_an_innocent_victim_but_not_a_criminal()
+    {
+        using var a = Make(13, 1, TownRelations(), ai: true);
+        var o = new Vector2(2000, 2000);
+        CharacterId Lone(int faction, float x) => a.SquadOf(faction, o, true, (o + new Vector2(x, 0), 0f)).Members[0];
+        var guard = Lone(Town, 0); var attacker = Lone(Bandits, 10); var victim = Lone(Drifters, 20);
+        var table = a.World.Characters;
+        Assert.True(a.Aggro.Innocent(table.Cold(guard.Slot)!, table.Cold(attacker.Slot)!, table.Cold(victim.Slot)!));
+        table.Cold(victim.Slot)!.Pending = new Meitou.Simulation.Crime.PendingCrime { Code = Meitou.Simulation.Crime.CrimeCode.Assault, VictimFaction = Town };
+        Assert.False(a.Aggro.Innocent(table.Cold(guard.Slot)!, table.Cold(attacker.Slot)!, table.Cold(victim.Slot)!));
+    }
+
+    /// <summary>
+    /// Goal 15's desire is the finder's first sensed ally above 0, not the best (<c>FUN_140599b90</c> asks <c>FUN_14099ca10</c> to stop at the first): a gate guard sees two mates, one fought by
+    /// one bandit (threat 0.05) and one by three (0.55); the scan's first value is the first of them in its senses, whichever is larger. Catches a constant desire of 1.
+    /// </summary>
+    [Fact]
+    public void Goal_15_desire_is_the_first_fighting_allys_threat_not_the_best()
+    {
+        using var a = Make(14, 1, TownRelations(), ai: true);
+        a.Aggro.Combat = a.Combat;
+        var o = new Vector2(2000, 2000);
+        var town = a.SquadOf(Town, o, true, (o, 0f), (o + new Vector2(10, 0), 0f), (o + new Vector2(-10, 0), 0f));
+        Lists(town, [Goal(TaskType.PROTECT_ALLIES)]);
+        Think(a);
+        CharacterId guard = town.Members[0], one = town.Members[1], three = town.Members[2];
+        var gang = a.SquadOf(Bandits, o, true, (o + new Vector2(0, 30), MathF.PI), (o + new Vector2(8, 30), MathF.PI), (o + new Vector2(-8, 30), MathF.PI), (o + new Vector2(16, 30), MathF.PI));
+        a.World.Commands.Enqueue(new AttackOrder([gang.Members[0]], one) { Tick = a.World.Tick });
+        foreach (var b in gang.Members.Skip(1)) a.World.Commands.Enqueue(new AttackOrder([b], three) { Tick = a.World.Tick });
+        var ai = a.World.SystemOf<AiSystem>()!;
+        float Threat(CharacterId id) => a.Combat.FightThreat(a.World, id.Slot, a.Aggro.SensesOf(id.Slot));
+        bool Seen(SenseEntry e) => e.Now && (e.Target == one.Slot || e.Target == three.Slot) && Threat(new CharacterId(e.Target, e.Generation)) > 0;
+        for (int k = 0; k < 600 && !(Threat(one) > 0 && Threat(three) > 0 && a.Aggro.SensesOf(guard.Slot)!.Entries.Any(Seen)); k++) a.World.RunTicks(1);
+        Assert.True(Threat(one) > 0 && Threat(three) > 0 && Threat(one) != Threat(three), $"both mates fought: {Threat(one)} and {Threat(three)}");
+        var first = a.Aggro.SensesOf(guard.Slot)!.Entries.First(Seen);
+        var scan = ai.ProtectScan(a.World, guard.Slot, TaskType.PROTECT_ALLIES, a.World.Characters.Cold(guard.Slot)!.Ai!);
+        Assert.Equal(Threat(new CharacterId(first.Target, first.Generation)), scan.First);
+        Assert.Equal(MathF.Max(Threat(one), Threat(three)), scan.Value);
+    }
+
+    /// <summary>
     /// A squad shares a sighting, not the attack (docs/simulation.md "Hostility and relations"): a guard that attacks on sight (16) goes for a bandit, and its mate with no combat goal,
     /// which sees the bandit too, never joins. Catches the squad's free mates being dragged into a member's fight whatever their own goals.
     /// </summary>

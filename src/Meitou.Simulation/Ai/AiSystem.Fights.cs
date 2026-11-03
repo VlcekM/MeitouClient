@@ -122,7 +122,7 @@ public sealed partial class AiSystem
     /// fails the plan (factor 0). 143's fallback hand list (+0x2f8, x0.1) is not modelled. Without <paramref name="attacker"/> only the finder's value (row 13 not asked, the target none).
     /// The first entry above 0 comes back too: 15 / 288's desire (<c>FUN_140599b90</c> asks the finder to stop at it, uncapped). Reads only the last tick's state (any thread in the think).
     /// </summary>
-    (int Best, float Value, float First) ProtectScan(World world, int slot, TaskType type, AiMind mind)
+    internal (int Best, float Value, float First) ProtectScan(World world, int slot, TaskType type, AiMind mind)
     {
         var table = world.Characters;
         var prev = table.Previous;
