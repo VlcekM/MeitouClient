@@ -353,6 +353,8 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
                     float ground = env.GroundHeight(root.X, root.Z, root.Y);
                     // A root far under the ground is lifted back onto it (FUN_1407d4470: more than 200 below), and frozen.
                     if (root.Y < ground - 200) { Shift(r, new Vector3(0, ground + 2 - root.Y, 0)); Freeze(r); }
+                    // At once when the terrain tile under it is not loaded (FUN_1405b8180 -> FUN_1407d1f70): a zone outside the active set, or off the grid.
+                    else if (world.ActiveZones is { } loaded && !loaded.Contains(Meitou.Data.World.WorldLayout.ZoneOf(root.X, root.Z))) Freeze(r);
                     else if (r.Age >= FreezeLatest || r.Age >= FreezeEarliest && StillShare(r) >= FreezeShare) Freeze(r);
                     hot.Position = r.Pose[r.Definition.Root].Position;
                     hot.Velocity = Vector3.Zero;

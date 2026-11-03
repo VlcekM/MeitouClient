@@ -275,7 +275,7 @@ Driver `FUN_1405b8180` (AnimationClass), update `FUN_1407d3c00`:
 Freeze = every body put to sleep and updates skipped (`FUN_1407d1f70`), WHOLE only:
 - after 2 s of ragdoll, within the next 5 s when ≥ 60% of bodies sleep; after 5 s a downward ray
   from 20 above the node against groups 2, 9–12, 15–22 (mask 0x7f9e04) decides (`FUN_1407d2440`);
-- at once when the terrain tile under it is not loaded (`FUN_1405b8180`).
+- at once when the terrain tile under it is not loaded (`FUN_1405b8180`). `FUN_1405d2c30` drains the character's animation request queue and then calls `FUN_1405b8180` (**Verified**; the earlier note that this is the AI task manager was wrong). Meitou: a whole ragdoll whose root is outside `World.ActiveZones` freezes at once (`RagdollSystem`).
 
 The frozen flag clears when a body wakes (`FUN_1407d2050`). `FUN_1407d4270` (reset timers, wake all
 with 0.4) runs when bone flags are applied and when a frozen ragdoll is carried. A root
