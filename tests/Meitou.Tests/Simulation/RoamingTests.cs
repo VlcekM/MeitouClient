@@ -47,6 +47,29 @@ public class RoamingTests
         Assert.All(travellers, p => Assert.Contains(Meitou.Data.World.WorldLayout.ZoneOf(p.Position.X, p.Position.Y), population.ActiveZones));
     }
 
+    /// <summary>A platoon with 2 or more members whose zone is left puts each imprisoned member in a squad and platoon of its own first (<c>FUN_14079c1c0</c>).</summary>
+    [Fact]
+    public void An_imprisoned_member_is_split_into_a_platoon_of_its_own_when_its_platoon_unloads()
+    {
+        var (w, _) = Start();
+        using var world = w;
+        w.RunTicks(700);
+        var platoon = w.Platoons.All.First();
+        var squad = w.Squads.Find(platoon.SquadId)!;
+        var prisoner = squad.Members[^1];
+        w.Characters.Cold(prisoner.Slot)!.InSomething = Meitou.Simulation.Locks.HeldState.Imprisoned;
+        int platoons = w.Platoons.Count;
+        w.Commands.Enqueue(new FocusCommand(new Vector3(-2000, 0, 2000)) { Tick = w.Tick });
+        for (int i = 0; i < 40 && platoon.State != PlatoonState.Unloaded; i++) w.RunTicks(150);
+        Assert.Equal(PlatoonState.Unloaded, platoon.State);
+        Assert.Equal(platoons + 1, w.Platoons.Count);
+        var split = w.Platoons.All.Single(p => p.Package == "CAPTURED_NPC");
+        var own = w.Squads.Find(split.SquadId)!;
+        Assert.Equal([prisoner], own.Members);
+        Assert.Equal(own.Id, w.Characters.Cold(prisoner.Slot)!.SquadId);
+        Assert.DoesNotContain(prisoner, squad.Members);
+    }
+
     internal static List<ulong> Scripted(int threads)
     {
         var (w, _) = Start(threads, 9);

@@ -89,6 +89,8 @@ public sealed class Platoon
     /// while set its stand-in neither travels nor takes a job (<c>FUN_1407ee790</c>).
     /// </summary>
     public bool Imprisoned { get; set; }
+    /// <summary>The platoon is persistent without a save's record to say so (the flag a prisoner's own platoon takes from its old platoon or its unique member, <c>FUN_14079c1c0</c>): the original never removes one.</summary>
+    public bool Persistent { get; set; }
     /// <summary>
     /// The unloaded platoon's activation dwell (+0x78, <c>FUN_1407ebf30</c>, <b>Verified</b>): 5 s when it becomes unloaded, 2 s again whenever it stands outside its zone's
     /// activation box; inside, it counts down and the platoon activates once it is below 0. Not saved (a loaded platoon starts at 5).
@@ -187,6 +189,7 @@ public sealed class PlatoonRegistry
                 h.Add(stored.Pinned);
             }
             if (!p.IntactFlag) h.Add(0x496E7463);   // likewise while not intact
+            if (p.Persistent) h.Add(0x50657273);   // only a split-off prisoner's, likewise
             if (p.Dead) h.Add(0x44656164);   // only once declared dead, so worlds without one hash as before
             if (p.OrphanSeconds > 0) h.Add(p.OrphanSeconds);   // only while counting, so worlds without it hash as before
             if (p.Campaign is { } campaign)

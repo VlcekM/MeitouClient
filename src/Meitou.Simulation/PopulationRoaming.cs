@@ -109,7 +109,7 @@ public sealed partial class PopulationSystem
     /// while it occupies a town, as the original makes an occupier persistent (docs/game/ai.md "Package classes"), or when a save's platoon is <c>persistent</c> (the original
     /// never removes one, docs/game/factions-squads-towns.md "Object model": e.g. a dismissed character's squad); never one declared <see cref="Platoon.Dead"/>.
     /// </summary>
-    bool Kept(Platoon p) => !p.Dead && ((p.Wild ? KeepWild : KeepRoamers) || Ai.AiSystem.Occupies(data.Ai, p.Package) || p.Saved?.Source.Record.Bools.GetValueOrDefault("persistent") == true);
+    bool Kept(Platoon p) => !p.Dead && ((p.Wild ? KeepWild : KeepRoamers) || Ai.AiSystem.Occupies(data.Ai, p.Package) || PersistentPlatoon(p));
 
     readonly List<Platoon> movers = [];
     /// <summary>Stand-ins one worker job steps (engine choice: a job costs more than a few stand-ins).</summary>
@@ -375,20 +375,25 @@ public sealed partial class PopulationSystem
         return false;
     }
 
+    /// <summary>A platoon with no member left (wiped out, removed, or all split off): the pool is free to make another (a saved platoon's characters are marked, for the next save).</summary>
+    void RemoveWiped(World world, Platoon p, Squad? squad)
+    {
+        if (p.Saved is { } gone)
+        {
+            if (p.Stored is null) Saving.SavedCharacters.Store(world, gone, p.Position);
+            gone.PlatoonId = -1;
+        }
+        if (squad is not null) world.Squads.Remove(squad.Id);
+        world.Platoons.Remove(p.Id);
+    }
+
     void StepLoaded(World world, Platoon p, float dt)
     {
         var table = world.Characters;
         var squad = world.Squads.Find(p.SquadId);
         if (squad is null || squad.Members.Count == 0 || squad.Leader.IsNone)
         {
-            // Wiped out (or removed): the pool is free to make another (a saved platoon's characters are marked, for the next save).
-            if (p.Saved is { } gone)
-            {
-                if (p.Stored is null) Saving.SavedCharacters.Store(world, gone, p.Position);
-                gone.PlatoonId = -1;
-            }
-            if (squad is not null) world.Squads.Remove(squad.Id);
-            world.Platoons.Remove(p.Id);
+            RemoveWiped(world, p, squad);
             return;
         }
         p.Position = PlatoonPosition(world, squad, p.Position);
@@ -401,6 +406,12 @@ public sealed partial class PopulationSystem
         // Faithful: a platoon the original does not keep is not unloaded whole: each member out of the zone is destroyed, and the platoon stays while any is left.
         else if (world.Tick >= p.UnloadAtTick && !(!Kept(p) && !p.Pinned && p.Campaign is null && ThinOutOfZone(world, p, squad)))
         {
+            if (squad.Members.Count >= 2) SplitPrisoners(world, p, squad);   // before the members are released: a prisoner is not a stray
+            if (squad.Members.Count == 0)
+            {
+                RemoveWiped(world, p, squad);
+                return;
+            }
             p.Imprisoned = squad.Members.Any(m => table.TryResolveNext(m, out int ms) && table.Cold(ms)!.IsImprisoned);
             if (squad.Ai is { } flagged) p.IntactFlag = flagged.Intact;   // kept as it was at unload (+0x100)
             if (squad.Ai?.Current is { } running) FollowPackage(world, p, running);
