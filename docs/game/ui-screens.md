@@ -86,11 +86,10 @@ order, and all seven have translations. Runtime reads the template and translate
 ### Splash
 
 **Verified** (decompile of `FUN_140916140`, `FUN_140914850`, `FUN_140913720`): a full-screen `WhiteSkin` widget coloured black, holding one ImageBox per
-slide, `Kenshi_Splash_Logos` then `Kenshi_Splash_LoFi` (`lofi.png`, 677 x 700), all hidden at first. A slide's height is the image height x `DAT_1421337ec` x a
+slide, `Kenshi_Splash_Logos` then `Kenshi_Splash_LoFi` (`lofi.png`, 677 x 700), all hidden at first. A slide's height is the image height x `DAT_1421337ec` (the GUI's horizontal scale = screen width / 1920, the width of `Kenshi_UI.png`; `FUN_1406e3c30` sets it and the vertical scale `DAT_1421337f0` = height / 1080) x a
 factor (100 for Logos, 0.7 for LoFi), capped at the screen height; its width keeps the image's aspect; it is centred (integer pixels). Each frame the current
 slide is shown with alpha min(1, 3 x seconds since it started); a press (any of four input flags) is remembered; once the slide has been drawn at alpha 1
-on more than three frames, a press or more than 4 s ends it: hidden at once (no fade out) and the next starts. `DAT_1421337ec` is **Unknown** (beside the
-UI scale `DAT_1421337f0`; Meitou takes height / 1080, which leaves Logos at the screen height either way).
+on more than three frames, a press or more than 4 s ends it: hidden at once (no fade out) and the next starts. The scale is **Verified** (`FUN_1406e3c30`, atlas 1920 x 1080 read from the install); Meitou uses it (`LoadingScreen.SplashSlideHeight`), which differs from height / 1080 only off 16:9.
 
 Meitou plays it in the Faithful mode on a start that opens on the title, over the boot (`LoadingScreen.StartSplash`) when the Interface setting "Splash
 screens" (`UserConfig.SplashScreens`) is on its Faithful side (the default is Meitou: no splash), never in the Meitou mode; the loading screen shows if the boot outlasts it. The two slides take
