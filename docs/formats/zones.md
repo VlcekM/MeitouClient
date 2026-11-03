@@ -122,15 +122,17 @@ zone file ([player outposts](save.md#player-outposts)); the buildings' `town` ha
 - Building ground (`UtilityT::getTerrainWithWaterHeight`, `FUN_1409b3720`): max(100, the zone's height grid at X/Z). The grid (`ZoneMap::getTerrainHeight`,
   `FUN_1407eac60`, filled by `FUN_1407eab40` from `Terrain::getRawData`) holds every other heightmap sample, 129 x 129 per zone, 36 units apart, read
   bilinearly; with no grid the terrain plugin's own height is used. It is up to ~16 units off the full heightmap on steep ground.
-- **Verified** against original saves (scratch probe; Beep Fan Club 1, METARU, autosave1): every outdoor level placement (2841, 3004, 2868) and every
-  game-made one (269) has saved `world Y pos` = building ground + instance Y within 0.05, none off. Stale level values are written back at that height
+- **Verified** against original saves (scratch probe; Beep Fan Club 1, METARU, autosave1): every level placement with its level instance Y (3205, 3412,
+  3268; 364-408 of them inside or mounted on a building of their zone, at the parent's height + instance Y) and every game-made one (269) has saved
+  `world Y pos` = that height within 0.05, none off; the four mounted lights of 22.26 moved with their wall. Stale level values are written back at that height
   (46.16 `677-Newwworld-INGAME` 23.6 higher, 24.40 `901`/`903-rebirth-INGAME`). Pontoon Bridges 27.40 `6`/`10-Newwworld-INGAME` (instance Y -92726,
   -86557) are missing from METARU's zone file, which keeps the zone's other three.
 - **Observed**: 1904 outdoor placements of the base load order have a `world Y pos` more than 0.05 off building ground + instance Y, many from rebirth.mod: the Cannibal
   Village (16.8, 17.10) and Cannibal Capital (18.7) about 25 lower, the 24 Spiked Cages of 16.8 18-28 lower. The original's baked navmesh on the six
   Cannibal Shacks of 16.8 lies 52-54 above building ground + instance Y and 72-78 above `world Y pos`.
-- Meitou: `WorldLevelData.Load(install)` stands each outdoor level building at `TerrainHeightmap.BuildingGroundAt` + instance Y (`PlaceOnGround`), keeps
-  the state's height for one inside or mounted on another, and leaves out one under -1000.
+- Meitou: `WorldLevelData.Load(install)` stands each outdoor level building at `TerrainHeightmap.BuildingGroundAt` + its height above, one inside or
+  mounted on another of its zone at that one's height + its height above (`PlacementHeights`); the height above is a nonzero `player furniture Y offset`,
+  else the instance Y. A child whose parent is in another zone keeps its state's height; one under -1000 is left out.
 
 `0-townlist` GAMESTATE_TOWN_INSTANCE_LIST: target TOWN, absolute XYZ, unused zero quaternion,
 GAMESTATE_TOWN state `-S5e`. **Verified**304 targets resolve;224 town states listing zones contain

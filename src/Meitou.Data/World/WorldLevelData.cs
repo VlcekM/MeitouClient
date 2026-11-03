@@ -82,31 +82,17 @@ public sealed class WorldLevelData
     }
 
     /// <summary>
-    /// Stands every outdoor level building on <paramref name="ground"/> (<see cref="TerrainHeightmap.BuildingGroundAt"/>) plus its instance Y, as the original
-    /// does whatever its state's <c>world Y pos</c> says (docs/formats/zones.md "Placement height"). One inside or mounted on another keeps its state's height.
+    /// Stands every outdoor level building on <paramref name="ground"/> (<see cref="TerrainHeightmap.BuildingGroundAt"/>) plus its instance Y, and one inside
+    /// or mounted on another of its zone on that one's height plus its instance Y, as the original does whatever its state's <c>world Y pos</c> says
+    /// (docs/formats/zones.md "Placement height"). One whose parent is not found keeps its state's height.
     /// </summary>
     public void PlaceOnGround(Func<double, double, float> ground)
     {
         groundHeights.Clear();
         foreach (var (zone, db) in Zones)
-        {
-            if (db.Find(BuildingListId) is not { } list) continue;
-            foreach (var (id, instance) in list.Instances)
-            {
-                if (instance.IsCleared || instance.Position == Vector3.Zero || !StandsOnGround(db, instance)) continue;
-                groundHeights[BuildingKey.Of(zone, id)] = ground(instance.Position.X, instance.Position.Z) + instance.Position.Y;
-            }
-        }
+            if (db.Find(BuildingListId) is { } list)
+                new PlacementHeights(zone, db, list, ground, groundHeights).Resolve();
     }
-
-    /// <summary>Its building state names no building it is inside of or mounted on (a null or missing handle): the original then puts it on the ground.</summary>
-    static bool StandsOnGround(GameDatabase db, GameInstance instance)
-    {
-        var state = instance.States.Select(db.Find).FirstOrDefault(s => s?.Type == FcsRecordType.GAMESTATE_BUILDING);
-        return state is null || IsNullHandle(state, "isInsideBuilding") && IsNullHandle(state, "mounted");
-    }
-
-    static bool IsNullHandle(GameRecord state, string name) => !state.Ints.TryGetValue(name + "TYPE", out int type) || type == (int)FcsRecordType.NULL_ITEM;
 
     /// <summary>A mod's own world layer, under its folder (docs/formats/zones.md "Mods").</summary>
     public const string ModDirectory = "leveldata";
