@@ -153,6 +153,16 @@ defender that turns between the pick and the blow is judged on the new side (Mei
 (+0x274) runs out, only for a non-dodge technique whose direction differs from the new blow's; a failed new start ends the defence (state 4, no defence for 1.2 s). Dodges are never re-picked. There is no
 limit on blocks other than this: a fighter blocks one blow at a time, its swing or wait excluding it. Meitou: `CombatSystem.SwingProgress` (before this the clip's own progress was used, so
 a swing was never cut short for a blow before its impact: a skilled fighter alone against four blocked 17 % of the blows at it in a sandbox battle, 34 % with it), `React(reconsider: true)`.
+**Verified** (defence start and hold; `FUN_140609290`, `FUN_140609c70`, `FUN_140665e00`, `FUN_140887970`, `FUN_1405b7600`/`7800`). The incoming pick takes the largest v with `<=`, so on a tie the
+later one in the +0x220 list wins and stays picked (no flip-flop). A defence starts only once that v is 0.1 or more (below: no technique, retry in 0.1 s, +0x274 = 0.25), and its clip
+starts **at once**: nothing times it so its blocked frame meets the impact; speed = CombatClass+400 +0x18c x technique +0x28. The chooser pools, on a passed roll, only rows of the blow's
+direction, on a failed one only rows of another direction in the same group (`FUN_140665630`); an empty pool returns none and the caller sets 1.2 s (+0x14c) either way, so "no row for that
+side" is the same as a failed roll. Each defence tick replays the technique through `FUN_1405b7600`, which finds the playing layer by name and continues it; a re-pick to the same technique
+continues it too, a different one clears the layers and starts fresh (`FUN_1405b7800`). A block is not ended by its clip: it lasts while any incoming swing has 0 < v < 1, then ends with the wait
+(+0x148); a dodge ends past 0.98 (state 4). Whether a block clip held past its length loops or stays on its last frame is **Unknown** (a fading block layer, +0x62, plays backwards).
+The front/rear heading is the movement object's current unit heading (+0x640 +0xd0, [fight steering](#fight-steering)).
+Meitou differs (current `React`/`Act`): the start is delayed so the blocked frame lands on the impact, the block is dropped when its clip runs out (+0.2 s), ties go to the first attacker scanned, and
+skipping already-decided blows lets two tied attackers re-pick each other every tick.
 **Measured** (Meitou `--battle`, sandbox floor, base data, 1800 ticks): 1 v 1 Samurai Heavy 62-75 % of blows blocked; 6 v 6 70 %; one stat-100 Samurai Heavy against 4: 36 % (most of the rest were seen with too little lead for the block clip to pass 0.5, or hit it while it swung, waited or was staggered:
 a failed block roll is rare at skill 100). The original's own rate was not measured in play (no original binary run here).
 **Measured** (Meitou scripted world, base data, katana, defence 86 with heavy plate and attack 60 against four at attack 62 / 37 / 32 / 98, hit reactions on, 60 seeds, to incapacitation): 70 % of blows blocked
