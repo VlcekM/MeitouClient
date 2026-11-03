@@ -237,10 +237,11 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
 
     /// <summary>
     /// The HUD's Goal text: the goal's name while the AI holds the character; "Running away" (35's name, <c>Task_Runaway</c>) for an NPC on the flee step, whichever of Self preservation, a goal 35 or a
-    /// broken squad started it, rather than its walk's "Moving"; null for the rest (the HUD then names the movement task).
+    /// broken squad started it, rather than its walk's "Moving"; "Stumbling" (147) for a stagger outside a fight (<see cref="CharacterCold.StumbleTaskUntil"/>); null for the rest (the HUD then names the movement task).
     /// </summary>
-    public static string? ActivityText(in CharacterHot n, CharacterCold cold) =>
-        cold is { Fleeing: true, IsPlayer: false, Medical.Incapacitated: not true } ? TaskBehaviours.Text(TaskType.RUN_AWAY)
+    public static string? ActivityText(in CharacterHot n, CharacterCold cold, long tick = 0) =>
+        cold.StumbleTaskUntil > tick ? TaskBehaviours.Text(TaskType.STUMBLE_TASK_FORCED)
+        : cold is { Fleeing: true, IsPlayer: false, Medical.Incapacitated: not true } ? TaskBehaviours.Text(TaskType.RUN_AWAY)
         : cold.Ai is { Goal: { } goal } && Holds(n, cold) ? TaskBehaviours.Text(goal.Task.Type) : null;
 
     /// <summary>

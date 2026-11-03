@@ -364,6 +364,11 @@ public sealed class CharacterCold
     public bool OrderMove { get; set; }
     /// <summary>The tick its stumble clip ends (combat's StunUntil, set at each interrupting hit): until then it neither walks nor works (docs/game/combat.md "Stagger outside a fight").</summary>
     public long StaggeredUntil { get; set; }
+    /// <summary>
+    /// Until when a stagger outside a fight reports the Stumbling task (147, <c>Character::_startStumble</c> queues it in front of the character's own task, which replans afterwards): set
+    /// with the stumble clip's stun, display only. Not saved.
+    /// </summary>
+    public long StumbleTaskUntil { get; set; }
     /// <summary>The tick its get-up after a knockout ends (<see cref="Combat.CombatSystem.GetUpClipSeconds"/> from waking, after the clip; Character +0x278 isCurrentlyGettingUp).</summary>
     public long GettingUpUntil { get; set; }
     /// <summary>The speed mode the character's move orders use (the original's saved <c>speed mode</c>: walk, run or no cap); no cap by default.</summary>

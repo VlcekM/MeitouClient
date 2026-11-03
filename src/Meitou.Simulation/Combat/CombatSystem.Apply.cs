@@ -193,7 +193,8 @@ public sealed partial class CombatSystem
     {
         // Outside a fight (docs/game/combat.md "Stagger outside a fight"): one getting up is left alone; any other drops its task, which is planned again from its start,
         // unless it mans a turret (shooting at a live target).
-        if (D.TargetSlot < 0 && !dc.InCombat)
+        bool outsideFight = D.TargetSlot < 0 && !dc.InCombat;
+        if (outsideFight)
         {
             if (CharacterFacts.GettingUp(dc, now))
             {
@@ -224,6 +225,7 @@ public sealed partial class CombatSystem
             D.StunUntil = now + Math.Max(1, (int)MathF.Ceiling(clip.Seconds / world.TickSeconds));
             D.PauseUntil = 0;   // the stumble state (8) ends the pause (FUN_14060cf60 clears +0x144)
             dc.StaggeredUntil = D.StunUntil;
+            if (outsideFight && dc.Gunning is null) dc.StumbleTaskUntil = D.StunUntil;   // reported as Stumbling (147) meanwhile
             D.ReadyTick = Math.Max(D.ReadyTick, D.StunUntil);
         }
         else D.ReadyTick = Math.Max(D.ReadyTick, now + (int)MathF.Ceiling(CombatTuning.InterruptPause / world.TickSeconds));

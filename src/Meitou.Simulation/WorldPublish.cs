@@ -283,7 +283,7 @@ public sealed partial class World
             s.Scale = cold?.Animal is { } animal ? animal.Scale(cold.ShownAge) : 1;   // the size last refreshed (BodySystem.Age)
             s.WeatherNotice = cold?.WeatherNotice ?? WeatherNotice.None; s.WeatherNoticeProtection = cold?.WeatherNoticeProtection ?? 0;
             s.Decision = Decisions.Tracing ? cold?.Decision : null;
-            s.Activity = cold is not null && (shown || cold.IsPlayer) ? Ai.AiSystem.ActivityText(state[i], cold) : null;
+            s.Activity = cold is not null && (shown || cold.IsPlayer) ? Ai.AiSystem.ActivityText(state[i], cold, Tick) : null;
             // The turret the combat system runs with this gunner; else (no combat system) at the gun of the turret its squad gave it: the AI's turret goal, walked to and stood at
             // (derived from the claims, not hashed).
             s.Turret = combat?.TurretOf(cold?.Gunning) is { } gunned ? new MannedTurret(cold!.Gunning!, gunned.BuildingId, gunned.Position, gunned.Yaw, gunned.GunId) { Simulated = true, Aim = gunned.Aim, Angles = gunned.Angles }

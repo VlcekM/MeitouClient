@@ -161,7 +161,7 @@ public static class TaskBehaviours
     public static AiBehaviour Of(TaskType type) => (uint)type < TypeCount ? Behaviours[(int)type] : AiBehaviour.None;
 
     /// <summary>The game's display text of a type the engine acts out; the enum name for the rest.</summary>
-    public static string Text(TaskType type) => Table.TryGetValue(type, out var e) ? e.Text : type.ToString();
+    public static string Text(TaskType type) => Table.TryGetValue(type, out var e) ? e.Text : type == TaskType.STUMBLE_TASK_FORCED ? "Stumbling" : type.ToString();
 
     /// <summary>Every type the engine acts out.</summary>
     public static IEnumerable<TaskType> Built => Table.Keys;
