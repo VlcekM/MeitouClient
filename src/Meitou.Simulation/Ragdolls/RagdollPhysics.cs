@@ -285,11 +285,7 @@ internal sealed class RagdollPhysics : IDisposable
                     budget--;
                     tiles[(x, z)] = tile = MakeTile(x, z, centre.Y, environment, ref budget);
                 }
-                else if (tile.BuildingsPending && budget > 0)
-                {
-                    budget -= BuildingUnits;
-                    AddBuildings(tile, new Vector3(x * TileSize, 0, z * TileSize), environment);
-                }
+                else if (tile.BuildingsPending && budget > 0 && AddBuildings(tile, new Vector3(x * TileSize, 0, z * TileSize), environment)) budget -= BuildingUnits;
                 tile.Used = tick;
             }
     }
@@ -350,20 +346,16 @@ internal sealed class RagdollPhysics : IDisposable
         tile.Ground = Simulation.Statics.Add(new StaticDescription(origin, Quaternion.Identity, tile.GroundShape));
         // Its buildings when the budget allows, else on a later cover (the tile asks again while BuildingsPending).
         tile.BuildingsPending = true;
-        if (budget > 0)
-        {
-            budget -= BuildingUnits;
-            AddBuildings(tile, origin, environment);
-        }
+        if (budget > 0 && AddBuildings(tile, origin, environment)) budget -= BuildingUnits;
         return tile;
     }
 
-    /// <summary>The buildings' triangles of a tile, once they are all known (until then the tile has ground only and asks again).</summary>
-    void AddBuildings(Tile tile, Vector3 origin, IRagdollEnvironment environment)
+    /// <summary>The buildings' triangles of a tile, once they are all known (until then the tile has ground only and asks again); true when a mesh was built (the budget's charge).</summary>
+    bool AddBuildings(Tile tile, Vector3 origin, IRagdollEnvironment environment)
     {
         gathered.Clear();
         tile.BuildingsPending = !environment.Buildings(origin, origin + new Vector3(TileSize, 0, TileSize), gathered);
-        if (tile.BuildingsPending || gathered.Count < 3) return;
+        if (tile.BuildingsPending || gathered.Count < 3) return false;
         // Both faces of every triangle: the files' windings are not trusted, and a body may meet a wall or floor from either side.
         int count = gathered.Count / 3;
         Pool.Take<Triangle>(count * 2, out var building);
@@ -376,6 +368,7 @@ internal sealed class RagdollPhysics : IDisposable
         tile.BuildingShape = Simulation.Shapes.Add(new Mesh(building, Vector3.One, Pool));
         tile.Buildings = Simulation.Statics.Add(new StaticDescription(origin, Quaternion.Identity, tile.BuildingShape));
         tile.HasBuildings = true;
+        return true;
     }
 
     void RemoveTile(Tile tile)

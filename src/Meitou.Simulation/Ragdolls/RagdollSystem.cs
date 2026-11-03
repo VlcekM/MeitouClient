@@ -55,7 +55,7 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
     /// </summary>
     const int TileBudget = 8;
     /// <summary>
-    /// Ragdolls started in one tick with a fresh pose (a knockdown, a stored squad's downed member coming back); the rest start on a later tick. A save's frozen ragdoll is not
+    /// Whole bodies started falling in one tick (a knockdown, a put-down, a stored squad's downed member coming back); the rest start on a later tick. A save's frozen ragdoll is not
     /// counted: it is the save's state and costs no settling. Engine choice: a build is 0.7 ms (bodies, joints, the ground probe), and a zone's arrivals asked for 20 in a tick.
     /// </summary>
     const int StartBudget = 4;
@@ -239,8 +239,11 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
             if (wanted != RagdollPart.None && !HasRagdoll(cold)) wanted = RagdollPart.None;
             if (r is null && wanted == RagdollPart.None) continue;
             float scale = cold is { Fighter.IsAnimal: true, Medical: { } size } ? size.ScaleK : 1;
-            // A ragdoll about to move needs the ground under it (TileBudget tiles a tick: past that it starts next tick, its blow and saved pose kept; a frozen saved one needs none).
-            bool starts = wanted != RagdollPart.None && (r is null || wanted != r.Mask) && cold.Save?.Ragdoll is not { Frozen: true };
+            // A whole body about to fall needs the ground under it and costs a build (TileBudget, StartBudget: past them it starts next tick, its blow and saved pose kept); a frozen
+            // saved one needs none, and a get-up, a limb's dangle or a lift never waits.
+            bool falls = (wanted & RagdollPart.Whole) != 0 && (wanted & RagdollPart.CarryMode) == 0;
+            bool fell = r is not null && (r.Mask & RagdollPart.Whole) != 0 && (r.Mask & RagdollPart.CarryMode) == 0;
+            bool starts = falls && !fell && cold.Save?.Ragdoll is not { Frozen: true };
             if (starts)
             {
                 if (startsLeft <= 0) continue;

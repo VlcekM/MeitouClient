@@ -795,15 +795,18 @@ when the host passes `CharacterRigs` (the game does; tests and goldens do not). 
   a zone gathers in 70..200 ms. A tile has ground only until its zones are gathered. Tiles unused for a minute (1,800 ticks) go, so a camera flight back to a zone
   finds them. **Budgets** (engine choice; `RagdollSystem.TileBudget`, `StartBudget`, `RagdollPhysics.BuildingUnits`): a tick spends at most 8 tile units (a
   ground mesh 1, a tile's building mesh 4: a town tile's is 2 ms against the ground's 0.12, and a zone's pending tiles all got theirs in the tick its buildings
-  were gathered) and starts at most 4 ragdolls with a fresh pose (a knockdown, a stored squad's downed member coming back); a ragdoll whose tiles the budget
-  did not reach starts on a later tick, the character animating meanwhile; a save's frozen ragdoll is not counted. **Observed** (headless flight probe, the
+  were gathered; a tile asking for buildings not yet gathered costs nothing) and starts at most 4 whole bodies falling (a knockdown, a put-down, a stored
+  squad's downed member coming back); one whose tiles the budget did not reach starts on a later tick, the character animating meanwhile; a save's frozen
+  ragdoll is not counted, and a get-up, a limb's dangle or a lift never waits. **Observed** (headless flight probe, the
   stutter save's flights): a zone's downed characters re-ragdoll when it loads, asked for 80-100 tiles and 20 builds in one tick (45-60 ms; after the budgets
   the setup loop is at most 3.4 ms a tick), and 20 whole bodies then fall for up to 7 s (the step 0.4 -> 1.3 ms a tick); a build is 0.7 ms (bodies, joints, the
   ground probe, which reads heightmap blocks on demand: 5 ms for the first in a new area). Whether the original re-settles a reloaded downed body is **Unknown**.
   **Threads** (`RagdollSystem.ThreadedBodies`): the step runs on the calling thread below 256 awake bodies and on the world's thread count above (**Observed**,
   the probe: single-threaded costs the same below 300 awake bodies, 0.4-0.8 ms, and 0.2 ms more at 1,100; the dispatcher's signals and waits are 0.3 ms a step,
   and its workers, preempted, stalled a step 16-85 ms in the probe's CPU trace). The step's remaining 12-21 ms spikes come with or without the dispatcher and
-  with no tile or build work: GC pauses landing in it (Server GC, the spawns' allocation; the trace shows the GC poll inside the solver), not the physics.
+  with no tile or build work; the trace put one of six inside a GC poll in the solver (Server GC, the spawns' allocation) and the rest in dispatcher waits, and
+  the game's heavy ragdoll frames mostly carry no GC pause: partly attributed, the rest **Unknown** (suspects: the heightmap block reads of the ground probe,
+  the dispatcher under the game's thread contention).
   The terrain is the full-resolution heightmap (blocks of 64 samples read on demand), not the simulation's `GroundHeights`:
   outside the area loaded at the start that is a coarse grid (a sample per 144 units) off the real ground by 2.4 units
   at the median and 15 at the 90th percentile over the land, so bodies met a ground the character was not standing on.
