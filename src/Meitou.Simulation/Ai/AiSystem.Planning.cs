@@ -77,7 +77,7 @@ public sealed partial class AiSystem
             // not carrying) is what Holds already requires of a character the AI runs.
             // So are the combat goals (engine choice): the desire already holds the finder's pick (and for the protect goals row 13's attacker), and the fight is the combat system's.
             // And the Medic goal: its desire holds the patient finder's score, and the treatment is the first aid system's. And the leader rescue (142: its finder and its done state, the leader down, are the desire's; the lift is the carry system's).
-            if (type == TaskType.DEFEAT_SQUAD || TaskBehaviours.Of(type) is AiBehaviour.Fight or AiBehaviour.Medic or AiBehaviour.RescueLeader)
+            if (TaskBehaviours.Of(type) is AiBehaviour.Assault or AiBehaviour.Fight or AiBehaviour.Medic or AiBehaviour.RescueLeader)
             {
                 mind.Plan.Clear();
                 mind.Plan.Add(new PlanStep(type, default));
