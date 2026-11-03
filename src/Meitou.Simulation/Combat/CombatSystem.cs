@@ -476,9 +476,27 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
 
     public void SlowWorld(World world)
     {
+        RepeatAssaults(world);
         (read, write) = (write, read);
         SwapZones();
         swappedTick = world.Tick;
+    }
+
+    /// <summary>
+    /// Attack Unprovoked (row 61) books its Assault again on every update of the task (<c>FUN_14033c250</c> runs <c>FUN_140334070</c> each time, <b>Verified</b>), so the pending crime's timer is refreshed
+    /// for as long as the attacker fights a victim that stays passive; <see cref="Assaulted"/> is the booking, with its own gates (the victim fighting, wanted, a bandit).
+    /// </summary>
+    void RepeatAssaults(World world)
+    {
+        if (Crimes is null) return;
+        var table = world.Characters;
+        for (int s = 0; s < table.HighWater; s++)
+        {
+            if (!table.Next[s].Alive || table.Cold(s) is not { Running: { Task: CharacterTask.Attack, Row: TaskType.UNPROVOKED_FOCUSED_MELEE_ATTACK } }) continue;
+            var fight = StateOf(table.IdOf(s));
+            if (fight.TargetSlot < 0 || !table.TryResolveNext(new CharacterId(fight.TargetSlot, fight.TargetGeneration), out int victim)) continue;
+            Crimes.Assault(world, s, victim, VictimFighting(table, table.IdOf(victim)));
+        }
     }
 
     /// <summary>The tick whose slow world swapped the state arrays last.</summary>
