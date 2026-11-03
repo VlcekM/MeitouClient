@@ -112,6 +112,8 @@ public static class TaskBehaviours
         [TaskType.FOLLOW_SLAVEMASTER] = (AiBehaviour.Follow, "Following master"),
         // 45 Bodyguard has no behaviour of its own (FUN_14032ebd0 builds Task_Blank for it): the following of a bodyguard contract is goal 44's.
         [TaskType.FOLLOW_PLAYER_ORDER] = (AiBehaviour.Follow, "Following"),
+        // 253 Following (urgent escape): a Task_Follow like 31 / 44 / 289 (FUN_14032ebd0 case 253, list B !7 60 90 59); one package lists it as a Leader goal.
+        [TaskType.FOLLOW_URGENT_ESCAPE] = (AiBehaviour.Follow, "Following"),
         [TaskType.GO_HOME_AND_GO_TO_BED] = (AiBehaviour.Sleep, "Going to bed"),
         [TaskType.GO_HOME_AND_GO_TO_BED_SECURE] = (AiBehaviour.Sleep, "Going to bed"),
         [TaskType.SLEEP_ON_FLOOR] = (AiBehaviour.Sleep, "Sleeping on ground"),
