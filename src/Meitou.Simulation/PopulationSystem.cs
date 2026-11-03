@@ -314,12 +314,12 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
             || MathF.Abs(camera.X - ZoneActivation.CentreOf(c).X) > ZoneActivation.RecentreDistance || MathF.Abs(camera.Z - ZoneActivation.CentreOf(c).Y) > ZoneActivation.RecentreDistance;
         if (move) loadCentre = WorldLayout.ZoneOf(camera.X, camera.Z);
         long now = world.Tick;
-        long until = now + (long)Math.Ceiling(ZoneActivation.LoadedLingerSeconds / world.TickSeconds);
+        long until = now + (long)Math.Ceiling(ZoneActivation.LoadedLingerSeconds * LingerSpeed(world) / world.TickSeconds);
         var centre = loadCentre!.Value;
         for (int x = centre.X - 1; x <= centre.X + 1; x++)
             for (int y = centre.Y - 1; y <= centre.Y + 1; y++)
                 Ask(new ZoneCoordinate(x, y), until);
-        long boxUntil = now + (long)Math.Ceiling(ZoneActivation.BoxLingerSeconds / world.TickSeconds);
+        long boxUntil = now + (long)Math.Ceiling(ZoneActivation.BoxLingerSeconds * LingerSpeed(world) / world.TickSeconds);
         int ring = settings.FastZoneHopping ? 1 : 0;
         boxZones.Clear();
         foreach (var p in players) ZoneActivation.AddZonesAround(p, ring, boxZones);
@@ -357,6 +357,12 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
         foreach (var zone in site.Coverage) if (active.Contains(zone)) return true;
         return false;
     }
+
+    /// <summary>
+    /// The zone lingers count real seconds, not game time (<c>FUN_140a0b830</c>, <b>Verified</b>: the timers drop by the unscaled frame time): at game speed s
+    /// game time runs s times faster than the clock, so L real seconds are L x s seconds of ticks. A paused world runs no ticks, so its zones simply stay.
+    /// </summary>
+    static float LingerSpeed(World world) => world.PhysicsSpeed > 0 ? world.PhysicsSpeed : 1;
 
     /// <summary>Keeps a zone of the grid loaded until <paramref name="until"/>, unless a later request already does.</summary>
     void Ask(ZoneCoordinate zone, long until)
