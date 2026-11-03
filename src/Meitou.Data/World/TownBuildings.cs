@@ -24,6 +24,8 @@ public enum HomeSpotKind : byte
     ThroneSeat = 7,
     /// <summary>Furniture with a BF_TRAINING functionality (a training dummy): stood at, not sat on.</summary>
     Training = 8,
+    /// <summary>Interior furniture with a BF_MINE, BF_RESEARCH, BF_REFINERY or BF_CRAFTING functionality: pretend-operated by a squad member staying home (43, docs/game/ai-tasks.md "Town goals").</summary>
+    Workstation = 9,
 }
 
 /// <summary>A spot inside a building in world space; <paramref name="Yaw"/> as the simulation measures it (0 along +Z, turning towards +X).</summary>
@@ -42,7 +44,7 @@ public readonly record struct HomeSpot(HomeSpotKind Kind, Vector3 Position, floa
     /// <summary>The BUILDING string id of a bed, seat or training dummy; null for other spots. A bed's output rate controls healing (docs/game/character-stats.md "Beds").</summary>
     public string? Record { get; init; }
     /// <summary>A node a goal may stand at: neither a bed, a seat nor a dummy.</summary>
-    public bool IsNode => Kind is not (HomeSpotKind.Bed or HomeSpotKind.Chair or HomeSpotKind.ThroneSeat or HomeSpotKind.Training);
+    public bool IsNode => Kind is not (HomeSpotKind.Bed or HomeSpotKind.Chair or HomeSpotKind.ThroneSeat or HomeSpotKind.Training or HomeSpotKind.Workstation);
 }
 
 /// <summary>
@@ -182,6 +184,8 @@ public static class TownBuildings
     public const int ChairFunction = 17;
     /// <summary>BF_THRONE ("throne chair", sat on like a chair) and BF_TRAINING (a training dummy): the other furniture sitting around (275) takes (docs/game/ai-tasks.md "Town goals").</summary>
     public const int ThroneFunction = 24, TrainingFunction = 7;
+    /// <summary>BF_MINE, BF_RESEARCH, BF_CRAFTING: with <see cref="RefineryFunction"/> and the chair and training function, the furniture staying home (43) operates in pretence (mask 0x2049a of <c>FUN_1408cbc00</c>).</summary>
+    public const int MineFunction = 1, ResearchFunction = 3, CraftingFunction = 10;
     /// <summary>BF_TABLE, BF_CORPSE_DISPOSAL, BF_REFINERY: what a free seat faces (<see cref="SeatYaw"/>).</summary>
     public const int TableFunction = 16, CorpseDisposalFunction = 11, RefineryFunction = 4;
     /// <summary>BF_RESOURCE_STORAGE, BF_SHOP, BF_GENERAL_STORAGE: the containers a building shop's stock goes into (<see cref="TownFixture.HoldsShopStock"/>).</summary>
@@ -334,7 +338,7 @@ public static class TownBuildings
                     HungerRate = function.GetFloat("hunger rate", 1),
                 });
             }
-            else if (function is not null && FurnitureOf(db, item.Building, function, at, YawOf(rotation)) is { } piece) c.Furniture.Add(piece);
+            else if (function is not null && FurnitureOf(db, item.Building, function, at, YawOf(rotation), inside: true) is { } piece) c.Furniture.Add(piece);
             if (function?.GetInt("function") is TableFunction or CorpseDisposalFunction or RefineryFunction) c.Tables.Add(at);
             else AddFixture(db, functions, item, $"{b.Key}/{index}", at, rotation, c);
             index++;
@@ -378,16 +382,17 @@ public static class TownBuildings
 
     /// <summary>
     /// A seat-like piece for sitting around (275, <see cref="TownBuilding.Furniture"/>) from a functionality: BF_CHAIR and BF_THRONE are sat on (its <c>animation</c> and <c>hunger rate</c>), BF_TRAINING
-    /// is stood at (and keeps its BUILDING, the dummy's stat and cap); null for any other function.
+    /// is stood at (and keeps its BUILDING, the dummy's stat and cap), and an interior piece of function MINE, RESEARCH, REFINERY or CRAFTING is a <see cref="HomeSpotKind.Workstation"/>; null for any other function.
     /// </summary>
-    static HomeSpot? FurnitureOf(GameDatabase db, GameRecord building, GameRecord function, Vector3 at, float yaw)
+    static HomeSpot? FurnitureOf(GameDatabase db, GameRecord building, GameRecord function, Vector3 at, float yaw, bool inside = false)
     {
-        var kind = function.GetInt("function") switch { ChairFunction => HomeSpotKind.Chair, ThroneFunction => HomeSpotKind.ThroneSeat, TrainingFunction => HomeSpotKind.Training, _ => (HomeSpotKind?)null };
+        var kind = function.GetInt("function") switch { ChairFunction => HomeSpotKind.Chair, ThroneFunction => HomeSpotKind.ThroneSeat, TrainingFunction => HomeSpotKind.Training,
+            MineFunction or ResearchFunction or RefineryFunction or CraftingFunction when inside => HomeSpotKind.Workstation, _ => (HomeSpotKind?)null };
         if (kind is not { } k) return null;
         return new HomeSpot(k, at, yaw)
         {
             Record = building.StringId,
-            SitClip = k == HomeSpotKind.Training ? null : function.GetReferences("animation").Select(r => db.Find(r.TargetStringId)?.Name).FirstOrDefault(n => n is not null),
+            SitClip = k is HomeSpotKind.Training or HomeSpotKind.Workstation ? null : function.GetReferences("animation").Select(r => db.Find(r.TargetStringId)?.Name).FirstOrDefault(n => n is not null),
             HungerRate = function.GetFloat("hunger rate", 1),
         };
     }

@@ -383,6 +383,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             AiBehaviour.Follow => squad.Leader.IsNone || squad.Leader == self || !world.Characters.IsAlive(squad.Leader) ? 0 : 1,
             AiBehaviour.GoHome => AtHomeTown(world, squad, board, self) ? 0 : GoHomeDesire(world, self),
             // Static guard's finder (FUN_14099edd0, Verified; 38 and 268 both register it, 268 with the indoors flag; 157 has its own, FUN_14099f1a0) returns 0.5 on its normal exit; only its visitor branch (a node beside a neutral stranger, not modelled) returns 1.
+            // Staying home needs a piece of the home's furniture to operate (the finder of 43 returns 0 without one).
+            AiBehaviour.Post when type == TaskType.STAY_IN_HOME => HasStayingFurniture(board.Home) ? 1 : 0,
             AiBehaviour.Post when type is TaskType.STAND_AT_GUARD_NODE_HOMEBUILDING or TaskType.STAND_AT_GUARD_NODE_HOMEBUILDING_INDOORS_ONLY => 0.5f,
             // A turret is only wanted by a member its squad gave one (the nearest free one in <see cref="ClaimTurrets"/>).
             AiBehaviour.Turret => board.TurretClaims.ContainsKey(self.Slot) ? 1 : 0,
@@ -782,7 +784,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         mind.WanderRadius = 0;
         mind.SitClip = null;   // set again below while it stays on its chair
         mind.SitHungerRate = 1;
-        if (mind.WorkActive && behaviour != AiBehaviour.Work)
+        if (mind.WorkActive && behaviour != AiBehaviour.Work && !PretendsAtHome(board, slot, behaviour, type))
         {
             // It stopped working: the next pick is a new one and the work clip goes.
             mind.WorkActive = false;
@@ -1029,8 +1031,9 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
                             mind.SitClip = claimed.SitClip;
                             mind.SitHungerRate = claimed.HungerRate;
                         }
-                        else if (claimed.Kind == HomeSpotKind.Training) n.Yaw = claimed.Yaw;
-                        Become(world, slot, claimed.Kind == HomeSpotKind.Training ? CharacterTask.Idle : CharacterTask.Rest);
+                        else if (claimed.Kind is HomeSpotKind.Training or HomeSpotKind.Workstation) n.Yaw = claimed.Yaw;
+                        if (claimed.Kind == HomeSpotKind.Workstation) PretendOperate(world, slot, mind, claimed);
+                        Become(world, slot, claimed.Kind is HomeSpotKind.Training or HomeSpotKind.Workstation ? CharacterTask.Idle : CharacterTask.Rest);
                     }
                 }
                 break;
@@ -1047,6 +1050,22 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
                 else Become(world, slot, CharacterTask.Idle);
                 break;
         }
+    }
+
+    /// <summary>Staying home at a workstation of the home (the pretend operating of 221, <see cref="PretendOperate"/>).</summary>
+    static bool PretendsAtHome(Blackboard board, int slot, AiBehaviour behaviour, TaskType type) =>
+        behaviour == AiBehaviour.Sit && type == TaskType.STAY_IN_HOME && board.SeatClaims.TryGetValue(slot, out var claim) && claim.Kind == HomeSpotKind.Workstation;
+
+    /// <summary>At a workstation, pretending to operate it (effect 136 IS_WORKING_PRETEND, row 221): the machine's work clip and hunger rate, as the real operating.</summary>
+    void PretendOperate(World world, int slot, AiMind mind, HomeSpot piece)
+    {
+        var record = data.Db.Find(piece.Record ?? "");
+        var clip = workClips.GetOrAdd(piece.Record ?? "", _ =>
+            record?.GetReferences("functionality") is [var link, ..] && data.Db.Find(link.TargetStringId)?.GetReferences("animation") is [var anim, ..] && data.Db.Find(anim.TargetStringId) is { } found ? found.Name : "stonemine");
+        mind.WorkActive = true;
+        mind.WorkClip = clip;
+        mind.WorkHungerRate = piece.HungerRate;
+        if (world.Characters.Cold(slot) is { } worker) worker.ActionClip = clip;
     }
 
     /// <summary>
@@ -1549,25 +1568,25 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             }
             if (taken is null && !seatTaken.TryGetValue(home, out taken)) seatTaken[home] = taken = [];
             int had = kept.TryGetValue(s, out var old) ? IndexOf(home, old) : -1;
-            if (had >= 0 && Operated(world, home.Spots[had].Position)) had = -1;
+            if (had >= 0 && Operated(world, home.SeatAt(had).Position)) had = -1;
             if (!relaxes && !sits || cold.Ai.SeatUnreachable)   // one that gave its seat up leaves it to the next member
             {
                 if (had >= 0) taken.Remove(had);
                 continue;
             }
-            if (had >= 0 && (relaxes || old.Kind == HomeSpotKind.Chair))
+            if (had >= 0 && (relaxes || StaysAt(old.Kind)))
             {
                 taken.Add(had);
                 board.SeatClaims[s] = old;
                 continue;
             }
-            int seat = FreeSeat(home, taken, HomeSpotKind.Chair, near);
+            int seat = relaxes ? FreeSeat(home, taken, HomeSpotKind.Chair, near) : FreeFurniture(world, home, taken, id);
             if (seat < 0 && relaxes) seat = FreeSeat(home, taken, HomeSpotKind.Bar, near);
             if (seat < 0 && relaxes) seat = FreeSeat(home, taken, HomeSpotKind.General, near);
             if (seat < 0 && relaxes && home.IsOutdoorTable) board.SeatClaims[s] = new HomeSpot(HomeSpotKind.General, home.Position, home.Yaw);
             if (seat < 0) continue;
             taken.Add(seat);
-            board.SeatClaims[s] = home.Spots[seat];
+            board.SeatClaims[s] = home.SeatAt(seat);
         }
     }
 
@@ -1690,8 +1709,33 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
 
     static int IndexOf(TownBuilding building, HomeSpot spot)
     {
-        for (int i = 0; i < building.Spots.Count; i++)
-            if (building.Spots[i] == spot) return i;
+        for (int i = 0; i < building.SeatCount; i++)
+            if (building.SeatAt(i) == spot) return i;
+        return -1;
+    }
+
+    /// <summary>The kinds of furniture staying home (43) takes: the functions of the mask 0x2049a of <c>FUN_1408cbc00</c> (MINE, RESEARCH, REFINERY, TRAINING, CRAFTING, CHAIR; <b>Verified</b>).</summary>
+    static bool StaysAt(HomeSpotKind kind) => kind is HomeSpotKind.Chair or HomeSpotKind.Training or HomeSpotKind.Workstation;
+
+    /// <summary>Whether the home interior holds a piece staying home takes; with none the goal is not wanted (the finder's factor is 0, <c>FUN_1408cbc00</c>).</summary>
+    internal static bool HasStayingFurniture(TownBuilding? home)
+    {
+        if (home is null) return false;
+        for (int i = 0; i < home.SeatCount; i++)
+            if (StaysAt(home.SeatAt(i).Kind)) return true;
+        return false;
+    }
+
+    /// <summary>A piece staying home takes, drawn at random from those no one claimed (the finder draws from its list, <c>FUN_1409fb020</c> with <c>FUN_1409b3b40</c>); -1: none free.</summary>
+    static int FreeFurniture(World world, TownBuilding home, HashSet<int> taken, CharacterId who)
+    {
+        int free = 0;
+        for (int i = 0; i < home.SeatCount; i++)
+            if (!taken.Contains(i) && StaysAt(home.SeatAt(i).Kind)) free++;
+        if (free == 0) return -1;
+        int pick = Rng.Int(Rng.Hash(world.Seed, Rng.Key(who), RngPurpose.Think, SeedSalts.AiTarget ^ 0x43), free);
+        for (int i = 0; i < home.SeatCount; i++)
+            if (!taken.Contains(i) && StaysAt(home.SeatAt(i).Kind) && pick-- == 0) return i;
         return -1;
     }
 

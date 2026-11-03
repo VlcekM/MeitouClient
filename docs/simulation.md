@@ -1755,8 +1755,7 @@ A gate's residents are made at the gate guard's spot (engine choice), not the ga
 Defensive Gates is inside the wall about 110 along it from the opening; headless (no door gate, no leaf) they
 are made at the origin and keep that post. Seats are the home's
 interior furniture with a CHAIR functionality (`HomeSpotKind.Chair`; never a standing node), free
-in that building this pass; relaxing falls back to a bar node, then a general node, staying home without one stands at home (engine choice: the original's
-43 operates home furniture, chairs among it, [ai-tasks](game/ai-tasks.md#town-goals); a given-up seat is tried again when the goal is renewed). Sitting around (275)
+in that building this pass; relaxing falls back to a bar node, then a general node; staying home (43) draws a free chair, training dummy or work piece (mine, research, refinery, crafting) of the home and is not wanted without one ([ai-tasks](game/ai-tasks.md#town-goals); a given-up seat is tried again when the goal is renewed). Sitting around (275)
 claims on its own (`Blackboard.SitClaims`, `AiSystem.ClaimSitting`): the nearest free chair, throne (BF_THRONE, `HomeSpotKind.ThroneSeat`, sat on like a chair) or, for a character not on the
 player's side, training dummy (BF_TRAINING, `HomeSpotKind.Training`, stood at) in a building of the town it stands in, when that is its squad's home town or owned by the squad's faction and the
 building is owned by the character's faction or the squad's; the throne and dummy pieces, and free-standing chairs, are `TownBuilding.Furniture`. It is not wanted

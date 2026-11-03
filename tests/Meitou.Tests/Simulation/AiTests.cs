@@ -67,6 +67,19 @@ public class AiTests(ITestOutputHelper output)
         SyntheticTown.Database(residentSquads, extra: Records(), changePatrol: p => p.References["AI packages"] =
             packages.Length == 0 ? [Ref("111-t", 0), Ref("112-t", 1)] : [.. packages.Select(x => Ref(x.Id, x.Slot))]);
 
+    /// <summary>docs/game/ai-tasks.md "Town goals" (43, FUN_1408cbc00): staying home is wanted only when the home interior holds a chair, training or work piece (functions MINE, RESEARCH, REFINERY, TRAINING, CRAFTING, CHAIR).</summary>
+    [Fact]
+    public void Staying_home_is_wanted_only_when_the_home_holds_a_piece_to_operate()
+    {
+        TownBuilding Home(HomeSpotKind[] spots, HomeSpotKind[] furniture) =>
+            new("i", "b", "home", Vector3.Zero, 0, false, false, [.. spots.Select(k => new HomeSpot(k, Vector3.Zero, 0))]) { Furniture = [.. furniture.Select(k => new HomeSpot(k, Vector3.Zero, 0))] };
+        Assert.False(AiSystem.HasStayingFurniture(null));
+        Assert.False(AiSystem.HasStayingFurniture(Home([HomeSpotKind.Bed, HomeSpotKind.General], [HomeSpotKind.ThroneSeat])));
+        Assert.True(AiSystem.HasStayingFurniture(Home([HomeSpotKind.Chair], [])));
+        Assert.True(AiSystem.HasStayingFurniture(Home([], [HomeSpotKind.Workstation])));
+        Assert.True(AiSystem.HasStayingFurniture(Home([], [HomeSpotKind.Training])));
+    }
+
     [Fact]
     public void Packages_load_the_parent_first_and_the_parent_wins()
     {
