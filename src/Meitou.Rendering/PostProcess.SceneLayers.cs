@@ -75,10 +75,10 @@ public sealed unsafe partial class PostProcess
         p.P.Set(p.FullSize, width, height);
         float tanY = MathF.Tan(fovNow * 0.5f);
         var r = viewRotation;
-        p.P.Set(p.Tan, tanY * aspectNow, tanY);
+        p.P.Set(p.Tan, ViewWindow.Tan(tanY * aspectNow, tanY));
         p.P.Set(p.Right, r.M11, r.M21, r.M31);
         p.P.Set(p.Up, r.M12, r.M22, r.M32);
-        p.P.Set(p.Back, r.M13, r.M23, r.M33);
+        p.P.Set(p.Back, ViewWindow.BackFor(r, fovNow, aspectNow));
         p.P.Set(p.Eye, eyeNow);
         p.P.Set(p.Grid, shaft.Grid);
         p.P.Set(p.Range, shaft.Range);

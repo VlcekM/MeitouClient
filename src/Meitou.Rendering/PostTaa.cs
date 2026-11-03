@@ -138,10 +138,10 @@ sealed class PostTaa : IDisposable
         v.Set(mode, 0);
         v.Set(flipDepthY, ctx.RenderTargetsBottomUp ? 0 : 1);
         float tanY = MathF.Tan(fov * 0.5f);
-        v.Set(tan, tanY * aspect, tanY);
+        v.Set(tan, ViewWindow.Tan(tanY * aspect, tanY));
         v.Set(right, rotation.M11, rotation.M21, rotation.M31);
         v.Set(up, rotation.M12, rotation.M22, rotation.M32);
-        v.Set(back, rotation.M13, rotation.M23, rotation.M33);
+        v.Set(back, ViewWindow.Back(rotation, tanY * aspect, tanY));
         v.Set(eyeY, eye.Y);
         v.Set(waterY, waterHeight ?? float.MinValue);
         v.Set(waterReactive, 0.5f);

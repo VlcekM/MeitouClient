@@ -73,10 +73,10 @@ public sealed unsafe partial class PostProcess
             ToPrev = toPrevious,
             Planes = new Vector4(planes.X, planes.Y, 0, 0),
             Full = new Vector4(UpscaleNear, UpscaleFar, 2 * JitterPixels.X / width, 2 * JitterPixels.Y / height),
-            TanEye = new Vector4(tanY * aspectNow, tanY, eyeNow.Y, WaterHeight ?? float.MinValue),
+            TanEye = new Vector4(ViewWindow.Tan(tanY * aspectNow, tanY), eyeNow.Y, WaterHeight ?? float.MinValue),
             Right = new Vector4(r.M11, r.M21, r.M31, WaterReactive),
             Up = new Vector4(r.M12, r.M22, r.M32, 0),
-            Back = new Vector4(r.M13, r.M23, r.M33, (depthOut is not null ? 1 : 0) | (reactiveOut is not null ? 2 : 0) | (cleanColour ? 4 : 0)),
+            Back = new Vector4(ViewWindow.BackFor(r, fovNow, aspectNow), (depthOut is not null ? 1 : 0) | (reactiveOut is not null ? 2 : 0) | (cleanColour ? 4 : 0)),
             Sun = sunMotion.Sun, SunMotion = sunMotion.Motion,
         };
         var data = Gpu.Frame.Constants.Write(new ReadOnlySpan<VelocityParams>(in p), 256);

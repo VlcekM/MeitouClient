@@ -227,7 +227,7 @@ sealed class PostComposite : IDisposable
             h.P.Set(h.Phase, (float)(phase - Math.Floor(phase)));
             h.P.Set(h.Amount, HeatHazeAmount * o.HeatHazeScale);
             float tanY = MathF.Tan(inputs.FieldOfView * 0.5f);
-            h.P.Set(h.Tan, tanY * inputs.Aspect, tanY);
+            h.P.Set(h.Tan, ViewWindow.Tan(tanY * inputs.Aspect, tanY));
             h.P.Set(h.NearFar, inputs.Near, inputs.Far);
             h.P.Set(h.FarClip, HeatHazeFarClip);
             h.P.Set(h.HasDepth, 1f);
@@ -373,11 +373,11 @@ sealed class PostComposite : IDisposable
         f.P.Bind(f.NearDepth, pointSampler with { View = depth.View() });
         f.P.Set(f.NearPlanes, i.Near, i.Far);
         float tanY = MathF.Tan(i.FieldOfView * 0.5f);
-        f.P.Set(f.Tan, tanY * i.Aspect, tanY);
+        f.P.Set(f.Tan, ViewWindow.Tan(tanY * i.Aspect, tanY));
         var r = i.View with { M41 = 0, M42 = 0, M43 = 0 };
         f.P.Set(f.Right, r.M11, r.M21, r.M31);
         f.P.Set(f.Up, r.M12, r.M22, r.M32);
-        f.P.Set(f.Back, r.M13, r.M23, r.M33);
+        f.P.Set(f.Back, ViewWindow.BackFor(r, i.FieldOfView, i.Aspect));
         f.P.Set(f.WaterY, i.WaterHeight ?? float.MinValue);
         var shaft = shaftFrame;
         bool injected = shaft.Darkening > 0 && shaftInjected is not null;
@@ -415,7 +415,7 @@ sealed class PostComposite : IDisposable
         s.P.Bind(s.Mask, i.CharactersDrawn ? sceneSampler with { View = scene.View() } : ctx.Dummy(s.P.SamplerInfo(s.Mask)));
         s.P.Set(s.CharacterOccluder, i.CharactersDrawn ? PostOptions.SsaoCharacterOccluder : 1f);
         float tanY = MathF.Tan(i.FieldOfView * 0.5f);
-        s.P.Set(s.Tan, tanY * i.Aspect, tanY);
+        s.P.Set(s.Tan, ViewWindow.Tan(tanY * i.Aspect, tanY));
         s.P.Set(s.NearFar, i.Near, i.Far);
         s.P.Set(s.Size, (float)scene.Desc.Width, (float)scene.Desc.Height);
         s.P.Set(s.Radius, PostOptions.SsaoRadius);
@@ -425,7 +425,7 @@ sealed class PostComposite : IDisposable
         var r = i.View with { M41 = 0, M42 = 0, M43 = 0 };
         s.P.Set(s.Right, r.M11, r.M21, r.M31);
         s.P.Set(s.Up, r.M12, r.M22, r.M32);
-        s.P.Set(s.Back, r.M13, r.M23, r.M33);
+        s.P.Set(s.Back, ViewWindow.BackFor(r, i.FieldOfView, i.Aspect));
         s.P.Set(s.Eye, i.Eye);
         s.P.Set(s.WaterY, i.WaterHeight ?? float.MinValue);
         s.P.ApplyGlobals();

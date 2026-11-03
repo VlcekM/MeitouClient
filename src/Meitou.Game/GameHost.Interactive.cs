@@ -978,30 +978,55 @@ sealed partial class GameHost
     }
 
     /// <summary>
-    /// The tiled shot of <c>screens.cfg</c>'s <c>multiplier</c> n (docs/game/ui-input.md "Screenshots"): the world alone, no interface, n times the window in each direction. The original
-    /// renders n x n tiles of window size with a frustum offset each; here one frame is drawn at the full size (a sub-window frustum would reach about 15 stages), so the image
-    /// has no seams but screen-space effects measured in pixels (ambient occlusion radius, bloom) are n times smaller. The exposure of the live view is pinned for the shot and the frame after.
+    /// The tiled shot of <c>screens.cfg</c>'s <c>multiplier</c> n (docs/game/ui-input.md "Screenshots"): the world alone, no interface, n x n tiles of window size, each drawn with the camera frustum
+    /// offset to it (<see cref="ViewWindow"/>) and blitted into one picture n times the window in each direction, as the original does. Screen-space effects therefore keep the window's pixel scale.
+    /// Each tile is drawn <see cref="TileGuard"/> pixels larger on every side and cropped, so what samples neighbours (ambient occlusion, bloom) has them at the tile's border; its temporal history is
+    /// dropped and warmed up again. The exposure of the live view is pinned for the whole shot, as the original zeroes the adaptation rate.
     /// </summary>
-    void SaveSupersampled(GpuContext context, int n, int width, int height)
+    void SaveSupersampled(GpuContext context, int n, int width, int height) => SaveTiles(context, n, width, height, GameScreenshots.Next(install.Root));
+
+    void SaveTiles(GpuContext context, int n, int width, int height, string file)
     {
-        var file = GameScreenshots.Next(install.Root);
         var post = gpu.Post!;
-        int big = n * width, tall = n * height, warm = post.WarmupFrames;
+        int warm = post.WarmupFrames, guard = TileGuard(width, height), tw = width + 2 * guard, th = height + 2 * guard;
         var (adapted, _) = post.ReadExposure();
-        if (!float.IsNaN(adapted)) post.HoldExposure(adapted, warm + 2);
+        if (!float.IsNaN(adapted)) post.HoldExposure(adapted, n * n * (warm + 1) + 2);
         var live = post.Target;
-        using var picture = context.CreateTexture(new Meitou.Rendering.Gpu.TextureDesc(Meitou.Rendering.Gpu.InternalFormat.Rgba8, big, tall,
-            Use: Meitou.Rendering.Gpu.TextureUse.ColourTarget | Meitou.Rendering.Gpu.TextureUse.TransferSrc | Meitou.Rendering.Gpu.TextureUse.Sampled, Name: "supersampled picture"));
-        post.Target = picture;
-        for (int i = 0; i <= warm; i++)
+        using var tile = context.CreateTexture(new Meitou.Rendering.Gpu.TextureDesc(Meitou.Rendering.Gpu.InternalFormat.Rgba8, tw, th,
+            Use: Meitou.Rendering.Gpu.TextureUse.ColourTarget | Meitou.Rendering.Gpu.TextureUse.TransferSrc | Meitou.Rendering.Gpu.TextureUse.Sampled, Name: "screenshot tile"));
+        var picture = new byte[n * width * n * height * 4];
+        post.Target = tile;
+        try
         {
-            DrawWorld(big, tall);
-            context.EndFrame();   // headless frames: the window's own frame was presented already
+            for (int row = 0; row < n; row++)
+                for (int column = 0; column < n; column++)
+                {
+                    ViewWindow.Current = ViewWindow.Tile(n, column, row, width, height, guard);
+                    post.ResetHistory();
+                    for (int i = 0; i <= warm; i++)
+                    {
+                        DrawWorld(tw, th);
+                        context.EndFrame();   // headless frames: the window's own frame was presented already
+                    }
+                    context.Finish();
+                    BlitTile(FramebufferCapture.ReadPicture(context, tile, tw, th), tw, guard, picture, n * width, column * width, row * height, width, height);
+                }
         }
-        context.Finish();
-        post.Target = live;
-        FramebufferCapture.SavePng(context, picture, file, big, tall);
-        Console.WriteLine($"saved     {file} ({big} x {tall}, multiplier {n})");
+        finally { ViewWindow.Current = ViewWindow.Whole; post.Target = live; post.ResetHistory(); }
+        var dir = Path.GetDirectoryName(Path.GetFullPath(file));
+        if (dir is not null) Directory.CreateDirectory(dir);
+        Meitou.Data.Textures.PngWriter.Write(file, n * width, n * height, picture);
+        Console.WriteLine($"saved     {file} ({n * width} x {n * height}, multiplier {n})");
+    }
+
+    /// <summary>The guard band of a tiled shot's tiles: an eighth of the height, at least 16 pixels.</summary>
+    static int TileGuard(int width, int height) => Math.Max(16, Math.Min(width, height) / 8);
+
+    /// <summary>Copies the middle <paramref name="width"/> x <paramref name="height"/> of a drawn tile (<paramref name="guard"/> pixels of guard round it) into the picture at (<paramref name="x"/>, <paramref name="y"/>).</summary>
+    static void BlitTile(byte[] tile, int tileWidth, int guard, byte[] picture, int pictureWidth, int x, int y, int width, int height)
+    {
+        for (int r = 0; r < height; r++)
+            tile.AsSpan(((r + guard) * tileWidth + guard) * 4, width * 4).CopyTo(picture.AsSpan(((y + r) * pictureWidth + x) * 4));
     }
 
     /// <summary>Waits until <paramref name="period"/> has passed since <paramref name="start"/>: sleeps most of it, spins the last 1.5 ms.</summary>

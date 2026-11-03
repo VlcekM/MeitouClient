@@ -57,7 +57,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     /// <summary>On (default): <see cref="End"/> builds the pyramid (<c>--no-occlusion-cull</c> turns it off).</summary>
     public bool OcclusionCull { get; set; } = true;
     /// <summary>What this frame's foliage cull may test against (empty when off, on the first frame, after a camera cut).</summary>
-    public OcclusionView OcclusionFor(Vector3 eye) => OcclusionCull && Hiz is { } hiz ? hiz.ViewFor(eye) : default;
+    public OcclusionView OcclusionFor(Vector3 eye) => OcclusionCull && ViewWindow.Current.IsWhole && Hiz is { } hiz ? hiz.ViewFor(eye) : default;
 
     // width × height is the render size (the scene, SSAO); displayWidth × displayHeight the chain after the upscaler (exposure, composite).
     int width, height, displayWidth, displayHeight;
@@ -617,11 +617,11 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         c.P.Set(c.Planes, planes.X, planes.Y);
         c.P.Set(c.JitterNdc, 2 * JitterPixels.X / width, 2 * JitterPixels.Y / height);
         float tanY = MathF.Tan(fovNow * 0.5f);
-        c.P.Set(c.Tan, tanY * aspectNow, tanY);
+        c.P.Set(c.Tan, ViewWindow.Tan(tanY * aspectNow, tanY));
         var r = viewRotation;
         c.P.Set(c.Right, r.M11, r.M21, r.M31);
         c.P.Set(c.Up, r.M12, r.M22, r.M32);
-        c.P.Set(c.Back, r.M13, r.M23, r.M33);
+        c.P.Set(c.Back, ViewWindow.BackFor(r, fovNow, aspectNow));
         c.P.Set(c.Wind, clouds.Wind.X, clouds.Wind.Y);
         c.P.Set(c.Sun, sunMotion.Sun);
         c.P.Set(c.SunMotion, sunMotion.Motion);
@@ -832,7 +832,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         CloseSegment();
 
         // The depth pyramid of this frame, for the next frame's foliage cull (nothing else reads it).
-        if (OcclusionCull && haveScene && sceneDepth is not null)
+        if (OcclusionCull && ViewWindow.Current.IsWhole && haveScene && sceneDepth is not null)
         {
             Hiz ??= new HizPyramid(Gpu);
             var hizCmd = Gpu.BeginNative("hiz");
@@ -933,11 +933,11 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         Bind(f.P, f.NearDepth, sceneDepth);
         f.P.Set(f.NearPlanes, planes.X, planes.Y);
         float tanY = MathF.Tan(fovNow * 0.5f);
-        f.P.Set(f.Tan, tanY * aspectNow, tanY);
+        f.P.Set(f.Tan, ViewWindow.Tan(tanY * aspectNow, tanY));
         var r = viewRotation;
         f.P.Set(f.Right, r.M11, r.M21, r.M31);
         f.P.Set(f.Up, r.M12, r.M22, r.M32);
-        f.P.Set(f.Back, r.M13, r.M23, r.M33);
+        f.P.Set(f.Back, ViewWindow.BackFor(r, fovNow, aspectNow));
         f.P.Set(f.WaterY, WaterHeight ?? float.MinValue);
         // The light shafts' grid of this frame, if they ran (darkening 0: the volumes as the game draws them).
         var shaft = shaftFrame;
@@ -1027,10 +1027,10 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
             Bind(g.P, g.NearDepth, sceneDepth);
             Bind(g.P, g.Albedo, giAlbedo);
             g.P.Set(g.NearPlanes, planes.X, planes.Y);
-            g.P.Set(g.Tan, tanY * aspectNow, tanY);
+            g.P.Set(g.Tan, ViewWindow.Tan(tanY * aspectNow, tanY));
             g.P.Set(g.Right, rot.M11, rot.M21, rot.M31);
             g.P.Set(g.Up, rot.M12, rot.M22, rot.M32);
-            g.P.Set(g.Back, rot.M13, rot.M23, rot.M33);
+            g.P.Set(g.Back, ViewWindow.BackFor(rot, fovNow, aspectNow));
             g.P.Set(g.Eye, eyeNow.X, eyeNow.Y, eyeNow.Z);
             g.P.Set(g.FullSize, (float)width, (float)height);
             g.P.Set(g.Div, (float)giDivisor);
@@ -1208,7 +1208,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     /// <summary>The one projection the upscalers' depth is written for (camera near .. view distance, unjittered). Standard 0..1 depth, not the
     /// scene's reversed convention: nothing is drawn with it; the velocity pass re-encodes the scene depth into it and DLSS gets it as
     /// <c>ViewToClip</c> (depth not inverted).</summary>
-    Matrix4x4 FullProjection(float fov, float aspectRatio) => Matrix4x4.CreatePerspectiveFieldOfView(fov, aspectRatio, UpscaleNear, UpscaleFar);
+    Matrix4x4 FullProjection(float fov, float aspectRatio) => ViewWindow.Current.Apply(Matrix4x4.CreatePerspectiveFieldOfView(fov, aspectRatio, UpscaleNear, UpscaleFar));
 
     /// <summary>
     /// The planes of the upscalers' depth: fixed, not the camera's (its near plane follows the eye's height above the ground and the far one the
@@ -1265,7 +1265,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
             {
                 Colour = sceneColour!.Texture, Depth = upscaleDepth!.Texture, Motion = motion!.Texture, Output = output.Texture, Reactive = WaterHeight is null && !covered ? null : reactive!.Texture,
                 RenderWidth = width, RenderHeight = height, DisplayWidth = displayWidth, DisplayHeight = displayHeight,
-                JitterPixels = JitterPixels, Near = UpscaleNear, Far = UpscaleFar, FieldOfView = fovNow,
+                JitterPixels = JitterPixels, Near = UpscaleNear, Far = UpscaleFar, FieldOfView = ViewWindow.FieldOfView(fovNow),
                 DeltaSeconds = Math.Clamp(dt, 0.001f, 0.25f), Sharpness = Options.Upscale.Sharpness, Reset = reset,
                 ViewToClip = FullProjection(fovNow, aspectNow), ClipToPreviousClip = previousValid ? Reprojection.ClipToPrevious(viewRotation, eyeNow, FullProjection(fovNow, aspectNow), previousRotation, previousEye, FullProjection(previousFov, previousAspect)) : Matrix4x4.Identity,
                 Eye = eyeNow, Right = new Vector3(viewRotation.M11, viewRotation.M21, viewRotation.M31), Up = new Vector3(viewRotation.M12, viewRotation.M22, viewRotation.M32),
@@ -1321,7 +1321,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
             frameGen.Prepare(new Upscalers.FrameGenInputs
             {
                 Depth = upscaleDepth.Texture, Motion = motion.Texture, RenderWidth = width, RenderHeight = height, JitterPixels = JitterPixels,
-                Near = UpscaleNear, Far = UpscaleFar, FieldOfView = fovNow, DeltaSeconds = Math.Clamp(dt, 0.001f, 0.25f), Reset = reset,
+                Near = UpscaleNear, Far = UpscaleFar, FieldOfView = ViewWindow.FieldOfView(fovNow), DeltaSeconds = Math.Clamp(dt, 0.001f, 0.25f), Reset = reset,
                 Eye = eyeNow, Right = new Vector3(viewRotation.M11, viewRotation.M21, viewRotation.M31), Up = new Vector3(viewRotation.M12, viewRotation.M22, viewRotation.M32),
                 Forward = -new Vector3(viewRotation.M13, viewRotation.M23, viewRotation.M33),
             });
@@ -1348,11 +1348,11 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         v.P.Set(v.Mode, mode);
         v.P.Set(v.FlipDepthY, Gpu.RenderTargetsBottomUp ? 0 : 1);
         float tanY = MathF.Tan(fovNow * 0.5f);
-        v.P.Set(v.Tan, tanY * aspectNow, tanY);
+        v.P.Set(v.Tan, ViewWindow.Tan(tanY * aspectNow, tanY));
         var r = viewRotation;
         v.P.Set(v.Right, r.M11, r.M21, r.M31);
         v.P.Set(v.Up, r.M12, r.M22, r.M32);
-        v.P.Set(v.Back, r.M13, r.M23, r.M33);
+        v.P.Set(v.Back, ViewWindow.BackFor(r, fovNow, aspectNow));
         v.P.Set(v.EyeY, eyeNow.Y);
         v.P.Set(v.WaterY, WaterHeight ?? float.MinValue);
         v.P.Set(v.WaterReactive, WaterReactive);
@@ -1432,7 +1432,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         }
         Bind(s.P, s.Mask, characters ? aoMask : null);
         s.P.Set(s.CharacterOccluder, characters ? PostOptions.SsaoCharacterOccluder : 1f);
-        s.P.Set(s.Tan, tanY * aspect, tanY);
+        s.P.Set(s.Tan, ViewWindow.Tan(tanY * aspect, tanY));
         s.P.Set(s.NearFar, nearPlane, farPlane);
         s.P.Set(s.Size, (float)width, (float)height);
         s.P.Set(s.Radius, PostOptions.SsaoRadius);
@@ -1444,7 +1444,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         var r = viewRotation;
         s.P.Set(s.Right, r.M11, r.M21, r.M31);
         s.P.Set(s.Up, r.M12, r.M22, r.M32);
-        s.P.Set(s.Back, r.M13, r.M23, r.M33);
+        s.P.Set(s.Back, ViewWindow.BackFor(r, fovY, aspect));
         s.P.Set(s.Eye, eyeNow.X, eyeNow.Y, eyeNow.Z);
         s.P.Set(s.WaterY, WaterHeight ?? float.MinValue);   // the floor's occlusion fades under the water, which writes no depth
         s.P.ApplyGlobals();   // the atmosphere's and the fog volumes' uniforms, through the frame globals
@@ -1546,7 +1546,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         h.P.Set(h.Phase, (float)(phase - Math.Floor(phase)));
         h.P.Set(h.Amount, HeatHazeAmount * Options.HeatHazeScale);
         float tanY = MathF.Tan(fovY * 0.5f);
-        h.P.Set(h.Tan, tanY * aspect, tanY);
+        h.P.Set(h.Tan, ViewWindow.Tan(tanY * aspect, tanY));
         h.P.Set(h.NearFar, nearPlane, farPlane);
         h.P.Set(h.FarClip, HeatHazeFarClip);
         h.P.Set(h.HasDepth, haveScene ? 1 : 0);
@@ -1570,6 +1570,9 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
 
     float? exposureHold;
     int exposureHoldFrames;
+
+    /// <summary>Forgets what the temporal passes kept (the upscaler's history, the shafts' history, the previous camera): the next frame starts afresh. A tiled screenshot calls it between tiles.</summary>
+    public void ResetHistory() => (historyValid, previousValid, shaftHistoryValid) = (false, false, false);
 
     /// <summary>
     /// Pins the adapted luminance to <paramref name="adapted"/> for the next <paramref name="frames"/> exposure passes (the band collapses to it), so a picture drawn at another size
