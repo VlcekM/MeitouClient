@@ -133,9 +133,37 @@ public sealed class SquadMemory
             }
         foreach (var e in player.Values)
             if (e.Short != 0 && (int)(world.GameHours - e.Time) > 6) e.Short = 0;
+        Forget(world, ref lost);
         if (lost is null) return;
         foreach (int squad in lost)
             if (!entries.Any(kv => kv.Key.Squad == squad && (kv.Value.Short >> MemoryTag.TempEnemy & 1) != 0)) tempEnemySquads.Remove(squad);
+    }
+
+    /// <summary>The size above which a memory forgets its old entries, and the age in game hours from which they go (<c>FUN_1406724e0</c>, <b>Verified</b>: 0x28 and 0x30).</summary>
+    const int ForgetAbove = 40, ForgetAfterHours = 48;
+
+    /// <summary>
+    /// A memory of more than <see cref="ForgetAbove"/> entries erases each entry older than <see cref="ForgetAfterHours"/> hours whose character is not one of the player's faction (or no longer resolves),
+    /// all tags with it (<c>FUN_1406724e0</c> with <c>FUN_1409fdfe0</c>, <b>Verified</b>).
+    /// </summary>
+    void Forget(World world, ref List<int>? lost)
+    {
+        var counts = new Dictionary<int, int>();
+        foreach (var ((squad, _), _) in entries) counts[squad] = counts.GetValueOrDefault(squad) + 1;
+        List<(int Squad, CharacterId Who)>? gone = null;
+        foreach (var ((squad, who), e) in entries)
+        {
+            if (counts[squad] <= ForgetAbove || (int)(world.GameHours - e.Time) <= ForgetAfterHours) continue;
+            bool player = world.Characters.TryResolveNext(who, out int slot) && world.Characters.Cold(slot) is { } c && c.Faction == world.Player.Faction;
+            if (!player) (gone ??= []).Add((squad, who));
+        }
+        if (gone is null) return;
+        foreach (var key in gone)
+        {
+            if (entries.TryGetValue(key, out var e) && (e.Short >> MemoryTag.TempEnemy & 1) != 0) (lost ??= []).Add(key.Squad);
+            entries.Remove(key);
+            index.Remove(key);
+        }
     }
 
     /// <summary>Whether the squad holds a TEMP_ENEMY tag on any character (the aggro scan skips the per-target lookup for squads that do not).</summary>

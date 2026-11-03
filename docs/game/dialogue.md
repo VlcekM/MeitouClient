@@ -376,7 +376,7 @@ me, 5 captor, 6 friendly, 7 defeated my squad, 8 I beat his squad, 9 killed my f
   reacting crime case ends by tagging the culprit short-term 7 criminal, setting its crime timer to 20 and, when the witness is the crime's
   victim (a trespass's victim is the witness that called it), `attackTarget` on the culprit. The player's attack orders do not call it.
   Short tags fade (**Verified**, `FUN_1406724e0` from the platoon slow step `FUN_1404ff060`, threshold 6.0 read from the exe): an entry
-  whose game hours since its last write, truncated, exceed 6 (so 7 h) loses all its short tags; long tags, time and the player TEMP ALLY bool
+  whose game hours since its last write, truncated, exceed 6 (so 7 h) loses all its short tags; the entry stays unless the memory holds more than 40 entries and it is older than 48 h and its character is not a resolving player-faction one (then it is erased, `SquadMemory.Forget`, **Verified**); long tags, time and the player TEMP ALLY bool
   stay (Meitou: `SquadMemory.Age`). Besides that, the perception update (`SensoryData::add`) clears it once the tagged enemy is a slave of the looker's
   faction (or its state +0x2f8 is 2, **Unknown**). Meitou (`DialogueSystem.TagEnemy`): the alert in `RetaliationSystem`, the stealth-KO
   miss, the crime victim (`CrimeSystem.Witnesses`, an attack order unless it already fights the culprit, and the criminal tag 7), DA 56, the
