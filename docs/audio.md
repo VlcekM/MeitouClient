@@ -318,7 +318,8 @@ on the GUI object with `Inventory_Items` of the item, `FUN_140715560`), that `It
 only characters), `Character_Unlock_Fail` as a sound of its own (it is only the loop's Stop; a failed roll posts nothing, as in the exe), `Character_Building_Materials` (no bank has it), `Sell_Item` from NPC shoppers, `Character_Drop_Person` from the corpse machine.
 Meitou's wardens have no unlock loop (their rounds only start the click); the player's lock picking loops as the exe's `Task_PickLock`.
 Machine work: while an operator works, the snapshot's `WorkEvents` (functionality and clip) has the host give that clip's layer its events with the functionality's added
-(`AnimationSoundEvents.Attach`), kept until the layer is gone. The simulation's time of a looping clip that is neither synched nor a side step runs on past its length; the host wraps
+(`AnimationSoundEvents.Attach`), kept until the layer is gone (engine choice: another machine's events replace them where the exe's instance would hold both; NPC town workers and
+obedient slaves, which Meitou runs outside `Task_OperateMachine`, get none). The simulation's time of a looping clip that is neither synched nor a side step runs on past its length; the host wraps
 its fraction, so the events of `stonemine`, `chop down static` and the swim clips fire on every pass, as the exe's cursor does.
 
 **Unarmed `Weapons`** (`FUN_1402b4570`, when a technique is chosen): the switch becomes `HtH_Punch` when the technique's last blow uses limb 0 or 1 (the arms, **Verified**) else `HtH_Kick`, with `_Robot` appended for a robot (**Observed**: the exe also appends it when a limb check on the attacker's race says robotic limbs). Meitou applies it when the animation of a COMBAT_TECHNIQUE valid
