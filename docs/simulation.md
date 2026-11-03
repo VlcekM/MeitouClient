@@ -1885,7 +1885,7 @@ order. Renderer state lives in Rendering; snapshots are the simulation-to-host b
 rechecks the sale flag, town kind, owner and its hostility, the quoted price and the money, then takes the money once.
 Sellable: function 19, or no function and interior meshes; no walls, gates or `is inside building` (the original's class and
 parent tests are not fully decoded). Ruined houses register without fixtures. The bought house's doors, own lock and
-indoor build permission become the player's, NPC lock rounds on it stop, and it turns private. As the original's purchase
+indoor build permission become the player's, every door is opened (`FUN_140297040`, **Verified**), NPC lock rounds on it stop, and it turns private. As the original's purchase
 ([what it does](game/ui-screens.md#selected-building)) the house is emptied: its interior layout's fixtures (cages, containers with
 their contents, beds, dummies) and seats go, occupants let out first; its loose-item slots go with the items lying in them; the
 renderer, navmesh and lamps lay it out without its interior layout (`BuildingPlacement.WithoutInterior`: `FixtureRegistry.PublishedEmptied`,

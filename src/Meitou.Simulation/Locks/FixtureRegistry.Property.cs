@@ -107,6 +107,8 @@ public sealed partial class FixtureRegistry
         bool ruin = IsDestroyed(p.Building);
         ownedProperties = null;
         foreach (var f in OfBuilding(key)) f.Owner = p.Owner;
+        // Every door is opened (FUN_1407ad6c0 calls FUN_140297040, from closed; Verified); the sleepers leave their beds with the interior's emptying below.
+        foreach (var f in OfBuilding(key).ToList()) OpenDoor(f);
         containerSpots = null; doorPicks = null; bedSpots = null; bedList = null; cageList = null; dummySpots = null;
         SetPublic(key, false);
         RegisterTownConstruction(world, p, ruin);
