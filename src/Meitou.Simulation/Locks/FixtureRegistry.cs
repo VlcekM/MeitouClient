@@ -423,25 +423,51 @@ public sealed partial class FixtureRegistry
             c.InWhat = f.Id;
             // Matched from the original's keys: the held state is the one loaded, so they are written back as read (HeldSave.Write).
             if (c.Save is { } loaded && loaded.InWhat == what) loaded.InWhat = f.Id;
-            // A loaded sleeper is put at its lie spot again (engine choice: a save from before LieSpot holds it at the bed's origin, half off the mattress).
-            if (c.InSomething == HeldState.Bed) { var (at, yaw) = LieSpot(f, next[s].Position); table.Place(s, at, yaw); }
+            // A loaded sleeper is put at its lie spot again (engine choice: a save from before LieSpot holds it at the bed's origin, half off the mattress),
+            // still sleeping: a task other than Sleep would get it up (BedSystem).
+            if (c.InSomething == HeldState.Bed)
+            {
+                var (at, yaw) = LieSpot(f, next[s].Position);
+                table.Place(s, at, yaw, CharacterTask.Sleep);
+            }
         }
     }
 
-    /// <summary>The fixture a held character's <see cref="CharacterCold.InWhat"/> names: a fixture id, a bed the player built, or a generated interior cage of the original's save.</summary>
+    /// <summary>
+    /// The fixture a held character's <see cref="CharacterCold.InWhat"/> names: a fixture id, a bed the player built, or a generated interior
+    /// cage or bed of the original's save.
+    /// </summary>
     Fixture? HeldFixture(CharacterCold c, string what)
     {
         if (byId.TryGetValue(what, out var f)) return f;
         // The original's `in what` of one lying in a bed the player built names that bed's building.
         if (c.InSomething == HeldState.Bed && byId.TryGetValue(what + "@bed0", out f) && f.Site < 0) return f;
-        return c.InSomething == HeldState.Imprisoned && SavedSpots?.GetValueOrDefault(what) is { } spot ? InteriorCageAt(spot) : null;
+        if (SavedSpots?.GetValueOrDefault(what) is not { } spot) return null;
+        return c.InSomething switch
+        {
+            HeldState.Imprisoned => InteriorCageAt(spot),
+            HeldState.Bed => InteriorBedAt(spot),
+            _ => null,
+        };
     }
 
     /// <summary>
-    /// The most a generated interior cage of a save may stand from Meitou's fixture of the same record and still be that cage: Meitou places the interior from the same layout
-    /// (<b>Observed</b>: the Rebirth Slave Shop's caged prisoner's cage at distance 0; the next cage of the room stands 27.8 away).
+    /// The most a generated interior cage or bed of a save may stand from Meitou's fixture of the same record and still be that one: Meitou places
+    /// the interior from the same layout (<b>Observed</b>: the Rebirth Slave Shop's caged prisoner's cage at distance 0, the next cage of the room
+    /// 27.8 away; the 24 saved sleepers of the Rebirth garrison's beds at distance 0, the next bed of the record 33 away).
     /// </summary>
     const float SavedSpotReach = 1;
+
+    /// <summary>The interior bed fixture with the spot's record standing at the spot (<see cref="SavedSpotReach"/>), or null.</summary>
+    Fixture? InteriorBedAt(SavedSpot spot)
+    {
+        foreach (var b in BedSpots)
+        {
+            bool near = Vector3.DistanceSquared(b.Position, spot.Position) <= SavedSpotReach * SavedSpotReach;
+            if (b.Record == spot.Record && near) return byId.GetValueOrDefault(b.Id);
+        }
+        return null;
+    }
 
     /// <summary>The interior cage fixture with the spot's record standing at the spot (<see cref="SavedSpotReach"/>), or null.</summary>
     Fixture? InteriorCageAt(SavedSpot spot)

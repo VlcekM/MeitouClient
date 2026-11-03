@@ -254,6 +254,9 @@ public sealed partial class AiSystem
                     if (type == TaskType.STAY_IN_HOME && board.SeatClaims.TryGetValue(slot, out var chair) && !mind.SeatUnreachable) return new PlanTarget(Targets.Seat, chair.Position);
                     return Spot(Targets.Spot, system.SpotFor(mind, board, AiBehaviour.Post, type));
                 case TaskType.GO_HOME_AND_GO_TO_BED or TaskType.GO_HOME_AND_GO_TO_BED_SECURE:
+                    // A character in a bed keeps it (the bed search FUN_1408cfe00, docs/game/locks.md "Bed search"): the target is where it lies.
+                    if (world.Characters.Cold(slot) is { InSomething: Locks.HeldState.Bed })
+                        return Spot(Targets.Bed, (Flat(Me.Position), true, Me.Position.Y, null));
                     if (system.SpareBed(world, board, mind, slot) is { } spare) return Spot(Targets.Bed, (Flat(spare.Position), true, spare.Position.Y, null));
                     if (!system.HasBed(world, board, mind, slot)) return default;
                     return Spot(Targets.Bed, system.SpotFor(mind, board, AiBehaviour.Sleep, type));
