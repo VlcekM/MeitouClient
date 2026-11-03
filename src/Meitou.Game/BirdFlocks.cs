@@ -1,128 +1,396 @@
 using System.Numerics;
 using Meitou.Data.Gameplay;
+using Meitou.Data.World;
 using Meitou.Rendering;
 
 namespace Meitou.Game;
 
+/// <summary>A world object that draws birds of one WILDLIFE_BIRDS kind to it (a record's <c>bird attractor</c> reference: <paramref name="Range"/> its first value, <paramref name="Max"/> its second).</summary>
+public readonly record struct BirdAttractor(object Key, string Kind, Vector3 Position, int Range, int Max);
+
 /// <summary>
-/// The birds (docs/game/birds.md): flocks of the WILDLIFE_BIRDS kinds the camera's BIOME_GROUP lists, flying round the camera on the display's real time, as the original's
-/// <c>BirdManager</c> does on its own thread. The kinds, their numbers and the fields' meanings come from the original (<b>Verified</b> loader); the steering is Meitou's
-/// own (the original's <c>FUN_140262830</c> states and constants are not reproduced). Birds are drawn as loose meshes (<see cref="DebrisPiece"/>).
+/// The birds (docs/game/birds.md): the original's <c>BirdManager</c> thread step <c>FUN_140262830</c>, run on the display's real time. Per WILDLIFE_BIRDS kind: spawn a flock when the
+/// birds alive plus its <c>spawn count</c> fit the amounts of the BIOME_GROUP cells in range (<c>FUN_140260620</c>, <c>FUN_140262500</c>), then move each bird by its state
+/// (<see cref="BirdState"/>) with a turn limited to about one radian per second. Birds are drawn as loose meshes (<see cref="DebrisPiece"/>).
 /// </summary>
 public sealed class BirdFlocks
 {
-    sealed class Bird { public Vector3 Offset, Position; public float Scale, Phase; }
+    /// <summary>A bird's state (<b>Verified</b>, the <c>+0x38</c> field of <c>FUN_140262830</c>; 8 is never set).</summary>
+    public enum BirdState { Gone = 0, Return = 1, Wander = 2, Follow = 3, Circle = 4, Attracted = 5, Rest = 6 }
 
-    sealed class Flock
+    sealed class Bird
     {
-        public BirdFlockData Kind = null!;
-        public Vector3 Position;
-        public float Heading, Turn;
-        public readonly List<Bird> Birds = [];
+        public Vector3 Position, Forward, Target;
+        public float Timer, Radius, Altitude, Scale;
+        public BirdState State;
+        public Bird? Mate;
+        public Attractor? Attractor;
     }
 
-    readonly IReadOnlyList<BirdFlockData> kinds;
+    sealed class Attractor(object key)
+    {
+        public readonly object Key = key;
+        public Vector3 Position;
+        public float Strength;
+        public int Max, Count;
+    }
+
+    sealed class Group(BirdFlockData kind)
+    {
+        public readonly BirdFlockData Kind = kind;
+        public readonly List<Bird> Birds = [];
+        public readonly List<Attractor> Attractors = [];
+    }
+
+    const float FarSpawn = 1000, NeighbourRadius = 100, WideNeighbourRadius = 1000, FrustumMargin = -10;
+    const float TooLow = 30, ClimbRate = 5, HeightScale = 2000, TurnPi = 3.14159f, FollowOffset = 100;
+
+    readonly Group[] groups;
     readonly Func<float, float, float> ground;
-    readonly List<Flock> flocks = [];
+    readonly Func<int, int, string?> groupOfCell;
     readonly Random random;
 
-    public BirdFlocks(IReadOnlyList<BirdFlockData> kinds, Func<float, float, float> ground, int seed = 1)
+    /// <param name="ground">The terrain's height at a world x, z.</param>
+    /// <param name="groupOfCell">The BIOME_GROUP id of a weather cell (null: none).</param>
+    public BirdFlocks(IReadOnlyList<BirdFlockData> kinds, Func<float, float, float> ground, Func<int, int, string?> groupOfCell, int seed = 1)
     {
-        this.kinds = kinds;
+        groups = [.. kinds.Where(k => k.Speed > 0 && k.SpawnCount > 0).Select(k => new Group(k))];
         this.ground = ground;
+        this.groupOfCell = groupOfCell;
         random = new Random(seed);
     }
 
-    public int FlockCount => flocks.Count;
+    public int BirdCount => groups.Sum(g => g.Birds.Count);
 
-    /// <summary>The radius round the camera a kind keeps its flocks in.</summary>
-    public static float RadiusOf(BirdFlockData kind) => MathF.Sqrt(Math.Max(kind.Distance, 0));
+    /// <summary>The birds in state <paramref name="state"/>.</summary>
+    public int CountIn(BirdState state) => groups.Sum(g => g.Birds.Count(b => b.State == state));
 
-    /// <summary>Moves the flocks by <paramref name="dt"/> real seconds; <paramref name="group"/> is the BIOME_GROUP under the camera (null: none, the flocks fly off).</summary>
-    public void Update(float dt, Vector3 camera, string? group)
+    /// <summary>
+    /// Moves the birds by <paramref name="dt"/> real seconds. <paramref name="eye"/> is the camera's position, <paramref name="focus"/> the camera controller's (where new flocks look), and
+    /// <paramref name="frustum"/> the view's six planes, normals inwards and normalised (a bird beyond its kind's <c>distance</c> and outside them is removed; null: none is).
+    /// </summary>
+    public void Update(float dt, Vector3 eye, Vector3 focus, Vector4[]? frustum)
     {
-        dt = Math.Clamp(dt, 0, 0.1f);
-        foreach (var kind in kinds)
+        foreach (var g in groups)
         {
-            int want = group is null || kind.SpawnCount <= 0 || kind.Speed <= 0 ? 0 : kind.AmountIn(group);
-            int have = flocks.Count(f => f.Kind == kind);
-            for (; have < want; have++) Spawn(kind, camera);
+            var range = CellsAround(g.Kind, eye);
+            if (g.Birds.Count + g.Kind.SpawnCount <= range.Total) SpawnFlock(g, range, focus);
+            for (int i = 0; i < g.Birds.Count; i++)
+                if (g.Birds[i].State != BirdState.Gone) Step(g, g.Birds[i], i, dt, eye, frustum);
+            g.Birds.RemoveAll(b => b.State == BirdState.Gone);
         }
-        for (int i = flocks.Count - 1; i >= 0; i--)
+    }
+
+    /// <summary>Gives the attractors of this frame (<c>FUN_140260880</c>: one the world no longer has is dropped, one it has gains its place with no birds on it).</summary>
+    public void SetAttractors(IReadOnlyList<BirdAttractor> attractors)
+    {
+        foreach (var g in groups)
         {
-            var f = flocks[i];
-            Step(f, dt, camera);
-            bool far = Vector2.Distance(new(f.Position.X, f.Position.Z), new(camera.X, camera.Z)) > RadiusOf(f.Kind) * 1.2f;
-            int wanted = group is null ? 0 : f.Kind.AmountIn(group);
-            if (far || wanted == 0 && flocks.Count(o => o.Kind == f.Kind) > 0 && Vector2.Distance(new(f.Position.X, f.Position.Z), new(camera.X, camera.Z)) > RadiusOf(f.Kind) * 0.5f)
+            var mine = attractors.Where(a => a.Kind == g.Kind.Id && a.Max > 0).ToList();
+            foreach (var gone in g.Attractors.Where(o => !mine.Any(a => a.Key.Equals(o.Key))).ToList())
             {
-                flocks.RemoveAt(i);
-                if (wanted > 0) Spawn(f.Kind, camera);
+                foreach (var b in g.Birds.Where(b => b.Attractor == gone)) ReleaseAttractor(b);
+                g.Attractors.Remove(gone);
+            }
+            foreach (var a in mine)
+            {
+                var held = g.Attractors.Find(o => o.Key.Equals(a.Key));
+                if (held is null) g.Attractors.Add(held = new Attractor(a.Key));
+                (held.Position, held.Strength, held.Max) = (a.Position, a.Range * (float)a.Range * 100, a.Max);
             }
         }
     }
 
-    void Spawn(BirdFlockData kind, Vector3 camera)
+    // ---- Spawning (FUN_140260620, FUN_140262500, FUN_1402622d0)
+
+    readonly record struct CellRange(int MinX, int MinZ, int MaxX, int MaxZ, int Matches, int Total);
+
+    /// <summary>The cells within the kind's <c>distance</c> of the camera (clamped to the map) that list the kind, and the sum of their amounts.</summary>
+    CellRange CellsAround(BirdFlockData kind, Vector3 eye)
     {
-        float radius = RadiusOf(kind), angle = Next() * MathF.Tau, away = radius * (0.4f + 0.5f * Next());
-        float x = camera.X + MathF.Cos(angle) * away, z = camera.Z + MathF.Sin(angle) * away;
-        float low = Math.Min(kind.SpawnHeightMin, kind.SpawnHeightMax), high = Math.Max(kind.SpawnHeightMin, kind.SpawnHeightMax);
-        var f = new Flock
-        {
-            Kind = kind, Heading = Next() * MathF.Tau, Position = new Vector3(x, ground(x, z) + low + (high - low) * Next() * 0.25f, z),
-            Turn = kind.Circling ? (Next() < 0.5f ? -1 : 1) * kind.Speed / Math.Max(radius * 0.3f, 1) : 0,
-        };
-        for (int b = 0; b < kind.SpawnCount; b++)
-        {
-            float spread = kind.Flocking ? 0.04f : 0.25f;
-            var offset = new Vector3((Next() - 0.5f) * 2, (Next() - 0.5f) * 0.5f, (Next() - 0.5f) * 2) * (kind.Speed * spread * (1 + b * 0.15f));
-            f.Birds.Add(new Bird { Offset = offset, Position = f.Position + offset, Scale = kind.ScaleMin + (kind.ScaleMax - kind.ScaleMin) * Next(), Phase = Next() * MathF.Tau });
-        }
-        flocks.Add(f);
+        var (minX, minZ) = WeatherAreas.CameraCellOf(eye.X - kind.Distance, eye.Z - kind.Distance);
+        var (maxX, maxZ) = WeatherAreas.CameraCellOf(eye.X + kind.Distance, eye.Z + kind.Distance);
+        int matches = 0, total = 0;
+        for (int x = minX; x <= maxX; x++)
+            for (int z = minZ; z <= maxZ; z++)
+                if (AmountOf(kind, x, z) is { } amount) { matches++; total += Math.Max(amount, 0); }
+        return new CellRange(minX, minZ, maxX, maxZ, matches, total);
     }
 
-    void Step(Flock f, float dt, Vector3 camera)
+    int? AmountOf(BirdFlockData kind, int x, int z) => groupOfCell(x, z) is { } id && kind.Lists(id) ? kind.AmountIn(id) : null;
+
+    void SpawnFlock(Group g, CellRange range, Vector3 focus)
     {
-        var kind = f.Kind;
-        if (!kind.Circling)
+        var kind = g.Kind;
+        int pick = random.Next(0, range.Matches + 1);
+        (int X, int Z)? cell = null;
+        for (int x = range.MinX; x <= range.MaxX && pick >= 1; x++)
+            for (int z = range.MinZ; z <= range.MaxZ && pick >= 1; z++)
+                if (AmountOf(kind, x, z) is not null) { cell = (x, z); pick--; }
+        if (cell is not { } c) return;
+        var (x0, z0, x1, z1) = WeatherAreas.CellRect(c.X, c.Z);
+        float px = x0 + (x1 - x0) * Next(), pz = z0 + (z1 - z0) * Next(), py = ground(px, pz);
+        if (new Vector2(px - focus.X, pz - focus.Z).LengthSquared() < FarSpawn * FarSpawn || py <= kind.SpawnHeightMin || py >= kind.SpawnHeightMax) return;
+        var at = new Vector3(px, py, pz);
+        for (int i = 0; i < kind.SpawnCount; i++)
         {
-            f.Turn += (Next() - 0.5f) * dt * 0.8f;
-            f.Turn = Math.Clamp(f.Turn, -0.3f, 0.3f);
-            // Out past two thirds of the radius the flock comes back towards the camera.
-            var to = new Vector2(camera.X - f.Position.X, camera.Z - f.Position.Z);
-            if (to.Length() > RadiusOf(kind) * 0.66f)
+            g.Birds.Add(new Bird
             {
-                float want = MathF.Atan2(to.Y, to.X), delta = MathF.IEEERemainder(want - f.Heading, MathF.Tau);
-                f.Turn = Math.Clamp(delta, -0.3f, 0.3f);
-            }
+                Position = at, Forward = Normalise(focus - at), State = BirdState.Wander, Timer = Range(30, 180), Scale = Range(kind.ScaleMin, kind.ScaleMax),
+            });
+            at += Normalise(new Vector3(Range(-1, 1), 0, Range(-1, 1))) * 5;
         }
-        f.Heading += f.Turn * dt;
-        var forward = new Vector3(MathF.Cos(f.Heading), 0, MathF.Sin(f.Heading));
-        f.Position.X += forward.X * kind.Speed * dt;
-        f.Position.Z += forward.Z * kind.Speed * dt;
-        // Up or down to the cruising height over the ground below, as fast as a quarter of the speed.
-        float cruise = ground(f.Position.X, f.Position.Z) * kind.ContourStrength + ground(camera.X, camera.Z) * (1 - kind.ContourStrength) + kind.Height;
-        f.Position.Y += Math.Clamp(cruise - f.Position.Y, -kind.Speed * 0.25f * dt, kind.Speed * 0.25f * dt);
-        var side = new Vector3(-forward.Z, 0, forward.X);
-        foreach (var b in f.Birds)
+    }
+
+    // ---- The step (FUN_140262830)
+
+    void Step(Group g, Bird b, int index, float dt, Vector3 eye, Vector4[]? frustum)
+    {
+        var kind = g.Kind;
+        var stride = b.Forward * (dt * kind.Speed);
+        b.Position += stride;
+        bool inside = InsideArea(kind, b.Position);
+        if (!inside)
         {
-            b.Phase += dt * 2.3f;
-            var target = f.Position + side * b.Offset.X + forward * b.Offset.Z + Vector3.UnitY * (b.Offset.Y + MathF.Sin(b.Phase) * 10);
-            b.Position = Vector3.Lerp(b.Position, target, Math.Min(1, dt * 3));
+            b.State = BirdState.Return;
+            b.Timer = 1e6f;
+            b.Target = b.Position - stride;
+            ReleaseAttractor(b);
         }
+        float groundY = ground(b.Position.X, b.Position.Z);
+        var desired = Desire(g, b, inside, dt, ref groundY);
+        Turn(b, desired, index, groundY, dt, kind);
+        if (b.State is BirdState.Wander or BirdState.Circle) TakeAttractor(g, b);
+        b.Timer -= dt;
+        if (b.Timer < 0) Expire(g, b, groundY);
+        if (frustum is not null && Vector3.Distance(eye, b.Position) > kind.Distance && Outside(frustum, b.Position))
+        {
+            b.State = BirdState.Gone;
+            ReleaseAttractor(b);
+        }
+    }
+
+    bool InsideArea(BirdFlockData kind, Vector3 p)
+    {
+        var (cx, cz) = WeatherAreas.CameraCellOf(p.X, p.Z);
+        return groupOfCell(cx, cz) is { } id && kind.Lists(id);
+    }
+
+    static bool Outside(Vector4[] frustum, Vector3 p)
+    {
+        foreach (var plane in frustum)
+            if (plane.X * p.X + plane.Y * p.Y + plane.Z * p.Z + plane.W < FrustumMargin) return true;
+        return false;
+    }
+
+    /// <summary>The terrain's unit normal at a position (finite differences of the height).</summary>
+    Vector3 Normal(Vector3 p)
+    {
+        const float e = 16;
+        float dx = ground(p.X + e, p.Z) - ground(p.X - e, p.Z), dz = ground(p.X, p.Z + e) - ground(p.X, p.Z - e);
+        return Vector3.Normalize(new Vector3(-dx, 2 * e, -dz));
+    }
+
+    /// <summary>The direction the bird wants to fly in, by its state; a circling bird lifts <paramref name="groundY"/> to its altitude minus 500.</summary>
+    Vector3 Desire(Group g, Bird b, bool inside, float dt, ref float groundY)
+    {
+        var kind = g.Kind;
+        switch (b.State)
+        {
+            case BirdState.Return:
+                {
+                    float dz = b.Target.Z - b.Position.Z;
+                    var aim = new Vector3(b.Target.X, b.Position.Y, b.Target.Z) + Normalise(new Vector3(dz, 0, b.Position.X - b.Target.X)) * dz;
+                    if (inside) b.Timer = 0;
+                    return aim - b.Position;
+                }
+            case BirdState.Wander or BirdState.Rest:
+                {
+                    var desired = b.Forward;
+                    var normal = Normal(b.Position);
+                    if (normal.Y < 0.999f)
+                    {
+                        var along = new Vector3(normal.Z, 0, -normal.X);
+                        if (Vector3.Dot(along, b.Forward) < 0) along = -along;
+                        float sign = kind.GroundHeight > groundY ? 1 : -1;
+                        desired = along * kind.ContourStrength + Normalise(new Vector3(normal.X, 0, normal.Z)) * sign;
+                    }
+                    if ((b.Mate = FindMate(g, b, NeighbourRadius)) is not null) b.State = BirdState.Follow;
+                    return desired;
+                }
+            case BirdState.Follow:
+                {
+                    if (FindMate(g, b, NeighbourRadius) is { } fresh) b.Mate = fresh;
+                    return b.Mate is { } mate ? Follow(b, mate, dt) : b.Forward;
+                }
+            case BirdState.Circle or BirdState.Attracted:
+                return Circle(b, dt, ref groundY, kind);
+            default:
+                return b.Forward;
+        }
+    }
+
+    /// <summary>Head for the point 100 units beside the mate (on the bird's own side), and speed up or slow down by up to 30 percent of a unit per second to keep level with it.</summary>
+    static Vector3 Follow(Bird b, Bird mate, float dt)
+    {
+        var side = new Vector3(mate.Forward.Z, 0, -mate.Forward.X);
+        if (Vector3.Dot(side, b.Position - mate.Position) < 0) side = -side;
+        var beside = mate.Position + side * FollowOffset;
+        float ahead = Math.Clamp(Vector3.Dot(b.Forward, beside - mate.Forward * FollowOffset - b.Position), -100, 100);
+        var desired = beside - b.Position;
+        b.Position += b.Forward * ((ahead * 0.003f + 1) * dt);
+        return desired;
+    }
+
+    Vector3 Circle(Bird b, float dt, ref float groundY, BirdFlockData kind)
+    {
+        if (b.State == BirdState.Circle)
+        {
+            if (groundY > b.Altitude) { b.Target = b.Position; b.Altitude = groundY; }
+            float sign = kind.Height > b.Altitude ? 1 : -1;
+            var normal = Normal(b.Position);
+            b.Target += Normalise(new Vector3(normal.X, 0, normal.Z)) * dt * sign;
+        }
+        else if (b.Attractor is { } held) b.Target = held.Position;
+        var centre = new Vector3(b.Target.X, b.Position.Y, b.Target.Z);
+        float dx = centre.X - b.Position.X, dz = centre.Z - b.Position.Z, reach = b.Radius * 1.4f;
+        var push = dx * dx + dz * dz < reach * reach
+            ? Normalise(b.Position + b.Forward * 100 - centre)
+            : new Vector3(b.Forward.Z, 0, b.Forward.X);
+        groundY = Math.Max(groundY, b.Altitude - 500);
+        return centre + push * b.Radius - b.Position;
+    }
+
+    /// <summary>Settles the bird's height over the ground and turns its heading towards <paramref name="desired"/> by about a radian per second.</summary>
+    static void Turn(Bird b, Vector3 desired, int index, float groundY, float dt, BirdFlockData kind)
+    {
+        desired = Normalise(desired);
+        double scatter = index * 4.32167;
+        float wobble = (float)(scatter - Math.Floor(scatter) - 0.5);
+        float height = b.Position.Y - groundY;
+        if (height < 0) b.Position.Y = groundY;
+        if (TooLow > height) desired.Y = ClimbRate;
+        else if (b.State != BirdState.Follow)
+        {
+            float want = (wobble * 0.3f + 1) * kind.Height;
+            if (b.Mate is { } mate) want = mate.Position.Y - groundY + wobble * ClimbRate;
+            desired.Y = (want - height) / HeightScale;
+        }
+        desired = Normalise(desired);
+        float cos = Vector3.Dot(b.Forward, desired);
+        if (cos > 0.99) { b.Forward = desired; return; }
+        float angle = -1 < cos ? MathF.Acos(cos) : TurnPi;
+        b.Forward = Normalise(b.Forward + (desired - b.Forward) * (dt / angle));
+    }
+
+    // ---- Neighbours and attractors (FUN_140260200, FUN_1402604f0)
+
+    /// <summary>The nearest bird of a flocking kind that is ahead of this one's view of it (it moves away from this bird) within <paramref name="radius"/>, unless it already follows this bird.</summary>
+    static Bird? FindMate(Group g, Bird self, float radius)
+    {
+        if (!g.Kind.Flocking) return null;
+        float best = radius * radius;
+        Bird? mate = null;
+        foreach (var o in g.Birds)
+        {
+            if (o == self || o.State is BirdState.Circle or BirdState.Attracted or BirdState.Gone) continue;
+            float d = Vector3.DistanceSquared(self.Position, o.Position);
+            if (Vector3.Dot(o.Forward, o.Position - self.Position) > 0 && d < best) (mate, best) = (o, d);
+        }
+        for (var chain = mate; chain is not null; chain = chain.Mate)
+            if (chain == self) return null;
+        return mate;
+    }
+
+    void TakeAttractor(Group g, Bird b)
+    {
+        Attractor? best = null;
+        float score = 1;
+        foreach (var a in g.Attractors)
+        {
+            if (a.Count >= a.Max) continue;
+            float s = a.Strength / Vector3.DistanceSquared(b.Position, a.Position);
+            if (s > score) (best, score) = (a, s);
+        }
+        if (best is null) return;
+        if (b.Attractor != best)
+        {
+            ReleaseAttractor(b);
+            b.Attractor = best;
+            best.Count++;
+        }
+        b.Timer = Range(30, 90);
+        b.State = BirdState.Attracted;
+        b.Radius = Range(400, 600);
+    }
+
+    static void ReleaseAttractor(Bird b)
+    {
+        if (b.Attractor is null) return;
+        b.Attractor.Count--;
+        b.Attractor = null;
+        if (b.State == BirdState.Attracted) b.State = BirdState.Wander;
+    }
+
+    // ---- State timers
+
+    void Expire(Group g, Bird b, float groundY)
+    {
+        switch (b.State)
+        {
+            case BirdState.Return or BirdState.Circle or BirdState.Rest:
+                b.Timer = Range(10, 40);
+                Wander(g, b);
+                break;
+            case BirdState.Wander or BirdState.Follow when !g.Kind.Circling:
+                b.Timer = Range(5, 30);
+                Wander(g, b);
+                break;
+            case BirdState.Wander or BirdState.Follow:
+                b.State = BirdState.Circle;
+                b.Target = b.Position;
+                b.Timer = Range(30, 180);
+                b.Altitude = groundY;
+                b.Mate = null;
+                b.Radius = Range(400, 600);
+                break;
+            case BirdState.Attracted:
+                b.State = BirdState.Rest;
+                b.Timer = Range(10, 40);
+                ReleaseAttractor(b);
+                break;
+        }
+    }
+
+    static void Wander(Group g, Bird b)
+    {
+        b.Mate = FindMate(g, b, WideNeighbourRadius);
+        b.State = b.Mate is null ? BirdState.Wander : BirdState.Follow;
     }
 
     float Next() => (float)random.NextDouble();
+    float Range(float min, float max) => min + Next() * (max - min);
 
-    /// <summary>This frame's birds as loose meshes, appended to <paramref name="pieces"/> (the mesh faces along its own +z: the bird flies towards where it is going).</summary>
+    static Vector3 Normalise(Vector3 v) => v.LengthSquared() < 1e-12f ? v : Vector3.Normalize(v);
+
+    /// <summary>This frame's birds as loose meshes, appended to <paramref name="pieces"/> (the mesh faces along its own +z).</summary>
     public void AddPieces(List<DebrisPiece> pieces)
     {
-        foreach (var f in flocks)
+        foreach (var g in groups)
         {
-            if (f.Kind.Mesh.Length == 0) continue;
-            var heading = Quaternion.CreateFromAxisAngle(Vector3.UnitY, MathF.PI / 2 - f.Heading);
-            var bank = Quaternion.CreateFromAxisAngle(Vector3.UnitZ, f.Turn * 0.8f);
-            foreach (var b in f.Birds) pieces.Add(new DebrisPiece(f.Kind.Mesh, b.Scale, bank * heading, b.Position));
+            if (g.Kind.Mesh.Length == 0) continue;
+            string mesh = g.Kind.Texture.Length == 0 ? g.Kind.Mesh : g.Kind.Mesh + DebrisPiece.TextureMark + g.Kind.Texture;
+            foreach (var b in g.Birds) pieces.Add(new DebrisPiece(mesh, b.Scale, Orientation(b.Forward), b.Position));
         }
+    }
+
+    /// <summary>Ogre's <c>Quaternion::FromAxes</c> of x = up x forward, y = forward x x, z = forward.</summary>
+    static Quaternion Orientation(Vector3 forward)
+    {
+        var x = Normalise(Vector3.Cross(Vector3.UnitY, forward));
+        if (x == Vector3.Zero) x = Vector3.UnitX;
+        var y = Vector3.Cross(forward, x);
+        var m = new Matrix4x4(x.X, x.Y, x.Z, 0, y.X, y.Y, y.Z, 0, forward.X, forward.Y, forward.Z, 0, 0, 0, 0, 1);
+        return Quaternion.CreateFromRotationMatrix(m);
     }
 }

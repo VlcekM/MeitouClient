@@ -34,6 +34,9 @@ public sealed record BirdFlockData
 
     public int AmountIn(string group) => Amounts.GetValueOrDefault(group);
 
+    /// <summary>Whether the BIOME_GROUP lists this kind (even with an amount of 0).</summary>
+    public bool Lists(string group) => Amounts.ContainsKey(group);
+
     /// <summary>Every WILDLIFE_BIRDS record with the groups that list it.</summary>
     public static List<BirdFlockData> LoadAll(GameDatabase db)
     {

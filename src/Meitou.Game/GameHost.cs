@@ -579,6 +579,7 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
         }
         Meitou.Rendering.StageClock.Lap(Meitou.Rendering.StageClock.Host);   // the profiler: the host's frame so far, then the blood marks apart from the terrain's update
         UpdateBlood();
+        birdAspect = width / (float)Math.Max(height, 1);
         UpdateBirds();
         Meitou.Rendering.StageClock.Lap(Meitou.Rendering.StageClock.Blood, "blood marks");
         UpdateWeatherSource();
@@ -609,23 +610,46 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
         if (birds is null)
         {
             var kinds = Meitou.Data.Gameplay.BirdFlockData.LoadAll(db);
-            birds = new Meitou.Game.BirdFlocks(kinds, (x, z) => gpu.Terrain.HeightAt(x, z));
             try { birdAreas = Meitou.Data.Gameplay.BiomeMap.Create(Meitou.Data.Gameplay.BiomeGroupData.LoadAll(db), Meitou.Data.World.WeatherAreas.Load(install)); }
             catch (Exception e) when (e is IOException or FormatException) { birdAreas = null; }
+            birds = new Meitou.Game.BirdFlocks(kinds, (x, z) => gpu.Terrain.HeightAt(x, z), GroupIdOfCell);
         }
+        UpdateBirdAttractors(db);
         double now = realTime.Elapsed.TotalSeconds;
         float dt = double.IsNaN(birdClock) ? 0 : (float)(now - birdClock);
         birdClock = now;
-        string? group = null;
-        if (birdAreas is { } areas)
-        {
-            var (cx, cz) = Meitou.Data.World.WeatherAreas.CameraCellOf(camera.Eye.X, camera.Eye.Z);
-            if (areas.GroupOf(cx, cz) is >= 0 and var g) group = areas.Groups[g].Id;
-        }
-        birds.Update(dt, camera.Eye, group);
+        birds.Update(dt, camera.Eye, camera.Target, BirdFrustum());
         birds.AddPieces(gpu.BirdPieces);
         if (gpu.Debris is { } birdMeshes) gpu.BirdPieces.RemoveAll(p => birdMeshes.Extent(p.Mesh, null) is null);   // a mesh is loaded when first asked for
     }
+
+    long birdBuildingsRevision = -1;
+
+    /// <summary>The buildings' <c>bird attractor</c> references (the original's <c>FUN_140263700</c> on a building's creation): each standing building draws the kinds its record lists.</summary>
+    void UpdateBirdAttractors(Meitou.Data.GameDatabase db)
+    {
+        var snapshot = session.CurrentSnapshot;
+        if (snapshot.BuildingsRevision == birdBuildingsRevision) return;
+        birdBuildingsRevision = snapshot.BuildingsRevision;
+        var list = new List<Meitou.Game.BirdAttractor>();
+        foreach (var building in snapshot.Buildings)
+            if (building.Complete && db.Find(building.Record) is { } record)
+                foreach (var link in record.GetReferences("bird attractor"))
+                    list.Add(new Meitou.Game.BirdAttractor((building.Id, link.TargetStringId), link.TargetStringId, building.Position, link.Values.Value0, link.Values.Value1));
+        birds!.SetAttractors(list);
+    }
+
+    string? GroupIdOfCell(int cx, int cz) => birdAreas is { } areas && areas.GroupOf(cx, cz) is >= 0 and var g ? areas.Groups[g].Id : null;
+
+    /// <summary>The view's six planes, normals inwards and normalised (Ogre's cached frustum planes, as the birds' distance test takes them).</summary>
+    Vector4[] BirdFrustum()
+    {
+        var planes = Meitou.Rendering.WorldCamera.FrustumPlanes(camera.View * camera.Projection(birdAspect, camera.Near, camera.ViewDistance));
+        for (int i = 0; i < planes.Length; i++) planes[i] /= new Vector3(planes[i].X, planes[i].Y, planes[i].Z).Length();
+        return planes;
+    }
+
+    float birdAspect = 16f / 9;
 
     /// <summary>This frame's world draw overlaps the next world tick (set by the interactive loop; never in stills, the duel, recorded flights or the play benchmark).</summary>
     bool tickAhead;
