@@ -110,8 +110,8 @@ so part, blood, clot and KO-timer rates are per second of that sum. Hunger inste
 adds it again only on a frame where the character is inside that frame's round-robin update budget, the same frames that queue its slot 0x278.
 So the medical time is dt x (1 + the share of frames with a full update): between 1 and 2 x dt, set by how many characters share the budget.
 **Verified** in game for the KO timer (1.0.65, issue #134, 25 knock-outs over nine runs): it fell 1.44 to 2.0 x dt, steady within a knock-out,
-1.44 to 1.5 in 15 of them. The part and blood rates share the factor (same sum; not measured). A game hour is so 1200/11 x dt but only
-600/11 to 1200/11 medical seconds. Meitou: `MedicalState.Tick(TickSeconds)` runs 1 x dt (a known deviation: no single factor fits).
+1.44 to 1.5 in 15 of them. The part and blood rates share the factor (same sum; not measured). A game hour is 1200/11 s of dt but
+1200/11 to 2400/11 medical seconds. Meitou: `MedicalState.Tick(TickSeconds)` runs 1 x dt (a known deviation: no single factor fits).
 
 ### Part tick (`FUN_14064f5c0`, **Verified** decompile)
 
@@ -191,7 +191,7 @@ Death: vital h-s<-M, blood<=-capacity or hunger<=0. Preserve KO/coma/death disti
   then the roll), but the collapse check `FUN_140649320` then finds the stump down at posture 0 and sets posture 2, and the posture setter
   `FUN_1405c7e20` writes 3.0 to Character +0x4f8 on that change, which is the KO timer (KenshiLib 1ce4a16: `MedicalSystem` at Character +0x458,
   `knockoutTimer` at +0xa0). **Verified** in game (1.0.65, issue #134): five leg cuts (KenshiLib `amputate`, which is `FUN_14064edc0`, then
-  `reassessCollapseMode`), four of them standing, at toughness 0 and 50, full or low blood, all wrote exactly 3; an arm cut wrote nothing.
+  `reassessCollapseMode`), three of them standing (two with the posture not read), at toughness 0 and 50, full or low blood, all wrote exactly 3; an arm cut wrote nothing.
   Another posture: no KO.
 - A destroyed part not cut off (setting too low; a crushed limb met by a tick): no KO; the leg is down, so the character crawls at once (posture 2).
 - The put-down, stealth and shackle knock-outs call the same function with a factor and no roll (the blood term only, **Verified**).
