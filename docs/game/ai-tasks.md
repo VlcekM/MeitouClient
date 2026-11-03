@@ -892,14 +892,18 @@ update `FUN_140511130`, `Character::setupAI` `FUN_140621b70`; KenshiLib names **
   SENSE_NEUTRAL, both excluding SENSE_KO), each candidate in the looker's current town and passing the area test `FUN_140599f30`: (1) one whose status object (Character `+0x1a0`, vfunc 0x70) has `+0xac` above 0 or that the looker's squad memory
   tags AGGRESSOR (short tag 2, `FUN_140678960` → `FUN_140678830`); (2) one whose NPC class (status `+0xdc`) is not 1 law enforcement, 3 trader or 5 diplomat (class 2 military
   only when its squad's home town (`FUN_1407956a0` +0x30, **Observed**) is not the looker's town and its faction is not in that town's resident factions (`+0xf0`; whether the owner is in it is **Unknown**)), passing `FUN_14099b820`: not class 7; `+0xac` above 0, AGGRESSOR, or `+0xa0` above 0 with class 8 or an animal; and attacking
-  (`FUN_1405ca6f0` → `FUN_1405c92d0`: its status `+0x68` target hand is that character and it is in combat mode) a victim V that the looker regards as an ally (vfunc 0x3f0) or an
-  innocent (no bounty with the looker's faction, not class 7 or 8, V `+0x148` below 1, and the attacker's faction is a bandit one (`+0x34` 8) or has `+0x1d0` set, or V does not regard
-  the looker an enemy, is no animal and not class 6 or 8). The best by `chooseBestAttackTarget` `FUN_14059e300`; factor 1. **Verified** (base data, the four official files): the
+  (`FUN_1405ca6f0` → `FUN_1405c92d0`, **Verified**: the attacker's own posture below 3, its status `+0x68` target hand V, and the attacker in combat mode, or holding position outside
+  it within `DAT_141685344` of V; V's own combat mode is not read) a victim V that the looker regards as an ally (vfunc 0x3f0) or an
+  innocent (no bounty with the looker's faction, not class 7 or 8, V `+0x148` below 1, and the attacker's faction is a bandit one (`+0x34` 8) or `not real` (`+0x1d0`), or V does not regard
+  the looker an enemy, is no animal and not class 6 or 8). V `+0x148` is `BountyManager::committingCrime` (crimes at Character `+0xf0`, field `+0x58`; KenshiLib 1ce4a16 layout,
+  **Observed**): V has no crime in progress. So the police of a town defend a stranger, the player included, from bandits attacking it there.
+  The best by `chooseBestAttackTarget` `FUN_14059e300`; factor 1. **Verified** (base data, the four official files): the
   `Shop` and `Shop-24hr` packages list 34 for the Squad and Squad2 roles (0-24 h, weight 1), next to 143, so every vanilla shop guard has it and the shopkeeper (Leader) has 143 only.
   Meitou (`AggroSystem.FindTroubleMaker`): both passes over the looker's sense entries (not KO, seen or heard or not) in its current town (`AiSystem.TownAt`); "intends aggression" is the TaskData
   intended aggression (+0x24, below) of the candidate's current goal (in a fight its fight row, else its AI goal, else its running row; `TaskAggression.OfGoal`) and +0xa0 that of its running
-  row; the class-2 resident-factions test stands on the town's owner faction (**Unknown**); the victim test of pass 2 takes the looker's own or allied faction only (the innocent branch
-  is left out); the area test is not modelled.
+  row; the class-2 resident-factions test stands on the town's owner faction (**Unknown**); pass 2's victim is the attacker's fight target while the attacker fights
+  (`AggroSystem.AttacksProtected`; the hold-position variant is not modelled), an ally by faction or `AggroSystem.Innocent` (the bounty of the looker's faction, `CharacterCold.Pending`
+  for `+0x148`, "regards the looker an enemy" read as V's faction hostile to the looker's); the area test is not modelled.
 - TaskData +0x24, the intended aggression (**Verified**, registrations in `FUN_140319a60`; the AI's state broadcast `FUN_14050ed60` copies the current goal's to status +0xac, `getIntendedAggression`,
   and the running task's to +0xa0): 1 for 4 / 227 Attacking, 262 / 263 / 266 Shooting, 228 Taking out, 61 Attacking target unprovoked, 101 Assault, 248 Attacking Squad, 16, 21, 144, 41 Fighting for
   master, 146 / 235 Turret gunner, 131 / 244 food grabbing; 0.5 for 13 Attacking attackers of; 0 for 34, 15, 143, 288, 32 and most rows; negative for the lockpicking, medic, repair, robotics and
