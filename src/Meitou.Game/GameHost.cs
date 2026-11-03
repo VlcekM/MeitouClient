@@ -50,6 +50,8 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
     long lastRepath;
     /// <summary>Seconds between <see cref="Meitou.Simulation.RepathCommand"/>s at least: zones go live in runs along a long walk, and are sent together (engine choice).</summary>
     const double RepathCoalesceSeconds = 1;
+    /// <summary>The far cadence (docs/simulation.md "Far cadence"): a character far from the camera and from every player character steps once in this many ticks.</summary>
+    const int FarTickPeriod = 4;
     readonly Dictionary<Meitou.Data.World.ZoneCoordinate, long> navZones = [];
     PlayerInterface player = null!;
     Meitou.Simulation.Squad? playerSquad;
@@ -140,10 +142,11 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
             simulation: worldSettings = new Meitou.Simulation.WorldSettings
             {
                 Seed = g.Seed, MinPartitionSize = 32, Threads = Math.Max(1, config.SimThreads ?? Math.Clamp(Environment.ProcessorCount / 2, 1, 8)),
-                Sunrise = (float)clock.Sunrise, Sunset = (float)clock.Sunset,
+                Sunrise = (float)clock.Sunrise, Sunset = (float)clock.Sunset, FarTickPeriod = FarTickPeriod,
             },
             systems: systems, walkability: walkability);
         session.World.BenchFacingFix = config.FixBenchFacing;
+        if (gpu.Characters is { } nearChars) session.World.NearRadius = nearChars.NearReach;   // every drawn character steps every tick (docs/simulation.md "Far cadence")
         BootPlayer(display, interactive);
     }
 

@@ -537,10 +537,10 @@ public sealed class MovementSystem(PathService paths) : ITickSystem, IDisposable
         var table = world.Characters;
         var prev = table.Previous;
         var next = table.Next;
-        float dt = world.TickSeconds;
         for (int i = part.Start; i < part.End; i++)
         {
-            if (!prev[i].Alive) continue;
+            if (!prev[i].Alive || !world.Steps(i)) continue;
+            float dt = world.StepSeconds(i);   // a far character's step covers the ticks since its last (the far cadence, World.StepTicks)
             ref var n = ref next[i];
             var task = (CharacterTask)n.Task;
             var flags = (MoveFlags)n.Flags;
@@ -580,7 +580,7 @@ public sealed class MovementSystem(PathService paths) : ITickSystem, IDisposable
                     if (heading == Vector2.Zero) heading = leadDir;
                     else if (moving)
                     {
-                        heading += (leadDir - heading) * (HeadingEase * dt);
+                        heading += (leadDir - heading) * MathF.Min(1, HeadingEase * dt);
                         heading = heading.LengthSquared() > 1e-8f ? Vector2.Normalize(heading) : leadDir;
                     }
                     cold.FollowHeading = heading;
@@ -767,10 +767,10 @@ public sealed class MovementSystem(PathService paths) : ITickSystem, IDisposable
         var prev = table.Previous;
         var next = table.Next;
         var walk = world.Walkability;
-        float dt = world.TickSeconds;
         for (int i = part.Start; i < part.End; i++)
         {
-            if (!prev[i].Alive) continue;
+            if (!prev[i].Alive || !world.Steps(i)) continue;
+            float dt = world.StepSeconds(i);   // a far character's step covers the ticks since its last (the far cadence, World.StepTicks)
             ref readonly var p = ref prev[i];
             ref var n = ref next[i];
             var cold = table.Cold(i)!;

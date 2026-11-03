@@ -119,7 +119,9 @@ public sealed class SightMap
         if (place.Length < count)
         {
             int size = Math.Max(count, place.Length * 2);
+            int was = place.Length;
             Array.Resize(ref place, size);
+            place.AsSpan(was).Fill(-1);
             Array.Resize(ref onTop, size);
             Array.Resize(ref light, size);
             Array.Resize(ref floorOf, size);
@@ -129,6 +131,7 @@ public sealed class SightMap
         }
         for (int s = 0; s < count; s++)
         {
+            if (!world.Steps(s)) continue;   // the far cadence: a skipped character keeps its last place, posture and facing
             int was = place[s];
             place[s] = -1;
             low[s] = prev[s].Alive && table.Cold(s)?.Medical is { Prone: true };

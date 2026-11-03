@@ -335,6 +335,8 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
     /// </summary>
     public bool InReach(Vector3 position, Vector3 eye) => Vector3.DistanceSquared(position, eye) <= (DrawDistance + ReachMargin) * (DrawDistance + ReachMargin);
     const float ReachMargin = 2000;
+    /// <summary>The distance within which a character may be drawn this frame (<see cref="DrawDistance"/> plus the margin): the simulation's near radius for its far cadence.</summary>
+    public float NearReach => DrawDistance + ReachMargin;
 
     /// <summary>
     /// The planes of the view the characters are shown in this frame (the host sets them before <see cref="Update"/>), for the off-screen rule (<see cref="Shown"/>);

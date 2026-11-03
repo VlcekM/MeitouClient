@@ -210,12 +210,12 @@ public sealed class AnimationSystem(AnimationLibrary library, AnimationLengths l
         var table = world.Characters;
         var prev = table.Previous;
         var next = table.Next;
-        float dt = world.TickSeconds;
         var wantedLower = lowerScratch ??= [];
         var wantedUpper = upperScratch ??= [];
         for (int i = part.Start; i < part.End; i++)
         {
-            if (!prev[i].Alive) continue;
+            if (!prev[i].Alive || !world.Steps(i)) continue;
+            float dt = world.StepSeconds(i);   // a far character's step covers the ticks since its last (the far cadence, World.StepTicks)
             var cold = table.Cold(i)!;
             var a = cold.Animation ??= new CharacterAnimation();
             var v = next[i].Velocity;

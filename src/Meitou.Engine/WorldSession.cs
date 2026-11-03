@@ -88,6 +88,8 @@ public sealed class WorldSession : IDisposable
     public InputState Input { get; } = new();
     public InputBindings Bindings { get; }
     public CameraRig Camera { get; }
+    /// <summary>The eye the simulation takes as the camera's (<see cref="World.ViewPosition"/>) instead of the rig's, while the host holds the view elsewhere (a character flight, a cinema take); null: the rig's.</summary>
+    public System.Numerics.Vector3? ViewEye { get; set; }
     /// <summary>Where the frame is between the previous and the current control tick (camera interpolation).</summary>
     public float Alpha => (float)Ticks.Alpha;
     /// <summary>The speed: 0 while paused by the player, else 1, 2 or 5.</summary>
@@ -151,7 +153,7 @@ public sealed class WorldSession : IDisposable
         double seconds = Clock.GameSeconds;
         for (int i = 0; i < count; i++, seconds += Simulation.TickSeconds) starts[i] = (Clock.TotalHoursAt(seconds), Clock.IsDaytimeAt(seconds));
         World.PhysicsSpeed = (float)Simulation.Speed;   // the ragdoll physics steps in real time
-        World.ViewPosition = Camera.Current.Eye;
+        World.ViewPosition = ViewEye ?? Camera.Current.Eye;
         runner ??= new TickRunner();
         runner.Start(World, starts);
         running = true;
@@ -247,7 +249,7 @@ public sealed class WorldSession : IDisposable
         World.GameHours = Clock.TotalHours;
         World.Daytime = Clock.IsDaytime;
         World.PhysicsSpeed = (float)(Simulation.Speed > 0 ? Simulation.Speed : Simulation.LastNonZeroSpeed);   // the ragdoll physics steps in real time
-        World.ViewPosition = Camera.Current.Eye;
+        World.ViewPosition = ViewEye ?? Camera.Current.Eye;
         long t0 = System.Diagnostics.Stopwatch.GetTimestamp();
         World.RunTick(publish);
         Measure(System.Diagnostics.Stopwatch.GetElapsedTime(t0).TotalMilliseconds);

@@ -580,6 +580,7 @@ sealed partial class GameHost
             cinema.Advance(cinema.FrameTime(dt));   // a flight through the keys moves the camera (and takes it from the rig)
             if (tour.Active && !tour.Advance(dt, camera, TourPosition)) EndTour();
             gpu.Ahead = tour.ArrivalEye(TourPosition);   // the streaming loads the landing view during the flight
+            session.ViewEye = cinemaHolds ? camera.Eye : null;   // the simulation's far cadence follows the flying camera, not the rig it left
             gpu.Kept = !config.KeepTexturesAtCharacters ? []
                 : config.KeepTexturesAtAllSquads ? [.. session.CurrentSnapshot.PlayerSquads.SelectMany(s => s.Members).Select(TourPosition).OfType<Vector3>()]
                 : [.. player.SquadBarMembers().Select(c => TourPosition(c.Id)).OfType<Vector3>()];

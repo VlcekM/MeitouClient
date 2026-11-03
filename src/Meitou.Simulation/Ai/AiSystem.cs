@@ -125,9 +125,9 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         int hour = world.Hour;
         for (int i = part.Start; i < part.End; i++)
         {
-            if (!prev[i].Alive || table.Cold(i) is not { Ai: { Squad: var squad } mind } cold || (mind.Engine ? EngineBoard : squad.Ai) is not { } board) continue;
-            // Cheapest test first: most characters are not due this tick.
-            if ((world.Tick + i) % every != 0 && mind.Version == board.Version && !mind.Replan) continue;
+            if (!prev[i].Alive || !world.Steps(i) || table.Cold(i) is not { Ai: { Squad: var squad } mind } cold || (mind.Engine ? EngineBoard : squad.Ai) is not { } board) continue;
+            // Cheapest test first: most characters are not due this tick (a far character's step covers several ticks: due when its turn fell in them, World.StepTicks).
+            if ((world.Tick + i) % every >= world.StepTicks(i) && mind.Version == board.Version && !mind.Replan) continue;
             mind.Replan = false;
             var id = table.IdOf(i);
             var roles = mind.Engine ? mind.EngineGoals : ObeyedRoles(world, squad, cold) ?? board.Roles[(int)RoleOf(squad, id, cold)];

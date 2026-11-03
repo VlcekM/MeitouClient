@@ -184,7 +184,7 @@ public sealed class DecisionSystem
         var table = world.Characters;
         for (int i = 0; i < table.HighWater; i++)
         {
-            if (!table.Next[i].Alive || table.Cold(i) is not { } cold || !Decides(cold)) continue;
+            if (!table.Next[i].Alive || !world.Steps(i) || table.Cold(i) is not { } cold || !Decides(cold)) continue;   // a far character decides at its step (the far cadence)
             if (cold.SavedOrders is not null) Saving.OrderSave.Restore(world, i, cold);
             bool front = cold.OrderQueue.Front is { } f && (!f.Tried || f.Started && !PlayerOrders.Runs(world, i, f));
             bool due = !paused && (world.Tick + i) % Production.ProductionSystem.JobCheckTicks == 0 && ReAsked(world, i, cold);

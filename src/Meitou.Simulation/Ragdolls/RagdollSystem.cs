@@ -204,6 +204,8 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
         for (int i = 0; i < next.Length; i++)
         {
             if (!next[i].Alive || table.Cold(i) is not { } cold) continue;
+            // The far cadence (World.Steps): a far character skipped this tick is left as it is, unless its ragdoll is moving (its pins follow the animation every physics step).
+            if (!world.Steps(i) && !(ragdolls.TryGetValue(table.IdOf(i), out var moving) && !moving.Frozen && moving.Mask != RagdollPart.None)) continue;
             // Meitou (BodyOptions.AdvancedRagdolls): a new whole-body ragdoll goes on as the character moved, pushed by the blow that put it down (CombatSystem.Knockdown), else as it moved last tick.
             bool advanced = options is { AdvancedRagdolls: true };
             var (launch, push) = !advanced ? default : cold.Blow ?? (table.Previous[i].Velocity, Vector3.Zero);

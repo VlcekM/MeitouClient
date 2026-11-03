@@ -156,7 +156,7 @@ public sealed partial class CombatSystem
         List<MedicalEvent>? events = null;
         for (int i = part.Start; i < part.End; i++)
         {
-            if (!prev[i].Alive) continue;
+            if (!prev[i].Alive || !world.Steps(i)) continue;   // the far cadence: a skipped fighter's tick timers run on, it acts on them at its step
             var cold = table.Cold(i)!;
             Body(world, i, cold, ref write[i], now, dt, ref events);
             inFight[i] = cold.InCombat;
@@ -252,7 +252,7 @@ public sealed partial class CombatSystem
         float dt = world.TickSeconds;
         for (int i = part.Start; i < part.End; i++)
         {
-            if (!prev[i].Alive) continue;
+            if (!prev[i].Alive || !world.Steps(i)) continue;
             var cold = table.Cold(i)!;
             if (cold.Fighter is null || cold.Stats is null || cold.Medical is null || cold.Race is null) continue;
             ref var s = ref write[i];
@@ -336,7 +336,7 @@ public sealed partial class CombatSystem
             {
                 if (s.ReactTech >= 0 && now >= s.ReactStart + s.ReactTicks) s.ReactTech = -1;
                 if (s.ReactTech < 0 && s.AttackTech < 0) React(world, i, ref s, cold, key, now, dt);
-                TickRanged(world, i, ref s, cold, effects, now, dt);
+                TickRanged(world, i, ref s, cold, effects, now, world.StepSeconds(i));   // its timers are seconds: a far character's step covers several ticks
                 continue;
             }
 

@@ -149,7 +149,7 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
         List<MedicalEvent>? events = null;
         for (int i = part.Start; i < part.End; i++)
         {
-            if (!prev[i].Alive) continue;
+            if (!prev[i].Alive || !world.Steps(i)) continue;
             var cold = table.Cold(i)!;
             if (cold.Medical is not { } medical || cold.Race is not { } race || cold.Stats is not { } stats) continue;
             ref var n = ref next[i];
@@ -164,8 +164,8 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
             if (medical.Dead) continue;
             // At 2x and 5x (World.SpeedSteps) a character no fight, injury or player touches steps on its slot's turn with the time since its last step: the rates come
             // out the same and the body costs per real second what it does at 1x. The rest step every tick, so knock-outs, deaths and the HUD keep their timing.
-            int steps = world.SpeedSteps;
-            if (steps > 1 && !cold.IsPlayer && !cold.InCombat && !medical.Incapacitated && !(medical.Bleeding > 0) && i % steps != world.Tick % steps
+            int steps = Math.Max(world.SpeedSteps, world.StepTicks(i));   // a far character's step covers the ticks since its last (the far cadence, World.StepTicks)
+            if (steps > 1 && world.StepTicks(i) == 1 && !cold.IsPlayer && !cold.InCombat && !medical.Incapacitated && !(medical.Bleeding > 0) && i % steps != world.Tick % steps
                 && cold.BodyStepTick >= 0 && world.Tick - cold.BodyStepTick < steps) continue;
             float dt = cold.BodyStepTick < 0 ? world.TickSeconds : Math.Clamp(world.Tick - cold.BodyStepTick, 1, steps) * world.TickSeconds;
             cold.BodyStepTick = world.Tick;

@@ -273,7 +273,7 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
         float reach = Settings.Reach;
         for (int i = part.Start; i < part.End; i++)
         {
-            if (!prev[i].Alive || next[i].Task != (byte)CharacterTask.Treat) continue;
+            if (!prev[i].Alive || !world.Steps(i) || next[i].Task != (byte)CharacterTask.Treat) continue;
             var cold = table.Cold(i)!;
             if (cold.Medical is not { Incapacitated: false } medical || cold.InCombat || medical.Aggregates().BothArmsDisabled || cold.StaggeredUntil > world.Tick) continue;
             var target = cold.TreatTarget;
@@ -312,7 +312,7 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
             Splint(world, m, medicCold, medical, stats, medicRace, body, race);
             return;
         }
-        float dt = world.TickSeconds;
+        float dt = world.StepSeconds(m);   // a far medic's step covers the ticks since its last (the far cadence, World.StepTicks)
         // The skill and trained stat: medic with a first aid kit, robotics with a robot repair kit; treating oneself x0.8 (FUN_14033c5a0, Task_FirstAid's kit phase).
         StatsEnumerated StatOf(bool robotKit) => robotKit ? StatsEnumerated.Robotics : StatsEnumerated.Medic;
         float SkillOf(bool robotKit) => stats[StatOf(robotKit)] * medical.StatMultiplier(StatOf(robotKit)) * (m == p ? 0.8f : 1);

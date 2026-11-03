@@ -62,6 +62,11 @@ public sealed record WorldSettings
     /// <summary>The CONSTANTS <c>sunrise</c> and <c>sunset</c> (game hours) the daylight factor ramps at (<see cref="SightMap.Daylight"/>).</summary>
     public float Sunrise { get; init; } = 5;
     public float Sunset { get; init; } = 23;
+    /// <summary>
+    /// The far cadence (docs/simulation.md "Far cadence", engine choice): a character far from the camera and from every player character steps once in this many
+    /// ticks, its step covering the ticks since its last. 1 (the default, and headless worlds without a <see cref="World.ViewPosition"/>): everyone steps every tick.
+    /// </summary>
+    public int FarTickPeriod { get; init; } = 1;
 }
 
 /// <summary>
@@ -79,6 +84,10 @@ public sealed partial class World : IDisposable
     readonly EffectBuffer[] buffers;
     readonly List<Effect> effects = [];
     Partition[] partitions = [];
+    // The far cadence (RefreshCadence): per slot, the ticks this tick's step covers (0: skipped this tick) and the tick of its last step.
+    byte[] stepTicks = [];
+    long[] lastStep = [];
+    readonly List<System.Numerics.Vector3> playerSpots = [];
     // Per system, built once when it is added: which parallel phases it implements and the delegates that run them (no closure per tick).
     readonly List<SystemPhases> phases = [];
     readonly List<SimCommand> deferred = [];
@@ -230,6 +239,21 @@ public sealed partial class World : IDisposable
     /// An input like <see cref="GameHours"/>: not hashed, not saved.
     /// </summary>
     public System.Numerics.Vector3? ViewPosition { get; set; }
+    /// <summary>
+    /// Within this distance of <see cref="ViewPosition"/> a character is near for the far cadence (<see cref="WorldSettings.FarTickPeriod"/>): the renderer's character draw
+    /// distance plus its reach margin, so every drawn character steps every tick. The host sets it; an input like <see cref="ViewPosition"/>.
+    /// </summary>
+    public float NearRadius { get; set; } = 8000;
+    /// <summary>Within this distance of a player character everyone is near for the far cadence (engine choice: what the player's people fight, trade and talk with).</summary>
+    public const float PlayerNearRadius = 1500;
+    /// <summary>The characters skipped this tick by the far cadence (F12).</summary>
+    public int FarSkipped { get; private set; }
+    /// <summary>Whether <paramref name="slot"/> steps this tick (far cadence): the parallel systems, the ragdolls, the sight map and the decisions leave a skipped slot as it is.</summary>
+    public bool Steps(int slot) => StepTicks(slot) != 0;
+    /// <summary>The ticks a stepping slot's step covers this tick (1 for a near character; up to <see cref="WorldSettings.FarTickPeriod"/> for a far one), 0 when skipped. A slot the tick has not seen yet (outside a tick) steps.</summary>
+    public int StepTicks(int slot) => slot < stepTicks.Length ? stepTicks[slot] : 1;
+    /// <summary>The game seconds a stepping slot's step covers this tick: the systems' <c>dt</c> for it.</summary>
+    public float StepSeconds(int slot) => StepTicks(slot) * TickSeconds;
     /// <summary>The integer hour of day, 0 to 23 (the game's sky controller hour that the AI compares windows with).</summary>
     public int Hour => Math.Clamp((int)(((GameHours % 24) + 24) % 24), 0, 23);
     public float TickSeconds => Settings.TickSeconds;
@@ -302,6 +326,7 @@ public sealed partial class World : IDisposable
         // 2. Schedule (serial): the grid of the last tick's positions, then the systems.
         table.Phase = TablePhase.Schedule;
         Grid.Build(table.Previous);
+        RefreshCadence();
         prof?.Lap(TickProfile.Grid);
         Sight.Update(this);
         prof?.Lap(TickProfile.Sight);
@@ -458,6 +483,65 @@ public sealed partial class World : IDisposable
     public void RunTicks(int ticks)
     {
         for (int i = 0; i < ticks; i++) RunTick();
+    }
+
+    /// <summary>
+    /// The far cadence (docs/simulation.md "Far cadence"): a character near the camera (<see cref="NearRadius"/> of <see cref="ViewPosition"/>), a player character
+    /// or anyone within <see cref="PlayerNearRadius"/> of one steps every tick; the rest step once in <see cref="WorldSettings.FarTickPeriod"/> ticks, spread by
+    /// slot, each step covering the ticks since the last (so a character crossing the boundary loses no time). Serial, from the last tick's positions.
+    /// </summary>
+    void RefreshCadence()
+    {
+        var table = Characters;
+        int n = table.HighWater, period = Settings.FarTickPeriod;
+        if (stepTicks.Length < n)
+        {
+            int size = Math.Max(n, stepTicks.Length * 2);
+            int was = stepTicks.Length;
+            Array.Resize(ref stepTicks, size);
+            Array.Resize(ref lastStep, size);
+            stepTicks.AsSpan(was).Fill(1);
+        }
+        if (period <= 1 || ViewPosition is not { } eye)
+        {
+            if (FarSkipped > 0) stepTicks.AsSpan(0, n).Fill(1);
+            FarSkipped = 0;
+            return;
+        }
+        var prev = table.Previous;
+        playerSpots.Clear();
+        for (int i = 0; i < n; i++)
+            if (prev[i].Alive && table.Cold(i) is { IsPlayer: true }) playerSpots.Add(prev[i].Position);
+        float near2 = NearRadius * NearRadius;
+        int skipped = 0;
+        for (int i = 0; i < n; i++)
+        {
+            if (!prev[i].Alive)
+            {
+                stepTicks[i] = 1;
+                lastStep[i] = Tick;
+                continue;
+            }
+            var at = prev[i].Position;
+            bool near = (Tick + i) % period == 0 || System.Numerics.Vector3.DistanceSquared(at, eye) <= near2 || table.Cold(i) is { IsPlayer: true } || NearPlayer(at);
+            if (!near)
+            {
+                stepTicks[i] = 0;
+                skipped++;
+                continue;
+            }
+            stepTicks[i] = (byte)Math.Clamp(Tick - lastStep[i], 1, period);
+            lastStep[i] = Tick;
+        }
+        FarSkipped = skipped;
+    }
+
+    bool NearPlayer(System.Numerics.Vector3 at)
+    {
+        const float r2 = PlayerNearRadius * PlayerNearRadius;
+        foreach (var p in playerSpots)
+            if (System.Numerics.Vector3.DistanceSquared(at, p) <= r2) return true;
+        return false;
     }
 
     void MakePartitions()

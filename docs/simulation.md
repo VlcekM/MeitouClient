@@ -60,6 +60,21 @@ real time (30 s); population unload grace uses game time (towns 60 s, roaming 10
 with simulation alpha; camera uses control alpha. Positions are float world coordinates;
 rendering is camera-relative.
 
+### Far cadence
+
+**Engine choice** (`WorldSettings.FarTickPeriod`, the game 4; 1 in tests, goldens and headless worlds without a `World.ViewPosition`, where nothing changes).
+Each tick, after the grid (serial, from the last tick's positions), every character is near or far: near when within `World.NearRadius` of the camera eye (the host sets
+it to the character renderer's draw distance plus its reach margin, 8000, so every drawn character steps every tick), a player character, or within
+`World.PlayerNearRadius` (1500) of one. A far character steps once in `FarTickPeriod` ticks, on its slot's turn (`(Tick + slot) % period`), and its step covers the
+ticks since its last (`World.StepTicks`, at most the period), so one that crosses the boundary loses no time. `World.Steps(slot)` is honoured by the parallel
+per-character loops (AI think, movement think and move, combat body step, act and approach, first aid, body, animation), the ragdoll setup loop (a moving ragdoll steps
+every tick: its pins follow the animation), the sight map's place probes and the decisions pass; their `dt` for a far character is `World.StepSeconds` where it
+integrates time (movement, animation, the ranged timers, the body's medical step), while combat's tick timers (ready, stun, get-up ticks) stay absolute ticks, so a
+far fighter acts on them at its next step. A cadence inside a stepped loop tests "due within the step" (`(Tick + i) % every < StepTicks(i)`, the AI's think), not
+`== 0`, else a period coprime with the cadence starves it. The serial sweeps (spread sweeps, slow world) visit every character as before. Known edges: a near fighter
+against a far one has an opponent that reacts up to the period late; a far character's snapshot is published every tick but changes only at its steps (not drawn:
+it is beyond the draw distance). Motivation and numbers: [bench](bench.md) "character flights".
+
 ## Threading
 
 Tick order: Inputs → Schedule → Think → Move → Act → ordered Apply → SlowWorld → Publish.
