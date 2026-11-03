@@ -128,8 +128,8 @@ public sealed partial class CombatSystem
         return q.Best;
     }
 
-    /// <summary>The crippled flag (Character vslot 0x360, <c>isCrippled</c>,): crawling, or unable to attack.</summary>
-    public static bool IsCrippled(CharacterCold c) => c.Medical is { Crawling: true } || c.Fighter is not { CanAttack: true };
+    /// <summary>The crippled flag of the target score (<c>FUN_14059e300</c> :249-252): vslot 0x360 (<c>isCrippled</c>: crawling, or unable to attack, stand-in) or the maimed test <c>FUN_140644170</c> (<see cref="Bodies.MedicalState.Maimed"/>).</summary>
+    public static bool IsCrippled(CharacterCold c) => c.Medical is { Crawling: true } or { Maimed: true } || c.Fighter is not { CanAttack: true };
 
     void Consider(World world, ref Choice q, int c, bool protect)
     {

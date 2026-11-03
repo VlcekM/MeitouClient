@@ -217,19 +217,6 @@ public sealed partial class FirstAidSystem
     /// <summary>The patient is being eaten (<c>isGettingEaten</c>, +0x279 &amp; 7): passes 1, 2 and 4 of the medic finder skip it; pass 3, pass 5 and the splint finder do not.</summary>
     static bool Eaten(CharacterCold patient) => patient.Medical is { EatenCountdown: > 0 };
 
-    /// <summary>The patient's injuries make an NPC medic pass it by (<c>FUN_140644170</c>, <b>Verified</b>): a stump on a leg, or on both arms.</summary>
-    static bool Maimed(MedicalState med)
-    {
-        int arms = 0;
-        foreach (var p in med.Parts)
-        {
-            if (p.Limb != LimbState.Stump) continue;
-            if (p.Template.Type == BodyPartType.Leg) return true;
-            if (p.Template.Type == BodyPartType.Arm) arms++;
-        }
-        return arms >= 2;
-    }
-
     /// <summary>The patients being treated now as (medic, patient) slot pairs (the blackboard's sub-target list).</summary>
     static List<(int Medic, int Patient)> Treated(CharacterTable table)
     {
@@ -246,7 +233,7 @@ public sealed partial class FirstAidSystem
     /// also waits while its squad fights or it carries someone (engine stand-ins for the goal's desire <c>FUN_140998410</c>: 0.01 with enemies about, 0.1 while carrying someone, else 1). Returns the best patient's slot and score, -1 for none.
     /// A patient whose (medic, patient) pair is already on the sub-target list (<paramref name="taken"/>) is returned at once from pass 1 or 2 with a score of at least 0.95; passes 1, 2 and 4 skip a patient being eaten.
     /// <list type="number">
-    /// <item><b>Allies</b> (sensed allies, not dead): not a robot race unless robotics; not carried by an enemy of the medic; not fighting; an NPC medic skips the maimed (<see cref="Maimed"/>). Score =
+    /// <item><b>Allies</b> (sensed allies, not dead): not a robot race unless robotics; not carried by an enemy of the medic; not fighting; an NPC medic skips the maimed (<see cref="MedicalState.Maimed"/>). Score =
     /// <see cref="Need"/> x <see cref="Nearness"/>; the same faction always counts, another one at 0.1 and, for a player medic, only with Heal Allies; x 0.05 when another medic works on it.
     /// The medic itself scores its plain need. The highest wins.</item>
     /// <item><b>Strangers</b>, when pass 1 found nobody: sensed neutral, knocked-out, imprisoned or crawling ones that are no enemy; not an animal or a robot race, not of a not-real faction, not fighting.
@@ -312,7 +299,7 @@ public sealed partial class FirstAidSystem
                 if (!next[s].Alive || (next[s].Position - origin).LengthSquared() > range2 || table.Cold(s) is not { } other || Skip(s, other)) continue;
                 if (KitNeed(cold, s, other, organic, robotic) <= 0) continue;   // Need's 0: before the relation tests
                 if (!Allied(world, i, s) || EnemyOf(world, i, s) || other.Race!.IsRobot && !robotics || other.InCombat || Eaten(other) || CarriedByEnemy(other) || Dist2(s) > range2) continue;
-                if (!cold.IsPlayer && Maimed(other.Medical!)) continue;
+                if (!cold.IsPlayer && other.Medical!.Maimed) continue;
                 float need = Need(world, i, s, organic, robotic);
                 if (need <= 0) continue;
                 float score = need * Nearness(world, i, cold, s);

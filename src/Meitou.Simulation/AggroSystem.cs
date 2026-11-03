@@ -1309,7 +1309,7 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
             Distance = MathF.Sqrt(d2),
             Fighting = c.InCombat,
             Gunner = c.Gunning is not null,
-            Crippled = c.Medical!.Crawling || c.Fighter is not { CanAttack: true },
+            Crippled = c.Medical!.Crawling || c.Medical.Maimed || c.Fighter is not { CanAttack: true },
             Peaceful = !c.InCombat && !IsEnemy(s.Relations, c.Faction, s.Faction),
             GettingUp = CharacterFacts.GettingUp(c, (long)s.Tick),
         };

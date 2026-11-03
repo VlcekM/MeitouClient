@@ -74,6 +74,24 @@ public sealed partial class MedicalState
     bool legKoKnown;
 
     /// <summary>
+    /// The injuries make an NPC medic pass the patient by, and count it crippled in the target score (<c>FUN_140644170</c>, <b>Verified</b>): a stump on a leg, or on both arms.
+    /// </summary>
+    public bool Maimed
+    {
+        get
+        {
+            int arms = 0;
+            foreach (var p in Parts)
+            {
+                if (p.Limb != LimbState.Stump) continue;
+                if (p.Template.Type == BodyPartType.Leg) return true;
+                if (p.Template.Type == BodyPartType.Arm) arms++;
+            }
+            return arms >= 2;
+        }
+    }
+
+    /// <summary>
     /// The original's forced crawl (posture 2, <c>FUN_140649320</c>, <b>Observed</b>): a conscious character with a stats object (not an animal) any of whose legs is down by
     /// <see cref="HealthPart.LegDown"/>. One leg is enough; it moves at <see cref="Speed.CrawlSpeed"/> and plays the grounded clips. Read live, so a hit shows at once.
     /// </summary>
