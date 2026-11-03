@@ -156,7 +156,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
             else if (HasGates(world, town)) { why = "outside an occupied town's walls"; return 0; }
         }
         if (!hungry) { why = "not hungry"; return 0; }
-        if (Store(world, at, town, owner: c.Faction, animal: animal, race: race) is not var (storeId, spot)) { why = "no store with food"; return 0; }
+        if (Store(world, at, town, owner: c.Faction, animal: animal, race: race, asker: c) is not var (storeId, spot)) { why = "no store with food"; return 0; }
         store = (town, storeId, spot);
         return desire;
     }
@@ -269,7 +269,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
                 var town = AiSystem.TownAt(data, world, at);
                 // 131 Looting food and 243 below search the blackboard's target town (Blackboard.Destination), else the current one, else the 3 x 3 zone cells round the member (FUN_1408cb650).
                 var foodTown = squad.Ai is { Destination.IsNone: false } target ? target.Destination : town;
-                if (loot[role] == 1 && !HoldsFood(cold) && Store(world, at, foodTown, cold.Faction) is var (lootId, lootSpot))
+                if (loot[role] == 1 && !HoldsFood(cold) && Store(world, at, foodTown, cold.Faction, asker: cold) is var (lootId, lootSpot))
                 {
                     cold.Engaged = true;
                     duties.Add(new TownDuty { Member = member, Faction = cold.Faction, Town = town, Kind = TownDutyKind.LootFood, Target = lootId, Goal = lootSpot });
@@ -303,7 +303,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
                 }
                 // 243 needs no own town (FUN_1408cb650); a player-side member takes only from its own faction's stores (FUN_1408dac20). 244 starts only with room for the item (state 82,
                 // FUN_14059bd80: the inventory, else the worn bag) and with no sensed ally fighting (state !12, AiSystem.AlliesFighting).
-                if (food[role] == 1 && !HoldsFood(cold) && Store(world, at, foodTown, owner: cold.Faction == world.Player.Faction ? cold.Faction : -1) is var (id, spot) && FoodFits(world, id, cold)
+                if (food[role] == 1 && !HoldsFood(cold) && Store(world, at, foodTown, owner: cold.Faction == world.Player.Faction ? cold.Faction : -1, asker: cold) is var (id, spot) && FoodFits(world, id, cold)
                     && world.SystemOf<AiSystem>()?.AlliesFighting(world, slot) != true)
                 {
                     cold.Engaged = true;
@@ -485,7 +485,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     /// of the player town, or a container that is not locked inside the town. Its id and where the member walks. With <paramref name="owner"/> (a player-side run) only stores of that
     /// faction; for an <paramref name="animal"/> raw food counts too and a store inside another building is skipped (the finder's animal tests).
     /// </summary>
-    (string Id, Vector2 Spot)? Store(World world, Vector3 at, CampaignTown town, int looter = -1, int owner = -1, bool animal = false, RaceData? race = null)
+    (string Id, Vector2 Spot)? Store(World world, Vector3 at, CampaignTown town, int looter = -1, int owner = -1, bool animal = false, RaceData? race = null, CharacterCold? asker = null)
     {
         var here = Flat(at);
         (string, Vector2)? best = null;
@@ -494,13 +494,13 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
             foreach (var m in world.Machines.All)
             {
                 if (m.Storage is not { } s || !s.Items.Any(i => Edible(i, animal, race)) || world.Buildings.Find(m.Site) is not { Complete: true } site || !InScope(world, town, at, CampaignTown.OfPlayer(site.Town), site.Position)) continue;
-                if (owner >= 0 && site.Owner != owner || animal && site.Parent is not null) continue;
+                if (owner >= 0 && site.Owner != owner || animal && site.Parent is not null || asker?.IsUnreachable(m.Site, world.Tick) == true) continue;
                 float d = Vector2.DistanceSquared(here, Flat(site.Position));
                 if (d < bestD) (best, bestD) = ((m.Site, Flat(site.Position)), d);
             }
         foreach (var f in world.Fixtures.All)
         {
-            if (looter >= 0 && f.Owner == looter || owner >= 0 && f.Owner != owner) continue;
+            if (looter >= 0 && f.Owner == looter || owner >= 0 && f.Owner != owner || asker?.IsUnreachable(f.Id, world.Tick) == true) continue;
             if (f.Contents is not { } c || f.Lock is { EffectivelyLocked: true } || !c.Items.Any(i => Edible(i, animal, race)) || !InScope(world, town, at, AiSystem.TownAt(data, world, f.Position), f.Position)) continue;
             float d = Vector2.DistanceSquared(here, Flat(f.Position));
             if (d < bestD) (best, bestD) = ((f.Id, Flat(f.Position)), d);
@@ -631,7 +631,12 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
             return End(world, d);
         }
         if (walking) return true;
-        if (++d.Tries > Settings.Walks) return End(world, d);
+        if (++d.Tries > Settings.Walks)
+        {
+            // The walk failed for good: the store goes on the AI's give-up list (pathFailures, 20 s) the finders skip (FUN_1405b0290 in FUN_1408dac20).
+            if (d.Target is { } failed) gc.NoteUnreachable(failed, world.Tick + (long)MathF.Ceiling(Construction.ConstructionSystem.UnreachableSeconds / world.TickSeconds));
+            return End(world, d);
+        }
         TaskStart.Walk(world, g, d.Goal, SpeedMode.Walk, RowOf(d.Kind), TaskSource.Goal);
         return true;
     }
