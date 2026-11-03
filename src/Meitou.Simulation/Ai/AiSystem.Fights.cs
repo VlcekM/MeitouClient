@@ -140,7 +140,7 @@ public sealed partial class AiSystem
         }
         else
         {
-            var scan = RetaliationSystem.ScanAllies(world, slot, fights, look, senses, SenseTag.Ko, () => RetaliationSystem.SlaveHelpAllowed(world, data, look.Relations, me, world.Characters.Previous[slot].Position), (_, threat) => threat);
+            var scan = RetaliationSystem.ScanAllies(world, slot, fights, look, senses, SenseTag.Ko | SenseTag.Imprisoned, () => RetaliationSystem.SlaveHelpAllowed(world, data, look.Relations, me, world.Characters.Previous[slot].Position), (_, threat) => threat);
             (best, value, first) = (scan.Best, scan.Value, scan.First);
         }
         return (best, value, first);
