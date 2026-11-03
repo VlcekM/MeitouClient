@@ -19,7 +19,7 @@ public sealed partial class CombatSystem
     static bool IsParry(CharacterCold attacker, CharacterCold defender, CombatTechnique tech, int blow)
     {
         if (!attacker.Fighter!.Unarmed || attacker.Race!.IsRobot) return true;
-        int limb = blow <= 1 ? tech.Limb1 : tech.Limb2;
+        int limb = tech.LimbOf(blow);
         if (limb is < 0 or > 3) return false;
         foreach (var p in defender.Medical!.Parts)
             if (p.Template.LimbSlot == limb && p.Limb == LimbState.Replaced) return true;
@@ -175,7 +175,7 @@ public sealed partial class CombatSystem
     {
         var f = ac.Fighter!;
         if (!f.Unarmed || f.IsAnimal || ac.Race!.IsRobot) return;
-        int limb = blow <= 1 ? tech.Limb1 : tech.Limb2;
+        int limb = tech.LimbOf(blow);
         if (limb is < 0 or > 3) return;
         if (dc.Race!.IsRobot) material = 1;
         var (cut, blunt) = material switch { 1 => (2f, 2f), 5 => (5f, 1f), 6 => (1f, 1f), _ => (0f, 1f) };

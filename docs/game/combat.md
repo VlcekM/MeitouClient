@@ -67,6 +67,7 @@ list unless `is block` or `is dodge` (then the defence list), in data order. Eac
 - Filter: category table; `min skill` ≤ skill ≤ `max skill`; (1 − e)·100 ≤ `max encumbrance`; `is prone` = posture ≠ 0 (always, **Verified** in the disassembly of
   `FUN_1408876d0`: the decompile prints the burden test and the prone test as `<` or `==` and prone, but the code rejects on burden above the maximum, then on a prone mismatch);
   limb factor f > 0, and f ≥ 1 except in the last pass.
+- The reader `FUN_1406684c0` stores one 0x14-byte blow (direction, power, blocked frame, limb, stop frame) per index 1..`num techniques` with no upper bound (**Verified**); 0 stores none, so f is 0 and the technique is never chosen (Meitou: `CombatTechnique.Blows`, `MoreBlows`; an absent field reads 1, the editor default, **Unknown** whether the loaded record carries it).
 - f = product over blows. `limb` 4 (weapon) 1; 0 left arm, 1 right arm: 0.001 if not working (+0x5be / +0x5bd).
   Legs 2/3: prone → technique out; flag +0x5b8 or a leg part down → ×0.25. A missing limb
   (`MedicalSystem::getLimbState` `FUN_140643b30` = 1 STUMP, **Verified**; 0 original, 2 replaced, 3 crushed) → 0.001. No blow above 0.01 → 0.
