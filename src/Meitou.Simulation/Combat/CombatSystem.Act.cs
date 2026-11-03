@@ -829,7 +829,9 @@ public sealed partial class CombatSystem
             ref readonly var a = ref read[other];
             if (a.AttackTech < 0 || a.NextBlow == 0 || a.TargetGeneration != generation) continue;
             int lands = a.AttackStart + (int)MathF.Ceiling(techniques[a.AttackTech].StrikeProgress(a.NextBlow) * a.AttackTicks);
-            if (lands <= now) continue;
+            // A blow landing this tick is still pending, not passed: the strike's effect is applied in the serial phase after every Act, so the block that covers it
+            // must stay as it is (a new one started now would be at its first frame when the blow lands and would not count).
+            if (lands < now) continue;
             if (lands < firstAny) firstAny = lands;
             if (s.ReactedSlot == other && s.ReactedSeq == a.AttackSeq && s.ReactedBlow == a.NextBlow) continue;
             if (lands < first) { first = lands; attacker = other; blow = a.NextBlow; }
@@ -866,6 +868,9 @@ public sealed partial class CombatSystem
             dodge = DefenceFormulas.BlockChance(effective, attack.AttackSkill, combat, 0, 95);
         }
         int pick = TechniqueChooser.ChooseReaction(techniques, fighter.TechniqueCategory, cold.Medical!.Prone, fighter.CanBlock, direction, block, dodge, chanceRoll, pickRoll, stumbling);
+        // A roll that passed for a direction no row fits is not a failed defence (the base game's +0x14c is the failed roll's timer): the blow passes and none is tried for it,
+        // but the fighter stays ready for the next one instead of standing idle for the no-defence time.
+        if (pick < 0 && fighter.CanBlock && chanceRoll * 100 < block && !HasFacingRow(techniques, fighter.TechniqueCategory, cold.Medical!.Prone, direction)) return;
         if (pick < 0)
         {
             // No defence (a failed dodge roll, or nothing fits): none is tried again for a while (the original's +0x14c).
@@ -889,5 +894,16 @@ public sealed partial class CombatSystem
         s.ReactTicks = ticks;
         s.LastTech = -1;   // the original's current technique (+0x150) is now a defence, which the next attack choice does not count as its last
 
+    }
+
+    /// <summary>Whether the fighter's category has a block row facing <paramref name="direction"/> at all (an empty pool is not a failed roll).</summary>
+    static bool HasFacingRow(IReadOnlyList<CombatTechnique> all, int category, bool prone, int direction)
+    {
+        for (int i = 0; i < all.Count; i++)
+        {
+            var t = all[i];
+            if (!t.Disabled && t.IsBlock && !t.IsDodge && t.AttackDirection1 == direction && t.IsProne == prone && TechniqueChooser.Fits(t, category)) return true;
+        }
+        return false;
     }
 }
