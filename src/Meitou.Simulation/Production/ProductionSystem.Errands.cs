@@ -76,7 +76,6 @@ public sealed partial class ProductionSystem
         if (Carry is null || world.Tick % ErrandEveryTicks != 0 || errands.Count == 0) return;
         var table = world.Characters;
         foreach (var gone in errands.Keys.Where(k => !table.IsAlive(k)).ToList()) errands.Remove(gone);
-        foreach (var gone in impossible.Keys.Where(k => !table.IsAlive(k)).ToList()) impossible.Remove(gone);
         for (int i = 0; i < table.HighWater; i++)
             if (table.Next[i].Alive && table.Cold(i) is { IsPlayer: true } cold && errands.TryGetValue(table.IdOf(i), out var errand)) StepErrand(world, i, cold, errand);
     }
@@ -166,7 +165,7 @@ public sealed partial class ProductionSystem
         if (task is not (CharacterTask.GoTo or CharacterTask.Idle or CharacterTask.Wander or CharacterTask.Follow)) { errands.Remove(id); return; }
         bool wasWalking = e.Walking;
         if (task != CharacterTask.GoTo) e.Walking = false;
-        if (e.Kind == ErrandKind.Corpse && wasWalking && task != CharacterTask.GoTo) NoteWalkEnd(world, id, n, e);
+        if (e.Kind == ErrandKind.Corpse && wasWalking && task != CharacterTask.GoTo) NoteWalkEnd(world, cold, n, e);
         Vector2 goal = e.Goal;
         BuildSite? site = null;
         Machine? machine = null;
@@ -212,21 +211,15 @@ public sealed partial class ProductionSystem
         return wasWalking || world.GameHours - e.StoppedAt.Value >= CarryOutMinutes / 60.0;
     }
 
-    // Derived state, not saved or hashed: the machines a carrier's path failed to, until the game tick (the AI's ignore map, 20 s).
-    readonly Dictionary<CharacterId, Dictionary<string, long>> impossible = [];
-
-    /// <summary>How long a machine whose path failed is skipped by that carrier (<c>FUN_140796ed0</c> stores 20.0, <b>Verified</b>; re-armed on each failed walk).</summary>
-    public const float PathImpossibleSeconds = 20;
-
-    /// <summary>The walk to the machine ended: if the carrier is not at it, the path failed and the carrier skips that machine for <see cref="PathImpossibleSeconds"/> (<c>FUN_1405b0290</c> in <c>FUN_1408d0770</c>).</summary>
-    void NoteWalkEnd(World world, CharacterId id, in CharacterHot n, Errand e)
+    /// <summary>The walk to the machine ended: if the carrier is not at it, the path failed and the carrier skips that machine for <see cref="ConstructionSystem.UnreachableSeconds"/> in the shared ignore map, <see cref="CharacterCold.Unreachable"/> (<c>FUN_1405b0290</c> in <c>FUN_1408d0770</c>).</summary>
+    void NoteWalkEnd(World world, CharacterCold cold, in CharacterHot n, Errand e)
     {
         if (e.Site is not { } siteId || Site(world, siteId) is not { } site || world.Machines.Find(siteId) is not { } machine || AtSite(n, site, machine)) return;
-        if (!impossible.TryGetValue(id, out var map)) impossible[id] = map = new Dictionary<string, long>(StringComparer.Ordinal);
-        map[siteId] = world.Tick + (long)MathF.Ceiling(PathImpossibleSeconds / world.TickSeconds);
+        cold.NoteUnreachable(siteId, world.Tick + (long)MathF.Ceiling(ConstructionSystem.UnreachableSeconds / world.TickSeconds));
     }
 
-    bool PathImpossible(World world, CharacterId id, string siteId) => impossible.TryGetValue(id, out var map) && map.TryGetValue(siteId, out long until) && until > world.Tick;
+    bool PathImpossible(World world, CharacterId id, string siteId) =>
+        world.Characters.TryResolveNext(id, out int i) && world.Characters.Cold(i) is { } cold && cold.IsUnreachable(siteId, world.Tick);
 
     // ---- corpse disposal (137 / 138) ----
 

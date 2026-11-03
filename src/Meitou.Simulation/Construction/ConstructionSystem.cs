@@ -818,14 +818,13 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
         bool fetch = world.Characters.Next[slot].Task == (byte)CharacterTask.FetchMaterials;
         string? key = !fetch ? site.Id : cold.FetchItem is { } item ? ItemKey(item) : null;
         if (key is null) return false;
-        (cold.Unreachable ??= new Dictionary<string, long>(StringComparer.Ordinal))[key] = world.Tick + (long)MathF.Ceiling(UnreachableSeconds / world.TickSeconds);
+        cold.NoteUnreachable(key, world.Tick + (long)MathF.Ceiling(UnreachableSeconds / world.TickSeconds));
         if (!fetch) return false;
         BackToSite(world.Characters, slot, cold);
         return true;
     }
 
-    static bool IsUnreachable(World world, CharacterCold cold, string key) =>
-        cold.Unreachable is { } map && map.TryGetValue(key, out long until) && until > world.Tick;
+    static bool IsUnreachable(World world, CharacterCold cold, string key) => cold.IsUnreachable(key, world.Tick);
 
     // ------------------------------------------------------------------ the work
 
