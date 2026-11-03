@@ -361,8 +361,8 @@ public readonly record struct PrisonView(bool Locked, float Sentence, double Hou
     public int LockLevel { get; init; } = -1;
 }
 
-/// <summary>A slave's state (1 slave, 2 escaped slave; <c>SlaveStateEnum</c>) and the name of the faction that owns it ("someone" is the caller's word for none).</summary>
-/// <summary>The slave state of a character (1 slave, 2 escaped), its owner faction's name and its "looks like a slave" level in 0..1 (<see cref="Kidnap.CaptiveSystem.LooksLikeSlaveLevel"/>).</summary>
+/// <summary>A slave's state (1 slave, 2 escaped slave, 3 ex-slave; <c>SlaveStateEnum</c>) and the name of the faction that owns it ("someone" is the caller's word for none).</summary>
+/// <summary>The slave state of a character (1 slave, 2 escaped, 3 ex-slave), its owner faction's name and its "looks like a slave" level in 0..1 (<see cref="Kidnap.CaptiveSystem.LooksLikeSlaveLevel"/>).</summary>
 public readonly record struct SlaveView(int State, string Owner, float Looks = 0);
 
 /// <summary>

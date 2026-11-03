@@ -368,26 +368,36 @@ sealed partial class PlayerInterface
             : new(Loc.Tr("Bounty:"), Loc.Tr("c.{1,num}", bounties.Count == 0 ? 0 : bounties.Max(v => v.Amount)), GreyColour, GreyColour);
 
     /// <summary>
-    /// The status lines of a slave (<c>FUN_1405d4260</c>, <b>Observed</b>; docs/game/ui-screens.md section 4): a title, "Slave" (state 1) or "Escaped slave" (state 2), and its text naming the owner
-    /// ("someone" without one); a player character's text ends with the hint on the obedient-slave job (state 1) or on keeping the looks-like-a-slave level low (state 2). Engine choices:
+    /// The status lines of a slave (<c>FUN_1405d4260</c>, <b>Observed</b>; docs/game/ui-screens.md section 4): a title, "Slave" (state 1), "Escaped slave" (state 2) or "Ex-slave" (state 3), and its text naming the
+    /// owner ("someone" without one); a player character's text ends with the hint on the obedient-slave job (state 1) or on keeping the looks-like-a-slave level low (states 2 and 3). Engine choices:
     /// the hint is shown for player characters, the title takes the Title colour and the text the Main one.
     /// </summary>
     static List<(string Key, string Value)> SlaveRows(SlaveView slave, bool player)
     {
         string owner = slave.Owner.Length > 0 ? slave.Owner : Loc.Tr("someone");
-        bool escaped = slave.State == 2;
-        string hint = !player ? "" : escaped
-            ? Loc.Tr("Keep your [Looks Like A Slave] level as low as possible, wear clothing or disguises and find a plastic surgeon to restore your hair. Don't get spotted.")
-            : Loc.Tr("Your character will have a permanent job assigned called [Obedient slave]. While this is active he will automatically work for his master. You can remove this job, but beware of the consequences...");
-        string text = escaped
-            ? Loc.Tr("A slave of {1} that has been seen escaping. Needs to lay low for a day and avoid getting spotted. {2}", owner, hint)
-            : Loc.Tr("A slave belonging to {1}. Not considered a person with rights, a slave works for his master until death and nothing more. {2}", owner, hint);
-        return [(TitleTag + Loc.Tr(escaped ? "Escaped slave" : "Slave"), ""), (MainTag + text.TrimEnd(), "")];
+        string text = slave.State switch
+        {
+            2 => Loc.Tr("A slave of {1} that has been seen escaping. Needs to lay low for a day and avoid getting spotted. {2}", owner, player ? EscapedHint() : ""),
+            3 => Loc.Tr("Was once a slave of {1} but has now escaped. The heat has died down but he still needs to avoid getting found out. {2}", owner, player ? ExSlaveHint() : ""),
+            _ => Loc.Tr("A slave belonging to {1}. Not considered a person with rights, a slave works for his master until death and nothing more. {2}", owner, player ? SlaveHint() : ""),
+        };
+        return [(TitleTag + SlaveTitle(slave.State), ""), (MainTag + text.TrimEnd(), "")];
     }
 
+    static string SlaveTitle(int state) => Loc.Tr(state switch { 2 => "Escaped slave", 3 => "Ex-slave", _ => "Slave" });
+
+    static string SlaveHint() =>
+        Loc.Tr("Your character will have a permanent job assigned called [Obedient slave]. While this is active he will automatically work for his master. You can remove this job, but beware of the consequences...");
+
+    static string EscapedHint() =>
+        Loc.Tr("Keep your [Looks Like A Slave] level as low as possible, wear clothing or disguises and find a plastic surgeon to restore your hair. Don't get spotted.");
+
+    static string ExSlaveHint() =>
+        Loc.Tr("Keep your [Looks Like A Slave] level as low as possible, wear clothing or disguises and find a plastic surgeon to restore your hair. You should be safe if you stay out of towns.");
+
     /// <summary>
-    /// The bounty panel's line for a status (<c>FUN_1405d4260</c>, <b>Observed</b>): its title in the Title colour (a pending crime's with its timer as the value), a slave's "Slave" or
-    /// "Escaped slave"; null for a character with only a bounty (the Bounty line).
+    /// The bounty panel's line for a status (<c>FUN_1405d4260</c>, <b>Observed</b>): its title in the Title colour (a pending crime's with its timer as the value), a slave's "Slave",
+    /// "Escaped slave" or "Ex-slave"; null for a character with only a bounty (the Bounty line).
     /// </summary>
     static HudLine? StatusLine(CharacterSnapshot lead) => lead.Status switch
     {
@@ -397,7 +407,7 @@ sealed partial class PlayerInterface
         { Kind: StatusKind.Crime } crime => new(Loc.Tr("Committing Crime!"), Loc.Tr("{1,num}", crime.Timer), TitleColour, TitleColour),
         { Kind: StatusKind.EscapedPrisoner } => new(Loc.Tr("Escaped Prisoner"), "", TitleColour),
         { Kind: StatusKind.Diplomatic } => new(Loc.Tr("Diplomatic Status"), "", TitleColour),
-        _ => lead.Slave is { } slave ? new(Loc.Tr(slave.State == 2 ? "Escaped slave" : "Slave"), "", TitleColour) : null,
+        _ => lead.Slave is { } slave ? new(SlaveTitle(slave.State), "", TitleColour) : null,
     };
 
     /// <summary>

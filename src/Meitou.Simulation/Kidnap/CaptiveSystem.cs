@@ -729,7 +729,7 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
     /// <summary>
     /// A character's "looks like a slave" level in 0..1 (status object +0xf4, shown by the inventory window's data panel and the status tooltip; <c>FUN_1405a51e0</c>, <b>Observed</b>, docs/game/ui-screens.md):
     /// a sum over its worn kit, locked shackles 1; else the hat section empty 0.4 (when a character flag, <b>Unknown</b>, holds; taken as true), the body section empty 0.1, the legs section empty 0.1
-    /// or holding the owner's slave clothing 0.5, the boots section empty 0.1. An escaped slave (state 2) doubles it and keeps at least 0.1; at most 1. Sections by the item slot ids: 3 head, 5 body (armour), 6 legs, 9 boots.
+    /// or holding the owner's slave clothing 0.5, the boots section empty 0.1. An escaped slave (state 2) doubles it and keeps at least 0.1, an ex-slave (3) keeps at least 0.01; at most 1. Sections by the item slot ids: 3 head, 5 body (armour), 6 legs, 9 boots.
     /// </summary>
     public float LooksLikeSlaveLevel(CharacterCold c)
     {
@@ -744,6 +744,7 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
         level += legs is null ? 0.1f : clothing.Contains(legs.Record) ? 0.5f : 0;
         if (!inv.Items.Any(i => i.Section == "boots")) level += 0.1f;
         if (c.SlaveState == 2) level = MathF.Max(level * 2, 0.1f);
+        if (c.SlaveState == 3) level = MathF.Max(level, 0.01f);
         return MathF.Min(level, 1);
     }
 

@@ -294,6 +294,12 @@ Loading can free an escaped slave at once, because the clock is restored to the 
 - the save holds `ssct` 34.00063 and the clock day 1 10:00, which is 34.0 h;
 - both escaped player characters were free within 120 calendar seconds of the load, in 5 runs out of 5, read with the KenshiOracle probe.
 
+What state 3 does elsewhere (**Observed**, the 64 callers of the getter `FUN_1405c8aa0` in 1.0.68): most tests are `== 1`, `== 2` or `!= 0`, so an ex-slave counts as unfree wherever the
+test is `!= 0` / `> 0` (a police carrier's cage desire 1.4 `FUN_1405a0f10`, the refugee package `FUN_140288ed0`, slave processing `FUN_1408cd630`, prison hunger 1.15 `FUN_1405c9ca0`) and as
+neither slave nor escapee elsewhere. Its own branches: the looks-like-slave level is kept at least 0.01 (`FUN_1405a51e0`, [UI](ui-screens.md)); the status panel shows "Ex-slave"
+(`FUN_1405d4260`); a looker that recognises one while the status `+0x110` is above 0 fires event 40 ESCAPED_EX_SLAVE_SPOTTED (`FUN_140859680`) and then sees through it as through an escapee
+(`FUN_140856f00`, with the line test 40 in place of 36). Meitou does not model event 40 or that recognition.
+
 Meitou: `FixtureRegistry.LayLow` runs from the crime sweep (engine choice) and also clears the owner on the first path. The stamp is `CharacterCold.SlaveSince`, and `SlaveSave` reads and writes `ssct`.
 
 ## Unknowns
