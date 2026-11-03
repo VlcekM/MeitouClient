@@ -110,8 +110,8 @@ player squad, floor(weirdness x 10) goes into the generated morph mesh's name (w
 
 CHARACTER `race` overrides the body file's race (fcs.def "will override race in .body file"; the viewer
 follows this, not traced). The candidates (`Faction::chooseARace` `FUN_1407ff1a0`, **Verified** in outline): the squad template's
-`race override` (7 templates) when one is given, else the CHARACTER's `race`, else the faction's `races`; a weighted draw by the reference value, where an entry of value 0 or less is never drawn (**Verified** for the faction list, `FUN_1407fe270`). Meitou keeps a body file's race
-before the faction's. With no candidate the original logs "Missing race" and uses RACE `17-gamedata.quack` (Greenlander) **by id**
+`race override` (7 templates) when one is given, else the CHARACTER's `race`, else the faction's `races`; a weighted draw by the reference value, where an entry of value 0 or less is never drawn (**Verified** for the faction list, `FUN_1407fe270`). The body file is not consulted for the race (**Verified**: `FUN_140581770` calls `chooseARace` with the CHARACTER and fills the chosen race's appearance from the body afterwards, `FUN_1406c3a70` has no race read); Meitou uses the body file's race only after
+when all of those give none (engine fallback; the 19 base-game CHARACTERs with a body and no race list either have an unreadable old-format body or are mod characters). With no candidate the original logs "Missing race" and uses RACE `17-gamedata.quack` (Greenlander) **by id**
 (`FUN_140074f00`, `FUN_140538360`, **Verified** read), so a translation mod that renames it changes nothing.
 
 ### Hidden body parts (Verified, `@ 140075600`, `@ 140071f90`, `@ 140531cc0`; HLSL `skin.hlsl`)
