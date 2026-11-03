@@ -82,6 +82,7 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
         if (EditorPointerDown(button, p)) return true;
         if (button == MouseButton.Right && CancelInventoryDrag()) return true;
         if (button == MouseButton.Right && !OverHud(p) && WallCancel()) return true;
+        if (button == MouseButton.Right && !OverHud(p) && BuildDiscard()) return true;
         if (button == MouseButton.Left)
         {
             if (contextMenu is not null) return true;   // an open menu takes no press: its rows act on the release, a press beside it does nothing (FUN_1407a7f10)

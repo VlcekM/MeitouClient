@@ -34,6 +34,9 @@ sealed partial class PlayerInterface
     bool buildPausedGame;
     string? buildCategory;
     int buildGroup;
+
+    /// <summary>A right click dropped the held building: no building is held until one is chosen from the lists again (<c>FUN_1404e27e0</c>).</summary>
+    bool buildDiscarded;
     // Which member of the group is chosen (null: its default pick).
     BuildingBuildData? buildMember;
     readonly List<QueuedGhost> buildQueue = [];
@@ -83,6 +86,7 @@ sealed partial class PlayerInterface
             buildCategory = null;
             buildGroup = 0;
             buildMember = null;
+            buildDiscarded = false;
             CloseInventoryWindows();
             faithfulScreens.Open("build");
             CloseContextMenu();
@@ -116,7 +120,7 @@ sealed partial class PlayerInterface
     BuildGroup? CurrentGroup()
     {
         var groups = BuildGroups();
-        return groups.Count == 0 ? null : groups[Math.Clamp(buildGroup, 0, groups.Count - 1)];
+        return groups.Count == 0 || buildDiscarded ? null : groups[Math.Clamp(buildGroup, 0, groups.Count - 1)];
     }
 
     /// <summary>The building the ghost shows: the chosen member of the chosen group (its default pick otherwise).</summary>
@@ -348,6 +352,15 @@ sealed partial class PlayerInterface
         return false;
     }
 
+    /// <summary>A right click in build mode over the world with a building held: it is discarded; the queued ghosts stay (Clear Building: Right-Click).</summary>
+    bool BuildDiscard()
+    {
+        if (!buildMode || CurrentBuilding() is null) return false;
+        buildDiscarded = true;
+        ghost = null;
+        return true;
+    }
+
     /// <summary>A right click in build mode while a line is laid: drops the line (true: taken).</summary>
     bool WallCancel()
     {
@@ -488,10 +501,14 @@ sealed partial class PlayerInterface
         return painter.RenderedIconReady(rendered) ? new() { ["ImageTexture"] = rendered, ["ImageFlipV"] = "true", ["Caption"] = "" } : null;
     }
 
-    /// <summary>The Commands box: the build map's keys (the original's own text is <b>Unknown</b>).</summary>
+    /// <summary>
+    /// The Commands box, in the original's lines and order (<c>FUN_1404d7d90</c>). The key names in the original are data strings the decompile does not show (<b>Observed</b>);
+    /// these are Meitou's keys (Space also places, Escape leaves build mode).
+    /// </summary>
     static readonly string[] BuildCommandLines =
     [
-        "Left click / Space: place", "Walls: click the start, click the end; right click: drop the line", "Backspace: undo", ", .: rotate", "- =: move down / up (Shift: slow)", "[ ]: tilt", "Confirm: build what is placed", "B: leave build mode",
+        "Place Building: Left-Click", "Clear Building: Right-Click", "Rotate: , or . keys", "Change Height: - and =", "Change Slope: [ and ]", "Undo: Backspace", "Cancel All: Escape",
+        "Press the Confirm button when finished",
     ];
 
     /// <summary>The stats panel's lines, the failure message and the queue count, over the arranged window.</summary>
@@ -518,11 +535,13 @@ sealed partial class PlayerInterface
         {
             case ("CategoriesList", "select"):
                 buildCategory = e.Text;
+                buildDiscarded = false;
                 buildGroup = 0;
                 buildMember = null;
                 break;
             case ("BuildingsList", "select"):
                 buildGroup = (int)e.Value;
+                buildDiscarded = false;
                 buildMember = null;
                 ghostLift = 0;
                 break;
