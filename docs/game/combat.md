@@ -102,6 +102,9 @@ own technique (its blow never lands) and holds it in the stumble state until the
 `FUN_14060cf60`, `FUN_140435570`); with no clip the technique is still cancelled. The break-out timer (`+0x124`, 1.2 s from the stumble's start, `FUN_14060cf60`)
 counts down each tick; once due, the first tick a swing at 10-99% progress is incoming (`+0x120`, the incoming list is non-empty) rolls the stumble break-out (`FUN_1406085e0`, chance `FUN_140885d80`);
 a failed roll sets the timer to 1.2 s again, a tick with no such swing leaves it due (**Verified**, decompile). Meitou: `CombatSlot.BreakOutTick`.
+A won roll plans a defence (+0x1f4 = 1), leaves the stumble for state 3 and clears +0x14c; state 3 (`FUN_14060d0b0`) starts it through `FUN_140609290`, whose chooser, the fighter still
+stumbling (`FUN_140435570`), takes only `is stumble dodge` rows; with none it gets no technique and 1.2 s, but the stumble state has ended either way (**Verified**; whether the stumble clip
+is cut, by the layer fade `FUN_1405b36f0` there, is **Unknown**). Meitou differs: a won roll with no stumble-dodge row keeps the stumble (`Act`, step 2).
 Knockback is the clips' root motion only (**Observed**: no impulse in these functions; [animation](../animation.md); ragdolls: [ragdolls](ragdolls.md)).
 A blocked blow neither staggers nor pushes (`FUN_140665540`). A shackled defender is knocked out instead 25% of the time; a defender whose fight is off: [stagger outside a fight](#fight-lifecycle-and-orders).
 **Verified** (`FUN_140520490` → `FUN_14051eab0`; `FUN_140435570` → `FUN_1405b3a40`): the clip plays at its record's play speed
@@ -170,7 +173,8 @@ the swing update `FUN_14060a590` and state 5 `FUN_1402b3180` (both from +0x290, 
 clears it, so during a rear block, which skips the turn, it keeps the last one. The seek and the power-through cone run along the line to the band target, the side-step snap and the speed
 caps along the facing. Meitou: `SteerState.Face` (set by `PursuitSystem.LookAt`; a look-at that is gone falls back to the band target, an engine reading), `CombatSteering.Velocity`. Meitou: `PursuitSystem.BandTarget` (the band; the player's pick is the focused target), `CombatSystem.DefenceAim` (the turn when not
 steering, e.g. on Hold). Animals never defend: for a defender whose `asAnimal` (vfunc 0x248) is set the start takes no technique, sets +0x14c to 2 s and succeeds, and the defending state (`FUN_14060a190`)
-goes back to deciding at once for want of a technique (`FUN_140609290`, **Verified**). Meitou: `React`, `CombatTuning.AnimalNoDefenceSeconds`; a stumble break-out (`FUN_1406085e0`) is left as it was.
+goes back to deciding at once for want of a technique (`FUN_140609290`, **Verified**). Meitou: `React`, `CombatTuning.AnimalNoDefenceSeconds`. An animal never reaches the stumble break-out: the take-hit (`FUN_1404391f0`) picks a stumble clip only when `asAnimal` is null and
+the stumble state (8) is planned only with a clip (`FUN_140665490`) (**Verified**); Meitou matches (`AnimationSystem.ChooseStumble` returns none for an animal).
 Meitou: `CombatSystem.MostAdvanced` (the followed swing; an exact tie keeps the followed one, else the lower slot, since the grid's order is not stable), `React` (start),
 `Reconsider` (the update), `ReactionEnds` (a blow counts as on its way until the attacker's state shows it struck: strikes apply after every Act, a far attacker's at its own step), `CombatTuning.DefenceStartProgress`. A held block's progress
 is clamped at 1, so it keeps blocking (the engine's reading of the loop question). A blow decided again rolls the same: Meitou's rolls are fixed per blow, the original draws afresh.
