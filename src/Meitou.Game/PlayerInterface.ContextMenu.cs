@@ -184,7 +184,10 @@ sealed partial class PlayerInterface
     (string, Action) InventoryVerb(CharacterSnapshot target)
     {
         var id = target.Id;
-        return (target.IsPlayer ? "Trade" : "Loot", () => Say(new Meitou.Simulation.Carrying.OpenLootOrder([], id) { Tick = session.World.Tick }));
+        void Open() => Say(new Meitou.Simulation.Carrying.OpenLootOrder([], id) { Tick = session.World.Tick });
+        // With Shift the verb is an order on the target like any other: Trade on an own character (a character hand, not a building) falls through to the TaskData lookup of order 26, so it adds the
+        // Foraging animals job like Loot does (FUN_1407fa650, Verified), not the window.
+        return (target.IsPlayer ? "Trade" : "Loot", () => OrderOrJob(Meitou.Data.Gameplay.Ai.TaskType.LOOT_TARGET, id, Open));
     }
 
     /// <summary>
