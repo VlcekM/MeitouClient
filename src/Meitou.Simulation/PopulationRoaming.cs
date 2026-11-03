@@ -151,6 +151,8 @@ public sealed partial class PopulationSystem
     void StandIn(World world, Platoon p, float dt)
     {
         if (p.Pinned || p.Wild || p.Campaign is not null) return;   // a town's own saved squad, or a wild one, stays where it was; a campaign moves its own
+        // GOHOME only issues a goto (FUN_1407ee790, Verified): the mover's speed is reset to 0 each step and only the platoon-handle branch (meaning Unknown, none in Meitou) sets 55, so it stands still.
+        if (p.Job == Ai.PlatoonJob.GoHome) return;
         // It stands still (FUN_1407ee790, Verified): a platoon of the player's faction, one off the zone grid, one inside the trimmed box of a loaded zone (it waits to be made), and a
         // platoon left with a member caged.
         if (p.Faction >= 0 && p.Faction == PlayerFactionOf(world) || p.Imprisoned) return;
@@ -223,8 +225,7 @@ public sealed partial class PopulationSystem
     }
 
     /// <summary>
-    /// A stand-in's speed in units per second, <paramref name="d"/> from its goal: the original's per job (docs/game/factions-squads-towns.md "Off-screen world": GOHOME 55,
-    /// TRAVEL_TARGET 25, TRAVEL_TARGET_FAST 60 or 90 beyond 25000), else the engine's travel stand-in (25, 90 far; a short-range patrol keeps walking at 25, where the
+    /// A stand-in's speed in units per second, <paramref name="d"/> from its goal: the original's per job (docs/game/factions-squads-towns.md "Off-screen world": TRAVEL_TARGET 25, TRAVEL_TARGET_FAST 60 or 90 beyond 25000), else the engine's travel stand-in (25, 90 far; a short-range patrol keeps walking at 25, where the
     /// original's stands still), all capped at the original mover's 70.
     /// </summary>
     float StandInSpeed(Platoon p, float d)
@@ -232,7 +233,6 @@ public sealed partial class PopulationSystem
         bool far = d > settings.StandInFarDistance;
         float speed = p.Job switch
         {
-            Ai.PlatoonJob.GoHome => 55,
             Ai.PlatoonJob.TravelTarget => 25,
             Ai.PlatoonJob.TravelTargetFast => far ? 90 : 60,
             Ai.PlatoonJob.PatrolShortRange => settings.StandInSpeed,

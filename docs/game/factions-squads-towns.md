@@ -491,7 +491,7 @@ Meitou: [ground items](../simulation.md#items-and-eating).
   `FUN_1407ef4b0`); otherwise the job: a campaign's if the war manager holds the platoon, else the package's `unloaded func`
   ([ai.md](ai.md)); job 0 becomes 2 for a non-persistent platoon and 4 (GOHOME) for a persistent one. No character data is read or changed:
   no healing, needs or fights (**Observed**).
-  - GOHOME: to the home only once within 2000, else to the object of a platoon handle (+0xb8, meaning **Unknown**) at 55.
+  - GOHOME: the mover's speed (+0xbc) is reset to 0 every step and only the branch for a platoon handle (+0xb8, meaning **Unknown**) sets 55, going to that object; the goto to the home (only once within 2000) sets no speed. So a GOHOME stand-in without a resolving handle stands still (**Verified**, `FUN_1407ee790`, `FUN_14065ef80` takes its speed from +0xbc). Meitou has no such handle: it stands still.
   - TRAVEL_TARGET / _FAST: to the mission target: the blackboard's override package's, else the campaign's target, else the current
     package's saved `mission target`, else a fallback (`FUN_140269cd0`); no move when it is the town the squad is in (**Observed**); a campaign's `travel speed unloaded` WALK / JOG / RUN gives 25 / 55 / 90;
     otherwise (GROUPED, NO_SPEED_CHANGE, no campaign) FAST 60 (90 beyond 25000), TRAVEL_TARGET 25. The mover caps speed at 70 (**Observed**: no other writer of the cap).
