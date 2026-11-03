@@ -108,7 +108,7 @@ so part, blood, clot and KO-timer rates are per second of that sum. Hunger inste
 **Verified** (decompile of the character loop `FUN_140786e30` and the job runner `FUN_140787940`): +0xc8 (KenshiLib `frameTIMEfour`) gets `DAT_142133794`
 (real seconds x game speed, [game-loop](game-loop.md#the-three-time-values)) twice. `FUN_1405c7ae0` adds it for every listed character every frame;
 `FUN_1405cfd90` adds it again only on a frame where the character has a turn in its update budget, and exactly those frames queue its slot 0x278
-(`threadedUpdate4`, list `+0x1c0` of the job runner). So the medical time is dt x (1 + s), s the character's share of frames with a turn: 1 to 2 x dt.
+(`threadedUpdate4`, list `+0x1c0` of the back thread's job; that job runs it is **Observed**, [game-loop](game-loop.md#the-character-update-budget)). So the medical time is dt x (1 + s), s the character's share of frames with a turn: 1 to 2 x dt.
 The budgets and the shares they give: [game-loop](game-loop.md#the-character-update-budget). A player's character is always in the flagged budget, so with
 fewer than 4 flagged characters its medical time is 2 x dt, and in a list with many unflagged characters (a town) 1.5 x dt with 4 to 7 flagged, 1.33 x dt
 with 8 to 11 (**Observed**, by simulating the decoded rule; characters near the list's head can get more).
@@ -119,7 +119,8 @@ is not on it (game clock). Meitou (`MedicalTimeBudget`, run by `BodySystem.Sched
 order for its list (the original's is a hash map's order, **Unknown**); a turn adds `TickSeconds` to `CharacterCold.MedicalBudgetSeconds`, which the body step
 adds to its own time (`MedicalContext.BudgetSeconds`) for the part, blood and KO-timer rates. The share depends only on the counts and the order, not on how long
 a frame is, so the mapping keeps the factor at any frame rate or speed. Flagged: the player's characters, and NPCs within `npc range` (3250) of `World.ViewPosition`
-(the game's in-view test has a camera frustum the simulation lacks, so a crowd round the camera counts more flagged characters than in the game); none without a camera.
+(the game's in-view test has a camera frustum the simulation lacks, so a crowd round the camera counts more flagged characters than in the game; an NPC engaged
+with a player, always flagged in the game, is flagged only near the camera); NPCs never without a camera.
 
 ### Part tick (`FUN_14064f5c0`, **Verified** decompile)
 

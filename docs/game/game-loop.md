@@ -84,9 +84,10 @@ slots 0 to 3 = `frameStarted`, `frameRenderingQueued`, `framePostAnimationUpdate
 
 ### The character update budget
 
-`FUN_140786e30` runs on the main thread every unpaused frame over the world's active character list (**Verified**, decompile; the lists are run
-by the AI back thread's `FUN_140787940`: list `+0x1a8` slot 0xd8 `threadedUpdate`, `+0x1c0` slot 0x278 `threadedUpdate4` (the medical update), `+0x1d8` slot
-0x280 `threadedUpdatePeriodic`; KenshiLib names):
+`FUN_140786e30` runs on the main thread every unpaused frame over the world's active character list (**Verified**, decompile). The lists it fills belong to
+the AI back thread object `DAT_1421348a0` (kicked by `frameStarted`, or run inline through its slot 0x18 at the loop's end); its work `FUN_140787940` runs list
+`+0x1a8` with slot 0xd8 `threadedUpdate`, `+0x1c0` with slot 0x278 `threadedUpdate4` (the medical update), `+0x1d8` with slot 0x280 `threadedUpdatePeriodic`
+(KenshiLib names; **Observed**: the job's object is taken as that thread object by its list offsets, the call was not traced):
 
 | Tier | Which characters | Turns a frame | Work |
 |---|---|---|---|

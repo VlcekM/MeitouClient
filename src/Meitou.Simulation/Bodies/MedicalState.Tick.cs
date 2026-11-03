@@ -242,12 +242,12 @@ public sealed partial class MedicalState
             CheckPart(i, ctx, events, inHitPath: false);
         }
         if (Dead) return;
-        LegCollapse(events);
 
         TickBlood(dtb, ctx);
         TickHunger(hours, ctx);
         CheckBlood(ctx, events);
         if (Dead) return;
+        LegCollapse(events);   // after the blood rule, as after a blow: the posture's 3 s is the timer a leg going down leaves
 
         // Not while being eaten: a vampiric meal drains the hunger level to -0.5 before it kills (whether the original's own update lets it pass 0 is Unknown).
         if (Hunger <= 0 && EatenCountdown <= 0) { Die(DeathCause.Starvation, events); return; }
