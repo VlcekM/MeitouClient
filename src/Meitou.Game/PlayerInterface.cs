@@ -86,6 +86,7 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
         if (EditorPointerDown(button, p)) return true;
         if (button == MouseButton.Right && CancelInventoryDrag()) return true;
         if (button == MouseButton.Right && !OverHud(p) && WallCancel()) return true;
+        if (button == MouseButton.Right && !OverHud(p) && LevelClearAt(p)) return true;
         if (button == MouseButton.Right && !OverHud(p) && BuildDiscard()) return true;
         if (button == MouseButton.Left)
         {
@@ -257,7 +258,7 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
             if (LabelAt(p) == labelled) LabelPickUp(labelled);
             return;
         }
-        if (button == MouseButton.Left) { InventoryPointerUp(p); JobDragEnd(p); SquadPointerUp(p, shift); faithfulScreens.PointerUp(); mapDrag = null; }
+        if (button == MouseButton.Left) { MapPickUp(p); InventoryPointerUp(p); JobDragEnd(p); SquadPointerUp(p, shift); faithfulScreens.PointerUp(); mapDrag = null; }
         if (button == MouseButton.Middle) mapDrag = null;
         if (button == MouseButton.Right && memberPress is { } pressed)
         {

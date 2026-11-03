@@ -346,6 +346,9 @@ public sealed partial class MedicalState
     /// <summary>Kills the character because one of its death items was taken while it was down (docs/game/animals.md "Death items").</summary>
     public void Butcher(List<MedicalEvent>? events = null) => Die(DeathCause.Butchered, events);
 
+    /// <summary>Kills the character outright (the dev console's <c>kill</c>; a vital part counts as the cause). Nothing happens to one already dead.</summary>
+    public void Kill(List<MedicalEvent>? events = null) => Die(DeathCause.VitalPart, events);
+
     void Die(DeathCause cause, List<MedicalEvent>? events)
     {
         if (Dead) return;

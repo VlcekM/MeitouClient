@@ -786,6 +786,8 @@ static partial class WorldFrame
         public InteriorMaskRenderer? InteriorMask;
         /// <summary>The navmesh debug view (null in the viewer; drawn while visible).</summary>
         public NavmeshOverlayRenderer? NavmeshOverlay;
+        /// <summary>The pick & collision inspector's drawing (Meitou only): pick hulls and shapes, same kind of renderer as the navmesh view.</summary>
+        public NavmeshOverlayRenderer? InspectorOverlay;
         /// <summary>The hover outline the game draws round the character under the mouse, and with Alt those near (null in the viewer); <see cref="HoverKeys"/> picks the characters by their draw-list keys, each with its colour (empty: none).</summary>
         public HoverOutlineRenderer? HoverOutline;
         public IReadOnlyList<(long Key, Vector4 Colour)> HoverKeys = [];
@@ -872,6 +874,7 @@ static partial class WorldFrame
             Debris?.Dispose();
             InteriorMask?.Dispose();
             NavmeshOverlay?.Dispose();
+            InspectorOverlay?.Dispose();
             Water?.Dispose();
             Surfaces?.Dispose();
             Reflection?.Dispose();

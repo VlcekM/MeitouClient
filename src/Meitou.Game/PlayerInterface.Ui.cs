@@ -62,6 +62,7 @@ sealed partial class PlayerInterface
             if (id == "load") layout = WithSaveFilter(layout);
             if (id == "editor") (editorLayout, editorRowsShape) = (layout, "");
             if (id == "inventory") characterInventoryLayout = layout;
+            if (id == "leveleditor") layout = LevelEditorBar(layout);
             faithfulScreens.Register(id, layout, modal, centreRoot: id is "file");
         }
         animalInventoryLayout = resolve("Kenshi_InventoryAnimalWindow.layout") is { } animalWindow ? MyGuiReader.ReadLayout(animalWindow) : null;
@@ -89,7 +90,7 @@ sealed partial class PlayerInterface
         ("bag", "Kenshi_InventoryGenericWindow", false), ("loot", "Kenshi_InventoryCharacterWindow", false), ("loot-bag", "Kenshi_InventoryGenericWindow", false), ("limbs", "Kenshi_LimbReplacementWindow", false), ("trader", "Kenshi_InventoryTraderWindow", false),
         ("building", "Kenshi_GenericBuildingWindow", false), ("bench", "Kenshi_InventoryResearchWindow", false), ("storage", "Kenshi_InventoryGenericWindow", false),
         ("build", "Kenshi_BuildWindow", false), ("editor", "Kenshi_CharacterEditor", true), ("dialogue", "Kenshi_ConversationPanel", true),
-        ("file", "Kenshi_OpenSaveFileDialog", true), ("prospect", "Kenshi_ProspectingWindow", false), ("tutorials", "Kenshi_TutorialsWindow", false),
+        ("file", "Kenshi_OpenSaveFileDialog", true), ("prospect", "Kenshi_ProspectingWindow", false), ("tutorials", "Kenshi_TutorialsWindow", false), ("leveleditor", "Kenshi_LevelEditor", false),
         (CharacterTradeScreen, "Kenshi_CharacterSelectionWindow", false),
     ];
 
@@ -215,6 +216,7 @@ sealed partial class PlayerInterface
         AddFrameControls(controls, hud, modalFrom);
         pointerOverUi = faithfulScreens.Contains(mouse) || MyGuiPresentation.HitTest(controls, mouse.X, mouse.Y) is not null;
         AddHoverLabel(controls);
+        AddInspectorPanel(controls);
         return controls;
     }
 

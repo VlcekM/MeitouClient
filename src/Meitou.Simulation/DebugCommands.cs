@@ -3,11 +3,12 @@ using Meitou.Data;
 using Meitou.Data.Fcs;
 using Meitou.Data.Gameplay.Bodies;
 using Meitou.Data.Gameplay.Construction;
+using Meitou.Data.World;
 using Meitou.Simulation.Bodies;
 
 namespace Meitou.Simulation;
 
-/// <summary>The game's F10 debug menu (Meitou only, docs/game/ui-input.md "Debug menu"): cheats sent as commands, so they apply between ticks like any input.</summary>
+/// <summary>The game's F10 debug menu and dev console (Meitou only, docs/game/ui-input.md "Debug menu", "Dev console"): cheats sent as commands, so they apply between ticks like any input.</summary>
 public abstract record DebugCommand : SimCommand;
 
 /// <summary>Adds <see cref="Delta"/> cats to the player's money (negative takes it away, never below 0).</summary>
@@ -68,11 +69,23 @@ public sealed record DebugGiveItem(CharacterId Character, string Record, int Qua
 /// </summary>
 public sealed record DebugClearBounties(IReadOnlyList<CharacterId> Characters, int? Faction = null) : DebugCommand;
 
+/// <summary>Kills the characters (<see cref="MedicalState.Kill"/>), as a lethal hit would: the medical state says dead, the body pass does the rest.</summary>
+public sealed record DebugKill(IReadOnlyList<CharacterId> Characters) : DebugCommand;
+
 /// <summary>Finishes every research and repetition (<see cref="Construction.ResearchState.CompleteAll"/>).</summary>
 public sealed record DebugUnlockResearch : DebugCommand;
 
 /// <summary>Spawns a character of record <see cref="Record"/> at <see cref="At"/>, alone in a squad of the first faction hostile to the player (<see cref="PopulationSystem"/> applies it).</summary>
 public sealed record DebugSpawn(string Record, Vector2 At) : DebugCommand;
+
+/// <summary>
+/// A building placed in the level editor (docs/game/level-editor.md "Simulation side"): <see cref="Building"/>, made by the host as the boot pass makes a level building
+/// (<see cref="TownBuildings.Builder"/>), joins the building list of the town with placement id <see cref="Town"/> and is registered as a loaded one (<see cref="TownEdits.Place"/>).
+/// </summary>
+public sealed record DebugPlaceBuilding(string Town, TownBuilding Building) : DebugCommand;
+
+/// <summary>A building cleared in the level editor, placed or loaded: leaves its town's list and registries (<see cref="TownEdits.Clear"/>). <see cref="Key"/> is its <see cref="TownBuilding.Key"/>.</summary>
+public sealed record DebugClearBuilding(string Key) : DebugCommand;
 
 static class DebugCheats
 {
@@ -81,6 +94,12 @@ static class DebugCheats
         var table = world.Characters;
         switch (command)
         {
+            case DebugPlaceBuilding place when data is not null:
+                TownEdits.Place(world, data, place.Town, place.Building);
+                break;
+            case DebugClearBuilding clear when data is not null:
+                TownEdits.Clear(world, data, clear.Key);
+                break;
             case DebugMoney money:
                 world.Player.Money = Math.Max(0, world.Player.Money + money.Delta);
                 break;
@@ -133,6 +152,16 @@ static class DebugCheats
                 break;
             case DebugClearBounties clear:
                 world.Post($"Bounties cleared: {ClearBounties(world, clear)}.");
+                break;
+            case DebugKill kill when data is not null:
+                var deaths = new List<MedicalEvent>();
+                foreach (var id in kill.Characters)
+                {
+                    if (Body(world, data, id) is not ({ } medical, _) || !table.TryResolveNext(id, out int slot)) continue;
+                    deaths.Clear();
+                    medical.Kill(deaths);
+                    if (deaths.Count > 0) { MovementSystem.Stop(table, slot); table.Next[slot].Velocity = Vector3.Zero; }
+                }
                 break;
             case DebugUnlockResearch when data is not null:
                 world.Post($"Research unlocked: {world.Research.CompleteAll(data.Db)} finished.");

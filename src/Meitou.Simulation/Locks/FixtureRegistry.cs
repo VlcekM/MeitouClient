@@ -144,13 +144,52 @@ public sealed partial class FixtureRegistry
     {
         if (site < 0 || site >= data.Sites.Count || !sites.Add(site)) return;
         int townFaction = site < data.SiteFactions.Count ? data.SiteFactions[site] : -1;
-        foreach (var b in data.Sites[site].Buildings)
-        {
-            RegisterBuilding(world, data, site, b, townFaction);
-            if (data.Sight is { } sight) world.Sight.Add(sight, SightBuilding(b, IsDestroyed(b)));
-        }
+        foreach (var b in data.Sites[site].Buildings) RegisterWithSight(world, data, site, b, townFaction);
         Bind(world);
         EmptyPurchased(world, site);
+    }
+
+    void RegisterWithSight(World world, PopulationData data, int site, TownBuilding b, int townFaction)
+    {
+        RegisterBuilding(world, data, site, b, townFaction);
+        if (data.Sight is { } sight) world.Sight.Add(sight, SightBuilding(b, IsDestroyed(b)));
+    }
+
+    /// <summary>
+    /// A building added to a town's list while the world runs (<see cref="TownEdits.Place"/>, the level editor): registered as <see cref="RegisterSite"/> registers a loaded one
+    /// (doors, lock, beds, seats, containers, property, room and lamps). A town not registered yet takes it with the rest when it is.
+    /// </summary>
+    internal void RegisterAdded(World world, PopulationData data, int site, TownBuilding b)
+    {
+        if (!sites.Contains(site)) return;
+        RegisterWithSight(world, data, site, b, site < data.SiteFactions.Count ? data.SiteFactions[site] : -1);
+        Bind(world);
+    }
+
+    /// <summary>
+    /// A building taken out of a town's list (<see cref="TownEdits.Clear"/>): its fixtures, property, public flag, room and lamps go; whoever lies in its beds or sits in its cages
+    /// is let out first (a cage's lock opened for it).
+    /// </summary>
+    internal void RemoveBuilding(World world, string building)
+    {
+        foreach (var f in OfBuilding(building).ToArray())
+        {
+            if (f.Occupant.IsNone) continue;
+            if (f.Kind == FixtureKind.Bed) LeaveBed(world, f.Occupant);
+            else if (f.Kind == FixtureKind.Cage)
+            {
+                if (f.Lock is { } cageLock) cageLock.Locked = false;
+                GetOut(world, f.Occupant);
+            }
+        }
+        Unregister(building);
+        properties.Remove(building);
+        resetBuildings.Remove(building);
+        publicFlags.Remove(building);
+        levelPublic.Remove(building);
+        nested.Remove(building);
+        ownedProperties = null;
+        world.Sight.Remove(building);
     }
 
     void RegisterBuilding(World world, PopulationData data, int site, TownBuilding b, int townFaction)

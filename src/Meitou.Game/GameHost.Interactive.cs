@@ -98,7 +98,8 @@ sealed partial class GameHost
         if (overlay is not null) { player.CreateUiPainter(overlay, assets.Find); ConnectItemIcons(); }
         if (gpu.Characters is { } portraits) { var (atlas, sampled) = portraits.PortraitAtlas; player.SetUiTexture(PlayerInterface.PortraitTexture, atlas, sampled); }
         // The debug overlays (docs/engine.md): F10 the debug menu (GameHost.DebugMenu.cs), F11 the frame statistics, F12 the profiler chart.
-        var profiler = overlay is null ? null : new FrameProfiler(display.Context, () => display.Context.GpuFrameMs);
+        debugToolsOn = true;
+        profiler = overlay is null ? null : new FrameProfiler(display.Context, () => display.Context.GpuFrameMs);
         // --log-spikes: the run's allocations by type (the runtime's samples, one per ~100 KB), printed with the summary.
         using var spikeGc = SpikeLog.Enabled ? new BenchGcListener() : null;
         // The Faithful / Meitou switches; Shift+F1 turns Meitou off and back on (plain F2..F4 and F8 are the game's speed and screenshot keys), the Tab panel sets them one by one.
@@ -182,7 +183,6 @@ sealed partial class GameHost
         }
         if (g.BenchmarkBaseline) panel?.ApplyBenchmarkBaseline();
         var stats = new List<string>();
-        bool statsVisible = false, fpsVisible = false;
         string fpsText = "";
         double fpsWindow = 0;
         int fpsWindowFrames = 0;
@@ -247,7 +247,7 @@ sealed partial class GameHost
         // Silk raises KeyDown once per press (no OS key repeat), so a held erase or caret key in a text field repeats here: after 0.5 s, then
         // 30 times a second (the Windows defaults). Typed characters already repeat through KeyChar.
         (Silk.NET.Input.IKeyboard Keyboard, SilkKey Key, long Next)? heldEditKey = null;
-        bool TextFieldFocused() => panel?.Visible == true || debugMenuOpen || player.UiEditing;
+        bool TextFieldFocused() => panel?.Visible == true || debugMenuOpen || ConsoleOpen || player.UiEditing;
         void RepeatEditKey()
         {
             if (heldEditKey is not { } held || Stopwatch.GetTimestamp() < held.Next) return;
@@ -274,6 +274,7 @@ sealed partial class GameHost
                 if (Covered) return;
                 if (panel?.Visible == true) panel.TextInput(value);
                 else if (sandboxPicker is { Open: true }) sandboxPicker.TextInput(value);
+                else if (ConsoleOpen) devConsole.Type(value);
                 else if (debugMenuOpen) DebugMenuText(value);
                 else player.UiText(value);
             };
@@ -304,6 +305,9 @@ sealed partial class GameHost
                 if ((k == SilkKey.KeypadEnter ? EngineKey.Enter : KeyMap.Map(k)) is { } pickerKey) sandboxPicker.KeyDown(pickerKey);
                 return;
             }
+            // Insert or Ctrl+` opens the dev console, which then takes every key (the debug menu's too) until it closes.
+            if (IsConsoleToggle(k, keyboard.IsKeyPressed(SilkKey.ControlLeft) || keyboard.IsKeyPressed(SilkKey.ControlRight))) { ToggleConsole(); return; }
+            if (ConsoleOpen) { ConsoleKey(keyboard, k); return; }
             // F10 (rebindable) opens the debug menu, which then takes every key until it closes.
             if (KeyMap.Map(k) is { } mapped && session.Bindings.Get(InputAction.ToggleDebugMenu).Contains(Binding.Of(mapped))) { debugMenuOpen = !debugMenuOpen; debugParts = null; return; }
             if (debugMenuOpen)
@@ -366,6 +370,17 @@ sealed partial class GameHost
             if (!hotkey && Enum.TryParse(k.ToString(), out CinemaKey cinemaKey) && cinema.OnKey(cinemaKey, ctrl, shiftDown)) return;
             // F9 is the game's quickload; the fps counter is on Ctrl+F9 (a modifier, so the key never reaches the input bindings).
             if (k == SilkKey.F9 && ctrl) { fpsVisible = !fpsVisible; return; }
+            // The pick & collision inspector's menu (opened from F10's Tools row, GameHost.Inspector.cs): while open it takes every key, like F10's.
+            if (inspectorMenuOpen)
+            {
+                if ((k == SilkKey.KeypadEnter ? EngineKey.Enter : KeyMap.Map(k)) is { } inspectorKey) InspectorMenuKey(inspectorKey);
+                return;
+            }
+            if (interiorEditorOpen)
+            {
+                if ((k == SilkKey.KeypadEnter ? EngineKey.Enter : KeyMap.Map(k)) is { } editorKey) InteriorEditorKey(editorKey);
+                return;
+            }
             if (KeyMap.Map(k) is { } key)
             {
                 if (shiftDown && key == EngineKey.F1) { Console.WriteLine(meitou.Toggle()); config.FaithfulLook = !meitou.On; return; }
@@ -585,6 +600,7 @@ sealed partial class GameHost
             animClock = true;
             UpdateNav();
             UpdateNavOverlay();
+            UpdateInspectorOverlay();
             UpdateBuildings();
             BenchLap(2);
             if (!cinemaHolds) ApplyCamera(session.CameraAt());
@@ -642,6 +658,7 @@ sealed partial class GameHost
                 if (pointerMouse is not null) pointerMouse.Cursor.CursorMode = windowCursor = cursorBeforeOrbit;
             }
             var pointerAt = pointerMouse is null ? Vector2.Zero : Pixels(orbitAnchor ?? pointerMouse.Position);
+            consolePointer = pointerAt;
             bool Held(SilkKey a, SilkKey b) => silkInput.Keyboards.Any(k => k.IsKeyPressed(a) || k.IsKeyPressed(b));
             player.CtrlHeld = Held(SilkKey.ControlLeft, SilkKey.ControlRight);
             player.AltHeld = Held(SilkKey.AltLeft, SilkKey.AltRight);
@@ -771,6 +788,10 @@ sealed partial class GameHost
                         FindStatsToggles(overlay.CharWidth);
                     }
                     if (debugMenuOpen) DrawDebugMenu(overlay, size.X, size.Y, panelsBottom);
+                    if (player.MapPick is not null) DrawMapPickHint(overlay, size.X, size.Y);
+                    if (inspectorMenuOpen) DrawInspectorMenu(overlay, size.X, size.Y, panelsBottom);
+                    if (interiorEditorOpen) DrawInteriorEditor(overlay, size.X, size.Y, panelsBottom);
+                    if (ConsoleOpen) DrawConsole(overlay, size.X, size.Y);
                     profiler?.Draw(overlay, size.X, size.Y);
                     profiler?.DrawVram(overlay, size.X, size.Y);
                 }

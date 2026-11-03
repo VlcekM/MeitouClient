@@ -160,23 +160,25 @@ sealed class ObjectStreamer(WorldObjects objects, ObjectMeshCache meshes) : IDis
     }
 
     /// <summary>A runtime placement was removed from <see cref="WorldObjects"/>: its instances and indoor volume leave the zone.</summary>
-    public void RemoveRuntime(string instanceId, ZoneCoordinate zone)
+    public void RemoveRuntime(string key, string instanceId, ZoneCoordinate zone)
     {
-        runtimeJobs.RemoveAll(j => j.Id == instanceId);
+        runtimeJobs.RemoveAll(j => j.Id == key);
         if (jobs.ContainsKey(zone) || fills.Any(f => f.Zone.Coordinate == zone)) { Invalidate(zone); return; }
         if (!zones.TryGetValue(zone, out var z)) return;
-        RemoveInstances(z, instanceId);
+        RemoveInstances(z, key, instanceId);
     }
 
-    void RemoveInstances(Zone z, string instanceId)
+    // The parts are named by the placement's instance id and its indoor volume by its key; a player's building has the one name for both.
+    void RemoveInstances(Zone z, string key, string? instanceId = null)
     {
-        bool Match(Instance i) => i.Placed.PlacementId == instanceId || i.Placed.ParentPlacementId == instanceId;
+        bool Named(string? id) => id == key || id == instanceId;
+        bool Match(Instance i) => Named(i.Placed.PlacementId) || Named(i.Placed.ParentPlacementId);
         z.Real.RemoveAll(Match);
         z.Stand.RemoveAll(Match);
         z.Unresolved.RemoveAll(Match);
         z.Parked.RemoveAll(Match);
         int had = z.Interiors.Length;
-        z.Interiors = [.. z.Interiors.Where(v => v.PlacementId != instanceId)];
+        z.Interiors = [.. z.Interiors.Where(v => !Named(v.PlacementId))];
         if (z.Interiors.Length != had) InteriorVersion++;
         z.GateHulls = [.. z.GateHulls.Where(v => v.PlacementId != instanceId)];
     }
@@ -213,7 +215,7 @@ sealed class ObjectStreamer(WorldObjects objects, ObjectMeshCache meshes) : IDis
             var laid = job.Result;
             // Keep the resident zone until the replacement layout is ready; only this house and its furniture change.
             if (replace) RemoveInstances(z, id);
-            else if (z.Real.Any(inst => inst.Placed.PlacementId == id)) continue;   // the zone's own layout already had it
+            else if (z.Real.Any(inst => inst.Placed.PlacementId == id || laid.Items.Count > 0 && inst.Placed.PlacementId == laid.Items[0].PlacementId)) continue;   // the zone's own layout already had it (a level-editor building's parts are named by its instance id, not its key)
             foreach (var item in laid.Items) z.Real.Add(Make(item, stand: false, z));
             foreach (var item in laid.Stand) z.Stand.Add(Make(item, stand: true, z));
             if (laid.Interiors.Count > 0) { z.Interiors = [.. z.Interiors, .. laid.Interiors]; InteriorVersion++; }

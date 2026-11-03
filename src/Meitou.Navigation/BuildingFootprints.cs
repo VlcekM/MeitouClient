@@ -11,6 +11,9 @@ namespace Meitou.Navigation;
 /// <param name="Hull">Counter-clockwise, scale applied, no rotation or position.</param>
 public sealed record BuildingFootprint(Vector2[] Hull, float YMin, float YMax)
 {
+    /// <summary>The convex hull of each collision shape on its own (same space as <see cref="Hull"/>): what the pick & collision inspector draws next to the merged hull.</summary>
+    public IReadOnlyList<Vector2[]> Shapes { get; init; } = [];
+
     /// <summary>The smallest box (X, Z) round <see cref="Hull"/>.</summary>
     public (Vector2 Min, Vector2 Max) Bounds
     {
@@ -22,6 +25,10 @@ public sealed record BuildingFootprint(Vector2[] Hull, float YMin, float YMax)
             return (min, max);
         }
     }
+
+    /// <summary>The per-shape hulls in the world, as <see cref="Place"/> does for the merged one.</summary>
+    public IEnumerable<Vector2[]> PlaceShapes(Vector3 position, Quaternion rotation) =>
+        Shapes.Select(shape => new BuildingFootprint(shape, YMin, YMax).Place(position, rotation));
 
     /// <summary>The hull in the world for a building at <paramref name="position"/> turned by <paramref name="rotation"/> (only its effect on X and Z counts).</summary>
     public Vector2[] Place(Vector3 position, Quaternion rotation)
@@ -72,7 +79,9 @@ public sealed class BuildingFootprints
     readonly GameInstall install;
     readonly GameDatabase db;
     readonly CollisionCache collision;
-    readonly Lazy<Dictionary<ZoneCoordinate, List<BuildingPlacement>>> index;
+    // The level data's buildings by zone, made on first use and again when the level data was edited (WorldLevelData.EditRevision).
+    (int Revision, Dictionary<ZoneCoordinate, List<BuildingPlacement>> Map)? indexed;
+    readonly object indexGate = new();
     readonly WorldLevelData? levels;
     readonly ConcurrentDictionary<string, Task<BuildingFootprint?>> byRecord = new(StringComparer.Ordinal);
 
@@ -82,17 +91,24 @@ public sealed class BuildingFootprints
         this.db = db;
         this.levels = levels;
         collision = new CollisionCache(install);
-        index = new(() =>
+    }
+
+    Dictionary<ZoneCoordinate, List<BuildingPlacement>> Index()
+    {
+        int revision = levels?.EditRevision ?? 0;
+        lock (indexGate)
         {
+            if (indexed is { } known && known.Revision == revision) return known.Map;
             var map = new Dictionary<ZoneCoordinate, List<BuildingPlacement>>();
-            if (levels is null) return map;
-            foreach (var b in levels.Buildings())
-            {
-                if (!map.TryGetValue(b.Zone, out var list)) map[b.Zone] = list = [];
-                list.Add(b);
-            }
+            if (levels is not null)
+                foreach (var b in levels.Buildings())
+                {
+                    if (!map.TryGetValue(b.Zone, out var list)) map[b.Zone] = list = [];
+                    list.Add(b);
+                }
+            indexed = (revision, map);
             return map;
-        });
+        }
     }
 
     /// <summary>The footprint of a BUILDING; null while it is being read, and for a record with no collision.</summary>
@@ -267,16 +283,20 @@ public sealed class BuildingFootprints
         float scale = building.GetFloat("scale", 1);
         if (scale <= 0) scale = 1;
         var points = new List<Vector3>();
+        var shapes = new List<Vector2[]>();
         foreach (var mesh in WorldObjectLayout.Building(db, building, "footprint", Vector3.Zero, Quaternion.Identity, new BuildingState()))
         {
             string path = mesh.Source.GetPath("xml collision");
             if (path.Length == 0 || collision.Get(path) is not { } prepared) continue;
             foreach (var shape in prepared.Shapes)
+            {
                 foreach (var v in shape.Vertices) points.Add(v * scale);
+                if (shape.Vertices.Length >= 3 && NavGeometry.Footprint([.. shape.Vertices.Select(v => v * scale)], 0, 0, 0).Polygon is { Length: >= 3 } own) shapes.Add(own);
+            }
         }
         if (points.Count < 3) return null;
         var hull = NavGeometry.Footprint(points, 0, 0, 0).Polygon;
-        return hull.Length < 3 ? null : new BuildingFootprint(hull, points.Min(p => p.Y), points.Max(p => p.Y));
+        return hull.Length < 3 ? null : new BuildingFootprint(hull, points.Min(p => p.Y), points.Max(p => p.Y)) { Shapes = shapes };
     }
 
     /// <summary>
@@ -294,7 +314,7 @@ public sealed class BuildingFootprints
 
     IEnumerable<BuildingPlacement> Near(Vector3 origin, Vector3 direction, float maxDistance)
     {
-        var map = index.Value;
+        var map = Index();
         const float Reach = 200;
         var from = new Vector2(origin.X, origin.Z);
         var track = new Vector2(direction.X, direction.Z) * maxDistance;
@@ -330,7 +350,7 @@ public sealed class BuildingFootprints
     public IEnumerable<(string Key, string Record, Vector3 Position, Quaternion Rotation)> LinkedAround(Vector2 centre, float radius, Func<double, double, float> terrainHeight)
     {
         if (levels is null) yield break;
-        var map = index.Value;
+        var map = Index();
         var home = WorldLayout.ZoneOf(centre.X, centre.Y);
         int span = (int)MathF.Ceiling(radius / WorldLayout.ZoneSize);
         for (int dz = -span; dz <= span; dz++)
@@ -348,7 +368,7 @@ public sealed class BuildingFootprints
     /// <summary>The footprints (those already read; the others are being read) of the level data's buildings with a placement within <paramref name="radius"/> of <paramref name="centre"/> (X, Z).</summary>
     public IEnumerable<PlacedFootprint> StaticAround(Vector2 centre, float radius)
     {
-        var map = index.Value;
+        var map = Index();
         const float Reach = 200;   // a building's own extent beyond its placement point
         var home = WorldLayout.ZoneOf(centre.X, centre.Y);
         int span = (int)MathF.Ceiling((radius + Reach) / WorldLayout.ZoneSize);

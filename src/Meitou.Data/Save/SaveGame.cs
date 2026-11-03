@@ -44,6 +44,11 @@ public sealed partial class SaveGame
     /// made from this one carries them on.
     /// </summary>
     public SortedDictionary<string, byte[]> ModData { get; } = new(StringComparer.Ordinal);
+    /// <summary>
+    /// The level editor's edits of the session (Meitou's own, in <see cref="SaveFolder.LevelEditsDirectory"/>): per zone the bytes of a zone file in the form of the editor's saved mod
+    /// (placed buildings with their state, cleared ones as entries with no target). A save without the folder (every older save, the original's) has none.
+    /// </summary>
+    public SortedDictionary<ZoneCoordinate, byte[]> LevelEdits { get; } = new(Comparer<ZoneCoordinate>.Create((a, b) => a.X != b.X ? a.X.CompareTo(b.X) : a.Y.CompareTo(b.Y)));
 
     /// <summary>
     /// The bytes of <c>meitou-mods/environment.json</c> (the code mods the save was made with, <c>CodeModEnvironment</c>); null when it has none.
@@ -83,6 +88,7 @@ public sealed partial class SaveGame
         if (folder.Exists(SaveFolder.PortraitName)) game.Portraits = folder.ReadAllBytes(SaveFolder.PortraitName);
         foreach (var (id, name) in folder.ModDataFiles) game.ModData[id] = folder.ReadAllBytes(name);
         if (folder.Exists(SaveFolder.ModEnvironmentName)) game.ModEnvironment = folder.ReadAllBytes(SaveFolder.ModEnvironmentName);
+        foreach (var (zone, name) in folder.LevelEditFiles) game.LevelEdits[zone] = folder.ReadAllBytes(name);
         game.Reindex();
         game.CheckZoneFiles();
         return game;
@@ -181,6 +187,7 @@ public sealed partial class SaveGame
         copy.Portraits = Portraits?.ToArray();
         foreach (var (id, bytes) in ModData) copy.ModData[id] = bytes.ToArray();
         copy.ModEnvironment = ModEnvironment?.ToArray();
+        foreach (var (zone, bytes) in LevelEdits) copy.LevelEdits[zone] = bytes.ToArray();
         copy.Reindex();
         copy.Problems.AddRange(Problems);
         return copy;
@@ -306,6 +313,7 @@ public sealed partial class SaveGame
                 file.WriteFile(Path.Combine(work, name.Replace('/', Path.DirectorySeparatorChar)));
             if (Portraits is not null) File.WriteAllBytes(Path.Combine(work, SaveFolder.PortraitName), Portraits);
             WriteModData(work);
+            WriteLevelEdits(work);
 
             if (Directory.Exists(folder))
             {
@@ -328,6 +336,14 @@ public sealed partial class SaveGame
             try { Directory.Delete(old, recursive: true); }
             catch (Exception e) when (e is IOException or UnauthorizedAccessException) { /* a leftover .old folder is removed by the next write */ }
         }
+    }
+
+    void WriteLevelEdits(string work)
+    {
+        if (LevelEdits.Count == 0) return;
+        Directory.CreateDirectory(Path.Combine(work, SaveFolder.LevelEditsDirectory));
+        foreach (var (zone, bytes) in LevelEdits)
+            File.WriteAllBytes(Path.Combine(work, SaveFolder.LevelEditsName(zone).Replace('/', Path.DirectorySeparatorChar)), bytes);
     }
 
     [GeneratedRegex(@"^(\d+)-")]

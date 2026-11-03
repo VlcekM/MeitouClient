@@ -374,7 +374,7 @@ short; a piece runs from its position along its own +Z for `link length` x `scal
 - **Controls**: click the start, move, click the end (no hold-drag). The first click starts a line for a normal wall, or
   for a single only when snapped (unsnapped singles and selected subsections place as one ordinary ghost). The second
   click queues every piece and, unless the end snapped or the wall is a single, a new line starts at the far end (clicks
-  chain a polyline). Right click drops the line. The first click posts "Blue arrows point outwards, towards enemy.";
+  chain a polyline). Right click drops the line; with no line, Meitou's right click on empty ground drops the chosen item (ghost and list highlight, queue stays; original **Unknown**, [level-editor](level-editor.md)). The first click posts "Blue arrows point outwards, towards enemy.";
   arrows (`arrow.mesh`, "bluebuilding", at rot x (0, 30, len/2), turned 180 deg, scale 2) mark each piece; the mesh's tip is at -X (see
   [perception](perception.md#spotting-a-sneaker)), which way it ends up facing is **Unknown**. A global flag `DAT_1421337b8` can block the first click (**Unknown**).
 - **Pieces** (`FUN_14042b660`): the wall and its `wall subsections`; connector and lower wedge kept apart, the rest with a

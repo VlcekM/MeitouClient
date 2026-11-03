@@ -61,7 +61,35 @@ sealed partial class PlayerInterface
     bool MapPointerDown(Vector2 p)
     {
         if (!OverMap(p)) return false;
-        mapDrag = p; return true;
+        mapDrag = p; mapPickFrom = p; return true;
+    }
+
+    /// <summary>
+    /// Debug (the F10 tool "Teleport on map"): while set, the next left click on the map (a press and release within <see cref="MapPickSlop"/> pixels, so panning still works) calls it with
+    /// the world point (X, Z; Y 0) and clears it. Closing the Map tab clears it too (Esc closes the overview).
+    /// </summary>
+    public Action<Vector3>? MapPick { get; private set; }
+    Vector2? mapPickFrom;
+    const float MapPickSlop = 4;
+
+    /// <summary>Opens the overview on the Map tab and arms <see cref="MapPick"/>; false (nothing armed) when the interface is hidden.</summary>
+    public bool BeginMapPick(Action<Vector3> pick)
+    {
+        if (!UiVisible) return false;
+        faithfulScreens.Open("overview");
+        faithfulScreens.SetTab("overview", "TabsMain", 0);
+        MapPick = pick;
+        return true;
+    }
+
+    /// <summary>The left button up: a click on the map (not a pan) hands its world point to <see cref="MapPick"/>.</summary>
+    void MapPickUp(Vector2 p)
+    {
+        var from = mapPickFrom;
+        mapPickFrom = null;
+        if (MapPick is not { } pick || from is not { } start || Vector2.Distance(start, p) > MapPickSlop || !OverMap(p)) return;
+        MapPick = null;
+        pick(MapWorld(Vector2.Clamp(mapView.At(mapViewport, p), Vector2.Zero, Vector2.One)));
     }
     bool MapPointerMove(Vector2 p)
     {
@@ -122,7 +150,7 @@ sealed partial class PlayerInterface
         }
         if (!shown && mapShown && !faithfulScreens.IsOpen("overview") && session.CurrentSnapshot.Towns.Any(t => (t & TownKnowledge.Recent) != 0))
             Say(new SeenDiscoveriesCommand { Tick = session.World.Tick });
-        if (!shown) { mapDrag = null; mapRightPressed = false; }
+        if (!shown) { mapDrag = null; mapRightPressed = false; MapPick = null; mapPickFrom = null; }
         mapShown = shown;
     }
 

@@ -70,9 +70,24 @@ public sealed class ItemSlots
         AddBuilding(world, data, site, relaid);
     }
 
+    /// <summary>A building added to a registered town while the world runs (<see cref="TownEdits.Place"/>): its slots, as <see cref="RegisterSite"/> makes a loaded one's. A town not registered yet takes them when it is.</summary>
+    internal void PlaceBuilding(World world, PopulationData data, int site, TownBuilding b)
+    {
+        if (sites.Contains(site)) AddBuilding(world, data, site, b);
+    }
+
+    /// <summary>A building taken out of a town (<see cref="TownEdits.Clear"/>): its slots go; the items lying in them stay on the ground.</summary>
+    internal void RemoveBuilding(TownBuilding b)
+    {
+        if (b.ItemSlots.Count == 0) return;
+        var ids = b.ItemSlots.Select(s => s.Id).ToHashSet(StringComparer.Ordinal);
+        all.RemoveAll(s => ids.Contains(s.Id));
+    }
+
     void AddBuilding(World world, PopulationData data, int site, TownBuilding b)
     {
-        if (b.ItemSlots.Count == 0 || world.Fixtures.IsEmptied(b.Key)) return;   // a bought house has none (EmptyBuilding)
+        if (b.ItemSlots.Count == 0 || world.Fixtures.IsEmptied(b.Key)   // a bought house has none (EmptyBuilding)
+            || all.Any(s => s.Id.StartsWith(b.Key + "/item", StringComparison.Ordinal))) return;
         int townFaction = site < data.SiteFactions.Count ? data.SiteFactions[site] : -1;
         int owner = data.LevelOwnerOf(b, townFaction);
         owner = world.Fixtures.PropertyOwner(b.Key) ?? owner;
