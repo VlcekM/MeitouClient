@@ -20,6 +20,8 @@ public sealed class CharacterAnimation
     {
         public int Definition;
         public float Time, Weight, Target;
+        /// <summary>Seconds of clip per second it last moved forwards at (the layer's play rate, +0x40): a block fading out plays backwards at it.</summary>
+        public float Rate;
         /// <summary>The clip's length in seconds as the character's skeleton has it (set while the time advances; derived, not hashed): the sound events' fractions need it.</summary>
         public float Length;
     }
@@ -92,6 +94,7 @@ public sealed class CharacterAnimation
             h.Add(Layers[i].Time);
             h.Add(Layers[i].Weight);
             h.Add(Layers[i].Target);
+            h.Add(Layers[i].Rate);
         }
         h.Add(Phase);
         h.Add(PhaseRate);
@@ -422,8 +425,9 @@ public sealed class AnimationSystem(AnimationLibrary library, AnimationLengths l
         }
         int technique = down || carried ? -1 : fight.Technique;   // a carried body plays nothing but its held pose
         bool fullTechnique = technique >= 0 && Library.Definitions[technique].Area == AnimationArea.All;
-        // A technique cuts a reaction or getting up short, and so does walking off (except a hit reaction, which moves the character itself).
-        if (a.Action >= 0 && !down && (technique >= 0 || MathF.Abs(speed) >= MovingSpeed && !a.ActionIsStumble)) a.Action = -1;
+        // A technique cuts a reaction or getting up short, and so does walking off (except a hit reaction, which moves the character itself); a stumble the combat system
+        // ended with a won break-out fades out (FUN_140609290 -> FUN_1405b36f0, docs/game/combat.md "Hit reactions").
+        if (a.Action >= 0 && !down && (technique >= 0 || MathF.Abs(speed) >= MovingSpeed && !a.ActionIsStumble || a.ActionIsStumble && fight.StumbleClip < 0)) a.Action = -1;
         if (a.Action >= 0)
         {
             var d = Library.Definitions[a.Action];
@@ -660,11 +664,13 @@ public sealed class AnimationSystem(AnimationLibrary library, AnimationLengths l
             if (layer.Definition == lift) layer.Time = liftTime;
             else if (layer.Definition == technique) layer.Time = fight.Progress * length;   // the combat system's timing: the blow lands at its frame
             else if (layer.Definition == a.Action) layer.Time = MathF.Max(a.ActionTime, 0);   // held at the start while getting up blends out of a ragdoll
+            else if (layer.Target <= 0 && !RunsFading(d, synched)) layer.Time = FadingTime(d, layer, dt);
             else if (IsStrafe(d)) layer.Time = Wrap(layer.Time + dt * a.Rate * d.PlaySpeed * a.StrafeSpeed, length);   // signed: a step the other way plays it backwards
             else if (synched) layer.Time = (a.Phase + d.SynchOffset - MathF.Floor(a.Phase + d.SynchOffset)) * length;
             else if (d.MoveSpeed != 0) layer.Time += dt * a.Rate * d.PlaySpeed * speed;
             else layer.Time += dt * (d.PlaySpeed > 0 ? d.PlaySpeed : d.Technique ? 1 : 0);
             if (!d.Loop && !synched && !IsStrafe(d)) layer.Time = Math.Clamp(layer.Time, 0, length * 0.999f);   // a one-shot clip holds its last frame
+            if (layer.Time > before && dt > 0) layer.Rate = (layer.Time - before) / dt;
             if (d.Relocates && layer.Time > before) root += (lengths.Root(d.Clip, layer.Time) - lengths.Root(d.Clip, before)) * layer.Weight;
             if (layer.Weight <= 0 && layer.Target <= 0) continue;   // faded out: dropped
             a.Layers[kept++] = layer;
@@ -672,6 +678,18 @@ public sealed class AnimationSystem(AnimationLibrary library, AnimationLengths l
         a.Count = kept;
         return root * rootScale;
     }
+
+    /// <summary>
+    /// Whether a layer fading out goes on playing (<c>FUN_1405b5c30</c>, the fading list: only a looping layer, +0x5d, advances; <b>Verified</b>). Synched and side-step clips are the
+    /// looping movement clips.
+    /// </summary>
+    static bool RunsFading(AnimationDefinition d, bool synched) => d.Loop || synched || IsStrafe(d) || d.MoveSpeed != 0;
+
+    /// <summary>
+    /// A non-looping layer's time while it fades out: frozen, except a block (+0x62, set by <c>FUN_1405b7600</c> for a block technique), which plays backwards at its rate, lowering the guard.
+    /// </summary>
+    static float FadingTime(AnimationDefinition d, in CharacterAnimation.Layer layer, float dt) =>
+        d.Technique && d.Area == AnimationArea.Upper ? MathF.Max(0, layer.Time - layer.Rate * dt) : layer.Time;
 
     /// <summary>A side-step clip (<see cref="AnimationLibrary.Strafe"/>): its time follows the side speed.</summary>
     static bool IsStrafe(AnimationDefinition d) => d.Area == AnimationArea.Lower && d.MoveSpeed == 0 && d.StrafeSpeedMax > 0 && !d.Technique;
