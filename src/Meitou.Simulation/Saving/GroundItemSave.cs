@@ -45,10 +45,12 @@ public static class GroundItemSave
 
     /// <summary>
     /// Writes each zone's list from the items lying in it (by position). A zone whose list would name the same records it does and gains no item is left as it is (so an
-    /// unchanged save keeps its zone files); a zone with items and no file gets one; a file left with no record goes (as the original deletes it).
+    /// unchanged save keeps its zone files); a zone with items and no file gets one; a file left with no record goes (as the original deletes it). Returns the new items a camp laid
+    /// (<see cref="GroundItem.Camp"/>), for <see cref="WritePersist"/> once the nests have their handles.
     /// </summary>
-    public static void Write(SaveGame game, World world, ItemFactory factory)
+    public static List<(SaveItem Item, int Camp)> Write(SaveGame game, World world, ItemFactory factory)
     {
+        var camps = new List<(SaveItem Item, int Camp)>();
         var byZone = new Dictionary<ZoneCoordinate, List<GroundItem>>();
         foreach (var g in world.GroundItems.All)
         {
@@ -65,8 +67,31 @@ public static class GroundItemSave
             var named = old.Select(o => o.Record.StringId).ToHashSet(StringComparer.Ordinal);
             if (zone is not null && items.All(i => i.Item.Saved is { } s && named.Contains(s.StringId)) && items.Count + kept.Count == old.Count) continue;
             if (zone is null) game.Zones[z] = zone = new SaveZone(z, new SaveFile());
-            SaveGroundItems.Write(zone, [.. items.Select(i => (i.Position, i.Rotation, SavedKit.FromItem(i.Item)))], kept);
+            var saved = items.Select(i => (i.Position, i.Rotation, Item: SavedKit.FromItem(i.Item))).ToList();
+            for (int k = 0; k < items.Count; k++)
+                if (items[k].Camp is { } camp && items[k].Item.Saved is null) camps.Add((saved[k].Item, camp));
+            SaveGroundItems.Write(zone, saved, kept);
             if (zone.File.Records.Count == 0) game.Zones.Remove(z);
+        }
+        return camps;
+    }
+
+    /// <summary>
+    /// Puts the original's <c>persist</c> handle on a camp's new items (docs/formats/save.md "Zone files"): the nest's (type 85, <paramref name="nests"/> by wild site) or the town's
+    /// (type 13, a <c>spawn in town centre</c> town's state). A camp the save holds no handle of leaves its items without one. A read item keeps its own.
+    /// </summary>
+    public static void WritePersist(SaveGame game, PopulationData data, List<(SaveItem Item, int Camp)> camps, IReadOnlyDictionary<int, Hand> nests)
+    {
+        if (camps.Count == 0) return;
+        var towns = new Dictionary<string, Hand>(StringComparer.Ordinal);
+        foreach (var t in game.Towns)
+            if (!t.IsNest && t.Instance.Length > 0 && !t.Handle.IsNull) towns.TryAdd(t.Instance, t.Handle);
+        foreach (var (item, camp) in camps)
+        {
+            int townSite = -1 - camp;
+            var hand = camp >= 0 ? nests.GetValueOrDefault(camp, Hand.Null)
+                : townSite < data.Sites.Count ? towns.GetValueOrDefault(data.Sites[townSite].InstanceId, Hand.Null) : Hand.Null;
+            if (!hand.IsNull && item.Written is { } record) hand.Write(record, "persist");
         }
     }
 }

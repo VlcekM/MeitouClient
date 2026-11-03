@@ -19,7 +19,7 @@ public sealed partial class PopulationSystem
         world.NestBuildings.Set(camp, layout, owner, centre, record);
         foreach (var piece in layout.Pieces) world.Fixtures.RegisterNestBuilding(world, data, piece, owner, site);
         if (layout.Drops.Count > 0 && !world.SavedZones.Contains(WorldLayout.ZoneOf(centre.X, centre.Y)) && world.NestBuildings.Stock(camp))
-            LayItems(world, layout.Drops, owner, centre);
+            LayItems(world, camp, layout.Drops, owner, centre);
     }
 
     /// <summary>A camp's buildings and meshes come down (a nest's when it unloads; it stands them up again when it loads).</summary>
@@ -44,9 +44,9 @@ public sealed partial class PopulationSystem
 
     /// <summary>
     /// The camp's items on the ground: a <c>debris</c> item as it is, a <c>loot spawn</c> entry rolled from its VENDOR_LIST as an item slot's is (<see cref="Items.ItemSlots.Roll"/>, with
-    /// the camp's faction for the grade). Loose, owned by nobody; saved with the zone's other loose items.
+    /// the camp's faction for the grade). Loose, owned by nobody, tagged as the camp's (kept past the dropped-item limit, saved with its <c>persist</c> handle).
     /// </summary>
-    void LayItems(World world, List<NestDrop> drops, int owner, Vector2 centre)
+    void LayItems(World world, int camp, List<NestDrop> drops, int owner, Vector2 centre)
     {
         ulong key = Rng.Mix(SeedSalts.NestFurniture ^ (ulong)(uint)(int)centre.X ^ (ulong)(uint)(int)centre.Y << 32 ^ 0x1007UL);
         var rng = new RandomStream(world.Seed, key, RngPurpose.Loot);
@@ -55,7 +55,7 @@ public sealed partial class PopulationSystem
             var item = drop.List
                 ? data.Db.Find(drop.Record) is { } list ? Items.ItemSlots.Roll(data, VendorList.From(data.Db, list), owner, ref rng).Item : null
                 : data.Items.Create(drop.Record, 1, 0);
-            if (item is not null) world.GroundItems.Place(item, drop.Position, drop.Yaw, null, -1);
+            if (item is not null) world.GroundItems.Place(item, drop.Position, drop.Yaw, null, -1, camp);
         }
     }
 }

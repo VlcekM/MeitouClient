@@ -123,7 +123,7 @@ public static partial class SaveCapture
         buildings = HeldSave.BuildingStates(game);
         MachineSave.Write(game, world);
         world.Systems.OfType<Combat.CombatSystem>().FirstOrDefault()?.WriteTurretShots(world, buildings);
-        GroundItemSave.Write(game, world, data.Items);
+        var campItems = GroundItemSave.Write(game, world, data.Items);
         var races = new Dictionary<string, RaceData?>(StringComparer.Ordinal);
         var written = WritePlayerSquads(builder, world, data, loaded, options, clock, buildings, races);
         WriteSelection(game, world, written);
@@ -138,6 +138,7 @@ public static partial class SaveCapture
         if (world.Systems.OfType<PopulationSystem>().FirstOrDefault() is { } population)
         {
             var nests = WriteNests(builder, world, data, population, options.Seed);
+            GroundItemSave.WritePersist(game, data, campItems, nests);
             WriteWildNpcs(builder, world, data, population, nests, options, clock, buildings, races);
         }
 

@@ -30,11 +30,16 @@ public sealed record GroundItem(int Id, ItemInstance Item, Vector3 Position, Qua
     public int OwnedBy { get; init; } = -1;
     /// <summary>The stump a severed limb fell from (null: none, e.g. any other item).</summary>
     public FallSource? Fall { get; init; }
+    /// <summary>
+    /// The camp that laid it (<see cref="NestBuildings"/>' key: a nest's debris or loot; null: none). Not counted against <see cref="GroundItems.Limit"/>; saved as the
+    /// original's <c>persist</c> handle naming the nest or town.
+    /// </summary>
+    public int? Camp { get; init; }
 }
 
 /// <summary>
 /// Loose items lying in the world (docs/simulation.md "Ground items"): the save's (its zones' <c>1-itemlist</c>, docs/formats/save.md "Zone files") and the severed limbs combat drops.
-/// Oldest first; beyond <see cref="Limit"/> items dropped in play the oldest of those goes. Hashed by <see cref="World.StateHash"/> only while it holds one.
+/// Oldest first; beyond <see cref="Limit"/> items dropped in play the oldest of those goes (not a slot's or a camp's). Hashed by <see cref="World.StateHash"/> only while it holds one.
 /// </summary>
 public sealed class GroundItems
 {
@@ -65,15 +70,15 @@ public sealed class GroundItems
         Revision++;
     }
 
-    static bool Capped(GroundItem i) => i.Item.Saved is null && i.Slot is null;
+    static bool Capped(GroundItem i) => i.Item.Saved is null && i.Slot is null && i.Camp is null;
 
     /// <summary>
     /// Lays a slot's item (<see cref="ItemSlots"/>) on the ground, turned <paramref name="yaw"/> about Y and laid flat as a dropped one (no limit while it keeps
-    /// <paramref name="slot"/>; null: a loose item at once); returns its id.
+    /// <paramref name="slot"/>; null: a loose item at once), or a camp's (<paramref name="camp"/>, <see cref="GroundItem.Camp"/>); returns its id.
     /// </summary>
-    public int Place(ItemInstance item, Vector3 position, float yaw, string? slot, int owner)
+    public int Place(ItemInstance item, Vector3 position, float yaw, string? slot, int owner, int? camp = null)
     {
-        items.Add(new GroundItem(nextId, item, position, Quaternion.CreateFromAxisAngle(Vector3.UnitY, yaw)) { Dropped = true, Slot = slot, OwnedBy = owner });
+        items.Add(new GroundItem(nextId, item, position, Quaternion.CreateFromAxisAngle(Vector3.UnitY, yaw)) { Dropped = true, Slot = slot, OwnedBy = owner, Camp = camp });
         Revision++;
         return nextId++;
     }
@@ -132,6 +137,7 @@ public sealed class GroundItems
             h.Add(i.Rotation.Z);
             h.Add(i.Rotation.W);
             if (i.Slot is not null) { h.Add(Rng.StableHash(i.Slot)); h.Add(i.OwnedBy); }   // only for a slot's, so other items hash as before
+            if (i.Camp is { } camp) h.Add(camp);
         }
     }
 }
