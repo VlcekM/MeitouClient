@@ -116,6 +116,8 @@ public sealed partial class World : IDisposable
         production = this.systems.OfType<Production.ProductionSystem>().FirstOrDefault();
         dialogues = this.systems.OfType<Dialogue.IDialogueSource>().FirstOrDefault();
         ragdolls = this.systems.OfType<Ragdolls.IRagdollSource>().FirstOrDefault();
+        hasGoalSources = this.systems.OfType<IGoalSource>().Any();
+        Claims.Configure(settings.TickSeconds);
         foreach (var owner in this.systems.OfType<ITaskOwner>()) owner.RegisterTasks(Tasks);
         foreach (var owner in this.systems.OfType<IDecisionOwner>()) owner.RegisterSources(Decisions);
         for (int k = 0; k < this.systems.Count; k++) if (DecidesAfter(this.systems[k])) decideAfter = k;
@@ -172,6 +174,9 @@ public sealed partial class World : IDisposable
     public PlayerState Player { get; } = new();
     /// <summary>Doors, lockable containers, cages and beds of the registered towns, with their occupants (docs/simulation.md "Cages, beds and locks").</summary>
     public Locks.FixtureRegistry Fixtures { get; } = new();
+    /// <summary>The squads' goal list across ticks (<see cref="GoalClaims"/>).</summary>
+    public GoalClaims Claims { get; } = new();
+    readonly bool hasGoalSources;
     /// <summary>The characters' places and light levels for the sight tests (docs/game/perception.md "Sight"), worked out each tick.</summary>
     public SightMap Sight { get; } = new();
     /// <summary>The unique (story) characters made, dead or captured (docs/game/factions-squads-towns.md "Unique characters").</summary>
@@ -386,6 +391,8 @@ public sealed partial class World : IDisposable
         if (decideAfter < 0) RunDecisions(prof);
         TaskStart.CheckStarts(this);
         prof?.Part("task starts");
+        Claims.Now = Tick;
+        if (hasGoalSources) SquadGoals.Of(this);   // the duties running now refresh their entries; the ones past their 3 s go
 
         // 8. Publish.
         Squads.Refresh(table);

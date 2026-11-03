@@ -22,20 +22,29 @@ public interface IGoalSource
 public sealed class SquadGoals
 {
     readonly List<(int Squad, CharacterId Worker, GoalTarget Target)> entries = [];
+    GoalClaims? book;
 
-    /// <summary>A snapshot of every source's work now.</summary>
+    /// <summary>
+    /// A snapshot of every source's work now plus the claims that ended within the last <see cref="GoalClaims.Seconds"/> (an entry of the original's list stays that long after its last
+    /// refresh, <c>FUN_14026a320</c>, <c>FUN_140269ff0</c>); the sources' work refreshes the world's book.
+    /// </summary>
     public static SquadGoals Of(World world)
     {
-        var goals = new SquadGoals();
+        world.Claims.Now = world.Tick;
+        var goals = new SquadGoals { book = world.Claims };
         foreach (var system in world.Systems)
             if (system is IGoalSource source) source.Publish(world, goals);
+        goals.entries.Clear();
+        goals.entries.AddRange(world.Claims.Live(world.Tick));
         return goals;
     }
 
     /// <summary>Records that <paramref name="worker"/> of <paramref name="squad"/> works on <paramref name="target"/>; workers outside every squad (-1) share one list (the original has none: every character has a squad).</summary>
     public void Add(int squad, CharacterId worker, GoalTarget target)
     {
-        if (!target.Body.IsNone || target.Place is not null) entries.Add((squad, worker, target));
+        if (target.Body.IsNone && target.Place is null) return;
+        entries.Add((squad, worker, target));
+        book?.Refresh(squad, worker, target);
     }
 
     /// <summary>How many other members of <paramref name="squad"/> work on <paramref name="target"/> (<c>FUN_1402690e0</c>): not the asker, nor the target itself.</summary>

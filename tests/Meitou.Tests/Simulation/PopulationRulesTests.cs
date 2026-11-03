@@ -109,4 +109,27 @@ public class PopulationRulesTests
         fixtures.NoteMade("b", T("c", 0, true));
         Assert.Equal(0, fixtures.RecordOf("b")!.Designation);   // a platoon made at the building overwrites, a zero too
     }
+
+    sealed class Duty : ITickSystem, IGoalSource
+    {
+        public bool On;
+        public CharacterId Worker, Body;
+        public void Publish(Meitou.Simulation.World world, SquadGoals goals) { if (On) goals.Add(1, Worker, GoalTarget.Of(Body)); }
+    }
+
+    /// <summary>FUN_14026a320 / FUN_140269ff0: an entry of the squad's goal list stays 3 s after its last refresh, so a claim outlives the duty that made it.</summary>
+    [Fact]
+    public void A_goal_claim_outlives_its_duty_by_three_seconds()
+    {
+        var duty = new Duty { On = true, Worker = new CharacterId(5, 1), Body = new CharacterId(6, 1) };
+        using var world = new Meitou.Simulation.World(new WorldSettings { PublishSnapshots = false }, new OpenGroundWalkability((_, _) => 0), [duty]);
+        world.RunTicks(3);
+        var asker = new CharacterId(7, 1);
+        Assert.Equal(1, SquadGoals.Of(world).Working(1, asker, GoalTarget.Of(duty.Body)));
+        duty.On = false;
+        world.RunTicks(80);   // 2.7 s
+        Assert.Equal(1, SquadGoals.Of(world).Working(1, asker, GoalTarget.Of(duty.Body)));
+        world.RunTicks(20);   // past 3 s
+        Assert.Equal(0, SquadGoals.Of(world).Working(1, asker, GoalTarget.Of(duty.Body)));
+    }
 }
