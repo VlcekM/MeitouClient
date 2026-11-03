@@ -465,7 +465,7 @@ from the decompile and agree with this table, except that the decompile shows no
 | 69 | `isRouteTraceBlocked` |
 | 70 | `isObjectMine` |
 | 71 | `isBuildingDamaged` |
-| 72 | `isFullyRested` |
+| 72 | `isFullyRested` (**Observed**, evaluator `FUN_1405a0610` from the registry's id-0x48 call): false for a character (or character target) whose faction is not the player's (faction `+0x250`), so an NPC's rows 98, 100, 175 and 261 are never done and their goals run in their hours; for the player's faction, true when the MedicalSystem's (Character `+0x458`) float `+0xb0` is above 0.9 (`FUN_140643cd0`; the field's meaning is **Unknown**). Meitou: false off the player's side, else not incapacitated |
 | 73 | `machineHasFreeOperatorSlot` |
 | 74 | `isEnemyForceDefeated` |
 | 76 | `isMessageDelivered` |
