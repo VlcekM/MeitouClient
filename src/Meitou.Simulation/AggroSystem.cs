@@ -845,7 +845,8 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
     {
         if (slot == s.Self) return;
         ref readonly var other = ref s.Table.Previous[slot];
-        float d2 = Vector3.DistanceSquared(other.Position, s.Eye);
+        // The range is on the ground plane (X/Z), as the original's gather over the grid (<c>FUN_1409ff210</c>, Verified).
+        float d2 = Vector2.DistanceSquared(new Vector2(other.Position.X, other.Position.Z), new Vector2(s.Eye.X, s.Eye.Z));
         if (s.FarPass ? d2 <= GatherNear * GatherNear || s.Gathered >= GatherCap || d2 > s.Range * s.Range && d2 > NoiseFar * NoiseFar
             : d2 > GatherNear * GatherNear || s.Gathered >= GatherCap + GatherExtra) return;
         var list = s.Block.entries;
