@@ -1118,7 +1118,8 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
             assembly.RefreshEquipment(cc);
         }
         assembly.RefreshEquipment(wc);
-        world.Defer(new Dialogue.DialogueEvent(table.IdOf(w), table.IdOf(c), before ? RecapturedSlave : IntroducingNewSlave) { Tick = world.Tick + 1 });
+        // Always event 35: the original's captive test (Character slot 124 `0x3e0`, FUN_1405e1f20) is the constant false in every character class, so 37 is never sent from here (FUN_14035aa20, Verified).
+        world.Defer(new Dialogue.DialogueEvent(table.IdOf(w), table.IdOf(c), IntroducingNewSlave) { Tick = world.Tick + 1 });
         // The owner is set only when it had none that resolves (FUN_14032e430 behind FUN_14035aa20): a recaptured slave keeps its owner and its master squad. Meitou's owner is a faction,
         // and the master squad (runtime only) stands for the handle when it is known.
         bool owned = cc.SlaveOwner >= 0 && (cc.SlaveMaster < 0 || world.Squads.Find(cc.SlaveMaster) is not null);
