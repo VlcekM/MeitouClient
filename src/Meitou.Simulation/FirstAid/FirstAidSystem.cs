@@ -338,8 +338,9 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
         }
         if (kitless)
         {
-            // Without a kit every part takes 1 HP a second, organic or robotic alike, and nothing drains (FUN_140649a00).
-            if (body.Bandage(dt, null, race, out _) <= 0)
+            // Without a kit every part takes 1 HP a second, organic or robotic alike, and nothing drains (FUN_140649a00). Done as with a kit: once the parts are bandaged up,
+            // healing turns bandage into flesh and float dust leaves a sliver of room every update, which would keep the treatment going for ever.
+            if (body.BandageRoom(race, false) + body.BandageRoom(race, true) <= Done || body.Bandage(dt, null, race, out _) <= 0)
             {
                 Say(world, m, medicCold.TreatTarget, HealingOtherFinished, BeingHealedFinished);
                 patientCold.StuckBolts = null;
