@@ -96,6 +96,8 @@ starve; robot flag alone does not imply zero rate. Eating: [Eating](#eating); NP
 [Free food](#free-food). Starvation KO threshold uses toughness10..85 and doubles with food;
 actual transition timing is not fully decoded.
 
+The medical update gets dt twice in the original (every frame, plus again for each character with a budgeted visit: about x(1 + visits / frames), x2 while the budget covers everyone); Meitou ticks exact game time ([engine choices](../simulation.md#engine-choices-against-the-originals-frame-loop)).
+
 Medical parts retain flesh h, bandage b, stun s, wear w, maximum M and hit/rig/replacement state.
 Effective part health, coverage/hit choice and body aggregates are distinct. Apply blunt/cut,
 bandaging and stun to the correct quantities; do not heal untreated flesh directly.

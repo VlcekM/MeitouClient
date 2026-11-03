@@ -17,6 +17,14 @@ clocks, input and camera, and disposes systems/services. Of a frame's ticks only
 a snapshot (`RunTick(publish)`), the pair the host interpolates between. Advanced → Pause after loading (`PauseOnLoad`, a plain on/off switch outside the Faithful / Meitou sides, default off as
 the game runs a loaded save at once, [game loop](game/game-loop.md)) pauses the speed after a menu load or import; `--load` runs.
 
+### Engine choices against the original's frame loop
+
+**Verified** original behaviour (decompile), each a deliberate difference in Meitou; none changes code.
+- **Character update budget** (`FUN_140786e30`, [game loop](game/game-loop.md)): the logic tick (slot 29, `FUN_1405ccd90`) runs for 8 characters a frame round robin; non-priority characters get the full update (slot 28, `FUN_1405d00b0`) for 6 a frame with the time accumulated since their last one; the rest only add the frame time to `+0xc8` while the in-view flag `+0x1a9` is clear (`FUN_1405c9f60`:151-152). Meitou steps every character every tick (timing granularity only). Animal growth (`FUN_1405cdf00`) is lumpy there, the total identical.
+- **Medical clock** (`FUN_1405c7ae0`, `FUN_1405cfd90`, `FUN_1405c7d40`, `FUN_140652000`): every character's `+0xc8` gets dt every frame and `FUN_1405cfd90` adds dt again for each character with a budgeted visit, so medical time runs at about real x (1 + visits / frames), x2 while 6 or fewer non-priority characters exist. Meitou runs `medical.Tick(TickSeconds)`, exactly game time. **Decision needed** to change it: it alters every bleeding, healing and KO rate.
+- **Paused growth** (`FUN_140788a00` -> `FUN_140787230` -> `FUN_140786a40`): the character clock (dt x speed) is replaced by 0.01 when not above 0 and is not zeroed by pause; per paused frame one flagged character (`+0x1a9` or carried `+0x3d4`) still gets vfuncs 0xe0, 0xe8, 0x268, so an animal ages 0.01 game-s per rendered frame while paused. Meitou: nothing runs while paused.
+- **Zone linger timers** (`FUN_140a0b830`): the three timers (`+0x18`, `+0xc4`, `+0xc8`; defaults 4, 6, 5 s) count down with the real, capped, smoothed frame dt (`DAT_142133790`), independent of game speed and running while paused. Meitou's `ZoneActivation` lingers (`LoadedLingerSeconds` 4, `BoxLingerSeconds` 6) count simulation ticks: 5x faster in real time at speed 5, frozen while paused. **Decision needed** to change it.
+
 ### Speed steps
 
 **Engine choice.** `World.SpeedSteps` is 1 at 1x and headless, 2 at 2x, 5 at 5x (from `World.PhysicsSpeed`, set by the host before each tick). The staggered looks

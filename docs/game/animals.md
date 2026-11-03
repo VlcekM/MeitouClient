@@ -117,6 +117,7 @@ moving an item out of its inventory clears it, and a loot take (or an item moved
   `dt / 2618.18 / lifespan`, dt the update's elapsed time (`+0xcc`, the same value the base update passes on) and 2618.18 s the day length
   (`FUN_14066cd50`). So `lifespan` is the game days from age 0 to 1. When the age has moved more than 0.05 past `+0x6fc`, `+0x6fc` takes it and,
   below 0.95, the look's size is refreshed (appearance vfunc 0x30); slot 0x390 is read live by the body each tick ([Body](#3-body)).
+  The update is lumpy in the original (8 characters a frame round robin for the logic tick, 6 for the full update with the accumulated time) and, while paused, one flagged character a frame still ages at 0.01 game-s a rendered frame (**Verified**, `FUN_140786a40`); Meitou steps every animal every tick and ages nothing while paused ([engine choices](../simulation.md#engine-choices-against-the-originals-frame-loop)).
 - So the stats multiplier (= age) keeps growing to 1.1, the size to lerp(1.1). Spawn ages come from the squad template ([factions 5.1](factions-squads-towns.md));
   ages above 1.1 do not grow.
 - Saves: GAMESTATE_CHARACTER float `age` = slot 0x398 (`FUN_1406280a0`), read back through slot 0x388 (**Verified**: 159 828 vanilla platoon
