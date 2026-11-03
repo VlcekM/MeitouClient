@@ -1538,6 +1538,6 @@ Code: `UiTooltips` (data, layout), `PlayerInterface.Tooltips.cs` (hover runtime,
 
 - The `+0x1a9` flag and `DAT_142133ae0` gating the damage floater label (section 8).
 - Why the code looks up ten life bars while the layout has nine (`LifeBar10` is missing; the constructor `FUN_140726a70` looks up `LifeBar1`, `LifeBar2`, ... until one is missing); the medical panel's overall health h; where the stats labels' upper case and the default squad name come from.
-- Exact tab index of the AI tab and which layout widgets belong to which tab for tabs 4 to 6.
+- Overview tab order MAP 0, FACTION 1, RESEARCH 2, CRAFTING 3, SQUADS 4, DIALOGUE (Messages) 5, AI 6 is Verified (`FUN_14049f5b0` captions each tab found by name in that order); only the layout's widget-per-tab mapping is not re-traced.
 - Trade, dialogue and research logic (other subsystems).
 - Layer of the secondary layouts without a `layer` attribute (Kenshi_OrdersPanelOrder, PortraitCharacter, SquadBox, SquadsPanel_PortraitCharacter, TutorialTooltipPanel, ItemListItem, CharacterSelectionBox): they are children of other widgets (**Observed**, not traced).
