@@ -180,7 +180,7 @@ motion vectors of moving parts not checked.
 
 **Original** (**Verified** by code, Ghidra, unless marked):
 - A building with an `interior` list owns an interior object, open or closed.
-- **Opening.** `FUN_1407f7230` runs every frame. Each player character whose location is a non-destroyed building sets that interior's keep-open timer to 10. The timer falls by the game-time step (`FUN_14054a790`), and the interior closes below 0 (`FUN_14054b690`). A building just left shows every floor (floor 4) until then.
+- **Opening.** `FUN_1407f7230` runs every frame. Each player character whose location is a non-destroyed building sets that interior's keep-open timer to 10. The timer falls by the game-time step (`FUN_14054a790`) only while the building is complete (its vtable slot 69 returns the building's is-complete byte `+0x160`, **Verified**; Meitou: a construction site is held open), and the interior closes below 0 (`FUN_14054b690`). A building just left shows every floor (floor 4) until then.
 - **Closing** (`FUN_14054b130`) hides the interior's contained objects in every pass, except those flagged outside (`RootObject+0x240`). Their entities are destroyed and the lights go off.
 - **Contained objects** are registered by `FUN_14054f3d0`. They are interior-layout furniture and buildings with a parent building: a saved `isInsideBuilding`, or player ghosts placed inside.
 - **The outside flag:**
