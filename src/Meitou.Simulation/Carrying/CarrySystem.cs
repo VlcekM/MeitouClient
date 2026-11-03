@@ -577,9 +577,9 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
         bool attached = !cold.Carrying.IsNone && cold.Carrying == cold.CarryTarget;
         if (!attached && cold.LiftTime > CarrySettings.AttachAt * LiftSeconds)
         {
-            // The body is attached once, at 0.4 of the clip, if it can still be lifted and is still near (the reach was tested when the clip started).
-            if (!table.TryResolveNext(cold.CarryTarget, out int b) || !CanCarry(world, cold, cold.Kidnapping ? TaskType.KIDNAP_ORDER : TaskType.LIFT_PERSON_PLAYER_ORDER) || !Liftable(world, i, b)
-                || Gap(table.Next[i], table.Next[b]) > 2 * ReachOf(world, table.Cold(b)!))   // pushed about while lifting: some slack, not a pick-up from afar
+            // The body is attached once, at 0.4 of the clip. The update re-checks nothing but the target: it must still resolve and not be carried by another carrier (unless this is a
+            // snatch); reach, arm, fight and down state were the start's tests (FUN_140354ff0).
+            if (!table.TryResolveNext(cold.CarryTarget, out int b) || table.Cold(b)!.CarriedBy is { IsNone: false } other && other != table.IdOf(i) && !cold.Snatching)
             {
                 End(world, i);
                 return;
