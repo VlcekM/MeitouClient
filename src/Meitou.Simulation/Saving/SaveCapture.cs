@@ -659,7 +659,8 @@ public static partial class SaveCapture
             {
                 int siteFaction = data.SiteFactions.Count > town ? data.SiteFactions[town] : -1;
                 // `sqt` is the town pool it counts against: 1 residents (and bar squads), 2 roaming (docs/formats/save.md "NPC platoons").
-                record.Ints["sqt"] = roaming ? 2 : 1;
+                // A template with `roaming military` is made in mode 2 even from a town's resident list (FUN_140583a10, Verified), so its housing squads are roaming-pool platoons too.
+                record.Ints["sqt"] = roaming || data.Db.Find(templateId)?.GetBool("roaming military") == true ? 2 : 1;
                 // Residents and bar squads are persistent (the original keeps them off screen, docs/game/factions-squads-towns.md "Persistent platoons"), roaming ones not but
                 // while they occupy a town.
                 record.Bools["persistent"] = !roaming || Ai.AiSystem.Occupies(data.Ai, package);
