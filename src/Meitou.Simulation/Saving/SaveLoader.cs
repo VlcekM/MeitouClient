@@ -121,6 +121,7 @@ public static class SaveLoader
             if (site.InstanceId.Length > 0 && context.TownStates.TryGetValue(site.InstanceId, out var state)
                 && state.Strings.GetValueOrDefault("replacementTown") is { Length: > 0 } replacement && data.Db.Find(replacement) is { Type: FcsRecordType.TOWN } record)
                 data.SetReplacement(site.Index, TownData.From(record));
+        world.Fixtures.RuinsFromSave(world, data);
         foreach (var site in data.Sites)
             if (site.Replacement is not null) world.Fixtures.ApplyTownRuins(world, data, site.Index);   // the ruins its residents made
         // The war states, and the town handles their targets and homes name (docs/formats/save.md WAR_SAVESTATE).

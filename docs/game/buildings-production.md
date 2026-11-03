@@ -971,11 +971,10 @@ made before this pass wrote those buildings intact). A town's baked distant mesh
 
 A [town override](factions-squads-towns.md#town-overrides) reads its zone back from the level file and houses the replacement's residents, so Meitou
 (`FixtureRegistry.ApplyTownRuins`) sets each of the town's buildings in its own zone that is not the player's: a home of a ruined template that can be destroyed is a
-ruin, any other as its level file has it (a resident ruin of the old town stands again). A loaded save applies them again from its replacements; the building states
-it writes carry them. The host replaces those buildings' level placements (drawing, navmesh, lamps); doors, locks and indoor sight follow. **Observed** (data):
+ruin, any other as its level file has it (a resident ruin of the old town stands again). Its other zones keep their state, but such a home there becomes a ruin
+too. A loaded save takes its ruins of standing buildings back, then applies its replacements again; the building states it writes carry them. The host replaces those
+buildings' level placements (drawing, navmesh, lamps) and drops a ruin's particle effects (a standing one's come back); doors, locks and indoor sight follow. **Observed** (data):
 95 overrides change ruins, e.g. Stoat (override) half destroyed 8, Catun (override) fishman takeover 14; Free Settlement to The Free City stands 7 up again.
-Not modelled: homes of the replacement outside the town's zone (the original keeps their state but ruins a ruined template's home); the world's building effects
-(fires, smoke), laid out once at boot, do not follow an override's ruins.
 
 ## Unknowns
 

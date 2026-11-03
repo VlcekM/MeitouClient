@@ -113,7 +113,7 @@ public sealed partial class FixtureRegistry
         bool Players(TownBuilding b) => IsPlayers(data, site, b, player);
         int LevelOwner(TownBuilding b) => b.OwnerFactionId is { } o && data.FactionIndex(o) is var fi and >= 0 ? fi : townFaction;
         var reset = town.Buildings.Where(b => b.Zone == town.Zone && !Players(b)).Select(b => b.Key).ToHashSet(StringComparer.Ordinal);
-        ApplyTownRuins(world, data, site, town.Buildings.Where(b => reset.Contains(b.Key)));
+        ApplyTownRuins(world, data, site, reset);
         if (Saved is { } saved && reset.Any(saved.ContainsKey))
             Saved = saved.Where(s => !reset.Contains(s.Key)).ToDictionary(s => s.Key, s => s.Value, StringComparer.Ordinal);
         foreach (var b in town.Buildings)
@@ -160,6 +160,7 @@ public sealed partial class FixtureRegistry
     {
         foreach (var building in resetBuildings.Keys)
             if (states.TryGetValue(building, out var state)) WriteReset(building, state);
+        WriteRuins(states);
     }
 
     /// <summary>
