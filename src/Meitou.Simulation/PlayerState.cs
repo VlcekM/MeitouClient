@@ -187,7 +187,7 @@ public sealed partial class PlayerSystem(PopulationData? data = null) : ITickSys
         var player = world.Player;
         string name = text;   // FUN_1404923d0 keeps the text as typed (no trim)
         if (name.Length > FactionNameLength) name = name[..FactionNameLength];
-        if (!player.Exists || name.Length == 0 || name == PlayerFactionName(world)) return;
+        if (!player.Exists || name == PlayerFactionName(world)) return;
         // FUN_1402e7950: any other faction already named so. (The data's names; the player's own old name is free again.)
         if (data is not null && data.Factions.Where((f, i) => i != player.Faction).Any(f => f.Name == name)) { world.Post("This faction name already exists"); return; }
         player.FactionName = name == data?.Factions[player.Faction].Name ? null : name;
