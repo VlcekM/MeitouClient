@@ -178,8 +178,8 @@ public sealed partial class MedicalState
     /// <summary>
     /// Steps the character by <paramref name="dt"/> seconds of character time (real seconds x game speed, <c>FUN_140652000</c> and what it calls; docs/game/character-stats.md
     /// "Time"): every part degenerates or heals itself, heals, is repaired and recovers from stun; wounds clot and blood runs out or recovers; hunger falls or is refilled from
-    /// the stomach (by the game clock, in hours); the KO timer counts down; blood loss, starvation and destroyed vital parts kill. Events go to <paramref name="events"/> if given.
-    /// A dead character is not stepped.
+    /// the stomach (by the game clock, in hours); the KO timer counts down; blood loss, starvation and destroyed vital parts kill. The part, blood and KO-timer rates run on
+    /// dt + <see cref="MedicalContext.BudgetSeconds"/> (the medical time), hunger on dt. Events go to <paramref name="events"/> if given. A dead character is not stepped.
     /// </summary>
     public void Tick(float dt, in MedicalContext ctx, List<MedicalEvent>? events = null)
     {
@@ -189,15 +189,15 @@ public sealed partial class MedicalState
         var race = ctx.Race;
         float chance = ctx.Options.ChanceOfDeath;
         float hours = dt * GameHoursPerSecond;
+        float medicalTime = dt + MathF.Max(0, ctx.BudgetSeconds);
         LegKoPoint = KoPoint(c, ctx.Toughness);
-        bool standing = Standing;   // the posture of the last update: a leg that goes down in the loop below still counts from a standing start
 
         // Part healing rates. In a bed (kinds 6 and 0x19) degeneration is 0 and the bed scales the organic or the robotic rate; state 2 doubles the organic rate (HealMult).
         float degMult = ctx.Bed != BedKind.None ? 0 : DegenerationMult(c, ctx.Toughness);
         float organic = race.HealRate * (ctx.Bed == BedKind.Bed ? ctx.BedFactor : 1) * ctx.HealMult;
         float robotic = race.HealRate * (ctx.Bed == BedKind.RepairBed ? ctx.BedFactor : 1);
         bool conscious = !Unconscious;
-        float dtb = dt * ctx.BodyTimeScale;
+        float dtb = medicalTime * ctx.BodyTimeScale;
 
         for (int i = 0; i < Parts.Count && !Dead; i++)
         {
@@ -239,9 +239,10 @@ public sealed partial class MedicalState
             if (p.Rig > 0) p.Rig = MathF.Max(0, MathF.Min(p.Rig, 50 - (p.Flesh - p.Stun)));
             if (p.Stun > 0) p.Stun = MathF.Max(0, p.Stun - dtb * 0.05f * c.StunRecoveryRate * c.HealRateMult * r);
 
-            CheckPart(i, ctx, events, inHitPath: false, standing);
+            CheckPart(i, ctx, events, inHitPath: false);
         }
         if (Dead) return;
+        LegCollapse(events);
 
         TickBlood(dtb, ctx);
         TickHunger(hours, ctx);
@@ -265,7 +266,7 @@ public sealed partial class MedicalState
 
         if (Unconscious)
         {
-            KoTimer -= dt;
+            KoTimer -= medicalTime;
             // Blood under 0 keeps an unconscious character out (reassessCollapseMode); the blood-KO flag only lowers the conscious threshold to -25 (CheckBlood).
             if (KoTimer <= 0 && !vitalDown && Blood >= 0 && ctx.PlayDead)
             {
@@ -289,6 +290,7 @@ public sealed partial class MedicalState
         bool legsDown = LegsDown;
         if (legsDown && legsWereDown == 0) CollapseOnset = true;
         legsWereDown = legsDown ? 1 : 0;
+        posture = Standing ? PostureState.Normal : PostureState.Other;
     }
 
     /// <summary>
@@ -370,7 +372,7 @@ public sealed partial class MedicalState
         if (t <= 0) return;
         if (Fed <= 0)
         {
-            float situation = HungerSituationFactor(c, ctx.Resting || Unconscious, ctx.Idle, ctx.EncumbranceFactor, ctx.UseHungerRate);
+            float situation = HungerSituationFactor(c, ctx.Resting || Unconscious, ctx.Still, ctx.Idle, ctx.EncumbranceFactor, ctx.UseHungerRate);
             Hunger -= hours / t * ctx.Race.HungerRate * situation;
         }
         else

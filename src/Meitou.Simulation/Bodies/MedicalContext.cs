@@ -39,13 +39,28 @@ public readonly struct MedicalContext(GameConstants constants, BodyOptions optio
     public bool Resting { get; init; }
 
     /// <summary>
-    /// Standing still out of combat with no task (the original's <c>CharBody::amIdle</c>, KenshiLib 1ce4a16): the hunger rate factor is <see cref="MedicalState.IdleHungerRate"/>
-    /// (<c>FUN_1408837a0</c>, <b>Verified</b> in game, #134), unless <see cref="UseHungerRate"/> is set.
+    /// Neither moving nor fighting (<c>FUN_1408837a0</c>'s first test): the hunger rate factor is <see cref="UseHungerRate"/>, the idle 0.8 or 1. Otherwise (the default) it is
+    /// 1 + (1 - e) x <c>encumbrance hunger rate</c>.
+    /// </summary>
+    public bool Still { get; init; }
+
+    /// <summary>
+    /// The original's <c>CharBody::amIdle</c> (KenshiLib 1ce4a16; <see cref="CharacterCold.AmIdle"/>): with <see cref="Still"/>, the hunger rate factor is
+    /// <see cref="MedicalState.IdleHungerRate"/> (<c>FUN_1408837a0</c>, <b>Verified</b> in game, #134), unless <see cref="UseHungerRate"/> is set.
     /// </summary>
     public bool Idle { get; init; }
 
-    /// <summary>Idle on a machine or a chair (not moving, not fighting): its functionality's <c>hunger rate</c> is the factor (CharStats <c>+0x178</c>, <c>FUN_1408837a0</c>, <b>Verified</b>); null: none.</summary>
+    /// <summary>
+    /// Not moving or fighting on a machine or a chair: its functionality's <c>hunger rate</c> is the factor (CharStats <c>+0x178</c>, <c>FUN_1408837a0</c>, <b>Verified</b>); null: none,
+    /// and a character standing still that is not idle takes that field's default 1.
+    /// </summary>
     public float? UseHungerRate { get; init; }
+
+    /// <summary>
+    /// The second add of the frame time to the medical time (<c>FUN_1405cfd90</c>, <see cref="MedicalTimeBudget"/>): seconds the update budget gave since the last step. The part,
+    /// blood and KO-timer rates run on dt plus this; hunger runs on dt alone (the game clock).
+    /// </summary>
+    public float BudgetSeconds { get; init; }
 
     /// <summary>Not safe to get up (<c>Character::isItSafeToGetUp</c> failing): a knockout that ends keeps the character down, playing dead (<see cref="MedicalState.PlayingDead"/>).</summary>
     public bool PlayDead { get; init; }

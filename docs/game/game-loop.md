@@ -84,15 +84,28 @@ slots 0 to 3 = `frameStarted`, `frameRenderingQueued`, `framePostAnimationUpdate
 
 ### The character update budget
 
-`FUN_140786e30` runs on the main thread every unpaused frame over the world's active character set (**Observed**; the three tiers are described
-by rules, cursors are remembered between frames so each pass continues where the last stopped):
+`FUN_140786e30` runs on the main thread every unpaused frame over the world's active character list (**Verified**, decompile; the lists are run
+by the AI back thread's `FUN_140787940`: list `+0x1a8` slot 0xd8 `threadedUpdate`, `+0x1c0` slot 0x278 `threadedUpdate4` (the medical update), `+0x1d8` slot
+0x280 `threadedUpdatePeriodic`; KenshiLib names):
 
-| Tier | Which characters | Per frame | Work |
+| Tier | Which characters | Turns a frame | Work |
 |---|---|---|---|
-| all | every character | all | `FUN_1405c7ae0`: two accumulators += `dt_scaled` |
-| A | any character | **8**, round robin | Character slot 29 (`FUN_1405ccd90`, the logic tick); added to list 3 |
-| B | characters with the priority flag (`+0xe4`) clear | **6**, round robin | slot 28 `FUN_1405cf130` (full update) with the *accumulated* time; `FUN_1405cfd90`; added to lists 1 and 2. The others of this class only add `dt_scaled` to their accumulator |
-| C | characters with the priority flag set | all get slot 28 **every frame**; a budget of `B` of them (rotating) also get `FUN_1405cfd90`, with `B = 4` when `⌊n/4⌋ < 5` and `B = ⌊n/4⌋` otherwise (n = flagged count of the previous frame) | list 1; list 2 for the budgeted ones |
+| all | every character | all | `FUN_1405c7ae0`: `+0xc8` and `+0xcc` += `dt_scaled` |
+| A | any character | **8** | slot 0xe8 `periodicUpdate` (`FUN_1405ccd90`); list `+0x1d8` |
+| B | flag `+0xe4` clear | **6** | `FUN_1405cfd90` (`+0xc8` += `dt_scaled` again); slot 0xe0 `update` (`FUN_1405cf130`, with `+0xc0` + `dt_scaled`); lists `+0x1c0`, `+0x1a8`. Without a turn only `+0xc0` += `dt_scaled` |
+| C | flag `+0xe4` set | `k = 4` when `⌊m/4⌋ < 5`, else `⌊m/4⌋` (m = last frame's flagged count) | every frame: slot 0xe0 and list `+0x1a8`; with a turn: `FUN_1405cfd90` and list `+0x1c0` |
+
+Each budget continues after the list position (counting every character) of last frame's last turn; a character at or before it gets a turn while the turns
+taken are under that position - list length + 1 + turns (the head takes what the tail left of a full round); a budget that runs out of characters starts the next
+frame at the head. Shares of frames with a turn (**Observed**, a simulation of this rule): a flagged character gets one in every frame with fewer than 4 flagged;
+with many unflagged characters in the list, 1/P with P = ⌈m/k⌉ (+1 when k divides m), so 1/2 for 4 to 7 flagged, 1/3 for 8 to 11; in an all-flagged list
+characters near the head get more (m = 5: three every frame, two every other). An unflagged one gets about 6/b of b. The medical time uses it
+([character-stats](character-stats.md#time)).
+
+The flag (KenshiLib `isVisibleUpdateMode`; **Verified** decompile of the visibility pass `FUN_1405c9f60`): set with `+0xe5` whenever `FUN_1405c79c0` holds: the
+character's faction is the player's (Faction `+0x250` `isPlayer`), Character `+0x250` (`_isEngagedWithAPlayer`) is set, or a zone test of `FUN_1409c4b10`
+(**Unknown**). Otherwise set when the character is in view (`+0x1a9`: within `npc range`, `DAT_1421334c8`, of the camera's node `FUN_1407f2a20`, and passing the
+visible-area and frustum tests) and its platoon tests pass (**Unknown** in detail). Meitou: `MedicalTimeBudget`, [character-stats](character-stats.md#time).
 
 ### Settings and constants
 
@@ -121,7 +134,7 @@ Values from the install through the repo's readers (**Verified**, `GameDatabase.
 
 - The start-of-new-game time of day. The saves in the install are empty; the sample save of [../formats/save.md](../formats/save.md#camera-type-56-id-1051-the-world-record) (a new game, saved at in-game day 1, 13:39) holds the `time day` / `time hour` / `time minute` and sky keys described above (**Observed** there), but the starting time itself is not traced.
 - Whether the float timestamp in the frame timer is audible after hours of play.
-- The exact priority rule behind `+0xe4` (which squads) and the distance metric of `npc range` (2D or 3D; it is a squared distance from a camera/player focus object).
+- The platoon tests behind `+0xe4` for an NPC in view and the zone test `FUN_1409c4b10`; `npc range` is a 3D squared distance from the camera's node (`FUN_1407f2a20`).
 - What the heavier per-faction step `FUN_1406b97c0` does with the accumulated time, the other speed-scaled timers (`FUN_140792500`, `FUN_1409a7930`; `FUN_140857500` is the hearing cooldown, [perception](perception.md#hearing)), and which function starts a loaded save at speed 1 (only the character-creation window's destructor `FUN_1405f5d10` was seen to set it).
 - Character slots 79 and 80, the second helper thread (`world +0x8c0`), the pending-event list at `+0x608`, `FUN_140671f50`, `FUN_1407869e0` and several smaller steps of `FUN_140788a00`.
 - Whether physics substeps or fixed-step settings are used (the PhysX scene desc has `timeStepMethod`/`maxTimestep` fields; where the game sets them was not found).
@@ -133,5 +146,5 @@ Values from the install through the repo's readers (**Verified**, `GameDatabase.
 - Summary: `VSync=No`
 - Measuring the frame time: `dt_smooth = Σ w_i · d_i / Σ w_i`; `w_i = 0.5^i`
 - The clock: `total game hours = day × 24 + time of day`; `Δhours = dt_real × speed × 11/1200`
-- The character update budget: `B = 4`; `B = ⌊n/4⌋`
+- The character update budget: `k = 4`; `k = ⌊m/4⌋`; share `1/P`, `P = ⌈m/k⌉`
 - Settings and constants: `VSync Interval=1`

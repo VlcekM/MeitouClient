@@ -54,7 +54,7 @@ The game speed is an input of one system: the ragdoll physics steps in real time
 [ragdolls](game/ragdolls.md)), so a ragdoll's outcome, and the position of a body that follows it, differs between speeds, as in the original. Runs at one speed, headless runs and the goldens are unaffected.
 
 **Verified** original clock: 1200/11 seconds per game hour ([game-loop.md](game/game-loop.md)).
-`BodySystem.HoursPerTick=11/36000`; the medical tick takes `TickSeconds` ([character-stats](game/character-stats.md#time)). Navmesh unload uses
+`BodySystem.HoursPerTick=11/36000`; the medical tick takes `TickSeconds` plus the update budget's turns (`MedicalTimeBudget`, [character-stats](game/character-stats.md#time)). Navmesh unload uses
 real time (30 s); population unload grace uses game time (towns 60 s, roaming 10 s).
 `RequestedPause` is independent of remembered nonzero speed. Render previous/current states
 with simulation alpha; camera uses control alpha. Positions are float world coordinates;
@@ -591,8 +591,8 @@ target, stance and drawn weapon dropped), as the original's new task and movemen
 `BodySystem` / `FirstAidSystem`, `Meitou.Data.Gameplay.Bodies`: race/stat/part factories,
 medical tick, blood/hunger/parts, knockout/death, healing, limb state, move speed/encumbrance and
 moving XP. Combat hits use the same body state; avoid double medical ticks. Treat/rest/medic
-orders find eligible still patients, walk to reach and apply aid serially. Medical time scale
-is explicit and uncertain; [character-stats.md](game/character-stats.md) owns original rules.
+orders find eligible still patients, walk to reach and apply aid serially. The medical time is the step's dt plus the
+update budget's turns ([character-stats.md](game/character-stats.md#time), which owns the original rules).
 
 Limbs: `HealthPart.Limb` / `Replacement` / `ReplacementItem` per slot; saves round-trip them ([save.md](formats/save.md#limbs-medical_state-limbs)).
 A severed limb queues (character, limb) on `CharacterTable.LimbsChanged`; between ticks the population system rebuilds the look

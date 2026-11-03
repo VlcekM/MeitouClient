@@ -123,8 +123,8 @@ public sealed partial class MedicalState
     }
 
     /// <summary>
-    /// Posture 0 (<c>PS_NORMAL</c>, docs/game/ragdolls.md "Forced crawl"): conscious, neither staying low nor crawling. Only a standing character loses a leg into a knock-out
-    /// (<see cref="Sever"/>, <b>Verified</b>: the original tests the posture before it sets the knock-out). Read before a blow or a tick changes the legs.
+    /// Posture 0 (<c>PS_NORMAL</c>, docs/game/ragdolls.md "Forced crawl"): conscious, neither staying low nor crawling, read live. A leg going down at posture 0 knocks the
+    /// character out (<see cref="LegCollapse"/>, which reads the posture as of the last tick).
     /// </summary>
     public bool Standing => !Unconscious && !StayingLow && !Crawling;
 
@@ -411,12 +411,16 @@ public sealed partial class MedicalState
     }
 
     /// <summary>
-    /// The hunger-rate situation factor (<c>FUN_1408837a0</c>): resting, knocked out or dead <c>bed hunger rate</c>; idle on a machine or chair its functionality's <c>hunger rate</c>
-    /// (<paramref name="useRate"/>); standing still with no task (<paramref name="idle"/>) <see cref="IdleHungerRate"/>; else 1 + (1 - e) x <c>encumbrance hunger rate</c> (the original's
-    /// rule moving or fighting; Meitou's standing still with another task too, where the original takes 1).
+    /// The hunger-rate situation factor (<c>FUN_1408837a0</c>, <b>Verified</b>): resting, knocked out or dead <c>bed hunger rate</c>; moving or fighting (not <paramref name="still"/>)
+    /// 1 + (1 - e) x <c>encumbrance hunger rate</c>; else on a machine or chair its functionality's <c>hunger rate</c> (<paramref name="useRate"/>), idle (<paramref name="idle"/>)
+    /// <see cref="IdleHungerRate"/>, otherwise 1 (CharStats <c>+0x178</c>'s default).
     /// </summary>
-    public static float HungerSituationFactor(GameConstants c, bool resting, bool idle, float encumbranceFactor, float? useRate = null) =>
-        resting ? c.BedHungerRate : useRate ?? (idle ? IdleHungerRate : 1 + (1 - encumbranceFactor) * c.EncumbranceHungerRate);
+    public static float HungerSituationFactor(GameConstants c, bool resting, bool still, bool idle, float encumbranceFactor, float? useRate = null)
+    {
+        if (resting) return c.BedHungerRate;
+        if (!still) return 1 + (1 - encumbranceFactor) * c.EncumbranceHungerRate;
+        return useRate ?? (idle ? IdleHungerRate : 1);
+    }
 
     /// <summary>The hunger factor of a character standing still with no task (<c>FUN_1408837a0</c> literal; <b>Verified</b> in game, #134: the HUD's "Idle: 0.80x").</summary>
     public const float IdleHungerRate = 0.8f;
