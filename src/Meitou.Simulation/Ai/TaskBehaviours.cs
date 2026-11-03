@@ -11,7 +11,7 @@ public enum AiBehaviour : byte
 {
     /// <summary>Not built: the goal scores 0.</summary>
     None = 0,
-    /// <summary>Stands about near its post, stepping a few metres now and then (<see cref="CharacterTask.Wander"/> in <see cref="AiSettings.MillRadius"/>).</summary>
+    /// <summary>Idleness (14): stands where it is, as the original's blank task (<see cref="CharacterTask.Idle"/>).</summary>
     Mill = 1,
     /// <summary>Walks to its node in the home building (shopkeeper, guard, throne or general, by goal), else to its post, and stands there.</summary>
     Post = 3,

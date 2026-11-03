@@ -14,8 +14,6 @@ public sealed class AiSettings
     public int PackageEveryTicks { get; init; } = 30;
     /// <summary>A character farther than this from its spot (node, bed, post) walks back to it.</summary>
     public float PostSlack { get; init; } = 12;
-    /// <summary>The radius a character mills about its post in (<see cref="AiBehaviour.Mill"/>).</summary>
-    public float MillRadius { get; init; } = 25;
     /// <summary>The score of the goal being acted out is multiplied by this (<b>Observed</b>, docs/game/ai.md "Scoring"), so a near tie does not flip.</summary>
     public float Continuity { get; init; } = 1.25f;
     /// <summary>A patrol package may start this many game hours after the last one started (uniform), and the first one within <see cref="FirstPatrolHours"/> of the squad appearing.</summary>
@@ -895,10 +893,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         switch (behaviour)
         {
             case AiBehaviour.Mill:
-                // Round its post; at a borrowed home (the bar of a bar package) round that.
-                mind.WanderCentre = board.Home is { } borrowed && borrowed != board.OwnHome ? Flat(borrowed.Position) : mind.Post;
-                mind.WanderRadius = Settings.MillRadius;
-                Become(world, slot, CharacterTask.Wander);
+                // Idleness is Task_Blank in the original: it stands where it is (the mover reset, CharMovement vslot 0x98 FUN_14065fc70, Verified); no stroll.
+                Become(world, slot, CharacterTask.Idle);
                 break;
             case AiBehaviour.Follow:
                 mind.FollowTarget = goal.Task.Target == TaskTargetType.SquadMission ? board.MissionTarget : CharacterId.None;
