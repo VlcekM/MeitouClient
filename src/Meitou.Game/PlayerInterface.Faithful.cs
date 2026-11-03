@@ -24,6 +24,8 @@ sealed partial class PlayerInterface
         uiInput++;
         if (!UiVisible) return false;
         if (key == Meitou.Engine.Input.Key.Escape && CancelInventoryDrag()) return true;
+        // toggle_camera_grid (Shift+; fixed: a binding carries no modifier, and ; alone is the free camera's).
+        if (shift && key == Meitou.Engine.Input.Key.Semicolon && !faithfulScreens.HasKeyboardFocus) { cameraGrid = !cameraGrid; return true; }
         if (key == Meitou.Engine.Input.Key.Escape)
         {
             if (advancedOpen && faithfulScreens.OpenScreens.LastOrDefault() == "new-game") { advancedOpen = false; return true; }

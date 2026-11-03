@@ -426,9 +426,24 @@ sealed partial class PlayerInterface
     void DrawGameUi(DebugOverlay overlay, int width, int height, DebugOverlay.OverlayPass? pass = null)
     {
         IReadOnlyList<UiControl> controls = ArrangeUi();
+        if (cameraGrid) DrawCameraGrid(overlay, width, height);
         if (UiMode == UiMode.Faithful && LoadBar is { Visible: true } bar) controls = [.. controls, .. bar.Controls(uiResources, width, height)];
         uiPainter?.Draw(controls, width, height, mouse, $"meitou:speed.{Array.IndexOf(ButtonSpeeds, session.Simulation.Speed)}",
             minimumTextPixels: TitleOpen ? 0 : StandardPixels, pass: pass);
+    }
+
+    /// <summary>The rule-of-thirds camera grid (Shift+;, toggle_camera_grid, event 0x29: the widget "CameraGrid", <c>FUN_1406e5fc0</c>), under the interface.</summary>
+    bool cameraGrid;
+
+    static void DrawCameraGrid(DebugOverlay overlay, int width, int height)
+    {
+        var white = Vector4.One;
+        for (int i = 1; i <= 2; i++)
+        {
+            float x = MathF.Round(width * i / 3f), y = MathF.Round(height * i / 3f);
+            overlay.Line(x, 0, x, height, 1, white);
+            overlay.Line(0, y, width, y, 1, white);
+        }
     }
 
     /// <summary>For screenshot reviews: open the same panel through its registered button action.</summary>

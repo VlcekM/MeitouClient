@@ -63,7 +63,7 @@ Binding maps: general map at Controls+0x28, build-mode map at +0x50 (checked fir
 | camera_zoom_in / out | Home / End | 0 | held |
 | highlight | Left Alt | 0 | held |
 | toggle_fps_camera | `;` | 0x28 | event |
-| toggle_camera_grid | Shift+`;` | 0x29 | event |
+| toggle_camera_grid | Shift+`;` | 0x29 | event; toggles the white rule-of-thirds widget "CameraGrid" (`FUN_1406e5fc0` mode 2, **Verified**); Meitou draws it under the interface, Shift+`;` fixed (a binding has no modifier) |
 | floor_up / floor_down | PgUp / PgDn | 0x24 / 0x25 | event |
 | speed_1 / 2 / 3 | F2 / F3 / F4 | 0x13 / 0x14 / 0x15 | event |
 | stop_movement | R | 0x16 | event |
