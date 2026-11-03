@@ -46,6 +46,25 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
     public const float GetUpBlend = 0.75f;
     /// <summary>The edge of a square of static ground and buildings the scene is made of, in world units, on a grid from the origin (engine choice).</summary>
     public const float TileSize = 32;
+    /// <summary>Ground tiles are kept this far round a moving ragdoll's root (<see cref="RagdollPhysics.Cover"/>).</summary>
+    const float TileReach = 12;
+    /// <summary>
+    /// Ground tile units made in one tick (<see cref="RagdollPhysics.Cover"/>: a ground mesh 1, a building mesh <see cref="RagdollPhysics.BuildingUnits"/>), the starting ragdolls'
+    /// first; a ragdoll whose tiles the budget does not reach starts on a later tick, the character animating meanwhile (engine choice: a zone's downed characters arriving together
+    /// asked for 80-100 tiles in one tick, 45-60 ms, and a town's building meshes came to its pending tiles in one tick when the zone was gathered; docs/simulation.md "Ragdolls").
+    /// </summary>
+    const int TileBudget = 8;
+    /// <summary>
+    /// Ragdolls started in one tick with a fresh pose (a knockdown, a stored squad's downed member coming back); the rest start on a later tick. A save's frozen ragdoll is not
+    /// counted: it is the save's state and costs no settling. Engine choice: a build is 0.7 ms (bodies, joints, the ground probe), and a zone's arrivals asked for 20 in a tick.
+    /// </summary>
+    const int StartBudget = 4;
+    /// <summary>
+    /// Awake bodies from which the physics steps on the world's thread count. Below it the step runs on the calling thread: it costs the same (**Observed**, headless flight probe,
+    /// 15-300 awake bodies: 0.4-0.8 ms either way; the dispatcher's signals and waits are 0.3 ms a step), and a dispatcher worker preempted by the render, streaming or GC threads
+    /// stalled the step for a scheduler quantum or more (16-85 ms waits in the probe's trace), which a single thread cannot suffer from another thread.
+    /// </summary>
+    const int ThreadedBodies = 256;
     /// <summary>Freezing (docs/game/ragdolls.md "Sleep and limits"): not before this age, then when this share of the bodies is still; at the latest after <see cref="FreezeLatest"/>.</summary>
     public const float FreezeEarliest = 2, FreezeShare = 0.6f, FreezeLatest = 7;
     /// <summary>
@@ -201,15 +220,12 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
 
         // 1. Masks, building and pinning.
         var next = table.Next;
+        int tilesLeft = TileBudget, startsLeft = StartBudget;
         for (int i = 0; i < next.Length; i++)
         {
             if (!next[i].Alive || table.Cold(i) is not { } cold) continue;
             // The far cadence (World.Steps): a far character skipped this tick is left as it is, unless its ragdoll is moving (its pins follow the animation every physics step).
             if (!world.Steps(i) && !(ragdolls.TryGetValue(table.IdOf(i), out var moving) && !moving.Frozen && moving.Mask != RagdollPart.None)) continue;
-            // Meitou (BodyOptions.AdvancedRagdolls): a new whole-body ragdoll goes on as the character moved, pushed by the blow that put it down (CombatSystem.Knockdown), else as it moved last tick.
-            bool advanced = options is { AdvancedRagdolls: true };
-            var (launch, push) = !advanced ? default : cold.Blow ?? (table.Previous[i].Velocity, Vector3.Zero);
-            cold.Blow = null;
             cold.CarryAttach = cold.CarriedBy.IsNone ? null : AttachOf(table, cold);
             var id = table.IdOf(i);
             ragdolls.TryGetValue(id, out var r);
@@ -221,6 +237,25 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
                 if (Vector3.DistanceSquared(next[i].Position, eye) > reach * reach) wanted = RagdollPart.None;
             }
             if (wanted != RagdollPart.None && !HasRagdoll(cold)) wanted = RagdollPart.None;
+            if (r is null && wanted == RagdollPart.None) continue;
+            float scale = cold is { Fighter.IsAnimal: true, Medical: { } size } ? size.ScaleK : 1;
+            // A ragdoll about to move needs the ground under it (TileBudget tiles a tick: past that it starts next tick, its blow and saved pose kept; a frozen saved one needs none).
+            bool starts = wanted != RagdollPart.None && (r is null || wanted != r.Mask) && cold.Save?.Ragdoll is not { Frozen: true };
+            if (starts)
+            {
+                if (startsLeft <= 0) continue;
+                if (!physics.Covered(next[i].Position, TileReach * scale))
+                {
+                    if (tilesLeft <= 0) continue;
+                    physics.Cover(next[i].Position, TileReach * scale, env, tick, ref tilesLeft);
+                    if (!physics.Covered(next[i].Position, TileReach * scale)) continue;
+                }
+                startsLeft--;
+            }
+            // Meitou (BodyOptions.AdvancedRagdolls): a new whole-body ragdoll goes on as the character moved, pushed by the blow that put it down (CombatSystem.Knockdown), else as it moved last tick.
+            bool advanced = options is { AdvancedRagdolls: true };
+            var (launch, push) = !advanced ? default : cold.Blow ?? (table.Previous[i].Velocity, Vector3.Zero);
+            cold.Blow = null;
             // A ragdoll a save holds (Saving.RagdollSave): taken the first time the character is seen, used when it starts as a whole body.
             SavedRagdoll? restore = null;
             if (cold.Save is { Ragdoll: { } saved })
@@ -228,10 +263,8 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
                 cold.Save.Ragdoll = null;
                 if (r is null && (wanted & RagdollPart.Whole) != 0) restore = saved;
             }
-            if (r is null && wanted == RagdollPart.None) continue;
             if (r is null)
             {
-                float scale = cold is { Fighter.IsAnimal: true, Medical: { } size } ? size.ScaleK : 1;
                 var setup = rigs.For(cold.Appearance!)!;
                 if (DefinitionOf(cold.Appearance!, setup.Rig, scale) is not { } definition) continue;
                 var carryBone = cold.Appearance!.Race.GetString("carry bone");
@@ -262,7 +295,7 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
             if (!r.Frozen && ToneOf(cold, r.Mask, advanced) is var tone && tone != r.Tone) SetTone(r, tone);
             if (!r.Frozen && r.Dynamic.Any(d => !d))
                 Pin(r, animated ?? Animated(r, cold, placement), dt);
-            if (!r.Frozen) physics.Cover(r.Pose[r.Definition.Root].Position, 12 * r.Scale, env, tick);
+            if (!r.Frozen) physics.Cover(r.Pose[r.Definition.Root].Position, TileReach * r.Scale, env, tick, ref tilesLeft);
         }
 
         world.Profile.Part("rag setup");   // F12: the masks, the builds, the pins and the ground tiles
@@ -284,7 +317,7 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
         if (Moving > 0 && physicsDue >= RagdollPhysics.StepOf(dt, 1) - 1e-5f)
         {
             foreach (var id in order) if (ragdolls[id] is { Frozen: false, Mask: not RagdollPart.None } floating) Buoy(world, floating, physicsDue);
-            physics.Step(physicsDue, threads);
+            physics.Step(physicsDue, physics.Simulation.Bodies.ActiveSet.Count >= ThreadedBodies ? threads : null);
             physicsDue = 0;
         }
         world.Profile.Part("rag step");

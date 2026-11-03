@@ -242,9 +242,14 @@ internal sealed class RagdollPhysics : IDisposable
     // ---- static tiles ----
 
     /// <summary>Tile edge and ground sample spacing in world units (engine choice: a 32-unit tile of 2-unit cells, 512 triangles).</summary>
-    public const float TileSize = RagdollSystem.TileSize, Cell = 2;
+    /// <summary>
+    /// A tile's ground is a mesh of <see cref="Cell"/>-unit cells (the heightmap's samples are 18 units apart: finer cells only tessellate the same bilinear patches). Engine choice:
+    /// the Bepu mesh build is nearly all of a tile's cost, 0.45 ms at 2-unit cells (512 triangles), and a zone's downed characters arriving together asked for 80-100 tiles in one tick.
+    /// </summary>
+    public const float TileSize = RagdollSystem.TileSize, Cell = 4;
     /// <summary>A tile no moving body has needed for this many ticks is removed.</summary>
-    const int TileLife = 90;
+    /// <summary>Ticks a tile outlives its last use (engine choice: a minute, so a camera flight back to a zone finds the tiles its bodies used; a tile is a few KB).</summary>
+    const int TileLife = 1800;
 
     sealed class Tile
     {
@@ -260,19 +265,54 @@ internal sealed class RagdollPhysics : IDisposable
 
     public int TileCount => tiles.Count;
 
-    /// <summary>Makes sure the tiles round <paramref name="centre"/> within <paramref name="reach"/> exist (ground from <paramref name="environment"/>), marked used at <paramref name="tick"/>.</summary>
-    public void Cover(Vector3 centre, float reach, IRagdollEnvironment environment, long tick)
+    /// <summary>A tile's building mesh counts this many tile units of the budget: a town tile's is 2 ms against a ground mesh's 0.12 (**Observed**, headless flight probe).</summary>
+    public const int BuildingUnits = 4;
+
+    /// <summary>
+    /// Makes sure the tiles round <paramref name="centre"/> within <paramref name="reach"/> exist (ground from <paramref name="environment"/>), marked used at <paramref name="tick"/>,
+    /// within <paramref name="budget"/> tile units (a ground mesh 1, a building mesh <see cref="BuildingUnits"/>; spent as it goes): a tile the budget does not reach stays
+    /// missing or without its buildings until a later call, so a zone's tiles arriving together cost a few ticks, not one.
+    /// </summary>
+    public void Cover(Vector3 centre, float reach, IRagdollEnvironment environment, long tick, ref int budget)
     {
-        int x0 = (int)MathF.Floor((centre.X - reach) / TileSize), x1 = (int)MathF.Floor((centre.X + reach) / TileSize);
-        int z0 = (int)MathF.Floor((centre.Z - reach) / TileSize), z1 = (int)MathF.Floor((centre.Z + reach) / TileSize);
+        var (x0, x1, z0, z1) = Span(centre, reach);
         for (int x = x0; x <= x1; x++)
             for (int z = z0; z <= z1; z++)
             {
-                if (!tiles.TryGetValue((x, z), out var tile)) tiles[(x, z)] = tile = MakeTile(x, z, centre.Y, environment);
-                else if (tile.BuildingsPending) AddBuildings(tile, new Vector3(x * TileSize, 0, z * TileSize), environment);
+                if (!tiles.TryGetValue((x, z), out var tile))
+                {
+                    if (budget <= 0) continue;
+                    budget--;
+                    tiles[(x, z)] = tile = MakeTile(x, z, centre.Y, environment, ref budget);
+                }
+                else if (tile.BuildingsPending && budget > 0)
+                {
+                    budget -= BuildingUnits;
+                    AddBuildings(tile, new Vector3(x * TileSize, 0, z * TileSize), environment);
+                }
                 tile.Used = tick;
             }
     }
+
+    /// <summary>As <see cref="Cover(Vector3, float, IRagdollEnvironment, long, ref int)"/> without a budget (the warm-up, tests).</summary>
+    public void Cover(Vector3 centre, float reach, IRagdollEnvironment environment, long tick)
+    {
+        int budget = int.MaxValue;
+        Cover(centre, reach, environment, tick, ref budget);
+    }
+
+    /// <summary>Whether every tile round <paramref name="centre"/> within <paramref name="reach"/> exists.</summary>
+    public bool Covered(Vector3 centre, float reach)
+    {
+        var (x0, x1, z0, z1) = Span(centre, reach);
+        for (int x = x0; x <= x1; x++)
+            for (int z = z0; z <= z1; z++)
+                if (!tiles.ContainsKey((x, z))) return false;
+        return true;
+    }
+
+    static (int X0, int X1, int Z0, int Z1) Span(Vector3 centre, float reach) =>
+        ((int)MathF.Floor((centre.X - reach) / TileSize), (int)MathF.Floor((centre.X + reach) / TileSize), (int)MathF.Floor((centre.Z - reach) / TileSize), (int)MathF.Floor((centre.Z + reach) / TileSize));
 
     /// <summary>Removes the tiles not used for a while.</summary>
     public void Sweep(long tick)
@@ -287,7 +327,7 @@ internal sealed class RagdollPhysics : IDisposable
         }
     }
 
-    Tile MakeTile(int tx, int tz, float nearY, IRagdollEnvironment environment)
+    Tile MakeTile(int tx, int tz, float nearY, IRagdollEnvironment environment, ref int budget)
     {
         const int n = (int)(TileSize / Cell);
         var origin = new Vector3(tx * TileSize, 0, tz * TileSize);
@@ -308,7 +348,13 @@ internal sealed class RagdollPhysics : IDisposable
         var tile = new Tile();
         tile.GroundShape = Simulation.Shapes.Add(new Mesh(triangles, Vector3.One, Pool));
         tile.Ground = Simulation.Statics.Add(new StaticDescription(origin, Quaternion.Identity, tile.GroundShape));
-        AddBuildings(tile, origin, environment);
+        // Its buildings when the budget allows, else on a later cover (the tile asks again while BuildingsPending).
+        tile.BuildingsPending = true;
+        if (budget > 0)
+        {
+            budget -= BuildingUnits;
+            AddBuildings(tile, origin, environment);
+        }
         return tile;
     }
 

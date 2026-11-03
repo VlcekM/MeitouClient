@@ -785,13 +785,25 @@ when the host passes `CharacterRigs` (the game does; tests and goldens do not). 
 - **Carried bodies**: `CarryMode` simulates the forearms and the head only, as the original does ([ragdolls](game/ragdolls.md#bodies-kinematic-or-simulated)); everything else follows the `carry me` clip. Ragdoll bodies turn at most 7 rad/s and the head's neck joint is sprung ([ragdolls](game/ragdolls.md#limits-of-motion-and-joint-springs)).
 - **Published pose**: `CharacterSnapshot.Ragdoll` (model-space `BonePose` overrides, weight for the
   get-up blend); the renderer poses with it. While `Whole`, the character's position follows the root.
-- **Scene**: 32-unit tiles round each moving ragdoll, terrain sampled every 2 units, plus building
+- **Scene**: 32-unit tiles round each moving ragdoll, terrain sampled every 4 units (the heightmap's samples are 18 apart; the Bepu mesh build is nearly all of a tile's
+  cost, 0.45 ms at 2-unit cells, **Observed**), plus building
   collision from `Meitou.Navigation.RagdollGeometry` (per zone on a worker, doors and passable parts
   skipped, ≤16 zones) and the map features' collision (rocks, cliff blocks, Rebirth's statue: each triangle in the zone its
   centre lies in, as features reach past a building's 600; outdoor bodies hit group 14, the features' group (**Verified**,
   [pathfinding](game/pathfinding.md#own-builder) "Map features"). **Observed** (`meitou-tools navmesh --ragdoll`): map
   features add 8,475 triangles to 21.19's 9,617 (Rebirth), 2,702 to 20.32's 12,926, 4,355 to 23.22's 19,844, 792 to 34.46, 304 to 18.39;
-  a zone gathers in 70..200 ms. A tile has ground only until its zones are gathered. Tiles unused for 90 ticks go.
+  a zone gathers in 70..200 ms. A tile has ground only until its zones are gathered. Tiles unused for a minute (1,800 ticks) go, so a camera flight back to a zone
+  finds them. **Budgets** (engine choice; `RagdollSystem.TileBudget`, `StartBudget`, `RagdollPhysics.BuildingUnits`): a tick spends at most 8 tile units (a
+  ground mesh 1, a tile's building mesh 4: a town tile's is 2 ms against the ground's 0.12, and a zone's pending tiles all got theirs in the tick its buildings
+  were gathered) and starts at most 4 ragdolls with a fresh pose (a knockdown, a stored squad's downed member coming back); a ragdoll whose tiles the budget
+  did not reach starts on a later tick, the character animating meanwhile; a save's frozen ragdoll is not counted. **Observed** (headless flight probe, the
+  stutter save's flights): a zone's downed characters re-ragdoll when it loads, asked for 80-100 tiles and 20 builds in one tick (45-60 ms; after the budgets
+  the setup loop is at most 3.4 ms a tick), and 20 whole bodies then fall for up to 7 s (the step 0.4 -> 1.3 ms a tick); a build is 0.7 ms (bodies, joints, the
+  ground probe, which reads heightmap blocks on demand: 5 ms for the first in a new area). Whether the original re-settles a reloaded downed body is **Unknown**.
+  **Threads** (`RagdollSystem.ThreadedBodies`): the step runs on the calling thread below 256 awake bodies and on the world's thread count above (**Observed**,
+  the probe: single-threaded costs the same below 300 awake bodies, 0.4-0.8 ms, and 0.2 ms more at 1,100; the dispatcher's signals and waits are 0.3 ms a step,
+  and its workers, preempted, stalled a step 16-85 ms in the probe's CPU trace). The step's remaining 12-21 ms spikes come with or without the dispatcher and
+  with no tile or build work: GC pauses landing in it (Server GC, the spawns' allocation; the trace shows the GC poll inside the solver), not the physics.
   The terrain is the full-resolution heightmap (blocks of 64 samples read on demand), not the simulation's `GroundHeights`:
   outside the area loaded at the start that is a coarse grid (a sample per 144 units) off the real ground by 2.4 units
   at the median and 15 at the 90th percentile over the land, so bodies met a ground the character was not standing on.
