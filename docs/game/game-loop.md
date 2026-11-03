@@ -10,7 +10,7 @@ original thread races. Tables preserve callback/time/control/constants mappings.
 replaced by 0.05 s when above it (the `min(dt, 0.5)` in the other branch never binds), so a frame longer than 0.05 s contributes at most 0.05 x speed and the game slows
 below 20 fps at every speed; the cap comes before the speed multiplier. The capped value is then pushed into a 20-entry history (`FUN_1402b2640`, the 0.5 is its
 weight base) that writes back the weighted average of the entries so far (weights 0.5^i; which end is newest is **Unknown**), and that smoothed value is what
-`FUN_14082b6e0` passes to `FUN_140788a00`. Meitou keeps its own wider budget and no smoothing instead (**engine choice**, [simulation](../simulation.md#time-model)).
+`FUN_14082b6e0` passes to `FUN_140788a00`. Meitou applies the same 0.05 s cap before the speed (`SimulationClock.MaxFrameSeconds`) and no smoothing (**engine choice**, [simulation](../simulation.md#time-model)).
 Twenty-entry zero-initialized history exponentially weights0.5^i. **Verified** callee/history
 layout. **Verified** FUN_140788a00 clocks: real smoothed dt; dt*speed zeroed by paused flag;
 dt*speed floored0.01 only when speed<=0, not universally when a menu sets requested-pause.
