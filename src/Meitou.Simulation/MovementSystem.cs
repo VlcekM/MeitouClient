@@ -52,7 +52,7 @@ public sealed class MovementSystem(PathService paths) : ITickSystem, IDisposable
     public const float ArriveRadius = 10;
     /// <summary>
     /// How far (units) a player's order with no path at all may stand in for one by walking straight at its goal (a few metres, the width of a room: one shoved into furniture
-    /// is that close). A goal further off is off the mesh as a rule, and walking at it would go on for ever, so the order is dropped as the original does.
+    /// is that close). A goal further off is off the mesh as a rule, and walking at it would go on for ever, so the order is dropped (engine choice; what the original does is unknown).
     /// </summary>
     public const float StraightOrderReach = 64;
     /// <summary>

@@ -205,7 +205,9 @@ point, and only when it can stand there (engine choice, `MovementSystem.EscapesT
 -51119,2797, scratch sim, PR #230): its path was found, every step was refused, the GoTo dropped after 3 asks and it stood for good; with the rule it walks out and arrives.
 Inside the Storm House's shop counter and tables the mesh is not cut, so a walker there just walks out. **Unknown** whether the original lets such a walker out (PR #230's author says so).
 **No path at all** (the start sits on a pocket of the mesh with no way out: inside a cage whose walls are not a navmesh cut, or a walker shoved into solid geometry): a player's move order
-is kept instead of being dropped, and the walker heads straight at the goal, the step test still refusing what cannot be walked (**engine choice**, `MovementSystem.ApplyAnswers`).
+is kept instead of being dropped when its goal is within 64 units (`StraightOrderReach`) and walkable at the walker's height: the walker heads straight at
+the goal, the step test still refusing what cannot be walked (**engine choice**, `MovementSystem.ApplyAnswers`); a goal further off or off the mesh still drops the
+order. **Unknown** what the original does.
 **Observed** (a character put inside a cage in Stack, -55291,1181,-14055): every path request came back not found and it stood for good, the order dropped on the first answer.
 A goal that cannot be reached is replaced by the reachable point nearest it in 3D (engine choice). **Observed** (Hub north wall, zone 20.32, scratch probe, issue #59):
 the walkway keeps corner pockets of 8..64 square units whose only exits are 3..8 wide between wall ends; nearest on the X/Z plane, a click there
