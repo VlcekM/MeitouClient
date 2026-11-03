@@ -246,7 +246,7 @@ public sealed partial class World : IDisposable
     public float NearRadius { get; set; } = 8000;
     /// <summary>Within this distance of a player character everyone is near for the far cadence (engine choice: what the player's people fight, trade and talk with).</summary>
     public const float PlayerNearRadius = 1500;
-    /// <summary>The characters skipped this tick by the far cadence (F12).</summary>
+    /// <summary>The characters skipped this tick by the far cadence (the play bench's <c>far</c> column).</summary>
     public int FarSkipped { get; private set; }
     /// <summary>Whether <paramref name="slot"/> steps this tick (far cadence): the parallel systems, the ragdolls, the sight map and the decisions leave a skipped slot as it is.</summary>
     public bool Steps(int slot) => StepTicks(slot) != 0;

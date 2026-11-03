@@ -250,7 +250,7 @@ public sealed unsafe partial class ShadowPass
             bool stale = stored[i] is not null && !all && !due;
             bool uncovered = stored[i] is not null && !MeitouShadowFit.Covers(stored[i]!, view, splits, SearchRadius(stored[i]!) + 2 * stored[i]!.Texel);
             bool sunTurned = stored[i] is not null && Vector3.Dot(toSun, storedSunDir[i]) < MathF.Cos(SunTolerance(stored[i]!));
-            want[i] = all || stored[i] is null || due || uncovered || sunTurned || owed[i];
+            want[i] = all || stored[i] is null || due || uncovered || sunTurned || owed[i] || this.stale[i];   // stale: drawn before a flight, wherever its box is now
             mustDraw[i] = stored[i] is null;
             if (stale && uncovered) RedrawReasons[i, 0]++;
             if (stale && !uncovered && sunTurned) RedrawReasons[i, 1]++;
