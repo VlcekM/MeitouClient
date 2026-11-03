@@ -28,7 +28,7 @@
     },
     {
       "id": 3,
-      "start": "2026-11-04 00:00:00",
+      "start": "2026-11-03 21:43:00",
       "label": "Series 3",
       "description": "--benchmark-baseline graphics: Medium tier, no GI, ground parallax or tessellation, no upscaler, SMAA. Two runs per scenario."
     }
