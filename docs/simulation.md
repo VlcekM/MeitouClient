@@ -689,8 +689,12 @@ simulation state; `Schedule` advances bolts. Targets without medical bodies do n
 terrain heightmap and the buildings' collision triangles (the ragdolls' environment, `SolidHits`), not the walkable surfaces (a roof over
 the shooter counted as ground). A building is there once its zone's collision has been read on a worker; until then bolts pass it, which
 breaks determinism for those first shots.
-A crossbow reload paused by a lost target, the fight's end or a switch to melee resumes where it stopped (as the original's controller timer,
-[combat.md](game/combat.md#turrets) fire gate); it does not count down while the controller is off (the original's runs on without a target, not modelled).
+A crossbow reload paused by the fight's end or a switch to melee resumes where it stopped (as the original's controller timer,
+[combat.md](game/combat.md#turrets) fire gate); in a fight without a target the controller stays on (state 3) and the reload counts on.
+Bolts and the line of fire hit each character's click hull, an axis-aligned box from the race's `hull size` (`CombatSystem.HullHalf`); the line of fire and the closing
+ray follow the original's tests ([combat.md](game/combat.md#line-of-fire-and-the-hit-shape)). Engine bounds: the line of fire looks the crossbow's `range` on (at
+least to the aim point), the closing ray `RangedTuning.RayReach` (2000); the original's rays are unbounded. Not modelled: the aim clip's blend before the steady time
+counts, the near-camera gate on aiming, and the controller's own target choice (Meitou's crossbowmen choose as fighters do, every second).
 Ranged state is hashed when used. Weapon/turret research: [combat.md](game/combat.md).
 
 Turrets (`CombatSystem.Turrets.cs`, facts: [combat.md](game/combat.md#turrets)): one serial step after the bolts fly finds the gunners and runs each manned turret in key
@@ -821,8 +825,8 @@ when the host passes `CharacterRigs` (the game does; tests and goldens do not). 
 - **Save** (Meitou key, [ragdolls](game/ragdolls.md#saves)): a whole-body ragdoll's body poses, frozen flag and age (`Saving/RagdollSave`); the loaded
   character's first ragdoll starts from them when its root lies within 20 of where it stands, else (and for carried or limb ragdolls) from the animation.
 
-Gaps: ragdolls collide with each other but not with characters that have none (as the original if its groups 0/1 are the characters' shapes:
-ragdoll group 3/4 skips them, [ragdolls](game/ragdolls.md#collision-groups)); the building gather's
+Gaps: ragdolls collide with each other but not with characters that have none (as the original: a character's click hull is group 0, which
+ragdoll group 3/4 skips, [ragdolls](game/ragdolls.md#collision-groups)); the building gather's
 timing can change a live game's hash (goldens have no environment).
 
 ## Crimes and bounties
@@ -1847,7 +1851,8 @@ and resetting camera evaluation is required for repeatable recording.
 ## Battle
 
 `--battle n unit m unit [rows] [--battle-map plateau|mesa|fog|sandbox|x,z] [--battle-width a[,b]] [--battle-no-fear]` (`GameHost.Battle.cs`): two blocks of NPCs, a squad each (each one CHARACTER or
-ANIMAL_CHARACTER record, its own faction's looks, the first fighter leading) 40 units apart in ranks of 25 (or `rows` ranks of n / rows, the back rank taking the rest; `--battle-width` sets
+ANIMAL_CHARACTER record, its own faction's looks, the first fighter leading; a record that names no faction, as CHARACTER records rarely do, takes the first faction, not the
+player's, that is an enemy both ways of the other side's, or of the player's, so the two sides' senses tag each other enemies as hostile groups' do) 40 units apart in ranks of 25 (or `rows` ranks of n / rows, the back rank taking the rest; `--battle-width` sets
 each side's rank length instead, one value for both), 6 units apart
 (times the race's `pathfind footprint radius` / 4 when larger, the front rank at least that far from the middle), on a plateau (default, -74028, 13428), the duel's mesa, a Fog Islands spot (-71560, -39953), the sandbox floor or a map spot, from 15:00 (or `--time`), with no towns
 and no Aggro. The host orders every standing fighter without a combat target at the nearest standing enemy, once per world tick, so

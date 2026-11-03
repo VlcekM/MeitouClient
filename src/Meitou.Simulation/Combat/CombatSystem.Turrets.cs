@@ -284,7 +284,7 @@ public sealed partial class CombatSystem
         if (t.Steady > 0) return;
         var (from, forward) = TurretRig.Barrel(t.Gun, t.Angles, t.Position, t.Yaw);
         float reach = Vector3.Distance(from, t.Aim ?? prev[target].Position);
-        if (LineOfFire(world, g, target, from, from + forward * reach, cold.Faction) != 1) return;
+        if (LineOfFire(world, g, target, from, from + forward * reach, cold.Faction, gun.Range) != 1) return;
         FireTurret(world, t, g, cold, target, from, forward);
         t.Loaded--;
         t.Shots++;

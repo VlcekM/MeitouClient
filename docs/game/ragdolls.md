@@ -49,7 +49,7 @@ Pairs disabled in `FUN_1407dbee0` (third argument hidden on a few calls, assumed
 | 28–31 | 0, 1, 3, 4, 14, 23–26, 6 (last pair's group assumed) |
 
 So ragdolls hit each other, items, building floors/stairs/furniture/roofs (9–22, 27), but not doors,
-foliage group 6 or passable parts. A living character is no PhysX actor and a ragdolled, carried or dead
+foliage group 6 or passable parts. A living character's only PhysX shape is its click hull in group 0, which ragdolls skip, and a ragdolled, carried or dead
 body is left out of the movement avoidance list, so it blocks no walker
 ([pathfinding](pathfinding.md#bodies-in-the-way)).
 
@@ -314,7 +314,7 @@ human frozen after 61 ticks): save → load gives the same 13 body poses (offset
 
 ## Unknowns
 
-- Meaning of groups 0, 1, 2, 7, 28–31 and the terrain's group.
+- Meaning of groups 1, 2, 7, 28–31 and the terrain's group (0: the click hulls, [combat](combat.md#line-of-fire-and-the-hit-shape)).
 - Exact condition of character slot 103 (group 4) and the downward-ray branch of `FUN_1407d2440`.
 - Which body is the root (RagdollAnimation `+0x48` key); likely the pelvis.
 - `FUN_1405ce9c0`'s branch for Character `+0x388` 1 / 0x5b (calls `FUN_1405b4fa0` on put-down).

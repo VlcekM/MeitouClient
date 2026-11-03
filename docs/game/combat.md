@@ -717,12 +717,21 @@ values; trajectory, aim timing and obstruction uncertainties remain labelled.
 - **Controller tick** (`FUN_140438c70`): sets the trigger flag `+0x34` every tick (so the fire gate `FUN_14043aee0`, run from the character update `FUN_1405cf130`, works every
   frame); chooses the target; none → state 3. Empty gun → state 2. In range (`FUN_140436860`: squared distance gunner→target < h × range², h the height factor from the gunner):
   XP perception and the stat (`FUN_1408c7250`: turrets 1.0, perception 3.0 per second), then the fire decision. With a turret it never walks to the target (blocked or out of range: wait).
-- **Fire decision** (`FUN_140437ad0`): aim error ≤ 1°; the steady timer (0.4 s, reset after a shot or reload) counts down only then; a ray from the muzzle along the barrel
-  (`FUN_140435b40`, mask `0x87f9e07`): a non-hostile character → hold; something nearer than the target → blocked; else fire.
+  A crossbowman out of range or blocked walks to the target (state 1, `FUN_1405c68a0`) unless Hold position (CharStats `+0x12b`) or the target is off its navmesh island (`FUN_140597160`);
+  entering state 1 sets the closing timer `+0x7c` to 0. In state 1 (**Observed**): in range, the closing ray ([line of fire](#line-of-fire-and-the-hit-shape)) passing adds the frame
+  time to `+0x7c`, and past 0.3 (`DAT_14168955c`) the walk halts and the state is 0 (the fire decision runs from the next tick); a ray that does not pass sets it to 0;
+  then `CharMovement::pathFailed` (slot 0x50) halts and sets state 3, else a walker that stopped (`+0x24` clear) is sent to the target again. A new target (`FUN_1404371f0`) sets
+  `+0x7c` to 5.0 and, in state 1, re-sends the walk. A held shot (2) does not walk.
+- **Fire decision** (`FUN_140437ad0`, **Observed**): aim error ≤ 1 (a crossbow's is the constant 1, `GunClassPersonal` slot 13); then, while the gun's ready flag holds (slot 7, a
+  crossbow's `+0x120`), the steady timer `+0x70` (0.4 s, reset after a shot or a reload) counts down, and without the flag it is set to 0.4 and the shot holds. A crossbow's flag
+  is written each controller tick by `FUN_14051e4e0`: cleared, then (target set, not walking, not reloading, the character's near-camera flag `+0x1a9` set) the shooter turns to the
+  target and the flag is the aim clip's weight > 0.9. With the timer out, the line of fire ([below](#line-of-fire-and-the-hit-shape)) decides: 1 fire, 2 hold, 0 blocked (walk).
 - **Fire gate** each frame: the reload `FUN_140437ce0` (an empty gun reloads clamp(lerp(s, max, min)), s = 0.01 (0.6 skill + 0.4 dex); XP stat and dexterity while it runs;
   ammo only used when the gun has an ammo record); while loaded the aim point (target `Bip01 Spine2` + lead, `FUN_140436d10`) goes to the building (slot 5 → `+0x4a8`); with the fire flag, the shot.
   **Observed** (decompile, Ghidra field writes): the controller's reload timer `+0x78` and reloading flag `+0x80` are written only by the reload step and the constructor
   `FUN_140439f20`; the task-end clear `FUN_140437470` leaves them, so a reload cut off by a lost target or a switch to melee resumes where it stopped the next time the controller runs.
+  The fire gate needs only the active flag `+0x36` and the trigger `+0x34`, which the controller tick sets before it looks for a target, so the reload runs on in state 3 (no
+  target). Starting a reload sets the current target to the finder's pick (`FUN_1404374d0` with no current); finishing one halts the movement (`CharMovement::halt`).
 - **Turning** (`TurretBuilding::vfunc_28` `140434b70`, `RotatingEnt::vfunc_2`, **Verified**): `+0x448` = −99, then while `+0x464` > 0 and someone operates, each `rotation function` 5
   part turns toward `+0x4a8` by its error (yaw about Y or pitch) limited to ± `+0x464` × frame time, down the part chain; `+0x448` = the largest error (degrees,
   `FUN_1404cc0d0`). So an unpowered turret does not turn and its error −99 passes the 1° test: it fires where it points. Sounds: [audio.md](../audio.md#other-world-side-events).
@@ -885,11 +894,31 @@ node in the shooter's `hands` (`Bip01 Prop2` with the attach offset; without bui
 `FUN_140434fc0`) is that node's world position + its orientation x (`barrel pos Y`, `barrel pos Z`, 0), the place of loaded bolt 0 (base game: (-1, 5.9, 0),
 Spring Bat (-1, 1.75, 0)). The direction is normalise(aim point - muzzle) (slot 12), the aim point the target's `Bip01 Spine2` (`Spine1` for some targets)
 plus a lead of target velocity x distance / `shot speed` (first order, **Verified**), tilted by `randomDeviant(random x deviation)`. Flight: each frame a ray from the bolt along its z on the physics
-thread (raycastClosestShape, group mask `0x087fde47`, read one frame late); a hit counts within 2 x the step. Groups tested: 0 and 1 (characters among them),
+thread (raycastClosestShape, group mask `0x087fde47`, read one frame late); a hit counts within 2 x the step. Groups tested: 0 and 1 (0: the characters' click hulls, below),
 2 terrain, 6 and 14 foliage, 9-12 building floors, 15-18 stairs, 19-22 furniture, 27 unwalkable roofs; not ragdolls, items, doors, interior hulls or
 passable parts. The shooter is skipped (`FUN_1400cd0b0`). Meitou: the simulation fires from a fixed point 15 up and 8 ahead (`RangedTuning.Barrel*`, measured
-from the posed muzzle) and tests the terrain and the buildings' collision (`SolidHits`; no foliage); the renderer draws a new bolt from the shooter's posed
+from the posed muzzle) and tests the click hulls, the terrain and the buildings' collision (`SolidHits`; no foliage); the renderer draws a new bolt from the shooter's posed
 muzzle and closes the gap to its simulated flight over 150 units (`GameHost.LaunchBlend`).
+
+### Line of fire and the hit shape
+
+**Observed** (decompile; functions cited). **Hit shape**: every character has a click hull, `CharMovement +0x3b0` (`clickHull`, KenshiLib 1ce4a16), a `PhysicsHullT` built by
+`FUN_140661a70` → `FUN_1404ccb50`, whose physics side (`PhysicsHullT` slot 6 → `FUN_1407e32d0`) is a kinematic PhysX actor (body flag `0x80`) with one box shape of default flags and
+collision group 0. Half size = (`hull size X`, `Y`, `Z`) of the RACE × 0.5 × slot 0x390 (1 for people, an animal's size), Y also × the appearance's `characterHeight` (`+0x184`);
+while the prone state (slot 0x368) is not 0 and `+0x2f8` is not 2, Y = max(X, Z) first. The box sits on the feet (shape offset +Y half) and only its position follows the
+character (slot 5: `moveGlobalPosition`), so it is not turned. The posture setter (`CharacterAnimal` slot 110) rebuilds it on a change to or from upright; a whole-body or carry
+ragdoll request removes it (`FUN_1405d0db0` → `FUN_14065fe40`) and the end rebuilds it. Base data (**Verified**, probe of the merged RACE records): people 5 × 17 × 5 (fishmen 5 × 20 × 5),
+bonedogs 10 × 15 × 10, spiders 25 × 22 × 25, Leviathan and Big-Bones 75 × 90 × 75; fcs.def's default 5 × 20 × 5 ("size of the click hull"). `characterHeight` is set by
+`FUN_14052e6c0` (age × `Height` / 100 + `Leg length` / 100 − 1) and `FUN_1405334d0` (`Height` / 100); which one a hull read first is **Unknown**.
+**Rays** are queued (`FUN_1404ccd00`, two buffers) and run on the physics thread (`FUN_1404cc460`): `raycastClosestShape` over all shapes in the mask, unbounded (`FLT_MAX`); a request
+still running answers "pending". Group 1's contents are **Unknown**.
+**Line of fire** (`FUN_140437ad0`): from the muzzle along the aim direction, mask `0x87f9e07` (groups 0–2, 9–12, 15–22, 27). Pending: hold. The first shape met names its object by
+the shape's handle: a character that is not the shooter and not an enemy (`Character::isEnemy` slot 0x3e8, disguises counted) holds (2); any enemy, the target or another, fires (1);
+another object (a building) blocks (0) unless the shooter is nearer the target than the hit point (feet to feet, `FUN_1404346d0`); a shape without an object (the terrain) and no
+hit at all fire. So packed ranks hold: a rear rank's line runs into the front rank's hulls (5 wide, 6 apart in Meitou's battle) unless they stand aside.
+**Closing ray** (`FUN_140438c70`, state 1): from the muzzle along (target feet + 5 up) − (own feet + 5 up), mask `0x87f9e04` (no characters); it passes when it meets something
+farther from the shooter than the target is. Meeting nothing does not pass, so on open ground a walker goes on until its path fails or the planner turns it to melee.
+Meitou: `CombatSystem.HullHalf`, `HitHull`, `LineOfFire`, `ClosingRayPasses`; a down character has no hull (every Meitou knock-out is ragdolled).
 
 ### Arms
 
@@ -922,8 +951,7 @@ the shoot orders 0x106 / 0x107 / 0x10a (`FUN_1407f9e20`), i.e. the Shooting task
 `hasTwoWorkingArm` and `hasWeaponEquipped`; where it does not, attack orders stay melee. The attack-on-sight post and area test `FUN_140598630` skips its 80 / 140 unit melee
 reach limits when the gate holds, so a Ranged-on crossbowman engages from afar (Meitou: `Orders.RangedExempt` in `AggroSystem`; a crossbow on the hip, a crouching or one-armed holder does not skip it). Nothing switches back by the target's distance: melee comes from the planner
 dropping the Shooting task when a threat is within 40 (`immediate`, [lifecycle](#fight-lifecycle-and-orders), which also has the shooting desire). Meitou: `CombatSystem.ChooseMode` follows that (crossbow unless dry, crawling (the gate's prone test) or a threat
-is within 40; never with the flag off; NPCs always on). The Shooting rows' desire reads the flag too; the `CharStats` constructor sets it on for every character (the +0x128 dword = 0x100), and only the player's standing order and the save change it, so NPCs are always Ranged. Other unknowns: the reload animation against the timer (the timer paces the shots, so only the clip's look is open); a character's hit shape
-(capsule or ragdoll) and whether downed bodies stop bolts; whether the crossbow's bleed and target multipliers and the armour's `ranged skill mult` do anything; how NPC crossbowmen get their bolts.
+is within 40; never with the flag off; NPCs always on). The Shooting rows' desire reads the flag too; the `CharStats` constructor sets it on for every character (the +0x128 dword = 0x100), and only the player's standing order and the save change it, so NPCs are always Ranged. Other unknowns: the reload animation against the timer (the timer paces the shots, so only the clip's look is open); whether the crossbow's bleed and target multipliers and the armour's `ranged skill mult` do anything; how NPC crossbowmen get their bolts.
 (The trigger flag `+0x34` is set by the controller tick itself every tick, so a shot leaves in the frame of its decision: [Turrets](#turrets), **Observed**.)
 
 ## Unknowns
