@@ -14,7 +14,7 @@ namespace Meitou.Simulation.FirstAid;
 /// First aid and resting in play (docs/simulation.md "Bodies", docs/game/character-stats.md "First aid, medkits and robot repair" and "Sleep, beds and resting").
 /// <list type="bullet">
 /// <item><b>Treat</b> (<see cref="CharacterTask.Treat"/>): <see cref="TreatOrder"/> (the player), the medic job and the NPC rule start it. <c>Schedule</c> walks the medic to the patient
-/// (the pursuit system's pattern: a path at free speed, asked again when the patient has moved); <c>Act</c> (own slot, read-only on the patient) emits one effect per tick while the medic
+/// (the pursuit system's pattern: a path at free speed, asked again when the patient has moved) and, in reach, asks the patient to stand still (<see cref="CharacterCold.StandStillUntil"/>); <c>Act</c> (own slot, read-only on the patient) emits one effect per tick while the medic
 /// is in reach, awake, not fighting and still, and the patient is still or down; <c>Apply</c> (serial commit, in target / source order) picks the kit, bandages the patient, drains the kit
 /// and trains the medic. So nothing on another character is written in a parallel phase.</item>
 /// <item><b>Rate</b> (<b>Observed</b>, character-stats.md): <c>lerp(1, 15, min(skill, kit quality) x 0.01) x medic speed mult</c> (x <c>robot medic speed mult</c> for a robot kit) per unit of <c>dt</c> on the first part with room (the next only once it fills), after any open wound is closed;
@@ -198,6 +198,7 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
 
     static void LetGo(CharacterCold cold)
     {
+        cold.TreatKneels = false;
         cold.TreatTarget = CharacterId.None;
         cold.TreatSplint = false;
         cold.TreatKit = null;
@@ -241,7 +242,11 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
             var spot = TreatSpot(world, table.Cold(t)!, next[t]);
             if (t == i || InReach(next[i], spot))
             {
-                // In reach (or treating itself): stand still and let the Act step work.
+                // In reach (or treating itself): stand still and let the Act step work, and ask the patient to stand still too. The medic kneels only while the patient
+                // keeps still (the original plays the clip in the first aid task's update, which runs once the target stands still, row 25's state 42).
+                if (t != i) AskToStandStill(world, table.Cold(t)!);
+                bool patientStill = Speed2(table.Previous[t].Velocity) <= Settings.StillSpeed * Settings.StillSpeed;
+                cold.TreatKneels = t == i || table.Cold(t)!.Medical!.Incapacitated || patientStill;
                 if ((n.Flags & Path) != 0)
                 {
                     n.Flags = (ushort)(n.Flags & ~Path);
@@ -251,6 +256,7 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
                 n.TaskTime = 0;
                 continue;
             }
+            cold.TreatKneels = false;
             n.TaskTime -= dt;
             var goal = new Vector2(spot.X, spot.Z);
             bool asking = (n.Flags & (ushort)(MoveFlags.NeedPath | MoveFlags.Pending)) != 0;
@@ -273,6 +279,16 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
             n.TaskTime = PursuitSystem.RepathSeconds;
         }
     }
+
+    /// <summary>How long a medic's ask to stand still lasts after its last renewal: the request's time to live (3 s, <c>FUN_140269ff0</c>).</summary>
+    const float StandStillSeconds = 3;
+
+    /// <summary>
+    /// The first aid task's every update asks the patient to stand still (<c>Task_FirstAid</c> / <c>Task_FirstAidRig</c> call <c>FUN_1403346d0</c>, docs/game/ai-tasks.md "Medic jobs"):
+    /// a crawling or walking patient stops, so the treatment can run (<see cref="Act"/> treats only a patient standing still). Without it a medic knelt, stood to follow, knelt again (issue #232).
+    /// </summary>
+    static void AskToStandStill(World world, CharacterCold patient) =>
+        patient.StandStillUntil = world.Tick + (long)MathF.Ceiling(StandStillSeconds / world.TickSeconds);
 
     /// <summary>A path whose last waypoint is farther than the reach from the goal on X/Z, or off the treatment spot's floor: the patient cannot be got to.</summary>
     bool EndsShort(Vector3 end, Vector2 goal, float spotHeight) =>

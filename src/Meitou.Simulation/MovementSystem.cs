@@ -782,6 +782,13 @@ public sealed class MovementSystem(PathService paths) : ITickSystem, IDisposable
         return slowest;
     }
 
+    /// <summary>
+    /// Whether a medic's ask to stand still holds the character (<see cref="CharacterCold.StandStillUntil"/>): the original's patient takes 62 Standing still as an urgent goal, which its
+    /// orders outrank and whose row needs no attack on it (<c>!isAggressionTowardsMe</c>). Engine reading: an NPC (the player's characters move by orders), not fighting or fleeing.
+    /// </summary>
+    static bool AskedToStandStill(in CharacterHot n, CharacterCold cold, long tick) =>
+        cold.StandStillUntil > tick && !cold.IsPlayer && !cold.InCombat && !cold.Fleeing && cold.CarriedBy.IsNone && n.Task != (byte)CharacterTask.Attack;
+
     public void Move(World world, Partition part)
     {
         var table = world.Characters;
@@ -825,6 +832,13 @@ public sealed class MovementSystem(PathService paths) : ITickSystem, IDisposable
                 // tick's inputs is already at its spot in Next.
                 n.Velocity = Vector3.Zero;
                 n.Flags = (ushort)(n.Flags & ~(ushort)MoveFlags.AnyPath);
+                cold.AgentSpeed = 0;
+                continue;
+            }
+            if (AskedToStandStill(n, cold, world.Tick))
+            {
+                // A medic treating it asked it to stand still (FirstAidSystem): it stops where it is; its own walk is kept and goes on when the ask lapses.
+                n.Velocity = Vector3.Zero;
                 cold.AgentSpeed = 0;
                 continue;
             }
