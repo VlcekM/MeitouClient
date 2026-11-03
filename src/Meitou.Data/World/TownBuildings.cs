@@ -175,6 +175,13 @@ public static class TownBuildings
     public const int BedFunction = 6, SkeletonBedFunction = 25;
     /// <summary>BUILDING_FUNCTIONALITY <c>function</c> 8, BF_CAGE: cages, the prisoner pole, the peeler (docs/game/locks.md "Data").</summary>
     public const int CageFunction = 8;
+
+    /// <summary>
+    /// Whether a BF_CAGE functionality is a torture rack (the class <c>TortureBuilding</c>; <b>Verified</b>, factory <c>FUN_14057cc70</c>, function 8): its <c>produces</c> list is not empty, or its
+    /// <c>flags</c> are not 0. Base data has none (the peeler, cooking pole, drill and hooks come from mods; docs/game/locks.md "Torture racks").
+    /// </summary>
+    public static bool IsRack(GameRecord functionality) =>
+        functionality.GetInt("function") == CageFunction && (functionality.GetReferences("produces").Count > 0 || functionality.GetInt("flags") != 0);
     /// <summary>BUILDING_FUNCTIONALITY <c>function</c> 21, BF_GATE (docs/game/buildings-production.md "Classes and functions").</summary>
     public const int GateFunction = 21;
 

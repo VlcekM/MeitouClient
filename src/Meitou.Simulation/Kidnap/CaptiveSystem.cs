@@ -176,6 +176,7 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
     {
         var table = world.Characters;
         if (world.Tick % RestoreEveryTicks == 0) RestoreSlavers(world);
+        StepRacks(world);
         for (int k = 0; k < jobs.Count;)
         {
             var j = jobs[k];
@@ -1056,19 +1057,36 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
     // How near the farm's origin an eater stops (engine choice: the original walks to the farm's work point, getPositionMarker).
     const float CropReach = 30;
 
+    /// <summary>The medical context of a captive the rack or a meal damages (toughness, strength, the seed and a per-character roll key).</summary>
+    MedicalContext ContextOf(World world, int c, CharacterCold cc) => new(data.Bodies.Constants, data.BodyOptions, cc.Race!)
+    {
+        Toughness = cc.Stats?.ScaledToughness ?? 0,
+        Strength = cc.Stats?.Strength ?? 50,
+        HasStats = cc.Stats is not null,
+        Seed = world.Seed,
+        CharacterKey = Rng.Key(world.Characters.IdOf(c)),
+    };
+
+    /// <summary>What a medical update of a captive does outside the medical state: a death or knock-out stands it up, a lost limb is announced to the renderer and the character cries event 70 (leg) or 71 (arm).</summary>
+    static void ApplyBodyEvents(World world, CharacterId captive, int c, MedicalState medical, List<MedicalEvent> events)
+    {
+        foreach (var e in events)
+        {
+            if (e.Kind is MedicalEventKind.Died or MedicalEventKind.KnockedOut) TaskStart.Stand(world.Characters, c);
+            else if (e.Kind == MedicalEventKind.PartSevered)
+            {
+                world.Characters.LimbsChanged.Enqueue((c, medical.Parts[e.Part].Template.LimbSlot));
+                world.Defer(new Dialogue.DialogueEvent(captive, CharacterId.None, medical.Parts[e.Part].Template.LimbSlot is 2 or 3 ? 70 : 71) { Tick = world.Tick + 1 });
+            }
+        }
+    }
+
     /// <summary>One update of a meal (<see cref="MedicalState.BeingEaten"/>, at the captive's own rate); true when the captive died of it or otherwise.</summary>
     bool Eat(World world, CaptiveJob j, int c, CharacterCold cc, float dt)
     {
         var table = world.Characters;
         var medical = cc.Medical!;
-        var ctx = new MedicalContext(data.Bodies.Constants, data.BodyOptions, cc.Race!)
-        {
-            Toughness = cc.Stats?.ScaledToughness ?? 0,
-            Strength = cc.Stats?.Strength ?? 50,
-            HasStats = cc.Stats is not null,
-            Seed = world.Seed,
-            CharacterKey = Rng.Key(table.IdOf(c)),
-        };
+        var ctx = ContextOf(world, c, cc);
         bool wasDead = medical.Dead;
         var events = new List<MedicalEvent>();
         // A meal still awake gains toughness XP: the generic continuous entry with amount 10 (FUN_1404356f0 calls FUN_1408c6430(stats, dt, 10, 21); Observed). Engine choice: "awake" for the
@@ -1077,15 +1095,7 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
         float rate = MedicalState.EatRate(cc.Stats?.Toughness ?? 0, cc.Stats?.Scale ?? 1);
         bool vampiric = table.TryResolveNext(j.Worker, out int w) && table.Cold(w)?.Race is { Vampiric: true };
         bool eaten = medical.BeingEaten(rate, dt, ctx, data.BodyOptions.Dismemberment != Dismemberment.Never, events, vampiric);
-        foreach (var e in events)
-        {
-            if (e.Kind is MedicalEventKind.Died or MedicalEventKind.KnockedOut) TaskStart.Stand(table, c);
-            else if (e.Kind == MedicalEventKind.PartSevered)
-            {
-                table.LimbsChanged.Enqueue((c, medical.Parts[e.Part].Template.LimbSlot));
-                world.Defer(new Dialogue.DialogueEvent(j.Captive, CharacterId.None, medical.Parts[e.Part].Template.LimbSlot is 2 or 3 ? 70 : 71) { Tick = world.Tick + 1 });
-            }
-        }
+        ApplyBodyEvents(world, j.Captive, c, medical, events);
         // "{1} has been eaten alive." for the player's own (FUN_140856bc0: of the player's faction, or of a squad that is).
         if (eaten && (cc.IsPlayer || world.Player.Faction >= 0 && cc.Faction == world.Player.Faction)) world.Post(Loc.Tr("{1} has been eaten alive.", cc.Name));
         return wasDead ? eaten : medical.Dead;

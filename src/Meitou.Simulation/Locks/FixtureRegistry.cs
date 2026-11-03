@@ -437,6 +437,7 @@ public sealed partial class FixtureRegistry
             Id = id, Building = building, Kind = kind, RecordId = record.StringId, Site = site, Owner = owner, Position = at, Yaw = yaw, HostRecordId = host,
             Clips = kind == FixtureKind.Cage && functionality is not null ? new CageClips(FirstClip(db, functionality, "animation"), FirstClip(db, functionality, "animation KO"), FirstClip(db, functionality, "animation dazed"), FirstClip(db, functionality, "animation lockpick")) : default,
             UseNodes = kind == FixtureKind.Cage ? UseNodes(db, record) : null,
+            Rack = kind == FixtureKind.Cage && functionality is not null && TownBuildings.IsRack(functionality),
             Restrains = functionality?.GetBool("restrains movement") ?? false, OccupantSelection = kind == FixtureKind.Cage && (functionality?.GetBool("occupant selection") ?? false), UseRange = functionality is null ? 25 : FloatOf(functionality, "use range", 25),
             Contents = kind == FixtureKind.Container && storageWidth > 0 && storageHeight > 0 ? new Meitou.Simulation.Items.Inventory(storageWidth, storageHeight) { StackBonusMult = record.GetFloat("stackable bonus mult", 1) } : null,
             Lock = !locked ? null : new LockState { Level = RollLevel(world.Seed, id, faction, IntOf(record, "lock level bonus"), door: false), Hardness = FloatOf(record, "hardness") },

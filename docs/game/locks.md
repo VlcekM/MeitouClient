@@ -376,6 +376,26 @@ Same targets as picking; Task_CutLock / Task_BruteForceLock share the shackle ta
 
 The house keeps, from the squads housed in it (**Verified**, decompile): designation `+0xc4`, public byte `+0xc8` and the squad template `+0xf0`. `FUN_14057f1f0` (house setup for a template) writes the template's `building designation` only while the house has none and its `public day` every time (the last setup wins); `FUN_14057f4c0` (a platoon made at the building) writes the designation over any value, a 0 included; `FUN_140553210` (a squad assigned) stores its template every time and the designation while none is set; `FUN_140792570` (a saved platoon's home handle at load) writes the designation while none is set. Readers: the bar, shop and public tests of the town places, `FUN_140330ab0` (bed cost: `public beds` and `bed usage cost` of the stored template, the stored designation for the bar exception). Meitou: `FixtureRegistry.RecordOf` (`BuildingRecord`), written by `PopulationSystem.Spawn` / `SpawnSquad` and `AiSystem.Attach`, hashed with the registry, saved into the building's state of a registered building as `meitou designation`, `meitou template` and `is public day` (the player's toggle wins). A building with no record (a town not made yet, a save from before) falls back to its level data's residents template.
 
+## Torture racks
+
+**Class** (**Verified**, factory `FUN_14057cc70`): a BUILDING whose functionality has `function` 8 (BF_CAGE) and a non-empty `produces` list or `flags` other than 0 is made a `TortureBuilding` (a
+`ProductionBuilding`; every other cage is a plain `UseableStuff`). `gamedata.base` has none; rebirth.mod's `skin peeler` (Peeler Machine) and many mods do (the cooking pole, the hooks, the drill, executions: `produces` set, `flags` 0 in the whole install,
+**Verified**, census of the merged load order). Meitou: `TownBuildings.IsRack` -> `Fixture.Rack`; a rack is still an ordinary cage fixture (use node, occupant, lock, `restrains movement`).
+
+**Per frame** (**Verified**, slot 28 `FUN_14029af90`; the constants are the exe's): the user is the first occupant.
+- No user: timer and busy flag clear, status 0. Otherwise the user's dialogue gets event 11 (`FUN_140684990`; Meitou fires it each tick, the dialogue's own speaking gate limits it).
+- **Armour first**: a user with items in its `armour` section (`FUN_140748380`) only advances a timer by the frame (game seconds); when the first piece's cut + blunt resistance (Armour `+0x228` / `+0x22c`,
+  the item's own values) is below timer x 0.04 (`0x1416b1630`) the piece is destroyed (`FUN_140799af0`) and the timer restarts. Output progress 0, status 0.
+- **Stretch** (no such armour): each part with a side (`+0x20` non-zero: arms, legs) with flesh - 1.1 x stun above minus its maximum loses the frame in flesh (`FUN_140644a70` with only its first term: no stun, wound or blood);
+  one past the limit is cut off (`FUN_14064edc0`) when the dismemberment global `DAT_142133504` is set. While any sided part still has flesh above 0 the frame is busy; when none has, the sideless parts (head, chest, stomach)
+  are stretched the same way and the frame is busy while one still takes damage. Vital parts then kill as in any medical update.
+- **Output**: progress = 0.5 - 0.25 x (best level of the sideless parts + best of the sided, level = (flesh - 1.1 stun) / maximum, -1 when none), so 0 for a whole body and 1 once every part is past its limit. The frame after the last busy one
+  the rack adds to its output (`vfunc_184`, the argument is whatever the register held, **Unknown**; Meitou 0): an item when the progress is at least 0.999, then progress 0, status 0; other frames status 1.
+- The base class then runs with `+0x1a4` (output value) zeroed each frame, so the machine's own production adds nothing, and the "has operators" byte `+0x3a9` holds the busy flag. Not modelled: the user object's `+0xe8` virtual 7 call (**Unknown**) and the global byte
+  `DAT_1421349c9` that blanks the frame (**Unknown**).
+
+Meitou: `CaptiveSystem.StepRacks` (every tick, `CaptiveSystem.Rack.cs`), `MedicalState.StretchLimbs`; the machine (status, output) exists for a player-built rack only. Not hashed unless a rack exists; not saved.
+
 ## Containers (Meitou)
 
 Interior items with `has inventory` (grid as for a [storage](buildings-production.md), 18 x 18 by default) are container fixtures with their own grid, locked or not (`has lock`).

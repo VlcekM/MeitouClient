@@ -163,6 +163,11 @@ public sealed class Fixture
     public UseNode[]? UseNodes { get; init; }
     public float UseRange { get; init; }
     public CharacterId Occupant { get; set; } = CharacterId.None;
+    /// <summary>Cages: a torture rack (<see cref="Meitou.Data.World.TownBuildings.IsRack"/>); derived from the data.</summary>
+    public bool Rack { get; init; }
+    /// <summary>Racks: the armour timer (<c>+0x490</c>, game seconds) and whether the last frame stretched its user (<c>+0x3a9</c> clear). Not saved; hashed only on a rack.</summary>
+    public float RackTimer { get; set; }
+    public bool RackBusy { get; set; }
     /// <summary>Beds: its record's <see cref="BedData"/>; derived from the data, not hashed or saved.</summary>
     public BedData Bed { get; init; }
     /// <summary>Beds: inside a building (an interior's bed; the bed search weighs it twice), not one standing on its own.</summary>
@@ -182,6 +187,7 @@ public sealed class Fixture
         if (Lock is { } l) l.Hash(ref h); else h.Add(-1);
         if (Kind == FixtureKind.Door) { h.Add((int)Motion); h.Add(OpenAmount); h.Add(DoorBroken); h.Add(WantsLock); if (AutoOpened) h.Add(LastPass); if (DoorProgress != 1) h.Add(DoorProgress); }
         h.Add(Occupant);
+        if (Rack) { h.Add(RackTimer); h.Add(RackBusy); }
         Contents?.Hash(ref h);
     }
 }
