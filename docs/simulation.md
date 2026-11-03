@@ -348,7 +348,7 @@ simulation thread; publish results at boundaries.
 `World.PreparePopulation` queues nearby residents/wild squads, activates existing nearby roaming
 platoons and drains completed builds during loading. It publishes matching snapshots without advancing
 ticks, game hours, AI, movement or roaming timers; readiness includes navmesh-gated sites.
-The original builds one queued squad request per rendered frame on the main thread (`FUN_140583310` pops one from the locked deque at world `+0x4a0` and builds it with `FUN_140581770`, **Verified**). Meitou, one tick standing for a frame: each tick finishes at most one roaming platoon build, else one squad of the finished wild builds (a wild build's site is marked loaded with its last squad); towns are built whole (`FUN_140583a10`, not this queue).
+The original builds one queued squad request per rendered frame on the main thread (`FUN_140583310` pops one from the locked deque at world `+0x4a0` and builds it with `FUN_140581770`, **Verified**). Meitou, one tick standing for a frame: behind the loading screen all finished builds are taken; in play each tick finishes at most one roaming platoon build, else one squad of the finished wild builds (a wild build's site is marked loaded with its last squad); towns are built whole (`FUN_140583a10`, not this queue).
 
 ### Unique characters
 

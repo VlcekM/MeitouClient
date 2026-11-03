@@ -101,6 +101,8 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
     /// <summary>The live world states take the unique table and the player's faction (serial; every tick, again after a look's unique refresh, and before the loading screen's builds).</summary>
     void RefreshStates(World world) => live.Refresh(world.Uniques, world.Player.Faction >= 0 ? world.Player.Faction : data.PlayerFaction);
 
+    bool drainAll;
+
     public PopulationData Data => data;
     public PopulationSettings Settings => settings;
     public SiteStatus StatusOf(int site) => states[site].Status;
@@ -131,7 +133,8 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
             state.Status = SiteStatus.Loaded;
             state.UnloadAtTick = -1;
         }
-        if (!DrainRoamers(world)) DrainWild(world);
+        if (drainAll) { while (DrainRoamers(world)) { } while (DrainWild(world)) { } }
+        else if (!DrainRoamers(world)) DrainWild(world);
         while (world.Characters.LimbsChanged.TryDequeue(out var cut))
         {
             if (world.Characters.Cold(cut.Character) is not { } cold) continue;
