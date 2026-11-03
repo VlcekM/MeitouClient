@@ -296,7 +296,18 @@ public sealed partial class DialogueSystem
         foreach (var door in world.Fixtures.OfBuilding(gate.Key)) Locks.FixtureRegistry.OpenDoor(door);
     }
 
-    /// <summary>DA_FOLLOW_WHILE_TALKING (16, task 164): the speaker walks after the target while its conversation lasts (engine: re-aimed every 15 ticks when more than 40 units off).</summary>
+    /// <summary>
+    /// DA_FOLLOW_WHILE_TALKING (16, Task_FollowAndTalk 164): the speaker follows the target with the shared follow task (FUN_140333400 / FUN_140333500, the same as a follow order: stand-off 20 to 40 on
+    /// the follower's side, the follow speed profile; <b>Verified</b>), a character in a fight excepted (engine choice: no walk to end a fight).
+    /// </summary>
+    void StartFollowing(World world, CharacterId who, CharacterId whom)
+    {
+        var table = world.Characters;
+        if (!table.TryResolveNext(who, out int s) || table.Cold(s) is not { InCombat: false }) return;
+        TaskStart.Start(world, s, new TaskRequest(CharacterTask.Follow, TaskType.FOLLOW_WHILE_TALKING, TaskSource.Npc) { Target = whom });
+    }
+
+    /// <summary>The follow lasts while the conversation does: when it is over (or the speaker or target is gone) the speaker stops following and stands.</summary>
     void StepFollowers(World world)
     {
         if (followers.Count == 0) return;
@@ -304,9 +315,13 @@ public sealed partial class DialogueSystem
         foreach (var (who, whom) in followers.ToArray())
         {
             bool talking = bubbles.Any(b => b.C.Npc == who) || open?.Npc == who;
-            if (!talking || !table.TryResolveNext(who, out int s) || !Awake(table, s) || Position(world, whom) is not { } at) { followers.Remove(who); continue; }
-            if (world.Tick % 15 != 0 || Vector3.DistanceSquared(table.Next[s].Position, at) <= 40 * 40 || table.Cold(s)!.InCombat) continue;   // no walk to end a fight it is in
-            TaskStart.Walk(world, s, new Vector2(at.X, at.Z), SpeedMode.Walk, TaskType.FOLLOW_WHILE_TALKING, TaskSource.Npc);
+            if (talking && table.TryResolveNext(who, out _) && Position(world, whom) is not null) continue;
+            followers.Remove(who);
+            if (table.TryResolveNext(who, out int s) && table.Cold(s) is { } cold && cold.FollowOrder == whom && table.Next[s].Task == (byte)CharacterTask.Follow)
+            {
+                cold.FollowOrder = CharacterId.None;
+                TaskStart.Stand(table, s);
+            }
         }
     }
 

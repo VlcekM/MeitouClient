@@ -155,6 +155,7 @@ public sealed partial class DialogueSystem
                     break;
                 case DialogueActions.FollowWhileTalking when !target.IsNone && mc is { IsPlayer: false }:
                     followers[me] = target;
+                    StartFollowing(world, me, target);
                     break;
                 case DialogueActions.ThugHunter when !target.IsNone && mc is { IsPlayer: false }:
                     stalkers[me] = new Stalk(target);
