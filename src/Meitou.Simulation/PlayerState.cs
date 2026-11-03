@@ -200,6 +200,11 @@ public sealed partial class PlayerSystem(PopulationData? data = null) : ITickSys
         Carrying.PickUpOrder o => o.Carriers, Carrying.PutDownOrder o => o.Carriers, Carrying.LootOrder o => o.Looters, Carrying.OpenLootOrder o => o.Looters,
         Carrying.StealthKoOrder o => o.Attackers, FirstAid.TreatOrder o => o.Medics, FirstAid.SplintOrder o => o.Medics, Locks.PickLockOrder o => o.Characters,
         Locks.UseBedOrder o => o.Characters, Production.OperateOrder o => o.Characters, Construction.BuildOrder o => o.Characters,
+        // Every other right-click verb that names characters goes through the same dispatcher (FUN_1407f9e20 :96 sets the flag before any order-specific code); only the job giver's orders (45, 0x111, 0xdf) skip it.
+        Dialogue.TalkOrder o => [o.Talker], FirstAid.RestOrder o => o.Characters, Items.OpenContainerOrder o => o.Characters, Items.PickUpItemOrder o => o.Characters,
+        Locks.DoorOrder o => o.Characters, Locks.DoorLockOrder o => o.Characters, Locks.ForceLockOrder o => o.Characters, Locks.PutShacklesOrder o => o.Characters, Locks.ShackleOrder o => o.Characters,
+        Locks.SetFreeOrder o => o.Characters, Locks.GetInCageOrder o => o.Characters, Locks.GetOutOrder o => o.Characters, Locks.PutInBedOrder o => o.Carriers, Crime.PutInCageOrder o => o.Carriers,
+        Construction.DismantleOrder o => o.Characters, Production.ProspectOrder o => [o.Character],
         _ => null,
     };
 

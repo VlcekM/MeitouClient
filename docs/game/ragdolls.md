@@ -143,7 +143,7 @@ and keeps those leg ragdoll bits on; the character tick `FUN_1405d00b0` sets pos
   3/4 character whose AI can get up becomes 3 when `Character::isItSafeToGetUp` fails, else 1 when sneaking (`+0xd4`),
   else 0. `playerWantsMeToGetUp` (`+0xec`, set for each selected character by every player order, `FUN_1407f9e20`,
   cleared each tick) turns that into 0 (1 only from 3 while sneaking). The exe tooltip says the same: a sneaker who wakes
-  stays down and crawls. No other setter of 1 was found.
+  stays down and crawls. No other setter of 1 was found. Meitou (`PlayerState.Ordered`): every order command that names characters sets it, the job giver's orders (45, 0x111, 0xdf) excepted; the original loops over the whole selection (the flag is set before any order-specific code, `FUN_1407f9e20`:96), Meitou only over the recipients.
 - Standing (not WHOLE): crippled (vfunc 0x360) gives 2; otherwise 1 is kept, anything else becomes 0, and 1 becomes 0
   too while `_isLiterallyUnderMeleeAttackRightNowForSure` (`+0x2b0`). So the forced crawl ends a voluntary one.
 - Standing orders: run, jog, walk, group speed (0, 1, 2, 16) on a posture-1 uncrippled character set 0 instead (the speed arrows do not step while anyone selected is in posture 1, **Verified** `FUN_1407f3a20`, [ui-screens](ui-screens.md)); stealth
