@@ -354,10 +354,10 @@ public sealed partial class CombatSystem
         var at = prev[g].Position;
         float range = t.Gun.Gun.Range;
         int current = t.Target >= 0 && t.Target < prev.Length && prev[t.Target].Alive && prev[t.Target].Generation == t.TargetGeneration ? t.Target : -1;
-        // Shoot At: the ordered target is kept while it lives and is free (out of range or blocked, the turret waits).
+        // Shoot At: the ordered target is kept while it lives, is free and is not down (row 235 list A state 7, which counts a crawler; out of range or blocked, the turret waits).
         if (!gc.TurretTarget.IsNone)
         {
-            if (table.TryResolveNext(gc.TurretTarget, out int ordered) && prev[ordered].Alive && !ScoresZero(world, gc, table.Cold(ordered))) return ordered;
+            if (table.TryResolveNext(gc.TurretTarget, out int ordered) && prev[ordered].Alive && !ScoresZero(world, gc, table.Cold(ordered)) && !CharacterFacts.TargetDown(table.Cold(ordered))) return ordered;   // row 235 ends on state 7 (isTargetDown: crawling too)
             gc.TurretTarget = CharacterId.None;
         }
         var found = turretCandidates ??= [];
