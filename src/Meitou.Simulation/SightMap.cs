@@ -367,6 +367,9 @@ public sealed class SightMap
     /// <summary>The <see cref="TownBuilding.Key"/> of the building the character is <see cref="Inside"/>; null outdoors or on top.</summary>
     public string? BuildingOf(int slot) => Inside(slot) ? rooms[place[slot]].Key : null;
 
+    /// <summary>The key of the building a place (<see cref="PlaceOf"/>) is in.</summary>
+    public string PlaceKey(int place) => rooms[place].Key;
+
     /// <summary>The indoor volume (room index) the character stands in, -1 outdoors or on top of a building.</summary>
     public int PlaceOf(int slot) => Inside(slot) ? place[slot] : -1;
 
