@@ -298,11 +298,14 @@ public sealed partial class AiSystem
         if (!board.AssaultSeeded) SeedAssaultTargets(world, board);
         foreach (var id in board.AssaultTargets)
         {
-            if (!table.TryResolveNext(id, out int i) || !table.Previous[i].Alive || table.Cold(i) is not { IsImprisoned: false } c || !CharacterFacts.PostureZero(c)) continue;
-            if (CurrentTown(world, table.Previous[i].Position) == board.Destination) return true;
+            if (!table.TryResolveNext(id, out int i) || !table.Previous[i].Alive || table.Cold(i) is not { } c) continue;
+            if (Stands(c, CurrentTown(world, table.Previous[i].Position) == board.Destination)) return true;
         }
         return false;
     }
+
+    /// <summary>A target set member that counts as standing (<c>FUN_14028eca0</c>): in the mission town, not caged, at posture 0 (not out, staying low, crawling or playing dead).</summary>
+    internal static bool Stands(CharacterCold c, bool inMissionTown) => inMissionTown && !c.IsImprisoned && CharacterFacts.PostureZero(c);
 
     /// <summary>The start rule's part of the target set: every person of the attacked faction within <see cref="AssaultReach"/> of the mission town (<c>FUN_1402900c0</c>).</summary>
     void SeedAssaultTargets(World world, Blackboard board)

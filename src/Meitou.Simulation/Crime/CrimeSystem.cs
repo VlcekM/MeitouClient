@@ -485,6 +485,12 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
     /// <see cref="AlarmReach"/>, half of it when the alarm was raised in a building (<see cref="TownAlarm.Place"/>), whatever the crime; with <paramref name="faction"/> (goal 210, allies
     /// only) only its faction's. An alarm in a building is skipped when its floor is more than one from the investigator's. An alarm inside a closed building (no open entrance, <see cref="Locks.FixtureRegistry.HasOpenDoor"/>) is skipped for an investigator in the same place and halves the reach a second time otherwise (needs <paramref name="place"/> and <paramref name="world"/>). Engine: its skip of any other floor in some buildings (building byte <c>+0xc2</c>, meaning <b>Unknown</b>), are not modelled. Null when none.
     /// </summary>
+    /// <summary>An alarm in a building whose entrances are all closed is skipped for an investigator in the same place.</summary>
+    internal static bool AlarmSkipped(bool closed, int alarmPlace, int investigatorPlace) => closed && alarmPlace >= 0 && alarmPlace == investigatorPlace;
+
+    /// <summary>The reach to an alarm: <see cref="AlarmReach"/>, halved for one raised in a building, halved again when that building is closed.</summary>
+    internal static float ReachOfAlarm(bool inBuilding, bool closed) => AlarmReach * (inBuilding ? 0.5f : 1) * (inBuilding && closed ? 0.5f : 1);
+
     public TownAlarm? AlarmFor(int town, Vector3 at, int faction = -1, int floor = 0, int place = -1, World? world = null)
     {
         TownAlarm? best = null;
@@ -495,9 +501,8 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
             if (a.Place >= 0 && Math.Abs(a.Floor - floor) > 1) continue;
             // An alarm in a building whose every entrance is closed (FUN_1405499a0 false, FUN_14092a810:52-62): skipped for an investigator inside it, else halved a second time.
             bool closed = a.Place >= 0 && world is not null && !world.Fixtures.HasOpenDoor(world.Sight.PlaceKey(a.Place));
-            if (closed && place == a.Place) continue;
-            float reach = a.Place >= 0 ? AlarmReach * 0.5f : AlarmReach;
-            if (closed) reach *= 0.5f;
+            if (AlarmSkipped(closed, a.Place, place)) continue;
+            float reach = ReachOfAlarm(a.Place >= 0, closed);
             float d = Vector3.DistanceSquared(a.Position, at);
             if (d < reach * reach && d < bestD) (best, bestD) = (a, d);
         }
