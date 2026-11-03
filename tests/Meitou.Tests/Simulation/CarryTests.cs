@@ -315,4 +315,25 @@ public class CarryTests
         Assert.Equal("carried 3.0<-0.0, 5.0<-1.0, 6.0<-7.0; loots 4/0 seen, 0/0; relation 10", happened);
         return hashes;
     }
+
+    [Fact]
+    public void A_carried_body_that_came_round_is_put_down_unless_it_is_chained_and_the_carriers_enemy()
+    {
+        // Goal 169's desire (FUN_1405a0710): 1 unless the body is chained and the carrier's enemy (FUN_14079c950).
+        var table = FactionRelations.Build([new FactionData { Id = "a", Name = "a", DefaultRelation = 50 }, new FactionData { Id = "b", Name = "b", DefaultRelation = -50 }, new FactionData { Id = "c", Name = "c", DefaultRelation = 50 }]);
+        var carry = new CarrySystem(BaseGame, BodyOptions.Default, 1) { Relations = table };
+        CharacterCold Make(int faction, bool chained)
+        {
+            var c = new CharacterCold { Faction = faction, Inventory = new Inventory() };
+            if (!chained) return c;
+            var shackles = new ItemInstance { Record = "shackles", Name = "shackles", Lock = new Meitou.Simulation.Locks.LockState { Locked = true, Level = 10, Hardness = 5 } };
+            c.Inventory.Add(shackles);
+            shackles.Section = "legs";
+            return c;
+        }
+        Assert.True(carry.WakesIntoPutDown(Make(0, false), Make(1, false)));
+        Assert.False(carry.WakesIntoPutDown(Make(0, false), Make(1, true)));
+        Assert.True(carry.WakesIntoPutDown(Make(0, false), Make(2, true)));
+        Assert.True(carry.WakesIntoPutDown(Make(0, false), Make(0, true)));
+    }
 }

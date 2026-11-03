@@ -130,14 +130,14 @@ public sealed partial class FirstAidSystem
     }
 
     /// <summary>A chained slave of the medic's faction (<c>FUN_14032e2a0</c>: chained, owner faction the medic's).</summary>
-    internal static bool OwnedChained(CharacterCold medic, CharacterCold patient) => patient.SlaveState == 1 && patient.Shackles is not null && patient.SlaveOwner == medic.Faction;
+    internal static bool OwnedChained(CharacterCold medic, CharacterCold patient) => patient.SlaveState == 1 && Locks.LockSystem.WornShackles(patient) is not null && patient.SlaveOwner == medic.Faction;
 
     /// <summary>
     /// A chained slave on the medic squad's slave list (pass 3's candidates, <c>FUN_14099f690</c>: the platoon's ownerships): a slave member of the squad or one that obeys it (<see cref="CharacterCold.SlaveMaster"/>).
     /// Stand-in: <c>SlaveMaster</c> is runtime only, so a slave with no known master (after a load) counts for every squad of its owner faction.
     /// </summary>
     static bool SquadSlave(CharacterCold medic, CharacterCold slave) =>
-        slave.SlaveState == 1 && slave.Shackles is not null
+        slave.SlaveState == 1 && Locks.LockSystem.WornShackles(slave) is not null
         && (medic.SquadId >= 0 && (slave.SlaveMaster == medic.SquadId || slave.SquadId == medic.SquadId) || slave.SlaveMaster < 0 && slave.SlaveOwner == medic.Faction);
 
     /// <summary>The patient's need score for a kit type (<see cref="MedicalState.FirstAidNeed"/>); 0 for a body without a medical state.</summary>
