@@ -135,7 +135,9 @@ public sealed partial class LockSystem(GameConstants constants, BodyOptions opti
                 case PickOutcome.Success: c.PickingLock = null; world.Fixtures.Touch(f); world.EmitSound(SoundKind.Unlocked, s, next[s].Position); if (c.IsPlayer) world.Post($"{c.Name}: Pick success!");
                     if (f.Occupant is { IsNone: false } held && held != table.IdOf(s)) world.Defer(new Dialogue.DialogueEvent(held, table.IdOf(s), UnlockMyCageOrShackles) { Tick = world.Tick + 1 });   // Task_PickLock: the freed character to the picker
                     break;
-                case PickOutcome.Failed: if (c.IsPlayer) world.Post($"{c.Name}: Pick failed"); break;
+                case PickOutcome.Failed: if (c.IsPlayer) world.Post($"{c.Name}: Pick failed");
+                    if (f.Occupant is { IsNone: false } caged && caged != table.IdOf(s)) world.Defer(new Dialogue.DialogueEvent(caged, table.IdOf(s), UnlockMyCageAttempt) { Tick = world.Tick + 1 });   // a failed roll: the captive says event 14
+                    break;
                 case PickOutcome.NotAllowed: c.PickingLock = null; if (c.IsPlayer) world.Post($"{c.Name}: I'm not skilled enough..."); break;
             }
         }

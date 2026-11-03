@@ -101,7 +101,7 @@ Save sample (autosave of the owner's game, 51 zone files): `lock lvl` values spa
   `Task_BruteForceShackles` `FUN_140352c50`; **Verified**): code 7 against the same field, the wearer's slave owner faction (status `+0xe0`, 0 for a free wearer, **Unknown** how a pending crime against it is booked), with the
   wearer's owner handle as the victim; cut and break book code 2 against faction 0 for a target that is no other character. economy.md lists code 7 as "Terrorism" (from the game's name table); which label the game shows for freeing is **Unknown**.
 - **Success side effects**: the picker's own squad's "house locked" flag is cleared when the door is of its own home (**Observed**, `FUN_140359160`: a stranger's pick leaves the owners' flag set); a freed character gets relation event 0xd from
-  the picker (0xe on failure) (**Observed**).
+  the picker (0xe on every failed roll, spoken by the captive or the shackle wearer, no player-only test; **Verified**, `FUN_140359160` event code defaults to 0xe, 0xd only on success). Event 13's memory side effect does not run for 14.
 
 ## Cutting and breaking (285 / 185 cut, 286 / 186 break)
 
