@@ -134,22 +134,22 @@ public sealed partial class LockSystem
 
     /// <summary>
     /// Whether the town's walls are locked up (<c>Town</c> vfunc <c>0x300</c> = <c>FUN_140929820</c>, <b>Verified</b>): the town has at least one gate (a gateway building with a door) and no gate door is
-    /// open (door state 1); closed, opening and closing doors all count as locked. A gate without door fixtures (not spawned) is no gate here.
+    /// open (door state 1; a broken one counts as open); closed, opening and closing doors all count as locked.
     /// </summary>
-    public static bool TownLockedUp(World world, TownSite site)
+    public static bool TownLockedUp(World world, TownSite site) =>
+        GatesLockedUp(site.Buildings.Where(b => !b.Destroyed).SelectMany(b => world.Fixtures.OfBuilding(b.Key)));
+
+    /// <summary>The rule of <see cref="TownLockedUp"/> over a town's door fixtures: shared with the campaign assault's breach test.</summary>
+    public static bool GatesLockedUp(IEnumerable<Fixture> doors)
     {
-        bool gate = false;
-        foreach (var b in site.Buildings)
+        bool any = false;
+        foreach (var gate in doors)
         {
-            if (b.Destroyed) continue;
-            foreach (var f in world.Fixtures.OfBuilding(b.Key))
-            {
-                if (f.Kind != FixtureKind.Door || !f.IsGate) continue;
-                gate = true;
-                if (f.Motion == DoorMotion.Open) return false;
-            }
+            if (gate.Kind != FixtureKind.Door || !gate.IsGate) continue;
+            if (gate.DoorBroken || gate.Motion == DoorMotion.Open) return false;
+            any = true;
         }
-        return gate;
+        return any;
     }
 
     /// <summary>A gate's main door (lowest door index with a known leaf) and its leaf.</summary>

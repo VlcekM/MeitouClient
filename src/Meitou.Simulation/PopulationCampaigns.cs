@@ -1141,16 +1141,7 @@ public sealed partial class PopulationSystem : IStateHashed
     static bool DoorsOpen(World world, CampaignTown t) => TownDoors(world, t).All(f => f.IsGate || f.DoorBroken || f.Motion != Locks.DoorMotion.Closed);
 
     /// <summary>Town slot 96 (<c>FUN_140929820</c>): the town has a gate and none of its gates is open (a broken one counts as open).</summary>
-    static bool WallsLockedUp(World world, CampaignTown t)
-    {
-        bool any = false;
-        foreach (var gate in TownDoors(world, t).Where(f => f.IsGate))
-        {
-            if (gate.DoorBroken || gate.Motion == Locks.DoorMotion.Open) return false;
-            any = true;
-        }
-        return any;
-    }
+    static bool WallsLockedUp(World world, CampaignTown t) => Locks.LockSystem.GatesLockedUp(TownDoors(world, t));
 
     /// <summary>Some faction runs a hostile campaign against the player (a defence ends only when none does).</summary>
     bool HostileAgainstPlayer(World world)
