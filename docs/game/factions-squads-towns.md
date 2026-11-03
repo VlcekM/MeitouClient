@@ -511,7 +511,7 @@ Meitou: [ground items](../simulation.md#items-and-eating).
   **Observed**) and never spawns again. New nests come only from the area tick, up to `num nests` per biome group; whether a dead nest
   frees its count is **Unknown**. A group with `nests at fixed markers only` picks among its NEST_MARKER towns, leaving out every marker whose
   nearest town (by XZ, markers skipped) is within 2500 (3D) (**Verified**, `FUN_1408f6350`, 6,250,000 squared).
-- **Nest furniture** (**Verified** by code unless marked): when an area loads (`FUN_1409fdbd0` → `FUN_1408f5e70`), each of its nests runs `Nest` slot 64
+- **Nest furniture** (**Verified** by code unless marked): when an area loads (`FUN_1409fdbd0` → `FUN_1408f5e70`; "area load" **Observed**), each of its nests runs `Nest` slot 64
   (`FUN_1409278a0`), which queues its TOWN record at its position, owner none; the queue (`FUN_140928410`, "delayedSpawningChecks") runs `TownBase` slot 113
   (`FUN_140938440`) once the zone is loaded. That seeds `srand` from the nest's X/Z and places: `debris` (ITEM / NEST_ITEM, `FUN_140937510`, within
   `size radius`); `debris building` round `num centrepoints` centres (none when 0); `loot spawn` ITEM lists. Nest buildings are not saved
@@ -524,7 +524,7 @@ Meitou: [ground items](../simulation.md#items-and-eating).
     a random direction × uniform [v1, v2] from the centre, put 25 from a piece of the same entry within 17 (the list is cleared per entry), dropped when the
     navmesh query (`FUN_1403a2300`, box half-size 60 round the point at the centre's height) finds nothing or a piece of the entry is within 12; ground and
     normal from a ray down from 10000; facing a random yaw, tilted to the normal, a tilt over the BUILDING's `max slope` (degrees) slerped back to it
-    (t = max slope / tilt); owned by the nest's faction.
+    (t = max slope / tilt); owned by the nest's faction (the nest's vtable +0x58, **Observed**).
   - Meitou (`NestFurniture`): the buildings, as above, when a nest's zone activates, removed when it unloads (NPCs in its cages let out). Its own
     rolls keyed by the nest's place; the navmesh query is the walkability at the centre's height within 60. A nest's cage of a kidnapper's faction is
     always a candidate, and a standing nest is a town for the fogman worship finder (nest markers skipped). Debris, loot and the towns' `spawn in town

@@ -669,7 +669,7 @@ public sealed partial class PopulationSystem
             squads.Add(one);
             members += one.Plan.TotalMembers;
         }
-        var pieces = topUp ? null : NestFurniture.Scatter(data.Db, nest, c, walk, seed, $"nest{site.Index}:");
+        var pieces = topUp ? null : NestFurniture.Scatter(data.Db, nest, c, walk, seed, $"nest{(int)c.X},{(int)c.Y}:");   // keyed by place: a save names its cages
         return new BuiltWild(site.Index, loadId, c, squads, rolls, exhausted, topUp, pieces);
     }
 }
