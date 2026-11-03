@@ -915,7 +915,7 @@ public sealed partial class PopulationSystem : IStateHashed
     }
 
     /// <summary>
-    /// Whether a loaded platoon of a cannibal assault carries enough to retreat (<c>FUN_14028fdf0</c>, <b>Verified</b>): each platoon counts its own carriers and keeps its own stamp of the
+    /// Whether a loaded platoon of a cannibal assault carries enough to retreat (<c>FUN_14028fdf0</c>, <b>Verified</b>; it first marks every member of the loaded squad "ordered", <c>FUN_14028a4e0</c>): each platoon counts its own carriers and keeps its own stamp of the
     /// first one, cleared while nobody (or no loaded squad) carries; any platoon with three carriers, or more than <see cref="CannibalCarryHours"/> since its first, ends the campaign's assault.
     /// </summary>
     bool CannibalsLoaded(World world, CampaignInstance inst, double now)
@@ -927,7 +927,12 @@ public sealed partial class PopulationSystem : IStateHashed
             int carriers = 0;
             if (world.Platoons.Find(id) is { State: PlatoonState.Loaded } p && world.Squads.Find(p.SquadId) is { } squad)
                 foreach (var member in squad.Members)
-                    if (table.TryResolveNext(member, out int slot) && !table.Cold(slot)!.Carrying.IsNone) carriers++;
+                    if (table.TryResolveNext(member, out int slot))
+                    {
+                        var cold = table.Cold(slot)!;
+                        cold.Ordered = true;   // FUN_14028a4e0, first thing the package's update does: the victim-side mark that stops an Assault booking
+                        if (!cold.Carrying.IsNone) carriers++;
+                    }
             if (carriers == 0)
             {
                 inst.CarryStarts.Remove(id);
