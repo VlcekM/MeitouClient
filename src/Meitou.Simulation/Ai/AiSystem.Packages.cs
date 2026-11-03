@@ -107,6 +107,9 @@ public sealed partial class AiSystem
             case PackageClass.Refugee:
                 StepRefugee(world, squad, board);
                 break;
+            case PackageClass.Contract:
+                TagMissionTarget(world, squad, board);
+                break;
             case PackageClass.PassingAssault:
             case PackageClass.OccupyTown:
                 var war = board.AssaultEnemy >= 0 ? new WarTargets(board.AssaultEnemy, false, CampaignTown.None) : WarTargets.None;
@@ -124,6 +127,18 @@ public sealed partial class AiSystem
                 if (squad.War.IsSet) squad.War = WarTargets.None;
                 break;
         }
+    }
+
+    /// <summary>
+    /// The update of Contract_HiredAlly (12), Contract_UntilOutOfDanger (14) and Contract_DefendPlayerBase (15) (<c>FUN_1402910e0</c>, <c>FUN_140290f90</c>, <c>FUN_140291410</c>, <b>Verified</b>): the package's
+    /// mission target, a character, is tagged TEMP ALLY (3) in the squad's memory each update; the defend package does so only once it has its player town (else it runs its start). The sensing hook
+    /// (<see cref="AggroSystem"/> <c>EmployerTags</c>) tags the employer's faction as it is seen, separately.
+    /// </summary>
+    void TagMissionTarget(World world, Squad squad, Blackboard board)
+    {
+        if (Memory is null || board.MissionTarget.IsNone || board.Contract?.Signal is not (12 or 14 or 15)) return;
+        if (board.Contract.Signal == 15 && world.Buildings.Towns.Count == 0) return;
+        Memory.Flag(world, squad.Id, board.MissionTarget, Dialogue.MemoryTag.TempAlly);
     }
 
     // ---- the wandering trader (Package_WanderingTrader) ----

@@ -259,6 +259,7 @@ public static class StandardSystems
         if (talk is not null) (talk.Arrests, talk.Extensions) = (arrest, o.Extensions);
         if (weather is not null) weather.Talk = talk;
         if (talk is not null && aggro is not null) (aggro.Memory, talk.Aggro) = (talk.Memory, aggro);
+        if (talk is not null && ai is not null) ai.Memory = talk.Memory;
         if (talk is not null && population is not null) population.Memory = talk.Memory;
         if (arrest is not null) arrest.Talk = talk;
         return new StandardSystemSet { Systems = Splice(systems, o.Extensions, data), Population = population, Movement = movement, Combat = combat, Aggro = aggro, Carry = carry, Kidnap = kidnap, Captives = captives, Crime = crime, Arrest = arrest, Locks = locks, Beds = beds, Trade = trade, Ai = ai, Construction = construction, Production = production, Ragdolls = ragdolls, Dialogue = talk };

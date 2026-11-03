@@ -93,6 +93,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     PopulationData Data => data;
     /// <summary>The towns' alarms the investigators answer (<see cref="AiBehaviour.Investigate"/>); null: none are raised.</summary>
     public Crime.CrimeSystem? Crimes { get; set; }
+    /// <summary>The squads' memory (the dialogue system's): the contract packages' update tags their mission target in it (<see cref="TagMissionTarget"/>).</summary>
+    public Dialogue.SquadMemory? Memory { get; set; }
     /// <summary>
     /// The combat system, for the threats Self preservation reads (<see cref="Combat.CombatSystem.ThreatLevel"/>) and its fight's attacker (row 13); null: the world's, once the serial step has
     /// found it (none: nothing threatens anyone).
