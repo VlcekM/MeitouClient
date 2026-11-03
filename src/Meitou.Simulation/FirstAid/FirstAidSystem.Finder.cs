@@ -11,7 +11,7 @@ namespace Meitou.Simulation.FirstAid;
 /// <summary>
 /// The medic finders of the original (docs/game/ai-tasks.md "Medic jobs"): <c>FUN_14099f690</c> for the Medic (58) and Robotics (57) jobs and the NPC <c>Medic</c> goal, <c>FUN_14099e240</c> for
 /// Splint Rigging (250). Both pick the patient with the highest score = need x nearness (x the relation factor, x 0.05 for a patient another medic already works on); the medic itself is a candidate
-/// at its plain need. The give-up list (<c>AITaskSystem.pathFailures</c>, +0x218: targets the AI could not path to, 20 s) is <see cref="CharacterCold.PathFailures"/>, filled by the combat chase and
+/// at its plain need. The give-up list (<c>AITaskSystem.pathFailures</c>, +0x218: targets the AI could not path to, 20 s) is <see cref="CharacterCold.Ignored"/>, filled by the combat chase and
 /// by the walk to a patient (<see cref="Schedule"/>). Engine stand-ins, because Meitou has no sensed list and no town walls: "sensed" is the medic's sight range, "seen or heard" always holds,
 /// the blackboard's marked-for-death cage is never set, "the same town and building" is <see cref="SightMap.PlaceOf"/>.
 /// </summary>

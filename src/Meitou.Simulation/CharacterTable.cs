@@ -267,10 +267,28 @@ public sealed class CharacterCold
     /// <summary>The target's place (height included) when the <see cref="PursuitSystem"/> last asked a path to <see cref="CharacterHot.Goal"/>: the path's end is measured against it, as the target may have moved since. Not saved.</summary>
     public Vector3 PursuitGoal { get; set; }
     /// <summary>
-    /// Fight targets it found no path to and the tick until which its target choice leaves them out (<c>AITaskSytem::notifyPathImpossible</c> stores 20 in its
-    /// <c>pathFailures</c>, <c>isPathImpossible</c> skips them; docs/game/combat.md "Attack slots and circling"). Not saved.
+    /// The AI's ignore map (<c>AITaskSytem.pathFailures</c> +0x218, filled by <c>notifyPathImpossible</c> <c>FUN_140796ed0</c> with 20 s, read by <c>isPathImpossible</c> <c>FUN_1405b0290</c>): targets (a
+    /// character, a site id, an <c>item:</c> id) it found no path to and the tick until which every finder leaves them out. Insertion order is kept (the lapse check reads it in order). Not saved.
     /// </summary>
-    public List<(CharacterId Target, long Until)>? PathFailures { get; set; }
+    public List<(IgnoreKey Key, long Until)>? Ignored { get; set; }
+    /// <summary>Ignores <paramref name="key"/> until the tick <paramref name="until"/> (a site id, <c>item:</c> id or machine's site id).</summary>
+    public void NoteUnreachable(string key, long until) => Ignore(new IgnoreKey(key, default), until);
+    /// <summary>Whether <paramref name="key"/> is still ignored at <paramref name="tick"/>.</summary>
+    public bool IsUnreachable(string key, long tick) => IsIgnored(new IgnoreKey(key, default), tick);
+    /// <summary>Ignores <paramref name="key"/> until <paramref name="until"/>, replacing an earlier entry for it.</summary>
+    public void Ignore(IgnoreKey key, long until)
+    {
+        var list = Ignored ??= [];
+        int at = list.FindIndex(e => e.Key == key);
+        if (at >= 0) list[at] = (key, until); else list.Add((key, until));
+    }
+    /// <summary>Whether <paramref name="key"/> is ignored at <paramref name="tick"/>.</summary>
+    public bool IsIgnored(IgnoreKey key, long tick)
+    {
+        if (Ignored is not { Count: > 0 } list) return false;
+        foreach (var (k, until) in list) if (k == key && until > tick) return true;
+        return false;
+    }
     /// <summary>
     /// The number that turns its portrait camera (docs/game/ui-screens.md "Portrait cells"): the save's <c>portrait_serial</c>, else its handle's serial; a character the game makes
     /// gets random × 4e9 at <see cref="CharacterTable.Spawn"/>, as the original rolls one per character.
@@ -502,12 +520,6 @@ public sealed class CharacterCold
     public string? FetchSite { get; set; }
     /// <summary>The ground item (<see cref="Items.GroundItems"/> id) a <see cref="CharacterTask.FetchMaterials"/> builder picks up (null: none). Hashed with <see cref="BuildSite"/>.</summary>
     public int? FetchItem { get; set; }
-    /// <summary>Targets (a site id, or <c>item:</c> and a ground item's id) this builder's path ended short of, with the tick they are ignored until (the AI's ignore map, <c>FUN_140796ed0</c>: 20 s). Not saved or hashed.</summary>
-    public Dictionary<string, long>? Unreachable { get; set; }
-    /// <summary>Ignores <paramref name="key"/> (a site id, <c>item:</c> id or machine's site id) until the tick <paramref name="until"/>; the one ignore map every finder reads (builders, corpse carriers).</summary>
-    public void NoteUnreachable(string key, long until) => (Unreachable ??= new Dictionary<string, long>(StringComparer.Ordinal))[key] = until;
-    /// <summary>Whether <paramref name="key"/> is still ignored at <paramref name="tick"/>.</summary>
-    public bool IsUnreachable(string key, long tick) => Unreachable is { } map && map.TryGetValue(key, out long until) && until > tick;
     /// <summary>The material record a <see cref="CharacterTask.FetchMaterials"/> builder fetches (null: not fetching). Hashed with <see cref="BuildSite"/>.</summary>
     public string? FetchRecord { get; set; }
     /// <summary>The building the <see cref="CharacterTask.Operate"/> task works (<see cref="Construction.BuildSite.Id"/>; null: none). Serial phases only. Hashed only while set.</summary>
@@ -767,7 +779,7 @@ public sealed class CharacterTable
             if (k.CombatRunning || k.TargetFleeingTime != 0) { hasher.Add(0x43527573); hasher.Add(k.CombatRunning); hasher.Add(k.TargetFleeingTime); }   // only while set, so worlds without fights hash as before
             if (k.Steer is { Active: true } steer) steer.Hash(ref hasher);
             else if (k.Steer is { ChaseTarget: >= 0 } chase) { hasher.Add(0x43686173); hasher.Add(chase.ChaseTarget); hasher.Add(chase.PathUntil); }   // a path chase, only while on one
-            if (k.PathFailures is { Count: > 0 } failures) { hasher.Add(0x50464C53); foreach (var (target, until) in failures) { hasher.Add(target.Slot); hasher.Add(target.Generation); hasher.Add(until); } }
+            if (k.Ignored is { Count: > 0 } failures && failures.Exists(e => e.Key.Name is null)) { hasher.Add(0x50464C53); foreach (var (key, until) in failures) if (key.Name is null) { hasher.Add(key.Id.Slot); hasher.Add(key.Id.Generation); hasher.Add(until); } }
             if (k.SteerSpeed != 0) { hasher.Add(0x53746572); hasher.Add(k.SteerSpeed); }
             if (k.AgentSpeed != 0) { hasher.Add(0x41676e74); hasher.Add(k.AgentSpeed); }
             if (k.Animation is { } anim) anim.Hash(ref hasher); else hasher.Add(-1);

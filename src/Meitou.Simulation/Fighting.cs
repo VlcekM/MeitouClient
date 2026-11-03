@@ -227,25 +227,26 @@ public sealed class PursuitSystem(CombatSystem combat) : ITickSystem
     public const float PathFailureSeconds = 20;
 
     /// <summary>
-    /// Lapses the path failures and, after a path request that found no way, adds <paramref name="target"/> (<see cref="CharacterCold.PathFailures"/>). A lapsed one is armed for another
+    /// Lapses the path failures and, after a path request that found no way, adds <paramref name="target"/> (<see cref="CharacterCold.Ignored"/>). A lapsed one is armed for another
     /// <see cref="PathFailureSeconds"/> while there is still no path to its target, else dropped (<c>AITaskSytem::update4Frame</c>, <b>Observed</b>; at most one dropped per call).
     /// </summary>
     internal static void NotePathFailure(World world, int i, CharacterCold cold, CharacterId target, float endReach)
     {
-        var failures = cold.PathFailures;
+        var failures = cold.Ignored;
         long armed = world.Tick + (long)MathF.Ceiling(PathFailureSeconds / world.TickSeconds);
         bool dropped = false;
         if (failures is not null)
             for (int k = failures.Count - 1; k >= 0; k--)
             {
-                if (cold.PathFailed && failures[k].Target == target) { failures.RemoveAt(k); continue; }
+                if (failures[k].Key.Name is not null) continue;   // a site or item, not a fight target
+                if (cold.PathFailed && failures[k].Key.Id == target) { failures.RemoveAt(k); continue; }
                 if (failures[k].Until > world.Tick || dropped) continue;
-                if (!PathExists(world, i, cold, failures[k].Target, endReach)) failures[k] = (failures[k].Target, armed);
+                if (!PathExists(world, i, cold, failures[k].Key.Id, endReach)) failures[k] = (failures[k].Key, armed);
                 else { failures.RemoveAt(k); dropped = true; }
             }
         if (!cold.PathFailed) return;
         cold.PathFailed = false;
-        (cold.PathFailures ??= []).Add((target, armed));
+        (cold.Ignored ??= []).Add((IgnoreKey.Of(target), armed));
     }
 
     /// <summary>
@@ -272,17 +273,15 @@ public sealed class PursuitSystem(CombatSystem combat) : ITickSystem
     /// </summary>
     internal static void GiveUp(World world, CharacterCold cold, CharacterId target)
     {
-        var failures = cold.PathFailures ??= [];
-        failures.RemoveAll(f => f.Target == target || f.Until <= world.Tick);
-        failures.Add((target, world.Tick + (long)MathF.Ceiling(PathFailureSeconds / world.TickSeconds)));
+        var failures = cold.Ignored ??= [];
+        failures.RemoveAll(f => f.Key == IgnoreKey.Of(target) || f.Until <= world.Tick);
+        failures.Add((IgnoreKey.Of(target), world.Tick + (long)MathF.Ceiling(PathFailureSeconds / world.TickSeconds)));
     }
 
     /// <summary>Whether <paramref name="cold"/> found no path to <paramref name="target"/> within the last <see cref="PathFailureSeconds"/>.</summary>
     public static bool PathImpossible(CharacterCold cold, CharacterId target, long tick)
     {
-        if (cold.PathFailures is not { Count: > 0 } failures) return false;
-        foreach (var (t, until) in failures) if (t == target && until > tick) return true;
-        return false;
+        return cold.IsIgnored(IgnoreKey.Of(target), tick);
     }
 }
 
