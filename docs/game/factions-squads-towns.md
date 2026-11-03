@@ -438,7 +438,8 @@ Meitou: [ground items](../simulation.md#items-and-eating).
   `FUN_14054c420`, a name only) to the template's `layout interior` and the exterior one to `layout exterior`, empty ones included, whatever the level
   state said, and reloads the exterior; ruins are not exempt. The interior loads its layout when the squad is made (`FUN_14057f820` → `FUN_1405621e0`)
   or when it is next loaded; an empty name loads nothing (`Layout::loadLayout` `FUN_1405512a0`), nor does a name the building has no layout for
-  (logged), nor any layout of a player-owned building that is not a wall (the name is cleared). With `layout interior` set, a building that does not
+  (logged), nor any layout of a player-owned building that is not a wall (the name is cleared; when a bought house's exterior is next loaded, so whether its
+  signs go, is **Unknown**: Meitou drops only its interior). With `layout interior` set, a building that does not
   offer it is not housed (`FUN_14055ad40`, before anything changes). A non-empty interior name also becomes the building's display name, then the
   template's `building name` when it has one. Each home has one template (the chooser skips buildings holding another), so the last housing wins:
   the default resident pass only takes buildings with none. Buildings housed by nobody keep the level state's names. **Observed**, saves (METARU,
