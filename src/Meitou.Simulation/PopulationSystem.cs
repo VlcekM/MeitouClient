@@ -666,7 +666,16 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
         world.ItemSlots.RegisterSite(world, data, town.Site);
         StandTownCamp(world, site);
         // Each home is set up for its template before its residents are made (FUN_14057f1f0).
-        foreach (var (home, template) in town.Homes) world.Fixtures.NoteSetup(home.Key, template);
+        // The platoon is made for every home, members or not (FUN_14057f4c0 stamps its template's designation on the building, FUN_140583a10 then stocks a home whose template made nothing).
+        var trade = world.SystemOf<Trading.TradeSystem>();
+        int townFaction = site.Town.Faction is { } townFactionId ? data.FactionIndex(townFactionId) : -1;
+        var stocked = town.Squads.Where(s => s.Home is not null).Select(s => s.Home!.Key).ToHashSet(StringComparer.Ordinal);
+        foreach (var (home, template) in town.Homes)
+        {
+            world.Fixtures.NoteSetup(home.Key, template);
+            world.Fixtures.NoteMade(home.Key, template);
+            if (!stocked.Contains(home.Key)) trade?.StockEmptyHome(world, home, template, town.Site, townFaction);
+        }
         // A town made counts as visited in every zone of its buildings (engine choice: its residents and its buildings' locks are saved whole, docs/formats/save.md "Zone files"),
         // but for the centre zone of another town: a file there would tell the original that town was made, with no residents saved for it.
         foreach (var b in site.Buildings)

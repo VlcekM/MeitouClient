@@ -423,13 +423,32 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
         if (world.Tick < squad.NextHomeFillTick) return;
         bool first = squad.NextHomeFillTick == 0;
         squad.NextHomeFillTick = world.Tick + (long)(template.VendorsRefreshTime / BodySystem.HoursPerTick);
+        StockHome(world, home, template, new Trader(squad.Town, squad.Faction, template.BuyMult, template.BuysStolen, template.BuysIllegal), (ulong)squad.Id, first);
+    }
+
+    /// <summary>
+    /// A home whose template made no squad (a ruin's or a shed's contents: every list empty, or every count 0) is stocked once when the town is made: the squad factory
+    /// (<c>FUN_140583a10</c>, <b>Verified</b>) calls the building filler <c>FUN_14095b210</c> with the specials when the template has vendor lists (its own or its building designation's, by the faction)
+    /// or special items, and no refresh follows (no platoon restocks it). Base data: 26 empty templates hold vendors or special items (the lost libraries, ghost bars, Flotsam safehouse).
+    /// </summary>
+    public void StockEmptyHome(World world, Meitou.Data.World.TownBuilding home, SquadTemplate template, int site, int faction)
+    {
+        if (!HoldsStock(template, FactionRecord(faction))) return;
+        StockHome(world, home, template, new Trader(site, faction, template.BuyMult, template.BuysStolen, template.BuysIllegal), Rng.StableHash(home.Key), true);
+    }
+
+    bool HoldsStock(SquadTemplate template, Meitou.Data.GameRecord? faction) =>
+        ShopFiller.VendorLinks(template, faction).Count > 0 || data.Db.Find(template.Id) is { } r && (r.GetReferences("special items").Count > 0 || r.GetReferences("special map items").Count > 0);
+
+    void StockHome(World world, Meitou.Data.World.TownBuilding home, SquadTemplate template, Trader terms, ulong key, bool first)
+    {
         var boxes = new List<Locks.Fixture>();
         foreach (var f in home.Fixtures)
             if (f.HoldsShopStock && world.Fixtures.Find(f.Id) is { Contents: not null } box) boxes.Add(box);
         if (boxes.Count == 0 || boxes.Any(b => b.Contents!.Items.Any(i => !i.Unique))) return;
-        if (Shop.ForBuilding(home, new Trader(squad.Town, squad.Faction, template.BuyMult, template.BuysStolen, template.BuysIllegal)) is not { } merged) return;
+        if (Shop.ForBuilding(home, terms) is not { } merged) return;
         merged.Fills = (int)world.Tick;
-        ShopFiller.Fill(merged, template, Market(world), data, world.Seed, (ulong)squad.Id, specials: first);
+        ShopFiller.Fill(merged, template, Market(world), data, world.Seed, key, specials: first);
         foreach (var item in merged.Stock.Items)
             foreach (var box in boxes)
                 if (box.Contents!.Add(item)) break;

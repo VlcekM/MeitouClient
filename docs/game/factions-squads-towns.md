@@ -484,6 +484,15 @@ Meitou: [ground items](../simulation.md#items-and-eating).
   buildings, whose fixtures and item slots then match a fresh registration). A loaded save's building states name the layouts the original furnished them with, so they win
   ([zone files](../formats/save.md#zone-files)), as do their `name` and `squad template` for the selected-building panel. Not followed: sound emitters (laid out once from the boot's names); bar squads
   stand in the town's bars and take the nearest bar as home (their templates, e.g. `Bar thugs`, have designation 0, **Verified** in the data); a loaded town keeps its saved squads, homes and bar squads and rolls no new bar squads.
+- **Squad factory sections** (`FUN_140583a10` = `RootObjectFactory::createRandomSquad`, **Verified**, whole function read 2026-11; the platoon itself is made by `FUN_14057f4c0` / `FUN_1407f4420`):
+  1. No lists at all (`leader`, `squad`, `squad2`, `animals`, `animals2`, `choosefrom list` all empty): no platoon content; with a home building and `vendors` (or the building designation's lists) or `special items` / `special map items`
+     the building filler `FUN_14095b210` stocks the home once (specials on) and the home's template is stored, then it returns null. Meitou `TradeSystem.StockEmptyHome` (26 base templates: lost libraries, ghost bar, Flotsam safehouse).
+  2. `roaming military` forces mode 2; `dont multiply` makes the size multiplier 1; the platoon gets its home and, with a home building, the member origin moves to a GENERAL else SHOPKEEPER node + (0, 10, 0).
+  3. `leader` (first entry only; a missing record is logged, no member and the index stays 0), then `num random chars` (between min and max when min < max) picks through `FUN_14057fd40`; the first member made with no leader yet is role 2, later ones 0.
+  4. `squad` (role 0), `squad2` (role 1), `animals` (age = roll x `animal age random` - 0.1 + v2 / 100, at least 0; the first with no leader yet is role 2, else 0), `animals2` (role 1, spacing 5); counts: v0, or a roll in [v0, v1] when 0 < v1 != 100, times the multiplier, at least 1 when above 0.
+  5. `slaves`: each a platoon of its own (the slave template's `faction`, else the owner's), its squad made recursively, every member role 4, owned by the squad; `prisoners`: only with a home, into free cages.
+  6. Tail: a non-player owner with vendor lists or specials and a home but no member made stocks the home like section 1; with members (or no home) `FUN_1404ff5e0(squad, 1)` fills the squad's own or home stock ([shops](economy.md#building-shops-observed-decompile)).
+  Meitou: `SquadFactory.Plan` (3, 4), `PopulationSystem.MakePrisoners` / `MakeSlaves` (5), `TradeSystem` (1, 6). Three early returns of `FUN_14095b210` (building fields `+0x88` = 0xb, `+0x238`, `+0x1a0`) are **Unknown** and not modelled. `FUN_14057f4c0` stamps its template's designation on the building even when the template makes no squad (`NoteMade` for every home).
 
 ### Off-screen world
 
