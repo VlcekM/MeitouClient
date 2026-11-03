@@ -964,7 +964,7 @@ CONTAINER (backpacks). Shop counters (function 9) have no type limit in Meitou (
   moves a building's output into the character's inventory while it has room (`FUN_14033cd10`). Rows 92 and 113 list "output not
   full" (!63) in list A, which row 87 needs, so a full output leads the planner from 87 to 92 ([Blocked output](#blocked-output), **Observed**, table). `Task_FillMachine`
   (93 "Filling machine", 124 "Hauling to") puts carried items, main grid and backpack, into a machine or a storage
-  (`FUN_140344510`). GOAP rows: [ai-tasks](ai-tasks.md); states 62 machineHasEmptyInputs, 63 isMachineOutputFull,
+  (`FUN_140344510`) (**Verified** by re-reading it): the target building without a production component is a storage, whose inventory takes the character's items and its backpack's (`FUN_140340da0`); one with a production component takes what its inputs accept (`FUN_140343780`, or `FUN_140340f10` for type 4); the task ends the first update that moves nothing. GOAP rows: [ai-tasks](ai-tasks.md); states 62 machineHasEmptyInputs, 63 isMachineOutputFull,
   66 haveSomeResourcesFrom, 67 haveSomeResourcesFor, 82 gotInventoryRoomForResources, 169 isMachineInputInvalid.
 - **Option** (**Verified**, string): "If they have nothing else to do, characters will automatically put any excess
   materials they are carrying into storage."
