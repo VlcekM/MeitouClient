@@ -617,6 +617,14 @@ replaced, 3 crushed) and the fitted item (holder `FUN_1400cd3f0`; **Verified** b
 - CHARACTER `starting health` (LOCATIONAL_DAMAGE, val0), applied to a new (not loaded) character (`FUN_140645ef0`, **Observed**): with
   M the part's maximum, val0 < -M makes the limb a stump (flesh 0, bandaged pool 5); else flesh = clamp(val0, -M, M) and the
   bandaged pool M - flesh. **Verified** by probe: Rock Bottom's `Naked dude` has Left Arm -150, a left-arm stump. Meitou ignores it on non-limbs.
+- CHARACTER `robot limbs` (LIMB_REPLACEMENT, `fcs.def` default (50, 100)), rolled for a new character after the backpack and before
+  `clothing` (`CharacterHuman::setupInventorySections` `FUN_14062c4e0`, **Verified** by decompile and disassembly): an entry whose record
+  resolves joins the option list of limb `slot` - 50 with weight v1 (weight <= 0 dropped). v0 < 0 is a "natural limb" option; v0 >= 0 counts
+  only when the record has a `material` reference (prosthetics do, stumps do not) and `RaceLimiter::canEquip` (`races`, `races exclude`)
+  passes. Each limb with options picks one by weight (one option: no roll); a pick with v0 >= 0 is made by the item factory with level
+  override v0 and fitted (`setRobotLimbItem`, `FUN_140645690`). No base CHARACTER uses the list (**Verified** by probe). Which runs first,
+  this or `starting health`, is **Unknown**: `FUN_140645ef0` makes any entry on a non-natural limb a stump. Meitou: rolled in
+  `CharacterGenerator.RollRobotLimbs`, fitted in `CharacterAssembly.Attach` after `starting health`, so the prosthetic wins.
 - A stump shows the RACE `limb replacement` record whose `slot` is 50 + k (`uses_limb_replacement`); a crushed
   limb attaches no mesh. Hidden body vertices: [characters.md](../characters.md#hidden-body-parts-verified--140075600--140071f90--140531cc0-hlsl-skinhlsl).
 - Meitou in play: fitted items sit in the inventory's `*_replace` sections (the limbs window), weigh nothing, are not traded and

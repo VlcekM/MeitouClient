@@ -262,6 +262,7 @@ public static class CharacterGenerator
         var pack = PickAbsolute(rng, character.GetReferences("backpack").Where(r => r.Values.Value0 > 0)
             .Select(r => (db.Find(r.TargetStringId), (float)r.Values.Value1)).Where(p => p.Item1 is not null && RaceAllowed(p.Item1, race)));
         if (pack is not null) loadout.Backpack = new LoadoutItem(pack) { Colour = Colour(pack) };
+        RollRobotLimbs(db, character, race, rng, loadout);
 
         // Clothing, one per slot in the game's order; race flags drop hats, shirts and shoes.
         int grade = character.GetInt("armour grade", 1), upgrade = character.GetInt("armour upgrade chance", 5);
@@ -331,6 +332,28 @@ public static class CharacterGenerator
         }
         if (loadout.Weapons.Count > 1 && loadout.Weapons[0].Section == "back" && loadout.Weapons[^1].Section == "hip")
             loadout.Weapons.Reverse();   // equip order: hip first, then back
+    }
+
+    /// <summary>
+    /// CHARACTER <c>robot limbs</c> (<c>CharacterHuman::setupInventorySections</c>, <b>Verified</b>; docs/game/character-stats.md "Limb replacements and robots"): the
+    /// LIMB_REPLACEMENT entries are grouped by their <c>slot</c>, v1 the relative weight. An entry with v0 &lt; 0 is a "keep the natural limb" option; one with v0 &gt;= 0 counts
+    /// only when its record has a <c>material</c> (a prosthetic, not a stump) and the race may wear it. Each limb picks one option; a prosthetic is fitted at level v0.
+    /// </summary>
+    static void RollRobotLimbs(GameDatabase db, GameRecord character, GameRecord race, MsvcRandom rng, Loadout loadout)
+    {
+        var options = new List<(GameReference? Ref, float Weight)>[loadout.Limbs.Length];
+        foreach (var r in character.GetReferences("robot limbs"))
+        {
+            if (db.Find(r.TargetStringId) is not { Type: FcsRecordType.LIMB_REPLACEMENT } limb) continue;
+            if (r.Values.Value0 >= 0 && (limb.GetReferences("material").Count == 0 || !RaceAllowed(limb, race))) continue;
+            int slot = limb.GetInt("slot") - Gameplay.Bodies.LimbReplacement.FirstSlot;
+            if ((uint)slot < (uint)options.Length) (options[slot] ??= []).Add((r, r.Values.Value1));
+        }
+        for (int k = 0; k < options.Length; k++)
+        {
+            if (options[k] is not { } list || PickRelative(rng, list) is not { } pick || pick.Values.Value0 < 0) continue;
+            loadout.Limbs[k] = new LoadoutLimb(2, db.Find(pick.TargetStringId), pick.Values.Value0);
+        }
     }
 
     /// <summary>Manufacturer from CHARACTER "weapon level" (val0 relative, 0 = 100; none listed: "Ancient"), model from its "weapon models" (val1).</summary>

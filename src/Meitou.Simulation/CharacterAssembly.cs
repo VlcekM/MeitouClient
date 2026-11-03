@@ -214,12 +214,31 @@ sealed class CharacterAssembly(PopulationData data)
         if (record is { Type: Meitou.Data.Fcs.FcsRecordType.CHARACTER } && record.GetBool("wears uniform") && (uint)cold.Faction < (uint)data.Factions.Count)
             foreach (var piece in cold.Inventory.Items)
                 if (piece.Type == Meitou.Data.Fcs.FcsRecordType.ARMOUR && piece.Section != "main") piece.Uniform = data.Factions[cold.Faction].Id;
+        FitRolledLimbs(cold.Appearance?.Loadout, cold.Inventory, medical);
         Dye(cold, cold.Inventory);
         cold.Fighter = FighterOf(record, cold.Inventory, cold.Medical, cold.Race?.StringId);
         cold.WaterFactor = raceData.WaterAvoidance * (cold.Faction == data.PlayerFaction && data.PlayerFaction >= 0 ? 0.5f : 1);
         cold.RoadPreference = data.RoadPreferenceOf(cold.Faction);
         hot.MaxSpeed = Speed.Run(raceData, stats, medical, 1, statsFactor: cold.Fighter?.AthleticsFactor ?? 1);
-        // A start without a limb (CHARACTER `starting health`) shows its stump.
+        // A start without a limb (CHARACTER `starting health`) shows its stump, one made with a prosthetic (`robot limbs`) its prosthetic.
         if (Enumerable.Range(0, 4).Any(k => medical.LimbPart(k) is { Limb: not LimbState.Original })) RefreshEquipment(cold);
+    }
+
+    /// <summary>
+    /// Fits the prosthetics a new character's loadout rolled from its CHARACTER <c>robot limbs</c> (<c>CharacterHuman::setupInventorySections</c>, <b>Verified</b>): each is made at
+    /// its rolled level and put on its limb whatever the limb was, so it also covers a <c>starting health</c> stump. The item sits in the limb's inventory section, as a fitted one does.
+    /// </summary>
+    void FitRolledLimbs(Loadout? loadout, Inventory inventory, MedicalState medical)
+    {
+        if (loadout is null) return;
+        for (int k = 0; k < loadout.Limbs.Length; k++)
+        {
+            if (loadout.Limbs[k] is not { State: (int)LimbState.Replaced, Prosthetic: { } record } rolled) continue;
+            if (data.Items.Limb(record.StringId) is not { } limb || limb.LimbSlot != k || data.Items.Create(record.StringId) is not { } item) continue;
+            item.Level = rolled.Level;
+            if (!medical.FitReplacement(limb, item)) continue;
+            (item.Section, item.X, item.Y) = (LimbReplacement.SlotOf(k), 0, 0);
+            inventory.Items.Add(item);
+        }
     }
 }
