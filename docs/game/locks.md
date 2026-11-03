@@ -134,14 +134,14 @@ Same targets as picking; Task_CutLock / Task_BruteForceLock share the shackle ta
   so a closed unlocked door, or one whose lock was cut, is struck on). The Burglary booking comes on every update that passes the in-the-way test, before the blow test.
   Meitou: every basher (the player's Smash order, a planner NPC, the pursuit's) books Burglary each update in reach against a door owner other than its own faction (**Verified**, `FUN_140348c10`, shared by rows 81/123/226/272/287/290); an NPC basher still drops its plan once the door is no longer locked (its planner replans).
   - **Who** (**Verified** scans): only the planner makes 81 and 287; 226 is the player's Smash order (not a provider, desire 1). Row 226's own list B is `!70 !128 5 57` (**Verified**, row table): the order is refused on a door of the smasher's faction or of an ally's (`LockSystem.SmashRefused`); the context menu already offers Smash only on doors not owned by the player's faction.
-  - **When** (**Observed**): a row needing DESTINATION_IS_ACCESSIBLE (59; every walk to a target, attacks, entering) finds the target's building without an open
+  - **When** (**Verified**, evaluator `FUN_140597030` is one function for state 59 on every goal: `FUN_1405499a0`, a door broken, open or opening): a row needing DESTINATION_IS_ACCESSIBLE (59; every walk to a target, attacks, entering) finds the target's building without an open
     door (`Building::hasAnOpenDoor`: none, broken, open or opening; a closed unlocked door counts as shut). 85 Open destination door (finder: that building)
     wants DOOR_IS_OPEN; its providers, in ascending type, are 72 Opening door, 81 and 287. Locked: 72 needs !54, which 78 (own door only) or 81 could give, and
     81 (B: not mine, not allied, a weapon, at the door) wins, walked to by 82. 287 is the break-out twin (LOCATION_IS_ACCESSIBLE 60 → 84 → 74 → !55).
   - **Desire** (`AI::scoreAggressiveAction` `FUN_14079d1a0`): 0 for a building in the basher's home town; 1.1 for a bandit (NPC type 8); a player character 1.1
     when aggressive, against an enemy or a not-real faction, else 0; an NPC 0 towards an ally (or in a war campaign, flag **Unknown**), 1 towards a hostile faction (**Verified**, `FUN_1406b26d0`: another faction, relation at or below the hostile threshold; the coexistence flag is not read; Meitou `FactionRelations.IsHostile`), else 0
-    for trader, civilian, diplomat or adventurer factions and 1 otherwise. Picking and breaking score 0.1, so a bash beats them. Inference, not run: a bandit
-    (1.1 > 72's 1) bashes even an unlocked closed door.
+    for trader, civilian, diplomat or adventurer factions and 1 otherwise. Picking and breaking score 0.1, so a bash beats them. A bandit
+    (1.1 > 72's 1) bashes even an unlocked closed door (81 reads no lock); Meitou `DoorPlan` uses the exact state for attackers and ransackers alike, and a planner basher drops its plan on an unlocked door unless it is aggressive (desire over 1).
   - **Door and place**: the building's one door (`getDoor`); at it within the door's reach of its marker (25, 45 for a gateway; x2 standing), height 130.
   - **Impossible**: no door, or a character ahead within a gap of 10 that a ray along the facing hits (any character). Which registry a character plans with
     is **Unknown** (an animal-only one could not reach 81 through 85).

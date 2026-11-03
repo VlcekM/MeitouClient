@@ -282,6 +282,35 @@ public class DoorTests(ITestOutputHelper output)
         Assert.Equal(DoorPlan.Entry.Walk, Plan(bandit));
     }
 
+    /// <summary>docs/game/locks.md "When": an attacker's row 4 needs state 59 (<c>hasAnOpenDoor</c>, one evaluator for every goal), so a bandit bashes a closed unlocked door and a non-aggressive attacker does not.</summary>
+    [Fact]
+    public void An_attackers_plan_reads_state_59_exactly_so_a_bandit_bashes_a_closed_unlocked_door()
+    {
+        var locks = new LockSystem(BaseGame, BodyOptions.Default);
+        using var world = new SimWorld(new WorldSettings { Seed = 31, PublishSnapshots = false, MinPartitionSize = 1 }, new OpenGroundWalkability((_, _) => 150), [locks]);
+        world.Fixtures.RegisterSite(world, ArrestTests.Town(), 0);
+        world.Fixtures.Doors = new Gate();
+        var door = world.Fixtures.Find("0.0:house#0")!;
+        var spot = world.Fixtures.DoorSpotOf(door)!.Value;
+        int owner = world.Fixtures.DoorOwner(door.Building);
+        CharacterId Spawn(bool bandit, int faction)
+        {
+            var cold = new Meitou.Tests.Combat.Combatant { Name = "raider" }.MakeCold();
+            cold.Faction = faction;
+            if (bandit) cold.NpcClass = Meitou.Data.Gameplay.FundamentalType.Bandit;
+            return world.Characters.Spawn(new CharacterHot { Position = spot.Centre + new Vector3(0, 0, 10), Health = 100, MaxSpeed = 60, WalkSpeed = 15, Task = (byte)CharacterTask.Attack }, cold, 0);
+        }
+        var bandit = Spawn(true, owner + 1);
+        var resident = Spawn(false, owner);
+        var plan = new DoorPlan();
+        world.Fixtures.SetLocked(door, false);
+        door.Motion = DoorMotion.Closed;
+        Assert.True(plan.PlansBash(world, null, bandit.Slot, resident.Slot, door.Building, door, spot, locks));
+        Assert.False(plan.PlansBash(world, null, resident.Slot, bandit.Slot, door.Building, door, spot, locks));
+        door.Motion = DoorMotion.Open;
+        Assert.False(plan.PlansBash(world, null, bandit.Slot, resident.Slot, door.Building, door, spot, locks));
+    }
+
     sealed class SplitRegions : IGateRegions
     {
         public int CodeAt(Vector3 at) => at.Z < SyntheticTown.Centre.Z ? 0 : 1;

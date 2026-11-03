@@ -82,8 +82,8 @@ public sealed partial class LockSystem
                 continue;
             }
             var door = world.Fixtures.Find(doorId);
-            // The task itself ends on a broken door or one open or opening and reads no lock (FUN_140348c10); the NPC's plan is dropped once its door is no longer locked.
-            if (door is null || door.DoorBroken || (c.BashOrdered || c.BashErrand ? door.Motion is DoorMotion.Open or DoorMotion.Opening : door.Lock is not { EffectivelyLocked: true }) || c.Medical is { Incapacitated: true } || (!c.BashOrdered && !c.BashErrand && next[s].Task != (byte)CharacterTask.Attack) || world.Fixtures.DoorSpotOf(door) is not { } spot)
+            // The task itself ends on a broken door or one open or opening and reads no lock (FUN_140348c10); a planner NPC's plan is dropped once its door is unlocked and the planner would open it (72) instead (see PlanDropped).
+            if (door is null || door.DoorBroken || door.Motion is DoorMotion.Open or DoorMotion.Opening || PlanDropped(world, door, c) || c.Medical is { Incapacitated: true } || (!c.BashOrdered && !c.BashErrand && next[s].Task != (byte)CharacterTask.Attack) || world.Fixtures.DoorSpotOf(door) is not { } spot)
             {
                 StopBashing(table, s, c);
                 continue;
@@ -127,6 +127,11 @@ public sealed partial class LockSystem
             }
         }
     }
+
+    /// <summary>A planner basher's door stands unlocked and closed: the planner replans, and only an aggressive character (desire over 72's 1, a bandit) still bashes it (<see cref="DoorPlan"/>).</summary>
+    bool PlanDropped(World world, Fixture door, CharacterCold c) =>
+        !c.BashOrdered && !c.BashErrand && door.Lock is not { EffectivelyLocked: true }
+        && (door.IsGate || DoorPlan.AggressiveTowards(world, Combat, c, door.Building, door.Position) <= 1);
 
     /// <summary>The door construction progress (1 when whole) one point of <see cref="BlowDamage"/> takes off (<c>DoorStuff::vfunc_62</c>).</summary>
     public const float ProgressPerDamage = 0.015f;
@@ -222,7 +227,7 @@ public sealed partial class LockSystem
         var list = new List<(string, Vector2, float, Fixture, DoorSpot)>();
         foreach (var b in world.Fixtures.Buildings)
         {
-            if (!world.Fixtures.IsShut(b)) continue;
+            if (world.Fixtures.HasOpenDoor(b)) continue;
             (Fixture Door, DoorSpot Spot)? main = null;
             Vector2 origin = default;
             float radius = 0;

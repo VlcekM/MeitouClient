@@ -24,7 +24,6 @@ sealed class DoorPlan : IPlanWorld
     CombatSystem? combat;
     int me;
     Vector3 destination;
-    bool exactOpen;
     CharacterCold cold = null!;
     string building = "";
     Fixture door = null!;
@@ -40,7 +39,7 @@ sealed class DoorPlan : IPlanWorld
     /// Plans row 4 for attacker <paramref name="s"/> at <paramref name="t"/>, shut in <paramref name="shutIn"/> behind its main door; true when the plan bashes it.
     /// </summary>
     public bool PlansBash(World w, CombatSystem? fights, int s, int t, string shutIn, Fixture mainDoor, DoorSpot mainSpot, LockSystem? gates = null) =>
-        Plans(w, fights, s, w.Characters.Next[t].Position, shutIn, mainDoor, mainSpot, gates, TaskType.MELEE_ATTACK, exact: false) == Entry.Bash;
+        Plans(w, fights, s, w.Characters.Next[t].Position, shutIn, mainDoor, mainSpot, gates, TaskType.MELEE_ATTACK) == Entry.Bash;
 
     /// <summary>How a walk into a building goes: no way in, a walk (the door opens as the character passes, row 72), or the door is bashed first.</summary>
     public enum Entry { Blocked, Walk, Bash }
@@ -50,11 +49,11 @@ sealed class DoorPlan : IPlanWorld
     /// <c>Building::hasAnOpenDoor</c>, so a closed unlocked door counts as shut and the planner opens it (72) or, for a locked one, bashes it (81) when the character wants to (<see cref="AggressiveTowards"/>).
     /// </summary>
     public Entry PlansEntry(World w, CombatSystem? fights, int s, string shutIn, Fixture mainDoor, DoorSpot mainSpot, LockSystem? gates) =>
-        Plans(w, fights, s, mainSpot.Centre, shutIn, mainDoor, mainSpot, gates, TaskType.RUN_AROUND_TOWN_LOOKING_FOR_PEOPLE, exact: true);
+        Plans(w, fights, s, mainSpot.Centre, shutIn, mainDoor, mainSpot, gates, TaskType.RUN_AROUND_TOWN_LOOKING_FOR_PEOPLE);
 
-    Entry Plans(World w, CombatSystem? fights, int s, Vector3 to, string shutIn, Fixture mainDoor, DoorSpot mainSpot, LockSystem? gates, TaskType goal, bool exact)
+    Entry Plans(World w, CombatSystem? fights, int s, Vector3 to, string shutIn, Fixture mainDoor, DoorSpot mainSpot, LockSystem? gates, TaskType goal)
     {
-        (world, combat, me, destination, building, door, spot, locks, exactOpen) = (w, fights, s, to, shutIn, mainDoor, mainSpot, gates, exact);
+        (world, combat, me, destination, building, door, spot, locks) = (w, fights, s, to, shutIn, mainDoor, mainSpot, gates);
         cold = w.Characters.Cold(s)!;
         aggressive = AggressiveTowards(w, fights, cold, shutIn, mainSpot.Centre);
         if (TaskDataTable.Of(goal) is not { } row) return Entry.Blocked;
@@ -97,8 +96,8 @@ sealed class DoorPlan : IPlanWorld
         bool atBuilding = target.Kind == Building;
         bool value = condition.State switch
         {
-            // hasAnOpenDoor: a door broken, open or opening. The attackers' plan (Meitou passes a closed unlocked door) counts a building shut when its doors are all locked; the entry plan is exact.
-            StateType.DESTINATION_IS_ACCESSIBLE => exactOpen ? world.Fixtures.HasOpenDoor(building) : !world.Fixtures.IsShut(building),
+            // hasAnOpenDoor (FUN_140597030, the state's evaluator for every goal): a door broken, open or opening, so a closed unlocked door counts as shut.
+            StateType.DESTINATION_IS_ACCESSIBLE => world.Fixtures.HasOpenDoor(building),
             StateType.isWithin50Meters => Vector2.Distance(Flat(n.Position), Flat(destination)) <= 50,
             StateType.DOOR_IS_OPEN => door.DoorBroken || door.Motion is DoorMotion.Open or DoorMotion.Opening,
             StateType.isDoorLocked => door.Lock is { EffectivelyLocked: true } && !door.DoorBroken,
