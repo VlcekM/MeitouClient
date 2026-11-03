@@ -68,11 +68,12 @@ public class OrderQueueTests
     }
 
     /// <summary>
-    /// The first tick a leg is down the character stops and its orders and tasks are cleared (<c>FUN_1405c8330</c> from <c>FUN_140649320</c>, docs/game/ragdolls.md "Forced crawl"): a
-    /// walking character with a Shift-queued Rest stands, idle, with an empty queue, and a character already stumbling keeps its task. Catches a crawler that walks on to its order.
+    /// A leg that gives out at posture 0 knocks the character out for 3 s (the posture setter <c>FUN_1405c7e20</c> on 0 to 2, docs/game/character-stats.md "Cut-off and leg loss"),
+    /// stumbling or not, and it then crawls with its orders and tasks cleared: a walking character with a Shift-queued Rest ends idle, crawling, with an empty queue. Catches a crawler
+    /// that walks on to its order, or one that skips the knock-out.
     /// </summary>
     [Fact]
-    public void A_leg_that_gives_out_stops_the_character_and_clears_its_orders_unless_it_stumbles()
+    public void A_leg_that_gives_out_knocks_the_character_out_then_it_crawls_with_its_orders_cleared()
     {
         foreach (bool stumbling in new[] { false, true })
         {
@@ -87,9 +88,12 @@ public class OrderQueueTests
             leg.Flesh = -leg.MaxHp * 0.5f;   // past the KO point, short of cut off
             if (stumbling) rig.Cold(f).StaggeredUntil = rig.World.Tick + 100;
             rig.World.RunTicks(2);
-            Assert.True(rig.Cold(f).Medical!.Crawling);
-            Assert.Equal(stumbling, rig.Cold(f).OrderQueue.Count > 0);
-            Assert.Equal(stumbling ? CharacterTask.GoTo : CharacterTask.Idle, rig.Task(f));
+            var medical = rig.Cold(f).Medical!;
+            Assert.True(medical.Unconscious && medical.KoTimer <= MedicalState.LegLossKoSeconds, "the leg knocks it out");
+            for (int t = 0; t < 10 / rig.World.TickSeconds && medical.Unconscious; t++) rig.World.RunTick();
+            Assert.True(medical.Crawling);
+            Assert.Empty(rig.Cold(f).OrderQueue);
+            Assert.Equal(CharacterTask.Idle, rig.Task(f));
         }
     }
 

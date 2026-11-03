@@ -739,11 +739,12 @@ public class AggroTests
     }
 
     /// <summary>
-    /// Self preservation is a goal of the same chooser (docs/game/ai-tasks.md "Combat goals", 32 and 35): a member fighting a bandit by its attack goal, whom the bandit fights back, has a leg go
-    /// down; the chooser takes 32, whose plan is 35 for a crippled character, and the flee step runs it from its threat. Catches the run left to a special case outside the chooser.
+    /// Self preservation is a goal of the same chooser (docs/game/ai-tasks.md "Combat goals", 32 and 35): a member fighting a bandit by its attack goal, whom the bandit fights back, loses
+    /// both arms; the chooser takes 32, whose plan is 35 for a character with no working arm, and the flee step runs it from its threat. Catches the run left to a special case outside the
+    /// chooser. (A leg going down at posture 0 knocks out first, and the bandit drops the downed target.)
     /// </summary>
     [Fact]
-    public void A_crippled_fighter_runs_away_by_self_preservation_in_the_chooser()
+    public void A_fighter_with_no_working_arm_runs_away_by_self_preservation_in_the_chooser()
     {
         using var a = Make(18, 1, TownRelations(), ai: true, flee: true);
         a.Aggro.Combat = a.Combat;
@@ -758,9 +759,9 @@ public class AggroTests
         Assert.True(a.Fighting(member) && a.Combat.StateOf(bandit).TargetSlot == member.Slot, "the member attacks and the bandit fights back");
         a.World.RunTicks(15);   // a look that lists the bandit among its threats
         var cold = table.Cold(member.Slot)!;
-        cold.Medical!.Parts[RLeg].Flesh = -80;
+        cold.Medical!.Parts[RArm].Flesh = cold.Medical.Parts[LArm].Flesh = -80;
         for (int k = 0; k < 2 * 15 && !cold.Fleeing; k++) a.World.RunTicks(1);
-        Assert.True(cold.Medical.Crawling, "a leg is down");
+        Assert.False(cold.Medical.ArmWorks(left: true) || cold.Medical.ArmWorks(left: false), "no arm works");
         Assert.True(cold.Fleeing && cold.FleesAlone, "it crawls away from its threat");
         Assert.Equal(TaskType.SELF_PRESERVATION, cold.Ai!.Goal!.Task.Type);
     }
@@ -785,7 +786,7 @@ public class AggroTests
         Assert.True(a.Fighting(member), "the member attacks the bandit");
         table.Cold(leader.Slot)!.Medical!.KnockOut(1000);
         var cold = table.Cold(member.Slot)!;
-        for (int k = 0; k < 2 * 15 && !cold.Fleeing; k++) a.World.RunTicks(1);
+        for (int k = 0; k < 10 / a.World.TickSeconds && !cold.Fleeing; k++) a.World.RunTicks(1);
         Assert.True(cold.Fleeing && !cold.FleesAlone, "the broken squad's member runs");
         a.World.RunTicks(3);
         Assert.Equal("Running away", Meitou.Simulation.Ai.AiSystem.ActivityText(table.Next[member.Slot], cold));
