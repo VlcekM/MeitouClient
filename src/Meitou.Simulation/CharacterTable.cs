@@ -266,6 +266,8 @@ public sealed class CharacterCold
     /// gets random × 4e9 at <see cref="CharacterTable.Spawn"/>, as the original rolls one per character.
     /// </summary>
     public uint? PortraitSerial { get; set; }
+    /// <summary>The build whose bone shape the character wears: made once, refreshed only while the character is of the player's faction (<c>FUN_140531820</c>, <c>FUN_1405338f0</c>). Not saved: made again at load, as the original.</summary>
+    public Meitou.Data.Characters.BodyBuild? ShapedBuild { get; set; }
     /// <summary>The character is running away (set and cleared by the <see cref="FleeSystem"/>, serial phases only): it neither looks for fights nor answers attacks.</summary>
     public bool Fleeing { get; set; }
     /// <summary>
