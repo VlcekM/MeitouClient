@@ -93,7 +93,7 @@ the disassembly where the decompile hides them):
 | Limb below its collapse level | on with the part's `collapse part` bits, humans only, not for a robotic limb on that side; asked when a non-vital part's h − s + rig falls under 0 (blow `FUN_14064f300`, tick `FUN_140649f50`, `FUN_140666780`) | `FUN_140649870` |
 | Leg bits with no leg crippled | off, each medical tick (so a leg between 0 and the KO point is ragdolled for one tick only: Meitou holds the bits only while a leg is down) | `FUN_140649320` |
 | Limb recovered | off for arm/leg bits no longer collapsed | `FUN_140649320` |
-| Picked up | on CARRY_MODE (replaces a queued WHOLE) | `FUN_1405ce9c0(1)` |
+| Picked up | on CARRY_MODE (replaces a queued WHOLE) | `FUN_1405ce9c0(1)` | The "on" tail also resets the AI task system (`FUN_1405074a0`: planned tasks wiped, **Verified**; Meitou `CarrySystem.Link` -> `AiMind.ResetPlan`).
 | Put down / dropped | off CARRY_MODE; the medical tick then re-requests WHOLE | `FUN_1405ce9c0(0)` |
 | Get up | off WHOLE unless carried | `Task_GetUp::vfunc_1` → `FUN_1405c69f0` |
 | Furniture use, entity rebuild, destruction | release all | `FUN_140330600`, `FUN_1405b93a0`, `FUN_140799af0` |

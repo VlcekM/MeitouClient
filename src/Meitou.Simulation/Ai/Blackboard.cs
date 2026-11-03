@@ -515,6 +515,13 @@ public sealed class AiMind
     /// cleared by that think.
     /// </summary>
     public bool Replan { get; set; }
+    /// <summary>The AI task system's plan reset (<c>FUN_1405074a0</c>): the pending steps and the committed goal go, so the next think chooses again.</summary>
+    public void ResetPlan()
+    {
+        Plan.Clear();
+        CommitUntil = 0;
+        Replan = true;
+    }
     /// <summary>What it wants to buy (goal 118, <see cref="ShoppingList"/>); made with the mind from its record and the world seed, not saved.</summary>
     public ShoppingList Shopping { get; init; } = new();
     /// <summary>The shop it walks to for goal 118 (set when the target is picked, so the arrival knows what the shop stocks); follows from the target, so not hashed.</summary>

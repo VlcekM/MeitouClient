@@ -1597,13 +1597,7 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
     public const float ChaseResetSenseUnits = 60;
 
     /// <summary>The plan reset (<c>FUN_1405074a0</c>): the pending steps and the committed goal are dropped, so the next think chooses again.</summary>
-    static void ResetPlan(CharacterCold cold)
-    {
-        if (cold.Ai is not { } mind) return;
-        mind.Plan.Clear();
-        mind.CommitUntil = 0;
-        mind.Replan = true;
-    }
+    static void ResetPlan(CharacterCold cold) => cold.Ai?.ResetPlan();
 
     /// <summary>
     /// The original's chase give-up (<c>ChaseMode</c>, docs/game/combat.md "Leaving a fight"), read from the chaser's sense entry of its target: after <see cref="GiveUpGateSeconds"/> of a

@@ -630,6 +630,7 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
         n.Position = table.Next[carrier].Position;
         n.Yaw = table.Next[carrier].Yaw;
         if (b.Animation is { } anim) anim.Action = -1;   // no falling or getting up while held
+        b.Ai?.ResetPlan();   // the carry-mode change wipes the body's planned tasks (FUN_1405ce9c0 -> FUN_1405074a0)
     }
 
     /// <summary>
