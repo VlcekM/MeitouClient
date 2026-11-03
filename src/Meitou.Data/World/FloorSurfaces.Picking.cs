@@ -31,6 +31,31 @@ public sealed partial class FloorSurfaces
         return best;
     }
 
+    /// <summary>
+    /// The upward unit normal of the floor surface a ray straight down from <paramref name="point"/> (raised by <paramref name="reach"/>) meets first, on floors up to the viewed one;
+    /// null when it meets none. The indoor ghost's single slope ray (<c>FUN_1404daa20</c>, <b>Verified</b>: one ray at its origin when it has a parent building).
+    /// </summary>
+    public Vector3? NormalBelow(Vector3 point, int floor, float reach)
+    {
+        var origin = point + new Vector3(0, reach, 0);
+        float nearest = float.MaxValue;
+        Vector3? normal = null;
+        foreach (var s in surfaces)
+        {
+            if (s.Floor > floor || point.X < s.Min.X || point.X > s.Max.X || point.Z < s.Min.Y || point.Z > s.Max.Y) continue;
+            for (int i = 0; i + 2 < s.Corners.Length; i += 3)
+            {
+                var a = s.Corners[i]; var b = s.Corners[i + 1]; var c = s.Corners[i + 2];
+                if (RayTriangle(origin, -Vector3.UnitY, a, b, c) is not { } t || t >= nearest) continue;
+                var n = Vector3.Cross(b - a, c - a);
+                if (n.LengthSquared() < 1e-12f) continue;
+                nearest = t;
+                normal = Vector3.Normalize(n.Y < 0 ? -n : n);
+            }
+        }
+        return normal;
+    }
+
     Vector3? FloorBelow(Vector3 point, int floor)
     {
         Vector3? best = null;

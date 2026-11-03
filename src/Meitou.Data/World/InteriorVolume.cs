@@ -159,6 +159,9 @@ public sealed record InteriorVolume(string PlacementId, Vector2[] Footprint, flo
         return best;
     }
 
+    /// <summary>The floor surface's upward normal under <paramref name="point"/> on floors up to <paramref name="floor"/> (<see cref="FloorSurfaces.NormalBelow"/>); null for none.</summary>
+    public Vector3? FloorNormal(Vector3 point, int floor, float reach) => floors?.Value.NormalBelow(point, floor, reach);
+
     /// <summary>A movement pick on this building's collision at or below the viewed floor.</summary>
     public (float Distance, Vector3 Position)? MoveHit(Vector3 origin, Vector3 direction, int floor, float maxDistance)
     {
