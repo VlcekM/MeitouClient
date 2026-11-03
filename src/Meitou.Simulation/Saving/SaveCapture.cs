@@ -735,7 +735,7 @@ public static partial class SaveCapture
                 if (into is not null) builder.RemovePlatoon(into);
                 continue;
             }
-            var members = stored.Members.Select(m => (m.Cold, m.Position, m.Yaw, CharacterId.None, m.Leader)).ToList();
+            var members = stored.Members.Concat(stored.Dead).Select(m => (m.Cold, m.Position, m.Yaw, CharacterId.None, m.Leader)).ToList();
             written[p.Id] = Write(p.Origin, p.Faction, p.TemplateId, p.Money, !stored.Pinned, stored.HomeBuilding, p.Package ?? stored.Package, members, stored.Shop, Ground(world, p.Position),
                 ai: stored.Ai, memory: stored.Memory, imprisoned: p.Imprisoned, dead: p.Dead, intact: p.IntactFlag, into: into);
             if (p.Persistent) written[p.Id].Record.Bools["persistent"] = true;   // a split-off prisoner's platoon

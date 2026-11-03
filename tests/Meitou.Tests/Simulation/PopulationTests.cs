@@ -46,6 +46,26 @@ public class PopulationTests
         Assert.Contains(table.Previous.ToArray(), c => c.Alive && c.Generation > 0);
     }
 
+    /// <summary>FUN_1404ff410 / FUN_1404feed0: a squad that unloads keeps its dead in the record and destroys their bodies; they come back as corpses when it is made again.</summary>
+    [Fact]
+    public void An_unloaded_squad_keeps_its_dead_and_their_bodies_come_back_with_it()
+    {
+        using var world = SyntheticTown.World(5, 1, 3, new PopulationSettings { UnloadGraceSeconds = 10, CheckEveryTicks = 1 });
+        world.RunTick();
+        var table = world.Characters;
+        var squad = world.Squads.All.First(s => s.Members.Count > 2);
+        var fallen = squad.Members[1];
+        table.Cold(fallen.Slot)!.DiedTick = world.Tick;
+        int before = table.Count;
+        world.Commands.Enqueue(new FocusCommand(new Vector3(-50000, 0, -50000)) { Tick = world.Tick });
+        world.RunTicks(450);
+        Assert.Equal(0, table.Count);   // the body went with the others
+        world.Commands.Enqueue(new FocusCommand(SyntheticTown.Centre) { Tick = world.Tick });
+        world.RunTicks(170);
+        Assert.Equal(before, table.Count);
+        Assert.Single(Enumerable.Range(0, table.HighWater), i => table.Next[i].Alive && table.Cold(i) is { DiedTick: >= 0 });
+    }
+
     [Fact]
     public void A_town_squad_in_an_active_zone_stays_loaded_as_a_platoon_when_its_town_unloads()
     {

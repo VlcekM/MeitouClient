@@ -23,7 +23,7 @@ public sealed class SavedMember
     public CharacterId Live { get; set; } = CharacterId.None;
     /// <summary>Its body left the world (removed after death): the next save leaves it out.</summary>
     public bool Gone { get; set; }
-    /// <summary>Dead (in the save, or when its platoon left the world): never made again; a save keeps its records (with the medical state it died with).</summary>
+    /// <summary>Dead when its platoon left the world: kept in the record and made again as a corpse (<c>FUN_1404ff410</c> writes the whole list); not counted as living.</summary>
     public bool Dead { get; set; }
 
     /// <summary>Where it stood and which way it faced when its platoon left the world (null: the save's place).</summary>
@@ -354,7 +354,7 @@ internal static class SavedCharacters
         var list = new List<(SavedMember, SavedParts)>();
         foreach (var m in sp.Members)
         {
-            if (m.Gone || m.Dead) continue;   // a corpse made once is not made again (it lies in the world, or went with its zone)
+            if (m.Gone) continue;   // a body that left the world after its platoon came back is not in the record any more; a dead one kept at the unload is made again as a corpse
             var p = m.Position is null ? Read(m.Source, sp.Name, data, appearances, races, parts, context.Log) : Again(m, data, races);
             if (p is null) continue;
             list.Add((m, p));
@@ -472,7 +472,7 @@ internal static class SavedCharacters
             m.Inventory = cold.Inventory;
             m.Look = cold.Appearance;
             m.Bounties = cold.Bounties;
-            if (cold.DiedTick >= 0) m.Dead = true;
+            if (cold.DiedTick >= 0 || cold.Medical is { Dead: true }) m.Dead = true;
             m.Live = CharacterId.None;
         }
         sp.Anchor = anchor;

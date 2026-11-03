@@ -137,6 +137,11 @@ public sealed class StoredSquad
     public double StoredHours { get; set; }
     /// <summary>The characters while the platoon is not in the world (empty while it is).</summary>
     public List<StoredMember> Members { get; } = [];
+    /// <summary>
+    /// The squad's dead, kept in the record as the original serialises the whole member list (<c>FUN_1404ff410</c>) while their bodies leave the world at the unload (<c>FUN_1404feed0</c>);
+    /// they come back as corpses where they lay when the squad is made again. Not counted as members (<see cref="Members"/> is the living).
+    /// </summary>
+    public List<StoredMember> Dead { get; } = [];
 }
 
 /// <summary>A character of a <see cref="StoredSquad"/>: its cold state, cleared of what only meant something in the world, and its place.</summary>
@@ -192,6 +197,7 @@ public sealed class PlatoonRegistry
                 // Only for stored squads, so worlds without them hash as before.
                 h.Add(stored.Members.Count);
                 foreach (var m in stored.Members) h.Add(m.Position);
+                if (stored.Dead.Count > 0) { h.Add(0x44656164); h.Add(stored.Dead.Count); }
                 h.Add(stored.Anchor);
                 h.Add(stored.Pinned);
             }
