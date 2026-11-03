@@ -436,6 +436,9 @@ public sealed record WorldSnapshot(long Tick, IReadOnlyList<CharacterSnapshot> C
     /// <summary>The town buildings a town override ruined or stood up again against the level data (<see cref="Locks.FixtureRegistry.Ruins"/>), and their revision.</summary>
     public IReadOnlyList<Locks.RuinedBuilding> Ruins { get; init; } = [];
     public long RuinsRevision { get; init; }
+    /// <summary>The bought town houses drawn without their interior layout (<see cref="Locks.FixtureRegistry.PublishedEmptied"/>), and their revision.</summary>
+    public IReadOnlyList<Meitou.Data.World.TownBuilding> EmptiedHouses { get; init; } = [];
+    public long EmptiedHousesRevision { get; init; }
     /// <summary>The player outposts with their power totals (the town panel, docs/game/ui-screens.md "Town panel").</summary>
     public IReadOnlyList<Production.OutpostSnapshot> Outposts { get; init; } = [];
     /// <summary>Loose items lying in the world (<see cref="Items.GroundItems"/>), oldest first.</summary>

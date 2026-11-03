@@ -108,7 +108,7 @@ public static class WorldLights
         foreach (var p in placed) result.Add(FromPlaced(p, interior: false, powerOn));
         if (layouts is null || state is null) return result;
         AddLayout(db, layouts, building, state.GetString("exterior layout name"), exterior: true, result);
-        if (includeInteriors) AddLayout(db, layouts, building, state.GetString("interior layout name"), exterior: false, result);
+        if (includeInteriors && !b.WithoutInterior) AddLayout(db, layouts, building, state.GetString("interior layout name"), exterior: false, result);
         return result;
     }
 

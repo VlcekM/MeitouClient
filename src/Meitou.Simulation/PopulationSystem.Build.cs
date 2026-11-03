@@ -22,9 +22,9 @@ public sealed partial class PopulationSystem
 
     /// <summary>
     /// The town's residents and bar squads. <paramref name="held"/>: a loaded save holds squads of the town (its pinned saved platoons), which are then its whole
-    /// population and nothing is made (docs/formats/save.md "NPC platoons").
+    /// population and nothing is made (docs/formats/save.md "NPC platoons"). <paramref name="playerOwned"/>: the keys of the town's buildings the player owns, which house nobody.
     /// </summary>
-    BuiltTown BuildTown(TownSite site, long loadId, ulong seed, IWalkability walk, bool held = false)
+    BuiltTown BuildTown(TownSite site, long loadId, ulong seed, IWalkability walk, bool held = false, IReadOnlySet<string>? playerOwned = null)
     {
         if (held) return new BuiltTown(site.Index, loadId, [], []);
         var town = site.Town;
@@ -35,7 +35,7 @@ public sealed partial class PopulationSystem
         var entries = ResidentHomes.Entries(town, faction);
         List<TownBuilding>? bars = null;
         if (site.Buildings.Any(b => b.CanHouse))
-            bars = HouseResidents(site, faction, factionIndex, seed, walk, squads, homes);
+            bars = HouseResidents(site, faction, factionIndex, seed, walk, squads, homes, playerOwned);
         else
         {
             // No building data (headless worlds): every entry's squads at spots round the centre (engine choice).

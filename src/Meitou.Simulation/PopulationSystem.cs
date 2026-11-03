@@ -418,14 +418,16 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
         bool held = !replaced && (HoldsSquads(world, site.Index) || PoolsOf(site.Index) is { Started: true });
         if (held) CheckRegeneration(world, site.Index);
         else if (!replaced) DropUnmade(world, site.Index);
+        // Taken here, not on the build thread: the buildings the player owns house no residents (docs/game/factions-squads-towns.md "Town residents").
+        var owned = world.Fixtures.PlayerOwnedIn(data, site.Index, world.Player.Faction >= 0 ? world.Player.Faction : data.PlayerFaction);
         if (work is null)
         {
-            Spawn(world, BuildTown(site, loadId, seed, walk, held));
+            Spawn(world, BuildTown(site, loadId, seed, walk, held, owned));
             state.Status = SiteStatus.Loaded;
         }
         else
         {
-            work.Add(() => built.Enqueue(BuildTown(site, loadId, seed, walk, held)));
+            work.Add(() => built.Enqueue(BuildTown(site, loadId, seed, walk, held, owned)));
         }
     }
 

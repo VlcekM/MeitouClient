@@ -50,7 +50,7 @@ sealed partial class GameHost
     void HideRuin(string key)
     {
         if (!shownRuins.Remove(key, out var ruin)) return;
-        if (shownBuildings.ContainsKey(key)) return;   // the player's site now: its placement is its own
+        if (shownBuildings.ContainsKey(key) || shownEmptied.Contains(key)) return;   // the player's site or bought house now: its placement is its own
         RuinEffects(ruin.Building, ruin.Building.Destroyed);   // as the level data has it
         ActiveObjects?.RemoveRuntime(key);
         nav?.RemoveRuntimeBuilding(key);

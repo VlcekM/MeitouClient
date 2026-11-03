@@ -17,13 +17,13 @@ public sealed partial class PopulationSystem
     /// <summary>
     /// Houses the town's resident entries in its buildings (<see cref="ResidentHomes.Assign"/>) and builds their squads into <paramref name="squads"/>, each building
     /// with its template into <paramref name="homes"/>; returns the town's bars (for the bar squads). Each housed template's squads: its <c>housemates</c> (v0, or
-    /// v0..v1 when v1 &gt; 0), then itself.
+    /// v0..v1 when v1 &gt; 0), then itself. The buildings in <paramref name="playerOwned"/> (the player's) house nobody.
     /// </summary>
     List<TownBuilding> HouseResidents(TownSite site, FactionData? faction, int factionIndex, ulong seed, IWalkability walk,
-        List<BuiltSquad> squads, List<(TownBuilding Building, SquadTemplate Template)> homes)
+        List<BuiltSquad> squads, List<(TownBuilding Building, SquadTemplate Template)> homes, IReadOnlySet<string>? playerOwned)
     {
         string? player = data.PlayerFaction >= 0 ? data.Factions[data.PlayerFaction].Id : null;
-        var housed = ResidentHomes.Assign(data.Db, site.Town, faction, site.Buildings, player);
+        var housed = ResidentHomes.Assign(data.Db, site.Town, faction, site.Buildings, player, playerOwned);
         for (int h = 0; h < housed.Count; h++)
         {
             var (b, t) = housed[h];

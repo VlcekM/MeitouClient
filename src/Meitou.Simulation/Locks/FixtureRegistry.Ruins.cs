@@ -45,7 +45,7 @@ public sealed partial class FixtureRegistry
         var faction = factionIndex >= 0 ? data.Factions[factionIndex] : null;
         string? playerId = data.PlayerFaction >= 0 ? data.Factions[data.PlayerFaction].Id : null;
         int player = world.Player.Faction >= 0 ? world.Player.Faction : data.PlayerFaction;
-        var ruined = ResidentRuins.RuinedHomes(data.Db, town.Town, faction, town.Buildings, playerId);
+        var ruined = ResidentRuins.RuinedHomes(data.Db, town.Town, faction, town.Buildings, playerId, PlayerOwnedIn(data, site, player));
         foreach (var b in town.Buildings)
         {
             if (reset.Contains(b.Key)) SetRuin(world, data, site, b, ruined.Contains(b.Key) || b.Destroyed && !b.RuinedByResidents);
@@ -111,6 +111,12 @@ public sealed partial class FixtureRegistry
     {
         if (ruins.Remove(building)) RuinsRevision++;
     }
+
+    /// <summary>
+    /// The keys of a town's buildings that are the player's (<see cref="IsPlayers"/>): its residents are never housed in them (docs/game/factions-squads-towns.md "Town residents").
+    /// </summary>
+    public HashSet<string> PlayerOwnedIn(PopulationData data, int site, int player) =>
+        [.. data.Sites[site].Buildings.Where(b => IsPlayers(data, site, b, player)).Select(b => b.Key)];
 
     /// <summary>Whether a town building is the player's: bought or owned, else (its town not registered) saved as theirs.</summary>
     bool IsPlayers(PopulationData data, int site, TownBuilding b, int player) =>

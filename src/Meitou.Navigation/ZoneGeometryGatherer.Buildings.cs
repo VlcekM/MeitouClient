@@ -47,6 +47,7 @@ internal sealed partial class ZoneGeometryGatherer
             hash = Combine(hash, (uint)BitConverter.SingleToInt32Bits(b.Rotation.Y));
             hash = Combine(hash, destroyed ? 1u : 0u);
             if (StateOf(b) is { } state) hash = Combine(hash, (uint)Stable(state.GetString("exterior layout name") + "|" + state.GetString("interior layout name")));
+            if (b.WithoutInterior) hash = Combine(hash, 0x1e7e1u);   // only then, so the other zones' keys stay as they were
         }
         return hash;
     }
@@ -85,13 +86,15 @@ internal sealed partial class ZoneGeometryGatherer
 
     /// <summary>
     /// The objects of a building's layouts placed in the world (docs/formats/zones.md, "Building layouts"): the signs and stalls of its exterior layout and the
-    /// furniture of its interior layout, as the renderer lays them out. None for a destroyed building, whose layouts are not drawn either.
+    /// furniture of its interior layout, as the renderer lays them out. None for a destroyed building, whose layouts are not drawn either; no furniture for a bought town house
+    /// (<see cref="BuildingPlacement.WithoutInterior"/>).
     /// </summary>
     IEnumerable<(LayoutItem Item, Vector3 Position, Quaternion Rotation)> LayoutObjects(BuildingPlacement b, GameRecord record, Vector3 position, bool destroyed)
     {
         if (destroyed || StateOf(b) is not { } state) yield break;
         foreach (bool exterior in (bool[])[true, false])
         {
+            if (!exterior && b.WithoutInterior) continue;
             if (state.GetString(exterior ? "exterior layout name" : "interior layout name") is not { Length: > 0 } name || layouts.Find(record, name, exterior) is not { } layout) continue;
             foreach (var item in layouts.Items(layout))
             {
