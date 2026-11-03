@@ -227,7 +227,7 @@ it is not part of target eligibility.
      slot-type sections of the looter all hold something (none counts as all) is left, unless the looter is police or the target imprisoned; checked
      per weapon after each move (**Verified**, `FUN_140342de0` mode 2; Meitou: back and hip).
   2. Food: items of type 4 with `item function` 3, then 15, repeated until none moves; then the same from the target's worn backpack (function 3).
-  3. With `notPlayerSide` and not `foodOnly`: every item (type 4) and armour (type 3), and every item of the backpack.
+  3. With `notPlayerSide` and not `foodOnly`: every item (type 4) and armour (type 3), and every item of the backpack. An armour piece with the uniform field set (`+0x1e8`) is skipped outright; one taken and not worn replaces a worn non-uniform piece of its section when the worn level is lower (the worn piece's unknown `+0x2c8` term taken as false), the old one going into the inventory (**Verified** `FUN_140342de0`:128-157; Meitou `CarrySystem.WearIfBetter`).
   An item goes into the looter's inventory, else its worn backpack, else back. Then the looter's squad tags the target short-term 6 (`FUN_1406744a0`) and the task ends.
 - **Confiscation** (the update with the confiscate flag, **Observed**): an animal target waits the 20 s and gets the take above (weapons, food); otherwise past 0.8 s
   `Inventory::getAllStolenItems(target's inventory, includeUnknown 0)` (`FUN_140748bc0`: the inventory's whole item list, then its equipped weapons and armour, each passing

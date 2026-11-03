@@ -231,10 +231,32 @@ public sealed partial class CarrySystem
         if (bag is not null) items.AddRange(bag.Items.Where(x => x.Type == FcsRecordType.ITEM && x.ItemFunction == FeedSystem.FoodFunction));
         if (everything)
         {
-            items.AddRange(from.Items.Where(x => x.Type is FcsRecordType.ITEM or FcsRecordType.ARMOUR && !items.Contains(x)));
+            items.AddRange(from.Items.Where(x => x.Type is FcsRecordType.ITEM or FcsRecordType.ARMOUR && !items.Contains(x) && !(x.Type == FcsRecordType.ARMOUR && x.Uniform.Length > 0)));   // a uniform piece is skipped outright (FUN_140342de0 mode 3)
             if (bag is not null) items.AddRange(bag.Items.Where(x => x.Type == FcsRecordType.ITEM && !items.Contains(x)));
         }
-        return moved + Take(looter, victim, items);
+        moved += Take(looter, victim, items);
+        if (everything) foreach (var piece in items.Where(x => x.Type == FcsRecordType.ARMOUR)) WearIfBetter(looter, piece);
+        return moved;
+    }
+
+    /// <summary>
+    /// A taken armour piece that was not worn replaces a worn non-uniform piece of its section with a lower level (<c>FUN_140342de0</c> mode 3, :128-157; the worn piece's unknown +0x2c8 term is taken as false): the old
+    /// piece goes into the looter's inventory.
+    /// </summary>
+    void WearIfBetter(CharacterCold looter, ItemInstance piece)
+    {
+        var inv = looter.Inventory!;
+        if (!inv.Items.Contains(piece) || InventoryCommands.IsEquipmentSection(piece.Section) || !InventoryCommands.IsEquipmentSection(piece.EquipmentSection)) return;
+        var worn = inv.Items.FirstOrDefault(i => i.Section == piece.EquipmentSection);
+        if (worn is null || worn.Uniform.Length > 0 || worn.LockedOn || worn.Level >= piece.Level || !piece.WearableBy(looter.Race?.StringId)) return;
+        inv.Remove(worn);
+        inv.Remove(piece);
+        if (InventoryCommands.TryEquip(inv, piece, looter) && inv.Add(worn)) { Assembly?.RefreshEquipment(looter); return; }
+        inv.Remove(piece);
+        inv.Items.Remove(worn);
+        worn.Section = piece.EquipmentSection;
+        inv.Items.Add(worn);
+        inv.Add(piece);
     }
 
     /// <summary>One of the looter's weapon sections (back, hip; not those its race closes) holds nothing.</summary>
