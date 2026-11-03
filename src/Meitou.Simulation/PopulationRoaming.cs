@@ -137,6 +137,7 @@ public sealed partial class PopulationSystem
         {
             foreach (var m in squad.Members) RemoveMember(world, m);
             world.Squads.Remove(squad.Id);
+            ForgetSquad(squad.Id);
         }
         if (p.Saved is { } saved)
         {
@@ -383,7 +384,7 @@ public sealed partial class PopulationSystem
             if (p.Stored is null) Saving.SavedCharacters.Store(world, gone, p.Position);
             gone.PlatoonId = -1;
         }
-        if (squad is not null) world.Squads.Remove(squad.Id);
+        if (squad is not null) { world.Squads.Remove(squad.Id); ForgetSquad(squad.Id); }
         world.Platoons.Remove(p.Id);
     }
 
@@ -439,6 +440,7 @@ public sealed partial class PopulationSystem
             }
             foreach (var m in squad.Members) { world.Uniques.Left(m); RemoveMember(world, m); }
             world.Squads.Remove(squad.Id);
+            ForgetSquad(squad.Id);
             p.State = PlatoonState.Unloaded;
             p.DwellLeft = 5;
             p.SquadId = -1;

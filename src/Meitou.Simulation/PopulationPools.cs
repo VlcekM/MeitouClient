@@ -410,6 +410,13 @@ public sealed partial class PopulationSystem
         return counts;
     }
 
+    /// <summary>A squad left the world: no site's squad list names it any more, so the nest wipe test (<see cref="CheckWipe"/>) sees no dangling handle.</summary>
+    internal void ForgetSquad(int id)
+    {
+        if (wildStates is null) return;
+        foreach (var state in wildStates) state.Squads.Remove(id);
+    }
+
     /// <summary>
     /// A nest that could make no squad (no entry fits or weighs anything) and has no squad left standing is wiped out for good (<c>FUN_140927440</c>, <c>Nest::vfunc_103</c>):
     /// <c>ded</c>, the hour as <c>tod</c>, and "{nest} has been wiped out". Engine choice for the original's "intact" here (its rule is Unknown): a squad with someone alive.
@@ -419,7 +426,7 @@ public sealed partial class PopulationSystem
         var pools = NestPools(world, site);
         if (pools.Ded) return;
         foreach (int id in state.Squads)
-            if (world.Squads.Find(id) is { } squad && squad.Members.Any(m => Living(world, m))) return;
+            if (world.Squads.Find(id) is not { } squad || squad.Members.Any(m => Living(world, m))) return;   // a handle that no longer resolves keeps the nest (FUN_1408f8740)
         if (HoldOf(world, site.Index) is { Members: > 0 }) return;
         pools.Ded = true;
         pools.DiedAt = (float)Hours(world);

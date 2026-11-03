@@ -126,6 +126,7 @@ public static class SquadManagement
                 if (doomed.Members.Count > 0) { world.Post("The squad needs to be empty before it can be removed."); return; }
                 if (PlayerSquads(world).Count == 1) { world.Post("You must have at least one squad."); return; }
                 world.Squads.Remove(doomed.Id);
+                world.SystemOf<PopulationSystem>()?.ForgetSquad(doomed.Id);
                 Renumber(PlayerSquads(world));
                 KeepActive(world);
                 break;
@@ -294,6 +295,7 @@ public static class SquadManagement
         from.Leader = CharacterId.None;
         if (into.Leader.IsNone && into.Members.Count > 0) into.Leader = into.Members[0];
         world.Squads.Remove(from.Id);
+        world.SystemOf<PopulationSystem>()?.ForgetSquad(from.Id);
     }
 
     /// <summary>
