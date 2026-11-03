@@ -1,4 +1,6 @@
 using System.Numerics;
+using Meitou.Data.Gameplay;
+using Meitou.Simulation.Dialogue;
 using Meitou.Simulation;
 using static Meitou.Tests.Simulation.SyntheticTown;
 
@@ -48,5 +50,31 @@ public class PopulationRulesTests
         Assert.True(list.Pending(5, 3, 2));
         list.Use(0);
         Assert.False(list.Pending(5, 9, 1));
+    }
+
+    /// <summary>FUN_1406724e0: a memory of more than 40 entries erases those older than 48 whole hours whose character is not the player's.</summary>
+    [Fact]
+    public void A_big_squad_memory_forgets_old_entries_once_it_holds_more_than_forty()
+    {
+        var ground = new OpenGroundWalkability((_, _) => 0);
+        using var world = new Meitou.Simulation.World(new WorldSettings { Seed = 1, Threads = 1, PublishSnapshots = false }, ground, []);
+        world.Player.Faction = 1;
+        CharacterId Make(int faction)
+        {
+            var cold = new Meitou.Tests.Combat.Combatant { Name = "c" }.MakeCold();
+            cold.Faction = faction;
+            return world.Characters.Spawn(new CharacterHot { Position = Vector3.Zero, Health = 100 }, cold, 0);
+        }
+        var memory = new SquadMemory();
+        var others = Enumerable.Range(0, 41).Select(_ => Make(0)).ToList();
+        world.GameHours = 0;
+        foreach (var c in others.Take(40)) memory.Remember(world, 7, c, 0);
+        world.GameHours = 10;
+        memory.Remember(world, 7, others[40], 0);
+        world.GameHours = 10 + 48.9;
+        memory.Age(world);
+        // 41 entries: the 40 old ones go, the fresher one stays.
+        Assert.Null(memory.Find(world, 7, others[0]));
+        Assert.NotNull(memory.Find(world, 7, others[40]));
     }
 }
