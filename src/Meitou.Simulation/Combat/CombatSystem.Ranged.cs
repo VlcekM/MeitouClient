@@ -265,6 +265,8 @@ public sealed partial class CombatSystem : IProjectileSource
     /// Chooses crossbow or melee for a fighting character that carries a crossbow (the planner's desires, docs/game/combat.md "Fight lifecycle and orders", melee or
     /// shooting): in Ranged mode (on for every NPC, the player's toggle for its characters) the crossbow while it has shots or ammunition and no threat is within
     /// <see cref="RetaliationSystem.ImmediateReach"/>, melee otherwise; out of Ranged mode never the crossbow. A character without a crossbow is left alone.
+    /// A reload in progress is paused, not abandoned, when the controller stops or the fighter turns to melee: the original's reload timer and flag (controller <c>+0x78</c>,
+    /// <c>+0x80</c>) are written only by the reload step and the constructor, so it resumes where it was the next time the crossbow is used (docs/game/combat.md "Turrets", fire gate).
     /// </summary>
     void ChooseMode(World world, int i, ref CombatSlot s, CharacterCold cold, bool fighting)
     {
@@ -272,13 +274,12 @@ public sealed partial class CombatSystem : IProjectileSource
         if (fighter.Crossbow is not { } x) return;
         if (!fighting)
         {
-            if (s.Ranged || s.ReloadLeft > 0 || s.RangedState != 0 || s.ClearTime != 0 || s.Steady != 0)
+            if (s.Ranged || s.RangedState != 0 || s.ClearTime != 0 || s.Steady != 0)
             {
-                // The fight is over: the controller stops (a reload in progress is abandoned; the bolts loaded stay loaded).
+                // The fight is over: the controller stops (a reload in progress is paused; the bolts loaded stay loaded).
                 s.Ranged = false;
                 cold.RangedCombatMode = false;
                 s.RangedState = 0;
-                s.ReloadLeft = 0;
                 s.ClearTime = 0;
                 s.Steady = 0;
             }
@@ -299,7 +300,6 @@ public sealed partial class CombatSystem : IProjectileSource
         if (!want) cold.RangedCombatMode = false;
         s.RangedState = want ? (byte)RangedStates.Aiming : (byte)0;
         s.Steady = want ? RangedFormulas.SteadyAim : 0;
-        s.ReloadLeft = 0;
         s.ClearTime = 0;
         cold.DrawnWeapon = want ? HandHold.OfCategory((int)WeaponCategory.Bow).Weapon : MeleeDrawn(fighter);
     }

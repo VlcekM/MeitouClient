@@ -689,6 +689,8 @@ simulation state; `Schedule` advances bolts. Targets without medical bodies do n
 terrain heightmap and the buildings' collision triangles (the ragdolls' environment, `SolidHits`), not the walkable surfaces (a roof over
 the shooter counted as ground). A building is there once its zone's collision has been read on a worker; until then bolts pass it, which
 breaks determinism for those first shots.
+A crossbow reload paused by a lost target, the fight's end or a switch to melee resumes where it stopped (as the original's controller timer,
+[combat.md](game/combat.md#turrets) fire gate); it does not count down while the controller is off (the original's runs on without a target, not modelled).
 Ranged state is hashed when used. Weapon/turret research: [combat.md](game/combat.md).
 
 Turrets (`CombatSystem.Turrets.cs`, facts: [combat.md](game/combat.md#turrets)): one serial step after the bolts fly finds the gunners and runs each manned turret in key
