@@ -1066,6 +1066,24 @@ public sealed partial class FixtureRegistry
         Clear(c);
     }
 
+    /// <summary>The bed clip Task_GetOutOfBed plays backwards before leaving (<c>FUN_140345760</c> compares the bed's clip name with it, <b>Verified</b>).</summary>
+    public const string GoToBedClip = "gotobed";
+
+    /// <summary>
+    /// <c>Task_GetOutOfBed</c> (<c>FUN_140345760</c> start, <c>FUN_140348480</c> update, <b>Verified</b>): a bed whose clip is <see cref="GoToBedClip"/> keeps the sleeper while the clip plays backwards
+    /// (<see cref="CharacterCold.LeavingBed"/>, the animation system sets <see cref="CharacterCold.BedExitDone"/> under a tenth of the clip), then it leaves; any other bed (every base one: <c>sleepinbed</c>)
+    /// is left at once (<see cref="LeaveBed"/>). True once the character is out.
+    /// </summary>
+    public bool GetOutOfBed(World world, CharacterId sleeper)
+    {
+        var table = world.Characters;
+        if (!table.TryResolveNext(sleeper, out int s) || table.Cold(s) is not { InSomething: HeldState.Bed } c) return true;
+        bool backwards = c.InWhat is { } id && Find(id) is { } bed && bed.Bed.Clip == GoToBedClip;
+        if (!backwards || c.BedExitDone) return LeaveBed(world, sleeper);
+        c.LeavingBed = true;
+        return false;
+    }
+
     /// <summary>Gets a character out of its bed (the original's <c>FUN_140345620</c>): the bed is free and the state cleared; it stands where it lay.</summary>
     public bool LeaveBed(World world, CharacterId sleeper)
     {
@@ -1151,6 +1169,7 @@ public sealed partial class FixtureRegistry
     {
         c.InSomething = HeldState.None;
         c.InWhat = null;
+        c.LeavingBed = c.BedExitDone = false;
         c.SentenceStart = 0;
         c.SentenceLength = 0;
         c.Kidnapped = false;

@@ -365,6 +365,9 @@ public sealed class CharacterCold
     public System.Numerics.Vector3? HoldPoint { get; set; }
     /// <summary>The Stand Up order (28, <c>Task_UnCrouch</c>) is running: the crouch clip plays backwards (<see cref="AnimationSystem"/>) and <see cref="Bodies.MedicalState.StayingLow"/> clears when it is nearly back at its start. Not saved; hashed while set.</summary>
     public bool StandingUp { get; set; }
+    /// <summary>The sleeper is getting out of a <c>gotobed</c> bed (<c>Task_GetOutOfBed</c>): the bed clip plays backwards (<see cref="AnimationSystem"/>) until <see cref="BedExitDone"/>. Not saved; hashed while set.</summary>
+    public bool LeavingBed { get; set; }
+    public bool BedExitDone { get; set; }
     /// <summary>The AI's manoeuvre mode (standing orders 8 and 9; the original's save key is unknown, so it is not saved, like <see cref="HoldPoint"/>).</summary>
     public ManoeuvreMode Manoeuvre { get; set; } = ManoeuvreMode.RoamFar;
     /// <summary>The AI's centre of movement (<c>AI::setCenterOfMovement</c>, +0x2c0): set by NEAR to where the character stands and by its ground move orders while not ROAM_FAR; null: none (not saved).</summary>
@@ -742,6 +745,7 @@ public sealed class CharacterTable
             hasher.Add(k.Role);
             hasher.Add(k.FollowPathTime);
             if (k.StandingUp) hasher.Add(0x5374556E);
+            if (k.LeavingBed) { hasher.Add(0x4C766742); hasher.Add(k.BedExitDone); }
             if (c.Task == (byte)CharacterTask.Follow) { hasher.Add(k.FollowHeading); hasher.Add(k.FollowSpeed); hasher.Add(k.FollowDirect); }
             if (k.PaceCap is { } pace) hasher.Add(pace);
             hasher.Add(k.Path.Length);

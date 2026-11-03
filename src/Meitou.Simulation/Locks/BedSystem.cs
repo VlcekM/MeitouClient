@@ -252,8 +252,8 @@ public sealed class BedSystem(PopulationData data, BedSettings? settings = null)
     {
         var table = world.Characters;
         for (int i = 0; i < table.HighWater; i++)
-            if (table.Next[i].Alive && table.Next[i].Task != (byte)CharacterTask.Sleep && table.Cold(i) is { InSomething: HeldState.Bed })
-                world.Fixtures.LeaveBed(world, table.IdOf(i));
+            if (table.Next[i].Alive && table.Next[i].Task != (byte)CharacterTask.Sleep && table.Cold(i) is { InSomething: HeldState.Bed } sleeper)
+                world.Fixtures.GetOutOfBed(world, table.IdOf(i));
     }
 
     /// <summary>One tick of a trip; false when it is over (in bed, laid in, refused, given up, or another order).</summary>

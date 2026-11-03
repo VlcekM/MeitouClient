@@ -482,7 +482,11 @@ public sealed class AnimationSystem(AnimationLibrary library, AnimationLengths l
         else if (down)
         {
             // Down in a bed: its clip (the sleeper's), so it lies where a sleeper lies.
-            if (inBed && HeldClip(CharacterTask.Sleep, cold, tick) is >= 0 and var lain) wanted.Add((lain, 1));
+            if (inBed && HeldClip(CharacterTask.Sleep, cold, tick) is >= 0 and var lain)
+            {
+                wanted.Add((lain, 1));
+                if (cold.LeavingBed) (a.HeldIndex, a.HeldRate) = (lain, -1);   // Task_GetOutOfBed plays the bed clip backwards (FUN_140348480)
+            }
             // Out cold in a cage: its `animation KO` (the Cage's foetal; the out-of-combat pick @ 140520500, docs/animation.md "In a bed or a cage").
             else if (inCage && cold.CageClips.Ko is { } ko && SitClipOf(ko) is >= 0 and var foetal) wanted.Add((foetal, 1));
             else if (LyingClip >= 0) wanted.Add((LyingClip, 1));
@@ -592,8 +596,17 @@ public sealed class AnimationSystem(AnimationLibrary library, AnimationLengths l
         var root = Settle(a, wanted, legs, lift, liftTime, technique, fight, speed, dt, Lengths, 1, seed, key, tick, legsShare);
         if (cold.StandingUp) FinishStandUp(a, cold, moving: a.HeldIndex < 0);
         else if (CrouchGoal(cold) != 0) FinishCrouch(a, cold, CrouchGoal(cold));
+        if (cold.LeavingBed && !cold.BedExitDone) FinishBedExit(a, cold);
         else if (cold.Crouched && cold.Ai is not null) cold.Crouched = false;   // the end of the task that crouched calls the stance setter with (0, 0)
         return root;
+    }
+
+    /// <summary>Task_GetOutOfBed leaves when the bed clip played backwards is under 0.1 of its length (FUN_140348480, DAT_14168a318); a character with no clip playing leaves at once.</summary>
+    static void FinishBedExit(CharacterAnimation a, CharacterCold cold)
+    {
+        if (a.HeldIndex < 0 || a.HeldRate >= 0) { cold.BedExitDone = true; return; }
+        for (int k = 0; k < a.Count; k++)
+            if (a.Layers[k].Definition == a.HeldIndex && a.Layers[k].Length > 0 && a.Layers[k].Time < UnCrouchDone * a.Layers[k].Length) cold.BedExitDone = true;
     }
 
     /// <summary>The clip direction of a crouch goal the character runs: 1 for CROUCH (27), -1 for STAND_UP (28), 0 for any other.</summary>

@@ -827,7 +827,12 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         ref var n = ref table.Next[slot];
         bool leader = mind.Squad.Leader == table.IdOf(slot);
         // Another goal gets it out of its bed (the get-up step's own think, or the goal's act-out where the plan has none); it stands where it lay.
-        if (behaviour != AiBehaviour.Sleep && table.Cold(slot)!.InSomething == Locks.HeldState.Bed) world.Fixtures.LeaveBed(world, table.IdOf(slot));
+        if (behaviour != AiBehaviour.Sleep && table.Cold(slot)!.InSomething == Locks.HeldState.Bed && !world.Fixtures.GetOutOfBed(world, table.IdOf(slot)))
+        {
+            Become(world, slot, CharacterTask.Idle);   // Task_GetOutOfBed plays the bed clip backwards first
+            mind.Replan = true;
+            return;
+        }
         // Steps of the plan before the goal's own act-out: getting out of bed, sheathing (one think each); the walk and the rest are the goal's.
         switch (mind.Step)
         {
