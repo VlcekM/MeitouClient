@@ -333,8 +333,8 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
         // Right is the command button by default; older saved configs bound it to orbit (kept when Command has moved off it).
         if (session.Bindings.Get(InputAction.Command).Contains(Binding.Of(EngineButton.Right)))
             session.Bindings.Set(InputAction.Orbit, [.. session.Bindings.Get(InputAction.Orbit).Where(b => !(b.IsMouse && b.Button == EngineButton.Right))]);
-        // Ctrl orbits as the middle button does; older saved configs had the middle button alone.
-        if (session.Bindings.Get(InputAction.Orbit).SequenceEqual([Binding.Of(EngineButton.Middle)])) session.Bindings.Set(InputAction.Orbit, EngineButton.Middle, EngineKey.LeftControl, EngineKey.RightControl);
+        // Left Control orbits as the middle button does (mouse_rotate, FUN_1403636c0: only code 0x1d); older saved configs had the middle button alone.
+        if (session.Bindings.Get(InputAction.Orbit).SequenceEqual([Binding.Of(EngineButton.Middle)])) session.Bindings.Set(InputAction.Orbit, EngineButton.Middle, EngineKey.LeftControl);
         // F12 is the profiler now (as in the viewer); older saved configs took it for the screenshot.
         if (session.Bindings.Get(InputAction.Screenshot).SequenceEqual([Binding.Of(EngineKey.F12)])) session.Bindings.Set(InputAction.Screenshot, EngineKey.F8, EngineKey.PrintScreen);
         // The profiler and debug menu were briefly on F10 and Insert; configs saved then go back to F12 and F10.

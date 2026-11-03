@@ -56,7 +56,7 @@ Binding maps: general map at Controls+0x28, build-mode map at +0x50 (checked fir
 |---|---|---|---|
 | mouse_select | Mouse1 | 0 | held |
 | mouse_command | Mouse2 | 0 | held |
-| mouse_rotate | Left Control or Mouse3 (two alternative bindings, not a chord) | 0 | held |
+| mouse_rotate | Left Control (0x1d) or Mouse3 (two alternative bindings, not a chord; Right Control 0x9d is only a modifier, not a binding, **Verified** `FUN_1403636c0`, `FUN_140360b30`) | 0 | held |
 | camera_forward / back / left / right | Up+W / Down+S / Left+A / Right+D | 0 | held |
 | camera_tilt+ / tilt- | `,` / `.` | 0 | held |
 | camera_rotate_left / right | Q / E | 0 | held |
