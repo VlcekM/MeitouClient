@@ -47,6 +47,18 @@ public static class ZoneActivation
         return (minX, minZ, maxX, maxZ);
     }
 
+    /// <summary>
+    /// Whether a position is inside the loaded box (<c>FUN_140a09770</c> as used by the relevance test <c>FUN_1404febd0</c>, <b>Verified</b>): the zone at the position is active and the
+    /// position lies in that zone's <see cref="TrimmedBox"/> (trim <see cref="ActivationTrim"/>, inclusive).
+    /// </summary>
+    public static bool InLoadedBox(float x, float z, HashSet<ZoneCoordinate> active)
+    {
+        var zone = WorldLayout.ZoneOf(x, z);
+        if (zone.X is < 0 or >= WorldLayout.ZoneCount || zone.Y is < 0 or >= WorldLayout.ZoneCount || !active.Contains(zone)) return false;
+        var (minX, minZ, maxX, maxZ) = TrimmedBox(zone, active.Contains, ActivationTrim);
+        return x >= minX && x <= maxX && z >= minZ && z <= maxZ;
+    }
+
     /// <summary>The middle of a zone, X and Z.</summary>
     public static Vector2 CentreOf(ZoneCoordinate zone)
     {

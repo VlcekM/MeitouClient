@@ -32,9 +32,9 @@ public sealed partial class PopulationSystem
 
     Vector2 SiteCentre(int site) => new(data.Sites[site].Position.X, data.Sites[site].Position.Z);
 
-    /// <summary>Whether a platoon should have its characters: a zone near it is active, or (a town's own saved squad) its town's zone is, as the town's fresh squads are made with the town.</summary>
+    /// <summary>Whether a platoon should have its characters: it is inside the trimmed box of an active zone (<see cref="ZoneActivation.InLoadedBox"/>, <c>FUN_1404febd0</c>), or (a town's own saved squad) its town's zone is, as the town's fresh squads are made with the town.</summary>
     bool Wanted(Platoon p) =>
-        active.Contains(WorldLayout.ZoneOf(p.Position.X, p.Position.Y)) || p.Pinned && p.Origin >= 0 && active.Contains(data.Sites[p.Origin].Zone);
+        ZoneActivation.InLoadedBox(p.Position.X, p.Position.Y, active) || p.Pinned && p.Origin >= 0 && active.Contains(data.Sites[p.Origin].Zone);
 
     /// <summary>
     /// Whether a wanted platoon may be made now: the host's <see cref="ZoneGate"/> holds it back until the navmesh is ready, of its town's zone for a town's own (as the
