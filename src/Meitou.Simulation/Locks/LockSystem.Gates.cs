@@ -140,7 +140,10 @@ public sealed partial class LockSystem
         var next = world.Characters.Next;
         int a = Regions.CodeAt(next[s].Position), b = Regions.CodeAt(next[t].Position);
         if (a == b || a < 0 || b < 0) return false;
-        if (RouteState(world, a, b, Flat(next[s].Position), out var gate) == 1 || gate is not { } g || MainGateDoor(world, g.Building) is not { } main) return false;
+        if (RouteState(world, a, b, Flat(next[s].Position), out var gate) == 1) return false;
+        // No gate leads there: 270 falls back to a wall of the attacker's region (FUN_1405a3f60), planned through 272 Smashing.
+        if (gate is null) return FindWallBasher(world, s, t, c, a);
+        if (gate is not { } g || MainGateDoor(world, g.Building) is not { } main) return false;
         if (!gatePlan.PlansBash(world, Combat, this, s, t, g.Building, main.Door, main.Spot)) return false;
         c.Bashing = main.Door.Id;
         c.BashTime = 0;

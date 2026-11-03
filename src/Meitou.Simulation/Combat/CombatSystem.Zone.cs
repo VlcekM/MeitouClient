@@ -236,19 +236,29 @@ public sealed partial class CombatSystem
             if (doorId is not null && world.Fixtures.Find(doorId) is { } door) global::Meitou.Simulation.Locks.LockSystem.Strike(world, door, Math.Clamp(f, 20, 60));
             else if (wall is not null)
             {
-                var line = wall.WallParent is { } parent && world.Buildings.Find(parent) is { } p ? p : wall;
-                line.Progress -= Math.Clamp(f * 0.5f, 10, 60) * 0.003f;
-                if (line.Progress <= 0)
-                {
-                    line.Progress = 0;
-                    line.Destroyed = true;
-                    world.EmitSound(SoundKind.WallBroken, a, line.Position);
-                }
-                world.Buildings.Changed();
+                StrikeWall(world, wall, f, a);
             }
         }
         if ((e.Arg & 0x100) == 0 && A.AttackSeq == (int)e.Amount && A.AttackTech >= 0) A.LastOutcome = BlowOutcome.Hit;
     }
 
     readonly List<(float Key, string? Door, Construction.BuildSite? Wall)> buildingScratch = [];
+
+    /// <summary>
+    /// A blow on a wall building (<c>WallBuilding</c> damage, docs/game/buildings-production.md): <paramref name="f"/> = 2 blunt + 0.5 cut of the attacker's packet; clamp(f / 2, 10, 60) x 0.003 off the
+    /// progress of the wall line (an attached piece's parent), destroyed at 0 with the wall-broken sound at <paramref name="attacker"/>. Shared by the fight's blows and the bashers' swings (Smashing, 272).
+    /// </summary>
+    internal static bool StrikeWall(World world, Construction.BuildSite wall, float f, int attacker)
+    {
+        var line = wall.WallParent is { } parent && world.Buildings.Find(parent) is { } p ? p : wall;
+        line.Progress -= Math.Clamp(f * 0.5f, 10, 60) * 0.003f;
+        if (line.Progress <= 0)
+        {
+            line.Progress = 0;
+            line.Destroyed = true;
+            world.EmitSound(SoundKind.WallBroken, attacker, line.Position);
+        }
+        world.Buildings.Changed();
+        return line.Destroyed;
+    }
 }

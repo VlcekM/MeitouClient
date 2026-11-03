@@ -207,6 +207,36 @@ public class DoorTests(ITestOutputHelper output)
         Assert.False(plan.PlansBash(world, null, locks, raider.Slot, target.Slot, key, door, spot));
     }
 
+    sealed class SplitRegions : IGateRegions
+    {
+        public int CodeAt(Vector3 at) => at.Z < SyntheticTown.Centre.Z ? 0 : 1;
+        public IReadOnlyList<GateLink> Gates { get; } = [];
+    }
+
+    /// <summary>docs/game/locks.md (270 -> 272): with no gate between the attacker's region and its target's, the planner smashes a wall of its own region; only an attacker in reach of the wall plans it (state 46).</summary>
+    [Fact]
+    public void A_bandit_in_a_region_no_gate_leads_out_of_plans_to_smash_a_wall_only_once_in_its_reach()
+    {
+        var locks = new LockSystem(BaseGame, BodyOptions.Default);
+        using var world = new SimWorld(new WorldSettings { Seed = 5, PublishSnapshots = false, MinPartitionSize = 1 }, new OpenGroundWalkability((_, _) => 300), [locks]);
+        locks.Inputs(world, [new GateRegionsCommand(new SplitRegions()) { Tick = 0 }]);
+        CharacterId Spawn(float dz, int faction)
+        {
+            var cold = new Meitou.Tests.Combat.Combatant { Name = "raider" }.MakeCold();
+            cold.Faction = faction;
+            cold.NpcClass = Meitou.Data.Gameplay.FundamentalType.Bandit;
+            return world.Characters.Spawn(new CharacterHot { Position = SyntheticTown.Centre + new Vector3(0, 0, dz), Health = 100, MaxSpeed = 60, WalkSpeed = 15, Task = (byte)CharacterTask.Attack }, cold, 0);
+        }
+        var raider = Spawn(-300, 1);
+        var target = Spawn(300, 2);
+        var wall = new Meitou.Simulation.Construction.BuildSite { Id = "wall", Record = "w", Position = SyntheticTown.Centre + new Vector3(0, 0, -100), Materials = [] };
+        var plan = new GatePlan();
+        // 272's state 46 (at the wall) has only 67 Running as provider, which needs 90 again: only an attacker already in reach (60) of the wall plans it.
+        Assert.False(plan.PlansSmash(world, null, locks, raider.Slot, target.Slot, wall));
+        world.Characters.Next[raider.Slot].Position = wall.Position + new Vector3(0, 0, -30);
+        Assert.True(plan.PlansSmash(world, null, locks, raider.Slot, target.Slot, wall));
+    }
+
     [Fact, Slow]
     public void Every_door_in_the_hub_has_a_known_position_and_its_destroyed_gates_have_none()
     {

@@ -41,6 +41,11 @@ public sealed partial class LockSystem
         for (int s = 0; s < table.HighWater; s++)
         {
             if (!next[s].Alive || table.Cold(s) is not { Bashing: { } doorId } c) continue;
+            if (c.BashWall)
+            {
+                Smash(world, s, c, doorId);
+                continue;
+            }
             var door = world.Fixtures.Find(doorId);
             // The task itself ends on a broken door or one open or opening and reads no lock (FUN_140348c10); the NPC's plan is dropped once its door is no longer locked.
             if (door is null || door.DoorBroken || (c.BashOrdered ? door.Motion is DoorMotion.Open or DoorMotion.Opening : door.Lock is not { EffectivelyLocked: true }) || c.Medical is { Incapacitated: true } || (!c.BashOrdered && next[s].Task != (byte)CharacterTask.Attack) || world.Fixtures.DoorSpotOf(door) is not { } spot)
@@ -101,19 +106,18 @@ public sealed partial class LockSystem
     }
 
     /// <summary>One swing at a door (<c>FUN_14029d690</c>): true when it broke the door.</summary>
-    bool Hit(Fixture door, CharacterCold c)
+    bool Hit(Fixture door, CharacterCold c) => Damage(door, Packet(c) is var (cut, blunt, animal) ? BlowDamage(cut, blunt, animal) : 20);
+
+    /// <summary>The cut and blunt damage of a basher's blow (its weapon's or fists' packet) and whether it is an animal's; null without the combat constants (every swing then does the minimum).</summary>
+    (float Cut, float Blunt, bool Animal)? Packet(CharacterCold c)
     {
-        float damage = 20;
-        if (CombatConstants is { } k && c.Fighter is { } f && c.Stats is { } stats && c.Medical is { } med)
-        {
-            float Eff(StatsEnumerated stat) => stats[stat] * stats.Scale * med.StatMultiplier(stat);
-            float str = Eff(StatsEnumerated.Strength);
-            var packet = f.Unarmed
-                ? DamageFormulas.UnarmedPacket(DamageFormulas.UnarmedRating(stats[StatsEnumerated.MartialArts] * stats.Scale, f.UnarmedBonus, med.DustAttackPenalty, f.EncumbranceFactor), Eff(StatsEnumerated.Toughness), str, f.FistsItem, TargetKind.Human, null, f.DamageOutput, k)
-                : DamageFormulas.Packet(Eff(f.WeaponSkill), Eff(StatsEnumerated.Dexterity) * f.DexterityMult, str, f.Weapon!, TargetKind.Human, null, f.DamageOutput, k);
-            damage = BlowDamage(packet.Cut, packet.Blunt, f.IsAnimal);
-        }
-        return Damage(door, damage);
+        if (CombatConstants is not { } k || c.Fighter is not { } f || c.Stats is not { } stats || c.Medical is not { } med) return null;
+        float Eff(StatsEnumerated stat) => stats[stat] * stats.Scale * med.StatMultiplier(stat);
+        float str = Eff(StatsEnumerated.Strength);
+        var packet = f.Unarmed
+            ? DamageFormulas.UnarmedPacket(DamageFormulas.UnarmedRating(stats[StatsEnumerated.MartialArts] * stats.Scale, f.UnarmedBonus, med.DustAttackPenalty, f.EncumbranceFactor), Eff(StatsEnumerated.Toughness), str, f.FistsItem, TargetKind.Human, null, f.DamageOutput, k)
+            : DamageFormulas.Packet(Eff(f.WeaponSkill), Eff(StatsEnumerated.Dexterity) * f.DexterityMult, str, f.Weapon!, TargetKind.Human, null, f.DamageOutput, k);
+        return (packet.Cut, packet.Blunt, f.IsAnimal);
     }
 
     /// <summary>Takes <paramref name="damage"/> (the clamped f) x <see cref="ProgressPerDamage"/> off a door's <see cref="Fixture.DoorProgress"/>; at 0 it breaks: unlocked and opened. True when it broke.</summary>
@@ -240,6 +244,7 @@ public sealed partial class LockSystem
     static void StopBashing(CharacterTable table, int s, CharacterCold c)
     {
         c.Bashing = null;
+        c.BashWall = false;
         c.BashOrdered = false;
         c.BashTime = 0;
         ref var n = ref table.Next[s];

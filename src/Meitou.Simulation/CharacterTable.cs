@@ -496,6 +496,8 @@ public sealed class CharacterCold
     public string? Bashing { get; set; }
     /// <summary>Whether <see cref="Bashing"/> was ordered by the player (Smash, 226) rather than found by the pursuit: the basher then needs no attack target. Hashed with <see cref="Bashing"/>.</summary>
     public bool BashOrdered { get; set; }
+    /// <summary>Whether <see cref="Bashing"/> names a wall site (a building of the world's registry) rather than a door: Smashing (272, planned through 270 when no gate leads to the target). Hashed with <see cref="Bashing"/>.</summary>
+    public bool BashWall { get; set; }
     /// <summary>The fixture whose lock this character cuts or breaks by order (Use Tools 285, Use Strength 286; <see cref="Locks.LockSystem"/>; null: none). Hashed only while set.</summary>
     public string? ForcingLock { get; set; }
     /// <summary>How <see cref="ForcingLock"/> is forced.</summary>
@@ -829,7 +831,7 @@ public sealed class CharacterTable
             if (k.SlaveState != 0) { hasher.Add(0x536C7653); hasher.Add(k.SlaveState); hasher.Add(k.SlaveOwner); if (k.SlaveState > 1) hasher.Add(k.SlaveSince); }
             if (k.Crouched) hasher.Add(0x43726F63);
             if (k.PickingLock is { } pick) { hasher.Add(0x5069636B); hasher.Add(Rng.StableHash(pick)); }
-            if (k.Bashing is { } bash) { hasher.Add(0x42617368); hasher.Add(Rng.StableHash(bash)); hasher.Add(k.BashTime); if (k.BashOrdered) hasher.Add(0x4F726473); }
+            if (k.Bashing is { } bash) { hasher.Add(0x42617368); hasher.Add(Rng.StableHash(bash)); hasher.Add(k.BashTime); if (k.BashOrdered) hasher.Add(0x4F726473); if (k.BashWall) hasher.Add(0x57616C6C); }
             if (k.ForcingLock is { } force) { hasher.Add(0x466F7263); hasher.Add(Rng.StableHash(force)); hasher.Add((int)k.Force); }
             if (k.DoorJob is { } doorJob) { hasher.Add(0x446F724A); hasher.Add(Rng.StableHash(doorJob.Door)); hasher.Add(doorJob.Lock); hasher.Add(doorJob.Work); }
             if (k.Shackles is { } job) { hasher.Add(0x5368636B); hasher.Add(Rng.Key(job.Wearer)); hasher.Add((int)job.Work); }
