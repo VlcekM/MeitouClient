@@ -18,8 +18,11 @@ public class ManoeuvreTests
         // STAY_CLOSE: 223 around the centre of movement at the looker's height; HOLD_GROUND: 63.
         Assert.True(Orders.InArea(ManoeuvreMode.StayClose, me, centre, new Vector3(1220, 5, 0)));
         Assert.False(Orders.InArea(ManoeuvreMode.StayClose, me, centre, new Vector3(1230, 5, 0)));
-        Assert.True(Orders.InArea(ManoeuvreMode.HoldGround, me, centre, new Vector3(1060, 5, 0)));
-        Assert.False(Orders.InArea(ManoeuvreMode.HoldGround, me, centre, new Vector3(1070, 5, 0)));
+        var atCentre = new Vector3(1000, 5, 0);
+        Assert.True(Orders.InArea(ManoeuvreMode.HoldGround, atCentre, centre, new Vector3(1060, 5, 0)));
+        Assert.False(Orders.InArea(ManoeuvreMode.HoldGround, atCentre, centre, new Vector3(1070, 5, 0)));
+        // HOLD_GROUND's extra term: d2 under the squared (distance looker to centre)^2, so a looker far from its centre takes everything.
+        Assert.True(Orders.InArea(ManoeuvreMode.HoldGround, me, centre, new Vector3(1070, 5, 0)));
         // A zero point is always in.
         Assert.True(Orders.InArea(ManoeuvreMode.HoldGround, me, centre, Vector3.Zero));
         Assert.Equal(46f, TargetScore.RangeOf(ManoeuvreMode.HoldGround));

@@ -219,8 +219,10 @@ public static class Orders
 
     /// <summary>
     /// The AI's area test <c>FUN_140597790</c> (<c>isTargetInRangeForOrders(Vector3)</c>, <b>Verified</b>): a zero point is in; ROAM_FAR measures the 3D squared distance from the character
-    /// itself, HOLD_GROUND (meiDistance + 40 + tolerance) and STAY_CLOSE (meiDistance + 200 + tolerance) from the centre of movement taken at the character's height. HOLD_GROUND's extra
-    /// term (the squared distance to the broadcast position squared, as written) is <b>Unknown</b> in its operands and left out; no order sets that mode yet.
+    /// itself, HOLD_GROUND (meiDistance + 40 + tolerance) and STAY_CLOSE (meiDistance + 200 + tolerance) from the centre of movement taken at the character's height. HOLD_GROUND is also in when
+    /// the squared distance d2 is under s2 squared, s2 being the squared distance from the AI's own position record (<c>AI +0x18 +0xc8</c>, here <paramref name="looker"/>, <b>Observed</b>: the
+    /// record the AI reads its zone from) to the centre at the centre's own height (operands decoded from the disassembly, <b>Verified</b>; a unit slip of the original that admits every target
+    /// once the looker is more than a few units from its centre). No order sets that mode (docs/game/combat.md "Standing orders").
     /// </summary>
     public static bool InArea(ManoeuvreMode mode, Vector3 looker, Vector3? centre, Vector3 target)
     {
@@ -228,7 +230,11 @@ public static class Orders
         var from = mode == ManoeuvreMode.RoamFar || centre is not { } c ? looker : new Vector3(c.X, looker.Y, c.Z);
         float d2 = Vector3.DistanceSquared(from, target);
         float reach = MeiDistance + MeiTolerance + (mode == ManoeuvreMode.StayClose ? StayCloseExtra : HoldGroundExtra);
-        return mode == ManoeuvreMode.RoamFar ? d2 < RoamFarArea2 : d2 < reach * reach;
+        if (mode == ManoeuvreMode.RoamFar) return d2 < RoamFarArea2;
+        if (d2 < reach * reach) return true;
+        if (mode != ManoeuvreMode.HoldGround || centre is not { } centreAt) return false;
+        float s2 = Vector3.DistanceSquared(looker, centreAt);
+        return d2 < s2 * s2;
     }
 
     /// <summary>The point a holding character holds (<see cref="CharacterCold.HoldPoint"/>, else where it stands).</summary>
