@@ -459,7 +459,7 @@ public sealed partial class CombatSystem
         {
             Category = fighter.TechniqueCategory,
             Skill = cold.Stats![fighter.WeaponSkill],
-            UnarmedSkill = WeaponStats.Lerp(e, 0.2f, 1) * (cold.Stats[StatsEnumerated.MartialArts] + fighter.UnarmedBonus),
+            UnarmedSkill = WeaponStats.Lerp(e, 0.2f, 1) * (cold.Stats[StatsEnumerated.MartialArts] + fighter.UnarmedBonus - medical.DustAttackPenalty),   // the chooser asks FUN_140884e00 with the injury term on (FUN_140884580 subtracts the dust penalty)
             Animal = fighter.IsAnimal,
             Prone = medical.Prone,
             Encumbrance = e,

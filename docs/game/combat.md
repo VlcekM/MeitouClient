@@ -62,7 +62,7 @@ list unless `is block` or `is dodge` (then the defence list), in data order. Eac
 - Gap = |aim − attacker| − 1.5·r·k − lerp(k, 0.45, 1)·r_t, at least 0. r, r_t: `pathfind footprint radius`; k: slot
   0x390 (1 for people). Aim: target + velocity × 1.2 s when its movement is plain mode 0, else its position.
 - Pass: category = weapon's (5 for fists), skill = stored category level. If empty and not an animal: category 5 at
-  `FUN_140884e00` = lerp(e, 0.2, 1) × (martial arts + CharStats +0x2c bonus − injury term) × slot 0x398. If still
+  `FUN_140884e00` = lerp(e, 0.2, 1) × (martial arts + CharStats +0x2c bonus − injury term) × slot 0x398. If still The injury term is the dust-storm attack penalty `FUN_140643a30` (int(`+0x14c` x K) while `+0x148` is 1); the attack chooser's unarmed passes (`FUN_140888030`:69, :78) ask with the flag set too, so its unarmed skill loses it (Meitou `CombatSystem.Act` `UnarmedSkill`).
   empty: that again, accepting hurt limbs. e = encumbrance factor (CharStats +0x190, 1 unburdened).
 - Filter: category table; `min skill` ≤ skill ≤ `max skill`; (1 − e)·100 ≤ `max encumbrance`; `is prone` = posture ≠ 0 (always, **Verified** in the disassembly of
   `FUN_1408876d0`: the decompile prints the burden test and the prone test as `<` or `==` and prone, but the code rejects on burden above the maximum, then on a prone mismatch);
