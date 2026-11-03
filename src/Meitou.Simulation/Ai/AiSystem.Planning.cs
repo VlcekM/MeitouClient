@@ -206,8 +206,9 @@ public sealed partial class AiSystem
                 StateType.isNoEnemiesInVicinity => !EnemyNear(cold),
                 // 26 IS_CROUCHING_OR_LYING (FUN_140599e90): false when crippled (a crawler: the flag is set with posture 2), else true staying low, playing dead or in a bed; the two unidentified flag reads are not modelled.
                 StateType.IS_CROUCHING_OR_LYING => CharacterFacts.CrouchingOrLying(cold),
-                // 141 (FUN_14060e640): the building to sleep in is private and a stranger stands in the home. 108 (no public test) is left to the lock-up round's own test.
+                // 141 (FUN_14060e640): the building to sleep in is private and a stranger stands in the home. 108 (FUN_14060e5e0): the same finder without the public test.
                 StateType.strangers_in_house_P => system.StrangersInHouseP(world, board, slot),
+                StateType.strangers_in_house => system.StrangersInHouse(world, board, slot),
                 // Held true: moving, standing up, power and buildings; doors are the movement's and the lock-up round's (docs/simulation.md "Planner").
                 StateType.isMovementAllowed or StateType.canGetUp or StateType.isBuildingComplete
                     or StateType.BUILDING_HAS_POWER or StateType.machineHasFreeOperatorSlot or StateType.isReadyForAction
