@@ -73,7 +73,7 @@ sealed partial class PlayerInterface
         // toggle_help (F1, event 7): the Tutorials window (docs/game/ui-input.md section 6).
         if (Bound(InputAction.ToggleHelp, key) && !TitleOpen && !EditorOpen)
         {
-            if (faithfulScreens.IsOpen("tutorials")) faithfulScreens.Close("tutorials"); else faithfulScreens.Open("tutorials");
+            ToggleHelpWindow();
             return true;
         }
         // toggle_map / toggle_faction / toggle_research / toggle_crafting (M / unbound / T / Y) ask for overview tabs 0 / 1 / 2 / 3 (docs/game/ui-input.md section 6).

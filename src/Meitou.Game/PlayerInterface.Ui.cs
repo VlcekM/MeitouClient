@@ -155,6 +155,7 @@ sealed partial class PlayerInterface
         for (int i = 0; i < ButtonSpeeds.Length; i++) b.Actions[$"TimeSpeedButton{i + 1}"] = $"meitou:speed.{i}";
         b.Actions["ShortcutInventoryButton"] = "meitou:inventory";
         b.Actions["ShortcutStatsButton"] = "meitou:stats";
+        b.Actions["ShortcutHelpButton"] = "meitou:help";
         b.Text["ShortcutTechButton"] = "TEC";
         foreach (string name in new[] { "ShortcutMapButton", "ShortcutTechButton", "ShortcutSquadButton" }) b.Actions[name] = "faithful:" + name;
         b.Actions["OrdersMedicButton"] = "meitou:medic";
@@ -365,6 +366,12 @@ sealed partial class PlayerInterface
         return true;
     }
 
+    /// <summary>The F1 key and the HLP button share one handler: toggle the Tutorials window (FUN_1406e1f20; ui-screens.md).</summary>
+    void ToggleHelpWindow()
+    {
+        if (faithfulScreens.IsOpen("tutorials")) faithfulScreens.Close("tutorials"); else faithfulScreens.Open("tutorials");
+    }
+
     void ExecuteUiAction(string action, string argument)
     {
         SoundForAction(action, argument);
@@ -382,6 +389,7 @@ sealed partial class PlayerInterface
             else if (action == "inventory" && InventoryOwner() is { } lead && pinnedInventories.FirstOrDefault(p => p.Value == lead.Id).Key is { } slot) faithfulScreens.Open(slot);
             else faithfulScreens.Open(action);
         }
+        else if (action == "help") ToggleHelpWindow();
         else if (action == "extendedstats") infoExpanded = !infoExpanded;
         else if (action is "floor-up" or "floor-down") Floor?.Step(action == "floor-up" ? 1 : -1);
         else if (action == "build") ToggleBuildMode();

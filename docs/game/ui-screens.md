@@ -274,7 +274,7 @@ widget's alpha into its children (`InheritsAlpha`, default true), and the text i
 **Verified** (`Kenshi_MainPanel.layout`): `OrdersChaseButton` is captioned JOBS; Meitou binds it
 to Jobs; the saved `chase mode` flag is that switch (**Verified**, [perma-jobs](ai-tasks.md#perma-jobs)).
 
-- Shortcut buttons INV, STA, MAP, TEC (research; user-requested caption; installed layout says TCH, **Verified** by reading `Kenshi_MainPanel.layout`), SQD, HLP; floor panel with text "Floor {1,num}"; four speed
+- Shortcut buttons INV, STA, MAP, TEC (research; user-requested caption; installed layout says TCH, **Verified** by reading `Kenshi_MainPanel.layout`), SQD, HLP (its click runs the same toggle as F1, the Tutorials window: FUN_14072d3b0 delegate to FUN_1406e1f20, **Verified** by decompile); floor panel with text "Floor {1,num}"; four speed
   buttons ([game-loop.md](game-loop.md#speed-and-pause): pause, 1x, 2x, 5x); money / day / time panel (money `c.{1,num}`; the clock text is described in [game-loop.md](game-loop.md#frame-clocks), money in [economy.md](economy.md#units-stacks-and-traders)); squad tab control; medical panel; orders panel;
   information, tooltip, PAUSED, loading and build panels; town / outpost panel; biome name panel with fading text
   ([Biome banner](#biome-banner)).
