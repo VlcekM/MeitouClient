@@ -167,6 +167,7 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
             Spot(world, Math.Max(1, Settings.SpotEveryTicks) * world.TickSeconds);
             DropFreedOutsideTowns(world);
         }
+        BountyDuty(world);
         for (int k = 0; k < arrests.Count;)
         {
             if (Step(world, arrests[k])) k++;

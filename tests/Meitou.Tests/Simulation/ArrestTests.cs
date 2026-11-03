@@ -170,4 +170,22 @@ public class ArrestTests
         picker.Medical!.KnockOut(1000);
         Assert.False(picks.Allowed(world, picker, 20));
     }
+
+    [Fact]
+    public void A_bounty_is_perceived_while_the_target_is_recently_wanted_or_is_down_and_an_enemy()
+    {
+        // FUN_140853fd0 behind goal 204's finder (FUN_14099bfc0): the entry of the guard's booking faction, visible with the recently-wanted marker, or on a downed enemy.
+        var data = Town();
+        var relations = data.Relations;
+        int city = data.FactionIndex("50-a");
+        var arrest = new ArrestSystem(new CrimeSystem(relations), BaseGame);
+        var guard = new Combatant().MakeCold();
+        guard.Faction = city;
+        var target = new Combatant().MakeCold();
+        target.Faction = relations.PlayerFaction;
+        Assert.False(arrest.PerceivedBounty(guard, target));
+        (target.Bounties = new BountyLedger()).Get(city, "city").Amount = 500;
+        target.RecentlyWanted = CrimeSystem.RecentlyWantedSeconds;
+        Assert.True(arrest.PerceivedBounty(guard, target));
+    }
 }

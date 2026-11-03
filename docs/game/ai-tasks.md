@@ -580,7 +580,7 @@ from the decompile and agree with this table, except that the decompile shows no
 ## Arrest and prison rows
 
 Rules: [economy 11.5, 11.7](economy.md#115-bail-and-sentence). **Observed** (evaluators and TaskData hooks resolved from the exe's thunk bytes):
-Meitou does not plan these chains: `ArrestSystem` (fight, lift, cage, walk, imprison) stands in for tasks 240 / 112 and goals 203 / 204 with the same outcome ([simulation](../simulation.md#arrest-and-jail), engine choice).
+Meitou does not plan these chains: `ArrestSystem` (fight, lift, cage, walk, imprison) stands in for tasks 240 / 112 and goal 203 with the same outcome ([simulation](../simulation.md#arrest-and-jail), engine choice). Goal 204 itself is `ArrestSystem.BountyDuty` (`ArrestSystem.Duty.cs`): every 15 ticks (engine cadence) a free character whose running package lists 204 (`PopulationSystem.GoalDuty`), with a free cage (`FindCage`) and a target from `BountyTarget` (the finder below; the squad's flag-7 mark is not modelled, the nearest in sight stands for the first sensed) starts the arrest. The bounty hunters' chase of a recognised bounty (`Hunt`) is not goal 204: it answers the event-44 dialogue with `DA_ATTACK_CHASE_FOREVER` ([economy 11.8](economy.md#118-bounty-spotting-and-bounty-hunters)).
 
 | Id | Semantics |
 | --- | --- |
