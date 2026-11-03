@@ -197,6 +197,12 @@ public sealed partial class LockSystem
     {
         if (world.Characters.TryResolveNext(prisoner, out int p) && world.Characters.Cold(p) is { } pc) pc.Freed = true;
         if (!world.Fixtures.Release(world, prisoner, faction, Crimes)) return false;
+        var talk = world.SystemOf<Dialogue.DialogueSystem>();
+        if (world.Characters.TryResolveNext(releaser, out int r) && talk is not null)
+        {
+            talk.Forgive(world, p, releaser);   // the prisoner forgives the releaser (FUN_14067aca0, both orders)
+            if (Crimes?.Factions.Books(faction) == true) talk.Forgive(world, r, prisoner);
+        }
         if (Crimes?.Factions.Books(faction) == true) world.Defer(new Dialogue.DialogueEvent(releaser, prisoner, PrisonerFreeToGo) { Tick = world.Tick + 1 });
         else if (faction == world.Player.Faction) world.Defer(new Dialogue.DialogueEvent(prisoner, releaser, UnlockMyCageOrShackles) { Tick = world.Tick + 1 });
         return true;

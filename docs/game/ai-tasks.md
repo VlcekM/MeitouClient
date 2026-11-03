@@ -703,7 +703,7 @@ Meitou: [simulation, captives](../simulation.md#captives).
   record at `+0x240` of the faction of the character that owns the AI task system (`FUN_1405a6bb0` lines 92-107, **Verified**), i.e. the **watcher's** faction, not the slave's owner (processing, `FUN_14035aa20`, reads the same worker-side list;
   the status-panel level `FUN_1405a51e0` is a separate function that keeps the owner list).
   Meitou's reading (**engine choice**): wearing locked shackles or any of the watcher faction's slave clothing (`CaptiveSystem.LooksLikeSlave`); a faction with none always passes.
-- **Cage memory**: `Task_PutInSomething` for a cage (`FUN_140358670`) makes the prisoner's squad remember the putter as captor (`FUN_140673a20(prisoner, putter, 5)`) and calls `FUN_14067aca0`, which
+- **Cage memory**: `Task_PutInSomething` for a cage (`FUN_140358670`) makes the prisoner's squad remember the putter as captor (`FUN_140673a20(prisoner, putter, 5)`) and calls `FUN_14067aca0` (Meitou `DialogueSystem.Forgive`, also run by processing a slave and by Task_ReleasePrisoner `FUN_1403570a0`: the prisoner forgives the releaser, and a booking releaser forgives the prisoner; **Verified** argument order), which
   adds nothing to a slave list: it clears the short-term tags TEMP_ENEMY (4), criminal (7) and aggressor (2) on the prisoner in the putter's squad memory, in the memory of every ally its sensor lists and in every platoon of its faction (`FUN_140289400` over `FUN_1406788d0`, **Verified**), clears the ENEMY bit of the prisoner's entry in the putter's sensor and empties a list of the putter's town (purpose **Unknown**). [Squad memory](dialogue.md#squad-memory) has the other writers.
 
 ## Desire and commitment
