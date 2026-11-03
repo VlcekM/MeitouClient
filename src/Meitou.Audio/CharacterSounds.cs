@@ -212,7 +212,7 @@ public sealed class CharacterSounds
     /// One character this frame: its place, facing and speed (units per second), and the animations it plays with their events. Characters beyond the drop radius are
     /// forgotten; the first update inside the track radius makes the object, with the voice and weapon switches (<c>uses_sounds</c>, <c>uses_bare_sword</c>).
     /// </summary>
-    public void Update(ulong key, CharacterSoundProfile profile, Vector3 position, float yaw, float speed, ReadOnlySpan<SoundLayer> layers, CharacterLoop loop = CharacterLoop.None)
+    public void Update(ulong key, CharacterSoundProfile profile, Vector3 position, float yaw, float speed, ReadOnlySpan<SoundLayer> layers, CharacterLoop loop = CharacterLoop.None, bool down = false, bool combat = false)
     {
         float d2 = player.HeardDistanceSquared(position, camera);
         entries.TryGetValue(key, out var e);
@@ -257,7 +257,7 @@ public sealed class CharacterSounds
         if (e.Profile.Ambient is { } ambient) UpdateAmbient(e, ambient, d2);
         SetLoop(e, loop, d2);
         ProcessLayers(e, layers, d2);
-        if (e.Profile.Animal) PassiveVoice(e, d2);
+        if (e.Profile.Animal) PassiveVoice(e, d2, down, combat);
     }
 
     /// <summary>
@@ -368,12 +368,12 @@ public sealed class CharacterSounds
         if (ev.Footstep) Footsteps++; else Swings++;
     }
 
-    /// <summary>An animal's idle call (<c>CharacterAnimal::vfunc_29</c>): <c>VO_Creature_Passive</c> every 20 to 60 seconds, the first up to 100 s after it appears.</summary>
-    void PassiveVoice(Entry e, float d2)
+    /// <summary>An animal's idle call (<c>CharacterAnimal::vfunc_29</c>): <c>VO_Creature_Passive</c> every 20 to 60 seconds, the first up to 100 s after it appears. Not while <paramref name="down"/> (slot 6, the timer stays due); in combat mode (<c>isInCombatMode</c>) the call is skipped and the timer still reschedules (Verified <c>FUN_1405cdf00</c>).</summary>
+    void PassiveVoice(Entry e, float d2, bool down, bool combat)
     {
         double now = clock.Elapsed.TotalSeconds;
-        if (now < e.NextPassive || e.Down) return;
-        if (d2 < EventLimit) { player.Post("VO_Creature_Passive", e.Object); Voices++; }
+        if (now < e.NextPassive || down) return;
+        if (!combat && d2 < EventLimit) { player.Post("VO_Creature_Passive", e.Object); Voices++; }
         e.NextPassive = now + random.NextDouble() * 40 + 20;
     }
 

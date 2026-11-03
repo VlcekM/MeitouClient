@@ -112,7 +112,7 @@ sealed partial class GameHost
             ulong key = SoundKey(c.Id);
             FillSoundLayers(c, key);
             var loop = c.Task == CharacterTask.Build ? CharacterLoop.Build : c.Task == CharacterTask.Treat ? CharacterLoop.Medic : (c.PickingLock || c.WorkingShackles) && c.Task != CharacterTask.GoTo ? CharacterLoop.Unlock : CharacterLoop.None;
-            sounds.Update(key, profile, position, yaw, speed, System.Runtime.InteropServices.CollectionsMarshal.AsSpan(soundLayers), loop);
+            sounds.Update(key, profile, position, yaw, speed, System.Runtime.InteropServices.CollectionsMarshal.AsSpan(soundLayers), loop, c.Down, c.CombatMode);
             JobSounds(sounds, key, c);
         }
         sounds.EndFrame();
