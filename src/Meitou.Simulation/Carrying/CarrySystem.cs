@@ -1000,8 +1000,8 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
 
     /// <summary>
     /// Every <see cref="CarrySettings.AutoEveryTicks"/> ticks (serial, slot order): NPCs with a rescue job (a loaded list), idle, wandering or following (or on a list job below it), able to carry
-    /// and with no fight in their squad, pick up the nearest knocked-out member of their faction within their sight (<see cref="FindRescue"/>); then NPC squads whose leader is knocked out
-    /// send their nearest free member to pick it up. A player character's rescue job is the decision step's (<see cref="RegisterSources"/>).
+    /// and with no fight in their squad, pick up the nearest knocked-out member of their faction within their sight (<see cref="FindRescue"/>); then the NPCs whose AI chose the leader rescue goal (142)
+    /// lift their knocked-out squad leader (<see cref="RescueLeaders"/>). A player character's rescue job is the decision step's (<see cref="RegisterSources"/>).
     /// </summary>
     void Rescue(World world, CharacterTable table)
     {
@@ -1017,7 +1017,7 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
             if (!MayRescue(world, i, cold)) continue;
             RescueSomeone(world, i, taken, TaskSource.Job, rescue);
         }
-        if (Settings.RescueNpcLeaders) RescueLeaders(world, table, taken);
+        RescueLeaders(world, table, taken);
     }
 
     /// <summary>
@@ -1118,24 +1118,32 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
         return best;
     }
 
-    /// <summary>NPC squads whose leader is knocked out send their nearest free member to pick it up.</summary>
+    /// <summary>
+    /// Goal 142's finder (<c>FUN_140598540</c>) with its list B state 101 (<c>isLeaderDown</c>) and the lift row's state 7: the slot of the character's squad leader when it is not the character
+    /// itself, not dead, down and one the lift can take (<see cref="CanBeLifted(CharacterCold)"/>: out cold, a carriable race, free; engine cap: the original's state 101 also counts a crippled
+    /// or carried leader and its state 7 a crawling one, which Meitou's lift does not take), and the character carries nothing (the goal's done state 48); -1 for none.
+    /// </summary>
+    public static int LeaderToRescue(World world, int slot)
+    {
+        var table = world.Characters;
+        if (table.Cold(slot) is not { SquadId: >= 0, Carrying.IsNone: true } || world.Squads.Find(table.Cold(slot)!.SquadId) is not { } squad) return -1;
+        if (!table.TryResolveNext(squad.Leader, out int l) || l == slot || !table.Next[l].Alive) return -1;
+        return table.Cold(l) is { Medical.Dead: false, InSomething: Locks.HeldState.None } leader && CanBeLifted(leader) ? l : -1;
+    }
+
+    /// <summary>
+    /// The leader rescue goal (142) of an NPC the AI runs: once the AI chose it (the package lists it in this hour and <see cref="LeaderToRescue"/> found the leader) and holds the character, a
+    /// character that is free lifts the leader as row 213 (the snatch lift) does, unless a squad mate lifts it already.
+    /// </summary>
     void RescueLeaders(World world, CharacterTable table, HashSet<int> taken)
     {
-        var next = table.Next;
-        foreach (var squad in world.Squads.All)
+        for (int i = 0; i < table.HighWater; i++)
         {
-            if (!table.TryResolveNext(squad.Leader, out int l) || taken.Contains(l)) continue;
-            if (table.Cold(l) is not { IsPlayer: false, Medical: { Unconscious: true, Dead: false } } leader || leader.InSomething != Locks.HeldState.None || !CanBeLifted(leader) || CharacterFacts.SquadFighting(table, squad)) continue;
-            int best = -1;
-            float best2 = float.MaxValue;
-            foreach (var m in squad.Members)
-            {
-                if (!table.TryResolveNext(m, out int s) || s == l || !Free(world, s) || table.Cold(s)!.IsPlayer) continue;
-                float d2 = Vector2.DistanceSquared(new Vector2(next[s].Position.X, next[s].Position.Z), new Vector2(next[l].Position.X, next[l].Position.Z));
-                if (d2 < best2) { best = s; best2 = d2; }
-            }
-            if (best < 0 || !Start(world, best, CharacterTask.PickUp, TaskType.FIND_AND_RESCUE_IF_THERES_BEDS, TaskSource.Npc, squad.Leader, (CharacterTask)next[best].Task)) continue;
-            taken.Add(l);
+            if (!table.Next[i].Alive || table.Cold(i) is not { IsPlayer: false, Ai: { Engine: false } mind }) continue;
+            int leader = LeaderToRescue(world, i);
+            mind.RescueWant = leader >= 0 ? 1 : 0;   // the think's desire for goal 142 reads it
+            if (leader < 0 || mind.Goal is not { Task.Type: TaskType.FIND_AND_RESCUE_LEADER } || !Free(world, i) || taken.Contains(leader)) continue;
+            if (BeginPickUp(world, i, table.IdOf(leader), (CharacterTask)table.Next[i].Task, source: TaskSource.Npc, row: TaskType.LIFT_PERSON_SNATCHING_ALLOWED)) taken.Add(leader);
         }
     }
 

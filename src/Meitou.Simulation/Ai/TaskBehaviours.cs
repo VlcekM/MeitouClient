@@ -81,6 +81,11 @@ public enum AiBehaviour : byte
     /// so it keeps strolling about the town (an occupier: round the complete buildings of the player town it holds).
     /// </summary>
     PatrolTown = 22,
+    /// <summary>
+    /// Find and rescue leader (142, finder <c>FUN_140598540</c>, list B 101 <c>isLeaderDown</c>): wanted while the squad's leader (not the character, not dead) is down and can be lifted
+    /// (<see cref="Carrying.CarrySystem.LeaderToRescue"/>); the serial carry sweep lifts it (row 213, the snatch lift) once the goal is chosen.
+    /// </summary>
+    RescueLeader = 23,
 }
 
 /// <summary>The engine's table from <see cref="TaskType"/> to <see cref="AiBehaviour"/>, and the TaskData display text (docs/game/ai-tasks.md "TaskData registry", Verified) of the types it acts out.</summary>
@@ -134,6 +139,7 @@ public static class TaskBehaviours
         [TaskType.INVESTIGATE_ALARMS] = (AiBehaviour.Investigate, "Investigating"),
         [TaskType.INVESTIGATE_ALARMS_ALLIES_ONLY] = (AiBehaviour.Investigate, "Investigating"),
         [TaskType.DEFEAT_SQUAD] = (AiBehaviour.Assault, "Assault"),
+        [TaskType.FIND_AND_RESCUE_LEADER] = (AiBehaviour.RescueLeader, "Rescuing leader"),
         [TaskType.SELF_PRESERVATION] = (AiBehaviour.SelfPreserve, "Self preservation"),
         [TaskType.RUN_AWAY] = (AiBehaviour.Flee, "Running away"),
         [TaskType.ATTACK_ENEMIES] = (AiBehaviour.Fight, "Attacking enemies"),

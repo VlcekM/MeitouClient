@@ -76,8 +76,8 @@ public sealed partial class AiSystem
             // The assault is its own plan (engine choice): its finder's target is not a plan target, the combat system draws weapons and closes in, and its only list B entry (!47,
             // not carrying) is what Holds already requires of a character the AI runs.
             // So are the combat goals (engine choice): the desire already holds the finder's pick (and for the protect goals row 13's attacker), and the fight is the combat system's.
-            // And the Medic goal: its desire holds the patient finder's score, and the treatment is the first aid system's.
-            if (type == TaskType.DEFEAT_SQUAD || TaskBehaviours.Of(type) is AiBehaviour.Fight or AiBehaviour.Medic)
+            // And the Medic goal: its desire holds the patient finder's score, and the treatment is the first aid system's. And the leader rescue (142: its finder and its done state, the leader down, are the desire's; the lift is the carry system's).
+            if (type == TaskType.DEFEAT_SQUAD || TaskBehaviours.Of(type) is AiBehaviour.Fight or AiBehaviour.Medic or AiBehaviour.RescueLeader)
             {
                 mind.Plan.Clear();
                 mind.Plan.Add(new PlanStep(type, default));
@@ -194,7 +194,7 @@ public sealed partial class AiSystem
                 StateType.atATown => system.TownAt(Me.Position) >= 0,
                 // Any alarm of its town in reach (goal 210's own-faction filter is its desire's).
                 StateType.ALARMS_IN_THE_VICINITY => system.AlarmOf(world, slot, TaskType.INVESTIGATE_ALARMS, board) is not null,
-                StateType.isLeaderDown => mind.Squad.Leader.IsNone || !world.Characters.IsAlive(mind.Squad.Leader),
+                StateType.isLeaderDown => SquadIntact.Down(world.Characters, mind.Squad.Leader) || world.Characters.TryResolveNext(mind.Squad.Leader, out int lead) && world.Characters.Cold(lead) is { Medical.Crawling: true },   // FUN_140997c70: no leader, dead, down or crippled
                 // 72 (FUN_1405a0610, Observed): never for a character not of the player's faction, so an NPC's sleep rows (98, 100, 175, 261)
                 // are never done; for the player's a medical float above 0.9 (MedicalSystem +0xb0, meaning Unknown), here "not incapacitated".
                 StateType.isFullyRested => playerSide && cold.Medical is not { Incapacitated: true },

@@ -407,6 +407,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             // Only while an alarm of its town is in reach (the row's done state !ALARMS_IN_THE_VICINITY).
             AiBehaviour.Investigate => AlarmOf(world, self.Slot, type, board) is null ? 0 : 1,
             // The assault's finder factor: 1 while a member of the mission target's squad passes its tests, else 0 (FUN_140793eb0).
+            AiBehaviour.RescueLeader => mind.RescueWant,
             AiBehaviour.Assault => targeting == TaskTargetType.SquadMission && !AssaultTargetFor(world, self.Slot, board).IsNone ? 1 : 0,
             // Self preservation: the threat level (AI slot 17); Running away: row 35's own (AI slot 55), a goal of the packages that list it.
             AiBehaviour.SelfPreserve => SelfPreservationDesire(world, self.Slot, mind),
@@ -1056,6 +1057,10 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
                         Become(world, slot, claimed.Kind is HomeSpotKind.Training or HomeSpotKind.Workstation ? CharacterTask.Idle : CharacterTask.Rest);
                     }
                 }
+                break;
+            case AiBehaviour.RescueLeader:
+                // The carry system's sweep lifts the leader (CarrySystem.Rescue); until then it stands.
+                Become(world, slot, CharacterTask.Idle);
                 break;
             case AiBehaviour.Turret:
                 if (board.TurretClaims.TryGetValue(slot, out int t) && (uint)t < (uint)board.Turrets.Count && board.Turrets[t].Turret is { } turret)

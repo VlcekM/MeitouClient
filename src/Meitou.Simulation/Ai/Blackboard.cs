@@ -516,6 +516,9 @@ public sealed class AiMind
     public TaskType FightGoal { get; set; }
     public CharacterId FightTarget { get; set; } = CharacterId.None;
     /// <summary>
+    /// <summary>The leader rescue goal's factor (<see cref="AiBehaviour.RescueLeader"/>): 1 while the squad leader is down and can be lifted, kept by the carry system's serial sweep (the think reads it).</summary>
+    public float RescueWant { get; set; }
+    /// <summary>
     /// The tick the last fight the serial step started for it begins (<see cref="CharacterCold.Running"/>'s <c>Tick</c> of that fight; 0: none yet): while it runs, the fight is the AI's own,
     /// a plan step of its combat goal, and the character thinks in it (<see cref="AiSystem.Holds"/>).
     /// </summary>
