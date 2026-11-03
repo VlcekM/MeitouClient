@@ -217,6 +217,9 @@ public sealed record BuildingPlacement(ZoneCoordinate Zone, string InstanceId, s
 {
     /// <summary>Runtime repair state; null leaves the level/save flag in control.</summary>
     public bool? DestroyedOverride { get; init; }
+    /// <summary>A loose item's mesh and scale when not its record's own (a nest's numbered debris piece, docs/game/factions-squads-towns.md "Nest furniture").</summary>
+    public string? ItemMesh { get; init; }
+    public float ItemScale { get; init; } = 1;
     readonly string? key;
 
     /// <summary>The run-time name of the building (<see cref="BuildingKey.Of"/>); a player-placed building, whose id is unique already, is given its own.</summary>

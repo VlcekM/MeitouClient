@@ -273,15 +273,16 @@ public sealed partial class FixtureRegistry
     }
 
     /// <summary>
-    /// Registers a nest building's cage or lock (<see cref="NestBuildings"/>: a Prisoner Pole of a fog nest), owned by the nest's faction and marked as a nest's
-    /// (<see cref="Fixture.Nest"/>), then binds the held characters whose <see cref="CharacterCold.InWhat"/> names it. A piece with neither is left out.
+    /// Registers a camp building's cage or lock (<see cref="NestBuildings"/>: a Prisoner Pole of a fog nest), owned by the camp's faction: a nest's is marked
+    /// (<see cref="Fixture.Nest"/>), a town's has the town's <paramref name="site"/>. Then binds the held characters whose <see cref="CharacterCold.InWhat"/> names it. A piece
+    /// with neither is left out.
     /// </summary>
-    public void RegisterNestBuilding(World world, PopulationData data, NestPiece piece, int owner)
+    public void RegisterNestBuilding(World world, PopulationData data, NestPiece piece, int owner, int site = -1)
     {
         if (byBuilding.ContainsKey(piece.Id) || data.Db.Find(piece.Record) is not { } record || Lockable(data.Db, record) is not { } kind) return;
         var faction = owner >= 0 && owner < data.Factions.Count ? data.Factions[owner] : null;
-        var made = Make(world, data.Db, kind, piece.Id, piece.Id, record, -1, owner, faction, piece.Position, TownBuildings.YawOf(piece.Rotation), host: record.StringId);
-        made.Nest = true;
+        var made = Make(world, data.Db, kind, piece.Id, piece.Id, record, site, owner, faction, piece.Position, TownBuildings.YawOf(piece.Rotation), host: record.StringId);
+        made.Nest = site < 0;
         byBuilding[piece.Id] = [made];
         buildings.Add(piece.Id);
         all.Add(made);

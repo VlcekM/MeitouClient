@@ -566,6 +566,7 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
         // The town's doors, cages, containers and beds, once (they stay registered when the town unloads).
         world.Fixtures.RegisterSite(world, data, town.Site);
         world.ItemSlots.RegisterSite(world, data, town.Site);
+        StandTownCamp(world, site);
         // A town made counts as visited in every zone of its buildings (engine choice: its residents and its buildings' locks are saved whole, docs/formats/save.md "Zone files"),
         // but for the centre zone of another town: a file there would tell the original that town was made, with no residents saved for it.
         foreach (var b in site.Buildings)

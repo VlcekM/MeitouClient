@@ -114,11 +114,11 @@ public static class WorldObjectLayout
     /// A loose item on the ground (docs/simulation.md "Ground items"): its <see cref="ItemMesh"/> at <paramref name="worldPosition"/> turned by <paramref name="rotation"/>; its look is the
     /// material resolver's pick for the record (its <c>material</c> list).
     /// </summary>
-    public static PlacedMesh? Item(GameRecord item, string placementId, Vector3 worldPosition, Quaternion rotation)
+    public static PlacedMesh? Item(GameRecord item, string placementId, Vector3 worldPosition, Quaternion rotation, string? mesh = null, float scale = 1)
     {
-        string mesh = ItemMesh(item);
+        mesh ??= ItemMesh(item);
         if (mesh.Length == 0) return null;
-        return new PlacedMesh(mesh, InstanceTransform(worldPosition, rotation, Vector3.One), item, item, placementId, PlacedKind.Item);
+        return new PlacedMesh(mesh, InstanceTransform(worldPosition, rotation, new Vector3(scale)), item, item, placementId, PlacedKind.Item);
     }
 
     /// <summary>The BUILDING_PART the character editor's stage stands the characters on (<c>FUN_1405f03c0</c>; base data: "character_editor_platform_part").</summary>

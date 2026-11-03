@@ -246,7 +246,8 @@ sealed class WorldObjects : IDisposable
                 if (record.Type != Meitou.Data.Fcs.FcsRecordType.BUILDING)
                 {
                     // A loose item (GameHost.GroundItems): its one mesh, at its absolute height.
-                    if (WorldObjectLayout.Item(record, b.InstanceId, new Vector3(b.Position.X, b.WorldY ?? map.HeightAt(b.Position.X, b.Position.Z) + b.Position.Y, b.Position.Z), b.Rotation) is { } item)
+                    var at = new Vector3(b.Position.X, b.WorldY ?? map.HeightAt(b.Position.X, b.Position.Z) + b.Position.Y, b.Position.Z);
+                    if (WorldObjectLayout.Item(record, b.InstanceId, at, b.Rotation, b.ItemMesh, b.ItemScale) is { } item)
                         result.Items.Add(item);
                     continue;
                 }

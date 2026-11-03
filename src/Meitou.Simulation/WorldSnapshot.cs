@@ -430,6 +430,8 @@ public sealed record WorldSnapshot(long Tick, IReadOnlyList<CharacterSnapshot> C
     public long BuildingsRevision { get; init; }
     /// <summary>The loaded nests' buildings (<see cref="NestBuildings"/>), complete and of the nest's faction, and their revision (bumped when a nest's come or go).</summary>
     public IReadOnlyList<Construction.BuildingSnapshot> NestBuildings { get; init; } = [];
+    /// <summary>The standing camps' <c>debris</c> meshes (drawn only); they change with <see cref="NestBuildingsRevision"/>.</summary>
+    public IReadOnlyList<NestMesh> NestMeshes { get; init; } = [];
     public long NestBuildingsRevision { get; init; }
     /// <summary>The player outposts with their power totals (the town panel, docs/game/ui-screens.md "Town panel").</summary>
     public IReadOnlyList<Production.OutpostSnapshot> Outposts { get; init; } = [];

@@ -156,29 +156,38 @@ public sealed class ItemSlots
         var group = Group(data.Db, s.GroupId)!;
         var rng = new RandomStream(world.Seed, Rng.StableHash(s.Id) ^ ((ulong)s.Made << 40), RngPurpose.Loot);
         s.Made++;
-        var entry = ShopFiller.Pick(group.Items.Entries, ref rng);
-        var faction = (uint)s.Owner < (uint)data.Factions.Count ? data.Db.Find(data.Factions[s.Owner].Id) : null;
-        // The original hands every item the grade's quality; only armour keeps it here, as shop stock does (what it does to other items is Unknown).
-        float quality = CharacterGenerator.QualityOfGrade(ShopFiller.Grade(faction, ref rng));
-        if (entry.Type != FcsRecordType.ARMOUR) quality = 0;
-        if (data.Items.Create(entry.Id, 1, quality) is not { } item)
+        var (item, type, noMaker) = Roll(data, group.Items, s.Owner, ref rng);
+        if (item is null)
         {
-            s.DueAt = world.GameHours + Math.Max(group.MinRespawnHours, 1);   // the data cannot make it: try again later
+            // The data cannot make it: try again later; a weapon with no usable manufacturer is tried again on the next update (FUN_1409540d0, Verified).
+            if (!noMaker) s.DueAt = world.GameHours + Math.Max(group.MinRespawnHours, 1);
             return;
         }
-        if (entry.Type == FcsRecordType.WEAPON)
-        {
-            // No usable manufacturer: no item is made and the slot stays empty, tried again on the next update (FUN_1409540d0, Verified).
-            if (ShopFiller.Maker(group.Items, data.Db, ref rng) is not { } made) return;
-            item.CompanyId = made.Maker.StringId;
-            item.MaterialId = made.Model ?? "";
-            item.Level = made.Level;
-        }
         float yaw = group.RandomYaw ? rng.NextFloat() * MathF.Tau : s.Yaw;
-        bool kept = Kept(entry.Type);
+        bool kept = Kept(type);
         int placed = world.GroundItems.Place(item, s.Position, yaw, kept ? s.Id : null, s.Owner);
         if (kept) s.Item = placed;
         else s.DueAt = NextDue(world, group, s);
+    }
+
+    /// <summary>
+    /// One item of an item list as the original's pick makes it (<c>FUN_1409540d0</c>): a weighted entry, the grade's quality for armour (from <paramref name="owner"/>'s faction), a
+    /// weapon's manufacturer and model. Null (with the entry's type) when the data cannot make it, or a weapon has no usable manufacturer (<c>NoMaker</c>).
+    /// </summary>
+    public static (ItemInstance? Item, FcsRecordType Type, bool NoMaker) Roll(PopulationData data, Meitou.Data.Gameplay.Economy.VendorList list, int owner, ref RandomStream rng)
+    {
+        var entry = ShopFiller.Pick(list.Entries, ref rng);
+        var faction = (uint)owner < (uint)data.Factions.Count ? data.Db.Find(data.Factions[owner].Id) : null;
+        // The original hands every item the grade's quality; only armour keeps it here, as shop stock does (what it does to other items is Unknown).
+        float quality = CharacterGenerator.QualityOfGrade(ShopFiller.Grade(faction, ref rng));
+        if (entry.Type != FcsRecordType.ARMOUR) quality = 0;
+        if (data.Items.Create(entry.Id, 1, quality) is not { } item) return (null, entry.Type, false);
+        if (entry.Type != FcsRecordType.WEAPON) return (item, entry.Type, false);
+        if (ShopFiller.Maker(list, data.Db, ref rng) is not { } made) return (null, entry.Type, true);
+        item.CompanyId = made.Maker.StringId;
+        item.MaterialId = made.Model ?? "";
+        item.Level = made.Level;
+        return (item, entry.Type, false);
     }
 
     public void Hash(ref StateHasher h)

@@ -17,6 +17,7 @@ sealed partial class GameHost
     long buildingsRevision = -1, nestBuildingsRevision = -1;
     // What the overlays were last told, by instance id.
     readonly Dictionary<string, BuildingSnapshot> shownBuildings = new(StringComparer.Ordinal);
+    readonly HashSet<string> shownNestMeshes = new(StringComparer.Ordinal);
     readonly HashSet<string> navBuildings = new(StringComparer.Ordinal), litBuildings = new(StringComparer.Ordinal), effectBuildings = new(StringComparer.Ordinal);
     readonly Dictionary<string, float> constructionLook = new(StringComparer.Ordinal);
     Dictionary<string, BuildingBuildData>? buildData;
@@ -38,6 +39,7 @@ sealed partial class GameHost
         if (snapshot.BuildingsRevision != buildingsRevision || snapshot.NestBuildingsRevision != nestBuildingsRevision)
         {
             DiffBuildings(snapshot);
+            if (snapshot.NestBuildingsRevision != nestBuildingsRevision) DiffNestMeshes(snapshot);
             buildingsRevision = snapshot.BuildingsRevision;
             nestBuildingsRevision = snapshot.NestBuildingsRevision;
         }
@@ -105,6 +107,28 @@ sealed partial class GameHost
             shownBuildings[site.Id] = site;
         }
     }
+
+    /// <summary>The standing camps' debris meshes (<see cref="WorldSnapshot.NestMeshes"/>) as runtime item placements, by place: the ones gone are taken out, the new ones put in.</summary>
+    void DiffNestMeshes(WorldSnapshot snapshot)
+    {
+        var current = new Dictionary<string, Meitou.Simulation.NestMesh>(StringComparer.Ordinal);
+        foreach (var m in snapshot.NestMeshes) current.TryAdd(NestMeshId(m), m);
+        foreach (string id in shownNestMeshes.Where(id => !current.ContainsKey(id)).ToArray())
+        {
+            ActiveObjects?.RemoveRuntime(id);
+            shownNestMeshes.Remove(id);
+        }
+        foreach (var (id, m) in current)
+        {
+            if (!shownNestMeshes.Add(id)) continue;
+            var rotation = System.Numerics.Quaternion.CreateFromAxisAngle(System.Numerics.Vector3.UnitY, m.Yaw);
+            ActiveObjects?.AddRuntime(new BuildingPlacement(WorldLayout.ZoneOf(m.Position.X, m.Position.Z), id, m.Record, m.Position, rotation, null, m.Position.Y)
+                { Key = id, ItemMesh = m.Mesh, ItemScale = m.Scale });
+        }
+    }
+
+    static string NestMeshId(Meitou.Simulation.NestMesh m) =>
+        string.Create(System.Globalization.CultureInfo.InvariantCulture, $"nestmesh:{m.Mesh}@{m.Position.X:F1},{m.Position.Z:F1}");
 
     /// <summary>
     /// A building's lamps are lit while it is complete (docs/game/buildings-production.md "Construction tick": completing switches its lights on). Placed the way the world's
@@ -180,6 +204,7 @@ sealed partial class GameHost
         constructionLook.Clear();
         buildingsRevision = -1;
         nestBuildingsRevision = -1;
+        shownNestMeshes.Clear();
         if (ActiveObjects is { } objects) objects.Construction = null;
     }
 

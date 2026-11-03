@@ -429,7 +429,8 @@ has an override world state (its lists are then replaced) or `0-buildinglist` ho
 - Slot list: the last level layer's list (a layer without one empties it), plus slots allocated in play (the lists Meitou makes this way are within the saved ones in 181 of 183 files, the other two lack
   one slot each). `nextId` can be above the highest record id.
 - Nest buildings are not saved (no type-85 `town` handle in save 2's 133 files); nest debris are `1-itemlist` ITEMs whose `persist` handle is the nest (222 in save 2).
-  Meitou stands the nest buildings up again each load ([nest furniture](../game/factions-squads-towns.md)) and places no debris; it writes neither.
+  Meitou stands the nest buildings and debris meshes up again each load ([nest furniture](../game/factions-squads-towns.md)), writing neither; a nest's
+  real items are loose items of the zone's list, without the `persist` handle.
 - Shop stock (**Observed**, METARU): 9025 of its 9038 `backpack_content` INVENTORY_ITEM_STATEs are in zone files (the shop buildings' containers), 13 in platoon
   files; no trader character carries its stock. Meitou cannot address those containers (unmapped interior ids) and saves a shop on its PLATOON instead
   ([NPC platoons](#npc-platoons-meitou-mapping)).

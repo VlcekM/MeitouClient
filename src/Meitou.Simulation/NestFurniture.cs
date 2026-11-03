@@ -8,24 +8,41 @@ namespace Meitou.Simulation;
 /// <summary>A building a nest stood up round itself (a TOWN's <c>debris building</c>): its id, BUILDING record and where it stands.</summary>
 public sealed record NestPiece(string Id, string Record, Vector3 Position, Quaternion Rotation);
 
+/// <summary>What a nest scatters at its place: its buildings, its <c>debris</c> meshes (drawn only) and the items it lays down in a fresh zone (<c>debris</c> with physics, <c>loot spawn</c>).</summary>
+public sealed record NestLayout(List<NestPiece> Pieces, List<NestMesh> Meshes, List<NestDrop> Drops)
+{
+    public bool IsEmpty => Pieces.Count == 0 && Meshes.Count == 0 && Drops.Count == 0;
+}
+
 /// <summary>
 /// A nest's <c>debris building</c> scatter (docs/game/factions-squads-towns.md "Nest furniture"; the original's <c>TownBase::_nestUpThisSpot</c> and its building placer
 /// <c>FUN_140930120</c>): <c>num centrepoints</c> centres within <c>size radius</c> of the nest, each 190 from the earlier ones it came within 140 of, and round each
 /// centre every entry's count of its BUILDING at v1 to v2 from it, pushed to 25 from a piece of the same entry within 17, dropped with no navmesh within 60 of the
 /// centre's height (the original's nearest-point query, a box of half-size 60) or within 12 of one, stood on the ground tilted to it up to the BUILDING's <c>max slope</c>.
-/// Pure; the rolls are keyed by the nest's place (the original seeds from its X/Z).
+/// Pure; the rolls are keyed by the nest's place (the original seeds from its X/Z). The <c>debris</c> and <c>loot spawn</c> lists are in <c>NestDebris.cs</c>.
 /// </summary>
-public static class NestFurniture
+public static partial class NestFurniture
 {
     const float CentreSpacing = 140, CentrePush = 190, PieceSpacing = 17, PiecePush = 25, PieceGap = 12, NavReach = 60, CountSpread = 0.5f, NormalStep = 5;
 
-    /// <summary>The pieces of <paramref name="nest"/> standing at <paramref name="at"/>; ids are <paramref name="idPrefix"/> and a number.</summary>
-    public static List<NestPiece> Scatter(GameDatabase db, TownData nest, Vector2 at, IWalkability walk, ulong seed, string idPrefix)
+    /// <summary>
+    /// What <paramref name="nest"/> scatters at <paramref name="at"/>, in the original's order: <c>debris</c>, the buildings (ids are <paramref name="idPrefix"/> and a number),
+    /// <c>loot spawn</c>.
+    /// </summary>
+    public static NestLayout Scatter(GameDatabase db, TownData nest, Vector2 at, IWalkability walk, ulong seed, string idPrefix)
     {
-        var pieces = new List<NestPiece>();
-        if (nest.NumCentrepoints <= 0 || nest.DebrisBuilding.Count == 0) return pieces;
         ulong key = Rng.Mix(SeedSalts.NestFurniture ^ (ulong)(uint)(int)at.X ^ (ulong)(uint)(int)at.Y << 32);
         var rolls = new RandomStream(seed, key, RngPurpose.Spawn);
+        var layout = new NestLayout([], [], []);
+        Debris(db, nest, at, walk, ref rolls, layout);
+        Buildings(db, nest, at, walk, ref rolls, idPrefix, layout.Pieces);
+        Loot(nest, at, walk, ref rolls, layout.Drops);
+        return layout;
+    }
+
+    static void Buildings(GameDatabase db, TownData nest, Vector2 at, IWalkability walk, ref RandomStream rolls, string idPrefix, List<NestPiece> pieces)
+    {
+        if (nest.NumCentrepoints <= 0 || nest.DebrisBuilding.Count == 0) return;
         var centres = new List<Vector2>();
         float nestY = walk.GroundHeight(at.X, at.Y);
         for (int c = 0; c < nest.NumCentrepoints; c++)
@@ -37,7 +54,6 @@ public static class NestFurniture
                 if (db.Find(entry.Id) is { } record)
                     Place(record, new Vector3(centre.X, centreY, centre.Y), entry, Count(ref rolls, entry.V0), walk, ref rolls, idPrefix, pieces);
         }
-        return pieces;
     }
 
     /// <summary>One entry's pieces round a centre; the spacing counts only this batch (the original clears its list on each call).</summary>
@@ -110,39 +126,61 @@ public static class NestFurniture
 }
 
 /// <summary>
-/// The buildings the loaded nests stood up (<see cref="NestFurniture"/>), by wild site. Not saved: a nest stands them up again from its place each time it loads, as the
-/// original (its nest buildings are never in a save). Serial phases only.
+/// The buildings and debris meshes the loaded nests (and the towns with <c>spawn in town centre</c>) stood up (<see cref="NestFurniture"/>), by camp: a wild site, or a town site
+/// (<see cref="TownCamp"/>). Not saved: a nest stands them up again from its place each time it loads, as the original (its nest buildings are never in a save); the items it lays
+/// down are ground items, saved as such, laid once per camp in a fresh zone (<see cref="Stock"/>). Serial phases only.
 /// </summary>
 public sealed class NestBuildings
 {
-    readonly SortedDictionary<int, (List<NestPiece> Pieces, int Owner, Vector2 Centre)> bySite = [];
-    IReadOnlyList<BuildingSnapshot>? published;
+    sealed record Camp(NestLayout Layout, int Owner, Vector2 Centre, string Record);
 
-    /// <summary>Bumped when a nest's buildings come or go: the host diffs <see cref="Published"/> by id when it changes.</summary>
+    readonly SortedDictionary<int, Camp> camps = [];
+    readonly HashSet<int> stocked = [];
+    IReadOnlyList<BuildingSnapshot>? published;
+    IReadOnlyList<NestMesh>? meshes;
+
+    /// <summary>The camp key of town site <paramref name="site"/> (a wild site's key is its index).</summary>
+    public static int TownCamp(int site) => -1 - site;
+
+    /// <summary>Bumped when a camp's buildings or meshes come or go: the host diffs <see cref="Published"/> and <see cref="Meshes"/> when it changes.</summary>
     public long Revision { get; private set; }
 
-    public IReadOnlyList<NestPiece> Of(int site) => bySite.TryGetValue(site, out var s) ? s.Pieces : [];
+    public IReadOnlyList<NestPiece> Of(int camp) => camps.TryGetValue(camp, out var c) ? c.Layout.Pieces : [];
 
-    /// <summary>The nests standing, by wild site, with where each stands.</summary>
-    public IEnumerable<(int Site, Vector2 Centre)> Standing => bySite.Select(kv => (kv.Key, kv.Value.Centre));
+    /// <summary>The TOWN record a camp was stood up from (null: none standing).</summary>
+    public string? RecordOf(int camp) => camps.TryGetValue(camp, out var c) ? c.Record : null;
 
-    public void Set(int site, List<NestPiece> pieces, int owner, Vector2 centre)
+    /// <summary>The nests standing (not the towns), by wild site, with where each stands.</summary>
+    public IEnumerable<(int Site, Vector2 Centre)> Standing => camps.Where(kv => kv.Key >= 0).Select(kv => (kv.Key, kv.Value.Centre));
+
+    public void Set(int camp, NestLayout layout, int owner, Vector2 centre, string record)
     {
-        bySite[site] = (pieces, owner, centre);
-        published = null;
-        Revision++;
+        camps[camp] = new Camp(layout, owner, centre, record);
+        Changed();
     }
 
-    public bool Remove(int site)
+    public bool Remove(int camp)
     {
-        if (!bySite.Remove(site)) return false;
-        published = null;
-        Revision++;
+        if (!camps.Remove(camp)) return false;
+        Changed();
         return true;
     }
 
-    /// <summary>Every nest building as a complete building of its nest's faction, for the host's render and navmesh overlays.</summary>
-    public IReadOnlyList<BuildingSnapshot> Published() => published ??= [.. bySite.Values.SelectMany(s => s.Pieces.Select(p => Snapshot(p, s.Owner)))];
+    /// <summary>True the first time a camp asks in this world (it lays its items now; the caller asks only for a zone the loaded save has no file of).</summary>
+    public bool Stock(int camp) => stocked.Add(camp);
+
+    void Changed()
+    {
+        published = null;
+        meshes = null;
+        Revision++;
+    }
+
+    /// <summary>Every camp building as a complete building of its camp's faction, for the host's render and navmesh overlays.</summary>
+    public IReadOnlyList<BuildingSnapshot> Published() => published ??= [.. camps.Values.SelectMany(c => c.Layout.Pieces.Select(p => Snapshot(p, c.Owner)))];
+
+    /// <summary>Every camp's debris meshes, for the host's render overlay.</summary>
+    public IReadOnlyList<NestMesh> Meshes() => meshes ??= [.. camps.Values.SelectMany(c => c.Layout.Meshes)];
 
     static BuildingSnapshot Snapshot(NestPiece p, int owner) => new(p.Id, p.Record, p.Position, p.Rotation, 0, null, owner, 0, 0, [], true, false);
 }

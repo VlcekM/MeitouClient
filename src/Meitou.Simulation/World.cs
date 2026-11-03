@@ -189,6 +189,8 @@ public sealed partial class World : IDisposable
     /// each that its loaded save has none of. Only read by saves, so not hashed.
     /// </summary>
     public HashSet<Meitou.Data.World.ZoneCoordinate> VisitedZones { get; } = [];
+    /// <summary>The zones the loaded save has a file of: the original's zones not loaded fresh (<c>ZoneMapContent::newGameFirstTimeLoaded</c> clear), where a nest lays no items.</summary>
+    public HashSet<Meitou.Data.World.ZoneCoordinate> SavedZones { get; } = [];
     /// <summary>
     /// The zones active as of the population's last look, which are the loaded zones (null before one, so no zone is judged inactive): squads, loose items and the navmesh are kept there. The collection is the population's own and swapped by it: read within a tick only. Not hashed.
     /// </summary>

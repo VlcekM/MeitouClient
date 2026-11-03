@@ -64,9 +64,9 @@ public sealed partial class PopulationSystem
 
     /// <summary>
     /// A wild site's squads, built. <paramref name="Rolls"/>: the nest rolls used (the next top-up's keys follow them); <paramref name="Exhausted"/>: a nest roll found no entry that fits or
-    /// weighs anything; <paramref name="Pieces"/>: a loading nest's buildings (<see cref="NestFurniture"/>).
+    /// weighs anything; <paramref name="Layout"/>: what a loading nest scatters (<see cref="NestFurniture"/>).
     /// </summary>
-    sealed record BuiltWild(int Site, long LoadId, Vector2 Centre, List<BuiltSquad> Squads, int Rolls = 0, bool Exhausted = false, bool TopUp = false, List<NestPiece>? Pieces = null);
+    sealed record BuiltWild(int Site, long LoadId, Vector2 Centre, List<BuiltSquad> Squads, int Rolls = 0, bool Exhausted = false, bool TopUp = false, NestLayout? Layout = null);
 
     /// <summary>What a nest build may make: members up to <paramref name="Cap"/> with <paramref name="Members"/> there already, <paramref name="Counts"/> squads per entry, rolls keyed from <paramref name="First"/>, at most <paramref name="Rolls"/> of them and <paramref name="Squads"/> squads; <paramref name="Place"/> false only weighs (a player is near).</summary>
     sealed record NestBudget(int Cap, int Members, int[] Counts, int First, int Rolls, int Squads, bool Place = true, Vector2? Centre = null);
@@ -333,7 +333,7 @@ public sealed partial class PopulationSystem
                     PayNestDespawn(world, wildSites[i], state);
                 }
                 Drop(world, state);
-                FoldNest(world, i);
+                FoldCamp(world, i);
                 wildLoaded.Remove(i);
             }
         }
@@ -450,7 +450,7 @@ public sealed partial class PopulationSystem
         var site = wildSites![b.Site];
         if (site.Kind == WildKind.Nest && (b.Squads.Count > 0 || site.SaveInstance is not null)) wildCentres[b.Site] = b.Centre;
         if (!b.TopUp) SpawnKeptWild(world, b.Site, state);
-        if (b.Pieces is { Count: > 0 } pieces) StandNest(world, site, pieces, b.Centre);
+        if (b.Layout is { IsEmpty: false } layout) StandCamp(world, site.Index, layout, site.Faction, b.Centre, site.Nest!.Id, -1);
         foreach (var built in b.Squads)
         {
             var squad = SpawnSquad(world, built, null, 0);
@@ -467,23 +467,6 @@ public sealed partial class PopulationSystem
         state.Status = SiteStatus.Loaded;
         if (!b.TopUp) state.UnloadAtTick = -1;
         if (site.Kind == WildKind.Nest && b.Exhausted) CheckWipe(world, site, state);
-    }
-
-    /// <summary>A loading nest's buildings go up: shown, and their cages and locks registered as its faction's.</summary>
-    void StandNest(World world, WildSite site, List<NestPiece> pieces, Vector2 centre)
-    {
-        FoldNest(world, site.Index);
-        world.NestBuildings.Set(site.Index, pieces, site.Faction, centre);
-        foreach (var piece in pieces) world.Fixtures.RegisterNestBuilding(world, data, piece, site.Faction);
-    }
-
-    /// <summary>A nest's buildings come down with it (it stands them up again when it loads).</summary>
-    static void FoldNest(World world, int site)
-    {
-        var pieces = world.NestBuildings.Of(site);
-        if (pieces.Count == 0) return;
-        world.Fixtures.UnregisterNestBuildings(world, pieces);
-        world.NestBuildings.Remove(site);
     }
 
     static float NestRadius(TownData nest) => Math.Max(nest.SizeRadius * nest.TownRadiusMult, 100);
@@ -669,7 +652,7 @@ public sealed partial class PopulationSystem
             squads.Add(one);
             members += one.Plan.TotalMembers;
         }
-        var pieces = topUp ? null : NestFurniture.Scatter(data.Db, nest, c, walk, seed, $"nest{(int)c.X},{(int)c.Y}:");   // keyed by place: a save names its cages
-        return new BuiltWild(site.Index, loadId, c, squads, rolls, exhausted, topUp, pieces);
+        var layout = topUp ? null : NestFurniture.Scatter(data.Db, nest, c, walk, seed, $"nest{(int)c.X},{(int)c.Y}:");   // keyed by place: a save names its cages
+        return new BuiltWild(site.Index, loadId, c, squads, rolls, exhausted, topUp, layout);
     }
 }

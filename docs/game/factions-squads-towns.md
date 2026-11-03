@@ -525,10 +525,21 @@ Meitou: [ground items](../simulation.md#items-and-eating).
     navmesh query (`FUN_1403a2300`, box half-size 60 round the point at the centre's height) finds nothing or a piece of the entry is within 12; ground and
     normal from a ray down from 10000; facing a random yaw, tilted to the normal, a tilt over the BUILDING's `max slope` (degrees) slerped back to it
     (t = max slope / tilt); owned by the nest's faction (the nest's vtable +0x58, **Observed**).
-  - Meitou (`NestFurniture`): the buildings, as above, when a nest's zone activates, removed when it unloads (NPCs in its cages let out). Its own
-    rolls keyed by the nest's place; the navmesh query is the walkability at the centre's height within 60. A nest's cage of a kidnapper's faction is
-    always a candidate, and a standing nest is a town for the fogman worship finder (nest markers skipped). Debris, loot and the towns' `spawn in town
-    centre` scatter are **not built**.
+  - `debris` (`spawnDebris` `FUN_140937510`, disassembly for the arguments): per entry v0 to v1 clusters (`Rand_IntInRange`: lo + a uniform step over
+    [lo, hi], clamped, so lo when lo > hi), scale v2 × 0.01 (v2 0: 1). A NEST_ITEM without `physics file`: a point within `size radius`, then `cluster min`
+    to `cluster max` meshes, each within `cluster range` × scale of the one before, yaw random, scale ± 0.1, its `ground mesh` (else `mesh`); with
+    `number of meshes` n > 1 the bare name less its last character plus an int in [1, n] (`FUN_14092bdc0`: `bone1.mesh`, 6 → `bone1`..`bone6`). Drawn
+    only (a static batch). With a `physics file` (`Beak Thing Egg`): as many real items within `cluster range` of the entry's point, each persisted to
+    the nest. Then the item's own `cluster` list from the last one placed (v0 to v1 clusters within v2; the egg's `Bone Fragment=15,0,0` is 15).
+  - `loot spawn` (VENDOR_LIST): the list for the nest's faction (`FUN_1409592a0`), v0 to v1 items rolled as an item slot's (`FUN_1409540d0`), each at
+    a point within `size radius` snapped to the navmesh, none below height 1; persisted to the nest.
+  - The real items (physics debris, loot) are made only when the zone's `ZoneMapContent::newGameFirstTimeLoaded` (+0xa8, read through
+    `getZoneMapLocation`) is set: a zone with no save file. The meshes and buildings come every load.
+  - Meitou (`NestFurniture`, `PopulationCamps.cs`): all of it when a nest's zone activates, removed when it unloads (NPCs in its cages let out); a
+    `spawn in town centre` town's when it is made, kept (again when its TOWN record changed). Its own rolls keyed by the camp's place; the navmesh query
+    is the walkability at the centre's height within 60. The items are loose ground items, laid once per camp in this world and only in a zone the
+    loaded save has no file of. A nest's cage of a kidnapper's faction is always a candidate, and a standing nest is a town for the fogman worship finder
+    (nest markers skipped). Not modelled: the dedupe of a town's saved pieces (Meitou makes them again, not saving them).
 - **Homeless squads** (area tick `FUN_1408f9240`, every 2 s, per island): the island's load (sum over its loaded sectors of intact +
   0.5 × not-intact squads, [counts](#off-screen-world) above; clamped to [0, 2] for a sector with its own town or the town flag `FUN_1408f62e0` / +0x30) is compared with `FUN_1408f5ca0`, the sum of P × `homeless spawn
   amount` over the loaded zones of the island; while below, one sector is picked by weight max(0, P × amount + 1 − load), halved when its own town stands in it (`FUN_1408f62e0`; only a
