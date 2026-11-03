@@ -3,13 +3,21 @@ using Meitou.Data.Gameplay;
 namespace Meitou.Data.World;
 
 /// <summary>
-/// The town buildings the residents' templates ruin (docs/game/buildings-production.md "Ruined by residents"): the original's squad setup <c>FUN_14057f1f0</c>
-/// destroys a home whose template has <c>building ruined</c> when the building can be (<c>FUN_14055b520</c>). Meitou lays that out once in the level data, before
-/// anything reads a building's <c>destroyed</c>, from the same seed-free assignment the population houses its towns with (<see cref="ResidentHomes.Assign"/>).
+/// What housing the residents does to the town buildings, laid out once in the level data before anything reads it, from the same seed-free assignment the
+/// population houses its towns with (<see cref="ResidentHomes.Assign"/>):
+/// <list type="bullet">
+/// <item>the ruins (docs/game/buildings-production.md "Ruined by residents"): the original's squad setup <c>FUN_14057f1f0</c> destroys a home whose template has
+/// <c>building ruined</c> when the building can be (<c>FUN_14055b520</c>);</item>
+/// <item>the layouts (docs/game/factions-squads-towns.md "Town residents"): the original gives a home its template's <c>layout interior</c> and <c>layout exterior</c>
+/// (<c>FUN_140552140</c>), so a building whose level state names no layout is furnished by its residents.</item>
+/// </list>
 /// </summary>
 public static class ResidentRuins
 {
-    /// <summary>Sets the level-data state's <c>destroyed</c> of each building its residents ruin; returns how many. A second call on the same levels does nothing.</summary>
+    /// <summary>
+    /// Sets the level-data state's <c>destroyed</c> of each building its residents ruin and names its residents' layouts where the state names none; returns how
+    /// many it ruined. A second call on the same levels does nothing.
+    /// </summary>
     public static int Apply(GameDatabase db, WorldLevelData levels, BuildingLayouts layouts)
     {
         lock (levels)
@@ -25,7 +33,10 @@ public static class ResidentRuins
                 var town = TownData.From(record);
                 var faction = town.Faction is { } id && db.Find(id) is { Type: Fcs.FcsRecordType.FACTION } f ? FactionData.From(f) : null;
                 foreach (var (b, t) in ResidentHomes.Assign(db, town, faction, list, player))
+                {
                     if (t.BuildingRuined && Ruin(db, levels, b)) ruined++;
+                    LayOut(db, layouts, b, t);
+                }
             }
             return ruined;
         }
@@ -37,6 +48,24 @@ public static class ResidentRuins
         state.BoolTable["destroyed"] = true;
         levels.ResidentRuined.Add(b.Key);
         return true;
+    }
+
+    /// <summary>
+    /// Names the template's layouts on its standing home where the level state names none and the building offers them. The original names them whatever the state
+    /// said (an empty one clearing the interior), ruins too; Meitou keeps a named layout (engine choice, <see cref="ResidentHomes.Assign"/>) and leaves a ruin bare,
+    /// as it draws no layout for one.
+    /// </summary>
+    static void LayOut(GameDatabase db, BuildingLayouts layouts, TownBuilding b, SquadTemplate t)
+    {
+        if (b.LevelState is not { } state || state.GetBool("destroyed") || db.Find(b.BuildingId) is not { } record) return;
+        Name(layouts, record, state, "interior layout name", t.LayoutInterior, exterior: false);
+        Name(layouts, record, state, "exterior layout name", t.LayoutExterior, exterior: true);
+    }
+
+    static void Name(BuildingLayouts layouts, GameRecord record, GameRecord state, string key, string layout, bool exterior)
+    {
+        if (layout.Length == 0 || state.GetString(key).Length > 0 || layouts.Find(record, layout, exterior) is null) return;
+        state.StringTable[key] = layout;
     }
 
     /// <summary>

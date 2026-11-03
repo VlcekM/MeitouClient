@@ -432,6 +432,12 @@ Meitou: [ground items](../simulation.md#items-and-eating).
   left gets one building per pass, passes repeat while one placed and has more. An entry with no building left makes
   no more squads (Stack: civilians v0 9, 2 made). Then every free building whose interiors take the default resident's
   `layout interior` gets it (`FUN_14092e4b0`).
+- **Layouts** (**Verified**, decompile): housing (`FUN_14092e4b0` → `FUN_140552140`) sets the home's interior layout name to the template's
+  `layout interior` (LayoutInterior vfunc 12 `FUN_14054c420`) and its exterior one to `layout exterior`, replacing the level state's, and reloads the
+  exterior. An interior whose name is empty loads nothing (`Layout::loadLayout` `FUN_1405512a0` needs a name), so a building the level data names no
+  layout for is furnished only by its residents: every placed Ash Dome (Cat-Lon's Exile, Ashland Domes I..IV) and the Ancient Tech Lab at zone 2.46
+  name none, their templates `Throne`, `lab`, `Lab no.2` (**Observed**, merged base data: 302 housed buildings name no interior layout, 121 of their
+  templates name one).
 - **Chooser** (`FUN_14092e870`): a template with `layout interior` needs a building offering it (own layouts or
   `shares interiors with`; gates exempt); without one, an entry naming buildings takes only those. Weight 1, x 0.4 when
   `layout exterior` is not offered, x 10 named in `building`, x 0.05 in `building dislike`; highest wins, first on a tie.
@@ -447,8 +453,8 @@ Meitou: [ground items](../simulation.md#items-and-eating).
   them has the same multiset per town but shuffled across buildings (223 same, 125 moved), so a new game rerolls homes
   (**Observed**). Destroyed buildings stay candidates (the Hub's ruins house squatters).
 - **Meitou engine choices**: buildings are taken in a fixed order (a hash of their keys), not rerolled per game, so the boot can lay out the
-  [ruins the homes make](buildings-production.md#ruined-by-residents); the level data's assignment is kept where it fits the rules (interiors are drawn from it,
-  not relaid to the template's layout); on a tie a building already laid out as the template wants wins; bar squads
+  [ruins the homes make](buildings-production.md#ruined-by-residents) and name the homes' layouts (`ResidentRuins.Apply`); the level data's assignment is kept
+  where it fits the rules, and a layout the level state names is kept, not relaid to the template's (75 homes differ; an empty template layout does not clear one), and a ruin gets none; on a tie a building already laid out as the template wants wins; bar squads
   stand in the town's bars and take the nearest bar as home (their templates, e.g. `Bar thugs`, have designation 0, **Verified** in the data); a loaded town keeps its saved squads, homes and bar squads and rolls no new bar squads.
 
 ### Off-screen world

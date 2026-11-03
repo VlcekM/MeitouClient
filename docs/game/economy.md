@@ -200,8 +200,8 @@ interior object with an inventory of the trader's home (`FUN_140953850`, `FUN_14
 **Meitou** (`Artifacts`, `PopulationSystem.Artifacts.cs`): the lists are made for a new game and an import (`SaveImport.Filter` writes them into the town states), kept per town,
 saved and read back with the keys above, and given out when a town makes its residents. Engine choices: the candidates are all the town's buildings with `interior` parts whose interior layout,
 when the level data names one, places an object, and whose template Meitou housed there ([town residents](factions-squads-towns.md#town-residents)); ties keep the buildings' placement order, the entries' order and the containers' layout order, and the buildings
-draw in placement order; an entry of 0 or fewer units is skipped. A building whose interior layout the level data does not name has no interior in Meitou (the original
-generates one on first load, which is not modelled), so what it is given is lost; what goes to a building in another town's centre zone is placed, but a save made before
+draw in placement order; an entry of 0 or fewer units is skipped. A building whose interior layout neither the level data nor its residents' template names has no
+interior objects ([layouts](factions-squads-towns.md#town-residents)), so what it is given is lost; what goes to a building in another town's centre zone is placed, but a save made before
 that zone is visited writes no file for it, so loses it. Items flagged unique (`ItemInstance.Unique`) do not stack with others; a shop
 fill and `FillHome` keep them, and a building shop takes its containers' items into its stock when it is made and gives its unique items back to them when its squad is
 dropped or made afresh; once nobody of its squad is alive the shop closes and its whole stock goes back into the containers, which a save keeps with the building. Not modelled: the shop fill's container choice and relocking,
