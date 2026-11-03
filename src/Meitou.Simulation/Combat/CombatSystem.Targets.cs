@@ -15,7 +15,7 @@ public sealed partial class CombatSystem
         public int Self, Current;
         public CharacterCold Cold;
         public bool Player, Hold, Prone, Animal;
-        public Vector2 HoldPoint;
+        public Vector3 HoldPoint;
         /// <summary>The AI task's target whose attackers the chooser protects (a bodyguard's), -1: none.</summary>
         public int Protectee;
         public int Best;

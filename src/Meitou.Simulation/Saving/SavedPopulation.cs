@@ -277,7 +277,7 @@ internal static class SavedCharacters
         DialogueSave.Read(sc.GameState, cold);
         if (cold.IsPlayer && sc.GameState is { } orders) Orders.Read(orders, cold);
         // The loader turns the saved toggles back on through setStandingOrder, and Hold's sets the hold point to where the character stands.
-        if ((cold.Orders & CharacterOrders.Hold) != 0) cold.HoldPoint = new System.Numerics.Vector2(hot.Position.X, hot.Position.Z);
+        if ((cold.Orders & CharacterOrders.Hold) != 0) cold.HoldPoint = hot.Position;
         // In a bed or a cage, and the sentence (docs/simulation.md "Cages, beds and locks"); the fixture binds when its town registers.
         HeldSave.Read(sc.GameState, cold, context.Handles, context.InstanceOf);
         if (cold.InSomething == Locks.HeldState.Bed) hot.Task = (byte)CharacterTask.Sleep;   // it lies there until an order (Locks.BedSystem)

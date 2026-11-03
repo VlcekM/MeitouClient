@@ -253,7 +253,7 @@ is not the looker's ally becomes a target only when both tests pass:
   (`Character::isInCombatMode` `FUN_140436610`: the fight task runs, against anyone) and the dot product of its movement direction (+0xd0) with the unit vector from it to the looker is above 0 (`FUN_1409b1960`).
   All distances to the looker are 3D (`Ogre::Vector3::squaredDistance`). **Verified**: the structure and constants `DAT_141682ad0` 2.0, `DAT_1416d4a28` 1600, `DAT_141685048` 80, `DAT_1416efdd8` 140, `DAT_1416bf8d4` 3600, `DAT_141681b38` 0.
   **Observed**: the direction of the subtraction (the decompile drops the second operand of `Vector3::operator-`; looker minus target is read).
-  Meitou `Orders.HoldPost` / `HoldFar`: speed is the horizontal velocity, +0xd0 is read as the yaw, the swing as `CombatSlot.AttackTech >= 0` and the hold point flat (**Observed** stand-ins).
+  Meitou `Orders.HoldPost` / `HoldFar`: speed is the horizontal velocity, +0xd0 is read as the yaw, the swing as `CombatSlot.AttackTech >= 0` and every distance, the hold point included, 3D (squared Vector3 distance, FUN_140598630: **Verified**; the point carries the Y of where Hold was set). Meitou has no goal 21 (aggressive neutrals), so its finder skipping the post test has no counterpart. Other stand-ins are **Observed**.
 - So there is no give-up distance measured from where a fight began: an attack starts inside the AI's area, and a
   chase ends by time and lost senses ([Leaving a fight](combat.md#leaving-a-fight)).
 

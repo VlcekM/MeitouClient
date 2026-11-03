@@ -347,7 +347,7 @@ public sealed class CharacterCold
     /// The point the Hold order holds (CharStats +0x130): where Hold was turned on, then, while on Hold, the destination of the running ground move order (its own or a queued
     /// one; <see cref="OrderMove"/>); null: where it stands (not saved).
     /// </summary>
-    public System.Numerics.Vector2? HoldPoint { get; set; }
+    public System.Numerics.Vector3? HoldPoint { get; set; }
     /// <summary>
     /// The running <see cref="CharacterTask.GoTo"/> is the player's ground move order or a queued one (the original's Task_Move flag <c>+0x95</c>, set for tasks 29 and 40 only):
     /// cleared by any other <see cref="MovementSystem.GoTo"/>. Runtime only.

@@ -406,7 +406,7 @@ public class DecisionTests
         Assert.Equal("14 Idleness", rig.Cold(f).Decision!.Winner);
         Assert.Equal(post, rig.Cold(f).HoldPoint);
         var at = rig.World.Characters.Next[f.Slot].Position;
-        Assert.True(Vector2.Distance(post, new Vector2(at.X, at.Z)) <= Orders.HoldReach, $"{Vector2.Distance(post, new Vector2(at.X, at.Z)):0} from its hold point");
+        Assert.True(Vector2.Distance(new Vector2(post.X, post.Z), new Vector2(at.X, at.Z)) <= Orders.HoldReach, $"{Vector2.Distance(new Vector2(post.X, post.Z), new Vector2(at.X, at.Z)):0} from its hold point");
     }
 
     /// <summary>

@@ -199,7 +199,7 @@ public sealed partial class FirstAidSystem
         if ((medicCold.Orders & CharacterOrders.Hold) != 0 && d2 > HoldLeash2)
         {
             var hold = Orders.HoldPointOf(medicCold, next[medic].Position);
-            if (Vector2.DistanceSquared(hold, new Vector2(next[patient].Position.X, next[patient].Position.Z)) > HoldLeash2) return 0;
+            if (Vector3.DistanceSquared(hold, next[patient].Position) > HoldLeash2) return 0;
         }
         float floor = world.Sight.PlaceOf(medic) is >= 0 and var place && place == world.Sight.PlaceOf(patient) ? SameBuildingNearness : 0;
         return MathF.Max(MathF.Min(1 - d2 / PatientFalloff2, 1), floor);

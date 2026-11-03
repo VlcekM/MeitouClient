@@ -211,7 +211,7 @@ public sealed partial class CombatSystem
                 cold.StaggeredUntil = Math.Max(cold.StaggeredUntil, cold.GettingUpUntil);
             }
             // The get-up's start puts the Hold point where it wakes (FUN_14033ca10).
-            if (Orders.Has(cold, CharacterOrders.Hold)) cold.HoldPoint = new Vector2(prev[i].Position.X, prev[i].Position.Z);
+            if (Orders.Has(cold, CharacterOrders.Hold)) cold.HoldPoint = prev[i].Position;
         }
         // The leg back up (posture 2 to 0, not a waking): the posture setter queues the get-up task 65 (FUN_1405c7e20), which stands the character through the
         // `standing up 3` clip with no bone blend (no ragdoll to leave: FUN_140334a20), holding it like a waker.
@@ -220,7 +220,7 @@ public sealed partial class CombatSystem
         {
             cold.GettingUpUntil = now + (int)MathF.Ceiling(GetUpClipSeconds / dt);
             cold.StaggeredUntil = Math.Max(cold.StaggeredUntil, cold.GettingUpUntil);
-            if (Orders.Has(cold, CharacterOrders.Hold)) cold.HoldPoint = new Vector2(prev[i].Position.X, prev[i].Position.Z);
+            if (Orders.Has(cold, CharacterOrders.Hold)) cold.HoldPoint = prev[i].Position;
         }
         s.Crawl = crawling;
         s.Down = cold.Medical.Incapacitated;

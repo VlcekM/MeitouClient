@@ -88,7 +88,7 @@ public sealed class PursuitSystem(CombatSystem combat) : ITickSystem
         if (Orders.Holding(cold))
         {
             float far = Orders.HoldFar(n.Position, next[t].Position, next[t].Yaw, combat.StateOf(new CharacterId(t, next[t].Generation)).TargetSlot >= 0);
-            holding = Vector2.DistanceSquared(Orders.HoldPointOf(cold, n.Position), new Vector2(next[t].Position.X, next[t].Position.Z)) > far * far;
+            holding = Vector3.DistanceSquared(Orders.HoldPointOf(cold, n.Position), next[t].Position) > far * far;
         }
         // In its footwork with a clear line to the target, the fight steering moves it (docs/game/combat.md "Fight steering"): its state sets the band, no paths.
         if (Steer(world, i, ref n, cold, st, t, holding)) return;

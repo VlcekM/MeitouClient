@@ -314,7 +314,7 @@ public class AggroTests
         var me = a.World.Characters.Spawn(new CharacterHot { Position = new Vector3(o.X, 150, o.Y), Health = 100, MaxSpeed = 60, WalkSpeed = 15 },
             new Combatant { Name = "holder" }.MakeCold(), 0);
         var cold = a.World.Characters.Cold(me.Slot)!;
-        (cold.Faction, cold.IsPlayer, cold.Orders, cold.HoldPoint) = (1, true, CharacterOrders.Hold, o);
+        (cold.Faction, cold.IsPlayer, cold.Orders, cold.HoldPoint) = (1, true, CharacterOrders.Hold, new Vector3(o.X, 150, o.Y));
         var stander = a.SquadOf(0, o, true, (o + new Vector2(0, 50), MathF.PI)).Members[0];
         Docile(a, stander);
         a.World.RunTicks((int)(3 / a.World.TickSeconds));
@@ -356,7 +356,7 @@ public class AggroTests
         var me = holder = a.World.Characters.Spawn(new CharacterHot { Position = new Vector3(o.X, 150, o.Y), Health = 100, MaxSpeed = 60, WalkSpeed = 15 },
             new Combatant { Name = "holder" }.MakeCold(), 0);
         var cold = a.World.Characters.Cold(me.Slot)!;
-        (cold.Faction, cold.IsPlayer, cold.Orders, cold.HoldPoint) = (1, true, CharacterOrders.Hold, o);
+        (cold.Faction, cold.IsPlayer, cold.Orders, cold.HoldPoint) = (1, true, CharacterOrders.Hold, new Vector3(o.X, 150, o.Y));
         a.World.RunTicks(2);
         Assert.True(cold.Running is { Source: TaskSource.Job } job && job.Runs(CharacterTask.Idle), "on a job's task");
         var walker = a.SquadOf(0, o, true, (o + new Vector2(-300, 60), 0f)).Members[0];

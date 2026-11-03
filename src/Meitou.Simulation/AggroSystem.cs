@@ -581,7 +581,7 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
         public Combat.CombatSystem? Fights;
         /// <summary>The looker: one of the player's, on Hold (and its hold point), crawling, an animal.</summary>
         public bool Player, Hold, HoldPost, Prone, Animal;
-        public Vector2 HoldPoint;
+        public Vector3 HoldPoint;
         /// <summary>The looker's spot meters (read only during the look) and the sneakers it sees this look.</summary>
         public List<Spot>? Spots;
         /// <summary>The looker's hearing memory (<see cref="Slot.Heard"/>), written during the look and stored back after it.</summary>

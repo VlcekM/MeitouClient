@@ -179,14 +179,14 @@ public static class Orders
     /// <summary>
     /// The Hold order's post test (<c>AI::isTargetInRangeForHOLDMode_hostiles</c>, docs/game/perception.md "The attack-on-sight tests", <b>Verified</b>): a target slower than 2,
     /// or <paramref name="held"/> (posture above 1, crawling or playing dead, or a swing running: the movement's animation-driven flag), must be within <see cref="HoldReach"/> of
-    /// the looker; one more than <see cref="HoldFar"/> from the hold point within 60. The distances to the looker are 3D; the hold point is flat (the stand-in for CharStats +0x130).
+    /// the looker; one more than <see cref="HoldFar"/> from the hold point within 60. Every distance is 3D (Vector3::squaredDistance, FUN_140598630), the hold point (CharStats +0x130..+0x138) included.
     /// </summary>
-    public static bool HoldPost(Vector3 looker, Vector2 hold, Vector3 target, Vector3 velocity, float targetYaw, bool held, bool targetFighting)
+    public static bool HoldPost(Vector3 looker, Vector3 hold, Vector3 target, Vector3 velocity, float targetYaw, bool held, bool targetFighting)
     {
         float d2 = Vector3.DistanceSquared(target, looker);
         if ((velocity.X * velocity.X + velocity.Z * velocity.Z < 2 * 2 || held) && d2 > HoldReach * HoldReach) return false;
         float far = HoldFar(looker, target, targetYaw, targetFighting);
-        return Vector2.DistanceSquared(hold, new Vector2(target.X, target.Z)) <= far * far || d2 <= 60 * 60;
+        return Vector3.DistanceSquared(hold, target) <= far * far || d2 <= 60 * 60;
     }
 
     /// <summary>
@@ -201,7 +201,7 @@ public static class Orders
     }
 
     /// <summary>The point a holding character holds (<see cref="CharacterCold.HoldPoint"/>, else where it stands).</summary>
-    public static Vector2 HoldPointOf(CharacterCold cold, Vector3 at) => cold.HoldPoint ?? new Vector2(at.X, at.Z);
+    public static Vector3 HoldPointOf(CharacterCold cold, Vector3 at) => cold.HoldPoint ?? at;
 
     /// <summary>The Hold toggle (standing order 12): holding, the character not sneaking (<c>CharStats::holdPositionMode</c>).</summary>
     public static bool Holding(CharacterCold? cold) => cold is not null && (cold.Orders & (CharacterOrders.Hold | CharacterOrders.Sneak)) == CharacterOrders.Hold;
@@ -224,7 +224,7 @@ public static class Orders
                     // Sneak off stands one staying low (setStandingOrder 4).
                     if ((set.Order & CharacterOrders.Sneak) != 0 && !on.Value && cold.Medical is { } low) low.StayingLow = false;
                     // Turning Hold on holds where the character stands (setStandingOrder 12: hold point = position).
-                    if ((set.Order & CharacterOrders.Hold) != 0) cold.HoldPoint = on.Value ? new Vector2(table.Next[slot].Position.X, table.Next[slot].Position.Z) : null;
+                    if ((set.Order & CharacterOrders.Hold) != 0) cold.HoldPoint = on.Value ? table.Next[slot].Position : null;
                 }
                 break;
             case RunSpeedCommand speed:
