@@ -71,7 +71,7 @@ public static class SaveImport
 
         FilterUniques(game, keep, options, data);
         FilterFactions(game, options);
-        FilterTowns(game, playerId, options);
+        FilterTowns(game, playerId, options, data);
         AddArtifacts(game, data);
         FilterZones(game, playerId, options);
 
@@ -183,7 +183,7 @@ public static class SaveImport
     /// The towns (<c>FUN_1403722d0</c>, <c>FUN_140372560</c>): nests go. With "Buildings" the non-nest towns of the player faction that were discovered stay whole (the outposts the player made are in
     /// the town instance list); every other town keeps what the player knew of it. "Dead NPCs" also keeps the town that replaces a destroyed one.
     /// </summary>
-    static void FilterTowns(SaveGame game, string playerId, ImportOptions options)
+    static void FilterTowns(SaveGame game, string playerId, ImportOptions options, PopulationData data)
     {
         var records = game.Quick.Records;
         var dropped = new List<FcsRecord>();
@@ -212,6 +212,7 @@ public static class SaveImport
             r.Filenames.Clear();
             r.Instances.Clear();
         }
+        dropped.AddRange(TooCloseTowns(game, playerId, dropped, data));
         records.RemoveAll(r => dropped.Contains(r));
         if (game.TownInstanceList is { } list)
         {
@@ -219,6 +220,29 @@ public static class SaveImport
             list.Instances.RemoveAll(i => i.States.Count > 0 && gone.Contains(i.States[0]));
         }
     }
+
+    /// <summary>
+    /// "Town too close. Removing" (<c>FUN_14092ae80</c>, <b>Verified</b>): in list order, a town of the player's whose centre lies inside the radius of the nearest other player town that is not a nest marker
+    /// is removed, and is no longer a neighbour for the towns after it, so of two overlapping towns the earlier one goes.
+    /// </summary>
+    static List<FcsRecord> TooCloseTowns(SaveGame game, string playerId, List<FcsRecord> dropped, PopulationData data)
+    {
+        var sites = data.Sites.Where(s => s.InstanceId.Length > 0).GroupBy(s => s.InstanceId).ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
+        var mine = game.Towns.Where(t => !t.IsNest && t.FactionId == playerId && !dropped.Contains(t.Record) && sites.ContainsKey(t.Instance)).Select(t => (t.Record, Site: sites[t.Instance])).ToList();
+        var removed = new List<FcsRecord>();
+        foreach (var (record, site) in mine.ToList())
+        {
+            var near = mine.Where(o => o.Record != record).OrderBy(o => Vector2.DistanceSquared(Flat(o.Site.Position), Flat(site.Position))).Cast<(FcsRecord Record, TownSite Site)?>().FirstOrDefault();
+            if (near is not { } other) continue;
+            float radius = other.Site.Town.Radius;
+            if (Vector2.DistanceSquared(Flat(other.Site.Position), Flat(site.Position)) >= radius * radius) continue;
+            removed.Add(record);
+            mine.RemoveAll(m => m.Record == record);
+        }
+        return removed;
+    }
+
+    static Vector2 Flat(Vector3 v) => new(v.X, v.Z);
 
     /// <summary>
     /// The towns get their artifacts as in a new game (docs/game/economy.md "Artifacts"): a town of the player's kept whole adds them to its saved list, the others had theirs cut.
