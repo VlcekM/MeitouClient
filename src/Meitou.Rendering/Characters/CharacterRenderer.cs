@@ -590,7 +590,8 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
 
             float scale = inst.Scale > 0 ? inst.Scale : 1;
             var centre = inst.Position + new Vector3(0, asset.Height * 0.5f * scale, 0);
-            bool far = inst.Hidden || Vector3.Distance(eye, centre) - asset.Radius * scale > reach * inst.DrawDistanceScale;
+            bool far = inst.Hidden || Vector3.Distance(eye, centre) - asset.Radius * scale > reach * inst.DrawDistanceScale
+                || inst.DrawDistanceScale <= 1 && Vector3.DistanceSquared(eye, inst.Position) > reach * reach;   // FUN_1405c9f60: the position's distance, skipped for a gigantic race
             if (far && !portraitKeys.Contains(inst.Key))
             {
                 if (!inst.Hidden && Kept.Count > 0 && NearKept(centre) is var dk && dk <= KeptReach) keptLooks.Add((asset, dk));
