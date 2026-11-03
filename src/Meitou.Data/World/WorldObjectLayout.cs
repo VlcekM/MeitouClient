@@ -316,7 +316,7 @@ public static class WorldObjectLayout
         {
             // A part of an upper floor with no destroyed mesh keeps its mesh as collision only (FUN_14055f6e0 mode 2: render skipped, collision made); children hang from the building.
             a.Result.Add(new PlacedMesh(mesh, node, part, a.Building, a.Identity, PlacedKind.BuildingPart)
-                { Floor = Math.Clamp(part.GetInt("building floor"), 0, 3), Interior = a.Interior, DoorIndex = a.DoorIndex, RenderHidden = true });
+                { Material = PartMaterial(a, part), Floor = Math.Clamp(part.GetInt("building floor"), 0, 3), Interior = a.Interior, DoorIndex = a.DoorIndex, RenderHidden = true });
             return null;
         }
         // A part that turns by itself is a joint too: it and everything hanging from it turn about its node's axis.
