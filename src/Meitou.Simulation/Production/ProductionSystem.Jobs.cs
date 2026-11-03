@@ -546,7 +546,7 @@ public sealed partial class ProductionSystem
             End(world, slot);
             return;
         }
-        if (!AtSite(n, atSite, there)) return;
+        if (!AtSite(world, n, atSite, there)) return;
         if (at != storeId)
         {
             if (there.Output is { Count: > 0 } output && items.Create(output.Recipe.Item, output.Count) is { } made && store.Data.Accepts(made.Record, made.Type))

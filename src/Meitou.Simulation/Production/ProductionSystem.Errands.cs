@@ -177,7 +177,7 @@ public sealed partial class ProductionSystem
             e.Site = site.Id;
             goal = GoalOf(world, site, machine);
         }
-        bool arrived = site is not null ? AtSite(n, site, machine!) : Vector2.Distance(new Vector2(n.Position.X, n.Position.Z), goal) <= ErrandArrive;
+        bool arrived = site is not null ? AtSite(world, n, site, machine!) : Vector2.Distance(new Vector2(n.Position.X, n.Position.Z), goal) <= ErrandArrive;
         if (arrived)
         {
             if (e.Kind == ErrandKind.Corpse) Incinerate(world, i, cold, site!, machine!);
@@ -214,7 +214,7 @@ public sealed partial class ProductionSystem
     /// <summary>The walk to the machine ended: if the carrier is not at it, the path failed and the carrier skips that machine for <see cref="ConstructionSystem.UnreachableSeconds"/> in the shared ignore map, <see cref="CharacterCold.Unreachable"/> (<c>FUN_1405b0290</c> in <c>FUN_1408d0770</c>).</summary>
     void NoteWalkEnd(World world, CharacterCold cold, in CharacterHot n, Errand e)
     {
-        if (e.Site is not { } siteId || Site(world, siteId) is not { } site || world.Machines.Find(siteId) is not { } machine || AtSite(n, site, machine)) return;
+        if (e.Site is not { } siteId || Site(world, siteId) is not { } site || world.Machines.Find(siteId) is not { } machine || AtSite(world, n, site, machine)) return;
         cold.NoteUnreachable(siteId, world.Tick + (long)MathF.Ceiling(ConstructionSystem.UnreachableSeconds / world.TickSeconds));
     }
 

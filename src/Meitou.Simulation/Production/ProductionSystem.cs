@@ -414,7 +414,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         return MathF.Sqrt(dx * dx + dz * dz);
     }
 
-    bool AtSite(in CharacterHot n, BuildSite site, Machine m)
+    bool AtSite(World world, in CharacterHot n, BuildSite site, Machine m)
     {
         // A turret's gunner stands at its spot (once its walk has found it).
         if (turretSpots.TryGetValue(site.Id, out var spot))
@@ -426,7 +426,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         if (naturalBounds.TryGetValue(site.Id, out var rock))
             return rock.Touches(n.Position) || SiteReach.Within(n, Vector2.Distance(new Vector2(n.Position.X, n.Position.Z), rock.Flat), m.Data.UseRange);
         // The machine's use range (UseableStuff::getReachRange).
-        return SiteReach.Within(n, GapTo(site, n.Position), m.Data.UseRange);
+        return SiteReach.Within(n, GapTo(site, n.Position), m.Data.UseRange) && SiteReach.AtHeight(n, site, world.Fixtures.DoorsByBuilding[site.Id].Any());
     }
 
     /// <summary>
@@ -513,7 +513,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         cold.Operating = false;
         cold.HaulTo = null;
         var goal = GoalOf(world, site, m);
-        if (!AtSite(n, site, m)) WalkToSite(ref n, cold, site, goal);
+        if (!AtSite(world, n, site, m)) WalkToSite(ref n, cold, site, goal);
         sweep = true;
     }
 
@@ -588,7 +588,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
     {
         const ushort Path = (ushort)MoveFlags.AnyPath;
         if (m.Data.Function == Meitou.Data.World.ObjectRanges.TurretFunction && !turretSpots.ContainsKey(site.Id)) GoalOf(world, site, m);
-        if (AtSite(n, site, m))
+        if (AtSite(world, n, site, m))
         {
             if ((n.Flags & Path) != 0)
             {
@@ -693,10 +693,10 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
             cold.Operating = false;
             if (Hauling(world, cold) is { } haul)
             {
-                if (AtSite(n, haul.Site, haul.Machine)) HaulAt(world, cold, m, haul.Machine);
+                if (AtSite(world, n, haul.Site, haul.Machine)) HaulAt(world, cold, m, haul.Machine);
                 continue;
             }
-            if (!AtSite(n, site, m)) continue;
+            if (!AtSite(world, n, site, m)) continue;
             // A rock (an "is foliage" building) becomes the operator's faction's once a player character works it, and joins a player town whose area holds it (Task_OperateMachine
             // slot 1, FUN_14035b430; the town by its radius here).
             if (cold.Faction == world.Player.Faction && site.Owner != cold.Faction && IsNatural(site.Id))
