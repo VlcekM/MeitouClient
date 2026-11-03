@@ -182,7 +182,7 @@ public sealed partial class FixtureRegistry
             list.Add(new Fixture
             {
                 Id = $"{b.Key}@bed{bed.ToString(CultureInfo.InvariantCulture)}", Building = b.Key, Kind = FixtureKind.Bed, Site = site, Owner = owner,
-                Position = spot.Position, Yaw = spot.Yaw, UseRange = 15, RecordId = spot.Record ?? "", Indoors = true,
+                Position = spot.Position, Yaw = spot.Yaw, Marker = spot.Marker, UseRange = 15, RecordId = spot.Record ?? "", Indoors = true,
                 Bed = spot.Record is { } bedRecord && db.Find(bedRecord) is { } bedItem ? BedDataOf(db, bedItem) ?? default : default,
             });
             bed++;
@@ -261,6 +261,7 @@ public sealed partial class FixtureRegistry
             list.Add(new Fixture
             {
                 Id = site.Id + "@bed0", Building = site.Id, Kind = FixtureKind.Bed, Site = -1, Owner = site.Owner, Position = site.Position, Yaw = yaw,
+                Marker = Meitou.Data.World.WorldObjectLayout.PositionMarker(data.Db, record, site.Position, site.Rotation),
                 UseRange = 15, RecordId = record.StringId, HostRecordId = record.StringId, Bed = b,
             });
         byBuilding[site.Id] = list;
@@ -319,7 +320,7 @@ public sealed partial class FixtureRegistry
         return null;
     }
 
-    /// <summary>A BUILDING's NODE_USE instances (<see cref="UseNode"/>) in instance id order; null with none (a bed with fewer than 2 is lain in at its own origin).</summary>
+    /// <summary>A BUILDING's NODE_USE instances (<see cref="UseNode"/>) in instance id order; null with none (a bed with fewer than 2 is lain in at its position marker, <see cref="Fixture.Marker"/>).</summary>
     static UseNode[]? UseNodes(GameDatabase db, GameRecord building)
     {
         UseNode[] nodes = [.. building.Instances.Values.Where(i => !i.IsCleared && db.Find(i.Target) is { } n && n.GetBool("is node") && n.GetInt("node type") == UseNodeType)
@@ -331,10 +332,10 @@ public sealed partial class FixtureRegistry
 
     /// <summary>
     /// Where a sleeper is put in a bed and the way it faces (<c>Building::getPositionMarker</c> / <c>getDirectionMarkerQuat</c>, docs/game/locks.md "Beds"): the bed's use node
-    /// nearest <paramref name="from"/>, else the bed's own origin and facing.
+    /// nearest <paramref name="from"/>, else the bed's position marker (its origin without a flagged part) and facing.
     /// </summary>
     public static (Vector3 At, float Yaw) LieSpot(Fixture bed, Vector3 from, double now = 0) =>
-        Nearest(bed, bed.Bed.Nodes, from, bed.BadNodes is { Count: > 0 } ? i => IsBad(bed, i, now) : null) ?? (bed.Position, bed.Yaw);
+        Nearest(bed, bed.Bed.Nodes, from, bed.BadNodes is { Count: > 0 } ? i => IsBad(bed, i, now) : null) ?? (bed.Marker ?? bed.Position, bed.Yaw);
 
     /// <summary>How long a use node a failed walk marked stays skipped: 0.5 on the original's world clock (<c>DAT_1421303d0 + 0xa0</c>, game hours, <b>Observed</b>: the 5-minute rule of Task_TakeIntruderOutside reads its differences x 60).</summary>
     public const double BadNodeHours = 0.5;

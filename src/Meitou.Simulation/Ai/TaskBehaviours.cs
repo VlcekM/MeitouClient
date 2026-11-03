@@ -139,7 +139,8 @@ public static class TaskBehaviours
         [TaskType.INVESTIGATE_ALARMS] = (AiBehaviour.Investigate, "Investigating"),
         [TaskType.INVESTIGATE_ALARMS_ALLIES_ONLY] = (AiBehaviour.Investigate, "Investigating"),
         [TaskType.DEFEAT_SQUAD] = (AiBehaviour.Assault, "Assault"),
-        // 248 Attacking Squad: the same finder as 101 (FUN_140793eb0, stub LAB_140006d25), the same flags and effect; no base package lists it, a mod can.        [TaskType.DEFEAT_SQUAD_LIMIT_CHASE_RANGE] = (AiBehaviour.Assault, "Attacking squad"),
+        // 248 Attacking Squad: the same finder as 101 (FUN_140793eb0, stub LAB_140006d25), the same flags and effect; no base package lists it, a mod can.
+        [TaskType.DEFEAT_SQUAD_LIMIT_CHASE_RANGE] = (AiBehaviour.Assault, "Attacking squad"),
         [TaskType.FIND_AND_RESCUE_LEADER] = (AiBehaviour.RescueLeader, "Rescuing leader"),
         [TaskType.SELF_PRESERVATION] = (AiBehaviour.SelfPreserve, "Self preservation"),
         [TaskType.RUN_AWAY] = (AiBehaviour.Flee, "Running away"),

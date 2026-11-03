@@ -205,12 +205,22 @@ public static class WorldObjectLayout
         public bool Interior;
         /// <summary>Laying out door i of the parent's <c>doors</c> list; -1 for the building itself.</summary>
         public int DoorIndex = -1;
+        /// <summary>The last position-marker part's marker (<see cref="PositionMarker"/>).</summary>
+        public Vector3? Marker;
     }
 
-    static void AddBuilding(GameDatabase db, GameRecord building, string placementId, Vector3 position, Quaternion rotation, BuildingState state,
+    /// <summary>
+    /// The building's position marker (<c>getPositionMarker</c> of a building with fewer than two use nodes, FUN_14054b850; <b>Verified</b>, FUN_14055f6e0:376-425): a part with a mesh
+    /// flagged <c>is for position marker</c> sets it to the building's position plus its orientation applied to the part's offset times the building's scale (the mesh itself is not
+    /// offset); the last such part wins. Null when the placement spawns none (the marker is then the building's position).
+    /// </summary>
+    public static Vector3? PositionMarker(GameDatabase db, GameRecord building, Vector3 worldPosition, Quaternion rotation) =>
+        AddBuilding(db, building, building.StringId, worldPosition, rotation, new BuildingState(), [], null, null)?.Marker;
+
+    static Assembly? AddBuilding(GameDatabase db, GameRecord building, string placementId, Vector3 position, Quaternion rotation, BuildingState state,
         List<PlacedMesh> result, List<PlacedLight>? lights, List<PlacedEffect>? effects, int doorIndex = -1, float? parentScale = null)
     {
-        if (building.GetBool("is node")) return;
+        if (building.GetBool("is node")) return null;
         float scale = parentScale ?? building.GetFloat("scale", 1);
         var a = new Assembly(db, building, placementId, state, result, lights, effects)
         {
@@ -232,6 +242,7 @@ public static class WorldObjectLayout
             a.Interior = true;
             AddParts(a, building, a.Node, 0, "interior");
         }
+        return a;
     }
 
     /// <summary>One level of the game's part creation: choose from <paramref name="holder"/>'s parts, create each, recurse, then the holder's instances.</summary>
@@ -271,6 +282,8 @@ public static class WorldObjectLayout
             ? Vector3.Zero
             : new Vector3(part.GetFloat("offset X"), part.GetFloat("offset Y"), part.GetFloat("offset Z")) * a.Scale;
         var local = Matrix4x4.CreateScale(a.Scale);
+        if (part.GetBool("is for position marker"))
+            a.Marker = Vector3.Transform(new Vector3(part.GetFloat("offset X"), part.GetFloat("offset Y"), part.GetFloat("offset Z")) * a.Scale, a.Node);
 
         // Rotating parts (no collision file, a rotation function on the part or its holder; RotatingEnt's constructor) roll a speed variation (unless
         // ROTATION_WIND_SPEED) and a start angle about their axis. The viewer leaves turret parts (ROTATION_TARGET) unrotated.

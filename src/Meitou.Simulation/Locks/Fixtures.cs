@@ -125,6 +125,8 @@ public sealed class Fixture
     /// <summary>Where an occupant is held, and which way it faces (the item's origin: the cage's attach node is not read, an engine choice).</summary>
     public Vector3 Position { get; init; }
     public float Yaw { get; init; }
+    /// <summary>The building's position marker (<see cref="Meitou.Data.World.WorldObjectLayout.PositionMarker"/>) where it differs from <see cref="Position"/>: what <c>getPositionMarker</c> gives when the building has fewer than two use nodes.</summary>
+    public Vector3? Marker { get; init; }
     /// <summary>Null for beds, and for a container with no <c>has lock</c>.</summary>
     public LockState? Lock { get; init; }
     /// <summary>A container's own inventory (<c>has inventory</c>; docs/game/locks.md "Containers"): null for the rest. Starts empty (what the original puts in is <b>Unknown</b>).</summary>

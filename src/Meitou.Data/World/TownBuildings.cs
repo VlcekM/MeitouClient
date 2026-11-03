@@ -45,6 +45,8 @@ public readonly record struct HomeSpot(HomeSpotKind Kind, Vector3 Position, floa
     public float HungerRate { get; init; } = 1;
     /// <summary>The BUILDING string id of a bed, seat or training dummy; null for other spots. A bed's output rate controls healing (docs/game/character-stats.md "Beds").</summary>
     public string? Record { get; init; }
+    /// <summary>A bed's position marker (<see cref="WorldObjectLayout.PositionMarker"/>) when its record flags a part for it; null: the bed's own position.</summary>
+    public Vector3? Marker { get; init; }
     /// <summary>A node a goal may stand at: neither a bed, a seat nor a dummy.</summary>
     public bool IsNode => Kind is not (HomeSpotKind.Bed or HomeSpotKind.Chair or HomeSpotKind.ThroneSeat or HomeSpotKind.Training or HomeSpotKind.Workstation or HomeSpotKind.Other);
 }
@@ -329,6 +331,7 @@ public static class TownBuildings
             {
                 NodeType = node ? item.Building.GetInt("node type") : -1,
                 Record = k == HomeSpotKind.Bed ? item.Building.StringId : null,
+                Marker = k == HomeSpotKind.Bed ? WorldObjectLayout.PositionMarker(db, item.Building, at, rotation) : null,
             });
             else if (function?.GetInt("function") == ChairFunction)
             {
