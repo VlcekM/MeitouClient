@@ -77,7 +77,7 @@ sealed partial class GameHost
     {
         var current = new Dictionary<string, BuildingSnapshot>(StringComparer.Ordinal);
         foreach (var site in snapshot.Buildings)
-            if (site.LevelPlacement is not { } level || site.Destroyed != LevelDestroyed(level)) current[site.Id] = site;   // a level ruin left a ruin needs no overlay
+            if (site.LevelPlacement is not { } level || !site.Destroyed || !LevelDestroyed(level)) current[site.Id] = site;   // a ruin the level already draws as one needs no overlay
         foreach (var site in snapshot.NestBuildings) current[site.Id] = site;   // the loaded nests' buildings, complete
         foreach (string id in shownBuildings.Keys.Where(id => !current.ContainsKey(id)).ToArray())
         {

@@ -974,7 +974,8 @@ A [town override](factions-squads-towns.md#town-overrides) reads its zone back f
 ruin, any other as its level file has it (a resident ruin of the old town stands again). A loaded save applies them again from its replacements; the building states
 it writes carry them. The host replaces those buildings' level placements (drawing, navmesh, lamps); doors, locks and indoor sight follow. **Observed** (data):
 95 overrides change ruins, e.g. Stoat (override) half destroyed 8, Catun (override) fishman takeover 14; Free Settlement to The Free City stands 7 up again.
-Not modelled: homes of the replacement outside the town's zone (the original keeps their state but ruins a ruined template's home).
+Not modelled: homes of the replacement outside the town's zone (the original keeps their state but ruins a ruined template's home); the world's building effects
+(fires, smoke), laid out once at boot, do not follow an override's ruins.
 
 ## Unknowns
 
