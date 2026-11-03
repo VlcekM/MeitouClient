@@ -147,7 +147,9 @@ at the asker" (the ask's refusal) is 0 < v < 1, so the asker may swing once the 
 list (attackers that asked it, i.e. that target it) and its declaration list (an attacker pushes itself on its own target's list every tick of a swing, `FUN_14060bcf0`), keeping those with 0 < v < 1 that have it in
 their hit candidates or target it. So a defender reacts only to attackers that target it (a blow from one that targets someone else is met only with a defence already playing), and to the
 one whose blow is most advanced (largest v). **One technique at a time** (+0x150): the outcome (`FUN_140665fa0`) compares the current block's direction with the blow's, whoever swings, and needs the clip past 0.5, so
-one block covers every later blow of its direction while it plays; the defence update re-picks (`FUN_140609290`) when the most advanced incoming swing changes, its blow index changes or the 1 s timer
+one block covers every later blow of its direction while it plays. The blow's side is worked out **at the impact** (`FUN_140436520`): the swing's own direction, turned to the rear one (1 -> 7, 2/3 -> 9)
+when the front/rear test `FUN_140435600` (the attacker's current position against the defender's and a heading vector it holds now, +0x640 -> +0xd0) says behind; nothing is stored at the pick. So a
+defender that turns between the pick and the blow is judged on the new side (Meitou matches: `Apply` reads `HitOutcomes.Facing`/`Behind` again); the defence update re-picks (`FUN_140609290`) when the most advanced incoming swing changes, its blow index changes or the 1 s timer
 (+0x274) runs out, only for a non-dodge technique whose direction differs from the new blow's; a failed new start ends the defence (state 4, no defence for 1.2 s). Dodges are never re-picked. There is no
 limit on blocks other than this: a fighter blocks one blow at a time, its swing or wait excluding it. Meitou: `CombatSystem.SwingProgress` (before this the clip's own progress was used, so
 a swing was never cut short for a blow before its impact: a skilled fighter alone against four blocked 17 % of the blows at it in a sandbox battle, 34 % with it), `React(reconsider: true)`.
