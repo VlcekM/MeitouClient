@@ -510,6 +510,14 @@ Meitou: [ground items](../simulation.md#items-and-eating).
   **Observed**) and never spawns again. New nests come only from the area tick, up to `num nests` per biome group; whether a dead nest
   frees its count is **Unknown**. A group with `nests at fixed markers only` picks among its NEST_MARKER towns, leaving out every marker whose
   nearest town (by XZ, markers skipped) is within 2500 (3D) (**Verified**, `FUN_1408f6350`, 6,250,000 squared).
+- **Nest furniture** (**Verified** by code unless marked): when an area loads (`FUN_1409fdbd0` → `FUN_1408f5e70`), each of its nests runs `Nest` slot 64
+  (`FUN_1409278a0`), which queues its TOWN record at its position, owner none; the queue (`FUN_140928410`, "delayedSpawningChecks") runs `TownBase` slot 113
+  (`FUN_140938440`) once the zone is loaded. That seeds `srand` from the nest's X/Z and places: `debris` (ITEM / NEST_ITEM, `FUN_140937510`, within
+  `size radius`); `debris building` × `num centrepoints` centre points (`FUN_140927600`), each entry's count from v0 (0: a coin flip for one; > 1: ±a
+  fraction, `FUN_1409b3b40`) placed by `FUN_140930120` (v1 / v2 read as min / max distance: **Observed**); `loot spawn` ITEM lists. Nest buildings are not
+  saved ([save](../formats/save.md)), so they come back from the seed each load (**Observed**). The fog nests' Prisoner Poles come from here (`Fog Deathyard`
+  6, `ruin- fogman resident` 4, `Cannibals` 5; `Nest of Beak Things` has `Beak Thing Egg` debris). Meitou: **not built** (issue 132), so nest squads
+  that kidnap find no cage.
 - **Homeless squads** (area tick `FUN_1408f9240`, every 2 s, per island): the island's load (sum over its loaded sectors of intact +
   0.5 × not-intact squads, [counts](#off-screen-world) above; clamped to [0, 2] for a sector with its own town or the town flag `FUN_1408f62e0` / +0x30) is compared with `FUN_1408f5ca0`, the sum of P × `homeless spawn
   amount` over the loaded zones of the island; while below, one sector is picked by weight max(0, P × amount + 1 − load), halved when its own town stands in it (`FUN_1408f62e0`; only a
