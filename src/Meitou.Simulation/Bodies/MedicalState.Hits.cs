@@ -231,7 +231,7 @@ public sealed partial class MedicalState
     float KoBlood(in MedicalContext ctx, float factor)
     {
         var c = ctx.Constants;
-        float t = Math.Clamp(ctx.Toughness / 100, 0, 1);
+        float t = ctx.Toughness / 100;
         float k = c.KnockoutMult1 + (c.KnockoutMult99 - c.KnockoutMult1) * t;
         float missingBlood = MathF.Abs(Capacity(ctx) - Blood) * k * 0.5f;
         return MathF.Max(3, (2 * c.KnockoutTimeBase + missingBlood) * factor * 4);

@@ -23,10 +23,8 @@ public readonly struct MedicalContext(GameConstants constants, BodyOptions optio
     public BodyOptions Options { get; } = options;
     public RaceData Race { get; } = race;
 
-    /// <summary>The toughness stat (not scaled; the KO point scales it by <see cref="StatsScale"/>).</summary>
+    /// <summary>The toughness stat times the stats multiplier (CharStats <c>+0x90</c> x <c>+0x34</c>: 1 for people, the age for animals), as every toughness read of the medical code (<c>FUN_140643ae0</c>, <c>FUN_1406447d0</c>, <c>FUN_140644980</c>, <c>FUN_140652000</c>, <c>FUN_140657620</c>).</summary>
     public float Toughness { get; init; } = 1;
-    /// <summary>The stats multiplier (CharStats <c>+0x34</c>: 1 for people, the age for animals) the KO point scales the toughness by (<see cref="MedicalState.KoPoint"/>).</summary>
-    public float StatsScale { get; init; } = 1;
 
     /// <summary>The strength stat, for the blood capacity.</summary>
     public float Strength { get; init; } = 50;

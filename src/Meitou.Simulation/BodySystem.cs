@@ -185,8 +185,7 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
             var ctx = new MedicalContext(Constants, Options, race)
             {
                 EncumbranceFactor = encumbrance,
-                Toughness = stats.Toughness,
-                StatsScale = stats.Scale,
+                Toughness = stats.Toughness * stats.Scale,
                 Strength = stats.Strength,
                 Seed = world.Seed,
                 CharacterKey = Rng.Key(table.IdOf(i)),
