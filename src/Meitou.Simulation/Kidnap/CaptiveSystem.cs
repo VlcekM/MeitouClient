@@ -664,7 +664,7 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
                 // A slave of an allied owner that still looks one is left alone, as is any of an owner who is no ally; the rest are processed (FUN_1408ca3d0).
                 if (!NeedsProcessing(cold, c)) continue;
             }
-            else if (c.Enslaved || c.Medical is { Incapacitated: true }) continue;
+            else if (c.SlaveState != 0 || c.Medical is { Incapacitated: true }) continue;
             return f;
         }
         return null;
@@ -681,7 +681,7 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
         world.Grid.Query(p.X, p.Z, AggroSystem.RangeOf(me, AggroSystem.OutdoorSight), ref scan, static (int v, ref FreeScan st) =>
         {
             var table = st.World.Characters;
-            if (v == st.Self || !table.Next[v].Alive || table.Cold(v) is not { SlaveState: 1 or 2, Medical: { Dead: false }, Race: not null } c || !c.CarriedBy.IsNone || c.InSomething != HeldState.None
+            if (v == st.Self || !table.Next[v].Alive || table.Cold(v) is not { SlaveState: not 0, Medical: { Dead: false }, Race: not null } c || !c.CarriedBy.IsNone || c.InSomething != HeldState.None
                 || c.Fighter is { IsAnimal: true } || c.Appearance?.Animal is not null) return;
             var id = table.IdOf(v);
             if (st.System.Busy(id) || st.System.Waiting(st.System.givenUp, id, st.World.GameHours) || !st.System.NeedsProcessing(st.Me, c)) return;
@@ -859,7 +859,7 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
     bool StepProcessLoose(World world, CaptiveJob j, int w, CharacterCold wc)
     {
         var table = world.Characters;
-        if (!table.TryResolveNext(j.Captive, out int c) || table.Cold(c) is not { Medical: { Dead: false }, SlaveState: 1 or 2 } cc || !cc.CarriedBy.IsNone || cc.InSomething != HeldState.None)
+        if (!table.TryResolveNext(j.Captive, out int c) || table.Cold(c) is not { Medical: { Dead: false }, SlaveState: not 0 } cc || !cc.CarriedBy.IsNone || cc.InSomething != HeldState.None)
             return End(world, j, CaptiveEventKind.GaveUp);
         ref var n = ref table.Next[w];
         var to = new Vector2(table.Next[c].Position.X, table.Next[c].Position.Z);
@@ -1100,7 +1100,7 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
     void Process(World world, int w, CharacterCold wc, int c, CharacterCold cc)
     {
         var table = world.Characters;
-        bool before = cc.SlaveOwner >= 0 || cc.Enslaved;
+        bool before = cc.SlaveOwner >= 0 || cc.SlaveState != 0;
         if (cc.Inventory is { } inv)
         {
             foreach (var type in Stripped)

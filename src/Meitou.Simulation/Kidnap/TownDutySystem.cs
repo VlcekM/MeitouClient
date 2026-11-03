@@ -771,7 +771,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
         // The squad's mission town (the hand Task_TravelToTargetTown sets, FUN_1405a0f10) set and not the town it stands in: 0.
         if (world.Squads.Find(c.SquadId)?.Ai is { Destination.IsNone: false } board && board.Destination != here) return 0;
         if (b.Fighter is { IsAnimal: true }) return 0;
-        if (b.Enslaved && (b.Bounties?.BookedAmount(data.Relations, c.Faction) ?? 0) < 1 && world.SystemOf<Crime.CrimeSystem>()?.IsPoliceLike(world, c) == true) return PoliceSlaveDesire;
+        if (b.SlaveState != 0 && (b.Bounties?.BookedAmount(data.Relations, c.Faction) ?? 0) < 1 && world.SystemOf<Crime.CrimeSystem>()?.IsPoliceLike(world, c) == true) return PoliceSlaveDesire;
         if (carry.Friendly(c, b)) return 0;
         return b.Medical is { Dead: true } ? DeadDesire : AliveDesire;
     }

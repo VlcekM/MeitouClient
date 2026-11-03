@@ -855,7 +855,7 @@ public sealed partial class FixtureRegistry
         bounty > LifeBounty ? LifeSentence : (float)Math.Truncate(bounty * 0.02 * prisonTime);
 
     /// <summary>The sentence is served (start + length not after <paramref name="nowHours"/>; one without a sentence always is).</summary>
-    public static bool SentenceServed(CharacterCold c, double nowHours) => !c.Kidnapped && !c.Enslaved && (c.SentenceLength <= 0 || c.SentenceStart + c.SentenceLength <= nowHours);
+    public static bool SentenceServed(CharacterCold c, double nowHours) => !c.Kidnapped && c.SlaveState == 0 && (c.SentenceLength <= 0 || c.SentenceStart + c.SentenceLength <= nowHours);
 
     /// <summary>
     /// Puts a character in a free cage (the original's enter, locks.md "Cages and beds"): imprisoned state, held at the cage's position and facing, orders and path dropped, the cage
@@ -1007,7 +1007,7 @@ public sealed partial class FixtureRegistry
         if (leaves && !(cage is not null && crimes?.Factions.NotReal(cage.Owner) == true)) c.Escaped = false;
         // The release leaves slavery as it is (FUN_1403570a0 never sets the slave state; bail and buy-free clear it themselves, Verified); a releaser that is not the player's
         // takes a slave over (FUN_14032e430: the owner changes, the state stays).
-        if (releaserFaction >= 0 && releaserFaction != world.Player.Faction && c.Enslaved) c.SlaveOwner = releaserFaction;
+        if (releaserFaction >= 0 && releaserFaction != world.Player.Faction && c.SlaveState != 0) c.SlaveOwner = releaserFaction;
         if (c.IsPlayer) world.Post(Loc.Tr("{1} has been released from prison.", c.Name));
         return true;
     }
@@ -1127,7 +1127,7 @@ public sealed partial class FixtureRegistry
     public static void FreeSlave(World world, int slot, CharacterCold c)
     {
         var shackles = LockSystem.WornShackles(c);
-        if (shackles is null && !c.Enslaved) return;
+        if (shackles is null && c.SlaveState == 0) return;
         world.Bark(world.Characters.IdOf(slot), Loc.Tr("Free!"));
         world.EmitSound(SoundKind.Unlocked, slot, world.Characters.Next[slot].Position);
         SetSlave(world, c, 0, -1);
@@ -1142,7 +1142,7 @@ public sealed partial class FixtureRegistry
     static void SetSlave(World world, CharacterCold c, byte state, int owner)
     {
         byte before = c.SlaveState;
-        if (!c.Enslaved && state == 1 && (c.IsPlayer || world.Player.Faction >= 0 && c.Faction == world.Player.Faction)) world.Post(Loc.Tr("{1} has been enslaved", c.Name));
+        if (c.SlaveState == 0 && state == 1 && (c.IsPlayer || world.Player.Faction >= 0 && c.Faction == world.Player.Faction)) world.Post(Loc.Tr("{1} has been enslaved", c.Name));
         if (state == 2) c.RecentlyWanted = Crime.CrimeSystem.RecentlyWantedSeconds;
         if (state > 1 && before != state) c.SlaveSince = world.GameHours;
         c.SlaveState = state;

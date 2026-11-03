@@ -259,7 +259,7 @@ public sealed partial class DialogueSystem
         var at = table.Next[s].Position;
         for (int i = 0; i < table.HighWater; i++)
         {
-            if (!table.Next[i].Alive || table.Cold(i) is not { Medical.Dead: false } c || c.Faction != tc.Faction || c.Enslaved) continue;
+            if (!table.Next[i].Alive || table.Cold(i) is not { Medical.Dead: false } c || c.Faction != tc.Faction || c.SlaveState != 0) continue;
             if (c.Fighter?.IsAnimal == true || c.Appearance?.Animal is not null || c.Race is null || dialogue.RaceMatches(c.Race.StringId, race.StringId)) continue;
             if (Vector3.DistanceSquared(table.Next[i].Position, at) > 100 * 100) continue;
             Locks.FixtureRegistry.Enslave(world, c, mc.Faction, mc.SquadId);

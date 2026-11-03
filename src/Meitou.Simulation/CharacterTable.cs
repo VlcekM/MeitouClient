@@ -461,8 +461,6 @@ public sealed class CharacterCold
     public byte SlaveState { get; set; }
     /// <summary>The game hours at which <see cref="SlaveState"/> last became 2 or 3 (status <c>+0x8</c>, saved as the float <c>ssct</c>; <see cref="Locks.FixtureRegistry.LayLow"/>). Hashed with a state above 1.</summary>
     public double SlaveSince { get; set; }
-    /// <summary>A slave or an escaped slave (state 1 or 2). The ex-slave (3, <c>FUN_14062b210</c>) is free in every test Meitou makes (the original tests 1, below 2, 2 and above 0 in different places; where unsure it counts as free).</summary>
-    public bool Enslaved => SlaveState is 1 or 2;
     /// <summary>The faction owning a slave or escaped slave (the original keeps a <c>slaver</c> handle; -1 none). Saved as <c>meitou slave owner</c>; hashed with <see cref="SlaveState"/>.</summary>
     public int SlaveOwner { get; set; } = -1;
     /// <summary>The squad a slave obeys (the original's owner handle naming a platoon; -1 none): job 187 Obedient Slave runs that squad's <c>Slave AI Goals</c> (<see cref="Ai.AiSystem"/>).

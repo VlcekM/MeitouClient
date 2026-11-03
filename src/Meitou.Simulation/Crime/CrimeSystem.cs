@@ -51,7 +51,7 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
     /// </summary>
     public bool IsPoliceLike(World world, CharacterCold c)
     {
-        if (c.IsPlayer || c.Enslaved || Factions.Bandit(c.Faction)) return false;   // engine: a slave is never police, whatever its record's class
+        if (c.IsPlayer || c.SlaveState != 0 || Factions.Bandit(c.Faction)) return false;   // engine: a slave is never police, whatever its record's class
         if (c.NpcClass == FundamentalType.LawEnforcement) return true;
         return c.NpcClass == FundamentalType.Military && c.SquadId >= 0 && world.Squads.Find(c.SquadId) is { TownOwn: true } squad && squad.Faction == c.Faction;
     }
@@ -76,7 +76,7 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
     {
         var c = world.Characters.Cold(culprit);
         if (c is null || !c.IsPlayer && code is not (CrimeCode.Assault or CrimeCode.Looting) || IsPoliceLike(world, c) || c.IsImprisoned || victimFaction == c.Faction
-            || !viaWrapper && !c.Enslaved && victimFaction == ArrestSystem.SeenFaction(c) || Factions.Lawless(victimFaction)) return false;
+            || !viaWrapper && c.SlaveState == 0 && victimFaction == ArrestSystem.SeenFaction(c) || Factions.Lawless(victimFaction)) return false;
         timer = MathF.Max(timer, MinTimer);
         if (c.Pending is { } p && p.Code != code && code == CrimeCode.Assault)
         {
@@ -408,7 +408,7 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
     {
         if (Friendly(w.Faction, c.Faction) || AggroSystem.IsEnemy(Relations, w.Faction, c.Faction)) return false;
         if (w.SquadId >= 0 && world.Squads.Find(w.SquadId) is { } squad && HomeKey(squad) == house.Key) return house.LockedUp && !house.Open(world.Hour);
-        return !house.Public && IsPoliceLike(world, w) && !Friendly(house.Faction, c.Faction) && (c.Enslaved || house.LockedUp);
+        return !house.Public && IsPoliceLike(world, w) && !Friendly(house.Faction, c.Faction) && (c.SlaveState != 0 || house.LockedUp);
     }
 
     /// <summary>
