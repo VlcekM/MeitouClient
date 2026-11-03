@@ -280,14 +280,16 @@ public sealed partial class MedicalState
     }
 
     /// <summary>
-    /// One CHARACTER <c>starting health</c> entry on a new body (<c>FUN_140645ef0</c>): below -M a limb becomes a stump (flesh 0, the treated pool 5); otherwise the flesh is
-    /// <paramref name="value"/> clamped to [-M, M] and the rest, M - flesh, is already treated. A part the anatomy lacks is ignored.
+    /// One CHARACTER <c>starting health</c> entry on a new body (<c>FUN_140645ef0</c>): a limb becomes a stump (flesh 0, the treated pool 5) when the value is below -M, or when the limb
+    /// is no longer original (an earlier entry or fit already changed it, only reachable with a second entry for the same limb); otherwise the flesh is <paramref name="value"/> clamped to
+    /// [-M, M] and the rest, M - flesh, is already treated. A part the anatomy lacks is ignored. A non-limb entry below -M is a stump in the original too (it writes past its limb table);
+    /// that is not copied (no base-game record has one: all 8 entries are arms or legs).
     /// </summary>
     public void ApplyStartingHealth(string partId, float value)
     {
         if (Parts.FirstOrDefault(p => p.Template.StringId == partId) is not { } p) return;
         float max = p.MaxHp;
-        if (value < -max && p.Template.LimbSlot is >= 0 and < 4)
+        if (p.Template.LimbSlot is >= 0 and < 4 && (value < -max || p.Limb != LimbState.Original))
         {
             p.Limb = LimbState.Stump;
             p.Flesh = 0;

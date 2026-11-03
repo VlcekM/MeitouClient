@@ -652,7 +652,7 @@ replaced, 3 crushed) and the fitted item (holder `FUN_1400cd3f0`; **Verified** b
   missing record is skipped, and with no entry nothing drops: no default item) and opens a wound. The item takes that bone's pose and falls from it ([collision](../formats/collision.md#item-physics)).
 - CHARACTER `starting health` (LOCATIONAL_DAMAGE, val0), applied to a new (not loaded) character (`FUN_140645ef0`, **Observed**): with
   M the part's maximum, val0 < -M makes the limb a stump (flesh 0, bandaged pool 5); else flesh = clamp(val0, -M, M) and the
-  bandaged pool M - flesh. **Verified** by probe: Rock Bottom's `Naked dude` has Left Arm -150, a left-arm stump. Meitou ignores it on non-limbs.
+  bandaged pool M - flesh. **Verified** by probe: Rock Bottom's `Naked dude` has Left Arm -150, a left-arm stump. Meitou ignores it on non-limbs. **Verified** (decompile): an arm or leg entry with val0 >= -M also becomes a stump when that limb is already not original (an earlier entry or fit changed it); a non-limb entry below -M is a stump in the original too (it writes past its 4-slot limb table, not copied; the base game has none: all 8 entries are arms or legs).
 - CHARACTER `robot limbs` (LIMB_REPLACEMENT, `fcs.def` default (50, 100)), rolled for a new character after the backpack and before
   `clothing` (`CharacterHuman::setupInventorySections` `FUN_14062c4e0`, **Verified** by decompile and disassembly): an entry whose record
   resolves joins the option list of limb `slot` - 50 with weight v1 (weight <= 0 dropped). v0 < 0 is a "natural limb" option; v0 >= 0 counts
