@@ -78,7 +78,7 @@ sealed partial class PlayerInterface
     bool GroundItemClick(Vector2 p)
     {
         if (SelectedIds().Count == 0 || PickGroundItem(p) is not { } item) return false;
-        Say(new Meitou.Simulation.Items.PickUpItemOrder([], item) { Tick = session.World.Tick });
+        Say(new Meitou.Simulation.Items.PickUpItemOrder([], item) { Tick = session.World.Tick, Alt = AltHeld });
         return true;
     }
 
@@ -146,6 +146,9 @@ sealed partial class PlayerInterface
     }
 
     /// <summary>Picking the item up would be stealing it: its owner's faction (<see cref="Meitou.Simulation.Items.GroundItem.OwnedBy"/>) is not the player's.</summary>
+    /// <summary>The ground item under <paramref name="pixel"/> belongs to another faction: its pointer is <c>steal</c> (<c>FUN_1407fc440</c>), and a right click without Alt only walks to it.</summary>
+    bool StealsGroundItem(Vector2 pixel) => PickGroundItem(pixel) is { } id && session.CurrentSnapshot.GroundItems.FirstOrDefault(g => g.Id == id) is { } g && Stealing(g);
+
     bool Stealing(Meitou.Simulation.Items.GroundItemSnapshot g) => g.OwnedBy >= 0 && g.OwnedBy != session.World.Player.Faction;
 
     /// <summary>Whether an ITEM record is an artifact (its <c>artifact</c> field); the host sets it.</summary>

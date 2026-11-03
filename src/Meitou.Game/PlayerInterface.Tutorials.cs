@@ -63,8 +63,8 @@ sealed partial class PlayerInterface
             InPrison = facts.InPrison,
             InCannibalCage = facts.InCannibalCage,
             Sneaking = sneak,
-            // Engine reading of the steal pointer (cursor 0x15): Meitou has no such pointer; a selection over another faction's ground item.
-            StealCursor = SelectedIds().Count > 0 && !pointerOverUi && PickGroundItem(mouse) is { } item && snap.GroundItems.FirstOrDefault(g => g.Id == item) is { } ground && Stealing(ground),
+            // The steal pointer (cursor 0x15): a selection over another faction's ground item.
+            StealCursor = SelectedIds().Count > 0 && !pointerOverUi && StealsGroundItem(mouse),
             SelectedHasBounty = inspected is { IsPlayer: false, Bounties.Count: > 0 },
             Hungry = hungry,
             PlayingDead = playingDead,

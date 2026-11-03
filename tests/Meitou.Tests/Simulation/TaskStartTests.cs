@@ -81,7 +81,7 @@ public class TaskStartTests
         public string WellSite = "", ShedSite = "", BedFixture = "", EmptyCage = "", LockedCage = "", StoreSite = "";
         public int Item;
         readonly OpenGroundWalkability walk = new(SyntheticTown.Ground);
-        readonly ItemFactory items;
+        internal readonly ItemFactory items;
 
         public Rig(bool carrying, bool decide = false, bool slaves = false, bool senses = false, FactionRelations? relations = null)
         {
@@ -232,6 +232,21 @@ public class TaskStartTests
             _ => CharacterTask.Attack,
         };
         return (order, task);
+    }
+
+    /// <summary>Another faction's ground item without Alt: the hint and a walk to it, nothing taken (<c>FUN_1407fc440</c>); with Alt it is picked up as any item.</summary>
+    [Theory, InlineData(false), InlineData(true)]
+    public void A_stolen_ground_item_needs_alt_to_be_picked_up(bool alt)
+    {
+        using var rig = new Rig(carrying: false);
+        int stolen = rig.World.GroundItems.Place(rig.items.Create("72-t")!, new Vector3(1000, 300, 1800), 0, null, owner: 2);
+        rig.World.RunTicks(3);
+        rig.World.TakeMessages();
+        rig.Say(new PickUpItemOrder([rig.Fighter], stolen) { Tick = rig.World.Tick, Alt = alt });
+        rig.World.RunTick();
+        Assert.Equal(!alt, rig.World.TakeMessages().Contains("Hold down the ALT key to steal items"));
+        Assert.Equal(CharacterTask.GoTo, rig.Task(rig.Fighter));
+        Assert.Equal(alt, rig.Cold(rig.Fighter).PickingUpItem == stolen);
     }
 
     /// <summary>
