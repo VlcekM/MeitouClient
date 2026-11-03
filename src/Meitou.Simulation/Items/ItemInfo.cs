@@ -111,8 +111,8 @@ public sealed record ItemInfo(string Id, string Name, FcsRecordType Type)
             EncumbranceEffect = r.Type == FcsRecordType.CONTAINER ? Math.Max(r.GetFloat("encumbrance effect", 1), 0) : 1,
             StackBonusMinimum = r.Type == FcsRecordType.CONTAINER ? r.GetInt("stackable bonus minimum", 1) : 1,
             StackBonusMult = r.Type == FcsRecordType.CONTAINER ? r.GetFloat("stackable bonus mult", 1) : 1,
-            WornOnlyBy = [.. r.GetReferences("races").Select(x => x.TargetStringId)],
-            WornNeverBy = r.GetReferences("races").Count > 0 ? [] : [.. r.GetReferences("races exclude").Select(x => x.TargetStringId)],
+            WornOnlyBy = Meitou.Data.Gameplay.RaceLimiter.Of(r).Only,
+            WornNeverBy = Meitou.Data.Gameplay.RaceLimiter.Of(r).Never,
         };
     }
 

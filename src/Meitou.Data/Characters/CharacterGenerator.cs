@@ -260,7 +260,7 @@ public static class CharacterGenerator
         GameRecord? Colour(GameRecord item) => Gameplay.ItemColours.Of(db, item) ?? Gameplay.ItemColours.Scheme(db, character, loadout.Faction);
         // Backpack: entries with val0 > 0; val1 is an absolute chance (out of 100).
         var pack = PickAbsolute(rng, character.GetReferences("backpack").Where(r => r.Values.Value0 > 0)
-            .Select(r => (db.Find(r.TargetStringId), (float)r.Values.Value1)).Where(p => p.Item1 is not null && RaceAllowed(p.Item1, race)));
+            .Select(r => (db.Find(r.TargetStringId), (float)r.Values.Value1)).Where(p => p.Item1 is not null && Gameplay.RaceLimiter.Allows(p.Item1, race)));
         if (pack is not null) loadout.Backpack = new LoadoutItem(pack) { Colour = Colour(pack) };
         RollRobotLimbs(db, character, race, rng, loadout);
 
@@ -278,7 +278,7 @@ public static class CharacterGenerator
             // quantity is a "no item" option.
             var options = clothing.Where(r => r.Values.Value0 != 0 && r.Values.Value1 > 0)
                 .Select(r => (Ref: r, Item: db.Find(r.TargetStringId)))
-                .Where(o => o.Item is { Type: FcsRecordType.ARMOUR } && o.Item.GetInt("slot", (int)AttachSlot.Body) == (int)slot && RaceAllowed(o.Item, race))
+                .Where(o => o.Item is { Type: FcsRecordType.ARMOUR } && o.Item.GetInt("slot", (int)AttachSlot.Body) == (int)slot && Gameplay.RaceLimiter.Allows(o.Item, race))
                 .ToList();
             var chosen = PickRelative(rng, options.Select(o => ((GameReference?)o.Ref, (float)o.Ref.Values.Value1)));
             if (chosen is not { } c || c.Values.Value0 < 1) continue;
@@ -387,13 +387,6 @@ public static class CharacterGenerator
         var model = db.Find("1058-gamedata.base");
         int level = maker.GetReferences("weapon models").Where(r => r.TargetStringId == model?.StringId).Select(r => r.Values.Value0).FirstOrDefault();
         return (maker, model, (int)(level + maker.GetFloat("overall level")));   // the float is added before the cut
-    }
-
-    /// <summary>ARMOUR / item <c>races</c> (only these may equip it; <c>races exclude</c> is then not read) and <c>races exclude</c> (docs/game/ui-screens.md, <c>RaceLimiter</c>), as <c>ItemInstance.WearableBy</c>.</summary>
-    static bool RaceAllowed(GameRecord item, GameRecord race)
-    {
-        var only = item.GetReferences("races");
-        return only.Count > 0 ? only.Any(r => r.TargetStringId == race.StringId) : !item.GetReferences("races exclude").Any(r => r.TargetStringId == race.StringId);
     }
 
     // ---- Weighted picks ----------------------------------------------------------------------------------------

@@ -23,7 +23,7 @@ public sealed class ItemInstance
     public string[] WornNeverBy { get; init; } = [];
     /// <summary>Whether a character of the RACE <paramref name="race"/> may wear it (null: no wearer, no limit).</summary>
     public bool WearableBy(string? race, bool animal = false) => Wearable(WornOnlyBy, WornNeverBy, race, animal);
-    internal static bool Wearable(string[] only, string[] never, string? race, bool animal = false) => race is null || (only.Length == 0 ? !animal && !never.Contains(race) : only.Contains(race));
+    internal static bool Wearable(string[] only, string[] never, string? race, bool animal = false) => Meitou.Data.Gameplay.RaceLimiter.Allows(only, never, race, animal);
     /// <summary>Shackles' lock (level = ARMOUR <c>lock level</c> clamped 0..100, its <c>hardness</c>, locked when made: <c>FUN_14089a440</c>); null for other items.</summary>
     public Locks.LockState? Lock { get; set; }
     /// <summary>Worn and effectively locked: the item cannot be taken off, sold or moved (LockedArmour's tooltip: "locked in place and cannot be removed").</summary>
