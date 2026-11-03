@@ -219,7 +219,7 @@ sealed partial class PlayerInterface
                 try { SaveCatalog.ValidateName(name); }
                 catch (ArgumentException ex) { Notice(ex.Message, true); return true; }
                 void Save() { ScreenAction?.Invoke(new("save", "SaveButton", "save", name)); faithfulScreens.Close("save"); }
-                if (slots.Any(s => s.Writable && string.Equals(s.Name, name, StringComparison.OrdinalIgnoreCase))) Confirm("OVERWRITE SAVE", Loc.Tr("Overwrite save '{1}'?", name), Save); else Save();
+                if (slots.Any(s => s.Writable && string.Equals(s.Name, name, StringComparison.Ordinal))) Confirm("OVERWRITE SAVE", Loc.Tr("Overwrite save '{1}'?", name), Save); else Save();
             }
             return true;
         }

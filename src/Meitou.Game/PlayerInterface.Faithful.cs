@@ -48,8 +48,8 @@ sealed partial class PlayerInterface
             return true;
         }
         if (faithfulScreens.HasKeyboardFocus && EditFocusKey(key, ctrl, shift)) return true;
-        // Delete or Backspace deletes the save selected in the load window (LoadSaveWindow::keyPressed, docs/game/ui-screens.md "Deleting a save").
-        if (key is Meitou.Engine.Input.Key.Delete or Meitou.Engine.Input.Key.Backspace && faithfulScreens.OpenScreens is [.., "load"] && selectedSlot is { } doomed) { AskDeleteSave(doomed); return true; }
+        // Delete or Backspace deletes the save selected in the load, save or import window (LoadSaveWindow::keyPressed, docs/game/ui-screens.md "Deleting a save").
+        if (key is Meitou.Engine.Input.Key.Delete or Meitou.Engine.Input.Key.Backspace && faithfulScreens.OpenScreens is [.., "load" or "save" or "import"] && selectedSlot is { } doomed) { AskDeleteSave(doomed); return true; }
         if (key == Meitou.Engine.Input.Key.Tab && faithfulScreens.FocusNext(shift)) return true;
         if (key == Meitou.Engine.Input.Key.Enter && faithfulScreens.Submit()) return true;
         if (key == Meitou.Engine.Input.Key.Space && faithfulScreens.ActivateFocused()) return true;
