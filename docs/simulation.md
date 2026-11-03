@@ -1389,8 +1389,8 @@ UI picks its wall (name, verbs and Cancel's nothing-delivered check are the wall
 **Saves.** `Saving/BuildingSave.cs` writes each site as a GAMESTATE_BUILDING (`<id>-S23`) plus its entry in the zone
 file's `0-buildinglist` (keys per [zones](formats/zones.md#placement-keys)); a zone without a file gets one, the slot
 list and the handle (`C` = zone container, `CS` 11111, next free `I`) follow, and player-built entries the world no
-longer has (a dismantled building) are removed. The instance Y is the absolute one, as in all game-made
-`-zoneX.Y-INGAME` buildings of the samples (**Observed**); a load prefers `world Y pos`. `is complete` is written
+longer has (a dismantled building) are removed. The instance Y is the height above the terrain, as in all game-made
+`-zoneX.Y-INGAME` buildings of the samples ([placement height](formats/zones.md#placement-height)); a load prefers `world Y pos`. `is complete` is written
 explicitly. The parent is `isInsideBuilding` plus Meitou's `meitou parent` (instance id, wins on load). On load it
 reserves every `-zoneX.Y-INGAME` id of the save and reads the player faction's such buildings back, in zone and list
 order (the player's start has none, base placements use other container names). `town` is the outpost's handle,

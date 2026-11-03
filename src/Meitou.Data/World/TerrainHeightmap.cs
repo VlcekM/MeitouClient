@@ -53,6 +53,27 @@ public sealed class TerrainHeightmap : IDisposable
         return (float)(h * (WorldLayout.MaxHeight / ushort.MaxValue));
     }
 
+    /// <summary>The lowest ground a building stands on: the water floor (docs/formats/zones.md "Placement height").</summary>
+    public const float BuildingGroundFloor = 100;
+
+    /// <summary>
+    /// The ground an outdoor building stands on in the original (docs/formats/zones.md "Placement height"): each zone keeps a coarse copy of its heights, every
+    /// other sample (36 units apart), interpolated bilinearly, and nothing lower than <see cref="BuildingGroundFloor"/>. Up to ~16 units off <see cref="HeightAt"/>
+    /// on steep ground. Not thread-safe (it reads the file).
+    /// </summary>
+    public float BuildingGroundAt(double x, double z)
+    {
+        int last = (Size - 1) / 2 - 1;
+        double scale = (Size - 1) / (double)WorldLayout.WorldSize / 2;
+        double u = Math.Clamp((x + WorldLayout.HalfWorldSize) * scale, 0, last + 1);
+        double v = Math.Clamp((z + WorldLayout.HalfWorldSize) * scale, 0, last + 1);
+        int c = Math.Min((int)u, last), r = Math.Min((int)v, last);
+        double fu = u - c, fv = v - r;
+        double h = Sample(2 * c, 2 * r) * (1 - fu) * (1 - fv) + Sample(2 * c + 2, 2 * r) * fu * (1 - fv) +
+                   Sample(2 * c, 2 * r + 2) * (1 - fu) * fv + Sample(2 * c + 2, 2 * r + 2) * fu * fv;
+        return MathF.Max(BuildingGroundFloor, (float)(h * (WorldLayout.MaxHeight / ushort.MaxValue)));
+    }
+
     /// <summary>
     /// Every <paramref name="step"/>-th sample on both axes (point sampling, starting at 0), streaming the file
     /// once. Returns a row-major grid of <c>(Size - 1) / step + 1</c> samples per side.

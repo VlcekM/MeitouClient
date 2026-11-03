@@ -63,7 +63,7 @@ Indoors, `player furniture Y offset` is child world Y minus the parent's origin 
 interiors). Zero makes the loader use raw instance Y as the parent-relative offset instead (**Observed**, eight authored placements
 crossing raw encodings and offsets on two floors). Nonzero offsets preserve placement independently of raw instance Y; zero with an
 absolute raw Y raises furniture by that absolute value. Meitou writes both indoor height fields parent-relative, outdoor instance Y
-terrain-relative, and reads absolute `world Y pos`. Native save output can have absolute indoor instance Y.
+terrain-relative, and reads absolute `world Y pos` back for its own buildings; the original never reads it ([placement height](zones.md#placement-height)). Native save output can have absolute indoor instance Y.
 **Observed**, native 1.0.68 load/save of eight placements written by Meitou: offsets 0, -1.5, 8 and 32 all retained their exact parent-relative heights.
 A finished one with doors also gets the door keys of [locks](../game/locks.md#save-keys)
 (the original saves doors the same way for every building, **Observed** by code). Meitou-only `meitou parent` (instance id) names a parent the handle cannot.

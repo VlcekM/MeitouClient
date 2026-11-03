@@ -422,6 +422,8 @@ public sealed partial class FixtureRegistry
             if (HeldFixture(c, what) is not { } f || !IsFree(table, f)) continue;
             f.Occupant = new CharacterId(s, next[s].Generation);
             c.InWhat = f.Id;
+            // A loaded prisoner plays its cage's poses as one put in does (Imprison): stand, out-cold foetal, a pole's own clip.
+            if (c.InSomething == HeldState.Imprisoned && f.Kind == FixtureKind.Cage) c.CageClips = f.Clips;
             // Matched from the original's keys: the held state is the one loaded, so they are written back as read (HeldSave.Write).
             if (c.Save is { } loaded && loaded.InWhat == what) loaded.InWhat = f.Id;
             // A loaded sleeper is put at its lie spot again (engine choice: a save from before LieSpot holds it at the bed's origin, half off the mattress).
