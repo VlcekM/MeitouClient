@@ -1380,6 +1380,8 @@ the obedience job row (item 28, **Verified** `_setHightlightCoords` `FUN_140972a
 
 ### 8. Damage floaters
 
+**Building damage number** (`FUN_14029d2b0`, **Verified**; wall `FUN_14029d560`, door `FUN_14029d690`): a blow on a building not yet destroyed shows `{1,num}` of int(f), f the clamped damage (door: clamp(2 blunt + 0.5 cut, 20, 60); wall: clamp((hit1 x 2 + hit0 x 0.5) x 0.5, 10, 60), 0.003 x f off its health fraction, destroyed at 0 with the Wwise event `Break`), only while the floaters option is on, at the building point lifted by a fixed height and jittered at random in x, y and z, one uniform grey, through the same floating-text factory (`FUN_14073faf0`, mode 2). Meitou: doors only (`FloaterKind.Building`, queued by `LockSystem`; walls take no damage here); the jitter amount and lift are **Unknown**.
+
 The options `floaters` (Off 0, Simple info 1 default, Full info 2; [settings](../formats/settings.md)) control the numbers that
 float over a character when a blow lands. Tooltip: damage "and in brackets the amount of damage that was stopped by armour";
 Full info "separate numbers for each damage type". Built at the end of `MedicalSystem` hit handling `FUN_1406508d0`

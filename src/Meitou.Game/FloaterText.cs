@@ -19,7 +19,7 @@ static class FloaterText
     /// </summary>
     public static string? Format(in Floater f, FloaterMode mode)
     {
-        if (f.Kind is FloaterKind.Text or FloaterKind.Label or FloaterKind.StealthHit or FloaterKind.StealthMiss) return f.Part.Length > 0 ? f.Part : null;   // the eating text and machine labels (Meitou draws it with the damage floaters, so it shows only while they are on)
+        if (f.Kind is FloaterKind.Text or FloaterKind.Label or FloaterKind.StealthHit or FloaterKind.StealthMiss or FloaterKind.Building) return f.Part.Length > 0 ? f.Part : null;   // the eating text and machine labels (Meitou draws it with the damage floaters, so it shows only while they are on)
         if (mode == FloaterMode.Off) return null;
         var d = f.Damage;
         var a = f.Absorbed;
@@ -46,7 +46,7 @@ static class FloaterText
     public static Vector4 Colour(in Floater f) => f.Kind switch
     {
         FloaterKind.Text => White,
-        FloaterKind.Label => LabelGrey,
+        FloaterKind.Label or FloaterKind.Building => LabelGrey,
         FloaterKind.StealthHit => StealthHit,
         FloaterKind.StealthMiss => StealthMiss,
         _ => f.TargetIsPlayer ? Red : f.SourceIsPlayer ? Green : Grey,

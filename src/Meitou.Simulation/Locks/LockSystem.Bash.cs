@@ -120,7 +120,7 @@ public sealed partial class LockSystem
             if (c.BashTime < 0) c.BashTime = 0;
             if (!BashBlowLands(c, world.TickSeconds)) continue;
             // A break's only sound is the door's Break (Task_BashDoor posts no unlock sound), played by the host's door sounds.
-            if (Hit(door, c))
+            if (Hit(world, door, c))
             {
                 world.Fixtures.Touch(door);
                 StopBashing(table, s, c);
@@ -144,7 +144,7 @@ public sealed partial class LockSystem
     }
 
     /// <summary>One swing at a door (<c>FUN_14029d690</c>): true when it broke the door.</summary>
-    bool Hit(Fixture door, CharacterCold c) => Damage(door, Packet(c) is var (cut, blunt, animal) ? BlowDamage(cut, blunt, animal) : 20);
+    bool Hit(World world, Fixture door, CharacterCold c) => Damage(world, door, Packet(c) is var (cut, blunt, animal) ? BlowDamage(cut, blunt, animal) : 20);
 
     /// <summary>The cut and blunt damage of a basher's blow (its weapon's or fists' packet) and whether it is an animal's; null without the combat constants (every swing then does the minimum).</summary>
     (float Cut, float Blunt, bool Animal)? Packet(CharacterCold c)
@@ -159,9 +159,10 @@ public sealed partial class LockSystem
     }
 
     /// <summary>Takes <paramref name="damage"/> (the clamped f) x <see cref="ProgressPerDamage"/> off a door's <see cref="Fixture.DoorProgress"/>; at 0 it breaks: unlocked and opened. True when it broke.</summary>
-    static bool Damage(Fixture door, float damage)
+    static bool Damage(World world, Fixture door, float damage)
     {
         if (door.Kind != FixtureKind.Door || door.DoorBroken) return false;
+        world.Floaters?.Enqueue(Floater.BuildingHit(door.Position, (int)damage));   // the damage number at the door (FUN_14029d2b0); queued only while the host shows floaters
         door.DoorProgress -= damage * ProgressPerDamage;
         if (door.DoorProgress > 0) return false;
         door.DoorProgress = 0;
@@ -177,7 +178,7 @@ public sealed partial class LockSystem
     /// </summary>
     internal static void Strike(World world, Fixture door, float damage)
     {
-        if (Damage(door, damage)) world.Fixtures.Touch(door);
+        if (Damage(world, door, damage)) world.Fixtures.Touch(door);
     }
 
     /// <summary>Gives the free attackers whose target is shut in another building, while they are outside it, its main door to bash when the planner says so (<see cref="DoorPlan"/>).</summary>
