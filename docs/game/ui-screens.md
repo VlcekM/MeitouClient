@@ -797,7 +797,7 @@ How a building gets selected: [ui-input](ui-input.md#building-picking-and-select
 | Building (houses), Door, Gateway, Wall | none (slot 48 returns 0) | - |
 
 `Kenshi_GenericBuildingWindow` (**Verified**, layout read): Window `Kenshi_WindowCX` captioned "BUILDING NAME", layer Window; `CraftingPanel`
-(`CraftingName`, `QueueButton` "QUEUE..."), `TitlesPanel` (INPUTS / OUTPUT), `Input1Panel` / `Input2Panel` (`InputNText`, `InputNStatusText`,
+(`CraftingName`, `QueueButton` "QUEUE..."), `TitlesPanel` (layout INPUTS / OUTPUT, but the constructor `FUN_140155f90` **Verified** overwrites them with the translated `Input` / `Inputs` by the input count, hidden at 0, and `Output`), `Input1Panel` / `Input2Panel` (`InputNText`, `InputNStatusText`,
 slot `inN`, `InputNProgressBar`), output (`out` slot, `OutputProgressBar`, `OutputText`, `OutputDataPanel`). The `inN` / `out` inventory
 sections are the recipe item's `inventory footprint width` × `inventory footprint height` cells (**Verified**, `FUN_14029e7b0` code read). The grid
 sits centred under its label and progress bar (**Observed**, owner's screenshot of an electrical workbench, 2026-10-24); the rule behind it and whether the bar

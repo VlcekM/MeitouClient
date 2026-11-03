@@ -162,6 +162,10 @@ sealed partial class PlayerInterface
             b.Progress["OutputProgressBar"] = current?.Progress ?? 0;
         }
         else b.Hidden.Add("OutputColumn");
+        // BuildInventoryLayout's constructor (FUN_140155f90) sets both column titles: "Input" / "Inputs" by the number of inputs (hidden at 0) and "Output", over the layout's INPUTS / OUTPUT.
+        int inputCount = FurnaceGrid(m) is not null ? 1 : m.Inputs.Count;
+        if (inputCount > 0) b.Text["InputTitleText"] = Loc.Plural("Input", "Inputs", inputCount);
+        b.Text["OutputTitleText"] = Loc.Tr("Output");
         if (m.Inputs.Count == 0 && FurnaceGrid(m) is null) b.Hidden.Add("InputTitleText");
         if (m is { Inputs.Count: 0, Craft: null, Output: not null } && FurnaceGrid(m) is null) OutputOnlyGeometry(b);
     }
