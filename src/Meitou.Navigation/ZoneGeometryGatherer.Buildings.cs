@@ -138,7 +138,7 @@ internal sealed partial class ZoneGeometryGatherer
     /// <summary>Shape groups of a building's upper-floor contents: stairs on floor 2 (17), floor-3 stairs (18) and furniture on floors 1..3 (20..22).</summary>
     public const uint UpperContentsMask = 0x760000;
 
-    /// <param name="floor">For a layout object: the floor it stands on (its state's <c>floornum</c>), which takes the place of its parts' own <c>building floor</c>.</param>
+    /// <param name="floor">For a layout object: the floor it stands on (its state's <c>floornum</c>), the object floor of <see cref="CollisionGroup"/>.</param>
     /// <param name="open">
     /// Exterior gather: the placed building (for a layout object, its building) has no real interior (<see cref="InteriorOf"/>), so every shape of a WALKABLE
     /// building is walkable, not only its floor-0 parts and furniture (docs/game/pathfinding.md, "Generator", building shapes; Observed: Heft's Shield Bridge,
@@ -169,21 +169,30 @@ internal sealed partial class ZoneGeometryGatherer
                 AddPart(g, building, mask, maskPath, node, isDoor: false, interiorMask: true, instanceId: placementId);
     }
 
+    /// <summary>
+    /// The navmesh collision group of a building part (<c>FUN_14055f6e0</c>, docs/formats/collision.md; later tests win): 9 + floor for floors 0..3 (else 9), unwalkable roof 27, stairs
+    /// 15 + floor for floors 0..3 (else unchanged), then a passable part or an IGNORE owner 23 + object floor, else furniture 19 + object floor (the object floor 0..3, else 0). A furniture
+    /// owner's base and stairs groups use the placed object's floor (<paramref name="objectFloor"/>, its state's <c>floornum</c>), any other part its own <c>building floor</c>, unclamped.
+    /// </summary>
+    static int CollisionGroup(GameRecord owner, GameRecord part, PathMode mode, int objectFloor)
+    {
+        bool furniture = owner.GetBool("is exterior furniture") || owner.GetBool("is interior furniture");
+        int floor = furniture ? objectFloor : part.GetInt("building floor");
+        bool inRange = floor is >= 0 and <= 3, objectInRange = objectFloor is >= 0 and <= 3;
+        int group = inRange ? 9 + floor : 9;
+        if (part.GetBool("is unwalkable roof")) group = 27;
+        if (part.GetBool("is stairs") && inRange) group = 15 + floor;
+        if (mode == PathMode.Ignore || part.GetBool("passable")) return 23 + (objectInRange ? objectFloor : 0);
+        return furniture ? 19 + (objectInRange ? objectFloor : 0) : group;
+    }
+
     void AddPart(ZoneGeometry g, GameRecord owner, GameRecord part, string path, Matrix4x4 node, bool isDoor, bool interiorMask, string instanceId, InteriorContext? interior = null, int? floorOverride = null, bool open = false, bool upper = false)
     {
         var prepared = collision.Get(path);
         if (prepared is null) return;
         g.Stats.PartsWithCollision++;
         var mode = (PathMode)owner.GetInt("path mode", (int)PathMode.Obstacle);
-        int floor = floorOverride ?? Math.Clamp(part.GetInt("building floor"), 0, 3);
-        int group;
-        if (isDoor) group = 5;
-        else if (interiorMask) group = 13;
-        else if (mode == PathMode.Ignore || part.GetBool("passable")) group = 23 + floor;
-        else if (part.GetBool("is unwalkable roof")) group = 27;
-        else if (part.GetBool("is stairs")) group = 15 + floor;
-        else if (owner.GetBool("is exterior furniture") || owner.GetBool("is interior furniture")) group = 19 + floor;
-        else group = 9 + floor;
+        int group = isDoor ? 5 : interiorMask ? 13 : CollisionGroup(owner, part, mode, floorOverride ?? 0);
 
         int firstTriangle = g.TriangleCount, firstSolid = g.Solids.Count;
         foreach (var shape in prepared.Shapes)

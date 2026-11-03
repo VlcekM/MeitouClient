@@ -85,6 +85,8 @@ use every rendered triangle as collision or infer PhysX actor dynamics from appe
 | 2 | the terrain (Observed: the ground-height rays' masks `0x204` and `0x4004` pair it with floors 9 or foliage 14; the interior-ambience ray `0x2004` is 2 + 13, [audio.md](../audio.md#interiors)) |
 | 3, 4 | other physics objects (items, FUN_1407626e0, FUN_1407e7460); not used by the navmesh |
 
+Assignment order (`FUN_14055f6e0`:183-330, **Verified**; later tests win): 9 + floor for floors 0..3, else 9; `is unwalkable roof` 27; `is stairs` 15 + floor for floors 0..3, else unchanged; then `passable` or path mode IGNORE: 23 + object floor, else an owner that is `is exterior furniture` / `is interior furniture`: 19 + object floor (object floor 0..3, else 0). The floor is the part's own `building floor` (raw, not clamped), except that a furniture owner's base and stairs groups, and the passable / IGNORE and furniture groups always, use the placed object's floor (int +0xa4, loaded from `floornum` of the placed building's state, 0 without one; `FUN_140552b70`:48-57). Meitou: `ZoneGeometryGatherer.CollisionGroup`.
+
 The character's ground ray (`FUN_14065f160`, **Verified**: from 20 units above the feet, straight down) uses mask `0x7de04` (groups 2, 9..12, 14, 15..18) outdoors and `0x7f9e00` (groups 9..12, 15..22) when the
 character is in a building; the hit's group and BUILDING decide the footstep surface (`interior material` / `exterior material`, [audio](../audio.md#characters-footsteps-combat-voices)). No per-shape physics material is
 consulted (`FUN_14065df80` reads only the group and the hit object).
