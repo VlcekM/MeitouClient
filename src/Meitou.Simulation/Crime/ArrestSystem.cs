@@ -62,11 +62,14 @@ public sealed class Arrest
     public string? Cage { get; set; }
     /// <summary>A slaver's take-over (<c>DA_ENSLAVE_TARGETS_CARRIED_PERSON</c>): the captive becomes the guard faction's slave when caged.</summary>
     public bool Enslave { get; init; }
+    /// <summary>A dialogue's capture (DA 29, task 240 "Capture Target"): its lift may take a target another carries (the snatch byte, <c>FUN_14032ebd0</c>).</summary>
+    public bool Capture { get; init; }
 
     internal void Hash(ref StateHasher h)
     {
         h.Add(Guard); h.Add(Target); h.Add(Faction); h.Add((int)Phase); h.Add(Time); h.Add(Fine); h.Add(Tries); h.Add(Waited); h.Add(Cage is { } c ? Rng.StableHash(c) : 0UL);
         if (Enslave) h.Add(0x536C6176);
+        if (Capture) h.Add(0x43617074);
     }
 }
 
@@ -404,7 +407,7 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
     // ------------------------------------------------------------------ fine or arrest
 
     /// <summary><paramref name="capture"/> false: the guard attacks instead of arresting, in his own town too (a dialogue's animal target).</summary>
-    void Start(World world, int g, int t, bool force, bool capture = true)
+    void Start(World world, int g, int t, bool force, bool capture = true, bool snatch = false)
     {
         var table = world.Characters;
         var gc = table.Cold(g)!;
@@ -418,7 +421,7 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
             Note(world, ArrestEventKind.Attack, guard, target, gc.Faction, bounty);
             return;
         }
-        var arrest = new Arrest { Guard = guard, Target = target, Faction = gc.Faction };
+        var arrest = new Arrest { Guard = guard, Target = target, Faction = gc.Faction, Capture = snatch };
         arrests.Add(arrest);
         gc.Engaged = true;   // the AI leaves him alone until the arrest ends
         if (!force && bounty is > 0 and < FineLimit)
@@ -516,9 +519,9 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
                 {
                     if (Carry is null) return End(world, a, ArrestEventKind.GaveUp);
                     if (gc.Carrying == a.Target) { a.Phase = ArrestPhase.Lift; return true; }
-                    if (!tc.CarriedBy.IsNone) return End(world, a, ArrestEventKind.GaveUp);
+                    if (!tc.CarriedBy.IsNone && !a.Capture) return End(world, a, ArrestEventKind.GaveUp);   // a capture (240) snatches a body another carries
                     if (gc.InCombat) return true;   // still trading blows (the KO tick, a squad mate): wait
-                    if (Carry.BeginPickUp(world, g, a.Target, source: TaskSource.Npc, row: TaskType.ARREST_TARGET)) { a.Phase = ArrestPhase.Lift; a.Waited = 0; return true; }
+                    if (Carry.BeginPickUp(world, g, a.Target, source: TaskSource.Npc, row: a.Capture ? TaskType.LIFT_PERSON_SNATCHING_ALLOWED_IN_TOWN_ONLY : TaskType.ARREST_TARGET)) { a.Phase = ArrestPhase.Lift; a.Waited = 0; return true; }
                     a.Waited += dt;
                     return a.Waited <= 10 || End(world, a, ArrestEventKind.GaveUp);
                 }

@@ -11,7 +11,7 @@ Bip01 L UpperArm attachment. A collapsed, missing or crushed left arm prevents c
 **Observed** target must resolve character and differ from carrier. An already-carried target ends the lift (start `FUN_14034f990`, update `FUN_140354ff0`
 when the carrier is someone else) unless the task's snatch byte `+0x79` is set: the task factory `FUN_14032ebd0` sets it for task types 213 Lifting/Snatching,
 225 Lifting/Snatching Order and 240 Capture Target, not for 68 and 170; the link `FUN_14034fbe0` then unlinks the old carrier (`FUN_1405ce1e0`) before attaching
-(**Verified** decompile). Meitou `CharacterCold.Snatching`: the player's pick-up order only (not a kidnap); the old carrier lets go as a drop (no put-down knock-out). AI down-state gate and player context-menu eligibility
+(**Verified** decompile). Meitou `CharacterCold.Snatching`: the player's pick-up order (not a kidnap) and a lift started with row 213 or 240 (`CarrySystem.BeginPickUp`; a dialogue capture, DA 29 in its own town, passes 240 and so takes a target another carries, `ArrestSystem` `Arrest.Capture`); the old carrier lets go as a drop (no put-down knock-out). AI down-state gate and player context-menu eligibility
 are different: the menu offers Pick Up on a standing own character ([ui-input](ui-input.md#context-menu-verbs), **Observed**), never on a carried body (**Verified**, `FUN_1407a6bc0`): so a player snatch can only follow a body picked up by another after the order was given (**Observed**, inferred). Meitou's Ctrl + right click also snatches (engine choice). Race carry-bone affects attachment; secondary character type unknown.
 
 **Observed** placement each frame (`CharacterAnimal::vfunc_77` `FUN_1405cda20`, `FUN_1405b5980`, `FUN_1405b1a30`): the body's

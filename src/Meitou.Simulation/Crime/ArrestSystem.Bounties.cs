@@ -287,8 +287,8 @@ public sealed partial class ArrestSystem : IOrderOwner
     {
         var table = world.Characters;
         if (!table.TryResolveNext(guard, out int g) || table.Cold(g) is not { IsPlayer: false, Medical.Incapacitated: false, Carrying.IsNone: true } || Busy(guard)) return false;
-        if (!table.TryResolveNext(target, out int t) || !table.Next[t].Alive || table.Cold(t) is not { IsImprisoned: false, CarriedBy.IsNone: true }) return false;
-        Start(world, g, t, force: true, capture);
+        if (!table.TryResolveNext(target, out int t) || !table.Next[t].Alive || table.Cold(t) is not { IsImprisoned: false }) return false;   // a carried target is snatched by the capture (task 240)
+        Start(world, g, t, force: true, capture, snatch: true);
         return true;
     }
 

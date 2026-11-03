@@ -296,6 +296,9 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
         }
     }
 
+    /// <summary>The lift rows whose task carries the snatch byte (<c>FUN_14032ebd0</c>): 213 Lifting/Snatching and 240 Capture Target (225, the player's order, sets it where the order starts).</summary>
+    static bool SnatchRow(TaskType? row) => row is TaskType.LIFT_PERSON_SNATCHING_ALLOWED or TaskType.LIFT_PERSON_SNATCHING_ALLOWED_IN_TOWN_ONLY;
+
     /// <summary>
     /// Starts a pick-up of <paramref name="body"/> by the character in <paramref name="carrier"/> (serial phases; the arrest and kidnap systems' lift), going back to <paramref name="resume"/>
     /// afterwards: false when it cannot carry or the body cannot be lifted. With <paramref name="kidnap"/> a sleeper may be taken too (<see cref="CanBeKidnapped"/>): the lift is then
@@ -306,10 +309,11 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
         var table = world.Characters;
         var lift = kidnap ? TaskType.KIDNAP_ORDER : TaskType.LIFT_PERSON_PLAYER_ORDER;
         if (!table.TryResolveNext(body, out int b) || b == carrier || table.Cold(carrier) is not { } c || !CanCarry(world, c, lift)) return false;
-        bool asleep = !CanBeLifted(table.Cold(b)!);
+        bool snatch = SnatchRow(row), asleep = !CanBeLifted(table.Cold(b)!) && !(snatch && Snatchable(table.Cold(b)!));
         if (asleep && !(kidnap && CanBeKidnapped(table, b))) return false;
         if (!Start(world, carrier, CharacterTask.PickUp, row ?? lift, source, body, resume, job)) return false;
         c.Kidnapping = asleep;
+        c.Snatching = snatch;
         return true;
     }
 
