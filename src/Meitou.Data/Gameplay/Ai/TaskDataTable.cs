@@ -45,7 +45,7 @@ public static class TaskDataTable
         R(163, "Moving to door inside", 0x41, Acts | NeedsTarget, "111", "27 !24 !83 90 60"),
         R(83, "Moving to current door", 0x41, Acts, "58", "27 !24 !83"),
         R(199, "Moving to door outside", 0x41, Acts, "126", "27 !24 !83 90 60"),
-        R(104, "0x1416830ec", 0x77, 0, "", "20"),
+        R(104, "null", 0x77, 0, "", "20"),
         R(180, "Gate guard", 0x1, Acts, "", "91 52"),
         R(121, "Moving to gate", 0x61, Acts | NeedsTarget, "91", "27 !26 60"),
         R(122, "Open gate", 0x61, Finder | Restricted, "90", "!54", "52"),
