@@ -239,23 +239,31 @@ public static class ShopFiller
     }
 
     /// <summary>
-    /// SQUAD_TEMPLATE <c>special items</c> (ITEM references), else <c>special map items</c> (MAP_ITEM), on a fill with specials (<c>FUN_140958740</c> from the shop refresh <c>FUN_14095b210</c>,
-    /// <b>Verified</b>): each entry's v0 items, in stacks of at most the item's stack limit, go into the stock before the vendor items; what fits nowhere is lost. Engine: the original
-    /// also marks them unique (<c>Item::isUnique</c>), which is not modelled.
+    /// SQUAD_TEMPLATE <c>special items</c> (ITEM references), then <c>special map items</c> (MAP_ITEM references), on a fill with specials (<c>FUN_140958740</c> from the shop refresh
+    /// <c>FUN_14095b210</c>, <b>Verified</b>): both lists are stocked when both exist (the original skips both only when both are empty). Each entry's v0 items go into the stock before the vendor
+    /// items in stacks of at most the record's raw <c>stackable</c> (at least 1: a 0 loops forever in the original), also for a map item whose stack limit elsewhere is 1; what fits nowhere is
+    /// lost. Engine: the original also marks them unique (<c>Item::isUnique</c>), which is not modelled.
     /// </summary>
     static void AddSpecials(Shop shop, string templateId, GameDatabase db, Market market)
     {
         if (db.Find(templateId) is not { } template) return;
-        var list = template.GetReferences("special items");
-        if (list.Count == 0) list = template.GetReferences("special map items");
+        AddSpecialList(shop, template.GetReferences("special items"), FcsRecordType.ITEM, db, market);
+        AddSpecialList(shop, template.GetReferences("special map items"), FcsRecordType.MAP_ITEM, db, market);
+    }
+
+    static void AddSpecialList(Shop shop, IReadOnlyList<GameReference> list, FcsRecordType type, GameDatabase db, Market market)
+    {
         foreach (var r in list)
+        {
+            if (db.Find(r.TargetStringId) is not { } record || record.Type != type) continue;
+            int perStack = Math.Max(record.GetInt("stackable"), 1);
             for (int left = r.Values.Value0; left > 0;)
             {
-                if (market.Items.Create(r.TargetStringId, 1) is not { } probe) break;
-                int stack = Math.Clamp(left, 1, Math.Max(probe.StackLimit, 1));
+                int stack = Math.Min(left, perStack);
                 if (market.Items.Create(r.TargetStringId, stack) is { } item) shop.Stock.Add(item);
                 left -= stack;
             }
+        }
     }
 
     internal static VendorEntry Pick(IReadOnlyList<VendorEntry> entries, ref RandomStream rng)
