@@ -46,6 +46,13 @@ public sealed class RaceData
     /// <summary><c>pathfind footprint radius</c>: the clearance a path query needs (4 humans, 7 Garru, 40 Leviathan).</summary>
     public float PathfindFootprintRadius { get; init; } = 4;
     public float PathfindAcceleration { get; init; } = 20;
+    /// <summary>
+    /// <c>hull size X</c>, <c>Y</c>, <c>Z</c> ("size of the click hull", fcs.def defaults 5, 20, 5; humans 5, 17, 5): the box the physics rays hit, bolts and the line of fire
+    /// included (docs/game/combat.md "Line of fire and the hit shape").
+    /// </summary>
+    public float HullX { get; init; } = 5;
+    public float HullY { get; init; } = 20;
+    public float HullZ { get; init; } = 5;
     public int ExtraAttackSlots { get; init; }
     /// <summary>
     /// <c>buy value</c> (fcs.def default 100, "percentage of normal value when bought or sold as a slave"): the factor of a slave's price (docs/game/economy.md section 12).
@@ -155,6 +162,9 @@ public sealed class RaceData
             CombatMoveSpeedMult = RecordReading.Float(r, "combat move speed mult", 1),
             PathfindFootprintRadius = RecordReading.Float(r, "pathfind footprint radius", 4),
             PathfindAcceleration = RecordReading.Float(r, "pathfind acceleration", 20),
+            HullX = RecordReading.Float(r, "hull size X", 5),
+            HullY = RecordReading.Float(r, "hull size Y", 20),
+            HullZ = RecordReading.Float(r, "hull size Z", 5),
             ExtraAttackSlots = RecordReading.Int(r, "extra attack slots", 0),
             BuyValue = RecordReading.Float(r, "buy value", 100),
             IsRobot = RecordReading.Bool(r, "is robot", false),

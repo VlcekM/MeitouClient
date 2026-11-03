@@ -259,7 +259,7 @@ not read) shows the Windows cursor instead, applied at once.
 ### Character picking
 
 **Observed** (`FUN_140800250`): the original picks characters with the same physics ray as buildings ([building picking](#building-picking-and-selection)): hits in groups 0, 1,
-3, 4 (3 and 4 are ragdoll shapes, [ragdolls](ragdolls.md#collision-groups); what 0 and 1 are is **Unknown**). Meitou (engine choice, [phs](../formats/phs.md)): clicks, quick orders, the hover
+3, 4 (3 and 4 are ragdoll shapes, [ragdolls](ragdolls.md#collision-groups); 0 the click hulls, [combat](combat.md#line-of-fire-and-the-hit-shape); 1 is **Unknown**). Meitou (engine choice, [phs](../formats/phs.md)): clicks, quick orders, the hover
 label, pointer and outline take the nearest character whose posed mesh the ray meets. Each mesh keeps, from its bind-pose vertices, one
 box per bone (vertices by their strongest weight; an unskinned part one box), grown 0.4 units; the boxes are posed by the live bone palette,
 so people and animals pick over their whole drawn body, a ragdoll where it lies. **Verified** (sandbox probe, 2026-10-16): a person hits from the feet to 18 units

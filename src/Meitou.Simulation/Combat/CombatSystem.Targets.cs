@@ -258,9 +258,13 @@ public sealed partial class CombatSystem
         return true;
     }
 
-    /// <summary>Turns a fighter on a new target: it asks its target again for a place and weighs its techniques afresh.</summary>
+    /// <summary>
+    /// Turns a fighter on a new target: it asks its target again for a place and weighs its techniques afresh. A crossbowman closing in on the old one has its closing timer
+    /// set to <see cref="RangedTuning.NewTargetClear"/> (<c>FUN_1404371f0</c>), so the first closing ray to pass stops it.
+    /// </summary>
     static void Retarget(ref CombatSlot s, int target, int generation, int now)
     {
+        if (s.RangedState == (byte)RangedStates.Closing && (s.TargetSlot != target || s.TargetGeneration != generation)) s.ClearTime = RangedTuning.NewTargetClear;
         s.TargetSlot = target;
         s.TargetGeneration = generation;
         s.Engaged = false;

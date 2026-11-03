@@ -1,4 +1,5 @@
 using System.Numerics;
+using Meitou.Data.Characters;
 using Meitou.Data.Gameplay;
 using Meitou.Data.Gameplay.Bodies;
 using Meitou.Data.Gameplay.Combat;
@@ -16,18 +17,30 @@ public static class RangedTuning
     public const float BarrelHeight = 15, BarrelForward = 8;
     /// <summary>Height above the feet the aim point (the original's bone <c>Bip01 Spine2</c>) stands for.</summary>
     public const float AimHeight = 13;
-    /// <summary>The body a bolt hits: an upright cylinder of the footprint radius, this tall (the original tests the physics shape, <b>Unknown</b>).</summary>
-    public const float BodyHeight = 18;
-    /// <summary>While closing in, the line of fire must be clear this long (seconds) before the shooter stops and aims again (<c>FUN_140438c70</c>'s 0.3 s, its ray flags <b>Unknown</b>).</summary>
+    /// <summary>
+    /// While closing in, the ray towards the target must meet the terrain or a building beyond the target this long (seconds) before the shooter stops and aims again
+    /// (<c>FUN_140438c70</c>, <c>DAT_14168955c</c> 0.3).
+    /// </summary>
     public const float ClearToAim = 0.3f;
+    /// <summary>What a new target sets the closing timer to (<c>FUN_1404371f0</c>, 5.0): the first ray that passes after it stops the walk at once.</summary>
+    public const float NewTargetClear = 5;
+    /// <summary>The shooter's closing ray stands this high above both feet (<c>FUN_140438c70</c>, <c>DAT_141685340</c> 5.0); only its direction is used.</summary>
+    public const float ClosingRayHeight = 5;
+    /// <summary>How far the closing ray looks (units): the original's physics ray is unbounded (<c>raycastClosestShape</c> to <c>FLT_MAX</c>), Meitou's terrain and buildings end somewhere.</summary>
+    public const float RayReach = 2000;
     /// <summary>The settings' <c>harpoonLimit</c> default and range (<see cref="CombatSystem.StuckLimit"/> is the live value).</summary>
     public const int DefaultStuckLimit = 60, MinStuckLimit = 10, MaxStuckLimit = 10000;
     /// <summary>Spacing of the terrain samples along a line of fire and along a bolt's step (units).</summary>
     public const float TerrainStep = 20, FlightTerrainStep = 5;
     /// <summary>Length of the pieces a long line of fire is cut into for the neighbour grid (units).</summary>
     public const float LineChunk = 100;
-    /// <summary>The largest body radius a bolt is tested against (the biggest animals' footprints are about this).</summary>
+    /// <summary>The largest body radius a melee zone is tested against (the biggest animals' footprints are about this).</summary>
     public const float MaxBodyRadius = 30;
+    /// <summary>
+    /// The largest horizontal reach of a click hull from its feet the grid queries allow for (the biggest hulls, Leviathan and Big-Bones, are 75 square: 53 corner to centre;
+    /// an animal's size factor can grow it).
+    /// </summary>
+    public const float MaxHullReach = 80;
 }
 
 public sealed partial class CombatSystem : IProjectileSource
@@ -128,42 +141,44 @@ public sealed partial class CombatSystem : IProjectileSource
     }
 
     /// <summary>
-    /// Where a segment from <paramref name="from"/> along <paramref name="seg"/> first enters an upright cylinder (radius <paramref name="radius"/>, from <paramref name="feet"/>
-    /// up <paramref name="height"/>), as a fraction of the segment in [0, 1].
+    /// Half the size of a character's click hull (<c>CharMovement +0x3b0</c>, a kinematic PhysX box in collision group 0 that the rays of bolts and of the line of fire hit; built by
+    /// <c>FUN_140661a70</c>, docs/game/combat.md "Line of fire and the hit shape"): the race's <c>hull size X, Y, Z</c>, Y = max(X, Z) while it is not upright (prone state not 0),
+    /// all times half the size factor (slot 0x390), Y also times the look's height (the appearance's <c>characterHeight</c>). The box is not turned with the character.
     /// </summary>
-    internal static bool HitBody(Vector3 from, Vector3 seg, Vector3 feet, float radius, float height, out float t)
+    internal static Vector3 HullHalf(CharacterCold c)
     {
+        var race = c.Race!;
+        float x = race.HullX, y = race.HullY, z = race.HullZ;
+        if (c.Medical is { Prone: true }) y = MathF.Max(x, z);
+        float k = 0.5f * (c.Medical?.ScaleK ?? 1);
+        float height = c.Appearance is { } look ? CharacterShape.MovementScaleOf(look) : 1;
+        return new Vector3(x * k, y * k * height, z * k);
+    }
+
+    /// <summary>
+    /// Where a segment from <paramref name="from"/> along <paramref name="seg"/> first enters a click hull standing on <paramref name="feet"/> (an axis-aligned box of half size
+    /// <paramref name="half"/>, its bottom at the feet), as a fraction of the segment in [0, 1].
+    /// </summary>
+    internal static bool HitHull(Vector3 from, Vector3 seg, Vector3 feet, Vector3 half, out float t)
+    {
+        float t0 = 0, t1 = 1;
         t = 0;
-        float ax = seg.X, az = seg.Z, wx = from.X - feet.X, wz = from.Z - feet.Z;
-        float a = ax * ax + az * az, c = wx * wx + wz * wz - radius * radius;
-        float t0, t1;
-        if (a < 1e-8f)
-        {
-            if (c > 0) return false;
-            t0 = 0;
-            t1 = 1;
-        }
-        else
-        {
-            float b = 2 * (wx * ax + wz * az);
-            float disc = b * b - 4 * a * c;
-            if (disc < 0) return false;
-            float root = MathF.Sqrt(disc);
-            t0 = (-b - root) / (2 * a);
-            t1 = (-b + root) / (2 * a);
-        }
-        t0 = MathF.Max(t0, 0);
-        t1 = MathF.Min(t1, 1);
-        if (t0 > t1) return false;
-        // Within [t0, t1] the segment is inside the circle; it must also be between the feet and the head there.
-        float lo = feet.Y, hi = feet.Y + height;
-        float y0 = from.Y + seg.Y * t0, y1 = from.Y + seg.Y * t1;
-        if (y0 >= lo && y0 <= hi) { t = t0; return true; }
-        if (MathF.Abs(seg.Y) < 1e-8f) return false;
-        float plane = y0 < lo ? lo : hi;
-        if ((y0 < lo && y1 < lo) || (y0 > hi && y1 > hi)) return false;
-        t = (plane - from.Y) / seg.Y;
-        return t >= t0 && t <= t1;
+        if (!Slab(from.X, seg.X, feet.X - half.X, feet.X + half.X, ref t0, ref t1)) return false;
+        if (!Slab(from.Y, seg.Y, feet.Y, feet.Y + 2 * half.Y, ref t0, ref t1)) return false;
+        if (!Slab(from.Z, seg.Z, feet.Z - half.Z, feet.Z + half.Z, ref t0, ref t1)) return false;
+        t = t0;
+        return true;
+    }
+
+    /// <summary>Narrows [<paramref name="t0"/>, <paramref name="t1"/>] to where the segment's coordinate (start <paramref name="o"/>, change <paramref name="d"/>) is within [lo, hi].</summary>
+    static bool Slab(float o, float d, float lo, float hi, ref float t0, ref float t1)
+    {
+        if (MathF.Abs(d) < 1e-8f) return o >= lo && o <= hi;
+        float a = (lo - o) / d, b = (hi - o) / d;
+        if (a > b) (a, b) = (b, a);
+        t0 = MathF.Max(t0, a);
+        t1 = MathF.Min(t1, b);
+        return t0 <= t1;
     }
 
     /// <summary>Whether <paramref name="shooter"/> (of <paramref name="faction"/>) counts <paramref name="other"/> as an enemy for the line of fire and friendly fire.</summary>
@@ -178,53 +193,72 @@ public sealed partial class CombatSystem : IProjectileSource
         return CharacterFacts.RegardsEnemy(Relations, faction, oc.Faction);
     }
 
-    /// <summary>Can be hit by a bolt: alive, with a body, not down (a lying body does not stop bolts: <b>engine</b>, the original's hit shape is <b>Unknown</b>).</summary>
+    /// <summary>
+    /// Has a click hull for bolts and the line of fire: alive, with a body, not down (the original takes the hull away while a whole-body or carry ragdoll runs, <c>FUN_1405d0db0</c>
+    /// → <c>FUN_14065fe40</c>, <b>Observed</b>; Meitou counts every down character as ragdolled).
+    /// </summary>
     static bool Shootable(ReadOnlySpan<CharacterHot> state, CharacterTable table, int slot) =>
         state[slot].Alive && table.Cold(slot) is { Medical.Incapacitated: false, Race: not null };
 
     struct LineScan
     {
         public CharacterTable Table;
-        public int Self, Target;
+        public int Self;
         public Vector3 From, Seg;
         public float Best;
         public int Hit;
     }
 
     /// <summary>
-    /// The fire decision's line of fire (<c>FUN_140437ad0</c>): 1 fire, 0 something nearer than the target is in the way (close in), 2 a friend is in the way (hold).
-    /// The original holds when terrain is hit first; the engine closes in instead, so a shooter behind a dune or a wall does not stand for ever (the ray flags are <b>Unknown</b>).
-    /// The terrain and the buildings' collision are tested (<see cref="SolidHits"/>).
+    /// The fire decision's line of fire (<c>FUN_140437ad0</c>, docs/game/combat.md "Line of fire and the hit shape"): a ray from <paramref name="from"/> through <paramref name="to"/>
+    /// (the original's is unbounded; here <paramref name="reach"/> long at least) and the first thing it meets of the click hulls, the terrain and the buildings. A hull of one
+    /// the shooter does not count an enemy holds the shot (2), any enemy's lets it go (1), the target's included; the terrain lets it go (it names no object); a building
+    /// closes in (0) when it is nearer the shooter than the target is (feet to feet), else lets it go; nothing met fires.
     /// </summary>
-    int LineOfFire(World world, int self, int target, Vector3 from, Vector3 to, int faction)
+    int LineOfFire(World world, int self, int target, Vector3 from, Vector3 to, int faction, float reach)
     {
         var seg = to - from;
         float length = seg.Length();
         if (length < 1e-3f) return 1;
-        // Terrain and buildings, the last few units at the target left out.
-        float solid = length > RangedTuning.TerrainStep ? SolidHits.Hit(world.Walkability, Buildings, from, seg * (1 - RangedTuning.TerrainStep / length), RangedTuning.TerrainStep, out _) : -1;
-        if (solid >= 0) return 0;
-        // Characters: the nearest body crossed before the target, the grid queried piece by piece.
-        var scan = new LineScan { Table = world.Characters, Self = self, Target = target, From = from, Seg = seg, Best = 1, Hit = -1 };
+        seg *= MathF.Max(length, reach) / length;
+        length = MathF.Max(length, reach);
+        int hit = FirstHull(world, self, from, seg, length, out float atHull);
+        // The terrain and the buildings only up to the first hull: whichever comes first decides.
+        var solidSeg = hit >= 0 ? seg * atHull : seg;
+        float solid = SolidHits.Hit(world.Walkability, Buildings, from, solidSeg, RangedTuning.TerrainStep, out bool building);
+        var prev = world.Characters.Previous;
+        if (solid < 0 && hit >= 0) return Hostile(world.Characters, self, prev[self].Generation, faction, target, hit) ? 1 : 2;
+        if (solid < 0 || !building) return 1;
+        var at = from + solidSeg * solid;
+        return Vector3.DistanceSquared(prev[self].Position, prev[target].Position) < Vector3.DistanceSquared(at, prev[self].Position) ? 1 : 0;
+    }
+
+    /// <summary>
+    /// The character whose click hull the segment enters first (the shooter's own left out), -1 for none, and where (<paramref name="at"/>, a fraction of the segment). The grid is
+    /// queried piece by piece from the start; a piece's query finds every hull entered within it, so a hull entered within the pieces done ends the search.
+    /// </summary>
+    int FirstHull(World world, int self, Vector3 from, Vector3 seg, float length, out float at)
+    {
+        var scan = new LineScan { Table = world.Characters, Self = self, From = from, Seg = seg, Best = 1, Hit = -1 };
         int chunks = Math.Max(1, (int)MathF.Ceiling(length / RangedTuning.LineChunk));
         for (int k = 0; k < chunks; k++)
         {
             var mid = from + seg * ((k + 0.5f) / chunks);
-            world.Grid.Query(mid.X, mid.Z, length / chunks * 0.5f + RangedTuning.MaxBodyRadius, ref scan, static (int other, ref LineScan st) =>
+            world.Grid.Query(mid.X, mid.Z, length / chunks * 0.5f + RangedTuning.MaxHullReach, ref scan, static (int other, ref LineScan st) =>
             {
-                if (other == st.Self || other == st.Target || other == st.Hit) return;
+                if (other == st.Self || other == st.Hit) return;
                 var state = st.Table.Previous;
                 if (!Shootable(state, st.Table, other)) return;
-                float r = CombatTuning.Footprint(st.Table.Cold(other));
-                if (HitBody(st.From, st.Seg, state[other].Position, r, RangedTuning.BodyHeight, out float t) && (t < st.Best || t == st.Best && other < st.Hit))
+                if (HitHull(st.From, st.Seg, state[other].Position, HullHalf(st.Table.Cold(other)!), out float t) && (t < st.Best || t == st.Best && other < st.Hit))
                 {
                     st.Best = t;
                     st.Hit = other;
                 }
             });
+            if (scan.Hit >= 0 && scan.Best <= (k + 1f) / chunks) break;
         }
-        if (scan.Hit < 0) return 1;
-        return Hostile(world.Characters, self, world.Characters.Previous[self].Generation, faction, target, scan.Hit) ? 1 : 2;
+        at = scan.Best;
+        return scan.Hit;
     }
 
     // ------------------------------------------------------------------ act: the controller
@@ -267,6 +301,7 @@ public sealed partial class CombatSystem : IProjectileSource
     /// <see cref="RetaliationSystem.ImmediateReach"/>, melee otherwise; out of Ranged mode never the crossbow. A character without a crossbow is left alone.
     /// A reload in progress is paused, not abandoned, when the controller stops or the fighter turns to melee: the original's reload timer and flag (controller <c>+0x78</c>,
     /// <c>+0x80</c>) are written only by the reload step and the constructor, so it resumes where it was the next time the crossbow is used (docs/game/combat.md "Turrets", fire gate).
+    /// A fight without a target keeps the crossbow and the controller (its reload counts on); the fight's end stops it.
     /// </summary>
     void ChooseMode(World world, int i, ref CombatSlot s, CharacterCold cold, bool fighting)
     {
@@ -274,6 +309,9 @@ public sealed partial class CombatSystem : IProjectileSource
         if (fighter.Crossbow is not { } x) return;
         if (!fighting)
         {
+            // Still in the fight without a target (the controller's state 3): the controller runs on, its reload with it (FUN_140438c70 sets the fire gate's flag before it
+            // looks for a target).
+            if (s.Ranged && cold.InCombat && CanShoot(s, cold, x)) return;
             if (s.Ranged || s.RangedState != 0 || s.ClearTime != 0 || s.Steady != 0)
             {
                 // The fight is over: the controller stops (a reload in progress is paused; the bolts loaded stay loaded).
@@ -285,11 +323,7 @@ public sealed partial class CombatSystem : IProjectileSource
             }
             return;
         }
-        bool hasAmmo = x.InfiniteAmmo || Ammunition.Find(cold.Inventory, x.Data.AmmoId) is not null;
-        // A crossbow (weapon category Bow) needs both arms (FUN_1407f2840, FUN_1409991d0); losing one puts it away (FUN_1405cc230) and the fight goes on in melee.
-        // The same gate needs the posture (vfunc 0x368) 0: staying low or crawling it does not shoot (docs/game/combat.md "Arms"); and the shooting rows want !me swim (139): not
-        // while swimming (water state 3).
-        bool can = (s.Loaded > 0 || hasAmmo) && cold.Medical is not { BothArmsWork: false } && cold.Medical is not { Prone: true } && cold.WaterState != 3;
+        bool can = CanShoot(s, cold, x);
         if (s.Dry == can) s.Dry = !can;
         // Ranged mode takes the crossbow however close the target is (between swings): melee is x0.1 against shooting's 1, and a threat within 40 refuses the shooting rows.
         bool rangedMode = Orders.RangedMode(cold);
@@ -305,87 +339,152 @@ public sealed partial class CombatSystem : IProjectileSource
     }
 
     /// <summary>
-    /// One tick of the ranged controller (<c>FUN_140438c70</c>, the reload <c>FUN_140437ce0</c>, the fire decision <c>FUN_140437ad0</c>): reload when empty (one bolt
-    /// taken at the end, through <see cref="ReloadEffect"/>); out of range or with the line blocked, close in (the pursuit system walks); in range, hold the aim for the
-    /// steady time and fire (<see cref="FireEffect"/>) when the line is clear. XP: crossbows and dexterity while reloading, crossbows and perception while aiming.
+    /// The shooting gate (<c>FUN_1407f2840</c>, docs/game/combat.md "Arms"): bolts loaded or ammunition, both arms (a crossbow is weapon category Bow, <c>FUN_1409991d0</c>; losing one puts it
+    /// away, <c>FUN_1405cc230</c>), the posture (vfunc 0x368) 0 (not staying low or crawling) and, for the shooting rows' <c>!me swim</c> (139), not swimming (water state 3).
+    /// </summary>
+    static bool CanShoot(in CombatSlot s, CharacterCold cold, CrossbowInstance x)
+    {
+        bool hasAmmo = x.InfiniteAmmo || Ammunition.Find(cold.Inventory, x.Data.AmmoId) is not null;
+        return (s.Loaded > 0 || hasAmmo) && cold.Medical is not { BothArmsWork: false } && cold.Medical is not { Prone: true } && cold.WaterState != 3;
+    }
+
+    /// <summary>
+    /// One tick of the ranged controller (<c>FUN_140438c70</c>, the reload <c>FUN_140437ce0</c>, the fire decision <c>FUN_140437ad0</c>; docs/game/combat.md "Turrets" and
+    /// "Line of fire and the hit shape"): reload when empty (one bolt taken at the end, through <see cref="ReloadEffect"/>), with a target or without one (state 3, the reload
+    /// runs on); out of range or with a building in the way, close in (the pursuit system walks) until the ray towards the target meets something beyond it for
+    /// <see cref="RangedTuning.ClearToAim"/>; in range, hold the aim for the steady time and fire (<see cref="FireEffect"/>) unless one it does not count an enemy is first on
+    /// the line. XP: crossbows and dexterity while reloading, crossbows and perception while aiming.
     /// </summary>
     void TickRanged(World world, int i, ref CombatSlot s, CharacterCold cold, EffectBuffer effects, int now, float dt)
     {
-        var table = world.Characters;
-        var prev = table.Previous;
-        var fighter = cold.Fighter!;
-        var x = fighter.Crossbow!;
-        var stats = cold.Stats!;
-        var race = cold.Race!;
-        int t = s.TargetSlot;
         // The shooting task's update sets Character +0x198 to Crossbows (35) every tick (Task_RangedAttack FUN_14033bfb0): the HUD's Current Skill line.
         cold.UseSkill(StatsEnumerated.Crossbows, world.Tick);
         cold.RangedCombatMode = true;
-
         if (s.Loaded <= 0)
         {
-            s.RangedState = (byte)RangedStates.Reloading;
-            if (s.ReloadLeft <= 0)
-            {
-                if (!x.InfiniteAmmo && Ammunition.Find(cold.Inventory, x.Data.AmmoId) is null)
-                {
-                    s.Dry = true;
-                    return;
-                }
-                float skill = RangedFormulas.SkillBlend(Eff(cold, StatsEnumerated.Crossbows), Eff(cold, StatsEnumerated.Dexterity), fighter.DexterityMult);
-                s.ReloadTime = RangedFormulas.ReloadTime(skill, x.Stats.ReloadMin, x.Stats.ReloadMax);
-                s.ReloadLeft = s.ReloadTime;
-            }
-            s.ReloadLeft -= dt;
-            xp.Continuous(stats, race, StatsEnumerated.Crossbows, dt, RangedFormulas.CrossbowXp);
-            xp.Continuous(stats, race, StatsEnumerated.Dexterity, dt, RangedFormulas.DexterityReloadXp);
-            if (s.ReloadLeft <= 0)
-            {
-                s.ReloadLeft = 0;
-                s.Loaded = x.NumShots;
-                cold.CrossbowShots = s.Loaded;
-                s.Steady = RangedFormulas.SteadyAim;
-                s.RangedState = (byte)RangedStates.Aiming;
-                if (!x.InfiniteAmmo) effects.Emit(i, i, ReloadEffect);
-            }
+            Reload(i, ref s, cold, effects, dt);
+            return;
+        }
+        int t = s.TargetSlot;
+        if (t < 0)
+        {
+            s.RangedState = (byte)RangedStates.NoTarget;
             return;
         }
 
+        var prev = world.Characters.Previous;
+        var x = cold.Fighter!.Crossbow!;
         var barrel = Barrel(prev[i]);
         float h = RangedFormulas.HeightFactor(barrel.Y, prev[t].Position.Y);
-        if (!RangedFormulas.InRange(Vector3.DistanceSquared(prev[i].Position, prev[t].Position), x.Stats.Range, h))
-        {
-            s.RangedState = (byte)RangedStates.Closing;
-            s.ClearTime = 0;
-            s.Steady = RangedFormulas.SteadyAim;
-            return;
-        }
-        var aim = AimPoint(barrel, prev[t], x.Stats.ShotSpeed);
+        bool inRange = RangedFormulas.InRange(Vector3.DistanceSquared(prev[i].Position, prev[t].Position), x.Stats.Range, h);
         if (s.RangedState == (byte)RangedStates.Closing)
         {
-            // Walking up: stop and aim once the line has been clear for a moment.
-            if (LineOfFire(world, i, t, barrel, aim, cold.Faction) == 0)
+            Close(world, i, t, ref s, barrel, inRange, dt);
+            return;
+        }
+        if (!inRange)
+        {
+            StartClosing(ref s);
+            return;
+        }
+        Aim(world, i, t, ref s, cold, effects, barrel, now, dt);
+    }
+
+    /// <summary>
+    /// The reload (<c>FUN_140437ce0</c>): an empty crossbow starts one of <see cref="RangedFormulas.ReloadTime"/> (none without ammunition: dry), counts it down with crossbows
+    /// and dexterity XP and at its end holds <c>num shots</c>, the aim steadied again; a reload cut off resumes where it stopped.
+    /// </summary>
+    void Reload(int i, ref CombatSlot s, CharacterCold cold, EffectBuffer effects, float dt)
+    {
+        var fighter = cold.Fighter!;
+        var x = fighter.Crossbow!;
+        s.RangedState = (byte)RangedStates.Reloading;
+        if (s.ReloadLeft <= 0)
+        {
+            if (!x.InfiniteAmmo && Ammunition.Find(cold.Inventory, x.Data.AmmoId) is null)
             {
-                s.ClearTime = 0;
+                s.Dry = true;
                 return;
             }
-            s.ClearTime += dt;
-            if (s.ClearTime < RangedTuning.ClearToAim) return;
-            s.ClearTime = 0;
+            float skill = RangedFormulas.SkillBlend(Eff(cold, StatsEnumerated.Crossbows), Eff(cold, StatsEnumerated.Dexterity), fighter.DexterityMult);
+            s.ReloadTime = RangedFormulas.ReloadTime(skill, x.Stats.ReloadMin, x.Stats.ReloadMax);
+            s.ReloadLeft = s.ReloadTime;
         }
+        s.ReloadLeft -= dt;
+        xp.Continuous(cold.Stats!, cold.Race!, StatsEnumerated.Crossbows, dt, RangedFormulas.CrossbowXp);
+        xp.Continuous(cold.Stats!, cold.Race!, StatsEnumerated.Dexterity, dt, RangedFormulas.DexterityReloadXp);
+        if (s.ReloadLeft > 0) return;
+        s.ReloadLeft = 0;
+        s.Loaded = x.NumShots;
+        cold.CrossbowShots = s.Loaded;
+        s.Steady = RangedFormulas.SteadyAim;
         s.RangedState = (byte)RangedStates.Aiming;
-        xp.Continuous(stats, race, StatsEnumerated.Perception, dt, RangedFormulas.PerceptionXp);
-        xp.Continuous(stats, race, StatsEnumerated.Crossbows, dt, RangedFormulas.CrossbowXp);
+        if (!x.InfiniteAmmo) effects.Emit(i, i, ReloadEffect);
+    }
+
+    /// <summary>The controller's state 1: walking towards the target, the closing timer from 0 (<c>FUN_140438c70</c> clears it only on entering the state).</summary>
+    static void StartClosing(ref CombatSlot s)
+    {
+        s.RangedState = (byte)RangedStates.Closing;
+        s.ClearTime = 0;
+        s.Steady = RangedFormulas.SteadyAim;
+    }
+
+    /// <summary>
+    /// Walking towards the target (state 1, <c>FUN_140438c70</c>): in range, the closing ray (<see cref="ClosingRayPasses"/>) passing adds to the timer and past
+    /// <see cref="RangedTuning.ClearToAim"/> the shooter stops (state 0, it aims from the next tick); a ray that does not pass sets the timer to 0. Out of range the timer stays.
+    /// </summary>
+    void Close(World world, int i, int t, ref CombatSlot s, Vector3 barrel, bool inRange, float dt)
+    {
+        if (!inRange) return;
+        if (!ClosingRayPasses(world, i, t, barrel))
+        {
+            s.ClearTime = 0;
+            return;
+        }
+        s.ClearTime += dt;
+        if (s.ClearTime <= RangedTuning.ClearToAim) return;
+        s.ClearTime = 0;
+        s.RangedState = (byte)RangedStates.Aiming;
+    }
+
+    /// <summary>
+    /// The closing ray (<c>FUN_140438c70</c> → <c>FUN_140435b40</c> with mask <c>0x87f9e04</c>: the terrain and the buildings, no characters): from the barrel along the line between
+    /// the two feet (both raised <see cref="RangedTuning.ClosingRayHeight"/>), it passes when it meets something farther from the shooter than the target is (<c>FUN_1404346d0</c>).
+    /// A ray that meets nothing does not pass. The original's ray is unbounded; here it ends <see cref="RangedTuning.RayReach"/> on.
+    /// </summary>
+    bool ClosingRayPasses(World world, int i, int t, Vector3 barrel)
+    {
+        var prev = world.Characters.Previous;
+        var line = prev[t].Position - prev[i].Position;
+        float length = line.Length();
+        if (length < 1e-3f) return false;
+        var seg = line * (RangedTuning.RayReach / length);
+        float hit = SolidHits.Hit(world.Walkability, Buildings, barrel, seg, RangedTuning.TerrainStep, out _);
+        if (hit < 0) return false;
+        return length * length < Vector3.DistanceSquared(barrel + seg * hit, prev[i].Position);
+    }
+
+    /// <summary>
+    /// Aiming in range (state 0): crossbows and perception XP, the steady time, then the line of fire (<see cref="LineOfFire"/>): clear fires, one not counted an enemy first on it
+    /// holds, a nearer building sends the shooter closer (<see cref="StartClosing"/>).
+    /// </summary>
+    void Aim(World world, int i, int t, ref CombatSlot s, CharacterCold cold, EffectBuffer effects, Vector3 barrel, int now, float dt)
+    {
+        var x = cold.Fighter!.Crossbow!;
+        s.RangedState = (byte)RangedStates.Aiming;
+        xp.Continuous(cold.Stats!, cold.Race!, StatsEnumerated.Perception, dt, RangedFormulas.PerceptionXp);
+        xp.Continuous(cold.Stats!, cold.Race!, StatsEnumerated.Crossbows, dt, RangedFormulas.CrossbowXp);
         if (s.Steady > 0)
         {
             s.Steady -= dt;
             if (s.Steady > 0) return;
         }
-        switch (LineOfFire(world, i, t, barrel, aim, cold.Faction))
+        var aim = AimPoint(barrel, world.Characters.Previous[t], x.Stats.ShotSpeed);
+        switch (LineOfFire(world, i, t, barrel, aim, cold.Faction, x.Stats.Range))
         {
             case 0:
-                s.RangedState = (byte)RangedStates.Closing;
-                s.ClearTime = 0;
+                StartClosing(ref s);
                 return;
             case 2:
                 return;
@@ -476,7 +575,7 @@ public sealed partial class CombatSystem : IProjectileSource
 
     /// <summary>
     /// Advances every bolt one tick, in the order they were fired (serial, against the last tick's positions, which is what the grid holds; <c>FUN_1404380e0</c>):
-    /// a straight line while range is left, then the nose pitching down 8 degrees a second; the first body or the ground on the step is hit. A friend in the way is
+    /// a straight line while range is left, then the nose pitching down 8 degrees a second; the first click hull (<see cref="HullHalf"/>) or the ground on the step is hit. A friend in the way is
     /// passed with the shooter's avoidance chance; the ground or a building sticks the bolt (a grazing hit on the ground drops it). Stuck bolts stay up to <see cref="StuckLimit"/>.
     /// </summary>
     void FlyProjectiles(World world)
@@ -516,11 +615,10 @@ public sealed partial class CombatSystem : IProjectileSource
                 float ground = SolidHits.Hit(walk, Buildings, p.Position, seg, RangedTuning.FlightTerrainStep, out bool building);
                 var scan = new FlightScan { Table = table, Shooter = p.Shooter, Skip = p.Passed, From = p.Position, Seg = seg, After = after, Best = ground < 0 ? 1 : ground, Hit = -1 };
                 var mid = p.Position + seg * 0.5f;
-                world.Grid.Query(mid.X, mid.Z, step * 0.5f + RangedTuning.MaxBodyRadius, ref scan, static (int other, ref FlightScan st) =>
+                world.Grid.Query(mid.X, mid.Z, step * 0.5f + RangedTuning.MaxHullReach, ref scan, static (int other, ref FlightScan st) =>
                 {
                     if (other == st.Shooter || other == st.Skip || !Shootable(st.Table.Previous, st.Table, other)) return;
-                    float r = CombatTuning.Footprint(st.Table.Cold(other));
-                    if (HitBody(st.From, st.Seg, st.Table.Previous[other].Position, r, RangedTuning.BodyHeight, out float t) && t > st.After
+                    if (HitHull(st.From, st.Seg, st.Table.Previous[other].Position, HullHalf(st.Table.Cold(other)!), out float t) && t > st.After
                         && (t < st.Best || t == st.Best && other < st.Hit))
                     {
                         st.Best = t;
