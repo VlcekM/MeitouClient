@@ -553,19 +553,25 @@ public sealed partial class PopulationSystem
 
     /// <summary>
     /// The nest that is a sector's own town (<c>FUN_1408f62e0</c>: the town nearest the sector's centre, when it stands in the sector): the nearest nest site
-    /// when no level-data town is nearer and it stands in the sector, else null. A rolled nest counts at its first spot (it settles among its spots as it loads).
+    /// when no level-data town is nearer and it stands in the sector, or the nearest level-data town when it is a nest standing in the sector, else null.
+    /// A rolled nest counts at its first spot (it settles among its spots as it loads).
     /// </summary>
     TownData? OwnNest(WildSite sector, Vector2 centre)
     {
-        float nearest = NearestTown(centre, out float town) is null ? float.MaxValue : town;
+        var town = NearestTown(centre, out float nearest);
         WildSite? own = null;
         foreach (var s in wildSites!)
         {
-            if (s.Kind != WildKind.Nest || s.Spots.Count == 0) continue;
+            if (s.Kind != WildKind.Nest || s.Spots.Count == 0)
+                continue;
             float d = Vector2.Distance(centre, s.Spots[0]);
-            if (d < nearest) (own, nearest) = (s, d);
+            if (d < nearest)
+                (own, nearest) = (s, d);
         }
-        return own is not null && own.Zone == sector.Zone ? own.Nest : null;
+
+        if (own is not null)
+            return own.Zone == sector.Zone ? own.Nest : null;
+        return town is { Town.Type: TownType.Nest } && town.Zone == sector.Zone ? town.Town : null;
     }
 
     static TownSite? NearestTown(PopulationData data, Vector2 p, out float distance)

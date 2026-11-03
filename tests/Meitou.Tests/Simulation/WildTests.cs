@@ -63,7 +63,11 @@ public class WildTests(ITestOutputHelper output)
     {
         var (minX, minZ, maxX, maxZ) = WeatherAreas.CellRect(sector.Zone.X, sector.Zone.Y);
         var centre = new Vector2((minX + maxX) / 2, (minZ + maxZ) / 2);
-        float town = data.Sites.Min(s => Vector2.Distance(centre, new Vector2(s.Position.X, s.Position.Z)));
+        // The towns PopulationSystem.NearestTown counts: not nest markers, points of interest or Null.
+        float town = data.Sites.Where(s => s.Town.Type is not (TownType.NestMarker or TownType.PointOfInterest or TownType.Null))
+            .Select(s => Vector2.Distance(centre, new Vector2(s.Position.X, s.Position.Z)))
+            .DefaultIfEmpty(float.MaxValue)
+            .Min();
         var nearest = nests.MinBy(n => Vector2.Distance(centre, n.Spots[0]))!;
         return nearest.Zone == sector.Zone && Vector2.Distance(centre, nearest.Spots[0]) < town;
     }
@@ -185,7 +189,7 @@ public class WildTests(ITestOutputHelper output)
         var roam = Rec("60-t", FcsRecordType.AI_PACKAGE, "Roam");
         var occupy = Rec("61-t", FcsRecordType.AI_PACKAGE, "Occupy");
         occupy.Ints["signal func"] = 30;
-        var data = WildData(p => p.References["AI packages"] = [new FcsReference("60-t", 0, 0, 0), new FcsReference("61-t", 1, 0, 0)], null, roam, occupy);
+        var data = WildData(p => p.References["AI packages"] = [new FcsReference("60-t", 0, 0, 0), new FcsReference("61-t", 1, 0, 0)], extra: [roam, occupy]);
         var (world, pop) = WildWorld(data, 1, StandardParts.Population | StandardParts.Movement | StandardParts.Ai);
         using var _ = world;
         pop.KeepWild = false;
