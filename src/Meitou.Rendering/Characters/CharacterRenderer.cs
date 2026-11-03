@@ -752,7 +752,7 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
     void PoseLive(Vector3 eye, int boneTotal, int partTotal)
     {
         var watch = Stopwatch.StartNew();
-        // Not cleared: every live character's range is written below (an icon clears its own), so zeroing megabytes first was wasted.
+        // Not cleared: every live character's range is written below (an icon has none), so zeroing megabytes first was wasted.
         bones = Gpu.Frame.AllocateConstants((ulong)Math.Max(boneTotal, 1) * 64, 256);
         nint bonePointer = (nint)bones.Pointer;
         previousBones = Motion ? Gpu.Frame.AllocateConstants((ulong)Math.Max(boneTotal, 1) * 64, 256) : bones;
@@ -768,12 +768,8 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
     void PoseOne(ref Live l, nint bonePointer, nint previousPointer, bool motion, Vector3 eye)
     {
         var asset = l.Asset;
+        if (asset.IsIcon) return;   // no rig, so no range in the palettes (GatherIcons gives it no bones)
         var rig = asset.Rig;
-        if (asset.IsIcon)
-        {
-            ClearPalette(l.BoneBase, rig.BoneCount, bonePointer, previousPointer, motion);
-            return;
-        }
 
         var state = l.State;
         if (l.Repose) Repose(ref l, state);
@@ -787,13 +783,6 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
             if (!l.Repose) state.Attach.CopyTo(state.PreviousAttach, 0);
         }
         if (!l.PortraitOnly) PlaceParts(in l, eye, motion);
-    }
-
-    /// <summary>Zeroes a character's range of the frame's palettes (and last frame's), as the cleared allocation used to give it.</summary>
-    static void ClearPalette(int boneBase, int count, nint bonePointer, nint previousPointer, bool motion)
-    {
-        new Span<Matrix4x4>((byte*)bonePointer + (long)boneBase * 64, count).Clear();
-        if (motion) new Span<Matrix4x4>((byte*)previousPointer + (long)boneBase * 64, count).Clear();
     }
 
     /// <summary>Poses the character's bones, attach points and lamps; the last pose becomes the previous one, or the new one does on a first pose or a snap.</summary>
