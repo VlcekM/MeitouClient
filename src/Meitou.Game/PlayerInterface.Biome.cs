@@ -41,7 +41,7 @@ sealed partial class PlayerInterface
         }
         biomeHold -= dt;
         biomeCooldown -= dt;
-        bool blocked = conversationShown;
+        bool blocked = shownTown != 0;   // the town panel is showing a town (MainBarGUI +0x128, FUN_140728d50:358): no banner starts and the group does not follow the pivot
         if (here.Id != biomeGroup && biomeCooldown <= 0 && !blocked && here.Name != "NONE" && here.Id != WeatherData.NoneRegionId)
         {
             (biomeName, biomeShown, biomeAlpha, biomeHold, biomeCooldown) = (here.Name, true, 0, BiomeHoldSeconds, BiomeCooldownSeconds);
@@ -54,7 +54,8 @@ sealed partial class PlayerInterface
             {
                 biomeShown = false;
                 // On hiding the game tests the group's `arrival dialog`: squad banter (PlayerInterface::triggerAreaArrivalDialogue).
-                if (biomeGroup is { } arrived) Say(new Meitou.Simulation.Dialogue.AreaArrival(arrived) { Tick = session.World.Tick });
+                // It reads the group under the pivot this frame (FUN_1408015d0 gets the current holder), not the stored one.
+                Say(new Meitou.Simulation.Dialogue.AreaArrival(here.Id) { Tick = session.World.Tick });
             }
         }
         if (!blocked) biomeGroup = here.Id;
@@ -79,7 +80,7 @@ sealed partial class PlayerInterface
         camera.BiomeTextTimer = MathF.Max(biomeCooldown, 0);
         camera.BiomeTextGroup = biomeGroup ?? "";
         var pivot = session.Camera.Current.Target;
-        camera.Area = RegionAt?.Invoke(pivot.X, pivot.Z) is { } here && here.Name != "NONE" && here.Id != WeatherData.NoneRegionId ? here.Name : "";
+        camera.Area = RegionAt?.Invoke(pivot.X, pivot.Z) is { } here && here.Name != "NONE" ? here.Name : "";   // the name test only (FUN_140375360); the banner also tests the id
     }
 
     /// <summary>A loaded save's cooldown (<c>FUN_140728c10</c>); the group is the one under the pivot, as the original's loading window sets it.</summary>
