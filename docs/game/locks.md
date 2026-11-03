@@ -252,6 +252,11 @@ Same targets as picking; Task_CutLock / Task_BruteForceLock share the shackle ta
   `is for position marker` part: it places the building's position marker (where characters use the cage), not the mesh. The mesh and the occupant both sit at the origin.
 - **Locked cage**: the occupant cannot leave; `Get out of cage` (133, 207) needs `!isDoorLocked`; tooltip shows the lock level
   or "The cage you are in is UNLOCKED. Nobody knows this but you" (`FUN_1405d4260`).
+- **Pose while held** (**Observed**, the original against Meitou): the fixture's own clips play, nothing else. A caged prisoner out cold or dead lies on its side in
+  the cage's `animation KO` (the Prisoner Cage's `foetal`), an awake one stands in its `animation` (the Cage's stand) at once, and the Prisoner Pole keeps its stand
+  pose whatever its occupant's state. No fall is played into the cage and no get-up out of it. An animal, which has no such clips, is left as a still frame: its
+  animation does not advance. Meitou: `AnimationSystem` skips the ragdoll hold for a held character (the furniture refuses the ragdoll, so nobody posed it and it
+  stayed flat in the knockout's pose) and leaves a held animal's layers alone.
 - **Leaving** (`Task_GetOutOfCage`, `FUN_1403554b0`, **Verified**): restores AI flags and pose. The task's constructor flag (`+0x80`; 1 for 207 and 256, 0 for 133, the task factory `FUN_14032ebd0` and `FUN_140335200`) is copied to the prisoner's
   `+0x1a0 -> +0xe8` (Meitou `Escaped`) only when the cage owner faction is real (`+0x1d0` clear); for a `not real` owner nothing is written. A nonzero flag also turns a slave in
   state 1 into state 2 and sets crime 0xc Escaping Prison against the cage owner (the setter refuses a `not real` or `fundamental type` 8 victim), after the hold is cleared (`FUN_140330600`), since the setter
