@@ -1043,6 +1043,16 @@ public sealed partial class FixtureRegistry
         return true;
     }
 
+    /// <summary>
+    /// Lets a character go from whatever holds it, a bed or a cage, with no lock or crime test (the carry link of a restored save, <c>FUN_1405ced90</c>, <b>Verified</b>).
+    /// </summary>
+    public void ReleaseHeld(World world, CharacterId held)
+    {
+        if (!world.Characters.TryResolveNext(held, out int s) || world.Characters.Cold(s) is not { InSomething: not HeldState.None } c) return;
+        if (c.InWhat is { } id && Find(id) is { } fixture && fixture.Occupant == held) fixture.Occupant = CharacterId.None;
+        Clear(c);
+    }
+
     /// <summary>Gets a character out of its bed (the original's <c>FUN_140345620</c>): the bed is free and the state cleared; it stands where it lay.</summary>
     public bool LeaveBed(World world, CharacterId sleeper)
     {

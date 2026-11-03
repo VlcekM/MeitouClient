@@ -528,7 +528,7 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
 
     /// <summary>
     /// The carries a save held (<see cref="Saving.SavedCharacterLink.CarryPartner"/>; docs/formats/save.md "Carry links"): a carrier whose partner is now in the world takes it up again at
-    /// once, without the lift. One waits while its partner is not loaded (the original's deferred link, <c>FUN_140797ec0</c>); either one dead or gone drops the link.
+    /// once, without the lift (the link needs a carrier that is not carried and carries nothing, and a body not carried; a body in a bed or cage is let go of). One waits while its partner is not loaded (the original's deferred link, <c>FUN_140797ec0</c>); either one dead or gone drops the link.
     /// </summary>
     void RestoreLinks(World world)
     {
@@ -550,7 +550,9 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
             link.CarryPartner = Meitou.Data.Save.Hand.Null;
             var body = table.Cold(b)!;
             body.Save?.CarryPartner = Meitou.Data.Save.Hand.Null;
-            if (!cold.Carrying.IsNone || !body.CarriedBy.IsNone || cold.Medical is not { Incapacitated: false }) continue;
+            // FUN_1405cff90 / FUN_1405ced90 (Verified): the carrier is not itself carried, carries nothing and the body is not carried; no medical test; a held body is let go.
+            if (!cold.Carrying.IsNone || !cold.CarriedBy.IsNone || !body.CarriedBy.IsNone) continue;
+            world.Fixtures.ReleaseHeld(world, table.IdOf(b));
             if (body.Medical is { Incapacitated: false } && Friendly(cold, body)) body.CarriedAwake = true;
             Link(table, i, b);
         }
