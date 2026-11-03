@@ -98,12 +98,13 @@ public sealed partial class PopulationSystem
     const float RaisedFloor = 12, FloorScanStep = 4, FloorScanReach = 60, FloorScanRadius = 40;
 
     /// <summary>
-    /// Where a resident squad of <paramref name="b"/> is made (Observed, <c>FUN_14057f820</c> and <c>FUN_140583a10</c>): a random general node of it, else a
-    /// shopkeeper node, else a guard post, else its origin; the height to find the floor from (its Y plus <see cref="SpotLift"/>).
+    /// The platoon point of a resident squad of <paramref name="b"/> (<c>FUN_14057f820</c>:86-103, <c>FUN_140583a10</c>:413-420, Verified): a random free node of type 0 (shopkeeper), else 2 (guard
+    /// post), else 1 (general), else its origin; the height to find the floor from (its Y plus <see cref="SpotLift"/>). The members are placed apart in the original, each at a random general
+    /// node, else a shopkeeper node (not modelled: they stand round the platoon point).
     /// </summary>
     static (Vector2 At, float? NearY) SpotIn(TownBuilding b, ulong seed, ulong key)
     {
-        foreach (int type in (ReadOnlySpan<int>)[NodeGeneral, NodeShopkeeper, NodeGuardPost])
+        foreach (int type in (ReadOnlySpan<int>)[NodeShopkeeper, NodeGuardPost, NodeGeneral])
         {
             int n = 0;
             foreach (var s in b.Spots) if (s.NodeType == type) n++;

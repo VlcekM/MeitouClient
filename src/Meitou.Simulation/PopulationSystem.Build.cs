@@ -51,7 +51,7 @@ public sealed partial class PopulationSystem
             }
         }
         // Bar squads (Observed, FUN_1409fcd20): per entry floor(v0 x v1 / 200) when v0 > 2, plus one more for each roll of 0..100 that is at most v1, stopping at the
-        // first that is not, at most v0 in all. The original puts each at a random node of the town; Meitou at a node of one of its bars (engine choice), else round the centre.
+        // first that is not, at most v0 in all. The original puts each at a random node of the town (the town's own position when none comes back); Meitou at a node of one of its bars (engine choice), else at the town's position.
         var barEntries = BarEntries(town, faction);
         for (int e = 0; e < barEntries.Count; e++)
         {
@@ -65,7 +65,8 @@ public sealed partial class PopulationSystem
                 {
                     if (BuildOne(template, factionIndex, faction, key, seed, new Vector2(spot.X, spot.Z)) is { } inside) squads.Add(inside with { NearY = spot.Y + SpotLift });
                 }
-                else if (BuildOne(template, factionIndex, faction, key, seed, Place(site, seed, key, walk)) is { } one) squads.Add(one);
+                // No bar node: the town's own position with no random offset, the height the ground there (FUN_1409fcd20:197-205, Town slot 8 FUN_1409272c0).
+                else if (BuildOne(template, factionIndex, faction, key, seed, new Vector2(site.Position.X, site.Position.Z)) is { } one) squads.Add(one);
             }
         }
         return new BuiltTown(site.Index, loadId, squads, homes);
