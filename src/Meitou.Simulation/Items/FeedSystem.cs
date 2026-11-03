@@ -214,7 +214,7 @@ public sealed class FeedSystem(ItemFactory items, FeedSettings? settings = null)
     /// The item of <paramref name="function"/> with the highest score: an opened item (charges below its full) scores (2 - charges / full) x 1000, a full one its nutrition (full / 100).
     /// Ties keep the first. A death item counts only when the inventory's owner is dead (FUN_140748d70, FUN_1407465d0).
     /// </summary>
-    static ItemInstance? Best(List<ItemInstance> items, int function, Func<string, bool>? eats, bool ownerDead = false)
+    internal static ItemInstance? Best(List<ItemInstance> items, int function, Func<string, bool>? eats, bool ownerDead = false)
     {
         ItemInstance? best = null;
         float top = -1;

@@ -73,6 +73,19 @@ public class CarryTests
 
     // ------------------------------------------------------------------ carrying
 
+    /// <summary>The lift rows carry condition !26 on the carrier (<c>FUN_140599e90</c>): a carrier staying low cannot start a lift, one standing can.</summary>
+    [Fact]
+    public void A_carrier_staying_low_cannot_start_a_lift()
+    {
+        using var rig = new Rig();
+        var carrier = rig.Add(1000, 2000);
+        rig.World.RunTicks(2);
+        var cold = rig.Cold(carrier);
+        Assert.True(CarrySystem.CanCarry(rig.World, cold));
+        cold.Medical!.StayingLow = true;
+        Assert.False(CarrySystem.CanCarry(rig.World, cold));
+    }
+
     [Fact]
     public void A_pick_up_walks_lifts_at_the_documented_clip_point_and_adds_the_carry_person_weight()
     {
