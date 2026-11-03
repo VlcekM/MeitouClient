@@ -203,7 +203,7 @@ it is not part of target eligibility.
   looter may use (`CharacterHuman` slot `0x328` is always true; the animal's is **Unknown**) it needs `Building::hasAnOpenDoor` `FUN_1405499a0`: no doors, or one open, opening or broken; Meitou `CarrySystem.Reachable`), not in the squad's give-up list, and not short-term tagged 6 by the looter's squad
   (`FUN_140678960(c, target, 6)`, [squad memory](dialogue.md#squad-memory)); the first match wins (sensed-list order, **Unknown**). Pass 1: mask 0x10 / 0 (read as the dead). Pass 2: masks 0x4008 / 0x11 (the kidnap finder's,
   read as other factions' downed) and also: the target's faction is not the player's (`FACTION +0x250`) unless the global **Bandits loot the player** (`142133598`) is set, and
-  `shouldIScrewThisGuyOver(looter, target)` (`FUN_14059a7b0`), with no friendliness filter before it (**Verified**, `FUN_14099ae10`).
+  `shouldIScrewThisGuyOver(looter, target)` (`FUN_14059a7b0`), with no friendliness filter before it (**Verified**, `FUN_14099ae10`). Pass 1 has no faction test either (**Verified**): the dead of the looter's own faction are looted too (Meitou `CarrySystem.LootTarget`).
 - **shouldIScrewThisGuyOver** (= dialogue condition 54, [dialogue](dialogue.md#conditions); **Verified**), in order (later lines override): true when either is of NPC class 8
   (Bandit; status `+0xdc`); false when both have the same class; true when the looter's personality (status `+0xd8`, not the class) is 2 traitorous; false when looter vfunc
   `0x3f0`(target, 1), "regards as friendly", holds; false when the personality is 1 honourable; true when the looter's status

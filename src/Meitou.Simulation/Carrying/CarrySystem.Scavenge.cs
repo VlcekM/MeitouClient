@@ -55,7 +55,7 @@ public sealed partial class CarrySystem
     /// <summary>
     /// Goal 177's finder (<c>FUN_14099ae10(ai, 0)</c>): within <see cref="ScavengeRange"/>, not carried, not looted by another and not tagged <see cref="MemoryTag.Looted"/> by the looter's squad;
     /// first the dead, then the downed living of factions neither its own nor allied (the kidnap finder's masks), not of the player's faction unless <see cref="PlayerState.BanditsLoot"/>,
-    /// whom <see cref="ScrewsOver"/> allows. Engine choices: the nearest of each pass (the original takes its sensed-list order); a dead body of the looter's own faction is left. -1: none.
+    /// whom <see cref="ScrewsOver"/> allows. Engine choices: the nearest of each pass (the original takes its sensed-list order); the dead pass has no faction test, so a body of the looter's own faction is looted too (Verified). -1: none.
     /// </summary>
     int LootTarget(World world, CharacterTable table, int slot, CharacterCold cold, HashSet<int> taken, List<int> bodies, SquadMemory? memory)
     {
@@ -71,7 +71,7 @@ public sealed partial class CarrySystem
             if (memory is not null && memory.HasShort(world, cold.SquadId, table.IdOf(s), MemoryTag.Looted)) continue;
             if (body.Medical!.Dead)
             {
-                if (body.Faction != cold.Faction && d2 <= dead2 && Reachable(world, slot, s)) (dead, dead2) = (s, d2);
+                if (d2 <= dead2 && Reachable(world, slot, s)) (dead, dead2) = (s, d2);
                 continue;
             }
             if (d2 > down2 || PlayerSide(world, body) && !world.Player.BanditsLoot || !Reachable(world, slot, s) || !ScrewsOver(world, slot, cold, s, body, memory)) continue;
