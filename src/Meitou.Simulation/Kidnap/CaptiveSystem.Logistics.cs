@@ -217,12 +217,6 @@ public sealed partial class CaptiveSystem
     /// </summary>
     public float DeliverDesire(World world, Squad squad) => DeliverDesirePerSlave * SlavesOf(world, squad).Count();
 
-    /// <summary>
-    /// State 26 IS_CROUCHING_OR_LYING (<c>FUN_140599e90</c>, <b>Verified</b>): false for a crippled (crawling) character; true for one staying low, knocked out, or in a bed. Row 192 wants it false, so the
-    /// delivery waits (<b>engine reading</b> of the posture values 1 to 3 of the character's posture virtual).
-    /// </summary>
-    static bool CrouchingOrLying(CharacterCold c) => c.Medical is { Crawling: false } m && (m.StayingLow || m.Unconscious) || c.InSomething == HeldState.Bed;
-
     /// <summary>The leader walks to the shipping town (re-sent whenever its walk ended outside it, at most <see cref="CaptiveSettings.Walks"/> times plus one per 1000 units), then hands its slaves over.</summary>
     bool StepDeliver(World world, CaptiveJob j, int w, CharacterCold wc)
     {
@@ -239,7 +233,7 @@ public sealed partial class CaptiveSystem
             TaskStart.Walk(world, w, centre, SpeedMode.Walk, RowOf(j.Kind), TaskSource.Goal);
             return true;
         }
-        if (CrouchingOrLying(wc)) return true;   // row 192's B list needs !26: it does nothing while its leader crouches or lies
+        if (CharacterFacts.CrouchingOrLying(wc)) return true;   // row 192's B list needs !26: it does nothing while its leader crouches or lies
         TaskStart.Stand(table, w);
         // 218 only in a prison or a slave camp; 194 anywhere (AI slot 66 FUN_140597c70, 65).
         int hour = world.Hour;

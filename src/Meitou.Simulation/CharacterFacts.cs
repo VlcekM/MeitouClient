@@ -12,6 +12,12 @@ namespace Meitou.Simulation;
 public static class CharacterFacts
 {
     /// <summary>
+    /// State 26 IS_CROUCHING_OR_LYING (<c>FUN_140599e90</c>, <b>Verified</b>), read by the planner and by the slave delivery: false when crippled (a crawler; an incapacitated one stands in for it), else true staying low (posture 1), playing dead (3) or in a bed. A knocked-out character is posture 4 and does not count.
+    /// </summary>
+    public static bool CrouchingOrLying(CharacterCold cold) =>
+        cold.Medical is { Crawling: false, Incapacitated: false } m && (m.StayingLow || m.PlayingDead || cold.InSomething == Locks.HeldState.Bed);
+
+    /// <summary>
     /// <c>Character</c> slot 6 <c>isDown</c> (vfunc 0x30, <c>FUN_1405c9e10</c>, <b>Verified</b>): dead or out cold, playing dead (which is unconscious to everyone), ragdolled or carried.
     /// A crawler is not down. A ragdoll is only ever whole for an incapacitated character, so <see cref="Ragdolls.RagdollSystem.IsRagdoll"/> adds nothing the first test lacks, and is kept for the original's reading.
     /// </summary>

@@ -425,7 +425,7 @@ from the decompile and agree with this table, except that the decompile shows no
 | 23 | `haveFirstAidKit`: the items or the worn backpack hold a kit of class 1 (`FUN_140598860`, **Verified**; charges not tested) |
 | 24 | `isCrouching` |
 | 25 | `isLyingProne` |
-| 26 | `IS_CROUCHING_OR_LYING` (`FUN_140599e90`, **Verified**): false when crippled (vfunc `0x360`); else true at posture 1, 2 or 3 (staying low, crawling, playing dead), or AI-sub-object byte `+0x49` set, or Character `+0x2f8` is 1 (bed), or Character byte `+0x278` set (the two bytes unidentified, not modelled). Meitou: `PlanContext.CrouchingOrLying` (crawling and incapacitated stand in for crippled) |
+| 26 | `IS_CROUCHING_OR_LYING` (`FUN_140599e90`, **Verified**): false when crippled (vfunc `0x360`); else true at posture 1, 2 or 3 (staying low, crawling, playing dead), or AI-sub-object byte `+0x49` set, or Character `+0x2f8` is 1 (bed), or Character byte `+0x278` set (the two bytes unidentified, not modelled). Meitou: `CharacterFacts.CrouchingOrLying`, shared by the planner and the slave delivery (crawling and incapacitated stand in for crippled; a knocked-out character is posture 4, not counted) |
 | 27 | `isMovementAllowed` ([range](#perma-jobs)) |
 | 28 | `isNearTo` |
 | 29 | `isGeneralAggressionLevel` |
