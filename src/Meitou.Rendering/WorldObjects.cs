@@ -16,6 +16,8 @@ sealed class ZoneObjects
     public List<PlacedMesh> Stand { get; } = [];
     /// <summary>The indoor volumes of the zone's buildings that have an <c>interior mask</c> (docs/formats/zones.md, "Interior view").</summary>
     public List<InteriorVolume> Interiors { get; } = [];
+    /// <summary>The hulls of gateway buildings: hit by the audio's indoor ray like any interior mask, but no room (<see cref="InteriorVolume.IsGateway"/>).</summary>
+    public List<InteriorVolume> GateHulls { get; } = [];
 }
 
 /// <summary>
@@ -271,7 +273,7 @@ sealed class WorldObjects : IDisposable
                 var position = new Vector3(b.Position.X, y, b.Position.Z);
                 var parts = WorldObjectLayout.Building(db, record, b.InstanceId, position, b.Rotation, new BuildingState(isDestroyed, townMaterial) { WithInterior = !isDestroyed, Identity = b.Key });
                 // A destroyed building gets no interior view (game: the per-frame interior driver skips it).
-                if (!isDestroyed && InteriorVolume.For(db, record, b.Key, position, b.Rotation, interiorCollisions!) is { } interior) result.Interiors.Add(interior);
+                if (!isDestroyed && InteriorVolume.For(db, record, b.Key, position, b.Rotation, interiorCollisions!, gateways: true) is { } interior) (interior.IsGateway ? result.GateHulls : result.Interiors).Add(interior);
                 // Resource buildings ("is foliage", no parts) are drawn by the foliage system as a FOLIAGE_MESH naming them as "building type".
                 if (parts.Count == 0 && record.GetBool("is foliage")) Interlocked.Increment(ref foliage);
                 else if (parts.Count == 0) Interlocked.Increment(ref empty);
