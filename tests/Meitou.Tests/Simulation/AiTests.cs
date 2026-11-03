@@ -3,6 +3,7 @@ using Meitou.Data;
 using Meitou.Data.Fcs;
 using Meitou.Data.Gameplay.Ai;
 using Meitou.Simulation;
+using Meitou.Simulation.Items;
 using Meitou.Simulation.Ai;
 using Meitou.Data.World;
 using static Meitou.Tests.Simulation.SyntheticTown;
@@ -78,6 +79,35 @@ public class AiTests(ITestOutputHelper output)
         Assert.True(AiSystem.HasStayingFurniture(Home([HomeSpotKind.Chair], [])));
         Assert.True(AiSystem.HasStayingFurniture(Home([], [HomeSpotKind.Workstation])));
         Assert.True(AiSystem.HasStayingFurniture(Home([], [HomeSpotKind.Training])));
+    }
+
+    /// <summary>docs/game/ai-tasks.md (Task_EquipBestWeapon, FUN_140346c30): an NPC of a non-player faction with no weapon on its back or hip draws the first weapon of its inventory of the task's kind; a player-side character does not.</summary>
+    [Fact]
+    public void An_npc_without_a_back_or_hip_weapon_draws_the_first_matching_weapon_of_its_inventory()
+    {
+        var ai = new AiSystem(new PopulationData { Db = new GameDatabase(), Sites = [], Factions = [], Relations = Meitou.Data.Gameplay.FactionRelations.Build([]) });
+        using var world = new SimWorld(new WorldSettings { Seed = 1, PublishSnapshots = false }, new OpenGroundWalkability((_, _) => 150), []);
+        world.Player.Faction = 1;
+        ItemInstance Weapon(string record, FcsRecordType type) => new() { Record = record, Type = type, Section = "main", Width = 1, Height = 2 };
+        CharacterCold Make(int faction, params ItemInstance[] items)
+        {
+            var cold = new Meitou.Tests.Combat.Combatant { Name = "c" }.MakeCold();
+            cold.Faction = faction;
+            cold.Inventory = new Inventory();
+            foreach (var item in items) cold.Inventory.Items.Add(item);
+            world.Characters.Spawn(new CharacterHot { Position = Vector3.Zero, Health = 100 }, cold, 0);
+            return cold;
+        }
+        var sabre = Weapon("sabre", FcsRecordType.WEAPON);
+        var bow = Weapon("bow", FcsRecordType.CROSSBOW);
+        var raider = Make(2, Weapon("bread", FcsRecordType.ITEM), bow, sabre);
+        Assert.True(ai.DrawFromInventory(world, raider, ranged: false));
+        Assert.Equal("back", sabre.Section);   // the first weapon section it fits; the crossbow waits for task 264
+        Assert.Equal("main", bow.Section);
+        Assert.True(ai.DrawFromInventory(world, raider, ranged: true));
+        Assert.NotEqual("main", bow.Section);
+        var recruit = Make(1, Weapon("katana", FcsRecordType.WEAPON));
+        Assert.False(ai.DrawFromInventory(world, recruit, ranged: false));
     }
 
     [Fact]

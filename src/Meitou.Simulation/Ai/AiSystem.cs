@@ -816,8 +816,12 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             case TaskType.EQUIP_WEAPON or TaskType.EQUIP_CROSSBOW:
                 // Task_EquipBestWeapon (6 melee only, 264 ranged only; FUN_140346c30, Verified): the matching weapon it carries comes out, else the hand is emptied.
                 var armed = table.Cold(slot)!;
+                bool ranged = mind.Step == TaskType.EQUIP_CROSSBOW;
                 if (armed.Fighter is { } fighter)
-                    armed.DrawnWeapon = mind.Step == TaskType.EQUIP_WEAPON ? Combat.CombatSystem.MeleeDrawn(fighter) : fighter.Crossbow is not null ? BowHold : WeaponKinds.None;
+                    armed.DrawnWeapon = !ranged ? Combat.CombatSystem.MeleeDrawn(fighter) : fighter.Crossbow is not null ? BowHold : WeaponKinds.None;
+                // Neither the back nor the hip gave one: an NPC of a non-player faction takes the first matching weapon of its inventory (s08-f09).
+                if (armed.DrawnWeapon == WeaponKinds.None && DrawFromInventory(world, armed, ranged) && armed.Fighter is { } rebuilt)
+                    armed.DrawnWeapon = !ranged ? Combat.CombatSystem.MeleeDrawn(rebuilt) : rebuilt.Crossbow is not null ? BowHold : WeaponKinds.None;
                 StepDone(mind);
                 return;
             case TaskType.GO_HOMEBUILDING:
