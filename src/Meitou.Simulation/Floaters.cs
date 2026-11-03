@@ -28,6 +28,10 @@ public enum FloaterKind : byte
 /// <param name="Absorbed">What the armour alone stopped.</param>
 public readonly record struct Floater(FloaterKind Kind, CharacterId Target, Vector3 Position, bool TargetIsPlayer, bool SourceIsPlayer, string Part, HitDamage Damage, ArmourAbsorbed Absorbed)
 {
+    /// <summary>The active squad's memory holds TEMP ENEMY / TEMP ALLY on the target (the original's tint tests, <c>FUN_140678830</c>); display only.</summary>
+    public bool TargetTempEnemy { get; init; }
+    public bool TargetTempAlly { get; init; }
+
     public static Floater Hit(CharacterId target, Vector3 position, bool targetIsPlayer, bool sourceIsPlayer, string part, in HitDamage damage, in ArmourAbsorbed absorbed) =>
         new(FloaterKind.Damage, target, position, targetIsPlayer, sourceIsPlayer, part, damage, absorbed);
 

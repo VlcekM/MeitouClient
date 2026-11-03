@@ -312,7 +312,10 @@ public sealed partial class CombatSystem
     void FloatHit(World world, int d, CharacterCold dc, bool sourceIsPlayer, int part, in HitDamage damage, in ArmourAbsorbed absorbed)
     {
         if (world.Floaters is not { } queue || part < 0) return;
-        queue.Enqueue(Floater.Hit(world.Characters.IdOf(d), world.Characters.Previous[d].Position, dc.IsPlayer, sourceIsPlayer, dc.Medical!.Parts[part].Template.Name, damage, absorbed));
+        var id = world.Characters.IdOf(d);
+        bool tagged = Memory is { } memory && world.Player.Squad >= 0;
+        queue.Enqueue(Floater.Hit(id, world.Characters.Previous[d].Position, dc.IsPlayer, sourceIsPlayer, dc.Medical!.Parts[part].Template.Name, damage, absorbed)
+            with { TargetTempEnemy = tagged && Memory!.HasShort(world, world.Player.Squad, id, Dialogue.MemoryTag.TempEnemy), TargetTempAlly = tagged && Memory!.HasShort(world, world.Player.Squad, id, Dialogue.MemoryTag.TempAlly) });
     }
 
     void Record(int now, int a, int d, int blow, BlowOutcome outcome, int part, in HitDamage damage, bool knockout, bool death)

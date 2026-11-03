@@ -25,6 +25,9 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
     /// <summary>The <see cref="Effect.Kind"/> of a blow: <c>Arg</c> is the blow (1 or 2) and <c>Amount</c> the attacker's attack number.</summary>
     public const int BlowEffect = 1;
 
+    /// <summary>The squad memory (set by the standard systems): the damage floater reads the active squad's TEMP ENEMY / TEMP ALLY tags (<c>FUN_1406508d0</c>).</summary>
+    public Dialogue.SquadMemory? Memory { get; set; }
+
     readonly CombatTechnique[] techniques, asWritten;
     readonly CombatConstants combat;
     readonly GameConstants constants;
