@@ -425,7 +425,7 @@ sealed partial class GameHost
         NavmeshOverlayRenderer? navOverlay = null;
         if (overlay is not null)
         {
-            hud = new PlayerInterface(session, heights.HeightAt, DrawnPosition) { SpeedUnit = config.SpeedUnit, Floaters = config.Floaters, FeedbackButtonInPlay = config.FeedbackButton, PortraitMenu = config.PortraitMenu };
+            hud = new PlayerInterface(session, heights.HeightAt, DrawnPosition) { SpeedUnit = config.SpeedUnit, Floaters = config.Floaters, FeedbackButtonInPlay = config.FeedbackButton };
             player = hud;
             hud.LoadUi(g.UiMode ?? config.UiMode, assets.Find);
             hud.CreateUiPainter(overlay, assets.Find);

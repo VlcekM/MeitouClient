@@ -1745,9 +1745,6 @@ msgstr "高级布娃娃"
 msgid "Pause after loading"
 msgstr "载入后暂停"
 
-msgid "Portrait menu"
-msgstr "头像菜单"
-
 msgid "Keep textures at all squads"
 msgstr "所有小队保持贴图"
 
@@ -2691,9 +2688,6 @@ msgstr "武术不超过 20 的角色，弱拳会在正常出拳距离上挥出�
 
 msgid "Seen into a building your characters are in, parts of other buildings that run through it are left out, such as the Hub's town wall in the Shinobi Thieves tower. The game's world places them there and draws them inside the room."
 msgstr "从你角色所在的建筑望进去时，穿过它的其他建筑构件会被舍去，例如忍者盗贼塔里那段枢纽镇城墙。游戏场景把它们放在那里，并把它们画进房间内部。"
-
-msgid "Holding the right button on a squad bar portrait opens that character's menu, as on the character itself; a quick right click still selects them and moves the camera to them. The game has no portrait menu."
-msgstr "在小队栏头像上按住右键会打开该角色的菜单（与在角色本体上操作相同）；快速点右键仍然是选中并把镜头移过去。游戏本身没有头像菜单。"
 
 msgid "Heal Neutrals"
 msgstr "治疗中立者"

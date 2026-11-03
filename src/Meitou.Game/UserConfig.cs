@@ -62,8 +62,6 @@ sealed class UserConfig
     public float InGameTransitionSpeed { get; set; } = 1.5f;
     /// <summary>A double click (or double tap) on a squad member farther than <see cref="FlightDistance"/> from the view flies the camera there in an arc (Advanced settings; Meitou only, the game cuts).</summary>
     public bool CharacterFlights { get; set; } = false;
-    /// <summary>Holding the right button on a squad bar portrait opens that member's context menu (Advanced settings; Meitou only, the game has none).</summary>
-    public bool PortraitMenu { get; set; } = true;
     /// <summary>Keeps the object meshes and textures and the terrain textures around every squad bar character loaded, not only around the camera (Advanced settings; Meitou only, costs video memory).</summary>
     public bool KeepTexturesAtCharacters { get; set; } = true;
     /// <summary>With <see cref="KeepTexturesAtCharacters"/>, the other player squads' members are kept too, not only the squad bar's (more video memory).</summary>

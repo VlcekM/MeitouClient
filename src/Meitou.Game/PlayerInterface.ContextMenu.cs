@@ -16,11 +16,13 @@ sealed partial class PlayerInterface
 {
     /// <summary>How long the command button is held on a target before the menu opens (<b>Observed</b>: 0.2 s, FUN_140800250).</summary>
     public const double ContextHoldSeconds = 0.2;
+    /// <summary>The hold on a squad bar portrait that opens its member's menu (<c>MainBarGUI</c>'s frame update, <c>DAT_141696c80</c>).</summary>
+    public const double PortraitHoldSeconds = 0.25;
 
     sealed record ContextMenu(string Title, Vector2 At, IReadOnlyList<(string Caption, Action Give)> Verbs);
     ContextMenu? contextMenu;
-    // A right press on a target that has verbs: its menu (built again when the hold ends), where, when, and the order a quick click gives (null: none).
-    (Func<Vector2, ContextMenu?> Menu, Vector2 At, long Since, Action? Quick)? contextPending;
+    // A right press on a target that has verbs: its menu (built again when the hold ends), where, when, the hold that opens it and the order a quick click gives (null: none).
+    (Func<Vector2, ContextMenu?> Menu, Vector2 At, long Since, double Hold, Action? Quick)? contextPending;
 
     public bool ContextMenuOpen => contextMenu is not null;
 
@@ -369,18 +371,21 @@ sealed partial class PlayerInterface
         return ContextPressOn(p, at => session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == id) is { } target ? Menu(target.Name, at, Verbs(target)) : null, quick);
     }
 
-    /// <summary>A right press on a target whose <paramref name="menu"/> has verbs (true): the hold timer starts and <paramref name="quick"/> waits for the release.</summary>
-    bool ContextPressOn(Vector2 p, Func<Vector2, ContextMenu?> menu, Action? quick)
+    /// <summary>
+    /// A right press on a target whose <paramref name="menu"/> has verbs (true): the hold timer starts, the menu opens after <paramref name="hold"/> seconds
+    /// (<see cref="ContextHoldSeconds"/> by default) and <paramref name="quick"/> waits for the release.
+    /// </summary>
+    bool ContextPressOn(Vector2 p, Func<Vector2, ContextMenu?> menu, Action? quick, double hold = ContextHoldSeconds)
     {
         if (menu(p) is null) return false;
-        contextPending = (menu, p, System.Diagnostics.Stopwatch.GetTimestamp(), quick);
+        contextPending = (menu, p, System.Diagnostics.Stopwatch.GetTimestamp(), hold, quick);
         return true;
     }
 
     /// <summary>Once a frame: a press held long enough opens the menu.</summary>
     void UpdateContextMenu()
     {
-        if (contextPending is not { } pending || System.Diagnostics.Stopwatch.GetElapsedTime(pending.Since).TotalSeconds < ContextHoldSeconds) return;
+        if (contextPending is not { } pending || System.Diagnostics.Stopwatch.GetElapsedTime(pending.Since).TotalSeconds < pending.Hold) return;
         contextPending = null;
         contextMenu = pending.Menu(pending.At);
     }

@@ -410,9 +410,6 @@ sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, 
                 Toggle: new("Pause after loading", () => config.PauseOnLoad, v => config.PauseOnLoad = v, OnOff: true)));
             result.Add(new("Hover outline", "Outline and tint the character under the cursor, in the colour of what a right click would do.",
                 Toggle: new("Hover outline", () => config.HoverOutline, v => config.HoverOutline = v, Remaster: true, OnOff: true)));
-            result.Add(new("Portrait menu", "Holding the right button on a squad bar portrait opens that character's menu, as on the character itself; a quick right click still selects them and "
-                + "moves the camera to them. The game has no portrait menu.",
-                Toggle: new("Portrait menu", () => config.PortraitMenu, v => player.PortraitMenu = config.PortraitMenu = v, Remaster: true, OnOff: true)));
             result.Add(new("luckyren Mode", "A character that takes a fatal hit explodes, covers everything around in blood and sends bones flying everywhere. Its gear falls to the ground around the spot.",
                 Toggle: new("luckyren Mode", () => config.LuckyrenMode, v => config.LuckyrenMode = v),
                 Picture: SettingsMenuArt.LuckyrenImage));
@@ -659,7 +656,6 @@ sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, 
         config.MainMenuTransitionSpeed = 1.5f;
         config.InGameTransitionSpeed = 1.5f;
         config.CharacterFlights = false;
-        player.PortraitMenu = config.PortraitMenu = true;
         config.KeepTexturesAtCharacters = true;
         config.KeepTexturesAtAllSquads = false;
         config.CharacterFlightSeconds = UserConfig.DefaultFlightSeconds;
