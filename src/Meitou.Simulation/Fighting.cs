@@ -357,7 +357,7 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem, IDecis
 
         // Passive zeroes it even in a fight (FUN_140599b90, Verified).
         public float Desire(World world, int slot) =>
-            (world.Characters.Cold(slot)!.Orders & CharacterOrders.Passive) != 0 ? 0 : owner.BestAlly(world, slot, out _) is var score && score > 0 ? score : 0.7f;
+            (world.Characters.Cold(slot)!.Orders & CharacterOrders.Passive) != 0 ? 0 : owner.ProtectDesire(world, slot) is var score && score > 0 ? score : 0.7f;
 
         public DecisionCheck CanRun(World world, int slot)
         {
@@ -369,7 +369,7 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem, IDecis
             // Desire 0: Passive, or sneaking outside a fight (FUN_1405c9750), or an obedient slave (FUN_140597380 job 187).
             if (!Helps(table, slot, [])) return DecisionCheck.No("cannot fight, or desire 0 (Passive, or sneaking outside a fight)");
             if (cold.SlaveState == 1 && Kidnap.ObedientSlave.HasJob(cold)) return DecisionCheck.No("an obedient slave (desire 0)");
-            return owner.Plan(world, slot, out _) >= 0 ? DecisionCheck.Run : DecisionCheck.No(owner.BestAlly(world, slot, out _) > 0 ? "no attacker of the ally in reach" : "no fighting ally in sight");
+            return owner.Plan(world, slot, out _) >= 0 ? DecisionCheck.Run : DecisionCheck.No(owner.BestAlly(world, slot, out _, out _) > 0 ? "no attacker of the ally in reach" : "no fighting ally in sight");
         }
 
         public void Start(World world, int slot)
@@ -387,36 +387,58 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem, IDecis
     /// or escaped slave only where the looker may help one (<see cref="SlaveHelpAllowed(World, CharacterCold, Vector3)"/>, tested once, for the first slave met). The best, the first in slot order
     /// on a tie, capped at 1.2; x0.5 while the looker carries someone (<c>FUN_140599b90</c>). 0 when there is none; <paramref name="ally"/> is that one's slot (-1 for none).
     /// </summary>
-    float BestAlly(World world, int slot, out int ally)
+    float BestAlly(World world, int slot, out int ally, out float first)
     {
-        ally = -1;
+        (ally, first) = (-1, 0);
         var table = world.Characters;
         if (table.Cold(slot) is not { } cold || world.SystemOf<AggroSystem>() is not { } aggro || aggro.SensesOf(slot) is not { } senses) return 0;
         var prev = table.Previous;
-        bool help = (world.Player.SquadAi & SquadAi.Help) != 0, slaveChecked = false, slaveOk = false;
-        float best = 0;
+        bool help = (world.Player.SquadAi & SquadAi.Help) != 0;
+        float Weigh(int other, float threat)
+        {
+            float v = threat * Math.Clamp((Vector3.DistanceSquared(world.Characters.Previous[slot].Position, world.Characters.Previous[other].Position) - 1000f) / (10f - 1000f), 0.1f, 1f);
+            return table.Cold(other)!.Faction == cold.Faction ? v : help ? v * v : 0;
+        }
+        var scan = ScanAllies(world, slot, combat, aggro, senses, SenseTag.Ko | SenseTag.Imprisoned, () => SlaveHelpAllowed(world, cold, world.Characters.Previous[slot].Position), Weigh);
+        (ally, first) = (scan.Best, scan.First);
+        return scan.Best < 0 ? 0 : Math.Min(scan.Value, CombatSystem.ProtectCap);
+    }
+
+    /// <summary>The score of 15 for a player character: the desire (the finder's first ally above 0, uncapped, x0.5 while carrying; <c>FUN_140599b90</c>) times the finder's factor (the best, capped).</summary>
+    float ProtectDesire(World world, int slot)
+    {
+        float factor = BestAlly(world, slot, out _, out float first);
+        return factor <= 0 ? 0 : first * factor * (world.Characters.Cold(slot)!.Carrying.IsNone ? 1 : 0.5f);
+    }
+
+    /// <summary>
+    /// The finder <c>FUN_14099ca10</c> shared by both kinds of looker (<b>Verified</b>): over the sensed entries tagged ALLY and not <paramref name="exclude"/>, seen or heard at the last look, alive, a slave or
+    /// escaped slave only where <paramref name="slaveOk"/> says (asked once, for the first), each worth <paramref name="weigh"/> of its fight threat (0 or less skips it). The best (the first on a tie), and the
+    /// first above 0, which the desire <c>FUN_140599b90</c> takes (the finder called to stop at it, uncapped).
+    /// </summary>
+    internal static (int Best, float Value, float First) ScanAllies(World world, int slot, CombatSystem fights, AggroSystem look, SenseBlock senses, SenseTag exclude, Func<bool> slaveOk, Func<int, float, float> weigh)
+    {
+        var table = world.Characters;
+        var prev = table.Previous;
+        int best = -1;
+        float value = 0, first = 0;
+        bool slaveChecked = false, slaveAllowed = false;
         foreach (var e in senses.Entries)
         {
-            if (!e.Now || (e.Tags & (SenseTag.Ally | SenseTag.Ko | SenseTag.Imprisoned)) != SenseTag.Ally || e.Target == slot) continue;
-            if (table.Cold(e.Target) is not { } other) continue;
-            float threat = combat.FightThreat(world, e.Target, aggro.SensesOf(e.Target));
-            if (threat <= 0) continue;
-            if (other.SlaveState is 1 or 2)
+            int a = e.Target;
+            if (a == slot || !e.Now || (e.Tags & (SenseTag.Ally | exclude)) != SenseTag.Ally || (uint)a >= (uint)prev.Length || !prev[a].Alive || prev[a].Generation != e.Generation
+                || table.Cold(a) is not { } ally) continue;
+            if (ally.SlaveState is 1 or 2)
             {
-                if (!slaveChecked) (slaveChecked, slaveOk) = (true, SlaveHelpAllowed(world, cold, prev[slot].Position));
-                if (!slaveOk) continue;
+                if (!slaveChecked) (slaveChecked, slaveAllowed) = (true, slaveOk());
+                if (!slaveAllowed) continue;
             }
-            float v = threat * Math.Clamp((Vector3.DistanceSquared(prev[slot].Position, prev[e.Target].Position) - 1000f) / (10f - 1000f), 0.1f, 1f);
-            if (other.Faction != cold.Faction)
-            {
-                if (!help) continue;
-                v *= v;
-            }
-            if (v > best) (best, ally) = (v, e.Target);
+            float v = weigh(a, fights.FightThreat(world, a, look.SensesOf(a)));
+            if (v <= 0) continue;
+            if (first <= 0) first = v;
+            if (v > value) (best, value) = (a, v);
         }
-        if (ally < 0) return 0;
-        best = Math.Min(best, CombatSystem.ProtectCap);
-        return table.Cold(slot)!.Carrying.IsNone ? best : best * 0.5f;
+        return (best, value, first);
     }
 
     /// <summary>
@@ -425,7 +447,7 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem, IDecis
     /// </summary>
     int Plan(World world, int slot, out int ally)
     {
-        if (BestAlly(world, slot, out ally) <= 0) return -1;
+        if (BestAlly(world, slot, out ally, out _) <= 0) return -1;
         var table = world.Characters;
         int foe = combat.BestAttackerOf(world, ally, slot);
         if (foe < 0 || table.Cold(slot) is not { } cold) return -1;

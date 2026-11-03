@@ -163,8 +163,8 @@ public class DecisionTests
         Assert.Equal("15 Protect allies", rig.Cold(far).Decision!.Winner);
         Assert.Equal("15 Protect allies", rig.Cold(near).Decision!.Winner);
         Assert.True(nearThreat > 0, "the attacked mate has a fight threat");
-        Assert.InRange(nearAt!.Value, 0.8f * nearThreat!.Value, 1.01f * nearThreat.Value);   // a few units off: the falloff near 1
-        Assert.InRange(farAt!.Value, 0.05f * farThreat!.Value, 0.5f * farThreat.Value);
+        Assert.InRange(nearAt!.Value, 0.05f * nearThreat!.Value * nearThreat.Value, 1.01f * nearThreat.Value * nearThreat.Value);   // desire (the first ally above 0: the mate, or the far fighter once it fights, at 0.1) x factor (the best, the mate at about 1)
+        Assert.InRange(farAt!.Value, 0.005f * farThreat!.Value * farThreat.Value, 0.25f * farThreat.Value * farThreat.Value);
     }
 
     /// <summary>
@@ -237,9 +237,9 @@ public class DecisionTests
         var goal = ProtectAllies(rig);
         RunUntil(rig, () => rig.Task(f) == CharacterTask.Attack, 2 * RetaliationSystem.CheckEveryTicks + 2, "joining the allies' fight");
         Assert.Equal("15 Protect allies", rig.Cold(f).Decision!.Winner);
-        // Squared: below the ally's threat squared (its weight, at most 1, times the threat, squared), not the threat x weight.
+        // Squared in both the desire and the factor: below the ally's threat to the fourth (its weight, at most 1, times the threat, squared, twice).
         float threat = rig.Combat.FightThreat(rig.World, ally.Slot, rig.World.SystemOf<AggroSystem>()!.SensesOf(ally.Slot));
-        Assert.InRange(goal.Desire(rig.World, f.Slot), 1e-9f, threat * threat * 1.001f);
+        Assert.InRange(goal.Desire(rig.World, f.Slot), 1e-13f, threat * threat * threat * threat * 1.001f);
     }
 
 

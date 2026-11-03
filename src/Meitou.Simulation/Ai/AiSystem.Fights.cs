@@ -140,21 +140,8 @@ public sealed partial class AiSystem
         }
         else
         {
-            bool slaveChecked = false, slaveOk = false;
-            foreach (var e in senses.Entries)
-            {
-                int a = e.Target;
-                if (a == slot || !e.Now || (e.Tags & (SenseTag.Ally | SenseTag.Ko)) != SenseTag.Ally || (uint)a >= (uint)prev.Length || !prev[a].Alive || prev[a].Generation != e.Generation
-                    || table.Cold(a) is not { } ally) continue;
-                if (ally.SlaveState is 1 or 2)
-                {
-                    if (!slaveChecked) (slaveChecked, slaveOk) = (true, RetaliationSystem.SlaveHelpAllowed(world, data, look.Relations, me, prev[slot].Position));
-                    if (!slaveOk) continue;
-                }
-                float v = fights.FightThreat(world, a, look.SensesOf(a));
-                if (first <= 0 && v > 0) first = v;
-                if (v > value) (best, value) = (a, v);
-            }
+            var scan = RetaliationSystem.ScanAllies(world, slot, fights, look, senses, SenseTag.Ko, () => RetaliationSystem.SlaveHelpAllowed(world, data, look.Relations, me, world.Characters.Previous[slot].Position), (_, threat) => threat);
+            (best, value, first) = (scan.Best, scan.Value, scan.First);
         }
         return (best, value, first);
     }
