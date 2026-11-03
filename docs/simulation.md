@@ -1111,7 +1111,8 @@ every 15 ticks, by `PopulationSystem.GoalDuty` (facts: [ai-tasks](game/ai-tasks.
   storage (function 2 or 13) of its town within 6517 that takes one, and puts in every stolen item that fits. A member with a home town standing in a TOWN-type town reads the home town's storages, any owner;
   else the current town's, owned by its faction or the town's (a player town's complete storage machine, else a container fixture, locked or not). Engine choice: only the stolen items go in (the original's
   Filling machine step is **Unknown**), and the stolen mark stays on them. The planner's state 121 (`PlanContext.Holds`) reads the same items.
-- Occupiers' **36 / 37** town goals walk to a random complete building of the player town (`AiSystem.OccupiedSpot`; the original's target is **Unknown**).
+- Occupiers' **36 / 37** town goals walk to a random complete building of the player town (`AiSystem.OccupiedSpot`, engine choice; the original's 36 scatters round the
+  occupied town's centre, [town goals](game/ai-tasks.md#town-goals)), 36 drawing again after every walk.
 - Engine choices: sight `AggroSystem.OutdoorSight`, arrival 40 (a cage: its `use range` + 15), 4 short walks before giving up; nothing is hashed until one runs.
 - **Observed** (headless, an owner save, Starving Bandits occupying an outpost whose buildings reach 253 from its centre): the knocked-out player character lying 566 out is left alone; moved
   into the base, one bandit lifts it and puts it down 413 out, nobody lifts it again in 6000 ticks; with two food items in a storage, two bandits take one each.
@@ -1717,9 +1718,10 @@ fights back, by the engine's answer (`RetaliationSystem`, at any distance; engin
 
 Scoring follows the original (`TaskProfiles`: desire, commitment, crowding per goal type); a desire
 the original computes in a function of its own counts as 1. Town goals ([ai-tasks.md](game/ai-tasks.md#town-goals)):
-wandering and patrolling in town walk to a general node of a public town building in the walker's zone
+wandering in town walks to a general node of a public town building in the walker's zone
 (public: the residents' template's `public day`, else the level state's `is public day`, else public; drawn
-among those with a general node, engine choice), shopping to a node of a
+among those with a general node, engine choice), patrolling town from one random point round the town's centre to the next
+(`AiSystem.Patrol`, as `Task_PatrolTown`), shopping to a node of a
 public shop that sells what the character's shopping list wants, else (not in a town of the player's faction) to a random public building, the desire being 1 for a shop and 0.4 for another building (as the original's finders, [ai-tasks](game/ai-tasks.md#town-goals); no faction test), then buys from its stock one unit a second ([NPC purchases](game/economy.md#npc-purchases)), relaxing under a bar package, sitting around (275) and staying home (43; the home is the bar under a bar package) sit on a seat claimed per
 member on the package cadence, and the wanderer walks to the nearest town. A bar package (both kinds) reserves
 one table per squad as the original (`AiSystem.PickTable`: public bars tried from a random one, first table no
@@ -1757,8 +1759,7 @@ origin, else the ground there (raised Swamp Houses and Cannibal Shacks: floor 25
 floor near it puts them on the nearest meshed storey below (`PopulationSystem.HomeFloor`, engine choices). **Observed** (headless probe of every
 town, 600 ticks): characters on the ground under a building floor went from 278 to 128 of 9060; ~80 of those are gate guards, the rest mostly
 homeless squads placed under unmeshed platforms. The Storm House's upper storey (+66) is on the navmesh except under its beds, whose
-spots therefore stand on the floor below (Observed, 2026-10-18 probe). Engine choices: patrolling town acts as
-wandering (its task class is undecoded); a committed goal chosen again after its commitment ran out
+spots therefore stand on the floor below (Observed, 2026-10-18 probe). Engine choices: a committed goal chosen again after its commitment ran out
 starts over with a new target; shops stand customers at a general
 node, else a guard post, else any node; a home or seat given up
 after three failed walks is tried again when a new goal is taken up, and a member that gave its seat up
