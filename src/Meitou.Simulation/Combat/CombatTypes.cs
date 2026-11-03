@@ -13,6 +13,8 @@ public sealed record AttackOrder(IReadOnlyList<CharacterId> Attackers, Character
     public bool Defensive { get; init; }
     /// <summary>The player picked this target (a right click, Attack Target, Attack Unprovoked): the attackers keep it rather than turning on one that lost the initiative roll to them.</summary>
     public bool Picked { get; init; }
+    /// <summary>The player's Attack Unprovoked (row 61): the only attack that books an Assault and marks the attacker ordered (<c>Task_FocusedMeleeAttack</c> flag, <b>Verified</b>); Attack Target (5) and the AI's fights do neither. Needs <see cref="Picked"/>.</summary>
+    public bool Unprovoked { get; init; }
     /// <summary>The chooser's source the fight stands in for (<see cref="TaskStart.Start"/>); null: an order when <see cref="Picked"/>, a reaction when <see cref="Defensive"/>, else a goal.</summary>
     public TaskSource? Source { get; init; }
     /// <summary>The job of the attackers' lists the fight runs (<see cref="TaskRequest.Job"/>; -1: none).</summary>

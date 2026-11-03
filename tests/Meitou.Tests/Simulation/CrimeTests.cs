@@ -138,7 +138,7 @@ public class CrimeTests
         var me = t.PlayerCharacter(O);
         var victim = t.Npc(City, O + new Vector2(0, 20), name: "victim");
         t.Npc(City, O + new Vector2(0, 250), face: O, type: FundamentalType.LawEnforcement, name: "officer");
-        t.Say(new AttackOrder([me], victim) { Tick = t.World.Tick });
+        t.Say(new AttackOrder([me], victim) { Tick = t.World.Tick, Picked = true, Unprovoked = true });
         t.World.RunTicks(40);
         Assert.Equal(500, t.Bounty(me, City));
         var entry = t.Cold(me).Bounties!.Of(City)!;
@@ -190,7 +190,7 @@ public class CrimeTests
         foreach (int target in new[] { 1, 30, 120, 300, 400, 900 })
         {
             t.World.RunTicks(target - (int)t.World.Tick);
-            if (target == 30) t.Say(new AttackOrder([me], townsman) { Tick = t.World.Tick });
+            if (target == 30) t.Say(new AttackOrder([me], townsman) { Tick = t.World.Tick, Picked = true, Unprovoked = true });
             if (target == 300) t.Say(new LootOrder([other], farmer) { Tick = t.World.Tick });
             hashes.Add(t.World.StateHash());
         }

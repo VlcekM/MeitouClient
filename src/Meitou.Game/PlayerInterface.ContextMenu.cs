@@ -230,7 +230,7 @@ sealed partial class PlayerInterface
             if (target.StealthKoChance is { } koChance)
                 verbs.Add((WithChance("Stealth KO", koChance), () => Say(new Meitou.Simulation.Carrying.StealthKoOrder(selection, id) { Tick = session.World.Tick })));
             if (Hostile(target)) return;
-            verbs.Add(("Attack Unprovoked", () => Say(new Meitou.Simulation.Combat.AttackOrder(selection, id) { Tick = session.World.Tick, Picked = true })));
+            verbs.Add(("Attack Unprovoked", () => Say(new Meitou.Simulation.Combat.AttackOrder(selection, id) { Tick = session.World.Tick, Picked = true, Unprovoked = true })));
             verbs.Add(("Bodyguard", () => Say(new FollowOrder(selection, id) { Guard = true, Tick = session.World.Tick })));
             if (session.World.CanTalk(id, selection[0])) verbs.Add(("Talk To", () => Say(new Meitou.Simulation.Dialogue.TalkOrder(selection[0], id) { Tick = session.World.Tick })));
             return;
@@ -255,7 +255,7 @@ sealed partial class PlayerInterface
             verbs.Add(("Attack Target", () => Say(new Meitou.Simulation.Combat.AttackOrder(selection, id) { Tick = session.World.Tick, Picked = true, Defensive = target.FightsPlayer })));
             return;
         }
-        verbs.Add(("Attack Unprovoked", () => Say(new Meitou.Simulation.Combat.AttackOrder(selection, id) { Tick = session.World.Tick, Picked = true })));
+        verbs.Add(("Attack Unprovoked", () => Say(new Meitou.Simulation.Combat.AttackOrder(selection, id) { Tick = session.World.Tick, Picked = true, Unprovoked = true })));
         verbs.Add(("Bodyguard", () => Say(new FollowOrder(selection, id) { Guard = true, Tick = session.World.Tick })));
         verbs.Add(("Follow", () => Say(new FollowOrder(selection, id) { Tick = session.World.Tick })));
     }
