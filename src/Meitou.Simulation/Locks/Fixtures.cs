@@ -6,6 +6,9 @@ namespace Meitou.Simulation.Locks;
 /// <summary>The original's <c>Character+0x2f8</c> (save key <c>in something</c>, docs/game/carry-loot.md): 0 normal, 1 in a bed, 2 imprisoned.</summary>
 public enum HeldState : byte { None = 0, Bed = 1, Imprisoned = 2 }
 
+/// <summary>A placement of a save's zone building list: its BUILDING record and world position (<see cref="Saving.HeldSave.BuildingSpots"/>).</summary>
+public readonly record struct SavedSpot(string Record, Vector3 Position);
+
 /// <summary>What a <see cref="Fixture"/> is.</summary>
 public enum FixtureKind : byte
 {

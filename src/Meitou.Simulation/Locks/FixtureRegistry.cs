@@ -124,6 +124,12 @@ public sealed partial class FixtureRegistry
     /// <summary>The GAMESTATE_BUILDING records of a loaded save by building instance id (<see cref="Saving.SaveLoader"/>): a building registered later takes its lock and door state from them.</summary>
     public IReadOnlyDictionary<string, FcsRecord>? Saved { get; set; }
 
+    /// <summary>
+    /// The placements of a loaded save's building lists by building instance id (<see cref="Saving.HeldSave.BuildingSpots"/>): a prisoner whose <c>in what</c> names a generated
+    /// interior cage binds to the interior cage fixture of the same record at that place (<see cref="Bind"/>).
+    /// </summary>
+    public IReadOnlyDictionary<string, SavedSpot>? SavedSpots { get; set; }
+
     /// <summary>The item factory a loaded save's container contents are made with (<see cref="ContainerSave"/>); set by the loader.</summary>
     public Meitou.Simulation.Items.ItemFactory? Items { get; set; }
 
@@ -382,14 +388,37 @@ public sealed partial class FixtureRegistry
         for (int s = 0; s < table.HighWater; s++)
         {
             if (!next[s].Alive || table.Cold(s) is not { InSomething: not HeldState.None, InWhat: { } what } c) continue;
-            // The original's `in what` of one lying in a bed the player built names that bed's building.
-            if (!byId.TryGetValue(what, out var f) && !(c.InSomething == HeldState.Bed && byId.TryGetValue(what + "@bed0", out f) && f.Site < 0)) continue;
-            if (!IsFree(table, f)) continue;
+            if (HeldFixture(c, what) is not { } f || !IsFree(table, f)) continue;
             f.Occupant = new CharacterId(s, next[s].Generation);
             c.InWhat = f.Id;
+            // Matched from the original's keys: the held state is the one loaded, so they are written back as read (HeldSave.Write).
+            if (c.Save is { } loaded && loaded.InWhat == what) loaded.InWhat = f.Id;
             // A loaded sleeper is put at its lie spot again (engine choice: a save from before LieSpot holds it at the bed's origin, half off the mattress).
             if (c.InSomething == HeldState.Bed) { var (at, yaw) = LieSpot(f, next[s].Position); table.Place(s, at, yaw); }
         }
+    }
+
+    /// <summary>The fixture a held character's <see cref="CharacterCold.InWhat"/> names: a fixture id, a bed the player built, or a generated interior cage of the original's save.</summary>
+    Fixture? HeldFixture(CharacterCold c, string what)
+    {
+        if (byId.TryGetValue(what, out var f)) return f;
+        // The original's `in what` of one lying in a bed the player built names that bed's building.
+        if (c.InSomething == HeldState.Bed && byId.TryGetValue(what + "@bed0", out f) && f.Site < 0) return f;
+        return c.InSomething == HeldState.Imprisoned && SavedSpots?.GetValueOrDefault(what) is { } spot ? InteriorCageAt(spot) : null;
+    }
+
+    /// <summary>
+    /// The most a generated interior cage of a save may stand from Meitou's fixture of the same record and still be that cage: Meitou places the interior from the same layout
+    /// (<b>Observed</b>: the Rebirth Slave Shop's caged prisoner's cage at distance 0; the next cage of the room stands 27.8 away).
+    /// </summary>
+    const float SavedSpotReach = 1;
+
+    /// <summary>The interior cage fixture with the spot's record standing at the spot (<see cref="SavedSpotReach"/>), or null.</summary>
+    Fixture? InteriorCageAt(SavedSpot spot)
+    {
+        foreach (var f in cageList ??= [.. all.Where(x => x.Kind == FixtureKind.Cage)])
+            if (f.Id != f.Building && f.RecordId == spot.Record && Vector3.DistanceSquared(f.Position, spot.Position) <= SavedSpotReach * SavedSpotReach) return f;
+        return null;
     }
 
     // ------------------------------------------------------------------ doors

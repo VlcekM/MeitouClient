@@ -89,6 +89,89 @@ public class JailSaveTests
         return SaveCapture.Capture(world, data, new SaveClock(3, 7, 45), null, Options, builder);
     }
 
+    /// <summary>The handle the original gives the generated interior cage (any handle the zone's states resolve).</summary>
+    static readonly Hand GeneratedCage = new((int)FcsRecordType.BUILDING, 1238, 11111, 1485, 99);
+
+    /// <summary>
+    /// A save as the original writes a member caged in a generated interior cage: the member's state has only the original's keys, <c>in what</c> naming a zone building-list
+    /// entry of <paramref name="record"/> at <paramref name="at"/> (an <c>&lt;n&gt;-zoneX.Y-INGAME</c> entry with its own state), which Meitou's fixture ids do not map.
+    /// </summary>
+    static SaveGame OriginalCageSave(PopulationData data, string folder, string record, Vector3 at)
+    {
+        using (var a = new Game(data))
+        {
+            var squad = a.World.Systems.OfType<PopulationSystem>().Single().StartPlayer(a.World, NewGameStart.From(data.Db.Find("40-t")!));
+            a.World.Fixtures.RegisterSite(a.World, data, 0);
+            a.World.RunTicks(2);
+            Assert.True(a.World.Fixtures.Imprison(a.World, squad.Members[0], a.World.Fixtures.Find($"{HouseKey}/0")!));
+            Capture(a.World, data).Write(folder);
+        }
+        var save = SaveGame.Load(folder);
+        var file = save.Zones[HouseZone].File;
+        string id = $"7-zone{HouseZone.X}.{HouseZone.Y}-INGAME";
+        var entry = new FcsInstance { Id = id, Target = record, Position = at };
+        entry.States.Add(id + "-S23");
+        save.Zones[HouseZone].BuildingList!.Instances.Add(entry);
+        var state = new FcsRecord { Type = (int)FcsRecordType.GAMESTATE_BUILDING, Id = file.Records.Max(r => r.Id) + 1, Name = "0", StringId = id + "-S23" };
+        GeneratedCage.Write(state, "handle");
+        file.Records.Add(state);
+
+        var caged = save.Platoons.Single(p => p.FactionId == save.PlayerFaction!.Id).Characters[0].GameState!;
+        caged.Ints.Remove(HeldSave.MeitouState);
+        caged.Strings.Remove(HeldSave.MeitouWhat);
+        caged.Ints["in something"] = (int)HeldState.Imprisoned;
+        GeneratedCage.Write(caged, "in what");
+        return save;
+    }
+
+    [Fact]
+    public void A_prisoner_the_original_saved_in_a_generated_interior_cage_is_seated_in_that_interior_cage_and_keeps_the_original_keys()
+    {
+        var data = JailData();
+        string folder = Path.Combine(Temp("jail-original"), QuickSave.Name);
+        try
+        {
+            var save = OriginalCageSave(data, folder, "54-t", HouseAt + new Vector3(10, 0, 0));
+            using var b = new Game(data);
+            var loaded = SaveLoader.Load(b.World, save, data);
+            b.World.Fixtures.RegisterSite(b.World, data, 0);
+            var prisoner = b.World.Squads.Find(b.World.Player.Squad)!.Members[0];
+            var cold = b.World.Characters.Cold(prisoner.Slot)!;
+            Assert.True(cold.IsImprisoned);
+            Assert.Equal($"{HouseKey}/0", cold.InWhat);
+            Assert.Equal(prisoner, b.World.Fixtures.Find($"{HouseKey}/0")!.Occupant);
+
+            // Unchanged since the load: written back as the original wrote it, with none of Meitou's keys.
+            var second = SaveCapture.Capture(b.World, data, loaded.Clock, loaded, Options);
+            var state = second.Platoons.Single(p => p.FactionId == second.PlayerFaction!.Id).Characters[0].GameState!;
+            Assert.Equal((int)HeldState.Imprisoned, state.Ints["in something"]);
+            Assert.Equal(GeneratedCage, Hand.Read(state, "in what"));
+            Assert.DoesNotContain(Keys(state), e => e.Key is HeldSave.MeitouState or HeldSave.MeitouWhat);
+        }
+        finally { Directory.Delete(Path.GetDirectoryName(folder)!, recursive: true); }
+    }
+
+    [Theory]
+    [InlineData("52-t", 0f)]   // another record at the cage's place
+    [InlineData("54-t", 5f)]   // the cage's record, 5 units off
+    public void A_generated_interior_entry_of_another_record_or_place_seats_nobody(string record, float offset)
+    {
+        var data = JailData();
+        string folder = Path.Combine(Temp("jail-unmatched"), QuickSave.Name);
+        try
+        {
+            var save = OriginalCageSave(data, folder, record, HouseAt + new Vector3(10 + offset, 0, 0));
+            using var b = new Game(data);
+            SaveLoader.Load(b.World, save, data);
+            b.World.Fixtures.RegisterSite(b.World, data, 0);
+            var cold = b.World.Characters.Cold(b.World.Squads.Find(b.World.Player.Squad)!.Members[0].Slot)!;
+            Assert.True(cold.IsImprisoned);
+            Assert.Equal(BuildingKey.Of(HouseZone, $"7-zone{HouseZone.X}.{HouseZone.Y}-INGAME"), cold.InWhat);
+            Assert.True(FixtureRegistry.IsFree(b.World.Characters, b.World.Fixtures.Find($"{HouseKey}/0")!));
+        }
+        finally { Directory.Delete(Path.GetDirectoryName(folder)!, recursive: true); }
+    }
+
     static IEnumerable<KeyValuePair<string, object>> Keys(FcsRecord r) =>
         r.Ints.Select(k => new KeyValuePair<string, object>(k.Key, k.Value)).Concat(r.Floats.Select(k => new KeyValuePair<string, object>(k.Key, k.Value)))
             .Concat(r.Bools.Select(k => new KeyValuePair<string, object>(k.Key, k.Value))).Concat(r.Strings.Select(k => new KeyValuePair<string, object>(k.Key, k.Value)))

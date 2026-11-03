@@ -34,10 +34,8 @@ sealed partial class PlayerInterface
             var p = Vector4.Transform(new Vector4(pixel.X / Width * 2 - 1, 1 - pixel.Y / Height * 2, z, 1), inverse);
             return new Vector3(p.X, p.Y, p.Z) / p.W;
         }
-        // Clip z is 1 at the near plane and 0 at the far one on a scene whose depth is reversed (Vulkan: DepthConvention); with it swapped the ray starts on the far plane
-        // and points back at the eye, so a floor or terrain pick lands far off the pixel or nowhere at all.
-        var near = At(DepthConvention.Reversed ? 1 : 0);
-        var far = At(DepthConvention.Reversed ? 0 : 1);
+        var near = At(DepthConvention.NearZ);
+        var far = At(DepthConvention.FarZ);
         return (near, Vector3.Normalize(far - near));
     }
 

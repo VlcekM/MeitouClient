@@ -61,6 +61,12 @@ public static class DepthConvention
     public static Matrix4x4 Perspective(float fieldOfView, float aspect, float near, float far) =>
         Apply(Matrix4x4.CreatePerspectiveFieldOfView(fieldOfView, aspect, near, far));
 
+    /// <summary>The clip z of the near plane in the scene convention (1 reversed, 0 conventional).</summary>
+    public static float NearZ => Reversed ? 1f : 0f;
+
+    /// <summary>The clip z of the far plane in the scene convention (0 reversed, 1 conventional).</summary>
+    public static float FarZ => Reversed ? 0f : 1f;
+
     /// <summary>View distance along the axis of a stored depth <paramref name="d"/> drawn with planes <paramref name="near"/>, <paramref name="far"/>.</summary>
     public static float ViewZ(float d, float near, float far) =>
         Reversed ? near * far / (near + d * (far - near)) : near * far / (far - d * (far - near));
