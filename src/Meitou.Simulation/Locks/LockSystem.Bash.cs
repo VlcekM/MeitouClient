@@ -75,8 +75,8 @@ public sealed partial class LockSystem
             // Someone in the way: the task is impossible (the plan fails; an NPC looks again at the next check).
             if (InTheWay(world, s, face)) { StopBashing(table, s, c); continue; }
             if (c.BashOrdered && next[s].Task == (byte)CharacterTask.GoTo) AtWork(world, s);
-            // Every update in reach books Burglary against the door's owner, before the blow (Task_BashDoor, locks.md); the pursuit's bashers book none yet.
-            if (c.BashOrdered && Crimes is not null && door.Owner >= 0 && door.Owner != c.Faction) Crimes.SetPending(world, s, Crime.CrimeCode.Burglary, door.Owner, CharacterId.None, Crime.CrimeSystem.MinTimer);
+            // Every update in reach books Burglary against the door's owner, before the blow, for any basher (Task_BashDoor, shared by rows 81/123/226/272/287/290, locks.md).
+            if (Crimes is not null && door.Owner >= 0 && door.Owner != c.Faction) Crimes.SetPending(world, s, Crime.CrimeCode.Burglary, door.Owner, CharacterId.None, Crime.CrimeSystem.MinTimer);
             if (c.BashTime < 0) c.BashTime = 0;
             c.BashTime += world.TickSeconds;
             if (c.BashTime < BashSwingSeconds) continue;
