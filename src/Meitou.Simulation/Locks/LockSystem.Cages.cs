@@ -76,11 +76,11 @@ public sealed partial class LockSystem
     }
 
     /// <summary>Whether the character's role list in its squad's running package holds one of the goals in its hours.</summary>
-    static bool Lists(Ai.Blackboard board, Squad squad, CharacterId id, CharacterCold c, int hour, Meitou.Data.Gameplay.Ai.TaskType a, Meitou.Data.Gameplay.Ai.TaskType b)
+    static bool Lists(Ai.Blackboard board, Squad squad, CharacterId id, CharacterCold c, int hour, Meitou.Data.Gameplay.Ai.TaskType a, Meitou.Data.Gameplay.Ai.TaskType b, Meitou.Data.Gameplay.Ai.TaskType other = Meitou.Data.Gameplay.Ai.TaskType.None)
     {
         var roles = board.Roles[(int)Ai.AiSystem.RoleOf(squad, id, c)];
         for (int g = 0; g < roles.Count; g++)
-            if (roles[g].Task.Type is var t && (t == a || t == b) && roles[g].InWindow(hour)) return true;
+            if (roles[g].Task.Type is var t && (t == a || t == b || t == other) && roles[g].InWindow(hour)) return true;
         return false;
     }
 
@@ -127,7 +127,7 @@ public sealed partial class LockSystem
     }
 
     /// <summary>
-    /// 256 Get out of cage (opportunistic; <c>Task_GetOutOfCage</c> with the escape flag, docs/game/ai-tasks.md "Arrest and prison rows"): an AI prisoner, awake, whose role list holds
+    /// 256 Get out of cage and 207 Escape cage (opportunistic; <c>Task_GetOutOfCage</c> with the escape flag, docs/game/ai-tasks.md "Arrest and prison rows"): an AI prisoner, awake, whose role list holds
     /// the goal in its hours, walks out as soon as its cage is not effectively locked (<see cref="FixtureRegistry.GetOut"/> refuses a locked one; it is an escape unless it is a kidnap victim, whatever the sentence).
     /// </summary>
     void OpportunisticEscapes(World world)
@@ -138,8 +138,8 @@ public sealed partial class LockSystem
         {
             if (f.Kind != FixtureKind.Cage || FixtureRegistry.IsFree(table, f) || f.Lock is { Locked: true } || !table.TryResolveNext(f.Occupant, out int s)) continue;
             if (table.Cold(s) is not { IsImprisoned: true, IsPlayer: false, Medical.Incapacitated: false, Ai: { Squad: { Ai: { } board } squad } } c) continue;
-            // 256, or 202 TOTAL_ESCAPE, whose !79 the cage rows (133 / 207 / 256) provide once the cage is unlocked.
-            if (Lists(board, squad, f.Occupant, c, hour, Meitou.Data.Gameplay.Ai.TaskType.GET_OUT_OF_CAGE_OPPORTUNISTIC, Meitou.Data.Gameplay.Ai.TaskType.TOTAL_ESCAPE))
+            // 256, 207 (Escape cage: A !79, B !54, the same task with the escape flag) or 202 TOTAL_ESCAPE, whose !79 the cage rows (133 / 207 / 256) provide once the cage is unlocked.
+            if (Lists(board, squad, f.Occupant, c, hour, Meitou.Data.Gameplay.Ai.TaskType.GET_OUT_OF_CAGE_OPPORTUNISTIC, Meitou.Data.Gameplay.Ai.TaskType.TOTAL_ESCAPE, Meitou.Data.Gameplay.Ai.TaskType.GET_OUT_OF_CAGE_ESCAPE))
                 world.Fixtures.GetOut(world, f.Occupant, Crimes);
         }
     }
