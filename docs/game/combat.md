@@ -103,8 +103,12 @@ own technique (its blow never lands) and holds it in the stumble state until the
 counts down each tick; once due, the first tick a swing at 10-99% progress is incoming (`+0x120`, the incoming list is non-empty) rolls the stumble break-out (`FUN_1406085e0`, chance `FUN_140885d80`);
 a failed roll sets the timer to 1.2 s again, a tick with no such swing leaves it due (**Verified**, decompile). Meitou: `CombatSlot.BreakOutTick`.
 A won roll plans a defence (+0x1f4 = 1), leaves the stumble for state 3 and clears +0x14c; state 3 (`FUN_14060d0b0`) starts it through `FUN_140609290`, whose chooser, the fighter still
-stumbling (`FUN_140435570`), takes only `is stumble dodge` rows; with none it gets no technique and 1.2 s, but the stumble state has ended either way (**Verified**; whether the stumble clip
-is cut, by the layer fade `FUN_1405b36f0` there, is **Unknown**). Meitou: `Act`, step 2 (the stumble clip is dropped with the state).
+stumbling (`FUN_140435570`), takes only `is stumble dodge` rows; with none it gets no technique and 1.2 s, but the stumble state has ended either way (**Verified**).
+The stumble clip is faded out, not cut, either way (**Verified**, decompile and base data): `FUN_140609290` (called with 0 from state 3) first moves every layer of manager 1 flagged +0x5c
+to the fading list (`FUN_1405b36f0`), and a stumble dodge then clears manager 1 too (`FUN_1405b7800` -> `FUN_1405b35c0`). +0x5c is the ANIMATION record's `is action` or `layer` "all"
+(`FUN_1405ba280`; `layer` "all" and any name but lower / overlay / two others puts the layer in manager 1), and every stumble record of the base game is `layer all`, `is action`. The fade
+needs a swing still incoming on that tick (the start's `FUN_140665e00` pick); without one the clip plays on (**Observed**). Meitou: `Act`, step 2; the animation fades the stumble only when a
+technique starts (`AnimationSystem`, the action is cut): with none the clip plays to its end (not the original).
 Knockback is the clips' root motion only (**Observed**: no impulse in these functions; [animation](../animation.md); ragdolls: [ragdolls](ragdolls.md)).
 A blocked blow neither staggers nor pushes (`FUN_140665540`). A shackled defender is knocked out instead 25% of the time; a defender whose fight is off: [stagger outside a fight](#fight-lifecycle-and-orders).
 **Verified** (`FUN_140520490` → `FUN_14051eab0`; `FUN_140435570` → `FUN_1405b3a40`): the clip plays at its record's play speed
