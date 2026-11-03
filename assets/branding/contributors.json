@@ -24,8 +24,8 @@
     "areas": "Metal rendering, Materials, Seat interaction, Mesh paths"
   },
   "crockmr": {
-    "commits": 2,
-    "areas": "Save system, Squads"
+    "commits": 10,
+    "areas": "Prisoner treatment, Save/load, Escaped slaves"
   },
   "dmlen": {
     "commits": 1,
@@ -40,7 +40,7 @@
     "areas": "Character meshes"
   },
   "dfdffish": {
-    "commits": 6,
-    "areas": "Localization, Launcher"
+    "commits": 9,
+    "areas": "Picking, Localization"
   }
 }
