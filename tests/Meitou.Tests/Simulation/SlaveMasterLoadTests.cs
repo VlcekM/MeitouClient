@@ -1,8 +1,11 @@
 using System.Numerics;
 using Meitou.Data.Fcs;
+using Meitou.Data.Gameplay.Ai;
 using Meitou.Data.Save;
 using Meitou.Simulation;
+using Meitou.Simulation.Ai;
 using Meitou.Simulation.Kidnap;
+using Meitou.Simulation.Locks;
 using Meitou.Simulation.Saving;
 using Meitou.Tests.Combat;
 using SimWorld = Meitou.Simulation.World;
@@ -121,5 +124,66 @@ public class SlaveMasterLoadTests
         world.RunTicks(21);
         Assert.True(freedCold.Save!.Slaver.IsNull);
         Assert.Equal(-1, freedCold.SlaveMaster);
+    }
+
+    static AiGoal CageGoal(int start, int end)
+    {
+        var task = new AiTask("t", "cage", TaskType.SLAVE_GET_IN_MY_MASTERS_CAGE, TaskPriority.NonUrgent, TaskTargetType.Specific, TaskEndEvent.Nothing);
+        return new AiGoal(task, start, end, 1);
+    }
+
+    static Blackboard Board(List<AiGoal>[] roles)
+    {
+        var board = new Blackboard([new(0, new AiPackage { Id = "p", Name = "p", Roles = roles })]);
+        board.Update();
+        return board;
+    }
+
+    /// <summary>
+    /// A slave of <paramref name="faction"/> by <paramref name="cage"/>, its own squad running <paramref name="own"/>, obeying <paramref name="master"/>
+    /// (-1: none).
+    /// </summary>
+    static CharacterId Slave(SimWorld world, int faction, Blackboard own, Fixture cage, int master)
+    {
+        var squad = NewSquad(world, faction);
+        squad.Ai = own;
+        var cold = new Combatant { Name = "slave" }.MakeCold();
+        (cold.SlaveState, cold.SlaveOwner, cold.SlaveMaster) = (1, faction, master);
+        cold.Ai = new AiMind { Squad = squad };
+        cold.SquadId = squad.Id;
+        cold.Faction = faction;
+        var at = new CharacterHot { Position = cage.Position + new Vector3(30, 0, 0), Health = 100, MaxSpeed = 60, WalkSpeed = 15 };
+        var id = world.Characters.Spawn(at, cold, world.Tick);
+        squad.Members.Add(id);
+        squad.Leader = id;
+        return id;
+    }
+
+    /// <summary>
+    /// An obeying slave takes its captive jobs from its master's Slave AI Goals, not its own lists (job 187, docs/simulation.md
+    /// "Obedient Slave"): at noon the one whose master gets it into its cage only at night stays out, the one with no master goes by
+    /// its own package's all-day goal. Catches the captive sweep reading the own lists of an obeying slave, which sent saved slaves to
+    /// their cages by day once they had owners.
+    /// </summary>
+    [Fact]
+    public void An_obeying_slave_takes_its_captive_jobs_from_its_masters_slave_goals_not_its_own()
+    {
+        var data = ArrestTests.Town();
+        int city = data.FactionIndex("50-a");
+        var captive = new CaptiveSystem(data, null, new CaptiveSettings { RecordLog = true });
+        var walk = new OpenGroundWalkability((_, _) => 150);
+        using var world = new SimWorld(new WorldSettings { PublishSnapshots = false, StartHours = 24 + 12 }, walk, [captive]);
+        world.Fixtures.RegisterSite(world, data, 0);
+        var cage = world.Fixtures.Find("0.0:cageA")!;
+
+        var master = NewSquad(world, city);
+        master.Ai = Board([[], [], [], [], [CageGoal(22, 5)]]);
+        List<AiGoal>[] Own() => [[CageGoal(0, 24)], [CageGoal(0, 24)], [CageGoal(0, 24)], [], []];
+        var obeying = Slave(world, city, Board(Own()), cage, master.Id);
+        var masterless = Slave(world, city, Board(Own()), cage, -1);
+        world.RunTicks(61);
+
+        Assert.DoesNotContain(captive.Log, e => e.Worker == obeying);
+        Assert.Contains(captive.Log, e => e.Worker == masterless && e.Kind == CaptiveEventKind.Started && e.Job == CaptiveJobKind.CageSelf);
     }
 }
