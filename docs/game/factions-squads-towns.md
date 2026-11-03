@@ -490,7 +490,7 @@ Meitou: [ground items](../simulation.md#items-and-eating).
 **Verified** by code (kenshi-named dump) unless marked. Who is kept off screen: [persistent platoons](#1-object-model).
 
 - **No world pass**: work is spread over round robins. Each faction steps one platoon of its list per frame (`FUN_1406b9970`, unloaded
-  ones only); one faction per frame runs its war manager (`FUN_1406b97c0` → `FUN_1409cb310`); one town and one nest per frame get growth /
+  ones only; a per-faction cursor at +0x23c, wrapped past the end, advances one per frame; Meitou steps all of them per look, [off-screen tier](../simulation.md#off-screen-tier)); one faction per frame runs its war manager (`FUN_1406b97c0` → `FUN_1409cb310`); one town and one nest per frame get growth /
   spawn / wipe (`TownList::vfunc_4`); the area tick every 2 s (new nests, homeless squads), sector housekeeping every 10 s. Each unloaded
   step measures its own elapsed game time, and growth and campaign timers read the game clock, so no rate depends on these periods.
 - **Unloaded step** (`UnloadedPlatoon::vfunc_2`, `0x1407ee790`): activation test, the 60 s orphan timer, then the mover is stopped and nothing more happens (**Verified**) for a platoon of the

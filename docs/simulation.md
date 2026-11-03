@@ -110,7 +110,7 @@ it, who yields, attack slots, joining, fighters at it) walk `AttackerIndex`, the
 Schedule, filtered to the grid cells a search would cover, in the grid's order. Ragdoll physics steps on `Threads` workers (Bepu deterministic mode).
 
 Effects sort by `(target,source,system,sequence)`; spatial-neighbour iteration order is fixed.
-Commands apply by tick and queue order. In-tick orders use serial `World.Defer`; deferred orders
+Commands apply by tick and queue order. Simplification: the original drains a character's command deque from its head each frame; the head is accepted or refused by `FUN_1405d0db0` and a refusal blocks everything behind it and is retried every frame (`FUN_1405d2c30`:15-41, **Verified**), while Meitou's `CommandQueue.TakeDue` removes every due command and a consumer that does not apply one drops it. The accept rules are **Unknown** (s21-d037), so this stays until they are decoded. In-tick orders use serial `World.Defer`; deferred orders
 precede host orders for their due tick. No concurrent host enqueue may alter that ordering.
 Randomness: stateless `Rng.Hash(seed,entityKey,purpose,counter)`; changing purpose/salt changes rolls.
 Worker partitions are `threads*2`, minimum 16 slots (game 32: 128 left a 500-character battle 3 partitions); one worker means caller execution.
@@ -376,6 +376,8 @@ original's table (CHARACTER → claimed, live character, state 1/0/2, player fla
 The original's rules: [off-screen world](game/factions-squads-towns.md#off-screen-world). It keeps only persistent platoons (residents) and
 campaign squads off screen, moves them in straight lines (roads for long trips), never fights or heals there, and drives the rest by clock-based
 budgets. The tier follows it, with Meitou choices marked.
+
+**Engine choice (s18-f24).** The original examines one platoon per faction per frame (`FUN_1406b9970`: its loop bound is one; a per-faction cursor at +0x23c, wrapped past the end of the list, picks it; if that platoon has an unloaded half it runs its update and, when that returns false, activates it and returns, else the cursor advances), so each platoon is examined once per (platoon count of its faction) frames (**Verified**, decompile). Meitou steps and may activate every unloaded platoon on each `CheckEveryTicks` look (`PopulationRoaming.StepRoaming`); rates do not depend on it because each step measures its own elapsed time, only the activation latency differs.
 
 **Town overrides** ([rule](game/factions-squads-towns.md#town-overrides)): `PopulationSystem.Replace` runs at each town load but those behind the loading
 screen (`PrepareLoading`); the winner goes into `TownSite.Replacement`, and `TownSite.Town` (what every reader uses) becomes it with the placement's id and names

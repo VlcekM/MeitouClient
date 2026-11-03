@@ -723,8 +723,7 @@ harvest look `FUN_1400e4800`, replant `FUN_1400e48e0`, geometry `FUN_1400e4a20`,
 ### Unloaded zones
 
 **Verified** (decompile, `ZoneManager::updateRendertimeThread` / `ZoneMapContent::threadedUpdate`): buildings update only in active zones; an
-unloaded zone has no building objects. Farms, automatic machines and moving-part buildings update every pass, operated ones in a 10-per-pass
-rotation. No building but the farm reads a saved time, so mines, wells, refiners, generators, research and crafting stop unloaded and do not
+unloaded zone has no building objects. Per zone pass (`FUN_1409fb2b0`): objects whose vfunc 0x3e8 (needs update) is true always enter the ready list (Building: any sub-part busy; ProductionBuilding: busy, or not (flag +0x3a9 and no current job); FarmBuilding: always), idle ones only while a budget of 10 per call lasts, from a rotation cursor that then advances (**Verified**). The pass cadence of `threadedUpdate` and whether the idle battery step (`FUN_1402994a0`, no dt) shows a rate difference are **Unknown**. Meitou updates every machine of an active zone each tick, dt-scaled (a difference, idle battery charge unverified). No building but the farm reads a saved time, so mines, wells, refiners, generators, research and crafting stop unloaded and do not
 catch up.
 
 **Farm catch-up** (**Verified**, `FarmBuilding::loadFromSerialise` / `timeSkip`): the farm saves `save time` (game hours) when its zone unloads
@@ -928,7 +927,7 @@ wind; a level building's mult comes from its data as its sound emitter's efficie
 needing neither operators nor power their `output rate`, other machines 0; engine choice).
 
 **Storage** (**Verified**, 603 buildings): 87 have `has inventory`; default 18 x 18, `itemtype limit` 4; `stackable bonus
-mult` 1 to 100000; `limit inventory` restricts the items. Grid (**Observed**, the building loader): a building whose `limit inventory`
+mult` 1 to 100000; `limit inventory` restricts the items. Loader note (`FUN_14057cc70`:192-202, 555-567, **Verified**): when the functionality record's int `flags` has bit 4 set the loader only prints the log line 'Warning: Nest building loaded <name>' and goes on, no state changes. Grid (**Observed**, the building loader): a building whose `limit inventory`
 names exactly one item is that item's `inventory footprint` (Iron Plates 4 x 3, Building Materials 6 x 3, steel bars 6 x 1), else
 `storage size`, for built and town-placed storages alike (`MachineData.StorageGrid`). Its window (**Observed**, screenshots) is
 `Kenshi_InventoryGenericWindow`: caption STORAGE, the one limited item's name as heading, `Max Capacity: N` with N the `stackable bonus

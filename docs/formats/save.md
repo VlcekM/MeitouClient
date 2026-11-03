@@ -153,6 +153,8 @@ waits and runs when it ends (Meitou: `HandleNewGame` keeps `newGameRequested` wh
 
 ### Autosave (`FUN_14047be70`)
 
+The save-file state machine's per-frame check (`FUN_1404742b0`:21-41, state +0x1e0 == 1, worker pending) is log-only: when the worker handle's held check returns 0 it logs 'Thread seems to have stopped running' and returns with the state unchanged (**Verified**; 'dead worker' is not established). Meitou's save is one `Task.Run` whose exceptions are reported, so it has no such case.
+
 Every frame from `GameWorld::vfunc_0` (**Verified**, decompile): while `Auto save` is on, no zone is loading and `DAT_142134690+0x298`
 is null, real dt adds to a timer (paused time not counted). Past `Auto save time (minutes)` x 60 it shows "Autosaving...", and the next
 frame saves slot `(autosaveindex + 1) mod 3` as `autosave<N>` and stores `autosaveindex` in `settings.cfg`. Meitou (`GameHost.Autosave`):

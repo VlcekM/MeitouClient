@@ -9,6 +9,8 @@ used as a naming reference for our 1.0.68 analysis; they are **Observed** until 
 
 ## Implementation
 
+Not built, by design: the original's in-game level editor and fog editor (`Kenshi_LevelEditor`, `Fog_Editor`, Shift+F12; [UI input](game/ui-input.md)); the developer key tools listed there.
+
 - [animation](animation.md)
 - [bench](bench.md)
 - [engine](engine.md)
