@@ -833,7 +833,7 @@ public sealed partial class PopulationSystem : IStateHashed
         }
         var leaderTown = TownAt(world, leader.Position);
         if (!inst.Reached && leaderTown == inst.Target) inst.Reached = true;
-        TrackFights(world, c, inst, now);
+        TrackFights(world, inst);
         if (leader.State == PlatoonState.Loaded && AllDown(world, leader))
         {
             Defeat(world, m, c, inst, now);
@@ -884,7 +884,8 @@ public sealed partial class PopulationSystem : IStateHashed
                     case CampaignKey.AssaultTown:
                         if (hours > 4) won = true;
                         else if (PlayersHold(world, inst.Target)) return false;
-                        else if (inst.FightStart >= 0 && now - inst.FightStart > 0.2 && (!AnyFighting(world, inst) || !PlayersStanding(world, inst.Target))
+                        else if (inst.FightStart < 0) { if (AnyFighting(world, inst)) inst.FightStart = now; }   // armed only past the players' hold test, FUN_1409c70f0
+                        else if (now - inst.FightStart > 0.2 && (!AnyFighting(world, inst) || !PlayersStanding(world, inst.Target))
                             && DoorsOpen(world, inst.Target) && !WallsLockedUp(world, inst.Target)) won = true;
                         break;
                     case CampaignKey.DefendTown:
@@ -1010,8 +1011,8 @@ public sealed partial class PopulationSystem : IStateHashed
         }
     }
 
-    /// <summary>Loaded fights (the original's are loaded only): the first one starts the assault's fight timer; a leader-platoon member fighting within 300 of a player character marks a fight with the player (engine test for the <b>Unknown</b> one).</summary>
-    void TrackFights(World world, CampaignData c, CampaignInstance inst, double now)
+    /// <summary>Loaded fights (the original's are loaded only; the assault's fight timer is armed in <c>Update</c>'s phase 1): a leader-platoon member fighting within 300 of a player character marks a fight with the player (engine test for the <b>Unknown</b> one).</summary>
+    void TrackFights(World world, CampaignInstance inst)
     {
         var table = world.Characters;
         foreach (int id in inst.Platoons)
@@ -1020,7 +1021,6 @@ public sealed partial class PopulationSystem : IStateHashed
             foreach (var member in squad.Members)
             {
                 if (!table.TryResolveNext(member, out int slot) || table.Cold(slot) is not { InCombat: true }) continue;
-                if (inst.FightStart < 0 && inst.Phase == 1 && c.Key == CampaignKey.AssaultTown && now - inst.PhaseStart <= 4) inst.FightStart = now;
                 if (id == inst.Leader && !inst.FoughtPlayer && PlayerNear(world, table.Previous[slot].Position, 300)) inst.FoughtPlayer = true;
             }
         }
