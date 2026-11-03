@@ -448,10 +448,10 @@ public sealed class AnimationSystem(AnimationLibrary library, AnimationLengths l
             // Out of a ragdoll the clip waits at its first key while the bones blend into it (docs/game/ragdolls.md "Getting up").
             if (ragdoll.WasWhole) a.ActionTime = -Meitou.Simulation.Ragdolls.RagdollSystem.GetUpBlend;
         }
-        // The leg back up: posture 2 ends in 0 and the posture setter queues the get-up task 65 (FUN_1405c7e20), which plays `standing up 3`.
+        // The leg back up or Stand Up from staying low: posture 2 or 1 ends in 0 and the posture setter queues the get-up task 65 (FUN_1405c7e20), which plays `standing up 3`.
         else if (a.WasCrawling && !down && !carried && !inBed && !inCage && cold.Medical is { Crawling: false, Prone: false }) StartAction(a, getUp, false);
         a.WasDown = down;
-        a.WasCrawling = cold.Medical is { Crawling: true };
+        a.WasCrawling = cold.Medical is { Crawling: true } or { StayingLow: true };
         // The hit reaction the combat system picked (it holds the character helpless for the clip's length; see ChooseStumble).
         if (!down && !carried && fight.StumbleClip >= 0 && fight.StumbleStart > a.SeenHit && Plays(a, cold, fight.StumbleClip))
         {

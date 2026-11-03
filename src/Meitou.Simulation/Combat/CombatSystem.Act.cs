@@ -222,7 +222,7 @@ public sealed partial class CombatSystem
             cold.StaggeredUntil = Math.Max(cold.StaggeredUntil, cold.GettingUpUntil);
             if (Orders.Has(cold, CharacterOrders.Hold)) cold.HoldPoint = prev[i].Position;
         }
-        s.Crawl = crawling;
+        s.Crawl = crawling || cold.Medical.StayingLow;   // any posture above 0: the setter queues task 65 whenever it returns to 0 (FUN_1405c7e20)
         s.Down = cold.Medical.Incapacitated;
         if (s.Down)
         {
