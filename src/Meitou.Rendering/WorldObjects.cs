@@ -252,7 +252,7 @@ sealed class WorldObjects : IDisposable
                         result.Items.Add(item);
                     continue;
                 }
-                // Y: the state's absolute "world Y pos" when there is one, else terrain height + the instance's Y (zones.md).
+                // Y: the placement's absolute height when it has one (the building ground + instance Y, or a state's "world Y pos"), else terrain height + the instance's Y (zones.md).
                 float y = b.WorldY ?? map.HeightAt(b.Position.X, b.Position.Z) + b.Position.Y;
                 if (b.WorldY is not null) Interlocked.Increment(ref fromState);
                 var state = b.StateId is not null && Levels.Zones.TryGetValue(b.StateZone ?? b.Zone, out var zoneDb) ? zoneDb.Find(b.StateId) : null;

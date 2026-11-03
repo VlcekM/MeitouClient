@@ -92,7 +92,7 @@ Building state writer/reader (**Verified** by code, no player-built building in 
 | `interior layout name`, `exterior layout name` | string | only with an interior |
 | `player furniture Y offset` | float | height above the parent building's origin for furniture, else 0 |
 | `version` | int | |
-| `world Y pos` | float | absolute height |
+| `world Y pos` | float | absolute height the building stood at; written, never read ([placement height](#placement-height)) |
 | `foliage` | bool | |
 | `squad template` | string | |
 | `isInsideBuilding` | handle | parent building |
@@ -104,10 +104,33 @@ New instance ids are `<n>-<container name>-INGAME`, n from the container's id co
 e.g. `19765-zone39.16-INGAME`). Instance ids are unique only within one zone file: **Observed** (base load order, scratch probe over
 `WorldLevelData.Buildings()`) 8,754 of 11,714 placements share their id with one in another zone, 580 ids within two zones of each other
 (`2-Newwworld-INGAME` is a Y-House in 19.29 and another house in 19.28). Meitou names a building at run time by `BuildingKey`
-`"<zone x>.<zone z>:<id>"` (doors, fixtures, renderer placements, saved-state lookup); the raw id stays in files and in the material seed. Their instance Y equals the state's `world Y pos` (**Observed**: 11405 of 11405 in the sample saves). On import, non-player buildings are rebuilt complete
+`"<zone x>.<zone z>:<id>"` (doors, fixtures, renderer placements, saved-state lookup); the raw id stays in files and in the material seed. In saves the instance Y stays the height above ground ([placement height](#placement-height)). On import, non-player buildings are rebuilt complete
 ([construction](../game/buildings-production.md#construction-tick)). A `creates player town` building makes a TOWN
 "Your Outpost" ([placement](../game/buildings-production.md#placement)), saved in `quick.save`'s town list, not in a
 zone file ([player outposts](save.md#player-outposts)); the buildings' `town` handle names it.
+
+### Placement height
+
+- **Verified** by code (1.0.68): `world Y pos` occurs once in the exe, used only by the writer `Building::_saveBuildingState` (`FUN_1405547f0`), which
+  stores the building's current Y (`getPosition`, Building+0x48). Nothing reads it.
+- `RootObjectFactory::createBuilding` (`FUN_14057cc70`) makes a building at its instance position and skips one whose instance Y is below -1000
+  ("Deleted a ... under the ground"). The constructor (`FUN_14055ca90`) keeps the instance Y as the height above ground (Building+0x278); a nonzero
+  `player furniture Y offset` replaces it on load (`FUN_140555650`).
+- `Building::createPhysical` (`FUN_1405609e0`): with no `isInsideBuilding` or `mounted` handle and not layout furniture, a non-door building stands at
+  building ground + height above ground; with a parent, at the parent's Y + height above ground. `WallBuilding::createPhysical` (`FUN_140562260`) runs it and then only moves
+  the position marker.
+- Building ground (`UtilityT::getTerrainWithWaterHeight`, `FUN_1409b3720`): max(100, the zone's height grid at X/Z). The grid (`ZoneMap::getTerrainHeight`,
+  `FUN_1407eac60`, filled by `FUN_1407eab40` from `Terrain::getRawData`) holds every other heightmap sample, 129 x 129 per zone, 36 units apart, read
+  bilinearly; with no grid the terrain plugin's own height is used. It is up to ~16 units off the full heightmap on steep ground.
+- **Verified** against original saves (scratch probe; Beep Fan Club 1, METARU, autosave1): every outdoor level placement (2841, 3004, 2868) and every
+  game-made one (269) has saved `world Y pos` = building ground + instance Y within 0.05, none off. Stale level values are written back at that height
+  (46.16 `677-Newwworld-INGAME` 23.6 higher, 24.40 `901`/`903-rebirth-INGAME`). Pontoon Bridges 27.40 `6`/`10-Newwworld-INGAME` (instance Y -92726,
+  -86557) are missing from METARU's zone file, which keeps the zone's other three.
+- **Observed**: 1904 outdoor placements of the base load order have a `world Y pos` more than 0.05 off building ground + instance Y, many from rebirth.mod: the Cannibal
+  Village (16.8, 17.10) and Cannibal Capital (18.7) about 25 lower, the 24 Spiked Cages of 16.8 18-28 lower. The original's baked navmesh on the six
+  Cannibal Shacks of 16.8 lies 52-54 above building ground + instance Y and 72-78 above `world Y pos`.
+- Meitou: `WorldLevelData.Load(install)` stands each outdoor level building at `TerrainHeightmap.BuildingGroundAt` + instance Y (`PlaceOnGround`), keeps
+  the state's height for one inside or mounted on another, and leaves out one under -1000.
 
 `0-townlist` GAMESTATE_TOWN_INSTANCE_LIST: target TOWN, absolute XYZ, unused zero quaternion,
 GAMESTATE_TOWN state `-S5e`. **Verified**304 targets resolve;224 town states listing zones contain
