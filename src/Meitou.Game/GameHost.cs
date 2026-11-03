@@ -579,6 +579,7 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
         }
         Meitou.Rendering.StageClock.Lap(Meitou.Rendering.StageClock.Host);   // the profiler: the host's frame so far, then the blood marks apart from the terrain's update
         UpdateBlood();
+        UpdateBirds();
         Meitou.Rendering.StageClock.Lap(Meitou.Rendering.StageClock.Blood, "blood marks");
         UpdateWeatherSource();
         UpdateInteriorView();
@@ -594,6 +595,36 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
         }
         finally { session.EndTickAhead(); }
         if (tickAhead) NoteAheadTick();
+    }
+
+    Meitou.Game.BirdFlocks? birds;
+    Meitou.Data.Gameplay.BiomeMap? birdAreas;
+    double birdClock = double.NaN;
+
+    /// <summary>The birds fly on the display's real time (the original's <c>BirdManager</c> thread is kicked with the real dt, docs/game/birds.md); the flocks are those the camera's BIOME_GROUP lists.</summary>
+    void UpdateBirds()
+    {
+        gpu.BirdPieces.Clear();
+        if (scene.Database is not { } db) return;
+        if (birds is null)
+        {
+            var kinds = Meitou.Data.Gameplay.BirdFlockData.LoadAll(db);
+            birds = new Meitou.Game.BirdFlocks(kinds, (x, z) => gpu.Terrain.HeightAt(x, z));
+            try { birdAreas = Meitou.Data.Gameplay.BiomeMap.Create(Meitou.Data.Gameplay.BiomeGroupData.LoadAll(db), Meitou.Data.World.WeatherAreas.Load(install)); }
+            catch (Exception e) when (e is IOException or FormatException) { birdAreas = null; }
+        }
+        double now = realTime.Elapsed.TotalSeconds;
+        float dt = double.IsNaN(birdClock) ? 0 : (float)(now - birdClock);
+        birdClock = now;
+        string? group = null;
+        if (birdAreas is { } areas)
+        {
+            var (cx, cz) = Meitou.Data.World.WeatherAreas.CameraCellOf(camera.Eye.X, camera.Eye.Z);
+            if (areas.GroupOf(cx, cz) is >= 0 and var g) group = areas.Groups[g].Id;
+        }
+        birds.Update(dt, camera.Eye, group);
+        birds.AddPieces(gpu.BirdPieces);
+        if (gpu.Debris is { } birdMeshes) gpu.BirdPieces.RemoveAll(p => birdMeshes.Extent(p.Mesh, null) is null);   // a mesh is loaded when first asked for
     }
 
     /// <summary>This frame's world draw overlaps the next world tick (set by the interactive loop; never in stills, the duel, recorded flights or the play benchmark).</summary>
