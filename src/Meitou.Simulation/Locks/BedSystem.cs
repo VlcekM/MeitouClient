@@ -427,7 +427,7 @@ public sealed class BedSystem(PopulationData data, BedSettings? settings = null)
 
     /// <summary>
     /// The job 106 "Find and put in bed" (<c>FUN_1405a0d50</c>, docs/game/carry-loot.md 3.2) as the decision step's contributor (step 5): a player character carrying a body whose faction is not
-    /// hostile to its own and that is no animal lays it in the bed the bed search finds (<b>engine choice</b>: the original's 106 has no target finder of its own). It runs while its walk does.
+    /// hostile to its own and that is no animal lays it in the bed the bed search finds (row 106 registers the bed search <c>FUN_1408cfe00</c> as its finder, <b>Verified</b>). It runs while its walk does.
     /// </summary>
     public void RegisterSources(DecisionSystem decisions) => decisions.RegisterJob(TaskType.FIND_BED_AND_PUT_IN, new PutInJob(this));
 
