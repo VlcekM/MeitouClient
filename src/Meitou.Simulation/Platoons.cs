@@ -111,7 +111,7 @@ public sealed class StoredSquad
     public required string Name { get; init; }
     /// <summary>A town's own squad (else a roaming one, which travels).</summary>
     public bool Pinned { get; init; } = true;
-    public Meitou.Data.World.TownBuilding? HomeBuilding { get; init; }
+    public Meitou.Data.World.TownBuilding? HomeBuilding { get; set; }
     public Trading.Shop? Shop { get; set; }
     /// <summary>The squad's <see cref="Squad.NextHomeFillTick"/>, so an emptied home is not refilled when it comes back.</summary>
     public long NextHomeFillTick { get; set; }

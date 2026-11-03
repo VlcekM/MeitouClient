@@ -427,7 +427,8 @@ Meitou: [ground items](../simulation.md#items-and-eating).
 - **When**: at zone populate (`FUN_140a0e760`) per non-player town, the zone's buildings sorted by handle serial (random-looking).
 - **Candidates**: buildings of the town ([membership](../formats/zones.md#town-membership)) with an `interior` reference, not player-owned, holding no residents template
   or the default one; walls (`links together`, a vfunc override) never, gates (`is wall gate`) only for entries naming
-  `building`s. Level data agrees: 1946 walls, none with a resident.
+  `building`s. Level data agrees: 1946 walls, none with a resident. Player-owned is ownership now: a house the player bought
+  houses nobody, and its squads moved out when it was bought ([purchase](ui-screens.md#selected-building)).
 - **Driver** (`FUN_1409370d0`): re-owns the buildings to the town's faction; priority 5 down to 0, each entry with count
   left gets one building per pass, passes repeat while one placed and has more. An entry with no building left makes
   no more squads (Stack: civilians v0 9, 2 made). Then every free building whose interiors take the default resident's

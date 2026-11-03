@@ -498,6 +498,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             var seats = new List<SeatClaim>();
             var seatOwners = new Dictionary<TownBuilding, int>(ReferenceEqualityComparer.Instance);
             foreach (var b in buildings)
+            {
+                if (world.Fixtures.IsEmptied(b.Key)) continue;   // a bought house's furniture is gone
                 for (int i = 0; i < b.SeatCount; i++)
                     if (Sittable(b.SeatAt(i).Kind, dummies: true))
                     {
@@ -505,6 +507,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
                         if (!seatOwners.ContainsKey(b))
                             seatOwners[b] = world.Fixtures.PropertyOwner(b.Key) ?? (b.OwnerFactionId is { } o && data.FactionIndex(o) is var fi and >= 0 ? fi : townFaction);
                     }
+            }
             places[site] = new(wander, shopList, [.. buildings.Where(b => (b.IsBar || bars.Contains(b)) && IsPublic(b))],
                 [.. buildings.Where(b => b.IsOutdoorTable)], [.. buildings.Where(b => !world.Fixtures.IsDestroyed(b) && b.Function is >= 0 and var fn && (WorkFunctions >> fn & 1) != 0)], stock, seats, seatOwners,
                 [.. buildings.Where(b => b.HasInterior && !b.IsWall && !world.Fixtures.IsDestroyed(b) && IsPublic(b))]);
@@ -1782,11 +1785,18 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// one (made without building data, or a save's without a home) an <b>engine choice</b>: among its town's
     /// buildings no other squad has, the nearest of the template's <c>building</c>; else by <c>building designation</c> a shop (SHOP) or the bar (BAR, or one of the
     /// town's bar squads; shared);
-    /// else the nearest with beds, else the nearest at all. None for a squad without a town or a town without building data.
+    /// else the nearest with beds, else the nearest at all. None for a squad without a town or a town without building data. A squad not of the player's faction is never
+    /// given a building the player owns (the original's housing leaves player-owned buildings out, docs/game/factions-squads-towns.md "Town residents").
     /// </summary>
     TownBuilding? AssignHome(World world, Squad squad, SquadTemplate? template)
     {
-        if (squad.HomeBuilding is { } given) return given;
+        int player = world.Player.Faction;
+        bool players = squad.Faction == player;
+        if (squad.HomeBuilding is { } given)
+        {
+            if (players || !world.Fixtures.OwnsBuilding(given.Key, player)) return given;
+            return squad.HomeBuilding = HouseForSale(world, squad);   // a save from before a bought house's squads moved out (Evict)
+        }
         if (squad.Town < 0 || data.Sites[squad.Town].Buildings is not { Count: > 0 } buildings) return null;
         var taken = new HashSet<TownBuilding>(ReferenceEqualityComparer.Instance);
         foreach (var other in world.Squads.All)
@@ -1798,7 +1808,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             float bestD = float.MaxValue;
             foreach (var b in buildings)
             {
-                if (!accept(b) || (!shared && taken.Contains(b))) continue;
+                if (!accept(b) || (!shared && taken.Contains(b)) || !players && world.Fixtures.OwnsBuilding(b.Key, player)) continue;
                 float d = Vector2.DistanceSquared(at, Flat(b.Position));
                 if (d < bestD) (best, bestD) = (b, d);
             }
@@ -1808,6 +1818,58 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         if (template?.BuildingDesignation == 1 && Nearest(b => b.IsShop) is { } shop) return shop;
         if ((template?.BuildingDesignation == 3 || IsBarSquad(squad)) && Nearest(b => b.IsBar, shared: true) is { } bar) return bar;
         return Nearest(b => b.Beds > 0) ?? Nearest(_ => true);
+    }
+
+    /// <summary>
+    /// The squads living in a town house the player has bought move out (the original's purchase callback <c>FUN_1407ad6c0</c>, docs/simulation.md "Town house purchases"):
+    /// each is given another house of its town that is for sale (<see cref="HouseForSale"/>), else none, and its members plan again for it. A platoon away from the world
+    /// (<see cref="StoredSquad"/>) only loses it.
+    /// </summary>
+    public void Evict(World world, string building)
+    {
+        foreach (var squad in world.Squads.All)
+            if (squad.HomeBuilding?.Key == building || squad.Ai?.OwnHome?.Key == building) Rehome(world, squad);
+        foreach (var platoon in world.Platoons.All)
+            if (platoon.Stored is { } stored && stored.HomeBuilding?.Key == building) stored.HomeBuilding = null;
+    }
+
+    void Rehome(World world, Squad squad)
+    {
+        var home = HouseForSale(world, squad);
+        squad.HomeBuilding = home;
+        if (squad.Ai is not { } board) return;
+        var old = board.OwnHome;
+        board.OwnHome = home;
+        if (board.Home == old) board.Home = home;
+        board.Touch();
+        foreach (var id in squad.Members)
+            if (world.Characters.TryResolveNext(id, out int slot) && world.Characters.Cold(slot)?.Ai is { } mind)
+            {
+                mind.HomeUnreachable = false;
+                mind.Replan = true;
+            }
+    }
+
+    /// <summary>
+    /// The BuildingFunction bits the finder of a new home looks through: 0x13, BF_ANY, MINE and REFINERY (the house function's number 19 passed as a bit mask, as the worker finder's
+    /// 0x41a is read, <b>Observed</b>); a building with no functionality counts as BF_ANY.
+    /// </summary>
+    const int RehomeFunctions = 0x13;
+
+    /// <summary>
+    /// The home a squad moving out is given (<c>FUN_14099e6e0</c> through <c>FUN_1409fc2e0</c>, <b>Observed</b>): one of its town's buildings in <see cref="RehomeFunctions"/> that is for
+    /// sale (the panel's test, slot 88 <c>FUN_14029c500</c>: <see cref="Locks.FixtureRegistry.SalePrice"/>), at random; null when there is none. The original also tests the squad
+    /// against each (<c>FUN_140621230</c>, meaning <b>Unknown</b>, not modelled).
+    /// </summary>
+    TownBuilding? HouseForSale(World world, Squad squad)
+    {
+        if ((uint)squad.Town >= (uint)data.Sites.Count) return null;
+        static bool Searched(int function) => function < 0 || function < 32 && (RehomeFunctions >> function & 1) != 0;
+        var houses = data.Sites[squad.Town].Buildings
+            .Where(b => Searched(b.Function) && world.Fixtures.SalePrice(b.Key, world.Player.Faction) is not null).ToList();
+        if (houses.Count == 0) return null;
+        ulong roll = Rng.Hash(world.Seed, (ulong)squad.Id, RngPurpose.Think, SeedSalts.AiRehome ^ (ulong)world.Tick << 8);
+        return houses[Rng.Int(roll, houses.Count)];
     }
 
     /// <summary>A squad made from one of its town's <c>bar squads</c> entries (the original gives it no home; Meitou keeps it at the bar, not in a free building with beds).</summary>

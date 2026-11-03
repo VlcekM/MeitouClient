@@ -70,12 +70,13 @@ public static class ResidentRuins
 
     /// <summary>
     /// The keys of the homes <paramref name="town"/>'s residents ruin when they are housed in <paramref name="buildings"/> afresh (a town override): homes of a ruined
-    /// template that can be destroyed.
+    /// template that can be destroyed. <paramref name="playerOwned"/>: the buildings the player owns now, which house nobody (<see cref="ResidentHomes.Assign"/>).
     /// </summary>
-    public static HashSet<string> RuinedHomes(GameDatabase db, TownData town, FactionData? faction, IReadOnlyList<TownBuilding> buildings, string? playerFactionId)
+    public static HashSet<string> RuinedHomes(GameDatabase db, TownData town, FactionData? faction, IReadOnlyList<TownBuilding> buildings, string? playerFactionId,
+        IReadOnlySet<string>? playerOwned = null)
     {
         var result = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var (b, t) in ResidentHomes.Assign(db, town, faction, buildings, playerFactionId))
+        foreach (var (b, t) in ResidentHomes.Assign(db, town, faction, buildings, playerFactionId, playerOwned))
             if (t.BuildingRuined && db.Find(b.BuildingId) is { } record && CanBeDestroyed(db, record)) result.Add(b.Key);
         return result;
     }

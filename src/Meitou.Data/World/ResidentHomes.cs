@@ -45,7 +45,8 @@ public static class ResidentHomes
     public static bool IsTemplate(GameRecord? record) => record is { Type: FcsRecordType.SQUAD_TEMPLATE or FcsRecordType.UNIQUE_SQUAD_TEMPLATE };
 
     /// <summary>
-    /// Houses the town's resident entries in <paramref name="buildings"/> (those that can house and are not <paramref name="playerFactionId"/>'s); returns each housed
+    /// Houses the town's resident entries in <paramref name="buildings"/> (those that can house, are not <paramref name="playerFactionId"/>'s in the level data and not among
+    /// <paramref name="playerOwned"/>, the keys of those the player owns now, such as a house bought); returns each housed
     /// building with its template, in housing order. Order of the buildings: by a hash of their keys (<b>engine choice</b>: the original's is its handles' serials, which
     /// are random, so it rerolls homes at a new game; a fixed order lets the boot lay out the ruins the homes make). Steps:
     /// <list type="number">
@@ -58,9 +59,9 @@ public static class ResidentHomes
     /// </list>
     /// </summary>
     public static List<(TownBuilding Building, SquadTemplate Template)> Assign(GameDatabase db, TownData town, FactionData? faction, IReadOnlyList<TownBuilding> buildings,
-        string? playerFactionId)
+        string? playerFactionId, IReadOnlySet<string>? playerOwned = null)
     {
-        var order = Order(buildings, playerFactionId);
+        var order = Order(buildings, playerFactionId, playerOwned);
         var entries = MakeEntries(db, Entries(town, faction));
         var housed = new List<(TownBuilding Building, SquadTemplate Template)>();
         var taken = new HashSet<TownBuilding>(ReferenceEqualityComparer.Instance);
@@ -73,8 +74,11 @@ public static class ResidentHomes
         return housed;
     }
 
-    static List<TownBuilding> Order(IReadOnlyList<TownBuilding> buildings, string? playerFactionId) =>
-        [.. buildings.Where(b => b.CanHouse && (playerFactionId is null || b.OwnerFactionId != playerFactionId)).OrderBy(b => KeyHash(b.Key)).ThenBy(b => b.Key, StringComparer.Ordinal)];
+    static List<TownBuilding> Order(IReadOnlyList<TownBuilding> buildings, string? playerFactionId, IReadOnlySet<string>? playerOwned)
+    {
+        bool Candidate(TownBuilding b) => b.CanHouse && (playerFactionId is null || b.OwnerFactionId != playerFactionId) && playerOwned?.Contains(b.Key) != true;
+        return [.. buildings.Where(Candidate).OrderBy(b => KeyHash(b.Key)).ThenBy(b => b.Key, StringComparer.Ordinal)];
+    }
 
     /// <summary>FNV-1a over the key's characters: stable across runs and platforms.</summary>
     static ulong KeyHash(string key)

@@ -20,8 +20,8 @@ public sealed partial class FixtureRegistry
     public IReadOnlyList<SeatSpot> SeatSpots => publishedSeats ??= [.. seatSpots.Values];
     public SeatSpot? FindSeat(string id) => seatSpots.GetValueOrDefault(id);
 
-    /// <summary>The original furniture a player-built seat in this town house can face.</summary>
-    public IReadOnlyList<Vector3> TablesOfBuilding(string building) => properties.TryGetValue(building, out var p) ? p.Building.Tables : [];
+    /// <summary>The original furniture a player-built seat in this town house can face: none once bought (<see cref="IsEmptied"/>).</summary>
+    public IReadOnlyList<Vector3> TablesOfBuilding(string building) => properties.TryGetValue(building, out var p) && !p.Purchased ? p.Building.Tables : [];
 
     void RegisterSeats(TownBuilding building, int owner)
     {

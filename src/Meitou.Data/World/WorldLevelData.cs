@@ -220,6 +220,8 @@ public sealed record BuildingPlacement(ZoneCoordinate Zone, string InstanceId, s
 {
     /// <summary>Runtime repair state; null leaves the level/save flag in control.</summary>
     public bool? DestroyedOverride { get; init; }
+    /// <summary>Its state's interior layout is not laid out: a town house the player bought, whose furniture the purchase destroyed (docs/simulation.md "Town house purchases").</summary>
+    public bool WithoutInterior { get; init; }
     /// <summary>A loose item's mesh and scale when not its record's own (a nest's numbered debris piece, docs/game/factions-squads-towns.md "Nest furniture").</summary>
     public string? ItemMesh { get; init; }
     public float ItemScale { get; init; } = 1;

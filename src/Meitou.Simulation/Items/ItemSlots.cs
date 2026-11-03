@@ -59,7 +59,7 @@ public sealed class ItemSlots
         int townFaction = site < data.SiteFactions.Count ? data.SiteFactions[site] : -1;
         foreach (var b in data.Sites[site].Buildings)
         {
-            if (b.ItemSlots.Count == 0) continue;
+            if (b.ItemSlots.Count == 0 || world.Fixtures.IsEmptied(b.Key)) continue;   // a bought house has none (EmptyBuilding)
             int owner = b.OwnerFactionId is { } o && data.FactionIndex(o) is var fi and >= 0 ? fi : townFaction;
             owner = world.Fixtures.PropertyOwner(b.Key) ?? owner;
             foreach (var s in b.ItemSlots)
@@ -80,7 +80,19 @@ public sealed class ItemSlots
         }
     }
 
-    /// <summary>Loose furnishings follow the purchased house, including subsequent slot refills.</summary>
+    /// <summary>
+    /// A town house the player bought loses its slots and the items lying in them (the original's purchase destroys the interior's item groups, <c>FUN_14054f4d0</c>, and a
+    /// group going destroys the item it still holds, <c>FUN_14054a600</c>); an item taken out of its slot already stays where it is.
+    /// </summary>
+    public void EmptyBuilding(World world, TownBuilding building)
+    {
+        var ids = building.ItemSlots.Select(s => s.Id).ToHashSet(StringComparer.Ordinal);
+        foreach (var slot in all)
+            if (ids.Contains(slot.Id) && slot.Item >= 0) world.GroundItems.Take(slot.Item);
+        all.RemoveAll(s => ids.Contains(s.Id));
+    }
+
+    /// <summary>A building's slots and the items lying in them take <paramref name="owner"/>, including later refills (a town override hands the town's buildings back).</summary>
     public void TransferBuilding(World world, TownBuilding building, int owner)
     {
         var ids = building.ItemSlots.Select(s => s.Id).ToHashSet(StringComparer.Ordinal);

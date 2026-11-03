@@ -614,6 +614,21 @@ How a building gets selected: [ui-input](ui-input.md#building-picking-and-select
     `building cost mult` × 400), f = 0.375 when slot 102 (+0x330) answers true, else 1. That slot reads the destroyed byte +0x1a1
     ([construction state](buildings-production.md#construction-state), **Verified** there against `FUN_1405595a0`). The button (slot 80
     `FUN_1407ad410`) asks "Do you want to buy this building for c.{1,num}?".
+    Yes (slot 81 `FUN_1407ad6c0`, answer 2; **Observed** decompile): `General_Click`; without the money "Can't afford to buy this building. It costs
+    c.{1,num}" (the money test of the player faction's money object also takes it: the callback deducts it nowhere else); else, in order:
+    the owner faction's platoons (active and unloaded lists) whose home is the building (`FUN_1406ba570`) lose it (home hand set to null, type 11); the building goes to the player's faction
+    (vfunc 0xa0, between the factions' building lists); its owner-platoon hand (+0xd0, whose flags the trespass test reads, [trespassing](economy.md#112-how-a-bounty-is-gained)) becomes
+    null; each door (+0x1c0) goes to the player's faction and `FUN_140297040` runs on its lock (**Unknown**); each furniture piece of the interior
+    holding an occupant (slot 0x300) lets it out (`FUN_14032e2f0`, `FUN_140330600`); the interior's furniture and item groups are destroyed
+    (`FUN_14054f4d0(interior, 1)`, `_destroyAllInternalBuildings`: of the furniture set +0xe8 a building whose slot 0x438 parent hand is not null
+    is kept, a mounted light or turret, **Unknown** which in practice; every `BuildingItemGroup` of +0x128 goes, and a group going destroys the item
+    it still holds, `FUN_14054a600`); the interior's list +0x88 goes to the player's faction; the building's town (one made for it when it has
+    none) is flagged (+0x3d0) and takes it (`FUN_140928ee0`); a call on interior +0x30 with 0 (**Unknown**); each evicted platoon gets a new home (`FUN_14099e6e0`): a random
+    building of its town that passes slot 88 (for sale, above) and a test of the platoon against it (`FUN_140621230`, **Unknown**), found
+    through `FUN_1409fc2e0` with BuildingFunction bit mask 0x13 (BF_ANY, MINE, REFINERY: read as the worker finder's 0x41a, so the house
+    function 19 is not among them); its members are ordered GO_HOMEBUILDING (19), or with no home found PATROL (22) and a write to the platoon's
+    +0x115 (`persistent`) whose value the decompile lost (**Unknown**); `FUN_14038a720` and `FUN_1404d2dd0` with the building (**Unknown**);
+    "Building purchased!". Meitou: [house purchases](../simulation.md#town-house-purchases).
   - 4 is the medical panel's section (**Observed**: `MedicalDatapanel`'s constructor `FUN_140726a70` passes 4 to `FUN_1406fd7d0`; it finds the
     `LifeBarN` widgets and their `Value`, `Yellow`, `Green`, `White`, `Datapanel`, `Tooltip`, `Robot` and `Crushed` children (and one more whose name string was not read), and `HealthText`). The
     header word is slot 114 (`FUN_1402fe040`: Normal / Broken / Under construction with a tooltip); the rows slot 115 (`FUN_140302380`): `Condition`, or

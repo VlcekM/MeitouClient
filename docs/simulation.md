@@ -1866,10 +1866,19 @@ order. Renderer state lives in Rendering; snapshots are the simulation-to-host b
 `BuyBuilding` (the panel's `For sale:` price, then the original's confirmation; [original rules](game/ui-screens.md#selected-building))
 rechecks the sale flag, town kind, owner and its hostility, the quoted price and the money, then takes the money once.
 Sellable: function 19, or no function and interior meshes; no walls, gates or `is inside building` (the original's class and
-parent tests are not fully decoded). Ruined houses register without fixtures. The bought house's fixtures, loose-item slots and
-indoor build permission become the player's, NPC lock rounds on it stop, and it turns private (**Meitou** choice: the original
-callback's other effects are **Unknown**). Saved as `owner faction ID` with `sell home` false; a loaded player owner that is not the
-level's counts as bought (saved again) and is applied before the fixtures are made.
+parent tests are not fully decoded). Ruined houses register without fixtures. The bought house's doors, own lock and
+indoor build permission become the player's, NPC lock rounds on it stop, and it turns private. As the original's purchase
+([what it does](game/ui-screens.md#selected-building)) the house is emptied: its interior layout's fixtures (cages, containers with
+their contents, beds, dummies) and seats go, occupants let out first; its loose-item slots go with the items lying in them; the
+renderer, navmesh and lamps lay it out without its interior layout (`BuildingPlacement.WithoutInterior`: `FixtureRegistry.PublishedEmptied`,
+or a bought ruin's site placement). Every squad living in it (engine reading: the original takes the owner faction's, whose town
+housed them) moves to a random other house of its town that is for sale (by the original's finder), else has none; its members plan
+again. Their town never houses residents in a building the player owns (`ResidentHomes.Assign`, `AiSystem.AssignHome`), so nobody
+lives there to call the buyer a trespasser. Saved as `owner faction ID` with
+`sell home` false; a loaded player owner that is not the level's counts as bought (saved again), is applied before the fixtures are
+made and empties the house again (a container's contents from an older save are dropped at its place); a squad of an older save living
+in it moves out when its AI attaches. Not built: the sound emitters of interior furniture (ovens; `WorldObjects.Emitters`, made once from
+the level data) stay.
 
 ## Open questions and known gaps
 

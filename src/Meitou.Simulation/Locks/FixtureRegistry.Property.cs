@@ -81,23 +81,36 @@ public sealed partial class FixtureRegistry
         return float.IsFinite(price) && price >= 0 && price <= int.MaxValue ? (long)price : null;
     }
 
+    /// <summary>
+    /// Buys a town house at its quoted price (docs/simulation.md "Town house purchases"): it becomes the player's and private, its furniture and loose items go
+    /// (<see cref="EmptyInterior"/>, <see cref="Meitou.Simulation.Items.ItemSlots.EmptyBuilding"/>) and the squads living in it move out (<see cref="Meitou.Simulation.Ai.AiSystem.Evict"/>).
+    /// </summary>
     public void Buy(World world, BuyBuilding order)
     {
         if (SalePrice(order.Building, world.Player.Faction) is not { } price || price != order.Price) return;
         if (world.Player.Money < price) { world.Post(Meitou.Localisation.Loc.Tr("You can't afford that.")); return; }
         var p = properties[order.Building];
         world.Player.Money -= price;
+        TakeOver(world, p);
+        world.ItemSlots.EmptyBuilding(world, p.Building);
+        EmptyInterior(world, order.Building, spill: false);
+        world.SystemOf<Ai.AiSystem>()?.Evict(world, order.Building);
+    }
+
+    /// <summary>The bought house's owner, fixtures and public flag become the player's; a ruin becomes the player's construction site.</summary>
+    void TakeOver(World world, Property p)
+    {
+        string key = p.Building.Key;
         p.Owner = world.Player.Faction;
         p.Purchased = true;
-        resetBuildings.Remove(order.Building);
+        resetBuildings.Remove(key);
         bool ruin = IsDestroyed(p.Building);
         ownedProperties = null;
-        foreach (var f in OfBuilding(order.Building)) f.Owner = p.Owner;
+        foreach (var f in OfBuilding(key)) f.Owner = p.Owner;
         containerSpots = null; doorPicks = null; bedSpots = null; cageList = null; dummySpots = null;
-        world.ItemSlots.TransferBuilding(world, p.Building, p.Owner);
-        SetPublic(order.Building, false);
+        SetPublic(key, false);
         RegisterTownConstruction(world, p, ruin);
-        DropRuin(p.Building.Key);   // its site shows it now
+        DropRuin(key);   // its site shows it now
     }
 
     /// <summary>
@@ -202,6 +215,7 @@ public sealed partial class FixtureRegistry
         if (!destroyed && complete && progress >= data.Target && !b.Destroyed && !(saved?.Bools.GetValueOrDefault("meitou town construction") ?? false)) return;
         var placement = b.Resolved?.Placement ?? new BuildingPlacement(b.Zone, b.InstanceId, b.BuildingId, b.Position,
             Quaternion.CreateFromAxisAngle(Vector3.UnitY, b.Yaw), b.LevelState?.StringId, b.Position.Y);
+        placement = placement with { WithoutInterior = p.Purchased };   // a bought house's furniture is gone (EmptyInterior)
         var site = new BuildSite
         {
             Id = b.Key, Record = b.BuildingId, Name = b.Name, Position = b.Position, Rotation = placement.Rotation,

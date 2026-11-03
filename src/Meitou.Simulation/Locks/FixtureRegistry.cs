@@ -149,6 +149,7 @@ public sealed partial class FixtureRegistry
             if (data.Sight is { } sight) world.Sight.Add(sight, SightBuilding(b, IsDestroyed(b)));
         }
         Bind(world);
+        EmptyPurchased(world, site);
     }
 
     void RegisterBuilding(World world, PopulationData data, int site, TownBuilding b, int townFaction)

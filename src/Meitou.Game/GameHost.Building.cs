@@ -37,6 +37,7 @@ sealed partial class GameHost
         }
         var snapshot = session.CurrentSnapshot;
         UpdateRuins(snapshot);
+        UpdateEmptiedHouses(snapshot);
         if (snapshot.BuildingsRevision != buildingsRevision || snapshot.NestBuildingsRevision != nestBuildingsRevision)
         {
             DiffBuildings(snapshot);
@@ -199,6 +200,7 @@ sealed partial class GameHost
         levelOwners = null;
         ForgetGroundItems();
         ForgetRuins();
+        ForgetEmptiedHouses();
         ForgetFarms();
         foreach (string id in navBuildings) nav?.RemoveRuntimeBuilding(id);
         navBuildings.Clear();
