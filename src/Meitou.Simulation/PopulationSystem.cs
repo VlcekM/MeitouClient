@@ -131,8 +131,7 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
             state.Status = SiteStatus.Loaded;
             state.UnloadAtTick = -1;
         }
-        DrainRoamers(world);
-        DrainWild(world);
+        if (!DrainRoamers(world)) DrainWild(world);
         while (world.Characters.LimbsChanged.TryDequeue(out var cut))
         {
             if (world.Characters.Cold(cut.Character) is not { } cold) continue;

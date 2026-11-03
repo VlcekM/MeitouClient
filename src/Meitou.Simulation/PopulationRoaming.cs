@@ -756,12 +756,25 @@ public sealed partial class PopulationSystem
         return BuildOne(SquadTemplate.From(record), faction, townFaction, key, seed, position);
     }
 
-    void DrainRoamers(World world)
+    readonly List<BuiltRoamer> readyRoamers = [];
+
+    /// <summary>
+    /// Finishes at most one finished roaming platoon build (the original builds one queued squad request per rendered frame, <c>FUN_140583310</c>; a tick stands for a frame here).
+    /// Returns whether it made one; a build whose platoon is gone costs no frame.
+    /// </summary>
+    bool DrainRoamers(World world)
     {
-        var ready = new List<BuiltRoamer>();
-        while (builtRoamers.TryDequeue(out var b)) ready.Add(b);
-        ready.Sort(static (a, b) => a.Platoon.CompareTo(b.Platoon));
-        foreach (var b in ready) FinishRoamer(world, b);
+        while (builtRoamers.TryDequeue(out var queued)) readyRoamers.Add(queued);
+        readyRoamers.Sort(static (a, b) => a.Platoon.CompareTo(b.Platoon));
+        while (readyRoamers.Count > 0)
+        {
+            var b = readyRoamers[0];
+            readyRoamers.RemoveAt(0);
+            if (world.Platoons.Find(b.Platoon) is not { State: PlatoonState.Activating }) continue;
+            FinishRoamer(world, b);
+            return true;
+        }
+        return false;
     }
 
     void FinishRoamer(World world, BuiltRoamer b)
