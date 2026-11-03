@@ -906,9 +906,21 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
                 bool friend = carrier.Faction == cold.Faction || relations.Contains(carrier.Faction) && relations.Contains(cold.Faction) && relations.IsAlly(cold.Faction, carrier.Faction);
                 if (e.State == UniqueState.Alive && !friend) uniques.Captured(recordId, carrier.IsPlayer);
             }
-            else if (e.State == UniqueState.Imprisoned || e.State == UniqueState.Dead && cold.IsPlayer) uniques.Freed(recordId);
+            else if (e.State == UniqueState.Imprisoned && FreeAgain(world, cold, playerFaction) || e.State == UniqueState.Dead && cold.IsPlayer) uniques.Freed(recordId);
         }
         if (gone is not null) foreach (var id in gone) uniques.Left(id);
+    }
+
+    /// <summary>
+    /// State 2 returns to 1 only for a character of the player's faction or one allied with (or of) its squad's owner (<c>FUN_1405cf470</c>, <b>Verified</b>; the ally test only partly decoded):
+    /// a free unique of any other faction stays imprisoned in the list.
+    /// </summary>
+    bool FreeAgain(World world, CharacterCold cold, int playerFaction)
+    {
+        if (playerFaction >= 0 && cold.Faction == playerFaction) return true;
+        if (world.Squads.Find(cold.SquadId) is not { } squad) return false;
+        var relations = data.Relations;
+        return squad.Faction == cold.Faction || relations.Contains(squad.Faction) && relations.Contains(cold.Faction) && relations.IsAlly(cold.Faction, squad.Faction);
     }
 
     /// <summary>The floor at X/Z: the one under <paramref name="nearY"/> inside a building, else the ground.</summary>

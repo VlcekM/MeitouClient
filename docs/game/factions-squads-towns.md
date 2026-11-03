@@ -78,7 +78,7 @@ and `bar squads` (33). Two UNIQUE_SQUAD_TEMPLATEs exist (`General Epson Army`, `
   take a carried unique off its carrier, do the same, player set when the carrier is the player's (`FUN_140680560`).
 - Periodic refresh (`FUN_1405cf470`, from the character's slot-80 update `FUN_1405d00b0`): state 1 and carried by a non-ally → 2 (player = carrier
   is the player's); state 2, not carried, not imprisoned, and in the player's faction or allied with its squad's → 1, player cleared; state 0, in
-  the player's faction and not dead → 1 (**Observed**: the ally/town tests are summarised).
+  the player's faction and not dead → 1 (**Observed**: the ally/town tests are summarised; Meitou `PopulationSystem.FreeAgain`).
 - Unload of an active platoon (`FUN_1407ef4b0` → `FUN_1409a8120`), for each unique member in state 2 or away from its ownership town: dead, down,
   carried by a non-friend or `+0x279 & 7` → state 0; free and well → entry erased (`FUN_1405067e0`, only if state ≠ 0 and the stored handle's container (C, CS) is
   this platoon: a unique registered to another squad is not released) and the platoon re-creates its members from the template on activation (+0x118 = 1), which claims the unique again;
