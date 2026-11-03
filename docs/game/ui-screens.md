@@ -1393,9 +1393,7 @@ Full info "separate numbers for each damage type". Built at the end of `MedicalS
 - **Simple**: `N` = whole-number total of the four amounts (no part name), plus ` (-A)` with A the total stopped, when A is above 0.
 - **Full**: the hit part's name, `": "`, then `C` = cut (cut + pierce when pierce is above 1) with ` (-a)` when its stopped amount
   is above 0; when blunt is 1 or more also `" + "`, `B` = blunt + stun and its own ` (-b)`. Numbers are truncated to integers.
-- **Placement**: the label follows the character, 15 units above its node. Colour (0.9, 0.9, 0.9) by default, (0.11, 0.6, 0.11) or
-  (1, 0.31, 0.31) when relation tests on the hit character and the camera's player succeed (red tested last, so it wins). Which
-  tests these are (`FUN_140678830` with 3 or 4, `FUN_1407916d0`) is **Unknown**; guess: red for the player's side being hit.
+- **Placement**: the label follows the character, 15 units above its node. Colour (0.9, 0.9, 0.9) by default (**Verified**, `FUN_1406508d0` end). Two tests follow, the second winning: green (0.11, 0.6, 0.11) when the hit character belongs to a player faction (`FUN_1407916d0`: its data `+0x250` set) or the active player platoon's squad memory holds the short-term tag TEMP ENEMY (bit 4) on it (`FUN_140678830`, [squad memory](dialogue.md#squad-memory)); red (1, 0.31, 0.31) when it belongs to a player faction or the memory holds TEMP ALLY (bit 3) on it. So a player's character is red, an enemy tagged TEMP ENEMY green, a TEMP ALLY red, anyone else grey; the blow's source is not tested. The memory is the platoon `+0x98` of `FUN_1407f5520(DAT_142134690)`: the player's current platoon (`+0x2a8`), else the one at the selection index (**Observed**). The label is only made while the GUI global `DAT_142133ae0` is set and the target's data `+0x1a9` flag is set (meaning **Unknown**).
 - Wall (building) damage uses the same label with a plain `{1,num}` number, random scatter of +-20 units (`FUN_14029d2b0`).
 - **Look and motion** (**Verified**, `ScreenLabel` update `FUN_1406ea9f0`, constants read from the binary): a plain MyGUI TextBox (template
   `Kenshi_TextboxStandardText`, so no shadow) on the `Dialog` layer, font from a table by the creator's 4th argument (0 `Kenshi_FloaterFont_Small`,
@@ -1405,7 +1403,7 @@ Full info "separate numbers for each damage type". Built at the end of `MedicalS
   among the callers of `FUN_14073faf0` (**Observed**). The stealth KO's "*Thunk*" / "Failed!" is another caller ([combat](combat.md#stealth-knock-out)).
 
 Meitou (`PlayerInterface.AddFloaters`): text, font, motion and fade as above; colour: red when a player's character is hit, green when one lands the
-blow, else grey (reading of the relation tests). No healing floater, as in the original. Drawn over the panels but under the modal screens (Esc menu, save/load, message boxes, dialogue).
+blow, else grey (an approximation of the tag tests above: the simulation has no "active platoon", so TEMP ENEMY / TEMP ALLY are not consulted). No healing floater, as in the original. Drawn over the panels but under the modal screens (Esc menu, save/load, message boxes, dialogue).
 
 ### Tooltips
 
@@ -1537,7 +1535,7 @@ Code: `UiTooltips` (data, layout), `PlayerInterface.Tooltips.cs` (hover runtime,
 
 ## Unknowns
 
-- The colour tests of the damage floaters (section 8).
+- The `+0x1a9` flag and `DAT_142133ae0` gating the damage floater label (section 8).
 - Why the code looks up ten life bars while the layout has nine (`LifeBar10` is missing; the constructor `FUN_140726a70` looks up `LifeBar1`, `LifeBar2`, ... until one is missing); the medical panel's overall health h; where the stats labels' upper case and the default squad name come from.
 - Exact tab index of the AI tab and which layout widgets belong to which tab for tabs 4 to 6.
 - Trade, dialogue and research logic (other subsystems).
