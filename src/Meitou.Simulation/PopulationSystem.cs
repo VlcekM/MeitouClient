@@ -906,21 +906,25 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
                 bool friend = carrier.Faction == cold.Faction || relations.Contains(carrier.Faction) && relations.Contains(cold.Faction) && relations.IsAlly(cold.Faction, carrier.Faction);
                 if (e.State == UniqueState.Alive && !friend) uniques.Captured(recordId, carrier.IsPlayer);
             }
-            else if (e.State == UniqueState.Imprisoned && FreeAgain(world, cold, playerFaction) || e.State == UniqueState.Dead && cold.IsPlayer) uniques.Freed(recordId);
+            else if (e.State == UniqueState.Imprisoned && FreeAgain(world, cold, table.Next[slot].Position, playerFaction) || e.State == UniqueState.Dead && cold.IsPlayer) uniques.Freed(recordId);
         }
         if (gone is not null) foreach (var id in gone) uniques.Left(id);
     }
 
     /// <summary>
-    /// State 2 returns to 1 only for a character of the player's faction or one allied with (or of) its squad's owner (<c>FUN_1405cf470</c>, <b>Verified</b>; the ally test only partly decoded):
-    /// a free unique of any other faction stays imprisoned in the list.
+    /// State 2 returns to 1 for a character of the player's faction, or standing in a town (its <c>+0x1a0 -> +0x88</c>) that is friendly to it (<c>FUN_1405cf470</c>, <b>Verified</b>): the town's
+    /// faction regards the character's faction as an ally (<c>FUN_1406b2630</c>), or it is the squad's home town, or its faction is the character's own. Not while carried or caged (the caller's branches).
+    /// A free unique elsewhere stays in state 2.
     /// </summary>
-    bool FreeAgain(World world, CharacterCold cold, int playerFaction)
+    internal bool FreeAgain(World world, CharacterCold cold, Vector3 at, int playerFaction)
     {
         if (playerFaction >= 0 && cold.Faction == playerFaction) return true;
-        if (world.Squads.Find(cold.SquadId) is not { } squad) return false;
+        var town = Ai.AiSystem.TownAt(data, world, at);
+        if (town.IsNone) return false;
+        int owner = FactionOfTown(world, town);
         var relations = data.Relations;
-        return squad.Faction == cold.Faction || relations.Contains(squad.Faction) && relations.Contains(cold.Faction) && relations.IsAlly(cold.Faction, squad.Faction);
+        if (owner == cold.Faction || owner >= 0 && relations.Contains(owner) && relations.Contains(cold.Faction) && relations.IsAlly(owner, cold.Faction)) return true;
+        return town.Site >= 0 && world.Squads.Find(cold.SquadId)?.Town == town.Site;
     }
 
     /// <summary>The floor at X/Z: the one under <paramref name="nearY"/> inside a building, else the ground.</summary>

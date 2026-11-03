@@ -77,8 +77,8 @@ and `bar squads` (33). Two UNIQUE_SQUAD_TEMPLATEs exist (`General Epson Army`, `
 - Imprisoned in a cage or restraint (`FUN_140330600`): state ≠ 0 → 2, player set when the cage's owner is the player's. `DA_ENSLAVE_TARGETS_CARRIED_PERSON` / `DA_ARREST_TARGETS_CARRIED_PERSON` (0x28 / 0x1e), which
   take a carried unique off its carrier, do the same, player set when the carrier is the player's (`FUN_140680560`).
 - Periodic refresh (`FUN_1405cf470`, from the character's slot-80 update `FUN_1405d00b0`): state 1 and carried by a non-ally → 2 (player = carrier
-  is the player's); state 2, not carried, not imprisoned, and in the player's faction or allied with its squad's → 1, player cleared; state 0, in
-  the player's faction and not dead → 1 (**Observed**: the ally/town tests are summarised; Meitou `PopulationSystem.FreeAgain`).
+  is the player's); state 2, not carried, not imprisoned, and in the player's faction, or standing in a town (character `+0x1a0 -> +0x88`) whose faction is an ally of its faction (`FUN_1406b2630`), is its squad's home town, or is its own faction → 1, player cleared (**Verified**, `FUN_1405cf470` decompile: the town test, not the squad's faction; the parent-faction step of `FUN_140851fb0` is not modelled; Meitou `PopulationSystem.FreeAgain`); state 0, in
+  the player's faction and not dead → 1 (**Observed**).
 - Unload of an active platoon (`FUN_1407ef4b0` → `FUN_1409a8120`), for each unique member in state 2 or away from its ownership town: dead, down,
   carried by a non-friend or `+0x279 & 7` → state 0; free and well → entry erased (`FUN_1405067e0`, only if state ≠ 0 and the stored handle's container (C, CS) is
   this platoon: a unique registered to another squad is not released) and the platoon re-creates its members from the template on activation (+0x118 = 1), which claims the unique again;
