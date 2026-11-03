@@ -17,7 +17,7 @@ namespace Meitou.Simulation.Crime;
 /// their faction (<see cref="ArrestSystem"/>).</item>
 /// <item><b>Expiry</b>: an entry lasts 0.04 hours per cat since its last raise, for ever from 10000 (<see cref="CrimeTable.LifetimeHours"/>).</item>
 /// </list>
-/// The setter has no NPC test: an NPC is the culprit of every crime its callers set (an NPC is never booked: engine choice; its attacks on characters not hostile to them, such as hungry
+/// The setter has no NPC test: an NPC is the culprit of every crime its callers set (a booking witness books an NPC's crime too, FUN_140854d10 has no player test; its attacks on characters not hostile to them, such as hungry
 /// bandits on a town's visitors, are witnessed so the town's police step in).
 /// </summary>
 public sealed partial class CrimeSystem(FactionRelations relations, CrimeSettings? settings = null) : ITickSystem, IStateHashed
@@ -355,7 +355,6 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
             // sweep from a police-like witness not yet fighting, as the guards' lines want a culprit within talking range that does not run (engine choice: lines' repetition limits are not kept).
             if (first || !c.IsPlayer && !wc.InCombat && IsPoliceLike(world, wc))
                 world.Defer(new Dialogue.DialogueEvent(witness, table.IdOf(culprit), WitnessEvent(world, wc, p)) { Tick = world.Tick + 1 });
-            if (!c.IsPlayer) continue;   // an NPC culprit is never booked (engine choice)
             if (!p.Booked && IsPoliceLike(world, wc) && Factions.Books(wf)) Book(world, culprit, wf, witness);
             if (p.Booked) return;
         }

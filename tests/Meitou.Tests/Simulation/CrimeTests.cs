@@ -195,6 +195,19 @@ public class CrimeTests
         Assert.Empty(u.Events(CrimeEventKind.Witnessed));
     }
 
+    /// <summary>The witness function (<c>FUN_140854d10</c>) ends in the booking call with no player test: a police witness books an NPC culprit's crime too.</summary>
+    [Fact]
+    public void A_crime_of_an_npc_culprit_seen_by_the_police_is_booked()
+    {
+        using var t = new Town();
+        var thug = t.Npc(Rivals, O, name: "thug");
+        var victim = t.Npc(City, O + new Vector2(0, 20), name: "victim");
+        t.Npc(City, O + new Vector2(0, 250), face: O, type: FundamentalType.LawEnforcement, name: "officer");
+        Assert.True(t.Crime.SetPending(t.World, thug.Slot, CrimeCode.Assault, City, t.World.Characters.IdOf(victim.Slot), CrimeSystem.MinTimer));
+        t.World.RunTicks(40);
+        Assert.Single(t.Events(CrimeEventKind.Booked));
+    }
+
     // ------------------------------------------------------------------ determinism
 
     /// <summary>
