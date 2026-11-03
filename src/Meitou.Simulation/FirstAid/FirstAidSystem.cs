@@ -18,8 +18,8 @@ namespace Meitou.Simulation.FirstAid;
 /// is in reach, awake, not fighting and still, and the patient is still or down; <c>Apply</c> (serial commit, in target / source order) picks the kit, bandages the patient, drains the kit
 /// and trains the medic. So nothing on another character is written in a parallel phase.</item>
 /// <item><b>Rate</b> (<b>Observed</b>, character-stats.md): <c>lerp(1, 15, min(skill, kit quality) x 0.01) x medic speed mult</c> (x <c>robot medic speed mult</c> for a robot kit) per unit of <c>dt</c> on the first part with room (the next only once it fills), after any open wound is closed;
-/// the kit's <c>charges</c> fall by <c>lerp(medkit drain 99, medkit drain 1, (100 - skill) / 100) x dt</c> per wound step or part bandaged (bandaging drains only the player's kits; character-stats.md "First aid update"). The skill is the medic's <c>medic</c> (first aid kit) or <c>robotics</c> (robot kit) times
-/// the stat multiplier of injuries and hunger. <c>dt</c> is <b>game seconds</b> (<b>engine choice</b>, the unit is <b>Unknown</b>).</item>
+/// the kit's <c>charges</c> fall by <c>lerp(medkit drain 99, medkit drain 1, (100 - skill) / 100) x dt</c> per wound step or part bandaged (bandaging drains only the player's kits; character-stats.md "First aid update"). The skill is the medic's <c>medic</c> (first aid kit) or <c>robotics</c> (robot kit) (raw, x0.8 on oneself: the original reads the CharStats field with no injury or hunger multiplier, also for splints).
+/// <c>dt</c> is <b>game seconds</b> (<b>engine choice</b>, the unit is <b>Unknown</b>).</item>
 /// <item><b>Auto</b> (<c>SlowWorld</c>, each NPC every <see cref="FirstAidSettings.AutoEveryTicks"/> ticks on its slot's turn, serial in slot order): an idle, wandering or following NPC looks for a patient with the original's
 /// Medic finder (<see cref="FindPatient"/>, FirstAidSystem.Finder.cs), as the decision step asks for the player characters' medic, robotics and splint jobs (<see cref="RegisterSources"/>).</item>
 /// <item><b>Rest</b> (<see cref="CharacterTask.Rest"/>): <see cref="RestOrder"/>; <see cref="BodySystem"/> reads the task as <see cref="MedicalContext.Resting"/>. Lying in a bed is
@@ -353,7 +353,7 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
         float dt = world.StepSeconds(m);   // a far medic's step covers the ticks since its last (the far cadence, World.StepTicks)
         // The skill and trained stat: medic with a first aid kit, robotics with a robot repair kit; treating oneself x0.8 (FUN_14033c5a0, Task_FirstAid's kit phase).
         StatsEnumerated StatOf(bool robotKit) => robotKit ? StatsEnumerated.Robotics : StatsEnumerated.Medic;
-        float SkillOf(bool robotKit) => stats[StatOf(robotKit)] * medical.StatMultiplier(StatOf(robotKit)) * (m == p ? 0.8f : 1);
+        float SkillOf(bool robotKit) => stats[StatOf(robotKit)] * (m == p ? 0.8f : 1);   // the raw stat: no injury or hunger multiplier
         // A medic not of the player's treats an imprisoned patient without a kit (Task_FirstAid FUN_1403563a0 skips the kit search; also for a chained slave of the medic's faction, FUN_14032e2a0).
         bool kitless = !medicCold.IsPlayer && (patientCold.IsImprisoned || OwnedChained(medicCold, patientCold));
         var ctx = new MedicalContext(Constants, bodyOptions, race);
@@ -435,7 +435,7 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
         }
         var item = kit.Item;
         float dt = world.TickSeconds;
-        float skill = stats[StatsEnumerated.Medic] * medical.StatMultiplier(StatsEnumerated.Medic);
+        float skill = stats[StatsEnumerated.Medic];   // the raw stat (FUN_14034ef20 passes CharStats +0x98)
         float quality = Items.Info(item.Record)?.Quality ?? 0;
         float added = body.Splint(dt, skill, quality, new MedicalContext(Constants, bodyOptions, race));
         if (added <= 0)
