@@ -288,7 +288,7 @@ Every event is the **victim's** faction's table about the **doer's** faction, fo
 all 639 merged base CHARACTER records have it, 102 are 0, 371 are 1, uniques up to 100). w = 1 when the town the victim stands in
 (status `+0x88`) is its own one (ownership object `+0x30`), 0.6 when that town's faction is `ally()` of the victim's (same faction
 included), else 0.025 (outside every town too).
- A failed kidnap makes the victim notice the kidnapper for 5 s through the same function (`FUN_14034ffa0`:73; Meitou `CarrySystem.Kidnap` -> `AggroSystem.Alarm`).
+
 | Deed | Where | Events |
 | --- | --- | --- |
 | melee blow lands | `FUN_1404394f0` (Character slot 62) via `FUN_140999f00` | kind 1 when the striker's status float `+0xac` > 0.1 (and the victim's combat byte `+0x130` clear); after the damage, if the victim is unconscious or dead (`+0x5b9`/`+0x5bc`): kind 2 if striker `+0xac` <= 0.15 else 3, plus kind 4 if dead. Every later blow on a downed body repeats it |
