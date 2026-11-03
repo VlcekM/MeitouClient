@@ -406,6 +406,7 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
     void ITaskHandler.End(World world, int slot, CharacterTask task, TaskEnd reason)
     {
         var cold = world.Characters.Cold(slot)!;
+        if (task == CharacterTask.PutDown && world.Characters.TryResolveNext(cold.Carrying, out int body)) Unlink(world, slot, body, drop: false);   // the put-down's end handler always releases the body (FUN_1403509f0)
         cold.CarryTarget = CharacterId.None;
         cold.LiftTime = -1;
         cold.LootFlags = LootStart.None;
