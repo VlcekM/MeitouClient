@@ -874,7 +874,7 @@ update `FUN_140511130`, `Character::setupAI` `FUN_140621b70`; KenshiLib names **
   `FUN_14099a190` (no distance factor for an NPC looker; a player-faction one: [Precedence](#precedence)), capped at 1.2. 288 is registered exactly as 15 (**Verified**: the two registration blocks
   differ only in the task id; the same finder, desire and flags; no code compares 288): "dont leave town" is only the mod record's name. The same-town variant `FUN_14099cf80` is never registered
   (**Verified**, no reference in the exe). Desire `FUN_140599b90` (**Verified**): 0 while sneaking and not in combat mode, while Passive (in a fight too) and for an enslaved character holding job
-  187; else the finder's value, x0.5 while carrying. A slave or escaped slave (status int 1 or 2) is defended only when the looker passes `FUN_140997e80`
+  187; else the finder's **first** sensed ally above 0 (called with its stop-at-first flag: returned at once, not capped at 1.2; **Verified**, `FUN_140599b90` passes 1 to `FUN_14099ca10`), x0.5 while carrying. The chooser multiplies it by the finder's best (capped) value (`AiSystem.ProtectScan`). A slave or escaped slave (status int 1 or 2) is defended only when the looker passes `FUN_140997e80`
   (**Verified**, latched once a pass): its faction is a bandit one (fundamental type 8), or it is in no town, or that town's owner books no bounties (Meitou:
   `RetaliationSystem.SlaveHelpAllowed`). An ally of another faction counts for an NPC looker; only a player-faction looker
   needs the global +0x111 and squares the weight ([Help Allies](#squad-ai-options)). Achieved by 13 "Attacking attackers of"
