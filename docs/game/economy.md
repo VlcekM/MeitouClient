@@ -358,6 +358,8 @@ Per-character hash map keyed by faction (`Character+0xf0`). Entry (`FUN_1405e7ee
   (`FUN_140852010`: its legal system, else itself when it books, else a null key nothing reads; argument passing read from registers, **Observed**). fcs.def: "Defaults to the
   empire"; 117 base CHARACTER records have a chance, 64 of them no `bounty factions` (**Verified** by probe). Whether the fuzz is rolled
   per faction is **Unknown**.
+  An amount of 0 or less is booked too (`FUN_140853e20` adds and stamps the time unconditionally): the entry stays at 0, since the expiry sweep
+  `FUN_1405cbb80` and "has a bounty" only consider amounts above 0 (**Verified**, decompile).
 
 ### 11.3 Lifetime
 
