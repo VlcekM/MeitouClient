@@ -491,6 +491,11 @@ public sealed class CharacterCold
     /// <summary>The whole-body clip (an ANIMATION record name) a captor holds while it works a captive standing (<see cref="Kidnap.CaptiveSystem"/>: "chop down static", "eat", "medic"); null: none. Derived, not hashed.</summary>
     public string? ActionClip { get; set; }
     /// <summary>
+    /// The machine an AI worker or obedient slave works standing (its functionality and the clip it set as <see cref="ActionClip"/>), whose <c>animation events</c> sound on that clip
+    /// while <see cref="ActionClip"/> is still it (the original runs <c>Task_OperateMachine</c> for them too); null: none. Derived, not hashed.
+    /// </summary>
+    public WorkEvents? ActionWork { get; set; }
+    /// <summary>
     /// The replan bit (<see cref="DecisionSystem.Request(CharacterCold)"/>): set by a replan trigger, consumed by the decision step. Player characters only; not saved (a load sets it); hashed while set.
     /// </summary>
     public bool Replan { get; set; }

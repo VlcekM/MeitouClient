@@ -549,6 +549,17 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         data.Db.Find(id)?.GetReferences("functionality") is [var link, ..] && data.Db.Find(link.TargetStringId)?.GetReferences("animation") is [var anim, ..]
             && data.Db.Find(anim.TargetStringId) is { } clip ? clip.Name : "stonemine");
 
+    /// <summary>
+    /// The BUILDING_FUNCTIONALITY (string id) of a worker's building, null without one: <c>Task_OperateMachine</c>, which the original runs for 189 / 190's act-outs (87, 221), adds its
+    /// <c>animation events</c> to the work clip each update (docs/audio.md "Machine work").
+    /// </summary>
+    string? WorkFunctionalityOf(TownBuilding b) =>
+        data.Db.Find(b.BuildingId)?.GetReferences("functionality") is [var link, ..] ? link.TargetStringId : null;
+
+    /// <summary>The machine events of standing work at a functionality's clip (<see cref="CharacterCold.ActionWork"/>); null without a functionality or clip.</summary>
+    internal static WorkEvents? StandingWork(string? functionality, string? clip) =>
+        functionality is not null && clip is not null ? new WorkEvents(functionality, clip) : null;
+
     readonly System.Collections.Concurrent.ConcurrentDictionary<string, float> workHungerRates = new(StringComparer.Ordinal);
 
     /// <summary>
@@ -765,8 +776,13 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             // It stopped working: the next pick is a new one and the work clip goes.
             mind.WorkActive = false;
             mind.WorkEpoch++;
-            if (table.Cold(slot) is { } worker && mind.WorkClip is not null && worker.ActionClip == mind.WorkClip) worker.ActionClip = null;
+            if (table.Cold(slot) is { } worker && mind.WorkClip is not null && worker.ActionClip == mind.WorkClip)
+            {
+                worker.ActionClip = null;
+                worker.ActionWork = null;
+            }
             mind.WorkClip = null;
+            mind.WorkFunctionality = null;
         }
         mind.FollowTarget = CharacterId.None;   // set again below for a follow goal aimed at the squad's mission
         ref var n = ref table.Next[slot];
@@ -903,6 +919,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
                     {
                         mind.Target = new Vector3(building.Position.X, float.NaN, building.Position.Z);
                         mind.WorkClip = WorkClipOf(building);
+                        mind.WorkFunctionality = WorkFunctionalityOf(building);
                         mind.WorkHungerRate = WorkHungerRateOf(building);
                     }
                 }
@@ -913,7 +930,11 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
                     Become(world, slot, CharacterTask.Idle);
                     var face = working - n.Position;
                     if (face.X * face.X + face.Z * face.Z > 1e-4f) n.Yaw = MathF.Atan2(face.X, face.Z);
-                    if (table.Cold(slot) is { } workerCold) workerCold.ActionClip = mind.WorkClip;
+                    if (table.Cold(slot) is { } workerCold)
+                    {
+                        workerCold.ActionClip = mind.WorkClip;
+                        workerCold.ActionWork = StandingWork(mind.WorkFunctionality, mind.WorkClip);
+                    }
                 }
                 break;
             case AiBehaviour.Investigate:

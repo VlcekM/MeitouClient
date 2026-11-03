@@ -66,6 +66,21 @@ public sealed partial class World
         return c.Escaped ? new(StatusKind.EscapedPrisoner) : null;
     }
 
+    /// <summary>
+    /// The machine whose <c>animation events</c> sound on the character's clip: the player's operate task while it works (its functionality on <see cref="CharacterCold.OperateClip"/>),
+    /// or an AI worker's or obedient slave's standing work while its <see cref="CharacterCold.ActionClip"/> is still that work's clip; null otherwise.
+    /// </summary>
+    static WorkEvents? WorkEventsOf(byte task, CharacterCold? cold)
+    {
+        if (task == (byte)CharacterTask.Operate)
+        {
+            return cold is { Operating: true, OperateSite: not null, OperateFunctionality: { } works, OperateClip: { } workClip }
+                ? new WorkEvents(works, workClip)
+                : null;
+        }
+        return task == (byte)CharacterTask.Idle && cold is { ActionWork: { } standing, ActionClip: { } clip } && clip == standing.Clip ? standing : null;
+    }
+
     // Out of Fill: a lambda capturing its locals would make the compiler allocate a closure on every character's fill, selected or not.
     static string[] ClosedSlotsOf(CharacterCold cold) => [.. ClosableSlots.Where(slot => Items.InventoryCommands.SectionClosed(cold, slot))];
 
@@ -235,8 +250,7 @@ public sealed partial class World
             s.Carry = cold is { CarriedBy.IsNone: false } ? cold.CarryAttach ?? Carrying.CarryPose.Fallback : null;
             s.Carrying = cold?.Carrying ?? CharacterId.None;
             s.HeldTool = state[i].Task == (byte)CharacterTask.Operate && cold is { OperateSite: not null, Appearance.Animal: null } ? cold.OperateTool : null;
-            s.WorkEvents = state[i].Task == (byte)CharacterTask.Operate && cold is { Operating: true, OperateSite: not null, OperateFunctionality: { } works, OperateClip: { } workClip }
-                ? new WorkEvents(works, workClip) : null;
+            s.WorkEvents = WorkEventsOf(state[i].Task, cold);
             s.Task = (CharacterTask)state[i].Task;
             s.PickingLock = cold?.PickingLock is not null;
             s.WorkingShackles = cold?.Shackles is { Work: Locks.ShackleWork.Pick or Locks.ShackleWork.Cut };

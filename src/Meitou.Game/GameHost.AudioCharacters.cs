@@ -26,8 +26,19 @@ sealed partial class GameHost
     bool[]? definitionLoops;
     /// <summary>A clip's events with a functionality's added, by functionality and clip definition (one array each, so a cursor keeps its place).</summary>
     readonly Dictionary<(string Functionality, int Definition), AnimationSoundEvent[]?> workEvents = [];
-    /// <summary>Each working character's clip that carries its machine's events, kept while that clip plays (the exe adds them to the clip's instance, which lives until it is gone).</summary>
-    readonly Dictionary<ulong, (int Definition, AnimationSoundEvent[] Events)> workLayers = [];
+    /// <summary>
+    /// Each working character's clips that carry machine events, kept while the clip plays (the exe adds them to the clip's instance, which lives until it is gone): a clip worked at
+    /// one machine and then another while it still plays carries both machines' events.
+    /// </summary>
+    readonly Dictionary<ulong, List<WorkLayer>> workLayers = [];
+
+    /// <summary>A clip (its definition) with the events of the functionalities worked on it added; <see cref="Events"/> is replaced only when another functionality joins.</summary>
+    sealed class WorkLayer
+    {
+        public required int Definition;
+        public required AnimationSoundEvent[] Events;
+        public readonly List<string> Functionalities = [];
+    }
     readonly Dictionary<ulong, SoundMemo> soundMemo = [];
     int soundFrame;
 
@@ -118,12 +129,12 @@ sealed partial class GameHost
     void FillSoundLayers(CharacterSnapshot c, ulong key)
     {
         soundLayers.Clear();
-        var work = WorkLayer(c, key);
+        var work = WorkLayersOf(c, key);
         for (int k = 0; k < c.Animations.Count; k++)   // indexed: a foreach over the interface boxes its enumerator, per character per frame
         {
             var layer = c.Animations[k];
             bool known = (uint)layer.Definition < (uint)definitionEvents!.Length;
-            var events = !known ? null : layer.Definition == work.Definition ? work.Events : definitionEvents[layer.Definition];
+            var events = !known ? null : Find(work, layer.Definition)?.Events ?? definitionEvents[layer.Definition];
             float fraction = ClipFraction(layer, known && definitionLoops![layer.Definition]);
             soundLayers.Add(new SoundLayer(layer.Definition, events, fraction, layer.Weight, events is null ? null : definitionWeapons![layer.Definition]));
         }
@@ -141,18 +152,52 @@ sealed partial class GameHost
     }
 
     /// <summary>
-    /// The clip a working character's machine puts its <c>animation events</c> on and the clip's events with those added (<c>Task_OperateMachine</c> and <c>Task_UseTrainingDummy</c> add
-    /// them to the playing clip each update, <c>FUN_140065280</c>; docs/audio.md "Character tasks"), kept until that clip stops playing; (-1, null) for none.
+    /// The clips a working character's machines put their <c>animation events</c> on, with those added (<c>Task_OperateMachine</c> and <c>Task_UseTrainingDummy</c> add them to the
+    /// playing clip each update, <c>FUN_140065280</c>; docs/audio.md "Machine work"), each kept until its clip stops playing; null for none.
     /// </summary>
-    (int Definition, AnimationSoundEvent[]? Events) WorkLayer(CharacterSnapshot c, ulong key)
+    List<WorkLayer>? WorkLayersOf(CharacterSnapshot c, ulong key)
     {
         if (c.WorkEvents is { } work && LayerOf(c, work.Clip) is var definition && WorkEventsOf(work.Functionality, definition) is { } events)
-            workLayers[key] = (definition, events);
-        if (!workLayers.TryGetValue(key, out var kept)) return (-1, null);
-        for (int k = 0; k < c.Animations.Count; k++)
-            if (c.Animations[k].Definition == kept.Definition) return kept;
+            AddWork(key, definition, work.Functionality, events);
+        if (!workLayers.TryGetValue(key, out var kept)) return null;
+        for (int i = kept.Count - 1; i >= 0; i--)   // not RemoveAll: its lambda would capture the character, a closure per working character per frame
+            if (!Plays(c, kept[i].Definition)) kept.RemoveAt(i);
+        if (kept.Count > 0) return kept;
         workLayers.Remove(key);
-        return (-1, null);
+        return null;
+    }
+
+    /// <summary>
+    /// The functionality's events put on the clip: a clip that already carries another machine's keeps those and takes these too (the exe's insert skips only an event already there).
+    /// </summary>
+    void AddWork(ulong key, int definition, string functionality, AnimationSoundEvent[] events)
+    {
+        if (!workLayers.TryGetValue(key, out var kept)) workLayers[key] = kept = [];
+        if (Find(kept, definition) is not { } layer)
+        {
+            layer = new WorkLayer { Definition = definition, Events = events };
+            layer.Functionalities.Add(functionality);
+            kept.Add(layer);
+            return;
+        }
+        if (layer.Functionalities.Contains(functionality)) return;
+        layer.Functionalities.Add(functionality);
+        layer.Events = AnimationSoundEvents.Attach(layer.Events, animationSounds!.Of(functionality)!);
+    }
+
+    static WorkLayer? Find(List<WorkLayer>? layers, int definition)
+    {
+        if (layers is null) return null;
+        foreach (var layer in layers)
+            if (layer.Definition == definition) return layer;
+        return null;
+    }
+
+    static bool Plays(CharacterSnapshot c, int definition)
+    {
+        for (int k = 0; k < c.Animations.Count; k++)
+            if (c.Animations[k].Definition == definition) return true;
+        return false;
     }
 
     /// <summary>The definition of the character's layer playing the ANIMATION record called <paramref name="clip"/>; -1 when none does.</summary>
