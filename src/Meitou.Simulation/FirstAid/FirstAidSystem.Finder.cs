@@ -300,6 +300,7 @@ public sealed partial class FirstAidSystem
                 if (KitNeed(cold, s, other, organic, robotic) <= 0) continue;   // Need's 0: before the relation tests
                 if (!Allied(world, i, s) || EnemyOf(world, i, s) || other.Race!.IsRobot && !robotics || other.InCombat || Eaten(other) || CarriedByEnemy(other) || Dist2(s) > range2) continue;
                 if (!cold.IsPlayer && other.Medical!.Maimed) continue;
+                if (!cold.IsPlayer && world.Sight.PlaceOf(i) >= 0 && !SeenOrHeard(world, i, s)) continue;   // an NPC medic in a building needs the patient seen or heard (FUN_14099f690 :123-128)
                 float need = Need(world, i, s, organic, robotic);
                 if (need <= 0) continue;
                 float score = need * Nearness(world, i, cold, s);
@@ -353,6 +354,7 @@ public sealed partial class FirstAidSystem
                     ok = other.SlaveState != 1 && !(cage is not null && MarkedForDeath(world, cold.SquadId, cage)) && (cage is null || owned);
                 }
                 if (!ok && !OwnedChained(cold, other)) continue;
+                if (!other.IsImprisoned && !SeenOrHeard(world, i, s)) continue;   // a free stranger must be seen or heard (:247-248)
                 if (world.Sight.PlaceOf(i) != world.Sight.PlaceOf(s)) continue;
                 float need = Need(world, i, s, organic, robotic);
                 if (need <= 0) continue;
@@ -383,6 +385,7 @@ public sealed partial class FirstAidSystem
                 if (KitNeed(cold, s, other, organic, robotic) <= 0) continue;
                 if (other.Race!.IsRobot && !robotics) continue;
                 if (!table.TryResolveNext(other.CarriedBy, out int c) || table.Cold(c)?.Faction != cold.Faction) continue;
+                if (!SeenOrHeard(world, i, s)) continue;   // :363-365
                 float need = Need(world, i, s, organic, robotic);
                 if (need <= 0) continue;
                 float score = need * Nearness(world, i, cold, s);
@@ -399,6 +402,13 @@ public sealed partial class FirstAidSystem
             }
         return best >= 0 ? (best, bestScore) : (-1, 0);
     }
+
+    /// <summary>
+    /// The sensed entry's seen or heard flag (+0x38, +0x39): the medic's sensed list (<see cref="AggroSystem"/>) holds the patient and it was sensed at the last look. True without the aggro system.
+    /// The finder's range gates stay as they are (the original has none in the finder: it walks the sensed list, which Meitou's capped block approximates).
+    /// </summary>
+    static bool SeenOrHeard(World world, int medic, int patient) =>
+        CharacterFacts.Senses(world, medic) is not { } block || block.Knows(world.Characters.IdOf(patient), now: true);
 
     /// <summary>
     /// Whether the patient sits in a cage, and whether that cage stands in the medic squad's home building <paramref name="homeKey"/> (<c>FUN_14099f690</c>, <b>Verified</b>: the cage's
