@@ -11,6 +11,12 @@ public readonly record struct AnimationLayer(string Name, float Time, float Weig
     public int Definition { get; init; } = -1;
 }
 
+/// <summary>
+/// The sound events a working machine puts on its operator's clip: the BUILDING_FUNCTIONALITY's <c>animation events</c> (string id) and the ANIMATION record (name) they ride on
+/// (docs/audio.md "Character tasks").
+/// </summary>
+public readonly record struct WorkEvents(string Functionality, string Clip);
+
 /// <summary>What a character is doing about its body: nothing, bandaging someone (<see cref="CharacterTask.Treat"/>) or resting (<see cref="CharacterTask.Rest"/>).</summary>
 public enum CareKind { None, Treating, Resting }
 
@@ -246,6 +252,8 @@ public sealed class CharacterSnapshot
     public Carrying.CarryAttach? Carry { get; internal set; }
     /// <summary>The ITEM (string id) held in the <c>hands</c> point while operating: the functionality's <c>special tool</c> (docs/game/buildings-production.md "Production"); null for none.</summary>
     public string? HeldTool { get; internal set; }
+    /// <summary>While it works a machine (playing its clip): the functionality whose <c>animation events</c> sound on that clip; null otherwise. Display only.</summary>
+    public WorkEvents? WorkEvents { get; internal set; }
     /// <summary>The size the body is drawn at: an animal's lerp(age, <c>scale min</c>, <c>scale max</c>) (its <c>MedicalState.ScaleK</c>), 1 for people.</summary>
     public float Scale { get; internal set; } = 1;
     /// <summary>The movement task (<see cref="CharacterTask"/>); the host's sounds follow building, treating and looting from it.</summary>

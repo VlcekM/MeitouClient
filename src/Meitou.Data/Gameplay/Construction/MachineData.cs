@@ -25,6 +25,8 @@ public sealed record MachineData
     public required string Name { get; init; }
     /// <summary>The functionality's <c>function</c> (BuildingFunction); -1 without a functionality.</summary>
     public int Function { get; init; } = -1;
+    /// <summary>The BUILDING_FUNCTIONALITY record (string id; null without one): its <c>animation events</c> ride on the operator's clip (docs/audio.md "Character tasks").</summary>
+    public string? Functionality { get; init; }
     /// <summary>The functionality's <c>flags</c>; a chair's facing rule.</summary>
     public int FunctionFlags { get; init; }
     /// <summary><c>stat used</c> (a <c>StatsEnumerated</c> value); 0 for none.</summary>
@@ -197,6 +199,7 @@ public sealed record MachineData
             Id = building.StringId,
             Name = building.Name,
             Function = fn,
+            Functionality = function?.StringId,
             FunctionFlags = function?.GetInt("flags") ?? 0,
             Stat = function?.GetInt("stat used") ?? 0,
             MaxOperators = maxOperators,

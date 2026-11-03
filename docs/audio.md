@@ -288,6 +288,12 @@ through one helper (`FUN_1405c9a70(char, event, maxSqDist)`): **dropped when the
   `Character_Pick_Up_Ground` (`Task_Pickup` slot 2, 1000 units, after the `Inventory_Items` switch, which the bank ignores; posted when any of the stack went into the inventory, not when nothing fitted), `Character_Pick_Up_Person` / `Character_Drop_Person` (on the carried person, with its `Armor_Worn`), `Character_Loot` (character target) / `Character_Inspect`,
   `Character_Consume` with `Consume` = `Eat` (200 units) and `Sell_Item` (200 units). `Character_Building_Materials` is posted but **no bank has it** (silent). Involuntary drops (knock-out, ragdoll) are silent.
   `Character_Drop_Ground`, `Taunt` and `Create_Character` are posted on the GUI object ([Interface](#interface)).
+- **Machine work** (**Verified**, decompile): each update of `Task_OperateMachine` (slot 2 `FUN_14035bc90`, once `tryOperate` passes and the clip, the functionality's `animation` else
+  `stonemine`, plays) and of `Task_UseTrainingDummy` (slot 2 `FUN_14035c1e0`) adds the BUILDING_FUNCTIONALITY's `animation events` to that clip on the operator (`FUN_140065280`, `FUN_140064e10`;
+  time = value x 0.01): a sorted insert that skips an event record already there at that time and moves the clip's next-event index past an event inserted before its last fraction
+  (`FUN_140064870`). No removal was found: they last as long as the clip's instance (**Observed**). Data (base game and rebirth, **Verified** by probe): mines `Impact` with `Impacts` =
+  `Ore` / `Stone` / `Copper` at 30 %, plates and weapon smiths `Plate` 30 %, farms `Character_farm` 30 % (its `ground effect` is not implemented), sword and assassin training `Dummy` 40 %;
+  the `stonemine` clip's own `Pickaxe` is `Attack` with `Weapons` = `Work_Pick` at 10 %. SFX_General_Bank has those `Impacts` cases and `Attack`'s `Work_Pick` (**Verified**, hashed names).
 
 Meitou (`CharacterSounds`, `AnimationSoundEvents`, `GroundSurfaces` in `Meitou.Audio`; `GameHost.AudioCharacters.cs`): characters within 1100 units of the eye get an object (dropped past 1400, or when they leave the snapshot);
 the host hands each character's place, facing, speed (horizontal distance between the last two snapshots over the tick) and animation layers (`AnimationLayer.Length` and `.Definition`, added to the snapshot) every frame.
@@ -311,6 +317,9 @@ warden locks one, `Character_Pick_Up_Ground` on a character that takes a ground 
 on the GUI object with `Inventory_Items` of the item, `FUN_140715560`), that `Item_Drop` through `UiSounds` when the shackles are on. The exe's AI cuffing (`Task_CuffTarget`: "Restraining" bar, `medic` animation) posts no event (**Verified**: no `PostEvent` caller in it), so a put-on by anyone but the player is silent. The RE found no task sound for dismantling (order 96; only `Task_Build`, orders 2 and 95, loops: **Observed**), so it is silent but for `Thing_Complete` when done. **No trigger in Meitou:** `Character_Inspect` (loot targets
 only characters), `Character_Unlock_Fail` as a sound of its own (it is only the loop's Stop; a failed roll posts nothing, as in the exe), `Character_Building_Materials` (no bank has it), `Sell_Item` from NPC shoppers, `Character_Drop_Person` from the corpse machine.
 Meitou's wardens have no unlock loop (their rounds only start the click); the player's lock picking loops as the exe's `Task_PickLock`.
+Machine work: while an operator works, the snapshot's `WorkEvents` (functionality and clip) has the host give that clip's layer its events with the functionality's added
+(`AnimationSoundEvents.Attach`), kept until the layer is gone. The simulation's time of a looping clip that is neither synched nor a side step runs on past its length; the host wraps
+its fraction, so the events of `stonemine`, `chop down static` and the swim clips fire on every pass, as the exe's cursor does.
 
 **Unarmed `Weapons`** (`FUN_1402b4570`, when a technique is chosen): the switch becomes `HtH_Punch` when the technique's last blow uses limb 0 or 1 (the arms, **Verified**) else `HtH_Kick`, with `_Robot` appended for a robot (**Observed**: the exe also appends it when a limb check on the attacker's race says robotic limbs). Meitou applies it when the animation of a COMBAT_TECHNIQUE valid
 for unarmed fighting only (not a block or dodge, not a creature's) starts (**Observed**: the exe's guard on the technique is a flag whose meaning is not traced).

@@ -34,20 +34,34 @@ public sealed class AnimationSoundEvents
                     {
                         if (db.Find(reference.TargetStringId) is not { Type: FcsRecordType.ANIMATION_EVENT } def || def.GetString("event") is not { Length: > 0 } ev) continue;
                         var sound = new AnimationSoundEvent(ev, def.GetString("override state"), def.GetString("override value"), def.GetString("stop"), ev == "Footsteps", reference.Values.Value0 * 0.01f);
-                        list ??= [];
-                        // Insert before the first event later than this one; the same event at the same time twice is kept once.
-                        int at = 0;
-                        bool duplicate = false;
-                        for (; at < list.Count; at++)
-                        {
-                            if (list[at].Fraction == sound.Fraction && list[at].Event == sound.Event && list[at].OverrideValue == sound.OverrideValue) { duplicate = true; break; }
-                            if (sound.Fraction < list[at].Fraction) break;
-                        }
-                        if (!duplicate) list.Insert(at, sound);
+                        Insert(list ??= [], sound);
                     }
                 if (list is not null) result.byRecord[record.StringId] = [.. list];
             }
         return result;
+    }
+
+    /// <summary>Inserts before the first event later than this one; the same event at the same time twice is kept once (<c>FUN_140064870</c>).</summary>
+    static void Insert(List<AnimationSoundEvent> list, AnimationSoundEvent sound)
+    {
+        int at = 0;
+        for (; at < list.Count; at++)
+        {
+            if (list[at].Fraction == sound.Fraction && list[at].Event == sound.Event && list[at].OverrideValue == sound.OverrideValue) return;
+            if (sound.Fraction < list[at].Fraction) break;
+        }
+        list.Insert(at, sound);
+    }
+
+    /// <summary>
+    /// A clip's events with <paramref name="added"/> inserted the same way: what a building's functionality puts on its operator's clip (its <c>animation events</c>, added by
+    /// <c>Task_OperateMachine</c> and <c>Task_UseTrainingDummy</c> each update, docs/audio.md "Character tasks").
+    /// </summary>
+    public static AnimationSoundEvent[] Attach(AnimationSoundEvent[]? clip, AnimationSoundEvent[] added)
+    {
+        var list = new List<AnimationSoundEvent>(clip ?? []);
+        foreach (var sound in added) Insert(list, sound);
+        return [.. list];
     }
 
     /// <summary>The events of the record with this string id, in time order; null when it has none.</summary>
@@ -66,6 +80,16 @@ public struct AnimationEventCursor
 {
     public float Last;
     public int Next;
+
+    /// <summary>
+    /// The events changed under the cursor (a machine's added to its clip): the next to fire is the first not before the last fraction, as the exe's insert moves the index past an event
+    /// added behind it (<c>FUN_140064870</c>).
+    /// </summary>
+    public void Rebase(AnimationSoundEvent[] events)
+    {
+        Next = 0;
+        while (Next < events.Length && events[Next].Fraction < Last) Next++;
+    }
 
     public void Update(AnimationSoundEvent[] events, float fraction, bool enabled, Action<AnimationSoundEvent> fire)
     {

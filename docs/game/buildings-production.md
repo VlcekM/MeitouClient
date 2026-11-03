@@ -501,7 +501,8 @@ not a natural site, has a functionality and passes the owner test of [resources]
 skipped when a virtual test on the character (`+0x30`) fails (**Unknown** what it tests; Meitou skips animals). Meitou
 shows it for the whole operate task, the walk there included, and drops it when the task ends (the original's removal
 was not traced, **Unknown**).
-Operator animation: the functionality's `animation` reference (**Verified**, probe of vanilla BUILDING_FUNCTIONALITY). No
+Operator animation: the functionality's `animation` reference (**Verified**, probe of vanilla BUILDING_FUNCTIONALITY); its `animation events` (the pick hitting ore, stone, a plate)
+sound on that clip ([audio](../audio.md#characters-footsteps-combat-voices) "Machine work"). No
 farming clip exists: cactus, cotton, potato, rice and veg farms use `stonemine` (the mining swing, with the Hoe); `farming
 wheat` and `farming hemp` have none (what the original plays then is **Unknown**; Meitou falls back to `stonemine`). Whether
 the original plays it while the crop grows is moot (**Observed**): row 87 needs state 73 `machineHasFreeOperatorSlot`, whose evaluator `FUN_140598de0` is **Verified** false while the machine's
