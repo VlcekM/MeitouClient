@@ -1377,7 +1377,8 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
             Peaceful = !c.InCombat && !IsEnemy(s.Relations, c.Faction, s.Faction),
             GettingUp = CharacterFacts.GettingUp(c, (long)s.Tick),
         };
-        return Meitou.Simulation.Combat.TargetScore.Score(candidate, s.Player, s.Hold, s.Prone, s.Animal);
+        // No player range clamp: only the in-fight chooser sets the clamp flag of FUN_14059e300 (param_7), every goal finder and the look pass 0 (Verified), so the attack-on-sight look reaches beyond 400.
+        return Meitou.Simulation.Combat.TargetScore.Score(candidate, false, s.Hold, s.Prone, s.Animal);
     }
 
     /// <summary>
