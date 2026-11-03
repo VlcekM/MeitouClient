@@ -48,7 +48,6 @@ Factory mappings grouped by identical class; each ID occurs exactly once:
 - Task_GoHomeTown: 128
 - Task_GoHomeTownFast: 127
 - Task_grabOneFood: 244
-  Update `FUN_140340850` (**Verified**): the candidates are the building's food list, else its inventory items of function 15 first, then 3; function 3 is always accepted, function 15 for an animal or when the race's `special food` lists it (`FUN_14042ee50`); the first accepted goes into the worn backpack when it takes it, else into the character's inventory, one item, then the task completes (fails with none). Meitou: `TownDutySystem.GrabFood`.
 - Task_HuntingSmell: 176
 - Task_InvestigateAlarms: 209, 210
 - Task_Kidnapping: 246
@@ -1205,6 +1204,7 @@ A character's job list (the Orders menu's "Perma-Jobs"; class `OrdersReceiver`, 
     item that has a store (`FUN_140998950`, inventory then backpack, over `FUN_14059acd0`, **Verified** decompile): a complete building with a production interface of
     the forager's faction (a player-side forager: any player-faction building) within the AI's range mode (ROAM_FAR: squared 4.2467e7) whose `canHaveSomeOfThese` takes
     it, the nearest. Effect 148 → row 241, a timed take of one item kind ([foraging take](carry-loot.md#34-foraging-take-row-241)). Meitou `CarrySystem.Storable`: storages only, `MachineData.Accepts` for the slot test (free room not tested). The finder skips a body on the path-failure list (`PursuitSystem.PathImpossible`; **Verified**); only pursuits write that list, the loot walk writes none.
+  - 244 Grabbing food, update `FUN_140340850` (**Verified**): the candidates are the building's food list, else its inventory items of function 15 first, then 3; function 3 is always accepted, function 15 for an animal or when the race's `special food` lists it (`FUN_14042ee50`); the first accepted goes into the worn backpack when it takes it, else into the character's inventory, one item, then the task completes (fails with none). Meitou: `TownDutySystem.GrabFood`.
   - 223 Remove Home Intruder: `FUN_14099c110`: the first sensed (0x400e, 0x201) character, not carried, inside a building whose handle equals the home building hand of the character's
     Ownerships (+0x38; `Hand` vfunc 0x10 is "not equal", so the test `== 0` means equal; for the player faction the Ownerships is one shared object whose home is **Unknown**), down (vfunc 0x30), special state
     (+0x2f8) 0, i.e. not in a bed or cage. Vfunc 0x30 is `FUN_1405c9e10` (**Verified**): true for dead, unconscious, ragdolled, carried or crippled (leg state >= 3), and the finder has no race test, so dead bodies count and a non-carriable one is returned and then refused by the lift (Meitou: `Medical.Incapacitated`, no `Carriable` test). 273 Remove Intruder: `FUN_14099c250` (**Verified** by decompile; slot names KenshiLib 1ce4a16, **Observed**): only while the character's current town
