@@ -121,6 +121,17 @@ public sealed partial class LockSystem
         return a == b || a < 0 || b < 0 || RouteState(world, a, b, Flat(from), out _) == 1;
     }
 
+    /// <summary>
+    /// Whether a character at <paramref name="at"/> is shut in: it stands inside town walls (gate code above 0) and the state from its code to the open world (code 0) is locked
+    /// (<c>FUN_1402eb070</c> = 3, <b>Verified</b>: <c>FUN_1405a34e0</c> and <c>FUN_1405a3710</c> give no desire then; the stand-in for the location test <c>FUN_1405a2710</c>'s gate half).
+    /// </summary>
+    public bool WallsLocked(World world, Vector3 at)
+    {
+        if (Regions is null) return false;
+        int code = Regions.CodeAt(at);
+        return code > 0 && RouteState(world, code, 0, Flat(at), out _) == 3;
+    }
+
     /// <summary>A gate's main door (lowest door index with a known leaf) and its leaf.</summary>
     internal static (Fixture Door, DoorSpot Spot)? MainGateDoor(World world, string building)
     {

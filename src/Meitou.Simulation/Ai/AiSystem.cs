@@ -413,7 +413,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             AiBehaviour.Assault => targeting == TaskTargetType.SquadMission && !AssaultTargetFor(world, self.Slot, board).IsNone ? 1 : 0,
             // Self preservation: the threat level (AI slot 17); Running away: row 35's own (AI slot 55), a goal of the packages that list it.
             AiBehaviour.SelfPreserve => SelfPreservationDesire(world, self.Slot, mind),
-            AiBehaviour.Flee => world.Characters.Cold(self.Slot) is { } runner ? SelfPreservation.RunDesire(runner) : 0,
+            AiBehaviour.Flee => world.Characters.Cold(self.Slot) is { } runner ? SelfPreservation.RunDesire(runner, SelfPreservation.Walled(world, self.Slot)) : 0,
             // A combat goal: its own desire's zeros and factors, times its finder's factor (an attack goal's 1 with a target, a protect goal's fight threat; AiSystem.Fights.cs).
             AiBehaviour.Fight => FightDesire(world, self.Slot, type, mind) is var want and > 0 ? want * FightFactor(world, self.Slot, type, mind) : 0,
             // The Medic goal: the finder's score from the serial sweep (its desire's fight and carrying cases are gates of the finder).
@@ -425,6 +425,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// <summary>Going home while away (AI slot 56, <c>FUN_1405a3710</c>, Verified): 0.5, but 0.01 for a slave (state 1) that is not with the player (<c>FUN_140856bc0</c>: its faction or its owner's is the player's).</summary>
     internal static float GoHomeDesire(World world, CharacterId self)
     {
+        // 0 shut in behind a locked gate of town walls (FUN_1402eb070 to code 0 is 3, Verified).
+        if (world.SystemOf<Locks.LockSystem>() is { } walls && walls.WallsLocked(world, world.Characters.Previous[self.Slot].Position)) return 0;
         if (world.Characters.Cold(self.Slot) is not { SlaveState: 1 } c) return 0.5f;
         int player = world.Player.Faction;
         bool withPlayer = c.IsPlayer || player >= 0 && (c.Faction == player || c.SlaveOwner == player);
@@ -1123,6 +1125,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     {
         if (behaviour == AiBehaviour.GoHome)
         {
+            // Retreating (128) and Retreating fast (127) walk to the home town's waypoint outside its gates (FUN_14033dd70 -> Town vfunc 0x38), never to a building.
+            if (type is TaskType.RETREAT_HOMETOWN or TaskType.RUN_AWAY_HOMETOWN && RetreatPoint(mind.Squad) is { } waypoint) return (waypoint, true, null, null);
             if (board.Home is { } h && !mind.HomeUnreachable) return (Flat(h.Position), true, null, null);
             if (board.Town >= 0) return (Flat(data.Sites[board.Town].Position), true, null, null);
             return (mind.Squad.HomeCentre, true, null, null);
@@ -1146,6 +1150,16 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         if (kind == HomeSpotKind.Bed || type == TaskType.STAY_IN_HOME) return (Flat(home.Position), true, null, null);
         return (mind.Post, false, null, null);
     }
+
+    // The lock system, for the gate codes (resolved in the serial step).
+    Locks.LockSystem? locks;
+
+    /// <summary>
+    /// Where Task_GoHomeTown / Task_GoHomeTownFast walk (<c>FUN_14033dd70</c>, <b>Verified</b>): the platoon's object hand (<c>+0xb8</c> of its platoon, meaning <b>Unknown</b>, never set here) if it
+    /// resolves, else the point outside the gates of the ownerships' home town (<see cref="TownExit"/>, Town vfunc <c>0x38</c>), else (no home town) the character's own spot; null for that last case.
+    /// </summary>
+    Vector2? RetreatPoint(Squad squad) =>
+        squad.Town >= 0 && squad.Town < data.Sites.Count ? TownExit.Of(data.Sites[squad.Town], locks?.Regions) : null;
 
     /// <summary>The goals that stand at a node of the home building by its type: 20 shopkeeper, 47 general and the guard posts (<c>FUN_14099ec70</c>, <c>FUN_14099f280</c>).</summary>
     static bool IsNodeGoal(TaskType type) => type is TaskType.STAND_AT_SHOPKEEPER_NODE or TaskType.STAND_AT_GENERAL_NODE or TaskType.STAND_AT_GUARD_NODE_HOMEBUILDING
@@ -1441,6 +1455,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         if (Interlocked.Exchange(ref shopping, 0) != 0) BuyForShoppers(world);
         combat ??= world.SystemOf<Combat.CombatSystem>();
         aggro ??= world.SystemOf<AggroSystem>();
+        locks ??= world.SystemOf<Locks.LockSystem>();
         if (Interlocked.Exchange(ref assaulting, 0) != 0) SendAssaults(world);
         if (Interlocked.Exchange(ref fighting, 0) != 0) SendFights(world);
         if (Interlocked.Exchange(ref treating, 0) != 0) (firstAid ??= world.SystemOf<FirstAid.FirstAidSystem>())?.SendGoalTreatments(world);

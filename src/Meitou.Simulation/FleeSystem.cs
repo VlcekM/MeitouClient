@@ -138,7 +138,7 @@ public sealed class FleeSystem(FactionRelations relations, CombatSystem combat, 
         if (ask == Ai.FleeAsk.Threat)
         {
             float level = combat.ThreatLevel(world, s, out var threats);
-            if (level <= 0 || !Ai.SelfPreservation.Runs(cold, level)) return;
+            if (level <= 0 || !Ai.SelfPreservation.Runs(cold, level, Ai.SelfPreservation.Walled(world, s))) return;
             cold.FleesAlone = true;
             Begin(world, table, s, threats, 1);
             return;
@@ -179,7 +179,7 @@ public sealed class FleeSystem(FactionRelations relations, CombatSystem combat, 
     bool Unthreatened(World world, int s, CharacterCold cold)
     {
         float level = combat.ThreatLevel(world, s, out _);
-        return level <= 0 || !Ai.SelfPreservation.Runs(cold, level);
+        return level <= 0 || !Ai.SelfPreservation.Runs(cold, level, Ai.SelfPreservation.Walled(world, s));
     }
 
     /// <summary>

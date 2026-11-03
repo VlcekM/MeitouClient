@@ -28,7 +28,7 @@ public sealed partial class AiSystem
     /// </summary>
     float FightDesire(World world, int slot, TaskType type, AiMind mind)
     {
-        if (world.Characters.Cold(slot) is not { Fighter.CanAttack: true, Medical: { Crawling: false } medical, Gunning: null } cold || SelfPreservation.Flees(cold, 1)) return 0;
+        if (world.Characters.Cold(slot) is not { Fighter.CanAttack: true, Medical: { Crawling: false } medical, Gunning: null } cold || SelfPreservation.Flees(cold, 1, SelfPreservation.Walled(world, slot))) return 0;
         bool passive = (cold.Orders & CharacterOrders.Passive) != 0, sneaking = (cold.Orders & CharacterOrders.Sneak) != 0 && !cold.InCombat;
         return type switch
         {

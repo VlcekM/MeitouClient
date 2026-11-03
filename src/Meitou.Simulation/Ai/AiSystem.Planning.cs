@@ -88,7 +88,7 @@ public sealed partial class AiSystem
             if (type == TaskType.SELF_PRESERVATION)
             {
                 if (world.Characters.Cold(slot) is not { } me) return false;
-                bool runs = SelfPreservation.Runs(me, desire);
+                bool runs = SelfPreservation.Runs(me, desire, SelfPreservation.Walled(world, slot));
                 if (!runs && system.SelfDefencePick(world, slot).IsNone) return false;
                 mind.Plan.Clear();
                 mind.Plan.Add(new PlanStep(runs ? TaskType.RUN_AWAY : TaskType.ATTACK_ATTACKERS_OF, default));

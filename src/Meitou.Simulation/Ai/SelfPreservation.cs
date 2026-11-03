@@ -18,10 +18,15 @@ public static class SelfPreservation
 
     /// <summary>
     /// Row 35's desire (AI slot 55, <c>FUN_1405a34e0</c>, <b>Verified</b>): 1 for a crippled character (Character <c>isCrippled</c>, the medical tick's flag: a leg down, so it crawls), else
-    /// 0.001. Left out: the 0 for a character that cannot get out (a locked gate between it and the open world, <b>Observed</b>: <c>FUN_1405a2710</c> and the gate states) and the player-faction
-    /// branch; a player's character has 0.
+    /// 0.001. 0 for a character shut in behind a locked gate of town walls (<paramref name="walled"/>, <b>Verified</b>: <c>FUN_1402eb070</c> to code 0 is 3); the building half of the location test
+    /// <c>FUN_1405a2710</c> (no open door) is not modelled. The player-faction branch is not needed: a player's character has 0.
     /// </summary>
-    public static float RunDesire(CharacterCold cold) => cold.IsPlayer || cold.Medical is not { } medical ? 0 : medical.Crawling ? 1 : RunFallback;
+    public static float RunDesire(CharacterCold cold, bool walled = false) =>
+        cold.IsPlayer || cold.Medical is not { } medical ? 0 : medical.Crawling ? 1 : walled ? 0 : RunFallback;
+
+    /// <summary>Whether the character is shut in behind a locked gate of town walls (<see cref="Locks.LockSystem.WallsLocked"/>): row 35's fallback desire is 0 then.</summary>
+    public static bool Walled(World world, int slot) =>
+        world.SystemOf<Locks.LockSystem>() is { } locks && locks.WallsLocked(world, world.Characters.Previous[slot].Position);
 
     /// <summary>
     /// Row 4's desire as the chain 13 to 4 meets it (AI slot 53, <c>FUN_1405a4260</c>, <b>Verified</b>): 0 with no working arm; a crippled NPC 0.1 while a threat is within
@@ -42,9 +47,9 @@ public static class SelfPreservation
     /// the goal's own, h the node's): true when 35 runs, false when the chain through 13 fights. A character that cannot fight (no arm, or crippled with nothing close) runs;
     /// a crippled one runs even when it can fight, for 35 is worth 1 against 4's 0.1; any other fights, 35 being worth 0.001.
     /// </summary>
-    public static bool Runs(CharacterCold cold, float level)
+    public static bool Runs(CharacterCold cold, float level, bool walled = false)
     {
-        float run = RunDesire(cold);
+        float run = RunDesire(cold, walled);
         if (run <= 0 || !CanRun(cold)) return false;
         float fight = AttackDesire(cold, level >= 1);
         return fight <= 0 || Value(level, run) > Value(level, fight);
@@ -53,5 +58,5 @@ public static class SelfPreservation
     static float Value(float level, float desire) => MathF.Min(level, desire) + desire;
 
     /// <summary>Whether this character flees under Self preservation when threatened: an NPC with an AI whose body takes the choice to 35 (<see cref="Runs"/>).</summary>
-    public static bool Flees(CharacterCold cold, float level) => !cold.IsPlayer && cold.Ai is not null && Runs(cold, level);
+    public static bool Flees(CharacterCold cold, float level, bool walled = false) => !cold.IsPlayer && cold.Ai is not null && Runs(cold, level, walled);
 }

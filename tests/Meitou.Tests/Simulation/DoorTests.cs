@@ -207,6 +207,40 @@ public class DoorTests(ITestOutputHelper output)
         Assert.False(plan.PlansBash(world, null, locks, raider.Slot, target.Slot, key, door, spot));
     }
 
+    /// <summary>Shut in (<c>FUN_1405a3710</c> / <c>FUN_1405a34e0</c>): a character inside town walls whose gate to the open world is locked has no retreat desire; outside the walls, or with the gate broken open, it has.</summary>
+    [Fact]
+    public void A_character_behind_a_locked_gate_of_town_walls_is_shut_in()
+    {
+        var owners = SyntheticTown.Rec("60-g", Meitou.Data.Fcs.FcsRecordType.FACTION, "owners");
+        var leaf = SyntheticTown.Rec("62-g", Meitou.Data.Fcs.FcsRecordType.BUILDING, "Gate door");
+        var gateRecord = SyntheticTown.Rec("63-g", Meitou.Data.Fcs.FcsRecordType.BUILDING, "Gate");
+        gateRecord.Bools["is wall gate"] = true;
+        gateRecord.References["doors"] = [SyntheticTown.Ref("62-g")];
+        var town = SyntheticTown.Rec("64-g", Meitou.Data.Fcs.FcsRecordType.TOWN, "Walled");
+        town.References["faction"] = [SyntheticTown.Ref("60-g")];
+        var file = new Meitou.Data.Fcs.FcsFile();
+        file.Records.AddRange([owners, leaf, gateRecord, town]);
+        var db = new GameDatabase();
+        db.Apply(file, "test.mod");
+        var buildings = new Dictionary<string, List<TownBuilding>> { ["walled"] = [new("gate", "63-g", "63-g", SyntheticTown.Centre, 0, false, false, [])] };
+        var data = PopulationData.Create(db, [new TownPlacement("walled", "64-g", SyntheticTown.Centre, null)], buildings: buildings);
+        var locks = new LockSystem(BaseGame, BodyOptions.Default);
+        using var world = new SimWorld(new WorldSettings { Seed = 5, PublishSnapshots = false, MinPartitionSize = 1 }, new OpenGroundWalkability((_, _) => 300), [locks]);
+        world.Fixtures.RegisterSite(world, data, 0);
+        world.Fixtures.Doors = new Gate();
+        string key = data.Sites[0].Buildings[0].Key;
+        var door = Assert.Single(world.Fixtures.OfBuilding(key), f => f.Kind == FixtureKind.Door);
+        door.Lock!.Level = Math.Max(1, door.Lock.Level);
+        world.Fixtures.SetLocked(door, true);
+        locks.Inputs(world, [new GateRegionsCommand(new LineRegions(key)) { Tick = 0 }]);
+
+        Assert.True(locks.WallsLocked(world, SyntheticTown.Centre + new Vector3(0, 0, 300)));
+        Assert.False(locks.WallsLocked(world, SyntheticTown.Centre + new Vector3(0, 0, -300)));
+        door.DoorBroken = true;
+        locks.Inputs(world, [new GateRegionsCommand(new LineRegions(key)) { Tick = 0 }]);   // the gate graph is rebuilt once a check
+        Assert.False(locks.WallsLocked(world, SyntheticTown.Centre + new Vector3(0, 0, 300)));
+    }
+
     /// <summary>docs/game/locks.md "When": state 59 is Building::hasAnOpenDoor, so a closed unlocked door counts as shut: a bandit (desire 1.1 over 72's 1) plans to bash it, one that is not aggressive opens it (walks in), and a locked door of its own faction is unlocked (78).</summary>
     [Fact]
     public void A_ransackers_entry_plan_opens_or_bashes_a_closed_door_by_state_59()
