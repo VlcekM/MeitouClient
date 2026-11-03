@@ -171,6 +171,7 @@ of definitions and gives each a weight; zero-weight ones are dropped:
   for > 0 when the lists are built (`FUN_1405bbd40`, **Observed**): such a clip goes to the strafe list instead of the by-name action list, and the value is never a speed.
   Only the base/animal class reads the strafe list (its first entry is the side step in a fight); humans fetch `strafe lower` by name. An animal's `strafe anim`
   is its side step only when none of its `animations` has `strafe speed max` > 0.
+  Human side step (`FUN_14051fc60`, **Verified**): only in combat mode, the record named `strafe lower` from the race's by-name map (first lookup cached globally), weight 1 − the movement layer's, no stance fit test. Meitou: `AnimationLibrary.Strafe` looks it up by name.
 - Meitou: `AnimationSystem.Strafe` and `AnimationLibrary.Strafe`; a fighter in its footwork (`CharacterCold.FaceSlot`) keeps facing its
   target while its path moves it (`MovementSystem`, the turn's speed cut skipped); the share is 0 below a total speed of 1 (standing; engine reading of the weight).
 

@@ -697,22 +697,15 @@ public sealed class AnimationLibrary
         return list.ToArray();
     }, this), stance);
 
-    readonly System.Collections.Concurrent.ConcurrentDictionary<AnimationStance, int> strafes = new();
-
     /// <summary>
-    /// The side-step clip of the legs (docs/animation.md "Side steps"): the first lower clip of the normal category, in record order, with no <c>move speed</c> and a
-    /// <c>strafe speed max</c> above 0 that fits the stance (<c>strafe lower</c> in the base game: combat only); -1 when none. <b>Observed</b>: the original takes it from its
-    /// candidates by layer and modes like any clip; which test reads <c>strafe speed max</c> was not traced.
+    /// The side-step clip of a human fighter (<c>FUN_14051fc60</c>, <b>Verified</b>): the record NAMED <c>strafe lower</c> from the race's by-name map (the first lookup cached for every later
+    /// character), with no stance fit test; -1 when the data has none. The animals' side step is their own <c>strafe anim</c> list.
     /// </summary>
-    public int Strafe(in AnimationStance stance) => strafes.GetOrAdd(Canonical(stance), static (s, self) =>
-    {
-        for (int i = 0; i < self.all.Count; i++)
-        {
-            var d = self.all[i];
-            if (d.Category == 0 && d.Area == AnimationArea.Lower && d.MoveSpeed == 0 && d.StrafeSpeedMax > 0 && !d.Technique && !d.IsAction && d.FitsExceptLegs(s)) return i;
-        }
-        return -1;
-    }, this);
+    public int Strafe(in AnimationStance stance) => strafeByName ??= IndexOf(StrafeRecord);
+
+    /// <summary>The record name of a human's side-step clip.</summary>
+    public const string StrafeRecord = "strafe lower";
+    int? strafeByName;
 
     readonly System.Collections.Concurrent.ConcurrentDictionary<AnimationStance, int> carryIdles = new();
 
