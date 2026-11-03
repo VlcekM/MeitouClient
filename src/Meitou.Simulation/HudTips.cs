@@ -304,8 +304,13 @@ static class HudTips
             hunger.Add((Loc.Tr("Encumbrance effect:"), Mult((1 - e) * constants.EncumbranceHungerRate + 1)));
             if (x.Resting) hunger.Add((Loc.Tr("Resting/KO state:"), Mult(constants.BedHungerRate)));
         }
-        // FUN_14088a2b0: with the AI idle flag clear (Meitou does not model it, so no Idle row), the used functionality's hunger rate (CharStats +0x178) when it is not 1.
-        if (x.WorkHungerRate is { } work && work != 1) hunger.Add((Loc.Tr("Current work:"), Mult(work)));
+        // FUN_14088a2b0: the idle flag (CharBody::amIdle) gives the Idle row, else the used functionality's hunger rate (CharStats +0x178) when it is not 1. A Meitou worker at its
+        // work clip may have no task, so its rate goes first, as in the hunger factor.
+        if (x.WorkHungerRate is { } work)
+        {
+            if (work != 1) hunger.Add((Loc.Tr("Current work:"), Mult(work)));
+        }
+        else if (x.Idle) hunger.Add((Loc.Tr("Idle:"), Mult(MedicalState.IdleHungerRate)));
 
         // FUN_140895350's sneak row: t = max((s - 40) / 60, 0) of the stealth term s, which is in 0..1, then lerp(12, S, t), so the cap reads 12.
         float? sneak = (cold.Orders & CharacterOrders.Sneak) != 0 ? 12 + (x.RunSpeed - 12) * MathF.Max((Orders.Stealth(cold) - 40) / 60, 0) : null;

@@ -129,7 +129,7 @@ public readonly record struct SkillTerms(float Base, int Injuries, int Hunger, i
 /// of the drawn weapon, or with nothing drawn (<see cref="Fists"/>) 1 - encumbrance, instead of the carrying rate.
 /// </summary>
 public readonly record struct ExtendedStats(float AthleticsXp, float StrengthXp, float ToughnessXp, float KoPoint, float RunSpeed, float RunValue, float HungerRate, bool Resting = false,
-    bool Fighting = false, bool Fists = false, float? WorkHungerRate = null);
+    bool Fighting = false, bool Fists = false, float? WorkHungerRate = null, bool Idle = false);
 public sealed record InventoryItemView(int Index, string Record, string Name, string Section, int X, int Y, int Width, int Height, int Quantity, float Weight, float Quality)
 {
     /// <summary>The item's material record (<c>material sid</c>; "" none), which picks its icon.</summary>

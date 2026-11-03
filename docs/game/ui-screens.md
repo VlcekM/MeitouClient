@@ -398,9 +398,9 @@ to Jobs; the saved `chase mode` flag is that switch (**Verified**, [perma-jobs](
       `max: N`, N = (int)(lerp(12, S, max((s − 40) / 60, 0)) × 0.2237) with s the stealth term (`FUN_140884850`, 0..1), so N is always (int)(12 × 0.2237) = 2; and `Total:` the
       line's text. The line's bracket is Bad for both signs (`FUN_140888fb0`). Meitou: in the panel's speed unit.
     - Hunger Rate (`FUN_14088a2b0`): `Racial hunger rate:`, `Age:` when the age (slot 0x398) is not 1, as the size factor (slot 0x390, lerp(age, `scale min`, `scale max`)), `Encumbrance effect:` 1 + (1 − e) `encumbrance hunger rate` (always,
-      though in a bed the rate uses the bed factor), `Resting/KO state:` `bed hunger rate` in a bed or KO or dead, then (independent of the resting row) `Idle:` 0.80x while the AI flag the rate's 0.8 reads is set, else
-      `Current work:` CharStats `+0x178 currentOperatingMachineHungerRate` when not 1 (**Verified**, decompile). Meitou has no idle flag: `Current work:` with the rate of the machine or seat in use
-      (`ExtendedStats.WorkHungerRate`), never `Idle:`.
+      though in a bed the rate uses the bed factor), `Resting/KO state:` `bed hunger rate` in a bed or KO or dead, then (independent of the resting row) `Idle:` 0.80x while `CharBody::amIdle` (the rate's 0.8) is set, else
+      `Current work:` CharStats `+0x178 currentOperatingMachineHungerRate` when not 1 (**Verified**, decompile). Meitou: `Current work:` with the rate of the machine or seat in use
+      (`ExtendedStats.WorkHungerRate`), else `Idle:` while standing still with no task (`ExtendedStats.Idle`).
   - `HealthText` words in priority: Dead, BEING EATEN ALIVE!!, Dying, Unconscious (N) (N = (int) of the medical float `+0xa0`, the KO timer, taken
     only while it is &gt; 0; "Rebooting" for skeletons; `FUN_14088a8f0`), Recovery coma, Playing dead..., Blood loss KO, Bleeding out,
     Crippled, Crippled arm, Critical, Limb trauma, Staying low, Starving (hunger &lt; 1), Bleeding, disguise words; else by the overall health h:

@@ -102,10 +102,16 @@ bandaging and stun to the correct quantities; do not heal untreated flesh direct
 
 ### Time
 
-**Verified** (decompile): the character adds `DAT_142133794` (real seconds x game speed, [game-loop](game-loop.md#the-three-time-values))
-to Character +0xc8 every frame (`FUN_1405c7ae0`, `FUN_1405cfd90`); `FUN_1405c7d40` hands the sum to the medical update
-`FUN_140652000` and clears it. So part, blood, clot and KO-timer rates are per second of that time (a game hour is 1200/11 of them).
-Hunger instead reads the game clock's elapsed time (`FUN_14064da70` via `FUN_140791ca0`). Meitou: `MedicalState.Tick(TickSeconds)`.
+**Verified** (decompile): `FUN_1405c7d40` (Character slot 0x278) hands Character +0xc8 to the medical update `FUN_140652000` and clears it,
+so part, blood, clot and KO-timer rates are per second of that sum. Hunger instead reads the game clock's elapsed time (`FUN_14064da70` via `FUN_140791ca0`).
+
+**Observed** (decompile of the character loop `FUN_140786e30` / `FUN_140786a40`): +0xc8 gets `DAT_142133794` (real seconds x game speed,
+[game-loop](game-loop.md#the-three-time-values)) twice. `FUN_1405c7ae0` adds it for every listed character every frame; `FUN_1405cfd90`
+adds it again only on a frame where the character is inside that frame's round-robin update budget, the same frames that queue its slot 0x278.
+So the medical time is dt x (1 + the share of frames with a full update): between 1 and 2 x dt, set by how many characters share the budget.
+**Verified** in game for the KO timer (1.0.65, issue #134, 25 knock-outs over nine runs): it fell 1.44 to 2.0 x dt, steady within a knock-out,
+1.44 to 1.5 in 15 of them. The part and blood rates share the factor (same sum; not measured). A game hour is so 1200/11 x dt but only
+600/11 to 1200/11 medical seconds. Meitou: `MedicalState.Tick(TickSeconds)` runs 1 x dt (a known deviation: no single factor fits).
 
 ### Part tick (`FUN_14064f5c0`, **Verified** decompile)
 
@@ -137,15 +143,19 @@ clamped to capacity every tick, and with no bleeding recovers `blood recovery ra
 (`FUN_140652000`). The wound is opened whatever the race's `bleed rate` (no race read in `FUN_1406508d0`; a bloodless race
 gets wounds that drain nothing). Bleeding has no per-part term but a stump's: a bandage never closes a wound (first aid closes
 the newest one first, see [First aid update](#first-aid-update)); a bandaged stump stops bleeding once h + b is back at 0.
-The KO timer +0xa0 falls by dt.
+The KO timer +0xa0 falls by the medical update's time ([Time](#time): 1 to 2 x dt).
 
 **worstDamage** (medical `+0xa4`, KenshiLib 1ce4a16; **Verified** decompile of the aggregates `FUN_140644e60`): the minimum over the organic parts
 (no `robotLimb`, and a byte `+0x7c` clear on an object the part returns, by offset the race's `robot`, **Observed**) of (`flesh` + `bandaging`) / M (M = `_maxHealth` x `age` x `HPMult` - `wearDamage`), computed as a percentage and scaled back, set to 1 above 0.999;
 starts at 1.0 (constructor `FUN_1406409f0`). So it is at most 1 and under 0 only while a part is below zero. Read by the HUD's health word, the hunger
 word and the Toughness XP multiplier ([ui-screens.md](ui-screens.md#4-hud-mainbargui)). Meitou: no single field; `HealthPart.Fraction` is per part.
 
-**Verified** coma point=-lerp(10,85,toughness/100). **Verified** KO time of a blood or vital knock-out (`FUN_1406447d0`):
-base20 + the vital and negative-part terms + the missing-blood term. Leg loss uses only the blood term ([cut-off and leg loss](#cut-off-and-leg-loss)).
+**Verified** coma point=-lerp(10,85,toughness/100). **Verified** KO time of a blood or vital knock-out (`FUN_1406447d0`, KenshiLib
+`startKnockoutTimer`): `knockout time base` (20, not scaled) + k x (per vital part 25 (M - h - s)/M + per part with h - s < 0 its
+`KO mult` x 100 |h - s|/M + 50 x missing blood / capacity), k as in the [expression reference](#expression-reference). So a part n % below 0 adds
+k x (25 + 2.25 n) for the head, k x (25 + 1.25 n) for the chest or stomach, k x 0.5 n for a limb. In game (1.0.65, issue #134: whole body 20 at
+toughness 0/50/100; head, chest, stomach, arm, leg rows, two parts at once and missing blood, toughness 0/50/100) every reading fits within 0.02
+(0.2 for a part still sinking). Meitou: `MedicalState.KoTime`.
 Death: vital h-s<-M, blood<=-capacity or hunger<=0. Preserve KO/coma/death distinctions.
 
 **Observed** (decompile; names KenshiLib 1ce4a16). The KO point (`pointOfNoReturn`, `140643ae0`) is read only by
@@ -176,18 +186,21 @@ Death: vital h-s<-M, blood<=-capacity or hunger<=0. Preserve KO/coma/death disti
 - A destroyed part that is not vital is cut off: a blow needs h-s+rig < -M, a tick h-s < -M (a worsening wound). A vital part kills instead.
 - Blow: Dismemberment >= Rare, a stats object, limb original or crushed. Tick: Frequent only, limb original only. A prosthetic is never cut off.
 - Sever: the part becomes a stump; blood -= (5 + 25 x U) after the KO below (the roll `FUN_1409b1c80(5, 30)`); toughness XP 300; LOST_LEG / LOST_ARM dialogue.
-- A leg (slot 2 or 3) cut off in posture 0 (conscious, not staying low, not crawling) is knocked out for
-  max(3, (2 x knockout time base + |capacity - blood| x k x 0.5) x (1 - toughness/100) x 4) x U, U uniform in [0, 1),
-  k = lerp(knockout mult 1, knockout mult 99, toughness/100). The 0.5 is 0.25 x 2; blood is read before the sever's loss; the
-  other parts' terms do not enter. Another posture: no KO.
+- A leg (slot 2 or 3) cut off in posture 0 (conscious, not staying low, not crawling) is knocked out for **3 s** of medical time. The sever first
+  writes max(3, (2 x knockout time base + |capacity - blood| x k x 0.5) x (1 - toughness/100) x 4) x U, U uniform in [0, 1) (`FUN_140644980`,
+  then the roll), but the collapse check `FUN_140649320` then finds the stump down at posture 0 and sets posture 2, and the posture setter
+  `FUN_1405c7e20` writes 3.0 to Character +0x4f8 on that change, which is the KO timer (KenshiLib 1ce4a16: `MedicalSystem` at Character +0x458,
+  `knockoutTimer` at +0xa0). **Verified** in game (1.0.65, issue #134): five leg cuts (KenshiLib `amputate`, which is `FUN_14064edc0`, then
+  `reassessCollapseMode`), four of them standing, at toughness 0 and 50, full or low blood, all wrote exactly 3; an arm cut wrote nothing.
+  Another posture: no KO.
 - A destroyed part not cut off (setting too low; a crushed limb met by a tick): no KO; the leg is down, so the character crawls at once (posture 2).
 - The put-down, stealth and shackle knock-outs call the same function with a factor and no roll (the blood term only, **Verified**).
-  Meitou: `MedicalState.KoBlood`, used by the leg loss and `PutDownKoSeconds` ([carry-loot](carry-loot.md)).
+  Meitou: `MedicalState.KoBlood`, used by `PutDownKoSeconds` ([carry-loot](carry-loot.md)).
 - The KO toughness XP (`FUN_1408c6720`) is paid only on the vital-part branch of `FUN_14064f300`, not for a leg or blood KO (**Verified**).
   Meitou pays it for every KO event: a gap.
 - **Unknown**: the notify codes 0x46 (leg) and 0x47 (arm) and vtable slot 0x410 that `FUN_14064edc0` calls; the fifth argument of
   `FUN_14064f300` (a blow is taken to sever under the setting rule).
-- Meitou: `MedicalState.ApplyHit`, `CheckPart`, `Sever(part, ctx, standing)`, `LegLossKo`, `Standing` (read before the blow, and before the tick's part loop).
+- Meitou: `MedicalState.ApplyHit`, `CheckPart`, `Sever(part, ctx, standing)`, `LegLossKoSeconds`, `Standing` (read before the blow, and before the tick's part loop).
 
 ### Decapitation (Meitou)
 
@@ -488,13 +501,16 @@ stomach gets min(floor - hunger, 0.04). Nobody but the player has to feed anyone
 
 Drain and digestion (same function): stomach empty: hunger -= dt/T x race rate x situation (`FUN_1408837a0`:
 bed/KO/dead `bed hunger rate`; else in combat or moving (movement +0x24) 1 + (1 - e) `encumbrance hunger
-rate`; else an AI flag (AI +0x300 -> +0x70) 0.8; else CharStats +0x178 `currentOperatingMachineHungerRate`, the used BUILDING_FUNCTIONALITY `hunger rate` (chairs 0.66,
+rate`; else `CharBody::amIdle` (Character +0x650 AI -> +0x300 CharBody -> +0x70, KenshiLib 1ce4a16; set by `CharBody::update` `FUN_1405c6d20`
+while the character has no current action) 0.8 (**Verified** in game, 1.0.65, issue #134: 0.8 read for a leader standing still with no job, the
+drain 0.8/T a game hour, the HUD row `Idle: 0.80x`; knocked out 0.33); else CharStats +0x178 `currentOperatingMachineHungerRate`, the used BUILDING_FUNCTIONALITY `hunger rate` (chairs 0.66,
 sit on floor 0.75, mines and sword training 1.2; **Verified** reader; written by `Task_OperateMachine`'s set-up `FUN_14035b430` from the building's `+0x3b0`
 for every operator, real (87) or pretend (221), and set back to 1 by the task's `endAction` (Tasker slot 3, `FUN_140347350`), the only other writer of 1 found; **Verified**
 decompile)); with food: moved = min(stomach,
 dt/T x slot 0x390 x `fed recovery rate mult` x race rate). Hunger is capped at 3 before the update. The tick
 is skipped while `DAT_142134690` +0x2f0 is set (**Unknown** flag). Meitou: `MedicalContext.HungerFloor`
-(`BodySystem.HungerFloor`; no floor in a world without data); Meitou: a character standing still out of combat on a machine it works, a chair, or (an NPC worker, goals 189 / 190) at its town building's work clip takes the functionality's rate (the original keeps it until the operate task ends, so also between strokes; Meitou's tasks end with the work); idle otherwise it keeps 1 + (1 - e) rate.
+(`BodySystem.HungerFloor`; no floor in a world without data); Meitou: a character standing still out of combat on a machine it works, a chair, or (an NPC worker, goals 189 / 190) at its town building's work clip takes the functionality's rate (the original keeps it until the operate task ends, so also between strokes; Meitou's tasks end with the work); standing still out of combat with no task (`CharacterTask.Idle`, `BodySystem.Idle`) 0.8; standing still with
+another task it keeps 1 + (1 - e) rate (the original: 1).
 
 ### Corpses
 

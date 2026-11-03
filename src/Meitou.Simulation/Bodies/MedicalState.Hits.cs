@@ -167,26 +167,26 @@ public sealed partial class MedicalState
 
     /// <summary>
     /// Cuts a limb off (<c>FUN_14064edc0</c>, <b>Verified</b>): the part becomes a stump (base HP 5), the character loses rand(5, 30) blood and gets a wound of strength <c>bleed rate</c> x 200.
-    /// A leg lost while <paramref name="standing"/> (posture 0) also knocks the character out for <see cref="LegLossKo"/> times a uniform roll in [0, 1), the KO time set before the blood
-    /// is lost; a leg lost while crawling, staying low, or already out does not. The caller awards the toughness XP (<see cref="XpService.ToughnessFromLimbLoss"/>) and spawns the
-    /// severed limb item from the race's <c>severed limbs</c>.
+    /// A leg lost while <paramref name="standing"/> (posture 0) also knocks the character out for <see cref="LegLossKoSeconds"/>; a leg lost while crawling, staying low, or already out
+    /// does not. The caller awards the toughness XP (<see cref="XpService.ToughnessFromLimbLoss"/>) and spawns the severed limb item from the race's <c>severed limbs</c>.
     /// </summary>
     public void Sever(int part, in MedicalContext ctx, bool standing, List<MedicalEvent>? events = null)
     {
         var p = Parts[part];
         p.Limb = LimbState.Stump;
         p.Replacement = null;
-        if (standing && p.Template.LimbSlot is 2 or 3) ApplyKo(LegLossKo(ctx) * NextRoll(ctx), events);
+        if (standing && p.Template.LimbSlot is 2 or 3) RestartKo(LegLossKoSeconds, events);
         Blood -= 5 + 25 * NextRoll(ctx);
         wounds.Add(ctx.Constants.BleedRate * 200);
         events?.Add(new MedicalEvent(MedicalEventKind.PartSevered, part));
     }
 
     /// <summary>
-    /// The leg-loss KO time before its roll (<c>FUN_140644980</c>, <b>Verified</b> by decompile): max(3, (2 x <c>knockout time base</c> + |capacity - blood| x k x 0.5) x (1 - toughness / 100) x 4),
-    /// k = lerp(<c>knockout mult 1</c>, <c>knockout mult 99</c>, toughness / 100). Only the missing blood enters it; the other parts' terms of <see cref="KoTerms"/> do not.
+    /// The KO time of a leg lost standing, in seconds of character time (<b>Verified</b> in game, #134). The sever (<c>FUN_14064edc0</c>) first writes a rolled time
+    /// (<c>FUN_140644980</c> x a roll), but the collapse check that follows finds the stump down at posture 0 and sets posture 2, and the posture setter (<c>FUN_1405c7e20</c>) writes 3
+    /// over the KO timer on that change (docs/game/character-stats.md "Cut-off and leg loss").
     /// </summary>
-    public float LegLossKo(in MedicalContext ctx) => KoBlood(ctx, 1 - Math.Clamp(ctx.Toughness / 100, 0, 1));
+    public const float LegLossKoSeconds = 3;
 
     /// <summary>
     /// <c>FUN_140644980</c> (<b>Verified</b>): max(3, (2 x <c>knockout time base</c> + |capacity - blood| x k x 0.5) x <paramref name="factor"/> x 4), k = lerp(<c>knockout mult 1</c>,

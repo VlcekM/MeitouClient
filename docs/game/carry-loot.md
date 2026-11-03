@@ -322,7 +322,7 @@ Meitou: `FixtureRegistry.LayLow` runs from the crime sweep (engine choice) and a
 11. The **speed caps** of the `carrying left/right` movement clips (RACE `male/female carry ragdoll` are unused: [ragdolls](ragdolls.md)).
 12. `FUN_14079c600`, called when the player picks up a non-player character, and **`CharStats+0x12b`** (set by slot 97 order kind 0xc), which turns
     both rescue goals off.
-13. The put-down KO time: `FUN_140644980` has no roll and only the blood term (**Verified**, [character-stats](character-stats.md#cut-off-and-leg-loss)); Meitou's `PutDownKoSeconds` follows it (`MedicalState.KoBlood`, shared with leg loss). The relation test `FUN_1406b27b0` of "friendly".
+13. The put-down KO time: `FUN_140644980` has no roll and only the blood term (**Verified**, [character-stats](character-stats.md#cut-off-and-leg-loss)); Meitou's `PutDownKoSeconds` follows it (`MedicalState.KoBlood`). The relation test `FUN_1406b27b0` of "friendly".
 
 ## Expression reference
 

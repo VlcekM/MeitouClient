@@ -411,11 +411,15 @@ public sealed partial class MedicalState
     }
 
     /// <summary>
-    /// The hunger-rate situation factor (<c>FUN_1408837a0</c>): resting, knocked out or dead <c>bed hunger rate</c>; the AI flag (<paramref name="usingMachine"/>) 0.8; idle on a machine or chair its
-    /// functionality's <c>hunger rate</c>; else 1 + (1 - e) x <c>encumbrance hunger rate</c> (the original's rule moving or fighting; Meitou's idle without a machine too).
+    /// The hunger-rate situation factor (<c>FUN_1408837a0</c>): resting, knocked out or dead <c>bed hunger rate</c>; idle on a machine or chair its functionality's <c>hunger rate</c>
+    /// (<paramref name="useRate"/>); standing still with no task (<paramref name="idle"/>) <see cref="IdleHungerRate"/>; else 1 + (1 - e) x <c>encumbrance hunger rate</c> (the original's
+    /// rule moving or fighting; Meitou's standing still with another task too, where the original takes 1).
     /// </summary>
-    public static float HungerSituationFactor(GameConstants c, bool resting, bool usingMachine, float encumbranceFactor, float? useRate = null) =>
-        resting ? c.BedHungerRate : usingMachine ? 0.8f : useRate ?? 1 + (1 - encumbranceFactor) * c.EncumbranceHungerRate;
+    public static float HungerSituationFactor(GameConstants c, bool resting, bool idle, float encumbranceFactor, float? useRate = null) =>
+        resting ? c.BedHungerRate : useRate ?? (idle ? IdleHungerRate : 1 + (1 - encumbranceFactor) * c.EncumbranceHungerRate);
+
+    /// <summary>The hunger factor of a character standing still with no task (<c>FUN_1408837a0</c> literal; <b>Verified</b> in game, #134: the HUD's "Idle: 0.80x").</summary>
+    public const float IdleHungerRate = 0.8f;
 
     // ------------------------------------------------------------------ KO time
 
