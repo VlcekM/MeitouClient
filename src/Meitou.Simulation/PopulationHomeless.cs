@@ -1,5 +1,6 @@
 using System.Numerics;
 using Meitou.Data.Gameplay;
+using Meitou.Data.Gameplay.Ai;
 using Meitou.Data.World;
 using Meitou.Simulation.Ai;
 
@@ -156,7 +157,7 @@ public sealed partial class PopulationSystem
     void PatrolStep(World world, Squad squad, int slot, int group, ZoneCoordinate zone)
     {
         var table = world.Characters;
-        if (table.Cold(slot)?.Ai is not { Behaviour: AiBehaviour.Patrol } || squad.Ai is { CurrentClass: PackageClass.Patrol or PackageClass.PatrolRunning } board
+        if (table.Cold(slot)?.Ai is not { Goal.Task.Type: TaskType.PATROL } || squad.Ai is { CurrentClass: PackageClass.Patrol or PackageClass.PatrolRunning } board
             && board.RouteIndex < board.Route.Length || squad.Ai is { Destination.IsNone: false }) return;
         patrolSeen.Add(squad.Id);
         var at = new Vector2(table.Previous[slot].Position.X, table.Previous[slot].Position.Z);
