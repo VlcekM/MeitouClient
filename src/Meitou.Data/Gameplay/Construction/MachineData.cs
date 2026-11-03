@@ -104,7 +104,7 @@ public sealed record MachineData
     public bool IsConsumer => PowerOutput < 0;
 
     public bool IsResearch => Function == ResearchFunction;
-    /// <summary>A training dummy (function 7, BF_TRAINING): its user trains <see cref="Stat"/> up to the cap <see cref="OutputRate"/> (the "Max Skill Level" of its panel is one less, docs/game/ai-tasks.md "Finders of the jobs").</summary>
+    /// <summary>A training dummy (function 7, BF_TRAINING): its user trains <see cref="Stat"/> up to the cap <see cref="OutputValue"/> (the "Max Skill Level" of its panel is one less, docs/game/ai-tasks.md "Finders of the jobs").</summary>
     public bool IsTraining => Function == TrainingFunction && Stat > 0;
     /// <summary>A mine, well or refinery: inputs (if any) into one output (functions 1, 4 and 27, <b>Verified</b> enum; the stone and ore processors are 4).</summary>
     public bool IsProducer => Function is MineFunction or RefineryFunction or NaturalMineFunction or RainCollectorFunction && Farm is null && Output is not null;
