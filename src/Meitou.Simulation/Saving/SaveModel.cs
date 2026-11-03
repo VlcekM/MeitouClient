@@ -53,6 +53,15 @@ public sealed class SavedCharacterLink
     public bool CarryIsCarrier { get; set; }
     /// <summary>The owner character a slave's save names (the <c>slaver</c> handle, <see cref="SlaveSave"/>), until <see cref="Kidnap.CaptiveSystem"/> finds it in the world.</summary>
     public Meitou.Data.Save.Hand Slaver { get; set; } = Meitou.Data.Save.Hand.Null;
+    /// <summary>The save's <c>slaver</c> handle no longer names the owner (the slave was freed or handed to another master): it is written as null.</summary>
+    public bool SlaverStale { get; set; }
+
+    /// <summary>Forgets the save's owner character: the slave was freed or handed on.</summary>
+    public void DropSlaver()
+    {
+        Slaver = Meitou.Data.Save.Hand.Null;
+        SlaverStale = true;
+    }
 }
 
 /// <summary>A player platoon of the save that is now a <see cref="Squad"/> in the world.</summary>

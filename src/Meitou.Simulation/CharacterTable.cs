@@ -523,6 +523,8 @@ public sealed class CharacterTable
     public int HighWater => highWater;
     /// <summary>Characters alive.</summary>
     public int Count => highWater - free.Count;
+    /// <summary>The characters ever added: a pass waiting for a character to appear runs again only when this has changed.</summary>
+    public long Spawns { get; private set; }
 
     /// <summary>The last tick's state of the slots 0..HighWater-1.</summary>
     public ReadOnlySpan<CharacterHot> Previous => previous.AsSpan(0, highWater);
@@ -600,6 +602,7 @@ public sealed class CharacterTable
         // Outside a tick there is no "last tick" to keep apart from the new one.
         if (!inTick) previous[slot] = state;
         this.cold[slot] = cold;
+        Spawns++;
         return new CharacterId(slot, generation);
     }
 

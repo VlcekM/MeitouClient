@@ -6,7 +6,7 @@ namespace Meitou.Simulation.Saving;
 /// <summary>
 /// A character's slave state in its GAMESTATE_CHARACTER record: the original's <c>slavestate</c> int (0 free, 1 slave, 2 escaped, 3 ex-slave; <c>FUN_140626580</c> writes it with <c>personality</c>,
 /// docs/formats/save.md), the original's <c>ssct</c> float (<see cref="CharacterCold.SlaveSince"/>, written always), the original's <c>slaver</c> handle (the owner character) and
-/// Meitou's <c>meitou slave owner</c> (the owner FACTION's string id). The owner key is written only while set and removed otherwise; the <c>slaver</c> keys are left as they were read.
+/// Meitou's <c>meitou slave owner</c> (the owner FACTION's string id). The owner key is written only while set and removed otherwise; the <c>slaver</c> keys are left as they were read until the slave is freed or handed to another master, then written as the null handle.
 /// </summary>
 public static class SlaveSave
 {
@@ -32,5 +32,7 @@ public static class SlaveSave
         state.Floats[SinceKey] = (float)cold.SlaveSince;
         if (cold.SlaveState != 0 && (uint)cold.SlaveOwner < (uint)data.Factions.Count) state.Strings[OwnerKey] = data.Factions[cold.SlaveOwner].Id;
         else state.Strings.Remove(OwnerKey);
+
+        if (cold.Save is { SlaverStale: true }) Hand.Null.Write(state, SlaverKey);
     }
 }
