@@ -104,8 +104,7 @@ public sealed class WarManager
 }
 
 /// <summary>
-/// Faction campaigns (docs/game/factions-squads-towns.md "Campaigns", docs/simulation.md "Off-screen tier"): one war manager per faction, run serially in faction order at every
-/// population look (every rule reads the game clock, so the cadence does not matter): the running campaigns, then the due requests, then the roll when the clock passes
+/// Faction campaigns (docs/game/factions-squads-towns.md "Campaigns", docs/simulation.md "Off-screen tier"): one war manager per faction, one runs per tick at a wrapping cursor (<see cref="StepWarManager"/>; every rule reads the game clock): the running campaigns, then the due requests, then the roll when the clock passes
 /// <c>updatetime</c>. Campaign squads are platoons kept while their campaign runs; off screen they are moved here (the leader to the target, the others to the leader), loaded
 /// their leader is sent to the same goal. Rolls are keyed by the world seed, the faction and the roll's hour, so a run repeats at any thread count.
 /// </summary>
@@ -202,20 +201,33 @@ public sealed partial class PopulationSystem : IStateHashed
     {
         StepProsperity(world);
         EnsureWars(world);
-        double now = world.GameHours;
-        foreach (var m in wars!)
-        {
-            for (int i = 0; i < m.Actives.Count; i++)
-                if (UpdateCampaign(world, m, m.Actives[i], now)) m.Actives.RemoveAt(i--);
-            UpdateRequests(world, m, now);
-            if (now > m.UpdateTime || m.UpdateTime == 0)
-            {
-                double at = m.UpdateTime;
-                m.UpdateTime = now + RollEveryHours;
-                if (m.Actives.Count == 0 && m.Requests.Count == 0) Roll(world, m, at, now);
-            }
-        }
         MoveCampaigns(world, settings.CheckEveryTicks * world.TickSeconds);
+    }
+
+    /// <summary>The faction whose war manager runs next (the original's global cursor <c>DAT_14212e314</c>); not saved, hashed.</summary>
+    int warCursor;
+
+    /// <summary>
+    /// One war manager per tick, at a cursor that wraps over the factions (<c>FUN_1402e74f0</c>, <b>Verified</b>: every call adds its time to all factions, then runs the faction clock and the war
+    /// manager <c>FUN_1409cb310</c> of the faction at the cursor only, and advances the cursor): the running campaigns, then the due requests, then the roll when the clock passes <c>updatetime</c>.
+    /// </summary>
+    void StepWarManager(World world)
+    {
+        EnsureWars(world);
+        if (wars!.Length == 0) return;
+        if (warCursor >= wars.Length) warCursor = 0;
+        var m = wars[warCursor];
+        warCursor = (warCursor + 1) % wars.Length;
+        double now = world.GameHours;
+        for (int i = 0; i < m.Actives.Count; i++)
+            if (UpdateCampaign(world, m, m.Actives[i], now)) m.Actives.RemoveAt(i--);
+        UpdateRequests(world, m, now);
+        if (now > m.UpdateTime || m.UpdateTime == 0)
+        {
+            double at = m.UpdateTime;
+            m.UpdateTime = now + RollEveryHours;
+            if (m.Actives.Count == 0 && m.Requests.Count == 0) Roll(world, m, at, now);
+        }
     }
 
     // ---- towns ----
@@ -1389,6 +1401,7 @@ public sealed partial class PopulationSystem : IStateHashed
     void HashWars(ref StateHasher h)
     {
         if (wars is null || !wars.Any(m => m.NextId > 0 || m.Requests.Count > 0)) return;
+        h.Add(warCursor);
         foreach (var m in wars)
         {
             h.Add(m.NextId);

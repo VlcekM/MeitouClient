@@ -175,7 +175,7 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
         TopUpNest(world);
         // The original answers a world state from the live unique table (FUN_1409a7e00), so the copy is taken every tick (cheap while nothing changed), not at the look.
         RefreshStates(world);
-        if (world.Tick % settings.CheckEveryTicks != 0) return;
+        if (world.Tick % settings.CheckEveryTicks != 0) { if (wars is not null) StepWarManager(world); return; }
         world.Uniques.SeedPrisoners(data.Db);
         RefreshUniques(world);
         RefreshStates(world);
@@ -183,6 +183,7 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
         Discover(world);
         StepRoaming(world);
         StepCampaigns(world);
+        StepWarManager(world);
         world.ItemSlots.Step(world, data);
     }
 
