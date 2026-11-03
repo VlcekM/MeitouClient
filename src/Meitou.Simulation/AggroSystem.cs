@@ -1099,9 +1099,8 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
     /// Pass 1, the entries of its senses tagged ENEMY and not KO (seen or heard or not): one in the same town whose current goal intends aggression (status +0xac,
     /// <see cref="Ai.TaskAggression.OfGoal"/>) or that its squad tagged AGGRESSOR. Pass 2, the entries tagged NEUTRAL and not KO: not law enforcement, trader or diplomat; military only when
     /// its squad's town is not this one and its faction does not own it (the town's resident factions are <b>Unknown</b>: the owner stands in); in the same town; not a slaver; intending
-    /// aggression, tagged AGGRESSOR, or a bandit or an animal whose running task intends it (+0xa0); and attacking someone in a fight whom the looker counts as an ally (its own or an
-    /// allied faction; the original's "innocent" victim branch is <b>Unknown</b> in part and left out). The best by the target score, as the look's (the area test <c>FUN_140599f30</c> is not
-    /// modelled). A pure read (any thread in the think).
+    /// aggression, tagged AGGRESSOR, or a bandit or an animal whose running task intends it (+0xa0); and attacking an ally or an innocent (<see cref="AttacksProtected"/>). The best by the
+    /// target score, as the look's (the area test <c>FUN_140599f30</c> is not modelled). A pure read (any thread in the think).
     /// </summary>
     CharacterId FindTroubleMaker(World world, int slot, CharacterCold cold, SenseBlock own, WarTargets war, IReadOnlyDictionary<int, int>? pending)
     {
@@ -1128,8 +1127,7 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
                 if (c.NpcClass is FundamentalType.LawEnforcement or FundamentalType.Trader or FundamentalType.Diplomat or FundamentalType.Slaver) continue;
                 if (c.NpcClass == FundamentalType.Military && (c.Faction == owner || world.Squads.Find(c.SquadId)?.Ai?.Town == town.Site && town.Site >= 0)) continue;
                 if (!(intends || aggressor || Ai.TaskAggression.OfTask(c) > 0 && (c.NpcClass == FundamentalType.Bandit || c.Fighter?.IsAnimal == true))) continue;
-                if (fights is null || fights.TargetOf(t, e.Generation) is not { Slot: >= 0 } v || (uint)v.Slot >= (uint)table.HighWater || prev[v.Slot].Generation != v.Generation
-                    || table.Cold(v.Slot) is not { InCombat: true } victim || !(victim.Faction == cold.Faction || Relations.Contains(victim.Faction) && Relations.IsAlly(cold.Faction, victim.Faction))) continue;
+                if (!AttacksProtected(world, fights, cold, c, t, e.Generation)) continue;
             }
             else if (!intends && !aggressor) continue;
             if (Ai.AiSystem.TownAt(towns, world, prev[t].Position) != town || PursuitSystem.PathImpossible(cold, id, world.Tick)) continue;
@@ -1139,6 +1137,33 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
             (scan.Best, scan.BestD2, scan.BestScore) = (t, d2, score);
         }
         return scan.Best >= 0 ? new CharacterId(scan.Best, prev[scan.Best].Generation) : CharacterId.None;
+    }
+
+    /// <summary>
+    /// 34's pass-2 victim test (<c>FUN_14099b820</c>, <b>Verified</b>): the neutral <paramref name="attacker"/> in <paramref name="slot"/> is in a fight (<c>FUN_1405ca6f0</c>: the attacker's
+    /// own combat mode and target, not the victim's) whose target the looker counts as an ally (its own or an allied faction) or as an <see cref="Innocent"/>. The original's variant for an
+    /// attacker holding position outside combat mode (within a distance of its target) is not modelled.
+    /// </summary>
+    bool AttacksProtected(World world, Combat.CombatSystem? fights, CharacterCold looker, CharacterCold attacker, int slot, int generation)
+    {
+        var table = world.Characters;
+        if (fights is null || !attacker.InCombat || fights.TargetOf(slot, generation) is not { Slot: >= 0 } v || (uint)v.Slot >= (uint)table.HighWater
+            || table.Previous[v.Slot].Generation != v.Generation || table.Cold(v.Slot) is not { } victim) return false;
+        if (victim.Faction == looker.Faction || Relations.Contains(victim.Faction) && Relations.IsAlly(looker.Faction, victim.Faction)) return true;
+        return Innocent(looker, attacker, victim);
+    }
+
+    /// <summary>
+    /// The innocent victim of 34's pass 2 (<c>FUN_14099b820</c>, <b>Verified</b>): not a slaver or bandit by NPC class, no bounty of the looker's faction, no crime of its own in progress
+    /// (Character +0x148, <c>committingCrime</c>: <see cref="CharacterCold.Pending"/>); then the attacker's faction is a bandit one or not real, or else the victim does not regard the
+    /// looker's faction as hostile (relations, the victim's side) and is no animal or slave. So the police defend a stranger from bandits.
+    /// </summary>
+    bool Innocent(CharacterCold looker, CharacterCold attacker, CharacterCold victim)
+    {
+        if (victim.NpcClass is FundamentalType.Slaver or FundamentalType.Bandit || victim.Bounties?.AmountFor(looker.Faction) >= 1 || victim.Pending is not null) return false;
+        if (Relations.Contains(attacker.Faction) && Relations.Factions[attacker.Faction] is { NotReal: true } or { FundamentalType: FundamentalType.Bandit }) return true;
+        bool hatesLooker = Relations.Contains(victim.Faction) && Relations.IsHostile(victim.Faction, looker.Faction);
+        return !hatesLooker && victim.Fighter?.IsAnimal != true && victim.NpcClass != FundamentalType.Slave;
     }
 
     static void Candidate(ref Scan s, int slot, CharacterCold c)
