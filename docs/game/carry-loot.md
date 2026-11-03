@@ -318,7 +318,7 @@ Meitou: `FixtureRegistry.LayLow` runs from the crime sweep (engine choice) and a
    are real, the UI events behind `FUN_140713d20` and `FUN_140715560` were not mapped.
 6. **Witness timing**: how often `FUN_1408580d0` runs per sensed character, with what range and line of sight, and how the pending timer `+0x90`
    counts down (`FUN_140851f40` sets it; the decrement was not found).
-7. `PUT_DOWN_CARRIED_DUDE_IF_THEY_CAN_WALK` (169): the meaning of the Character flag `+0x5b8` (vslot `0x360`) that its desire reads (the rest is settled: below). (Kind 4 of `FUN_14038ab50` is the bed's nearest type-4 node the body is placed at, [locks](locks.md#beds).)
+7. (Settled, **Observed**) Character flag `+0x5b8` (vslot `0x360`, read by goal 169's desire, the stealth/flee rows and the leg-down term): the only writes of an `+0x5b8` byte in the exe (whole-program scan) are the constructor `FUN_1405ebd50`'s 0, so it is always 0; reads of it change nothing and Meitou treats it as 0. (Kind 4 of `FUN_14038ab50` is the bed's nearest type-4 node the body is placed at, [locks](locks.md#beds).)
 8. Bed rent: decoded ([locks](locks.md#beds)); allied factions' beds are free. The town-type and `FUN_140621230` tests in it are **Unknown**.
 9. A **despawn timer** for ground items.
 10. The steal order type 0x1d of the ALT path (`FUN_1407fc440`): the taskType table says 29 is `MOVE_CUS_ORDERED`.
