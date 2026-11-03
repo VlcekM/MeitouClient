@@ -144,7 +144,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
             // Every farm alike (FUN_1400e8420): the fertility effect 0 of a hydroponic one makes the ground matter only at or below the minimum, the biome's water usage applies, and the crop match is the biome's unless the farm stands inside a building.
             float fertility = resources.Value(MachineData.GroundResource, p.X, p.Y, p.Z);
             m.Yield = farm.FertilityFactor(fertility);
-            m.Indoors = data.InteriorFurniture && site.Parent is not null;   // slot 59 where the farm stands (the power tick keeps it)
+            m.Indoors = IsIndoors(data, site);   // the power tick keeps it
             m.CropMatch = resources.CropMatch(farm, p.X, p.Z, m.Indoors);
             m.WaterRate = farm.ConsumptionRate / MachineData.DaySeconds * resources.WaterUsage(p.X, p.Z);
             Replant(world, m);
@@ -413,6 +413,9 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         float dx = a.X - b.X, dz = a.Z - b.Z;
         return MathF.Sqrt(dx * dx + dz * dz);
     }
+
+    /// <summary>Building slot 59 (<c>isIndoors</c>, <b>Verified</b>): a machine whose record is interior furniture and which stands in a building. One rule for the power tick, a light's work and a farm's crop match and rain.</summary>
+    static bool IsIndoors(MachineData data, BuildSite? site) => data.InteriorFurniture && site?.Parent is not null;
 
     bool AtSite(World world, in CharacterHot n, BuildSite site, Machine m)
     {

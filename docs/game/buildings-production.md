@@ -297,7 +297,7 @@ shows the first failing message in this order (**Verified** unless marked):
   and `Environment:`. Values are coloured (1 - c, c, 0), c clamped to 0..1. Environment: `-` when `fertility effect`
   is 0, else of the coverages Green, Arid, Swamp (keys 1, 2, 3) the first largest, `, ` and the next equal one, or
   `Dead` when the largest is below 0.1, in the crop yield's colour. The ghost is valid only while v and the crop yield
-  are >= 0.01.
+  are >= 0.01. The popup's crop yield (`FUN_1400e40a0`, **Verified**) is a fixed constant when the farm's own `fertility effect` is 0, else the weighted biome coverages: it keys on the record's flag, not on slot 59 as the running farm does (`FarmBuilding`), and `PlacementRules.Readout` matches that.
 - **Controls** (bindings `FUN_1403636c0`, applied in `FUN_1404d5420` x frame time): rotate +-80 deg/s, move up/down
   +-60 units/s (6 with the slow modifier; offset reset above 1000), tilt factor +-1/s in 0..1, default 0.2. Each step is capped
   by the margins (**Verified**, `FUN_1404d5420`): the up key moves by min(step, up margin) while the up margin is above 0 and

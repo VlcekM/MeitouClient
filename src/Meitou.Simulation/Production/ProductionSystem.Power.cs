@@ -53,7 +53,7 @@ public sealed partial class ProductionSystem
         foreach (var m in world.Machines.All)
         {
             // Slot 59 (isIndoors): interior furniture standing in a building; slot 164: a light building outdoors works only while it is not daytime.
-            m.Indoors = m.Data.InteriorFurniture && Site(world, m.Site)?.Parent is not null;
+            m.Indoors = IsIndoors(m.Data, Site(world, m.Site));
             m.Active = !m.Data.IsLight || m.Indoors || !world.Daytime;
             if (m.Data.IsWind) (m.Wind, m.WindRated) = (WindShare(world, m), Rated(world, m));
             if (m.Data.Function == MachineData.RainCollectorFunction)
