@@ -945,9 +945,10 @@ CONTAINER (backpacks). Shop counters (function 9) have no type limit in Meitou (
   the progress (and `isMachineOutputFull`, status 1, stops the operators: row 87 needs !63). Nothing else in the production building removes items.
 - **Who empties it** (**Verified**, a scan of every AI package in the merged data): rows 87, 92, 93, 113, 114, 124, 152, 221, 242 and 247 are in no package; NPCs reach them only through
   the planner from goal 189 (effect IS_WORKING, provider 87: needs !63, !62, !89, !169) and the player's jobs. For a full output the provider of !63 is 92 (`Task_EmptyMachine`,
-  `FUN_14033cd10`: needs 82 room for the machine's output item and isAtLocation); for no room the provider of 82 is 114 (a `Task_Blank` goal whose effect !62 on a storage is provided by
-  93 `Task_FillMachine`, `FUN_140344510`, needing 67 something the storage accepts is carried), its finder `FUN_1405a70a0` = the nearest storage that accepts a carried item type
-  (stored items are put in through `FUN_140340da0`). A workplace the plan cannot make runnable (inputs to fetch: 94 then 66 from another machine's output, 113) fails goal 189, and goal 190
+  `FUN_14033cd10`: needs 82 room for the machine's output item and isAtLocation); for no room the provider of 82 is 114 (a `Task_Blank` goal with effect !62; its finder `FUN_1405a70a0` = the nearest storage or machine that accepts a carried item type; the
+  filler of 62 is 93 `Task_FillMachine`, `FUN_140344510`, which puts the carried items into a storage through `FUN_140340da0`). **Unknown:** how a storage target makes !62 unmet: state 62
+  (`FUN_1405974e0`) reads the building's production component (virtual `0x2f8`), which a pure storage lacks (`FUN_140344510` takes its storage branch on exactly that), so 62 reads false and the
+  row would already hold; static reading cannot tell, a runtime trace of a player ditch (job 242) could. A workplace the plan cannot make runnable (inputs to fetch: 94 then 66 from another machine's output, 113) fails goal 189, and goal 190
   (pretend, row 221, which asks nothing of the machine) is what the NPC does.
 - **Task_EmptyMachine** (`FUN_14033cd10`, **Verified**): at the building, takes its output item types in order and moves units into the character's inventory while there is room
   (backpack included); a production building at status 1 goes to 2 after a take; ends when nothing is left.
