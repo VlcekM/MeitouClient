@@ -998,7 +998,9 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
         }
         if (s.Effects is { } fx && s.Squad >= 0 && s.Memory is not null)
         {
-            if (s.War.IsSet && s.War.Everyone && WarEnemy(ref s, c, other.Position)) fx.Emit(s.Self, slot, TagEffect, Dialogue.MemoryTag.TempEnemy);
+            // The sighting hooks of the assault packages (passing-by assault FUN_1402903c0, occupation FUN_140286c40, the war assault FUN_14028a3f0) tag each sensed enemy with squad memory 4; the tag has no expiry and the
+            // package's end does not clear it. Their "in view" gate (Character +0x1a9) is treated as always true: the simulation does not depend on the camera (engine choice).
+            if (s.War.IsSet && WarEnemy(ref s, c, other.Position)) fx.Emit(s.Self, slot, TagEffect, Dialogue.MemoryTag.TempEnemy);
             if (s.EmployerAllies && s.Employer >= 0 && c.Faction == s.Employer) fx.Emit(s.Self, slot, TagEffect, Dialogue.MemoryTag.TempAlly);
         }
     }
