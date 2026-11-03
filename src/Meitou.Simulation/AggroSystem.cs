@@ -571,6 +571,8 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
         /// <summary>The faction a hired squad works for (<c>Contract_HiredAlly</c> 12, its employer's) or defends (<c>Contract_DefendPlayerBase</c> 15, the hirer's); -1: none. Its members are never enemies, nor, hired, its allies.</summary>
         public int Employer;
         public bool EmployerAllies;
+        /// <summary>Seeing the employer's faction tags the character TEMP ALLY in the squad's memory (the hired ally's and the defend-base contract's sighting hooks).</summary>
+        public bool EmployerTags;
         /// <summary>The territorial circle (R2 0: none, -1: contains nobody).</summary>
         public (Vector2 Centre, float R2) Home;
         public int Best;
@@ -701,7 +703,7 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
             HoldPost = Orders.Holding(cold) && !Orders.RangedExempt(cold), Prone = cold.Medical?.Prone == true, Animal = cold.Fighter?.IsAnimal == true, HoldPoint = Orders.HoldPointOf(cold, prev[i].Position),
             Seed = world.Seed, Key = Rng.Key(new CharacterId(i, prev[i].Generation)), Tick = (ulong)world.Tick,
             Finder = finder, War = war, Towns = Towns, PlayerSlots = playerSlots, FighterSlots = fighterSlots,
-            Employer = EmployerOf(world, cold, out bool allies), EmployerAllies = allies,
+            Employer = EmployerOf(world, cold, out bool allies, out bool defending), EmployerAllies = allies, EmployerTags = allies || defending,
             Home = finder == FoeFinder.Territory ? Territory(cold) : default,
             Spots = slots[i].Spots, Heard = slots[i].Heard, Sightings = effects is null ? null : sightings ??= [], Effects = effects,
             Block = keepSenses ? slots[i].Senses ??= new SenseBlock() : slots[i].Senses ?? new SenseBlock(),
@@ -857,10 +859,20 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
     }
 
     /// <summary>The faction <paramref name="cold"/>'s squad is contracted to (<see cref="Scan.Employer"/>): the contract target's (the hirer) for signals 12 and 15; -1 otherwise.</summary>
-    static int EmployerOf(World world, CharacterCold cold, out bool allies)
+    static int EmployerOf(World world, CharacterCold cold, out bool allies, out bool defending)
     {
-        allies = false;
+        allies = defending = false;
         var table = world.Characters;
+        // Contract_DefendPlayerBase (15): the exempt faction is the owner of the player town nearest the platoon leader (FUN_14028a290 against the town set at the start by FUN_14028a170), not a stored hirer; none without a player town.
+        if (cold.Ai?.Squad.Ai is { Contract.Signal: 15 })
+        {
+            defending = true;
+            var from = cold.Ai.Squad.Position;
+            Construction.PlayerTown? nearest = null;
+            foreach (var t in world.Buildings.Towns)
+                if (nearest is null || Vector3.DistanceSquared(t.Position, from) < Vector3.DistanceSquared(nearest.Position, from)) nearest = t;
+            return nearest?.Owner ?? -1;
+        }
         if (cold.Ai?.Squad.Ai is not { Contract.Signal: 12 or 15 } board || board.MissionTarget is not { IsNone: false } id || id.Slot >= table.HighWater
             || table.Previous[id.Slot].Generation != id.Generation || table.Cold(id.Slot) is not { } h) return -1;
         allies = board.Contract.Signal == 12;
@@ -1033,7 +1045,7 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
             // package's end does not clear it. Their "in view" gate (Character +0x1a9) is treated as always true: the simulation does not depend on the camera (engine choice).
             if (s.War.IsSet && WarEnemy(ref s, c, other.Position)) fx.Emit(s.Self, slot, TagEffect, Dialogue.MemoryTag.TempEnemy);
             if (s.War.IsSet && (WarEnemy(ref s, c, other.Position) || AssaultSensed(ref s, e, c, other.Position))) fx.Emit(s.Self, slot, AssaultTargetEffect, 0);
-            if (s.EmployerAllies && s.Employer >= 0 && c.Faction == s.Employer) fx.Emit(s.Self, slot, TagEffect, Dialogue.MemoryTag.TempAlly);
+            if (s.EmployerTags && s.Employer >= 0 && c.Faction == s.Employer) fx.Emit(s.Self, slot, TagEffect, Dialogue.MemoryTag.TempAlly);
         }
     }
 
