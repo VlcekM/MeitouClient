@@ -466,6 +466,21 @@ public class DecisionTests
         Assert.StartsWith("32 Self preservation", rig.Cold(sleeper).Decision!.Winner);
     }
 
+    /// <summary>Starting a stealth knock-out switches its attacker into stealth when it is not in it (Task_StealthKO start FUN_140345eb0), so an order given to one that stopped sneaking still runs.</summary>
+    [Fact]
+    public void A_stealth_ko_order_makes_a_character_that_is_not_sneaking_sneak()
+    {
+        using var rig = Quiet();
+        var target = Victim(rig, 1300, 2300);
+        var attacker = rig.Add(1330, 2300, player: false);
+        Assert.Equal(0, (int)(rig.Cold(attacker).Orders & CharacterOrders.Sneak));
+        rig.World.RunTick();
+        rig.Say(new StealthKoOrder([attacker], target) { Tick = rig.World.Tick });
+        rig.World.RunTicks(5);
+        Assert.Equal(CharacterTask.StealthKo, rig.Task(attacker));
+        Assert.NotEqual(0, (int)(rig.Cold(attacker).Orders & CharacterOrders.Sneak));
+    }
+
     /// <summary>
     /// The target of a failed stealth knock-out (<c>Character::attackTarget</c>: a replan, then the chooser) fights its attacker through the step, and a standing order beats that as it beats
     /// Self preservation. Catches a player target that is pushed into a fight over its order, or one that never answers.

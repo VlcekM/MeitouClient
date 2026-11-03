@@ -43,8 +43,14 @@ public sealed partial class CarrySystem
     }
 
     /// <summary>A character that may be sent on a stealth knock-out: sneaking, awake, not carrying or carried (a fight it is in ends with the order's new task).</summary>
-    public static bool CanKnockOut(CharacterCold cold) =>
-        cold is { Medical.Incapacitated: false, Race: not null, Stats: not null } && (cold.Orders & CharacterOrders.Sneak) != 0 && cold.Carrying.IsNone && cold.CarriedBy.IsNone;
+    public static bool CanKnockOut(CharacterCold cold) => (cold.Orders & CharacterOrders.Sneak) != 0 && CanRunKnockOut(cold);
+
+    /// <summary>
+    /// A character the stealth knock-out order may start on: the sneaking is not asked, the task switches it on when it starts (<c>FUN_140345eb0</c> calls <c>FUN_1405ca9a0(attacker, 1)</c> unless the
+    /// attacker is in stealth mode, <b>Verified</b>), so a queued order whose character stopped sneaking meanwhile still runs.
+    /// </summary>
+    static bool CanRunKnockOut(CharacterCold cold) =>
+        cold is { Medical.Incapacitated: false, Race: not null, Stats: not null } && cold.Carrying.IsNone && cold.CarriedBy.IsNone;
 
     /// <summary>A character that may be knocked out from behind: awake, with a body, not carried, not an animal (the verb list's <c>isAnimal</c> gate, so no cleansers).</summary>
     public static bool CanBeKnockedOut(CharacterCold cold) =>

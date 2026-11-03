@@ -762,6 +762,8 @@ Meitou ([simulation](../simulation.md#ranged)): `CombatSystem.Turrets.cs`, `Turr
 Order 228 "Stealth KO" (verb list `FUN_14079b2d0`), `Task_StealthKO` (vtable slots `FUN_140345eb0` start,
 `FUN_14034cd80` update). **Verified** literals, flow **Observed**:
 
+- Start (`FUN_140345eb0`, **Verified**): phase 0 (-1 when the `knockout` clip already plays), then the attacker is set sneaking (`FUN_1405ca9a0(attacker, 1)`) unless it is already in stealth mode, for the whole task, also for a queued order whose character stopped sneaking meanwhile (Meitou: `CarrySystem.Start` sets `Sneak`; `CanRunKnockOut` does not ask for it, only the offer does).
+
 - Offered (order list `FUN_1407a6bc0` and the quick right click `PlayerInterface::characterSelected` `FUN_1407fb410`, **Verified**): only while the attacker `Character::isStealthMode` (`FUN_1405c9750`: sneaking, not
   in combat) and the target is not an animal (vfunc +0x248 `isAnimal`, non-zero only on `CharacterAnimal`); no faction or race test.
   So no animal can be KO'd, cleansers included ("Cleanser Unit" is an `ANIMAL_CHARACTER`, Newwworld.mod). Meitou: `CarrySystem.CanBeKnockedOut`.

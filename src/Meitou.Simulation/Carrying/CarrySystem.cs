@@ -256,7 +256,7 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
                 return cold is { Medical.Incapacitated: false, Inventory: not null } && cold.CarriedBy.IsNone ? OrderCheck.Run : OrderCheck.Blocked();
             case TaskType.STEALTH_KNOCKOUT:
                 if (!CanBeKnockedOut(tc)) return OrderCheck.Gone;
-                return CanKnockOut(cold) ? OrderCheck.Run : OrderCheck.Blocked();
+                return CanRunKnockOut(cold) ? OrderCheck.Run : OrderCheck.Blocked();
         }
         return OrderCheck.Gone;
     }
@@ -292,6 +292,7 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
                 break;
             case TaskType.STEALTH_KNOCKOUT:
                 Start(world, slot, CharacterTask.StealthKo, TaskType.STEALTH_KNOCKOUT, TaskSource.Order, order.Target, CharacterTask.Idle);
+                if (table.Cold(slot) is { } sneaker) sneaker.Orders |= CharacterOrders.Sneak;   // not in stealth mode: set sneaking (FUN_140345eb0)
                 break;
         }
     }
