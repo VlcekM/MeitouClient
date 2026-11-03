@@ -752,14 +752,17 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     /// <summary>
     /// The desire of goals 112 and 281 for the body the carrier in slot <paramref name="carrier"/> holds (<c>AI::scorePutCarriedDudeInCage</c> <c>FUN_1405a1140</c> with <c>FUN_1405a0f10</c>,
     /// <b>Verified</b>), tests in the original's order: the carrier stands in no town 0.1; an animal 0; a law enforcer (<see cref="Crime.CrimeSystem.IsPoliceLike"/>) carrying a slave or escapee it has
-    /// no bounty on 1.4; a body the carrier regards as friendly (<see cref="CarrySystem.Friendly"/>) 0; a dead one 0.5; else 2. The original also returns 0 while the squad's mission target
-    /// (a hand on its AI data, <b>Observed</b>) is set and is not the town the carrier stands in: not modelled, the Meitou package fields do not map to it one for one.
+    /// no bounty on 1.4; a body the carrier regards as friendly (<see cref="CarrySystem.Friendly"/>) 0; a dead one 0.5; else 2. Before the animal test, 0 while the squad's mission town (the board's
+    /// <see cref="Blackboard.Destination"/>, the hand of <b>Observed</b> <c>FUN_1405a0f10</c>) is set and is not the town the carrier stands in.
     /// </summary>
     public float CageDesire(World world, int carrier, int body)
     {
         var table = world.Characters;
         if (table.Cold(carrier) is not { } c || table.Cold(body) is not { } b) return 0;
-        if (AiSystem.TownAt(data, world, table.Next[carrier].Position).IsNone) return OutsideTownDesire;
+        var here = AiSystem.TownAt(data, world, table.Next[carrier].Position);
+        if (here.IsNone) return OutsideTownDesire;
+        // The squad's mission town (the hand Task_TravelToTargetTown sets, FUN_1405a0f10) set and not the town it stands in: 0.
+        if (world.Squads.Find(c.SquadId)?.Ai is { Destination.IsNone: false } board && board.Destination != here) return 0;
         if (b.Fighter is { IsAnimal: true }) return 0;
         if (b.SlaveState != 0 && (b.Bounties?.BookedAmount(data.Relations, c.Faction) ?? 0) < 1 && world.SystemOf<Crime.CrimeSystem>()?.IsPoliceLike(world, c) == true) return PoliceSlaveDesire;
         if (carry.Friendly(c, b)) return 0;
