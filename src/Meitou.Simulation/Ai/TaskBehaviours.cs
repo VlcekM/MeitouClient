@@ -71,6 +71,11 @@ public enum AiBehaviour : byte
     /// <see cref="AiSystem"/>, AiSystem.Fights.cs); the think asks for the fight (<see cref="AiMind.FightTarget"/>) and the serial step starts it, which the combat system fights.
     /// </summary>
     Fight = 20,
+    /// <summary>
+    /// JOB_MEDIC (58, the Medic goal of most packages, docs/game/ai-tasks.md "Medic jobs"): wanted at the patient finder's score (<see cref="FirstAid.FirstAidSystem.FindPatient"/>, run on the
+    /// NPC's sweep turn and kept in <see cref="AiMind.MedicScore"/>); the think asks for the treatment (<see cref="AiMind.MedicAsk"/>) and the serial step starts it, row 58's Treat.
+    /// </summary>
+    Medic = 21,
 }
 
 /// <summary>The engine's table from <see cref="TaskType"/> to <see cref="AiBehaviour"/>, and the TaskData display text (docs/game/ai-tasks.md "TaskData registry", Verified) of the types it acts out.</summary>
@@ -131,6 +136,7 @@ public static class TaskBehaviours
         [TaskType.PROTECT_OWN_SQUAD] = (AiBehaviour.Fight, "Protect close allies"),
         [TaskType.PROTECT_ALLIES] = (AiBehaviour.Fight, "Protect allies"),
         [TaskType.PROTECT_ALLIES_STAY_IN_TOWN] = (AiBehaviour.Fight, "Protect allies"),
+        [TaskType.JOB_MEDIC] = (AiBehaviour.Medic, "Medic"),
     };
 
     // Flat tables by type number for the think's hot loop (a dictionary lookup per goal was a third of the think).

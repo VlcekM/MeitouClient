@@ -480,6 +480,14 @@ public sealed class AiMind
     /// <summary>Whom the think picked to assault (<see cref="AiBehaviour.Assault"/>); the serial step sends the attack and clears it.</summary>
     public CharacterId AssaultTarget { get; set; } = CharacterId.None;
     /// <summary>
+    /// The Medic goal's finder result (<see cref="AiBehaviour.Medic"/>): the patient and score <see cref="FirstAid.FirstAidSystem.FindPatient"/> gave on the character's last sweep turn
+    /// (none and 0: no patient). The finder shares scratch lists, so it runs in the serial sweep and the parallel think reads what it kept.
+    /// </summary>
+    public CharacterId MedicPatient { get; set; } = CharacterId.None;
+    public float MedicScore { get; set; }
+    /// <summary>The think chose the Medic goal: the serial step of the same tick starts the treatment (<see cref="FirstAid.FirstAidSystem.SendGoalTreatments"/>) and clears it (not hashed).</summary>
+    public bool MedicAsk { get; set; }
+    /// <summary>
     /// What the think asks of the <see cref="FleeSystem"/> this tick: to run the character from its threats (Self preservation's provider 35) or from the enemies it senses (a goal 35 of its
     /// lists). Set by the think on the mind's own character, taken and cleared by the serial flee step of the same tick, so it is never set between ticks (not hashed).
     /// </summary>
@@ -534,6 +542,7 @@ public sealed class AiMind
         if (BedAt is { } bed) hasher.Add(Rng.StableHash(bed));
         if (!FollowTarget.IsNone) hasher.Add(FollowTarget);
         if (!AssaultTarget.IsNone) hasher.Add(AssaultTarget);
+        if (MedicScore != 0) { hasher.Add(MedicPatient); hasher.Add(MedicScore); }
         if (FightFrom != 0) hasher.Add(FightFrom);
         if (Replan) hasher.Add(0x5265706C);
         if (LookAbout != Crime.CrimeSystem.FirstLookAboutSeconds) hasher.Add(LookAbout);

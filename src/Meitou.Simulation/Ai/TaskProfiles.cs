@@ -41,6 +41,8 @@ public static class TaskProfiles
         [TaskType.MAN_THE_GATE] = new(1),
         [TaskType.FOLLOW_SLAVEMASTER] = new(1),
         [TaskType.BODYGUARD] = new(Special, Crowd: 0.9f),
+        // Medic: the desire function's 1 times the finder's score (FUN_140998410); crowd factor 0.8 (FUN_140319a60, Observed).
+        [TaskType.JOB_MEDIC] = new(Special, Crowd: 0.8f),
         [TaskType.GO_HOME_AND_GO_TO_BED] = new(Special, 2, 8, true),
         [TaskType.GO_HOME_AND_GO_TO_BED_SECURE] = new(Special, 2, 8, true),
         [TaskType.RUN_AWAY_HOMETOWN] = new(Special, 0.05f, 0.15f),

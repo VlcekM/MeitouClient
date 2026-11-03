@@ -405,6 +405,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             AiBehaviour.Flee => world.Characters.Cold(self.Slot) is { } runner ? SelfPreservation.RunDesire(runner) : 0,
             // A combat goal: its own desire's zeros and factors, times its finder's factor (an attack goal's 1 with a target, a protect goal's fight threat; AiSystem.Fights.cs).
             AiBehaviour.Fight => FightDesire(world, self.Slot, type, mind) is var want and > 0 ? want * FightFactor(world, self.Slot, type, mind) : 0,
+            // The Medic goal: the finder's score from the serial sweep (its desire's fight and carrying cases are gates of the finder).
+            AiBehaviour.Medic => world.Characters.IsAlive(mind.MedicPatient) ? mind.MedicScore : 0,
             _ => 1,
         };
     }
@@ -884,6 +886,12 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
                 mind.AssaultTarget = AssaultTargetFor(world, slot, board);
                 if (!mind.AssaultTarget.IsNone) Interlocked.Exchange(ref assaulting, 1);
                 break;
+            case AiBehaviour.Medic:
+                // Stands while the serial step starts the treatment of the patient its finder gives then (FirstAidSystem.SendGoalTreatments).
+                Become(world, slot, CharacterTask.Idle);
+                mind.MedicAsk = true;
+                Interlocked.Exchange(ref treating, 1);
+                break;
             case AiBehaviour.Fight:
             case AiBehaviour.SelfPreserve when mind.Step != TaskType.RUN_AWAY:
                 // Stands while the serial step starts the fight on the finder's pick (Self preservation's: row 13's attacker of itself; the combat system walks it there and fights); the
@@ -1240,6 +1248,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         aggro ??= world.SystemOf<AggroSystem>();
         if (Interlocked.Exchange(ref assaulting, 0) != 0) SendAssaults(world);
         if (Interlocked.Exchange(ref fighting, 0) != 0) SendFights(world);
+        if (Interlocked.Exchange(ref treating, 0) != 0) (firstAid ??= world.SystemOf<FirstAid.FirstAidSystem>())?.SendGoalTreatments(world);
         if (Interlocked.Exchange(ref leaving, 0) != 0) LeaveFights(world);
         bool cadence = world.Tick % world.Every(Settings.PackageEveryTicks) == 0;
         // Each town's turrets are claimed once per cadence, by the squads in squad order (derived, not hashed).

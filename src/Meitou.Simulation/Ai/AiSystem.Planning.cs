@@ -76,7 +76,8 @@ public sealed partial class AiSystem
             // The assault is its own plan (engine choice): its finder's target is not a plan target, the combat system draws weapons and closes in, and its only list B entry (!47,
             // not carrying) is what Holds already requires of a character the AI runs.
             // So are the combat goals (engine choice): the desire already holds the finder's pick (and for the protect goals row 13's attacker), and the fight is the combat system's.
-            if (type == TaskType.DEFEAT_SQUAD || TaskBehaviours.Of(type) == AiBehaviour.Fight)
+            // And the Medic goal: its desire holds the patient finder's score, and the treatment is the first aid system's.
+            if (type == TaskType.DEFEAT_SQUAD || TaskBehaviours.Of(type) is AiBehaviour.Fight or AiBehaviour.Medic)
             {
                 mind.Plan.Clear();
                 mind.Plan.Add(new PlanStep(type, default));

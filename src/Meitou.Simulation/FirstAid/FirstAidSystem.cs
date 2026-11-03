@@ -3,6 +3,7 @@ using Meitou.Data.Fcs;
 using Meitou.Data.Gameplay;
 using Meitou.Data.Gameplay.Ai;
 using Meitou.Data.Gameplay.Bodies;
+using Meitou.Simulation.Ai;
 using Meitou.Simulation.Bodies;
 using Meitou.Simulation.Items;
 using Meitou.Simulation.Locks;
@@ -532,6 +533,9 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
 
     // ------------------------------------------------------------------ treating by themselves
 
+    // Resolved on the first sweep: whose goal lists hold the Medic goal.
+    AiSystem? ai;
+
     public void SlowWorld(World world)
     {
         // Each NPC looks every AutoEveryTicks ticks, a slot's turn falling on its own tick (slot mod the period), so the looks spread over the ticks instead of all landing on one
@@ -549,11 +553,54 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
                 if (!next[i].Alive || !world.Turn(i, every)) continue;   // its turn (the far cadence, World.Turn)
                 var cold = table.Cold(i)!;
                 if (cold.IsPlayer || !Settings.AutoNpcs) continue;   // a player's medic jobs are the decision step's (MedicJobs)
-                // Idle: no task, following, wandering or an implicit job.
+                if (cold.Ai is { Engine: false } mind)
+                {
+                    // The AI's own: its Medic goal weighs the patient found here (AiBehaviour.Medic); one whose lists hold no Medic goal does not treat.
+                    if ((ai ??= world.SystemOf<AiSystem>())?.ListsGoal(world, i, TaskType.JOB_MEDIC) != true) mind.MedicScore = 0;
+                    else
+                    {
+                        if (taken is null) { taken = Treated(table); BeginSweep(world); }
+                        KeepPick(world, i, mind, taken);
+                    }
+                    continue;
+                }
+                // An NPC the AI does not run (an engine mind, or none) treats when idle: no task, following, wandering or an implicit job.
                 bool idle = next[i].Task is (byte)CharacterTask.Idle or (byte)CharacterTask.Wander or (byte)CharacterTask.Follow || Production.PermaJobs.ListJob(cold, (CharacterTask)next[i].Task) is { Implicit: true };
                 if (!idle) continue;
                 if (taken is null) { taken = Treated(table); BeginSweep(world); }
                 HealSomeone(world, i, taken, robotics: false, TaskSource.Npc);
+            }
+        }
+        finally { EndSweep(); }
+    }
+
+    /// <summary>The Medic goal's finder result for the think (<see cref="AiMind.MedicPatient"/>, <see cref="AiMind.MedicScore"/>; none and 0 without a patient).</summary>
+    void KeepPick(World world, int i, AiMind mind, List<(int Medic, int Patient)> taken)
+    {
+        var (patient, score) = FindPatient(world, i, taken, robotics: false);
+        mind.MedicPatient = patient >= 0 ? world.Characters.IdOf(patient) : CharacterId.None;
+        mind.MedicScore = patient >= 0 ? score : 0;
+    }
+
+    /// <summary>
+    /// Starts the treatment of each NPC whose think chose its Medic goal (<see cref="AiMind.MedicAsk"/>; serial, after the think): the finder runs again on the state of now, so a patient
+    /// treated meanwhile is not walked to; one that finds none drops its kept pick, and the next think chooses again.
+    /// </summary>
+    internal void SendGoalTreatments(World world)
+    {
+        var table = world.Characters;
+        List<(int Medic, int Patient)>? taken = null;
+        try
+        {
+            for (int s = 0; s < table.HighWater; s++)
+            {
+                if (table.Cold(s)?.Ai is not { MedicAsk: true } mind) continue;
+                mind.MedicAsk = false;
+                if (!table.Next[s].Alive) continue;
+                if (taken is null) { taken = Treated(table); BeginSweep(world); }
+                if (HealSomeone(world, s, taken, robotics: false, TaskSource.Npc)) continue;
+                mind.MedicPatient = CharacterId.None;
+                mind.MedicScore = 0;
             }
         }
         finally { EndSweep(); }
