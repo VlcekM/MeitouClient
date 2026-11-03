@@ -514,6 +514,8 @@ public sealed class AiMind
     /// it attacks, picked again whenever it is free (<see cref="AiSystem.AssaultTargetFor"/>); none when it has no such order. Not saved; hashed while set.
     /// </summary>
     public CharacterId ForcedAssault { get; set; } = CharacterId.None;
+    /// <summary>Where the stranger a static guard stands beside is (<see cref="AiSystem"/>'s <c>GuardFactor</c>, FUN_14099edd0); null: the plain guard post. Derived by the think; hashed while set.</summary>
+    public System.Numerics.Vector3? GuardVisitorAt { get; set; }
     /// <summary>
     /// What the think asks of the <see cref="FleeSystem"/> this tick: to run the character from its threats (Self preservation's provider 35) or from the enemies it senses (a goal 35 of its
     /// lists). Set by the think on the mind's own character, taken and cleared by the serial flee step of the same tick, so it is never set between ticks (not hashed).
@@ -588,6 +590,7 @@ public sealed class AiMind
         if (!AssaultTarget.IsNone) hasher.Add(AssaultTarget);
         if (MedicScore != 0) { hasher.Add(MedicPatient); hasher.Add(MedicScore); }
         if (!ForcedAssault.IsNone) { hasher.Add(0x466F7241); hasher.Add(ForcedAssault); }
+        if (GuardVisitorAt is { } visitor) { hasher.Add(0x47756172); hasher.Add(visitor); }
         if (FightFrom != 0) hasher.Add(FightFrom);
         if (Replan) hasher.Add(0x5265706C);
         if (LookAbout != Crime.CrimeSystem.FirstLookAboutSeconds) hasher.Add(LookAbout);

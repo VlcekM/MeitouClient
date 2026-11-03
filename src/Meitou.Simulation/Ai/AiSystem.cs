@@ -386,7 +386,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             // Static guard's finder (FUN_14099edd0, Verified; 38 and 268 both register it, 268 with the indoors flag; 157 has its own, FUN_14099f1a0) returns 0.5 on its normal exit; only its visitor branch (a node beside a neutral stranger, not modelled) returns 1.
             // Staying home needs a piece of the home's furniture to operate (the finder of 43 returns 0 without one).
             AiBehaviour.Post when type == TaskType.STAY_IN_HOME => HasStayingFurniture(board.Home) ? 1 : 0,
-            AiBehaviour.Post when type is TaskType.STAND_AT_GUARD_NODE_HOMEBUILDING or TaskType.STAND_AT_GUARD_NODE_HOMEBUILDING_INDOORS_ONLY => 0.5f,
+            AiBehaviour.Post when type is TaskType.STAND_AT_GUARD_NODE_HOMEBUILDING or TaskType.STAND_AT_GUARD_NODE_HOMEBUILDING_INDOORS_ONLY => GuardFactor(world, self, board, mind),
             // A turret is only wanted by a member that found one (the nearest unused one to it in <see cref="ClaimTurrets"/>): the finder's factor times the desire of AI slot 35.
             AiBehaviour.Turret => board.TurretClaims.ContainsKey(self.Slot) ? board.TurretFactors.GetValueOrDefault(self.Slot, 1) * TurretDesire(world, self.Slot) : 0,
             AiBehaviour.TownNode => WanderIn(board.Town, world.Characters.Previous[self.Slot].Position).Count > 0 || OccupiedBuildings(world, board) > 0 ? 1 : 0,
@@ -1148,6 +1148,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             _ => HomeSpotKind.General,
         };
         ulong roll = kind == HomeSpotKind.Bed ? 0 : mind.NodeRoll;   // beds stay round robin (the bed search is not the node finders')
+        if (kind == HomeSpotKind.Guard && mind.GuardVisitorAt is { } visitor && Nearest(home, kind, visitor) is { } beside) return (Flat(beside.Position), true, beside.Position.Y, beside.Yaw);
         if (Pick(home, kind, mind.MemberIndex, roll) is { } spot) return (Flat(spot.Position), true, spot.Position.Y, spot.IsNode ? spot.Yaw : null);
         // Guard posts fall back to general nodes (docs/game/ai-tasks.md "Town goals"); the counter is the shopkeeper's, so only its goal falls back onto it.
         if (kind == HomeSpotKind.Guard && Pick(home, HomeSpotKind.General, mind.MemberIndex, roll) is { } general)
