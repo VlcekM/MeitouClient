@@ -232,6 +232,34 @@ sealed class WorldObjects : IDisposable
         return result;
     }
 
+    /// <summary>
+    /// The level's objects with <c>bird attractor</c> references (docs/game/birds.md): the buildings of the zone files that are not flagged incomplete by their state, the furniture
+    /// of their layouts, and the map features. Positioned as <see cref="Lay"/> places them. Safe from a worker thread.
+    /// </summary>
+    public List<(string Key, GameRecord Record, Vector3 Position)> BirdAttractorSources()
+    {
+        var result = new List<(string, GameRecord, Vector3)>();
+        using var map = TerrainHeightmap.Open(Install);
+        foreach (var b in Levels.Buildings())
+        {
+            if (b.Position == Vector3.Zero || Database.Find(b.BuildingId) is not { } record) continue;
+            var state = b.StateId is not null && Levels.Zones.TryGetValue(b.StateZone ?? b.Zone, out var zoneDb) ? zoneDb.Find(b.StateId) : null;
+            if (state is not null && state.Bools.TryGetValue("is complete", out bool complete) && !complete) continue;
+            float y = b.WorldY ?? map.HeightAt(b.Position.X, b.Position.Z) + b.Position.Y;
+            var position = new Vector3(b.Position.X, y, b.Position.Z);
+            if (record.GetReferences("bird attractor").Count > 0) result.Add((b.Key, record, position));
+            foreach (bool exterior in (ReadOnlySpan<bool>)[true, false])
+                if (state?.GetString(exterior ? "exterior layout name" : "interior layout name") is { Length: > 0 } name && Layouts.Find(record, name, exterior) is { } layout)
+                    foreach (var item in Layouts.Items(layout, b))
+                        if (item.Building.GetReferences("bird attractor").Count > 0)
+                            result.Add(($"{b.Key}/{item.InstanceId}", item.Building, BuildingLayouts.Place(position, b.Rotation, item).Position));
+        }
+        foreach (var (zone, feature) in Features.All())
+            if (Database.Find(feature.StringId) is { Type: Meitou.Data.Fcs.FcsRecordType.MAP_FEATURES } record && record.GetReferences("bird attractor").Count > 0)
+                result.Add(($"feature {zone} {feature.Position}", record, feature.Position));
+        return result;
+    }
+
     /// <summary>Lays out one zone's buildings and map features as the game builds them (docs/formats/zones.md).</summary>
     public ZoneObjects BuildZone(ZoneCoordinate zone)
     {

@@ -223,6 +223,7 @@ public sealed partial class World
             s.BackDrawn = cold?.Fighter?.WeaponIsBack ?? false;
             s.HasFlies = cold?.HasFlies ?? false;
             s.Name = cold?.Name ?? "";
+            s.RecordId = cold?.RecordId ?? "";
             s.SquadId = cold?.SquadId ?? -1;
             s.IsPlayer = cold?.IsPlayer ?? false;
             s.IsTrader = talk?.Trades(this, i) ?? (cold is { IsPlayer: false, SquadId: >= 0 } && Squads.Find(cold.SquadId)?.Shop is not null);

@@ -198,6 +198,8 @@ public sealed class CharacterSnapshot
     /// <summary>The bolts stuck in the character (<see cref="CharacterCold.StuckBolts"/>).</summary>
     public IReadOnlyList<StuckBolt> StuckBolts { get; internal set; } = [];
     public string Name { get; internal set; } = "";
+    /// <summary>The CHARACTER or ANIMAL_CHARACTER record it was made from (<see cref="CharacterCold.RecordId"/>).</summary>
+    public string RecordId { get; internal set; } = "";
     public int SquadId { get; internal set; } = -1;
     /// <summary>One of the player's characters, and whether it is selected.</summary>
     public bool IsPlayer { get; internal set; }

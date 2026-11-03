@@ -86,17 +86,19 @@ public sealed class BirdFlocks
     {
         foreach (var g in groups)
         {
-            var mine = attractors.Where(a => a.Kind == g.Kind.Id && a.Max > 0).ToList();
-            foreach (var gone in g.Attractors.Where(o => !mine.Any(a => a.Key.Equals(o.Key))).ToList())
+            var mine = new Dictionary<object, BirdAttractor>();
+            foreach (var a in attractors)
+                if (a.Kind == g.Kind.Id && a.Max > 0) mine[a.Key] = a;
+            foreach (var gone in g.Attractors.Where(o => !mine.ContainsKey(o.Key)).ToList())
             {
                 foreach (var b in g.Birds.Where(b => b.Attractor == gone)) ReleaseAttractor(b);
                 g.Attractors.Remove(gone);
             }
-            foreach (var a in mine)
+            var held = g.Attractors.ToDictionary(o => o.Key);
+            foreach (var a in mine.Values)
             {
-                var held = g.Attractors.Find(o => o.Key.Equals(a.Key));
-                if (held is null) g.Attractors.Add(held = new Attractor(a.Key));
-                (held.Position, held.Strength, held.Max) = (a.Position, a.Range * (float)a.Range * 100, a.Max);
+                if (!held.TryGetValue(a.Key, out var current)) g.Attractors.Add(current = new Attractor(a.Key));
+                (current.Position, current.Strength, current.Max) = (a.Position, a.Range * (float)a.Range * 100, a.Max);
             }
         }
     }

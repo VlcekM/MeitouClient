@@ -624,19 +624,53 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
     }
 
     long birdBuildingsRevision = -1;
+    object? birdAttractorsFor;
+    Task<List<(string Key, Meitou.Data.GameRecord Record, Vector3 Position)>>? birdLevelSources;
+    readonly List<Meitou.Game.BirdAttractor> birdBuildingAttractors = [], birdLevelAttractors = [];
 
-    /// <summary>The buildings' <c>bird attractor</c> references (the original's <c>FUN_140263700</c> on a building's creation): each standing building draws the kinds its record lists.</summary>
+    /// <summary>
+    /// The <c>bird attractor</c> references of the objects the original registers them for (<c>FUN_140263700</c>, on a building's, map feature's or animal's creation):
+    /// the player's standing buildings, the level's buildings and map features (read once off the main thread) and every animal, which carries its own as it moves.
+    /// </summary>
     void UpdateBirdAttractors(Meitou.Data.GameDatabase db)
     {
         var snapshot = session.CurrentSnapshot;
-        if (snapshot.BuildingsRevision == birdBuildingsRevision) return;
-        birdBuildingsRevision = snapshot.BuildingsRevision;
-        var list = new List<Meitou.Game.BirdAttractor>();
-        foreach (var building in snapshot.Buildings)
-            if (building.Complete && db.Find(building.Record) is { } record)
-                foreach (var link in record.GetReferences("bird attractor"))
-                    list.Add(new Meitou.Game.BirdAttractor((building.Id, link.TargetStringId), link.TargetStringId, building.Position, link.Values.Value0, link.Values.Value1));
-        birds!.SetAttractors(list);
+        bool changed = false;
+        if (!ReferenceEquals(birdAttractorsFor, session.World))
+        {
+            birdAttractorsFor = session.World;
+            birdLevelAttractors.Clear();
+            birdLevelSources = scene.Objects is { } objects ? Task.Run(objects.BirdAttractorSources) : null;
+            birdBuildingsRevision = -1;
+            changed = true;
+        }
+        if (birdLevelSources is { IsCompletedSuccessfully: true } read)
+        {
+            foreach (var (key, record, at) in read.Result) AddBirdAttractors(birdLevelAttractors, key, record, at);
+            birdLevelSources = null;
+            changed = true;
+        }
+        if (snapshot.BuildingsRevision != birdBuildingsRevision)
+        {
+            birdBuildingsRevision = snapshot.BuildingsRevision;
+            birdBuildingAttractors.Clear();
+            foreach (var building in snapshot.Buildings)
+                if (building.Complete && db.Find(building.Record) is { } record) AddBirdAttractors(birdBuildingAttractors, building.Id, record, building.Position);
+            changed = true;
+        }
+        var animals = new List<Meitou.Game.BirdAttractor>();
+        foreach (var c in snapshot.Characters)
+            if (c.Animal && db.Find(c.RecordId) is { } animal) AddBirdAttractors(animals, c.Id, animal, c.Position);
+        if (changed || animals.Count > 0 || birdHadAnimals) birds!.SetAttractors([.. birdBuildingAttractors, .. birdLevelAttractors, .. animals]);
+        birdHadAnimals = animals.Count > 0;
+    }
+
+    bool birdHadAnimals;
+
+    void AddBirdAttractors(List<Meitou.Game.BirdAttractor> into, object owner, Meitou.Data.GameRecord record, Vector3 at)
+    {
+        foreach (var link in record.GetReferences("bird attractor"))
+            into.Add(new Meitou.Game.BirdAttractor((owner, link.TargetStringId), link.TargetStringId, at, link.Values.Value0, link.Values.Value1));
     }
 
     string? GroupIdOfCell(int cx, int cz) => birdAreas is { } areas && areas.GroupOf(cx, cz) is >= 0 and var g ? areas.Groups[g].Id : null;
