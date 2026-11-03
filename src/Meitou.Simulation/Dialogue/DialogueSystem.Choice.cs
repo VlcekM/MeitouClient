@@ -156,7 +156,7 @@ public sealed partial class DialogueSystem
             else if ((known.Long & node.MemoryRequired) != node.MemoryRequired || (known.Long & node.MemoryForbidden) != 0) return false;
         }
         if (node.IsRoot && (mc.DialogueLocks?.TryGetValue(node.StringId, out bool locked) == true ? locked : node.Locked)) return false;
-        if (node.OneAtATime && node.IsRoot && SquadOf(world, me).Any(m => m != me && open?.Npc == m && open.Root == node)) return false;
+        if (node.OneAtATime && node.IsRoot && RootLive(world, c, node)) return false;
         if (node.ChanceTemporary < 99 && Rng.Float(NextRoll(world, me)) * 100 >= node.ChanceTemporary) return false;
         if (node.InTownOf.Count > 0 && (TownFaction(world, table.Next[ms].Position) is not { } tf || !node.InTownOf.Contains(tf))) return false;
         if (node.MyFaction.Count > 0 && !node.MyFaction.Contains(FactionId(mc.Faction))) return false;

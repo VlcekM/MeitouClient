@@ -342,7 +342,7 @@ the most used.
 - `chance permanent` rolls are per character; not written by `Character::serialise` (fcs.def's "saved forever" was not found).
 - **Locks** are per character (default the DIALOGUE's `locked`) and **saved** in the character's save record as pairs `lok0`, `lok1`, ...:
   the string is the DIALOGUE string id, the bool of the same key "locked" (writer `FUN_140679900`, reader `FUN_14067f780`).
-- `one at a time`: fails while another member of the speaker's squad runs the same root.
+- `one at a time` (**Verified**, `FUN_140678f30`): fails while any member of the conversation owner's squad (owner included) has a live conversation, open window or bubble chain rooted at this node (`DialogueSystem.RootLive`).
 - Per-event counters and last targets are memory only.
 - The [squad memory](#squad-memory) is saved on the platoon (`FUN_140678cb0` reads `taglong`, `tagshort`, `tagtime` per index).
 

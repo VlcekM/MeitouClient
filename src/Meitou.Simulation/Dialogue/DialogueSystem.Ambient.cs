@@ -85,6 +85,13 @@ public sealed partial class DialogueSystem
         return true;
     }
 
+    /// <summary>
+    /// The "one at a time" test of a root (<c>FUN_140678f30</c>, <b>Verified</b>): a member of the conversation owner's squad, the owner included, has a live conversation rooted at <paramref name="node"/>,
+    /// the open window or a bubble chain of another conversation than <paramref name="c"/>.
+    /// </summary>
+    bool RootLive(World world, Conversation c, DialogueNode node) =>
+        SquadOf(world, c.Npc).Any(m => open is { } o && o != c && o.Npc == m && o.Root == node || bubbles.Any(b => b.C != c && b.C.Npc == m && b.C.Root == node));
+
     bool BubbleOf(CharacterId who) => shown.ContainsKey(who) || bubbles.Any(b => b.Speaker == who || b.C.Npc == who);
 
     /// <summary>Whether <paramref name="who"/> is saying a line of another conversation, or is in the open player conversation.</summary>
