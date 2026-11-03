@@ -58,6 +58,9 @@ public sealed class CharacterCold
     public System.Numerics.Vector2 FollowHeading { get; set; }
     /// <summary>The speed a follower wants this tick (<see cref="MovementSystem"/>, the original's desired speed). Not saved; hashed while following.</summary>
     public float FollowSpeed { get; set; }
+    /// <summary>The follower steers straight at its aim (the original's <c>Task_Follow</c> flag +0xac, with its 50 to 100 hysteresis) and where it was at its last update (+0x94). Not saved; the flag is hashed while following.</summary>
+    public bool FollowDirect { get; set; }
+    public System.Numerics.Vector3 FollowLast { get; set; }
     /// <summary>
     /// A campaign follower's pace near its trail point (task 215, <c>FUN_140349e70</c>; <see cref="PopulationSystem"/>'s campaign look sets it and clears it): its walk to the point goes
     /// no faster than this. Applies only to a <see cref="CharacterTask.GoTo"/> out of combat. Not saved (the next look sets it again); hashed while set.
@@ -724,7 +727,7 @@ public sealed class CharacterTable
             hasher.Add(k.SquadId);
             hasher.Add(k.Role);
             hasher.Add(k.FollowPathTime);
-            if (c.Task == (byte)CharacterTask.Follow) { hasher.Add(k.FollowHeading); hasher.Add(k.FollowSpeed); }
+            if (c.Task == (byte)CharacterTask.Follow) { hasher.Add(k.FollowHeading); hasher.Add(k.FollowSpeed); hasher.Add(k.FollowDirect); }
             if (k.PaceCap is { } pace) hasher.Add(pace);
             hasher.Add(k.Path.Length);
             hasher.Add(k.PathRequest);

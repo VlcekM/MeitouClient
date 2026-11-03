@@ -173,7 +173,7 @@ Each update, with d the XZ distance to the aim: under 1 the desired speed (movem
 d × max(0.1, 0.5 + 0.5 × dot(leader direction, own direction)): a follower that lags runs to catch up, one facing away slows. With the
 leader standing: under 20 → 0, 20-50 → 10-20, 50-200 → 20-30, 200-500 → 30-999 (each linear in d², clamped). Speed 0 stops. Under 50
 it steers straight (movement mode 2 MOVE_DIRECTION, desired motion toward the aim, move limit √d); from 50 to 100 it keeps that only
-while it moved more than its speed² since the last update; otherwise it paths to the aim. Followers copy an allied leader's sneaking.
+while it moved more than its speed² since the last update; otherwise it paths to the aim. Followers copy an allied leader's sneaking. (**Verified**: the two directions are the movement vectors +0xd0/+0xd8 normalised, not the facings; the 100 limit is the squared constant 10000 read as such, **Observed**.) Meitou: `MovementSystem.FollowDirect` (`CharacterCold.FollowDirect` / `FollowLast`) and `Direction(velocity)`.
 Stacked floors are **Unknown**. Engine choice: a follower whose own floor under the leader is over 20 off the leader's height paths to
 the leader on its floor, d plus the height gap (**Observed**: "guys b stuck" save, Dust Bandits squad under its boss on the Hub Storm
 House roof storey, stood "Following leader" on the floors below).
