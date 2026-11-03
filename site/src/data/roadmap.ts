@@ -100,7 +100,7 @@ export const categories: Category[] = [
     { id: "storage-windows-and-grids", system: "Storage windows and grids", status: "works", note: "Grid sized from the stored item, Max Capacity line, red when full.", bugs: [] },
   ] },
   { id: "world", name: "World", blurb: "Towns, crime, dialogue, animals, raids, roads and the map.", rows: [
-    { id: "town-life-residents-shops-bars", system: "Town life: residents, shops, bars", status: "untested", note: "Wandering, shopping (public shops only), bar seats, sleeping at home, shooing strangers from homes, town stalkers. An NPC tooltip shows the unresolved name \"Pacifier /GENNAME/\" (#104). Overly aggressive shopkeepers: fixed on master (#120).", bugs: ["#104"] },
+    { id: "town-life-residents-shops-bars", system: "Town life: residents, shops, bars", status: "untested", note: "Wandering, shopping (public shops only), bar seats, sleeping at home, shooing strangers from homes, town stalkers. Overly aggressive shopkeepers: fixed on master (#120).", bugs: [] },
     { id: "crime-trespassing-arrest-jail", system: "Crime, trespassing, arrest, jail", status: "wip", note: "Guards, fines, cages, bail, bounty hunters, crime alarms (expiring 8 game seconds after the last raise); guards confiscate stolen goods on master. Guards with Protect allies defend allied defenders and hear fights in their own place, on master. Prisoners are held at the cage's facing every update; a report of prisoners facing 90 degrees away from the door is not confirmed fixed. Play report: guards do not attack intruders or wildlife until the player's character is downed.", bugs: [] },
     { id: "holy-nation-inspections-and-smuggling", system: "Holy Nation inspections and smuggling", status: "untested", note: "Gate guard inspections find the faction's illegal goods (Holy Nation: hashish and forbidden books) and post who was caught smuggling. Selling illegal goods to a trader is not checked yet.", bugs: [] },
     { id: "squads-away-from-the-camera", system: "Squads away from the camera", status: "works", note: "Tested in play: squads away from the camera work. Unloaded squads travel, fight and heal off screen. Open: NPC squads load and unload in a box of 340 round the player's characters, where the original keeps a squad while its zone (3 x 3 zones round the camera) is loaded. Corpses are saved and removed by the original's zone rule; a report of bodies vanishing beside the player is not reproduced.", bugs: [] },
@@ -155,7 +155,6 @@ export const bugs: Bug[] = [
   { id: "#117", seen: "Can't enter Island Lab.", original: "Not checked.", state: "Open issue" },
   { id: "#111", seen: "Hub defensive walls clip into the Shinobi Thieves Tower.", original: "Not checked.", state: "Open issue" },
   { id: "#108", seen: "UI flickering.", original: "Not checked.", state: "Open issue" },
-  { id: "#104", seen: "An NPC tooltip shows the unresolved name \"Pacifier /GENNAME/\".", original: "Not checked.", state: "Open issue" },
   { id: "#17", seen: "Borderless full screen on macOS shows no window.", original: "Not applicable.", state: "Issue closed; last report says still broken", platform: "macOS" },
 ];
 

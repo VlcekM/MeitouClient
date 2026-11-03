@@ -75,6 +75,7 @@ body:
         - "Sound and music [sound-and-music]"
         - "Game speed and pause [game-speed-and-pause]"
         - "Inventory, machine and loot windows [inventory-machine-and-loot-windows]"
+        - "Interface drawing [interface-drawing]"
         - "Item tooltips [item-tooltips]"
         - "Right-click item transfer between windows [right-click-item-transfer-between-windows]"
         - "Translations [translations]"
