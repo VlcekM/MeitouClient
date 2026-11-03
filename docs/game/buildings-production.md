@@ -148,7 +148,7 @@ score and the 0.75 falloff spread them). Work distance: [below](#work-distance).
 `maxUseRange` +0x420, read from the functionality's `use range` (`FUN_1402a0900`), `DoorStuff` 45 (kind 7) or 25. Vanilla `use range`
 (**Verified** by a probe of the install): 10 to 25 for benches and storage, 50 ore mines and iron rocks, 80 wind generators,
 100 copper rocks, 140 hybrid stone mines. Which tasks reach their building through `isAtLocation` is **Observed** only through
-the goal conditions (the call is virtual).
+the goal conditions (the call is virtual). Meitou applies the height limit above wherever it applies the reach range of the same function: builders, fetchers, machine operators, haulers and corpse carriers (`SiteReach.AtHeight`; rocks and turret posts keep their own arrival test).
 
 Meitou (`SiteReach`): builders 40 (walls 60), operators and storage fetches the `use range`, doubled once stopped, measured
 to the building's footprint hull (engine choice standing in for touching; a building without collision uses its parts' bounds
