@@ -159,6 +159,9 @@ public static partial class SaveCapture
         public readonly List<(SaveItem Item, CharacterId Owner)> Owners = [];
     }
 
+    /// <summary>The platoon's mission town (Meitou key: the TOWN id of the site its package took it to), read back as <see cref="Platoon.Target"/>.</summary>
+    public const string MissionTownKey = "meitou mission town";
+
     [ThreadStatic] static MemoryPass? memoryPass;
 
     static Dialogue.SquadMemory? MemoryOf(World world) => world.Systems.OfType<Dialogue.DialogueSystem>().FirstOrDefault()?.Memory;
@@ -622,7 +625,7 @@ public static partial class SaveCapture
         // does (FUN_140372ef0: `never been activated` 0, its file and char count); its pool, residency, town and home stay as the record has them.
         SavePlatoon Write(int town, int factionIndex, string templateId, long money, bool roaming, TownBuilding? homeBuilding, string? package,
             List<(CharacterCold Cold, Vector3 Position, float Yaw, CharacterId Id, bool Leader)> members, Trading.Shop? shop, Vector3 at = default, AiSave? ai = null, SquadMemoryData? memory = null,
-            bool imprisoned = false, bool dead = false, bool intact = true, SavePlatoon? into = null)
+            bool imprisoned = false, bool dead = false, bool intact = true, SavePlatoon? into = null, int missionTown = -1)
         {
             var faction = data.Factions[factionIndex];
             factions.TryGetValue(faction.Id, out var state);
@@ -669,6 +672,8 @@ public static partial class SaveCapture
                     || ResidentHomes.Entries(site.Town, siteFaction >= 0 ? data.Factions[siteFaction] : null).Any(e => e.Id == templateId));
             }
             if (package is not null) record.Strings["currentPackage"] = package;
+            if (missionTown >= 0 && missionTown != town && missionTown < data.Sites.Count) record.Strings[MissionTownKey] = data.Sites[missionTown].Town.Id;
+            else record.Strings.Remove(MissionTownKey);
             ShopSave.Write(record, shop, world);
             AiSave.Write(record, ai);
             NoteMemory(record, memory);
@@ -721,7 +726,8 @@ public static partial class SaveCapture
             var leader = alive.Contains(squad.Leader) || alive.Count == 0 ? squad.Leader : alive[0];
             var members = every.Select(id => (table.Cold(id.Slot)!, table.Previous[id.Slot].Position, table.Previous[id.Slot].Yaw, id, id == leader)).ToList();
             var sp = Write(squad.Town, squad.Faction, squad.TemplateId, squad.Money, roamer is { Pinned: false }, squad.HomeBuilding, roamer?.Package ?? squad.Ai?.Current?.Id, members, squad.Shop, ai: AiSave.Of(squad.Ai) ?? squad.SavedAi, memory: MemoryOf(world)?.Snapshot(squad.Id),
-                imprisoned: roamer?.Imprisoned ?? false, dead: roamer?.Dead ?? false, intact: roamer?.IntactFlag ?? squad.Ai?.Intact ?? true, at: roamer is null ? default : Ground(world, roamer.Position), into: into);
+                imprisoned: roamer?.Imprisoned ?? false, dead: roamer?.Dead ?? false, intact: roamer?.IntactFlag ?? squad.Ai?.Intact ?? true, at: roamer is null ? default : Ground(world, roamer.Position), into: into,
+                missionTown: squad.Ai is { } board && Ai.AiSystem.BoardMoves(board) && PopulationSystem.MissionSite(board) is >= 0 and var mission ? mission : roamer?.Target ?? -1);
             if (roamer is not null) written[roamer.Id] = sp;
         }
         // Squads stored since they left the world: a town's since its town unloaded, a roaming one (Meitou) since it first left.
@@ -737,7 +743,7 @@ public static partial class SaveCapture
             }
             var members = stored.Members.Concat(stored.Dead).Select(m => (m.Cold, m.Position, m.Yaw, CharacterId.None, m.Leader)).ToList();
             written[p.Id] = Write(p.Origin, p.Faction, p.TemplateId, p.Money, !stored.Pinned, stored.HomeBuilding, p.Package ?? stored.Package, members, stored.Shop, Ground(world, p.Position),
-                ai: stored.Ai, memory: stored.Memory, imprisoned: p.Imprisoned, dead: p.Dead, intact: p.IntactFlag, into: into);
+                ai: stored.Ai, memory: stored.Memory, imprisoned: p.Imprisoned, dead: p.Dead, intact: p.IntactFlag, into: into, missionTown: p.Target);
             if (p.Persistent) written[p.Id].Record.Bools["persistent"] = true;   // a split-off prisoner's platoon
         }
         // A campaign's stand-ins that never had their characters (not a save's: those are in it already).
@@ -745,7 +751,7 @@ public static partial class SaveCapture
         {
             if (p is not { Campaign: not null, State: PlatoonState.Unloaded, Saved: null } || p.Stored is { Members.Count: > 0 } || !Writable(p.Origin, p.Faction)) continue;
             if (loaded?.RoamingPlatoons.ContainsKey(p.Id) == true) continue;
-            written[p.Id] = Write(p.Origin, p.Faction, p.TemplateId, p.Money, true, null, p.Package, [], null, Ground(world, p.Position), imprisoned: p.Imprisoned, dead: p.Dead, intact: p.IntactFlag);
+            written[p.Id] = Write(p.Origin, p.Faction, p.TemplateId, p.Money, true, null, p.Package, [], null, Ground(world, p.Position), imprisoned: p.Imprisoned, dead: p.Dead, intact: p.IntactFlag, missionTown: p.Target);
         }
         return written;
     }

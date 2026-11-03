@@ -353,6 +353,7 @@ public static class SaveLoader
             Imprisoned = platoon.Record.Bools.GetValueOrDefault("imprisoned"),
             Dead = platoon.Record.Bools.GetValueOrDefault("dead"),
             IntactFlag = platoon.Record.Bools.GetValueOrDefault("intact", true),
+            Target = MissionTownOf(platoon.Record, data),
         };
         world.Platoons.Add(p);
         if (!platoon.Handle.IsNull) context.PlatoonIds.TryAdd((platoon.Handle.C, platoon.Handle.CS), p.Id);
@@ -365,6 +366,15 @@ public static class SaveLoader
         if (unmade) loaded.Notes.Add($"{platoon.Name}: never made by the game; made from its template when it activates.");
         if (travels) loaded.RoamingPlatoons[p.Id] = platoon.Name;
         else loaded.TownBoundPlatoons++;
+    }
+
+    /// <summary>The site of the platoon's saved mission town (<see cref="SaveCapture.MissionTownKey"/>: the town its package took it to when it left the world); -1 when it has none or the town is not placed.</summary>
+    static int MissionTownOf(FcsRecord record, PopulationData data)
+    {
+        if (record.Strings.GetValueOrDefault(SaveCapture.MissionTownKey) is not { Length: > 0 } id) return -1;
+        for (int i = 0; i < data.Sites.Count; i++)
+            if (data.Sites[i].Town.Id == id) return i;
+        return -1;
     }
 
     /// <summary>

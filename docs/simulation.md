@@ -423,7 +423,7 @@ Implemented (`PopulationRoaming.cs`):
   GOHOME or a patrol sends a roaming stand-in on its way at once. Job 0 (no branch of its own in the original: 2 for a non-persistent platoon, 4 for a persistent one) stays the engine's travel stand-in.
 - **Speeds**: per job as the original (GOHOME 55, TRAVEL_TARGET 25, TRAVEL_TARGET_FAST 60 or 90 beyond 25000), the engine's travel stand-in (job
   NONE) 25 or 90, all capped at the original mover's 70 (`StandInSpeedCap`); straight lines. A short-range patrol keeps walking at 25 (the
-  original's stands still). Destinations stay the engine's (towns, patrol points near home): the original keeps no roaming squad off screen,
+  original's stands still). Destinations stay the engine's (towns, patrol points near home) except a TRAVEL_TARGET job, which heads for the saved mission town ([off-screen world](game/factions-squads-towns.md#off-screen-world)): the original keeps no roaming squad off screen,
   and saves give no usable target (**Observed**, 4 owner saves: `mission target` always type 0, `target town` on 1-3 platoons, `mission town`
   mostly a TOWN).
 - **Roads** (`RoadNetwork`, `PopulationData.Roads` from the level's ROAD records; the same instance serves on-screen long routes,

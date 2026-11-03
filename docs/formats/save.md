@@ -68,6 +68,8 @@ terrain-relative, and reads absolute `world Y pos` back for its own buildings; t
 A finished one with doors also gets the door keys of [locks](../game/locks.md#save-keys)
 (the original saves doors the same way for every building, **Observed** by code). Meitou-only `meitou parent` (instance id) names a parent the handle cannot.
 
+**Platoon mission town** (Meitou key `meitou mission town` on a roaming or stored platoon record: the TOWN id of the town its package was taking it to when it left the world, absent: none; read back as `Platoon.Target`, which a TRAVEL_TARGET stand-in heads for).
+
 **Building record** (Meitou keys on a registered town building's GAMESTATE_BUILDING, [locks](../game/locks.md#building-record)): int `meitou designation`, string `meitou template` (the last assigned SQUAD_TEMPLATE id, absent: none) and the stored public byte as `is public day`; a state without them is a building with no record yet.
 
 **Town-house repair** (Meitou): the original zone instance's GAMESTATE_BUILDING stores `destroyed`, `is complete`,

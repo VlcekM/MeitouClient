@@ -168,14 +168,14 @@ public sealed partial class PopulationSystem
             var (minX, minZ, maxX, maxZ) = ZoneActivation.TrimmedBox(zone, active.Contains, StandInStopTrim);
             if (p.Position.X >= minX && p.Position.X <= maxX && p.Position.Y >= minZ && p.Position.Y <= maxZ) return;
         }
-        if (ShippingCamp(p) is >= 0 and var camp)
+        if (MissionGoal(p) is >= 0 and var mission)
         {
-            // Shipping slaves: on to the camp, then it stays there; the slaves are handed over once it loads (Deliver 192).
-            p.Target = camp;
+            // TRAVEL_TARGET / _FAST (FUN_1407ee790, FUN_140269cd0): on to the mission target, then it stays there (a shipping squad's slaves are handed over once it loads, Deliver 192).
+            p.Target = mission;
             p.Point = null;
-            var at = SiteCentre(camp);
+            var at = SiteCentre(mission);
             float left = Vector2.Distance(p.Position, at);
-            if (left > settings.RoamArrivalRadius) Travel(p, at, MathF.Min(TravelTargetSpeed, StandInSpeedCap) * dt);
+            if (left > MathF.Max(data.Sites[mission].Town.Radius, settings.RoamArrivalRadius)) Travel(p, at, StandInSpeed(p, left) * dt);
             return;
         }
         if (p.WaitLeft > 0)
@@ -279,6 +279,18 @@ public sealed partial class PopulationSystem
             if (d < bestD) (best, bestD) = (site.Index, d);
         }
         return best;
+    }
+
+    /// <summary>
+    /// The town a TRAVEL_TARGET / _FAST platoon outside a campaign heads for, -1 for any other job (<c>FUN_140269cd0</c>, <b>Verified</b>: the campaign's target, else the saved mission target, else the
+    /// platoon's home; a campaign's is <see cref="Platoon.CampaignGoal"/>, the saved one <see cref="Platoon.Target"/>, set where the squad unloads and saved as <see cref="Saving.SaveCapture.MissionTownKey"/>).
+    /// A shipping squad with slaves and no chosen camp takes the nearest one (<see cref="ShippingCamp"/>). No move when it already stands in that town (the caller). Any thread.
+    /// </summary>
+    int MissionGoal(Platoon p)
+    {
+        if (p.Job is not (Ai.PlatoonJob.TravelTarget or Ai.PlatoonJob.TravelTargetFast) || p.Campaign is not null) return -1;
+        if (ShippingCamp(p) is >= 0 and var camp) return camp;
+        return p.Target >= 0 && p.Target < data.Sites.Count ? p.Target : p.Origin;
     }
 
     /// <summary>A shipping package (signal 11 or 28) whose off-screen job is TRAVEL_TARGET (<c>unloaded func</c> 5, as all four in the base data).</summary>
@@ -513,7 +525,7 @@ public sealed partial class PopulationSystem
     }
 
     /// <summary>The town (site index) a travelling package heads for: its mission town, else its mission town hand's placed town; -1: none.</summary>
-    static int MissionSite(Ai.Blackboard board) => board.MissionTown >= 0 ? board.MissionTown : board.Destination.Site;
+    internal static int MissionSite(Ai.Blackboard board) => board.MissionTown >= 0 ? board.MissionTown : board.Destination.Site;
 
     /// <summary>
     /// A squad unloading with <paramref name="running"/> as its package: the platoon keeps it and takes its off-screen job (<c>FUN_1407ee790</c> re-reads the job from the blackboard's
