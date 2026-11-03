@@ -225,15 +225,12 @@ public sealed partial class PopulationSystem
     }
 
     /// <summary>
-    /// A neighbour's weight in a patrol's pick (<c>FUN_1408f5ad0</c>): 1 when its zone is not active; active, by the homeless squads standing in it, 10 when none,
-    /// 5 for one, 1 for more. The original divides 10 by 0 for an empty one, an infinite weight its pick does not handle; 10 is an engine choice.
+    /// A neighbour's weight in a patrol's pick (<c>FUN_1408f5ad0</c>, disassembly, <b>Verified</b>): 1 when its zone is not active; active, by its load n (<see cref="PatrolWeight"/>).
     /// </summary>
-    float SectorWeight(ZoneCoordinate zone)
-    {
-        if (!active.Contains(zone)) return 1;
-        float n = patrolStanding.GetValueOrDefault(zone);
-        return n == 0 ? 10 : n < 2 ? 5 / n : 1;
-    }
+    float SectorWeight(ZoneCoordinate zone) => !active.Contains(zone) ? 1 : PatrolWeight(patrolStanding.GetValueOrDefault(zone));
+
+    /// <summary>An active sector's weight for load n: 10 when empty, a flat 5 below 2, 1 at 2, 1 / n above (the constants 10, 2, 5, 1 of <c>FUN_1408f5ad0</c>).</summary>
+    internal static float PatrolWeight(float n) => n == 0 ? 10 : n < 2 ? 5 : n > 2 ? 1 / n : 1;
 
     /// <summary>
     /// Every non-persistent platoon not homed to a nest counts in the area sector of its place (<c>FUN_1407ebd00</c> -> <c>FUN_1408f6c80</c> / <c>FUN_1408f68a0</c>, <b>Verified</b>), town roamers and
@@ -243,7 +240,7 @@ public sealed partial class PopulationSystem
     {
         foreach (var p in world.Platoons.All)
         {
-            if (p.Pinned || p.Wild || p.Campaign is not null || p.Saved?.Source.Record.Bools.GetValueOrDefault("persistent") == true) continue;
+            if (p.Pinned || p.Wild || p.Campaign is not null || PersistentPlatoon(p)) continue;
             var zone = WorldLayout.ZoneOf(p.Position.X, p.Position.Y);
             bool intact = Intact(world, p);
             load[zone] = load.GetValueOrDefault(zone) + (intact ? 1 : 0.5f);

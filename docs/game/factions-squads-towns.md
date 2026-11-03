@@ -148,7 +148,7 @@ counted, the rest into the counted set (+0x60, size +0x70). The sector tick (`FU
 the platoon's intact flag is 0 (`FUN_1407ac7b0` → `FUN_1407a5be0`: the squad-intact rule of [perception](perception.md), which a squad with no able member fails, so a wiped or hurt one counts), and drops from the third
 set one whose squad object is gone (+0x1d8 null, unloaded); nothing moves back. A sector's load is +0x70 + 0.5 x +0x98 against its group's cap (**Verified**); the homeless draw's "below its share" test reads +0x70 alone.
 A wiped platoon is destroyed only at its next unload (`declareDead`), so it keeps counting until then (**Observed**). Meitou (`PopulationHomeless.RefillSectors`): the same by the current intact test (no one-per-tick
-drip; a squad intact again counts 1), for a sector's squads but a save's persistent ones and occupiers, plus every other non-persistent, non-campaign platoon (town roamers and stand-ins too) in the zone of its place (`AddPlatoonLoad`). The patrol weight uses the same load n (intact 1, not intact 0.5) as 10 for 0, 5 / n below 2, else 1. A nest's or town's pool is the set
+drip; a squad intact again counts 1), for a sector's squads but a save's persistent ones and occupiers, plus every other non-persistent, non-campaign platoon (town roamers and stand-ins too) in the zone of its place (`AddPlatoonLoad`). The patrol weight uses the same load n (intact 1, not intact 0.5) as 10 for 0, a flat 5 below 2, 1 at 2, 1 / n above (**Verified**: `FUN_1408f5ad0` disassembly constants). A nest's or town's pool is the set
 of platoons whose `hometown` is it, by `sqt` (1 residents, 2 roaming), counted in living characters ([save keys](../formats/save.md#npc-platoons-meitou-mapping)).
 
 Loot/building inventories, artifacts, shop stock, prisoners/slaves and placed debris derive
@@ -597,8 +597,8 @@ Meitou: [ground items](../simulation.md#items-and-eating).
   1. A coin flip takes the four diagonal or the four straight neighbouring sectors; those of the same biome group with sector flag
      +0x32 clear (its writer not found: **Unknown**) and weight > 0 enter a cumulative pick.
   2. Weight (`FUN_1408f5ad0`): 1 for a sector whose zone is not active. Active: n = its counted platoons + 0.5 × the others (the area
-     tick's sets: non-persistent platoons not homed to a nest are counted); 10 / n when n = 0 (an infinite weight; the pick then
-     runs off its map, so the result is undefined), 5 / n when n < 2, else 1. Plus the zone's smell × the smell factor, but that factor
+     tick's sets: non-persistent platoons not homed to a nest are counted); 10 when n = 0, a flat 5 when n < 2, 1 at n = 2, 1 / n above
+     (**Verified**: constants and branches of the `FUN_1408f5ad0` disassembly). Plus the zone's smell × the smell factor, but that factor
      is `blood smell mult` read from the template's bool fields, so it is always 0 (**Observed**). With a home town, × 5 when the
      sector's Chebyshev distance d from the home's sector equals near or far, × 10 between, × 0 outside: a homed patrol stays within one
      sector of its home's sector, and homeless squads have one (above).
