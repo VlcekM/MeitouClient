@@ -558,6 +558,14 @@ Meitou: [ground items](../simulation.md#items-and-eating).
   beyond 50000 (`createRandomUnloadedSquad` → `Ownerships::setHomeTown`, KenshiLib 1ce4a16 names; **Verified** by code). It tethers the
   patrol (below). Saved homeless platoons have no `basetown`/`hometown` ([save.md](../formats/save.md)); whether the home is saved
   elsewhere is **Unknown**. Meitou decides it at the squad's first patrol, from where it stands (engine choice, so saved squads get one).
+  The maker's template source (`FUN_1408f8060`, **Observed** by disassembly, not traced): when the sector's own town is a nest object
+  (vfunc `0x270`) with a non-empty pool-2 list, the group's `homeless spawns` are not used; if that town is near the sector and not the
+  player's, the candidates are the nest's pool-2 list within its free budget (`FUN_1408f7e80`, the nest rule above), else the maker
+  returns 0. **Observed** (an hour's hold of a Rebirth save, native hooks on the tick and the maker): every pass drew the Wolf Pack Den's
+  cell (the only active one with a non-zero amount; target 1, load 0) and the maker returned 0, so no homeless squad appeared. Meitou
+  (`BuildSector`, load-time fill and refill): a sector whose own town is a nest with roaming squads (`OwnNest`: the nearest nest site,
+  or a level-data nest town, standing in the sector and nearer than any other town) makes none of the group's squads; the nest's pool
+  stays its own site's (engine choice: the sector route to it is not modelled).
 - **Patrol task** (`Task_Patrol`, loaded; **Verified** by code and disassembly unless marked): the platoon's `PatrolInfo` (+0x1e8: biome
   group, has-home flag and home town position, sector range near/far, `patrol approaches towns`, a smell factor) is made once; the
   start sets the range to (1, 2), or (0, 1) when the platoon has a home town, then orders a move whose destination (`CharMovement`

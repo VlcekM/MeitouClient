@@ -20,9 +20,9 @@ public class WildTests(ITestOutputHelper output)
 
     /// <summary>
     /// The synthetic town's data plus a biome group with homeless spawns and a dog nest; the group covers the four zones round the world's origin. <paramref name="changePatrol"/>
-    /// changes the <c>Patrol</c> template (<c>10-t</c>, also a homeless spawn) and <paramref name="extra"/> adds records.
+    /// changes the <c>Patrol</c> template (<c>10-t</c>, also a homeless spawn), <paramref name="changeDen"/> the nest's TOWN and <paramref name="extra"/> adds records.
     /// </summary>
-    static PopulationData WildData(Action<FcsRecord>? changePatrol = null, params FcsRecord[] extra)
+    static PopulationData WildData(Action<FcsRecord>? changePatrol = null, Action<FcsRecord>? changeDen = null, params FcsRecord[] extra)
     {
         var db = SyntheticTown.Database(residentSquads: 1, changePatrol: changePatrol);
         var dogs = Rec("52-t", FcsRecordType.SQUAD_TEMPLATE, "Dog pack");
@@ -37,6 +37,7 @@ public class WildTests(ITestOutputHelper output)
         nest.Floats["town radius mult"] = 1;
         nest.References["faction"] = [new FcsReference("53-t", 0, 0, 0)];
         nest.References["roaming squads"] = [new FcsReference("52-t", 100, 0, 0)];
+        changeDen?.Invoke(nest);
         var group = Rec("50-t", FcsRecordType.BIOME_GROUP, "Wilds");
         group.Ints["index"] = 0x123456;
         group.Ints["num nests"] = 2;
@@ -56,6 +57,20 @@ public class WildTests(ITestOutputHelper output)
     }
 
     static readonly Vector3 Origin = new(0, 300, 0);   // the corner of four zones: all four are active
+
+    /// <summary>Whether the sector's own town (the town or nest nearest its centre, when it stands in the sector) is one of <paramref name="nests"/>.</summary>
+    static bool OwnTownIsNest(PopulationData data, IReadOnlyList<WildSite> nests, WildSite sector)
+    {
+        var (minX, minZ, maxX, maxZ) = WeatherAreas.CellRect(sector.Zone.X, sector.Zone.Y);
+        var centre = new Vector2((minX + maxX) / 2, (minZ + maxZ) / 2);
+        // The towns PopulationSystem.NearestTown counts: not nest markers, points of interest or Null.
+        float town = data.Sites.Where(s => s.Town.Type is not (TownType.NestMarker or TownType.PointOfInterest or TownType.Null))
+            .Select(s => Vector2.Distance(centre, new Vector2(s.Position.X, s.Position.Z)))
+            .DefaultIfEmpty(float.MaxValue)
+            .Min();
+        var nearest = nests.MinBy(n => Vector2.Distance(centre, n.Spots[0]))!;
+        return nearest.Zone == sector.Zone && Vector2.Distance(centre, nearest.Spots[0]) < town;
+    }
 
     static (SimWorld World, PopulationSystem Population) WildWorld(PopulationData data, int threads, StandardParts parts = StandardParts.Population | StandardParts.Movement, ulong seed = 3)
     {
@@ -95,11 +110,13 @@ public class WildTests(ITestOutputHelper output)
         Assert.Equal(4, sectors.Count);
         Assert.Equal(2, nests.Count);
         Assert.All(nests, n => Assert.Equal("Dog Den", n.Nest!.Name));
+        // A den stands in a sector of its own (FUN_1408f62e0) for at least one of them: that sector makes none of the group's squads.
+        Assert.Contains(sectors, s => OwnTownIsNest(data, nests, s));
         foreach (var s in sectors)
         {
             Assert.Equal(SiteStatus.Loaded, pop.WildStatusOf(s.Index));
             // ceil(1.5) = 2 squads; the gated template never.
-            Assert.Equal(2, pop.WildSquadsOf(s.Index).Count);
+            Assert.Equal(OwnTownIsNest(data, nests, s) ? 0 : 2, pop.WildSquadsOf(s.Index).Count);
             Assert.All(pop.WildSquadsOf(s.Index), id => Assert.NotEqual("11-t", world.Squads.Find(id)!.TemplateId));
         }
         foreach (var n in nests)
@@ -117,6 +134,21 @@ public class WildTests(ITestOutputHelper output)
             }
         }
         foreach (var line in WildSquads(world, pop)) output.WriteLine(line);
+    }
+
+    [Fact]
+    public void A_nest_without_roaming_squads_leaves_its_sector_the_groups_homeless_squads()
+    {
+        // The original's maker skips the group's list only for a nest whose pool-2 list is not empty (docs/game/factions-squads-towns.md "Homeless squads").
+        var data = WildData(changeDen: d => d.References.Remove("roaming squads"));
+        var (world, pop) = WildWorld(data, 1);
+        using var _ = world;
+        world.RunTicks(16);
+        var sectors = pop.WildSites.Where(s => s.Kind == WildKind.Sector).ToList();
+        var nests = pop.WildSites.Where(s => s.Kind == WildKind.Nest).ToList();
+        Assert.Contains(sectors, s => OwnTownIsNest(data, nests, s));
+        Assert.All(sectors, s => Assert.Equal(2, pop.WildSquadsOf(s.Index).Count));
+        Assert.All(nests, n => Assert.Empty(pop.WildSquadsOf(n.Index)));
     }
 
     [Theory]
@@ -157,7 +189,7 @@ public class WildTests(ITestOutputHelper output)
         var roam = Rec("60-t", FcsRecordType.AI_PACKAGE, "Roam");
         var occupy = Rec("61-t", FcsRecordType.AI_PACKAGE, "Occupy");
         occupy.Ints["signal func"] = 30;
-        var data = WildData(p => p.References["AI packages"] = [new FcsReference("60-t", 0, 0, 0), new FcsReference("61-t", 1, 0, 0)], roam, occupy);
+        var data = WildData(p => p.References["AI packages"] = [new FcsReference("60-t", 0, 0, 0), new FcsReference("61-t", 1, 0, 0)], extra: [roam, occupy]);
         var (world, pop) = WildWorld(data, 1, StandardParts.Population | StandardParts.Movement | StandardParts.Ai);
         using var _ = world;
         pop.KeepWild = false;
