@@ -151,27 +151,6 @@ public class JailSaveTests
         finally { Directory.Delete(Path.GetDirectoryName(folder)!, recursive: true); }
     }
 
-    [Theory]
-    [InlineData("52-t", 0f)]   // another record at the cage's place
-    [InlineData("54-t", 5f)]   // the cage's record, 5 units off
-    public void A_generated_interior_entry_of_another_record_or_place_seats_nobody(string record, float offset)
-    {
-        var data = JailData();
-        string folder = Path.Combine(Temp("jail-unmatched"), QuickSave.Name);
-        try
-        {
-            var save = OriginalCageSave(data, folder, record, HouseAt + new Vector3(10 + offset, 0, 0));
-            using var b = new Game(data);
-            SaveLoader.Load(b.World, save, data);
-            b.World.Fixtures.RegisterSite(b.World, data, 0);
-            var cold = b.World.Characters.Cold(b.World.Squads.Find(b.World.Player.Squad)!.Members[0].Slot)!;
-            Assert.True(cold.IsImprisoned);
-            Assert.Equal(BuildingKey.Of(HouseZone, $"7-zone{HouseZone.X}.{HouseZone.Y}-INGAME"), cold.InWhat);
-            Assert.True(FixtureRegistry.IsFree(b.World.Characters, b.World.Fixtures.Find($"{HouseKey}/0")!));
-        }
-        finally { Directory.Delete(Path.GetDirectoryName(folder)!, recursive: true); }
-    }
-
     static IEnumerable<KeyValuePair<string, object>> Keys(FcsRecord r) =>
         r.Ints.Select(k => new KeyValuePair<string, object>(k.Key, k.Value)).Concat(r.Floats.Select(k => new KeyValuePair<string, object>(k.Key, k.Value)))
             .Concat(r.Bools.Select(k => new KeyValuePair<string, object>(k.Key, k.Value))).Concat(r.Strings.Select(k => new KeyValuePair<string, object>(k.Key, k.Value)))

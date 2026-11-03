@@ -417,7 +417,10 @@ public sealed partial class FixtureRegistry
     Fixture? InteriorCageAt(SavedSpot spot)
     {
         foreach (var f in cageList ??= [.. all.Where(x => x.Kind == FixtureKind.Cage)])
-            if (f.Id != f.Building && f.RecordId == spot.Record && Vector3.DistanceSquared(f.Position, spot.Position) <= SavedSpotReach * SavedSpotReach) return f;
+        {
+            bool near = Vector3.DistanceSquared(f.Position, spot.Position) <= SavedSpotReach * SavedSpotReach;
+            if (f.Id != f.Building && f.RecordId == spot.Record && near) return f;
+        }
         return null;
     }
 
