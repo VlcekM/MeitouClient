@@ -445,6 +445,8 @@ internal static class SavedCharacters
         }
         sp.Touched = true;
         context.ResolveOwners(world);
+        // A caged or sleeping member takes its fixture again: its town registered (and bound) before the platoon came in.
+        world.Fixtures.Bind(world);
         context.Log($"{sp.Name} ({name}, {(sp.Pinned ? "town" : sp.Wild is { } wild ? (wild == WildKind.Nest ? "nest" : "homeless") : "roaming")}): {squad.Members.Count} saved character(s) at {world.Characters.Next[squad.Leader.Slot].Position.X:0}, {world.Characters.Next[squad.Leader.Slot].Position.Z:0}");
         return squad;
     }
