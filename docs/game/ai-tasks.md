@@ -844,6 +844,8 @@ update `FUN_140511130`, `Character::setupAI` `FUN_140621b70`; KenshiLib names **
 
 ## Combat goals
 
+**Melee row gates** (**Verified**: rows 4 and 227 of the TaskData table above; state 139 `FUN_140598e90` is the character's water state 3, 140 `FUN_140598ec0` the target's; 78 is the target's `+0x2f8 == 2`). A person's row 4 needs neither itself nor its target deep in the water; an animal's row 227 has no swim test but refuses an imprisoned target and needs it within 50 (state 41). Meitou: `AiSystem.AttackRowBlocked` gives the attack goals 16, 21, 144 and 34 a factor 0 for a pick that fails them (the planner's other states of those rows are the engine's own checks; 227's `hasWeaponEquipped` for an animal is **Unknown**, not tested). A fight already running is not ended by it (whether the running task re-tests list B is **Unknown**).
+
 **Verified** (registrations in `FUN_140319a60`, finder/desire stubs resolved by disassembly); readings of the finders' tests **Observed**.
 
 - 16 ATTACK_ENEMIES: effect state 6 `isNoEnemiesInVicinity` (registered without an evaluator). Finder `FUN_14059f3a0` walks the

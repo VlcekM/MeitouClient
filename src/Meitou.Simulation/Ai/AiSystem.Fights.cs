@@ -61,7 +61,27 @@ public sealed partial class AiSystem
             TaskType.ATTACK_ENEMIES_OF_MY_SLAVEMASTER => aggro?.FindFoe(world, slot, AggroSystem.FoeFinder.MasterEnemies, pending),
             _ => null,
         } ?? CharacterId.None;
+        if (!foe.IsNone && AttacksThroughRow(type) && AttackRowBlocked(world, slot, foe)) return (0, CharacterId.None);
         return (foe.IsNone ? 0 : 1, foe);
+    }
+
+    /// <summary>The attack goals whose plan is the melee row (4 Attacking, or 227 for an animal): 16, 21, 144 and 34 (docs/game/ai-tasks.md "Combat goals").</summary>
+    static bool AttacksThroughRow(TaskType type) => type is TaskType.ATTACK_ENEMIES or TaskType.ATTACK_ENEMIES_AND_NEUTRALS or TaskType.TERRITORIAL_AGGRESSION_BUT_DONT_LEAVE_HOME or TaskType.ATTACK_TROUBLE_MAKERS;
+
+    /// <summary>Reach of the melee rows' <c>isWithin50Meters</c> (state 41) on their target.</summary>
+    const float MeleeRowReach = 50;
+
+    /// <summary>
+    /// The state tests of the melee row's list B that can fail without a plan step in front of them (docs/game/ai-tasks.md, TaskData rows 4 and 227, <b>Verified</b>; states 139 and 140
+    /// <c>FUN_140598e90</c> / <c>FUN_140598ec0</c>: water state 3 of the character, of the target): a person's row 4 needs neither itself nor its target deep in the water; an animal's row 227
+    /// has no swim test but refuses an imprisoned target (78) and needs it within 50 (41). The accessibility and readiness states (27, 59, 60, 90, 37, 69) are the engine's own checks.
+    /// </summary>
+    static bool AttackRowBlocked(World world, int slot, CharacterId foe)
+    {
+        var table = world.Characters;
+        if (table.Cold(slot) is not { } me || !table.TryResolveNext(foe, out int f) || table.Cold(f) is not { } target) return false;
+        if (me.Fighter?.IsAnimal != true) return me is { WaterState: 3, InSomething: Locks.HeldState.None } || target.WaterState == 3;
+        return target.IsImprisoned || System.Numerics.Vector2.Distance(Flat(table.Previous[slot].Position), Flat(table.Previous[f].Position)) > MeleeRowReach;
     }
 
     /// <summary>
