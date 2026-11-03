@@ -86,7 +86,7 @@ public sealed record TownBuilding(string InstanceId, string BuildingId, string N
     public bool CanHouse { get; init; }
     /// <summary>
     /// It has <c>interior</c> parts and its interior layout, when the level data names one, places at least one object (the original's interior holding internal buildings,
-    /// docs/game/economy.md "Artifacts"; one the level data does not name the original generates on first load, and Meitou counts it).
+    /// docs/game/economy.md "Artifacts"; one no layout is named for counts, as the residents' template may name one, <see cref="ResidentRuins.Apply"/>).
     /// </summary>
     public bool Furnished { get; init; }
     /// <summary><c>is wall gate</c>: a town gate, housing only resident entries that name it in <c>building</c>.</summary>
