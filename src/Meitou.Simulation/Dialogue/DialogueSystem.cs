@@ -257,13 +257,13 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
     public const float TalkHeight = 35;
 
     /// <summary>
-    /// Whether <paramref name="talker"/> is near enough <paramref name="target"/> to talk: X/Z within the target's footprint radius + <see cref="TalkReach"/>, twice the reach once
+    /// Whether <paramref name="talker"/> is near enough <paramref name="target"/> to talk: X/Z within the target's scaled radius (footprint x body scale) + <see cref="TalkReach"/>, twice the reach once
     /// the talker has stopped, and within <see cref="TalkHeight"/> in height.
     /// </summary>
     static bool InTalkRange(CharacterTable table, int talker, int target)
     {
         var (a, b) = (table.Next[talker].Position, table.Next[target].Position);
-        float reach = Combat.CombatTuning.Footprint(table.Cold(target)) + TalkReach * ((table.Next[talker].Flags & (ushort)MoveFlags.AnyPath) == 0 ? 2 : 1);
+        float reach = Combat.CombatSteering.Radius(table.Cold(target)) + TalkReach * ((table.Next[talker].Flags & (ushort)MoveFlags.AnyPath) == 0 ? 2 : 1);
         return Vector2.Distance(new(a.X, a.Z), new(b.X, b.Z)) < reach && MathF.Abs(a.Y - b.Y) < TalkHeight;
     }
 
@@ -370,7 +370,8 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
                 c.Choices.Add((null, "[...]"));
                 return;
             }
-            c.Choices.Add((child, Expand(world, c, child, PickText(world, c.Player, child), c.Player, c.Npc) + MoneySuffix(child)));
+            string label = Expand(world, c, child, PickText(world, c.Player, child), c.Player, c.Npc) + MoneySuffix(child);
+            if (label.Length > 0) c.Choices.Add((child, label));   // a choice with no text and no cost is never offered (FUN_140680130)
         }
         if (c.Choices.Count == 0) c.Choices.Add((null, "[Leave]"));
     }
@@ -397,7 +398,9 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
         else
         {
             c.Choices.Clear();
-            c.Choices.Add((p.Line, Expand(world, c, p.Line, PickText(world, c.Player, p.Line), c.Player, c.Npc) + MoneySuffix(p.Line)));
+            string label = Expand(world, c, p.Line, PickText(world, c.Player, p.Line), c.Player, c.Npc) + MoneySuffix(p.Line);
+            if (label.Length == 0) c.Ended = true;   // nothing to offer: the conversation ends
+            else c.Choices.Add((p.Line, label));
         }
     }
 

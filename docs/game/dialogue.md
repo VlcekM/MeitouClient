@@ -256,7 +256,7 @@ NPC answers an event's lines like any other; the rule is also in [Arrival banter
   `DAT_141e3c5d0` = 7.0 read from the exe): X/Z distance < the target's radius (`Character::getRadius`: its movement's footprint
   radius +0x364 x a scale) + 7 x 3 (7 x 2 when the target is a ragdoll), that reach **doubled when the talker is not moving**, and
   |dy| < 10 (< 35 on the same floor); else within 7 x 1.6 = 11.2 on the same floor or |dy| < 35. Meitou (`DialogueSystem.InTalkRange`):
-  the race's `pathfind footprint radius` + 21, doubled once stopped, |dy| < 35; also for an NPC walking up to talk (task 102, engine choice).
+  the target's scaled radius (`CombatSteering.Radius`: footprint x body scale) + 21, doubled once stopped, |dy| < 35; also for an NPC walking up to talk (task 102, engine choice).
 - **Walking to a moving NPC** (**Observed**: the player-reported vanilla behaviour of issue #136, the chase of a moving pick-up target; the task-12 walk's own re-aim code is not read): the talker follows the NPC's current position until in range. Meitou (`DialogueSystem.SlowWorld`): every 0.5 s the Move order is renewed when the NPC is over 12 from the walk's goal or the walk has ended short of it; the NPC is kept still only when idle or wandering (`Hold`), so a walking NPC is chased; a talker found on any other task (another order, a fight) drops the approach (engine choice). The give-up after `ApproachSeconds` (60 s) is an engine choice.
 
 **Saying a line** (`FUN_1406839a0`): in a player conversation a line with **no children ends the conversation at once** without being
