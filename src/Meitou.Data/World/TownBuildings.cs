@@ -26,6 +26,8 @@ public enum HomeSpotKind : byte
     Training = 8,
     /// <summary>Interior furniture with a BF_MINE, BF_RESEARCH, BF_REFINERY or BF_CRAFTING functionality: pretend-operated by a squad member staying home (43, docs/game/ai-tasks.md "Town goals").</summary>
     Workstation = 9,
+    /// <summary>A node of type 3 (turret), 4 (use) or 5 (light) not named as a bar or throne: no goal stands at it (the general-node finder asks for type 1 only, <c>FUN_14038c2f0</c>).</summary>
+    Other = 10,
 }
 
 /// <summary>A spot inside a building in world space; <paramref name="Yaw"/> as the simulation measures it (0 along +Z, turning towards +X).</summary>
@@ -44,7 +46,7 @@ public readonly record struct HomeSpot(HomeSpotKind Kind, Vector3 Position, floa
     /// <summary>The BUILDING string id of a bed, seat or training dummy; null for other spots. A bed's output rate controls healing (docs/game/character-stats.md "Beds").</summary>
     public string? Record { get; init; }
     /// <summary>A node a goal may stand at: neither a bed, a seat nor a dummy.</summary>
-    public bool IsNode => Kind is not (HomeSpotKind.Bed or HomeSpotKind.Chair or HomeSpotKind.ThroneSeat or HomeSpotKind.Training or HomeSpotKind.Workstation);
+    public bool IsNode => Kind is not (HomeSpotKind.Bed or HomeSpotKind.Chair or HomeSpotKind.ThroneSeat or HomeSpotKind.Training or HomeSpotKind.Workstation or HomeSpotKind.Other);
 }
 
 /// <summary>
@@ -431,12 +433,16 @@ public static class TownBuildings
         state is not null && state.GetInt("mountedTYPE") == (int)FcsRecordType.BUILDING && state.Ints.ContainsKey("mountedI") &&
         instances.TryGetValue((state.GetInt("mountedC"), state.GetInt("mountedI")), out string? instance) ? instance : null;
 
-    /// <summary>The kind of a node: by its <c>node type</c> (0 shopkeeper, 2 guard post), else by its record's name.</summary>
+    /// <summary>
+    /// The kind of a node from its <c>node type</c> alone (<c>FUN_14038c2f0</c>): 0 shopkeeper, 1 general, 2 guard post, whatever the name. Types 3 (turret), 4 (use) and 5 (light) are never
+    /// general: the record's name only gives the engine's bar and throne stand-ins, else <see cref="HomeSpotKind.Other"/>.
+    /// </summary>
     public static HomeSpotKind NodeKind(GameRecord node) => node.GetInt("node type") switch
     {
         0 => HomeSpotKind.Shopkeeper,
+        1 => HomeSpotKind.General,
         2 => HomeSpotKind.Guard,
-        _ => NodeKind(node.Name),
+        _ => NodeKind(node.Name) is var named && named is HomeSpotKind.Bar or HomeSpotKind.Throne ? named : HomeSpotKind.Other,
     };
 
     /// <summary>The layout names a building record can take (case ignored), cached by record and side; empty without layouts.</summary>

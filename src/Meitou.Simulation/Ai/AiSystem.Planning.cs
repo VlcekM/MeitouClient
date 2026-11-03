@@ -255,10 +255,11 @@ public sealed partial class AiSystem
             switch (type)
             {
                 case TaskType.STAND_AT_SHOPKEEPER_NODE or TaskType.STAND_AT_GUARD_NODE_HOMEBUILDING or TaskType.STAND_AT_GUARD_NODE_HOMEBUILDING_INDOORS_ONLY
-                    or TaskType.STAND_AT_GUARD_NODE_HOMETOWN_OUTSIDE or TaskType.STAND_AT_GENERAL_NODE or TaskType.STAY_IN_HOME or TaskType.SIT_ON_THRONE
+                    or TaskType.STAND_AT_GUARD_NODE_HOMETOWN_OUTSIDE or TaskType.STAND_AT_GENERAL_NODE or TaskType.STAY_IN_HOME
                     or TaskType.HOLD_POSITION or TaskType.MAN_THE_GATE:
                     // Staying home on its claimed chair, else at home.
                     if (type == TaskType.STAY_IN_HOME && board.SeatClaims.TryGetValue(slot, out var chair) && !mind.SeatUnreachable) return new PlanTarget(Targets.Seat, chair.Position);
+                    if (system.NodeGoalFindsNothing(mind, board, type)) return default;
                     return Spot(Targets.Spot, system.SpotFor(mind, board, AiBehaviour.Post, type));
                 case TaskType.GO_HOME_AND_GO_TO_BED or TaskType.GO_HOME_AND_GO_TO_BED_SECURE:
                     // A character in a bed keeps it (the bed search FUN_1408cfe00, docs/game/locks.md "Bed search"): the target is where it lies.
@@ -276,7 +277,7 @@ public sealed partial class AiSystem
                     if (at is not { } p) return default;
                     return new PlanTarget(type == TaskType.WANDERER ? Targets.Town : Targets.Spot, type == TaskType.WANDERER ? p with { Y = float.NaN } : p);
                 }
-                case TaskType.SIT_AROUND:
+                case TaskType.SIT_AROUND or TaskType.SIT_ON_THRONE:   // Reigning sits on a throne furniture, no target without one (FUN_1408cbd50)
                     return board.SitClaims.TryGetValue(slot, out var sit) && !mind.SeatUnreachable ? new PlanTarget(Targets.Seat, sit.Spot.Position) : default;
                 case TaskType.RELAX_IN_TOWN_PACKAGE:
                     return board.SeatClaims.TryGetValue(slot, out var seat) && !mind.SeatUnreachable ? new PlanTarget(Targets.Seat, seat.Position) : default;

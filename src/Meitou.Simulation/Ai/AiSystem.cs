@@ -504,7 +504,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             foreach (var b in buildings)
                 if (b.ResidentsTemplate.Length > 0) Note(b, TemplateOf(b.ResidentsTemplate).Template);
             bool IsPublic(TownBuilding b) => world.Fixtures.PublicOf(b.Key) ?? (publicFlag.TryGetValue(b, out bool open) ? open : b.LevelState?.GetBool("is public day", true) ?? true);
-            var wander = buildings.Where(b => IsPublic(b) && b.Spots.Any(IsGeneralNode)).GroupBy(b => b.Zone).ToDictionary(g => g.Key, g => g.ToArray());
+            var wander = buildings.Where(b => IsPublic(b)).GroupBy(b => b.Zone).ToDictionary(g => g.Key, g => g.ToArray());
             var shopList = buildings.Where(b => (b.IsShop || shops.Contains(b)) && IsPublic(b)).ToArray();
             var stock = new Dictionary<TownBuilding, ulong>(ReferenceEqualityComparer.Instance);
             foreach (var b in shopList) stock[b] = StockOf(world, b, stocks.GetValueOrDefault(b));
@@ -618,7 +618,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
 
     /// <summary>
     /// Where a town goal goes (docs/game/ai-tasks.md "Town goals"): wandering in town, a random general node of a random public building of the town in the walker's
-    /// zone (Observed; the original draws from all of those and finds nothing in one without such a node, Meitou draws from those with one); shopping, a random shop of the town that sells what its list wants,
+    /// zone (<b>Verified</b>, <c>FUN_1409fc6c0</c>, <c>FUN_140999a60</c>: one without such a node gives no target); shopping, a random shop of the town that sells what its list wants,
     /// else a random public building (<see cref="ShopFor"/>): a shop at a general node in it, else at it, any other building at its origin; the wanderer, the nearest town that is no nest marker. Null when there is none.
     /// </summary>
     Vector3? TargetFor(World world, CharacterId self, AiBehaviour behaviour, int town, AiMind mind)
@@ -634,6 +634,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
                 if (b is null) return null;
                 // A building without a counter is the target itself, its origin on any floor (FUN_1409997f0); the walk ends within WorkReach of it.
                 if (behaviour == AiBehaviour.Shop && ShopFactor(places, b) < 1) return new Vector3(b.Position.X, float.NaN, b.Position.Z);
+                // Wandering: a random general node of the drawn building, none: no target and no redraw (FUN_140999a60, FUN_14038c2f0).
+                if (behaviour == AiBehaviour.TownNode) return RandomNode(b, IsGeneralNode, roll);
                 // A general node; in a shop without one a guard post, else any other node (engine choice: where the original's Task_Shopping stands is not decoded).
                 foreach (var accept in (ReadOnlySpan<Func<HomeSpot, bool>>)[IsGeneralNode, s => s.Kind == HomeSpotKind.Guard, s => s.IsNode])
                 {
@@ -701,6 +703,18 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             float z = from.Z + (Rng.Float(roll) - 0.5f) * PatrolScatter;
             if (world.Walkability.IsWalkable(x, z)) return new Vector3(x, float.NaN, z);
         }
+        return null;
+    }
+
+    /// <summary>A random spot of <paramref name="building"/> that <paramref name="accept"/>s, its position; null when it has none.</summary>
+    static Vector3? RandomNode(TownBuilding building, Func<HomeSpot, bool> accept, ulong roll)
+    {
+        int nodes = 0;
+        foreach (var s in building.Spots) if (accept(s)) nodes++;
+        if (nodes == 0) return null;
+        int pick = Rng.Int(Rng.Mix(roll), nodes);
+        foreach (var s in building.Spots)
+            if (accept(s) && pick-- == 0) return s.Position;
         return null;
     }
 
@@ -780,7 +794,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             mind.NodeRoll = Rng.Hash(world.Seed, Rng.Key(table.IdOf(slot)), RngPurpose.Think, SeedSalts.NodePick ^ (ulong)++mind.NodeEpoch);   // a renewed goal draws its node anew
             // A spot given up is tried again from wherever the character is now (engine choice: the walk may have failed from the old place only).
             mind.HomeUnreachable = false;
-            if (type is not (TaskType.RELAX_IN_TOWN_PACKAGE or TaskType.SIT_AROUND)) mind.SeatUnreachable = false;
+            if (type is not (TaskType.RELAX_IN_TOWN_PACKAGE or TaskType.SIT_AROUND or TaskType.SIT_ON_THRONE)) mind.SeatUnreachable = false;
             if (profile.Commits)
             {
                 ulong roll = Rng.Hash(world.Seed, Rng.Key(table.IdOf(slot)), RngPurpose.Think, SeedSalts.AiCommit ^ (ulong)world.Tick << 9 ^ (ulong)type);
@@ -1030,7 +1044,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
                 // At its claimed seat (a chair or throne, else a node; a training dummy is stood at).
                 HomeSpot claimed = default;
                 bool claim;
-                if (type == TaskType.SIT_AROUND)
+                if (type is TaskType.SIT_AROUND or TaskType.SIT_ON_THRONE)
                 {
                     claim = board.SitClaims.TryGetValue(slot, out var sitting);
                     if (claim) claimed = sitting.Spot;
@@ -1113,7 +1127,6 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         {
             TaskType.STAND_AT_SHOPKEEPER_NODE => HomeSpotKind.Shopkeeper,
             TaskType.STAND_AT_GUARD_NODE_HOMEBUILDING or TaskType.STAND_AT_GUARD_NODE_HOMEBUILDING_INDOORS_ONLY or TaskType.STAND_AT_GUARD_NODE_HOMETOWN_OUTSIDE => HomeSpotKind.Guard,
-            TaskType.SIT_ON_THRONE => HomeSpotKind.Throne,
             _ => HomeSpotKind.General,
         };
         ulong roll = kind == HomeSpotKind.Bed ? 0 : mind.NodeRoll;   // beds stay round robin (the bed search is not the node finders')
@@ -1122,9 +1135,29 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         if (kind == HomeSpotKind.Guard && Pick(home, HomeSpotKind.General, mind.MemberIndex, roll) is { } general)
             return (Flat(general.Position), true, general.Position.Y, general.Yaw);
         if (kind != HomeSpotKind.Bed && Pick(home, null, mind.MemberIndex, roll, kind != HomeSpotKind.Shopkeeper) is { } any) return (Flat(any.Position), true, any.Position.Y, any.Yaw);
+        return null;
+    }
+
+        // The node goals (shopkeeper, guard, general) find a node of their own type and nothing else (FUN_14099ec70, FUN_14099f280: an empty hand, see NodeGoalFindsNothing); the others stand at any node.
+        if (kind != HomeSpotKind.Bed && !IsNodeGoal(type) && Pick(home, null, mind.MemberIndex, kind != HomeSpotKind.Shopkeeper) is { } any) return (Flat(any.Position), true, any.Position.Y, any.Yaw);
         // No bed: it sleeps in the house; a node goal without nodes stays at its own post, except staying home.
         if (kind == HomeSpotKind.Bed || type == TaskType.STAY_IN_HOME) return (Flat(home.Position), true, null, null);
         return (mind.Post, false, null, null);
+    }
+
+    /// <summary>The goals that stand at a node of the home building by its type: 20 shopkeeper, 47 general and the guard posts (<c>FUN_14099ec70</c>, <c>FUN_14099f280</c>).</summary>
+    static bool IsNodeGoal(TaskType type) => type is TaskType.STAND_AT_SHOPKEEPER_NODE or TaskType.STAND_AT_GENERAL_NODE or TaskType.STAND_AT_GUARD_NODE_HOMEBUILDING
+        or TaskType.STAND_AT_GUARD_NODE_HOMEBUILDING_INDOORS_ONLY or TaskType.STAND_AT_GUARD_NODE_HOMETOWN_OUTSIDE;
+
+    /// <summary>
+    /// Whether a node goal of a character with a home finds no node: the home has none of the goal's type (a guard post retries with general nodes, nothing else does), so the finder's hand
+    /// is empty (<c>FUN_14099e920</c>: kind 2 retries with kind 1, <c>FUN_14038c2f0</c> matches the type alone). A character without a home or whose home is out of reach keeps its post.
+    /// </summary>
+    bool NodeGoalFindsNothing(AiMind mind, Blackboard board, TaskType type)
+    {
+        if (!IsNodeGoal(type) || board.Home is not { } home || mind.HomeUnreachable || GateSpot(board, mind, type) is not null) return false;
+        var kind = type switch { TaskType.STAND_AT_SHOPKEEPER_NODE => HomeSpotKind.Shopkeeper, TaskType.STAND_AT_GENERAL_NODE => HomeSpotKind.General, _ => HomeSpotKind.Guard };
+        return Pick(home, kind, 0) is null && !(kind == HomeSpotKind.Guard && Pick(home, HomeSpotKind.General, 0) is not null);
     }
 
     /// <summary>
@@ -1688,9 +1721,13 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             var id = squad.Members[k];
             if (!world.Characters.TryResolveNext(id, out int s) || world.Characters.Cold(s) is not { } cold || cold.Ai is null) continue;
             var roles = board.Roles[(int)RoleOf(squad, id, cold)];
-            bool sits = false;
-            for (int g = 0; g < roles.Count && !sits; g++)
-                sits = roles[g].Task.Type == TaskType.SIT_AROUND && roles[g].InWindow(hour);
+            bool sits = false, around = false;
+            for (int g = 0; g < roles.Count; g++)
+            {
+                if (!roles[g].InWindow(hour)) continue;
+                sits |= roles[g].Task.Type is TaskType.SIT_AROUND or TaskType.SIT_ON_THRONE;
+                around |= roles[g].Task.Type == TaskType.SIT_AROUND;
+            }
             bool had = keptSits.TryGetValue(s, out var old);
             if (!sits || cold.Ai.SeatUnreachable)   // one that gave its seat up leaves it to the next member
             {
@@ -1702,7 +1739,9 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             int site = TownAt(at);
             var seats = site >= 0 && MaySitIn(world, board, squad, site, playerSide) ? Places(site) : NoPlaces;
             bool Mine(TownBuilding b) => seats.SeatOwners.TryGetValue(b, out int owner) && owner >= 0 && (owner == cold.Faction || owner == squad.Faction);
-            if (had && Mine(old.Building) && Sittable(old.Spot.Kind, !playerSide))
+            // Only reigning open: the throne furniture alone (BF_THRONE, mask 0x1000000 of FUN_1408cbd50); sitting around also takes chairs and dummies.
+            bool Takes(HomeSpotKind kind) => around ? Sittable(kind, !playerSide) : kind == HomeSpotKind.ThroneSeat;
+            if (had && Mine(old.Building) && Takes(old.Spot.Kind))
             {
                 TakenOf(old.Building).Add(old.Index);
                 board.SitClaims[s] = old;
@@ -1714,7 +1753,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             for (int i = 0; i < seats.Seats.Count; i++)
             {
                 var seat = seats.Seats[i];
-                if (!Sittable(seat.Spot.Kind, !playerSide) || !Mine(seat.Building) || seatTaken.TryGetValue(seat.Building, out var taken) && taken.Contains(seat.Index)) continue;
+                if (!Takes(seat.Spot.Kind) || !Mine(seat.Building) || seatTaken.TryGetValue(seat.Building, out var taken) && taken.Contains(seat.Index)) continue;
                 float d = Vector3.DistanceSquared(seat.Spot.Position, at);
                 if (d < bestD) (best, bestD) = (i, d);
             }

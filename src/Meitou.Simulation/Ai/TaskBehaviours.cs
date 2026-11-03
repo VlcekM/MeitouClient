@@ -112,7 +112,7 @@ public static class TaskBehaviours
         [TaskType.MAN_A_TURRET_ON_BUILDING] = (AiBehaviour.Turret, "Turret home guard"),
         [TaskType.MAN_A_TURRET_PLAYER_JOB] = (AiBehaviour.Turret, "Turret guard"),
         [TaskType.USE_TURRET] = (AiBehaviour.Turret, "Turret gunner"),
-        [TaskType.SIT_ON_THRONE] = (AiBehaviour.Post, "Reigning"),
+        [TaskType.SIT_ON_THRONE] = (AiBehaviour.Sit, "Reigning"),
         [TaskType.FOLLOW_SQUADLEADER] = (AiBehaviour.Follow, "Following leader"),
         [TaskType.FOLLOW_SLAVEMASTER] = (AiBehaviour.Follow, "Following master"),
         // 45 Bodyguard has no behaviour of its own (FUN_14032ebd0 builds Task_Blank for it): the following of a bodyguard contract is goal 44's.
