@@ -299,6 +299,7 @@ another squad); 66 and 67 need a player-faction target. **Looker gates** (**Veri
 only after it walks into the bar. Meitou (`DialogueSystem.quiet`): pairs noticed at the world's first look (new game or load) get no sight line
 until the player character has been out of notice.
 
+**Overlap** (`FUN_140671f50`, once a frame after the GUI update when 2 or more bubbles exist; **Verified**): for every pair with non-zero alpha whose absolute rectangles intersect (edges included) the axis of the smaller overlap is pushed (horizontal when the width overlap is smaller), each bubble by overlap / 2 + 1 integer pixels in opposite directions, the smaller coordinate toward smaller; passes repeat while any pair moved, at most 10; positions are recomputed from the heads each frame so nothing persists. Meitou: `PlayerInterface.SeparateBubbles`.
 **Timing** (`FUN_140685090`, `FUN_14067fd80`): showing a bubble sets timer `+0x230` = 2.0 + 0.12 × text length (both constants **Verified**,
 read from the exe); DA 12 sets the second timer `+0x234` (val0). Both lose the frame dt each update, only while the pause flag
 `DAT_1421349c9` is clear, and the next line starts once both are below 0 (**Verified**; the dt unit is **Unknown**). Updates do nothing

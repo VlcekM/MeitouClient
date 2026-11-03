@@ -20,7 +20,7 @@ sealed partial class PlayerInterface
         var speech = session.CurrentSnapshot.Speech;
         if (speech.Count == 0 || uiPainter is not { } painter) return;
         float scale = Height / 1080f;
-        int n = 0;
+        var shown = new List<(SpeechBubble Bubble, FittedSpeech Text, float Alpha, UiRect Panel)>();
         foreach (var bubble in speech)
         {
             if (session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == bubble.Speaker) is not { } who) continue;
@@ -30,16 +30,63 @@ sealed partial class PlayerInterface
             if (alpha <= 0 || Project(head) is not { } at) continue;
             var text = SpeechText(painter, bubble);
             float w = (text.Width + 4) / 0.855556f, h = MathF.Max(text.Height / 0.75f, Height * 0.0222222f);
-            var panel = new UiRect(at.X - w / 2, at.Y - 4 * scale - h, w, h);
-            string a = alpha.ToString("R", CultureInfo.InvariantCulture);
-            controls.Add(new($"speech-{n}", "Widget", panel, "", "", "Kenshi_SpeechPanelSkin", true, new Dictionary<string, string> { ["Alpha"] = a }, Vector4.Zero, Pickable: false));
-            controls.Add(new($"speech-text-{n++}", "TextBox", new(panel.X + w * 0.0688889f, panel.Y + h * 0.125f, w * 0.855556f, h * 0.75f), text.Lines, "", "", true,
-                new Dictionary<string, string>
-                {
-                    ["FontName"] = SpeechFont(bubble), ["TextAlign"] = "Center", ["TextShadow"] = "true",
-                    ["TextColour"] = "0.902 0.902 0.902", ["Alpha"] = a,
-                }, Vector4.Zero, Pickable: false, TextScale: 1));
+            shown.Add((bubble, text, alpha, new UiRect(at.X - w / 2, at.Y - 4 * scale - h, w, h)));
         }
+        var panels = SeparateBubbles([.. shown.Select(b => b.Panel)]);
+        for (int n = 0; n < shown.Count; n++) AddBubble(controls, n, shown[n].Bubble, shown[n].Text, shown[n].Alpha, panels[n]);
+    }
+
+    void AddBubble(List<UiControl> controls, int n, SpeechBubble bubble, FittedSpeech text, float alpha, UiRect panel)
+    {
+        float w = panel.Width, h = panel.Height;
+        string a = alpha.ToString("R", CultureInfo.InvariantCulture);
+        controls.Add(new($"speech-{n}", "Widget", panel, "", "", "Kenshi_SpeechPanelSkin", true, new Dictionary<string, string> { ["Alpha"] = a }, Vector4.Zero, Pickable: false));
+        controls.Add(new($"speech-text-{n}", "TextBox", new(panel.X + w * 0.0688889f, panel.Y + h * 0.125f, w * 0.855556f, h * 0.75f), text.Lines, "", "", true,
+            new Dictionary<string, string>
+            {
+                ["FontName"] = SpeechFont(bubble), ["TextAlign"] = "Center", ["TextShadow"] = "true",
+                ["TextColour"] = "0.902 0.902 0.902", ["Alpha"] = a,
+            }, Vector4.Zero, Pickable: false, TextScale: 1));
+    }
+
+    /// <summary>Most passes of the bubbles' push-apart.</summary>
+    const int BubblePasses = 10;
+
+    /// <summary>
+    /// Overlapping bubbles push each other apart (<c>FUN_140671f50</c>, once a frame): for every pair whose integer pixel rectangles intersect (edges included) the shorter-overlap
+    /// axis is used (horizontal when the width overlap is smaller) and each moves overlap / 2 + 1 pixels, the one with the smaller coordinate toward smaller; whole passes repeat
+    /// while any pair moved, at most ten. Positions are recomputed from the heads every frame, so the shift does not persist.
+    /// </summary>
+    internal static UiRect[] SeparateBubbles(UiRect[] panels)
+    {
+        var r = panels.Select(p => (X: (int)MathF.Round(p.X), Y: (int)MathF.Round(p.Y), W: (int)MathF.Round(p.Width), H: (int)MathF.Round(p.Height))).ToArray();
+        for (int pass = 0; pass < BubblePasses; pass++)
+        {
+            bool moved = false;
+            for (int i = 0; i < r.Length; i++)
+                for (int j = i + 1; j < r.Length; j++)
+                    moved |= PushApart(r, i, j);
+            if (!moved) break;
+        }
+        return [.. r.Select(p => new UiRect(p.X, p.Y, p.W, p.H))];
+    }
+
+    static bool PushApart((int X, int Y, int W, int H)[] r, int i, int j)
+    {
+        var (a, b) = (r[i], r[j]);
+        int dx = Math.Min(a.X + a.W, b.X + b.W) - Math.Max(a.X, b.X), dy = Math.Min(a.Y + a.H, b.Y + b.H) - Math.Max(a.Y, b.Y);
+        if (dx < 0 || dy < 0) return false;
+        if (dx < dy)
+        {
+            int shift = dx / 2 + 1, sign = a.X < b.X ? -1 : 1;
+            (r[i].X, r[j].X) = (a.X + sign * shift, b.X - sign * shift);
+        }
+        else
+        {
+            int shift = dy / 2 + 1, sign = a.Y < b.Y ? -1 : 1;
+            (r[i].Y, r[j].Y) = (a.Y + sign * shift, b.Y - sign * shift);
+        }
+        return true;
     }
 
     /// <summary>A bubble's text broken into lines and its size in pixels, as its text box draws it.</summary>
