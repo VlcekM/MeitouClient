@@ -189,6 +189,8 @@ public sealed class Machine
     public float ProductionMult { get; set; } = 1;
     /// <summary>A wind generator's share of its output: its blade's <see cref="Meitou.Data.World.RotorSpec.WindShare"/> of the wind at the site (derived each tick; not saved, not hashed).</summary>
     public float Wind { get; set; }
+    /// <summary>The wind range of the rotor this placement spawned (<see cref="Meitou.Data.World.WorldObjectLayout.WindRotor"/>; derived at creation, not saved); null: the share is 0.</summary>
+    public (float Min, float Max)? WindRotor { get; init; }
     /// <summary>A wind generator's wind speed at the site (units/s) and its rated output (data + research), for its panel; derived each tick.</summary>
     public float WindSpeed { get; set; }
     public float WindRated { get; set; }

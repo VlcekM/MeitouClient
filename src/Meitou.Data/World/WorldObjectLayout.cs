@@ -174,6 +174,18 @@ public static class WorldObjectLayout
         return result;
     }
 
+    /// <summary>
+    /// A wind generator's rotor as this placement spawns it (<c>getWindRotationPower</c> reads only the parts the layout created, <b>Verified</b>, FUN_1404cbd90): the first laid-out part that
+    /// turns with the wind speed (rotation function 3, no collision file) and its wind range; null when the position's part choice spawns none.
+    /// </summary>
+    public static (float Min, float Max)? WindRotor(GameDatabase db, GameRecord building, Vector3 worldPosition)
+    {
+        foreach (var mesh in Building(db, building, building.StringId, worldPosition, Quaternion.Identity))
+            if (mesh.Joints is { Count: > 0 } joints && joints[^1] is { Rotor.Function: RotorSpec.WindSpeed } own && own.PartId == mesh.Source.StringId)
+                return (own.Rotor.WindMin, MathF.Max(own.Rotor.WindMin, own.Rotor.WindMax));
+        return null;
+    }
+
     sealed class Assembly(GameDatabase db, GameRecord building, string placementId, BuildingState state, List<PlacedMesh> result, List<PlacedLight>? lights, List<PlacedEffect>? effects)
     {
         public readonly GameDatabase Db = db;

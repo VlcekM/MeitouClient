@@ -129,6 +129,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
             Site = site.Id,
             Data = data,
             Position = site.Position,
+            WindRotor = data.IsWind && db.Find(site.Record) is { } record ? Meitou.Data.World.WorldObjectLayout.WindRotor(db, record, site.Position) : null,
             Inputs = [.. data.Inputs.Select(i => new InputSlot(i))],
             Output = data.Output is { } o ? new OutputSlot(o) : null,
             Storage = data.HasInventory ? new Inventory(data.StorageWidth, data.StorageHeight) { StackBonusMult = data.StackBonusMult, Limited = data.StorageLimit.Count > 0 }
