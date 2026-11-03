@@ -662,6 +662,8 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
             // The player's characters attack on sight with the job or Hold's goal (offered to the decision step); an NPC decides by its own goals in the chooser.
             bool targets = looks && cold.IsPlayer && (HuntsEnemies(cold) || HoldsGround(cold));
             var scan = NewScan(world, i, cold, war, MathF.Max(0, RangeOf(cold, Settings.SightRange)), effects);
+            // A carried or unconscious character only lets its senses fade (FUN_1405d00b0 runs FUN_14050c7c0 instead of the AI update when the get-up test FUN_140598c20 fails): no gather, no sighting.
+            if (!cold.CarriedBy.IsNone || cold.Medical.Incapacitated) { Fade(ref scan); continue; }
             // Every awake NPC keeps spot meters on the sneakers it sees, not only those it would fight (the original's per-looker SpottingPeopleMgr): they feed the crime
             // witnesses, the stealth knock-out and the sneaker's arrows.
             bool picks = targets || looks && cold.Ai is not null;
@@ -738,6 +740,30 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
         if (!s.Far || s.Gathered >= GatherCap) return;
         s.FarPass = true;
         s.World.Grid.Query(s.Eye.X, s.Eye.Z, MathF.Max(s.Range, NoiseFar), ref s, Visit);
+    }
+
+    /// <summary>
+    /// The look of a carried or unconscious character (<c>SensoryData::fade</c> <c>FUN_140859220</c>, <b>Verified</b>): the counts and threats are cleared and every entry decays (<see cref="Decay"/>) as
+    /// one not sensed; nobody new is gathered and nothing is sensed again.
+    /// </summary>
+    static void Fade(ref Scan s)
+    {
+        var b = s.Block;
+        b.threats.Clear();
+        b.Enemies = b.Neutrals = b.Allies = b.AlliesDown = 0;
+        b.ThreatToMe = b.ThreatToAllies = 0;
+        var table = s.Table;
+        var prev = table.Previous;
+        var list = b.entries;
+        int w = 0;
+        for (int k = 0; k < list.Count; k++)
+        {
+            var e = list[k];
+            int t = e.Target;
+            if ((uint)t >= (uint)table.HighWater || !prev[t].Alive || prev[t].Generation != e.Generation || table.Cold(t) is not { } c) continue;
+            if (Decay(ref s, ref e, t, c)) list[w++] = e;
+        }
+        list.RemoveRange(w, list.Count - w);
     }
 
     /// <summary>

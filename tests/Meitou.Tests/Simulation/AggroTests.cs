@@ -429,6 +429,31 @@ public class AggroTests
         Assert.False(senses.Knows(target), "dropped once its life is over");
     }
 
+    /// <summary>A carried character only lets its senses fade (FUN_1405d00b0 -> FUN_140859220): it senses nobody new, and what it knew decays unrefreshed.</summary>
+    [Fact]
+    public void A_carried_character_senses_nobody_new_and_its_entries_only_fade()
+    {
+        var aggro = new AggroSystem(Relations(), new AggroSettings { AttackOnSight = false });
+        using var world = new SimWorld(new WorldSettings { Seed = 3, Threads = 1, PublishSnapshots = false }, new OpenGroundWalkability((_, _) => 150), [aggro]);
+        CharacterId Spawn(float z)
+        {
+            var cold = new Combatant().MakeCold();
+            cold.Faction = Villagers;
+            return world.Characters.Spawn(new CharacterHot { Position = new Vector3(2000, 150, z), Health = 100, MaxSpeed = 60, WalkSpeed = 15 }, cold, 0);
+        }
+        CharacterId looker = Spawn(2000), seen = Spawn(2200), carrier = Spawn(2000);
+        world.Characters.Cold(looker.Slot)!.CarriedBy = carrier;
+        world.RunTicks(30);
+        Assert.False(aggro.SensesOf(looker.Slot)!.Knows(seen), "a carried character gathers nobody");
+        world.Characters.Cold(looker.Slot)!.CarriedBy = CharacterId.None;
+        world.RunTicks(30);
+        Assert.True(aggro.SensesOf(looker.Slot)!.Knows(seen, now: true), "set down, it senses again");
+        world.Characters.Cold(looker.Slot)!.CarriedBy = carrier;
+        world.RunTicks(30);
+        Assert.True(aggro.SensesOf(looker.Slot)!.Knows(seen), "the entry is kept while its life lasts");
+        Assert.False(aggro.SensesOf(looker.Slot)!.Knows(seen, now: true), "but nothing refreshes it");
+    }
+
     /// <summary>
     /// Two of the player's squad fight a group, a third stands apart and one of the group attacks it: the lone one keeps fighting its own attacker through every re-pick
     /// (docs/game/combat.md "Target selection": the chooser's lists are its own attackers and threats, and a bodyguard's protectee's attackers, never a squad mate's).
