@@ -254,7 +254,7 @@ public sealed partial class FirstAidSystem
         if (!cold.IsPlayer && cold.SquadId >= 0 && world.Squads.Find(cold.SquadId) is { } squad && CharacterFacts.SquadFighting(table, squad)) return (-1, 0);
         // Nor while it carries someone (the goal's 0.1 then): the carrying goal (a kidnap, a rescue) keeps it, so a carrier does not walk off after a patient with the body.
         if (!cold.IsPlayer && !cold.Carrying.IsNone) return (-1, 0);
-        bool organic = cold.Inventory is { } inv && Best(inv, ItemInfo.FirstAidKitFunction) is not null, robotic = cold.Inventory is { } inv2 && Best(inv2, ItemInfo.RobotKitFunction) is not null;
+        bool organic = HasFunction(cold.Inventory, ItemInfo.FirstAidKitFunction), robotic = HasFunction(cold.Inventory, ItemInfo.RobotKitFunction);
         bool healAllies = (world.Player.SquadAi & SquadAi.Heal) != 0;
         bool healAll = cold.IsPlayer && (world.Player.SquadAi & SquadAi.HealAll) != 0, healNeutrals = healAll || cold.IsPlayer && (world.Player.SquadAi & SquadAi.HealNeutrals) != 0;
         bool heals = Relations is { } rel && rel.Contains(cold.Faction) && rel.Factions[cold.Faction].HealsStrangers;

@@ -457,24 +457,8 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
         if (kit.Item.Charges <= 0) kit.Owner.RemoveOne(kit.Item);
     }
 
-    /// <summary>The best kit of a function in an inventory (and its backpack): the highest record quality with charges left; the first of equals.</summary>
-    ItemInstance? Best(Inventory? inventory, int function)
-    {
-        if (inventory is null) return null;
-        ItemInstance? best = null;
-        float bestQuality = float.MinValue;
-        foreach (var item in inventory.All())
-        {
-            if (item.Type != FcsRecordType.ITEM || item.ItemFunction != function || item.Charges <= 0 || item.Quantity <= 0) continue;
-            float q = Items.Info(item.Record)?.Quality ?? 0;
-            if (q > bestQuality)
-            {
-                best = item;
-                bestQuality = q;
-            }
-        }
-        return best;
-    }
+    /// <summary>Whether an inventory (or its backpack) holds an item of the function: the medic finder's kit flags test only the item function, no charge, quantity or type (<c>FUN_14004b84e</c>).</summary>
+    static bool HasFunction(Inventory? inventory, int function) => inventory is not null && inventory.All().Any(item => item.ItemFunction == function);
 
     static int FunctionOf(bool robot) => robot ? ItemInfo.RobotKitFunction : ItemInfo.FirstAidKitFunction;
 
