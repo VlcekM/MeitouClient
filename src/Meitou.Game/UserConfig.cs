@@ -54,6 +54,8 @@ sealed class UserConfig
     public FloaterMode Floaters { get; set; } = FloaterMode.Simple;
     /// <summary>The original's <c>censorship</c> option (Interface settings, off by default): five words swapped in the displayed dialogue.</summary>
     public bool Censorship { get; set; }
+    /// <summary>The original's <c>Show names</c> option (Interface settings, on by default): the name over the player's characters; off, the tag keeps only its stealth and light icons.</summary>
+    public bool ShowNames { get; set; } = true;
     /// <summary>The FEEDBACK button at the top right during play (Interface settings, default on); off, it shows only on the title and with the game menu open.</summary>
     public bool FeedbackButton { get; set; } = true;
     /// <summary>The original's splash at startup in the Faithful UI (Advanced settings: the switch's Faithful side), off by default; off, the menu shows as soon as the game has loaded.</summary>

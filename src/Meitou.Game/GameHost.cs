@@ -354,6 +354,7 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
         player = new PlayerInterface(session, gpu.Terrain.HeightAt, DrawnPosition);
         player.LoadUi(g.UiMode ?? config.UiMode, assets.Find);
         player.SpeedUnit = config.SpeedUnit;
+        player.ShowNames = config.ShowNames;
         player.Floaters = config.Floaters;
         player.FeedbackButtonInPlay = config.FeedbackButton;
         player.FixLoadButton = config.FixLoadButton;

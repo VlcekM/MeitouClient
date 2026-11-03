@@ -293,6 +293,9 @@ sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, 
                 + "and the part hit. Healing of your own characters floats up in green.", Choice: new(() => ["Off", "Simple info", "Full info"],
                 () => (int)config.Floaters, i => player.Floaters = config.Floaters = (FloaterMode)i)));
         if (page == 2)
+            result.Add(new("Show names", "The name over each of your characters (the game's Show names option). Off, only the stealth and light icons stay.",
+                Toggle: new("Show names", () => config.ShowNames, v => player.ShowNames = config.ShowNames = v, OnOff: true)));
+        if (page == 2)
             result.Add(new("Censorship", "Swaps a few strong words in the dialogue for milder ones (the game's censorship option).",
                 Toggle: new("Censorship", () => config.Censorship, v => config.Censorship = v, OnOff: true)));
         if (page == 2)
@@ -694,6 +697,7 @@ sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, 
         player.SetUiMode(UiMode.Meitou);
         player.SpeedUnit = config.SpeedUnit = SpeedUnit.Mph;
         player.Floaters = config.Floaters = FloaterMode.Simple;
+        player.ShowNames = config.ShowNames = true;
         player.FeedbackButtonInPlay = config.FeedbackButton = true;
         config.TickAhead = TickAheadMode.Dynamic;
         bindings.ResetToDefaults();

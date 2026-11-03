@@ -89,7 +89,7 @@ sense `AggroSystem.Notice` (level seen, for a player-side target of another fact
 conscious victim (engine choice: not when it goes down). Not wired: the forced sense of the AI tasks, the body drop and dialogue events 0x21 / 0x37, and a hit's `param_4`
 gate. Whether the arrows read well in game (the mesh is 10 units long) was not checked with a run (**Unknown**).
 Every player character within the 1.2e8 range gets the `Kenshi_CharacterNamePanel` over its head (name in `Kenshi_StandardFont_Large` with shadow, selected: white in [brackets], else #b3b3b3 (**Observed**); the icon only while sneaking); NPCs get none
-(**Observed** in the original, not verified against `FUN_1406e8100`).
+(**Observed** in the original). **Verified** (`FUN_1406e8100`, `FUN_1406e2fd0`, `FUN_1406e2900`, `FUN_1405cc310`, `FUN_1403eca90`): a tag is made when a character with a faction whose `+0x250` is set (and a relation test against the player's faction object, **Unknown**) enters the world; the `Show names` option (`DAT_142133508`, saved by `FUN_1403eca90`) is copied into each tag (`+0x20`), and off hides the name text and sizes the panel to the two icons (Meitou: `PlayerInterface.ShowNames`, Interface settings "Show names", default on); a carried character's tag is lifted by the name's height (Meitou draws none for a carried one).
 
 ## Disguise
 

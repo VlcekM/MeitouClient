@@ -65,15 +65,17 @@ sealed partial class PlayerInterface
             if (Vector3.DistanceSquared(Eye, feet) >= NameTagRangeSquared) continue;
             if (Project(feet + new Vector3(0, CharacterHeight + 4, 0)) is not { } head) continue;
             float x = head.X - width / 2, y = head.Y - 4 * scale - height;
-            controls.Add(new($"nametag-{n}", "TextBox", new(x + width * 0.187192f, y, width * 0.655172f, height), c.Selected ? $"[{c.Name}]" : c.Name, "", "", true,
+            if (ShowNames) controls.Add(new($"nametag-{n}", "TextBox", new(x + width * 0.187192f, y, width * 0.655172f, height), c.Selected ? $"[{c.Name}]" : c.Name, "", "", true,
                 new Dictionary<string, string>
                 {
                     ["FontName"] = "Kenshi_StandardFont_Large", ["TextAlign"] = "Center", ["TextShadow"] = "true", ["TextColour"] = c.Selected ? "1 1 1" : "0.702 0.702 0.702",
                 }, Vector4.Zero, Pickable: false));
+            // Without the name the panel is the two icons side by side (FUN_1406e2fd0 sizes it to them), centred over the head.
+            float stealthX = ShowNames ? x : head.X - width * (0.187192f + 0.157635f) / 2, lightX = ShowNames ? x + width * 0.842365f : stealthX + width * 0.187192f;
             if (c.Stealth is { } state)
             {
                 var tint = state switch { StealthExposure.Detected => TagSeen, StealthExposure.Noticed => TagAlmostSeen, _ => TagHidden };
-                controls.Add(new($"nametag-stealth-{n}", "ImageBox", new(x, y + height * 0.09375f, width * 0.187192f, height * 0.84375f), "", "", "", true,
+                controls.Add(new($"nametag-stealth-{n}", "ImageBox", new(stealthX, y + height * 0.09375f, width * 0.187192f, height * 0.84375f), "", "", "", true,
                     new Dictionary<string, string>
                     {
                         ["ImageResource"] = "Kenshi_CharacterNameTags", ["ImageGroup"] = "Stealth", ["ImageName"] = "Stealth",
@@ -81,7 +83,7 @@ sealed partial class PlayerInterface
                     }, default, Pickable: false));
                 // The LightLevel icon on the right in the layout's colour: frame round((1 - light) x 6) of its 7, the sun at full light (FUN_1406e8100).
                 int frame = (int)MathF.Round((1 - Math.Clamp(c.Light, 0, 1)) * (LightLevelFrames - 1));
-                controls.Add(new($"nametag-light-{n}", "ImageBox", new(x + width * 0.842365f, y, width * 0.157635f, height), "", "", "", true,
+                controls.Add(new($"nametag-light-{n}", "ImageBox", new(lightX, y, width * 0.157635f, height), "", "", "", true,
                     new Dictionary<string, string>
                     {
                         ["ImageResource"] = "Kenshi_CharacterNameTags", ["ImageGroup"] = "LightLevel", ["ImageName"] = "LightLevel",
@@ -94,6 +96,9 @@ sealed partial class PlayerInterface
 
     /// <summary>Whether the world leaves a character undrawn (above the viewed floor, or inside a closed building): its tag shows only while it is selected.</summary>
     public Func<CharacterId, bool>? HiddenInWorld { get; set; }
+
+    /// <summary>The original's <c>Show names</c> option (<c>FUN_1406e2fd0</c>): off, the name tag keeps only its icons.</summary>
+    public bool ShowNames { get; set; } = true;
 
     MyGuiLayout? taskBarLayout;
 
