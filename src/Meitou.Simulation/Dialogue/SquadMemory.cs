@@ -13,6 +13,8 @@ public static class MemoryTag
     public const int Looted = 6;
     /// <summary>DC 52 I_LOVE_THIS_GUY's long-term mask (lifesaver, freed me) and DC 53 I_HATE_THIS_GUY's (stole from me, captor, defeated my squad, killed my friend).</summary>
     public const uint LoveMask = 0xc, HateMask = 0x2b0;
+    /// <summary>The grudge test of the put-in-bed desire (<c>FUN_140599390</c>, <b>Verified</b>): long-term tags 1, 4, 5, 7, 8, 9, 10 and short-term tags 1, 2, 4, 5, 7.</summary>
+    public const uint GrudgeLongMask = 0x7b2, GrudgeShortMask = 0xb6;
 }
 
 /// <summary>

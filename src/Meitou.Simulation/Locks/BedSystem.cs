@@ -455,7 +455,23 @@ public sealed class BedSystem(PopulationData data, BedSettings? settings = null)
         if (Carry is null || table.Cold(slot) is not { Carrying.IsNone: false } c || !CanWalk(c) || trips.Exists(t => t.Character == table.IdOf(slot))) return null;
         if (!table.TryResolveNext(c.Carrying, out int b) || table.Cold(b) is not { } bc || bc.Fighter is { IsAnimal: true }) return null;
         if (data.Relations.Contains(bc.Faction) && data.Relations.Contains(c.Faction) && data.Relations.IsHostile(bc.Faction, c.Faction)) return null;
+        if (!WantsToPutIn(world, slot, c, b, bc)) return null;
         return world.Fixtures.FindBed(world, slot, data.Relations, f => Reserved(f, table.IdOf(slot)));
+    }
+
+    /// <summary>
+    /// The rest of the desire of goal 106 (<c>FUN_1405a0d50</c>, <b>Verified</b>): the carrier regards the body as friendly, its squad's memory of the body holds no grudge tag, and a police-like carrier
+    /// is owed no bounty by the body.
+    /// </summary>
+    static bool WantsToPutIn(World world, int slot, CharacterCold c, int body, CharacterCold bc)
+    {
+        if (world.SystemOf<Dialogue.DialogueSystem>() is { } dialogue)
+        {
+            if (!dialogue.RegardsFriendly(world, slot, body)) return false;
+            if (dialogue.Memory.Find(world, c.SquadId, world.Characters.IdOf(body)) is { } known
+                && ((known.Long & Dialogue.MemoryTag.GrudgeLongMask) != 0 || (known.Short & Dialogue.MemoryTag.GrudgeShortMask) != 0)) return false;
+        }
+        return !(world.SystemOf<Crime.CrimeSystem>()?.IsPoliceLike(world, c) == true && bc.Bounties?.AmountFor(c.Faction) > 0);
     }
 
     public void Hash(ref StateHasher hasher)
