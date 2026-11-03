@@ -149,6 +149,7 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
             systems: systems, walkability: walkability);
         session.World.BenchFacingFix = config.FixBenchFacing;
         if (gpu.Characters is { } nearChars) session.World.NearRadius = nearChars.NearReach;   // every drawn character steps every tick (docs/simulation.md "Far cadence")
+        session.HoldForZones = interactive && !IsSandbox && !IsDuel && !IsBattle;   // the forced pause while the camera's zones load
         BootPlayer(display, interactive);
     }
 

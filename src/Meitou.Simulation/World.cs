@@ -178,6 +178,24 @@ public sealed partial class World : IDisposable
     public GoalClaims Claims { get; } = new();
     /// <summary>The camera the host last passed (<see cref="CameraViewCommand"/>); null: none, nothing is tested against a screen.</summary>
     public CameraViewCommand? View { get; internal set; }
+
+    /// <summary>The game is held until the camera's surroundings are loaded (<see cref="PopulationSystem.LoadingHold"/>); the host stops the ticks, a forced pause apart from the player's.</summary>
+    public bool HeldForZones => systems.OfType<PopulationSystem>().FirstOrDefault()?.LoadingHold == true;
+
+    /// <summary>
+    /// Between ticks (the host's frame, no tick-ahead running): applies the camera's focus and asks for its zones, so they load while the world is held (<see cref="HeldForZones"/>). The camera views
+    /// go to the world as well; every other command waits for its tick.
+    /// </summary>
+    public void StepHeld()
+    {
+        if (Characters.Phase != TablePhase.Outside) throw new InvalidOperationException("held steps require a tick boundary");
+        var due = Commands.TakeDue(Tick, c => c is FocusCommand or CameraViewCommand);
+        foreach (var system in systems)
+        {
+            if (system is PopulationSystem population && (due.Count > 0 || population.LoadingHold)) population.StepHeld(this, due);
+            else if (system is BodySystem body && due.Count > 0) body.Inputs(this, due);
+        }
+    }
     readonly bool hasGoalSources;
     /// <summary>The characters' places and light levels for the sight tests (docs/game/perception.md "Sight"), worked out each tick.</summary>
     public SightMap Sight { get; } = new();

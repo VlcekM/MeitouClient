@@ -351,6 +351,7 @@ sealed partial class GameHost
             simulation: worldSettings = new Meitou.Simulation.WorldSettings { Seed = g.Seed, MinPartitionSize = 128, Threads = Math.Max(1, config.SimThreads ?? Math.Clamp(Environment.ProcessorCount / 2, 1, 8)), FarTickPeriod = FarTickPeriod },
             systems: systems, walkability: walkability);
         session.World.BenchFacingFix = config.FixBenchFacing;
+        session.HoldForZones = !IsSandbox && !IsDuel && !IsBattle;
         render.Grid = IsSandbox;
         session.Camera.Place(new Vector2((float)(o.X ?? scene.Focus.X), (float)(o.Z ?? scene.Focus.Z)), (float)(o.Yaw ?? 30) * MathF.PI / 180,
             (float)(o.Pitch ?? Meitou.Data.World.KenshiCamera.InitialPitchDegrees) * MathF.PI / 180,

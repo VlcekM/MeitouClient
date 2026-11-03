@@ -83,6 +83,27 @@ public class PopulationTests
         Assert.Contains(zone, world.LoadedZones!);
     }
 
+    /// <summary>FUN_140a0f820 / FUN_140787d40: the world is held while a sample point of the camera lies in a zone that is not loaded; the camera's zones are asked for between ticks, so they can load meanwhile.</summary>
+    [Fact]
+    public void The_world_is_held_while_the_cameras_zones_are_not_ready_and_the_camera_still_asks_for_them()
+    {
+        using var world = SyntheticTown.World(5, 1, 3, new PopulationSettings { UnloadGraceSeconds = 10, CheckEveryTicks = 1 });
+        var population = (PopulationSystem)world.Systems[0];
+        bool ready = false;
+        population.ZoneGate = _ => ready;
+        world.RunTick();
+        Assert.True(world.HeldForZones);
+        // The camera goes elsewhere while held: no tick runs, yet its zones are requested.
+        var there = new Vector3(20000, 0, 20000);
+        world.Commands.Enqueue(new FocusCommand(there) { Tick = world.Tick });
+        world.StepHeld();
+        Assert.Contains(Meitou.Data.World.WorldLayout.ZoneOf(there.X, there.Z), population.ActiveZones);
+        Assert.True(world.HeldForZones);
+        ready = true;
+        world.StepHeld();
+        Assert.False(world.HeldForZones);
+    }
+
     [Fact]
     public void A_town_squad_in_an_active_zone_stays_loaded_as_a_platoon_when_its_town_unloads()
     {

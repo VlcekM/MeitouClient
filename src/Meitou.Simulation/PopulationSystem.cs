@@ -414,6 +414,36 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
         if (!loadedUntil.TryGetValue(zone, out long was) || was < until) loadedUntil[zone] = until;
     }
 
+    /// <summary>
+    /// Whether the game is held while the camera's surroundings load (<c>FUN_140a0f820</c>:181-203, <c>FUN_140787d40</c>, <b>Verified</b>): one of the four sample points (the camera focus and +600 in x, in z and in both)
+    /// lies in a zone that is not loaded, i.e. not requested and ready. Only with a <see cref="ZoneGate"/> (a host that builds navmeshes). A point off the zone grid is not counted (engine choice: the unclamped
+    /// camera over the sea would hold the game for good).
+    /// </summary>
+    public bool LoadingHold { get; private set; }
+
+    const float HoldReach = 600;
+
+    void UpdateHold(World world)
+    {
+        LoadingHold = false;
+        if (ZoneGate is null || focus is not { } f || world.LoadedZones is not { } loaded) return;
+        foreach (var at in (ReadOnlySpan<Vector2>)[new(f.X, f.Z), new(f.X + HoldReach, f.Z), new(f.X, f.Z + HoldReach), new(f.X + HoldReach, f.Z + HoldReach)])
+        {
+            var zone = WorldLayout.ZoneOf(at.X, at.Y);
+            if (zone.IsInsideGrid && !loaded.Contains(zone)) { LoadingHold = true; return; }
+        }
+    }
+
+    /// <summary>
+    /// Between ticks while the world is held (or when the camera moved): takes the camera focus from <paramref name="commands"/> and asks for its zones again, so the zones load whilst no tick runs
+    /// (the original asks every frame, outside the game's pause).
+    /// </summary>
+    internal void StepHeld(World world, IReadOnlyList<SimCommand> commands)
+    {
+        foreach (var c in commands) if (c is FocusCommand f) focus = f.Position;
+        RefreshZones(world);
+    }
+
     void RefreshZones(World world)
     {
         // The player's characters ask for the box round them (the player's faction, docs/game/character-stats.md "Corpses"); the camera focus centres the block, and alone it does without a player.
@@ -431,6 +461,7 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
         foreach (var zone in loadedUntil.Keys) active.Add(zone);
         world.ActiveZones = world.LoadedZones;   // the ready ones (RefreshLoaded)
         world.VisitedZones.UnionWith(world.ActiveZones!);
+        UpdateHold(world);
         long grace = (long)Math.Ceiling(settings.UnloadGraceSeconds / world.TickSeconds);
         long townGrace = (long)Math.Ceiling(settings.TownUnloadGraceSeconds / world.TickSeconds);
         foreach (var site in data.Sites)

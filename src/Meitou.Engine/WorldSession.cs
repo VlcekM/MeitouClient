@@ -52,6 +52,11 @@ public sealed class WorldSession : IDisposable
     public FixedStepClock Ticks { get; }
     /// <summary>The game-time simulation tick.</summary>
     public SimulationClock Simulation { get; } = new();
+    /// <summary>The interactive host holds the game while the camera's zones load (<see cref="World.HeldForZones"/>); scripted runs never do.</summary>
+    public bool HoldForZones { get; set; }
+    /// <summary>The longest the game is held for zones (real seconds).</summary>
+    public const double MaxHoldSeconds = 60;
+    double heldSeconds;
     public GameClock Clock { get; }
     /// <summary>The simulated world; it ticks with the simulation clock. Replaced as a whole by <see cref="ReplaceWorld"/> (a loaded save); read it again after a frame, do not keep it.</summary>
     public World World { get; private set; }
@@ -111,6 +116,14 @@ public sealed class WorldSession : IDisposable
     public int AdvanceSimulation(double realSeconds)
     {
         EnsureNotRunning();
+        if (HoldForZones && aheadTicks == 0)
+        {
+            // The forced pause (FUN_140787d40): the zones round the camera are not loaded yet. The camera still asks for them; no tick runs and the clock owes none. A zone that never loads
+            // (a failed navmesh) lets the game go on after MaxHoldSeconds (engine choice).
+            World.StepHeld();
+            if (World.HeldForZones && (heldSeconds += realSeconds) < MaxHoldSeconds) return 0;
+        }
+        else heldSeconds = 0;
         int n = Simulation.Advance(realSeconds);
         if (!Simulation.IsPaused)
         {
@@ -144,7 +157,7 @@ public sealed class WorldSession : IDisposable
     public void BeginTickAhead()
     {
         EnsureNotRunning();
-        if (aheadTicks > 0 || Simulation.IsPaused) return;
+        if (aheadTicks > 0 || Simulation.IsPaused || HoldForZones && World.HeldForZones) return;
         // Rounded down (a tick short runs in the next frame; one too many holds the picture a frame), plus a hair: the average nears a steady count from below.
         int count = (int)Math.Clamp(Math.Floor(owedPerFrame + 0.1), 1, Simulation.MaxTicksPerFrame * Simulation.Speed);
         (heldPrevious, heldCurrent, heldTick, held) = (World.PreviousSnapshot, World.Snapshot, World.Tick, true);
