@@ -84,10 +84,12 @@ public sealed class ShoppingList
         Array.Clear(done);
     }
 
-    /// <summary>Whether something is left to buy today: goal 118's desire (0 once every entry is done).</summary>
-    public bool Pending(int today, int hour)
+    /// <summary>Whether something is left to buy today in the town <paramref name="site"/> the buyer stands in (-1: none): goal 118's desire (0 once every entry is done).</summary>
+    public bool Pending(int today, int hour, int site = -1)
     {
         NewDay(today, hour);
+        // Standing in another town than the one it last bought in starts the list over at every evaluation (FUN_140998fa0, Verified).
+        if (town >= 0 && site >= 0 && town != site) Array.Clear(done);
         for (int k = 0; k < function.Length; k++)
             if (wanted[k] > done[k]) return true;
         return false;

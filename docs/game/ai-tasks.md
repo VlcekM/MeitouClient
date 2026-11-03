@@ -1028,7 +1028,7 @@ update `FUN_140511130`, `Character::setupAI` `FUN_140621b70`; KenshiLib names **
   - **Desire** (`FUN_140999620` / `FUN_140998fa0`): 1 while some entry has done < wanted, else 0. `done` goes back to 0 when the game clock's day counter
     (`DAT_1421303d0`+8; the hour is +0) differs from the list's and the hour is above 7 (`FUN_140998e40`, called by the desire, the finder and
     `FUN_1409995f0`), and when the buyer's town differs from the one the list last bought in (`FUN_140998da0`, called by the buy step). `FUN_140998fa0` has a
-    second reset comparing the list's town with the character's `+0x88` itself, not the town it yields: **Unknown** whether it can fire. That `+8` is a day
+    second reset at every desire evaluation: both the list's last town (`+0x30`) and the AI status town (`+0x88`) set and different resets the done counts (**Verified**, `FUN_140998e40`; Meitou `ShoppingList.Pending` with the board's town), so a shopper that finished in one town wants to shop in the next the same day.
     counter (1 at a new game, `FUN_14036cb80`) is **Observed**.
   - **Finder**: the entries in order, skipping those done; the first with a shop of the town stocking that function wins (a random one of them), else the
     random public building. A shop stocks a function when a type 9 object (a container) in it holds an item with that `item function` (`FUN_14054add0`).
