@@ -205,8 +205,22 @@ sealed partial class GameHost
         for (int i = 0; i < editorCrowd.Count; i++)
         {
             var (look, at, yaw, clip) = editorCrowd[i];
-            float speed = animationLibrary?.IndexOf(clip) is >= 0 and int k ? animationLibrary.Definitions[k].PlaySpeed : 0;
-            list.Add(new CharacterInstance(EditorCrowdKey + i, look, at, yaw, [new CharacterPose(clip, (now + i * 3.7f) * speed, 1)]));
+            list.Add(new CharacterInstance(EditorCrowdKey + i, look, at, yaw, [new CharacterPose(clip, EditorClipTime(clip, now + i * 3.7f), 1)]));
         }
+    }
+
+    /// <summary>
+    /// The time a clip held in the bar (a seat's sitting clip, a standing patron's stance) is drawn at, <paramref name="seconds"/> after it started: at its record's play
+    /// speed, a one-shot clip (no <c>loop</c>) held at its last frame as the simulation holds one (<see cref="AnimationSystem"/>), not wrapped round by the renderer. A seat
+    /// whose clip sits down (mods' sitting animations) would otherwise stand up and sit down again over and over (issue #242).
+    /// </summary>
+    float EditorClipTime(string clip, float seconds)
+    {
+        if (animationLibrary?.IndexOf(clip) is not (>= 0 and int k)) return 0;
+        var d = animationLibrary.Definitions[k];
+        float time = seconds * d.PlaySpeed;
+        if (d.Loop) return time;
+        float length = animationLengths?.Of(d.Clip) ?? 1;
+        return Math.Clamp(time, 0, length * 0.999f);
     }
 }

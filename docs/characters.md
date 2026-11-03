@@ -305,7 +305,10 @@ exe decompile unless marked; Meitou: `CharacterDraft` (data), `EditCharacter` / 
   shadow cascades), short of the world 3000 below; headless 1280x960 Release: 4.0-4.2 ms a frame capped, 5-29 ms uncapped (**Observed**, noisy machine). The shown character stands at a fixed spot of the building's frame facing the counter; up to 5 other
   characters of the editor's list sit on the seats nearest the far tables behind it, each over 41 across from it (beyond the orbit's reach; the source's chair spots and sitting clips). Night shows
   in the dark windows. The bar's own people stand and sit in it: its residents' leader (Barman) at a shopkeeper node and first squad member (Ninja Guard) at a guard
-  node, 3 patrons of the town's `bar squads` on the next seats and 3 at general nodes, all beyond the same 41, rolled with fixed seeds. The bar stands on
+  node, 3 patrons of the town's `bar squads` on the next seats and 3 at general nodes, all beyond the same 41, rolled with fixed seeds. Their clips run at the
+  record's `play speed`; one without `loop` holds its last frame, as the simulation holds a one-shot clip, so a mod's sit-down seat clip is not replayed (#242).
+  Base data has none: its seat clips loop (`sitting chair` a 0.033 s pose at speed 0.01, `sitting idle` 10.9 s at 1; **Verified** by probe on base data).
+  The original seats a sitter with the functionality's first `animation` reference (**Verified**, decompilation, `FUN_1402a0900`). The bar stands on
   `FLatTop_Pillar01.mesh` scaled to 1500 each way with its top at the bar's ground, with 14 shrubs round it. A white point light under the roof (half the
   lamps' mean power, radius 220) and a grey character fill (0.04) light the room neutrally. The camera is the stage's
   orbit, moved across instead of shifting the projection. The stage covers the bar until its parts, the streaming and the characters are in, or at most 3 s
