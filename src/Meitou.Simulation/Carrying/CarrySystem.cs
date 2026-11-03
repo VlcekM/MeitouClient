@@ -70,11 +70,11 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
 
     /// <summary>
     /// A character that can be given a pick-up: awake, with a body, not an animal, not fighting (but for an <paramref name="ordered"/> lift: the order's new task ends the fight), not carrying
-    /// or carried, with a usable left arm. An animal never carries: every carry task (rescue, leader rescue, kidnap, capture, cage, arrest, foraging) is registered for the human repertoire only
+    /// or carried, with a usable left arm, not crouching or lying (the lift rows' condition !26 is about the carrier: <see cref="CharacterFacts.CrouchingOrLying"/>). An animal never carries: every carry task (rescue, leader rescue, kidnap, capture, cage, arrest, foraging) is registered for the human repertoire only
     /// and an animal plans with its own, and its context menu has no Pick Up (docs/game/carry-loot.md "Who carries").
     /// </summary>
     public static bool CanCarry(World world, CharacterCold cold, TaskType row = TaskType.LIFT_PERSON_PLAYER_ORDER, bool ordered = false) =>
-        cold is { Medical: { Incapacitated: false } m, Race: not null } && (ordered || !cold.InCombat) && cold.Carrying.IsNone && cold.CarriedBy.IsNone && LeftArmUsable(m) && TaskStart.Eligible(world, cold, row);
+        cold is { Medical: { Incapacitated: false } m, Race: not null } && (ordered || !cold.InCombat) && cold.Carrying.IsNone && cold.CarriedBy.IsNone && LeftArmUsable(m) && !CharacterFacts.CrouchingOrLying(cold) && TaskStart.Eligible(world, cold, row);
 
     /// <summary>A character that may be lifted: knocked out or dead, of a <c>carriable</c> race (every base race but the Leviathan, <b>Verified</b>), not carried already, not in a cage.</summary>
     public static bool CanBeLifted(CharacterCold cold) => cold is { Medical.Incapacitated: true, Race.Carriable: true, IsImprisoned: false } && cold.CarriedBy.IsNone;
