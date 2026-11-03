@@ -26,7 +26,7 @@ public sealed partial class CarrySystem
     {
         if (world.SystemOf<PopulationSystem>() is not { } population) return;
         var memory = world.SystemOf<DialogueSystem>()?.Memory;
-        int every = world.Every(Settings.AutoEveryTicks), phase = (int)(world.Tick % every);
+        int every = world.Every(Settings.AutoEveryTicks);
         HashSet<int>? taken = null;
         List<int>? bodies = null;
         Span<int> duty = stackalloc int[5];
@@ -36,7 +36,7 @@ public sealed partial class CarrySystem
             duty.Fill(-1);
             foreach (var member in squad.Members)
             {
-                if (!table.TryResolveNext(member, out int slot) || slot % every != phase || table.Cold(slot) is not { IsPlayer: false, Inventory: not null } cold || !Ai.AiSystem.Holds(table.Next[slot], cold)) continue;
+                if (!table.TryResolveNext(member, out int slot) || !world.Turn(slot, every) || table.Cold(slot) is not { IsPlayer: false, Inventory: not null } cold || !Ai.AiSystem.Holds(table.Next[slot], cold)) continue;
                 int role = (int)Ai.AiSystem.RoleOf(squad, member, cold);
                 if (duty[role] < 0) duty[role] = population.GoalDuty(world, squad, (AiRole)role, TaskType.LOOT_THE_DEAD) ? 1 : 0;
                 if (duty[role] == 0) continue;

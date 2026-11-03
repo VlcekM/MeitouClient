@@ -254,6 +254,17 @@ public sealed partial class World : IDisposable
     public int StepTicks(int slot) => slot < stepTicks.Length ? stepTicks[slot] : 1;
     /// <summary>The game seconds a stepping slot's step covers this tick: the systems' <c>dt</c> for it.</summary>
     public float StepSeconds(int slot) => StepTicks(slot) * TickSeconds;
+    /// <summary>
+    /// The slot's turn in a sweep that looks at each character once in <paramref name="every"/> ticks (its turn: the ticks where Tick - slot is a multiple of every; the AI's think
+    /// anchors at Tick + slot, so a slot's look and think interleave) fell within the ticks its current step covers (<see cref="StepTicks"/>): a near character exactly on its turn, a
+    /// far one at its first step after it, a skipped one never. So a far character keeps the sweep's rate whatever the period divides (docs/simulation.md "Far cadence").
+    /// </summary>
+    public bool Turn(int slot, int every)
+    {
+        long since = (Tick - slot) % every;
+        if (since < 0) since += every;
+        return since < StepTicks(slot);
+    }
     /// <summary>The integer hour of day, 0 to 23 (the game's sky controller hour that the AI compares windows with).</summary>
     public int Hour => Math.Clamp((int)(((GameHours % 24) + 24) % 24), 0, 23);
     public float TickSeconds => Settings.TickSeconds;
@@ -379,7 +390,7 @@ public sealed partial class World : IDisposable
         prof?.Part("end tick");   // F12: the squads, the prune and the table's end, apart from the snapshot
         Tick++;
         GameHours += TickSeconds / SecondsPerGameHour;
-        if (publish && Settings.PublishSnapshots) Publish(prof);
+        if (publish && Settings.PublishSnapshots) Publish(prof, farShared: true);
         prof?.Lap(TickProfile.Publish);
     }
 

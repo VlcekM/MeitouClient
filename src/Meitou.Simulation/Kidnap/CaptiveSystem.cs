@@ -191,8 +191,8 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
         // a frame in turn, FUN_140786e30).
         int every = world.Every(Settings.SweepEveryTicks), phase = (int)(world.Tick % every);
         if (phase == 0) ExpireWaits(world.GameHours);
-        Sweep(world, every, phase);
-        RunPlayerAnimalGoals(world, every, phase);
+        Sweep(world, every);
+        RunPlayerAnimalGoals(world, every);
     }
 
     /// <summary>
@@ -202,13 +202,13 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
     /// step's (<see cref="RaceGoals"/>: priority 3 at step 4, priority 2 at step 6); this pass runs them in list order for the other animals of the player's faction, idle only (engine).
     /// An order that runs ends one (<see cref="CaptiveJob.PlayerSide"/>).
     /// </summary>
-    void RunPlayerAnimalGoals(World world, int every, int phase)
+    void RunPlayerAnimalGoals(World world, int every)
     {
         if (world.Player.Faction < 0) return;
         var table = world.Characters;
-        for (int s = phase; s < table.HighWater; s += every)
+        for (int s = 0; s < table.HighWater; s++)
         {
-            if (!table.Next[s].Alive || table.Next[s].Task != (byte)CharacterTask.Idle || table.Cold(s) is not { Fighter.IsAnimal: true } c || !PlayerSquad(world, c) || DecisionSystem.Decides(c)) continue;
+            if (!table.Next[s].Alive || !world.Turn(s, every) || table.Next[s].Task != (byte)CharacterTask.Idle || table.Cold(s) is not { Fighter.IsAnimal: true } c || !PlayerSquad(world, c) || DecisionSystem.Decides(c)) continue;
             if (!FreeForRaceGoal(world, s, c)) continue;
             if (PickRaceGoal(world, s, c, null, firstInList: true) is { } pick) StartRaceGoal(world, s, c, pick);
         }
@@ -382,7 +382,7 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
         return table.Next[slot].Alive && table.Cold(slot) is { } c && AiSystem.Holds(table.Next[slot], c) && table.Next[slot].Task != (byte)CharacterTask.Rest && !Busy(table.IdOf(slot));
     }
 
-    void Sweep(World world, int every, int phase)
+    void Sweep(World world, int every)
     {
         var table = world.Characters;
         int hour = world.Hour, started = 0;
@@ -395,7 +395,7 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
             foreach (var member in squad.Members)
             {
                 if (jobs.Count >= Settings.MaxJobs || started >= maxNew) return;
-                if (!table.TryResolveNext(member, out int slot) || slot % every != phase || !Free(world, slot)) continue;
+                if (!table.TryResolveNext(member, out int slot) || !world.Turn(slot, every) || !Free(world, slot)) continue;
                 var cold = table.Cold(slot)!;
                 var roles = board.Roles[(int)AiSystem.RoleOf(squad, member, cold)];
                 for (int g = 0; g < roles.Count; g++)

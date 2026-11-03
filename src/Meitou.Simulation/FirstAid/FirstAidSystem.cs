@@ -525,14 +525,13 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
         int every = world.Every(Settings.AutoEveryTicks);
         var table = world.Characters;
         var next = table.Next;
-        int phase = (int)(world.Tick % every);
         // The treated list and the sweep are made on the turn's first idle NPC (a turn with none, most of them in a quiet world, makes neither).
         List<(int Medic, int Patient)>? taken = null;
         try
         {
-            for (int i = phase; i < table.HighWater; i += every)
+            for (int i = 0; i < table.HighWater; i++)
             {
-                if (!next[i].Alive) continue;
+                if (!next[i].Alive || !world.Turn(i, every)) continue;   // its turn (the far cadence, World.Turn)
                 var cold = table.Cold(i)!;
                 if (cold.IsPlayer || !Settings.AutoNpcs) continue;   // a player's medic jobs are the decision step's (MedicJobs)
                 // Idle: no task, following, wandering or an implicit job.

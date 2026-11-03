@@ -70,10 +70,16 @@ ticks since its last (`World.StepTicks`, at most the period), so one that crosse
 per-character loops (AI think, movement think and move, combat body step, act and approach, first aid, body, animation), the ragdoll setup loop (a moving ragdoll steps
 every tick: its pins follow the animation), the sight map's place probes and the decisions pass; their `dt` for a far character is `World.StepSeconds` where it
 integrates time (movement, animation, the ranged timers, the body's medical step), while combat's tick timers (ready, stun, get-up ticks) stay absolute ticks, so a
-far fighter acts on them at its next step. A cadence inside a stepped loop tests "due within the step" (`(Tick + i) % every < StepTicks(i)`, the AI's think), not
-`== 0`, else a period coprime with the cadence starves it. The serial sweeps (spread sweeps, slow world) visit every character as before. Known edges: a near fighter
-against a far one has an opponent that reacts up to the period late; a far character's snapshot is published every tick but changes only at its steps (not drawn:
-it is beyond the draw distance). Motivation and numbers: [bench](bench.md) "character flights".
+far fighter acts on them at its next step. The serial per-character passes honour it too (the carry act-outs, the aggro chase bookkeeping, the pursuit schedule).
+A sweep with its own cadence tests `World.Turn(slot, every)` (the slot's turn fell within the ticks its step covers), not `slot % every == phase`: a cadence that
+shares a factor with the period starves slots (30 and 15 against 4: half the far slots never coincide), and the turn rule keeps a far character's sweep rate, so the
+spread sweeps (AI think, aggro look, first aid, crime, captive, town duty, kidnap, scavenge) cost the same, on the step tick. A tick's publish gives a character the
+cadence skipped the last publish's snapshot object again (`WorldPublish.Fresh`: a buffer fills only an object no other buffer of the ring shows, as the render
+thread may be reading it; a paused or loading publish fills everyone). Contract: `NearRadius` must cover the renderer's reach, else a drawn character moves at
+7.5 Hz; the Metal host sets the period but leaves the 8000 default (**Unknown** whether its reach fits). Known edge: a near fighter against a far one has an
+opponent that reacts up to the period late. **Observed** (headless flight probe, ~1,150 loaded, 470-590 skipped a tick): the publish 0.8-1.0 -> 0.6-0.7 ms a
+tick; the spread sweeps unchanged (their cost is per tick: town duty's scan of every slot, first aid's treated list); the ragdoll system is 0.6-2.9 ms of the
+slow world's 1.5-4.9 (its physics step 0.4-0.5 ms with one moving ragdoll, its setup 50-70 us a moving whole body). Numbers: [bench](bench.md) "character flights".
 
 ## Threading
 
@@ -308,7 +314,7 @@ crime sees deeds and final positions/carry links. Game combat uses `SelfApproach
 
 ### Spread sweeps
 
-Engine choice: a periodic per-character pass looks at each character on its slot's turn (slot mod the period), as the original runs its AI
+Engine choice: a periodic per-character pass looks at each character on its slot's turn (`World.Turn`: `Tick - slot` a multiple of the period, within the far cadence's step; the AI's think anchors at `Tick + slot`, so a slot's look and think interleave), as the original runs its AI
 updates 8 characters a frame in turn ([game loop](game/game-loop.md#the-character-update-budget)), instead of all on one tick: Aggro, Crime,
 FirstAid, NPC looting, Captive (`SweepEveryTicks` 30; new jobs at most `MaxNewJobs` over the period, at least one a tick), Town duty and
 Kidnap (`LookEveryTicks` 15). **Observed** (`--log-spikes`, ~1,400 characters loaded): the captive sweep on one tick was 8-11 ms once a second.

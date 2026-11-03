@@ -631,11 +631,9 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
         var prev = table.Previous;
         var next = table.Next;
         int every = world.Every(Settings.ScanEveryTicks);
-        int phase = (int)(world.Tick % every);
-        int first = part.Start + ((phase - part.Start % every) % every + every) % every;
-        for (int i = first; i < part.End; i += every)
+        for (int i = part.Start; i < part.End; i++)
         {
-            if (!prev[i].Alive || i >= slots.Length) continue;
+            if (!prev[i].Alive || i >= slots.Length || !world.Turn(i, every)) continue;   // its turn (the far cadence, World.Turn)
             if (slots[i].Heard is { } heard) slots[i].Heard = PruneHeard(heard, world);
             if (table.Cold(i) is not { Medical: not null } cold) continue;
             byte task = next[i].Task;
@@ -1470,7 +1468,7 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
         for (int i = 0; i < table.HighWater; i++)
         {
             ref var n = ref next[i];
-            if (!n.Alive) continue;
+            if (!n.Alive || !world.Steps(i)) continue;   // a far character is looked at on its step (the far cadence)
             var cold = table.Cold(i)!;
             // The player's characters never give up a chase (the original's gate: the chaser's faction is not the player's); after a fight they are decided again (the decision step).
             if (DecisionSystem.Decides(cold)) continue;

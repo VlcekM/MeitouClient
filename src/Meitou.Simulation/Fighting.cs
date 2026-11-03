@@ -22,13 +22,14 @@ public sealed class PursuitSystem(CombatSystem combat) : ITickSystem
     public void Schedule(World world)
     {
         var table = world.Characters;
-        float dt = world.TickSeconds;
         int count = table.HighWater;
         combat.IndexAttackers(world);   // for FightersAt: this schedule runs before combat's
         // Each attacker writes only its own slot and reads its target's place and the combat state of the last tick, so the slots run in parallel in any order.
+        // A far character pursues at its step, the step covering the ticks since its last (the far cadence, World.Steps).
         world.ParallelFor((count + SlotsPerJob - 1) / SlotsPerJob, job =>
         {
-            for (int i = job * SlotsPerJob, end = Math.Min(count, i + SlotsPerJob); i < end; i++) Pursue(world, table, i, dt);
+            for (int i = job * SlotsPerJob, end = Math.Min(count, i + SlotsPerJob); i < end; i++)
+                if (world.Steps(i)) Pursue(world, table, i, world.StepSeconds(i));
         });
     }
 

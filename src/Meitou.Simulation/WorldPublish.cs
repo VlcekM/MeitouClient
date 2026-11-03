@@ -84,8 +84,31 @@ public sealed partial class World
     /// </summary>
     sealed class SnapshotBuffer
     {
+        /// <summary>Per slot, the snapshot this publish shows: the object the buffer filled (<see cref="Own"/>, else <see cref="Spare"/>), or the last publish's for a character the far cadence skipped.</summary>
         public CharacterSnapshot?[] Slots = [];
+        public CharacterSnapshot?[] Own = [], Spare = [];
         public readonly List<CharacterSnapshot> List = [];
+    }
+
+    /// <summary>
+    /// The buffer's object to fill for slot <paramref name="i"/>: never one another buffer of the ring still shows (a far character's object is shared across publishes and the render
+    /// thread may be reading it). The two the buffer owns alternate; one more is made only when both are shown elsewhere.
+    /// </summary>
+    CharacterSnapshot Fresh(SnapshotBuffer buffer, int i)
+    {
+        ref var own = ref buffer.Own[i];
+        if (own is null || !ShownElsewhere(buffer, own, i)) return own ??= new();
+        ref var spare = ref buffer.Spare[i];
+        if (spare is not null && ShownElsewhere(buffer, spare, i)) spare = null;
+        (own, spare) = (spare ?? new(), own);
+        return own;
+    }
+
+    bool ShownElsewhere(SnapshotBuffer buffer, CharacterSnapshot s, int i)
+    {
+        foreach (var b in snapshotRing)
+            if (b != buffer && i < b.Slots.Length && ReferenceEquals(b.Slots[i], s)) return true;
+        return false;
     }
     readonly SnapshotBuffer[] snapshotRing = [new(), new(), new(), new()];
     /// <summary>The buffers <see cref="Snapshot"/>, <see cref="PreviousSnapshot"/> and the snapshot before that were filled from (null: <see cref="WorldSnapshot.Empty"/>).</summary>
@@ -95,7 +118,8 @@ public sealed partial class World
     void KeepPrevious(WorldSnapshot previous, SnapshotBuffer? buffer) => (PreviousSnapshot, previousBuffer) = (previous, buffer);
 
     /// <summary>Builds the <see cref="WorldSnapshot"/> of the tick that just ended from the state it left in <see cref="CharacterTable.Previous"/>.</summary>
-    void Publish(TickProfile? prof = null)
+    /// <param name="farShared">A tick's publish: a character the far cadence skipped this tick (<see cref="Steps"/>) is published as the last publish had it, the same object.</param>
+    void Publish(TickProfile? prof = null, bool farShared = false)
     {
         var table = Characters;
         var state = table.Previous;
@@ -117,13 +141,28 @@ public sealed partial class World
         var population = systems.OfType<PopulationSystem>().FirstOrDefault()?.Data;
         float extraBloodLoss = systems.OfType<BodySystem>().FirstOrDefault()?.Constants.ExtraBloodLossFromBodyparts ?? 1;
         var buffer = Array.Find(snapshotRing, b => b != shownBuffer && b != previousBuffer && b != olderBuffer)!;
-        if (buffer.Slots.Length < state.Length) Array.Resize(ref buffer.Slots, state.Length);
+        if (buffer.Slots.Length < state.Length)
+        {
+            Array.Resize(ref buffer.Slots, state.Length);
+            Array.Resize(ref buffer.Own, state.Length);
+            Array.Resize(ref buffer.Spare, state.Length);
+        }
         var slots = buffer.Slots;
+        // A character the far cadence skipped this tick has not changed: the last publish's object stands for it again (docs/simulation.md "Far cadence").
+        var kept = farShared ? shownBuffer?.Slots : null;
         ParallelFor((state.Length + PublishChunk - 1) / PublishChunk, chunk =>
         {
             var state = table.Previous;
             for (int i = chunk * PublishChunk, end = Math.Min(state.Length, i + PublishChunk); i < end; i++)
-                if (state[i].Alive) Fill(slots[i] ??= new(), i);
+            {
+                if (!state[i].Alive) continue;
+                if (kept is not null && !Steps(i) && i < kept.Length && kept[i] is { } last && last.Id == new CharacterId(i, state[i].Generation))
+                {
+                    slots[i] = last;
+                    continue;
+                }
+                Fill(slots[i] = Fresh(buffer, i), i);
+            }
         });
         var list = buffer.List;
         list.Clear();

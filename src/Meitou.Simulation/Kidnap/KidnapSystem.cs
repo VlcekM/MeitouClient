@@ -146,10 +146,10 @@ public sealed class KidnapSystem(PopulationData data, PopulationSystem populatio
         }
         // Each kidnapper looks once in LookEveryTicks, on its slot's turn (slot mod the period): the looks spread over the ticks (docs/simulation.md "Spread sweeps").
         int every = world.Every(Settings.LookEveryTicks);
-        Look(world, every, (int)(world.Tick % every));
+        Look(world, every);
     }
 
-    void Look(World world, int every, int phase)
+    void Look(World world, int every)
     {
         var table = world.Characters;
         victims.Clear();
@@ -171,7 +171,7 @@ public sealed class KidnapSystem(PopulationData data, PopulationSystem populatio
             duty.Fill(-1);
             foreach (var member in squad.Members)
             {
-                if (!table.TryResolveNext(member, out int slot) || slot % every != phase || !FreeKidnapper(world, slot)) continue;
+                if (!table.TryResolveNext(member, out int slot) || !world.Turn(slot, every) || !FreeKidnapper(world, slot)) continue;
                 var cold = table.Cold(slot)!;
                 int role = (int)Ai.AiSystem.RoleOf(squad, member, cold);
                 if (duty[role] < 0) duty[role] = population.KidnapDuty(world, squad, (AiRole)role) ? 1 : 0;

@@ -96,9 +96,9 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
             else duties.RemoveAt(k);
         }
         // Each member looks once in LookEveryTicks, on its slot's turn (slot mod the period): the looks spread over the ticks (docs/simulation.md "Spread sweeps").
-        int every = world.Every(Settings.LookEveryTicks), phase = (int)(world.Tick % every);
-        Look(world, every, phase);
-        LookPlayerFood(world, every, phase);
+        int every = world.Every(Settings.LookEveryTicks);
+        Look(world, every);
+        LookPlayerFood(world, every);
     }
 
     /// <summary>
@@ -111,15 +111,15 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     /// goal is the decision step's (<see cref="GettingFood"/>, priority 3, weight 0.5); this pass runs it for the other characters of the player's faction while idle (they hold no
     /// jobs; engine choice).
     /// </summary>
-    void LookPlayerFood(World world, int every, int phase)
+    void LookPlayerFood(World world, int every)
     {
         int faction = world.Player.Faction;
         if (faction < 0) return;
         foodWaits.RemoveAll(w => w.Until <= world.GameHours);
         var table = world.Characters;
-        for (int s = phase; s < table.HighWater; s += every)
+        for (int s = 0; s < table.HighWater; s++)
         {
-            if (!table.Next[s].Alive || table.Cold(s) is not { IsPlayer: false } c || c.Faction != faction) continue;
+            if (!table.Next[s].Alive || !world.Turn(s, every) || table.Cold(s) is not { IsPlayer: false } c || c.Faction != faction) continue;
             var task = (CharacterTask)table.Next[s].Task;
             if (task != CharacterTask.Idle) continue;
             if (FoodWant(world, s, c, out var store, out _) > 0) StartFood(world, s, c, store);
@@ -205,7 +205,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
 
     // ------------------------------------------------------------------ the look
 
-    void Look(World world, int every, int phase)
+    void Look(World world, int every)
     {
         var table = world.Characters;
         downed.Clear();
@@ -221,7 +221,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
             if (!c.Carrying.IsNone) { reserved.Add(c.Carrying); carriers.Add(s); }
             if (c is { Medical: { Unconscious: true, Dead: false } } && c.InSomething == HeldState.None && CarrySystem.CanBeLifted(c)) downed.Add(s);
         }
-        LookDeadCarriers(world, every, phase);
+        LookDeadCarriers(world, every);
         Span<int> intruders = stackalloc int[5], food = stackalloc int[5], confiscate = stackalloc int[5], loot = stackalloc int[5], shoo = stackalloc int[5], ransack = stackalloc int[5], stash = stackalloc int[5];
         foreach (var squad in world.Squads.All)
         {
@@ -235,7 +235,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
             stash.Fill(-1);
             foreach (var member in squad.Members)
             {
-                if (!table.TryResolveNext(member, out int slot) || slot % every != phase || !Free(world, slot) || Busy(member)) continue;
+                if (!table.TryResolveNext(member, out int slot) || !world.Turn(slot, every) || !Free(world, slot) || Busy(member)) continue;
                 var cold = table.Cold(slot)!;
                 int role = (int)AiSystem.RoleOf(squad, member, cold);
                 if (intruders[role] < 0) intruders[role] = population.GoalDuty(world, squad, (AiRole)role, TaskType.PICKUP_INTRUDERS_TOWN) ? 1 : 0;
@@ -315,12 +315,12 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     /// the carried handle, never whether it is dead, and the goal has no list B (<b>Verified</b>). A free member whose package lists 281 and who carries a dead body takes it to the best free cage
     /// of its town; with none it keeps the body (the goal has no finder result and does not plan).
     /// </summary>
-    void LookDeadCarriers(World world, int every, int phase)
+    void LookDeadCarriers(World world, int every)
     {
         var table = world.Characters;
         foreach (int slot in carriers)
         {
-            if (slot % every != phase) continue;
+            if (!world.Turn(slot, every)) continue;
             var id = table.IdOf(slot);
             if (!FreeCarrier(table, slot) || Busy(id)) continue;
             var cold = table.Cold(slot)!;

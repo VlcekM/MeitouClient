@@ -495,10 +495,10 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
     {
         var table = world.Characters;
         var next = table.Next;
-        float dt = world.TickSeconds;
         for (int i = 0; i < table.HighWater; i++)
         {
-            if (!next[i].Alive) continue;
+            if (!next[i].Alive || !world.Steps(i)) continue;
+            float dt = world.StepSeconds(i);   // a far character's step covers the ticks since its last (the far cadence)
             switch ((CharacterTask)next[i].Task)
             {
                 case CharacterTask.PickUp: Lift(world, table, i, dt); break;
