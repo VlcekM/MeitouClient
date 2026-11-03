@@ -45,6 +45,8 @@ public readonly record struct AnimationStance
     /// <summary>Health of the legs in per cent (100 healthy, negative past the point of function); compared with the records' leg damage ranges.</summary>
     public float LeftLeg { get; init; }
     public float RightLeg { get; init; }
+    /// <summary>The animation class's current category (<c>AC+0xf0</c>, <b>Verified</b> FUN_140520500): 4 in deep water for a race that swims, 5 held down or crawling, else 0. Only the hit-reaction pick tests it.</summary>
+    public int Category { get; init; }
 
     public AnimationStance() { LeftLeg = 100; RightLeg = 100; }
 }
@@ -109,6 +111,8 @@ public sealed record AnimationDefinition
     public int StumbleFrom { get; init; }
     /// <summary><c>category</c> (CharacterAnimCategory: 0 ANIM_NORMAL ... 8 RANGED). Only category 0 is chosen as movement, idle or stumble; the RANGED clips (crossbow aim and reload) are played by the combat system's timing like techniques.</summary>
     public int Category { get; init; }
+    /// <summary>The category a weather-type record (<see cref="AnimationLibrary.WeatherCategory"/>, taken by no selector but the stumble pick) really has; null for every other record.</summary>
+    public int? StumbleCategory { get; init; }
     /// <summary>A COMBAT_TECHNIQUE (attack, block or dodge): played by the combat system's timing, never chosen as movement or idle.</summary>
     public bool Technique { get; init; }
     /// <summary>
@@ -282,11 +286,19 @@ public sealed record AnimationDefinition
     }
 
     /// <summary>The weapon type held must be one of the record's weapon kinds, for the upper, whole-body and overlay layers (<b>Verified</b>, the idle draw <c>@ 14051ec80</c>); fists (type 5) skip the test.</summary>
-    public bool KindFits(in AnimationStance s)
-    {
-        var held = s.Right.Holds ? s.Right.Weapon : s.Left.Holds ? s.Left.Weapon : WeaponKinds.Unarmed;
-        return held == WeaponKinds.Unarmed || (Kinds & held) != 0;
-    }
+    public bool KindFits(in AnimationStance s) => HeldKind(s) is var held && (held == WeaponKinds.Unarmed || (Kinds & held) != 0);
+
+    static WeaponKinds HeldKind(in AnimationStance s) => s.Right.Holds ? s.Right.Weapon : s.Left.Holds ? s.Left.Weapon : WeaponKinds.Unarmed;
+
+    /// <summary>
+    /// The weight an idle pick gives the record (<c>FUN_14051ec80</c> and <c>FUN_14051d660</c>, <b>Verified</b>): <c>idle chance</c> (negative counts 0), times 0.1 on the upper, whole-body and overlay
+    /// layers when the held weapon type is unarmed (5) and <c>has weapon L</c> or <c>R</c> is exactly YES (a hand then holds an item whose animation kind is 5; the arm check already drops those when both hands are empty).
+    /// </summary>
+    public float IdleWeight(in AnimationStance s) =>
+        Math.Max(IdleChance, 0) * (Area != AnimationArea.Lower && HeldKind(s) == WeaponKinds.Unarmed && (WeaponLeft == 1 || WeaponRight == 1) ? UnarmedHeldYesFactor : 1f);
+
+    /// <summary>The loaded constant <c>DAT_14167fad0</c>.</summary>
+    public const float UnarmedHeldYesFactor = 0.1f;
 
     /// <summary>
     /// Whether the record can play as a character's own <c>idle stance</c> (the original's idle pick <c>FUN_14051f230</c>, <b>Verified</b> by decompilation,
@@ -389,7 +401,12 @@ public sealed class AnimationLibrary
             .Concat(db.OfType(FcsRecordType.ANIMATION)
                 .Where(r => !r.GetBool("disabled") && r.GetInt("category") == GroundedCategory && r.GetInt("weather type") == 0)
                 .OrderBy(r => r.StringId, StringComparer.Ordinal)
-                .Select(AnimationDefinition.From)));
+                .Select(AnimationDefinition.From))
+            // The weather-type records that list `stumbles` (FUN_1405bbd40 files them in the by-name and stumble maps like any record), last of all; only the stumble pick takes them.
+            .Concat(db.OfType(FcsRecordType.ANIMATION)
+                .Where(r => !r.GetBool("disabled") && r.GetInt("weather type") != 0 && r.GetReferences("stumbles").Any())
+                .OrderBy(r => r.StringId, StringComparer.Ordinal)
+                .Select(r => AnimationDefinition.From(r) with { StumbleCategory = r.GetInt("category"), Category = WeatherCategory })));
         library.BuildAnimals(db);
         // The order the original lists ANIMATION records in: its per-type map of records by string id (GameDataContainer +0x90), a boost hash map filled in load order.
         int rank = 0;
@@ -418,6 +435,9 @@ public sealed class AnimationLibrary
 
     /// <summary>The category of the animal definitions (ANIMAL_ANIMATION records and creature techniques): no ANIMATION record has it, so no humanoid selector takes them.</summary>
     public const int AnimalCategory = -1;
+
+    /// <summary>The category of weather-type records with stumbles: no selector takes them, only <see cref="Stumbles"/> by their <see cref="AnimationDefinition.StumbleCategory"/> (docs/animation.md).</summary>
+    public const int WeatherCategory = -2;
 
     /// <summary>The ANIMAL_ANIMATION record name of the lying clips: one record plays <c>gotosleep</c> once (the fall), another <c>sleep</c> in a loop.</summary>
     public const string AnimalLyingRecord = "sleeponfloor";
@@ -568,7 +588,7 @@ public sealed class AnimationLibrary
         foreach (int i in self.grounded)
         {
             var d = self.all[i];
-            if (d.Idle && !d.IsAction && d.MoveSpeed == 0 && d.FitsExceptLegs(s)) list.Add((i, Math.Max(d.IdleChance, 0)));
+            if (d.Idle && !d.IsAction && d.MoveSpeed == 0 && d.FitsExceptLegs(s)) list.Add((i, d.IdleWeight(s)));
         }
         return [.. list];
     }, this), stance, firstInDataOrder: true);
@@ -616,7 +636,7 @@ public sealed class AnimationLibrary
 
     /// <summary>
     /// The hit reactions (stumbles) a hit to body part <paramref name="part"/> (a LOCATIONAL_DAMAGE string id) may play, with their weights (<b>Verified</b>,
-    /// docs/animation.md "Hit reactions"): the clips listing the part in <c>stumbles</c> that fit the stance, whose <c>big stumble</c> equals
+    /// docs/animation.md "Hit reactions"): the clips of the stance's <see cref="AnimationStance.Category"/> listing the part in <c>stumbles</c> that fit the stance, whose <c>big stumble</c> equals
     /// <paramref name="big"/> and whose <c>stumble from</c> is the side (0 front, 1 rear), weighing <c>chance</c> / 100; the one already playing
     /// (<paramref name="playing"/>) weighs a quarter of that. Every base-game stumble has <c>chance</c> 0, so when all weigh 0 they are equally likely
     /// (<b>engine choice</b>).
@@ -628,7 +648,7 @@ public sealed class AnimationLibrary
         for (int i = 0; i < all.Count; i++)
         {
             var d = all[i];
-            if (d.Category != 0 || d.Stumbles.Count == 0 || d.BigStumble != big || d.StumbleFrom != side || !d.Stumbles.Contains(part) || !d.FitsExceptLegs(stance)) continue;
+            if ((d.StumbleCategory ?? d.Category) != stance.Category || d.Stumbles.Count == 0 || d.BigStumble != big || d.StumbleFrom != side || !d.Stumbles.Contains(part) || !d.FitsExceptLegs(stance)) continue;
             float w = d.Chance / 100f * (i == playing ? 0.25f : 1);
             into.Add((i, w));
             total += w;
@@ -674,13 +694,13 @@ public sealed class AnimationLibrary
         for (int i = 0; i < self.all.Count; i++)
         {
             var d = self.all[i];
-            if (d.Category == 0 && d.Idle && !d.IsAction && d.Area == AnimationArea.Upper && d.CombatMode != 0 && d.FitsExceptLegs(s)) list.Add((i, Math.Max(d.IdleChance, 0)));
+            if (d.Category == 0 && d.Idle && !d.IsAction && d.Area == AnimationArea.Upper && d.CombatMode != 0 && d.FitsExceptLegs(s)) list.Add((i, d.IdleWeight(s)));
         }
         if (list.Count == 0)
             for (int i = 0; i < self.all.Count; i++)
             {
                 var d = self.all[i];
-                if (d.Category == 0 && d.Idle && !d.IsAction && d.Area == AnimationArea.All && d.FitsExceptLegs(s with { Combat = d.CombatMode == 1 })) list.Add((i, Math.Max(d.IdleChance, 0)));
+                if (d.Category == 0 && d.Idle && !d.IsAction && d.Area == AnimationArea.All && d.FitsExceptLegs(s with { Combat = d.CombatMode == 1 })) list.Add((i, d.IdleWeight(s)));
             }
         return list.ToArray();
     }, this), stance);
@@ -692,7 +712,7 @@ public sealed class AnimationLibrary
         for (int i = 0; i < self.all.Count; i++)
         {
             var d = self.all[i];
-            if (d.Category == 0 && d.Idle && !d.IsAction && d.Area == AnimationArea.All && d.FitsExceptLegs(s)) list.Add((i, Math.Max(d.IdleChance, 0)));
+            if (d.Category == 0 && d.Idle && !d.IsAction && d.Area == AnimationArea.All && d.FitsExceptLegs(s)) list.Add((i, d.IdleWeight(s)));
         }
         return list.ToArray();
     }, this), stance);

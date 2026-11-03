@@ -929,6 +929,11 @@ public sealed class AnimationSystem(AnimationLibrary library, AnimationLengths l
     /// <summary>The fraction of a stumble clip after which the stumble state ends (<c>DAT_14168db34</c>).</summary>
     public const float StumbleEnd = 0.98f;
 
+    /// <summary>The animation class's category (FUN_140520500, <b>Verified</b>): 4 in deep water for a race that swims, else 5 when held down or crawling, else 0.</summary>
+    static int CategoryOf(CharacterCold cold) =>
+        cold is { WaterState: 3, Race.Swims: true } ? AnimationLibrary.SwimmingCategory
+        : cold.CarriedBy.IsNone && cold.Medical is { Prone: true } ? AnimationLibrary.GroundedCategory : 0;
+
     /// <summary>What a character holds and does, as the clips' conditions read it; leg health in per cent weighs the limp clips.</summary>
     static AnimationStance StanceOf(CharacterCold cold)
     {
@@ -938,6 +943,7 @@ public sealed class AnimationSystem(AnimationLibrary library, AnimationLengths l
             Prone = cold.CarriedBy.IsNone && cold.Medical is { Prone: true },   // the crawl records are prone; no standing clip (stumbles included) fits a crawler
             Crouched = cold.Crouched && !(cold.CarriedBy.IsNone && cold.Medical is { Prone: true }),   // never together with prone (FUN_14051dda0)
         };
+        stance = stance with { Category = CategoryOf(cold) };
         if (cold.Medical is not { } body) return stance;
         float left = 100, right = 100;
         foreach (var part in body.PartSpan)
