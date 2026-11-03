@@ -1097,6 +1097,7 @@ position. Engine: every loaded zone is a candidate; a hunter stops within 50.
 
 `Kidnap/TownDutySystem` (serial `SlowWorld`, after the kidnapping; with the population and the AI): goals of an AI squad's running package that no act-out covers, per member,
 every 15 ticks, by `PopulationSystem.GoalDuty` (facts: [ai-tasks](game/ai-tasks.md) "Finders of the jobs", [carry-loot 3.2](game/carry-loot.md#32-goals-and-their-target-finders)).
+Duties are priority-2 goals (**Observed**: `FUN_140510ef0` tries orders, jobs, urgent perma-jobs and priority-3 goals first): a member running a job or perma-job (a task other than idle, wander, follow, go-to) or whose AI holds an urgent goal takes none (`TownDutySystem.Free`). Stand-in: the duties do not compete by key with the package's other priority-2 goals.
 - **273 Remove Intruder**: a free member standing in its home town, the town its occupation holds or a town of its faction lifts the nearest knocked-out character in that town's
   walls (`amInsideTownWalls` > 0: its [gate code](game/pathfinding.md#gate-codes) is a walled region, so an unwalled town removes none; where the codes are unknown, the built-up area: a
   placed town's radius, a player town's farthest building from its centre), not carried or caged (a body in a bed is lifted, `FUN_14099c250`), not of its faction or an ally.

@@ -352,8 +352,14 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     {
         var table = world.Characters;
         if (!table.Next[slot].Alive || table.Next[slot].Task is not ((byte)CharacterTask.Idle or (byte)CharacterTask.Wander or (byte)CharacterTask.Follow or (byte)CharacterTask.GoTo)) return false;
-        return table.Cold(slot) is { IsPlayer: false, Fleeing: false, Engaged: false, InCombat: false } c && CarrySystem.CanCarry(world, c, TaskType.PICKUP_INTRUDERS);
+        return table.Cold(slot) is { IsPlayer: false, Fleeing: false, Engaged: false, InCombat: false } c && CarrySystem.CanCarry(world, c, TaskType.PICKUP_INTRUDERS) && !HoldsHigherGoal(c);
     }
+
+    /// <summary>
+    /// A duty is a priority-2 goal: the goal chooser (<c>FUN_140510ef0</c>) tries player orders, jobs, urgent perma-jobs and the priority-3 goals first (Observed), so a member whose AI holds an urgent
+    /// goal does not take one. Engine stand-in: jobs and perma-jobs show as a task other than idle, wander, follow or go-to, which <see cref="Free"/> already turns away.
+    /// </summary>
+    static bool HoldsHigherGoal(CharacterCold c) => c.Ai?.Goal?.Task.Priority is Meitou.Data.Gameplay.Ai.TaskPriority.Urgent or Meitou.Data.Gameplay.Ai.TaskPriority.Obedience;
 
     bool Busy(CharacterId id)
     {
