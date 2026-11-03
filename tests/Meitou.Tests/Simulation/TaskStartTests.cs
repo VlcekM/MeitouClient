@@ -260,6 +260,21 @@ public class TaskStartTests
         Assert.True(rig.Combat.StateOf(f).TargetSlot < 0, "no fight target");
     }
 
+    /// <summary>
+    /// Set Free through the Cages path is Task_ReleasePrisoner's start (<c>FUN_1403570a0</c>): the prisoner is marked freed and a releaser of the player's faction is thanked (event 13, deferred).
+    /// Catches the walk-and-release path skipping the mark or the thanks that the rounds path gave.
+    /// </summary>
+    [Fact]
+    public void Set_free_marks_the_prisoner_freed_and_thanks_a_player_releaser()
+    {
+        using var rig = new Rig(carrying: false);
+        rig.Say(new SetFreeOrder([rig.Fighter], rig.Prisoner) { Tick = 0 });
+        for (int i = 0; i < 3000 && !rig.Cold(rig.Prisoner).Freed; i++) rig.World.RunTick();
+        Assert.True(rig.Cold(rig.Prisoner).Freed, "marked freed");
+        Assert.False(rig.Cold(rig.Prisoner).IsImprisoned);
+        Assert.True(rig.World.DeferredCount > 0, "the thanks (event 13) is deferred");
+    }
+
     const int H = Repertoire.Human, I = Repertoire.Imprisoned, Ch = Repertoire.Chained, A = Repertoire.Animal, Cr = Repertoire.Crippled;
 
     /// <summary>The row of each start (docs/simulation.md "Task eligibility") and the repertoires the original registers it for (docs/game/ai-tasks.md "TaskData registry").</summary>

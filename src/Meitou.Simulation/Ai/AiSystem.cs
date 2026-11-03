@@ -420,7 +420,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     }
 
     /// <summary>Going home while away (AI slot 56, <c>FUN_1405a3710</c>, Verified): 0.5, but 0.01 for a slave (state 1) that is not with the player (<c>FUN_140856bc0</c>: its faction or its owner's is the player's).</summary>
-    static float GoHomeDesire(World world, CharacterId self)
+    internal static float GoHomeDesire(World world, CharacterId self)
     {
         if (world.Characters.Cold(self.Slot) is not { SlaveState: 1 } c) return 0.5f;
         int player = world.Player.Faction;

@@ -14,6 +14,23 @@ namespace Meitou.Tests.Simulation;
 /// <summary>The AI (docs/simulation.md "AI"): the package and goal data as docs/game/ai.md reads them, the package choice, and a town that patrols by day and sleeps at night.</summary>
 public class AiTests(ITestOutputHelper output)
 {
+    /// <summary>Going home away from home is wanted at 0.5, but at 0.01 by a slave not with the player (AI slot 56, <c>FUN_1405a3710</c>); with the player (its owner's faction) 0.5 again.</summary>
+    [Fact]
+    public void Going_home_is_barely_wanted_by_a_slave_not_with_the_player()
+    {
+        using var world = new SimWorld(new WorldSettings { Seed = 1, PublishSnapshots = false }, new OpenGroundWalkability((_, _) => 150), []);
+        world.Player.Faction = 1;
+        var cold = new Meitou.Tests.Combat.Combatant { Name = "slave" }.MakeCold();
+        cold.Faction = 2;
+        var id = world.Characters.Spawn(new CharacterHot { Position = new Vector3(1000, 150, 1000), Health = 100 }, cold, 0);
+        Assert.Equal(0.5f, AiSystem.GoHomeDesire(world, id));
+        cold.SlaveState = 1;
+        cold.SlaveOwner = 3;
+        Assert.Equal(0.01f, AiSystem.GoHomeDesire(world, id));
+        cold.SlaveOwner = 1;
+        Assert.Equal(0.5f, AiSystem.GoHomeDesire(world, id));
+    }
+
     static FcsRecord Task(string id, TaskType type, TaskPriority tier, TaskTargetType target = TaskTargetType.Specific)
     {
         var r = Rec(id, FcsRecordType.AI_TASK, type.ToString());
