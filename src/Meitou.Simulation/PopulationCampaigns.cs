@@ -39,12 +39,10 @@ public sealed class CampaignInstance
     public int Leader { get; set; } = -1;
     /// <summary>Its platoons, in the order they joined.</summary>
     public List<int> Platoons { get; } = [];
-    /// <summary>Its platoons gone from the world (killed off screen or despawned): not intact for the 20 % rule (not saved: a load skips them, as the original's unresolved handles).</summary>
-    public int Lost { get; set; }
     /// <summary>The characters it needs (int(<c>num forces</c> × <c>raidSizeMult</c>)) and those it gathered.</summary>
     public int Required { get; set; }
     public int Men { get; set; }
-    /// <summary>The game hour its first loaded fight began (-1: none yet; restarts at load).</summary>
+    /// <summary>The game hour its first loaded fight began in the first 4 hours of an assault's phase 1 (<c>FUN_1409c70f0</c>, <b>Verified</b>); -1: none yet, and at every phase change.</summary>
     public double FightStart { get; set; } = -1;
     /// <summary>Its leader platoon fought the player's characters (engine test, <c>PopulationCampaigns.cs</c>).</summary>
     public bool FoughtPlayer { get; set; }
@@ -690,6 +688,7 @@ public sealed partial class PopulationSystem : IStateHashed
         if (inst.Phase == phase) return false;
         inst.Phase = phase;
         inst.PhaseStart = world.GameHours;
+        inst.FightStart = -1;
         return true;
     }
 
@@ -814,7 +813,6 @@ public sealed partial class PopulationSystem : IStateHashed
             foreach (int id in inst.Platoons) if (world.Platoons.Find(id) is { } gone) Release(world, gone);
             return true;
         }
-        inst.Lost += inst.Platoons.Count(id => world.Platoons.Find(id) is null);
         inst.Platoons.RemoveAll(id => world.Platoons.Find(id) is not { } p || p.Campaign != inst);
         if (inst.Leader < 0 || !inst.Platoons.Contains(inst.Leader)) inst.Leader = inst.Platoons.Count > 0 ? inst.Platoons[0] : -1;
         double hours = now - inst.PhaseStart;
@@ -835,7 +833,7 @@ public sealed partial class PopulationSystem : IStateHashed
         }
         var leaderTown = TownAt(world, leader.Position);
         if (!inst.Reached && leaderTown == inst.Target) inst.Reached = true;
-        TrackFights(world, inst, now);
+        TrackFights(world, c, inst, now);
         if (leader.State == PlatoonState.Loaded && AllDown(world, leader))
         {
             Defeat(world, m, c, inst, now);
@@ -845,7 +843,7 @@ public sealed partial class PopulationSystem : IStateHashed
         {
             case 0:
                 // A loaded campaign that is neither hostile nor a defence is defeated at once within 1.8 × the radius of a town with hostile occupiers (Town +0x128).
-                if (leader.State == PlatoonState.Loaded && !c.IsHostile && c.Key != CampaignKey.DefendTown && OccupiedNear(world, leader.Position))
+                if (leader.State == PlatoonState.Loaded && !c.IsHostile && c.Key != CampaignKey.DefendTown && OccupiedNear(world, inst.Target, leader.Position))
                 {
                     Defeat(world, m, c, inst, now);
                     return false;
@@ -864,6 +862,7 @@ public sealed partial class PopulationSystem : IStateHashed
                     && (inst.AnnouncedAt < 0 || PendingTalk?.Invoke(inst.Announcer) == true)) return false;
                 inst.Phase = c.HasPt2 ? 1 : 2;
                 inst.PhaseStart = now;
+                inst.FightStart = -1;
                 return false;
             case 1:
                 if (leaderTown == inst.Home)
@@ -876,6 +875,7 @@ public sealed partial class PopulationSystem : IStateHashed
                 {
                     inst.Phase = 2;
                     inst.PhaseStart = now;
+                    inst.FightStart = -1;
                     return false;
                 }
                 bool won = false;
@@ -900,22 +900,17 @@ public sealed partial class PopulationSystem : IStateHashed
                     return false;
                 }
                 int intact = inst.Platoons.Count(id => world.Platoons.Find(id) is { } p && Intact(world, p));
-                if (inst.Platoons.Count == 0 || intact < 0.2f * (inst.Platoons.Count + inst.Lost)) Defeat(world, m, c, inst, now);
+                if (inst.Platoons.Count == 0 || intact < 0.2f * inst.Platoons.Count) Defeat(world, m, c, inst, now);
                 return false;
         }
         return false;
     }
 
-    /// <summary>Whether a point is within 1.8 × the radius of a town with hostile occupiers (only player towns get them, <see cref="Ai.AiSystem.Occupied"/>).</summary>
-    bool OccupiedNear(World world, Vector2 at)
+    /// <summary>Whether a point is within 1.8 × the radius of the campaign's own target when it has hostile occupiers (<c>FUN_1409c70f0</c> phase 0, <b>Verified</b>: no other town is looked at; <see cref="Ai.AiSystem.Occupied"/>).</summary>
+    bool OccupiedNear(World world, CampaignTown target, Vector2 at)
     {
-        foreach (var town in world.Buildings.Towns)
-        {
-            var t = CampaignTown.OfPlayer(town.Number);
-            float r = 1.8f * RadiusOf(world, t);
-            if (Vector2.DistanceSquared(at, CentreOf(world, t)) <= r * r && Ai.AiSystem.Occupied(world, t)) return true;
-        }
-        return false;
+        float r = 1.8f * RadiusOf(world, target);
+        return Vector2.DistanceSquared(at, CentreOf(world, target)) <= r * r && Ai.AiSystem.Occupied(world, target);
     }
 
     /// <summary>
@@ -976,6 +971,7 @@ public sealed partial class PopulationSystem : IStateHashed
     {
         inst.Phase = 2;
         inst.PhaseStart = now;
+        inst.FightStart = -1;
         if (c.IsHostile) world.Post(Loc.Tr("{1} against {2} has ended", c.DisplayName, NameOf(world, inst.Target)));
         Log($"{data.Factions[m.Faction].Name}: {c.Name} against {NameOf(world, inst.Target)} won");
         FollowUp(world, m, c.VictoryTriggers, inst, now, 1);
@@ -985,6 +981,7 @@ public sealed partial class PopulationSystem : IStateHashed
     {
         inst.Phase = 2;
         inst.PhaseStart = now;
+        inst.FightStart = -1;
         string target = NameOf(world, inst.Target);
         world.Post(!c.IsHostile ? Loc.Tr("{1} was defeated on their way to {2}", c.DisplayName, target) : inst.FoughtPlayer ? Loc.Tr("{1} against {2} has been defeated", c.DisplayName, target) : Loc.Tr("{1} to {2} has failed", c.DisplayName, target));
         Log($"{data.Factions[m.Faction].Name}: {c.Name} against {target} lost");
@@ -1014,7 +1011,7 @@ public sealed partial class PopulationSystem : IStateHashed
     }
 
     /// <summary>Loaded fights (the original's are loaded only): the first one starts the assault's fight timer; a leader-platoon member fighting within 300 of a player character marks a fight with the player (engine test for the <b>Unknown</b> one).</summary>
-    void TrackFights(World world, CampaignInstance inst, double now)
+    void TrackFights(World world, CampaignData c, CampaignInstance inst, double now)
     {
         var table = world.Characters;
         foreach (int id in inst.Platoons)
@@ -1023,7 +1020,7 @@ public sealed partial class PopulationSystem : IStateHashed
             foreach (var member in squad.Members)
             {
                 if (!table.TryResolveNext(member, out int slot) || table.Cold(slot) is not { InCombat: true }) continue;
-                if (inst.FightStart < 0) inst.FightStart = now;
+                if (inst.FightStart < 0 && inst.Phase == 1 && c.Key == CampaignKey.AssaultTown && now - inst.PhaseStart <= 4) inst.FightStart = now;
                 if (id == inst.Leader && !inst.FoughtPlayer && PlayerNear(world, table.Previous[slot].Position, 300)) inst.FoughtPlayer = true;
             }
         }
@@ -1394,7 +1391,6 @@ public sealed partial class PopulationSystem : IStateHashed
                 h.Add(a.Trig);
                 h.Add(a.Leader);
                 h.Add(a.Men);
-                h.Add(a.Lost);
                 h.Add(a.Announcer);
                 h.Add(a.AnnouncedAt);
                 h.Add(a.ArrivedAt);
