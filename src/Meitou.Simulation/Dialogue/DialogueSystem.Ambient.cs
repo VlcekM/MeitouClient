@@ -228,7 +228,7 @@ public sealed partial class DialogueSystem
     const int GetUpPeace = 23, GetUpFight = 24, GetUpUnnecessaryFight = 25;
 
     /// <summary>
-    /// Getting up (<c>Task_GetUp</c>, <c>FUN_14033ca10</c> / <c>FUN_1408c6780</c>, docs/game/ragdolls.md): a character that was down at the last look and is awake now fires, with no target,
+    /// Getting up (<c>Task_GetUp</c>, <c>FUN_14033ca10</c> / <c>FUN_1408c6780</c>, docs/game/ragdolls.md): the events fire only when the task starts with posture 0, so a character that was not standing (out cold, staying low, crawling) at the last look and stands now fires, with no target (a wake that stays low fires nothing until it stands),
     /// 23 when it senses no enemy or neutral (<see cref="BodySystem.Senses"/>); else, stood up on the player's order with no conscious ally sensed, 25; else 24.
     /// </summary>
     void SeeGettingUp(World world)
@@ -239,7 +239,7 @@ public sealed partial class DialogueSystem
             if (!table.Next[i].Alive || table.Cold(i) is not { Medical: { } medical } c) continue;
             var id = table.IdOf(i);
             if (medical.Dead) { down.Remove(id); continue; }
-            if (medical.Incapacitated) { down.Add(id); continue; }
+            if (!medical.Standing) { down.Add(id); continue; }   // knocked out, staying low or crawling: posture not 0
             if (!down.Remove(id)) continue;
             bool ordered = c.OrderedUp;
             c.OrderedUp = false;
