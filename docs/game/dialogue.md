@@ -322,7 +322,7 @@ the event was delivered in the speaker's current town (the per-event map the con
 
 **Verified** (`PlayerInterface::triggerAreaArrivalDialogue` `FUN_1407ffe40`, called when the biome banner hides, [ui-screens](ui-screens.md)): the active squad needs 2 members;
 candidates are members not unconscious, not carried, not in a bed or prison, not animals, not in combat mode, on screen and, for a BIOME_GROUP, not in a town. A member
-sensing an enemy (`numEnemies` > 0) stops it. With 2 or more candidates every candidate x every `arrival dialog` DIALOGUE is scored (`Dialogue::scoreCustomDialog`) and the best
+sensing an enemy (`numEnemies` > 0) stops it, tested only for members that are up, free, not animals and not in melee combat mode (`FUN_1407ffe40` :100-117; the in-town and on-screen filters come after it, so an in-town member still aborts). With 2 or more candidates every candidate x every `arrival dialog` DIALOGUE is scored (`Dialogue::scoreCustomDialog`) and the best
 runs (`runCustomDialog`). A `dumb` speaker (CHARACTER record flag, `FUN_1405e89c0`; Agnu and Ray in the base data) scores only when the DIALOGUE's `is character`
 lists it, an empty list failing; any other speaker needs the list only when it is non-empty (**Verified**, `FUN_14067e060`, `FUN_140684d70`). Meitou: one test, `DialogueSystem.ListsSpeaker`, for roots, interjections and the arrival banter. Meitou (`DialogueSystem.Arrive`): the first dialogue, speaker
 (with that rule, `MaySpeak`) and partner in squad order with a line win; "on screen" is not tested.
