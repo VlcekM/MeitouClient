@@ -111,7 +111,7 @@ A locked shackle cannot be unequipped: "This item is locked in place and cannot 
 Same targets as picking; Task_CutLock / Task_BruteForceLock share the shackle tasks' update (**Verified** vtables).
 
 - **Cut** (`Task_CutShackles` slot 2, **Observed**): needs `hasTools` (state 122). Each update: hardness -=
-  `clamp(0.01 x a x b, 0.05, 0.2) x dt x 2`, where `a x b` is the strength-based product of the break test below. At <= 0 the
+  `clamp(0.01 x a x b, 0.05, 0.2) x dt x 2`, where a is the stat-based multiplier `FUN_1406457e0(stats, 1, 1)` (**Verified**, `FUN_140359f80`: the hunger term only, no limb, light or damage terms) and b the strength stat; the break test below uses every term (`FUN_140338090`). Meitou: `Lockpicking.CutStrength`. At <= 0 the
   best tool is consumed (a tool: ITEM `item function` 9, e.g. Hacksaw; `hasTools` `FUN_1405989e0` tests item `+0x124 == 9`, **Verified**) (aborts if none), the lock's broken flag is set, "Shackles broken!" (also for locks).
   The bar shows hardness x 10. Same crime rule as picking (2 for own-target / buildings, 7 for another character).
 - **Break** (`Task_BruteForceShackles` slot 2, **Observed**): instant; succeeds when effective strength x stat scale > 3 x hardness,

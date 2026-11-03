@@ -110,6 +110,9 @@ public sealed class Lockpicking(GameConstants constants, BodyOptions options)
     /// <summary>The effective strength the cut and break tests use (the stat-scale term taken as 1, locks.md Unknowns).</summary>
     static float Strength(CharacterCold c) => (c.Stats?[StatsEnumerated.Strength] ?? 0) * (c.Medical?.StatMultiplier(StatsEnumerated.Strength) ?? 1);
 
+    /// <summary>The strength the cut tasks use (<c>FUN_140359f80</c>): the stat times the multiplier asked with the hunger term only (<c>FUN_1406457e0(stats, 1, 1)</c>), no limb, light or damage terms.</summary>
+    static float CutStrength(CharacterCold c) => (c.Stats?[StatsEnumerated.Strength] ?? 0) * (c.Medical?.StatMultiplier(StatsEnumerated.Strength, StatUse.Hunger) ?? 1);
+
     /// <summary>The best tool the character carries (ITEM <c>item function</c> 9, the condition <c>hasTools</c>: Hacksaw, Tools), by quality; null: "I don't have any tools".</summary>
     public static Items.ItemInstance? BestTool(CharacterCold c) =>
         c.Inventory?.All().Where(i => i.ItemFunction == ToolFunction).OrderByDescending(i => i.Quality).FirstOrDefault();
@@ -126,7 +129,7 @@ public sealed class Lockpicking(GameConstants constants, BodyOptions options)
         var c = world.Characters.Cold(cutter);
         if (c is null || item.Lock is not { Broken: false } l) return false;
         ShackleCrime(world, cutter, wearer, crimes);
-        l.Hardness -= Math.Clamp(0.01f * Strength(c), 0.05f, 0.2f) * dt * 2;
+        l.Hardness -= Math.Clamp(0.01f * CutStrength(c), 0.05f, 0.2f) * dt * 2;
         if (l.Hardness > 0) return false;
         l.Hardness = 0;
         if (BestTool(c) is { } tool) c.Inventory!.RemoveOne(tool);
@@ -143,7 +146,7 @@ public sealed class Lockpicking(GameConstants constants, BodyOptions options)
         var c = world.Characters.Cold(cutter);
         if (c is null || target.Lock is not { Broken: false } l) return false;
         Crime(world, cutter, c, target, crimes);
-        l.Hardness -= Math.Clamp(0.01f * Strength(c), 0.05f, 0.2f) * dt * 2;
+        l.Hardness -= Math.Clamp(0.01f * CutStrength(c), 0.05f, 0.2f) * dt * 2;
         if (l.Hardness > 0) return false;
         l.Hardness = 0;
         if (BestTool(c) is { } tool) c.Inventory!.RemoveOne(tool);
