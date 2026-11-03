@@ -188,7 +188,7 @@ public sealed class AiDatabase(GameDatabase db)
 
     /// <summary>
     /// A RACE's <c>AI Goals</c> (docs/game/ai.md "Other records that touch the AI", Verified): the weight is val1 x 0.01 with no zero default, the
-    /// window is always open (0, 100); val0 is not read.
+    /// window is always open (0, 100); val0 is not read. The goal never has a task target (the task's <c>targeting</c> is replaced by Specific: FUN_1405094f0 reads only three legacy bools no record has).
     /// </summary>
     public IReadOnlyList<AiGoal> RaceGoals(string raceId)
     {
@@ -199,7 +199,7 @@ public sealed class AiDatabase(GameDatabase db)
             if (db.Find(raceId) is { } race)
                 foreach (var e in race.GetReferences("AI Goals"))
                 {
-                    if (TaskLocked(e.TargetStringId) is { } task) list.Add(new AiGoal(task, 0, 100, e.Values.Value1 * 0.01f));
+                    if (TaskLocked(e.TargetStringId) is { } task) list.Add(new AiGoal(task with { Target = TaskTargetType.Specific }, 0, 100, e.Values.Value1 * 0.01f));
                     else problems++;
                 }
             races[raceId] = list;
