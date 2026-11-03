@@ -122,6 +122,7 @@ public sealed partial class AiSystem
         bool At(in PlanTarget t)
         {
             if (t.IsNone) return true;
+            if (world.Characters.Cold(slot)?.Ai?.ArrivedAt is { } arrived && Flat(t.Position) == arrived) return true;   // its walk there ended on its own (isAtLocation)
             var p = Me.Position;
             float slack = t.Kind == Targets.Turret ? TurretSlack : t.Kind == Targets.Work ? WorkReach : system.Settings.PostSlack;
             if (Vector2.DistanceSquared(Flat(p), Flat(t.Position)) > slack * slack) return false;

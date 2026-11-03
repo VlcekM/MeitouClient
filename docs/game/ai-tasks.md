@@ -738,6 +738,7 @@ vfunc 5 `FUN_14050caf0`). TaskData fields: +0x108 desire (a member function, nea
 
 **Observed** (class `TaskPathfinder`: search `FUN_14050f800`, entry `FUN_14050fe10`, pick `FUN_140510650`, node expansion `FUN_14051bae0`, provider maps
 `FUN_14060fe30`, "can run" `FUN_14060f940`). Meitou: [simulation](../simulation.md#planner).
+- **isAtLocation for a point target** (`FUN_1405a2450`, **Verified**): arrived when the mover reports no path or a finished one (`FUN_14065edb0`), or when the flat squared distance is under 144 and |dy| under 20. A finished path counts before any distance test. Meitou (`AiSystem.GoToSpot`, `AiMind.ArrivedAt`): a walk that ends on its own (idle, found a path, no fight or flight) counts as arrival at that spot; a failed or interrupted walk counts towards `MaxFailedWalks`. The vertical slack `FloorSlack` 6 is an engine choice (it tells floors apart).
 
 - **Row fields** (builder `FUN_140319a60`, its disassembly read per registration; the two bools **Verified** against a second parse of the same
   calls). *Acts* (+0x134): the registration's first bool, cleared when an effect is set; rows with neither acts nor an effect: 104, 91, 89, 202, 14,

@@ -449,6 +449,8 @@ public sealed class AiMind
     public IReadOnlyList<AiGoal> RaceGoals { get; init; } = [];
     /// <summary>It was sent walking to a spot and has not arrived.</summary>
     public bool Walking { get; set; }
+    /// <summary>The spot its last walk ended at on its own (the path finished, no fight or flight took it, a path was found): the original counts a finished path as arrival before any distance test (<c>isAtLocation</c> <c>FUN_1405a2450</c>, Verified). Cleared when it walks again.</summary>
+    public Vector2? ArrivedAt { get; set; }
     /// <summary>Walks in a row that ended away from the spot (no way there, or interrupted); at <see cref="AiSystem.MaxFailedWalks"/> it gives the spot up.</summary>
     public int FailedWalks { get; set; }
     /// <summary>The home's spots kept failing: it uses <see cref="Post"/> instead until its home changes.</summary>
@@ -534,6 +536,7 @@ public sealed class AiMind
         hasher.Add(WanderRadius);
         hasher.Add(Walking);
         hasher.Add(FailedWalks);
+        if (ArrivedAt is { } arrived) { hasher.Add(0x41727276); hasher.Add(arrived); }   // only while set
         hasher.Add(HomeUnreachable);
         hasher.Add(SeatUnreachable);
         hasher.Add(CommitUntil);

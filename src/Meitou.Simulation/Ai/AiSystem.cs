@@ -1200,11 +1200,15 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         float within = slack > 0 ? slack : Settings.PostSlack;
         // A spot on a floor counts as reached on that floor only, not on the ground below it.
         bool away = Vector2.DistanceSquared(here, target) > within * within || height is { } y && MathF.Abs(n.Position.Y - y) > FloorSlack;
+        if (n.Task != (byte)CharacterTask.Idle) mind.ArrivedAt = null;   // it moved on: the finished path no longer says where it is
         if (mind.Walking && n.Task != (byte)CharacterTask.GoTo)
         {
             // The walk is over: arrived, or it ended elsewhere (no way there, or a fight took it).
             mind.Walking = false;
-            mind.FailedWalks = away ? mind.FailedWalks + 1 : 0;
+            // A walk whose path finished counts as arrival whatever the distance (isAtLocation, FUN_1405a2450); a walk without a path or one a fight or flight took is a failed one.
+            var cold0 = table.Cold(slot);
+            if (away && cold0 is { InCombat: false, Fleeing: false, PathFailed: false } && n.Task == (byte)CharacterTask.Idle) mind.ArrivedAt = target;
+            mind.FailedWalks = away && mind.ArrivedAt != target ? mind.FailedWalks + 1 : 0;
             if (mind.FailedWalks >= MaxFailedWalks)
             {
                 mind.FailedWalks = 0;
@@ -1218,9 +1222,11 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
                 return false;   // the next think picks the new spot
             }
         }
+        if (away && mind.ArrivedAt == target) return true;   // its path ended there: arrived
         if (away)
         {
             WalkTo(world, slot, target, mode);
+            mind.ArrivedAt = null;
             if (height is { } floor && n.Task == (byte)CharacterTask.GoTo)
             {
                 // A spot on a floor (a node, seat or gun) is walked onto, not to a stride off it.
