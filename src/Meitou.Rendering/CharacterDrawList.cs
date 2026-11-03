@@ -27,6 +27,8 @@ public readonly record struct CharacterInstance(long Key, CharacterAppearance Ap
     public Quaternion? Rotation { get; init; }
     /// <summary>Uniform size the body is drawn at (an animal's age-dependent size; 1 for people).</summary>
     public float Scale { get; init; } = 1;
+    /// <summary>The factor the draw distance is multiplied by for this body (7 for a gigantic race, <c>FUN_140539020</c>); 1 for the rest.</summary>
+    public float DrawDistanceScale { get; init; } = 1;
     /// <summary>Not drawn in the world (still posed for its portrait): on a floor of a building that the interior view hides (docs/formats/zones.md "Interior view").</summary>
     public bool Hidden { get; init; }
     /// <summary>Pose every frame regardless of distance, for presentation actors whose animation must stay smooth.</summary>

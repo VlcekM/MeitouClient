@@ -282,6 +282,7 @@ public sealed partial class World
             s.RunSpeed = cold?.RunSpeed ?? SpeedMode.Free;
             s.Jobs = cold is { Jobs.Count: > 0 } ? cold.Jobs.ToArray() : [];
             s.Scale = cold?.Animal is { } animal ? animal.Scale(cold.ShownAge) : 1;   // the size last refreshed (BodySystem.Age)
+            s.DrawDistanceScale = cold?.Race is { Gigantic: true } ? Meitou.Data.Gameplay.Bodies.RaceData.GiganticDrawScale : 1;
             s.WeatherNotice = cold?.WeatherNotice ?? WeatherNotice.None; s.WeatherNoticeProtection = cold?.WeatherNoticeProtection ?? 0;
             s.Decision = Decisions.Tracing ? cold?.Decision : null;
             s.Activity = cold is not null && (shown || cold.IsPlayer) ? Ai.AiSystem.ActivityText(state[i], cold, Tick) : null;

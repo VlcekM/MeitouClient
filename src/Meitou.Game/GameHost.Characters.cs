@@ -160,7 +160,7 @@ sealed partial class GameHost
             }
             list.Add(new CharacterInstance(DrawKey(c.Id), c.Appearance, position, yaw, poses)
             {
-                WeaponDrawn = c.WeaponDrawn, Scale = c.Scale, Hidden = hiddenIndoors.Contains(c.Id), FullRateAnimation = c.IsPlayer, Rotation = rotation,
+                WeaponDrawn = c.WeaponDrawn, Scale = c.Scale, DrawDistanceScale = c.DrawDistanceScale, Hidden = hiddenIndoors.Contains(c.Id), FullRateAnimation = c.IsPlayer, Rotation = rotation,
                 Bones = Blend(before is null || Reanchored(before, c) ? null : before.Ragdoll, c.Ragdoll, alpha, ref Slot(ref ragdollsBySlot, c.Id.Slot), ref Slot(ref spareRagdollsBySlot, c.Id.Slot)),
             });
         }
@@ -273,7 +273,7 @@ sealed partial class GameHost
             var inBar = editing is { } shown ? EditorBarPlace(c.Id, shown) : null;
             if (c.Appearance is null || editing is { } edited && c.Id != edited && inBar is null) continue;
             // The snapshot's place: a tick's motion is well inside InReach's margin.
-            if (reachOf is not null && !reachOf.InReach(c.Position, eye) && !portraitKeys.Contains(DrawKey(c.Id)) && c.Id != sandboxHero)
+            if (reachOf is not null && !reachOf.InReach(c.Position, eye, c.DrawDistanceScale) && !portraitKeys.Contains(DrawKey(c.Id)) && c.Id != sandboxHero)
             {
                 if (distant) AddDistant(list, c);
                 continue;
@@ -329,7 +329,7 @@ sealed partial class GameHost
             var glide = player.EditorBlend(c.Id);   // after the preview, which may just have swapped the look
             list.Add(new CharacterInstance(DrawKey(c.Id), look, position, yaw, poses)
             {
-                WeaponDrawn = c.WeaponDrawn, RangedDrawn = c.RangedDrawn, BackDrawn = c.BackDrawn, Shots = c.CrossbowShots, Bolts = BoltsOf(c), Scale = c.Scale, Hidden = inBar is null && hiddenIndoors.Contains(c.Id), FullRateAnimation = editing is not null || fullRate.Contains(c.Id) || c.Id == sandboxHero && sandboxPicker?.Current is not null,
+                WeaponDrawn = c.WeaponDrawn, RangedDrawn = c.RangedDrawn, BackDrawn = c.BackDrawn, Shots = c.CrossbowShots, Bolts = BoltsOf(c), Scale = c.Scale, DrawDistanceScale = c.DrawDistanceScale, Hidden = inBar is null && hiddenIndoors.Contains(c.Id), FullRateAnimation = editing is not null || fullRate.Contains(c.Id) || c.Id == sandboxHero && sandboxPicker?.Current is not null,
                 Bones = !posed ? null : Blend(before is null || Reanchored(before, c) ? null : before.Ragdoll, c.Ragdoll, alpha, ref Slot(ref ragdollsBySlot, c.Id.Slot), ref Slot(ref spareRagdollsBySlot, c.Id.Slot)),
                 BlendFrom = glide?.From, Blend = glide?.Blend ?? 0, Build = c.Build, Rotation = rotation, Blood = c.BloodAmounts,
             });

@@ -333,7 +333,7 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
     /// Whether a character placed at <paramref name="position"/> can come within <see cref="DrawDistance"/> of <paramref name="eye"/> this frame, with a margin for the largest
     /// bodies' size: the host leaves out the poses and the ragdoll of the rest, which <see cref="Update"/> never reads (only their look and place, for loading).
     /// </summary>
-    public bool InReach(Vector3 position, Vector3 eye) => Vector3.DistanceSquared(position, eye) <= (DrawDistance + ReachMargin) * (DrawDistance + ReachMargin);
+    public bool InReach(Vector3 position, Vector3 eye, float distanceScale = 1) => Vector3.DistanceSquared(position, eye) <= (DrawDistance * distanceScale + ReachMargin) * (DrawDistance * distanceScale + ReachMargin);
     const float ReachMargin = 2000;
     /// <summary>The distance within which a character may be drawn this frame (<see cref="DrawDistance"/> plus the margin): the simulation's near radius for its far cadence.</summary>
     public float NearReach => DrawDistance + ReachMargin;
@@ -581,7 +581,7 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         for (int i = 0; i < items.Count; i++)
         {
             var inst = items[i];
-            if (AssetFor(in inst, eye, reach, ref built, ref buildMs) is not { } asset) continue;
+            if (AssetFor(in inst, eye, reach * inst.DrawDistanceScale, ref built, ref buildMs) is not { } asset) continue;
             if (inst.FreezeFrom is { } freezeFrom && !Freeze(inst.Key, freezeFrom, asset)) continue;
             if (inst.Build is { } build) ApplyBuild(asset, build);
             if (inst.BlendFrom is { } blendFrom && inst.Blend < 1 && assets.TryGetValue(blendFrom, out var fromAsset) && fromAsset is not null)
@@ -590,7 +590,7 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
 
             float scale = inst.Scale > 0 ? inst.Scale : 1;
             var centre = inst.Position + new Vector3(0, asset.Height * 0.5f * scale, 0);
-            bool far = inst.Hidden || Vector3.Distance(eye, centre) - asset.Radius * scale > reach;
+            bool far = inst.Hidden || Vector3.Distance(eye, centre) - asset.Radius * scale > reach * inst.DrawDistanceScale;
             if (far && !portraitKeys.Contains(inst.Key))
             {
                 if (!inst.Hidden && Kept.Count > 0 && NearKept(centre) is var dk && dk <= KeptReach) keptLooks.Add((asset, dk));

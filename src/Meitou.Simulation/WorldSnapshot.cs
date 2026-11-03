@@ -258,6 +258,8 @@ public sealed class CharacterSnapshot
     public WorkEvents? WorkEvents { get; internal set; }
     /// <summary>The size the body is drawn at: an animal's lerp(age, <c>scale min</c>, <c>scale max</c>) (its <c>MedicalState.ScaleK</c>), 1 for people.</summary>
     public float Scale { get; internal set; } = 1;
+    /// <summary>How many times farther than the draw distance D the body is drawn: 7 for a gigantic race (<c>FUN_140539020</c>, Verified), else 1.</summary>
+    public float DrawDistanceScale { get; internal set; } = 1;
     /// <summary>The movement task (<see cref="CharacterTask"/>); the host's sounds follow building, treating and looting from it.</summary>
     public CharacterTask Task { get; internal set; }
     /// <summary>Working on a cage's lock (the picker's order is given and it is in reach or walking there).</summary>

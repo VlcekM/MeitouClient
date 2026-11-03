@@ -692,6 +692,8 @@ and a consumer that reads the same offset):
 | `walk speed`, `swim speed mult`, `swim offset`, `water avoidance` | movement; water avoidance a becomes a + 1 if a >= 0 else 1 / (1 - a) | +0x64, +0x60, +0x68, +0x6c | `FUN_140886460`, pathfinding |
 | `vision range mult` | detection range: outdoor vision range = 1500 x this ([perception.md](perception.md#sight)) | +0x74 | AI |
 | `is robot`, `swims`, `carriable`, `single gender`, `gigantic`, `vampiric`, `no hats`, `no shirts`, `no shoes`, `cant enter buildings` (stored inverted) | flags | +0x7c, +0x79, +0x7a, +0x7b, +0x78, +0x7d, +0x7e, +0x7f, +0x80, +0x9c | many |
+
+`gigantic` (race +0x78) raises the Ogre rendering distance of the character to D x 7 (`FUN_140539020` :225-228, constant 7.0, **Verified**), and the per-frame visibility pass `FUN_1405c9f60` :44-52 skips the beyond-D clear for it (see [combat](combat.md)). D is a runtime global with no writer in the decompile; Meitou keeps its 6000. Meitou: `RaceData.GiganticDrawScale`, `CharacterInstance.DrawDistanceScale`, the far test in `CharacterRenderer`.
 | `extra attack slots` | added to CONSTANTS `max num attack slots` (1) | +0x84 | combat (`FUN_1406658c0`, ...) |
 | `self healing` | slow healing without bandaging (read per part) | per part | `FUN_14064dd10` |
 | `strength`, `dexterity` | stat multipliers (starting value and XP rate) | map entries 1, 18 | all XP code |
