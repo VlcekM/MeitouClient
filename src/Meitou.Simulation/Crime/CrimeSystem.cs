@@ -17,7 +17,7 @@ namespace Meitou.Simulation.Crime;
 /// their faction (<see cref="ArrestSystem"/>).</item>
 /// <item><b>Expiry</b>: an entry lasts 0.04 hours per cat since its last raise, for ever from 10000 (<see cref="CrimeTable.LifetimeHours"/>).</item>
 /// </list>
-/// An NPC is a culprit only of an Assault, never booked (engine choice: an NPC's looting and carrying raise no crime; its attacks on characters not hostile to them, such as hungry
+/// The setter has no NPC test: an NPC is the culprit of every crime its callers set (an NPC is never booked: engine choice; its attacks on characters not hostile to them, such as hungry
 /// bandits on a town's visitors, are witnessed so the town's police step in).
 /// </summary>
 public sealed partial class CrimeSystem(FactionRelations relations, CrimeSettings? settings = null) : ITickSystem, IStateHashed
@@ -75,7 +75,7 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
     public bool SetPending(World world, int culprit, CrimeCode code, int victimFaction, CharacterId victim, float timer, bool viaWrapper = false)
     {
         var c = world.Characters.Cold(culprit);
-        if (c is null || !c.IsPlayer && code is not (CrimeCode.Assault or CrimeCode.Looting) || IsPoliceLike(world, c) || c.IsImprisoned || victimFaction == c.Faction
+        if (c is null || IsPoliceLike(world, c) || c.IsImprisoned || victimFaction == c.Faction
             || !viaWrapper && c.SlaveState == 0 && victimFaction == ArrestSystem.SeenFaction(c) || Factions.Lawless(victimFaction)) return false;
         timer = MathF.Max(timer, MinTimer);
         if (c.Pending is { } p && p.Code != code && code == CrimeCode.Assault)

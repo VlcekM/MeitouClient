@@ -241,6 +241,7 @@ public sealed partial class CaptiveSystem
             j.Time = 0;
             return true;
         }
+        EnslavingCrime(world, w, c, cc);
         if (j.Time < Settings.CuffSeconds) return true;
         Cuff(world, c, cc);
         world.Defer(new Dialogue.DialogueEvent(j.Worker, j.Captive, RecapturedSlave) { Tick = world.Tick + 1 });   // FUN_140684990(dialogue, target, 0x25) when the bar is full
@@ -277,6 +278,18 @@ public sealed partial class CaptiveSystem
         if (moved && wc.SquadId >= 0) world.SystemOf<Dialogue.DialogueSystem>()?.Memory.Flag(world, wc.SquadId, world.Characters.IdOf(c), Dialogue.MemoryTag.Looted);
         cc.DrawnWeapon = WeaponKinds.None;
         assembly.RefreshEquipment(cc);
+    }
+
+    /// <summary>
+    /// Each update of <c>Task_CuffTarget</c> (<c>FUN_14034af20</c>, <b>Verified</b>): a captive in slave state 0 with no bounty for the null faction, whose squad's faction is the player's or
+    /// anti-slavery, makes the cuffer the culprit of a pending Enslaving crime against the captive's faction.
+    /// </summary>
+    void EnslavingCrime(World world, int w, int c, CharacterCold cc)
+    {
+        if (cc.SlaveState != 0 || cc.Bounties?.AmountFor(-1) > 0 || cc.SquadId < 0 || world.Squads.Find(cc.SquadId) is not { } squad) return;
+
+        bool enslaves = squad.Faction == world.Player.Faction || (uint)squad.Faction < (uint)data.Factions.Count && data.Factions[squad.Faction].AntiSlavery;
+        if (enslaves) world.SystemOf<Crime.CrimeSystem>()?.SetPending(world, w, Crime.CrimeCode.Enslaving, cc.Faction, world.Characters.IdOf(c), Crime.CrimeSystem.MinTimer);
     }
 
     /// <summary>The cuffing's result: locked shackles worn (engine choice, see the class remarks).</summary>
