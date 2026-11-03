@@ -347,6 +347,13 @@ public sealed partial class PopulationSystem
         return n;
     }
 
+    /// <summary>The squared distance within which the camera focus stops a nest making squads (<c>FUN_1408f8740</c>:154-170, 1250 = 35.4 units; before any candidate is drawn).</summary>
+    public const float NestFocusBlockSquared = 1250;
+
+    /// <summary>Whether the camera focus (none: no test) is within sqrt(<see cref="NestFocusBlockSquared"/>) of the nest centre in 3D, the centre taken on the ground.</summary>
+    bool FocusBlocksNest(World world, Vector2 centre) =>
+        focus is { } f && Vector3.DistanceSquared(f, new Vector3(centre.X, world.Walkability.GroundHeight(centre.X, centre.Y), centre.Y)) < NestFocusBlockSquared;
+
     /// <summary>The radius round a nest within which a player's character stops it making squads (<c>FUN_1407866d0</c>, 1250).</summary>
     public const float NestGuardRadius = 1250;
 
@@ -373,7 +380,7 @@ public sealed partial class PopulationSystem
         var pools = NestPools(world, site);
         if (pools.Ded) return;
         var players = PlayerSpots(world);
-        bool guarded = false;
+        bool guarded = FocusBlocksNest(world, centre);
         foreach (var at in players)
             if (Vector2.DistanceSquared(at, centre) < NestGuardRadius * NestGuardRadius) { guarded = true; break; }
         var budget = new NestBudget((int)MathF.Floor(pools.Roaming.Current), NestLiving(world, i, state), TemplateCounts(world, site, state), state.Made, 4, 1, !guarded, centre);
