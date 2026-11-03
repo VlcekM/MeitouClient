@@ -615,8 +615,8 @@ How a building gets selected: [ui-input](ui-input.md#building-picking-and-select
     ([construction state](buildings-production.md#construction-state), **Verified** there against `FUN_1405595a0`). The button (slot 80
     `FUN_1407ad410`) asks "Do you want to buy this building for c.{1,num}?".
     Yes (slot 81 `FUN_1407ad6c0`, answer 2; **Observed** decompile): `General_Click`; without the money "Can't afford to buy this building. It costs
-    c.{1,num}" (the money test of the player faction's money object also takes it); else, in order: the owner faction's platoons (active and
-    unloaded lists) whose home is the building (`FUN_1406ba570`) lose it (home hand set to null, type 11); the building goes to the player's faction
+    c.{1,num}" (the money test of the player faction's money object also takes it: the callback deducts it nowhere else); else, in order:
+    the owner faction's platoons (active and unloaded lists) whose home is the building (`FUN_1406ba570`) lose it (home hand set to null, type 11); the building goes to the player's faction
     (vfunc 0xa0, between the factions' building lists); its owner-platoon hand (+0xd0, whose flags the trespass test reads, [trespassing](economy.md#112-how-a-bounty-is-gained)) becomes
     null; each door (+0x1c0) goes to the player's faction and `FUN_140297040` runs on its lock (**Unknown**); each furniture piece of the interior
     holding an occupant (slot 0x300) lets it out (`FUN_14032e2f0`, `FUN_140330600`); the interior's furniture and item groups are destroyed

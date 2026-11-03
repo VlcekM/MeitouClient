@@ -495,6 +495,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             var seats = new List<SeatClaim>();
             var seatOwners = new Dictionary<TownBuilding, int>(ReferenceEqualityComparer.Instance);
             foreach (var b in buildings)
+            {
+                if (world.Fixtures.IsEmptied(b.Key)) continue;   // a bought house's furniture is gone
                 for (int i = 0; i < b.SeatCount; i++)
                     if (Sittable(b.SeatAt(i).Kind, dummies: true))
                     {
@@ -502,6 +504,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
                         if (!seatOwners.ContainsKey(b))
                             seatOwners[b] = world.Fixtures.PropertyOwner(b.Key) ?? (b.OwnerFactionId is { } o && data.FactionIndex(o) is var fi and >= 0 ? fi : townFaction);
                     }
+            }
             places[site] = new(wander, shopList, [.. buildings.Where(b => (b.IsBar || bars.Contains(b)) && IsPublic(b))],
                 [.. buildings.Where(b => b.IsOutdoorTable)], [.. buildings.Where(b => !world.Fixtures.IsDestroyed(b) && b.Function is >= 0 and var fn && (WorkFunctions >> fn & 1) != 0)], stock, seats, seatOwners,
                 [.. buildings.Where(b => b.HasInterior && !b.IsWall && !world.Fixtures.IsDestroyed(b) && IsPublic(b))]);
