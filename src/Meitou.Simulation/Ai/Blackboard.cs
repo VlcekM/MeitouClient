@@ -154,6 +154,8 @@ public sealed class Blackboard
     /// <summary>The town's turrets (<see cref="PopulationData.Turrets"/>) and the turret index each member's slot claimed to man, as the last serial step found them (derived, not hashed).</summary>
     public IReadOnlyList<TownBuilding> Turrets { get; set; } = [];
     public Dictionary<int, int> TurretClaims { get; } = [];
+    /// <summary>The turret finder's factor for each claim (<see cref="AiSystem"/>'s <c>TurretFactor</c>: 1 near, 0.3 far; in melee mode 0.8 and 0.05), as the last serial step found it (derived, not hashed).</summary>
+    public Dictionary<int, float> TurretFactors { get; } = [];
     /// <summary>The seat of the bar (<see cref="Home"/> under a bar package) each relaxing member's slot claimed, as the last serial step found it (derived, not hashed).</summary>
     public Dictionary<int, HomeSpot> SeatClaims { get; } = [];
     /// <summary>The furniture each member sitting around (275) claimed (a seat of <see cref="TownBuilding.SeatAt"/> numbering, in any building the finder allows), as the last serial step found it (derived, not hashed).</summary>

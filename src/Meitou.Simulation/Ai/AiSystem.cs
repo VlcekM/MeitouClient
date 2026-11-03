@@ -387,8 +387,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             // Staying home needs a piece of the home's furniture to operate (the finder of 43 returns 0 without one).
             AiBehaviour.Post when type == TaskType.STAY_IN_HOME => HasStayingFurniture(board.Home) ? 1 : 0,
             AiBehaviour.Post when type is TaskType.STAND_AT_GUARD_NODE_HOMEBUILDING or TaskType.STAND_AT_GUARD_NODE_HOMEBUILDING_INDOORS_ONLY => 0.5f,
-            // A turret is only wanted by a member its squad gave one (the nearest free one in <see cref="ClaimTurrets"/>).
-            AiBehaviour.Turret => board.TurretClaims.ContainsKey(self.Slot) ? 1 : 0,
+            // A turret is only wanted by a member that found one (the nearest unused one to it in <see cref="ClaimTurrets"/>): the finder's factor times the desire of AI slot 35.
+            AiBehaviour.Turret => board.TurretClaims.ContainsKey(self.Slot) ? board.TurretFactors.GetValueOrDefault(self.Slot, 1) * TurretDesire(world, self.Slot) : 0,
             AiBehaviour.TownNode => WanderIn(board.Town, world.Characters.Previous[self.Slot].Position).Count > 0 || OccupiedBuildings(world, board) > 0 ? 1 : 0,
             // Row 36 has no finder; its walk needs a town to stroll round (engine choice: the original's walk without one, round the task's target, is not decoded).
             AiBehaviour.PatrolTown => board.Town >= 0 || OccupiedBuildings(world, board) > 0 ? 1 : 0,
@@ -1509,15 +1509,33 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         return front + new Vector3(gate.Out.X, 0, gate.Out.Y) * (8 * (step % 2)) + along;
     }
 
+    /// <summary>Within this (squared 2.25e6) of the character the turret finder's pick has factor 1; within 600 in melee mode it has 0.8.</summary>
+    const float TurretNear = 1500, TurretNearMelee = 600;
+
     /// <summary>
-    /// Gives the members' slots the town's turrets to man (docs/simulation.md "AI", turrets): in member order each takes the nearest turret no earlier member claimed,
-    /// by the distance to its post; a member whose goal is the home building's turrets first takes one mounted on its home. Rebuilt on the package cadence; a town
+    /// The turret goals' (149, 222, 234) finder factor for the turret found at distance <paramref name="d2"/> squared (<c>FUN_1408ccc70</c>, <b>Verified</b> from the registry and decompile): 1.0 within
+    /// 1500, else 0.3; in melee combat mode 0.8 within 600, else 0.05.
+    /// </summary>
+    internal static float TurretFactor(float d2, bool melee) => melee ? d2 <= TurretNearMelee * TurretNearMelee ? 0.8f : 0.05f : d2 <= TurretNear * TurretNear ? 1 : 0.3f;
+
+    /// <summary>
+    /// The desire of the turret goals (AI slot 35 <c>FUN_140598080</c>): 0 when carrying; 2.0 when enemies are sensed (it has a turret as target); else 1.0. Not modelled: the 0 for a combat-flagged
+    /// character outside melee mode, the cut at the squared distance clamp(<c>AI+0x28</c> x 1.2, 10000, 1e6), the faction-owned test (stat flag <c>+0x129</c>) and the 0.4 of a hurt character with none
+    /// sensed (their operands are <b>Unknown</b>).
+    /// </summary>
+    float TurretDesire(World world, int slot) =>
+        world.Characters.Cold(slot) is not { } cold || !cold.Carrying.IsNone ? 0 : aggro?.SensesOf(slot) is { Enemies: > 0 } ? 2 : 1;
+
+    /// <summary>
+    /// Gives the members' slots the town's turrets to man (docs/simulation.md "AI", turrets): in member order each takes the nearest turret no earlier member claimed
+    /// (the original's unused turrets), by the distance to the character itself (<c>FUN_1408ccc70</c>); a member whose goal is the home building's turrets first takes one mounted on its home. Rebuilt on the package cadence; a town
     /// without turrets gives none.
     /// </summary>
     void ClaimTurrets(World world, Blackboard board, Squad squad)
     {
         board.Turrets = data.Turrets(board.Town);
         board.TurretClaims.Clear();
+        board.TurretFactors.Clear();
         if (board.Turrets.Count == 0) return;
         if (!turretTaken.TryGetValue(board.Town, out var taken)) turretTaken[board.Town] = taken = [];
         int hour = world.Hour, claimed = 0;
@@ -1534,10 +1552,16 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
                 {
                     if (taken.Contains(t) || board.Turrets[t].Turret is not { } turret) continue;
                     if (homeOnly && turret.MountedOn != board.Home?.Key) continue;
-                    float d = Vector2.DistanceSquared(mind.Post, Flat(turret.Position));
+                    float d = Vector2.DistanceSquared(Flat(world.Characters.Previous[s].Position), Flat(turret.Position));
                     if (d < bestD) (best, bestD) = (t, d);
                 }
-                if (best >= 0) { taken.Add(best); board.TurretClaims[s] = best; claimed++; }
+                if (best >= 0)
+                {
+                    taken.Add(best);
+                    board.TurretClaims[s] = best;
+                    board.TurretFactors[s] = TurretFactor(bestD, cold.InCombat);
+                    claimed++;
+                }
             }
     }
 
