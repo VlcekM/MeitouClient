@@ -175,12 +175,12 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
         TopUpNest(world);
         // The original answers a world state from the live unique table (FUN_1409a7e00), so the copy is taken every tick (cheap while nothing changed), not at the look.
         RefreshStates(world);
+        TickDiscover(world);
         if (world.Tick % settings.CheckEveryTicks != 0) { if (wars is not null) StepWarManager(world); return; }
         world.Uniques.SeedPrisoners(data.Db);
         RefreshUniques(world);
         RefreshStates(world);
         RefreshZones(world);
-        Discover(world);
         StepRoaming(world);
         StepCampaigns(world);
         StepWarManager(world);
@@ -197,6 +197,19 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
     Vector2?[] wildCentres = [];
     /// <summary>The player characters of a <see cref="Discover"/> check, with their zones.</summary>
     readonly List<(Vector2 At, ZoneCoordinate Zone)> viewers = [];
+
+    void TickDiscover(World world)
+    {
+        // Real time, not simulated (FUN_14092f6b0, Verified): the unscaled frame time adds up while the game runs (a pause adds nothing: no tick) and a check runs once it reaches a second.
+        discoverClock += world.TickSeconds / MathF.Max(world.PhysicsSpeed, 0.01f);
+        if (discoverClock < DiscoverEverySeconds) return;
+        discoverClock = 0;
+        Discover(world);
+    }
+
+    /// <summary>Real seconds between two town discovery checks (<c>DAT_14167c308</c>).</summary>
+    public const float DiscoverEverySeconds = 1;
+    float discoverClock;
 
     /// <summary>
     /// Towns and camps a player character comes within <see cref="ExploreRange"/> of become discovered and explored, and their faction known; ones not yet discovered within
