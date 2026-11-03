@@ -79,6 +79,8 @@ Pose/LOD distances can scale by animal size in engine, not original scheduler pr
 | Cage Beast | cage_beast (41) | **walk** 1.6 | **idle1** 15.9 | gotosleep 2.5, sleep 1.5 | attack1 1.4 | run 0.67, strafeleft |
 | Skimmer | skimmer (32) | **walk** 2.67 | none: its `idle1` record names a clip the skeleton lacks (it has `idle01` 0.17) | **sleep** 0.17 | **attack1** 1.83 (its `eat (attack1)` record too) | strafe |
 
+Clip filter (`FUN_14051d660`, **Verified** for the strafe list, Inferred for walk and run): a clip with `stealth mode` 1 is kept only while the animal sneaks; animals never sneak (the stealth flag is written only by the Character sneak setter), so such a clip is never picked. Meitou drops it in `AnimationLibrary.BuildAnimals`.
+
 ## Death items
 
 The meat, skins, teeth (animals) and cores/CPUs (robots, Gurglers) a body yields. Not dropped at death: they are in the inventory

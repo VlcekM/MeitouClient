@@ -128,7 +128,7 @@ public sealed record AnimationDefinition
         Area = AnimationArea.All,
         Category = AnimationLibrary.AnimalCategory,
         Relocates = false,
-        WeaponLeft = 2, WeaponRight = 2, CombatMode = 2, StealthMode = 2, Kinds = WeaponKinds.All,
+        WeaponLeft = 2, WeaponRight = 2, CombatMode = 2, Kinds = WeaponKinds.All,
         LeftLegMin = 1000, LeftLegMax = 1000, RightLegMin = 1000, RightLegMax = 1000,
     };
 
@@ -430,6 +430,7 @@ public sealed class AnimationLibrary
     /// Every ANIMAL_CHARACTER's clip set from its <c>animations</c> list (docs/game/animals.md "Animations"): the movement clips (non-zero <c>move speed</c>), the idles
     /// (<c>idle</c>, by <c>idle chance</c>) and its <c>sleeponfloor</c> records (the one that does not loop is the fall, the looping one the lying clip), each followed by
     /// every other <c>sleeponfloor</c> record as a fallback (engine choice: most lists name one or none; the system takes the first whose clip the skeleton has).
+    /// A clip whose <c>stealth mode</c> is 1 (sneaking only) is dropped: an animal is never sneaking, so its clip filter (<c>FUN_14051d660</c>) never keeps it (Inferred for movement picks).
     /// </summary>
     void BuildAnimals(GameDatabase db)
     {
@@ -442,7 +443,7 @@ public sealed class AnimationLibrary
         foreach (var a in db.OfType(FcsRecordType.ANIMAL_CHARACTER))
         {
             var listed = a.GetReferences("animations").Select(r => db.Find(r.TargetStringId))
-                .OfType<GameRecord>().Where(r => index.ContainsKey(r.StringId)).DistinctBy(r => r.StringId).ToList();
+                .OfType<GameRecord>().Where(r => index.ContainsKey(r.StringId) && all[index[r.StringId]].StealthMode != 1).DistinctBy(r => r.StringId).ToList();
             var defs = listed.Select(r => index[r.StringId]).ToList();
             string? race = a.GetReferences("race").Where(r => r.Values.Value0 > 0).Select(r => r.TargetStringId).FirstOrDefault();
             animals[a.StringId] = new AnimalClips(
