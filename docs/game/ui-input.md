@@ -282,11 +282,14 @@ Rendering details: [objects](../render-objects.md#building-sign-highlight).
 **Verified** (`FUN_140415e00` hooks the ItemBox of each squad tab to `MainBarGUI`; disassembly of `FUN_140413d80`, the eventNotifyItem handler, and `FUN_140413d30`, eventSelectItemAccept):
 - Left press (notify 0, button 0): closes the context menu (`FUN_1407a6bc0`), selects the member (`FUN_1407f90b0` -> `FUN_1407f8f60`, Shift toggles, [above](#quick-right-click-on-a-character)), no camera move.
 - Double click (accept, `FUN_140413d30`): the same with the focus flag set, which runs `FUN_1407f5400` (focus the camera on the character).
-- **Right** press (button 1): closes the context menu and remembers the pressed index; right release over the same portrait calls `FUN_140413cd0` with the focus flag set: the same
-  select-and-focus as the double click, at once, whatever the hold time. **There is no portrait context menu in the original**, and no right-click menu on any other path of the bar.
-- So the report in GitHub issue #137 (the base game lacks it) is wrong: vanilla focuses on a right click. Meitou (`PlayerInterface.MouseDown` / `MouseUp`): a right release on the pressed portrait selects it
-  (Shift toggles) and centres / flies the camera as the double click. Meitou switch "Portrait menu" (Advanced settings, on by default; not in the original): a held right press opens the
-  member's context menu, as on the character in the world; a quick release still selects and focuses.
+- **Right** press (button 1): closes the context menu, remembers the pressed index, copies the portrait's character hand into `MainBarGUI` `+0x1e8` and zeroes the hold timer `+0x208`.
+- **Held** (**Verified**, `FUN_140415630`, `MainBarGUI`'s frame update; `DAT_141696c80` = 0.25): while that hand is not a `NULL_ITEM` (11) one, the timer adds the frame time; past
+  0.25 s it drops the MyGUI mouse capture, opens the context menu (`FUN_1407a6bc0` mode 1) for the hand's character (type 1; a hand of type 91 resolves another way, **Unknown**) and
+  clears the hand to `NULL_ITEM`. So the original has a portrait menu: the same menu as on the character in the world, after 0.25 s rather than the world's 0.2 s.
+- Right release over the same portrait with the hand still set (a press shorter than 0.25 s) calls `FUN_140413cd0` with the focus flag set: the same select-and-focus as the double click.
+  After the menu opened, the release does not focus. No right-click menu on any other path of the bar.
+- Meitou (`PlayerInterface.MouseDown` / `MouseUp`): a quick right release on the pressed portrait selects it (Shift toggles) and centres / flies the camera as the double click; a held press
+  opens the member's context menu after the world's 0.2 s, behind the "Portrait menu" switch (Advanced settings, on by default), which wrongly calls it Meitou-only.
 
 ### Ground item labels
 
