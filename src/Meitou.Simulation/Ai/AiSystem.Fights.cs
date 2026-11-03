@@ -34,9 +34,14 @@ public sealed partial class AiSystem
         {
             TaskType.ATTACK_ENEMIES => passive || sneaking || medical.Prone ? 0 : 1,
             TaskType.PROTECT_ALLIES or TaskType.PROTECT_ALLIES_STAY_IN_TOWN => passive || sneaking || cold.SlaveState == 1 && cold.SlaveMaster >= 0 ? 0 : ProtectScan(world, slot, type, mind).First * (cold.Carrying.IsNone ? 1 : 0.5f),
+            // 41's desire is the constant 2 (AI slot 0x178, FUN_1406415d0, Verified): the slave's Slave list weighs it above the other fighting goals.
+            TaskType.ATTACK_ENEMIES_OF_MY_SLAVEMASTER => MasterDesire,
             _ => 1,
         };
     }
+
+    /// <summary>Row 41's desire (<c>DAT_141682ad0</c>).</summary>
+    const float MasterDesire = 2;
 
     /// <summary>
     /// A combat goal's finder: its factor and the character it would fight (<see cref="CharacterId.None"/> with the factor 0). Attack goals: <see cref="AggroSystem.FindFoe"/>, factor 1 with a
@@ -53,6 +58,7 @@ public sealed partial class AiSystem
             TaskType.ATTACK_ENEMIES_AND_NEUTRALS => aggro?.FindFoe(world, slot, AggroSystem.FoeFinder.EnemiesAndNeutrals, pending),
             TaskType.TERRITORIAL_AGGRESSION_BUT_DONT_LEAVE_HOME => aggro?.FindFoe(world, slot, AggroSystem.FoeFinder.Territory, pending),
             TaskType.ATTACK_TROUBLE_MAKERS => aggro?.FindFoe(world, slot, AggroSystem.FoeFinder.TroubleMakers, pending),
+            TaskType.ATTACK_ENEMIES_OF_MY_SLAVEMASTER => aggro?.FindFoe(world, slot, AggroSystem.FoeFinder.MasterEnemies, pending),
             _ => null,
         } ?? CharacterId.None;
         return (foe.IsNone ? 0 : 1, foe);

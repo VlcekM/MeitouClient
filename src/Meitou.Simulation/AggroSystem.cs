@@ -624,6 +624,8 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
         Territory = 2,
         /// <summary>34 ATTACK_TROUBLE_MAKERS (<c>FUN_14099baa0</c>): an enemy attacking an ally in the looker's town.</summary>
         TroubleMakers = 3,
+        /// <summary>41 ATTACK_ENEMIES_OF_MY_SLAVEMASTER (<c>FUN_14059ee50</c>): a sensed enemy of the slave's master (<see cref="FindMasterFoe"/>).</summary>
+        MasterEnemies = 4,
     }
 
     /// <summary>
@@ -1158,6 +1160,7 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
     public CharacterId FindFoe(World world, int slot, FoeFinder finder, IReadOnlyDictionary<int, int>? pending = null)
     {
         var table = world.Characters;
+        if (finder == FoeFinder.MasterEnemies) return FindMasterFoe(world, slot, pending);
         if (!Settings.AttackOnSight || (uint)slot >= (uint)slots.Length || slots[slot].Senses is not { } own
             || table.Cold(slot) is not { Medical: not null, SlaveState: not 1, Fighter.CanAttack: true } cold || !Relations.Contains(cold.Faction)) return CharacterId.None;
         var war = cold.SquadId >= 0 && world.Squads.Find(cold.SquadId) is { War.IsSet: true } assaulting ? assaulting.War : WarTargets.None;
@@ -1190,6 +1193,41 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
         }
         return scan.Best >= 0 ? new CharacterId(scan.Best, table.Previous[scan.Best].Generation) : CharacterId.None;
     }
+
+    /// <summary>
+    /// 41 ATTACK_ENEMIES_OF_MY_SLAVEMASTER (finder <c>FUN_14059ee50</c>, <b>Verified</b>; docs/game/perception.md "Sense tags"): for a slave (state 1) whose master resolves (its squad), the entries of
+    /// its senses with the master-enemy tag (bit 12: the master counts the character as an enemy, slot 125 from the master's side; here the master squad's faction attacks it on sight, or its squad
+    /// tag TEMP_ENEMY) and none of KO, imprisoned or crawling (bits 3, 9, 14); not of the slave's own squad, not a slave of the same owner; the best by the target score. The area test
+    /// <c>FUN_140599f30</c> and the Hold post test <c>FUN_140598630</c> follow the look's (the area is not modelled). A pure read (any thread in the think).
+    /// </summary>
+    CharacterId FindMasterFoe(World world, int slot, IReadOnlyDictionary<int, int>? pending)
+    {
+        var table = world.Characters;
+        var prev = table.Previous;
+        if (slot >= slots.Length || slots[slot].Senses is not { } own || table.Cold(slot) is not { Medical: not null, SlaveState: 1, SlaveMaster: >= 0, Fighter.CanAttack: true } cold
+            || world.Squads.Find(cold.SlaveMaster) is not { } master || !Relations.Contains(master.Faction)) return CharacterId.None;
+        var scan = NewScan(world, slot, cold, WarTargets.None, MathF.Max(0, RangeOf(cold, Settings.SightRange)), null, keepSenses: false, FoeFinder.MasterEnemies);
+        scan.Pending = pending;
+        foreach (var e in own.entries)
+        {
+            int t = e.Target;
+            if ((e.Tags & (SenseTag.Ko | SenseTag.Imprisoned)) != 0 || (uint)t >= (uint)table.HighWater || t == slot || !prev[t].Alive || prev[t].Generation != e.Generation
+                || table.Cold(t) is not { Medical.Incapacitated: false, IsImprisoned: false } c || c.Medical.Crawling && !c.InCombat || c.SquadId == cold.SquadId
+                || c.SlaveState == 1 && c.SlaveOwner == cold.SlaveOwner || !EnemyOfMaster(world, master, c, t, e.Generation)) continue;
+            var id = new CharacterId(t, e.Generation);
+            if (PursuitSystem.PathImpossible(cold, id, world.Tick)) continue;
+            float d2 = Vector3.DistanceSquared(prev[t].Position, scan.Eye);
+            float score = Score(ref scan, t, c, d2) ?? float.NegativeInfinity;
+            if (!(score > scan.BestScore)) continue;
+            (scan.Best, scan.BestD2, scan.BestScore) = (t, d2, score);
+        }
+        return scan.Best >= 0 ? new CharacterId(scan.Best, prev[scan.Best].Generation) : CharacterId.None;
+    }
+
+    /// <summary>Sense tag bit 12 (<c>FUN_1408580d0</c>): the slave's master calls <paramref name="c"/> an enemy (slot 125 of the master): its faction attacks the character's seen faction on sight, or its squad tags it TEMP_ENEMY.</summary>
+    bool EnemyOfMaster(World world, Squad master, CharacterCold c, int slot, int generation) =>
+        c.Faction != master.Faction && (AttacksOnSight(Relations, master.Faction, Crime.ArrestSystem.SeenFaction(c))
+            || Memory is { } memory && memory.HasShort(world, master.Id, new CharacterId(slot, generation), Dialogue.MemoryTag.TempEnemy));
 
     /// <summary>
     /// 34 ATTACK_TROUBLE_MAKERS, "Law enforcer" (finder <c>FUN_14099baa0</c>, <b>Verified</b>; docs/game/ai-tasks.md "Combat goals"): nothing while the looker is in no town (its current town).

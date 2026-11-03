@@ -140,6 +140,7 @@ public static class TaskBehaviours
         [TaskType.ATTACK_ENEMIES_AND_NEUTRALS] = (AiBehaviour.Fight, "Attacking others"),
         [TaskType.TERRITORIAL_AGGRESSION_BUT_DONT_LEAVE_HOME] = (AiBehaviour.Fight, "Home territory aggression"),
         [TaskType.ATTACK_TROUBLE_MAKERS] = (AiBehaviour.Fight, "Attacking trouble makers"),
+        [TaskType.ATTACK_ENEMIES_OF_MY_SLAVEMASTER] = (AiBehaviour.Fight, "Attacking enemies of my master"),
         [TaskType.PROTECT_OWN_SQUAD] = (AiBehaviour.Fight, "Protect close allies"),
         [TaskType.PROTECT_ALLIES] = (AiBehaviour.Fight, "Protect allies"),
         [TaskType.PROTECT_ALLIES_STAY_IN_TOWN] = (AiBehaviour.Fight, "Protect allies"),
