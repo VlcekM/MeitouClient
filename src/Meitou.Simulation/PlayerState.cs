@@ -317,6 +317,7 @@ public sealed partial class PlayerSystem(PopulationData? data = null) : ITickSys
                     DebugCheats.Apply(world, data, assembly, debug);
                     break;
                 case Editing.FinishCreation:
+                    if (player.InCreation) Editing.CharacterEditing.EndCreation(world, assembly);
                     player.InCreation = false;
                     break;
                 case Items.PickUpItemOrder pick:

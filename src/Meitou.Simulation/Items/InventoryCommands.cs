@@ -25,8 +25,9 @@ public static class InventoryCommands
     /// <summary>
     /// <c>validateInventorySections</c> (<c>FUN_1406218f0</c>, character vtable slot 130; <b>Verified</b> body): a section <see cref="SectionClosed"/> for the character empties itself. The
     /// first worn boots of a character whose race may wear shoes are dropped in front of it (slot 53, <c>FUN_1405ca740</c>); every other item of a closed section is destroyed
-    /// (<c>FUN_140749c20</c> with its delete flag). The original runs it when it builds a human's inventory and when a leg is severed (<c>FUN_14064edc0</c>, parts 2 and 3); Meitou calls it
-    /// for the second (<see cref="PopulationSystem"/>'s limb queue), as a built inventory never has a worn item in a closed section.
+    /// (<c>FUN_140749c20</c> with its delete flag). The original runs it when it builds a human's inventory, when a leg is severed (<c>FUN_14064edc0</c>, parts 2 and 3) and for every
+    /// character when the new game's editor closes (<c>FUN_1405f5d10</c>); Meitou calls it for the last two (<see cref="PopulationSystem"/>'s limb queue,
+    /// <see cref="Editing.CharacterEditing.EndCreation"/>: a race switched in the editor keeps the old race's clothes until then), as a built inventory never has a worn item in a closed section.
     /// </summary>
     public static void ValidateSections(World world, int slot, CharacterCold cold)
     {

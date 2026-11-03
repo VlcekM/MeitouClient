@@ -311,7 +311,8 @@ exe decompile unless marked; Meitou: `CharacterDraft` (data), `EditCharacter` / 
   after its room is laid out (the counts are global and can stay up under memory pressure). The faithful UI keeps the stage. Metal: compiled, not yet seen on a Mac.
 - **Keys**: `in editor` true while open; a mode 0 character without a body file is randomised on open (Meitou's start characters are already
   rolled). Closing in mode 0 also sets health from the CHARACTER's `starting health` (Meitou: a new race at creation gets a new body, which
-  applies it; the edited look keeps stumps and prosthetics).
+  applies it; the edited look keeps stumps and prosthetics), then validates each human's inventory sections for its race (**Verified**, `FUN_1405f5d10`:
+  worn hats, shirts and shoes of a race that closes them are removed, [disabled slots](game/ui-screens.md); Meitou: `CharacterEditing.EndCreation`).
 - **Meitou validation** (`CharacterEditing.Apply`, `CharacterDraft.Sanitize`): player character with a person's look; creation only while
   `PlayerState.InCreation` (new game until CONFIRM) and within the start's force races; surgery needs the surgeon alive within 60 units
   (engine choice), the same race and gender, money > price, and takes the price. Head/hair/beard must be the race's, sliders and poses are

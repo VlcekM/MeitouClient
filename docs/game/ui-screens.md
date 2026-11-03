@@ -1224,9 +1224,12 @@ unless marked; Meitou: `PlayerInterface.Squads.cs`, commands in `SquadManagement
   replaced). **Verified** (decompile): "empties" destroys every item in the section (`FUN_140749c20` with its delete flag, "clearAllItems"); for boots with shoes allowed the first worn item is first
   taken off through character vtable slot 53 (`FUN_1405ca740`), which places it in the world just ahead of the character (the scalar of the offset is not readable) and removes it from the
   inventory: worn boots are dropped, not packed. With `no shoes` nothing is taken off, the items are destroyed. Callers (vtable slot 130 `+0x410`, **Observed**: a scan of the `+0x410` virtual calls, whose other hits are other classes' slots): the human inventory build
-  (`FUN_14062c4e0`, slot `0x2c0`, before the clothing is added) and the severing of a leg (`FUN_14064edc0`, parts 2 and 3). The other `InventorySection::setEnabled` callers are the furnace, crafting benches and animals. Meitou:
+  (`FUN_14062c4e0`, slot `0x2c0`, before the clothing is added) and the severing of a leg (`FUN_14064edc0`, parts 2 and 3); **Verified** (decompile): also the character editor's close
+  (`FUN_1405f5d10`) for each human of its list when not in mode 1 (the window's byte `+0x1c0` is mode == 1, set in `FUN_1405f4dd0`), right after `starting health`, so a race
+  switched at a new game loses what it wore in the sections it closes. The other `InventorySection::setEnabled` callers are the furnace, crafting benches and animals. Meitou:
   `InventoryCommands.SectionClosed`, `CharacterSnapshot.ClosedSlots`, drawn disabled and refusing drops and every automatic equip (`TryEquip`, `Transfer`, `MoveInto`: trade, pick-up, loot, scavenge, storage, slave clothing);
-  `InventoryCommands.ValidateSections` runs when a leg is severed (the limb queue of `PopulationSystem`): boots dropped 3 ahead of the character (as a dropped held item, engine offset), the rest destroyed.
+  `InventoryCommands.ValidateSections` runs when a leg is severed (the limb queue of `PopulationSystem`) and for the start's squad when the creation ends (`CharacterEditing.EndCreation`):
+  boots dropped 3 ahead of the character (as a dropped held item, engine offset), the rest destroyed.
 - **Unknown**: the trader window's panel lines beyond Money.
 - Item placement failure messages (FUN_14070f7e0; the checks behind them are in [economy.md](economy.md#shops-and-transactions)): Out of trading range; No room for that item; You can't
   afford that; The shopkeeper can't afford that; That's not for sale; Got caught stealing; Smugglers only buy
