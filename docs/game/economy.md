@@ -16,6 +16,8 @@ otherwise own value. Apply armour/clothing category, relative-price and slot fac
 hat3=0.3, legs6=0.5, shirt8=1.5, boots9=0.2, others1. Quality0 uses own value, not low endpoint.
 Crossbow107/limb111: s² between value/value1, category multipliers are swapped (robotics for107,
 crossbow for111). Container46 uses own integer value without multipliers.
+The runtime price passes the item's level (vfunc 0x2b8, called first in `FUN_1407a8f90`) as the quality: a
+limb's grade level 5/20/40/60/80/95, not its saved `quality` (**Observed**, disassembly; the same vfunc picks the grade colour).
 
 Ingredients recursively price same quality with category flag1; sum rounded
 ingredientValue*(v0/100)*(1+profitability). **Observed** v0 interpretation; other steps verified
