@@ -838,10 +838,10 @@ public sealed partial class CombatSystem
             ref readonly var a = ref read[other];
             if (a.AttackTech < 0 || a.NextBlow == 0 || a.TargetGeneration != generation || a.AttackTicks <= 0) continue;
 
-            // A blow landing this tick is still on its way: the strike is applied in the serial phase after every Act.
+            // A blow is on its way until the attacker's state shows it struck (a far attacker strikes at its own step, after the landing tick; strikes apply after every Act).
             int lands = a.AttackStart + (int)MathF.Ceiling(techniques[a.AttackTech].StrikeProgress(a.NextBlow) * a.AttackTicks);
             float v = SwingProgress(in a, now);
-            if (lands < now || v <= 0) continue;
+            if (v <= 0) continue;
             if (best.Attacker >= 0 && !Ahead(v, other, in best, keep)) continue;
             best = new IncomingBlow(other, a.AttackSeq, a.NextBlow, v, lands);
         }

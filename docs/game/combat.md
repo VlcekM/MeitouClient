@@ -161,8 +161,10 @@ side" is the same as a failed roll. Each defence tick replays the technique thro
 continues it too, a different one clears the layers and starts fresh (`FUN_1405b7800`). A block is not ended by its clip: it lasts while any incoming swing has 0 < v < 1, then ends with the wait
 (+0x148); a dodge ends past 0.98 (state 4). Whether a block clip held past its length loops or stays on its last frame is **Unknown** (a fading block layer, +0x62, plays backwards).
 The front/rear heading is the movement object's current unit heading (+0x640 +0xd0, [fight steering](#fight-steering)).
+Each defence tick also turns the defender towards the followed attacker (`FUN_140666400(this, +0x1a8)`, the call that turns a swinger to its target when over 5 away). Meitou: not
+modelled; a defender steers at its fight target (`Fighting.cs`). Animals never defend: a defender whose vfunc 0x248 is set gets a 2 s no-defence timer (`FUN_140609290`); Meitou: not modelled.
 Meitou: `CombatSystem.MostAdvanced` (the followed swing; an exact tie keeps the followed one, else the lower slot, since the grid's order is not stable), `React` (start),
-`Reconsider` (the update), `ReactionEnds` (a blow landing this tick still counts as on its way: strikes apply after every Act), `CombatTuning.DefenceStartProgress`. A held block's progress
+`Reconsider` (the update), `ReactionEnds` (a blow counts as on its way until the attacker's state shows it struck: strikes apply after every Act, a far attacker's at its own step), `CombatTuning.DefenceStartProgress`. A held block's progress
 is clamped at 1, so it keeps blocking (the engine's reading of the loop question). A blow decided again rolls the same: Meitou's rolls are fixed per blow, the original draws afresh.
 
 **Observed** (decompiled, not measured in game), with several attackers: a target answering a request is asked by
