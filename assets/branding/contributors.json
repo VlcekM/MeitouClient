@@ -20,8 +20,8 @@
     "areas": "Audio, Saves"
   },
   "gosuboy": {
-    "commits": 6,
-    "areas": "Seats, Metal, Materials"
+    "commits": 7,
+    "areas": "Metal rendering, Materials, Seat interaction, Mesh paths"
   },
   "crockmr": {
     "commits": 2,
@@ -40,7 +40,7 @@
     "areas": "Character meshes"
   },
   "dfdffish": {
-    "commits": 2,
-    "areas": "zh_CN locale, Launcher"
+    "commits": 6,
+    "areas": "Localization, Launcher"
   }
 }
