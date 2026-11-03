@@ -328,10 +328,34 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
             foreach (var p in world.Platoons.All)
                 if (p.Faction == player) ZoneActivation.AddZonesAround(new Vector3(p.Position.X, 0, p.Position.Y), ring, boxZones);
         foreach (var zone in boxZones) Ask(zone, boxUntil);
+        AskTownZones();
         List<ZoneCoordinate>? gone = null;
         foreach (var (zone, t) in loadedUntil) if (t < now) (gone ??= []).Add(zone);
         if (gone is not null) foreach (var zone in gone) loadedUntil.Remove(zone);
         world.LoadedZones = new HashSet<ZoneCoordinate>(loadedUntil.Keys);
+    }
+
+    /// <summary>
+    /// A loaded town asks for every zone of its list, its own and its coverage, with no ring and the largest timer among those already loaded (<c>FUN_140929b20</c>, <b>Verified</b>), so the
+    /// zones of a town lapse together.
+    /// </summary>
+    void AskTownZones()
+    {
+        foreach (var site in data.Sites)
+        {
+            if (site.Coverage.Count == 0 || states[site.Index].Status is not (SiteStatus.Loaded or SiteStatus.Loading)) continue;
+            long latest = loadedUntil.GetValueOrDefault(site.Zone, -1);
+            foreach (var zone in site.Coverage) latest = Math.Max(latest, loadedUntil.GetValueOrDefault(zone, -1));
+            if (latest < 0) continue;
+            Ask(site.Zone, latest);
+            foreach (var zone in site.Coverage) Ask(zone, latest);
+        }
+    }
+
+    bool CoverageActive(TownSite site)
+    {
+        foreach (var zone in site.Coverage) if (active.Contains(zone)) return true;
+        return false;
     }
 
     /// <summary>Keeps a zone of the grid loaded until <paramref name="until"/>, unless a later request already does.</summary>
@@ -371,7 +395,7 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
                 case SiteStatus.Loaded or SiteStatus.Loading when wanted:
                     state.UnloadAtTick = -1;
                     break;
-                case SiteStatus.Loaded or SiteStatus.Loading when AnyMemberActive(world, state):
+                case SiteStatus.Loaded or SiteStatus.Loading when CoverageActive(site) || AnyMemberActive(world, state):
                     state.UnloadAtTick = -1;
                     break;
                 case SiteStatus.Loaded or SiteStatus.Loading:
