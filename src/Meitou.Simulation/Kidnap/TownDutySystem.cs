@@ -223,7 +223,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
             if (!table.Next[s].Alive || table.Cold(s) is not { } c) continue;
             if (table.Next[s].Task == (byte)CharacterTask.PickUp && !c.CarryTarget.IsNone) reserved.Add(c.CarryTarget);
             if (!c.Carrying.IsNone) { reserved.Add(c.Carrying); carriers.Add(s); }
-            if (c is { Medical: { Unconscious: true, Dead: false } } && c.InSomething == HeldState.None && CarrySystem.CanBeLifted(c)) downed.Add(s);
+            if (c is { Medical: { Unconscious: true, Dead: false } } && c.InSomething != HeldState.Imprisoned && CarrySystem.CanBeLifted(c)) downed.Add(s);
         }
         LookDeadCarriers(world, every);
         Span<int> intruders = stackalloc int[5], food = stackalloc int[5], confiscate = stackalloc int[5], loot = stackalloc int[5], shoo = stackalloc int[5], ransack = stackalloc int[5], stash = stackalloc int[5];
