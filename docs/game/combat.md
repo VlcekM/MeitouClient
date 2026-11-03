@@ -163,8 +163,11 @@ continues it too, a different one clears the layers and starts fresh (`FUN_1405b
 The front/rear heading is the movement object's current unit heading (+0x640 +0xd0, [fight steering](#fight-steering)).
 **Verified** (`FUN_140666400`, `FUN_14060a190`): each defence tick turns the defender at once towards the followed attacker when it is over 5 away (3D, 25 = 5²) and sets the movement's look-at to it,
 except while the current technique is a block (+0x2c) of direction 7, 8 or 9, which is met turned away. The defending band (slot 12) is kept to the followed attacker (limit 16), or, with a
-focused target (+0x2c8, orders 5 and 61), to that one (powerThrough, limit 18). Which of the two headings wins for a focused defender (the turn, or the steering facing its band target later in
-the frame) is **Unknown**. Meitou: `Fighting.BandTarget` (the band and so the steering's facing; the player's pick is the focused target), `CombatSystem.DefenceAim` (the turn when not
+focused target (+0x2c8, orders 5 and 61), to that one (powerThrough, limit 18). There is no conflict for a focused defender: the fight steering (`FUN_1402af1e0`) holds the band target (+0x150 of its
+struct) and the look-at (+0x130, the hand `FUN_1402ae2e0` writes) apart and faces the **look-at** (the flat unit vector to it, the band target only when no look-at is set; its velocity while
+running), so a focused defender keeps its band to the pick and faces the followed attacker (**Verified**, decompile). The look-at is written only by `FUN_140666400` (attack start, defence),
+the swing update `FUN_14060a590` and state 5 `FUN_1402b3180` (both from +0x290, the current opponent `FUN_140665580` sets: the target in state 5, the followed attacker in a defence); nothing
+clears it, so during a rear block, which skips the turn, it keeps the last one. Meitou faces the band target (`SteerState.Target`): a focused defender faces its pick (not the original). Meitou: `Fighting.BandTarget` (the band and so the steering's facing; the player's pick is the focused target), `CombatSystem.DefenceAim` (the turn when not
 steering, e.g. on Hold). Animals never defend: a defender whose vfunc 0x248 is set gets a 2 s no-defence timer (`FUN_140609290`); Meitou: not modelled.
 Meitou: `CombatSystem.MostAdvanced` (the followed swing; an exact tie keeps the followed one, else the lower slot, since the grid's order is not stable), `React` (start),
 `Reconsider` (the update), `ReactionEnds` (a blow counts as on its way until the attacker's state shows it struck: strikes apply after every Act, a far attacker's at its own step), `CombatTuning.DefenceStartProgress`. A held block's progress
