@@ -8,6 +8,8 @@ sealed class BuildingFloor
 {
     /// <summary>The placement's key (the interior view's id for it).</summary>
     public required string Key { get; init; }
+    /// <summary>The placement it was made from: a new listing with the same one keeps this floor and its collision.</summary>
+    public required BuildingPlacement Placement { get; init; }
     public required Vector3 Position { get; init; }
     /// <summary>The building's <c>interior material</c> and <c>exterior material</c> (GroundType).</summary>
     public required int Interior { get; init; }
@@ -27,7 +29,8 @@ sealed class BuildingFloor
 /// closest hit is a building, takes that building's <c>exterior material</c> or, with the character inside a building, its <c>interior material</c>) and for the strategy
 /// camera's ground (docs/formats/camera.md "Height"). Display only: the floors are read from the placements and their collision files, nothing of it reaches the simulation.
 /// A zone's buildings are listed on a worker on first need, a building's floor collision when a point first comes within <see cref="Reach"/>; until it is there the answer
-/// is "no building" and the caller keeps to the terrain.
+/// is "no building" and the caller keeps to the terrain. A runtime placement added or removed (a dropped item too) lists the zone again, while the listing before it still
+/// answers, and an unchanged building keeps its collision: dropping the known floors for a few frames dipped the camera's pivot to the terrain (#204).
 /// </summary>
 sealed class BuildingFloors(WorldObjects objects)
 {
@@ -36,9 +39,8 @@ sealed class BuildingFloors(WorldObjects objects)
     /// <summary>How far above the feet the ray starts (<c>FUN_14065f160</c>: 20), and how far below the feet a floor still counts as the one stood on (engine choice: the heights characters stand at come from the navigation mesh).</summary>
     public const float RayStart = 20, Tolerance = 4;
 
-    readonly Dictionary<ZoneCoordinate, Task<BuildingFloor[]>> zones = [];
+    readonly Dictionary<ZoneCoordinate, ZoneListing> zones = [];
     readonly List<(BuildingFloor Floor, FloorSurfaces Surfaces)> near = [];
-    int version;
 
     /// <summary>The GroundType of the building floor under <paramref name="feet"/> (the closest of the buildings' floors within the tolerance), or -1 for none.</summary>
     public int MaterialUnder(Vector3 feet, bool inside)
@@ -69,11 +71,6 @@ sealed class BuildingFloors(WorldObjects objects)
     /// <summary>The buildings within <see cref="Reach"/> whose floors are made (asking for the rest); the list is reused by the next call.</summary>
     List<(BuildingFloor, FloorSurfaces)> Near(float x, float z)
     {
-        if (version != objects.PlacementVersion)
-        {
-            zones.Clear();
-            version = objects.PlacementVersion;
-        }
         near.Clear();
         // The zones the reach touches: its four corners.
         Span<ZoneCoordinate> touched = stackalloc ZoneCoordinate[4];
@@ -85,16 +82,53 @@ sealed class BuildingFloors(WorldObjects objects)
             touched[count++] = zone;
         }
         foreach (var zone in touched[..count])
-        {
-            if (!zones.TryGetValue(zone, out var job)) zones[zone] = job = BackgroundWork.Run(() => objects.FloorsOf(zone));
-            if (!job.IsCompletedSuccessfully) continue;
-            foreach (var floor in job.Result)
+            foreach (var floor in Listed(zone))
             {
                 if (Vector2.DistanceSquared(new(floor.Position.X, floor.Position.Z), new(x, z)) > Reach * Reach) continue;
                 if (floor.Surfaces is { } surfaces) near.Add((floor, surfaces));
                 else floor.Request();
             }
-        }
         return near;
+    }
+
+    /// <summary>
+    /// A zone's buildings as last listed, listing them again on a worker when the placements changed since (the old listing answers until then; one job per zone at a
+    /// time, so placements changing every frame still get listed).
+    /// </summary>
+    BuildingFloor[] Listed(ZoneCoordinate zone)
+    {
+        if (!zones.TryGetValue(zone, out var listing)) zones[zone] = listing = new ZoneListing();
+        if (listing.Job is { IsCompletedSuccessfully: true } done && listing.Adopted != done)
+        {
+            listing.Floors = KeepUnchanged(listing.Floors, done.Result);
+            listing.Adopted = done;
+        }
+        int version = objects.PlacementVersion;
+        if (listing.Job is null || (listing.Version != version && listing.Job.IsCompleted))
+        {
+            listing.Job = BackgroundWork.Run(() => objects.FloorsOf(zone));
+            listing.Version = version;
+        }
+        return listing.Floors;
+    }
+
+    /// <summary>The new listing, each building whose placement did not change replaced by its floor from the old one (so its collision is not made again).</summary>
+    static BuildingFloor[] KeepUnchanged(BuildingFloor[] old, BuildingFloor[] listed)
+    {
+        if (old.Length == 0) return listed;
+        var byKey = new Dictionary<string, BuildingFloor>(old.Length, StringComparer.Ordinal);
+        foreach (var floor in old) byKey.TryAdd(floor.Key, floor);
+        for (int i = 0; i < listed.Length; i++)
+            if (byKey.TryGetValue(listed[i].Key, out var kept) && kept.Placement == listed[i].Placement) listed[i] = kept;
+        return listed;
+    }
+
+    /// <summary>One zone's listing: the floors in use, the job listing them again and the placement version it was started at.</summary>
+    sealed class ZoneListing
+    {
+        public BuildingFloor[] Floors = [];
+        public Task<BuildingFloor[]>? Job;
+        public Task<BuildingFloor[]>? Adopted;
+        public int Version;
     }
 }
