@@ -43,7 +43,10 @@ public sealed partial class FixtureRegistry
         }
     }
 
-    /// <summary>Lays one building out afresh: its town takes the new one, the published list has it, and a registered standing one's room and lamps follow.</summary>
+    /// <summary>
+    /// Lays one building out afresh: its town takes the new one, the published list has it, a registered town's item slots follow, and a standing one's room and
+    /// lamps. A registered town's fixtures follow when it is registered again (<see cref="TownReplaced"/>).
+    /// </summary>
     void Relay(World world, PopulationData data, int site, TownBuilding b, string interior, string exterior)
     {
         bool destroyed = IsDestroyed(b);
@@ -51,6 +54,7 @@ public sealed partial class FixtureRegistry
         if (ReferenceEquals(relaid, b)) return;
         ruins[b.Key] = new RuinedBuilding(relaid, destroyed);
         RuinsRevision++;
+        world.ItemSlots.RelayBuilding(world, data, site, b, relaid);
         if (!destroyed && sites.Contains(site) && data.Sight is { } sight) world.Sight.Relay(sight, relaid);
     }
 

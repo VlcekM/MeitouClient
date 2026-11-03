@@ -96,13 +96,16 @@ public sealed partial class FixtureRegistry
         doors?.SetDoorsBlocked(building, false);
     }
 
-    /// <summary>Writes each ruined or stood-up building's <c>destroyed</c> into its saved record (those outside a reset zone have no other writer of it).</summary>
+    /// <summary>
+    /// Writes each ruined or stood-up building's <c>destroyed</c> into its saved record (those outside a reset zone have no other writer of it), and the layout names
+    /// of each one laid out afresh; a building listed only for its layouts keeps its saved <c>destroyed</c>.
+    /// </summary>
     void WriteRuins(IReadOnlyDictionary<string, Meitou.Data.Fcs.FcsRecord> states)
     {
         foreach (var (key, ruin) in ruins)
         {
             if (!states.TryGetValue(key, out var state)) continue;
-            state.Bools["destroyed"] = ruin.Destroyed;
+            if (ruin.Destroyed != ruin.Building.Destroyed) state.Bools["destroyed"] = ruin.Destroyed;
             WriteLayouts(ruin.Building, state);
         }
     }
