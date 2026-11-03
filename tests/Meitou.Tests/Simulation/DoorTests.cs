@@ -207,6 +207,40 @@ public class DoorTests(ITestOutputHelper output)
         Assert.False(plan.PlansBash(world, null, locks, raider.Slot, target.Slot, key, door, spot));
     }
 
+    /// <summary>docs/game/locks.md "When": state 59 is Building::hasAnOpenDoor, so a closed unlocked door counts as shut: a bandit (desire 1.1 over 72's 1) plans to bash it, one that is not aggressive opens it (walks in), and a locked door of its own faction is unlocked (78).</summary>
+    [Fact]
+    public void A_ransackers_entry_plan_opens_or_bashes_a_closed_door_by_state_59()
+    {
+        var locks = new LockSystem(BaseGame, BodyOptions.Default);
+        using var world = new SimWorld(new WorldSettings { Seed = 31, PublishSnapshots = false, MinPartitionSize = 1 }, new OpenGroundWalkability((_, _) => 150), [locks]);
+        world.Fixtures.RegisterSite(world, ArrestTests.Town(), 0);
+        world.Fixtures.Doors = new Gate();
+        var door = world.Fixtures.Find("0.0:house#0")!;
+        var spot = world.Fixtures.DoorSpotOf(door)!.Value;
+        int owner = world.Fixtures.DoorOwner(door.Building);
+        CharacterId Spawn(bool bandit, int faction)
+        {
+            var cold = new Meitou.Tests.Combat.Combatant { Name = "raider" }.MakeCold();
+            cold.Faction = faction;
+            if (bandit) cold.NpcClass = Meitou.Data.Gameplay.FundamentalType.Bandit;
+            return world.Characters.Spawn(new CharacterHot { Position = spot.Centre + new Vector3(0, 0, 10), Health = 100, MaxSpeed = 60, WalkSpeed = 15, Task = (byte)CharacterTask.Idle }, cold, 0);
+        }
+        var bandit = Spawn(true, owner + 1);
+        var resident = Spawn(false, owner);
+        var plan = new DoorPlan();
+        DoorPlan.Entry Plan(CharacterId who) => plan.PlansEntry(world, null, who.Slot, door.Building, door, spot, locks);
+
+        world.Fixtures.SetLocked(door, false);
+        door.Motion = DoorMotion.Closed;
+        Assert.Equal(DoorPlan.Entry.Bash, Plan(bandit));
+        Assert.Equal(DoorPlan.Entry.Walk, Plan(resident));
+        world.Fixtures.SetLocked(door, true);
+        Assert.Equal(DoorPlan.Entry.Bash, Plan(bandit));
+        Assert.Equal(DoorPlan.Entry.Walk, Plan(resident));   // its own door: 78 unlocks it
+        door.Motion = DoorMotion.Open;
+        Assert.Equal(DoorPlan.Entry.Walk, Plan(bandit));
+    }
+
     sealed class SplitRegions : IGateRegions
     {
         public int CodeAt(Vector3 at) => at.Z < SyntheticTown.Centre.Z ? 0 : 1;

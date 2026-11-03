@@ -48,7 +48,7 @@ public sealed partial class LockSystem
             }
             var door = world.Fixtures.Find(doorId);
             // The task itself ends on a broken door or one open or opening and reads no lock (FUN_140348c10); the NPC's plan is dropped once its door is no longer locked.
-            if (door is null || door.DoorBroken || (c.BashOrdered ? door.Motion is DoorMotion.Open or DoorMotion.Opening : door.Lock is not { EffectivelyLocked: true }) || c.Medical is { Incapacitated: true } || (!c.BashOrdered && next[s].Task != (byte)CharacterTask.Attack) || world.Fixtures.DoorSpotOf(door) is not { } spot)
+            if (door is null || door.DoorBroken || (c.BashOrdered || c.BashErrand ? door.Motion is DoorMotion.Open or DoorMotion.Opening : door.Lock is not { EffectivelyLocked: true }) || c.Medical is { Incapacitated: true } || (!c.BashOrdered && !c.BashErrand && next[s].Task != (byte)CharacterTask.Attack) || world.Fixtures.DoorSpotOf(door) is not { } spot)
             {
                 StopBashing(table, s, c);
                 continue;
@@ -175,6 +175,14 @@ public sealed partial class LockSystem
 
     readonly DoorPlan doorPlan = new();
 
+    /// <summary>Sends <paramref name="c"/>, a ransacker whose entry plan bashes the door <paramref name="doorId"/> (row 81), to bash it: it walks there and swings as an attacker would, and the door breaking ends it.</summary>
+    internal void BashForErrand(CharacterCold c, string doorId)
+    {
+        c.Bashing = doorId;
+        c.BashErrand = true;
+        c.BashTime = 0;
+    }
+
     /// <summary>The shut buildings with their main door (<c>Building::getDoor</c>, one per building; engine reading: the one of lowest door index with a known leaf).</summary>
     List<(string, Vector2, float, Fixture, DoorSpot)> ShutBuildings(World world)
     {
@@ -245,6 +253,7 @@ public sealed partial class LockSystem
     {
         c.Bashing = null;
         c.BashWall = false;
+        c.BashErrand = false;
         c.BashOrdered = false;
         c.BashTime = 0;
         ref var n = ref table.Next[s];

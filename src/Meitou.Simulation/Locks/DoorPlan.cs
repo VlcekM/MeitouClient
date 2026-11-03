@@ -22,7 +22,9 @@ sealed class DoorPlan : IPlanWorld
 
     World world = null!;
     CombatSystem? combat;
-    int me, foe;
+    int me;
+    Vector3 destination;
+    bool exactOpen;
     CharacterCold cold = null!;
     string building = "";
     Fixture door = null!;
@@ -37,17 +39,30 @@ sealed class DoorPlan : IPlanWorld
     /// <summary>
     /// Plans row 4 for attacker <paramref name="s"/> at <paramref name="t"/>, shut in <paramref name="shutIn"/> behind its main door; true when the plan bashes it.
     /// </summary>
-    public bool PlansBash(World w, CombatSystem? fights, int s, int t, string shutIn, Fixture mainDoor, DoorSpot mainSpot, LockSystem? gates = null)
+    public bool PlansBash(World w, CombatSystem? fights, int s, int t, string shutIn, Fixture mainDoor, DoorSpot mainSpot, LockSystem? gates = null) =>
+        Plans(w, fights, s, w.Characters.Next[t].Position, shutIn, mainDoor, mainSpot, gates, TaskType.MELEE_ATTACK, exact: false) == Entry.Bash;
+
+    /// <summary>How a walk into a building goes: no way in, a walk (the door opens as the character passes, row 72), or the door is bashed first.</summary>
+    public enum Entry { Blocked, Walk, Bash }
+
+    /// <summary>
+    /// Plans goal 216 (its effect 107 is provided by row 156 Entering building) for character <paramref name="s"/> (a ransacker) into <paramref name="shutIn"/> behind its main door, with state 59 as the original has it:
+    /// <c>Building::hasAnOpenDoor</c>, so a closed unlocked door counts as shut and the planner opens it (72) or, for a locked one, bashes it (81) when the character wants to (<see cref="AggressiveTowards"/>).
+    /// </summary>
+    public Entry PlansEntry(World w, CombatSystem? fights, int s, string shutIn, Fixture mainDoor, DoorSpot mainSpot, LockSystem? gates) =>
+        Plans(w, fights, s, mainSpot.Centre, shutIn, mainDoor, mainSpot, gates, TaskType.RUN_AROUND_TOWN_LOOKING_FOR_PEOPLE, exact: true);
+
+    Entry Plans(World w, CombatSystem? fights, int s, Vector3 to, string shutIn, Fixture mainDoor, DoorSpot mainSpot, LockSystem? gates, TaskType goal, bool exact)
     {
-        (world, combat, me, foe, building, door, spot, locks) = (w, fights, s, t, shutIn, mainDoor, mainSpot, gates);
+        (world, combat, me, destination, building, door, spot, locks, exactOpen) = (w, fights, s, to, shutIn, mainDoor, mainSpot, gates, exact);
         cold = w.Characters.Cold(s)!;
         aggressive = AggressiveTowards(w, fights, cold, shutIn, mainSpot.Centre);
-        if (TaskDataTable.Of(TaskType.MELEE_ATTACK) is not { } row) return false;
-        var target = new PlanTarget(Foe, w.Characters.Next[t].Position);
-        if (TaskPlanner.Local.Plan(row, 1, target, this, [], plan) <= 0) return false;
+        if (TaskDataTable.Of(goal) is not { } row) return Entry.Blocked;
+        var target = new PlanTarget(Foe, to);
+        if (TaskPlanner.Local.Plan(row, 1, target, this, [], plan) <= 0) return Entry.Blocked;
         foreach (var step in plan)
-            if (step.Type is TaskType.BASH_DOOR or TaskType.BASH_DOOR_HERE) return true;
-        return false;
+            if (step.Type is TaskType.BASH_DOOR or TaskType.BASH_DOOR_HERE) return Entry.Bash;
+        return Entry.Walk;
     }
 
     /// <summary>
@@ -82,9 +97,9 @@ sealed class DoorPlan : IPlanWorld
         bool atBuilding = target.Kind == Building;
         bool value = condition.State switch
         {
-            // hasAnOpenDoor: none broken, open or opening (Meitou passes a closed unlocked door, so a shut building is one whose doors are all locked).
-            StateType.DESTINATION_IS_ACCESSIBLE => !world.Fixtures.IsShut(building),
-            StateType.isWithin50Meters => Vector2.Distance(Flat(n.Position), Flat(world.Characters.Next[foe].Position)) <= 50,
+            // hasAnOpenDoor: a door broken, open or opening. The attackers' plan (Meitou passes a closed unlocked door) counts a building shut when its doors are all locked; the entry plan is exact.
+            StateType.DESTINATION_IS_ACCESSIBLE => exactOpen ? world.Fixtures.HasOpenDoor(building) : !world.Fixtures.IsShut(building),
+            StateType.isWithin50Meters => Vector2.Distance(Flat(n.Position), Flat(destination)) <= 50,
             StateType.DOOR_IS_OPEN => door.DoorBroken || door.Motion is DoorMotion.Open or DoorMotion.Opening,
             StateType.isDoorLocked => door.Lock is { EffectivelyLocked: true } && !door.DoorBroken,
             StateType.DOOR_IS_BROKEN => door.DoorBroken,
@@ -95,16 +110,20 @@ sealed class DoorPlan : IPlanWorld
             // Task_BashDoor wants a weapon; an animal's natural one counts.
             StateType.hasWeaponEquipped => cold.Fighter is { } f && (f.IsAnimal || !f.Unarmed),
             // 90 is evaluated for house doors as for gates (FUN_140597160, Verified): the walk to the door or the foe must not lie behind a gate that is not open.
-            StateType.DESTINATION_NOT_BLOCKED_BY_FORTIFICATIONS => locks is null || locks.NotBlocked(world, n.Position, atBuilding ? spot.Centre : world.Characters.Next[foe].Position),
+            StateType.DESTINATION_NOT_BLOCKED_BY_FORTIFICATIONS => locks is null || locks.NotBlocked(world, n.Position, atBuilding ? spot.Centre : destination),
             StateType.isMovementAllowed or StateType.LOCATION_IS_ACCESSIBLE or StateType.isReadyForAction or StateType.crowdLimit8 => true,
             _ => false,
         };
         return value == condition.Holds;
     }
 
-    /// <summary>85's finder (<c>AI::getDestinationBuilding</c>): the building the target is in.</summary>
-    public PlanTarget Find(TaskDataRow row, in PlanTarget target) =>
-        row.Type == TaskType.OPEN_DOOR_FOR_DESTINATION ? new PlanTarget(Building, spot.Centre) : default;
+    /// <summary>85's finder (<c>AI::getDestinationBuilding</c>): the building the target is in. 216's (<c>FUN_1408cb510</c>): the building the caller drew, as the destination.</summary>
+    public PlanTarget Find(TaskDataRow row, in PlanTarget target) => row.Type switch
+    {
+        TaskType.OPEN_DOOR_FOR_DESTINATION => new PlanTarget(Building, spot.Centre),
+        TaskType.RUN_AROUND_TOWN_LOOKING_FOR_PEOPLE => new PlanTarget(Foe, destination),
+        _ => default,
+    };
 
     /// <summary>
     /// AT_LOCATION_BUILDING_DOOR (<c>AI::isWithinChoppingRange</c>, <b>Observed</b>): within <see cref="DoorReach"/> of the door's leaf on the ground (x2 while standing) and

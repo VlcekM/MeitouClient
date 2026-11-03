@@ -249,9 +249,10 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
                     || squad.Ai is { HomePublic: false } && population.GoalDuty(world, squad, (AiRole)role, TaskType.SHOO_STRANGERS_OUT_OF_MY_BUILDING_IF_PRIVATE)) ? 1 : 0;
                 if (ransack[role] < 0) ransack[role] = population.GoalDuty(world, squad, (AiRole)role, TaskType.RUN_AROUND_TOWN_LOOKING_FOR_PEOPLE) ? 1 : 0;
                 if (stash[role] < 0) stash[role] = population.GoalDuty(world, squad, (AiRole)role, TaskType.PUT_LOOT_IN_STORAGE) ? 1 : 0;
-                if (ransack[role] == 1 && RansackTarget(world, squad, slot) is { } raid)
+                if (ransack[role] == 1 && RansackTarget(world, squad, slot) is var (raid, door))
                 {
                     cold.Engaged = true;
+                    if (door is not null) locks?.BashForErrand(cold, door);
                     if (cold.Fighter is { } armed) cold.DrawnWeapon = Combat.CombatSystem.MeleeDrawn(armed);   // B: hasWeaponEquipped
                     var goal = Flat(raid.Position);
                     duties.Add(new TownDuty { Member = member, Faction = cold.Faction, Town = AiSystem.TownAt(data, world, raid.Position), Kind = TownDutyKind.Ransack, Target = raid.Key, Goal = goal });
@@ -984,20 +985,38 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     /// <summary>
     /// <c>AI::findRandomBuildingInTown</c> (<c>FUN_1408cb510</c>, goal 216): the squad's mission town (its blackboard's, else the campaign target it marches on), else the town the
     /// member stands in; one of its standing buildings with an interior, drawn uniformly at random among those the planner would reach: row 156 Entering building (the only provider of effect 107, which
-    /// goal 216 wants) needs DESTINATION_IS_ACCESSIBLE (59: not shut) and DESTINATION_NOT_BLOCKED_BY_FORTIFICATIONS (90: no closed gate between), <b>Observed</b>. The original plans sub-steps (bash the door, open the
-    /// gate) for a building that fails them; here such a building is left out of the draw (<b>engine choice</b>: the attackers' door and gate plumbing, <see cref="Locks.DoorPlan"/>, is not wired to this errand). Null: none.
+    /// goal 216 wants) needs DESTINATION_IS_ACCESSIBLE (59: <c>hasAnOpenDoor</c>) and DESTINATION_NOT_BLOCKED_BY_FORTIFICATIONS (90: no closed gate between), <b>Observed</b>. The door sub-steps are planned
+    /// (<see cref="EntryTo"/>: open the door, row 72, or bash it, row 81); a building with no way in is left out of the draw, as is one behind a closed gate (<b>engine choice</b>: the gate's sub-steps are not wired to this errand). Null: none.
     /// </summary>
-    Meitou.Data.World.TownBuilding? RansackTarget(World world, Squad squad, int slot)
+    (Meitou.Data.World.TownBuilding Building, string? Door)? RansackTarget(World world, Squad squad, int slot)
     {
         int site = squad.Ai is { MissionTown: >= 0 } b ? b.MissionTown : squad.Ai is { Destination: { Site: >= 0 } dest } ? dest.Site : AiSystem.TownAt(data, world, world.Characters.Next[slot].Position).Site;
         if (site < 0) return null;
         locks ??= world.Systems.OfType<Locks.LockSystem>().FirstOrDefault();
         var from = world.Characters.Next[slot].Position;
-        var rooms = data.Sites[site].Buildings.Where(x => !world.Fixtures.IsDestroyed(x) && (x.InteriorLayout.Length > 0 || x.InteriorLayouts.Count > 0)
-            && !world.Fixtures.IsShut(x.Key) && (locks is null || locks.NotBlocked(world, from, x.Position))).ToList();
+        var rooms = new List<(Meitou.Data.World.TownBuilding, string?)>();
+        foreach (var x in data.Sites[site].Buildings)
+        {
+            if (world.Fixtures.IsDestroyed(x) || x.InteriorLayout.Length == 0 && x.InteriorLayouts.Count == 0 || locks is not null && !locks.NotBlocked(world, from, x.Position)) continue;
+            if (EntryTo(world, slot, x) is { } door) rooms.Add((x, door.Length == 0 ? null : door));
+        }
         if (rooms.Count == 0) return null;
         return rooms[Rng.Int(Rng.Hash(world.Seed, (ulong)Rng.Key(world.Characters.IdOf(slot)) ^ (ulong)world.Tick, RngPurpose.Slow, RansackSalt), rooms.Count)];
     }
+
+    /// <summary>
+    /// How the member gets into a building, by the planner (row 156's state 59 <c>hasAnOpenDoor</c>, <see cref="Locks.DoorPlan.PlansEntry"/>): "" to walk in (a door open, none, or a closed one the character opens as it passes, row 72),
+    /// the id of the door it bashes first (row 81, a locked door of a building it is aggressive towards), null when the planner finds no way in.
+    /// </summary>
+    string? EntryTo(World world, int slot, Meitou.Data.World.TownBuilding building)
+    {
+        if (world.Fixtures.HasOpenDoor(building.Key)) return "";
+        if (Locks.LockSystem.MainGateDoor(world, building.Key) is not { } main) return "";
+        var entry = doorPlan.PlansEntry(world, world.SystemOf<Combat.CombatSystem>(), slot, building.Key, main.Door, main.Spot, locks);
+        return entry switch { Locks.DoorPlan.Entry.Walk => "", Locks.DoorPlan.Entry.Bash => main.Door.Id, _ => null };
+    }
+
+    readonly Locks.DoorPlan doorPlan = new();
 
     const ulong RansackSalt = 0x5261_6E73_6163_6B21;
 
@@ -1010,6 +1029,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
         var table = world.Characters;
         ref var gn = ref table.Next[g];
         bool walking = gn.Task == (byte)CharacterTask.GoTo;
+        if (table.Cold(g)?.Bashing is not null) return true;   // bashing the door first (the lock system walks and swings)
         if (world.Sight.BuildingOf(g) == d.Target || !walking && Vector2.Distance(Flat(gn.Position), d.Goal) <= Settings.CageSlack) return End(world, d);
         if (walking) return true;
         if (++d.Tries > Settings.Walks) return End(world, d);
