@@ -84,6 +84,9 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
         if (stats.Scale - cold.ShownAge > AnimalData.ResizeStep && stats.Scale < AnimalData.ResizeBelow) cold.ShownAge = stats.Scale;
     }
 
+    /// <summary>The character loop's update budgets, for the second add to the medical time (<see cref="MedicalContext.BudgetSeconds"/>); run by <see cref="Schedule"/>.</summary>
+    readonly MedicalTimeBudget medicalBudget = new();
+
     /// <summary>Per slot: not safe to get up this tick (<see cref="MedicalContext.PlayDead"/>), from <see cref="Schedule"/>.</summary>
     bool[] playDead = [];
 
@@ -94,10 +97,12 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
     const float InsideSight = 500;
 
     /// <summary>
-    /// Who may not get up this tick: a knocked-out person (not an animal) whose knockout ends, or who plays dead, when <see cref="SafeToGetUp"/> fails. Serial, from the last tick's state.
+    /// The update budgets' turns of this tick (<see cref="MedicalTimeBudget"/>); then who may not get up this tick: a knocked-out person (not an animal) whose knockout ends, or who
+    /// plays dead, when <see cref="SafeToGetUp"/> fails. Serial, from the last tick's state.
     /// </summary>
     public void Schedule(World world)
     {
+        medicalBudget.Run(world);
         var table = world.Characters;
         if (playDead.Length < table.HighWater) Array.Resize(ref playDead, table.HighWater);
         var combat = world.SystemOf<Combat.CombatSystem>();
@@ -107,7 +112,7 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
             playDead[i] = false;
             if (!table.Previous[i].Alive || table.Cold(i) is not { Animal: null, Medical: { Unconscious: true, Dead: false, HasStatsObject: true } medical } cold) continue;
             if (medical.PlayingDead && was && (world.Tick + i) % PlayDeadRecheckTicks != 0) { playDead[i] = true; continue; }
-            if (medical.PlayingDead || medical.WakesWithin(world.TickSeconds)) playDead[i] = !SafeToGetUp(world, combat, i, cold);
+            if (medical.PlayingDead || medical.WakesWithin(world.TickSeconds + cold.MedicalBudgetSeconds)) playDead[i] = !SafeToGetUp(world, combat, i, cold);
         }
     }
 
@@ -193,9 +198,12 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
                 HungerFloor = HungerFloor(world, cold, medical),
                 HealMult = cold.InSomething == Locks.HeldState.Imprisoned ? 2 : 1,
                 PlayDead = i < playDead.Length && playDead[i],
+                Still = Still(cold, in n),
                 UseHungerRate = UseHungerRate(cold, in n),
-                Idle = Idle(cold, in n),
+                Idle = AmIdle(world, cold, medical, in n),
+                BudgetSeconds = cold.MedicalBudgetSeconds,
             };
+            cold.MedicalBudgetSeconds = 0;
             // The combat system's own context (hits) reads the encumbrance from the fighter, so it matches the one used here.
             if (cold.Fighter is { } fighter) fighter.EncumbranceFactor = encumbrance;
             if (world.BloodMarks is { } marks && medical.Bleeding > 0 && cold.WaterState == 0) BloodTrail(world, marks, i, cold, medical.Bleeding, race, in n);
@@ -280,7 +288,7 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
     /// <summary>The functionality <c>hunger rate</c> of the machine a character works or the chair it sits on, while it stands still out of combat (<see cref="MedicalContext.UseHungerRate"/>); null otherwise.</summary>
     static float? UseHungerRate(CharacterCold cold, in CharacterHot n)
     {
-        if (cold.InCombat || n.Velocity.LengthSquared() > 1) return null;
+        if (!Still(cold, in n)) return null;
         if (n.Task == (byte)CharacterTask.Operate && cold.Operating) return cold.OperateHungerRate;
         if (n.Task == (byte)CharacterTask.Rest && cold.Ai is { SitClip: not null } mind) return mind.SitHungerRate;
         // An NPC worker at its town building (AiBehaviour.Work, at its work clip), which the original works through Task_OperateMachine.
@@ -288,18 +296,26 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
         return null;
     }
 
+    /// <summary>Neither moving nor fighting (<see cref="MedicalContext.Still"/>, the first test of <c>FUN_1408837a0</c>).</summary>
+    static bool Still(CharacterCold cold, in CharacterHot n) => !cold.InCombat && n.Velocity.LengthSquared() <= 1;
+
     /// <summary>
-    /// Standing still out of combat with no task (<see cref="MedicalContext.Idle"/>): the original's <c>CharBody::amIdle</c>, set while the character has no current action
-    /// (<c>FUN_1405c6d20</c>), which <c>FUN_1408837a0</c> reads after the moving and fighting test.
+    /// The original's <c>CharBody::amIdle</c> (<see cref="MedicalContext.Idle"/>, <see cref="CharacterCold.AmIdle"/>): <c>CharBody::update</c> (<c>FUN_1405c6d20</c>) sets it while the
+    /// character has no current action (here: standing still out of combat with no task, and not getting up, the get-up being task 65) and leaves it alone while the character is down,
+    /// so a knock-out keeps the value from before it.
     /// </summary>
-    static bool Idle(CharacterCold cold, in CharacterHot n) => !cold.InCombat && n.Velocity.LengthSquared() <= 1 && n.Task == (byte)CharacterTask.Idle;
+    static bool AmIdle(World world, CharacterCold cold, MedicalState medical, in CharacterHot n)
+    {
+        if (!medical.Incapacitated) cold.AmIdle = Still(cold, in n) && n.Task == (byte)CharacterTask.Idle && !CharacterFacts.GettingUp(cold, world.Tick);
+        return cold.AmIdle;
+    }
 
     ExtendedStats ExtendedOf(CharacterCold cold, CharacterStats stats, RaceData race, MedicalState medical, float speed, float encumbrance, in MedicalContext ctx, bool carrying)
     {
         float runValue = Speed.RunValue(race, stats.Athletics);
         float toughness = XpService.ToughnessFactor(medical);
         bool rest = ctx.Resting || medical.Unconscious || medical.Dead;
-        float hunger = race.HungerRate * MedicalState.HungerSituationFactor(Constants, rest, ctx.Idle, encumbrance, ctx.UseHungerRate);
+        float hunger = race.HungerRate * MedicalState.HungerSituationFactor(Constants, rest, ctx.Still, ctx.Idle, encumbrance, ctx.UseHungerRate);
         return new ExtendedStats(XpService.AthleticsRate(encumbrance, speed, runValue), xp.StrengthCarryRate(encumbrance, carrying), toughness,
             MedicalState.KoPoint(Constants, stats.Toughness), speed, runValue, hunger, rest, WorkHungerRate: ctx.UseHungerRate, Idle: ctx.Idle);
     }

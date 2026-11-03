@@ -191,6 +191,16 @@ public sealed class CharacterCold
     public long DiedTick { get; set; } = -1;
     /// <summary>The tick of the body system's last step for it (<see cref="BodySystem"/>, 2x and 5x step in turns); -1 before the first. Derived, not hashed or saved.</summary>
     public long BodyStepTick { get; set; } = -1;
+    /// <summary>
+    /// The medical time the character's update budget turns gave since its last body step (<see cref="Bodies.MedicalTimeBudget"/>, the original's second add to Character
+    /// <c>+0xc8</c>); the body step adds it to its own time and clears it. Derived, not hashed or saved.
+    /// </summary>
+    public float MedicalBudgetSeconds { get; set; }
+    /// <summary>
+    /// The original's <c>CharBody::amIdle</c> (<see cref="BodySystem"/>): standing still out of combat with no task, refreshed only while the character is not down, so a knock-out
+    /// keeps the value it had before. Derived, not hashed or saved.
+    /// </summary>
+    public bool AmIdle { get; set; }
     /// <summary>A corpse with flies (docs/game/character-stats.md "Corpses": 4 game hours after death while the weather leaves characters alone); it smells of blood (<see cref="SmellSystem"/>).</summary>
     public bool HasFlies { get; set; }
     /// <summary>Where the character came from in a loaded save, with the saved stats and medical state (null for a character the game made itself); see <c>Meitou.Simulation.Saving</c>.</summary>

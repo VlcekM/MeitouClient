@@ -110,7 +110,6 @@ public sealed partial class MedicalState
     public void ApplyHit(int part, in HitDamage hit, in MedicalContext ctx, List<MedicalEvent>? events = null)
     {
         if (Dead) return;
-        bool standing = Standing;   // the posture before the blow (a leg lost in it still counts from a standing start)
         var c = ctx.Constants;
         var race = ctx.Race;
         var p = Parts[part];
@@ -124,11 +123,12 @@ public sealed partial class MedicalState
         // Opened whatever the race's bleed rate; a bloodless race's wounds drain nothing but still need first aid.
         if (MathF.Max(hit.Cut, hit.Pierce) > 0) wounds.Add(MathF.Max(hit.Cut, hit.Pierce) * c.BleedRate * hit.Scale);
 
-        CheckPart(part, ctx, events, inHitPath: true, standing);
+        CheckPart(part, ctx, events, inHitPath: true);
         CheckBlood(ctx, events);
+        LegCollapse(events);
     }
 
-    void CheckPart(int index, in MedicalContext ctx, List<MedicalEvent>? events, bool inHitPath, bool standing)
+    void CheckPart(int index, in MedicalContext ctx, List<MedicalEvent>? events, bool inHitPath)
     {
         if (Dead) return;
         var p = Parts[index];
@@ -151,7 +151,7 @@ public sealed partial class MedicalState
             return;
         }
         bool severs = inHitPath ? blowSevers : setting >= Dismemberment.Frequent && p.Limb == LimbState.Original && p.Template.Severance;
-        if (severs) Sever(index, ctx, standing, events);
+        if (severs) Sever(index, ctx, events);
     }
 
     /// <summary>The head was cut off by the blow that killed the character (Meitou, <see cref="BodyOptions.Decapitation"/>); saved as <c>meitou decapitated</c>.</summary>
@@ -167,26 +167,48 @@ public sealed partial class MedicalState
 
     /// <summary>
     /// Cuts a limb off (<c>FUN_14064edc0</c>, <b>Verified</b>): the part becomes a stump (base HP 5), the character loses rand(5, 30) blood and gets a wound of strength <c>bleed rate</c> x 200.
-    /// A leg lost while <paramref name="standing"/> (posture 0) also knocks the character out for <see cref="LegLossKoSeconds"/>; a leg lost while crawling, staying low, or already out
-    /// does not. The caller awards the toughness XP (<see cref="XpService.ToughnessFromLimbLoss"/>) and spawns the severed limb item from the race's <c>severed limbs</c>.
+    /// A leg's stump is down, so a character standing (posture 0) is knocked out by <see cref="LegCollapse"/>, which the caller runs after its checks. The caller awards the toughness XP
+    /// (<see cref="XpService.ToughnessFromLimbLoss"/>) and spawns the severed limb item from the race's <c>severed limbs</c>.
     /// </summary>
-    public void Sever(int part, in MedicalContext ctx, bool standing, List<MedicalEvent>? events = null)
+    public void Sever(int part, in MedicalContext ctx, List<MedicalEvent>? events = null)
     {
         var p = Parts[part];
         p.Limb = LimbState.Stump;
         p.Replacement = null;
-        if (standing && p.Template.LimbSlot is 2 or 3) RestartKo(LegLossKoSeconds, events);
         Blood -= 5 + 25 * NextRoll(ctx);
         wounds.Add(ctx.Constants.BleedRate * 200);
         events?.Add(new MedicalEvent(MedicalEventKind.PartSevered, part));
     }
 
     /// <summary>
-    /// The KO time of a leg lost standing, in seconds of character time (<b>Verified</b> in game, #134). The sever (<c>FUN_14064edc0</c>) first writes a rolled time
-    /// (<c>FUN_140644980</c> x a roll), but the collapse check that follows finds the stump down at posture 0 and sets posture 2, and the posture setter (<c>FUN_1405c7e20</c>) writes 3
-    /// over the KO timer on that change (docs/game/character-stats.md "Cut-off and leg loss").
+    /// The KO time a leg going down at posture 0 writes, in seconds of character time (<b>Verified</b> in game for a leg cut off standing, #134): the collapse check (<c>FUN_140649320</c>)
+    /// sets posture 2 for a leg down at posture 0, and the posture setter (<c>FUN_1405c7e20</c>) writes 3 over the KO timer on that change (docs/game/character-stats.md
+    /// "Cut-off and leg loss"). The sever's own rolled time (<c>FUN_140644980</c> x a roll) is always overwritten, so it is not modelled.
     /// </summary>
     public const float LegLossKoSeconds = 3;
+
+    /// <summary>Posture 0 (<c>PS_NORMAL</c>) as of the end of the last <see cref="Tick"/>, or unknown before the first.</summary>
+    enum PostureState : byte { Unknown, Normal, Other }
+
+    /// <summary>
+    /// The posture the character update last set (the original's <c>getProneState</c>, refreshed once a tick from <see cref="Standing"/>): a knock-out turns it from 0 only on the
+    /// next update, so a leg going down between (another blow of the same tick) still finds it at 0. Not saved: unknown after a load, when the live <see cref="Standing"/> stands in.
+    /// </summary>
+    PostureState posture;
+
+    bool PostureNormal => posture == PostureState.Unknown ? Standing : posture == PostureState.Normal;
+
+    /// <summary>
+    /// The posture setter's 0 -> 2 change (<c>FUN_140649320</c> then <c>FUN_1405c7e20</c>, <b>Verified</b> decompile): a leg down (stump, crushed or under the KO point,
+    /// <see cref="HealthPart.LegDown"/>) while the posture is 0 sets posture 2 and writes <see cref="LegLossKoSeconds"/> to the KO timer, over any running knock-out, and the
+    /// character is out until it runs down. Cut off or not, standing or already knocked out by a vital part since the last update.
+    /// </summary>
+    void LegCollapse(List<MedicalEvent>? events)
+    {
+        if (Dead || !PostureNormal || !LegsDown) return;
+        posture = PostureState.Other;
+        RestartKo(LegLossKoSeconds, events);
+    }
 
     /// <summary>
     /// <c>FUN_140644980</c> (<b>Verified</b>): max(3, (2 x <c>knockout time base</c> + |capacity - blood| x k x 0.5) x <paramref name="factor"/> x 4), k = lerp(<c>knockout mult 1</c>,

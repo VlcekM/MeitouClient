@@ -56,10 +56,11 @@ public sealed partial class MedicalState
                 {
                     p.Flesh -= bite;
                     p.Bandage -= bite;
-                    CheckPart(i, ctx, events, inHitPath: false, Standing);
+                    CheckPart(i, ctx, events, inHitPath: false);
+                    LegCollapse(events);   // the bite runs the collapse check (FUN_140650370 calls FUN_140649320)
                     return Dead && Cause == DeathCause.Eaten;
                 }
-                if (limbLoss && limb && p.Limb is LimbState.Original or LimbState.Crushed && p.Template.Severance) Sever(i, ctx, Standing, events);
+                if (limbLoss && limb && p.Limb is LimbState.Original or LimbState.Crushed && p.Template.Severance) Sever(i, ctx, events);
             }
         }
         if (EatenPasses > EatenPassesToDeath)
