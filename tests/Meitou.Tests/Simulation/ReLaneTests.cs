@@ -2,6 +2,7 @@ using Meitou.Simulation;
 using Meitou.Simulation.Ai;
 using Meitou.Simulation.Bodies;
 using static Meitou.Tests.Bodies.BodyFixtures;
+using SimWorld = Meitou.Simulation.World;
 
 namespace Meitou.Tests.Simulation;
 
@@ -37,4 +38,28 @@ public class ReLaneTests
     [InlineData(500, 1f)]
     public void The_bed_clock_lowers_the_sleeping_desire_just_after_a_bed(double minutes, float desire) =>
         Assert.Equal(desire, AiSystem.BedClockDesire(Cold(), minutes));
+
+    /// <summary>A character's light is the bare daylight until a sight test (or the stat multiplier) asked for it; the next update then samples it in full (<c>FUN_1405ccd90</c>:53-60).</summary>
+    [Fact]
+    public void A_characters_light_is_sampled_only_after_a_request()
+    {
+        using var world = new SimWorld(new WorldSettings { Seed = 1, Threads = 1, PublishSnapshots = false }, new OpenGroundWalkability((_, _) => 0), []);
+        var player = world.Characters.Spawn(new CharacterHot { Position = new System.Numerics.Vector3(100, 0, 100), Health = 100 }, new CharacterCold { IsPlayer = true }, 0);
+        int slot = player.Slot;
+        double hour = 0;
+        for (; hour < 24; hour += 0.25)
+        {
+            world.GameHours = hour;
+            world.Sight.Update(world);
+            if (world.Sight.Daylight is > 0.05f and < 0.4f) break;
+        }
+        float day = world.Sight.Daylight;
+        Assert.InRange(day, 0.05f, 0.4f);
+        Assert.Equal(day, world.Sight.PeekLight(slot), 4);   // nothing asked: bare daylight
+        world.Sight.Light(slot);                              // a sight test reads it first (bare), and raises the request
+        world.Sight.Update(world);
+        Assert.Equal(2 * day, world.Sight.PeekLight(slot), 4); // sampled: no lamps, 2 x daylight
+        world.Sight.Update(world);
+        Assert.Equal(day, world.Sight.PeekLight(slot), 4);   // the request was cleared: bare again
+    }
 }
