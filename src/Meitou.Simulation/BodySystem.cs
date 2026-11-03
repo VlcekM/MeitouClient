@@ -224,12 +224,8 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
             // Sneak XP (FUN_1408586d0 / FUN_1408c65a0, Verified): the player's faction only, not in a bed or cage or carried, while moving, and only with someone about; a watcher
             // of the last 4 s gives the noticed rate. The original also pays x0.1 to a sneaker standing still that a hostile targets (not modelled: none then).
             if ((cold.Orders & CharacterOrders.Sneak) != 0 && !medical.Incapacitated && (cold.IsPlayer || world.Player.Faction >= 0 && cold.Faction == world.Player.Faction)
-                && cold.InSomething == Locks.HeldState.None && cold.CarriedBy.IsNone && n.Velocity.X * n.Velocity.X + n.Velocity.Z * n.Velocity.Z > SneakMoving * SneakMoving)
-            {
-                cold.StealthFactor = 1;   // the sneak XP step resets the hearing checks' exposure factor (FUN_1408c65a0)
-                var exposure = PaidExposureOf(world, cold);
-                if (exposure != StealthExposure.Unobserved || SomeoneAbout(world, i)) xp.Sneaking(stats, race, exposure, dt);
-            }
+                && cold.InSomething == Locks.HeldState.None && cold.CarriedBy.IsNone)
+                SneakXp(world, i, cold, stats, race, n.Velocity.X * n.Velocity.X + n.Velocity.Z * n.Velocity.Z > SneakMoving * SneakMoving, dt);
             if (cold.IsPlayer || table.IdOf(i) == world.Player.Inspected) cold.Extended = ExtendedOf(cold, stats, race, medical, n.MaxSpeed, encumbrance, in ctx, carrying);
             n.Health = Math.Clamp(medical.Blood / MathF.Max(MedicalState.BloodCapacity(race, stats.Strength), 1) * 100, 0, 100);
             foreach (var e in events)
@@ -352,6 +348,19 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
     {
         var exposure = ExposureOf(world, cold);
         return exposure < StealthExposure.Noticed && Watched(world, cold) ? StealthExposure.Noticed : exposure;
+    }
+
+    /// <summary>
+    /// One sneaker's stealth XP (<c>FUN_1408586d0</c> calls <c>FUN_1408c65a0</c> when it is moving or has a pending crime): a mover with someone about or watching, a sneaker standing still
+    /// with a pending crime counts as observed, and at x0.1 for not moving (<b>Verified</b>; the building trigger of the original is unresolved and not modelled).
+    /// </summary>
+    void SneakXp(World world, int i, CharacterCold cold, CharacterStats stats, RaceData race, bool moving, float dt)
+    {
+        if (!moving && cold.Pending is null) return;
+        cold.StealthFactor = 1;   // the sneak XP step resets the hearing checks' exposure factor (FUN_1408c65a0)
+        var exposure = PaidExposureOf(world, cold);
+        if (cold.Pending is not null && exposure == StealthExposure.Unobserved) exposure = StealthExposure.Near;   // the 'observed' argument is forced by a pending crime
+        if (exposure != StealthExposure.Unobserved || SomeoneAbout(world, i)) xp.Sneaking(stats, race, exposure, dt, moving);
     }
 
     /// <summary>The speed above which a sneaker counts as moving for its XP (engine stand-in for the movement's moving flag).</summary>

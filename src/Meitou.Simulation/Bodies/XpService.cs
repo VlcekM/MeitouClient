@@ -171,8 +171,11 @@ public sealed class XpService(GameConstants constants, BodyOptions options)
     /// within sight range unseen, 1.5 when a looker's spot meter on it is filling or full (Verified literals; the "about" and "seen" gates are <b>Observed</b> readings of
     /// the original's flags). The per-hearing-check gain of <c>FUN_1408c7330</c> is <see cref="HearingCheck"/>.
     /// </summary>
-    public float Sneaking(CharacterStats stats, RaceData race, StealthExposure exposure, float dtSeconds) =>
-        Continuous(stats, race, StatsEnumerated.Stealth, dtSeconds, SneakRate(exposure));
+    public float Sneaking(CharacterStats stats, RaceData race, StealthExposure exposure, float dtSeconds, bool moving = true) =>
+        Continuous(stats, race, StatsEnumerated.Stealth, dtSeconds, SneakRate(exposure) * (moving ? 1 : NotMovingFactor));
+
+    /// <summary>The factor on the sneak rate while the sneaker is not moving (<c>FUN_1408c65a0</c>, double <c>DAT_14168a318</c> = 0.1, <b>Verified</b>).</summary>
+    public const float NotMovingFactor = 0.1f;
 
     /// <summary>The amount <see cref="Sneaking"/> feeds the continuous entry (<c>CharStats +0x170</c>, which the Stealth line's tooltip shows as "XP rate:").</summary>
     public static float SneakRate(StealthExposure exposure) => exposure switch { StealthExposure.Unobserved => 0.2f, StealthExposure.Near => 0.9f, _ => 1.5f };
