@@ -198,7 +198,7 @@ public sealed class FeedSystem(ItemFactory items, FeedSettings? settings = null)
         {
             if (!table.TryResolveNext(m, out int s) || table.Cold(s) is not { Inventory.Backpack.Contents: { } bag }) continue;
             if (Vector3.DistanceSquared(table.Next[s].Position, here) > ShareReach * ShareReach) continue;
-            if (Best(bag.Items, race, animal) is { } food) return (bag, food);
+            if (Best(bag.Items, race, animal, ownerDead: table.Cold(s)!.Medical?.Dead == true) is { } food) return (bag, food);
         }
         return (null, null);
     }
@@ -207,20 +207,20 @@ public sealed class FeedSystem(ItemFactory items, FeedSettings? settings = null)
     internal static bool CarriesFood(CharacterCold cold, RaceData race, bool animal) => cold.Inventory is { } own && Best(own.Items, race, animal) is not null;
 
     /// <summary>The bite of <c>FUN_140748d70</c>: raw food the race eats first, then food.</summary>
-    static ItemInstance? Best(List<ItemInstance> items, RaceData race, bool animal) =>
-        Best(items, RawFoodFunction, r => animal || race.SpecialFood.Contains(r)) ?? Best(items, FoodFunction, null);
+    static ItemInstance? Best(List<ItemInstance> items, RaceData race, bool animal, bool ownerDead = false) =>
+        Best(items, RawFoodFunction, r => animal || race.SpecialFood.Contains(r), ownerDead) ?? Best(items, FoodFunction, null, ownerDead);
 
     /// <summary>
     /// The item of <paramref name="function"/> with the highest score: an opened item (charges below its full) scores (2 - charges / full) x 1000, a full one its nutrition (full / 100).
-    /// Ties keep the first. Death items (of a living owner, here always) are left.
+    /// Ties keep the first. A death item counts only when the inventory's owner is dead (FUN_140748d70, FUN_1407465d0).
     /// </summary>
-    static ItemInstance? Best(List<ItemInstance> items, int function, Func<string, bool>? eats)
+    static ItemInstance? Best(List<ItemInstance> items, int function, Func<string, bool>? eats, bool ownerDead = false)
     {
         ItemInstance? best = null;
         float top = -1;
         foreach (var item in items)
         {
-            if (item.ItemFunction != function || item.Quantity <= 0 || item.Death || eats is not null && !eats(item.Record)) continue;
+            if (item.ItemFunction != function || item.Quantity <= 0 || item.Death && !ownerDead || eats is not null && !eats(item.Record)) continue;
             float full = item.MaxCharges;
             float score = item.Charges == full ? full * 0.01f : full > 0 ? (1 - item.Charges / full + 1) * 1000 : 0;
             if (score > 0 && score > top) (best, top) = (item, score);
