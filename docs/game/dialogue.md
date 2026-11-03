@@ -324,7 +324,7 @@ the event was delivered in the speaker's current town (the per-event map the con
 candidates are members not unconscious, not carried, not in a bed or prison, not animals, not in combat mode, on screen and, for a BIOME_GROUP, not in a town. A member
 sensing an enemy (`numEnemies` > 0) stops it. With 2 or more candidates every candidate x every `arrival dialog` DIALOGUE is scored (`Dialogue::scoreCustomDialog`) and the best
 runs (`runCustomDialog`). A `dumb` speaker (CHARACTER record flag, `FUN_1405e89c0`; Agnu and Ray in the base data) scores only when the DIALOGUE's `is character`
-lists it, an empty list failing; any other speaker needs the list only when it is non-empty (**Verified**, `FUN_14067e060`, `FUN_140684d70`). Meitou (`DialogueSystem.Arrive`): the first dialogue, speaker
+lists it, an empty list failing; any other speaker needs the list only when it is non-empty (**Verified**, `FUN_14067e060`, `FUN_140684d70`). Meitou: one test, `DialogueSystem.ListsSpeaker`, for roots, interjections and the arrival banter. Meitou (`DialogueSystem.Arrive`): the first dialogue, speaker
 (with that rule, `MaySpeak`) and partner in squad order with a line win; "on screen" is not tested.
 
 ### Tokens

@@ -149,6 +149,33 @@ public class DialogueTests
         Assert.True(loaded.DialogueLocks!["rich-d"]);
     }
 
+    /// <summary>A dumb villager (Agnu, Ray) with one dialogue; <paramref name="listed"/>: the dialogue's <c>is character</c> names it.</summary>
+    static PopulationData Dumb(bool listed) => PopulationData.Create(Db([
+        Rec("204-gamedata.base", FcsRecordType.FACTION, r => r.Name = "Nameless"),
+        Rec("f-d", FcsRecordType.FACTION, r => r.Name = "Villagers"),
+        Rec("npc-d", FcsRecordType.CHARACTER, r => { r.Name = "Villager"; r.Bools["dumb"] = true; r.References["dialogue"] = [Ref("plain-d")]; }),
+        Rec("plain-d", FcsRecordType.DIALOGUE, r => { r.References["lines"] = [Ref("plain-l")]; if (listed) r.References["is character"] = [Ref("npc-d")]; }),
+        Rec("plain-l", FcsRecordType.DIALOGUE_LINE, r => r.Strings["text0"] = "Hello."),
+    ]), []);
+
+    [Fact]
+    public void A_dumb_character_speaks_only_a_dialogue_whose_is_character_list_names_it()
+    {
+        // FUN_14067e060 / FUN_140684d70: for a dumb record an empty list fails.
+        using (var v = new Village(data: Dumb(listed: false)))
+        {
+            v.Say(new TalkOrder(v.Hero, v.Villager) { Tick = 0 });
+            v.World.RunTicks(2);
+            Assert.Null(v.Talk);
+        }
+        using (var v = new Village(data: Dumb(listed: true)))
+        {
+            v.Say(new TalkOrder(v.Hero, v.Villager) { Tick = 0 });
+            v.World.RunTicks(2);
+            Assert.Equal("Hello.", v.Talk!.Text);
+        }
+    }
+
     [Fact]
     public void Joining_the_guild_raises_its_rank_to_the_cap_and_switches_its_dialogue()
     {

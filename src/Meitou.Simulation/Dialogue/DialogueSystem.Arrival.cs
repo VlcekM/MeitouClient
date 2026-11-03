@@ -42,7 +42,7 @@ public sealed partial class DialogueSystem
     bool MaySpeak(World world, DialogueNode root, CharacterId speaker)
     {
         if (Cold(world, speaker) is not { } c) return false;
-        return root.IsCharacter.Contains(c.RecordId) || root.IsCharacter.Count == 0 && data.Db.Find(c.RecordId)?.GetBool("dumb") != true;
+        return ListsSpeaker(root, c.RecordId);
     }
 
     /// <summary>The original's <c>numEnemies</c> &gt; 0: the character's senses count an enemy (<see cref="CharacterFacts.Senses"/>).</summary>
