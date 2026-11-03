@@ -252,7 +252,7 @@ public sealed partial class ArrestSystem : IOrderOwner
         float d = Vector2.Distance(new Vector2(n.Position.X, n.Position.Z), goal);
         bool walking = n.Task == (byte)CharacterTask.GoTo;
         if (walking && Vector2.Distance(n.Goal, goal) > 1) return false;   // another order
-        if (d <= cage.UseRange + Settings.CageReach || !walking && d <= Settings.CageSlack)
+        if (FixtureRegistry.AtCage(cage, n.Position, walking))
         {
             if (walking) TaskStart.Stand(table, s);
             Carry!.LetGo(world, s);

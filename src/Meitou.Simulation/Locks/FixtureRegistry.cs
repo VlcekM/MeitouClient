@@ -715,6 +715,23 @@ public sealed partial class FixtureRegistry
 
     // ------------------------------------------------------------------ cages and beds
 
+    /// <summary>The factor on a building's reach while the character is not moving (<c>DAT_141682ad0</c>, read from the exe).</summary>
+    public const float StillReachFactor = 2;
+
+    /// <summary>The height difference below which a character is on a cage's floor when it is not on the same floor number (<c>AI::isWithinChoppingRange</c>: 15 for a building with a containing building; the 45 of an outdoor one is not modelled).</summary>
+    public const float WorkHeight = 15;
+
+    /// <summary>
+    /// Whether a character is at a cage to use it (goal 108's <c>isAtLocation</c> for a building, <c>AI::isWithinChoppingRange</c> <c>FUN_14059c6d0</c>:114-122, docs/game/buildings-production.md
+    /// "Work distance"): its flat distance to the cage's position is below the functionality's <c>use range</c>, doubled while it is not moving, and it is less than 15 above or below it
+    /// (the original's same-floor test has no counterpart here: Meitou's cage has no floor of its own).
+    /// </summary>
+    public static bool AtCage(Fixture cage, Vector3 character, bool moving)
+    {
+        float reach = cage.UseRange * (moving ? 1 : StillReachFactor);
+        return Vector2.Distance(new(character.X, character.Z), new(cage.Position.X, cage.Position.Z)) < reach && MathF.Abs(character.Y - cage.Position.Y) < WorkHeight;
+    }
+
     /// <summary>Whether nobody is in it: no occupant, or one that is gone or no longer held there.</summary>
     public static bool IsFree(CharacterTable table, Fixture f) =>
         f.Occupant.IsNone || !table.TryResolveNext(f.Occupant, out int s) || table.Cold(s) is not { } held || held.InWhat != f.Id || held.InSomething == HeldState.None;

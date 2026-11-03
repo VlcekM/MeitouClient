@@ -24,9 +24,6 @@ public sealed record ArrestSettings
     public float FineSeconds { get; init; } = 60;
     /// <summary>A guard counts as in his own town within this multiple of his resident squad's home radius of its centre (<b>engine reading</b> of the original's status <c>+0x88</c> test).</summary>
     public float TownSlack { get; init; } = 2;
-    /// <summary>A carrier puts the captive in once within the cage's <c>use range</c> plus this; a walk that ended within <see cref="CageSlack"/> puts it in too (a cage inside a building).</summary>
-    public float CageReach { get; init; } = 15;
-    public float CageSlack { get; init; } = 200;
     /// <summary>Walks to the cage before the carrier gives up and drops the captive.</summary>
     public int CageWalks { get; init; } = 3;
     /// <summary>A player character within this of the cage pays a bail (the original pays at a law NPC's dialogue in that town).</summary>
@@ -574,7 +571,7 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
                 if (cage is null || !FixtureRegistry.IsFree(table, cage)) return ToCage(world, a, g, t);
                 float d = Vector2.Distance(new Vector2(gn.Position.X, gn.Position.Z), new Vector2(cage.Position.X, cage.Position.Z));
                 bool walking = gn.Task == (byte)CharacterTask.GoTo;
-                if (d <= cage.UseRange + Settings.CageReach || !walking && d <= Settings.CageSlack)
+                if (FixtureRegistry.AtCage(cage, gn.Position, walking))
                 {
                     TaskStart.Stand(table, g);
                     Carry!.LetGo(world, g);

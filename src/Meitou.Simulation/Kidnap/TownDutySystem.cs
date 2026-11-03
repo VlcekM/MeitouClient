@@ -15,9 +15,8 @@ public sealed record TownDutySettings
     public int LookEveryTicks { get; init; } = 15;
     /// <summary>A member looks for an intruder within its sight (the sensed list's size is <b>Unknown</b>).</summary>
     public float Sight { get; init; } = AggroSystem.OutdoorSight;
-    /// <summary>A walk counts as arrived within this of its goal (a cage: its <c>use range</c> plus <see cref="CageReach"/>; a walk that ended within <see cref="CageSlack"/> of it does too).</summary>
+    /// <summary>A walk counts as arrived within this of its goal; a walk that ended within <see cref="CageSlack"/> of it does too (a cage's reach is <see cref="FixtureRegistry.AtCage"/>).</summary>
     public float Arrive { get; init; } = 40;
-    public float CageReach { get; init; } = 15;
     public float CageSlack { get; init; } = 200;
     /// <summary>Walks that end short before the member gives up (an intruder is then put down where it is).</summary>
     public int Walks { get; init; } = 4;
@@ -697,7 +696,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
             if ((world.Tick + g) % world.Every(Settings.LookEveryTicks) == 0 && CageDesire(world, g, b) <= 0) return Dispose(world, d, g, b, cageable: false);
             var cage = d.Target is { } id ? world.Fixtures.Find(id) : null;
             if (cage is null || !FixtureRegistry.IsFree(table, cage)) return PutDown(world, d, g);
-            if (gap <= cage.UseRange + Settings.CageReach || !walking && gap <= Settings.CageSlack)
+            if (FixtureRegistry.AtCage(cage, gn.Position, walking))
             {
                 TaskStart.Stand(table, g);
                 carry.LetGo(world, g);
@@ -895,7 +894,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
         if (cage is null || cage.Occupant != d.Body || !table.TryResolveNext(d.Body, out int p) || table.Cold(p)?.Inventory is null || gc.Inventory is null) return End(world, d);
         bool walking = gn.Task == (byte)CharacterTask.GoTo;
         float gap = Vector2.Distance(Flat(gn.Position), d.Goal);
-        if (gap <= cage.UseRange + Settings.CageReach || !walking && gap <= Settings.CageSlack)
+        if (FixtureRegistry.AtCage(cage, gn.Position, walking))
         {
             TaskStart.Stand(table, g);
             if ((d.Next += world.TickSeconds) <= CarrySystem.ConfiscateSeconds) return true;
