@@ -413,6 +413,8 @@ public sealed class CharacterCold
     /// <see cref="Locks.Fixture.Id"/> it is in (null: not known, e.g. a loaded prisoner whose cage the world has not mapped). Set by <see cref="Locks.FixtureRegistry"/>, serial phases only.
     /// </summary>
     public Locks.HeldState InSomething { get; set; }
+    /// <summary>Game hours of the last update of a bed it lay in (status <c>+0xc0</c>, refreshed every update of Task_UseBed, <c>FUN_140347950</c>); 0 before any. Row 98's desire reads it ; derived, not hashed or saved.</summary>
+    public double BedUsedHours { get; set; }
     public string? InWhat { get; set; }
     /// <summary>Imprisoned: it does not move, fight, carry or run AI (docs/simulation.md "Cages, beds and locks").</summary>
     public bool IsImprisoned => InSomething == Locks.HeldState.Imprisoned;

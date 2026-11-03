@@ -941,6 +941,7 @@ public sealed partial class FixtureRegistry
         foreach (var f in bedList ??= [.. all.Where(x => x.Kind == FixtureKind.Bed)])
         {
             if (f.Occupant.IsNone || !table.TryResolveNext(f.Occupant, out int s) || table.Cold(s) is not { InSomething: HeldState.Bed } c || c.InWhat != f.Id) continue;
+            c.BedUsedHours = world.GameHours;   // Task_UseBed's update stamps the status clock (+0xc0)
             ref var n = ref table.Next[s];
             var (at, yaw) = LieSpot(f, n.Position, world.GameHours);
             if (n.Position != at || n.Yaw != yaw) table.Place(s, at, yaw);

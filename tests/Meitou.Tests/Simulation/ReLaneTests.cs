@@ -28,4 +28,13 @@ public class ReLaneTests
         dead.Medical!.Butcher();
         Assert.False(SquadIntact.Able(null!, dead, persistentHome: false));
     }
+
+    /// <summary>Row 98's desire by the minutes since the last bed use (<c>FUN_1405a0880</c>): 0.3 within 20, else 1 for a human.</summary>
+    [Theory]
+    [InlineData(5, 0.3f)]
+    [InlineData(19.9, 0.3f)]
+    [InlineData(20, 1f)]
+    [InlineData(500, 1f)]
+    public void The_bed_clock_lowers_the_sleeping_desire_just_after_a_bed(double minutes, float desire) =>
+        Assert.Equal(desire, AiSystem.BedClockDesire(Cold(), minutes));
 }

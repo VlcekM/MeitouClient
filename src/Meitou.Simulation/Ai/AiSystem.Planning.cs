@@ -113,6 +113,7 @@ public sealed partial class AiSystem
 
         public float Desire(TaskDataRow row, in PlanTarget target)
         {
+            if (row.Type == TaskType.USE_BED) return system.SleepingDesire(world, board, slot);   // row 98: AI slot 30 (FUN_1405a0880); 0 drops the node
             float d = TaskProfiles.Of(row.Type).Desire;
             return d >= 0 ? d : 1;   // a random or own desire function counts as 1 on the way
         }
