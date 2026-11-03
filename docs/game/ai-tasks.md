@@ -973,8 +973,8 @@ update `FUN_140511130`, `Character::setupAI` `FUN_140621b70`; KenshiLib names **
   goals, whose pick is row 13's attacker (none: the goal fails). Engine gates: a character that cannot fight, crawls, runs away under Self preservation or mans a turret wants none. One whose
   lists hold no combat goal starts no fight and joins none: it only fights back when attacked (32 in the same chooser). Nothing else starts an NPC's fight on sight or pulls a mate in.
   - **Squads the AI does not run** (`AiSystem.EngineMinds`, `AiMind.Engine`; engine choice for the routine): `setupAI` gives every character goals (14, 32, its race's, its faction's; [Precedence](#precedence))
-    and its squad's packages add theirs, so every NPC of such a squad gets a mind: a roaming platoon's active half (its trip is the population's stand-in), a campaign's loaded squad and a squad
-    whose template lists no AI packages. Its combat goals are those of its package for its role (a campaign squad's phase package, as `PopulationSystem.GoalDuty` reads it; a roaming one's
+    and its squad's packages add theirs, so every NPC of such a squad gets a mind: a loaded roaming or campaign platoon's squad whose movement the population owns (the platoon runs a blackboard, [simulation](../simulation.md#ai); its running package supplies the goals) and a squad
+    whose template lists no AI packages. Its combat goals are those of its package for its role (the blackboard's running package: a campaign squad's phase package, as `PopulationSystem.GoalDuty` reads it; a roaming one's
     the package its stand-in follows; none without packages) and of its race; it weighs only them and Self preservation (fight or run), on its routine (standing, wandering, following, the roaming
     leader's walk) and in its own fight, and acts nothing else out; a fight's end gives the routine back (the stand-down). So a template without packages starts no fight (no base race lists an
     attack goal; Cannibal lists 143) and a caravan with 143 / 15 only defends. Not modelled for them: 35 and the packages' other goals (the trip goes on as before). A mind dropped by trade,

@@ -386,9 +386,10 @@ public sealed partial class PopulationSystem
         else if (world.Tick >= p.UnloadAtTick && !(!Kept(p) && !p.Pinned && p.Campaign is null && ThinOutOfZone(world, p, squad)))
         {
             p.Imprisoned = squad.Members.Any(m => table.TryResolveNext(m, out int ms) && table.Cold(ms)!.IsImprisoned);
-            if (p.Campaign is null && squad.Ai is { } board) p.IntactFlag = board.Intact;   // kept as it was at unload (+0x100)
+            if (squad.Ai is { } flagged) p.IntactFlag = flagged.Intact;   // kept as it was at unload (+0x100)
             if (squad.Ai?.Current is { } running) FollowPackage(world, p, running);
-            if (p.Package is { } shipping && IsShipping(shipping) && squad.Ai is { MissionTown: >= 0 and var mission }) p.Target = mission;   // the camp it ships to (ShippingCamp)
+            if (squad.Ai is { } running_ && Ai.AiSystem.BoardMoves(running_) && MissionSite(running_) is >= 0 and var mission) p.Target = mission;   // where its package was taking it
+            else if (p.Package is { } shipping && IsShipping(shipping) && squad.Ai is { MissionTown: >= 0 and var camp }) p.Target = camp;   // the camp it ships to (ShippingCamp)
             // Faithful: a platoon the original does not keep (not a town's own, not in a campaign, not occupying) is despawned as it leaves; a save's wild one by the wild switch.
             if ((p.Dead || !Kept(p) && !p.Pinned) && p.Campaign is null)
             {
@@ -423,6 +424,12 @@ public sealed partial class PopulationSystem
             return;
         }
         if (p.Pinned || p.Wild || p.Dead) return;   // a town's own or a wild one: its AI runs it, it has no trips (nor has a dead one)
+        // A package that travels (the trader, the shipping classes) moves the squad itself: no trip order meanwhile, and the trip starts afresh when it gives way.
+        if (squad.Ai is { } board && Ai.AiSystem.BoardMoves(board))
+        {
+            (p.Target, p.WaitLeft, p.Point) = (-1, 0, null);
+            return;
+        }
         // A leader in a fight or a loot is left to it: an order now would replace that task (the trip goes on when it is over).
         if (table.Next[squad.Leader.Slot].Task is (byte)CharacterTask.Attack or (byte)CharacterTask.Loot) return;
 
@@ -470,6 +477,9 @@ public sealed partial class PopulationSystem
             }
         }
     }
+
+    /// <summary>The town (site index) a travelling package heads for: its mission town, else its mission town hand's placed town; -1: none.</summary>
+    static int MissionSite(Ai.Blackboard board) => board.MissionTown >= 0 ? board.MissionTown : board.Destination.Site;
 
     /// <summary>
     /// A squad unloading with <paramref name="running"/> as its package: the platoon keeps it and takes its off-screen job (<c>FUN_1407ee790</c> re-reads the job from the blackboard's

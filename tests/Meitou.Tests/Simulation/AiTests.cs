@@ -427,4 +427,26 @@ public class AiTests(ITestOutputHelper output)
         }
         finally { if (Directory.Exists(platoonFolder)) Directory.Delete(platoonFolder, recursive: true); }
     }
+
+    /// <summary>Every loaded platoon runs its blackboard in the original (<c>FUN_1402732b0</c>), a roaming one too; no town building is claimed, and the population still moves a package that does not travel.</summary>
+    [Fact]
+    public void A_loaded_roaming_platoons_squad_runs_a_blackboard_without_claiming_a_home_and_keeps_its_engine_routine()
+    {
+        var near = Rec("116-t", FcsRecordType.AI_PACKAGE, "Patrol near home");
+        near.Ints["unloaded func"] = 2;
+        var data = WithHomes(SyntheticTown.Database(roaming: true, extra: [.. Records(), near],
+            changePatrol: p => p.References["AI packages"] = [Ref("111-t", 0), Ref("112-t", 1)], changeFolk: t => t.References["AI packages"] = [Ref("116-t", 0)]), out _, out _);
+        using var world = Town(1, out _, data, null);
+        world.RunTicks(700);
+        var roamers = world.Platoons.All.Where(p => !p.Pinned && p.State == PlatoonState.Loaded).ToList();
+        Assert.NotEmpty(roamers);
+        foreach (var platoon in roamers)
+        {
+            var squad = world.Squads.Find(platoon.SquadId)!;
+            Assert.Equal("116-t", squad.Ai?.Current?.Id);
+            Assert.Null(squad.Ai!.OwnHome);
+            Assert.False(AiSystem.BoardMoves(squad.Ai));
+            Assert.All(squad.Members, m => Assert.True(world.Characters.Cold(world.Characters.TryResolveNext(m, out int s) ? s : -1)!.Ai!.Engine));
+        }
+    }
 }

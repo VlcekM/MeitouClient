@@ -1380,19 +1380,23 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             board.Intact = IsIntact(world, squad, board);
             UpdateInTown(world, squad, board);
             rules.Bind(this, world, squad);
+            var platoon = PlatoonOf(world, squad);
+            if (platoon?.Campaign is { } campaign && PhasePackage(world, platoon, campaign) is { } phase) InstallPhasePackage(world, board, phase);
             board.Update(rules, world.GameHours);
-            StepPackage(world, squad, board);
+            if (platoon?.Campaign is null) StepPackage(world, squad, board);   // a campaign's squad has its war targets from the campaign
             // A contract that ended: its leader says the package's contract end talk to the employer (event 30, FUN_14026a110).
             if (board.TakeEnded() is { Package.ContractEndTalk: { } talk, Target: var employer } && !squad.Leader.IsNone)
                 world.Defer(new Dialogue.DialogueEvent(squad.Leader, employer, Dialogue.DialogueSystem.ContractJobEnded, talk) { Tick = world.Tick + 1 });
             AdvanceRoute(world, squad, board);
             board.Crowd.Clear();
             board.CrowdEntries.Clear();
+            bool populationMoves = platoon is not null && !BoardMoves(board);
+            if (populationMoves) EngineMinds(world, squad, board);
             for (int k = 0; k < squad.Members.Count; k++)
             {
                 if (!table.TryResolveNext(squad.Members[k], out int s)) continue;
                 var cold = table.Cold(s)!;
-                if (cold.Ai is null or { Engine: true })
+                if (!populationMoves && cold.Ai is null or { Engine: true })
                 {
                     var p = table.Next[s].Position;
                     cold.Ai = new AiMind
@@ -1401,7 +1405,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
                         Shopping = ShoppingList.Make(data.Db, cold.RecordId, world.Seed, Rng.Key(table.IdOf(s))),
                     };
                 }
-                if (cold.Ai.Goal is { } g)
+                if (cold.Ai?.Goal is { } g)
                 {
                     board.Crowd[g.Task.Type] = board.Crowd.GetValueOrDefault(g.Task.Type) + 1;
                     board.CrowdEntries.Add(new CrowdEntry(squad.Members[k], g.Task.Type, CrowdTarget(g.Task.Target, squad, board, squad.Members[k])));
@@ -1722,7 +1726,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     void Attach(World world, Squad squad)
     {
         var (packages, template) = TemplateOf(squad.TemplateId);
-        var home = AssignHome(world, squad, template);
+        // A platoon's squad on the road has no building of its own to claim (only one its town gave it).
+        var home = PlatoonOf(world, squad) is null ? AssignHome(world, squad, template) : squad.HomeBuilding;
         // The template's initial door state applies to the home it is given (docs/game/locks.md "Doors"); the first squad's wins, a saved building keeps its own.
         if (home is not null) world.Fixtures.ApplyInitialDoorState(home.Key, template?.InitialDoorState ?? 0);
         ulong roll = Rng.Hash(world.Seed, (ulong)squad.Id, RngPurpose.Think, SeedSalts.AiPatrol);
@@ -1756,23 +1761,24 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// platoon's package's for its role (a campaign squad's phase package, a roaming one's the package the population's stand-in follows, else the template's first choice; none for a
     /// template without packages) and its race's. Its routine stays the engine's. Serial, on the package cadence and when the squad appears; a mind made for another squad is made again.
     /// </summary>
-    void EngineMinds(World world, Squad squad)
+    void EngineMinds(World world, Squad squad, Blackboard? board = null)
     {
         if (IsPlayers(world, squad)) return;
         var table = world.Characters;
         AiPackage? package;
-        if (squad.PlatoonId >= 0 && world.Platoons.Find(squad.PlatoonId) is { } platoon)
+        if (board is not null) package = board.Current;   // a platoon's squad running its blackboard: the package that runs
+        else if (squad.PlatoonId >= 0 && world.Platoons.Find(squad.PlatoonId) is { } platoon)
         {
             // A campaign's squad runs its phase's package (as PopulationSystem.GoalDuty reads it); a roaming one the package its stand-in follows.
-            string? id = platoon.Campaign is { } inst
-                ? inst.Phase <= 2 ? world.SystemOf<PopulationSystem>()?.CampaignOf(inst.CampaignId)?.PackageOf(inst.Phase, inst.Leader == platoon.Id) : null
-                : platoon.Package;
-            package = id is null ? platoon.Campaign is null ? FirstPackage(squad.TemplateId) : null : data.Ai.Package(id);
+            AiPackage? phase = platoon.Campaign is { } inst ? PhasePackage(world, platoon, inst) : null;
+            package = phase ?? (platoon.Package is { } id ? data.Ai.Package(id) : platoon.Campaign is null ? FirstPackage(squad.TemplateId) : null);
         }
         else package = FirstPackage(squad.TemplateId);
         for (int k = 0; k < squad.Members.Count; k++)
         {
-            if (!table.TryResolveNext(squad.Members[k], out int s) || table.Cold(s) is not { IsPlayer: false } cold || cold.Ai is { Engine: false }) continue;
+            // A full mind gives way to an engine one only under a blackboard that says the population moves the squad.
+            if (!table.TryResolveNext(squad.Members[k], out int s) || table.Cold(s) is not { IsPlayer: false } cold || cold.Ai is { Engine: false } && board is null) continue;
+            if (cold.Ai is { Engine: false }) cold.Ai = null;
             if (cold.Ai is null || !ReferenceEquals(cold.Ai.Squad, squad))
             {
                 var p = table.Next[s].Position;
@@ -1784,6 +1790,26 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             }
             cold.Ai.EngineGoals = package is null ? [] : CombatGoalsOf(package, RoleOf(squad, squad.Members[k], cold));
         }
+    }
+
+    /// <summary>How long the war manager's phase package runs as the platoon's override before it is installed afresh (<c>FUN_140272240</c> called with 24 game hours, <b>Verified</b>).</summary>
+    const double PhaseHours = 24;
+
+    /// <summary>
+    /// The package the war manager's record gives a campaign platoon for its phase (<c>FUN_140272570</c>: pt1, pt2 or retreat, the leader platoon's or the others'); null after the
+    /// retreat or when the campaign lists none.
+    /// </summary>
+    AiPackage? PhasePackage(World world, Platoon platoon, CampaignInstance inst) =>
+        inst.Phase <= 2 && world.SystemOf<PopulationSystem>()?.CampaignOf(inst.CampaignId)?.PackageOf(inst.Phase, inst.Leader == platoon.Id) is { } id ? data.Ai.Package(id) : null;
+
+    /// <summary>
+    /// Installs the phase package as the blackboard's 24 h timed override when it holds none or another (the war manager's check on every visit, <c>FUN_140272570</c>, <b>Verified</b>);
+    /// the override running out ends it (<see cref="Blackboard.Update"/>), the slots choose that visit and the same record installs it afresh on the next.
+    /// </summary>
+    void InstallPhasePackage(World world, Blackboard board, AiPackage package)
+    {
+        if (board.Contract?.Id == package.Id) return;
+        board.StartContract(package, world.GameHours, PhaseHours, rules);
     }
 
     /// <summary>The package a template's squad starts with (<see cref="Blackboard.Update"/> over its slots, as the population's stand-in takes it, <see cref="PlatoonJobs.For"/>); null without one.</summary>
@@ -1817,7 +1843,26 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// The AI runs a squad that is not the player's, not a roaming platoon's active half (a town's own saved squad, pinned, is run like the town's, a save's wild one like the wild
     /// sites' squads), and whose template lists AI packages.
     /// </summary>
-    bool Runs(World world, Squad squad) => (squad.PlatoonId < 0 || squad.Pinned || squad.Wild) && !IsPlayers(world, squad) && TemplateOf(squad.TemplateId).Packages.Count > 0;
+    bool Runs(World world, Squad squad) => !IsPlayers(world, squad) && TemplateOf(squad.TemplateId).Packages.Count > 0;
+
+    /// <summary>
+    /// The platoon whose squad this is when the population moves it (a loaded roaming or campaign platoon: not a town's own saved squad, nor a wild one); null for any other squad.
+    /// Every loaded platoon runs its blackboard in the original (<c>FUN_1402732b0</c> from the platoon's slot 27, docs/game/ai.md "Blackboard update"), whatever its kind.
+    /// </summary>
+    Platoon? PlatoonOf(World world, Squad squad) => squad.PlatoonId >= 0 && !squad.Pinned && !squad.Wild ? world.Platoons.Find(squad.PlatoonId) : null;
+
+    /// <summary>
+    /// Whether the running package moves the squad itself (the trader, the refugee, the shipping and retreat classes): one of its goals travels and a mission town is set. Else the
+    /// population's trip or campaign march moves a platoon's squad and its members keep the engine's routine (<see cref="AiMind.Engine"/>), as before the platoons ran a blackboard.
+    /// </summary>
+    internal static bool BoardMoves(Blackboard board)
+    {
+        if (board.Destination.IsNone && board.MissionTown < 0 && board.RefugeeTarget < 0) return false;
+        foreach (var role in board.Roles)
+            foreach (var goal in role)
+                if (TaskBehaviours.Of(goal.Task.Type) == AiBehaviour.Travel) return true;
+        return false;
+    }
 
     bool IsPlayers(World world, Squad squad)
     {
