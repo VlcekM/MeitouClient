@@ -21,16 +21,7 @@ sealed record GameplaySettings(float SquadSize = 1, float Population = 1, float 
     /// <summary>The install's <c>settings.cfg</c>; every missing key takes the original's default.</summary>
     public static GameplaySettings FromInstall(GameInstall install)
     {
-        var values = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
-        try
-        {
-            var file = Path.Combine(install.Root, "settings.cfg");
-            if (File.Exists(file))
-                foreach (var line in File.ReadLines(file))
-                    if (line.IndexOf('=') is > 0 and var eq && float.TryParse(line[(eq + 1)..], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float v) && float.IsFinite(v))
-                        values[line[..eq].Trim()] = v;
-        }
-        catch (IOException) { }
+        var values = ReadValues(install);
         float Get(string key, float fallback, float min, float max) => values.TryGetValue(key, out float v) ? Math.Clamp(v, min, max) : fallback;
         return new(
             SquadSize: Get("Squad size multiplier", 1, MinSquadSize, MaxSquadSize),
@@ -42,5 +33,27 @@ sealed record GameplaySettings(float SquadSize = 1, float Population = 1, float 
             AutoSave: Get("Auto save", 1, 0, 1) != 0,
             AutoSaveMinutes: Get("Auto save time (minutes)", 10, MinAutoSaveMinutes, MaxAutoSaveMinutes),
             HarpoonLimit: (int)Get("harpoonLimit", RangedTuning.DefaultStuckLimit, RangedTuning.MinStuckLimit, RangedTuning.MaxStuckLimit));
+    }
+
+    /// <summary>
+    /// The NPC View Range (<c>npc range</c> of the install's settings.cfg; <c>FUN_1405c9f60</c>, <b>Verified</b>): 3250 when missing, 3000 when stored below 1000. Characters farther from the eye
+    /// than this are not drawn (<c>CharacterRenderer.DrawDistance</c>).
+    /// </summary>
+    public static float NpcRange(GameInstall install) =>
+        ReadValues(install).TryGetValue("npc range", out float v) ? (v < 1000 ? 3000 : v) : 3250;
+
+    static Dictionary<string, float> ReadValues(GameInstall install)
+    {
+        var values = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
+        try
+        {
+            var file = Path.Combine(install.Root, "settings.cfg");
+            if (File.Exists(file))
+                foreach (var line in File.ReadLines(file))
+                    if (line.IndexOf('=') is > 0 and var eq && float.TryParse(line[(eq + 1)..], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float v) && float.IsFinite(v))
+                        values[line[..eq].Trim()] = v;
+        }
+        catch (IOException) { }
+        return values;
     }
 }
