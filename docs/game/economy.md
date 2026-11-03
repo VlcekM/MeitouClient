@@ -312,7 +312,7 @@ Per-character hash map keyed by faction (`Character+0xf0`). Entry (`FUN_1405e7ee
   stores it there; e.g. Bounty Hunters and Medics Guild -> United Cities) when it has one, else the given faction itself when its `+0x40` flag is set (else a null key that
   nothing reads: the flag is still set and the culprit marked recently wanted, but no bounty is kept). `FUN_140851fb0(faction)` is the same choice without the cage rule ("booking
   faction" below). **Verified** (decompile of `FUN_140853ec0`, `FUN_140852010`, `FUN_140851fb0`, `FUN_140853e20`): every ledger read, claim and erase by a faction goes through the
-  same key. Meitou: `CrimeSystem.Book` (cage owner while imprisoned, `CrimeFactions.BookingOf`), every lookup through `BountyLedger.BookedFor` / `BookedAmount`.
+  same key. Meitou: `CrimeSystem.Book` (cage owner while imprisoned, `CrimeFactions.BookingOf`), every lookup through `BountyLedger.BookedFor` / `BookedAmount`, the release's erase of the releaser's and the jail's entries too (`FUN_1408539f0`).
   The given faction is the **booking police witness's** (or the police in the hit rule of 11.6), not the victim's (**Observed**: both callers pass their own faction); the crime bit is set, the timestamp is reset to now, and the "wanted" UI is refreshed. The very first crime
   code (1, Enslaving) sets the flag but adds nothing (**Observed**; the code returns before the add). The same function also sets the status float `Character+0x1a0 -> +0x110` to 250.0: the **"recently wanted" marker** that makes a bounty
   visible at once (11.8); setting or witnessing a pending crime (`FUN_140852e10`, `FUN_140851f40`) sets it too. Its decrement was not traced.
