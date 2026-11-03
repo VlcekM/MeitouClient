@@ -553,10 +553,12 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// The BUILDING_FUNCTIONALITY (string id) of a worker's building, null without one: <c>Task_OperateMachine</c>, which the original runs for 189 / 190's act-outs (87, 221), adds its
     /// <c>animation events</c> to the work clip each update (docs/audio.md "Machine work").
     /// </summary>
-    string? WorkFunctionalityOf(TownBuilding b) => data.Db.Find(b.BuildingId)?.GetReferences("functionality") is [var link, ..] ? link.TargetStringId : null;
+    string? WorkFunctionalityOf(TownBuilding b) =>
+        data.Db.Find(b.BuildingId)?.GetReferences("functionality") is [var link, ..] ? link.TargetStringId : null;
 
     /// <summary>The machine events of standing work at a functionality's clip (<see cref="CharacterCold.ActionWork"/>); null without a functionality or clip.</summary>
-    internal static WorkEvents? StandingWork(string? functionality, string? clip) => functionality is not null && clip is not null ? new WorkEvents(functionality, clip) : null;
+    internal static WorkEvents? StandingWork(string? functionality, string? clip) =>
+        functionality is not null && clip is not null ? new WorkEvents(functionality, clip) : null;
 
     readonly System.Collections.Concurrent.ConcurrentDictionary<string, float> workHungerRates = new(StringComparer.Ordinal);
 

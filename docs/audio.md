@@ -297,7 +297,7 @@ through one helper (`FUN_1405c9a70(char, event, maxSqDist)`): **dropped when the
   The AI's worker goals act out through the same task (87 / 221, [ai-tasks](game/ai-tasks.md#slave-work-shout-and-capture)), so NPC town workers and obedient slaves sound alike.
 - **Ground effect** (a particle, not a sound; **Verified**, decompile, unless marked): an ANIMATION_EVENT with `ground effect` set also becomes an `AnimationGroundEvent` on the clip
   (`FUN_140064e10`; it keeps the `bone`). Base game and rebirth (**Verified**, probe): `Footstep R` / `Footstep L` (bones `Bip01 R/L Foot`) and the farms' `Impact Farm` (no bone).
-  Firing (`FUN_140065330`): nothing while a character flag at `+0x1a9` is clear (**Unknown** meaning) or without a body entity. The point is the named bone's world position (the character's
+  Firing (`FUN_140065330`): nothing while a character flag at `+0x1a9` is clear (**Unknown** meaning) or without a body entity (**Observed**). The point is the named bone's world position (the character's
   without a bone or when the bone's height comes out 0). Under the water height: the BIOMES record's `water effects` entry (v0 depth, v1 speed) with the greatest v0 at
   most the depth, then greatest v1 at most the speed, at the water surface. Dry: only when the ground ray's hit has the null handle (type `0xb`, the terrain; **Observed**); the biome's
   `ground effects` slot for the overlay channel at the point (`FUN_140a16f70`, the footsteps' channel pick), fired when the speed is at least its min speed and `rand()`/32768 is at most

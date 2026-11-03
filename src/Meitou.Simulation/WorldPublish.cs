@@ -74,7 +74,9 @@ public sealed partial class World
     {
         if (task == (byte)CharacterTask.Operate)
         {
-            return cold is { Operating: true, OperateSite: not null, OperateFunctionality: { } works, OperateClip: { } workClip } ? new WorkEvents(works, workClip) : null;
+            return cold is { Operating: true, OperateSite: not null, OperateFunctionality: { } works, OperateClip: { } workClip }
+                ? new WorkEvents(works, workClip)
+                : null;
         }
         return task == (byte)CharacterTask.Idle && cold is { ActionWork: { } standing, ActionClip: { } clip } && clip == standing.Clip ? standing : null;
     }
