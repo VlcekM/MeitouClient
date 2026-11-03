@@ -365,9 +365,13 @@ public sealed class BedSystem(PopulationData data, BedSettings? settings = null)
         if (owner < data.Factions.Count && data.Factions[owner].FundamentalType == FundamentalType.Bandit) return 0;
         if (bed.Site >= 0 && bed.Site < data.Sites.Count && data.Sites[bed.Site].Town.Type is TownType.Nest or TownType.Ruins or TownType.PointOfInterest) return 0;
         if (!MayUse(world, bed, faction)) return -1;
-        // The building's record: the template of the last squad assigned to it and the designation it was given first (FUN_140330ab0 reads the house, not its residents).
-        if (world.Fixtures.RecordOf(bed.Building) is not { Template: { } templateId } record || data.Db.Find(templateId) is not { } template
-            || !template.GetBool("public beds") && record.Designation != BarDesignation) return -1;
+        // The building's record: the template of the last squad assigned to it and the designation it was given first (FUN_140330ab0 reads the house, not its residents); a building with no record falls back to its residents (docs/game/locks.md).
+        var record = world.Fixtures.RecordOf(bed.Building);
+        string? templateId = record?.Template;
+        if (templateId is null)
+            foreach (var squad in world.Squads.All)
+                if ((squad.Ai?.OwnHome ?? squad.HomeBuilding)?.Key == bed.Building) { templateId = squad.TemplateId; break; }
+        if (templateId is null || data.Db.Find(templateId) is not { } template || !template.GetBool("public beds") && (record?.Designation ?? template.GetInt("building designation")) != BarDesignation) return -1;
         int cost = template.GetInt("bed usage cost");
         if (bed.Bed.Function == Meitou.Data.World.TownBuildings.SkeletonBedFunction) cost *= 4;
         return Math.Max(cost, 0);
