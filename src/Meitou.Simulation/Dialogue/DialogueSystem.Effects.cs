@@ -344,17 +344,15 @@ public sealed partial class DialogueSystem
             case "PLAYERFACTION": return data.Relations.Contains(world.Player.Faction) ? data.Factions[world.Player.Faction].Name : "";
         }
         if (dialogue.WordSwap(token) is not { } swap) return "";
-        var candidates = new List<DialogueNode>();
-        int best = int.MinValue;
-        foreach (var child in swap.Children)
-        {
-            if (child.Score < best) break;
-            if (!Check(world, c, child, me, other)) continue;
-            if (child.Score > best) { best = child.Score; candidates.Clear(); }
-            candidates.Add(child);
-        }
-        if (candidates.Count == 0) return "";
-        var pick = candidates.Count == 1 ? candidates[0] : candidates[Rng.Int(NextRoll(world, me), candidates.Count)];
-        return Expand(world, c, pick, PickText(world, me, pick), me, other, depth + 1);
+        // The full line walk over the swap's lines (FUN_14067a530 :168-220 into FUN_14067a0c0): the target is the conversation's, or the passed one when that is the owner; run a second time
+        // when the first finds nothing; the picked line and its parents (the swap, a root it came through) are stamped used (FUN_140675630).
+        var walkTarget = c.Player.IsNone || c.Player == me ? other : c.Player;
+        var picked = Pick(world, c, swap.Children, 0, walkTarget) ?? Pick(world, c, swap.Children, 0, walkTarget);
+        if (picked is not { } p) return "";
+        double now = world.GameHours;
+        lastUse[p.Line.StringId] = now;
+        lastUse[swap.StringId] = now;
+        if (p.Root is { } through) lastUse[through.StringId] = now;
+        return Expand(world, c, p.Line, PickText(world, p.Speaker, p.Line), me, other, depth + 1);
     }
 }
