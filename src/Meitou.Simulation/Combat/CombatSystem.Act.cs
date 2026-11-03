@@ -272,10 +272,14 @@ public sealed partial class CombatSystem
                 if (chance && s.ReactTech < 0 && (s.TargetSlot >= 0 || cold.InCombat))
                 {
                     // Due, the timer stays out until a swing is in the window, then rolls on that tick; a failed roll starts it again (FUN_1406085e0).
+                    // A won roll ends the stumble and clears the no-defence timer, then starts a defence (FUN_1406085e0 -> state 3 -> FUN_140609290): a stumble-dodge row,
+                    // or with none no technique and the no-defence time.
                     if (BreaksOut(world, i, cold, key, now, out bool rolled))
                     {
+                        s.StunUntil = now;
+                        s.StumbleClip = -1;
+                        s.DefendReadyTick = Math.Min(s.DefendReadyTick, now);
                         React(world, i, ref s, cold, key, now, dt, stumbling: true);
-                        if (s.ReactTech >= 0) { s.StunUntil = now; s.StumbleClip = -1; }
                     }
                     else if (rolled) s.BreakOutTick = now + every;
                 }

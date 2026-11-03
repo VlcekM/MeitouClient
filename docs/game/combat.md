@@ -104,7 +104,7 @@ counts down each tick; once due, the first tick a swing at 10-99% progress is in
 a failed roll sets the timer to 1.2 s again, a tick with no such swing leaves it due (**Verified**, decompile). Meitou: `CombatSlot.BreakOutTick`.
 A won roll plans a defence (+0x1f4 = 1), leaves the stumble for state 3 and clears +0x14c; state 3 (`FUN_14060d0b0`) starts it through `FUN_140609290`, whose chooser, the fighter still
 stumbling (`FUN_140435570`), takes only `is stumble dodge` rows; with none it gets no technique and 1.2 s, but the stumble state has ended either way (**Verified**; whether the stumble clip
-is cut, by the layer fade `FUN_1405b36f0` there, is **Unknown**). Meitou differs: a won roll with no stumble-dodge row keeps the stumble (`Act`, step 2).
+is cut, by the layer fade `FUN_1405b36f0` there, is **Unknown**). Meitou: `Act`, step 2 (the stumble clip is dropped with the state).
 Knockback is the clips' root motion only (**Observed**: no impulse in these functions; [animation](../animation.md); ragdolls: [ragdolls](ragdolls.md)).
 A blocked blow neither staggers nor pushes (`FUN_140665540`). A shackled defender is knocked out instead 25% of the time; a defender whose fight is off: [stagger outside a fight](#fight-lifecycle-and-orders).
 **Verified** (`FUN_140520490` → `FUN_14051eab0`; `FUN_140435570` → `FUN_1405b3a40`): the clip plays at its record's play speed
