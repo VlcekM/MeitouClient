@@ -135,6 +135,13 @@ Values from the install through the repo's readers (**Verified**, `GameDatabase.
 | `bodypart degeneration rate` / `robot wear rate` / `stun recovery rate` | 1.5 / 1 / 1 | |
 | `max squads` / `max squad size` / `max faction size` | 10 / 20 / 30 | |
 
+### World per-frame helpers (a3-krest, decompile)
+- `FUN_1403beeb0(thread, dt)` is the generic worker-thread kick used by the world's helper threads (`+0x18`, `+0x8c0`) and several managers: with the thread running it stores `dt`, sets a flag and signals; without one (`+0x45` set) it stores `dt` and runs the work (vfunc 1) inline. Which work the `+0x8c0` thread does is **Unknown** (**Verified**: only the kick).
+- Deferred removal list (world `+0x890`, filled when a character is destroyed): flushed by `FUN_1405429a0`, a hash-set erase of the character handle in the set at `+0x750`. Meitou's registry is live, so it has no counterpart (no behavioural effect).
+- `FUN_1403ac3f0` drains one queued building per call and, for each of its door parts with a non-empty box, calls `FUN_1403a6070`: it logs "Door <name> open|closed at <pos>" and registers a pathfinder obstacle record (type 3 open, 4 closed) holding the door box (its size, the base lowered by a constant) in the list at `+0x138`. The open test is the door's open state (`vfunc 0x308`) or state field 1. Meitou's navmesh door areas follow the same open/closed rule ([locks](locks.md)); the obstacle box and the one-building-per-call latency are not modelled (**Observed**: no gameplay rule depends on them).
+- Character `+0x88`..`+0x98` is a handle (type, four ints); `FUN_140792310` (virtual, only a type 0 building or the null type is accepted) copies it in (`FUN_140594290`) and sets the byte at `+0x69c` to 4; `FUN_1405c7bf0` (from `FUN_1407869e0`, once per update while unpaused) counts that byte down and resets the handle to null at 0. The reader of `+0x88` was not found (**Unknown**).
+- `FUN_1407875c0` pops one record (type, four ints) from the queue at `+0x190` per call, finds the object in the thing registry (type 1: `DAT_142133f98`/`DAT_142133f90`; type 0x5b: `FUN_140791600`), takes it out of the pending list at `DAT_1421348a0+0x1d8`, and calls its virtual `+0x280` (**Verified**); it is the main-thread hand-over of objects a loader made. The producer and what `+0x280` does are **Unknown**.
+
 ## Unknowns
 
 - The start-of-new-game time of day. The saves in the install are empty; the sample save of [../formats/save.md](../formats/save.md#camera-type-56-id-1051-the-world-record) (a new game, saved at in-game day 1, 13:39) holds the `time day` / `time hour` / `time minute` and sky keys described above (**Observed** there), but the starting time itself is not traced.
