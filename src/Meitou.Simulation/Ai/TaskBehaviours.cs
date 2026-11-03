@@ -86,6 +86,11 @@ public enum AiBehaviour : byte
     /// (<see cref="Carrying.CarrySystem.LeaderToRescue"/>); the serial carry sweep lifts it (row 213, the snatch lift) once the goal is chosen.
     /// </summary>
     RescueLeader = 23,
+    /// <summary>
+    /// Crouches (CROUCH 27, <c>Task_Crouch</c>) or stands up from a crouch (STAND_UP 28, <c>Task_UnCrouch</c>) where it stands: the <c>squat T</c> clip plays forwards or backwards and the animation
+    /// stance's crouched byte is set once it passes 0.9 or cleared under 0.1 (<see cref="AnimationSystem"/>). The base data lists neither goal; modded packages may.
+    /// </summary>
+    Crouch = 24,
 }
 
 /// <summary>The engine's table from <see cref="TaskType"/> to <see cref="AiBehaviour"/>, and the TaskData display text (docs/game/ai-tasks.md "TaskData registry", Verified) of the types it acts out.</summary>
@@ -142,6 +147,8 @@ public static class TaskBehaviours
         // 248 Attacking Squad: the same finder as 101 (FUN_140793eb0, stub LAB_140006d25), the same flags and effect; no base package lists it, a mod can.
         [TaskType.DEFEAT_SQUAD_LIMIT_CHASE_RANGE] = (AiBehaviour.Assault, "Attacking squad"),
         [TaskType.FIND_AND_RESCUE_LEADER] = (AiBehaviour.RescueLeader, "Rescuing leader"),
+        [TaskType.CROUCH] = (AiBehaviour.Crouch, "Crouching"),
+        [TaskType.STAND_UP] = (AiBehaviour.Crouch, "Standing"),
         [TaskType.SELF_PRESERVATION] = (AiBehaviour.SelfPreserve, "Self preservation"),
         [TaskType.RUN_AWAY] = (AiBehaviour.Flee, "Running away"),
         [TaskType.ATTACK_ENEMIES] = (AiBehaviour.Fight, "Attacking enemies"),

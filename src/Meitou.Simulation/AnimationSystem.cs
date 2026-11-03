@@ -193,6 +193,8 @@ public sealed class AnimationSystem(AnimationLibrary library, AnimationLengths l
     {
         // Standing up from staying low plays the crouch clip backwards (Task_UnCrouch, FUN_140345fb0 / FUN_140346090: squat T at rate -1; see FinishStandUp).
         _ when cold.StandingUp && SquatClip >= 0 => SquatClip,
+        // A crouch goal (Task_Crouch 27 plays it forwards, Task_UnCrouch 28 backwards); the stance byte follows (FinishCrouch).
+        _ when CrouchGoal(cold) != 0 && SquatClip >= 0 => SquatClip,
         // The lock picker plays the cage's `animation lockpick`, else the medic clip every update it picks (Task_PickLock, FUN_140359160; the crawler's kneeling clip is chosen in Crawl).
         _ when cold.PickingLock is not null && cold.PickWork.Tick >= tick - 1 => (cold.PickWork.Clip is { } pick ? SitClipOf(pick) : -1) is >= 0 and var picking ? picking : TreatingClip,
         CharacterTask.Build or CharacterTask.DeliverMaterials or CharacterTask.Prospect => TreatingClip,
@@ -525,7 +527,7 @@ public sealed class AnimationSystem(AnimationLibrary library, AnimationLengths l
                 wanted.AddRange(upper);
                 if (stance.Combat && technique < 0 && Library.CombatGuard(stance, speed) is >= 0 and var guard) { wanted.Add((guard, 1)); a.Idle = -1; }
             }
-            else if (technique < 0 && HeldClip(task, cold, tick) is >= 0 and var held) { a.HeldIndex = held; a.HeldRate = cold.StandingUp && held == SquatClip ? -1 : cold.PickingLock is not null && cold.PickWork.Tick >= tick - 1 ? cold.PickWork.Rate : 1; wanted.Add((held, 1)); a.Idle = -1; }
+            else if (technique < 0 && HeldClip(task, cold, tick) is >= 0 and var held) { a.HeldIndex = held; a.HeldRate = cold.StandingUp && held == SquatClip ? -1 : held == SquatClip && CrouchGoal(cold) != 0 ? CrouchGoal(cold) : cold.PickingLock is not null && cold.PickWork.Tick >= tick - 1 ? cold.PickWork.Rate : 1; wanted.Add((held, 1)); a.Idle = -1; }
             else if (technique < 0)
             {
                 // A carrier standing: a whole-body idle as if it carried nothing, with the carrying arm pose (stand carrying left) over it (engine choice: the data has no whole-body carrying idle).
@@ -589,7 +591,30 @@ public sealed class AnimationSystem(AnimationLibrary library, AnimationLengths l
                 if (!Plays(a, cold, wanted[k].Index)) { wanted.RemoveAt(k); if (k < legs) legs--; }
         var root = Settle(a, wanted, legs, lift, liftTime, technique, fight, speed, dt, Lengths, 1, seed, key, tick, legsShare);
         if (cold.StandingUp) FinishStandUp(a, cold, moving: a.HeldIndex < 0);
+        else if (CrouchGoal(cold) != 0) FinishCrouch(a, cold, CrouchGoal(cold));
+        else if (cold.Crouched && cold.Ai is not null) cold.Crouched = false;   // the end of the task that crouched calls the stance setter with (0, 0)
         return root;
+    }
+
+    /// <summary>The clip direction of a crouch goal the character runs: 1 for CROUCH (27), -1 for STAND_UP (28), 0 for any other.</summary>
+    static int CrouchGoal(CharacterCold cold) => cold.Ai is { Behaviour: Ai.AiBehaviour.Crouch, Goal: { } goal } ? goal.Task.Type == Meitou.Data.Gameplay.Ai.TaskType.CROUCH ? 1 : -1 : 0;
+
+    /// <summary>The share of <c>squat T</c> past which Task_Crouch sets the crouched byte (FUN_140346440, the float at 14168a25c, 0.9).</summary>
+    const float CrouchSet = 0.9f;
+
+    /// <summary>
+    /// Task_Crouch (<paramref name="direction"/> 1) sets the animation class's crouched byte once <c>squat T</c> has passed <see cref="CrouchSet"/>; Task_UnCrouch (-1) clears it once the clip played
+    /// backwards is under <see cref="UnCrouchDone"/> (FUN_140346090). The byte is never set together with prone (<see cref="StanceOf"/>).
+    /// </summary>
+    void FinishCrouch(CharacterAnimation a, CharacterCold cold, int direction)
+    {
+        for (int k = 0; k < a.Count; k++)
+        {
+            ref var layer = ref a.Layers[k];
+            if (layer.Definition != SquatClip || layer.Length <= 0) continue;
+            if (direction > 0 && layer.Time > CrouchSet * layer.Length) cold.Crouched = true;
+            else if (direction < 0 && layer.Time < UnCrouchDone * layer.Length) cold.Crouched = false;
+        }
     }
 
     /// <summary>The share of <c>squat T</c> left at which Task_UnCrouch ends and sets the posture upright (FUN_140346090: progress below 0.1, <b>Verified</b>).</summary>

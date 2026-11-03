@@ -406,6 +406,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             AiBehaviour.Investigate => AlarmOf(world, self.Slot, type, board) is null ? 0 : 1,
             // The assault's finder factor: 1 while a member of the mission target's squad passes its tests, else 0 (FUN_140793eb0).
             AiBehaviour.RescueLeader => mind.RescueWant,
+            // Crouching is wanted always (it holds the pose while it runs); standing up (its effects !24 !25 !26) only while crouched.
+            AiBehaviour.Crouch => type == TaskType.CROUCH || world.Characters.Cold(self.Slot) is { Crouched: true } ? 1 : 0,
             AiBehaviour.Assault => targeting == TaskTargetType.SquadMission && !AssaultTargetFor(world, self.Slot, board).IsNone ? 1 : 0,
             // Self preservation: the threat level (AI slot 17); Running away: row 35's own (AI slot 55), a goal of the packages that list it.
             AiBehaviour.SelfPreserve => SelfPreservationDesire(world, self.Slot, mind),
@@ -1069,7 +1071,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
                 }
                 break;
             case AiBehaviour.RescueLeader:
-                // The carry system's sweep lifts the leader (CarrySystem.Rescue); until then it stands.
+            case AiBehaviour.Crouch:
+                // RescueLeader: the carry system's sweep lifts the leader (CarrySystem.Rescue); until then it stands. Crouch: it stands where it is; the animation system plays the clip and sets the stance.
                 Become(world, slot, CharacterTask.Idle);
                 break;
             case AiBehaviour.Turret:
@@ -1130,12 +1133,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         // Guard posts fall back to general nodes (docs/game/ai-tasks.md "Town goals"); the counter is the shopkeeper's, so only its goal falls back onto it.
         if (kind == HomeSpotKind.Guard && Pick(home, HomeSpotKind.General, mind.MemberIndex, roll) is { } general)
             return (Flat(general.Position), true, general.Position.Y, general.Yaw);
-        if (kind != HomeSpotKind.Bed && Pick(home, null, mind.MemberIndex, roll, kind != HomeSpotKind.Shopkeeper) is { } any) return (Flat(any.Position), true, any.Position.Y, any.Yaw);
-        return null;
-    }
-
         // The node goals (shopkeeper, guard, general) find a node of their own type and nothing else (FUN_14099ec70, FUN_14099f280: an empty hand, see NodeGoalFindsNothing); the others stand at any node.
-        if (kind != HomeSpotKind.Bed && !IsNodeGoal(type) && Pick(home, null, mind.MemberIndex, kind != HomeSpotKind.Shopkeeper) is { } any) return (Flat(any.Position), true, any.Position.Y, any.Yaw);
+        if (kind != HomeSpotKind.Bed && !IsNodeGoal(type) && Pick(home, null, mind.MemberIndex, roll, kind != HomeSpotKind.Shopkeeper) is { } any) return (Flat(any.Position), true, any.Position.Y, any.Yaw);
         // No bed: it sleeps in the house; a node goal without nodes stays at its own post, except staying home.
         if (kind == HomeSpotKind.Bed || type == TaskType.STAY_IN_HOME) return (Flat(home.Position), true, null, null);
         return (mind.Post, false, null, null);
