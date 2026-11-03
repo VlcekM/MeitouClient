@@ -386,7 +386,7 @@ public static class CharacterGenerator
         var maker = db.Find("1057-gamedata.base") ?? orElse;
         var model = db.Find("1058-gamedata.base");
         int level = maker.GetReferences("weapon models").Where(r => r.TargetStringId == model?.StringId).Select(r => r.Values.Value0).FirstOrDefault();
-        return (maker, model, level + (int)maker.GetFloat("overall level"));
+        return (maker, model, (int)(level + maker.GetFloat("overall level")));   // the float is added before the cut
     }
 
     /// <summary>ARMOUR / item <c>races</c> (only these may equip it; <c>races exclude</c> is then not read) and <c>races exclude</c> (docs/game/ui-screens.md, <c>RaceLimiter</c>), as <c>ItemInstance.WearableBy</c>.</summary>
