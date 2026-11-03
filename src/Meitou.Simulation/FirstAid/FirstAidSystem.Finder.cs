@@ -438,7 +438,7 @@ public sealed partial class FirstAidSystem
         var table = world.Characters;
         var next = table.Next;
         var cold = table.Cold(i)!;
-        if (cold.Medical is not { Incapacitated: false } own || cold.Race is not { } ownRace || cold.Stats is not { } stats || cold.InCombat) return -1;
+        if (cold.Medical is not { Incapacitated: false } own || cold.Race is not { } ownRace || cold.Stats is not { } stats) return -1;   // no combat test: the original's finder has none (FUN_14099e240)
         if (OwnKit(cold, ItemInfo.SplintKitFunction) is not { } kit) return -1;   // the medic's own kit, as the order and the splint use
         // No fight test in the original finder (FUN_14099e240) and the job keeps a positive desire (FUN_140998410): a player's splint job runs during a fight, as the Medic job does.
         if (!cold.IsPlayer && cold.SquadId >= 0 && world.Squads.Find(cold.SquadId) is { } squad && CharacterFacts.SquadFighting(table, squad)) return -1;
