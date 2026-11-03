@@ -475,7 +475,7 @@ sealed partial class PlayerInterface
         // The building's picture (docs/game/ui-screens.md "Building icons"): the game's saved one, else the renderer's drawing; the frame stays empty while it loads.
         if (BuildingImage(building) is { } image) b.Properties["BuildingImage"] = image;
         else b.Hidden.Add("BuildingImage");
-        b.Text["CommandsTextBox"] = string.Join('\n', BuildCommandLines);
+        b.Text["CommandsTextBox"] = BuildCommandsText();
         b.Properties["CommandsTextBox"] = new Dictionary<string, string> { ["WordWrap"] = "true", ["TextAlign"] = "Left Top", ["TextColour"] = MyGuiColours.TemplateInk(uiResources, "Kenshi_GenericTextBox") };
         b.Text["FloorText"] = Loc.Tr("Floor {1,num}", Floor?.Get() ?? 0);
         Enable("FloorArrowUp", "FloorArrowUp");
@@ -502,14 +502,19 @@ sealed partial class PlayerInterface
     }
 
     /// <summary>
-    /// The Commands box, in the original's lines and order (<c>FUN_1404d7d90</c>). The key names in the original are data strings the decompile does not show (<b>Observed</b>);
-    /// these are Meitou's keys (Space also places, Escape leaves build mode).
+    /// The Commands box (<c>FUN_1404d7d90</c>, <b>Verified</b>, the key strings read from the exe's data): per line a label in the dark tag, a space and the value in the light tag, the lines
+    /// joined by line breaks; the last reads "Press [Confirm] when finished". The texts are the original's, not Meitou's bindings (Space also places, Escape leaves build mode).
     /// </summary>
-    static readonly string[] BuildCommandLines =
-    [
-        "Place Building: Left-Click", "Clear Building: Right-Click", "Rotate: , or . keys", "Change Height: - and =", "Change Slope: [ and ]", "Undo: Backspace", "Cancel All: Escape",
-        "Press the Confirm button when finished",
-    ];
+    static string BuildCommandsText()
+    {
+        const string Label = "#140806", Value = "#afa68b";
+        static string Row(string label, string value) => Label + Loc.Tr(label) + Value + " " + value;
+        return string.Join('\n',
+            Row("Place Building:", Loc.Tr("Left-Click")), Row("Clear Building:", Loc.Tr("Right-Click")),
+            Row("Rotate:", Loc.Tr("{1} or {2} keys", "<>", ",.")), Row("Change Height:", Loc.Tr("{1} and {2}", "+", "-")),
+            Row("Change Slope:", Loc.Tr("{1} and {2}", "[", "]")), Row("Undo:", Loc.Tr("Backspace")), Row("Cancel All:", Loc.Tr("Esc")),
+            Label + Loc.Tr("Press") + " " + Value + "[" + Loc.Tr("Confirm") + "]" + Label + " " + Loc.Tr("when finished"));
+    }
 
     /// <summary>The stats panel's lines, the failure message and the queue count, over the arranged window.</summary>
     void AddBuildContent(List<UiControl> controls)
