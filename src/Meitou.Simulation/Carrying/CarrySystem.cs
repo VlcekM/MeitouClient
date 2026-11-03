@@ -1103,8 +1103,10 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
     }
 
     /// <summary>
-    /// The rescue finder (a pure read): with no fight in its squad, the nearest knocked-out member of the character's faction (<see cref="Rescues"/>) within its sight that nobody else lifts
-    /// (<paramref name="taken"/>), not an animal, not in a bed or cage; -1 for none.
+    /// The rescue finder (<c>FUN_1408cd2d0</c>, <b>Verified</b>; a pure read): with no fight in its squad, the nearest knocked-out member of the character's faction (<see cref="Rescues"/>) that nobody else
+    /// lifts (<paramref name="taken"/>), not an animal, not in a bed or cage; -1 for none. The original walks the looker's sensed ALLY entries (seen, heard or remembered, at the place they were last
+    /// sensed) with no range limit (<c>DAT_14169bc38</c> is the largest float); Meitou reads the same entries, and also every character within its sight, as the capped sense block may lack
+    /// one the original's unbounded gather would hold. A crawling ally is left out by the call's mask 0x4010 (bit 14); a downed one that is not unconscious (the original's crippled byte) is not modelled.
     /// </summary>
     int FindRescue(World world, int i, HashSet<int> taken)
     {
@@ -1112,16 +1114,26 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
         var next = table.Next;
         var cold = table.Cold(i)!;
         if (cold.SquadId >= 0 && world.Squads.Find(cold.SquadId) is { } squad && CharacterFacts.SquadFighting(table, squad)) return -1;
-        float range = AggroSystem.RangeOf(cold, Settings.Sight), best2 = range * range;
+        var here = new Vector2(next[i].Position.X, next[i].Position.Z);
+        float range = AggroSystem.RangeOf(cold, Settings.Sight), sight2 = range * range, best2 = float.MaxValue;
         int best = -1;
+        bool Qualifies(int s) =>
+            s != i && table.Next[s].Alive && !taken.Contains(s) && table.Cold(s) is { Medical: { Unconscious: true, Dead: false } } other && other.InSomething == Locks.HeldState.None
+            && other.Fighter is not { IsAnimal: true } && other.Appearance?.Animal is null && Rescues(world, cold, other) && CanBeLifted(other);
+        void Consider(int s, Vector2 at)
+        {
+            float d2 = Vector2.DistanceSquared(here, at);
+            if (d2 < best2 || d2 == best2 && best >= 0 && s < best) { best = s; best2 = d2; }
+        }
+        if (CharacterFacts.Senses(world, i) is { } senses)
+            foreach (var e in senses.Entries)
+                if ((e.Tags & SenseTag.Ally) != 0 && (uint)e.Target < (uint)table.HighWater && table.Next[e.Target].Generation == e.Generation && Qualifies(e.Target))
+                    Consider(e.Target, new Vector2(e.Place.X, e.Place.Z));
         for (int s = 0; s < table.HighWater; s++)
         {
-            if (s == i || !next[s].Alive || taken.Contains(s)) continue;
-            if (table.Cold(s) is not { Medical: { Unconscious: true, Dead: false } } other || other.InSomething != Locks.HeldState.None
-                || other.Fighter is { IsAnimal: true } || other.Appearance?.Animal is not null   // never an animal (the finder's slot 0x248 test)
-                || !Rescues(world, cold, other) || !CanBeLifted(other)) continue;
-            float d2 = Vector2.DistanceSquared(new Vector2(next[i].Position.X, next[i].Position.Z), new Vector2(next[s].Position.X, next[s].Position.Z));
-            if (d2 <= best2 && (best < 0 || d2 < best2)) { best = s; best2 = d2; }
+            if (!Qualifies(s)) continue;
+            var at = new Vector2(next[s].Position.X, next[s].Position.Z);
+            if (Vector2.DistanceSquared(here, at) <= sight2) Consider(s, at);
         }
         return best;
     }
