@@ -1593,6 +1593,18 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
         }
     }
 
+    /// <summary>The chase age in sense-age units past which the plan is reset every tick (<c>FUN_14033a800</c>, Verified literal 60: 1.1 game hours).</summary>
+    public const float ChaseResetSenseUnits = 60;
+
+    /// <summary>The plan reset (<c>FUN_1405074a0</c>): the pending steps and the committed goal are dropped, so the next think chooses again.</summary>
+    static void ResetPlan(CharacterCold cold)
+    {
+        if (cold.Ai is not { } mind) return;
+        mind.Plan.Clear();
+        mind.CommitUntil = 0;
+        mind.Replan = true;
+    }
+
     /// <summary>
     /// The original's chase give-up (<c>ChaseMode</c>, docs/game/combat.md "Leaving a fight"), read from the chaser's sense entry of its target: after <see cref="GiveUpGateSeconds"/> of a
     /// chase, a target with no entry is given up, and one its last look did not sense when the entry is older than <see cref="GiveUpSenseSeconds"/> or the chaser stands within
@@ -1610,6 +1622,8 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
         }
         if (s.ChaseStart < 0) s.ChaseStart = world.Tick;
         if ((world.Tick - s.ChaseStart) * world.TickSeconds < GiveUpGateSeconds) return;
+        // Past 60 sense-age units (1.1 game hours) of chase the plan is reset on every tick while it goes on (FUN_14033a800).
+        if ((world.Tick - s.ChaseStart) * world.TickSeconds > ChaseResetSenseUnits * SenseUnitSeconds) ResetPlan(cold);
         SenseEntry entry = default;
         bool known = s.Senses is { } senses && senses.TryGet(new CharacterId(t, next[t].Generation), out entry);
         if (known && entry.Now) return;
@@ -1618,6 +1632,7 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
         if (Vector2.DistanceSquared(here, new Vector2(next[t].Position.X, next[t].Position.Z)) < GiveUpReach * GiveUpReach && (table.Cold(t)!.Orders & CharacterOrders.Sneak) == 0) return;
         if (known && (world.Tick - entry.Tick) * world.TickSeconds <= GiveUpSenseSeconds && Vector2.DistanceSquared(here, new Vector2(entry.Place.X, entry.Place.Z)) >= GiveUpReach * GiveUpReach) return;
         s.ChaseStart = -1;
+        ResetPlan(cold);   // the caller ends the task and resets the plan (FUN_14034ca40:36-48): the next think plans afresh
         world.Defer(new StopCommand([table.IdOf(i)]) { Tick = world.Tick + 1 });
         world.Defer(new Dialogue.DialogueEvent(table.IdOf(i), table.IdOf(t), 60) { Tick = world.Tick + 1 });
     }
