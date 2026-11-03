@@ -300,7 +300,7 @@ public static class Orders
                 break;
             case StandUpCommand stand:
                 foreach (var id in stand.Characters)
-                    if (table.TryResolveNext(id, out int slot) && table.Cold(slot) is { IsPlayer: true, Medical: { } medical }) medical.StayingLow = false;
+                    if (table.TryResolveNext(id, out int slot) && table.Cold(slot) is { IsPlayer: true, Medical: { StayingLow: true } } staying) staying.StandingUp = true;
                 break;
         }
     }

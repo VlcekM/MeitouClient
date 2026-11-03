@@ -169,6 +169,29 @@ public class AnimationTests
     }
 
     [Fact]
+    public void Stand_up_plays_the_crouch_clip_backwards_and_stands_when_it_is_under_a_tenth()
+    {
+        // docs/game/ragdolls.md "Staying low": the Stand Up order (28) is Task_UnCrouch, `squat T` at rate -1 until its progress is under 0.1 (FUN_140346090).
+        var lib = new AnimationLibrary([Def("stand 1", AnimationArea.All, idle: true, right: 0), Def("squat T", AnimationArea.All, play: 1)]);
+        var system = new AnimationSystem(lib, new AnimationLengths().Add("squat T", 2f));
+        var body = BodyFixtures.Healthy();
+        body.StayingLow = true;
+        var cold = new CharacterCold { Medical = body, StandingUp = true };
+        var a = new CharacterAnimation();
+        const float dt = 1 / 30f;
+        int squat = lib.IndexOf("squat T");
+        system.Update(a, cold, 0, dt, 1, 1, 0);
+        Assert.True(cold.StandingUp);
+        float first = Enumerable.Range(0, a.Count).Select(k => a.Layers[k]).First(l => l.Definition == squat).Time;
+        Assert.True(first > 1.8f);
+        int ticks = 1;
+        while (cold.StandingUp && ticks < 200) system.Update(a, cold, 0, dt, 1, 1, ticks++);
+        Assert.False(body.StayingLow);
+        // From 1.998 down to 0.2 at one clip second per second: about 54 ticks.
+        Assert.InRange(ticks, 50, 60);
+    }
+
+    [Fact]
     public void A_stopped_crawler_whose_leg_is_past_minus_101_per_cent_still_plays_a_crawl_idle()
     {
         // The records' leg minimum -999 is read as -101, so a severed leg (health under -100 %) fits no crawl idle; the original's idle draw (FUN_14051ec80) then takes the first of

@@ -179,6 +179,8 @@ public sealed class AnimationSystem(AnimationLibrary library, AnimationLengths l
     /// <summary>The whole-body clip held while a character takes a building apart (<c>stonemine</c>, <b>Verified</b>: <c>Task_Dismantle</c>); -1 when the data has none.</summary>
     int DismantlingClip { get; } = library.IndexOf("stonemine");
     /// <summary>The carrier's lift clip (<c>shoulder lift left</c>, played backwards to put down) and a carried body's held pose (<c>carry me</c>, a category 3 record the library appends); -1 when the data has none.</summary>
+    /// <summary>The crouch clip Task_Crouch plays forwards and Task_UnCrouch backwards (<c>squat T</c>, FUN_140346360 / FUN_140345fb0).</summary>
+    int SquatClip { get; } = library.IndexOf("squat T");
     int LiftClip { get; } = library.IndexOf(Carrying.CarrySystem.LiftClip);
     /// <summary>The overlay that holds a carrier's arm on the body (<c>carrying left arm only</c>: <c>override L arm</c>, every other bone deleted): <b>Verified</b>, <c>FUN_140520000</c> plays it every frame a character carries.</summary>
     int CarryArmClip { get; } = library.IndexOf("carrying left arm only");
@@ -189,6 +191,8 @@ public sealed class AnimationSystem(AnimationLibrary library, AnimationLengths l
     // Resting on a chair plays the clip its functionality names ("sitting chair"), else sitting on the floor.
     int HeldClip(CharacterTask task, CharacterCold cold, long tick) => task switch
     {
+        // Standing up from staying low plays the crouch clip backwards (Task_UnCrouch, FUN_140345fb0 / FUN_140346090: squat T at rate -1; see FinishStandUp).
+        _ when cold.StandingUp && SquatClip >= 0 => SquatClip,
         // The lock picker plays the cage's `animation lockpick`, else the medic clip every update it picks (Task_PickLock, FUN_140359160; the crawler's kneeling clip is chosen in Crawl).
         _ when cold.PickingLock is not null && cold.PickWork.Tick >= tick - 1 => (cold.PickWork.Clip is { } pick ? SitClipOf(pick) : -1) is >= 0 and var picking ? picking : TreatingClip,
         CharacterTask.Build or CharacterTask.DeliverMaterials or CharacterTask.Prospect => TreatingClip,
@@ -521,7 +525,7 @@ public sealed class AnimationSystem(AnimationLibrary library, AnimationLengths l
                 wanted.AddRange(upper);
                 if (stance.Combat && technique < 0 && Library.CombatGuard(stance, speed) is >= 0 and var guard) { wanted.Add((guard, 1)); a.Idle = -1; }
             }
-            else if (technique < 0 && HeldClip(task, cold, tick) is >= 0 and var held) { a.HeldIndex = held; a.HeldRate = cold.PickingLock is not null && cold.PickWork.Tick >= tick - 1 ? cold.PickWork.Rate : 1; wanted.Add((held, 1)); a.Idle = -1; }
+            else if (technique < 0 && HeldClip(task, cold, tick) is >= 0 and var held) { a.HeldIndex = held; a.HeldRate = cold.StandingUp && held == SquatClip ? -1 : cold.PickingLock is not null && cold.PickWork.Tick >= tick - 1 ? cold.PickWork.Rate : 1; wanted.Add((held, 1)); a.Idle = -1; }
             else if (technique < 0)
             {
                 // A carrier standing: a whole-body idle as if it carried nothing, with the carrying arm pose (stand carrying left) over it (engine choice: the data has no whole-body carrying idle).
@@ -583,7 +587,27 @@ public sealed class AnimationSystem(AnimationLibrary library, AnimationLengths l
         if (Rigs is not null)
             for (int k = wanted.Count - 1; k >= 0; k--)
                 if (!Plays(a, cold, wanted[k].Index)) { wanted.RemoveAt(k); if (k < legs) legs--; }
-        return Settle(a, wanted, legs, lift, liftTime, technique, fight, speed, dt, Lengths, 1, seed, key, tick, legsShare);
+        var root = Settle(a, wanted, legs, lift, liftTime, technique, fight, speed, dt, Lengths, 1, seed, key, tick, legsShare);
+        if (cold.StandingUp) FinishStandUp(a, cold, moving: a.HeldIndex < 0);
+        return root;
+    }
+
+    /// <summary>The share of <c>squat T</c> left at which Task_UnCrouch ends and sets the posture upright (FUN_140346090: progress below 0.1, <b>Verified</b>).</summary>
+    const float UnCrouchDone = 0.1f;
+
+    /// <summary>
+    /// Ends the Stand Up order (task 28, Task_UnCrouch) when the crouch clip played backwards is under <see cref="UnCrouchDone"/> of its length; with no clip to play, or a character that
+    /// is not holding still for it (a walker plays no held clip), at once (the old instant reset).
+    /// </summary>
+    void FinishStandUp(CharacterAnimation a, CharacterCold cold, bool moving)
+    {
+        bool done = moving || SquatClip < 0;
+        if (!done)
+            for (int k = 0; k < a.Count && !done; k++)
+                done = a.Layers[k].Definition == SquatClip && a.Layers[k].Length > 0 && a.Layers[k].Time < UnCrouchDone * a.Layers[k].Length;
+        if (!done) return;
+        cold.StandingUp = false;
+        if (cold.Medical is { } medical) medical.StayingLow = false;
     }
 
     /// <summary>
@@ -661,6 +685,7 @@ public sealed class AnimationSystem(AnimationLibrary library, AnimationLengths l
                 // A clip that never advances (the stances: play speed 0) holds its first frame, as the editor and the portraits show it.
                 float start = d.Loop && !d.IsAction && !d.Technique && index != a.Action && index != lift && (d.PlaySpeed > 0 || d.MoveSpeed != 0)
                     ? Rng.Float(Rng.Hash(seed, key, RngPurpose.Animation, (ulong)tick ^ ((ulong)index << 32) ^ 0x4C4F4F50UL)) * lengths.Of(d.Clip) : 0;
+                if (index == a.HeldIndex && a.HeldRate < 0) start = lengths.Of(d.Clip) * 0.999f;   // played backwards from its end
                 a.Layers[k] = new CharacterAnimation.Layer { Definition = index, Weight = first ? weight : 0, Time = start };
             }
             a.Layers[k].Target = weight;

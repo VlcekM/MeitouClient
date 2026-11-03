@@ -537,7 +537,7 @@ ranged-weapon wielder, not built), and ends with the sound `Right_Click`. 235 Sh
 A right click on the ground (`PlayerInterface::playerMove`) is order 29 through the same path; how an order replaces a fight: [combat](combat.md#fight-lifecycle-and-orders).
 **Unknown**: slots 34, 102 and the +0x260 handle (read here as the lead's turret, as it swaps every attack for 235); `FUN_1405c9750` (KenshiLib `Character::isStealthMode`) returns
 the sneak flag +0xd4 unless the fight is on (`isInCombatMode`, CombatClass +0x130); where a cage opens its menu at once. 28 Stand Up is AI task 28
-(`Task_UnCrouch`, [staying low](ragdolls.md#staying-low)); Meitou stands the selection at once.
+(`Task_UnCrouch`, [staying low](ragdolls.md#staying-low)); Meitou plays the same backward clip (`CharacterCold.StandingUp`, `AnimationSystem.FinishStandUp`).
 
 Seats (**Observed**, live vanilla Kenshi 1.0.68 on Windows, compared with Meitou Metal using the same copied tavern save): the central stool, wall bench and side stool offer Use on a held right click. Use walks to the seat, sits facing the nearby table and shows Operating machine. Stop stands and shows Aimless; a ground move exits sitting. Menu dimensions and title casing differ in Meitou. An expanded **Observed** native-Windows/Meitou-Metal comparison used identical authored, player-owned vanilla fixtures for all nine BF_CHAIR/BF_THRONE building records:
 
