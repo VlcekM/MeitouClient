@@ -58,7 +58,7 @@ public sealed partial class ProductionSystem
             if (m.Data.IsWind) (m.Wind, m.WindRated) = (WindShare(world, m), Rated(world, m));
             if (m.Data.Function == MachineData.RainCollectorFunction)
                 m.Rain = !m.Indoors && world.Weather?.At(m.Position.X, m.Position.Z) is { Affect: not WeatherAffecting.Acid } here ? here.Wetness : 0;
-            if (!m.Data.IsConsumer && !m.Data.IsGenerator && !m.Data.IsBattery || Site(world, m.Site) is not { Complete: true } site)
+            if (!m.Data.IsConsumer && !m.Data.IsGenerator && !m.Data.IsBattery || IsTownWork(m.Site) || Site(world, m.Site) is not { Complete: true } site)
             {
                 m.Power = 1;
                 continue;

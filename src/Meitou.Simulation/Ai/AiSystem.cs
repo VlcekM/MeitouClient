@@ -554,7 +554,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     const int WorkFunctions = 0x41a;
 
     /// <summary>How near a worker's building it stands (units; engine choice: the functionality's <c>use range</c> is not read for the town's buildings).</summary>
-    const float WorkReach = 30;
+    internal const float WorkReach = 30;
 
     readonly System.Collections.Concurrent.ConcurrentDictionary<string, string> workClips = new(StringComparer.Ordinal);
 
@@ -936,6 +936,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
                 Patrol(world, slot, mind, board);
                 break;
             case AiBehaviour.Work:
+                mind.WorkOperate = null;
+                mind.CollectFrom = null;
                 if (mind.Target is null)
                 {
                     if (mind.WorkActive) mind.WorkEpoch++;
@@ -946,6 +948,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
                         mind.WorkClip = WorkClipOf(building);
                         mind.WorkFunctionality = WorkFunctionalityOf(building);
                         mind.WorkHungerRate = WorkHungerRateOf(building);
+                        mind.WorkBuilding = building;
+                        mind.WorkOwner = WorkOwnerOf(board.Town);
                     }
                 }
                 if (mind.Target is not { } working) Become(world, slot, CharacterTask.Idle);
@@ -960,6 +964,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
                         workerCold.ActionClip = mind.WorkClip;
                         workerCold.ActionWork = StandingWork(mind.WorkFunctionality, mind.WorkClip);
                     }
+                    WorkAtMachine(mind, type);
                 }
                 break;
             case AiBehaviour.Investigate:

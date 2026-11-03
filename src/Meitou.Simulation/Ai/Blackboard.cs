@@ -471,6 +471,12 @@ public sealed class AiMind
     /// </summary>
     public int WorkEpoch { get; set; }
     public bool WorkActive { get; set; }
+    /// <summary>The town building it operates this tick (Task_OperateMachine, row 87, at the building) or empties the output of (row 92), and the faction owning its machine; set by the think, applied by <see cref="Production.ProductionSystem"/> (derived, not hashed).</summary>
+    public Meitou.Data.World.TownBuilding? WorkOperate { get; set; }
+    public Meitou.Data.World.TownBuilding? CollectFrom { get; set; }
+    public int WorkOwner { get; set; }
+    /// <summary>The building its work goals picked (set with <see cref="WorkClip"/>).</summary>
+    public Meitou.Data.World.TownBuilding? WorkBuilding { get; set; }
     /// <summary>The clip it plays at its work (the ANIMATION its building's functionality names), cleared with <see cref="CharacterCold.ActionClip"/> when it stops; null when not working.</summary>
     public string? WorkClip { get; set; }
     /// <summary>Its work building's BUILDING_FUNCTIONALITY (string id; null without one), whose <c>animation events</c> sound on <see cref="WorkClip"/>. Set with it, so not hashed.</summary>

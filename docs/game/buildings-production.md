@@ -459,7 +459,7 @@ rock) makes output only while someone operates it.
   KenshiLib 1ce4a16; [ui-input](ui-input.md#context-menu-verbs)); `Task_OperateMachine`'s start (`FUN_14035b430`) only asks `tryOperate` (slot `0x4f8`:
   `UseableStuff` `FUN_1400f8030`, `CraftingBuilding` `FUN_1402b5bf0`: refused when `dontNeedWorkRightNow` or every operator slot is taken), no owner test;
   for a foliage building (a rock) of no player owner it then makes the player's faction its owner. The output stays in the machine, so taking it is looting
-  another faction's inventory (26). Meitou: not built, NPC town buildings are not `Machine`s ([simulation](../simulation.md#production)).
+  another faction's inventory (26). Meitou: [NPC town machines](#npc-town-machines).
 - **Automatic machines** (**Verified**, decompile): +0x3ac (`numOperatorsMax`, KenshiLib 1ce4a16) is the BUILDING's `max operators`
   unless below 0, then the functionality's (`FUN_1402a3750`, `FUN_14029e460`); +0x3a9 "has operators" = that value is neither 0 nor from two negatives.
   With +0x3a9 clear (raw 0, or both records negative), `ProductionBuilding::vfunc_28` (`FUN_14029ad90`, each frame) calls slot 150 itself with no operator and s = 1, so the machine
@@ -595,7 +595,7 @@ field prefixes by MiningResource: `iron`, `stone`, `copper`, `carbon`, `water`, 
 - **NPC mines** (**Observed**, two saves of one game): NPC towns' mines have production states; Quarry Mine A 14 of 16,
   Quarry Mine B 16 of 18 and Stone Mine 8 of 8 with `production amount` > 0 (at most 0.19), none holding output items; Ore
   Mine 0 of 8; Ore Drill III (Automated) `resource mult` 0.5 (the not-player fallback). So NPCs work them (the town goal 43
-  Staying home leads to 221 operating, [ai-tasks](ai-tasks.md#town-goals)). **Unknown:** what empties an NPC mine's output.
+  Staying home leads to 221 operating, [ai-tasks](ai-tasks.md#town-goals)). What empties an NPC mine's output: [NPC town machines](#npc-town-machines).
 
 - **Rain collector** (function 26, `RainCollectorBuilding`, vtable `1416eca48`; **Verified**, decompile): a ProductionBuilding that overrides slot 109 (health x power share, `FUN_140296e00`)
   with `FUN_140298470` = that times the rain strength `FUN_140298400`: the current weather's `wetness` at the building (when the building is outdoors), 0 when the weather's
@@ -936,6 +936,28 @@ storage` (function 2); Large Barrels also hold Water. Other `itemtype limit`s (*
 (Armour Storage, Armour Stand), WEAPON (weapon stands, cabinets, display boards), CROSSBOW (Crossbow Locker); none takes
 CONTAINER (backpacks). Shop counters (function 9) have no type limit in Meitou (`IsStorage` is functions 2 and 13 only).
 
+
+### NPC town machines
+
+- **Output add** (`FUN_1402984b0`, **Verified**): when a producer's accumulator reaches 1 and its output inventory cannot take the item, the accumulator resets to 0, so a full output loses
+  the progress (and `isMachineOutputFull`, status 1, stops the operators: row 87 needs !63). Nothing else in the production building removes items.
+- **Who empties it** (**Verified**, a scan of every AI package in the merged data): rows 87, 92, 93, 113, 114, 124, 152, 221, 242 and 247 are in no package; NPCs reach them only through
+  the planner from goal 189 (effect IS_WORKING, provider 87: needs !63, !62, !89, !169) and the player's jobs. For a full output the provider of !63 is 92 (`Task_EmptyMachine`,
+  `FUN_14033cd10`: needs 82 room for the machine's output item and isAtLocation); for no room the provider of 82 is 114 (a `Task_Blank` goal whose effect !62 on a storage is provided by
+  93 `Task_FillMachine`, `FUN_140344510`, needing 67 something the storage accepts is carried), its finder `FUN_1405a70a0` = the nearest storage that accepts a carried item type
+  (stored items are put in through `FUN_140340da0`). A workplace the plan cannot make runnable (inputs to fetch: 94 then 66 from another machine's output, 113) fails goal 189, and goal 190
+  (pretend, row 221, which asks nothing of the machine) is what the NPC does.
+- **Task_EmptyMachine** (`FUN_14033cd10`, **Verified**): at the building, takes its output item types in order and moves units into the character's inventory while there is room
+  (backpack included); a production building at status 1 goes to 2 after a take; ends when nothing is left.
+- **State evaluators** (**Observed**, read from the decompile, meanings of the virtual calls inferred): 66 `FUN_140597530` the character carries the machine's output item; 67 `FUN_1405a45f0` it carries an item the machine (an input) or storage accepts;
+  82 `FUN_14059bd80` inventory or worn backpack has room for the target's item (a machine: its output item); 105 `FUN_1405a2c40` machine output empty; 169 `FUN_1405975d0` input invalid
+  (production type 6 flag).
+- **Meitou** (`ProductionSystem.TownWork`, `AiSystem.WorkAtMachine`): the town building a worker of goal 189 stands at is a virtual complete site `townwork:<building key>` of the town's
+  faction (like a rock or a training dummy: no registry site, not drawn, saved or built; its machine is kept in memory), made when the first worker arrives. A worker whose plan starts with
+  87 operates it every tick (skill factor, operating XP: the player's operator lines), with 92 empties it into its inventory. Only producers run: a research bench counts for the player's
+  research alone and a crafting bench with no queue refuses an operator, so both stay pretence. Not modelled: rows 94/113/93/114 (fetching inputs from other machines, ditching into a
+  storage: NPC town storages are not machines), so a refinery's workers pretend and a worker with a full inventory pretends. Unpowered: town machines draw no player grid (power held true).
+  A town machine is no player machine for the hauling jobs (`ProductionSystem.Takes`).
 ### Hauling
 
 - **Tasks** (**Verified** classes, **Observed** meaning): `Task_EmptyMachine` (92 "Collecting resource", 284 "Looting")

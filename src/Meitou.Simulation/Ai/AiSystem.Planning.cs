@@ -23,7 +23,7 @@ public sealed partial class AiSystem
     /// </summary>
     static bool Carried(TaskType step) => step is TaskType.MOVE_ON_FREE_WILL or TaskType.MOVE_ON_FREE_WILL_FAST or TaskType.TRAVEL_TO_TARGET_TOWN
         or TaskType.TRAVEL_TO_TARGET_TOWN_FAST or TaskType.STAND_AT_NODE or TaskType.BUY_SHIT
-        or TaskType.USE_BED or TaskType.USE_BED_ORDER or TaskType.USE_TURRET or TaskType.OPERATE_MACHINERY or TaskType.PRETEND_TO_OPERATE_MACHINERY or TaskType.UNEQUIP_WEAPON
+        or TaskType.USE_BED or TaskType.USE_BED_ORDER or TaskType.USE_TURRET or TaskType.OPERATE_MACHINERY or TaskType.COLLECT_OUTPUT_RESOURCE or TaskType.PRETEND_TO_OPERATE_MACHINERY or TaskType.UNEQUIP_WEAPON
         or TaskType.GET_OUT_OF_BED or TaskType.GET_OUT_OF_BED_IF_ITS_EMERGENCY or TaskType.GET_OUT_OF_BED_ONCE_HEALED
         or TaskType.EQUIP_WEAPON or TaskType.EQUIP_CROSSBOW or TaskType.GO_HOMEBUILDING or TaskType.GET_NEAR_TO
         or TaskType.ENTER_BUILDING or TaskType.LEAVE_BUILDING;
@@ -136,9 +136,9 @@ public sealed partial class AiSystem
         /// </summary>
         Meitou.Simulation.Production.Machine? MachineAt(in PlanTarget t)
         {
-            if (t.Kind != Targets.Machine) return null;
+            if (t.Kind is not (Targets.Machine or Targets.Work)) return null;
             foreach (var m in world.Machines.All)
-                if (m.Position.X == t.Position.X && m.Position.Z == t.Position.Z) return m;
+                if (m.Position.X == t.Position.X && m.Position.Z == t.Position.Z && (t.Kind == Targets.Machine || Production.ProductionSystem.IsTownWork(m.Site))) return m;
             return null;
         }
 
@@ -168,6 +168,8 @@ public sealed partial class AiSystem
                 StateType.machineHasEmptyInputs => MachineAt(target)?.HasEmptyInputs == true,
                 StateType.isMachineOutputFull => MachineAt(target)?.OutputBlocked == true,
                 StateType.isMachineJammed => MachineAt(target)?.Jammed == true,
+                // 82 of a machine target (FUN_14059bd80): room in the inventory or the worn backpack for a unit of its output item.
+                StateType.gotInventoryRoomForResources => MachineAt(target) is { Output: { } room } && cold.Inventory is { } bag && system.Data.Items.Create(room.Recipe.Item, 1) is { } unit && bag.HasRoomFor(unit),
                 // 5: a weapon in hand that is not ranged; 156: a ranged one (FUN_140596a30 / FUN_140596a70, Verified); 157's evaluator is an undecoded stub.
                 StateType.hasWeaponEquipped => cold.DrawnWeapon != WeaponKinds.None && cold.DrawnWeapon != BowHold,
                 StateType.hasWeaponEquipped_156 => cold.DrawnWeapon == BowHold,

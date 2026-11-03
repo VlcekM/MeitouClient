@@ -197,6 +197,37 @@ public class ProductionTests
         return hashes;
     }
 
+    /// <summary>
+    /// A town building an NPC worker of goal 189 stands at is a machine of the town's faction, made when it arrives (docs/game/buildings-production.md "NPC town machines"): with row 87 first in its
+    /// plan it operates it and the output grows; with row 92 first it empties the output into its inventory (<c>Task_EmptyMachine</c>) and a full output (status 1) goes back to 2.
+    /// </summary>
+    [Fact]
+    public void An_npc_worker_operates_its_town_buildings_machine_and_then_empties_its_output()
+    {
+        using var rig = new Rig(Database(), Constants, []);
+        const int Town = 7;
+        var building = new TownBuilding("well", Well, "Well", At, 0, false, false, []);
+        var stats = new CharacterStats();
+        stats[StatsEnumerated.Labouring] = Unit;
+        var squad = new Squad { Id = 1, TemplateId = "t", Faction = Town };
+        var cold = new CharacterCold { Name = "miner", Race = Human, Stats = stats, Medical = MedicalState.Create(Human, 50), Inventory = new Inventory(), Faction = Town };
+        cold.Ai = new Meitou.Simulation.Ai.AiMind { Squad = squad, Behaviour = Meitou.Simulation.Ai.AiBehaviour.Work, WorkOperate = building, WorkOwner = Town };
+        var worker = rig.World.Characters.Spawn(new CharacterHot { Position = At + new Vector3(0, 0, 10), MaxSpeed = 40, WalkSpeed = 15, Task = (byte)CharacterTask.Idle }, cold, 0);
+        rig.World.RunTicks(600);
+        var machine = rig.World.Machines.Find(ProductionSystem.TownWorkId(building));
+        Assert.NotNull(machine);
+        Assert.True(machine.Output!.Count > 0);
+        int made = machine.Output.Count;
+
+        machine.Status = 1;
+        cold.Ai.WorkOperate = null;
+        cold.Ai.CollectFrom = building;
+        rig.World.RunTicks(2);
+        Assert.Equal(0, machine.Output.Count);
+        Assert.Equal(2, machine.Status);
+        Assert.Equal(made, cold.Inventory!.All().Where(i => i.Record == Water).Sum(i => i.Quantity));
+    }
+
     // ------------------------------------------------------------------ items and research costs
 
     /// <summary>

@@ -52,7 +52,7 @@ public sealed partial class ProductionSystem
     public static bool IsNatural(string id) => id.StartsWith(NaturalPrefix, StringComparison.Ordinal);
 
     /// <summary>A player site of the registry, else the rock a natural id names, else a town seat or training dummy; null for none.</summary>
-    BuildSite? Site(World world, string id) => world.Buildings.Find(id) ?? Seat(world, id) ?? Natural(id) ?? TownDummy(world, id);
+    BuildSite? Site(World world, string id) => world.Buildings.Find(id) ?? Seat(world, id) ?? Natural(id) ?? TownDummy(world, id) ?? TownWorkSite(id);
 
     readonly Dictionary<string, BuildSite> dummySites = new(StringComparer.Ordinal);
 

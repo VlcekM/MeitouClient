@@ -435,7 +435,7 @@ public sealed partial class ProductionSystem
 
     /// <summary>A carried item a "Hauling to" job takes to its storage: a loose stack of something a player machine makes (not the character's own kit), that the storage takes and has room for.</summary>
     static bool Takes(World world, Machine store, Items.ItemInstance item) =>
-        Stores(store, item) && world.Machines.All.Any(s => !s.Data.IsStorage && s.Output?.Recipe.Item == item.Record);
+        Stores(store, item) && world.Machines.All.Any(s => !s.Data.IsStorage && !IsTownWork(s.Site) && s.Output?.Recipe.Item == item.Record);
 
     /// <summary>A loose stack (not the character's own kit) the storage takes and has room for.</summary>
     internal static bool Stores(Machine store, Items.ItemInstance item) =>
