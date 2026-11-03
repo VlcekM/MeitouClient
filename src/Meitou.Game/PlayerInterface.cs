@@ -41,7 +41,7 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
 
     /// <summary>
     /// The active squad's members in squad order, the first leading (the squad bar's; the number keys and select_all pick from them, the original's <c>UiSelectSquadMember</c> /
-    /// <c>UiSelectAllInSquad</c>). The squad of the first selected character, else the first squad, when the active one is unknown; none without a squad list.
+    /// <c>UiSelectAllInSquad</c>). The squad of the first selected character, else the first squad, when the active one is unknown; every player character in a world with no squad list.
     /// </summary>
     IReadOnlyList<CharacterId> ActiveSquadMembers()
     {
@@ -50,7 +50,7 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
         var firstSelected = Selected().Count > 0 ? Selected()[0].Id : CharacterId.None;
         var squad = snapshot.PlayerSquads.FirstOrDefault(s => s.Id == snapshot.ActiveSquad)
             ?? snapshot.PlayerSquads.FirstOrDefault(s => s.Members.Contains(firstSelected)) ?? snapshot.PlayerSquads.FirstOrDefault();
-        if (squad is null) return [];
+        if (squad is null) return snapshot.PlayerSquads.Count == 0 ? PlayerCharacters() : [];   // a world with no squad list at all (tests, bare sessions) keeps every player character
         var present = PlayerCharacters().ToHashSet();
         return [.. squad.Members.Where(present.Contains)];
     }
