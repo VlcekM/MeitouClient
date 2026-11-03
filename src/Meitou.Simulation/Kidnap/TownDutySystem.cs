@@ -508,9 +508,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     static bool InScope(World world, CampaignTown town, Vector3 at, CampaignTown storeTown, Vector3 storePosition)
     {
         if (!town.IsNone) return storeTown == town;
-        var a = Meitou.Data.World.WorldLayout.ZoneOf(at.X, at.Z);
-        var b = Meitou.Data.World.WorldLayout.ZoneOf(storePosition.X, storePosition.Z);
-        return Math.Abs(a.X - b.X) <= 1 && Math.Abs(a.Y - b.Y) <= 1;
+        return Meitou.Data.World.WorldLayout.WithinOneZone(at.X, at.Z, storePosition.X, storePosition.Z);
     }
 
     /// <summary>Food the finder looks for (<c>FUN_14042ee50</c>): <c>item function</c> 3, and raw food (15) for an animal or when the race's special food lists it.</summary>

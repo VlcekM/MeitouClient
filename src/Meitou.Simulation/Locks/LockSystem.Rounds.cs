@@ -222,13 +222,11 @@ public sealed partial class LockSystem : IStateHashed
     {
         var table = world.Characters;
         var at = table.Next[jailer].Position;
-        var cell = WorldLayout.ZoneOf(at.X, at.Z);
         int town = jc.Ai?.Squad.Ai?.Town ?? -1;
         foreach (var f in world.Fixtures.All)
         {
             if (f.Kind != FixtureKind.Cage || f.Owner != jc.Faction || town >= 0 && f.Site != town || FixtureRegistry.IsFree(table, f)) continue;
-            var there = WorldLayout.ZoneOf(f.Position.X, f.Position.Z);
-            if (Math.Abs(there.X - cell.X) > 1 || Math.Abs(there.Y - cell.Y) > 1) continue;
+            if (!WorldLayout.WithinOneZone(at.X, at.Z, f.Position.X, f.Position.Z)) continue;
             if (!table.TryResolveNext(f.Occupant, out int p) || Served(world, p) != f || Busy(f.Occupant)) continue;
             return f;
         }

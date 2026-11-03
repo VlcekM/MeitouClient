@@ -112,12 +112,10 @@ public sealed partial class CaptiveSystem
     /// </summary>
     IEnumerable<Fixture> NearbyCages(World world, int site, Vector3 at, int faction)
     {
-        var here = WorldLayout.ZoneOf(at.X, at.Z);
         IEnumerable<Fixture> all = site >= 0 ? CagesOf(world, site) : world.Fixtures.All.Where(f => f.Kind == FixtureKind.Cage);
         foreach (var f in all)
         {
-            var cell = WorldLayout.ZoneOf(f.Position.X, f.Position.Z);
-            if (f.Owner == faction && Math.Abs(cell.X - here.X) <= 1 && Math.Abs(cell.Y - here.Y) <= 1) yield return f;
+            if (f.Owner == faction && WorldLayout.WithinOneZone(at.X, at.Z, f.Position.X, f.Position.Z)) yield return f;
         }
     }
 
