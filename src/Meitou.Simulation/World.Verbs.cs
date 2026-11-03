@@ -28,6 +28,10 @@ public readonly record struct VerbFacts(bool RegardsLead, bool LeadRegards, bool
 
 public sealed partial class World
 {
+    /// <summary>The result of the arrival banter try <paramref name="serial"/> (<see cref="Dialogue.AreaArrival"/>): null while it has not run yet, else whether the host forgets the group; true without a dialogue system.</summary>
+    public bool? ArrivalForget(int serial) =>
+        SystemOf<Dialogue.DialogueSystem>() is not { } dialogue ? true : dialogue.ArrivalResult is var (done, forget) && done == serial ? forget : null;
+
     /// <summary>
     /// Whether <paramref name="who"/> regards <paramref name="of"/> as friendly (Character slot 126, <see cref="Dialogue.DialogueSystem.RegardsFriendly(World, int, int)"/>); the host asks between
     /// ticks. False without a dialogue system.

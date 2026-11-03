@@ -55,10 +55,39 @@ sealed partial class PlayerInterface
                 biomeShown = false;
                 // On hiding the game tests the group's `arrival dialog`: squad banter (PlayerInterface::triggerAreaArrivalDialogue).
                 // It reads the group under the pivot this frame (FUN_1408015d0 gets the current holder), not the stored one.
-                Say(new Meitou.Simulation.Dialogue.AreaArrival(here.Id) { Tick = session.World.Tick });
+                TryArrival(here.Id);
             }
         }
         if (!blocked) biomeGroup = here.Id;
+        RetryArrival(here.Id);
+    }
+
+    /// <summary>The group whose arrival banter is still being tried (<c>DAT_142132c70</c>), the try's serial and when it was last made (wall clock).</summary>
+    string? arrivalGroup;
+    int arrivalSerial;
+    long arrivalAt;
+
+    /// <summary>Between banter tries: the real time between them (<c>DAT_14167fad4</c>).</summary>
+    const double ArrivalRetrySeconds = 10;
+
+    /// <summary>Stores the group with the time and makes the first try (<c>FUN_1408015d0</c>).</summary>
+    void TryArrival(string group)
+    {
+        arrivalGroup = group;
+        arrivalAt = Stopwatch.GetTimestamp();
+        Say(new Meitou.Simulation.Dialogue.AreaArrival(group, ++arrivalSerial) { Tick = session.World.Tick });
+    }
+
+    /// <summary>
+    /// Every frame (<c>FUN_140801540</c>): the stored group is dropped when the group under the pivot is another, or when the last try's result says to forget it; else after more than 10 s
+    /// of real time since the last try the banter is tried again.
+    /// </summary>
+    void RetryArrival(string here)
+    {
+        if (arrivalGroup is not { } group) return;
+        bool? forget = session.World.ArrivalForget(arrivalSerial);
+        if (here != group || forget == true) arrivalGroup = null;
+        else if (forget == false && Stopwatch.GetElapsedTime(arrivalAt).TotalSeconds > ArrivalRetrySeconds) TryArrival(group);
     }
 
     /// <summary>The panel over the HUD while the banner shows: the layout's own panel at the fade's alpha with the name in its text box; hidden otherwise.</summary>

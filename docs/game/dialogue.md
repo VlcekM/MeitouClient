@@ -330,6 +330,8 @@ runs (`runCustomDialog`). A `dumb` speaker (CHARACTER record flag, `FUN_1405e89c
 lists it, an empty list failing; any other speaker needs the list only when it is non-empty (**Verified**, `FUN_14067e060`, `FUN_140684d70`). Meitou: one test, `DialogueSystem.ListsSpeaker`, for roots, interjections and the arrival banter. Meitou (`DialogueSystem.Arrive`): the first dialogue, speaker
 (with that rule, `MaySpeak`) and partner in squad order with a line win; "on screen" is not tested.
 
+**Retry** (**Verified**, `FUN_140801540` called every frame from `FUN_140787940`, `FUN_1408015d0`, `FUN_140800eb0`): hiding the banner stores the group and the real-time stamp (`FUN_14025b3b0` x 1e-6 seconds) and runs the first try; each frame the stored record is cleared when the group under the camera pivot (`FUN_1408f5770`) differs, else more than 10 s (`DAT_14167fad4`) after the stamp the stamp is renewed and the banter run again; the record is cleared only when the banter returns non-zero: a squad of under 2 members or a line started (zero: an enemy sensed, under 2 candidates or no pair with a line). Meitou: `AreaArrival` carries a serial, `DialogueSystem.Arrive` publishes (serial, forget) and the Biome UI (`PlayerInterface.RetryArrival`) keeps the group and the wall-clock stamp.
+
 ### Tokens
 
 `/NAME/` pairs are expanded until none is left (`FUN_14067a530`). Built in: `COST` (val0 of the line's first DA 8 or 9, else of its
