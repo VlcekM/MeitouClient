@@ -162,7 +162,7 @@ public sealed partial class CombatSystem
             Peaceful = o.TargetSlot < 0 && Relations is { } relations && !AggroSystem.IsEnemy(relations, tc.Faction, q.Cold.Faction),
             GettingUp = CharacterFacts.GettingUp(tc, world.Tick),
         };
-        if (TargetScore.Score(candidate, q.Player, q.Hold, q.Prone, q.Animal) is { } score && score > q.BestScore)
+        if (TargetScore.Score(candidate, q.Player, q.Hold, q.Prone, q.Animal, q.Cold.Manoeuvre) is { } score && score > q.BestScore)
         {
             q.Best = c;
             q.BestScore = score;

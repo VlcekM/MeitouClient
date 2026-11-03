@@ -312,7 +312,7 @@ public sealed partial class PlayerSystem(PopulationData? data = null) : ITickSys
                 case SquadFormationCommand formation:
                     SquadAiKeys.SetFormation(world, player.Faction, (int)formation.Formation, data?.Factions);
                     break;
-                case OrdersCommand or RunSpeedCommand or StandUpCommand:
+                case OrdersCommand or RunSpeedCommand or StandUpCommand or ManoeuvreCommand:
                     Orders.Apply(world, command);
                     break;
                 case Editing.EditCharacter edit:

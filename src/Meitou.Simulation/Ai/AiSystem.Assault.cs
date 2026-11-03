@@ -54,7 +54,7 @@ public sealed partial class AiSystem
                 GettingUp = CharacterFacts.GettingUp(c, world.Tick),
             };
             // The first of equal scores keeps it.
-            if (TargetScore.Score(candidate, false, false, medical.Prone, me.Fighter?.IsAnimal == true) is { } score && score > bestScore) (best, bestScore) = (m, score);
+            if (TargetScore.Score(candidate, false, false, medical.Prone, me.Fighter?.IsAnimal == true, me.Manoeuvre) is { } score && score > bestScore) (best, bestScore) = (m, score);
         }
         return best;
     }

@@ -1339,6 +1339,8 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
         // A contract's employer (Contract_HiredAlly / Contract_DefendPlayerBase assessNeutral, and HiredAlly's assessEnemy for the employer's allies, Verified): TEMP_ALLY, not an enemy.
         if (enemy && s.Employer >= 0 && (c.Faction == s.Employer || s.EmployerAllies && s.Relations.Contains(c.Faction) && s.Relations.IsAlly(s.Employer, c.Faction))) enemy = false;
         if (!enemy) return;
+        // The attack-on-sight area test (FUN_140599f30) of the finders 16, 21 and 144.
+        if (s.Finder != FoeFinder.TroubleMakers && !InAttackArea(ref s, slot, other.Position)) return;
         // One it found no path to lately is never picked (isPathImpossible in the attack-on-sight finder's score, docs/game/combat.md "Target score"): else a guard shut in with its
         // enemy (a cage, a locked room) takes it as target again every look and never turns on anyone it can reach.
         if (s.Cold is { } looker && PursuitSystem.PathImpossible(looker, new CharacterId(slot, other.Generation), (long)s.Tick)) return;
@@ -1351,6 +1353,17 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
         s.Best = slot;
         s.BestD2 = d2;
         s.BestScore = score;
+    }
+
+    /// <summary>
+    /// The area test of the attack-on-sight finders (<c>FUN_140599f30</c>, <b>Verified</b>): a target in the looker's own building passes; else the AI's area by manoeuvre mode
+    /// (<see cref="Orders.InArea"/>); outside it a target still passes while it fights the looker.
+    /// </summary>
+    static bool InAttackArea(ref Scan s, int slot, Vector3 at)
+    {
+        if (s.World.Sight.BuildingOf(s.Self) is { } own && s.World.Sight.BuildingOf(slot) == own) return true;
+        if (Orders.InArea(s.Cold!.Manoeuvre, s.Eye, s.Cold.CentreOfMovement, at)) return true;
+        return s.Combat?.StateOf(new CharacterId(slot, s.Table.Previous[slot].Generation)) is { TargetSlot: var target } && target == s.Self;
     }
 
     /// <summary>Territorial (144, <c>FUN_14059fd70</c>, <b>Verified</b>): without a home circle anyone; else one within the circle, or outside it in the looker's own building.</summary>
@@ -1378,7 +1391,7 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
             GettingUp = CharacterFacts.GettingUp(c, (long)s.Tick),
         };
         // No player range clamp: only the in-fight chooser sets the clamp flag of FUN_14059e300 (param_7), every goal finder and the look pass 0 (Verified), so the attack-on-sight look reaches beyond 400.
-        return Meitou.Simulation.Combat.TargetScore.Score(candidate, false, s.Hold, s.Prone, s.Animal);
+        return Meitou.Simulation.Combat.TargetScore.Score(candidate, false, s.Hold, s.Prone, s.Animal, s.Cold?.Manoeuvre ?? ManoeuvreMode.RoamFar);
     }
 
     /// <summary>

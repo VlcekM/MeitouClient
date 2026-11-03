@@ -353,6 +353,10 @@ public sealed class CharacterCold
     /// one; <see cref="OrderMove"/>); null: where it stands (not saved).
     /// </summary>
     public System.Numerics.Vector3? HoldPoint { get; set; }
+    /// <summary>The AI's manoeuvre mode (standing orders 8 and 9; the original's save key is unknown, so it is not saved, like <see cref="HoldPoint"/>).</summary>
+    public ManoeuvreMode Manoeuvre { get; set; } = ManoeuvreMode.RoamFar;
+    /// <summary>The AI's centre of movement (<c>AI::setCenterOfMovement</c>, +0x2c0): set by NEAR to where the character stands and by its ground move orders while not ROAM_FAR; null: none (not saved).</summary>
+    public System.Numerics.Vector3? CentreOfMovement { get; set; }
     /// <summary>
     /// The running <see cref="CharacterTask.GoTo"/> is the player's ground move order or a queued one (the original's Task_Move flag <c>+0x95</c>, set for tasks 29 and 40 only):
     /// cleared by any other <see cref="MovementSystem.GoTo"/>. Runtime only.

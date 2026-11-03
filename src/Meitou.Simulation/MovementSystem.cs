@@ -884,6 +884,8 @@ public sealed class MovementSystem(PathService paths) : ITickSystem, IDisposable
             // An order move on Hold makes its destination the hold point on every step (Task_Move update FUN_140354600, Verified): a queued move as it starts, and over
             // the position Hold was turned on at mid-walk.
             if (n.Task == (byte)CharacterTask.GoTo && cold.OrderMove && Orders.Holding(cold)) cold.HoldPoint = new Vector3(n.Goal.X, n.Position.Y, n.Goal.Y);
+            // Every player order sets the centre of movement to its point (Character::addOrder -> AI::setCenterOfMovement); it matters only while the mode is not ROAM_FAR.
+            if (n.Task == (byte)CharacterTask.GoTo && cold.OrderMove && cold.Manoeuvre != ManoeuvreMode.RoamFar) cold.CentreOfMovement = new Vector3(n.Goal.X, n.Position.Y, n.Goal.Y);
             float speed = MathF.Sqrt(p.Velocity.X * p.Velocity.X + p.Velocity.Z * p.Velocity.Z);
             var dir = Vector2.Zero;
             bool facing = false, agentWalk = false;

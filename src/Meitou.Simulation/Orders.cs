@@ -58,6 +58,20 @@ public sealed record OrdersCommand(IReadOnlyList<CharacterId> Characters, Charac
 /// </summary>
 public sealed record RunSpeedCommand(IReadOnlyList<CharacterId> Characters, int Step = 1) : SimCommand;
 
+/// <summary>
+/// The AI's manoeuvre mode (<c>AI::ordersMovement</c> +0x2bc, KenshiLib <c>AIManuverabilityOrders</c>): how far from its centre of movement a character takes targets and job targets
+/// (<see cref="Orders.InArea"/>). Set by the standing orders FAR (8, <see cref="ManoeuvreCommand"/> with <see cref="RoamFar"/>) and NEAR (9, <see cref="StayClose"/>).
+/// </summary>
+public enum ManoeuvreMode : byte
+{
+    HoldGround = 0,
+    StayClose = 1,
+    RoamFar = 2,
+}
+
+/// <summary>Standing order FAR (8) or NEAR (9) for the characters, or the player's selection when the list is empty (<c>AI::setManuveringFreedomLevel</c>).</summary>
+public sealed record ManoeuvreCommand(IReadOnlyList<CharacterId> Characters, ManoeuvreMode Mode) : SimCommand;
+
 /// <summary>Stand Up (order 28): the characters crawling by choice stand (<see cref="Bodies.MedicalState.StayingLow"/>).</summary>
 public sealed record StandUpCommand(IReadOnlyList<CharacterId> Characters) : SimCommand;
 
@@ -200,6 +214,23 @@ public static class Orders
         return MathF.Sin(targetYaw) * to.X + MathF.Cos(targetYaw) * to.Z > 0 ? 140 : 80;
     }
 
+    /// <summary>Squared reach of ROAM_FAR (<c>DAT_1416efdcc</c>, about 6517 units), the constructor's <c>meiDistance</c> and <c>meiDistanceTolerance</c> (<c>AI::AI</c>; no other writer) and the extras of the other modes.</summary>
+    public const float RoamFarArea2 = 42467328, MeiDistance = 18, MeiTolerance = 5, HoldGroundExtra = 40, StayCloseExtra = 200;
+
+    /// <summary>
+    /// The AI's area test <c>FUN_140597790</c> (<c>isTargetInRangeForOrders(Vector3)</c>, <b>Verified</b>): a zero point is in; ROAM_FAR measures the 3D squared distance from the character
+    /// itself, HOLD_GROUND (meiDistance + 40 + tolerance) and STAY_CLOSE (meiDistance + 200 + tolerance) from the centre of movement taken at the character's height. HOLD_GROUND's extra
+    /// term (the squared distance to the broadcast position squared, as written) is <b>Unknown</b> in its operands and left out; no order sets that mode yet.
+    /// </summary>
+    public static bool InArea(ManoeuvreMode mode, Vector3 looker, Vector3? centre, Vector3 target)
+    {
+        if (target == Vector3.Zero) return true;
+        var from = mode == ManoeuvreMode.RoamFar || centre is not { } c ? looker : new Vector3(c.X, looker.Y, c.Z);
+        float d2 = Vector3.DistanceSquared(from, target);
+        float reach = MeiDistance + MeiTolerance + (mode == ManoeuvreMode.StayClose ? StayCloseExtra : HoldGroundExtra);
+        return mode == ManoeuvreMode.RoamFar ? d2 < RoamFarArea2 : d2 < reach * reach;
+    }
+
     /// <summary>The point a holding character holds (<see cref="CharacterCold.HoldPoint"/>, else where it stands).</summary>
     public static Vector3 HoldPointOf(CharacterCold cold, Vector3 at) => cold.HoldPoint ?? at;
 
@@ -250,6 +281,15 @@ public static class Orders
                     // Group speed gives the characters set together one speed group (PlayerInterface::assignSpeedGroup), keyed by the first one.
                     group = mode == SpeedMode.Group ? group < 0 ? slot : group : -1;
                     cold.SpeedGroup = group;
+                }
+                break;
+            case ManoeuvreCommand manoeuvre:
+                // setStandingOrder 8 / 9 (Verified): FAR is ROAM_FAR and clears the centre of movement, NEAR is STAY_CLOSE with the centre at the character's position.
+                foreach (var id in manoeuvre.Characters.Count > 0 ? manoeuvre.Characters : world.Player.Selection.ToArray())
+                {
+                    if (!table.TryResolveNext(id, out int slot) || table.Cold(slot) is not { IsPlayer: true } cold) continue;
+                    cold.Manoeuvre = manoeuvre.Mode;
+                    cold.CentreOfMovement = manoeuvre.Mode == ManoeuvreMode.RoamFar ? null : table.Next[slot].Position;
                 }
                 break;
             case StandUpCommand stand:
