@@ -133,6 +133,31 @@ sealed class UserConfig
     public bool? EdgeScroll { get; set; }
     /// <summary>The in-game tutorials (the original's <c>tutorials</c>, default on; Gameplay settings); null until first used, then taken from the install's settings.cfg.</summary>
     public bool? Tutorials { get; set; }
+    /// <summary>The original's `invert X` (default off) and `invert Y` (default on); Controls settings. Null until first used, then taken from the install's settings.cfg.</summary>
+    public bool? InvertX { get; set; }
+    public bool? InvertY { get; set; }
+    /// <summary>The original's `camera speed` (150 … 1000, default 500) and `camera zoom` (10 … 200, default 125); Controls settings. Null until first used, then taken from the install's settings.cfg.</summary>
+    public float? CameraMoveSpeed { get; set; }
+    public float? CameraZoomSpeed { get; set; }
+    public const float MinCameraMoveSpeed = 150, MaxCameraMoveSpeed = 1000, MinCameraZoomSpeed = 10, MaxCameraZoomSpeed = 200;
+
+    /// <summary>Fills the camera options still unset from the install's settings.cfg (the original's missing-key defaults).</summary>
+    public void SeedCamera(Meitou.Content.GameInstall install)
+    {
+        InvertX ??= Meitou.Audio.AudioSystem.Setting(install, "invert X", 0) != 0;
+        InvertY ??= Meitou.Audio.AudioSystem.Setting(install, "invert Y", 1) != 0;
+        CameraMoveSpeed ??= Meitou.Audio.AudioSystem.Setting(install, "camera speed", Meitou.Data.World.KenshiCamera.DefaultMoveSpeed, MinCameraMoveSpeed, MaxCameraMoveSpeed);
+        CameraZoomSpeed ??= Meitou.Audio.AudioSystem.Setting(install, "camera zoom", Meitou.Data.World.KenshiCamera.DefaultZoomSpeed, MinCameraZoomSpeed, MaxCameraZoomSpeed);
+    }
+
+    /// <summary>Hands the camera options to the strategy camera's settings (unset ones keep the camera's own defaults, which are the original's).</summary>
+    public void ApplyCamera(Meitou.Engine.Cameras.CameraSettings camera)
+    {
+        camera.InvertX = InvertX ?? camera.InvertX;
+        camera.InvertY = InvertY ?? camera.InvertY;
+        camera.MoveSpeed = CameraMoveSpeed ?? camera.MoveSpeed;
+        camera.ZoomSpeed = CameraZoomSpeed ?? camera.ZoomSpeed;
+    }
     /// <summary>The green marker where a move order was given (the original's `Movement marker`, default on; Interface settings); null until first used, then taken from the install's settings.cfg.</summary>
     public bool? MovementMarker { get; set; }
     /// <summary>The marker on the camera's pivot while it is turned (the original's `Rotation marker`, default on; Interface settings); null until first used, then taken from the install's settings.cfg.</summary>
