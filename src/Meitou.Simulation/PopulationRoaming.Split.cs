@@ -52,7 +52,7 @@ public sealed partial class PopulationSystem
         }
     }
 
-    bool PersistentPlatoon(Platoon p) => p.Persistent || p.Saved?.Source.Record.Bools.GetValueOrDefault("persistent") == true;
+    bool PersistentPlatoon(Platoon p) => !p.PersistentCleared && (p.Persistent || p.Saved?.Source.Record.Bools.GetValueOrDefault("persistent") == true);
 
     /// <summary>The id of the AI_PACKAGE the original looks up by name (<c>FUN_1406bfe60</c>); null when the data has none.</summary>
     string? PackageNamed(string name) =>

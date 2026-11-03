@@ -92,6 +92,13 @@ public sealed class Platoon
     /// <summary>The platoon is persistent without a save's record to say so (the flag a prisoner's own platoon takes from its old platoon or its unique member, <c>FUN_14079c1c0</c>): the original never removes one.</summary>
     public bool Persistent { get; set; }
     /// <summary>
+    /// Spawn mode 3 (+0x118, <c>FUN_1404ffad0</c>, <b>Verified</b>): the platoon's home town was replaced by an override town it does not belong to; its activation is refused and
+    /// the keep test refuses it (<c>FUN_1407ec570</c>). Not saved (set again at the next activation).
+    /// </summary>
+    public bool ReplacedHome { get; set; }
+    /// <summary>The original's activation took the persistent flag off (<c>FUN_1407ebdd0</c>(platoon, 0)); overrides a save's <c>persistent</c>. Not saved: the platoon is gone within a minute.</summary>
+    public bool PersistentCleared { get; set; }
+    /// <summary>
     /// The unloaded platoon's activation dwell (+0x78, <c>FUN_1407ebf30</c>, <b>Verified</b>): 5 s when it becomes unloaded, 2 s again whenever it stands outside its zone's
     /// activation box; inside, it counts down and the platoon activates once it is below 0. Not saved (a loaded platoon starts at 5).
     /// </summary>

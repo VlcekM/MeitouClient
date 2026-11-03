@@ -303,7 +303,7 @@ public static class SaveLoader
         string baseTown = platoon.Record.Strings.GetValueOrDefault("basetown", "");
         int origin = -1;
         for (int i = 0; i < data.Sites.Count && baseTown.Length > 0; i++)
-            if (data.Sites[i].Town.Id == baseTown) { origin = i; break; }
+            if (data.Sites[i].Record.Id == baseTown || data.Sites[i].Replacement?.Id == baseTown) { origin = i; break; }   // the town's own TOWN, or the override that took its place (platoons made since)
         if (origin < 0 && campaignHome is { IsNull: false } home && context.TownSites.TryGetValue((home.C, home.CS), out int homeSite)) origin = homeSite;
         if (origin < 0 && platoon.SquadTemplate.Length > 0 && LoadWildPlatoon(world, platoon, data, loaded, context)) return;
         if (origin < 0 || platoon.SquadTemplate.Length == 0)

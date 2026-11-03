@@ -68,7 +68,7 @@ public sealed partial class PopulationSystem
         // nothing another one changes, so the result does not depend on the order. What changes the registry or the world follows, serially, in id order.
         movers.Clear();
         foreach (var p in platoonBuffer)
-            if (p.State == PlatoonState.Unloaded && !p.Pinned && p.Campaign is null) movers.Add(p);   // a campaign's are moved by it (they follow their leader)
+            if (p.State == PlatoonState.Unloaded && !p.Pinned) movers.Add(p);   // a campaign's are moved by it (they follow their leader, StandIn); its orphan timer counts here
         world.ParallelFor((movers.Count + MoversPerJob - 1) / MoversPerJob, job =>
         {
             for (int i = job * MoversPerJob, end = Math.Min(movers.Count, i + MoversPerJob); i < end; i++) StepOffscreen(world, movers[i], dt);
@@ -105,11 +105,14 @@ public sealed partial class PopulationSystem
     const float OrphanLimitSeconds = 60;
 
     /// <summary>
-    /// Whether a platoon out of the world keeps its characters: by the Meitou switches (<see cref="KeepWild"/> for a save's wild one, else <see cref="KeepRoamers"/>), and always
-    /// while it occupies a town, as the original makes an occupier persistent (docs/game/ai.md "Package classes"), or when a save's platoon is <c>persistent</c> (the original
-    /// never removes one, docs/game/factions-squads-towns.md "Object model": e.g. a dismissed character's squad); never one declared <see cref="Platoon.Dead"/>.
+    /// Whether a platoon out of the world keeps its characters (the original's keep test <c>FUN_1407ec570</c>, <b>Verified</b>): persistent (a save's <c>persistent</c>, an occupier of a town, docs/game/ai.md "Package classes";
+    /// never a platoon declared <see cref="Platoon.Dead"/>, which clears the flag), else not in spawn mode 3 (<see cref="Platoon.ReplacedHome"/>) and held by a faction campaign whose record is not in phase 2
+    /// (<see cref="CampaignKept"/>; the original's empty-squad refusal is <c>RemoveWiped</c> before this runs). The Meitou switches (<see cref="KeepWild"/> for a save's wild one, else <see cref="KeepRoamers"/>) keep the rest.
     /// </summary>
-    bool Kept(Platoon p) => !p.Dead && ((p.Wild ? KeepWild : KeepRoamers) || Ai.AiSystem.Occupies(data.Ai, p.Package) || PersistentPlatoon(p));
+    bool Kept(Platoon p) => !p.Dead && (Ai.AiSystem.Occupies(data.Ai, p.Package) || PersistentPlatoon(p) || !p.ReplacedHome && (p.Wild ? KeepWild : KeepRoamers)) || CampaignKept(p);
+
+    /// <summary>The war manager's record for the platoon exists and is not in phase 2 (<c>FUN_140283500</c>, <c>FUN_1407ec570</c>), outside spawn mode 3: a campaign's force that has not been spent is kept, a victorious or retreating one is not.</summary>
+    internal static bool CampaignKept(Platoon p) => !p.ReplacedHome && p.Campaign is { Phase: not 2 };
 
     readonly List<Platoon> movers = [];
     /// <summary>Stand-ins one worker job steps (engine choice: a job costs more than a few stand-ins).</summary>
@@ -121,7 +124,7 @@ public sealed partial class PopulationSystem
     /// </summary>
     void StepOffscreen(World world, Platoon p, float dt)
     {
-        if (!Kept(p) && !Wanted(p)) p.OrphanSeconds += dt;
+        if (!Kept(p) && (p.ReplacedHome || !Wanted(p))) p.OrphanSeconds += dt;
         else p.OrphanSeconds = 0;
         if (p.OrphanSeconds <= OrphanLimitSeconds) StandIn(world, p, dt);
     }
@@ -156,6 +159,8 @@ public sealed partial class PopulationSystem
         // It stands still (FUN_1407ee790, Verified): a platoon of the player's faction, one off the zone grid, one inside the trimmed box of a loaded zone (it waits to be made), and a
         // platoon left with a member caged.
         if (p.Faction >= 0 && p.Faction == PlayerFactionOf(world) || p.Imprisoned) return;
+        // Job 0 of a persistent platoon becomes GOHOME (FUN_1407ee790, Verified): it stands still too, whatever its distance from home (9216 only picks GOHOME over the idle hook); only a non-persistent one takes the engine's travel.
+        if (p.Job == Ai.PlatoonJob.None && (PersistentPlatoon(p) || Ai.AiSystem.Occupies(data.Ai, p.Package))) return;
         var zone = WorldLayout.ZoneOf(p.Position.X, p.Position.Y);
         if (!zone.IsInsideGrid) return;
         if (active.Contains(zone))
@@ -405,7 +410,7 @@ public sealed partial class PopulationSystem
         // A town's own squad keeps the town's grace (it leaves with its town), a roaming one the roaming grace.
         else if (p.UnloadAtTick < 0) p.UnloadAtTick = world.Tick + (long)Math.Ceiling((p.Pinned ? settings.UnloadGraceSeconds : settings.RoamUnloadGraceSeconds) / world.TickSeconds);
         // Faithful: a platoon the original does not keep is not unloaded whole: each member out of the zone is destroyed, and the platoon stays while any is left.
-        else if (world.Tick >= p.UnloadAtTick && !(!Kept(p) && !p.Pinned && p.Campaign is null && ThinOutOfZone(world, p, squad)))
+        else if (world.Tick >= p.UnloadAtTick && !(!Kept(p) && !p.Pinned && ThinOutOfZone(world, p, squad)))
         {
             if (squad.Members.Count >= 2) SplitPrisoners(world, p, squad);   // before the members are released: a prisoner is not a stray
             if (squad.Members.Count == 0)
@@ -419,7 +424,7 @@ public sealed partial class PopulationSystem
             if (squad.Ai is { } running_ && Ai.AiSystem.BoardMoves(running_) && MissionSite(running_) is >= 0 and var mission) p.Target = mission;   // where its package was taking it
             else if (p.Package is { } shipping && IsShipping(shipping) && squad.Ai is { MissionTown: >= 0 and var camp }) p.Target = camp;   // the camp it ships to (ShippingCamp)
             // Faithful: a platoon the original does not keep (not a town's own, not in a campaign, not occupying) is despawned as it leaves; a save's wild one by the wild switch.
-            if ((p.Dead || !Kept(p) && !p.Pinned) && p.Campaign is null)
+            if (!Kept(p) && !p.Pinned)
             {
                 PayRoamerDespawn(world, p, squad);
                 Despawn(world, p);
@@ -662,8 +667,32 @@ public sealed partial class PopulationSystem
 
     // ---- unloaded to loaded ----
 
+    /// <summary>
+    /// Spawn mode 3 (<c>FUN_1404ffad0</c>, <b>Verified</b>): a saved platoon whose <c>basetown</c> no longer fits its home town's replacement (<see cref="HomeFits"/>) is not activated. Its template's leader
+    /// being unique, the template's uniques it holds are released and the flag stays (the keep test refuses it unless persistent); otherwise the persistent flag is cleared as well. Either way
+    /// the keep test then fails (<see cref="Kept"/>) and the platoon goes with the orphan timer. Whether it was refused.
+    /// </summary>
+    bool RefuseReplacedHome(World world, Platoon p)
+    {
+        if (p.Saved is null || p.Origin < 0 || p.Origin >= data.Sites.Count || HomeFits(p)) { p.ReplacedHome = false; return false; }
+        p.ReplacedHome = true;
+        p.State = PlatoonState.Unloaded;
+        if (data.Db.Find(p.TemplateId) is { } template && UniqueCharacters.IsUnique(template.GetReferences("leader") is { Count: > 0 } l ? data.Db.Find(l[0].TargetStringId) : null)) ReleaseUniques(world, p);
+        else p.PersistentCleared = true;
+        return true;
+    }
+
+    /// <summary>The home-hand test of activation: the platoon's <c>basetown</c> (unset: its town's own TOWN) names the town's own TOWN when it has no replacement, else the replacement.</summary>
+    bool HomeFits(Platoon p)
+    {
+        var site = data.Sites[p.Origin];
+        string home = p.Saved!.Source.Record.Strings.GetValueOrDefault("basetown", "");
+        return home.Length == 0 || home == site.Record.Id ? site.Replacement is null : home == site.Replacement?.Id;
+    }
+
     void Activate(World world, Platoon p)
     {
+        if (RefuseReplacedHome(world, p)) return;
         p.State = PlatoonState.Activating;
         // A stand-in that travelled comes back on walkable ground (it went in straight lines, over water and through buildings); one that did not keeps its characters' places.
         var anchor = p.Stored?.Anchor ?? p.Saved?.Anchor;
