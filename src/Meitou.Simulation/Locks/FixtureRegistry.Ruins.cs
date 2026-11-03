@@ -3,7 +3,10 @@ using Meitou.Data.World;
 
 namespace Meitou.Simulation.Locks;
 
-/// <summary>A town building a town override has ruined, or stood up again, against what the level data has (<see cref="FixtureRegistry.Ruins"/>).</summary>
+/// <summary>
+/// A town building a town override has ruined, or stood up again, against what the level data has, or one laid out afresh (its placement names its layouts,
+/// <see cref="FixtureRegistry.LayoutsFromSave"/>); <see cref="FixtureRegistry.Ruins"/>.
+/// </summary>
 public sealed record RuinedBuilding(TownBuilding Building, bool Destroyed);
 
 public sealed partial class FixtureRegistry
@@ -11,7 +14,10 @@ public sealed partial class FixtureRegistry
     // The town buildings whose ruin state a town override changed from the level data's, by key (docs/game/buildings-production.md "Ruined by residents").
     readonly Dictionary<string, RuinedBuilding> ruins = new(StringComparer.Ordinal);
 
-    /// <summary>The town buildings whose ruin state differs from the level data's (the host draws, paths and lights them so); <see cref="RuinsRevision"/> counts changes.</summary>
+    /// <summary>
+    /// The town buildings whose ruin state differs from the level data's or that were laid out afresh (the host draws, paths and lights them so);
+    /// <see cref="RuinsRevision"/> counts changes.
+    /// </summary>
     public IReadOnlyCollection<RuinedBuilding> Ruins => ruins.Values;
     public long RuinsRevision { get; private set; }
     (long Revision, RuinedBuilding[] List) publishedRuins = (0, []);
@@ -35,7 +41,9 @@ public sealed partial class FixtureRegistry
     {
         var town = data.Sites[site];
         int player = world.Player.Faction >= 0 ? world.Player.Faction : data.PlayerFaction;
-        ApplyTownRuins(world, data, site, [.. town.Buildings.Where(b => b.Zone == town.Zone && !IsPlayers(data, site, b, player)).Select(b => b.Key)]);
+        HashSet<string> own = [.. town.Buildings.Where(b => b.Zone == town.Zone && !IsPlayers(data, site, b, player)).Select(b => b.Key)];
+        RelayTown(world, data, site, own.Where(key => Saved?.GetValueOrDefault(key)?.Strings.ContainsKey(ResidentRuins.InteriorKey) != true).ToHashSet());
+        ApplyTownRuins(world, data, site, own);
     }
 
     void ApplyTownRuins(World world, PopulationData data, int site, HashSet<string> reset)
@@ -92,14 +100,19 @@ public sealed partial class FixtureRegistry
     void WriteRuins(IReadOnlyDictionary<string, Meitou.Data.Fcs.FcsRecord> states)
     {
         foreach (var (key, ruin) in ruins)
-            if (states.TryGetValue(key, out var state)) state.Bools["destroyed"] = ruin.Destroyed;
+        {
+            if (!states.TryGetValue(key, out var state)) continue;
+            state.Bools["destroyed"] = ruin.Destroyed;
+            WriteLayouts(ruin.Building, state);
+        }
     }
 
     void SetRuin(World world, PopulationData data, int site, TownBuilding b, bool destroyed)
     {
         bool was = IsDestroyed(b);
-        bool changed = destroyed == b.Destroyed ? ruins.Remove(b.Key) : !ruins.TryGetValue(b.Key, out var old) || old.Destroyed != destroyed;
-        if (destroyed != b.Destroyed) ruins[b.Key] = new RuinedBuilding(b, destroyed);
+        bool listed = destroyed != b.Destroyed || Relaid(b);
+        bool changed = !listed ? ruins.Remove(b.Key) : !ruins.TryGetValue(b.Key, out var old) || old.Destroyed != destroyed || !ReferenceEquals(old.Building, b);
+        if (listed) ruins[b.Key] = new RuinedBuilding(b, destroyed);
         if (changed) RuinsRevision++;
         if (was == destroyed || !sites.Contains(site) || data.Sight is not { } sight) return;
         if (destroyed) world.Sight.Remove(b.Key);

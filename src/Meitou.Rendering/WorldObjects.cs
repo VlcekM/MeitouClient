@@ -205,7 +205,7 @@ sealed class WorldObjects : IDisposable
             bool sounds = !incomplete && record.GetReferences("sounds").Count > 0;
             var layouts = new List<GameRecord>(2);
             foreach (bool exterior in (ReadOnlySpan<bool>)[true, false])
-                if (state?.GetString(exterior ? "exterior layout name" : "interior layout name") is { Length: > 0 } layoutName && Layouts.Find(record, layoutName, exterior) is { } layout)
+                if (b.LayoutName(state, exterior) is { Length: > 0 } layoutName && Layouts.Find(record, layoutName, exterior) is { } layout)
                     layouts.Add(layout);
             if (!sounds && layouts.Count == 0) continue;
             float y = b.WorldY ?? map.HeightAt(b.Position.X, b.Position.Z) + b.Position.Y;
@@ -281,7 +281,7 @@ sealed class WorldObjects : IDisposable
                 foreach (bool exterior in (ReadOnlySpan<bool>)[true, false])
                 {
                     if (isDestroyed || !exterior && b.WithoutInterior) continue;
-                    if (state?.GetString(exterior ? "exterior layout name" : "interior layout name") is not { Length: > 0 } layoutName) continue;
+                    if (b.LayoutName(state, exterior) is not { Length: > 0 } layoutName) continue;
                     if (Layouts.Find(record, layoutName, exterior) is not { } layout) { Interlocked.Increment(ref layoutsNotFound); continue; }
                     Interlocked.Increment(ref layouts);
                     foreach (var item in Layouts.Items(layout))

@@ -35,7 +35,7 @@ public static class ResidentRuins
                 foreach (var (b, t) in ResidentHomes.Assign(db, town, faction, list, player))
                 {
                     if (t.BuildingRuined && Ruin(db, levels, b)) ruined++;
-                    LayOut(b, t);
+                    LayOut(levels, b, t);
                 }
             }
             return ruined;
@@ -54,9 +54,11 @@ public static class ResidentRuins
     /// Names the template's <c>layout interior</c> and <c>layout exterior</c> on its home whatever the level state said, an empty one clearing it, ruins too (the
     /// original's <c>FUN_140552140</c>; a name the building has no layout for places nothing, as in the original). Nothing reads a ruin's layouts.
     /// </summary>
-    static void LayOut(TownBuilding b, SquadTemplate t)
+    static void LayOut(WorldLevelData levels, TownBuilding b, SquadTemplate t)
     {
         if (b.LevelState is not { } state) return;
+        var level = (state.GetString(InteriorKey), state.GetString(ExteriorKey));
+        if (level != (t.LayoutInterior, t.LayoutExterior)) levels.LevelLayoutNames.TryAdd(b.Key, level);
         foreach (var (key, layout) in Names(t)) state.StringTable[key] = layout;
     }
 
@@ -65,6 +67,18 @@ public static class ResidentRuins
         [(InteriorKey, t.LayoutInterior), (ExteriorKey, t.LayoutExterior)];
 
     public const string InteriorKey = "interior layout name", ExteriorKey = "exterior layout name";
+
+    /// <summary>
+    /// The interior and exterior layout names housing <paramref name="town"/>'s residents afresh in <paramref name="buildings"/> gives its homes (a town override,
+    /// <see cref="LayOut"/>), by building key; buildings it houses nobody in are not listed. <paramref name="playerOwned"/> as for <see cref="RuinedHomes"/>.
+    /// </summary>
+    public static Dictionary<string, (string Interior, string Exterior)> HomeLayouts(GameDatabase db, TownData town, FactionData? faction,
+        IReadOnlyList<TownBuilding> buildings, string? playerFactionId, IReadOnlySet<string>? playerOwned = null)
+    {
+        var result = new Dictionary<string, (string Interior, string Exterior)>(StringComparer.Ordinal);
+        foreach (var (b, t) in ResidentHomes.Assign(db, town, faction, buildings, playerFactionId, playerOwned)) result[b.Key] = (t.LayoutInterior, t.LayoutExterior);
+        return result;
+    }
 
     /// <summary>
     /// The keys of the homes <paramref name="town"/>'s residents ruin when they are housed in <paramref name="buildings"/> afresh (a town override): homes of a ruined

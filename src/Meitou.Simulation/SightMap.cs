@@ -112,6 +112,20 @@ public sealed class SightMap
         foreach (int k in e.Lamps) LampCells(k, add: false);
     }
 
+    /// <summary>
+    /// A registered building laid out afresh (a town override's residents, <see cref="PopulationData.Relay"/>): its old room and lamps go and its new ones come, unless it
+    /// is a ruin.
+    /// </summary>
+    public void Relay(ISightSource source, TownBuilding building)
+    {
+        if (!added.Contains(building.Key)) return;
+        Remove(building.Key);
+        added.Remove(building.Key);
+        hidden.Remove(building.Key);
+        entries.Remove(building.Key);
+        Add(source, building);
+    }
+
     /// <summary>A ruin stands again: the room and lamps it had come back, or are added now when it was a ruin when its town registered.</summary>
     public void Restore(ISightSource source, TownBuilding building)
     {
