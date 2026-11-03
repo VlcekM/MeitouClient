@@ -710,8 +710,8 @@ public sealed partial class CombatSystem
             if (other == i || !range.Holds((x, z))) continue;
             ref readonly var o = ref read[other];
             if (o.TargetGeneration != generation || o.Down || o.Ranged) continue;
-            // A swing holds its slot unless the target (a blocker) freed its slots after the swing started.
-            if (o.AttackTech >= 0 && o.NextBlow > 0 && o.AttackStart >= read[t].SlotsCleared)
+            // A swing holds its slot unless the target (a blocker) freed its slots after the swing started, or it has run past SlotHoldSeconds (FUN_140668000).
+            if (o.AttackTech >= 0 && o.NextBlow > 0 && o.AttackStart >= read[t].SlotsCleared && now - o.AttackStart <= (int)MathF.Ceiling(SlotHoldSeconds / world.TickSeconds))
             {
                 if (++holders + ahead >= slots) return false;
                 continue;
@@ -743,6 +743,9 @@ public sealed partial class CombatSystem
     /// <summary>The Block order's slot timer: uniform 1.5 to 4.5 s (<b>Verified</b> literals, FUN_1402b3180).</summary>
     static int BlockTimerTicks(World world, ulong key, int now) =>
         Math.Max(1, (int)MathF.Ceiling((1.5f + 3 * CombatRolls.Float(world.Seed, key, CombatRoll.BlockTimer, (ulong)(uint)now)) / world.TickSeconds));
+
+    /// <summary>A slot holder is dropped once its slot timer passes this (AttackSlotManager::periodicUpdate, <c>DAT_141683188</c>, Verified): even a swing still on.</summary>
+    public const float SlotHoldSeconds = 20;
 
     /// <summary>The most attack slots a target can have (the slot count is clamped to 1 to 5, <c>FUN_1406661d0</c>).</summary>
     public const int MaxAttackSlots = 5;
