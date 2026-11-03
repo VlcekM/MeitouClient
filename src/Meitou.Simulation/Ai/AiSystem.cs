@@ -520,7 +520,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
                     {
                         seats.Add(new SeatClaim(b, i));
                         if (!seatOwners.ContainsKey(b))
-                            seatOwners[b] = world.Fixtures.PropertyOwner(b.Key) ?? (b.OwnerFactionId is { } o && data.FactionIndex(o) is var fi and >= 0 ? fi : townFaction);
+                            seatOwners[b] = BuildingOwner(world, b, townFaction);
                     }
             }
             places[site] = new(wander, shopList, [.. buildings.Where(b => (b.IsBar || bars.Contains(b)) && IsPublic(b))],
@@ -2257,6 +2257,9 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     (TownBuilding Bar, int Table)? PickTable(World world, int site, Squad squad, bool outdoors)
     {
         var places = Places(site);
+        int townFaction = site < data.SiteFactions.Count ? data.SiteFactions[site] : -1;
+        // A table of a building whose faction is hostile to the squad's is skipped (the table finder's filter, FUN_1408ca670 / FUN_1406b26d0: relation at most -30).
+        bool Hostile(TownBuilding b) => data.Relations.Contains(squad.Faction) && BuildingOwner(world, b, townFaction) is >= 0 and var owner && data.Relations.Contains(owner) && data.Relations.IsHostile(squad.Faction, owner);
         var held = new HashSet<(TownBuilding, int)>();
         foreach (var other in world.Squads.All)
             if (other != squad && other.Ai is { BarTable: >= 0, Home: { } at } b && b.CurrentClass is PackageClass.Bar or PackageClass.BarOutdoors) held.Add((at, b.BarTable));
@@ -2267,14 +2270,18 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             {
                 var bar = places.Bars[(start + k) % places.Bars.Count];
                 for (int t = 0; t < bar.Tables.Count; t++)
-                    if (!held.Contains((bar, t))) return (bar, t);
+                    if (!held.Contains((bar, t)) && !Hostile(bar)) return (bar, t);
             }
             return null;
         }
         foreach (var table in places.OutdoorTables)
-            if (!held.Contains((table, 0))) return (table, 0);
+            if (!held.Contains((table, 0)) && !Hostile(table)) return (table, 0);
         return null;
     }
+
+    /// <summary>The faction owning a town building: its property owner, else its level owner, else the town's (<paramref name="townFaction"/>).</summary>
+    int BuildingOwner(World world, TownBuilding b, int townFaction) =>
+        world.Fixtures.PropertyOwner(b.Key) ?? data.LevelOwnerOf(b, townFaction);
 
     /// <summary>
     /// A patrol's route (<b>engine choice</b>: the original's <c>GoOutOnPatrol</c> is not decoded): <see cref="AiSettings.PatrolPoints"/> points round the home town at

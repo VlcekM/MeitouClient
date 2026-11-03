@@ -126,7 +126,7 @@ public sealed partial class FixtureRegistry
         int townFaction = site < data.SiteFactions.Count ? data.SiteFactions[site] : -1;
         int player = world.Player.Faction >= 0 ? world.Player.Faction : data.PlayerFaction;
         bool Players(TownBuilding b) => IsPlayers(data, site, b, player);
-        int LevelOwner(TownBuilding b) => b.OwnerFactionId is { } o && data.FactionIndex(o) is var fi and >= 0 ? fi : townFaction;
+        int LevelOwner(TownBuilding b) => data.LevelOwnerOf(b, townFaction);
         var reset = town.Buildings.Where(b => b.Zone == town.Zone && !Players(b)).Select(b => b.Key).ToHashSet(StringComparer.Ordinal);
         RelayTown(world, data, site, reset);
         ApplyTownRuins(world, data, site, reset);

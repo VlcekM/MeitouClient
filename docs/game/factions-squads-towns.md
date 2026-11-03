@@ -414,6 +414,8 @@ Meitou: [ground items](../simulation.md#items-and-eating).
 
 ### Town residents
 
+**Building owner after populate** (**Verified**, `FUN_1409370d0`:35-75, `FUN_140557950` owner setter, `FUN_14092e4b0`:35-37): the town resident driver gives the town's faction (Town slot 0x58) to every building of the town whose current owner is not the player's (faction +0x250 == 0), and the home-taking function does the same for each home, so whatever faction the level data names, every non-player building ends owned by the town's faction; the player's own keep theirs, and a saved owner still overrides afterwards. Meitou: `PopulationData.LevelOwnerOf` (fixtures, seats and item slots, the table finder); how many base level buildings name another faction than their town's was not probed. A table of a building whose faction is hostile to the squad's (relation at most -30, `FUN_1408ca670` / `FUN_1406b26d0`) is skipped by the bar table finder (`AiSystem.PickTable`; **Verified**, the filter's other parts are not decoded).
+
 **Observed** (kenshi-named dump) unless marked; Meitou: `PopulationHomes.cs`.
 
 - **Table** (`FUN_140935d10`, `FUN_140936e60`): the faction's `residents` then the town's; with `residents override` the

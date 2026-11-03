@@ -301,6 +301,13 @@ public sealed class PopulationData
 
     public float RoadPreferenceOf(int faction) => faction >= 0 && faction < Factions.Count ? Factions[faction].RoadPreference : 0;
 
+    /// <summary>
+    /// The faction owning a town building before any saved owner: the player's faction when the level data names it, else the town's faction whatever the level data says, since the town populate
+    /// gives the town faction every non-player building of the town (<c>FUN_1409370d0</c>:35-75, <c>FUN_14092e4b0</c>:35-37).
+    /// </summary>
+    public int LevelOwnerOf(Meitou.Data.World.TownBuilding b, int townFaction) =>
+        b.OwnerFactionId is { } id && FactionIndex(id) is >= 0 and var faction && faction == PlayerFaction ? faction : townFaction;
+
     /// <summary>The position of a faction id in <see cref="Factions"/> (the first when an id repeats), or -1. The index is built once.</summary>
     public int FactionIndex(string id)
     {

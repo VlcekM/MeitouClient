@@ -157,7 +157,7 @@ public sealed partial class FixtureRegistry
     {
         if (byBuilding.ContainsKey(b.Key)) return;
         var db = data.Db;
-        int levelOwner = b.OwnerFactionId is { } o && data.FactionIndex(o) is var fi and >= 0 ? fi : townFaction;
+        int levelOwner = data.LevelOwnerOf(b, townFaction);
         int owner = levelOwner;
         if (Saved?.GetValueOrDefault(b.Key)?.Strings.GetValueOrDefault("owner faction ID") is { Length: > 0 } savedOwner && data.FactionIndex(savedOwner) is >= 0 and var savedFaction)
             owner = savedFaction;
