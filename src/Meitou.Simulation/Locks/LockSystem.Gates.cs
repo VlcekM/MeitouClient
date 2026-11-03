@@ -132,6 +132,26 @@ public sealed partial class LockSystem
         return code > 0 && RouteState(world, code, 0, Flat(at), out _) == 3;
     }
 
+    /// <summary>
+    /// Whether the town's walls are locked up (<c>Town</c> vfunc <c>0x300</c> = <c>FUN_140929820</c>, <b>Verified</b>): the town has at least one gate (a gateway building with a door) and no gate door is
+    /// open (door state 1); closed, opening and closing doors all count as locked. A gate without door fixtures (not spawned) is no gate here.
+    /// </summary>
+    public static bool TownLockedUp(World world, TownSite site)
+    {
+        bool gate = false;
+        foreach (var b in site.Buildings)
+        {
+            if (b.Destroyed) continue;
+            foreach (var f in world.Fixtures.OfBuilding(b.Key))
+            {
+                if (f.Kind != FixtureKind.Door || !f.IsGate) continue;
+                gate = true;
+                if (f.Motion == DoorMotion.Open) return false;
+            }
+        }
+        return gate;
+    }
+
     /// <summary>A gate's main door (lowest door index with a known leaf) and its leaf.</summary>
     internal static (Fixture Door, DoorSpot Spot)? MainGateDoor(World world, string building)
     {

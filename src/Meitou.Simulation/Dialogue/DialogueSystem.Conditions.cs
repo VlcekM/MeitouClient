@@ -116,6 +116,8 @@ public sealed partial class DialogueSystem
             case 56: return Bool(s.InCombat);
             // WITHIN_TOWN_WALLS: S's gate code above 0 (Character slot 35, docs/game/pathfinding.md "Gate codes"); no gate pass yet reads as the open world.
             case 57: return Bool(Position(world, subjectId) is { } walled && world.SystemOf<Locks.LockSystem>()?.Regions?.CodeAt(walled) > 0);
+            // TOWN_WALLS_LOCKED_UP: S's current town has gates and none of their doors is open (FUN_140929820 behind Town vfunc 0x300); S in no town reads false.
+            case 58: return Bool(Position(world, subjectId) is { } inTown && TownAt(inTown) is >= 0 and var walledTown && Locks.LockSystem.TownLockedUp(world, data.Sites[walledTown]));
             case 59: return Bool(s.SlaveState is 1 or 2);
             case 61: return Bool(s.SlaveState is 1 or 2 && s.SlaveOwner >= 0 && s.SlaveOwner == meF);
             case 62: return Bool(s.SlaveState > 1);

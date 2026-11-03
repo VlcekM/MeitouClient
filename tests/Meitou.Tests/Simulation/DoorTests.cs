@@ -236,6 +236,13 @@ public class DoorTests(ITestOutputHelper output)
 
         Assert.True(locks.WallsLocked(world, SyntheticTown.Centre + new Vector3(0, 0, 300)));
         Assert.False(locks.WallsLocked(world, SyntheticTown.Centre + new Vector3(0, 0, -300)));
+        // DC 58 TOWN_WALLS_LOCKED_UP: a gate and no open door; an opening door still counts as locked, an open one does not.
+        Assert.True(LockSystem.TownLockedUp(world, data.Sites[0]));
+        door.Motion = DoorMotion.Opening;
+        Assert.True(LockSystem.TownLockedUp(world, data.Sites[0]));
+        door.Motion = DoorMotion.Open;
+        Assert.False(LockSystem.TownLockedUp(world, data.Sites[0]));
+        door.Motion = DoorMotion.Closed;
         door.DoorBroken = true;
         locks.Inputs(world, [new GateRegionsCommand(new LineRegions(key)) { Tick = 0 }]);   // the gate graph is rebuilt once a check
         Assert.False(locks.WallsLocked(world, SyntheticTown.Centre + new Vector3(0, 0, 300)));
