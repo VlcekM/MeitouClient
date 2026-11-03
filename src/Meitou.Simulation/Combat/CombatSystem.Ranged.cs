@@ -785,7 +785,7 @@ public sealed partial class CombatSystem : IProjectileSource
         if (shooterAlive) Crimes?.Hit(world, p.Shooter, v);
         if (shooterAlive && !dc.Medical.Incapacitated)
         {
-            world.SystemOf<AggroSystem>()?.Notice(world, world.Characters.IdOf(v), world.Characters.IdOf(p.Shooter));   // the victim senses the shooter (FUN_140999d50)
+            world.SystemOf<AggroSystem>()?.Alarm(world, world.Characters.IdOf(v), world.Characters.IdOf(p.Shooter));   // the victim senses the shooter, with the alarm flag (FUN_140999d50)
             HitReplan(dc, world.Tick);
         }
         // The bolt hit's relation events (FUN_140439c90: none without a shooter; a bolt that was not meant for the victim is a minor knock-out and no hit).

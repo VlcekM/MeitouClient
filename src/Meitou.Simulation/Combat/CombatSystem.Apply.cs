@@ -155,7 +155,7 @@ public sealed partial class CombatSystem
         Crimes?.Hit(world, a, d);
         if (!dc.Medical.Incapacitated)
         {
-            world.SystemOf<AggroSystem>()?.Notice(world, table.IdOf(d), table.IdOf(a));   // the victim senses its attacker (FUN_140999f00)
+            world.SystemOf<AggroSystem>()?.Alarm(world, table.IdOf(d), table.IdOf(a));   // the victim senses its attacker, with the alarm flag (FUN_140999f00)
             HitReplan(dc, world.Tick);
         }
         Deeds?.Blow(world, a, d, dc.Medical.Incapacitated, death);

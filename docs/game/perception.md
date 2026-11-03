@@ -130,13 +130,13 @@ cooldown of 2 s of 1x game time divided by the speed (so 2/speed² real s; pause
 `FUN_140347950` and `FUN_140357d00`, and their exits reset it to 0, **Verified** writer scan), x0.5 for another interior and x0.5 again when the building (the target's, else the listener's) has no open door.
 Chance 0.75 x (1 - d²/N²), sneaking (0.05 when `+0xb4` is 0, else 0.1) x (1 - stealth) x the same; x2 while the pair's alarm runs (5 s, set by
 the forced sense `FUN_140858f40` with its alarm flag: the perceive-and-tag `FUN_1405cb0a0` of DA_MASSIVE_ALARM and AI tasks, the drop of a carried body `FUN_1405ce1e0`,
-a bolt's victim `FUN_140999d50`; counted down in `FUN_1408593d0`, **Verified**). In combat mode in the same place and on
+a melee victim `FUN_140999f00` and a bolt's victim `FUN_140999d50` (also `FUN_14034cd80`, `FUN_14034ffa0`, `FUN_1403552d0` and the case 0x21 of `FUN_140680560`; the dialogue attack effects 6 / 0x37 / 0x39 pass flag 0, **Verified**); counted down in `FUN_1408593d0`, **Verified**). In combat mode in the same place and on
 the same floor any chance > 0 is a sure hearing; else a roll. A heard listener with `+0xb4` 1 drops it on a coin flip and, for a sneaking player target, says event 47
 ALMOST_WOKE_UP. Sneaking or crawling targets get stealth XP ([character-stats](character-stats.md)). Meitou (`AggroSystem.Hears`, one test for the
 attack-on-sight look and the chaser's look): the player pair (player faction only: `FUN_140856bc0`'s owner path for slaves and pets is not modelled), the moving or combat-mode
 gate (a fighter standing still makes noise 350 f), the interior, floor, door and sure-hearing rules, the awake halving and the sleeper's coin flip with event 47 (asleep =
 `CarrySystem.Asleep`, in a bed or resting with the sleep behaviour; 1 and 2 are not told apart), the cooldown (2 s of simulated time, game speed not applied; per-listener
-list `AggroSystem.Slot.Heard`) and the alarm doubling (set only by DA_MASSIVE_ALARM through `AggroSystem.Alarm`; the other alarm sources are not wired); the sneaking base is 0.05 for an awake listener, 0.1 for a sleeper (`Orders.SneakHearChance`).
+list `AggroSystem.Slot.Heard`) and the alarm doubling (set through `AggroSystem.Alarm` by DA_MASSIVE_ALARM, a landed melee blow or bolt (the victim's forced sense), the stealth KO and the kidnap; the AI perceive-and-tag tasks `FUN_14034ffa0` / `FUN_1403552d0` and a dropped carried body `FUN_1405ce1e0` are not wired); the sneaking base is 0.05 for an awake listener, 0.1 for a sleeper (`Orders.SneakHearChance`).
 Hearing does not imply ordinary visual cone/line-of-sight eligibility.
 
 ## Senses
