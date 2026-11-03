@@ -145,7 +145,7 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
 
     /// <summary>
     /// Whether the player may order work on a site (the build verb, <c>FUN_1407a6bc0</c>, Verified): its own, and any other faction's that is unfinished and standing; a destroyed site
-    /// of another faction has no menu. <b>Engine reading</b>: the original's Task_Build body is not readable, so the work itself is as for an own site.
+    /// of another faction has no menu. The order and the work test no owner in the original (docs/game/ui-input.md, Verified), so the work is as for an own site.
     /// </summary>
     static bool MayBeBuilt(World world, BuildSite site) => site.Owner == world.Player.Faction || !site.Complete && !site.Destroyed;
 
