@@ -907,6 +907,13 @@ public sealed partial class CombatSystem
             s.DefendReadyTick = now + (int)MathF.Ceiling(CombatTuning.EarlyDefenceSeconds / dt);
             return;
         }
+        if (!stumbling && cold.Fighter!.IsAnimal)
+        {
+            // An animal never defends: the start takes no technique and holds off the next try (FUN_140609290, the defender's asAnimal vfunc 0x248).
+            s.ReactedSlot = swing.Attacker;
+            s.DefendReadyTick = now + (int)MathF.Ceiling(CombatTuning.AnimalNoDefenceSeconds / dt);
+            return;
+        }
         StartDefence(world, i, ref s, cold, key, now, dt, in swing, stumbling, reconsider: false);
     }
 

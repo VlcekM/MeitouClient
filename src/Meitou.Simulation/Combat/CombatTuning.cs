@@ -26,6 +26,8 @@ public static class CombatTuning
     /// defence sets +0x14c to DefenceStartedSeconds, and the defence update looks at the blow's side again every DefenceRecheckSeconds (+0x274, <c>FUN_1408862c0</c> 1.0).
     /// </summary>
     public const float DefenceStartProgress = 0.1f, EarlyDefenceSeconds = 0.1f, DefenceStartedSeconds = 0.2f, DefenceRecheckSeconds = 1f;
+    /// <summary>An animal's defence start takes no technique and sets +0x14c to this (<b>Verified</b>, <c>FUN_140609290</c>): animals never block or dodge.</summary>
+    public const float AnimalNoDefenceSeconds = 2f;
     /// <summary>A swing is given up to defend while it is under this far through and a blow coming at the fighter is past this far (<b>Verified</b>, FUN_1406083d0(0.5, 0.5)).</summary>
     public const float AbortOwnProgress = 0.5f, AbortIncomingProgress = 0.5f;
     /// <summary>

@@ -169,7 +169,8 @@ running), so a focused defender keeps its band to the pick and faces the followe
 the swing update `FUN_14060a590` and state 5 `FUN_1402b3180` (both from +0x290, the current opponent `FUN_140665580` sets: the target in state 5, the followed attacker in a defence); nothing
 clears it, so during a rear block, which skips the turn, it keeps the last one. The seek and the power-through cone run along the line to the band target, the side-step snap and the speed
 caps along the facing. Meitou: `SteerState.Face` (set by `PursuitSystem.LookAt`; a look-at that is gone falls back to the band target, an engine reading), `CombatSteering.Velocity`. Meitou: `PursuitSystem.BandTarget` (the band; the player's pick is the focused target), `CombatSystem.DefenceAim` (the turn when not
-steering, e.g. on Hold). Animals never defend: a defender whose vfunc 0x248 is set gets a 2 s no-defence timer (`FUN_140609290`); Meitou: not modelled.
+steering, e.g. on Hold). Animals never defend: for a defender whose `asAnimal` (vfunc 0x248) is set the start takes no technique, sets +0x14c to 2 s and succeeds, and the defending state (`FUN_14060a190`)
+goes back to deciding at once for want of a technique (`FUN_140609290`, **Verified**). Meitou: `React`, `CombatTuning.AnimalNoDefenceSeconds`; a stumble break-out (`FUN_1406085e0`) is left as it was.
 Meitou: `CombatSystem.MostAdvanced` (the followed swing; an exact tie keeps the followed one, else the lower slot, since the grid's order is not stable), `React` (start),
 `Reconsider` (the update), `ReactionEnds` (a blow counts as on its way until the attacker's state shows it struck: strikes apply after every Act, a far attacker's at its own step), `CombatTuning.DefenceStartProgress`. A held block's progress
 is clamped at 1, so it keeps blocking (the engine's reading of the loop question). A blow decided again rolls the same: Meitou's rolls are fixed per blow, the original draws afresh.
