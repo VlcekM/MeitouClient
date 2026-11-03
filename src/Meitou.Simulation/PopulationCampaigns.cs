@@ -859,7 +859,7 @@ public sealed partial class PopulationSystem : IStateHashed
                 // With an announcement, a loaded leader waits for it, then while its negotiation is pending (engine choice for the Unknown event-2 state: up to
                 // AnnouncementPatience hours from arriving); off screen nobody can hear it, so it goes on.
                 if (c.DialogAnnouncement is not null && leader.State == PlatoonState.Loaded && Announcer is not null && now - inst.ArrivedAt < AnnouncementPatience
-                    && (inst.AnnouncedAt < 0 || PendingTalk?.Invoke(inst.Announcer) == true)) return false;
+                    && (inst.AnnouncedAt < 0 || PendingTalk?.Invoke(inst.Announcer) == true || AnnouncementHeard(world, inst, leader.Position))) return false;
                 inst.Phase = c.HasPt2 ? 1 : 2;
                 inst.PhaseStart = now;
                 inst.FightStart = -1;
@@ -1206,20 +1206,26 @@ public sealed partial class PopulationSystem : IStateHashed
 
     /// <summary>
     /// A loaded leader in phase 0 that has arrived at the target (task 129 needs state 131 <c>atPackageTarget</c>; Meitou: <see cref="CampaignInstance.ArrivedAt"/>) and is not
-    /// down (!101) says its campaign's <c>dialog announcement</c> once, with the camera and a target-faction member within 2500 of it.
+    /// down (!101) says its campaign's <c>dialog announcement</c>, again each time it has ended, while the camera and a target-faction member are within 2500 of it.
     /// </summary>
     void TryAnnounce(World world, CampaignInstance inst, CharacterId leader, Vector3 at)
     {
-        if (inst.Phase != 0 || inst.ArrivedAt < 0 || inst.AnnouncedAt >= 0 || Announcer is null || inst.Enemy < 0 || CampaignOf(inst.CampaignId)?.DialogAnnouncement is not { } announcement) return;
+        // After the wait ends (its dialogue finished, nothing pending) the task falls through to the announcement again while the conditions hold (FUN_140355770, a2-047).
+        if (inst.Phase != 0 || inst.ArrivedAt < 0 || inst.AnnouncedAt >= 0 && PendingTalk?.Invoke(inst.Announcer) == true || Announcer is null || inst.Enemy < 0 || CampaignOf(inst.CampaignId)?.DialogAnnouncement is not { } announcement) return;
         if (!world.Characters.TryResolveNext(leader, out int ls) || !world.Characters.Next[ls].Alive || world.Characters.Cold(ls)?.Medical?.Incapacitated == true) return;
-        if (focus is not { } camera || Vector2.DistanceSquared(new Vector2(at.X, at.Z), new Vector2(camera.X, camera.Z)) > AnnounceRange * AnnounceRange) return;
-        var table = world.Characters;
-        bool heard = false;
-        for (int i = 0; i < table.Previous.Length && !heard; i++)
-            heard = table.Previous[i].Alive && table.Cold(i) is { } c && c.Faction == inst.Enemy && Vector3.DistanceSquared(table.Previous[i].Position, at) <= AnnounceRange * AnnounceRange;
-        if (!heard || !Announcer(world, leader, announcement)) return;
+        if (!AnnouncementHeard(world, inst, new Vector2(at.X, at.Z)) || !Announcer(world, leader, announcement)) return;
         inst.Announcer = leader;
         inst.AnnouncedAt = world.GameHours;
+    }
+
+    /// <summary>The announcement's conditions (task 129, <c>FUN_140354990</c>): the leader within 2500 of the camera and a member of the target faction within 2500 of the leader.</summary>
+    bool AnnouncementHeard(World world, CampaignInstance inst, Vector2 at)
+    {
+        if (inst.Enemy < 0 || focus is not { } camera || Vector2.DistanceSquared(at, new Vector2(camera.X, camera.Z)) > AnnounceRange * AnnounceRange) return false;
+        var table = world.Characters;
+        for (int i = 0; i < table.Previous.Length; i++)
+            if (table.Previous[i].Alive && table.Cold(i) is { } c && c.Faction == inst.Enemy && Vector2.DistanceSquared(new Vector2(table.Previous[i].Position.X, table.Previous[i].Position.Z), at) <= AnnounceRange * AnnounceRange) return true;
+        return false;
     }
 
     /// <summary>The trail's step and its first slot count (<b>Verified</b>, <c>FUN_1409d6070</c>).</summary>

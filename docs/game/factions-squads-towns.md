@@ -764,7 +764,7 @@ campaign is not hostile, or that is not active (slot 70); a redirected request d
 - Announcement (task 129 in the pt1 leader package, **Verified**): "{1} has arrived at {2}" once; task 129 needs the leader not down (!101)
   and at the package target (131 `atPackageTarget`, [TaskData](ai-tasks.md); its radius is **Unknown**, Meitou uses the 0.8 × radius arrival); with the leader within 2500 of the camera
   and a target-faction member within 2500 of it, `dialog announcement` fires as event 2 ANNOUNCEMENT with no target; phase 0 then waits on
-  the leader's event-2 state (which state: **Unknown**). Talking to a campaign member (event 1) is refused without a pending `interrupt`.
+  the leader's event-2 state (which state: **Unknown**). When that state ends, the update of `FUN_140355770` clears the waiting flag (+0x78) and falls through to the camera and faction-object test (`FUN_140354990`, 2500) and the event (`FUN_140685750`) again, so the announcement repeats while the leader stays at the target and the conditions hold; only the 'has arrived' message is gated once (+0x7a) (**Verified**, decompile; Meitou `PopulationCampaigns.TryAnnounce`, bounded by its patience of one game hour). Talking to a campaign member (event 1) is refused without a pending `interrupt`.
   "Invasion with demands" (data): the announcement sets the negotiation as `interrupt`; paying 2000 (DA 8 + DA 38) retreats and requests it
   again in 42-56 h; refusing is DA 37 (attack); stabbing the speaker is DA 21 + DA 38 and the "EXTRA ANGRY" campaign in 20-50 h.
 
