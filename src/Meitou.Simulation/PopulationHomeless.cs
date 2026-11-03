@@ -26,7 +26,7 @@ public sealed partial class PopulationSystem
     readonly Dictionary<string, bool> approachesTowns = new(StringComparer.Ordinal);
     readonly HashSet<int> patrolSeen = [];
     /// <summary>The homeless squads standing in each zone (living leader), counted at the start of each patrol pass for <see cref="SectorWeight"/>.</summary>
-    readonly Dictionary<ZoneCoordinate, int> patrolStanding = [];
+    readonly Dictionary<ZoneCoordinate, float> patrolStanding = [];
     /// <summary>Each homeless squad's home sector, its patrol's tether (<see cref="HomeCell"/>; null: none), by squad id.</summary>
     readonly Dictionary<int, (int X, int Z)?> homelessHomes = [];
 
@@ -57,9 +57,10 @@ public sealed partial class PopulationSystem
             {
                 if (world.Squads.Find(id) is not { } squad || !table.TryResolveNext(squad.Leader, out int slot) || !table.IsAlive(squad.Leader)) continue;
                 var zone = WorldLayout.ZoneOf(table.Previous[slot].Position.X, table.Previous[slot].Position.Z);
-                patrolStanding[zone] = patrolStanding.GetValueOrDefault(zone) + 1;
+                patrolStanding[zone] = patrolStanding.GetValueOrDefault(zone) + (SquadIntact(world, squad) ? 1 : 0.5f);
             }
         }
+        AddPlatoonLoad(world, patrolStanding, null);
         foreach (int i in wildLoaded)
         {
             var site = wildSites![i];
@@ -227,7 +228,28 @@ public sealed partial class PopulationSystem
     /// A neighbour's weight in a patrol's pick (<c>FUN_1408f5ad0</c>): 1 when its zone is not active; active, by the homeless squads standing in it, 10 when none,
     /// 5 for one, 1 for more. The original divides 10 by 0 for an empty one, an infinite weight its pick does not handle; 10 is an engine choice.
     /// </summary>
-    float SectorWeight(ZoneCoordinate zone) => !active.Contains(zone) ? 1 : patrolStanding.GetValueOrDefault(zone) switch { 0 => 10, 1 => 5, _ => 1 };
+    float SectorWeight(ZoneCoordinate zone)
+    {
+        if (!active.Contains(zone)) return 1;
+        float n = patrolStanding.GetValueOrDefault(zone);
+        return n == 0 ? 10 : n < 2 ? 5 / n : 1;
+    }
+
+    /// <summary>
+    /// Every non-persistent platoon not homed to a nest counts in the area sector of its place (<c>FUN_1407ebd00</c> -> <c>FUN_1408f6c80</c> / <c>FUN_1408f68a0</c>, <b>Verified</b>), town roamers and
+    /// stand-ins too: 1 when intact, 0.5 when not (<c>FUN_1408f6d20</c>). The homeless squads of the wild sites are added by the callers; the platoons made for a wild site are not counted twice.
+    /// </summary>
+    void AddPlatoonLoad(World world, Dictionary<ZoneCoordinate, float> load, Dictionary<ZoneCoordinate, int>? intactIn)
+    {
+        foreach (var p in world.Platoons.All)
+        {
+            if (p.Pinned || p.Wild || p.Campaign is not null || p.Saved?.Source.Record.Bools.GetValueOrDefault("persistent") == true) continue;
+            var zone = WorldLayout.ZoneOf(p.Position.X, p.Position.Y);
+            bool intact = Intact(world, p);
+            load[zone] = load.GetValueOrDefault(zone) + (intact ? 1 : 0.5f);
+            if (intact && intactIn is not null) intactIn[zone] = intactIn.GetValueOrDefault(zone) + 1;
+        }
+    }
 
     /// <summary>
     /// The sector of a homeless squad's home town (<c>FUN_1408f8060</c>, then <c>Ownerships::setHomeTown</c>), measured from <paramref name="at"/>: the town nearest
@@ -288,6 +310,9 @@ public sealed partial class PopulationSystem
         var towns = TownZones();
         HashSet<int>? persistent = null;
         float target = 0, load = 0;
+        var roaming = new Dictionary<ZoneCoordinate, float>();
+        AddPlatoonLoad(world, roaming, intactIn);
+        foreach (var (zone, held) in roaming) standing[zone] = standing.GetValueOrDefault(zone) + held;
         foreach (int i in wildLoaded)
         {
             var site = wildSites![i];
@@ -314,6 +339,7 @@ public sealed partial class PopulationSystem
                 standing[zone] = standing.GetValueOrDefault(zone) + (intact ? 1 : 0.5f);
                 if (intact) intactIn[zone] = intactIn.GetValueOrDefault(zone) + 1;
             }
+            held += roaming.GetValueOrDefault(site.Zone);
             // Clamped to [0, 2] where a town is: its own, or the sector flag (FUN_1408f62e0, +0x30).
             load += ownTown[^1] || towns.Contains(site.Zone) ? Math.Min(held, 2) : held;
         }

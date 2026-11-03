@@ -148,7 +148,7 @@ counted, the rest into the counted set (+0x60, size +0x70). The sector tick (`FU
 the platoon's intact flag is 0 (`FUN_1407ac7b0` → `FUN_1407a5be0`: the squad-intact rule of [perception](perception.md), which a squad with no able member fails, so a wiped or hurt one counts), and drops from the third
 set one whose squad object is gone (+0x1d8 null, unloaded); nothing moves back. A sector's load is +0x70 + 0.5 x +0x98 against its group's cap (**Verified**); the homeless draw's "below its share" test reads +0x70 alone.
 A wiped platoon is destroyed only at its next unload (`declareDead`), so it keeps counting until then (**Observed**). Meitou (`PopulationHomeless.RefillSectors`): the same by the current intact test (no one-per-tick
-drip; a squad intact again counts 1), for a sector's squads but a save's persistent ones and occupiers. A nest's or town's pool is the set
+drip; a squad intact again counts 1), for a sector's squads but a save's persistent ones and occupiers, plus every other non-persistent, non-campaign platoon (town roamers and stand-ins too) in the zone of its place (`AddPlatoonLoad`). The patrol weight uses the same load n (intact 1, not intact 0.5) as 10 for 0, 5 / n below 2, else 1. A nest's or town's pool is the set
 of platoons whose `hometown` is it, by `sqt` (1 residents, 2 roaming), counted in living characters ([save keys](../formats/save.md#npc-platoons-meitou-mapping)).
 
 Loot/building inventories, artifacts, shop stock, prisoners/slaves and placed debris derive
