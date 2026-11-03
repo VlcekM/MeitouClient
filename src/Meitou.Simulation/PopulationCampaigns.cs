@@ -739,7 +739,7 @@ public sealed partial class PopulationSystem : IStateHashed
     /// <summary>
     /// The due requests (<c>FUN_1409cb310</c>'s request pass): a gone target (missing, or a player town occupied for a non-hostile campaign or not active) is redirected, the start
     /// waiting for the next run, else delayed 5-10 h; a failed world-state or leader gate drops it; else a start, tried each run (no chance, cooldown, range or population gate).
-    /// Delays and starts share one counter (<see cref="CampaignRequest.Tries"/>): dropped when a delay takes it above 10, or a failed start above 100.
+    /// Delays and starts share one counter (<see cref="CampaignRequest.Tries"/>): dropped when a delay takes it above 10, or a failed start above 100. A removal ends the run (**Verified**: the original breaks out of its loop after each delete).
     /// </summary>
     void UpdateRequests(World world, WarManager m, double now)
     {
@@ -762,17 +762,17 @@ public sealed partial class PopulationSystem : IStateHashed
                 }
                 ulong roll = Rng.Hash(world.Seed, (ulong)m.Faction << 32 | (uint)i, RngPurpose.Campaign, BitConverter.DoubleToUInt64Bits(r.Due) ^ SeedSalts.CampaignRetry);
                 r.Due += 5 + Rng.Float(roll) * 5;
-                if (++r.Tries > 10) m.Requests.RemoveAt(i--);
+                if (++r.Tries > 10) { m.Requests.RemoveAt(i); break; }   // a removal ends the run (the original's loop breaks after deleting)
                 continue;
             }
             if (!WorldStatesPass(world, c))
             {
-                m.Requests.RemoveAt(i--);
-                continue;
+                m.Requests.RemoveAt(i);
+                break;
             }
             // A start only appends requests (the ally help), so i still points at r.
             var result = Start(world, m, c, r.Target, r.Home, now);
-            if (result != StartResult.Weak || ++r.Tries > 100) m.Requests.RemoveAt(i--);
+            if (result != StartResult.Weak || ++r.Tries > 100) { m.Requests.RemoveAt(i); break; }
         }
     }
 
