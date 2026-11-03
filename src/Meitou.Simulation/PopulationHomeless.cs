@@ -240,7 +240,7 @@ public sealed partial class PopulationSystem
     {
         foreach (var p in world.Platoons.All)
         {
-            if (p.Pinned || p.Wild || p.Campaign is not null || PersistentPlatoon(p)) continue;
+            if (p.Wild || p.Campaign is not null || PersistentPlatoon(p)) continue;
             var zone = WorldLayout.ZoneOf(p.Position.X, p.Position.Y);
             bool intact = Intact(world, p);
             load[zone] = load.GetValueOrDefault(zone) + (intact ? 1 : 0.5f);
