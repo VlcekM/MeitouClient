@@ -401,10 +401,12 @@ public sealed class CharacterCold
     /// </summary>
     public bool Freed { get; set; }
     /// <summary>
-    /// The original's slave state (status <c>+0</c>, saved as <c>slavestate</c>; <c>FUN_1405a4940</c>): 0 free, 1 slave, 2 escaped slave. A slave's sentence is never served.
-    /// <see cref="Locks.FixtureRegistry.Enslave"/>; hashed only while set.
+    /// The original's slave state (status <c>+0</c>, saved as <c>slavestate</c>; <c>FUN_1405a4940</c>): 0 free, 1 slave, 2 escaped slave, 3 ex-slave. A slave's sentence is never served.
+    /// <see cref="Locks.FixtureRegistry.Enslave"/>; an escaped slave lies low to ex-slave, then free (<see cref="Locks.FixtureRegistry.LayLow"/>); hashed only while set.
     /// </summary>
     public byte SlaveState { get; set; }
+    /// <summary>The game hours at which <see cref="SlaveState"/> last became 2 or 3 (status <c>+0x8</c>, saved as the float <c>ssct</c>; <see cref="Locks.FixtureRegistry.LayLow"/>). Hashed with a state above 1.</summary>
+    public double SlaveSince { get; set; }
     /// <summary>The faction owning a slave or escaped slave (the original keeps a <c>slaver</c> handle; -1 none). Saved as <c>meitou slave owner</c>; hashed with <see cref="SlaveState"/>.</summary>
     public int SlaveOwner { get; set; } = -1;
     /// <summary>The squad a slave obeys (the original's owner handle naming a platoon; -1 none): job 187 Obedient Slave runs that squad's <c>Slave AI Goals</c> (<see cref="Ai.AiSystem"/>).
@@ -735,7 +737,7 @@ public sealed class CharacterTable
             if (k.Kidnapped) hasher.Add(0x4B64706E);
             if (k.Freed) hasher.Add(0x46726564);
             if (k.Ordered) hasher.Add(0x4F72646E);
-            if (k.SlaveState != 0) { hasher.Add(0x536C7653); hasher.Add(k.SlaveState); hasher.Add(k.SlaveOwner); }
+            if (k.SlaveState != 0) { hasher.Add(0x536C7653); hasher.Add(k.SlaveState); hasher.Add(k.SlaveOwner); if (k.SlaveState > 1) hasher.Add(k.SlaveSince); }
             if (k.PickingLock is { } pick) { hasher.Add(0x5069636B); hasher.Add(Rng.StableHash(pick)); }
             if (k.Bashing is { } bash) { hasher.Add(0x42617368); hasher.Add(Rng.StableHash(bash)); hasher.Add(k.BashTime); if (k.BashOrdered) hasher.Add(0x4F726473); }
             if (k.ForcingLock is { } force) { hasher.Add(0x466F7263); hasher.Add(Rng.StableHash(force)); hasher.Add((int)k.Force); }

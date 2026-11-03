@@ -466,9 +466,9 @@ squad-intact flag) are written by `FUN_140372ef0` and read by `FUN_1407ed0f0` (*
 Meanings: [locks](../game/locks.md#save-keys), [economy 11.5](../game/economy.md#115-bail-and-sentence) (`sentence` = start in game hours, `psts` = length).
 Dialogue locks (**Observed**, `Character::serialise` writer `FUN_140679900`, reader `FUN_14067f780`): character pairs `lok0`, `lok1`, ..., string = DIALOGUE
 string id, bool of the same key = locked ([dialogue](../game/dialogue.md#memory-and-saves)); Meitou reads and writes them (`Saving/DialogueSave`), and reads `personality` when above 0.
-Slave state (**Observed**, `FUN_140626580` writes, `FUN_140626830` reads, in the character's state record with `personality`): `slavestate` int (status `+0`: 0 free, 1 slave, 2 escaped, 3 ex-slave; the reader stores any int unchecked, **Verified** `FUN_140626830`; Meitou models 0 to 2 and loads 3 or anything else as free),
+Slave state (**Observed**, `FUN_140626580` writes, `FUN_140626830` reads, in the character's state record with `personality`): `slavestate` int (status `+0`: 0 free, 1 slave, 2 escaped, 3 ex-slave; the reader stores any int unchecked, **Verified** `FUN_140626830`; Meitou models 0 to 3 and loads anything else as free), `ssct` float (`+0x8`, the game hours of the last change to state 2 or 3, [lie low](../game/carry-loot.md#escaped-slaves-lie-low)),
 `escap` bool (`+0xe8`, the escaped-prisoner flag), `disguiseblown` float (`+0x110`, the [disguise](../game/perception.md#disguise) cooldown and recently-wanted marker; Meitou `CrimeSave`) and two short-keyed bools (`kidn` `+0xe9`; `tn` `+0xea`, the freed flag, names from `DAT_1416fa808` / `DAT_1416fa804`, **Verified**); the owner is the `slaver` handle. Meitou (`Saving/SlaveSave`)
-reads and writes `slavestate`, and the owner as `meitou slave owner` (FACTION string id). `CrimeSave` reads and writes `tn` (`CharacterCold.Freed`, written always).
+reads and writes `slavestate` and `ssct`, and the owner as `meitou slave owner` (FACTION string id). `CrimeSave` reads and writes `tn` (`CharacterCold.Freed`, written always).
 
 Carry links (**Observed**, decompile: `FUN_1406280a0` writes, `FUN_140627b30` reads): the character state record has a bool `carrying` (true on the carrier) and a handle `carrying`
 (the partner, null when none), both always written. The reader links them when the partner resolves, else keeps the handle and links it later from the per-frame `FUN_140797ec0`
@@ -636,7 +636,7 @@ yet, is left out. Round trip checked with a throwaway probe (write, read, clear)
 
 - What `byteSize` encodes beyond "child count for some record classes", and whether the game ever reads it (it does not at load).
 - The two long slot lists (2503 and 2969 ints) at the end of `quick.save`; the `S` serial's use when a handle goes stale (what happens on a mismatch).
-- The roles of BIOMES `E<n>` instances (EffectHandler state fields), `_w_fog_a`, `TI day/dat0`, `towntime`, `ssct`, and whether MEDICAL `fed` / `KO` are the stomach buffer and the KO timer (the other MEDICAL floats are explained above).
+- The roles of BIOMES `E<n>` instances (EffectHandler state fields), `_w_fog_a`, `TI day/dat0`, `towntime`, and whether MEDICAL `fed` / `KO` are the stomach buffer and the KO timer (the other MEDICAL floats are explained above).
 - Whether `loadGame` rejects or adapts to a `mods` list that differs from the current load order (nothing in the sample: single base-game save).
 - Prisoners, dead characters, bounties, trade and mission state, and player outposts: not present in an early-game sample. Player-built building and outpost keys are known from the code only ([zones](zones.md#placement-keys), [outposts](#player-outposts)).
 - What `DAT_142134690+0x298` is (the autosave gate).

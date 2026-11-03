@@ -246,6 +246,7 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
             if (!next[s].Alive || !world.Turn(s, every) || table.Cold(s) is not { } c) continue;   // its turn (the far cadence, World.Turn)
             if (c.Bounties is { } ledger && !c.IsImprisoned) Expire(world, s, c, ledger, hoursPerTick);   // paused while imprisoned (economy.md 11.3)
             if (c.RecentlyWanted > 0) c.RecentlyWanted = MathF.Max(0, c.RecentlyWanted - seconds);
+            Locks.FixtureRegistry.LayLow(world, c);
             if (c.Pending is { } p)
             {
                 p.Timer -= seconds;
