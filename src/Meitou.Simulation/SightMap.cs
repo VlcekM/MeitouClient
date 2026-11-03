@@ -267,6 +267,9 @@ public sealed class SightMap
         return range * Math.Clamp(MathF.Max(brightest, 1) - Light(looker) + 1, 1, 2);
     }
 
+    /// <summary>The room (<see cref="PlaceOf"/>'s numbering) a point lies in, -1 outdoors: an item's location as <c>FUN_14099b1d0</c> compares it with a character's.</summary>
+    public int PlaceAt(Vector3 at) => RoomAt(at);
+
     int RoomAt(Vector3 at)
     {
         if (!roomCells.TryGetValue((CellOf(at.X), CellOf(at.Z)), out var list)) return -1;
