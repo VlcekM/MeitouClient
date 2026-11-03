@@ -207,7 +207,7 @@ Same targets as picking; Task_CutLock / Task_BruteForceLock share the shackle ta
   Meitou: `DoorLockOrder` (nearest selected character walks to the door's work spot, `LockSystem.DoorLockJobs`); the job (`CharacterCold.DoorJob`) is hashed while set and not saved. The lock-up round (`LockSystem.Rounds`) does the same: `FixtureRegistry.CloseDoor` then the lock at once, smashed doors left out of the round (engine choice for 198: the data does not exclude them).
 - **Residents** (`allDoorsLocked` 87, `FUN_140596bd0`): true when the character is in bed, or its squad's "house locked" flag
   is set (squad AI object +0xe8, saved `homelok`; set by Task_LockDoor at each door it locks whose lock is the worker's faction's, and Task_CloseDoor (a door with a working lock), when no door of the home is open or opening (`FUN_1407933a0`, **Verified**: one locked door is enough); cleared by unlocking, picking or a
-  non-player opening a door), else when the home building has no door that is open, broken or effectively unlocked
+  non-player opening a door (`Task_OpenDoor` update `FUN_1403370f0`, **Verified**: every update with the door unlocked, unless the opener's faction is the player's; Meitou `LockSystem.NoteDoorOpened`, from the walk-through opening)), else when the home building has no door that is open, broken or effectively unlocked
   (`FUN_1408cb1c0`, which also returns that door as the next target). Base AI_PACKAGE hours (**Verified** data):
 
 | Package | Task | Hours |
