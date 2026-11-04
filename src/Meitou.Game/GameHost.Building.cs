@@ -275,7 +275,7 @@ sealed partial class GameHost
             },
             WorldInfo = placement =>
             {
-                var (zone, instance, record) = (placement.Zone, placement.InstanceId, placement.BuildingId);
+                var (zone, instance) = (placement.Zone, placement.InstanceId);
                 if (townOf is null && popData is { } d)
                 {
                     townOf = [];
@@ -287,18 +287,9 @@ sealed partial class GameHost
                             townOf[(b.Zone, b.InstanceId)] = (site.Town.Name, b.OwnerFactionId is { } id ? d.Factions.FirstOrDefault(f => f.Id == id)?.Name ?? townOwner : townOwner);
                     }
                 }
-                string recordName = db.Find(record)?.Name ?? record;
                 var levels = scene.Objects?.Levels;
                 var state = levels is not null && placement.StateId is { } stateId && levels.Zones.TryGetValue(zone, out var zoneDb) ? zoneDb.Find(stateId) : null;
-                // The squad template that runs it names a special building ("The Dancing Skeleton") and, for a trader, lists what it sells.
-                var squad = state?.GetString("squad template") is { Length: > 0 } squadId ? db.Find(squadId) : null;
-                string name = squad?.GetString("building name") is { Length: > 0 } squadName ? squadName
-                    : state?.GetString("name") is { Length: > 0 } own ? own : recordName;
-                string? type = name != recordName ? recordName : null;
-                // A shop whose state only carries its layout's generic name ("Shop", "Big Shop"): the Meitou UI calls it after what it sells.
-                string? sells = squad is { } s && s.GetBool("is trader") && placement.LayoutName(state, exterior: false) is { } layout && layout.Contains("Shop", StringComparison.Ordinal) && name == layout
-                    && s.GetReferences("vendors").FirstOrDefault().TargetStringId is { } vendor && db.Find(vendor)?.Name is { Length: > 0 } list
-                    ? char.ToUpperInvariant(list[0]) + list[1..] : null;
+                var (name, type, sells) = WorldBuildingName(db, placement, state, session.World.Fixtures.Saved?.GetValueOrDefault(placement.Key));
                 var (town, owner) = townOf is not null && townOf.TryGetValue((zone, instance), out var info) ? (info.Town, info.Owner) : (null, null);
                 return new(name, type, town, owner, state?.GetBool("is public day") ?? false, state?.GetBool("is public night") ?? false, sells,
                     shownRuins.TryGetValue(placement.Key, out var ruin) ? ruin.Destroyed : placement.DestroyedOverride ?? state?.GetBool("destroyed") ?? false);
@@ -307,6 +298,30 @@ sealed partial class GameHost
             PlayerFactionId = () => popData is { } d && d.PlayerFaction is >= 0 and var mine && mine < d.Factions.Count ? d.Factions[mine].Id : "",
             DrawGhosts = draws => ActiveObjects?.SetGhosts(draws),
         };
+    }
+
+    /// <summary>
+    /// A world building's name, its <c>Type:</c> (the record's name when that differs) and, for a shop named only after its layout, what it sells (the Meitou UI's name):
+    /// read from <paramref name="saved"/>, a loaded save's state, else <paramref name="state"/>, the level state the boot's housing named (ResidentRuins).
+    /// </summary>
+    static (string Name, string? Type, string? Sells) WorldBuildingName(Meitou.Data.GameDatabase db, BuildingPlacement placement,
+        Meitou.Data.GameRecord? state, Meitou.Data.Fcs.FcsRecord? saved)
+    {
+        string StateText(string key) => saved is not null && saved.Strings.TryGetValue(key, out var text) ? text : state?.GetString(key) ?? "";
+        string recordName = db.Find(placement.BuildingId)?.Name ?? placement.BuildingId;
+
+        // The squad template that runs it names a special building ("The Dancing Skeleton") and, for a trader, lists what it sells.
+        var squad = StateText(ResidentRuins.SquadTemplateKey) is { Length: > 0 } squadId ? db.Find(squadId) : null;
+        string name = squad?.GetString("building name") is { Length: > 0 } squadName ? squadName
+            : StateText(ResidentRuins.NameKey) is { Length: > 0 } own ? own : recordName;
+        string? type = name != recordName ? recordName : null;
+
+        // A shop whose state only carries its layout's generic name ("Shop", "Big Shop"): the Meitou UI calls it after what it sells.
+        string interior = placement.InteriorLayout ?? StateText(ResidentRuins.InteriorKey);
+        string? sells = squad is { } s && s.GetBool("is trader") && interior.Contains("Shop", StringComparison.Ordinal) && name == interior
+            && s.GetReferences("vendors").FirstOrDefault().TargetStringId is { } vendor && db.Find(vendor)?.Name is { Length: > 0 } list
+            ? char.ToUpperInvariant(list[0]) + list[1..] : null;
+        return (name, type, sells);
     }
 
     // A level building's instance id and owning faction id (its state's owner, else its town's faction), by placement key; made on first use.

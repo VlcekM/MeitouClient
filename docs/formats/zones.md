@@ -75,7 +75,7 @@ Building state writer/reader (**Verified** by code, no player-built building in 
 
 | Key | Type | Value |
 |---|---|---|
-| `name` | string | building name |
+| `name` | string | display name; housing replaces it ([town residents](../game/factions-squads-towns.md#town-residents)) |
 | `residents` handle, `residents template` | handle, string | null / empty for a new building |
 | `floornum` | int | floor |
 | `destroyed` | bool | +0x1a1 |

@@ -52,7 +52,8 @@ public static class ResidentRuins
 
     /// <summary>
     /// Names the template's <c>layout interior</c> and <c>layout exterior</c> on its home whatever the level state said, an empty one clearing it, ruins too (the
-    /// original's <c>FUN_140552140</c>; a name the building has no layout for places nothing, as in the original). Nothing reads a ruin's layouts.
+    /// original's <c>FUN_140552140</c>; a name the building has no layout for places nothing, as in the original). Nothing reads a ruin's layouts. The home is named
+    /// as housing names it (<see cref="DisplayName"/>) and its state names the template, as the original's saved state does.
     /// </summary>
     static void LayOut(WorldLevelData levels, TownBuilding b, SquadTemplate t)
     {
@@ -60,13 +61,23 @@ public static class ResidentRuins
         var level = (state.GetString(InteriorKey), state.GetString(ExteriorKey));
         if (level != (t.LayoutInterior, t.LayoutExterior)) levels.LevelLayoutNames.TryAdd(b.Key, level);
         foreach (var (key, layout) in Names(t)) state.StringTable[key] = layout;
+
+        if (DisplayName(t) is { } name) state.StringTable[NameKey] = name;
+        state.StringTable[SquadTemplateKey] = t.Id;
     }
+
+    /// <summary>
+    /// The name housing <paramref name="t"/> gives its home (docs/game/factions-squads-towns.md "Town residents", Layouts): its <c>building name</c>, else its non-empty
+    /// <c>layout interior</c>; null keeps the building's own.
+    /// </summary>
+    public static string? DisplayName(SquadTemplate t) =>
+        t.BuildingName.Length > 0 ? t.BuildingName : t.LayoutInterior.Length > 0 ? t.LayoutInterior : null;
 
     /// <summary>The level-state keys housing <paramref name="t"/> names, with the layout names it gives them (<see cref="LayOut"/>).</summary>
     public static IEnumerable<(string Key, string Layout)> Names(SquadTemplate t) =>
         [(InteriorKey, t.LayoutInterior), (ExteriorKey, t.LayoutExterior)];
 
-    public const string InteriorKey = "interior layout name", ExteriorKey = "exterior layout name";
+    public const string InteriorKey = "interior layout name", ExteriorKey = "exterior layout name", NameKey = "name", SquadTemplateKey = "squad template";
 
     /// <summary>
     /// The interior and exterior layout names housing <paramref name="town"/>'s residents afresh in <paramref name="buildings"/> gives its homes (a town override,
