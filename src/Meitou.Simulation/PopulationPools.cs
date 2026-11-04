@@ -456,8 +456,8 @@ public sealed partial class PopulationSystem
     }
 
     /// <summary>
-    /// A wild site's squads leave the world: one that lost someone (engine choice for "not intact") takes its living members out of the pool (<c>FUN_140796b30</c>, the
-    /// original's despawn of a damaged squad it does not keep).
+    /// A wild site's squads leave the world: one that is not intact (the squad-intact rule, <see cref="SquadIntact"/>, <b>Verified</b>) takes its living members out of the pool while it is above 0, with no
+    /// floor (<c>FUN_140796b30</c>, the original's despawn of a damaged squad it does not keep).
     /// </summary>
     void PayNestDespawn(World world, WildSite site, SiteState state)
     {
@@ -465,11 +465,11 @@ public sealed partial class PopulationSystem
         foreach (int id in state.Squads)
         {
             if (world.Squads.Find(id) is not { } squad) continue;
+            if (SquadIntact(world, squad)) continue;
             int living = squad.Members.Count(m => Living(world, m));
-            if (living >= squad.SpawnSize) continue;
             // Every non-persistent platoon taken out of the world while not intact lowers its faction's prosperity (FUN_1406bab60), nest squads and homeless ones too.
             if (squad.Members.Count > 0) LowerProsperity(world, squad.Faction, DamagedDespawnProsperity);
-            if (site.Kind == WildKind.Nest && pools is not null) pools.Roaming.Current = MathF.Max(0, pools.Roaming.Current - living);
+            if (site.Kind == WildKind.Nest && pools is not null && pools.Roaming.Current > 0) pools.Roaming.Current -= living;
         }
     }
 }
