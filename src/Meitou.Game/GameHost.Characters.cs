@@ -26,14 +26,17 @@ sealed partial class GameHost
     /// <summary>The free camera's eye this far above the ground under it keeps the last focus: the zones load again once it comes down.</summary>
     const float FocusCeiling = Meitou.Data.World.KenshiCamera.FlightHeight;
 
-    /// <summary>Tells the world the camera it is looked at through, every frame (the update flag of <see cref="Meitou.Simulation.Bodies.MedicalTimeBudget"/> and the sensing hooks, <see cref="Meitou.Simulation.MedicalClock"/>).</summary>
     /// <summary>The window's aspect ratio, kept by the frame loop for <see cref="SendView"/>.</summary>
     float viewAspect = 16f / 9;
 
+    /// <summary>The settings' <c>npc range</c>, read once (the drawing takes it once too; reading settings.cfg every frame cost 0.09 ms).</summary>
+    float? npcRange;
+
+    /// <summary>Tells the world the camera it is looked at through, every frame (the update flag of <see cref="Meitou.Simulation.Bodies.MedicalTimeBudget"/> and the sensing hooks, <see cref="Meitou.Simulation.MedicalClock"/>).</summary>
     void SendView()
     {
         if (IsBattle) return;
-        session.World.Commands.Enqueue(new Meitou.Simulation.CameraViewCommand(camera.Eye, camera.Forward, camera.FieldOfView, viewAspect, GameplaySettings.NpcRange(install)) { Tick = session.World.Tick });
+        session.World.Commands.Enqueue(new Meitou.Simulation.CameraViewCommand(camera.Eye, camera.Forward, camera.FieldOfView, viewAspect, npcRange ??= GameplaySettings.NpcRange(install)) { Tick = session.World.Tick });
     }
 
     /// <summary>Tells the world where the camera looks, when it has moved enough to matter (the zones follow it).</summary>
