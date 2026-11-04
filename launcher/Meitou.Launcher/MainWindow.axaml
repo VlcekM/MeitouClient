@@ -67,7 +67,7 @@
               </StackPanel>
             </Button>
             <!-- Continue: the newest save, when it was made with the enabled mods (ContinueSave.cs); shown while there is a save -->
-            <Button x:Name="ContinueButton" Classes="paper" Click="Continue_Click" CornerRadius="0" Margin="-1,0,0,0" MinWidth="250" IsVisible="False">
+            <Button x:Name="ContinueButton" Classes="paper" Click="Continue_Click" CornerRadius="0" Margin="-1,0,0,0" MinWidth="250" HorizontalContentAlignment="Left" IsVisible="False">
               <StackPanel Orientation="Horizontal" Spacing="12">
                 <Path Data="M0,0 L0,18 L15,9 Z" VerticalAlignment="Center" />
                 <StackPanel VerticalAlignment="Center">
