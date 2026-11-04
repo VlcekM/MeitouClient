@@ -156,6 +156,9 @@ sealed partial class PlayerInterface
     /// <summary>The load's game data and level file problems (<see cref="GameDatabase.Issues"/>, <see cref="WorldLevelData.Issues"/>); listed in log.txt.</summary>
     public int DataProblems { get; set; }
 
+    /// <summary>The loaded mods and their problems, for the Settings MODS page; null without game data.</summary>
+    public ModReport? Mods { get; set; }
+
     /// <summary>The title's notice of <see cref="DataProblems"/>, bottom right (a missing mod or a data conflict would otherwise look like a clean install).</summary>
     void AddDataProblems(List<UiControl> controls)
     {
