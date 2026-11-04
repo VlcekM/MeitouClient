@@ -48,11 +48,11 @@ public class SlaveListTests
     static CharacterId ObeyingSlave(SimWorld world, int faction, Squad master, Vector3 at) =>
         Member(world, NewSquad(world, faction, Board([], [], [], [], [])), at, c => (c.SlaveState, c.SlaveOwner, c.SlaveMaster) = (1, faction, master.Id));
 
-    static (SimWorld World, CaptiveSystem Captive, int City, Fixture Cage) Town()
+    static (SimWorld World, CaptiveSystem Captive, int City, Fixture Cage) Town(params ITickSystem[] more)
     {
         var data = ArrestTests.Town();
         var captive = new CaptiveSystem(data, null, new CaptiveSettings { RecordLog = true });
-        var world = new SimWorld(new WorldSettings { PublishSnapshots = false, StartHours = 24 + 12 }, new OpenGroundWalkability((_, _) => 150), [captive]);
+        var world = new SimWorld(new WorldSettings { PublishSnapshots = false, StartHours = 24 + 12 }, new OpenGroundWalkability((_, _) => 150), [captive, .. more]);
         world.Fixtures.RegisterSite(world, data, 0);
         return (world, captive, data.FactionIndex("50-a"), world.Fixtures.Find("0.0:cageA")!);
     }
@@ -99,6 +99,47 @@ public class SlaveListTests
         foreach (var s in slaves.Take(2)) (world.Characters.Cold(s.Slot)!.SlaveState, world.Characters.Cold(s.Slot)!.SlaveMaster) = (0, -1);
         world.RunTicks(61);
         Assert.True(Gathers());
+    }
+
+    /// <summary>
+    /// At its first slow world, starts a walk of row 43 Staying home (a goal's provenance) for <paramref name="who"/> to <paramref name="to"/> and lets the captive
+    /// sweep have it.
+    /// </summary>
+    sealed class HomeWalker(Func<CharacterId> who, Vector2 to) : ITickSystem
+    {
+        bool done;
+
+        public void SlowWorld(SimWorld world)
+        {
+            if (done || !world.Characters.TryResolveNext(who(), out int slot)) return;
+            done = true;
+            TaskStart.Walk(world, slot, to, SpeedMode.Walk, TaskType.STAY_IN_HOME, TaskSource.Goal);
+            world.Characters.Cold(slot)!.Engaged = false;
+        }
+    }
+
+    /// <summary>
+    /// A job's walk is its own (docs/simulation.md "Captives"): a gatherer that takes its 173 job while it walks away for another goal (a walk of row 43 Staying home, from
+    /// 150 off the cage to 450 farther) turns to the cage at once and lifts the captive. Catches the cage walk that took any walk for its own, so Rebirth's workmasters,
+    /// walking home when their gather jobs started, reached the cages only after most of the hour.
+    /// </summary>
+    [Fact]
+    public void A_gatherer_walking_for_another_goal_turns_to_the_cage_at_once()
+    {
+        var worker = CharacterId.None;
+        var walkability = new OpenGroundWalkability((_, _) => 150);
+        var (world, captive, city, cage) = Town(new MovementSystem(new PathService(walkability, true)), new HomeWalker(() => worker, new Vector2(2200 + 600, 2000)));
+        using var _ = world;
+        Assert.Equal((2200f, 2000f), (cage.Position.X, cage.Position.Z));
+        var master = NewSquad(world, city, Board([], [], [Goal(TaskType.GATHER_SLAVES_FROM_CAGES)], [], []));
+        // Held off the sweep until it walks home (HomeWalker), a walk the AI holds (43's act-out).
+        worker = Member(world, master, cage.Position + new Vector3(150, 0, 0), c => (c.Ai!.Behaviour, c.Engaged) = (AiBehaviour.Post, true));
+        var prisoner = Member(world, NewSquad(world, city, Board([], [], [], [], [])), cage.Position);
+        Assert.True(world.Fixtures.Imprison(world, prisoner, cage));
+
+        bool Gathered() => captive.Log.Any(e => e is { Kind: CaptiveEventKind.Gathered } && e.Worker == worker && e.Captive == prisoner);
+        for (int t = 0; t < 1200 && !Gathered(); t++) world.RunTicks(1);
+        Assert.True(Gathered());
     }
 
     /// <summary>
