@@ -16,6 +16,8 @@ sealed class GameOptions
     public bool LowEnd;
     /// <summary><c>--benchmark-baseline</c> (also passed on to WorldOptions): the benchmarks' settings for this run, the saved graphics neither applied nor overwritten.</summary>
     public bool BenchmarkBaseline;
+    /// <summary><c>--mods-cfg</c>: read the enabled mods from this file instead of <c>data/mods.cfg</c> (also <c>MEITOU_MODS_CFG</c>; the option wins).</summary>
+    public string? ModsCfg;
     public bool UiShowcase;
     /// <summary>With <c>--screenshot</c>: one HUD/panel to open for the picture (null: the HUD only).</summary>
     public string? UiPanel;
@@ -83,6 +85,7 @@ sealed class GameOptions
           --fps-limit <n>            frame limit when vsync is off (default 150 from meitou.user.json; 0 = unlimited)
           --vsync / --no-vsync       vsync (default off)
           --seed <n>                 the world seed (default 0)
+          --mods-cfg <file>          read the enabled mods from this file instead of data/mods.cfg (also MEITOU_MODS_CFG); the launcher still writes the real one
           --ui <faithful|meitou>      UI mode, independent of graphics; also available in the settings (default meitou; --low-end: faithful)
           --ui-showcase              with --screenshot: capture HUD, inventory, stats, map, menus, a trade with the nearest trader and a conversation in either UI mode
           --ui-panel <name>          with --screenshot: open one HUD/panel for the picture (hud, hud-expanded, inventory, stats, overview, menu, title, ...)
@@ -233,6 +236,7 @@ sealed class GameOptions
                 case "--scene-every": g.SceneEvery = Math.Max(int.Parse(Next(), CultureInfo.InvariantCulture), 1); break;
                 case "--scene-npc": g.SceneNpc = Next(); break;
                 case "--scene-town": g.SceneTown = Next(); break;
+                case "--mods-cfg": g.ModsCfg = Next(); break;
                 case "--low-end": g.LowEnd = true; rest.Add(a); break;
                 case "--benchmark-baseline": g.BenchmarkBaseline = true; rest.Add(a); break;
                 default: rest.Add(a); break;

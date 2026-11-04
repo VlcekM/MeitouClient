@@ -118,6 +118,7 @@ public sealed partial class World : IDisposable
         ragdolls = this.systems.OfType<Ragdolls.IRagdollSource>().FirstOrDefault();
         hasGoalSources = this.systems.OfType<IGoalSource>().Any();
         Claims.Configure(settings.TickSeconds);
+        for (int k = 0; k < this.systems.Count; k++) RegisterCombatHitObserver(this.systems[k], k);
         foreach (var owner in this.systems.OfType<ITaskOwner>()) owner.RegisterTasks(Tasks);
         foreach (var owner in this.systems.OfType<IDecisionOwner>()) owner.RegisterSources(Decisions);
         for (int k = 0; k < this.systems.Count; k++) if (DecidesAfter(this.systems[k])) decideAfter = k;
@@ -296,6 +297,7 @@ public sealed partial class World : IDisposable
         trades ??= system as Trading.ITradeSource;
         dialogues ??= system as Dialogue.IDialogueSource;
         ragdolls ??= system as Ragdolls.IRagdollSource;
+        RegisterCombatHitObserver(system, systems.Count - 1);
         if (system is IDecisionOwner owner) owner.RegisterSources(Decisions);
         if (DecidesAfter(system)) decideAfter = systems.Count - 1;
     }
@@ -615,6 +617,7 @@ public sealed partial class World : IDisposable
         if (Machines.Count > 0) Machines.Hash(ref h);   // only once the player has a working building
         if (Research.Changed) Research.Hash(ref h);   // only once research changed in play
         foreach (var s in systems) if (s is IStateHashed hashed) hashed.Hash(ref h);
+        HashCombatHitObserverFaults(ref h);
         return h.Value;
     }
 

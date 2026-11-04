@@ -14,7 +14,7 @@ public static class GameResources
 
     public static OgreScriptResources For(GameInstall install)
     {
-        string modList = Path.Combine(install.DataDirectory, "mods.cfg");
+        string modList = ModList.ModsCfgPath(install);
         var key = (install.Root, File.Exists(modList) ? File.GetLastWriteTimeUtc(modList) : default);
         return cache.GetOrAdd(key, _ => new(() => OgreScriptResources.ForInstall(install, LoadOrder.FromInstall(install)))).Value;
     }
