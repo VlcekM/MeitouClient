@@ -251,6 +251,10 @@ interpolated string, which no translation could match.
   and the preset buttons refuse, so an unloaded list never overwrites `mods.cfg`.
 - A preset is a named, ordered list of names with enabled flags. Applying one reorders the list. Mods the preset doesn't name go
   to the end, disabled, and mods it names that aren't on disk are reported. Applying doesn't save.
+- From save lists the save folders (with `quick.save`) of Meitou's save root, the install's `save` and `%LOCALAPPDATA%/kenshi/save`,
+  newest first, and applies the chosen save's CAMERA `mods` list ([save](formats/save.md#camera-type-56-id-1051-the-world-record))
+  as an all-enabled preset, without `base` and the core mods. `SaveModList` (Meitou.Core) reads it; **Verified** equal to
+  `SaveCamera.Mods` on 22 of the owner's saves (0 to 180 mods).
 - A mod folder with `RE_Kenshi.json` is marked as a plugin mod whose DLLs Meitou ignores ([RE_Kenshi](formats/rekenshi.md)).
 - A mod folder with `meitou.json` is marked as a code mod ([modding](modding.md)). Play asks about the enabled code mods not decided
   yet; the Code mods button beside Save mod list asks about every code mod in the list, so a choice can be changed or revoked. The
