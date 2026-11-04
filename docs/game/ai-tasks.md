@@ -1055,17 +1055,17 @@ update `FUN_140511130`, `Character::setupAI` `FUN_140621b70`; KenshiLib names **
   function mask 0x10810 (BF_REFINERY, BF_CORPSE_DISPOSAL, BF_TABLE) in the town, of a faction not hostile to the squad's, inside the bar (or,
   with no bar, inside no building), in a public building (vfunc 82) and not reserved. The outdoors variant (flag +0x151, BarOutdoors) skips the
   bars and takes a free outdoor table. So a bar holds as many visiting squads as it has free tables.
-- **36 Patrolling town** (`Task_PatrolTown` slots 1-3 `FUN_140336370` / `FUN_1403364b0` / `FUN_1403365b0`, **Observed**, decompile): row 36 has no finder or
-  effect (registration in `FUN_140319a60`) and no commitment. Start, update and resume pass modes 0/1/2 to the mover `FUN_1405c6b30` with the task target's position
-  and, while the task has a target (task vfunc `0x40`), the platoon's town: the blackboard's town hand (`FUN_140269cd0`: the contract's target, else the campaign's
-  when it is a town, else the blackboard's town, else the platoon's home town) when it resolves to a town (`FUN_1409f9100`). With a town the move is an area order
-  (order mode 2) on the town's position with scatter max(500, 0.5 x the town's radius, Town vfunc 84); without one, on the target's position with scatter 1250.
-  `setPatrolInput` draws the destination within ±scatter/2 in X and Z (redraws: [patrol moves](factions-squads-towns.md#off-screen-world)); the update re-sends
-  the order only when the mover reports idle, reached or failed. So a patroller strolls from point to point round its town's centre and never stands still for long.
-  What the task's own target is for a goal with no finder is **Unknown** (only the townless case reads it).
-  Meitou (`AiSystem.Patrol`, `PatrolPoint`): the town's centre ± scatter/2 with the scatter above, the first of 10 draws on walkable ground (the building and water
-  redraws are not modelled), a new draw each time a walk is over; wanted only with a town (the townless walk is not built); an occupier walks among the
-  complete buildings of the player town it holds (`AiSystem.OccupiedSpot`, engine choice).
+- **36 Patrolling town** (`Task_PatrolTown` slots 1-3 `FUN_140336370` / `FUN_1403364b0` / `FUN_1403365b0`, **Verified** by the decompile and the `FUN_1405c6b30` mover; row 36 has no finder or
+  effect, registration in `FUN_140319a60`, and no commitment). The task instance's vfunc `0x48` is the character (as in Task_Patrol and Task_Follow), `0x40` the task's target test. Start and resume
+  (modes 0 / 2) do nothing without a target; the update (mode 1) never asks, so it always runs: it hands the mover the **character's own position** and, only while the task has a target, the
+  platoon's town (the blackboard's town hand, `FUN_140269cd0`, resolved by `FUN_1409f9100`). With a town the move is an area order on the town's position with scatter max(500, 0.5 x the town's radius,
+  Town vfunc 84); without one, on the character's own position with scatter 1250 (`DAT_1416f190c`, at least 500). `setPatrolInput` draws the destination within ±scatter/2 in X and Z
+  (redraws: [patrol moves](factions-squads-towns.md#off-screen-world)); the update re-sends the order only when the mover reports idle, reached or failed.
+  Every base "Patrol hometown" AI_TASK has `targeting` SPECIFIC (0), which sets no hand at load (**Verified**, `FUN_1402704e0`), and no finder fills one, so the task has no target (**Observed**, the
+  conclusion): the character strolls in steps of up to ±625 from where it stands, after its list B is met (`atDestinationTown`, so it first travels to the destination town). It does not stand, and
+  it does not patrol round the town's centre unless a mod gives the row a target-bearing `targeting`.
+  Meitou (`AiSystem.Patrol`, `PatrolPoint`): the own-position draw above, the first of 10 draws on walkable ground (the building and water redraws are not modelled), a new draw each time a walk is
+  over; the town path (a target present) is not modelled.
 - Building layouts' `is bar` / `is shop` are 0 on every exterior layout of the base game and mods checked (2 interior layouts set `is bar`, 9 `is shop`),
   so they do not mark bars and shops (**Verified** over the merged `interiors.level`).
 - **43 Staying home** (`FUN_1408cbc00`): furniture in the home whose BuildingFunction is in mask 0x2049a (bits MINE, RESEARCH, REFINERY, TRAINING,
