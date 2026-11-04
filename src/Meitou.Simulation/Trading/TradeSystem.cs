@@ -174,12 +174,10 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
                     Close(world);
                     break;
                 case BuyItem buy when open:
-                    FollowSelection(world);
-                    Buy(world, buy);
+                    if (CustomerTrades(world)) Buy(world, buy);
                     break;
                 case SellItem sell when open:
-                    FollowSelection(world);
-                    Sell(world, sell);
+                    if (CustomerTrades(world)) Sell(world, sell);
                     break;
                 case ArrangeStock when open:
                     if (Resolve(world, out _, out _, out var arranged)) InventoryCommands.Arrange(arranged!.Stock);
@@ -236,17 +234,30 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
     /// <summary>
     /// The open trade passes to another selected character of the player's within <see cref="TradeSettings.PassRange"/> of the trader when its customer is no longer selected
     /// (the original buys into the window the stock is dropped on, <c>FUN_140712490</c>, <b>Observed</b>); farther the customer stays.
+    /// False when it stays while not selected.
     /// </summary>
-    void FollowSelection(World world)
+    bool FollowSelection(World world)
     {
         var selection = world.Player.Selection;
-        if (selection.Count == 0 || selection.Contains(customer) || !world.Characters.TryResolveNext(trader, out int t)) return;
+        if (selection.Count == 0 || selection.Contains(customer) || !world.Characters.TryResolveNext(trader, out int t)) return true;
         foreach (var id in selection)
             if (world.Characters.TryResolveNext(id, out int c) && world.Characters.Cold(c) is { IsPlayer: true, Inventory: not null, Medical: not { Incapacitated: true } } && InReach(world, c, t, Settings.PassRange))
             {
                 customer = id;
-                return;
+                return true;
             }
+        return false;
+    }
+
+    /// <summary>
+    /// Whether a buy or sell goes ahead: the trade follows the selection, and when every selected character is out of its reach nothing moves and "Out of trading range."
+    /// is posted, as the original refuses a drop on a character window beyond the item limit (<c>FUN_140712490</c>, docs/game/economy.md "Trading range").
+    /// </summary>
+    bool CustomerTrades(World world)
+    {
+        if (FollowSelection(world)) return true;
+        world.Post("Out of trading range.");
+        return false;
     }
 
     internal void RefreshView(World world) =>
