@@ -579,9 +579,10 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
         }
         Meitou.Rendering.StageClock.Lap(Meitou.Rendering.StageClock.Host);   // the profiler: the host's frame so far, then the blood marks apart from the terrain's update
         UpdateBlood();
+        Meitou.Rendering.StageClock.Lap(Meitou.Rendering.StageClock.Blood, "blood marks");
         birdAspect = width / (float)Math.Max(height, 1);
         UpdateBirds();
-        Meitou.Rendering.StageClock.Lap(Meitou.Rendering.StageClock.Blood, "blood marks");
+        Meitou.Rendering.StageClock.Lap(Meitou.Rendering.StageClock.Birds, "birds");
         UpdateWeatherSource();
         UpdateInteriorView();
         // The frame's animation time (particles, water, wet surfaces) is game time: still while paused, faster at higher speeds.
@@ -605,23 +606,48 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
     /// <summary>The birds fly on the display's real time (the original's <c>BirdManager</c> thread is kicked with the real dt, docs/game/birds.md); the flocks are those the camera's BIOME_GROUP lists.</summary>
     void UpdateBirds()
     {
-        gpu.BirdPieces.Clear();
-        if (scene.Database is not { } db) return;
+        if (scene.Database is not { } db) { gpu.BirdPieces.Clear(); return; }
         if (birds is null)
         {
             var kinds = Meitou.Data.Gameplay.BirdFlockData.LoadAll(db);
             try { birdAreas = Meitou.Data.Gameplay.BiomeMap.Create(Meitou.Data.Gameplay.BiomeGroupData.LoadAll(db), Meitou.Data.World.WeatherAreas.Load(install)); }
             catch (Exception e) when (e is IOException or FormatException) { birdAreas = null; }
-            birds = new Meitou.Game.BirdFlocks(kinds, (x, z) => gpu.Terrain.HeightAt(x, z), GroupIdOfCell);
+            birds = new Meitou.Game.BirdFlocks(kinds, birdHeights.HeightAt, GroupIdOfCell);
+            birdStep = new Meitou.Game.BirdThread(() => birds.Update(birdDt, birdEye, birdFocus, birdPlanes));
+
+        }
+        // The step runs beside the frame: its flocks are shown one frame late (the original's thread is as loose), and a step still running when the next frame starts is left to finish.
+        bool async = o.Screenshot is null && !IsDuel;
+        if (birdStep!.Busy) return;
+        if (birdStarted && async)
+        {
+            gpu.BirdPieces.Clear();
+            birds.AddPieces(gpu.BirdPieces, mesh => gpu.Debris is { } birdMeshes && birdMeshes.Extent(mesh, null) is not null);   // a mesh is loaded when first asked for
         }
         UpdateBirdAttractors(db);
         double now = realTime.Elapsed.TotalSeconds;
-        float dt = double.IsNaN(birdClock) ? 0 : (float)(now - birdClock);
+        birdDt = double.IsNaN(birdClock) ? 0 : (float)(now - birdClock);
         birdClock = now;
-        birds.Update(dt, camera.Eye, camera.Target, BirdFrustum());
-        birds.AddPieces(gpu.BirdPieces);
-        if (gpu.Debris is { } birdMeshes) gpu.BirdPieces.RemoveAll(p => birdMeshes.Extent(p.Mesh, null) is null);   // a mesh is loaded when first asked for
+        birdEye = camera.Eye;
+        birdFocus = camera.Target;
+        birdPlanes = BirdFrustum();
+        birdHeights.Refresh(gpu.Terrain);
+        birdStarted = true;
+        if (async) birdStep.Start();
+        else
+        {
+            birds.Update(birdDt, birdEye, birdFocus, birdPlanes);
+            gpu.BirdPieces.Clear();
+            birds.AddPieces(gpu.BirdPieces, mesh => gpu.Debris is { } birdMeshes && birdMeshes.Extent(mesh, null) is not null);
+        }
     }
+
+    readonly Meitou.Rendering.TerrainHeights birdHeights = new();
+    Meitou.Game.BirdThread? birdStep;
+    bool birdStarted;
+    float birdDt;
+    Vector3 birdEye, birdFocus;
+    Vector4[]? birdPlanes;
 
     long birdBuildingsRevision = -1;
     object? birdAttractorsFor;

@@ -50,3 +50,13 @@ internal readonly struct HeightSnapshot
         return v * (WorldLayout.MaxHeight / ushort.MaxValue);
     }
 }
+
+/// <summary>A terrain height source for a worker thread: <see cref="Refresh"/> (render thread, while no worker reads it) takes a <see cref="HeightSnapshot"/>, <see cref="HeightAt"/> reads it.</summary>
+public sealed class TerrainHeights
+{
+    HeightSnapshot snapshot;
+
+    public void Refresh(TerrainRenderer terrain) => snapshot = terrain.Snapshot();
+
+    public float HeightAt(float x, float z) => snapshot.HeightAt(x, z);
+}

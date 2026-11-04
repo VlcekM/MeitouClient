@@ -35,11 +35,45 @@ public sealed class BirdFlocks
         public int Max, Count;
     }
 
-    sealed class Group(BirdFlockData kind)
+    sealed class Group(BirdFlockData kind, Func<int, int, string?> groupOfCell)
     {
         public readonly BirdFlockData Kind = kind;
+        /// <summary>The kind's amount in each weather cell (-1: the cell's group does not list it), row z * 64 + x; the map does not change while the birds fly.</summary>
+        public readonly int[] Amounts = BuildAmounts(kind, groupOfCell);
+        /// <summary>Summed-area tables of the listing cells and their amounts (65 x 65: rows and columns of the cells before), so a rectangle's sums take four reads.</summary>
+        public readonly int[] MatchSums = new int[(WeatherAreas.Cells + 1) * (WeatherAreas.Cells + 1)], TotalSums = new int[(WeatherAreas.Cells + 1) * (WeatherAreas.Cells + 1)];
+
+        static int[] BuildAmounts(BirdFlockData kind, Func<int, int, string?> groupOfCell)
+        {
+            var amounts = new int[WeatherAreas.Cells * WeatherAreas.Cells];
+            for (int z = 0; z < WeatherAreas.Cells; z++)
+                for (int x = 0; x < WeatherAreas.Cells; x++)
+                    amounts[z * WeatherAreas.Cells + x] = groupOfCell(x, z) is { } id && kind.Lists(id) ? Math.Max(kind.AmountIn(id), 0) : -1;
+            return amounts;
+        }
+
+        public void BuildSums()
+        {
+            const int n = WeatherAreas.Cells, w = n + 1;
+            for (int z = 0; z < n; z++)
+                for (int x = 0; x < n; x++)
+                {
+                    int a = Amounts[z * n + x];
+                    MatchSums[(z + 1) * w + x + 1] = MatchSums[z * w + x + 1] + MatchSums[(z + 1) * w + x] - MatchSums[z * w + x] + (a >= 0 ? 1 : 0);
+                    TotalSums[(z + 1) * w + x + 1] = TotalSums[z * w + x + 1] + TotalSums[(z + 1) * w + x] - TotalSums[z * w + x] + Math.Max(a, 0);
+                }
+        }
+
+        public static int Sum(int[] sums, int minX, int minZ, int maxX, int maxZ)
+        {
+            const int w = WeatherAreas.Cells + 1;
+            return sums[(maxZ + 1) * w + maxX + 1] - sums[minZ * w + maxX + 1] - sums[(maxZ + 1) * w + minX] + sums[minZ * w + minX];
+        }
+
         public readonly List<Bird> Birds = [];
         public readonly List<Attractor> Attractors = [];
+        /// <summary>The mesh with its texture, as the debris renderer takes it.</summary>
+        public readonly string Mesh = kind.Texture.Length == 0 ? kind.Mesh : kind.Mesh + DebrisPiece.TextureMark + kind.Texture;
     }
 
     const float FarSpawn = 1000, NeighbourRadius = 100, WideNeighbourRadius = 1000, FrustumMargin = -10;
@@ -47,16 +81,15 @@ public sealed class BirdFlocks
 
     readonly Group[] groups;
     readonly Func<float, float, float> ground;
-    readonly Func<int, int, string?> groupOfCell;
     readonly Random random;
 
     /// <param name="ground">The terrain's height at a world x, z.</param>
     /// <param name="groupOfCell">The BIOME_GROUP id of a weather cell (null: none).</param>
     public BirdFlocks(IReadOnlyList<BirdFlockData> kinds, Func<float, float, float> ground, Func<int, int, string?> groupOfCell, int seed = 1)
     {
-        groups = [.. kinds.Where(k => k.Speed > 0 && k.SpawnCount > 0).Select(k => new Group(k))];
+        groups = [.. kinds.Where(k => k.Speed > 0 && k.SpawnCount > 0).Select(k => new Group(k, groupOfCell))];
+        foreach (var g in groups) g.BuildSums();
         this.ground = ground;
-        this.groupOfCell = groupOfCell;
         random = new Random(seed);
     }
 
@@ -73,7 +106,7 @@ public sealed class BirdFlocks
     {
         foreach (var g in groups)
         {
-            var range = CellsAround(g.Kind, eye);
+            var range = CellsAround(g, eye);
             if (g.Birds.Count + g.Kind.SpawnCount <= range.Total) SpawnFlock(g, range, focus);
             for (int i = 0; i < g.Birds.Count; i++)
                 if (g.Birds[i].State != BirdState.Gone) Step(g, g.Birds[i], i, dt, eye, frustum);
@@ -108,18 +141,15 @@ public sealed class BirdFlocks
     readonly record struct CellRange(int MinX, int MinZ, int MaxX, int MaxZ, int Matches, int Total);
 
     /// <summary>The cells within the kind's <c>distance</c> of the camera (clamped to the map) that list the kind, and the sum of their amounts.</summary>
-    CellRange CellsAround(BirdFlockData kind, Vector3 eye)
+    CellRange CellsAround(Group g, Vector3 eye)
     {
+        var kind = g.Kind;
         var (minX, minZ) = WeatherAreas.CameraCellOf(eye.X - kind.Distance, eye.Z - kind.Distance);
         var (maxX, maxZ) = WeatherAreas.CameraCellOf(eye.X + kind.Distance, eye.Z + kind.Distance);
-        int matches = 0, total = 0;
-        for (int x = minX; x <= maxX; x++)
-            for (int z = minZ; z <= maxZ; z++)
-                if (AmountOf(kind, x, z) is { } amount) { matches++; total += Math.Max(amount, 0); }
-        return new CellRange(minX, minZ, maxX, maxZ, matches, total);
+        return new CellRange(minX, minZ, maxX, maxZ, Group.Sum(g.MatchSums, minX, minZ, maxX, maxZ), Group.Sum(g.TotalSums, minX, minZ, maxX, maxZ));
     }
 
-    int? AmountOf(BirdFlockData kind, int x, int z) => groupOfCell(x, z) is { } id && kind.Lists(id) ? kind.AmountIn(id) : null;
+    static int? AmountOf(Group g, int x, int z) => g.Amounts[z * WeatherAreas.Cells + x] is >= 0 and var amount ? amount : null;
 
     void SpawnFlock(Group g, CellRange range, Vector3 focus)
     {
@@ -128,7 +158,7 @@ public sealed class BirdFlocks
         (int X, int Z)? cell = null;
         for (int x = range.MinX; x <= range.MaxX && pick >= 1; x++)
             for (int z = range.MinZ; z <= range.MaxZ && pick >= 1; z++)
-                if (AmountOf(kind, x, z) is not null) { cell = (x, z); pick--; }
+                if (AmountOf(g, x, z) is not null) { cell = (x, z); pick--; }
         if (cell is not { } c) return;
         var (x0, z0, x1, z1) = WeatherAreas.CellRect(c.X, c.Z);
         float px = x0 + (x1 - x0) * Next(), pz = z0 + (z1 - z0) * Next(), py = ground(px, pz);
@@ -151,7 +181,7 @@ public sealed class BirdFlocks
         var kind = g.Kind;
         var stride = b.Forward * (dt * kind.Speed);
         b.Position += stride;
-        bool inside = InsideArea(kind, b.Position);
+        bool inside = InsideArea(g, b.Position);
         if (!inside)
         {
             b.State = BirdState.Return;
@@ -172,10 +202,10 @@ public sealed class BirdFlocks
         }
     }
 
-    bool InsideArea(BirdFlockData kind, Vector3 p)
+    static bool InsideArea(Group g, Vector3 p)
     {
         var (cx, cz) = WeatherAreas.CameraCellOf(p.X, p.Z);
-        return groupOfCell(cx, cz) is { } id && kind.Lists(id);
+        return g.Amounts[cz * WeatherAreas.Cells + cx] >= 0;
     }
 
     static bool Outside(Vector4[] frustum, Vector3 p)
@@ -375,14 +405,13 @@ public sealed class BirdFlocks
 
     static Vector3 Normalise(Vector3 v) => v.LengthSquared() < 1e-12f ? v : Vector3.Normalize(v);
 
-    /// <summary>This frame's birds as loose meshes, appended to <paramref name="pieces"/> (the mesh faces along its own +z).</summary>
-    public void AddPieces(List<DebrisPiece> pieces)
+    /// <summary>This frame's birds as loose meshes, appended to <paramref name="pieces"/> (the mesh faces along its own +z); <paramref name="ready"/> says per mesh whether it is loaded (null: all are).</summary>
+    public void AddPieces(List<DebrisPiece> pieces, Func<string, bool>? ready = null)
     {
         foreach (var g in groups)
         {
-            if (g.Kind.Mesh.Length == 0) continue;
-            string mesh = g.Kind.Texture.Length == 0 ? g.Kind.Mesh : g.Kind.Mesh + DebrisPiece.TextureMark + g.Kind.Texture;
-            foreach (var b in g.Birds) pieces.Add(new DebrisPiece(mesh, b.Scale, Orientation(b.Forward), b.Position));
+            if (g.Kind.Mesh.Length == 0 || g.Birds.Count == 0 || ready is not null && !ready(g.Mesh)) continue;
+            foreach (var b in g.Birds) pieces.Add(new DebrisPiece(g.Mesh, b.Scale, Orientation(b.Forward), b.Position));
         }
     }
 
@@ -394,5 +423,44 @@ public sealed class BirdFlocks
         var y = Vector3.Cross(forward, x);
         var m = new Matrix4x4(x.X, x.Y, x.Z, 0, y.X, y.Y, y.Z, 0, forward.X, forward.Y, forward.Z, 0, 0, 0, 0, 1);
         return Quaternion.CreateFromRotationMatrix(m);
+    }
+}
+
+/// <summary>
+/// The thread the birds' step runs on (the original's <c>BirdManager</c> has its own, "Birds"): the host starts a step with <see cref="Start"/> once the last one is done (<see cref="Busy"/>)
+/// and reads the flocks between steps only.
+/// </summary>
+public sealed class BirdThread
+{
+    readonly Action work;
+    readonly SemaphoreSlim go = new(0);
+    volatile bool busy;
+    Exception? failure;
+
+    public BirdThread(Action work)
+    {
+        this.work = work;
+        new Thread(Run) { IsBackground = true, Name = "Birds" }.Start();
+    }
+
+    public bool Busy => busy;
+
+    /// <summary>Runs the work once on the thread; the caller waits for <see cref="Busy"/> to clear first. A step that failed throws here, on the host's thread.</summary>
+    public void Start()
+    {
+        if (failure is { } e) { failure = null; throw new InvalidOperationException("The bird thread failed.", e); }
+        busy = true;
+        go.Release();
+    }
+
+    void Run()
+    {
+        while (true)
+        {
+            go.Wait();
+            try { work(); }
+            catch (Exception e) { failure = e; }
+            busy = false;
+        }
     }
 }
