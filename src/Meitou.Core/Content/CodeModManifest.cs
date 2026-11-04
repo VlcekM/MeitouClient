@@ -14,7 +14,8 @@ public sealed record CodeModManifest(string Id, int ApiVersion, IReadOnlyList<st
     {
         try
         {
-            using var json = JsonDocument.Parse(File.ReadAllBytes(path), new JsonDocumentOptions { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true });
+            var options = new JsonDocumentOptions { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true };
+            using var json = JsonDocument.Parse(File.ReadAllBytes(path), options);
             return FromJson(json.RootElement);
         }
         catch (JsonException e)
@@ -28,7 +29,8 @@ public sealed record CodeModManifest(string Id, int ApiVersion, IReadOnlyList<st
         if (root.ValueKind != JsonValueKind.Object) throw new InvalidDataException($"{ModList.CodeManifestFile} must hold an object");
         string id = Text(root, "id");
         if (!IsValidId(id)) throw new InvalidDataException($"id '{id}': use letters, digits, '.', '_' and '-', starting with a letter or digit");
-        if (!root.TryGetProperty("apiVersion", out var api) || !api.TryGetInt32(out int apiVersion)) throw new InvalidDataException("apiVersion: a whole number is needed");
+        if (!root.TryGetProperty("apiVersion", out var api) || !api.TryGetInt32(out int apiVersion))
+            throw new InvalidDataException("apiVersion: a whole number is needed");
         string entry = Text(root, "entry");
         return new CodeModManifest(id, apiVersion, ReadAssemblies(root), entry);
     }
@@ -47,7 +49,8 @@ public sealed record CodeModManifest(string Id, int ApiVersion, IReadOnlyList<st
         var names = new List<string>();
         foreach (var item in list.EnumerateArray())
         {
-            if (item.ValueKind != JsonValueKind.String || item.GetString() is not { Length: > 0 } name || Path.GetFileName(name) != name || !name.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))
+            string? name = item.ValueKind == JsonValueKind.String ? item.GetString() : null;
+            if (name is not { Length: > 0 } || Path.GetFileName(name) != name || !name.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))
                 throw new InvalidDataException($"assemblies: '{item}' is not a DLL file name in the mod folder");
             names.Add(name);
         }

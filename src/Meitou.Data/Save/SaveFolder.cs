@@ -75,8 +75,11 @@ public sealed partial class SaveFolder
 
     /// <summary>The code-mod sidecar files: (mod id, name) for each <c>meitou-mods/&lt;id&gt;.dat</c>.</summary>
     public IEnumerable<(string Id, string Name)> ModDataFiles =>
-        Names.Where(n => n.StartsWith(ModDataDirectory + "/", StringComparison.Ordinal) && n.EndsWith(ModDataExtension, StringComparison.Ordinal) && n.IndexOf('/', ModDataDirectory.Length + 1) < 0)
-            .Select(n => (n[(ModDataDirectory.Length + 1)..^ModDataExtension.Length], n));
+        Names.Where(IsModDataName).Select(n => (n[(ModDataDirectory.Length + 1)..^ModDataExtension.Length], n));
+
+    static bool IsModDataName(string name) =>
+        name.StartsWith(ModDataDirectory + "/", StringComparison.Ordinal) && name.EndsWith(ModDataExtension, StringComparison.Ordinal)
+        && name.IndexOf('/', ModDataDirectory.Length + 1) < 0;
 
     public static string ZoneName(ZoneCoordinate zone) => $"{ZoneDirectory}/zone.{zone.X}.{zone.Y}.zone";
 

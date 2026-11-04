@@ -146,7 +146,8 @@ public sealed class ModContext
 }
 
 /// <summary>What a mod's debug command gets: the row's typed text, the selected characters, the camera target, the tick, and the command queue.</summary>
-public sealed record DebugCommandContext(string Field, IReadOnlyList<CharacterId> Selected, System.Numerics.Vector3 Target, long Tick, Action<SimCommand> Enqueue);
+public sealed record DebugCommandContext(
+    string Field, IReadOnlyList<CharacterId> Selected, System.Numerics.Vector3 Target, long Tick, Action<SimCommand> Enqueue);
 
 /// <summary>A debug menu row a mod added.</summary>
 public sealed record ModDebugCommand(string Owner, string Label, bool HasField, Func<DebugCommandContext, string> Run);

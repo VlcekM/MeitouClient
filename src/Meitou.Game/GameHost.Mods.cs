@@ -12,7 +12,8 @@ namespace Meitou.Game;
 sealed partial class GameHost
 {
     ModHost? mods;
-    // With code mods enabled the JIT warm-up starts only once they are initialized: a method compiled before a Harmony patch keeps any inlined copy of the target.
+    // With code mods enabled the JIT warm-up starts only once they are initialized: a method compiled before a Harmony patch keeps any inlined copy
+    // of the target.
     bool warmupAfterMods;
 
     /// <summary>Starts the JIT warm-up now, or (with code mods enabled) once they are initialized.</summary>
@@ -57,7 +58,12 @@ sealed partial class GameHost
 
     int DebugRowCount => DebugLabels.Length + ModDebugRows.Count;
 
-    string DebugLabel(int row) => row < DebugLabels.Length ? DebugLabels[row] : $"{ModDebugRows[row - DebugLabels.Length].Label} [{ModDebugRows[row - DebugLabels.Length].Owner}]";
+    string DebugLabel(int row)
+    {
+        if (row < DebugLabels.Length) return DebugLabels[row];
+        var command = ModDebugRows[row - DebugLabels.Length];
+        return $"{command.Label} [{command.Owner}]";
+    }
 
     void EnsureDebugFields()
     {

@@ -35,7 +35,10 @@ sealed class ModRegistry
     public void CheckFree(ModCodeKind kind, int code, ModRegistrations pending, string mod)
     {
         if (code < SimulationExtensions.FirstModCode)
-            throw new ArgumentOutOfRangeException(nameof(code), code, $"Mod codes start at {SimulationExtensions.FirstModCode}; lower numbers are the game's.");
+        {
+            string reason = $"Mod codes start at {SimulationExtensions.FirstModCode}; lower numbers are the game's.";
+            throw new ArgumentOutOfRangeException(nameof(code), code, reason);
+        }
         if (owners.TryGetValue((kind, code), out var owner)) throw new InvalidOperationException($"{kind} {code} is taken by mod '{owner}'.");
         bool mine = kind switch
         {
@@ -49,8 +52,10 @@ sealed class ModRegistry
     public void Commit(string mod, ModRegistrations r)
     {
         foreach (var factory in r.Systems) Simulation.Systems.Add(Tagged(mod, factory));
-        foreach (var (code, handler) in r.Conditions) Claim(ModCodeKind.DialogueCondition, code, mod, () => Simulation.DialogueConditions[code] = handler);
-        foreach (var (code, handler) in r.Effects) Claim(ModCodeKind.DialogueEffect, code, mod, () => Simulation.DialogueEffects[code] = handler);
+        foreach (var (code, handler) in r.Conditions)
+            Claim(ModCodeKind.DialogueCondition, code, mod, () => Simulation.DialogueConditions[code] = handler);
+        foreach (var (code, handler) in r.Effects)
+            Claim(ModCodeKind.DialogueEffect, code, mod, () => Simulation.DialogueEffects[code] = handler);
         foreach (var (type, name) in r.RecordTypes) Claim(ModCodeKind.RecordType, type, mod, () => RecordTypes[type] = name);
         Ui.AddRange(r.Ui);
         DebugCommands.AddRange(r.DebugCommands);

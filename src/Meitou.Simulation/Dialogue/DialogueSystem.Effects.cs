@@ -221,8 +221,11 @@ public sealed partial class DialogueSystem
     }
 
     /// <summary>A mod's condition code: the handler's answer, or "no" when no mod handles it (as an unknown vanilla code computes).</summary>
-    bool ModCondition(World world, CharacterId me, CharacterId subject, DialogueCondition dc) =>
-        Extensions?.DialogueConditions.GetValueOrDefault(dc.Condition) is { } handler ? handler(new DialogueCheck(world, me, subject, dc)) : dc.Value <= 0;
+    bool ModCondition(World world, CharacterId me, CharacterId subject, DialogueCondition dc)
+    {
+        if (Extensions?.DialogueConditions.GetValueOrDefault(dc.Condition) is not { } handler) return dc.Value <= 0;
+        return handler(new DialogueCheck(world, me, subject, dc));
+    }
 
     /// <summary>The attack-on-sight system a massive alarm alarms each member's hearing of the target through (<see cref="AggroSystem.Alarm"/>); null: no alarm.</summary>
     public AggroSystem? Aggro { get; set; }

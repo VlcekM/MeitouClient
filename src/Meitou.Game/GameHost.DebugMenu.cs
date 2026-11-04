@@ -28,7 +28,8 @@ sealed partial class GameHost
     (string? Id, string Name)[]? debugParts;
     int debugPart;
 
-    bool DebugHasField(int row) => row >= DebugLabels.Length ? ModDebugRows[row - DebugLabels.Length].HasField : (DebugRow)row is not (DebugRow.Teleport or DebugRow.Heal or DebugRow.MaxSkills or DebugRow.ForceHits or DebugRow.UnlockResearch);
+    bool DebugHasField(int row) => row >= DebugLabels.Length ? ModDebugRows[row - DebugLabels.Length].HasField
+        : (DebugRow)row is not (DebugRow.Teleport or DebugRow.Heal or DebugRow.MaxSkills or DebugRow.ForceHits or DebugRow.UnlockResearch);
 
     /// <summary>The rows that open the body part list.</summary>
     static bool DebugPicksPart(int row) => (DebugRow)row is DebugRow.Damage or DebugRow.ForceHits;

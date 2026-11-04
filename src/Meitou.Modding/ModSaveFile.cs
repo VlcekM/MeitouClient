@@ -36,7 +36,8 @@ static class ModSaveFile
         try
         {
             if (r.ReadUInt32() != Magic) throw new InvalidDataException("not a mod data file");
-            if (r.ReadInt32() is var version && version != FormatVersion) throw new InvalidDataException($"mod data format {version}, this game reads {FormatVersion}");
+            int version = r.ReadInt32();
+            if (version != FormatVersion) throw new InvalidDataException($"mod data format {version}, this game reads {FormatVersion}");
             return ReadEntries(r, r.ReadInt32());
         }
         catch (EndOfStreamException e)
@@ -52,7 +53,8 @@ static class ModSaveFile
         {
             string name = r.ReadString();
             int length = r.ReadInt32();
-            if (length < 0 || length > r.BaseStream.Length - r.BaseStream.Position) throw new InvalidDataException($"entry '{name}' has a bad length");
+            if (length < 0 || length > r.BaseStream.Length - r.BaseStream.Position)
+                throw new InvalidDataException($"entry '{name}' has a bad length");
             entries[name] = r.ReadBytes(length);
         }
         return entries;

@@ -90,7 +90,8 @@ public sealed class ModHost
             mod = Prepare(info);
             Initialize(mod, options);
             mods.Add(mod);
-            Console.WriteLine($"mod       {mod.Manifest.Id}: loaded from {info.Name} ({string.Join(", ", mod.Assemblies.Select(a => a.GetName().Name))})");
+            string assemblies = string.Join(", ", mod.Assemblies.Select(a => a.GetName().Name));
+            Console.WriteLine($"mod       {mod.Manifest.Id}: loaded from {info.Name} ({assemblies})");
         }
         catch (ModLoadException e)
         {
@@ -114,7 +115,10 @@ public sealed class ModHost
     {
         CodeModManifest manifest;
         try { manifest = CodeModManifest.Read(info.CodeManifestPath); }
-        catch (Exception e) when (e is InvalidDataException or IOException or UnauthorizedAccessException) { throw new ModLoadException($"bad {ModList.CodeManifestFile}: {e.Message}"); }
+        catch (Exception e) when (e is InvalidDataException or IOException or UnauthorizedAccessException)
+        {
+            throw new ModLoadException($"bad {ModList.CodeManifestFile}: {e.Message}");
+        }
         if (manifest.ApiVersion != ModApi.Version)
             throw new ModLoadException($"built for code-mod API {manifest.ApiVersion}; this Meitou has API {ModApi.Version}");
         if (mods.FirstOrDefault(m => m.Manifest.Id == manifest.Id) is { } twin)
@@ -144,8 +148,10 @@ public sealed class ModHost
     {
         var type = mod.Assemblies.Select(a => a.GetType(mod.Manifest.Entry, throwOnError: false)).FirstOrDefault(t => t is not null)
             ?? throw new ModLoadException($"entry type {mod.Manifest.Entry} is not in its assemblies");
-        if (!typeof(IMod).IsAssignableFrom(type)) throw new ModLoadException($"entry type {type.FullName} does not implement {typeof(IMod).FullName}");
-        if (type.GetConstructor(Type.EmptyTypes) is null) throw new ModLoadException($"entry type {type.FullName} has no public parameterless constructor");
+        if (!typeof(IMod).IsAssignableFrom(type))
+            throw new ModLoadException($"entry type {type.FullName} does not implement {typeof(IMod).FullName}");
+        if (type.GetConstructor(Type.EmptyTypes) is null)
+            throw new ModLoadException($"entry type {type.FullName} has no public parameterless constructor");
         return (IMod)Activator.CreateInstance(type)!;
     }
 
