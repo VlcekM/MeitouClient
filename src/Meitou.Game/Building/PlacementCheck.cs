@@ -88,7 +88,9 @@ public static class PlacementCheck
     {
         var b = q.Building;
         var at = new Vector2(q.Position.X, q.Position.Z);
-        var town = PlacementRules.TownBlock(b, at, q.Towns, q.PlayerFactionId);
+        // A site floor counts as ours, as in the "don't own" test below.
+        bool owned = q.On is { Level: null } or { Owned: true };
+        var town = PlacementRules.TownBlock(b, at, q.Towns, q.PlayerFactionId, owned);
         if (town != PlacementFailure.None) return town;
 
         var turned = Quaternion.CreateFromAxisAngle(Vector3.UnitY, q.Yaw);

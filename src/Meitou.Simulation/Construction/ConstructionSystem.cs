@@ -380,7 +380,8 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
             world.Post(PlacementRules.Message(PlacementFailure.NotAvailable));
             return null;
         }
-        var fail = PlacementRules.TownBlock(data, new Vector2(plan.Position.X, plan.Position.Z), towns, playerFactionId);
+        // A plan with a parent stands in a building the host found ours.
+        var fail = PlacementRules.TownBlock(data, new Vector2(plan.Position.X, plan.Position.Z), towns, playerFactionId, plan.Parent is not null);
         if (fail != PlacementFailure.None)
         {
             world.Post(PlacementRules.Message(fail));

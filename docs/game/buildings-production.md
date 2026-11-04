@@ -221,6 +221,9 @@ shows the first failing message in this order (**Verified** unless marked):
   town is the nearest by centre among all types except type 8 `NEST_MARKER` (skipped, so a nest marker never blocks; the
   ghost's call arguments are not in the decompile, the other callers pass type 10 = any);
   type 10 null towns have radius 0 (type 8 too), so they block only a `creates player town` building, within 2000.
+  No town blocks an `is interior furniture` or `is node` ghost (ghost `+0x109`) whose footprint nodes all stand in one
+  building owned by a player faction (ghost `+0x8b`, `FUN_1404d69c0`): `FUN_1404dba40` clears the town (**Verified** by
+  decompile), so furniture goes into a bought town house. Its other owner branch (vtable `+0x330`, faction `+0x1d0`) is **Unknown**.
   **Unknown/not modelled:** the original tests only that nearest town (Meitou tests every one), and swaps it for the
   town containing the ghost (`FUN_140928890`) when inside 0.9 x its radius (0.6 x when the nearest is ruins/POI).
 - **Outposts** (**Verified**, `FUN_1404d6d90` per queued ghost on Confirm, then `FUN_1404db180`): a ghost in or on a

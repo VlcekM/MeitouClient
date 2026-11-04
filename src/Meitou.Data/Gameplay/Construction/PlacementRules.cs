@@ -35,12 +35,16 @@ public static class PlacementRules
     /// <summary>
     /// The town block of docs/game/buildings-production.md "Placement" (Towns): a town of another faction blocks within its radius (<see cref="TownData.Radius"/>, 0 for a null town
     /// which then blocks only outposts); a building that creates a player town within 2.5 x that radius (1 x for ruins and points of interest) or <see cref="OutpostMinimumDistance"/>
-    /// of the centre. Nest markers (never a candidate, <c>FUN_140927f10</c>) and towns of the player's faction never block. <see cref="PlacementFailure.NotOwnedBuilding"/> (the second text of the first row) is the host's: it needs the building under the ghost.
+    /// of the centre. Nest markers (never a candidate, <c>FUN_140927f10</c>) and towns of the player's faction never block, nor does any town for interior furniture or a node
+    /// standing in a building of the player's (<paramref name="inOwnedBuilding"/>, <c>FUN_1404dba40</c>). <see cref="PlacementFailure.NotOwnedBuilding"/> (the second text of the
+    /// first row) is the host's: it needs the building under the ghost.
     /// </summary>
-    public static PlacementFailure TownBlock(BuildingBuildData building, Vector2 at, IReadOnlyList<PlacementTown> towns, string playerFactionId)
+    public static PlacementFailure TownBlock(BuildingBuildData building, Vector2 at, IReadOnlyList<PlacementTown> towns, string playerFactionId, bool inOwnedBuilding = false)
     {
         ArgumentNullException.ThrowIfNull(building);
         ArgumentNullException.ThrowIfNull(towns);
+        if (inOwnedBuilding && (building.IsInteriorFurniture || building.IsNode)) return PlacementFailure.None;
+
         foreach (var placed in towns)
         {
             var town = placed.Town;
