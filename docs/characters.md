@@ -212,6 +212,9 @@ both. Lines are trimmed, blank ones skipped; each file is optional. An empty lis
 name). 135 of 639 merged CHARACTERs are `named`, among them most start-squad members (Wanderer, Nobody, start slave; not Citizen, Exile).
 Meitou: `NamePool`, rolled at spawn (`PopulationSystem.SpawnName`, `RngPurpose.Name`) from the world seed, which a new game from the menu rolls afresh
 (`--seed` keeps one), so the start squad's names differ from game to game as the original's; files read from the install, not mods.
+**Verified** (`FUN_14062b210` end): once the character is set up, a name holding a `/` goes through the dialogue text expansion and censorship
+(`FUN_14067e8b0`, [dialogue tokens](game/dialogue.md#tokens)) with the character's own dialogue and no target, so a word swap's line replaces the token
+(UWE names CHARACTERs "Trader /GENNAME/" with a GENNAME WORD_SWAPS of first names). Meitou: `DialogueSystem.ExpandName` at spawn.
 
 ## Character editor
 

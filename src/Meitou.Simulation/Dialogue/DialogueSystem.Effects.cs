@@ -317,7 +317,14 @@ public sealed partial class DialogueSystem
     /// <summary>A built line as shown: through the censorship when the player turned it on.</summary>
     string Said(string text) => Settings.Censored?.Invoke() == true ? Censorship.Apply(text) : text;
 
-    string Expand(World world, Conversation c, DialogueNode line, string text, CharacterId me, CharacterId other, int depth = 0)
+    /// <summary>
+    /// A new character's name with its text tokens expanded (docs/characters.md "Names"): a name holding a <c>/</c> goes through the same expansion and censorship as a said line,
+    /// spoken by the character itself to no one (<c>FUN_14062b210</c> end into <c>FUN_14067e8b0</c>), so a mod's "Trader /GENNAME/" takes a line of its GENNAME word swap.
+    /// </summary>
+    public string ExpandName(World world, CharacterId me, string name) =>
+        name.IndexOf('/') < 0 ? name : Said(Expand(world, new Conversation { Npc = me, Player = CharacterId.None, Event = 0 }, null, name, me, CharacterId.None));
+
+    string Expand(World world, Conversation c, DialogueNode? line, string text, CharacterId me, CharacterId other, int depth = 0)
     {
         if (depth > 4 || text.IndexOf('/') < 0) return text;
         var sb = new StringBuilder(text.Length + 16);
@@ -338,11 +345,11 @@ public sealed partial class DialogueSystem
         return sb.ToString();
     }
 
-    string Token(World world, Conversation c, DialogueNode line, string token, CharacterId me, CharacterId other, int depth)
+    string Token(World world, Conversation c, DialogueNode? line, string token, CharacterId me, CharacterId other, int depth)
     {
         switch (token)
         {
-            case "COST": return line.Cost is { } cost ? cost.ToString("N0", CultureInfo.InvariantCulture) : "";
+            case "COST": return line?.Cost is { } cost ? cost.ToString("N0", CultureInfo.InvariantCulture) : "";
             case "MYNAME": return NameOf(world, me);
             case "YOURNAME": return Cold(world, other)?.Name ?? "you";
             case "TARGETFACTION": return Cold(world, other) is { } o && data.Relations.Contains(o.Faction) ? data.Factions[o.Faction].Name : "you";

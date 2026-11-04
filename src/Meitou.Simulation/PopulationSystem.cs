@@ -858,6 +858,8 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
             // A new NPC's bounties (economy.md 11.2; engine: not the player's characters, nor the sandbox's idle spawns).
             if (!player && !idle) cold.Bounties = Crime.SpawnBounties.Roll(data, record, world.Seed, table.PeekNextId(), world.Tick);
             var id = table.Spawn(hot, cold, world.Tick);
+            // The name's text tokens, once the character exists (FUN_14062b210 end): a mod's "Trader /GENNAME/".
+            if (cold.Name.Contains('/') && world.SystemOf<Dialogue.DialogueSystem>() is { } talk) cold.Name = talk.ExpandName(world, id, cold.Name);
             if (UniqueCharacters.IsUnique(record)) world.Uniques.Bind(plan.RecordId, id);
             squad.Members.Add(id);
             if (plan.Role == SquadRole.Leader && squad.Leader.IsNone) squad.Leader = id;
