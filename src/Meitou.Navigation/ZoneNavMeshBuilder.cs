@@ -151,17 +151,8 @@ internal static partial class ZoneNavMeshBuilder
         var bmin = new RcVec3f(x0 - pad, yMin - 1, z0 - pad);
         var bmax = new RcVec3f(x0 + tileWorld + pad, yMax + 1, z0 + tileWorld + pad);
         int cells = s.TileCells + 2 * border;
-        var hf = new RcHeightfield(cells, cells, bmin, bmax, s.CellSize, ch, border);
-
-        var tileTris = new int[tris.Count * 3];
-        var tileAreas = new int[tris.Count];
-        for (int i = 0; i < tris.Count; i++)
-        {
-            int t = tris[i];
-            tileTris[i * 3] = indices[t * 3]; tileTris[i * 3 + 1] = indices[t * 3 + 1]; tileTris[i * 3 + 2] = indices[t * 3 + 2];
-            tileAreas[i] = areas[t];
-        }
-        RcRasterizations.RasterizeTriangles(ctx, verts, tileTris, tileAreas, tris.Count, hf, walkableClimb);
+        RcHeightfield Field() => new(cells, cells, bmin, bmax, s.CellSize, ch, border);
+        var hf = Rasterize(ctx, verts, indices, areas, tris, Field, walkableClimb);
         RcFilters.FilterLowHangingWalkableObstacles(ctx, walkableClimb, hf);
         RcFilters.FilterWalkableLowHeightSpans(ctx, walkableHeight, hf);
         long t1 = Stopwatch.GetTimestamp();

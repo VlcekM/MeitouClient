@@ -263,7 +263,7 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
             // No way to the patient: no path, or one that ends short of the asked goal (the walkability answers an unreachable goal with the way to the reachable point nearest it). The
             // original's task walk reports it (notifyPathImpossible): the patient goes on the medic's path failures for 20 s, which the finder skips, and the treatment ends. Without it
             // a medic asked for the same hopeless path every half second (issue #124: searches run to the iteration limit, ~280 MB/s of garbage).
-            if (!asking && (cold.PathFailed || (n.Flags & (ushort)MoveFlags.HasPath) != 0 && cold.Path.Length > 0 && EndsShort(cold.Path[^1], n.Goal, spot.Y)))
+            if (!asking && (cold.PathFailed || (n.Flags & (ushort)MoveFlags.HasPath) != 0 && cold.Path.Length > 0 && EndsShort(ReachedEnd(cold, n), n.Goal, spot.Y)))
             {
                 cold.PathFailed = false;
                 PursuitSystem.GiveUp(world, cold, table.IdOf(t));
@@ -289,6 +289,13 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
     /// </summary>
     static void AskToStandStill(World world, CharacterCold patient) =>
         patient.StandStillUntil = world.Tick + (long)MathF.Ceiling(StandStillSeconds / world.TickSeconds);
+
+    /// <summary>
+    /// Where the path is known to lead: the end of its navmesh part. A provisional route (the goal unreachable over the loaded zones: a medic shut in a locked house) runs
+    /// on from the reachable point nearest the goal to the goal itself, so its last waypoint is the goal; the medic waited at that point for ever.
+    /// </summary>
+    static Vector3 ReachedEnd(CharacterCold cold, in CharacterHot n) =>
+        cold.PathExact >= cold.Path.Length ? cold.Path[^1] : cold.PathExact > 0 ? cold.Path[cold.PathExact - 1] : n.Position;
 
     /// <summary>A path whose last waypoint is farther than the reach from the goal on X/Z, or off the treatment spot's floor: the patient cannot be got to.</summary>
     bool EndsShort(Vector3 end, Vector2 goal, float spotHeight) =>

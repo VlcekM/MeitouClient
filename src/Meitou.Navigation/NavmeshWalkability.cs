@@ -151,17 +151,7 @@ public sealed partial class NavmeshWalkability : IWalkability
         float lowest = float.MaxValue, layer = float.MinValue;
         foreach (float h in heights)
         {
-            float s = Snap(w, x, z, h, out bool beside);
-            // Where the mesh is too far off for its surface to be found (a ramp the polygon cuts under), the surface at the walker's own height, when that
-            // is nearer the mesh than what was found (Observed: the terrain 30 below, inside the ramp, at the Great Fortress) or within the terrain snap's reach
-            // of it: a polygon spanning a flat top and its slope sags up to ~25 under the top and lies nearer a face inside the rock (Observed: the rock by the
-            // Hub's gate, where the original's polygon is flat on the top).
-            if (near && MathF.Abs(s - nearY) > StandRise && w.TrySurfaceNear(x, z, nearY, StandRise, out float own)
-                && MathF.Abs(own - h) < MathF.Max(MathF.Abs(s - h), TerrainSnapRange)) s = own;
-            // A walker on the ground along the foot of a raised top whose edge the snap took (nothing is over the spot): the ground, when the mesh is within the
-            // terrain snap's reach of it (Observed: a top at 560 over ground at 537 west of Black Desert City, a polygon at 550 by its foot, stopping walkers there).
-            else if (near && beside && MathF.Abs(s - nearY) > StandRise && Ground(w, x, z) is var t && MathF.Abs(t - nearY) <= StandRise
-                && MathF.Abs(t - h) <= TerrainSnapRange) s = t;
+            float s = near ? SurfaceNear(w, x, z, h, nearY) : Snap(w, x, z, h, out _);
             lowest = MathF.Min(lowest, s);
             float reach = MathF.Min(h, s);
             if (reach > nearY + StandRise || reach <= layer || near && MathF.Max(h, s) < nearY - StandDrop) continue;
@@ -176,6 +166,30 @@ public sealed partial class NavmeshWalkability : IWalkability
         }
         if (!reachable) y = lowest;
         return true;
+    }
+
+    /// <summary>The real surface a mesh height <paramref name="h"/> stands for (<see cref="Snap"/>) to a walker at <paramref name="nearY"/>.</summary>
+    float SurfaceNear(NavWorld w, float x, float z, float h, float nearY)
+    {
+        float s = Snap(w, x, z, h, out bool beside);
+        if (MathF.Abs(s - nearY) <= StandRise) return s;
+        float t = Ground(w, x, z);
+
+        // Where the mesh is too far off for its surface to be found (a ramp the polygon cuts under), the surface at the walker's own height, when that
+        // is nearer the mesh than what was found (Observed: the terrain 30 below, inside the ramp, at the Great Fortress) or within the terrain snap's reach
+        // of it: a polygon spanning a flat top and its slope sags up to ~25 under the top and lies nearer a face inside the rock (Observed: the rock by the
+        // Hub's gate, where the original's polygon is flat on the top).
+        bool surface = w.TrySurfaceNear(x, z, nearY, StandRise, out float own);
+        if (surface && MathF.Abs(own - h) < MathF.Max(MathF.Abs(s - h), TerrainSnapRange)) return own;
+
+        // A walker on the ground along the foot of a raised top whose edge the snap took (nothing is over the spot): the ground, when the mesh is within the
+        // terrain snap's reach of it (Observed: a top at 560 over ground at 537 west of Black Desert City, a polygon at 550 by its foot, stopping walkers there).
+        if (beside && MathF.Abs(t - nearY) <= StandRise && MathF.Abs(t - h) <= TerrainSnapRange) return t;
+
+        // A walker on bare ground over a polygon sagging under it however far (a polygon is planar between its corners and spans the terrain's humps): the
+        // ground (Observed: 31 under a hillside west of the Hub, zone 19.34, where the original's polygon sags 28 too).
+        bool onGround = t <= nearY + StandRise && t >= nearY - StandDrop;
+        return !surface && onGround && h < t ? t : s;
     }
 
     /// <summary>
@@ -219,9 +233,11 @@ public sealed partial class NavmeshWalkability : IWalkability
         if (!fromLoaded || !w.Contains(WorldLayout.ZoneOf(to.X, to.Z))) return LongRoute(w, from, to, agent, fromLoaded);
         // A goal just found unreachable (shut in, or a way in too narrow for the radius): a walker that can reach the nearest point found then is on the
         // same ground, which does not reach the goal either, so it walks there instead of running the exact and the nearest-point searches, each of
-        // which explores all the ground it can reach.
+        // which explores all the ground it can reach. Only while no door was locked or unlocked since: through a door opened since, a walker outside reached the
+        // corner of a locked house nearest the goal that one shut in it had found, and stood there.
+        int doors = Doors.Version;
         var key = UnreachableKey(w, to, agent);
-        if (key is { } known && unreachable.TryGetValue(known, out var hit) && ReferenceEquals(hit.World, w)
+        if (key is { } known && unreachable.TryGetValue(known, out var hit) && ReferenceEquals(hit.World, w) && hit.Doors == doors
             && System.Diagnostics.Stopwatch.GetElapsedTime(hit.At).TotalSeconds < UnreachableSeconds
             && new NavQuery(w, Doors).FindPath(from, hit.Nearest, agent, null, out _) is { Found: true } near)
             return Provisional(w, FromWalker(from, near), to);
@@ -246,7 +262,7 @@ public sealed partial class NavmeshWalkability : IWalkability
         if (key is { } found)
         {
             if (unreachable.Count >= UnreachableLimit) unreachable.Clear();
-            unreachable[found] = (w, part.Points[^1], System.Diagnostics.Stopwatch.GetTimestamp());
+            unreachable[found] = (w, doors, part.Points[^1], System.Diagnostics.Stopwatch.GetTimestamp());
         }
         return Provisional(w, part, to);
     }
@@ -259,14 +275,14 @@ public sealed partial class NavmeshWalkability : IWalkability
         return new PathResult(points) { Exact = part.Points.Count };
     }
 
-    /// <summary>How long (s) a goal found unreachable is remembered (engine choice: a door may open, and a door has no version).</summary>
+    /// <summary>How long (s) a goal found unreachable is remembered (engine choice; a door locked or unlocked meanwhile drops it at once).</summary>
     public const double UnreachableSeconds = 10;
     const int UnreachableLimit = 4096;
 
     // Goals found unreachable over the loaded zones, by goal polygon and the agent's radius and door rule: the navmesh they were found on (any other
-    // mesh, after a zone went live or unloaded, asks again), the nearest reachable point and when. Each was 300-600 ms of searching, asked again
+    // mesh, after a zone went live or unloaded, asks again), the doors' version (NavDoors.Version), the nearest reachable point and when. Each was 300-600 ms of searching, asked again
     // and again by a town's residents walking to a goal they cannot reach (Observed, zone 14.23: a cabinet in a building, docs/game/pathfinding.md).
-    readonly System.Collections.Concurrent.ConcurrentDictionary<(NavRef Goal, float Radius, bool DoorsClosed), (NavWorld World, Vector3 Nearest, long At)> unreachable = new();
+    readonly System.Collections.Concurrent.ConcurrentDictionary<(NavRef Goal, float Radius, bool DoorsClosed), (NavWorld World, int Doors, Vector3 Nearest, long At)> unreachable = new();
 
     static (NavRef, float, bool)? UnreachableKey(NavWorld w, Vector3 to, NavAgent agent) =>
         w.TryFindPolygon(to, NavQuery.GoalSnap, out var goal, out _) ? (goal, agent.Radius, agent.DoorsClosed) : null;
