@@ -17,7 +17,7 @@ public sealed class ModRow(ModInfo mod, bool enabled) : INotifyPropertyChanged
     public string Notes => string.Join(" · ", new[]
     {
         Mod.HasCode ? LauncherText.Translate("Code mod: runs C# code of its own once allowed") : null,
-        Mod.HasNativePlugin ? LauncherText.Translate("RE_Kenshi plugin: its DLLs are ignored in Meitou") : null,
+        Mod.HasNativePlugin && !Mod.HasCode ? LauncherText.Translate("RE_Kenshi plugin: its DLLs are ignored in Meitou") : null,
     }.OfType<string>());
     public bool HasNotes => Mod.HasNativePlugin || Mod.HasCode;
 

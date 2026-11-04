@@ -255,7 +255,8 @@ interpolated string, which no translation could match.
   newest first and labelled by root, and applies the chosen save's CAMERA `mods` list ([save](formats/save.md#camera-type-56-id-1051-the-world-record))
   as an all-enabled preset, without `base` and the core mods. `SaveModList` (Meitou.Core) reads it; **Verified** equal to
   `SaveCamera.Mods` on 22 of the owner's saves (0 to 180 mods).
-- A mod folder with `RE_Kenshi.json` is marked as a plugin mod whose DLLs Meitou ignores ([RE_Kenshi](formats/rekenshi.md)).
+- A mod folder with `RE_Kenshi.json` is marked as a plugin mod whose DLLs Meitou ignores ([RE_Kenshi](formats/rekenshi.md)), unless it
+  also has `meitou.json`: then only the code-mod note shows.
 - A mod folder with `meitou.json` is marked as a code mod ([modding](modding.md)). Play asks about the enabled code mods not decided
   yet; the Code mods button beside Save mod list asks about every code mod in the list, so a choice can be changed or revoked. The
   question has a box per mod (ticked: allowed now) and three answers: Data only all, Trust all, Apply (the ticks). Escape decides
