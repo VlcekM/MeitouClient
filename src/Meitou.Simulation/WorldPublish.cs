@@ -257,7 +257,9 @@ public sealed partial class World
             // The original skips robots' appearances (FUN_140531820) and animals have none.
             s.Build = cold is { Stats: { } buildStats, Medical: { } fed, Race.IsRobot: false, Appearance: { Animal: null } look }
                 ? ShapedBuild(cold, Meitou.Data.Characters.CharacterShape.BuildFromStats(look.Female, buildStats, static (stats, s) => stats[s], fed.Hunger)) : null;
-            s.Path = selected && (state[i].Flags & (ushort)MoveFlags.HasPath) != 0 ? cold!.Path.Skip(state[i].PathCursor).ToArray() : [];
+            bool pathed = detailed && (state[i].Flags & (ushort)MoveFlags.HasPath) != 0;
+            s.Path = pathed ? cold!.Path.Skip(state[i].PathCursor).ToArray() : [];
+            s.PathExact = pathed && cold!.PathExact != int.MaxValue ? Math.Max(cold.PathExact - state[i].PathCursor, 0) : int.MaxValue;
             s.CarriedBy = cold?.CarriedBy ?? CharacterId.None;
             s.Carry = cold is { CarriedBy.IsNone: false } ? cold.CarryAttach ?? Carrying.CarryPose.Fallback : null;
             s.Carrying = cold?.Carrying ?? CharacterId.None;

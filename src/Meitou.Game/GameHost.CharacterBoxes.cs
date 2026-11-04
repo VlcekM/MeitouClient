@@ -11,26 +11,38 @@ namespace Meitou.Game;
 sealed partial class GameHost
 {
     bool characterBoxes;
-    // Where the checkbox was drawn last (x0, y0, x1, y1), null while the statistics are hidden.
-    Vector4? characterBoxesToggle;
+    // Where the checkboxes were drawn last (x0, y0, x1, y1), null while the statistics are hidden.
+    Vector4? characterBoxesToggle, walkPathsToggle;
     readonly List<(string Line, Vector4 Rect)> statsLaidOut = [];
     readonly List<Vector4> countedBoxes = [];
 
     static readonly Vector4 CharacterBoxColour = new(1f, 0.85f, 0.2f, 0.9f);
 
-    /// <summary>Ticks the statistics' checkbox as the switch stands (the lines are built once a second).</summary>
-    void TickCharacterBoxes(List<string> stats)
+    /// <summary>Ticks the statistics' checkboxes as their switches stand (the lines are built once a second).</summary>
+    void TickStatsToggles(List<string> stats)
     {
-        string from = characterBoxes ? WorldStats.CharacterBoxesOff : WorldStats.CharacterBoxesOn;
-        string to = characterBoxes ? WorldStats.CharacterBoxesOn : WorldStats.CharacterBoxesOff;
+        TickStatsToggle(stats, characterBoxes, WorldStats.CharacterBoxesOff, WorldStats.CharacterBoxesOn);
+        TickStatsToggle(stats, walkPaths, WorldStats.PathsOff, WorldStats.PathsOn);
+    }
+
+    static void TickStatsToggle(List<string> stats, bool on, string off, string ticked)
+    {
+        string from = on ? off : ticked;
+        string to = on ? ticked : off;
         for (int i = 0; i < stats.Count; i++)
             if (stats[i].Contains(from, StringComparison.Ordinal)) stats[i] = stats[i].Replace(from, to, StringComparison.Ordinal);
     }
 
-    /// <summary>The checkbox's rectangle in the panel just drawn (from its laid-out lines), or null when it is not there.</summary>
-    Vector4? FindCharacterBoxesToggle(float charWidth)
+    /// <summary>Where the checkboxes are in the panel just drawn (from its laid-out lines).</summary>
+    void FindStatsToggles(float charWidth)
     {
-        string marker = characterBoxes ? WorldStats.CharacterBoxesOn : WorldStats.CharacterBoxesOff;
+        characterBoxesToggle = FindStatsToggle(characterBoxes ? WorldStats.CharacterBoxesOn : WorldStats.CharacterBoxesOff, charWidth);
+        walkPathsToggle = FindStatsToggle(walkPaths ? WorldStats.PathsOn : WorldStats.PathsOff, charWidth);
+    }
+
+    /// <summary>A checkbox's rectangle in the panel just drawn, or null when it is not there.</summary>
+    Vector4? FindStatsToggle(string marker, float charWidth)
+    {
         foreach (var (line, rect) in statsLaidOut)
         {
             int at = line.IndexOf(marker, StringComparison.Ordinal);
@@ -41,13 +53,15 @@ sealed partial class GameHost
         return null;
     }
 
-    /// <summary>A left click on the checkbox flips the boxes; true when it took the click.</summary>
-    bool CharacterBoxesClick(Vector2 at)
+    /// <summary>A left click on a checkbox flips its switch; true when one took the click.</summary>
+    bool StatsToggleClick(Vector2 at)
     {
-        if (characterBoxesToggle is not { } t || at.X < t.X || at.X > t.Z || at.Y < t.Y || at.Y > t.W) return false;
-        characterBoxes = !characterBoxes;
-        return true;
+        if (Inside(characterBoxesToggle, at)) { characterBoxes = !characterBoxes; return true; }
+        if (Inside(walkPathsToggle, at)) { walkPaths = !walkPaths; return true; }
+        return false;
     }
+
+    static bool Inside(Vector4? rect, Vector2 at) => rect is { } t && at.X >= t.X && at.X <= t.Z && at.Y >= t.Y && at.Y <= t.W;
 
     /// <summary>The counted characters' outlines over the whole picture, seen through the world camera at the display size.</summary>
     void DrawCharacterBoxes(DebugOverlay overlay, CharacterRenderer characters, WorldCamera camera, int width, int height)

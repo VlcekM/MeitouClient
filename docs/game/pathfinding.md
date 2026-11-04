@@ -725,6 +725,9 @@ yellow. Original: polygons magenta, ends orange, edges joined to the next tile v
 **Observed** (Hub, zone 20.32): the original's polygons are large and simplified, building footprints are holes (interiors separate), and rock and cliff
 cuts follow the blocky 36-unit terrain grid (generator inputs, terrain). The original has no such view (`rebuild_navmesh` Ctrl+Shift+F11 only rebuilds).
 
+F11's `[ ] paths` checkbox (`GameHost.Paths.cs`) draws, over everything, the path of each selected or inspected character (`CharacterSnapshot.Path`, from
+its feet): navmesh legs green, the provisional long-range part (`PathExact`) orange, the next waypoint white, the end red.
+
 ### Search cost
 
 Engine facts (our A*, not the original's Havok query). Each expanded polygon relaxes its neighbours; a relaxation places the crossing on the shared edge

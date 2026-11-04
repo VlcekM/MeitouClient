@@ -215,8 +215,10 @@ public sealed class CharacterSnapshot
     public byte RunSpeed { get; internal set; } = SpeedMode.Free;
     /// <summary>The job list (<see cref="CharacterCold.Jobs"/>), first = highest priority.</summary>
     public IReadOnlyList<Production.PermaJob> Jobs { get; internal set; } = [];
-    /// <summary>The path being followed from the next waypoint, for selected characters only (the host draws it).</summary>
+    /// <summary>The path being followed from the next waypoint, for selected and inspected characters only (the host's F11 path view draws it).</summary>
     public IReadOnlyList<Vector3> Path { get; internal set; } = [];
+    /// <summary>The index into <see cref="Path"/> where its provisional long-range part begins (<see cref="CharacterCold.PathExact"/>; past the end: none).</summary>
+    public int PathExact { get; internal set; } = int.MaxValue;
     /// <summary>Null for a character without a body (an animal).</summary>
     public BodyStatus? Body { get; internal set; }
     /// <summary>The stat-driven body of a person (not a robot, not an animal), from its current stats and hunger; null for the others.</summary>
