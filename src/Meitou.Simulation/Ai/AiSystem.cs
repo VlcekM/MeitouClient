@@ -113,6 +113,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     readonly Dictionary<int, HashSet<int>> turretTaken = [];
     // The seats of each bar claimed in the current cadence pass, by building (derived, not hashed).
     readonly Dictionary<TownBuilding, HashSet<int>> seatTaken = new(ReferenceEqualityComparer.Instance);
+    // The guard posts of each building held in the current cadence pass, by spot index (derived, not hashed).
+    readonly Dictionary<TownBuilding, HashSet<int>> postTaken = new(ReferenceEqualityComparer.Instance);
     readonly Rules rules = new();
 
     // ------------------------------------------------------------------ think (parallel)
@@ -293,9 +295,10 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         var candidates = Candidates;
         var plans = PlanContext.Local.Bind(this, world, slot, mind, board);
         // While a goal it committed to is running, only a tier above that goal's priority may take over; if none plans, the goal and its plan stay
-        // (FUN_140510ef0 in committed mode, Verified).
-        var committed = only == Restrict.None && mind.Goal is { } running && mind.Plan.Count > 0 && TaskProfiles.Of(running.Task.Type).Commits && world.GameHours < mind.CommitUntil
-            ? running : null;
+        // (FUN_140510ef0 in committed mode, Verified). Not past its hours: the plan step ends a goal's plan then, and the update clears a goal
+        // left with no plan however long its commitment runs (FUN_14050d970, FUN_140511130, Verified; docs/game/ai-tasks.md "Precedence").
+        var committed = only == Restrict.None && mind.Goal is { } running && mind.Plan.Count > 0 && TaskProfiles.Of(running.Task.Type).Commits
+            && world.GameHours < mind.CommitUntil && running.InWindow(hour) ? running : null;
         foreach (var tier in Tiers)
         {
             if (committed is not null && tier <= committed.Task.Priority || only != Restrict.None && tier != TaskPriority.Urgent) break;
@@ -397,7 +400,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             AiBehaviour.Shop => !mind.Shopping.Pending(ShoppingList.DayOf(world.GameHours), world.Hour, board.Town) ? 0
                 : ShopFor(Places(board.Town), mind, TargetRoll(world, self, behaviour), RandomShopping(world, board.Town)) is { } picked ? ShopFactor(Places(board.Town), picked) : 0,
             // A worker needs a mine, bench or refinery in its town (the finders return 0 without one).
-            AiBehaviour.Work => Places(board.Town).Workplaces.Count > 0 && WorkAllowed(world, self.Slot, board.Town) ? 1 : 0,
+            AiBehaviour.Work => WorkAllowed(world, self.Slot, board.Town) && (HoldsWork(mind, board.Town, type) || PickWork(world, self, board.Town, mind.WorkEpoch, type) is not null) ? 1 : 0,
             // Relaxing needs a free seat of the package's bar, sitting around a free chair of the home (claimed in <see cref="ClaimSeats"/>); the original's finder returns 0 without one (FUN_1408caf00).
             AiBehaviour.Relax => board.BarTable >= 0 && board.SeatClaims.ContainsKey(self.Slot) && !mind.SeatUnreachable ? 1 : 0,
             AiBehaviour.Sit => board.SitClaims.ContainsKey(self.Slot) && !mind.SeatUnreachable ? 1 : 0,
@@ -443,15 +446,23 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         return best;
     }
 
-    /// <summary>A town's public buildings with a general node by zone, its shops, its public bars and its outdoor tables, as <see cref="RefreshPlaces"/> last found them.</summary>
+    /// <summary>
+    /// A town's public buildings with a general node by zone, its shops, its public bars, its outdoor tables and the guard posts of its
+    /// standing buildings, as <see cref="RefreshPlaces"/> last found them.
+    /// </summary>
     sealed record TownPlaces(IReadOnlyDictionary<ZoneCoordinate, TownBuilding[]> Wander, IReadOnlyList<TownBuilding> Shops, IReadOnlyList<TownBuilding> Bars,
         IReadOnlyList<TownBuilding> OutdoorTables, IReadOnlyList<TownBuilding> Workplaces,
         IReadOnlyDictionary<TownBuilding, ulong> Stock, IReadOnlyList<SeatClaim> Seats, IReadOnlyDictionary<TownBuilding, int> SeatOwners,
-        IReadOnlyList<TownBuilding> Public);
+        IReadOnlyList<TownBuilding> Public, IReadOnlyList<SeatClaim> Posts);
 
-    static readonly TownPlaces NoPlaces = new(new Dictionary<ZoneCoordinate, TownBuilding[]>(), [], [], [], [], new Dictionary<TownBuilding, ulong>(), [], new Dictionary<TownBuilding, int>(), []);
+    static readonly TownPlaces NoPlaces = new(new Dictionary<ZoneCoordinate, TownBuilding[]>(), [], [], [], [], new Dictionary<TownBuilding, ulong>(), [], new Dictionary<TownBuilding, int>(), [], []);
     // Rebuilt in the serial step, read by the think on every worker (derived, not hashed).
     readonly Dictionary<int, TownPlaces> places = [];
+    // The workplaces of each town 189 can really work at (RealWork), rebuilt with the places (derived, not hashed).
+    readonly Dictionary<int, IReadOnlyList<TownBuilding>> realWork = [];
+    // The operator slots of each workplace held in the current cadence pass (derived, not hashed).
+    readonly Dictionary<TownBuilding, int> workTaken = new(ReferenceEqualityComparer.Instance);
+    readonly System.Collections.Concurrent.ConcurrentDictionary<string, int> maxOperators = new(StringComparer.Ordinal);
 
     TownPlaces Places(int site) => site >= 0 && places.TryGetValue(site, out var p) ? p : NoPlaces;
 
@@ -471,6 +482,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     void RefreshPlaces(World world)
     {
         places.Clear();
+        realWork.Clear();
         var shops = new HashSet<TownBuilding>(ReferenceEqualityComparer.Instance);
         var bars = new HashSet<TownBuilding>(ReferenceEqualityComparer.Instance);
         var publicFlag = new Dictionary<TownBuilding, bool>(ReferenceEqualityComparer.Instance);
@@ -524,7 +536,9 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             }
             places[site] = new(wander, shopList, [.. buildings.Where(b => (b.IsBar || bars.Contains(b)) && IsPublic(b))],
                 [.. buildings.Where(b => b.IsOutdoorTable)], [.. buildings.Where(b => !world.Fixtures.IsDestroyed(b) && b.Function is >= 0 and var fn && (WorkFunctions >> fn & 1) != 0)], stock, seats, seatOwners,
-                [.. buildings.Where(b => b.HasInterior && !b.IsWall && !world.Fixtures.IsDestroyed(b) && IsPublic(b))]);
+                [.. buildings.Where(b => b.HasInterior && !b.IsWall && !world.Fixtures.IsDestroyed(b) && IsPublic(b))],
+                [.. buildings.Where(b => !world.Fixtures.IsDestroyed(b)).SelectMany(GuardPosts)]);
+            realWork[site] = [.. places[site].Workplaces.Where(b => RealWork(world, b))];
         }
     }
 
@@ -586,13 +600,85 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// <summary>
     /// The building a worker works at (the finders of goals 189 / 190: a random building of the town with a function in <see cref="WorkFunctions"/>, slot 2 of the building finder
     /// <c>FUN_1409fb020</c>); the roll is the character's and its <paramref name="epoch"/> of picks (<see cref="AiMind.WorkEpoch"/>), so asking twice names the same one. Null: the town has none.
+    /// 189 (<paramref name="type"/>, real work) takes only the workplaces it can run (<see cref="RealWork"/>); 190 (pretend) any.
     /// </summary>
-    TownBuilding? PickWork(World world, CharacterId self, int town, int epoch)
+    TownBuilding? PickWork(World world, CharacterId self, int town, int epoch, TaskType type = TaskType.AUTO_LABOURING_MINES_PRETEND)
     {
-        var list = Places(town).Workplaces;
-        if (list.Count == 0 || !WorkAllowed(world, self.Slot, town)) return null;
-        return list[Rng.Int(Rng.Hash(world.Seed, Rng.Key(self), RngPurpose.Think, SeedSalts.AiTarget ^ (ulong)epoch << 20 ^ 0x57), list.Count)];
+        if (!WorkAllowed(world, self.Slot, town)) return null;
+        var list = WorkplacesFor(town, type);
+        int free = 0;
+        foreach (var b in list) if (HasFreeSlot(b)) free++;
+        if (free == 0) return null;
+        int pick = Rng.Int(Rng.Hash(world.Seed, Rng.Key(self), RngPurpose.Think, SeedSalts.AiTarget ^ (ulong)epoch << 20 ^ 0x57), free);
+        foreach (var b in list)
+            if (HasFreeSlot(b) && pick-- == 0) return b;
+        return null;
     }
+
+    /// <summary>Whether a mind holds a workplace that is still one its goal <paramref name="type"/> may work at.</summary>
+    bool HoldsWork(AiMind mind, int town, TaskType type) => mind.WorkPost is { } post && WorkplacesFor(town, type).Contains(post);
+
+    /// <summary>
+    /// Whether a workplace has an operator slot no one holds in this cadence pass (73 <c>machineHasFreeOperatorSlot</c>; the finder's <c>couldIOperate</c>, docs/game/ai-tasks.md
+    /// "Worker"): fewer holders than its functionality's <c>max operators</c>.
+    /// </summary>
+    bool HasFreeSlot(TownBuilding building) => workTaken.GetValueOrDefault(building) < MaxOperatorsOf(building);
+
+    /// <summary>A workplace's functionality <c>max operators</c> (1 when the key is missing); no limit for a building without a functionality record.</summary>
+    int MaxOperatorsOf(TownBuilding building) => maxOperators.GetOrAdd(building.BuildingId, id =>
+        data.Db.Find(id)?.GetReferences("functionality") is [var link, ..] && data.Db.Find(link.TargetStringId) is { } function
+            ? function.GetInt("max operators", 1) : int.MaxValue);
+
+    /// <summary>
+    /// The operator slots of 189 / 190 (docs/game/ai-tasks.md "Worker"): a member whose goal is one of them keeps the workplace it holds while that is still one its goal may work
+    /// at, else holds one with a free slot drawn as <see cref="PickWork"/> draws; a member on another goal lets its slot go. Serial, on the package cadence, after every squad's
+    /// kept slots are reserved (<see cref="ReserveWork"/>).
+    /// </summary>
+    void ClaimWork(World world, Blackboard board, Squad squad)
+    {
+        foreach (var id in squad.Members)
+        {
+            if (!world.Characters.TryResolveNext(id, out int s) || world.Characters.Cold(s)?.Ai is not { } mind) continue;
+            var type = mind.Goal?.Task.Type;
+            bool works = type is TaskType.AUTO_LABOURING_MINES or TaskType.AUTO_LABOURING_MINES_PRETEND;
+            if (works && HoldsWork(mind, board.Town, type!.Value)) continue;
+            if (mind.WorkPost is { } left) workTaken[left] = workTaken.GetValueOrDefault(left) - 1;
+            mind.WorkPost = works ? PickWork(world, id, board.Town, mind.WorkEpoch, type!.Value) : null;
+            if (mind.WorkPost is { } got) workTaken[got] = workTaken.GetValueOrDefault(got) + 1;
+        }
+    }
+
+    /// <summary>The workplaces the members hold, reserved for every squad before any claims (as <see cref="ReserveSeats"/>).</summary>
+    void ReserveWork(World world)
+    {
+        foreach (var squad in world.Squads.All)
+            foreach (var id in squad.Members)
+                if (world.Characters.TryResolveNext(id, out int s) && world.Characters.Cold(s)?.Ai?.WorkPost is { } post)
+                    workTaken[post] = workTaken.GetValueOrDefault(post) + 1;
+    }
+
+    /// <summary>The workplaces of <paramref name="town"/> a worker on <paramref name="type"/> may pick: <see cref="RealWork"/> for 189, all of them for 190.</summary>
+    IReadOnlyList<TownBuilding> WorkplacesFor(int town, TaskType type)
+    {
+        if (type != TaskType.AUTO_LABOURING_MINES) return Places(town).Workplaces;
+        return town >= 0 && realWork.TryGetValue(town, out var real) ? real : [];
+    }
+
+    /// <summary>
+    /// Whether 189 can really work at a workplace (docs/game/ai-tasks.md "Worker"). Its act-out, 87 Operating machine, needs !62 <c>machineHasEmptyInputs</c>, and with an empty
+    /// input the plan must fill the machine from a source of its input, so the original's workers keep to the workplaces they can run. A mine has no input; a refinery,
+    /// research or crafting bench counts only with a machine running there with its inputs (engine choice: Meitou's NPC towns run no machines, so theirs hold nothing).
+    /// </summary>
+    static bool RealWork(World world, TownBuilding building)
+    {
+        if (building.Function == MineFunction) return true;
+        foreach (var m in world.Machines.All)
+            if (m.Position.X == building.Position.X && m.Position.Z == building.Position.Z) return !m.HasEmptyInputs;
+        return false;
+    }
+
+    /// <summary>BuildingFunction BF_MINE.</summary>
+    const int MineFunction = 1;
 
     /// <summary>
     /// The player-flag gate of the building finders of goals 189 / 190 (<c>FUN_1408cac60</c> / <c>FUN_1408cadb0</c>, <b>Verified</b>): the town's owner and the character must agree on being the player's
@@ -764,6 +850,17 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     void Act(World world, int slot, AiMind mind, AiGoal goal, Blackboard board)
     {
         var table = world.Characters;
+        // Nothing but the default task for one lying in its bed: it lies on with no goal, as one loaded there (Holds). The original's update
+        // clears a goal left with no plan (FUN_140511130, Verified), and its sleepers whose hours ended lie on with no goal or order
+        // (docs/game/ai-tasks.md "Precedence", Observed; why its Idleness does not take over is Unknown).
+        if (ReferenceEquals(goal, Idle) && table.Cold(slot)!.InSomething == Locks.HeldState.Bed)
+        {
+            mind.Plan.Clear();
+            mind.Goal = null;
+            mind.Behaviour = AiBehaviour.None;
+            mind.Version = board.Version;
+            return;
+        }
         var type = goal.Task.Type;
         var behaviour = TaskBehaviours.Of(type);
         var profile = TaskProfiles.Of(type);
@@ -947,11 +1044,13 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             case AiBehaviour.Work:
                 mind.WorkOperate = null;
                 mind.CollectFrom = null;
+                // The workplace whose slot it holds wins over the pick it walks to (ClaimWork).
+                if (mind.WorkPost is { } post && mind.Target is { } aim && (aim.X != post.Position.X || aim.Z != post.Position.Z)) mind.Target = null;
                 if (mind.Target is null)
                 {
                     if (mind.WorkActive) mind.WorkEpoch++;
                     mind.WorkActive = true;
-                    if (PickWork(world, table.IdOf(slot), board.Town, mind.WorkEpoch) is { } building)
+                    if ((mind.WorkPost ?? PickWork(world, table.IdOf(slot), board.Town, mind.WorkEpoch, type)) is { } building)
                     {
                         mind.Target = new Vector3(building.Position.X, float.NaN, building.Position.Z);
                         mind.WorkClip = WorkClipOf(building);
@@ -1101,6 +1200,9 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             if (board.Town >= 0) return (Flat(data.Sites[board.Town].Position), true, null, null);
             return (mind.Squad.HomeCentre, true, null, null);
         }
+        // 157 Static town guard: the post of its town it holds (ClaimTownPosts).
+        if (type == TaskType.STAND_AT_GUARD_NODE_HOMETOWN_OUTSIDE && !mind.HomeUnreachable && mind.TownPost is { Spot: var post })
+            return (Flat(post.Position), true, post.Position.Y, post.Yaw);
         if (!mind.HomeUnreachable && GateSpot(board, mind, type) is { } guard) return (Flat(guard), true, guard.Y, null);
         if (board.Home is not { } home || mind.HomeUnreachable || type is TaskType.HOLD_POSITION or TaskType.MAN_THE_GATE) return (mind.Post, false, null, null);
         HomeSpotKind kind = behaviour == AiBehaviour.Sleep ? HomeSpotKind.Bed : type switch
@@ -1405,7 +1507,17 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         if (Interlocked.Exchange(ref leaving, 0) != 0) LeaveFights(world);
         bool cadence = world.Tick % world.Every(Settings.PackageEveryTicks) == 0;
         // Each town's turrets are claimed once per cadence, by the squads in squad order (derived, not hashed).
-        if (cadence) { turretTaken.Clear(); seatTaken.Clear(); ReserveSeats(world); RefreshPlaces(world); }
+        if (cadence)
+        {
+            turretTaken.Clear();
+            seatTaken.Clear();
+            postTaken.Clear();
+            workTaken.Clear();
+            ReserveSeats(world);
+            ReservePosts(world);
+            RefreshPlaces(world);
+            ReserveWork(world);
+        }
         foreach (var squad in world.Squads.All)
         {
             if (squad.Ai is null)
@@ -1459,6 +1571,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             ClaimTurrets(world, board, squad);
             ClaimSeats(world, board, squad);
             ClaimSitting(world, board, squad);
+            ClaimWork(world, board, squad);
+            ClaimTownPosts(world, board, squad);
             FindGate(world, board, squad);
         }
         if (merges.Count > 0) ApplyMerges(world);
@@ -1507,11 +1621,13 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
 
     /// <summary>
     /// Where a gate's guards stand: the gate guard 15 out from its leaf; a member whose node goal finds no node in a gate it lives in flanks the opening on that side,
-    /// beyond the leaf's edges, alternately left and right in two rows (engine choice: the original's goal finds nothing there). Null for other goals.
+    /// beyond the leaf's edges, alternately left and right in two rows (engine choice: it stands in for the original's gate posts, which no
+    /// layout holds). Null for other goals, and for 157 while it holds a town post.
     /// </summary>
     static Vector3? GateSpot(Blackboard board, AiMind mind, TaskType type)
     {
         if (board.Gate is not { } gate) return null;
+        if (type == TaskType.STAND_AT_GUARD_NODE_HOMETOWN_OUTSIDE && mind.TownPost is not null) return null;
         var front = FrontOf(gate);
         if (type == TaskType.MAN_THE_GATE) return front;
         if (type is not (TaskType.STAND_AT_GUARD_NODE_HOMEBUILDING or TaskType.STAND_AT_GUARD_NODE_HOMEBUILDING_INDOORS_ONLY or TaskType.STAND_AT_GUARD_NODE_HOMETOWN_OUTSIDE
@@ -1716,6 +1832,65 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             TakenOf(found.Building).Add(found.Index);
             board.SitClaims[s] = found;
         }
+    }
+
+    /// <summary>
+    /// The guard posts of 157 Static town guard (<c>AI::findGuardNodeForTown</c>, docs/game/ai-tasks.md "Town goals"): a member whose goal
+    /// is 157 keeps the post it holds, else draws one uniformly among its town's guard posts no one holds (as the original's draw over the
+    /// town's nodes held by no one else). A member on another goal, or whose home spots kept failing, lets its post go. None free: it holds
+    /// none and stands where the home node goals stand (engine choice: the original's goal then finds nothing).
+    /// </summary>
+    void ClaimTownPosts(World world, Blackboard board, Squad squad)
+    {
+        var posts = Places(board.Town).Posts;
+        for (int k = 0; k < squad.Members.Count; k++)
+        {
+            var id = squad.Members[k];
+            if (!world.Characters.TryResolveNext(id, out int s) || world.Characters.Cold(s)?.Ai is not { } mind) continue;
+            bool guards = mind.Goal?.Task.Type == TaskType.STAND_AT_GUARD_NODE_HOMETOWN_OUTSIDE && !mind.HomeUnreachable;
+            if (mind.TownPost is { } held && (!guards || world.Fixtures.IsDestroyed(held.Building)))
+            {
+                PostsTakenOf(held.Building).Remove(held.Index);
+                mind.TownPost = null;
+            }
+            if (!guards || mind.TownPost is not null) continue;
+            mind.TownPost = DrawPost(world, id, posts);
+            if (mind.TownPost is { } got) PostsTakenOf(got.Building).Add(got.Index);
+        }
+    }
+
+    /// <summary>One of <paramref name="posts"/> no one holds, drawn uniformly by the character's roll of this tick; null when all are held.</summary>
+    SeatClaim? DrawPost(World world, CharacterId self, IReadOnlyList<SeatClaim> posts)
+    {
+        int free = 0;
+        foreach (var p in posts) if (!PostHeld(p)) free++;
+        if (free == 0) return null;
+        ulong salt = SeedSalts.AiTarget ^ (ulong)world.Tick << 8 ^ (ulong)TaskType.STAND_AT_GUARD_NODE_HOMETOWN_OUTSIDE;
+        ulong roll = Rng.Hash(world.Seed, Rng.Key(self), RngPurpose.Think, salt);
+        int pick = Rng.Int(roll, free);
+        foreach (var p in posts)
+            if (!PostHeld(p) && pick-- == 0) return p;
+        return null;
+    }
+
+    /// <summary>The town posts the members hold, reserved for every squad before any draws (as <see cref="ReserveSeats"/>).</summary>
+    void ReservePosts(World world)
+    {
+        foreach (var squad in world.Squads.All)
+            foreach (var id in squad.Members)
+                if (world.Characters.TryResolveNext(id, out int s) && world.Characters.Cold(s)?.Ai?.TownPost is { } post)
+                    PostsTakenOf(post.Building).Add(post.Index);
+    }
+
+    bool PostHeld(SeatClaim post) => postTaken.TryGetValue(post.Building, out var taken) && taken.Contains(post.Index);
+
+    HashSet<int> PostsTakenOf(TownBuilding building) => postTaken.TryGetValue(building, out var taken) ? taken : postTaken[building] = [];
+
+    /// <summary>The guard posts of a building (its spots of kind <see cref="HomeSpotKind.Guard"/>), numbered as its spots.</summary>
+    static IEnumerable<SeatClaim> GuardPosts(TownBuilding building)
+    {
+        for (int i = 0; i < building.Spots.Count; i++)
+            if (building.Spots[i].Kind == HomeSpotKind.Guard) yield return new SeatClaim(building, i);
     }
 
     /// <summary>
@@ -2205,8 +2380,9 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
 
     /// <summary>
     /// The table a squad starting a bar package reserves (the original's <c>Package_HangAroundBar</c> start, docs/game/ai-tasks.md "Town goals"): the town's public bars
-    /// are tried in turn from a random one (seeded by the squad and the tick), the first table of one no other squad's bar package holds wins; a town without bars, or
-    /// <paramref name="outdoors"/>, takes the first free outdoor table. Null when all are taken: the squad stays home.
+    /// are tried in turn from a random one (seeded by the squad and the tick), the first table of one no other squad's bar package holds wins; the
+    /// <paramref name="outdoors"/> kind takes the first free outdoor table instead. A town without bars gives the normal kind none, as the original's filter keeps
+    /// only indoor furniture for it. Null when there is none: the squad stays home.
     /// </summary>
     (TownBuilding Bar, int Table)? PickTable(World world, int site, Squad squad, bool outdoors)
     {
@@ -2214,19 +2390,20 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         var held = new HashSet<(TownBuilding, int)>();
         foreach (var other in world.Squads.All)
             if (other != squad && other.Ai is { BarTable: >= 0, Home: { } at } b && b.CurrentClass is PackageClass.Bar or PackageClass.BarOutdoors) held.Add((at, b.BarTable));
-        if (!outdoors && places.Bars.Count > 0)
+        if (outdoors)
         {
-            int start = Rng.Int(Rng.Hash(world.Seed, (ulong)squad.Id << 32 ^ (ulong)world.Tick, RngPurpose.Think, SeedSalts.BarPick), places.Bars.Count);
-            for (int k = 0; k < places.Bars.Count; k++)
-            {
-                var bar = places.Bars[(start + k) % places.Bars.Count];
-                for (int t = 0; t < bar.Tables.Count; t++)
-                    if (!held.Contains((bar, t))) return (bar, t);
-            }
+            foreach (var table in places.OutdoorTables)
+                if (!held.Contains((table, 0))) return (table, 0);
             return null;
         }
-        foreach (var table in places.OutdoorTables)
-            if (!held.Contains((table, 0))) return (table, 0);
+        if (places.Bars.Count == 0) return null;
+        int start = Rng.Int(Rng.Hash(world.Seed, (ulong)squad.Id << 32 ^ (ulong)world.Tick, RngPurpose.Think, SeedSalts.BarPick), places.Bars.Count);
+        for (int k = 0; k < places.Bars.Count; k++)
+        {
+            var bar = places.Bars[(start + k) % places.Bars.Count];
+            for (int t = 0; t < bar.Tables.Count; t++)
+                if (!held.Contains((bar, t))) return (bar, t);
+        }
         return null;
     }
 

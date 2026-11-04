@@ -653,20 +653,32 @@ public sealed partial class MainWindow : Window
     void ApplyPreset_Click(object? sender, RoutedEventArgs e)
     {
         if (PresetBox.SelectedItem is not ModPreset preset || !ModsReady()) return;
+        var missing = ApplyOrder(preset.Mods.Select(p => (p.Name, p.Enabled)));
+        Status(Tr("Preset '{1}' applied (not saved yet).", preset.Name) + NotOnDisk(missing));
+    }
+
+    /// <summary>
+    /// Puts the named mods first, in this order and with these flags, and the others after them, disabled; answers the enabled names not
+    /// on disk.
+    /// </summary>
+    List<string> ApplyOrder(IEnumerable<(string Name, bool Enabled)> order)
+    {
         var byName = mods.ToDictionary(m => m.Name, StringComparer.Ordinal);
         var ordered = new List<ModRow>();
         var missing = new List<string>();
-        foreach (var p in preset.Mods)
+        foreach (var (name, enabled) in order)
         {
-            if (byName.Remove(p.Name, out var row)) { row.Enabled = p.Enabled; ordered.Add(row); }
-            else if (p.Enabled) missing.Add(p.Name);
+            if (byName.Remove(name, out var row)) { row.Enabled = enabled; ordered.Add(row); }
+            else if (enabled) missing.Add(name);
         }
         foreach (var row in mods.Where(m => byName.ContainsKey(m.Name))) { row.Enabled = false; ordered.Add(row); }
         mods.Clear();
         foreach (var row in ordered) mods.Add(row);
         ShowModCount();
-        Status(Tr("Preset '{1}' applied (not saved yet).", preset.Name) + (missing.Count > 0 ? Tr(" Not on disk: {1}.", string.Join(", ", missing)) : ""));
+        return missing;
     }
+
+    static string NotOnDisk(List<string> missing) => missing.Count > 0 ? Tr(" Not on disk: {1}.", string.Join(", ", missing)) : "";
 
     void DeletePreset_Click(object? sender, RoutedEventArgs e)
     {

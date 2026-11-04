@@ -23,6 +23,12 @@ Released with tags `launcher-v<version>` by `.github/workflows/launcher-release.
 - The window can be **resized** from its edges and corners on Windows.
 - Scroll bars match the launcher: a brass thumb on a dark track, no arrows. A page keeps its scroll bar's room, so
   its rows no longer shift when the bar appears.
+- **Mods from a save**: the Mods page's **From save** button lists your saves and applies the mods a save was made with, in its
+  load order. Like a preset, it doesn't save until you Save or Play.
+- **Code mods**: Play asks before a mod may run its own code, with a box per mod, **Trust all** and **Data only all**. The
+  **Code mods** button lets you change those choices later.
+- On Windows, the first-start dialog asks whether to **launch as Kenshi on Steam**.
+- The mod list loads in the background, so the window opens at once even with a large workshop folder.
 
 ## v1.4.0
 

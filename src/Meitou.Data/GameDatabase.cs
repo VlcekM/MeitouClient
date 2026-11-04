@@ -18,6 +18,9 @@ public sealed class GameDatabase
     /// <summary>Files applied so far, in order.</summary>
     public List<string> Files { get; } = [];
 
+    /// <summary>The header of each file applied (version, author, description), by file name.</summary>
+    public Dictionary<string, FileHeader> Headers { get; } = new(StringComparer.Ordinal);
+
     /// <summary>Problems found while applying files. None of them stop loading.</summary>
     public List<GameDataIssue> Issues { get; } = [];
 
@@ -163,6 +166,7 @@ public sealed class GameDatabase
     {
         Version++;
         Files.Add(fileName);
+        Headers[fileName] = new(file.Version, file.Author, file.Description);
         foreach (var record in file.Records)
             Apply(record, fileName);
     }
@@ -262,6 +266,9 @@ public enum GameDataIssueKind
     /// <summary>A world level file could not be read (a mod's file with its zero bytes turned to spaces); it is left out.</summary>
     LevelFileNotLoaded,
 }
+
+/// <summary>A data file's version, author and description.</summary>
+public sealed record FileHeader(int Version, string Author, string Description);
 
 public sealed record GameDataIssue(GameDataIssueKind Kind, string File, string? StringId, string Message)
 {

@@ -6,8 +6,8 @@ namespace Meitou.Navigation;
 internal static partial class ZoneNavMeshBuilder
 {
     /// <summary>
-    /// The tile's heightfield: the walkable and the cutting triangles are rasterized into two fields and merged column by column, a merged span walkable when
-    /// a walkable surface in it reaches within the climb of its top. Recast's own merge (rcAddSpan) first raises a new span to the top of an existing one it
+    /// The tile's heightfield: the walkable and the cutting triangles are rasterized into two fields and merged column by column, a merged span walkable at
+    /// its walkable top when that reaches within the climb of its top. Recast's own merge (rcAddSpan) first raises a new span to the top of an existing one it
     /// overlaps and then compares the tops, so a floor rasterized into a taller cutting span walks that span's top: the cells along a steep wall rising from a
     /// floor to a walkable roof slope became a walkable stair (docs/game/pathfinding.md, "Own builder", rasterization).
     /// </summary>
@@ -40,7 +40,9 @@ internal static partial class ZoneNavMeshBuilder
 
     /// <summary>
     /// One column's spans of both fields (each sorted and apart) merged where they touch, as Recast merges them; a merged span takes the highest walkable
-    /// area whose top is within <paramref name="climb"/> of its own top, else none.
+    /// area whose top is within <paramref name="climb"/> of its own top, else none, and a walkable one stands at that walkable top, not on the cutting part
+    /// over it: the original cuts a face under cutting geometry rather than lifting it, so a steep collar rising from a roof is no stair of cutting tops
+    /// onto the dome it carries (docs/game/pathfinding.md, "Own builder", rasterization).
     /// </summary>
     static RcSpan? MergeColumn(RcSpan? walk, RcSpan? cut, int climb)
     {
@@ -71,6 +73,7 @@ internal static partial class ZoneNavMeshBuilder
             }
             span!.next = null;
             span.area = walkTop >= span.smax - climb ? walkArea : NavArea.Null;
+            if (span.area != NavArea.Null) span.smax = walkTop;
             if (tail is null) head = span;
             else tail.next = span;
             tail = span;
