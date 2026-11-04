@@ -1,53 +1,78 @@
+using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Meitou.Content;
 
 namespace Meitou.Launcher;
 
-// The Continue the last save setting (docs/launcher.md "Continue the last save"): Play loads the newest save when it was made with the
+// The Continue half of the Play button (docs/launcher.md "Continue"): starts the game in the newest save when it was made with the
 // enabled mods.
 public sealed partial class MainWindow
 {
     // Options that pick the game's start themselves; the game refuses --load beside the others.
     static readonly string[] StartOptions = ["--load", "--new-game", "--no-population", "--duel", "--sandbox", "--battle", "--terrain-sandbox"];
 
-    void Continue_Click(object? sender, RoutedEventArgs e)
+    async void Continue_Click(object? sender, RoutedEventArgs e) => await StartGame(continueSave: true);
+
+    /// <summary>Shows Continue with the newest save's name while there is a save (rescanned when the window is activated).</summary>
+    async Task RefreshContinueAsync()
     {
-        config.ContinueLastSave = ContinueBox.IsChecked == true;
-        config.Save();
+        var slot = install is { } gameInstall ? await Task.Run(() => NewestSave(gameInstall)) : null;
+        ContinueButton.IsVisible = slot is not null;
+        PlayButton.CornerRadius = slot is null ? new(7, 0, 0, 7) : new(0);
+        PlayButton.Margin = slot is null ? new(0) : new(-1, 0, 0, 0);
+        // Its fixed least width (the footer not moving between Play texts) would crowd the footer beside Continue.
+        PlayButton.MinWidth = slot is null ? 312 : 0;
+        if (slot is null) return;
+
+        ContinueSaveText.Text = slot.Name;
+        ToolTip.SetTip(ContinueButton, Tr("Load the newest save, {1} ({2}); its mods must be the enabled ones", slot.Name, slot.ModifiedUtc.ToLocalTime().ToString("g")));
     }
 
-    /// <summary>
-    /// The save folder Play loads, or null to start at the menu; the note (empty when the setting is off) is added to Play's status.
-    /// </summary>
-    async Task<(string? Folder, string Note)> ContinueTarget(GameInstall gameInstall)
+    static SaveModSlot? NewestSave(GameInstall gameInstall)
     {
-        if (!config.ContinueLastSave) return (null, "");
+        try
+        {
+            return SaveModList.Scan(SaveModList.Roots(gameInstall)).FirstOrDefault();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>The newest save when its mods are the enabled ones; else null, with the reason in the status.</summary>
+    async Task<SaveModSlot?> ContinueTarget(GameInstall gameInstall)
+    {
+        if (!ModsReady()) return null;
         if (SplitArguments(config.LaunchArguments).FirstOrDefault(StartOptions.Contains) is { } option)
-            return (null, Tr(" Not continuing the last save: Launch arguments have {1}.", option));
+        {
+            Status(Tr("Launch arguments have {1}, which picks the start itself: remove it to continue a save.", option));
+            return null;
+        }
 
         var enabled = mods.Where(m => m.Enabled).Select(m => m.Name).ToList();
         try
         {
-            return await Task.Run(() => NewestSave(gameInstall, enabled));
+            var (slot, problem) = await Task.Run(() => CheckNewestSave(gameInstall, enabled));
+            if (problem is not null) Status(problem);
+            return slot;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
         {
-            return (null, Tr(" Could not read the last save: {1}", ex.Message));
+            Status(Tr("Could not read the last save: {1}", ex.Message));
+            return null;
         }
     }
 
-    static (string? Folder, string Note) NewestSave(GameInstall gameInstall, List<string> enabled)
+    // The newest save, or null and why it can't be continued.
+    static (SaveModSlot? Slot, string? Problem) CheckNewestSave(GameInstall gameInstall, List<string> enabled)
     {
-        var slots = SaveModList.Scan(SaveModList.Roots(gameInstall));
-        if (slots.Count == 0) return (null, Tr(" No save to continue."));
+        if (SaveModList.Scan(SaveModList.Roots(gameInstall)).FirstOrDefault() is not { } slot) return (null, Tr("No save to continue."));
+        if (SaveModList.Read(slot.Folder) is not { } saved) return (null, Tr("The save '{1}' has no mod list.", slot.Name));
 
-        var slot = slots[0];
-        if (SaveModList.Read(slot.Folder) is not { } saved) return (null, Tr(" The last save '{1}' has no mod list.", slot.Name));
-
-        var differences = ModDifferences(saved, enabled);
-        return differences is null
-            ? (slot.Folder, Tr(" Continuing '{1}'.", slot.Name))
-            : (null, Tr(" Not continuing '{1}', made with other mods ({2}).", slot.Name, differences));
+        return ModDifferences(saved, enabled) is { } differences
+            ? (null, Tr("The save '{1}' was made with other mods ({2}); Mods > From save applies its list.", slot.Name, differences))
+            : (slot, null);
     }
 
     // Null when the save's mods are the enabled ones (in any order), else which are missing and which are extra.

@@ -63,7 +63,6 @@ public sealed partial class MainWindow : Window
         ArgumentsBox.Text = config.LaunchArguments;
         SteamRow.IsVisible = OperatingSystem.IsWindows();
         SteamBox.IsChecked = config.LaunchAsSteamKenshi;
-        ContinueBox.IsChecked = config.ContinueLastSave;
         RendererRow.IsVisible = OperatingSystem.IsMacOS();
         RendererMetalItem.IsVisible = MacSupport.MetalAvailable;
         if (!MacSupport.MetalAvailable && config.Renderer == "metal") config.Renderer = "auto";
@@ -88,6 +87,8 @@ public sealed partial class MainWindow : Window
         UseKenshi(found);
         if (!config.FoldersConfirmed) ShowSetup();
         Closing += (_, _) => { if (graphicsSave?.IsEnabled == true) SaveGame(); };
+        // A save made in the game since: Continue names it.
+        Activated += (_, _) => _ = RefreshContinueAsync();
         Opened += async (_, _) =>
         {
             // Apply after Avalonia has attached control templates; the constructor pass runs before some text presenters exist.
@@ -280,6 +281,7 @@ public sealed partial class MainWindow : Window
     {
         install = found;
         KenshiPathBox.Text = found?.Root ?? config.KenshiPath ?? "";
+        _ = RefreshContinueAsync();
         KenshiStatus.Text = found is null ? "Not found: browse to the folder with data/gamedata.base."
             : found.WorkshopDirectory is null ? "The folder with data/gamedata.base." : "The folder with data/gamedata.base; Steam workshop mods found.";
         KenshiBadge.Text = found is null ? "Kenshi not found: set its folder in Settings" : found.Root;
@@ -1173,27 +1175,49 @@ public sealed partial class MainWindow : Window
     {
         // As the update button: install the latest, or cancel its download.
         if (PlayButton.Classes.Contains("pending")) { InstallLatest_Click(sender, e); return; }
+        await StartGame(continueSave: false);
+    }
+
+    // Starts the played version; with continueSave, in the newest save (ContinueSave.cs), not at all when its mods are other ones.
+    async Task StartGame(bool continueSave)
+    {
         if (install is null) { Status("Set the Kenshi folder first (Settings)."); return; }
-        string version;
-        string? exe = null;
-#if DEBUG
-        exe = FindDevelopmentGame();
-#endif
-        if (exe is null)
-        {
-            if (PlayVersion is not { } selected) { Status("Install a version first (Versions)."); return; }
-            version = selected;
-            exe = Releases.FindGame(Releases.VersionDirectory(version));
-            if (exe is null) { Status(Tr("Meitou {1} is not installed any more.", version)); return; }
-        }
-        else version = "Debug build";
+        if (FindPlayedGame() is not (string exe, string version)) return;
         // A second game would share meitou.user.json and the mod list with the first; whichever closes last overwrites the other's.
         if (running is { HasExited: false }) { Status("Meitou is already running: close it before starting it again."); return; }
+
+        SaveModSlot? save = null;
+        if (continueSave && (save = await ContinueTarget(install)) is null) return;
         if (!SaveMods()) return;
         if (graphicsSave?.IsEnabled == true) SaveGame();
         await AskForCodeMods();
-        var (continueFolder, continueNote) = await ContinueTarget(install);
         if (running is { HasExited: false }) return;   // a second click while the question was open started the game already
+
+        var start = GameStartInfo(exe, install);
+        var steamAppIdFiles = SetUpSteamAppId(start, exe, install);
+        if (!SetUpRenderer(start, steamAppIdFiles, out string? renderer, out bool metalFallback)) return;
+        AddArguments(start, renderer, save);
+
+        string started = renderer is null ? Tr("Meitou {1} started.", version)
+            : Tr("Meitou {1} started with {2}{3}.", version, RendererLabel(renderer), metalFallback ? " (Vulkan loader missing)" : "");
+        if (save is not null) started += Tr(" Continuing '{1}'.", save.Name);
+        Launch(start, exe, version, started, steamAppIdFiles);
+    }
+
+    // The game Play starts and its version; null, with the reason in the status, when there is none.
+    (string Exe, string Version)? FindPlayedGame()
+    {
+#if DEBUG
+        if (FindDevelopmentGame() is { } development) return (development, "Debug build");
+#endif
+        if (PlayVersion is not { } version) { Status("Install a version first (Versions)."); return null; }
+        if (Releases.FindGame(Releases.VersionDirectory(version)) is { } exe) return (exe, version);
+        Status(Tr("Meitou {1} is not installed any more.", version));
+        return null;
+    }
+
+    static ProcessStartInfo GameStartInfo(string exe, GameInstall gameInstall)
+    {
         var start = new ProcessStartInfo(exe)
         {
             WorkingDirectory = LauncherConfig.DataDirectory,
@@ -1203,17 +1227,19 @@ public sealed partial class MainWindow : Window
             RedirectStandardError = true,
 #endif
         };
-        start.Environment[GameInstall.EnvironmentVariable] = install.Root;
+        start.Environment[GameInstall.EnvironmentVariable] = gameInstall.Root;
         // The Metal GPU cull is experimental and has caused GPU progress timeouts; it is not a user setting.
         start.Environment.Remove("MEITOU_METAL_GPU_CULL");
         start.Environment.Remove("MEITOU_METAL_GPU_BUDGET_MB");
-        string? renderer = null;
-        bool metalFallback = false;
-        // Steamworks reads this file from the working directory when the game is started outside Steam.
-        // Keep it only for the lifetime of this launch; never ship it or overwrite a user's file. A file that already holds Kenshi's
-        // ID is one an earlier launch left (the launcher closed before the game did), so this launch takes it over and removes it.
-        var steamAppIdFiles = new List<string>();
-        void RemoveSteamAppIds() { foreach (string file in steamAppIdFiles) TryDeleteSteamAppId(file); }
+        return start;
+    }
+
+    // Steamworks reads steam_appid.txt from the working directory when the game is started outside Steam. Keep it only for the lifetime of
+    // this launch; never ship it or overwrite a user's file. A file that already holds Kenshi's ID is one an earlier launch left (the
+    // launcher closed before the game did), so this launch takes it over and removes it. Answers the files written.
+    List<string> SetUpSteamAppId(ProcessStartInfo start, string exe, GameInstall gameInstall)
+    {
+        var written = new List<string>();
         string[] appIdFiles = [.. new[] { Path.Combine(start.WorkingDirectory, "steam_appid.txt"), Path.Combine(Path.GetDirectoryName(exe)!, "steam_appid.txt") }
             .Distinct(StringComparer.OrdinalIgnoreCase)];
         if (!config.LaunchAsSteamKenshi)
@@ -1227,119 +1253,144 @@ public sealed partial class MainWindow : Window
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
             }
         }
-        else if (OperatingSystem.IsWindows() && File.Exists(Path.Combine(install.Root, "steam_api64.dll")))
+        else if (OperatingSystem.IsWindows() && File.Exists(Path.Combine(gameInstall.Root, "steam_api64.dll")) && !SteamAppIdConflict(appIdFiles))
         {
-            // Any other ID in either place is the user's: write nothing then, so both places keep agreeing.
-            bool appIdConflict = false;
             foreach (string file in appIdFiles)
             {
-                try { if (File.Exists(file) && File.ReadAllText(file).Trim() != KenshiAppId) appIdConflict = true; }
-                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { appIdConflict = true; }
-            }
-            if (!appIdConflict)
-            {
-                foreach (string file in appIdFiles)
+                try
                 {
-                    try
-                    {
-                        Directory.CreateDirectory(Path.GetDirectoryName(file)!);
-                        File.WriteAllText(file, KenshiAppId);
-                        steamAppIdFiles.Add(file);
-                    }
-                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+                    Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+                    File.WriteAllText(file, KenshiAppId);
+                    written.Add(file);
                 }
-                start.Environment["SteamAppId"] = KenshiAppId;
-                start.Environment["SteamGameId"] = KenshiAppId;
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
             }
+            start.Environment["SteamAppId"] = KenshiAppId;
+            start.Environment["SteamGameId"] = KenshiAppId;
         }
-        if (OperatingSystem.IsMacOS())
+        return written;
+    }
+
+    // Any other ID in either place is the user's: write nothing then, so both places keep agreeing.
+    static bool SteamAppIdConflict(string[] appIdFiles)
+    {
+        bool conflict = false;
+        foreach (string file in appIdFiles)
         {
-            // A release advertises its renderers in settings-schema.json; an old release without the key is Vulkan-only.
-            bool metalSupported = PlaySchema().Schema?.Renderers.Contains("metal", StringComparer.OrdinalIgnoreCase) == true;
-            string requested = config.Renderer;
-            if (requested == "metal" && !MacSupport.MetalAvailable)
-            {
-                RemoveSteamAppIds();
-                Status("Metal needs an Apple-silicon Mac; choose Auto or Vulkan.");
-                return;
-            }
-            if (requested == "metal" && !metalSupported)
-            {
-                RemoveSteamAppIds();
-                Status("This Meitou version does not include Metal; choose Vulkan or install a newer version.");
-                return;
-            }
+            try { if (File.Exists(file) && File.ReadAllText(file).Trim() != KenshiAppId) conflict = true; }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { conflict = true; }
+        }
+        return conflict;
+    }
+
+    static void RemoveSteamAppIds(List<string> files) { foreach (string file in files) TryDeleteSteamAppId(file); }
+
+    // macOS: the renderer to pass and its environment; false (the status says why, the app ID files removed) when it cannot start.
+    bool SetUpRenderer(ProcessStartInfo start, List<string> steamAppIdFiles, out string? renderer, out bool metalFallback)
+    {
+        renderer = null;
+        metalFallback = false;
+        if (!OperatingSystem.IsMacOS()) return true;
+
+        // A release advertises its renderers in settings-schema.json; an old release without the key is Vulkan-only.
+        bool metalSupported = PlaySchema().Schema?.Renderers.Contains("metal", StringComparer.OrdinalIgnoreCase) == true;
+        string requested = config.Renderer;
+        const string noMetal = "This Meitou version does not include Metal; choose Vulkan or install a newer version.";
+        string? problem = requested == "metal" && !MacSupport.MetalAvailable ? "Metal needs an Apple-silicon Mac; choose Auto or Vulkan."
+            : requested == "metal" && !metalSupported ? noMetal
+            : null;
+        if (problem is null)
+        {
             if (requested == "auto" && !metalSupported) requested = "vulkan";
             renderer = MacSupport.Resolve(requested);
-            if (renderer == "metal" && !metalSupported)
-            {
-                RemoveSteamAppIds();
-                Status("This Meitou version does not include Metal; choose Vulkan or install a newer version.");
-                return;
-            }
             metalFallback = requested == "vulkan" && renderer == "metal";
-            if (renderer == "metal")
-            {
-                start.Environment.Remove("DYLD_LIBRARY_PATH");
-                start.Environment["MEITOU_METAL_GPU_BUDGET_MB"] = config.MetalMemoryBudget.ToString(System.Globalization.CultureInfo.InvariantCulture);
-            }
-            else if (!MacSupport.AddVulkanEnvironment(start.Environment))
-            {
-                RemoveSteamAppIds();
-                Status(MacSupport.MetalAvailable && !metalSupported
-                    ? "This Meitou version has no Metal renderer and no Vulkan loader; install a newer version or MoltenVK."
-                    : MacSupport.MetalAvailable
-                        ? "The Vulkan loader is not installed: use Auto/Metal, or install MoltenVK from Settings > Setup."
-                        : "The Vulkan loader is not installed: run 'brew install molten-vk vulkan-loader' in a terminal, then Play again.");
-                return;
-            }
+            problem = renderer == "metal" ? (metalSupported ? null : noMetal)
+                : MacSupport.AddVulkanEnvironment(start.Environment) ? null
+                : VulkanLoaderProblem(metalSupported);
         }
-        foreach (var arg in SplitArguments(config.LaunchArguments)) start.ArgumentList.Add(arg);
-        if (continueFolder is not null)
+        if (problem is not null)
         {
-            start.ArgumentList.Add("--load");
-            start.ArgumentList.Add(continueFolder);
+            RemoveSteamAppIds(steamAppIdFiles);
+            Status(problem);
+            return false;
         }
+
+        if (renderer == "metal")
+        {
+            start.Environment.Remove("DYLD_LIBRARY_PATH");
+            start.Environment["MEITOU_METAL_GPU_BUDGET_MB"] = config.MetalMemoryBudget.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        }
+        return true;
+    }
+
+    static string VulkanLoaderProblem(bool metalSupported) => MacSupport.MetalAvailable && !metalSupported
+        ? "This Meitou version has no Metal renderer and no Vulkan loader; install a newer version or MoltenVK."
+        : MacSupport.MetalAvailable
+            ? "The Vulkan loader is not installed: use Auto/Metal, or install MoltenVK from Settings > Setup."
+            : "The Vulkan loader is not installed: run 'brew install molten-vk vulkan-loader' in a terminal, then Play again.";
+
+    void AddArguments(ProcessStartInfo start, string? renderer, SaveModSlot? save)
+    {
+        foreach (var arg in SplitArguments(config.LaunchArguments)) start.ArgumentList.Add(arg);
         if (renderer is not null)
         {
             // Appended last so the selector wins over a hand-written --renderer in Launch arguments.
             start.ArgumentList.Add("--renderer");
             start.ArgumentList.Add(renderer);
         }
+        if (save is not null)
+        {
+            start.ArgumentList.Add("--load");
+            start.ArgumentList.Add(save.Folder);
+        }
+    }
+
+    void Launch(ProcessStartInfo start, string exe, string version, string started, List<string> steamAppIdFiles)
+    {
         try
         {
             var game = Process.Start(start);
             running = game;
-            string suffix = metalFallback ? " (Vulkan loader missing)" : "";
-            Status(renderer is null ? Tr("Meitou {1} started.", version) + continueNote
-                : Tr("Meitou {1} started with {2}{3}.", version, RendererLabel(renderer), suffix) + continueNote);
-            if (game is null) { RemoveSteamAppIds(); return; }
-            // The game's window is all a player sees of it, so a crash (above all one before the window opens) is reported here.
-            var log = Path.Combine(Path.GetDirectoryName(exe)!, "log.txt");
+            Status(started);
+            if (game is null) { RemoveSteamAppIds(steamAppIdFiles); return; }
 #if DEBUG
-            game.OutputDataReceived += (_, data) => { if (data.Data is { } line) { Console.WriteLine($"[Meitou] {line}"); System.Diagnostics.Debug.WriteLine($"[Meitou] {line}"); } };
-            game.ErrorDataReceived += (_, data) => { if (data.Data is { } line) { Console.Error.WriteLine($"[Meitou] {line}"); System.Diagnostics.Debug.WriteLine($"[Meitou] {line}"); } };
-            game.BeginOutputReadLine();
-            game.BeginErrorReadLine();
+            ForwardOutput(game);
 #endif
-            game.EnableRaisingEvents = true;
-            game.Exited += (_, _) =>
-            {
-                int code = game.ExitCode;
-                Dispatcher.UIThread.Post(() =>
-                {
-                    // On the UI thread, as Play: a game started since then has taken these files over and removes them itself.
-                    if (running == game) RemoveSteamAppIds();
-                    if (code != 0) Status(Tr("Meitou {1} stopped with an error (exit code {2}); its log is {3}", version, code, log));
-                });
-            };
+            WatchExit(game, version, Path.Combine(Path.GetDirectoryName(exe)!, "log.txt"), steamAppIdFiles);
         }
         catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or IOException)
         {
-            RemoveSteamAppIds();
+            RemoveSteamAppIds(steamAppIdFiles);
             Status(Tr("Could not start Meitou {1}: {2}", version, ex.Message));
         }
     }
+
+    // The game's window is all a player sees of it, so a crash (above all one before the window opens) is reported here.
+    void WatchExit(Process game, string version, string log, List<string> steamAppIdFiles)
+    {
+        game.EnableRaisingEvents = true;
+        game.Exited += (_, _) =>
+        {
+            int code = game.ExitCode;
+            Dispatcher.UIThread.Post(() =>
+            {
+                // On the UI thread, as Play: a game started since then has taken these files over and removes them itself.
+                if (running == game) RemoveSteamAppIds(steamAppIdFiles);
+                if (code != 0) Status(Tr("Meitou {1} stopped with an error (exit code {2}); its log is {3}", version, code, log));
+                _ = RefreshContinueAsync();
+            });
+        };
+    }
+
+#if DEBUG
+    static void ForwardOutput(Process game)
+    {
+        game.OutputDataReceived += (_, data) => { if (data.Data is { } line) { Console.WriteLine($"[Meitou] {line}"); System.Diagnostics.Debug.WriteLine($"[Meitou] {line}"); } };
+        game.ErrorDataReceived += (_, data) => { if (data.Data is { } line) { Console.Error.WriteLine($"[Meitou] {line}"); System.Diagnostics.Debug.WriteLine($"[Meitou] {line}"); } };
+        game.BeginOutputReadLine();
+        game.BeginErrorReadLine();
+    }
+#endif
 
 #if DEBUG
     static string? FindDevelopmentGame()

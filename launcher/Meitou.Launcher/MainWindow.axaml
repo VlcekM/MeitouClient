@@ -4,7 +4,7 @@
         x:Class="Meitou.Launcher.MainWindow"
         Title="Meitou Launcher" Icon="avares://meitou-launcher/Assets/meitou.ico"
         WindowDecorations="None" TransparencyLevelHint="Transparent"
-        WindowStartupLocation="CenterScreen" Width="1200" Height="936" MinWidth="760" MinHeight="540">
+        WindowStartupLocation="CenterScreen" Width="1200" Height="936" MinWidth="800" MinHeight="540">
   <!-- No system frame: the plate floats on a transparent window with its own title bar; the margin holds its shadow and the resize grips. -->
   <Panel>
     <Border x:Name="Plate" Classes="plate" Margin="8" Padding="16,0,16,12">
@@ -53,6 +53,16 @@
           </Button>
           <!-- Play the newest installed version, or the one picked from the arrow's menu (or on Versions) -->
           <StackPanel x:Name="PlayPanel" DockPanel.Dock="Right" Orientation="Horizontal" Margin="12,0,0,0">
+            <!-- Continue: the newest save, when it was made with the enabled mods (ContinueSave.cs); shown while there is a save -->
+            <Button x:Name="ContinueButton" Classes="paper" Click="Continue_Click" CornerRadius="7,0,0,7" IsVisible="False">
+              <StackPanel Orientation="Horizontal" Spacing="12">
+                <Path Data="M0,0 H4 V18 H0 Z M7,0 L7,18 L20,9 Z" VerticalAlignment="Center" />
+                <StackPanel VerticalAlignment="Center">
+                  <TextBlock Text="Continue" FontSize="17" Foreground="{StaticResource Secondary}" />
+                  <TextBlock x:Name="ContinueSaveText" FontSize="11" MaxWidth="160" TextTrimming="CharacterEllipsis" Foreground="{StaticResource Secondary}" />
+                </StackPanel>
+              </StackPanel>
+            </Button>
             <!-- A fixed least width (with the arrow, Install latest's 352) so "Play latest" / "Play latest nightly" do not move the footer -->
             <Button x:Name="PlayButton" Classes="paper" Click="Play_Click" CornerRadius="7,0,0,7" MinWidth="312">
               <!-- Playing the latest while a newer release is not installed, it is the update button: download icon, "Update to v…" -->
@@ -342,15 +352,6 @@
                   <TextBlock Classes="desc" Text="Passed to the game, e.g. --faithful or --windowed." />
                 </StackPanel>
                 <TextBox Grid.Column="1" x:Name="ArgumentsBox" LostFocus="Arguments_LostFocus" />
-              </Grid>
-            </Border>
-            <Border Classes="row">
-              <Grid ColumnDefinitions="*,Auto">
-                <StackPanel VerticalAlignment="Center">
-                  <TextBlock Classes="name" Text="Continue the last save" />
-                  <TextBlock Classes="desc" Text="Play loads the newest save when it was made with the enabled mods; otherwise the game starts at the menu." TextWrapping="Wrap" />
-                </StackPanel>
-                <CheckBox Grid.Column="1" x:Name="ContinueBox" Click="Continue_Click" VerticalAlignment="Center" />
               </Grid>
             </Border>
             <Border x:Name="SteamRow" Classes="row">
