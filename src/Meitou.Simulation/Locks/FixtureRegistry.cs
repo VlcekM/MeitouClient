@@ -956,7 +956,10 @@ public sealed partial class FixtureRegistry
             c.BedUsedHours = world.GameHours;   // Task_UseBed's update stamps the status clock (+0xc0)
             ref var n = ref table.Next[s];
             var (at, yaw) = LieSpot(f, n.Position, world.GameHours);
-            if (n.Position != at || n.Yaw != yaw) table.Place(s, at, yaw);
+            if (n.Position == at && n.Yaw == yaw) continue;
+            (byte task, var time) = (n.Task, n.TaskTime);
+            table.Place(s, at, yaw);
+            (n.Task, n.TaskTime) = (task, time);   // Place stands it; a sleeper stays asleep
         }
     }
 
