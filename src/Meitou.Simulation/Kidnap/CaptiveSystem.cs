@@ -988,9 +988,15 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
         }
         bool corpse = m.Dead;
         if (!Eat(world, j, c, cc, world.TickSeconds)) return true;
-        // The meal over, the original destroys the character with the reason "eaten" (FUN_140799af0): a corpse is let go to the body system's removal (its decay clock run out).
-        if (corpse && cc.DiedTick >= 0) cc.DiedTick = Math.Max(0, world.Tick - BodySystem.CorpseTicksOf(world) - 1);
-        return End(world, j, CaptiveEventKind.Eaten);
+        bool over = End(world, j, CaptiveEventKind.Eaten);
+        // The meal over, the original destroys the character with the reason "eaten" (FUN_140799af0): the corpse goes at once, as the body system removes a decayed one.
+        if (corpse)
+        {
+            var id = table.IdOf(c);
+            world.Uniques.Left(id);
+            table.Remove(id);
+        }
+        return over;
     }
 
     /// <summary>
