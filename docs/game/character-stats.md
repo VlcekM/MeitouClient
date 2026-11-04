@@ -287,7 +287,7 @@ skill x 0.8 when treating oneself and q = min(skill, kit quality):
   when that finds none (a first search that finds none is left to `FUN_1403563a0`: the robot phase, else the end); `FUN_14033c5a0` clears it when it is used up. Meitou: `CharacterCold.TreatKit` (`FirstAidSystem.KitOf`; runtime, derived), also dropped when no longer held.
 - **Unknown**: while no wound is open but bleeding (medical +0x78) is positive, `FUN_14064d800` bandages an extra time and lowers it
   by q x 0.01 x dt; it is recomputed every medical tick, so Meitou leaves it out.
-- Meitou: `FirstAidSystem.Apply`, `MedicalState.CloseWound` / `Treat`; dt in game seconds (unit **Unknown**).
+- **dt** (**Verified**, `FUN_1405cf130`): the task update gets the character's update time `+0xc4` = the scaled frame time `DAT_142133794` (0.01 when not positive) plus the time summed while the character was not visited (`+0xc0`, cleared), passed on by `FUN_1403563a0`; so its long run is the scaled frame time once, without the medical clock's extra visits ([Time](#time)). Meitou: `FirstAidSystem.Apply`, `MedicalState.CloseWound` / `Treat`, `dt = TickSeconds`.
 
 **Observed** (`wade`, player Metaru's MEDICAL_STATE): injured parts have flesh + bandage ≈100,
 stun0 and bleeding0; the wounds are already treated. First Aid has nothing left to bandage;
@@ -333,7 +333,7 @@ counts as health in the fraction, the down (h-s+rig<0) and sever tests, so a spl
 - Order 249 refuses without such a kit ("I don't have a splint kit."). The job 250 "Splint Rigging" (finder `FUN_14099e240`, may pick the medic
   itself): [perma-jobs](ai-tasks.md#perma-jobs); Meitou runs it as a splint treatment (`FirstAidSystem.FindSplint`, the decision step's job).
 - Meitou: `SplintOrder` (the Treat task with `TreatSplint`), `MedicalState.NeedsSplint` / `Splint`, `FirstAidSystem.OwnKit` (own kit,
-  fewest charges); dt in game seconds as for first aid. Left as they are: Meitou's splint skill is `stat x StatMultiplier`, where the rig
+  fewest charges); dt as for first aid. Left as they are: Meitou's splint skill is `stat x StatMultiplier`, where the rig
   task passes the raw CharStats+0x98 (**Verified**); XP only when rig is added.
 
 ### The stat list
