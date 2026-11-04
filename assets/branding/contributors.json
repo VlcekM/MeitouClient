@@ -24,15 +24,15 @@
     "areas": "Metal rendering, Materials, Seat interaction, Mesh paths"
   },
   "crockmr": {
-    "commits": 10,
-    "areas": "Prisoner treatment, Save/load, Escaped slaves"
+    "commits": 19,
+    "areas": "Slaves, Sleep, Plans, Platoons, Prisoner care, Save files, Squads"
   },
   "dmlen": {
     "commits": 1,
     "areas": "Projectile tracers"
   },
   "lucasskrewer": {
-    "commits": 4,
+    "commits": 5,
     "areas": "Benchmarks, Animal hunger"
   },
   "dxseba": {
@@ -40,7 +40,7 @@
     "areas": "Character meshes"
   },
   "dfdffish": {
-    "commits": 9,
-    "areas": "Picking, Localization"
+    "commits": 11,
+    "areas": "Picking, Launcher, Localization"
   }
 }
