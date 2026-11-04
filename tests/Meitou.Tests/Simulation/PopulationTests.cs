@@ -46,9 +46,9 @@ public class PopulationTests
     }
 
     [Fact]
-    public void A_town_stays_loaded_while_one_of_its_squads_stands_in_an_active_zone()
+    public void A_town_squad_in_an_active_zone_stays_loaded_as_a_platoon_when_its_town_unloads()
     {
-        // Issue #57: a squad chasing the player away from home vanished with its site's zone.
+        // Issue #57: a squad chasing the player away from home vanished with its site's zone. The town unloads with its coverage zones; the squad is a platoon that unloads by its own place.
         using var world = SyntheticTown.World(5, 1, 3, new PopulationSettings { UnloadGraceSeconds = 10, CheckEveryTicks = 1 });
         var population = (PopulationSystem)world.Systems[0];
         world.RunTick();
@@ -59,10 +59,10 @@ public class PopulationTests
         world.RunTick();
         table.Place(chaser.Slot, far, 0);
         world.RunTicks(350);   // past 10 s
-        Assert.Equal(SiteStatus.Loaded, population.StatusOf(0));
+        Assert.Equal(SiteStatus.Unloaded, population.StatusOf(0));
         Assert.True(table.IsAlive(chaser));
 
-        // Back home, out of the active zones: the town goes after its grace.
+        // Back home, out of the active zones: the platoon unloads.
         table.Place(chaser.Slot, SyntheticTown.Centre, 0);
         world.RunTicks(350);
         Assert.Equal(SiteStatus.Unloaded, population.StatusOf(0));

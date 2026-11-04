@@ -408,7 +408,7 @@ public sealed partial class PopulationSystem
         // Away from every active zone for long enough: only the stand-in goes on.
         if (Wanted(p) || SquadCarriesPlayer(world, squad)) p.UnloadAtTick = -1;
         // A town's own squad keeps the town's grace (it leaves with its town), a roaming one the roaming grace.
-        else if (p.UnloadAtTick < 0) p.UnloadAtTick = world.Tick + (long)Math.Ceiling((p.Pinned ? settings.UnloadGraceSeconds : settings.RoamUnloadGraceSeconds) / world.TickSeconds);
+        else if (p.UnloadAtTick < 0) p.UnloadAtTick = world.Tick + (long)Math.Ceiling((p.Pinned ? settings.TownUnloadGraceSeconds : settings.RoamUnloadGraceSeconds) / world.TickSeconds);
         // Faithful: a platoon the original does not keep is not unloaded whole: each member out of the zone is destroyed, and the platoon stays while any is left.
         else if (world.Tick >= p.UnloadAtTick && !(!Kept(p) && !p.Pinned && ThinOutOfZone(world, p, squad)))
         {

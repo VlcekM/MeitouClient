@@ -424,7 +424,7 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
                 case SiteStatus.Loaded or SiteStatus.Loading when wanted:
                     state.UnloadAtTick = -1;
                     break;
-                case SiteStatus.Loaded or SiteStatus.Loading when CoverageActive(site) || AnyMemberActive(world, state):
+                case SiteStatus.Loaded or SiteStatus.Loading when CoverageActive(site):
                     state.UnloadAtTick = -1;
                     break;
                 case SiteStatus.Loaded or SiteStatus.Loading:
@@ -437,8 +437,8 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
     }
 
     /// <summary>
-    /// Whether a living member of one of the site's squads stands in an active zone: the site then stays loaded wherever its own zone is, so a squad
-    /// chasing the player away from home does not vanish with it (the original unloads each platoon by its own place, docs/simulation.md "Population").
+    /// Whether a living member of one of a wild site's squads stands in an active zone (a nest then stays loaded). A town does not use it: its squads are platoons that unload by their own
+    /// place (<see cref="KeepLoaded"/>).
     /// </summary>
     bool AnyMemberActive(World world, SiteState state)
     {
@@ -542,6 +542,7 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
         foreach (int id in state.Squads)
         {
             if (world.Squads.Find(id) is not { } squad) continue;
+            if (KeepLoaded(world, site, squad)) continue;
             var stored = new StoredSquad { Name = squad.Name, HomeBuilding = squad.HomeBuilding, Shop = squad.Shop, NextHomeFillTick = squad.NextHomeFillTick, Package = squad.Ai?.Current?.Id, Ai = Saving.AiSave.Of(squad.Ai) ?? squad.SavedAi, Memory = Memory?.Take(squad.Id) };
             var at = Store(world, squad, stored);
             world.Squads.Remove(id);
@@ -560,6 +561,27 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
             });
         }
         Reset(state);
+    }
+
+    /// <summary>
+    /// A town squad with a living member in the loaded box of an active zone is not stored with its town: it stays in the world as a pinned platoon that unloads on its own, as the original
+    /// checks each platoon by its place (<c>FUN_1404febd0</c>, after 4 s outside every loaded zone; a zone's unload touches no platoon, <c>FUN_1409fe980</c>), so a squad chasing the player
+    /// away from home does not vanish with its town. True when it was kept.
+    /// </summary>
+    bool KeepLoaded(World world, int site, Squad squad)
+    {
+        var at = PlatoonPosition(world, squad, new Vector2(squad.Position.X, squad.Position.Z));
+        if (!ZoneActivation.InLoadedBox(at.X, at.Y, active)) return false;
+        var stored = new StoredSquad { Name = squad.Name, HomeBuilding = squad.HomeBuilding, Shop = squad.Shop, NextHomeFillTick = squad.NextHomeFillTick, Package = squad.Ai?.Current?.Id, Ai = Saving.AiSave.Of(squad.Ai) ?? squad.SavedAi };
+        var platoon = new Platoon
+        {
+            Id = world.Platoons.NextId(), Origin = site, TemplateId = squad.TemplateId, Faction = squad.Faction, Key = 0, Size = Math.Max(squad.SpawnSize, squad.Members.Count),
+            Position = at, Money = squad.Money, Package = stored.Package, Stored = stored, IntactFlag = squad.Ai?.Intact ?? true, State = PlatoonState.Loaded, SquadId = squad.Id,
+        };
+        squad.PlatoonId = platoon.Id;
+        squad.Pinned = true;
+        world.Platoons.Add(platoon);
+        return true;
     }
 
     /// <summary>A wild site leaves the world: its squads are removed (the population makes them again).</summary>

@@ -35,9 +35,9 @@ public sealed class Squad
     /// </summary>
     public Meitou.Data.World.TownBuilding? HomeBuilding { get; set; }
     /// <summary>The roaming platoon this loaded squad is the active half of (-1: a resident or other squad).</summary>
-    public int PlatoonId { get; init; } = -1;
+    public int PlatoonId { get; set; } = -1;
     /// <summary>The active half of a pinned saved platoon (<see cref="Platoon.Pinned"/>): a town's own squad from a save, treated as the town's squads are (AI, guards).</summary>
-    public bool Pinned { get; init; }
+    public bool Pinned { get; set; }
     /// <summary>One of its town's own squads: the town made it, or a save holds it as the town's.</summary>
     public bool TownOwn => Town >= 0 && (PlatoonId < 0 || Pinned);
     /// <summary>The player faction's hidden <c>__DEAD_SQUAD__</c> its characters move to when they die (<see cref="SquadManagement.BuryDead"/>): no tab, never one of the player's squads.</summary>
