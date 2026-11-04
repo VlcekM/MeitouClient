@@ -24,6 +24,17 @@ public sealed class RagdollGeometry : IRagdollEnvironment, IDisposable
     const float Reach = 600;
     readonly ConcurrentDictionary<(ZoneCoordinate Zone, bool Roofs), long> used = new();
     long clock;
+    readonly NavRuntimeBuildings? runtime;
+    int generation;
+
+    public int Generation => Volatile.Read(ref generation);
+
+    void Changed(ZoneCoordinate zone)
+    {
+        zones.TryRemove((zone, false), out _);
+        zones.TryRemove((zone, true), out _);
+        Interlocked.Increment(ref generation);
+    }
 
     /// <summary>Heightmap samples along a block of the ground cache, and blocks kept at most (65 × 65 samples each, about 8 KB; a block is 1152 units across).</summary>
     const int BlockSamples = 64, MaxBlocks = 256;
@@ -31,9 +42,12 @@ public sealed class RagdollGeometry : IRagdollEnvironment, IDisposable
     readonly Dictionary<(int, int), HeightWindow> blocks = [];
 
     /// <param name="terrainHeight">The simulation's ground height, used only where the full heightmap cannot be opened: it is the coarse world grid away from the loaded area.</param>
-    public RagdollGeometry(GameInstall install, GameDatabase db, WorldLevelData levels, Func<float, float, float> terrainHeight)
+    /// <param name="runtime">The buildings placed at run time (built, bought or ruined houses), which the zones' collision includes as the navmesh does; a change drops the zone's gathered collision and bumps <see cref="Generation"/>.</param>
+    public RagdollGeometry(GameInstall install, GameDatabase db, WorldLevelData levels, Func<float, float, float> terrainHeight, NavRuntimeBuildings? runtime = null)
     {
-        gatherer = new ZoneGeometryGatherer(install, db, levels, new CollisionCache(install)) { IncludeFoliage = false };
+        gatherer = new ZoneGeometryGatherer(install, db, levels, new CollisionCache(install), runtime) { IncludeFoliage = false };
+        this.runtime = runtime;
+        if (runtime is not null) runtime.Changed += Changed;
         terrain = terrainHeight;
         try { map = TerrainHeightmap.Open(install); }
         catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException) { }
@@ -115,6 +129,7 @@ public sealed class RagdollGeometry : IRagdollEnvironment, IDisposable
 
     public void Dispose()
     {
+        if (runtime is not null) runtime.Changed -= Changed;
         foreach (var task in zones.Values) try { task.Wait(); } catch (AggregateException) { }
         map?.Dispose();
         lock (gatherLock) gatherer.Dispose();

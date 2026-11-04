@@ -182,7 +182,7 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
                 var navForRoutes = nav;
                 _ = Task.Run(() => navForRoutes.Walkability.Coarse.Warm());
                 // Ragdolls land on the terrain and the buildings' collision (gathered per zone on a worker when a ragdoll comes near).
-                ragdollGeometry = new Meitou.Navigation.RagdollGeometry(install, gameDb, levels!, heights.HeightAt);
+                ragdollGeometry = new Meitou.Navigation.RagdollGeometry(install, gameDb, levels!, heights.HeightAt, nav.Runtime);
             }
             var towns = levels is null ? [] : levels.Towns().ToList();
             // The wild (homeless squads and nests) needs the world's area sectors; the sandbox and the duel have none.

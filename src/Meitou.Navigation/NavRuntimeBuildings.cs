@@ -19,37 +19,48 @@ public sealed class NavRuntimeBuildings
 
     public bool IsEmpty => byZone.Count == 0;
 
+    /// <summary>Raised after a placement is added, replaced or removed, with the zone it was placed in (both zones when a replacement moves it): what else keeps zone-wide results (the ragdolls' collision) drops them.</summary>
+    public event Action<ZoneCoordinate>? Changed;
+
     /// <summary>Adds or replaces a placement (by global placement key).</summary>
     public void Add(BuildingPlacement placement)
     {
+        BuildingPlacement? old;
         lock (gate)
         {
+            all.TryGetValue(placement.Key, out old);
             all[placement.Key] = placement;
             byZone = all.Values.GroupBy(p => p.Zone).ToDictionary(g => g.Key, g => g.ToArray());
         }
+        if (old is not null && old.Zone != placement.Zone) Changed?.Invoke(old.Zone);
+        Changed?.Invoke(placement.Zone);
     }
 
     /// <summary>Removes a placement; returns it, or null when there was none.</summary>
     public BuildingPlacement? Remove(string instanceId)
     {
+        BuildingPlacement? removed;
         lock (gate)
         {
-            if (!all.Remove(instanceId, out var removed)) return null;
+            if (!all.Remove(instanceId, out removed)) return null;
             byZone = all.Values.GroupBy(p => p.Zone).ToDictionary(g => g.Key, g => g.ToArray());
-            return removed;
         }
+        Changed?.Invoke(removed.Zone);
+        return removed;
     }
 
     /// <summary>Removes everything; returns the removed placements.</summary>
     public List<BuildingPlacement> Clear()
     {
+        List<BuildingPlacement> removed;
         lock (gate)
         {
-            var removed = all.Values.ToList();
+            removed = all.Values.ToList();
             all.Clear();
             byZone = [];
-            return removed;
         }
+        foreach (var zone in removed.Select(r => r.Zone).Distinct()) Changed?.Invoke(zone);
+        return removed;
     }
 
     /// <summary>Every placement now.</summary>

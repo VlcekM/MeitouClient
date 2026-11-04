@@ -256,6 +256,8 @@ internal sealed class RagdollPhysics : IDisposable
         public StaticHandle Ground, Buildings;
         public TypedIndex GroundShape, BuildingShape;
         public bool HasBuildings, BuildingsPending;
+        /// <summary>The environment's <see cref="IRagdollEnvironment.Generation"/> the buildings were asked at.</summary>
+        public int Generation;
         public long Used;
     }
 
@@ -285,7 +287,12 @@ internal sealed class RagdollPhysics : IDisposable
                     budget--;
                     tiles[(x, z)] = tile = MakeTile(x, z, centre.Y, environment, ref budget);
                 }
-                else if (tile.BuildingsPending && budget > 0 && AddBuildings(tile, new Vector3(x * TileSize, 0, z * TileSize), environment)) budget -= BuildingUnits;
+                else
+                {
+                    // Collision that changed since the tile's buildings were built (a building placed or ruined): asked again, the old mesh standing until the new one is ready.
+                    if (tile.Generation != environment.Generation) (tile.Generation, tile.BuildingsPending) = (environment.Generation, true);
+                    if (tile.BuildingsPending && budget > 0 && AddBuildings(tile, new Vector3(x * TileSize, 0, z * TileSize), environment)) budget -= BuildingUnits;
+                }
                 tile.Used = tick;
             }
     }
@@ -344,7 +351,7 @@ internal sealed class RagdollPhysics : IDisposable
                 triangles[t++] = new Triangle(P(i, k), P(i + 1, k), P(i, k + 1));
                 triangles[t++] = new Triangle(P(i + 1, k), P(i + 1, k + 1), P(i, k + 1));
             }
-        var tile = new Tile();
+        var tile = new Tile { Generation = environment.Generation };
         tile.GroundShape = Simulation.Shapes.Add(new Mesh(triangles, Vector3.One, Pool));
         tile.Ground = Simulation.Statics.Add(new StaticDescription(origin, Quaternion.Identity, tile.GroundShape));
         // Its buildings when the budget allows, else on a later cover (the tile asks again while BuildingsPending).
@@ -358,7 +365,13 @@ internal sealed class RagdollPhysics : IDisposable
     {
         gathered.Clear();
         tile.BuildingsPending = !environment.Buildings(origin, origin + new Vector3(TileSize, 0, TileSize), gathered);
-        if (tile.BuildingsPending || gathered.Count < 3) return false;
+        if (tile.BuildingsPending) return false;
+        if (gathered.Count < 3)
+        {
+            if (!tile.HasBuildings) return false;
+            RemoveBuildings(tile);
+            return true;
+        }
         // Both faces of every triangle: the files' windings are not trusted, and a body may meet a wall or floor from either side.
         int count = gathered.Count / 3;
         Pool.Take<Triangle>(count * 2, out var building);
@@ -368,10 +381,18 @@ internal sealed class RagdollPhysics : IDisposable
             building[2 * i] = new Triangle(a, b, c);
             building[2 * i + 1] = new Triangle(a, c, b);
         }
+        if (tile.HasBuildings) RemoveBuildings(tile);
         tile.BuildingShape = Simulation.Shapes.Add(new Mesh(building, Vector3.One, Pool));
         tile.Buildings = Simulation.Statics.Add(new StaticDescription(origin, Quaternion.Identity, tile.BuildingShape));
         tile.HasBuildings = true;
         return true;
+    }
+
+    void RemoveBuildings(Tile tile)
+    {
+        Simulation.Statics.Remove(tile.Buildings);
+        Simulation.Shapes.RemoveAndDispose(tile.BuildingShape, Pool);
+        tile.HasBuildings = false;
     }
 
     void RemoveTile(Tile tile)
@@ -397,6 +418,8 @@ internal sealed class RagdollPhysics : IDisposable
 public interface IRagdollEnvironment
 {
     float GroundHeight(float x, float z, float nearY);
+    /// <summary>Changes whenever the buildings' collision changed (a building placed, removed or ruined at run time): tiles built from an older one are built again.</summary>
+    int Generation => 0;
     /// <summary>Adds the triangles (three points each, world space, any winding) of the building collision between <paramref name="min"/> and <paramref name="max"/> (X and Z).</summary>
     /// <returns>False while some of them are not known yet (being read): the tile asks again.</returns>
     bool Buildings(Vector3 min, Vector3 max, List<Vector3> triangles);
