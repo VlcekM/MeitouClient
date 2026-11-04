@@ -794,15 +794,18 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         {
             case TaskType.GET_OUT_OF_BED or TaskType.GET_OUT_OF_BED_IF_ITS_EMERGENCY or TaskType.GET_OUT_OF_BED_ONCE_HEALED:
                 Become(world, slot, CharacterTask.Idle);
+                StepDone(mind);
                 return;
             case TaskType.UNEQUIP_WEAPON:
                 table.Cold(slot)!.DrawnWeapon = WeaponKinds.None;
+                StepDone(mind);
                 return;
             case TaskType.EQUIP_WEAPON or TaskType.EQUIP_CROSSBOW:
                 // Task_EquipBestWeapon (6 melee only, 264 ranged only; FUN_140346c30, Verified): the matching weapon it carries comes out, else the hand is emptied.
                 var armed = table.Cold(slot)!;
                 if (armed.Fighter is { } fighter)
                     armed.DrawnWeapon = mind.Step == TaskType.EQUIP_WEAPON ? Combat.CombatSystem.MeleeDrawn(fighter) : fighter.Crossbow is not null ? BowHold : WeaponKinds.None;
+                StepDone(mind);
                 return;
             case TaskType.GO_HOMEBUILDING:
                 // 19 Going home before the goal (43 Staying home and the like away from home): the walk home of the GoHome act-out.
@@ -1284,6 +1287,16 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     {
         if (world.Characters.Next[slot].Task == (byte)task) return;
         TaskStart.StartOwn(world, slot, new TaskRequest(task, GoalRow(world, slot), TaskSource.Goal));
+    }
+
+    /// <summary>
+    /// A one-think step carried out leaves the plan, as the original's queue moves on when a task ends: a plan its committed goal keeps
+    /// (<see cref="Choose"/>) goes on to the next step instead of doing this one again at every think. A plan made anew no longer has the step,
+    /// whose state now holds.
+    /// </summary>
+    static void StepDone(AiMind mind)
+    {
+        if (mind.Plan.Count > 1) mind.Plan.RemoveAt(0);
     }
 
     /// <summary>Sends it walking (or running) to a point, unless it is going there already (<see cref="TaskStart.StartOwn"/>, as <see cref="Become"/>).</summary>
