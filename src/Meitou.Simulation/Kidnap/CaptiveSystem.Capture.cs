@@ -173,32 +173,45 @@ public sealed partial class CaptiveSystem
     // ------------------------------------------------------------------ one job
 
     /// <summary>
-    /// One tick of a Shout job (188, <c>Task_TalktoPlayer</c>; B list <c>isDialogDelivered</c>): event 38 as it starts, as the task fires it,
-    /// and again every <see cref="CaptiveSettings.ShoutSeconds"/> while no line is said (engine: the original's re-plan rate is not decoded).
-    /// The worker walks to the slave and stands within <see cref="CaptiveSettings.ShoutReach"/> of it, following it when it moves on. The event
-    /// goes out only while the worker is quiet, and the job ends once it speaks after one (the dialogue holds its bubble), so a line still
-    /// showing from the last job neither ends this one nor is talked over.
+    /// One tick of a Shout job (188, <c>Task_TalktoPlayer</c>): event 38 as it starts, as the task fires it, and again every
+    /// <see cref="CaptiveSettings.ShoutSeconds"/> while the worker is quiet (engine choice: the original's re-plan rate is not decoded). The job
+    /// ends once the worker speaks after an event went out (engine choice, see <c>docs/simulation.md</c>: the original's B list
+    /// <c>isDialogDelivered</c> is true without a Dialogue object, else the event delivered in its town), so a line still showing from the last
+    /// job neither ends this one nor is talked over. A worker with no line never ends it: <see cref="CaptiveSettings.GiveUpSeconds"/> does.
     /// </summary>
     bool StepShout(World world, CaptiveJob j, int w, Vector2 to)
     {
-        var table = world.Characters;
         bool speaking = (talk ??= world.SystemOf<Dialogue.DialogueSystem>())?.Engages(j.Worker) == true;
         if (j.Blows > 0 && speaking) return End(world, j, CaptiveEventKind.Shouted);
+
         if (!speaking && (j.Blows == 0 || j.Time >= Settings.ShoutSeconds))
         {
             j.Blows++;
             j.Time = 0;
             world.Defer(new Dialogue.DialogueEvent(j.Worker, j.Captive, ShoutAtSlaveWorker) { Tick = world.Tick + 1 });
         }
+
+        FollowSlave(world, j, w, to);
+        return true;
+    }
+
+    /// <summary>The worker walks to its slave and stands within <see cref="CaptiveSettings.ShoutReach"/> of it, walking on when the slave moves off.</summary>
+    void FollowSlave(World world, CaptiveJob j, int w, Vector2 to)
+    {
+        var table = world.Characters;
         var here = new Vector2(table.Next[w].Position.X, table.Next[w].Position.Z);
         bool walking = table.Next[w].Task == (byte)CharacterTask.GoTo;
+
         if (Vector2.Distance(here, to) <= Settings.ShoutReach)
         {
             if (walking) TaskStart.Stand(table, w);
-            return true;
+            return;
         }
-        if (!walking || Vector2.Distance(table.Next[w].Goal, to) > 5) TaskStart.Walk(world, w, to, SpeedMode.Walk, RowOf(j.Kind), TaskSource.Goal);
-        return true;
+
+        if (!walking || Vector2.Distance(table.Next[w].Goal, to) > 5)
+        {
+            TaskStart.Walk(world, w, to, SpeedMode.Walk, RowOf(j.Kind), TaskSource.Goal);
+        }
     }
 
     // The dialogue a Shout job asks whether its worker said a line (null until first asked, or without one).
