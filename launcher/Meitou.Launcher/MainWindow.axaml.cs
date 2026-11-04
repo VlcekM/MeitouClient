@@ -481,7 +481,7 @@ public sealed partial class MainWindow : Window
             {
                 var order = ModList.LauncherOrder(gameInstall, ModList.Discover(gameInstall));
                 // The rows show each mod's author and plugin note: read them here too, not on the UI thread.
-                foreach (var entry in order) { _ = entry.Mod.Header; _ = entry.Mod.HasNativePlugin; }
+                foreach (var entry in order) { _ = entry.Mod.Header; _ = entry.Mod.HasNativePlugin; _ = entry.Mod.HasCode; }
                 return order;
             });
         }
@@ -1156,7 +1156,7 @@ public sealed partial class MainWindow : Window
 
     // ---- Play ----
 
-    void Play_Click(object? sender, RoutedEventArgs e)
+    async void Play_Click(object? sender, RoutedEventArgs e)
     {
         // As the update button: install the latest, or cancel its download.
         if (PlayButton.Classes.Contains("pending")) { InstallLatest_Click(sender, e); return; }
@@ -1178,6 +1178,8 @@ public sealed partial class MainWindow : Window
         if (running is { HasExited: false }) { Status("Meitou is already running: close it before starting it again."); return; }
         if (!SaveMods()) return;
         if (graphicsSave?.IsEnabled == true) SaveGame();
+        await AskForCodeMods();
+        if (running is { HasExited: false }) return;   // a second click while the question was open started the game already
         var start = new ProcessStartInfo(exe)
         {
             WorkingDirectory = LauncherConfig.DataDirectory,

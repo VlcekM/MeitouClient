@@ -40,8 +40,11 @@ public sealed class SystemBuildContext(PopulationData data, IReadOnlyList<ITickS
     public T? Find<T>() where T : class, ITickSystem => Standard.OfType<T>().FirstOrDefault();
 }
 
-/// <summary>An extra system: made again for every world (each new game and load builds its systems afresh), placed at <see cref="Anchor"/>.</summary>
-public sealed record SystemFactory(string Owner, string Name, SystemAnchor Anchor, Func<SystemBuildContext, ITickSystem> Create);
+/// <summary>
+/// An extra system: made again for every world (each new game and load builds its systems afresh), placed at <see cref="Anchor"/>. A factory that returns null leaves
+/// the system out of that world.
+/// </summary>
+public sealed record SystemFactory(string Owner, string Name, SystemAnchor Anchor, Func<SystemBuildContext, ITickSystem?> Create);
 
 /// <summary>
 /// A dialogue condition code a mod handles (docs/modding.md "Registration surface"), with the speaker and the subject the condition's <c>who</c> picked

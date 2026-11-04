@@ -18,7 +18,8 @@ sealed partial class GameHost
     enum DebugRow { Teleport, SpawnNpc, GiveItem, Money, Heal, MaxSkills, Damage, ForceHits, DamageMultiplier, UnlockResearch }
 
     static readonly string[] DebugLabels = ["Teleport selected here", "Spawn NPC (hostile)", "Give item (name x5 q80)", "Money (+/- cats)", "Heal", "Max out skills", "Damage (cut)", "Force hits to", "Damage multiplier", "Unlock all research"];
-    readonly string[] debugFields = ["", "", "", "1000", "", "", "20", "", "1", ""];
+    // The rows' typed text: the vanilla rows', then one per code mod row (EnsureDebugFields).
+    readonly List<string> debugFields = ["", "", "", "1000", "", "", "20", "", "1", ""];
     readonly Dictionary<(bool Character, string Text), (string Id, string Name)?> debugMatches = [];
     bool debugMenuOpen;
     int debugRow;
@@ -27,7 +28,7 @@ sealed partial class GameHost
     (string? Id, string Name)[]? debugParts;
     int debugPart;
 
-    static bool DebugHasField(int row) => (DebugRow)row is not (DebugRow.Teleport or DebugRow.Heal or DebugRow.MaxSkills or DebugRow.ForceHits or DebugRow.UnlockResearch);
+    bool DebugHasField(int row) => row >= DebugLabels.Length ? ModDebugRows[row - DebugLabels.Length].HasField : (DebugRow)row is not (DebugRow.Teleport or DebugRow.Heal or DebugRow.MaxSkills or DebugRow.ForceHits or DebugRow.UnlockResearch);
 
     /// <summary>The rows that open the body part list.</summary>
     static bool DebugPicksPart(int row) => (DebugRow)row is DebugRow.Damage or DebugRow.ForceHits;
@@ -35,6 +36,7 @@ sealed partial class GameHost
 
     void DebugMenuKey(EngineKey key)
     {
+        EnsureDebugFields();
         string field = debugFields[debugRow];
         if (debugParts is { } parts)
         {
@@ -58,8 +60,8 @@ sealed partial class GameHost
                 debugPart = Math.Min(debugPart, debugParts.Length - 1);
                 break;
             case EngineKey.Escape: debugMenuOpen = false; break;
-            case EngineKey.Up: debugRow = (debugRow + DebugLabels.Length - 1) % DebugLabels.Length; break;
-            case EngineKey.Down: debugRow = (debugRow + 1) % DebugLabels.Length; break;
+            case EngineKey.Up: debugRow = (debugRow + DebugRowCount - 1) % DebugRowCount; break;
+            case EngineKey.Down: debugRow = (debugRow + 1) % DebugRowCount; break;
             case EngineKey.Backspace when field.Length > 0: debugFields[debugRow] = field[..^1]; break;
             case EngineKey.Enter: debugStatus = DebugApply((DebugRow)debugRow, field.Trim()); break;
         }
@@ -67,6 +69,7 @@ sealed partial class GameHost
 
     void DebugMenuText(char c)
     {
+        EnsureDebugFields();
         if (DebugHasField(debugRow) && !char.IsControl(c)) debugFields[debugRow] += c;
     }
 
@@ -85,6 +88,7 @@ sealed partial class GameHost
         var selected = world.Player.Selection.ToArray();
         var targets = DebugTargets();
         var here = session.Camera.Current.Target;
+        if ((int)row >= DebugLabels.Length) return ModDebugApply((int)row - DebugLabels.Length, field, selected, here, tick);
         switch (row)
         {
             case DebugRow.Teleport:
@@ -171,10 +175,11 @@ sealed partial class GameHost
         var here = session.Camera.Current.Target;
         var lines = new List<string>();
         int highlight = 0;
-        for (int i = 0; i < DebugLabels.Length; i++)
+        EnsureDebugFields();
+        for (int i = 0; i < DebugRowCount; i++)
         {
             if (i == debugRow) highlight = lines.Count;
-            string line = (i == debugRow && debugParts is null ? "> " : "  ") + DebugLabels[i];
+            string line = (i == debugRow && debugParts is null ? "> " : "  ") + DebugLabel(i);
             if (DebugHasField(i))
             {
                 string field = debugFields[i];

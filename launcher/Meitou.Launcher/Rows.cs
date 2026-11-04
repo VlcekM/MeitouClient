@@ -14,8 +14,12 @@ public sealed class ModRow(ModInfo mod, bool enabled) : INotifyPropertyChanged
     public string Name => Mod.Name;
     public string Detail => LauncherText.Translate(Mod.Source == ModSource.Workshop ? "Steam workshop" : "Local mod")
         + (Mod.Header is { Author.Length: > 0 } h ? $" · {h.Author}" : "");
-    public string Notes => Mod.HasNativePlugin ? LauncherText.Translate("RE_Kenshi plugin: its DLLs are ignored in Meitou") : "";
-    public bool HasNotes => Mod.HasNativePlugin;
+    public string Notes => string.Join(" · ", new[]
+    {
+        Mod.HasCode ? LauncherText.Translate("Code mod: runs C# code of its own once allowed") : null,
+        Mod.HasNativePlugin ? LauncherText.Translate("RE_Kenshi plugin: its DLLs are ignored in Meitou") : null,
+    }.OfType<string>());
+    public bool HasNotes => Mod.HasNativePlugin || Mod.HasCode;
 
     public bool Enabled
     {

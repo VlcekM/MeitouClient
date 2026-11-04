@@ -219,6 +219,7 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
             animationLengths = Meitou.Data.Gameplay.AnimationLengths.Load(install.Root, gameDb, name => assets.Find(name));   // with the animals' own skeletons and the animation files
             animationLibrary = Meitou.Data.Gameplay.AnimationLibrary.FromDatabase(gameDb);
             popData = data;
+            StartMods(gameDb, data);
             townPlacements = towns;
             saveLevels = levels;
             simWalkability = walkability;
@@ -228,6 +229,7 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
             systems = built.Systems;
             constants = data.Bodies.Constants;
         }
+        StartDeferredWarmup();
         return (walkability, systems, constants);
     }
 
@@ -237,6 +239,7 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
     /// </summary>
     void ConfigurePlayerInterface(PlayerInterface ui)
     {
+        ConnectModUi(ui);
         ui.FixLoadButton = config.FixLoadButton;
         ui.SaveInUse = folder => session.World.Player.Exists && saveInUse is { } used && string.Equals(Path.GetFullPath(used), Path.GetFullPath(folder), StringComparison.OrdinalIgnoreCase);
         ui.DeleteSave = folder =>

@@ -69,9 +69,16 @@ sealed class ModRegistry
     {
         Create = context =>
         {
-            var system = factory.Create(context);
+            ITickSystem? system;
+            try { system = factory.Create(context); }
+            catch (Exception e)
+            {
+                // A mod's fault leaves its system out of this world; the world is still made.
+                Console.Error.WriteLine($"mod       {mod}: system '{factory.Name}' not made: {e}");
+                return null;
+            }
             if (system is not null) made.AddOrUpdate(system, new ModSystemTag(mod, factory.Name));
-            return system!;
+            return system;
         },
     };
 }

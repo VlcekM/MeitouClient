@@ -41,6 +41,10 @@ sealed class GameSettings
     public bool? GetBool(string key) => root[key] is JsonValue v && v.TryGetValue(out bool b) ? b : null;
     public float? GetNumber(string key) => Number(root[key]);
     public string? GetString(string key) => root[key] is JsonValue v && v.TryGetValue(out string? text) ? text : null;
+    /// <summary>A list of strings (non-string entries skipped); empty when the key is missing.</summary>
+    public List<string> GetStrings(string key) =>
+        root[key] is JsonArray list ? [.. list.OfType<JsonValue>().Select(v => v.TryGetValue(out string? s) ? s : null).OfType<string>()] : [];
+    public void Set(string key, IEnumerable<string> values) => root[key] = new JsonArray([.. values.Select(v => (JsonNode)JsonValue.Create(v))]);
     public void Set(string key, bool value) => root[key] = value;
     public void Set(string key, string value) => root[key] = value;
     /// <summary>A whole value is written as an integer: the game reads its integer settings (the frame limit) strictly.</summary>
