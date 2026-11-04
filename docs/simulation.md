@@ -1179,10 +1179,15 @@ failed walks mark the cage unreachable for the faction; its own faction's shut d
 - **Escapes** (`LockSystem.OpportunisticEscapes`, `ShackleEscapes`): an AI prisoner whose role list holds 256 or 202 in its hours walks out of a cage that is not locked
   (`FixtureRegistry.GetOut`); every 30 ticks an AI character outside a cage wearing locked shackles with 202 listed works them off, cutting with a tool, else picking (the
   original planner's choice among pick, cut and break is **Unknown**); once they are unlocked it takes the worn shackles off (219) into its inventory (else the ground; engine choice).
-- **Shout** (188): a worker with slaves of its squad's list up and uncaged says event 38 at a random one and walks towards it for up to 8 s (or within 40); the same worker again after 0.5 to 1.5 x 120 game
-  seconds (engine pacing).
+- **Shout** (188): a worker with slaves of its squad's list up and uncaged says event 38 at a random one, walks to it and stands within 40, following it
+  when it moves on; it says the event again every 8 s (engine choice) until its worker speaks (`DialogueSystem.Engages`; the row's B list
+  `isDialogDelivered` is read differently, [ai-tasks](game/ai-tasks.md)), and the next sweep picks a slave again with no pause. A worker with no
+  event-38 line, or with the event lines off, never speaks: its job then ends only at `CaptiveSettings.GiveUpSeconds` (600 s) or when the slave goes
+  (engine choice).
 - **Work** (189, 190; `AiBehaviour.Work` in the AI, not a job: it competes by score like any goal): a worker of a town with a mine, research bench, refinery or crafting bench (BuildingFunction 1, 3, 4,
-  10) walks to a random one (a pick of the character and `AiMind.WorkEpoch`, kept while it works there) to within 30 units, faces it and plays its functionality's clip (`stonemine` by default) as
+  10) walks to a random one (a pick of the character and `AiMind.WorkEpoch`, kept while it works there; 189 only one it can run, `AiSystem.RealWork`: a mine,
+  or a machine running there with its inputs, [ai-tasks](game/ai-tasks.md#slave-work-shout-and-capture); each holds one of the workplace's
+  `max operators` slots, `AiMind.WorkPost`) to within 30 units, faces it and plays its functionality's clip (`stonemine` by default) as
   `ActionClip`. NPC towns run no machines here, so nothing is produced (their buildings are level data, not `Machine`s, and Meitou has no NPC-town production); the worker does take the building's `hunger rate` (`AiMind.WorkHungerRate`). **Observed** (probe, Rebirth, real data): 35 workers, slaves among them, stand at the mines of the Holy Nation's towns by day.
 - **Obedient Slave** (187, [facts](game/ai-tasks.md#slave-work-shout-and-capture)): for the AI's slaves the Slave role list of the owner's squad, which slave members already run; a slave in another squad runs the list of `CharacterCold.SlaveMaster` (after a load, the squad of the owner character its `slaver` handle names, [save](formats/save.md)), for its captive jobs too (the captive sweep reads the same list, so a slave whose own package lists Slave get in Cage all day goes to its cage only in its master's hours).
   **A player character** has the job in its list (`Kidnap/ObedientSlave.cs`, `CaptiveSystem`): `FixtureRegistry.SetSlave` (every route to slave state 1: sale, arrest, processing, a cage, a delivery) destroys its jobs and order
@@ -1736,7 +1741,9 @@ fights back, by the engine's answer (`RetaliationSystem`, at any distance; engin
 **Campaign phase package** (**Verified**, `FUN_140272570`, `FUN_140272240`, `FUN_14026a110`): on each visit a loaded campaign platoon whose war-manager record gives a package (pt1, pt2 or retreat; the leader platoon's `... leader`, the others' `... others` falling back to it, `CampaignData.PackageOf`) holds that package as the blackboard's override when it has none or another, for 24 game hours (`AiSystem.InstallPhasePackage` = `Blackboard.StartContract`, saved as `contractjob` / `jobhr`); when the 24 h run out the override ends, the template slots choose on that visit and the same package is installed afresh on the next. `PopulationCampaigns.StepCampaignLoaded` still orders the march; the war classes 19 / 20 / 32 (own start and finish tests, out of the campaign) are not built, so only the timed behaviour of the override is modelled. The campaign sets the squad's war targets, so `StepPackage` skips a campaign squad.
 
 Scoring follows the original (`TaskProfiles`: desire, commitment, crowding per goal type); a desire
-the original computes in a function of its own counts as 1. Town goals ([ai-tasks.md](game/ai-tasks.md#town-goals)):
+the original computes in a function of its own counts as 1. A committed goal holds only within its hours
+([goal end](game/ai-tasks.md#precedence)); one lying in its bed with only the default task left lies on with no goal
+(engine choice from the observed sleepers). Town goals ([ai-tasks.md](game/ai-tasks.md#town-goals)):
 wandering in town walks to a general node of a public town building in the walker's zone
 (public: the residents' template's `public day`, else the level state's `is public day`, else public; drawn
 among those with a general node, engine choice), patrolling town from one random point round the town's centre to the next
@@ -1744,11 +1751,16 @@ among those with a general node, engine choice), patrolling town from one random
 public shop that sells what the character's shopping list wants, else (not in a town of the player's faction) to a random public building, the desire being 1 for a shop and 0.4 for another building (as the original's finders, [ai-tasks](game/ai-tasks.md#town-goals); no faction test), then buys from its stock one unit a second ([NPC purchases](game/economy.md#npc-purchases)), relaxing under a bar package, sitting around (275) and staying home (43; the home is the bar under a bar package) sit on a seat claimed per
 member on the package cadence, and the wanderer walks to the nearest town. A bar package (both kinds) reserves
 one table per squad as the original (`AiSystem.PickTable`: public bars tried from a random one, first table no
-other bar squad holds; no bar, or the outdoors kind: a free table placed outdoors in the town; none free: the
-squad keeps its home and does not relax); its members take the free seats nearest that table (engine choice),
+other bar squad holds; the outdoors kind: a free table placed outdoors in the town; a town without bars gives
+the normal kind none, as the original; none free: the squad keeps its home and does not relax); its members take the free seats nearest that table (engine choice),
 at an outdoor table they stand at it. A home node goal takes a
 node of its kind, a guard post a general node next (as the original), then any node but a shopkeeper's
-(engine; only the shopkeeper goal falls back onto the counter). Gates have no nodes: the gate guard
+(engine; only the shopkeeper goal falls back onto the counter). Static town guard (157) holds a guard post of its town
+instead (`AiMind.TownPost`, `AiSystem.ClaimTownPosts`, on the package cadence): the one it holds while its goal stays 157,
+else one drawn uniformly among the town's guard posts no other 157 member holds (the posts of 38 and 268 are not counted: engine
+choice), as the original ([ai-tasks](game/ai-tasks.md#town-goals)); none free, it stands where the home node goals do (engine choice). The post is
+not saved: a load draws again. Gates have no nodes in their layouts (the original's have 3 or 4 guard posts at run time,
+source **Unknown**): the gate guard
 (180, the home gate, else the town's gate nearest the squad) stands 15 out from the gate's first door
 leaf, on the side away from the town centre (the side is an engine choice), facing out; a member whose
 guard or general node goal finds nothing in its home gate flanks the opening on that side, beyond the

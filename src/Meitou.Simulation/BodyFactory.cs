@@ -33,8 +33,11 @@ public sealed class BodyFactory(GameDatabase db)
         float[] values;
         float randomise = 0;
         GameRecord? statsRecord = null;
+        // The three numbers of a reference are its list slot, not a switch: most characters that name a STATS record carry (0, 100, 0) and the rest
+        // (0, 0, 0), so the record is used whenever one is named, as the original does.
         if (character is not null)
-            foreach (var r in character.GetReferences("stats")) if (r.Values.Value0 > 0) { statsRecord = Db.Find(r.TargetStringId); break; }
+            foreach (var r in character.GetReferences("stats"))
+                if (Db.Find(r.TargetStringId) is { } listed) { statsRecord = listed; break; }
         if (statsRecord is not null) values = StatsData.Read(statsRecord);
         else if (character is not null)
             values = CharacterStats.FromGroups(character.GetInt("combat stats"), character.GetInt("unarmed stats"), character.GetInt("stealth stats"),

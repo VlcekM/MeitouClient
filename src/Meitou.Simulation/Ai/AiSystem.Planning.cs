@@ -285,7 +285,8 @@ public sealed partial class AiSystem
                 case TaskType.AUTO_LABOURING_MINES or TaskType.AUTO_LABOURING_MINES_PRETEND:
                     // The building it works at: the one it walks to now, else the pick it will make (the same roll, AiMind.WorkEpoch).
                     if (mind.Behaviour == AiBehaviour.Work && mind.Goal?.Task.Type == type && mind.Target is { } current) return new PlanTarget(Targets.Work, current);
-                    return system.PickWork(world, world.Characters.IdOf(slot), board.Town, mind.WorkEpoch + (mind.WorkActive ? 1 : 0)) is { } work
+                    if (mind.Goal?.Task.Type == type && mind.WorkPost is { } held) return new PlanTarget(Targets.Work, new Vector3(held.Position.X, float.NaN, held.Position.Z));
+                    return system.PickWork(world, world.Characters.IdOf(slot), board.Town, mind.WorkEpoch + (mind.WorkActive ? 1 : 0), type) is { } work
                         ? new PlanTarget(Targets.Work, new Vector3(work.Position.X, float.NaN, work.Position.Z)) : default;
                 case TaskType.MAN_A_TURRET or TaskType.MAN_A_TURRET_ON_BUILDING or TaskType.MAN_A_TURRET_PLAYER_JOB or TaskType.USE_TURRET:
                     return board.TurretClaims.TryGetValue(slot, out int t) && (uint)t < (uint)board.Turrets.Count && board.Turrets[t].Turret is { } turret
