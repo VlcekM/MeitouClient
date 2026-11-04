@@ -8,11 +8,12 @@ RE_Kenshi decision ([rekenshi](formats/rekenshi.md)) stands and its DLLs stay ig
 
 - **Not BepInEx.** Its chainloader discovers plugins from its own folder, not `mods.cfg`, so code mods would not enable, disable or order with
   their data mod. It injects via Doorstop (proxy DLL on Windows, `LD_PRELOAD`/`DYLD_INSERT_LIBRARIES` on Unix), which fights the launcher and the
-  signed macOS build when the host is ours and can load assemblies itself. **Observed** (2026-11): BepInEx 6 still had no stable release;
-  downstream projects built on `be.*` builds in 2026-06.
-- **Harmony is not an alternative to an API.** The game is a JIT, self-contained, untrimmed, non-single-file publish, so Harmony works on it
-  whether blessed or not. The decision is only what the engine promises beyond raw patching. **Observed**: Lib.Harmony 2.4.2 added .NET 10
-  support ([releases](https://github.com/pardeike/Harmony/releases)).
+  signed macOS build when the host is ours and can load assemblies itself. **Observed**
+  ([BepInEx.Utility.IL2CPP r2](https://github.com/BepInEx/BepInEx.Utility.IL2CPP/releases/tag/r2), 2026-06): BepInEx 6 still had no stable
+  release; downstream projects built on `be.*` builds.
+- **Harmony is not an alternative to an API.** It works on the game's publish (Loading) whether blessed or not, so the decision is only what
+  the engine promises beyond raw patching. **Observed**: Lib.Harmony 2.4.2 added .NET 10 support
+  ([releases](https://github.com/pardeike/Harmony/releases)).
 - **No accessor mirrors.** Mods reference `Meitou.Simulation` and the other `Meitou.*` assemblies directly, as a patch needs the types anyway.
   Compatibility is per game version (RimWorld's model); a refactor may break a mod and that is accepted.
 
@@ -87,8 +88,8 @@ system twice catches API systems only; a patched vanilla method needs the whole 
 
 ## Platforms
 
-- Managed DLLs run unchanged on the Windows, Linux and macOS builds. Harmony's detours come from MonoMod.Core: .NET Core on x64 Linux and macOS
-  **Observed** in MonoMod's release notes; arm64 (the `osx-arm64` release) is reported merged in MonoMod v25.x by a third-party write-up only, so
-  code mods there are **Unknown** until a patch is tested on that build.
+- Managed DLLs run unchanged on the Windows, Linux and macOS builds. Harmony's detours come from MonoMod.Core, whose support for .NET Core on
+  Linux and macOS is **Observed** only as a fix note in [MonoMod's releases](https://github.com/MonoMod/MonoMod/releases) and for arm64 (the
+  `osx-arm64` release) only in a third-party write-up, so code mods off `win-x64` are **Unknown** until a patch is tested on each build.
 - **Observed** (Harmony 3.0 RC notes): native async methods cannot be patched (`NotSupportedException`). Irrelevant on .NET 10; a constraint if
   the game moves to .NET 11 runtime-async.
