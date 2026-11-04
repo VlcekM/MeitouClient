@@ -225,7 +225,7 @@ public sealed partial class CaptiveSystem
         float r = MathF.Max(site.Town.Radius, 100);
         if (Vector2.Distance(new Vector2(n.Position.X, n.Position.Z), centre) > r)
         {
-            if (n.Task == (byte)CharacterTask.GoTo) return true;
+            if (WalksOwn(table, w, j)) return true;
             if (++j.Walks > Settings.Walks + 1 + (int)(Vector2.Distance(new Vector2(n.Position.X, n.Position.Z), centre) / 1000)) return End(world, j, CaptiveEventKind.GaveUp);
             TaskStart.Walk(world, w, centre, SpeedMode.Walk, RowOf(j.Kind), TaskSource.Goal);
             return true;

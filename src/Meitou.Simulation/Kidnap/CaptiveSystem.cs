@@ -429,6 +429,13 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
 
     static readonly HashSet<TaskType> JobRows = [.. Enum.GetValues<CaptiveJobKind>().Select(RowOf)];
 
+    /// <summary>
+    /// Whether the worker walks the job's own walk: a GoTo whose running row is the job's (<see cref="RowOf"/>). A walk it was on when the job started, its AI's or an
+    /// errand's, is not, so the job sends its own at once, as a goal taken up ends the plan before it (docs/game/ai-tasks.md "Precedence").
+    /// </summary>
+    static bool WalksOwn(CharacterTable table, int w, CaptiveJob j) =>
+        table.Next[w].Task == (byte)CharacterTask.GoTo && table.Cold(w)?.Running?.Row == RowOf(j.Kind);
+
     /// <summary>Whether a walk's row is a job's (<see cref="RowOf"/>): a fight may interrupt it, the job is given up (<see cref="Ai.AiSystem"/>'s pre-emption).</summary>
     internal static bool IsJobRow(TaskType row) => JobRows.Contains(row);
 
@@ -909,7 +916,7 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
         var table = world.Characters;
         ref var n = ref table.Next[w];
         float d = Vector2.Distance(new Vector2(n.Position.X, n.Position.Z), new Vector2(cage.Position.X, cage.Position.Z));
-        bool walking = n.Task == (byte)CharacterTask.GoTo;
+        bool walking = WalksOwn(table, w, j);
         arrived = d <= cage.UseRange + Settings.Reach || !walking && j.Walks > 0 && d <= Settings.Slack;
         if (arrived || walking) return true;
         if (++j.Walks > Settings.Walks)
@@ -975,7 +982,7 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
         float d = Vector2.Distance(new Vector2(n.Position.X, n.Position.Z), new Vector2(body.X, body.Z));
         if (j.Phase == CaptivePhase.Walk)
         {
-            bool walking = n.Task == (byte)CharacterTask.GoTo;
+            bool walking = WalksOwn(table, w, j);
             if (d > Settings.Reach && !(!walking && j.Walks > 0 && d <= Settings.Slack))
             {
                 if (walking) return true;
@@ -1042,7 +1049,7 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
         float d = Vector2.Distance(new Vector2(n.Position.X, n.Position.Z), new Vector2(site.Position.X, site.Position.Z));
         if (j.Phase == CaptivePhase.Walk)
         {
-            bool walking = n.Task == (byte)CharacterTask.GoTo;
+            bool walking = WalksOwn(table, w, j);
             if (d > Settings.Reach + CropReach && !(!walking && j.Walks > 0 && d <= Settings.Slack + CropReach))
             {
                 if (walking) return true;
