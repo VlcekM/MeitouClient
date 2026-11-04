@@ -418,13 +418,27 @@ public sealed unsafe class ParticleRenderer : IDisposable
     /// Fires the particle system <paramref name="system"/> once at <paramref name="position"/>, its emitters turned by <paramref name="orientation"/>, emitting for
     /// <paramref name="seconds"/> of the frame clock, the particles <paramref name="size"/> times as big and <paramref name="lifeScale"/> times as long-lived
     /// (luckyren Mode's blood). With <paramref name="recolour"/> the particles take that colour (rgb, 0 to about 2) in place of their texture's hue (a race's <c>blood colour</c>).
-    /// Drawn with the map's placers; an unknown system does nothing.
+    /// Drawn with the map's placers; an unknown system does nothing. Returns the burst's unit (null: none), for <see cref="MoveBurst"/>.
     /// </summary>
-    public void Burst(string system, Vector3 position, Quaternion orientation, float seconds, float size = 1, float lifeScale = 1, Vector3? recolour = null)
+    public EffectUnit? Burst(string system, Vector3 position, Quaternion orientation, float seconds, float size = 1, float lifeScale = 1, Vector3? recolour = null)
     {
-        if (!Enabled) return;
+        if (!Enabled) return null;
         Sync();
-        if (BurstGroup(system) is { } group) group.Spawn(position, orientation, seconds, size, lifeScale, recolour);
+        return BurstGroup(system)?.Spawn(position, orientation, seconds, size, lifeScale, recolour);
+    }
+
+    readonly List<(EffectUnit Unit, Vector3 Position, Quaternion Orientation)> burstMoves = [];
+
+    /// <summary>
+    /// Moves a <see cref="Burst"/>'s emitter to <paramref name="position"/>, turned by <paramref name="orientation"/>, from the next <see cref="Update"/> (no wait for the
+    /// running simulation); the particles it threw already stay where they are (a neck's spurt that follows the falling body).
+    /// </summary>
+    public void MoveBurst(EffectUnit unit, Vector3 position, Quaternion orientation) => burstMoves.Add((unit, position, orientation));
+
+    void ApplyBurstMoves()
+    {
+        foreach (var (unit, position, orientation) in burstMoves) (unit.Position, unit.Orientation) = (position, orientation);
+        burstMoves.Clear();
     }
 
     /// <summary>Makes the <see cref="Burst"/> groups of <paramref name="systems"/> and starts decoding their textures, so a first burst is not drawn without them.</summary>
@@ -491,6 +505,7 @@ public sealed unsafe class ParticleRenderer : IDisposable
     void UpdateInner(double seconds, WorldCamera camera)
     {
         Sync();
+        ApplyBurstMoves();
         coveragePending = false;   // the last frame's quads live in its constants: only a Draw in this frame makes coverage
         if (!Enabled) { lastSeconds = seconds; return; }
         var view = new EffectCamera(camera.Eye, camera.Forward);

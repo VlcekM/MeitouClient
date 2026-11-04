@@ -225,6 +225,7 @@ public sealed class EffectUnit
         }
         sim.WorldOffset = Anchor;
         sim.Origin = local;
+        sim.Orientation = Orientation;   // a steered burst turns with what it follows (ParticleRenderer.MoveBurst)
         sim.EmissionStopped = Stopped;
         float left = Pending;
         Pending = 0;
@@ -745,7 +746,8 @@ public sealed class BurstEffectGroup(PuSystemDef system, int seed, EffectWorld w
 {
     /// <summary>A unit at <paramref name="position"/>, turned by <paramref name="orientation"/>, emitting for <paramref name="seconds"/>, its particles <paramref name="size"/> times as big and <paramref name="lifeScale"/> times as long-lived.</summary>
     /// <param name="recolour">A colour the particles take in place of their texture's hue: kept as a negative tint, which the renderer's fragment program reads as that.</param>
-    public void Spawn(Vector3 position, Quaternion orientation, float seconds, float size, float lifeScale, Vector3? recolour = null)
+    /// <returns>The unit, which its owner may move while it emits (its particles stay in the world where they were thrown).</returns>
+    public EffectUnit Spawn(Vector3 position, Quaternion orientation, float seconds, float size, float lifeScale, Vector3? recolour = null)
     {
         var u = NewUnit(position);
         if (recolour is { } colour) u.Tint = -Vector3.Max(colour, new Vector3(1e-4f));
@@ -754,6 +756,7 @@ public sealed class BurstEffectGroup(PuSystemDef system, int seed, EffectWorld w
         u.Size = size;
         u.LifeScale = lifeScale;
         u.Radius *= size * lifeScale;
+        return u;
     }
 
     public override void Update(float dt, in EffectCamera camera, WeatherEffectInput weather)
