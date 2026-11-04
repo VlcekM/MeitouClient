@@ -54,10 +54,19 @@ public sealed class ModHost
     public IReadOnlyDictionary<int, string> RecordTypes => registry.RecordTypes;
 
     /// <summary>The enabled mods of <c>mods.cfg</c>, in order, that carry code (<see cref="ModInfo.HasCode"/>).</summary>
+    /// <remarks>A folder that cannot be read gives none (logged): a failing scan must not stop a game that may have no code mods at all.</remarks>
     public static List<ModInfo> EnabledCodeMods(GameInstall install)
     {
-        var onDisk = ModList.Discover(install).ToDictionary(m => m.Name, StringComparer.Ordinal);
-        return [.. ModList.ReadEnabled(install).Select(n => onDisk.GetValueOrDefault(n)).OfType<ModInfo>().Where(m => m.HasCode)];
+        try
+        {
+            var onDisk = ModList.Discover(install).ToDictionary(m => m.Name, StringComparer.Ordinal);
+            return [.. ModList.ReadEnabled(install).Select(n => onDisk.GetValueOrDefault(n)).OfType<ModInfo>().Where(m => m.HasCode)];
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            Console.Error.WriteLine($"mods      the mod folders could not be read, no code mods: {e.Message}");
+            return [];
+        }
     }
 
     /// <summary>Loads and initializes the code mods, in order. Never throws for a mod's fault.</summary>
