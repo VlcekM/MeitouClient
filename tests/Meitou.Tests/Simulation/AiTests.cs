@@ -372,6 +372,33 @@ public class AiTests(ITestOutputHelper output)
     }
 
     /// <summary>
+    /// A committed goal ends with its hours (docs/game/ai-tasks.md "Precedence", goal end): sleepers on a 153 of 22 to 0 with their commitment running
+    /// have no goal past midnight, when nothing else of theirs is open, and lie on in their beds. Catches the committed mode keeping a goal out of its
+    /// window, which kept Rebirth's garrison on 153 past its hours, and the default task getting a sleeper up, which the original's do not.
+    /// </summary>
+    [Fact]
+    public void A_committed_bed_goal_ends_with_its_hours_and_its_sleepers_lie_on_with_no_goal()
+    {
+        var package = Rec("132-t", FcsRecordType.AI_PACKAGE, "Night shift");
+        package.References["Leader AI Goals"] = package.References["Squad AI Goals"] = [Ref("102-t", 22, 0, 50), Ref("101-t", 6, 22, 0)];
+        var db = SyntheticTown.Database(1, extra: [.. Records(), package], changePatrol: p => p.References["AI packages"] = [Ref("132-t", 0)]);
+        using var world = Town(1, out _, WithHomes(db, out _, out _), null);
+        world.RunTicks(400);
+        world.GameHours = 24 + 22.2;
+        world.RunTicks(1200);
+        var sleepers = world.Squads.All.Where(s => s.TemplateId == "10-t").SelectMany(s => s.Members).Select(m => world.Characters.Cold(m.Slot)!)
+            .Where(c => c.InSomething == Meitou.Simulation.Locks.HeldState.Bed && c.Ai?.Goal?.Task.Type == TaskType.GO_HOME_AND_GO_TO_BED).ToList();
+        Assert.NotEmpty(sleepers);
+        Assert.True(world.GameHours < 48, $"{world.GameHours} h");
+
+        // Past midnight, the commitment (at least 2 hours from going to bed) still runs.
+        world.GameHours = 48.1;
+        Assert.All(sleepers, c => Assert.True(c.Ai!.CommitUntil > world.GameHours, $"commitment {c.Ai.CommitUntil}"));
+        world.RunTicks(300);
+        Assert.All(sleepers, c => Assert.Equal((Meitou.Simulation.Locks.HeldState.Bed, (TaskType?)null), (c.InSomething, c.Ai!.Goal?.Task.Type)));
+    }
+
+    /// <summary>
     /// A goal it committed to goes on past a step of its own once that step is done (docs/simulation.md "Planner"): sleepers with a weapon drawn
     /// sheathe it, then walk to their beds. Catches the kept plan repeating its done first step, which held a character where it stood for the whole
     /// commitment.

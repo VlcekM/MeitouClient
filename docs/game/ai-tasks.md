@@ -779,9 +779,20 @@ update `FUN_140511130`, `Character::setupAI` `FUN_140621b70`; KenshiLib names **
 
 - **When**: the chooser runs on a replan request (`AITaskSytem` vfunc 3 `FUN_140506cf0` sets +0x1b0; the update `FUN_140511130` chooses, otherwise `FUN_14050d970`
   only steps the running plan): a plan finished, an order added, a stagger (`forceOrderInsert`), `underMeleeAttack` with the fight off unless the target gets up or is
-  player-side and moving ([combat](combat.md#fight-lifecycle-and-orders)). No periodic replan was found (**Observed**). Between replans the plan step (`FUN_14050d970`, **Observed**) ends the current goal's plan
+  player-side and moving ([combat](combat.md#fight-lifecycle-and-orders)). No periodic replan was found (**Observed**). Between replans the plan step (`FUN_14050d970`, **Verified**) ends the current goal's plan
   (`FUN_14050d7d0`, so the chooser runs again) when the goal's list A holds (`FUN_140513f50`), when its hours are over, or when the goal's row can no longer run (`FUN_14060f940`); a further test on
   the queued task is not decoded (**Unknown**). It does not weigh the goal's desire again, so a goal's fight runs until it ends by itself (nothing left, target down, give-up) or its goal is done.
+- **Goal end** (**Verified**, disassembly; fields from KenshiLib `AITaskSytem`: +0x1C0 `currentGoal`, +0x20C its priority, +0x280
+  `currentGoalExpiryTime` in game hours):
+  - the plan step tests the hours (start < end half-open, overnight otherwise) unless the goal's row has +0x16 set;
+  - the plan end (`FUN_14050d7d0`) clears the plan and asks for a replan, and keeps `currentGoal` while it commits and its expiry has not
+    passed (`TimeOfDay::timeOfDayHasPassed`, `FUN_140791c20`: an unset time counts as passed);
+  - the update clears `currentGoal` and its priority whenever no plan is left after the chooser, committed or not. So a committed goal
+    ends with its hours: the chooser, committed at the goal's priority, stops before that tier (sources 2 and 5) and plans nothing.
+  - The setter (`FUN_14050caf0`) sets the expiry to now only for a new committing goal; every set adds min + r x range, so setting the
+    same goal again extends it. Row 153 registers 2, 8 and the commit flag (`FUN_140319a60`).
+  - **Observed** (KenshiOracle state 0.5 hold, Rebirth, N = 1): 24 garrison sleepers on 153 (23 to 11) had no goal and no order from
+    11:00 and lay on in bed to the hold's end at 11.6 h. Why the default task does not take over or get them up is **Unknown**.
 - **Sources**, in order; the first whose pick has a plan above 0 runs:
   1. The front of the order queue (+0x40 deque, count +0x60): first popped when done (list A holds) or its desire x finder is 0 or less; then planned with the search flag
      ([planner](#planner)). A player character's order that fails to plan shows its failure text (vfunc 0x2d8) and stays queued (**Observed**); the chooser goes on.
