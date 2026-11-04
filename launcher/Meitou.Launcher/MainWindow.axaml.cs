@@ -758,6 +758,8 @@ public sealed partial class MainWindow : Window
         PlayIcon.Data = ContinueButton.IsVisible ? MenuIcon : StartIcon;
         UpdateIcon.IsVisible = pending;
         PlayText.FontSize = ContinueButton.IsVisible ? 17 : 21;
+        // Two lines in the button's one-line height.
+        PlayText.LineHeight = menu ? 20 : double.NaN;
         PlaySubText.IsVisible = menu;
         PlaySubText.Text = played;
         SetText(PlayText, pending ? Tr("Update to {1}", Releases.Display(LatestRelease!.Version)) : menu ? Tr("Main menu") : Tr("Play {1}", played));
