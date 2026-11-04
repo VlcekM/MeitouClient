@@ -467,7 +467,7 @@ here) plus `meitou lock <i>`; doors and an interior chest locked before the save
 wade and 2 (moved to Admag) keep every zone file byte for byte except door keys added to buildings whose saved state has none (3 files in save 2, 1 in save 1).
 Loose items (`Saving/GroundItemSave`, `Data/Save/SaveGroundItems`): a load puts every `1-itemlist` item the data can make on the ground at its saved position and rotation;
 a save writes each zone's list from the items lying in it, a read item with its own record (unmodelled keys kept), a new one with the key set above minus `uniform`
-and the limb keys (`persist` only on a camp's, above), id `<n>-zone<X>.<Y>-INGAME` above every such number of the file; entries whose item the data lacks are written back as read; a zone whose
+and the limb keys (`persist` only on a camp's, above), id `<n>-zone<X>.<Y>-INGAME` above every such number of the file and of the read items written back (a reused id loads as the other item); entries whose item the data lacks are written back as read; a zone whose
 list is unchanged is left as it is, an empty list is not written, a file left empty goes. **Observed** (headless, METARU with the install's load order): 285 of 285 items
 loaded; a capture with nothing changed keeps all 123 zone files byte for byte; an item dropped, saved and reloaded lies where it was, and a second save writes the
 same 124 files.

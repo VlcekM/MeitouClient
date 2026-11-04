@@ -29,7 +29,7 @@ public static partial class SaveGroundItems
     /// <summary>
     /// Replaces the zone's list and the ITEM records it named with <paramref name="items"/> (each a position, a rotation and the item; one with a <see cref="SaveItem.Source"/> keeps its
     /// record id and its unmodelled keys) and <paramref name="kept"/> (entries written back as read). A new item's record gets id <c>&lt;n&gt;-zone&lt;X&gt;.&lt;Y&gt;-INGAME</c> with <c>n</c>
-    /// above every such id of the file, and the list's entries are numbered from 1. An empty list is not written (the original deletes it).
+    /// above every such id of the file and of the read items, and the list's entries are numbered from 1. An empty list is not written (the original deletes it).
     /// </summary>
     public static void Write(SaveZone zone, IReadOnlyList<(Vector3 Position, Quaternion Rotation, SaveItem Item)> items, IReadOnlyList<SaveGroundItem> kept)
     {
@@ -42,8 +42,7 @@ public static partial class SaveGroundItems
         if (items.Count + kept.Count == 0) return;
         var list = new FcsRecord { Type = (int)FcsRecordType.INSTANCE_COLLECTION, Id = NextNumber(file), Name = "0", StringId = ListId };
         string suffix = string.Create(CultureInfo.InvariantCulture, $"-zone{zone.Coordinate.X}.{zone.Coordinate.Y}-INGAME");
-        int n = file.Records.Select(r => Number(r.StringId, suffix)).Concat(file.Records.SelectMany(r => r.Instances).Select(i => Number(i.Id, suffix)))
-            .Concat(kept.Select(k => Number(k.Record.StringId, suffix))).DefaultIfEmpty(0).Max();
+        int n = LastNumber(file, items, kept, suffix);
         var taken = new HashSet<string>(StringComparer.Ordinal);
         int entry = 0;
         foreach (var k in kept)
@@ -82,6 +81,19 @@ public static partial class SaveGroundItems
         r.Strings["section"] = "";
         r.Bools["in inventory"] = false;
         return r;
+    }
+
+    /// <summary>
+    /// The highest <c>n</c> of the <paramref name="suffix"/> ids already in use: the file's records and instances, the kept entries and the read items being written back (whose
+    /// records were just removed, so a new item numbered from the file alone would take a read item's id and load as that item).
+    /// </summary>
+    static int LastNumber(SaveFile file, IReadOnlyList<(Vector3 Position, Quaternion Rotation, SaveItem Item)> items, IReadOnlyList<SaveGroundItem> kept, string suffix)
+    {
+        var ids = file.Records.Select(r => r.StringId)
+            .Concat(file.Records.SelectMany(r => r.Instances).Select(i => i.Id))
+            .Concat(kept.Select(k => k.Record.StringId))
+            .Concat(items.Select(i => i.Item.Source?.StringId ?? ""));
+        return ids.Select(id => Number(id, suffix)).DefaultIfEmpty(0).Max();
     }
 
     static string Entry(int k) => k.ToString(CultureInfo.InvariantCulture);
