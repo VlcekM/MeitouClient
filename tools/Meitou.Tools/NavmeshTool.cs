@@ -33,6 +33,10 @@ static class NavmeshTool
         bool ownOnly = false;
         var compare = new List<ZoneCoordinate>();
         var compareInteriors = new List<ZoneCoordinate>();
+        var survey = new List<ZoneCoordinate>();
+        bool surveyTowns = false;
+        string? surveyName = null;
+        Vector2? section = null;
         for (int i = 0; i < args.Length; i++)
         {
             switch (args[i])
@@ -71,6 +75,16 @@ static class NavmeshTool
                         compareInteriors.Add(new(int.Parse(p[0], CultureInfo.InvariantCulture), int.Parse(p[1], CultureInfo.InvariantCulture)));
                     }
                     break;
+                case "--survey-interiors":
+                    while (i + 1 < args.Length && !args[i + 1].StartsWith("--", StringComparison.Ordinal))
+                    {
+                        if (args[++i] == "towns") { surveyTowns = true; continue; }
+                        var p = args[i].Split(',');
+                        survey.Add(new(int.Parse(p[0], CultureInfo.InvariantCulture), int.Parse(p[1], CultureInfo.InvariantCulture)));
+                    }
+                    break;
+                case "--name": surveyName = args[++i]; break;
+                case "--section": { var p = args[++i].Split(','); section = new(float.Parse(p[0], CultureInfo.InvariantCulture), float.Parse(p[1], CultureInfo.InvariantCulture)); break; }
                 case "--verbose": verbose = true; break;
                 case "--interior": interiorKey = args[++i]; break;
                 case "--climb": settings = settings with { MaxClimb = float.Parse(args[++i], CultureInfo.InvariantCulture) }; break;
@@ -91,9 +105,10 @@ static class NavmeshTool
         ResidentRuins.Apply(db, levels, new BuildingLayouts(db, levels.Interiors));   // the homes' ruins and layouts, as the game lays them out
         Console.WriteLine($"game data and levels loaded ({watch.ElapsedMilliseconds} ms)");
         if (compare.Count > 0) return Compare(install, db, levels, compare, settings);
-        if (compareTowns)
-            compareInteriors.AddRange(levels.Towns().Select(t => WorldLayout.ZoneOf(t.Position.X, t.Position.Z)).Distinct().Except(compareInteriors).OrderBy(z => z.X).ThenBy(z => z.Y));
+        if (compareTowns) compareInteriors.AddRange(TownZones(levels).Except(compareInteriors));
         if (compareInteriors.Count > 0) return CompareInteriors(install, db, levels, compareInteriors, settings, around);
+        if (surveyTowns) survey.AddRange(TownZones(levels).Except(survey));
+        if (survey.Count > 0) return InteriorSurvey.Run(install, db, levels, survey, settings, surveyName, png, section);
         if (route is { Length: 4 }) return Route(install, db, levels, route);
         if (fingerprint) return Fingerprint(install, db, levels, zone is { } only ? [only] : [new ZoneCoordinate(20, 32), new ZoneCoordinate(21, 32)], settings);
         if (zone is null)
@@ -232,13 +247,17 @@ static class NavmeshTool
     /// <c>--interior key</c>: gathers and builds one building's interior alone, lists its seeds and connected components, and with <c>--obj path</c> writes its
     /// gathered triangles (<c>path.geometry.obj</c>) and its polygons (<c>path</c>) for a 3D viewer or a script.
     /// </summary>
+    /// <summary>Every zone holding a town placement, in order.</summary>
+    static IEnumerable<ZoneCoordinate> TownZones(WorldLevelData levels) =>
+        levels.Towns().Select(t => WorldLayout.ZoneOf(t.Position.X, t.Position.Z)).Distinct().OrderBy(z => z.X).ThenBy(z => z.Y);
+
     static int DescribeOneInterior(ZoneGeometryGatherer gatherer, ZoneCoordinate zone, string key, NavBuildSettings settings, string? obj, bool ownOnly)
     {
         var site = gatherer.InteriorSites(zone).FirstOrDefault(s => s.Placement.Key == key);
         if (site is null) { Console.Error.WriteLine($"No interior {key} in zone {zone}; keys: {string.Join(", ", gatherer.InteriorSites(zone).Select(s => s.Placement.Key))}"); return 1; }
         var g = gatherer.GatherInterior(site, NavMeshPipeline.InteriorTileStep * settings.CellSize, agentHeight: settings.AgentHeight, ownOnly: ownOnly, trackParts: true);
         if (g is null) { Console.Error.WriteLine("No usable hull."); return 1; }
-        settings = settings with { TileCells = (int)MathF.Round((g.ZoneMax.X - g.ZoneMin.X) / settings.CellSize) };
+        settings = NavMeshPipeline.InteriorSettings(settings, g);
         foreach (var (owner, part, path, first, last) in g.PartRanges)
         {
             float lo = float.MaxValue, hi = float.MinValue;
