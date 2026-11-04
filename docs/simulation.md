@@ -1738,8 +1738,8 @@ among those with a general node, engine choice), patrolling town from one random
 public shop that sells what the character's shopping list wants, else (not in a town of the player's faction) to a random public building, the desire being 1 for a shop and 0.4 for another building (as the original's finders, [ai-tasks](game/ai-tasks.md#town-goals); no faction test), then buys from its stock one unit a second ([NPC purchases](game/economy.md#npc-purchases)), relaxing under a bar package, sitting around (275) and staying home (43; the home is the bar under a bar package) sit on a seat claimed per
 member on the package cadence, and the wanderer walks to the nearest town. A bar package (both kinds) reserves
 one table per squad as the original (`AiSystem.PickTable`: public bars tried from a random one, first table no
-other bar squad holds; no bar, or the outdoors kind: a free table placed outdoors in the town; none free: the
-squad keeps its home and does not relax); its members take the free seats nearest that table (engine choice),
+other bar squad holds; the outdoors kind: a free table placed outdoors in the town; a town without bars gives
+the normal kind none, as the original; none free: the squad keeps its home and does not relax); its members take the free seats nearest that table (engine choice),
 at an outdoor table they stand at it. A home node goal takes a
 node of its kind, a guard post a general node next (as the original), then any node but a shopkeeper's
 (engine; only the shopkeeper goal falls back onto the counter). Gates have no nodes: the gate guard

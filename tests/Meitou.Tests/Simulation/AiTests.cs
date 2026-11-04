@@ -225,6 +225,41 @@ public class AiTests(ITestOutputHelper output)
     }
 
     /// <summary>
+    /// A bar package needs a bar (docs/game/ai-tasks.md "Town goals", the hang-around-bar package): the town's squad on its normal kind (signal 17),
+    /// whose package gives 214 Relaxing at full weight and 118 Shopping at half, in its town with no bar but an outdoor table and a public house, gets
+    /// no table, so nobody relaxes and its members shop. Catches the fallback onto the outdoor table, which set a Holy Prisoner Caravan relaxing at
+    /// Rebirth's stone processors where the original's shops.
+    /// </summary>
+    [Fact]
+    public void A_bar_package_in_a_town_without_a_bar_takes_no_table_and_its_members_shop()
+    {
+        var relax = Task("131-t", TaskType.RELAX_IN_TOWN_PACKAGE, TaskPriority.NonUrgent);
+        var shop = Task("132-t", TaskType.SHOPPING, TaskPriority.NonUrgent);
+        var bar = Rec("118-t", FcsRecordType.AI_PACKAGE, "Hang out in a bar");
+        bar.Ints["signal func"] = 17;
+        bar.References["Leader AI Goals"] = [Ref("131-t", 0, 24, 0), Ref("132-t", 0, 24, 50)];
+        bar.References["Squad AI Goals"] = [Ref("131-t", 0, 24, 0), Ref("132-t", 0, 24, 50)];
+        var db = SyntheticTown.Database(1, extra: [.. Records(), relax, shop, bar], changePatrol: p => p.References["AI packages"] = [Ref("118-t", 0)]);
+        Vector3 At(float dx, float dz) => new(Centre.X + dx, 300, Centre.Z + dz);
+        var house = new TownBuilding("house", "b-house", "House", At(-80, 0), 0, false, false, [new HomeSpot(HomeSpotKind.Bed, At(-90, 0), 0)])
+        {
+            HasInterior = true,
+        };
+        var table = new TownBuilding("table", "b-table", "Table", At(60, 40), 0, false, false, []) { Function = TownBuildings.TableFunction };
+        var data = PopulationData.Create(db, [new TownPlacement("inst", "30-t", Centre, null)],
+            buildings: new Dictionary<string, List<TownBuilding>> { ["inst"] = [house, table] });
+
+        using var world = Town(1, out _, data, null);
+        world.RunTicks(300);
+        var squad = Assert.Single(world.Squads.All, s => s.TemplateId == "10-t");
+        Assert.Equal(-1, squad.Ai!.BarTable);
+        Assert.NotSame(table, squad.Ai.Home);
+        var goals = squad.Members.Select(m => world.Characters.Cold(m.Slot)?.Ai?.Goal?.Task.Type).ToList();
+        Assert.DoesNotContain(TaskType.RELAX_IN_TOWN_PACKAGE, goals.Cast<TaskType?>());
+        Assert.Contains(TaskType.SHOPPING, goals.Cast<TaskType?>());
+    }
+
+    /// <summary>
     /// A character already lying in a bed keeps it when it goes to bed (docs/game/locks.md "Bed search"): sleepers moved into each other's beds of
     /// their home (30 apart, beyond the post slack), with no goal yet as after a load, stay in those beds, plan 98 Sleeping first and sleep as the
     /// goal's own task. Catches the goal aiming at the bed its member index picks, whose plan got the saved sleepers of a loaded town out of their
