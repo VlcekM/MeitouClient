@@ -142,7 +142,7 @@ public sealed class CharacterStats
 
     /// <summary>
     /// Writes the saved STATS floats (docs/formats/save.md): the stat's field name (<c>strength</c>, <c>attack</c>, <c>toughness2</c>, <c>mass combat</c>...) to its value.
-    /// The legacy keys (<c>endurance</c>, <c>warrior spirit</c>, <c>xp</c>, <c>free attribute points</c>...) are not kept.
+    /// The legacy keys (<c>endurance</c>, <c>warrior spirit</c>, <c>xp</c>, <c>free attribute points</c>...) are not kept; the save writer gives a new character the STATS template's <c>warrior spirit</c> and a loaded one keeps its saved value.
     /// </summary>
     public void WriteSave(IDictionary<string, float> floats)
     {

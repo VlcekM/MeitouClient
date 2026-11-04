@@ -226,6 +226,7 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
             var built = BuildSystems(interactive);
             population = built.Population;
             if (nav is not null) population!.ZoneGate = zone => nav.Walkability.World.Contains(zone);
+            SnapshotPlayerTowns();
             systems = built.Systems;
             constants = data.Bodies.Constants;
         }

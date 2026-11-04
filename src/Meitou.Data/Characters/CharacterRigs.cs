@@ -110,7 +110,7 @@ public sealed class CharacterRigs(GameDatabase db, Func<string, string?> findMes
     {
         if (rig.BoneCount != CharacterShape.HumanBoneCount) return null;
         var input = c.Shape ?? CharacterShape.InputFor(db, c);
-        if (build is { } b) input = input with { Muscle = b.Muscle, Starvation = b.Starvation };
+        if (build is { } b) input = input with { Muscle = b.ShapeMuscle, Starvation = b.ShapeStarvation };
         if (whole && input.Missing.Count > 0) input = input with { Missing = new HashSet<Limb>() };
         var shape = CharacterShape.Compute(input, name => rig.Handle(name) is not null);
         return rig.Shape(shape.BoneSize, shape.PositionalSize, shape.MovementScale);

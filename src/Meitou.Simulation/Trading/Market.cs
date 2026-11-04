@@ -59,13 +59,8 @@ public sealed class Market
     /// <summary>The culture of a faction (null: none).</summary>
     public TradeCulture? FactionCulture(int faction) => (uint)faction < (uint)factionCultures.Length ? factionCultures[faction] : null;
 
-    /// <summary>The weapon quality is the model level; armour's is its level too (level 0: full, 100), not its saved `quality`; everything else uses <see cref="ItemInstance.Quality"/>.</summary>
-    static float QualityOf(ItemInstance item) => item.Type switch
-    {
-        FcsRecordType.WEAPON or FcsRecordType.CROSSBOW => item.Level,
-        FcsRecordType.ARMOUR => item.Level <= 0 ? 100 : item.Level,
-        _ => item.Quality,
-    };
+    /// <summary>The quality <c>ItemValue</c> gets: <see cref="ItemInstance.GearLevel"/>, never the saved `quality` (armour at level 0 is worth its record's own value).</summary>
+    static float QualityOf(ItemInstance item) => item.GearLevel;
 
     /// <summary><c>ItemValue(record, quality, 1, manufacturer)</c> of an item (0 for a record the data does not have).</summary>
     public int BaseValue(ItemInstance item) => baseValues.GetOrAdd((item.Record, QualityOf(item), item.CompanyId), static (key, m) =>

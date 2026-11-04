@@ -53,6 +53,15 @@ public sealed class WeatherAreas
     /// <summary>The cell holding a world position (may lie outside 0..63 for positions off the map).</summary>
     public static (int X, int Z) CellOf(float x, float z) => ((int)MathF.Floor(x / CellSize) + Origin, (int)MathF.Floor(z / CellSize) + Origin);
 
+    /// <summary>
+    /// The cell of the camera's region lookup (<c>FUN_1408f56b0</c>): <c>(int)((coordinate + 147465) / 4608)</c> truncated toward zero and clamped to 0..63 per axis, so a position off the map takes the
+    /// edge cell. The origin 147465 = 32 x 4608 + 9 puts the original's cell boundaries 9 units from <see cref="CellOf"/>'s.
+    /// </summary>
+    public static (int X, int Z) CameraCellOf(float x, float z) =>
+        (Math.Clamp((int)((x + CameraOrigin) / CellSize), 0, Cells - 1), Math.Clamp((int)((z + CameraOrigin) / CellSize), 0, Cells - 1));
+
+    const float CameraOrigin = 147465f;
+
     public static bool InMap(int cx, int cz) => (uint)cx < Cells && (uint)cz < Cells;
 
     /// <summary>The colour (0xRRGGBB) of a cell, or -1 outside the map.</summary>

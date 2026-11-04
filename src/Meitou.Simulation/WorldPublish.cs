@@ -38,6 +38,16 @@ public sealed partial class World
 
     static readonly string[] ClosableSlots = ["head", "shirt", "boots"];
 
+    /// <summary>
+    /// The build a character is drawn with: the normal maps follow the live stats, the bone shape is made once and rebuilt only while the character is of the player's faction
+    /// (<c>FUN_140531820</c> calls <c>FUN_14052e6c0</c> only then; <c>FUN_1405338f0</c> made it at creation, here the first publish; docs/animation.md "Stat-driven body").
+    /// </summary>
+    Meitou.Data.Characters.BodyBuild ShapedBuild(CharacterCold cold, Meitou.Data.Characters.BodyBuild live)
+    {
+        if (cold.ShapedBuild is not { } shaped || cold.Faction >= 0 && cold.Faction == Player.Faction) cold.ShapedBuild = shaped = live;
+        return live.WithShapeOf(shaped);
+    }
+
     /// <summary>A player character's disguise for the panel (<see cref="Crime.ArrestSystem"/>: the level, the uniform faction, the blown cooldown, the tooltip's factors).</summary>
     DisguiseView DisguiseOf(CharacterCold c, Vector3 at, PopulationData? data)
     {
@@ -244,7 +254,7 @@ public sealed partial class World
             s.Body = cold?.Medical is { } med && cold.Race is { } race ? BodyOf(cold, med, race, state[i].Task, extraBloodLoss) : null;
             // The original skips robots' appearances (FUN_140531820) and animals have none.
             s.Build = cold is { Stats: { } buildStats, Medical: { } fed, Race.IsRobot: false, Appearance: { Animal: null } look }
-                ? Meitou.Data.Characters.CharacterShape.BuildFromStats(look.Female, buildStats, static (stats, s) => stats[s], fed.Hunger) : null;
+                ? ShapedBuild(cold, Meitou.Data.Characters.CharacterShape.BuildFromStats(look.Female, buildStats, static (stats, s) => stats[s], fed.Hunger)) : null;
             s.Path = selected && (state[i].Flags & (ushort)MoveFlags.HasPath) != 0 ? cold!.Path.Skip(state[i].PathCursor).ToArray() : [];
             s.CarriedBy = cold?.CarriedBy ?? CharacterId.None;
             s.Carry = cold is { CarriedBy.IsNone: false } ? cold.CarryAttach ?? Carrying.CarryPose.Fallback : null;

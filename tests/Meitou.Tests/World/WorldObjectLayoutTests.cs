@@ -31,35 +31,36 @@ public class WorldObjectLayoutTests
     public void Part_choice_follows_the_games_rolls()
     {
         static bool Exists(string id) => id != "missing";
-        // Group 0: chance 0 keeps without a roll; chance 100 still rolls; a missing target still rolls.
+        // Group 0: chance 0 and 100 keep without a roll; a missing target still rolls.
         var r = new BuildingRandom(99);
-        var chosen = WorldObjectLayout.ChooseParts([Part("a", 0, 0)], Exists, r);
-        Assert.Equal("a", Assert.Single(chosen).TargetStringId);
+        var chosen = WorldObjectLayout.ChooseParts([Part("a", 0, 0), Part("b", 0, 100)], Exists, r);
+        Assert.Equal(["a", "b"], chosen.Select(p => p.TargetStringId));
         Assert.Equal(0, r.Count);
-        WorldObjectLayout.ChooseParts([Part("a", 0, 100), Part("missing", 0, 50)], Exists, r);
+        WorldObjectLayout.ChooseParts([Part("a", 0, 50), Part("missing", 0, 50)], Exists, r);
         Assert.Equal(2, r.Count);
 
-        // A group 0 entry is kept when the int roll 0..99 is below its chance.
+        // A group 0 entry is kept when the int roll 0..100 is at most its chance.
         for (uint seed = 0; seed < 50; seed++)
         {
-            int roll = new BuildingRandom(seed).NextInt(0, 99);
+            int roll = new BuildingRandom(seed).NextInt(0, 100);
             var kept = WorldObjectLayout.ChooseParts([Part("a", 0, 40)], Exists, new BuildingRandom(seed));
-            Assert.Equal(roll < 40, kept.Count == 1);
+            Assert.Equal(roll <= 40, kept.Count == 1);
         }
 
-        // Other groups: one roll per group with two or more usable entries, the pick is the first running total above the roll.
+        // Other groups: one roll per group (also with a single entry), over the total of every entry (0 counts as 100); the walk takes the first entry whose chance is not below the roll.
         for (uint seed = 0; seed < 50; seed++)
         {
-            float roll = new BuildingRandom(seed).NextFloat(0, 100);
+            float roll = new BuildingRandom(seed).NextFloat(0, 25 + 100 + 30 + 75);
             var rng = new BuildingRandom(seed);
-            var pick = WorldObjectLayout.ChooseParts([Part("c", 1, 25), Part("zero", 1, 0), Part("missing", 1, 30), Part("d", 1, 75), Part("e", 2, 10)], Exists, rng);
-            Assert.Equal(1, rng.Count); // group 2 has a single entry: no roll
-            Assert.Equal(["e", roll < 25 ? "c" : "d"], pick.Select(p => p.TargetStringId)); // group 2 was inserted last: first in map order
+            var pick = WorldObjectLayout.ChooseParts([Part("c", 1, 25), Part("zero", 1, 0), Part("missing", 1, 30), Part("d", 1, 75)], Exists, rng);
+            Assert.Equal(1, rng.Count);
+            string? expected = roll <= 25 ? "c" : roll - 25 <= 100 ? "zero" : roll - 125 <= 30 ? null : roll - 155 <= 75 ? "d" : null;
+            Assert.Equal(expected is null ? [] : [expected], pick.Select(p => p.TargetStringId));
         }
 
-        // Group order is the game's hash map order (17 buckets): new buckets go first, a key joins its bucket at the front.
-        var order = WorldObjectLayout.ChooseParts([Part("g1", 1, 1), Part("g2", 2, 1), Part("g18", 18, 1), Part("z", 0, 0)], Exists, new BuildingRandom(0));
-        Assert.Equal(["z", "g2", "g18", "g1"], order.Select(p => p.TargetStringId));
+        // Groups are visited in ascending order, one draw each, group 0 first.
+        var order = WorldObjectLayout.ChooseParts([Part("g18", 18, 100), Part("g2", 2, 100), Part("g1", 1, 100), Part("z", 0, 0)], Exists, new BuildingRandom(0));
+        Assert.Equal(["z", "g1", "g2", "g18"], order.Select(p => p.TargetStringId));
     }
 
     [Fact]

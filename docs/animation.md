@@ -247,7 +247,7 @@ characters/root collision and leg-health/lying/care selection belong in [simulat
 (`FUN_14052e6c0`, M and S above). The maps: base `nm <g>` blended to `nm <g> strong` by D; when S > 0.25 or S > D, blended to `nm <g> skinny`
 by S, the base being `nm <g> strong` when D > 0.33 (RACE fields; humans and Shek have their own `_muscular` / `_skinny` files, robots and hive
 one file for all). What calls it, and how often, is **Unknown** (it is a virtual of `AppearanceHuman`, slots 6 and 13).
-Meitou (`CharacterShape.BuildFromStats`, `CharacterSnapshot.Build`, `CharacterRenderer.ApplyBuild`): published every tick from the live stats,
+**The bone shape is rebuilt only for the player's faction** (**Verified**, `FUN_140531820`: `FUN_14052e6c0` runs only when the character's faction has `+0x250` set, the test of `declareDead`); any other character keeps the shape made at its creation (`FUN_1405338f0` calls `FUN_14052bc70` then `FUN_14052e6c0`), while its normal maps and `muscleBlend` follow the live values. Meitou: `BodyBuild.ShapeMuscle`/`ShapeStarvation`, `WorldPublish.ShapedBuild` (the shape input is stored at the first publish, refreshed while the faction is the player's; not saved, so a load re-makes it from the saved stats, as the original does). Meitou (`CharacterShape.BuildFromStats`, `CharacterSnapshot.Build`, `CharacterRenderer.ApplyBuild`): published every tick from the live stats,Meitou (`CharacterShape.BuildFromStats`, `CharacterSnapshot.Build`, `CharacterRenderer.ApplyBuild`): published every tick from the live stats,
 applied when a value moves by more than 0.01, the normal maps once both are resident (engine choices).
 
 ### Startup preprocessing

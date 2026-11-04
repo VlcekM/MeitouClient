@@ -125,7 +125,7 @@ public sealed class WeatherWorld
         bool teleport = !hasCamera || snapRequested || Vector2.DistanceSquared(here, lastCamera) > TeleportDistanceSquared;
         snapRequested = false;
         (cellX, cellZ) = !hasCamera || WeatherAreas.DistanceSquaredToCell(cellX, cellZ, here.X, here.Y) >= RegionHysteresis * RegionHysteresis
-            ? WeatherAreas.CellOf(here.X, here.Y) : (cellX, cellZ);
+            ? WeatherAreas.CameraCellOf(here.X, here.Y) : (cellX, cellZ);
         hasCamera = true;
         lastCamera = here;
 

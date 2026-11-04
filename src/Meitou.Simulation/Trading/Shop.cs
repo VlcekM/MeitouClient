@@ -211,7 +211,10 @@ public static class ShopFiller
         for (int l = 0; l < lists.Count && totalWeight > 0; l++)
         {
             var (list, weight) = lists[l];
-            int count = l == lists.Count - 1 ? Math.Max(n - assigned, 0) : (int)MathF.Round((float)n * weight / totalWeight, MidpointRounding.AwayFromZero);
+            // FUN_140959800 (Verified): each list's own share is (v / sum) x n rounded half away from zero; the last adds what is left when that is above 0, so it takes
+            // max(n - assigned before it, its own share) and the total can exceed n.
+            int count = (int)MathF.Round((float)weight / totalWeight * n, MidpointRounding.AwayFromZero);
+            if (l == lists.Count - 1) count = Math.Max(n - assigned, count);
             assigned += count;
             var entries = list.Entries.Where(e => town?.Forbidden.Contains(e.Id) != true && own?.Forbidden.Contains(e.Id) != true).ToList();
             for (int k = 0; k < count && entries.Count > 0; k++)
@@ -236,23 +239,31 @@ public static class ShopFiller
     }
 
     /// <summary>
-    /// SQUAD_TEMPLATE <c>special items</c> (ITEM references), else <c>special map items</c> (MAP_ITEM), on a fill with specials (<c>FUN_140958740</c> from the shop refresh <c>FUN_14095b210</c>,
-    /// <b>Verified</b>): each entry's v0 items, in stacks of at most the item's stack limit, go into the stock before the vendor items; what fits nowhere is lost. Engine: the original
-    /// also marks them unique (<c>Item::isUnique</c>), which is not modelled.
+    /// SQUAD_TEMPLATE <c>special items</c> (ITEM references), then <c>special map items</c> (MAP_ITEM references), on a fill with specials (<c>FUN_140958740</c> from the shop refresh
+    /// <c>FUN_14095b210</c>, <b>Verified</b>): both lists are stocked when both exist (the original skips both only when both are empty). Each entry's v0 items go into the stock before the vendor
+    /// items in stacks of at most the record's raw <c>stackable</c> (at least 1: a 0 loops forever in the original), also for a map item whose stack limit elsewhere is 1; what fits nowhere is
+    /// lost. Engine: the original also marks them unique (<c>Item::isUnique</c>), which is not modelled.
     /// </summary>
     static void AddSpecials(Shop shop, string templateId, GameDatabase db, Market market)
     {
         if (db.Find(templateId) is not { } template) return;
-        var list = template.GetReferences("special items");
-        if (list.Count == 0) list = template.GetReferences("special map items");
+        AddSpecialList(shop, template.GetReferences("special items"), FcsRecordType.ITEM, db, market);
+        AddSpecialList(shop, template.GetReferences("special map items"), FcsRecordType.MAP_ITEM, db, market);
+    }
+
+    static void AddSpecialList(Shop shop, IReadOnlyList<GameReference> list, FcsRecordType type, GameDatabase db, Market market)
+    {
         foreach (var r in list)
+        {
+            if (db.Find(r.TargetStringId) is not { } record || record.Type != type) continue;
+            int perStack = Math.Max(record.GetInt("stackable"), 1);
             for (int left = r.Values.Value0; left > 0;)
             {
-                if (market.Items.Create(r.TargetStringId, 1) is not { } probe) break;
-                int stack = Math.Clamp(left, 1, Math.Max(probe.StackLimit, 1));
+                int stack = Math.Min(left, perStack);
                 if (market.Items.Create(r.TargetStringId, stack) is { } item) shop.Stock.Add(item);
                 left -= stack;
             }
+        }
     }
 
     internal static VendorEntry Pick(IReadOnlyList<VendorEntry> entries, ref RandomStream rng)
@@ -322,34 +333,39 @@ public static class ShopFiller
         return g;
     }
 
-    /// <summary>A grade 0..5 by the faction's <c>armors 0</c> .. <c>armors 5</c> chances (the field names as the doc gives them; the spelling in the data is <b>Unknown</b>).</summary>
+    /// <summary>
+    /// A grade 0..5 by the faction's <c>armors 0</c> .. <c>armors 5</c> chances (<c>FUN_140954c80</c> builds the table, <c>FUN_14063cea0</c> draws, <b>Verified</b>): only chances above 0 count (a faction
+    /// with none: grade 0), no faction gives 50 / 80 / 25 / 5 for grades 0..3; a single grade is taken with no draw, else one float(0, total) draw against the running sums.
+    /// </summary>
     internal static int Grade(GameRecord? faction, ref RandomStream rng)
     {
         Span<int> w = stackalloc int[6];
-        int total = 0;
-        for (int g = 0; g < 6; g++) total += w[g] = Math.Max(faction?.GetInt($"armors {g}", DefaultGradeChances[g]) ?? DefaultGradeChances[g], 0);
-        if (total <= 0) return 1;
-        int roll = rng.NextInt(total);
+        int total = 0, kinds = 0, only = 0;
         for (int g = 0; g < 6; g++)
         {
-            if (roll < w[g]) return g;
+            w[g] = Math.Max(faction is null ? NoFactionGradeChances[g] : faction.GetInt($"armors {g}", DefaultGradeChances[g]), 0);
+            total += w[g];
+            if (w[g] > 0) { kinds++; only = g; }
+        }
+        if (kinds <= 1) return only;
+        float roll = rng.NextFloat() * total;
+        for (int g = 0; g < 6; g++)
+        {
+            if (w[g] > 0 && roll < w[g]) return g;
             roll -= w[g];
         }
-        return 5;
+        return only;
     }
+
+    /// <summary>The grade chances of an item list made with no faction (<c>FUN_140954c80</c>, constants read from the exe).</summary>
+    static readonly int[] NoFactionGradeChances = [50, 80, 25, 5, 0, 0];
 
     /// <summary>A manufacturer from the list (v0, 0 counting as 100), then a model from its <c>weapon models</c> (v1, 0 counting as 100) whose v0 is the level; none or level 0: the fixed fallback model.</summary>
     internal static (GameRecord Maker, string? Model, int Level)? Maker(VendorList list, GameDatabase db, ref RandomStream rng)
     {
         var makers = list.Manufacturers.Select(m => (Record: db.Find(m.Id), Weight: m.V0 == 0 ? 100 : m.V0)).Where(m => m.Record is not null && m.Weight > 0).ToList();
         if (makers.Count == 0) return null;
-        int roll = rng.NextInt(makers.Sum(m => m.Weight));
-        var maker = makers[^1].Record!;
-        foreach (var m in makers)
-        {
-            if (roll < m.Weight) { maker = m.Record!; break; }
-            roll -= m.Weight;
-        }
+        var maker = PickWeighted(makers, m => m.Weight, ref rng).Record!;   // the list is not empty and every weight is above 0
         var models = maker.GetReferences("weapon models").Where(r => db.Find(r.TargetStringId) is not null).ToList();
         // No model or a model of level 0: the factory substitutes manufacturer 1057 and model 1058 (FUN_140580750, Verified).
         if (models.Count == 0 || Model(models, ref rng) is not { Values.Value0: not 0 } picked)
@@ -360,16 +376,24 @@ public static class ShopFiller
         return (maker, picked.TargetStringId, picked.Values.Value0);
     }
 
-    static GameReference Model(List<GameReference> models, ref RandomStream rng)
+    static GameReference? Model(List<GameReference> models, ref RandomStream rng) =>
+        PickWeighted(models.Where(r => r.Values.Value1 >= 0).ToList(), r => r.Values.Value1 == 0 ? 100 : r.Values.Value1, ref rng);
+
+    /// <summary>
+    /// The factory's weighted choice (<c>FUN_14057fd40</c>, <b>Verified</b>): candidates of weight above 0 (a weight of 0 counts 100); none gives none, one is taken with no draw, else one float(0, total) draw
+    /// against the running sums. Used for the manufacturer (v0) and the model (v1).
+    /// </summary>
+    static T? PickWeighted<T>(List<T> candidates, Func<T, int> weight, ref RandomStream rng)
     {
-        int total = models.Sum(r => r.Values.Value1 == 0 ? 100 : Math.Max(r.Values.Value1, 0));
-        int pick = rng.NextInt(Math.Max(total, 1));
-        foreach (var r in models)
+        var live = candidates.Where(c => weight(c) > 0).ToList();
+        if (live.Count == 0) return default;
+        if (live.Count == 1) return live[0];
+        int roll = rng.NextInt(live.Sum(weight));
+        foreach (var c in live)
         {
-            int w = r.Values.Value1 == 0 ? 100 : Math.Max(r.Values.Value1, 0);
-            if (pick < w) return r;
-            pick -= w;
+            if (roll < weight(c)) return c;
+            roll -= weight(c);
         }
-        return models[^1];
+        return live[^1];
     }
 }

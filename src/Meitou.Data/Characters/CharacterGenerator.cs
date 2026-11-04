@@ -49,16 +49,16 @@ public static class CharacterGenerator
         }
 
         // Race (Faction::chooseARace, Verified in outline): the squad template's "race override", else the CHARACTER's "race" list (val0 = relative weight, entries with
-        // val0 > 0), else the body file's, else the faction's "races" (the original takes the faction's before any body file; engine order for characters with one).
+        // val0 > 0), else the faction's "races" (Faction::chooseARace reads no body file: the loader fills the chosen race's appearance afterwards), else the body file's race (engine fallback).
         GameRecord? race = record.Type == FcsRecordType.RACE ? record : null;
         if (race is null && character is not null && raceOverride is { Count: > 0 })
             race = PickRelative(rng, raceOverride.Where(r => r.Values.Value0 > 0).Select(r => (db.Find(r.TargetStringId), (float)r.Values.Value0)));
         if (race is null && character is not null)
             race = PickRelative(rng, character.GetReferences("race").Where(r => r.Values.Value0 > 0)
                 .Select(r => (db.Find(r.TargetStringId), (float)r.Values.Value0)));
-        if (race is null && bodyFile?.RaceId is { } bodyRace) race = db.Find(bodyRace);
         if (race is null && (faction ?? (character?.GetReferences("faction") is { Count: > 0 } own ? db.Find(own[0].TargetStringId) : null)) is { } races)
-            race = PickRelative(rng, races.GetReferences("races").Select(r => (db.Find(r.TargetStringId), r.Values.Value0 > 0 ? (float)r.Values.Value0 : 1f)));
+            race = PickRelative(rng, races.GetReferences("races").Where(r => r.Values.Value0 > 0).Select(r => (db.Find(r.TargetStringId), (float)r.Values.Value0)));   // FUN_1407fe270: weight <= 0 never drawn
+        if (race is null && bodyFile?.RaceId is { } bodyRace) race = db.Find(bodyRace);   // engine fallback where the original has no race at all (it logs an error)
         if (race is null)
         {
             race = CharacterAppearance.Find(db, DefaultRaceId, FcsRecordType.RACE) ?? throw new KeyNotFoundException($"'{record.Name}' ({record.StringId}) has no race.");
@@ -386,15 +386,14 @@ public static class CharacterGenerator
         var maker = db.Find("1057-gamedata.base") ?? orElse;
         var model = db.Find("1058-gamedata.base");
         int level = maker.GetReferences("weapon models").Where(r => r.TargetStringId == model?.StringId).Select(r => r.Values.Value0).FirstOrDefault();
-        return (maker, model, level + (int)maker.GetFloat("overall level"));
+        return (maker, model, (int)(level + maker.GetFloat("overall level")));   // the float is added before the cut
     }
 
-    /// <summary>ARMOUR / item <c>races</c> (only these may equip it) and <c>races exclude</c>.</summary>
+    /// <summary>ARMOUR / item <c>races</c> (only these may equip it; <c>races exclude</c> is then not read) and <c>races exclude</c> (docs/game/ui-screens.md, <c>RaceLimiter</c>), as <c>ItemInstance.WearableBy</c>.</summary>
     static bool RaceAllowed(GameRecord item, GameRecord race)
     {
         var only = item.GetReferences("races");
-        if (only.Count > 0 && !only.Any(r => r.TargetStringId == race.StringId)) return false;
-        return !item.GetReferences("races exclude").Any(r => r.TargetStringId == race.StringId);
+        return only.Count > 0 ? only.Any(r => r.TargetStringId == race.StringId) : !item.GetReferences("races exclude").Any(r => r.TargetStringId == race.StringId);
     }
 
     // ---- Weighted picks ----------------------------------------------------------------------------------------

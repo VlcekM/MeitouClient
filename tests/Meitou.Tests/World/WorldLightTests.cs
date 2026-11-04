@@ -75,7 +75,7 @@ public class WorldLightTests
             var expected = new BuildingRandom(BuildingRandom.Seed(at.X, at.Z));
             float power = 0.6f + expected.NextFloat(-0.2f, 0.2f);
             expected.Next();
-            bool childKept = expected.NextInt(0, 99) < 50;
+            bool childKept = expected.NextInt(0, 100) <= 50;
 
             Assert.Equal(power, Assert.Single(lights).Power);
             Assert.InRange(lights[0].Power, 0.4f, 0.8f);

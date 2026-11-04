@@ -344,9 +344,10 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
             else if (living && TemplateOf(squad.TemplateId) is { } template)
             {
                 var terms = new Trader(squad.Town, squad.Faction, template.BuyMult, template.BuysStolen, template.BuysIllegal);
-                // A housed trader keeps a building shop when its home has stock containers, whether or not it made prisoner or slave squads (FUN_140583a10 / FUN_1404ff5e0, Observed); without containers the squad shop stays (Meitou fallback, the original stocks nothing).
-                squad.Shop = (squad.HomeBuilding is { } home ? Shop.ForBuilding(home, terms) : null)
-                    ?? new Shop { Terms = terms };
+                // A squad with a home building stocks only that building's containers, whether or not it made prisoner or slave squads, and never a squad stock; a home without stock containers
+                // gets nothing (FUN_140583a10 / FUN_1404ff5e0 / FUN_14095b210, Verified). Only a squad with no home building has a squad shop (s14-f26).
+                squad.Shop = squad.HomeBuilding is { } home ? Shop.ForBuilding(home, terms) : new Shop { Terms = terms };
+                if (squad.Shop is null) continue;
                 TakeContents(world, squad.Shop);
                 Refill(world, squad, squad.Shop, template);
             }
@@ -408,7 +409,7 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
     SquadTemplate? HomeTemplateOf(string id)
     {
         if (!homeTemplates.TryGetValue(id, out var t))
-            homeTemplates[id] = t = data.Db.Find(id) is { } r && SquadFactory.IsTemplate(r) && SquadTemplate.From(r) is { IsTrader: false } fill && (fill.Vendors.Count > 0 || fill.BuildingDesignation is 2 or 3 or 5 or 6 or 8 or 9 or 11) ? fill : null;
+            homeTemplates[id] = t = data.Db.Find(id) is { } r && SquadFactory.IsTemplate(r) && SquadTemplate.From(r) is { } fill && (!fill.IsTrader || fill.Vendors.Count == 0) && (fill.Vendors.Count > 0 || fill.BuildingDesignation is 2 or 3 or 5 or 6 or 8 or 9 or 11) ? fill : null;
         return t;
     }
 

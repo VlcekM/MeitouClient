@@ -822,3 +822,5 @@ read and at least one consumer found through the data cross-references; base val
 - First aid, medkits and robot repair: `h + b <= M`; `rate = lerp(1, 15, min(skill, kit quality) * 0.01) * medic speed mult (3)`, one part per update ([First aid update](#first-aid-update))
 - Encumbrance and carrying: `C = carry weight mult * strength * strengthInjuryMultiplier + encumbrance base` (strength's whole stat multiplier); `e = clamp((C - 0.05 W) / (0.95 W), 0, 1)`; `W <= C`
 - CONSTANTS used by this subsystem: `field address = 0x142133dd0 + 4 * index`
+
+**Saved `warrior spirit`** (**Verified**, decompile; no gameplay reader found, **Unknown**): the CharStats constructor `FUN_14064cb30` reads the STATS record's float `warrior spirit` into CharStats +0x13c (a missing key reads 0; 13 base STATS records carry it: 1, 10 or 20) and `FUN_14064a8f0` writes it back under that key. Meitou's save writer gives a new character the template's value, a loaded one keeps its saved value.

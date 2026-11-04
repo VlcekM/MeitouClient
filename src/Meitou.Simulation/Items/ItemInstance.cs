@@ -52,6 +52,14 @@ public sealed class ItemInstance
         set => buyback = value;
     }
     public int Level { get; set; }
+    /// <summary>
+    /// The level the original's item vfunc 0x2b8 reports, which its item price (<c>FUN_1407a8f90</c>) takes as the quality and its grade colour reads (<b>Verified</b>, vtables): a
+    /// gear piece's (weapon, armour, crossbow, robotic limb) <see cref="Level"/> (<c>Gear+0x224</c>), 0 for any other item (plain, map, nest, money, blueprint, severed limb, backpack).
+    /// </summary>
+    public int GearLevel => GearLevelOf(Type, Level);
+    /// <summary><see cref="GearLevel"/> for an item of <paramref name="type"/> at <paramref name="level"/>.</summary>
+    public static int GearLevelOf(FcsRecordType type, int level) =>
+        type is FcsRecordType.WEAPON or FcsRecordType.ARMOUR or FcsRecordType.CROSSBOW or FcsRecordType.LIMB_REPLACEMENT ? level : 0;
     /// <summary>The name of the smith who crafted the item at a bench (the save key <c>crafter</c>; empty: not crafted by the player's smith). The tooltip prints it with the player faction's name.</summary>
     public string Crafter { get; set; } = "";
     /// <summary>The faction whose uniform the piece is (the save key <c>uniform</c>, the faction record id; empty: none): armour with one sells and buys at 0.3 of its price (<c>Armour+0x1e8</c>, <c>FUN_1408a9c20</c>, <b>Verified</b>).</summary>

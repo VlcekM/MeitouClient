@@ -215,7 +215,7 @@ public sealed partial class ProductionSystem
         foreach (var f in world.Fixtures.All)
         {
             if (f.Kind != FixtureKind.Cage || f.Owner != world.Player.Faction || f.Occupant.IsNone || !table.TryResolveNext(f.Occupant, out int s)) continue;
-            if (!Liftable(world, table, s, f.Occupant, lifted)) continue;
+            if (!Liftable(world, table, s, f.Occupant, lifted, cageStage: true)) continue;
             float d = Gap(at, f.Position);
             if (d <= Settings.HaulRange && d < bestD) (best, bestD) = (f.Occupant, d);
         }
@@ -225,7 +225,7 @@ public sealed partial class ProductionSystem
             {
                 if (s == slot || !table.Next[s].Alive) continue;
                 var id = table.IdOf(s);
-                if (!Liftable(world, table, s, id, lifted)) continue;
+                if (!Liftable(world, table, s, id, lifted, cageStage: false)) continue;
                 float d = Gap(at, table.Next[s].Position);
                 if (d <= ErrandSight && d < bestD) (best, bestD) = (id, d);
             }
@@ -233,35 +233,77 @@ public sealed partial class ProductionSystem
         return best is { } body ? (body, Vector2.Zero) : null;
     }
 
-    /// <summary>A dead, non-robot body that can be lifted, that nobody has and that is not in the give-up list.</summary>
-    bool Liftable(World world, CharacterTable table, int s, CharacterId id, HashSet<CharacterId> lifted) =>
-        table.Cold(s) is { Medical.Dead: true } body && body.Race is { IsRobot: false } && !lifted.Contains(id) && !givenUp.Contains(id) && CarrySystem.CanBeLifted(world, body);
+    /// <summary>
+    /// A dead body that can be lifted, that nobody has and that is not in the give-up list. Robots are skipped only in the cage stage (<b>Verified</b>: <c>FUN_1408cfb00</c> tests the race's robot
+    /// byte on the cage's occupant, the nearest-body finder <c>FUN_1408ce170</c> tests it only for an animal finder), so a human carrier lifts a dead robot lying outside.
+    /// </summary>
+    bool Liftable(World world, CharacterTable table, int s, CharacterId id, HashSet<CharacterId> lifted, bool cageStage) =>
+        table.Cold(s) is { Medical.Dead: true } body && (!cageStage || body.Race is { IsRobot: false }) && !lifted.Contains(id) && !givenUp.Contains(id)
+        && CarrySystem.CanBeLifted(world, body);
+
+    /// <summary>The weight of a distance in the disposal finder: clamp(1 - d^2 / 4608^2, 1e-5, 1) (<c>FUN_1409b2380</c> with <c>DAT_14172e248</c> = 2.1233664e7, <b>Verified</b>).</summary>
+    static float DisposalWeight(float distanceSquared) => Math.Clamp(1 - distanceSquared / 21233664f, 1e-5f, 1f);
 
     /// <summary>
-    /// The corpse machine a body is taken to (<c>FUN_1408d0770</c> for function 11, <b>Verified</b> by decompile): the player's complete corpse-disposal building with an operator place free, the
-    /// nearest weighing most (the original's weight is clamp(1 - d^2 / 2.1e7, 1e-5, 1), x100 for the character's own faction, the other factors do not apply to the player's own buildings).
+    /// The corpse machine a body is taken to (<c>FUN_1408d0770</c> for function 11, <b>Verified</b> by decompile): among the complete corpse-disposal buildings of the player and of allied factions (<see cref="MayUseDisposal"/>) with an operator place free
+    /// that lie within 1.1 x the radius of the carrier's town (<c>FUN_1408cbea0</c> / <c>FUN_140a00690</c>), the one of the greatest <see cref="DisposalWeight"/> of the 3D distance to the carrier (x100 for the player's own); the
+    /// first listed wins a tie (the weights of everything beyond 4608 are equal). The town is the one the carrier stands in, else the nearest within 1.5625e7 squared (<c>DAT_14172dd88</c>); with
+    /// none, every town is searched. Stand-ins: the town is a player's town, and the squad's home town (the Ownerships' +0x38, <b>Unknown</b> for the player) and the home-building x100 are not read.
     /// </summary>
     (BuildSite Site, Machine Machine)? NearestIncinerator(World world, Vector3 from)
     {
+        var town = PlayerTownAt(world, from) ?? NearestPlayerTown(world, from, DisposalTownReach);
         BuildSite? bestSite = null;
         Machine? best = null;
-        float bestGap = float.MaxValue;
+        float bestWeight = -1;
         foreach (var m in world.Machines.All)
         {
-            if (m.Data.Function != Meitou.Data.World.TownBuildings.CorpseDisposalFunction || Site(world, m.Site) is not { Complete: true } site || site.Owner != world.Player.Faction) continue;
+            if (m.Data.Function != Meitou.Data.World.TownBuildings.CorpseDisposalFunction || Site(world, m.Site) is not { Complete: true } site || !MayUseDisposal(world, site)) continue;
+            if (town is not null && Gap(site.Position, town.Position) > town.Radius * 1.1f) continue;
             if (OperatorsOf(world, site.Id) >= m.Data.MaxOperators) continue;
-            float gap = Gap(site.Position, from);
-            if (gap > bestGap || (gap == bestGap && string.CompareOrdinal(m.Site, best?.Site) > 0)) continue;
-            (bestSite, best, bestGap) = (site, m, gap);
+            float weight = DisposalWeight(Vector3.DistanceSquared(site.Position, from)) * (site.Owner == world.Player.Faction ? OwnFactionWeight : 1);
+            if (weight <= bestWeight) continue;
+            (bestSite, best, bestWeight) = (site, m, weight);
         }
         return best is null ? null : (bestSite!, best);
+    }
+
+    /// <summary>The weight factor of a building of the character's own faction (<c>DAT_141683250</c>, <b>Verified</b> 100).</summary>
+    const float OwnFactionWeight = 100;
+
+    /// <summary>
+    /// Whether the player's character may use a corpse machine of a faction (the ally test <c>FUN_140621230</c>, <b>Verified</b> for a standalone building): its own faction's; else the
+    /// building's faction is not hostile to the character's (relation of the building's faction at -30 or lower, <c>FUN_1406b26d0</c>) and is its ally (the same faction, relation 50 or more,
+    /// <c>FUN_1406b2630</c>). Stand-ins: no designation record, the occupied town of the Ownerships (+0x80) and the nested-building branches are not read, nor the allied flag.
+    /// </summary>
+    bool MayUseDisposal(World world, BuildSite site)
+    {
+        int mine = world.Player.Faction;
+        if (site.Owner == mine) return true;
+        return Carry?.Relations is { } relations && relations.Contains(site.Owner) && !relations.IsHostile(site.Owner, mine) && relations.IsAlly(site.Owner, mine);
+    }
+
+    /// <summary>The squared distance within which a carrier outside every town still takes the nearest town (<c>DAT_14172dd88</c>, <b>Verified</b> 1.5625e7).</summary>
+    const float DisposalTownReach = 15625000f;
+
+    /// <summary>The player's town nearest to a point by centre, if its squared distance is within <paramref name="reachSquared"/>.</summary>
+    static PlayerTown? NearestPlayerTown(World world, Vector3 at, float reachSquared)
+    {
+        PlayerTown? best = null;
+        float bestD = reachSquared;
+        foreach (var town in world.Buildings.Towns)
+        {
+            float d = Vector3.DistanceSquared(town.Position, at);
+            if (town.Owner == world.Player.Faction && d <= bestD) (best, bestD) = (town, d);
+        }
+        return best;
     }
 
     // ---- intruders (223 / 273) ----
 
     /// <summary>
     /// The finders of jobs 223 (<c>FUN_14099c110</c>) and 273 (<c>FUN_14099c250</c>, whose own test is the carrier's town, docs/game/ai-tasks.md; the AI's: <see cref="Kidnap.TownDutySystem"/>) for a
-    /// player character, <b>Observed</b>: a downed character in the building the carrier stands in, not carried,
+    /// player character, <b>Verified</b> (<c>FUN_14099c110</c>: down by the character's isDown, not carried, special state 0, no race test, so a dead body or a non-carriable one counts and a refused lift leaves the finder returning it): a downed character in the building the carrier stands in, not carried,
     /// not caged (223: not in a bed either, special state 0). Engine choices: the building is the player's complete building with doors whose footprint holds the carrier (the original's
     /// "home" of 223 is the Ownerships' +0x38, whose value for the player faction is <b>Unknown</b>); an intruder is knocked out, alive, and neither of the carrier's faction nor an ally (the
     /// sensed list's exclude bits 0x201 are <b>Unknown</b>); 273 is a town finder (<see cref="FindTownIntruder"/>). The goal is outside the door (223 / 224,
@@ -277,9 +319,9 @@ public sealed partial class ProductionSystem
         float bestD = float.MaxValue;
         for (int s = 0; s < table.HighWater; s++)
         {
-            if (s == slot || !table.Next[s].Alive || table.Cold(s) is not { Medical: { Unconscious: true, Dead: false } } body) continue;
+            if (s == slot || !table.Next[s].Alive || table.Cold(s) is not { Medical.Incapacitated: true } body) continue;
             var id = table.IdOf(s);
-            if (lifted.Contains(id) || givenUp.Contains(id) || body.IsImprisoned || !body.CarriedBy.IsNone || !CarrySystem.CanBeLifted(body)) continue;
+            if (lifted.Contains(id) || givenUp.Contains(id) || body.IsImprisoned || !body.CarriedBy.IsNone) continue;
             if (kind == ErrandKind.OutOfBuilding && body.InSomething != HeldState.None) continue;
             if (Carry!.Friendly(cold, body)) continue;
             if (EnclosedAt(world, table.Next[s].Position) != site) continue;

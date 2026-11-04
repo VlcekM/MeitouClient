@@ -174,6 +174,18 @@ public static class WorldObjectLayout
         return result;
     }
 
+    /// <summary>
+    /// A wind generator's rotor as this placement spawns it (<c>getWindRotationPower</c> reads only the parts the layout created, <b>Verified</b>, FUN_1404cbd90): the first laid-out part that
+    /// turns with the wind speed (rotation function 3, no collision file) and its wind range; null when the position's part choice spawns none.
+    /// </summary>
+    public static (float Min, float Max)? WindRotor(GameDatabase db, GameRecord building, Vector3 worldPosition)
+    {
+        foreach (var mesh in Building(db, building, building.StringId, worldPosition, Quaternion.Identity))
+            if (mesh.Joints is { Count: > 0 } joints && joints[^1] is { Rotor.Function: RotorSpec.WindSpeed } own && own.PartId == mesh.Source.StringId)
+                return (own.Rotor.WindMin, MathF.Max(own.Rotor.WindMin, own.Rotor.WindMax));
+        return null;
+    }
+
     sealed class Assembly(GameDatabase db, GameRecord building, string placementId, BuildingState state, List<PlacedMesh> result, List<PlacedLight>? lights, List<PlacedEffect>? effects)
     {
         public readonly GameDatabase Db = db;
@@ -395,52 +407,40 @@ public static class WorldObjectLayout
     }
 
     /// <summary>
-    /// The <c>parts</c> entries the game uses, drawing from <paramref name="random"/> exactly as it does (val0 group, val1 chance):
-    /// a group 0 entry with chance 0 is always kept; any other group 0 entry rolls an int 0..99 (even at chance ≥ 100 and for
-    /// missing targets) and is kept if the roll is below its chance. Other groups collect their entries with chance &gt; 0 and an
-    /// existing target; afterwards each group, in the iteration order of the game's hash map, keeps its only entry or rolls a
-    /// float in [0, total) and keeps the entry whose running total first exceeds it. Group 0 picks come first, in list order.
+    /// The <c>parts</c> entries the game uses, drawing from <paramref name="random"/> exactly as it does (<c>FUN_140848950</c>, val0 group, val1 chance). A group 0 entry is kept
+    /// without a draw at chance 0 or 100, else when an int roll 0..100 is at most its chance (a missing target rolls too). Every other group, in ascending group number, draws one float in
+    /// [0, total) (total: the chance of every entry, 0 counting as 100, missing targets too), then walks its entries in list order: one whose chance (0 as 100) is below the roll
+    /// takes it off and goes on, else it is taken (a missing target yields no part) and the walk stops; a roll past the sum takes nothing. Group 0 picks come first, in list order.
     /// </summary>
     public static List<GameReference> ChooseParts(IReadOnlyList<GameReference> parts, Func<string, bool> exists, BuildingRandom random)
     {
         var result = new List<GameReference>();
-        var groups = new Dictionary<int, List<(GameReference Ref, float Total)>>();
-        var order = new List<int>();
+        var groups = new SortedDictionary<int, List<GameReference>>();
         foreach (var p in parts)
         {
             int group = p.Values.Value0, chance = p.Values.Value1;
-            if (group == 0)
+            if (group != 0)
             {
-                if (chance == 0 || random.NextInt(0, 99) < chance) result.Add(p);
-                continue;
+                if (!groups.TryGetValue(group, out var list)) groups[group] = list = [];
+                list.Add(p);
             }
-            if (!groups.TryGetValue(group, out var list))
-            {
-                groups[group] = list = [];
-                InsertInMapOrder(order, group);
-            }
-            if (chance > 0 && exists(p.TargetStringId))
-                list.Add((p, (list.Count > 0 ? list[^1].Total : 0) + chance));
+            else if (chance == 0 || chance == 100 || random.NextInt(0, 100) <= chance) result.Add(p);
         }
-        foreach (int group in order)
+        foreach (var list in groups.Values)
         {
-            var list = groups[group];
-            if (list.Count == 0) continue; // the game appends an empty entry here
-            if (list.Count == 1) { result.Add(list[0].Ref); continue; }
-            float roll = random.NextFloat(0, list[^1].Total);
-            result.Add(list.FirstOrDefault(e => e.Total > roll, list[^1]).Ref);
+            float roll = random.NextFloat(0, list.Sum(e => GroupChance(e)));
+            foreach (var entry in list)
+            {
+                if (GroupChance(entry) < roll) { roll -= GroupChance(entry); continue; }
+                if (exists(entry.TargetStringId)) result.Add(entry);
+                break;
+            }
         }
         return result;
     }
 
-    /// <summary>Group order of the game's <c>boost::unordered_map&lt;int, ...&gt;</c> (17 buckets, key % 17): a key in a new bucket goes to the front, else before its bucket's first key.</summary>
-    static void InsertInMapOrder(List<int> order, int key)
-    {
-        const ulong buckets = 17; // boost's next prime from the default 11
-        ulong bucket = (ulong)(long)key % buckets;
-        int at = order.FindIndex(k => (ulong)(long)k % buckets == bucket);
-        order.Insert(at < 0 ? 0 : at, key);
-    }
+    /// <summary>An entry's chance in a non-zero group: 0 stands for 100.</summary>
+    static int GroupChance(GameReference entry) => entry.Values.Value1 == 0 ? 100 : entry.Values.Value1;
 
     /// <summary>
     /// A building's <c>distant mesh</c> at the building's position, rotation and <c>scale</c> (the transform the game's
