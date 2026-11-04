@@ -151,17 +151,7 @@ public sealed partial class NavmeshWalkability : IWalkability
         float lowest = float.MaxValue, layer = float.MinValue;
         foreach (float h in heights)
         {
-            float s = Snap(w, x, z, h, out bool beside);
-            // Where the mesh is too far off for its surface to be found (a ramp the polygon cuts under), the surface at the walker's own height, when that
-            // is nearer the mesh than what was found (Observed: the terrain 30 below, inside the ramp, at the Great Fortress) or within the terrain snap's reach
-            // of it: a polygon spanning a flat top and its slope sags up to ~25 under the top and lies nearer a face inside the rock (Observed: the rock by the
-            // Hub's gate, where the original's polygon is flat on the top).
-            if (near && MathF.Abs(s - nearY) > StandRise && w.TrySurfaceNear(x, z, nearY, StandRise, out float own)
-                && MathF.Abs(own - h) < MathF.Max(MathF.Abs(s - h), TerrainSnapRange)) s = own;
-            // A walker on the ground along the foot of a raised top whose edge the snap took (nothing is over the spot): the ground, when the mesh is within the
-            // terrain snap's reach of it (Observed: a top at 560 over ground at 537 west of Black Desert City, a polygon at 550 by its foot, stopping walkers there).
-            else if (near && beside && MathF.Abs(s - nearY) > StandRise && Ground(w, x, z) is var t && MathF.Abs(t - nearY) <= StandRise
-                && MathF.Abs(t - h) <= TerrainSnapRange) s = t;
+            float s = near ? SurfaceNear(w, x, z, h, nearY) : Snap(w, x, z, h, out _);
             lowest = MathF.Min(lowest, s);
             float reach = MathF.Min(h, s);
             if (reach > nearY + StandRise || reach <= layer || near && MathF.Max(h, s) < nearY - StandDrop) continue;
@@ -176,6 +166,30 @@ public sealed partial class NavmeshWalkability : IWalkability
         }
         if (!reachable) y = lowest;
         return true;
+    }
+
+    /// <summary>The real surface a mesh height <paramref name="h"/> stands for (<see cref="Snap"/>) to a walker at <paramref name="nearY"/>.</summary>
+    float SurfaceNear(NavWorld w, float x, float z, float h, float nearY)
+    {
+        float s = Snap(w, x, z, h, out bool beside);
+        if (MathF.Abs(s - nearY) <= StandRise) return s;
+        float t = Ground(w, x, z);
+
+        // Where the mesh is too far off for its surface to be found (a ramp the polygon cuts under), the surface at the walker's own height, when that
+        // is nearer the mesh than what was found (Observed: the terrain 30 below, inside the ramp, at the Great Fortress) or within the terrain snap's reach
+        // of it: a polygon spanning a flat top and its slope sags up to ~25 under the top and lies nearer a face inside the rock (Observed: the rock by the
+        // Hub's gate, where the original's polygon is flat on the top).
+        bool surface = w.TrySurfaceNear(x, z, nearY, StandRise, out float own);
+        if (surface && MathF.Abs(own - h) < MathF.Max(MathF.Abs(s - h), TerrainSnapRange)) return own;
+
+        // A walker on the ground along the foot of a raised top whose edge the snap took (nothing is over the spot): the ground, when the mesh is within the
+        // terrain snap's reach of it (Observed: a top at 560 over ground at 537 west of Black Desert City, a polygon at 550 by its foot, stopping walkers there).
+        if (beside && MathF.Abs(t - nearY) <= StandRise && MathF.Abs(t - h) <= TerrainSnapRange) return t;
+
+        // A walker on bare ground over a polygon sagging under it however far (a polygon is planar between its corners and spans the terrain's humps): the
+        // ground (Observed: 31 under a hillside west of the Hub, zone 19.34, where the original's polygon sags 28 too).
+        bool onGround = t <= nearY + StandRise && t >= nearY - StandDrop;
+        return !surface && onGround && h < t ? t : s;
     }
 
     /// <summary>
