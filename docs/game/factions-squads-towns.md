@@ -469,7 +469,7 @@ Meitou: [ground items](../simulation.md#items-and-eating).
   float 0.01, so v1 100, v0 4 gives 1, not 2), then +1 per Rand(0, 100) <= v1, stopping
   at the first failure, at most v0. Each at a random node of the town's node map (`FUN_14038b000`), else the town
   position; no home. That map (NodeList +0x50) is filled by `FUN_14038b650` with nodes the game creates itself next to objects
-  (record `1186-gamedata.base`, "Node Guardpost", node type 2); which objects is **Unknown** (Meitou: GENERAL nodes of its bars).
+  (record `1186-gamedata.base`, "Node Guardpost", node type 2). **Verified** (`FUN_14038b650`, called from the door's point update `FUN_14029cc90`): the objects are door buildings; the node is put just outside the door (the door point `+0x3bc` pushed out along `+0x3bc - +0x3c8`, as state 126, [locks](locks.md)), and skipped when an existing node of that list lies within a small distance (`DAT_14167c308`). `FUN_14038b000` picks uniformly among the town's nodes. Meitou: GENERAL nodes of its bars (engine choice); the door geometry comes from the door gate at runtime, which the pure town builder does not have, and the creation order of the original's list is not reproducible, so the node stream cannot match.
 - **New game vs level data**: level-data building states carry `residents template` / `squad template`; save 2 against
   them has the same multiset per town but shuffled across buildings (223 same, 125 moved), so a new game rerolls homes
   (**Observed**). Destroyed buildings stay candidates (the Hub's ruins house squatters).
@@ -800,7 +800,7 @@ every message {1} is the campaign's name and {2} the target town's (the cancel m
 
 - What sets the character status threat float `+0xac` and the killer handle `+0x2c0` (3.5); what the
   allied byte (+0) and the `trust` floats feed (dialogue conditions, "trustworthy" behaviour).
-- What `building designation` changes beyond the bar (it does not enter the chooser); the town node map bar squads use.
+- What `building designation` changes beyond the bar (it does not enter the chooser); 
 - Nest respawn delay after "wiped out", the default of `DAT_142133588` (the Number of nests multiplier option; **Unknown**, the exe image holds zeros there), the rule that makes `TownPopulationManager::vfunc_4`
   declare a town wiped out (**Observed** gates: roaming pool cap <= 3 and <= 25 roaming members).
 - Campaigns: TownBase slots 92 / 96, the disabled-town flag, what besides the two calls recomputes the town level,
