@@ -91,6 +91,8 @@ static class NavmeshTool
                 case "--cell": settings = settings with { CellSize = float.Parse(args[++i], CultureInfo.InvariantCulture) }; break;
                 case "--own-only": ownOnly = true; break;
                 case "--tile": settings = settings with { TileCells = int.Parse(args[++i], CultureInfo.InvariantCulture) }; break;
+                case "--edge": settings = settings with { MaxEdgeLength = int.Parse(args[++i], CultureInfo.InvariantCulture) }; break;
+                case "--monotone": settings = settings with { Watershed = false }; break;
                 case "--min-region": settings = settings with { MinRegionArea = int.Parse(args[++i], CultureInfo.InvariantCulture) }; break;
                 case "--merge-region": settings = settings with { MergeRegionArea = int.Parse(args[++i], CultureInfo.InvariantCulture) }; break;
                 case "--simplify": settings = settings with { MaxSimplificationError = float.Parse(args[++i], CultureInfo.InvariantCulture) }; break;
@@ -405,7 +407,7 @@ static class NavmeshTool
         if (original is null) { yield return "no original tile"; yield break; }
         var kept = world.Find(g.Zone)!;
         var buckets = Buckets(original);
-        int both = 0, onlyOriginal = 0, onlyOurs = 0, pruned = 0;
+        int both = 0, onlyOriginal = 0, onlyOurs = 0, pruned = 0, floating = 0;
         var list = new List<int>();
         for (float z = cz - radius; z <= cz + radius; z += step)
         {
@@ -416,6 +418,7 @@ static class NavmeshTool
                 bool o = OriginalAt(original, buckets, x, z, ground, 12);
                 list.Clear(); kept.PolygonsAt(x, z, list);
                 bool m = list.Any(q => MathF.Abs(kept.HeightAt(q, x, z) - ground) < 12);
+                if (o && !m && list.Count > 0 && list.All(q => kept.HeightAt(q, x, z) > ground + 12)) floating++;
                 list.Clear(); mesh.PolygonsAt(x, z, list);
                 bool any = list.Any(q => MathF.Abs(mesh.HeightAt(q, x, z) - ground) < 12);
                 char c = o && m ? 'B' : o ? (any ? 'p' : 'o') : m ? 'm' : '.';
@@ -425,7 +428,7 @@ static class NavmeshTool
             }
             yield return row.ToString();
         }
-        yield return $"ground samples (within 12 of the terrain): both {both}, original only {onlyOriginal}, original and ours unkept {pruned}, ours only {onlyOurs}";
+        yield return $"ground samples (within 12 of the terrain): both {both}, original only {onlyOriginal}, original and ours unkept {pruned}, ours only {onlyOurs}; ours floating over the original's ground {floating}";
     }
 
     /// <summary>

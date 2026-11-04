@@ -186,7 +186,7 @@ the centre); others the plain group speed.
 
 ## Own builder
 
-DotRecast: cells2,height1,tile 288 cells (576 units),no edge limit,watershed regions,agent18/climb5,ground/water/door areas (interiors: one tile,
+DotRecast: cells2,height1,tile 288 cells (576 units),edges 24 cells,watershed regions,agent18/climb5,ground/water/door areas (interiors: one tile,
 monotone regions, edges 24 cells; [Search cost](#search-cost)). Build asynchronously,
 cache tiles and gate population on readiness. Query A* through portal clearance (radius per wall end; tile-border, seam
 and area-change ends are open) and water/door costs. **Observed** (zone 18.39, `meitou-tools navmesh`): a Swamp Village
@@ -199,7 +199,9 @@ in it). **Observed** (zone 39.16, Stoat, scratch probe from ground-level points 
 A walker off the mesh (engine choices): its path starts at its own position, then the nearest mesh point, which it walks to; if the nearest start polygon gives no path, or
 one whose first 10 units it cannot stand along, up to 4 next-nearest starts are tried. Movement turns early for the next waypoint (within 5) only where it can stand along
 the first 10 units of the straight line to it, else it walks to within 2 of the corner. A step blocked on the navmesh part asks for the path again from where the walker
-stands, up to 3 times since its last waypoint or order (`BlockedRepathLimit`), before the path and a GoTo order are dropped. **Observed** (zone 22.10, save "stuck", scratch sim): a walker on the terrain at
+stands, up to 3 times since its last waypoint or order (`BlockedRepathLimit`), before the path and a GoTo order are dropped; a block while a request is in
+flight is not counted (the walker stands until the answer comes; counted per tick, 4 blocks took 0.3 s and dropped orders, **Observed** zone 21.29, save
+"Gigachad", scratch sim). **Observed** (zone 22.10, save "stuck", scratch sim): a walker on the terrain at
 Y392 beside the Old Storm House's (`6-rebirth-INGAME`) door stair snapped to the stair's corner (Recast corner vertices take the highest neighbouring cell, 408 over
 ground at 395); that polygon's only exits were narrower than the radius, the next start's path was cut up the stair's side, and the walker stood still. With the three rules it enters in 3 s.
 <a id="shoved-into-furniture"></a>A walker off every surface at its height and its next step (shoved into something that cuts a hole in the mesh) may step only nearer its path's current
@@ -750,8 +752,11 @@ remembered nearest point gets the provisional route at once, while no door was l
 walkers outside reached the corner of a locked L-House that one shut in it had found, and stood there; **Observed**, Gigachad save, 39.16); retries skip start
 polygons a failed search reached (same region, same failure). GoTo answers went from ~95 to ~17 ms on average, polygons per search ~11,000 to ~5,800.
 
-Polygon count (engine choice): 96-unit tiles with 48-unit edges cut open ground into a grid, and monotone regions into strips; 576-unit tiles, unlimited
-edges and watershed regions keep it in few polygons. **Observed** (`meitou-tools navmesh --compare`, 13 town zones): kept polygons fell 39..56 %
+Polygon count (engine choice): 96-unit tiles with 48-unit edges cut open ground into a grid, and monotone regions into strips; 576-unit tiles and
+watershed regions keep it in few polygons. Edges stay capped at 24 cells: unlimited, polygons merged across a canyon floor and its slopes took heights 30..43
+above the terrain, and walkers stood on them in the air and were blocked where the step up exceeded `StandRise` (**Observed**, zone 22.31 at -42171,-4335,
+save "Gigachad"; a cap of 48 cells left -42187,-4379 31 above). With the cap 22.31 has 6,930 polygons, without 5,665, before the change 9,865.
+The figures below were measured without the cap. **Observed** (`meitou-tools navmesh --compare`, 13 town zones): kept polygons fell 39..56 %
 (Hub 20.32 10,183 to about 6,200; the original's tile has 5,857 faces); a zone builds in about twice the time. Over 2,352 random pairs in 20.32
 (radius 4) polygons expanded per search fell 965 to 560 and search time 20..30 %, paths 1 % longer. The original's ground ours lacks stayed within 0.1
 point of its area (`orig%`) but in 18.39, 1.4 to 1.7 %: a walkable AshlandsRibs top (y ~293, -61200,35000) has no link to the ground and is pruned (whether

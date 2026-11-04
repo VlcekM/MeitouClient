@@ -17,8 +17,11 @@ public sealed record NavBuildSettings
     public float MaxClimb { get; init; } = 5f;
     /// <summary>Contour simplification error in cells.</summary>
     public float MaxSimplificationError { get; init; } = 1.3f;
-    /// <summary>Longest contour edge in cells (0: unlimited).</summary>
-    public int MaxEdgeLength { get; init; }
+    /// <summary>
+    /// Longest contour edge in cells (0: unlimited). Unlimited, polygons spanning a canyon floor and its slopes took heights 30..43 off the ground and walkers
+    /// floated on them (docs/game/pathfinding.md "Search cost").
+    /// </summary>
+    public int MaxEdgeLength { get; init; } = 24;
     /// <summary>Watershed regions (chunky polygons) rather than monotone ones (strips; ZoneNavMeshBuilder.Partition).</summary>
     public bool Watershed { get; init; } = true;
     public int MinRegionArea { get; init; } = 4;

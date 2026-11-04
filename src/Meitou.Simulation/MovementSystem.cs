@@ -148,7 +148,8 @@ public sealed class MovementSystem(PathService paths) : ITickSystem, IDisposable
     public const int ProvisionalBlockedLimit = 5;
     /// <summary>
     /// How many times running a walker stopped on the navmesh part of its path (no ground it can stand on ahead) asks for the path again from where it stands before it drops it
-    /// and the order (engine choice: from a slightly different spot the path can start elsewhere, docs/game/pathfinding.md "Own builder").
+    /// and the order (engine choice: from a slightly different spot the path can start elsewhere, docs/game/pathfinding.md "Own builder"). A block while a request is in flight
+    /// does not count: the walker stands until the answer comes.
     /// </summary>
     public const int BlockedRepathLimit = 3;
 
@@ -1138,6 +1139,12 @@ public sealed class MovementSystem(PathService paths) : ITickSystem, IDisposable
                     if (speed > 0.1f && !facing) n.Yaw = MathF.Atan2(dir.X, dir.Y);
                 }
                 else if (steering) speed = 0;   // into a wall or off the ground: it stands this tick
+                else if ((n.Flags & (ushort)(MoveFlags.NeedPath | MoveFlags.Pending)) != 0)
+                {
+                    // Blocked with a path already asked for: it stands until the answer comes, so each answer counts as one try below, not each tick waited.
+                    speed = 0;
+                    dir = Vector2.Zero;
+                }
                 else
                 {
                     // Blocked on the provisional part of a long route (the terrain-only route met a wall or a building): stand and ask again.
