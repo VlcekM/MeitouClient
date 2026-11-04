@@ -43,6 +43,8 @@ internal static class SeedSalts
     public const ulong BarChance = 77;
     /// <summary>Counter (under <see cref="RngPurpose.Think"/>) of the roll that picks which of a town's bars a squad starting a bar package goes to.</summary>
     public const ulong BarPick = 78;
+    /// <summary>Counter base (under <see cref="RngPurpose.Think"/>, xor the mind's node epoch) of the roll that draws which node a standing goal takes in its building (FUN_14099f280: uniform among the free nodes, kept until the goal is renewed).</summary>
+    public const ulong NodePick = 0x4E6F6465_50696B21;
     /// <summary>Counter of the roll that picks which squad template a town's roaming pool draws.</summary>
     public const ulong RoamingPick = 5;
     /// <summary>Counter base of the roll for the look of member n of a town squad (n is added).</summary>
@@ -66,9 +68,9 @@ internal static class SeedSalts
     /// <summary>A platoon's short-range patrol point off screen (<see cref="Ai.PlatoonJobs"/>).</summary>
     public const ulong PlatoonPatrol = 0x5050UL;
 
-    /// <summary>Town residents in their buildings (<c>PopulationHomes.cs</c>): the counter of the node a squad is made at, counter base of the housemate counts, and
+    /// <summary>Town residents in their buildings (<c>PopulationHomes.cs</c>): the counter of the node a squad is made at, of a member's own node, counter base of the housemate counts, and
     /// the salt XORed into a housed squad's key.</summary>
-    public const ulong HomeSpot = 0x40DE5UL, Housemates = 0x40A7E00UL, ResidentHome = 0x2E51DUL;
+    public const ulong HomeSpot = 0x40DE5UL, MemberSpot = 0x40DE6UL, Housemates = 0x40A7E00UL, ResidentHome = 0x2E51DUL;
     /// <summary>A housed squad's <c>prisoners</c> (<c>PopulationSystem.MakePrisoners</c>): the salt XORed into a prisoner squad's key, and counter base of the cage picks.</summary>
     public const ulong PrisonerSquad = 0x9215EUL, PrisonerCage = 0x921CA00UL;
     /// <summary>A housed squad's <c>slaves</c> (<c>PopulationSystem.MakeSlaves</c>): counter base of the slaves' looks, and of their cage picks.</summary>

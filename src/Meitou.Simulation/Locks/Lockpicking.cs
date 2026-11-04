@@ -107,8 +107,11 @@ public sealed class Lockpicking(GameConstants constants, BodyOptions options)
         return Roll(world, c, l, ShackleKey(wearer, item), dt);
     }
 
-    /// <summary>The effective strength the cut and break tests use (the stat-scale term taken as 1, locks.md Unknowns).</summary>
-    static float Strength(CharacterCold c) => (c.Stats?[StatsEnumerated.Strength] ?? 0) * (c.Medical?.StatMultiplier(StatsEnumerated.Strength) ?? 1);
+    /// <summary>The effective strength the cut and break tests use (stat x the CharStats scale +0x34, FUN_140641480: 1 for people, the age for animals).</summary>
+    static float Strength(CharacterCold c) => (c.Stats?[StatsEnumerated.Strength] ?? 0) * (c.Stats?.Scale ?? 1) * (c.Medical?.StatMultiplier(StatsEnumerated.Strength) ?? 1);
+
+    /// <summary>The strength the cut tasks use (<c>FUN_140359f80</c>): the stat times the multiplier asked with the hunger term only (<c>FUN_1406457e0(stats, 1, 1)</c>), no limb, light or damage terms.</summary>
+    static float CutStrength(CharacterCold c) => (c.Stats?[StatsEnumerated.Strength] ?? 0) * (c.Stats?.Scale ?? 1) * (c.Medical?.StatMultiplier(StatsEnumerated.Strength, StatUse.Hunger) ?? 1);
 
     /// <summary>The best tool the character carries (ITEM <c>item function</c> 9, the condition <c>hasTools</c>: Hacksaw, Tools), by quality; null: "I don't have any tools".</summary>
     public static Items.ItemInstance? BestTool(CharacterCold c) =>
@@ -126,7 +129,7 @@ public sealed class Lockpicking(GameConstants constants, BodyOptions options)
         var c = world.Characters.Cold(cutter);
         if (c is null || item.Lock is not { Broken: false } l) return false;
         ShackleCrime(world, cutter, wearer, crimes);
-        l.Hardness -= Math.Clamp(0.01f * Strength(c), 0.05f, 0.2f) * dt * 2;
+        l.Hardness -= Math.Clamp(0.01f * CutStrength(c), 0.05f, 0.2f) * dt * 2;
         if (l.Hardness > 0) return false;
         l.Hardness = 0;
         if (BestTool(c) is { } tool) c.Inventory!.RemoveOne(tool);
@@ -143,7 +146,7 @@ public sealed class Lockpicking(GameConstants constants, BodyOptions options)
         var c = world.Characters.Cold(cutter);
         if (c is null || target.Lock is not { Broken: false } l) return false;
         Crime(world, cutter, c, target, crimes);
-        l.Hardness -= Math.Clamp(0.01f * Strength(c), 0.05f, 0.2f) * dt * 2;
+        l.Hardness -= Math.Clamp(0.01f * CutStrength(c), 0.05f, 0.2f) * dt * 2;
         if (l.Hardness > 0) return false;
         l.Hardness = 0;
         if (BestTool(c) is { } tool) c.Inventory!.RemoveOne(tool);
@@ -159,6 +162,7 @@ public sealed class Lockpicking(GameConstants constants, BodyOptions options)
         if (c is null || item.Lock is not { Broken: false } l) return false;
         ShackleCrime(world, breaker, wearer, crimes);
         if (Strength(c) <= 3 * l.Hardness) return false;
+        l.Hardness = 0;
         l.Broken = true;
         return true;
     }
@@ -166,12 +170,12 @@ public sealed class Lockpicking(GameConstants constants, BodyOptions options)
     /// <summary>
     /// Another character's shackles: code 7 against the faction that owns the wearer as a slave (status <c>+0xe0</c>, <c>FUN_140359d90</c>, <c>FUN_140359f80</c>, <c>FUN_140352c50</c>, <b>Verified</b>), booked
     /// every update before the roll. A wearer without an owner (-1) books nothing: <see cref="CrimeSystem.SetPending"/> refuses a faction that does not exist (the original sets the crime against
-    /// a null faction, whose booking is <b>Unknown</b>), as it refuses the culprit's own faction. The wearer stays the crime's victim character (the original passes the wearer's owner handle).
+    /// a null faction, whose booking is <b>Unknown</b>), as it refuses the culprit's own faction. The wearer stays the crime's victim character (the original passes the wearer's owner handle); a self-target is not special-cased (the worker's own slave owner).
     /// </summary>
     static void ShackleCrime(World world, int worker, CharacterId wearer, CrimeSystem? crimes)
     {
         var table = world.Characters;
-        if (crimes is null || wearer == table.IdOf(worker) || !table.TryResolveNext(wearer, out int w) || table.Cold(w) is not { } victim) return;
+        if (crimes is null || !table.TryResolveNext(wearer, out int w) || table.Cold(w) is not { } victim) return;
         if (victim.SlaveOwner >= 0) crimes.SetPending(world, worker, CrimeCode.Terrorism, victim.SlaveOwner, wearer, CrimeSystem.MinTimer);
     }
 
@@ -184,8 +188,9 @@ public sealed class Lockpicking(GameConstants constants, BodyOptions options)
         var c = world.Characters.Cold(picker);
         if (c is null || target.Lock is not { } l || l.Broken) return false;
         Crime(world, picker, c, target, crimes);
-        float strength = (c.Stats?[StatsEnumerated.Strength] ?? 0) * (c.Medical?.StatMultiplier(StatsEnumerated.Strength) ?? 1);
+        float strength = (c.Stats?[StatsEnumerated.Strength] ?? 0) * (c.Stats?.Scale ?? 1) * (c.Medical?.StatMultiplier(StatsEnumerated.Strength) ?? 1);
         if (strength <= 3 * l.Hardness) return false;
+        l.Hardness = 0;
         l.Broken = true;
         if (target.Kind == FixtureKind.Door) target.DoorBroken = true;
         world.Fixtures.Touch(target);
@@ -193,15 +198,20 @@ public sealed class Lockpicking(GameConstants constants, BodyOptions options)
     }
 
     /// <summary>
-    /// The pending crime of every update (<b>Observed</b>): a cage holding another character is code 7 against the cage's owner (the captive's owner faction, read here as the jail's);
-    /// any other fixture owned by another faction is Burglary (2) against its owner. <see cref="CrimeSystem.SetPending"/> refuses own-faction and lawless victims.
+    /// The pending crime of every update (<b>Verified</b>, <c>FUN_140359160</c>, <c>FUN_140359d90</c>): a cage holding a character resolves the task's target to that character, so it books
+    /// code 7 against the captive's slave owner faction (a captive that is no slave books nothing, as <see cref="CrimeSystem.SetPending"/> refuses a faction that does not exist; the original
+    /// books it against a null faction, <b>Unknown</b>); a self-pick is the same case. Any other fixture owned by another faction is Burglary (2) against its owner.
     /// </summary>
     static void Crime(World world, int picker, CharacterCold c, Fixture target, CrimeSystem? crimes)
     {
-        if (crimes is null || target.Owner < 0) return;
+        if (crimes is null) return;
         var table = world.Characters;
-        bool captive = target.Kind == FixtureKind.Cage && !FixtureRegistry.IsFree(table, target) && target.Occupant != table.IdOf(picker);
-        if (captive) crimes.SetPending(world, picker, CrimeCode.Terrorism, target.Owner, target.Occupant, CrimeSystem.MinTimer);
-        else if (target.Owner != c.Faction) crimes.SetPending(world, picker, CrimeCode.Burglary, target.Owner, CharacterId.None, CrimeSystem.MinTimer);
+        bool captive = target.Kind == FixtureKind.Cage && !FixtureRegistry.IsFree(table, target);
+        if (captive)
+        {
+            if (table.TryResolveNext(target.Occupant, out int o) && table.Cold(o) is { SlaveOwner: >= 0 } oc)
+                crimes.SetPending(world, picker, CrimeCode.Terrorism, oc.SlaveOwner, target.Occupant, CrimeSystem.MinTimer);
+        }
+        else if (target.Owner >= 0 && target.Owner != c.Faction) crimes.SetPending(world, picker, CrimeCode.Burglary, target.Owner, CharacterId.None, CrimeSystem.MinTimer);
     }
 }

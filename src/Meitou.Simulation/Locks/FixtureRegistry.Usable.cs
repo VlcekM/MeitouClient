@@ -24,7 +24,7 @@ public sealed partial class FixtureRegistry
     public bool IsInside(Fixture f) => f.Id != f.Building || nested.Contains(f.Building);
 
     /// <summary>Whether a building is open to the public (the original's <c>Building::isPublic</c> <c>+0xc8</c>, <b>Observed</b>): as the player set it, else as its state reads, else public.</summary>
-    public bool IsPublic(string building) => PublicOf(building) ?? (levelPublic.TryGetValue(building, out bool open) ? open : true);
+    public bool IsPublic(string building) => PublicFlagOf(building) ?? (levelPublic.TryGetValue(building, out bool open) ? open : true);
 
     /// <summary>The town a fixture's building stands in (<c>FUN_1400f6c20</c>): its site, else the town whose radius holds it.</summary>
     CampaignTown TownOfFixture(World world, Fixture f) =>
@@ -42,6 +42,17 @@ public sealed partial class FixtureRegistry
     /// </summary>
     public Func<Fixture, bool> CageCandidates(World world, PopulationData data, CharacterCold carrier, Vector3 at)
     {
+        var inReach = TownCandidates(world, data, carrier, at);
+        return f => f.Nest && f.Owner == carrier.Faction || inReach(f.Position);
+    }
+
+    /// <summary>
+    /// The building gatherer's town rule (<c>FUN_1408cbea0</c> -> <c>FUN_140a00690</c>, <b>Verified</b>) as a test on a position: within <see cref="TownReach"/> x the radius of the town the character stands in, else of its
+    /// faction's nearest, or of its squad's home town; membership is by the spatial query, not the building's own town, so an outpost's storages count by where they stand. Every position when it has no town at all.
+    /// Used by the cage finders and the material finder (<c>FUN_14059d000</c>, mask <c>0x4002436</c>).
+    /// </summary>
+    public Func<Vector3, bool> TownCandidates(World world, PopulationData data, CharacterCold carrier, Vector3 at)
+    {
         usableData ??= data;
         var town = AiSystem.TownAt(data, world, at);
         if (town.IsNone) town = NearestTownOf(world, data, carrier.Faction, at);
@@ -53,13 +64,16 @@ public sealed partial class FixtureRegistry
         var (homeCentre, homeReach) = home.IsNone ? default : Reach(world, data, home);
         if (town.Site >= 0) RegisterSite(world, data, town.Site);
         if (home.Site >= 0) RegisterSite(world, data, home.Site);
-        return f =>
+        return position =>
         {
-            if (f.Nest && f.Owner == faction) return true;
-            var p = new Vector2(f.Position.X, f.Position.Z);
+            var p = new Vector2(position.X, position.Z);
             return Vector2.DistanceSquared(p, centre) <= reach * reach || !home.IsNone && Vector2.DistanceSquared(p, homeCentre) <= homeReach * homeReach;
         };
     }
+
+    /// <summary>The key of the building the carrier's squad lives in, the home weight of <see cref="FindCage"/> (the ownerships' home building, <c>FUN_1407956a0</c> +0x38, <b>Verified</b>); null when none.</summary>
+    public static string? HomeOf(World world, CharacterCold carrier) =>
+        world.Squads.Find(carrier.SquadId) is { } squad ? (squad.Ai?.OwnHome ?? squad.HomeBuilding)?.Key : null;
 
     // A town's centre and TownReach x radius.
     static (Vector2 Centre, float Reach) Reach(World world, PopulationData data, CampaignTown town)
@@ -95,22 +109,24 @@ public sealed partial class FixtureRegistry
     /// else when the owner regards the squad's faction as an ally. The original also lets a carrier with a slave state use any cage, but its gatherer (<c>FUN_140a00690</c>) tests with no character
     /// and so drops these first: not modelled. Without population data only the carrier's own faction passes.
     /// </summary>
-    public bool CanUse(World world, CharacterCold carrier, Fixture f)
+    public bool CanUse(World world, CharacterCold carrier, Fixture f) => CanUse(world, carrier, f.Owner, f);
+
+    /// <summary>
+    /// The one <c>canIUseThisBuilding</c> test (<c>FUN_140621230</c>) of every function-mask building finder: <paramref name="f"/> is the building's fixture, or null for a standalone building that is no
+    /// fixture (a player's machine, with no town of its own), whose owner faction is <paramref name="owner"/>.
+    /// </summary>
+    public bool CanUse(World world, CharacterCold carrier, int owner, Fixture? f)
     {
         var squad = world.Squads.Find(carrier.SquadId);
         int faction = squad?.Faction ?? carrier.Faction;
-        if (faction < 0 || f.Owner == faction) return true;
+        if (faction < 0 || owner == faction) return true;
         if (usableData is not { } data) return false;
-        if (squad?.Ai is { CurrentClass: PackageClass.OccupyTown, Destination.IsNone: false } board && TownOfFixture(world, f) == board.Destination) return true;
-        int owner = f.Owner;
+        if (f is not null && squad?.Ai is { CurrentClass: PackageClass.OccupyTown, Destination.IsNone: false } board && TownOfFixture(world, f) == board.Destination) return true;
         var relations = data.Relations;
         bool known = owner >= 0 && relations.Contains(owner) && relations.Contains(faction);
-        if (known && relations.IsHostile(owner, faction) || f.Contents is not null) return false;
-        if (!IsInside(f))
-        {
-            if (squad is { Town: >= 0 } && f.Site == squad.Town) return true;
-        }
-        else if (IsPublic(f.Building) && faction < data.Factions.Count && !data.Factions[faction].NotReal && owner != world.Player.Faction) return true;
+        if (known && relations.IsHostile(owner, faction) || f?.Contents is not null) return false;
+        if (f is not null && !IsInside(f) && squad is { Town: >= 0 } && f.Site == squad.Town) return true;
+        if (f is not null && IsInside(f) && IsPublic(f.Building) && faction < data.Factions.Count && !data.Factions[faction].NotReal && owner != world.Player.Faction) return true;
         return known && relations.IsAlly(owner, faction);
     }
 }

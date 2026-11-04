@@ -129,7 +129,7 @@ public sealed partial class ArrestSystem
     /// <summary>A looker has seen through the disguise: event 44 when the character is wanted by the looker's faction, else blown for 250 s.</summary>
     void SeeThrough(World world, int w, int s, CharacterCold c, CharacterCold wc)
     {
-        if (c.Bounties?.Of(wc.Faction) is { Claimed: false, Amount: > 0 })
+        if (c.Bounties?.BookedFor(Crimes.Factions.Relations, wc.Faction) is { Claimed: false, Amount: > 0 })
         {
             if (!FreeGuard(world, w)) return;
             if (Talks) Spotted(world, w, s, BountySpotted);

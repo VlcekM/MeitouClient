@@ -146,7 +146,7 @@ public sealed class InputBindings
         Set(InputAction.Prospect);
         Set(InputAction.Rest, Key.L);
         Set(InputAction.PutDown, Key.K);
-        Set(InputAction.Orbit, MouseButton.Middle, Key.LeftControl, Key.RightControl);
+        Set(InputAction.Orbit, MouseButton.Middle, Key.LeftControl);
         Set(InputAction.Select, MouseButton.Left);   // the game's buttons, rebindable: orbit with the right button and select with the middle one, say
         Set(InputAction.Command, MouseButton.Right);
         Set(InputAction.ToggleFreeCamera, Key.Semicolon);

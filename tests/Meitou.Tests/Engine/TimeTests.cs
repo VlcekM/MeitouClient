@@ -69,7 +69,7 @@ public class TimeTests
         {
             var one = new SimulationClock(maxTicksPerFrame: 1_000_000);
             one.SetSpeed(speed);
-            long expected = one.Advance(total);
+            long expected = Enumerable.Repeat(SimulationClock.MaxFrameSeconds, 80).Sum(x => one.Advance(x));   // frames over the cap are cut, so the whole is 80 frames at it
             Assert.Equal((long)Math.Round(total * speed * 30), expected);
             var split = new SimulationClock(maxTicksPerFrame: 1_000_000);
             split.SetSpeed(speed);

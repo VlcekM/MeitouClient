@@ -176,6 +176,7 @@ public static class StandardSystems
         if (Has(StandardParts.Body)) { systems.Add(StandardParts.Body, new BodySystem(data.Bodies.Constants, data.BodyOptions, o.BodyTimeScale, data.Db)); systems.Add(StandardParts.Body, weather = new WeatherSystem(data.Bodies.Constants) { Db = data.Db, Buildings = o.RagdollEnvironment }); }
         Meitou.Simulation.Carrying.CarrySystem? carry = null;
         Meitou.Simulation.Kidnap.KidnapSystem? kidnap = null;
+        Meitou.Simulation.Kidnap.TownDutySystem? townDuty = null;
         Meitou.Simulation.Ragdolls.RagdollSystem? ragdolls = null;
         if (Has(StandardParts.Carry))
         {
@@ -188,7 +189,7 @@ public static class StandardSystems
             // Raiders lifting the downed and carrying them to a cage of their faction: right after the carry system, whose lift and links it uses; it adds nothing to the hash until one runs.
             if (population is not null) systems.Add(StandardParts.Carry, kidnap = new Meitou.Simulation.Kidnap.KidnapSystem(data, population, carry, o.Kidnap) { Deeds = deeds });
             // Town goals of AI squads outside the act-outs (removing downed intruders, caging them, fetching food): after the kidnapping, with the same lift; nothing in the hash until one runs.
-            if (population is not null && Has(StandardParts.Ai)) systems.Add(StandardParts.Carry, new Meitou.Simulation.Kidnap.TownDutySystem(data, population, carry));
+            if (population is not null && Has(StandardParts.Ai)) systems.Add(StandardParts.Carry, townDuty = new Meitou.Simulation.Kidnap.TownDutySystem(data, population, carry) { Deeds = deeds });
             // The zones' blood smell and the blood hunters (goal 176); nothing in the hash until a corpse has flies or someone bleeds.
             if (Has(StandardParts.Ai)) systems.Add(StandardParts.Carry, new SmellSystem(data, population));
         }
@@ -203,11 +204,13 @@ public static class StandardSystems
         Meitou.Simulation.Production.ProductionSystem? production = null;
         if (Has(StandardParts.Production)) systems.Add(StandardParts.Production, production = new Meitou.Simulation.Production.ProductionSystem(data, o.Production) { Assembly = new CharacterAssembly(data), Construction = construction, Beds = beds, Carry = carry });
         if (Has(StandardParts.Combat)) systems.Add(StandardParts.Combat, combat!);
+        float bashCycle = 0;   // the stonemine cycle the bashers swing by (Task_BashDoor), 0: no animation data
         if (Has(StandardParts.Animation))
         {
             var library = o.AnimationLibrary ?? AnimationLibrary.FromDatabase(data.Db);
             var lengths = o.AnimationLengths ?? new AnimationLengths();
-            var animation = new AnimationSystem(library, lengths, o.AnimationBlendRate ?? 4, combat);
+            var animation = new AnimationSystem(library, lengths, o.AnimationBlendRate ?? 4, combat) { Rigs = o.Ragdolls };
+            if (library.IndexOf("stonemine") is >= 0 and var mine) bashCycle = lengths.Of(library.Definitions[mine].Clip) / (library.Definitions[mine].PlaySpeed > 0 ? library.Definitions[mine].PlaySpeed : 1);
             systems.Add(StandardParts.Animation, animation);
             // Ragdolls right after the animation: they start from and pin to this tick's pose, and the whole body's position is theirs before anything later reads it.
             if (o.Ragdolls is not null) systems.Add(StandardParts.Animation, ragdolls = new Meitou.Simulation.Ragdolls.RagdollSystem(o.Ragdolls, o.RagdollEnvironment, data.BodyOptions));
@@ -241,7 +244,10 @@ public static class StandardSystems
             if (ai is not null) ai.Crimes = crime;
             // Right after it: the police act on this tick's bookings and sightings; the lock orders (picking, getting out) report their crimes to it.
             systems.Add(StandardParts.Crime, arrest = new Meitou.Simulation.Crime.ArrestSystem(crime, data.Bodies.Constants, o.Arrest) { Carry = carry, Deeds = deeds, Towns = data });
+            arrest.Captives = captives;
+            if (townDuty is not null) townDuty.Arrests = arrest;
             systems.Add(StandardParts.Crime, locks = new Meitou.Simulation.Locks.LockSystem(data.Bodies.Constants, data.BodyOptions) { Crimes = crime, DoorsCloseBehind = o.DoorsCloseBehind, Assembly = new CharacterAssembly(data), Combat = combat, CombatConstants = data.Combat.Constants });
+            if (bashCycle > 0) locks.BashClipSeconds = bashCycle;
             if (combat is not null) combat.Locks = locks;
         }
         Meitou.Simulation.Trading.TradeSystem? trade = null;
@@ -257,6 +263,8 @@ public static class StandardSystems
         if (talk is not null) (talk.Arrests, talk.Extensions) = (arrest, o.Extensions);
         if (weather is not null) weather.Talk = talk;
         if (talk is not null && aggro is not null) (aggro.Memory, talk.Aggro) = (talk.Memory, aggro);
+        if (talk is not null && ai is not null) ai.Memory = talk.Memory;
+        if (talk is not null && combat is not null) combat.Memory = talk.Memory;
         if (talk is not null && population is not null) population.Memory = talk.Memory;
         if (arrest is not null) arrest.Talk = talk;
         return new StandardSystemSet { Systems = Splice(systems, o.Extensions, data), Population = population, Movement = movement, Combat = combat, Aggro = aggro, Carry = carry, Kidnap = kidnap, Captives = captives, Crime = crime, Arrest = arrest, Locks = locks, Beds = beds, Trade = trade, Ai = ai, Construction = construction, Production = production, Ragdolls = ragdolls, Dialogue = talk };

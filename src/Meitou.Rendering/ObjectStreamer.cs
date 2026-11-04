@@ -79,6 +79,8 @@ sealed class ObjectStreamer(WorldObjects objects, ObjectMeshCache meshes) : IDis
         /// <summary>The indoor volumes of the zone's buildings (<see cref="ZoneObjects.Interiors"/>).</summary>
         /// <summary>An array, so the per-frame interior walks (camera, audio, lamps, GI) enumerate without allocating.</summary>
         public InteriorVolume[] Interiors = [];
+        /// <summary>The gateway hulls of the zone (<see cref="ZoneObjects.GateHulls"/>): only the audio's indoor ray tests them.</summary>
+        public InteriorVolume[] GateHulls = [];
     }
 
     /// <summary>Zones laid out at once.</summary>
@@ -176,6 +178,7 @@ sealed class ObjectStreamer(WorldObjects objects, ObjectMeshCache meshes) : IDis
         int had = z.Interiors.Length;
         z.Interiors = [.. z.Interiors.Where(v => v.PlacementId != instanceId)];
         if (z.Interiors.Length != had) InteriorVersion++;
+        z.GateHulls = [.. z.GateHulls.Where(v => v.PlacementId != instanceId)];
     }
 
     void EnsurePopulated(ZoneCoordinate zone)
@@ -214,6 +217,7 @@ sealed class ObjectStreamer(WorldObjects objects, ObjectMeshCache meshes) : IDis
             foreach (var item in laid.Items) z.Real.Add(Make(item, stand: false, z));
             foreach (var item in laid.Stand) z.Stand.Add(Make(item, stand: true, z));
             if (laid.Interiors.Count > 0) { z.Interiors = [.. z.Interiors, .. laid.Interiors]; InteriorVersion++; }
+            if (laid.GateHulls.Count > 0) z.GateHulls = [.. z.GateHulls, .. laid.GateHulls];
         }
     }
 
@@ -377,7 +381,7 @@ sealed class ObjectStreamer(WorldObjects objects, ObjectMeshCache meshes) : IDis
     void Add(ZoneObjects laid)
     {
         var (x0, z0) = WorldLayout.ZoneOrigin(laid.Zone);
-        var zone = new Zone { Coordinate = laid.Zone, X0 = x0, Z0 = z0, Interiors = [.. laid.Interiors] };
+        var zone = new Zone { Coordinate = laid.Zone, X0 = x0, Z0 = z0, Interiors = [.. laid.Interiors], GateHulls = [.. laid.GateHulls] };
         if (laid.Interiors.Count > 0 || zones.TryGetValue(laid.Zone, out var old) && old.Interiors.Length > 0) InteriorVersion++;
         zones[laid.Zone] = zone;
         fills.Enqueue(new Fill { Zone = zone, Laid = laid });

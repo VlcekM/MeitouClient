@@ -10,7 +10,7 @@ public sealed partial class World
     public void ApplyPausedInterfaceCommands()
     {
         if (Characters.Phase != TablePhase.Outside) throw new InvalidOperationException("interface commands require a tick boundary");
-        var due = Commands.TakeDue(Tick, c => c is OrderCommand or StopCommand or SelectCommand or OrdersCommand or RunSpeedCommand or StandUpCommand or SquadCommand or SquadAiCommand
+        var due = Commands.TakeDue(Tick, c => c is OrderCommand or StopCommand or SelectCommand or OrdersCommand or RunSpeedCommand or StandUpCommand or ManoeuvreCommand or SquadCommand or SquadAiCommand
             or SquadFormationCommand or RenameFactionCommand or SeenDiscoveriesCommand
             or Production.AddJob or Production.AddOrderJob or Production.RemoveJob or Production.MoveJob
             or Production.QueueCraft or Production.CancelCraft or Production.RepeatCrafts or Production.QueueResearch or Production.CancelResearch

@@ -118,9 +118,9 @@ static class HudTips
         lines.Add(Line("Dexterity:", StatsEnumerated.Dexterity, fighter?.DexterityMult ?? 1) with { Tip = dexterityTip });
 
         var toughnessTip = new List<(string, string)> { (Loc.Tr("Toughness XP rate:"), Loc.Tr("{1,num}x", (int)XpService.ToughnessFactor(med))) };
-        float tough = stats.Toughness * stats.Scale;
+        float tough = stats.ScaledToughness;
         if (constants is not null)
-            toughnessTip.AddRange([(Loc.Tr("Health KO point:"), Int(MedicalState.KoPoint(constants, stats.Toughness))),
+            toughnessTip.AddRange([(Loc.Tr("Health KO point:"), Int(MedicalState.KoPoint(constants, stats.ScaledToughness))),
                 (Loc.Tr("Wound degeneration speed:"), Loc.Tr("{1,num=fix,p=2}x", MedicalState.DegenerationMult(constants, tough)))]);
         if (hc is { } r) toughnessTip.Add((Loc.Tr("Damage resistance:"), Loc.Tr("{1,num}%", (int)(r.Resistance * 100))));
         lines.Add(new HudStatLine("Toughness:", stats.Toughness, stats.Toughness) { Tip = toughnessTip });
@@ -153,7 +153,7 @@ static class HudTips
     {
         float e = cold.Fighter?.EncumbranceFactor ?? 1;
         var factors = (cold.Fighter?.Factors ?? StatFactors.None) with { Stun = med.DustStatFactor };
-        float t = stats.Toughness * stats.Scale * 0.01f;
+        float t = stats.ScaledToughness * 0.01f;
         static float Lerp(float t, float a, float b) => (b - a) * t + a;
         var strength = new List<StatReadout>();
         if (constants is not null)
@@ -171,7 +171,7 @@ static class HudTips
         if (constants is not null)
         {
             toughness.Add(new("Knockout time:", Loc.Tr("{1,num=fix,p=2}", Lerp(t, constants.KnockoutMult1, constants.KnockoutMult99)) + "x"));
-            toughness.Add(new("Knockout point:", Int(MedicalState.KoPoint(constants, stats.Toughness)), Main: true));
+            toughness.Add(new("Knockout point:", Int(MedicalState.KoPoint(constants, stats.ScaledToughness)), Main: true));
             toughness.Add(new("Wound deterioration speed:", Loc.Tr("{1,num=fix,p=2}", Lerp(t, constants.DegenerationMult1, constants.DegenerationMult99)) + "x"));
         }
         if (cold.Extended is { } r)

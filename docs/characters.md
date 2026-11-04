@@ -212,6 +212,9 @@ both. Lines are trimmed, blank ones skipped; each file is optional. An empty lis
 name). 135 of 639 merged CHARACTERs are `named`, among them most start-squad members (Wanderer, Nobody, start slave; not Citizen, Exile).
 Meitou: `NamePool`, rolled at spawn (`PopulationSystem.SpawnName`, `RngPurpose.Name`) from the world seed, which a new game from the menu rolls afresh
 (`--seed` keeps one), so the start squad's names differ from game to game as the original's; files read from the install, not mods.
+**Verified** (`FUN_14062b210` end): once the character is set up, a name holding a `/` goes through the dialogue text expansion and censorship
+(`FUN_14067e8b0`, [dialogue tokens](game/dialogue.md#tokens)) with the character's own dialogue and no target, so a word swap's line replaces the token
+(UWE names CHARACTERs "Trader /GENNAME/" with a GENNAME WORD_SWAPS of first names). Meitou: `DialogueSystem.ExpandName` at spawn.
 
 ## Character editor
 
@@ -268,7 +271,7 @@ exe decompile unless marked; Meitou: `CharacterDraft` (data), `EditCharacter` / 
   (`FUN_14007f040`), then face poses; the rest stays. Draws as in [Original random sequence](#assembly-and-generation). RESET ALL = the appearance template's defaults (hair, beard,
   colours, `Posture`, idle stance `idle_stand_normal`; slider values **Unknown**, Meitou: XML mid, poses 0, Posture 20); CLOTHES toggles worn
   clothing in the preview; IMPORT/EXPORT: see [below](#import-and-export). CONFIRM asks first when some
-  characters were never shown, closes, unpauses at speed 1; it charges nothing. No cancel widget; Esc opens the game menu over the editor
+  characters were never shown, closes, unpauses and sets the speed to Normal (`FUN_1405e9f40`, **Verified**; the generic editor confirm, so surgery too); it charges nothing. No cancel widget; Esc opens the game menu over the editor
   (**Observed**, vanilla play; Meitou does so in both modes).
 - **Race and gender switches** (`FUN_1405ef390`, `FUN_1405eadc0`, **Observed**): each character keeps a look per (race, gender); a switch stores
   the current look under the old pair and loads the new pair's, keeping the idle stance. **Verified** (decompilation, `FUN_1405f03c0`): when the

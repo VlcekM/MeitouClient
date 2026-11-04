@@ -252,8 +252,8 @@ public sealed class BedSystem(PopulationData data, BedSettings? settings = null)
     {
         var table = world.Characters;
         for (int i = 0; i < table.HighWater; i++)
-            if (table.Next[i].Alive && table.Next[i].Task != (byte)CharacterTask.Sleep && table.Cold(i) is { InSomething: HeldState.Bed })
-                world.Fixtures.LeaveBed(world, table.IdOf(i));
+            if (table.Next[i].Alive && table.Next[i].Task != (byte)CharacterTask.Sleep && table.Cold(i) is { InSomething: HeldState.Bed } sleeper)
+                world.Fixtures.GetOutOfBed(world, table.IdOf(i));
     }
 
     /// <summary>One tick of a trip; false when it is over (in bed, laid in, refused, given up, or another order).</summary>
@@ -265,9 +265,9 @@ public sealed class BedSystem(PopulationData data, BedSettings? settings = null)
         if (carrying ? c.Carrying != t.Body : c.InSomething != HeldState.None) return false;
         ref var n = ref table.Next[s];
         var bed = world.Fixtures.Find(t.Bed);
-        if (bed is null || !FixtureRegistry.IsFree(table, bed))
+        if (bed is null || !carrying && !FixtureRegistry.IsFree(table, bed))
         {
-            if (t.Fixed || world.Fixtures.FindBed(world, s, data.Relations, f => Reserved(f, t.Character)) is not { } other)
+            if (t.Fixed || carrying || world.Fixtures.FindBed(world, s, data.Relations, f => Reserved(f, t.Character)) is not { } other)
             {
                 if (c.IsPlayer) world.Post(carrying ? $"{c.Name}: no free bed nearby" : $"{c.Name}: the bed is taken");
                 if (!carrying) TaskStart.Stand(table, s);
@@ -294,6 +294,7 @@ public sealed class BedSystem(PopulationData data, BedSettings? settings = null)
             if (++t.Tries > Settings.Walks)
             {
                 world.Fixtures.MarkUnreachable(world, bed, c.Faction);
+                FixtureRegistry.MarkBadNode(world, bed, n.Position);
                 if (c.IsPlayer) world.Post($"{c.Name} cannot get to the bed");
                 if (!carrying) TaskStart.Stand(table, s);
                 return false;
@@ -304,10 +305,21 @@ public sealed class BedSystem(PopulationData data, BedSettings? settings = null)
         return true;
     }
 
-    /// <summary>The walker at its bed: the rent, then in (the original's <c>Task_UseBed</c> start <c>FUN_140357d00</c>). False: the trip is over either way.</summary>
+    /// <summary>
+    /// The walker at its bed: the rent, then in (the original's <c>Task_UseBed</c> start <c>FUN_140357d00</c>). A bed whose machine draws power and gets none refuses (<c>FUN_140357ad0</c> with
+    /// the power test <c>FUN_140299370</c>, <b>Verified</b>; only a bed the player built has a machine, and no base-game bed draws power): the task ends and the player hears "This bed needs power to operate.".
+    /// False: the trip is over either way.
+    /// </summary>
     bool LieIn(World world, int s, CharacterCold c, Fixture bed)
     {
         var table = world.Characters;
+        if (world.Machines.Find(bed.Building) is { Data.IsConsumer: true, HasPower: false })
+        {
+            if (c.IsPlayer) world.Post(Loc.Tr("This bed needs power to operate."));
+            TaskStart.Stand(table, s);
+            return false;
+        }
+
         if (!Pay(world, s, bed, Cost(world, bed, c.Faction)) || !world.Fixtures.EnterBed(world, table.IdOf(s), bed)) TaskStart.Stand(table, s);
         return false;
     }
@@ -319,6 +331,12 @@ public sealed class BedSystem(PopulationData data, BedSettings? settings = null)
     {
         var table = world.Characters;
         if (!table.TryResolveNext(body, out int b) || table.Cold(b) is not { } bc) return false;
+        if (!FixtureRegistry.IsFree(table, bed))
+        {
+            if (c.IsPlayer) world.Post($"{c.Name}: no free bed nearby");
+            return false;
+        }
+
         int cost = Cost(world, bed, c.Faction);
         if (cost != 0 && Cost(world, bed, bc.Faction) is var own and >= 0 && own < cost) cost = own;
         if (!Pay(world, s, bed, cost)) return false;
@@ -347,10 +365,13 @@ public sealed class BedSystem(PopulationData data, BedSettings? settings = null)
         if (owner < data.Factions.Count && data.Factions[owner].FundamentalType == FundamentalType.Bandit) return 0;
         if (bed.Site >= 0 && bed.Site < data.Sites.Count && data.Sites[bed.Site].Town.Type is TownType.Nest or TownType.Ruins or TownType.PointOfInterest) return 0;
         if (!MayUse(world, bed, faction)) return -1;
-        Squad? residents = null;
-        foreach (var squad in world.Squads.All)
-            if ((squad.Ai?.OwnHome ?? squad.HomeBuilding)?.Key == bed.Building) { residents = squad; break; }
-        if (residents is null || data.Db.Find(residents.TemplateId) is not { } template || !template.GetBool("public beds") && template.GetInt("building designation") != BarDesignation) return -1;
+        // The building's record: the template of the last squad assigned to it and the designation it was given first (FUN_140330ab0 reads the house, not its residents); a building with no record falls back to its residents (docs/game/locks.md).
+        var record = world.Fixtures.RecordOf(bed.Building);
+        string? templateId = record?.Template;
+        if (templateId is null)
+            foreach (var squad in world.Squads.All)
+                if ((squad.Ai?.OwnHome ?? squad.HomeBuilding)?.Key == bed.Building) { templateId = squad.TemplateId; break; }
+        if (templateId is null || data.Db.Find(templateId) is not { } template || !template.GetBool("public beds") && (record?.Designation ?? template.GetInt("building designation")) != BarDesignation) return -1;
         int cost = template.GetInt("bed usage cost");
         if (bed.Bed.Function == Meitou.Data.World.TownBuildings.SkeletonBedFunction) cost *= 4;
         return Math.Max(cost, 0);
@@ -366,7 +387,7 @@ public sealed class BedSystem(PopulationData data, BedSettings? settings = null)
         int owner = bed.Owner;
         if (faction < 0) return true;
         if (data.Relations.Contains(owner) && data.Relations.Contains(faction) && data.Relations.IsHostile(faction, owner)) return false;
-        return world.Fixtures.PublicOf(bed.Building) != false && !(faction < data.Factions.Count && data.Factions[faction].NotReal);
+        return world.Fixtures.PublicFlagOf(bed.Building) != false && !(faction < data.Factions.Count && data.Factions[faction].NotReal);
     }
 
     internal BuildingDetail? DetailOf(World world, string? instance)
@@ -409,7 +430,7 @@ public sealed class BedSystem(PopulationData data, BedSettings? settings = null)
 
     /// <summary>
     /// The job 106 "Find and put in bed" (<c>FUN_1405a0d50</c>, docs/game/carry-loot.md 3.2) as the decision step's contributor (step 5): a player character carrying a body whose faction is not
-    /// hostile to its own and that is no animal lays it in the bed the bed search finds (<b>engine choice</b>: the original's 106 has no target finder of its own). It runs while its walk does.
+    /// hostile to its own and that is no animal lays it in the bed the bed search finds (row 106 registers the bed search <c>FUN_1408cfe00</c> as its finder, <b>Verified</b>). It runs while its walk does.
     /// </summary>
     public void RegisterSources(DecisionSystem decisions) => decisions.RegisterJob(TaskType.FIND_BED_AND_PUT_IN, new PutInJob(this));
 
@@ -437,7 +458,23 @@ public sealed class BedSystem(PopulationData data, BedSettings? settings = null)
         if (Carry is null || table.Cold(slot) is not { Carrying.IsNone: false } c || !CanWalk(c) || trips.Exists(t => t.Character == table.IdOf(slot))) return null;
         if (!table.TryResolveNext(c.Carrying, out int b) || table.Cold(b) is not { } bc || bc.Fighter is { IsAnimal: true }) return null;
         if (data.Relations.Contains(bc.Faction) && data.Relations.Contains(c.Faction) && data.Relations.IsHostile(bc.Faction, c.Faction)) return null;
+        if (!WantsToPutIn(world, slot, c, b, bc)) return null;
         return world.Fixtures.FindBed(world, slot, data.Relations, f => Reserved(f, table.IdOf(slot)));
+    }
+
+    /// <summary>
+    /// The rest of the desire of goal 106 (<c>FUN_1405a0d50</c>, <b>Verified</b>): the carrier regards the body as friendly, its squad's memory of the body holds no grudge tag, and a police-like carrier
+    /// is owed no bounty by the body.
+    /// </summary>
+    static bool WantsToPutIn(World world, int slot, CharacterCold c, int body, CharacterCold bc)
+    {
+        if (world.SystemOf<Dialogue.DialogueSystem>() is { } dialogue)
+        {
+            if (!dialogue.RegardsFriendly(world, slot, body)) return false;
+            if (dialogue.Memory.Find(world, c.SquadId, world.Characters.IdOf(body)) is { } known
+                && ((known.Long & Dialogue.MemoryTag.GrudgeLongMask) != 0 || (known.Short & Dialogue.MemoryTag.GrudgeShortMask) != 0)) return false;
+        }
+        return !(world.SystemOf<Crime.CrimeSystem>()?.IsPoliceLike(world, c) == true && bc.Bounties?.AmountFor(c.Faction) > 0);
     }
 
     public void Hash(ref StateHasher hasher)

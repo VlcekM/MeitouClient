@@ -393,7 +393,7 @@ sealed partial class GameHost
         if (characters is not null) Console.WriteLine($"metal     crowd ready ({characters.Assets} appearances)");
         else if (scene.Database is { } characterDb && !g.NoPopulation)
         {
-            characters = new CharacterRenderer(ctx, install, characterDb, assets, characterRigs) { Source = FillWorldDrawList, SettleFirst = true, LoadBudget = 0, GeneratedLod = o.CharacterLod, SkinShading = o.SkinShading, SkinRaces = config.SkinRaces, EnhancedIcons = o.MeitouIcons, PoseClock = () => realTime.Elapsed.TotalSeconds };
+            characters = new CharacterRenderer(ctx, install, characterDb, assets, characterRigs) { DrawDistance = GameplaySettings.NpcRange(install), Source = FillWorldDrawList, SettleFirst = true, LoadBudget = 0, GeneratedLod = o.CharacterLod, SkinShading = o.SkinShading, SkinRaces = config.SkinRaces, EnhancedIcons = o.MeitouIcons, PoseClock = () => realTime.Elapsed.TotalSeconds };
             worldGpu.Characters = characters;
             Console.WriteLine("metal     characters ready (population draw list)");
         }
@@ -511,6 +511,13 @@ sealed partial class GameHost
         ApplyCameraRotateSpeed(config.CameraRotateSpeed);
         config.EdgeScroll ??= Meitou.Audio.AudioSystem.Setting(install, "Edge scrolling", 1) != 0;
         config.Tutorials ??= Meitou.Audio.AudioSystem.Setting(install, "tutorials", 1) != 0;
+        config.SeedCamera(install);
+        config.ApplyCamera(session.Camera.Settings);
+        KeyMap.SwapButtons = config.SwapMouseButtons == true;
+        hud?.FontSize = config.FontSize ?? Meitou.Data.Ui.KenshiFontSize.DefaultSetting;
+        config.MovementMarker ??= Meitou.Audio.AudioSystem.Setting(install, "Movement marker", 1) != 0;
+        config.RotationMarker ??= Meitou.Audio.AudioSystem.Setting(install, "Rotation marker", 1) != 0;
+        if (hud is not null) (hud.MovementMarker, hud.RotationMarker) = (config.MovementMarker == true, config.RotationMarker == true);
         tutorials ??= new TutorialManager(Path.Combine(Directory.GetCurrentDirectory(), TutorialManager.FileName));
         tutorials.Enabled = config.Tutorials == true;
         hud?.ConfigureTutorials(tutorials);
@@ -528,7 +535,7 @@ sealed partial class GameHost
                 UpscalerStatus = UpscalerStatusText,
                 GameplayChanged = ApplyGameplay,
                 ModSettings = () => mods?.Settings ?? [],
-                AttackSlotsChanged = slots => { foreach (var combat in session.World.Systems.OfType<Meitou.Simulation.Combat.CombatSystem>()) combat.AttackSlots = slots; },
+                AttackSlotsChanged = slots => { foreach (var combat in session.World.Systems.OfType<Meitou.Simulation.Combat.CombatSystem>()) combat.UseAttackSlots(slots); },
                 LateDefencesChanged = on => { foreach (var combat in session.World.Systems.OfType<Meitou.Simulation.Combat.CombatSystem>()) combat.LateDefences = on; },
                 DoorsCloseChanged = on => { foreach (var locks in session.World.Systems.OfType<Meitou.Simulation.Locks.LockSystem>()) locks.DoorsCloseBehind = on; },
                 BenchFacingChanged = on => session.World.BenchFacingFix = on,
@@ -542,6 +549,7 @@ sealed partial class GameHost
                     foreach (var production in session.World.Systems.OfType<Meitou.Simulation.Production.ProductionSystem>()) production.UnloadedProduction = config.UnloadedProduction;
                 },
                 CameraRotateSpeedChanged = ApplyCameraRotateSpeed,
+                CameraChanged = () => config.ApplyCamera(session.Camera.Settings),
                 AudioChanged = AudioSettingsChanged,
             };
             // The saved graphics values are the same keys the Vulkan panel uses. The Metal display choices have their own
@@ -1193,6 +1201,7 @@ sealed partial class GameHost
                 if (!tourHolds && hud is not null) ApplyTitleCamera();
                 // A flight puts the focus where it lands, so the towns there populate during the flight; otherwise the
                 // followed character's pivot is already in the rig.
+                viewAspect = window.Size.X / (float)Math.Max(window.Size.Y, 1);
                 SendFocus(tour.Active && tour.Current is { } tourLanding && TourPosition(tourLanding) is { } tourAt ? tourAt
                     : tourHolds ? camera.Target : null);
                 // The strategy camera's eye clearance for the followed character and the tour's arcs over hills.

@@ -184,7 +184,10 @@ sealed partial class PlayerInterface
     (string, Action) InventoryVerb(CharacterSnapshot target)
     {
         var id = target.Id;
-        return (target.IsPlayer ? "Trade" : "Loot", () => Say(new Meitou.Simulation.Carrying.OpenLootOrder([], id) { Tick = session.World.Tick }));
+        void Open() => Say(new Meitou.Simulation.Carrying.OpenLootOrder([], id) { Tick = session.World.Tick });
+        // With Shift the verb is an order on the target like any other: Trade on an own character (a character hand, not a building) falls through to the TaskData lookup of order 26, so it adds the
+        // Foraging animals job like Loot does (FUN_1407fa650, Verified), not the window.
+        return (target.IsPlayer ? "Trade" : "Loot", () => OrderOrJob(Meitou.Data.Gameplay.Ai.TaskType.LOOT_TARGET, id, Open));
     }
 
     /// <summary>
@@ -218,6 +221,8 @@ sealed partial class PlayerInterface
             if (target.CanOpenInventory) verbs.Add(InventoryVerb(target));
             if (!target.CarriedBy.IsNone) return;   // no pick-up verb or Throw out of home for a carried body
             verbs.Add(PickUpVerb(target));
+            if (target.StealthKoChance is { } downChance)   // 228 on a down character too (FUN_1407a6bc0:583-594)
+                verbs.Add((WithChance("Stealth KO", downChance), () => Say(new Meitou.Simulation.Carrying.StealthKoOrder(selection, id) { Tick = session.World.Tick })));
             ThrowOutVerb(verbs, target, selection);
             return;
         }
@@ -230,7 +235,7 @@ sealed partial class PlayerInterface
             if (target.StealthKoChance is { } koChance)
                 verbs.Add((WithChance("Stealth KO", koChance), () => Say(new Meitou.Simulation.Carrying.StealthKoOrder(selection, id) { Tick = session.World.Tick })));
             if (Hostile(target)) return;
-            verbs.Add(("Attack Unprovoked", () => Say(new Meitou.Simulation.Combat.AttackOrder(selection, id) { Tick = session.World.Tick, Picked = true })));
+            verbs.Add(("Attack Unprovoked", () => Say(new Meitou.Simulation.Combat.AttackOrder(selection, id) { Tick = session.World.Tick, Picked = true, Unprovoked = true })));
             verbs.Add(("Bodyguard", () => Say(new FollowOrder(selection, id) { Guard = true, Tick = session.World.Tick })));
             if (session.World.CanTalk(id, selection[0])) verbs.Add(("Talk To", () => Say(new Meitou.Simulation.Dialogue.TalkOrder(selection[0], id) { Tick = session.World.Tick })));
             return;
@@ -255,9 +260,11 @@ sealed partial class PlayerInterface
             verbs.Add(("Attack Target", () => Say(new Meitou.Simulation.Combat.AttackOrder(selection, id) { Tick = session.World.Tick, Picked = true, Defensive = target.FightsPlayer })));
             return;
         }
-        verbs.Add(("Attack Unprovoked", () => Say(new Meitou.Simulation.Combat.AttackOrder(selection, id) { Tick = session.World.Tick, Picked = true })));
+        verbs.Add(("Attack Unprovoked", () => Say(new Meitou.Simulation.Combat.AttackOrder(selection, id) { Tick = session.World.Tick, Picked = true, Unprovoked = true })));
         verbs.Add(("Bodyguard", () => Say(new FollowOrder(selection, id) { Guard = true, Tick = session.World.Tick })));
         verbs.Add(("Follow", () => Say(new FollowOrder(selection, id) { Tick = session.World.Tick })));
+        if (!target.IsDiplomat && Selected().LastOrDefault() is { } lead && session.World.VerbFactsOf(lead.Id, id) is { RegardsLead: true })
+            verbs.Add(("Pick Up", () => Say(new Meitou.Simulation.Carrying.PickUpOrder([], id) { Tick = session.World.Tick })));   // a plain 225 here: never Kidnap (FUN_1407a6bc0)
     }
 
     /// <summary>How far from the clicked enemy Attack All looks for the others (an engine choice: the original's order 16 is "Attacking enemies", whose reach is <b>Unknown</b>).</summary>

@@ -47,7 +47,7 @@ public sealed partial class CarrySystem
     /// The kidnap's roll on arrival (<c>Task_Kidnapping</c> vfunc 1, <b>Observed</b>); true when the lift goes on. First the victim's squad tags the kidnapper TEMP_ENEMY and the
     /// kidnapping becomes a pending crime on it. A hit (roll &lt;= chance) knocks an awake victim out (<see cref="KidnapKoMin"/>..<see cref="KidnapKoMax"/>) and trains assassination by 100.
     /// A miss: the victim's town alarm is raised at the kidnapper; its squad remembers it (long-term intruder) and says event 8 to it; assassination trains by 300; a sleeping victim
-    /// wakes and goes for the kidnapper. Engine: the original's perception mark and the kidnapper's field +0x110 = 250 (<b>Unknown</b>) are not modelled.
+    /// wakes and goes for the kidnapper. The victim notices the kidnapper for 5 s (<see cref="AggroSystem.Alarm"/>). Engine: the kidnapper's field +0x110 = 250 (<b>Unknown</b>) are not modelled.
     /// </summary>
     bool Kidnap(World world, CharacterTable table, int i)
     {
@@ -86,9 +86,9 @@ public sealed partial class CarrySystem
         if (table.Cold(i) is { } kidnapper) kidnapper.RecentlyWanted = Crime.CrimeSystem.RecentlyWantedSeconds;
         if (talk is not null && victim.SquadId >= 0) talk.Memory.Remember(world, victim.SquadId, kidnapperId, Dialogue.MemoryTag.Intruder);
         world.Defer(new Dialogue.DialogueEvent(victimId, kidnapperId, 8) { Tick = world.Tick + 1 });
-        // A player character is told of the kidnapper (the forced sense every victim gets, FUN_140858f40) and the step decides what it does (CarrySystem.Engage).
+        // Every victim notices the kidnapper for 5 s: the forced sense with the alarm flag (FUN_14034ffa0:73 -> FUN_140858f40, entry seen flag set, timer +0x3c = 5), then the step decides what a player character does (CarrySystem.Engage).
         bool decides = DecisionSystem.Decides(victim);
-        if (decides && !asleep) Aggro?.Force(world, b, i);
+        Aggro?.Alarm(world, victimId, kidnapperId);
         if (asleep)
         {
             if (victim.InSomething == Locks.HeldState.Bed) world.Fixtures.LeaveBed(world, victimId);

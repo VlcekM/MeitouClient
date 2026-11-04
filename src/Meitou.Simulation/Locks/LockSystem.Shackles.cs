@@ -27,7 +27,7 @@ public sealed partial class LockSystem
     /// <summary>A worker beside the wearer works within this distance (engine: a cage's use range).</summary>
     public const float ShackleReach = 25;
     /// <summary>Dialogue events 13 (EV_UNLOCK_MY_CAGE_OR_SHACKLES) and 46 (EV_PRISONER_FREE_TO_GO).</summary>
-    const int UnlockMyCageOrShackles = 13, PrisonerFreeToGo = 46;
+    const int UnlockMyCageOrShackles = 13, UnlockMyCageAttempt = 14, PrisonerFreeToGo = 46;
 
     /// <summary>The worn locked shackles of a character (null: none).</summary>
     public static Items.ItemInstance? WornShackles(CharacterCold? c) => c?.Inventory?.Items.FirstOrDefault(i => i.LockedOn);
@@ -153,7 +153,7 @@ public sealed partial class LockSystem
                     {
                         case PickOutcome.Open: c.Shackles = null; break;
                         case PickOutcome.Success: c.Shackles = null; Freed(world, s, c, job.Wearer, "Pick success!"); break;
-                        case PickOutcome.Failed: if (c.IsPlayer) world.Post($"{c.Name}: Pick failed"); break;
+                        case PickOutcome.Failed: if (c.IsPlayer) world.Post($"{c.Name}: Pick failed"); FailedPick(world, s, job.Wearer); break;
                         case PickOutcome.NotAllowed: c.Shackles = null; if (c.IsPlayer) world.Post($"{c.Name}: I'm not skilled enough..."); break;
                     }
                     break;
@@ -163,11 +163,29 @@ public sealed partial class LockSystem
                     break;
                 case ShackleWork.Break:
                     c.Shackles = null;
-                    if (Picking.BreakShackles(world, s, job.Wearer, item, Crimes)) Freed(world, s, c, job.Wearer, "*Crunck*");
+                    if (Picking.BreakShackles(world, s, job.Wearer, item, Crimes)) BruteForced(world, s, c, job.Wearer);
                     else if (c.IsPlayer) world.Post($"{c.Name}: I'm not strong enough to do that");
                     break;
             }
         }
+    }
+
+    /// <summary>A failed lockpick roll on shackles: the wearer says event 14 to the picker (Task_PickLock, FUN_140359160; no player-only test).</summary>
+    static void FailedPick(World world, int s, CharacterId wearer)
+    {
+        var worker = world.Characters.IdOf(s);
+        if (!wearer.IsNone && wearer != worker) world.Defer(new Dialogue.DialogueEvent(wearer, worker, UnlockMyCageAttempt) { Tick = world.Tick + 1 });
+    }
+
+    /// <summary>
+    /// A lock or shackles broken by strength (Task_BruteForceLock / Shackles update <c>FUN_140352c50</c>, <b>Verified</b>): the sound, the log line "Shackles broken!" and the floating "*Crunck*"
+    /// (both, whatever the lock), and the freed character (a cage's occupant, the shackles' wearer) thanks the breaker like any other release.
+    /// </summary>
+    static void BruteForced(World world, int s, CharacterCold c, CharacterId freed)
+    {
+        world.EmitSound(SoundKind.Unlocked, s, world.Characters.Next[s].Position);
+        if (c.IsPlayer) { world.Post($"{c.Name}: Shackles broken!"); world.Post($"{c.Name}: *Crunck*"); }
+        Thank(world, world.Characters.IdOf(s), freed);
     }
 
     static void Freed(World world, int s, CharacterCold c, CharacterId wearer, string message)
@@ -175,8 +193,12 @@ public sealed partial class LockSystem
         world.EmitSound(SoundKind.Unlocked, s, world.Characters.Next[s].Position);
         if (c.IsPlayer) world.Post($"{c.Name}: {message}");
         // An NPC freed by a player character thanks it (EV_UNLOCK_MY_CAGE_OR_SHACKLES, as for a player releasing a prisoner, economy.md 11.5).
-        var worker = world.Characters.IdOf(s);
-        if (c.IsPlayer && wearer != worker && world.Characters.TryResolveNext(wearer, out int w) && world.Characters.Cold(w) is { IsPlayer: false })
-            world.Defer(new Dialogue.DialogueEvent(wearer, worker, UnlockMyCageOrShackles) { Tick = world.Tick + 1 });
+        if (c.IsPlayer) Thank(world, world.Characters.IdOf(s), wearer);
+    }
+
+    static void Thank(World world, CharacterId worker, CharacterId freed)
+    {
+        if (freed != worker && world.Characters.TryResolveNext(freed, out int w) && world.Characters.Cold(w) is { IsPlayer: false })
+            world.Defer(new Dialogue.DialogueEvent(freed, worker, UnlockMyCageOrShackles) { Tick = world.Tick + 1 });
     }
 }

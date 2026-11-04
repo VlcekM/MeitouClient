@@ -27,7 +27,7 @@ public sealed partial class CarrySystem
         if (world.SystemOf<PopulationSystem>() is not { } population) return;
         var memory = world.SystemOf<DialogueSystem>()?.Memory;
         int every = world.Every(Settings.AutoEveryTicks);
-        HashSet<int>? taken = null;
+        SquadGoals? goals = null;
         List<int>? bodies = null;
         Span<int> duty = stackalloc int[5];
         foreach (var squad in world.Squads.All)
@@ -40,12 +40,12 @@ public sealed partial class CarrySystem
                 int role = (int)Ai.AiSystem.RoleOf(squad, member, cold);
                 if (duty[role] < 0) duty[role] = population.GoalDuty(world, squad, (AiRole)role, TaskType.LOOT_THE_DEAD) ? 1 : 0;
                 if (duty[role] == 0) continue;
-                taken ??= Looting(table);
+                goals ??= SquadGoals.Of(world);
                 bodies ??= LootableBodies(table);
                 if (!TaskStart.Eligible(world, cold, TaskType.LOOT_THE_DEAD)) continue;
-                int target = LootTarget(world, table, slot, cold, taken, bodies, memory);
+                int target = LootTarget(world, table, slot, cold, goals, bodies, memory);
                 if (target < 0) continue;
-                taken.Add(target);
+                goals.Add(cold.SquadId, table.IdOf(slot), GoalTarget.Of(table.IdOf(target)));
                 var task = (CharacterTask)table.Next[slot].Task;
                 Start(world, slot, CharacterTask.Loot, TaskType.LOOT_THE_DEAD, TaskSource.Npc, table.IdOf(target), TaskStart.Standing(cold, task));
             }
@@ -53,31 +53,40 @@ public sealed partial class CarrySystem
     }
 
     /// <summary>
-    /// Goal 177's finder (<c>FUN_14099ae10(ai, 0)</c>): within <see cref="ScavengeRange"/>, not carried, not looted by another and not tagged <see cref="MemoryTag.Looted"/> by the looter's squad;
+    /// Goal 177's finder (<c>FUN_14099ae10(ai, 0)</c>): within <see cref="ScavengeRange"/> in 3D (<c>FUN_14099ae10</c> :42, :88), not carried, not worked by a squad mate (the squad's goal list) and not tagged <see cref="MemoryTag.Looted"/> by the looter's squad;
     /// first the dead, then the downed living of factions neither its own nor allied (the kidnap finder's masks), not of the player's faction unless <see cref="PlayerState.BanditsLoot"/>,
-    /// whom <see cref="ScrewsOver"/> allows. Engine choices: the nearest of each pass (the original takes its sensed-list order); a dead body of the looter's own faction is left. -1: none.
+    /// whom <see cref="ScrewsOver"/> allows. Engine choices: the nearest of each pass (the original takes its sensed-list order); the dead pass has no faction test, so a body of the looter's own faction is looted too (Verified). -1: none.
     /// </summary>
-    int LootTarget(World world, CharacterTable table, int slot, CharacterCold cold, HashSet<int> taken, List<int> bodies, SquadMemory? memory)
+    int LootTarget(World world, CharacterTable table, int slot, CharacterCold cold, SquadGoals goals, List<int> bodies, SquadMemory? memory)
     {
         var next = table.Next;
-        var at = new Vector2(next[slot].Position.X, next[slot].Position.Z);
+        var at = next[slot].Position;
         int dead = -1, down = -1;
         float dead2 = ScavengeRange * ScavengeRange, down2 = dead2;
         foreach (int s in bodies)
         {
-            if (s == slot || !next[s].Alive || taken.Contains(s) || table.Cold(s) is not { } body || !CanBeLooted(body) || !body.CarriedBy.IsNone || body.IsImprisoned) continue;
-            float d2 = Vector2.DistanceSquared(at, new Vector2(next[s].Position.X, next[s].Position.Z));
+            if (s == slot || !next[s].Alive || goals.Working(cold.SquadId, table.IdOf(slot), GoalTarget.Of(table.IdOf(s))) > 0 || table.Cold(s) is not { } body || !CanBeLooted(body) || !body.CarriedBy.IsNone) continue;   // no imprisoned test in either pass (FUN_14099ae10): a downed prisoner in a cage is scavenged
+            float d2 = Vector3.DistanceSquared(at, next[s].Position);   // Ogre squaredDistance: full 3D, strict bound
             if (d2 > down2 && d2 > dead2) continue;
             if (memory is not null && memory.HasShort(world, cold.SquadId, table.IdOf(s), MemoryTag.Looted)) continue;
             if (body.Medical!.Dead)
             {
-                if (body.Faction != cold.Faction && d2 <= dead2 && Reachable(world, slot, s)) (dead, dead2) = (s, d2);
+                if (d2 <= dead2 && Reachable(world, slot, s)) (dead, dead2) = (s, d2);
                 continue;
             }
             if (d2 > down2 || PlayerSide(world, body) && !world.Player.BanditsLoot || !Reachable(world, slot, s) || !ScrewsOver(world, slot, cold, s, body, memory)) continue;
             (down, down2) = (s, d2);
         }
         return dead >= 0 ? dead : down;
+    }
+
+    /// <summary>The bodies the characters are lifting or looting, in the squad's goal list (<see cref="SquadGoals"/>).</summary>
+    void IGoalSource.Publish(World world, SquadGoals goals)
+    {
+        var table = world.Characters;
+        for (int i = 0; i < table.HighWater; i++)
+            if (table.Next[i].Alive && table.Next[i].Task is (byte)CharacterTask.PickUp or (byte)CharacterTask.Loot && table.Cold(i) is { CarryTarget.IsNone: false } c)
+                goals.Add(c.SquadId, table.IdOf(i), GoalTarget.Of(c.CarryTarget));
     }
 
     /// <summary>The lootable characters (carried ones too: a looter that starts may drop its load), in slot order: what <see cref="LootTarget"/> tests, collected once a pass.</summary>
@@ -102,7 +111,7 @@ public sealed partial class CarrySystem
         return world.Sight.BuildingOf(body) is not { } building || world.Sight.BuildingOf(looter) == building || world.Fixtures.HasOpenDoor(building);
     }
 
-    static bool PlayerSide(World world, CharacterCold c) => c.IsPlayer || world.Player.Faction >= 0 && c.Faction == world.Player.Faction;
+    internal static bool PlayerSide(World world, CharacterCold c) => c.IsPlayer || world.Player.Faction >= 0 && c.Faction == world.Player.Faction;
 
     /// <summary>
     /// <c>Character::shouldIScrewThisGuyOver</c> (<c>FUN_14059a7b0</c>, <b>Verified</b>), the only test of a downed body in the loot finder (no friendliness filter before it): the dialogue
@@ -231,10 +240,32 @@ public sealed partial class CarrySystem
         if (bag is not null) items.AddRange(bag.Items.Where(x => x.Type == FcsRecordType.ITEM && x.ItemFunction == FeedSystem.FoodFunction));
         if (everything)
         {
-            items.AddRange(from.Items.Where(x => x.Type is FcsRecordType.ITEM or FcsRecordType.ARMOUR && !items.Contains(x)));
+            items.AddRange(from.Items.Where(x => x.Type is FcsRecordType.ITEM or FcsRecordType.ARMOUR && !items.Contains(x) && !(x.Type == FcsRecordType.ARMOUR && x.Uniform.Length > 0)));   // a uniform piece is skipped outright (FUN_140342de0 mode 3)
             if (bag is not null) items.AddRange(bag.Items.Where(x => x.Type == FcsRecordType.ITEM && !items.Contains(x)));
         }
-        return moved + Take(looter, victim, items);
+        moved += Take(looter, victim, items);
+        if (everything) foreach (var piece in items.Where(x => x.Type == FcsRecordType.ARMOUR)) WearIfBetter(looter, piece);
+        return moved;
+    }
+
+    /// <summary>
+    /// A taken armour piece that was not worn replaces a worn non-uniform piece of its section with a lower level (<c>FUN_140342de0</c> mode 3, :128-157; the worn piece's unknown +0x2c8 term is taken as false): the old
+    /// piece goes into the looter's inventory.
+    /// </summary>
+    void WearIfBetter(CharacterCold looter, ItemInstance piece)
+    {
+        var inv = looter.Inventory!;
+        if (!inv.Items.Contains(piece) || InventoryCommands.IsEquipmentSection(piece.Section) || !InventoryCommands.IsEquipmentSection(piece.EquipmentSection)) return;
+        var worn = inv.Items.FirstOrDefault(i => i.Section == piece.EquipmentSection);
+        if (worn is null || worn.Uniform.Length > 0 || worn.LockedOn || worn.Level >= piece.Level || !piece.WearableBy(looter.Race?.StringId)) return;
+        inv.Remove(worn);
+        inv.Remove(piece);
+        if (InventoryCommands.TryEquip(inv, piece, looter) && inv.Add(worn)) { Assembly?.RefreshEquipment(looter); return; }
+        inv.Remove(piece);
+        inv.Items.Remove(worn);
+        worn.Section = piece.EquipmentSection;
+        inv.Items.Add(worn);
+        inv.Add(piece);
     }
 
     /// <summary>One of the looter's weapon sections (back, hip; not those its race closes) holds nothing.</summary>

@@ -76,11 +76,11 @@ public sealed partial class LockSystem
     }
 
     /// <summary>Whether the character's role list in its squad's running package holds one of the goals in its hours.</summary>
-    static bool Lists(Ai.Blackboard board, Squad squad, CharacterId id, CharacterCold c, int hour, Meitou.Data.Gameplay.Ai.TaskType a, Meitou.Data.Gameplay.Ai.TaskType b)
+    static bool Lists(Ai.Blackboard board, Squad squad, CharacterId id, CharacterCold c, int hour, Meitou.Data.Gameplay.Ai.TaskType a, Meitou.Data.Gameplay.Ai.TaskType b, Meitou.Data.Gameplay.Ai.TaskType other = Meitou.Data.Gameplay.Ai.TaskType.None)
     {
         var roles = board.Roles[(int)Ai.AiSystem.RoleOf(squad, id, c)];
         for (int g = 0; g < roles.Count; g++)
-            if (roles[g].Task.Type is var t && (t == a || t == b) && roles[g].InWindow(hour)) return true;
+            if (roles[g].Task.Type is var t && (t == a || t == b || t == other) && roles[g].InWindow(hour)) return true;
         return false;
     }
 
@@ -127,7 +127,7 @@ public sealed partial class LockSystem
     }
 
     /// <summary>
-    /// 256 Get out of cage (opportunistic; <c>Task_GetOutOfCage</c> with the escape flag, docs/game/ai-tasks.md "Arrest and prison rows"): an AI prisoner, awake, whose role list holds
+    /// 256 Get out of cage and 207 Escape cage (opportunistic; <c>Task_GetOutOfCage</c> with the escape flag, docs/game/ai-tasks.md "Arrest and prison rows"): an AI prisoner, awake, whose role list holds
     /// the goal in its hours, walks out as soon as its cage is not effectively locked (<see cref="FixtureRegistry.GetOut"/> refuses a locked one; it is an escape unless it is a kidnap victim, whatever the sentence).
     /// </summary>
     void OpportunisticEscapes(World world)
@@ -138,8 +138,8 @@ public sealed partial class LockSystem
         {
             if (f.Kind != FixtureKind.Cage || FixtureRegistry.IsFree(table, f) || f.Lock is { Locked: true } || !table.TryResolveNext(f.Occupant, out int s)) continue;
             if (table.Cold(s) is not { IsImprisoned: true, IsPlayer: false, Medical.Incapacitated: false, Ai: { Squad: { Ai: { } board } squad } } c) continue;
-            // 256, or 202 TOTAL_ESCAPE, whose !79 the cage rows (133 / 207 / 256) provide once the cage is unlocked.
-            if (Lists(board, squad, f.Occupant, c, hour, Meitou.Data.Gameplay.Ai.TaskType.GET_OUT_OF_CAGE_OPPORTUNISTIC, Meitou.Data.Gameplay.Ai.TaskType.TOTAL_ESCAPE))
+            // 256, 207 (Escape cage: A !79, B !54, the same task with the escape flag) or 202 TOTAL_ESCAPE, whose !79 the cage rows (133 / 207 / 256) provide once the cage is unlocked.
+            if (Lists(board, squad, f.Occupant, c, hour, Meitou.Data.Gameplay.Ai.TaskType.GET_OUT_OF_CAGE_OPPORTUNISTIC, Meitou.Data.Gameplay.Ai.TaskType.TOTAL_ESCAPE, Meitou.Data.Gameplay.Ai.TaskType.GET_OUT_OF_CAGE_ESCAPE))
                 world.Fixtures.GetOut(world, f.Occupant, Crimes);
         }
     }
@@ -185,7 +185,26 @@ public sealed partial class LockSystem
             if (!table.TryResolveNext(prisoner, out int ps) || table.Cold(ps) is not { } pc || !Conscious(pc)) continue;
             // Letting a prisoner out of another faction's cage is the crime of lifting it out (FixtureRegistry.LiftOut): a pending code 7 against the cage's owner.
             if (cage.Owner >= 0 && cage.Owner != c.Faction) Crimes?.SetPending(world, s, CrimeCode.Terrorism, cage.Owner, prisoner, CrimeSystem.MinTimer);
-            if (world.Fixtures.Release(world, prisoner, c.Faction, Crimes)) world.EmitSound(SoundKind.Unlocked, s, next[s].Position);
+            if (FreeBy(world, table.IdOf(s), c.Faction, prisoner)) world.EmitSound(SoundKind.Unlocked, s, next[s].Position);
         }
+    }
+
+    /// <summary>
+    /// The start of Task_ReleasePrisoner (<c>FUN_1403570a0</c>, Verified): the prisoner is marked freed (status <c>+0xea</c>, set unconditionally; the status update drops it outside every town, <see cref="Crime.ArrestSystem"/>),
+    /// released, then a releaser of a faction that books bounties tells it it may go (event 46 from the releaser), else a releaser of the player's faction is thanked (event 13 from the prisoner).
+    /// </summary>
+    bool FreeBy(World world, CharacterId releaser, int faction, CharacterId prisoner)
+    {
+        if (world.Characters.TryResolveNext(prisoner, out int p) && world.Characters.Cold(p) is { } pc) pc.Freed = true;
+        if (!world.Fixtures.Release(world, prisoner, faction, Crimes)) return false;
+        var talk = world.SystemOf<Dialogue.DialogueSystem>();
+        if (world.Characters.TryResolveNext(releaser, out int r) && talk is not null)
+        {
+            talk.Forgive(world, p, releaser);   // the prisoner forgives the releaser (FUN_14067aca0, both orders)
+            if (Crimes?.Factions.Books(faction) == true) talk.Forgive(world, r, prisoner);
+        }
+        if (Crimes?.Factions.Books(faction) == true) world.Defer(new Dialogue.DialogueEvent(releaser, prisoner, PrisonerFreeToGo) { Tick = world.Tick + 1 });
+        else if (faction == world.Player.Faction) world.Defer(new Dialogue.DialogueEvent(prisoner, releaser, UnlockMyCageOrShackles) { Tick = world.Tick + 1 });
+        return true;
     }
 }

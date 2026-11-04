@@ -72,15 +72,13 @@ sealed partial class PlayerInterface
     }
 
     /// <summary>
-    /// A right click on a ground item, with a selection (true): the pick-up order, or held its menu with the one verb, "Steal" for another faction's item else "Pick Up"
-    /// (<c>FUN_14079b2d0</c>; docs/game/ui-input.md "Ground item labels").
+    /// A right click on a ground item, with a selection (true): the pick-up order at once. A plain item has no inventory, so the original adds no verb and a held press shows no menu
+    /// (<c>FUN_1407a6bc0</c> adds Pick Up / Steal and Loot only for an item with an inventory; docs/game/ui-input.md "Ground item labels").
     /// </summary>
     bool GroundItemClick(Vector2 p)
     {
         if (SelectedIds().Count == 0 || PickGroundItem(p) is not { } item) return false;
-        void Quick() => Say(new Meitou.Simulation.Items.PickUpItemOrder([], item) { Tick = session.World.Tick });
-        if (session.CurrentSnapshot.GroundItems.FirstOrDefault(g => g.Id == item) is not { Name: { } name } g
-            || !ContextPressOn(p, at => Menu(name, at, [(Stealing(g) ? "Steal" : "Pick Up", Quick)]), Quick)) Quick();
+        Say(new Meitou.Simulation.Items.PickUpItemOrder([], item) { Tick = session.World.Tick, Alt = AltHeld });
         return true;
     }
 
@@ -148,6 +146,9 @@ sealed partial class PlayerInterface
     }
 
     /// <summary>Picking the item up would be stealing it: its owner's faction (<see cref="Meitou.Simulation.Items.GroundItem.OwnedBy"/>) is not the player's.</summary>
+    /// <summary>The ground item under <paramref name="pixel"/> belongs to another faction: its pointer is <c>steal</c> (<c>FUN_1407fc440</c>), and a right click without Alt only walks to it.</summary>
+    bool StealsGroundItem(Vector2 pixel) => PickGroundItem(pixel) is { } id && session.CurrentSnapshot.GroundItems.FirstOrDefault(g => g.Id == id) is { } g && Stealing(g);
+
     bool Stealing(Meitou.Simulation.Items.GroundItemSnapshot g) => g.OwnedBy >= 0 && g.OwnedBy != session.World.Player.Faction;
 
     /// <summary>Whether an ITEM record is an artifact (its <c>artifact</c> field); the host sets it.</summary>

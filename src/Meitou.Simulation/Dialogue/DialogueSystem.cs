@@ -60,6 +60,8 @@ public sealed class DialogueSettings
     public int AmbientEveryTicks { get; init; } = 30;
     public int AmbientPerScan { get; init; } = 2;
     public float AmbientRepeatHours { get; init; } = 0.5f;
+    /// <summary>Whether the displayed lines go through <see cref="Censorship"/> (the player's setting, read when a line is built).</summary>
+    public Func<bool>? Censored { get; init; }
 }
 
 /// <summary>
@@ -257,13 +259,13 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
     public const float TalkHeight = 35;
 
     /// <summary>
-    /// Whether <paramref name="talker"/> is near enough <paramref name="target"/> to talk: X/Z within the target's footprint radius + <see cref="TalkReach"/>, twice the reach once
+    /// Whether <paramref name="talker"/> is near enough <paramref name="target"/> to talk: X/Z within the target's scaled radius (footprint x body scale) + <see cref="TalkReach"/>, twice the reach once
     /// the talker has stopped, and within <see cref="TalkHeight"/> in height.
     /// </summary>
     static bool InTalkRange(CharacterTable table, int talker, int target)
     {
         var (a, b) = (table.Next[talker].Position, table.Next[target].Position);
-        float reach = Combat.CombatTuning.Footprint(table.Cold(target)) + TalkReach * ((table.Next[talker].Flags & (ushort)MoveFlags.AnyPath) == 0 ? 2 : 1);
+        float reach = Combat.CombatSteering.Radius(table.Cold(target)) + TalkReach * ((table.Next[talker].Flags & (ushort)MoveFlags.AnyPath) == 0 ? 2 : 1);
         return Vector2.Distance(new(a.X, a.Z), new(b.X, b.Z)) < reach && MathF.Abs(a.Y - b.Y) < TalkHeight;
     }
 
@@ -282,11 +284,19 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
         if (world.Characters.TryResolveNext(id, out int slot) && world.Characters.Cold(slot) is { } c) c.Engaged = false;
     }
 
+    /// <summary>The farthest the talking player character may be from the camera for a player conversation to start (<c>FUN_140684320</c>, constant 9216).</summary>
+    public const float CameraReach = 9216;
+
+    /// <summary>Whether the talker is more than <see cref="CameraReach"/> from the camera focus (no focus known: never; headless runs and tests have none).</summary>
+    bool TooFarFromCamera(CharacterTable table, CharacterId talker) =>
+        population?.Focus is { } focus && table.TryResolveNext(talker, out int p) && Vector3.Distance(table.Next[p].Position, focus) > CameraReach;
+
     /// <summary>Fires <paramref name="ev"/> at <paramref name="npc"/> with <paramref name="player"/> as its target and opens the conversation (docs/game/dialogue.md "Player conversation").</summary>
     void Start(World world, CharacterId npc, CharacterId player, int ev, bool quiet = false)
     {
         var table = world.Characters;
         if (!table.TryResolveNext(npc, out int n) || table.Cold(n) is not { } nc) return;
+        if (ev == DialogueEvents.PlayerTalkToMe && TooFarFromCamera(table, player)) return;
         var c = new Conversation { Npc = npc, Player = player, Event = ev };
         IReadOnlyList<DialogueNode> roots = interrupts.Remove(npc, out var pending) && dialogue.Node(pending) is { IsRoot: true } interrupt ? [interrupt] : SetOf(world, n).For(ev);
         var picked = Pick(world, c, roots);
@@ -345,7 +355,7 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
         c.Line = line;
         c.Speaker = speaker;
         MarkUsed(world, c, line);
-        string text = Expand(world, c, line, PickText(world, speaker, line), speaker, c.Player);
+        string text = Said(Expand(world, c, line, PickText(world, speaker, line), speaker, c.Player));
         text += MoneySuffix(line);
         c.Text = text;
         c.Log.Add($"{NameOf(world, speaker)}: {text}");
@@ -370,7 +380,8 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
                 c.Choices.Add((null, "[...]"));
                 return;
             }
-            c.Choices.Add((child, Expand(world, c, child, PickText(world, c.Player, child), c.Player, c.Npc) + MoneySuffix(child)));
+            string label = Said(Expand(world, c, child, PickText(world, c.Player, child), c.Player, c.Npc)) + MoneySuffix(child);
+            if (label.Length > 0) c.Choices.Add((child, label));   // a choice with no text and no cost is never offered (FUN_140680130)
         }
         if (c.Choices.Count == 0) c.Choices.Add((null, "[Leave]"));
     }
@@ -397,7 +408,9 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
         else
         {
             c.Choices.Clear();
-            c.Choices.Add((p.Line, Expand(world, c, p.Line, PickText(world, c.Player, p.Line), c.Player, c.Npc) + MoneySuffix(p.Line)));
+            string label = Said(Expand(world, c, p.Line, PickText(world, c.Player, p.Line), c.Player, c.Npc)) + MoneySuffix(p.Line);
+            if (label.Length == 0) c.Ended = true;   // nothing to offer: the conversation ends
+            else c.Choices.Add((p.Line, label));
         }
     }
 

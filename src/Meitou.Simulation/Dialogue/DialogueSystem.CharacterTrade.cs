@@ -239,21 +239,27 @@ public sealed partial class DialogueSystem
         c.Fleeing = false;
         c.Pending = null;
         TaskStart.Stand(table, slot);
-        if (caged && table.TryResolveNext(player, out int buyer))
-        {
-            var from = table.Next[slot].Position;
-            var to = table.Next[buyer].Position;
-            var away = new Vector2(from.X - to.X, from.Z - to.Z);
-            float gap = away.Length();
-            // Beside the buyer, on the slave's side: out through the open cage door (the path finds it).
-            var target = new Vector2(to.X, to.Z) + (gap > 1e-3f ? away / gap * Math.Min(GetOutReach, gap) : Vector2.Zero);
-            TaskStart.Walk(world, slot, target, SpeedMode.Walk, Meitou.Data.Gameplay.Ai.TaskType.MOVE_ON_FREE_WILL, TaskSource.Npc);
-        }
+        if (caged && table.TryResolveNext(player, out int buyer)) WalkOutOfCage(world, slot, buyer);
         if (Locks.LockSystem.WornShackles(c)?.Lock is { } l) l.Locked = false;
         Memory.Remember(world, c.SquadId, player, MemoryTag.FreedMe);   // its (new) squad remembers the buyer as the one who freed it (FUN_1406add20, Observed)
         if (Settings.AmbientEvents) Fire(world, id, player, BoughtMeFromSlavery);
         ChangeTowardPlayer(world, slaver.Faction, 1);
         ChangeTowardPlayer(world, c.Faction, 4);
+    }
+
+    /// <summary>
+    /// The walk of a prisoner freed from its cage (Task_GetOutOfCage with the legit flag, row 133, <c>FUN_1406add20</c> and <c>FUN_1406ae170</c> give it): out through the open cage door to within a few
+    /// units of <paramref name="nearSlot"/>, on the prisoner's side of it (where the original's task takes it is <b>Unknown</b>; the path finds the door).
+    /// </summary>
+    internal static void WalkOutOfCage(World world, int slot, int nearSlot)
+    {
+        var table = world.Characters;
+        var from = table.Next[slot].Position;
+        var to = table.Next[nearSlot].Position;
+        var away = new Vector2(from.X - to.X, from.Z - to.Z);
+        float gap = away.Length();
+        var target = new Vector2(to.X, to.Z) + (gap > 1e-3f ? away / gap * Math.Min(GetOutReach, gap) : Vector2.Zero);
+        TaskStart.Walk(world, slot, target, SpeedMode.Walk, Meitou.Data.Gameplay.Ai.TaskType.MOVE_ON_FREE_WILL, TaskSource.Npc);
     }
 
     /// <summary>

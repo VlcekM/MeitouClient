@@ -190,6 +190,7 @@ public sealed class SightMap
             place.AsSpan(was).Fill(-1);
             Array.Resize(ref onTop, size);
             Array.Resize(ref light, size);
+            Array.Resize(ref wanted, size);
             Array.Resize(ref floorOf, size);
             Array.Resize(ref probed, size);
             Array.Resize(ref low, size);
@@ -241,9 +242,29 @@ public sealed class SightMap
         brightest = 0;
         for (int s = 0; s < count; s++)
         {
-            light[s] = prev[s].Alive ? LightOf(s, prev[s].Position, table.Cold(s) is { IsPlayer: true }) : 1;
+            light[s] = prev[s].Alive ? SampleLight(s, prev[s].Position, table.Cold(s) is { IsPlayer: true }) : 1;
             if (prev[s].Alive) brightest = MathF.Max(brightest, light[s]);
         }
+    }
+
+    // Each character's light request (Character +0xdc): raised by a sight test on its looker and target, and by the stat multiplier; the resample clears it (set from any worker, only ever to true).
+    bool[] wanted = [];
+
+    /// <summary>
+    /// A character's light value for this tick (<c>FUN_1405ccd90</c>:53-60, <b>Verified</b>): every update first overwrites it with the bare daylight factor; only when its request was raised since
+    /// (a sight test on it, as looker or target, or the stat multiplier) and it is player-controlled or the daylight is at or below the threshold is the request cleared and the light sampled in
+    /// full (lamps, ray, indoor flag; <see cref="LightOf"/>). So a first test after a quiet period reads bare daylight.
+    /// </summary>
+    float SampleLight(int slot, Vector3 at, bool player)
+    {
+        if (!wanted[slot] || !player && Daylight >= NpcDaylight) return Daylight;
+        wanted[slot] = false;
+        return LightOf(slot, at, player);
+    }
+
+    void Request(int slot)
+    {
+        if ((uint)slot < (uint)wanted.Length) wanted[slot] = true;
     }
 
     float brightest = 1;
@@ -264,8 +285,11 @@ public sealed class SightMap
     {
         bool top = Known(looker) && onTop[looker];
         float range = (Inside(looker) ? IndoorSight : outdoor) * (0.5f + 0.5f * Daylight) * (top ? 2 : 1);
-        return range * Math.Clamp(MathF.Max(brightest, 1) - Light(looker) + 1, 1, 2);
+        return range * Math.Clamp(MathF.Max(brightest, 1) - PeekLight(looker) + 1, 1, 2);
     }
+
+    /// <summary>The room (<see cref="PlaceOf"/>'s numbering) a point lies in, -1 outdoors: an item's location as <c>FUN_14099b1d0</c> compares it with a character's.</summary>
+    public int PlaceAt(Vector3 at) => RoomAt(at);
 
     int RoomAt(Vector3 at)
     {
@@ -367,11 +391,21 @@ public sealed class SightMap
     /// <summary>The <see cref="TownBuilding.Key"/> of the building the character is <see cref="Inside"/>; null outdoors or on top.</summary>
     public string? BuildingOf(int slot) => Inside(slot) ? rooms[place[slot]].Key : null;
 
+    /// <summary>The key of the building a place (<see cref="PlaceOf"/>) is in.</summary>
+    public string PlaceKey(int place) => rooms[place].Key;
+
     /// <summary>The indoor volume (room index) the character stands in, -1 outdoors or on top of a building.</summary>
     public int PlaceOf(int slot) => Inside(slot) ? place[slot] : -1;
 
     /// <summary>The light level of the character (1 in daylight; see the class remarks).</summary>
-    public float Light(int slot) => Known(slot) ? light[slot] : 1;
+    public float Light(int slot)
+    {
+        Request(slot);
+        return PeekLight(slot);
+    }
+
+    /// <summary>The light level without raising the character's light request (the HUD and the query bound read it, no sight test or stat multiplier does).</summary>
+    public float PeekLight(int slot) => Known(slot) ? light[slot] : 1;
 
     /// <summary>
     /// The range a looker sees <paramref name="target"/> to before the view cone (<c>FUN_140857b10</c>, <c>FUN_140852f70</c>, <c>FUN_140851bc0</c>): 0 when they are in different places

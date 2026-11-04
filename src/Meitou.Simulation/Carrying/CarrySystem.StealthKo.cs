@@ -43,12 +43,18 @@ public sealed partial class CarrySystem
     }
 
     /// <summary>A character that may be sent on a stealth knock-out: sneaking, awake, not carrying or carried (a fight it is in ends with the order's new task).</summary>
-    public static bool CanKnockOut(CharacterCold cold) =>
-        cold is { Medical.Incapacitated: false, Race: not null, Stats: not null } && (cold.Orders & CharacterOrders.Sneak) != 0 && cold.Carrying.IsNone && cold.CarriedBy.IsNone;
+    public static bool CanKnockOut(CharacterCold cold) => (cold.Orders & CharacterOrders.Sneak) != 0 && CanRunKnockOut(cold);
 
-    /// <summary>A character that may be knocked out from behind: awake, with a body, not carried, not an animal (the verb list's <c>isAnimal</c> gate, so no cleansers).</summary>
+    /// <summary>
+    /// A character the stealth knock-out order may start on: the sneaking is not asked, the task switches it on when it starts (<c>FUN_140345eb0</c> calls <c>FUN_1405ca9a0(attacker, 1)</c> unless the
+    /// attacker is in stealth mode, <b>Verified</b>), so a queued order whose character stopped sneaking meanwhile still runs.
+    /// </summary>
+    static bool CanRunKnockOut(CharacterCold cold) =>
+        cold is { Medical.Incapacitated: false, Race: not null, Stats: not null } && cold.Carrying.IsNone && cold.CarriedBy.IsNone;
+
+    /// <summary>A character that may be knocked out from behind: alive (a downed one too, the verb list offers 228 on it), with a body, not carried, not an animal (the verb list's <c>isAnimal</c> gate, so no cleansers).</summary>
     public static bool CanBeKnockedOut(CharacterCold cold) =>
-        cold is { Medical.Incapacitated: false, Race: not null } && cold.CarriedBy.IsNone && !CharacterFacts.Animal(cold);
+        cold is { Medical.Dead: false, Race: not null } && cold.CarriedBy.IsNone && !CharacterFacts.Animal(cold);
 
     /// <summary>
     /// The chance in per cent that a stealth knock-out lands (<c>FUN_1408852f0</c>, <b>Verified</b> literals; docs/game/combat.md "Stealth knock-out"). X = the attacker's assassination minus
@@ -88,7 +94,21 @@ public sealed partial class CarrySystem
     static Vector2 Behind(in CharacterHot target) =>
         new(target.Position.X - MathF.Sin(target.Yaw) * KnockoutBehind, target.Position.Z - MathF.Cos(target.Yaw) * KnockoutBehind);
 
-    /// <summary>The walk of a stealth knock-out (Schedule, serial): to the point behind the target, re-aimed as it moves; within reach the swing starts.</summary>
+    /// <summary>
+    /// Where the attacker walks (<c>Task_StealthKO</c> <c>FUN_14034cd80</c>, <b>Verified</b>): the point behind the target, or, for a target in a bed or imprisoned, that building's position marker
+    /// nearest the attacker (<see cref="Locks.FixtureRegistry.PositionMarker"/>: the nearest use node, else its marker).
+    /// </summary>
+    static Vector2 KnockoutGoal(World world, CharacterCold target, in CharacterHot targetHot, in CharacterHot attacker)
+    {
+        if (target.InSomething != Locks.HeldState.None && target.InWhat is { } id
+            && world.Fixtures.PositionMarker(id, attacker.Position, world.GameHours) is { } marker) return new Vector2(marker.X, marker.Z);
+        return Behind(targetHot);
+    }
+
+    /// <summary>
+    /// The walk of a stealth knock-out (Schedule, serial): to the goal behind the target, re-aimed as it moves, through the swing too (the goal is set every update before the state logic, and
+    /// the knockout clip has no <c>disables movement</c>, so only reaching the point stops the attacker); within reach the swing starts.
+    /// </summary>
     void ScheduleKnockOuts(World world)
     {
         var table = world.Characters;
@@ -99,7 +119,6 @@ public sealed partial class CarrySystem
             ref var n = ref next[i];
             if (!n.Alive || n.Task != (byte)CharacterTask.StealthKo) continue;
             var cold = table.Cold(i)!;
-            if (cold.LiftTime >= 0) continue;   // swinging: SlowWorld has it
             // Only the target's sensing the attacker cancels the walk (FUN_14034cd80, no combat-state test of either side: orders beat goals); the roll's fight zero is in Strike.
             if (cold.Medical is not { Incapacitated: false } || !table.TryResolveNext(cold.CarryTarget, out int t) || table.Cold(t) is not { } target
                 || !CanBeKnockedOut(target) || Senses(world, table, t, i))
@@ -107,21 +126,15 @@ public sealed partial class CarrySystem
                 End(world, i);
                 continue;
             }
-            var goal = Behind(next[t]);
-            if (Vector2.Distance(new Vector2(n.Position.X, n.Position.Z), goal) < KnockoutStartRange)
+            var goal = KnockoutGoal(world, target, next[t], n);
+            if (cold.LiftTime < 0 && Vector2.Distance(new Vector2(n.Position.X, n.Position.Z), goal) < KnockoutStartRange)
             {
-                // Only the path is dropped: MovementSystem.Stop would end the task too, and the swing with it.
-                n.Flags = (ushort)(n.Flags & ~(ushort)MoveFlags.AnyPath);
-                n.PathCursor = 0;
-                cold.PathRequest = 0;
                 // The target's sense entry: heard on this last step (the sneaking hearing roll at the step's speed; the original's pass cadence is not traced).
                 float stealth = Orders.Stealth(cold), step = new Vector2(n.Velocity.X, n.Velocity.Z).Length();
-                float hear = step > 0.01f ? Orders.SneakHearChance(Vector3.Distance(n.Position, next[t].Position), Orders.SneakNoise(stealth, WeatherSystem.NoiseFactor(cold)), stealth) : 0;
+                float hear = step > 0.01f ? Orders.SneakHearChance(Vector3.Distance(n.Position, next[t].Position), Orders.SneakNoise(stealth, WeatherSystem.NoiseFactor(cold)), stealth, !Asleep(table, t)) : 0;
                 cold.KnockoutHeard = hear > 0 && Rng.Float(Rng.Hash(world.Seed, Rng.Key(table.IdOf(i)), RngPurpose.KnockoutHear, (ulong)world.Tick)) < hear;
-                n.Velocity = Vector3.Zero;
                 cold.LiftTime = 0;
                 Face(ref n, next[t]);
-                continue;
             }
             n.TaskTime -= dt;
             bool asking = (n.Flags & (ushort)(MoveFlags.NeedPath | MoveFlags.Pending)) != 0;
@@ -209,14 +222,14 @@ public sealed partial class CarrySystem
         {
             if (target.Medical is { } medical && target.Race is { } targetRace)
             {
-                var ctx = new MedicalContext(Constants, bodyOptions, targetRace) { Toughness = target.Stats?.Toughness ?? 0, Strength = target.Stats?.Strength ?? 50, HasStats = target.Stats is not null };
+                var ctx = new MedicalContext(Constants, bodyOptions, targetRace) { Toughness = target.Stats?.ScaledToughness ?? 0, Strength = target.Stats?.Strength ?? 50, HasStats = target.Stats is not null };
                 float assassination = (cold.Stats?[StatsEnumerated.Assassination] ?? 0) * (cold.Medical?.StatMultiplier(StatsEnumerated.Assassination) ?? 1);
                 medical.KnockOut(medical.PutDownKoSeconds(ctx, assassination * 0.01f));
                 TaskStart.Stand(table, t);
                 table.Next[t].Velocity = Vector3.Zero;
             }
         }
-        else
+        else if (!target.Medical!.Incapacitated)
         {
             // A miss (Task_StealthKO, FUN_14034cd80, Verified): the victim says event 56 ASSASSINATION_FAILED at the attacker, notices it (its hearing of it is alarmed for 5 s), each
             // side's squad tags the other TEMP_ENEMY, and the victim goes for the attacker (Character::attackTarget; no assault is booked for that, so the order is a defensive one).

@@ -111,7 +111,8 @@ public sealed class ItemFactory(GameDatabase db, GameConstants constants, Func<M
                 ? new Locks.LockState { Level = Math.Clamp(shackles.Ints.GetValueOrDefault("lock level"), 0, 100), Hardness = shackles.Floats.GetValueOrDefault("hardness"), Locked = true }
                 : null,
             Quantity = Math.Max(quantity, 1),
-            Quality = quality,
+            // An ITEM keeps its record's quality (Item::Item, FUN_14075faf0); the other kinds take the maker's grade.
+            Quality = type == FcsRecordType.ITEM ? info.Quality : quality,
             // An armour piece's stats follow its level, which a made piece takes from its grade quality; so do a crossbow's and a limb's (FUN_140580750 hands the grade to those constructors).
             Level = info.Type is FcsRecordType.ARMOUR or FcsRecordType.CROSSBOW or FcsRecordType.LIMB_REPLACEMENT ? (int)quality : 0,
             ItemFunction = info.Function,

@@ -14,8 +14,43 @@ public sealed partial class LockSystem
 {
     /// <summary>Ticks between looks for attackers whose target is shut in (engine choice).</summary>
     public const int BashCheckTicks = 30;
-    /// <summary>Game seconds between swings (engine choice: the original swings at 0.6 of its <c>stonemine</c> clip, whose length Meitou does not read).</summary>
-    public const float BashSwingSeconds = 1.5f;
+    /// <summary>The cycle length used when the host gives none (worlds without the animation data).</summary>
+    public const float DefaultBashClipSeconds = 1.5f;
+    /// <summary>Where in the clip's cycle a blow lands (<c>Task_BashDoor</c> update <c>FUN_140348c10</c>, <b>Verified</b>: the blow fires when the <c>stonemine</c> progress crosses 0.6).</summary>
+    public const float BashBlowProgress = 0.6f;
+    /// <summary>
+    /// Game seconds one <c>stonemine</c> cycle takes (the clip's length over its record's play speed; set by the host from the animation data). A human basher's blow lands at 0.6 of every cycle,
+    /// the first at 0.6 into the first (the task starts with its previous progress at 1). An animal swings its own attack clip instead (<see cref="BashBlowLands"/>).
+    /// </summary>
+    public float BashClipSeconds { get; set; } = DefaultBashClipSeconds;
+
+    /// <summary>
+    /// How far into an animal's own attack clip it restarts (<c>Task_BashDoor</c>, <b>Verified</b> <c>FUN_140348c10</c>: it restarts the clip once its progress reads past 0.98, double <c>0x1416c0b90</c>);
+    /// a human's looping <c>stonemine</c> has no restart.
+    /// </summary>
+    public const float AnimalRestartProgress = 0.98f;
+
+    /// <summary>
+    /// Advances a basher's clip phase (<see cref="CharacterCold.BashTime"/>, seconds into the cycle) by <paramref name="dt"/>; true on the tick the phase crosses <see cref="BashBlowProgress"/>.
+    /// An animal swings its own attack technique's clip (<see cref="CombatSystem.AnimalBashSeconds"/>, <c>FUN_140887420</c>) and restarts it at <see cref="AnimalRestartProgress"/>.
+    /// </summary>
+    bool BashBlowLands(CharacterCold c, float dt)
+    {
+        float own = Combat?.AnimalBashSeconds(c) ?? 0;
+        bool lands = own > 0 ? BlowLands(c.BashTime, dt, own, out float phase, AnimalRestartProgress * own) : BlowLands(c.BashTime, dt, BashClipSeconds, out phase);
+        c.BashTime = phase;
+        return lands;
+    }
+
+    /// <summary>One step of a swing cycle: the blow lands when the phase crosses 0.6 of the clip (<paramref name="cycle"/>); the phase wraps at <paramref name="period"/> (the clip's length unless given).</summary>
+    internal static bool BlowLands(float phase, float dt, float cycle, out float next, float period = 0)
+    {
+        if (period <= 0) period = cycle;
+        float blowAt = BashBlowProgress * cycle, t = phase + dt;
+        next = t >= period ? t - period : t;
+        return phase < blowAt && t >= blowAt;
+    }
+
     /// <summary>How far out from the leaf the basher walks to (engine choice: a walk goal on the outside; arriving is <see cref="DoorPlan.AtDoor"/>).</summary>
     public const float BashStandOff = 12;
     /// <summary>How near the stand spot by a door a lock worker counts as there.</summary>
@@ -41,9 +76,14 @@ public sealed partial class LockSystem
         for (int s = 0; s < table.HighWater; s++)
         {
             if (!next[s].Alive || table.Cold(s) is not { Bashing: { } doorId } c) continue;
+            if (c.BashWall)
+            {
+                Smash(world, s, c, doorId);
+                continue;
+            }
             var door = world.Fixtures.Find(doorId);
-            // The task itself ends on a broken door or one open or opening and reads no lock (FUN_140348c10); the NPC's plan is dropped once its door is no longer locked.
-            if (door is null || door.DoorBroken || (c.BashOrdered ? door.Motion is DoorMotion.Open or DoorMotion.Opening : door.Lock is not { EffectivelyLocked: true }) || c.Medical is { Incapacitated: true } || (!c.BashOrdered && next[s].Task != (byte)CharacterTask.Attack) || world.Fixtures.DoorSpotOf(door) is not { } spot)
+            // The task itself ends on a broken door or one open or opening and reads no lock (FUN_140348c10); a planner NPC's plan is dropped once its door is unlocked and the planner would open it (72) instead (see PlanDropped).
+            if (door is null || door.DoorBroken || door.Motion is DoorMotion.Open or DoorMotion.Opening || PlanDropped(world, door, c) || c.Medical is { Incapacitated: true } || (!c.BashOrdered && !c.BashErrand && next[s].Task != (byte)CharacterTask.Attack) || world.Fixtures.DoorSpotOf(door) is not { } spot)
             {
                 StopBashing(table, s, c);
                 continue;
@@ -75,20 +115,23 @@ public sealed partial class LockSystem
             // Someone in the way: the task is impossible (the plan fails; an NPC looks again at the next check).
             if (InTheWay(world, s, face)) { StopBashing(table, s, c); continue; }
             if (c.BashOrdered && next[s].Task == (byte)CharacterTask.GoTo) AtWork(world, s);
-            // Every update in reach books Burglary against the door's owner, before the blow (Task_BashDoor, locks.md); the pursuit's bashers book none yet.
-            if (c.BashOrdered && Crimes is not null && door.Owner >= 0 && door.Owner != c.Faction) Crimes.SetPending(world, s, Crime.CrimeCode.Burglary, door.Owner, CharacterId.None, Crime.CrimeSystem.MinTimer);
+            // Every update in reach books Burglary against the door's owner, before the blow, for any basher (Task_BashDoor, shared by rows 81/123/226/272/287/290, locks.md).
+            if (Crimes is not null && door.Owner >= 0 && door.Owner != c.Faction) Crimes.SetPending(world, s, Crime.CrimeCode.Burglary, door.Owner, CharacterId.None, Crime.CrimeSystem.MinTimer);
             if (c.BashTime < 0) c.BashTime = 0;
-            c.BashTime += world.TickSeconds;
-            if (c.BashTime < BashSwingSeconds) continue;
-            c.BashTime = 0;
+            if (!BashBlowLands(c, world.TickSeconds)) continue;
             // A break's only sound is the door's Break (Task_BashDoor posts no unlock sound), played by the host's door sounds.
-            if (Hit(door, c))
+            if (Hit(world, door, c))
             {
                 world.Fixtures.Touch(door);
                 StopBashing(table, s, c);
             }
         }
     }
+
+    /// <summary>A planner basher's door stands unlocked and closed: the planner replans, and only an aggressive character (desire over 72's 1, a bandit) still bashes it (<see cref="DoorPlan"/>).</summary>
+    bool PlanDropped(World world, Fixture door, CharacterCold c) =>
+        !c.BashOrdered && !c.BashErrand && door.Lock is not { EffectivelyLocked: true }
+        && (door.IsGate || DoorPlan.AggressiveTowards(world, Combat, c, door.Building, door.Position) <= 1);
 
     /// <summary>The door construction progress (1 when whole) one point of <see cref="BlowDamage"/> takes off (<c>DoorStuff::vfunc_62</c>).</summary>
     public const float ProgressPerDamage = 0.015f;
@@ -101,25 +144,25 @@ public sealed partial class LockSystem
     }
 
     /// <summary>One swing at a door (<c>FUN_14029d690</c>): true when it broke the door.</summary>
-    bool Hit(Fixture door, CharacterCold c)
+    bool Hit(World world, Fixture door, CharacterCold c) => Damage(world, door, Packet(c) is var (cut, blunt, animal) ? BlowDamage(cut, blunt, animal) : 20);
+
+    /// <summary>The cut and blunt damage of a basher's blow (its weapon's or fists' packet) and whether it is an animal's; null without the combat constants (every swing then does the minimum).</summary>
+    (float Cut, float Blunt, bool Animal)? Packet(CharacterCold c)
     {
-        float damage = 20;
-        if (CombatConstants is { } k && c.Fighter is { } f && c.Stats is { } stats && c.Medical is { } med)
-        {
-            float Eff(StatsEnumerated stat) => stats[stat] * stats.Scale * med.StatMultiplier(stat);
-            float str = Eff(StatsEnumerated.Strength);
-            var packet = f.Unarmed
-                ? DamageFormulas.UnarmedPacket(DamageFormulas.UnarmedRating(stats[StatsEnumerated.MartialArts] * stats.Scale, f.UnarmedBonus, med.DustAttackPenalty, f.EncumbranceFactor), Eff(StatsEnumerated.Toughness), str, f.FistsItem, TargetKind.Human, null, f.DamageOutput, k)
-                : DamageFormulas.Packet(Eff(f.WeaponSkill), Eff(StatsEnumerated.Dexterity) * f.DexterityMult, str, f.Weapon!, TargetKind.Human, null, f.DamageOutput, k);
-            damage = BlowDamage(packet.Cut, packet.Blunt, f.IsAnimal);
-        }
-        return Damage(door, damage);
+        if (CombatConstants is not { } k || c.Fighter is not { } f || c.Stats is not { } stats || c.Medical is not { } med) return null;
+        float Eff(StatsEnumerated stat) => stats[stat] * stats.Scale * med.StatMultiplier(stat);
+        float str = Eff(StatsEnumerated.Strength);
+        var packet = f.Unarmed
+            ? DamageFormulas.UnarmedPacket(DamageFormulas.UnarmedRating(stats[StatsEnumerated.MartialArts] * stats.Scale, f.UnarmedBonus, med.DustAttackPenalty, f.EncumbranceFactor), Eff(StatsEnumerated.Toughness), str, f.FistsItem, TargetKind.Human, null, f.DamageOutput, k)
+            : DamageFormulas.Packet(Eff(f.WeaponSkill), Eff(StatsEnumerated.Dexterity) * f.DexterityMult, str, f.Weapon!, TargetKind.Human, null, f.DamageOutput, k);
+        return (packet.Cut, packet.Blunt, f.IsAnimal);
     }
 
     /// <summary>Takes <paramref name="damage"/> (the clamped f) x <see cref="ProgressPerDamage"/> off a door's <see cref="Fixture.DoorProgress"/>; at 0 it breaks: unlocked and opened. True when it broke.</summary>
-    static bool Damage(Fixture door, float damage)
+    static bool Damage(World world, Fixture door, float damage)
     {
         if (door.Kind != FixtureKind.Door || door.DoorBroken) return false;
+        world.Floaters?.Enqueue(Floater.BuildingHit(door.Position, (int)damage));   // the damage number at the door (FUN_14029d2b0); queued only while the host shows floaters
         door.DoorProgress -= damage * ProgressPerDamage;
         if (door.DoorProgress > 0) return false;
         door.DoorProgress = 0;
@@ -135,7 +178,7 @@ public sealed partial class LockSystem
     /// </summary>
     internal static void Strike(World world, Fixture door, float damage)
     {
-        if (Damage(door, damage)) world.Fixtures.Touch(door);
+        if (Damage(world, door, damage)) world.Fixtures.Touch(door);
     }
 
     /// <summary>Gives the free attackers whose target is shut in another building, while they are outside it, its main door to bash when the planner says so (<see cref="DoorPlan"/>).</summary>
@@ -171,13 +214,21 @@ public sealed partial class LockSystem
 
     readonly DoorPlan doorPlan = new();
 
+    /// <summary>Sends <paramref name="c"/>, a ransacker whose entry plan bashes the door <paramref name="doorId"/> (row 81), to bash it: it walks there and swings as an attacker would, and the door breaking ends it.</summary>
+    internal void BashForErrand(CharacterCold c, string doorId)
+    {
+        c.Bashing = doorId;
+        c.BashErrand = true;
+        c.BashTime = 0;
+    }
+
     /// <summary>The shut buildings with their main door (<c>Building::getDoor</c>, one per building; engine reading: the one of lowest door index with a known leaf).</summary>
     List<(string, Vector2, float, Fixture, DoorSpot)> ShutBuildings(World world)
     {
         var list = new List<(string, Vector2, float, Fixture, DoorSpot)>();
         foreach (var b in world.Fixtures.Buildings)
         {
-            if (!world.Fixtures.IsShut(b)) continue;
+            if (world.Fixtures.HasOpenDoor(b)) continue;
             (Fixture Door, DoorSpot Spot)? main = null;
             Vector2 origin = default;
             float radius = 0;
@@ -240,6 +291,8 @@ public sealed partial class LockSystem
     static void StopBashing(CharacterTable table, int s, CharacterCold c)
     {
         c.Bashing = null;
+        c.BashWall = false;
+        c.BashErrand = false;
         c.BashOrdered = false;
         c.BashTime = 0;
         ref var n = ref table.Next[s];

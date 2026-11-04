@@ -112,4 +112,4 @@ Evidence scopes below apply only to their named sources/checks.
 
 - The camera value used for the inside test (above).
 - Version 1 files (no names) were not seen.
-- Where the level editor saves the file (above).
+- Where the level editor saves the file (above). Meitou has no level or fog editor (`FUN_14010d8d0` FogEditor window; **Verified** it exists, not ported).

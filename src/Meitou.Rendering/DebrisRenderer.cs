@@ -11,7 +11,11 @@ namespace Meitou.Rendering;
 /// One loose mesh in the world: its file, its size and where it is (rotation and translation, the mesh's middle at the translation); <paramref name="Stretch"/> lengthens
 /// it along its own z (a bolt in flight).
 /// </summary>
-public readonly record struct DebrisPiece(string Mesh, float Scale, Quaternion Rotation, Vector3 Position, float Stretch = 1, LimbLook? Limb = null);
+public readonly record struct DebrisPiece(string Mesh, float Scale, Quaternion Rotation, Vector3 Position, float Stretch = 1, LimbLook? Limb = null)
+{
+    /// <summary>A mesh named <c>file</c> + this + <c>texture</c> is drawn with that diffuse texture on every part (the birds' <c>HWBirds</c> material clone, docs/game/birds.md).</summary>
+    public const char TextureMark = '?';
+}
 
 /// <summary>
 /// How a severed limb is drawn (the original's <c>SeveredLimb</c> material, docs/game/blood-decals.md "On the body and on severed limbs"): the item's MATERIAL record's texture map and
@@ -323,12 +327,19 @@ public sealed unsafe class DebrisRenderer : IDisposable
         // The bindless table is bound once per segment: register/update the debris textures before that bind. On Metal the
         // argument buffer must already name them when the encoder takes it.
         var standIn = gpu.StandIn2D;
+        // Pieces of one mesh come in runs (a flock of birds): the lookup is made once per run.
+        string? runName = null;
+        Mesh? runMesh = null;
         foreach (var piece in pieces)
+        {
+            if (piece.Limb is null && ReferenceEquals(piece.Mesh, runName)) continue;
             if (meshes.TryGetValue(Key(piece.Mesh, piece.Limb), out var known) && known is not null)
             {
+                if (piece.Limb is null) runName = piece.Mesh;
                 foreach (var part in known.Parts) _ = part.Diffuse?.Index;
                 if (known.Limb) { _ = known.Mask?.Index; _ = known.Normal?.Index; _ = (bloodMap ??= Texture("bloody.png"))?.Index; if (piece.Limb is { } first) _ = skinTable?.Invoke(first); }
             }
+        }
 
         // The view block carries the camera-relative projection/eye and the light direction; the frame block carries the atmosphere.
         var view = new ViewConstants
@@ -348,10 +359,17 @@ public sealed unsafe class DebrisRenderer : IDisposable
             AmbientSky = light.AmbientSky,
             AmbientGround = light.AmbientGround,
         };
+        (runName, runMesh) = (null, null);
         foreach (var piece in pieces)
         {
             // Only meshes loaded before (Extent): nothing is uploaded inside the pass.
-            if (!meshes.TryGetValue(Key(piece.Mesh, piece.Limb), out var mesh) || mesh is null) continue;
+            Mesh? mesh;
+            if (piece.Limb is null && ReferenceEquals(piece.Mesh, runName) && runMesh is not null) mesh = runMesh;
+            else
+            {
+                if (!meshes.TryGetValue(Key(piece.Mesh, piece.Limb), out mesh) || mesh is null) continue;
+                if (piece.Limb is null) (runName, runMesh) = (piece.Mesh, mesh);
+            }
             // A limb's piece is at its mesh's origin (its blood mapping reads the mesh's own x); the others are centred on their bounds.
             var middle = mesh.Limb ? piece.Position + Vector3.Transform(mesh.Centre * piece.Scale, piece.Rotation) : piece.Position;
             if (!FrustumTests.SphereVisible(frustum, middle, mesh.Extent.Length() * piece.Scale * MathF.Max(piece.Stretch, 1))) continue;
@@ -389,12 +407,14 @@ public sealed unsafe class DebrisRenderer : IDisposable
         string key = Key(file, limb);
         if (meshes.TryGetValue(key, out var known)) return known;
         Mesh? mesh = null;
+        string? diffuse = null;
+        if (file.IndexOf(DebrisPiece.TextureMark) is >= 0 and var mark) (file, diffuse) = (file[..mark], file[(mark + 1)..]);
         try
         {
             if (find(Path.GetFileName(file.Replace('\\', '/'))) is { } path) {
                 var ogre = OgreMeshReader.ReadFile(path);
                 if (MeshWeld.Enabled) OgreMeshWeld.Apply(ogre);
-                mesh = Build(file, materialOf ?? file, ogre, limb);
+                mesh = Build(file, materialOf ?? file, ogre, limb, diffuse);
             }
         }
         catch (Exception e) when (e is IOException or InvalidDataException or NotSupportedException)
@@ -405,7 +425,7 @@ public sealed unsafe class DebrisRenderer : IDisposable
         return mesh;
     }
 
-    Mesh? Build(string file, string materialOf, OgreMesh ogre, LimbLook? limb)
+    Mesh? Build(string file, string materialOf, OgreMesh ogre, LimbLook? limb, string? diffuse = null)
     {
         var built = Model.Build(ogre, null, tangentSign: limb is not null);   // a limb: the tangent's own w, the game's severed_limb_vs
         if (limb is not null) Characters.CharacterContent.MarkCurvature(built);   // a limb's skin scatters light by its curvature
@@ -418,7 +438,7 @@ public sealed unsafe class DebrisRenderer : IDisposable
         {
             var material = limb is null ? resolver?.Candidates(materialOf, new OgreSubMesh { MaterialName = part.MaterialName }).FirstOrDefault() : null;
             float threshold = material is { Alpha: AlphaSource.DiffuseAlpha } ? MathF.Max(material.AlphaThreshold, 0.5f) : 0;
-            parts.Add(((uint)indices.Count, (uint)part.Indices.Length, vertices.Count, Texture(limb is null ? material?.Diffuse : limb.Diffuse), threshold));
+            parts.Add(((uint)indices.Count, (uint)part.Indices.Length, vertices.Count, Texture(diffuse ?? (limb is null ? material?.Diffuse : limb.Diffuse)), threshold));
             foreach (var v in part.Vertices) vertices.Add(limb is null ? v with { Position = v.Position - centre } : v);   // a limb keeps the mesh's own space (its blood mapping reads x)
             indices.AddRange(part.Indices);
         }

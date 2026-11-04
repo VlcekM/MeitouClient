@@ -223,9 +223,11 @@ public sealed partial class World
             s.BackDrawn = cold?.Fighter?.WeaponIsBack ?? false;
             s.HasFlies = cold?.HasFlies ?? false;
             s.Name = cold?.Name ?? "";
+            s.RecordId = cold?.RecordId ?? "";
             s.SquadId = cold?.SquadId ?? -1;
             s.IsPlayer = cold?.IsPlayer ?? false;
             s.IsTrader = talk?.Trades(this, i) ?? (cold is { IsPlayer: false, SquadId: >= 0 } && Squads.Find(cold.SquadId)?.Shop is not null);
+            s.IsDiplomat = cold?.NpcClass == FundamentalType.Diplomat;
             s.Selected = selected;
             s.Inspected = inspected;
             s.Skills = detailed && cold!.Stats is { } sk ? new SkillSummary(sk[StatsEnumerated.MeleeAttack], sk[StatsEnumerated.MeleeDefence], sk[StatsEnumerated.Dodge], sk.Toughness, sk.Strength, sk.Athletics) : null;
@@ -281,9 +283,10 @@ public sealed partial class World
             s.RunSpeed = cold?.RunSpeed ?? SpeedMode.Free;
             s.Jobs = cold is { Jobs.Count: > 0 } ? cold.Jobs.ToArray() : [];
             s.Scale = cold?.Animal is { } animal ? animal.Scale(cold.ShownAge) : 1;   // the size last refreshed (BodySystem.Age)
+            s.DrawDistanceScale = cold?.Race is { Gigantic: true } ? Meitou.Data.Gameplay.Bodies.RaceData.GiganticDrawScale : 1;
             s.WeatherNotice = cold?.WeatherNotice ?? WeatherNotice.None; s.WeatherNoticeProtection = cold?.WeatherNoticeProtection ?? 0;
             s.Decision = Decisions.Tracing ? cold?.Decision : null;
-            s.Activity = cold is not null && (shown || cold.IsPlayer) ? Ai.AiSystem.ActivityText(state[i], cold) : null;
+            s.Activity = cold is not null && (shown || cold.IsPlayer) ? Ai.AiSystem.ActivityText(state[i], cold, Tick) : null;
             // The turret the combat system runs with this gunner; else (no combat system) at the gun of the turret its squad gave it: the AI's turret goal, walked to and stood at
             // (derived from the claims, not hashed).
             s.Turret = combat?.TurretOf(cold?.Gunning) is { } gunned ? new MannedTurret(cold!.Gunning!, gunned.BuildingId, gunned.Position, gunned.Yaw, gunned.GunId) { Simulated = true, Aim = gunned.Aim, Angles = gunned.Angles }
@@ -295,7 +298,7 @@ public sealed partial class World
                 && production?.InPlayerBuilding(this, state[i].Position) == true;
             s.BedRecoveryRate = detailed && cold is { InSomething: Locks.HeldState.Bed } ? systems.OfType<BodySystem>().FirstOrDefault()?.BedRecoveryRate(this, cold, in state[i]) : null;
             s.Stealth = sneaking ? watchers.Length == 0 ? StealthExposure.Unobserved : watchers.Max(w => w.Level) : null;
-            s.Light = sneaking ? Sight.Light(i) : 1;
+            s.Light = sneaking ? Sight.PeekLight(i) : 1;
             s.Watchers = watchers;
             s.Bar = cold is { IsPlayer: true } ? PickBar(cold, state[i].Task) ?? TrainBar(cold) : null;
             s.Prison = cold is { IsImprisoned: true } ? new PrisonView(!(cold.InWhat is { } cageId && Fixtures.Find(cageId) is { } cage && cage.Lock is not { EffectivelyLocked: true }), cold.SentenceLength, cold.SentenceStart + cold.SentenceLength - GameHours) { CageOwner = cold.InWhat is { } owned && Fixtures.Find(owned) is { } jail ? jail.Owner : -1, CageId = cold.InWhat,
@@ -403,7 +406,7 @@ public sealed partial class World
         return new HudView(med.Blood, Bodies.MedicalState.BloodCapacity(race, stats.Strength, med.HasStatsObject, med.ScaleK, med.ScaleZ), med.Bleeding,
             cold.Fighter?.EncumbranceFactor ?? 1, lines.AsReadOnly(), extended) { BleedRate = race.BleedRate, Fed = med.Fed, Robot = race.IsRobot,
             ExtendedTips = extended is { } x ? HudTips.Extended(cold, med, race, stats, x, constants) : null, Skill = SkillLine(id, cold, med, race, stats, hot, combat, mode),
-            KoPoint = constants is null ? null : Bodies.MedicalState.KoPoint(constants, stats.Toughness),
+            KoPoint = constants is null ? null : Bodies.MedicalState.KoPoint(constants, stats.ScaledToughness),
             StatReadouts = HudTips.StatsWindow(cold, med, race, stats, hc, constants, db) };
     }
 
@@ -451,7 +454,7 @@ public sealed partial class World
             int total = (int)(s * 100), trained = (int)stats[StatsEnumerated.Stealth];
             float t = MathF.Max(0, (s - 0.1f) / 0.8f), top = hot.MaxSpeed;
             return new(StatsEnumerated.Stealth, "Stealth:", total) { Base = trained, Stealth = new(trained, 12 + (top - 12) * t, Bodies.XpService.SneakRate(BodySystem.PaidExposureOf(this, cold)),
-                !cold.Carrying.IsNone, med.Prone, (int)((1 - encumbrance) * 100), (int)((med.StealthBodyFactor(stats[StatsEnumerated.Toughness] * stats.Scale) - 1) * 100),
+                !cold.Carrying.IsNone, med.Prone, (int)((1 - encumbrance) * 100), (int)((med.StealthBodyFactor(stats.ScaledToughness) - 1) * 100),
                 (int)(((cold.Fighter?.StealthMult ?? 1) - 1) * 100), (int)((med.LegItemFactor(StatsEnumerated.Stealth) - 1) * 100), total) };
         }
         float speed = MathF.Sqrt(hot.Velocity.X * hot.Velocity.X + hot.Velocity.Z * hot.Velocity.Z);

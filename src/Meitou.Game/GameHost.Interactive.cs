@@ -129,7 +129,7 @@ sealed partial class GameHost
                 FrameGenerationStatus = () => (display.FrameGeneration ? "active" : frameGenerationAtStart ? "unavailable (see the log), plain swapchain in use" : "off")
                     + (config.FrameGeneration != frameGenerationAtStart ? $", {(config.FrameGeneration ? "on" : "off")} after a restart" : ""),
                 ModSettings = () => mods?.Settings ?? [],
-                AttackSlotsChanged = slots => { foreach (var combat in session.World.Systems.OfType<Meitou.Simulation.Combat.CombatSystem>()) combat.AttackSlots = slots; },
+                AttackSlotsChanged = slots => { foreach (var combat in session.World.Systems.OfType<Meitou.Simulation.Combat.CombatSystem>()) combat.UseAttackSlots(slots); },
                 LateDefencesChanged = on => { foreach (var combat in session.World.Systems.OfType<Meitou.Simulation.Combat.CombatSystem>()) combat.LateDefences = on; },
                 GunnerFacingChanged = on => { foreach (var combat in session.World.Systems.OfType<Meitou.Simulation.Combat.CombatSystem>()) combat.GunnerFacesBarrel = on; },
                 PunchReachChanged = on => { foreach (var combat in session.World.Systems.OfType<Meitou.Simulation.Combat.CombatSystem>()) combat.PunchReachFix = on; },
@@ -140,6 +140,7 @@ sealed partial class GameHost
                 SkinRaceList = scene.Database is { } raceDb ? CharacterRenderer.PersonRaces(raceDb) : [],
                 SkinRacesChanged = () => { if (gpu.Characters is { } chars) chars.SkinRaces = config.SkinRaces; },
                 CameraRotateSpeedChanged = ApplyCameraRotateSpeed,
+                CameraChanged = () => config.ApplyCamera(session.Camera.Settings),
                 TutorialsChanged = on => { if (tutorials is { } t) t.Enabled = on; },
                 ResetTutorials = () => tutorials?.Reset(),
                 OffscreenChanged = () =>
@@ -154,6 +155,13 @@ sealed partial class GameHost
         ApplyCameraRotateSpeed(config.CameraRotateSpeed);
         config.EdgeScroll ??= Meitou.Audio.AudioSystem.Setting(install, "Edge scrolling", 1) != 0;
         config.Tutorials ??= Meitou.Audio.AudioSystem.Setting(install, "tutorials", 1) != 0;
+        config.SeedCamera(install);
+        config.ApplyCamera(session.Camera.Settings);
+        KeyMap.SwapButtons = config.SwapMouseButtons == true;
+        player.FontSize = config.FontSize ?? Meitou.Data.Ui.KenshiFontSize.DefaultSetting;
+        config.MovementMarker ??= Meitou.Audio.AudioSystem.Setting(install, "Movement marker", 1) != 0;
+        config.RotationMarker ??= Meitou.Audio.AudioSystem.Setting(install, "Rotation marker", 1) != 0;
+        (player.MovementMarker, player.RotationMarker) = (config.MovementMarker == true, config.RotationMarker == true);
         tutorials ??= new TutorialManager(Path.Combine(Directory.GetCurrentDirectory(), TutorialManager.FileName));
         tutorials.Enabled = config.Tutorials == true;
         player.ConfigureTutorials(tutorials);
@@ -354,7 +362,7 @@ sealed partial class GameHost
                 return;
             }
             // A numpad key bound to a game hotkey (the orders, NUM0..NUM8 by default) is the game's, except with Ctrl (saving a shot) or the cinema's editor open (F6).
-            bool hotkey = !IsDuel && !ctrl && !cinema.EditorVisible && KeyMap.Map(k) is { } gameKey && player.IsHotkey(gameKey);
+            bool hotkey = !IsDuel && !ctrl && !cinema.EditorVisible && KeyMap.Map(k) is { } gameKey && (player.IsHotkey(gameKey) || player.OwnsBuildNumpad(gameKey));
             if (!hotkey && Enum.TryParse(k.ToString(), out CinemaKey cinemaKey) && cinema.OnKey(cinemaKey, ctrl, shiftDown)) return;
             // F9 is the game's quickload; the fps counter is on Ctrl+F9 (a modifier, so the key never reaches the input bindings).
             if (k == SilkKey.F9 && ctrl) { fpsVisible = !fpsVisible; return; }
@@ -590,6 +598,7 @@ sealed partial class GameHost
                 : [.. player.SquadBarMembers().Select(c => TourPosition(c.Id)).OfType<Vector3>()];
             string? takeFile = cinema.TakeFrame();
             // A flight puts the focus on where it lands from the first frame (the towns there populate during the flight), not on the arc.
+            viewAspect = window.Size.X / (float)Math.Max(window.Size.Y, 1);
             SendFocus(tour.Active && tour.Current is { } landing && TourPosition(landing) is { } landingAt ? landingAt : cinemaHolds ? camera.Target : null);
             if (!cinemaHolds) SandboxFollowCamera();
             if (!cinemaHolds) FollowCamera();
@@ -636,6 +645,7 @@ sealed partial class GameHost
             bool Held(SilkKey a, SilkKey b) => silkInput.Keyboards.Any(k => k.IsKeyPressed(a) || k.IsKeyPressed(b));
             player.CtrlHeld = Held(SilkKey.ControlLeft, SilkKey.ControlRight);
             player.AltHeld = Held(SilkKey.AltLeft, SilkKey.AltRight);
+            screenshotRequested = player.GateScreenshot(screenshotRequested);
             // The Highlight key (Alt) lights up the signs, outlines the characters near the focus and labels the ground items there.
             bool highlighting = highlightHeld && windowFocused && !Covered && !session.Camera.IsFree &&
                 panel?.Visible != true && !interfaceHidden && !cinema.Clean && !cinemaHolds && !cinema.EditorVisible;
@@ -807,7 +817,9 @@ sealed partial class GameHost
                 characterTris += gpu.Characters?.DrawnTriangles ?? 0;
                 if (gpu.Foliage is { Enabled: true } drawnFoliage) grassBlades += drawnFoliage.DrawnBlades;
                 if (takeFile is not null) { FramebufferCapture.SavePng(display.Context, finalPicture ?? backbuffer, takeFile, size.X, size.Y, topDown: finalPicture is not null); cinema.FrameDone(); }
+                else if (shot && GameScreenshots.Multiplier(install.Root) is >= 2 and var multiplier) SaveSupersampled(display.Context, multiplier, size.X, size.Y);
                 else if (shot) SaveScreenshot(display.Context, finalPicture ?? backbuffer, size.X, size.Y, topDown: finalPicture is not null);
+                if (shot) player.EndScreenshot();
                 if (feedbackShot)
                 {
                     player.ShotWithoutMenus = false;
@@ -959,11 +971,63 @@ sealed partial class GameHost
         session.Input.SetMousePosition(anchor.X, anchor.Y);
     }
 
-    static void SaveScreenshot(GpuContext context, GpuTexture picture, int width, int height, bool topDown = false)
+    void SaveScreenshot(GpuContext context, GpuTexture picture, int width, int height, bool topDown = false)
     {
-        var file = Path.Combine(Directory.CreateDirectory(@"C:\Temp").FullName, $"meitou-{DateTime.Now:yyyyMMdd-HHmmss}.png");
+        var file = GameScreenshots.Next(install.Root);
         FramebufferCapture.SavePng(context, picture, file, width, height, topDown);
         Console.WriteLine($"saved     {file}");
+    }
+
+    /// <summary>
+    /// The tiled shot of <c>screens.cfg</c>'s <c>multiplier</c> n (docs/game/ui-input.md "Screenshots"): the world alone, no interface, n x n tiles of window size, each drawn with the camera frustum
+    /// offset to it (<see cref="ViewWindow"/>) and blitted into one picture n times the window in each direction, as the original does. Screen-space effects therefore keep the window's pixel scale.
+    /// Each tile is drawn <see cref="TileGuard"/> pixels larger on every side and cropped, so what samples neighbours (ambient occlusion, bloom) has them at the tile's border; its temporal history is
+    /// dropped and warmed up again. The exposure of the live view is pinned for the whole shot, as the original zeroes the adaptation rate.
+    /// </summary>
+    void SaveSupersampled(GpuContext context, int n, int width, int height) => SaveTiles(context, n, width, height, GameScreenshots.Next(install.Root));
+
+    void SaveTiles(GpuContext context, int n, int width, int height, string file)
+    {
+        var post = gpu.Post!;
+        int warm = post.WarmupFrames, guard = TileGuard(width, height), tw = width + 2 * guard, th = height + 2 * guard;
+        var (adapted, _) = post.ReadExposure();
+        if (!float.IsNaN(adapted)) post.HoldExposure(adapted, n * n * (warm + 1) + 2);
+        var live = post.Target;
+        using var tile = context.CreateTexture(new Meitou.Rendering.Gpu.TextureDesc(Meitou.Rendering.Gpu.InternalFormat.Rgba8, tw, th,
+            Use: Meitou.Rendering.Gpu.TextureUse.ColourTarget | Meitou.Rendering.Gpu.TextureUse.TransferSrc | Meitou.Rendering.Gpu.TextureUse.Sampled, Name: "screenshot tile"));
+        var picture = new byte[n * width * n * height * 4];
+        post.Target = tile;
+        try
+        {
+            for (int row = 0; row < n; row++)
+                for (int column = 0; column < n; column++)
+                {
+                    ViewWindow.Current = ViewWindow.Tile(n, column, row, width, height, guard);
+                    post.ResetHistory();
+                    for (int i = 0; i <= warm; i++)
+                    {
+                        DrawWorld(tw, th);
+                        context.EndFrame();   // headless frames: the window's own frame was presented already
+                    }
+                    context.Finish();
+                    BlitTile(FramebufferCapture.ReadPicture(context, tile, tw, th), tw, guard, picture, n * width, column * width, row * height, width, height);
+                }
+        }
+        finally { ViewWindow.Current = ViewWindow.Whole; post.Target = live; post.ResetHistory(); }
+        var dir = Path.GetDirectoryName(Path.GetFullPath(file));
+        if (dir is not null) Directory.CreateDirectory(dir);
+        Meitou.Data.Textures.PngWriter.Write(file, n * width, n * height, picture);
+        Console.WriteLine($"saved     {file} ({n * width} x {n * height}, multiplier {n})");
+    }
+
+    /// <summary>The guard band of a tiled shot's tiles: an eighth of the height, at least 16 pixels.</summary>
+    static int TileGuard(int width, int height) => Math.Max(16, Math.Min(width, height) / 8);
+
+    /// <summary>Copies the middle <paramref name="width"/> x <paramref name="height"/> of a drawn tile (<paramref name="guard"/> pixels of guard round it) into the picture at (<paramref name="x"/>, <paramref name="y"/>).</summary>
+    static void BlitTile(byte[] tile, int tileWidth, int guard, byte[] picture, int pictureWidth, int x, int y, int width, int height)
+    {
+        for (int r = 0; r < height; r++)
+            tile.AsSpan(((r + guard) * tileWidth + guard) * 4, width * 4).CopyTo(picture.AsSpan(((y + r) * pictureWidth + x) * 4));
     }
 
     /// <summary>Waits until <paramref name="period"/> has passed since <paramref name="start"/>: sleeps most of it, spins the last 1.5 ms.</summary>

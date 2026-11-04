@@ -30,7 +30,7 @@ public static class BuildingEffects
         WorldObjectLayout.Building(db, building.Record, b.InstanceId, building.Position, b.Rotation, new BuildingState { Identity = b.Key }, null, result);
         var name = b.LayoutName(state, exterior: true);
         if (layouts is null || name.Length == 0 || layouts.Find(building.Record, name, exterior: true) is not { } layout) return result;
-        foreach (var item in layouts.Items(layout))
+        foreach (var item in layouts.Items(layout, b))
         {
             var (at, rotation) = BuildingLayouts.Place(building.Position, b.Rotation, item);
             WorldObjectLayout.Building(db, item.Building, $"{b.InstanceId}/{item.InstanceId}", at, rotation,

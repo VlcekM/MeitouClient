@@ -314,7 +314,7 @@ public class AggroTests
         var me = a.World.Characters.Spawn(new CharacterHot { Position = new Vector3(o.X, 150, o.Y), Health = 100, MaxSpeed = 60, WalkSpeed = 15 },
             new Combatant { Name = "holder" }.MakeCold(), 0);
         var cold = a.World.Characters.Cold(me.Slot)!;
-        (cold.Faction, cold.IsPlayer, cold.Orders, cold.HoldPoint) = (1, true, CharacterOrders.Hold, o);
+        (cold.Faction, cold.IsPlayer, cold.Orders, cold.HoldPoint) = (1, true, CharacterOrders.Hold, new Vector3(o.X, 150, o.Y));
         var stander = a.SquadOf(0, o, true, (o + new Vector2(0, 50), MathF.PI)).Members[0];
         Docile(a, stander);
         a.World.RunTicks((int)(3 / a.World.TickSeconds));
@@ -356,7 +356,7 @@ public class AggroTests
         var me = holder = a.World.Characters.Spawn(new CharacterHot { Position = new Vector3(o.X, 150, o.Y), Health = 100, MaxSpeed = 60, WalkSpeed = 15 },
             new Combatant { Name = "holder" }.MakeCold(), 0);
         var cold = a.World.Characters.Cold(me.Slot)!;
-        (cold.Faction, cold.IsPlayer, cold.Orders, cold.HoldPoint) = (1, true, CharacterOrders.Hold, o);
+        (cold.Faction, cold.IsPlayer, cold.Orders, cold.HoldPoint) = (1, true, CharacterOrders.Hold, new Vector3(o.X, 150, o.Y));
         a.World.RunTicks(2);
         Assert.True(cold.Running is { Source: TaskSource.Job } job && job.Runs(CharacterTask.Idle), "on a job's task");
         var walker = a.SquadOf(0, o, true, (o + new Vector2(-300, 60), 0f)).Members[0];
@@ -427,6 +427,31 @@ public class AggroTests
         Assert.False(senses.Knows(target, now: true));
         world.RunTicks((int)(10 / world.TickSeconds));
         Assert.False(senses.Knows(target), "dropped once its life is over");
+    }
+
+    /// <summary>A carried character only lets its senses fade (FUN_1405d00b0 -> FUN_140859220): it senses nobody new, and what it knew decays unrefreshed.</summary>
+    [Fact]
+    public void A_carried_character_senses_nobody_new_and_its_entries_only_fade()
+    {
+        var aggro = new AggroSystem(Relations(), new AggroSettings { AttackOnSight = false });
+        using var world = new SimWorld(new WorldSettings { Seed = 3, Threads = 1, PublishSnapshots = false }, new OpenGroundWalkability((_, _) => 150), [aggro]);
+        CharacterId Spawn(float z)
+        {
+            var cold = new Combatant().MakeCold();
+            cold.Faction = Villagers;
+            return world.Characters.Spawn(new CharacterHot { Position = new Vector3(2000, 150, z), Health = 100, MaxSpeed = 60, WalkSpeed = 15 }, cold, 0);
+        }
+        CharacterId looker = Spawn(2000), seen = Spawn(2200), carrier = Spawn(2000);
+        world.Characters.Cold(looker.Slot)!.CarriedBy = carrier;
+        world.RunTicks(30);
+        Assert.False(aggro.SensesOf(looker.Slot)!.Knows(seen), "a carried character gathers nobody");
+        world.Characters.Cold(looker.Slot)!.CarriedBy = CharacterId.None;
+        world.RunTicks(30);
+        Assert.True(aggro.SensesOf(looker.Slot)!.Knows(seen, now: true), "set down, it senses again");
+        world.Characters.Cold(looker.Slot)!.CarriedBy = carrier;
+        world.RunTicks(30);
+        Assert.True(aggro.SensesOf(looker.Slot)!.Knows(seen), "the entry is kept while its life lasts");
+        Assert.False(aggro.SensesOf(looker.Slot)!.Knows(seen, now: true), "but nothing refreshes it");
     }
 
     /// <summary>
@@ -518,6 +543,51 @@ public class AggroTests
         Lists(pack, [Goal(TaskType.SLEEP_ON_FLOOR)], [Goal(TaskType.SLEEP_ON_FLOOR)]);
         a.World.RunTicks(30);
         Assert.All(pack.Members, m => Assert.Equal(TaskType.IDLE, a.World.Characters.Cold(m.Slot)!.Ai!.Goal!.Task.Type));
+    }
+
+    /// <summary>
+    /// A law enforcer (34) defends an innocent who is no ally (docs/game/ai-tasks.md, <c>FUN_14099b820</c>): the victim of another, peaceful faction, with no pending crime and no bounty, is one;
+    /// a victim with a pending crime or a bandit is not. Catches 34 defending only allies.
+    /// </summary>
+    [Fact]
+    public void A_law_enforcer_counts_a_peaceful_stranger_as_an_innocent_victim_but_not_a_criminal()
+    {
+        using var a = Make(13, 1, TownRelations(), ai: true);
+        var o = new Vector2(2000, 2000);
+        CharacterId Lone(int faction, float x) => a.SquadOf(faction, o, true, (o + new Vector2(x, 0), 0f)).Members[0];
+        var guard = Lone(Town, 0); var attacker = Lone(Bandits, 10); var victim = Lone(Drifters, 20);
+        var table = a.World.Characters;
+        Assert.True(a.Aggro.Innocent(table.Cold(guard.Slot)!, table.Cold(attacker.Slot)!, table.Cold(victim.Slot)!));
+        table.Cold(victim.Slot)!.Pending = new Meitou.Simulation.Crime.PendingCrime { Code = Meitou.Simulation.Crime.CrimeCode.Assault, VictimFaction = Town };
+        Assert.False(a.Aggro.Innocent(table.Cold(guard.Slot)!, table.Cold(attacker.Slot)!, table.Cold(victim.Slot)!));
+    }
+
+    /// <summary>
+    /// Goal 15's desire is the finder's first sensed ally above 0, not the best (<c>FUN_140599b90</c> asks <c>FUN_14099ca10</c> to stop at the first): a gate guard sees two mates, one fought by
+    /// one bandit (threat 0.05) and one by three (0.55); the scan's first value is the first of them in its senses, whichever is larger. Catches a constant desire of 1.
+    /// </summary>
+    [Fact]
+    public void Goal_15_desire_is_the_first_fighting_allys_threat_not_the_best()
+    {
+        using var a = Make(14, 1, TownRelations(), ai: true);
+        a.Aggro.Combat = a.Combat;
+        var o = new Vector2(2000, 2000);
+        var town = a.SquadOf(Town, o, true, (o, 0f), (o + new Vector2(10, 0), 0f), (o + new Vector2(-10, 0), 0f));
+        Lists(town, [Goal(TaskType.PROTECT_ALLIES)]);
+        Think(a);
+        CharacterId guard = town.Members[0], one = town.Members[1], three = town.Members[2];
+        var gang = a.SquadOf(Bandits, o, true, (o + new Vector2(0, 30), MathF.PI), (o + new Vector2(8, 30), MathF.PI), (o + new Vector2(-8, 30), MathF.PI), (o + new Vector2(16, 30), MathF.PI));
+        a.World.Commands.Enqueue(new AttackOrder([gang.Members[0]], one) { Tick = a.World.Tick });
+        foreach (var b in gang.Members.Skip(1)) a.World.Commands.Enqueue(new AttackOrder([b], three) { Tick = a.World.Tick });
+        var ai = a.World.SystemOf<AiSystem>()!;
+        float Threat(CharacterId id) => a.Combat.FightThreat(a.World, id.Slot, a.Aggro.SensesOf(id.Slot));
+        bool Seen(SenseEntry e) => e.Now && (e.Target == one.Slot || e.Target == three.Slot) && Threat(new CharacterId(e.Target, e.Generation)) > 0;
+        for (int k = 0; k < 600 && !(Threat(one) > 0 && Threat(three) > 0 && a.Aggro.SensesOf(guard.Slot)!.Entries.Any(Seen)); k++) a.World.RunTicks(1);
+        Assert.True(Threat(one) > 0 && Threat(three) > 0 && Threat(one) != Threat(three), $"both mates fought: {Threat(one)} and {Threat(three)}");
+        var first = a.Aggro.SensesOf(guard.Slot)!.Entries.First(Seen);
+        var scan = ai.ProtectScan(a.World, guard.Slot, TaskType.PROTECT_ALLIES, a.World.Characters.Cold(guard.Slot)!.Ai!);
+        Assert.Equal(Threat(new CharacterId(first.Target, first.Generation)), scan.First);
+        Assert.Equal(MathF.Max(Threat(one), Threat(three)), scan.Value);
     }
 
     /// <summary>

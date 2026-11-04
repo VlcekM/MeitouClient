@@ -24,6 +24,10 @@ public enum HomeSpotKind : byte
     ThroneSeat = 7,
     /// <summary>Furniture with a BF_TRAINING functionality (a training dummy): stood at, not sat on.</summary>
     Training = 8,
+    /// <summary>Interior furniture with a BF_MINE, BF_RESEARCH, BF_REFINERY or BF_CRAFTING functionality: pretend-operated by a squad member staying home (43, docs/game/ai-tasks.md "Town goals").</summary>
+    Workstation = 9,
+    /// <summary>A node of type 3 (turret), 4 (use) or 5 (light) not named as a bar or throne: no goal stands at it (the general-node finder asks for type 1 only, <c>FUN_14038c2f0</c>).</summary>
+    Other = 10,
 }
 
 /// <summary>A spot inside a building in world space; <paramref name="Yaw"/> as the simulation measures it (0 along +Z, turning towards +X).</summary>
@@ -41,8 +45,10 @@ public readonly record struct HomeSpot(HomeSpotKind Kind, Vector3 Position, floa
     public float HungerRate { get; init; } = 1;
     /// <summary>The BUILDING string id of a bed, seat or training dummy; null for other spots. A bed's output rate controls healing (docs/game/character-stats.md "Beds").</summary>
     public string? Record { get; init; }
+    /// <summary>A bed's position marker (<see cref="WorldObjectLayout.PositionMarker"/>) when its record flags a part for it; null: the bed's own position.</summary>
+    public Vector3? Marker { get; init; }
     /// <summary>A node a goal may stand at: neither a bed, a seat nor a dummy.</summary>
-    public bool IsNode => Kind is not (HomeSpotKind.Bed or HomeSpotKind.Chair or HomeSpotKind.ThroneSeat or HomeSpotKind.Training);
+    public bool IsNode => Kind is not (HomeSpotKind.Bed or HomeSpotKind.Chair or HomeSpotKind.ThroneSeat or HomeSpotKind.Training or HomeSpotKind.Workstation or HomeSpotKind.Other);
 }
 
 /// <summary>
@@ -169,6 +175,13 @@ public static class TownBuildings
     public const int BedFunction = 6, SkeletonBedFunction = 25;
     /// <summary>BUILDING_FUNCTIONALITY <c>function</c> 8, BF_CAGE: cages, the prisoner pole, the peeler (docs/game/locks.md "Data").</summary>
     public const int CageFunction = 8;
+
+    /// <summary>
+    /// Whether a BF_CAGE functionality is a torture rack (the class <c>TortureBuilding</c>; <b>Verified</b>, factory <c>FUN_14057cc70</c>, function 8): its <c>produces</c> list is not empty, or its
+    /// <c>flags</c> are not 0. Base data has none (the peeler, cooking pole, drill and hooks come from mods; docs/game/locks.md "Torture racks").
+    /// </summary>
+    public static bool IsRack(GameRecord functionality) =>
+        functionality.GetInt("function") == CageFunction && (functionality.GetReferences("produces").Count > 0 || functionality.GetInt("flags") != 0);
     /// <summary>BUILDING_FUNCTIONALITY <c>function</c> 21, BF_GATE (docs/game/buildings-production.md "Classes and functions").</summary>
     public const int GateFunction = 21;
 
@@ -182,6 +195,8 @@ public static class TownBuildings
     public const int ChairFunction = 17;
     /// <summary>BF_THRONE ("throne chair", sat on like a chair) and BF_TRAINING (a training dummy): the other furniture sitting around (275) takes (docs/game/ai-tasks.md "Town goals").</summary>
     public const int ThroneFunction = 24, TrainingFunction = 7;
+    /// <summary>BF_MINE, BF_RESEARCH, BF_CRAFTING: with <see cref="RefineryFunction"/> and the chair and training function, the furniture staying home (43) operates in pretence (mask 0x2049a of <c>FUN_1408cbc00</c>).</summary>
+    public const int MineFunction = 1, ResearchFunction = 3, CraftingFunction = 10;
     /// <summary>BF_TABLE, BF_CORPSE_DISPOSAL, BF_REFINERY: what a free seat faces (<see cref="SeatYaw"/>).</summary>
     public const int TableFunction = 16, CorpseDisposalFunction = 11, RefineryFunction = 4;
     /// <summary>BF_RESOURCE_STORAGE, BF_SHOP, BF_GENERAL_STORAGE: the containers a building shop's stock goes into (<see cref="TownFixture.HoldsShopStock"/>).</summary>
@@ -312,7 +327,7 @@ public static class TownBuildings
         var spots = c.Spots;
         int index = 0;
         List<(int Spot, int Flags)>? seats = null;
-        foreach (var item in layouts.Items(interior))
+        foreach (var item in layouts.Items(interior, b))
         {
             var (at, rotation) = BuildingLayouts.Place(resolved.Position, b.Rotation, item);
             bool node = item.Building.GetBool("is node");
@@ -323,6 +338,7 @@ public static class TownBuildings
             {
                 NodeType = node ? item.Building.GetInt("node type") : -1,
                 Record = k == HomeSpotKind.Bed ? item.Building.StringId : null,
+                Marker = k == HomeSpotKind.Bed ? WorldObjectLayout.PositionMarker(db, item.Building, at, rotation) : null,
             });
             else if (function?.GetInt("function") == ChairFunction)
             {
@@ -334,7 +350,7 @@ public static class TownBuildings
                     HungerRate = function.GetFloat("hunger rate", 1),
                 });
             }
-            else if (function is not null && FurnitureOf(db, item.Building, function, at, YawOf(rotation)) is { } piece) c.Furniture.Add(piece);
+            else if (function is not null && FurnitureOf(db, item.Building, function, at, YawOf(rotation), inside: true) is { } piece) c.Furniture.Add(piece);
             if (function?.GetInt("function") is TableFunction or CorpseDisposalFunction or RefineryFunction) c.Tables.Add(at);
             else AddFixture(db, functions, item, $"{b.Key}/{index}", at, rotation, c);
             index++;
@@ -378,16 +394,17 @@ public static class TownBuildings
 
     /// <summary>
     /// A seat-like piece for sitting around (275, <see cref="TownBuilding.Furniture"/>) from a functionality: BF_CHAIR and BF_THRONE are sat on (its <c>animation</c> and <c>hunger rate</c>), BF_TRAINING
-    /// is stood at (and keeps its BUILDING, the dummy's stat and cap); null for any other function.
+    /// is stood at (and keeps its BUILDING, the dummy's stat and cap), and an interior piece of function MINE, RESEARCH, REFINERY or CRAFTING is a <see cref="HomeSpotKind.Workstation"/>; null for any other function.
     /// </summary>
-    static HomeSpot? FurnitureOf(GameDatabase db, GameRecord building, GameRecord function, Vector3 at, float yaw)
+    static HomeSpot? FurnitureOf(GameDatabase db, GameRecord building, GameRecord function, Vector3 at, float yaw, bool inside = false)
     {
-        var kind = function.GetInt("function") switch { ChairFunction => HomeSpotKind.Chair, ThroneFunction => HomeSpotKind.ThroneSeat, TrainingFunction => HomeSpotKind.Training, _ => (HomeSpotKind?)null };
+        var kind = function.GetInt("function") switch { ChairFunction => HomeSpotKind.Chair, ThroneFunction => HomeSpotKind.ThroneSeat, TrainingFunction => HomeSpotKind.Training,
+            MineFunction or ResearchFunction or RefineryFunction or CraftingFunction when inside => HomeSpotKind.Workstation, _ => (HomeSpotKind?)null };
         if (kind is not { } k) return null;
         return new HomeSpot(k, at, yaw)
         {
             Record = building.StringId,
-            SitClip = k == HomeSpotKind.Training ? null : function.GetReferences("animation").Select(r => db.Find(r.TargetStringId)?.Name).FirstOrDefault(n => n is not null),
+            SitClip = k is HomeSpotKind.Training or HomeSpotKind.Workstation ? null : function.GetReferences("animation").Select(r => db.Find(r.TargetStringId)?.Name).FirstOrDefault(n => n is not null),
             HungerRate = function.GetFloat("hunger rate", 1),
         };
     }
@@ -426,12 +443,16 @@ public static class TownBuildings
         state is not null && state.GetInt("mountedTYPE") == (int)FcsRecordType.BUILDING && state.Ints.ContainsKey("mountedI") &&
         instances.TryGetValue((state.GetInt("mountedC"), state.GetInt("mountedI")), out string? instance) ? instance : null;
 
-    /// <summary>The kind of a node: by its <c>node type</c> (0 shopkeeper, 2 guard post), else by its record's name.</summary>
+    /// <summary>
+    /// The kind of a node from its <c>node type</c> alone (<c>FUN_14038c2f0</c>): 0 shopkeeper, 1 general, 2 guard post, whatever the name. Types 3 (turret), 4 (use) and 5 (light) are never
+    /// general: the record's name only gives the engine's bar and throne stand-ins, else <see cref="HomeSpotKind.Other"/>.
+    /// </summary>
     public static HomeSpotKind NodeKind(GameRecord node) => node.GetInt("node type") switch
     {
         0 => HomeSpotKind.Shopkeeper,
+        1 => HomeSpotKind.General,
         2 => HomeSpotKind.Guard,
-        _ => NodeKind(node.Name),
+        _ => NodeKind(node.Name) is var named && named is HomeSpotKind.Bar or HomeSpotKind.Throne ? named : HomeSpotKind.Other,
     };
 
     /// <summary>The layout names a building record can take (case ignored), cached by record and side; empty without layouts.</summary>

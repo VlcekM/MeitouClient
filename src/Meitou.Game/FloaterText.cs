@@ -19,7 +19,7 @@ static class FloaterText
     /// </summary>
     public static string? Format(in Floater f, FloaterMode mode)
     {
-        if (f.Kind is FloaterKind.Text or FloaterKind.Label or FloaterKind.StealthHit or FloaterKind.StealthMiss) return f.Part.Length > 0 ? f.Part : null;   // the eating text and machine labels (Meitou draws it with the damage floaters, so it shows only while they are on)
+        if (f.Kind is FloaterKind.Text or FloaterKind.Label or FloaterKind.StealthHit or FloaterKind.StealthMiss or FloaterKind.Building) return f.Part.Length > 0 ? f.Part : null;   // the eating text and machine labels (Meitou draws it with the damage floaters, so it shows only while they are on)
         if (mode == FloaterMode.Off) return null;
         var d = f.Damage;
         var a = f.Absorbed;
@@ -46,11 +46,17 @@ static class FloaterText
     public static Vector4 Colour(in Floater f) => f.Kind switch
     {
         FloaterKind.Text => White,
-        FloaterKind.Label => LabelGrey,
+        FloaterKind.Label or FloaterKind.Building => LabelGrey,
         FloaterKind.StealthHit => StealthHit,
         FloaterKind.StealthMiss => StealthMiss,
-        _ => f.TargetIsPlayer ? Red : f.SourceIsPlayer ? Green : Grey,
+        _ => HitColour(f),
     };
+
+    /// <summary>
+    /// The blow's tint (<c>FUN_1406508d0</c> end, <b>Verified</b>): grey; green when the attacker's faction is the player's or the active squad's memory holds TEMP ENEMY on the target; then red, which wins, when the target's
+    /// faction is the player's or the memory holds TEMP ALLY on it.
+    /// </summary>
+    static Vector4 HitColour(in Floater f) => f.TargetIsPlayer || f.TargetTempAlly ? Red : f.SourceIsPlayer || f.TargetTempEnemy ? Green : Grey;
 
     /// <summary>A stealth knock-out's result colours (<c>FUN_14034cd80</c>, <b>Verified</b> literals): "*Thunk*" (0.4, 0.8, 0.4) at 0.9 alpha, "Failed!" (0.7, 0.4, 0.4) at 0.7.</summary>
     public static readonly Vector4 StealthHit = new(0.4f, 0.8f, 0.4f, 0.9f), StealthMiss = new(0.7f, 0.4f, 0.4f, 0.7f);

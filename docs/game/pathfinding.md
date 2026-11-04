@@ -10,7 +10,7 @@ our DotRecast builder (`Meitou.Navigation`), not proprietary Havok SDK. [Collisi
 Zone4608,64² grid; exterior UID=(Z<<8)|X, interiors>=0x10000 with unknown composition.
 **Observed** face key upper10 bits instance, lower22 face. Floating origin keeps Havok small.
 NavMeshMain owns mutation/messages, sleeps10ms idle; generator sleeps100ms and dispatches queued
-full/partial/interior/stitch jobs. 3x3 active-zone loads and runtime stitching observed in logs.
+full/partial/interior/stitch jobs. The NavMeshMain thread (`FUN_1403af0f0`, **Verified**) steps `FUN_1403ae490` in a loop with the flush-to-zero bit set and calls Sleep(10) only when a step found nothing to do. Meitou's `NavMeshService` / `PathService` block on a `BlockingCollection` and wake at once: an engine choice (up to ~10 ms less latency), not copied. 3x3 active-zone loads and runtime stitching observed in logs.
 
 **Verified** navtiles:3995 Havok tagfiles, magic1E0DB0CA CEFA11D0, SDK hk_2014.2.0-r1,
 hkRootLevelContainer; hkaiNavMesh faces16bytes/edges20, graph/streaming/mediator/static-tree objects.
@@ -161,7 +161,7 @@ literally reads `CARAVAN. MILITARY`). Random draws are uniform (`rand()`).
   move to x = front-most x + 25 + r as a rear guard.
 
 **Following** (`Task_Follow` update `14033b350`, shared by 141 Task_FollowLeader, 31 and the other follow tasks). Task 141 follows
-the slave owner if the character has one, else its squad leader. Formation mode applies when the target is the follower's slave
+the slave owner if the character has one (Meitou: the leader of its master squad, `ObedientSlave.OwnerOf`), else its squad leader. Formation mode applies when the target is the follower's slave
 owner or in its platoon (`14033b160`); otherwise the aim is target + normalise(me − target) × D, D = 20..40 drawn when the task is made
 (`14032ebd0`). Formation aim (`1403335c0`): heading H (task +0xa0) eases toward the leader's XZ direction (−X if zero) while the leader
 moves, H += (dir − H) × 0.5 × dt (`GameLoop_DtScaled`), aim = leader position + H × leader speed + slot rotated from −X onto H, so
@@ -173,7 +173,7 @@ Each update, with d the XZ distance to the aim: under 1 the desired speed (movem
 d × max(0.1, 0.5 + 0.5 × dot(leader direction, own direction)): a follower that lags runs to catch up, one facing away slows. With the
 leader standing: under 20 → 0, 20-50 → 10-20, 50-200 → 20-30, 200-500 → 30-999 (each linear in d², clamped). Speed 0 stops. Under 50
 it steers straight (movement mode 2 MOVE_DIRECTION, desired motion toward the aim, move limit √d); from 50 to 100 it keeps that only
-while it moved more than its speed² since the last update; otherwise it paths to the aim. Followers copy an allied leader's sneaking.
+while it moved more than its speed² since the last update; otherwise it paths to the aim. Followers copy an allied leader's sneaking. (**Verified**: the two directions are the movement vectors +0xd0/+0xd8 normalised, not the facings; the 100 limit is the squared constant 10000 read as such, **Observed**.) Meitou: `MovementSystem.FollowDirect` (`CharacterCold.FollowDirect` / `FollowLast`) and `Direction(velocity)`.
 Stacked floors are **Unknown**. Engine choice: a follower whose own floor under the leader is over 20 off the leader's height paths to
 the leader on its floor, d plus the height gap (**Observed**: "guys b stuck" save, Dust Bandits squad under its boss on the Hub Storm
 House roof storey, stood "Following leader" on the floors below).
@@ -261,7 +261,7 @@ none when destroyed; it holds interior stairs and upper floors. **Verified** (ti
 inside the bounds of `Storm_House_01_Interior-stairs` (`is stairs`, only in `interior`). **Observed** (scratch NavSystem probe):
 without the list that storey and the Watchtower `2-Newwworld-INGAME` floors +130/+190/+290 were unkept; with it paths from the door seed reach them.
 **Destroyed interiors**: a part with a `destroyed mesh` but no `destroyed collision` keeps its intact `xml collision` (**Verified**,
-`FUN_14055f6e0`; with no `phs or mesh` its `xml collision` is cleared instead). The original rebuilds a ruin's interior at load or when it is destroyed
+`FUN_14055f6e0`; with no `phs or mesh` its `xml collision` is cleared instead, see below). The original rebuilds a ruin's interior at load or when it is destroyed
 and stitches it to the tile's exterior (**Verified**, Generator, "Destroyed at run time"); Meitou builds it the same way. A ruin has no doors, so its seed
 is a node, else the original's ray from above its origin onto its floor-0 part (`ZoneGeometryGatherer.OriginRaySeed`). **Observed** (original tiles
 20.32, 18.35, 19.29, 20.29, built with these buildings destroyed; interior groups matched to ours by box): the original keeps a mesh on the ground floor
@@ -283,7 +283,7 @@ outside it, `14.5:2-` probe: neither mesh at 2 outside the hull, both at 4), so 
 the original's inputs; its run-time mesh is not in the tiles). Hub: all 19 ruins have a boundary; floor points inside each outline are reached from the
 street (L-House `4645-Newwworld-INGAME` 39/39), as walkers enter it in the original (user report).
 **Doors**: every part of a `doors`-list building is group 5. **Observed** (35 door records): only
-`Defensive Gate level 4/5 Door` lack `is door`, yet open in game; without the rule Squin was sealed.
+`Defensive Gate level 4/5 Door` lack `is door`, yet open in game; without the rule Squin was sealed. **Verified** (decompile, s17-f13): the original reads no `is door` string anywhere; a building is a door by being made from a `doors` list (`FUN_140557280` factory `FUN_14057cc70`; DoorStuff constructor `FUN_14029fb40` sets the byte +0x1a0). Probe over the merged base and mod data: no BUILDING record has `is door`; 36 BUILDING_PART records have it, and two of them (`moor27-door2` of `Shop Door B`, `Storm_House_03_Door02` of `Storm House Door C II`) belong to buildings in no `doors` list, so Meitou keeps the flag test as well (the part flag, kept on purpose; no change).
 **Entrance seeds** (engine choice): cross the door's width axis. An exterior seed stands on the highest walkable surface at its marker at most
 `DoorSeedRise` (5) above the door box's base (the original drops the marker with a ray), else on the terrain or water; an interior seed on the lowest
 collision floor with agent-height headroom. **Observed** (Defensive Gate IV `2934-Walls2.mod`, zone 24.27, "this gate is fucked" save): its walkable
@@ -514,6 +514,11 @@ failures (Meitou: the nearest reachable point and a straight tail). Both would s
 measurement shows the cost, since most in-town trips exceed 1000 units.
 **Observed** (scratch harness, nothing loaded): Hub→Squin 17657 straight walks 25522 at 0.3 (99 % within 400 of a road; 43 % at 0);
 Hub→Stack 34054; Squin→Admag at 0.8 walks 132184 for 26834 straight (short road `length` values, as off screen).
+Destroyed-part rules (**Verified**, `FUN_14055f6e0` l.144-176): a stairs part with no `destroyed mesh` is dropped. A non-stairs part with `building floor` != 0 and no `destroyed mesh` keeps its
+normal mesh in mode 2: not drawn, but its collision is made (`destroyed collision`, else `xml collision`). A stairs or upper-floor part whose `destroyed mesh` replaces a blank own `phs or mesh` has
+its `xml collision` cleared, so only `destroyed collision` applies; a ground-floor non-stairs part is never cleared. (The original clears the shared part record, so intact buildings using the part
+lose the collision too once a destroyed one was made; Meitou clears it per placement only.) Meitou: `WorldObjectLayout.AddPart` (`PlacedMesh.RenderHidden`, `BlankXmlCollision`,
+`PlacedMesh.CollisionPath`); the renderer skips hidden parts, the navmesh gatherers use them.
 
 ### Generator (runtime and tool-time navmesh building)
 
@@ -757,7 +762,7 @@ The original labels the walkable ground by the gates (**Verified** structure, de
 - **Gate states** (`FUN_1402eebb0`, `FUN_1402eb070`): a map keyed by the pair (smaller code | larger << 8); several gates between one pair keep the lowest
   state (**Verified**); routes through several gates are as bad as their worst gate, best route kept (**Observed**). Same code → 0, either -1 → -1.
   Gate state 1 open or broken, 2 closed, 3 locked (**Observed**). `FUN_1402ebdd0` finds the gate a route between two codes leaves by.
-- **Readers in play**: DESTINATION_NOT_BLOCKED_BY_FORTIFICATIONS ([gates](locks.md#cutting-and-breaking-285--185-cut-286--186-break)), the run-away score
+- **Readers in play**: the spawn-inside-walls repair of a squad's activation (`FUN_1404ffad0`, **Verified**, [factions](factions-squads-towns.md#town-residents)); DESTINATION_NOT_BLOCKED_BY_FORTIFICATIONS ([gates](locks.md#cutting-and-breaking-285--185-cut-286--186-break)), the run-away score
   ([combat](combat.md)). Wall termites reads the pass's town list but is disabled ([walls](buildings-production.md#walls)).
 
 Meitou (`Meitou.Navigation/NavGateRegions`, engine reading): gates are buildings with `is wall gate` or a BF_GATE functionality

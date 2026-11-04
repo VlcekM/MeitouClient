@@ -89,6 +89,15 @@ public sealed class Platoon
     /// while set its stand-in neither travels nor takes a job (<c>FUN_1407ee790</c>).
     /// </summary>
     public bool Imprisoned { get; set; }
+    /// <summary>The platoon is persistent without a save's record to say so (the flag a prisoner's own platoon takes from its old platoon or its unique member, <c>FUN_14079c1c0</c>): the original never removes one.</summary>
+    public bool Persistent { get; set; }
+    /// <summary>
+    /// Spawn mode 3 (+0x118, <c>FUN_1404ffad0</c>, <b>Verified</b>): the platoon's home town was replaced by an override town it does not belong to; its activation is refused and
+    /// the keep test refuses it (<c>FUN_1407ec570</c>). Not saved (set again at the next activation).
+    /// </summary>
+    public bool ReplacedHome { get; set; }
+    /// <summary>The original's activation took the persistent flag off (<c>FUN_1407ebdd0</c>(platoon, 0)); overrides a save's <c>persistent</c>. Not saved: the platoon is gone within a minute.</summary>
+    public bool PersistentCleared { get; set; }
     /// <summary>
     /// The unloaded platoon's activation dwell (+0x78, <c>FUN_1407ebf30</c>, <b>Verified</b>): 5 s when it becomes unloaded, 2 s again whenever it stands outside its zone's
     /// activation box; inside, it counts down and the platoon activates once it is below 0. Not saved (a loaded platoon starts at 5).
@@ -128,6 +137,11 @@ public sealed class StoredSquad
     public double StoredHours { get; set; }
     /// <summary>The characters while the platoon is not in the world (empty while it is).</summary>
     public List<StoredMember> Members { get; } = [];
+    /// <summary>
+    /// The squad's dead, kept in the record as the original serialises the whole member list (<c>FUN_1404ff410</c>) while their bodies leave the world at the unload (<c>FUN_1404feed0</c>);
+    /// they come back as corpses where they lay when the squad is made again. Not counted as members (<see cref="Members"/> is the living).
+    /// </summary>
+    public List<StoredMember> Dead { get; } = [];
 }
 
 /// <summary>A character of a <see cref="StoredSquad"/>: its cold state, cleared of what only meant something in the world, and its place.</summary>
@@ -183,10 +197,12 @@ public sealed class PlatoonRegistry
                 // Only for stored squads, so worlds without them hash as before.
                 h.Add(stored.Members.Count);
                 foreach (var m in stored.Members) h.Add(m.Position);
+                if (stored.Dead.Count > 0) { h.Add(0x44656164); h.Add(stored.Dead.Count); }
                 h.Add(stored.Anchor);
                 h.Add(stored.Pinned);
             }
             if (!p.IntactFlag) h.Add(0x496E7463);   // likewise while not intact
+            if (p.Persistent) h.Add(0x50657273);   // only a split-off prisoner's, likewise
             if (p.Dead) h.Add(0x44656164);   // only once declared dead, so worlds without one hash as before
             if (p.OrphanSeconds > 0) h.Add(p.OrphanSeconds);   // only while counting, so worlds without it hash as before
             if (p.Campaign is { } campaign)

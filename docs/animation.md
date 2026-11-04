@@ -20,6 +20,10 @@ Hit reactions: the six ANIMATION records with `stumbles` all relocate; their `Bi
 `mid blow` 4.63 s peak 18 back (~45%) ending 4 back, `back blow light` 0.67 s ~0, `back blow low` 1.47 s 17.7
 forward, `mid blow drop` 6.57 s ~4 back, `back blow high` has no clip. When they play: [combat.md](game/combat.md#hit-reactions).
 
+### Clips a body lacks
+
+**Verified** (layer manager update `@ 1405b5c30`, with `FUN_1405b3090` / `FUN_14051caa0`): a layer whose animation the character's entity does not have (`hasAnimationState` false) is deleted before the weights are summed or scaled, so it takes no weight from the other layers. **Observed** (the base game plus a large mod list, rigs of the humanoid races): ~8 ANIMATION records resolve on no humanoid skeleton, e.g. `Block pole bottom` and `GROUNDED_BlowBack_Chest low`, whose clips only a mod's female animation file holds, and `stand 1 sword lefty`. Meitou: the renderer finds no layer for them, so before this a wanted one took the whole body half's weight (`Publish`) and the body stood in the binding pose until it ended. `AnimationSystem.Plays` (`CharacterRigs.Plays`, cached per appearance) drops such wanted layers, and a technique or hit reaction the body cannot play is not started (it stays in its stance; the combat system still holds it for the clip's length). **Unknown**: what the original picks when its hit reaction clip is missing.
+
 ### Clip times between ticks
 
 Engine choice (`GameHost.LayerTime`): the host draws a layer's clip time from the last tick's towards this one's by the shorter way round the clip (by the layer's
@@ -127,7 +131,9 @@ of definitions and gives each a weight; zero-weight ones are dropped:
   1 IMPRISONED, 2 SLEEPING, 3 CARRIED, 4 SWIMMING, 5 GROUNDED, 6 COMBAT, 7 ATTACKS, 8 RANGED, enum names
   from the FCS editor). Meitou plays category 4 in deep water ([water states](game/pathfinding.md#water-states)): `swim` (clip `swim2`), `swim carry`, `swim carry left`, `swim idle`;
   and category 5 while crawling ([forced crawl](game/ragdolls.md#forced-crawl)).
+  The hit-reaction pick `FUN_14051f420` -> `FUN_14051d660` tests it too, against the class category `AC+0xf0` that `FUN_140520500` sets (4 in deep water for a swimming race, else 5 held down or crawling, else 0; **Verified**): a swimmer or crawler only gets stumbles of category 4 or 5, none if no record has them (Meitou: `AnimationStance.Category`). The stumble picker never reads `weather type` (`FUN_1405bbd40` files a weather record in the by-name and per-part stumble maps like any other, **Verified**), so such a record listing `stumbles` is a valid stumble (base data: the only weather-type record, a mod's `wind in face`, has none; Meitou appends them last as `WeatherCategory`, taken by no other selector).
 - `is combat mode` and `stealth mode`: EITHER (2) or equal to the character's combat / stealth state (when the combat flag is set: [combat](game/combat.md#combat-stance)).
+- `crouched` / `prone` (record bytes +0x9c / prone; `FUN_14051ec80`:110 compares them with `AnimationClass` +0x21c / +0x21d): both are written together by `FUN_14051dda0` (vtable slot 18); with both set crouched is cleared and "ANIM ERROR: crouched and proned" logged. Task_Crouch (27) sets crouched once its `squat T` clip has passed a progress threshold (`FUN_140346440`, threshold not read), Task_UnCrouch (28) and the end of many tasks clear it (**Verified**). The base data has no crouch task. Meitou: `CharacterCold.Crouched` feeds `AnimationStance.Crouched` (never with prone); nothing sets it yet, the task trigger is missing.
 - Arms (`@ 14051d240`, **Verified**): for layer index 1 (upper **and** `all`, which keeps index 1) and 2 (overlay) the lower layer is exempt: `has weapon L` and `R` both YES mean exactly
   one hand holds a weapon; otherwise each hand's YES / NO must match what it holds, EITHER passes. For the same layers the weapon type held (5 = unarmed) must be a set bit of the record's weapon-kind
   mask, except that fists skip the test (`@ 14051ec80`). Meitou: `AnimationDefinition.ArmsFit`, `KindFits`, applied in `FitsExceptLegs`.
@@ -140,8 +146,7 @@ of definitions and gives each a weight; zero-weight ones are dropped:
   is 1. A positive r is then sharpened: **w = 1 / (1 + e^(−10 (2r − 1)))** (so r = 0.5 → 0.5, r = 1 → 0.99995).
 - **Leg weight**: the same ramp (without the sigmoid) over the health of the *more hurt* leg against
   `L/R leg damage min / ideal / max` of that side (left values if the left leg is worse). The loader forces
-  min < 1 to −101 and max > 99 to 101, so a healthy-leg clip covers the whole range. Idle picks (`@ 14051ec80`, `@ 14051d310`) weigh the legs the same way, so an idle records 0 .. 100 still plays on a leg
-  below 0 (limping, not yet collapsed); Meitou reads the range alike in `AnimationDefinition.Fits` (`LegFloor`, `LegCeil`; before, the idle list was empty for such a leg).
+  min < 1 to −101 and max > 99 to 101, so a healthy-leg clip covers the whole range; a minimum under 1 makes the ramp flat 1 below the ideal (no rise), and a value and a minimum both under −40 give 1 outright (`FUN_14051cd10`, **Verified**). Idle picks (`@ 14051ec80`, `FUN_14051d180`) weigh each candidate `idle chance` x this ramp (a pass/fail range would not; the stance flag +0x9f gives 1 instead), keeping weights above 0. Meitou: `AnimationDefinition.LegWeight` and `AnimationLibrary.LegWeighted` (the idle caches hold the clips that fit apart from the legs).
   The idle draw `FUN_14051ec80` never comes back empty (**Verified**): with no record fitting it returns the first record of the idle list it was given (`+0x2c0`; which record that is in the base data is **Unknown**). The crawl idles' `-999` leg minimum is read as -101, so a leg past -101 % (a severed one; `HealthPart.Fraction` is unbounded) fits neither `crawl idle` and the pick was empty, leaving a stopped crawler in the bind pose (**Verified**: probe of the base data, no crawl idle fits a leg under -101 in any combat or stealth state). Meitou: `AnimationLibrary.CrawlIdles` then ignores the leg ranges and takes the first grounded idle that fits the rest, in data order.
 - Only for idle picks (layer upper or overlay): `being carried` / `carrying left` / `carrying right` must
   match the character, and the weapon-type flags must include the equipped weapon's type; for unarmed (type 5)
@@ -168,6 +173,7 @@ of definitions and gives each a weight; zero-weight ones are dropped:
   for > 0 when the lists are built (`FUN_1405bbd40`, **Observed**): such a clip goes to the strafe list instead of the by-name action list, and the value is never a speed.
   Only the base/animal class reads the strafe list (its first entry is the side step in a fight); humans fetch `strafe lower` by name. An animal's `strafe anim`
   is its side step only when none of its `animations` has `strafe speed max` > 0.
+  Human side step (`FUN_14051fc60`, **Verified**): only in combat mode, the record named `strafe lower` from the race's by-name map (first lookup cached globally), weight 1 − the movement layer's, no stance fit test. Meitou: `AnimationLibrary.Strafe` looks it up by name.
 - Meitou: `AnimationSystem.Strafe` and `AnimationLibrary.Strafe`; a fighter in its footwork (`CharacterCold.FaceSlot`) keeps facing its
   target while its path moves it (`MovementSystem`, the turn's speed cut skipped); the share is 0 below a total speed of 1 (standing; engine reading of the weight).
 

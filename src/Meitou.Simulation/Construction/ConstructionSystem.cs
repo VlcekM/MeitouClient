@@ -143,10 +143,16 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
 
     static IReadOnlyList<CharacterId> Who(World world, IReadOnlyList<CharacterId> ids) => ids.Count > 0 ? ids : world.Player.Selection.ToArray();
 
+    /// <summary>
+    /// Whether the player may order work on a site (the build verb, <c>FUN_1407a6bc0</c>, Verified): its own, and any other faction's that is unfinished and standing; a destroyed site
+    /// of another faction has no menu. The order and the work test no owner in the original (docs/game/ui-input.md, Verified), so the work is as for an own site.
+    /// </summary>
+    static bool MayBeBuilt(World world, BuildSite site) => site.Owner == world.Player.Faction || !site.Complete && !site.Destroyed;
+
     void OrderBuild(World world, IReadOnlyList<CharacterId> who, BuildSite? target, bool queued)
     {
         // Build and Repair are both Task_Build: an unfinished site is built, a damaged one (progress below its target) repaired; a whole building has nothing to do.
-        if (target is not { NeedsWork: true } site || site.Owner != world.Player.Faction) return;
+        if (target is not { NeedsWork: true } site || !MayBeBuilt(world, site)) return;
         var table = world.Characters;
         foreach (var id in who)
             if (table.TryResolveNext(id, out int slot)) PlayerOrders.Give(world, slot, new OrderEntry(TaskType.BUILD, this) { Site = site.Id }, queued);
@@ -167,10 +173,11 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
                 if (world.Fixtures.Find(id) is not { Kind: Locks.FixtureKind.Door } door || door.Owner != world.Player.Faction || !DoorNeedsWork(door)) return OrderCheck.Gone;
                 return Able(cold) ? OrderCheck.Run : OrderCheck.Blocked();
             case TaskType.DISMANTLE:
-                if (reg.Find(id) is not { LevelPlacement: null } doomed || doomed.Owner != world.Player.Faction || Blocker(reg, doomed) is not null) return OrderCheck.Gone;
+                if (reg.Find(id) is not { LevelPlacement: null } doomed || doomed.Owner != world.Player.Faction) return OrderCheck.Gone;
+                if (Blocker(reg, doomed) is { } refusal) return OrderCheck.Blocked(refusal);   // the builder says it (a bark), as the task's first update does
                 return Able(cold) ? OrderCheck.Run : OrderCheck.Blocked();
             default:
-                if (reg.Find(id) is not { NeedsWork: true } site || site.Owner != world.Player.Faction) return OrderCheck.Gone;
+                if (reg.Find(id) is not { NeedsWork: true } site || !MayBeBuilt(world, site)) return OrderCheck.Gone;
                 return Able(cold) && HasWorkingArm(cold) ? OrderCheck.Run : OrderCheck.Blocked();
         }
     }
@@ -223,11 +230,7 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
                 case DismantleOrder order:
                 {
                     if (Root(reg, reg.Find(order.Site)) is not { LevelPlacement: null } site || site.Owner != world.Player.Faction) break;
-                    if (Blocker(reg, site) is { } text)
-                    {
-                        world.Post(text);
-                        break;
-                    }
+                    // Taking apart a building with furniture or mounted buildings is refused by the builder when the task runs (Task_Dismantle update FUN_1403518c0: it speaks, then ends), not at the order.
                     foreach (var id in Who(world, order.Characters))
                         if (table.TryResolveNext(id, out int slot)) PlayerOrders.Give(world, slot, new OrderEntry(TaskType.DISMANTLE, this) { Site = site.Id }, order.Queued);
                     break;
@@ -401,7 +404,7 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
             Rate = data.Rate,
         };
         site.Complete = site.Target <= 0;   // a total of 0 completes at once (Verified)
-        site.Town = TownFor(world, site, data);
+        site.Town = TownFor(world, site, data, plan.BoundsSize);
         reg.Add(site);
         return site;
     }
@@ -420,9 +423,9 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
     /// <summary>
     /// The player town a new site belongs to (docs/game/buildings-production.md "Placement", Outposts): its parent building's; else the nearest player town within
     /// <see cref="JoinTownRange"/>; else the town of the nearest player building within <see cref="JoinBuildingRange"/>; else, for a <c>creates player town</c> building that is not a
-    /// wall, a new outpost at its position, which also takes in the player buildings whose nearest town within <see cref="AdoptRange"/> it is. 0 when none.
+    /// wall, a new outpost at its position plus the size of the ghost's bounds box (<b>Verified</b>, <c>FUN_1404d6d90</c>: <c>Aabb::getSize</c>, the full X, Y and Z extent), which also takes in the player buildings whose nearest town within <see cref="AdoptRange"/> it is. 0 when none.
     /// </summary>
-    int TownFor(World world, BuildSite site, BuildingBuildData data)
+    int TownFor(World world, BuildSite site, BuildingBuildData data, Vector3 boundsSize)
     {
         var reg = world.Buildings;
         if (site.Parent is { } parent && reg.Find(parent) is { } home) return home.Town;   // a level building's town is not a player town: the rules below
@@ -448,7 +451,7 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
         if (near is { Town: > 0 } && best < JoinBuildingRange) return near.Town;
 
         if (data.LinksTogether || !data.CreatesPlayerTown) return 0;
-        var town = reg.AddTown(site.Position, faction);
+        var town = reg.AddTown(site.Position + boundsSize, faction);   // the ghost's position plus its bounds' size (FUN_1404d6d90)
         foreach (var s in reg.All)
             if (s.Owner == faction && NearestTown(reg, s.Position, AdoptRange) == town.Number) s.Town = town.Number;
         return town.Number;
@@ -646,8 +649,9 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
     /// Whether the worker is near enough its goal (<see cref="SiteReach.Within"/>): a site by its footprint, a ground item by its position (within <see cref="PlayerSystem.PickUpReach"/>,
     /// twice that once stopped).
     /// </summary>
-    bool Arrived(in CharacterHot n, (Vector3 At, BuildSite? Site, float Reach) goal) =>
-        SiteReach.Within(n, goal.Site is { } site ? SiteReach.Gap(Settings.EdgeGap, site, n.Position) : Vector2.Distance(new(n.Position.X, n.Position.Z), new(goal.At.X, goal.At.Z)), goal.Reach);
+    bool Arrived(World world, in CharacterHot n, (Vector3 At, BuildSite? Site, float Reach) goal) =>
+        SiteReach.Within(n, goal.Site is { } site ? SiteReach.Gap(Settings.EdgeGap, site, n.Position) : Vector2.Distance(new(n.Position.X, n.Position.Z), new(goal.At.X, goal.At.Z)), goal.Reach)
+        && (goal.Site is not { } high || SiteReach.AtHeight(n, high, world.Fixtures.DoorsByBuilding[high.Id].Any()));
 
     /// <summary>
     /// Where a worker goes and from how near it works: the site, or for a fetcher its source (a storage by its machine's <c>use range</c>, the original's <c>UseableStuff::getReachRange</c>;
@@ -674,7 +678,7 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
         cold.BuildSite = site.Id;
         cold.BuildBar = 0;
         ClearFetch(cold);
-        if (!Arrived(n, (site.Position, site, ReachOf(site))))
+        if (!Arrived(world, n, (site.Position, site, ReachOf(site))))
         {
             n.Goal = new Vector2(site.Position.X, site.Position.Z);
             n.Flags |= (ushort)MoveFlags.NeedPath;
@@ -776,7 +780,7 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
                 continue;
             }
             const ushort Path = (ushort)MoveFlags.AnyPath;
-            if (Arrived(n, goal))
+            if (Arrived(world, n, goal))
             {
                 // There: stand still and let the slow world work.
                 if ((n.Flags & Path) != 0)
@@ -790,6 +794,7 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
             }
             // On the way, or not started (a path that failed or ended short is asked for again after a wait).
             if ((n.Flags & Path) != 0) continue;
+            if (n.TaskTime > 0 && NoteUnreachable(world, i, cold, site)) continue;
             n.TaskTime -= dt;
             if (n.TaskTime > 0) continue;
             n.Goal = new Vector2(goal.At.X, goal.At.Z);
@@ -799,6 +804,30 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
         }
         if (reg.Count == 0 && !doorWork) sweep = false;
     }
+
+    // ------------------------------------------------------------------ unreachable targets
+
+    /// <summary>How long a target whose path ended short is ignored (<c>FUN_140796ed0</c> stores 20.0 in the AI's ignore map, <b>Verified</b>; its decay is <b>Unknown</b>, taken as seconds).</summary>
+    public const float UnreachableSeconds = 20;
+
+    static string ItemKey(int id) => "item:" + id;
+
+    /// <summary>
+    /// The path of a worker ended short of its target (<c>FUN_14059c6d0</c>, "Task impossible: X can't get to Y"): the site, or the loose item it fetches, is ignored for
+    /// <see cref="UnreachableSeconds"/> (readers: <see cref="EngineerSite"/>, <see cref="Source"/>). A fetcher of a loose item goes back to its site, which picks another source. True when the worker left its goal.
+    /// </summary>
+    bool NoteUnreachable(World world, int slot, CharacterCold cold, BuildSite site)
+    {
+        bool fetch = world.Characters.Next[slot].Task == (byte)CharacterTask.FetchMaterials;
+        string? key = !fetch ? site.Id : cold.FetchItem is { } item ? ItemKey(item) : null;
+        if (key is null) return false;
+        cold.NoteUnreachable(key, world.Tick + (long)MathF.Ceiling(UnreachableSeconds / world.TickSeconds));
+        if (!fetch) return false;
+        BackToSite(world.Characters, slot, cold);
+        return true;
+    }
+
+    static bool IsUnreachable(World world, CharacterCold cold, string key) => cold.IsUnreachable(key, world.Tick);
 
     // ------------------------------------------------------------------ the work
 
@@ -850,7 +879,7 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
                 BackToSite(table, i, cold);
                 continue;
             }
-            if (!Arrived(n, goal)) continue;
+            if (!Arrived(world, n, goal)) continue;
             if (cold.StaggeredUntil > world.Tick) continue;   // a stagger interrupts the work
             if (n.Velocity.X == 0 && n.Velocity.Z == 0) n.Yaw = MathF.Atan2(goal.At.X - n.Position.X, goal.At.Z - n.Position.Z);
             switch ((CharacterTask)n.Task)
@@ -895,6 +924,7 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
         if (k > CounterRestart) k = site.BuilderCounter = 0;
         site.BuilderCounter++;
         float scaled = amount * Settings.BuildingSpeed * constants.BuildSpeed * Falloff[Math.Min(k, CounterCap)];
+        if (Data(site.Record) is { IsDoor: true }) scaled *= DoorWorkFactor;   // the door byte (+0x1a0) of a DoorStuff building, FUN_1405595a0
         site.Progress = site.Rate > 0 ? site.Progress + site.Rate * scaled : site.Target;
         if (site.Progress > 0) SetBroken(world, site, false);
         world.Buildings.Touch();
@@ -908,7 +938,11 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
 
     // ------------------------------------------------------------------ doors
 
-    /// <summary>A door's build work counts three times (Building slot 70 with the door byte <c>+0x1a0</c> set, <c>FUN_1405595a0</c>, <b>Verified</b>).</summary>
+    /// <summary>
+    /// A door's build work counts three times (Building slot 70 with the door byte <c>+0x1a0</c> set, <c>FUN_1405595a0</c>, <b>Verified</b>), for a door fixture and for a site whose record is a door. The
+    /// same function never completes a door by its own progress (the parent building does, <b>Verified</b>); Meitou's door fixtures are whole at progress 1 and no door site is a child that its
+    /// parent completes, so a door site keeps the progress test.
+    /// </summary>
     public const float DoorWorkFactor = 3;
 
     // Builders that have worked each door this tick (the 0.75 falloff counter of the door's own Building; per tick as for sites).
@@ -1084,13 +1118,15 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
     /// <summary>
     /// The material finder (<b>Verified</b>, the 115 "Finding building mats" target finder <c>FUN_1405a2a60</c> -> <c>FUN_14059d000</c>; docs/game/buildings-production.md "Material delivery"):
     /// for each material still owed, in the site's order, the first that has a source wins: a loose item of it within <see cref="GroundRadius"/> of the builder, else the nearest player storage
-    /// holding it within <see cref="SourceRangeSquared"/>, else the nearest player machine whose output holds it. Engine choices: the nearest loose item (the original takes the first its grid
-    /// search meets), no town filter, no per-material memory of the last source, the exact record (the original also lets any record of the same type stand in for a non-ITEM material);
+    /// holding it within <see cref="SourceRangeSquared"/>, else the nearest player machine whose output holds it. The buildings are those of the builder's town (<see cref="FixtureRegistry.TownCandidates"/>). Engine choices: the nearest loose item (the original takes the first its grid
+    /// search meets), no per-material memory of the last source (the original's is a cache emptied at each AI update, so it changes no answer), the exact record (the original also lets any record of the same type stand in for a non-ITEM material);
     /// a loose item another faction owns (a town interior's, <see cref="Items.ItemSlots"/>) is left, as the original leaves items lying in another faction's building.
     /// </summary>
     MaterialSource? Source(World world, int slot, CharacterCold cold, BuildSite site)
     {
         var at = world.Characters.Next[slot].Position;
+        // The buildings are those of the builder's town (FUN_1408cbea0); a world with no town data has no such limit.
+        var inTown = world.SystemOf<PopulationSystem>()?.Data is { } data ? world.Fixtures.TownCandidates(world, data, cold, at) : null;
         foreach (var material in site.Materials)
         {
             if (material.Required <= material.Delivered) continue;
@@ -1099,6 +1135,7 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
             float best = GroundRadius * GroundRadius;
             foreach (var g in world.GroundItems.All)
             {
+                if (IsUnreachable(world, cold, ItemKey(g.Id))) continue;   // before the ownership test (FUN_14059d000)
                 if (g.Item.Record != want || g.Item.Quantity <= 0 || g.Item.Contents is not null || g.OwnedBy >= 0 && g.OwnedBy != cold.Faction) continue;
                 float d = Vector3.DistanceSquared(g.Position, at);
                 if (d <= best && (loose is null || d < best)) (loose, best) = (g.Id, d);
@@ -1110,7 +1147,7 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
             {
                 if (world.Buildings.Find(m.Site) is not { Complete: true } building || building.Owner != cold.Faction) continue;
                 float d = Vector3.DistanceSquared(building.Position, at);
-                if (d > SourceRangeSquared) continue;
+                if (d > SourceRangeSquared || inTown is not null && !inTown(building.Position)) continue;
                 if (m.Data.IsStorage)
                 {
                     if (d < storeGap && m.Storage is { } inv && Stack(inv, want) is not null) (store, storeGap) = (m.Site, d);
@@ -1252,7 +1289,18 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
         foreach (var c in world.Buildings.All)
             if (c.WallParent == site.Id) Refund(world, c);   // nothing unless a save from before the link gave it materials
         world.EmitSound(SoundKind.DismantleDone, slot, world.Characters.Next[slot].Position);
+        DestroyMountedTurrets(world, site);
         Remove(world, site);
+    }
+
+    /// <summary>
+    /// The turrets mounted on a building go with it when its dismantle completes, without a refund (<b>Verified</b>, <c>FUN_1402a2860</c>: <c>BuildingFinderTurretsOnCertainBuilding</c> and the
+    /// destroy routine <c>FUN_140799af0</c> with the reason "dismantled"). A gunner's Operate task ends because its site is gone.
+    /// </summary>
+    void DestroyMountedTurrets(World world, BuildSite site)
+    {
+        foreach (var child in world.Buildings.All.Where(o => o.Parent == site.Id).ToList())
+            if (world.Machines.Find(child.Id) is { Data.Function: Meitou.Data.World.ObjectRanges.TurretFunction }) Remove(world, child);
     }
 
     /// <summary>The selection panel's refusal while other buildings are mounted on the site (<b>Verified</b> string, slot 84 <c>FUN_14054db30</c>).</summary>
@@ -1331,6 +1379,7 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
         float bestScore = 0;
         foreach (var site in reg.All)
         {
+            if (IsUnreachable(world, cold, site.Id)) continue;   // the first condition of FUN_1409a6900
             if (!site.NeedsWork || site.Paused || site.Destroyed && IsShell(site.Record) || site.Dismantling || site.WallParent is not null || site.Owner != cold.Faction) continue;
             if (site.Stalled && !Carries(cold, site) && Source(world, slot, cold, site) is null) continue;
             float d2 = Vector3.DistanceSquared(at, site.Position);

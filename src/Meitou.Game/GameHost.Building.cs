@@ -271,7 +271,7 @@ sealed partial class GameHost
                 StaticAlong = (origin, direction, length) => footprints.Along(origin, direction, length).Where(b => Pickable(b.Placement.BuildingId)),
                 // The movement pick's floors up to the viewed one: the build window's floor arrows choose the floor the ghost stands on.
                 FloorAlong = (origin, direction, length) => gpu.Objects?.FloorHit(origin, direction, viewedFloor, length) is { } hit
-                    ? (hit.Position, GhostFloorOf(hit.Room, hit.Room.FloorAt(hit.Position)) with { Ceiling = hit.Room.CeilingAbove(hit.Position) }) : null,
+                    ? (hit.Position, GhostFloorOf(hit.Room, hit.Room.FloorAt(hit.Position)) with { Ceiling = hit.Room.CeilingAbove(hit.Position), Normal = hit.Room.FloorNormal(hit.Position, viewedFloor, FloorSurfaces.RayStart) }) : null,
                 Readout = Readout,
             },
             WorldInfo = placement =>

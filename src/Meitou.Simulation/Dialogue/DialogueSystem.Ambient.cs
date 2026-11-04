@@ -85,6 +85,13 @@ public sealed partial class DialogueSystem
         return true;
     }
 
+    /// <summary>
+    /// The "one at a time" test of a root (<c>FUN_140678f30</c>, <b>Verified</b>): a member of the conversation owner's squad, the owner included, has a live conversation rooted at <paramref name="node"/>,
+    /// the open window or a bubble chain of another conversation than <paramref name="c"/>.
+    /// </summary>
+    bool RootLive(World world, Conversation c, DialogueNode node) =>
+        SquadOf(world, c.Npc).Any(m => open is { } o && o != c && o.Npc == m && o.Root == node || bubbles.Any(b => b.C != c && b.C.Npc == m && b.C.Root == node));
+
     bool BubbleOf(CharacterId who) => shown.ContainsKey(who) || bubbles.Any(b => b.Speaker == who || b.C.Npc == who);
 
     /// <summary>Whether <paramref name="who"/> is saying a line of another conversation, or is in the open player conversation.</summary>
@@ -109,7 +116,7 @@ public sealed partial class DialogueSystem
         var near = new List<(int Slot, float D2)>();
         for (int i = 0; i < table.HighWater; i++)
         {
-            if (!table.Next[i].Alive || table.Next[i].Task == (byte)CharacterTask.Rest || table.Cold(i) is not { IsPlayer: false, SquadId: >= 0, Engaged: false, InCombat: false, Fleeing: false, IsImprisoned: false } nc) continue;
+            if (!table.Next[i].Alive || table.Next[i].Task == (byte)CharacterTask.Rest || table.Cold(i) is not { IsPlayer: false, SquadId: >= 0, Engaged: false, InCombat: false, Fleeing: false, IsImprisoned: false, SlaveState: not 1 } nc) continue;   // a slave (state 1) says nothing (FUN_1408529c0)
             if (nc.Fighter?.IsAnimal == true || nc.Appearance?.Animal is not null || !data.Relations.Contains(nc.Faction) || !Awake(table, i)) continue;
             float reach = MathF.Max(world.Sight.MaxRange(i, AggroSystem.RangeOf(nc, AggroSystem.OutdoorSight)), Settings.AmbientRange);
             float nearest = float.MaxValue;
@@ -159,8 +166,11 @@ public sealed partial class DialogueSystem
             }
             // The squad's cooldown starts only once a line is said: the original asks again on every perception update and rolls `chance temporary` afresh each time
             // (the Red Sabres' attack root is 20%), so a failed look is tried again on the next scan. A player character it has nothing to say to leaves the turn to the NPCs.
-            if (best >= 0 && !Recent(world, nc.SquadId, table.IdOf(best))
-                && TrySay(world, i, nc.SquadId, best, data.Relations.IsHostile(nc.Faction, world.Player.Faction) ? 66 : data.Relations.IsAlly(nc.Faction, world.Player.Faction) ? 67 : 3))
+            // Events 66 and 3 (the non-friend branch) need a looker that is no slave and has not escaped; 67 (the friend branch) does not (FUN_140859680).
+            int sight = SightEvent(world, i, nc, best >= 0 ? best : -1);
+            bool free = nc is { SlaveState: 0, Escaped: false };
+            if (best >= 0 && (sight == 67 || free) && !Recent(world, nc.SquadId, table.IdOf(best))
+                && TrySay(world, i, nc.SquadId, best, sight))
             {
                 said++;
                 continue;
@@ -173,7 +183,51 @@ public sealed partial class DialogueSystem
                 float d2 = Vector3.DistanceSquared(table.Next[i].Position, table.Next[o].Position);
                 if (d2 <= best2 && !Recent(world, nc.SquadId, table.IdOf(o))) (best, best2) = (o, d2);
             }
-            if (best >= 0 && TrySay(world, i, nc.SquadId, best, 3)) said++;
+            if (best >= 0 && free && TrySay(world, i, nc.SquadId, best, 3)) said++;
+        }
+        SeeAnimals(world, near, said);
+    }
+
+    /// <summary>EV_USING_MY_TRAINING_EQUIPMENT (<c>FUN_140859680</c>).</summary>
+    const int UsingMyTrainingEquipment = 59;
+
+    /// <summary>
+    /// The event an NPC fires at a seen player character (<c>FUN_140859680</c>, <b>Verified</b>): 67 for an ally; else 59 when the target is training on a dummy owned by the looker's faction
+    /// (the target's <c>+0x158</c> holds the faction of the dummy it uses, set by <c>Task_UseTrainingDummy</c>'s update and reset every character tick) while the looker senses no enemy,
+    /// else 66 for an enemy of the player and 3 for the rest.
+    /// </summary>
+    int SightEvent(World world, int looker, CharacterCold nc, int target)
+    {
+        if (data.Relations.IsAlly(nc.Faction, world.Player.Faction)) return 67;
+        if (target >= 0 && TrainingDummyOwner(world, target) == nc.Faction && world.SystemOf<AggroSystem>()?.SensesOf(looker) is not { Enemies: > 0 }) return UsingMyTrainingEquipment;
+        return data.Relations.IsHostile(nc.Faction, world.Player.Faction) ? 66 : 3;
+    }
+
+    /// <summary>The faction owning the training dummy the character is using now (Character <c>+0x158</c>); -1 when it uses none.</summary>
+    internal static int TrainingDummyOwner(World world, int slot) =>
+        world.Characters.Cold(slot) is { OperateSite: { } site } && world.Fixtures.Find(site) is { Kind: Locks.FixtureKind.Training } dummy ? dummy.Owner : -1;
+
+    /// <summary>I_SEE_ANIMAL_SQUAD: an NPC looker that passes the same filter and sees an awake animal fires it at the animal (<c>FUN_140859680</c> :54-64, before the friend/enemy split).</summary>
+    const int SeeAnimalSquad = 27;
+
+    void SeeAnimals(World world, List<(int Slot, float D2)> near, int said)
+    {
+        var table = world.Characters;
+        var animals = new List<int>();
+        for (int a = 0; a < table.HighWater; a++)
+            if (table.Next[a].Alive && Awake(table, a) && table.Cold(a) is { } ac && (ac.Fighter?.IsAnimal == true || ac.Appearance?.Animal is not null)) animals.Add(a);
+        if (animals.Count == 0) return;
+        foreach (var (i, _) in near)
+        {
+            if (said >= Settings.AmbientPerScan) return;
+            var nc = table.Cold(i)!;
+            float outdoor = AggroSystem.RangeOf(nc, AggroSystem.OutdoorSight);
+            foreach (int a in animals)
+                if (world.Sight.Sees(i, a, table.Next[i].Position, table.Next[a].Position, outdoor, -1) > 0 && !Recent(world, nc.SquadId, table.IdOf(a)) && TrySay(world, i, nc.SquadId, a, SeeAnimalSquad))
+                {
+                    said++;
+                    break;
+                }
         }
     }
 
@@ -193,7 +247,7 @@ public sealed partial class DialogueSystem
     const int GetUpPeace = 23, GetUpFight = 24, GetUpUnnecessaryFight = 25;
 
     /// <summary>
-    /// Getting up (<c>Task_GetUp</c>, <c>FUN_14033ca10</c> / <c>FUN_1408c6780</c>, docs/game/ragdolls.md): a character that was down at the last look and is awake now fires, with no target,
+    /// Getting up (<c>Task_GetUp</c>, <c>FUN_14033ca10</c> / <c>FUN_1408c6780</c>, docs/game/ragdolls.md): the events fire only when the task starts with posture 0, so a character that was not standing (out cold, staying low, crawling) at the last look and stands now fires, with no target (a wake that stays low fires nothing until it stands),
     /// 23 when it senses no enemy or neutral (<see cref="BodySystem.Senses"/>); else, stood up on the player's order with no conscious ally sensed, 25; else 24.
     /// </summary>
     void SeeGettingUp(World world)
@@ -204,7 +258,7 @@ public sealed partial class DialogueSystem
             if (!table.Next[i].Alive || table.Cold(i) is not { Medical: { } medical } c) continue;
             var id = table.IdOf(i);
             if (medical.Dead) { down.Remove(id); continue; }
-            if (medical.Incapacitated) { down.Add(id); continue; }
+            if (!medical.Standing) { down.Add(id); continue; }   // knocked out, staying low or crawling: posture not 0
             if (!down.Remove(id)) continue;
             bool ordered = c.OrderedUp;
             c.OrderedUp = false;
@@ -262,7 +316,7 @@ public sealed partial class DialogueSystem
                 continue;
             }
             MarkUsed(world, c, line);
-            string text = Expand(world, c, line, PickText(world, speaker, line), speaker, speaker == c.Player ? c.Npc : c.Player) + MoneySuffix(line);
+            string text = Said(Expand(world, c, line, PickText(world, speaker, line), speaker, speaker == c.Player ? c.Npc : c.Player)) + MoneySuffix(line);
             RunEffects(world, c, line, chained ? speaker : c.Npc);   // locks, unlocks, interrupt and the rest land on the state of whoever says a chained line
             // A crowd trigger's forced starts drop other characters' bubbles from the list: find this one again.
             if ((k = bubbles.FindIndex(b => ReferenceEquals(b, current))) < 0) continue;

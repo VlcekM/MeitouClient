@@ -81,7 +81,7 @@ sealed partial class PlayerInterface
     {
         if (factionDraft is not { } draft || faithfulScreens.Focus is { Screen: "overview", Widget: FactionNameBox }) return;
         factionDraft = null;
-        if (FactionNameTaken?.Invoke(draft.Trim()) == true) { MessageBox("Faction Name", "This faction name already exists"); return; }
+        if (FactionNameTaken?.Invoke(draft) == true) { MessageBox("Faction Name", "This faction name already exists"); return; }
         Say(new Meitou.Simulation.RenameFactionCommand(draft) { Tick = session.World.Tick });
     }
 

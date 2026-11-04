@@ -198,11 +198,15 @@ public sealed class CharacterSnapshot
     /// <summary>The bolts stuck in the character (<see cref="CharacterCold.StuckBolts"/>).</summary>
     public IReadOnlyList<StuckBolt> StuckBolts { get; internal set; } = [];
     public string Name { get; internal set; } = "";
+    /// <summary>The CHARACTER or ANIMAL_CHARACTER record it was made from (<see cref="CharacterCold.RecordId"/>).</summary>
+    public string RecordId { get; internal set; } = "";
     public int SquadId { get; internal set; } = -1;
     /// <summary>One of the player's characters, and whether it is selected.</summary>
     public bool IsPlayer { get; internal set; }
     /// <summary>A member of a squad with a shop (right click trades).</summary>
     public bool IsTrader { get; internal set; }
+    /// <summary>The character's NPC class is Diplomat (the standing Pick Up verb skips it, <c>FUN_1407a6bc0</c>).</summary>
+    public bool IsDiplomat { get; internal set; }
     public bool Selected { get; internal set; }
     /// <summary>Another faction's character the HUD shows (<see cref="InspectCommand"/>): it carries the same HUD details as a selected one but is not selected.</summary>
     public bool Inspected { get; internal set; }
@@ -256,6 +260,8 @@ public sealed class CharacterSnapshot
     public WorkEvents? WorkEvents { get; internal set; }
     /// <summary>The size the body is drawn at: an animal's lerp(age, <c>scale min</c>, <c>scale max</c>) (its <c>MedicalState.ScaleK</c>), 1 for people.</summary>
     public float Scale { get; internal set; } = 1;
+    /// <summary>How many times farther than the draw distance D the body is drawn: 7 for a gigantic race (<c>FUN_140539020</c>, Verified), else 1.</summary>
+    public float DrawDistanceScale { get; internal set; } = 1;
     /// <summary>The movement task (<see cref="CharacterTask"/>); the host's sounds follow building, treating and looting from it.</summary>
     public CharacterTask Task { get; internal set; }
     /// <summary>Working on a cage's lock (the picker's order is given and it is in reach or walking there).</summary>

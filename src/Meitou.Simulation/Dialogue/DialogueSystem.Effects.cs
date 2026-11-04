@@ -89,8 +89,10 @@ public sealed partial class DialogueSystem
                     return;
                 case DialogueActions.AssignBounty when tc is not null && mc is not null && effect.Value > 0 && data.Relations.Contains(mc.Faction):
                 {
-                    tc.Bounties ??= new Crime.BountyLedger();
-                    tc.Bounties.Get(mc.Faction, data.Factions[mc.Faction].Name).Amount += effect.Value;
+                    // FUN_140853e20 (Verified): marks the pending crime booked, then adds the amount to the speaker's faction's booking entry (none kept without one).
+                    if (tc.Pending is { } pending) pending.Booked = true;
+                    if (Crime.CrimeFactions.BookingKey(data.Relations, mc.Faction) is var key and >= 0)
+                        (tc.Bounties ??= new Crime.BountyLedger()).Get(key, data.Factions[key].Name).Amount += effect.Value;
                     break;
                 }
                 // Without an amount only a speaker whose CHARACTER has `assigns bounties` books the target's pending crime (Character::canAssignBounties, Verified).
@@ -136,8 +138,8 @@ public sealed partial class DialogueSystem
                     Locks.FixtureRegistry.FreeSlave(world, freed, tc);
                     break;
                 case DialogueActions.ClearBounty when tc?.Bounties is { } ledger && mc is not null:
-                    if (ledger.Of(mc.Faction) is { } entry) ledger.Remove(entry);
-                    if (Position(world, target) is { } at && TownAt(at) is >= 0 and var town && town < data.SiteFactions.Count && ledger.Of(data.SiteFactions[town]) is { } local)
+                    if (ledger.BookedFor(data.Relations, mc.Faction) is { } entry) ledger.Remove(entry);
+                    if (Position(world, target) is { } at && TownAt(at) is >= 0 and var town && town < data.SiteFactions.Count && ledger.BookedFor(data.Relations, data.SiteFactions[town]) is { } local)
                         ledger.Remove(local);
                     if (ledger.Count == 0) tc.Bounties = null;
                     tc.Recognition = 0;
@@ -153,6 +155,7 @@ public sealed partial class DialogueSystem
                     break;
                 case DialogueActions.FollowWhileTalking when !target.IsNone && mc is { IsPlayer: false }:
                     followers[me] = target;
+                    StartFollowing(world, me, target);
                     break;
                 case DialogueActions.ThugHunter when !target.IsNone && mc is { IsPlayer: false }:
                     stalkers[me] = new Stalk(target);
@@ -302,6 +305,7 @@ public sealed partial class DialogueSystem
         var table = world.Characters;
         if (!table.TryResolveNext(target, out _) || !table.TryResolveNext(me, out int s) || !table.Next[s].Alive) return;
         TaskStart.Stand(table, s);
+        if (world.SystemOf<Ai.AiSystem>() is { } ai && table.Cold(s) is { IsPlayer: false, IsImprisoned: false, Medical.Incapacitated: false, Fighter.CanAttack: true } && ai.OrderAssault(world, me, target)) return;
         if (table.Cold(s) is { IsPlayer: false, IsImprisoned: false, Medical.Incapacitated: false, Fighter.CanAttack: true })
             world.Defer(new Combat.AttackOrder([me], target) { Tick = world.Tick + 1, Source = TaskSource.Npc });
     }
@@ -310,7 +314,17 @@ public sealed partial class DialogueSystem
     /// The text tokens (docs/game/dialogue.md "Tokens"): <c>/NAME/</c> pairs until none is left; COST, MYNAME, YOURNAME, TARGETFACTION and PLAYERFACTION are built in, any other name
     /// is the WORD_SWAPS record of that name (its lines chosen like a line's children, one of their texts; none: empty). A token at the start or after ". ", "! ", "? " is capitalised.
     /// </summary>
-    string Expand(World world, Conversation c, DialogueNode line, string text, CharacterId me, CharacterId other, int depth = 0)
+    /// <summary>A built line as shown: through the censorship when the player turned it on.</summary>
+    string Said(string text) => Settings.Censored?.Invoke() == true ? Censorship.Apply(text) : text;
+
+    /// <summary>
+    /// A new character's name with its text tokens expanded (docs/characters.md "Names"): a name holding a <c>/</c> goes through the same expansion and censorship as a said line,
+    /// spoken by the character itself to no one (<c>FUN_14062b210</c> end into <c>FUN_14067e8b0</c>), so a mod's "Trader /GENNAME/" takes a line of its GENNAME word swap.
+    /// </summary>
+    public string ExpandName(World world, CharacterId me, string name) =>
+        name.IndexOf('/') < 0 ? name : Said(Expand(world, new Conversation { Npc = me, Player = CharacterId.None, Event = 0 }, null, name, me, CharacterId.None));
+
+    string Expand(World world, Conversation c, DialogueNode? line, string text, CharacterId me, CharacterId other, int depth = 0)
     {
         if (depth > 4 || text.IndexOf('/') < 0) return text;
         var sb = new StringBuilder(text.Length + 16);
@@ -331,28 +345,26 @@ public sealed partial class DialogueSystem
         return sb.ToString();
     }
 
-    string Token(World world, Conversation c, DialogueNode line, string token, CharacterId me, CharacterId other, int depth)
+    string Token(World world, Conversation c, DialogueNode? line, string token, CharacterId me, CharacterId other, int depth)
     {
         switch (token)
         {
-            case "COST": return line.Cost is { } cost ? cost.ToString("N0", CultureInfo.InvariantCulture) : "";
+            case "COST": return line?.Cost is { } cost ? cost.ToString("N0", CultureInfo.InvariantCulture) : "";
             case "MYNAME": return NameOf(world, me);
             case "YOURNAME": return Cold(world, other)?.Name ?? "you";
             case "TARGETFACTION": return Cold(world, other) is { } o && data.Relations.Contains(o.Faction) ? data.Factions[o.Faction].Name : "you";
             case "PLAYERFACTION": return data.Relations.Contains(world.Player.Faction) ? data.Factions[world.Player.Faction].Name : "";
         }
         if (dialogue.WordSwap(token) is not { } swap) return "";
-        var candidates = new List<DialogueNode>();
-        int best = int.MinValue;
-        foreach (var child in swap.Children)
-        {
-            if (child.Score < best) break;
-            if (!Check(world, c, child, me, other)) continue;
-            if (child.Score > best) { best = child.Score; candidates.Clear(); }
-            candidates.Add(child);
-        }
-        if (candidates.Count == 0) return "";
-        var pick = candidates.Count == 1 ? candidates[0] : candidates[Rng.Int(NextRoll(world, me), candidates.Count)];
-        return Expand(world, c, pick, PickText(world, me, pick), me, other, depth + 1);
+        // The full line walk over the swap's lines (FUN_14067a530 :168-220 into FUN_14067a0c0): the target is the conversation's, or the passed one when that is the owner; run a second time
+        // when the first finds nothing; the picked line and its parents (the swap, a root it came through) are stamped used (FUN_140675630).
+        var walkTarget = c.Player.IsNone || c.Player == me ? other : c.Player;
+        var picked = Pick(world, c, swap.Children, 0, walkTarget) ?? Pick(world, c, swap.Children, 0, walkTarget);
+        if (picked is not { } p) return "";
+        double now = world.GameHours;
+        lastUse[p.Line.StringId] = now;
+        lastUse[swap.StringId] = now;
+        if (p.Root is { } through) lastUse[through.StringId] = now;
+        return Expand(world, c, p.Line, PickText(world, p.Speaker, p.Line), me, other, depth + 1);
     }
 }

@@ -430,7 +430,8 @@ public sealed unsafe partial class TerrainDecalRenderer
     {
         if (!surfacesOn || surfaces.Count == 0 || terrainDepth is null || terrainDepthFrame != gpu.Frame.Number || staticDepthFrame != gpu.Frame.Number) return;
         RegisterSprites();
-        var back = new Vector3(rotation.M13, rotation.M23, rotation.M33);
+        var back = ViewWindow.Back(rotation, tanX, tanY);
+        (tanX, tanY) = (ViewWindow.Tan(tanX, tanY).X, ViewWindow.Tan(tanX, tanY).Y);
         surfaceNear.Clear();
         float range = MathF.Max(Range, 0);
         foreach (var d in surfaces)

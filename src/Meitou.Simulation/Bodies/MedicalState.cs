@@ -74,6 +74,24 @@ public sealed partial class MedicalState
     bool legKoKnown;
 
     /// <summary>
+    /// The injuries make an NPC medic pass the patient by, and count it crippled in the target score (<c>FUN_140644170</c>, <b>Verified</b>): a stump on a leg, or on both arms.
+    /// </summary>
+    public bool Maimed
+    {
+        get
+        {
+            int arms = 0;
+            foreach (var p in Parts)
+            {
+                if (p.Limb != LimbState.Stump) continue;
+                if (p.Template.Type == BodyPartType.Leg) return true;
+                if (p.Template.Type == BodyPartType.Arm) arms++;
+            }
+            return arms >= 2;
+        }
+    }
+
+    /// <summary>
     /// The original's forced crawl (posture 2, <c>FUN_140649320</c>, <b>Observed</b>): a conscious character with a stats object (not an animal) any of whose legs is down by
     /// <see cref="HealthPart.LegDown"/>. One leg is enough; it moves at <see cref="Speed.CrawlSpeed"/> and plays the grounded clips. Read live, so a hit shows at once.
     /// </summary>
@@ -388,17 +406,21 @@ public sealed partial class MedicalState
     /// <summary>The passing-out point of starvation (<c>FUN_140657620</c>): (100 - K x f) / 100, K = lerp(min, max toughness ko point, toughness / 100), f 1 with an empty stomach and 2 with food.</summary>
     public static float StarvationKoThreshold(GameConstants c, float toughness, bool foodInStomach)
     {
-        float k = c.MinToughnessKoPoint + (c.MaxToughnessKoPoint - c.MinToughnessKoPoint) * Math.Clamp(toughness * 0.01f, 0, 1);
+        float k = c.MinToughnessKoPoint + (c.MaxToughnessKoPoint - c.MinToughnessKoPoint) * (toughness * 0.01f);
         return (100 - k * (foodInStomach ? 2 : 1)) / 100;
     }
 
-    /// <summary>The negative HP at which a character goes into a coma (<c>FUN_140643ae0</c>): -lerp(min, max toughness ko point, toughness x 0.01); -10 at toughness 0 and -85 at 100 in the base game. Clamped to toughness 0 to 100 here.</summary>
+    /// <summary>
+    /// The negative HP at which a character goes into a coma (<c>FUN_140643ae0</c>, <b>Verified</b>): -lerp(min, max toughness ko point, toughness x stats multiplier x 0.01) with the plain
+    /// unclamped lerp (<c>FUN_140015b63</c>), so toughness past 100 goes past the max; -10 at toughness 0 and -85 at 100 in the base game. <paramref name="toughness"/> is the stat times the
+    /// stats multiplier.
+    /// </summary>
     public static float KoPoint(GameConstants c, float toughness) =>
-        -(c.MinToughnessKoPoint + (c.MaxToughnessKoPoint - c.MinToughnessKoPoint) * Math.Clamp(toughness * 0.01f, 0, 1));
+        -(c.MinToughnessKoPoint + (c.MaxToughnessKoPoint - c.MinToughnessKoPoint) * (toughness * 0.01f));
 
     /// <summary>The wound degeneration multiplier lerp(<c>degeneration mult 1</c>, <c>degeneration mult 99</c>, toughness / 100): toughness 1 deteriorates about 57 times faster than 99.</summary>
     public static float DegenerationMult(GameConstants c, float toughness) =>
-        c.DegenerationMult1 + (c.DegenerationMult99 - c.DegenerationMult1) * Math.Clamp(toughness * 0.01f, 0, 1);
+        c.DegenerationMult1 + (c.DegenerationMult99 - c.DegenerationMult1) * (toughness * 0.01f);
 
     /// <summary>
     /// The untreated damage fraction D of a part (<c>FUN_14064f5c0</c>): clamp(((M - h - b) x 100 / M - 20) / (90 - 20), 0, 1), x0.25 if h + b &gt; 0. Damage under 20% of M does nothing; 90% or more is full speed.
@@ -434,7 +456,7 @@ public sealed partial class MedicalState
     public float KoTerms(in MedicalContext ctx)
     {
         var c = ctx.Constants;
-        float k = c.KnockoutMult1 + (c.KnockoutMult99 - c.KnockoutMult1) * Math.Clamp(ctx.Toughness / 100, 0, 1);
+        float k = c.KnockoutMult1 + (c.KnockoutMult99 - c.KnockoutMult1) * (ctx.Toughness / 100);
         float sum = 0;
         foreach (var p in parts)
         {

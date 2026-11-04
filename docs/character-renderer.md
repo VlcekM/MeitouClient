@@ -82,6 +82,15 @@ Clamp stored bounds to real mesh extent. Animation rendering does not independen
 walk-loop root movement; simulation owns relocation. Quads/morph and motion buffers retain
 correct previous-frame data across skipped poses and content changes.
 
+### Tiny characters (Meitou engine choice)
+
+The original draws every character within its distance, a gigantic race out to 7x it, however small it shows. Meitou does not draw, pose or build one whose
+projected height (`asset.Height x scale`, over the distance to the eye, in render pixels: `LodPixelsPerRadian` follows the render size, so before the upscaler) is under 1.5 px,
+and draws it again from 2.0 px (`CharacterRenderer.CullTiny`; the hysteresis keeps one at the edge from flickering). A look not built yet is judged by the tallest asset built
+for its body mesh, so the first of a body mesh is still built. Never the player's characters, a portrait's, a hidden one, nor a look wanted by a kept point. It leaves the live list, so
+no shadow, motion or reflection pass sees it either; the simulation, the host's lists, sight, sounds and selection are untouched (picking reads the live list: a speck is not clickable).
+**Observed**: far giants of a mod-heavy install cost 0.6-1.2 ms a frame in a camera flight before this; **Unknown**: popping under DLSS at 1.5 px (not seen at the far zoom).
+
 ## Animals and portraits
 
 Animal race/body/mesh/fur/clips/size use shared assembly with animal inputs, not human fallback.

@@ -158,6 +158,12 @@ public sealed partial class CaptiveSystem
                 // 168's desire is the rescue one (FUN_140599480): 0 on the raw Hold bit (also while sneaking) or while carrying. 167 has no Hold test.
                 if (!capture && (cold.Orders & CharacterOrders.Hold) != 0) return null;
                 int v = NearestDown(world, slot, cold, capture);
+                // Row 170 (the lift 168 plans through) wants !22: a victim that needs first aid is treated first (row 25, with a kit and an arm), else the plan fails and nothing is lifted.
+                if (!capture && v >= 0 && table.Cold(v) is { } hurt && FirstAid.FirstAidSystem.NeedsFirstAid(world, hurt))
+                {
+                    FirstAid.FirstAidSystem.TreatBeforeLift(world, slot, v);
+                    return null;
+                }
                 // No cage to take it to: not started, so no one is cuffed and left (engine; the carry, goal 112, needs a free cage as the arrest goal does).
                 return v < 0 || !Kidnap.HasCage(world, table.Next[v].Position, cold) ? null : new CaptiveJob
                 {
@@ -266,11 +272,12 @@ public sealed partial class CaptiveSystem
         if (j.Blows == 0)
         {
             if (j.Time < Settings.StripSeconds) return true;
-            Strip(world, c, wc, cc);
+            StripWeapons(world, c, wc, cc);
             j.Blows = 1;
             j.Time = 0;
             return true;
         }
+        EnslavingCrime(world, w, c, cc);
         if (j.Time < Settings.CuffSeconds) return true;
         Cuff(world, c, cc);
         world.Defer(new Dialogue.DialogueEvent(j.Worker, j.Captive, RecapturedSlave) { Tick = world.Tick + 1 });   // FUN_140684990(dialogue, target, 0x25) when the bar is full
@@ -289,21 +296,36 @@ public sealed partial class CaptiveSystem
 
     /// <summary>
     /// <c>Task_StripWeapons</c> once its 0.8 s are up: the items of the target's <c>hip</c> and <c>back</c> sections go to the stripper's inventory (the ground when it is full; engine choice).
-    /// The original then sets the stripper's squad's short-term tag 6 on the target (a tag nothing reads, <b>Unknown</b> name).
+    /// After each item moved the original sets the stripper's squad's short-term tag 6 on the target (<c>FUN_14034e7b0</c> calling <c>FUN_1406744a0</c>, <b>Verified</b>): <see cref="Dialogue.MemoryTag.Looted"/>, which the NPC looting finder skips.
     /// </summary>
-    void Strip(World world, int c, CharacterCold wc, CharacterCold cc)
+    public void StripWeapons(World world, int c, CharacterCold wc, CharacterCold cc)
     {
         if (cc.Inventory is not { } inv) return;
         var at = world.Characters.Next[c].Position;
+        bool moved = false;
         foreach (var item in inv.Items.ToList())
         {
             if (item.LockedOn || !IsWeaponSection(item.Section)) continue;
             inv.Items.Remove(item);
             item.Section = "main";
             if (wc.Inventory is not { } into || !into.Add(item)) world.GroundItems.Drop(item, at, 0);
+            moved = true;
         }
+        if (moved && wc.SquadId >= 0) world.SystemOf<Dialogue.DialogueSystem>()?.Memory.Flag(world, wc.SquadId, world.Characters.IdOf(c), Dialogue.MemoryTag.Looted);
         cc.DrawnWeapon = WeaponKinds.None;
         assembly.RefreshEquipment(cc);
+    }
+
+    /// <summary>
+    /// Each update of <c>Task_CuffTarget</c> (<c>FUN_14034af20</c>, <b>Verified</b>): a captive in slave state 0 with no bounty for the null faction, whose squad's faction is the player's or
+    /// anti-slavery, makes the cuffer the culprit of a pending Enslaving crime against the captive's faction.
+    /// </summary>
+    void EnslavingCrime(World world, int w, int c, CharacterCold cc)
+    {
+        if (cc.SlaveState != 0 || cc.Bounties?.AmountFor(-1) > 0 || cc.SquadId < 0 || world.Squads.Find(cc.SquadId) is not { } squad) return;
+
+        bool enslaves = squad.Faction == world.Player.Faction || (uint)squad.Faction < (uint)data.Factions.Count && data.Factions[squad.Faction].AntiSlavery;
+        if (enslaves) world.SystemOf<Crime.CrimeSystem>()?.SetPending(world, w, Crime.CrimeCode.Enslaving, cc.Faction, world.Characters.IdOf(c), Crime.CrimeSystem.MinTimer);
     }
 
     /// <summary>The cuffing's result: locked shackles worn (engine choice, see the class remarks).</summary>

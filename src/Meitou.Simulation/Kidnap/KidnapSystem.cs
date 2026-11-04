@@ -17,9 +17,6 @@ public sealed record KidnapSettings
     public float Sight { get; init; } = AggroSystem.OutdoorSight;
     /// <summary>A carrier counts as in a town of its faction within this multiple of the town's radius (it then looks for the town's cages).</summary>
     public float TownSlack { get; init; } = 1.5f;
-    /// <summary>A carrier puts the captive in once within the cage's <c>use range</c> plus this; a walk that ended within <see cref="CageSlack"/> puts it in too (a cage inside a building).</summary>
-    public float CageReach { get; init; } = 15;
-    public float CageSlack { get; init; } = 200;
     /// <summary>Walks to cages before the carrier gives up and drops the captive; lifts that fail before it lets the victim be.</summary>
     public int CageWalks { get; init; } = 3;
     public int LiftTries { get; init; } = 3;
@@ -273,11 +270,11 @@ public sealed class KidnapSystem(PopulationData data, PopulationSystem populatio
                 if (cage is null || !FixtureRegistry.IsFree(table, cage)) return Retry(world, a, g);
                 float d = Vector2.Distance(new Vector2(gn.Position.X, gn.Position.Z), new Vector2(cage.Position.X, cage.Position.Z));
                 bool walking = gn.Task == (byte)CharacterTask.GoTo;
-                if (d <= cage.UseRange + Settings.CageReach || !walking && d <= Settings.CageSlack)
+                if (FixtureRegistry.AtCage(cage, gn.Position, walking))
                 {
                     TaskStart.Stand(table, g);
                     carry.LetGo(world, g);
-                    if (!world.Fixtures.Imprison(world, a.Victim, cage, 1, a.Carrier)) return Retry(world, a, g);
+                    if (!world.Fixtures.Imprison(world, a.Victim, cage, data.Bodies.Constants.PrisonTime, a.Carrier)) return Retry(world, a, g);
                     if (table.TryResolveNext(a.Victim, out int caged)) Deeds?.Caged(world, g, caged);
                     tc.Kidnapped = true;
                     if (tc.IsPlayer) world.Post($"{tc.Name} has been kidnapped by {data.Factions[a.Faction].Name}");
@@ -315,7 +312,7 @@ public sealed class KidnapSystem(PopulationData data, PopulationSystem populatio
     Fixture? CageFor(World world, Vector3 at, CharacterCold carrier, Abduction? self)
     {
         var candidate = world.Fixtures.CageCandidates(world, data, carrier, at);
-        return world.Fixtures.FindCage(world, carrier, at, null, f => !candidate(f) || Reserved(f, self));
+        return world.Fixtures.FindCage(world, carrier, at, FixtureRegistry.HomeOf(world, carrier), f => !candidate(f) || Reserved(f, self));
     }
 
     bool Reserved(Fixture f, Abduction? self)

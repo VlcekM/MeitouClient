@@ -99,7 +99,7 @@ sealed partial class PlayerInterface
 
     public void CreateUiPainter(DebugOverlay overlay, Func<string, string?> resolve)
     {
-        uiPainter = new(overlay, uiResources, resolve) { Mode = UiMode };
+        uiPainter = new(overlay, uiResources, resolve) { Mode = UiMode, FontSizeSetting = fontSize };
         findAsset = resolve;
         // The screens' pictures are read ahead (the overview's map is 43 MB), so that opening a screen only uploads them.
         uiPainter.Prefetch(FaithfulScreenFiles.SelectMany(s => faithfulScreens.Layout(s.Id).Widgets).Concat(faithfulHud.Widgets)
@@ -155,6 +155,7 @@ sealed partial class PlayerInterface
         for (int i = 0; i < ButtonSpeeds.Length; i++) b.Actions[$"TimeSpeedButton{i + 1}"] = $"meitou:speed.{i}";
         b.Actions["ShortcutInventoryButton"] = "meitou:inventory";
         b.Actions["ShortcutStatsButton"] = "meitou:stats";
+        b.Actions["ShortcutHelpButton"] = "meitou:help";
         b.Text["ShortcutTechButton"] = "TEC";
         foreach (string name in new[] { "ShortcutMapButton", "ShortcutTechButton", "ShortcutSquadButton" }) b.Actions[name] = "faithful:" + name;
         b.Actions["OrdersMedicButton"] = "meitou:medic";
@@ -365,6 +366,12 @@ sealed partial class PlayerInterface
         return true;
     }
 
+    /// <summary>The F1 key and the HLP button share one handler: toggle the Tutorials window (FUN_1406e1f20; ui-screens.md).</summary>
+    void ToggleHelpWindow()
+    {
+        if (faithfulScreens.IsOpen("tutorials")) faithfulScreens.Close("tutorials"); else faithfulScreens.Open("tutorials");
+    }
+
     void ExecuteUiAction(string action, string argument)
     {
         SoundForAction(action, argument);
@@ -382,6 +389,7 @@ sealed partial class PlayerInterface
             else if (action == "inventory" && InventoryOwner() is { } lead && pinnedInventories.FirstOrDefault(p => p.Value == lead.Id).Key is { } slot) faithfulScreens.Open(slot);
             else faithfulScreens.Open(action);
         }
+        else if (action == "help") ToggleHelpWindow();
         else if (action == "extendedstats") infoExpanded = !infoExpanded;
         else if (action is "floor-up" or "floor-down") Floor?.Step(action == "floor-up" ? 1 : -1);
         else if (action == "build") ToggleBuildMode();
@@ -418,9 +426,47 @@ sealed partial class PlayerInterface
     void DrawGameUi(DebugOverlay overlay, int width, int height, DebugOverlay.OverlayPass? pass = null)
     {
         IReadOnlyList<UiControl> controls = ArrangeUi();
+        if (cameraGrid) DrawCameraGrid(overlay, width, height);
         if (UiMode == UiMode.Faithful && LoadBar is { Visible: true } bar) controls = [.. controls, .. bar.Controls(uiResources, width, height)];
         uiPainter?.Draw(controls, width, height, mouse, $"meitou:speed.{Array.IndexOf(ButtonSpeeds, session.Simulation.Speed)}",
             minimumTextPixels: TitleOpen ? 0 : StandardPixels, pass: pass);
+    }
+
+    /// <summary>The rule-of-thirds camera grid (Shift+;, toggle_camera_grid, event 0x29: the widget "CameraGrid", <c>FUN_1406e5fc0</c>), under the interface.</summary>
+    bool cameraGrid;
+    int gridHold;
+    bool gridRestore;
+
+    /// <summary>
+    /// The screenshot event with the camera grid shown (the frame-end callback <c>FUN_14082b6e0</c>, <b>Verified</b>): the "CameraGrid" widget is hidden and the picture is taken two frames later,
+    /// when the widget is shown again (<see cref="EndScreenshot"/>); with the grid hidden or missing the picture is taken at once. Returns whether the picture is taken this frame.
+    /// </summary>
+    public bool GateScreenshot(bool requested)
+    {
+        if (gridHold > 0) return --gridHold == 0;
+        if (!requested) return false;
+        if (!cameraGrid) return true;
+        (cameraGrid, gridRestore, gridHold) = (false, true, 2);
+        return false;
+    }
+
+    /// <summary>The picture is taken: the camera grid hidden for it is shown again.</summary>
+    public void EndScreenshot()
+    {
+        if (!gridRestore) return;
+        (cameraGrid, gridRestore) = (true, false);
+    }
+
+
+    static void DrawCameraGrid(DebugOverlay overlay, int width, int height)
+    {
+        var white = Vector4.One;
+        for (int i = 1; i <= 2; i++)
+        {
+            float x = MathF.Round(width * i / 3f), y = MathF.Round(height * i / 3f);
+            overlay.Line(x, 0, x, height, 1, white);
+            overlay.Line(0, y, width, y, 1, white);
+        }
     }
 
     /// <summary>For screenshot reviews: open the same panel through its registered button action.</summary>

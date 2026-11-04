@@ -38,6 +38,14 @@ public static class WorldLayout
     public static ZoneCoordinate ZoneOf(double x, double z) =>
         new((int)Math.Floor(x / ZoneSize) + ZoneCount / 2, (int)Math.Floor(z / ZoneSize) + ZoneCount / 2);
 
+    /// <summary>Whether two world points lie in the same zone or in zones next to each other: the 3x3 cells of the original's building finders (<c>FUN_1409fc450</c>, <c>FUN_1409fc540</c>, <c>FUN_1408cf3c0</c>).</summary>
+    public static bool WithinOneZone(double ax, double az, double bx, double bz)
+    {
+        var a = ZoneOf(ax, az);
+        var b = ZoneOf(bx, bz);
+        return Math.Abs(a.X - b.X) <= 1 && Math.Abs(a.Y - b.Y) <= 1;
+    }
+
     /// <summary>World X/Z of the zone's minimum corner.</summary>
     public static (double X, double Z) ZoneOrigin(ZoneCoordinate zone) =>
         ((zone.X - ZoneCount / 2) * (double)ZoneSize, (zone.Y - ZoneCount / 2) * (double)ZoneSize);

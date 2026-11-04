@@ -129,6 +129,35 @@ public class CrimeTests
 
     static readonly Vector2 O = new(2000, 2000);
 
+    /// <summary>
+    /// Only Attack Unprovoked (row 61) books an Assault and marks the attacker ordered (<c>Task_FocusedMeleeAttack</c>'s flag, docs/game/combat.md); Attack Target (row 5) does neither. Catches every
+    /// picked attack booking.
+    /// </summary>
+    [Fact]
+    public void Attack_unprovoked_books_an_assault_and_marks_the_attacker_ordered_but_attack_target_does_not()
+    {
+        foreach (bool unprovoked in new[] { false, true })
+        {
+            using var t = new Town();
+            var me = t.PlayerCharacter(O);
+            var victim = t.Npc(City, O + new Vector2(0, 20), name: "victim");
+            t.Say(new AttackOrder([me], victim) { Tick = t.World.Tick, Picked = true, Unprovoked = unprovoked });
+            t.World.RunTicks(10);
+            Assert.Equal(unprovoked, t.Cold(me).Pending?.Code == CrimeCode.Assault);
+            Assert.Equal(unprovoked, t.Cold(me).Ordered);
+        }
+    }
+
+    /// <summary>The original's pending-crime setter (<c>FUN_140852c80</c>) has no NPC test: an NPC culprit gets any crime (the cuffing task's Enslaving, code 1), not only Assault and Looting.</summary>
+    [Fact]
+    public void An_npc_culprit_gets_any_crime_pending_from_the_original_setter()
+    {
+        using var t = new Town();
+        var thug = t.Npc(Rivals, O, name: "thug");
+        Assert.True(t.Crime.SetPending(t.World, thug.Slot, CrimeCode.Enslaving, City, CharacterId.None, CrimeSystem.MinTimer));
+        Assert.Equal(CrimeCode.Enslaving, t.Cold(thug).Pending!.Code);
+    }
+
     // ------------------------------------------------------------------ witnesses
 
     [Fact]
@@ -138,7 +167,7 @@ public class CrimeTests
         var me = t.PlayerCharacter(O);
         var victim = t.Npc(City, O + new Vector2(0, 20), name: "victim");
         t.Npc(City, O + new Vector2(0, 250), face: O, type: FundamentalType.LawEnforcement, name: "officer");
-        t.Say(new AttackOrder([me], victim) { Tick = t.World.Tick });
+        t.Say(new AttackOrder([me], victim) { Tick = t.World.Tick, Picked = true, Unprovoked = true });
         t.World.RunTicks(40);
         Assert.Equal(500, t.Bounty(me, City));
         var entry = t.Cold(me).Bounties!.Of(City)!;
@@ -166,6 +195,19 @@ public class CrimeTests
         Assert.Empty(u.Events(CrimeEventKind.Witnessed));
     }
 
+    /// <summary>The witness function (<c>FUN_140854d10</c>) ends in the booking call with no player test: a police witness books an NPC culprit's crime too.</summary>
+    [Fact]
+    public void A_crime_of_an_npc_culprit_seen_by_the_police_is_booked()
+    {
+        using var t = new Town();
+        var thug = t.Npc(Rivals, O, name: "thug");
+        var victim = t.Npc(City, O + new Vector2(0, 20), name: "victim");
+        t.Npc(City, O + new Vector2(0, 250), face: O, type: FundamentalType.LawEnforcement, name: "officer");
+        Assert.True(t.Crime.SetPending(t.World, thug.Slot, CrimeCode.Assault, City, t.World.Characters.IdOf(victim.Slot), CrimeSystem.MinTimer));
+        t.World.RunTicks(40);
+        Assert.Single(t.Events(CrimeEventKind.Booked));
+    }
+
     // ------------------------------------------------------------------ determinism
 
     /// <summary>
@@ -190,7 +232,7 @@ public class CrimeTests
         foreach (int target in new[] { 1, 30, 120, 300, 400, 900 })
         {
             t.World.RunTicks(target - (int)t.World.Tick);
-            if (target == 30) t.Say(new AttackOrder([me], townsman) { Tick = t.World.Tick });
+            if (target == 30) t.Say(new AttackOrder([me], townsman) { Tick = t.World.Tick, Picked = true, Unprovoked = true });
             if (target == 300) t.Say(new LootOrder([other], farmer) { Tick = t.World.Tick });
             hashes.Add(t.World.StateHash());
         }

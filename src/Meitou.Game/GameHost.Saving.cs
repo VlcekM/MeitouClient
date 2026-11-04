@@ -84,6 +84,7 @@ sealed partial class GameHost
         foreach (var population in session.World.Systems.OfType<Meitou.Simulation.PopulationSystem>())
             (population.Settings.SquadSizeMultiplier, population.Settings.PopulationMultiplier, population.Settings.RaidSizeMult, population.Settings.RaidFrequencyMult) =
                 (gameplay.SquadSize, gameplay.Population, gameplay.RaidSize, gameplay.RaidFrequency);
+        foreach (var population in session.World.Systems.OfType<Meitou.Simulation.PopulationSystem>()) population.Settings.FastZoneHopping = gameplay.FastZoneHopping;
         foreach (var ai in session.World.Systems.OfType<Meitou.Simulation.Ai.AiSystem>()) ai.Settings.TownAttacks = gameplay.TownAttacks;
         foreach (var combat in session.World.Systems.OfType<Meitou.Simulation.Combat.CombatSystem>()) combat.StuckLimit = gameplay.HarpoonLimit;
     }
@@ -97,13 +98,13 @@ sealed partial class GameHost
             Parts = (IsSandbox || IsDuel || IsBattle ? Meitou.Simulation.StandardParts.All & ~Meitou.Simulation.StandardParts.Aggro : Meitou.Simulation.StandardParts.All)
                 & ~(IsBattle && g.BattleNoFear ? Meitou.Simulation.StandardParts.Flee : Meitou.Simulation.StandardParts.None),
             // NPCs that see a player character say a line as a speech bubble (docs/game/dialogue.md "Ambient conversations"); the sandbox, the duel and the battle stay silent.
-            Dialogue = new Meitou.Simulation.Dialogue.DialogueSettings { AmbientEvents = !IsSandbox && !IsDuel && !IsBattle },
+            Dialogue = new Meitou.Simulation.Dialogue.DialogueSettings { AmbientEvents = !IsSandbox && !IsDuel && !IsBattle, Censored = () => config.Censorship },
             Population = new Meitou.Simulation.PopulationSettings
             {
                 Background = interactive && !IsDuel && !IsBattle, KeepRoamers = config.KeepRoamers, OffscreenFights = config.OffscreenFights, OffscreenHealing = config.OffscreenHealing,
                 CampaignAncestorsOnce = config.CampaignAncestorsOnce, KeepWild = config.KeepWild, ResidentSchedule = config.ResidentSchedule,
                 NestsMultiplier = (settings ?? difficulty)[6],
-                SquadSizeMultiplier = Gameplay.SquadSize, PopulationMultiplier = Gameplay.Population, RaidSizeMult = Gameplay.RaidSize, RaidFrequencyMult = Gameplay.RaidFrequency,
+                SquadSizeMultiplier = Gameplay.SquadSize, PopulationMultiplier = Gameplay.Population, RaidSizeMult = Gameplay.RaidSize, RaidFrequencyMult = Gameplay.RaidFrequency, FastZoneHopping = Gameplay.FastZoneHopping,
             },
             Ai = new Meitou.Simulation.Ai.AiSettings { TownAttacks = Gameplay.TownAttacks },
             Construction = new Meitou.Simulation.Construction.ConstructionSettings { BuildingSpeed = (settings ?? difficulty)[5], EdgeGap = SiteEdgeGap },
@@ -111,7 +112,7 @@ sealed partial class GameHost
             // The duel replays exactly: its paths are answered inside the tick, never on a thread whose timing differs from lap to lap.
             SynchronousPaths = !interactive || IsDuel,
             // The duel prints what its measured lap holds (MeasureLap).
-            Combat = new Meitou.Simulation.Combat.CombatOptions { SelfApproach = false, TickMedical = false, RecordLog = IsDuel, AttackSlots = Math.Clamp(config.AttackSlots, 1, 5), StuckLimit = Gameplay.HarpoonLimit, LateDefences = config.LateDefences, GunnerFacesBarrel = config.FixGunnerFacing, PunchReachFix = config.FixPunchReach },
+            Combat = new Meitou.Simulation.Combat.CombatOptions { SelfApproach = false, TickMedical = false, RecordLog = IsDuel, AttackSlots = config.AttackSlotsOption, StuckLimit = Gameplay.HarpoonLimit, LateDefences = config.LateDefences, GunnerFacesBarrel = config.FixGunnerFacing, PunchReachFix = config.FixPunchReach },
             DoorsCloseBehind = config.DoorsCloseBehind,
             AnimationLengths = animationLengths,
             AnimationLibrary = animationLibrary,
@@ -425,6 +426,7 @@ sealed partial class GameHost
     Task NavmeshAround(Vector3 at)
     {
         if (nav is null) return Task.CompletedTask;
+        FinishNavUnload();
         long now = Stopwatch.GetTimestamp();
         var pending = new List<Task>();
         foreach (var z in ZoneActivation.ZonesAround(at, 0))

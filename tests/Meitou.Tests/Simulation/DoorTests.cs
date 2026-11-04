@@ -131,7 +131,7 @@ public class DoorTests(ITestOutputHelper output)
         // A bonedog's blows do the minimum (a quarter of its packet is under 20): 0.3 of the door's progress each, one every 1.5 s.
         bool bashed = false;
         Vector3 at = default;
-        int ticks = (int)((MathF.Ceiling(door.DoorProgress / (20 * LockSystem.ProgressPerDamage)) + 4) * LockSystem.BashSwingSeconds / world.TickSeconds) + 900;
+        int ticks = (int)((MathF.Ceiling(door.DoorProgress / (20 * LockSystem.ProgressPerDamage)) + 4) * LockSystem.DefaultBashClipSeconds / world.TickSeconds) + 900;
         for (int t = 0; t < ticks && !door.DoorBroken; t++)
         {
             world.RunTick();
@@ -201,10 +201,150 @@ public class DoorTests(ITestOutputHelper output)
         var spot = world.Fixtures.DoorSpotOf(door)!.Value;
         var plan = new GatePlan();
         Assert.True(plan.PlansBash(world, null, locks, raider.Slot, target.Slot, key, door, spot));
+        // A ransacker (goal 216) bound for a building behind it plans the same bash.
+        var from = world.Characters.Next[raider.Slot].Position;
+        var to = world.Characters.Next[target.Slot].Position;
+        Assert.Equal((DoorPlan.Entry.Bash, door.Id), locks.GateEntry(world, raider.Slot, from, to));
 
         // Broken, the gate is open (state 1): the way is not blocked, so nothing is bashed.
         door.DoorBroken = true;
         Assert.False(plan.PlansBash(world, null, locks, raider.Slot, target.Slot, key, door, spot));
+        locks.Inputs(world, [new GateRegionsCommand(new LineRegions(key)) { Tick = 0 }]);   // the gate graph is rebuilt once a check
+        Assert.Equal(DoorPlan.Entry.Walk, locks.GateEntry(world, raider.Slot, from, to).Entry);
+    }
+
+    /// <summary>Shut in (<c>FUN_1405a3710</c> / <c>FUN_1405a34e0</c>): a character inside town walls whose gate to the open world is locked has no retreat desire; outside the walls, or with the gate broken open, it has.</summary>
+    [Fact]
+    public void A_character_behind_a_locked_gate_of_town_walls_is_shut_in()
+    {
+        var owners = SyntheticTown.Rec("60-g", Meitou.Data.Fcs.FcsRecordType.FACTION, "owners");
+        var leaf = SyntheticTown.Rec("62-g", Meitou.Data.Fcs.FcsRecordType.BUILDING, "Gate door");
+        var gateRecord = SyntheticTown.Rec("63-g", Meitou.Data.Fcs.FcsRecordType.BUILDING, "Gate");
+        gateRecord.Bools["is wall gate"] = true;
+        gateRecord.References["doors"] = [SyntheticTown.Ref("62-g")];
+        var town = SyntheticTown.Rec("64-g", Meitou.Data.Fcs.FcsRecordType.TOWN, "Walled");
+        town.References["faction"] = [SyntheticTown.Ref("60-g")];
+        var file = new Meitou.Data.Fcs.FcsFile();
+        file.Records.AddRange([owners, leaf, gateRecord, town]);
+        var db = new GameDatabase();
+        db.Apply(file, "test.mod");
+        var buildings = new Dictionary<string, List<TownBuilding>> { ["walled"] = [new("gate", "63-g", "63-g", SyntheticTown.Centre, 0, false, false, [])] };
+        var data = PopulationData.Create(db, [new TownPlacement("walled", "64-g", SyntheticTown.Centre, null)], buildings: buildings);
+        var locks = new LockSystem(BaseGame, BodyOptions.Default);
+        using var world = new SimWorld(new WorldSettings { Seed = 5, PublishSnapshots = false, MinPartitionSize = 1 }, new OpenGroundWalkability((_, _) => 300), [locks]);
+        world.Fixtures.RegisterSite(world, data, 0);
+        world.Fixtures.Doors = new Gate();
+        string key = data.Sites[0].Buildings[0].Key;
+        var door = Assert.Single(world.Fixtures.OfBuilding(key), f => f.Kind == FixtureKind.Door);
+        door.Lock!.Level = Math.Max(1, door.Lock.Level);
+        world.Fixtures.SetLocked(door, true);
+        locks.Inputs(world, [new GateRegionsCommand(new LineRegions(key)) { Tick = 0 }]);
+
+        Assert.True(locks.WallsLocked(world, SyntheticTown.Centre + new Vector3(0, 0, 300)));
+        Assert.False(locks.WallsLocked(world, SyntheticTown.Centre + new Vector3(0, 0, -300)));
+        // DC 58 TOWN_WALLS_LOCKED_UP: a gate and no open door; an opening door still counts as locked, an open one does not.
+        Assert.True(LockSystem.TownLockedUp(world, data.Sites[0]));
+        door.Motion = DoorMotion.Opening;
+        Assert.True(LockSystem.TownLockedUp(world, data.Sites[0]));
+        door.Motion = DoorMotion.Open;
+        Assert.False(LockSystem.TownLockedUp(world, data.Sites[0]));
+        door.Motion = DoorMotion.Closed;
+        door.DoorBroken = true;
+        locks.Inputs(world, [new GateRegionsCommand(new LineRegions(key)) { Tick = 0 }]);   // the gate graph is rebuilt once a check
+        Assert.False(locks.WallsLocked(world, SyntheticTown.Centre + new Vector3(0, 0, 300)));
+    }
+
+    /// <summary>docs/game/locks.md "When": state 59 is Building::hasAnOpenDoor, so a closed unlocked door counts as shut: a bandit (desire 1.1 over 72's 1) plans to bash it, one that is not aggressive opens it (walks in), and a locked door of its own faction is unlocked (78).</summary>
+    [Fact]
+    public void A_ransackers_entry_plan_opens_or_bashes_a_closed_door_by_state_59()
+    {
+        var locks = new LockSystem(BaseGame, BodyOptions.Default);
+        using var world = new SimWorld(new WorldSettings { Seed = 31, PublishSnapshots = false, MinPartitionSize = 1 }, new OpenGroundWalkability((_, _) => 150), [locks]);
+        world.Fixtures.RegisterSite(world, ArrestTests.Town(), 0);
+        world.Fixtures.Doors = new Gate();
+        var door = world.Fixtures.Find("0.0:house#0")!;
+        var spot = world.Fixtures.DoorSpotOf(door)!.Value;
+        int owner = world.Fixtures.DoorOwner(door.Building);
+        CharacterId Spawn(bool bandit, int faction)
+        {
+            var cold = new Meitou.Tests.Combat.Combatant { Name = "raider" }.MakeCold();
+            cold.Faction = faction;
+            if (bandit) cold.NpcClass = Meitou.Data.Gameplay.FundamentalType.Bandit;
+            return world.Characters.Spawn(new CharacterHot { Position = spot.Centre + new Vector3(0, 0, 10), Health = 100, MaxSpeed = 60, WalkSpeed = 15, Task = (byte)CharacterTask.Idle }, cold, 0);
+        }
+        var bandit = Spawn(true, owner + 1);
+        var resident = Spawn(false, owner);
+        var plan = new DoorPlan();
+        DoorPlan.Entry Plan(CharacterId who) => plan.PlansEntry(world, null, who.Slot, door.Building, door, spot, locks);
+
+        world.Fixtures.SetLocked(door, false);
+        door.Motion = DoorMotion.Closed;
+        Assert.Equal(DoorPlan.Entry.Bash, Plan(bandit));
+        Assert.Equal(DoorPlan.Entry.Walk, Plan(resident));
+        world.Fixtures.SetLocked(door, true);
+        Assert.Equal(DoorPlan.Entry.Bash, Plan(bandit));
+        Assert.Equal(DoorPlan.Entry.Walk, Plan(resident));   // its own door: 78 unlocks it
+        door.Motion = DoorMotion.Open;
+        Assert.Equal(DoorPlan.Entry.Walk, Plan(bandit));
+    }
+
+    /// <summary>docs/game/locks.md "When": an attacker's row 4 needs state 59 (<c>hasAnOpenDoor</c>, one evaluator for every goal), so a bandit bashes a closed unlocked door and a non-aggressive attacker does not.</summary>
+    [Fact]
+    public void An_attackers_plan_reads_state_59_exactly_so_a_bandit_bashes_a_closed_unlocked_door()
+    {
+        var locks = new LockSystem(BaseGame, BodyOptions.Default);
+        using var world = new SimWorld(new WorldSettings { Seed = 31, PublishSnapshots = false, MinPartitionSize = 1 }, new OpenGroundWalkability((_, _) => 150), [locks]);
+        world.Fixtures.RegisterSite(world, ArrestTests.Town(), 0);
+        world.Fixtures.Doors = new Gate();
+        var door = world.Fixtures.Find("0.0:house#0")!;
+        var spot = world.Fixtures.DoorSpotOf(door)!.Value;
+        int owner = world.Fixtures.DoorOwner(door.Building);
+        CharacterId Spawn(bool bandit, int faction)
+        {
+            var cold = new Meitou.Tests.Combat.Combatant { Name = "raider" }.MakeCold();
+            cold.Faction = faction;
+            if (bandit) cold.NpcClass = Meitou.Data.Gameplay.FundamentalType.Bandit;
+            return world.Characters.Spawn(new CharacterHot { Position = spot.Centre + new Vector3(0, 0, 10), Health = 100, MaxSpeed = 60, WalkSpeed = 15, Task = (byte)CharacterTask.Attack }, cold, 0);
+        }
+        var bandit = Spawn(true, owner + 1);
+        var resident = Spawn(false, owner);
+        var plan = new DoorPlan();
+        world.Fixtures.SetLocked(door, false);
+        door.Motion = DoorMotion.Closed;
+        Assert.True(plan.PlansBash(world, null, bandit.Slot, resident.Slot, door.Building, door, spot, locks));
+        Assert.False(plan.PlansBash(world, null, resident.Slot, bandit.Slot, door.Building, door, spot, locks));
+        door.Motion = DoorMotion.Open;
+        Assert.False(plan.PlansBash(world, null, bandit.Slot, resident.Slot, door.Building, door, spot, locks));
+    }
+
+    sealed class SplitRegions : IGateRegions
+    {
+        public int CodeAt(Vector3 at) => at.Z < SyntheticTown.Centre.Z ? 0 : 1;
+        public IReadOnlyList<GateLink> Gates { get; } = [];
+    }
+
+    /// <summary>docs/game/locks.md (270 -> 272): with no gate between the attacker's region and its target's, the planner smashes a wall of its own region; only an attacker in reach of the wall plans it (state 46).</summary>
+    [Fact]
+    public void A_bandit_in_a_region_no_gate_leads_out_of_plans_to_smash_a_wall_only_once_in_its_reach()
+    {
+        var locks = new LockSystem(BaseGame, BodyOptions.Default);
+        using var world = new SimWorld(new WorldSettings { Seed = 5, PublishSnapshots = false, MinPartitionSize = 1 }, new OpenGroundWalkability((_, _) => 300), [locks]);
+        locks.Inputs(world, [new GateRegionsCommand(new SplitRegions()) { Tick = 0 }]);
+        CharacterId Spawn(float dz, int faction)
+        {
+            var cold = new Meitou.Tests.Combat.Combatant { Name = "raider" }.MakeCold();
+            cold.Faction = faction;
+            cold.NpcClass = Meitou.Data.Gameplay.FundamentalType.Bandit;
+            return world.Characters.Spawn(new CharacterHot { Position = SyntheticTown.Centre + new Vector3(0, 0, dz), Health = 100, MaxSpeed = 60, WalkSpeed = 15, Task = (byte)CharacterTask.Attack }, cold, 0);
+        }
+        var raider = Spawn(-300, 1);
+        var target = Spawn(300, 2);
+        var wall = new Meitou.Simulation.Construction.BuildSite { Id = "wall", Record = "w", Position = SyntheticTown.Centre + new Vector3(0, 0, -100), Materials = [] };
+        var plan = new GatePlan();
+        // 272's state 46 (at the wall) has only 67 Running as provider, which needs 90 again: only an attacker already in reach (60) of the wall plans it.
+        Assert.False(plan.PlansSmash(world, null, locks, raider.Slot, target.Slot, wall));
+        world.Characters.Next[raider.Slot].Position = wall.Position + new Vector3(0, 0, -30);
+        Assert.True(plan.PlansSmash(world, null, locks, raider.Slot, target.Slot, wall));
     }
 
     [Fact, Slow]
@@ -236,5 +376,35 @@ public class DoorTests(ITestOutputHelper output)
         Assert.Equal(2, gates.Count(b => b.Destroyed));
         Assert.All(gates.Where(b => b.Destroyed), g => Assert.DoesNotContain(world.Fixtures.OfBuilding(g.Key), f => f.Kind == FixtureKind.Door));
         Assert.Contains(hub.Buildings.Where(b => !b.Destroyed), b => world.Fixtures.OfBuilding(b.Key).Any(f => f.Kind == FixtureKind.Door));
+    }
+
+    [Fact]
+    public void A_bash_blow_lands_once_per_clip_cycle_at_six_tenths_of_it()
+    {
+        // Task_BashDoor (FUN_140348c10): the blow fires when the stonemine progress crosses 0.6, the first at 0.6 into the first cycle.
+        float phase = 0;
+        var blows = new List<float>();
+        for (int i = 1; i <= 400; i++)
+        {
+            if (LockSystem.BlowLands(phase, 0.01f, 2, out phase)) blows.Add(i * 0.01f);
+        }
+        Assert.Equal(2, blows.Count);
+        Assert.InRange(blows[0], 1.19f, 1.22f);
+        Assert.InRange(blows[1], 3.19f, 3.22f);
+    }
+
+    [Fact]
+    public void An_animals_bash_clip_restarts_when_its_progress_passes_98_percent()
+    {
+        // Task_BashDoor (FUN_140348c10): an animal's own attack clip is restarted once it reads past 0.98, so the cycle is 0.98 of the clip and the blow stays at 0.6 of the clip.
+        float phase = 0;
+        var blows = new List<float>();
+        for (int i = 1; i <= 400; i++)
+        {
+            if (LockSystem.BlowLands(phase, 0.01f, 2, out phase, LockSystem.AnimalRestartProgress * 2)) blows.Add(i * 0.01f);
+        }
+        Assert.Equal(2, blows.Count);
+        Assert.InRange(blows[0], 1.19f, 1.22f);
+        Assert.InRange(blows[1], 3.15f, 3.19f);
     }
 }

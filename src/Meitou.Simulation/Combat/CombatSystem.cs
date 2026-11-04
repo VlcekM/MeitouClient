@@ -25,6 +25,9 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
     /// <summary>The <see cref="Effect.Kind"/> of a blow: <c>Arg</c> is the blow (1 or 2) and <c>Amount</c> the attacker's attack number.</summary>
     public const int BlowEffect = 1;
 
+    /// <summary>The squad memory (set by the standard systems): the damage floater reads the active squad's TEMP ENEMY / TEMP ALLY tags (<c>FUN_1406508d0</c>).</summary>
+    public Dialogue.SquadMemory? Memory { get; set; }
+
     readonly CombatTechnique[] techniques, asWritten;
     readonly CombatConstants combat;
     readonly GameConstants constants;
@@ -45,7 +48,7 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
         this.options = options;
         this.lengths = lengths;
         Settings = settings ?? new CombatOptions();
-        AttackSlots = Math.Max(1, Settings.AttackSlots ?? combat.MaxNumAttackSlots);
+        UseAttackSlots(Settings.AttackSlots);
         LateDefences = Settings.LateDefences;
         GunnerFacesBarrel = Settings.GunnerFacesBarrel;
         PunchReachFix = Settings.PunchReachFix;
@@ -57,6 +60,9 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
 
     /// <summary>How many enemies may melee one target at once, before the target race's <c>extra attack slots</c>: CONSTANTS <c>max num attack slots</c> (1, Faithful) unless a setting changes it.</summary>
     public int AttackSlots { get; set; }
+
+    /// <summary>Sets <see cref="AttackSlots"/> to a setting's value, or to the loaded CONSTANTS <c>max num attack slots</c> for null (the Faithful meaning, <c>FUN_1406661d0</c>, <b>Verified</b>).</summary>
+    public void UseAttackSlots(int? slots) => AttackSlots = Math.Max(1, slots ?? combat.MaxNumAttackSlots);
 
     /// <summary>Stuck bolts kept in the world per bolt mesh (the settings' <c>harpoonLimit</c>, <see cref="CombatOptions.StuckLimit"/>): past it the one that flew longest goes (<c>FUN_14043acf0</c>).</summary>
     public int StuckLimit { get; set; }
@@ -207,7 +213,7 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
                         if (order.Picked)
                         {
                             if (table.TryResolveNext(id, out int a))
-                                PlayerOrders.Give(world, a, new OrderEntry(TaskType.FOCUSED_MELEE_ATTACK, this) { Target = order.Target, Detail = new PickedAttack(order, victimFighting, world.Tick) }, order.Queued);
+                                PlayerOrders.Give(world, a, new OrderEntry(order.Unprovoked ? TaskType.UNPROVOKED_FOCUSED_MELEE_ATTACK : TaskType.FOCUSED_MELEE_ATTACK, this) { Target = order.Target, Detail = new PickedAttack(order, victimFighting, world.Tick) }, order.Queued);
                             continue;
                         }
                         if (Engage(world, table, id, order, now)) Assaulted(world, table, id, order, victimFighting);
@@ -250,7 +256,7 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
         // A fighter turns on no one it found no path to lately unless the player picked it (isPathImpossible in every finder's score, docs/game/combat.md "Target score"): a mate
         // that is called in on a sighting or an attack and cannot reach the enemy (a cage, a locked room) would otherwise stand at the nearest spot for ever.
         if (!order.Picked && PursuitSystem.PathImpossible(cold, target, now)) return false;
-        var (row, source) = order.Picked ? (TaskType.FOCUSED_MELEE_ATTACK, TaskSource.Order) : order.Defensive ? (TaskType.ATTACK_ATTACKERS_OF, TaskSource.Reaction) : (TaskType.ATTACK_ENEMIES, TaskSource.Goal);
+        var (row, source) = order.Picked ? (order.Unprovoked ? TaskType.UNPROVOKED_FOCUSED_MELEE_ATTACK : TaskType.FOCUSED_MELEE_ATTACK, TaskSource.Order) : order.Defensive ? (TaskType.ATTACK_ATTACKERS_OF, TaskSource.Reaction) : (TaskType.ATTACK_ENEMIES, TaskSource.Goal);
         return TaskStart.Start(world, a, new TaskRequest(CharacterTask.Attack, row, order.Source ?? source) { Target = target, Job = order.Job }) == StartResult.Started;
     }
 
@@ -258,10 +264,15 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
     bool VictimFighting(CharacterTable table, CharacterId target) =>
         table.TryResolveNext(target, out int vs) && table.Cold(vs) is { } vc && IsInCombatMode(table, target, vc, melee: true, ranged: false);
 
-    /// <summary>The order itself changes no relation (the original's relation events come from the blows, Deeds); an attack that is not self-defence is an assault.</summary>
+    /// <summary>
+    /// The order itself changes no relation (the original's relation events come from the blows, Deeds). Only Attack Unprovoked (row 61) is an assault at its start (<c>FUN_140334070</c>)
+    /// and marks the attacker ordered whether or not the booking passes (<c>FUN_14033c1e0</c>); rows 5, 4, 13 and 16 do neither (<b>Verified</b>, flag <c>+0x98</c> of the task).
+    /// </summary>
     void Assaulted(World world, CharacterTable table, CharacterId attacker, AttackOrder order, bool victimFighting)
     {
-        if (!order.Defensive && Crimes is { } crimes && table.TryResolveNext(order.Target, out int victimSlot)) crimes.Assault(world, attacker.Slot, victimSlot, victimFighting);
+        if (!order.Unprovoked || order.Defensive) return;
+        if (Crimes is { } crimes && table.TryResolveNext(order.Target, out int victimSlot)) crimes.Assault(world, attacker.Slot, victimSlot, victimFighting);
+        if (table.Cold(attacker.Slot) is { } cold) cold.Ordered = true;
     }
 
     /// <summary>The player's attack order in a queue: the command, and the victim's combat mode when it was given (read again when the order starts on a later tick).</summary>
@@ -270,7 +281,7 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
     // Saved: the pick is rebuilt from its attacker and target; the victim's combat mode is read when the order starts (a tick that is never the world's).
     int IOrderOwner.SaveKind(OrderEntry order) => order.Detail is PickedAttack ? 0 : -1;
     object? IOrderOwner.LoadDetail(World world, CharacterId self, TaskType row, int kind, CharacterId target) =>
-        new PickedAttack(new AttackOrder([self], target) { Picked = true, Tick = world.Tick }, false, -1);
+        new PickedAttack(new AttackOrder([self], target) { Picked = true, Unprovoked = row == TaskType.UNPROVOKED_FOCUSED_MELEE_ATTACK, Tick = world.Tick }, false, -1);
 
     /// <summary>
     /// The attack order (row 5) needs a target that is there, awake and has a body (else it leaves the queue), and an attacker able to fight: a fighter, awake, not carried (<see cref="Engage"/>).
@@ -460,7 +471,7 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
     MedicalContext MakeContext(World world, int slot, CharacterCold cold) =>
         new(constants, options, cold.Race!)
         {
-            Toughness = cold.Stats![StatsEnumerated.Toughness],
+            Toughness = cold.Stats!.ScaledToughness,
             Strength = cold.Stats[StatsEnumerated.Strength],
             EncumbranceFactor = cold.Fighter?.EncumbranceFactor ?? 1,
             Seed = world.Seed,
@@ -471,9 +482,27 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
 
     public void SlowWorld(World world)
     {
+        RepeatAssaults(world);
         (read, write) = (write, read);
         SwapZones();
         swappedTick = world.Tick;
+    }
+
+    /// <summary>
+    /// Attack Unprovoked (row 61) books its Assault again on every update of the task (<c>FUN_14033c250</c> runs <c>FUN_140334070</c> each time, <b>Verified</b>), so the pending crime's timer is refreshed
+    /// for as long as the attacker fights a victim that stays passive; <see cref="Assaulted"/> is the booking, with its own gates (the victim fighting, wanted, a bandit).
+    /// </summary>
+    void RepeatAssaults(World world)
+    {
+        if (Crimes is null) return;
+        var table = world.Characters;
+        for (int s = 0; s < table.HighWater; s++)
+        {
+            if (!table.Next[s].Alive || table.Cold(s) is not { Running: { Task: CharacterTask.Attack, Row: TaskType.UNPROVOKED_FOCUSED_MELEE_ATTACK } }) continue;
+            var fight = StateOf(table.IdOf(s));
+            if (fight.TargetSlot < 0 || !table.TryResolveNext(new CharacterId(fight.TargetSlot, fight.TargetGeneration), out int victim)) continue;
+            Crimes.Assault(world, s, victim, VictimFighting(table, table.IdOf(victim)));
+        }
     }
 
     /// <summary>The tick whose slow world swapped the state arrays last.</summary>

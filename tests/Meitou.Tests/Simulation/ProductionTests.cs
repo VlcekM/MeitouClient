@@ -197,6 +197,87 @@ public class ProductionTests
         return hashes;
     }
 
+    /// <summary>
+    /// A town building an NPC worker of goal 189 stands at is a machine of the town's faction, made when it arrives (docs/game/buildings-production.md "NPC town machines"): with row 87 first in its
+    /// plan it operates it and the output grows; with row 92 first it empties the output into its inventory (<c>Task_EmptyMachine</c>) and a full output (status 1) goes back to 2.
+    /// </summary>
+    [Fact]
+    public void An_npc_worker_operates_its_town_buildings_machine_and_then_empties_its_output()
+    {
+        using var rig = new Rig(Database(), Constants, []);
+        const int Town = 7;
+        var building = new TownBuilding("well", Well, "Well", At, 0, false, false, []);
+        var stats = new CharacterStats();
+        stats[StatsEnumerated.Labouring] = Unit;
+        var squad = new Squad { Id = 1, TemplateId = "t", Faction = Town };
+        var cold = new CharacterCold { Name = "miner", Race = Human, Stats = stats, Medical = MedicalState.Create(Human, 50), Inventory = new Inventory(), Faction = Town };
+        cold.Ai = new Meitou.Simulation.Ai.AiMind { Squad = squad, Behaviour = Meitou.Simulation.Ai.AiBehaviour.Work, WorkOperate = building, WorkOwner = Town };
+        var worker = rig.World.Characters.Spawn(new CharacterHot { Position = At + new Vector3(0, 0, 10), MaxSpeed = 40, WalkSpeed = 15, Task = (byte)CharacterTask.Idle }, cold, 0);
+        rig.World.RunTicks(600);
+        var machine = rig.World.Machines.Find(ProductionSystem.TownWorkId(building));
+        Assert.NotNull(machine);
+        Assert.True(machine.Output!.Count > 0);
+        int made = machine.Output.Count;
+
+        machine.Status = 1;
+        cold.Ai.WorkOperate = null;
+        cold.Ai.CollectFrom = building;
+        rig.World.RunTicks(2);
+        Assert.Equal(0, machine.Output.Count);
+        Assert.Equal(2, machine.Status);
+        Assert.Equal(made, cold.Inventory!.All().Where(i => i.Record == Water).Sum(i => i.Quantity));
+    }
+
+    /// <summary>A town building's machine keeps its output, progress, inputs and status through a save (docs/formats/save.md "Town machines"): the Meitou-only keys of the CAMERA record.</summary>
+    [Fact]
+    public void A_town_machine_round_trips_through_the_save_keys()
+    {
+        var building = new TownBuilding("well", Well, "Well", At, 0, false, false, []);
+        var camera = new Meitou.Data.Fcs.FcsRecord { Type = (int)Meitou.Data.Fcs.FcsRecordType.CAMERA, Id = 1, Name = "c", StringId = "c" };
+        using (var rig = new Rig(Database(), Constants, []))
+        {
+            var machine = rig.Production.TownWork(rig.World, building, 7)!;
+            machine.Output!.Count = 4;
+            machine.Output.Progress = 0.25f;
+            machine.Status = 1;
+            Meitou.Simulation.Saving.TownMachineSave.Write(camera, rig.World);
+        }
+        using var again = new Rig(Database(), Constants, []);
+        Meitou.Simulation.Saving.TownMachineSave.Read(camera, again.World, again.Production, key => key == building.Key ? (building, 7) : null);
+        var read = again.World.Machines.Find(ProductionSystem.TownWorkId(building))!;
+        Assert.Equal((4, 0.25f, (byte)1), (read.Output!.Count, read.Output.Progress, read.Status));
+    }
+
+    /// <summary>
+    /// Row 94's finder (<c>FUN_14059d9b0</c>) names the nearest town machine whose output holds an item the target machine's inputs take, and a worker at the target with row 93 puts what it carries into
+    /// the inputs (<c>Task_FillMachine</c>), as the chain 92 -> 94 -> 93 -> 87 of an NPC refinery (docs/game/buildings-production.md "NPC town machines").
+    /// </summary>
+    [Fact]
+    public void A_town_machine_is_filled_from_the_output_of_another()
+    {
+        using var rig = new Rig(Database(), Constants, []);
+        const int Town = 7;
+        var well = new TownBuilding("well", Well, "Well", At, 0, false, false, []);
+        var far = new TownBuilding("far", Well, "Far well", At + new Vector3(500, 0, 0), 0, false, false, []);
+        var shop = new TownBuilding("shop", PoweredWorkshop, "Workshop", At + new Vector3(0, 0, 100), 0, false, false, []);
+        var target = rig.Production.TownWork(rig.World, shop, Town)!;
+        Assert.Null(ProductionSystem.InputSource(rig.World, target, [far, well, shop], shop.Position));   // nothing made yet
+        rig.Production.TownWork(rig.World, far, Town)!.Output!.Count = 2;
+        rig.Production.TownWork(rig.World, well, Town)!.Output!.Count = 3;
+        Assert.Same(well, ProductionSystem.InputSource(rig.World, target, [far, well, shop], shop.Position));
+
+        var squad = new Squad { Id = 1, TemplateId = "t", Faction = Town };
+        var cold = new CharacterCold { Name = "hauler", Race = Human, Stats = new CharacterStats(), Medical = MedicalState.Create(Human, 50), Inventory = new Inventory(), Faction = Town };
+        cold.Ai = new Meitou.Simulation.Ai.AiMind { Squad = squad, Behaviour = Meitou.Simulation.Ai.AiBehaviour.Work, FillTo = shop, WorkOwner = Town };
+        Assert.False(ProductionSystem.CarriesInputOf(cold, target));
+        cold.Inventory.Add(rig.Items.Create(Water, 4)!);
+        Assert.True(ProductionSystem.CarriesInputOf(cold, target));
+        rig.World.Characters.Spawn(new CharacterHot { Position = shop.Position, MaxSpeed = 40, WalkSpeed = 15, Task = (byte)CharacterTask.Idle }, cold, 0);
+        rig.World.RunTicks(2);
+        Assert.True(target.Inputs[0].Count > 0);
+        Assert.Equal(4, target.Inputs[0].Count + cold.Inventory.All().Where(i => i.Record == Water).Sum(i => i.Quantity));
+    }
+
     // ------------------------------------------------------------------ items and research costs
 
     /// <summary>

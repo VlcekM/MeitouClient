@@ -27,6 +27,7 @@ public sealed partial class CarrySystem
         {
             if (s == i || !next[s].Alive || taken.Contains(s) || table.Cold(s) is not { } animal || animal.Faction == cold.Faction) continue;
             if (!(animal.Fighter?.IsAnimal ?? animal.Appearance?.Animal is not null) || !CanBeLooted(animal) || !animal.CarriedBy.IsNone || !animal.Inventory!.All().Any()) continue;
+            if (PursuitSystem.PathImpossible(cold, table.IdOf(s), world.Tick)) continue;   // the give-up list (AITaskSytem::isPathImpossible, FUN_1408ce3a0)
             float d2 = Vector2.DistanceSquared(at, new Vector2(next[s].Position.X, next[s].Position.Z));
             if (d2 <= best2 && (best < 0 || d2 < best2) && Storable(world, cold, next[i].Position, animal) is not null) { best = s; best2 = d2; }
         }

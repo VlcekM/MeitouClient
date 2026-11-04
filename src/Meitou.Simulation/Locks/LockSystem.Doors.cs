@@ -277,6 +277,8 @@ public sealed partial class LockSystem
         public Fixture Door;
         public DoorSpot Spot;
         public bool Opened;
+        /// <summary>The faction of the walker that opened the door (-1: none).</summary>
+        public int OpenerFaction;
         /// <summary>The door is open (or opening): the scan only notes who goes through or stands in it.</summary>
         public bool Watch;
         public bool Passed;
@@ -295,7 +297,7 @@ public sealed partial class LockSystem
             bool watch = f.Motion is DoorMotion.Open or DoorMotion.Opening;
             if (watch && !f.AutoOpened) continue;
             if (fixtures.DoorSpotOf(f) is not { } spot) continue;
-            var scan = new WalkerScan { World = world, Door = f, Spot = spot, Watch = watch };
+            var scan = new WalkerScan { World = world, Door = f, Spot = spot, Watch = watch, OpenerFaction = -1 };
             world.Grid.Query(spot.Centre.X, spot.Centre.Z, OpenReach, ref scan, static (int slot, ref WalkerScan s) =>
             {
                 if (s.Opened || s.Passed) return;
@@ -322,13 +324,21 @@ public sealed partial class LockSystem
                 }
                 if (!Crosses(n.Position, c.Path, n.PathCursor, s.Spot, legs: 2)) return;
                 s.Opened = FixtureRegistry.OpenDoor(s.Door) || s.Door.Motion == DoorMotion.Opening;
+                if (s.Opened) s.OpenerFaction = c.Faction;
             });
+            if (scan.Opened) NoteDoorOpened(world, f, scan.OpenerFaction);
             if (scan.Opened && !watch) { f.AutoOpened = true; f.LastPass = world.Tick; }
             else if (watch && scan.Passed) f.LastPass = world.Tick;
             // A door that wants its lock is left open: closing it would lock it, and a locked gate shuts its building for every path.
             else if (watch && DoorsCloseBehind && !f.WantsLock && f.Motion == DoorMotion.Open && (world.Tick - f.LastPass) * world.TickSeconds >= AutoCloseSeconds)
                 FixtureRegistry.CloseDoor(f);
         }
+    }
+
+    /// <summary>Task_OpenDoor (<c>FUN_1403370f0</c>, <b>Verified</b>) clears the door owner's "house locked" flag whenever a character outside the player's faction opens a door (docs/game/locks.md "Doors").</summary>
+    internal void NoteDoorOpened(World world, Fixture door, int openerFaction)
+    {
+        if (openerFaction != world.Player.Faction) houseLocked.Remove(door.Building);
     }
 
     /// <summary>The open amount from which a door lets walkers through (the original's navmesh treats it as open from 0.6, docs/game/locks.md "Navigation").</summary>

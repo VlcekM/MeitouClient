@@ -87,7 +87,7 @@ sealed partial class PlayerInterface
                 switch (PickAt(mouse).Kind)
                 {
                     case Picked.Character when QuickOrder(mouse) is { } order: chosen = (order.Pointer, order.Target); break;
-                    case Picked.GroundItem: chosen = ("pick_item", null); break;
+                    case Picked.GroundItem: chosen = (StealsGroundItem(mouse) ? "steal" : "pick_item", null); break;
                     case Picked.Container when PickContainer(mouse) is { } container: chosen = (ContainerPointer(container), null); break;
                     case Picked.Door when PickDoor(mouse) is { } door: chosen = (DoorPointer(door), null); break;
                     case Picked.Bed or Picked.Cage or Picked.Dummy or Picked.Seat: chosen = ("use", null); break;   // a bed's slot 130 pointer (UseableStuff, no inventory)

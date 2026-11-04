@@ -16,6 +16,8 @@ sealed class ZoneObjects
     public List<PlacedMesh> Stand { get; } = [];
     /// <summary>The indoor volumes of the zone's buildings that have an <c>interior mask</c> (docs/formats/zones.md, "Interior view").</summary>
     public List<InteriorVolume> Interiors { get; } = [];
+    /// <summary>The hulls of gateway buildings: hit by the audio's indoor ray like any interior mask, but no room (<see cref="InteriorVolume.IsGateway"/>).</summary>
+    public List<InteriorVolume> GateHulls { get; } = [];
 }
 
 /// <summary>
@@ -74,6 +76,7 @@ sealed class WorldObjects : IDisposable
         var watch = Stopwatch.StartNew();
         var levels = WorldLevelData.Load(install, includeInteriors: true);
         WorldFrame.LogIssues("world levels", levels.Problems());
+
         var objects = new WorldObjects
         {
             Database = db,
@@ -84,6 +87,9 @@ sealed class WorldObjects : IDisposable
             Layouts = new BuildingLayouts(db, levels.Interiors),
             DistantTowns = Meitou.Data.World.DistantTowns.Find(install, db, levels),
         };
+        // The factions' building swaps, once, for every consumer of the placements and of their layouts' furniture.
+        int swapped = levels.ApplyBuildingSwaps(db, objects.Layouts);
+        if (swapped > 0) Console.WriteLine($"world     {swapped} building(s) replaced or skipped by the factions' swaps");
         foreach (var t in objects.DistantTowns) objects.bakedTowns.Add(t.InstanceId);
         int ruins = ResidentRuins.Apply(db, levels, objects.Layouts);
         foreach (var b in levels.Buildings())
@@ -111,7 +117,7 @@ sealed class WorldObjects : IDisposable
         lock (runtimeLock)
         {
             runtime[placement.Key] = placement;
-            Reindex();
+            Reindex(placement.Key);
         }
     }
 
@@ -121,7 +127,7 @@ sealed class WorldObjects : IDisposable
         lock (runtimeLock)
         {
             if (!runtime.Remove(instanceId, out var removed)) return null;
-            Reindex();
+            Reindex(instanceId);
             return removed;
         }
     }
@@ -141,10 +147,13 @@ sealed class WorldObjects : IDisposable
     /// <summary>Whether a runtime placement with this id is still in the store.</summary>
     public bool HasRuntime(string instanceId) { lock (runtimeLock) return runtime.ContainsKey(instanceId); }
 
-    void Reindex()
+    /// <summary>The key prefix of a ground item's placement: its comings and goings leave the building floors alone (a pick-up inside a building must not drop the camera to the terrain).</summary>
+    public const string GroundKeyPrefix = "ground:";
+
+    void Reindex(string? key = null)
     {
         runtimeByZone = runtime.Values.GroupBy(p => p.Zone).ToDictionary(g => g.Key, g => g.ToArray());
-        placementVersion++;
+        if (key is null || !key.StartsWith(GroundKeyPrefix, StringComparison.Ordinal)) placementVersion++;
     }
 
     IReadOnlyList<BuildingPlacement> RuntimeIn(ZoneCoordinate zone) => runtimeByZone.TryGetValue(zone, out var list) ? list : [];
@@ -152,7 +161,7 @@ sealed class WorldObjects : IDisposable
     volatile int placementVersion;
     BuildingFloors? floors;
 
-    /// <summary>Changes whenever a runtime placement is added or removed: what <see cref="Floors"/> listed before is stale.</summary>
+    /// <summary>Changes whenever a runtime placement other than a ground item is added or removed: what <see cref="Floors"/> listed before is stale.</summary>
     internal int PlacementVersion => placementVersion;
 
     /// <summary>The building floors under the characters' feet (the footstep surface, docs/audio.md "Surface") and under the camera; used from the main thread.</summary>
@@ -213,13 +222,41 @@ sealed class WorldObjects : IDisposable
             string key = b.Key;
             if (sounds && BuildingEmitters.For(Database, record, key, position, b.Rotation) is { } emitter) result.Add(emitter);
             foreach (var layout in layouts)
-                foreach (var item in Layouts.Items(layout))
+                foreach (var item in Layouts.Items(layout, b))
                 {
                     if (item.Building.GetReferences("sounds").Count == 0) continue;
                     var (at, rotation) = BuildingLayouts.Place(position, b.Rotation, item);
                     if (BuildingEmitters.For(Database, item.Building, $"{key}/{item.InstanceId}", at, rotation) is { } furniture) result.Add(furniture);
                 }
         }
+        return result;
+    }
+
+    /// <summary>
+    /// The level's objects with <c>bird attractor</c> references (docs/game/birds.md): the buildings of the zone files that are not flagged incomplete by their state, the furniture
+    /// of their layouts, and the map features. Positioned as <see cref="Lay"/> places them. Safe from a worker thread.
+    /// </summary>
+    public List<(string Key, GameRecord Record, Vector3 Position)> BirdAttractorSources()
+    {
+        var result = new List<(string, GameRecord, Vector3)>();
+        using var map = TerrainHeightmap.Open(Install);
+        foreach (var b in Levels.Buildings())
+        {
+            if (b.Position == Vector3.Zero || Database.Find(b.BuildingId) is not { } record) continue;
+            var state = b.StateId is not null && Levels.Zones.TryGetValue(b.StateZone ?? b.Zone, out var zoneDb) ? zoneDb.Find(b.StateId) : null;
+            if (state is not null && state.Bools.TryGetValue("is complete", out bool complete) && !complete) continue;
+            float y = b.WorldY ?? map.HeightAt(b.Position.X, b.Position.Z) + b.Position.Y;
+            var position = new Vector3(b.Position.X, y, b.Position.Z);
+            if (record.GetReferences("bird attractor").Count > 0) result.Add((b.Key, record, position));
+            foreach (bool exterior in (ReadOnlySpan<bool>)[true, false])
+                if (state?.GetString(exterior ? "exterior layout name" : "interior layout name") is { Length: > 0 } name && Layouts.Find(record, name, exterior) is { } layout)
+                    foreach (var item in Layouts.Items(layout, b))
+                        if (item.Building.GetReferences("bird attractor").Count > 0)
+                            result.Add(($"{b.Key}/{item.InstanceId}", item.Building, BuildingLayouts.Place(position, b.Rotation, item).Position));
+        }
+        foreach (var (zone, feature) in Features.All())
+            if (Database.Find(feature.StringId) is { Type: Meitou.Data.Fcs.FcsRecordType.MAP_FEATURES } record && record.GetReferences("bird attractor").Count > 0)
+                result.Add(($"feature {zone} {feature.Position}", record, feature.Position));
         return result;
     }
 
@@ -264,10 +301,11 @@ sealed class WorldObjects : IDisposable
                 var position = new Vector3(b.Position.X, y, b.Position.Z);
                 var parts = WorldObjectLayout.Building(db, record, b.InstanceId, position, b.Rotation, new BuildingState(isDestroyed, townMaterial) { WithInterior = !isDestroyed, Identity = b.Key });
                 // A destroyed building gets no interior view (game: the per-frame interior driver skips it).
-                if (!isDestroyed && InteriorVolume.For(db, record, b.Key, position, b.Rotation, interiorCollisions!) is { } interior) result.Interiors.Add(interior);
+                if (!isDestroyed && InteriorVolume.For(db, record, b.Key, position, b.Rotation, interiorCollisions!, gateways: true) is { } interior) (interior.IsGateway ? result.GateHulls : result.Interiors).Add(interior);
                 // Resource buildings ("is foliage", no parts) are drawn by the foliage system as a FOLIAGE_MESH naming them as "building type".
                 if (parts.Count == 0 && record.GetBool("is foliage")) Interlocked.Increment(ref foliage);
                 else if (parts.Count == 0) Interlocked.Increment(ref empty);
+                parts.RemoveAll(m => m.RenderHidden);   // collision only (a destroyed building's upper-floor part with no destroyed mesh)
                 // Inside another building and not outside: hidden while that one is closed (a player's own building says so; a zone's by its state).
                 if (b.Contained || state is not null && state.GetBool("is inside building") && !BuildingLayouts.IsOutside(state))
                     for (int k = 0; k < parts.Count; k++) parts[k] = parts[k] with { Contained = true, ContainerId = b.ContainerId };
@@ -284,7 +322,7 @@ sealed class WorldObjects : IDisposable
                     if (b.LayoutName(state, exterior) is not { Length: > 0 } layoutName) continue;
                     if (Layouts.Find(record, layoutName, exterior) is not { } layout) { Interlocked.Increment(ref layoutsNotFound); continue; }
                     Interlocked.Increment(ref layouts);
-                    foreach (var item in Layouts.Items(layout))
+                    foreach (var item in Layouts.Items(layout, b))
                     {
                         var (at, rotation) = BuildingLayouts.Place(position, b.Rotation, item);
                         var placed = WorldObjectLayout.Building(db, item.Building, $"{b.InstanceId}/{item.InstanceId}", at, rotation,

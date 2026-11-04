@@ -12,6 +12,11 @@ public struct CharacterHot
 {
     /// <summary>The slot holds a character. A dead slot's other fields are stale.</summary>
     public bool Alive;
+    /// <summary>
+    /// Its zone is not loaded: the character is deactivated and takes no part in the update (<c>FUN_1405c9410</c>, docs/game/game-loop.md "Inactive characters"). Set on <see cref="CharacterTable.Previous"/> once a tick by
+    /// <see cref="World"/>; derived (not hashed).
+    /// </summary>
+    public bool Dormant;
     /// <summary>The slot's generation: raised each time the slot is used again, so an old <see cref="CharacterId"/> never names the new character.</summary>
     public int Generation;
     /// <summary>World position: X/Z on the map, Y the height the character stands at.</summary>
@@ -58,6 +63,9 @@ public sealed class CharacterCold
     public System.Numerics.Vector2 FollowHeading { get; set; }
     /// <summary>The speed a follower wants this tick (<see cref="MovementSystem"/>, the original's desired speed). Not saved; hashed while following.</summary>
     public float FollowSpeed { get; set; }
+    /// <summary>The follower steers straight at its aim (the original's <c>Task_Follow</c> flag +0xac, with its 50 to 100 hysteresis) and where it was at its last update (+0x94). Not saved; the flag is hashed while following.</summary>
+    public bool FollowDirect { get; set; }
+    public System.Numerics.Vector3 FollowLast { get; set; }
     /// <summary>
     /// A campaign follower's pace near its trail point (task 215, <c>FUN_140349e70</c>; <see cref="PopulationSystem"/>'s campaign look sets it and clears it): its walk to the point goes
     /// no faster than this. Applies only to a <see cref="CharacterTask.GoTo"/> out of combat. Not saved (the next look sets it again); hashed while set.
@@ -158,6 +166,8 @@ public sealed class CharacterCold
     public float RoadPreference { get; set; }
     /// <summary>The water state 0..3 (<see cref="Meitou.Simulation.Bodies.Speed.WaterState"/>) <see cref="MovementSystem"/> found at the character's position, and its swim speed (<see cref="Meitou.Simulation.Bodies.Speed.Swim"/>) <see cref="BodySystem"/> keeps up to date. Derived each tick: not hashed, not saved.</summary>
     public byte WaterState { get; set; }
+    /// <summary>The ground height under a ragdolled body (the original's Character +0x698, set from the ragdoll's ground probe; 0: none yet). Derived: not hashed, not saved.</summary>
+    public float StandHeight { get; set; }
     public float SwimSpeed { get; set; }
     /// <summary>
     /// The weather acting on the character (the original's animation holder <c>+0x198</c> / <c>+0x1a0</c>, docs/formats/weather.md "Effects on characters"): its kind, the
@@ -257,10 +267,28 @@ public sealed class CharacterCold
     /// <summary>The target's place (height included) when the <see cref="PursuitSystem"/> last asked a path to <see cref="CharacterHot.Goal"/>: the path's end is measured against it, as the target may have moved since. Not saved.</summary>
     public Vector3 PursuitGoal { get; set; }
     /// <summary>
-    /// Fight targets it found no path to and the tick until which its target choice leaves them out (<c>AITaskSytem::notifyPathImpossible</c> stores 20 in its
-    /// <c>pathFailures</c>, <c>isPathImpossible</c> skips them; docs/game/combat.md "Attack slots and circling"). Not saved.
+    /// The AI's ignore map (<c>AITaskSytem.pathFailures</c> +0x218, filled by <c>notifyPathImpossible</c> <c>FUN_140796ed0</c> with 20 s, read by <c>isPathImpossible</c> <c>FUN_1405b0290</c>): targets (a
+    /// character, a site id, an <c>item:</c> id) it found no path to and the tick until which every finder leaves them out. Insertion order is kept (the lapse check reads it in order). Not saved.
     /// </summary>
-    public List<(CharacterId Target, long Until)>? PathFailures { get; set; }
+    public List<(IgnoreKey Key, long Until)>? Ignored { get; set; }
+    /// <summary>Ignores <paramref name="key"/> until the tick <paramref name="until"/> (a site id, <c>item:</c> id or machine's site id).</summary>
+    public void NoteUnreachable(string key, long until) => Ignore(new IgnoreKey(key, default), until);
+    /// <summary>Whether <paramref name="key"/> is still ignored at <paramref name="tick"/>.</summary>
+    public bool IsUnreachable(string key, long tick) => IsIgnored(new IgnoreKey(key, default), tick);
+    /// <summary>Ignores <paramref name="key"/> until <paramref name="until"/>, replacing an earlier entry for it.</summary>
+    public void Ignore(IgnoreKey key, long until)
+    {
+        var list = Ignored ??= [];
+        int at = list.FindIndex(e => e.Key == key);
+        if (at >= 0) list[at] = (key, until); else list.Add((key, until));
+    }
+    /// <summary>Whether <paramref name="key"/> is ignored at <paramref name="tick"/>.</summary>
+    public bool IsIgnored(IgnoreKey key, long tick)
+    {
+        if (Ignored is not { Count: > 0 } list) return false;
+        foreach (var (k, until) in list) if (k == key && until > tick) return true;
+        return false;
+    }
     /// <summary>
     /// The number that turns its portrait camera (docs/game/ui-screens.md "Portrait cells"): the save's <c>portrait_serial</c>, else its handle's serial; a character the game makes
     /// gets random × 4e9 at <see cref="CharacterTable.Spawn"/>, as the original rolls one per character.
@@ -337,6 +365,11 @@ public sealed class CharacterCold
     public bool Snatching { get; set; }
     /// <summary>The <see cref="CharacterTask.Loot"/> is the foraging job's (Task_Loot_ResourcesWeHaveStorageFor, row 241): it takes only what the faction's storages accept, after a wait. Runtime only; hashed with the task.</summary>
     public bool Foraging { get; set; }
+    /// <summary>
+    /// The animation class's crouched byte (AnimationClass +0x21c, written with prone by <c>FUN_14051dda0</c>; both set clears crouched): set by Task_Crouch (27) once its <c>squat T</c> clip has passed a progress threshold
+    /// (<c>FUN_140346440</c>), cleared by Task_UnCrouch (28) and the end of many tasks. The base data has no crouch task; nothing sets it yet (the task trigger is missing). Hashed only while set.
+    /// </summary>
+    public bool Crouched { get; set; }
     /// <summary>The NPC <see cref="CharacterTask.Loot"/>'s start flags (<see cref="Carrying.LootStart"/>), fixed when the task starts (<see cref="LiftTime"/> below 0); cleared with the task. Runtime only; hashed with the task.</summary>
     public Carrying.LootStart LootFlags { get; set; }
     /// <summary>The rescue job (148 <c>FIND_AND_RESCUE_IF_THERES_BEDS</c>, NUM8) is in <see cref="Jobs"/>: an idle character picks up a downed member of its faction by itself.</summary>
@@ -347,7 +380,16 @@ public sealed class CharacterCold
     /// The point the Hold order holds (CharStats +0x130): where Hold was turned on, then, while on Hold, the destination of the running ground move order (its own or a queued
     /// one; <see cref="OrderMove"/>); null: where it stands (not saved).
     /// </summary>
-    public System.Numerics.Vector2? HoldPoint { get; set; }
+    public System.Numerics.Vector3? HoldPoint { get; set; }
+    /// <summary>The Stand Up order (28, <c>Task_UnCrouch</c>) is running: the crouch clip plays backwards (<see cref="AnimationSystem"/>) and <see cref="Bodies.MedicalState.StayingLow"/> clears when it is nearly back at its start. Not saved; hashed while set.</summary>
+    public bool StandingUp { get; set; }
+    /// <summary>The sleeper is getting out of a <c>gotobed</c> bed (<c>Task_GetOutOfBed</c>): the bed clip plays backwards (<see cref="AnimationSystem"/>) until <see cref="BedExitDone"/>. Not saved; hashed while set.</summary>
+    public bool LeavingBed { get; set; }
+    public bool BedExitDone { get; set; }
+    /// <summary>The AI's manoeuvre mode (standing orders 8 and 9; the original's save key is unknown, so it is not saved, like <see cref="HoldPoint"/>).</summary>
+    public ManoeuvreMode Manoeuvre { get; set; } = ManoeuvreMode.RoamFar;
+    /// <summary>The AI's centre of movement (<c>AI::setCenterOfMovement</c>, +0x2c0): set by NEAR to where the character stands and by its ground move orders while not ROAM_FAR; null: none (not saved).</summary>
+    public System.Numerics.Vector3? CentreOfMovement { get; set; }
     /// <summary>
     /// The running <see cref="CharacterTask.GoTo"/> is the player's ground move order or a queued one (the original's Task_Move flag <c>+0x95</c>, set for tasks 29 and 40 only):
     /// cleared by any other <see cref="MovementSystem.GoTo"/>. Runtime only.
@@ -355,6 +397,11 @@ public sealed class CharacterCold
     public bool OrderMove { get; set; }
     /// <summary>The tick its stumble clip ends (combat's StunUntil, set at each interrupting hit): until then it neither walks nor works (docs/game/combat.md "Stagger outside a fight").</summary>
     public long StaggeredUntil { get; set; }
+    /// <summary>
+    /// Until when a stagger outside a fight reports the Stumbling task (147, <c>Character::_startStumble</c> queues it in front of the character's own task, which replans afterwards): set
+    /// with the stumble clip's stun, display only. Not saved.
+    /// </summary>
+    public long StumbleTaskUntil { get; set; }
     /// <summary>The tick its get-up after a knockout ends (<see cref="Combat.CombatSystem.GetUpClipSeconds"/> from waking, after the clip; Character +0x278 isCurrentlyGettingUp).</summary>
     public long GettingUpUntil { get; set; }
     /// <summary>The speed mode the character's move orders use (the original's saved <c>speed mode</c>: walk, run or no cap); no cap by default.</summary>
@@ -389,6 +436,8 @@ public sealed class CharacterCold
     /// <see cref="Locks.Fixture.Id"/> it is in (null: not known, e.g. a loaded prisoner whose cage the world has not mapped). Set by <see cref="Locks.FixtureRegistry"/>, serial phases only.
     /// </summary>
     public Locks.HeldState InSomething { get; set; }
+    /// <summary>Game hours of the last update of a bed it lay in (status <c>+0xc0</c>, refreshed every update of Task_UseBed, <c>FUN_140347950</c>); 0 before any. Row 98's desire reads it ; derived, not hashed or saved.</summary>
+    public double BedUsedHours { get; set; }
     public string? InWhat { get; set; }
     /// <summary>Imprisoned: it does not move, fight, carry or run AI (docs/simulation.md "Cages, beds and locks").</summary>
     public bool IsImprisoned => InSomething == Locks.HeldState.Imprisoned;
@@ -441,10 +490,16 @@ public sealed class CharacterCold
     public int SpeedGroup { get; set; } = -1;
     /// <summary>The fixture this character is picking the lock of (<see cref="Locks.LockSystem"/>; null: none). Hashed only while set.</summary>
     public string? PickingLock { get; set; }
+    /// <summary>The picker's work this update (Task_PickLock, <c>FUN_140359160</c>): the tick, the cage's <c>animation lockpick</c> clip (null: the medic clip) and the play speed 0.55 + 1.45 x 0.01 x skill (cosmetic). Not hashed: it follows from <see cref="PickingLock"/>.</summary>
+    public (long Tick, string? Clip, float Rate) PickWork { get; set; } = (-1, null, 1);
     /// <summary>The door this character is bashing in (<see cref="Locks.LockSystem"/>; null: none). Hashed only while set.</summary>
     public string? Bashing { get; set; }
     /// <summary>Whether <see cref="Bashing"/> was ordered by the player (Smash, 226) rather than found by the pursuit: the basher then needs no attack target. Hashed with <see cref="Bashing"/>.</summary>
     public bool BashOrdered { get; set; }
+    /// <summary>Whether <see cref="Bashing"/> names a wall site (a building of the world's registry) rather than a door: Smashing (272, planned through 270 when no gate leads to the target). Hashed with <see cref="Bashing"/>.</summary>
+    public bool BashWall { get; set; }
+    /// <summary>Whether <see cref="Bashing"/> is a door bashed for an errand (the ransackers' entry, row 81 planned for goal 216) rather than an attacker's: it needs no attack target and ends when the door opens. Hashed with <see cref="Bashing"/>.</summary>
+    public bool BashErrand { get; set; }
     /// <summary>The fixture whose lock this character cuts or breaks by order (Use Tools 285, Use Strength 286; <see cref="Locks.LockSystem"/>; null: none). Hashed only while set.</summary>
     public string? ForcingLock { get; set; }
     /// <summary>How <see cref="ForcingLock"/> is forced.</summary>
@@ -586,6 +641,9 @@ public sealed class CharacterTable
     /// <summary>The ticks begun (a paused interface step counts): the start path's debug stamp (<see cref="CharacterCold.TaskSetTick"/>).</summary>
     internal long Ticks { get; private set; }
 
+    /// <summary>Sets the activity flag of a slot on the previous tick's state (<see cref="CharacterHot.Dormant"/>; serial phases).</summary>
+    internal void SetDormant(int slot, bool dormant) => previous[slot].Dormant = dormant;
+
     internal void BeginTick()
     {
         Ticks++;
@@ -708,7 +766,9 @@ public sealed class CharacterTable
             hasher.Add(k.SquadId);
             hasher.Add(k.Role);
             hasher.Add(k.FollowPathTime);
-            if (c.Task == (byte)CharacterTask.Follow) { hasher.Add(k.FollowHeading); hasher.Add(k.FollowSpeed); }
+            if (k.StandingUp) hasher.Add(0x5374556E);
+            if (k.LeavingBed) { hasher.Add(0x4C766742); hasher.Add(k.BedExitDone); }
+            if (c.Task == (byte)CharacterTask.Follow) { hasher.Add(k.FollowHeading); hasher.Add(k.FollowSpeed); hasher.Add(k.FollowDirect); }
             if (k.PaceCap is { } pace) hasher.Add(pace);
             hasher.Add(k.Path.Length);
             hasher.Add(k.PathRequest);
@@ -723,7 +783,7 @@ public sealed class CharacterTable
             if (k.CombatRunning || k.TargetFleeingTime != 0) { hasher.Add(0x43527573); hasher.Add(k.CombatRunning); hasher.Add(k.TargetFleeingTime); }   // only while set, so worlds without fights hash as before
             if (k.Steer is { Active: true } steer) steer.Hash(ref hasher);
             else if (k.Steer is { ChaseTarget: >= 0 } chase) { hasher.Add(0x43686173); hasher.Add(chase.ChaseTarget); hasher.Add(chase.PathUntil); }   // a path chase, only while on one
-            if (k.PathFailures is { Count: > 0 } failures) { hasher.Add(0x50464C53); foreach (var (target, until) in failures) { hasher.Add(target.Slot); hasher.Add(target.Generation); hasher.Add(until); } }
+            if (k.Ignored is { Count: > 0 } failures && failures.Exists(e => e.Key.Name is null)) { hasher.Add(0x50464C53); foreach (var (key, until) in failures) if (key.Name is null) { hasher.Add(key.Id.Slot); hasher.Add(key.Id.Generation); hasher.Add(until); } }
             if (k.SteerSpeed != 0) { hasher.Add(0x53746572); hasher.Add(k.SteerSpeed); }
             if (k.AgentSpeed != 0) { hasher.Add(0x41676e74); hasher.Add(k.AgentSpeed); }
             if (k.Animation is { } anim) anim.Hash(ref hasher); else hasher.Add(-1);
@@ -771,8 +831,9 @@ public sealed class CharacterTable
             if (k.Freed) hasher.Add(0x46726564);
             if (k.Ordered) hasher.Add(0x4F72646E);
             if (k.SlaveState != 0) { hasher.Add(0x536C7653); hasher.Add(k.SlaveState); hasher.Add(k.SlaveOwner); if (k.SlaveState > 1) hasher.Add(k.SlaveSince); }
+            if (k.Crouched) hasher.Add(0x43726F63);
             if (k.PickingLock is { } pick) { hasher.Add(0x5069636B); hasher.Add(Rng.StableHash(pick)); }
-            if (k.Bashing is { } bash) { hasher.Add(0x42617368); hasher.Add(Rng.StableHash(bash)); hasher.Add(k.BashTime); if (k.BashOrdered) hasher.Add(0x4F726473); }
+            if (k.Bashing is { } bash) { hasher.Add(0x42617368); hasher.Add(Rng.StableHash(bash)); hasher.Add(k.BashTime); if (k.BashOrdered) hasher.Add(0x4F726473); if (k.BashWall) hasher.Add(0x57616C6C); if (k.BashErrand) hasher.Add(0x45727264); }
             if (k.ForcingLock is { } force) { hasher.Add(0x466F7263); hasher.Add(Rng.StableHash(force)); hasher.Add((int)k.Force); }
             if (k.DoorJob is { } doorJob) { hasher.Add(0x446F724A); hasher.Add(Rng.StableHash(doorJob.Door)); hasher.Add(doorJob.Lock); hasher.Add(doorJob.Work); }
             if (k.Shackles is { } job) { hasher.Add(0x5368636B); hasher.Add(Rng.Key(job.Wearer)); hasher.Add((int)job.Work); }

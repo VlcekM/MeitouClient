@@ -15,8 +15,8 @@ namespace Meitou.Simulation.Carrying;
 /// bone, <see cref="AttachBone"/>), weighs <c>carry person weight</c> in the carrier's load (<see cref="BodySystem"/>) and lifts a carrier's speed mode from walk to run (<see cref="MovementSystem"/>).</item>
 /// <item><b>Pick up</b> (<see cref="CharacterTask.PickUp"/>): the walk to the body (the first aid pattern), then the <c>shoulder lift left</c> clip: attached at 0.4 of it, done at 0.95.
 /// <b>Put down</b> (<see cref="CharacterTask.PutDown"/>): the clip backwards, let go below 0.2; a body the carrier does not regard as friendly is knocked out again.</item>
-/// <item><b>Dropped</b> at once when the carrier is knocked out or dies or its left arm fails or is cut off. A friendly body that comes round is set down; a non-friendly one is knocked out again on the
-/// shoulder (engine choices). A squad mate lifted awake (<see cref="CharacterCold.CarriedAwake"/>) rides until put down.</item>
+/// <item><b>Dropped</b> at once when the carrier is knocked out or dies or its left arm fails or is cut off. A body that comes round is put down by an NPC carrier when the carrier's lists hold goal 169 (<see cref="ListsPutDown"/>) unless it is chained and the carrier's enemy (<see cref="WakesIntoPutDown"/>); any other rides on awake (a player-side body that is no friend is knocked out again on the
+/// shoulder, engine choice); a player-side carrier sets only a friendly one down. A squad mate lifted awake (<see cref="CharacterCold.CarriedAwake"/>) rides until put down.</item>
 /// <item><b>Rescue</b>: the rescue job, and NPC squads' knocked-out leaders (<see cref="CarrySettings.RescueNpcLeaders"/>).</item>
 /// <item><b>Loot</b> (<see cref="CharacterTask.Loot"/>): the walk, then everything of the main inventory and the backpack that fits moves to the looter (<see cref="LootOrder"/>), or the body's
 /// inventory opens in a window to take from (<see cref="OpenLootOrder"/>); a member of the victim's faction who sees it makes it a theft. NPCs with goal 177 loot by the original's
@@ -25,7 +25,7 @@ namespace Meitou.Simulation.Carrying;
 /// Everything runs in the serial phases (<c>Inputs</c>, <c>Schedule</c>, <c>SlowWorld</c>), in slot order, so the result does not depend on threads or partitions. Placed after the body system (its
 /// <c>SlowWorld</c> sees this tick's knock-outs and the corpses already removed) and before combat.
 /// </summary>
-public sealed partial class CarrySystem(GameConstants constants, BodyOptions options, float liftSeconds = 1, CarrySettings? settings = null) : ITickSystem, ITaskOwner, ITaskHandler, IOrderOwner, IDecisionOwner
+public sealed partial class CarrySystem(GameConstants constants, BodyOptions options, float liftSeconds = 1, CarrySettings? settings = null) : ITickSystem, ITaskOwner, ITaskHandler, IOrderOwner, IDecisionOwner, IGoalSource
 {
     /// <summary>The bone of the carrier the body hangs from (the original's <c>Bip01 L UpperArm</c> for the left side, <b>Verified</b>).</summary>
     public const string AttachBone = "Bip01 L UpperArm";
@@ -70,11 +70,11 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
 
     /// <summary>
     /// A character that can be given a pick-up: awake, with a body, not an animal, not fighting (but for an <paramref name="ordered"/> lift: the order's new task ends the fight), not carrying
-    /// or carried, with a usable left arm. An animal never carries: every carry task (rescue, leader rescue, kidnap, capture, cage, arrest, foraging) is registered for the human repertoire only
+    /// or carried, with a usable left arm, not crouching or lying (the lift rows' condition !26 is about the carrier: <see cref="CharacterFacts.CrouchingOrLying"/>). An animal never carries: every carry task (rescue, leader rescue, kidnap, capture, cage, arrest, foraging) is registered for the human repertoire only
     /// and an animal plans with its own, and its context menu has no Pick Up (docs/game/carry-loot.md "Who carries").
     /// </summary>
     public static bool CanCarry(World world, CharacterCold cold, TaskType row = TaskType.LIFT_PERSON_PLAYER_ORDER, bool ordered = false) =>
-        cold is { Medical: { Incapacitated: false } m, Race: not null } && (ordered || !cold.InCombat) && cold.Carrying.IsNone && cold.CarriedBy.IsNone && LeftArmUsable(m) && TaskStart.Eligible(world, cold, row);
+        cold is { Medical: { Incapacitated: false } m, Race: not null } && (ordered || !cold.InCombat) && cold.Carrying.IsNone && cold.CarriedBy.IsNone && LeftArmUsable(m) && !CharacterFacts.CrouchingOrLying(cold) && TaskStart.Eligible(world, cold, row);
 
     /// <summary>A character that may be lifted: knocked out or dead, of a <c>carriable</c> race (every base race but the Leviathan, <b>Verified</b>), not carried already, not in a cage.</summary>
     public static bool CanBeLifted(CharacterCold cold) => cold is { Medical.Incapacitated: true, Race.Carriable: true, IsImprisoned: false } && cold.CarriedBy.IsNone;
@@ -256,7 +256,7 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
                 return cold is { Medical.Incapacitated: false, Inventory: not null } && cold.CarriedBy.IsNone ? OrderCheck.Run : OrderCheck.Blocked();
             case TaskType.STEALTH_KNOCKOUT:
                 if (!CanBeKnockedOut(tc)) return OrderCheck.Gone;
-                return CanKnockOut(cold) ? OrderCheck.Run : OrderCheck.Blocked();
+                return CanRunKnockOut(cold) ? OrderCheck.Run : OrderCheck.Blocked();
         }
         return OrderCheck.Gone;
     }
@@ -292,9 +292,13 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
                 break;
             case TaskType.STEALTH_KNOCKOUT:
                 Start(world, slot, CharacterTask.StealthKo, TaskType.STEALTH_KNOCKOUT, TaskSource.Order, order.Target, CharacterTask.Idle);
+                if (table.Cold(slot) is { } sneaker) sneaker.Orders |= CharacterOrders.Sneak;   // not in stealth mode: set sneaking (FUN_140345eb0)
                 break;
         }
     }
+
+    /// <summary>The lift rows whose task carries the snatch byte (<c>FUN_14032ebd0</c>): 213 Lifting/Snatching and 240 Capture Target (225, the player's order, sets it where the order starts).</summary>
+    static bool SnatchRow(TaskType? row) => row is TaskType.LIFT_PERSON_SNATCHING_ALLOWED or TaskType.LIFT_PERSON_SNATCHING_ALLOWED_IN_TOWN_ONLY;
 
     /// <summary>
     /// Starts a pick-up of <paramref name="body"/> by the character in <paramref name="carrier"/> (serial phases; the arrest and kidnap systems' lift), going back to <paramref name="resume"/>
@@ -306,10 +310,11 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
         var table = world.Characters;
         var lift = kidnap ? TaskType.KIDNAP_ORDER : TaskType.LIFT_PERSON_PLAYER_ORDER;
         if (!table.TryResolveNext(body, out int b) || b == carrier || table.Cold(carrier) is not { } c || !CanCarry(world, c, lift)) return false;
-        bool asleep = !CanBeLifted(table.Cold(b)!);
+        bool snatch = SnatchRow(row), asleep = !CanBeLifted(table.Cold(b)!) && !(snatch && Snatchable(table.Cold(b)!));
         if (asleep && !(kidnap && CanBeKidnapped(table, b))) return false;
         if (!Start(world, carrier, CharacterTask.PickUp, row ?? lift, source, body, resume, job)) return false;
         c.Kidnapping = asleep;
+        c.Snatching = snatch;
         return true;
     }
 
@@ -402,6 +407,7 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
     void ITaskHandler.End(World world, int slot, CharacterTask task, TaskEnd reason)
     {
         var cold = world.Characters.Cold(slot)!;
+        if (task == CharacterTask.PutDown && world.Characters.TryResolveNext(cold.Carrying, out int body)) Unlink(world, slot, body, drop: false);   // the put-down's end handler always releases the body (FUN_1403509f0)
         cold.CarryTarget = CharacterId.None;
         cold.LiftTime = -1;
         cold.LootFlags = LootStart.None;
@@ -524,7 +530,7 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
 
     /// <summary>
     /// The carries a save held (<see cref="Saving.SavedCharacterLink.CarryPartner"/>; docs/formats/save.md "Carry links"): a carrier whose partner is now in the world takes it up again at
-    /// once, without the lift. One waits while its partner is not loaded (the original's deferred link, <c>FUN_140797ec0</c>); either one dead or gone drops the link.
+    /// once, without the lift (the link needs a carrier that is not carried and carries nothing, and a body not carried; a body in a bed or cage is let go of). One waits while its partner is not loaded (the original's deferred link, <c>FUN_140797ec0</c>); either one dead or gone drops the link.
     /// </summary>
     void RestoreLinks(World world)
     {
@@ -546,7 +552,9 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
             link.CarryPartner = Meitou.Data.Save.Hand.Null;
             var body = table.Cold(b)!;
             body.Save?.CarryPartner = Meitou.Data.Save.Hand.Null;
-            if (!cold.Carrying.IsNone || !body.CarriedBy.IsNone || cold.Medical is not { Incapacitated: false }) continue;
+            // FUN_1405cff90 / FUN_1405ced90 (Verified): the carrier is not itself carried, carries nothing and the body is not carried; no medical test; a held body is let go.
+            if (!cold.Carrying.IsNone || !cold.CarriedBy.IsNone || !body.CarriedBy.IsNone) continue;
+            world.Fixtures.ReleaseHeld(world, table.IdOf(b));
             if (body.Medical is { Incapacitated: false } && Friendly(cold, body)) body.CarriedAwake = true;
             Link(table, i, b);
         }
@@ -567,13 +575,14 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
                 return;
             }
         }
-        cold.LiftTime += dt;
+        // In deep water (water state 3) the lift plays no clip and reads its position as 1.0: it links and finishes at once (FUN_14034f990, FUN_140354ff0).
+        cold.LiftTime = MovementSystem.WaterStateAt(world.Walkability, table.Next[i].Position, cold) == 3 ? LiftSeconds : cold.LiftTime + dt;
         bool attached = !cold.Carrying.IsNone && cold.Carrying == cold.CarryTarget;
         if (!attached && cold.LiftTime > CarrySettings.AttachAt * LiftSeconds)
         {
-            // The body is attached once, at 0.4 of the clip, if it can still be lifted and is still near (the reach was tested when the clip started).
-            if (!table.TryResolveNext(cold.CarryTarget, out int b) || !CanCarry(world, cold, cold.Kidnapping ? TaskType.KIDNAP_ORDER : TaskType.LIFT_PERSON_PLAYER_ORDER) || !Liftable(world, i, b)
-                || Gap(table.Next[i], table.Next[b]) > 2 * ReachOf(world, table.Cold(b)!))   // pushed about while lifting: some slack, not a pick-up from afar
+            // The body is attached once, at 0.4 of the clip. The update re-checks nothing but the target: it must still resolve and not be carried by another carrier (unless this is a
+            // snatch); reach, arm, fight and down state were the start's tests (FUN_140354ff0).
+            if (!table.TryResolveNext(cold.CarryTarget, out int b) || table.Cold(b)!.CarriedBy is { IsNone: false } other && other != table.IdOf(i) && !cold.Snatching)
             {
                 End(world, i);
                 return;
@@ -630,6 +639,7 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
         n.Position = table.Next[carrier].Position;
         n.Yaw = table.Next[carrier].Yaw;
         if (b.Animation is { } anim) anim.Action = -1;   // no falling or getting up while held
+        b.Ai?.ResetPlan();   // the carry-mode change wipes the body's planned tasks (FUN_1405ce9c0 -> FUN_1405074a0)
     }
 
     /// <summary>
@@ -660,11 +670,35 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
         }
     }
 
+    /// <summary>
+    /// Whether a carried body that came round is put down (goal 169's desire <c>FUN_1405a0710</c>, <b>Verified</b>: 1 for a living, awake carried body unless it is chained and the carrier's enemy, <c>FUN_14079c950</c>;
+    /// its <c>+0x5b8</c> condition is not modelled). A player-side carrier has no such goal (its AI goals are the faction's): it keeps the older rule, friendly bodies are set down at once.
+    /// </summary>
+    internal bool WakesIntoPutDown(CharacterCold carrier, CharacterCold body)
+    {
+        bool chained = Locks.LockSystem.WornShackles(body) is not null;
+        bool enemy = carrier.Faction != body.Faction && Relations is { } r && r.Contains(carrier.Faction) && r.Contains(body.Faction) && r.IsHostile(carrier.Faction, body.Faction);
+        return !chained || !enemy;
+    }
+
+    /// <summary>
+    /// Whether the carrier's goal lists hold goal 169 now (<b>Verified</b>, the AI scores only the goals of its lists: the role list of its squad's running package, or its campaign phase's, and its race's
+    /// <c>AI Goals</c>, in the goal's hour window; docs/game/carry-loot.md "Goal 169"). A character with no squad or AI lists none.
+    /// </summary>
+    internal bool ListsPutDown(World world, int slot, CharacterCold carrier)
+    {
+        int hour = world.Hour;
+        foreach (var g in carrier.Ai?.RaceGoals ?? [])
+            if (g.Task.Type == TaskType.PUT_DOWN_CARRIED_DUDE_IF_THEY_CAN_WALK && g.InWindow(hour)) return true;
+        return world.SystemOf<PopulationSystem>() is { } population && world.Squads.Find(carrier.SquadId) is { } squad
+            && population.GoalDuty(world, squad, Ai.AiSystem.RoleOf(squad, world.Characters.IdOf(slot), carrier), TaskType.PUT_DOWN_CARRIED_DUDE_IF_THEY_CAN_WALK);
+    }
+
     /// <summary>The put-down KO of a body its carrier does not regard as friendly (nothing for the dead).</summary>
     void KnockOutHeld(CharacterCold carrier, CharacterCold body)
     {
         if (body.Medical is not { Dead: false } medical || body.Race is not { } race) return;
-        var ctx = new MedicalContext(Constants, bodyOptions, race) { Toughness = body.Stats?.Toughness ?? 0, Strength = body.Stats?.Strength ?? 50, HasStats = body.Stats is not null };
+        var ctx = new MedicalContext(Constants, bodyOptions, race) { Toughness = body.Stats?.ScaledToughness ?? 0, Strength = body.Stats?.Strength ?? 50, HasStats = body.Stats is not null };
         medical.KnockOut(medical.PutDownKoSeconds(ctx, MedicalState.PutDownKoFactor(carrier.Stats?[StatsEnumerated.Assassination] ?? 0)));
     }
 
@@ -695,9 +729,12 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
             if (body.Medical is { Incapacitated: true }) body.CarriedAwake = false;   // knocked out on the shoulder: set down when it comes round
             else if (body.Medical is not null && !body.CarriedAwake)
             {
-                // The body came round. A friendly one is set down (the AI's PUT_DOWN_CARRIED_DUDE_IF_THEY_CAN_WALK); a captive is knocked out again on the shoulder (engine stand-ins).
-                if (Friendly(cold, body)) { Unlink(world, i, b, drop: false); continue; }
-                KnockOutHeld(cold, body);
+                // The body came round. The AI's goal 169 PUT_DOWN_CARRIED_DUDE_IF_THEY_CAN_WALK puts it down when the carrier's package lists it, unless the body is chained and the carrier's enemy
+                // (see WakesIntoPutDown); the put-down task knocks a body the carrier does not regard as friendly out again on the ground. Any other awake body rides on (no goal puts it down).
+                if (PlayerSide(world, cold)) { if (Friendly(cold, body)) { Unlink(world, i, b, drop: false); continue; } KnockOutHeld(cold, body); }
+                else if (!ListsPutDown(world, i, cold)) body.CarriedAwake = true;
+                else if (WakesIntoPutDown(cold, body)) BeginPutDown(world, i);
+                else body.CarriedAwake = true;
             }
             ref var bn = ref next[b];
             bn.Position = next[i].Position;
@@ -713,6 +750,13 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
         var cold = table.Cold(i)!;
         if (!table.TryResolveNext(cold.CarryTarget, out int t) || Gap(table.Next[i], table.Next[t]) > ReachOf(world, table.Cold(t)!)) return;   // still walking (Schedule ends a loot whose target went)
         var victim = table.Cold(t)!;
+        // The loot window is open: the looter stays in the task (squatting, no other task) for as long as it stays open, then ends it (Task_Loot_Order, FUN_140354ef0).
+        if ((cold.LootFlags & LootStart.WindowHeld) != 0)
+        {
+            if (world.Player.OpenLoot == cold.CarryTarget && world.Player.LootOpener == table.IdOf(i)) return;
+            End(world, i);
+            return;
+        }
         bool opening = Opening(world, i);
         if (cold.Inventory is not { } bag || !(opening ? Openable(table, t) : CanBeLooted(victim)))
         {
@@ -734,7 +778,7 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
         {
             // An open-loot order: the window opens instead of a take-all.
             (player.OpenLoot, player.LootOpener, player.OpeningLoot) = (player.OpeningLoot, player.LootWalker, CharacterId.None);
-            End(world, i);
+            cold.LootFlags |= LootStart.WindowHeld;
             return;
         }
         int death = DeathUnits(victim.Inventory!);
@@ -991,8 +1035,8 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
 
     /// <summary>
     /// Every <see cref="CarrySettings.AutoEveryTicks"/> ticks (serial, slot order): NPCs with a rescue job (a loaded list), idle, wandering or following (or on a list job below it), able to carry
-    /// and with no fight in their squad, pick up the nearest knocked-out member of their faction within their sight (<see cref="FindRescue"/>); then NPC squads whose leader is knocked out
-    /// send their nearest free member to pick it up. A player character's rescue job is the decision step's (<see cref="RegisterSources"/>).
+    /// and with no fight in their squad, pick up the nearest knocked-out member of their faction within their sight (<see cref="FindRescue"/>); then the NPCs whose AI chose the leader rescue goal (142)
+    /// lift their knocked-out squad leader (<see cref="RescueLeaders"/>). A player character's rescue job is the decision step's (<see cref="RegisterSources"/>).
     /// </summary>
     void Rescue(World world, CharacterTable table)
     {
@@ -1008,7 +1052,7 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
             if (!MayRescue(world, i, cold)) continue;
             RescueSomeone(world, i, taken, TaskSource.Job, rescue);
         }
-        if (Settings.RescueNpcLeaders) RescueLeaders(world, table, taken);
+        RescueLeaders(world, table, taken);
     }
 
     /// <summary>
@@ -1086,8 +1130,10 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
     }
 
     /// <summary>
-    /// The rescue finder (a pure read): with no fight in its squad, the nearest knocked-out member of the character's faction (<see cref="Rescues"/>) within its sight that nobody else lifts
-    /// (<paramref name="taken"/>), not an animal, not in a bed or cage; -1 for none.
+    /// The rescue finder (<c>FUN_1408cd2d0</c>, <b>Verified</b>; a pure read): with no fight in its squad, the nearest knocked-out member of the character's faction (<see cref="Rescues"/>) that nobody else
+    /// lifts (<paramref name="taken"/>), not an animal, not in a bed or cage; -1 for none. The original walks the looker's sensed ALLY entries (seen, heard or remembered, at the place they were last
+    /// sensed) with no range limit (<c>DAT_14169bc38</c> is the largest float); Meitou reads the same entries, and also every character within its sight, as the capped sense block may lack
+    /// one the original's unbounded gather would hold. A crawling ally is left out by the call's mask 0x4010 (bit 14); a downed one that is not unconscious (the original's crippled byte) is not modelled.
     /// </summary>
     int FindRescue(World world, int i, HashSet<int> taken)
     {
@@ -1095,39 +1141,56 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
         var next = table.Next;
         var cold = table.Cold(i)!;
         if (cold.SquadId >= 0 && world.Squads.Find(cold.SquadId) is { } squad && CharacterFacts.SquadFighting(table, squad)) return -1;
-        float range = AggroSystem.RangeOf(cold, Settings.Sight), best2 = range * range;
+        var here = new Vector2(next[i].Position.X, next[i].Position.Z);
+        float range = AggroSystem.RangeOf(cold, Settings.Sight), sight2 = range * range, best2 = float.MaxValue;
         int best = -1;
+        bool Qualifies(int s) =>
+            s != i && table.Next[s].Alive && !taken.Contains(s) && table.Cold(s) is { Medical: { Unconscious: true, Dead: false } } other && other.InSomething == Locks.HeldState.None
+            && other.Fighter is not { IsAnimal: true } && other.Appearance?.Animal is null && Rescues(world, cold, other) && CanBeLifted(other);
+        void Consider(int s, Vector2 at)
+        {
+            float d2 = Vector2.DistanceSquared(here, at);
+            if (d2 < best2 || d2 == best2 && best >= 0 && s < best) { best = s; best2 = d2; }
+        }
+        if (CharacterFacts.Senses(world, i) is { } senses)
+            foreach (var e in senses.Entries)
+                if ((e.Tags & SenseTag.Ally) != 0 && (uint)e.Target < (uint)table.HighWater && table.Next[e.Target].Generation == e.Generation && Qualifies(e.Target))
+                    Consider(e.Target, new Vector2(e.Place.X, e.Place.Z));
         for (int s = 0; s < table.HighWater; s++)
         {
-            if (s == i || !next[s].Alive || taken.Contains(s)) continue;
-            if (table.Cold(s) is not { Medical: { Unconscious: true, Dead: false } } other || other.InSomething != Locks.HeldState.None
-                || other.Fighter is { IsAnimal: true } || other.Appearance?.Animal is not null   // never an animal (the finder's slot 0x248 test)
-                || !Rescues(world, cold, other) || !CanBeLifted(other)) continue;
-            float d2 = Vector2.DistanceSquared(new Vector2(next[i].Position.X, next[i].Position.Z), new Vector2(next[s].Position.X, next[s].Position.Z));
-            if (d2 <= best2 && (best < 0 || d2 < best2)) { best = s; best2 = d2; }
+            if (!Qualifies(s)) continue;
+            var at = new Vector2(next[s].Position.X, next[s].Position.Z);
+            if (Vector2.DistanceSquared(here, at) <= sight2) Consider(s, at);
         }
         return best;
     }
 
-    /// <summary>NPC squads whose leader is knocked out send their nearest free member to pick it up.</summary>
+    /// <summary>
+    /// Goal 142's finder (<c>FUN_140598540</c>) with its list B state 101 (<c>isLeaderDown</c>) and the lift row's state 7: the slot of the character's squad leader when it is not the character
+    /// itself, not dead, down and one the lift can take (<see cref="CanBeLifted(CharacterCold)"/>: out cold, a carriable race, free; engine cap: the original's state 101 also counts a crippled
+    /// or carried leader and its state 7 a crawling one, which Meitou's lift does not take), and the character carries nothing (the goal's done state 48); -1 for none.
+    /// </summary>
+    public static int LeaderToRescue(World world, int slot)
+    {
+        var table = world.Characters;
+        if (table.Cold(slot) is not { SquadId: >= 0, Carrying.IsNone: true } || world.Squads.Find(table.Cold(slot)!.SquadId) is not { } squad) return -1;
+        if (!table.TryResolveNext(squad.Leader, out int l) || l == slot || !table.Next[l].Alive) return -1;
+        return table.Cold(l) is { Medical.Dead: false, InSomething: Locks.HeldState.None } leader && CanBeLifted(leader) ? l : -1;
+    }
+
+    /// <summary>
+    /// The leader rescue goal (142) of an NPC the AI runs: once the AI chose it (the package lists it in this hour and <see cref="LeaderToRescue"/> found the leader) and holds the character, a
+    /// character that is free lifts the leader as row 213 (the snatch lift) does, unless a squad mate lifts it already.
+    /// </summary>
     void RescueLeaders(World world, CharacterTable table, HashSet<int> taken)
     {
-        var next = table.Next;
-        foreach (var squad in world.Squads.All)
+        for (int i = 0; i < table.HighWater; i++)
         {
-            if (!table.TryResolveNext(squad.Leader, out int l) || taken.Contains(l)) continue;
-            if (table.Cold(l) is not { IsPlayer: false, Medical: { Unconscious: true, Dead: false } } leader || leader.InSomething != Locks.HeldState.None || !CanBeLifted(leader) || CharacterFacts.SquadFighting(table, squad)) continue;
-            int best = -1;
-            float best2 = float.MaxValue;
-            foreach (var m in squad.Members)
-            {
-                if (!table.TryResolveNext(m, out int s) || s == l || !Free(world, s) || table.Cold(s)!.IsPlayer) continue;
-                float range = AggroSystem.RangeOf(table.Cold(s)!, Settings.Sight);
-                float d2 = Vector2.DistanceSquared(new Vector2(next[s].Position.X, next[s].Position.Z), new Vector2(next[l].Position.X, next[l].Position.Z));
-                if (d2 <= range * range && d2 < best2) { best = s; best2 = d2; }
-            }
-            if (best < 0 || !Start(world, best, CharacterTask.PickUp, TaskType.FIND_AND_RESCUE_IF_THERES_BEDS, TaskSource.Npc, squad.Leader, (CharacterTask)next[best].Task)) continue;
-            taken.Add(l);
+            if (!table.Next[i].Alive || table.Cold(i) is not { IsPlayer: false, Ai: { Engine: false } mind }) continue;
+            int leader = LeaderToRescue(world, i);
+            mind.RescueWant = leader >= 0 ? 1 : 0;   // the think's desire for goal 142 reads it
+            if (leader < 0 || mind.Goal is not { Task.Type: TaskType.FIND_AND_RESCUE_LEADER } || !Free(world, i) || taken.Contains(leader)) continue;
+            if (BeginPickUp(world, i, table.IdOf(leader), (CharacterTask)table.Next[i].Task, source: TaskSource.Npc, row: TaskType.LIFT_PERSON_SNATCHING_ALLOWED)) taken.Add(leader);
         }
     }
 

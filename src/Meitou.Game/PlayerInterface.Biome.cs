@@ -41,7 +41,7 @@ sealed partial class PlayerInterface
         }
         biomeHold -= dt;
         biomeCooldown -= dt;
-        bool blocked = conversationShown;
+        bool blocked = shownTown != 0;   // the town panel is showing a town (MainBarGUI +0x128, FUN_140728d50:358): no banner starts and the group does not follow the pivot
         if (here.Id != biomeGroup && biomeCooldown <= 0 && !blocked && here.Name != "NONE" && here.Id != WeatherData.NoneRegionId)
         {
             (biomeName, biomeShown, biomeAlpha, biomeHold, biomeCooldown) = (here.Name, true, 0, BiomeHoldSeconds, BiomeCooldownSeconds);
@@ -54,10 +54,40 @@ sealed partial class PlayerInterface
             {
                 biomeShown = false;
                 // On hiding the game tests the group's `arrival dialog`: squad banter (PlayerInterface::triggerAreaArrivalDialogue).
-                if (biomeGroup is { } arrived) Say(new Meitou.Simulation.Dialogue.AreaArrival(arrived) { Tick = session.World.Tick });
+                // It reads the group under the pivot this frame (FUN_1408015d0 gets the current holder), not the stored one.
+                TryArrival(here.Id);
             }
         }
         if (!blocked) biomeGroup = here.Id;
+        RetryArrival(here.Id);
+    }
+
+    /// <summary>The group whose arrival banter is still being tried (<c>DAT_142132c70</c>), the try's serial and when it was last made (wall clock).</summary>
+    string? arrivalGroup;
+    int arrivalSerial;
+    long arrivalAt;
+
+    /// <summary>Between banter tries: the real time between them (<c>DAT_14167fad4</c>).</summary>
+    const double ArrivalRetrySeconds = 10;
+
+    /// <summary>Stores the group with the time and makes the first try (<c>FUN_1408015d0</c>).</summary>
+    void TryArrival(string group)
+    {
+        arrivalGroup = group;
+        arrivalAt = Stopwatch.GetTimestamp();
+        Say(new Meitou.Simulation.Dialogue.AreaArrival(group, ++arrivalSerial) { Tick = session.World.Tick });
+    }
+
+    /// <summary>
+    /// Every frame (<c>FUN_140801540</c>): the stored group is dropped when the group under the pivot is another, or when the last try's result says to forget it; else after more than 10 s
+    /// of real time since the last try the banter is tried again.
+    /// </summary>
+    void RetryArrival(string here)
+    {
+        if (arrivalGroup is not { } group) return;
+        bool? forget = session.World.ArrivalForget(arrivalSerial);
+        if (here != group || forget == true) arrivalGroup = null;
+        else if (forget == false && Stopwatch.GetElapsedTime(arrivalAt).TotalSeconds > ArrivalRetrySeconds) TryArrival(group);
     }
 
     /// <summary>The panel over the HUD while the banner shows: the layout's own panel at the fade's alpha with the name in its text box; hidden otherwise.</summary>
@@ -79,7 +109,7 @@ sealed partial class PlayerInterface
         camera.BiomeTextTimer = MathF.Max(biomeCooldown, 0);
         camera.BiomeTextGroup = biomeGroup ?? "";
         var pivot = session.Camera.Current.Target;
-        camera.Area = RegionAt?.Invoke(pivot.X, pivot.Z) is { } here && here.Name != "NONE" && here.Id != WeatherData.NoneRegionId ? here.Name : "";
+        camera.Area = RegionAt?.Invoke(pivot.X, pivot.Z) is { } here && here.Name != "NONE" ? here.Name : "";   // the name test only (FUN_140375360); the banner also tests the id
     }
 
     /// <summary>A loaded save's cooldown (<c>FUN_140728c10</c>); the group is the one under the pivot, as the original's loading window sets it.</summary>

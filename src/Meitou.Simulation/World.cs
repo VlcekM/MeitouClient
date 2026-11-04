@@ -116,6 +116,8 @@ public sealed partial class World : IDisposable
         production = this.systems.OfType<Production.ProductionSystem>().FirstOrDefault();
         dialogues = this.systems.OfType<Dialogue.IDialogueSource>().FirstOrDefault();
         ragdolls = this.systems.OfType<Ragdolls.IRagdollSource>().FirstOrDefault();
+        hasGoalSources = this.systems.OfType<IGoalSource>().Any();
+        Claims.Configure(settings.TickSeconds);
         for (int k = 0; k < this.systems.Count; k++) RegisterCombatHitObserver(this.systems[k], k);
         foreach (var owner in this.systems.OfType<ITaskOwner>()) owner.RegisterTasks(Tasks);
         foreach (var owner in this.systems.OfType<IDecisionOwner>()) owner.RegisterSources(Decisions);
@@ -173,6 +175,12 @@ public sealed partial class World : IDisposable
     public PlayerState Player { get; } = new();
     /// <summary>Doors, lockable containers, cages and beds of the registered towns, with their occupants (docs/simulation.md "Cages, beds and locks").</summary>
     public Locks.FixtureRegistry Fixtures { get; } = new();
+    /// <summary>The squads' goal list across ticks (<see cref="GoalClaims"/>).</summary>
+    public GoalClaims Claims { get; } = new();
+    /// <summary>The camera the host last passed (<see cref="CameraViewCommand"/>); null: none, nothing is tested against a screen.</summary>
+    public CameraViewCommand? View { get; internal set; }
+
+    readonly bool hasGoalSources;
     /// <summary>The characters' places and light levels for the sight tests (docs/game/perception.md "Sight"), worked out each tick.</summary>
     public SightMap Sight { get; } = new();
     /// <summary>The unique (story) characters made, dead or captured (docs/game/factions-squads-towns.md "Unique characters").</summary>
@@ -345,6 +353,7 @@ public sealed partial class World : IDisposable
         Grid.Build(table.Previous);
         RefreshCadence();
         prof?.Lap(TickProfile.Grid);
+        MarkDormant();
         Sight.Update(this);
         prof?.Lap(TickProfile.Sight);
         MakePartitions();
@@ -387,6 +396,8 @@ public sealed partial class World : IDisposable
         if (decideAfter < 0) RunDecisions(prof);
         TaskStart.CheckStarts(this);
         prof?.Part("task starts");
+        Claims.Now = Tick;
+        if (hasGoalSources) SquadGoals.Of(this);   // the duties running now refresh their entries; the ones past their 3 s go
 
         // 8. Publish.
         Squads.Refresh(table);
@@ -398,6 +409,24 @@ public sealed partial class World : IDisposable
         GameHours += TickSeconds / SecondsPerGameHour;
         if (publish && Settings.PublishSnapshots) Publish(prof, farShared: true);
         prof?.Lap(TickProfile.Publish);
+    }
+
+    /// <summary>
+    /// The activity gate (<c>FUN_1405c9410</c>, each logic tick per character, <b>Verified</b>): a character whose zone record is not loaded is deactivated, one whose zone is loaded active again,
+    /// and one off the zone grid keeps its state. A deactivated character is not updated (<see cref="CharacterHot.Dormant"/>). Without a loaded set (a world with no population) every one is active.
+    /// </summary>
+    void MarkDormant()
+    {
+        var table = Characters;
+        var loaded = LoadedZones;
+        for (int i = 0; i < table.HighWater; i++)
+        {
+            var at = table.Previous[i];
+            if (!at.Alive) continue;
+            if (loaded is null) { if (at.Dormant) table.SetDormant(i, false); continue; }
+            var zone = Meitou.Data.World.WorldLayout.ZoneOf(at.Position.X, at.Position.Z);
+            if (zone.IsInsideGrid && at.Dormant == loaded.Contains(zone)) table.SetDormant(i, !loaded.Contains(zone));
+        }
     }
 
     // The decisions pass: its own part of the slow world phase, not the next system's.

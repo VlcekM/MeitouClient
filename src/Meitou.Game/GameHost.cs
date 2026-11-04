@@ -53,6 +53,8 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
     /// <summary>The far cadence (docs/simulation.md "Far cadence"): a character far from the camera and from every player character steps once in this many ticks.</summary>
     const int FarTickPeriod = 4;
     readonly Dictionary<Meitou.Data.World.ZoneCoordinate, long> navZones = [];
+    const double NavCacheSeconds = 120;
+    const int NavCacheZones = 60;
     PlayerInterface player = null!;
     Meitou.Simulation.Squad? playerSquad;
     WorldFrame.Gpu gpu = null!;
@@ -150,6 +152,9 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
         BootPlayer(display, interactive);
     }
 
+    /// <summary>The level data read afresh (no scene objects to share), with the factions' building swaps applied as the scene's are.</summary>
+    Meitou.Data.World.WorldLevelData LoadedLevels(Meitou.Data.GameDatabase gameDb) { var levels = Meitou.Data.World.WorldLevelData.Load(install, includeInteriors: true); Meitou.Data.World.BuildingSwapPass.ApplyBuildingSwaps(levels, gameDb); return levels; }
+
     /// <summary>
     /// The simulation's side of <see cref="Boot"/>, on a worker (it reads the game data and the scene's level data and makes no GPU resource): the navmesh system, the
     /// population's data and its systems. Returns the walkability, the systems and the game constants for the session.
@@ -165,7 +170,7 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
         {
             // The sandbox, the duel and the battle walk on open ground (the heightmap): the sandbox has no world, and the duel's spot may be a navmesh island the build prunes.
             // None has towns: their own characters are the only ones.
-            var levels = IsSandbox || IsDuel || IsBattle ? null : scene.Objects?.Levels ?? Meitou.Data.World.WorldLevelData.Load(install, includeInteriors: true);
+            var levels = IsSandbox || IsDuel || IsBattle ? null : scene.Objects?.Levels ?? LoadedLevels(gameDb);
             if (levels is not null)
             {
                 // The homes' ruins and layouts before anything reads the levels (done already when the renderer read them).
@@ -177,7 +182,7 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
                 var navForRoutes = nav;
                 _ = Task.Run(() => navForRoutes.Walkability.Coarse.Warm());
                 // Ragdolls land on the terrain and the buildings' collision (gathered per zone on a worker when a ragdoll comes near).
-                ragdollGeometry = new Meitou.Navigation.RagdollGeometry(install, gameDb, levels!, heights.HeightAt);
+                ragdollGeometry = new Meitou.Navigation.RagdollGeometry(install, gameDb, levels!, heights.HeightAt, nav.Runtime);
             }
             var towns = levels is null ? [] : levels.Towns().ToList();
             // The wild (homeless squads and nests) needs the world's area sectors; the sandbox and the duel have none.
@@ -331,8 +336,8 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
         // Right is the command button by default; older saved configs bound it to orbit (kept when Command has moved off it).
         if (session.Bindings.Get(InputAction.Command).Contains(Binding.Of(EngineButton.Right)))
             session.Bindings.Set(InputAction.Orbit, [.. session.Bindings.Get(InputAction.Orbit).Where(b => !(b.IsMouse && b.Button == EngineButton.Right))]);
-        // Ctrl orbits as the middle button does; older saved configs had the middle button alone.
-        if (session.Bindings.Get(InputAction.Orbit).SequenceEqual([Binding.Of(EngineButton.Middle)])) session.Bindings.Set(InputAction.Orbit, EngineButton.Middle, EngineKey.LeftControl, EngineKey.RightControl);
+        // Left Control orbits as the middle button does (mouse_rotate, FUN_1403636c0: only code 0x1d); older saved configs had the middle button alone.
+        if (session.Bindings.Get(InputAction.Orbit).SequenceEqual([Binding.Of(EngineButton.Middle)])) session.Bindings.Set(InputAction.Orbit, EngineButton.Middle, EngineKey.LeftControl);
         // F12 is the profiler now (as in the viewer); older saved configs took it for the screenshot.
         if (session.Bindings.Get(InputAction.Screenshot).SequenceEqual([Binding.Of(EngineKey.F12)])) session.Bindings.Set(InputAction.Screenshot, EngineKey.F8, EngineKey.PrintScreen);
         // The profiler and debug menu were briefly on F10 and Insert; configs saved then go back to F12 and F10.
@@ -348,6 +353,7 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
         player = new PlayerInterface(session, gpu.Terrain.HeightAt, DrawnPosition);
         player.LoadUi(g.UiMode ?? config.UiMode, assets.Find);
         player.SpeedUnit = config.SpeedUnit;
+        player.ShowNames = config.ShowNames;
         player.Floaters = config.Floaters;
         player.FeedbackButtonInPlay = config.FeedbackButton;
         player.FixLoadButton = config.FixLoadButton;
@@ -408,7 +414,7 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
         if (!IsSandbox && crowd > 0 && population is not null) SpawnCrowd(target, crowd);
         LoadingStep("characters");
         if (scene.Database is { } characterDb && !g.NoPopulation && gpu.Characters is null)
-            gpu.Characters = new CharacterRenderer(context, install, characterDb, assets, characterRigs) { Source = FillDrawList, Guard = gpu.Guard, GeneratedLod = o.CharacterLod, SkinShading = o.SkinShading, SkinRaces = config.SkinRaces, EnhancedIcons = o.MeitouIcons,
+            gpu.Characters = new CharacterRenderer(context, install, characterDb, assets, characterRigs) { DrawDistance = GameplaySettings.NpcRange(install), Source = FillDrawList, Guard = gpu.Guard, GeneratedLod = o.CharacterLod, SkinShading = o.SkinShading, SkinRaces = config.SkinRaces, EnhancedIcons = o.MeitouIcons,
                 PoseClock = () => animClock ? animSeconds : realTime.Elapsed.TotalSeconds };   // the frame clock DrawWorld gives the foliage sway: a recorded flight poses the same every take
         var rig = session.Camera;
         rig.Place(new Vector2(target.X, target.Z), (o.Yaw ?? 30) * MathF.PI / 180,
@@ -463,20 +469,45 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
     /// Keeps the navmesh on the zones the population has active (built on the nav thread, cached), drops the ones idle for 30 s, and has the characters whose way
     /// leads through a zone whose mesh arrived ask for their paths again (their first path may have crossed a building), at most every <see cref="RepathCoalesceSeconds"/>.
     /// </summary>
+    Task navUnload = Task.CompletedTask;
+    HashSet<Meitou.Data.World.ZoneCoordinate> navUnloading = [];
+
+    /// <summary>Waits for the zones being dropped (a load right after must not be undone by it).</summary>
+    void FinishNavUnload()
+    {
+        if (navUnloading.Count == 0) return;
+        navUnload.Wait();
+        navUnloading = [];
+        relabelGates = true;
+    }
+
     void UpdateNav(bool wait = false)
     {
         if (nav is null || population is null) return;
         UpdateGateRegions(nav);
         long now = Stopwatch.GetTimestamp();
+        // Dropping zones republishes the whole mesh (tens of ms): it runs on the pool, one batch at a time, and a zone being dropped is loaded again once that is done.
+        if (navUnloading.Count > 0 && navUnload.IsCompleted) { navUnloading = []; relabelGates = true; }
+        if (wait) FinishNavUnload();
         var pending = new List<Task<Meitou.Navigation.NavZoneReady>>();
         // The population's zones, and those the walkers' long routes lead into (NavmeshWalkability.RouteZones).
         foreach (var z in population.ActiveZones.Concat(nav.Walkability.RouteZones(TimeSpan.FromSeconds(30))))
         {
+            if (navUnloading.Contains(z)) continue;
             if (!navZones.ContainsKey(z)) pending.Add(nav.LoadZone(z));
             navZones[z] = now;
         }
-        foreach (var (z, seen) in navZones.ToList())
-            if (Stopwatch.GetElapsedTime(seen, now).TotalSeconds > 30) { nav.UnloadZone(z); navZones.Remove(z); relabelGates = true; }
+        // Meitou's asset cache (engine choice): a left zone's mesh stays NavCacheSeconds, at most NavCacheZones zones, the oldest dropped first, so a return within two minutes rebuilds nothing.
+        var stale = navZones.Where(e => Stopwatch.GetElapsedTime(e.Value, now).TotalSeconds > NavCacheSeconds).Select(e => e.Key).ToList();
+        if (navZones.Count - stale.Count > NavCacheZones)
+            stale.AddRange(navZones.Where(e => !stale.Contains(e.Key)).OrderBy(e => e.Value).Take(navZones.Count - stale.Count - NavCacheZones).Select(e => e.Key));
+        if (stale.Count > 0 && navUnloading.Count == 0)
+        {
+            foreach (var z in stale) navZones.Remove(z);
+            navUnloading = [.. stale];
+            var batch = stale;
+            navUnload = Task.Run(() => nav.UnloadZones(batch));
+        }
         if (wait) Task.WaitAll([.. pending]);
         HashSet<Meitou.Data.World.ZoneCoordinate> zones;
         lock (navReady)
@@ -562,6 +593,9 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
         Meitou.Rendering.StageClock.Lap(Meitou.Rendering.StageClock.Host);   // the profiler: the host's frame so far, then the blood marks apart from the terrain's update
         UpdateBlood();
         Meitou.Rendering.StageClock.Lap(Meitou.Rendering.StageClock.Blood, "blood marks");
+        birdAspect = width / (float)Math.Max(height, 1);
+        UpdateBirds();
+        Meitou.Rendering.StageClock.Lap(Meitou.Rendering.StageClock.Birds, "birds");
         UpdateWeatherSource();
         UpdateInteriorView();
         // The frame's animation time (particles, water, wet surfaces) is game time: still while paused, faster at higher speeds.
@@ -577,6 +611,118 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
         finally { session.EndTickAhead(); }
         if (tickAhead) NoteAheadTick();
     }
+
+    Meitou.Game.BirdFlocks? birds;
+    Meitou.Data.Gameplay.BiomeMap? birdAreas;
+    double birdClock = double.NaN;
+
+    /// <summary>The birds fly on the display's real time (the original's <c>BirdManager</c> thread is kicked with the real dt, docs/game/birds.md); the flocks are those the camera's BIOME_GROUP lists.</summary>
+    void UpdateBirds()
+    {
+        if (scene.Database is not { } db) { gpu.BirdPieces.Clear(); return; }
+        if (birds is null)
+        {
+            var kinds = Meitou.Data.Gameplay.BirdFlockData.LoadAll(db);
+            try { birdAreas = Meitou.Data.Gameplay.BiomeMap.Create(Meitou.Data.Gameplay.BiomeGroupData.LoadAll(db), Meitou.Data.World.WeatherAreas.Load(install)); }
+            catch (Exception e) when (e is IOException or FormatException) { birdAreas = null; }
+            birds = new Meitou.Game.BirdFlocks(kinds, birdHeights.HeightAt, GroupIdOfCell);
+            birdStep = new Meitou.Game.BirdThread(() => birds.Update(birdDt, birdEye, birdFocus, birdPlanes));
+
+        }
+        // The step runs beside the frame: its flocks are shown one frame late (the original's thread is as loose), and a step still running when the next frame starts is left to finish.
+        bool async = o.Screenshot is null && !IsDuel;
+        if (birdStep!.Busy) return;
+        if (birdStarted && async)
+        {
+            gpu.BirdPieces.Clear();
+            birds.AddPieces(gpu.BirdPieces, mesh => gpu.Debris is { } birdMeshes && birdMeshes.Extent(mesh, null) is not null);   // a mesh is loaded when first asked for
+        }
+        UpdateBirdAttractors(db);
+        double now = realTime.Elapsed.TotalSeconds;
+        birdDt = double.IsNaN(birdClock) ? 0 : (float)(now - birdClock);
+        birdClock = now;
+        birdEye = camera.Eye;
+        birdFocus = camera.Target;
+        birdPlanes = BirdFrustum();
+        birdHeights.Refresh(gpu.Terrain);
+        birdStarted = true;
+        if (async) birdStep.Start();
+        else
+        {
+            birds.Update(birdDt, birdEye, birdFocus, birdPlanes);
+            gpu.BirdPieces.Clear();
+            birds.AddPieces(gpu.BirdPieces, mesh => gpu.Debris is { } birdMeshes && birdMeshes.Extent(mesh, null) is not null);
+        }
+    }
+
+    readonly Meitou.Rendering.TerrainHeights birdHeights = new();
+    Meitou.Game.BirdThread? birdStep;
+    bool birdStarted;
+    float birdDt;
+    Vector3 birdEye, birdFocus;
+    Vector4[]? birdPlanes;
+
+    long birdBuildingsRevision = -1;
+    object? birdAttractorsFor;
+    Task<List<(string Key, Meitou.Data.GameRecord Record, Vector3 Position)>>? birdLevelSources;
+    readonly List<Meitou.Game.BirdAttractor> birdBuildingAttractors = [], birdLevelAttractors = [];
+
+    /// <summary>
+    /// The <c>bird attractor</c> references of the objects the original registers them for (<c>FUN_140263700</c>, on a building's, map feature's or animal's creation):
+    /// the player's standing buildings, the level's buildings and map features (read once off the main thread) and every animal, which carries its own as it moves.
+    /// </summary>
+    void UpdateBirdAttractors(Meitou.Data.GameDatabase db)
+    {
+        var snapshot = session.CurrentSnapshot;
+        bool changed = false;
+        if (!ReferenceEquals(birdAttractorsFor, session.World))
+        {
+            birdAttractorsFor = session.World;
+            birdLevelAttractors.Clear();
+            birdLevelSources = scene.Objects is { } objects ? Task.Run(objects.BirdAttractorSources) : null;
+            birdBuildingsRevision = -1;
+            changed = true;
+        }
+        if (birdLevelSources is { IsCompletedSuccessfully: true } read)
+        {
+            foreach (var (key, record, at) in read.Result) AddBirdAttractors(birdLevelAttractors, key, record, at);
+            birdLevelSources = null;
+            changed = true;
+        }
+        if (snapshot.BuildingsRevision != birdBuildingsRevision)
+        {
+            birdBuildingsRevision = snapshot.BuildingsRevision;
+            birdBuildingAttractors.Clear();
+            foreach (var building in snapshot.Buildings)
+                if (building.Complete && db.Find(building.Record) is { } record) AddBirdAttractors(birdBuildingAttractors, building.Id, record, building.Position);
+            changed = true;
+        }
+        var animals = new List<Meitou.Game.BirdAttractor>();
+        foreach (var c in snapshot.Characters)
+            if (c.Animal && db.Find(c.RecordId) is { } animal) AddBirdAttractors(animals, c.Id, animal, c.Position);
+        if (changed || animals.Count > 0 || birdHadAnimals) birds!.SetAttractors([.. birdBuildingAttractors, .. birdLevelAttractors, .. animals]);
+        birdHadAnimals = animals.Count > 0;
+    }
+
+    bool birdHadAnimals;
+
+    void AddBirdAttractors(List<Meitou.Game.BirdAttractor> into, object owner, Meitou.Data.GameRecord record, Vector3 at)
+    {
+        foreach (var link in record.GetReferences("bird attractor"))
+            into.Add(new Meitou.Game.BirdAttractor((owner, link.TargetStringId), link.TargetStringId, at, link.Values.Value0, link.Values.Value1));
+    }
+
+    string? GroupIdOfCell(int cx, int cz) => birdAreas is { } areas && areas.GroupOf(cx, cz) is >= 0 and var g ? areas.Groups[g].Id : null;
+
+    /// <summary>The view's six planes, normals inwards and normalised (Ogre's cached frustum planes, as the birds' distance test takes them).</summary>
+    Vector4[] BirdFrustum()
+    {
+        var planes = Meitou.Rendering.WorldCamera.FrustumPlanes(camera.View * camera.Projection(birdAspect, camera.Near, camera.ViewDistance));
+        for (int i = 0; i < planes.Length; i++) planes[i] /= new Vector3(planes[i].X, planes[i].Y, planes[i].Z).Length();
+        return planes;
+    }
+
+    float birdAspect = 16f / 9;
 
     /// <summary>This frame's world draw overlaps the next world tick (set by the interactive loop; never in stills, the duel, recorded flights or the play benchmark).</summary>
     bool tickAhead;

@@ -1,7 +1,9 @@
 using System.Numerics;
 using Meitou.Data.Gameplay;
 using Meitou.Data.Gameplay.Ai;
+using Meitou.Data.World;
 using Meitou.Simulation.Ai;
+using Meitou.Simulation.Combat;
 using Meitou.Simulation.Locks;
 
 namespace Meitou.Simulation.Kidnap;
@@ -19,7 +21,7 @@ namespace Meitou.Simulation.Kidnap;
 /// over: each leaves the squad for a squad of its own, owned by the town's faction and put into a free cage of the town (<b>engine choice</b>: the original's handover goes through
 /// that dialogue, and no base-game dialogue answers event 39, <b>Unknown</b>).</item>
 /// <item><b>Get in the cage</b> (172 "Getting in my cage", a Slave AI Goal; <c>FUN_1408caaf0</c>, <b>Observed</b>): a slave not held walks to the nearest free cage of its owner's faction
-/// in its town and gets in (<c>Task_UseCage</c>).</item>
+/// in the 3x3 zone cells round it, in any town, and gets in (<c>Task_UseCage</c>).</item>
 /// </list>
 /// </summary>
 public sealed partial class CaptiveSystem
@@ -65,63 +67,102 @@ public sealed partial class CaptiveSystem
             case TaskType.GATHER_SLAVES_FROM_CAGES_IF_ITS_AN_EXPORT_TOWN:
             {
                 int site = TownAt(data, table.Next[slot].Position);
-                if (site < 0) return null;
-                if (type == TaskType.GATHER_SLAVES_FROM_CAGES_IF_ITS_AN_EXPORT_TOWN)
-                {
-                    if (data.Sites[site].Town.Type is not (TownType.Town or TownType.Outpost)) return null;
-                    // The desire (AI slot 64): a town of the player's faction or of an anti-slavery one is gathered from by its allies only (FUN_140597b80).
-                    int owner = site < data.SiteFactions.Count ? data.SiteFactions[site] : -1;
-                    if (owner >= 0 && (owner == world.Player.Faction || owner < data.Factions.Count && data.Factions[owner].AntiSlavery) && !Allied(cold.Faction, owner)) return null;
-                }
-                else if (SlavesOf(world, squad).Count(s => !table.Cold(s)!.IsImprisoned && table.Cold(s)!.Medical is not { Incapacitated: true }) > 3) return null;
-                return GatherTarget(world, slot, cold, site, type) is { } cage
-                    ? new CaptiveJob { Kind = CaptiveJobKind.Gather, Worker = worker, Captive = cage.Occupant, Cage = cage.Id, Faction = cold.Faction, Site = site }
+                bool export = type == TaskType.GATHER_SLAVES_FROM_CAGES_IF_ITS_AN_EXPORT_TOWN;
+                if (export ? !ExportTown(world, cold, site) : SlavesOf(world, squad).Count(s => table.Cold(s)!.InSomething == HeldState.None && table.Cold(s)!.Medical is not { Incapacitated: true }) > 3) return null;
+                var cages = export ? CagesOf(world, site) : NearbyCages(world, site, table.Next[slot].Position, cold.Faction);
+                return GatherTarget(world, slot, cold, cages, type) is { } cage
+                    ? new CaptiveJob { Kind = CaptiveJobKind.Gather, Worker = worker, Captive = cage.Occupant, Cage = cage.Id, Faction = cold.Faction, Site = cage.Site }
                     : null;
             }
             case TaskType.GO_TO_SOMEWHERE_FOR_DELIVERING_SLAVES:
             {
-                if (board.MissionTown < 0 || squad.Leader != worker || !SlavesOf(world, squad).Any()) return null;
+                if (board.MissionTown < 0 || squad.Leader != worker || DeliverDesire(world, squad) <= 0) return null;
                 return new CaptiveJob { Kind = CaptiveJobKind.Deliver, Worker = worker, Captive = CharacterId.None, Cage = "", Faction = cold.Faction, Site = board.MissionTown };
             }
             case TaskType.SLAVE_GET_IN_MY_MASTERS_CAGE:
             {
                 if (cold.SlaveState != 1 || cold.SlaveOwner < 0 || cold.InSomething != HeldState.None || cold.IsPlayer) return null;
-                int site = board.Town >= 0 ? board.Town : TownAt(data, table.Next[slot].Position);
-                if (site < 0) return null;
+                // FUN_1408caaf0: the owner faction's free cages in the 3x3 zone cells round the slave, whatever the town (the finder's town argument is 0).
                 var at = table.Next[slot].Position;
                 Fixture? best = null;
                 float bestD = float.MaxValue;
-                foreach (var f in CagesOf(world, site))
+                foreach (var f in NearbyCages(world, -1, at, cold.SlaveOwner))
                 {
-                    if (f.Owner != cold.SlaveOwner || !FixtureRegistry.IsFree(table, f) || Taken(f.Id)) continue;
+                    if (!FixtureRegistry.IsFree(table, f) || Taken(f.Id)) continue;
                     float d = Vector2.DistanceSquared(new Vector2(at.X, at.Z), new Vector2(f.Position.X, f.Position.Z));
                     if (d < bestD) (best, bestD) = (f, d);
                 }
-                return best is null ? null : new CaptiveJob { Kind = CaptiveJobKind.CageSelf, Worker = worker, Captive = worker, Cage = best.Id, Faction = cold.Faction, Site = site };
+                return best is null ? null : new CaptiveJob { Kind = CaptiveJobKind.CageSelf, Worker = worker, Captive = worker, Cage = best.Id, Faction = cold.Faction, Site = best.Site };
             }
         }
         return null;
     }
 
-    /// <summary>The cage a gatherer takes a captive from (see the class remarks); the nearest (<c>BuildingFinder</c> slot 1).</summary>
-    Fixture? GatherTarget(World world, int slot, CharacterCold cold, int site, TaskType type)
+    /// <summary>The desire of 217 (AI slot 64, <c>FUN_140597b80</c>): the gatherer stands in a town or outpost, and when its owner is the player's faction or an anti-slavery one, is an ally of it.</summary>
+    bool ExportTown(World world, CharacterCold cold, int site)
+    {
+        if (site < 0 || data.Sites[site].Town.Type is not (TownType.Town or TownType.Outpost)) return false;
+        int owner = site < data.SiteFactions.Count ? data.SiteFactions[site] : -1;
+        return owner < 0 || !(owner == world.Player.Faction || owner < data.Factions.Count && data.Factions[owner].AntiSlavery) || Allied(cold.Faction, owner);
+    }
+
+    /// <summary>
+    /// The cages 173 and 245 search (<c>FUN_1409fc450</c> with the town the gatherer stands in, <b>Verified</b>): those of the gatherer's faction in the 3x3 zone cells round it, of that town
+    /// when it is in one, of any town when not (the finder's town is only a filter, null passes everything). Only fixtures of towns already registered exist.
+    /// </summary>
+    IEnumerable<Fixture> NearbyCages(World world, int site, Vector3 at, int faction)
+    {
+        IEnumerable<Fixture> all = site >= 0 ? CagesOf(world, site) : world.Fixtures.All.Where(f => f.Kind == FixtureKind.Cage);
+        foreach (var f in all)
+        {
+            if (f.Owner == faction && WorldLayout.WithinOneZone(at.X, at.Z, f.Position.X, f.Position.Z)) yield return f;
+        }
+    }
+
+    /// <summary>The cage a gatherer takes a captive from (see the class remarks): 173 and 217 the nearest (<c>BuildingFinder</c> slot 1), 245 the first in the finder's order
+    /// whose occupant is a woman or of another race (<c>FUN_1408d1410</c>, <b>Verified</b>: no distance sort, and no test of the occupant being a player character, down or busy).</summary>
+    Fixture? GatherTarget(World world, int slot, CharacterCold cold, IEnumerable<Fixture> cages, TaskType type)
     {
         var table = world.Characters;
         var at = table.Next[slot].Position;
         Fixture? best = null;
         float bestD = float.MaxValue;
-        foreach (var f in CagesOf(world, site))
+        foreach (var f in cages)
         {
-            if (f.Owner == world.Player.Faction && world.Player.Faction >= 0 || Taken(f.Id)) continue;
-            if (type != TaskType.GATHER_SLAVES_FROM_CAGES_IF_ITS_AN_EXPORT_TOWN && f.Owner != cold.Faction) continue;
-            if (OccupantSlot(world, f) is not (>= 0 and var s) || Busy(table.IdOf(s))) continue;
-            var c = table.Cold(s)!;
-            if (c.IsPlayer || c.Medical is { Incapacitated: true }) continue;
-            if (type == TaskType.GATHER_SLAVES_FROM_CAGES_IF_FEMALE_OR_BEAST && c.Appearance is not { Female: true } && c.Race?.StringId == cold.Race?.StringId) continue;
+            if (f.Owner == world.Player.Faction && world.Player.Faction >= 0 || !GatherCage(world, slot, cold, f, type, out var c)) continue;
+            if (type == TaskType.GATHER_SLAVES_FROM_CAGES_IF_FEMALE_OR_BEAST) return f;
             float d = Vector2.DistanceSquared(new Vector2(at.X, at.Z), new Vector2(f.Position.X, f.Position.Z));
             if (d < bestD) (best, bestD) = (f, d);
         }
         return best;
+    }
+
+    /// <summary>Whether <paramref name="f"/> and its occupant pass the finder's tests of <paramref name="type"/>.</summary>
+    bool GatherCage(World world, int slot, CharacterCold cold, Fixture f, TaskType type, out CharacterCold c)
+    {
+        var table = world.Characters;
+        c = cold;
+        bool export = type == TaskType.GATHER_SLAVES_FROM_CAGES_IF_ITS_AN_EXPORT_TOWN, unholy = type == TaskType.GATHER_SLAVES_FROM_CAGES_IF_FEMALE_OR_BEAST;
+        var goals = export ? SquadGoals.Of(world) : null;
+        var asker = table.IdOf(slot);
+        if (export ? goals!.Working(cold.SquadId, asker, GoalTarget.At(f.Id)) > 0 : Taken(f.Id)) return false;
+        if (!export && f.Owner != cold.Faction || OccupantSlot(world, f) is not (>= 0 and var s)) return false;
+        c = table.Cold(s)!;
+        // 217 (FUN_1408cc600): dropped for a down or crippled occupant, or one two squad mates already work.
+        if (export) return !(c.IsPlayer || c.Medical is { Incapacitated: true } || CombatSystem.IsCrippled(c) || goals!.Working(cold.SquadId, asker, GoalTarget.Of(table.IdOf(s))) >= 2);
+        if (unholy) return c.Appearance is { Female: true } || c.Race?.StringId != cold.Race?.StringId;
+        return !(Busy(table.IdOf(s)) || c.IsPlayer || c.Medical is { Incapacitated: true });
+    }
+
+    /// <summary>The cage and the captive of every job, in the squad's goal list the finders ask (<see cref="SquadGoals"/>).</summary>
+    void IGoalSource.Publish(World world, SquadGoals goals)
+    {
+        foreach (var j in jobs)
+        {
+            if (!world.Characters.TryResolveNext(j.Worker, out int w) || world.Characters.Cold(w) is not { } c) continue;
+            goals.Add(c.SquadId, j.Worker, GoalTarget.At(j.Cage));
+            goals.Add(c.SquadId, j.Worker, GoalTarget.Of(j.Captive));
+        }
     }
 
     bool StepLogistics(World world, CaptiveJob j, int w, CharacterCold wc)
@@ -164,6 +205,15 @@ public sealed partial class CaptiveSystem
         return End(world, j, CaptiveEventKind.GaveUp);
     }
 
+    /// <summary>Goal 192's desire per slave (<c>DAT_141696c80</c>, read from the exe: 0.25).</summary>
+    public const float DeliverDesirePerSlave = 0.25f;
+
+    /// <summary>
+    /// Goal 192's desire (AI slot 65, <c>FUN_14059a0a0</c>, <b>Verified</b>): 0.25 per entry of the platoon's slave list; 0 with no slaves. The sweep starts the goal when it is above 0 and takes the first goal in
+    /// its hours (with one candidate, the usual package, the scoring against the member's other goals changes nothing observable, so no scorer is modelled).
+    /// </summary>
+    public float DeliverDesire(World world, Squad squad) => DeliverDesirePerSlave * SlavesOf(world, squad).Count();
+
     /// <summary>The leader walks to the shipping town (re-sent whenever its walk ended outside it, at most <see cref="CaptiveSettings.Walks"/> times plus one per 1000 units), then hands its slaves over.</summary>
     bool StepDeliver(World world, CaptiveJob j, int w, CharacterCold wc)
     {
@@ -180,6 +230,7 @@ public sealed partial class CaptiveSystem
             TaskStart.Walk(world, w, centre, SpeedMode.Walk, RowOf(j.Kind), TaskSource.Goal);
             return true;
         }
+        if (CharacterFacts.CrouchingOrLying(wc)) return true;   // row 192's B list needs !26: it does nothing while its leader crouches or lies
         TaskStart.Stand(table, w);
         // 218 only in a prison or a slave camp; 194 anywhere (AI slot 66 FUN_140597c70, 65).
         int hour = world.Hour;
@@ -190,9 +241,10 @@ public sealed partial class CaptiveSystem
                 || g.Task.Type == TaskType.GIVE_ALL_MY_SLAVES_TO_IF_ITS_AN_IMPORT_TOWN && site.Town.Type is TownType.Prison or TownType.SlaveCamp)) hands = true;
         if (!hands) return End(world, j, CaptiveEventKind.GaveUp);
         int owner = j.Site < data.SiteFactions.Count && data.SiteFactions[j.Site] >= 0 ? data.SiteFactions[j.Site] : wc.Faction;
-        var receiver = Receiver(world, w, owner);
-        if (receiver is { } to) world.Defer(new Dialogue.DialogueEvent(j.Worker, to, SlaveDelivery) { Tick = world.Tick + 1 });
-        int master = receiver is { } by && table.Cold(by.Slot) is { } rc ? rc.SquadId : -1;
+        // The receiver finder (FUN_1408ca950) finding nobody makes the goal unwanted: nothing is handed over, the next sweep retries.
+        if (Receiver(world, w, owner, centre, r) is not { } to) return End(world, j, CaptiveEventKind.GaveUp);
+        world.Defer(new Dialogue.DialogueEvent(j.Worker, to, SlaveDelivery) { Tick = world.Tick + 1 });
+        int master = table.Cold(to.Slot) is { } rc ? rc.SquadId : -1;
         foreach (int s in SlavesOf(world, squad).ToList())
         {
             var sc = table.Cold(s)!;
@@ -213,17 +265,20 @@ public sealed partial class CaptiveSystem
         return End(world, j, null);
     }
 
-    /// <summary>The nearest live NPC of <paramref name="faction"/> or an ally within the town's reach of the leader (the original's designated-building finder, <c>FUN_1408ca950</c>, reduced).</summary>
-    CharacterId? Receiver(World world, int w, int faction)
+    /// <summary>The live NPC of <paramref name="faction"/> or an ally within <paramref name="radius"/> of the shipping town's <paramref name="centre"/> nearest to the leader
+    /// (the original's designated-building finder, <c>FUN_1408ca950</c>, reduced to its owner hand; its acceptance test is <b>Unknown</b>, s07-d083).</summary>
+    CharacterId? Receiver(World world, int w, int faction, Vector2 centre, float radius)
     {
         var table = world.Characters;
         var at = table.Next[w].Position;
         int best = -1;
-        float bestD = AggroSystem.OutdoorSight * AggroSystem.OutdoorSight;
+        float bestD = float.MaxValue;
         for (int s = 0; s < table.HighWater; s++)
         {
-            if (s == w || !table.Next[s].Alive || table.Cold(s) is not { IsPlayer: false, SlaveState: 0, Medical.Incapacitated: false } c || c.Faction != faction && !Allied(faction, c.Faction)) continue;
-            float d = Vector3.DistanceSquared(at, table.Next[s].Position);
+            if (s == w || !table.Next[s].Alive || table.Cold(s) is not { IsPlayer: false, SlaveState: not (1 or 2), Medical.Incapacitated: false } c || c.Faction != faction && !Allied(faction, c.Faction)) continue;
+            var p = table.Next[s].Position;
+            if (Vector2.Distance(new Vector2(p.X, p.Z), centre) > radius) continue;
+            float d = Vector3.DistanceSquared(at, p);
             if (d < bestD) (best, bestD) = (s, d);
         }
         return best < 0 ? null : table.IdOf(best);

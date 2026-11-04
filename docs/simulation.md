@@ -9,13 +9,22 @@ below do not claim original-game parity. Retain Verified/Observed/Unknown scopes
 Control: 30 Hz real time, input/UI/camera continue while paused. The interface's own commands (selection, order toggles, run speed, job lists,
 crafting/research queues, squads, inventory, shops, building settings, the Stop order and every order, [order queue](#order-queue)) apply between ticks while paused
 (`World.ApplyPausedInterfaceCommands`); orders only set tasks, nobody moves or fights until the next tick. Simulation: 1/30 s game time;
-accumulate `realDt*speed`, speeds 0/1/2/5. Budget `2*speed` ticks per frame; excess is dropped and
-`AchievedSpeed` reports slowdown. Engine choice: the original instead caps the real frame time at 0.05 s before the speed
-multiplier (slows below 20 fps; [game loop](game/game-loop.md#frame-clocks)); Meitou slows below 15 fps (a budget of 6 let a heavy world snowball: **Observed**, a save with 5 characters apart and 1374 characters loaded, ticks of 15-40 ms, frames running 6 of them, 200-470 ms). Control ticks precede simulation ticks; a speed change applies
+accumulate `min(realDt, 0.05)*speed` (the original's cap before the speed multiplier, slows below 20 fps, [game loop](game/game-loop.md#frame-clocks), **Verified**
+`FUN_14082ac70`), speeds 0/1/2/5. A safety budget of `2*speed` ticks per frame stays above that cap (engine choice; a larger one let a heavy world snowball); excess is dropped and
+`AchievedSpeed` reports it. Control ticks precede simulation ticks; a speed change applies
 to the entire frame. `WorldSession` rejects unequal world/clock tick lengths, owns snapshots,
 clocks, input and camera, and disposes systems/services. Of a frame's ticks only the last two publish
 a snapshot (`RunTick(publish)`), the pair the host interpolates between. Advanced → Pause after loading (`PauseOnLoad`, a plain on/off switch outside the Faithful / Meitou sides, default off as
 the game runs a loaded save at once, [game loop](game/game-loop.md)) pauses the speed after a menu load or import; `--load` runs.
+
+### Engine choices against the original's frame loop
+
+**Verified** original behaviour (decompile), each a deliberate difference in Meitou; none changes code.
+- **Character update budget** (`FUN_140786e30`, [game loop](game/game-loop.md)): the logic tick (slot 29, `FUN_1405ccd90`) runs for 8 characters a frame round robin; non-priority characters get the full update (slot 28, `FUN_1405d00b0`) for 6 a frame with the time accumulated since their last one; the rest only add the frame time to `+0xc8` while the in-view flag `+0x1a9` is clear (`FUN_1405c9f60`:151-152). Meitou steps every character every tick (timing granularity only). Animal growth (`FUN_1405cdf00`) is lumpy there, the total identical.
+- **Medical clock** (`FUN_1405c7ae0`, `FUN_1405cfd90`, `FUN_1405c7d40`, `FUN_140652000`): not an engine choice, Meitou runs the original's clock: parts, blood, clotting and the KO timer get the character time its update budget adds up (`MedicalTimeBudget`, [character stats](game/character-stats.md#time)); hunger keeps game time.
+- **Paused growth** (`FUN_140788a00` -> `FUN_140787230` -> `FUN_140786a40`): the character clock (dt x speed) is replaced by 0.01 when not above 0 and is not zeroed by pause; per paused frame one flagged character (`+0x1a9` or carried `+0x3d4`) still gets vfuncs 0xe0, 0xe8, 0x268, so an animal ages 0.01 game-s per rendered frame while paused. Meitou: nothing runs while paused (the host's frames do not reach the simulation; the difference is under a game minute of growth per real minute).
+- **Zone linger timers** (`FUN_140a0b830`): the three timers (`+0x18`, `+0xc4`, `+0xc8`; defaults 4, 6, 5 s) count down with the real, capped, smoothed frame dt (`DAT_142133790`), independent of game speed. Meitou matches while running: `PopulationSystem.LingerSpeed` scales the lingers by the game speed. While paused the world runs no ticks, so its zones stay (the original's timers would run out, unloading zones nobody moves toward).
+- **Birds**: a `BirdManager` thread of its own, kicked every frame with the real dt; Meitou flies flocks on the display's real time, outside the simulation: [birds](game/birds.md).
 
 ### Speed steps
 
@@ -54,8 +63,7 @@ The game speed is an input of one system: the ragdoll physics steps in real time
 [ragdolls](game/ragdolls.md)), so a ragdoll's outcome, and the position of a body that follows it, differs between speeds, as in the original. Runs at one speed, headless runs and the goldens are unaffected.
 
 **Verified** original clock: 1200/11 seconds per game hour ([game-loop.md](game/game-loop.md)).
-`BodySystem.HoursPerTick=11/36000`; the medical tick takes `TickSeconds` plus the update budget's turns (`MedicalTimeBudget`, [character-stats](game/character-stats.md#time)). Navmesh unload uses
-real time (30 s); population unload grace uses game time (towns 60 s, roaming 10 s).
+`BodySystem.HoursPerTick=11/36000`; the medical tick takes `TickSeconds` plus the update budget's turns (`MedicalTimeBudget`, [character-stats](game/character-stats.md#time)). Population and assets split: **simulation = original**: a town site unloads with its zones (`TownUnloadGraceSeconds` = 0; the zones lapse 4-6 s after the camera / player timers, [character-stats](game/character-stats.md#time)), and its squads become pinned platoons; wild sites and roaming squads keep an engine-choice grace on game time (60 s, 10 s). **Asset cache = Meitou engine choice**: a left zone's navmesh stays loaded 120 s (real time, at most 60 zones, oldest dropped first; then the disk cache), so a return does not rebuild; render assets follow the camera, not the sim zones. **Observed** (save mec-tou-nu2, Release): a town's unload costs ~0.02 ms, a second spawn of a town 0.06-12 ms, the first spawn of a town with 8 squads 65 ms (JIT included).
 `RequestedPause` is independent of remembered nonzero speed. Render previous/current states
 with simulation alpha; camera uses control alpha. Positions are float world coordinates;
 rendering is camera-relative.
@@ -102,7 +110,7 @@ it, who yields, attack slots, joining, fighters at it) walk `AttackerIndex`, the
 Schedule, filtered to the grid cells a search would cover, in the grid's order. Ragdoll physics steps on `Threads` workers (Bepu deterministic mode).
 
 Effects sort by `(target,source,system,sequence)`; spatial-neighbour iteration order is fixed.
-Commands apply by tick and queue order. In-tick orders use serial `World.Defer`; deferred orders
+Commands apply by tick and queue order. Simplification: the original drains a character's command deque from its head each frame; the head is accepted or refused by `FUN_1405d0db0` and a refusal blocks everything behind it and is retried every frame (`FUN_1405d2c30`:15-41, **Verified**), while Meitou's `CommandQueue.TakeDue` removes every due command and a consumer that does not apply one drops it. The accept rules are **Unknown** (s21-d037), so this stays until they are decoded. In-tick orders use serial `World.Defer`; deferred orders
 precede host orders for their due tick. No concurrent host enqueue may alter that ordering.
 Randomness: stateless `Rng.Hash(seed,entityKey,purpose,counter)`; changing purpose/salt changes rolls.
 Worker partitions are `threads*2`, minimum 16 slots (game 32: 128 left a 500-character battle 3 partitions); one worker means caller execution.
@@ -332,13 +340,14 @@ incomplete. A town that unloads turns each squad it made into a pinned platoon h
 cleared of path, AI, carry, treatment, combat and stealth state, plus the squad's home building, shop, purse and AI package.
 The town then holds squads and makes none of its own; the platoon is made of the same characters when the town's zone is
 active again and leaves with the town's grace. A town or wild site with a living member of its squads in an active zone does not unload (nor counts its grace) wherever its own zone is, so a chase away from home does not end in a vanish (engine choice for the original's per-platoon unload by its own place); a nest held so makes no new squads. This is the original's model: residents are persistent platoons kept as their
-characters ([persistent platoons](game/factions-squads-towns.md#1-object-model)). Saves write stored squads as the town's platoons (`sqt` 1). Any platoon's
+characters ([persistent platoons](game/factions-squads-towns.md#1-object-model)). A loaded town also stays while any zone of its coverage list is active, and asks for every zone of its list each frame with the largest camera or player timer among them, a copy that extends nothing, so its zones lapse with the last of those (**Verified**, `FUN_140929b20`, `FUN_140a09380`; [corrected: no permanent hold](game/character-stats.md#corpses); `PopulationSystem.AskTownZones`); the load trigger stays its own zone (**Unknown**, s19-d036). Saves write stored squads as the town's platoons (`sqt` 1). Any platoon's
 activation waits for the navmesh gate of its town's zone (a traveller: its own). A town made once (its pools' `started`) makes no residents again; its
 badly hurt squads are made afresh within its pools (see "Off-screen tier"). `ActiveZones` is double-buffered. Zone loading/spawn planning stays off the
 simulation thread; publish results at boundaries.
 `World.PreparePopulation` queues nearby residents/wild squads, activates existing nearby roaming
 platoons and drains completed builds during loading. It publishes matching snapshots without advancing
 ticks, game hours, AI, movement or roaming timers; readiness includes navmesh-gated sites.
+The original builds one queued squad request per rendered frame on the main thread (`FUN_140583310` pops one from the locked deque at world `+0x4a0` and builds it with `FUN_140581770`, **Verified**). Meitou, one tick standing for a frame: behind the loading screen all finished builds are taken; in play each tick finishes at most one roaming platoon build, else one squad of the finished wild builds (a wild build's site is marked loaded with its last squad); towns are built whole (`FUN_140583a10`, not this queue).
 
 ### Unique characters
 
@@ -367,6 +376,8 @@ original's table (CHARACTER → claimed, live character, state 1/0/2, player fla
 The original's rules: [off-screen world](game/factions-squads-towns.md#off-screen-world). It keeps only persistent platoons (residents) and
 campaign squads off screen, moves them in straight lines (roads for long trips), never fights or heals there, and drives the rest by clock-based
 budgets. The tier follows it, with Meitou choices marked.
+
+**Engine choice (s18-f24).** The original examines one platoon per faction per frame (`FUN_1406b9970`: its loop bound is one; a per-faction cursor at +0x23c, wrapped past the end of the list, picks it; if that platoon has an unloaded half it runs its update and, when that returns false, activates it and returns, else the cursor advances), so each platoon is examined once per (platoon count of its faction) frames (**Verified**, decompile). Meitou steps and may activate every unloaded platoon on each `CheckEveryTicks` look (`PopulationRoaming.StepRoaming`); rates do not depend on it because each step measures its own elapsed time, only the activation latency differs.
 
 **Town overrides** ([rule](game/factions-squads-towns.md#town-overrides)): `PopulationSystem.Replace` runs at each town load but those behind the loading
 screen (`PrepareLoading`); the winner goes into `TownSite.Replacement`, and `TownSite.Town` (what every reader uses) becomes it with the placement's id and names
@@ -412,7 +423,7 @@ Implemented (`PopulationRoaming.cs`):
   GOHOME or a patrol sends a roaming stand-in on its way at once. Job 0 (no branch of its own in the original: 2 for a non-persistent platoon, 4 for a persistent one) stays the engine's travel stand-in.
 - **Speeds**: per job as the original (GOHOME 55, TRAVEL_TARGET 25, TRAVEL_TARGET_FAST 60 or 90 beyond 25000), the engine's travel stand-in (job
   NONE) 25 or 90, all capped at the original mover's 70 (`StandInSpeedCap`); straight lines. A short-range patrol keeps walking at 25 (the
-  original's stands still). Destinations stay the engine's (towns, patrol points near home): the original keeps no roaming squad off screen,
+  original's stands still). Destinations stay the engine's (towns, patrol points near home) except a TRAVEL_TARGET job, which heads for the saved mission town ([off-screen world](game/factions-squads-towns.md#off-screen-world)): the original keeps no roaming squad off screen,
   and saves give no usable target (**Observed**, 4 owner saves: `mission target` always type 0, `target town` on 1-3 platoons, `mission town`
   mostly a TOWN).
 - **Roads** (`RoadNetwork`, `PopulationData.Roads` from the level's ROAD records; the same instance serves on-screen long routes,
@@ -445,7 +456,7 @@ Implemented (`PopulationRoaming.cs`):
     so each every N ticks, N = all nests: a loaded one with room makes one squad (rolls keyed after the load's), unless a player character is within 1250, then it only weighs.
     An entry must fit the free budget, except while the pool is empty with more than 4 free (the Fog Deathyard's `Fog hive nest`, expected
     size 1 + (12 + 24) / 2 = 19, against a budget of floor(0.7 × 25) = 17). A roll that finds no entry (all weights 0 or none fits the free budget) with no squad of the nest left alive sets `ded` for good, `tod`,
-    and posts "<nest> has been wiped out" (engine choice: "intact" = someone alive); so does a pool spent below one member with no one alive. A squad that lost someone takes its living out of `pop2`
+    and posts "<nest> has been wiped out" (engine choice: "intact" = someone alive; a squad handle that no longer resolves keeps the nest, `FUN_1408f8740`, so squads leaving the world are forgotten by `ForgetSquad`); so does a pool spent below one member with no one alive. A squad that lost someone takes its living out of `pop2`
     when the nest unloads. Dead squads lying there still count against the template weights. **Observed** (headless): a swamp raptor nest
     (N 20, pool 14) refills an 8-duck squad after its two squads die; drained to 1 with all dead it is wiped out and saved with `ded`, `tod`,
     `pop2` 1.008, `popd2` 20.
@@ -478,7 +489,7 @@ the player has one and stands in it; requests (victory/loss chains, ally help) c
   Meitou (`KeepRoamers`) with its people, Faithful under the normal despawn.
 - **Phases** off screen as the original (0.8 × radius arrival, 4 / 12 / 1 h, the 20 % rule, 3 h removal); the leader travels to the target
   and the others to it at the `travel speed unloaded` speeds (serial, outside the parallel movers). With `OffscreenFights` (Meitou) campaign
-  stand-ins fight like other travellers and a squad lost there counts as not intact for the 20 % rule; Faithful: an unloaded assault wins at 4 h. Engine choice: a
+  stand-ins fight like other travellers and a squad lost there leaves the list the 20 % rule counts (**Verified**, `FUN_1409c70f0`: the denominator is the platoons still registered). The fight timer is armed only in phase 1 of an assault's first 4 h, after the players' hold test passes (`FUN_1409c70f0` returns first), and reset at every phase change; phase 0's early end tests only the campaign's own target town. Faithful: an unloaded assault wins at 4 h. Engine choice: a
   campaign with no platoon left is defeated. End effects: the messages and the trigger roll or the 40-96 h retry; nothing else changes.
 - **Loaded**: campaign squads are platoons the AI does not run, so the campaign drives them; the phase's package is what the next population
   look does with `Phase` (the original installs it at the next AI update). Column (`GatherAndMove` as the original): the leader's trail is
@@ -802,7 +813,7 @@ when the host passes `CharacterRigs` (the game does; tests and goldens do not). 
   finds them. **Budgets** (engine choice; `RagdollSystem.TileBudget`, `StartBudget`, `RagdollPhysics.BuildingUnits`): a tick spends at most 8 tile units (a
   ground mesh 1, a tile's building mesh 4: a town tile's is 2 ms against the ground's 0.12, and a zone's pending tiles all got theirs in the tick its buildings
   were gathered; a tile asking for buildings not yet gathered costs nothing) and starts at most 4 whole bodies falling (a knockdown, a put-down, a stored
-  squad's downed member coming back); one whose tiles the budget did not reach starts on a later tick, the character animating meanwhile; a save's frozen
+  squad's downed member coming back); one whose tiles the budget did not reach, or whose tiles still lack their buildings (`RagdollPhysics.Covered`), starts on a later tick, the character animating meanwhile; a save's frozen
   ragdoll is not counted, and a get-up, a limb's dangle or a lift never waits. **Observed** (headless flight probe, the
   stutter save's flights): a zone's downed characters re-ragdoll when it loads, asked for 80-100 tiles and 20 builds in one tick (45-60 ms; after the budgets
   the setup loop is at most 3.4 ms a tick), and 20 whole bodies then fall for up to 7 s (the step 0.4 -> 1.3 ms a tick); a build is 0.7 ms (bodies, joints, the
@@ -839,9 +850,9 @@ remaining uncertainties: [economy.md](game/economy.md). Expiry is paused while i
 Witness sight: the original's sight test with places and light ([perception](game/perception.md#sight), `SightMap`); a
 sneaking culprit is seen only once the witness's spot meter is full ([perception](game/perception.md#spotting-a-sneaker);
 the aggro scan's meters, kept for every NPC looker, not saved).
-NPC culprits (engine choices): an NPC's non-defensive attack order, and each of its landed blows, sets a pending Assault (not an
-animal's; the victim may be a player character), and an NPC looter its Looting ([NPC looting](#carrying-rescue-and-looting)); neither is booked
-(other codes are refused for NPCs). A police-like witness not fighting re-fires the witness event (41 for an Assault, 42 for a Looting) at it every
+NPC culprits: an NPC's non-defensive attack order, and each of its landed blows, sets a pending Assault (not an
+animal's; the victim may be a player character), and an NPC looter its Looting ([NPC looting](#carrying-rescue-and-looting)); both are booked like a player's (**Verified**, the witness function `FUN_140854d10` ends in the booking call with no player test; a Bandit, Diplomat or LawEnforcement class is never booked).
+The setter itself refuses no NPC code (**Verified**, `FUN_140852c80`): any other crime a caller sets on an NPC (the cuffing task's Enslaving) is pending too and witnessed the same. A police-like witness not fighting re-fires the witness event (41 for an Assault, 42 for a Looting) at it every
 sweep, since the guards' lines (e.g. "Shek guard witness crime": DA 29, 33, 6) need it within 260 and not running. So a town's
 guards turn on hungry bandits (Starving Bandits, -10 to all: not hostile, so no aggro target) attacking someone there.
 Trespassing (`Trespasses`, [economy 11.2](game/economy.md#112-how-a-bounty-is-gained)): a player character inside
@@ -911,7 +922,7 @@ unload, hashed only once non-empty. Facts: [locks](game/locks.md), [economy 11.5
   state from its door fixtures: broken/open 1, closed 2, locked 3, none registered (a town not spawned) 1; codes no gate joins count as 3, engine choices), plans row 4 with `GatePlan`: 90 from the
   codes, 122's finder the first gate on the route (nearest of the equally good), 123/290/81 at it (91: within 45 of the leaf, x2 standing; crowdLimit8: under
   8 bashers on it), restricted rows open (the attacker is an NPC). A plan that bashes sets `Bashing` to the gate's main door, and the door basher takes over,
-  standing on the attacker's side of the leaf. Gate state 2 needs no plan (Meitou walks through closed unlocked doors). Checked before the house doors.
+  standing on the attacker's side of the leaf. Gate state 2 needs no plan (Meitou walks through closed unlocked doors). Checked before the house doors. When no gate leads to the target, 270's wall fallback smashes the nearest wall of the attacker's region once it is within the wall's reach (`LockSystem.Smash`, [locks](game/locks.md#doors)).
   Coverage: `GateRegionTests` (labelling), `DoorTests.A_bandit_outside_a_locked_gate_plans_to_bash_it_and_none_once_it_is_broken` (the plan).
 - **Beds** (`Locks/BedSystem`, serial; facts in [locks](game/locks.md#beds)): bed fixtures are the town interiors' beds and, registered with the player's
   buildings (`<site>@bed0`, site -1), the beds the player built; each keeps its `BedData` (function, clip, construction materials). `UseBedOrder` (258: a quick
@@ -921,9 +932,10 @@ unload, hashed only once non-empty. Facts: [locks](game/locks.md), [economy 11.5
   is engine state, not saved) and enters; 3 short walks give the bed up (`MarkUnreachable`). In a bed the task is `CharacterTask.Sleep` (held still, the
   bed's clip, `Sleeping` on the HUD); any other task gets it up (`GetUp`; a knock-out or death in bed keeps it there). The player's bed search `FindBed`
   follows the original's weights over beds within `BedSearchRange` 3953 (engine, for the town). Job 106 (in the list with the rescue job; the decision step's, `BedSystem.PutInJob`): a carrier of
-  a non-hostile body lays it in the searched bed. Lifting a sleeper takes it out. Engine difference: no power test. The rescue job (148) and the one-shot Rescue start a lift only while the bed search finds the rescuer a bed (`CarrySystem.MayRescue`).
+  a friendly, non-hostile body with no grudge tag against it, and no bounty owed to a police-like carrier, lays it in the searched bed. Lifting a sleeper takes it out. Engine difference: no power test. The rescue job (148) and the one-shot Rescue start a lift only while the bed search finds the rescuer a bed (`CarrySystem.MayRescue`).
   Saves: `HeldSave` (a player-built bed also writes the original's `in what` = its building's handle; read back through `Bind`); a loaded sleeper's task is Sleep,
   and `Bind` puts it at its lie spot still sleeping (a standing task would get it up).
+
 - **AI sleepers** (going to bed, 153/239, which plan into 98 Sleeping, `Task_UseBed`): arrived at their home's bed spot, the serial step (`AiSystem.LieDown`) lies
   them in that bed, else in the nearest free bed of the building within 30 (engine choice); with none free they rest on the floor there. Without a bed spot at
   home they go to the bed `AiSystem.SpareBed` finds ([locks](game/locks.md)); with none the goal is not wanted (desire 0).
@@ -943,7 +955,7 @@ unload, hashed only once non-empty. Facts: [locks](game/locks.md), [economy 11.5
   original's rows (85 → 72 / 81 / 287 → 82); a plan with a bash takes the building's main door (lowest door index with a spot) (`CharacterCold.Bashing`).
   Only door states and 90 DESTINATION_NOT_BLOCKED_BY_FORTIFICATIONS (`LockSystem.NotBlocked`, as for gates) are evaluated (the rest of row 4 is held); the desire is `scoreAggressiveAction` (no war-campaign case); an animal's natural weapon
   counts. The pursuit leaves it alone; it walks to 12 out from the leaf until within the door's reach (25, x2 standing, the leaf for the marker, no
-  gateway 45) and swings every 1.5 s (engine; the clip length is not read); a character ahead within 10 ends it until the next check. A closed unlocked
+  gateway 45) and swings at 0.6 of every `stonemine` cycle (`LockSystem.BashClipSeconds`, 1.5 s only without animation data; an animal swings its own first fitting attack technique's clip, restarted at 0.98, `CombatSystem.AnimalBashSeconds`); a character ahead within 10 ends it until the next check. A closed unlocked
   door is passed by the walk, so the bandit branch (bashing unlocked doors) and the break-out (287) are not acted out.
   Broken: lock unlocked, door broken and opening, the pursuit resumes. Engine: no crime for NPCs, the `Unlocked` sound for
   `Break`; headless (no door gate, no spots) nothing is bashed. Player characters never bash.
@@ -952,6 +964,7 @@ unload, hashed only once non-empty. Facts: [locks](game/locks.md), [economy 11.5
 
 `Crime/ArrestSystem` (serial `SlowWorld`, after `CrimeSystem`) and `Locks/LockSystem`. Facts: [economy 11.5, 11.7, 11.8](game/economy.md#117-arrest).
 Arrests, the recognition meter and the marker are hashed only while set. What a save keeps of them: [Saves](#saves).
+**Engine choice**: the arrest (`ArrestSystem`) runs the original's chain (fight 7, strip 181, lift 240, then the cage errand of 112) as its serial phases, not through the AI planner, because dialogue, bounty-duty and slave arrests all start it; the chain's rows and states are in [AI tasks](game/ai-tasks.md#arrest-and-prison-rows). Goals 203, 112 and 281 are not in `TaskBehaviours.Table`.
 - **Triggers**: a police-like witness that books a crime acts at once (`CrimeSystem.BookingsOf`, the witnessed-crime
   events); every 15 ticks an awake NPC within 400 that sees a player character (`Visibility`/`SneakVisibility`) whose
   bounty with its faction reaches its class threshold spots it, at once while `RecentlyWanted` > 0 (250 game seconds after
@@ -977,11 +990,11 @@ Arrests, the recognition meter and the marker are hashed only while set. What a 
 - **Release**: player and NPC prisoners alike are freed by the release rounds below.
 - **Rounds** (`LockSystem.Rounds.cs`, serial; a sweep every 30 ticks starts at most 4, at most 8 run; the worker is
   `Engaged`; each lock takes the owner's 3.3 s): **release** (211): an awake prisoner whose sentence is served is freed by an NPC of the
-  cage's faction with goal 211 in its role list and hours (the finder has no booking test and only that goal frees, **Verified** `FUN_1408cf3c0`; police-like NPCs without it never do),
-  nearest within 1500, who walks there, unlocks and `Release`s in its faction's name; engine: in a cage of a faction that books bounties, none such,
+  cage's faction with goal 211 in its role list and hours (the finder has no booking test, skips an occupant the jailer regards as an enemy, and only that goal frees, **Verified** `FUN_1408cf3c0`; police-like NPCs without it never do),
+  driven by each such jailer (`FUN_1408cf3c0`, **Verified**: the first cage of the jailer's town and faction in the 3 x 3 zone cells round it, no radius), who walks there, unlocks and `Release`s in its faction's name; engine: in a cage of a faction that books bounties, no NPC of the faction holds the goal,
   3 failed walks or 120 s, and the system frees it; the cages of non-booking factions wait for a 211 holder. **Lock-up** (155, 197): while
   a member has the goal in its hours a free member with it locks every door of the home (155 only with every member
-  inside, engine: within the home's farthest node + 10; neither with a stranger inside); when no member's goal is in its
+  inside, engine: within the home's farthest node + 10; neither with a stranger inside; a 197 worker prefers a member already outside and otherwise leaves the home first, then works each door within 45 of its outer point, [locks](game/locks.md)); when no member's goal is in its
   hours, a free member with 86 Opening up in its hours unlocks what a round locked (squads without 86 stay locked, as the original). The house flag is set at each door the round locks (worker's faction's lock, no door of the home open or opening) and cleared by the unlock round (engine: the round unlocks rather than opens; a loaded night's locked homes come back flagged, `meitou house locked`). **Wardens**
   (195): occupied unlocked cages of the faction in its town are locked. **Keys** (engine): a worker whose target is behind
   its own faction's or home's shut doors unlocks them standing before it walks (the sim doesn't know door positions); an
@@ -1030,11 +1043,11 @@ Arrests, the recognition meter and the marker are hashed only while set. What a 
   sentence is never served; getting out of the cage makes it an escaped slave (2, recently wanted 250); a release or bail frees it (0); an owned slave caged in another owner's cage
   changes owner. Dialogue conditions 59, 61, 62 and 64 read it. Saved as `slavestate` and `meitou slave owner` (`SlaveSave`). An arrest with `Enslave` makes the slave at the
   caging; the slavers' own processing (182) of caged captives is [Captives](#captives). CHARACTER `slave` ("sets initial slave state"; **Verified**: fcs.def and the editor's `SlaveStateEnum` NOT_SLAVE 0, IS_SLAVE 1, ESCAPING_SLAVE 2, EX_SLAVE 3) is
-  applied to a new game's characters (`StartPlayer`; The Slaves' "start slave" is 1, in locked Prisoner Shackles), owned by the start town's faction (engine; the original's owner is
-  **Unknown**); 3 is free.
+  applied to every freshly made character (**Verified**, `FUN_14062b210`: gated only on there being no saved state, no record-type or squad test; the setter `FUN_1405a4940` stores it with no owner test), `PopulationSystem.SpawnSquad`; a saved one reads `slavestate`. The Slaves' "start slave" is 1, in locked Prisoner Shackles. Owner: the faction of the town the squad belongs to, the start town's for the start squad, else none (-1) (engine; the original's owner is
+  **Unknown**); 3 (ex-slave) is kept, shown with its owner, its looks-like-slave level floored at 0.01 and not doubled (`FUN_1405a51e0`, **Verified**: floor 0.01, state 2 doubled with a 0.1 floor); the other rules test it as the original does, non-zero tests count it as a slave. The setter's "has been enslaved" message and obedient-slave job are not run for these.
 - **Slave squads** (`PopulationSystem.MakeSlaves`): a squad's planned `slaves` squads (the factory's role 4) are made at its spot as squads of their template's faction (else the
   owner's), every member a slave of the owner squad's faction, put into random free cages of the home after its prisoners (engine: their "Slave only squad" package's one goal is
-  Slave get in Cage, 172; the rest stand by the owner). A slave is never police-like (engine: many slave records keep the default MILITARY class); an owned slave starts no fights and is no aggro target but for its owner's
+  Slave get in Cage, 172; the rest stand by the owner). A slave is police-like by its class like anyone (`FUN_140599600` tests no slave state, **Verified**; every Meitou caller mirrors an original caller of it); an owned slave starts no fights and is no aggro target but for its owner's
   enemies (engine: Heng's Outlaw slaves, uncaged without building data, drew its Samurai into fights). **Observed** (real-data
   probe 2026-10-21): Rebirth's 10 Rebirth Cage Guards squads make 34 caged Rebirth Slaves.
 - **Slave catching** (`ArrestSystem.CatchSlave`, the spotting sweep; the packages' Capture Slaves, 167, in `addon- slave catching`, which Rebirth's gate guards and garrison inherit;
@@ -1077,8 +1090,10 @@ what it wore there going into its inventory (engine choice; `DialogueSystem.Chai
   without a cage in range and cages the same way, its home its squad's home town, which the retreat package walks the squad to (130 TRAVEL_TO_TARGET_TOWN_FAST as going home at a run, [Captives](#captives)).
 - What happens to the captive next: [Captives](#captives).
 - **Not built**: kidnapping as a crime for witnesses, a carrier's platoon unloading with an NPC victim (the carry is dropped when the platoon is stored).
+- Activation of a player-owned empty platoon (**Verified**, `FUN_1404ffad0`: members are made from the template only when the owner has no player flag): it is removed, not filled (`PopulationRoaming.Activate`).
+- Activation repair (**Verified**): a platoon's squad made in a player town's open ground by a faction that is not the player's has the members that came up inside walls moved to its place, with a red message "Character <name> of <squad> tried to spawn inside walls!" (**Verified**, `FUN_1404ffad0`: the place's gate code 0, a member alive, up, not in a bed or cage and with its own code above 0, once at the build; Meitou `PopulationRoaming.MoveOutOfPlayerWalls`, for every platoon load: roaming, town-pool and never-made town squads (a saved squad's characters keep their saved places), plain colour, nothing where the codes are unknown).
   The original's unload test (`ActivePlatoon::unloadCheck` `FUN_1404febd0`, **Verified** by decompile) holds a platoon loaded while a member carries (Character `+0x348`) a player-faction
-  character (`+0x380` hand, `HandleManager::isPlayerFaction`), its 4.5 s countdown reset to 4, which Meitou's zones following a carried player character match; with an NPC load it
+  character (`+0x380` hand, `HandleManager::isPlayerFaction`), its 4.5 s countdown reset to 4, whatever the zone at the platoon's place (per carrier, not through the leader's zone; Meitou `PopulationRoaming.SquadCarriesPlayer`); with an NPC load it
   unloads as usual. What `Platoon::deactivate` then does with the carry and the victim's own platoon is **Unknown** (a save writes the link as `carrying`, `FUN_140627b30`).
 - **Observed** (headless, real data, `raidFrequencyMult` 1000): the Skin Bandits' "skin bandit standard raid small" against an outpost with four weak player characters: all four are lifted once down (the
   cannibal rule sends phase 2 at the third carrier), three are caged at the faction's Skinhouse HQ (it has three cages), the fourth, on the leader, is carried on towards the campaign's far home.
@@ -1096,22 +1111,22 @@ position. Engine: every loaded zone is a candidate; a hunter stops within 50.
 
 `Kidnap/TownDutySystem` (serial `SlowWorld`, after the kidnapping; with the population and the AI): goals of an AI squad's running package that no act-out covers, per member,
 every 15 ticks, by `PopulationSystem.GoalDuty` (facts: [ai-tasks](game/ai-tasks.md) "Finders of the jobs", [carry-loot 3.2](game/carry-loot.md#32-goals-and-their-target-finders)).
+Duties are priority-2 goals (**Observed**: `FUN_140510ef0` tries orders, jobs, urgent perma-jobs and priority-3 goals first): a member running a job or perma-job (a task other than idle, wander, follow, go-to) or whose AI holds an urgent goal takes none (`TownDutySystem.Free`). Stand-in: the duties do not compete by key with the package's other priority-2 goals.
 - **273 Remove Intruder**: a free member standing in its home town, the town its occupation holds or a town of its faction lifts the nearest knocked-out character in that town's
   walls (`amInsideTownWalls` > 0: its [gate code](game/pathfinding.md#gate-codes) is a walled region, so an unwalled town removes none; where the codes are unknown, the built-up area: a
-  placed town's radius, a player town's farthest building from its centre), not carried or caged, not of its faction or an ally.
+  placed town's radius, a player town's farthest building from its centre), not carried or caged (a body in a bed is lifted, `FUN_14099c250`), not of its faction or an ally.
   A body that dies on the way is caged only with **281** listed (else let go). Any free member carrying a dead body (a kidnapper's or arrester's victim that died: they end their errand without letting go when 281 is listed) with 281 in its package takes it to a cage the same way (`LookDeadCarriers`, **Verified** `FUN_1405a1140`: no dead test); with no cage it keeps the body.
   Carrying it: with **112** (a living body) or **281** (any body) listed and the carried-body desire above 0 (`CageDesire`: 0 for an animal or one the carrier regards as friendly, 0.1 outside a town, 1.4 police with a bounty-free slave, 0.5 dead, 2.0 alive; [ai-tasks](game/ai-tasks.md)), the best free cage in that town (the occupied town's cages are usable), where it is locked up with the usual put-in sentence (108 `Task_PutInSomething`
-  sets none without a bounty, [economy 11.5](game/economy.md#115-bail-and-sentence); not `Kidnapped`, **Verified** `FUN_140358670`); else with **274** listed, 200 past the
-  built-up area on its side (farther out until walkable), put down; else put down. A body put down short of its goal is left alone for 2 game hours.
+  sets none without a bounty, [economy 11.5](game/economy.md#115-bail-and-sentence); not `Kidnapped`, **Verified** `FUN_140358670`); else with **274** listed, to the town's exit point (`TownExit`: 200 outward from the first gate outside the walls or wall with an interior, the same for every carrier; no walkability test, **Verified** `FUN_140927120`), put down; else put down. A body put down short of its goal is left alone for 2 game hours.
 - **243 Getting food**: a member holding no food walks to the nearest store with food in the town (a player town's complete storage, else an unlocked container) and takes one item.
   Meitou's NPCs are fed by their hunger floor, so the food is not eaten.
 - **158 / 283 Shooing** (`AI::findStrangersInMyBuilding`; 283 only while the home is private): the first character in the squad's home building that is neither allied nor an
   enemy, not down, caged, its faction's slave or law enforcement, or (an NPC squad) a player character there not sneaking or spotted; the member walks at it and sends event 9
   (17 to an enemy) every 5 s (engine pacing; the dialogue data escalates); after 25 game minutes, once the stranger is getting away, event 60 and done; over once it is out.
 - **216 Ransacking town** (`AI::findRandomBuildingInTown`): a member draws a random standing building with an interior in its mission town (blackboard, else the campaign's
-  destination, else where it stands), draws its weapon and runs into it; inside, the errand ends and the next look draws another.
+  destination, else where it stands) among those the planner gets it into (row 156's B list 59 `hasAnOpenDoor` and 90, **Observed**): `DoorPlan.PlansEntry` plans goal 216 with the exact state 59, so a closed unlocked door is opened (72: the walk opens it) or, for a character that wants to (`AggressiveTowards`; a bandit 1.1 beats 72), bashed first (81: `LockSystem.BashForErrand`, the door basher with `CharacterCold.BashErrand`, no attack needed, ending when the door opens; no Burglary is booked yet); a locked door nobody will bash or unlock leaves the building out of the draw. A closed gate on the route is planned the same way (`LockSystem.GateEntry`, `GatePlan.PlansEntry`: a locked gate the character wants to bash is bashed first with rows 123 / 290, an unlocked one is passed, row 122; no gate leading there leaves the building out). It draws its weapon and runs into it; inside, the errand ends and the next look draws another. The attackers' `DoorPlan` keeps `!IsShut` (all doors locked) for state 59: the exact test would make every bandit bash closed unlocked doors, **Unknown** whether the original does (an inference from the desires, not run).
 - **131 Looting food** (`AI::findSomethingToLootFoodFrom`, shared with 243): a member holding no food in any town (not only its own) walks to the nearest such store, not a
-  container of its own faction (engine reading of the own-shop skip), and takes every food item that fits (`Task_EmptyMachine` moves items while there is room).
+  container of its own faction (engine reading of the own-shop skip), and takes up to 10 units of the first food record it lists (`Task_EmptyMachine` 284 with flag 1, `FUN_14033cd10`, **Verified**: one unit per pass while the store still holds the record and there is room; the record is the first one the store's inventory lists, food or not, **Verified** `FUN_140299990`: distinct records in item order).
 - **212 Confiscating goods** (`AI::findPrisonerWithContraband`): in its town, the first occupied cage (list order) whose prisoner's inventory (not its bag) holds an item stolen for it; at the cage it waits 0.8 s and
   confiscates as a police looter does ([NPC looting](#carrying-rescue-and-looting)); engine choice: whatever the runner's class (base data: only law-enforcement packages list 212).
 - **184 Ditching loot** (`FUN_14059b040`, [rules](game/ai-tasks.md#arrest-and-prison-rows)): a member carrying an item stolen for it (state 121: inventory or worn backpack; none for a lawless faction) walks to the nearest
@@ -1144,14 +1159,14 @@ failed walks mark the cage unreachable for the faction; its own faction's shut d
   processed too. **Observed** (probe): a player character caged next to the Slave Farm's Cage Wardens is enslaved about 7 s later.
 - **Gather** (173, 245: while the squad has at most 3 slaves up and uncaged on its slave list, which is its slave members and the slaves of other
   squads that obey it, `CaptiveSystem.SlavesOf`; whether the original's list also holds the owner faction's slaves that obey no squad is
-  **Unknown**, Meitou leaves them out; 217: in a town or outpost, and in one of the player's faction or an anti-slavery one only for its allies): the nearest occupied cage of the town the gatherer stands in (173,
-  245: its faction's; 217: any but the player's; 245: a woman or another race). The cage is opened and the captive joins the gatherer's squad as a slave member (state 1, owner its
+  **Unknown**, Meitou leaves them out; 217: in a town or outpost, and in one of the player's faction or an anti-slavery one only for its allies): the nearest occupied cage of the gatherer's faction in the 3x3 zone cells round it, of the town it stands in or of any town when it stands in none (173 and 245, **Verified** `FUN_1409fc450`; 217 needs the town) (173,
+  245: its faction's, the first in finder order (no distance sort) whose occupant is a woman or of another race, with no test of the occupant being a player character, down or busy; 217: any but the player's). The cage is opened and the captive joins the gatherer's squad as a slave member (state 1, owner its
   faction; its AI mind is made anew, so its Slave AI Goals, mostly 171 Follow slavemaster, run). Engine reading of `Task_GetSlave`'s queued message (**Unknown**); NPCs only.
   **Observed** (probe): the Slave Farm's workmasters take the caged slaves out by day; at night their slaves' 172 puts them back.
 - **Deliver** (192, the squad leader under a shipping package): walks to `Blackboard.MissionTown`; there, with 194 (or 218 in a prison or slave camp) in its hours, it says event 39
-  to the nearest NPC of the town's faction or an ally, and each of its slaves leaves for a "Wandering Squad" of its own, owned by the town's faction, caged in the nearest free cage of
+  to the nearest (to the leader) NPC of the town's faction or an ally within the town's radius; none found, the finder `FUN_1408ca950` returns 0 (**Verified**: the goal is unwanted) and nothing is handed over until the next sweep. Each of its slaves then leaves for a "Wandering Squad" of its own, owned by the town's faction, caged in the nearest free cage of
   that faction or an ally (engine: the original's handover is a dialogue for event 39, **Unknown**).
-- **Get in the cage** (172, a Slave AI Goal): a slave not held walks to the nearest free cage of its owner's faction in its town and gets in.
+- **Get in the cage** (172, a Slave AI Goal): a slave not held walks to the nearest free cage of its owner's faction in the 3x3 zone cells round it, in any town, and gets in.
 - **Packages** (`PackageClass` 8 to 11, rules in `AiSystem.Captives.cs` as the facts): cannibal retreat (1, 25), cannibals at home (27), prisoner gathering (10, 24), slave shipping (11,
   28; Meitou always takes the nearest slave camp not hostile to the squad, the other town rule's flag being **Unknown**); the cannibal patrol (4) does not start while the town's cages
   are full. A squad's slaves are its live slave members in slave state 1 (engine reading of the platoon's slave list).
@@ -1164,8 +1179,8 @@ failed walks mark the cage unreachable for the faction; its own faction's shut d
 - **Liberate** (276): the nearest cage, in the town the worker stands in (else its squad's), of a faction neither its own nor allied, holding a live occupant that is not its
   enemy. 3 s of `medic` at the cage (engine), then `FixtureRegistry.Release` (no crime is booked for an NPC liberator).
 - **Eating on the ground** (230 / 233, `CaptiveJobKind.EatBody`; also from the race's `AI Goals`, which the sweep reads after the role list): the nearest body within sight that
-  the finder takes; the eater walks to it and eats it as a caged meal is eaten (`eat`, event 52, `MedicalState.BeingEaten` for a living one, which can kill it). A corpse is eaten
-  until `GiveUpSeconds` (engine: the original goes on while the finder finds it).
+  the finder takes; the eater walks to it and eats it as a caged meal is eaten (`eat`, event 52, `MedicalState.BeingEaten`, which can kill a living one). The eat action has no dead test (`FUN_140353c50`, `FUN_1404356f0`, `FUN_140650370`, **Verified**): a corpse is bitten the
+  same way until no part is left to eat and the passes run out (more than 5), when the original destroys the character with the reason "eaten" (`FUN_140799af0`); Meitou removes the corpse at once (`CaptiveSystem.StepEatBody`, as the body system removes a decayed one). A living one eaten away is not removed but left dead (**not modelled**).
 - **Fogman worship** (237 / 236, `CaptiveJobKind.Worship`): in the town nearest it (a standing nest counts, nest markers do not), the first cage whose occupant is being eaten (a running Eat job); within 60 it faces the cage,
   plays `bowing` and barks event 53 every 3-14 game s; ends once the cage is empty or the job grows old (the original runs on while the cage stands).
 - **Dogs' limb play** (race goals 277-279): 277 sends an animal with an empty mouth (an adult only when its stomach is empty and hunger at most 2.75) to the nearest limb within
@@ -1182,7 +1197,9 @@ failed walks mark the cage unreachable for the faction; its own faction's shut d
   event-38 line, or with the event lines off, never speaks: its job then ends only at `CaptiveSettings.GiveUpSeconds` (600 s) or when the slave goes
   (engine choice).
 - **Work** (189, 190; `AiBehaviour.Work` in the AI, not a job: it competes by score like any goal): a worker of a town with a mine, research bench, refinery or crafting bench (BuildingFunction 1, 3, 4,
-  10) walks to a random one (a pick of the character and `AiMind.WorkEpoch`, kept while it works there) to within 30 units, faces it and plays its functionality's clip (`stonemine` by default) as
+  10) walks to a random one (a pick of the character and `AiMind.WorkEpoch`, kept while it works there; 189 only one it can run, `AiSystem.RealWork`: a mine,
+  or a machine running there with its inputs, [ai-tasks](game/ai-tasks.md#slave-work-shout-and-capture); each holds one of the workplace's
+  `max operators` slots, `AiMind.WorkPost`) to within 30 units, faces it and plays its functionality's clip (`stonemine` by default) as
   `ActionClip`. NPC towns run no machines here, so nothing is produced (their buildings are level data, not `Machine`s, and Meitou has no NPC-town production); the worker does take the building's `hunger rate` (`AiMind.WorkHungerRate`). **Observed** (probe, Rebirth, real data): 35 workers, slaves among them, stand at the mines of the Holy Nation's towns by day.
 - **Obedient Slave** (187, [facts](game/ai-tasks.md#slave-work-shout-and-capture)): for the AI's slaves the Slave role list of the owner's squad, which slave members already run; a slave in another squad runs the list of `CharacterCold.SlaveMaster` (after a load, the squad of the owner character its `slaver` handle names, [save](formats/save.md)), for its captive jobs too (the captive sweep reads the same list, so a slave whose own package lists Slave get in Cage all day goes to its cage only in its master's hours).
   **A player character** has the job in its list (`Kidnap/ObedientSlave.cs`, `CaptiveSystem`): `FixtureRegistry.SetSlave` (every route to slave state 1: sale, arrest, processing, a cage, a delivery) destroys its jobs and order
@@ -1277,7 +1294,7 @@ optional), `EdgeGap` (site, point -> gap to its footprint hull; the host's).
   `BuildOrder` (player characters, awake, not carried or caged, with a working arm: row 2 needs state 38 `hasOneWorkingArm`, **Observed**, and the engineer job likewise; Build and Repair alike work a site that `NeedsWork`:
   unfinished, or complete with progress below its target, the original's damage) and `DismantleOrder` set the
   `CharacterTask`s `Build` / `Dismantle` and `CharacterCold.BuildSite`
-  (the selection when the list is empty). Dismantling is refused with the original's texts while a site stands in the
+  (the selection when the list is empty). Dismantling is refused, by the builder's bark when the order starts, with the original's texts while a site stands in the
   site ("I have to dismantle the furniture first." for interior furniture and nodes, else "I have to unmount the
   buildings first."). `CancelSite` removes an incomplete site with nothing delivered, else posts "Dismantle it to get the
   materials back."; `PauseSite` sets `Paused` (only the auto-job skips it). `PlaceBuildings`, `CancelSite`, `ConfirmDismantle` and `PauseSite`
@@ -1453,8 +1470,7 @@ crafting benches, generators and batteries. Facts: [production](game/buildings-p
   yields `ResourceField.NodeYield` (at least 0.1) and is kept in memory, not saved; a saved job keeps the id (`meitou pjob<i>`). The ore stays in
   the rock's output (5) until taken: a left click selects the rock and opens its machine window once it has been mined (**Observed** by the
   owner: the base game's ore is picked up by hand), or a storage within `HaulRange` takes it as for any machine. Engine choices: the rock is picked by its mesh's triangles where the instance places them (the original picks its building's collision); its radius, the longest half-extent of the mesh's bounds box scaled by the instance and at least `NodeRadius` 25, sizes its resource richness (the original takes the mesh's bounds the same way); without the mesh file a rock is picked as a sphere of 25 round its origin; the pointer over a rock is `mine` (with characters selected, after sites and doors, as the click order is); level-placed `is foliage`
-  buildings (not drawn, not in `FoliageResourceNodes`) cannot be mined. NPC town mines are not run (the original's make output while NPCs
-  operate them).
+  buildings (not drawn, not in `FoliageResourceNodes`) cannot be mined. An NPC town building a worker operates is a machine of its own (`TownWork`, [NPC town machines](game/buildings-production.md#npc-town-machines)).
 - **Town training dummies** (`ProductionSystem.TownDummy`, fixtures `FixtureKind.Training`, UI `PlayerInterface.Dummies.cs`). A town building's BF_TRAINING
   furniture (its interior layout's, or the building itself) is a fixture `<building>@dummy<n>` (n in layout order) of the building's owner; like a rock it is no
   registry site, so it is neither drawn, saved nor built: the production system makes a complete site of it once its town has registered, and its machine is kept in
@@ -1655,7 +1671,7 @@ to the next tick. A hostile target is attacked instead.
   sharing one long-term entry; DC 18, 20, 23 and 52-55 and the aggro scan (TEMP ENEMY / ALLY) read it, the effects and event-1 ends write it; it stays with a squad's platoon while the squad is out of the world and is saved on the platoon (`MemorySave`) ([engine choices](game/dialogue.md#meitou-design)).
 - **Speech bubbles**: `WorldSnapshot.Speech` lists the lines on show (`SpeechBubble`: speaker, text, large font); `PlayerInterface.AddSpeech` draws them over the head. Sources and engine choices: [dialogue](game/dialogue.md#meitou-design).
 - **Personality**: the save's `personality` when above 0, else rolled as the original does from the character's (else its faction's) PERSONALITY record, with Meitou's own random draw (`Personality`, [facts](game/dialogue.md#enums)).
-- **Engine choices**: a childless NPC line shows `[Leave]`; a reply leading to another reply offers it alone; number keys pick choices.
+- **Engine choices**: a childless NPC line shows `[Leave]`; a reply leading to another reply offers it alone; number keys pick choices. A choice whose picked text is empty and that has no cost is not offered (**Verified**, `FUN_140680130` list loop); with none left the original ends the conversation, Meitou keeps `[Leave]` for the first offer.
 - **State**: last use per line, permanent chance rolls, event counters, squad memory, interrupts and the open conversation are hashed, not
   saved (as the original, except the squad memory, which it saves on the platoon; the faction global trust and war flags it saves under `meitou` keys, [save](formats/save.md#faction-trust-war-flags-bed-rent-and-turrets)). Locks are on `CharacterCold.DialogueLocks`, hashed while set, saved as `lok*` (`DialogueSave`).
 
@@ -1703,11 +1719,11 @@ whose first step is neither the goal nor a step the engine carries out (`AiSyste
 - A node is made once per row and target (the original allows four copies), so the ancestor-repeat test never fires; a child already
   closed is skipped rather than accepted from the node.
 - Only the step being carried out counts as queued, and only while it can run (Meitou's steps do not end on their own).
-- Finders: the spots, beds, seats, turrets and towns the act-outs already pick, at the floor point the walk ends on (`PlanContext.Find`); other finders find nothing,
+- Finders: the spots, beds, seats, turrets, towns and (rows 113 / 114 / 242) the ditch storage ([ditching](game/ai-tasks.md#ditching)) the act-outs already pick, at the floor point the walk ends on (`PlanContext.Find`); other finders find nothing,
   so such goals do not plan. Rows on the way have their `TaskProfiles` desire, else 1. The exception is DEFEAT_SQUAD 101, whose plan is the goal alone: the finder's
   pick (`AiSystem.AssaultTargetFor`, [ai-tasks](game/ai-tasks.md#combat-goals)) is sent as an `AttackOrder` by the serial step and the combat system fights it.
   SELF_PRESERVATION 32 is the other exception: its plan is `[35, 32]` when `SelfPreservation.Runs` (a crippled NPC, or one with no working arm, under a threat), else `[13, 32]` on its own attacker (row 13 on itself, `AiSystem.SelfDefencePick`, started as the combat goals' fights below), else none;
-  35 is acted out by `FleeSystem` on the AI's request ([ai-tasks](game/ai-tasks.md#combat-goals)). State 26 stays false.
+  35 is acted out by `FleeSystem` on the AI's request ([ai-tasks](game/ai-tasks.md#combat-goals)). State 26 is wired (staying low, playing dead, in a bed; not crippled).
 - States (`PlanContext.Holds`): location, distance, bed, sitting, home (within 20 of the home), home town, town, weapon drawn, weapon carried
   (`hasWeapon`), carrying, a first aid kit carried (23), the immediate threat (39, `CombatSystem.ImmediateThreat`), deep water (139), a leg down that could be fixed (103, `MedicalState.LegsMessedUp`), inside the home building (107, `AI::iAmInsideTargetBuilding` for a non-building target) and strangers in a private home (141, so a resident does not
   go to bed with one inside; [stranger states](game/ai-tasks.md#stranger-states)) are evaluated; moving, getting up, arms, power, buildings, doors, gates, accessibility, machine operator slots and readiness are
@@ -1727,10 +1743,14 @@ start (a dialogue's, an assault's, a duty's), with 32 alone (`Preempts`; in a fi
 (`AiMind.Replan`, engine stand-ins): a sighting of the look (the looker and its mates within 2 R), a new enemy sensed by a fighter in its own fight, an alert (the attacked NPC with its fight
 off, the squad mates of the attacker and the attacked), a mate's fight start and the end of its own fight (`CombatSystem.EndFight`); else
 the 15-tick cadence. A new enemy is acted on one tick after the look that sensed it (look at T, think at T+1, fight from T+2); so is an attack (alert at T, the attacker a threat at once). Any
-other character the AI does not hold (fleeing, carried) starts no fight. The members of a squad the AI does not run (a roaming platoon's active half, a campaign's loaded squad, a template without packages)
+other character the AI does not hold (fleeing, carried) starts no fight. The members of a squad whose movement the population owns (a loaded roaming platoon or campaign platoon, see "Platoon blackboards" below) or that the AI does not run (a template without packages)
 get an engine-run mind (`AiMind.Engine`, `AiSystem.EngineMinds`): the combat goals of their package for their role and of their race, and Self preservation, weighed on their routine and
 in their own fights; nothing else is acted out ([combat goals](game/ai-tasks.md#combat-goals)). An NPC without a mind (no squad, or between a dropped mind and the next package cadence) only
 fights back, by the engine's answer (`RetaliationSystem`, at any distance; engine choice).
+
+**Platoon blackboards** (**Verified**: every loaded platoon is visited by the faction slow step, whose Platoon slot 27 runs the blackboard `FUN_1402732b0` with the slot walk `FUN_140272570` and the war-manager check; wild, town-own, roaming, campaign and traveller platoons alike). `AiSystem.Runs` admits every loaded non-player squad whose template lists packages, so a roaming or campaign platoon's squad has a `Blackboard` (package choice on the package cadence, in-town tracking, saved `currentPackage` / contract / replacement applied through `Attach`); it claims no building of its own (`PlatoonOf`). Who moves the squad: if the running package travels (a `Travel` goal while a mission town, destination or refugee target is set: the trader, refugee, shipping and retreat classes, `AiSystem.BoardMoves`) its members get full minds and `PopulationRoaming.StepLoaded` issues no trip order (the trip starts afresh once the package gives way; at unload the stand-in's target is the package's mission town); otherwise the population's trip or campaign march moves it and the members keep the engine's routine. Engine choice: the other packages' goals (patrol routes, home, bar, work) are not acted out for platoon squads. A platoon leaving the loaded box (`ZoneActivation.InLoadedBox`) is released after the grace period, and the blackboard goes with the squad (its saved state to `stored.Ai`).
+
+**Campaign phase package** (**Verified**, `FUN_140272570`, `FUN_140272240`, `FUN_14026a110`): on each visit a loaded campaign platoon whose war-manager record gives a package (pt1, pt2 or retreat; the leader platoon's `... leader`, the others' `... others` falling back to it, `CampaignData.PackageOf`) holds that package as the blackboard's override when it has none or another, for 24 game hours (`AiSystem.InstallPhasePackage` = `Blackboard.StartContract`, saved as `contractjob` / `jobhr`); when the 24 h run out the override ends, the template slots choose on that visit and the same package is installed afresh on the next. `PopulationCampaigns.StepCampaignLoaded` still orders the march; the war classes 19 / 20 / 32 (own start and finish tests, out of the campaign) are not built, so only the timed behaviour of the override is modelled. The campaign sets the squad's war targets, so `StepPackage` skips a campaign squad.
 
 Scoring follows the original (`TaskProfiles`: desire, commitment, crowding per goal type); a desire
 the original computes in a function of its own counts as 1. A committed goal holds only within its hours
@@ -1761,8 +1781,7 @@ A gate's residents are made at the gate guard's spot (engine choice), not the ga
 Defensive Gates is inside the wall about 110 along it from the opening; headless (no door gate, no leaf) they
 are made at the origin and keep that post. Seats are the home's
 interior furniture with a CHAIR functionality (`HomeSpotKind.Chair`; never a standing node), free
-in that building this pass; relaxing falls back to a bar node, then a general node, staying home without one stands at home (engine choice: the original's
-43 operates home furniture, chairs among it, [ai-tasks](game/ai-tasks.md#town-goals); a given-up seat is tried again when the goal is renewed). Sitting around (275)
+in that building this pass; relaxing falls back to a bar node, then a general node; staying home (43) draws a free chair, training dummy or work piece (mine, research, refinery, crafting) of the home and is not wanted without one ([ai-tasks](game/ai-tasks.md#town-goals); a given-up seat is tried again when the goal is renewed). Sitting around (275)
 claims on its own (`Blackboard.SitClaims`, `AiSystem.ClaimSitting`): the nearest free chair, throne (BF_THRONE, `HomeSpotKind.ThroneSeat`, sat on like a chair) or, for a character not on the
 player's side, training dummy (BF_TRAINING, `HomeSpotKind.Training`, stood at) in a building of the town it stands in, when that is its squad's home town or owned by the squad's faction and the
 building is owned by the character's faction or the squad's; the throne and dummy pieces, and free-standing chairs, are `TownBuilding.Furniture`. It is not wanted
@@ -1891,7 +1910,7 @@ order. Renderer state lives in Rendering; snapshots are the simulation-to-host b
 rechecks the sale flag, town kind, owner and its hostility, the quoted price and the money, then takes the money once.
 Sellable: function 19, or no function and interior meshes; no walls, gates or `is inside building` (the original's class and
 parent tests are not fully decoded). Ruined houses register without fixtures. The bought house's doors, own lock and
-indoor build permission become the player's, NPC lock rounds on it stop, and it turns private. As the original's purchase
+indoor build permission become the player's, every door is opened (`FUN_140297040`, **Verified**), NPC lock rounds on it stop, and it turns private. As the original's purchase
 ([what it does](game/ui-screens.md#selected-building)) the house is emptied: its interior layout's fixtures (cages, containers with
 their contents, beds, dummies) and seats go, occupants let out first; its loose-item slots go with the items lying in them; the
 renderer, navmesh and lamps lay it out without its interior layout (`BuildingPlacement.WithoutInterior`: `FixtureRegistry.PublishedEmptied`,

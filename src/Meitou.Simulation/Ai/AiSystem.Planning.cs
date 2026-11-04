@@ -9,7 +9,7 @@ public sealed partial class AiSystem
     /// <summary>Kinds of <see cref="PlanTarget"/> the finders give.</summary>
     static class Targets
     {
-        public const byte Spot = 1, Bed = 2, Seat = 3, Turret = 4, Town = 5, Work = 6, Machine = 7;
+        public const byte Spot = 1, Bed = 2, Seat = 3, Turret = 4, Town = 5, Work = 6, Machine = 7, Store = 8;
     }
 
     /// <summary>How near a home's position counts as at home (units; engine stand-in for the original's inside-the-building test).</summary>
@@ -23,7 +23,7 @@ public sealed partial class AiSystem
     /// </summary>
     static bool Carried(TaskType step) => step is TaskType.MOVE_ON_FREE_WILL or TaskType.MOVE_ON_FREE_WILL_FAST or TaskType.TRAVEL_TO_TARGET_TOWN
         or TaskType.TRAVEL_TO_TARGET_TOWN_FAST or TaskType.STAND_AT_NODE or TaskType.BUY_SHIT
-        or TaskType.USE_BED or TaskType.USE_BED_ORDER or TaskType.USE_TURRET or TaskType.OPERATE_MACHINERY or TaskType.PRETEND_TO_OPERATE_MACHINERY or TaskType.UNEQUIP_WEAPON
+        or TaskType.USE_BED or TaskType.USE_BED_ORDER or TaskType.USE_TURRET or TaskType.OPERATE_MACHINERY or TaskType.COLLECT_OUTPUT_RESOURCE or TaskType.FILL_MACHINE or TaskType.PRETEND_TO_OPERATE_MACHINERY or TaskType.UNEQUIP_WEAPON
         or TaskType.GET_OUT_OF_BED or TaskType.GET_OUT_OF_BED_IF_ITS_EMERGENCY or TaskType.GET_OUT_OF_BED_ONCE_HEALED
         or TaskType.EQUIP_WEAPON or TaskType.EQUIP_CROSSBOW or TaskType.GO_HOMEBUILDING or TaskType.GET_NEAR_TO
         or TaskType.ENTER_BUILDING or TaskType.LEAVE_BUILDING;
@@ -76,8 +76,8 @@ public sealed partial class AiSystem
             // The assault is its own plan (engine choice): its finder's target is not a plan target, the combat system draws weapons and closes in, and its only list B entry (!47,
             // not carrying) is what Holds already requires of a character the AI runs.
             // So are the combat goals (engine choice): the desire already holds the finder's pick (and for the protect goals row 13's attacker), and the fight is the combat system's.
-            // And the Medic goal: its desire holds the patient finder's score, and the treatment is the first aid system's.
-            if (type == TaskType.DEFEAT_SQUAD || TaskBehaviours.Of(type) is AiBehaviour.Fight or AiBehaviour.Medic)
+            // And the Medic goal: its desire holds the patient finder's score, and the treatment is the first aid system's. And the leader rescue (142: its finder and its done state, the leader down, are the desire's; the lift is the carry system's).
+            if (TaskBehaviours.Of(type) is AiBehaviour.Assault or AiBehaviour.Fight or AiBehaviour.Medic or AiBehaviour.RescueLeader)
             {
                 mind.Plan.Clear();
                 mind.Plan.Add(new PlanStep(type, default));
@@ -88,7 +88,7 @@ public sealed partial class AiSystem
             if (type == TaskType.SELF_PRESERVATION)
             {
                 if (world.Characters.Cold(slot) is not { } me) return false;
-                bool runs = SelfPreservation.Runs(me, desire);
+                bool runs = SelfPreservation.Runs(me, desire, SelfPreservation.Walled(world, slot));
                 if (!runs && system.SelfDefencePick(world, slot).IsNone) return false;
                 mind.Plan.Clear();
                 mind.Plan.Add(new PlanStep(runs ? TaskType.RUN_AWAY : TaskType.ATTACK_ATTACKERS_OF, default));
@@ -113,6 +113,7 @@ public sealed partial class AiSystem
 
         public float Desire(TaskDataRow row, in PlanTarget target)
         {
+            if (row.Type == TaskType.USE_BED) return system.SleepingDesire(world, board, slot);   // row 98: AI slot 30 (FUN_1405a0880); 0 drops the node
             float d = TaskProfiles.Of(row.Type).Desire;
             return d >= 0 ? d : 1;   // a random or own desire function counts as 1 on the way
         }
@@ -122,8 +123,9 @@ public sealed partial class AiSystem
         bool At(in PlanTarget t)
         {
             if (t.IsNone) return true;
+            if (world.Characters.Cold(slot)?.Ai?.ArrivedAt is { } arrived && Flat(t.Position) == arrived) return true;   // its walk there ended on its own (isAtLocation)
             var p = Me.Position;
-            float slack = t.Kind == Targets.Turret ? TurretSlack : t.Kind == Targets.Work ? WorkReach : system.Settings.PostSlack;
+            float slack = t.Kind == Targets.Store ? StoreSlack : t.Kind == Targets.Turret ? TurretSlack : t.Kind == Targets.Work ? WorkReach : system.Settings.PostSlack;
             if (Vector2.DistanceSquared(Flat(p), Flat(t.Position)) > slack * slack) return false;
             // A spot on a floor counts on that floor only (NaN: no floor).
             return float.IsNaN(t.Position.Y) || MathF.Abs(p.Y - t.Position.Y) <= FloorSlack;
@@ -135,11 +137,13 @@ public sealed partial class AiSystem
         /// </summary>
         Meitou.Simulation.Production.Machine? MachineAt(in PlanTarget t)
         {
-            if (t.Kind != Targets.Machine) return null;
+            if (t.Kind is not (Targets.Machine or Targets.Work)) return null;
             foreach (var m in world.Machines.All)
-                if (m.Position.X == t.Position.X && m.Position.Z == t.Position.Z) return m;
+                if (m.Position.X == t.Position.X && m.Position.Z == t.Position.Z && (t.Kind == Targets.Machine || Production.ProductionSystem.IsTownWork(m.Site))) return m;
             return null;
         }
+
+        IEnumerable<Meitou.Data.World.TownBuilding> Workplaces() => board.Town >= 0 ? system.Places(board.Town).Workplaces : [];
 
         float Distance(in PlanTarget t) => t.IsNone ? 0 : Vector2.Distance(Flat(Me.Position), Flat(t.Position));
 
@@ -163,6 +167,12 @@ public sealed partial class AiSystem
                 StateType.machineHasEmptyInputs => MachineAt(target)?.HasEmptyInputs == true,
                 StateType.isMachineOutputFull => MachineAt(target)?.OutputBlocked == true,
                 StateType.isMachineJammed => MachineAt(target)?.Jammed == true,
+                // 82 of a machine target (FUN_14059bd80): room in the inventory or the worn backpack for a unit of its output item.
+                StateType.gotInventoryRoomForResources => MachineAt(target) is { Output: { } room } && cold.Inventory is { } bag && system.Data.Items.Create(room.Recipe.Item, 1) is { } unit && bag.HasRoomFor(unit),
+                // 67 for the ditch target (a storage the finder found takes a carried item, FUN_1405a59a0): the character still carries something the collection lists.
+                // For a machine target (row 93 at a town machine) it carries an item an input takes (FUN_1405a45f0); 66 (FUN_140597530): it carries the machine's output item.
+                StateType.haveSomeResourcesFor => target.Kind == Targets.Store && cold.Inventory is { } carried ? Production.ProductionSystem.Ditchable(carried).Any() : MachineAt(target) is { } fillable && Production.ProductionSystem.CarriesInputOf(cold, fillable),
+                StateType.haveSomeResourcesFrom => MachineAt(target) is { } emptiable && Production.ProductionSystem.CarriesOutputOf(cold, emptiable),
                 // 5: a weapon in hand that is not ranged; 156: a ranged one (FUN_140596a30 / FUN_140596a70, Verified); 157's evaluator is an undecoded stub.
                 StateType.hasWeaponEquipped => cold.DrawnWeapon != WeaponKinds.None && cold.DrawnWeapon != BowHold,
                 StateType.hasWeaponEquipped_156 => cold.DrawnWeapon == BowHold,
@@ -191,17 +201,21 @@ public sealed partial class AiSystem
                 StateType.atATown => system.TownAt(Me.Position) >= 0,
                 // Any alarm of its town in reach (goal 210's own-faction filter is its desire's).
                 StateType.ALARMS_IN_THE_VICINITY => system.AlarmOf(world, slot, TaskType.INVESTIGATE_ALARMS, board) is not null,
-                StateType.isLeaderDown => mind.Squad.Leader.IsNone || !world.Characters.IsAlive(mind.Squad.Leader),
+                StateType.isLeaderDown => SquadIntact.Down(world.Characters, mind.Squad.Leader) || world.Characters.TryResolveNext(mind.Squad.Leader, out int lead) && world.Characters.Cold(lead) is { Medical.Crawling: true },   // FUN_140997c70: no leader, dead, down or crippled
                 // 72 (FUN_1405a0610, Observed): never for a character not of the player's faction, so an NPC's sleep rows (98, 100, 175, 261)
                 // are never done; for the player's a medical float above 0.9 (MedicalSystem +0xb0, meaning Unknown), here "not incapacitated".
                 StateType.isFullyRested => playerSide && cold.Medical is not { Incapacitated: true },
                 StateType.hasOneWorkingArm => cold.Medical is not { } arms || arms.ArmWorks(left: true) || arms.ArmWorks(left: false),
+                // 80 (evaluator 1405c7930, Verified): the medical left-arm byte +0x166; the lift rows 213, 240, 225, 246, 68 and 170 need it. States 7 and 48 are not wired: no goal reaches those rows.
+                StateType.isCarryingArmOK => cold.Medical is not { } carrier || Carrying.CarrySystem.LeftArmUsable(carrier),
                 StateType.hasTwoWorkingArm => cold.Medical is not { } arms2 || arms2.BothArmsWork,
                 // The turret goals' done test (149, 222, 234: list A "6*"): no enemy near, so guards man the turrets only while enemies come (docs/simulation.md "AI", turrets).
                 StateType.isNoEnemiesInVicinity => !EnemyNear(cold),
-                // (26, crouching or lying, stays false: standing up first is not modelled, SelfPreservation.Runs.)
-                // 141 (FUN_14060e640): the building to sleep in is private and a stranger stands in the home. 108 (no public test) is left to the lock-up round's own test.
+                // 26 IS_CROUCHING_OR_LYING (FUN_140599e90): false when crippled (a crawler: the flag is set with posture 2), else true staying low, playing dead or in a bed; the two unidentified flag reads are not modelled.
+                StateType.IS_CROUCHING_OR_LYING => CharacterFacts.CrouchingOrLying(cold),
+                // 141 (FUN_14060e640): the building to sleep in is private and a stranger stands in the home. 108 (FUN_14060e5e0): the same finder without the public test.
                 StateType.strangers_in_house_P => system.StrangersInHouseP(world, board, slot),
+                StateType.strangers_in_house => system.StrangersInHouse(world, board, slot),
                 // Held true: moving, standing up, power and buildings; doors are the movement's and the lock-up round's (docs/simulation.md "Planner").
                 StateType.isMovementAllowed or StateType.canGetUp or StateType.isBuildingComplete
                     or StateType.BUILDING_HAS_POWER or StateType.machineHasFreeOperatorSlot or StateType.isReadyForAction
@@ -248,10 +262,11 @@ public sealed partial class AiSystem
             switch (type)
             {
                 case TaskType.STAND_AT_SHOPKEEPER_NODE or TaskType.STAND_AT_GUARD_NODE_HOMEBUILDING or TaskType.STAND_AT_GUARD_NODE_HOMEBUILDING_INDOORS_ONLY
-                    or TaskType.STAND_AT_GUARD_NODE_HOMETOWN_OUTSIDE or TaskType.STAND_AT_GENERAL_NODE or TaskType.STAY_IN_HOME or TaskType.SIT_ON_THRONE
+                    or TaskType.STAND_AT_GUARD_NODE_HOMETOWN_OUTSIDE or TaskType.STAND_AT_GENERAL_NODE or TaskType.STAY_IN_HOME
                     or TaskType.HOLD_POSITION or TaskType.MAN_THE_GATE:
                     // Staying home on its claimed chair, else at home.
                     if (type == TaskType.STAY_IN_HOME && board.SeatClaims.TryGetValue(slot, out var chair) && !mind.SeatUnreachable) return new PlanTarget(Targets.Seat, chair.Position);
+                    if (system.NodeGoalFindsNothing(mind, board, type)) return default;
                     return Spot(Targets.Spot, system.SpotFor(mind, board, AiBehaviour.Post, type));
                 case TaskType.GO_HOME_AND_GO_TO_BED or TaskType.GO_HOME_AND_GO_TO_BED_SECURE:
                     // A character in a bed keeps it (the bed search FUN_1408cfe00, docs/game/locks.md "Bed search"): the target is where it lies.
@@ -269,15 +284,24 @@ public sealed partial class AiSystem
                     if (at is not { } p) return default;
                     return new PlanTarget(type == TaskType.WANDERER ? Targets.Town : Targets.Spot, type == TaskType.WANDERER ? p with { Y = float.NaN } : p);
                 }
-                case TaskType.SIT_AROUND:
+                case TaskType.SIT_AROUND or TaskType.SIT_ON_THRONE:   // Reigning sits on a throne furniture, no target without one (FUN_1408cbd50)
                     return board.SitClaims.TryGetValue(slot, out var sit) && !mind.SeatUnreachable ? new PlanTarget(Targets.Seat, sit.Spot.Position) : default;
                 case TaskType.RELAX_IN_TOWN_PACKAGE:
                     return board.SeatClaims.TryGetValue(slot, out var seat) && !mind.SeatUnreachable ? new PlanTarget(Targets.Seat, seat.Position) : default;
                 case TaskType.AUTO_LABOURING_MINES or TaskType.AUTO_LABOURING_MINES_PRETEND:
                     // The building it works at: the one it walks to now, else the pick it will make (the same roll, AiMind.WorkEpoch).
                     if (mind.Behaviour == AiBehaviour.Work && mind.Goal?.Task.Type == type && mind.Target is { } current) return new PlanTarget(Targets.Work, current);
-                    return system.PickWork(world, world.Characters.IdOf(slot), board.Town, mind.WorkEpoch + (mind.WorkActive ? 1 : 0)) is { } work
+                    if (mind.Goal?.Task.Type == type && mind.WorkPost is { } held) return new PlanTarget(Targets.Work, new Vector3(held.Position.X, float.NaN, held.Position.Z));
+                    return system.PickWork(world, world.Characters.IdOf(slot), board.Town, mind.WorkEpoch + (mind.WorkActive ? 1 : 0), type) is { } work
                         ? new PlanTarget(Targets.Work, new Vector3(work.Position.X, float.NaN, work.Position.Z)) : default;
+                case TaskType.GET_RID_OF_RESOURCES_IN_MY_INVENTORY or TaskType.EMPTY_MACHINE_OUTPUTS or TaskType.DITCH_ALL_RESOURCES:
+                    // Rows 114, 113 and 242 share the finder FUN_1405a59a0: the nearest storage taking a carried item (TownDutySystem.DitchStore, a read-only look here).
+                    return world.SystemOf<Kidnap.TownDutySystem>() is { } duties && world.Characters.Cold(slot) is { } carrier
+                        && duties.DitchStore(world, mind.Squad, carrier, Me.Position, register: false) is var (_, spot) ? new PlanTarget(Targets.Store, new Vector3(spot.X, float.NaN, spot.Y)) : default;
+                case TaskType.WANT_TO_FILL_MACHINE:
+                    // Row 94 (FUN_14059d9b0): the machine whose output holds what the target machine's inputs need (the town's workplaces here).
+                    return MachineAt(from) is { } wanting && Production.ProductionSystem.InputSource(world, wanting, Workplaces(), Me.Position) is { } source
+                        ? new PlanTarget(Targets.Work, new Vector3(source.Position.X, float.NaN, source.Position.Z)) : default;
                 case TaskType.MAN_A_TURRET or TaskType.MAN_A_TURRET_ON_BUILDING or TaskType.MAN_A_TURRET_PLAYER_JOB or TaskType.USE_TURRET:
                     return board.TurretClaims.TryGetValue(slot, out int t) && (uint)t < (uint)board.Turrets.Count && board.Turrets[t].Turret is { } turret
                         ? new PlanTarget(Targets.Turret, TurretSpot(world, turret)) : default;

@@ -354,10 +354,11 @@ public sealed partial class CombatSystem
         var at = prev[g].Position;
         float range = t.Gun.Gun.Range;
         int current = t.Target >= 0 && t.Target < prev.Length && prev[t.Target].Alive && prev[t.Target].Generation == t.TargetGeneration ? t.Target : -1;
-        // Shoot At: the ordered target is kept while it lives and is free (out of range or blocked, the turret waits).
+        // Shoot At (FUN_140437f40, Verified): the ordered target is kept while it lives, is free, is not down and the gunner does not regard it as friendly; otherwise the order is dropped and the gunner chooses as it always does (row 235 list A state 7, which counts a crawler; out of range or blocked, the turret waits).
         if (!gc.TurretTarget.IsNone)
         {
-            if (table.TryResolveNext(gc.TurretTarget, out int ordered) && prev[ordered].Alive && !ScoresZero(world, gc, table.Cold(ordered))) return ordered;
+            var talk = world.SystemOf<Dialogue.DialogueSystem>();
+            if (table.TryResolveNext(gc.TurretTarget, out int ordered) && prev[ordered].Alive && !ScoresZero(world, gc, table.Cold(ordered)) && !CharacterFacts.TargetDown(table.Cold(ordered)) && (talk is null || !talk.RegardsFriendly(world, g, ordered))) return ordered;   // row 235 ends on state 7 (isTargetDown: crawling too)
             gc.TurretTarget = CharacterId.None;
         }
         var found = turretCandidates ??= [];
@@ -386,6 +387,15 @@ public sealed partial class CombatSystem
             return s;
         }
 
+        // Shoot At (FUN_140437f40, Verified): the ordered target is kept while it scores above 0 (closeness x arc: in range and not blocked) and the gunner does not regard it as friendly;
+        // otherwise the order is dropped and the gunner chooses as it always does. A target out of range still scores 0.001 (kept, never fired at); one blocked (inside elsewhere) scores 0.
+        if (!gc.TurretTarget.IsNone)
+        {
+            var talk = world.SystemOf<Dialogue.DialogueSystem>();
+            if (table.TryResolveNext(gc.TurretTarget, out int ordered) && prev[ordered].Alive && Score(ordered, TurretFormulas.FullRange) > 0
+                && (talk is null || !talk.RegardsFriendly(world, g, ordered))) return ordered;
+            gc.TurretTarget = CharacterId.None;
+        }
         // The current target is dropped when it no longer scores.
         if (current >= 0 && Score(current, TurretFormulas.FullRange) <= 0) current = -1;
         int best = -1;

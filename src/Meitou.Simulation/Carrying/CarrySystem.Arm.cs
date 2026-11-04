@@ -74,6 +74,7 @@ public sealed partial class CarrySystem
         var at = new Vector2(next[slot].Position.X, next[slot].Position.Z);
         float range2 = FindWeaponRange * FindWeaponRange;
         bool inTown = !Ai.AiSystem.TownAt(data, world, next[slot].Position).IsNone;
+        var sight = world.Sight;
         int item = -1;
         float best = range2;
         foreach (var g in world.GroundItems.All)
@@ -81,7 +82,9 @@ public sealed partial class CarrySystem
             if (g.Item.Type != FcsRecordType.WEAPON || g.Slot is not null || claimed.Contains(g.Id)) continue;
             float d2 = Vector2.DistanceSquared(at, new Vector2(g.Position.X, g.Position.Z));
             if (d2 > best) continue;
-            if (inTown && g.OwnedBy >= 0 && !(data.Relations.Contains(cold.Faction) && AggroSystem.IsEnemy(data.Relations, cold.Faction, g.OwnedBy))) continue;
+            // In a town it must lie where the character is (inside the same building, or both outdoors), and be nobody's or an enemy's (FUN_14099b1d0).
+            if (inTown && (sight.PlaceAt(g.Position) != sight.PlaceOf(slot)
+                || g.OwnedBy >= 0 && !(data.Relations.Contains(cold.Faction) && AggroSystem.IsEnemy(data.Relations, cold.Faction, g.OwnedBy)))) continue;
             (item, best) = (g.Id, d2);
         }
         if (item >= 0) return (item, -1);

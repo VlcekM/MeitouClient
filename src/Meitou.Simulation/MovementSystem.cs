@@ -29,7 +29,7 @@ namespace Meitou.Simulation;
 /// onto a heading that eases toward the leader's, one second ahead of the leader; anyone else keeps a drawn 20..40 from its target. Its speed is the original's desired speed
 /// (<see cref="FollowSpeedFor"/>), capped by its top speed only (engine choice: the original's cap by speed mode is Unknown, and only this lets it settle in its slot). Within
 /// <see cref="DirectDistance"/> it steers straight at the aim, else it takes paths, and for <see cref="FollowPathSeconds"/> after a blocked step (engine choice). Not done: the
-/// original's aim outside a building the follower cannot enter, and its 50-100 hysteresis (practically nil).</item>
+/// original's aim outside a building the follower cannot enter.</item>
 /// <item>Turning: a walker out of combat faces the way it moves while its velocity follows the agent's acceleration (the original's model, Verified); its drawn
 /// body turns after the facing at a limited rate (<see cref="AnimationSystem.FollowFacing"/>). Fighters and direct followers keep the heading limit <see cref="TurnRate"/>
 /// and the cosine cut (engine choice).</item>
@@ -599,7 +599,7 @@ public sealed class MovementSystem(PathService paths) : ITickSystem, IDisposable
         var next = table.Next;
         for (int i = part.Start; i < part.End; i++)
         {
-            if (!prev[i].Alive || !world.Steps(i)) continue;
+            if (!prev[i].Alive || prev[i].Dormant || !world.Steps(i)) continue;
             float dt = world.StepSeconds(i);   // a far character's step covers the ticks since its last (the far cadence, World.StepTicks)
             ref var n = ref next[i];
             var task = (CharacterTask)n.Task;
@@ -617,7 +617,7 @@ public sealed class MovementSystem(PathService paths) : ITickSystem, IDisposable
                     continue;
                 }
                 var squad = cold.SquadId >= 0 ? world.Squads.Find(cold.SquadId) : null;
-                var leader = Followed(squad, cold);
+                var leader = Followed(world, squad, cold);
                 if (leader.IsNone || leader.Slot == i || !table.IsAlive(leader))
                 {
                     TaskStart.Step(table, i, CharacterTask.Wander);
@@ -660,14 +660,15 @@ public sealed class MovementSystem(PathService paths) : ITickSystem, IDisposable
                 bool otherFloor = !shutOut && climb > FloorSlack && MathF.Abs(world.Walkability.GroundHeight(leadAt.X, leadAt.Y, n.Position.Y) - lead.Position.Y) > FloorSlack;
                 if (otherFloor) slotPos = leadAt;
                 float away = Vector2.Distance(here, slotPos) + (otherFloor ? climb : 0);
-                cold.FollowSpeed = FollowSpeedFor(away, moving, leadDir, new Vector2(MathF.Sin(prev[i].Yaw), MathF.Cos(prev[i].Yaw)));
+                // The catch-up factor reads the two movement vectors (+0xd0 / +0xd8 normalised), not the facings (FUN_14033b350, Verified).
+                cold.FollowSpeed = FollowSpeedFor(away, moving, Direction(lead.Velocity), Direction(prev[i].Velocity));
                 n.Mode = lead.Mode;
-                // Task_Follow sets the follower's sneaking each update (FUN_14033b350, Verified): on while the leader sneaks out of a fight and the follower counts it an ally (here:
-                // the same faction, as squad mates are), off otherwise; dropping it also stands it up. A leader that follows someone itself may change its own flag in this same
+                // Task_Follow sets the follower's sneaking each update (FUN_14033b350, Verified): on while the leader sneaks out of a fight and the follower regards it as friendly (vfunc 0x3f0; here:
+                // the same faction or an allied one, as Carry.Friendly reads it), off otherwise; dropping it also stands it up. A leader that follows someone itself may change its own flag in this same
                 // parallel pass, so its followers are left as they are (engine choice, keeps the step deterministic).
                 if (lead.Task != (byte)CharacterTask.Follow && table.Cold(leader.Slot) is { } leaderCold)
                 {
-                    bool sneak = (leaderCold.Orders & CharacterOrders.Sneak) != 0 && !leaderCold.InCombat && leaderCold.Faction == cold.Faction;
+                    bool sneak = (leaderCold.Orders & CharacterOrders.Sneak) != 0 && !leaderCold.InCombat && (leaderCold.Faction == cold.Faction || Fights?.Relations is { } rel && rel.Contains(cold.Faction) && rel.Contains(leaderCold.Faction) && rel.IsAlly(cold.Faction, leaderCold.Faction));
                     if (sneak) cold.Orders |= CharacterOrders.Sneak;
                     else if ((cold.Orders & CharacterOrders.Sneak) != 0)
                     {
@@ -677,7 +678,8 @@ public sealed class MovementSystem(PathService paths) : ITickSystem, IDisposable
                 }
                 n.TaskTime -= dt;
                 if (cold.FollowPathTime > 0) cold.FollowPathTime = MathF.Max(cold.FollowPathTime - dt, 0);
-                if (away < DirectDistance && !otherFloor && cold.FollowPathTime <= 0)
+                bool direct = FollowDirect(cold, away, n.Position, new Vector2(prev[i].Velocity.X, prev[i].Velocity.Z).Length());
+                if (direct && !otherFloor && cold.FollowPathTime <= 0)
                 {
                     // Near its aim: Move steers it straight there (a path it had is dropped).
                     n.Goal = slotPos;
@@ -715,9 +717,36 @@ public sealed class MovementSystem(PathService paths) : ITickSystem, IDisposable
         }
     }
 
-    /// <summary>Whom a follower keeps its slot by: the target of its <see cref="FollowOrder"/>, a contract's mission target (Ai.AiMind.FollowTarget), else its squad's leader.</summary>
-    static CharacterId Followed(Squad? squad, CharacterCold cold) =>
-        !cold.FollowOrder.IsNone ? cold.FollowOrder : cold.Ai is { FollowTarget.IsNone: false } follows ? follows.FollowTarget : squad?.Leader ?? CharacterId.None;
+    /// <summary>
+    /// Whom a follower keeps its slot by: the target of its <see cref="FollowOrder"/>, a contract's mission target (Ai.AiMind.FollowTarget), its owner (a slave's: Task_FollowLeader, the owner first, <c>FUN_14033b160</c>;
+    /// Meitou's owner is the leader of the master squad, <see cref="Kidnap.ObedientSlave.OwnerOf"/>), else its squad's leader.
+    /// </summary>
+    static CharacterId Followed(World world, Squad? squad, CharacterCold cold) =>
+        !cold.FollowOrder.IsNone ? cold.FollowOrder : cold.Ai is { FollowTarget.IsNone: false } follows ? follows.FollowTarget
+        : Kidnap.ObedientSlave.OwnerOf(world, cold) is { } owner ? owner : squad?.Leader ?? CharacterId.None;
+
+    /// <summary>A velocity's horizontal unit direction (zero stays zero, as Ogre's normalise leaves it).</summary>
+    static Vector2 Direction(Vector3 velocity)
+    {
+        var flat = new Vector2(velocity.X, velocity.Z);
+        return flat.LengthSquared() > 0 ? Vector2.Normalize(flat) : Vector2.Zero;
+    }
+
+    /// <summary>The squared distance within which a follower steers straight at its aim (the original's 50), and beyond which it always takes paths (100).</summary>
+    const float DirectNear2 = DirectDistance * DirectDistance, DirectFar2 = 100 * 100;
+
+    /// <summary>
+    /// Whether a follower steers straight at its aim (<c>Task_Follow</c> flag <c>+0xac</c>, FUN_14033b350, <b>Verified</b>): set within 50; between 50 and 100 it stays set only while the distance
+    /// it moved since the last update exceeds its speed squared (else it drops and paths); cleared beyond 100. The distance moved is kept for the next update.
+    /// </summary>
+    static bool FollowDirect(CharacterCold cold, float away, Vector3 position, float speed)
+    {
+        float d2 = away * away;
+        if (d2 < DirectNear2) cold.FollowDirect = true;
+        else if (cold.FollowDirect && (d2 >= DirectFar2 || Vector3.Distance(position, cold.FollowLast) <= speed * speed)) cold.FollowDirect = false;
+        cold.FollowLast = position;
+        return cold.FollowDirect;
+    }
 
     /// <summary>How far a follower that is not its target's squad mate keeps from it: 20..40, drawn per follower and target (the original draws it when the follow task is made).</summary>
     static float PlainDistance(ulong seed, CharacterId self, CharacterId target) =>
@@ -836,7 +865,7 @@ public sealed class MovementSystem(PathService paths) : ITickSystem, IDisposable
         var walk = world.Walkability;
         for (int i = part.Start; i < part.End; i++)
         {
-            if (!prev[i].Alive || !world.Steps(i)) continue;
+            if (!prev[i].Alive || prev[i].Dormant || !world.Steps(i)) continue;
             float dt = world.StepSeconds(i);   // a far character's step covers the ticks since its last (the far cadence, World.StepTicks)
             ref readonly var p = ref prev[i];
             ref var n = ref next[i];
@@ -883,7 +912,9 @@ public sealed class MovementSystem(PathService paths) : ITickSystem, IDisposable
             }
             // An order move on Hold makes its destination the hold point on every step (Task_Move update FUN_140354600, Verified): a queued move as it starts, and over
             // the position Hold was turned on at mid-walk.
-            if (n.Task == (byte)CharacterTask.GoTo && cold.OrderMove && Orders.Holding(cold)) cold.HoldPoint = n.Goal;
+            if (n.Task == (byte)CharacterTask.GoTo && cold.OrderMove && Orders.Holding(cold)) cold.HoldPoint = new Vector3(n.Goal.X, n.Position.Y, n.Goal.Y);
+            // Every player order sets the centre of movement to its point (Character::addOrder -> AI::setCenterOfMovement); it matters only while the mode is not ROAM_FAR.
+            if (n.Task == (byte)CharacterTask.GoTo && cold.OrderMove && cold.Manoeuvre != ManoeuvreMode.RoamFar) cold.CentreOfMovement = new Vector3(n.Goal.X, n.Position.Y, n.Goal.Y);
             float speed = MathF.Sqrt(p.Velocity.X * p.Velocity.X + p.Velocity.Z * p.Velocity.Z);
             var dir = Vector2.Zero;
             bool facing = false, agentWalk = false;
@@ -1132,7 +1163,7 @@ public sealed class MovementSystem(PathService paths) : ITickSystem, IDisposable
     /// seabed, while here a character on the water keeps the navmesh's flat water surface for its height, so the depth is taken from the terrain below while it is at the surface
     /// (<see cref="Speed.WaterSlack"/> over the water level; a deck or floor higher up counts as dry). The race's size scale is taken as 1 (what humans have, <b>Observed</b>).
     /// </summary>
-    static int WaterStateAt(IWalkability walk, Vector3 at, CharacterCold cold)
+    internal static int WaterStateAt(IWalkability walk, Vector3 at, CharacterCold cold)
     {
         if (cold.Race is not { } race || !cold.CarriedBy.IsNone) return 0;
         float standY = at.Y <= WorldWater.Height + Speed.WaterSlack ? MathF.Min(at.Y, walk.TerrainHeight(at.X, at.Z)) : at.Y;

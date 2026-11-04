@@ -10,7 +10,7 @@ original thread races. Tables preserve callback/time/control/constants mappings.
 replaced by 0.05 s when above it (the `min(dt, 0.5)` in the other branch never binds), so a frame longer than 0.05 s contributes at most 0.05 x speed and the game slows
 below 20 fps at every speed; the cap comes before the speed multiplier. The capped value is then pushed into a 20-entry history (`FUN_1402b2640`, the 0.5 is its
 weight base) that writes back the weighted average of the entries so far (weights 0.5^i; which end is newest is **Unknown**), and that smoothed value is what
-`FUN_14082b6e0` passes to `FUN_140788a00`. Meitou keeps its own wider budget and no smoothing instead (**engine choice**, [simulation](../simulation.md#time-model)).
+`FUN_14082b6e0` passes to `FUN_140788a00`. Meitou applies the same 0.05 s cap before the speed (`SimulationClock.MaxFrameSeconds`) and no smoothing (**engine choice**, [simulation](../simulation.md#time-model)).
 Twenty-entry zero-initialized history exponentially weights0.5^i. **Verified** callee/history
 layout. **Verified** FUN_140788a00 clocks: real smoothed dt; dt*speed zeroed by paused flag;
 dt*speed floored0.01 only when speed<=0, not universally when a menu sets requested-pause.
@@ -49,6 +49,8 @@ slots 0 to 3 = `frameStarted`, `frameRenderingQueued`, `framePostAnimationUpdate
 | (render) | | updateSceneGraph, compositor update; during it `framePostAnimationUpdates` (`FUN_140829df0`, sets a byte at +0x88 that `frameEnded` consumes and clears) |
 | 2. `frameRenderingQueued` | `FUN_14082ac70` | **Measures the frame time** (below). |
 | 4. `frameEnded` | `FUN_14082b6e0` | Cursor visibility; in menu/title state (`DAT_142133320` set) it only calls the new-game/import handler `FUN_14047c310` and returns; otherwise calls **`GameWorld::vfunc_0` = `FUN_140788a00(&GameWorld, dt)`**, the whole world update; then a **floating-origin rebase**: when the camera is more than 10000 units (squared distance 1e8, x/z) from the scene's relative origin, the origin is moved and zone-manager/terrain data re-based (calls `FUN_140409c70`, `FUN_140a08d10`, `FUN_1406083b0`); then hotkey state handling. |
+
+**The `DAT_142133308` object in `frameStarted`** (**Verified**, decompile): the global is field `+8` of the engine singleton at `0x142133300` (the world object whose `+0x20` is the title screen, `DAT_142133320`); `FUN_14086cf90` (start-up, log lines "Renderer Created" / "Root Initialised") writes it with a new `Renderer` (`FUN_140815ab0`, base `RendererT` with a list of `RenderEntityT`; fields `+0x58` camera, `+0x60` scene manager, `+0x68` root). Its vfunc 8 (`FUN_14082e580`) refreshes the camera's parent node transform and calls vfunc 1 of each registered render entity: Ogre scene-side visual updates with no simulation state. Meitou's renderers update their own scenes from the published snapshot, so there is no counterpart to compare (not a difference).
 
 ### The three time values
 
@@ -108,6 +110,14 @@ character's faction is the player's (Faction `+0x250` `isPlayer`), Character `+0
 (**Unknown**). Otherwise set when the character is in view (`+0x1a9`: within `npc range`, `DAT_1421334c8`, of the camera's node `FUN_1407f2a20`, and passing the
 visible-area and frustum tests) and its platoon tests pass (**Unknown** in detail). Meitou: `MedicalTimeBudget`, [character-stats](character-stats.md#time).
 
+### Inactive characters
+
+`FUN_1405c9410` (a virtual of the logic tick, **Verified**): the zone record at the character's X/Z (vfunc `0xc8`; none, off the grid: nothing happens); a character that is not active (vfunc `0xf8`, flag `+0x608`) in a zone whose loaded flag holds (`FUN_140a090b0`) is activated (vfunc `0x200`, `FUN_1405cc310`: scene node, physics, lists), an active one in a zone that is not loaded is deactivated (vfunc `0x208`, `FUN_1405c9490`: clears the flag and releases the scene and physics objects). An inactive character is out of the active set the update walks, so it neither thinks, moves nor ages while its zone is unloaded, even when its platoon stays loaded (the platoon keeps relevance by its effective leader's place). Meitou: `World.MarkDormant` sets `CharacterHot.Dormant` from `World.LoadedZones` once a tick (none: everyone active); the AI think, movement, body, combat, first-aid, aggro scan and animation loops skip a dormant slot. Serial duties (carrying, captives, production) still look at it but act on tasks the frozen movement no longer advances.
+
+### Loaded zones and the world hold
+
+A zone's loaded flags are set only when the zone manager goes from state 4 to 5, after every zone of the load list is accepted (`FUN_140a0f820`:66-96, `FUN_1403ac950`); a request (`FUN_140a0f080`) is ignored in state 3 unless the zone is already requested and loaded. Each frame four sample points (the camera focus and +600 in x, in z and in both, **Verified** constant 600.0) are tested: one off the grid or in a zone whose loaded flag is 0 applies the forced pause (`FUN_140787d40(registry, 1)` writes only the paused byte `+0x8b9` and posts Pause_Game), so the game is held paused while the camera's surroundings load. Meitou: `PopulationSystem.RefreshLoaded` publishes `World.LoadedZones` / `ActiveZones` as the requested zones that `ZoneGate` (the host's navmesh for the zone exists) also passes; `PopulationSystem.ActiveZones`, which the host builds navmeshes for, stays the requested set. **Deliberate departure:** Meitou does not hold the game while zones load (no loading pause, by the project goal of better performance); the simulation keeps ticking and the camera's zones load as `ZoneGate` passes them. The player's pause and its button are untouched.
+
 ### Settings and constants
 
 Values from the install through the repo's readers (**Verified**, `GameDatabase.Load(LoadOrder.FromInstall)`, one `GLOBAL CONSTANTS` record, `110-gamedata.quack`, modified by `Newwworld.mod` and `rebirth.mod`; `LoadOrder.BaseGame` gives the same numbers, but note that it still includes those two mods, which are part of the core file list; the `fcs.def` defaults differ, e.g. `max faction size` 100, `starvation time` 24, `build speed` 1):
@@ -130,6 +140,13 @@ Values from the install through the repo's readers (**Verified**, `GameDatabase.
 | `heal rate mult` / `resting heal rate mult` | 0.25 / 2 | healing |
 | `bodypart degeneration rate` / `robot wear rate` / `stun recovery rate` | 1.5 / 1 / 1 | |
 | `max squads` / `max squad size` / `max faction size` | 10 / 20 / 30 | |
+
+### World per-frame helpers (a3-krest, decompile)
+- `FUN_1403beeb0(thread, dt)` is the generic worker-thread kick used by the world's helper threads (`+0x18`, `+0x8c0`) and several managers: with the thread running it stores `dt`, sets a flag and signals; without one (`+0x45` set) it stores `dt` and runs the work (vfunc 1) inline. Which work the `+0x8c0` thread does is **Unknown** (**Verified**: only the kick).
+- Deferred removal list (world `+0x890`, filled when a character is destroyed): flushed by `FUN_1405429a0`, a hash-set erase of the character handle in the set at `+0x750`. Meitou's registry is live, so it has no counterpart (no behavioural effect).
+- `FUN_1403ac3f0` drains one queued building per call and, for each of its door parts with a non-empty box, calls `FUN_1403a6070`: it logs "Door <name> open|closed at <pos>" and registers a pathfinder obstacle record (type 3 open, 4 closed) holding the door box (its size, the base lowered by a constant) in the list at `+0x138`. The open test is the door's open state (`vfunc 0x308`) or state field 1. Meitou's navmesh door areas follow the same open/closed rule ([locks](locks.md)); the obstacle box and the one-building-per-call latency are not modelled (**Observed**: no gameplay rule depends on them).
+- Character `+0x88`..`+0x98` is a handle (type, four ints); `FUN_140792310` (virtual, only a type 0 building or the null type is accepted) copies it in (`FUN_140594290`) and sets the byte at `+0x69c` to 4; `FUN_1405c7bf0` (from `FUN_1407869e0`, once per update while unpaused) counts that byte down and resets the handle to null at 0. The reader of `+0x88` was not found (**Unknown**).
+- `FUN_1407875c0` pops one record (type, four ints) from the queue at `+0x190` per call, finds the object in the thing registry (type 1: `DAT_142133f98`/`DAT_142133f90`; type 0x5b: `FUN_140791600`), takes it out of the pending list at `DAT_1421348a0+0x1d8`, and calls its virtual `+0x280` (**Verified**); it is the main-thread hand-over of objects a loader made. The producer and what `+0x280` does are **Unknown**.
 
 ## Unknowns
 

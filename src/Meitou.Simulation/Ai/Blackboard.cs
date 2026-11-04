@@ -154,12 +154,16 @@ public sealed class Blackboard
     /// <summary>The town's turrets (<see cref="PopulationData.Turrets"/>) and the turret index each member's slot claimed to man, as the last serial step found them (derived, not hashed).</summary>
     public IReadOnlyList<TownBuilding> Turrets { get; set; } = [];
     public Dictionary<int, int> TurretClaims { get; } = [];
+    /// <summary>The turret finder's factor for each claim (<see cref="AiSystem"/>'s <c>TurretFactor</c>: 1 near, 0.3 far; in melee mode 0.8 and 0.05), as the last serial step found it (derived, not hashed).</summary>
+    public Dictionary<int, float> TurretFactors { get; } = [];
     /// <summary>The seat of the bar (<see cref="Home"/> under a bar package) each relaxing member's slot claimed, as the last serial step found it (derived, not hashed).</summary>
     public Dictionary<int, HomeSpot> SeatClaims { get; } = [];
     /// <summary>The furniture each member sitting around (275) claimed (a seat of <see cref="TownBuilding.SeatAt"/> numbering, in any building the finder allows), as the last serial step found it (derived, not hashed).</summary>
     public Dictionary<int, SeatClaim> SitClaims { get; } = [];
     /// <summary>The gate the squad guards (its home when that is a gate, else for a gate guard goal the town's gate nearest the squad), as the last serial step found it (derived, not hashed); null: none, or its door's place not known.</summary>
     public GatePost? Gate { get; set; }
+    /// <summary>The home the gate guard post was first resolved to (the blackboard's HOME_GATE hand, <c>FUN_14026b410</c>): taken from <see cref="OwnHome"/> once it is set, then kept even when the home changes.</summary>
+    public TownBuilding? GateHome { get; set; }
     public TownBuilding? OwnHome { get; set; }
     /// <summary>The template's <c>public day</c>, which the original writes over <see cref="OwnHome"/>'s public flag (docs/game/locks.md "Data"): what trespassing reads.</summary>
     public bool HomePublic { get; init; } = true;
@@ -198,6 +202,12 @@ public sealed class Blackboard
     public int AssaultEnemy { get; set; } = -1;
     public bool AssaultDone { get; set; }
     public float AssaultCooldown { get; set; }
+    /// <summary>
+    /// The passing-by assault's target set (+0xd8): the town faction's people within <see cref="AiSystem.AssaultReach"/> of the town at the start, plus every character its members sense as enemies (<c>AggroSystem.AssaultTargetEffect</c>).
+    /// Nothing leaves it while the package runs (<c>FUN_1402900c0</c>, <c>FUN_1402903c0</c>, <c>FUN_140294980</c>). Not saved or hashed: a loaded assault seeds it again from the start rule (<see cref="AssaultSeeded"/>) and refills from the scan.
+    /// </summary>
+    public HashSet<CharacterId> AssaultTargets { get; } = [];
+    public bool AssaultSeeded { get; set; }
     /// <summary>The occupation's clock (<c>Package_OccupyTown</c> +0xc0): game seconds in a row with no able member in the town; past 4 it ends.</summary>
     public float OccupyAway { get; set; }
     /// <summary>The refugee package (<c>Package_Refugee</c>): the squad was not intact when it started (+0xb0), and the squad it makes for to join (its mission target, +0x28; -1: none yet).</summary>
@@ -449,6 +459,8 @@ public sealed class AiMind
     public IReadOnlyList<AiGoal> RaceGoals { get; init; } = [];
     /// <summary>It was sent walking to a spot and has not arrived.</summary>
     public bool Walking { get; set; }
+    /// <summary>The spot its last walk ended at on its own (the path finished, no fight or flight took it, a path was found): the original counts a finished path as arrival before any distance test (<c>isAtLocation</c> <c>FUN_1405a2450</c>, Verified). Cleared when it walks again.</summary>
+    public Vector2? ArrivedAt { get; set; }
     /// <summary>Walks in a row that ended away from the spot (no way there, or interrupted); at <see cref="AiSystem.MaxFailedWalks"/> it gives the spot up.</summary>
     public int FailedWalks { get; set; }
     /// <summary>The home's spots kept failing: it uses <see cref="Post"/> instead until its home changes.</summary>
@@ -469,7 +481,25 @@ public sealed class AiMind
     /// building (the pick is a roll of this and the character), and whether it is working now.
     /// </summary>
     public int WorkEpoch { get; set; }
+    /// <summary>The roll that picks this goal's node among the home's (uniform; 0: not drawn yet, the member's round robin stands in) and the number of draws: renewed when a goal is taken up anew.</summary>
+    public ulong NodeRoll { get; set; }
+    public int NodeEpoch { get; set; }
     public bool WorkActive { get; set; }
+    /// <summary>The town building it operates this tick (Task_OperateMachine, row 87, at the building) or empties the output of (row 92), and the faction owning its machine; set by the think, applied by <see cref="Production.ProductionSystem"/> (derived, not hashed).</summary>
+    public Meitou.Data.World.TownBuilding? WorkOperate { get; set; }
+    public Meitou.Data.World.TownBuilding? CollectFrom { get; set; }
+    /// <summary>The town building it fills (Task_FillMachine, row 93, at the building) with the inputs it carries this tick; set by the think, applied by <see cref="Production.ProductionSystem"/> (derived, not hashed).</summary>
+    public Meitou.Data.World.TownBuilding? FillTo { get; set; }
+    /// <summary>The plan's step 93 Filling machine into the ditch target (rows 113, 114, 242) is due: the think sets it, <see cref="Kidnap.TownDutySystem"/> starts the errand and clears it (derived, not hashed).</summary>
+    public bool DitchRequest { get; set; }
+    public int WorkOwner { get; set; }
+    /// <summary>The building its work goals picked (set with <see cref="WorkClip"/>).</summary>
+    public Meitou.Data.World.TownBuilding? WorkBuilding { get; set; }
+    /// <summary>
+    /// The workplace it holds an operator slot of while on 189 / 190 (<see cref="AiSystem"/>'s serial step claims it on the package cadence); null on another goal or
+    /// when no workplace had a free slot. Not saved: a load claims again (derived, not hashed).
+    /// </summary>
+    public TownBuilding? WorkPost { get; set; }
     /// <summary>The clip it plays at its work (the ANIMATION its building's functionality names), cleared with <see cref="CharacterCold.ActionClip"/> when it stops; null when not working.</summary>
     public string? WorkClip { get; set; }
     /// <summary>Its work building's BUILDING_FUNCTIONALITY (string id; null without one), whose <c>animation events</c> sound on <see cref="WorkClip"/>. Set with it, so not hashed.</summary>
@@ -494,6 +524,12 @@ public sealed class AiMind
     public float MedicScore { get; set; }
     /// <summary>The think chose the Medic goal: the serial step of the same tick starts the treatment (<see cref="FirstAid.FirstAidSystem.SendGoalTreatments"/>) and clears it (not hashed).</summary>
     public bool MedicAsk { get; set; }
+    /// The Assault order a dialogue attack effect gave this character (<c>FUN_140680560</c> cases 6, 0x37 and 0x39 order goal 101, or 248 for 0x37, on the effect's target): the member of the target's squad
+    /// it attacks, picked again whenever it is free (<see cref="AiSystem.AssaultTargetFor"/>); none when it has no such order. Not saved; hashed while set.
+    /// </summary>
+    public CharacterId ForcedAssault { get; set; } = CharacterId.None;
+    /// <summary>Where the stranger a static guard stands beside is (<see cref="AiSystem"/>'s <c>GuardFactor</c>, FUN_14099edd0); null: the plain guard post. Derived by the think; hashed while set.</summary>
+    public System.Numerics.Vector3? GuardVisitorAt { get; set; }
     /// <summary>
     /// What the think asks of the <see cref="FleeSystem"/> this tick: to run the character from its threats (Self preservation's provider 35) or from the enemies it senses (a goal 35 of its
     /// lists). Set by the think on the mind's own character, taken and cleared by the serial flee step of the same tick, so it is never set between ticks (not hashed).
@@ -505,6 +541,9 @@ public sealed class AiMind
     /// </summary>
     public TaskType FightGoal { get; set; }
     public CharacterId FightTarget { get; set; } = CharacterId.None;
+    /// <summary>
+    /// <summary>The leader rescue goal's factor (<see cref="AiBehaviour.RescueLeader"/>): 1 while the squad leader is down and can be lifted, kept by the carry system's serial sweep (the think reads it).</summary>
+    public float RescueWant { get; set; }
     /// <summary>
     /// The tick the last fight the serial step started for it begins (<see cref="CharacterCold.Running"/>'s <c>Tick</c> of that fight; 0: none yet): while it runs, the fight is the AI's own,
     /// a plan step of its combat goal, and the character thinks in it (<see cref="AiSystem.Holds"/>).
@@ -518,12 +557,24 @@ public sealed class AiMind
     /// cleared by that think.
     /// </summary>
     public bool Replan { get; set; }
+    /// <summary>The AI task system's plan reset (<c>FUN_1405074a0</c>): the pending steps and the committed goal go, so the next think chooses again.</summary>
+    public void ResetPlan()
+    {
+        Plan.Clear();
+        CommitUntil = 0;
+        Replan = true;
+    }
     /// <summary>What it wants to buy (goal 118, <see cref="ShoppingList"/>); made with the mind from its record and the world seed, not saved.</summary>
     public ShoppingList Shopping { get; init; } = new();
     /// <summary>The shop it walks to for goal 118 (set when the target is picked, so the arrival knows what the shop stocks); follows from the target, so not hashed.</summary>
     public TownBuilding? ShopAt { get; set; }
     /// <summary>The world tick of its next unit at the shop (<c>Task_Shopping</c>, goal 119: a second after it arrived, then a second after each sale); 0: the task is not running. Not saved (the task is not).</summary>
     public long NextBuyTick { get; set; }
+    /// <summary>
+    /// The cage the kill and eat goals chose last (the AI memory's hand <c>+0x88</c>, <c>FUN_1408d0d90</c>, <b>Verified</b>): asked again while it still holds a captive, the finder returns it as it is. One memory
+    /// for goals 135, 139, 282 and the eat goals. Not saved.
+    /// </summary>
+    public string? FateCage { get; set; }
     /// <summary>The investigation's look-about count in seconds (<see cref="Crime.CrimeSystem.LookAboutSeconds"/>; the task starts it at 15).</summary>
     public float LookAbout { get; set; } = Crime.CrimeSystem.FirstLookAboutSeconds;
 
@@ -539,21 +590,26 @@ public sealed class AiMind
         hasher.Add(WanderRadius);
         hasher.Add(Walking);
         hasher.Add(FailedWalks);
+        if (ArrivedAt is { } arrived) { hasher.Add(0x41727276); hasher.Add(arrived); }   // only while set
         hasher.Add(HomeUnreachable);
         hasher.Add(SeatUnreachable);
         hasher.Add(CommitUntil);
         hasher.Add(Target ?? new Vector3(float.NaN));
         if (WorkActive || WorkEpoch != 0) { hasher.Add(WorkEpoch); hasher.Add(WorkActive); }
+        if (NodeRoll != 0) hasher.Add(NodeRoll);
         if (Resume) hasher.Add(0x52657375);
         if (PlaceAt is { } place) hasher.Add(place);
         if (BedAt is { } bed) hasher.Add(Rng.StableHash(bed));
         if (!FollowTarget.IsNone) hasher.Add(FollowTarget);
         if (!AssaultTarget.IsNone) hasher.Add(AssaultTarget);
         if (MedicScore != 0) { hasher.Add(MedicPatient); hasher.Add(MedicScore); }
+        if (!ForcedAssault.IsNone) { hasher.Add(0x466F7241); hasher.Add(ForcedAssault); }
+        if (GuardVisitorAt is { } visitor) { hasher.Add(0x47756172); hasher.Add(visitor); }
         if (FightFrom != 0) hasher.Add(FightFrom);
         if (Replan) hasher.Add(0x5265706C);
         if (LookAbout != Crime.CrimeSystem.FirstLookAboutSeconds) hasher.Add(LookAbout);
         if (NextBuyTick != 0) hasher.Add(NextBuyTick);
+        if (FateCage is { } fateCage) hasher.Add(Rng.StableHash(fateCage));
         Shopping.Hash(ref hasher);
     }
 }

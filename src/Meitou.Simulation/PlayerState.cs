@@ -185,9 +185,9 @@ public sealed partial class PlayerSystem(PopulationData? data = null) : ITickSys
     void RenameFaction(World world, string text)
     {
         var player = world.Player;
-        string name = text.Trim();
+        string name = text;   // FUN_1404923d0 keeps the text as typed (no trim)
         if (name.Length > FactionNameLength) name = name[..FactionNameLength];
-        if (!player.Exists || name.Length == 0 || name == PlayerFactionName(world)) return;
+        if (!player.Exists || name == PlayerFactionName(world)) return;
         // FUN_1402e7950: any other faction already named so. (The data's names; the player's own old name is free again.)
         if (data is not null && data.Factions.Where((f, i) => i != player.Faction).Any(f => f.Name == name)) { world.Post("This faction name already exists"); return; }
         player.FactionName = name == data?.Factions[player.Faction].Name ? null : name;
@@ -200,6 +200,11 @@ public sealed partial class PlayerSystem(PopulationData? data = null) : ITickSys
         Carrying.PickUpOrder o => o.Carriers, Carrying.PutDownOrder o => o.Carriers, Carrying.LootOrder o => o.Looters, Carrying.OpenLootOrder o => o.Looters,
         Carrying.StealthKoOrder o => o.Attackers, FirstAid.TreatOrder o => o.Medics, FirstAid.SplintOrder o => o.Medics, Locks.PickLockOrder o => o.Characters,
         Locks.UseBedOrder o => o.Characters, Production.OperateOrder o => o.Characters, Construction.BuildOrder o => o.Characters,
+        // Every other right-click verb that names characters goes through the same dispatcher (FUN_1407f9e20 :96 sets the flag before any order-specific code); only the job giver's orders (45, 0x111, 0xdf) skip it.
+        Dialogue.TalkOrder o => [o.Talker], FirstAid.RestOrder o => o.Characters, Items.OpenContainerOrder o => o.Characters, Items.PickUpItemOrder o => o.Characters,
+        Locks.DoorOrder o => o.Characters, Locks.DoorLockOrder o => o.Characters, Locks.ForceLockOrder o => o.Characters, Locks.PutShacklesOrder o => o.Characters, Locks.ShackleOrder o => o.Characters,
+        Locks.SetFreeOrder o => o.Characters, Locks.GetInCageOrder o => o.Characters, Locks.GetOutOrder o => o.Characters, Locks.PutInBedOrder o => o.Carriers, Crime.PutInCageOrder o => o.Carriers,
+        Construction.DismantleOrder o => o.Characters, Production.ProspectOrder o => [o.Character],
         _ => null,
     };
 
@@ -234,8 +239,12 @@ public sealed partial class PlayerSystem(PopulationData? data = null) : ITickSys
             switch (command)
             {
                 case SelectCommand select:
-                    var selectable = select.Characters.Where(id =>
+                    var candidates = select.Characters.Where(id =>
                         table.TryResolveNext(id, out int slot) && table.Cold(slot)!.IsPlayer).ToArray();
+                    if (candidates.Length == 0) break;
+                    // A non-additive select with any candidate clears the selection first; the gate then keeps out the dead (FUN_1407f3b50, FUN_1407f7f20).
+                    if (!select.Additive && !(select.Toggle && candidates.Length == 1 && player.Selection.Contains(candidates[0]))) player.Selection.Clear();
+                    var selectable = candidates.Where(id => !(table.TryResolveNext(id, out int living) && table.Cold(living)!.Medical is { Dead: true })).ToArray();
                     if (selectable.Length == 0) break;
                     // A shift-click on a selected character takes it out, never emptying the selection (it stays when it is the only one).
                     if (select.Toggle && selectable.Length == 1 && player.Selection.Contains(selectable[0]))
@@ -307,7 +316,7 @@ public sealed partial class PlayerSystem(PopulationData? data = null) : ITickSys
                 case SquadFormationCommand formation:
                     SquadAiKeys.SetFormation(world, player.Faction, (int)formation.Formation, data?.Factions);
                     break;
-                case OrdersCommand or RunSpeedCommand or StandUpCommand:
+                case OrdersCommand or RunSpeedCommand or StandUpCommand or ManoeuvreCommand:
                     Orders.Apply(world, command);
                     break;
                 case Editing.EditCharacter edit:

@@ -41,12 +41,16 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
 
     /// <summary>
     /// The active squad's members in squad order, the first leading (the squad bar's; the number keys and select_all pick from them, the original's <c>UiSelectSquadMember</c> /
-    /// <c>UiSelectAllInSquad</c>). Every player character when there is no squad list (a world without a player squad).
+    /// <c>UiSelectAllInSquad</c>). The squad of the first selected character, else the first squad, when the active one is unknown; every player character in a world with no squad list.
     /// </summary>
     IReadOnlyList<CharacterId> ActiveSquadMembers()
     {
         var snapshot = session.CurrentSnapshot;
-        if (snapshot.PlayerSquads.FirstOrDefault(s => s.Id == snapshot.ActiveSquad) is not { } squad) return PlayerCharacters();
+        // No cached squad: the first selected character's squad, else the first squad of the roster, else nothing (FUN_1407f5520).
+        var firstSelected = Selected().Count > 0 ? Selected()[0].Id : CharacterId.None;
+        var squad = snapshot.PlayerSquads.FirstOrDefault(s => s.Id == snapshot.ActiveSquad)
+            ?? snapshot.PlayerSquads.FirstOrDefault(s => s.Members.Contains(firstSelected)) ?? snapshot.PlayerSquads.FirstOrDefault();
+        if (squad is null) return snapshot.PlayerSquads.Count == 0 ? PlayerCharacters() : [];   // a world with no squad list at all (tests, bare sessions) keeps every player character
         var present = PlayerCharacters().ToHashSet();
         return [.. squad.Members.Where(present.Contains)];
     }
@@ -82,6 +86,7 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
         if (EditorPointerDown(button, p)) return true;
         if (button == MouseButton.Right && CancelInventoryDrag()) return true;
         if (button == MouseButton.Right && !OverHud(p) && WallCancel()) return true;
+        if (button == MouseButton.Right && !OverHud(p) && BuildDiscard()) return true;
         if (button == MouseButton.Left)
         {
             if (contextMenu is not null) return true;   // an open menu takes no press: its rows act on the release, a press beside it does nothing (FUN_1407a7f10)
@@ -308,6 +313,7 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
     /// </summary>
     public void Steer(bool final = false)
     {
+        if (!final) hotkeyEventsThisFrame = 0;
         UpdateContextMenu();
         UpdateFactionName();
         UpdateTownName();
@@ -340,8 +346,9 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
     /// <summary>A third press (a single one while the flight to that member is under way): the host ends the flight on it at once.</summary>
     public Action<CharacterId>? SkipFlight { get; set; }
     // The last number key and when it was pressed: the same key again within DoubleTapSeconds centres on the character (docs/game/ui-input.md, events 100..120).
-    Key lastSelectKey;
-    long lastSelectAt;
+    InputAction? lastHotkey;
+    long lastHotkeyAt;
+    int hotkeyEventsThisFrame;
     const double DoubleTapSeconds = 0.5;
 
     /// <summary>Selects the squad's <paramref name="index"/>th member (<paramref name="shift"/> adds); the second press within half a second centres the camera on it and follows.</summary>

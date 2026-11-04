@@ -301,6 +301,13 @@ public sealed class PopulationData
 
     public float RoadPreferenceOf(int faction) => faction >= 0 && faction < Factions.Count ? Factions[faction].RoadPreference : 0;
 
+    /// <summary>
+    /// The faction owning a town building before any saved owner: the player's faction when the level data names it, else the town's faction whatever the level data says, since the town populate
+    /// gives the town faction every non-player building of the town (<c>FUN_1409370d0</c>:35-75, <c>FUN_14092e4b0</c>:35-37).
+    /// </summary>
+    public int LevelOwnerOf(Meitou.Data.World.TownBuilding b, int townFaction) =>
+        b.OwnerFactionId is { } id && FactionIndex(id) is >= 0 and var faction && faction == PlayerFaction ? faction : townFaction;
+
     /// <summary>The position of a faction id in <see cref="Factions"/> (the first when an id repeats), or -1. The index is built once.</summary>
     public int FactionIndex(string id)
     {
@@ -430,12 +437,14 @@ public sealed class PopulationSettings
     /// <summary>The <c>Squad size multiplier</c> setting (factions-squads-towns.md section 9).</summary>
     public float SquadSizeMultiplier { get; set; } = 1;
     /// <summary>The <c>Fast zone hopping</c> setting: a ring of one more zone round each box the player's characters ask for (<c>FUN_140a0f640</c>'s flag, <b>Verified</b>; the camera's block is not ringed).</summary>
-    public bool FastZoneHopping { get; init; }
+    public bool FastZoneHopping { get; set; }
     /// <summary>
     /// Game seconds a zone stays loaded after nothing asks for it. The original has three real-time countdowns whose lengths are
     /// Unknown (game-loop.md); this is an engine choice, long enough that walking back and forth over a zone edge never reloads.
     /// </summary>
     public float UnloadGraceSeconds { get; init; } = 60;
+    /// <summary>Game seconds a town site stays loaded after its zones lapsed: 0, the original's rule (a town unloads with its zones, 4 to 6 s after the last request, docs/game/character-stats.md "Which zones are loaded"). Wild sites and roaming squads keep <see cref="UnloadGraceSeconds"/>.</summary>
+    public float TownUnloadGraceSeconds { get; init; }
     /// <summary>Ticks between looks at the zones (engine choice: twice a game second).</summary>
     public int CheckEveryTicks { get; init; } = 15;
     /// <summary>Build the towns' characters on a background thread (the game) or inside the tick (tests).</summary>

@@ -126,7 +126,7 @@ public sealed unsafe partial class PostProcess
         if (FogVrsStats) CollectRateStats();
 
         float tanY = MathF.Tan(fovNow * 0.5f);
-        var tan = new Vector2(tanY * aspectNow, tanY);
+        var tan = ViewWindow.Tan(tanY * aspectNow, tanY);
         var r = viewRotation;
         var size = new Vector2(width, height);
 
@@ -136,7 +136,7 @@ public sealed unsafe partial class PostProcess
         d.P.Set(d.Tan, tan);
         d.P.Set(d.Right, r.M11, r.M21, r.M31);
         d.P.Set(d.Up, r.M12, r.M22, r.M32);
-        d.P.Set(d.Back, r.M13, r.M23, r.M33);
+        d.P.Set(d.Back, ViewWindow.BackFor(r, fovNow, aspectNow));
         d.P.Set(d.Eye, eye);
         d.P.Set(d.Size, size);
         d.P.Set(d.WaterY, WaterHeight ?? float.MinValue);
@@ -147,7 +147,7 @@ public sealed unsafe partial class PostProcess
         p.P.Set(p.Tan, tan);
         p.P.Set(p.Right, r.M11, r.M21, r.M31);
         p.P.Set(p.Up, r.M12, r.M22, r.M32);
-        p.P.Set(p.Back, r.M13, r.M23, r.M33);
+        p.P.Set(p.Back, ViewWindow.BackFor(r, fovNow, aspectNow));
         p.P.Set(p.Size, size);
         p.P.Set(p.Rate, texel, FogShadingRate.MarginBlocks, device.MaxShadingRate, 0);
         var thresholds = FogShadingRate.Thresholds;

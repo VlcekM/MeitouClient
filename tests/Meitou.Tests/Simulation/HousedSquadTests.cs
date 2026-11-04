@@ -86,4 +86,23 @@ public class HousedSquadTests(ITestOutputHelper output)
             if (template.VendorMoney > 0) Assert.True(s.Money >= template.VendorMoney - (int)(template.VendorMoney * 0.4), $"{s.Name}: {s.Money}");
         }
     }
+
+    [Fact]
+    public void A_home_whose_template_makes_no_squad_but_names_vendors_is_stocked_when_the_town_is_made()
+    {
+        var data = Load();
+        var db = data.Db;
+        // A level-data home with an empty template that holds vendor lists or special items (a ruin's loot, FUN_140583a10's empty path) and stock containers.
+        var (site, home) = data.Sites.SelectMany(s => s.Buildings.Select(b => (Site: s, Building: b)))
+            .First(x => x.Building.ResidentsTemplate.Length > 0 && x.Building.Fixtures.Any(f => f.HoldsShopStock) && db.Find(x.Building.ResidentsTemplate) is { } r
+                && r.GetReferences("squad").Count + r.GetReferences("squad2").Count + r.GetReferences("animals").Count + r.GetReferences("animals2").Count + r.GetReferences("leader").Count + r.GetReferences("choosefrom list").Count == 0
+                && r.GetReferences("vendors").Count > 0 && site0(x.Site));
+        using var world = Town(data, site, StandardParts.Trade);
+        world.RunTicks(3);
+        var held = world.Fixtures.OfBuilding(home.Key).Where(f => f.Contents is not null).Sum(f => f.Contents!.Items.Count);
+        output.WriteLine($"{site.Town.Name}, {home.Name} ({home.ResidentsTemplate}): {held} stacks in its containers");
+        Assert.True(held > 0);
+    }
+
+    static bool site0(TownSite site) => site.Town.Faction is not null;
 }

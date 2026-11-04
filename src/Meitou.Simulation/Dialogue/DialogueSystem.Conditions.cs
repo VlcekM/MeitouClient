@@ -68,7 +68,7 @@ public sealed partial class DialogueSystem
                 return Bool(dc.Condition == 7 ? cell2.Owner == by : cell2.Owner != by);
             }
             case 4 or 5:
-                return Bool(Cold(world, s.Carrying) is { } body && (body.Medical?.Dead ?? false) == (dc.Condition == 5) && (body.Bounties?.AmountFor(meF) ?? 0) > 0);
+                return Bool(Cold(world, s.Carrying) is { } body && (body.Medical?.Dead ?? false) == (dc.Condition == 5) && (body.Bounties?.BookedAmount(data.Relations, meF) ?? 0) > 0);
             case 9: return Bool(s.SquadId >= 0 && world.Squads.Find(s.SquadId)?.Shop is not null);
             case 14: return Bool(s.IsImprisoned);
             case 16:
@@ -100,13 +100,13 @@ public sealed partial class DialogueSystem
                 var (enemies, _, allies) = BodySystem.Senses(world, combat, ss, s);
                 return Bool(enemies > allies * 1.3f);
             }
-            case 40: return Num2(s.RecentlyWanted > 0 || s.Recognition >= 1 ? s.Bounties?.AmountFor(meF) ?? 0 : 0);
+            case 40: return Num2(s.RecentlyWanted > 0 || s.Recognition >= 1 ? s.Bounties?.BookedAmount(data.Relations, meF) ?? 0 : 0);
             case 41: return Bool(s.Medical is { Unconscious: true, Dead: false });
             case 43: return Bool(SquadOf(world, subjectId).All(m => Cold(world, m)?.Medical?.Incapacitated != false));
             case 44: return Bool(s.Medical?.Dead == true);
             case 45: return Bool(s.Appearance?.Female == true);
             case 46: return b && Cold(world, s.Carrying) is { Medical.Dead: false, NpcClass: FundamentalType.Adventurer or FundamentalType.Bandit or FundamentalType.Slave or FundamentalType.Civilian };
-            case 47: return Num2(s.Bounties?.AmountFor(meF) ?? 0);
+            case 47: return Num2(s.Bounties?.BookedAmount(data.Relations, meF) ?? 0);
             case 48: return Bool(s.Fighter is { IsAnimal: false, Weapon: null });
             case 50: return Bool(world.Squads.Find(mc.SquadId)?.Ai is { } board && board.MissionTarget == subjectId);
             case 52: return Bool(Loves(world, mc, subjectId));
@@ -116,6 +116,8 @@ public sealed partial class DialogueSystem
             case 56: return Bool(s.InCombat);
             // WITHIN_TOWN_WALLS: S's gate code above 0 (Character slot 35, docs/game/pathfinding.md "Gate codes"); no gate pass yet reads as the open world.
             case 57: return Bool(Position(world, subjectId) is { } walled && world.SystemOf<Locks.LockSystem>()?.Regions?.CodeAt(walled) > 0);
+            // TOWN_WALLS_LOCKED_UP: S's current town has gates and none of their doors is open (FUN_140929820 behind Town vfunc 0x300); S in no town reads false.
+            case 58: return Bool(Position(world, subjectId) is { } inTown && TownAt(inTown) is >= 0 and var walledTown && Locks.LockSystem.TownLockedUp(world, data.Sites[walledTown]));
             case 59: return Bool(s.SlaveState is 1 or 2);
             case 61: return Bool(s.SlaveState is 1 or 2 && s.SlaveOwner >= 0 && s.SlaveOwner == meF);
             case 62: return Bool(s.SlaveState > 1);
@@ -124,7 +126,7 @@ public sealed partial class DialogueSystem
             case 63: return Bool(s.IsImprisoned && s.InWhat is { } cage && world.Fixtures.Find(cage)?.Lock is { EffectivelyLocked: true });
             // Same RACE_GROUP (two races in no group also count as the same).
             case 65: return Bool(s.Race is not null && mc.Race is not null && dialogue.RaceGroupOf(s.Race.StringId)?.Group == dialogue.RaceGroupOf(mc.Race.StringId)?.Group);
-            case 66: return Bool(s.IsPlayer && world.Player.Money >= (s.Bounties?.AmountFor(meF) ?? 0));
+            case 66: return Bool(s.IsPlayer && world.Player.Money >= (s.Bounties?.BookedAmount(data.Relations, meF) ?? 0));
             case 67: return Bool((s.Orders & CharacterOrders.Sneak) != 0 && !s.InCombat);
             case 68: return Bool(world.Characters.TryResolveNext(subjectId, out int indoors) && world.Sight.BuildingOf(indoors) is not null);
             case 69: return Num2(HasIllegalItem(world, c, me, mc, subjectId) ? 1 : 0);

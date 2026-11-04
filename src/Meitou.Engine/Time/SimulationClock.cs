@@ -7,10 +7,9 @@ namespace Meitou.Engine.Time;
 /// "Speed and pause"). The pause key stores the speed and sets 0, and resumes at the stored one (<see cref="PauseKey"/>); the HUD pause button only sets 0; a separate <see cref="RequestedPause"/>
 /// (menus, loading) stops the world without touching the speed, and the world is paused when either holds, as the game's paused
 /// flag is "requested pause OR speed 0".
-/// A frame owes at most <see cref="MaxTicksPerFrame"/> x speed ticks; the rest are dropped, so the game then runs slower than asked
-/// (<see cref="AchievedSpeed"/>). Engine choice: the original caps the real frame time at 0.05 s BEFORE the speed multiplier (it slows
-/// below 20 fps at every speed, Verified, docs/game/game-loop.md "Frame clocks"); this budget is 2 ticks (0.067 s of game time) at 1x and slows
-/// below 15 fps: a larger one let a heavy world snowball, each late frame owing more ticks that made the next late too. The tick count depends only on the
+/// A frame's real time is capped at <see cref="MaxFrameSeconds"/> BEFORE the speed multiplier, as the original does (FUN_14082ac70; it slows below 20 fps at every
+/// speed, Verified, docs/game/game-loop.md "Frame clocks"). A frame also owes at most <see cref="MaxTicksPerFrame"/> x speed ticks, a safety limit above that cap
+/// (engine choice: 2 ticks is 0.067 s of game time at 1x, the cap owes 1.5); the rest are dropped (<see cref="AchievedSpeed"/>). The tick count depends only on the
 /// summed <c>real time x speed</c>, not on how frames split it (the <see cref="FixedStepClock"/> property), as long as no tick is dropped.
 /// </summary>
 public sealed class SimulationClock
@@ -19,6 +18,8 @@ public sealed class SimulationClock
     public static readonly double[] Speeds = [1, 2, 5];
     /// <summary>Simulation ticks per game second (owner decision 2).</summary>
     public const double TickRate = 30;
+    /// <summary>The longest real frame time that counts, before the speed multiplier (the original's <c>DAT_141696c74</c>, 0.05 s).</summary>
+    public const double MaxFrameSeconds = 0.05;
     /// <summary>Default most ticks a frame may run at speed 1 (engine choice): 1/15 s of game time; times the speed at the others.</summary>
     public const int DefaultMaxTicksPerFrame = 2;
 
@@ -122,7 +123,7 @@ public sealed class SimulationClock
             return 0;
         }
         long droppedBefore = steps.DroppedTicks;
-        int run = steps.Advance(realSeconds * speed, (int)Math.Min((long)maxTicksPerFrame * (long)speed, int.MaxValue));
+        int run = steps.Advance(Math.Min(realSeconds, MaxFrameSeconds) * speed, (int)Math.Min((long)maxTicksPerFrame * (long)speed, int.MaxValue));
         long dropped = steps.DroppedTicks - droppedBefore;
         AchievedSpeed = AchievedSpeedOver(speed, run, dropped);
         return run;

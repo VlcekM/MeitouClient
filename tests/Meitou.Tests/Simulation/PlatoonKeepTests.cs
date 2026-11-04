@@ -1,0 +1,36 @@
+using Meitou.Simulation;
+
+namespace Meitou.Tests.Simulation;
+
+/// <summary>The campaign half of the original's platoon keep test (FUN_1407ec570): held by a campaign record that is not in phase 2, and not in spawn mode 3.</summary>
+public class PlatoonKeepTests
+{
+    static Platoon Of(CampaignInstance? campaign, bool replacedHome = false) =>
+        new() { Id = 1, Key = 1, Origin = 0, TemplateId = "t", Campaign = campaign, ReplacedHome = replacedHome };
+
+    static CampaignInstance Instance(int phase) => new() { Faction = 0, Id = 0, CampaignId = "c", Phase = phase };
+
+    [Fact]
+    public void A_campaign_force_is_kept_until_its_record_is_in_phase_2()
+    {
+        Assert.False(PopulationSystem.CampaignKept(Of(null)));
+        Assert.True(PopulationSystem.CampaignKept(Of(Instance(0))));
+        Assert.True(PopulationSystem.CampaignKept(Of(Instance(1))));
+        Assert.False(PopulationSystem.CampaignKept(Of(Instance(2))));
+    }
+
+    [Fact]
+    public void Spawn_mode_3_is_never_kept_by_a_campaign()
+    {
+        Assert.False(PopulationSystem.CampaignKept(Of(Instance(0), replacedHome: true)));
+    }
+
+    [Fact]
+    public void Home_test_refuses_a_vanilla_platoon_of_a_replaced_town_but_not_an_older_meitou_one()
+    {
+        Assert.False(PopulationSystem.HomeFits(false, "own", "own", "repl"));
+        Assert.True(PopulationSystem.HomeFits(false, "repl", "own", "repl"));
+        Assert.True(PopulationSystem.HomeFits(false, "own", "own", null));
+        Assert.True(PopulationSystem.HomeFits(true, "own", "own", "repl"));
+    }
+}

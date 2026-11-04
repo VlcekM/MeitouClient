@@ -1,5 +1,6 @@
 using System.Numerics;
 using Meitou.Data.Gameplay.Ai;
+using Meitou.Data.Gameplay.Bodies;
 using Meitou.Simulation.Ai;
 using Meitou.Simulation.Carrying;
 using Meitou.Simulation.Items;
@@ -14,11 +15,8 @@ public sealed record TownDutySettings
     public int LookEveryTicks { get; init; } = 15;
     /// <summary>A member looks for an intruder within its sight (the sensed list's size is <b>Unknown</b>).</summary>
     public float Sight { get; init; } = AggroSystem.OutdoorSight;
-    /// <summary>An intruder is put down this far past the town's built-up area (<b>Observed</b>: the original's exit point is 200 beyond a door of one of the town's buildings).</summary>
-    public float OutsideTown { get; init; } = 200;
-    /// <summary>A walk counts as arrived within this of its goal (a cage: its <c>use range</c> plus <see cref="CageReach"/>; a walk that ended within <see cref="CageSlack"/> of it does too).</summary>
+    /// <summary>A walk counts as arrived within this of its goal; a walk that ended within <see cref="CageSlack"/> of it does too (a cage's reach is <see cref="FixtureRegistry.AtCage"/>).</summary>
     public float Arrive { get; init; } = 40;
-    public float CageReach { get; init; } = 15;
     public float CageSlack { get; init; } = 200;
     /// <summary>Walks that end short before the member gives up (an intruder is then put down where it is).</summary>
     public int Walks { get; init; } = 4;
@@ -26,7 +24,7 @@ public sealed record TownDutySettings
     public double RefuseHours { get; init; } = 2;
 }
 
-public enum TownDutyKind : byte { Lift, Out, Cage, Food, Confiscate, LootFood, Shoo, Ransack, Stash }
+public enum TownDutyKind : byte { Lift, Out, Cage, Food, Confiscate, LootFood, Shoo, Ransack, Stash, Ditch }
 
 /// <summary>One member's errand of the <see cref="TownDutySystem"/>: an intruder it lifts and carries out or to a cage, or a store it fetches food from.</summary>
 public sealed class TownDuty
@@ -67,10 +65,10 @@ public sealed class TownDuty
 /// <item><b>112 Find and put in cage</b> (a living body) or <b>281</b> (any body), while the package lists it: the best free cage in the town (the original's finder; an occupier may use the occupied town's, its use test passing
 /// for that town, <c>FUN_140621230</c>), where the intruder is locked up with the put-in's usual sentence (from a bounty with the cage owner's faction,
 /// docs/game/economy.md 11.5; none: served, so the jailer frees it); else</item>
-/// <item><b>274 Throwing out</b> (<c>Task_TakeIntruderOutsideTown</c>): carried past the town's built-up area (<see cref="TownDutySettings.OutsideTown"/>) on the member's side and put down.</item>
+/// <item><b>274 Throwing out</b> (<c>Task_TakeIntruderOutsideTown</c>): carried to the town's point outside its gates (<see cref="TownExit"/>, the same for every carrier) and put down.</item>
 /// <item><b>243 Getting food</b> (finder <c>FUN_1408cb650</c>, <c>BuildingFinder_LootFoodAndStuff</c>; then 244 <c>Task_grabOneFood</c>): a member holding no food walks to the nearest store with
-/// food in the town and takes one item of it (the goal holds while it has food, list A <c>gotAFoodItem</c>). The town the original's finder searches is read as the one the member stands in;
-/// it need not be the squad's own, and a player-side member takes only from its faction's stores.</item>
+/// food in the town and takes one item of it (the goal holds while it has food, list A <c>gotAFoodItem</c>). The finder searches the blackboard's target town (<c>Blackboard.Destination</c>), else the town the member stands in,
+/// else the 3 x 3 zone cells round it; it need not be the squad's own, and a player-side member takes only from its faction's stores.</item>
 /// </list>
 /// </summary>
 public sealed class TownDutySystem(PopulationData data, PopulationSystem population, CarrySystem carry, TownDutySettings? settings = null) : ITickSystem, IStateHashed, IDecisionOwner
@@ -86,6 +84,10 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     readonly List<(CharacterId Member, double Until)> foodWaits = [];
 
     public TownDutySettings Settings { get; } = settings ?? new TownDutySettings();
+    /// <summary>The relation event of a caging (<see cref="FactionDeeds.Caged"/>, <c>FUN_140358670</c>); null: none.</summary>
+    public FactionDeeds? Deeds { get; set; }
+    /// <summary>The bounty claim after a caging (<see cref="Crime.ArrestSystem.Claim"/>, <c>FUN_140330d50</c>); it pays only a carrier of the player's faction. Null: none.</summary>
+    public Crime.ArrestSystem? Arrests { get; set; }
     public IReadOnlyList<TownDuty> Duties => duties;
 
     public void SlowWorld(World world)
@@ -99,6 +101,45 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
         int every = world.Every(Settings.LookEveryTicks);
         Look(world, every);
         LookPlayerFood(world, every);
+        StartRequestedDitches(world);
+    }
+
+    /// <summary>
+    /// Row 114's finder (<c>FUN_1405a70a0</c>, which is row 242's <c>FUN_1405a59a0</c>, <b>Verified</b>): the nearest storage in reach that takes one of the character's carried items
+    /// (<see cref="Production.ProductionSystem.Ditchable"/>). Engine choice: only storages of its own faction or the town's, in the town it stands in (<see cref="StoreFor"/>; the finder's own owner
+    /// test is <b>Unknown</b>). <paramref name="register"/> false is a read-only look (the planner's, on a worker).
+    /// </summary>
+    public (string Id, Vector2 Spot)? DitchStore(World world, Squad squad, CharacterCold cold, Vector3 at, bool register)
+    {
+        var town = AiSystem.TownAt(data, world, at);
+        if (town.IsNone || cold.Inventory is not { } inv) return null;
+        return StoreFor(world, squad, cold, at, town, [.. Production.ProductionSystem.Ditchable(inv)], register);
+    }
+
+    /// <summary>
+    /// The plan's step 93 Filling machine at a storage (<see cref="AiMind.DitchRequest"/>, set by the think when the plan's first step walks to or fills the ditch target): a <see cref="TownDutyKind.Ditch"/>
+    /// errand walks there and puts the carried items in; the AI plans again when it ends.
+    /// </summary>
+    void StartRequestedDitches(World world)
+    {
+        var table = world.Characters;
+        for (int s = 0; s < table.HighWater; s++)
+        {
+            if (!table.Next[s].Alive || table.Cold(s) is not { Ai: { DitchRequest: true } mind } c) continue;
+            mind.DitchRequest = false;
+            var id = table.IdOf(s);
+            if (c.Engaged || c.InCombat || c.Fleeing || Busy(id)) continue;
+            var at = table.Next[s].Position;
+            if (DitchStore(world, mind.Squad, c, at, register: true) is not var (storeId, spot)) { mind.Replan = true; continue; }
+            StartDitch(world, s, c, AiSystem.TownAt(data, world, at), storeId, spot);
+        }
+    }
+
+    void StartDitch(World world, int slot, CharacterCold cold, CampaignTown town, string storeId, Vector2 spot)
+    {
+        cold.Engaged = true;
+        duties.Add(new TownDuty { Member = world.Characters.IdOf(slot), Faction = cold.Faction, Town = town, Kind = TownDutyKind.Ditch, Target = storeId, Goal = spot });
+        TaskStart.Walk(world, slot, spot, SpeedMode.Walk, RowOf(TownDutyKind.Ditch), TaskSource.Goal);
     }
 
     /// <summary>
@@ -154,7 +195,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
             else if (HasGates(world, town)) { why = "outside an occupied town's walls"; return 0; }
         }
         if (!hungry) { why = "not hungry"; return 0; }
-        if (Store(world, at, town, owner: c.Faction, animal: animal) is not var (storeId, spot)) { why = "no store with food"; return 0; }
+        if (Store(world, at, town, owner: c.Faction, animal: animal, race: race, asker: c) is not var (storeId, spot)) { why = "no store with food"; return 0; }
         store = (town, storeId, spot);
         return desire;
     }
@@ -219,7 +260,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
             if (!table.Next[s].Alive || table.Cold(s) is not { } c) continue;
             if (table.Next[s].Task == (byte)CharacterTask.PickUp && !c.CarryTarget.IsNone) reserved.Add(c.CarryTarget);
             if (!c.Carrying.IsNone) { reserved.Add(c.Carrying); carriers.Add(s); }
-            if (c is { Medical: { Unconscious: true, Dead: false } } && c.InSomething == HeldState.None && CarrySystem.CanBeLifted(c)) downed.Add(s);
+            if (c is { Medical: { Unconscious: true, Dead: false } } && c.InSomething != HeldState.Imprisoned && CarrySystem.CanBeLifted(c)) downed.Add(s);
         }
         LookDeadCarriers(world, every);
         Span<int> intruders = stackalloc int[5], food = stackalloc int[5], confiscate = stackalloc int[5], loot = stackalloc int[5], shoo = stackalloc int[5], ransack = stackalloc int[5], stash = stackalloc int[5];
@@ -246,9 +287,10 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
                     || squad.Ai is { HomePublic: false } && population.GoalDuty(world, squad, (AiRole)role, TaskType.SHOO_STRANGERS_OUT_OF_MY_BUILDING_IF_PRIVATE)) ? 1 : 0;
                 if (ransack[role] < 0) ransack[role] = population.GoalDuty(world, squad, (AiRole)role, TaskType.RUN_AROUND_TOWN_LOOKING_FOR_PEOPLE) ? 1 : 0;
                 if (stash[role] < 0) stash[role] = population.GoalDuty(world, squad, (AiRole)role, TaskType.PUT_LOOT_IN_STORAGE) ? 1 : 0;
-                if (ransack[role] == 1 && RansackTarget(world, squad, slot) is { } raid)
+                if (ransack[role] == 1 && RansackTarget(world, squad, slot) is var (raid, door))
                 {
                     cold.Engaged = true;
+                    if (door is not null) locks?.BashForErrand(cold, door);
                     if (cold.Fighter is { } armed) cold.DrawnWeapon = Combat.CombatSystem.MeleeDrawn(armed);   // B: hasWeaponEquipped
                     var goal = Flat(raid.Position);
                     duties.Add(new TownDuty { Member = member, Faction = cold.Faction, Town = AiSystem.TownAt(data, world, raid.Position), Kind = TownDutyKind.Ransack, Target = raid.Key, Goal = goal });
@@ -264,8 +306,9 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
                 }
                 var at = table.Next[slot].Position;
                 var town = AiSystem.TownAt(data, world, at);
-                // 131 Looting food, in whatever town it is in (the original's target town, else the current one).
-                if (loot[role] == 1 && !town.IsNone && !HoldsFood(cold) && Store(world, at, town, cold.Faction) is var (lootId, lootSpot))
+                // 131 Looting food and 243 below search the blackboard's target town (Blackboard.Destination), else the current one, else the 3 x 3 zone cells round the member (FUN_1408cb650).
+                var foodTown = squad.Ai is { Destination.IsNone: false } target ? target.Destination : town;
+                if (loot[role] == 1 && !HoldsFood(cold) && Store(world, at, foodTown, cold.Faction, asker: cold) is var (lootId, lootSpot))
                 {
                     cold.Engaged = true;
                     duties.Add(new TownDuty { Member = member, Faction = cold.Faction, Town = town, Kind = TownDutyKind.LootFood, Target = lootId, Goal = lootSpot });
@@ -280,8 +323,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
                     TaskStart.Walk(world, slot, stashSpot, SpeedMode.Walk, RowOf(TownDutyKind.Stash), TaskSource.Goal);
                     continue;
                 }
-                if (town.IsNone) continue;
-                bool mine = MyTown(world, squad, town);
+                bool mine = !town.IsNone && MyTown(world, squad, town);
                 if (mine && intruders[role] == 1 && downed.Count > 0 && Intruder(world, slot, cold, town) is >= 0 and var body
                     && carry.BeginPickUp(world, slot, table.IdOf(body), CharacterTask.Idle, source: TaskSource.Goal, row: TaskType.PICKUP_INTRUDERS_TOWN))
                 {
@@ -299,9 +341,16 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
                     continue;
                 }
                 // 243 needs no own town (FUN_1408cb650); a player-side member takes only from its own faction's stores (FUN_1408dac20). 244 starts only with room for the item (state 82,
-                // FUN_14059bd80: the inventory, else the worn bag); state !12 (no sensed ally fighting) is not modelled: its per-ally score FUN_14099a190 is undecoded.
-                if (food[role] == 1 && !HoldsFood(cold) && Store(world, at, town, owner: cold.Faction == world.Player.Faction ? cold.Faction : -1) is var (id, spot) && FoodFits(world, id, cold))
+                // FUN_14059bd80: the inventory, else the worn bag) and with no sensed ally fighting (state !12, AiSystem.AlliesFighting).
+                if (food[role] == 1 && !HoldsFood(cold) && Store(world, at, foodTown, owner: cold.Faction == world.Player.Faction ? cold.Faction : -1, asker: cold) is var (id, spot)
+                    && world.SystemOf<AiSystem>()?.AlliesFighting(world, slot) != true)
                 {
+                    if (!FoodFits(world, id, cold))
+                    {
+                        // 244's B list asks state 82 (room); its provider is row 114 Ditching to make space, whose plan is 93 into the nearest storage (a2-039): the food run waits for the next look.
+                        if (!town.IsNone && DitchStore(world, squad, cold, at, register: true) is var (ditchId, ditchSpot)) StartDitch(world, slot, cold, town, ditchId, ditchSpot);
+                        continue;
+                    }
                     cold.Engaged = true;
                     duties.Add(new TownDuty { Member = member, Faction = cold.Faction, Town = town, Kind = TownDutyKind.Food, Target = id, Goal = spot });
                     TaskStart.Walk(world, slot, spot, SpeedMode.Walk, RowOf(TownDutyKind.Food), TaskSource.Goal);
@@ -347,8 +396,14 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     {
         var table = world.Characters;
         if (!table.Next[slot].Alive || table.Next[slot].Task is not ((byte)CharacterTask.Idle or (byte)CharacterTask.Wander or (byte)CharacterTask.Follow or (byte)CharacterTask.GoTo)) return false;
-        return table.Cold(slot) is { IsPlayer: false, Fleeing: false, Engaged: false, InCombat: false } c && CarrySystem.CanCarry(world, c, TaskType.PICKUP_INTRUDERS);
+        return table.Cold(slot) is { IsPlayer: false, Fleeing: false, Engaged: false, InCombat: false } c && CarrySystem.CanCarry(world, c, TaskType.PICKUP_INTRUDERS) && !HoldsHigherGoal(c);
     }
+
+    /// <summary>
+    /// A duty is a priority-2 goal: the goal chooser (<c>FUN_140510ef0</c>) tries player orders, jobs, urgent perma-jobs and the priority-3 goals first (Observed), so a member whose AI holds an urgent
+    /// goal does not take one. Engine stand-in: jobs and perma-jobs show as a task other than idle, wander, follow or go-to, which <see cref="Free"/> already turns away.
+    /// </summary>
+    static bool HoldsHigherGoal(CharacterCold c) => c.Ai?.Goal?.Task.Priority is Meitou.Data.Gameplay.Ai.TaskPriority.Urgent or Meitou.Data.Gameplay.Ai.TaskPriority.Obedience;
 
     bool Busy(CharacterId id)
     {
@@ -429,7 +484,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
 
     /// <summary>
     /// The intruder finder's stand-in for <c>amInsideTownWalls</c> where the gate codes are unknown (<b>engine reading</b>): a placed town's radius, a player
-    /// town's farthest building from its centre. A body put down past it (<see cref="TownDutySettings.OutsideTown"/>) is not found again.
+    /// town's farthest building from its centre. A body put down at the exit point is normally outside it.
     /// </summary>
     bool BuiltUp(World world, CampaignTown town, Vector2 p) => Vector2.Distance(p, Centre(world, town)) <= Reach(world, town);
 
@@ -446,16 +501,25 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
         return far;
     }
 
-    /// <summary>Where an intruder is put down: past the built-up area by <see cref="TownDutySettings.OutsideTown"/> on the carrier's side, farther out until the ground is walkable.</summary>
-    Vector2 Outside(World world, CampaignTown town, Vector3 from)
+    /// <summary>
+    /// Where an intruder is put down: the town's point outside its gates (<see cref="TownExit"/>, <c>Town::getPositionOutsideTownGates(200)</c>, <b>Verified</b>), the same for every carrier. A player town's
+    /// is found over its complete sites: a gate outside the walls, or a wall with an interior.
+    /// </summary>
+    Vector2 Outside(World world, CampaignTown town)
     {
-        var centre = Centre(world, town);
-        var dir = Flat(from) - centre;
-        dir = dir.LengthSquared() > 1e-4f ? Vector2.Normalize(dir) : Vector2.UnitX;
-        float distance = Reach(world, town) + Settings.OutsideTown;
-        var p = centre + dir * distance;
-        for (int tries = 0; tries < 4 && !world.Walkability.IsWalkable(p.X, p.Y); tries++, distance *= 1.25f) p = centre + dir * distance;
-        return p;
+        locks ??= world.Systems.OfType<Locks.LockSystem>().FirstOrDefault();
+        if (town.Site >= 0) return TownExit.Of(data.Sites[town.Site], locks?.Regions, world.Fixtures.IsDestroyed);
+        return TownExit.Of(Centre(world, town), ExitCandidates(world, town));
+    }
+
+    IEnumerable<(Vector2, bool)> ExitCandidates(World world, CampaignTown town)
+    {
+        foreach (var site in world.Buildings.All)
+        {
+            if (site.Town != town.PlayerTown || !site.Complete || data.Db.Find(site.Record) is not { } r) continue;
+            bool gate = Meitou.Data.World.TownBuildings.IsGate(data.Db, r, gateFunctions) && !(locks?.Regions?.CodeAt(site.Position) > 0);
+            yield return (Flat(site.Position), gate || r.GetBool("links together") && r.GetReferences("interior").Count > 0);
+        }
     }
 
     static bool HoldsFood(CharacterCold cold) =>
@@ -466,35 +530,46 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     /// of the player town, or a container that is not locked inside the town. Its id and where the member walks. With <paramref name="owner"/> (a player-side run) only stores of that
     /// faction; for an <paramref name="animal"/> raw food counts too and a store inside another building is skipped (the finder's animal tests).
     /// </summary>
-    (string Id, Vector2 Spot)? Store(World world, Vector3 at, CampaignTown town, int looter = -1, int owner = -1, bool animal = false)
+    (string Id, Vector2 Spot)? Store(World world, Vector3 at, CampaignTown town, int looter = -1, int owner = -1, bool animal = false, RaceData? race = null, CharacterCold? asker = null)
     {
         var here = Flat(at);
         (string, Vector2)? best = null;
         float bestD = float.MaxValue;
-        if (town.PlayerTown > 0)
+        if (town.PlayerTown > 0 || town.IsNone)
             foreach (var m in world.Machines.All)
             {
-                if (m.Storage is not { } s || !s.Items.Any(i => Edible(i, animal)) || world.Buildings.Find(m.Site) is not { Complete: true } site || site.Town != town.PlayerTown) continue;
-                if (owner >= 0 && site.Owner != owner || animal && site.Parent is not null) continue;
+                if (m.Storage is not { } s || !s.Items.Any(i => Edible(i, animal, race)) || world.Buildings.Find(m.Site) is not { Complete: true } site || !InScope(world, town, at, CampaignTown.OfPlayer(site.Town), site.Position)) continue;
+                if (owner >= 0 && site.Owner != owner || animal && site.Parent is not null || asker?.IsUnreachable(m.Site, world.Tick) == true) continue;
                 float d = Vector2.DistanceSquared(here, Flat(site.Position));
                 if (d < bestD) (best, bestD) = ((m.Site, Flat(site.Position)), d);
             }
         foreach (var f in world.Fixtures.All)
         {
-            if (looter >= 0 && f.Owner == looter || owner >= 0 && f.Owner != owner) continue;
-            if (f.Contents is not { } c || f.Lock is { EffectivelyLocked: true } || !c.Items.Any(i => Edible(i, animal)) || AiSystem.TownAt(data, world, f.Position) != town) continue;
+            if (looter >= 0 && f.Owner == looter || owner >= 0 && f.Owner != owner || asker?.IsUnreachable(f.Id, world.Tick) == true) continue;
+            if (f.Contents is not { } c || f.Lock is { EffectivelyLocked: true } || !c.Items.Any(i => Edible(i, animal, race)) || !InScope(world, town, at, AiSystem.TownAt(data, world, f.Position), f.Position)) continue;
             float d = Vector2.DistanceSquared(here, Flat(f.Position));
             if (d < bestD) (best, bestD) = ((f.Id, Flat(f.Position)), d);
         }
         return best;
     }
 
-    /// <summary>Food the finder looks for: <c>item function</c> 3, for an animal also raw food (15).</summary>
-    static bool Edible(ItemInstance item, bool animal) => item.IsFood || animal && item.ItemFunction == FeedSystem.RawFoodFunction;
+    /// <summary>
+    /// Whether a store belongs to the food finder's search (<c>FUN_1408cb650</c> over <c>FUN_1409fc540</c>, <b>Verified</b>): in the given town, or, with no town, within the 3 x 3 zone cells round the looter
+    /// (<paramref name="storeTown"/> is the store's town for a placed one and the player town's number for a player's site; a machine is in the town when it is that player town).
+    /// </summary>
+    static bool InScope(World world, CampaignTown town, Vector3 at, CampaignTown storeTown, Vector3 storePosition)
+    {
+        if (!town.IsNone) return storeTown == town;
+        return Meitou.Data.World.WorldLayout.WithinOneZone(at.X, at.Z, storePosition.X, storePosition.Z);
+    }
+
+    /// <summary>Food the finder looks for (<c>FUN_14042ee50</c>): <c>item function</c> 3, and raw food (15) for an animal or when the race's special food lists it.</summary>
+    static bool Edible(ItemInstance item, bool animal, RaceData? race = null) =>
+        item.IsFood || item.ItemFunction == FeedSystem.RawFoodFunction && (animal || race?.SpecialFood.Contains(item.Record) == true);
 
     /// <summary>Whether the member has room for the item <see cref="StepFood"/> would take from the store (<see cref="Inventory.HasRoomFor"/>).</summary>
     bool FoodFits(World world, string storeId, CharacterCold cold) =>
-        StoreInventory(world, storeId) is { } store && cold.Inventory is { } inv && store.Items.FirstOrDefault(i => Edible(i, false)) is { } item && inv.HasRoomFor(item);
+        StoreInventory(world, storeId) is { } store && cold.Inventory is { } inv && store.Items.FirstOrDefault(i => Edible(i, false, cold.Race)) is { } item && inv.HasRoomFor(item);
 
     Inventory? StoreInventory(World world, string id) => world.Machines.Find(id)?.Storage ?? world.Fixtures.Find(id)?.Contents;
 
@@ -546,13 +621,15 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     /// walks. A member with a home town standing in a TOWN-type town reads the <i>home</i> town's storages (any owner); otherwise the current town's, owned by the member's faction or the town's
     /// (the nearest-allies finder's building test, <c>FUN_1408ca5d0</c> with <c>FUN_140621230</c>, <b>Observed</b>: a storage has an inventory, so only those two owners pass).
     /// </summary>
-    (string Id, Vector2 Spot)? StashStore(World world, Squad squad, CharacterCold cold, Vector3 at, CampaignTown town)
+    (string Id, Vector2 Spot)? StashStore(World world, Squad squad, CharacterCold cold, Vector3 at, CampaignTown town) => StoreFor(world, squad, cold, at, town, [.. LootOf(world, cold)], register: true);
+
+    /// <summary>The storage <see cref="StashStore"/>'s search finds for <paramref name="loot"/> (any carried items); <paramref name="register"/> false is a read-only look (the planner's finder, run on a worker).</summary>
+    (string Id, Vector2 Spot)? StoreFor(World world, Squad squad, CharacterCold cold, Vector3 at, CampaignTown town, List<ItemInstance> loot, bool register)
     {
-        var loot = LootOf(world, cold).ToList();
         if (loot.Count == 0) return null;
         bool listed = squad.Town >= 0 && town.Site >= 0 && data.Sites[town.Site].Town.Type == Meitou.Data.Gameplay.TownType.Town;
         var search = listed ? CampaignTown.OfSite(squad.Town) : town;
-        if (search.Site >= 0) world.Fixtures.RegisterSite(world, data, search.Site);
+        if (register && search.Site >= 0) world.Fixtures.RegisterSite(world, data, search.Site);
         int townOwner = search.PlayerTown > 0 ? world.Buildings.FindTown(search.PlayerTown)?.Owner ?? -1 : search.Site < data.SiteFactions.Count ? data.SiteFactions[search.Site] : -1;
         bool Usable(int owner) => listed || owner == cold.Faction || townOwner < 0 || owner == townOwner;
         (string, Vector2)? best = null;
@@ -574,7 +651,8 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     }
 
     /// <summary>
-    /// 184 at its storage (the plan's row 93 Filling machine, whose item choice is <b>Unknown</b>; engine choice: what list A <c>!121</c> asks for): every stolen item the storage takes goes in, whole
+    /// 184 and 114 at their storage (row 93 Filling machine, <c>FUN_140344510</c>, <b>Verified</b>: a target with no production component is a storage that takes the carried items): for 184 every
+    /// stolen item the storage takes (engine choice: what list A <c>!121</c> asks for), for 114 what the finder's collection lists (<see cref="Production.ProductionSystem.Ditchable"/>), whole
     /// stacks while there is room; what does not fit stays carried.
     /// </summary>
     bool StepStash(World world, TownDuty d, int g, CharacterCold gc)
@@ -590,7 +668,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
         if (gap <= Settings.Arrive || !walking && gap <= Settings.CageSlack)
         {
             TaskStart.Stand(table, g);
-            foreach (var item in LootOf(world, gc).Where(i => machine is not null ? Production.ProductionSystem.Stores(machine, i) : Takes(box!, i)).ToList())
+            foreach (var item in (d.Kind == TownDutyKind.Ditch ? Production.ProductionSystem.Ditchable(inv) : LootOf(world, gc)).Where(i => machine is not null ? Production.ProductionSystem.Stores(machine, i) : Takes(box!, i)).ToList())
             {
                 inv.Remove(item);
                 if (store.Add(item)) continue;
@@ -601,7 +679,12 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
             return End(world, d);
         }
         if (walking) return true;
-        if (++d.Tries > Settings.Walks) return End(world, d);
+        if (++d.Tries > Settings.Walks)
+        {
+            // The walk failed for good: the store goes on the AI's give-up list (pathFailures, 20 s) the finders skip (FUN_1405b0290 in FUN_1408dac20).
+            if (d.Target is { } failed) gc.NoteUnreachable(failed, world.Tick + (long)MathF.Ceiling(Construction.ConstructionSystem.UnreachableSeconds / world.TickSeconds));
+            return End(world, d);
+        }
         TaskStart.Walk(world, g, d.Goal, SpeedMode.Walk, RowOf(d.Kind), TaskSource.Goal);
         return true;
     }
@@ -628,6 +711,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
         TownDutyKind.LootFood => TaskType.LOOT_FOOD_AND_STUFF,
         TownDutyKind.Shoo => TaskType.SHOO_STRANGERS_OUT_OF_MY_BUILDING,
         TownDutyKind.Ransack => TaskType.RUN_AROUND_TOWN_LOOKING_FOR_PEOPLE,
+        TownDutyKind.Ditch => TaskType.GET_RID_OF_RESOURCES_IN_MY_INVENTORY,
         _ => TaskType.PUT_LOOT_IN_STORAGE,
     };
 
@@ -640,7 +724,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
         if (gc.InCombat) return d.PlayerSide && gc.IsPlayer ? End(world, d) : true;   // a player character's food run is a goal its fight replaced: the decision step chooses again
         ref var gn = ref table.Next[g];
         if (d.Kind is TownDutyKind.Food or TownDutyKind.LootFood) return StepFood(world, d, g, gc);
-        if (d.Kind == TownDutyKind.Stash) return StepStash(world, d, g, gc);
+        if (d.Kind is TownDutyKind.Stash or TownDutyKind.Ditch) return StepStash(world, d, g, gc);
         if (d.Kind == TownDutyKind.Confiscate) return StepConfiscate(world, d, g, gc);
         if (d.Kind == TownDutyKind.Shoo) return StepShoo(world, d, g, gc);
         if (d.Kind == TownDutyKind.Ransack) return StepRansack(world, d, g);
@@ -666,11 +750,14 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
             if ((world.Tick + g) % world.Every(Settings.LookEveryTicks) == 0 && CageDesire(world, g, b) <= 0) return Dispose(world, d, g, b, cageable: false);
             var cage = d.Target is { } id ? world.Fixtures.Find(id) : null;
             if (cage is null || !FixtureRegistry.IsFree(table, cage)) return PutDown(world, d, g);
-            if (gap <= cage.UseRange + Settings.CageReach || !walking && gap <= Settings.CageSlack)
+            if (FixtureRegistry.AtCage(cage, gn.Position, walking))
             {
                 TaskStart.Stand(table, g);
                 carry.LetGo(world, g);
-                if (!world.Fixtures.Imprison(world, d.Body, cage, 1, d.Member)) return End(world, d);
+                if (!world.Fixtures.Imprison(world, d.Body, cage, data.Bodies.Constants.PrisonTime, d.Member)) return End(world, d);
+                // Every cage put-in by this task: the captive's squad remembers the putter as captor and the relation event goes out, then the bounty claim (FUN_140358670).
+                Deeds?.Caged(world, g, b);
+                Arrests?.Claim(world, g, d.Body, cage);
                 if (body.IsPlayer) world.Post($"{body.Name} has been locked in a cage by {data.Factions[d.Faction].Name}");
                 return End(world, d);
             }
@@ -711,7 +798,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
         }
         if (squad is not null && population.GoalDuty(world, squad, (AiRole)role, TaskType.TAKE_INTRUDER_OUTSIDE_TOWN))
         {
-            (d.Kind, d.Goal, d.Tries) = (TownDutyKind.Out, Outside(world, d.Town, gn.Position), 0);
+            (d.Kind, d.Goal, d.Tries) = (TownDutyKind.Out, Outside(world, d.Town), 0);
             TaskStart.Walk(world, g, d.Goal, SpeedMode.Free, RowOf(d.Kind), TaskSource.Goal);
             return true;
         }
@@ -726,16 +813,19 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     /// <summary>
     /// The desire of goals 112 and 281 for the body the carrier in slot <paramref name="carrier"/> holds (<c>AI::scorePutCarriedDudeInCage</c> <c>FUN_1405a1140</c> with <c>FUN_1405a0f10</c>,
     /// <b>Verified</b>), tests in the original's order: the carrier stands in no town 0.1; an animal 0; a law enforcer (<see cref="Crime.CrimeSystem.IsPoliceLike"/>) carrying a slave or escapee it has
-    /// no bounty on 1.4; a body the carrier regards as friendly (<see cref="CarrySystem.Friendly"/>) 0; a dead one 0.5; else 2. The original also returns 0 while the squad's mission target
-    /// (a hand on its AI data, <b>Observed</b>) is set and is not the town the carrier stands in: not modelled, the Meitou package fields do not map to it one for one.
+    /// no bounty on 1.4; a body the carrier regards as friendly (<see cref="CarrySystem.Friendly"/>) 0; a dead one 0.5; else 2. Before the animal test, 0 while the squad's mission town (the board's
+    /// <see cref="Blackboard.Destination"/>, the hand of <b>Observed</b> <c>FUN_1405a0f10</c>) is set and is not the town the carrier stands in.
     /// </summary>
     public float CageDesire(World world, int carrier, int body)
     {
         var table = world.Characters;
         if (table.Cold(carrier) is not { } c || table.Cold(body) is not { } b) return 0;
-        if (AiSystem.TownAt(data, world, table.Next[carrier].Position).IsNone) return OutsideTownDesire;
+        var here = AiSystem.TownAt(data, world, table.Next[carrier].Position);
+        if (here.IsNone) return OutsideTownDesire;
+        // The squad's mission town (the hand Task_TravelToTargetTown sets, FUN_1405a0f10) set and not the town it stands in: 0.
+        if (world.Squads.Find(c.SquadId)?.Ai is { Destination.IsNone: false } board && board.Destination != here) return 0;
         if (b.Fighter is { IsAnimal: true }) return 0;
-        if (b.SlaveState != 0 && (b.Bounties?.AmountFor(c.Faction) ?? 0) < 1 && world.SystemOf<Crime.CrimeSystem>()?.IsPoliceLike(world, c) == true) return PoliceSlaveDesire;
+        if (b.SlaveState != 0 && (b.Bounties?.BookedAmount(data.Relations, c.Faction) ?? 0) < 1 && world.SystemOf<Crime.CrimeSystem>()?.IsPoliceLike(world, c) == true) return PoliceSlaveDesire;
         if (carry.Friendly(c, b)) return 0;
         return b.Medical is { Dead: true } ? DeadDesire : AliveDesire;
     }
@@ -744,13 +834,45 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     bool ListsDeadCage(World world, CharacterCold carrier, CharacterId id) =>
         world.Squads.Find(carrier.SquadId) is { } s && population.GoalDuty(world, s, AiSystem.RoleOf(s, id, carrier), TaskType.FIND_CAGE_AND_PUT_DEADGUY_IN);
 
-    /// <summary>The best free cage in the duty's town for the carrier (<see cref="FixtureRegistry.FindCage"/>'s weights, its squad's home x100), not another errand's.</summary>
+    /// <summary>The best free cage among the carrier's town candidates (<see cref="FixtureRegistry.CageCandidates"/>) by <see cref="FixtureRegistry.FindCage"/>'s weights (its squad's home x100), not another errand's.</summary>
     Fixture? Cage(World world, Vector3 at, TownDuty self)
     {
         if (!world.Characters.TryResolveNext(self.Member, out int slot) || world.Characters.Cold(slot) is not { } carrier) return null;
         if (self.Town.Site >= 0) world.Fixtures.RegisterSite(world, data, self.Town.Site);
-        var squad = world.Squads.Find(carrier.SquadId);
-        return world.Fixtures.FindCage(world, carrier, at, (squad?.Ai?.OwnHome ?? squad?.HomeBuilding)?.Key, f => AiSystem.TownAt(data, world, f.Position) != self.Town || duties.Any(o => !ReferenceEquals(o, self) && o.Target == f.Id));
+        var candidate = world.Fixtures.CageCandidates(world, data, carrier, at);
+        return world.Fixtures.FindCage(world, carrier, at, FixtureRegistry.HomeOf(world, carrier), f => !candidate(f) || duties.Any(o => !ReferenceEquals(o, self) && o.Target == f.Id));
+    }
+
+    /// <summary>Units of one record the looting task (Task_EmptyMachine 284, <c>FUN_14033cd10</c>) takes per run.</summary>
+    public const int LootUnits = 10;
+
+    /// <summary>
+    /// Looting food from a store (284, <c>FUN_14033cd10</c>, <b>Verified</b>): the first record the store lists, whatever it is (the storage's list, vfunc <c>0x548</c> <c>FUN_140299990</c>, is the distinct records of
+    /// its inventory in item order, with no food filter once the task's looting flag is set; the finder only checked that some food is held), one unit at a time while the store still holds it and there is room,
+    /// at most <see cref="LootUnits"/> in all.
+    /// </summary>
+    static void LootFirstFood(Inventory store, Inventory into)
+    {
+        if (store.Items.FirstOrDefault()?.Record is not { } record) return;
+        int budget = LootUnits;
+        foreach (var item in store.Items.Where(i => i.Record == record).ToList())
+        {
+            int moved = InventoryCommands.MoveInto(store, item, budget, into, bagFirst: true, out _);
+            budget -= moved;
+            if (moved == 0 || budget <= 0) break;
+        }
+    }
+
+    /// <summary>
+    /// Grabbing one food (244, <c>FUN_140340850</c>, <b>Verified</b>): the first raw-food item (function 15) the character accepts (an animal, or the race's special food), else the first food
+    /// (function 3); one unit goes into the worn backpack when it takes it, else the character's inventory. Returns the units moved (0: nothing to take, or no room).
+    /// </summary>
+    static int GrabFood(Inventory store, CharacterCold c, Inventory into)
+    {
+        bool animal = c.Medical is { HasStatsObject: false };
+        var item = store.Items.FirstOrDefault(i => i.ItemFunction == FeedSystem.RawFoodFunction && Edible(i, animal, c.Race))
+            ?? store.Items.FirstOrDefault(i => i.IsFood);
+        return item is null ? 1 : InventoryCommands.MoveInto(store, item, 1, into, bagFirst: true, out _);   // nothing listed is no failure of room
     }
 
     bool StepFood(World world, TownDuty d, int g, CharacterCold gc)
@@ -769,10 +891,8 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
         {
             TaskStart.Stand(table, g);
             if (d.Kind == TownDutyKind.LootFood)
-                foreach (var item in store.Items.Where(i => i.IsFood).ToList()) InventoryCommands.MoveInto(store, item, 0, into, bagFirst: true, out _);   // Task_EmptyMachine: while there is room
-            else if (store.Items.FirstOrDefault(i => Edible(i, d.PlayerSide && gc.Medical is { HasStatsObject: false })) is { } item
-                && InventoryCommands.MoveInto(store, item, 1, into, bagFirst: false, out _) == 0   // the grid, else the worn bag (state 82)
-                && InventoryCommands.MoveInto(store, item, 1, into, bagFirst: true, out _, bagOnly: true) == 0 && d.PlayerSide)
+                LootFirstFood(store, into);
+            else if (GrabFood(store, gc, into) == 0 && d.PlayerSide)
                 foodWaits.Add((d.Member, world.GameHours + Settings.RefuseHours));   // no room for it: not again for a while
             world.Machines.Touch();
             return End(world, d);
@@ -828,7 +948,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
         if (cage is null || cage.Occupant != d.Body || !table.TryResolveNext(d.Body, out int p) || table.Cold(p)?.Inventory is null || gc.Inventory is null) return End(world, d);
         bool walking = gn.Task == (byte)CharacterTask.GoTo;
         float gap = Vector2.Distance(Flat(gn.Position), d.Goal);
-        if (gap <= cage.UseRange + Settings.CageReach || !walking && gap <= Settings.CageSlack)
+        if (FixtureRegistry.AtCage(cage, gn.Position, walking))
         {
             TaskStart.Stand(table, g);
             if ((d.Next += world.TickSeconds) <= CarrySystem.ConfiscateSeconds) return true;
@@ -917,16 +1037,42 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
 
     /// <summary>
     /// <c>AI::findRandomBuildingInTown</c> (<c>FUN_1408cb510</c>, goal 216): the squad's mission town (its blackboard's, else the campaign target it marches on), else the town the
-    /// member stands in; one of its standing buildings with an interior, drawn uniformly at random. Null: none.
+    /// member stands in; one of its standing buildings with an interior, drawn uniformly at random among those the planner would reach: row 156 Entering building (the only provider of effect 107, which
+    /// goal 216 wants) needs DESTINATION_IS_ACCESSIBLE (59: <c>hasAnOpenDoor</c>) and DESTINATION_NOT_BLOCKED_BY_FORTIFICATIONS (90: no closed gate between), <b>Observed</b>. The door sub-steps are planned
+    /// (<see cref="EntryTo"/>: open the door, row 72, or bash it, row 81); a building with no way in is left out of the draw. A closed gate on the route is planned as for an attacker (<see cref="Locks.LockSystem.GateEntry"/>: bash it, row 123 / 290, or pass an unlocked one, row 122). Null: none.
     /// </summary>
-    Meitou.Data.World.TownBuilding? RansackTarget(World world, Squad squad, int slot)
+    (Meitou.Data.World.TownBuilding Building, string? Door)? RansackTarget(World world, Squad squad, int slot)
     {
         int site = squad.Ai is { MissionTown: >= 0 } b ? b.MissionTown : squad.Ai is { Destination: { Site: >= 0 } dest } ? dest.Site : AiSystem.TownAt(data, world, world.Characters.Next[slot].Position).Site;
         if (site < 0) return null;
-        var rooms = data.Sites[site].Buildings.Where(x => !world.Fixtures.IsDestroyed(x) && (x.InteriorLayout.Length > 0 || x.InteriorLayouts.Count > 0)).ToList();
+        locks ??= world.Systems.OfType<Locks.LockSystem>().FirstOrDefault();
+        var from = world.Characters.Next[slot].Position;
+        var rooms = new List<(Meitou.Data.World.TownBuilding, string?)>();
+        foreach (var x in data.Sites[site].Buildings)
+        {
+            if (world.Fixtures.IsDestroyed(x) || x.InteriorLayout.Length == 0 && x.InteriorLayouts.Count == 0) continue;
+            var gate = locks?.GateEntry(world, slot, from, x.Position) ?? (Locks.DoorPlan.Entry.Walk, null);
+            if (gate.Entry == Locks.DoorPlan.Entry.Blocked) continue;
+            if (gate.Door is not null) rooms.Add((x, gate.Door));   // the gate is bashed first (rows 123 / 290)
+            else if (EntryTo(world, slot, x) is { } door) rooms.Add((x, door.Length == 0 ? null : door));
+        }
         if (rooms.Count == 0) return null;
         return rooms[Rng.Int(Rng.Hash(world.Seed, (ulong)Rng.Key(world.Characters.IdOf(slot)) ^ (ulong)world.Tick, RngPurpose.Slow, RansackSalt), rooms.Count)];
     }
+
+    /// <summary>
+    /// How the member gets into a building, by the planner (row 156's state 59 <c>hasAnOpenDoor</c>, <see cref="Locks.DoorPlan.PlansEntry"/>): "" to walk in (a door open, none, or a closed one the character opens as it passes, row 72),
+    /// the id of the door it bashes first (row 81, a locked door of a building it is aggressive towards), null when the planner finds no way in.
+    /// </summary>
+    string? EntryTo(World world, int slot, Meitou.Data.World.TownBuilding building)
+    {
+        if (world.Fixtures.HasOpenDoor(building.Key)) return "";
+        if (Locks.LockSystem.MainGateDoor(world, building.Key) is not { } main) return "";
+        var entry = doorPlan.PlansEntry(world, world.SystemOf<Combat.CombatSystem>(), slot, building.Key, main.Door, main.Spot, locks);
+        return entry switch { Locks.DoorPlan.Entry.Walk => "", Locks.DoorPlan.Entry.Bash => main.Door.Id, _ => null };
+    }
+
+    readonly Locks.DoorPlan doorPlan = new();
 
     const ulong RansackSalt = 0x5261_6E73_6163_6B21;
 
@@ -939,6 +1085,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
         var table = world.Characters;
         ref var gn = ref table.Next[g];
         bool walking = gn.Task == (byte)CharacterTask.GoTo;
+        if (table.Cold(g)?.Bashing is not null) return true;   // bashing the door first (the lock system walks and swings)
         if (world.Sight.BuildingOf(g) == d.Target || !walking && Vector2.Distance(Flat(gn.Position), d.Goal) <= Settings.CageSlack) return End(world, d);
         if (walking) return true;
         if (++d.Tries > Settings.Walks) return End(world, d);
@@ -962,6 +1109,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
         {
             gc.Engaged = false;
             if (table.Next[g].Task == (byte)CharacterTask.GoTo) TaskStart.Stand(table, g);
+            if (d.Kind == TownDutyKind.Ditch && gc.Ai is { } mind) mind.Replan = true;   // the plan's step 93 is done: the planner asks again with the inventory as it is now
         }
         return false;
     }

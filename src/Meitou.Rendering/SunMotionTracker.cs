@@ -63,7 +63,7 @@ sealed class SunMotionTracker
         float z = -Vector3.Dot(direction, new Vector3(rotation.M13, rotation.M23, rotation.M33));
         if (z < 0.05f) return null;
         float tanY = MathF.Tan(fov * 0.5f);
-        return new Vector2(x / (z * tanY * aspect), y / (z * tanY));
+        return ViewWindow.Current.ToTile(new Vector2(x / (z * tanY * aspect), y / (z * tanY)));
     }
 
     static T ReadGlobal<T>(FrameGlobals globals, string name) where T : unmanaged

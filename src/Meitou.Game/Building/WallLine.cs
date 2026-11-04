@@ -138,6 +138,8 @@ public static class WallLine
         public readonly List<BuildingBuildData> Pieces = [];
         public readonly bool[] Used = new bool[64];
         public BuildingBuildData? Connector, Wedge;
+        /// <summary>The wall's <c>max slope</c> and <c>building height</c> (the wall object's +0x88 and +0x8c).</summary>
+        public float MaxSlope, Height;
         public BuildingBuildData Shortest => Pieces[^1];
         public BuildingBuildData Longest => Pieces[0];
 
@@ -145,7 +147,7 @@ public static class WallLine
 
         public static PieceSet Of(BuildingBuildData master, Func<string, BuildingBuildData?> data)
         {
-            var set = new PieceSet();
+            var set = new PieceSet { MaxSlope = master.MaxSlope, Height = master.BuildingHeight };
             foreach (var piece in master.WallSubsections.Select(data).Prepend(master))
             {
                 if (piece is null) continue;
@@ -248,6 +250,13 @@ public static class WallLine
             p = cur + Vector3.Normalize(toward) * (len - stretch);
             var d = p - cur;
 
+            // A rising piece steeper than the wall's max slope is not placed: the run goes on straight (FUN_14042a4b0 -> FUN_14042a2b0) and ends.
+            if (p.Y > cur.Y && Angle(dir, d) > set.MaxSlope)
+            {
+                cur = Straight(set, pieces, smoothed, Segment(Vector3.Dot(new Vector3(cur.X - start.X, 0, cur.Z - start.Z), dir)), cur, before, reversed);
+                break;
+            }
+
             float bend = Angle(before, d);
             if (Vector3.Normalize(d).Y - Vector3.Normalize(before).Y > 0) bend = -bend;
             if (bend > BendDegrees && set.Shortest.LinkType != Single)
@@ -282,6 +291,44 @@ public static class WallLine
             return float.Lerp(smoothed[i].Y, smoothed[i + 1].Y, t);
         }
     }
+
+    /// <summary>
+    /// The straight continuation past a slope that is too steep (<c>FUN_14042a2b0</c>, <b>Verified</b>): along the previous piece's direction, the profile points from <paramref name="from"/> on are
+    /// scanned for how far the line stands above the ground; the scan stops at the first point where the ground rises <c>building height</c> - 10 above the line (<see cref="Rise"/>), else at the point
+    /// of greatest rise. Pieces of the longest length follow the line for as long as half a piece is less than the distance left (a single only once). Returns where the last one ends.
+    /// </summary>
+    static Vector3 Straight(PieceSet set, List<WallPiece> pieces, Vector3[] profile, int from, Vector3 cur, Vector3 before, bool reversed)
+    {
+        if (before.LengthSquared() < 1e-9f) return cur;
+        var line = Vector3.Normalize(before);
+        float distance = 0, bestDistance = 0, lowest = 0;
+        for (int i = from; i < profile.Length; i++)
+        {
+            distance = Vector3.Dot(line, profile[i] - cur);
+            float above = line.Y * distance + cur.Y - profile[i].Y;
+            if (above < lowest)
+            {
+                bestDistance = distance;
+                lowest = above;
+            }
+            if (above < Rise - set.Height) break;
+            distance = bestDistance;
+        }
+        var piece = set.Longest;
+        float length = piece.LinkLength;
+        while (length * 0.5f < distance)
+        {
+            var next = cur + line * length;
+            pieces.Add(reversed ? Facing(piece, next, cur) : Facing(piece, cur, next));
+            cur = next;
+            if (piece.LinkType == Single) break;
+            distance -= length;
+        }
+        return cur;
+    }
+
+    /// <summary>The constant a straight continuation compares the line's height over the ground with (<c>DAT_14167fad4</c>, <b>Verified</b> 10).</summary>
+    const float Rise = 10;
 
     // ---- small geometry ----
 

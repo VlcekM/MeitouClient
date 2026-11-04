@@ -88,12 +88,15 @@ public sealed partial class PopulationSystem
         // One squad of everything the start lists.
         var members = new List<BuiltMember>();
         var first = new List<MemberPlan>();
+        var fromTemplate = new HashSet<int>();   // the members the squad templates made: they go through the unique gate, the CHARACTER entries do not (FUN_140583a10)
         SquadTemplate? template = null;
         void AddTemplate(GameRecord record)
         {
             var t = SquadTemplate.From(record);
             template ??= t;
+            int before = first.Count;
             first.AddRange(SquadFactory.Plan(data.Db, t, settings.SquadSizeMultiplier, world.Seed, Rng.Mix(key ^ (uint)first.Count), States).Members);
+            for (int i = before; i < first.Count; i++) fromTemplate.Add(i);
         }
         // A CHARACTER entry's characters stand up to 50 from the place on x and z, as the original's do.
         Vector2 Scatter(int i) => new(Rng.Float(Rng.Hash(world.Seed, key, RngPurpose.Spawn, SeedSalts.PlayerScatter + 2 * (ulong)i)) * 100 - 50,
@@ -120,13 +123,17 @@ public sealed partial class PopulationSystem
         }
         var plan = new SquadPlan(template ?? new SquadTemplate { Id = start.Id, Name = start.Name }, first, [], []);
         var built = new BuiltSquad(plan, at, data.PlayerFaction, members);
-        var squad = SpawnSquad(world, built, null, town is null ? 100 : town.Town.SizeRadius * town.Town.TownRadiusMult, player: true);
-        // CHARACTER `slave` (fcs.def "sets initial slave state", SlaveStateEnum NOT_SLAVE 0, IS_SLAVE 1, ESCAPING_SLAVE 2, EX_SLAVE 3): The Slaves start's "start slave" is 1. The owner is
-        // the start town's faction (engine choice: the original's is Unknown); an escaped one is stamped now (lie low, FixtureRegistry.LayLow); an ex-slave start is left free.
+        var squad = SpawnSquad(world, built, null, town is null ? 100 : town.Town.SizeRadius * town.Town.TownRadiusMult, player: true, gated: fromTemplate);
+        // A start slave (CHARACTER `slave`, set for every new character in SpawnSquad) belongs to the start town's faction (engine choice: the original's owner is Unknown); an escaped one is
+        // stamped now (lie low, FixtureRegistry.LayLow); an ex-slave start is left free.
         int owner = town is not null && town.Index < data.SiteFactions.Count ? data.SiteFactions[town.Index] : -1;
-        foreach (var id in squad.Members)
-            if (world.Characters.Cold(id.Slot) is { } c && data.Db.Find(c.RecordId)?.GetInt("slave") is (1 or 2) and var state && owner >= 0)
-                (c.SlaveState, c.SlaveOwner, c.SlaveSince) = ((byte)state, owner, world.GameHours);
+        if (owner >= 0)
+            foreach (var id in squad.Members)
+                if (world.Characters.Cold(id.Slot) is { SlaveState: not 0 } c)
+                {
+                    c.SlaveOwner = owner;
+                    if (c.SlaveState == 2) c.SlaveSince = world.GameHours;
+                }
         // The first player squad reads like its platoon, the faction's name and 0 ("Nameless_0", docs/game/ui-screens.md "Squad tabs").
         squad.Name = $"{(data.Factions[data.PlayerFaction].Name is { Length: > 0 } f ? f : "Nameless")}_0";
         world.Player.Faction = data.PlayerFaction;

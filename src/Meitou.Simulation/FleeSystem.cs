@@ -98,8 +98,8 @@ public sealed class FleeSystem(FactionRelations relations, CombatSystem combat, 
     void Consider(World world, CharacterTable table, Squad squad)
     {
         if (!Relations.Contains(squad.Faction)) return;
-        int size = 0;
-        bool fighting = false;
+        int size = 0, able = 0;
+        bool fighting = false, home = Ai.SquadIntact.PersistentHome(squad);
         standing.Clear();
         foreach (var m in squad.Members)
         {
@@ -107,6 +107,7 @@ public sealed class FleeSystem(FactionRelations relations, CombatSystem combat, 
             // A member running alone (Self preservation) does not stop its squad from breaking; it counts as the others do and is not started again.
             if (c.IsPlayer || c.Fleeing && !c.FleesAlone) return;
             size++;
+            if (Ai.SquadIntact.Able(world, c, home)) able++;
             bool down = c.Medical is { Incapacitated: true };
             if (down || c.Fighter is null) continue;
             standing.Add(s);
@@ -115,14 +116,12 @@ public sealed class FleeSystem(FactionRelations relations, CombatSystem combat, 
         // The squad-intact test (Ai.SquadIntact, FUN_14079acf0, docs/game/perception.md "Fleeing"): a member caged or carried off by a non-ally keeps it intact; else it
         // needs a leader and someone able; under 4 members it holds while the leader is up, from 4 while those able to fight are a share of the squad. No enemy is counted.
         if (!fighting || standing.Count == 0 || Ai.SquadIntact.Held(table, squad, Relations)) return;
-        if (Ai.SquadIntact.Decide(standing.Count, size, !squad.Leader.IsNone, Ai.SquadIntact.Down(table, squad.Leader), Ai.SquadIntact.PersistentHome(squad))) return;
+        if (Ai.SquadIntact.Decide(able, size, !squad.Leader.IsNone, Ai.SquadIntact.Down(table, squad.Leader), home)) return;
         Broken++;
         foreach (int s in standing)
         {
             if (table.Cold(s)!.Fleeing) continue;
-            var centre = Vector3.Zero;
-            int k = 0;
-            Enemies(world, table, s, null, (_, p) => { centre += p; k++; });
+            var (centre, k) = Centre(world, table, s);
             table.Cold(s)!.FleesAlone = false;
             Begin(world, table, s, centre, k);
         }
@@ -139,15 +138,13 @@ public sealed class FleeSystem(FactionRelations relations, CombatSystem combat, 
         if (ask == Ai.FleeAsk.Threat)
         {
             float level = combat.ThreatLevel(world, s, out var threats);
-            if (level <= 0 || !Ai.SelfPreservation.Runs(cold, level)) return;
+            if (level <= 0 || !Ai.SelfPreservation.Runs(cold, level, Ai.SelfPreservation.Walled(world, s))) return;
             cold.FleesAlone = true;
             Begin(world, table, s, threats, 1);
             return;
         }
         if (standingAt != world.Tick) { StandingFactions(table); standingAt = world.Tick; }
-        var centre = Vector3.Zero;
-        int k = 0;
-        Enemies(world, table, s, null, (_, p) => { centre += p; k++; });
+        var (centre, k) = Centre(world, table, s);
         cold.FleesAlone = false;
         Begin(world, table, s, centre, k);
     }
@@ -182,7 +179,33 @@ public sealed class FleeSystem(FactionRelations relations, CombatSystem combat, 
     bool Unthreatened(World world, int s, CharacterCold cold)
     {
         float level = combat.ThreatLevel(world, s, out _);
-        return level <= 0 || !Ai.SelfPreservation.Runs(cold, level);
+        return level <= 0 || !Ai.SelfPreservation.Runs(cold, level, Ai.SelfPreservation.Walled(world, s));
+    }
+
+    /// <summary>
+    /// The centre <c>Task_Runaway</c> runs from (<c>FUN_14034b440</c>, <b>Verified</b>): the sum of the positions and the count of the runner's sense entries tagged NEUTRAL or ENEMY (include mask 6)
+    /// and neither KO, bit 4 nor imprisoned (exclude 0x218; <c>FUN_140853960</c>), neutrals included, that intend aggression: the status float +0xac, the intended aggression of the entry's current
+    /// goal (<see cref="Ai.TaskAggression.OfGoal"/>), must be above 0. The original adds the running task's +0xa0 when the entry's target matches a handle of the sense record (which one:
+    /// <b>Unknown</b>, not modelled). A runner without senses falls back to the enemies standing in its sight range.
+    /// </summary>
+    (Vector3 Centre, int Count) Centre(World world, CharacterTable table, int s)
+    {
+        var centre = Vector3.Zero;
+        int k = 0;
+        if (world.SystemOf<AggroSystem>()?.SensesOf(s) is not { } senses)
+        {
+            Enemies(world, table, s, null, (_, p) => { centre += p; k++; });
+            return (centre, k);
+        }
+        foreach (var e in senses.Entries)
+        {
+            var tags = e.Tags;
+            if ((tags & (SenseTag.Neutral | SenseTag.Enemy)) == 0 || (tags & (SenseTag.Ko | SenseTag.Imprisoned)) != 0 || e.Target == s || (uint)e.Target >= (uint)table.HighWater) continue;
+            if (!table.Next[e.Target].Alive || table.Next[e.Target].Generation != e.Generation || table.Cold(e.Target) is not { } c || Ai.TaskAggression.OfGoal(c) <= 0) continue;
+            centre += table.Next[e.Target].Position;
+            k++;
+        }
+        return (centre, k);
     }
 
     // The tick StandingFactions was last built on (a request may come on any tick, the periodic check on every CheckEveryTicks).

@@ -73,6 +73,19 @@ public class CarryTests
 
     // ------------------------------------------------------------------ carrying
 
+    /// <summary>The lift rows carry condition !26 on the carrier (<c>FUN_140599e90</c>): a carrier staying low cannot start a lift, one standing can.</summary>
+    [Fact]
+    public void A_carrier_staying_low_cannot_start_a_lift()
+    {
+        using var rig = new Rig();
+        var carrier = rig.Add(1000, 2000);
+        rig.World.RunTicks(2);
+        var cold = rig.Cold(carrier);
+        Assert.True(CarrySystem.CanCarry(rig.World, cold));
+        cold.Medical!.StayingLow = true;
+        Assert.False(CarrySystem.CanCarry(rig.World, cold));
+    }
+
     [Fact]
     public void A_pick_up_walks_lifts_at_the_documented_clip_point_and_adds_the_carry_person_weight()
     {
@@ -265,7 +278,9 @@ public class CarryTests
         var down2 = rig.Add(1150, 1900, squad: 2, faction: 1);
         var down3 = rig.Add(900, 2200, squad: 3, faction: 1);
         var leader = rig.Add(1600, 2000, player: false, squad: 4, faction: 0, leader: true);
-        rig.Add(1650, 2000, player: false, squad: 4, faction: 0, task: CharacterTask.Wander);
+        var rescuer = rig.Add(1650, 2000, player: false, squad: 4, faction: 0, task: CharacterTask.Wander);
+        // Its AI chose goal 142 (Find and rescue leader, listed by a few retreat packages); a squad whose package does not list it leaves its leader lying.
+        rig.Cold(rescuer).Ai = new Meitou.Simulation.Ai.AiMind { Squad = rig.World.Squads.Find(4)!, Goal = new Meitou.Data.Gameplay.Ai.AiGoal(new Meitou.Data.Gameplay.Ai.AiTask("142", "Find and rescue leader", Meitou.Data.Gameplay.Ai.TaskType.FIND_AND_RESCUE_LEADER, Meitou.Data.Gameplay.Ai.TaskPriority.NonUrgent, Meitou.Data.Gameplay.Ai.TaskTargetType.Specific, Meitou.Data.Gameplay.Ai.TaskEndEvent.Nothing), 0, 100, 1) };
         rig.Add(1700, 2050, player: false, squad: 4, faction: 0, task: CharacterTask.Idle, yaw: -MathF.PI / 2);   // the witness, facing the looting
         foreach (var r in new[] { "a", "b", "c", "d" }) rig.Cold(down1).Inventory!.Add(Item(r, 2, 2));
         rig.Body(down1).KnockOut(10000);
@@ -299,5 +314,40 @@ public class CarryTests
         // townsfolk (the relation stays 10) and loots an emptied body.
         Assert.Equal("carried 3.0<-0.0, 5.0<-1.0, 6.0<-7.0; loots 4/0 seen, 0/0; relation 10", happened);
         return hashes;
+    }
+
+    [Fact]
+    public void A_carried_body_that_came_round_is_put_down_unless_it_is_chained_and_the_carriers_enemy()
+    {
+        // Goal 169's desire (FUN_1405a0710): 1 unless the body is chained and the carrier's enemy (FUN_14079c950).
+        var table = FactionRelations.Build([new FactionData { Id = "a", Name = "a", DefaultRelation = 50 }, new FactionData { Id = "b", Name = "b", DefaultRelation = -50 }, new FactionData { Id = "c", Name = "c", DefaultRelation = 50 }]);
+        var carry = new CarrySystem(BaseGame, BodyOptions.Default, 1) { Relations = table };
+        CharacterCold Make(int faction, bool chained)
+        {
+            var c = new CharacterCold { Faction = faction, Inventory = new Inventory() };
+            if (!chained) return c;
+            var shackles = new ItemInstance { Record = "shackles", Name = "shackles", Lock = new Meitou.Simulation.Locks.LockState { Locked = true, Level = 10, Hardness = 5 } };
+            c.Inventory.Add(shackles);
+            shackles.Section = "legs";
+            return c;
+        }
+        Assert.True(carry.WakesIntoPutDown(Make(0, false), Make(1, false)));
+        Assert.False(carry.WakesIntoPutDown(Make(0, false), Make(1, true)));
+        Assert.True(carry.WakesIntoPutDown(Make(0, false), Make(2, true)));
+        Assert.True(carry.WakesIntoPutDown(Make(0, false), Make(0, true)));
+    }
+
+    [Fact]
+    public void Goal_169_puts_a_woken_body_down_only_for_a_carrier_whose_goal_lists_hold_it()
+    {
+        // The AI scores only the goals of its lists: a carrier whose race goals (or package) lack 169 keeps the awake body on its shoulder.
+        using var rig = new Rig(1, minPartition: 1, seed: 21);
+        var carrier = rig.Add(1000, 2000, player: false, squad: 1, faction: 0);
+        var goal = new Meitou.Data.Gameplay.Ai.AiGoal(new Meitou.Data.Gameplay.Ai.AiTask("169", "Putting down", Meitou.Data.Gameplay.Ai.TaskType.PUT_DOWN_CARRIED_DUDE_IF_THEY_CAN_WALK, Meitou.Data.Gameplay.Ai.TaskPriority.Urgent, Meitou.Data.Gameplay.Ai.TaskTargetType.Self, Meitou.Data.Gameplay.Ai.TaskEndEvent.Nothing), 0, 24, 1);
+        var squad = rig.World.Squads.Find(1)!;
+        rig.Cold(carrier).Ai = new Meitou.Simulation.Ai.AiMind { Squad = squad };
+        Assert.False(rig.Carry.ListsPutDown(rig.World, carrier.Slot, rig.Cold(carrier)));
+        rig.Cold(carrier).Ai = new Meitou.Simulation.Ai.AiMind { Squad = squad, RaceGoals = [goal] };
+        Assert.True(rig.Carry.ListsPutDown(rig.World, carrier.Slot, rig.Cold(carrier)));
     }
 }

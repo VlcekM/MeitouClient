@@ -32,9 +32,9 @@ public sealed partial class PopulationSystem
 
     Vector2 SiteCentre(int site) => new(data.Sites[site].Position.X, data.Sites[site].Position.Z);
 
-    /// <summary>Whether a platoon should have its characters: a zone near it is active, or (a town's own saved squad) its town's zone is, as the town's fresh squads are made with the town.</summary>
+    /// <summary>Whether a platoon should have its characters: it is inside the trimmed box of an active zone (<see cref="ZoneActivation.InLoadedBox"/>, <c>FUN_1404febd0</c>), or (a town's own saved squad) its town's zone is, as the town's fresh squads are made with the town.</summary>
     bool Wanted(Platoon p) =>
-        active.Contains(WorldLayout.ZoneOf(p.Position.X, p.Position.Y)) || p.Pinned && p.Origin >= 0 && active.Contains(data.Sites[p.Origin].Zone);
+        ZoneActivation.InLoadedBox(p.Position.X, p.Position.Y, active) || p.Pinned && p.Origin >= 0 && active.Contains(data.Sites[p.Origin].Zone);
 
     /// <summary>
     /// Whether a wanted platoon may be made now: the host's <see cref="ZoneGate"/> holds it back until the navmesh is ready, of its town's zone for a town's own (as the
@@ -68,7 +68,7 @@ public sealed partial class PopulationSystem
         // nothing another one changes, so the result does not depend on the order. What changes the registry or the world follows, serially, in id order.
         movers.Clear();
         foreach (var p in platoonBuffer)
-            if (p.State == PlatoonState.Unloaded && !p.Pinned && p.Campaign is null) movers.Add(p);   // a campaign's are moved by it (they follow their leader)
+            if (p.State == PlatoonState.Unloaded && !p.Pinned) movers.Add(p);   // a campaign's are moved by it (they follow their leader, StandIn); its orphan timer counts here
         world.ParallelFor((movers.Count + MoversPerJob - 1) / MoversPerJob, job =>
         {
             for (int i = job * MoversPerJob, end = Math.Min(movers.Count, i + MoversPerJob); i < end; i++) StepOffscreen(world, movers[i], dt);
@@ -105,11 +105,14 @@ public sealed partial class PopulationSystem
     const float OrphanLimitSeconds = 60;
 
     /// <summary>
-    /// Whether a platoon out of the world keeps its characters: by the Meitou switches (<see cref="KeepWild"/> for a save's wild one, else <see cref="KeepRoamers"/>), and always
-    /// while it occupies a town, as the original makes an occupier persistent (docs/game/ai.md "Package classes"), or when a save's platoon is <c>persistent</c> (the original
-    /// never removes one, docs/game/factions-squads-towns.md "Object model": e.g. a dismissed character's squad); never one declared <see cref="Platoon.Dead"/>.
+    /// Whether a platoon out of the world keeps its characters (the original's keep test <c>FUN_1407ec570</c>, <b>Verified</b>): persistent (a save's <c>persistent</c>, an occupier of a town, docs/game/ai.md "Package classes";
+    /// never a platoon declared <see cref="Platoon.Dead"/>, which clears the flag), else not in spawn mode 3 (<see cref="Platoon.ReplacedHome"/>) and held by a faction campaign whose record is not in phase 2
+    /// (<see cref="CampaignKept"/>; the original's empty-squad refusal is <c>RemoveWiped</c> before this runs). The Meitou switches (<see cref="KeepWild"/> for a save's wild one, else <see cref="KeepRoamers"/>) keep the rest.
     /// </summary>
-    bool Kept(Platoon p) => !p.Dead && ((p.Wild ? KeepWild : KeepRoamers) || Ai.AiSystem.Occupies(data.Ai, p.Package) || p.Saved?.Source.Record.Bools.GetValueOrDefault("persistent") == true);
+    bool Kept(Platoon p) => !p.Dead && (Ai.AiSystem.Occupies(data.Ai, p.Package) || PersistentPlatoon(p) || !p.ReplacedHome && (p.Wild ? KeepWild : KeepRoamers)) || CampaignKept(p);
+
+    /// <summary>The war manager's record for the platoon exists and is not in phase 2 (<c>FUN_140283500</c>, <c>FUN_1407ec570</c>), outside spawn mode 3: a campaign's force that has not been spent is kept, a victorious or retreating one is not.</summary>
+    internal static bool CampaignKept(Platoon p) => !p.ReplacedHome && p.Campaign is { Phase: not 2 };
 
     readonly List<Platoon> movers = [];
     /// <summary>Stand-ins one worker job steps (engine choice: a job costs more than a few stand-ins).</summary>
@@ -121,7 +124,7 @@ public sealed partial class PopulationSystem
     /// </summary>
     void StepOffscreen(World world, Platoon p, float dt)
     {
-        if (!Kept(p) && !Wanted(p)) p.OrphanSeconds += dt;
+        if (!Kept(p) && (p.ReplacedHome || !Wanted(p))) p.OrphanSeconds += dt;
         else p.OrphanSeconds = 0;
         if (p.OrphanSeconds <= OrphanLimitSeconds) StandIn(world, p, dt);
     }
@@ -137,6 +140,7 @@ public sealed partial class PopulationSystem
         {
             foreach (var m in squad.Members) RemoveMember(world, m);
             world.Squads.Remove(squad.Id);
+            ForgetSquad(squad.Id);
         }
         if (p.Saved is { } saved)
         {
@@ -150,9 +154,13 @@ public sealed partial class PopulationSystem
     void StandIn(World world, Platoon p, float dt)
     {
         if (p.Pinned || p.Wild || p.Campaign is not null) return;   // a town's own saved squad, or a wild one, stays where it was; a campaign moves its own
+        // GOHOME only issues a goto (FUN_1407ee790, Verified): the mover's speed is reset to 0 each step and only the platoon-handle branch (meaning Unknown, none in Meitou) sets 55, so it stands still.
+        if (p.Job == Ai.PlatoonJob.GoHome) return;
         // It stands still (FUN_1407ee790, Verified): a platoon of the player's faction, one off the zone grid, one inside the trimmed box of a loaded zone (it waits to be made), and a
         // platoon left with a member caged.
         if (p.Faction >= 0 && p.Faction == PlayerFactionOf(world) || p.Imprisoned) return;
+        // Job 0 of a persistent platoon becomes GOHOME (FUN_1407ee790, Verified): it stands still too, whatever its distance from home (9216 only picks GOHOME over the idle hook); only a non-persistent one takes the engine's travel.
+        if (p.Job == Ai.PlatoonJob.None && (PersistentPlatoon(p) || Ai.AiSystem.Occupies(data.Ai, p.Package))) return;
         var zone = WorldLayout.ZoneOf(p.Position.X, p.Position.Y);
         if (!zone.IsInsideGrid) return;
         if (active.Contains(zone))
@@ -160,14 +168,14 @@ public sealed partial class PopulationSystem
             var (minX, minZ, maxX, maxZ) = ZoneActivation.TrimmedBox(zone, active.Contains, StandInStopTrim);
             if (p.Position.X >= minX && p.Position.X <= maxX && p.Position.Y >= minZ && p.Position.Y <= maxZ) return;
         }
-        if (ShippingCamp(p) is >= 0 and var camp)
+        if (MissionGoal(p) is >= 0 and var mission)
         {
-            // Shipping slaves: on to the camp, then it stays there; the slaves are handed over once it loads (Deliver 192).
-            p.Target = camp;
+            // TRAVEL_TARGET / _FAST (FUN_1407ee790, FUN_140269cd0): on to the mission target, then it stays there (a shipping squad's slaves are handed over once it loads, Deliver 192).
+            p.Target = mission;
             p.Point = null;
-            var at = SiteCentre(camp);
+            var at = SiteCentre(mission);
             float left = Vector2.Distance(p.Position, at);
-            if (left > settings.RoamArrivalRadius) Travel(p, at, MathF.Min(TravelTargetSpeed, StandInSpeedCap) * dt);
+            if (left > MathF.Max(data.Sites[mission].Town.Radius, settings.RoamArrivalRadius)) Travel(p, at, StandInSpeed(p, left) * dt);
             return;
         }
         if (p.WaitLeft > 0)
@@ -222,8 +230,7 @@ public sealed partial class PopulationSystem
     }
 
     /// <summary>
-    /// A stand-in's speed in units per second, <paramref name="d"/> from its goal: the original's per job (docs/game/factions-squads-towns.md "Off-screen world": GOHOME 55,
-    /// TRAVEL_TARGET 25, TRAVEL_TARGET_FAST 60 or 90 beyond 25000), else the engine's travel stand-in (25, 90 far; a short-range patrol keeps walking at 25, where the
+    /// A stand-in's speed in units per second, <paramref name="d"/> from its goal: the original's per job (docs/game/factions-squads-towns.md "Off-screen world": TRAVEL_TARGET 25, TRAVEL_TARGET_FAST 60 or 90 beyond 25000), else the engine's travel stand-in (25, 90 far; a short-range patrol keeps walking at 25, where the
     /// original's stands still), all capped at the original mover's 70.
     /// </summary>
     float StandInSpeed(Platoon p, float d)
@@ -231,7 +238,6 @@ public sealed partial class PopulationSystem
         bool far = d > settings.StandInFarDistance;
         float speed = p.Job switch
         {
-            Ai.PlatoonJob.GoHome => 55,
             Ai.PlatoonJob.TravelTarget => 25,
             Ai.PlatoonJob.TravelTargetFast => far ? 90 : 60,
             Ai.PlatoonJob.PatrolShortRange => settings.StandInSpeed,
@@ -273,6 +279,18 @@ public sealed partial class PopulationSystem
             if (d < bestD) (best, bestD) = (site.Index, d);
         }
         return best;
+    }
+
+    /// <summary>
+    /// The town a TRAVEL_TARGET / _FAST platoon outside a campaign heads for, -1 for any other job (<c>FUN_140269cd0</c>, <b>Verified</b>: the campaign's target, else the saved mission target, else the
+    /// platoon's home; a campaign's is <see cref="Platoon.CampaignGoal"/>, the saved one <see cref="Platoon.Target"/>, set where the squad unloads and saved as <see cref="Saving.SaveCapture.MissionTownKey"/>).
+    /// A shipping squad with slaves and no chosen camp takes the nearest one (<see cref="ShippingCamp"/>). No move when it already stands in that town (the caller). Any thread.
+    /// </summary>
+    int MissionGoal(Platoon p)
+    {
+        if (p.Job is not (Ai.PlatoonJob.TravelTarget or Ai.PlatoonJob.TravelTargetFast) || p.Campaign is not null) return -1;
+        if (ShippingCamp(p) is >= 0 and var camp) return camp;
+        return p.Target >= 0 && p.Target < data.Sites.Count ? p.Target : p.Origin;
     }
 
     /// <summary>A shipping package (signal 11 or 28) whose off-screen job is TRAVEL_TARGET (<c>unloaded func</c> 5, as all four in the base data).</summary>
@@ -359,38 +377,66 @@ public sealed partial class PopulationSystem
 
     // ---- loaded roaming squads ----
 
+    /// <summary>
+    /// A member is carrying a character of the player's faction: the platoon holds its loaded state whatever the zone at its place (<c>FUN_1404febd0</c>, <b>Verified</b>: a carry flag and a carried
+    /// hand whose owner faction is a player faction). The original tests it 0.5 s after the countdown began; here at once.
+    /// </summary>
+    bool SquadCarriesPlayer(World world, Squad squad)
+    {
+        var table = world.Characters;
+        int player = PlayerFactionOf(world);
+        foreach (var m in squad.Members)
+        {
+            if (!table.TryResolveNext(m, out int slot) || table.Cold(slot) is not { } c || c.Carrying.IsNone) continue;
+            if (table.TryResolveNext(c.Carrying, out int carried) && table.Cold(carried) is { } load && (load.IsPlayer || player >= 0 && load.Faction == player)) return true;
+        }
+        return false;
+    }
+
+    /// <summary>A platoon with no member left (wiped out, removed, or all split off): the pool is free to make another (a saved platoon's characters are marked, for the next save).</summary>
+    void RemoveWiped(World world, Platoon p, Squad? squad)
+    {
+        if (p.Saved is { } gone)
+        {
+            if (p.Stored is null) Saving.SavedCharacters.Store(world, gone, p.Position);
+            gone.PlatoonId = -1;
+        }
+        if (squad is not null) { world.Squads.Remove(squad.Id); ForgetSquad(squad.Id); }
+        world.Platoons.Remove(p.Id);
+    }
+
     void StepLoaded(World world, Platoon p, float dt)
     {
         var table = world.Characters;
         var squad = world.Squads.Find(p.SquadId);
         if (squad is null || squad.Members.Count == 0 || squad.Leader.IsNone)
         {
-            // Wiped out (or removed): the pool is free to make another (a saved platoon's characters are marked, for the next save).
-            if (p.Saved is { } gone)
-            {
-                if (p.Stored is null) Saving.SavedCharacters.Store(world, gone, p.Position);
-                gone.PlatoonId = -1;
-            }
-            if (squad is not null) world.Squads.Remove(squad.Id);
-            world.Platoons.Remove(p.Id);
+            RemoveWiped(world, p, squad);
             return;
         }
         p.Position = PlatoonPosition(world, squad, p.Position);
         if (!p.Dead && (p.Faction < 0 || p.Faction != PlayerFactionOf(world)) && AllDead(world, squad)) DeclareDead(p);
 
         // Away from every active zone for long enough: only the stand-in goes on.
-        if (Wanted(p)) p.UnloadAtTick = -1;
+        if (Wanted(p) || SquadCarriesPlayer(world, squad)) p.UnloadAtTick = -1;
         // A town's own squad keeps the town's grace (it leaves with its town), a roaming one the roaming grace.
-        else if (p.UnloadAtTick < 0) p.UnloadAtTick = world.Tick + (long)Math.Ceiling((p.Pinned ? settings.UnloadGraceSeconds : settings.RoamUnloadGraceSeconds) / world.TickSeconds);
+        else if (p.UnloadAtTick < 0) p.UnloadAtTick = world.Tick + (long)Math.Ceiling((p.Pinned ? settings.TownUnloadGraceSeconds : settings.RoamUnloadGraceSeconds) / world.TickSeconds);
         // Faithful: a platoon the original does not keep is not unloaded whole: each member out of the zone is destroyed, and the platoon stays while any is left.
-        else if (world.Tick >= p.UnloadAtTick && !(!Kept(p) && !p.Pinned && p.Campaign is null && ThinOutOfZone(world, p, squad)))
+        else if (world.Tick >= p.UnloadAtTick && !(!Kept(p) && !p.Pinned && ThinOutOfZone(world, p, squad)))
         {
+            if (squad.Members.Count >= 2) SplitPrisoners(world, p, squad);   // before the members are released: a prisoner is not a stray
+            if (squad.Members.Count == 0)
+            {
+                RemoveWiped(world, p, squad);
+                return;
+            }
             p.Imprisoned = squad.Members.Any(m => table.TryResolveNext(m, out int ms) && table.Cold(ms)!.IsImprisoned);
-            if (p.Campaign is null && squad.Ai is { } board) p.IntactFlag = board.Intact;   // kept as it was at unload (+0x100)
+            if (squad.Ai is { } flagged) p.IntactFlag = flagged.Intact;   // kept as it was at unload (+0x100)
             if (squad.Ai?.Current is { } running) FollowPackage(world, p, running);
-            if (p.Package is { } shipping && IsShipping(shipping) && squad.Ai is { MissionTown: >= 0 and var mission }) p.Target = mission;   // the camp it ships to (ShippingCamp)
+            if (squad.Ai is { } running_ && Ai.AiSystem.BoardMoves(running_) && MissionSite(running_) is >= 0 and var mission) p.Target = mission;   // where its package was taking it
+            else if (p.Package is { } shipping && IsShipping(shipping) && squad.Ai is { MissionTown: >= 0 and var camp }) p.Target = camp;   // the camp it ships to (ShippingCamp)
             // Faithful: a platoon the original does not keep (not a town's own, not in a campaign, not occupying) is despawned as it leaves; a save's wild one by the wild switch.
-            if ((p.Dead || !Kept(p) && !p.Pinned) && p.Campaign is null)
+            if (!Kept(p) && !p.Pinned)
             {
                 PayRoamerDespawn(world, p, squad);
                 Despawn(world, p);
@@ -411,6 +457,7 @@ public sealed partial class PopulationSystem
             }
             foreach (var m in squad.Members) { world.Uniques.Left(m); RemoveMember(world, m); }
             world.Squads.Remove(squad.Id);
+            ForgetSquad(squad.Id);
             p.State = PlatoonState.Unloaded;
             p.DwellLeft = 5;
             p.SquadId = -1;
@@ -423,6 +470,12 @@ public sealed partial class PopulationSystem
             return;
         }
         if (p.Pinned || p.Wild || p.Dead) return;   // a town's own or a wild one: its AI runs it, it has no trips (nor has a dead one)
+        // A package that travels (the trader, the shipping classes) moves the squad itself: no trip order meanwhile, and the trip starts afresh when it gives way.
+        if (squad.Ai is { } board && Ai.AiSystem.BoardMoves(board))
+        {
+            (p.Target, p.WaitLeft, p.Point) = (-1, 0, null);
+            return;
+        }
         // A leader in a fight or a loot is left to it: an order now would replace that task (the trip goes on when it is over).
         if (table.Next[squad.Leader.Slot].Task is (byte)CharacterTask.Attack or (byte)CharacterTask.Loot) return;
 
@@ -470,6 +523,9 @@ public sealed partial class PopulationSystem
             }
         }
     }
+
+    /// <summary>The town (site index) a travelling package heads for: its mission town, else its mission town hand's placed town; -1: none.</summary>
+    internal static int MissionSite(Ai.Blackboard board) => board.MissionTown >= 0 ? board.MissionTown : board.Destination.Site;
 
     /// <summary>
     /// A squad unloading with <paramref name="running"/> as its package: the platoon keeps it and takes its off-screen job (<c>FUN_1407ee790</c> re-reads the job from the blackboard's
@@ -623,8 +679,31 @@ public sealed partial class PopulationSystem
 
     // ---- unloaded to loaded ----
 
+    /// <summary>
+    /// Spawn mode 3 (<c>FUN_1404ffad0</c>, <b>Verified</b>): a saved platoon whose <c>basetown</c> no longer fits its home town's replacement (<see cref="HomeFits"/>) is not activated. Its template's leader
+    /// being unique, the template's uniques it holds are released and the flag stays (the keep test refuses it unless persistent); otherwise the persistent flag is cleared as well. Either way
+    /// the keep test then fails (<see cref="Kept"/>) and the platoon goes with the orphan timer. Whether it was refused.
+    /// </summary>
+    bool RefuseReplacedHome(World world, Platoon p)
+    {
+        if (p.Saved is null || p.Origin < 0 || p.Origin >= data.Sites.Count || HomeFits(p)) { p.ReplacedHome = false; return false; }
+        p.ReplacedHome = true;
+        p.State = PlatoonState.Unloaded;
+        if (data.Db.Find(p.TemplateId) is { } template && UniqueCharacters.IsUnique(template.GetReferences("leader") is { Count: > 0 } l ? data.Db.Find(l[0].TargetStringId) : null)) ReleaseUniques(world, p);
+        else p.PersistentCleared = true;
+        return true;
+    }
+
+    /// <summary>The home-hand test of activation: the platoon's <c>basetown</c> (unset: its town's own TOWN) names the town's own TOWN when it has no replacement, else the replacement.</summary>
+    bool HomeFits(Platoon p) => HomeFits(p.Saved!.LegacyBaseTown, p.Saved.Source.Record.Strings.GetValueOrDefault("basetown", ""), data.Sites[p.Origin].Record.Id, data.Sites[p.Origin].Replacement?.Id);
+
+    /// <summary>The activation's home test: an older Meitou save's platoon always fits; else an unset or own <paramref name="home"/> fits only a town with no replacement, otherwise <paramref name="home"/> must be the replacement.</summary>
+    internal static bool HomeFits(bool legacy, string home, string own, string? replacement) =>
+        legacy || (home.Length == 0 || home == own ? replacement is null : home == replacement);
+
     void Activate(World world, Platoon p)
     {
+        if (RefuseReplacedHome(world, p)) return;
         p.State = PlatoonState.Activating;
         // A stand-in that travelled comes back on walkable ground (it went in straight lines, over water and through buildings); one that did not keeps its characters' places.
         var anchor = p.Stored?.Anchor ?? p.Saved?.Anchor;
@@ -664,6 +743,12 @@ public sealed partial class PopulationSystem
             else work.Add(() => builtRoamers.Enqueue(new BuiltRoamer(id, null, Saving.SavedCharacters.Prepare(saved, data, context.Appearances, context))));
             return;
         }
+        // A player-owned platoon with nobody to bring is never filled from its template (FUN_1404ffad0, Verified): it is removed.
+        if (p.Faction >= 0 && p.Faction == PlayerFactionOf(world))
+        {
+            world.Platoons.Remove(p.Id);
+            return;
+        }
         if (work is null) FinishRoamer(world, new BuiltRoamer(id, BuildRoamer(p.TemplateId, p.Faction, p.Key, seed, position)));
         else
         {
@@ -682,12 +767,25 @@ public sealed partial class PopulationSystem
         return BuildOne(SquadTemplate.From(record), faction, townFaction, key, seed, position);
     }
 
-    void DrainRoamers(World world)
+    readonly List<BuiltRoamer> readyRoamers = [];
+
+    /// <summary>
+    /// Finishes at most one finished roaming platoon build (the original builds one queued squad request per rendered frame, <c>FUN_140583310</c>; a tick stands for a frame here).
+    /// Returns whether it made one; a build whose platoon is gone costs no frame.
+    /// </summary>
+    bool DrainRoamers(World world)
     {
-        var ready = new List<BuiltRoamer>();
-        while (builtRoamers.TryDequeue(out var b)) ready.Add(b);
-        ready.Sort(static (a, b) => a.Platoon.CompareTo(b.Platoon));
-        foreach (var b in ready) FinishRoamer(world, b);
+        while (builtRoamers.TryDequeue(out var queued)) readyRoamers.Add(queued);
+        readyRoamers.Sort(static (a, b) => a.Platoon.CompareTo(b.Platoon));
+        while (readyRoamers.Count > 0)
+        {
+            var b = readyRoamers[0];
+            readyRoamers.RemoveAt(0);
+            if (world.Platoons.Find(b.Platoon) is not { State: PlatoonState.Activating }) continue;
+            FinishRoamer(world, b);
+            return true;
+        }
+        return false;
     }
 
     void FinishRoamer(World world, BuiltRoamer b)
@@ -719,10 +817,32 @@ public sealed partial class PopulationSystem
         }
         if (squad.SpawnSize == 0) squad.SpawnSize = p.Saved?.Members.Count ?? p.Size;
         squad.Money = p.Money;
+        MoveOutOfPlayerWalls(world, squad);
         p.State = PlatoonState.Loaded;
         p.SquadId = squad.Id;
         p.UnloadAtTick = -1;
         if (Goal(p) is not null && p.WaitLeft <= 0) OrderLeader(world, p, squad);
+    }
+
+    /// <summary>
+    /// The repair right after a squad's characters are made (<c>FUN_1404ffad0</c>, <b>Verified</b>): a squad of a faction that is not the player's whose place is in a player town but in the open (gate
+    /// code 0 there) has each member that is alive, up, not in a bed or cage and inside walls (its own code above 0) moved to the place, with a red message
+    /// "Character &lt;name&gt; of &lt;squad&gt; tried to spawn inside walls!" (the message is not coloured here). Nothing where the codes are unknown.
+    /// </summary>
+    void MoveOutOfPlayerWalls(World world, Squad squad)
+    {
+        int player = PlayerFactionOf(world);
+        if (player < 0 || squad.Faction == player || world.SystemOf<Locks.LockSystem>()?.Regions is not { } regions) return;
+        var place = squad.Position;
+        if (Ai.AiSystem.TownAt(data, world, place) is not { IsNone: false } town || FactionOfTown(world, town) != player || regions.CodeAt(place) != 0) return;
+        var table = world.Characters;
+        foreach (var id in squad.Members)
+        {
+            if (!table.TryResolveNext(id, out int slot) || table.Cold(slot) is not { } c) continue;
+            if (c.DiedTick >= 0 || c.Medical is { Incapacitated: true } || c.InSomething != Locks.HeldState.None || regions.CodeAt(table.Next[slot].Position) <= 0) continue;
+            table.Next[slot].Position = place;
+            world.Post(Loc.Tr("Character {1} of {2} tried to spawn inside walls!", c.Name, squad.Name));
+        }
     }
 
     /// <summary>

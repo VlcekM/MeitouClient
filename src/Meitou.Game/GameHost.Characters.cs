@@ -26,10 +26,24 @@ sealed partial class GameHost
     /// <summary>The free camera's eye this far above the ground under it keeps the last focus: the zones load again once it comes down.</summary>
     const float FocusCeiling = Meitou.Data.World.KenshiCamera.FlightHeight;
 
+    /// <summary>The window's aspect ratio, kept by the frame loop for <see cref="SendView"/>.</summary>
+    float viewAspect = 16f / 9;
+
+    /// <summary>The settings' <c>npc range</c>, read once (the drawing takes it once too; reading settings.cfg every frame cost 0.09 ms).</summary>
+    float? npcRange;
+
+    /// <summary>Tells the world the camera it is looked at through, every frame (the update flag of <see cref="Meitou.Simulation.Bodies.MedicalTimeBudget"/> and the sensing hooks, <see cref="Meitou.Simulation.MedicalClock"/>).</summary>
+    void SendView()
+    {
+        if (IsBattle) return;
+        session.World.Commands.Enqueue(new Meitou.Simulation.CameraViewCommand(camera.Eye, camera.Forward, camera.FieldOfView, viewAspect, npcRange ??= GameplaySettings.NpcRange(install)) { Tick = session.World.Tick });
+    }
+
     /// <summary>Tells the world where the camera looks, when it has moved enough to matter (the zones follow it).</summary>
     void SendFocus(Vector3? at = null)
     {
         if (IsDuel) return;   // the duel's worlds keep the focus on its spot (DuelSetup), wherever the camera flies
+        SendView();
         var current = session.Camera.Current;
         if (at is null && sentFocus && current.IsFree && current.Eye.Y - session.Camera.EyeGroundAt(current.Eye.X, current.Eye.Z) > FocusCeiling) return;
         var target = at ?? current.Target;   // the cinema's camera while it holds the view
@@ -146,7 +160,7 @@ sealed partial class GameHost
             }
             list.Add(new CharacterInstance(DrawKey(c.Id), c.Appearance, position, yaw, poses)
             {
-                WeaponDrawn = c.WeaponDrawn, Scale = c.Scale, Hidden = hiddenIndoors.Contains(c.Id), FullRateAnimation = c.IsPlayer, Rotation = rotation,
+                WeaponDrawn = c.WeaponDrawn, Scale = c.Scale, DrawDistanceScale = c.DrawDistanceScale, Hidden = hiddenIndoors.Contains(c.Id), FullRateAnimation = c.IsPlayer, Rotation = rotation,
                 Bones = Blend(before is null || Reanchored(before, c) ? null : before.Ragdoll, c.Ragdoll, alpha, ref Slot(ref ragdollsBySlot, c.Id.Slot), ref Slot(ref spareRagdollsBySlot, c.Id.Slot)),
             });
         }
@@ -259,7 +273,7 @@ sealed partial class GameHost
             var inBar = editing is { } shown ? EditorBarPlace(c.Id, shown) : null;
             if (c.Appearance is null || editing is { } edited && c.Id != edited && inBar is null) continue;
             // The snapshot's place: a tick's motion is well inside InReach's margin.
-            if (reachOf is not null && !reachOf.InReach(c.Position, eye) && !portraitKeys.Contains(DrawKey(c.Id)) && c.Id != sandboxHero)
+            if (reachOf is not null && !reachOf.InReach(c.Position, eye, c.DrawDistanceScale) && !portraitKeys.Contains(DrawKey(c.Id)) && c.Id != sandboxHero)
             {
                 if (distant) AddDistant(list, c);
                 continue;
@@ -315,7 +329,7 @@ sealed partial class GameHost
             var glide = player.EditorBlend(c.Id);   // after the preview, which may just have swapped the look
             list.Add(new CharacterInstance(DrawKey(c.Id), look, position, yaw, poses)
             {
-                WeaponDrawn = c.WeaponDrawn, RangedDrawn = c.RangedDrawn, BackDrawn = c.BackDrawn, Shots = c.CrossbowShots, Bolts = BoltsOf(c), Scale = c.Scale, Hidden = inBar is null && hiddenIndoors.Contains(c.Id), FullRateAnimation = editing is not null || fullRate.Contains(c.Id) || c.Id == sandboxHero && sandboxPicker?.Current is not null,
+                WeaponDrawn = c.WeaponDrawn, RangedDrawn = c.RangedDrawn, BackDrawn = c.BackDrawn, Shots = c.CrossbowShots, Bolts = BoltsOf(c), Scale = c.Scale, DrawDistanceScale = c.DrawDistanceScale, Hidden = inBar is null && hiddenIndoors.Contains(c.Id), FullRateAnimation = editing is not null || fullRate.Contains(c.Id) || c.Id == sandboxHero && sandboxPicker?.Current is not null,
                 Bones = !posed ? null : Blend(before is null || Reanchored(before, c) ? null : before.Ragdoll, c.Ragdoll, alpha, ref Slot(ref ragdollsBySlot, c.Id.Slot), ref Slot(ref spareRagdollsBySlot, c.Id.Slot)),
                 BlendFrom = glide?.From, Blend = glide?.Blend ?? 0, Build = c.Build, Rotation = rotation, Blood = c.BloodAmounts,
             });

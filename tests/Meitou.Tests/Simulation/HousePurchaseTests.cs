@@ -52,6 +52,7 @@ public class HousePurchaseTests
         Assert.Null(world.Snapshot.InspectedBuilding.SalePrice);
         Assert.Contains(house.Key, world.Snapshot.OwnedTownBuildings);
         Assert.All(world.Fixtures.OfBuilding(house.Key), f => Assert.Equal(data.PlayerFaction, f.Owner));
+        Assert.All(world.Fixtures.OfBuilding(house.Key).Where(f => f.Kind == FixtureKind.Door), d => Assert.NotEqual(DoorMotion.Closed, d.Motion));   // FUN_1407ad6c0 opens every door
         world.Commands.Enqueue(new BuyBuilding(house.Key, price) { Tick = world.Tick }); world.RunTick();
         Assert.Equal(20000 - price, world.Player.Money);
         var state = Rec("saved", FcsRecordType.GAMESTATE_BUILDING);

@@ -147,7 +147,7 @@ public sealed class WeatherSystem(GameConstants constants) : ITickSystem
     /// <summary>
     /// Whether a roof of a shelter is over the character (<c>FUN_1405cf790</c>: a ray down from 1000 above hits a building more than 10 over the feet whose record has <c>is shelter</c>).
     /// <b>Engine choice</b>: the collision query does not say which building a triangle belongs to, so a player's complete building with <c>is shelter</c> within <see cref="ShelterReach"/> of the
-    /// character is the one assumed hit, and the ray counts when it meets any building's collision more than <see cref="RoofClearance"/> over the feet. Buildings of the towns are not asked
+    /// character is the one assumed hit, and the ray counts when it meets the collision of groups 23..26 (the passable parts and the parts of buildings paths ignore: <see cref="Ragdolls.IRagdollEnvironment.Roofs"/>, the ray's include mask 0x7800000, <b>Verified</b>) more than <see cref="RoofClearance"/> over the feet. Buildings of the towns are not asked
     /// (the base game has none with the flag; the three that have it are the player's tents of a mod).
     /// </summary>
     bool Sheltered(World world, int slot, Vector3 at)
@@ -166,7 +166,7 @@ public sealed class WeatherSystem(GameConstants constants) : ITickSystem
         if (!near) return false;
         var from = new Vector3(at.X, at.Y + 1000, at.Z);
         var seg = new Vector3(0, -(1000 - RoofClearance), 0);
-        Combat.SolidHits.Hit(world.Walkability, Buildings, from, seg, 50, out bool building);
+        Combat.SolidHits.Hit(world.Walkability, Buildings, from, seg, 50, out bool building, roofs: true);
         return building;
     }
 

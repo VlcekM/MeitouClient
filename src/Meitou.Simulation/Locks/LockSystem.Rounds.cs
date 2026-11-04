@@ -8,8 +8,8 @@ namespace Meitou.Simulation.Locks;
 /// <summary>What a <see cref="Round"/> does: free a served prisoner (goal 211), lock a home's doors at night (155, 197), unlock them when that is over, lock a faction's cages (195).</summary>
 public enum RoundKind : byte { Release, LockDoors, UnlockDoors, LockCages }
 
-/// <summary>Where a round is: unlocking its own shut building to get in, walking to the next target, working the lock (the owner's 3.3 s).</summary>
-public enum RoundPhase : byte { Keys, Walk, Work }
+/// <summary>Where a round is: unlocking its own shut building to get in, walking to the next target, working the lock (the owner's 3.3 s), or (a lock-up from outside) leaving the home first.</summary>
+public enum RoundPhase : byte { Keys, Walk, Work, Leave }
 
 /// <summary>One NPC's round of lock work (serial state of the <see cref="LockSystem"/>): the fixtures it works, in order.</summary>
 public sealed class Round
@@ -24,6 +24,9 @@ public sealed class Round
     public CharacterId Prisoner { get; init; } = CharacterId.None;
     /// <summary>Within this of a target the worker works it (a cage's <c>use range</c> + <see cref="LockSystem.Reach"/>; for doors the home's extent).</summary>
     public required float Reach { get; init; }
+    /// <summary>A lock-up from outside (goal 197): the worker leaves the home first and works each door from its outer side, within <see cref="LockSystem.DoorReach"/> of it; <see cref="Extent"/> is the home's.</summary>
+    public bool FromOutside { get; init; }
+    public float Extent { get; init; }
     public int Index { get; set; }
     public RoundPhase Phase { get; set; }
     /// <summary>Game seconds in the phase, of the whole round, and walks that ended away from the target.</summary>
@@ -36,6 +39,7 @@ public sealed class Round
         h.Add((int)Kind); h.Add(Worker); h.Add(Faction); h.Add(Targets.Length);
         foreach (var t in Targets) h.Add(Rng.StableHash(t));
         h.Add(Prisoner); h.Add(Index); h.Add((int)Phase); h.Add(Time); h.Add(Age); h.Add(Walks);
+        if (FromOutside) { h.Add(1); h.Add(Extent); }
     }
 }
 
@@ -45,8 +49,8 @@ public sealed class Round
 /// meanwhile (<see cref="CharacterCold.Engaged"/>). The work at a lock is the owner's lock/unlock time, 0.3 per second (<b>Verified</b>).
 /// <list type="bullet">
 /// <item><b>Release</b> (211 "police free prisoners", economy.md 11.5): an awake prisoner whose sentence is served is freed by an NPC of the cage's faction whose role list holds goal 211 in
-/// its hours (the finder <c>FUN_1408cf3c0</c> has no booking test and only that goal frees, <b>Verified</b>), the nearest within <see cref="ReleaserRange"/>: it walks there, unlocks the cage
-/// and lets the prisoner out (<see cref="FixtureRegistry.Release"/> in its faction's name). <b>Engine choice</b>: in a cage of a faction that books bounties, with no such NPC, or after
+/// its hours (the finder <c>FUN_1408cf3c0</c> has no booking test and only that goal frees, <b>Verified</b>), the first such jailer to find a cage of its town and faction within one zone cell: it walks there, unlocks the cage
+/// and lets the prisoner out (<see cref="FixtureRegistry.Release"/> in its faction's name). <b>Engine choice</b>: in a cage of a faction that books bounties, when no NPC of the faction holds the goal, or after
 /// <see cref="ReleaseTimeout"/>, the system frees it in the jail faction's name; cages of factions that book none (slavers, bandits, the player's) are freed by a 211 holder or nobody.</item>
 /// <item><b>Lock-up</b> (155, 197): while a member's role list holds the goal in its hours, a free member that has it locks every door of the squad's home, door by door; 155 only
 /// once every member is inside (engine: within the home's extent) and, for both, no stranger is (<c>!strangers in house</c>). When no member's goal is in its hours any more,
@@ -62,7 +66,10 @@ public sealed partial class LockSystem : IStateHashed
     public const float LockWorkSeconds = 1 / 0.3f;
     /// <summary>Engine choices of the rounds (see the class remarks).</summary>
     public const int RoundEveryTicks = 30, MaxRounds = 8, MaxNewRounds = 4, RoundWalks = 3;
-    public const float ReleaserRange = AggroSystem.OutdoorSight, ReleaseTimeout = 120, WalkSlack = 200;
+    public const float ReleaseTimeout = 120, WalkSlack = 200;
+    /// <summary>The reach of state 126 AT_LOCATION_BUILDING_DOOR_OUTSIDE for a door (<c>FUN_140596e90</c> against the door's reach range, 45, <b>Observed</b>); a lock-up from outside works a door within it.</summary>
+    public const float DoorReach = 45;
+    /// <summary>A door's two points lie 15 either side of the leaf (<c>FUN_14029cc90</c>); state 126 extends the outer one away from the other by 1.1 times their distance (<c>FUN_140596e90</c>, <b>Verified</b>).</summary>
 
     readonly List<Round> rounds = [];
     // Homes a lock-up round locked (the squad's "house locked" flag), by building instance id; sorted so the hash has a fixed order.
@@ -173,40 +180,56 @@ public sealed partial class LockSystem : IStateHashed
         LockUpSweep(world, ref started);
     }
 
+    /// <summary>
+    /// The release rounds are driven by each goal-211 jailer (the finder <c>FUN_1408cf3c0</c>, <b>Verified</b>): the cages of its town and faction within one zone cell of it (<c>FUN_1409fc450</c>,
+    /// <c>FUN_1409fb880</c>: the 3 x 3 cells round the jailer, a building of the given town and faction), the first in list order whose prisoner is held, up, served and not already being freed;
+    /// no radius, no nearest-jailer choice. <b>Engine choice</b>: a served prisoner of a booking faction is freed by the system only when no NPC of that faction holds goal 211 in its hours.
+    /// </summary>
     void ReleaseSweep(World world, ref int started)
     {
         if (Crimes is null) return;
         var table = world.Characters;
-        var next = table.Next;
         int hour = world.Hour;
-        for (int s = 0; s < table.HighWater; s++)
+        var holders = new HashSet<int>();
+        for (int w = 0; w < table.HighWater; w++)
         {
-            if (!next[s].Alive || table.Cold(s) is not { IsImprisoned: true, InWhat: { } where } c || c.Medical is { Incapacitated: true }) continue;
-            if (!FixtureRegistry.SentenceServed(c, world.GameHours) || world.Fixtures.Find(where) is not { } cage) continue;
-            var prisoner = table.IdOf(s);
-            if (Busy(prisoner)) continue;
-            int releaser = -1;
-            float bestD2 = ReleaserRange * ReleaserRange;
-            for (int w = 0; w < table.HighWater; w++)
+            if (!table.Next[w].Alive || table.Cold(w) is not { IsPlayer: false } wc || !HasGoal(world, w, wc, TaskType.POLICE_FREE_PRISONERS_WHEN_DONE, hour)) continue;
+            holders.Add(wc.Faction);
+            if (!Free(world, w)) continue;
+            if (rounds.Count >= MaxRounds || started >= MaxNewRounds) continue;
+            if (FirstServed(world, w, wc) is not { } cage || table.IdOf(w) == cage.Occupant) continue;
+            if (Start(world, w, new Round
             {
-                if (w == s || !next[w].Alive || table.Cold(w) is not { IsPlayer: false } wc || wc.Faction != cage.Owner || !HasGoal(world, w, wc, TaskType.POLICE_FREE_PRISONERS_WHEN_DONE, hour) || !Free(world, w)) continue;
-                float d2 = Vector3.DistanceSquared(next[w].Position, cage.Position);
-                if (d2 >= bestD2 && releaser >= 0 || d2 > ReleaserRange * ReleaserRange) continue;
-                (releaser, bestD2) = (w, d2);
-            }
-            if (releaser < 0)
-            {
-                // Nobody to do it: a booking jail's faction frees it (engine); the rest of the cages wait for a 211 holder.
-                if (Crimes.Factions.Books(cage.Owner)) world.Fixtures.Release(world, prisoner, cage.Owner, Crimes);
-                continue;
-            }
-            if (rounds.Count >= MaxRounds || started >= MaxNewRounds) return;
-            if (Start(world, releaser, new Round
-            {
-                Kind = RoundKind.Release, Worker = table.IdOf(releaser), Faction = table.Cold(releaser)!.Faction, Targets = [cage.Id], Prisoner = prisoner,
-                Reach = cage.UseRange + Reach,
+                Kind = RoundKind.Release, Worker = table.IdOf(w), Faction = wc.Faction, Targets = [cage.Id], Prisoner = cage.Occupant, Reach = cage.UseRange + Reach,
             }, cage)) started++;
         }
+        for (int s = 0; s < table.HighWater; s++)
+            if (table.Next[s].Alive && Served(world, s) is { } cage && !holders.Contains(cage.Owner) && Crimes.Factions.Books(cage.Owner) && !Busy(table.IdOf(s)))
+                world.Fixtures.Release(world, table.IdOf(s), cage.Owner, Crimes);   // nobody to do it: a booking jail's faction frees it (engine)
+    }
+
+    /// <summary>
+    /// The cage of the prisoner in <paramref name="s"/> when it is held, awake, its sentence served and not an enemy of the cage's faction (<c>FUN_1408cf3c0</c> asks vfunc <c>0x3e8</c>, isEnemy:
+    /// a jailer frees no prisoner it regards as an enemy, the booking-jail fallback included, <b>Verified</b>); null otherwise.
+    /// </summary>
+    Fixture? Served(World world, int s) =>
+        world.Characters.Cold(s) is { IsImprisoned: true, InWhat: { } where } c && c.Medical is not { Incapacitated: true } && FixtureRegistry.SentenceServed(c, world.GameHours)
+            && world.Fixtures.Find(where) is { } cage && !CharacterFacts.RegardsEnemy(Crimes!.Relations, cage.Owner, c.Faction) ? cage : null;
+
+    /// <summary>The first cage in list order of the jailer's town and faction within one zone cell of it whose prisoner is due for release and not already in a round.</summary>
+    Fixture? FirstServed(World world, int jailer, CharacterCold jc)
+    {
+        var table = world.Characters;
+        var at = table.Next[jailer].Position;
+        int town = jc.Ai?.Squad.Ai?.Town ?? -1;
+        foreach (var f in world.Fixtures.All)
+        {
+            if (f.Kind != FixtureKind.Cage || f.Owner != jc.Faction || town >= 0 && f.Site != town || FixtureRegistry.IsFree(table, f)) continue;
+            if (!WorldLayout.WithinOneZone(at.X, at.Z, f.Position.X, f.Position.Z)) continue;
+            if (!table.TryResolveNext(f.Occupant, out int p) || Served(world, p) != f || Busy(f.Occupant)) continue;
+            return f;
+        }
+        return null;
     }
 
     void LockUpSweep(World world, ref int started)
@@ -219,17 +242,24 @@ public sealed partial class LockSystem : IStateHashed
             if (squad.Ai is not { } board) continue;
             int lockUp = -1, outside = -1, warden = -1, opener = -1;
             bool inside155 = false, from197 = false, cages = false;
+            var home = board.OwnHome;
+            float homeExtent = home is null ? 0 : Extent(home);
             foreach (var m in squad.Members)
             {
                 if (!table.TryResolveNext(m, out int s) || table.Cold(s) is not { } c) continue;
                 bool free = Free(world, s);
                 if (HasGoal(world, s, c, TaskType.LOCK_ALL_MY_DOORS, hour)) { inside155 = true; if (free && lockUp < 0) lockUp = s; }
-                if (HasGoal(world, s, c, TaskType.LOCK_ALL_MY_DOORS_FROM_OUTSIDE, hour)) { from197 = true; if (free && outside < 0) outside = s; }
+                if (HasGoal(world, s, c, TaskType.LOCK_ALL_MY_DOORS_FROM_OUTSIDE, hour))
+                {
+                    from197 = true;
+                    // A member that is already outside is preferred: the others would have to leave the home first.
+                    if (free && (outside < 0 || home is not null && Within(table.Next[outside], home, homeExtent) && !Within(table.Next[s], home, homeExtent))) outside = s;
+                }
                 if (HasGoal(world, s, c, TaskType.LOCK_ALL_THE_CAGES, hour)) { cages = true; if (free && warden < 0) warden = s; }
                 if (free && opener < 0 && HasGoal(world, s, c, TaskType.OPEN_UP_SHOP_DOORS, hour)) opener = s;
             }
             if (cages && warden >= 0 && board.Town >= 0) LockCages(world, squad, board, warden, ref started);
-            if (board.OwnHome is not { } home || world.Fixtures.DoorOwner(home.Key) < 0 || world.Fixtures.OwnsBuilding(home.Key, world.Player.Faction) || Targeted(home.Key)) continue;
+            if (home is null || world.Fixtures.DoorOwner(home.Key) < 0 || world.Fixtures.OwnsBuilding(home.Key, world.Player.Faction) || Targeted(home.Key)) continue;
             string building = home.Key;
             if (inside155 || from197)
             {
@@ -237,10 +267,10 @@ public sealed partial class LockSystem : IStateHashed
                 int worker = inside155 ? lockUp : outside;
                 if (worker < 0 && from197) worker = outside;
                 if (worker < 0 || Busy(table.IdOf(worker))) continue;   // the warden of this sweep may be it
-                float extent = Extent(home);
+                float extent = homeExtent;
                 if (inside155 && !AllInside(world, squad, home, extent)) continue;
                 if (StrangerInside(world, squad, home, extent)) continue;
-                if (StartDoors(world, worker, RoundKind.LockDoors, building, extent)) started++;
+                if (StartDoors(world, worker, RoundKind.LockDoors, building, extent, fromOutside: worker == outside && worker != lockUp)) started++;
             }
             else if (houseLocked.Contains(building))   // 86 Opening up (finder FUN_1408cb360): only a member whose package lists it, in its hours
             {
@@ -270,14 +300,17 @@ public sealed partial class LockSystem : IStateHashed
         }, first)) started++;
     }
 
-    bool StartDoors(World world, int worker, RoundKind kind, string building, float extent)
+    bool StartDoors(World world, int worker, RoundKind kind, string building, float extent, bool fromOutside = false)
     {
         var doors = new List<string>();
-        foreach (var f in world.Fixtures.OfBuilding(building)) if (f.Kind == FixtureKind.Door) doors.Add(f.Id);
+        foreach (var f in world.Fixtures.OfBuilding(building))
+            if (f.Kind == FixtureKind.Door && !(kind == RoundKind.LockDoors && f.DoorBroken)) doors.Add(f.Id);   // lock up is never planned on a smashed door (row 77 list B: !DOOR_IS_BROKEN)
+        if (doors.Count == 0 || kind == RoundKind.LockDoors && doors.TrueForAll(id => world.Fixtures.Find(id)!.Lock is { Locked: true })) return false;
         var first = world.Fixtures.Find(doors[0])!;
         return Start(world, worker, new Round
         {
-            Kind = kind, Worker = world.Characters.IdOf(worker), Faction = world.Characters.Cold(worker)!.Faction, Targets = [.. doors], Building = building, Reach = extent,
+            Kind = kind, Worker = world.Characters.IdOf(worker), Faction = world.Characters.Cold(worker)!.Faction, Targets = [.. doors], Building = building,
+            Reach = fromOutside ? DoorReach : extent, FromOutside = fromOutside, Extent = extent,
         }, first);
     }
 
@@ -336,8 +369,26 @@ public sealed partial class LockSystem : IStateHashed
         rounds.Add(round);
         TaskStart.Stand(table, worker);   // up from its bed or post
         if (round.Kind is not (RoundKind.LockDoors or RoundKind.UnlockDoors) && NeedsKeys(world, round, c, first)) round.Phase = RoundPhase.Keys;
+        else if (round.FromOutside && c.Ai?.Squad.Ai?.OwnHome is { } home && Within(table.Next[worker], home, round.Extent))
+        {
+            round.Phase = RoundPhase.Leave;   // row 200 Leaving building achieves !107, which row 197 needs
+            TaskStart.StepTo(table, worker, OuterPoint(world, first), SpeedMode.Walk);
+        }
         else Walk(world, worker, round, first);
     }
+
+    /// <summary>
+    /// Where state 126 AT_LOCATION_BUILDING_DOOR_OUTSIDE wants a worker for a door (<c>FUN_140596e90</c>, <b>Verified</b>): the door's outer point pushed out by 1.1 times the distance between its two points,
+    /// 15 + 33 from the leaf; the outer side is the one away from the building's origin (which of the two points the original calls outer is <b>Unknown</b>). The fixture's place without door data.
+    /// </summary>
+    static Vector2 OuterPoint(World world, Fixture door)
+    {
+        if (world.Fixtures.DoorSpotOf(door) is not { } spot) return Flat(door.Position);
+        return DoorPoints.Outer(spot, door.Position);
+    }
+
+    /// <summary>The place a round's worker goes to for a target: a lock-up from outside uses the door's outer point.</summary>
+    static Vector2 SpotOf(World world, Round round, Fixture f) => round.FromOutside ? OuterPoint(world, f) : Flat(f.Position);
 
     /// <summary>The target's building is shut by doors the worker may open: its faction's, or its squad's home.</summary>
     static bool NeedsKeys(World world, Round round, CharacterCold c, Fixture f) =>
@@ -347,10 +398,10 @@ public sealed partial class LockSystem : IStateHashed
     {
         round.Phase = RoundPhase.Walk;
         round.Time = 0;
-        if (Distance(world.Characters.Next[worker], f) > round.Reach) TaskStart.StepTo(world.Characters, worker, new Vector2(f.Position.X, f.Position.Z), SpeedMode.Walk);
+        if (Distance(world, round, world.Characters.Next[worker], f) > round.Reach) TaskStart.StepTo(world.Characters, worker, SpotOf(world, round, f), SpeedMode.Walk);
     }
 
-    static float Distance(in CharacterHot n, Fixture f) => Vector2.Distance(new Vector2(n.Position.X, n.Position.Z), new Vector2(f.Position.X, f.Position.Z));
+    static float Distance(World world, Round round, in CharacterHot n, Fixture f) => Vector2.Distance(Flat(n.Position), SpotOf(world, round, f));
 
     /// <summary>One tick of a round; false when it is over.</summary>
     bool Step(World world, Round r)
@@ -378,10 +429,12 @@ public sealed partial class LockSystem : IStateHashed
                 world.Fixtures.SetDoorsLocked(f.Building, false);
                 Walk(world, w, r, f);
                 return true;
+            case RoundPhase.Leave:
+                return LeaveStep(world, r, w, wc, f);
             case RoundPhase.Walk:
             {
                 bool walking = n.Task == (byte)CharacterTask.GoTo;
-                float d = Distance(n, f);
+                float d = Distance(world, r, n, f);
                 if (d <= r.Reach || !walking && d <= WalkSlack)
                 {
                     if (walking) TaskStart.Stand(table, w);
@@ -407,9 +460,25 @@ public sealed partial class LockSystem : IStateHashed
                 var nextTarget = world.Fixtures.Find(r.Targets[r.Index]);
                 if (nextTarget is null) return End(world, r, fallback: false, done: true);
                 Walk(world, w, r, nextTarget);
-                if (r.Phase == RoundPhase.Walk && Distance(n, nextTarget) <= r.Reach) r.Phase = RoundPhase.Work;   // the next door is where it stands
+                if (r.Phase == RoundPhase.Walk && Distance(world, r, n, nextTarget) <= r.Reach) r.Phase = RoundPhase.Work;   // the next door is where it stands
                 return true;
         }
+        return true;
+    }
+
+    /// <summary>The leaving phase of a lock-up from outside: on the way out until the worker is past the home's extent, then it walks to the first door; a walk that ends short is tried again a few times.</summary>
+    bool LeaveStep(World world, Round r, int w, CharacterCold wc, Fixture first)
+    {
+        var table = world.Characters;
+        ref var n = ref table.Next[w];
+        if (wc.Ai?.Squad.Ai?.OwnHome is not { } home || !Within(n, home, r.Extent))
+        {
+            Walk(world, w, r, first);
+            return true;
+        }
+        if (n.Task == (byte)CharacterTask.GoTo) return true;
+        if (++r.Walks > RoundWalks) return End(world, r, fallback: true);
+        TaskStart.StepTo(table, w, OuterPoint(world, first), SpeedMode.Walk);
         return true;
     }
 
@@ -419,15 +488,11 @@ public sealed partial class LockSystem : IStateHashed
         {
             case RoundKind.Release:
                 world.Fixtures.SetLocked(f, false);
-                // The prisoner is marked freed (status +0xea, Task_ReleasePrisoner), unless it was kidnapped: never booked, its mark would drop on its next AI update.
-                if (world.Characters.TryResolveNext(r.Prisoner, out int freed) && world.Characters.Cold(freed) is { Kidnapped: false } fc) fc.Freed = true;
-                // A releaser of a faction that books bounties tells the prisoner it may go (EV_PRISONER_FREE_TO_GO, Task_ReleasePrisoner, economy.md 11.5).
-                if (world.Fixtures.Release(world, r.Prisoner, r.Faction, Crimes) && Crimes?.Factions.Books(r.Faction) == true)
-                    world.Defer(new Dialogue.DialogueEvent(r.Worker, r.Prisoner, PrisonerFreeToGo) { Tick = world.Tick + 1 });
+                FreeBy(world, r.Worker, r.Faction, r.Prisoner);
                 break;
             case RoundKind.LockDoors:
-                f.Motion = DoorMotion.Closed;   // locking closes the door first
-                f.OpenAmount = 0;
+                if (f.DoorBroken) break;
+                FixtureRegistry.CloseDoor(f);   // an open door starts to swing shut (Task_LockDoor, FUN_140337670); the lock is set at once
                 world.Fixtures.SetLocked(f, true);
                 // Each locked door of the home whose lock is the worker's faction's sets the house flag while no door of it is open or opening (Task_LockDoor's
                 // FUN_1407933a0, Verified): one locked door is enough, the others may just be closed.

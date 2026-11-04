@@ -23,6 +23,9 @@ public sealed record InteriorVolume(string PlacementId, Vector2[] Footprint, flo
     /// <summary>The building's <c>cavernous</c> flag: <c>Enter_Building_Big</c> (the big reverb) instead of <c>Enter_Building</c>.</summary>
     public bool Cavernous { get; init; }
 
+    /// <summary>A gateway's hull: the original builds the interior object of any building with an <c>interior</c> list (<c>FUN_140551b20</c>, no gateway test) and the audio ray hits its hull, but it is no room (no roof hiding, no sight, no view).</summary>
+    public bool IsGateway { get; init; }
+
     /// <summary>
     /// The <c>interior mask</c> parts' render meshes (record paths, <c>phs or mesh</c>), placed with <see cref="Node"/>: what the game draws into its
     /// interior depth range to cut the terrain and foliage inside (docs/render-terrain.md "Interior cut"). Not the trigger hull above.
@@ -159,6 +162,9 @@ public sealed record InteriorVolume(string PlacementId, Vector2[] Footprint, flo
         return best;
     }
 
+    /// <summary>The floor surface's upward normal under <paramref name="point"/> on floors up to <paramref name="floor"/> (<see cref="FloorSurfaces.NormalBelow"/>); null for none.</summary>
+    public Vector3? FloorNormal(Vector3 point, int floor, float reach) => floors?.Value.NormalBelow(point, floor, reach);
+
     /// <summary>A movement pick on this building's collision at or below the viewed floor.</summary>
     public (float Distance, Vector3 Position)? MoveHit(Vector3 origin, Vector3 direction, int floor, float maxDistance)
     {
@@ -171,11 +177,12 @@ public sealed record InteriorVolume(string PlacementId, Vector2[] Footprint, flo
 
     /// <summary>
     /// The volume of a building placed at <paramref name="position"/> / <paramref name="rotation"/>, or null when it has no <c>interior mask</c> part with a
-    /// readable collision file, or is a gateway (walked under, not entered). <paramref name="collision"/> loads a record's collision path (shared, cached).
+    /// readable collision file, or is a gateway and <paramref name="gateways"/> is false (a gateway is walked under, not entered: no room, but its hull still answers the audio ray, <see cref="IsGateway"/>). <paramref name="collision"/> loads a record's collision path (shared, cached).
     /// </summary>
-    public static InteriorVolume? For(GameDatabase db, GameRecord building, string placementId, Vector3 position, Quaternion rotation, InteriorCollisions collision)
+    public static InteriorVolume? For(GameDatabase db, GameRecord building, string placementId, Vector3 position, Quaternion rotation, InteriorCollisions collision, bool gateways = false)
     {
-        if (building.GetBool("is gateway")) return null;
+        bool gateway = building.GetBool("is gateway");
+        if (gateway && !gateways) return null;
         float scale = building.GetFloat("scale", 1);
         var node = WorldObjectLayout.InstanceTransform(position, rotation, new Vector3(scale > 0 ? scale : 1));
         var points = new List<Vector2>();
@@ -204,6 +211,7 @@ public sealed record InteriorVolume(string PlacementId, Vector2[] Footprint, flo
             Ambience = building.GetInt("interior ambience"),
             Integrity = building.GetFloat("interior integrity", 100),
             Cavernous = building.GetBool("cavernous"),
+            IsGateway = gateway,
             MaskMeshes = meshes,
             Node = node,
             maskCorners = [.. corners],

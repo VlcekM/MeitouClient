@@ -53,7 +53,7 @@ sealed partial class PlayerInterface
             if (f.Kind == FloaterKind.Damage && Vector3.DistanceSquared(Eye, f.Position) >= FloaterRangeSquared) continue;
             if (FloaterText.Format(f, Floaters) is not { } text) continue;
             // A machine label is in the small floater font (FUN_1403567a0) and starts at its own point.
-            floaters.Add(new Live(f.Target, text, FloaterText.Colour(f), now, f.Kind == FloaterKind.Label ? FloaterMode.Full : Floaters, f.Kind == FloaterKind.Label ? 0 : FloaterHeight) { Last = f.Position });
+            floaters.Add(new Live(f.Target, text, FloaterText.Colour(f), now, f.Kind == FloaterKind.Label ? FloaterMode.Full : Floaters, f.Kind == FloaterKind.Label ? 0 : FloaterHeight) { Last = f.Kind == FloaterKind.Building ? Jittered(f.Position) : f.Position });
         }
         // A long fast-forward queues many at once: only the newest are worth showing.
         if (floaters.Count > 24) floaters.RemoveRange(0, floaters.Count - 24);
@@ -66,6 +66,11 @@ sealed partial class PlayerInterface
                 foreach (var l in floaters)
                     if (l.Target == c.Id) l.Last = where(c);
     }
+
+    /// <summary>A building's damage number starts at the point hit moved a little at random in x, y and z (<c>FUN_14029d2b0</c>; the original's amounts are <b>Unknown</b>, display only).</summary>
+    static Vector3 Jittered(Vector3 at) => at + new Vector3(Random.Shared.NextSingle() - 0.5f, Random.Shared.NextSingle() - 0.5f, Random.Shared.NextSingle() - 0.5f) * BuildingFloaterJitter;
+
+    const float BuildingFloaterJitter = 20;
 
     static float Rise(Live l, long now) => (float)((now - l.Born) / (double)System.Diagnostics.Stopwatch.Frequency) * FloaterRiseSpeed;
 

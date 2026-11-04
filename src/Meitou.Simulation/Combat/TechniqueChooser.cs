@@ -110,7 +110,7 @@ public static class TechniqueChooser
         for (int blow = 1; blow <= t.Blows; blow++)
         {
             float f = 1;
-            switch (blow == 1 ? t.Limb1 : t.Limb2)
+            switch (t.LimbOf(blow))
             {
                 case 0: if (!q.LeftArm) f = 0.001f; break;
                 case 1: if (!q.RightArm) f = 0.001f; break;

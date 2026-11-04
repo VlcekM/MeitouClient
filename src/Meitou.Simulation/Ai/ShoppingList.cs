@@ -26,7 +26,7 @@ public sealed class ShoppingList
     readonly int[] function, wanted, done;
     int day = int.MinValue, town = -1;
 
-    ShoppingList(int[] function, int[] wanted)
+    internal ShoppingList(int[] function, int[] wanted)
     {
         this.function = function;
         this.wanted = wanted;
@@ -80,17 +80,25 @@ public sealed class ShoppingList
     void NewDay(int today, int hour)
     {
         if (today == day || hour <= ResetAfterHour) return;
-        day = today;
-        Array.Clear(done);
+        StartOver(today);
     }
 
-    /// <summary>Whether something is left to buy today: goal 118's desire (0 once every entry is done).</summary>
-    public bool Pending(int today, int hour)
+    /// <summary>Whether something is left to buy today in the town <paramref name="site"/> the buyer stands in (-1: none): goal 118's desire (0 once every entry is done).</summary>
+    public bool Pending(int today, int hour, int site = -1)
     {
         NewDay(today, hour);
+        // Standing in another town than the one it last bought in starts the list over at every evaluation, as the day's reset does, which also records the day (FUN_140998fa0 calls FUN_140998e40, Verified).
+        if (town >= 0 && site >= 0 && town != site) StartOver(today);
         for (int k = 0; k < function.Length; k++)
             if (wanted[k] > done[k]) return true;
         return false;
+    }
+
+    /// <summary>The day's reset (<c>FUN_140998e40</c>): remembers <paramref name="today"/> and sets every done back to 0.</summary>
+    void StartOver(int today)
+    {
+        day = today;
+        Array.Clear(done);
     }
 
     /// <summary>The item function of entry <paramref name="k"/> while it still has units to buy today, else -1.</summary>

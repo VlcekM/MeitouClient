@@ -44,7 +44,7 @@ paths. A MAP_FEATURES record draws its mesh only while `hidden` is false, and ma
 instance at its node whatever `hidden` says (**Verified** (decompiled), FUN_14039c7e0, FUN_14039b130); an empty texture map
 is `white.dds`, an empty normal map `flat.dds` (**Verified** (decompiled), FUN_140841a50 via FUN_140843920). The `hidden` test
 is skipped while global `DAT_142134690+0x298` is set, which then draws `athene.mesh` for a feature with no mesh (**Verified**
-(decompiled), FUN_14039c7e0); that this flag is editor mode is **Observed** (inferred, not traced). Nest debris is population state.
+(decompiled), FUN_14039c7e0); that this flag is editor mode is **Observed** (inferred, not traced). Nest debris is population state ([nest debris](#nest-debris-and-loot)).
 Materials select local town/biome/climate inputs; do not substitute a material solely by mesh name.
 
 Original part view distances differ from whole-object reach. Distant towns use stand-ins/LOD and
@@ -195,6 +195,27 @@ block:  int32 count, count ×
 - Meitou with this rule (probe over the level data, 2026-10-20): Sho-Battai claims 169 buildings, The Hub 128, Squin 45, Stack 137, all inside each town's
   GAMESTATE_TOWN zones; 261 towns hold 9766 buildings. Residents: Squin 37 (save 36), Stack 94 (save 93-95).
 
+## Nest debris and loot
+
+A TOWN with `debris`, `debris building` or `loot spawn` lists lays them out when its zone is populated: the TOWN virtual +0x388 (`FUN_140938440`; reached by the vtable of
+TownBase, Town, Nest and TownNull, caller **Unknown**), which seeds `rand()` from the town's position xor `0xdeadbeef` (a layout fixed by the place). **Verified** (decompile):
+- `debris` (NEST_ITEM link, v0..v1 the count, v2 the scale per cent, 0 = 1): `FUN_140937510`. An item **with a `physics file`** is a real item (3 records in the base game: Beak Thing
+  Egg, Crab Egg, Gurgler Egg, each `trade item`, values 7000 / 400 / 400): for each of the count, `cluster min`..`cluster max` copies, each at the centre plus a random direction
+  times 0..`cluster range`, on the ground; only when the flag byte +0xa8 of the object the zone's slot 25 returns allows it (meaning **Unknown**; Meitou: always). Any other (13 records:
+  bones, dung, trash, carpets, awnings; `trade item` mostly set, value 0..25) is a mesh node from `ground mesh` (else `mesh`; with `number of meshes` above 1 a numbered
+  variant) at a random yaw within `size radius` of the centre, plus cluster copies; the item's own `cluster` links then repeat this with their v0..v1 and v2. Meitou does not draw these.
+- `loot spawn` (63 links in the base game, all VENDOR_LIST): v0..v1 times a point of the nest where the height is at least 1, an item rolled from the list as an interior layout's slot rolls
+  ([loose items](../game/factions-squads-towns.md#loose-items-in-buildings), `FUN_1409540d0`), put there as a real item, only with the same flag. The reach of the point is **Unknown**
+  (the call passes none that the decompile shows); Meitou uses `size radius`.
+- `debris building` (BUILDING link: Prisoner Pole, Camp Bed, Torch Post, Campfire, Sitting spot, Trophy ...): for each of `num centrepoints` a point round the centre
+  (`FUN_140927600`), pushed away from earlier points, then per entry a count (v0; v0 = 0 gives one on a chance; above 1 it varies by +-0.5 x v0) of buildings
+  at the point plus a random direction times v1..v2 (**Observed**: the data reads as a distance range), kept off earlier ones by a spacing, on valid ground, laid to the ground's
+  slope up to the record's `max slope`, at a random yaw, made by the building factory (`FUN_140930120`, `FUN_14057cc70`) with their +0x241 flag set. **Not modelled**: a nest's
+  Prisoner Poles (cages) are what the Fog Islands' fogmen carry their victims to ([#132](https://github.com/VlcekM/MeitouClient/issues/132)).
+- Persistence: the items are saved with the nest as their `persist` handle ([save](save.md)); the buildings are not saved.
+Meitou (`PopulationSystem.ScatterNest`, **Engine choices**: its own random stream, loot reach): the first load of a nest the save does not name lays the eggs and the loot as ground
+items kept apart from the ground item limit; a nest loaded again, and one a save names, lay nothing more.
+
 ## Open questions
 
 - Meaning of the trailer ints and of the stored record sizes.
@@ -203,7 +224,7 @@ block:  int32 count, count ×
   building's `town*` handle matches a town state's `hand*` by `C` and `CS`, see "Materials" above; the game gives
   a new handle a random serial from `rand()`, FUN_1400d1c20). Why most town handles match no town state.
 - What the INVENTORY_STATE entries in the building list are for; INVENTORY_*
-  contents; the game's building layout lookup (the 13 unresolved exterior names) and nest debris scatter.
+  contents; the game's building layout lookup (the 13 unresolved exterior names); the caller and the flag of the nest scatter.
 - ROAD `start`/`end`, the road point x parameter, road foliage w.
 - `fogfeatures.dat`, `globalPathing.path` layouts (`blendinfo.dat`: see terrain.md).
 - Building assembly leftovers: rolls drawn by part-material collections inside the seeded sequence (EFFECT

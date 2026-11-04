@@ -11,7 +11,9 @@ public sealed partial class PopulationSystem
         focus = cameraFocus;
         world.Uniques.SeedPrisoners(data.Db);
         RefreshStates(world);
-        Inputs(world, []);
+        drainAll = true;   // behind the loading screen the builds are all taken (the original's load thread, not the per-frame queue)
+        try { Inputs(world, []); }
+        finally { drainAll = false; }
         // Towns loaded behind the loading screen keep their TOWN, as the original checks no override then (its ZoneManager +8 byte).
         loadingScreen = true;
         try { RefreshZones(world); }

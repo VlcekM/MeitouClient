@@ -369,4 +369,22 @@ public class JailSaveTests
         Assert.False(plainHouse.Bools["locked0"]);
         Assert.DoesNotContain(Keys(plainHouse), e => e.Key is "meitou lock 0" or LockSystem.HouseLockedKey);
     }
+
+    [Fact]
+    public void A_character_outside_the_players_faction_opening_a_door_clears_its_homes_locked_flag()
+    {
+        // Task_OpenDoor (FUN_1403370f0) clears the owner squad's house flag unless the opener is of the player's faction.
+        var data = JailData();
+        using var a = new Game(data);
+        a.World.Fixtures.Saved = new Dictionary<string, FcsRecord> { [HouseKey] = HouseState((LockSystem.HouseLockedKey, true)) };
+        a.World.Fixtures.RegisterSite(a.World, data, 0);
+        a.World.RunTicks(2);
+        var locks = a.World.Systems.OfType<LockSystem>().Single();
+        var door = a.World.Fixtures.OfBuilding(HouseKey).First(f => f.Kind == FixtureKind.Door);
+        Assert.True(locks.IsHouseLocked(a.World, HouseKey));
+        locks.NoteDoorOpened(a.World, door, a.World.Player.Faction);
+        Assert.True(locks.IsHouseLocked(a.World, HouseKey));
+        locks.NoteDoorOpened(a.World, door, a.World.Player.Faction + 1);
+        Assert.False(locks.IsHouseLocked(a.World, HouseKey));
+    }
 }

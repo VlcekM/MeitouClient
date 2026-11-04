@@ -43,9 +43,10 @@ public static class TaskProfiles
         [TaskType.BODYGUARD] = new(Special, Crowd: 0.9f),
         // Medic: the desire function's 1 times the finder's score (FUN_140998410); crowd factor 0.8 (FUN_140319a60, Observed).
         [TaskType.JOB_MEDIC] = new(Special, Crowd: 0.8f),
+        [TaskType.DEFEAT_SQUAD_LIMIT_CHASE_RANGE] = new(Special, 0.3f, 2, true),   // 248 Attacking Squad (FUN_140319a60: commitment 0.3 + rand x 2, +0x20 set)
         [TaskType.GO_HOME_AND_GO_TO_BED] = new(Special, 2, 8, true),
         [TaskType.GO_HOME_AND_GO_TO_BED_SECURE] = new(Special, 2, 8, true),
-        [TaskType.RUN_AWAY_HOMETOWN] = new(Special, 0.05f, 0.15f),
+        [TaskType.RUN_AWAY_HOMETOWN] = new(Special, 0.05f, 0.15f, true),   // 127 Retreating fast (FUN_140319a60: 0.05 + 0.15 r, +0x20 set, a2-003)
         // Home territory aggression: AI slot 41, 0.5 (docs/game/ai-tasks.md "Combat goals", Observed). 16, 21, 34, 143 desire 1 (slot 19, 16's own zeros apart); 15 / 288 their own (AiSystem.Fights.cs).
         [TaskType.TERRITORIAL_AGGRESSION_BUT_DONT_LEAVE_HOME] = new(0.5f),
     };

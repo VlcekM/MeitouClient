@@ -163,7 +163,7 @@ static class DebugCheats
         if (!table.TryResolveNext(id, out int slot) || table.Cold(slot) is not { Medical: { } medical, Race: { } race } cold) return null;
         return (medical, new MedicalContext(data.Bodies.Constants, data.Bodies.Options, race)
         {
-            Toughness = cold.Stats?.Toughness ?? 0,
+            Toughness = cold.Stats?.ScaledToughness ?? 0,
             Strength = cold.Stats?.Strength ?? 50,
             HasStats = cold.Stats is not null,
             Seed = world.Seed,

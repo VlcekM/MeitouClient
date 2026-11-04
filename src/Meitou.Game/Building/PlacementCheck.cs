@@ -19,6 +19,9 @@ public sealed record GhostFloor(string Building, Vector2[] Footprint, int Floor,
     /// <summary>The height of the building's ceiling over the floor point, null when nothing is over it (what a <c>ceiling placement</c> ghost hangs from).</summary>
     public float? Ceiling { get; init; }
 
+    /// <summary>The floor surface's upward normal under the ghost's origin (the original's one indoor slope ray); null when it is not known.</summary>
+    public Vector3? Normal { get; init; }
+
     /// <summary>The parent the placed building records: the site's id, or the level building's instance id.</summary>
     public string Parent => Level ?? Building;
 }
@@ -145,8 +148,9 @@ public static class PlacementCheck
         // A wall piece pitches with the ground: its own up axis must be within `max slope` of the vertical (Verified, FUN_140429510).
         if (q.WallPiece)
             return b.MaxSlope > 0 && Vector3.Transform(Vector3.UnitY, Normalised(q.Rotation)).Y < MathF.Cos(b.MaxSlope * MathF.PI / 180) ? PlacementFailure.NotLevel : PlacementFailure.None;
-        // A building's floor is taken as level (the original's one indoor ray and its 5 degree surface test are not read).
-        if (parent is not null) return PlacementFailure.None;
+        // On a building's floor the slope block takes one ray at the origin (FUN_1404daa20, Verified; the indoor ghost matches the slope, so a normal further from the vertical than
+        // `max slope` fails it). Its 5 degree surface test is not read.
+        if (parent is not null) return b.MaxSlope > 0 && q.On?.Normal is { } floorNormal && AngleFromUp(floorNormal) > b.MaxSlope ? PlacementFailure.NotLevel : PlacementFailure.None;
         // The vertical margins, after the nudge the original gives the ghost each frame (Settle); a margin left below 0 fails.
         if (Settle(q) is { After: { Down: < -MarginEpsilon } or { Up: < -MarginEpsilon } }) return PlacementFailure.NotLevel;
         var bounds = q.Services.Footprint(b.Id)?.Bounds ?? (new Vector2(-4), new Vector2(4));
@@ -155,6 +159,8 @@ public static class PlacementCheck
         if (normalY < SteepestNormalY || b.MatchSlope && b.MaxSlope > 0 && slope > b.MaxSlope) return PlacementFailure.NotLevel;
         return PlacementFailure.None;
     }
+
+    static float AngleFromUp(Vector3 normal) => MathF.Acos(Math.Clamp(Vector3.Dot(Vector3.Normalize(normal), Vector3.UnitY), -1, 1)) * 180 / MathF.PI;
 
     /// <summary>The value of a margin with nothing limiting it (the original starts both at 1e8).</summary>
     public const float NoLimit = 1e8f;

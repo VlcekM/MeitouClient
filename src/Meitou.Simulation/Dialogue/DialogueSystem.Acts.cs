@@ -64,7 +64,38 @@ public sealed partial class DialogueSystem
     {
         var table = world.Characters;
         if (table.Cold(captive) is { SquadId: >= 0 } cc && table.Cold(captor) is not null) Memory.Remember(world, cc.SquadId, table.IdOf(captor), MemoryTag.Captor);
+        Forgive(world, captor, table.IdOf(captive));
     }
+
+    /// <summary>
+    /// <c>FUN_14067aca0</c> over <c>FUN_140289400</c> (<b>Verified</b>): the short-term tags TEMP_ENEMY, criminal and aggressor on <paramref name="target"/> are cleared in the memory of the observer's
+    /// squad, of the squads of the allies it senses (stand-in: allied characters within sight) and of every squad of its faction. Run by the end of processing a slave (observer: the worker), by
+    /// <c>Task_PutInSomething</c> for a cage (<c>FUN_140358670</c>: the putter forgives the captive) and by <c>Task_ReleasePrisoner</c> (<c>FUN_1403570a0</c>: the prisoner forgives the releaser, and when the
+    /// releaser's faction books bounties the releaser forgives the prisoner). The original also clears the ENEMY bit of the target's entry in the observer's sensor (the scan recomputes it here) and
+    /// empties a list of its town (purpose <b>Unknown</b>); neither is modelled.
+    /// </summary>
+    public void Forgive(World world, int observer, CharacterId target)
+    {
+        var table = world.Characters;
+        if (table.Cold(observer) is not { } oc) return;
+        var squads = new SortedSet<int>();
+        if (oc.SquadId >= 0) squads.Add(oc.SquadId);
+        foreach (var squad in world.Squads.All) if (squad.Faction == oc.Faction) squads.Add(squad.Id);
+        var at = table.Next[observer].Position;
+        for (int s = 0; s < table.HighWater; s++)
+        {
+            if (!table.Next[s].Alive || table.Cold(s) is not { SquadId: >= 0 } a || !AlliedFactions(oc.Faction, a.Faction)) continue;
+            if (Vector3.DistanceSquared(at, table.Next[s].Position) <= AggroSystem.OutdoorSight * AggroSystem.OutdoorSight) squads.Add(a.SquadId);
+        }
+        foreach (int squad in squads)
+        {
+            Memory.ClearShort(squad, target, MemoryTag.TempEnemy);
+            Memory.ClearShort(squad, target, MemoryTag.Criminal);
+            Memory.ClearShort(squad, target, MemoryTag.Aggressor);
+        }
+    }
+
+    bool AlliedFactions(int a, int b) => a >= 0 && b >= 0 && (a == b || data.Relations.Contains(a) && data.Relations.Contains(b) && data.Relations.IsAlly(a, b));
 
     /// <summary>
     /// Event 13 UNLOCK_MY_CAGE_OR_SHACKLES fired by a freed prisoner at its liberator (<c>FUN_140684990</c>, <b>Observed</b>): unless the speaker's squad already remembers the liberator as its captor,
@@ -265,7 +296,18 @@ public sealed partial class DialogueSystem
         foreach (var door in world.Fixtures.OfBuilding(gate.Key)) Locks.FixtureRegistry.OpenDoor(door);
     }
 
-    /// <summary>DA_FOLLOW_WHILE_TALKING (16, task 164): the speaker walks after the target while its conversation lasts (engine: re-aimed every 15 ticks when more than 40 units off).</summary>
+    /// <summary>
+    /// DA_FOLLOW_WHILE_TALKING (16, Task_FollowAndTalk 164): the speaker follows the target with the shared follow task (FUN_140333400 / FUN_140333500, the same as a follow order: stand-off 20 to 40 on
+    /// the follower's side, the follow speed profile; <b>Verified</b>), a character in a fight excepted (engine choice: no walk to end a fight).
+    /// </summary>
+    void StartFollowing(World world, CharacterId who, CharacterId whom)
+    {
+        var table = world.Characters;
+        if (!table.TryResolveNext(who, out int s) || table.Cold(s) is not { InCombat: false }) return;
+        TaskStart.Start(world, s, new TaskRequest(CharacterTask.Follow, TaskType.FOLLOW_WHILE_TALKING, TaskSource.Npc) { Target = whom });
+    }
+
+    /// <summary>The follow lasts while the conversation does: when it is over (or the speaker or target is gone) the speaker stops following and stands.</summary>
     void StepFollowers(World world)
     {
         if (followers.Count == 0) return;
@@ -273,9 +315,13 @@ public sealed partial class DialogueSystem
         foreach (var (who, whom) in followers.ToArray())
         {
             bool talking = bubbles.Any(b => b.C.Npc == who) || open?.Npc == who;
-            if (!talking || !table.TryResolveNext(who, out int s) || !Awake(table, s) || Position(world, whom) is not { } at) { followers.Remove(who); continue; }
-            if (world.Tick % 15 != 0 || Vector3.DistanceSquared(table.Next[s].Position, at) <= 40 * 40 || table.Cold(s)!.InCombat) continue;   // no walk to end a fight it is in
-            TaskStart.Walk(world, s, new Vector2(at.X, at.Z), SpeedMode.Walk, TaskType.FOLLOW_WHILE_TALKING, TaskSource.Npc);
+            if (talking && table.TryResolveNext(who, out _) && Position(world, whom) is not null) continue;
+            followers.Remove(who);
+            if (table.TryResolveNext(who, out int s) && table.Cold(s) is { } cold && cold.FollowOrder == whom && table.Next[s].Task == (byte)CharacterTask.Follow)
+            {
+                cold.FollowOrder = CharacterId.None;
+                TaskStart.Stand(table, s);
+            }
         }
     }
 

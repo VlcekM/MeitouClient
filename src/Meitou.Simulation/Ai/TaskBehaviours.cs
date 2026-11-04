@@ -11,7 +11,7 @@ public enum AiBehaviour : byte
 {
     /// <summary>Not built: the goal scores 0.</summary>
     None = 0,
-    /// <summary>Stands about near its post, stepping a few metres now and then (<see cref="CharacterTask.Wander"/> in <see cref="AiSettings.MillRadius"/>).</summary>
+    /// <summary>Idleness (14): stands where it is, as the original's blank task (<see cref="CharacterTask.Idle"/>).</summary>
     Mill = 1,
     /// <summary>Walks to its node in the home building (shopkeeper, guard, throne or general, by goal), else to its post, and stands there.</summary>
     Post = 3,
@@ -81,6 +81,16 @@ public enum AiBehaviour : byte
     /// so it keeps strolling about the town (an occupier: round the complete buildings of the player town it holds).
     /// </summary>
     PatrolTown = 22,
+    /// <summary>
+    /// Find and rescue leader (142, finder <c>FUN_140598540</c>, list B 101 <c>isLeaderDown</c>): wanted while the squad's leader (not the character, not dead) is down and can be lifted
+    /// (<see cref="Carrying.CarrySystem.LeaderToRescue"/>); the serial carry sweep lifts it (row 213, the snatch lift) once the goal is chosen.
+    /// </summary>
+    RescueLeader = 23,
+    /// <summary>
+    /// Crouches (CROUCH 27, <c>Task_Crouch</c>) or stands up from a crouch (STAND_UP 28, <c>Task_UnCrouch</c>) where it stands: the <c>squat T</c> clip plays forwards or backwards and the animation
+    /// stance's crouched byte is set once it passes 0.9 or cleared under 0.1 (<see cref="AnimationSystem"/>). The base data lists neither goal; modded packages may.
+    /// </summary>
+    Crouch = 24,
 }
 
 /// <summary>The engine's table from <see cref="TaskType"/> to <see cref="AiBehaviour"/>, and the TaskData display text (docs/game/ai-tasks.md "TaskData registry", Verified) of the types it acts out.</summary>
@@ -107,11 +117,13 @@ public static class TaskBehaviours
         [TaskType.MAN_A_TURRET_ON_BUILDING] = (AiBehaviour.Turret, "Turret home guard"),
         [TaskType.MAN_A_TURRET_PLAYER_JOB] = (AiBehaviour.Turret, "Turret guard"),
         [TaskType.USE_TURRET] = (AiBehaviour.Turret, "Turret gunner"),
-        [TaskType.SIT_ON_THRONE] = (AiBehaviour.Post, "Reigning"),
+        [TaskType.SIT_ON_THRONE] = (AiBehaviour.Sit, "Reigning"),
         [TaskType.FOLLOW_SQUADLEADER] = (AiBehaviour.Follow, "Following leader"),
         [TaskType.FOLLOW_SLAVEMASTER] = (AiBehaviour.Follow, "Following master"),
-        [TaskType.BODYGUARD] = (AiBehaviour.Follow, "Bodyguard"),
+        // 45 Bodyguard has no behaviour of its own (FUN_14032ebd0 builds Task_Blank for it): the following of a bodyguard contract is goal 44's.
         [TaskType.FOLLOW_PLAYER_ORDER] = (AiBehaviour.Follow, "Following"),
+        // 253 Following (urgent escape): a Task_Follow like 31 / 44 / 289 (FUN_14032ebd0 case 253, list B !7 60 90 59); one package lists it as a Leader goal.
+        [TaskType.FOLLOW_URGENT_ESCAPE] = (AiBehaviour.Follow, "Following"),
         [TaskType.GO_HOME_AND_GO_TO_BED] = (AiBehaviour.Sleep, "Going to bed"),
         [TaskType.GO_HOME_AND_GO_TO_BED_SECURE] = (AiBehaviour.Sleep, "Going to bed"),
         [TaskType.SLEEP_ON_FLOOR] = (AiBehaviour.Sleep, "Sleeping on ground"),
@@ -132,12 +144,18 @@ public static class TaskBehaviours
         [TaskType.INVESTIGATE_ALARMS] = (AiBehaviour.Investigate, "Investigating"),
         [TaskType.INVESTIGATE_ALARMS_ALLIES_ONLY] = (AiBehaviour.Investigate, "Investigating"),
         [TaskType.DEFEAT_SQUAD] = (AiBehaviour.Assault, "Assault"),
+        // 248 Attacking Squad: the same finder as 101 (FUN_140793eb0, stub LAB_140006d25), the same flags and effect; no base package lists it, a mod can.
+        [TaskType.DEFEAT_SQUAD_LIMIT_CHASE_RANGE] = (AiBehaviour.Assault, "Attacking squad"),
+        [TaskType.FIND_AND_RESCUE_LEADER] = (AiBehaviour.RescueLeader, "Rescuing leader"),
+        [TaskType.CROUCH] = (AiBehaviour.Crouch, "Crouching"),
+        [TaskType.STAND_UP] = (AiBehaviour.Crouch, "Standing"),
         [TaskType.SELF_PRESERVATION] = (AiBehaviour.SelfPreserve, "Self preservation"),
         [TaskType.RUN_AWAY] = (AiBehaviour.Flee, "Running away"),
         [TaskType.ATTACK_ENEMIES] = (AiBehaviour.Fight, "Attacking enemies"),
         [TaskType.ATTACK_ENEMIES_AND_NEUTRALS] = (AiBehaviour.Fight, "Attacking others"),
         [TaskType.TERRITORIAL_AGGRESSION_BUT_DONT_LEAVE_HOME] = (AiBehaviour.Fight, "Home territory aggression"),
         [TaskType.ATTACK_TROUBLE_MAKERS] = (AiBehaviour.Fight, "Attacking trouble makers"),
+        [TaskType.ATTACK_ENEMIES_OF_MY_SLAVEMASTER] = (AiBehaviour.Fight, "Attacking enemies of my master"),
         [TaskType.PROTECT_OWN_SQUAD] = (AiBehaviour.Fight, "Protect close allies"),
         [TaskType.PROTECT_ALLIES] = (AiBehaviour.Fight, "Protect allies"),
         [TaskType.PROTECT_ALLIES_STAY_IN_TOWN] = (AiBehaviour.Fight, "Protect allies"),
@@ -158,7 +176,7 @@ public static class TaskBehaviours
     public static AiBehaviour Of(TaskType type) => (uint)type < TypeCount ? Behaviours[(int)type] : AiBehaviour.None;
 
     /// <summary>The game's display text of a type the engine acts out; the enum name for the rest.</summary>
-    public static string Text(TaskType type) => Table.TryGetValue(type, out var e) ? e.Text : type.ToString();
+    public static string Text(TaskType type) => Table.TryGetValue(type, out var e) ? e.Text : type == TaskType.STUMBLE_TASK_FORCED ? "Stumbling" : type.ToString();
 
     /// <summary>Every type the engine acts out.</summary>
     public static IEnumerable<TaskType> Built => Table.Keys;

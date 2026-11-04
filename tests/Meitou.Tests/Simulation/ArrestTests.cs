@@ -170,4 +170,39 @@ public class ArrestTests
         picker.Medical!.KnockOut(1000);
         Assert.False(picks.Allowed(world, picker, 20));
     }
+
+    [Fact]
+    public void State_118_target_unarmed_needs_no_weapon_in_hand_and_empty_hip_and_back_sections()
+    {
+        var target = new Combatant { Name = "target" }.MakeCold();
+        var pack = new Meitou.Simulation.Items.Inventory();
+        target.Inventory = pack;
+        Assert.True(CharacterFacts.TargetUnarmed(target));
+        pack.Items.Add(new Meitou.Simulation.Items.ItemInstance { Record = "wrench", Type = FcsRecordType.ITEM, Section = "main" });
+        Assert.True(CharacterFacts.TargetUnarmed(target));   // only the weapon sections count
+        var sword = new Meitou.Simulation.Items.ItemInstance { Record = "katana", Type = FcsRecordType.WEAPON, Section = "back" };
+        pack.Items.Add(sword);
+        Assert.False(CharacterFacts.TargetUnarmed(target));
+        pack.Items.Remove(sword);
+        target.DrawnWeapon = WeaponKinds.Katana;
+        Assert.False(CharacterFacts.TargetUnarmed(target));
+    }
+
+    [Fact]
+    public void A_bounty_is_perceived_while_the_target_is_recently_wanted_or_is_down_and_an_enemy()
+    {
+        // FUN_140853fd0 behind goal 204's finder (FUN_14099bfc0): the entry of the guard's booking faction, visible with the recently-wanted marker, or on a downed enemy.
+        var data = Town();
+        var relations = data.Relations;
+        int city = data.FactionIndex("50-a");
+        var arrest = new ArrestSystem(new CrimeSystem(relations), BaseGame);
+        var guard = new Combatant().MakeCold();
+        guard.Faction = city;
+        var target = new Combatant().MakeCold();
+        target.Faction = relations.PlayerFaction;
+        Assert.False(arrest.PerceivedBounty(guard, target));
+        (target.Bounties = new BountyLedger()).Get(city, "city").Amount = 500;
+        target.RecentlyWanted = CrimeSystem.RecentlyWantedSeconds;
+        Assert.True(arrest.PerceivedBounty(guard, target));
+    }
 }

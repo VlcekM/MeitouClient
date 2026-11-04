@@ -15,7 +15,7 @@ public sealed partial class CombatSystem
         public int Self, Current;
         public CharacterCold Cold;
         public bool Player, Hold, Prone, Animal;
-        public Vector2 HoldPoint;
+        public Vector3 HoldPoint;
         /// <summary>The AI task's target whose attackers the chooser protects (a bodyguard's), -1: none.</summary>
         public int Protectee;
         public int Best;
@@ -128,6 +128,9 @@ public sealed partial class CombatSystem
         return q.Best;
     }
 
+    /// <summary>The crippled flag of the target score (<c>FUN_14059e300</c> :249-252): vslot 0x360 (<c>isCrippled</c>: crawling, or unable to attack, stand-in) or the maimed test <c>FUN_140644170</c> (<see cref="Bodies.MedicalState.Maimed"/>).</summary>
+    public static bool IsCrippled(CharacterCold c) => c.Medical is { Crawling: true } or { Maimed: true } || c.Fighter is not { CanAttack: true };
+
     void Consider(World world, ref Choice q, int c, bool protect)
     {
         var table = world.Characters;
@@ -139,7 +142,7 @@ public sealed partial class CombatSystem
         // The current target is whoever the order named, of any faction.
         if (c != q.Current && (tc.Faction == q.Cold.Faction || q.Cold.SquadId >= 0 && tc.SquadId == q.Cold.SquadId)) return;
         ref readonly var o = ref read[c];
-        if (q.Hold && !Orders.HoldPost(prev[i].Position, q.HoldPoint, prev[c].Position, prev[c].Velocity, prev[c].Yaw, tc.Medical.Crawling || o.AttackTech >= 0, o.TargetSlot >= 0)) return;
+        if (q.Hold && !Orders.HoldPost(prev[i].Position, q.HoldPoint, prev[c].Position, prev[c].Velocity, prev[c].Yaw, tc.Medical is { Crawling: true } || o.AttackTech >= 0, o.TargetSlot >= 0)) return;
         int attackers = AttackerCount(world, c) + (q.Pending is { } pending ? pending.GetValueOrDefault(c) : 0);
         float dx = prev[c].Position.X - prev[i].Position.X, dz = prev[c].Position.Z - prev[i].Position.Z;
         var candidate = new TargetCandidate
@@ -155,11 +158,11 @@ public sealed partial class CombatSystem
             Distance = MathF.Sqrt(dx * dx + dz * dz),
             Fighting = o.TargetSlot >= 0,
             Gunner = tc.Gunning is not null,
-            Crippled = tc.Medical.Crawling || tc.Fighter is not { CanAttack: true },
+            Crippled = IsCrippled(tc),
             Peaceful = o.TargetSlot < 0 && Relations is { } relations && !AggroSystem.IsEnemy(relations, tc.Faction, q.Cold.Faction),
             GettingUp = CharacterFacts.GettingUp(tc, world.Tick),
         };
-        if (TargetScore.Score(candidate, q.Player, q.Hold, q.Prone, q.Animal) is { } score && score > q.BestScore)
+        if (TargetScore.Score(candidate, q.Player, q.Hold, q.Prone, q.Animal, q.Cold.Manoeuvre) is { } score && score > q.BestScore)
         {
             q.Best = c;
             q.BestScore = score;

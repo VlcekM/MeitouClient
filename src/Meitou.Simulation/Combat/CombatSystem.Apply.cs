@@ -19,7 +19,7 @@ public sealed partial class CombatSystem
     static bool IsParry(CharacterCold attacker, CharacterCold defender, CombatTechnique tech, int blow)
     {
         if (!attacker.Fighter!.Unarmed || attacker.Race!.IsRobot) return true;
-        int limb = blow <= 1 ? tech.Limb1 : tech.Limb2;
+        int limb = tech.LimbOf(blow);
         if (limb is < 0 or > 3) return false;
         foreach (var p in defender.Medical!.Parts)
             if (p.Template.LimbSlot == limb && p.Limb == LimbState.Replaced) return true;
@@ -31,16 +31,20 @@ public sealed partial class CombatSystem
         if (e.Kind == FireEffect) { ApplyFire(world, e); return; }
         if (e.Kind == ReloadEffect) { ApplyReload(world, e); return; }
         if (e.Kind == ZoneBuildingsEffect) { ApplyZoneBuildings(world, e); return; }
+        if (e.Kind == MassCombatEffect) { if (world.Characters.Cold(e.Target) is { Stats: { } asked }) xp.MassCombat(asked); return; }
         if (e.Kind != BlowEffect) return;
         var table = world.Characters;
         int a = e.Source, d = e.Target, blow = e.Arg, seq = (int)e.Amount, now = (int)world.Tick;
         ref var A = ref write[a];
         ref var D = ref write[d];
-        if (A.AttackSeq != seq || A.AttackTech < 0) return;
+        // A blow thrown in Act lands even when Act then ended or restarted the swing on the same tick (the original resolves it inside the swing update); only a hit, knock-out
+        // or kill applied earlier this tick takes the swing away from its attacker. It carries its technique, and touches the attacker's swing only while that is still the one.
+        if (A.CancelTick == now) return;
+        bool live = A.AttackSeq == seq && A.AttackTech >= 0;
         var ac = table.Cold(a);
         var dc = table.Cold(d);
         if (ac is null || dc is null || ac.Fighter is null || dc.Fighter is null || ac.Stats is null || dc.Stats is null || ac.Medical is null || dc.Medical is null || ac.Race is null || dc.Race is null) return;
-        var tech = techniques[A.AttackTech];
+        var tech = techniques[(int)e.Position.X];
         var prev = table.Previous;
         int direction = HitOutcomes.Facing(tech.DirectionOf(blow), HitOutcomes.Behind(table.Previous[a].Position, table.Previous[d].Position, table.Previous[d].Yaw));
 
@@ -49,7 +53,8 @@ public sealed partial class CombatSystem
         float progress = reaction is not null ? Math.Clamp((now - D.ReactStart) / (float)D.ReactTicks, 0, 1) : 0;
         var outcome = HitOutcomes.Decide(reaction, progress, direction);
 
-        A.LastOutcome = outcome;
+        if (live) A.LastOutcome = outcome;
+        else if (A.AttackSeq == seq) Pause(world, ref A, outcome, now);
         // A blow that lands or is blocked takes the defender off the attacker's list of fighters it lets close in (attackImpactCheck → CombatClass::removeAttackerH on
         // the attacker's own list, docs/game/combat.md "Attack slots and circling"): a defender fighting the attacker asks again before its next swing.
         if (outcome is BlowOutcome.Hit or BlowOutcome.Blocked && D.TargetSlot == a && D.TargetGeneration == prev[a].Generation) D.Engaged = false;
@@ -67,7 +72,7 @@ public sealed partial class CombatSystem
                 if (!techniques[D.ReactTech].IsDodge) Sound(world, SoundKind.Blocked, d, a, prev[d].Position, unarmed: !parry, robot: false);
                 // A parry throws sparks at the parrying weapon (FUN_1404394f0, IsParry); a fist blow of a plain hand-to-hand impact does not.
                 if (!techniques[D.ReactTech].IsDodge && parry) world.BlockSparks?.Enqueue(Id(world, d));
-                Stop(ref A, tech, blow);
+                if (live) Stop(ref A, tech, blow);
                 Punch(world, a, ac, dc, tech, blow, 5);
                 Record(now, a, d, blow, outcome, -1, default, false, false);
                 return;
@@ -137,6 +142,7 @@ public sealed partial class CombatSystem
         {
             D.Down = true;
             D.AttackTech = -1;
+            D.CancelTick = now;
             D.NextBlow = 0;
             D.ReactTech = -1;
         }
@@ -152,7 +158,7 @@ public sealed partial class CombatSystem
         Crimes?.Hit(world, a, d);
         if (!dc.Medical.Incapacitated)
         {
-            world.SystemOf<AggroSystem>()?.Notice(world, table.IdOf(d), table.IdOf(a));   // the victim senses its attacker (FUN_140999f00)
+            world.SystemOf<AggroSystem>()?.Alarm(world, table.IdOf(d), table.IdOf(a));   // the victim senses its attacker, with the alarm flag (FUN_140999f00)
             HitReplan(dc, world.Tick);
         }
         Deeds?.Blow(world, a, d, dc.Medical.Incapacitated, death);
@@ -176,12 +182,12 @@ public sealed partial class CombatSystem
     {
         var f = ac.Fighter!;
         if (!f.Unarmed || f.IsAnimal || ac.Race!.IsRobot) return;
-        int limb = blow <= 1 ? tech.Limb1 : tech.Limb2;
+        int limb = tech.LimbOf(blow);
         if (limb is < 0 or > 3) return;
         if (dc.Race!.IsRobot) material = 1;
         var (cut, blunt) = material switch { 1 => (2f, 2f), 5 => (5f, 1f), 6 => (1f, 1f), _ => (0f, 1f) };
         var stats = ac.Stats!;
-        float k = (1 - 0.5f * (UnarmedRating(world, a, ac, f) + stats[StatsEnumerated.Toughness] * stats.Scale) * 0.01f) * options.GlobalDamageMultiplier * f.FistInjury;
+        float k = (1 - 0.5f * (UnarmedRating(world, a, ac, f) + stats.ScaledToughness) * 0.01f) * options.GlobalDamageMultiplier * f.FistInjury;
         if (ac.Medical!.PunchDamage(limb, cut * k, blunt * k, constants)) xp.ToughnessFromDamage(stats, ac.Race, material);
     }
 
@@ -194,7 +200,8 @@ public sealed partial class CombatSystem
     {
         // Outside a fight (docs/game/combat.md "Stagger outside a fight"): one getting up is left alone; any other drops its task, which is planned again from its start,
         // unless it mans a turret (shooting at a live target).
-        if (D.TargetSlot < 0 && !dc.InCombat)
+        bool outsideFight = D.TargetSlot < 0 && !dc.InCombat;
+        if (outsideFight)
         {
             if (CharacterFacts.GettingUp(dc, now))
             {
@@ -212,6 +219,7 @@ public sealed partial class CombatSystem
         D.HitHeavy = heavy && !stumbling;
         if (stumbling && !heavy) return;
         D.AttackTech = -1;
+        D.CancelTick = now;
         D.NextBlow = 0;
         D.ReactTech = -1;
         string? part = D.HitPart >= 0 && D.HitPart < dc.Medical!.Parts.Count ? dc.Medical.Parts[D.HitPart].Template.StringId : null;
@@ -224,6 +232,7 @@ public sealed partial class CombatSystem
             D.StunUntil = now + Math.Max(1, (int)MathF.Ceiling(clip.Seconds / world.TickSeconds));
             D.PauseUntil = 0;   // the stumble state (8) ends the pause (FUN_14060cf60 clears +0x144)
             dc.StaggeredUntil = D.StunUntil;
+            if (outsideFight && dc.Gunning is null) dc.StumbleTaskUntil = D.StunUntil;   // reported as Stumbling (147) meanwhile
             D.ReadyTick = Math.Max(D.ReadyTick, D.StunUntil);
         }
         else D.ReadyTick = Math.Max(D.ReadyTick, now + (int)MathF.Ceiling(CombatTuning.InterruptPause / world.TickSeconds));
@@ -263,6 +272,23 @@ public sealed partial class CombatSystem
         public float Roll(int piece) => CombatRolls.Float(seed, defenderKey, CombatRoll.Cover, CombatRolls.BlowCounter(attacker, attackSeq, blow, piece));
     }
 
+    /// <summary>The pause after a swing whose last blow was resolved after Act ended the swing (on the same tick): Act chose it from the blow before, so it is chosen again from this outcome.</summary>
+    void Pause(World world, ref CombatSlot attacker, BlowOutcome outcome, int now)
+    {
+        if (attacker.ReadyTick <= now) return;   // the swing ended with no pause of its own
+        float pause = outcome switch
+        {
+            BlowOutcome.Blocked => CombatTuning.BlockedPause,
+            BlowOutcome.Dodged => CombatTuning.DodgedPause,
+            BlowOutcome.Missed => CombatTuning.MissedPause,
+            _ => CombatTuning.HitPause,
+        };
+        bool held = attacker.PauseUntil == attacker.ReadyTick;
+        attacker.ReadyTick = now + Math.Max(1, (int)MathF.Ceiling(pause / world.TickSeconds));
+        if (held) attacker.PauseUntil = attacker.ReadyTick;
+        attacker.LastOutcome = outcome;
+    }
+
     static void Stop(ref CombatSlot attacker, CombatTechnique tech, int blow)
     {
         // A blocked blow stops the swing at its "stop frame": the rest of the combo is not thrown.
@@ -293,7 +319,10 @@ public sealed partial class CombatSystem
     void FloatHit(World world, int d, CharacterCold dc, bool sourceIsPlayer, int part, in HitDamage damage, in ArmourAbsorbed absorbed)
     {
         if (world.Floaters is not { } queue || part < 0) return;
-        queue.Enqueue(Floater.Hit(world.Characters.IdOf(d), world.Characters.Previous[d].Position, dc.IsPlayer, sourceIsPlayer, dc.Medical!.Parts[part].Template.Name, damage, absorbed));
+        var id = world.Characters.IdOf(d);
+        bool tagged = Memory is { } memory && world.Player.Squad >= 0;
+        queue.Enqueue(Floater.Hit(id, world.Characters.Previous[d].Position, dc.IsPlayer, sourceIsPlayer, dc.Medical!.Parts[part].Template.Name, damage, absorbed)
+            with { TargetTempEnemy = tagged && Memory!.HasShort(world, world.Player.Squad, id, Dialogue.MemoryTag.TempEnemy), TargetTempAlly = tagged && Memory!.HasShort(world, world.Player.Squad, id, Dialogue.MemoryTag.TempAlly) });
     }
 
     void Record(int now, int a, int d, int blow, BlowOutcome outcome, int part, in HitDamage damage, bool knockout, bool death)

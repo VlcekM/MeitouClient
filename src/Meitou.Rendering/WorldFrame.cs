@@ -780,6 +780,8 @@ static partial class WorldFrame
         /// <summary>This frame's bolts stuck in characters (<see cref="CharacterRenderer.CollectBolts"/>), drawn with the debris.</summary>
         public readonly List<DebrisPiece> BoltPieces = [];
         public readonly List<DebrisPiece> DebrisPieces = [];
+        /// <summary>The birds of this frame (<see cref="Meitou.Game"/>'s flocks), drawn as loose meshes after the debris.</summary>
+        public readonly List<DebrisPiece> BirdPieces = [];
         /// <summary>The buildings' interior masks the terrain, foliage and map features are cut by (made with the first frame that has objects; docs/render-interior-cut.md).</summary>
         public InteriorMaskRenderer? InteriorMask;
         /// <summary>The navmesh debug view (null in the viewer; drawn while visible).</summary>

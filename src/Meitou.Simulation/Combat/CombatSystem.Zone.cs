@@ -102,10 +102,10 @@ public sealed partial class CombatSystem
         var scan = Scan(world, i, s, cold, tech, blow);
         Keep(i, in scan);
         int hits = Math.Min(scan.Count, Math.Max(1, tech.MaxSimultaneousHits));
-        for (int n = 0; n < hits; n++) effects.Emit(i, scan.Slots[n], BlowEffect, s.AttackSeq, default, blow);
+        for (int n = 0; n < hits; n++) effects.Emit(i, scan.Slots[n], BlowEffect, s.AttackSeq, new Vector3(s.AttackTech, 0, 0), blow);
         // The walls and doors in it take the hits left (looked up in the serial apply: the building lookups are not thread-safe).
         int left = Math.Max(1, tech.MaxSimultaneousHits) - hits;
-        if (left > 0 && (Construction is not null || Locks is not null)) effects.Emit(i, i, ZoneBuildingsEffect, s.AttackSeq, new Vector3(left, 0, 0), blow | (hits > 0 ? 0x100 : 0));
+        if (left > 0 && (Construction is not null || Locks is not null)) effects.Emit(i, i, ZoneBuildingsEffect, s.AttackSeq, new Vector3(left, s.AttackTech, 0), blow | (hits > 0 ? 0x100 : 0));
     }
 
     /// <summary>The characters in blow <paramref name="blow"/>'s attack zone, in the list's order (<see cref="Strike"/>).</summary>
@@ -174,7 +174,7 @@ public sealed partial class CombatSystem
     }
 
     /// <summary>The <see cref="Effect.Kind"/> of the walls and doors a blow's zone may still hit: the target is the attacker, <c>Arg</c> the blow (+0x100 when it hit a character),
-    /// <c>Amount</c> the attack number, <c>Position.X</c> the hits left.</summary>
+    /// <c>Amount</c> the attack number, <c>Position.X</c> the hits left, <c>Position.Y</c> the technique.</summary>
     public const int ZoneBuildingsEffect = 4;
 
     /// <summary>The construction system, for which sites are walls (<see cref="Construction.ConstructionSystem.Data"/>) and their footprints; null: blows hit no wall.</summary>
@@ -193,8 +193,8 @@ public sealed partial class CombatSystem
     {
         int a = e.Target, blow = e.Arg & 0xff, left = (int)e.Position.X;
         ref var A = ref write[a];
-        if (A.AttackSeq != (int)e.Amount || A.AttackTech < 0 || world.Characters.Cold(a) is not { Fighter: { } fighter, Stats: { } stats, Medical: { } medical } cold) return;
-        var tech = techniques[A.AttackTech];
+        if (A.CancelTick == (int)world.Tick || world.Characters.Cold(a) is not { Fighter: { } fighter, Stats: { } stats, Medical: { } medical } cold) return;
+        var tech = techniques[(int)e.Position.Y];
         var zone = ZoneOf(world, a, A, cold, tech, blow);
         float Eff(StatsEnumerated stat) => stats[stat] * stats.Scale * medical.StatMultiplier(stat);
         float str = Eff(StatsEnumerated.Strength);
@@ -236,19 +236,29 @@ public sealed partial class CombatSystem
             if (doorId is not null && world.Fixtures.Find(doorId) is { } door) global::Meitou.Simulation.Locks.LockSystem.Strike(world, door, Math.Clamp(f, 20, 60));
             else if (wall is not null)
             {
-                var line = wall.WallParent is { } parent && world.Buildings.Find(parent) is { } p ? p : wall;
-                line.Progress -= Math.Clamp(f * 0.5f, 10, 60) * 0.003f;
-                if (line.Progress <= 0)
-                {
-                    line.Progress = 0;
-                    line.Destroyed = true;
-                    world.EmitSound(SoundKind.WallBroken, a, line.Position);
-                }
-                world.Buildings.Changed();
+                StrikeWall(world, wall, f, a);
             }
         }
-        if ((e.Arg & 0x100) == 0) A.LastOutcome = BlowOutcome.Hit;
+        if ((e.Arg & 0x100) == 0 && A.AttackSeq == (int)e.Amount && A.AttackTech >= 0) A.LastOutcome = BlowOutcome.Hit;
     }
 
     readonly List<(float Key, string? Door, Construction.BuildSite? Wall)> buildingScratch = [];
+
+    /// <summary>
+    /// A blow on a wall building (<c>WallBuilding</c> damage, docs/game/buildings-production.md): <paramref name="f"/> = 2 blunt + 0.5 cut of the attacker's packet; clamp(f / 2, 10, 60) x 0.003 off the
+    /// progress of the wall line (an attached piece's parent), destroyed at 0 with the wall-broken sound at <paramref name="attacker"/>. Shared by the fight's blows and the bashers' swings (Smashing, 272).
+    /// </summary>
+    internal static bool StrikeWall(World world, Construction.BuildSite wall, float f, int attacker)
+    {
+        var line = wall.WallParent is { } parent && world.Buildings.Find(parent) is { } p ? p : wall;
+        line.Progress -= Math.Clamp(f * 0.5f, 10, 60) * 0.003f;
+        if (line.Progress <= 0)
+        {
+            line.Progress = 0;
+            line.Destroyed = true;
+            world.EmitSound(SoundKind.WallBroken, attacker, line.Position);
+        }
+        world.Buildings.Changed();
+        return line.Destroyed;
+    }
 }

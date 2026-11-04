@@ -201,6 +201,9 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
 
     // ---- runtime buildings, construction sites and the placement ghost (docs/render-objects.md "Construction sites") ----
 
+    /// <summary>The key prefix of a ground item's placement (see <see cref="WorldObjects.GroundKeyPrefix"/>).</summary>
+    public const string GroundKeyPrefix = WorldObjects.GroundKeyPrefix;
+
     /// <summary>A building the player placed: part of its zone from now on (laid out apart from the rest of an already loaded zone).</summary>
     public void AddRuntime(BuildingPlacement placement)
     {
@@ -928,8 +931,10 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         InteriorVolume? best = null;
         foreach (var zone in streamer.AllZones)
         {
-            if (zone.Interiors.Length == 0 || ObjectStreamer.ZoneDistance(zone.X0, zone.Z0, new Vector3(x, 0, z)) > 200) continue;
+            if (zone.Interiors.Length + zone.GateHulls.Length == 0 || ObjectStreamer.ZoneDistance(zone.X0, zone.Z0, new Vector3(x, 0, z)) > 200) continue;
             foreach (var v in zone.Interiors)
+                if ((best is null || v.YMax > best.YMax) && v.ContainsGround(x, z)) best = v;
+            foreach (var v in zone.GateHulls)
                 if ((best is null || v.YMax > best.YMax) && v.ContainsGround(x, z)) best = v;
         }
         return best;

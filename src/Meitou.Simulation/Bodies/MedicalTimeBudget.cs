@@ -17,8 +17,7 @@ public sealed class MedicalTimeBudget
     public const int FlaggedTurnsMin = 4;
 
     /// <summary>
-    /// The settings' <c>npc range</c> default (settings.cfg, docs/formats/settings.md): within it of the camera an NPC may be in view and so flagged. Meitou has no camera frustum in the
-    /// simulation, so it flags every NPC within this distance of <see cref="World.ViewPosition"/>.
+    /// The settings' <c>npc range</c> default (settings.cfg, docs/formats/settings.md): without a camera view, within it of the camera an NPC counts as in view and so flagged. Meitou flags every NPC within this distance of <see cref="World.ViewPosition"/>.
     /// </summary>
     public const float NpcRange = 3250;
 
@@ -57,11 +56,12 @@ public sealed class MedicalTimeBudget
     }
 
     /// <summary>
-    /// The update flag (<c>Character +0xe4</c>, <c>FUN_1405c9f60</c>): always set for the player's faction (<c>FUN_1405c79c0</c>); for an NPC set while it is in view, which Meitou
-    /// takes as within <see cref="NpcRange"/> of the camera. Without a camera (headless worlds, tests) only the player's characters have it.
+    /// The update flag (<c>Character +0xe4</c>, <c>FUN_1405c9f60</c>, <b>Verified</b> for the two main terms): set for the player's faction (<c>FUN_1405c79c0</c>); for an NPC while it is on screen, the
+    /// range and frustum test of <see cref="MedicalClock.OnScreen"/> against the camera the host passed (<see cref="World.View"/>), else within <see cref="NpcRange"/> of <see cref="World.ViewPosition"/>.
+    /// Without a camera (headless worlds, tests) only the player's characters have it. The original's other terms (an NPC engaged with the player, building and town refinements) are not modelled.
     /// </summary>
     static bool Flagged(World world, CharacterCold cold, Vector3 position) =>
-        cold.IsPlayer || world.ViewPosition is { } eye && Vector3.DistanceSquared(position, eye) <= NpcRange * NpcRange;
+        cold.IsPlayer || (world.View is { } view ? MedicalClock.OnScreen(view, position) : world.ViewPosition is { } eye && Vector3.DistanceSquared(position, eye) <= NpcRange * NpcRange);
 
     /// <summary>One budget's pass over the list: it continues after last frame's last turn, and the list's head takes what the tail leaves (the original's wrap rule).</summary>
     struct Round(int cursor, int turns)

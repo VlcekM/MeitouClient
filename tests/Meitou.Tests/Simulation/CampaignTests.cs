@@ -85,7 +85,7 @@ public class CampaignTests(ITestOutputHelper output)
         }
 
         // The roll starts it: squads gathered beyond the men needed, the warning posted.
-        Assert.True(RunUntil(() => war.Actives.Count > 0, 300));
+        Assert.True(RunUntil(() => war.Actives.Count > 0, 300 + population.Wars.Count));   // one war manager runs per tick at a wrapping cursor (FUN_1402e74f0), so the roll waits up to one lap
         // The watcher leaves and the camera looks far off, so the raid travels and fights unloaded as before.
         int watchers = world.Characters.Cold(watcher.Slot)!.SquadId;
         world.Characters.Remove(watcher);
@@ -123,10 +123,10 @@ public class CampaignTests(ITestOutputHelper output)
         }
 
         // Unloaded, nobody fights: the assault wins after 4 h, then is removed 3 h later and its squads go home.
-        Assert.True(RunUntil(() => inst.Phase == 2, 4 * 3300));
+        Assert.True(RunUntil(() => inst.Phase == 2, 4 * 3300 + 2 * population.Wars.Count));
         Assert.Contains(world.TakeMessages(), m => m.EndsWith(" against " + outpost.Name + " has ended"));
         var squads = inst.Platoons.ToList();
-        Assert.True(RunUntil(() => war.Actives.Count == 0, 3 * 3300));
+        Assert.True(RunUntil(() => war.Actives.Count == 0, 3 * 3300 + 2 * population.Wars.Count));
         Assert.All(squads, id => Assert.Null(world.Platoons.Find(id)?.Campaign));
         output.WriteLine($"ended after {world.GameHours - 37:0.00} h; follow-ups queued: {string.Join(", ", population.Wars.SelectMany(m => m.Requests).Select(r => r.CampaignId))}");
         if (campaign.VictoryTriggers.Sum(t => t.V2) >= 100) Assert.NotEmpty(population.Wars.SelectMany(m => m.Requests));

@@ -16,7 +16,7 @@ public sealed class FrameProfiler : IDisposable
     public enum Mode { Off, Gpu, Cpu }
 
     public const int History = 300;
-    const int Slots = 4, MaxStamps = 128, MaxPre = 96, Stages = 27;
+    const int Slots = 4, MaxStamps = 128, MaxPre = 96, Stages = 28;
     // Series: the stages by StageClock index, then the GPU time outside the stamped stages (uploads, overlay), then the total.
     const int Other = Stages, Total = Stages + 1, Series = Stages + 2;
     // The legend's top rows: a stage of its own, or a group of stages (shown as their sum) that a click on its row opens. The GPU's submit span
@@ -24,7 +24,7 @@ public sealed class FrameProfiler : IDisposable
     static readonly (string Name, int[] Stages)[] Groups =
     [
         ("sim", [StageClock.Sim]),
-        ("update", [StageClock.Host, StageClock.Blood, 0, 1, 2, StageClock.UpdChars, 3]),
+        ("update", [StageClock.Host, StageClock.Blood, StageClock.Birds, 0, 1, 2, StageClock.UpdChars, 3]),
         ("pre-frame", [StageClock.Uploads, StageClock.Cull, StageClock.Bake]),
         ("shadows", [12]), ("gi", [14]), ("reflection", [4]),
         ("scene", [5, 6, 7, 8, StageClock.Characters, 9, StageClock.Shafts, StageClock.Fog, 13]),
@@ -46,6 +46,7 @@ public sealed class FrameProfiler : IDisposable
         new(0.95f, 0.45f, 0.65f, 1), new(0.70f, 0.50f, 0.95f, 1),
         new(0.30f, 0.80f, 0.70f, 1), new(0.90f, 0.65f, 0.35f, 1),
         new(0.75f, 0.75f, 0.55f, 1), new(0.85f, 0.15f, 0.15f, 1), new(0.20f, 0.95f, 0.60f, 1),
+        new(0.95f, 0.90f, 0.55f, 1),
         new(0.50f, 0.50f, 0.50f, 1), new(1.00f, 1.00f, 1.00f, 1),
     ];
 

@@ -30,6 +30,9 @@ public sealed class CharacterAnimation
     public int Count;
     /// <summary>Phase of the synched movement clips in cycles (0..1): the lower and the upper body, and a walk fading into a run, stay in step.</summary>
     public float Phase;
+    /// <summary>Per definition whether this body's rig plays it (1 yes, -1 no, 0 not asked), for the appearance <see cref="PlaysFor"/>.</summary>
+    internal sbyte[]? Plays;
+    internal object? PlaysFor;
     /// <summary>Cycles per second the phase advances: written whenever the lower movement blend is picked (<b>Verified</b> <c>@ 14051d8e0</c>, <c>@ 14051d000</c>), kept while no such pick runs (standing out of combat, a technique): the legs go on stepping through their fade-out.</summary>
     public float PhaseRate;
     /// <summary>The idle chosen, and the seconds it still plays before another is chosen (-1 / 0: none yet).</summary>
@@ -48,6 +51,9 @@ public sealed class CharacterAnimation
     public bool WasCrawling;
     /// <summary>The body's playback factor F = 2 - H (H the skeleton's movement scale; docs/animation.md "Movement"); 0 until the first tick sets it.</summary>
     public float Rate;
+    /// <summary>The held clip (a work clip) the character plays this tick (-1: none) and the factor its play speed is scaled by (the lock picker's skill speed). Derived, not hashed.</summary>
+    public int HeldIndex = -1;
+    public float HeldRate = 1;
     /// <summary>The last <see cref="SpeedWindow"/> speeds, oldest overwritten first (<see cref="SmoothSpeed"/>).</summary>
     public readonly float[] Speeds = new float[SpeedWindow];
     public int SpeedCount;
@@ -141,6 +147,24 @@ public sealed class AnimationSystem(AnimationLibrary library, AnimationLengths l
     public AnimationLengths Lengths { get; } = lengths;
     /// <summary>The CONSTANTS <c>animation blend rate</c> (fcs.def default 4, "1 is very slow"): weight per second.</summary>
     public float BlendRate { get; } = blendRate;
+
+    /// <summary>
+    /// The skeleton rigs, to know which clips a body can play (<see cref="Plays"/>); null: every clip plays (tests, headless worlds).
+    /// </summary>
+    public Meitou.Data.Characters.CharacterRigs? Rigs { get; init; }
+
+    /// <summary>
+    /// Whether the character's skeleton has the clip of definition <paramref name="index"/>. <b>Verified</b> (<c>FUN_1405b5c30</c>, the layer manager's update): a layer whose animation
+    /// the entity lacks is deleted before the weights are summed or scaled, so it never takes weight from the others. A clip only a mod's other-sex animation file holds is such a one.
+    /// </summary>
+    bool Plays(CharacterAnimation a, CharacterCold cold, int index)
+    {
+        if (Rigs is null || cold.Appearance is not { } look) return true;
+        if (!ReferenceEquals(a.PlaysFor, look) || a.Plays is null) (a.PlaysFor, a.Plays) = (look, new sbyte[Library.Definitions.Count]);
+        ref sbyte known = ref a.Plays[index];
+        if (known == 0) known = (sbyte)(Rigs.Plays(look, Library.Definitions[index].Name) ? 1 : -1);
+        return known > 0;
+    }
     /// <summary>The ragdolls (null: none; the fall and lying clips stand in for them). Read in the parallel phase: the last tick's state.</summary>
     public Meitou.Simulation.Ragdolls.IRagdollState? Ragdolls { get; set; }
 
@@ -155,6 +179,8 @@ public sealed class AnimationSystem(AnimationLibrary library, AnimationLengths l
     /// <summary>The whole-body clip held while a character takes a building apart (<c>stonemine</c>, <b>Verified</b>: <c>Task_Dismantle</c>); -1 when the data has none.</summary>
     int DismantlingClip { get; } = library.IndexOf("stonemine");
     /// <summary>The carrier's lift clip (<c>shoulder lift left</c>, played backwards to put down) and a carried body's held pose (<c>carry me</c>, a category 3 record the library appends); -1 when the data has none.</summary>
+    /// <summary>The crouch clip Task_Crouch plays forwards and Task_UnCrouch backwards (<c>squat T</c>, FUN_140346360 / FUN_140345fb0).</summary>
+    int SquatClip { get; } = library.IndexOf("squat T");
     int LiftClip { get; } = library.IndexOf(Carrying.CarrySystem.LiftClip);
     /// <summary>The overlay that holds a carrier's arm on the body (<c>carrying left arm only</c>: <c>override L arm</c>, every other bone deleted): <b>Verified</b>, <c>FUN_140520000</c> plays it every frame a character carries.</summary>
     int CarryArmClip { get; } = library.IndexOf("carrying left arm only");
@@ -163,8 +189,14 @@ public sealed class AnimationSystem(AnimationLibrary library, AnimationLengths l
 
     // Building, delivering materials and prospecting play the medic clip (Verified, Task_Build, Task_AddMaterialsToBuilding and Task_Prospecting).
     // Resting on a chair plays the clip its functionality names ("sitting chair"), else sitting on the floor.
-    int HeldClip(CharacterTask task, CharacterCold cold) => task switch
+    int HeldClip(CharacterTask task, CharacterCold cold, long tick) => task switch
     {
+        // Standing up from staying low plays the crouch clip backwards (Task_UnCrouch, FUN_140345fb0 / FUN_140346090: squat T at rate -1; see FinishStandUp).
+        _ when cold.StandingUp && SquatClip >= 0 => SquatClip,
+        // A crouch goal (Task_Crouch 27 plays it forwards, Task_UnCrouch 28 backwards); the stance byte follows (FinishCrouch).
+        _ when CrouchGoal(cold) != 0 && SquatClip >= 0 => SquatClip,
+        // The lock picker plays the cage's `animation lockpick`, else the medic clip every update it picks (Task_PickLock, FUN_140359160; the crawler's kneeling clip is chosen in Crawl).
+        _ when cold.PickingLock is not null && cold.PickWork.Tick >= tick - 1 => (cold.PickWork.Clip is { } pick ? SitClipOf(pick) : -1) is >= 0 and var picking ? picking : TreatingClip,
         CharacterTask.Build or CharacterTask.DeliverMaterials or CharacterTask.Prospect => TreatingClip,
         // A medic kneels only at a patient keeping still (Task_FirstAid's update plays the clip; FirstAidSystem); waiting for one that moves it stands.
         CharacterTask.Treat => cold.TreatKneels ? TreatingClip : -1,
@@ -219,7 +251,7 @@ public sealed class AnimationSystem(AnimationLibrary library, AnimationLengths l
         var wantedUpper = upperScratch ??= [];
         for (int i = part.Start; i < part.End; i++)
         {
-            if (!prev[i].Alive || !world.Steps(i)) continue;
+            if (!prev[i].Alive || prev[i].Dormant || !world.Steps(i)) continue;
             float dt = world.StepSeconds(i);   // a far character's step covers the ticks since its last (the far cadence, World.StepTicks)
             var cold = table.Cold(i)!;
             var a = cold.Animation ??= new CharacterAnimation();
@@ -386,6 +418,7 @@ public sealed class AnimationSystem(AnimationLibrary library, AnimationLengths l
         var fight = combatView ?? CombatView.None;
         var lower = lowerScratch ?? [];
         var upper = upperScratch ?? [];
+        a.HeldIndex = -1;
         lower.Clear();
         upper.Clear();
         if (Library.Animal(cold.RecordId) is { } animal) return UpdateAnimal(a, cold, PlanOf(animal), speed, dt, seed, key, tick, lower, fight, ragdoll);
@@ -415,17 +448,18 @@ public sealed class AnimationSystem(AnimationLibrary library, AnimationLengths l
             // Out of a ragdoll the clip waits at its first key while the bones blend into it (docs/game/ragdolls.md "Getting up").
             if (ragdoll.WasWhole) a.ActionTime = -Meitou.Simulation.Ragdolls.RagdollSystem.GetUpBlend;
         }
-        // The leg back up: posture 2 ends in 0 and the posture setter queues the get-up task 65 (FUN_1405c7e20), which plays `standing up 3`.
+        // The leg back up or Stand Up from staying low: posture 2 or 1 ends in 0 and the posture setter queues the get-up task 65 (FUN_1405c7e20), which plays `standing up 3`.
         else if (a.WasCrawling && !down && !carried && !inBed && !inCage && cold.Medical is { Crawling: false, Prone: false }) StartAction(a, getUp, false);
         a.WasDown = down;
-        a.WasCrawling = cold.Medical is { Crawling: true };
+        a.WasCrawling = cold.Medical is { Crawling: true } or { StayingLow: true };
         // The hit reaction the combat system picked (it holds the character helpless for the clip's length; see ChooseStumble).
-        if (!down && !carried && fight.StumbleClip >= 0 && fight.StumbleStart > a.SeenHit)
+        if (!down && !carried && fight.StumbleClip >= 0 && fight.StumbleStart > a.SeenHit && Plays(a, cold, fight.StumbleClip))
         {
             a.SeenHit = fight.StumbleStart;
             StartAction(a, fight.StumbleClip, true);
         }
         int technique = down || carried ? -1 : fight.Technique;   // a carried body plays nothing but its held pose
+        if (technique >= 0 && !Plays(a, cold, technique)) technique = -1;   // a blow or block its body has no clip for leaves it in its stance, not the binding pose
         bool fullTechnique = technique >= 0 && Library.Definitions[technique].Area == AnimationArea.All;
         // A technique cuts a reaction or getting up short, and so does walking off (except a hit reaction, which moves the character itself); a stumble the combat system
         // ended with a won break-out fades out (FUN_140609290 -> FUN_1405b36f0, docs/game/combat.md "Hit reactions").
@@ -448,7 +482,11 @@ public sealed class AnimationSystem(AnimationLibrary library, AnimationLengths l
         else if (down)
         {
             // Down in a bed: its clip (the sleeper's), so it lies where a sleeper lies.
-            if (inBed && HeldClip(CharacterTask.Sleep, cold) is >= 0 and var lain) wanted.Add((lain, 1));
+            if (inBed && HeldClip(CharacterTask.Sleep, cold, tick) is >= 0 and var lain)
+            {
+                wanted.Add((lain, 1));
+                if (cold.LeavingBed) (a.HeldIndex, a.HeldRate) = (lain, -1);   // Task_GetOutOfBed plays the bed clip backwards (FUN_140348480)
+            }
             // Out cold in a cage: its `animation KO` (the Cage's foetal; the out-of-combat pick @ 140520500, docs/animation.md "In a bed or a cage").
             else if (inCage && cold.CageClips.Ko is { } ko && SitClipOf(ko) is >= 0 and var foetal) wanted.Add((foetal, 1));
             else if (LyingClip >= 0) wanted.Add((LyingClip, 1));
@@ -493,7 +531,7 @@ public sealed class AnimationSystem(AnimationLibrary library, AnimationLengths l
                 wanted.AddRange(upper);
                 if (stance.Combat && technique < 0 && Library.CombatGuard(stance, speed) is >= 0 and var guard) { wanted.Add((guard, 1)); a.Idle = -1; }
             }
-            else if (technique < 0 && HeldClip(task, cold) is >= 0 and var held) { wanted.Add((held, 1)); a.Idle = -1; }
+            else if (technique < 0 && HeldClip(task, cold, tick) is >= 0 and var held) { a.HeldIndex = held; a.HeldRate = cold.StandingUp && held == SquatClip ? -1 : held == SquatClip && CrouchGoal(cold) != 0 ? CrouchGoal(cold) : cold.PickingLock is not null && cold.PickWork.Tick >= tick - 1 ? cold.PickWork.Rate : 1; wanted.Add((held, 1)); a.Idle = -1; }
             else if (technique < 0)
             {
                 // A carrier standing: a whole-body idle as if it carried nothing, with the carrying arm pose (stand carrying left) over it (engine choice: the data has no whole-body carrying idle).
@@ -552,7 +590,62 @@ public sealed class AnimationSystem(AnimationLibrary library, AnimationLengths l
             a.Idle = -1;
         }
 
-        return Settle(a, wanted, legs, lift, liftTime, technique, fight, speed, dt, Lengths, 1, seed, key, tick, legsShare);
+        if (Rigs is not null)
+            for (int k = wanted.Count - 1; k >= 0; k--)
+                if (!Plays(a, cold, wanted[k].Index)) { wanted.RemoveAt(k); if (k < legs) legs--; }
+        var root = Settle(a, wanted, legs, lift, liftTime, technique, fight, speed, dt, Lengths, 1, seed, key, tick, legsShare);
+        if (cold.StandingUp) FinishStandUp(a, cold, moving: a.HeldIndex < 0);
+        else if (CrouchGoal(cold) != 0) FinishCrouch(a, cold, CrouchGoal(cold));
+        if (cold.LeavingBed && !cold.BedExitDone) FinishBedExit(a, cold);
+        else if (cold.Crouched && cold.Ai is not null) cold.Crouched = false;   // the end of the task that crouched calls the stance setter with (0, 0)
+        return root;
+    }
+
+    /// <summary>Task_GetOutOfBed leaves when the bed clip played backwards is under 0.1 of its length (FUN_140348480, DAT_14168a318); a character with no clip playing leaves at once.</summary>
+    static void FinishBedExit(CharacterAnimation a, CharacterCold cold)
+    {
+        if (a.HeldIndex < 0 || a.HeldRate >= 0) { cold.BedExitDone = true; return; }
+        for (int k = 0; k < a.Count; k++)
+            if (a.Layers[k].Definition == a.HeldIndex && a.Layers[k].Length > 0 && a.Layers[k].Time < UnCrouchDone * a.Layers[k].Length) cold.BedExitDone = true;
+    }
+
+    /// <summary>The clip direction of a crouch goal the character runs: 1 for CROUCH (27), -1 for STAND_UP (28), 0 for any other.</summary>
+    static int CrouchGoal(CharacterCold cold) => cold.Ai is { Behaviour: Ai.AiBehaviour.Crouch, Goal: { } goal } ? goal.Task.Type == Meitou.Data.Gameplay.Ai.TaskType.CROUCH ? 1 : -1 : 0;
+
+    /// <summary>The share of <c>squat T</c> past which Task_Crouch sets the crouched byte (FUN_140346440, the float at 14168a25c, 0.9).</summary>
+    const float CrouchSet = 0.9f;
+
+    /// <summary>
+    /// Task_Crouch (<paramref name="direction"/> 1) sets the animation class's crouched byte once <c>squat T</c> has passed <see cref="CrouchSet"/>; Task_UnCrouch (-1) clears it once the clip played
+    /// backwards is under <see cref="UnCrouchDone"/> (FUN_140346090). The byte is never set together with prone (<see cref="StanceOf"/>).
+    /// </summary>
+    void FinishCrouch(CharacterAnimation a, CharacterCold cold, int direction)
+    {
+        for (int k = 0; k < a.Count; k++)
+        {
+            ref var layer = ref a.Layers[k];
+            if (layer.Definition != SquatClip || layer.Length <= 0) continue;
+            if (direction > 0 && layer.Time > CrouchSet * layer.Length) cold.Crouched = true;
+            else if (direction < 0 && layer.Time < UnCrouchDone * layer.Length) cold.Crouched = false;
+        }
+    }
+
+    /// <summary>The share of <c>squat T</c> left at which Task_UnCrouch ends and sets the posture upright (FUN_140346090: progress below 0.1, <b>Verified</b>).</summary>
+    const float UnCrouchDone = 0.1f;
+
+    /// <summary>
+    /// Ends the Stand Up order (task 28, Task_UnCrouch) when the crouch clip played backwards is under <see cref="UnCrouchDone"/> of its length; with no clip to play, or a character that
+    /// is not holding still for it (a walker plays no held clip), at once (the old instant reset).
+    /// </summary>
+    void FinishStandUp(CharacterAnimation a, CharacterCold cold, bool moving)
+    {
+        bool done = moving || SquatClip < 0;
+        if (!done)
+            for (int k = 0; k < a.Count && !done; k++)
+                done = a.Layers[k].Definition == SquatClip && a.Layers[k].Length > 0 && a.Layers[k].Time < UnCrouchDone * a.Layers[k].Length;
+        if (!done) return;
+        cold.StandingUp = false;
+        if (cold.Medical is { } medical) medical.StayingLow = false;
     }
 
     /// <summary>
@@ -589,7 +682,7 @@ public sealed class AnimationSystem(AnimationLibrary library, AnimationLengths l
             Library.CrawlMovement(speed, stance, wanted);
             if (wanted.Count > 0) { a.Idle = -1; legs = wanted.Count; return true; }
         }
-        if (HeldClip(task, cold) is >= 0 and var held && held == TreatingClip && CrawlUseClip >= 0)
+        if (HeldClip(task, cold, tick) is >= 0 and var held && held == TreatingClip && CrawlUseClip >= 0)
         {
             wanted.Add((CrawlUseClip, 1));
             a.Idle = -1;
@@ -630,6 +723,7 @@ public sealed class AnimationSystem(AnimationLibrary library, AnimationLengths l
                 // A clip that never advances (the stances: play speed 0) holds its first frame, as the editor and the portraits show it.
                 float start = d.Loop && !d.IsAction && !d.Technique && index != a.Action && index != lift && (d.PlaySpeed > 0 || d.MoveSpeed != 0)
                     ? Rng.Float(Rng.Hash(seed, key, RngPurpose.Animation, (ulong)tick ^ ((ulong)index << 32) ^ 0x4C4F4F50UL)) * lengths.Of(d.Clip) : 0;
+                if (index == a.HeldIndex && a.HeldRate < 0) start = lengths.Of(d.Clip) * 0.999f;   // played backwards from its end
                 a.Layers[k] = new CharacterAnimation.Layer { Definition = index, Weight = first ? weight : 0, Time = start };
             }
             a.Layers[k].Target = weight;
@@ -670,7 +764,7 @@ public sealed class AnimationSystem(AnimationLibrary library, AnimationLengths l
             else if (IsStrafe(d)) layer.Time = Wrap(layer.Time + dt * a.Rate * d.PlaySpeed * a.StrafeSpeed, length);   // signed: a step the other way plays it backwards
             else if (synched) layer.Time = (a.Phase + d.SynchOffset - MathF.Floor(a.Phase + d.SynchOffset)) * length;
             else if (d.MoveSpeed != 0) layer.Time += dt * a.Rate * d.PlaySpeed * speed;
-            else layer.Time += dt * (d.PlaySpeed > 0 ? d.PlaySpeed : d.Technique ? 1 : 0);
+            else layer.Time += dt * (d.PlaySpeed > 0 ? d.PlaySpeed : d.Technique ? 1 : 0) * (layer.Definition == a.HeldIndex ? a.HeldRate : 1);
             if (!d.Loop && !synched && !IsStrafe(d)) layer.Time = Math.Clamp(layer.Time, 0, length * 0.999f);   // a one-shot clip holds its last frame
             if (layer.Time > before && dt > 0) layer.Rate = (layer.Time - before) / dt;
             if (d.Relocates && layer.Time > before) root += (lengths.Root(d.Clip, layer.Time) - lengths.Root(d.Clip, before)) * layer.Weight;
@@ -904,6 +998,11 @@ public sealed class AnimationSystem(AnimationLibrary library, AnimationLengths l
     /// <summary>The fraction of a stumble clip after which the stumble state ends (<c>DAT_14168db34</c>).</summary>
     public const float StumbleEnd = 0.98f;
 
+    /// <summary>The animation class's category (FUN_140520500, <b>Verified</b>): 4 in deep water for a race that swims, else 5 when held down or crawling, else 0.</summary>
+    static int CategoryOf(CharacterCold cold) =>
+        cold is { WaterState: 3, Race.Swims: true } ? AnimationLibrary.SwimmingCategory
+        : cold.CarriedBy.IsNone && cold.Medical is { Prone: true } ? AnimationLibrary.GroundedCategory : 0;
+
     /// <summary>What a character holds and does, as the clips' conditions read it; leg health in per cent weighs the limp clips.</summary>
     static AnimationStance StanceOf(CharacterCold cold)
     {
@@ -911,7 +1010,9 @@ public sealed class AnimationSystem(AnimationLibrary library, AnimationLengths l
         {
             Right = new HandHold(cold.DrawnWeapon), Combat = cold.InCombat, Stealth = (cold.Orders & CharacterOrders.Sneak) != 0, CarryingLeft = !cold.Carrying.IsNone, BeingCarried = !cold.CarriedBy.IsNone,
             Prone = cold.CarriedBy.IsNone && cold.Medical is { Prone: true },   // the crawl records are prone; no standing clip (stumbles included) fits a crawler
+            Crouched = cold.Crouched && !(cold.CarriedBy.IsNone && cold.Medical is { Prone: true }),   // never together with prone (FUN_14051dda0)
         };
+        stance = stance with { Category = CategoryOf(cold) };
         if (cold.Medical is not { } body) return stance;
         float left = 100, right = 100;
         foreach (var part in body.PartSpan)

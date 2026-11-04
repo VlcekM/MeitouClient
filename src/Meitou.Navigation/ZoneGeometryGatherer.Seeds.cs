@@ -129,7 +129,7 @@ internal sealed partial class ZoneGeometryGatherer
             var points = new List<Vector3>();
             foreach (var mesh in WorldObjectLayout.Building(db, record, b.InstanceId, position, b.Rotation, new BuildingState(destroyed)))
             {
-                string path = CollisionPathOf(mesh.Source, destroyed);
+                string path = mesh.CollisionPath(destroyed);
                 if (path.Length == 0 || collision.Get(path) is not { } prepared) continue;
                 foreach (var shape in prepared.Shapes) foreach (var v in shape.Vertices) points.Add(Vector3.Transform(v, node));
             }

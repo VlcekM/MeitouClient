@@ -36,7 +36,7 @@ public sealed record TrainingSpot(string Id, string Record, Vector3 Position, in
 /// (null with fewer than 2: it is lain in at its own origin and facing).
 /// </summary>
 /// <summary>A cage's clips (ANIMATION names; null: none listed): standing in it, unconscious, dazed.</summary>
-public readonly record struct CageClips(string? Idle, string? Ko, string? Dazed);
+public readonly record struct CageClips(string? Idle, string? Ko, string? Dazed, string? Lockpick = null);
 
 public readonly record struct BedData(int Function, string? Clip, float Materials, UseNode[]? Nodes = null);
 
@@ -109,6 +109,8 @@ public sealed class LockState
 /// </summary>
 public sealed class Fixture
 {
+    /// <summary>A bed's use nodes a failed walk marked bad (node index, game hour of the mark; <see cref="FixtureRegistry.MarkBadNode"/>), each skipped for <see cref="FixtureRegistry.BadNodeHours"/>. Runtime only: not saved or hashed.</summary>
+    internal List<(int Node, double Stamp)>? BadNodes;
     public required string Id { get; init; }
     /// <summary>The instance id of the placed building it belongs to (the house of a door, the building of an interior item): what <see cref="IDoorGate"/> and the save name.</summary>
     public required string Building { get; init; }
@@ -123,6 +125,8 @@ public sealed class Fixture
     /// <summary>Where an occupant is held, and which way it faces (the item's origin: the cage's attach node is not read, an engine choice).</summary>
     public Vector3 Position { get; init; }
     public float Yaw { get; init; }
+    /// <summary>The building's position marker (<see cref="Meitou.Data.World.WorldObjectLayout.PositionMarker"/>) where it differs from <see cref="Position"/>: what <c>getPositionMarker</c> gives when the building has fewer than two use nodes.</summary>
+    public Vector3? Marker { get; init; }
     /// <summary>Null for beds, and for a container with no <c>has lock</c>.</summary>
     public LockState? Lock { get; init; }
     /// <summary>A container's own inventory (<c>has inventory</c>; docs/game/locks.md "Containers"): null for the rest. Starts empty (what the original puts in is <b>Unknown</b>).</summary>
@@ -159,6 +163,11 @@ public sealed class Fixture
     public UseNode[]? UseNodes { get; init; }
     public float UseRange { get; init; }
     public CharacterId Occupant { get; set; } = CharacterId.None;
+    /// <summary>Cages: a torture rack (<see cref="Meitou.Data.World.TownBuildings.IsRack"/>); derived from the data.</summary>
+    public bool Rack { get; init; }
+    /// <summary>Racks: the armour timer (<c>+0x490</c>, game seconds) and whether the last frame stretched its user (<c>+0x3a9</c> clear). Not saved; hashed only on a rack.</summary>
+    public float RackTimer { get; set; }
+    public bool RackBusy { get; set; }
     /// <summary>Beds: its record's <see cref="BedData"/>; derived from the data, not hashed or saved.</summary>
     public BedData Bed { get; init; }
     /// <summary>Beds: inside a building (an interior's bed; the bed search weighs it twice), not one standing on its own.</summary>
@@ -178,6 +187,7 @@ public sealed class Fixture
         if (Lock is { } l) l.Hash(ref h); else h.Add(-1);
         if (Kind == FixtureKind.Door) { h.Add((int)Motion); h.Add(OpenAmount); h.Add(DoorBroken); h.Add(WantsLock); if (AutoOpened) h.Add(LastPass); if (DoorProgress != 1) h.Add(DoorProgress); }
         h.Add(Occupant);
+        if (Rack) { h.Add(RackTimer); h.Add(RackBusy); }
         Contents?.Hash(ref h);
     }
 }

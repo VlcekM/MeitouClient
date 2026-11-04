@@ -749,7 +749,8 @@ sealed partial class PlayerInterface
         if (type == Meitou.Data.Fcs.FcsRecordType.ITEM && function is not (3 or 16))
         {
             if (t.MaxCharges > 1) lines.Add(Row("Charges", $"{Number(t.Charges)}/{Number(t.MaxCharges)}"));
-            if (t.Quality > 0 && t.Quality != 100) lines.Add(Row("Quality", $"{Number(t.Quality)}/100"));
+            // FUN_1407ae130: shown whenever the quality is not 1 (an ITEM carries its record's quality, 1 unless the data sets it).
+            if (t.Quality != 1) lines.Add(Row("Quality", $"{Number(t.Quality)}/100"));
         }
         if (t.MapNote is { Length: > 0 } note)
             foreach (string row in note.Split('\n')) lines.Add(new(row, "", row.StartsWith("[Right", StringComparison.Ordinal) || row.StartsWith("[Location", StringComparison.Ordinal) ? TooltipTone.Cyan : TooltipTone.Ink));

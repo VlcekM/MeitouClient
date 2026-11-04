@@ -15,6 +15,8 @@ public enum FloaterKind : byte
     StealthHit,
     /// <summary>A stealth knock-out's "Failed!" (<see cref="Floater.Part"/>) over the attacker, red-grey (<c>FUN_14034cd80</c>).</summary>
     StealthMiss,
+    /// <summary>A building's damage number (<see cref="Floater.Part"/>, the int of the clamped damage) at the point hit, grey (<c>FUN_14029d2b0</c>: a door's bashing blow; a wall's is not built).</summary>
+    Building,
 }
 
 /// <summary>
@@ -26,6 +28,10 @@ public enum FloaterKind : byte
 /// <param name="Absorbed">What the armour alone stopped.</param>
 public readonly record struct Floater(FloaterKind Kind, CharacterId Target, Vector3 Position, bool TargetIsPlayer, bool SourceIsPlayer, string Part, HitDamage Damage, ArmourAbsorbed Absorbed)
 {
+    /// <summary>The active squad's memory holds TEMP ENEMY / TEMP ALLY on the target (the original's tint tests, <c>FUN_140678830</c>); display only.</summary>
+    public bool TargetTempEnemy { get; init; }
+    public bool TargetTempAlly { get; init; }
+
     public static Floater Hit(CharacterId target, Vector3 position, bool targetIsPlayer, bool sourceIsPlayer, string part, in HitDamage damage, in ArmourAbsorbed absorbed) =>
         new(FloaterKind.Damage, target, position, targetIsPlayer, sourceIsPlayer, part, damage, absorbed);
 
@@ -34,6 +40,9 @@ public readonly record struct Floater(FloaterKind Kind, CharacterId Target, Vect
 
     public static Floater Strike(CharacterId attacker, Vector3 position, string text, bool hit) =>
         new(hit ? FloaterKind.StealthHit : FloaterKind.StealthMiss, attacker, position, false, false, text, default, default);
+
+    public static Floater BuildingHit(Vector3 position, int amount) =>
+        new(FloaterKind.Building, CharacterId.None, position, false, false, amount.ToString(System.Globalization.CultureInfo.InvariantCulture), default, default);
 
     public static Floater Label(Vector3 position, string text) => new(FloaterKind.Label, CharacterId.None, position, false, false, text, default, default);
 }

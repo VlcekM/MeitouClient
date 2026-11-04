@@ -174,7 +174,7 @@ sealed partial class GameHost
             gpu.Dispose();
             return 0;
         }
-        string?[] panels = g.UiShowcase
+        string?[] panels = g.UiPanel is { Length: > 0 } onePanel ? [onePanel == "hud" ? null : onePanel] : g.UiShowcase
             ? [null, "hud-expanded", "inventory", "limbs", "stats", "overview", "overview-faction", "building", "menu", "new-game", "save", "load", "title", "title-new-game", "title-load", "title-import", "title-credits", "title-exit", "build", "editor", "editor-face", "editor-hair", "edited", "trade", "talk"] : [null];
         foreach (string? panelName in panels)
         {

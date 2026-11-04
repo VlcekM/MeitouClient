@@ -80,6 +80,13 @@ public sealed class CharacterRigs(GameDatabase db, Func<string, string?> findMes
     public CharacterPoseSetup? For(CharacterAppearance c) =>
         setups.GetOrAdd(c, static (a, self) => new Lazy<CharacterPoseSetup?>(() => self.Build(a)), this).Value;   // a static factory: nothing allocated on a hit
 
+    /// <summary>
+    /// Whether the body of <paramref name="c"/> can play the ANIMATION record <paramref name="record"/>: its skeleton, with the animation files its race and record link, has the clip
+    /// (the renderer finds a layer for it, <see cref="SkeletonRig.Layer"/>). True for an animal (its clips are checked by the animation plan) or a body that cannot be read.
+    /// </summary>
+    public bool Plays(CharacterAppearance c, string record) =>
+        For(c) is not { Animal: false } setup || setup.Rig.Layer(db, record) is not null;
+
     CharacterPoseSetup? Build(CharacterAppearance c)
     {
         var bodyPath = findMesh(c.BodyMesh);

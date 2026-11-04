@@ -170,9 +170,6 @@ public sealed partial class PopulationSystem
             if (s < states.Length && (states[s].Status == SiteStatus.Loading || states[s].Pending)) continue;
             // Judged only while the zone at the town's position is loaded (zone byte +0xb1, FUN_1408f6760).
             if (world.LoadedZones is { } loaded && !loaded.Contains(Meitou.Data.World.WorldLayout.ZoneOf(data.Sites[s].Position.X, data.Sites[s].Position.Z))) continue;
-            // Engine choice: a town of the player's faction is kept (as the repopulation and remake passes leave it alone); the original's wipe gates have no faction test,
-            // though the town list's caller of them was not read.
-            if (data.SiteFactions[s] is >= 0 and var owner && owner == PlayerFactionOf(world)) continue;
             if (townPools[s] is not { Started: true, Ded: false } pools || resident[s] || pools.Roaming.Current > WipeRoamingPool || roamers[s] > WipeRoamingLiving) continue;
             pools.Ded = true;
             pools.DiedAt = (float)Hours(world);
@@ -270,6 +267,7 @@ public sealed partial class PopulationSystem
         }
         var squad = SpawnSquad(world, built with { Home = home }, site, radius, platoonId: fresh.Id, pinned: true);
         squad.Money = p.Money;
+        MoveOutOfPlayerWalls(world, squad);
         fresh.SquadId = squad.Id;
         world.Platoons.Add(fresh);
         Despawn(world, p, release: false);   // its uniques were freed above and the fresh squad holds them
@@ -302,6 +300,7 @@ public sealed partial class PopulationSystem
         if (RollTemplate(world, p).Built is not { } built) return null;
         var squad = SpawnSquad(world, built with { Home = home }, site, radius, platoonId: p.Id, pinned: true);
         squad.Money = p.Money;
+        MoveOutOfPlayerWalls(world, squad);
         p.Stored = new StoredSquad { Name = data.Db.Find(p.TemplateId)?.Name ?? p.TemplateId, HomeBuilding = home };
         p.Size = built.Plan.TotalMembers;
         p.Unmade = false;
@@ -348,6 +347,13 @@ public sealed partial class PopulationSystem
         return n;
     }
 
+    /// <summary>The squared distance within which the camera focus stops a nest making squads (<c>FUN_1408f8740</c>:154-170, 1250 = 35.4 units; before any candidate is drawn).</summary>
+    public const float NestFocusBlockSquared = 1250;
+
+    /// <summary>Whether the camera focus (none: no test) is within sqrt(<see cref="NestFocusBlockSquared"/>) of the nest centre in 3D, the centre taken on the ground.</summary>
+    bool FocusBlocksNest(World world, Vector2 centre) =>
+        focus is { } f && Vector3.DistanceSquared(f, new Vector3(centre.X, world.Walkability.GroundHeight(centre.X, centre.Y), centre.Y)) < NestFocusBlockSquared;
+
     /// <summary>The radius round a nest within which a player's character stops it making squads (<c>FUN_1407866d0</c>, 1250).</summary>
     public const float NestGuardRadius = 1250;
 
@@ -374,7 +380,7 @@ public sealed partial class PopulationSystem
         var pools = NestPools(world, site);
         if (pools.Ded) return;
         var players = PlayerSpots(world);
-        bool guarded = false;
+        bool guarded = FocusBlocksNest(world, centre);
         foreach (var at in players)
             if (Vector2.DistanceSquared(at, centre) < NestGuardRadius * NestGuardRadius) { guarded = true; break; }
         var budget = new NestBudget((int)MathF.Floor(pools.Roaming.Current), NestLiving(world, i, state), TemplateCounts(world, site, state), state.Made, 4, 1, !guarded, centre);
@@ -411,6 +417,13 @@ public sealed partial class PopulationSystem
         return counts;
     }
 
+    /// <summary>A squad left the world: no site's squad list names it any more, so the nest wipe test (<see cref="CheckWipe"/>) sees no dangling handle.</summary>
+    internal void ForgetSquad(int id)
+    {
+        if (wildStates is null) return;
+        foreach (var state in wildStates) state.Squads.Remove(id);
+    }
+
     /// <summary>
     /// A nest that could make no squad (no entry fits or weighs anything) and has no squad left standing is wiped out for good (<c>FUN_140927440</c>, <c>Nest::vfunc_103</c>):
     /// <c>ded</c>, the hour as <c>tod</c>, and "{nest} has been wiped out". Engine choice for the original's "intact" here (its rule is Unknown): a squad with someone alive.
@@ -420,7 +433,7 @@ public sealed partial class PopulationSystem
         var pools = NestPools(world, site);
         if (pools.Ded) return;
         foreach (int id in state.Squads)
-            if (world.Squads.Find(id) is { } squad && squad.Members.Any(m => Living(world, m))) return;
+            if (world.Squads.Find(id) is not { } squad || squad.Members.Any(m => Living(world, m))) return;   // a handle that no longer resolves keeps the nest (FUN_1408f8740)
         if (HoldOf(world, site.Index) is { Members: > 0 }) return;
         pools.Ded = true;
         pools.DiedAt = (float)Hours(world);
@@ -443,17 +456,20 @@ public sealed partial class PopulationSystem
     }
 
     /// <summary>
-    /// A nest's squads leave the world: one that lost someone (engine choice for "not intact") takes its living members out of the pool (<c>FUN_140796b30</c>, the
-    /// original's despawn of a damaged squad it does not keep).
+    /// A wild site's squads leave the world: one that is not intact (the squad-intact rule, <see cref="SquadIntact"/>, <b>Verified</b>) takes its living members out of the pool while it is above 0, with no
+    /// floor (<c>FUN_140796b30</c>, the original's despawn of a damaged squad it does not keep).
     /// </summary>
     void PayNestDespawn(World world, WildSite site, SiteState state)
     {
-        if (site.Kind != WildKind.Nest || !nestPools.TryGetValue(site.Index, out var pools)) return;
+        nestPools.TryGetValue(site.Index, out var pools);
         foreach (int id in state.Squads)
         {
             if (world.Squads.Find(id) is not { } squad) continue;
+            if (SquadIntact(world, squad)) continue;
             int living = squad.Members.Count(m => Living(world, m));
-            if (living < squad.SpawnSize) pools.Roaming.Current = MathF.Max(0, pools.Roaming.Current - living);
+            // Every non-persistent platoon taken out of the world while not intact lowers its faction's prosperity (FUN_1406bab60), nest squads and homeless ones too.
+            if (squad.Members.Count > 0) LowerProsperity(world, squad.Faction, DamagedDespawnProsperity);
+            if (site.Kind == WildKind.Nest && pools is not null && pools.Roaming.Current > 0) pools.Roaming.Current -= living;
         }
     }
 }

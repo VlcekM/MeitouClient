@@ -88,6 +88,22 @@ public sealed partial class CombatSystem
     }
 
     /// <summary>
+    /// The seconds one swing of an animal's door bash takes (<c>Task_BashDoor</c>, <c>FUN_140887420</c>, <b>Verified</b>): the first attack technique, in data order, that fits the animal's weapon
+    /// category (not <c>disabled</c>, no block or dodge) plays at speed 1; its clip's length from the animal's own skeleton over the technique's <c>anim speed mult</c>. 0 when there is none
+    /// or the clip is unknown (the caller keeps the human cycle).
+    /// </summary>
+    public float AnimalBashSeconds(CharacterCold cold)
+    {
+        if (cold.Fighter is not { IsAnimal: true } f) return 0;
+        foreach (var t in asWritten)
+        {
+            if (t.Disabled || t.IsBlock || t.IsDodge || !TechniqueChooser.Fits(t, f.AnimalCategory)) continue;
+            return lengths.For(cold.Race?.StringId).Of(t.AnimName) / MathF.Max(t.AnimSpeedMult, 0.1f);
+        }
+        return 0;
+    }
+
+    /// <summary>
     /// The playback rate of a technique (docs/game/combat.md "Animation speed", <b>Verified</b>): attacks lerp(t, 0.8, 1.2) x G capped at 1.2, blocks lerp(t, 0.6, 4) x G
     /// capped at 4, with t = 0.01 (0.6 dexterity + 0.4 skill) (attack, or defence with the bonuses); dodges 1. G = (0.5 + 0.5 min(1, e + 0.5) (1 - f)) x the gear's
     /// <c>combat speed mult</c>, e the encumbrance factor and f the weapon-weight-over-strength factor of the strength XP.
@@ -156,7 +172,7 @@ public sealed partial class CombatSystem
         List<MedicalEvent>? events = null;
         for (int i = part.Start; i < part.End; i++)
         {
-            if (!prev[i].Alive || !world.Steps(i)) continue;   // the far cadence: a skipped fighter's tick timers run on, it acts on them at its step
+            if (!prev[i].Alive || prev[i].Dormant || !world.Steps(i)) continue;   // the far cadence: a skipped fighter's tick timers run on, it acts on them at its step
             var cold = table.Cold(i)!;
             Body(world, i, cold, ref write[i], now, dt, ref events);
             inFight[i] = cold.InCombat;
@@ -211,7 +227,7 @@ public sealed partial class CombatSystem
                 cold.StaggeredUntil = Math.Max(cold.StaggeredUntil, cold.GettingUpUntil);
             }
             // The get-up's start puts the Hold point where it wakes (FUN_14033ca10).
-            if (Orders.Has(cold, CharacterOrders.Hold)) cold.HoldPoint = new Vector2(prev[i].Position.X, prev[i].Position.Z);
+            if (Orders.Has(cold, CharacterOrders.Hold)) cold.HoldPoint = prev[i].Position;
         }
         // The leg back up (posture 2 to 0, not a waking): the posture setter queues the get-up task 65 (FUN_1405c7e20), which stands the character through the
         // `standing up 3` clip with no bone blend (no ragdoll to leave: FUN_140334a20), holding it like a waker.
@@ -220,9 +236,9 @@ public sealed partial class CombatSystem
         {
             cold.GettingUpUntil = now + (int)MathF.Ceiling(GetUpClipSeconds / dt);
             cold.StaggeredUntil = Math.Max(cold.StaggeredUntil, cold.GettingUpUntil);
-            if (Orders.Has(cold, CharacterOrders.Hold)) cold.HoldPoint = new Vector2(prev[i].Position.X, prev[i].Position.Z);
+            if (Orders.Has(cold, CharacterOrders.Hold)) cold.HoldPoint = prev[i].Position;
         }
-        s.Crawl = crawling;
+        s.Crawl = crawling || cold.Medical.StayingLow;   // any posture above 0: the setter queues task 65 whenever it returns to 0 (FUN_1405c7e20)
         s.Down = cold.Medical.Incapacitated;
         if (s.Down)
         {
@@ -252,7 +268,7 @@ public sealed partial class CombatSystem
         float dt = world.TickSeconds;
         for (int i = part.Start; i < part.End; i++)
         {
-            if (!prev[i].Alive || !world.Steps(i)) continue;
+            if (!prev[i].Alive || prev[i].Dormant || !world.Steps(i)) continue;
             var cold = table.Cold(i)!;
             if (cold.Fighter is null || cold.Stats is null || cold.Medical is null || cold.Race is null) continue;
             ref var s = ref write[i];
@@ -423,7 +439,7 @@ public sealed partial class CombatSystem
                 bool paused = now < s.PauseUntil;
                 if (!aborted && fighting && !paused && (now >= s.ReadyTick || incoming >= 0 || yielded))
                 {
-                    StartAttack(world, i, ref s, cold, key, now, dt);
+                    StartAttack(world, i, ref s, cold, key, now, dt, effects);
                     // A failed ask: with a blow coming it defends (below), else an engaged fighter goes to state 5 (FUN_14060c8b0); an attack ends it.
                     s.CircleState = s.Engaged && s.AttackTech < 0 && incoming < 0;
                 }
@@ -437,7 +453,7 @@ public sealed partial class CombatSystem
         }
     }
 
-    void StartAttack(World world, int i, ref CombatSlot s, CharacterCold cold, ulong key, int now, float dt)
+    void StartAttack(World world, int i, ref CombatSlot s, CharacterCold cold, ulong key, int now, float dt, EffectBuffer effects)
     {
         var table = world.Characters;
         var prev = table.Previous;
@@ -459,7 +475,7 @@ public sealed partial class CombatSystem
         {
             Category = fighter.TechniqueCategory,
             Skill = cold.Stats![fighter.WeaponSkill],
-            UnarmedSkill = WeaponStats.Lerp(e, 0.2f, 1) * (cold.Stats[StatsEnumerated.MartialArts] + fighter.UnarmedBonus),
+            UnarmedSkill = WeaponStats.Lerp(e, 0.2f, 1) * (cold.Stats[StatsEnumerated.MartialArts] + fighter.UnarmedBonus - medical.DustAttackPenalty),   // the chooser asks FUN_140884e00 with the injury term on (FUN_140884580 subtracts the dust penalty)
             Animal = fighter.IsAnimal,
             Prone = medical.Prone,
             Encumbrance = e,
@@ -476,7 +492,7 @@ public sealed partial class CombatSystem
         int pick = TechniqueChooser.ChooseAttack(techniques, query, roll, out s.Reach);
         if (pick < 0) return;
         // In reach with a technique: ask the target (and hold an attack slot).
-        if (!HasSlot(world, i, t, tc, now) || !HasInitiative(world, i, ref s, t, cold, tc, now)) return;
+        if (!HasSlot(world, i, t, tc, now) || !HasInitiative(world, i, ref s, t, cold, tc, now, effects)) return;
         var tech = techniques[pick];
         s.AttackSeq++;
         s.AttackTech = pick;
@@ -498,13 +514,14 @@ public sealed partial class CombatSystem
     /// or not fighting it; otherwise an initiative roll on both attack skills (the skill roll with <c>attack chance factor</c>, 50/50 at equal skill),
     /// drawn from the pair and tick so both sides agree. The loser yields: the winner may swing at it at once (the original sets the winner to attack).
     /// </summary>
-    bool HasInitiative(World world, int i, ref CombatSlot s, int t, CharacterCold cold, CharacterCold tc, int now)
+    bool HasInitiative(World world, int i, ref CombatSlot s, int t, CharacterCold cold, CharacterCold tc, int now, EffectBuffer effects)
     {
         ref readonly var target = ref read[t];
         var prev = world.Characters.Previous;
         bool atMe = target.TargetSlot == i && target.TargetGeneration == prev[i].Generation;
         if (target.YieldTo == i && now < target.YieldUntil) return true;
         if (atMe && SwingProgress(in target, now) is > 0 and < 1) return false;   // its swing at me is on the way to its blow (progress strictly between 0 and 1, FUN_140665420): I defend (FUN_140666a30)
+        if (MassCombatAnswer(world, t, in target, atMe, now)) effects.Emit(i, t, MassCombatEffect);
         if (Open(t, tc, now)) return true;
         if (s.YieldTo == t && now < s.YieldUntil) return false;
         // The target is free (deciding or in its pause): one draw for the pair and tick, the lower slot's view.
@@ -522,6 +539,20 @@ public sealed partial class CombatSystem
         s.YieldTo = t;
         s.YieldUntil = from + Math.Max(1, (int)MathF.Ceiling(CombatTuning.YieldSeconds / world.TickSeconds));
         return false;
+    }
+
+    /// <summary>The <see cref="Effect.Kind"/> of an ask whose answer adds mass combat experience to the asked character (<c>FUN_1408c5e80</c>, <c>Target</c>).</summary>
+    public const int MassCombatEffect = 5;
+
+    /// <summary>
+    /// Whether the answer to an ask (<c>FUN_140666a30</c>, <b>Verified</b>) gives the asked character mass combat XP: it is stumbling, or it fights someone other than the asker with its dead-time
+    /// flag clear (no block or dodge playing) and is defending (blows coming at it; engine reading of state 1) or attacking. A target without a target gives none.
+    /// </summary>
+    bool MassCombatAnswer(World world, int t, in CombatSlot target, bool atMe, int now)
+    {
+        if (now < target.StunUntil) return true;
+        if (target.TargetSlot < 0 || atMe || target.Down || target.ReactTech >= 0) return false;
+        return target.AttackTech >= 0 || Incoming(world, t, now, out _) > 0;
     }
 
     /// <summary>
@@ -695,8 +726,8 @@ public sealed partial class CombatSystem
             if (other == i || !range.Holds((x, z))) continue;
             ref readonly var o = ref read[other];
             if (o.TargetGeneration != generation || o.Down || o.Ranged) continue;
-            // A swing holds its slot unless the target (a blocker) freed its slots after the swing started.
-            if (o.AttackTech >= 0 && o.NextBlow > 0 && o.AttackStart >= read[t].SlotsCleared)
+            // A swing holds its slot unless the target (a blocker) freed its slots after the swing started, or it has run past SlotHoldSeconds (FUN_140668000).
+            if (o.AttackTech >= 0 && o.NextBlow > 0 && o.AttackStart >= read[t].SlotsCleared && now - o.AttackStart <= (int)MathF.Ceiling(SlotHoldSeconds / world.TickSeconds))
             {
                 if (++holders + ahead >= slots) return false;
                 continue;
@@ -728,6 +759,9 @@ public sealed partial class CombatSystem
     /// <summary>The Block order's slot timer: uniform 1.5 to 4.5 s (<b>Verified</b> literals, FUN_1402b3180).</summary>
     static int BlockTimerTicks(World world, ulong key, int now) =>
         Math.Max(1, (int)MathF.Ceiling((1.5f + 3 * CombatRolls.Float(world.Seed, key, CombatRoll.BlockTimer, (ulong)(uint)now)) / world.TickSeconds));
+
+    /// <summary>A slot holder is dropped once its slot timer passes this (AttackSlotManager::periodicUpdate, <c>DAT_141683188</c>, Verified): even a swing still on.</summary>
+    public const float SlotHoldSeconds = 20;
 
     /// <summary>The most attack slots a target can have (the slot count is clamped to 1 to 5, <c>FUN_1406661d0</c>).</summary>
     public const int MaxAttackSlots = 5;

@@ -38,6 +38,24 @@ public class MovementTests
         Assert.Equal(300, end.Y);
     }
 
+    /// <summary>FUN_1405c9410: a character whose zone is not loaded is deactivated and takes no step; one in a loaded zone does.</summary>
+    [Fact]
+    public void A_character_in_an_unloaded_zone_is_deactivated_until_its_zone_loads()
+    {
+        using var w = Flat();
+        var here = Add(w, new(0, 300, 0));
+        var there = Add(w, new(9000, 300, 0));
+        w.LoadedZones = new HashSet<Meitou.Data.World.ZoneCoordinate> { Meitou.Data.World.WorldLayout.ZoneOf(0, 0) };
+        w.Commands.Enqueue(new MoveOrder([here], new Vector3(0, 0, 400)) { Tick = 0 });
+        w.Commands.Enqueue(new MoveOrder([there], new Vector3(9000, 0, 400)) { Tick = 0 });
+        w.RunTicks(60);
+        Assert.True(Where(w, here).Z > 50);
+        Assert.Equal(0, Where(w, there).Z);
+        w.LoadedZones = null;   // everything loaded again
+        w.RunTicks(60);
+        Assert.True(Where(w, there).Z > 50);
+    }
+
     [Fact]
     public void Characters_do_not_walk_into_the_water_and_unreachable_goals_give_up()
     {

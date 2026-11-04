@@ -47,6 +47,50 @@ public class RoamingTests
         Assert.All(travellers, p => Assert.Contains(Meitou.Data.World.WorldLayout.ZoneOf(p.Position.X, p.Position.Y), population.ActiveZones));
     }
 
+    /// <summary>FUN_1407ee790 / FUN_140269cd0: an unloaded TRAVEL_TARGET platoon heads for its mission target at 25 and stays once it is in that town; with none it goes home.</summary>
+    [Fact]
+    public void A_travel_target_stand_in_goes_to_its_mission_town_and_stays_there()
+    {
+        var (w, population) = Start();
+        using var world = w;
+        w.RunTicks(30);
+        var template = w.Platoons.All.First();
+        w.Commands.Enqueue(new FocusCommand(new Vector3(-50000, 0, -50000)) { Tick = w.Tick });
+        var far = new Vector2(SyntheticTown.Far.X, SyntheticTown.Far.Z);
+        var start = new Vector2(SyntheticTown.Centre.X, SyntheticTown.Centre.Z) + new Vector2(0, 3000);
+        var p = new Platoon { Id = 900, Key = 900, Origin = 0, TemplateId = template.TemplateId, Faction = template.Faction, Size = 3, Position = start, State = PlatoonState.Unloaded, Job = Meitou.Simulation.Ai.PlatoonJob.TravelTarget, Target = 1 };
+        w.Platoons.Add(p);
+        w.RunTicks(150);   // the first look and the activation dwell
+        float before = Vector2.Distance(p.Position, far);
+        w.RunTicks(300);   // 10 s at 25 units per second
+        float after = Vector2.Distance(p.Position, far);
+        Assert.InRange(before - after, 240, 260);
+        Assert.Equal(1, p.Target);
+    }
+
+    /// <summary>A platoon with 2 or more members whose zone is left puts each imprisoned member in a squad and platoon of its own first (<c>FUN_14079c1c0</c>).</summary>
+    [Fact]
+    public void An_imprisoned_member_is_split_into_a_platoon_of_its_own_when_its_platoon_unloads()
+    {
+        var (w, _) = Start();
+        using var world = w;
+        w.RunTicks(700);
+        var platoon = w.Platoons.All.First();
+        var squad = w.Squads.Find(platoon.SquadId)!;
+        var prisoner = squad.Members[^1];
+        w.Characters.Cold(prisoner.Slot)!.InSomething = Meitou.Simulation.Locks.HeldState.Imprisoned;
+        int platoons = w.Platoons.Count;
+        w.Commands.Enqueue(new FocusCommand(new Vector3(-2000, 0, 2000)) { Tick = w.Tick });
+        for (int i = 0; i < 40 && platoon.State != PlatoonState.Unloaded; i++) w.RunTicks(150);
+        Assert.Equal(PlatoonState.Unloaded, platoon.State);
+        Assert.Equal(platoons + 1, w.Platoons.Count);
+        var split = w.Platoons.All.Single(p => p.Package == "CAPTURED_NPC");
+        var own = w.Squads.Find(split.SquadId)!;
+        Assert.Equal([prisoner], own.Members);
+        Assert.Equal(own.Id, w.Characters.Cold(prisoner.Slot)!.SquadId);
+        Assert.DoesNotContain(prisoner, squad.Members);
+    }
+
     internal static List<ulong> Scripted(int threads)
     {
         var (w, _) = Start(threads, 9);

@@ -16,10 +16,10 @@ static class SolidHits
     [ThreadStatic] static List<Vector3>? triangles;
 
     /// <summary>The fraction of <paramref name="seg"/> from <paramref name="from"/> where it first meets the terrain or a building, -1 when it meets neither.</summary>
-    public static float Hit(IWalkability walk, IRagdollEnvironment? buildings, Vector3 from, Vector3 seg, float terrainStep, out bool building)
+    public static float Hit(IWalkability walk, IRagdollEnvironment? buildings, Vector3 from, Vector3 seg, float terrainStep, out bool building, bool roofs = false)
     {
         float ground = Terrain(walk, from, seg, terrainStep);
-        float wall = buildings is null ? -1 : Buildings(buildings, from, seg, ground < 0 ? 1 : ground);
+        float wall = buildings is null ? -1 : Buildings(buildings, from, seg, ground < 0 ? 1 : ground, roofs);
         building = wall >= 0;
         return building ? wall : ground;
     }
@@ -42,7 +42,7 @@ static class SolidHits
     }
 
     /// <summary>The fraction of the segment where it first crosses a building's collision triangle before <paramref name="limit"/>, -1 for none.</summary>
-    static float Buildings(IRagdollEnvironment env, Vector3 from, Vector3 seg, float limit)
+    static float Buildings(IRagdollEnvironment env, Vector3 from, Vector3 seg, float limit, bool roofs)
     {
         var list = triangles ??= [];
         int pieces = Math.Max(1, (int)MathF.Ceiling(seg.Length() * limit / Chunk));
@@ -51,7 +51,8 @@ static class SolidHits
             float t0 = limit * k / pieces, t1 = limit * (k + 1) / pieces;
             Vector3 a = from + seg * t0, b = from + seg * t1;
             list.Clear();
-            env.Buildings(Vector3.Min(a, b) - Vector3.One, Vector3.Max(a, b) + Vector3.One, list);
+            if (roofs) env.Roofs(Vector3.Min(a, b) - Vector3.One, Vector3.Max(a, b) + Vector3.One, list);
+            else env.Buildings(Vector3.Min(a, b) - Vector3.One, Vector3.Max(a, b) + Vector3.One, list);
             float best = float.PositiveInfinity;
             for (int i = 0; i + 2 < list.Count; i += 3)
                 if (Crosses(from, seg, list[i], list[i + 1], list[i + 2], out float t) && t >= t0 && t <= t1 && t < best) best = t;

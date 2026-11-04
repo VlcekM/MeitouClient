@@ -67,6 +67,8 @@ public sealed class RaceData
     public bool Carriable { get; init; }
     public bool SingleGender { get; init; }
     public bool Gigantic { get; init; }
+    /// <summary>The factor a gigantic race multiplies the draw distance by (Ogre rendering distance D x 7, <c>FUN_140539020</c>, Verified).</summary>
+    public const float GiganticDrawScale = 7;
     public bool Vampiric { get; init; }
     public bool NoHats { get; init; }
     public bool NoShirts { get; init; }

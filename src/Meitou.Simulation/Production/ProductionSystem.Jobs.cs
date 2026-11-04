@@ -435,7 +435,7 @@ public sealed partial class ProductionSystem
 
     /// <summary>A carried item a "Hauling to" job takes to its storage: a loose stack of something a player machine makes (not the character's own kit), that the storage takes and has room for.</summary>
     static bool Takes(World world, Machine store, Items.ItemInstance item) =>
-        Stores(store, item) && world.Machines.All.Any(s => !s.Data.IsStorage && s.Output?.Recipe.Item == item.Record);
+        Stores(store, item) && world.Machines.All.Any(s => !s.Data.IsStorage && !IsTownWork(s.Site) && s.Output?.Recipe.Item == item.Record);
 
     /// <summary>A loose stack (not the character's own kit) the storage takes and has room for.</summary>
     internal static bool Stores(Machine store, Items.ItemInstance item) =>
@@ -445,7 +445,7 @@ public sealed partial class ProductionSystem
     /// What 242 Ditch all resources carries off (finder <c>FUN_1405a59a0</c>, its item collection <c>FUN_140749490</c>, <b>Verified</b>): ITEMs with <c>item function</c> 0 or 15, and food
     /// (function 3) but the first, in inventory order.
     /// </summary>
-    static IEnumerable<Items.ItemInstance> Ditchable(Items.Inventory inv)
+    internal static IEnumerable<Items.ItemInstance> Ditchable(Items.Inventory inv)
     {
         bool fed = false;
         foreach (var item in inv.All())
@@ -546,7 +546,7 @@ public sealed partial class ProductionSystem
             End(world, slot);
             return;
         }
-        if (!AtSite(n, atSite, there)) return;
+        if (!AtSite(world, n, atSite, there)) return;
         if (at != storeId)
         {
             if (there.Output is { Count: > 0 } output && items.Create(output.Recipe.Item, output.Count) is { } made && store.Data.Accepts(made.Record, made.Type))

@@ -269,9 +269,8 @@ public sealed partial class CombatSystem : IProjectileSource
 
     /// <summary>
     /// A threat within <see cref="RetaliationSystem.ImmediateReach"/> (the planner's <c>iAmBeingMeleeAttacked immediate</c>, Character +0x2b0, recomputed by <c>FUN_1404378f0</c> over the
-    /// threats list, <b>Verified</b>; docs/game/combat.md "Fight lifecycle and orders"): one of the senses' threats (<see cref="SenseBlock.Threats"/>) by centre distance, not down (staying
-    /// low or crawling still count), not in a bed or cage, not carried, and not behind a gate that is not open between them (<c>FUN_140598450</c>, <see cref="Locks.LockSystem.NotBlocked"/>).
-    /// The original's "getting up" byte (+0x278) is not modelled.
+    /// threats list, <b>Verified</b>; docs/game/combat.md "Fight lifecycle and orders"): one of the senses' threats (<see cref="SenseBlock.Threats"/>) by full 3D squared distance (strictly under the reach squared), not down (staying
+    /// low or crawling still count), not in a bed or cage, not carried, not getting up, and not behind a gate that is not open between them (<c>FUN_140598450</c>, <see cref="Locks.LockSystem.NotBlocked"/>).
     /// </summary>
     internal bool ImmediateThreat(World world, int self)
     {
@@ -283,10 +282,10 @@ public sealed partial class CombatSystem : IProjectileSource
         {
             int a = id.Slot;
             if ((uint)a >= (uint)prev.Length || !prev[a].Alive || prev[a].Generation != id.Generation || read[a].Down) continue;
-            if (table.Cold(a) is not { } c || c.InSomething != global::Meitou.Simulation.Locks.HeldState.None || !c.CarriedBy.IsNone) continue;
+            if (table.Cold(a) is not { } c || c.InSomething != global::Meitou.Simulation.Locks.HeldState.None || !c.CarriedBy.IsNone || CharacterFacts.GettingUp(c, world.Tick)) continue;
             var at = prev[a].Position;
-            var d = at - here;
-            if (d.X * d.X + d.Z * d.Z > RetaliationSystem.ImmediateReach * RetaliationSystem.ImmediateReach) continue;
+            // Full 3D squared distance, strictly under the reach squared (FUN_1404378f0).
+            if (Vector3.DistanceSquared(at, here) >= RetaliationSystem.ImmediateReach * RetaliationSystem.ImmediateReach) continue;
             if (Locks is { } locks && !locks.NotBlocked(world, here, at)) continue;
             return true;
         }
@@ -773,6 +772,7 @@ public sealed partial class CombatSystem : IProjectileSource
         {
             D.Down = true;
             D.AttackTech = -1;
+            D.CancelTick = now;
             D.NextBlow = 0;
             D.ReactTech = -1;
             Sound(world, SoundKind.Down, v, p.Shooter, prev[v].Position, fatal: death);
@@ -787,7 +787,7 @@ public sealed partial class CombatSystem : IProjectileSource
         if (shooterAlive) Crimes?.Hit(world, p.Shooter, v);
         if (shooterAlive && !dc.Medical.Incapacitated)
         {
-            world.SystemOf<AggroSystem>()?.Notice(world, world.Characters.IdOf(v), world.Characters.IdOf(p.Shooter));   // the victim senses the shooter (FUN_140999d50)
+            world.SystemOf<AggroSystem>()?.Alarm(world, world.Characters.IdOf(v), world.Characters.IdOf(p.Shooter));   // the victim senses the shooter, with the alarm flag (FUN_140999d50)
             HitReplan(dc, world.Tick);
         }
         // The bolt hit's relation events (FUN_140439c90: none without a shooter; a bolt that was not meant for the victim is a minor knock-out and no hit).

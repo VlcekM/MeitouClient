@@ -24,6 +24,8 @@ sealed partial class PlayerInterface
         uiInput++;
         if (!UiVisible) return false;
         if (key == Meitou.Engine.Input.Key.Escape && CancelInventoryDrag()) return true;
+        // toggle_camera_grid (Shift+; fixed: a binding carries no modifier, and ; alone is the free camera's).
+        if (shift && key == Meitou.Engine.Input.Key.Semicolon && !faithfulScreens.HasKeyboardFocus) { cameraGrid = !cameraGrid; return true; }
         if (key == Meitou.Engine.Input.Key.Escape)
         {
             if (advancedOpen && faithfulScreens.OpenScreens.LastOrDefault() == "new-game") { advancedOpen = false; return true; }
@@ -48,8 +50,8 @@ sealed partial class PlayerInterface
             return true;
         }
         if (faithfulScreens.HasKeyboardFocus && EditFocusKey(key, ctrl, shift)) return true;
-        // Delete or Backspace deletes the save selected in the load window (LoadSaveWindow::keyPressed, docs/game/ui-screens.md "Deleting a save").
-        if (key is Meitou.Engine.Input.Key.Delete or Meitou.Engine.Input.Key.Backspace && faithfulScreens.OpenScreens is [.., "load"] && selectedSlot is { } doomed) { AskDeleteSave(doomed); return true; }
+        // Delete or Backspace deletes the save selected in the load, save or import window (LoadSaveWindow::keyPressed, docs/game/ui-screens.md "Deleting a save").
+        if (key is Meitou.Engine.Input.Key.Delete or Meitou.Engine.Input.Key.Backspace && faithfulScreens.OpenScreens is [.., "load" or "save" or "import"] && selectedSlot is { } doomed) { AskDeleteSave(doomed); return true; }
         if (key == Meitou.Engine.Input.Key.Tab && faithfulScreens.FocusNext(shift)) return true;
         if (key == Meitou.Engine.Input.Key.Enter && faithfulScreens.Submit()) return true;
         if (key == Meitou.Engine.Input.Key.Space && faithfulScreens.ActivateFocused()) return true;
@@ -73,7 +75,7 @@ sealed partial class PlayerInterface
         // toggle_help (F1, event 7): the Tutorials window (docs/game/ui-input.md section 6).
         if (Bound(InputAction.ToggleHelp, key) && !TitleOpen && !EditorOpen)
         {
-            if (faithfulScreens.IsOpen("tutorials")) faithfulScreens.Close("tutorials"); else faithfulScreens.Open("tutorials");
+            ToggleHelpWindow();
             return true;
         }
         // toggle_map / toggle_faction / toggle_research / toggle_crafting (M / unbound / T / Y) ask for overview tabs 0 / 1 / 2 / 3 (docs/game/ui-input.md section 6).

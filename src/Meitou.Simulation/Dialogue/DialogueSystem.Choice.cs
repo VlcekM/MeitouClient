@@ -109,8 +109,7 @@ public sealed partial class DialogueSystem
         {
             if (m == c.Npc || c.Interjectors.Contains(m) || !table.TryResolveNext(m, out int s) || !Awake(table, s) || table.Cold(s) is not { } mc) continue;
             if (mc.Engaged || mc.Fighter?.IsAnimal == true) continue;
-            bool dumb = data.Db.Find(mc.RecordId)?.GetBool("dumb") == true;
-            if ((dumb || node.IsCharacter.Count > 0) && !node.IsCharacter.Contains(mc.RecordId)) continue;
+            if (!ListsSpeaker(node, mc.RecordId)) continue;
             float d2 = Vector3.DistanceSquared(table.Next[s].Position, at);
             float w = Math.Clamp((d2 - 202800f) / (900f - 202800f), 0, 1);
             if (mc.Race?.StringId != owner.Race?.StringId) w *= 0.1f;
@@ -126,6 +125,13 @@ public sealed partial class DialogueSystem
         }
         return weighted[^1].Id;
     }
+
+    /// <summary>
+    /// The is-character list test of a speaker (<c>FUN_14067e060</c>, <c>FUN_140684d70</c>, <c>FUN_140679bc0</c>, Verified): a <c>dumb</c> record (<c>FUN_1405e89c0</c> false) speaks a root or an interjection only when the list names it, so an empty
+    /// list fails; any other record passes an empty list or one that names it. The later lines of a conversation only test a non-empty list.
+    /// </summary>
+    bool ListsSpeaker(DialogueNode node, string record) =>
+        node.IsCharacter.Contains(record) || node.IsCharacter.Count == 0 && !((node.IsRoot || node.Interjection) && data.Db.Find(record)?.GetBool("dumb") == true);
 
     /// <summary>
     /// The line check (<c>FUN_140678f30</c>, docs/game/dialogue.md "Line check") with <paramref name="me"/> as the speaker and <paramref name="other"/> the target: tag masks, the lock,
@@ -150,13 +156,13 @@ public sealed partial class DialogueSystem
             else if ((known.Long & node.MemoryRequired) != node.MemoryRequired || (known.Long & node.MemoryForbidden) != 0) return false;
         }
         if (node.IsRoot && (mc.DialogueLocks?.TryGetValue(node.StringId, out bool locked) == true ? locked : node.Locked)) return false;
-        if (node.OneAtATime && node.IsRoot && SquadOf(world, me).Any(m => m != me && open?.Npc == m && open.Root == node)) return false;
+        if (node.OneAtATime && node.IsRoot && RootLive(world, c, node)) return false;
         if (node.ChanceTemporary < 99 && Rng.Float(NextRoll(world, me)) * 100 >= node.ChanceTemporary) return false;
         if (node.InTownOf.Count > 0 && (TownFaction(world, table.Next[ms].Position) is not { } tf || !node.InTownOf.Contains(tf))) return false;
         if (node.MyFaction.Count > 0 && !node.MyFaction.Contains(FactionId(mc.Faction))) return false;
         if (node.TargetFaction.Count > 0 && (tc is null || !node.TargetFaction.Contains(FactionId(tc.Faction)))) return false;
         if (node.HasPackage.Count > 0 && !node.HasPackage.Overlaps(SetOf(world, ms).Packages)) return false;
-        if (node.IsCharacter.Count > 0 && !node.IsCharacter.Contains(mc.RecordId)) return false;
+        if (!ListsSpeaker(node, mc.RecordId)) return false;
         if (node.TargetCarryingCharacter.Count > 0)
         {
             // Each listed character in turn: the first member of the target's squad (perceived) carrying it becomes the target; any hit passes.

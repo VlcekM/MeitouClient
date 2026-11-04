@@ -44,7 +44,7 @@ public sealed class WorldCamera
 
     /// <summary>The scene projection in <see cref="DepthConvention"/> (reversed on Vulkan: depth 1 at the near plane, 0 at the far one).</summary>
     public Matrix4x4 Projection(float aspect, float near, float far) =>
-        DepthConvention.Perspective(FieldOfView, aspect, near, far);
+        ViewWindow.Current.Apply(DepthConvention.Perspective(FieldOfView, aspect, near, far));
 
     /// <summary>Rotates the eye around the target.</summary>
     public void Orbit(float dx, float dy)

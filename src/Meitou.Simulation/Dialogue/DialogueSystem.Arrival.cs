@@ -3,8 +3,11 @@ using Meitou.Data.Gameplay.Dialogue;
 
 namespace Meitou.Simulation.Dialogue;
 
-/// <summary>The biome banner has faded for <see cref="GroupId"/> (a BIOME_GROUP): the active squad may banter about the area (<see cref="DialogueSystem"/>, "arrival dialog").</summary>
-public sealed record AreaArrival(string GroupId) : SimCommand;
+/// <summary>
+/// The biome banner has faded for <see cref="GroupId"/> (a BIOME_GROUP), or the host's 10 s retry while the squad stays in the group's area: the active squad may banter about the area
+/// (<see cref="DialogueSystem"/>, "arrival dialog"). <see cref="Serial"/> numbers the try so the host can read its result (<see cref="DialogueSystem.ArrivalResult"/>).
+/// </summary>
+public sealed record AreaArrival(string GroupId, int Serial = 0) : SimCommand;
 
 public sealed partial class DialogueSystem
 {
@@ -16,23 +19,42 @@ public sealed partial class DialogueSystem
     /// </summary>
     void Arrive(World world, AreaArrival a)
     {
+        bool forget = TryArrive(world, a);
+        Volatile.Write(ref arrivalResult, a.Serial * 2 + (forget ? 1 : 0));
+    }
+
+    int arrivalResult;
+
+    /// <summary>
+    /// The result of the last arrival try: its <see cref="AreaArrival.Serial"/> and whether the host forgets the group (<c>FUN_140800eb0</c>: a non-zero result of the banter,
+    /// squad of under 2 or a line started; an enemy sensed, under 2 candidates or no pair with a line keep the 10 s retry going).
+    /// </summary>
+    public (int Serial, bool Forget) ArrivalResult { get { int r = Volatile.Read(ref arrivalResult); return (r >> 1, (r & 1) != 0); } }
+
+    /// <summary>One try of <see cref="Arrive"/>; true: forget the group.</summary>
+    bool TryArrive(World world, AreaArrival a)
+    {
         var table = world.Characters;
-        if (world.Squads.Find(world.Player.Squad) is not { Members.Count: >= 2 } squad || data.Db.Find(a.GroupId) is not { } group) return;
+        if (world.Squads.Find(world.Player.Squad) is not { Members.Count: >= 2 } squad) return true;
+        if (data.Db.Find(a.GroupId) is not { } group) return false;
         var roots = group.GetReferences("arrival dialog").Select(r => dialogue.Node(r.TargetStringId)).Where(n => n is { IsRoot: true }).ToList();
-        if (roots.Count == 0) return;
+        if (roots.Count == 0) return false;
         var candidates = new List<CharacterId>();
         foreach (var id in squad.Members)
         {
             if (!table.TryResolveNext(id, out int s) || table.Cold(s) is not { } c) continue;
-            if (SensesEnemy(world, s, c)) return;
-            if (!Awake(table, s) || !c.CarriedBy.IsNone || c.InSomething != Locks.HeldState.None || SquadRegistry.IsAnimal(c) || c.InCombat || data.TownAt(table.Next[s].Position) >= 0) continue;
+            // Only a member that is up, free, not an animal and out of melee counts for the enemy test, which aborts the whole arrival; the town filter comes after it (FUN_1407ffe40 :100-121).
+            if (!Awake(table, s) || !c.CarriedBy.IsNone || c.InSomething != Locks.HeldState.None || SquadRegistry.IsAnimal(c) || c.InCombat) continue;
+            if (SensesEnemy(world, s, c)) return false;
+            if (data.TownAt(table.Next[s].Position) >= 0) continue;
             candidates.Add(id);
         }
-        if (candidates.Count < 2) return;
+        if (candidates.Count < 2) return false;
         foreach (var root in roots)
             foreach (var speaker in candidates)
                 foreach (var partner in candidates)
-                    if (partner != speaker && MaySpeak(world, root!, speaker) && StartBubbles(world, speaker, partner, root!, 0)) return;
+                    if (partner != speaker && MaySpeak(world, root!, speaker) && StartBubbles(world, speaker, partner, root!, 0)) return true;
+        return false;
     }
 
     /// <summary>
@@ -42,7 +64,7 @@ public sealed partial class DialogueSystem
     bool MaySpeak(World world, DialogueNode root, CharacterId speaker)
     {
         if (Cold(world, speaker) is not { } c) return false;
-        return root.IsCharacter.Contains(c.RecordId) || root.IsCharacter.Count == 0 && data.Db.Find(c.RecordId)?.GetBool("dumb") != true;
+        return ListsSpeaker(root, c.RecordId);
     }
 
     /// <summary>The original's <c>numEnemies</c> &gt; 0: the character's senses count an enemy (<see cref="CharacterFacts.Senses"/>).</summary>

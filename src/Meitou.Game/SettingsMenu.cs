@@ -32,6 +32,13 @@ sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, 
     Slider CameraRotateSpeed => cameraRotateSpeed ??= new("Camera rotation speed", UserConfig.MinCameraRotateSpeed, UserConfig.MaxCameraRotateSpeed,
         () => config.CameraRotateSpeed, v => { config.CameraRotateSpeed = MathF.Round(v * 2) / 2; CameraRotateSpeedChanged?.Invoke(config.CameraRotateSpeed); },
         "0.#", Faithful: global::Meitou.Data.World.KenshiCamera.DefaultRotateSpeed);
+    Slider? cameraMoveSpeed, cameraZoomSpeed;
+    Slider CameraMoveSpeed => cameraMoveSpeed ??= CameraSpeedSlider("Camera move speed", UserConfig.MinCameraMoveSpeed, UserConfig.MaxCameraMoveSpeed,
+        () => config.CameraMoveSpeed ?? global::Meitou.Data.World.KenshiCamera.DefaultMoveSpeed, v => config.CameraMoveSpeed = v, global::Meitou.Data.World.KenshiCamera.DefaultMoveSpeed);
+    Slider CameraZoomSpeed => cameraZoomSpeed ??= CameraSpeedSlider("Camera zoom speed", UserConfig.MinCameraZoomSpeed, UserConfig.MaxCameraZoomSpeed,
+        () => config.CameraZoomSpeed ?? global::Meitou.Data.World.KenshiCamera.DefaultZoomSpeed, v => config.CameraZoomSpeed = v, global::Meitou.Data.World.KenshiCamera.DefaultZoomSpeed);
+    Slider CameraSpeedSlider(string label, float min, float max, Func<float> get, Action<float> set, float original) =>
+        new(label, min, max, get, v => { set(MathF.Round(v)); CameraChanged?.Invoke(); }, "0", Faithful: original);
     Slider[]? audioSliders;
     /// <summary>The audio sliders of the original's options (docs/formats/settings.md); each writes <see cref="UserConfig.Audio"/> and calls <see cref="AudioChanged"/>.</summary>
     Slider[] AudioSliders => audioSliders ??= [
@@ -83,7 +90,7 @@ sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, 
     Slider AttackSlotsSlider => attackSlotsSlider ??= new("Attackers per target", 1, 5, () => config.AttackSlots, v =>
     {
         config.AttackSlots = Math.Clamp((int)MathF.Round(v), 1, 5);
-        AttackSlotsChanged?.Invoke(config.AttackSlots);
+        AttackSlotsChanged?.Invoke(config.AttackSlotsOption);
     }, "0", Faithful: UserConfig.FaithfulAttackSlots, Meitou: UserConfig.MeitouAttackSlots);
     Slider? harpoonLimitSlider;
     Slider HarpoonLimitSlider => harpoonLimitSlider ??= new("Harpoon limit", global::Meitou.Simulation.Combat.RangedTuning.MinStuckLimit, global::Meitou.Simulation.Combat.RangedTuning.MaxStuckLimit, () => (config.Gameplay ??= new()).HarpoonLimit,
@@ -123,7 +130,7 @@ sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, 
     /// <summary>What the Frame generation row reports as its state ("active", "off", ...); null on a host without that setting.</summary>
     public Func<string>? FrameGenerationStatus { get; init; }
     /// <summary>Applies a new attackers-per-target setting to the running combat system.</summary>
-    public Action<int>? AttackSlotsChanged { get; init; }
+    public Action<int?>? AttackSlotsChanged { get; init; }
     /// <summary>Applies the late-dodges setting to the running combat system.</summary>
     public Action<bool>? LateDefencesChanged { get; init; }
     /// <summary>Applies the turret gunner facing fix to the running combat system.</summary>
@@ -140,6 +147,8 @@ sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, 
     public Action<bool>? DoorsCloseChanged { get; init; }
     /// <summary>Applies a new camera rotation speed (<see cref="UserConfig.CameraRotateSpeed"/>) to the camera.</summary>
     public Action<float>? CameraRotateSpeedChanged { get; init; }
+    /// <summary>A camera option other than the rotation speed changed (invert X / Y, move speed, zoom speed; <see cref="UserConfig.ApplyCamera"/>).</summary>
+    public Action? CameraChanged { get; init; }
     /// <summary>The person races of the loaded data with their skin default (<c>CharacterRenderer.PersonRaces</c>), listed on Graphics > Skin.</summary>
     public IReadOnlyList<(string Id, string Name, bool Default)> SkinRaceList { get; init; } = [];
     /// <summary>A race's skin was turned on or off (the config's <see cref="UserConfig.SkinRaces"/> holds it); the game hands it to the character renderer.</summary>
@@ -296,8 +305,24 @@ sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, 
                 () => (int)config.SpeedUnit, i => player.SpeedUnit = config.SpeedUnit = (SpeedUnit)i)));
         if (page == 2)
             result.Add(new("Damage floaters", "Numbers that float over a character when a blow lands, with the damage armour stopped in brackets. Simple shows the total, Full one number per damage type "
-                + "and the part hit. Healing of your own characters floats up in green.", Choice: new(() => ["Off", "Simple info", "Full info"],
+                + "and the part hit.", Choice: new(() => ["Off", "Simple info", "Full info"],
                 () => (int)config.Floaters, i => player.Floaters = config.Floaters = (FloaterMode)i)));
+        if (page == 2)
+            result.Add(new("Font size", "Points added to every interface font's default height (the game: 3).",
+                Slider: new("Font size", UserConfig.MinFontSize, UserConfig.MaxFontSize, () => config.FontSize ?? global::Meitou.Data.Ui.KenshiFontSize.DefaultSetting,
+                    v => { float size = Math.Clamp(MathF.Round(v), UserConfig.MinFontSize, UserConfig.MaxFontSize); config.FontSize = size; player.FontSize = size; }, "0", Faithful: global::Meitou.Data.Ui.KenshiFontSize.DefaultSetting)));
+        if (page == 2)
+            result.Add(new("Show names", "The name over each of your characters (the game's Show names option). Off, only the stealth and light icons stay.",
+                Toggle: new("Show names", () => config.ShowNames, v => player.ShowNames = config.ShowNames = v, OnOff: true)));
+        if (page == 2)
+            result.Add(new("Show movement marker", "The green marker where a move order sends your characters (the game: on).",
+                Toggle: new("Show movement marker", () => config.MovementMarker != false, v => player.MovementMarker = (config.MovementMarker = v) == true, OnOff: true)));
+        if (page == 2)
+            result.Add(new("Show rotation marker", "The green marker on the camera's pivot while you turn it (the game: on).",
+                Toggle: new("Show rotation marker", () => config.RotationMarker != false, v => player.RotationMarker = (config.RotationMarker = v) == true, OnOff: true)));
+        if (page == 2)
+            result.Add(new("Censorship", "Swaps a few strong words in the dialogue for milder ones (the game's censorship option).",
+                Toggle: new("Censorship", () => config.Censorship, v => config.Censorship = v, OnOff: true)));
         if (page == 2)
             result.Add(new("Feedback button", "The FEEDBACK button at the top right during play. Off, it still shows on the title screen and in the Esc menu.",
                 Toggle: new("Feedback button", () => config.FeedbackButton, v => player.FeedbackButtonInPlay = config.FeedbackButton = v, OnOff: true)));
@@ -306,6 +331,19 @@ sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, 
                 Toggle: new("Hardware mouse", () => config.HardwareMouse, v => config.HardwareMouse = v)));
         if (page == 3)
             result.Add(new(CameraRotateSpeed.Label, "How fast the rotate and tilt keys and the mouse turn the camera (the game: 6).", Slider: CameraRotateSpeed));
+        if (page == 3)
+            result.Add(new(CameraMoveSpeed.Label, "How fast the arrow keys and the screen edge pan the camera (the game: 500; faster the higher the camera).", Slider: CameraMoveSpeed));
+        if (page == 3)
+            result.Add(new(CameraZoomSpeed.Label, "How fast the wheel and the zoom keys move the camera in and out (the game: 125).", Slider: CameraZoomSpeed));
+        if (page == 3)
+            result.Add(new("Invert mouse X", "Reverses the camera's turn, for the mouse and the keys (the game: off).",
+                Toggle: new("Invert mouse X", () => config.InvertX == true, v => { config.InvertX = v; CameraChanged?.Invoke(); }, OnOff: true)));
+        if (page == 3)
+            result.Add(new("Invert mouse Y", "Reverses the camera's tilt, for the mouse and the keys (the game: on).",
+                Toggle: new("Invert mouse Y", () => config.InvertY != false, v => { config.InvertY = v; CameraChanged?.Invoke(); }, OnOff: true)));
+        if (page == 3)
+            result.Add(new("Swap mouse buttons", "Swap the left and right mouse buttons (the game: off; the game view follows, as in the original).",
+                Toggle: new("Swap mouse buttons", () => config.SwapMouseButtons == true, v => KeyMap.SwapButtons = (config.SwapMouseButtons = v) == true, OnOff: true)));
         if (page == 3)
             result.Add(new("Edge scrolling", "The camera moves when the pointer is at the edge of the screen.",
                 Toggle: new("Edge scrolling", () => config.EdgeScroll != false, v => config.EdgeScroll = v)));
@@ -349,6 +387,8 @@ sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, 
             result.Add(new("Auto save", "Saves the game on its own every few minutes of unpaused play, into three slots in turn (autosave0 to autosave2).",
                 Toggle: new("Auto save", () => (config.Gameplay ??= new()).AutoSave, v => SetGameplay((config.Gameplay ?? new()) with { AutoSave = v }), OnOff: true)));
             result.Add(new(AutoSaveSlider.Label, "Minutes of unpaused play between autosaves (the game: 10).", Slider: AutoSaveSlider));
+            result.Add(new("Fast zone hopping", "Keeps a larger area loaded round each of your characters, so switching between distant ones skips most of the loading (the game: off; uses more memory).",
+                Toggle: new("Fast zone hopping", () => (config.Gameplay ??= new()).FastZoneHopping, v => SetGameplay((config.Gameplay ?? new()) with { FastZoneHopping = v }), OnOff: true)));
             result.Add(new("Tutorials", "Shows the tutorial hints as you play (the game: on).",
                 Toggle: new("Tutorials", () => config.Tutorials != false, v => { config.Tutorials = v; TutorialsChanged?.Invoke(v); }, OnOff: true)));
             result.Add(new("Reset Tutorials", "Every tutorial can show again, the ones already seen included.", Run: () => ResetTutorials?.Invoke()));
@@ -690,7 +730,14 @@ sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, 
         config.HardwareMouse = false;
         CameraRotateSpeed.Set(global::Meitou.Data.World.KenshiCamera.DefaultRotateSpeed);
         config.EdgeScroll = true;
+        config.InvertX = false;
+        config.InvertY = true;
+        config.CameraMoveSpeed = global::Meitou.Data.World.KenshiCamera.DefaultMoveSpeed;
+        config.CameraZoomSpeed = global::Meitou.Data.World.KenshiCamera.DefaultZoomSpeed;
+        CameraChanged?.Invoke();
         config.Tutorials = true;
+        player.MovementMarker = player.RotationMarker = true;
+        config.MovementMarker = config.RotationMarker = true;
         TutorialsChanged?.Invoke(true);
         config.HoverOutline = true;
         config.LuckyrenMode = false;
@@ -698,6 +745,7 @@ sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, 
         player.SetUiMode(UiMode.Meitou);
         player.SpeedUnit = config.SpeedUnit = SpeedUnit.Mph;
         player.Floaters = config.Floaters = FloaterMode.Simple;
+        player.ShowNames = config.ShowNames = true;
         player.FeedbackButtonInPlay = config.FeedbackButton = true;
         config.TickAhead = TickAheadMode.Dynamic;
         bindings.ResetToDefaults();

@@ -11,6 +11,22 @@ namespace Meitou.Simulation;
 /// </summary>
 public static class CharacterFacts
 {
+    /// <summary>Posture 0 (vfunc <c>0x368</c>, <b>Verified</b> in <c>FUN_14028eca0</c> and <c>FUN_1409c70f0</c>): not knocked out or dead, not staying low, crawling or playing dead.</summary>
+    public static bool PostureZero(CharacterCold cold) => cold.Medical is not ({ Incapacitated: true } or { StayingLow: true } or { Crawling: true } or { PlayingDead: true });
+
+    /// <summary>
+    /// State 118 TARGET_IS_UNARMED (<c>FUN_1405a2290</c>, <b>Verified</b>): the target holds no weapon in hand (vfunc <c>0x3c0</c>) and every inventory section of category 0 (the weapon sections, <c>hip</c> and
+    /// <c>back</c>) is empty, locked items included.
+    /// </summary>
+    public static bool TargetUnarmed(CharacterCold target) =>
+        target.DrawnWeapon == WeaponKinds.None && (target.Inventory is not { } inv || !inv.Items.Exists(i => i.Section is "hip" or "back"));
+
+    /// <summary>
+    /// State 26 IS_CROUCHING_OR_LYING (<c>FUN_140599e90</c>, <b>Verified</b>), read by the planner and by the slave delivery: false when crippled (a crawler; an incapacitated one stands in for it), else true staying low (posture 1), playing dead (3) or in a bed. A knocked-out character is posture 4 and does not count.
+    /// </summary>
+    public static bool CrouchingOrLying(CharacterCold cold) =>
+        cold.Medical is { Crawling: false, Incapacitated: false } m && (m.StayingLow || m.PlayingDead || cold.InSomething == Locks.HeldState.Bed);
+
     /// <summary>
     /// <c>Character</c> slot 6 <c>isDown</c> (vfunc 0x30, <c>FUN_1405c9e10</c>, <b>Verified</b>): dead or out cold, playing dead (which is unconscious to everyone), ragdolled or carried.
     /// A crawler is not down. A ragdoll is only ever whole for an incapacitated character, so <see cref="Ragdolls.RagdollSystem.IsRagdoll"/> adds nothing the first test lacks, and is kept for the original's reading.
@@ -45,6 +61,16 @@ public static class CharacterFacts
 
     /// <summary>The "getting up" byte (<c>Character</c> <c>+0x278</c>): set while the character rises from a knock-down (<see cref="CharacterCold.GettingUpUntil"/>).</summary>
     public static bool GettingUp(CharacterCold cold, long tick) => cold.GettingUpUntil > tick;
+
+    /// <summary>The goals a character that can rise posts as its current task (<c>FUN_1405d00b0</c> ~148-232, <b>Verified</b>): 65 GET_UP_STAND_UP, 52 GET_UP_STAY_DOWN_THOUGH.</summary>
+    public const int GetUpStandUpGoal = 65, GetUpStayDownGoal = 52;
+
+    /// <summary>
+    /// The goal a character rising from a knock-down has as its task (0: none). Animals always post 65 (single branch, no posture computation); another character posts 52 when it ends
+    /// staying low or crawling (posture 1 or 2) and 65 when it ends standing.
+    /// </summary>
+    public static int GetUpGoal(CharacterCold cold, long tick) =>
+        !GettingUp(cold, tick) ? 0 : cold.Fighter?.IsAnimal == true || cold.Medical is not { } m || !(m.StayingLow || m.Crawling) ? GetUpStandUpGoal : GetUpStayDownGoal;
 
     /// <summary>Whether a waking character stands through the get-up clip: not one carried, and not one waking in a bed (it lies on; <c>AnimationSystem</c> plays no clip, so nothing holds it).</summary>
     public static bool PlaysGetUp(CharacterCold cold) => cold.CarriedBy.IsNone && cold.InSomething != Locks.HeldState.Bed;

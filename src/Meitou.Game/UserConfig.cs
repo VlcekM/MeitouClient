@@ -52,6 +52,10 @@ sealed class UserConfig
     public SpeedUnit SpeedUnit { get; set; } = SpeedUnit.Mph;
     /// <summary>The damage floaters (Interface settings): the original's <c>floaters</c> option, Simple by default; Meitou also floats a green "+N" over a player character that heals.</summary>
     public FloaterMode Floaters { get; set; } = FloaterMode.Simple;
+    /// <summary>The original's <c>censorship</c> option (Interface settings, off by default): five words swapped in the displayed dialogue.</summary>
+    public bool Censorship { get; set; }
+    /// <summary>The original's <c>Show names</c> option (Interface settings, on by default): the name over the player's characters; off, the tag keeps only its stealth and light icons.</summary>
+    public bool ShowNames { get; set; } = true;
     /// <summary>The FEEDBACK button at the top right during play (Interface settings, default on); off, it shows only on the title and with the game menu open.</summary>
     public bool FeedbackButton { get; set; } = true;
     /// <summary>The original's splash at startup in the Faithful UI (Advanced settings: the switch's Faithful side), off by default; off, the menu shows as soon as the game has loaded.</summary>
@@ -80,6 +84,9 @@ sealed class UserConfig
     /// <summary>How many enemies may swing at one target at once (Advanced settings, 1-5; plus the race's extra slots): Faithful 1 (the game's CONSTANTS, the default), Meitou 3.</summary>
     public int AttackSlots { get; set; } = FaithfulAttackSlots;
     public const int FaithfulAttackSlots = 1, MeitouAttackSlots = 3;
+
+    /// <summary>The setting for the combat system: null (the loaded CONSTANTS <c>max num attack slots</c>, 1 in the base game) at the Faithful value, else the chosen 1 to 5.</summary>
+    public int? AttackSlotsOption => AttackSlots == FaithfulAttackSlots ? null : Math.Clamp(AttackSlots, 1, 5);
     /// <summary>A late but successfully rolled dodge or block still counts (Advanced settings; off by default and in both presets, so fights feel as the game's): a balance change for fights against several enemies.</summary>
     public bool LateDefences { get; set; } = false;
     /// <summary>The off-screen switches (Advanced settings; Faithful off, Meitou on; docs/simulation.md "Off-screen tier"): roaming squads keep their characters off screen,
@@ -126,6 +133,42 @@ sealed class UserConfig
     public bool? EdgeScroll { get; set; }
     /// <summary>The in-game tutorials (the original's <c>tutorials</c>, default on; Gameplay settings); null until first used, then taken from the install's settings.cfg.</summary>
     public bool? Tutorials { get; set; }
+    /// <summary>The original's `invert X` (default off) and `invert Y` (default on); Controls settings. Null until first used, then taken from the install's settings.cfg.</summary>
+    public bool? InvertX { get; set; }
+    public bool? InvertY { get; set; }
+    /// <summary>The original's `swap mouse buttons` (default off; Controls settings): the left and right buttons trade places in the GUI and the game view. Null until first used, then taken from the install's settings.cfg.</summary>
+    public bool? SwapMouseButtons { get; set; }
+    /// <summary>The original's `font size2` (slider -10 … 32, default 3; Interface settings): points added to every GUI font's default height (<see cref="Meitou.Data.Ui.KenshiFontSize"/>). Null until first used, then taken from the install's settings.cfg.</summary>
+    public float? FontSize { get; set; }
+    /// <summary>The original's `camera speed` (150 … 1000, default 500) and `camera zoom` (10 … 200, default 125); Controls settings. Null until first used, then taken from the install's settings.cfg.</summary>
+    public float? CameraMoveSpeed { get; set; }
+    public float? CameraZoomSpeed { get; set; }
+    public const float MinFontSize = -10, MaxFontSize = 32;
+    public const float MinCameraMoveSpeed = 150, MaxCameraMoveSpeed = 1000, MinCameraZoomSpeed = 10, MaxCameraZoomSpeed = 200;
+
+    /// <summary>Fills the camera options still unset from the install's settings.cfg (the original's missing-key defaults).</summary>
+    public void SeedCamera(Meitou.Content.GameInstall install)
+    {
+        InvertX ??= Meitou.Audio.AudioSystem.Setting(install, "invert X", 0) != 0;
+        InvertY ??= Meitou.Audio.AudioSystem.Setting(install, "invert Y", 1) != 0;
+        SwapMouseButtons ??= Meitou.Audio.AudioSystem.Setting(install, "swap mouse buttons", 0) != 0;
+        FontSize ??= Meitou.Audio.AudioSystem.Setting(install, "font size2", Meitou.Data.Ui.KenshiFontSize.DefaultSetting, MinFontSize, MaxFontSize);
+        CameraMoveSpeed ??= Meitou.Audio.AudioSystem.Setting(install, "camera speed", Meitou.Data.World.KenshiCamera.DefaultMoveSpeed, MinCameraMoveSpeed, MaxCameraMoveSpeed);
+        CameraZoomSpeed ??= Meitou.Audio.AudioSystem.Setting(install, "camera zoom", Meitou.Data.World.KenshiCamera.DefaultZoomSpeed, MinCameraZoomSpeed, MaxCameraZoomSpeed);
+    }
+
+    /// <summary>Hands the camera options to the strategy camera's settings (unset ones keep the camera's own defaults, which are the original's).</summary>
+    public void ApplyCamera(Meitou.Engine.Cameras.CameraSettings camera)
+    {
+        camera.InvertX = InvertX ?? camera.InvertX;
+        camera.InvertY = InvertY ?? camera.InvertY;
+        camera.MoveSpeed = CameraMoveSpeed ?? camera.MoveSpeed;
+        camera.ZoomSpeed = CameraZoomSpeed ?? camera.ZoomSpeed;
+    }
+    /// <summary>The green marker where a move order was given (the original's `Movement marker`, default on; Interface settings); null until first used, then taken from the install's settings.cfg.</summary>
+    public bool? MovementMarker { get; set; }
+    /// <summary>The marker on the camera's pivot while it is turned (the original's `Rotation marker`, default on; Interface settings); null until first used, then taken from the install's settings.cfg.</summary>
+    public bool? RotationMarker { get; set; }
     /// <summary>Sounds are heard from the first selected character instead of the camera (Audio settings; off, the default: the camera, as the game does).</summary>
     public bool HearFromSelected { get; set; }
     /// <summary>The Windows cursor instead of the game's drawn pointer (the original's <c>hardware_mouse</c>, default off; Interface settings).</summary>

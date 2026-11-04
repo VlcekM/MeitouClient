@@ -20,6 +20,9 @@ public sealed partial class AiSystem
         return StrangerInHome(world, home, slot);
     }
 
+    /// <summary>State 108 <c>strangers in house</c> (evaluator <c>FUN_14060e5e0</c>, <b>Verified</b>): true when the stranger finder returns above 0, with no public test; false with no home. Goals 155, 197, 158, 283 and 239 read it.</summary>
+    bool StrangersInHouse(World world, Blackboard board, int slot) => board.OwnHome is { } home && StrangerInHome(world, home, slot);
+
     struct StrangerScan
     {
         public World World;

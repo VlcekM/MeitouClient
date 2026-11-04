@@ -13,6 +13,8 @@ public static class MemoryTag
     public const int Looted = 6;
     /// <summary>DC 52 I_LOVE_THIS_GUY's long-term mask (lifesaver, freed me) and DC 53 I_HATE_THIS_GUY's (stole from me, captor, defeated my squad, killed my friend).</summary>
     public const uint LoveMask = 0xc, HateMask = 0x2b0;
+    /// <summary>The grudge test of the put-in-bed desire (<c>FUN_140599390</c>, <b>Verified</b>): long-term tags 1, 4, 5, 7, 8, 9, 10 and short-term tags 1, 2, 4, 5, 7.</summary>
+    public const uint GrudgeLongMask = 0x7b2, GrudgeShortMask = 0xb6;
 }
 
 /// <summary>
@@ -89,6 +91,16 @@ public sealed class SquadMemory
         if (player.TryGetValue(squad, out var p)) p.Time = world.GameHours;
     }
 
+    /// <summary>
+    /// Clears a short-term tag on the character's own entry (<c>FUN_1406788d0</c>, <b>Verified</b>), the mirror of <see cref="Flag"/>; the time stays. <see cref="AnyTempEnemy"/> stays right.
+    /// </summary>
+    public void ClearShort(int squad, CharacterId who, int tag)
+    {
+        if (squad < 0 || (uint)tag > 31 || !index.TryGetValue((squad, who), out var e) || (e.Short >> tag & 1) == 0) return;
+        e.Short &= ~(1u << tag);
+        if (tag == MemoryTag.TempEnemy && !entries.Any(kv => kv.Key.Squad == squad && (kv.Value.Short >> MemoryTag.TempEnemy & 1) != 0)) tempEnemySquads.Remove(squad);
+    }
+
     /// <summary>Whether the squad holds short-term <paramref name="tag"/> on the character (<c>FUN_140678830</c>): TEMP_ALLY on a player-faction character is the squad's player flag.</summary>
     public bool HasShort(World world, int squad, CharacterId who, int tag) => (Read(world, squad, who).Short >> tag & 1) != 0;
 
@@ -121,9 +133,37 @@ public sealed class SquadMemory
             }
         foreach (var e in player.Values)
             if (e.Short != 0 && (int)(world.GameHours - e.Time) > 6) e.Short = 0;
+        Forget(world, ref lost);
         if (lost is null) return;
         foreach (int squad in lost)
             if (!entries.Any(kv => kv.Key.Squad == squad && (kv.Value.Short >> MemoryTag.TempEnemy & 1) != 0)) tempEnemySquads.Remove(squad);
+    }
+
+    /// <summary>The size above which a memory forgets its old entries, and the age in game hours from which they go (<c>FUN_1406724e0</c>, <b>Verified</b>: 0x28 and 0x30).</summary>
+    const int ForgetAbove = 40, ForgetAfterHours = 48;
+
+    /// <summary>
+    /// A memory of more than <see cref="ForgetAbove"/> entries erases each entry older than <see cref="ForgetAfterHours"/> hours whose character is not one of the player's faction (or no longer resolves),
+    /// all tags with it (<c>FUN_1406724e0</c> with <c>FUN_1409fdfe0</c>, <b>Verified</b>).
+    /// </summary>
+    void Forget(World world, ref List<int>? lost)
+    {
+        var counts = new Dictionary<int, int>();
+        foreach (var ((squad, _), _) in entries) counts[squad] = counts.GetValueOrDefault(squad) + 1;
+        List<(int Squad, CharacterId Who)>? gone = null;
+        foreach (var ((squad, who), e) in entries)
+        {
+            if (counts[squad] <= ForgetAbove || (int)(world.GameHours - e.Time) <= ForgetAfterHours) continue;
+            bool player = world.Characters.TryResolveNext(who, out int slot) && world.Characters.Cold(slot) is { } c && c.Faction == world.Player.Faction;
+            if (!player) (gone ??= []).Add((squad, who));
+        }
+        if (gone is null) return;
+        foreach (var key in gone)
+        {
+            if (entries.TryGetValue(key, out var e) && (e.Short >> MemoryTag.TempEnemy & 1) != 0) (lost ??= []).Add(key.Squad);
+            entries.Remove(key);
+            index.Remove(key);
+        }
     }
 
     /// <summary>Whether the squad holds a TEMP_ENEMY tag on any character (the aggro scan skips the per-target lookup for squads that do not).</summary>

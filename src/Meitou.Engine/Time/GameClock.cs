@@ -25,8 +25,7 @@ public sealed class GameClock
         double sunrise = DefaultSunrise, double sunset = DefaultSunset, int daysPerYear = DefaultDaysPerYear)
     {
         if (daysPerYear < 1) throw new ArgumentOutOfRangeException(nameof(daysPerYear));
-        // Sunset not after sunrise gives 6 and 20 (game-loop.md, formats/terrain.md).
-        if (sunset <= sunrise) (sunrise, sunset) = (6, 20);
+        // The raw values stay: with a sunset not after the sunrise there is no daytime (the 6 / 20 fallback is the sun direction's alone, FUN_14066e380, Meitou.Data.World.SkyClock).
         StartHour = ((startHour % 24) + 24) % 24;
         StartDay = startDay;
         Sunrise = sunrise;

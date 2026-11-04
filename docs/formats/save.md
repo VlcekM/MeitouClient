@@ -68,6 +68,12 @@ terrain-relative, and reads absolute `world Y pos` back for its own buildings; t
 A finished one with doors also gets the door keys of [locks](../game/locks.md#save-keys)
 (the original saves doors the same way for every building, **Observed** by code). Meitou-only `meitou parent` (instance id) names a parent the handle cannot.
 
+**Town machines** (Meitou `Saving/TownMachineSave`, a1-t189 / g-003): the original keeps a base building's production state in its GAMESTATE_BUILDING and an INVENTORY_STATE (`production amount`, `consumption amount-<k>`, [production](../game/buildings-production.md#production), **Observed**); a new game's town buildings have no such record in Meitou's zone files, so the machines of NPC town buildings are Meitou-only keys on CAMERA: string `meitou tm<i>` (the building's run-time key), int `meitou tm<i> st` (status), float `meitou tm<i> out` (progress), int `meitou tm<i> outn` (output items), int `meitou tm<i> in<k>` and float `meitou tm<i> lv<k>` (items and level of input k). Read back before the first tick; a key naming no town building is dropped. Pinned by `ProductionTests`.
+
+**Platoon mission town** (Meitou key `meitou mission town` on a roaming or stored platoon record: the TOWN id of the town its package was taking it to when it left the world, absent: none; read back as `Platoon.Target`, which a TRAVEL_TARGET stand-in heads for).
+
+**Building record** (Meitou keys on a registered town building's GAMESTATE_BUILDING, [locks](../game/locks.md#building-record)): int `meitou designation`, string `meitou template` (the last assigned SQUAD_TEMPLATE id, absent: none) and the stored public byte as `is public day`; a state without them is a building with no record yet.
+
 **Town-house repair** (Meitou): the original zone instance's GAMESTATE_BUILDING stores `destroyed`, `is complete`,
 `pause`, `construction progress`, `<i>construction mats` and ownership. Bool `meitou town construction` keeps it distinct
 from a new player-built instance, including after completion; the loader registers its construction state when the town activates.
@@ -153,6 +159,8 @@ waits and runs when it ends (Meitou: `HandleNewGame` keeps `newGameRequested` wh
 
 ### Autosave (`FUN_14047be70`)
 
+The save-file state machine's per-frame check (`FUN_1404742b0`:21-41, state +0x1e0 == 1, worker pending) is log-only: when the worker handle's held check returns 0 it logs 'Thread seems to have stopped running' and returns with the state unchanged (**Verified**; 'dead worker' is not established). Meitou's save is one `Task.Run` whose exceptions are reported, so it has no such case.
+
 Every frame from `GameWorld::vfunc_0` (**Verified**, decompile): while `Auto save` is on, no zone is loading and `DAT_142134690+0x298`
 is null, real dt adds to a timer (paused time not counted). Past `Auto save time (minutes)` x 60 it shows "Autosaving...", and the next
 frame saves slot `(autosaveindex + 1) mod 3` as `autosave<N>` and stores `autosaveindex` in `settings.cfg`. Meitou (`GameHost.Autosave`):
@@ -208,8 +216,7 @@ their squad's point, on the ground there (`PlaceOnGround`); a save without a pla
 comes from with no start applied is **Unknown**); imprisoned uniques not in the player's squads are dropped from the table
 (their characters are not carried) instead of tested by handle; the finished research of "off" is `_Default Start` only; the weather and decals start fresh; war states are dropped with
 the NPC platoons. A save older than 0.90.0 drops the reset, buildings, research and dead-NPC ticks (`SaveImport.AllowedFor`; the original's window disables and unticks them,
-`FUN_14047cee0`, comparing the CAMERA `version` packed as a << 24 | b << 12 | c, unparsable = 0; Meitou's window does the same on row selection, `PlayerInterface.OldImportSave`). Not built: the "too close" player-town removal (a new outpost is made only with no player town within 5000, [outposts](../game/buildings-production.md#placement), far outside
-any radius, so only an edited save reaches it) and the `imported` marker (the NPC platoons are left out, so every town makes its residents anyway). The relation table is shared by the
+`FUN_14047cee0`, comparing the CAMERA `version` packed as a << 24 | b << 12 | c, unparsable = 0; Meitou's window does the same on row selection, `PlayerInterface.OldImportSave`). Done: the "too close" player-town removal (`SaveImport.TooCloseTowns`; the radius is the placed town's). Not built: and the `imported` marker (the NPC platoons are left out, so every town makes its residents anyway). The relation table is shared by the
 data, so an import without Relations first sets it back to the FACTION values (`FactionRelations.Reset`).
 
 ### Object handles and slot lists
@@ -483,7 +490,7 @@ squad-intact flag) are written by `FUN_140372ef0` and read by `FUN_1407ed0f0` (*
 Meanings: [locks](../game/locks.md#save-keys), [economy 11.5](../game/economy.md#115-bail-and-sentence) (`sentence` = start in game hours, `psts` = length).
 Dialogue locks (**Observed**, `Character::serialise` writer `FUN_140679900`, reader `FUN_14067f780`): character pairs `lok0`, `lok1`, ..., string = DIALOGUE
 string id, bool of the same key = locked ([dialogue](../game/dialogue.md#memory-and-saves)); Meitou reads and writes them (`Saving/DialogueSave`), and reads `personality` when above 0.
-Slave state (**Observed**, `FUN_140626580` writes, `FUN_140626830` reads, in the character's state record with `personality`): `slavestate` int (status `+0`: 0 free, 1 slave, 2 escaped, 3 ex-slave; the reader stores any int unchecked, **Verified** `FUN_140626830`; Meitou models 0 to 3 and loads anything else as free), `ssct` float (`+0x8`, the game hours of the last change to state 2 or 3, [lie low](../game/carry-loot.md#escaped-slaves-lie-low)),
+Slave state (**Observed**, `FUN_140626580` writes, `FUN_140626830` reads, in the character's state record with `personality`): `slavestate` int (status `+0`: 0 free, 1 slave, 2 escaped, 3 ex-slave; the reader stores any int unchecked, **Verified** `FUN_140626830`; Meitou keeps 0 to 3; each rule tests the state as the original's function does (`== 0`, `!= 0`, `== 1`, `== 2`, `< 1`: the ex-slave 3 counts as a slave where the original tests non-zero, e.g. `FUN_1405a0f10`, `FUN_140852350`, `FUN_140680560`'s "Free!") and loads anything else as free), `ssct` float (`+0x8`, the game hours of the last change to state 2 or 3, [lie low](../game/carry-loot.md#escaped-slaves-lie-low)),
 `escap` bool (`+0xe8`, the escaped-prisoner flag), `disguiseblown` float (`+0x110`, the [disguise](../game/perception.md#disguise) cooldown and recently-wanted marker; Meitou `CrimeSave`) and two short-keyed bools (`kidn` `+0xe9`; `tn` `+0xea`, the freed flag, names from `DAT_1416fa808` / `DAT_1416fa804`, **Verified**); the owner is the `slaver` handle, on an NPC slave a CHARACTER handle naming its owner (**Observed** on one
 Rebirth save, read with a scratch FCS reader: all 32 state-1 slaves name a saved Holy Sentinel of the owner faction; the two escaped player characters hold the null handle).
 Meitou (`Saving/SlaveSave`) reads and writes `slavestate` and `ssct`, and the owner as `meitou slave owner` (FACTION string id). It reads a CHARACTER `slaver` handle: once that character is
@@ -492,7 +499,7 @@ a squad handle is not mapped. The read keys are written back unchanged until the
 
 Carry links (**Observed**, decompile: `FUN_1406280a0` writes, `FUN_140627b30` reads): the character state record has a bool `carrying` (true on the carrier) and a handle `carrying`
 (the partner, null when none), both always written. The reader links them when the partner resolves, else keeps the handle and links it later from the per-frame `FUN_140797ec0`
-(deferred until the partner is loaded). Meitou (`SaveCapture`, `CarrySystem.RestoreLinks`): the same keys; the link is made without a lift, checked every 20 ticks.
+(deferred until the partner is loaded). Meitou (`SaveCapture`, `CarrySystem.RestoreLinks`): the same keys; the link is made without a lift, checked every 20 ticks; it skips a carrier that is carried or carries and a carried body, tests no incapacitation (the carry step drops an incapacitated carrier's body afterwards, **Verified** `FUN_1405cff90`), and lets the body go from a bed or cage.
 
 Meitou (`Saving/HeldSave`): reads building keys from the zones' GAMESTATE_BUILDING records when the town registers and writes them back into
 them (the visited zones' files, [Zone files](#zone-files)); the save ids of generated interiors are not mapped, so interior cages and

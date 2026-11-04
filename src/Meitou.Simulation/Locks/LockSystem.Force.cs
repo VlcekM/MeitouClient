@@ -45,11 +45,15 @@ public sealed partial class LockSystem
                     world.Post($"{walker.Name}: I need a weapon to smash that");
                     return;
                 }
-                if (world.Fixtures.DoorSpotOf(fixture) is null) return;
+                if (world.Fixtures.DoorSpotOf(fixture) is null || SmashRefused(walker, fixture)) return;
                 break;
         }
         StartWork(world, best, CharacterTask.GoTo, RowOf(order.Force), fixture.Id, detail: order.Force, queued: order.Queued);
     }
+
+    /// <summary>Row 226's own conditions (!70 isObjectMine, !128 isAlly): a door of the smasher's faction or of an ally's is never smashed on an order.</summary>
+    bool SmashRefused(CharacterCold walker, Fixture door) =>
+        door.Owner == walker.Faction || Combat?.Relations is { } r && r.Contains(walker.Faction) && r.Contains(door.Owner) && r.IsAlly(walker.Faction, door.Owner);
 
     /// <summary>Each tick: a character in reach of the lock it was ordered to force cuts or breaks it; one given another order, downed or gone gives up.</summary>
     void ForcedLocks(World world)
@@ -75,7 +79,7 @@ public sealed partial class LockSystem
             if (c.Force == LockForce.Strength)
             {
                 c.ForcingLock = null;
-                if (Picking.Break(world, s, f, Crimes)) { world.EmitSound(SoundKind.Unlocked, s, next[s].Position); if (c.IsPlayer) world.Post($"{c.Name}: *Crunck*"); }
+                if (Picking.Break(world, s, f, Crimes)) BruteForced(world, s, c, f.Kind == FixtureKind.Cage ? f.Occupant : CharacterId.None);
                 else if (c.IsPlayer) world.Post($"{c.Name}: I'm not strong enough to do that");
                 continue;
             }

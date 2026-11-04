@@ -105,6 +105,12 @@ public sealed class BountyLedger
     /// <summary>The bounty <paramref name="faction"/> has on the character (0: none).</summary>
     public int AmountFor(int faction) => Of(faction)?.Amount ?? 0;
 
+    /// <summary>The entry <paramref name="faction"/>'s bounties are kept under: its booking faction's (<see cref="CrimeFactions.BookingKey"/>), or null.</summary>
+    public BountyEntry? BookedFor(FactionRelations relations, int faction) => CrimeFactions.BookingKey(relations, faction) is var key and >= 0 ? Of(key) : null;
+
+    /// <summary>The bounty <paramref name="faction"/> sees on the character: its booking faction's entry (0: none).</summary>
+    public int BookedAmount(FactionRelations relations, int faction) => BookedFor(relations, faction)?.Amount ?? 0;
+
     /// <summary>Any faction has a bounty on the character (the game's "has any bounty", which gives others permission to loot it).</summary>
     public bool Any
     {
@@ -156,7 +162,7 @@ public sealed class BountyLedger
 
 /// <summary>
 /// A town's raised alarm (<c>FUN_1409335e0</c>'s record, <b>Observed</b>): the crime, the faction it was against, where it was raised. It stays until an investigator has looked about at
-/// it (<see cref="CrimeSystem.Investigate"/>; the original's field +0x24 = 8.0 is <b>Unknown</b>, no expiry was found). Not saved (engine choice).
+/// it (<see cref="CrimeSystem.Investigate"/>) or <see cref="CrimeSystem.AlarmLife"/> after its creation (the original's field +0x24, <b>Verified</b>). Not saved (engine choice).
 /// </summary>
 public sealed class TownAlarm
 {
@@ -168,13 +174,13 @@ public sealed class TownAlarm
     public int Place { get; set; } = -1;
     /// <summary>The culprit's floor when it was raised (the original's <c>+0x60</c>); only read for an alarm with a <see cref="Place"/>. Overwritten by a repeated raise.</summary>
     public int Floor { get; set; }
-    /// <summary>Game seconds it still lives: <see cref="CrimeSystem.AlarmLife"/> at each raise, counted down by the town update; gone below 0.</summary>
+    /// <summary>Game seconds it still lives: <see cref="CrimeSystem.AlarmLife"/> at creation (a repeated raise leaves it), counted down by the town update; gone below 0.</summary>
     public float Life { get; set; } = CrimeSystem.AlarmLife;
 }
 
 /// <summary>
 /// A crime the character committed that nobody has booked yet (economy.md 11.6, carry-loot.md 4.3: code, victim faction, victim, a freshness timer; the "booked" flag). One per
-/// character, as in the game. <see cref="Timer"/> is in game seconds and counts down (the game's countdown was not found: engine choice); a witness sets it to 20 again.
+/// character, as in the game. <see cref="Timer"/> is in game seconds and counts down (the tail of the per-character crime tick <c>FUN_1405cbb80</c>: cleared once it is at or below 0, else reduced by the tick delta; <b>Verified</b>, not run for a dead character); a witness sets it to 20 again.
 /// </summary>
 public sealed class PendingCrime
 {
@@ -258,16 +264,25 @@ public sealed class CrimeFactions
         {
             var data = relations.Factions[f];
             int legal = data.LegalSystem is { } id ? relations.IndexOf(id) : -1;
-            booking[f] = legal >= 0 ? legal : books[f] ? f : -1;
+            booking[f] = BookingKey(relations, f);
             hunters[f] = data.FundamentalType == FundamentalType.Adventurer && legal >= 0 && !data.NotReal;
         }
     }
 
     /// <summary>
-    /// The faction whose ledger entry <paramref name="f"/>'s bounties use (the game's <c>FUN_140851fb0</c>, economy.md 11.2, <b>Observed</b>): its <c>legal system</c> when it has one, else
-    /// itself when it books bounties, else -1. Only the bounty hunters' spotting reads it here (the booking keeps the witness's own faction).
+    /// The faction whose ledger entry <paramref name="f"/>'s bounties use (the game's <c>FUN_140851fb0</c> / <c>FUN_140852010</c>, economy.md 11.2, <b>Verified</b>): its <c>legal system</c>
+    /// when it has one, else itself when it books bounties, else -1 (no entry). The booking, the claims and every bounty lookup by a faction go through it.
     /// </summary>
     public int BookingOf(int f) => Relations.Contains(f) ? booking[f] : -1;
+
+    /// <summary><see cref="BookingOf"/> computed from the relations (for code without the crime system's cache).</summary>
+    public static int BookingKey(FactionRelations relations, int f)
+    {
+        if (!relations.Contains(f)) return -1;
+        var data = relations.Factions[f];
+        int legal = data.LegalSystem is { } id ? relations.IndexOf(id) : -1;
+        return legal >= 0 ? legal : data.BooksBounties ? f : -1;
+    }
 
     /// <summary>
     /// The faction's NPCs hunt bounties (economy.md 11.8). <b>Engine choice</b>: nothing in the data flags bounty hunters; read here as <c>fundamental type</c> ADVENTURER with a

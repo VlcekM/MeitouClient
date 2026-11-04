@@ -432,38 +432,79 @@ public sealed partial class PopulationSystem
         return [.. list];
     }
 
-    void DrainWild(World world)
+    /// <summary>The build being spawned one squad per tick (docs/game/ai.md "Squad factory queue"), and the next of its squads.</summary>
+    (BuiltWild Build, int Next)? spawningWild;
+    readonly List<BuiltWild> readyWild = [];
+
+    /// <summary>
+    /// Spawns at most one squad of the finished wild builds (the original builds one queued squad request per rendered frame, <c>FUN_140583310</c>; a tick stands for a frame here).
+    /// Returns whether it made one. A build is finished (its site marked loaded, the nest scattered) with its last squad.
+    /// </summary>
+    bool DrainWild(World world)
     {
-        if (builtWild.IsEmpty) return;
-        var ready = new List<BuiltWild>();
-        while (builtWild.TryDequeue(out var b)) ready.Add(b);
-        ready.Sort(static (a, b) => a.Site.CompareTo(b.Site));
-        foreach (var b in ready) SpawnWild(world, b);
+        while (builtWild.TryDequeue(out var queued)) readyWild.Add(queued);
+        readyWild.Sort(static (a, b) => a.Site.CompareTo(b.Site));
+        while (true)
+        {
+            if (spawningWild is null)
+            {
+                if (readyWild.Count == 0) return false;
+                var b = readyWild[0];
+                readyWild.RemoveAt(0);
+                if (!BeginWild(world, b)) continue;
+                spawningWild = (b, 0);
+            }
+            var (build, next) = spawningWild.Value;
+            if (wildStates[build.Site].LoadId != build.LoadId) { spawningWild = null; continue; }   // unloaded meanwhile
+            if (next >= build.Squads.Count) { EndWild(world, build); spawningWild = null; continue; }   // nothing (more) to make costs no frame
+            SpawnWildSquad(world, build, build.Squads[next]);
+            spawningWild = (build, next + 1);
+            if (next + 1 >= build.Squads.Count) { EndWild(world, build); spawningWild = null; }
+            return true;
+        }
     }
 
+    /// <summary>A build made and applied at once (no worker thread).</summary>
     void SpawnWild(World world, BuiltWild b)
     {
+        if (!BeginWild(world, b)) return;
+        foreach (var built in b.Squads) SpawnWildSquad(world, b, built);
+        EndWild(world, b);
+    }
+
+    bool BeginWild(World world, BuiltWild b)
+    {
         var state = wildStates[b.Site];
-        if (state.LoadId != b.LoadId || state.Status != (b.TopUp ? SiteStatus.Loaded : SiteStatus.Loading)) return;   // unloaded meanwhile
+        if (state.LoadId != b.LoadId || state.Status != (b.TopUp ? SiteStatus.Loaded : SiteStatus.Loading)) return false;   // unloaded meanwhile
         state.Pending = false;
         state.Made = (b.TopUp ? state.Made : 0) + b.Rolls;
         var site = wildSites![b.Site];
         if (site.Kind == WildKind.Nest && (b.Squads.Count > 0 || site.SaveInstance is not null)) wildCentres[b.Site] = b.Centre;
         if (!b.TopUp) SpawnKeptWild(world, b.Site, state);
         if (b.Layout is { IsEmpty: false } layout) StandCamp(world, site.Index, layout, site.Faction, b.Centre, site.Nest!.Id, -1);
-        foreach (var built in b.Squads)
+        return true;
+    }
+
+    void SpawnWildSquad(World world, BuiltWild b, BuiltSquad built)
+    {
+        var state = wildStates[b.Site];
+        var site = wildSites![b.Site];
+        var squad = SpawnSquad(world, built, null, 0);
+        if (site.Kind == WildKind.Nest)
         {
-            var squad = SpawnSquad(world, built, null, 0);
-            if (site.Kind == WildKind.Nest)
-            {
-                squad.HomeCentre = b.Centre;
-                squad.HomeRadius = NestRadius(site.Nest!);
-                nestSquads[squad.Id] = site.Nest!;
-            }
-            else squad.HomeRadius = settings.HomelessHomeRadius;
-            state.Squads.Add(squad.Id);
-            if (wildLog.Count < 256) wildLog.Add(new WildSpawn(world.Tick, site.Kind, site.Kind == WildKind.Nest ? site.Nest!.Name : data.Biomes!.Groups[site.Group].Name, squad.Name, squad.Members.Count));
+            squad.HomeCentre = b.Centre;
+            squad.HomeRadius = NestRadius(site.Nest!);
+            nestSquads[squad.Id] = site.Nest!;
         }
+        else squad.HomeRadius = settings.HomelessHomeRadius;
+        state.Squads.Add(squad.Id);
+        if (wildLog.Count < 256) wildLog.Add(new WildSpawn(world.Tick, site.Kind, site.Kind == WildKind.Nest ? site.Nest!.Name : data.Biomes!.Groups[site.Group].Name, squad.Name, squad.Members.Count));
+    }
+
+    void EndWild(World world, BuiltWild b)
+    {
+        var state = wildStates[b.Site];
+        var site = wildSites![b.Site];
         state.Status = SiteStatus.Loaded;
         if (!b.TopUp) state.UnloadAtTick = -1;
         if (site.Kind == WildKind.Nest && b.Exhausted) CheckWipe(world, site, state);

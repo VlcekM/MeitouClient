@@ -3,7 +3,11 @@ using System.Numerics;
 namespace Meitou.Simulation.Items
 {
     /// <summary>Pick up a ground item (<see cref="GroundItems"/> id): the nearest of the characters (the selection when empty) who may walks to it and puts it in its inventory.</summary>
-    public sealed record PickUpItemOrder(IReadOnlyList<CharacterId> Characters, int Item) : OrderCommand;
+    public sealed record PickUpItemOrder(IReadOnlyList<CharacterId> Characters, int Item) : OrderCommand
+    {
+        /// <summary>Alt was held (the original's steal modifier, <c>DAT_142133462</c>): another faction's item is taken only then; without it the order is the hint "Hold down the ALT key to steal items" and a walk to the item (<c>FUN_1407fc440</c>).</summary>
+        public bool Alt { get; init; } = true;
+    }
 }
 
 namespace Meitou.Simulation
@@ -69,6 +73,8 @@ namespace Meitou.Simulation
         {
             if (world.GroundItems.Find(order.Item) is not { } item) return;
             var table = world.Characters;
+            bool walkOnly = !order.Alt && item.OwnedBy >= 0 && item.OwnedBy != world.Player.Faction;
+            if (walkOnly) world.Post("Hold down the ALT key to steal items");
             int best = -1;
             float bestDistance = float.MaxValue;
             foreach (var id in order.Characters.Count > 0 ? order.Characters : world.Player.Selection.ToArray())
@@ -78,7 +84,11 @@ namespace Meitou.Simulation
                 float d = Vector2.Distance(Flat(table.Next[s].Position), Flat(item.Position));
                 if (d < bestDistance) (best, bestDistance) = (s, d);
             }
-            if (best >= 0) PlayerOrders.Give(world, best, new OrderEntry(Meitou.Data.Gameplay.Ai.TaskType.PICKUP, this) { Point = item.Position, Detail = order.Item }, order.Queued);
+            if (best < 0) return;
+            if (walkOnly && world.SystemOf<MovementSystem>() is { } movement)
+                PlayerOrders.Give(world, best, new OrderEntry(Meitou.Data.Gameplay.Ai.TaskType.MOVE_CUS_ORDERED, movement) { Point = item.Position }, order.Queued);
+            else if (!walkOnly)
+                PlayerOrders.Give(world, best, new OrderEntry(Meitou.Data.Gameplay.Ai.TaskType.PICKUP, this) { Point = item.Position, Detail = order.Item }, order.Queued);
         }
 
         /// <summary>

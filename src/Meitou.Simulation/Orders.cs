@@ -58,6 +58,20 @@ public sealed record OrdersCommand(IReadOnlyList<CharacterId> Characters, Charac
 /// </summary>
 public sealed record RunSpeedCommand(IReadOnlyList<CharacterId> Characters, int Step = 1) : SimCommand;
 
+/// <summary>
+/// The AI's manoeuvre mode (<c>AI::ordersMovement</c> +0x2bc, KenshiLib <c>AIManuverabilityOrders</c>): how far from its centre of movement a character takes targets and job targets
+/// (<see cref="Orders.InArea"/>). Set by the standing orders FAR (8, <see cref="ManoeuvreCommand"/> with <see cref="RoamFar"/>) and NEAR (9, <see cref="StayClose"/>).
+/// </summary>
+public enum ManoeuvreMode : byte
+{
+    HoldGround = 0,
+    StayClose = 1,
+    RoamFar = 2,
+}
+
+/// <summary>Standing order FAR (8) or NEAR (9) for the characters, or the player's selection when the list is empty (<c>AI::setManuveringFreedomLevel</c>).</summary>
+public sealed record ManoeuvreCommand(IReadOnlyList<CharacterId> Characters, ManoeuvreMode Mode) : SimCommand;
+
 /// <summary>Stand Up (order 28): the characters crawling by choice stand (<see cref="Bodies.MedicalState.StayingLow"/>).</summary>
 public sealed record StandUpCommand(IReadOnlyList<CharacterId> Characters) : SimCommand;
 
@@ -125,7 +139,7 @@ public static class Orders
         float s = stats[StatsEnumerated.Stealth] * stats.Scale * (cold.Fighter is { } f ? f.EncumbranceFactor * f.StealthMult : 1);
         if (cold.Medical is { } medical)
         {
-            s *= medical.StealthBodyFactor(stats[StatsEnumerated.Toughness] * stats.Scale)
+            s *= medical.StealthBodyFactor(stats.ScaledToughness)
                 * Bodies.StatMultiplier.LimbItemFactor(medical, StatsEnumerated.Stealth, medical.Aggregates());
             if (medical.Prone) s *= 2;
         }
@@ -169,21 +183,24 @@ public static class Orders
     /// <summary>A sneaking mover's noise range: lerp(s, 450 f, 80) (docs/game/perception.md "Hearing", Verified constants), f the weather's factor (<see cref="WeatherSystem.NoiseFactor"/>, 1 in clear weather).</summary>
     public static float SneakNoise(float stealth, float weather = 1) => 450 * weather + (80 - 450 * weather) * stealth;
 
-    /// <summary>The chance to hear a sneaking target at <paramref name="distance"/>: 0.1 x (1 - s) x (1 - d^2 / N^2) ("Hearing"; the 0.05 squad case is not modelled).</summary>
-    public static float SneakHearChance(float distance, float noise, float stealth) =>
-        noise > 0 && distance < noise ? 0.1f * (1 - stealth) * (1 - distance * distance / (noise * noise)) : 0;
+    /// <summary>The base chance to hear a sneaking target: 0.05 for an awake listener (StateBroadcast <c>+0xb4</c> 0), 0.1 for a sleeper (<c>FUN_140857500</c>, Verified constants).</summary>
+    public static float SneakHearBase(bool awake) => awake ? 0.05f : 0.1f;
+
+    /// <summary>The chance to hear a sneaking target at <paramref name="distance"/>: base x (1 - s) x (1 - d^2 / N^2) ("Hearing").</summary>
+    public static float SneakHearChance(float distance, float noise, float stealth, bool awake) =>
+        noise > 0 && distance < noise ? SneakHearBase(awake) * (1 - stealth) * (1 - distance * distance / (noise * noise)) : 0;
 
     /// <summary>
     /// The Hold order's post test (<c>AI::isTargetInRangeForHOLDMode_hostiles</c>, docs/game/perception.md "The attack-on-sight tests", <b>Verified</b>): a target slower than 2,
     /// or <paramref name="held"/> (posture above 1, crawling or playing dead, or a swing running: the movement's animation-driven flag), must be within <see cref="HoldReach"/> of
-    /// the looker; one more than <see cref="HoldFar"/> from the hold point within 60. The distances to the looker are 3D; the hold point is flat (the stand-in for CharStats +0x130).
+    /// the looker; one more than <see cref="HoldFar"/> from the hold point within 60. Every distance is 3D (Vector3::squaredDistance, FUN_140598630), the hold point (CharStats +0x130..+0x138) included.
     /// </summary>
-    public static bool HoldPost(Vector3 looker, Vector2 hold, Vector3 target, Vector3 velocity, float targetYaw, bool held, bool targetFighting)
+    public static bool HoldPost(Vector3 looker, Vector3 hold, Vector3 target, Vector3 velocity, float targetYaw, bool held, bool targetFighting)
     {
         float d2 = Vector3.DistanceSquared(target, looker);
         if ((velocity.X * velocity.X + velocity.Z * velocity.Z < 2 * 2 || held) && d2 > HoldReach * HoldReach) return false;
         float far = HoldFar(looker, target, targetYaw, targetFighting);
-        return Vector2.DistanceSquared(hold, new Vector2(target.X, target.Z)) <= far * far || d2 <= 60 * 60;
+        return Vector3.DistanceSquared(hold, target) <= far * far || d2 <= 60 * 60;
     }
 
     /// <summary>
@@ -197,8 +214,31 @@ public static class Orders
         return MathF.Sin(targetYaw) * to.X + MathF.Cos(targetYaw) * to.Z > 0 ? 140 : 80;
     }
 
+    /// <summary>Squared reach of ROAM_FAR (<c>DAT_1416efdcc</c>, about 6517 units), the constructor's <c>meiDistance</c> and <c>meiDistanceTolerance</c> (<c>AI::AI</c>; no other writer) and the extras of the other modes.</summary>
+    public const float RoamFarArea2 = 42467328, MeiDistance = 18, MeiTolerance = 5, HoldGroundExtra = 40, StayCloseExtra = 200;
+
+    /// <summary>
+    /// The AI's area test <c>FUN_140597790</c> (<c>isTargetInRangeForOrders(Vector3)</c>, <b>Verified</b>): a zero point is in; ROAM_FAR measures the 3D squared distance from the character
+    /// itself, HOLD_GROUND (meiDistance + 40 + tolerance) and STAY_CLOSE (meiDistance + 200 + tolerance) from the centre of movement taken at the character's height. HOLD_GROUND is also in when
+    /// the squared distance d2 is under s2 squared, s2 being the squared distance from the AI's own position record (<c>AI +0x18 +0xc8</c>, here <paramref name="looker"/>, <b>Observed</b>: the
+    /// record the AI reads its zone from) to the centre at the centre's own height (operands decoded from the disassembly, <b>Verified</b>; a unit slip of the original that admits every target
+    /// once the looker is more than a few units from its centre). No order sets that mode (docs/game/combat.md "Standing orders").
+    /// </summary>
+    public static bool InArea(ManoeuvreMode mode, Vector3 looker, Vector3? centre, Vector3 target)
+    {
+        if (target == Vector3.Zero) return true;
+        var from = mode == ManoeuvreMode.RoamFar || centre is not { } c ? looker : new Vector3(c.X, looker.Y, c.Z);
+        float d2 = Vector3.DistanceSquared(from, target);
+        float reach = MeiDistance + MeiTolerance + (mode == ManoeuvreMode.StayClose ? StayCloseExtra : HoldGroundExtra);
+        if (mode == ManoeuvreMode.RoamFar) return d2 < RoamFarArea2;
+        if (d2 < reach * reach) return true;
+        if (mode != ManoeuvreMode.HoldGround || centre is not { } centreAt) return false;
+        float s2 = Vector3.DistanceSquared(looker, centreAt);
+        return d2 < s2 * s2;
+    }
+
     /// <summary>The point a holding character holds (<see cref="CharacterCold.HoldPoint"/>, else where it stands).</summary>
-    public static Vector2 HoldPointOf(CharacterCold cold, Vector3 at) => cold.HoldPoint ?? new Vector2(at.X, at.Z);
+    public static Vector3 HoldPointOf(CharacterCold cold, Vector3 at) => cold.HoldPoint ?? at;
 
     /// <summary>The Hold toggle (standing order 12): holding, the character not sneaking (<c>CharStats::holdPositionMode</c>).</summary>
     public static bool Holding(CharacterCold? cold) => cold is not null && (cold.Orders & (CharacterOrders.Hold | CharacterOrders.Sneak)) == CharacterOrders.Hold;
@@ -221,7 +261,7 @@ public static class Orders
                     // Sneak off stands one staying low (setStandingOrder 4).
                     if ((set.Order & CharacterOrders.Sneak) != 0 && !on.Value && cold.Medical is { } low) low.StayingLow = false;
                     // Turning Hold on holds where the character stands (setStandingOrder 12: hold point = position).
-                    if ((set.Order & CharacterOrders.Hold) != 0) cold.HoldPoint = on.Value ? new Vector2(table.Next[slot].Position.X, table.Next[slot].Position.Z) : null;
+                    if ((set.Order & CharacterOrders.Hold) != 0) cold.HoldPoint = on.Value ? table.Next[slot].Position : null;
                 }
                 break;
             case RunSpeedCommand speed:
@@ -249,9 +289,18 @@ public static class Orders
                     cold.SpeedGroup = group;
                 }
                 break;
+            case ManoeuvreCommand manoeuvre:
+                // setStandingOrder 8 / 9 (Verified): FAR is ROAM_FAR and clears the centre of movement, NEAR is STAY_CLOSE with the centre at the character's position.
+                foreach (var id in manoeuvre.Characters.Count > 0 ? manoeuvre.Characters : world.Player.Selection.ToArray())
+                {
+                    if (!table.TryResolveNext(id, out int slot) || table.Cold(slot) is not { IsPlayer: true } cold) continue;
+                    cold.Manoeuvre = manoeuvre.Mode;
+                    cold.CentreOfMovement = manoeuvre.Mode == ManoeuvreMode.RoamFar ? null : table.Next[slot].Position;
+                }
+                break;
             case StandUpCommand stand:
                 foreach (var id in stand.Characters)
-                    if (table.TryResolveNext(id, out int slot) && table.Cold(slot) is { IsPlayer: true, Medical: { } medical }) medical.StayingLow = false;
+                    if (table.TryResolveNext(id, out int slot) && table.Cold(slot) is { IsPlayer: true, Medical: { StayingLow: true } } staying) staying.StandingUp = true;
                 break;
         }
     }

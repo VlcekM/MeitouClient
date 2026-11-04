@@ -133,20 +133,28 @@ internal sealed class NavMeshService : IDisposable
     /// Drops a zone's mesh from the loaded world (the cache file stays). A queued build of it is skipped and a running one is cached but not published;
     /// their task is cancelled.
     /// </summary>
-    public void Unload(ZoneCoordinate zone)
+    public void Unload(ZoneCoordinate zone) => Unload([zone]);
+
+    /// <summary>Drops several zones at once: the world is published again once (the combined mesh is rebuilt on each publish, tens of milliseconds), not per zone.</summary>
+    public void Unload(IReadOnlyCollection<ZoneCoordinate> zones)
     {
-        TaskCompletionSource<NavZoneReady>? tcs;
+        var cancelled = new List<TaskCompletionSource<NavZoneReady>>();
         lock (publishLock)
         {
-            var world = Walkability.World.Without(zone);
-            bool published = full.Remove(zone);
-            live.Remove(zone);
-            standing.Remove(zone);
-            pending.TryRemove(zone, out tcs);
+            var world = Walkability.World;
+            bool published = false;
+            foreach (var zone in zones)
+            {
+                world = world.Without(zone);
+                published |= full.Remove(zone);
+                live.Remove(zone);
+                standing.Remove(zone);
+                if (pending.TryRemove(zone, out var tcs)) cancelled.Add(tcs);
+            }
             // Its neighbours' border regions toward it are kept again (a zone never published changed nothing).
             Walkability.SetWorld(published && full.Count > 0 ? Publish(world) : world);
         }
-        tcs?.TrySetCanceled();
+        foreach (var tcs in cancelled) tcs.TrySetCanceled();
     }
 
     void Work()

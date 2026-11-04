@@ -34,6 +34,9 @@ sealed partial class PlayerInterface
     bool buildPausedGame;
     string? buildCategory;
     int buildGroup;
+
+    /// <summary>A right click dropped the held building: no building is held until one is chosen from the lists again (<c>FUN_1404e27e0</c>).</summary>
+    bool buildDiscarded;
     // Which member of the group is chosen (null: its default pick).
     BuildingBuildData? buildMember;
     readonly List<QueuedGhost> buildQueue = [];
@@ -83,6 +86,7 @@ sealed partial class PlayerInterface
             buildCategory = null;
             buildGroup = 0;
             buildMember = null;
+            buildDiscarded = false;
             CloseInventoryWindows();
             faithfulScreens.Open("build");
             CloseContextMenu();
@@ -116,7 +120,7 @@ sealed partial class PlayerInterface
     BuildGroup? CurrentGroup()
     {
         var groups = BuildGroups();
-        return groups.Count == 0 ? null : groups[Math.Clamp(buildGroup, 0, groups.Count - 1)];
+        return groups.Count == 0 || buildDiscarded ? null : groups[Math.Clamp(buildGroup, 0, groups.Count - 1)];
     }
 
     /// <summary>The building the ghost shows: the chosen member of the chosen group (its default pick otherwise).</summary>
@@ -135,8 +139,7 @@ sealed partial class PlayerInterface
 
     /// <summary>
     /// A key press while build mode is on: the build map (docs/game/ui-input.md section 4, checked first in build mode) takes <c>,</c> <c>.</c> rotate, <c>-</c> <c>=</c> move down / up,
-    /// <c>[</c> <c>]</c> tilt, Backspace undo and Space apply. Returns true when the key was taken, so the host does not also pause or turn the camera. The numpad aliases of the original
-    /// are not mapped (the numpad is the cinema camera's).
+    /// <c>[</c> <c>]</c> tilt, Backspace undo and Space apply. Returns true when the key was taken, so the host does not also pause or turn the camera. NUM+ / NUM- are the original's second keys of both the move and the tilt pairs, and the later registration (tilt) wins in its key map, so they tilt (<c>FUN_1403636c0</c>, <c>FUN_140362260</c>).
     /// </summary>
     public bool BuildKey(Key key, bool shift)
     {
@@ -144,7 +147,7 @@ sealed partial class PlayerInterface
         if (!buildMode) return false;
         switch (key)
         {
-            case EngineKey.Comma or EngineKey.Period or EngineKey.Minus or EngineKey.Equal or EngineKey.LeftBracket or EngineKey.RightBracket:
+            case EngineKey.Comma or EngineKey.Period or EngineKey.Minus or EngineKey.Equal or EngineKey.LeftBracket or EngineKey.RightBracket or EngineKey.KeypadAdd or EngineKey.KeypadSubtract:
                 buildHeld.Add(key);
                 return true;
             case EngineKey.Backspace:
@@ -157,6 +160,9 @@ sealed partial class PlayerInterface
                 return false;
         }
     }
+
+    /// <summary>Whether <paramref name="key"/> is a build map key that the cinema's numpad must not take (NUM+ / NUM- while building).</summary>
+    public bool OwnsBuildNumpad(Key key) => buildMode && key is EngineKey.KeypadAdd or EngineKey.KeypadSubtract;
 
     public void BuildKeyUp(Key key)
     {
@@ -182,7 +188,7 @@ sealed partial class PlayerInterface
         if (buildHeld.Contains(EngineKey.Equal) && ghostMargins.Up > 0) ghostLift += MathF.Min(lift, ghostMargins.Up);
         else if (buildHeld.Contains(EngineKey.Minus) && ghostMargins.Down > 0) ghostLift -= MathF.Min(lift, ghostMargins.Down);
         if (MathF.Abs(ghostLift) > MaxLift) ghostLift = 0;
-        ghostTilt = Math.Clamp(ghostTilt + Held(EngineKey.RightBracket, EngineKey.LeftBracket) * TiltPerSecond * dt, 0, 1);
+        ghostTilt = Math.Clamp(ghostTilt + Math.Clamp(Held(EngineKey.RightBracket, EngineKey.LeftBracket) + Held(EngineKey.KeypadAdd, EngineKey.KeypadSubtract), -1, 1) * TiltPerSecond * dt, 0, 1);
 
         ghost = null;
         ghostMargins = PlacementCheck.VerticalMargins.Unlimited;
@@ -348,6 +354,15 @@ sealed partial class PlayerInterface
         return false;
     }
 
+    /// <summary>A right click in build mode over the world with a building held: it is discarded; the queued ghosts stay (Clear Building: Right-Click).</summary>
+    bool BuildDiscard()
+    {
+        if (!buildMode || CurrentBuilding() is null) return false;
+        buildDiscarded = true;
+        ghost = null;
+        return true;
+    }
+
     /// <summary>A right click in build mode while a line is laid: drops the line (true: taken).</summary>
     bool WallCancel()
     {
@@ -402,6 +417,23 @@ sealed partial class PlayerInterface
         ghostLift = 0;
     }
 
+    /// <summary>
+    /// The size of a ghost's bounding box (<c>Aabb::getSize</c> of the ghost's bounds, <c>FUN_1404d6d90</c>): the merge of its parts' mesh bounds in their own space, the full X, Y and Z extent.
+    /// Zero without readable mesh bounds.
+    /// </summary>
+    Vector3 GhostBoundsSize(BuildingBuildData building)
+    {
+        if (buildHost is not { } host) return default;
+        Vector3? min = null, max = null;
+        foreach (var part in host.Parts(building.Id))
+        {
+            if (host.Placement.PartBounds(part.MeshPath) is not { } box) continue;
+            min = min is { } lo ? Vector3.Min(lo, box.Min) : box.Min;
+            max = max is { } hi ? Vector3.Max(hi, box.Max) : box.Max;
+        }
+        return min is { } a && max is { } b ? b - a : default;
+    }
+
     void BuildUndo()
     {
         if (WallCancel()) return;
@@ -412,7 +444,7 @@ sealed partial class PlayerInterface
     {
         if (buildQueue.Count == 0) return;
         Sound("Building_Confirm");
-        Say(new PlaceBuildings([.. buildQueue.Select(q => new PlannedBuilding(q.Building.Id, q.Position, q.Rotation, q.Floor, q.Parent))]) { Tick = session.World.Tick });
+        Say(new PlaceBuildings([.. buildQueue.Select(q => new PlannedBuilding(q.Building.Id, q.Position, q.Rotation, q.Floor, q.Parent, GhostBoundsSize(q.Building)))]) { Tick = session.World.Tick });
         buildQueue.Clear();
         SetBuildMode(false);
     }
@@ -445,7 +477,7 @@ sealed partial class PlayerInterface
         // The building's picture (docs/game/ui-screens.md "Building icons"): the game's saved one, else the renderer's drawing; the frame stays empty while it loads.
         if (BuildingImage(building) is { } image) b.Properties["BuildingImage"] = image;
         else b.Hidden.Add("BuildingImage");
-        b.Text["CommandsTextBox"] = string.Join('\n', BuildCommandLines);
+        b.Text["CommandsTextBox"] = BuildCommandsText();
         b.Properties["CommandsTextBox"] = new Dictionary<string, string> { ["WordWrap"] = "true", ["TextAlign"] = "Left Top", ["TextColour"] = MyGuiColours.TemplateInk(uiResources, "Kenshi_GenericTextBox") };
         b.Text["FloorText"] = Loc.Tr("Floor {1,num}", Floor?.Get() ?? 0);
         Enable("FloorArrowUp", "FloorArrowUp");
@@ -471,11 +503,20 @@ sealed partial class PlayerInterface
         return painter.RenderedIconReady(rendered) ? new() { ["ImageTexture"] = rendered, ["ImageFlipV"] = "true", ["Caption"] = "" } : null;
     }
 
-    /// <summary>The Commands box: the build map's keys (the original's own text is <b>Unknown</b>).</summary>
-    static readonly string[] BuildCommandLines =
-    [
-        "Left click / Space: place", "Walls: click the start, click the end; right click: drop the line", "Backspace: undo", ", .: rotate", "- =: move down / up (Shift: slow)", "[ ]: tilt", "Confirm: build what is placed", "B: leave build mode",
-    ];
+    /// <summary>
+    /// The Commands box (<c>FUN_1404d7d90</c>, <b>Verified</b>, the key strings read from the exe's data): per line a label in the dark tag, a space and the value in the light tag, the lines
+    /// joined by line breaks; the last reads "Press [Confirm] when finished". The texts are the original's, not Meitou's bindings (Space also places, Escape leaves build mode).
+    /// </summary>
+    static string BuildCommandsText()
+    {
+        const string Label = "#140806", Value = "#afa68b";
+        static string Row(string label, string value) => Label + Loc.Tr(label) + Value + " " + value;
+        return string.Join('\n',
+            Row("Place Building:", Loc.Tr("Left-Click")), Row("Clear Building:", Loc.Tr("Right-Click")),
+            Row("Rotate:", Loc.Tr("{1} or {2} keys", "<>", ",.")), Row("Change Height:", Loc.Tr("{1} and {2}", "+", "-")),
+            Row("Change Slope:", Loc.Tr("{1} and {2}", "[", "]")), Row("Undo:", Loc.Tr("Backspace")), Row("Cancel All:", Loc.Tr("Esc")),
+            Label + Loc.Tr("Press") + " " + Value + "[" + Loc.Tr("Confirm") + "]" + Label + " " + Loc.Tr("when finished"));
+    }
 
     /// <summary>The stats panel's lines, the failure message and the queue count, over the arranged window.</summary>
     void AddBuildContent(List<UiControl> controls)
@@ -501,11 +542,13 @@ sealed partial class PlayerInterface
         {
             case ("CategoriesList", "select"):
                 buildCategory = e.Text;
+                buildDiscarded = false;
                 buildGroup = 0;
                 buildMember = null;
                 break;
             case ("BuildingsList", "select"):
                 buildGroup = (int)e.Value;
+                buildDiscarded = false;
                 buildMember = null;
                 ghostLift = 0;
                 break;
@@ -608,10 +651,10 @@ sealed partial class PlayerInterface
         var verbs = new List<(string, Action)>();
         var selection = SelectedIds();
         if (selection.Count == 0) return verbs;
-        // Building work is the owner's (the construction system ignores it on another faction's); the other verbs are as before.
+        // Build is offered on any standing unfinished building, whoever owns it (FUN_1407a6bc0, ui-input.md); Repair and the other verbs are the owner's.
         bool own = site.Owner == session.World.Player.Faction;
         if (own && (site.Destroyed || site.Complete && site.NeedsWork)) verbs.Add(("Repair", () => OrderConstruction(site, selection)));
-        else if (own && !site.Complete) verbs.Add(("Build", () => OrderConstruction(site, selection)));
+        else if (!site.Complete && !site.Destroyed) verbs.Add(("Build", () => OrderConstruction(site, selection)));
         AddMachineVerb(verbs, site, selection);
         if (site.Complete && Machine(site.Id) is { } machine)
         {

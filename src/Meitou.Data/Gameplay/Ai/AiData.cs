@@ -151,12 +151,18 @@ public sealed class AiDatabase(GameDatabase db)
         for (int i = 0; i < 3; i++) Add(roles[i], legacy);
     }
 
+    /// <summary>
+    /// The goal lists' duplicate test (<c>FUN_14027b3a0</c>, <b>Verified</b>): same task type and equal hand (<c>FUN_1400cd060</c>: two null hands are equal). At load only LEADER, SQUAD_MISSION
+    /// and HOME_GATE fill the hand, so SPECIFIC and SELF both stay null and are equal; the others are told apart by their kind (a hand that resolves to nothing later is not seen here).
+    /// </summary>
+    static bool SameHand(TaskTargetType a, TaskTargetType b) => a == b || a is TaskTargetType.Specific or TaskTargetType.Self && b is TaskTargetType.Specific or TaskTargetType.Self;
+
     void Add(List<AiGoal> list, IReadOnlyList<GameReference> entries)
     {
         foreach (var e in entries)
         {
             if (TaskLocked(e.TargetStringId) is not { } task) { problems++; continue; }
-            if (list.Exists(g => g.Task.Type == task.Type && g.Task.Target == task.Target)) continue;
+            if (list.Exists(g => g.Task.Type == task.Type && SameHand(g.Task.Target, task.Target))) continue;
             // val2 is the weight x 100, 0 meaning 1.
             float weight = e.Values.Value2 == 0 ? 1 : e.Values.Value2 * 0.01f;
             list.Add(new AiGoal(task, e.Values.Value0, e.Values.Value1, weight));
@@ -182,7 +188,7 @@ public sealed class AiDatabase(GameDatabase db)
 
     /// <summary>
     /// A RACE's <c>AI Goals</c> (docs/game/ai.md "Other records that touch the AI", Verified): the weight is val1 x 0.01 with no zero default, the
-    /// window is always open (0, 100); val0 is not read.
+    /// window is always open (0, 100); val0 is not read. The goal never has a task target (the task's <c>targeting</c> is replaced by Specific: FUN_1405094f0 reads only three legacy bools no record has).
     /// </summary>
     public IReadOnlyList<AiGoal> RaceGoals(string raceId)
     {
@@ -193,7 +199,7 @@ public sealed class AiDatabase(GameDatabase db)
             if (db.Find(raceId) is { } race)
                 foreach (var e in race.GetReferences("AI Goals"))
                 {
-                    if (TaskLocked(e.TargetStringId) is { } task) list.Add(new AiGoal(task, 0, 100, e.Values.Value1 * 0.01f));
+                    if (TaskLocked(e.TargetStringId) is { } task) list.Add(new AiGoal(task with { Target = TaskTargetType.Specific }, 0, 100, e.Values.Value1 * 0.01f));
                     else problems++;
                 }
             races[raceId] = list;

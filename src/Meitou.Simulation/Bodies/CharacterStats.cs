@@ -41,6 +41,8 @@ public sealed class CharacterStats
     public float Strength => values[(int)StatsEnumerated.Strength];
     public float Dexterity => values[(int)StatsEnumerated.Dexterity];
     public float Toughness => values[(int)StatsEnumerated.Toughness];
+    /// <summary>The toughness every read of the original uses: stat x the stats multiplier (<c>+0x90</c> x <c>+0x34</c>), see <see cref="Scale"/>.</summary>
+    public float ScaledToughness => Toughness * Scale;
     public float Athletics => values[(int)StatsEnumerated.Athletics];
 
     /// <summary>A copy of the values by stat number.</summary>
@@ -152,7 +154,7 @@ public sealed class CharacterStats
 
     /// <summary>
     /// Reads the saved STATS floats written by <see cref="WriteSave"/> (a missing key keeps the default), except that a save without <c>lockpicking</c> gets half the
-    /// character's thievery (<c>FUN_14064b6a0</c>, docs/game/character-stats.md).
+    /// character's thievery and one without <c>toughness2</c> its defence as toughness (<c>FUN_14064b6a0</c>, docs/game/character-stats.md).
     /// </summary>
     public static CharacterStats ReadSave(IReadOnlyDictionary<string, float> floats)
     {
@@ -160,6 +162,7 @@ public sealed class CharacterStats
         for (int i = 1; i < StatsInfo.Count; i++)
             if (StatsInfo.FieldName((StatsEnumerated)i) is { } name && floats.TryGetValue(name, out float v)) stats.values[i] = v;
         if (!floats.ContainsKey("lockpicking")) stats.values[(int)StatsEnumerated.Lockpicking] = stats.values[(int)StatsEnumerated.Thieving] * 0.5f;
+        if (!floats.ContainsKey("toughness2")) stats.values[(int)StatsEnumerated.Toughness] = stats.values[(int)StatsEnumerated.MeleeDefence];   // FUN_14064b6a0: toughness = defence
         return stats;
     }
 }

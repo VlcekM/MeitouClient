@@ -136,7 +136,7 @@ public readonly record struct CaptiveEvent(long Tick, CaptiveEventKind Kind, Cap
 /// <list type="bullet">
 /// <item><b>Kill</b> (135 "Kill random prisoner"; 282 "Dinner time" eats instead): wanted when the town's kill timer has run out or all the faction's cages there are full
 /// (<b>Observed</b>, AI slot 20 <c>FUN_14032e9b0</c>; the timer is set to now + uniform[1, 15) game hours when the town is first asked about and whenever a captive dies of a
-/// kill or a meal, <c>FUN_14034a810</c>). The target is the best occupied cage (the cage finder's weights and usable test, <c>FUN_1408d0770</c>, <see cref="FateTarget"/>), its occupant alive and not a robot;
+/// kill or a meal, <c>FUN_14034a810</c>). The target is the best occupied cage (the cage finder's weights and usable test, <c>FUN_1408d0770</c>, <see cref="FateTarget"/>), its occupant alive; when that best cage holds a robot there is no target this ask;
 /// the occupant says event 10 MARKED_FOR_DEATH to the worker. Its plan draws a weapon first (B list hasWeaponEquipped, <see cref="DrawWeapon"/>); with none to draw the goal does not plan. At the cage it plays <c>chop down static</c> and strikes once per clip at
 /// 0.55 of it (<see cref="CombatSystem.Execute"/>), the occupant crying event 11 SCREAMING_TORTURE each time, until it dies.</item>
 /// <item><b>Eat</b> (139 "Eat random prisoner", wanted always; 282 at the kill rate): the same target; the eater sheathes its weapon (B list !hasWeaponEquipped), plays <c>eat</c>,
@@ -149,7 +149,7 @@ public readonly record struct CaptiveEvent(long Tick, CaptiveEventKind Kind, Cap
 /// </list>
 /// The jobs and the kill timers are not saved (the original keeps the timers in a global map it does not save, <b>Observed</b>); hashed only while any exist.
 /// </summary>
-public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? combat, CaptiveSettings? settings = null) : ITickSystem, IStateHashed, IDecisionOwner
+public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? combat, CaptiveSettings? settings = null) : ITickSystem, IStateHashed, IDecisionOwner, IGoalSource
 {
     readonly List<CaptiveJob> jobs = [];
     readonly List<CaptiveEvent> log = [];
@@ -175,6 +175,7 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
     {
         var table = world.Characters;
         if (world.Tick % RestoreEveryTicks == 0) RestoreSlavers(world);
+        StepRacks(world);
         for (int k = 0; k < jobs.Count;)
         {
             var j = jobs[k];
@@ -459,13 +460,13 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
             case TaskType.KILL_A_RANDOM_CAGE_OCCUPANT:
                 site = FateTown(world, slot, board);
                 // The desire reads the town and creates its timer before any other test; the weapon is the plan's equip step (FateJob), not a condition of the goal.
-                if (site < 0 || !KillDue(world, site, cold.Faction) || combat is null) return null;
+                if (site < 0 || !KillDue(world, site, cold) || combat is null) return null;
                 return FateJob(world, slot, cold, board, site, CaptiveJobKind.Kill);
             case TaskType.EAT_A_RANDOM_CAGE_OCCUPANT:
                 return FateJob(world, slot, cold, board, FateTown(world, slot, board), CaptiveJobKind.Eat);   // no town test: the finder falls back to the nearest town
             case TaskType.EAT_A_RANDOM_CAGE_OCCUPANT_MEASURED_RATE:
                 site = FateTown(world, slot, board);
-                return site < 0 || !KillDue(world, site, cold.Faction) ? null : FateJob(world, slot, cold, board, site, CaptiveJobKind.Eat);
+                return site < 0 || !KillDue(world, site, cold) ? null : FateJob(world, slot, cold, board, site, CaptiveJobKind.Eat);
             case TaskType.EAT_A_RANDOM_DEAD_BODY:
             case TaskType.EAT_A_RANDOM_KO_BODY:
                 return BodyToEat(world, slot, cold, dead: type == TaskType.EAT_A_RANDOM_DEAD_BODY) is >= 0 and var meal
@@ -516,11 +517,11 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
 
     CaptiveJob? FateJob(World world, int slot, CharacterCold cold, Blackboard board, int site, CaptiveJobKind kind)
     {
-        if (FateTarget(world, slot, cold, board.OwnHome?.Key) is not { } cage || kind == CaptiveJobKind.Kill && !DrawWeapon(cold)) return null;
+        if (FateTarget(world, slot, cold, board.OwnHome?.Key, out bool fresh) is not { } cage || kind == CaptiveJobKind.Kill && !DrawWeapon(cold)) return null;
         var table = world.Characters;
         var worker = table.IdOf(slot);
-        // The finder has the occupant say "marked for death" to the one who picked it (event 10, FUN_1408d0d90).
-        world.Defer(new Dialogue.DialogueEvent(cage.Occupant, worker, MarkedForDeath) { Tick = world.Tick + 1 });
+        // A fresh choice has the occupant say "marked for death" to the one who picked it (event 10, FUN_1408d0d90; every character has a dialogue state, so the original's test for one never fails).
+        if (fresh) world.Defer(new Dialogue.DialogueEvent(cage.Occupant, worker, MarkedForDeath) { Tick = world.Tick + 1 });
         if (kind == CaptiveJobKind.Eat) cold.DrawnWeapon = WeaponKinds.None;   // 220's B list: !hasWeaponEquipped
         return new CaptiveJob { Kind = kind, Worker = worker, Captive = cage.Occupant, Cage = cage.Id, Faction = cold.Faction, Site = site };
     }
@@ -585,36 +586,55 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
     /// The cage whose occupant a killer or eater takes (<c>FUN_1408d0d90</c> over the cage finder <c>FUN_1408d0770</c> in its occupied mode, <b>Verified</b>): <see cref="FixtureRegistry.FindCage"/> with
     /// <c>occupied</c>, over the candidates of the worker's town (<see cref="FixtureRegistry.CageCandidates"/>: its town, else its faction's nearest, plus its home's) with the faction and usable tests of
     /// the finder (a cage of another faction only when <see cref="FixtureRegistry.CanUse"/> passes) and the weights clamp(1 - d^2 / 4608^2, 1e-5, 1), x100 own faction, x100 in the worker's home. Not
-    /// one whose occupant is dead, a robot (RACE <c>robot</c>), or another job's.
+    /// one whose occupant is dead or another job's. A robot occupant (RACE <c>robot</c>) does not leave the cage out: the finder wrapper tests it only on the best cage, and then there is no target
+    /// this ask (<c>FUN_1408d0d90</c>, <b>Verified</b>). The wrapper remembers its choice (<see cref="AiMind.FateCage"/>, stored before the robot test): while the remembered cage holds a captive it is returned
+    /// as it is (no weighting, no robot test, <paramref name="fresh"/> false: no event 10); once it holds none the memory is cleared and the search runs again. <b>Engine choice</b>: a dead occupant counts as
+    /// none (the jobs work live captives only), and a remembered cage another job works is no target this ask.
     /// </summary>
-    Fixture? FateTarget(World world, int slot, CharacterCold cold, string? home)
+    Fixture? FateTarget(World world, int slot, CharacterCold cold, string? home, out bool fresh)
     {
+        fresh = false;
         var table = world.Characters;
+        var mind = cold.Ai;
+        if (mind?.FateCage is { } id)
+        {
+            if (world.Fixtures.Find(id) is { } kept && OccupantSlot(world, kept) is >= 0 and var held) return Taken(kept.Id) || Busy(table.IdOf(held)) ? null : kept;
+            mind.FateCage = null;
+        }
         var candidate = world.Fixtures.CageCandidates(world, data, cold, table.Next[slot].Position);
-        return world.Fixtures.FindCage(world, cold, table.Next[slot].Position, home,
-            f => !candidate(f) || Taken(f.Id) || OccupantSlot(world, f) is not (>= 0 and var s) || table.Cold(s)!.Race is { IsRobot: true } || Busy(table.IdOf(s)), occupied: true);
+        var best = world.Fixtures.FindCage(world, cold, table.Next[slot].Position, home,
+            f => !candidate(f) || Taken(f.Id) || OccupantSlot(world, f) is not (>= 0 and var s) || Busy(table.IdOf(s)), occupied: true);
+        if (best is null) return null;
+        if (mind is not null) mind.FateCage = best.Id;
+        fresh = true;
+        return table.Cold(table.TryResolveNext(best.Occupant, out int o) ? o : slot)!.Race is { IsRobot: true } ? null : best;
     }
 
-    /// <summary>All the cages of <paramref name="faction"/> in the town are held by live characters, and there is one (<c>FUN_1405a1ab0</c>, the state CAGES_ARE_ALL_FULL).</summary>
-    public bool CagesFull(World world, int site, int faction) => CagesFull(world, data, site, faction);
+    /// <summary>
+    /// The state CAGES_ARE_ALL_FULL (<c>FUN_1405a1ab0</c>, <c>FUN_1408cbea0</c> mask 0x100, <c>FUN_140a00690</c>): every cage of the character's town and of its squad's home town that
+    /// <see cref="FixtureRegistry.CanUse"/> (<c>canIUseThisBuilding</c>) passes for it holds a live character, and there is at least one.
+    /// </summary>
+    public bool CagesFull(World world, int site, CharacterCold who) => CagesFull(world, data, site, who);
 
-    public static bool CagesFull(World world, PopulationData data, int site, int faction)
+    public static bool CagesFull(World world, PopulationData data, int site, CharacterCold who)
     {
+        int home = world.Squads.Find(who.SquadId)?.Town ?? -1;
         bool any = false;
-        foreach (var f in CagesOf(world, data, site))
-        {
-            if (f.Owner != faction) continue;
-            if (OccupantSlot(world, f) < 0) return false;
-            any = true;
-        }
+        foreach (int town in home >= 0 && home != site ? new[] { site, home } : [site])
+            foreach (var f in CagesOf(world, data, town))
+            {
+                if (!world.Fixtures.CanUse(world, who, f)) continue;
+                if (OccupantSlot(world, f) < 0) return false;
+                any = true;
+            }
         return any;
     }
 
     /// <summary>The kill rate (AI slot 20, <c>FUN_14032e9b0</c>): the town's timer has run out, or all the faction's cages there are full. The first ask sets the timer.</summary>
-    bool KillDue(World world, int site, int faction)
+    bool KillDue(World world, int site, CharacterCold who)
     {
         if (!killAt.TryGetValue(site, out double at)) killAt[site] = at = NextKill(world, site);
-        return world.GameHours >= at || CagesFull(world, site, faction);
+        return world.GameHours >= at || CagesFull(world, site, who);
     }
 
     /// <summary>now + uniform[1, 15) game hours (<c>FUN_14034a810</c>).</summary>
@@ -623,7 +643,7 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
 
     /// <summary>
     /// A captive a slaver processes (<c>FUN_1408cc110</c> for 260, <c>FUN_1408cd630</c> for 183, through <c>BuildingFinder_SlavesToProcess</c>, <b>Observed</b>): a cage of the town whose
-    /// owner is not the player's faction and is the worker's or an ally of it (engine reading of the finder's town test), holding a live character no other job works. 260 takes an
+    /// owner is not the player's faction and that the worker may use (<c>Ownerships::canIUseThisBuilding</c>, <see cref="Locks.FixtureRegistry.CanUse(World, CharacterCold, Locks.Fixture)"/>: its own faction, a non-enemy cage outdoors in its home town, one indoors in a public building, else an ally; <c>FUN_1408db510</c>), holding a live character no other job works. 260 takes an
     /// awake occupant that is no slave; 183 one on the worker's floor and in its building (or both outdoors) within <see cref="CaptiveSettings.WatchRange"/> in 3D, whose owner (if any) is an ally and that is not a slave
     /// of an owner that still looks one (<c>FUN_1408ca3d0</c>; its flag <c>0x3e0</c> is taken as slave state 1, <b>Unknown</b>).
     /// </summary>
@@ -633,7 +653,7 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
         var at = table.Next[slot].Position;
         foreach (var f in CagesOf(world, site))
         {
-            if (f.Owner < 0 || f.Owner == world.Player.Faction || f.Owner != cold.Faction && !Allied(cold.Faction, f.Owner) || Taken(f.Id)) continue;
+            if (f.Owner < 0 || f.Owner == world.Player.Faction || !world.Fixtures.CanUse(world, cold, f) || Taken(f.Id)) continue;
             if (OccupantSlot(world, f) is not (>= 0 and var s) || Busy(table.IdOf(s))) continue;
             var c = table.Cold(s)!;
             if (watching)
@@ -683,9 +703,10 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
 
     /// <summary>
     /// The watchers' needs-processing test (<c>FUN_1408ca3d0</c>, <b>Verified</b>) for a live character that is no animal and not carried: one without an owner needs it; one whose owner is no ally
-    /// of the watcher does not; one of an allied owner does unless it is a slave in state 1 that <see cref="LooksLikeSlave"/> (the state stands for the original's flag <c>0x3e0</c>, <b>Unknown</b>).
+    /// of the watcher does not; one of an allied owner always does: the original's way out (slave state not 2 or 3, Character slot <c>0x3e0</c> true, <c>FUN_1405a6bb0</c> holds) is never taken as the
+    /// slot is the constant false. Its other test, that no other member of the platoon works the target (<c>FUN_1402690e0</c>), is the callers' <c>Busy</c>.
     /// </summary>
-    bool NeedsProcessing(CharacterCold watcher, CharacterCold c) => c.SlaveOwner < 0 || Allied(watcher.Faction, c.SlaveOwner) && !(c.SlaveState == 1 && LooksLikeSlave(c));
+    bool NeedsProcessing(CharacterCold watcher, CharacterCold c) => c.SlaveOwner < 0 || Allied(watcher.Faction, c.SlaveOwner);
 
     /// <summary>
     /// The cage a liberator opens (276, <c>BuildingFinder_CagesToLiberate</c> <c>FUN_1408cf140</c>, <b>Observed</b>): a cage of a faction that is neither the worker's nor allied to it,
@@ -711,43 +732,29 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
     }
 
     /// <summary>
-    /// Whether a slave looks like one (the state <c>TARGET_LOOKS_LIKE_A_SLAVE</c> that processing makes true; the platoon's test <c>FUN_1405a6bb0</c> over the character's worn kit, <b>Observed</b>
-    /// in outline). <b>Engine reading</b>: it wears locked shackles or any of its owner faction's <c>slave clothing</c>; the original's test also looks at the torso and leg slots one by one.
-    /// </summary>
-    bool LooksLikeSlave(CharacterCold c)
-    {
-        if (LockSystem.WornShackles(c) is not null) return true;
-        if (c.Inventory is not { } inv || data.Factions is not { } factions || (uint)c.SlaveOwner >= (uint)factions.Count || data.Db.Find(factions[c.SlaveOwner].Id) is not { } owner) return false;
-        var clothing = owner.GetReferences("slave clothing");
-        // An owner without slave clothing has none to put on: its slaves are not processed over and over (engine choice).
-        if (clothing.Count == 0) return true;
-        foreach (var link in clothing)
-            foreach (var item in inv.Items)
-                if (item.Record == link.TargetStringId && Items.InventoryCommands.IsEquipmentSection(item.Section)) return true;
-        return false;
-    }
-
-    /// <summary>
     /// A character's "looks like a slave" level in 0..1 (status object +0xf4, shown by the inventory window's data panel and the status tooltip; <c>FUN_1405a51e0</c>, <b>Observed</b>, docs/game/ui-screens.md):
-    /// a sum over its worn kit, locked shackles 1; else the hat section empty 0.4 (when a character flag, <b>Unknown</b>, holds; taken as true), the body section empty 0.1, the legs section empty 0.1
-    /// or holding the owner's slave clothing 0.5, the boots section empty 0.1. An escaped slave (state 2) doubles it and keeps at least 0.1, an ex-slave (3) keeps at least 0.01; at most 1. Sections by the item slot ids: 3 head, 5 body (armour), 6 legs, 9 boots.
+    /// a sum over its worn kit: the hat section empty 0.4 (when a character flag, <b>Unknown</b>, holds; taken as true), the body section empty 0.1 or holding a locked piece 1, the legs section empty 0.1, a locked piece 1
+    /// or the owner's slave clothing 0.5, the boots section empty 0.1 or a locked piece 1 (a lock in any other section counts nothing). An escaped slave (state 2) doubles it and keeps at least 0.1, an ex-slave (3) keeps at least 0.01; at most 1. Sections by the item slot ids: 3 head, 5 body (armour), 6 legs, 9 boots.
     /// </summary>
     public float LooksLikeSlaveLevel(CharacterCold c)
     {
         if (c.Inventory is not { } inv) return 0;
-        if (LockSystem.WornShackles(c) is not null) return 1;
         string[] clothing = (uint)c.SlaveOwner < (uint)(data.Factions?.Count ?? 0) && data.Db.Find(data.Factions![c.SlaveOwner].Id) is { } owner
             ? [.. owner.GetReferences("slave clothing").Select(l => l.TargetStringId)] : [];
-        float level = 0;
-        if (!inv.Items.Any(i => i.Section == "head")) level += 0.4f;
-        if (!inv.Items.Any(i => i.Section == "armour")) level += 0.1f;
+        var armour = inv.Items.FirstOrDefault(i => i.Section == "armour");
         var legs = inv.Items.FirstOrDefault(i => i.Section == "legs");
-        level += legs is null ? 0.1f : clothing.Contains(legs.Record) ? 0.5f : 0;
-        if (!inv.Items.Any(i => i.Section == "boots")) level += 0.1f;
+        var boots = inv.Items.FirstOrDefault(i => i.Section == "boots");
+        // A locked piece counts 1 in the armour, legs and boots sections only (nothing in the head or any other section).
+        float level = inv.Items.Any(i => i.Section == "head") ? 0 : 0.4f;
+        level += armour is null ? 0.1f : armour.LockedOn ? 1 : 0;
+        level += legs is null ? 0.1f : legs.LockedOn ? 1 : clothing.Contains(legs.Record) ? 0.5f : 0;
+        level += boots is null ? 0.1f : boots.LockedOn ? 1 : 0;
         if (c.SlaveState == 2) level = MathF.Max(level * 2, 0.1f);
-        if (c.SlaveState == 3) level = MathF.Max(level, 0.01f);
+        else if (c.SlaveState == 3) level = MathF.Max(level, ExSlaveFloor);   // the ex-slave's level is floored, not doubled (FUN_1405a51e0)
         return MathF.Min(level, 1);
     }
+
+    const float ExSlaveFloor = 0.01f;
 
     bool Allied(int a, int b) => a >= 0 && b >= 0 && (a == b || data.Relations.Contains(a) && data.Relations.Contains(b) && data.Relations.IsAlly(a, b));
 
@@ -929,8 +936,8 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
 
     /// <summary>
     /// A meal on the ground (220 on a 230 / 233 target): the eater walks to the body, then eats it with the <c>eat</c> clip as a caged one is eaten (<see cref="Eat"/>), barking event 52. The
-    /// original's goal stays chosen while its finder still returns the body (TARGET_IS_EATEN is always false), so a corpse is eaten until <see cref="CaptiveSettings.GiveUpSeconds"/> ends
-    /// the job (engine choice); a living body until it dies. Carried away, caged or gone: over.
+    /// action has no dead test (<c>FUN_140353c50</c>, <b>Verified</b>): a corpse is bitten like a living body until its parts are gone and the passes run out, when it is removed; a living
+    /// body until it dies. Carried away, caged or gone: over.
     /// </summary>
     bool StepEatBody(World world, CaptiveJob j, int w, CharacterCold wc)
     {
@@ -964,8 +971,17 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
             j.NextBark = j.Time + Settings.BarkSeconds;
             world.Defer(new Dialogue.DialogueEvent(j.Worker, j.Captive, EatingSounds) { Tick = world.Tick + 1 });
         }
-        if (m.Dead) return true;
-        return Eat(world, j, c, cc, world.TickSeconds) ? End(world, j, CaptiveEventKind.Eaten) : true;
+        bool corpse = m.Dead;
+        if (!Eat(world, j, c, cc, world.TickSeconds)) return true;
+        bool over = End(world, j, CaptiveEventKind.Eaten);
+        // The meal over, the original destroys the character with the reason "eaten" (FUN_140799af0): the corpse goes at once, as the body system removes a decayed one.
+        if (corpse)
+        {
+            var id = table.IdOf(c);
+            world.Uniques.Left(id);
+            table.Remove(id);
+        }
+        return over;
     }
 
     /// <summary>
@@ -1023,19 +1039,37 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
     // How near the farm's origin an eater stops (engine choice: the original walks to the farm's work point, getPositionMarker).
     const float CropReach = 30;
 
+    /// <summary>The medical context of a captive the rack or a meal damages (toughness, strength, the seed and a per-character roll key).</summary>
+    MedicalContext ContextOf(World world, int c, CharacterCold cc) => new(data.Bodies.Constants, data.BodyOptions, cc.Race!)
+    {
+        Toughness = cc.Stats?.ScaledToughness ?? 0,
+        Strength = cc.Stats?.Strength ?? 50,
+        HasStats = cc.Stats is not null,
+        Seed = world.Seed,
+        CharacterKey = Rng.Key(world.Characters.IdOf(c)),
+    };
+
+    /// <summary>What a medical update of a captive does outside the medical state: a death or knock-out stands it up, a lost limb is announced to the renderer and the character cries event 70 (leg) or 71 (arm).</summary>
+    static void ApplyBodyEvents(World world, CharacterId captive, int c, MedicalState medical, List<MedicalEvent> events)
+    {
+        foreach (var e in events)
+        {
+            if (e.Kind is MedicalEventKind.Died or MedicalEventKind.KnockedOut) TaskStart.Stand(world.Characters, c);
+            else if (e.Kind == MedicalEventKind.PartSevered)
+            {
+                world.Characters.LimbsChanged.Enqueue((c, medical.Parts[e.Part].Template.LimbSlot));
+                world.Defer(new Dialogue.DialogueEvent(captive, CharacterId.None, medical.Parts[e.Part].Template.LimbSlot is 2 or 3 ? 70 : 71) { Tick = world.Tick + 1 });
+            }
+        }
+    }
+
     /// <summary>One update of a meal (<see cref="MedicalState.BeingEaten"/>, at the captive's own rate); true when the captive died of it or otherwise.</summary>
     bool Eat(World world, CaptiveJob j, int c, CharacterCold cc, float dt)
     {
         var table = world.Characters;
         var medical = cc.Medical!;
-        var ctx = new MedicalContext(data.Bodies.Constants, data.BodyOptions, cc.Race!)
-        {
-            Toughness = cc.Stats?.Toughness ?? 0,
-            Strength = cc.Stats?.Strength ?? 50,
-            HasStats = cc.Stats is not null,
-            Seed = world.Seed,
-            CharacterKey = Rng.Key(table.IdOf(c)),
-        };
+        var ctx = ContextOf(world, c, cc);
+        bool wasDead = medical.Dead;
         var events = new List<MedicalEvent>();
         // A meal still awake gains toughness XP: the generic continuous entry with amount 10 (FUN_1404356f0 calls FUN_1408c6430(stats, dt, 10, 21); Observed). Engine choice: "awake" for the
         // original's unnamed conscious test (vfunc 0x358).
@@ -1043,18 +1077,10 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
         float rate = MedicalState.EatRate(cc.Stats?.Toughness ?? 0, cc.Stats?.Scale ?? 1);
         bool vampiric = table.TryResolveNext(j.Worker, out int w) && table.Cold(w)?.Race is { Vampiric: true };
         bool eaten = medical.BeingEaten(rate, dt, ctx, data.BodyOptions.Dismemberment != Dismemberment.Never, events, vampiric);
-        foreach (var e in events)
-        {
-            if (e.Kind is MedicalEventKind.Died or MedicalEventKind.KnockedOut) TaskStart.Stand(table, c);
-            else if (e.Kind == MedicalEventKind.PartSevered)
-            {
-                table.LimbsChanged.Enqueue((c, medical.Parts[e.Part].Template.LimbSlot));
-                world.Defer(new Dialogue.DialogueEvent(j.Captive, CharacterId.None, medical.Parts[e.Part].Template.LimbSlot is 2 or 3 ? 70 : 71) { Tick = world.Tick + 1 });
-            }
-        }
+        ApplyBodyEvents(world, j.Captive, c, medical, events);
         // "{1} has been eaten alive." for the player's own (FUN_140856bc0: of the player's faction, or of a squad that is).
         if (eaten && (cc.IsPlayer || world.Player.Faction >= 0 && cc.Faction == world.Player.Faction)) world.Post(Loc.Tr("{1} has been eaten alive.", cc.Name));
-        return medical.Dead;
+        return wasDead ? eaten : medical.Dead;
     }
 
     /// <summary>
@@ -1086,7 +1112,8 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
             assembly.RefreshEquipment(cc);
         }
         assembly.RefreshEquipment(wc);
-        world.Defer(new Dialogue.DialogueEvent(table.IdOf(w), table.IdOf(c), before ? RecapturedSlave : IntroducingNewSlave) { Tick = world.Tick + 1 });
+        // Always event 35: the original's captive test (Character slot 124 `0x3e0`, FUN_1405e1f20) is the constant false in every character class, so 37 is never sent from here (FUN_14035aa20, Verified).
+        world.Defer(new Dialogue.DialogueEvent(table.IdOf(w), table.IdOf(c), IntroducingNewSlave) { Tick = world.Tick + 1 });
         // The owner is set only when it had none that resolves (FUN_14032e430 behind FUN_14035aa20): a recaptured slave keeps its owner and its master squad. Meitou's owner is a faction,
         // and the master squad (runtime only) stands for the handle when it is known.
         bool owned = cc.SlaveOwner >= 0 && (cc.SlaveMaster < 0 || world.Squads.Find(cc.SlaveMaster) is not null);
@@ -1094,6 +1121,7 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
         else FixtureRegistry.Enslave(world, cc, wc.Faction, wc.SquadId);
         // Then its orders object is reset: the one-shot orders and the perma-jobs are destroyed (FUN_140507530, FUN_140507280) and job 187 is added toward the owner (a player character's list; the AI's slaves run it as AiSystem.ObeyedRoles).
         ObedientSlave.Reset(world, cc);
+        world.SystemOf<Dialogue.DialogueSystem>()?.Forgive(world, w, table.IdOf(c));
     }
 
     /// <summary>The record types a new slave is stripped of, in the original's order.</summary>

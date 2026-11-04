@@ -23,7 +23,7 @@ public sealed partial class AiSystem
     }
 
     /// <summary>A passing-by assault looks for the town faction's people within this of the town (<b>Verified</b>, 2500 in <c>FUN_140290450</c>).</summary>
-    const float AssaultReach = 2500;
+    internal const float AssaultReach = 2500;
     /// <summary>The assault is not over before this many game hours (<b>Verified</b>, 0.25 in its finished test).</summary>
     const double AssaultMinHours = 0.25;
     /// <summary>The occupation ends after this long with no able member in the town (<b>Observed</b>: 4 of the timer the finished test adds to, read as game seconds).</summary>
@@ -107,6 +107,9 @@ public sealed partial class AiSystem
             case PackageClass.Refugee:
                 StepRefugee(world, squad, board);
                 break;
+            case PackageClass.Contract:
+                TagMissionTarget(world, squad, board);
+                break;
             case PackageClass.PassingAssault:
             case PackageClass.OccupyTown:
                 var war = board.AssaultEnemy >= 0 ? new WarTargets(board.AssaultEnemy, false, CampaignTown.None) : WarTargets.None;
@@ -124,6 +127,18 @@ public sealed partial class AiSystem
                 if (squad.War.IsSet) squad.War = WarTargets.None;
                 break;
         }
+    }
+
+    /// <summary>
+    /// The update of Contract_HiredAlly (12), Contract_UntilOutOfDanger (14) and Contract_DefendPlayerBase (15) (<c>FUN_1402910e0</c>, <c>FUN_140290f90</c>, <c>FUN_140291410</c>, <b>Verified</b>): the package's
+    /// mission target, a character, is tagged TEMP ALLY (3) in the squad's memory each update; the defend package does so only once it has its player town (else it runs its start). The sensing hook
+    /// (<see cref="AggroSystem"/> <c>EmployerTags</c>) tags the employer's faction as it is seen, separately.
+    /// </summary>
+    void TagMissionTarget(World world, Squad squad, Blackboard board)
+    {
+        if (Memory is null || board.MissionTarget.IsNone || board.Contract?.Signal is not (12 or 14 or 15)) return;
+        if (board.Contract.Signal == 15 && world.Buildings.Towns.Count == 0) return;
+        Memory.Flag(world, squad.Id, board.MissionTarget, Dialogue.MemoryTag.TempAlly);
     }
 
     // ---- the wandering trader (Package_WanderingTrader) ----
@@ -188,20 +203,19 @@ public sealed partial class AiSystem
         return n;
     }
 
-    /// <summary>Whether someone of <paramref name="faction"/> (the player's characters for the player's faction) is up within <paramref name="range"/> of a point, or (range 0) in the board's mission town.</summary>
-    bool FactionNear(World world, Blackboard board, int faction, Vector2 at, float range)
+    /// <summary>Whether someone of <paramref name="faction"/> (the player's characters for the player's faction) is up within <paramref name="range"/> of a point.</summary>
+    bool FactionNear(World world, int faction, Vector2 at, float range)
     {
         var table = world.Characters;
-        int player = world.Player.Faction >= 0 ? world.Player.Faction : data.PlayerFaction;
         for (int i = 0; i < table.Previous.Length; i++)
         {
-            if (!table.Previous[i].Alive || table.Cold(i) is not { } c || c.Medical is { Incapacitated: true }) continue;
-            if (c.Faction != faction && !(c.IsPlayer && faction == player)) continue;
-            var p = table.Previous[i].Position;
-            if (range > 0 ? Vector2.DistanceSquared(Flat(p), at) <= range * range : CurrentTown(world, p) == board.Destination) return true;
+            if (!table.Previous[i].Alive || table.Cold(i) is not { } c || c.Medical is { Incapacitated: true } || !OfFaction(world, c, faction)) continue;
+            if (Vector2.DistanceSquared(Flat(table.Previous[i].Position), at) <= range * range) return true;
         }
         return false;
     }
+
+    bool OfFaction(World world, CharacterCold c, int faction) => c.Faction == faction || c.IsPlayer && faction == (world.Player.Faction >= 0 ? world.Player.Faction : data.PlayerFaction);
 
     /// <summary>
     /// Whether a passing-by assault may start (vtable +0x60, <c>FUN_140290450</c>): attacks not set to Never; not spent; its leader in a player town whose faction it is not allied
@@ -222,7 +236,7 @@ public sealed partial class AiSystem
             }
             else assaultEnds[squad.Faction] = world.GameHours;
         }
-        return FactionNear(world, board, town.Owner, Flat(town.Position), AssaultReach);
+        return FactionNear(world, town.Owner, Flat(town.Position), AssaultReach);
     }
 
     /// <summary>Whether another squad of the faction runs a passing-by assault now.</summary>
@@ -244,6 +258,8 @@ public sealed partial class AiSystem
         board.Destination = board.InTown;
         board.AssaultStart = world.GameHours;
         board.AssaultEnemy = world.Buildings.FindTown(board.InTown.PlayerTown)?.Owner ?? -1;
+        board.AssaultTargets.Clear();
+        SeedAssaultTargets(world, board);
         if (DestinationCentre(world, board) is { } centre) PostsInto(world, squad, centre, null);
     }
 
@@ -270,9 +286,38 @@ public sealed partial class AiSystem
         if (!Assaulting(world, squad.Faction, squad)) assaultEnds[squad.Faction] = world.GameHours;
     }
 
-    /// <summary>Someone of the attacked faction still stands in the town (engine reading of the original's target set: those within 2500 at the start and those seen since).</summary>
-    bool DefenderStanding(World world, Blackboard board) =>
-        board.AssaultEnemy >= 0 && FactionNear(world, board, board.AssaultEnemy, default, 0);
+    /// <summary>
+    /// Someone of the assault's target set (<see cref="Blackboard.AssaultTargets"/>: the attacked faction's people within 2500 at the start and those its members sense since; none leaves it) still stands in the mission town. The end
+    /// and hand-over tests (<c>FUN_14028eca0</c>, <c>FUN_14028ea90</c>, <b>Verified</b>) count a target only when its current town is the mission town and it is not unconscious or
+    /// dead, not caged and at posture 0 (staying low, crawling and playing dead do not count); the inside-town-walls value (vfunc 0x118, non-zero) is not modelled.
+    /// </summary>
+    bool DefenderStanding(World world, Blackboard board)
+    {
+        if (board.AssaultEnemy < 0) return false;
+        var table = world.Characters;
+        if (!board.AssaultSeeded) SeedAssaultTargets(world, board);
+        foreach (var id in board.AssaultTargets)
+        {
+            if (!table.TryResolveNext(id, out int i) || !table.Previous[i].Alive || table.Cold(i) is not { } c) continue;
+            if (Stands(c, CurrentTown(world, table.Previous[i].Position) == board.Destination)) return true;
+        }
+        return false;
+    }
+
+    /// <summary>A target set member that counts as standing (<c>FUN_14028eca0</c>): in the mission town, not caged, at posture 0 (not out, staying low, crawling or playing dead).</summary>
+    internal static bool Stands(CharacterCold c, bool inMissionTown) => inMissionTown && !c.IsImprisoned && CharacterFacts.PostureZero(c);
+
+    /// <summary>The start rule's part of the target set: every person of the attacked faction within <see cref="AssaultReach"/> of the mission town (<c>FUN_1402900c0</c>).</summary>
+    void SeedAssaultTargets(World world, Blackboard board)
+    {
+        board.AssaultSeeded = true;
+        var at = DestinationCentre(world, board);
+        if (at is not { } centre) return;
+        var table = world.Characters;
+        for (int i = 0; i < table.Previous.Length; i++)
+            if (table.Previous[i].Alive && table.Cold(i) is { } c && OfFaction(world, c, board.AssaultEnemy) && Vector2.DistanceSquared(Flat(table.Previous[i].Position), centre) <= AssaultReach * AssaultReach)
+                board.AssaultTargets.Add(table.IdOf(i));
+    }
 
     /// <summary>
     /// Whether the assault is over (vtable +0x68, <c>FUN_14028eca0</c>): the squad no longer intact ends it for good; not before 0.25 h; while a defender stands it goes on; then it

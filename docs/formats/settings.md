@@ -81,7 +81,7 @@ i.e. everything).
 | `grass density` | float; slider 0 … 2 | 1 | Grass Density | Multiplies grass candidates per page (FUN_1406d0340) | Zones loaded afterwards |
 | `foliage range` | float; slider 0.1 … 4 | 1; **≤ 0 → 0.1** | Foliage View Range | Mesh foliage page range multiplier (FUN_1406d3e30); a zone gets foliage only when it is above 0 (FUN_1409f9560), which the clamp always makes true | Zones loaded afterwards |
 | `objects view range` | float; slider 1000 … 8000 | 3000; **< 1000 → 1000** | Objects View Range | Rendering distance of building parts ([zones.md](zones.md#placement-files-and-assembly); FUN_140558b40, FUN_14055f6e0) | Objects created afterwards |
-| `npc range` | float; slider 1000 … 8000 | 3250; **< 1000 → 3000** | NPC View Range | Character relevance radius ([game-loop.md](../game/game-loop.md)) | No |
+| `npc range` | float; slider 1000 … 8000 | 3250; **< 1000 → 3000** | NPC View Range | Character relevance radius ([game-loop.md](../game/game-loop.md)) | Yes: the character draw distance (`GameplaySettings.NpcRange`, from the eye; the in-view flag and the race `+0x78` factor are not modelled) |
 | `feature range` | int, stored as float; slider 0 … 8 | 2; **clamped 0 … 6** | Terrain Feature Range | Square of ±N zones (64 × 64 zone grid) around the camera's zone that map features load for (FUN_140a098e0) | No |
 | `distant town range` | int, stored as float; slider 0 … 8 | 6; **clamped 0 … 10** | Distant Towns Range | Square of ±N zones around the camera's zone that distant towns show for (FUN_140a0b340) | No |
 | `generate distant towns` | bool | 0 | Generate Distant Towns | Build distant meshes for towns without a baked one ([zones.md](zones.md#placement-files-and-assembly); FUN_1400d8350) | Towns loaded afterwards |
@@ -96,7 +96,7 @@ i.e. everything).
 | `camera zoom` | float; slider 10 … 200 | 125 | Camera Zoom Speed | Zoom step speed (+0x0C) |
 | `invert X` | bool | 0 | Invert mouse X | Stored as a ±1 factor at +0x10 |
 | `invert Y` | bool | **1** | Invert mouse Y | Stored as a ±1 factor at +0x14 (inverted by default) |
-| `swap mouse buttons` | bool | 0 | Swap mouse buttons | Swaps left and right buttons on the GUI |
+| `swap mouse buttons` | bool | 0 | Swap mouse buttons | Tooltip: swaps left and right on the GUI. **Verified** (OIS press and release callbacks `FUN_14082a090` / `FUN_14082a1e0`, global `DAT_14213346b`): the button is swapped (0 and 1 trade) once, before both the key code posted to the game's input (`(button + 1) * 0x1000`) and MyGUI's inject; so the game view swaps too, as Meitou does (Controls page, `KeyMap.SwapButtons`) |
 | `hardware_mouse` | bool | 0 | Hardware Mouse | Windows cursor instead of the drawn one; the tooltip says it needs a restart |
 | `Edge scrolling` | bool | 1 | Edge scrolling | Camera moves when the pointer is at the screen edge |
 | `mouse speed horizontal` | float | 1.5 (see text) | none | Scales the raw mouse x movement |
@@ -107,10 +107,10 @@ i.e. everything).
 | Key | Type, range | Missing → | Options label | What it does |
 | --- | --- | --- | --- | --- |
 | `Show names` | bool | 1 | Show character names | Names above the player's characters |
-| `Movement marker` | bool | 1 | Show movement marker | The green marker where you click |
-| `Rotation marker` | bool | 1 | Show rotation marker | The green marker while rotating the camera |
+| `Movement marker` | bool | 1 | Show movement marker | The green marker where you click (Meitou: Interface page, `UserConfig.MovementMarker`) |
+| `Rotation marker` | bool | 1 | Show rotation marker | The green marker while rotating the camera (Meitou: Interface page, `UserConfig.RotationMarker`) |
 | `floaters` | int 0 … 2 | 1 | Show damage floaters: Off = 0, Simple info = 1, Full info = 2 | Damage numbers; only shown within 4000 units (squared distance 1.6e7, FUN_1406508d0); 2 splits them by damage type. Layout: [ui-screens](../game/ui-screens.md#8-damage-floaters); stored at options +0x7c |
-| `font size2` | int (stored as float); slider −10 … 32 | 3 | Font Size | GUI font size: added in points to every font's MyGUI default height ([mygui.md](mygui.md)) |
+| `font size2` | int (stored as float); slider −10 … 32 | 3 | Font Size | GUI font size: added in points to every font's MyGUI default height ([mygui.md](mygui.md)) (Meitou: Interface page, `UiPainter.FontSizeSetting`) |
 | `tutorials` | bool | 1 | Tutorials | In-game tutorials ("Reset Tutorials" is a button, not a key) |
 | `censorship` | bool | 0 | Language censorship | Filters swearing in dialogue (FUN_14067e8b0) |
 | `language` | string, locale code | see text | none in options | The locale folder `locale/<code>/` used for translations; empty falls back to `steam_language`, unknown is `en_GB` ([localisation](localisation.md)). Meitou reads it; the launcher's Language setting writes this line, nothing else of the file ([launcher](../launcher.md)) |
@@ -143,7 +143,7 @@ into bus gains ([audio.md](../audio.md#volumes)). Meitou applies them at once fr
 | `attacks` | int 0 … 5 | 2 | Town attacks frequency: Bombardment = 0, High = 1, Normal = 2, Fewer = 3, Rare = 4, Never = 5 | A faction's wait between passing-by assaults on the player's towns, uniform, in game hours (**Observed**: the elapsed-time helper `FUN_140791bf0` read as hours): 0, [6, 48), [32, 96), [72, 144), [130, 188); 5 stops them (`FUN_140286a70`, `FUN_140290450`; [ai.md](../game/ai.md#package-classes)) |
 | `Dismemberment` | int 0 … 2 | 1 | Dismemberment: Never = 0, Rare = 1, Frequent = 2 | The options page binds the drop-down to the global `DAT_142133504` (`FUN_1403f0260`), which the hit, degeneration and eaten code read when a part is damaged (`FUN_14064f300`, `FUN_14064f5c0`, `FUN_140650370`, `FUN_14029af90`), so a change applies at once (**Verified**, decompile). [combat.md](../game/combat.md), [character-stats.md](../game/character-stats.md) |
 | `civilians` | bool | 1 | none | Loaded and saved; **no reader found** (no instruction addresses its global other than the writer; an access through the block's base pointer would not show up, so **Unknown**) |
-| `Fast zone hopping` | bool | 0 | Fast zone hopping | Keeps a larger area loaded so switching between distant characters skips loading: a ring of one more zone round the box of each player character ([character-stats](../game/character-stats.md#corpses), FUN_140a0f640; storage `DAT_142133518`, **Verified**) |
+| `Fast zone hopping` | bool | 0 | Fast zone hopping | Keeps a larger area loaded (Meitou: Gameplay page, applies to the running world)  so switching between distant characters skips loading: a ring of one more zone round the box of each player character ([character-stats](../game/character-stats.md#corpses), FUN_140a0f640; storage `DAT_142133518`, **Verified**) |
 | `Auto save` | bool | 1 | Auto save | [save.md](save.md#autosave-fun_14047be70) |
 | `Auto save time (minutes)` | float; slider 1 … 30 | 10 | Auto save time (minutes) | same |
 | `User save location` | bool | 1 (see save.md) | User Save Location | Saves in `%LOCALAPPDATA%\kenshi\save` (1) or the install (0); [save.md](save.md) |
@@ -181,7 +181,7 @@ the game calls `Root::restoreConfig` / `saveConfig` (**Verified**), which use th
 | `foliage range`, `grass range`, `grass density` | Emulated with sliders / environment variables (`MEITOU_FOLIAGE_RANGE`, `MEITOU_GRASS_RANGE`, `--grass-density`); default foliage range ×4 and grass range ×8, not the game's 1 |
 | `objects view range`, `feature range`, `distant town range` | Constants in `ObjectRanges`; the viewer's own `--object-distance` (default 20000 in Meitou, 12000 in Faithful; the landmark distance is a fixed 7.5 times it in Meitou) and `--distant-range` replace them |
 | `FXAA`, `HeatHaze` | Honoured as options (`--no-fxaa`, `--no-heat-haze`; Faithful switches) |
-| `camera speed`, `camera zoom` | Constants in `KenshiCamera` / `CameraSettings` (500, 125) |
+| `camera speed`, `camera zoom`, `invert X`, `invert Y` | Controls page (Camera move speed 150 … 1000, Camera zoom speed 10 … 200, Invert mouse X / Y), kept in `UserConfig`, first taken from settings.cfg (`UserConfig.SeedCamera`), applied to `CameraSettings` (`ApplyCamera`) |
 | `water reflection`, `reflection range` | Honoured as options (2026-10-06): `--water-reflection <0..4>` (viewer default 4; the game's missing-key default is 2) and the reflection range (viewer default 3; the game's 0.6; Tab slider only, the `--reflection-range` option was removed); `--water-reflection 0` / `R` are the on/off switch (`--no-reflections` was removed). See "Viewer: water reflection" below |
 | `terrain detail`, `terrain distant`, `terrain threshold`, `terrain patch size` | Not honoured, deliberately (2026-10-06): the viewer does not replicate the game's per-node rule above. Its CDLOD (64-quad patches) uses its own resolution-aware screen-space error, measured in pixels of the picture actually rendered (after the upscaler's render scale): `--terrain-error <px>` (default 10, Tab slider "Terrain detail"), no far ramp (the `--terrain-far-error` and `--terrain-ramp` options were removed). See [terrain.md](terrain.md#lod-water-and-sun) |
 | `texture resolution gimping` | Honoured as `--texture-quality <0..4>` and, in the game, the saved Tab slider (applied before the world loads; the option and `--low-end` win). Missing: 0, full size (the game's missing-key default is 1). Object/foliage/character textures reload when the slider moves; the terrain layer arrays take one size, `2048 >> level` (the `Landscape` drop, [dds.md](dds.md) "Terrain layer textures"), at start, so terrain needs a restart like the game. 133 texture pairs (BC3 + BC1, full mips), all allocated up front: 1064 / 266 / 67 / 17 / 4 MiB at levels 0 … 4 |

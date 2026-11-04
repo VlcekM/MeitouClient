@@ -74,7 +74,7 @@ public sealed class ItemSlots
     {
         if (b.ItemSlots.Count == 0 || world.Fixtures.IsEmptied(b.Key)) return;   // a bought house has none (EmptyBuilding)
         int townFaction = site < data.SiteFactions.Count ? data.SiteFactions[site] : -1;
-        int owner = b.OwnerFactionId is { } o && data.FactionIndex(o) is var fi and >= 0 ? fi : townFaction;
+        int owner = data.LevelOwnerOf(b, townFaction);
         owner = world.Fixtures.PropertyOwner(b.Key) ?? owner;
         foreach (var s in b.ItemSlots)
         {

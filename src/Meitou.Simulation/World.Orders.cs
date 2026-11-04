@@ -32,7 +32,7 @@ public sealed partial class World
     {
         TaskType.MOVE_CUS_ORDERED or TaskType.STAY_CLOSE_TO_TARGET or TaskType.BODYGUARD => SystemOf<MovementSystem>(),
         TaskType.LIFT_PERSON_PLAYER_ORDER or TaskType.KIDNAP_ORDER or TaskType.LOOT_TARGET or TaskType.STEALTH_KNOCKOUT or TaskType.PUT_DOWN_OBJECT => SystemOf<Carrying.CarrySystem>(),
-        TaskType.FOCUSED_MELEE_ATTACK => SystemOf<Combat.CombatSystem>(),
+        TaskType.FOCUSED_MELEE_ATTACK or TaskType.UNPROVOKED_FOCUSED_MELEE_ATTACK => SystemOf<Combat.CombatSystem>(),
         TaskType.BUILD or TaskType.REPAIR or TaskType.DISMANTLE => SystemOf<Construction.ConstructionSystem>(),
         TaskType.OPERATE_MACHINERY or TaskType.OPERATE_AUTOMATIC_MACHINERY or TaskType.OPERATE_STORAGE or TaskType.USE_TRAINING_DUMMY or TaskType.USE_TURRET or TaskType.PROSPECTING => SystemOf<Production.ProductionSystem>(),
         TaskType.FIRST_AID_ORDER or TaskType.SPLINT_ORDER or TaskType.REST => SystemOf<FirstAid.FirstAidSystem>(),

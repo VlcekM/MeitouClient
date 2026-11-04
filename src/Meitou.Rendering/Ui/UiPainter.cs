@@ -111,9 +111,17 @@ public sealed partial class UiPainter : IDisposable
     float EffectiveFontSize(string path, float size, float resolution)
     {
         if (!fontSizes.TryGetValue((path, size, resolution), out float effective))
-            fontSizes[(path, size, resolution)] = effective = KenshiFontSize.Effective(File.ReadAllBytes(path), size, resolution);
+            fontSizes[(path, size, resolution)] = effective = KenshiFontSize.Effective(File.ReadAllBytes(path), size, resolution, FontSizeSetting);
         return effective;
     }
+
+    /// <summary>The <c>font size2</c> option (points added to every font's default height); a change takes effect on the next frames.</summary>
+    public float FontSizeSetting
+    {
+        get => fontSizeSetting;
+        set { if (fontSizeSetting == value) return; fontSizeSetting = value; fontSizes.Clear(); }
+    }
+    float fontSizeSetting = KenshiFontSize.DefaultSetting;
     readonly Dictionary<string, string?> fontPaths = new(StringComparer.Ordinal);
 
     string? FontPath(string name)

@@ -23,7 +23,7 @@ public sealed class SavedMember
     public CharacterId Live { get; set; } = CharacterId.None;
     /// <summary>Its body left the world (removed after death): the next save leaves it out.</summary>
     public bool Gone { get; set; }
-    /// <summary>Dead (in the save, or when its platoon left the world): never made again; a save keeps its records (with the medical state it died with).</summary>
+    /// <summary>Dead when its platoon left the world: kept in the record and made again as a corpse (<c>FUN_1404ff410</c> writes the whole list); not counted as living.</summary>
     public bool Dead { get; set; }
 
     /// <summary>Where it stood and which way it faced when its platoon left the world (null: the save's place).</summary>
@@ -43,6 +43,10 @@ public sealed class SavedMember
 /// </summary>
 public sealed class SavedPlatoon
 {
+    /// <summary>Set on platoons Meitou writes with the town they belong to now as <c>basetown</c> (replacement-aware, as the original's).</summary>
+    public const string BaseTownKey = "meitou basetown";
+    /// <summary>A platoon of an older Meitou save: its <c>basetown</c> is the placement's own id even in a replaced town, so it is taken to fit (the original's test is not applied).</summary>
+    public bool LegacyBaseTown { get; init; }
     public required SavePlatoon Source { get; init; }
     public string Name => Source.Name;
     public required bool Pinned { get; init; }
@@ -83,6 +87,8 @@ public sealed record SavedNest(string Instance, string TownId, Vector3 Position,
 /// <summary>What a world loaded from a save needs to make the save's NPC platoons later (<see cref="World.Saved"/>), and the platoons themselves.</summary>
 public sealed class SavedPopulation
 {
+    /// <summary>The save was written by Meitou (its CAMERA holds the seed key): its platoons without <see cref="SavedPlatoon.BaseTownKey"/> predate the replacement-aware <c>basetown</c>.</summary>
+    public bool MeitouWritten { get; init; }
     public required SaveHandles Handles { get; init; }
     public required IReadOnlyDictionary<FcsRecord, string> InstanceOf { get; init; }
     /// <summary>The instance ids of <see cref="InstanceOf"/>, as a set (made on first use).</summary>
@@ -277,7 +283,7 @@ internal static class SavedCharacters
         DialogueSave.Read(sc.GameState, cold);
         if (cold.IsPlayer && sc.GameState is { } orders) Orders.Read(orders, cold);
         // The loader turns the saved toggles back on through setStandingOrder, and Hold's sets the hold point to where the character stands.
-        if ((cold.Orders & CharacterOrders.Hold) != 0) cold.HoldPoint = new System.Numerics.Vector2(hot.Position.X, hot.Position.Z);
+        if ((cold.Orders & CharacterOrders.Hold) != 0) cold.HoldPoint = hot.Position;
         // In a bed or a cage, and the sentence (docs/simulation.md "Cages, beds and locks"); the fixture binds when its town registers.
         HeldSave.Read(sc.GameState, cold, context.Handles, context.InstanceOf);
         if (cold.InSomething == Locks.HeldState.Bed) hot.Task = (byte)CharacterTask.Sleep;   // it lies there until an order (Locks.BedSystem)
@@ -354,7 +360,7 @@ internal static class SavedCharacters
         var list = new List<(SavedMember, SavedParts)>();
         foreach (var m in sp.Members)
         {
-            if (m.Gone || m.Dead) continue;   // a corpse made once is not made again (it lies in the world, or went with its zone)
+            if (m.Gone) continue;   // a body that left the world after its platoon came back is not in the record any more; a dead one kept at the unload is made again as a corpse
             var p = m.Position is null ? Read(m.Source, sp.Name, data, appearances, races, parts, context.Log) : Again(m, data, races);
             if (p is null) continue;
             list.Add((m, p));
@@ -472,7 +478,7 @@ internal static class SavedCharacters
             m.Inventory = cold.Inventory;
             m.Look = cold.Appearance;
             m.Bounties = cold.Bounties;
-            if (cold.DiedTick >= 0) m.Dead = true;
+            if (cold.DiedTick >= 0 || cold.Medical is { Dead: true }) m.Dead = true;
             m.Live = CharacterId.None;
         }
         sp.Anchor = anchor;

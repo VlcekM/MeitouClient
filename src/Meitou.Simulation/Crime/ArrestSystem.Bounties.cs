@@ -72,7 +72,7 @@ public sealed partial class ArrestSystem : IOrderOwner
         if (!c.IsImprisoned || c.Kidnapped || c.InWhat is not { } id || world.Fixtures.Find(id) is not { Kind: FixtureKind.Cage } cage) return null;
         int owner = cage.Owner;
         if (owner < 0 || owner == world.Player.Faction || Crimes.Factions.Lawless(owner)) return null;
-        long price = 2L * (c.Bounties?.AmountFor(owner) ?? 0);
+        long price = 2L * (c.Bounties?.BookedAmount(Crimes.Factions.Relations, owner) ?? 0);
         if (c.Faction != world.Player.Faction) price = Math.Max(price, MinNpcBail);
         return (int)Math.Min(price, int.MaxValue);
     }
@@ -138,7 +138,7 @@ public sealed partial class ArrestSystem : IOrderOwner
         var table = world.Characters;
         var prisoner = table.IdOf(p);
         world.Player.Money -= price;
-        if (pc.Bounties is { } ledger && ledger.Of(cage.Owner) is { } entry)
+        if (pc.Bounties is { } ledger && ledger.BookedFor(Crimes.Factions.Relations, cage.Owner) is { } entry)
         {
             ledger.Remove(entry);
             if (ledger.Count == 0) pc.Bounties = null;
@@ -151,8 +151,22 @@ public sealed partial class ArrestSystem : IOrderOwner
         // Its squad remembers the payer as the one who freed it, and it says event 51 at the payer (FUN_1406ae170: FUN_140673930 tag 3, FUN_140684990 event 0x33; Verified).
         var payerId = table.IdOf(payer);
         Talk?.Memory.Remember(world, pc.SquadId, payerId, Dialogue.MemoryTag.FreedMe);
-        Talk?.FireEvent(world, prisoner, payerId, Dialogue.DialogueSystem.BoughtMeFromSlavery);
+        bool spoke = Talk?.FireEvent(world, prisoner, payerId, Dialogue.DialogueSystem.BoughtMeFromSlavery) == true;
+        SendOut(world, p, pc, payer, spoke);
         Note(world, ArrestEventKind.Bailed, table.IdOf(payer), prisoner, cage.Owner, price);
+    }
+
+    /// <summary>
+    /// The end of each freed prisoner's block in <c>FUN_1406ae170</c>: one that could not speak (event 51 returned 0) is given 128 Retreat to hometown, then every one 133 Get out of cage (legit).
+    /// Whether the later give replaces the earlier or queues behind it is <b>Unknown</b> (<c>FUN_1405d20d0</c>): Meitou walks a prisoner that spoke out of the cage to its payer
+    /// (<see cref="Dialogue.DialogueSystem.WalkOutOfCage"/>, 133) and one that did not to its squad's home (128 standing for the pair).
+    /// </summary>
+    void SendOut(World world, int p, CharacterCold pc, int payer, bool spoke)
+    {
+        if (!spoke && world.Squads.Find(pc.SquadId) is { } squad)
+            TaskStart.Walk(world, p, squad.HomeCentre, SpeedMode.Walk, TaskType.RETREAT_HOMETOWN, TaskSource.Npc);
+        else
+            Dialogue.DialogueSystem.WalkOutOfCage(world, p, payer);
     }
 
     // ------------------------------------------------------------------ putting a captive in a cage, and the claim
@@ -215,7 +229,7 @@ public sealed partial class ArrestSystem : IOrderOwner
     Fixture? FindCageFor(World world, int s, CharacterCold c, Caging? self)
     {
         var at = world.Characters.Next[s].Position;
-        var cage = world.Fixtures.FindCage(world, c, at, null, f => Reserved(f, null) || cagings.Exists(k => !ReferenceEquals(k, self) && k.Cage == f.Id));
+        var cage = world.Fixtures.FindCage(world, c, at, FixtureRegistry.HomeOf(world, c), f => Reserved(f, null) || cagings.Exists(k => !ReferenceEquals(k, self) && k.Cage == f.Id));
         float r = Settings.CageSearchRange;
         return cage is not null && Vector2.DistanceSquared(new Vector2(at.X, at.Z), new Vector2(cage.Position.X, cage.Position.Z)) <= r * r ? cage : null;
     }
@@ -238,7 +252,7 @@ public sealed partial class ArrestSystem : IOrderOwner
         float d = Vector2.Distance(new Vector2(n.Position.X, n.Position.Z), goal);
         bool walking = n.Task == (byte)CharacterTask.GoTo;
         if (walking && Vector2.Distance(n.Goal, goal) > 1) return false;   // another order
-        if (d <= cage.UseRange + Settings.CageReach || !walking && d <= Settings.CageSlack)
+        if (FixtureRegistry.AtCage(cage, n.Position, walking))
         {
             if (walking) TaskStart.Stand(table, s);
             Carry!.LetGo(world, s);
@@ -256,7 +270,8 @@ public sealed partial class ArrestSystem : IOrderOwner
     }
 
     /// <summary>
-    /// The reward for a captive the carrier just put in <paramref name="cage"/> (the game's <c>FUN_140330d50</c>, economy.md 11.4, <b>Observed</b>): a player carrier, a captive not of the
+    /// The reward for a captive the carrier just put in <paramref name="cage"/> (the game's <c>FUN_140330d50</c>, economy.md 11.4, <b>Observed</b>): a carrier whose faction is the player's (the faction object's player flag, not
+    /// whether the carrier is player-controlled, <b>Verified</b>), a captive not of the
     /// player's faction, a cage whose owner is not the player's faction and not lawless (<c>not real</c> or BANDIT), neither of them escaped; the captive's unclaimed entry for the cage owner's
     /// faction pays, halved (truncated) when the captive is dead, into the player's money, and is marked claimed. The slaver exception does not apply (the player's characters are never
     /// slaves here). Returns what it paid (0: nothing).
@@ -264,10 +279,10 @@ public sealed partial class ArrestSystem : IOrderOwner
     public int Claim(World world, int carrier, CharacterId captive, Fixture cage)
     {
         var table = world.Characters;
-        if (table.Cold(carrier) is not { IsPlayer: true, Escaped: false } || !table.TryResolveNext(captive, out int b) || table.Cold(b) is not { IsPlayer: false, Escaped: false } bc) return 0;
+        if (table.Cold(carrier) is not { Escaped: false } cc || !(cc.IsPlayer || world.Player.Faction >= 0 && cc.Faction == world.Player.Faction) || !table.TryResolveNext(captive, out int b) || table.Cold(b) is not { IsPlayer: false, Escaped: false } bc) return 0;
         int owner = cage.Owner;
         if (cage.Kind != FixtureKind.Cage || owner < 0 || owner == world.Player.Faction || bc.Faction == world.Player.Faction || Crimes.Factions.Lawless(owner)) return 0;
-        if (bc.Bounties?.Of(owner) is not { Amount: > 0, Claimed: false } entry) return 0;
+        if (bc.Bounties?.BookedFor(Crimes.Factions.Relations, owner) is not { Amount: > 0, Claimed: false } entry) return 0;
         int amount = bc.Medical is { Dead: true } ? entry.Amount / 2 : entry.Amount;
         world.Player.Money += amount;
         entry.Claimed = true;
@@ -286,7 +301,7 @@ public sealed partial class ArrestSystem : IOrderOwner
     {
         var table = world.Characters;
         if (!table.TryResolveNext(guard, out int g) || table.Cold(g) is not { IsPlayer: false, Medical.Incapacitated: false, Carrying.IsNone: true } || Busy(guard)) return false;
-        if (!table.TryResolveNext(target, out int t) || !table.Next[t].Alive || table.Cold(t) is not { IsImprisoned: false, CarriedBy.IsNone: true }) return false;
+        if (!table.TryResolveNext(target, out int t) || !table.Next[t].Alive || table.Cold(t) is not { IsImprisoned: false }) return false;   // a carried target is snatched by the capture (task 240)
         Start(world, g, t, force: true, capture);
         return true;
     }
@@ -330,11 +345,11 @@ public sealed partial class ArrestSystem : IOrderOwner
         if (!table.TryResolveNext(carrier, out int c) || table.Cold(c) is not { } cc || !table.TryResolveNext(cc.Carrying, out int t) || table.Cold(t) is not { } tc) return false;
         var target = cc.Carrying;
         Carry.LetGo(world, c);
-        var arrest = new Arrest { Guard = guard, Target = target, Faction = gc.Faction, Phase = ArrestPhase.Fight, Enslave = enslave };
+        var arrest = new Arrest { Guard = guard, Target = target, Faction = gc.Faction, Phase = ArrestPhase.Fight, Enslave = enslave, Takeover = true };
         arrests.Add(arrest);
         gc.Engaged = true;
         if (tc.Medical is { Incapacitated: true } && Carry.BeginPickUp(world, g, target, source: TaskSource.Npc, row: TaskType.ARREST_TARGETS_CARRIED_PERSON)) arrest.Phase = ArrestPhase.Lift;
-        Note(world, ArrestEventKind.Arrest, guard, target, gc.Faction, tc.Bounties?.AmountFor(gc.Faction) ?? 0);
+        Note(world, ArrestEventKind.Arrest, guard, target, gc.Faction, tc.Bounties?.BookedAmount(Crimes.Factions.Relations, gc.Faction) ?? 0);
         return true;
     }
 
