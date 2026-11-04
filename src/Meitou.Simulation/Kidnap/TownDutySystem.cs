@@ -788,12 +788,13 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     public const int LootUnits = 10;
 
     /// <summary>
-    /// Looting food from a store (284, <c>FUN_14033cd10</c>, <b>Verified</b>): the first record the store lists (the food filter stands in for the finder's listing, whose order for a storage is
-    /// <b>Unknown</b>), one unit at a time while the store still holds it and there is room, at most <see cref="LootUnits"/> in all.
+    /// Looting food from a store (284, <c>FUN_14033cd10</c>, <b>Verified</b>): the first record the store lists, whatever it is (the storage's list, vfunc <c>0x548</c> <c>FUN_140299990</c>, is the distinct records of
+    /// its inventory in item order, with no food filter once the task's looting flag is set; the finder only checked that some food is held), one unit at a time while the store still holds it and there is room,
+    /// at most <see cref="LootUnits"/> in all.
     /// </summary>
     static void LootFirstFood(Inventory store, Inventory into)
     {
-        if (store.Items.FirstOrDefault(i => i.IsFood)?.Record is not { } record) return;
+        if (store.Items.FirstOrDefault()?.Record is not { } record) return;
         int budget = LootUnits;
         foreach (var item in store.Items.Where(i => i.Record == record).ToList())
         {
