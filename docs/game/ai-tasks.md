@@ -686,7 +686,12 @@ Meitou: [simulation, captives](../simulation.md#captives).
     runtime only: after a load it is the squad of the owner character the save's `slaver` handle names ([save](../formats/save.md)), else the owner is found again from the job's saved handle when it names a character.
 - **Shout** (188, `Task_TalktoPlayer`, slots 1 and 2 `FUN_14034c5a0` / `FUN_14034c7c0`): the event is the row's (TaskData `+0x130`: **Verified** 0x26 for 188, 0x27 for 194 and 218, 9 for 158 and 283).
   Start fires it at the target (`FUN_140684990`); each update walks to the target (vfunc `0x3b0`), repeats event 9, gives up after 25 minutes with event 60, and ends when the dialogue is free.
-  The slavers' event-38 lines ("shout at slave worker": chance temporary 10, six lines) are in "slaver guard MAIN" and "Holy Nation Paladin". Meitou paces it: a worker shouts at most every 60 to 180 game seconds.
+  The slavers' event-38 lines ("shout at slave worker": chance temporary 10, six lines) are in "slaver guard MAIN" and "Holy Nation Paladin".
+  **Observed** (KenshiProbe state 0.5 live check, the 10 workmasters of Rebirth, N = 1): a workmaster on 188 keeps it with one slave as target for
+  long spells (one to three targets an hour), with order `move_on_free_will` at 72 of 75 checks and `send_dialogue_signal` at 3, and none ever
+  takes `stay_in_home`. Meitou: the Shout job keeps with its slave and says the event again every 8 s until a line is said, then the next
+  job picks a slave again ([simulation](../simulation.md)). An earlier pacing of 60 to 180 s of tick time between shouts (0.55 to 1.65 game
+  hours) let each workmaster shout once an hour and stay home in between.
 - **Capture** (167): the planner chain is 167 (effect isChained 134) <- 166 Restraining (`Task_CuffTarget`; needs 38, at location, 118 TARGET_IS_UNARMED, 7 target down) <- 181 Stripping weapons
   (`Task_StripWeapons`; effect 118). The chain needs 38 `hasOneWorkingArm` (either arm, **Verified**: rows 166 and 181) and nothing else of the arms; 167 has no B list. Only the later lift (rows 213, 240, 246, 68, 170: 80 `isCarryingArmOK`, the left arm) needs the left arm, so a one-armed capturer cuffs and then leaves the captive. **Strip** (**Observed**, `FUN_14034e7b0`): `medic` for 0.8 s, then the items of the target's `hip` and `back` sections (`FUN_140747ff0`) go to the
   stripper's inventory (else its storage), and the stripper's squad sets short-term tag 6 on the target (`FUN_1406744a0`; the NPC looting finder skips tag-6 targets, [carry-loot](carry-loot.md#33-npc-looting)). **Cuff** (`FUN_14034af20`): a "Restraining" bar
