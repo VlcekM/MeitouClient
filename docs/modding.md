@@ -125,8 +125,26 @@ holds refuses the second mod.
 Mod systems and patches obey [simulation](simulation.md) "Threading": parallel phases write only their partition's `Next`, read
 `Previous` and the grid, send cross-character effects through `EffectBuffer`; randomness through `Rng.Hash` with the mod's purpose;
 no `World` access outside the tick (tick-ahead runs on `Meitou.Tick` during the draw); outside input goes through `Enqueue`. Violations
-break golden hashes and any future replay. Nothing in the API can stop a patch. Not built: a debug mode that compares `StateHash` across
-thread counts with the mods loaded (it needs a launch option, which waits for the owner's approval).
+break golden hashes and any future replay. Nothing in the API can stop a patch; the check below finds most offenders.
+
+### Determinism check
+
+`meitou-tools mod-check <save folder> [--ticks n] [--threads n] [--mod <mod folder>]...` (`tools/Meitou.Tools/ModCheck.cs`) loads a save
+headless with the enabled code mods, or only the `--mod` folders (their code; their records join the data only when enabled), and runs
+it three times: twice on one thread and once on `--threads` (default 4), for `--ticks` (default 600). It compares `World.StateHash`
+after every tick and reports the first differing tick of each pair and the `IStateHashed` systems that differ there, a mod's by id and
+name. One-thread runs differing points at unseeded randomness or the clock; thread counts differing, at a threading mistake. On a
+difference it runs the game without mods: if that differs too, the fault is the game's. Running the command is consent to run the mods'
+code, so `trustedCodeMods` is not consulted.
+
+- Walkability is the open terrain, not the navmesh (whose zones load on threads), paths are answered in the tick and the population works
+  in it, so runs repeat; the world differs from play in where characters walk.
+- The parallel phases cut slots into partitions of at least 32, so a world under 64 characters runs them as one partition and cannot show
+  a threading mistake; the command warns.
+- It sees only hashed state: a mod's unhashed state, or a patch that changes nothing hashed, passes.
+- **Observed** (2026-11-04, win-x64, saves `autosave0`, `Gigachad`, `260`): a clean scratch mod passes; a mod rolling `Random.Shared` in
+  `SlowWorld` differs from tick 1 in both comparisons and is named; a mod whose `Act` writes one field from every partition differs only
+  across thread counts once the population passes 64 characters (tick 152) and is named; the game alone agrees.
 
 ## Versioning
 
