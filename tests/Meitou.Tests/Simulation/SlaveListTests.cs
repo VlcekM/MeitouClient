@@ -100,4 +100,60 @@ public class SlaveListTests
         world.RunTicks(61);
         Assert.True(Gathers());
     }
+
+    /// <summary>
+    /// 188 Working the slaves keeps its slave until a line is said (docs/game/ai-tasks.md, the slavers' event-38 lines; the row's B list isDialogDelivered): with no
+    /// dialogue, a worker stands by an obeying slave 20 away and keeps the same Shout job for 30 s, saying the event again on the way. Catches the job that ended at
+    /// reach and then held the worker for 0.55 to 1.65 game hours, so the Rebirth workmasters shouted once an hour and stayed home in between.
+    /// </summary>
+    [Fact]
+    public void A_worker_keeps_its_shout_job_while_no_line_is_said()
+    {
+        var (world, captive, city, cage) = Town();
+        using var _ = world;
+        var master = NewSquad(world, city, Board([], [], [Goal(TaskType.WORK_THE_SLAVES)], [], []));
+        var worker = Member(world, master, cage.Position + new Vector3(60, 0, 0));
+        ObeyingSlave(world, city, master, cage.Position + new Vector3(80, 0, 0));
+        world.RunTicks(61);
+        var job = Assert.Single(captive.Jobs, j => j is { Kind: CaptiveJobKind.Shout } && j.Worker == worker);
+
+        world.RunTicks((int)(30 / world.TickSeconds));
+        Assert.Contains(job, captive.Jobs);
+        Assert.True(job.Blows >= 3, $"{job.Blows} shouts");
+        Assert.DoesNotContain(captive.Log, e => e.Job == CaptiveJobKind.Shout && e.Worker == worker && e.Kind != CaptiveEventKind.Started);
+    }
+
+    /// <summary>
+    /// With its line on (a dialogue package with an event-38 line, ambient events on), the worker's Shout job ends once it says the line, and the next sweep starts
+    /// another on its slaves. Catches a job that never ended, or ended without a line.
+    /// </summary>
+    [Fact]
+    public void A_worker_ends_its_shout_job_on_its_line_and_starts_another()
+    {
+        var shouter = SyntheticTown.Rec("shouter-c", Meitou.Data.Fcs.FcsRecordType.CHARACTER, "Workmaster");
+        shouter.References["dialogue package"] = [SyntheticTown.Ref("shout-p")];
+        var package = SyntheticTown.Rec("shout-p", Meitou.Data.Fcs.FcsRecordType.DIALOGUE_PACKAGE, "Shouts");
+        package.References["dialogs"] = [SyntheticTown.Ref("shout-d", CaptiveSystem.ShoutAtSlaveWorker)];
+        var dialog = SyntheticTown.Rec("shout-d", Meitou.Data.Fcs.FcsRecordType.DIALOGUE, "Shout");
+        dialog.Bools["monologue"] = true;
+        dialog.References["lines"] = [SyntheticTown.Ref("shout-l")];
+        var line = SyntheticTown.Rec("shout-l", Meitou.Data.Fcs.FcsRecordType.DIALOGUE_LINE, "Shout line");
+        line.Strings["text0"] = "Back to work!";
+        var data = ArrestTests.Town([shouter, package, dialog, line]);
+        var captive = new CaptiveSystem(data, null, new CaptiveSettings { RecordLog = true });
+        var talk = new Meitou.Simulation.Dialogue.DialogueSystem(data, new Meitou.Simulation.Dialogue.DialogueSettings { AmbientEvents = true });
+        using var world = new SimWorld(new WorldSettings { PublishSnapshots = false, StartHours = 24 + 12 }, new OpenGroundWalkability((_, _) => 150), [captive, talk]);
+        world.Fixtures.RegisterSite(world, data, 0);
+        int city = data.FactionIndex("50-a");
+        var cage = world.Fixtures.Find("0.0:cageA")!;
+        var master = NewSquad(world, city, Board([], [], [Goal(TaskType.WORK_THE_SLAVES)], [], []));
+        var worker = Member(world, master, cage.Position + new Vector3(60, 0, 0), c => c.RecordId = "shouter-c");
+        ObeyingSlave(world, city, master, cage.Position + new Vector3(80, 0, 0));
+
+        world.RunTicks((int)(30 / world.TickSeconds));
+        bool Logged(CaptiveEventKind kind) => captive.Log.Any(e => e.Job == CaptiveJobKind.Shout && e.Worker == worker && e.Kind == kind);
+        Assert.True(Logged(CaptiveEventKind.Shouted));
+        Assert.True(captive.Log.Count(e => e is { Kind: CaptiveEventKind.Started, Job: CaptiveJobKind.Shout } && e.Worker == worker) >= 2);
+        Assert.False(Logged(CaptiveEventKind.GaveUp));
+    }
 }
