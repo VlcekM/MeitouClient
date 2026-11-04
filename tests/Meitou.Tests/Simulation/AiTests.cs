@@ -225,6 +225,71 @@ public class AiTests(ITestOutputHelper output)
     }
 
     /// <summary>
+    /// The synthetic town for the work goals: one resident squad whose package gives every member 189 all day, a house, a quarry west of it and a refinery
+    /// east of it, which no machine runs. <paramref name="quarryRecord"/> names the quarry's BUILDING record (null: none, so no operator limit).
+    /// </summary>
+    static PopulationData WithWork(out TownBuilding quarry, out TownBuilding refinery, string? quarryRecord = null, IEnumerable<FcsRecord>? extra = null)
+    {
+        var work = Task("140-t", TaskType.AUTO_LABOURING_MINES, TaskPriority.NonUrgent);
+        var package = Rec("119-t", FcsRecordType.AI_PACKAGE, "Workers");
+        package.References["Leader AI Goals"] = [Ref("140-t", 0, 24, 0)];
+        package.References["Squad AI Goals"] = [Ref("140-t", 0, 24, 0)];
+        var db = SyntheticTown.Database(1, extra: [.. Records(), work, package, .. extra ?? []], changePatrol: p => p.References["AI packages"] = [Ref("119-t", 0)]);
+        Vector3 At(float dx, float dz) => new(Centre.X + dx, 300, Centre.Z + dz);
+        var house = new TownBuilding("house", "b-house", "House", At(0, -80), 0, false, false, [new HomeSpot(HomeSpotKind.Bed, At(0, -90), 0)]);
+        quarry = new TownBuilding("quarry", quarryRecord ?? "b-quarry", "Quarry", At(-90, 40), 0, false, false, []) { Function = 1 };
+        refinery = new TownBuilding("refinery", "b-refinery", "Refinery", At(90, 40), 0, false, false, []) { Function = TownBuildings.RefineryFunction };
+        return PopulationData.Create(db, [new TownPlacement("inst", "30-t", Centre, null)],
+            buildings: new Dictionary<string, List<TownBuilding>> { ["inst"] = [house, quarry, refinery] });
+    }
+
+    /// <summary>The members of the resident squad whose goal is 189 Worker, with their minds.</summary>
+    static List<(CharacterId Id, AiMind Mind)> Workers(SimWorld world)
+    {
+        var workers = new List<(CharacterId, AiMind)>();
+        foreach (var squad in world.Squads.All.Where(s => s.TemplateId == "10-t"))
+            foreach (var m in squad.Members)
+                if (world.Characters.Cold(m.Slot)?.Ai is { Goal.Task.Type: TaskType.AUTO_LABOURING_MINES } mind) workers.Add((m, mind));
+        return workers;
+    }
+
+    /// <summary>
+    /// 189 Worker only takes a workplace it can run (docs/game/ai-tasks.md "Worker": 87's B list needs !62, and an NPC town's machines run nothing): a squad on 189 in
+    /// a town with a quarry and an unfed refinery holds only the quarry and works there. Catches the pick over every workplace, which set Rebirth's slaves at its four
+    /// unfed Manual Stone Processors where the original's work only the quarries.
+    /// </summary>
+    [Fact]
+    public void Workers_take_only_the_workplace_they_can_run()
+    {
+        using var world = Town(1, out _, WithWork(out var quarry, out _), null);
+        world.RunTicks(600);
+        var workers = Workers(world);
+        Assert.True(workers.Count >= 3, $"{workers.Count} members on 189");
+        Assert.All(workers, w => Assert.Same(quarry, w.Mind.WorkPost));
+        Assert.All(workers, w => Assert.InRange(Off(world, w.Id, quarry.Position), 0, 35));
+    }
+
+    /// <summary>
+    /// A workplace takes as many workers as its functionality's max operators (73 machineHasFreeOperatorSlot; the finder's couldIOperate, docs/game/ai-tasks.md "Worker"):
+    /// with a quarry of 2 slots and four or more workers on 189, exactly two hold it. Catches workplaces without a limit and a slot held twice.
+    /// </summary>
+    [Fact]
+    public void A_workplace_takes_as_many_workers_as_its_operator_slots()
+    {
+        var quarryRecord = Rec("w-quarry", FcsRecordType.BUILDING, "Quarry");
+        quarryRecord.References["functionality"] = [Ref("w-quarry-f")];
+        var function = Rec("w-quarry-f", FcsRecordType.BUILDING_FUNCTIONALITY, "Stone mine");
+        function.Ints["function"] = 1;
+        function.Ints["max operators"] = 2;
+        using var world = Town(1, out _, WithWork(out var quarry, out _, "w-quarry", [quarryRecord, function]), null);
+        world.RunTicks(600);
+        var minds = world.Squads.All.Where(s => s.TemplateId == "10-t").SelectMany(s => s.Members)
+            .Select(m => world.Characters.Cold(m.Slot)?.Ai).OfType<AiMind>().ToList();
+        Assert.True(minds.Count >= 4, $"{minds.Count} members");
+        Assert.Equal(2, minds.Count(m => ReferenceEquals(m.WorkPost, quarry)));
+    }
+
+    /// <summary>
     /// A character already lying in a bed keeps it when it goes to bed (docs/game/locks.md "Bed search"): sleepers moved into each other's beds of
     /// their home (30 apart, beyond the post slack), with no goal yet as after a load, stay in those beds, plan 98 Sleeping first and sleep as the
     /// goal's own task. Catches the goal aiming at the bed its member index picks, whose plan got the saved sleepers of a loaded town out of their

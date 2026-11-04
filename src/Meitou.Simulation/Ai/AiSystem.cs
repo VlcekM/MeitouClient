@@ -392,7 +392,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             AiBehaviour.Shop => !mind.Shopping.Pending(ShoppingList.DayOf(world.GameHours), world.Hour) ? 0
                 : ShopFor(Places(board.Town), mind, TargetRoll(world, self, behaviour), RandomShopping(world, board.Town)) is { } picked ? ShopFactor(Places(board.Town), picked) : 0,
             // A worker needs a mine, bench or refinery in its town (the finders return 0 without one).
-            AiBehaviour.Work => Places(board.Town).Workplaces.Count > 0 ? 1 : 0,
+            AiBehaviour.Work => HoldsWork(mind, board.Town, type) || PickWork(world, self, board.Town, mind.WorkEpoch, type) is not null ? 1 : 0,
             // Relaxing needs a free seat of the package's bar, sitting around a free chair of the home (claimed in <see cref="ClaimSeats"/>); the original's finder returns 0 without one (FUN_1408caf00).
             AiBehaviour.Relax => board.BarTable >= 0 && board.SeatClaims.ContainsKey(self.Slot) && !mind.SeatUnreachable ? 1 : 0,
             AiBehaviour.Sit => board.SitClaims.ContainsKey(self.Slot) && !mind.SeatUnreachable ? 1 : 0,
@@ -438,6 +438,11 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     static readonly TownPlaces NoPlaces = new(new Dictionary<ZoneCoordinate, TownBuilding[]>(), [], [], [], [], new Dictionary<TownBuilding, ulong>(), [], new Dictionary<TownBuilding, int>(), []);
     // Rebuilt in the serial step, read by the think on every worker (derived, not hashed).
     readonly Dictionary<int, TownPlaces> places = [];
+    // The workplaces of each town 189 can really work at (RealWork), rebuilt with the places (derived, not hashed).
+    readonly Dictionary<int, IReadOnlyList<TownBuilding>> realWork = [];
+    // The operator slots of each workplace held in the current cadence pass (derived, not hashed).
+    readonly Dictionary<TownBuilding, int> workTaken = new(ReferenceEqualityComparer.Instance);
+    readonly System.Collections.Concurrent.ConcurrentDictionary<string, int> maxOperators = new(StringComparer.Ordinal);
 
     TownPlaces Places(int site) => site >= 0 && places.TryGetValue(site, out var p) ? p : NoPlaces;
 
@@ -457,6 +462,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     void RefreshPlaces(World world)
     {
         places.Clear();
+        realWork.Clear();
         var shops = new HashSet<TownBuilding>(ReferenceEqualityComparer.Instance);
         var bars = new HashSet<TownBuilding>(ReferenceEqualityComparer.Instance);
         var publicFlag = new Dictionary<TownBuilding, bool>(ReferenceEqualityComparer.Instance);
@@ -511,6 +517,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             places[site] = new(wander, shopList, [.. buildings.Where(b => (b.IsBar || bars.Contains(b)) && IsPublic(b))],
                 [.. buildings.Where(b => b.IsOutdoorTable)], [.. buildings.Where(b => !world.Fixtures.IsDestroyed(b) && b.Function is >= 0 and var fn && (WorkFunctions >> fn & 1) != 0)], stock, seats, seatOwners,
                 [.. buildings.Where(b => b.HasInterior && !b.IsWall && !world.Fixtures.IsDestroyed(b) && IsPublic(b))]);
+            realWork[site] = [.. places[site].Workplaces.Where(b => RealWork(world, b))];
         }
     }
 
@@ -572,13 +579,84 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// <summary>
     /// The building a worker works at (the finders of goals 189 / 190: a random building of the town with a function in <see cref="WorkFunctions"/>, slot 2 of the building finder
     /// <c>FUN_1409fb020</c>); the roll is the character's and its <paramref name="epoch"/> of picks (<see cref="AiMind.WorkEpoch"/>), so asking twice names the same one. Null: the town has none.
+    /// 189 (<paramref name="type"/>, real work) takes only the workplaces it can run (<see cref="RealWork"/>); 190 (pretend) any.
     /// </summary>
-    TownBuilding? PickWork(World world, CharacterId self, int town, int epoch)
+    TownBuilding? PickWork(World world, CharacterId self, int town, int epoch, TaskType type = TaskType.AUTO_LABOURING_MINES_PRETEND)
     {
-        var list = Places(town).Workplaces;
-        if (list.Count == 0) return null;
-        return list[Rng.Int(Rng.Hash(world.Seed, Rng.Key(self), RngPurpose.Think, SeedSalts.AiTarget ^ (ulong)epoch << 20 ^ 0x57), list.Count)];
+        var list = WorkplacesFor(town, type);
+        int free = 0;
+        foreach (var b in list) if (HasFreeSlot(b)) free++;
+        if (free == 0) return null;
+        int pick = Rng.Int(Rng.Hash(world.Seed, Rng.Key(self), RngPurpose.Think, SeedSalts.AiTarget ^ (ulong)epoch << 20 ^ 0x57), free);
+        foreach (var b in list)
+            if (HasFreeSlot(b) && pick-- == 0) return b;
+        return null;
     }
+
+    /// <summary>Whether a mind holds a workplace that is still one its goal <paramref name="type"/> may work at.</summary>
+    bool HoldsWork(AiMind mind, int town, TaskType type) => mind.WorkPost is { } post && WorkplacesFor(town, type).Contains(post);
+
+    /// <summary>
+    /// Whether a workplace has an operator slot no one holds in this cadence pass (73 <c>machineHasFreeOperatorSlot</c>; the finder's <c>couldIOperate</c>, docs/game/ai-tasks.md
+    /// "Worker"): fewer holders than its functionality's <c>max operators</c>.
+    /// </summary>
+    bool HasFreeSlot(TownBuilding building) => workTaken.GetValueOrDefault(building) < MaxOperatorsOf(building);
+
+    /// <summary>A workplace's functionality <c>max operators</c> (1 when the key is missing); no limit for a building without a functionality record.</summary>
+    int MaxOperatorsOf(TownBuilding building) => maxOperators.GetOrAdd(building.BuildingId, id =>
+        data.Db.Find(id)?.GetReferences("functionality") is [var link, ..] && data.Db.Find(link.TargetStringId) is { } function
+            ? function.GetInt("max operators", 1) : int.MaxValue);
+
+    /// <summary>
+    /// The operator slots of 189 / 190 (docs/game/ai-tasks.md "Worker"): a member whose goal is one of them keeps the workplace it holds while that is still one its goal may work
+    /// at, else holds one with a free slot drawn as <see cref="PickWork"/> draws; a member on another goal lets its slot go. Serial, on the package cadence, after every squad's
+    /// kept slots are reserved (<see cref="ReserveWork"/>).
+    /// </summary>
+    void ClaimWork(World world, Blackboard board, Squad squad)
+    {
+        foreach (var id in squad.Members)
+        {
+            if (!world.Characters.TryResolveNext(id, out int s) || world.Characters.Cold(s)?.Ai is not { } mind) continue;
+            var type = mind.Goal?.Task.Type;
+            bool works = type is TaskType.AUTO_LABOURING_MINES or TaskType.AUTO_LABOURING_MINES_PRETEND;
+            if (works && HoldsWork(mind, board.Town, type!.Value)) continue;
+            if (mind.WorkPost is { } left) workTaken[left] = workTaken.GetValueOrDefault(left) - 1;
+            mind.WorkPost = works ? PickWork(world, id, board.Town, mind.WorkEpoch, type!.Value) : null;
+            if (mind.WorkPost is { } got) workTaken[got] = workTaken.GetValueOrDefault(got) + 1;
+        }
+    }
+
+    /// <summary>The workplaces the members hold, reserved for every squad before any claims (as <see cref="ReserveSeats"/>).</summary>
+    void ReserveWork(World world)
+    {
+        foreach (var squad in world.Squads.All)
+            foreach (var id in squad.Members)
+                if (world.Characters.TryResolveNext(id, out int s) && world.Characters.Cold(s)?.Ai?.WorkPost is { } post)
+                    workTaken[post] = workTaken.GetValueOrDefault(post) + 1;
+    }
+
+    /// <summary>The workplaces of <paramref name="town"/> a worker on <paramref name="type"/> may pick: <see cref="RealWork"/> for 189, all of them for 190.</summary>
+    IReadOnlyList<TownBuilding> WorkplacesFor(int town, TaskType type)
+    {
+        if (type != TaskType.AUTO_LABOURING_MINES) return Places(town).Workplaces;
+        return town >= 0 && realWork.TryGetValue(town, out var real) ? real : [];
+    }
+
+    /// <summary>
+    /// Whether 189 can really work at a workplace (docs/game/ai-tasks.md "Worker"). Its act-out, 87 Operating machine, needs !62 <c>machineHasEmptyInputs</c>, and with an empty
+    /// input the plan must fill the machine from a source of its input, so the original's workers keep to the workplaces they can run. A mine has no input; a refinery,
+    /// research or crafting bench counts only with a machine running there with its inputs (engine choice: Meitou's NPC towns run no machines, so theirs hold nothing).
+    /// </summary>
+    static bool RealWork(World world, TownBuilding building)
+    {
+        if (building.Function == MineFunction) return true;
+        foreach (var m in world.Machines.All)
+            if (m.Position.X == building.Position.X && m.Position.Z == building.Position.Z) return !m.HasEmptyInputs;
+        return false;
+    }
+
+    /// <summary>BuildingFunction BF_MINE.</summary>
+    const int MineFunction = 1;
 
     static bool IsGeneralNode(HomeSpot s) => s.NodeType == NodeGeneral;
 
@@ -918,11 +996,13 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
                 Patrol(world, slot, mind, board);
                 break;
             case AiBehaviour.Work:
+                // The workplace whose slot it holds wins over the pick it walks to (ClaimWork).
+                if (mind.WorkPost is { } post && mind.Target is { } aim && (aim.X != post.Position.X || aim.Z != post.Position.Z)) mind.Target = null;
                 if (mind.Target is null)
                 {
                     if (mind.WorkActive) mind.WorkEpoch++;
                     mind.WorkActive = true;
-                    if (PickWork(world, table.IdOf(slot), board.Town, mind.WorkEpoch) is { } building)
+                    if ((mind.WorkPost ?? PickWork(world, table.IdOf(slot), board.Town, mind.WorkEpoch, type)) is { } building)
                     {
                         mind.Target = new Vector3(building.Position.X, float.NaN, building.Position.Z);
                         mind.WorkClip = WorkClipOf(building);
@@ -1344,6 +1424,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         bool cadence = world.Tick % world.Every(Settings.PackageEveryTicks) == 0;
         // Each town's turrets are claimed once per cadence, by the squads in squad order (derived, not hashed).
         if (cadence) { turretTaken.Clear(); seatTaken.Clear(); ReserveSeats(world); RefreshPlaces(world); }
+        if (cadence) { workTaken.Clear(); ReserveWork(world); }
         foreach (var squad in world.Squads.All)
         {
             if (squad.Ai is null)
@@ -1393,6 +1474,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             ClaimTurrets(world, board, squad);
             ClaimSeats(world, board, squad);
             ClaimSitting(world, board, squad);
+            ClaimWork(world, board, squad);
             FindGate(world, board, squad);
         }
         if (merges.Count > 0) ApplyMerges(world);

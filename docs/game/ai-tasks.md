@@ -649,6 +649,24 @@ Meitou: [simulation, captives](../simulation.md#captives).
   221 (pretend); both `Task_OperateMachine` ([sitting and the held tool](ai-tasks.md#town-goals), [production](buildings-production.md#production)). Meitou's NPC towns have no running machines, so both are
   the same standing at the building at its functionality's clip (`stonemine` by default) with its `animation events` ([audio](../audio.md#characters-footsteps-combat-voices) "Machine work"):
   **engine choice**, the building's `use range` is not read (30 units).
+  - **The finder's visit** (`FUN_1408cebe0`, the query's slot 0, **Verified** by disassembly) keeps a building when all of these hold:
+    - `getUseableStuff()` (vfunc 0x300) is set and `getBuildState()` (0x228) is complete;
+    - its function (0x2f0) is in the mask, and it is of the query's town;
+    - a test of the building against the worker passes (`FUN_14003bd0e`, **Unknown**), or the worker is in slave state 1;
+    - it is not on a list of the worker's (`+0x650`, `+0x20`, **Unknown**), and a foliage building (`+0xc0`) is within reach;
+    - `UseableStuff::couldIOperate(worker)` (vfunc 0x500, `FUN_1400f7c90`, the same for UseableStuff, ProductionBuilding and
+      CraftingBuilding) holds: not `dontNeedWorkRightNow()` (0x4e8; false but for ResearchBuilding and FarmBuilding), and the worker already
+      operates it or the operators (`+0x3d0`) are fewer than `numOperatorsMax` (`+0x3ac`; the functionality's `max operators`, 6 for a
+      Stone mine, 1 for Stone processing).
+    - So the finder takes a refinery with a free slot whatever its inputs.
+  - **The plan refuses an empty machine**: 87's B list has !62 `machineHasEmptyInputs`, whose only provider is 93 Filling machine (67
+    `haveSomeResourcesFor`, from 94 and a source of the input). **Observed** (KenshiOracle state 0.5 hold, Rebirth, N = 1): the
+    original's slaves on 189 work only the quarries (Stone mine) and never the four unfed Manual Stone Processors.
+  - Meitou: 189 picks only a workplace it can run (`AiSystem.RealWork`): a mine, or a refinery, research or crafting bench with a machine
+    running there that has its inputs. NPC towns run no machines, so theirs count as empty (engine choice for the plan's fill-or-fail).
+    190 (pretend, no 62 in 221's B list) still picks any workplace. A member on 189 or 190 holds an operator slot (`AiMind.WorkPost`,
+    `AiSystem.ClaimWork`, serial on the package cadence, the kept slots reserved first): up to the functionality's `max operators` per
+    workplace, no limit for a building without a functionality record.
 - **Obedient Slave** (187, flags 0x75, TaskData kind +4 = 1 and +8 = 0 like a plain job, no lists, no desire or finder of its own, task class `Task_Blank`). Meitou:
   [simulation, captives](../simulation.md#captives). A **perma-job** (it sits in the character's job list, `+0x88`), not a goal, whoever the character is.
   - **Added and removed** (**Verified**, `FUN_1405a4940` slave state setter -> `FUN_14032e0d0`): when the slave state *changes* (the setter does nothing for the same state), a change **to 1**

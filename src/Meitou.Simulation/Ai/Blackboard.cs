@@ -465,6 +465,11 @@ public sealed class AiMind
     /// </summary>
     public int WorkEpoch { get; set; }
     public bool WorkActive { get; set; }
+    /// <summary>
+    /// The workplace it holds an operator slot of while on 189 / 190 (<see cref="AiSystem"/>'s serial step claims it on the package cadence); null on another goal or
+    /// when no workplace had a free slot. Not saved: a load claims again (derived, not hashed).
+    /// </summary>
+    public TownBuilding? WorkPost { get; set; }
     /// <summary>The clip it plays at its work (the ANIMATION its building's functionality names), cleared with <see cref="CharacterCold.ActionClip"/> when it stops; null when not working.</summary>
     public string? WorkClip { get; set; }
     /// <summary>Its work building's BUILDING_FUNCTIONALITY (string id; null without one), whose <c>animation events</c> sound on <see cref="WorkClip"/>. Set with it, so not hashed.</summary>
