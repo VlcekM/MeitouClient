@@ -57,6 +57,16 @@ static class Program
             Console.Error.WriteLine($"Kenshi install not found: set {GameInstall.EnvironmentVariable} or create {GameInstall.LocalConfigFile}.");
             return 1;
         }
+        try
+        {
+            var modsCfg = game.ModsCfg ?? Environment.GetEnvironmentVariable("MEITOU_MODS_CFG");
+            if (!string.IsNullOrEmpty(modsCfg)) ModList.UseModsCfg(modsCfg);
+        }
+        catch (FileNotFoundException e)
+        {
+            Console.Error.WriteLine(e.Message);
+            return 2;
+        }
         if (game.DataCheck)
         {
             var checkedDb = Meitou.Data.GameDatabase.Load(Meitou.Data.LoadOrder.FromInstall(install));

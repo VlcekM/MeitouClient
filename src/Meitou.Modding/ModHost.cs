@@ -36,6 +36,7 @@ public sealed class ModHost
     readonly ModRegistry registry = new();
     readonly List<LoadedMod> mods = [];
     readonly List<string> notices = [];
+    readonly Dictionary<string, string> refused = new(StringComparer.Ordinal);
 
     ModHost() { }
 
@@ -43,6 +44,9 @@ public sealed class ModHost
 
     /// <summary>What went wrong or was left out, one line per mod, for the player's notices.</summary>
     public IReadOnlyList<string> Notices => notices;
+
+    /// <summary>The reason each refused code mod was not loaded, by mod name (the <c>.mod</c> file's stem, as in mods.cfg).</summary>
+    public IReadOnlyDictionary<string, string> Refused => refused;
 
     /// <summary>What every world is built with; null without registrations.</summary>
     public SimulationExtensions? Simulation => registry.Simulation.IsEmpty ? null : registry.Simulation;
@@ -108,6 +112,7 @@ public sealed class ModHost
     {
         Console.Error.WriteLine($"mod       {mod}: not loaded: {reason}");
         notices.Add($"Mod {mod} not loaded: {reason}");
+        refused[mod] = reason;
     }
 
     /// <summary>The manifest checks, the assemblies and the entry instance.</summary>
