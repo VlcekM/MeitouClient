@@ -143,6 +143,8 @@ public sealed partial class AiSystem
             return null;
         }
 
+        IEnumerable<Meitou.Data.World.TownBuilding> Workplaces() => board.Town >= 0 ? system.Places(board.Town).Workplaces : [];
+
         float Distance(in PlanTarget t) => t.IsNone ? 0 : Vector2.Distance(Flat(Me.Position), Flat(t.Position));
 
         bool Settled(in PlanTarget t) => At(t) && (CharacterTask)Me.Task is CharacterTask.Rest or CharacterTask.Idle;
@@ -168,7 +170,9 @@ public sealed partial class AiSystem
                 // 82 of a machine target (FUN_14059bd80): room in the inventory or the worn backpack for a unit of its output item.
                 StateType.gotInventoryRoomForResources => MachineAt(target) is { Output: { } room } && cold.Inventory is { } bag && system.Data.Items.Create(room.Recipe.Item, 1) is { } unit && bag.HasRoomFor(unit),
                 // 67 for the ditch target (a storage the finder found takes a carried item, FUN_1405a59a0): the character still carries something the collection lists.
-                StateType.haveSomeResourcesFor => target.Kind == Targets.Store && cold.Inventory is { } carried && Production.ProductionSystem.Ditchable(carried).Any(),
+                // For a machine target (row 93 at a town machine) it carries an item an input takes (FUN_1405a45f0); 66 (FUN_140597530): it carries the machine's output item.
+                StateType.haveSomeResourcesFor => target.Kind == Targets.Store && cold.Inventory is { } carried ? Production.ProductionSystem.Ditchable(carried).Any() : MachineAt(target) is { } fillable && Production.ProductionSystem.CarriesInputOf(cold, fillable),
+                StateType.haveSomeResourcesFrom => MachineAt(target) is { } emptiable && Production.ProductionSystem.CarriesOutputOf(cold, emptiable),
                 // 5: a weapon in hand that is not ranged; 156: a ranged one (FUN_140596a30 / FUN_140596a70, Verified); 157's evaluator is an undecoded stub.
                 StateType.hasWeaponEquipped => cold.DrawnWeapon != WeaponKinds.None && cold.DrawnWeapon != BowHold,
                 StateType.hasWeaponEquipped_156 => cold.DrawnWeapon == BowHold,
@@ -293,6 +297,10 @@ public sealed partial class AiSystem
                     // Rows 114, 113 and 242 share the finder FUN_1405a59a0: the nearest storage taking a carried item (TownDutySystem.DitchStore, a read-only look here).
                     return world.SystemOf<Kidnap.TownDutySystem>() is { } duties && world.Characters.Cold(slot) is { } carrier
                         && duties.DitchStore(world, mind.Squad, carrier, Me.Position, register: false) is var (_, spot) ? new PlanTarget(Targets.Store, new Vector3(spot.X, float.NaN, spot.Y)) : default;
+                case TaskType.WANT_TO_FILL_MACHINE:
+                    // Row 94 (FUN_14059d9b0): the machine whose output holds what the target machine's inputs need (the town's workplaces here).
+                    return MachineAt(from) is { } wanting && Production.ProductionSystem.InputSource(world, wanting, Workplaces(), Me.Position) is { } source
+                        ? new PlanTarget(Targets.Work, new Vector3(source.Position.X, float.NaN, source.Position.Z)) : default;
                 case TaskType.MAN_A_TURRET or TaskType.MAN_A_TURRET_ON_BUILDING or TaskType.MAN_A_TURRET_PLAYER_JOB or TaskType.USE_TURRET:
                     return board.TurretClaims.TryGetValue(slot, out int t) && (uint)t < (uint)board.Turrets.Count && board.Turrets[t].Turret is { } turret
                         ? new PlanTarget(Targets.Turret, TurretSpot(world, turret)) : default;

@@ -248,6 +248,36 @@ public class ProductionTests
         Assert.Equal((4, 0.25f, (byte)1), (read.Output!.Count, read.Output.Progress, read.Status));
     }
 
+    /// <summary>
+    /// Row 94's finder (<c>FUN_14059d9b0</c>) names the nearest town machine whose output holds an item the target machine's inputs take, and a worker at the target with row 93 puts what it carries into
+    /// the inputs (<c>Task_FillMachine</c>), as the chain 92 -> 94 -> 93 -> 87 of an NPC refinery (docs/game/buildings-production.md "NPC town machines").
+    /// </summary>
+    [Fact]
+    public void A_town_machine_is_filled_from_the_output_of_another()
+    {
+        using var rig = new Rig(Database(), Constants, []);
+        const int Town = 7;
+        var well = new TownBuilding("well", Well, "Well", At, 0, false, false, []);
+        var far = new TownBuilding("far", Well, "Far well", At + new Vector3(500, 0, 0), 0, false, false, []);
+        var shop = new TownBuilding("shop", PoweredWorkshop, "Workshop", At + new Vector3(0, 0, 100), 0, false, false, []);
+        var target = rig.Production.TownWork(rig.World, shop, Town)!;
+        Assert.Null(ProductionSystem.InputSource(rig.World, target, [far, well, shop], shop.Position));   // nothing made yet
+        rig.Production.TownWork(rig.World, far, Town)!.Output!.Count = 2;
+        rig.Production.TownWork(rig.World, well, Town)!.Output!.Count = 3;
+        Assert.Same(well, ProductionSystem.InputSource(rig.World, target, [far, well, shop], shop.Position));
+
+        var squad = new Squad { Id = 1, TemplateId = "t", Faction = Town };
+        var cold = new CharacterCold { Name = "hauler", Race = Human, Stats = new CharacterStats(), Medical = MedicalState.Create(Human, 50), Inventory = new Inventory(), Faction = Town };
+        cold.Ai = new Meitou.Simulation.Ai.AiMind { Squad = squad, Behaviour = Meitou.Simulation.Ai.AiBehaviour.Work, FillTo = shop, WorkOwner = Town };
+        Assert.False(ProductionSystem.CarriesInputOf(cold, target));
+        cold.Inventory.Add(rig.Items.Create(Water, 4)!);
+        Assert.True(ProductionSystem.CarriesInputOf(cold, target));
+        rig.World.Characters.Spawn(new CharacterHot { Position = shop.Position, MaxSpeed = 40, WalkSpeed = 15, Task = (byte)CharacterTask.Idle }, cold, 0);
+        rig.World.RunTicks(2);
+        Assert.True(target.Inputs[0].Count > 0);
+        Assert.Equal(4, target.Inputs[0].Count + cold.Inventory.All().Where(i => i.Record == Water).Sum(i => i.Quantity));
+    }
+
     // ------------------------------------------------------------------ items and research costs
 
     /// <summary>

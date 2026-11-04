@@ -985,6 +985,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             case AiBehaviour.Work:
                 mind.WorkOperate = null;
                 mind.CollectFrom = null;
+                mind.FillTo = null;
                 if (mind.Target is null)
                 {
                     if (mind.WorkActive) mind.WorkEpoch++;
@@ -999,19 +1000,21 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
                         mind.WorkOwner = WorkOwnerOf(board.Town);
                     }
                 }
-                if (mind.Target is not { } working) Become(world, slot, CharacterTask.Idle);
-                else if (GoToSpot(world, slot, mind, Flat(working), GiveUp.Target, SpeedMode.Walk, WorkReach))
+                var stepAt = StepBuilding(mind, board.Town);
+                Vector3? working = stepAt is not null && stepAt != mind.WorkBuilding ? new Vector3(stepAt.Position.X, float.NaN, stepAt.Position.Z) : mind.Target;
+                if (working is not { } workAt) Become(world, slot, CharacterTask.Idle);
+                else if (GoToSpot(world, slot, mind, Flat(workAt), GiveUp.Target, SpeedMode.Walk, WorkReach))
                 {
                     // At the building: facing it, at its work clip.
                     Become(world, slot, CharacterTask.Idle);
-                    var face = working - n.Position;
+                    var face = workAt - n.Position;
                     if (face.X * face.X + face.Z * face.Z > 1e-4f) n.Yaw = MathF.Atan2(face.X, face.Z);
                     if (table.Cold(slot) is { } workerCold)
                     {
                         workerCold.ActionClip = mind.WorkClip;
                         workerCold.ActionWork = StandingWork(mind.WorkFunctionality, mind.WorkClip);
                     }
-                    WorkAtMachine(mind, type);
+                    WorkAtMachine(mind, type, stepAt);
                 }
                 break;
             case AiBehaviour.Investigate:

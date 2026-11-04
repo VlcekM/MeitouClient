@@ -783,7 +783,7 @@ already and the plan is still `93 Filling machine -> 114` (93 is the only row li
 Meitou: `PlanContext.Find` gives rows 113 / 114 / 242 a `Targets.Store` target (`TownDutySystem.DitchStore`: the nearest container fixture or player storage of its faction or the town's, in its town, that takes an item
 of `ProductionSystem.Ditchable`; the finder's own owner and town test is **Unknown**, engine choice), state 67 is true for it while the character carries such an item, and a plan whose first step is 93 or the walk to a
 Store target sets `AiMind.DitchRequest`; `TownDutySystem` runs a `Ditch` errand (walk, put in, `Replan`). So a worker of goal 189 whose inventory is full ditches before it empties the machine (92's B 82), and a
-town food run (244) that finds no room ditches first (a2-039). Row 94's finder `FUN_14059d9b0` (a machine whose output holds what the target machine's inputs need, scored by `FUN_14059d000`) is not modelled.
+town food run (244) that finds no room ditches first (a2-039). Row 94's finder `FUN_14059d9b0` (the nearest machine whose output holds an item the target machine's inputs take, scored by `FUN_14059d000`) is modelled for machines (`ProductionSystem.InputSource`), see [NPC town machines](buildings-production.md#npc-town-machines).
 
 ## Precedence
 
