@@ -741,6 +741,8 @@ public sealed partial class CombatSystem : IProjectileSource
         float toughness = dc.Stats is { } ds ? ds[StatsEnumerated.Toughness] * dc.Medical.StatMultiplier(StatsEnumerated.Toughness) : 0;
         ReadOnlySpan<ArmourPiece> armour = dc.Fighter is { } df ? df.Armour : default;
         var cover = new BoltCover(world.Seed, Rng.Key(table.IdOf(v)), p.Id);
+        bool observe = world.HasCombatHitObservers;
+        bool wasAlive = observe && !dc.Medical.Dead, wasIncapacitated = observe && dc.Medical.Incapacitated;
         var (part, damage, absorbed) = HitResolver.LandDetailed(dc.Medical, ctx, packet, armour, cover, toughness, false, true, combat, events);
         FloatHit(world, v, dc, p.ShooterIsPlayer, part, damage, absorbed);
         Sound(world, SoundKind.BoltHit, v, p.Shooter, prev[v].Position, armoured: absorbed.Cut + absorbed.Blunt + absorbed.Pierce > 0, robot: false);
@@ -794,6 +796,10 @@ public sealed partial class CombatSystem : IProjectileSource
         if (death && world.Luckyren) dc.Burst = new Vector2(p.Direction.X, p.Direction.Z);
         if (Settings.RecordLog)
             log.Add(new CombatLogEntry(now, p.Shooter, v, 0, BlowOutcome.Hit, part, damage.Cut, damage.Blunt, damage.Pierce, damage.ExtraStun, knockout, death) { Ranged = true, Intended = intended });
+        if (observe && part >= 0)
+            world.ObserveCombatHit(new CombatHit(world.Tick, CombatHitSource.Projectile, new(p.Shooter, p.ShooterGeneration), table.IdOf(v),
+                p.Id, -1, part, damage, absorbed, prev[v].Position, p.Direction, prev[v].Yaw,
+                -1, false, intended, wasAlive, wasIncapacitated));
     }
 
     /// <summary>The cover roll of a bolt: a function of the victim, the bolt and the armour piece.</summary>
