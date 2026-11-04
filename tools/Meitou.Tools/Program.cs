@@ -23,6 +23,7 @@ return args switch
     ["audio", .. var audioArgs] => WithInstall(i => AudioTool.Run(i, audioArgs)),
     ["image-diff", var a, var b] =>ImageDiff.Run(a, b, null),
     ["image-diff", var a, var b, var d] => ImageDiff.Run(a, b, d),
+    ["mod-check", .. var checkArgs] => WithInstall(i => ModCheck.Run(i, checkArgs)),
     ["world-map", var png] => WithInstall(i => WorldSurvey.RenderMap(i, png)),
     ["world-map", var png, var step] => WithInstall(i => WorldSurvey.RenderMap(i, png, int.Parse(step))),
     _ => Usage(),
@@ -55,6 +56,9 @@ static int Usage()
         meitou-tools weather [--region name | --at x,z] [--days d0 d1] [--seed n] [--list] [--extents]  print a region's season and weather timeline (--list: the regions and their calendars)
         meitou-tools audio [bank] [--media | --decode | --wav <folder> [wem id]]  survey every Wwise bank in data/audio, dump one bank's events and object tree, decode its Vorbis WEMs, or write them as WAV
         meitou-tools image-diff <a.png> <b.png> [diff.png]  compare two screenshots: mean difference, share of pixels over 12/255
+        meitou-tools mod-check <save folder> [--ticks n] [--threads n] [--mod <mod folder>]...
+                           load the save headless with the enabled code mods, or the --mod folders (running their code), and compare the state hash
+                           per tick over two one-thread runs and a run on n threads (defaults 600, 4): where they differ, and which hashed systems
         meitou-tools world-map <png> [step]  render a top-down world map (every step-th height sample, default 16)
         """);
     return 2;

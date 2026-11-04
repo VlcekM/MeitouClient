@@ -211,6 +211,9 @@ public sealed class ModHost
         return stream.ToArray();
     }
 
+    /// <summary>The mod and the registered name of a world's system; null for a standard system.</summary>
+    public (string ModId, string Name)? OwnerOf(ITickSystem system) => registry.TagOf(system) is { } tag ? (tag.ModId, tag.Name) : null;
+
     /// <summary>Registers the mods' interface extensions with a new interface; one that throws is logged and skipped.</summary>
     public List<IDisposable> RegisterUi(Func<IUiExtension, IDisposable> register)
     {
