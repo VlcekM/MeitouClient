@@ -344,6 +344,15 @@
                 <TextBox Grid.Column="1" x:Name="ArgumentsBox" LostFocus="Arguments_LostFocus" />
               </Grid>
             </Border>
+            <Border Classes="row">
+              <Grid ColumnDefinitions="*,Auto">
+                <StackPanel VerticalAlignment="Center">
+                  <TextBlock Classes="name" Text="Continue the last save" />
+                  <TextBlock Classes="desc" Text="Play loads the newest save when it was made with the enabled mods; otherwise the game starts at the menu." TextWrapping="Wrap" />
+                </StackPanel>
+                <CheckBox Grid.Column="1" x:Name="ContinueBox" Click="Continue_Click" VerticalAlignment="Center" />
+              </Grid>
+            </Border>
             <Border x:Name="SteamRow" Classes="row">
               <Grid ColumnDefinitions="*,Auto">
                 <StackPanel VerticalAlignment="Center">

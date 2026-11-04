@@ -63,6 +63,7 @@ public sealed partial class MainWindow : Window
         ArgumentsBox.Text = config.LaunchArguments;
         SteamRow.IsVisible = OperatingSystem.IsWindows();
         SteamBox.IsChecked = config.LaunchAsSteamKenshi;
+        ContinueBox.IsChecked = config.ContinueLastSave;
         RendererRow.IsVisible = OperatingSystem.IsMacOS();
         RendererMetalItem.IsVisible = MacSupport.MetalAvailable;
         if (!MacSupport.MetalAvailable && config.Renderer == "metal") config.Renderer = "auto";
@@ -1191,6 +1192,7 @@ public sealed partial class MainWindow : Window
         if (!SaveMods()) return;
         if (graphicsSave?.IsEnabled == true) SaveGame();
         await AskForCodeMods();
+        var (continueFolder, continueNote) = await ContinueTarget(install);
         if (running is { HasExited: false }) return;   // a second click while the question was open started the game already
         var start = new ProcessStartInfo(exe)
         {
@@ -1293,6 +1295,11 @@ public sealed partial class MainWindow : Window
             }
         }
         foreach (var arg in SplitArguments(config.LaunchArguments)) start.ArgumentList.Add(arg);
+        if (continueFolder is not null)
+        {
+            start.ArgumentList.Add("--load");
+            start.ArgumentList.Add(continueFolder);
+        }
         if (renderer is not null)
         {
             // Appended last so the selector wins over a hand-written --renderer in Launch arguments.
@@ -1304,8 +1311,8 @@ public sealed partial class MainWindow : Window
             var game = Process.Start(start);
             running = game;
             string suffix = metalFallback ? " (Vulkan loader missing)" : "";
-            Status(renderer is null ? Tr("Meitou {1} started.", version)
-                : Tr("Meitou {1} started with {2}{3}.", version, RendererLabel(renderer), suffix));
+            Status(renderer is null ? Tr("Meitou {1} started.", version) + continueNote
+                : Tr("Meitou {1} started with {2}{3}.", version, RendererLabel(renderer), suffix) + continueNote);
             if (game is null) { RemoveSteamAppIds(); return; }
             // The game's window is all a player sees of it, so a crash (above all one before the window opens) is reported here.
             var log = Path.Combine(Path.GetDirectoryName(exe)!, "log.txt");

@@ -264,6 +264,14 @@ interpolated string, which no translation could match.
   nothing. Allowed names go to `trustedCodeMods` in `meitou.user.json` (kept by game releases since 2026-10-20, which keep unknown
   keys); data-only names go to the launcher's `DataOnlyCodeMods`, so Play does not ask about them again.
 
+## Continue the last save
+
+Settings → **Continue the last save** (`ContinueLastSave`, off by default): Play appends `--load <folder>` (game 0.10.0 and later) for the
+newest slot From save lists (newest `quick.save` over the three roots), when its CAMERA `mods` list holds the enabled mods, order
+ignored, names compared case-insensitively. Otherwise the game starts at the menu and the status says why: other mods (which are not
+enabled, which are not in the save), no save, no mod list, an unreadable save, or Launch arguments that already pick a start
+(`--load`, `--new-game`, `--no-population`, `--duel`, `--sandbox`, `--battle`, `--terrain-sandbox`; the game refuses `--load` beside the others).
+
 ## News
 
 The Home page shows the repository's `news/` folder (format in `news/README.md`): one folder per article,
