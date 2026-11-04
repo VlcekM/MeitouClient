@@ -132,6 +132,10 @@ public sealed partial class FirstAidSystem
     /// <summary>A chained slave of the medic's faction (<c>FUN_14032e2a0</c>: chained, owner faction the medic's).</summary>
     internal static bool OwnedChained(CharacterCold medic, CharacterCold patient) => patient.SlaveState == 1 && Locks.LockSystem.WornShackles(patient) is not null && patient.SlaveOwner == medic.Faction;
 
+    /// <summary>A patient chained to this very medic (<c>FUN_14032e1e0</c>: the chain flag and the chain's owner is the medic; Meitou's owner is <see cref="Kidnap.ObedientSlave.OwnerOf"/>).</summary>
+    static bool ChainedTo(World world, CharacterId medic, CharacterCold patient) =>
+        Locks.LockSystem.WornShackles(patient) is not null && Kidnap.ObedientSlave.OwnerOf(world, patient) == medic;
+
     /// <summary>
     /// A chained slave on the medic squad's slave list (pass 3's candidates, <c>FUN_14099f690</c>: the platoon's ownerships): a slave member of the squad or one that obeys it (<see cref="CharacterCold.SlaveMaster"/>).
     /// Stand-in: <c>SlaveMaster</c> is runtime only, so a slave with no known master (after a load) counts for every squad of its owner faction.
@@ -348,7 +352,8 @@ public sealed partial class FirstAidSystem
                     var (cage, owned) = CageOwnedBy(world, s, cold.Faction, HomeKey(world, cold));
                     ok = other.SlaveState != 1 && !(cage is not null && MarkedForDeath(world, cold.SquadId, cage)) && (cage is null || owned);
                 }
-                if (!ok && !OwnedChained(cold, other)) continue;
+                // Chained to this very medic: accepted below slave state 2 whatever the rules above said; any other needs them (FUN_14099f690:273-283, Verified).
+                if (ChainedTo(world, table.IdOf(i), other) ? other.SlaveState >= 2 : !ok) continue;
                 if (!other.IsImprisoned && !SeenOrHeard(world, i, s)) continue;   // a free stranger must be seen or heard (:247-248)
                 if (world.Sight.PlaceOf(i) != world.Sight.PlaceOf(s)) continue;
                 float need = Need(world, i, s, organic, robotic);

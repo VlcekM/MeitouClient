@@ -617,7 +617,7 @@ public sealed class MovementSystem(PathService paths) : ITickSystem, IDisposable
                     continue;
                 }
                 var squad = cold.SquadId >= 0 ? world.Squads.Find(cold.SquadId) : null;
-                var leader = Followed(squad, cold);
+                var leader = Followed(world, squad, cold);
                 if (leader.IsNone || leader.Slot == i || !table.IsAlive(leader))
                 {
                     TaskStart.Step(table, i, CharacterTask.Wander);
@@ -717,9 +717,13 @@ public sealed class MovementSystem(PathService paths) : ITickSystem, IDisposable
         }
     }
 
-    /// <summary>Whom a follower keeps its slot by: the target of its <see cref="FollowOrder"/>, a contract's mission target (Ai.AiMind.FollowTarget), else its squad's leader.</summary>
-    static CharacterId Followed(Squad? squad, CharacterCold cold) =>
-        !cold.FollowOrder.IsNone ? cold.FollowOrder : cold.Ai is { FollowTarget.IsNone: false } follows ? follows.FollowTarget : squad?.Leader ?? CharacterId.None;
+    /// <summary>
+    /// Whom a follower keeps its slot by: the target of its <see cref="FollowOrder"/>, a contract's mission target (Ai.AiMind.FollowTarget), its owner (a slave's: Task_FollowLeader, the owner first, <c>FUN_14033b160</c>;
+    /// Meitou's owner is the leader of the master squad, <see cref="Kidnap.ObedientSlave.OwnerOf"/>), else its squad's leader.
+    /// </summary>
+    static CharacterId Followed(World world, Squad? squad, CharacterCold cold) =>
+        !cold.FollowOrder.IsNone ? cold.FollowOrder : cold.Ai is { FollowTarget.IsNone: false } follows ? follows.FollowTarget
+        : Kidnap.ObedientSlave.OwnerOf(world, cold) is { } owner ? owner : squad?.Leader ?? CharacterId.None;
 
     /// <summary>A velocity's horizontal unit direction (zero stays zero, as Ogre's normalise leaves it).</summary>
     static Vector2 Direction(Vector3 velocity)

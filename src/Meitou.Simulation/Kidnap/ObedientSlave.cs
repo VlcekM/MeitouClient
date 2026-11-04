@@ -80,7 +80,7 @@ public static class ObedientSlave
     /// The character the owner handle names (<b>Meitou</b>: the leader of the master squad the slave was sold, arrested or processed into; the original's handle names a character or a
     /// squad); null when the master is not known.
     /// </summary>
-    static CharacterId? OwnerOf(World world, CharacterCold cold)
+    internal static CharacterId? OwnerOf(World world, CharacterCold cold)
     {
         if (cold.SlaveMaster < 0 || world.Squads.Find(cold.SlaveMaster) is not { } master) return null;
         var table = world.Characters;

@@ -161,7 +161,7 @@ literally reads `CARAVAN. MILITARY`). Random draws are uniform (`rand()`).
   move to x = front-most x + 25 + r as a rear guard.
 
 **Following** (`Task_Follow` update `14033b350`, shared by 141 Task_FollowLeader, 31 and the other follow tasks). Task 141 follows
-the slave owner if the character has one, else its squad leader. Formation mode applies when the target is the follower's slave
+the slave owner if the character has one (Meitou: the leader of its master squad, `ObedientSlave.OwnerOf`), else its squad leader. Formation mode applies when the target is the follower's slave
 owner or in its platoon (`14033b160`); otherwise the aim is target + normalise(me − target) × D, D = 20..40 drawn when the task is made
 (`14032ebd0`). Formation aim (`1403335c0`): heading H (task +0xa0) eases toward the leader's XZ direction (−X if zero) while the leader
 moves, H += (dir − H) × 0.5 × dt (`GameLoop_DtScaled`), aim = leader position + H × leader speed + slot rotated from −X onto H, so
