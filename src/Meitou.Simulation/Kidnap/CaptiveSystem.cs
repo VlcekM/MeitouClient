@@ -704,9 +704,10 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
 
     /// <summary>
     /// The watchers' needs-processing test (<c>FUN_1408ca3d0</c>, <b>Verified</b>) for a live character that is no animal and not carried: one without an owner needs it; one whose owner is no ally
-    /// of the watcher does not; one of an allied owner does unless it is a slave in state 1 that <see cref="LooksLikeSlave"/> (the state stands for the original's flag <c>0x3e0</c>, <b>Unknown</b>).
+    /// of the watcher does not; one of an allied owner always does: the original's way out (slave state not 2 or 3, Character slot <c>0x3e0</c> true, <c>FUN_1405a6bb0</c> holds) is never taken as the
+    /// slot is the constant false. Its other test, that no other member of the platoon works the target (<c>FUN_1402690e0</c>), is the callers' <c>Busy</c>.
     /// </summary>
-    bool NeedsProcessing(CharacterCold watcher, CharacterCold c) => c.SlaveOwner < 0 || Allied(watcher.Faction, c.SlaveOwner) && !(c.SlaveState == 1 && LooksLikeSlave(c, watcher.Faction));
+    bool NeedsProcessing(CharacterCold watcher, CharacterCold c) => c.SlaveOwner < 0 || Allied(watcher.Faction, c.SlaveOwner);
 
     /// <summary>
     /// The cage a liberator opens (276, <c>BuildingFinder_CagesToLiberate</c> <c>FUN_1408cf140</c>, <b>Observed</b>): a cage of a faction that is neither the worker's nor allied to it,
@@ -729,24 +730,6 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
             if (d < bestD) (best, bestD) = (f, d);
         }
         return best;
-    }
-
-    /// <summary>
-    /// Whether a slave looks like one (the state <c>TARGET_LOOKS_LIKE_A_SLAVE</c> that processing makes true; the platoon's test <c>FUN_1405a6bb0</c> over the character's worn kit, <b>Observed</b>
-    /// in outline). The reference list is the <i>watcher's</i> faction's <c>slave clothing</c> (<c>FUN_1405a6bb0</c> reads the record of the faction of the character that owns the task system, <b>Verified</b>),
-    /// as processing dresses from it. <b>Engine reading</b>: it wears locked shackles or any of that clothing; the original's test also looks at the torso and leg slots one by one.
-    /// </summary>
-    bool LooksLikeSlave(CharacterCold c, int watcherFaction)
-    {
-        if (LockSystem.WornShackles(c) is not null) return true;
-        if (c.Inventory is not { } inv || data.Factions is not { } factions || (uint)watcherFaction >= (uint)factions.Count || data.Db.Find(factions[watcherFaction].Id) is not { } watcher) return false;
-        var clothing = watcher.GetReferences("slave clothing");
-        // A watcher faction without slave clothing has none to put on: the slaves are not processed over and over (engine choice).
-        if (clothing.Count == 0) return true;
-        foreach (var link in clothing)
-            foreach (var item in inv.Items)
-                if (item.Record == link.TargetStringId && Items.InventoryCommands.IsEquipmentSection(item.Section)) return true;
-        return false;
     }
 
     /// <summary>
