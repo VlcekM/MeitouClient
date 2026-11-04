@@ -328,6 +328,9 @@ public class KidnapTests
 [Slow]
 public class KidnapInstallTests(ITestOutputHelper output)
 {
+    /// <summary>How far round a cage the test's ground is the cage's floor: past its still reach (use range 15, doubled).</summary>
+    const float CageFloorRadius = 40;
+
     [Fact]
     public void A_cannibal_raid_lifts_downed_player_characters_and_cages_them_and_a_save_keeps_them_kidnapped()
     {
@@ -338,7 +341,17 @@ public class KidnapInstallTests(ITestOutputHelper output)
         using var map = TerrainHeightmap.Open(install);
         var buildings = TownBuildings.Build(db, levels, new BuildingLayouts(db, levels.Interiors), (x, z) => map.HeightAt((float)x, (float)z));
         var data = PopulationData.Create(db, levels.Towns(), new GeneratedAppearances(db, install.Root), buildings: buildings);
-        var walk = new OpenGroundWalkability((_, _) => 300);
+        // The terrain, with the floor the navmesh would give round each cage of the raiders' town: Skinhouse HQ's cages stand on upper floors, 87 to 95 above the
+        // ground, and a cage is reached only within 15 of its height (FixtureRegistry.AtCage). The heightmap's file reader is not thread-safe.
+        var cageFloors = new List<Fixture>();
+        var heightGate = new object();
+        float Ground(float x, float z)
+        {
+            foreach (var c in cageFloors)
+                if (Vector2.Distance(new(x, z), new(c.Position.X, c.Position.Z)) < CageFloorRadius) return c.Position.Y;
+            lock (heightGate) return map.HeightAt(x, z);
+        }
+        var walk = new OpenGroundWalkability(Ground);
         SimWorld NewWorld(PopulationSettings settings, out StandardSystemSet set)
         {
             set = StandardSystems.Build(data, walk, new StandardSystemOptions
@@ -365,6 +378,7 @@ public class KidnapInstallTests(ITestOutputHelper output)
             if (world.Fixtures.All.Any(x => x.Kind == FixtureKind.Cage && x.Site == t.Index)) { home = t; break; }
         }
         Assert.NotNull(home);
+        cageFloors.AddRange(world.Fixtures.All.Where(x => x.Kind == FixtureKind.Cage && x.Site == home.Index));
         var outpost = world.Buildings.AddTown(home.Position + new Vector3(1500, 0, 0), data.PlayerFaction);
         world.RunTicks(15);
         var war = population.Wars[faction];
