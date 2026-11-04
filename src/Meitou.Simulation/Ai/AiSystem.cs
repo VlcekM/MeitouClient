@@ -113,6 +113,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     readonly Dictionary<int, HashSet<int>> turretTaken = [];
     // The seats of each bar claimed in the current cadence pass, by building (derived, not hashed).
     readonly Dictionary<TownBuilding, HashSet<int>> seatTaken = new(ReferenceEqualityComparer.Instance);
+    // The guard posts of each building held in the current cadence pass, by spot index (derived, not hashed).
+    readonly Dictionary<TownBuilding, HashSet<int>> postTaken = new(ReferenceEqualityComparer.Instance);
     readonly Rules rules = new();
 
     // ------------------------------------------------------------------ think (parallel)
@@ -429,13 +431,16 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         return best;
     }
 
-    /// <summary>A town's public buildings with a general node by zone, its shops, its public bars and its outdoor tables, as <see cref="RefreshPlaces"/> last found them.</summary>
+    /// <summary>
+    /// A town's public buildings with a general node by zone, its shops, its public bars, its outdoor tables and the guard posts of its
+    /// standing buildings, as <see cref="RefreshPlaces"/> last found them.
+    /// </summary>
     sealed record TownPlaces(IReadOnlyDictionary<ZoneCoordinate, TownBuilding[]> Wander, IReadOnlyList<TownBuilding> Shops, IReadOnlyList<TownBuilding> Bars,
         IReadOnlyList<TownBuilding> OutdoorTables, IReadOnlyList<TownBuilding> Workplaces,
         IReadOnlyDictionary<TownBuilding, ulong> Stock, IReadOnlyList<SeatClaim> Seats, IReadOnlyDictionary<TownBuilding, int> SeatOwners,
-        IReadOnlyList<TownBuilding> Public);
+        IReadOnlyList<TownBuilding> Public, IReadOnlyList<SeatClaim> Posts);
 
-    static readonly TownPlaces NoPlaces = new(new Dictionary<ZoneCoordinate, TownBuilding[]>(), [], [], [], [], new Dictionary<TownBuilding, ulong>(), [], new Dictionary<TownBuilding, int>(), []);
+    static readonly TownPlaces NoPlaces = new(new Dictionary<ZoneCoordinate, TownBuilding[]>(), [], [], [], [], new Dictionary<TownBuilding, ulong>(), [], new Dictionary<TownBuilding, int>(), [], []);
     // Rebuilt in the serial step, read by the think on every worker (derived, not hashed).
     readonly Dictionary<int, TownPlaces> places = [];
 
@@ -510,7 +515,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             }
             places[site] = new(wander, shopList, [.. buildings.Where(b => (b.IsBar || bars.Contains(b)) && IsPublic(b))],
                 [.. buildings.Where(b => b.IsOutdoorTable)], [.. buildings.Where(b => !world.Fixtures.IsDestroyed(b) && b.Function is >= 0 and var fn && (WorkFunctions >> fn & 1) != 0)], stock, seats, seatOwners,
-                [.. buildings.Where(b => b.HasInterior && !b.IsWall && !world.Fixtures.IsDestroyed(b) && IsPublic(b))]);
+                [.. buildings.Where(b => b.HasInterior && !b.IsWall && !world.Fixtures.IsDestroyed(b) && IsPublic(b))],
+                [.. buildings.Where(b => !world.Fixtures.IsDestroyed(b)).SelectMany(GuardPosts)]);
         }
     }
 
@@ -1052,6 +1058,9 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             if (board.Town >= 0) return (Flat(data.Sites[board.Town].Position), true, null, null);
             return (mind.Squad.HomeCentre, true, null, null);
         }
+        // 157 Static town guard: the post of its town it holds (ClaimTownPosts).
+        if (type == TaskType.STAND_AT_GUARD_NODE_HOMETOWN_OUTSIDE && !mind.HomeUnreachable && mind.TownPost is { Spot: var post })
+            return (Flat(post.Position), true, post.Position.Y, post.Yaw);
         if (!mind.HomeUnreachable && GateSpot(board, mind, type) is { } guard) return (Flat(guard), true, guard.Y, null);
         if (board.Home is not { } home || mind.HomeUnreachable || type is TaskType.HOLD_POSITION or TaskType.MAN_THE_GATE) return (mind.Post, false, null, null);
         HomeSpotKind kind = behaviour == AiBehaviour.Sleep ? HomeSpotKind.Bed : type switch
@@ -1343,7 +1352,15 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         if (Interlocked.Exchange(ref leaving, 0) != 0) LeaveFights(world);
         bool cadence = world.Tick % world.Every(Settings.PackageEveryTicks) == 0;
         // Each town's turrets are claimed once per cadence, by the squads in squad order (derived, not hashed).
-        if (cadence) { turretTaken.Clear(); seatTaken.Clear(); ReserveSeats(world); RefreshPlaces(world); }
+        if (cadence)
+        {
+            turretTaken.Clear();
+            seatTaken.Clear();
+            postTaken.Clear();
+            ReserveSeats(world);
+            ReservePosts(world);
+            RefreshPlaces(world);
+        }
         foreach (var squad in world.Squads.All)
         {
             if (squad.Ai is null)
@@ -1393,6 +1410,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             ClaimTurrets(world, board, squad);
             ClaimSeats(world, board, squad);
             ClaimSitting(world, board, squad);
+            ClaimTownPosts(world, board, squad);
             FindGate(world, board, squad);
         }
         if (merges.Count > 0) ApplyMerges(world);
@@ -1440,11 +1458,13 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
 
     /// <summary>
     /// Where a gate's guards stand: the gate guard 15 out from its leaf; a member whose node goal finds no node in a gate it lives in flanks the opening on that side,
-    /// beyond the leaf's edges, alternately left and right in two rows (engine choice: the original's goal finds nothing there). Null for other goals.
+    /// beyond the leaf's edges, alternately left and right in two rows (engine choice: it stands in for the original's gate posts, which no
+    /// layout holds). Null for other goals, and for 157 while it holds a town post.
     /// </summary>
     static Vector3? GateSpot(Blackboard board, AiMind mind, TaskType type)
     {
         if (board.Gate is not { } gate) return null;
+        if (type == TaskType.STAND_AT_GUARD_NODE_HOMETOWN_OUTSIDE && mind.TownPost is not null) return null;
         var front = FrontOf(gate);
         if (type == TaskType.MAN_THE_GATE) return front;
         if (type is not (TaskType.STAND_AT_GUARD_NODE_HOMEBUILDING or TaskType.STAND_AT_GUARD_NODE_HOMEBUILDING_INDOORS_ONLY or TaskType.STAND_AT_GUARD_NODE_HOMETOWN_OUTSIDE
@@ -1625,6 +1645,65 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             TakenOf(found.Building).Add(found.Index);
             board.SitClaims[s] = found;
         }
+    }
+
+    /// <summary>
+    /// The guard posts of 157 Static town guard (<c>AI::findGuardNodeForTown</c>, docs/game/ai-tasks.md "Town goals"): a member whose goal
+    /// is 157 keeps the post it holds, else draws one uniformly among its town's guard posts no one holds (as the original's draw over the
+    /// town's nodes held by no one else). A member on another goal, or whose home spots kept failing, lets its post go. None free: it holds
+    /// none and stands where the home node goals stand (engine choice: the original's goal then finds nothing).
+    /// </summary>
+    void ClaimTownPosts(World world, Blackboard board, Squad squad)
+    {
+        var posts = Places(board.Town).Posts;
+        for (int k = 0; k < squad.Members.Count; k++)
+        {
+            var id = squad.Members[k];
+            if (!world.Characters.TryResolveNext(id, out int s) || world.Characters.Cold(s)?.Ai is not { } mind) continue;
+            bool guards = mind.Goal?.Task.Type == TaskType.STAND_AT_GUARD_NODE_HOMETOWN_OUTSIDE && !mind.HomeUnreachable;
+            if (mind.TownPost is { } held && (!guards || world.Fixtures.IsDestroyed(held.Building)))
+            {
+                PostsTakenOf(held.Building).Remove(held.Index);
+                mind.TownPost = null;
+            }
+            if (!guards || mind.TownPost is not null) continue;
+            mind.TownPost = DrawPost(world, id, posts);
+            if (mind.TownPost is { } got) PostsTakenOf(got.Building).Add(got.Index);
+        }
+    }
+
+    /// <summary>One of <paramref name="posts"/> no one holds, drawn uniformly by the character's roll of this tick; null when all are held.</summary>
+    SeatClaim? DrawPost(World world, CharacterId self, IReadOnlyList<SeatClaim> posts)
+    {
+        int free = 0;
+        foreach (var p in posts) if (!PostHeld(p)) free++;
+        if (free == 0) return null;
+        ulong salt = SeedSalts.AiTarget ^ (ulong)world.Tick << 8 ^ (ulong)TaskType.STAND_AT_GUARD_NODE_HOMETOWN_OUTSIDE;
+        ulong roll = Rng.Hash(world.Seed, Rng.Key(self), RngPurpose.Think, salt);
+        int pick = Rng.Int(roll, free);
+        foreach (var p in posts)
+            if (!PostHeld(p) && pick-- == 0) return p;
+        return null;
+    }
+
+    /// <summary>The town posts the members hold, reserved for every squad before any draws (as <see cref="ReserveSeats"/>).</summary>
+    void ReservePosts(World world)
+    {
+        foreach (var squad in world.Squads.All)
+            foreach (var id in squad.Members)
+                if (world.Characters.TryResolveNext(id, out int s) && world.Characters.Cold(s)?.Ai?.TownPost is { } post)
+                    PostsTakenOf(post.Building).Add(post.Index);
+    }
+
+    bool PostHeld(SeatClaim post) => postTaken.TryGetValue(post.Building, out var taken) && taken.Contains(post.Index);
+
+    HashSet<int> PostsTakenOf(TownBuilding building) => postTaken.TryGetValue(building, out var taken) ? taken : postTaken[building] = [];
+
+    /// <summary>The guard posts of a building (its spots of kind <see cref="HomeSpotKind.Guard"/>), numbered as its spots.</summary>
+    static IEnumerable<SeatClaim> GuardPosts(TownBuilding building)
+    {
+        for (int i = 0; i < building.Spots.Count; i++)
+            if (building.Spots[i].Kind == HomeSpotKind.Guard) yield return new SeatClaim(building, i);
     }
 
     /// <summary>

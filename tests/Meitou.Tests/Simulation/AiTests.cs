@@ -260,6 +260,78 @@ public class AiTests(ITestOutputHelper output)
     }
 
     /// <summary>
+    /// The synthetic town for 157 Static town guard: one resident squad whose package gives every member 157 from 6 to 22, a house with beds, and two
+    /// towers north of it with <paramref name="west"/> and <paramref name="east"/> guard posts, 30 apart.
+    /// </summary>
+    static PopulationData WithPosts(int west, int east, out TownBuilding[] towers)
+    {
+        var guard = Task("130-t", TaskType.STAND_AT_GUARD_NODE_HOMETOWN_OUTSIDE, TaskPriority.NonUrgent);
+        var package = Rec("116-t", FcsRecordType.AI_PACKAGE, "Town guards");
+        package.References["Leader AI Goals"] = [Ref("130-t", 6, 22, 0)];
+        package.References["Squad AI Goals"] = [Ref("130-t", 6, 22, 0)];
+        var db = SyntheticTown.Database(1, extra: [.. Records(), guard, package], changePatrol: p => p.References["AI packages"] = [Ref("116-t", 0)]);
+        Vector3 At(float dx, float dz) => new(Centre.X + dx, 300, Centre.Z + dz);
+        TownBuilding Tower(string id, float dx, int posts) => new(id, "b-" + id, "Tower", At(dx, 60), 0, false, false,
+            [.. Enumerable.Range(0, posts).Select(i => new HomeSpot(HomeSpotKind.Guard, At(dx + 30 * i, 70), 0) { NodeType = 2 })]);
+        towers = [Tower("tower-w", -150, west), Tower("tower-e", 30, east)];
+        var house = new TownBuilding("house", "b-house", "House", At(0, -80), 0, false, false,
+            [new HomeSpot(HomeSpotKind.Bed, At(-10, -90), 0), new HomeSpot(HomeSpotKind.Bed, At(0, -90), 0), new HomeSpot(HomeSpotKind.Bed, At(10, -90), 0)]);
+        return PopulationData.Create(db, [new TownPlacement("inst", "30-t", Centre, null)],
+            buildings: new Dictionary<string, List<TownBuilding>> { ["inst"] = [house, .. towers] });
+    }
+
+    /// <summary>The members of the resident squad whose goal is 157 Static town guard, with their minds.</summary>
+    static List<(CharacterId Id, AiMind Mind)> TownGuards(SimWorld world)
+    {
+        var guards = new List<(CharacterId, AiMind)>();
+        foreach (var squad in world.Squads.All.Where(s => s.TemplateId == "10-t"))
+            foreach (var m in squad.Members)
+                if (world.Characters.Cold(m.Slot)?.Ai is { Goal.Task.Type: TaskType.STAND_AT_GUARD_NODE_HOMETOWN_OUTSIDE } mind) guards.Add((m, mind));
+        return guards;
+    }
+
+    /// <summary>
+    /// 157 Static town guard holds a guard post of its town (docs/game/ai-tasks.md "Town goals"): of a squad of four or more on 157, three draw the
+    /// town's three posts, one each, and stand at them; the others hold none. Catches the goal aimed at the home building's spots (the members stayed
+    /// at their own posts, as a gate's stayed at its gate) and two members drawn onto one post.
+    /// </summary>
+    [Fact]
+    public void Town_guards_take_different_free_posts_of_their_town()
+    {
+        using var world = Town(1, out _, WithPosts(2, 1, out var towers), null);
+        world.RunTicks(900);
+        var guards = TownGuards(world);
+        Assert.True(guards.Count >= 4, $"{guards.Count} members on 157");
+        var holders = guards.Where(g => g.Mind.TownPost is not null).ToList();
+        var posts = holders.Select(g => g.Mind.TownPost!.Value).ToList();
+        Assert.Equal(3, posts.Distinct().Count());
+        Assert.Equal(3, holders.Count);
+        Assert.All(posts, p => Assert.Contains(p.Building, towers));
+        Assert.All(holders, g => Assert.InRange(Off(world, g.Id, g.Mind.TownPost!.Value.Spot.Position), 0, 13));
+    }
+
+    /// <summary>
+    /// A town guard keeps its post while its goal stays 157 and lets it go when the goal ends: the posts drawn stay the same over 20 more package
+    /// cadences, and at 23:00, outside the goal's hours, no member holds one. Catches a draw on every cadence (the guards walking from post to post)
+    /// and a post still held after the goal.
+    /// </summary>
+    [Fact]
+    public void A_town_guard_keeps_its_post_until_its_goal_ends()
+    {
+        using var world = Town(1, out _, WithPosts(4, 4, out _), null);
+        world.RunTicks(300);
+        var held = TownGuards(world).ToDictionary(g => g.Id, g => g.Mind.TownPost);
+        Assert.True(held.Count >= 3, $"{held.Count} members on 157");
+        Assert.All(held.Values, p => Assert.NotNull(p));
+        world.RunTicks(600);
+        Assert.All(held, h => Assert.Equal(h.Value, world.Characters.Cold(h.Key.Slot)!.Ai!.TownPost));
+
+        world.GameHours = 24 + 23;
+        world.RunTicks(300);
+        Assert.All(held.Keys, id => Assert.Null(world.Characters.Cold(id.Slot)!.Ai!.TownPost));
+    }
+
+    /// <summary>
     /// A character already lying in a bed keeps it when it goes to bed (docs/game/locks.md "Bed search"): sleepers moved into each other's beds of
     /// their home (30 apart, beyond the post slack), with no goal yet as after a load, stay in those beds, plan 98 Sleeping first and sleep as the
     /// goal's own task. Catches the goal aiming at the bed its member index picks, whose plan got the saved sleepers of a loaded town out of their

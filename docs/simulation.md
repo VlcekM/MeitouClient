@@ -1745,7 +1745,12 @@ other bar squad holds; the outdoors kind: a free table placed outdoors in the to
 the normal kind none, as the original; none free: the squad keeps its home and does not relax); its members take the free seats nearest that table (engine choice),
 at an outdoor table they stand at it. A home node goal takes a
 node of its kind, a guard post a general node next (as the original), then any node but a shopkeeper's
-(engine; only the shopkeeper goal falls back onto the counter). Gates have no nodes: the gate guard
+(engine; only the shopkeeper goal falls back onto the counter). Static town guard (157) holds a guard post of its town
+instead (`AiMind.TownPost`, `AiSystem.ClaimTownPosts`, on the package cadence): the one it holds while its goal stays 157,
+else one drawn uniformly among the town's guard posts no other 157 member holds (the posts of 38 and 268 are not counted: engine
+choice), as the original ([ai-tasks](game/ai-tasks.md#town-goals)); none free, it stands where the home node goals do (engine choice). The post is
+not saved: a load draws again. Gates have no nodes in their layouts (the original's have 3 or 4 guard posts at run time,
+source **Unknown**): the gate guard
 (180, the home gate, else the town's gate nearest the squad) stands 15 out from the gate's first door
 leaf, on the side away from the town centre (the side is an engine choice), facing out; a member whose
 guard or general node goal finds nothing in its home gate flanks the opening on that side, beyond the
