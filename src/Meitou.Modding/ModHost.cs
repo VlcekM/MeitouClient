@@ -23,8 +23,10 @@ public sealed class LoadedMod
 }
 
 /// <summary>Where a <see cref="ModHost"/> loads from: the enabled mods in order, the mods the player allowed to run code, the merged data and the running world.</summary>
+/// <param name="SavedSettings">The player's saved settings of a mod by its id (setting key to text), or null.</param>
 public sealed record ModHostOptions(
-    IReadOnlyList<ModInfo> Enabled, IReadOnlySet<string> Allowed, GameDatabase Data, PopulationData Population, Func<World?> World);
+    IReadOnlyList<ModInfo> Enabled, IReadOnlySet<string> Allowed, GameDatabase Data, PopulationData Population, Func<World?> World,
+    Func<string, IReadOnlyDictionary<string, string>?>? SavedSettings = null);
 
 /// <summary>
 /// The code mods of a session (docs/modding.md): loads the enabled, allowed ones at startup, runs their <see cref="IMod.Initialize"/> once, and holds what they
@@ -53,6 +55,9 @@ public sealed class ModHost
 
     public IReadOnlyList<IUiExtension> UiExtensions => registry.Ui;
     public IReadOnlyList<ModDebugCommand> DebugCommands => registry.DebugCommands;
+
+    /// <summary>The settings the mods registered, in load order (docs/modding.md "Settings").</summary>
+    public IReadOnlyList<ModSettingsGroup> Settings => registry.Settings;
 
     /// <summary>The record types mods claimed (number, mod's name for it).</summary>
     public IReadOnlyDictionary<int, string> RecordTypes => registry.RecordTypes;
@@ -163,7 +168,7 @@ public sealed class ModHost
     /// <summary>Runs <see cref="IMod.Initialize"/>; commits the registrations when it returns, removes the mod's patches when it throws.</summary>
     void Initialize(LoadedMod mod, ModHostOptions options)
     {
-        var context = new ModContext(mod, registry, options.Data, options.Population, options.World);
+        var context = new ModContext(mod, registry, options.Data, options.Population, options.World, options.SavedSettings?.Invoke(mod.Manifest.Id));
         try { mod.Instance!.Initialize(context); }
         catch
         {

@@ -14,13 +14,16 @@ public sealed class ModContext
 {
     readonly ModRegistry registry;
     readonly Func<World?> world;
+    readonly IReadOnlyDictionary<string, string>? savedSettings;
     Harmony? harmony;
 
-    internal ModContext(LoadedMod mod, ModRegistry registry, GameDatabase data, PopulationData population, Func<World?> world)
+    internal ModContext(LoadedMod mod, ModRegistry registry, GameDatabase data, PopulationData population, Func<World?> world,
+        IReadOnlyDictionary<string, string>? savedSettings = null)
     {
         Mod = mod;
         this.registry = registry;
         this.world = world;
+        this.savedSettings = savedSettings;
         Data = data;
         Population = population;
         RngPurpose = (RngPurpose)(uint)(Rng.StableHash(mod.Manifest.Id) | 0x8000_0000UL);
@@ -137,6 +140,23 @@ public sealed class ModContext
         ArgumentNullException.ThrowIfNull(run);
         if (string.IsNullOrWhiteSpace(label)) throw new ArgumentException("A debug command needs a label.", nameof(label));
         Pending.DebugCommands.Add(new ModDebugCommand(Id, label, hasField, run));
+    }
+
+    /// <summary>
+    /// The mod's settings (docs/modding.md "Settings"): the public properties of <paramref name="settings"/> marked
+    /// <see cref="SettingAttribute"/>, one group on the Settings screen's Mod settings page. The player's saved values are set on the object before
+    /// this returns; the values it has now are the defaults. Once per mod.
+    /// </summary>
+    public ModSettingsGroup AddSettings(object settings)
+    {
+        CheckOpen();
+        ArgumentNullException.ThrowIfNull(settings);
+        if (Pending.Settings is not null) throw new InvalidOperationException($"{Id}: AddSettings is allowed once per mod.");
+        var group = new ModSettingsGroup(Id, Name, settings);
+        if (savedSettings is not null)
+            foreach (string key in group.Load(savedSettings)) Log($"saved setting '{key}' is not a value of a setting; ignored");
+        Pending.Settings = group;
+        return group;
     }
 
     void CheckOpen()

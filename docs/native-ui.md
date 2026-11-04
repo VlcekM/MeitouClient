@@ -10,7 +10,7 @@ read-only binding copies, never mutable world. [MyGUI](formats/mygui.md), [parit
 ## Settings
 
 `SettingsMenu` shares category/row geometry and input between both modes: Display, Graphics, Interface, Controls, Advanced, Audio, Gameplay,
-Fixes, Mods. Faithful uses MyGUI skins; Meitou the [UI kit](meitou-ui.md)'s rust plates and paper Save. Tab or Options opens it;
+Fixes, Mods, Mod settings. Faithful uses MyGUI skins; Meitou the [UI kit](meitou-ui.md)'s rust plates and paper Save. Tab or Options opens it;
 Esc/X/Save saves and returns. Changes apply live (the active upscaler shown beside the requested one); texture quality needs a
 restart. Display and Graphics rows come from the launcher's catalogue (`LauncherSchema.Find` / `Order`: name, range, direction,
 value text, choices, impact, order), so the game and the [launcher](launcher.md#graphics) show them alike; the Tab panel slider
@@ -18,6 +18,9 @@ only reads and writes the value.
 
 Mods (`SettingsMenu.Mods.cs`) is read-only: the mods of the load order with each `.mod` header and its game data problems (`ModReport`), a Copy
 button for the selected mod and one for all problems; a summary line under the version text opens it. Separator files (`[1]---[...]---.mod`) are listed without detail.
+
+Mod settings (`SettingsMenu.ModSettings.cs`) lists the settings code mods registered ([modding](modding.md), "Settings"): a group per mod in load
+order, open the first time it is shown, its rows the page's own switches, sliders and lists; a changed row is brass with a Reset link.
 
 Graphics (`SettingsMenu.Looks.cs`, `.Presets.cs`, `.Groups.cs`; `--settings-showcase` with `--screenshot` captures it) has two
 rows above its tabs:

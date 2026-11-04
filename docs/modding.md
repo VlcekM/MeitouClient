@@ -121,6 +121,15 @@ holds refuses the second mod.
 - **Debug rows:** `AddDebugCommand(label, run, hasField)` adds a row to the F10 menu after the vanilla ones. `run` gets
   `DebugCommandContext` (field, selection, camera target, tick, `Enqueue`) on the host thread while a tick may be in flight, so it must
   not touch the world; it returns the status line, and a throw shows as the status.
+- **Settings:** `AddSettings(object)`, once per mod: the object's public get/set properties marked `[Setting(label, Hint, Min, Max, Step, Options)]`
+  (`ModSettings.cs`) become one group, in declaration order, on the Settings screen's Mod settings page ([native UI](native-ui.md#settings)): `bool`
+  an Off | On switch, `int`/`float`/`double` a slider (Min and Max required; Step 0 = 1 for `int`, a hundredth of the range otherwise), an enum or a
+  `string` with Options a list. Another type, a number without a range or no marked property refuses the mod. The player's values are kept in
+  `meitou.user.json` (`modSettings`: mod id, key, invariant text; a default is not kept) and set on the object before `AddSettings` returns, a
+  number clamped to its range, a value that is not one of the setting's ignored with a log line; the values the object had are the defaults Reset
+  restores. The page sets a changed property at once on the interface's thread, outside the tick, and raises the returned group's `Changed`: a mod
+  copies what its simulation needs in a serial step (its system's `Inputs`). **Verified** by `ModdingTests`; the page **Observed** drawn
+  (2026-11-04, Windows, Vulkan, `--settings-showcase` changed locally to open it with a scratch group); using it in play **Unknown**.
 - **Commands:** a mod's own `SimCommand` types, queued with `Enqueue` and handled in its system's `Inputs`.
 
 ## Harmony

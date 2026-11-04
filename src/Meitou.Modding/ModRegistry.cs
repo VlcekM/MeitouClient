@@ -15,6 +15,7 @@ sealed class ModRegistrations
     public Dictionary<int, string> RecordTypes { get; } = [];
     public List<IUiExtension> Ui { get; } = [];
     public List<ModDebugCommand> DebugCommands { get; } = [];
+    public ModSettingsGroup? Settings { get; set; }
 }
 
 /// <summary>A system a mod's factory made, for its save data: the mod and the name it was registered under.</summary>
@@ -30,6 +31,7 @@ sealed class ModRegistry
     public List<IUiExtension> Ui { get; } = [];
     public List<ModDebugCommand> DebugCommands { get; } = [];
     public Dictionary<int, string> RecordTypes { get; } = [];
+    public List<ModSettingsGroup> Settings { get; } = [];
 
     /// <summary>Throws when a code is below the mods' range or another mod (or this one) has it already.</summary>
     public void CheckFree(ModCodeKind kind, int code, ModRegistrations pending, string mod)
@@ -59,6 +61,7 @@ sealed class ModRegistry
         foreach (var (type, name) in r.RecordTypes) Claim(ModCodeKind.RecordType, type, mod, () => RecordTypes[type] = name);
         Ui.AddRange(r.Ui);
         DebugCommands.AddRange(r.DebugCommands);
+        if (r.Settings is not null) Settings.Add(r.Settings);
     }
 
     /// <summary>The mod and name a world's system was made under; null for a standard system.</summary>

@@ -11,9 +11,12 @@ namespace Meitou.Game;
 /// <summary>Shared settings layout and interaction; the current UI mode selects only its presentation.</summary>
 sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBindings bindings, Action save, Slider frameLimit, UserConfig config)
 {
-    static readonly string[] Pages = ["Display", "Graphics", "Interface", "Controls", "Advanced", "Audio", "Gameplay", "Fixes", "Mods"];
+    static readonly string[] Pages =
+        ["Display", "Graphics", "Interface", "Controls", "Advanced", "Audio", "Gameplay", "Fixes", "Mods", "Mod settings"];
     /// <summary>The MODS page (SettingsMenu.Mods.cs): it lists the loaded mods instead of settings.</summary>
     const int ModsPage = 8;
+    /// <summary>The Mod settings page (SettingsMenu.ModSettings.cs): the settings code mods registered.</summary>
+    const int ModSettingsPage = 9;
     /// <summary>The Graphics tabs: the look tabs, then the quality tabs (SettingsMenu.Looks.cs).</summary>
     internal static readonly string[] GraphicsPages = ["Lighting", "Sky & weather", "Colour", "World", "Characters"];
     /// <summary>The Metal-only preset row (Native / MetalFX quality, balanced, performance / TAA), edited by the Metal settings panel.</summary>
@@ -248,6 +251,7 @@ sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, 
 
     List<Entry> Entries()
     {
+        if (page == ModSettingsPage) return ModSettingsEntries();
         string section = page == 1 ? GraphicsPages[graphicsPage] : Pages[page];
         // In the catalogue's order, the launcher's (LauncherSchema.Order).
         var result = values.Sliders.Where(s => s.Label is not ("Time of day" or "Time speed") && Section(s.Label) == section && ReliefSliderShown(s.Label))

@@ -37,7 +37,8 @@ sealed partial class GameHost
         if (enabled.Count == 0) return;
         Console.WriteLine($"mods      {enabled.Count} code mod(s) enabled; Harmony {ModHost.HarmonyVersion}, code-mod API {ModApi.Version}");
         var allowed = config.TrustedCodeMods.ToHashSet(StringComparer.Ordinal);
-        mods = ModHost.Load(new ModHostOptions(enabled, allowed, db, data, () => session?.World));
+        mods = ModHost.Load(new ModHostOptions(enabled, allowed, db, data, () => session?.World,
+            id => config.ModSettings.TryGetValue(id, out var saved) ? saved : null));
     }
 
     /// <summary>The mods' interface extensions and their load notices, for a new interface.</summary>

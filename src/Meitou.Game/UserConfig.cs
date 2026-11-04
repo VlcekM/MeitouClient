@@ -148,6 +148,10 @@ sealed class UserConfig
     public int AutosaveIndex { get; set; }
     /// <summary>The code mods (by mod name) the player allowed to run their own code (docs/modding.md "Trust"); the launcher asks and adds them. Others load as data only.</summary>
     public List<string> TrustedCodeMods { get; set; } = [];
+    /// <summary>
+    /// The code mods' settings the player changed (docs/modding.md "Settings"): mod id to setting key to the value as text; a default is not kept.
+    /// </summary>
+    public Dictionary<string, Dictionary<string, string>> ModSettings { get; set; } = [];
     /// <summary>The feedback form's ticks and Discord name, as last used; null until the form first opens.</summary>
     public FeedbackSettings? Feedback { get; set; }
     public Dictionary<string, float> Graphics { get; set; } = [];
