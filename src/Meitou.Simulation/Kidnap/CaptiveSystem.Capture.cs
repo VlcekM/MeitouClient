@@ -17,16 +17,17 @@ namespace Meitou.Simulation.Kidnap;
 /// and carries it to a cage of its faction (goal 112 in the original, here <see cref="KidnapSystem.Carry"/>).</item>
 /// <item><b>Carry</b> (168 "Carrying slaves", finder <c>FUN_1408cdf50</c>): the same for a downed slave owned by the carrier's faction, with no strip or cuff.</item>
 /// <item><b>Shout</b> (188 "Working the slaves", finder <c>FUN_1408cd940</c>): the worker says event 38 SHOUT_AT_SLAVE_WORKER to a random slave of its squad that is alive, uncarried and uncaged
-/// (the row's TaskData event, <b>Verified</b>: the registration of 188 stores 0x26 at <c>+0x130</c>), then walks towards it until the line is over (<c>Task_TalktoPlayer</c> fires the event when
-/// it starts and walks on to the target). A worker shouts again after <see cref="CaptiveSettings.ShoutCooldownSeconds"/> (engine pacing: the original scores the goal at 0.25 per slave
-/// against the others).</item>
+/// (the row's TaskData event, <b>Verified</b>: the registration of 188 stores 0x26 at <c>+0x130</c>) and keeps with it, saying the event
+/// again every <see cref="CaptiveSettings.ShoutSeconds"/>, until it says a line: the row's B list is <c>isDialogDelivered</c>, and the
+/// original's worker stays on 188 with one slave as target for long spells (<b>Observed</b>). The next sweep then picks a slave again, with no
+/// pause between.</item>
 /// </list>
 /// A job that gives up puts its target on the capturer's give-up list for <see cref="CaptiveSettings.GiveUpHours"/> (engine: the writer of the original's list is not traced).
 /// </summary>
 public sealed partial class CaptiveSystem
 {
-    /// <summary>The downed and cuffed or carried: the AI's give-up list entries and the shouters' pacing (hashed while any exist).</summary>
-    readonly List<(CharacterId Who, double Until)> givenUp = [], shoutUntil = [];
+    /// <summary>The downed and cuffed or carried: the AI's give-up list entries (hashed while any exist).</summary>
+    readonly List<(CharacterId Who, double Until)> givenUp = [];
 
     /// <summary>The kidnapping system that carries a captive to a cage once it is cuffed (null: captives are cuffed and left).</summary>
     public KidnapSystem? Kidnap { get; set; }
@@ -57,7 +58,6 @@ public sealed partial class CaptiveSystem
     void ExpireWaits(double now)
     {
         givenUp.RemoveAll(e => e.Until <= now);
-        shoutUntil.RemoveAll(e => e.Until <= now);
     }
 
     /// <summary>
@@ -143,15 +143,12 @@ public sealed partial class CaptiveSystem
         {
             case TaskType.WORK_THE_SLAVES:
             {
-                if (Waiting(shoutUntil, worker, now)) return null;
                 var slaves = new List<int>();
                 foreach (int s in SlavesOf(world, squad))
                     if (table.Cold(s) is { CarriedBy.IsNone: true, InSomething: HeldState.None } && !Waiting(givenUp, table.IdOf(s), now) && !Busy(table.IdOf(s))) slaves.Add(s);
                 if (slaves.Count == 0) return null;
                 ulong roll = Rng.Hash(world.Seed, Rng.Key(worker), RngPurpose.Slow, ShoutSalt + (ulong)world.Tick);
                 int pick = slaves[Rng.Int(roll, slaves.Count)];
-                // 0.5 to 1.5 times the cooldown, so the workers do not shout together.
-                SetWait(shoutUntil, worker, now + Settings.ShoutCooldownSeconds * (0.5 + Rng.Float(Rng.Mix(roll))) / World.SecondsPerGameHour);
                 return new CaptiveJob { Kind = CaptiveJobKind.Shout, Worker = worker, Captive = table.IdOf(pick), Cage = "", Faction = cold.Faction };
             }
             case TaskType.CAPTURE_NEW_SLAVES or TaskType.CARRY_WOUNDED_SLAVES:
@@ -175,6 +172,51 @@ public sealed partial class CaptiveSystem
 
     // ------------------------------------------------------------------ one job
 
+    /// <summary>
+    /// One tick of a Shout job (188, <c>Task_TalktoPlayer</c>): event 38 as it starts, as the task fires it, and again every
+    /// <see cref="CaptiveSettings.ShoutSeconds"/> while the worker is quiet (engine choice: the original's re-plan rate is not decoded). The job
+    /// ends once the worker speaks after an event went out (engine choice, see <c>docs/simulation.md</c>: the original's B list
+    /// <c>isDialogDelivered</c> is true without a Dialogue object, else the event delivered in its town), so a line still showing from the last
+    /// job neither ends this one nor is talked over. A worker with no line never ends it: <see cref="CaptiveSettings.GiveUpSeconds"/> does.
+    /// </summary>
+    bool StepShout(World world, CaptiveJob j, int w, Vector2 to)
+    {
+        bool speaking = (talk ??= world.SystemOf<Dialogue.DialogueSystem>())?.Engages(j.Worker) == true;
+        if (j.Blows > 0 && speaking) return End(world, j, CaptiveEventKind.Shouted);
+
+        if (!speaking && (j.Blows == 0 || j.Time >= Settings.ShoutSeconds))
+        {
+            j.Blows++;
+            j.Time = 0;
+            world.Defer(new Dialogue.DialogueEvent(j.Worker, j.Captive, ShoutAtSlaveWorker) { Tick = world.Tick + 1 });
+        }
+
+        FollowSlave(world, j, w, to);
+        return true;
+    }
+
+    /// <summary>The worker walks to its slave and stands within <see cref="CaptiveSettings.ShoutReach"/> of it, walking on when the slave moves off.</summary>
+    void FollowSlave(World world, CaptiveJob j, int w, Vector2 to)
+    {
+        var table = world.Characters;
+        var here = new Vector2(table.Next[w].Position.X, table.Next[w].Position.Z);
+        bool walking = table.Next[w].Task == (byte)CharacterTask.GoTo;
+
+        if (Vector2.Distance(here, to) <= Settings.ShoutReach)
+        {
+            if (walking) TaskStart.Stand(table, w);
+            return;
+        }
+
+        if (!walking || Vector2.Distance(table.Next[w].Goal, to) > 5)
+        {
+            TaskStart.Walk(world, w, to, SpeedMode.Walk, RowOf(j.Kind), TaskSource.Goal);
+        }
+    }
+
+    // The dialogue a Shout job asks whether its worker said a line (null until first asked, or without one).
+    Dialogue.DialogueSystem? talk;
+
     bool StepSlaveWork(World world, CaptiveJob j, int w, CharacterCold wc)
     {
         var table = world.Characters;
@@ -182,19 +224,7 @@ public sealed partial class CaptiveSystem
         if (!table.TryResolveNext(j.Captive, out int c) || table.Cold(c) is not { } cc || cc.Medical is not { Dead: false } || !cc.CarriedBy.IsNone || cc.IsImprisoned)
             return End(world, j, CaptiveEventKind.GaveUp);
         var to = new Vector2(table.Next[c].Position.X, table.Next[c].Position.Z);
-        if (j.Kind == CaptiveJobKind.Shout)
-        {
-            if (j.Blows == 0)
-            {
-                // The task fires its event as it starts (Task_TalktoPlayer slot 1) and walks to the target while the line lasts.
-                j.Blows = 1;
-                world.Defer(new Dialogue.DialogueEvent(j.Worker, j.Captive, ShoutAtSlaveWorker) { Tick = world.Tick + 1 });
-            }
-            var here = new Vector2(table.Next[w].Position.X, table.Next[w].Position.Z);
-            if (Vector2.Distance(here, to) <= Settings.ShoutReach || j.Age > Settings.ShoutSeconds) return End(world, j, CaptiveEventKind.Shouted);
-            if (table.Next[w].Task != (byte)CharacterTask.GoTo || Vector2.Distance(table.Next[w].Goal, to) > 5) TaskStart.Walk(world, w, to, SpeedMode.Walk, RowOf(j.Kind), TaskSource.Goal);
-            return true;
-        }
+        if (j.Kind == CaptiveJobKind.Shout) return StepShout(world, j, w, to);
         // It got up: a caged one is beaten down first (196 Beat prisoner, Task_KillPrisoner: B list 78 imprisoned, 5 weapon drawn; effect 7 target down) by an armed worker;
         // any other is given up.
         if (!Down(cc) && j.Kind == CaptiveJobKind.Capture && (!cc.IsImprisoned || combat is null || wc.Fighter is not { Unarmed: false })) return End(world, j, CaptiveEventKind.GaveUp);
@@ -297,7 +327,5 @@ public sealed partial class CaptiveSystem
     {
         hasher.Add(givenUp.Count);
         foreach (var (who, until) in givenUp) { hasher.Add(who); hasher.Add(until); }
-        hasher.Add(shoutUntil.Count);
-        foreach (var (who, until) in shoutUntil) { hasher.Add(who); hasher.Add(until); }
     }
 }

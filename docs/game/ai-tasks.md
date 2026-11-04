@@ -648,6 +648,24 @@ Meitou: [simulation, captives](../simulation.md#captives).
   (`Blackboard +0x88`) for a building through `BuildingFinder_SpecialFunction` (mask 0x41a read as bits, **Observed**: 1 MINE, 3 RESEARCH, 4 REFINERY, 10 CRAFTING) and takes one at random
   (slot 2 `FUN_1409fb020`: index `FUN_1409b3b40(0, n - 1)`); the town test is the one in the table above. Acting out is 87 (real: needs the machine's inputs and output room, power, a free operator slot) or
   221 (pretend); both `Task_OperateMachine` ([sitting and the held tool](ai-tasks.md#town-goals), [production](buildings-production.md#production)). Meitou: 189 operates the town building's machine when its plan starts with 87 and empties it when it starts with 92, 190 pretends at the building at its functionality's clip (`stonemine` by default, with its `animation events`, [audio](../audio.md#characters-footsteps-combat-voices) "Machine work"; [NPC town machines](buildings-production.md#npc-town-machines)); **engine choice**: the building's `use range` is not read (30 units).
+  - **The finder's visit** (`FUN_1408cebe0`, the query's slot 0, **Verified** by disassembly) keeps a building when all of these hold:
+    - `getUseableStuff()` (vfunc 0x300) is set and `getBuildState()` (0x228) is complete;
+    - its function (0x2f0) is in the mask, and it is of the query's town;
+    - a test of the building against the worker passes (`FUN_14003bd0e`, **Unknown**), or the worker is in slave state 1;
+    - it is not on a list of the worker's (`+0x650`, `+0x20`, **Unknown**), and a foliage building (`+0xc0`) is within reach;
+    - `UseableStuff::couldIOperate(worker)` (vfunc 0x500, `FUN_1400f7c90`, the same for UseableStuff, ProductionBuilding and
+      CraftingBuilding) holds: not `dontNeedWorkRightNow()` (0x4e8; false but for ResearchBuilding and FarmBuilding), and the worker already
+      operates it or the operators (`+0x3d0`) are fewer than `numOperatorsMax` (`+0x3ac`; the functionality's `max operators`, 6 for a
+      Stone mine, 1 for Stone processing).
+    - So the finder takes a refinery with a free slot whatever its inputs.
+  - **The plan refuses an empty machine**: 87's B list has !62 `machineHasEmptyInputs`, whose only provider is 93 Filling machine (67
+    `haveSomeResourcesFor`, from 94 and a source of the input). **Observed** (KenshiOracle state 0.5 hold, Rebirth, N = 1): the
+    original's slaves on 189 work only the quarries (Stone mine) and never the four unfed Manual Stone Processors.
+  - Meitou: 189 picks only a workplace it can run (`AiSystem.RealWork`): a mine, or a refinery, research or crafting bench with a machine
+    running there that has its inputs. An NPC town's machine is never fed (rows 94 and 93 are not modelled), so only its mines count (engine choice for the plan's fill-or-fail).
+    190 (pretend, no 62 in 221's B list) still picks any workplace. A member on 189 or 190 holds an operator slot (`AiMind.WorkPost`,
+    `AiSystem.ClaimWork`, serial on the package cadence, the kept slots reserved first): up to the functionality's `max operators` per
+    workplace, no limit for a building without a functionality record.
 - **Obedient Slave** (187, flags 0x75, TaskData kind +4 = 1 and +8 = 0 like a plain job, no lists, no desire or finder of its own, task class `Task_Blank`). Meitou:
   [simulation, captives](../simulation.md#captives). A **perma-job** (it sits in the character's job list, `+0x88`), not a goal, whoever the character is.
   - **Added and removed** (**Verified**, `FUN_1405a4940` slave state setter -> `FUN_14032e0d0`): when the slave state *changes* (the setter does nothing for the same state), a change **to 1**
@@ -685,7 +703,12 @@ Meitou: [simulation, captives](../simulation.md#captives).
     runtime only: after a load it is the squad of the owner character the save's `slaver` handle names ([save](../formats/save.md)), else the owner is found again from the job's saved handle when it names a character.
 - **Shout** (188, `Task_TalktoPlayer`, slots 1 and 2 `FUN_14034c5a0` / `FUN_14034c7c0`): the event is the row's (TaskData `+0x130`: **Verified** 0x26 for 188, 0x27 for 194 and 218, 9 for 158 and 283).
   Start fires it at the target (`FUN_140684990`); each update walks to the target (vfunc `0x3b0`), repeats event 9, gives up after 25 minutes with event 60, and ends when the dialogue is free.
-  The slavers' event-38 lines ("shout at slave worker": chance temporary 10, six lines) are in "slaver guard MAIN" and "Holy Nation Paladin". Meitou paces it: a worker shouts at most every 60 to 180 game seconds.
+  The slavers' event-38 lines ("shout at slave worker": chance temporary 10, six lines) are in "slaver guard MAIN" and "Holy Nation Paladin".
+  **Observed** (probe, state 0.5 live check, the 10 workmasters of Rebirth, N = 1): a workmaster on 188 keeps it with one slave as target for
+  long spells (one to three targets an hour), with order `move_on_free_will` at 72 of 75 checks and `send_dialogue_signal` at 3, and none ever
+  takes `stay_in_home`. Meitou (engine choice): the Shout job keeps with its slave and says the event again every 8 s until its worker speaks,
+  then the next job picks a slave again ([simulation](../simulation.md)). The original's `isDialogDelivered` is not that test: it is true
+  without a Dialogue object, else whether the event was delivered in the speaker's town ([dialogue](dialogue.md)).
 - **Capture** (167): the planner chain is 167 (effect isChained 134) <- 166 Restraining (`Task_CuffTarget`; needs 38, at location, 118 TARGET_IS_UNARMED, 7 target down) <- 181 Stripping weapons
   (`Task_StripWeapons`; effect 118). The chain needs 38 `hasOneWorkingArm` (either arm, **Verified**: rows 166 and 181) and nothing else of the arms; 167 has no B list. Only the later lift (rows 213, 240, 246, 68, 170: 80 `isCarryingArmOK`, the left arm) needs the left arm, so a one-armed capturer cuffs and then leaves the captive. **Strip** (**Observed**, `FUN_14034e7b0`): `medic` for 0.8 s, then the items of the target's `hip` and `back` sections (`FUN_140747ff0`) go to the
   stripper's inventory (else its storage), and the stripper's squad sets short-term tag 6 on the target (`FUN_1406744a0`; the NPC looting finder skips tag-6 targets, [carry-loot](carry-loot.md#33-npc-looting)). **Cuff** (`FUN_14034af20`): a "Restraining" bar
@@ -705,7 +728,8 @@ Meitou: [simulation, captives](../simulation.md#captives).
 
 **Observed** (TaskData constructor `FUN_14061d350`, registrations in `FUN_140319a60` parsed for all 253 rows, scorer `FUN_14050df10`, `AITaskSytem`
 vfunc 5 `FUN_14050caf0`). TaskData fields: +0x108 desire (a member function, nearly always a virtual of the `AI` object: `mov rax,[rcx]; jmp [rax+slot*8]`);
-+0x160 target finder (returns a factor, 0 when it found nothing; the desire is multiplied by it when the row has an effect, `FUN_14060fd80`);
++0x160 target finder (returns a factor, mostly 0 when it found nothing, a constant for 38, 268 and 157 ([town goals](#town-goals)); the desire is multiplied
+by it when the row has an effect, `FUN_14060fd80`);
 +0x18 / +0x1c commitment minimum / random range in game hours; +0x20 commits; +0x34 crowd factor (default 1); +0x3c is read by the senses
 (`FUN_1408529c0`, meaning **Unknown**).
 
@@ -775,9 +799,20 @@ update `FUN_140511130`, `Character::setupAI` `FUN_140621b70`; KenshiLib names **
 
 - **When**: the chooser runs on a replan request (`AITaskSytem` vfunc 3 `FUN_140506cf0` sets +0x1b0; the update `FUN_140511130` chooses, otherwise `FUN_14050d970`
   only steps the running plan): a plan finished, an order added, a stagger (`forceOrderInsert`), `underMeleeAttack` with the fight off unless the target gets up or is
-  player-side and moving ([combat](combat.md#fight-lifecycle-and-orders)). No periodic replan was found (**Observed**). Between replans the plan step (`FUN_14050d970`, **Observed**) ends the current goal's plan
+  player-side and moving ([combat](combat.md#fight-lifecycle-and-orders)). No periodic replan was found (**Observed**). Between replans the plan step (`FUN_14050d970`, **Verified**) ends the current goal's plan
   (`FUN_14050d7d0`, so the chooser runs again) when the goal's list A holds (`FUN_140513f50`), when its hours are over, or when the goal's row can no longer run (`FUN_14060f940`); a further test on
   the queued task is not decoded (**Unknown**). It does not weigh the goal's desire again, so a goal's fight runs until it ends by itself (nothing left, target down, give-up) or its goal is done.
+- **Goal end** (**Verified**, disassembly; fields from KenshiLib `AITaskSytem`: +0x1C0 `currentGoal`, +0x20C its priority, +0x280
+  `currentGoalExpiryTime` in game hours):
+  - the plan step tests the hours (start < end half-open, overnight otherwise) unless the goal's row has +0x16 set;
+  - the plan end (`FUN_14050d7d0`) clears the plan and asks for a replan, and keeps `currentGoal` while it commits and its expiry has not
+    passed (`TimeOfDay::timeOfDayHasPassed`, `FUN_140791c20`: an unset time counts as passed);
+  - the update clears `currentGoal` and its priority whenever no plan is left after the chooser, committed or not. So a committed goal
+    ends with its hours: the chooser, committed at the goal's priority, stops before that tier (sources 2 and 5) and plans nothing.
+  - The setter (`FUN_14050caf0`) sets the expiry to now only for a new committing goal; every set adds min + r x range, so setting the
+    same goal again extends it. Row 153 registers 2, 8 and the commit flag (`FUN_140319a60`).
+  - **Observed** (KenshiOracle state 0.5 hold, Rebirth, N = 1): 24 garrison sleepers on 153 (23 to 11) had no goal and no order from
+    11:00 and lay on in bed to the hold's end at 11.6 h. Why the default task does not take over or get them up is **Unknown**.
 - **Sources**, in order; the first whose pick has a plan above 0 runs:
   1. The front of the order queue (+0x40 deque, count +0x60): first popped when done (list A holds) or its desire x finder is 0 or less; then planned with the search flag
      ([planner](#planner)). A player character's order that fails to plan shows its failure text (vfunc 0x2d8) and stays queued (**Observed**); the chooser goes on.
@@ -1015,6 +1050,27 @@ update `FUN_140511130`, `Character::setupAI` `FUN_140621b70`; KenshiLib names **
   reserved; guard posts fall back to general nodes. A node marker faces along its local −X: for 784 of 990 shopkeeper nodes in base-game town interiors,
   yaw − 90° points at the nearest Shop Counter's side the node stands on (**Verified**, layouts placed by `TownBuildings`, compared with each counter's
   yaw; the rest are corner or odd-angled counters). The engine turns a character arriving at a node that way.
+- **38 / 268 Static guard, 157 Static town guard** (**Verified**, disassembly of 1.0.65; names from KenshiLib `AI.h`, whose RVAs are
+  0x17b0 lower): 38 `findGuardNodeForBuilding_inOrOut` and 268 `_indoorOnly` call `findGuardNodeForBuilding_nearestPlayer(out,
+  indoorsOnly)` (`FUN_14099edd0`); 157 is `findGuardNodeForTown` (`FUN_14099f1a0`).
+  - **nearestPlayer**: when the home building (`StateBroadcastData` +0x48) has designation (`Building` +0xc4) BD_SHOP, BD_BAR or
+    BD_HQ, is public (vfunc 0x290 `isPublic`) and the character's faction is real (`notARealFaction` +0x1d0 clear), it draws one
+    of the characters it senses (`sensoryData.seen`, filter (2, 0x2a9) **Unknown**) that are indoors (`isIndoors`, vfunc 0x1d8,
+    compared with the home: **Observed**) and takes the home's guard post nearest them (`FUN_14038ab50`): factor 1, 0 with none.
+    Otherwise, or with nobody drawn: `AI::findNode(NODE_GUARD_POST, home only, indoorsOnly)`, factor 0.5 whatever it finds.
+  - **findGuardNodeForTown**: keeps a current target that is still a node, else `findNode(NODE_GUARD_POST, false, false)`; factor
+    1 whatever it finds.
+  - **`AI::findNode`** (`FUN_14099e920`): keeps the character's current node of the type while it is free or the character's (home
+    only: still in the home). Home only: a random node of the type in the home (`FUN_14038c2f0`; no holder test), then a general
+    node. Else a uniform draw (`FUN_14038b000`) over the node manager's list for the character's town (+0x50), of the nodes held
+    by no one (holder type 11, null) or by the character; no type test. A found node is registered with the node manager
+    (`FUN_14038a5a0`). None found: a null target, with which the plan cannot run ([planner](#planner), Can run, **Observed**).
+  - **Observed** (KenshiProbe state 0.5 live check, Rebirth Gate Guards, N = 1): the 38 holders of each Defensive Gate II stand on
+    3 or 4 guard posts of that gate, 60 to 120 from its centre, often two members on one post; no layout in the data has such nodes.
+    The 157 holders walk to posts across the town, up to about 1400 away. What the town list holds is **Unknown** (the walks fit
+    the town buildings' guard posts).
+  - Meitou: 157 holds a guard post of its town ([simulation](../simulation.md#ai)); 38 and 268 take the home's posts, a gate
+    member a flank spot; branch nearestPlayer and the factors are not modelled.
 - **118 Shopping** (`FUN_1409997f0`, **Verified**): a shop of the town selling an item on the character's shopping list (`FUN_1409fc070`), else, only when the faction of the
   shopper's town has no player flag (`+0x250` clear; the list loop runs first and a hit skips this test), a random building (`FUN_1409fc1b0`): a town of the player's faction gets
   no random shopping, only list hits; none found: 0. Factor 1 for a BF_SHOP building, 0.4 otherwise. Then 119 (`Task_Shopping`) at it. Both finders scan the zone's
@@ -1047,14 +1103,25 @@ update `FUN_140511130`, `Character::setupAI` `FUN_140621b70`; KenshiLib names **
     forgotten, so the next think picks a shop again). The fallback is a random public building of the town with an interior that is not a wall or ruin (`TownPlaces.Public`; the original's set, the buildings of class SHELL_WITH_INTERIOR with function id 19, is not read from data: **Observed**), not in a town of the player's faction (`AiSystem.RandomShopping`). The desire is the finder's factor (**Verified**): 1 when the pick is a shop (Meitou's shop set stands for BF_SHOP furniture), 0.4 (`ShopNoCounterFactor`) for any other building, 0 when none is found or nothing is left on the list. A shop is walked to as before (a node in it); another building within 30 of its origin on any floor, where the buy step finds no seller and the visit ends. What gates the random fallback on the town's `+0x250` (`FUN_1409997f0`) is **Unknown**.
 - **214 Relaxing** (`FUN_140998d10`): the current package's own target (package vfunc 1); none: 0. Effect `IS_WORKING`, acted out by 87 Operating
   machine, i.e. using furniture there; with no free one the plan fails and another goal wins.
-- **Hang-around-bar package** (`Package_HangAroundBar`, start vfunc 6; **Observed**): its town is the squad's home town, else the nearest friendly one
-  (`FUN_1402916b0`); only while that town's zone is loaded. The town's buildings of designation 3 (BD_BAR, the residents' template's
-  `building designation`; town vfunc `0x2d0`) are scanned cyclically from a random one; the first with a free **table** wins, that table is
-  reserved for the squad in a global table→squad map (`DAT_14212ddb8`) and becomes the package's target. A town with no bar takes a free table
-  outdoors in it; all bars full: no target. The table search (`FUN_140292de0`, `BuildingFinder_TableToSitAt` vfunc 5) keeps furniture of
-  function mask 0x10810 (BF_REFINERY, BF_CORPSE_DISPOSAL, BF_TABLE) in the town, of a faction not hostile to the squad's, inside the bar (or,
-  with no bar, inside no building), in a public building (vfunc 82) and not reserved. The outdoors variant (flag +0x151, BarOutdoors) skips the
-  bars and takes a free outdoor table. So a bar holds as many visiting squads as it has free tables.
+- **Hang-around-bar package** (`Package_HangAroundBar`, start vfunc 6; **Observed** unless marked): its town (`FUN_1402916b0`, **Verified**) is the town
+  of the platoon's home building, else its home town (platoon vfunc 0x98 `+0x30`), else the nearest town for its faction (`FUN_14004f13d`, mode 2,
+  then 0); only while that town's zone is loaded. The town's buildings of designation 3 (BD_BAR, the residents' template's `building designation`;
+  town vfunc `0x2d0`) are scanned cyclically from a random one; the first with a free **table** wins, that table is reserved for the squad in a
+  global table→squad map (`DAT_14212ddb8`) and becomes the package's target; all bars full: no target.
+  - The table search (`FUN_140292de0`, **Verified** by disassembly) asks the town (vfunc 0x2c8, `FUN_1409fc540`) for its furniture through a filter
+    (vfunc 5 `FUN_1408ca670`). It keeps a piece:
+    - of the package's town, and of a faction not hostile to the platoon's (`FUN_1406b26d0`);
+    - inside the bar when there is one (`isIndoors`, vfunc 0x1d8);
+    - **indoors for the normal kind, outdoors for the outdoors kind** (package flag +0x151, BarOutdoors);
+    - of function 16 BF_TABLE, 11 BF_CORPSE_DISPOSAL or 4 BF_REFINERY. A refinery passes only when the object of its vfunc 0x300 has 13 at
+      +0x3f8 (meaning **Unknown**). A table or corpse disposal inside a building needs that building to be the bar, public (vfunc 0x290), or
+      to pass an owner test (**Unknown**).
+  - With no bar the search then drops every piece inside a building. With its flag set it drops the pieces in the table→squad map, the only
+    reservation it reads.
+  - So a town without a bar gives the normal kind (signal 17) no table: its filter keeps indoor pieces, and the no-bar pass drops them. Only the
+    outdoors kind (26) takes a free outdoor table. A bar holds as many visiting squads as it has free tables.
+  - **Observed** (KenshiProbe state 0.5 live check, N = 1): a Holy Prisoner Caravan on signal 17 in Rebirth, which has no bar, shops all hour
+    and never relaxes.
 - **36 Patrolling town** (`Task_PatrolTown` slots 1-3 `FUN_140336370` / `FUN_1403364b0` / `FUN_1403365b0`, **Verified** by the decompile and the `FUN_1405c6b30` mover; row 36 has no finder or
   effect, registration in `FUN_140319a60`, and no commitment). The task instance's vfunc `0x48` is the character (as in Task_Patrol and Task_Follow), `0x40` the task's target test. Start and resume
   (modes 0 / 2) do nothing without a target; the update (mode 1) never asks, so it always runs: it hands the mover the **character's own position** and, only while the task has a target, the
@@ -1116,7 +1183,7 @@ update `FUN_140511130`, `Character::setupAI` `FUN_140621b70`; KenshiLib names **
   two points (`FUN_14029cc90`) are its leaf's centre ± 15 (constant `0x14168a258`) along the leaf's thin axis, dropped to the ground;
   Meitou takes the fallback gate nearest the squad (one `Blackboard.Gate` per squad), not nearest each guard (engine choice, one guard per gate squad in practice).
   which side `+0x3bc` is depends on a door body offset (**Unknown**). Gate BUILDING records have no nodes (**Verified**, the merged
-  load order's Defensive Gates II-V), so the squad's guard node goals find nothing there.
+  load order's Defensive Gates II-V), yet the gate members' 38 finds 3 or 4 posts per gate at run time (Static guard above).
 
 ## Perma-jobs
 

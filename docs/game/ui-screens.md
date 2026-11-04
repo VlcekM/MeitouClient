@@ -195,7 +195,9 @@ Empire Citizen and The Cannibal Hunters). The "Meitou" sentences are engine choi
   total is 0 and counts down otherwise, so the bar appears after six updates with work pending and hides as soon as the queue empties.
 - A second pair of counters over two other queues is kept the same way but not drawn.
 - Meitou (`ResourceLoadBar`, Faithful mode): stepped once a drawn frame. Pending means the objects' plus the characters' loads (engine choice: the
-  original's queue holds the meshes and textures it loads in the background; terrain and foliage streaming are left out). It is drawn last on the
+  original's queue holds the meshes and textures it loads in the background; terrain and foliage streaming are left out). The characters' part counts only
+  the looks the renderer is going to build (the build step's own rule: near the eye or a kept point, or a portrait), not those of far NPCs it leaves
+  unbuilt until the eye comes near, which would keep the bar up for the whole session. It is drawn last on the
   loading screen and over the in-game UI.
 
 ## 4. HUD (MainBarGUI)
