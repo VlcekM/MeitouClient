@@ -188,7 +188,8 @@ sealed partial class GameHost
 
     /// <summary>
     /// The edited character's poses: the chosen idle stance at its record's play speed, as the simulation plays it (0 for the stances: a held pose of a 1-frame clip;
-    /// 0.01 for squat), cross-faded from the stances chosen before at the simulation's blend rate (<c>animation blend rate</c>).
+    /// 0.01 for squat; a mod's one-shot stance held at its last frame, <see cref="EditorClipTime"/>), cross-faded from the stances chosen before at the simulation's blend rate
+    /// (<c>animation blend rate</c>).
     /// </summary>
     CharacterPose[] EditorStancePoses(CharacterId id, string stance)
     {
@@ -204,7 +205,7 @@ sealed partial class GameHost
             if (weight <= 0) editorStances.RemoveAt(i);
             else editorStances[i] = (name, weight);
         }
-        return [.. editorStances.Select(s => new CharacterPose(s.Stance, animationLibrary?.IndexOf(s.Stance) is >= 0 and int k ? (float)now * animationLibrary.Definitions[k].PlaySpeed : 0, s.Weight))];
+        return [.. editorStances.Select(s => new CharacterPose(s.Stance, EditorClipTime(s.Stance, (float)now), s.Weight))];
     }
 
     readonly HashSet<CharacterId> fullRate = [];
