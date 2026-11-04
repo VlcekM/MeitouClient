@@ -233,6 +233,45 @@ public class JailSaveTests
         finally { Directory.Delete(Path.GetDirectoryName(folder)!, recursive: true); }
     }
 
+    /// <summary>
+    /// A town member saved in a cage holds that cage again on load, although its platoon comes in after the town registered its fixtures
+    /// (docs/formats/save.md "Locks, cages and sentences"). Catches a saved platoon's spawn that binds nobody: the town's caged slaves stayed
+    /// imprisoned in no cage, so no slaver of the town gathered them.
+    /// </summary>
+    [Fact]
+    public void A_town_member_saved_in_a_cage_holds_it_again_when_its_platoon_comes_in_after_the_town_registered()
+    {
+        var data = JailData();
+        string folder = Path.Combine(Temp("jail-town"), QuickSave.Name);
+        try
+        {
+            string name;
+            using (var a = new Game(data))
+            {
+                a.World.Systems.OfType<PopulationSystem>().Single().StartPlayer(a.World, NewGameStart.From(data.Db.Find("40-t")!));
+                a.World.Commands.Enqueue(new FocusCommand(SyntheticTown.Centre) { Tick = 0 });
+                a.World.RunTicks(30);
+                var resident = a.World.Squads.All.First(s => s.Town == 0 && s.Id != a.World.Player.Squad && s.Members.Count > 0).Members[0];
+                Assert.True(a.World.Fixtures.Imprison(a.World, resident, a.World.Fixtures.Find($"{HouseKey}/0")!));
+                name = a.World.Characters.Cold(resident.Slot)!.Name;
+                Capture(a.World, data).Write(folder);
+            }
+
+            using var b = new Game(data);
+            SaveLoader.Load(b.World, SaveGame.Load(folder), data);
+            b.World.Commands.Enqueue(new FocusCommand(SyntheticTown.Centre) { Tick = 0 });
+            // The town registers first; the caged member's platoon comes in later.
+            bool CagedIn() => Enumerable.Range(0, b.World.Characters.HighWater).Any(k => b.World.Characters.Cold(k) is { IsImprisoned: true });
+            for (int t = 0; t < 600 && !CagedIn(); t++) b.World.RunTicks(1);
+            Assert.True(b.World.Fixtures.IsRegistered(0) && CagedIn());
+            var cage = b.World.Fixtures.Find($"{HouseKey}/0")!;
+            Assert.True(b.World.Characters.IsAlive(cage.Occupant), "the cage holds someone");
+            var held = b.World.Characters.Cold(cage.Occupant.Slot)!;
+            Assert.Equal((name, $"{HouseKey}/0", true), (held.Name, held.InWhat, held.IsImprisoned));
+        }
+        finally { Directory.Delete(Path.GetDirectoryName(folder)!, recursive: true); }
+    }
+
     static IEnumerable<KeyValuePair<string, object>> Keys(FcsRecord r) =>
         r.Ints.Select(k => new KeyValuePair<string, object>(k.Key, k.Value)).Concat(r.Floats.Select(k => new KeyValuePair<string, object>(k.Key, k.Value)))
             .Concat(r.Bools.Select(k => new KeyValuePair<string, object>(k.Key, k.Value))).Concat(r.Strings.Select(k => new KeyValuePair<string, object>(k.Key, k.Value)))
