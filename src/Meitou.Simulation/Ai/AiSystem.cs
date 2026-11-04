@@ -292,9 +292,10 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         var candidates = Candidates;
         var plans = PlanContext.Local.Bind(this, world, slot, mind, board);
         // While a goal it committed to is running, only a tier above that goal's priority may take over; if none plans, the goal and its plan stay
-        // (FUN_140510ef0 in committed mode, Verified).
-        var committed = only == Restrict.None && mind.Goal is { } running && mind.Plan.Count > 0 && TaskProfiles.Of(running.Task.Type).Commits && world.GameHours < mind.CommitUntil
-            ? running : null;
+        // (FUN_140510ef0 in committed mode, Verified). Not past its hours: the plan step ends a goal's plan then, and the update clears a goal
+        // left with no plan however long its commitment runs (FUN_14050d970, FUN_140511130, Verified; docs/game/ai-tasks.md "Precedence").
+        var committed = only == Restrict.None && mind.Goal is { } running && mind.Plan.Count > 0 && TaskProfiles.Of(running.Task.Type).Commits
+            && world.GameHours < mind.CommitUntil && running.InWindow(hour) ? running : null;
         foreach (var tier in Tiers)
         {
             if (committed is not null && tier <= committed.Task.Priority || only != Restrict.None && tier != TaskPriority.Urgent) break;
@@ -741,6 +742,17 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     void Act(World world, int slot, AiMind mind, AiGoal goal, Blackboard board)
     {
         var table = world.Characters;
+        // Nothing but the default task for one lying in its bed: it lies on with no goal, as one loaded there (Holds). The original's update
+        // clears a goal left with no plan (FUN_140511130, Verified), and its sleepers whose hours ended lie on with no goal or order
+        // (docs/game/ai-tasks.md "Precedence", Observed; why its Idleness does not take over is Unknown).
+        if (ReferenceEquals(goal, Idle) && table.Cold(slot)!.InSomething == Locks.HeldState.Bed)
+        {
+            mind.Plan.Clear();
+            mind.Goal = null;
+            mind.Behaviour = AiBehaviour.None;
+            mind.Version = board.Version;
+            return;
+        }
         var type = goal.Task.Type;
         var behaviour = TaskBehaviours.Of(type);
         var profile = TaskProfiles.Of(type);

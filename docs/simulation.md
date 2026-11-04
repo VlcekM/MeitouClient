@@ -1730,7 +1730,9 @@ in their own fights; nothing else is acted out ([combat goals](game/ai-tasks.md#
 fights back, by the engine's answer (`RetaliationSystem`, at any distance; engine choice).
 
 Scoring follows the original (`TaskProfiles`: desire, commitment, crowding per goal type); a desire
-the original computes in a function of its own counts as 1. Town goals ([ai-tasks.md](game/ai-tasks.md#town-goals)):
+the original computes in a function of its own counts as 1. A committed goal holds only within its hours
+([goal end](game/ai-tasks.md#precedence)); one lying in its bed with only the default task left lies on with no goal
+(engine choice from the observed sleepers). Town goals ([ai-tasks.md](game/ai-tasks.md#town-goals)):
 wandering in town walks to a general node of a public town building in the walker's zone
 (public: the residents' template's `public day`, else the level state's `is public day`, else public; drawn
 among those with a general node, engine choice), patrolling town from one random point round the town's centre to the next
