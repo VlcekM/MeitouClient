@@ -62,9 +62,15 @@ public static class ResidentRuins
         if (level != (t.LayoutInterior, t.LayoutExterior)) levels.LevelLayoutNames.TryAdd(b.Key, level);
         foreach (var (key, layout) in Names(t)) state.StringTable[key] = layout;
 
-        if (DisplayName(t) is { } name) state.StringTable[NameKey] = name;
-        state.StringTable[SquadTemplateKey] = t.Id;
+        var levelNaming = BuildingNaming.Of(state);
+        var naming = Naming(t, levelNaming);
+        if (naming != levelNaming) levels.LevelNames.TryAdd(b.Key, levelNaming);
+        state.StringTable[NameKey] = naming.Name;
+        state.StringTable[SquadTemplateKey] = naming.SquadTemplate;
     }
+
+    /// <summary>The name and squad template housing <paramref name="t"/> gives a home named <paramref name="own"/> before (<see cref="DisplayName"/>).</summary>
+    public static BuildingNaming Naming(SquadTemplate t, BuildingNaming own) => new(DisplayName(t) ?? own.Name, t.Id);
 
     /// <summary>
     /// The name housing <paramref name="t"/> gives its home (docs/game/factions-squads-towns.md "Town residents", Layouts): its <c>building name</c>, else its non-empty
@@ -80,14 +86,14 @@ public static class ResidentRuins
     public const string InteriorKey = "interior layout name", ExteriorKey = "exterior layout name", NameKey = "name", SquadTemplateKey = "squad template";
 
     /// <summary>
-    /// The interior and exterior layout names housing <paramref name="town"/>'s residents afresh in <paramref name="buildings"/> gives its homes (a town override,
-    /// <see cref="LayOut"/>), by building key; buildings it houses nobody in are not listed. <paramref name="playerOwned"/> as for <see cref="RuinedHomes"/>.
+    /// The templates housing <paramref name="town"/>'s residents afresh in <paramref name="buildings"/> puts in its homes (a town override, which names them as
+    /// <see cref="LayOut"/> does), by building key; buildings it houses nobody in are not listed. <paramref name="playerOwned"/> as for <see cref="RuinedHomes"/>.
     /// </summary>
-    public static Dictionary<string, (string Interior, string Exterior)> HomeLayouts(GameDatabase db, TownData town, FactionData? faction,
+    public static Dictionary<string, SquadTemplate> HomeTemplates(GameDatabase db, TownData town, FactionData? faction,
         IReadOnlyList<TownBuilding> buildings, string? playerFactionId, IReadOnlySet<string>? playerOwned = null)
     {
-        var result = new Dictionary<string, (string Interior, string Exterior)>(StringComparer.Ordinal);
-        foreach (var (b, t) in ResidentHomes.Assign(db, town, faction, buildings, playerFactionId, playerOwned)) result[b.Key] = (t.LayoutInterior, t.LayoutExterior);
+        var result = new Dictionary<string, SquadTemplate>(StringComparer.Ordinal);
+        foreach (var (b, t) in ResidentHomes.Assign(db, town, faction, buildings, playerFactionId, playerOwned)) result[b.Key] = t;
         return result;
     }
 
@@ -120,4 +126,11 @@ public static class ResidentRuins
         }
         return false;
     }
+}
+
+/// <summary>A building's display <c>name</c> and its residents' <c>squad template</c> (docs/game/factions-squads-towns.md "Town residents", Layouts).</summary>
+public readonly record struct BuildingNaming(string Name, string SquadTemplate)
+{
+    /// <summary>What <paramref name="state"/>, a GAMESTATE_BUILDING, names.</summary>
+    public static BuildingNaming Of(GameRecord? state) => new(state?.GetString(ResidentRuins.NameKey) ?? "", state?.GetString(ResidentRuins.SquadTemplateKey) ?? "");
 }

@@ -109,6 +109,10 @@ public sealed record TownBuilding(string InstanceId, string BuildingId, string N
     public string InteriorLayout { get; init; } = "";
     /// <summary>The interior and exterior layout names its level files give it, before any residents named theirs (<see cref="WorldLevelData.LevelLayoutNames"/>).</summary>
     public (string Interior, string Exterior) LevelLayouts { get; init; } = ("", "");
+    /// <summary>The name and squad template its level files give it, before any residents named theirs (<see cref="WorldLevelData.LevelNames"/>).</summary>
+    public BuildingNaming LevelNaming { get; init; } = new("", "");
+    /// <summary>The name and squad template a town override's housing gave it (<see cref="TownBuildings.Relay"/>); null leaves its state's.</summary>
+    public BuildingNaming? Naming { get; init; }
     /// <summary>The name of its interior or exterior layout now: its placement's (<see cref="TownBuildings.Relay"/>), else its level state's; "" for none.</summary>
     public string LayoutName(bool exterior) =>
         Resolved?.Placement.LayoutName(LevelState, exterior) ?? LevelState?.GetString(exterior ? ResidentRuins.ExteriorKey : ResidentRuins.InteriorKey) ?? "";
@@ -236,6 +240,7 @@ public static class TownBuildings
                 InteriorLayout = state?.GetString("interior layout name") ?? "",
                 LevelLayouts = levels.LevelLayoutNames.TryGetValue(b.Key, out var raw) ? raw
                     : (state?.GetString(ResidentRuins.InteriorKey) ?? "", state?.GetString(ResidentRuins.ExteriorKey) ?? ""),
+                LevelNaming = levels.LevelNames.TryGetValue(b.Key, out var named) ? named : BuildingNaming.Of(state),
                 InteriorLayouts = LayoutNames(layouts, record, exterior: false, names),
                 ExteriorLayouts = LayoutNames(layouts, record, exterior: true, names),
                 HandleSlot = state is not null && state.Ints.ContainsKey("handleI") && state.GetInt("handleTYPE") == (int)FcsRecordType.BUILDING ? state.GetInt("handleI") : -1,
@@ -253,9 +258,10 @@ public static class TownBuildings
     /// residents name them as the level data's do not. Its contents come from them, and the names ride on its placement
     /// (<see cref="BuildingPlacement.InteriorLayout"/>) so every reader lays it out alike. A building without a level state or placement stays as it is.
     /// </summary>
-    public static TownBuilding Relay(GameDatabase db, BuildingLayouts layouts, TownBuilding b, string interior, string exterior)
+    public static TownBuilding Relay(GameDatabase db, BuildingLayouts layouts, TownBuilding b, string interior, string exterior, BuildingNaming? naming = null)
     {
         if (b.Resolved is not { } resolved || b.LevelState is not { } state) return b;
+        if (b.LayoutName(exterior: false) == interior && b.LayoutName(exterior: true) == exterior) return b with { Naming = naming ?? b.Naming };
         var placed = resolved with { Placement = resolved.Placement with { InteriorLayout = interior, ExteriorLayout = exterior } };
         var functions = new Dictionary<string, GameRecord?>(StringComparer.Ordinal);
         var c = LayContents(db, layouts, placed, state, new(StringComparer.Ordinal), functions);
@@ -263,7 +269,7 @@ public static class TownBuildings
         return b with
         {
             IsShop = c.Shop, IsBar = c.Bar, Spots = c.Spots, Fixtures = c.Fixtures, ItemSlots = c.ItemSlots, Tables = c.Tables, Furniture = c.Furniture,
-            Furnished = c.Furnished, InteriorLayout = interior, Resolved = placed,
+            Furnished = c.Furnished, InteriorLayout = interior, Resolved = placed, Naming = naming ?? b.Naming,
         };
     }
 

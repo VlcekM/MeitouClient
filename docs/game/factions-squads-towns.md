@@ -467,10 +467,10 @@ Meitou: [ground items](../simulation.md#items-and-eating).
   levels: renderer, lamps, effects, navmesh and `NavmeshTool`, homes); the level data's assignment is kept where it fits the rules. Later changes lay a
   building out afresh (`TownBuildings.Relay`, `FixtureRegistry.Layouts.cs`): its beds, nodes, fixtures and item slots come from the new names, which its
   placement carries to the renderer, navmesh overlay, lamps, effects and indoor sight, and a save writes into its state. A town override's own zone
-  (not the player's buildings) takes the replacement's housing: a home its template's names, any other building its level files' (as the original reads
+  (not the player's buildings) takes the replacement's housing: a home its template's layouts, `name` and `squad template`, any other building its level files' (as the original reads
   the zone back from them); its other zones keep theirs (**Observed** headless: Stoat's half-destroyed override relays 15 of its zone's 219
   buildings, whose fixtures and item slots then match a fresh registration). A loaded save's building states name the layouts the original furnished them with, so they win
-  ([zone files](../formats/save.md#zone-files)), as do their `name` and `squad template` for the selected-building panel. Not followed: sound emitters (laid out once from the boot's names); a replaced town's homes keep the boot housing's `name` and `squad template`; bar squads
+  ([zone files](../formats/save.md#zone-files)), as do their `name` and `squad template` for the selected-building panel. Not followed: sound emitters (laid out once from the boot's names); bar squads
   stand in the town's bars and take the nearest bar as home (their templates, e.g. `Bar thugs`, have designation 0, **Verified** in the data); a loaded town keeps its saved squads, homes and bar squads and rolls no new bar squads.
 
 ### Off-screen world

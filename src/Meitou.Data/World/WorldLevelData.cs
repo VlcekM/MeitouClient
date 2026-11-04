@@ -34,6 +34,9 @@ public sealed class WorldLevelData
     /// <summary>The interior and exterior layout names the level files give the buildings <see cref="ResidentRuins.Apply"/> named otherwise, by building key.</summary>
     public Dictionary<string, (string Interior, string Exterior)> LevelLayoutNames { get; } = new(StringComparer.Ordinal);
 
+    /// <summary>The name and squad template the level files give the buildings <see cref="ResidentRuins.Apply"/> named otherwise, by building key.</summary>
+    public Dictionary<string, BuildingNaming> LevelNames { get; } = new(StringComparer.Ordinal);
+
     /// <summary>Merged zone files by grid cell.</summary>
     public SortedDictionary<ZoneCoordinate, GameDatabase> Zones { get; } = new(Comparer<ZoneCoordinate>.Create((a, b) => a.Y != b.Y ? a.Y.CompareTo(b.Y) : a.X.CompareTo(b.X)));
 

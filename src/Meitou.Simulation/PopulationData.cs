@@ -174,13 +174,14 @@ public sealed class PopulationData
 
     /// <summary>
     /// Lays building <paramref name="b"/> of town <paramref name="site"/> out with other layout names (a town override's or a loaded save's residents, docs/game/factions-squads-towns.md
-    /// "Town residents"): the new building takes its place in <see cref="TownSite.Buildings"/> and is returned; <paramref name="b"/> itself when the names are its own
+    /// "Town residents"), or only renamed (<paramref name="naming"/>): the new building takes its place in <see cref="TownSite.Buildings"/> and is returned; <paramref name="b"/> itself when the names are its own
     /// already or there are no layouts.
     /// </summary>
-    public TownBuilding Relay(int site, TownBuilding b, string interior, string exterior)
+    public TownBuilding Relay(int site, TownBuilding b, string interior, string exterior, BuildingNaming? naming = null)
     {
-        if (Layouts is null || b.LayoutName(exterior: false) == interior && b.LayoutName(exterior: true) == exterior) return b;
-        var relaid = TownBuildings.Relay(Db, Layouts, b, interior, exterior);
+        bool sameLayouts = b.LayoutName(exterior: false) == interior && b.LayoutName(exterior: true) == exterior;
+        if (Layouts is null || sameLayouts && (naming is null || naming == b.Naming)) return b;
+        var relaid = TownBuildings.Relay(Db, Layouts, b, interior, exterior, naming);
         if (ReferenceEquals(relaid, b)) return b;
         Sites[site].Relay(b, relaid);
         lock (turrets) turrets.Remove(site);

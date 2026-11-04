@@ -223,7 +223,8 @@ sealed partial class GameHost
         var parts = new Dictionary<string, IReadOnlyList<Meitou.Data.World.PlacedMesh>>(StringComparer.Ordinal);
         var icons = new Meitou.Data.Gameplay.Construction.BuildingIcons(Path.Combine(install.DataDirectory, "icons", "buildings"));
         IReadOnlyList<Meitou.Data.Gameplay.Construction.PlacementTown>? towns = null;
-        Dictionary<(Meitou.Data.World.ZoneCoordinate, string), (string Town, string? Owner)>? townOf = null;
+        // Per level building of a town: the town, its owner's name and where it sits in the town's buildings (a relaid one takes the same place).
+        Dictionary<(Meitou.Data.World.ZoneCoordinate, string), (string Town, string? Owner, int Site, int Index)>? townOf = null;
         var pickable = new Dictionary<string, bool>(StringComparer.Ordinal);
         // Resource and node buildings are not selectable objects (TownBuildings leaves them out too).
         bool Pickable(string record) => pickable.TryGetValue(record, out bool known) ? known
@@ -283,14 +284,22 @@ sealed partial class GameHost
                     {
                         // A building whose state names no owner belongs to its town's faction (the original re-owns a town's buildings to it).
                         string? townOwner = site.Index < d.SiteFactions.Count && d.SiteFactions[site.Index] is >= 0 and var townFaction && townFaction < d.Factions.Count ? d.Factions[townFaction].Name : null;
-                        foreach (var b in site.Buildings)
-                            townOf[(b.Zone, b.InstanceId)] = (site.Town.Name, b.OwnerFactionId is { } id ? d.Factions.FirstOrDefault(f => f.Id == id)?.Name ?? townOwner : townOwner);
+                        for (int i = 0; i < site.Buildings.Count; i++)
+                        {
+                            var b = site.Buildings[i];
+                            string? buildingOwner = b.OwnerFactionId is { } id ? d.Factions.FirstOrDefault(f => f.Id == id)?.Name ?? townOwner : townOwner;
+                            townOf[(b.Zone, b.InstanceId)] = (site.Town.Name, buildingOwner, site.Index, i);
+                        }
                     }
                 }
                 var levels = scene.Objects?.Levels;
                 var state = levels is not null && placement.StateId is { } stateId && levels.Zones.TryGetValue(zone, out var zoneDb) ? zoneDb.Find(stateId) : null;
-                var (name, type, sells) = WorldBuildingName(db, placement, state, session.World.Fixtures.Saved?.GetValueOrDefault(placement.Key));
-                var (town, owner) = townOf is not null && townOf.TryGetValue((zone, instance), out var info) ? (info.Town, info.Owner) : (null, null);
+                var info = townOf is not null && townOf.TryGetValue((zone, instance), out var found) ? found : default((string Town, string? Owner, int Site, int Index)?);
+                var building = info is { } at && popData is { } live && at.Site < live.Sites.Count && at.Index < live.Sites[at.Site].Buildings.Count
+                    ? live.Sites[at.Site].Buildings[at.Index] : null;
+                var saved = session.World.Fixtures.Saved?.GetValueOrDefault(placement.Key);
+                var (name, type, sells) = WorldBuildingName(db, placement, state, saved, building?.Key == placement.Key ? building : null);
+                var (town, owner) = info is { } t ? (t.Town, t.Owner) : (null, null);
                 return new(name, type, town, owner, state?.GetBool("is public day") ?? false, state?.GetBool("is public night") ?? false, sells,
                     shownRuins.TryGetValue(placement.Key, out var ruin) ? ruin.Destroyed : placement.DestroyedOverride ?? state?.GetBool("destroyed") ?? false);
             },
@@ -302,12 +311,15 @@ sealed partial class GameHost
 
     /// <summary>
     /// A world building's name, its <c>Type:</c> (the record's name when that differs) and, for a shop named only after its layout, what it sells (the Meitou UI's name):
-    /// read from <paramref name="saved"/>, a loaded save's state, else <paramref name="state"/>, the level state the boot's housing named (ResidentRuins).
+    /// read from the naming a town override's housing gave <paramref name="building"/>, else <paramref name="saved"/>, a loaded save's state, else <paramref name="state"/>,
+    /// the level state the boot's housing named (ResidentRuins).
     /// </summary>
     static (string Name, string? Type, string? Sells) WorldBuildingName(Meitou.Data.GameDatabase db, BuildingPlacement placement,
-        Meitou.Data.GameRecord? state, Meitou.Data.Fcs.FcsRecord? saved)
+        Meitou.Data.GameRecord? state, Meitou.Data.Fcs.FcsRecord? saved, TownBuilding? building)
     {
-        string StateText(string key) => saved is not null && saved.Strings.TryGetValue(key, out var text) ? text : state?.GetString(key) ?? "";
+        string StateText(string key) => building?.Naming is { } naming && key is ResidentRuins.NameKey or ResidentRuins.SquadTemplateKey
+            ? key == ResidentRuins.NameKey ? naming.Name : naming.SquadTemplate
+            : saved is not null && saved.Strings.TryGetValue(key, out var text) ? text : state?.GetString(key) ?? "";
         string recordName = db.Find(placement.BuildingId)?.Name ?? placement.BuildingId;
 
         // The squad template that runs it names a special building ("The Dancing Skeleton") and, for a trader, lists what it sells.
@@ -317,7 +329,7 @@ sealed partial class GameHost
         string? type = name != recordName ? recordName : null;
 
         // A shop whose state only carries its layout's generic name ("Shop", "Big Shop"): the Meitou UI calls it after what it sells.
-        string interior = placement.InteriorLayout ?? StateText(ResidentRuins.InteriorKey);
+        string interior = building?.LayoutName(exterior: false) ?? placement.InteriorLayout ?? StateText(ResidentRuins.InteriorKey);
         string? sells = squad is { } s && s.GetBool("is trader") && interior.Contains("Shop", StringComparison.Ordinal) && name == interior
             && s.GetReferences("vendors").FirstOrDefault().TargetStringId is { } vendor && db.Find(vendor)?.Name is { Length: > 0 } list
             ? char.ToUpperInvariant(list[0]) + list[1..] : null;

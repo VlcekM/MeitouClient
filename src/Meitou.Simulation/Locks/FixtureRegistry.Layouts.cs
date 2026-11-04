@@ -25,7 +25,8 @@ public sealed partial class FixtureRegistry
 
     /// <summary>
     /// Houses town <paramref name="site"/>'s residents afresh in its buildings <paramref name="keys"/> (a town override reads its zone back from the level file and
-    /// houses the replacement's residents there): a home takes its template's layouts, any other building its level files' (<see cref="TownBuilding.LevelLayouts"/>).
+    /// houses the replacement's residents there): a home takes its template's layouts and naming, any other building its level files' (<see cref="TownBuilding.LevelLayouts"/>,
+    /// <see cref="TownBuilding.LevelNaming"/>).
     /// </summary>
     void RelayTown(World world, PopulationData data, int site, IReadOnlySet<string> keys)
     {
@@ -34,24 +35,24 @@ public sealed partial class FixtureRegistry
         var faction = factionIndex >= 0 ? data.Factions[factionIndex] : null;
         string? playerId = data.PlayerFaction >= 0 ? data.Factions[data.PlayerFaction].Id : null;
         int player = world.Player.Faction >= 0 ? world.Player.Faction : data.PlayerFaction;
-        var homes = ResidentRuins.HomeLayouts(data.Db, town.Town, faction, town.Buildings, playerId, PlayerOwnedIn(data, site, player));
+        var homes = ResidentRuins.HomeTemplates(data.Db, town.Town, faction, town.Buildings, playerId, PlayerOwnedIn(data, site, player));
         foreach (var b in town.Buildings.ToList())
         {
             if (!keys.Contains(b.Key)) continue;
-            var (interior, exterior) = homes.TryGetValue(b.Key, out var named) ? named : b.LevelLayouts;
-            Relay(world, data, site, b, interior, exterior);
+            if (homes.TryGetValue(b.Key, out var t)) Relay(world, data, site, b, t.LayoutInterior, t.LayoutExterior, ResidentRuins.Naming(t, b.LevelNaming));
+            else Relay(world, data, site, b, b.LevelLayouts.Interior, b.LevelLayouts.Exterior, b.LevelNaming);
         }
     }
 
     /// <summary>
     /// Lays one building out afresh: its town takes the new one, the published list has it, a registered town's item slots follow, and a standing one's room and
-    /// lamps. A registered town's fixtures follow when it is registered again (<see cref="TownReplaced"/>).
+    /// lamps. A registered town's fixtures follow when it is registered again (<see cref="TownReplaced"/>). A building only renamed (<paramref name="naming"/>) keeps the rest.
     /// </summary>
-    void Relay(World world, PopulationData data, int site, TownBuilding b, string interior, string exterior)
+    void Relay(World world, PopulationData data, int site, TownBuilding b, string interior, string exterior, BuildingNaming? naming = null)
     {
         bool destroyed = IsDestroyed(b);
-        var relaid = data.Relay(site, b, interior, exterior);
-        if (ReferenceEquals(relaid, b)) return;
+        var relaid = data.Relay(site, b, interior, exterior, naming);
+        if (relaid.LayoutName(exterior: false) == b.LayoutName(exterior: false) && relaid.LayoutName(exterior: true) == b.LayoutName(exterior: true)) return;
         ruins[b.Key] = new RuinedBuilding(relaid, destroyed);
         RuinsRevision++;
         world.ItemSlots.RelayBuilding(world, data, site, b, relaid);
