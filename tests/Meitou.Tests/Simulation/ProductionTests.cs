@@ -228,6 +228,26 @@ public class ProductionTests
         Assert.Equal(made, cold.Inventory!.All().Where(i => i.Record == Water).Sum(i => i.Quantity));
     }
 
+    /// <summary>A town building's machine keeps its output, progress, inputs and status through a save (docs/formats/save.md "Town machines"): the Meitou-only keys of the CAMERA record.</summary>
+    [Fact]
+    public void A_town_machine_round_trips_through_the_save_keys()
+    {
+        var building = new TownBuilding("well", Well, "Well", At, 0, false, false, []);
+        var camera = new Meitou.Data.Fcs.FcsRecord { Type = (int)Meitou.Data.Fcs.FcsRecordType.CAMERA, Id = 1, Name = "c", StringId = "c" };
+        using (var rig = new Rig(Database(), Constants, []))
+        {
+            var machine = rig.Production.TownWork(rig.World, building, 7)!;
+            machine.Output!.Count = 4;
+            machine.Output.Progress = 0.25f;
+            machine.Status = 1;
+            Meitou.Simulation.Saving.TownMachineSave.Write(camera, rig.World);
+        }
+        using var again = new Rig(Database(), Constants, []);
+        Meitou.Simulation.Saving.TownMachineSave.Read(camera, again.World, again.Production, key => key == building.Key ? (building, 7) : null);
+        var read = again.World.Machines.Find(ProductionSystem.TownWorkId(building))!;
+        Assert.Equal((4, 0.25f, (byte)1), (read.Output!.Count, read.Output.Progress, read.Status));
+    }
+
     // ------------------------------------------------------------------ items and research costs
 
     /// <summary>

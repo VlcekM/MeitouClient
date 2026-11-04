@@ -97,6 +97,8 @@ public static class SaveLoader
         if (playerFaction is not null) BuildingSave.Read(save, world, data.Db, playerFaction.Id, playerIndex);
         // The machines of the player's complete buildings: recipe slots, storage, farms (docs/simulation.md "Production").
         if (playerFaction is not null && world.Systems.OfType<Production.ProductionSystem>().FirstOrDefault() is { } production) MachineSave.Read(save, world, production, data.Items);
+        // The machines of NPC town buildings (docs/formats/save.md "Town machines").
+        if (world.Systems.OfType<Production.ProductionSystem>().FirstOrDefault() is { } townProduction) TownMachineSave.Read(camera.Record, world, townProduction, TownMachineSave.Resolver(data));
         // The loose items of the zone files (docs/simulation.md "Ground items"); a zone with a file is not loaded fresh (no nest items are laid there).
         world.SavedZones.UnionWith(save.Zones.Keys);
         if (GroundItemSave.Load(save, world, data.Items, id => data.FactionIndex(id) is var f and >= 0 && !data.Factions[f].NotReal ? f : -1) is > 0 and var lost) loaded.Notes.Add($"{lost} loose items name records this game does not have; they stay in the zone files.");

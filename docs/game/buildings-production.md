@@ -960,7 +960,7 @@ CONTAINER (backpacks). Shop counters (function 9) have no type limit in Meitou (
   82 `FUN_14059bd80` inventory or worn backpack has room for the target's item (a machine: its output item); 105 `FUN_1405a2c40` machine output empty; 169 `FUN_1405975d0` input invalid
   (production type 6 flag).
 - **Meitou** (`ProductionSystem.TownWork`, `AiSystem.WorkAtMachine`): the town building a worker of goal 189 stands at is a virtual complete site `townwork:<building key>` of the town's
-  faction (like a rock or a training dummy: no registry site, not drawn, saved or built; its machine is kept in memory), made when the first worker arrives. A worker whose plan starts with
+  faction (like a rock or a training dummy: no registry site, not drawn, saved or built; its machine is kept in memory and in the save), made when the first worker arrives and kept in the save ([town machines](../formats/save.md)). A worker whose plan starts with
   87 operates it every tick (skill factor, operating XP: the player's operator lines), with 92 empties it into its inventory. Only producers run: a research bench counts for the player's
   research alone and a crafting bench with no queue refuses an operator, so both stay pretence. Ditching: rows 113 / 114 / 93 (`TownDutySystem.DitchStore` and the Ditch errand, [ai-tasks](ai-tasks.md#ditching)); not modelled: row 94 and its finder `FUN_14059d9b0` (fetching inputs from other machines' outputs: town machines are made lazily, empty, when a worker arrives, so there is no output to fetch), so a refinery's workers pretend. Unpowered: town machines draw no player grid (power held true).
   A town machine is no player machine for the hauling jobs (`ProductionSystem.Takes`).
