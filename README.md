@@ -10,6 +10,11 @@ Architecture/research: [docs index](docs/README.md). Website: [meitou.kenshi.wik
 
 [![Contributors](assets/branding/contributors.png?v=d9d272d9)](https://github.com/VlcekM/MeitouClient/graphs/contributors)
 
+## Modding
+
+MeitouClient should be fully compatible with Forgotten Construction Set Kenshi mods.
+
+We also have a C# modding API, do check out our [Wiki](https://github.com/VlcekM/MeitouClient/wiki/Writing-code-mods) for documentation!
 
 ## Download and requirements
 
