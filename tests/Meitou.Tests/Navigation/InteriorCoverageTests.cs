@@ -13,13 +13,22 @@ namespace Meitou.Tests.Navigation;
 [Slow]
 public class InteriorCoverageTests
 {
-    [Theory]
-    [InlineData(18, 35, 95, "Squin")]
-    [InlineData(19, 29, 79, "Stack")]
-    public void A_town_zone_covers_at_least_its_share_of_the_original_interior_faces(int x, int z, int floorPercent, string town)
+    static readonly (int X, int Z, int FloorPercent, string Town)[] Towns =
+    [
+        (18, 35, 95, "Squin"), (43, 11, 89, "Sho-Battai"), (50, 33, 86, "Black Scratch"), (20, 32, 97, "The Hub"), (47, 16, 92, "Heft"),
+        (26, 13, 91, "World's End"), (19, 29, 79, "Stack"), (48, 45, 98, "Snailhouse lagoon"),
+    ];
+
+    [Fact]
+    public void A_town_zone_covers_at_least_its_share_of_the_original_interior_faces()
+    {
+        Assert.SkipWhen(InstallData.Install is null, "Kenshi install not found");
+        Assert.All(Towns, t => CoversItsShare(t.X, t.Z, t.FloorPercent, t.Town));
+    }
+
+    static void CoversItsShare(int x, int z, int floorPercent, string town)
     {
         var install = InstallData.Install;
-        Assert.SkipWhen(install is null, "Kenshi install not found");
         var zone = new ZoneCoordinate(x, z);
         var groups = OriginalNavTiles.LoadInteriors(install!, zone);
         Assert.NotEmpty(groups);

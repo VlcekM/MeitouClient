@@ -13,14 +13,22 @@ namespace Meitou.Tests.Navigation;
 [Slow]
 public class InteriorJoinSweepTests
 {
-    [Theory]
-    [InlineData(18, 35, 8, "Squin")]
-    [InlineData(47, 16, 10, "Heft")]
-    [InlineData(28, 43, 1, "Ancient Lab")]
-    public void No_intact_interior_the_original_connects_is_sealed(int x, int z, int matchedFloor, string place)
+    static readonly (int X, int Z, int MatchedFloor, string Place)[] Zones =
+    [
+        (18, 35, 8, "Squin"), (19, 29, 11, "Stack"), (50, 33, 5, "Black Scratch"), (47, 16, 10, "Heft"), (20, 32, 2, "The Hub"), (43, 11, 19, "Sho-Battai"),
+        (26, 13, 14, "World's End"), (48, 45, 5, "Snailhouse lagoon"), (28, 43, 1, "Ancient Lab"), (37, 35, 1, "Ancient Lab"), (54, 59, 2, "Ash Domes"),
+    ];
+
+    [Fact]
+    public void No_intact_interior_the_original_connects_is_sealed()
+    {
+        Assert.SkipWhen(InstallData.Install is null, "Kenshi install not found");
+        Assert.All(Zones, z => NoneSealed(z.X, z.Z, z.MatchedFloor, z.Place));
+    }
+
+    static void NoneSealed(int x, int z, int matchedFloor, string place)
     {
         var install = InstallData.Install;
-        Assert.SkipWhen(install is null, "Kenshi install not found");
         var zone = new ZoneCoordinate(x, z);
         var groups = OriginalNavTiles.LoadInteriors(install!, zone);
         Assert.NotEmpty(groups);

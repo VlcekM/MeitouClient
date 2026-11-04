@@ -50,11 +50,22 @@ public class DoorJoinTests
         }
     }
 
-    [Theory]
-    [InlineData(43, 11, 21, "43.11:12-Newwworld-INGAME", "43.11:5563-Newwworld-INGAME", "43.11:5565-Newwworld-INGAME", "43.11:2-Newwworld-INGAME")]
-    public void Every_intact_interior_with_a_door_painter_is_joined_to_the_exterior(int x, int z, int painted, params string[] doorToDoor)
+    static readonly (int X, int Z, int Painted, string[] DoorToDoor)[] DoorZones =
+    [
+        (43, 11, 21, ["43.11:12-Newwworld-INGAME", "43.11:5563-Newwworld-INGAME", "43.11:5565-Newwworld-INGAME", "43.11:2-Newwworld-INGAME"]),
+        (47, 16, 10, ["47.16:241-Newwworld-INGAME"]),
+        (48, 45, 6, ["48.45:9-rebirth-INGAME"]),
+    ];
+
+    [Fact]
+    public void Every_intact_interior_with_a_door_painter_is_joined_to_the_exterior()
     {
         Assert.SkipWhen(InstallData.Install is null, "Kenshi install not found");
+        Assert.All(DoorZones, d => AllJoined(d.X, d.Z, d.Painted, d.DoorToDoor));
+    }
+
+    static void AllJoined(int x, int z, int painted, string[] doorToDoor)
+    {
         var b = Zone(x, z);
         var mesh = b.Full;
         int exterior = mesh.PolygonCount - b.Inner.Sum(i => i.Mesh.PolygonCount);
