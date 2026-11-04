@@ -1352,7 +1352,15 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         if (Interlocked.Exchange(ref leaving, 0) != 0) LeaveFights(world);
         bool cadence = world.Tick % world.Every(Settings.PackageEveryTicks) == 0;
         // Each town's turrets are claimed once per cadence, by the squads in squad order (derived, not hashed).
-        if (cadence) { turretTaken.Clear(); seatTaken.Clear(); postTaken.Clear(); ReserveSeats(world); ReservePosts(world); RefreshPlaces(world); }
+        if (cadence)
+        {
+            turretTaken.Clear();
+            seatTaken.Clear();
+            postTaken.Clear();
+            ReserveSeats(world);
+            ReservePosts(world);
+            RefreshPlaces(world);
+        }
         foreach (var squad in world.Squads.All)
         {
             if (squad.Ai is null)
@@ -1455,7 +1463,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// </summary>
     static Vector3? GateSpot(Blackboard board, AiMind mind, TaskType type)
     {
-        if (board.Gate is not { } gate || type == TaskType.STAND_AT_GUARD_NODE_HOMETOWN_OUTSIDE && mind.TownPost is not null) return null;
+        if (board.Gate is not { } gate) return null;
+        if (type == TaskType.STAND_AT_GUARD_NODE_HOMETOWN_OUTSIDE && mind.TownPost is not null) return null;
         var front = FrontOf(gate);
         if (type == TaskType.MAN_THE_GATE) return front;
         if (type is not (TaskType.STAND_AT_GUARD_NODE_HOMEBUILDING or TaskType.STAND_AT_GUARD_NODE_HOMEBUILDING_INDOORS_ONLY or TaskType.STAND_AT_GUARD_NODE_HOMETOWN_OUTSIDE
