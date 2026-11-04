@@ -183,6 +183,20 @@ public sealed partial class LockSystem
 
     readonly GatePlan gatePlan = new();
 
+    /// <summary>
+    /// How a ransacker (goal 216) at <paramref name="from"/> gets past the gates between it and a building at <paramref name="to"/>, by the planner (<see cref="GatePlan.PlansEntry"/>): a walk when no gate is
+    /// closed on the route (or the codes are unknown), the gate's door to bash (row 123 / 290), or none when the plan finds no way (a locked gate it does not want to bash, or no gate on the route).
+    /// </summary>
+    internal (DoorPlan.Entry Entry, string? Door) GateEntry(World world, int s, Vector3 from, Vector3 to)
+    {
+        if (Regions is null) return (DoorPlan.Entry.Walk, null);
+        int a = Regions.CodeAt(from), b = Regions.CodeAt(to);
+        if (a == b || a < 0 || b < 0 || RouteState(world, a, b, Flat(from), out var gate) == 1) return (DoorPlan.Entry.Walk, null);
+        if (gate is not { } g || MainGateDoor(world, g.Building) is not { } main) return (DoorPlan.Entry.Blocked, null);
+        var entry = gatePlan.PlansEntry(world, Combat, this, s, to, g.Building, main.Door, main.Spot);
+        return (entry, entry == DoorPlan.Entry.Bash ? main.Door.Id : null);
+    }
+
     /// <summary>How many characters bash the gate whose door is <paramref name="doorId"/> now (crowdLimit8).</summary>
     internal static int BashersAt(World world, string doorId)
     {

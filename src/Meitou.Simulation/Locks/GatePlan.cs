@@ -24,7 +24,9 @@ sealed class GatePlan : IPlanWorld
     World world = null!;
     CombatSystem? combat;
     LockSystem locks = null!;
-    int me, foe;
+    int me;
+    Vector3 to;
+    TaskType goal;
     CharacterCold cold = null!;
     string building = "";
     Fixture door = null!;
@@ -46,17 +48,27 @@ sealed class GatePlan : IPlanWorld
     public bool PlansSmash(World w, CombatSystem? fights, LockSystem lockSystem, int s, int t, BuildSite smash) =>
         PlansBash(w, fights, lockSystem, s, t, "", null!, default, smash);
 
-    bool PlansBash(World w, CombatSystem? fights, LockSystem lockSystem, int s, int t, string gate, Fixture mainDoor, DoorSpot mainSpot, BuildSite? smash)
+    bool PlansBash(World w, CombatSystem? fights, LockSystem lockSystem, int s, int t, string gate, Fixture mainDoor, DoorSpot mainSpot, BuildSite? smash) =>
+        Run(w, fights, lockSystem, s, w.Characters.Next[t].Position, TaskType.MELEE_ATTACK, gate, mainDoor, mainSpot, smash) == DoorPlan.Entry.Bash;
+
+    /// <summary>
+    /// Plans goal 216 (ransacking: row 156 Entering building needs state 90) for ransacker <paramref name="s"/> into a building at <paramref name="dest"/> behind gate <paramref name="gate"/>: blocked when no plan exists,
+    /// a bash when the plan bashes the gate (123 / 290), else a walk (an unlocked closed gate is opened, row 122).
+    /// </summary>
+    public DoorPlan.Entry PlansEntry(World w, CombatSystem? fights, LockSystem lockSystem, int s, Vector3 dest, string gate, Fixture mainDoor, DoorSpot mainSpot) =>
+        Run(w, fights, lockSystem, s, dest, TaskType.RUN_AROUND_TOWN_LOOKING_FOR_PEOPLE, gate, mainDoor, mainSpot, null);
+
+    DoorPlan.Entry Run(World w, CombatSystem? fights, LockSystem lockSystem, int s, Vector3 dest, TaskType goalRow, string gate, Fixture mainDoor, DoorSpot mainSpot, BuildSite? smash)
     {
-        (world, combat, locks, me, foe, building, door, spot, wall) = (w, fights, lockSystem, s, t, gate, mainDoor, mainSpot, smash);
+        (world, combat, locks, me, to, goal, building, door, spot, wall) = (w, fights, lockSystem, s, dest, goalRow, gate, mainDoor, mainSpot, smash);
         cold = w.Characters.Cold(s)!;
         aggressive = smash is null ? DoorPlan.AggressiveTowards(w, fights, cold, gate, mainSpot.Centre) : 1;
-        if (TaskDataTable.Of(TaskType.MELEE_ATTACK) is not { } row) return false;
-        var target = new PlanTarget(Foe, w.Characters.Next[t].Position);
-        if (TaskPlanner.Local.Plan(row, 1, target, this, [], plan) <= 0) return false;
+        if (TaskDataTable.Of(goal) is not { } row) return DoorPlan.Entry.Blocked;
+        var target = new PlanTarget(Foe, dest);
+        if (TaskPlanner.Local.Plan(row, 1, target, this, [], plan) <= 0) return DoorPlan.Entry.Blocked;
         foreach (var step in plan)
-            if (step.Type is TaskType.BASH_GATE or TaskType.Unnamed290 or TaskType.BASH_DOOR or TaskType.SMASH_BUILDING) return true;
-        return false;
+            if (step.Type is TaskType.BASH_GATE or TaskType.Unnamed290 or TaskType.BASH_DOOR or TaskType.SMASH_BUILDING) return DoorPlan.Entry.Bash;
+        return DoorPlan.Entry.Walk;
     }
 
     public float Desire(TaskDataRow row, in PlanTarget target)
@@ -73,7 +85,7 @@ sealed class GatePlan : IPlanWorld
         int owner = wall?.Owner ?? world.Fixtures.DoorOwner(building);
         bool value = condition.State switch
         {
-            StateType.DESTINATION_NOT_BLOCKED_BY_FORTIFICATIONS => locks.NotBlocked(world, n.Position, world.Characters.Next[foe].Position),
+            StateType.DESTINATION_NOT_BLOCKED_BY_FORTIFICATIONS => locks.NotBlocked(world, n.Position, to),
             // 163 isBuildingDestroyed (272's effect): the wall is gone, or the gate's door is broken; 46 isAtLocation: in reach of the wall or the gate.
             StateType.isBuildingDestroyed => wall is not null ? wall.Destroyed : door.DoorBroken,
             StateType.isAtLocation_46 => target.Kind == Wall ? AtWall(world, locks, wall, n) : atGate && AtGate(n, spot),
@@ -103,6 +115,7 @@ sealed class GatePlan : IPlanWorld
         bool gated = wall is null;
         return row.Type switch
         {
+            TaskType.RUN_AROUND_TOWN_LOOKING_FOR_PEOPLE => new PlanTarget(Foe, to),   // 216's finder: the building the caller drew
             TaskType.OPEN_FORTIFICATION_GATE when gated => new PlanTarget(Gate, spot.Centre),
             TaskType.ASSAULT_FORTIFICATIONS_PREFER_GATES => gated ? new PlanTarget(Gate, spot.Centre) : new PlanTarget(Wall, wall!.Position),
             _ => default,

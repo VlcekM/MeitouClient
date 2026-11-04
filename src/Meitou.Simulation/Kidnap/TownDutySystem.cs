@@ -1039,7 +1039,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     /// <c>AI::findRandomBuildingInTown</c> (<c>FUN_1408cb510</c>, goal 216): the squad's mission town (its blackboard's, else the campaign target it marches on), else the town the
     /// member stands in; one of its standing buildings with an interior, drawn uniformly at random among those the planner would reach: row 156 Entering building (the only provider of effect 107, which
     /// goal 216 wants) needs DESTINATION_IS_ACCESSIBLE (59: <c>hasAnOpenDoor</c>) and DESTINATION_NOT_BLOCKED_BY_FORTIFICATIONS (90: no closed gate between), <b>Observed</b>. The door sub-steps are planned
-    /// (<see cref="EntryTo"/>: open the door, row 72, or bash it, row 81); a building with no way in is left out of the draw, as is one behind a closed gate (<b>engine choice</b>: the gate's sub-steps are not wired to this errand). Null: none.
+    /// (<see cref="EntryTo"/>: open the door, row 72, or bash it, row 81); a building with no way in is left out of the draw. A closed gate on the route is planned as for an attacker (<see cref="Locks.LockSystem.GateEntry"/>: bash it, row 123 / 290, or pass an unlocked one, row 122). Null: none.
     /// </summary>
     (Meitou.Data.World.TownBuilding Building, string? Door)? RansackTarget(World world, Squad squad, int slot)
     {
@@ -1050,8 +1050,11 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
         var rooms = new List<(Meitou.Data.World.TownBuilding, string?)>();
         foreach (var x in data.Sites[site].Buildings)
         {
-            if (world.Fixtures.IsDestroyed(x) || x.InteriorLayout.Length == 0 && x.InteriorLayouts.Count == 0 || locks is not null && !locks.NotBlocked(world, from, x.Position)) continue;
-            if (EntryTo(world, slot, x) is { } door) rooms.Add((x, door.Length == 0 ? null : door));
+            if (world.Fixtures.IsDestroyed(x) || x.InteriorLayout.Length == 0 && x.InteriorLayouts.Count == 0) continue;
+            var gate = locks?.GateEntry(world, slot, from, x.Position) ?? (Locks.DoorPlan.Entry.Walk, null);
+            if (gate.Entry == Locks.DoorPlan.Entry.Blocked) continue;
+            if (gate.Door is not null) rooms.Add((x, gate.Door));   // the gate is bashed first (rows 123 / 290)
+            else if (EntryTo(world, slot, x) is { } door) rooms.Add((x, door.Length == 0 ? null : door));
         }
         if (rooms.Count == 0) return null;
         return rooms[Rng.Int(Rng.Hash(world.Seed, (ulong)Rng.Key(world.Characters.IdOf(slot)) ^ (ulong)world.Tick, RngPurpose.Slow, RansackSalt), rooms.Count)];

@@ -201,10 +201,16 @@ public class DoorTests(ITestOutputHelper output)
         var spot = world.Fixtures.DoorSpotOf(door)!.Value;
         var plan = new GatePlan();
         Assert.True(plan.PlansBash(world, null, locks, raider.Slot, target.Slot, key, door, spot));
+        // A ransacker (goal 216) bound for a building behind it plans the same bash.
+        var from = world.Characters.Next[raider.Slot].Position;
+        var to = world.Characters.Next[target.Slot].Position;
+        Assert.Equal((DoorPlan.Entry.Bash, door.Id), locks.GateEntry(world, raider.Slot, from, to));
 
         // Broken, the gate is open (state 1): the way is not blocked, so nothing is bashed.
         door.DoorBroken = true;
         Assert.False(plan.PlansBash(world, null, locks, raider.Slot, target.Slot, key, door, spot));
+        locks.Inputs(world, [new GateRegionsCommand(new LineRegions(key)) { Tick = 0 }]);   // the gate graph is rebuilt once a check
+        Assert.Equal(DoorPlan.Entry.Walk, locks.GateEntry(world, raider.Slot, from, to).Entry);
     }
 
     /// <summary>Shut in (<c>FUN_1405a3710</c> / <c>FUN_1405a34e0</c>): a character inside town walls whose gate to the open world is locked has no retreat desire; outside the walls, or with the gate broken open, it has.</summary>
