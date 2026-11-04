@@ -866,10 +866,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         float harvest = MathF.Max(fd.HarvestTime, 1e-6f);
         float growth = p < growthLength ? p / growthLength : p < growthLength + fd.HarvestTime ? 1 + (p - growthLength) / harvest : 2;
         if (growth >= 2) death += (p - growthLength - fd.HarvestTime) / MathF.Max(fd.DeathTime, 1e-6f);
-        float delta = growth - f.Growth;
-        for (int i = 0; i < f.Plants.Length; i++)
-            if (f.Plants[i] >= -1) f.Plants[i] = MathF.Min(f.Plants[i] + delta, MathF.Min(growth, 1));
-        f.Growth = growth;
+        f.Growth = growth;   // the plants' own growth is not touched: while below 1 the next tick sets the growth to the lowest plant again (FUN_1400e5580)
         f.Death = death;
         if (ignoreWater) return;
         foreach (var input in m.Inputs)

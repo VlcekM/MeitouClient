@@ -737,7 +737,7 @@ and on every save. On load, h = now - save time; if h > 1 and the farm is built,
   (drought stretches only the growth phase). With a `drought death time` DDT > 0: death = saved death + (h - w) / DDT (the saved death is not zeroed here); above 1 the harvested count
   resets, death keeps its fraction and p = that fraction x DDT; no replant. p then wraps on Cd; phases use Gd (p < Gd: growth p / Gd; then 1 + (p - Gd) / harvest time; else 2) and a
   position in the death phase ADDS (p - Gd - harvest) / death time to the accumulated death.
-  Meitou also moves the plants by the growth change (an engine choice, **Unknown** in the original).
+  The plants are not touched (**Verified**, `FUN_1400df6e0` writes no plant): while the growth is below 1 the live tick (`FUN_1400e5580`) sets it to the lowest plant again, so a catch-up inside the growing phase is undone by the next tick, a vanilla quirk Meitou keeps.
 - A player farm then uses its water, per input: need = w x rate x the input's amount - level, the level zeroed; need > 0 removes the whole
   stack when it holds no more than need, else floor(need) items with the level 1 - frac(need) (**Verified**, `FUN_1400df6e0`).
 
