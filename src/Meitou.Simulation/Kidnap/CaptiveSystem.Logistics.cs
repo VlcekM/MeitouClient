@@ -24,12 +24,21 @@ namespace Meitou.Simulation.Kidnap;
 /// </summary>
 public sealed partial class CaptiveSystem
 {
-    /// <summary>A squad's own slaves: its live slave members in slave state 1 (engine reading of the blackboard's slave list, <c>platoon vfunc 0x98 +0x10</c>).</summary>
+    /// <summary>
+    /// A squad's slave list (the original's platoon ownerships, <c>platoon vfunc 0x98 +0x10</c>, docs/game/ai-tasks.md "Pass 3, owned slaves"): its live slave
+    /// members in slave state 1, then the live slaves of other squads that obey it (<see cref="CharacterCold.SlaveMaster"/>), as a town's slave squads obey
+    /// their workmasters.
+    /// </summary>
     public static IEnumerable<int> SlavesOf(World world, Squad squad)
     {
         var table = world.Characters;
         foreach (var m in squad.Members)
             if (table.TryResolveNext(m, out int s) && table.Cold(s) is { SlaveState: 1, Role: (int)SquadRole.Slave, Medical.Dead: false }) yield return s;
+        for (int s = 0; s < table.HighWater; s++)
+        {
+            if (!table.Next[s].Alive || table.Cold(s) is not { SlaveState: 1, Medical.Dead: false } c) continue;
+            if (c.SlaveMaster == squad.Id && c.SquadId != squad.Id) yield return s;
+        }
     }
 
     /// <summary>The town whose radius holds <paramref name="at"/> (the nearest such centre), -1: none.</summary>
