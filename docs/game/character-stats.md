@@ -12,6 +12,12 @@ CHARACTER `stats randomise` is an int (Hundred Guardian and Shek Warrior: 10, no
 int, default 3, "+/- this amount". Meitou reads the int, falling back to a float for mods. The original's
 random distribution is **Unknown**.
 
+**Observed** (base records): CHARACTER `stats` is a list of STATS records, one record plus three numbers per entry.
+Those numbers are the list slot, not a filter: of the 80 characters in `gamedata.base` that name one, 72 carry
+`(0, 100, 0)` and 8 `(0, 0, 0)` (`Dialogue.mod` 60/43, `rebirth.mod` 10/7, `Newwworld.mod` 2/0), and every character names
+exactly one. A character naming none uses the five group fields (`combat stats`...). What the original does with a
+character that names several is **Unknown**; Meitou takes the first that resolves.
+
 **Observed:** skills are floats, not discrete levels plus XP counters. Factory combines record
 values/randomness, race modifiers and derived stats. Core gain: `f=((cap-stat)/cap)^2`, cap101;
 add amount*f only for 0<amount<=20, 0<f<=20, reject new NaN; old NaN becomes20 (exe).
@@ -816,3 +822,5 @@ read and at least one consumer found through the data cross-references; base val
 - First aid, medkits and robot repair: `h + b <= M`; `rate = lerp(1, 15, min(skill, kit quality) * 0.01) * medic speed mult (3)`, one part per update ([First aid update](#first-aid-update))
 - Encumbrance and carrying: `C = carry weight mult * strength * strengthInjuryMultiplier + encumbrance base` (strength's whole stat multiplier); `e = clamp((C - 0.05 W) / (0.95 W), 0, 1)`; `W <= C`
 - CONSTANTS used by this subsystem: `field address = 0x142133dd0 + 4 * index`
+
+**Saved `warrior spirit`** (**Verified**, decompile; no gameplay reader found, **Unknown**): the CharStats constructor `FUN_14064cb30` reads the STATS record's float `warrior spirit` into CharStats +0x13c (a missing key reads 0; 13 base STATS records carry it: 1, 10 or 20) and `FUN_14064a8f0` writes it back under that key. Meitou's save writer gives a new character the template's value, a loaded one keeps its saved value.

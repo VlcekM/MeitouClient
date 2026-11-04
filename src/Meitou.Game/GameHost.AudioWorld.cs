@@ -148,7 +148,7 @@ sealed partial class GameHost
         if (data is null || !data.PowersEmitterEachFrame) return true;
         if (data.IsWind)
         {
-            if (data.WindRotor is { } rotor) { levelWind.Add((emitter, rotor)); efficiency = LevelWindShare(emitter.Position, rotor); }
+            if (db.Find(emitter.Building) is { } record && WorldObjectLayout.WindRotor(db, record, emitter.Origin) is { } rotor) { levelWind.Add((emitter, rotor)); efficiency = LevelWindShare(emitter.Position, rotor); }
         }
         else if (data.IsGenerator || data.IsBattery || (data.PowerOperators == 0 && data.PowerOutput == 0)) efficiency = data.OutputRate;
         else return false;

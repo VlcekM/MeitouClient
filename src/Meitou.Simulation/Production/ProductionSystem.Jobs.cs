@@ -243,7 +243,7 @@ public sealed partial class ProductionSystem
         if (n.Velocity.X == 0 && n.Velocity.Z == 0) n.Yaw = MathF.Atan2(site.Position.X - n.Position.X, site.Position.Z - n.Position.Z);
         m.Operators++;
         cold.Operating = true;
-        if (cold.Stats is { } stats && cold.Race is { } race) xp.Capped(stats, race, (Meitou.Data.Gameplay.Bodies.StatsEnumerated)m.Data.Stat, dt, TrainingRate, m.Data.OutputRate);
+        if (cold.Stats is { } stats && cold.Race is { } race) xp.Capped(stats, race, (Meitou.Data.Gameplay.Bodies.StatsEnumerated)m.Data.Stat, dt, TrainingRate, m.Data.OutputValue);
     }
 
     /// <summary>BF_CHAIR and BF_THRONE (17, 24; docs/game/ai-tasks.md "Town goals").</summary>
@@ -362,7 +362,8 @@ public sealed partial class ProductionSystem
                 if (!m.Data.IsTraining || OperatorsOf(world, id) - (cold.OperateSite == id ? 1 : 0) >= m.Data.MaxOperators) return true;
                 return !HasWorkingArm(cold);
             case TaskType.OPERATE_AUTOMATIC_MACHINERY:
-                return !m.Data.IsAutomatic || !m.Data.IsProducer || !AutoWork(world, site, m, cold, fetch: true);
+                // Done as soon as no input of the machine is empty (the row's done list !62, machineHasEmptyInputs false): the 124 companion goes on from there.
+                return !m.Data.IsAutomatic || !m.Data.IsProducer || !m.HasEmptyInputs || !AutoWork(world, site, m, cold, fetch: true);
             case TaskType.OPERATE_STORAGE:
                 // On an automatic machine (152's companion, the original's Task_FillMachine into it): what the character carries for its inputs.
                 if (m.Data.IsAutomatic && m.Data.IsProducer) return !AutoWork(world, site, m, cold, fetch: false);

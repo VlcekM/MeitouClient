@@ -129,6 +129,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
             Site = site.Id,
             Data = data,
             Position = site.Position,
+            WindRotor = data.IsWind && db.Find(site.Record) is { } record ? Meitou.Data.World.WorldObjectLayout.WindRotor(db, record, site.Position) : null,
             Inputs = [.. data.Inputs.Select(i => new InputSlot(i))],
             Output = data.Output is { } o ? new OutputSlot(o) : null,
             Storage = data.HasInventory ? new Inventory(data.StorageWidth, data.StorageHeight) { StackBonusMult = data.StackBonusMult, Limited = data.StorageLimit.Count > 0 }
@@ -140,10 +141,11 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         var p = site.Position;
         if (data.Farm is { } farm)
         {
-            // Indoor farms too (FUN_1400e8420): their fertility effect 0 makes the ground matter only at or below the minimum, and the biome's water usage applies.
+            // Every farm alike (FUN_1400e8420): the fertility effect 0 of a hydroponic one makes the ground matter only at or below the minimum, the biome's water usage applies, and the crop match is the biome's unless the farm stands inside a building.
             float fertility = resources.Value(MachineData.GroundResource, p.X, p.Y, p.Z);
             m.Yield = farm.FertilityFactor(fertility);
-            m.CropMatch = resources.CropMatch(farm, p.X, p.Z);
+            m.Indoors = data.InteriorFurniture && site.Parent is not null;   // slot 59 where the farm stands (the power tick keeps it)
+            m.CropMatch = resources.CropMatch(farm, p.X, p.Z, m.Indoors);
             m.WaterRate = farm.ConsumptionRate / MachineData.DaySeconds * resources.WaterUsage(p.X, p.Z);
             Replant(world, m);
         }
@@ -834,46 +836,38 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         UnloadedProduction || world.ActiveZones is not { } active || active.Contains(Meitou.Data.World.WorldLayout.ZoneOf(m.Position.X, m.Position.Z));
 
     /// <summary>
-    /// A farm's catch-up for <paramref name="h"/> unloaded game hours (<b>Verified</b>, <c>FarmBuilding::timeSkip</c>, docs/game/buildings-production.md "Unloaded zones"): the crop advances along its
-    /// cycle (growth, harvest time, death time) for the watered hours, then at the drought rate while its death grows; a completed cycle replants. An NPC farm ignores water.
+    /// A farm's catch-up for <paramref name="h"/> unloaded game hours (<b>Verified</b>, <c>FarmBuilding::timeSkip</c> <c>FUN_1400df6e0</c>, docs/game/buildings-production.md "Unloaded zones"): the crop
+    /// advances along its cycle (growth G, harvest H, death D) for the watered hours; an NPC farm ignores water. A finished cycle only wraps (nothing is harvested, nothing replants); the hours
+    /// short of water stretch only the growth phase (G / drought multiplier) and add to the death that was already there.
     /// </summary>
     internal void TimeSkip(World world, Machine m, float h, bool ignoreWater)
     {
         var f = m.Farm!;
         var fd = m.Data.Farm!;
-        float g = fd.GrowthTime / MathF.Max(m.Yield * m.Power, 1e-6f), cycle = g + fd.HarvestTime + fd.DeathTime;
+        float g = fd.GrowthTime / MathF.Max(m.Yield, 1e-6f), cycle = g + fd.HarvestTime + fd.DeathTime;
         if (cycle <= 0) return;
         float p = f.Growth < 1 ? MathF.Max(f.Growth, 0) * g : f.Growth < 2 ? g + (f.Growth - 1) * fd.HarvestTime : g + fd.HarvestTime + f.Death * fd.DeathTime;
         float rate = m.WaterRate, water = float.MaxValue;
         foreach (var input in m.Inputs) water = MathF.Min(water, input.Level + input.Count);
         // The watered share mixes the per-second water rate with the skipped game hours and divides by h as well, as the game writes it (FUN_1400df6e0).
         float w = m.Inputs.Length == 0 ? float.MaxValue : rate > 0 ? water / (rate * h) : h;
-        bool replant = false;
-        float death = 0, saved = f.Death;
+        float death, growthLength = g;
         if (ignoreWater || h <= w)
         {
             p += h;
-            replant = p > cycle;
+            death = 0;
+            if (p > cycle)
+            {
+                f.Harvested = 0;
+                p -= MathF.Floor(p / cycle) * cycle;
+            }
         }
-        else
-        {
-            p = (p + w) % cycle;
-            float dm = fd.DroughtMultiplier > 0 ? fd.DroughtMultiplier : 1e-8f;
-            p += (h - w) * dm;
-            // The drought adds to the death already there (and with no drought time leaves it).
-            death = fd.DroughtDeathTime > 0 ? saved + (h - w) / fd.DroughtDeathTime : saved;
-            if (death > 1) { replant = true; death %= 1; }
-            replant |= p > cycle;
-        }
-        p %= cycle;
-        if (replant) Replant(world, m);
-        float growth = p < g ? p / g : p < g + fd.HarvestTime ? 1 + (p - g) / MathF.Max(fd.HarvestTime, 1e-6f) : 2;
-        float delta = growth - f.Growth;
-        for (int i = 0; i < f.Plants.Length; i++)
-            if (f.Plants[i] >= -1) f.Plants[i] = MathF.Min(f.Plants[i] + delta, MathF.Min(growth, 1));
-        f.Growth = growth;
-        // A position in the death phase adds its remainder to the death.
-        f.Death = growth >= 2 ? death + (p - g - fd.HarvestTime) / MathF.Max(fd.DeathTime, 1e-6f) : death;
+        else (p, death, growthLength) = DroughtSkip(f, fd, p, g, w, h, cycle);
+        float harvest = MathF.Max(fd.HarvestTime, 1e-6f);
+        float growth = p < growthLength ? p / growthLength : p < growthLength + fd.HarvestTime ? 1 + (p - growthLength) / harvest : 2;
+        if (growth >= 2) death += (p - growthLength - fd.HarvestTime) / MathF.Max(fd.DeathTime, 1e-6f);
+        f.Growth = growth;   // the plants' own growth is not touched: while below 1 the next tick sets the growth to the lowest plant again (FUN_1400e5580)
+        f.Death = death;
         if (ignoreWater) return;
         foreach (var input in m.Inputs)
         {
@@ -888,6 +882,33 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
                 input.Level = 1 - (need - whole);
             }
         }
+    }
+
+    /// <summary>
+    /// The short-of-water branch of <see cref="TimeSkip"/> (<c>FUN_1400df6e0</c>, <b>Verified</b>): the position after the <paramref name="w"/> watered hours wraps on the normal cycle, the other hours
+    /// move it unstretched; the death time adds (h - w) / drought death time to the death already there, and past 1 nothing is harvested, the death keeps its fraction and the position becomes
+    /// that fraction of the drought death time; the position then wraps on the drought cycle (growth G / drought multiplier, 1e8 when that is 0). Returns the position, the death and the growth length.
+    /// </summary>
+    static (float P, float Death, float GrowthLength) DroughtSkip(FarmState f, FarmData fd, float p, float g, float w, float h, float cycle)
+    {
+        p += w;
+        p -= MathF.Floor(p / cycle) * cycle;
+        float growthLength = fd.DroughtMultiplier != 0 ? g / fd.DroughtMultiplier : 1e8f;
+        float droughtCycle = growthLength + fd.HarvestTime + fd.DeathTime;
+        p += h - w;
+        float death = f.Death;
+        if (fd.DroughtDeathTime > 0)
+        {
+            death += (h - w) / fd.DroughtDeathTime;
+            if (death > 1)
+            {
+                f.Harvested = 0;
+                death -= MathF.Floor(death);
+                p = death * fd.DroughtDeathTime;
+            }
+        }
+        p -= MathF.Floor(p / droughtCycle) * droughtCycle;
+        return (p, death, growthLength);
     }
 
     /// <summary>How ripe a farm is, 0..1 over its growth (the HUD's figure): the growth while growing, 1 once ripe.</summary>
@@ -915,16 +936,17 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
     /// <summary>The factor of the rain's water (the exe's constant at <c>14168a254</c>, <b>Verified</b>).</summary>
     const float RainWaterFactor = 3;
 
-    /// <summary>The farm tick (<b>Observed</b>, <c>FarmBuilding::vfunc_28</c>), every tick whether anyone is there. An outdoor farm's first input is rained on first: level += wetness x water rate x rate x dt x 3, at most 1 (<b>Verified</b>, <c>FUN_1400e5580</c>).</summary>
+    /// <summary>The farm tick (<b>Observed</b>, <c>FarmBuilding::vfunc_28</c>), every tick whether anyone is there. A farm not inside a building (<see cref="Machine.Indoors"/>, slot 59; its own indoor flag, fertility effect 0, is not read) has its first input rained on first: level += wetness x water rate x rate x dt x 3, at most 1 (<b>Verified</b>, <c>FUN_1400e5580</c>).</summary>
     void FarmTick(World world, Machine m, float dt)
     {
         var f = m.Farm!;
         var fd = m.Data.Farm!;
         float h = dt / (MachineData.DaySeconds / 24);
-        if (m.Inputs.Length > 0 && !fd.Indoor && world.Weather?.At(m.Position.X, m.Position.Z) is { Wetness: > 0 } rain)
+        if (m.Inputs.Length > 0 && !m.Indoors && world.Weather?.At(m.Position.X, m.Position.Z) is { Wetness: > 0 } rain)
             m.Inputs[0].Level = MathF.Min(1, m.Inputs[0].Level + rain.Wetness * m.WaterRate * m.Inputs[0].Rate * dt * RainWaterFactor);
         bool watered = m.Inputs.Length == 0 || DrawWater(m, dt * m.WaterRate);
-        float inc = h * m.Yield * m.Power / fd.GrowthTime;
+        float inc = h * m.Yield / fd.GrowthTime;
+        if (Rated(world, m) != 0) inc *= m.Health * m.Power;   // slot 109 only for a farm that uses power (FUN_1402976a0)
         if (!watered) inc *= fd.DroughtMultiplier;
         bool changed = false;
         if (f.Growth >= 1)
@@ -953,7 +975,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         if (fd.DroughtDeathTime > 0 && f.Growth > 0 && f.Growth < 1)
         {
             if (!watered) f.Death += h / fd.DroughtDeathTime;
-            else if (f.Death > 0 && f.Death < 0.6f) f.Death = MathF.Max(0, f.Death - h / fd.DroughtDeathTime);
+            else if (f.Death > 0 && f.Death < 0.6f) f.Death -= h / fd.DroughtDeathTime;   // no floor: one step can overshoot below 0 (FUN_1400e5580)
             if (f.Death > 0) changed = true;
         }
         if (f.Death >= 1 || f.Harvested >= f.Plants.Length) Replant(world, m);
@@ -965,8 +987,8 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
     }
 
     /// <summary>
-    /// One operator's work on a farm (<b>Observed</b>, <c>FarmBuilding::vfunc_150</c>): a ripe crop is harvested plant by plant (<c>health x powerSat x P x dt x s x harvest rate</c>,
-    /// each plant rolling its <c>output per plant</c> against the efficiency), a dead one cleared (<c>clear rate</c>, the same factors; slot 109, <b>Verified</b> <c>FUN_1400e59e0</c>).
+    /// One operator's work on a farm (<b>Observed</b>, <c>FarmBuilding::vfunc_150</c>): a ripe crop is harvested plant by plant (<c>health x powerSat x P x dt x s x harvest rate</c>;
+    /// when the progress completes the output's room is tested, else status 1 keeps the progress; then ceil(<c>output per plant</c>) rolls against the efficiency and the fraction once), a dead one cleared (<c>clear rate</c>, the same factors; slot 109, <b>Verified</b> <c>FUN_1400e59e0</c>).
     /// </summary>
     bool HarvestStep(World world, Machine m, float farming, float s, float dt)
     {
@@ -975,20 +997,21 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         float work = m.Health * m.Power * constants.ProductionSpeed * dt * s;
         if (f.Growth >= 1 && f.Death < fd.DeathThreshold && f.Harvested < f.Plants.Length)
         {
-            if (m.Output is not { } output) return false;
-            if (output.Full)
-            {
-                f.Status = FarmStatus.OutputFull;
-                return false;
-            }
+            if (m.Output is not { } output || f.Status == FarmStatus.OutputFull) return false;   // status 1: the work function does nothing (FUN_1400e59e0)
             f.HarvestProgress += work * fd.HarvestRate / MachineData.DaySeconds;
             if (f.HarvestProgress < 1) return true;
+            if (output.Full)
+            {
+                f.Status = FarmStatus.OutputFull;   // the progress is kept; the tick lets go of it once there is room
+                return false;
+            }
             float skill = farming < 0 ? 0.01f : farming * 0.01f;
             float e = Math.Clamp(Lerp(0.5f, 2, skill), 0, 1) * m.CropMatch * m.Yield;
             ulong key = Rng.StableHash(m.Site);
             int whole = (int)fd.OutputPerPlant;
             int made = 0;
-            for (int u = 0; u < whole; u++)
+            // ceil(output) rolls against e, then the fraction rolled once against itself (a do-while on a positive output).
+            for (float u = 0; u < fd.OutputPerPlant; u++)
                 if (Rng.Float(Rng.Hash(world.Seed, key, RngPurpose.Farm, (1UL << 40) | (uint)f.Rolls++)) < e) made++;
             float frac = fd.OutputPerPlant - whole;
             if (frac > 0 && Rng.Float(Rng.Hash(world.Seed, key, RngPurpose.Farm, (1UL << 40) | (uint)f.Rolls++)) < frac) made++;

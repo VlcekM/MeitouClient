@@ -108,7 +108,7 @@ public sealed record ItemInfo(string Id, string Name, FcsRecordType Type)
             Quality = r.GetFloat("quality"),
             StorageWidth = r.GetInt("storage size width"),
             StorageHeight = r.GetInt("storage size height"),
-            EncumbranceEffect = r.Type == FcsRecordType.CONTAINER ? r.GetFloat("encumbrance effect", 1) : 1,
+            EncumbranceEffect = r.Type == FcsRecordType.CONTAINER ? Math.Max(r.GetFloat("encumbrance effect", 1), 0) : 1,
             StackBonusMinimum = r.Type == FcsRecordType.CONTAINER ? r.GetInt("stackable bonus minimum", 1) : 1,
             StackBonusMult = r.Type == FcsRecordType.CONTAINER ? r.GetFloat("stackable bonus mult", 1) : 1,
             WornOnlyBy = [.. r.GetReferences("races").Select(x => x.TargetStringId)],

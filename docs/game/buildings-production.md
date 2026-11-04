@@ -660,10 +660,10 @@ the [layout's plant count](#farm-plants), not `amount`.
   Fertility factor F = `1 - (1 - f) x fertility effect`, 0 when f <= `minimum fertility`, f the GROUND resource
   (`FUN_1400e4320`, `vfunc_91`); F is also the yield. Both the water usage and F apply to indoor farms too, with no indoor branch
   (**Verified**, `FUN_1400e8420`): their effect 0 gives F = 1 unless the ground is at or below the minimum (the shipped indoor
-  FARM_DATA have `minimum fertility` -1, so never).
+  FARM_DATA have `minimum fertility` -1, so never). The biome crop terms of the crop match C (`FUN_1400dfe10`) and the rain top-up read where the farm stands instead (slot 59 `isIndoors`: interior furniture inside a building, **Verified**), not `fertility effect` 0, which is a separate byte: a hydroponic farm standing outdoors takes the biome match and rain; Meitou `Machine.Indoors`, set at creation and by the power tick. The ghost's popup keeps the flag (the ghost's parent is not read there, **Unknown**).
 - **Plants**: each has a growth g. Replant (`FUN_1400e48e0`): every g = -0.2 x U[0,1), `plant start` = their minimum,
   `plants harvested` 0, death d 0, clear progress 0, harvest progress 0, farm growth = `plant start`.
-- **Tick**, h = dt/(G/24): outdoors (the exe also tests a building flag at `+0x240`, meaning **Unknown**), rain fills the FIRST input's level by
+- **Tick**, h = dt/(G/24): while the farm is not inside a building (slot 59 `isIndoors` null, **Verified**; or the byte at `+0x240` is set, meaning **Unknown**, treated as unset; the farm's own indoor flag, fertility effect 0, is not read, so a hydroponic farm standing outside is rained on; Meitou `Machine.Indoors`), rain fills the FIRST input's level by
   `wetness x w x rate x dt x 3` (to 1 at most; **Verified**: `FUN_1400e5580`, the 3 at `14168a254`). `wetness` is the weather record's `wetness`
   (0..1; the def field `+0x94` of the region's current weather at the farm, loader `FUN_1409de7b0`), not `rain intensity` and not times the weather's strength;
   any weather counts, acid included. Meitou: `WeatherHere.Wetness`, `ProductionSystem.FarmTick`. Water draw
@@ -672,11 +672,13 @@ the [layout's plant count](#farm-plants), not `amount`.
   powerSat when the building uses power. Farm growth < 1: each plant with -1 <= g < 1 gains inc; farm growth = the
   lowest such g, capped at 1. 1 <= growth < 2: growth += h / `harvest time` (ripe; at 2 it rots). Growth >= 2:
   d += h / `death time`. While 0 < growth < 1 and `drought death time` > 0: a failed draw adds h / `drought death time`
-  to d, a good one takes it off while 0 < d < 0.6. d >= 1 or every plant harvested: replant.
+  to d, a good one takes it off while 0 < d < 0.6 with no floor at 0 (**Verified**, `FUN_1400e5580`; one step can leave d below 0, nothing clamps it later). d >= 1 or every plant harvested: replant.
 - **Harvest** (an operator, skill factor s): when growth >= 1, d < `death threshold`, not every plant harvested and the
-  output is not full, harvest progress += health x powerSat x P x dt x s x harvest rate. At 1: the output gets, per whole
-  unit of `output per plant`, one item with probability e (the fraction rolled once); the plant's g = -10, `plants
-  harvested` += 1; the work point moves to the next plant. No room: status 1. A crop of zero items floats "Failed".
+  status is not 1, harvest progress += health x powerSat x P x dt x s x harvest rate (no room test yet). At 1 the output
+  section is asked for room for the item (**Verified**, `FUN_1400e59e0`): none sets status 1 and keeps the progress (the tick keeps 1 while the output
+  cannot take the item, else resets to 2; the work function does nothing at 1). With room, ceil(`output per plant`) rolls give one item each with probability e (a do-while: 1 to 2 rolls
+  for an output of 1 or 2; 0.5 gives one e-roll), then the fraction `output - int(output)` is rolled once against itself; the progress resets to 0, the plant's g = -10, `plants
+  harvested` += 1; the work point moves to the next plant. A crop of zero items floats "Failed".
   e (`FUN_1400dfe10`) = `clamp01(lerp(farming/100, 0.5, 2))` x C x F, C = sum of the farm's crop weights x the biome
   coverages (1 indoors), farming the operator's effective stat (**Verified**: the 0.01 at `141682ad8` and the call order).
 - **Clearing**: d >= `death threshold`: clear progress += health x powerSat x P x dt x s x clear rate; at 1 one plant is
@@ -725,13 +727,17 @@ catch up.
 
 **Farm catch-up** (**Verified**, `FarmBuilding::loadFromSerialise` / `timeSkip`): the farm saves `save time` (game hours) when its zone unloads
 and on every save. On load, h = now - save time; if h > 1 and the farm is built, `timeSkip(h, ignoreWater = owner is not the player)`:
-- Cycle C = G (`growth time` / fertility) + `harvest time` + `death time`; position p from `plant growth` (0..1 over G, 1..2 over harvest time,
+- Cycle C = G (`growth time` / fertility, no power factor) + `harvest time` + `death time`; position p from `plant growth` (0..1 over G, 1..2 over harvest time,
   then `plant death` x death time).
 - Water m = min over inputs of level + item count; watered hours w = m / (rate x h), rate the per-second water rate (+0x534, as the live
   tick uses it) and h in game hours (it mixes the units and divides by h too, as written; w = h with no rate).
-- h <= w or an NPC farm: p += h, death 0; a completed cycle replants.
-- Else p += w (wrapped), the other h - w hours grow at the drought multiplier (0: 1e-8) and, with a drought death time, death += (h - w) / `drought death time` (added to the saved death), past 1
-  replanting and keeping the fraction; watered, the death is first zeroed. A position left in the death phase then adds its remainder / death time.
+- h <= w or an NPC farm: p += h, death 0 (not added to); when p > C the harvested count resets and p wraps (`p - floor(p / C) x C`). Nothing replants (`FUN_1400e48e0` is not
+  called), and the plants' own growth values, harvest and clear progress are untouched.
+- Else p = (p + w) wrapped on C, Gd = G / `drought multiplier` (1e8, `DAT_1416888b0`, when that is 0) and the drought cycle Cd = Gd + harvest + death; p += h - w with no multiplier
+  (drought stretches only the growth phase). With a `drought death time` DDT > 0: death = saved death + (h - w) / DDT (the saved death is not zeroed here); above 1 the harvested count
+  resets, death keeps its fraction and p = that fraction x DDT; no replant. p then wraps on Cd; phases use Gd (p < Gd: growth p / Gd; then 1 + (p - Gd) / harvest time; else 2) and a
+  position in the death phase ADDS (p - Gd - harvest) / death time to the accumulated death.
+  The plants are not touched (**Verified**, `FUN_1400df6e0` writes no plant): while the growth is below 1 the live tick (`FUN_1400e5580`) sets it to the lowest plant again, so a catch-up inside the growing phase is undone by the next tick, a vanilla quirk Meitou keeps.
 - A player farm then uses its water, per input: need = w x rate x the input's amount - level, the level zeroed; need > 0 removes the whole
   stack when it holds no more than need, else floor(need) items with the level 1 - frac(need) (**Verified**, `FUN_1400df6e0`).
 
@@ -827,7 +833,7 @@ and `power capacity` (battery store, "in seconds" per fcs.def), plus research ([
   fuelled ("Out of fuel" otherwise); **Verified** `FUN_140297760`, health the construction fraction. A battery's output is the same health x rate while it holds charge,
   and its capacity health x (capacity + increase) (`FUN_140297650`). Meitou the same (`ProductionSystem.Output`, `Capacity`).
 - **Wind generators** (**Verified**, decompiled): output = the share x the above, 0 when below 1 (`WindGeneratorBuilding::getPowerOutput`); the share
-  (`PhysicsCollection::getWindRotationPower`) is the first ROTATION_WIND_SPEED part's wind share ([rotating parts](#rotating-parts)), 0 with none or without
+  (`PhysicsCollection::getWindRotationPower`) is the first ROTATION_WIND_SPEED part's wind share ([rotating parts](#rotating-parts)) among the parts the placement actually spawned (FUN_140848950 spawns only the chosen random-group parts, so the rotor depends on the position's seed; Meitou: `WorldObjectLayout.WindRotor`, per machine), 0 with none or without
   the building's physics collection (render entity) loaded. Meitou gives every built one its share from the scheduled wind of the weather region at the site.
   Sound intensity = the share. State (`getGUIState`): the production state, then "No Wind" ("There is currently not enough wind to drive the
   machine.") while the share is 0. Panel (`getGUIPower`), only with rated output (`getMaxPower`: `power output` + research) above 0: section 4 (the condition
@@ -846,8 +852,9 @@ and `power capacity` (battery store, "in seconds" per fcs.def), plus research ([
   min(demand, supply left / consumers left). Consumers left short with `gets battery` are counted; if batteries were in
   use the previous frame (town `+0x470`) they share the batteries' output the same way. With no supply left the
   batteries drain by what was drawn (`FUN_1402978d0`) and the town enters battery mode; with a surplus it leaves it and
-  the batteries charge from it, each at most its rate. Factor = granted / demand (1 with no demand), x health
+  the batteries charge from it, each at most its rate: in stored order each battery takes min(surplus left / batteries still to come, its rate), the count falling by one for every battery, switched off or full ones included (**Verified**, `FUN_14092cd60`; the switch byte `vfunc 0x228` and "rate 0 when full" are engine readings, **Observed**). Factor = granted / demand (1 with no demand), x health
   (`vfunc_109`); production, crafting, research and farm growth are scaled by it.
+- **One town per call** (**Verified**, `FUN_14092d850`): the world's per-frame update collects every eligible town (`vfunc 0x270` == 0) and calls `vfunc 0x2b8` (the frame above) on the one at a static cursor (`DAT_14213543c`, incremented first, wrapped to 0 at the count) per call; the other towns keep their last grants. The call rate is not decoded. Meitou `ProductionSystem.ShareOneTown`: one grid town per production pass in ascending number (an engine choice for the cadence); batteries of every town still integrate their last grant each pass.
 - **Fuel** (`vfunc_183` on generators): inputs drawn as a producer's, x the load (`GeneratorBuilding::vfunc_167`):
   output / rated x (battery charging + consumer demand) / all generators' output, at most 1 ("Fuel Consumption {1}%").
 - **Battery store** (`vfunc_27`): += flow / rate x dt, clamped to 0..capacity.
@@ -959,7 +966,7 @@ original falls back to the template.
 ## Ruined by residents
 
 **Verified** (decompile): the squad setup `FUN_14057f1f0` calls slot 104 (set destroyed) on the squad's home with `building ruined` of its template and slot 105
-(`FUN_14055b520`, can be destroyed): true when the building's int +0x198 is 7 (meaning **Unknown**) or it, or a part reached through `parts` at any depth, has a
+(`FUN_14055b520`, can be destroyed): true when the building's class (+0x198) is 7, GatewayBuilding, the `is wall gate` building (**Verified**, [pathfinding](pathfinding.md)), or it, or a part reached through `parts` at any depth, has a
 `destroyed mesh`. So a home whose template is not ruined is set intact. **Observed** (data, base game and its mods): 26 SQUAD_TEMPLATEs set `building ruined`, among
 them `_ruined empty building (DEFAULT)` (`44421-rebirth.mod`), the `default resident` of Old Village (Deadcat, `50243-rebirth.mod`), whose level states are
 intact and name no template. Its houses are ruins in the original (issue #145).
@@ -975,7 +982,7 @@ fixtures or item slots).
 Meitou (`ResidentRuins`): before anything reads the level data's `destroyed`, every town is housed by the population's rule ([town residents](factions-squads-towns.md#town-residents))
 and each home of a ruined template that has a destroyed mesh is set destroyed in its level state; 71 base-game buildings (Old Village 10 of 10, Abandoned Town 9 of 9,
 the library ruins). A saved `destroyed` false does not undo a level ruin unless the player's repair saved it (`meitou town construction`; engine choice: saves
-made before this pass wrote those buildings intact). A town's baked distant mesh is a fixed file of the install, drawn as it is (as in the original). Not modelled: the int +0x198 test; setting a level ruin intact (13 level ruins get a template that is not ruined, e.g. Bast's and Endin's
+made before this pass wrote those buildings intact). A town's baked distant mesh is a fixed file of the install, drawn as it is (as in the original). Meitou: `ResidentRuins.CanBeDestroyed` tests `is wall gate` for the class. Not modelled: setting a level ruin intact (13 level ruins get a template that is not ruined, e.g. Bast's and Endin's
 `Trashed building w/squatters`, yet those towns are ruins in the original, so where the original skips the call is **Unknown**).
 
 A [town override](factions-squads-towns.md#town-overrides) reads its zone back from the level file and houses the replacement's residents, so Meitou

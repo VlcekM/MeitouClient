@@ -201,11 +201,11 @@ public sealed class ItemSlots
     /// </summary>
     public static (ItemInstance? Item, FcsRecordType Type, bool NoMaker) Roll(PopulationData data, Meitou.Data.Gameplay.Economy.VendorList list, int owner, ref RandomStream rng)
     {
-        var entry = ShopFiller.Pick(list.Entries, ref rng);
+        var entry = list.Entries.Count == 1 ? list.Entries[0] : ShopFiller.Pick(list.Entries, ref rng);   // FUN_1409540d0: one entry is taken with no draw
         var faction = (uint)owner < (uint)data.Factions.Count ? data.Db.Find(data.Factions[owner].Id) : null;
-        // The original hands every item the grade's quality; only armour keeps it here, as shop stock does (what it does to other items is Unknown).
+        // The original hands every pick the grade's quality (FUN_140580750, Verified): it becomes the level of armour, crossbows and limbs; what it does to a plain ITEM is Unknown (none here).
         float quality = CharacterGenerator.QualityOfGrade(ShopFiller.Grade(faction, ref rng));
-        if (entry.Type != FcsRecordType.ARMOUR) quality = 0;
+        if (entry.Type is not (FcsRecordType.ARMOUR or FcsRecordType.CROSSBOW or FcsRecordType.LIMB_REPLACEMENT)) quality = 0;
         if (data.Items.Create(entry.Id, 1, quality) is not { } item) return (null, entry.Type, false);
         if (entry.Type != FcsRecordType.WEAPON) return (item, entry.Type, false);
         if (ShopFiller.Maker(list, data.Db, ref rng) is not { } made) return (null, entry.Type, true);

@@ -113,7 +113,7 @@ on while the daylight factor is 0 (the switch follows slot 164's "not daytime").
   `Bip01 Pelvis`), CONTAINER Garru Backpack (`Packbeast lantern`, `Bip01`; the Pack Beast's `backpack`), and two mod
   attachments on `Bip01 Spine2` that nothing references. All name `pack beast light`: point, F5F59C, 0.2 ± 0.05, r 300.
 - **Belt slot.** The two lanterns are the only records with `slot` 14 (ATTACH_BELT), so the inventory's belt slot holds
-  lanterns (**Observed**: Meitou lets an ITEM with slot 14 into `belt`). The item's `charges` 200 use is **Unknown**.
+  lanterns (**Observed**: Meitou lets an ITEM with slot 14 into `belt`; **Verified** in `FUN_14075faf0`:99-101 / `FUN_14074bc30` that every item type stores its `slot` and a section takes an item whose slot is its type, so an ITEM of any worn slot (shirt, hat, boots, body, legs, belt) goes to that section, and slot 7 or an unmapped one to none; base data: 307 ITEMs slot 7, the 2 lanterns slot 14). A CONTAINER's `encumbrance effect` is clamped to 0 or more (`FUN_140763810`:127-134, **Verified**); a missing field stays 1 in Meitou (the original's default is **Unknown**). The item's `charges` 200 use is **Unknown**.
 - **Lights** (`ScythePhysicsT`, ctor `1407e71f0` reads `light data`; `vfunc_15`): one light per entry of a map, made by the
   building light builder with the night flag set, so the light pass draws them only at daylight <= 0.1. Each frame
   (`vfunc_2`) a light's node takes a physics body's position and orientation. How the map is filled (which body) is

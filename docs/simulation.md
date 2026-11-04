@@ -1176,8 +1176,11 @@ failed walks mark the cage unreachable for the faction; its own faction's shut d
 - **Escapes** (`LockSystem.OpportunisticEscapes`, `ShackleEscapes`): an AI prisoner whose role list holds 256 or 202 in its hours walks out of a cage that is not locked
   (`FixtureRegistry.GetOut`); every 30 ticks an AI character outside a cage wearing locked shackles with 202 listed works them off, cutting with a tool, else picking (the
   original planner's choice among pick, cut and break is **Unknown**); once they are unlocked it takes the worn shackles off (219) into its inventory (else the ground; engine choice).
-- **Shout** (188): a worker with slaves of its squad's list up and uncaged says event 38 at a random one and walks towards it for up to 8 s (or within 40); the same worker again after 0.5 to 1.5 x 120 game
-  seconds (engine pacing).
+- **Shout** (188): a worker with slaves of its squad's list up and uncaged says event 38 at a random one, walks to it and stands within 40, following it
+  when it moves on; it says the event again every 8 s (engine choice) until its worker speaks (`DialogueSystem.Engages`; the row's B list
+  `isDialogDelivered` is read differently, [ai-tasks](game/ai-tasks.md)), and the next sweep picks a slave again with no pause. A worker with no
+  event-38 line, or with the event lines off, never speaks: its job then ends only at `CaptiveSettings.GiveUpSeconds` (600 s) or when the slave goes
+  (engine choice).
 - **Work** (189, 190; `AiBehaviour.Work` in the AI, not a job: it competes by score like any goal): a worker of a town with a mine, research bench, refinery or crafting bench (BuildingFunction 1, 3, 4,
   10) walks to a random one (a pick of the character and `AiMind.WorkEpoch`, kept while it works there; 189 only one it can run, `AiSystem.RealWork`: a mine,
   or a machine running there with its inputs, [ai-tasks](game/ai-tasks.md#slave-work-shout-and-capture); each holds one of the workplace's
@@ -1505,7 +1508,7 @@ crafting benches, generators and batteries. Facts: [production](game/buildings-p
   an order replaces the job's task, and the list resumes once the order is done. A job that ends leaves the character idle, decided again at once. The other jobs'
   contributors are further below:
   - 97 Training (Shift + right click on a training dummy, function 7, or the "Training" verb): the Operate task at the dummy; `Train` raises the building's `stat used` by the capped continuous
-    XP entry (`XpService.Capped`, rate 2, cap = `output rate`; [facts](game/ai-tasks.md#perma-jobs)). Blocked while the dummy has no free place or the character has no working arm.
+    XP entry (`XpService.Capped`, rate 2, cap = the building's `+0x1a4`, `MachineData.OutputValue` = `output rate` x `production mult` / `max operators` when above 1, **Verified** `FUN_14029e460`; [facts](game/ai-tasks.md#perma-jobs)). Blocked while the dummy has no free place or the character has no working arm.
   - 45 Bodyguard / 31 Staying close (`PermaJob.Character`; the "Follow" and "Bodyguard" verbs with Shift, `AddOrderJob` with the target): the character follows the job's character with a follow order
     (`MovementSystem.Follow`); blocked when it is gone, for 31 also while it is down; saved with the target's handle and found again from it after a load. Defending the followed
     character (`RetaliationSystem.Guards`; rows 45 / 31 need state 16, [precedence](game/ai-tasks.md#precedence)): a bodyguard (45, the verb always gives the job; `Guarding` is a running
@@ -1525,7 +1528,7 @@ crafting benches, generators and batteries. Facts: [production](game/buildings-p
     a full output no storage takes). A farmer at a growing farm with water tends it: it plays the farm's clip (engine reading of task 87, [farming](game/buildings-production.md#farming)).
   - 124 Hauling to (`CharacterTask.Haul`): the nearest player machine within `HaulRange` of the storage whose output the storage takes is
     emptied into the hauler's pack and carried there; items the hauler already carries that some machine makes go first. Blocked with neither.
-  - 152 Operating automatic machine (Shift + Auto-Haul on an automatic machine; its companion 124 lands on the same machine): the operator above at the machine, hauling only.
+  - 152 Operating automatic machine (Shift + Auto-Haul on an automatic machine; its companion 124 lands on the same machine): the operator above at the machine, hauling only. Its done list is `!62` (machineHasEmptyInputs false, **Verified**, TaskData row 152): the job is finished, and the list moves on to the 124 companion, as soon as no input of the machine is empty (`ProductionSystem.Blocked`).
     Blocked unless it is mid-trip for it, carries an item an input has room for, an empty input's item is in a storage, or a full or carried output has a storage that takes it
     (engine reading of the row's goal "no empty inputs", `AutoWork`). 124 on an automatic machine runs the same way, blocked unless it carries an item an input has room for.
   - 125 Engineer (ordered as 2 Build or 95 Repair; Shift + quick right click on an unfinished site): builds `ConstructionSystem.EngineerSite`'s
@@ -1732,7 +1735,9 @@ in their own fights; nothing else is acted out ([combat goals](game/ai-tasks.md#
 fights back, by the engine's answer (`RetaliationSystem`, at any distance; engine choice).
 
 Scoring follows the original (`TaskProfiles`: desire, commitment, crowding per goal type); a desire
-the original computes in a function of its own counts as 1. Town goals ([ai-tasks.md](game/ai-tasks.md#town-goals)):
+the original computes in a function of its own counts as 1. A committed goal holds only within its hours
+([goal end](game/ai-tasks.md#precedence)); one lying in its bed with only the default task left lies on with no goal
+(engine choice from the observed sleepers). Town goals ([ai-tasks.md](game/ai-tasks.md#town-goals)):
 wandering in town walks to a general node of a public town building in the walker's zone
 (public: the residents' template's `public day`, else the level state's `is public day`, else public; drawn
 among those with a general node, engine choice), patrolling town from one random point round the town's centre to the next
@@ -1740,11 +1745,16 @@ among those with a general node, engine choice), patrolling town from one random
 public shop that sells what the character's shopping list wants, else (not in a town of the player's faction) to a random public building, the desire being 1 for a shop and 0.4 for another building (as the original's finders, [ai-tasks](game/ai-tasks.md#town-goals); no faction test), then buys from its stock one unit a second ([NPC purchases](game/economy.md#npc-purchases)), relaxing under a bar package, sitting around (275) and staying home (43; the home is the bar under a bar package) sit on a seat claimed per
 member on the package cadence, and the wanderer walks to the nearest town. A bar package (both kinds) reserves
 one table per squad as the original (`AiSystem.PickTable`: public bars tried from a random one, first table no
-other bar squad holds; no bar, or the outdoors kind: a free table placed outdoors in the town; none free: the
-squad keeps its home and does not relax); its members take the free seats nearest that table (engine choice),
+other bar squad holds; the outdoors kind: a free table placed outdoors in the town; a town without bars gives
+the normal kind none, as the original; none free: the squad keeps its home and does not relax); its members take the free seats nearest that table (engine choice),
 at an outdoor table they stand at it. A home node goal takes a
 node of its kind, a guard post a general node next (as the original), then any node but a shopkeeper's
-(engine; only the shopkeeper goal falls back onto the counter). Gates have no nodes: the gate guard
+(engine; only the shopkeeper goal falls back onto the counter). Static town guard (157) holds a guard post of its town
+instead (`AiMind.TownPost`, `AiSystem.ClaimTownPosts`, on the package cadence): the one it holds while its goal stays 157,
+else one drawn uniformly among the town's guard posts no other 157 member holds (the posts of 38 and 268 are not counted: engine
+choice), as the original ([ai-tasks](game/ai-tasks.md#town-goals)); none free, it stands where the home node goals do (engine choice). The post is
+not saved: a load draws again. Gates have no nodes in their layouts (the original's have 3 or 4 guard posts at run time,
+source **Unknown**): the gate guard
 (180, the home gate, else the town's gate nearest the squad) stands 15 out from the gate's first door
 leaf, on the side away from the town centre (the side is an engine choice), facing out; a member whose
 guard or general node goal finds nothing in its home gate flanks the opening on that side, beyond the

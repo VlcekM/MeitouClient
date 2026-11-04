@@ -155,11 +155,11 @@ sealed partial class PlayerInterface
 
     /// <summary>
     /// A label's own colour (docs/game/ui-input.md "Ground item labels"): a plain ITEM's <c>ItemArtifact</c> or <c>ItemStandard</c>; a weapon, armour, backpack, nest item, map item,
-    /// crossbow or limb its <c>ItemGrade</c> by level (armour by its quality) below 16/36/51/66/81 (grades 4 and 5 share the yellow); anything else <c>DropItemLabelBackDefault</c>.
+    /// crossbow or limb its <c>ItemGrade</c> by its <see cref="Meitou.Simulation.Items.ItemInstance.GearLevel"/> below 16/36/51/66/81 (grades 4 and 5 share the yellow); anything else <c>DropItemLabelBackDefault</c>.
     /// </summary>
     string ItemLabelColour(Meitou.Simulation.Items.GroundItemSnapshot g)
     {
-        int level = g.Type == FcsRecordType.ARMOUR ? (int)g.Quality : g.Level;
+        int level = Meitou.Simulation.Items.ItemInstance.GearLevelOf(g.Type, g.Level);
         return g.Type switch
         {
             FcsRecordType.ITEM => TipHex(ArtifactOf?.Invoke(g.Record) == true ? "0dfceb" : "e0cccc"),

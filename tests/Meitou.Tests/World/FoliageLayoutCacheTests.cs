@@ -48,9 +48,9 @@ public sealed class FoliageLayoutCacheTests : IDisposable
         return FoliageCatalog.Load(db);
     }
 
-    static readonly (Vector2, float)[] Towns = [(new Vector2(100, 200), 2000f)];
+    static readonly FoliageTown[] Towns = [new FoliageTown(new Vector2(100, 200), 2000f)];
 
-    FoliageLayoutCache Open(FoliageCatalog catalog, string name, IEnumerable<(Vector2, float)>? towns = null) =>
+    FoliageLayoutCache Open(FoliageCatalog catalog, string name, IEnumerable<FoliageTown>? towns = null) =>
         new(install, catalog, towns ?? Towns, Path.Combine(temp, name), 0);
 
     static (FoliageZone, FoliageGround) Zone(FoliageCatalog catalog, ZoneCoordinate coordinate, bool complete = true)

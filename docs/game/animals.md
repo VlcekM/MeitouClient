@@ -94,7 +94,7 @@ from the start.
   (Electrical Components 4, Iron Plates 6, `stackable` 1), and a stack of the same record without the flag stays a separate stack
   (**Verified**, METARU and quicksave platoon files: 144 / 187 flagged items, none overlapping).
 - Item lookups by type (`FUN_1407465d0`, used by `Task_grabOneFood` and `CharacterAnimal::vfunc_94`) skip flagged items while the
-  owner is alive (`+0x5bc`) (**Observed**).
+  owner is alive (`+0x5bc`) (**Observed**); a dead owner's count (**Verified**, `FUN_140748d70` and `FUN_1407465d0` read the owner's dead byte), so a squad mate eats from a dead mate's backpack (`FeedSystem.Best`).
 - Taking one out (`FUN_14075e7e0`, from the inventory's remove functions) clears the flag; when the owner is alive and down
   (`isDown`, [carry-loot.md](carry-loot.md): unconscious, playing dead, carried or ragdolled, so an awake carried body too) the owner dies (the death function) with "{1} has been butchered"
   (**Verified**, `FUN_14075e7e0`: not dead, then `isDown` or posture 3+, which `isDown` already covers; the flag clears either way).

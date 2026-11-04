@@ -112,7 +112,8 @@ public sealed class ItemFactory(GameDatabase db, GameConstants constants, Func<M
                 : null,
             Quantity = Math.Max(quantity, 1),
             Quality = quality,
-            Level = info.Type == FcsRecordType.ARMOUR ? (int)quality : 0,   // an armour piece's stats follow its level, which a made piece takes from its grade quality
+            // An armour piece's stats follow its level, which a made piece takes from its grade quality; so do a crossbow's and a limb's (FUN_140580750 hands the grade to those constructors).
+            Level = info.Type is FcsRecordType.ARMOUR or FcsRecordType.CROSSBOW or FcsRecordType.LIMB_REPLACEMENT ? (int)quality : 0,
             ItemFunction = info.Function,
             Charges = info.Type == FcsRecordType.ITEM ? maxCharges : 1,   // only an ITEM starts full
             MaxCharges = maxCharges,
@@ -260,10 +261,11 @@ public sealed class ItemFactory(GameDatabase db, GameConstants constants, Func<M
     }
 
     /// <summary>
-    /// The section a worn ARMOUR goes to by its <c>slot</c> (the save's section names); an ITEM only to <c>belt</c>, the slot of the two lanterns (the only ITEMs with slot 14 in the
-    /// merged data, docs/formats/lights.md "Carried lanterns").
+    /// The section a worn ARMOUR or ITEM goes to by its <c>slot</c> (the save's section names; <c>FUN_14075faf0</c> stores the slot of every item type and a section takes an item whose
+    /// slot is its type, <c>FUN_14074bc30</c>, <b>Verified</b>). An ARMOUR with another slot goes to "main"; an ITEM with slot 7 (none) or another slot has no section (in the base data
+    /// only the two lanterns, slot 14, have one).
     /// </summary>
-    static string SectionOf(GameRecord worn) => worn.Type == FcsRecordType.ITEM && worn.GetInt("slot") != (int)Meitou.Data.Characters.AttachSlot.Belt ? "" : (Meitou.Data.Characters.AttachSlot)worn.GetInt("slot") switch
+    static string SectionOf(GameRecord worn) => (Meitou.Data.Characters.AttachSlot)worn.GetInt("slot") switch
     {
         Meitou.Data.Characters.AttachSlot.Shirt => "shirt",
         Meitou.Data.Characters.AttachSlot.Hat => "head",
@@ -271,6 +273,6 @@ public sealed class ItemFactory(GameDatabase db, GameConstants constants, Func<M
         Meitou.Data.Characters.AttachSlot.Body => "armour",
         Meitou.Data.Characters.AttachSlot.Legs => "legs",
         Meitou.Data.Characters.AttachSlot.Belt => "belt",
-        _ => "main",
+        _ => worn.Type == FcsRecordType.ITEM ? "" : "main",
     };
 }

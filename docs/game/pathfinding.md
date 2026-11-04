@@ -367,9 +367,11 @@ original leaves Small Shack `48.13:8-` (`110371`) unconnected too; Meitou joins 
 only then compares the two tops for the walkable flag, so a floor rasterized into a taller cutting span walks that span's top, and a chain of merges carries the flag
 up further. **Observed** (Bughouse `18.35:11-`, heightfield column -62402,16498): the roof terrace (485) merged with the steep wall under the roof slope gave a
 walkable span to 492, so the wall became a walkable stair (485, 488, 492, 496) onto the slope (58°, walkable at the 60° building limit) and its wall-top ring;
-the original has neither. Walkable and cutting triangles are now rasterized into two fields and merged per column, a merged span walkable only when a walkable
-surface in it reaches within the climb of its top (5 cells). **Observed**: 1..3 cells instead remove Y-House roof ledges but also tilted storeys inside a
-cutting slab (Outpost s-I `9.51:2-`: the upper floor, 9 k units², is lost at 3); at 1 the towns survey loses 175 k shared units² for 475 k fewer ours-only.
+the original has neither. Walkable and cutting triangles are now rasterized into two fields and merged per column; a merged span is walkable only when a
+walkable surface in it reaches within the climb (5 cells) of its top, and then stands at that walkable top, not on the cutting part over it (cutting material
+removes the original's faces, it never makes walkable ones). **Observed** (`--survey-interiors`): lifted to the cutting top, the cells at the foot of a steep
+collar became a stair onto the dome it carries (Y-House `39.16:16-`: roof 1069, collar tops 1074, dome 1079..1096; the original has no dome); a stricter
+threshold (1..3 cells) instead drops floor cells along tilted walls, whose faces enter them (Outpost s-I `9.51:2-`: its upper storey was lost at 3).
 **Interior survey**: `meitou-tools navmesh --survey-interiors zones|towns|x,z ... [--name text] [--png dir] [--section x,z]` samples over each intact interior's
 hull every 2 units the zone's kept polygons against the original's interior faces plus its exterior polygons (the original carves its exterior with the hull's
 convex volume, so a ledge round the walls is its exterior's and our interior's) and sums, per building type, the area both have, only ours (and how much 20+

@@ -361,6 +361,7 @@ sealed partial class GameHost
         player.NewGameOptions = nextDifficulty;   // the New game window then shows the loaded save's options (the original loads them into its globals)
         population = built.Population;
         if (nav is not null) population!.ZoneGate = zone => nav.Walkability.World.Contains(zone);
+        SnapshotPlayerTowns();
         loadedSave = loaded;
         preparedBase = null;
         worldEpoch++;
@@ -437,5 +438,16 @@ sealed partial class GameHost
         {
             if (t.Result != all) Console.Error.WriteLine("load      the navmesh round the player was not ready after 15 s; loading goes on");
         }, TaskScheduler.Default);
+    }
+
+    /// <summary>The towns the player's faction owns now, for the foliage placer (<see cref="Meitou.Data.World.FoliageWorld.PlayerTowns"/>, a snapshot taken when a world is made or loaded).</summary>
+    void SnapshotPlayerTowns()
+    {
+        var owned = new HashSet<(int, int)>();
+        if (popData is { PlayerFaction: >= 0 } d)
+            foreach (var site in d.Sites)
+                if (site.Index < d.SiteFactions.Count && d.SiteFactions[site.Index] == d.PlayerFaction)
+                    owned.Add(Meitou.Data.World.FoliageWorld.TownKey(site.Position.X, site.Position.Z));
+        Meitou.Data.World.FoliageWorld.PlayerTowns = owned;
     }
 }

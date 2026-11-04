@@ -65,6 +65,24 @@ public static class DdsReader
         }
     }
 
+    /// <summary>
+    /// Reads only the first surface (the full-size level of the first image) of a DDS file from an open handle: the headers, then that surface's bytes. The result's
+    /// <see cref="DdsFile.Data"/> holds just that surface (its offset rebased to 0), so a 14-level 8192 x 8192 BC1 file costs 32 MB instead of 43 MB read and held.
+    /// </summary>
+    public static DdsFile ReadTopSurface(Microsoft.Win32.SafeHandles.SafeFileHandle file)
+    {
+        long length = RandomAccess.GetLength(file);
+        if (length > int.MaxValue) throw new DdsFormatException($"File of {length} bytes is too large.");
+        Span<byte> head = stackalloc byte[4 + HeaderSize + Dx10HeaderSize];
+        head = head[..ReadFully(file, head, 0)];
+        var headers = Parse(head, length, []);
+        if (headers.Surfaces.Count == 0) throw new DdsFormatException("No surfaces.");
+        var top = headers.Surfaces[0];
+        var data = new byte[top.Length];
+        if (ReadFully(file, data, top.Offset) != top.Length) throw new DdsFormatException("File ended early.");
+        return headers.WithData(data, [top with { Offset = 0 }]);
+    }
+
     static int ReadFully(Microsoft.Win32.SafeHandles.SafeFileHandle file, Span<byte> buffer, long offset)
     {
         int read = 0;
