@@ -33,9 +33,8 @@ public sealed partial class PopulationSystem
         var squads = new List<BuiltSquad>();
         var homes = new List<(TownBuilding, SquadTemplate)>();
         var entries = ResidentHomes.Entries(town, faction);
-        List<TownBuilding>? bars = null;
         if (site.Buildings.Any(b => b.CanHouse))
-            bars = HouseResidents(site, faction, factionIndex, seed, walk, squads, homes, playerOwned);
+            HouseResidents(site, faction, factionIndex, seed, walk, squads, homes, playerOwned);
         else
         {
             // No building data (headless worlds): every entry's squads at spots round the centre (engine choice).
@@ -51,7 +50,7 @@ public sealed partial class PopulationSystem
             }
         }
         // Bar squads (Observed, FUN_1409fcd20): per entry floor(v0 x v1 / 200) when v0 > 2, plus one more for each roll of 0..100 that is at most v1, stopping at the
-        // first that is not, at most v0 in all. The original puts each at a random node of the town (the town's own position when none comes back); Meitou at a node of one of its bars (engine choice), else at the town's position.
+        // first that is not, at most v0 in all. The original puts each at a random node of the town's node map (the town's own position when none comes back), as Meitou.
         var barEntries = BarEntries(town, faction);
         List<Vector3>? guardNodes = null;
         for (int e = 0; e < barEntries.Count; e++)
@@ -62,13 +61,9 @@ public sealed partial class PopulationSystem
             for (int k = 0; k < n; k++)
             {
                 ulong key = Rng.Mix(SeedSalts.BarSquad ^ (ulong)site.Index << 40 ^ (ulong)e << 20 ^ (uint)k);
-                if (bars is { Count: > 0 } && BarSpot(bars, seed, key) is { } spot)
-                {
-                    if (BuildOne(template, factionIndex, faction, key, seed, new Vector2(spot.X, spot.Z)) is { } inside) squads.Add(inside with { NearY = spot.Y + SpotLift });
-                }
-                // No bar node: a node of the town's node map, the guard nodes outside its doors (FUN_1409fcd20 via FUN_14038b000, FUN_14038b650); none: the town's own position with no random
+                // A node of the town's node map, the guard nodes outside its doors, whether or not a bar has nodes (FUN_1409fcd20 via FUN_14038b000, FUN_14038b650); none: the town's own position with no random
                 // offset, the height the ground there (FUN_1409fcd20:197-205, Town slot 8 FUN_1409272c0).
-                else if (GuardSpot(guardNodes ??= TownGuardNodes.Of(data.Db, site.Buildings, walk), seed, key) is { } node)
+                if (GuardSpot(guardNodes ??= TownGuardNodes.Of(data.Db, site.Buildings, walk), seed, key) is { } node)
                 {
                     if (BuildOne(template, factionIndex, faction, key, seed, new Vector2(node.X, node.Z)) is { } outside) squads.Add(outside with { NearY = node.Y + SpotLift });
                 }
@@ -99,13 +94,6 @@ public sealed partial class PopulationSystem
     /// <summary>A random node of the town's node map (null when it has none): uniform, as <c>FUN_14038b000</c>.</summary>
     static Vector3? GuardSpot(List<Vector3> nodes, ulong seed, ulong key) =>
         nodes.Count == 0 ? null : nodes[Rng.Int(Rng.Hash(seed, key, RngPurpose.Spawn, SeedSalts.HomeSpot), nodes.Count)];
-
-    /// <summary>A random general node of the town's bars (null when they have none).</summary>
-    static Vector3? BarSpot(List<TownBuilding> bars, ulong seed, ulong key)
-    {
-        var nodes = bars.SelectMany(b => b.Spots).Where(s => s.NodeType == NodeGeneral).ToList();
-        return nodes.Count == 0 ? null : nodes[Rng.Int(Rng.Hash(seed, key, RngPurpose.Spawn, SeedSalts.HomeSpot), nodes.Count)].Position;
-    }
 
     /// <summary>
     /// The bar squad entries of a town (Observed): without <c>residents override</c> the faction's <c>bar squads</c> (for towns of type Town only), then the town's;
