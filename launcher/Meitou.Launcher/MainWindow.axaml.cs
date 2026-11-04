@@ -721,18 +721,7 @@ public sealed partial class MainWindow : Window
     void ShowPlay()
     {
         var picked = PickedVersion;
-        if (download is null)
-        {
-            bool pending = UpdatePending;
-            PlayButton.Classes.Set("pending", pending);
-            PlayVersionButton.Classes.Set("pending", pending);
-            PlayIcon.IsVisible = !pending;
-            UpdateIcon.IsVisible = pending;
-            SetText(PlayText, pending ? Tr("Update to {1}", Releases.Display(LatestRelease!.Version))
-                : picked is null ? Tr("Play {1}", Tr(Latest)) : Tr("Play {1}", Releases.Display(picked)));
-            ToolTip.SetTip(PlayButton, pending ? Tr("Download and install {1}; the arrow plays an installed version", LatestRelease!.Title)
-                : PlayVersion is { } played ? Tr("Start Meitou {1}", played) : null);
-        }
+        if (download is null) ShowPlayText();
         versionMenu.Items.Clear();
         versionMenu.Items.Add(VersionItem(UpdatePending ? Tr("Latest (update to {1})", Releases.Display(LatestRelease!.Version))
             : installedVersions.FirstOrDefault() is { } newest ? Tr("Latest ({1})", Releases.Display(newest)) : Tr("Latest"), null, picked));
@@ -752,6 +741,26 @@ public sealed partial class MainWindow : Window
             versionMenu.Items.Add(new Separator());
             versionMenu.Items.Add(item);
         }
+    }
+
+    // Beside Continue, Play is "Main menu" over the version it starts.
+    void ShowPlayText()
+    {
+        var picked = PickedVersion;
+        bool pending = UpdatePending, menu = ContinueButton.IsVisible && !pending;
+        string played = picked is null ? Tr(Latest) : Releases.Display(picked);
+        PlayButton.Classes.Set("pending", pending);
+        PlayVersionButton.Classes.Set("pending", pending);
+        PlayIcon.IsVisible = !pending;
+        UpdateIcon.IsVisible = pending;
+        PlayText.FontSize = ContinueButton.IsVisible ? 17 : 21;
+        PlaySubText.IsVisible = menu;
+        PlaySubText.Text = played;
+        SetText(PlayText, pending ? Tr("Update to {1}", Releases.Display(LatestRelease!.Version)) : menu ? Tr("Main menu") : Tr("Play {1}", played));
+        ToolTip.SetTip(PlayButton, pending ? Tr("Download and install {1}; the arrow plays an installed version", LatestRelease!.Title)
+            : PlayVersion is not { } version ? null
+            : menu ? Tr("Start Meitou {1} at the main menu", version)
+            : Tr("Start Meitou {1}", version));
     }
 
     // Skip: the new release is no longer offered, until a newer one comes out.

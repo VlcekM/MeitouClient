@@ -4,7 +4,7 @@ using Meitou.Content;
 
 namespace Meitou.Launcher;
 
-// The Continue half of the Play button (docs/launcher.md "Continue"): starts the game in the newest save when it was made with the
+// The Continue part of the Play button (docs/launcher.md "Continue"): starts the game in the newest save when it was made with the
 // enabled mods.
 public sealed partial class MainWindow
 {
@@ -18,10 +18,9 @@ public sealed partial class MainWindow
     {
         var slot = install is { } gameInstall ? await Task.Run(() => NewestSave(gameInstall)) : null;
         ContinueButton.IsVisible = slot is not null;
-        PlayButton.CornerRadius = slot is null ? new(7, 0, 0, 7) : new(0);
-        PlayButton.Margin = slot is null ? new(0) : new(-1, 0, 0, 0);
         // Its fixed least width (the footer not moving between Play texts) would crowd the footer beside Continue.
         PlayButton.MinWidth = slot is null ? 312 : 0;
+        if (download is null) ShowPlayText();
         if (slot is null) return;
 
         ContinueSaveText.Text = slot.Name;
