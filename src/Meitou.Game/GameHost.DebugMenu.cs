@@ -12,14 +12,19 @@ namespace Meitou.Game;
 /// The debug menu (F10; Ctrl+F10 on Metal, where F10 is the settings panel; docs/game/ui-input.md "Debug menu"): cheats sent to the world as
 /// <see cref="DebugCommand"/>s. Up/Down pick a row, typing fills its field, Enter applies it, Esc or the close key closes; while open it takes every key.
 /// Teleport and spawn use the camera's target (the middle of the screen); heal, max skills and damage the selected characters, else the inspected one.
+/// Heal keeps lost limbs; its sub-row Heal fully gives them back.
 /// </summary>
 sealed partial class GameHost
 {
-    enum DebugRow { Teleport, SpawnNpc, GiveItem, Money, Heal, MaxSkills, Damage, ForceHits, DamageMultiplier, UnlockResearch }
+    enum DebugRow { Teleport, SpawnNpc, GiveItem, Money, Heal, HealFully, MaxSkills, Damage, ForceHits, DamageMultiplier, UnlockResearch }
 
-    static readonly string[] DebugLabels = ["Teleport selected here", "Spawn NPC (hostile)", "Give item (name x5 q80)", "Money (+/- cats)", "Heal", "Max out skills", "Damage (cut)", "Force hits to", "Damage multiplier", "Unlock all research"];
+    static readonly string[] DebugLabels =
+    [
+        "Teleport selected here", "Spawn NPC (hostile)", "Give item (name x5 q80)", "Money (+/- cats)", "Heal", "  Heal fully (restore limbs)", "Max out skills", "Damage (cut)",
+        "Force hits to", "Damage multiplier", "Unlock all research",
+    ];
     // The rows' typed text: the vanilla rows', then one per code mod row (EnsureDebugFields).
-    readonly List<string> debugFields = ["", "", "", "1000", "", "", "20", "", "1", ""];
+    readonly List<string> debugFields = ["", "", "", "1000", "", "", "", "20", "", "1", ""];
     readonly Dictionary<(bool Character, string Text), (string Id, string Name)?> debugMatches = [];
     bool debugMenuOpen;
     int debugRow;
@@ -29,7 +34,7 @@ sealed partial class GameHost
     int debugPart;
 
     bool DebugHasField(int row) => row >= DebugLabels.Length ? ModDebugRows[row - DebugLabels.Length].HasField
-        : (DebugRow)row is not (DebugRow.Teleport or DebugRow.Heal or DebugRow.MaxSkills or DebugRow.ForceHits or DebugRow.UnlockResearch);
+        : (DebugRow)row is not (DebugRow.Teleport or DebugRow.Heal or DebugRow.HealFully or DebugRow.MaxSkills or DebugRow.ForceHits or DebugRow.UnlockResearch);
 
     /// <summary>The rows that open the body part list.</summary>
     static bool DebugPicksPart(int row) => (DebugRow)row is DebugRow.Damage or DebugRow.ForceHits;
@@ -112,10 +117,11 @@ sealed partial class GameHost
                 if (!long.TryParse(field, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out long delta)) return "money: a whole number, e.g. 500 or -500";
                 world.Commands.Enqueue(new DebugMoney(delta) { Tick = tick });
                 return $"money {delta.ToString("+#;-#;0", CultureInfo.InvariantCulture)}";
-            case DebugRow.Heal:
+            case DebugRow.Heal or DebugRow.HealFully:
                 if (targets.Length == 0) return "select or inspect a character first";
-                world.Commands.Enqueue(new DebugHeal(targets) { Tick = tick });
-                return $"healed {targets.Length}";
+                bool limbs = row == DebugRow.HealFully;
+                world.Commands.Enqueue(new DebugHeal(targets, limbs) { Tick = tick });
+                return $"healed {targets.Length}{(limbs ? ", limbs restored" : "")}";
             case DebugRow.MaxSkills:
                 if (targets.Length == 0) return "select or inspect a character first";
                 world.Commands.Enqueue(new DebugMaxSkills(targets) { Tick = tick });

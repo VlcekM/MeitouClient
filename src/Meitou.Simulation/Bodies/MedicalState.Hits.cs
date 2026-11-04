@@ -9,7 +9,7 @@ public sealed partial class MedicalState
 
     /// <summary>
     /// The game's F10 debug heal (Meitou only, not the original's): every part whole (no wear, stun, bandage or splint), full blood, no wounds and no KO time left,
-    /// so the next body tick wakes the character. A dead character stays dead.
+    /// so the next body tick wakes the character. A dead character stays dead; a stump or crushed limb stays one (<see cref="RestoreLimbs"/> gives it back).
     /// </summary>
     public void Heal(in MedicalContext ctx)
     {
@@ -25,6 +25,20 @@ public sealed partial class MedicalState
         Blood = Capacity(ctx);
         BloodKo = false;
         KoTimer = 0;
+    }
+
+    /// <summary>The F10 debug full heal's limbs (Meitou only): every stump and crushed limb is the original again; a fitted prosthetic stays. True when one changed.</summary>
+    public bool RestoreLimbs()
+    {
+        if (Dead) return false;
+        bool changed = false;
+        foreach (var p in parts)
+            if (p.Limb is LimbState.Stump or LimbState.Crushed)
+            {
+                p.Limb = LimbState.Original;
+                changed = true;
+            }
+        return changed;
     }
 
     float NextRoll(in MedicalContext ctx) => BodyRolls.Float(ctx.Seed, ctx.CharacterKey, BodyRolls.MedicalDomain, rollCounter++);

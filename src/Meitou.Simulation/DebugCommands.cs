@@ -16,8 +16,8 @@ public sealed record DebugMoney(long Delta) : DebugCommand;
 /// <summary>Puts the characters on the ground at <see cref="Target"/> (side by side, 10 units apart) and drops their orders.</summary>
 public sealed record DebugTeleport(IReadOnlyList<CharacterId> Characters, Vector3 Target) : DebugCommand;
 
-/// <summary>Heals the characters fully (<see cref="MedicalState.Heal"/>).</summary>
-public sealed record DebugHeal(IReadOnlyList<CharacterId> Characters) : DebugCommand;
+/// <summary>Heals the characters (<see cref="MedicalState.Heal"/>); with <see cref="Limbs"/> their lost and crushed limbs come back first (<see cref="MedicalState.RestoreLimbs"/>).</summary>
+public sealed record DebugHeal(IReadOnlyList<CharacterId> Characters, bool Limbs = false) : DebugCommand;
 
 /// <summary>Sets every stat of the characters to 100.</summary>
 public sealed record DebugMaxSkills(IReadOnlyList<CharacterId> Characters) : DebugCommand;
@@ -91,7 +91,12 @@ static class DebugCheats
                 break;
             case DebugHeal heal when data is not null:
                 foreach (var id in heal.Characters)
-                    if (Body(world, data, id) is ({ } medical, var ctx)) medical.Heal(ctx);
+                    if (Body(world, data, id) is ({ } medical, var ctx))
+                    {
+                        // The look and kit follow the limbs (boots, two-handed holds), as after a prosthetic is fitted.
+                        if (heal.Limbs && medical.RestoreLimbs() && table.TryResolveNext(id, out int healed)) assembly?.RefreshEquipment(table.Cold(healed)!);
+                        medical.Heal(ctx);
+                    }
                 break;
             case DebugMaxSkills max:
                 foreach (var id in max.Characters)
