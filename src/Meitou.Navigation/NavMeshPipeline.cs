@@ -25,9 +25,7 @@ internal static class NavMeshPipeline
         var built = new ZoneNavMesh[geometries.Count];
         Parallel.For(0, geometries.Count, new ParallelOptions { MaxDegreeOfParallelism = Math.Max(1, Environment.ProcessorCount - 1) }, i =>
         {
-            int side = (int)MathF.Round((geometries[i].ZoneMax.X - geometries[i].ZoneMin.X) / settings.CellSize);
-            var single = settings with { Threads = 1, TileCells = side, Watershed = false, MaxEdgeLength = InteriorEdgeCells };
-            built[i] = ZoneNavMeshBuilder.Build(geometries[i], single, out _);
+            built[i] = ZoneNavMeshBuilder.Build(geometries[i], InteriorSettings(settings, geometries[i]), out _);
             built[i].Surfaces = new NavSurfaces(NavSurfaces.From(geometries[i], geometries[i].ZoneMin, geometries[i].ZoneMax));
         });
         if (log is not null)
@@ -51,6 +49,13 @@ internal static class NavMeshPipeline
 
     /// <summary>An interior's longest contour edge in cells (the builder's default before zones went to large tiles and unlimited edges).</summary>
     const int InteriorEdgeCells = 24;
+
+    /// <summary>The settings an interior is built with: one tile over its box, monotone regions, edges of at most <see cref="InteriorEdgeCells"/>.</summary>
+    public static NavBuildSettings InteriorSettings(NavBuildSettings settings, ZoneGeometry interior)
+    {
+        int side = (int)MathF.Round((interior.ZoneMax.X - interior.ZoneMin.X) / settings.CellSize);
+        return settings with { Threads = 1, TileCells = side, Watershed = false, MaxEdgeLength = InteriorEdgeCells };
+    }
 
     internal static void DescribeInterior(ZoneGeometry g, ZoneNavMesh m, Action<string> log)
     {

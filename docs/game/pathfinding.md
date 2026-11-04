@@ -716,8 +716,8 @@ edges and watershed regions keep it in few polygons. **Observed** (`meitou-tools
 (Hub 20.32 10,183 to about 6,200; the original's tile has 5,857 faces); a zone builds in about twice the time. Over 2,352 random pairs in 20.32
 (radius 4) polygons expanded per search fell 965 to 560 and search time 20..30 %, paths 1 % longer. The original's ground ours lacks stayed within 0.1
 point of its area (`orig%`) but in 18.39, 1.4 to 1.7 %: a walkable AshlandsRibs top (y ~293, -61200,35000) has no link to the ground and is pruned (whether
-the original reaches its own: **Unknown**). Interiors cover the original's interior faces as before. Watershed regions round a hole can have two
-outlines, which DotRecast refuses (Recast only warns): such a tile is built monotone. A walker shut out of its goal whose own polygon is the reachable one
+the original reaches its own: **Unknown**). Interiors cover the original's interior faces as before. DotRecast refuses some watershed contours Recast
+only warns about (two outlines round a hole; "Bad outline", in a town zone of `--survey-interiors towns`): such a tile is built monotone. A walker shut out of its goal whose own polygon is the reachable one
 nearest the goal walks across it to the point nearest the goal; before, it got no path (`NavigationTests`: a gate's closed door, the polygon up to the wall).
 
 ## Gate codes

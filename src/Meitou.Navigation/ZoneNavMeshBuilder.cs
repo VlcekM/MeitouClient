@@ -190,8 +190,8 @@ internal static partial class ZoneNavMeshBuilder
 
     /// <summary>
     /// The tile's polygons over watershed regions: chunky polygons, where monotone partitioning cuts open ground into long strips (a fifth more polygons for a
-    /// search to expand; docs/game/pathfinding.md "Search cost"). A watershed region winding round a hole can come out with two outlines, which Recast only
-    /// warns about and DotRecast refuses: such a tile is partitioned monotone.
+    /// search to expand; docs/game/pathfinding.md "Search cost"). DotRecast refuses some watershed contours that Recast only warns about (a region winding
+    /// round a hole with two outlines, an outline simplified into a bad one): such a tile is partitioned monotone.
     /// </summary>
     static RcPolyMesh? Partition(RcContext ctx, RcCompactHeightfield chf, NavBuildSettings s, TileTicks ticks)
     {
@@ -217,7 +217,7 @@ internal static partial class ZoneNavMeshBuilder
         {
             contours = RcContours.BuildContours(ctx, chf, s.MaxSimplificationError, s.MaxEdgeLength, 1);
         }
-        catch (Exception e) when (watershed && e.Message.Contains("Multiple outlines", StringComparison.Ordinal))
+        catch (Exception) when (watershed)
         {
             return false;
         }
