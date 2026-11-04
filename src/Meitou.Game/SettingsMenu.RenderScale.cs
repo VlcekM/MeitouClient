@@ -3,13 +3,13 @@ using Meitou.Settings;
 
 namespace Meitou.Game;
 
-/// <summary>A slider with named values in the catalogue (render scale's quality modes): a choice of them and Custom, the slider itself only under Custom.</summary>
+/// <summary>A slider with named values in the catalogue (render scale's quality modes): a choice of them and Custom, the slider under it locked to the mode's value but under Custom.</summary>
 sealed partial class SettingsMenu
 {
     /// <summary>The sliders whose Custom was picked: the slider stays shown even when its value matches a mode.</summary>
     readonly HashSet<string> customModes = [];
 
-    /// <summary>The rows replacing a slider row with modes: the mode choice, and the slider under Custom; any other row as it is.</summary>
+    /// <summary>The rows replacing a slider row with modes: the mode choice, then the slider (locked but under Custom); any other row as it is.</summary>
     IEnumerable<Entry> ModeEntries(Entry row)
     {
         if (row is not { Slider: { } slider, Raw: { } key } || LauncherSchema.Find(key) is not { Modes: { Count: > 0 } modes } d)
@@ -19,7 +19,7 @@ sealed partial class SettingsMenu
         }
         string[] names = [.. modes.Select(m => m.Name), "Custom"];
         yield return row with { Slider = null, Choice = new(() => names, () => ModeIndex(key, slider, modes, d.Step), i => ChooseMode(key, slider, modes, i)) };
-        if (ModeIndex(key, slider, modes, d.Step) == modes.Count) yield return row with { Label = "Custom value", Depth = 1 };
+        yield return row with { Label = "Custom value", Depth = 1, Locked = ModeIndex(key, slider, modes, d.Step) < modes.Count };
     }
 
     int ModeIndex(string key, Slider slider, List<SettingMode> modes, float step)

@@ -91,7 +91,7 @@ static class LauncherSchema
         new() { Name = "Performance", Value = Percent(0.5f) },
         new() { Name = "Normal", Value = Percent(1 / 1.7f) },
         new() { Name = "Quality", Value = Percent(1 / 1.5f) },
-        new() { Name = "Ultra quality (0.83)", Value = Percent(UpscaleOptions.UltraQualityScale) },
+        new() { Name = "Ultra quality", Value = Percent(UpscaleOptions.UltraQualityScale) },
         new() { Name = "DLAA", Value = 1 },
     ];
 

@@ -330,11 +330,11 @@ sealed partial class SettingsMenu
                     Rect(valueAt, MainInk with { W = 0.06f }, viewport);
                     Rect(valueAt with { Y = valueAt.Y + valueAt.Height - scale, Height = scale }, MainInk with { W = 0.4f }, viewport);
                 }
-                Text(slider.Display, R(688, y, 412, 20), 13, LightInk, "Right VCenter", viewport);
+                Text(slider.Display, R(688, y, 412, 20), 13, entry.Locked ? MutedInk : LightInk, "Right VCenter", viewport);
             }
             var track = R(696, y + row - 9, 396, 3);
             Rect(track, new(0.10f, 0.08f, 0.07f, 1), viewport);
-            Rect(track with { Width = track.Width * slider.Fraction }, Brass with { W = 0.75f }, viewport);
+            Rect(track with { Width = track.Width * slider.Fraction }, entry.Locked ? MutedInk with { W = 0.5f } : Brass with { W = 0.75f }, viewport);
             if (slider.Faithful is { } faithful) RemasterMark(slider, faithful, track, FaithfulInk);
             if (slider.Meitou is { } meitou) RemasterMark(slider, meitou, track, Brass);
             if (slider.Faithful is { } f && slider.Meitou is { } m && entry.Depth == 0)   // inside a feature its header has the switch
@@ -345,7 +345,9 @@ sealed partial class SettingsMenu
                 Segmented(R(696, y + 2, 140, 18), at, i => slider.Set(i == 1 ? m : f));
             }
             var knob = new UiRect(track.X + slider.Fraction * track.Width - 3 * scale, track.Y - 4 * scale, 6 * scale, 11 * scale);
-            Rect(knob, LightInk, viewport);
+            Rect(knob, entry.Locked ? MutedInk : LightInk, viewport);
+            // A locked slider (a mode's value, SettingsMenu.RenderScale.cs) shows its value but takes no drag, key or typed value.
+            if (entry.Locked) return;
             var hit = R(688, y + row - 16, 412, 16);
             if (hit.Intersect(viewport).Height >= hit.Height - 1) hits.Add(new(hit, () => { }, slider, track));
             if (valueAt.Intersect(viewport).Height >= valueAt.Height - 1) hits.Add(new(valueAt, () => BeginNumber(slider, valueAt)));

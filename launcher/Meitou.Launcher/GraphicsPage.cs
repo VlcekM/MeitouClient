@@ -721,7 +721,7 @@ public sealed partial class MainWindow
 
     /// <summary>
     /// A slider with named values (<see cref="SettingDescription.Modes"/>, render scale's quality modes): a drop-down of them and Custom, as the game's
-    /// menu shows it; the slider sits under it only while Custom is chosen, or the value is none of the modes.
+    /// menu shows it; the slider under it shows the value, locked but while Custom is chosen (or the value is none of the modes).
     /// </summary>
     Border ModesRow(SettingDescription s)
     {
@@ -735,7 +735,7 @@ public sealed partial class MainWindow
         {
             loading = true;
             box.SelectedIndex = Index();
-            custom.IsVisible = box.SelectedIndex == modes.Count;
+            custom.IsEnabled = box.SelectedIndex == modes.Count;
             loading = false;
         }
         Show();
