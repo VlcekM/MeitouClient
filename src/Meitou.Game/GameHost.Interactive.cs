@@ -776,10 +776,10 @@ sealed partial class GameHost
                 Meitou.Rendering.StageClock.UiPart(Meitou.Rendering.StageClock.UiSettings);
                 // Over everything: the letterbox and the cinema's editor (F6, also with F7); the game hides its status line.
                 if (overlay is not null && !covered) cinema.Draw(overlay, size.X, size.Y, shot || take || feedbackShot || (interfaceHidden && !cinema.EditorVisible), showStatus: false);
-                // F11's character boxes and paths, on top of everything.
-                if (statsVisible && ui && overlay is not null && !covered && !shot && !feedbackShot)
+                // F11's character boxes and paths, on top of everything; the paths stay once ticked, with the statistics hidden too.
+                if (ui && overlay is not null && !covered && !shot && !feedbackShot)
                 {
-                    if (characterBoxes && gpu.Characters is { } boxed) DrawCharacterBoxes(overlay, boxed, camera, size.X, size.Y);
+                    if (characterBoxes && statsVisible && gpu.Characters is { } boxed) DrawCharacterBoxes(overlay, boxed, camera, size.X, size.Y);
                     if (walkPaths) DrawWalkPaths(overlay, session.CurrentSnapshot, camera, size.X, size.Y);
                 }
                 Meitou.Rendering.StageClock.UiPart(Meitou.Rendering.StageClock.UiCinema);

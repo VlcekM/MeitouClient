@@ -5,9 +5,9 @@ using Meitou.Simulation;
 namespace Meitou.Game;
 
 /// <summary>
-/// F11's path view (Meitou only; docs/game/pathfinding.md "Meitou debug view"): a checkbox on the statistics' characters line that draws, over everything, the
-/// path each selected or inspected character follows (<see cref="CharacterSnapshot.Path"/>): from its feet to the next waypoint, then the navmesh part, then the
-/// provisional long-range part (<see cref="CharacterSnapshot.PathExact"/>), the next waypoint and the end marked.
+/// F11's path view (Meitou only; docs/game/pathfinding.md "Meitou debug view"): a checkbox on the statistics' characters line that draws, over everything and
+/// still once F11 is closed, the path each selected or inspected character follows (<see cref="CharacterSnapshot.Path"/>): from its feet to the next waypoint,
+/// then the navmesh part, then the provisional long-range part (<see cref="CharacterSnapshot.PathExact"/>), the next waypoint and the end marked.
 /// </summary>
 sealed partial class GameHost
 {
