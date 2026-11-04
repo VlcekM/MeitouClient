@@ -70,7 +70,6 @@ public sealed partial class LockSystem : IStateHashed
     /// <summary>The reach of state 126 AT_LOCATION_BUILDING_DOOR_OUTSIDE for a door (<c>FUN_140596e90</c> against the door's reach range, 45, <b>Observed</b>); a lock-up from outside works a door within it.</summary>
     public const float DoorReach = 45;
     /// <summary>A door's two points lie 15 either side of the leaf (<c>FUN_14029cc90</c>); state 126 extends the outer one away from the other by 1.1 times their distance (<c>FUN_140596e90</c>, <b>Verified</b>).</summary>
-    const float DoorPointOffset = 15, DoorOuterFactor = 1.1f;
 
     readonly List<Round> rounds = [];
     // Homes a lock-up round locked (the squad's "house locked" flag), by building instance id; sorted so the hash has a fixed order.
@@ -385,11 +384,7 @@ public sealed partial class LockSystem : IStateHashed
     static Vector2 OuterPoint(World world, Fixture door)
     {
         if (world.Fixtures.DoorSpotOf(door) is not { } spot) return Flat(door.Position);
-        var n = new Vector2(spot.Normal.X, spot.Normal.Z);
-        n = n.LengthSquared() < 1e-6f ? Vector2.UnitY : Vector2.Normalize(n);
-        var centre = Flat(spot.Centre);
-        if (Vector2.Dot(centre - Flat(door.Position), n) < 0) n = -n;
-        return centre + n * (DoorPointOffset + 2 * DoorPointOffset * DoorOuterFactor);
+        return DoorPoints.Outer(spot, door.Position);
     }
 
     /// <summary>The place a round's worker goes to for a target: a lock-up from outside uses the door's outer point.</summary>
