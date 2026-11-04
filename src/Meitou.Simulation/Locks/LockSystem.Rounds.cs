@@ -69,8 +69,8 @@ public sealed partial class LockSystem : IStateHashed
     public const float ReleaseTimeout = 120, WalkSlack = 200;
     /// <summary>The reach of state 126 AT_LOCATION_BUILDING_DOOR_OUTSIDE for a door (<c>FUN_140596e90</c> against the door's reach range, 45, <b>Observed</b>); a lock-up from outside works a door within it.</summary>
     public const float DoorReach = 45;
-    /// <summary>How far past the home's extent a leaving worker walks (<b>engine choice</b>).</summary>
-    const float LeaveMargin = 10;
+    /// <summary>A door's two points lie 15 either side of the leaf (<c>FUN_14029cc90</c>); state 126 extends the outer one away from the other by 1.1 times their distance (<c>FUN_140596e90</c>, <b>Verified</b>).</summary>
+    const float DoorPointOffset = 15, DoorOuterFactor = 1.1f;
 
     readonly List<Round> rounds = [];
     // Homes a lock-up round locked (the squad's "house locked" flag), by building instance id; sorted so the hash has a fixed order.
@@ -370,22 +370,30 @@ public sealed partial class LockSystem : IStateHashed
         rounds.Add(round);
         TaskStart.Stand(table, worker);   // up from its bed or post
         if (round.Kind is not (RoundKind.LockDoors or RoundKind.UnlockDoors) && NeedsKeys(world, round, c, first)) round.Phase = RoundPhase.Keys;
-        else if (round.FromOutside && LeavePoint(c, first, round.Extent) is { } leave && Within(table.Next[worker], c.Ai!.Squad.Ai!.OwnHome!, round.Extent))
+        else if (round.FromOutside && c.Ai?.Squad.Ai?.OwnHome is { } home && Within(table.Next[worker], home, round.Extent))
         {
             round.Phase = RoundPhase.Leave;   // row 200 Leaving building achieves !107, which row 197 needs
-            TaskStart.StepTo(table, worker, leave, SpeedMode.Walk);
+            TaskStart.StepTo(table, worker, OuterPoint(world, first), SpeedMode.Walk);
         }
         else Walk(world, worker, round, first);
     }
 
-    /// <summary>Where a worker leaving the home walks to: just past its extent on the first door's side (<b>engine choice</b>; the original goes to the door's outer side, state 126). Null without a home.</summary>
-    static Vector2? LeavePoint(CharacterCold c, Fixture door, float extent)
+    /// <summary>
+    /// Where state 126 AT_LOCATION_BUILDING_DOOR_OUTSIDE wants a worker for a door (<c>FUN_140596e90</c>, <b>Verified</b>): the door's outer point pushed out by 1.1 times the distance between its two points,
+    /// 15 + 33 from the leaf; the outer side is the one away from the building's origin (which of the two points the original calls outer is <b>Unknown</b>). The fixture's place without door data.
+    /// </summary>
+    static Vector2 OuterPoint(World world, Fixture door)
     {
-        if (c.Ai?.Squad.Ai?.OwnHome is not { } home) return null;
-        var centre = new Vector2(home.Position.X, home.Position.Z);
-        var away = new Vector2(door.Position.X, door.Position.Z) - centre;
-        return centre + (away.LengthSquared() < 1e-4f ? Vector2.UnitX : Vector2.Normalize(away)) * (extent + LeaveMargin);
+        if (world.Fixtures.DoorSpotOf(door) is not { } spot) return Flat(door.Position);
+        var n = new Vector2(spot.Normal.X, spot.Normal.Z);
+        n = n.LengthSquared() < 1e-6f ? Vector2.UnitY : Vector2.Normalize(n);
+        var centre = Flat(spot.Centre);
+        if (Vector2.Dot(centre - Flat(door.Position), n) < 0) n = -n;
+        return centre + n * (DoorPointOffset + 2 * DoorPointOffset * DoorOuterFactor);
     }
+
+    /// <summary>The place a round's worker goes to for a target: a lock-up from outside uses the door's outer point.</summary>
+    static Vector2 SpotOf(World world, Round round, Fixture f) => round.FromOutside ? OuterPoint(world, f) : Flat(f.Position);
 
     /// <summary>The target's building is shut by doors the worker may open: its faction's, or its squad's home.</summary>
     static bool NeedsKeys(World world, Round round, CharacterCold c, Fixture f) =>
@@ -395,10 +403,10 @@ public sealed partial class LockSystem : IStateHashed
     {
         round.Phase = RoundPhase.Walk;
         round.Time = 0;
-        if (Distance(world.Characters.Next[worker], f) > round.Reach) TaskStart.StepTo(world.Characters, worker, new Vector2(f.Position.X, f.Position.Z), SpeedMode.Walk);
+        if (Distance(world, round, world.Characters.Next[worker], f) > round.Reach) TaskStart.StepTo(world.Characters, worker, SpotOf(world, round, f), SpeedMode.Walk);
     }
 
-    static float Distance(in CharacterHot n, Fixture f) => Vector2.Distance(new Vector2(n.Position.X, n.Position.Z), new Vector2(f.Position.X, f.Position.Z));
+    static float Distance(World world, Round round, in CharacterHot n, Fixture f) => Vector2.Distance(Flat(n.Position), SpotOf(world, round, f));
 
     /// <summary>One tick of a round; false when it is over.</summary>
     bool Step(World world, Round r)
@@ -431,7 +439,7 @@ public sealed partial class LockSystem : IStateHashed
             case RoundPhase.Walk:
             {
                 bool walking = n.Task == (byte)CharacterTask.GoTo;
-                float d = Distance(n, f);
+                float d = Distance(world, r, n, f);
                 if (d <= r.Reach || !walking && d <= WalkSlack)
                 {
                     if (walking) TaskStart.Stand(table, w);
@@ -457,7 +465,7 @@ public sealed partial class LockSystem : IStateHashed
                 var nextTarget = world.Fixtures.Find(r.Targets[r.Index]);
                 if (nextTarget is null) return End(world, r, fallback: false, done: true);
                 Walk(world, w, r, nextTarget);
-                if (r.Phase == RoundPhase.Walk && Distance(n, nextTarget) <= r.Reach) r.Phase = RoundPhase.Work;   // the next door is where it stands
+                if (r.Phase == RoundPhase.Walk && Distance(world, r, n, nextTarget) <= r.Reach) r.Phase = RoundPhase.Work;   // the next door is where it stands
                 return true;
         }
         return true;
@@ -475,7 +483,7 @@ public sealed partial class LockSystem : IStateHashed
         }
         if (n.Task == (byte)CharacterTask.GoTo) return true;
         if (++r.Walks > RoundWalks) return End(world, r, fallback: true);
-        if (LeavePoint(wc, first, r.Extent) is { } leave) TaskStart.StepTo(table, w, leave, SpeedMode.Walk);
+        TaskStart.StepTo(table, w, OuterPoint(world, first), SpeedMode.Walk);
         return true;
     }
 
