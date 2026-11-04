@@ -535,11 +535,17 @@ public sealed class MovementSystem(PathService paths) : ITickSystem, IDisposable
                 else
                 {
                     // No way there: the old path (an order given on the move) is dropped too.
+                    bool following = (n.Flags & (ushort)MoveFlags.HasPath) != 0;
                     cold.PathFailed = true;
                     n.Flags = (ushort)(n.Flags & ~(ushort)MoveFlags.HasPath);
                     n.PathCursor = 0;
                     n.TaskTime = FailedPathWait;
-                    if (n.Task == (byte)CharacterTask.GoTo) { TaskStart.Step(table, slot, CharacterTask.Idle); cold.OrderQueue.Clear(); }
+                    if (n.Task == (byte)CharacterTask.GoTo)
+                    {
+                        LogDropped(world, n, cold, following ? "no path found on asking again (the path it followed is dropped)" : "no path found");
+                        TaskStart.Step(table, slot, CharacterTask.Idle);
+                        cold.OrderQueue.Clear();
+                    }
                 }
             }
         }
@@ -1148,7 +1154,15 @@ public sealed class MovementSystem(PathService paths) : ITickSystem, IDisposable
                     if (n.Task == (byte)CharacterTask.Follow) cold.FollowPathTime = FollowPathSeconds;
                     n.Flags = (ushort)(n.Flags & ~(ushort)MoveFlags.HasPath);
                     n.TaskTime = FailedPathWait;
-                    if (n.Task == (byte)CharacterTask.GoTo) { TaskStart.Step(table, i, CharacterTask.Idle); cold.OrderQueue.Clear(); }
+                    if (n.Task == (byte)CharacterTask.GoTo)
+                    {
+                        string why = n.PathCursor >= cold.PathExact
+                            ? $"blocked {cold.ProvisionalBlocked} times on the provisional long-range part (limit {ProvisionalBlockedLimit})"
+                            : $"blocked {cold.BlockedRepaths} times on the navmesh part (limit {BlockedRepathLimit})";
+                        LogDropped(world, n, cold, $"{why}, waypoint {n.PathCursor} of {cold.Path.Length}, stuck stepping to {x:0}, {z:0}");
+                        TaskStart.Step(table, i, CharacterTask.Idle);
+                        cold.OrderQueue.Clear();
+                    }
                 }
             }
         moved:
@@ -1168,6 +1182,13 @@ public sealed class MovementSystem(PathService paths) : ITickSystem, IDisposable
         if (cold.Race is not { } race || !cold.CarriedBy.IsNone) return 0;
         float standY = at.Y <= WorldWater.Height + Speed.WaterSlack ? MathF.Min(at.Y, walk.TerrainHeight(at.X, at.Z)) : at.Y;
         return Speed.WaterState(standY, 1, race.Swims);
+    }
+
+    /// <summary>A player's move order dropped: why and where, in the log (docs/game/pathfinding.md "Dropped orders"). Other characters' drops are not logged.</summary>
+    static void LogDropped(World world, in CharacterHot n, CharacterCold cold, string why)
+    {
+        if (!cold.IsPlayer) return;
+        Console.WriteLine($"order     {cold.Name} dropped its move at tick {world.Tick}: {why}; at {n.Position.X:0}, {n.Position.Y:0}, {n.Position.Z:0}, goal {n.Goal.X:0}, {n.Goal.Y:0}");
     }
 
     /// <summary>Asks for the path to the goal again (partition-safe: the character's own state), at most every <see cref="ProvisionalRepathSeconds"/> unless <paramref name="now"/>.</summary>

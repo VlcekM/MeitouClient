@@ -728,6 +728,11 @@ cuts follow the blocky 36-unit terrain grid (generator inputs, terrain). The ori
 F11's `[ ] paths` checkbox (`GameHost.Paths.cs`) draws, over everything and still with F11 closed, the path of each selected or inspected character
 (`CharacterSnapshot.Path`, from its feet): navmesh legs green, the provisional long-range part (`PathExact`) orange, the next waypoint white, the end red.
 
+### Dropped orders
+
+A player's move order dropped by the movement system is logged (`order` lines in `log.txt`, `MovementSystem.LogDropped`): no path found (first request or
+asking again), or blocked past `ProvisionalBlockedLimit` / `BlockedRepathLimit`, with the position, goal and waypoint.
+
 ### Search cost
 
 Engine facts (our A*, not the original's Havok query). Each expanded polygon relaxes its neighbours; a relaxation places the crossing on the shared edge
