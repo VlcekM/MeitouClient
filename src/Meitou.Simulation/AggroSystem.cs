@@ -1274,16 +1274,21 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
         return scan.Best >= 0 ? new CharacterId(scan.Best, prev[scan.Best].Generation) : CharacterId.None;
     }
 
+    /// <summary>The range within which a holding attacker not in combat mode still counts as fighting its target (<c>DAT_141685344</c>, 40).</summary>
+    const float HoldDefenceRange = 40;
+
     /// <summary>
-    /// 34's pass-2 victim test (<c>FUN_14099b820</c>, <b>Verified</b>): the neutral <paramref name="attacker"/> in <paramref name="slot"/> is in a fight (<c>FUN_1405ca6f0</c>: the attacker's
-    /// own combat mode and target, not the victim's) whose target the looker counts as an ally (its own or an allied faction) or as an <see cref="Innocent"/>. The original's variant for an
-    /// attacker holding position outside combat mode (within a distance of its target) is not modelled.
+    /// 34's pass-2 victim test (<c>FUN_14099b820</c>, <b>Verified</b>): the neutral <paramref name="attacker"/> in <paramref name="slot"/> has the victim as its target, is not knocked out or playing dead and
+    /// is in combat mode, or holds position with the victim within <see cref="HoldDefenceRange"/> (<c>FUN_1405c92d0</c>: the attacker's own mode and target, not the victim's); and the victim is the
+    /// looker's ally (its own faction or an allied one) or an <see cref="Innocent"/>.
     /// </summary>
     bool AttacksProtected(World world, Combat.CombatSystem? fights, CharacterCold looker, CharacterCold attacker, int slot, int generation)
     {
         var table = world.Characters;
-        if (fights is null || !attacker.InCombat || fights.TargetOf(slot, generation) is not { Slot: >= 0 } v || (uint)v.Slot >= (uint)table.HighWater
+        if (fights is null || attacker.Medical is { Incapacitated: true } or { PlayingDead: true } || fights.TargetOf(slot, generation) is not { Slot: >= 0 } v || (uint)v.Slot >= (uint)table.HighWater
             || table.Previous[v.Slot].Generation != v.Generation || table.Cold(v.Slot) is not { } victim) return false;
+        // FUN_1405c92d0: the attacker is in combat mode, or holds position (CharStats +0x12b) with the victim within 40 of it.
+        if (!attacker.InCombat && !((attacker.Orders & CharacterOrders.Hold) != 0 && Vector3.Distance(table.Previous[slot].Position, table.Previous[v.Slot].Position) < HoldDefenceRange)) return false;
         if (victim.Faction == looker.Faction || Relations.Contains(victim.Faction) && Relations.IsAlly(looker.Faction, victim.Faction)) return true;
         return Innocent(looker, attacker, victim);
     }
