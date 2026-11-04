@@ -651,10 +651,10 @@ public sealed class CharacterTable
     }
 
     /// <summary>
-    /// Puts a character at <paramref name="position"/> facing <paramref name="yaw"/>, standing still with no path (a teleport: into a cage). Serial phases or setup only; outside a
-    /// tick both buffers are written, as <see cref="Spawn"/> does.
+    /// Puts a character at <paramref name="position"/> facing <paramref name="yaw"/>, standing still with no path (a teleport: into a cage), its task
+    /// <paramref name="task"/>. Serial phases or setup only; outside a tick both buffers are written, as <see cref="Spawn"/> does.
     /// </summary>
-    public void Place(int slot, Vector3 position, float yaw)
+    public void Place(int slot, Vector3 position, float yaw, CharacterTask task = CharacterTask.Idle)
     {
         if (phase == TablePhase.Parallel) throw new InvalidOperationException("characters are placed in the serial phases only");
         ref var n = ref next[slot];
@@ -663,7 +663,7 @@ public sealed class CharacterTable
         n.Velocity = Vector3.Zero;
         n.Goal = new Vector2(position.X, position.Z);
         n.Flags = (ushort)(n.Flags & ~(ushort)MoveFlags.AnyPath);
-        n.Task = (byte)CharacterTask.Idle;
+        n.Task = (byte)task;
         n.TaskTime = 0;
         if (!inTick) previous[slot] = n;
     }

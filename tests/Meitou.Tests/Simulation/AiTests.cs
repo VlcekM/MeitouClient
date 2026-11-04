@@ -169,14 +169,20 @@ public class AiTests(ITestOutputHelper output)
 
     // ------------------------------------------------------------------ homes, package classes, stances, platoons
 
-    /// <summary>The synthetic town with two buildings: a shop (a shopkeeper node, two beds) east of the centre and a house (three beds) west of it.</summary>
-    static PopulationData WithHomes(GameDatabase db, out TownBuilding shop, out TownBuilding house)
+    /// <summary>
+    /// The synthetic town with two buildings: a shop (a shopkeeper node, two beds) east of the centre and a house (three beds,
+    /// <paramref name="bedGap"/> apart) west of it.
+    /// </summary>
+    static PopulationData WithHomes(GameDatabase db, out TownBuilding shop, out TownBuilding house, float bedGap = 10)
     {
         Vector3 At(float dx, float dz) => new(Centre.X + dx, 300, Centre.Z + dz);
         shop = new TownBuilding("shop", "b-shop", "Shop", At(80, 0), 0, true, false,
             [new HomeSpot(HomeSpotKind.Shopkeeper, At(80, 12), 0), new HomeSpot(HomeSpotKind.Bed, At(90, 0), 0), new HomeSpot(HomeSpotKind.Bed, At(90, -10), 0)]);
         house = new TownBuilding("house", "b-house", "House", At(-80, 0), 0, false, false,
-            [new HomeSpot(HomeSpotKind.Bed, At(-90, 0), 0), new HomeSpot(HomeSpotKind.Bed, At(-90, 10), 0), new HomeSpot(HomeSpotKind.Bed, At(-90, 20), 0)]);
+            [
+                new HomeSpot(HomeSpotKind.Bed, At(-90, 0), 0), new HomeSpot(HomeSpotKind.Bed, At(-90, bedGap), 0),
+                new HomeSpot(HomeSpotKind.Bed, At(-90, 2 * bedGap), 0),
+            ]);
         return PopulationData.Create(db, [new TownPlacement("inst", "30-t", Centre, null)], buildings: new Dictionary<string, List<TownBuilding>> { ["inst"] = [shop, house] });
     }
 
@@ -215,6 +221,46 @@ public class AiTests(ITestOutputHelper output)
             }
             // Every bed is taken (lain in, task Sleep); the sleepers left over rest beside them.
             Assert.Equal(Math.Min(beds.Count, sleepers.Count), sleepers.Count(m => world.Characters.Cold(m.Slot)!.InSomething == Meitou.Simulation.Locks.HeldState.Bed));
+        }
+    }
+
+    /// <summary>
+    /// A character already lying in a bed keeps it when it goes to bed (docs/game/locks.md "Bed search"): sleepers moved into each other's beds of
+    /// their home (30 apart, beyond the post slack), with no goal yet as after a load, stay in those beds, plan 98 Sleeping first and sleep as the
+    /// goal's own task. Catches the goal aiming at the bed its member index picks, whose plan got the saved sleepers of a loaded town out of their
+    /// beds, and a sleep left with the load's or the walk's provenance, which has no order.
+    /// </summary>
+    [Fact]
+    public void Sleepers_lying_in_other_beds_of_their_home_keep_them_and_plan_sleeping_first()
+    {
+        var data = WithHomes(Database(2), out _, out var house, bedGap: 30);
+        using var world = Town(1, out _, data, null);
+        world.RunTicks(400);
+        world.GameHours = 24 + 22.5;
+        world.RunTicks(1200);
+        var squad = world.Squads.All.Single(s => s.TemplateId == "10-t" && s.Ai!.Home == house);
+        var lying = squad.Members.Where(m => world.Characters.Cold(m.Slot)!.InSomething == Meitou.Simulation.Locks.HeldState.Bed).Take(2).ToList();
+        Assert.Equal(2, lying.Count);
+
+        // Each into the other's bed, as a save may hold them; no goal or plan yet, as on load.
+        var beds = lying.Select(m => world.Fixtures.Find(world.Characters.Cold(m.Slot)!.InWhat!)!).ToList();
+        foreach (var m in lying) world.Fixtures.LeaveBed(world, m);
+        for (int k = 0; k < 2; k++) Assert.True(world.Fixtures.EnterBed(world, lying[k], beds[1 - k]));
+        foreach (var m in lying)
+        {
+            var mind = world.Characters.Cold(m.Slot)!.Ai!;
+            mind.Goal = null;
+            mind.Plan.Clear();
+        }
+        world.RunTicks(300);
+        for (int k = 0; k < 2; k++)
+        {
+            var cold = world.Characters.Cold(lying[k].Slot)!;
+            Assert.Equal((Meitou.Simulation.Locks.HeldState.Bed, beds[1 - k].Id), (cold.InSomething, cold.InWhat));
+            Assert.Equal((TaskType.GO_HOME_AND_GO_TO_BED, TaskType.USE_BED), (cold.Ai!.Goal!.Task.Type, cold.Ai.Step));
+            // The sleep is the goal's own, so its plan step is its order.
+            var run = cold.Running!;
+            Assert.Equal((TaskSource.Goal, TaskType.GO_HOME_AND_GO_TO_BED, CharacterTask.Sleep), (run.Source, run.Row, run.Task));
         }
     }
 

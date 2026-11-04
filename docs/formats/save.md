@@ -499,7 +499,9 @@ them (the visited zones' files, [Zone files](#zone-files)); the save ids of gene
 beds keep rolled state. `in what` resolves to a placed building, or, for a prisoner, to a generated interior building: the zone building-list entry it names
 (record, position) is matched to Meitou's interior cage fixture of the same record within 1 unit (`FixtureRegistry.SavedSpots`). **Observed**: a Rebirth Slave
 Shop prisoner's cage (`1783-gamedata.base`, an `<n>-zoneX.Y-INGAME` entry of the shop's serialised interior) stands at distance 0 from Meitou's fixture made from
-the shop's `interior layout name`, the next cage 27.8 away; generated interior beds are not matched. Meitou-only keys `meitou in something` (int) /
+the shop's `interior layout name`, the next cage 27.8 away. A sleeper's generated interior bed is matched the same way
+(**Observed**: the 24 saved sleepers of the Rebirth garrison, record `3460-otto.mod`, at distance 0 from Meitou's beds, the next bed
+of the record 33 away). Meitou-only keys `meitou in something` (int) /
 `meitou in what` (fixture id) carry the rest and win on load. Unchanged held state keeps the original keys as read; a changed one without a building handle writes `in something` 0
 and the null handle. `sentence`/`psts` are written while a sentence is set or the save had them; Meitou's start equals `World.GameHours` (day x 24 + hour).
 

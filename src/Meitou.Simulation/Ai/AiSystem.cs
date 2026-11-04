@@ -867,7 +867,11 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
                 else Become(world, slot, CharacterTask.Wander);
                 break;
             case AiBehaviour.Sleep when table.Cold(slot)!.InSomething == Locks.HeldState.Bed:
-                break;   // lying in its bed
+                // Lying in its bed. One loaded there, or laid in by the walk's end, sleeps by no start of this goal: the goal takes the sleep as its own
+                // (the original's sleeper runs its plan's 98 Task_UseBed).
+                if (table.Cold(slot)!.Running is not { Source: TaskSource.Goal } own || !own.Runs(CharacterTask.Sleep))
+                    TaskStart.StartOwn(world, slot, new TaskRequest(CharacterTask.Sleep, type, TaskSource.Goal));
+                break;
             case AiBehaviour.Post:
             case AiBehaviour.Sleep:
             case AiBehaviour.GoHome:

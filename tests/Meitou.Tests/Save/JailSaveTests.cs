@@ -26,8 +26,13 @@ public class JailSaveTests
     static readonly string[] CharacterKeys = [CrimeSave.EscapedKey, CrimeSave.OldRecentlyWantedKey, CrimeSave.RecognitionKey, HeldSave.MeitouState, HeldSave.MeitouWhat];
     static readonly SaveCaptureOptions Options = new() { Placements = [new TownPlacement("inst", "30-t", SyntheticTown.Centre, null)] };
 
-    /// <summary>The synthetic town with a house of one door that has a cage in its interior (<c>house/0</c>).</summary>
-    static PopulationData JailData()
+    static readonly Vector3 BedAt = HouseAt + new Vector3(-10, 0, 0);
+
+    /// <summary>
+    /// The synthetic town with a house of one door that has a cage in its interior (<c>house/0</c>), and with <paramref name="bed"/> a bed
+    /// (<c>house@bed0</c>).
+    /// </summary>
+    static PopulationData JailData(bool bed = false)
     {
         static FcsRecord Rec(string id, FcsRecordType type, string name) => SyntheticTown.Rec(id, type, name);
         var door = Rec("51-t", FcsRecordType.BUILDING, "Door");
@@ -39,20 +44,29 @@ public class JailSaveTests
         function.Floats["use range"] = 25;
         var cage = Rec("54-t", FcsRecordType.BUILDING, "Prisoner Cage");
         cage.References["functionality"] = [SyntheticTown.Ref("53-t")];
-        var db = SyntheticTown.Database(anatomy: true, extra: [door, house, function, cage]);
-        var home = new TownBuilding("house", "52-t", "house", HouseAt, 0, false, false, []) { Zone = HouseZone, Fixtures = [new TownFixture($"{HouseKey}/0", "54-t", true, HouseAt + new Vector3(10, 0, 0), 0)] };
+        var sleep = Rec("55-t", FcsRecordType.BUILDING_FUNCTIONALITY, "Bed");
+        sleep.Ints["function"] = TownBuildings.BedFunction;
+        var cot = Rec("56-t", FcsRecordType.BUILDING, "Bed");
+        cot.References["functionality"] = [SyntheticTown.Ref("55-t")];
+        var db = SyntheticTown.Database(anatomy: true, extra: [door, house, function, cage, sleep, cot]);
+        HomeSpot[] spots = bed ? [new HomeSpot(HomeSpotKind.Bed, BedAt, 0) { Record = "56-t" }] : [];
+        var home = new TownBuilding("house", "52-t", "house", HouseAt, 0, false, false, spots)
+        {
+            Zone = HouseZone,
+            Fixtures = [new TownFixture($"{HouseKey}/0", "54-t", true, HouseAt + new Vector3(10, 0, 0), 0)],
+        };
         return PopulationData.Create(db, [new TownPlacement("inst", "30-t", SyntheticTown.Centre, null)], buildings: new Dictionary<string, List<TownBuilding>> { ["inst"] = [home] });
     }
 
-    sealed class Game(PopulationData data) : IDisposable
+    sealed class Game(PopulationData data, StandardParts parts = Parts) : IDisposable
     {
         public PopulationData Data { get; } = data;
-        public SimWorld World { get; } = Make(data);
+        public SimWorld World { get; } = Make(data, parts);
 
-        static SimWorld Make(PopulationData data)
+        static SimWorld Make(PopulationData data, StandardParts parts)
         {
             var walk = new OpenGroundWalkability(SyntheticTown.Ground);
-            var systems = SyntheticTown.Standard(data, walk, Parts, new PopulationSettings { CheckEveryTicks = 1 });
+            var systems = SyntheticTown.Standard(data, walk, parts, new PopulationSettings { CheckEveryTicks = 1 });
             return new SimWorld(new WorldSettings { Seed = 11, PublishSnapshots = false }, walk, systems.Systems);
         }
 
@@ -92,6 +106,9 @@ public class JailSaveTests
     /// <summary>The handle the original gives the generated interior cage (any handle the zone's states resolve).</summary>
     static readonly Hand GeneratedCage = new((int)FcsRecordType.BUILDING, 1238, 11111, 1485, 99);
 
+    /// <summary>The handle of the generated interior bed, another entry of the zone.</summary>
+    static readonly Hand GeneratedBed = new((int)FcsRecordType.BUILDING, 1238, 11111, 1486, 98);
+
     /// <summary>
     /// A save as the original writes a member caged in a generated interior cage: the member's state has only the original's keys, <c>in what</c> naming a zone building-list
     /// entry of <paramref name="record"/> at <paramref name="at"/> (an <c>&lt;n&gt;-zoneX.Y-INGAME</c> entry with its own state), which Meitou's fixture ids do not map.
@@ -107,21 +124,57 @@ public class JailSaveTests
             Capture(a.World, data).Write(folder);
         }
         var save = SaveGame.Load(folder);
+        AddGeneratedEntry(save, 7, record, at, GeneratedCage);
+        OriginalHeld(save, HeldState.Imprisoned, GeneratedCage);
+        return save;
+    }
+
+    /// <summary>
+    /// A save as the original writes a member lying in a generated interior bed (<see cref="OriginalCageSave"/>, of the house's bed record at its
+    /// place).
+    /// </summary>
+    static SaveGame OriginalBedSave(PopulationData data, string folder)
+    {
+        using (var a = new Game(data))
+        {
+            var squad = a.World.Systems.OfType<PopulationSystem>().Single().StartPlayer(a.World, NewGameStart.From(data.Db.Find("40-t")!));
+            a.World.Fixtures.RegisterSite(a.World, data, 0);
+            a.World.RunTicks(2);
+            Assert.True(a.World.Fixtures.EnterBed(a.World, squad.Members[0], a.World.Fixtures.Find($"{HouseKey}@bed0")!));
+            Capture(a.World, data).Write(folder);
+        }
+        var save = SaveGame.Load(folder);
+        AddGeneratedEntry(save, 8, "56-t", BedAt, GeneratedBed);
+        OriginalHeld(save, HeldState.Bed, GeneratedBed);
+        return save;
+    }
+
+    /// <summary>
+    /// The house zone's building-list entry <c>&lt;n&gt;-zoneX.Y-INGAME</c> of <paramref name="record"/> at <paramref name="at"/>, with a state of
+    /// its own named by <paramref name="handle"/>.
+    /// </summary>
+    static void AddGeneratedEntry(SaveGame save, int n, string record, Vector3 at, Hand handle)
+    {
         var file = save.Zones[HouseZone].File;
-        string id = $"7-zone{HouseZone.X}.{HouseZone.Y}-INGAME";
+        string id = $"{n}-zone{HouseZone.X}.{HouseZone.Y}-INGAME";
         var entry = new FcsInstance { Id = id, Target = record, Position = at };
         entry.States.Add(id + "-S23");
         save.Zones[HouseZone].BuildingList!.Instances.Add(entry);
         var state = new FcsRecord { Type = (int)FcsRecordType.GAMESTATE_BUILDING, Id = file.Records.Max(r => r.Id) + 1, Name = "0", StringId = id + "-S23" };
-        GeneratedCage.Write(state, "handle");
+        handle.Write(state, "handle");
         file.Records.Add(state);
+    }
 
-        var caged = save.Platoons.Single(p => p.FactionId == save.PlayerFaction!.Id).Characters[0].GameState!;
-        caged.Ints.Remove(HeldSave.MeitouState);
-        caged.Strings.Remove(HeldSave.MeitouWhat);
-        caged.Ints["in something"] = (int)HeldState.Imprisoned;
-        GeneratedCage.Write(caged, "in what");
-        return save;
+    /// <summary>
+    /// The player's first member held as the original writes it: only the original's keys, <c>in what</c> naming <paramref name="handle"/>.
+    /// </summary>
+    static void OriginalHeld(SaveGame save, HeldState held, Hand handle)
+    {
+        var state = save.Platoons.Single(p => p.FactionId == save.PlayerFaction!.Id).Characters[0].GameState!;
+        state.Ints.Remove(HeldSave.MeitouState);
+        state.Strings.Remove(HeldSave.MeitouWhat);
+        state.Ints["in something"] = (int)held;
+        handle.Write(state, "in what");
     }
 
     [Fact]
@@ -147,6 +200,35 @@ public class JailSaveTests
             Assert.Equal((int)HeldState.Imprisoned, state.Ints["in something"]);
             Assert.Equal(GeneratedCage, Hand.Read(state, "in what"));
             Assert.DoesNotContain(Keys(state), e => e.Key is HeldSave.MeitouState or HeldSave.MeitouWhat);
+        }
+        finally { Directory.Delete(Path.GetDirectoryName(folder)!, recursive: true); }
+    }
+
+    /// <summary>
+    /// A sleeper the original saved in a generated interior bed lies in that bed again and sleeps on (docs/formats/save.md "Locks, cages and
+    /// sentences"): its <c>in what</c> entry is matched by record and place to Meitou's bed of the interior, as a cage's is. Catches beds left
+    /// unmatched, whose saved sleepers held no bed and got up, and a bound sleeper put at its lie spot standing, which the bed system then got up.
+    /// </summary>
+    [Fact]
+    public void A_sleeper_the_original_saved_in_a_generated_interior_bed_lies_in_that_bed_again()
+    {
+        var data = JailData(bed: true);
+        string folder = Path.Combine(Temp("bed-original"), QuickSave.Name);
+        try
+        {
+            var save = OriginalBedSave(data, folder);
+            using var b = new Game(data, Parts | StandardParts.FirstAid);
+            SaveLoader.Load(b.World, save, data);
+            b.World.Fixtures.RegisterSite(b.World, data, 0);
+            var sleeper = b.World.Squads.Find(b.World.Player.Squad)!.Members[0];
+            var cold = b.World.Characters.Cold(sleeper.Slot)!;
+            Assert.Equal((HeldState.Bed, $"{HouseKey}@bed0"), (cold.InSomething, cold.InWhat));
+            Assert.Equal(sleeper, b.World.Fixtures.Find($"{HouseKey}@bed0")!.Occupant);
+
+            // It sleeps on, with no order to get it up.
+            b.World.RunTicks(30);
+            var task = (CharacterTask)b.World.Characters.Previous[sleeper.Slot].Task;
+            Assert.Equal((HeldState.Bed, CharacterTask.Sleep), (cold.InSomething, task));
         }
         finally { Directory.Delete(Path.GetDirectoryName(folder)!, recursive: true); }
     }
