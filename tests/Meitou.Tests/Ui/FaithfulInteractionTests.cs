@@ -77,7 +77,7 @@ public class FaithfulInteractionTests(ITestOutputHelper output)
             Assert.Equal(selectedHunger, ui.NewGameOptions[0]);
             Click(ui, "CancelButton");
             Assert.DoesNotContain(ui.UiFrame, c => c.Name == "advanced-track-0");
-            Click(ui, "NewGameButton"); Assert.Equal(1, ui.NewGameOptions[0]);
+            Click(ui, "NewGameButton"); Assert.Equal(selectedHunger, ui.NewGameOptions[0]);   // kept between openings, as the original's globals
         }
         finally { ui.DisposeUi(); }
     }
