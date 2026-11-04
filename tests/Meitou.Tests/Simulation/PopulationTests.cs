@@ -8,7 +8,7 @@ namespace Meitou.Tests.Simulation;
 public class PopulationTests
 {
     [Fact]
-    public void Residents_appear_when_the_focus_is_near_and_leave_after_the_grace_period()
+    public void Residents_appear_when_the_focus_is_near_and_leave_with_their_zones()
     {
         using var world = SyntheticTown.World(5, 1, 3, new PopulationSettings { UnloadGraceSeconds = 10, CheckEveryTicks = 1 });
         var population = (PopulationSystem)world.Systems[0];
@@ -29,11 +29,11 @@ public class PopulationTests
         Assert.All(patrols, s => Assert.InRange(s.Members.Count, 1 + 2 + 1 + 1, 1 + 4 + 1 + 1));
         int before = table.Count;
 
-        // The focus moves far away: nothing is removed during the grace period, then everything is.
+        // The focus moves far away: the town lapses with its zones (the camera block's 4 s), not after a grace of its own.
         world.Commands.Enqueue(new FocusCommand(new Vector3(-50000, 0, -50000)) { Tick = world.Tick });
-        world.RunTicks(150);   // 5 s
+        world.RunTicks(60);   // 2 s
         Assert.Equal(before, table.Count);
-        world.RunTicks(300);   // past 10 s once the 4 s the camera's block stays loaded have run out
+        world.RunTicks(90);   // past the 4 s the camera's block stays loaded
         Assert.Equal(SiteStatus.Unloaded, population.StatusOf(0));
         Assert.Equal(0, table.Count);
         Assert.Equal(0, world.Squads.Count);

@@ -53,6 +53,8 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
     /// <summary>The far cadence (docs/simulation.md "Far cadence"): a character far from the camera and from every player character steps once in this many ticks.</summary>
     const int FarTickPeriod = 4;
     readonly Dictionary<Meitou.Data.World.ZoneCoordinate, long> navZones = [];
+    const double NavCacheSeconds = 120;
+    const int NavCacheZones = 60;
     PlayerInterface player = null!;
     Meitou.Simulation.Squad? playerSquad;
     WorldFrame.Gpu gpu = null!;
@@ -462,8 +464,11 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
             if (!navZones.ContainsKey(z)) pending.Add(nav.LoadZone(z));
             navZones[z] = now;
         }
-        foreach (var (z, seen) in navZones.ToList())
-            if (Stopwatch.GetElapsedTime(seen, now).TotalSeconds > 30) { nav.UnloadZone(z); navZones.Remove(z); relabelGates = true; }
+        // Meitou's asset cache (engine choice): a left zone's mesh stays NavCacheSeconds, at most NavCacheZones zones, the oldest dropped first, so a return within two minutes rebuilds nothing.
+        var stale = navZones.Where(e => Stopwatch.GetElapsedTime(e.Value, now).TotalSeconds > NavCacheSeconds).Select(e => e.Key).ToList();
+        if (navZones.Count - stale.Count > NavCacheZones)
+            stale.AddRange(navZones.Where(e => !stale.Contains(e.Key)).OrderBy(e => e.Value).Take(navZones.Count - stale.Count - NavCacheZones).Select(e => e.Key));
+        foreach (var z in stale) { nav.UnloadZone(z); navZones.Remove(z); relabelGates = true; }
         if (wait) Task.WaitAll([.. pending]);
         HashSet<Meitou.Data.World.ZoneCoordinate> zones;
         lock (navReady)

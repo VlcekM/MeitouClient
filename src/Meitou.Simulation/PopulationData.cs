@@ -443,6 +443,8 @@ public sealed class PopulationSettings
     /// Unknown (game-loop.md); this is an engine choice, long enough that walking back and forth over a zone edge never reloads.
     /// </summary>
     public float UnloadGraceSeconds { get; init; } = 60;
+    /// <summary>Game seconds a town site stays loaded after its zones lapsed: 0, the original's rule (a town unloads with its zones, 4 to 6 s after the last request, docs/game/character-stats.md "Which zones are loaded"). Wild sites and roaming squads keep <see cref="UnloadGraceSeconds"/>.</summary>
+    public float TownUnloadGraceSeconds { get; init; }
     /// <summary>Ticks between looks at the zones (engine choice: twice a game second).</summary>
     public int CheckEveryTicks { get; init; } = 15;
     /// <summary>Build the towns' characters on a background thread (the game) or inside the tick (tests).</summary>

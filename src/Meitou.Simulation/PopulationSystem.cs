@@ -16,7 +16,7 @@ namespace Meitou.Simulation;
 /// Zone activation and town residents (docs/game/game-loop.md "Update, threads and budget", factions-squads-towns.md 6.4). The active zones are the
 /// loaded ones (<see cref="RefreshLoaded"/>): the 3 x 3 block round the camera's focus (a <see cref="FocusCommand"/>) and the box of +-340 units round each
 /// player character, with a ring of one more zone when <c>Fast zone hopping</c> is on (<see cref="ZoneActivation"/>). A placed town in an active zone gets its resident squads (squad
-/// factory, then characters rolled by the generator); when its zone is no longer active for <see cref="PopulationSettings.UnloadGraceSeconds"/>
+/// factory, then characters rolled by the generator); when its zone is no longer active for <see cref="PopulationSettings.TownUnloadGraceSeconds"/>
 /// its characters are removed (the original turns the squads into abstract "unloaded" ones, which the AI stage will do). The
 /// characters are built on a background thread when <see cref="PopulationSettings.Background"/> is set and taken in at the first tick
 /// after they are ready.
@@ -411,6 +411,7 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
         world.VisitedZones.UnionWith(active);
         world.ActiveZones = active;
         long grace = (long)Math.Ceiling(settings.UnloadGraceSeconds / world.TickSeconds);
+        long townGrace = (long)Math.Ceiling(settings.TownUnloadGraceSeconds / world.TickSeconds);
         foreach (var site in data.Sites)
         {
             var state = states[site.Index];
@@ -427,8 +428,8 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
                     state.UnloadAtTick = -1;
                     break;
                 case SiteStatus.Loaded or SiteStatus.Loading:
-                    if (state.UnloadAtTick < 0) state.UnloadAtTick = world.Tick + grace;
-                    else if (world.Tick >= state.UnloadAtTick) Unload(world, site.Index, state);
+                    if (state.UnloadAtTick < 0) state.UnloadAtTick = world.Tick + townGrace;
+                    if (world.Tick >= state.UnloadAtTick) Unload(world, site.Index, state);
                     break;
             }
         }
