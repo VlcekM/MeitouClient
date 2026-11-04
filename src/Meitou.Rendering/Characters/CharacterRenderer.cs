@@ -572,6 +572,8 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
     (int Bones, int Parts) GatherLive(Vector3 eye)
     {
         liveCount = layerCount = attachCount = 0;
+        (tinyBefore, tinyNow) = (tinyNow, tinyBefore);
+        tinyNow.Clear();
         int built = 0, boneTotal = 0, partTotal = 0;
         double buildMs = 0;
         float reach = EyeLift.Of(eye, GroundUnderEye) > 0 ? Math.Min(DrawDistance, LiftedReach) : DrawDistance;
@@ -581,6 +583,9 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         for (int i = 0; i < items.Count; i++)
         {
             var inst = items[i];
+            // Too small to show (Meitou's choice, docs/character-renderer.md "Tiny characters"): no build, pose or draw; the simulation and the host's lists still hold it.
+            assets.TryGetValue(inst.Appearance, out var known);
+            if (CullTiny(in inst, eye, known)) continue;
             if (AssetFor(in inst, eye, reach * inst.DrawDistanceScale, ref built, ref buildMs) is not { } asset) continue;
             if (inst.FreezeFrom is { } freezeFrom && !Freeze(inst.Key, freezeFrom, asset)) continue;
             if (inst.Build is { } build) ApplyBuild(asset, build);
@@ -629,8 +634,33 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         asset = content.Build(inst.Appearance);
         buildMs += Stopwatch.GetElapsedTime(buildStart).TotalMilliseconds;
         assets[inst.Appearance] = asset;
+        if (asset is not null && inst.Appearance?.BodyMesh is { Length: > 0 } body) bodyHeights[body] = Math.Max(bodyHeights.GetValueOrDefault(body), asset.Height);
         built++;
         return asset;
+    }
+
+    /// <summary>Projected height, in render pixels, under which a character is not built, posed or drawn; it comes back above <see cref="TinyOff"/> (hysteresis, so one at the edge does not flicker).</summary>
+    const float TinyOn = 1.5f, TinyOff = 2.0f;
+    /// <summary>The tallest asset built per body mesh, so a look not built yet can be judged before its build.</summary>
+    readonly Dictionary<string, float> bodyHeights = [];
+    HashSet<long> tinyBefore = [], tinyNow = [];
+
+    /// <summary>
+    /// Whether the character's projected height is under <see cref="TinyOn"/> render pixels (<see cref="TinyOff"/> once it was): a speck the original draws and Meitou does not.
+    /// Never the player's, a portrait's, a hidden or an editor character, and not one near a kept point (its look is built ahead). Without a built asset the body mesh's known height is used.
+    /// </summary>
+    bool CullTiny(in CharacterInstance inst, Vector3 eye, CharacterAsset? asset)
+    {
+        if (!viewKnown || inst.FullRateAnimation || inst.Hidden || portraitKeys.Contains(inst.Key)) return false;
+        float height = asset?.Height ?? (inst.Appearance.BodyMesh is { Length: > 0 } body && bodyHeights.TryGetValue(body, out var h) ? h : 0);
+        if (height <= 0) return false;
+        float scale = inst.Scale > 0 ? inst.Scale : 1;
+        float distance = MathF.Max(1, Vector3.Distance(eye, inst.Position));
+        float pixels = height * scale * viewPixelsPerRadian / distance;
+        if (pixels >= (tinyBefore.Contains(inst.Key) ? TinyOff : TinyOn)) return false;
+        if (asset is null && (Ahead is not null || Kept.Count > 0)) return false;
+        tinyNow.Add(inst.Key);
+        return true;
     }
 
     /// <summary>A new live entry for the character (<paramref name="far"/>: drawn for its portrait only), its state brought up to date.</summary>
