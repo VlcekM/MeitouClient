@@ -1,4 +1,4 @@
-# Builds a release of the game (src/Meitou.Game) and the world viewer (meitou-viewer) for one runtime into a zip that runs as is:
+# Builds a release of the game (src/Meitou.Game), the world viewer (meitou-viewer) and meitou-tools (mod-check for code mods) for one runtime into a zip that runs as is:
 # self-contained .NET under the single top folder Meitou-<version>-<rid>. The Windows zip also carries NVIDIA's DLSS runtime and Streamline
 # plugins, AMD's FidelityFX library and NVIDIA's NGX client library (meitou_ngx.dll, for DLSS with frame generation) next to the exes, and the Linux zip
 # NVIDIA's DLSS model and NGX client library and our build of AMD's FidelityFX library, their licences in licenses/; they come from NVIDIA's and AMD's
@@ -32,11 +32,13 @@ $stage = Join-Path $Output $name
 if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
 New-Item -ItemType Directory -Force $stage, $Cache | Out-Null
 
-# The game and the world viewer (meitou-viewer), self-contained (no .NET install needed) and not single-file: the runtime and our
-# Meitou.*.dll lie beside the executables, shared by both (same build, same runtime), so code mods can reference and load them. A numeric
+# The game, the world viewer (meitou-viewer) and meitou-tools, self-contained (no .NET install needed) and not single-file: the runtime and our
+# Meitou.*.dll lie beside the executables, shared by all three (same build, same runtime), so code mods can reference and load them. A numeric
 # version goes into the assembly version too.
 $numeric = if ($Version -match '^\d+(\.\d+){1,3}') { $Matches[0] } else { "0.0.0" }
-foreach ($project in @("src/Meitou.Game/Meitou.Game.csproj", "tools/Meitou.ModelViewer/Meitou.ModelViewer.csproj")) {
+# meitou-tools joins them for modders: mod-check runs a save with code mods and compares the runs (docs/modding.md "Determinism check").
+$projects = @("src/Meitou.Game/Meitou.Game.csproj", "tools/Meitou.ModelViewer/Meitou.ModelViewer.csproj", "tools/Meitou.Tools/Meitou.Tools.csproj")
+foreach ($project in $projects) {
     dotnet publish (Join-Path $root $project) -c Release -r $Rid --self-contained true `
         -p:DebugType=embedded -p:Version=$numeric -p:InformationalVersion=$Version -o $stage
     if ($LASTEXITCODE -ne 0) { throw "dotnet publish $project failed" }
@@ -143,12 +145,14 @@ $('=' * $title.Length)
 
 A reimplementation of the Kenshi engine. It reads your own Kenshi install; no game files are included.
 
-Two programs
-------------
+Three programs
+--------------
 $("$game.exe".PadRight(20))The game: the world with the Kenshi camera.
 meitou-viewer.exe   The world viewer: a free camera over the world, with the Faithful / Meitou switches (F1-F8), frame statistics
                     (F11), the profiler (F12) and every renderer option (meitou-viewer.exe --world --help lists them).
                     meitou-viewer-dlss.bat starts it at The Hub with DLSS.
+meitou-tools.exe    For modders, from a terminal: meitou-tools.exe mod-check <save folder> checks code mods for determinism
+                    (meitou-tools.exe alone lists its commands).
 
 Start
 -----
@@ -189,11 +193,12 @@ $('=' * $title.Length)
 A reimplementation of the Kenshi engine. It reads your own Kenshi install (the Windows game's files, e.g. from Steam with Proton);
 no game files are included.
 
-Two programs
-------------
+Three programs
+--------------
 $($game.PadRight(16))The game: the world with the Kenshi camera.
 meitou-viewer   The world viewer: a free camera over the world, with the Faithful / Meitou switches (F1-F8), frame statistics (F11),
                 the profiler (F12) and every renderer option (./meitou-viewer --world --help lists them).
+meitou-tools    For modders: ./meitou-tools mod-check <save folder> checks code mods for determinism (./meitou-tools alone lists its commands).
 
 Start
 -----
@@ -215,13 +220,13 @@ Set-Content -Path (Join-Path $stage "README.txt") -Value $readme -Encoding UTF8
 $zipPath = Join-Path $Output "$name.zip"
 if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
 if (-not (Test-Path (Join-Path $stage "settings-schema.json"))) { throw "settings-schema.json missing from $stage" }
-foreach ($program in $game, "meitou-viewer") {
+foreach ($program in $game, "meitou-viewer", "meitou-tools") {
     if (-not (Test-Path (Join-Path $stage "$program$exe"))) { throw "$program$exe missing from $stage" }
 }
 if ($windows) {
     [IO.Compression.ZipFile]::CreateFromDirectory((Resolve-Path $stage), (Join-Path (Resolve-Path $Output) "$name.zip"), [IO.Compression.CompressionLevel]::Optimal, $true)
 } else {
-    $programs = @($game, "meitou-viewer", "createdump") | ForEach-Object { Join-Path $stage $_ } | Where-Object { Test-Path $_ }
+    $programs = @($game, "meitou-viewer", "meitou-tools", "createdump") | ForEach-Object { Join-Path $stage $_ } | Where-Object { Test-Path $_ }
     chmod +x @programs
     if ($LASTEXITCODE -ne 0) { throw "chmod failed" }
     if ($mac) {

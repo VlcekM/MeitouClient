@@ -68,8 +68,9 @@ The game itself cannot ask: mods initialize on the boot worker before the interf
   took, a missing DLL, an entry type that is absent, not an `IMod` or without a public parameterless constructor, a throwing
   `Initialize`.
 - Constraint: the game stays a JIT publish, never `PublishTrimmed`, `PublishAot` or single-file. **Verified**
-  (`tools/scripts/package-release.ps1`): the game publishes self-contained with `Meitou.*.dll` beside the executable; `0Harmony.dll`
-  is there in the build output (**Observed**, 2026-11-04), not yet checked in a published zip.
+  (`tools/scripts/package-release.ps1`): the game publishes self-contained with `Meitou.*.dll` beside the executable, and `meitou-tools`
+  with it. **Observed** (2026-11-04, win-x64 publish of the three programs into one folder): `0Harmony.dll` and `Meitou.Modding.dll` are
+  there, the game's 228 files are byte-identical to a game-only publish, and the published `meitou-tools.exe mod-check` runs.
 
 ## Lifecycle
 
@@ -129,7 +130,8 @@ break golden hashes and any future replay. Nothing in the API can stop a patch; 
 
 ### Determinism check
 
-`meitou-tools mod-check <save folder> [--ticks n] [--threads n] [--mod <mod folder>]...` (`tools/Meitou.Tools/ModCheck.cs`) loads a save
+`meitou-tools mod-check <save folder> [--ticks n] [--threads n] [--mod <mod folder>]...` (`tools/Meitou.Tools/ModCheck.cs`, shipped in
+the release zips beside the game) loads a save
 headless with the enabled code mods, or only the `--mod` folders (their code; their records join the data only when enabled), and runs
 it three times: twice on one thread and once on `--threads` (default 4), for `--ticks` (default 600). It compares `World.StateHash`
 after every tick and reports the first differing tick of each pair and the `IStateHashed` systems that differ there, a mod's by id and
