@@ -31,7 +31,7 @@ static class LauncherSchema
             { Name = "Texture quality", Labels = [.. Meitou.Data.Textures.TextureQuality.Labels], Reversed = true },
         Graphics(WorldFrame.FilteringSlider, 0, 4, 1, 4) with { Name = "Texture filtering", Labels = ["1x", "2x", "4x", "8x", "16x"] },
         Graphics(WorldFrame.UpscalerSliders[0], 0, 5, 1, 3) with { Name = "Anti-aliasing/upscaling", Labels = ["Off", "FXAA", "SMAA", "TAA", "FSR", "DLSS"] },
-        Graphics(WorldFrame.UpscalerSliders[1], 0.33f, 1, 0.01f, 1) with { Scale = 100, Suffix = " %" },
+        Graphics(WorldFrame.UpscalerSliders[1], 0.33f, 1, 0.01f, Percent(UpscaleOptions.DefaultScale)) with { Scale = 100, Suffix = " %", Modes = RenderScaleModes() },
         Graphics(WorldFrame.UpscalerSliders[2], 0, 1, 0.01f, 0.5f) with { Format = "0.00" },
         // World
         Graphics(WorldFrame.ObjectDistanceSlider, 1000, 400000, 100, Enhancements.MeitouObjectDistance) with { Logarithmic = true },
@@ -83,6 +83,19 @@ static class LauncherSchema
         Graphics(WorldFrame.NightGradeStrengthSlider, 0, 1, 0.05f, NightGrade.MeitouStrength) with { Format = "0.00" },
         Graphics(WorldFrame.BloomStrengthSlider, 0, 0.25f, 0.005f, new PostOptions().BloomStrength) with { Format = "0.000" },
     ];
+
+    /// <summary>The render scale's quality modes, lowest first: FSR's and DLSS's ratios, as the slider stores them (whole percent).</summary>
+    static List<SettingMode> RenderScaleModes() =>
+    [
+        new() { Name = "Ultra performance", Value = Percent(1 / 3f) },
+        new() { Name = "Performance", Value = Percent(0.5f) },
+        new() { Name = "Normal", Value = Percent(1 / 1.7f) },
+        new() { Name = "Quality", Value = Percent(1 / 1.5f) },
+        new() { Name = "Ultra quality (0.83)", Value = Percent(UpscaleOptions.UltraQualityScale) },
+        new() { Name = "DLAA", Value = 1 },
+    ];
+
+    static float Percent(float scale) => MathF.Round(scale * 100) / 100;
 
     static SettingDescription Multiplier(string label, float min, float max, float shown) =>
         Graphics(label, min, max, 0.05f, shown) with { Logarithmic = min > 0, Format = "0.00", Suffix = "x" };

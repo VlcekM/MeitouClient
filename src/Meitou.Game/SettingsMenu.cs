@@ -296,7 +296,7 @@ sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, 
                 result.Add(new("Frame generation (FSR 3)", FrameGenerationHint(),
                     Toggle: new("Frame generation (FSR 3)", () => config.FrameGeneration, v => config.FrameGeneration = v, OnOff: true), Raw: "frameGeneration"));
             result = [.. result.OrderBy(e => LauncherSchema.Order(e.Raw ?? ""))];
-            result = [.. result.SelectMany(e => e is { Raw: var raw, Slider: not null } && raw == WorldFrame.UpscalerSliders[1] ? RenderScaleEntries(e) : [e])];
+            result = [.. result.SelectMany(ModeEntries)];
         }
         if (page == 2)
             result.Add(new("UI style", "Choose original Kenshi skins or Meitou materials.", Choice: new(() => ["Faithful", "Meitou"],
@@ -755,7 +755,7 @@ sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, 
         config.FaithfulLook = false;
         config.KeepAtLow.Clear();
         activeLook = null;
-        customRenderScale = false;
+        customModes.Clear();
         resetPending = false;
         notice = "Default settings restored.";
     }

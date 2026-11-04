@@ -216,8 +216,18 @@ sealed partial class SettingsMenu
             if (values.Sliders.FirstOrDefault(s => s.Label == WorldFrame.UpscalerSliders[0]) is { } antiAliasing) antiAliasing.Set(0);
             if (values.Sliders.FirstOrDefault(s => s.Label == WorldFrame.UpscalerSliders[1]) is { } scale) scale.Set(WorldOptions.LowEndRenderScale);
         }
+        if (preset == HighPreset) SetHighRenderScale();
         foreach (var (p, slider) in PresetPairs()) slider.Set(PresetTarget(p, slider, preset));
         if (values.Toggles.FirstOrDefault(t => t.Label == FifthCascade) is { } cascade && cascade.Get() != CascadeFor(preset)) cascade.Set(CascadeFor(preset));
+    }
+
+    /// <summary>High's render scale: Quality with an upscaler (TAA, FSR, DLSS), native without one (no plain scaling).</summary>
+    void SetHighRenderScale()
+    {
+        var antiAliasing = values.Sliders.FirstOrDefault(s => s.Label == WorldFrame.UpscalerSliders[0]);
+        if (values.Sliders.FirstOrDefault(s => s.Label == WorldFrame.UpscalerSliders[1]) is not { } scale) return;
+        bool upscaler = antiAliasing is not null && antiAliasing.Get() >= 3;
+        scale.Set(upscaler ? UpscaleOptions.DefaultScale : 1);
     }
 
     /// <summary>

@@ -166,7 +166,7 @@ public sealed partial class MainWindow
 
     Border SettingRow(SettingDescription s) => s.Kind == SettingKind.Toggle ? s.Graphics ? SwitchRow(s) : ToggleRow(s)
         : s.Labels is { Length: 2 } ? CheckRow(s, s.Labels[0], s.Labels[1], v => { if (s.Graphics) game.SetGraphics(s.Key, s.Min + v); else game.Set(s.Key, s.Min + v); })
-        : s.Labels is { Length: > 0 } ? ChoiceRow(s) : SliderRow(s);
+        : s.Labels is { Length: > 0 } ? ChoiceRow(s) : s.Modes is { Count: > 0 } ? ModesRow(s) : SliderRow(s);
 
 
     const double GutterWidth = 22;
@@ -718,6 +718,46 @@ public sealed partial class MainWindow
 
     /// <summary>A setting with named values (anti-aliasing, texture quality, water reflection), in the slider's order from its left end.</summary>
     Border ChoiceRow(SettingDescription s) => DropDownRow(s, s.Labels!, s.Min, v => { if (s.Graphics) game.SetGraphics(s.Key, v); else game.Set(s.Key, v); });
+
+    /// <summary>
+    /// A slider with named values (<see cref="SettingDescription.Modes"/>, render scale's quality modes): a drop-down of them and Custom, as the game's
+    /// menu shows it; the slider sits under it only while Custom is chosen, or the value is none of the modes.
+    /// </summary>
+    Border ModesRow(SettingDescription s)
+    {
+        var modes = s.Modes!;
+        var box = new ComboBox { HorizontalAlignment = HorizontalAlignment.Stretch, ItemsSource = modes.Select(m => Tr(m.Name)).Append(Tr("Custom")).ToList() };
+        var custom = SliderRow(s with { Name = "Custom value", Description = "", Impact = null });
+        custom.Margin = new(GutterWidth, 0, 0, 0);
+        bool loading = false, customChosen = false;
+        int Index() => customChosen ? modes.Count : modes.FindIndex(m => m.Matches(CurrentValue(s), s.Step)) is var i and >= 0 ? i : modes.Count;
+        void Show()
+        {
+            loading = true;
+            box.SelectedIndex = Index();
+            custom.IsVisible = box.SelectedIndex == modes.Count;
+            loading = false;
+        }
+        Show();
+        var row = SettingFrame(s, box, 260, Show);
+        box.SelectionChanged += (_, _) =>
+        {
+            if (loading || box.SelectedIndex < 0) return;
+            customChosen = box.SelectedIndex == modes.Count;
+            if (!customChosen) WriteSetting(s, modes[box.SelectedIndex].Value);
+            PresetBroken(s.Key);
+            SaveGame();
+            foreach (var show in rowShows) show();
+            RefreshMarks();
+        };
+        return new Border { Child = new StackPanel { Children = { row, custom } } };
+    }
+
+    void WriteSetting(SettingDescription s, float value)
+    {
+        if (s.Graphics) game.SetGraphics(s.Key, value);
+        else game.Set(s.Key, value);
+    }
 
     /// <summary>A continuous setting: a slider and its value, which can be typed (Enter or leaving the box; Esc puts it back).</summary>
     Border SliderRow(SettingDescription s)

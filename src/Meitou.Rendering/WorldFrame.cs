@@ -307,7 +307,7 @@ sealed class WorldOptions
           --wireframe
           --post <meitou|kenshi|off>   post-processing preset (default meitou), before the options below: HDR scene, SSAO
           --upscaler <off|taa|fsr|dlss|metalfx>   temporal upscaling (default taa in Meitou, off in Faithful; FSR and DLSS need the vendor library; MetalFX is the Metal backend's opt-in, else TAA)
-          --render-scale <0.25..1|native|ultra-quality|quality|balanced|performance|ultra>   render size per axis (Meitou default 0.83 with an upscaler, else 1)
+          --render-scale <0.25..1|native|ultra-quality|quality|balanced|performance|ultra>   render size per axis (Meitou default 0.67, Quality, with an upscaler, else 1)
           --no-fxaa                the game's FXAA off when no upscaler runs (the game's own FXAA setting, default on)
           --smaa                   SMAA instead of FXAA when no upscaler runs
           --particle-divisor <0|1|2|4>   the weather's alpha and additive particles drawn at 1/n of the render size (0, the default: by sprite size; `--faithful particles` draws them full size)

@@ -38,7 +38,8 @@ rows above its tabs:
 - **Quality**: Low / Medium / High / Ultra / Custom, always the tier the settings sit at (`CurrentPreset`; a moved slider makes
   it Custom). It sets the distance, foliage, grass, reflection, shadow, particle density, filtering, texture, ground relief and
   shaft quality sliders, the fifth cascade and the relief switches (rock smoothing from Medium, outline refinement from High;
-  Meitou only). High is the start default; distances that follow a switch's side (Draw distances, Shadows) are multiples of that
+  Meitou only). High is the start default and sets render scale Quality 0.67 (`UpscaleOptions.DefaultScale`; 1 without TAA, FSR or DLSS),
+  not counted when reading the tier; Medium and Ultra leave the scale; distances that follow a switch's side (Draw distances, Shadows) are multiples of that
   side's mark, so a tier reads the same in either look. Low is `--low-end` (`WorldOptions.LowEnd*`): also shadows and relief
   off, quarter-size particles, no anti-aliasing at 0.83 render scale. Low holds the costly look switches off (AO, light shafts,
   water, Meitou shadows, parallax, displacement) without changing the preset; turning one on keeps it on at Low (`keepAtLow`),

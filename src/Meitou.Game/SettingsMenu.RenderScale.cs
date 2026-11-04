@@ -1,44 +1,43 @@
 using Meitou.Rendering;
+using Meitou.Settings;
 
 namespace Meitou.Game;
 
-/// <summary>The Display page's render scale: a choice of the upscalers' quality modes, with the free slider under Custom.</summary>
+/// <summary>A slider with named values in the catalogue (render scale's quality modes): a choice of them and Custom, the slider itself only under Custom.</summary>
 sealed partial class SettingsMenu
 {
-    /// <summary>The quality modes, lowest scale first (FSR's and DLSS's ratios; Ultra quality is the Meitou default), then Custom.</summary>
-    static readonly (string Name, float Scale)[] RenderScaleModes =
-    [
-        ("Ultra performance", 1 / 3f), ("Performance", 0.5f), ("Normal", 1 / 1.7f), ("Quality", 1 / 1.5f),
-        ("Ultra quality (0.83)", UpscaleOptions.MeitouDefaultScale), ("DLAA", 1),
-    ];
+    /// <summary>The sliders whose Custom was picked: the slider stays shown even when its value matches a mode.</summary>
+    readonly HashSet<string> customModes = [];
 
-    /// <summary>Custom was picked: the slider stays shown even when its value matches a mode.</summary>
-    bool customRenderScale;
-
-    /// <summary>The render scale rows replacing the slider's own row: the mode choice, and the slider itself under Custom.</summary>
-    IEnumerable<Entry> RenderScaleEntries(Entry sliderRow)
+    /// <summary>The rows replacing a slider row with modes: the mode choice, and the slider under Custom; any other row as it is.</summary>
+    IEnumerable<Entry> ModeEntries(Entry row)
     {
-        var slider = sliderRow.Slider!;
-        string[] names = [.. RenderScaleModes.Select(m => m.Name), "Custom"];
-        yield return sliderRow with
+        if (row is not { Slider: { } slider, Raw: { } key } || LauncherSchema.Find(key) is not { Modes: { Count: > 0 } modes } d)
         {
-            Slider = null,
-            Choice = new(() => names, () => RenderScaleMode(slider), i => ChooseRenderScale(slider, i)),
-        };
-        if (RenderScaleMode(slider) == RenderScaleModes.Length) yield return sliderRow with { Label = "Custom scale", Depth = 1 };
+            yield return row;
+            yield break;
+        }
+        string[] names = [.. modes.Select(m => m.Name), "Custom"];
+        yield return row with { Slider = null, Choice = new(() => names, () => ModeIndex(key, slider, modes, d.Step), i => ChooseMode(key, slider, modes, i)) };
+        if (ModeIndex(key, slider, modes, d.Step) == modes.Count) yield return row with { Label = "Custom value", Depth = 1 };
     }
 
-    int RenderScaleMode(Slider slider)
+    int ModeIndex(string key, Slider slider, List<SettingMode> modes, float step)
     {
-        if (customRenderScale) return RenderScaleModes.Length;
+        if (customModes.Contains(key)) return modes.Count;
         float value = slider.Get();
-        int mode = Array.FindIndex(RenderScaleModes, m => MathF.Abs(MathF.Round(m.Scale * 100) / 100 - value) < 0.005f);
-        return mode < 0 ? RenderScaleModes.Length : mode;
+        int mode = modes.FindIndex(m => m.Matches(value, step));
+        return mode < 0 ? modes.Count : mode;
     }
 
-    void ChooseRenderScale(Slider slider, int index)
+    void ChooseMode(string key, Slider slider, List<SettingMode> modes, int index)
     {
-        customRenderScale = index >= RenderScaleModes.Length;
-        if (!customRenderScale) slider.Set(RenderScaleModes[index].Scale);
+        if (index >= modes.Count)
+        {
+            customModes.Add(key);
+            return;
+        }
+        customModes.Remove(key);
+        slider.Set(modes[index].Value);
     }
 }

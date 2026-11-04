@@ -176,7 +176,7 @@ Authority: `src/Meitou.Rendering/WorldFrame.cs` (`Parse`, `Usage`), `src/Meitou.
 |---|---|---|---|
 | `--post <meitou\|kenshi\|off>` | preset | meitou | Post chain preset; applied before the rows below. |
 | `--upscaler <off\|taa\|fsr\|dlss\|metalfx>` | | taa (Meitou), off (Faithful) | Temporal upscaler. FSR and DLSS need their vendor libraries; MetalFX is Metal only, else TAA. |
-| `--render-scale <0.25..1 or name>` | 0.25 to 1; native, ultra-quality, quality, balanced, performance, ultra | 0.83 with an upscaler (Meitou), else 1 | Render size per axis. |
+| `--render-scale <0.25..1 or name>` | 0.25 to 1; native, ultra-quality, quality, balanced, performance, ultra | 0.67 (Quality) with an upscaler (Meitou), else 1 | Render size per axis. |
 | `--no-fxaa` | | FXAA on | Game's FXAA off when no upscaler runs. |
 | `--smaa` | | off | SMAA instead of FXAA when no upscaler runs. |
 | `--no-heat-haze` | | on | No heat haze. |

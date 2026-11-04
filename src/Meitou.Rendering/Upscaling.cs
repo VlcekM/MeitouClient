@@ -14,9 +14,11 @@ public sealed class UpscaleOptions
     public UpscalerKind Kind = UpscalerKind.Dlss;
     /// <summary>The temporal method the Meitou anti-aliasing switch turns on (the last one chosen; DLSS until then).</summary>
     public UpscalerKind Preferred = UpscalerKind.Dlss;
-    /// <summary>Render size over display size per axis; null selects Ultra Quality for temporal Meitou rendering, native when off.</summary>
+    /// <summary>Render size over display size per axis; null selects <see cref="DefaultScale"/> for temporal Meitou rendering, native when off.</summary>
     public float? Scale;
-    public const float MeitouDefaultScale = 0.83f;
+    /// <summary>The Meitou default with an upscaler: Quality (the High preset's).</summary>
+    public const float DefaultScale = 1 / 1.5f;
+    public const float UltraQualityScale = 0.83f;
     /// <summary>0..1: FSR's own sharpening (RCAS); after TAA and DLSS the composite's (PostProcessShaders.Composite).</summary>
     public float Sharpness = 0.3f;
     /// <summary>Set on the command line: the saved settings don't override it.</summary>
@@ -24,11 +26,11 @@ public sealed class UpscaleOptions
 
     /// <summary>The quality modes' scales, FSR's and DLSS's shared ratios (1.5, 1.7, 2, 3 per axis).</summary>
     public static readonly (string Name, float Scale)[] Modes =
-        [("native", 1f), ("ultra-quality", MeitouDefaultScale), ("quality", 1 / 1.5f), ("balanced", 1 / 1.7f), ("performance", 0.5f), ("ultra", 1 / 3f)];
+        [("native", 1f), ("ultra-quality", UltraQualityScale), ("quality", 1 / 1.5f), ("balanced", 1 / 1.7f), ("performance", 0.5f), ("ultra", 1 / 3f)];
 
     public bool Temporal => Kind != UpscalerKind.Off;
     /// <summary>The render scale; with Off too (FXAA then runs on the plainly scaled-up picture: no jitter, no history).</summary>
-    public float EffectiveScale => Scale ?? (Temporal ? MeitouDefaultScale : 1);
+    public float EffectiveScale => Scale ?? (Temporal ? DefaultScale : 1);
 
     public static float ParseScale(string s)
     {

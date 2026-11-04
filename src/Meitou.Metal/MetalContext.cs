@@ -725,7 +725,7 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
     /// programs write it, so the pass has the attachment they expect).</summary>
     public GpuTexture Albedo => albedo ?? throw new InvalidOperationException("no frame is open");
 
-    /// <summary>The scene's render scale (the Vulkan path's TAA/upscaler scale): 1 = native, 0.83 = the Meitou default.</summary>
+    /// <summary>The scene's render scale (the Vulkan path's TAA/upscaler scale): 1 = native, 0.67 = the Vulkan path's Meitou default.</summary>
     public float RenderScale { get; set; } = 1f;
     public int SceneWidth { get; private set; }
     public int SceneHeight { get; private set; }

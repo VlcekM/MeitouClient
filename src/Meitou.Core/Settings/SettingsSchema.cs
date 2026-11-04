@@ -146,6 +146,9 @@ public sealed record SettingDescription
     public string Suffix { get; set; } = "";
     public float? OffBelow { get; set; }
     public string OffText { get; set; } = "Off";
+    /// <summary>A slider's named values (render scale's quality modes): a drop-down of them and Custom, the slider shown only under Custom;
+    /// a value that is none of them reads Custom. Null: a plain slider (an older launcher shows that either way).</summary>
+    public List<SettingMode>? Modes { get; set; }
 
     public string Text(float value)
     {
@@ -153,6 +156,16 @@ public sealed record SettingDescription
         if (Labels is { Length: > 0 } labels) return labels[Math.Clamp((int)MathF.Round(value - Min), 0, labels.Length - 1)];
         return (value * Scale).ToString(Format, System.Globalization.CultureInfo.InvariantCulture) + Suffix;
     }
+}
+
+/// <summary>One of a slider's <see cref="SettingDescription.Modes"/>: its name and the value it writes.</summary>
+public sealed record SettingMode
+{
+    public string Name { get; set; } = "";
+    public float Value { get; set; }
+
+    /// <summary>Whether <paramref name="value"/> is this mode's, within half a slider <paramref name="step"/>.</summary>
+    public bool Matches(float value, float step) => MathF.Abs(value - Value) <= step / 2;
 }
 
 [JsonSourceGenerationOptions(WriteIndented = true, PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase, UseStringEnumConverter = true,
