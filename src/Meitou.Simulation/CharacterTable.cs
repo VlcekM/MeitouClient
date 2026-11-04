@@ -108,6 +108,16 @@ public sealed class CharacterCold
     /// set only with the asynchronous path service, so not hashed.
     /// </summary>
     public long PathApplied { get; set; }
+    /// <summary>
+    /// A splice asked for (<see cref="MovementSystem"/>, docs/game/pathfinding.md "Long routes"): the path it replaces the start of, up to and with its point
+    /// <see cref="SpliceEnd"/>, while the goal is still <see cref="SpliceGoal"/>; null: the next request is for the whole way. Not saved, not hashed.
+    /// </summary>
+    public Vector3[]? SplicePath { get; set; }
+    public int SpliceEnd { get; set; }
+    public System.Numerics.Vector2 SpliceGoal { get; set; }
+    /// <summary>The splice request in flight (0: none), and the last one sent, so its answer is never taken for a whole path. Not hashed.</summary>
+    public long SpliceRequest { get; set; }
+    public long LastSplice { get; set; }
     /// <summary>Belongs to the player's faction: can be selected and ordered.</summary>
     public bool IsPlayer { get; set; }
     /// <summary>The order queue (<see cref="Simulation.OrderQueue"/>, <see cref="PlayerOrders"/>): the order in hand first, then the queued ones (Shift); changed only by the character's own partition or a serial phase.</summary>

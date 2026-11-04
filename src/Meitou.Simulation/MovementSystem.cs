@@ -35,7 +35,7 @@ namespace Meitou.Simulation;
 /// and the cosine cut (engine choice).</item>
 /// Queued move orders (row-29 entries of <see cref="CharacterCold.OrderQueue"/>) and the formation (<see cref="Formation"/>) exist.
 /// </summary>
-public sealed class MovementSystem(PathService paths) : ITickSystem, IDisposable, ITaskOwner, ITaskHandler, IOrderOwner
+public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDisposable, ITaskOwner, ITaskHandler, IOrderOwner
 {
     /// <summary>The fights the steering reads (null: no fight steering, as in worlds without combat; the world's combat system unless set).</summary>
     public Combat.CombatSystem? Fights { get; set; }
@@ -119,6 +119,30 @@ public sealed class MovementSystem(PathService paths) : ITickSystem, IDisposable
     /// wanted one by at most this x dt, and near its last point it is held to sqrt(2 x this x the distance left), so it stops there.
     /// </summary>
     public static float PathAcceleration(CharacterCold cold) => (cold.Race?.PathfindAcceleration ?? 24) * 10;
+    /// <summary>How far short of a corner the nav agent's braking starts beyond its stopping distance, and the length its turn term stands for (both 0.1 and 1 Havok unit).</summary>
+    const float CornerMargin = 1, CornerLength = 10;
+
+    /// <summary>
+    /// The nav agent's braking for the corner it heads for (<b>Verified</b>, <c>FUN_140147fd0</c> with the corner from <c>FUN_140146a60</c>; docs/game/pathfinding.md):
+    /// once the corner along its heading is within its stopping distance (<see cref="CornerMargin"/> added), its wanted speed drops to
+    /// sqrt(2 a <see cref="CornerLength"/> |sin θ|), θ between its velocity and the way to the corner; when even the wanted speed fits under that, it steers square
+    /// across its velocity toward the corner's side at that speed.
+    /// </summary>
+    static (Vector2 Dir, float Desired) CornerBrake(Vector3 moving, Vector2 to, Vector2 dir, float desired, float acceleration)
+    {
+        var velocity = new Vector2(moving.X, moving.Z);
+        float speed = velocity.Length();
+        if (speed <= 1e-4f) return (dir, desired);
+        var heading = velocity / speed;
+        if (Vector2.Dot(to, heading) - CornerMargin >= speed * speed / (2 * acceleration)) return (dir, desired);
+
+        var across = new Vector2(heading.Y, -heading.X);
+        float lateral = Vector2.Dot(across, dir);
+        float limit = 2 * acceleration * CornerLength * MathF.Abs(lateral);
+        if (desired * desired <= limit) return (lateral < 0 ? -across : across, desired);
+        return (dir, MathF.Sqrt(limit));
+    }
+
     /// <summary>The <see cref="CharacterCold.ArriveWithin"/> of a walk to a spot (engine choice: a barman stands at his node behind the counter, not a stride off it).</summary>
     public const float SpotArrive = 2;
     /// <summary>How fast a formation follower's heading eases toward its leader's, per second, while the leader moves (the original's 0.5).</summary>
@@ -173,6 +197,14 @@ public sealed class MovementSystem(PathService paths) : ITickSystem, IDisposable
                     // A walker whose way on does not lead through a changed zone keeps its path (a long walk loads zones ahead all the way, and each would
                     // otherwise turn every walker about). One waiting for an answer asks again: it may have been made on the old meshes.
                     if (repath.Zones is { } zones && (c.Flags & (ushort)MoveFlags.Pending) == 0 && !Crosses(c.Position, table.Cold(s)!.Path, c.PathCursor, zones)) continue;
+                    // One following a path splices in the part through the new meshes and walks on meanwhile (an answer it waits for may be made on the old ones).
+                    if ((c.Flags & (ushort)MoveFlags.HasPath) != 0)
+                    {
+                        c.Flags = (ushort)(c.Flags & ~(ushort)MoveFlags.Pending);
+                        table.Cold(s)!.PathRequest = 0;
+                        AskSplice(ref c, table.Cold(s)!, repath.Zones);
+                        continue;
+                    }
                     c.Flags = (ushort)((c.Flags & ~(ushort)(MoveFlags.Pending | MoveFlags.HasPath)) | (ushort)MoveFlags.NeedPath);
                     c.PathCursor = 0;
                     table.Cold(s)!.PathRequest = 0;
@@ -305,6 +337,7 @@ public sealed class MovementSystem(PathService paths) : ITickSystem, IDisposable
         n.Mode = mode;
         n.Flags = (ushort)((n.Flags & ~(ushort)MoveFlags.Pending) | (ushort)MoveFlags.NeedPath);
         cold.PathRequest = 0;
+        cold.SplicePath = null;
     }
 
     /// <summary>
@@ -485,9 +518,12 @@ public sealed class MovementSystem(PathService paths) : ITickSystem, IDisposable
             var cold = table.Cold(i)!;
             // The goal's floor: the height the order was given at (a follower's leader on another storey), else the character's own (a wander or follow goal on its level).
             float nearY = cold.GoalHeightAt == next[i].Goal && !float.IsNaN(cold.GoalHeight) ? cold.GoalHeight : next[i].Position.Y;
-            var to = new Vector3(next[i].Goal.X, world.Walkability.GroundHeight(next[i].Goal.X, next[i].Goal.Y, nearY), next[i].Goal.Y);
+            var splice = SpliceTarget(next[i], cold);
+            var to = splice ?? new Vector3(next[i].Goal.X, world.Walkability.GroundHeight(next[i].Goal.X, next[i].Goal.Y, nearY), next[i].Goal.Y);
             cold.PathRequest = Paths.Submit(new CharacterId(i, next[i].Generation), next[i].Position, to, cold.FootprintRadius,
                 WaterCost.Of(cold.WaterFactor, next[i].MaxSpeed, cold.Race, cold.SwimSpeed), cold.RoadPreference);
+            if (splice is null) cold.SplicePath = null;
+            else cold.SpliceRequest = cold.LastSplice = cold.PathRequest;
             next[i].Flags = (ushort)((next[i].Flags & ~(ushort)MoveFlags.NeedPath) | (ushort)MoveFlags.Pending);
         }
         // The synchronous service has the answers already.
@@ -507,12 +543,13 @@ public sealed class MovementSystem(PathService paths) : ITickSystem, IDisposable
                 // An older request: the character was given another goal since. Orders given again every tick (a held right button) are each replaced
                 // before their path comes, so a found path newer than the one followed is still taken while the latest request is on its way.
                 bool waiting = (n.Flags & (ushort)(MoveFlags.NeedPath | MoveFlags.Pending)) != 0;
-                if (!answer.Path.Found || !waiting || n.Task != (byte)CharacterTask.GoTo || answer.Id <= cold.PathApplied) continue;
+                if (!answer.Path.Found || !waiting || n.Task != (byte)CharacterTask.GoTo || answer.Id <= cold.PathApplied || answer.Id == cold.LastSplice) continue;
                 TakePath(world.Walkability, ref n, cold, answer.Path);
                 cold.PathApplied = answer.Id;
                 continue;
             }
             n.Flags = (ushort)(n.Flags & ~(ushort)MoveFlags.Pending);
+            if (TakeSpliceAnswer(world.Walkability, ref n, cold, answer)) continue;
             if (answer.Path.Found)
             {
                 cold.PathFailed = false;
@@ -996,6 +1033,7 @@ public sealed class MovementSystem(PathService paths) : ITickSystem, IDisposable
                     if (cold.Medical is { Crawling: true } && cold.CarriedBy.IsNone) desired = Bodies.Speed.Crippled;   // the final override, after water and sneaking
                     // Braking into the last point, never past it.
                     if (last) desired = MathF.Min(desired, MathF.Min(MathF.Sqrt(2 * PathAcceleration(cold) * dist), dist / dt));
+                    else if (!cold.InCombat) (dir, desired) = CornerBrake(p.Velocity, to, dir, desired, PathAcceleration(cold));
                 }
                 // On the provisional part of a long route: ask again (the zones ahead may have loaded), following this one until the answer comes.
                 if (n.PathCursor >= cold.PathExact) Reroute(world, ref n, cold);
@@ -1198,12 +1236,19 @@ public sealed class MovementSystem(PathService paths) : ITickSystem, IDisposable
         Console.WriteLine($"order     {cold.Name} dropped its move at tick {world.Tick}: {why}; at {n.Position.X:0}, {n.Position.Y:0}, {n.Position.Z:0}, goal {n.Goal.X:0}, {n.Goal.Y:0}");
     }
 
-    /// <summary>Asks for the path to the goal again (partition-safe: the character's own state), at most every <see cref="ProvisionalRepathSeconds"/> unless <paramref name="now"/>.</summary>
+    /// <summary>Asks for the path again (partition-safe: the character's own state), at most every <see cref="ProvisionalRepathSeconds"/> unless <paramref name="now"/>.</summary>
     static void Reroute(World world, ref CharacterHot n, CharacterCold cold, bool now = false)
     {
         if ((n.Flags & (ushort)(MoveFlags.NeedPath | MoveFlags.Pending)) != 0 || !now && world.Tick < cold.ProvisionalRepathTick) return;
-        n.Flags |= (ushort)MoveFlags.NeedPath;
         cold.ProvisionalRepathTick = world.Tick + (long)MathF.Ceiling(ProvisionalRepathSeconds / world.TickSeconds);
+
+        // Blocked: the whole way again from where it stands; on the provisional part, a splice of the stretch ahead (MovementSystem.Splice.cs).
+        if (now)
+        {
+            cold.SplicePath = null;
+            n.Flags |= (ushort)MoveFlags.NeedPath;
+        }
+        else AskSplice(ref n, cold);
     }
 
     /// <summary>Spacing (units) of the points a path is tested at for the zones it crosses (<see cref="Crosses"/>; engine choice, well under a zone).</summary>
