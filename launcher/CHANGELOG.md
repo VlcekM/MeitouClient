@@ -2,6 +2,11 @@
 
 Released with tags `launcher-v<version>` by `.github/workflows/launcher-release.yml`; each release needs its `## v<version>` section.
 
+## v1.5.1
+
+- A mod that ships both a Meitou code mod (`meitou.json`) and an RE_Kenshi plugin no longer says its DLLs are ignored: its row
+  shows only the code-mod note.
+
 ## v1.5.0
 
 - **Simplified Chinese** texts for the launcher and Meitou's own game menus.
