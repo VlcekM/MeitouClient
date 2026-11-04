@@ -192,20 +192,20 @@ sealed partial class PlayerInterface
     }
 
     /// <summary>
-    /// While trading, the trade item behind one of the customer's inventory items: its tooltip gains the prices (Value, Sell value; <c>FUN_14079e7a0</c>, <b>Observed</b> by decompile, see
-    /// <see cref="ItemLines"/>). Null: no trade, or another character's grid.
+    /// While trading, the trade item behind an inventory item of a seller's (<see cref="TradeView.GoodsOf"/>): its tooltip gains the prices (Value, Sell value; <c>FUN_14079e7a0</c>,
+    /// <b>Observed</b> by decompile, see <see cref="ItemLines"/>). Null: no trade, or a character who cannot take the trade.
     /// </summary>
     TradeItemView? SellTip(CharacterId owner, int index) =>
-        session.CurrentSnapshot.Trade is { } trade && trade.Customer == owner ? trade.Goods.FirstOrDefault(g => g.Index == index) : null;
+        session.CurrentSnapshot.Trade is { } trade && trade.GoodsOf.TryGetValue(owner, out var goods) ? goods.FirstOrDefault(g => g.Index == index) : null;
 
     /// <summary>
-    /// The fencing prompt beside an item of the customer's held over the stock (<c>FUN_140712920</c>, <b>Observed</b> by decompile). An illegal good first: "ILLEGAL GOODS!" and "NO!" in the Bad
-    /// colour, or for a trader that buys illegal goods "Illegal goods?" and "No problem!" in the Good colour. Else a stolen one: stolen from the trader's own faction, "Fencing chance:" and the
+    /// The fencing prompt beside a seller's item (<see cref="TradeView.GoodsOf"/>) held over the stock (<c>FUN_140712920</c>, <b>Observed</b> by decompile). An illegal good first:
+    /// "ILLEGAL GOODS!" and "NO!" in the Bad colour, or for a trader that buys illegal goods "Illegal goods?" and "No problem!" in the Good colour. Else a stolen one: stolen from the trader's own faction, "Fencing chance:" and the
     /// chance in the Bad colour; stolen from anyone else and the trader buys stolen goods, "Stolen goods?" and "No problem!" in the Good colour; otherwise nothing.
     /// </summary>
     void AddFencePrompt(List<UiControl> controls)
     {
-        if (held is not { } item || session.CurrentSnapshot.Trade is not { } trade || item.From != ItemOwner.Of(trade.Customer)
+        if (held is not { } item || session.CurrentSnapshot.Trade is not { } trade || item.From.Holder != ItemHolder.Character
             || faithfulScreens.HitTest(mouse) is not { Screen: "trader" } || trade.Held is not { } goods) return;
         (string Label, string Value, string Colour)? prompt = goods.Illegal ? (trade.BuysIllegal ? ("Illegal goods?", "No problem!", GoodColour) : ("ILLEGAL GOODS!", "NO!", BadColour))
             : !goods.Stolen ? null
@@ -229,7 +229,7 @@ sealed partial class PlayerInterface
     void Sell(TradeView trade, CharacterId seller, InventoryItemToken token, int quantity, int? x, int y)
     {
         var sale = new SellItem(token, quantity) { Tick = session.World.Tick, X = x, Y = y, From = seller };
-        if (seller != trade.Customer || trade.Goods.FirstOrDefault(g => g.Index == token.Index) is not { FenceOdds: { } odds })
+        if (!trade.GoodsOf.TryGetValue(seller, out var goods) || goods.FirstOrDefault(g => g.Index == token.Index) is not { FenceOdds: { } odds })
         {
             Say(sale);
             return;

@@ -1603,7 +1603,8 @@ Trade verb and pointer. Shop state is hashed; the open trade is not, except its 
 Customer: the original buys into the character window the stock is dropped on (`FUN_140712490`, **Observed**). Meitou keeps one customer; the inventory window shows the lead
 selected character, also while trading. A buy or sell names the window's character (`BuyItem.Into`, `SellItem.From`, a held item's window) and the trade passes to them within
 `PassRange` 1000 of the trader (`TradeWith`; the original's unflagged item limit, [trading range](game/economy.md#trading-range)); farther nothing moves and "Out of trading range."
-is posted. With no window named the trade follows the selection (`FollowSelection`). An open trade stays open within 1000; opening needs 30.
+is posted. With no window named the trade follows the selection (`FollowSelection`). The view prices the goods of every player character within that reach for its seller (`TradeView.GoodsOf`),
+so any of their windows shows sell prices and the fencing prompt and asks before a risky sale. An open trade stays open within 1000; opening needs 30.
 Transfers and money changes must succeed together. Stealing from containers: [crimes](#crimes-and-bounties). Smuggling: the refusal and event 8 (`TradeSystem.Smuggling`) and the held item's prompt ([economy](game/economy.md#fencing-stealing-and-smuggling)); not built: a smuggler's own answer (read by no caller seen).
 
 Bags (engine choice; how the original trades bags and their contents is **Unknown**): a bag trades whole, the same instance with its contents grid, and only empty ("That bag
