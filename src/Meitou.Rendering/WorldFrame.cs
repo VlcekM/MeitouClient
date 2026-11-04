@@ -25,6 +25,8 @@ sealed class WorldOptions
     public bool SizeGiven;
     /// <summary>The size of a bench run (<c>--bench-frames</c> or <c>--ab</c>) without <c>--size</c>: smaller, so the runs are quicker.</summary>
     public static readonly (int Width, int Height) BenchSize = (1280, 720);
+    /// <summary>The render size of <c>--benchmark-baseline</c>: 1080p in a window, whatever the monitor.</summary>
+    public static readonly (int Width, int Height) BenchmarkBaselineSize = (1920, 1080);
     public bool NoTextures, NoObjects, Wireframe;
     public int Debug;
     /// <summary>The reach switch (Enhancements): Meitou by default (objects to 20000, landmarks 7.5 times that, terrain error 16 px) or the viewer's old values (12000, none, 10 px).
@@ -208,11 +210,14 @@ sealed class WorldOptions
 
     /// <summary>
     /// <c>--benchmark-baseline</c>: the parts of the benchmark baseline that must be set before the device and the post chain exist, where it stands
-    /// among the options (the game sets them again after the command line): no ray-traced GI (the device is made without ray queries), no ground parallax or tessellation, no upscaler, SMAA at full size,
-    /// texture quality 1. The game sets the rest of the Medium tier through the settings (SettingsMenu.ApplyBenchmarkBaseline).
+    /// among the options (the game sets them again after the command line): a 1920x1080 window (not full screen or maximised), no ray-traced GI (the device
+    /// is made without ray queries), no ground parallax or tessellation, no upscaler, SMAA at full size, texture quality 1. The game sets the rest of the
+    /// Medium tier through the settings (SettingsMenu.ApplyBenchmarkBaseline).
     /// </summary>
     void ApplyBenchmarkBaseline()
     {
+        (Width, Height) = BenchmarkBaselineSize;
+        SizeGiven = Windowed = true;
         Gi = false;
         Enhancements.Apply(Switches(this), "gi,interiorgi,parallax,displace", meitou: false);
         RockSmoothing.TessellateActive = false;
@@ -268,7 +273,7 @@ sealed class WorldOptions
           --no-audio               no sound (the biome ambience and weather beds from the game's Wwise banks)   --audio-gain <dB> raise or lower the whole mix (0 = the game's levels)
           --no-particles           no weather particles  --particle-prewarm <s> seconds simulated before the first picture (default: the longest particle life; 0 starts empty)   --particle-density <x> the effects' emission rate x (0.1-1, the Tab slider)   --anisotropy <n> the most anisotropic filtering any texture gets (1-16, the Tab slider; 16 default)
           --low-end                potato-PC settings: short draw distances, no shadows, reflections, AO, ground relief, light shafts or anti-aliasing, 0.83 render scale, sparse grass and particles (options after it override)
-          --benchmark-baseline     the benchmarks' settings: the Medium tier with no GI, ground parallax or tessellation, no upscaler, SMAA (the viewer: options after it override; the game: fixed)
+          --benchmark-baseline     the benchmarks' settings: a 1920x1080 window, the Medium tier with no GI, ground parallax or tessellation, no upscaler, SMAA (the viewer: options after it override; the game: fixed)
           --no-vsync               start with vsync off (uncapped; Tab slider)
           --grass-density <x>      grass blades x this (0.1-2, default 1; Tab slider)
           --camera-code <hex>      start at a camera code (Ctrl+C in the viewer copies one), the world loaded round it
@@ -340,8 +345,7 @@ sealed class WorldOptions
         int viewAt = Array.LastIndexOf(args, "--view");
         if (viewAt >= 0 && viewAt + 1 < args.Length) o.View = args[viewAt + 1];
         args = NamedViews.Expand(args);   // --view <name> becomes its options, in place: the ones after it win
-        bool sizeGiven = args.Contains("--size");
-        o.SizeGiven = sizeGiven;
+        o.SizeGiven = args.Contains("--size");
 
         var r = new OptionReader(args);
         while (r.MoveNext())
@@ -352,7 +356,7 @@ sealed class WorldOptions
         }
 
         if (o.Radius <= 0) throw new ArgumentException("--radius must be positive");
-        if (!sizeGiven && (o.BenchFrames > 0 || o.Ab is not null)) (o.Width, o.Height) = BenchSize;
+        if (!o.SizeGiven && (o.BenchFrames > 0 || o.Ab is not null)) (o.Width, o.Height) = BenchSize;
         return o;
     }
 

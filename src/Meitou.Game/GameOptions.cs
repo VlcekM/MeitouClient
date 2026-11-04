@@ -119,7 +119,7 @@ sealed class GameOptions
                                      a container, doors, a pick-up, path requests, a walk, a fight, loot, the panels, a horizon view, the overview), every frame measured
                                      (frame, update, world tick steps and systems, render stages, GPU stages, collections); writes frames.csv and summary.md there and
                                      quits; frame limit and vsync off; MEITOU_BENCH_ONLY=a,b keeps those segments
-          --benchmark-baseline       the settings benchmarks for the site use (bench/kit): the Medium tier, no GI, ground parallax or tessellation, no upscaler, SMAA;
+          --benchmark-baseline       the settings benchmarks for the site use (bench/kit): a 1920x1080 window, the Medium tier, no GI, ground parallax or tessellation, no upscaler, SMAA;
                                      like --low-end, the saved graphics are neither applied nor overwritten
           --load <save folder>       start in a save, Meitou's or the original game's (%LOCALAPPDATA%\kenshi\save\<name>), loaded as the game menu's Load does; works with --screenshot
           --renderer <vulkan|metal>  the renderer for the whole frame: vulkan (the default) or metal (macOS: the scene, HUD and faithful panels, the port's current slice)
