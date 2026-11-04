@@ -62,9 +62,17 @@ sealed partial class SettingsMenu
         Rect(R(212, y + ModRowHeight - 1, 888, 1), MainInk with { W = 0.075f }, viewport);
         Text(row.Name, R(224, y, 520, ModRowHeight), 14, index == modsSelected || hovered ? LightInk : MainInk, clip: viewport, translate: false);
         if (row.Issues.Count > 0)
-            Text(Loc.Plural("{1} issue", "{1} issues", row.Issues.Count, row.Issues.Count), R(750, y, 200, ModRowHeight), 12, Brass, "Right VCenter", viewport, translate: false);
+        {
+            string issues = Loc.Plural("{1} issue", "{1} issues", row.Issues.Count, row.Issues.Count);
+            Text(issues, R(750, y, 200, ModRowHeight), 12, Brass, "Right VCenter", viewport, translate: false);
+        }
+
         if (row.Version is { } version)
-            Text($"{Loc.Tr("Version")}: {version.ToString(CultureInfo.InvariantCulture)}", R(960, y, 128, ModRowHeight), 12, MutedInk, "Right VCenter", viewport, translate: false);
+        {
+            string text = $"{Loc.Tr("Version")}: {version.ToString(CultureInfo.InvariantCulture)}";
+            Text(text, R(960, y, 128, ModRowHeight), 12, MutedInk, "Right VCenter", viewport, translate: false);
+        }
+
         if (at.Intersect(viewport).Height >= at.Height - 1)
             hits.Add(new(at, () => { modsSelected = modsSelected == index ? -1 : index; modsDetailScroll = 0; }));
     }
@@ -85,7 +93,8 @@ sealed partial class SettingsMenu
         Rect(R(1092, 440 + (226 - thumb) * modsDetailScroll / max, 3, thumb), Brass with { W = 0.75f });
     }
 
-    ModRow? SelectedMod(ModReport? report) => report is not null && modsSelected >= 0 && modsSelected < report.Rows.Count ? report.Rows[modsSelected] : null;
+    ModRow? SelectedMod(ModReport? report) =>
+        report is not null && modsSelected >= 0 && modsSelected < report.Rows.Count ? report.Rows[modsSelected] : null;
 
     /// <summary>A mod's name, version, author, description and issue lines (the first <paramref name="cap"/>, then "... N more").</summary>
     static string ModText(ModRow row, int cap)

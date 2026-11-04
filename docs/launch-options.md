@@ -16,7 +16,7 @@ Authority: `src/Meitou.Game/GameOptions.cs` (`Split`, `Usage`), `src/Meitou.Game
 |---|---|---|---|
 | `--new-game [start]` | start name | Wanderer | New game: squad at its town, camera on it. |
 | `--list-starts` | | | Print the available starts and exit. |
-| `--mods-cfg <file>` | file | `data/mods.cfg` | Read the enabled mods (load order, language, code mods) from this file instead of `data/mods.cfg`; a missing file stops the game with an error. Also `MEITOU_MODS_CFG` (the option wins). Read-only: the launcher still writes `data/mods.cfg`. |
+| `--mods-cfg <file>` | file | `data/mods.cfg` | Read the enabled mods (load order, language, code mods) from this file instead of `data/mods.cfg`; a relative path is taken from the working directory; a missing file stops the game with exit code 2. The Settings window's Mods page lists the mods of this list. Also `MEITOU_MODS_CFG` (the option wins). Read-only: the launcher still writes `data/mods.cfg`. |
 | `--data-check` | | | Print every game data and level file problem of the load order (missing mod, changed record type...) and exit: 0 none, 1 some. |
 | `--load <folder>` | save folder | none | Start in a save, Meitou's or the original game's. With `--screenshot` too. |
 | `--seed <n>` | integer | 0 | World seed. A new game from the menu keeps it once given. |

@@ -439,7 +439,8 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
     void LogMods(ModReport report)
     {
         string file = Meitou.Content.ModList.ModsCfgOverride ?? "data/mods.cfg";
-        Console.WriteLine($"mods      {report.Enabled} enabled, {report.Loaded} loaded, {report.Problems} {(report.Problems == 1 ? "problem" : "problems")}, from {file}");
+        string problems = report.Problems == 1 ? "problem" : "problems";
+        Console.WriteLine($"mods      {report.Enabled} enabled, {report.Loaded} loaded, {report.Problems} {problems}, from {file}");
     }
 
     /// <summary>The game clock with sunrise, sunset and days per year from the CONSTANTS record (defaults without data).</summary>

@@ -6,7 +6,7 @@ namespace Meitou.Game;
 
 /// <summary>
 /// One line of the Settings MODS page: a mod in load order with the header of its file and the data problems found in it, or a
-/// <c>[1]---[...]</c> separator of mods.cfg (<paramref name="Version"/> null, no issues). A mod whose file was not found has no version either.
+/// <c>[1]---[...]---</c> separator of mods.cfg (<paramref name="Version"/> null, no issues listed on the row). A mod whose file was not found has no version either.
 /// </summary>
 sealed record ModRow(string Name, int? Version, string Author, string Description, IReadOnlyList<string> Issues, bool Separator = false)
 {
@@ -16,7 +16,9 @@ sealed record ModRow(string Name, int? Version, string Author, string Descriptio
         string file = name + ".mod";
         var problems = issues[file].Select(i => i.ToString()).ToList();
         if (refused is not null && refused.TryGetValue(name, out var reason)) problems.Insert(0, ModReport.RefusedText(reason));
-        return db.Headers.TryGetValue(file, out var header) ? new(name, header.Version, header.Author, header.Description, problems) : new(name, null, "", "", problems);
+        if (!db.Headers.TryGetValue(file, out var header)) return new(name, null, "", "", problems);
+
+        return new(name, header.Version, header.Author, header.Description, problems);
     }
 }
 
@@ -52,34 +54,30 @@ sealed class ModReport(List<ModRow> rows, List<string> otherIssues, int enabled,
         }
     }
 
+    /// <summary>A "[1]---[...]---" dummy mod file that groups the load order; a mod that merely starts with a bracket is a mod.</summary>
+    static bool IsSeparator(string name) => name.StartsWith('[') && name.Contains("---", StringComparison.Ordinal);
+
     /// <param name="refused">The code mods the game refused to load, by mod name, with the reason; each counts as an issue of its row.</param>
     public static ModReport Build(GameInstall install, GameDatabase db, IReadOnlyDictionary<string, string>? refused = null)
     {
         var issues = db.Issues.ToLookup(i => i.File, StringComparer.Ordinal);
         var rows = new List<ModRow>();
         var seen = new HashSet<string>(StringComparer.Ordinal);
-        var separators = new HashSet<string>(StringComparer.Ordinal);
         var path = ModList.ModsCfgPath(install);
         foreach (var line in File.Exists(path) ? File.ReadAllLines(path) : [])
         {
-            if (line.StartsWith('['))
-            {
-                // A "[1]---[...]---.mod" separator is a dummy mod file, counted as a mod in both numbers.
-                string trimmed = line.Trim();
-                separators.Add(trimmed);
-                rows.Add(new(trimmed, null, "", "", [], true));
-            }
-            else if (ModList.ParseModsCfg([line]).FirstOrDefault() is { } name && seen.Add(name))
-                rows.Add(ModRow.Of(name, db, issues, refused));
+            if (ModList.ParseModsCfg([line]).FirstOrDefault() is not { } name || !seen.Add(name)) continue;
+
+            rows.Add(IsSeparator(name) ? new(name + ".mod", null, "", "", [], true) : ModRow.Of(name, db, issues, refused));
         }
 
-        var shown = rows.Where(r => !r.Separator).Select(r => r.Name + ".mod").Concat(separators).ToHashSet(StringComparer.Ordinal);
+        var shown = rows.Where(r => !r.Separator).Select(r => r.Name + ".mod").ToHashSet(StringComparer.Ordinal);
         var other = db.Issues.Where(i => !shown.Contains(i.File)).Select(i => i.ToString()).ToList();
         // A refused mod that mods.cfg does not list has no row: its reason goes with the problems no row owns.
         foreach (var (mod, reason) in refused ?? new Dictionary<string, string>())
             if (!seen.Contains(mod)) other.Add($"{mod}: {RefusedText(reason)}");
-        int loaded = seen.Count(n => db.Headers.ContainsKey(n + ".mod")) + separators.Count(db.Headers.ContainsKey);
+        int loaded = seen.Count(n => db.Headers.ContainsKey(n + ".mod"));
         string? custom = ModList.ModsCfgOverride is { } file ? Path.GetFileName(file) : null;
-        return new(rows, other, seen.Count + separators.Count, loaded, custom);
+        return new(rows, other, seen.Count, loaded, custom);
     }
 }
