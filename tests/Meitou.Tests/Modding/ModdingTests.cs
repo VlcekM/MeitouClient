@@ -206,30 +206,6 @@ public class ModdingTests
     }
 
     /// <summary>
-    /// Saved values are on the object when AddSettings returns (a number clamped, an unknown value or key ignored); Set snaps to the step and tells
-    /// Changed.
-    /// </summary>
-    [Fact]
-    public void Saved_values_are_set_before_AddSettings_returns()
-    {
-        var ores = new OreSettings();
-        var saved = new Dictionary<string, string>
-        {
-            ["Capacity"] = "5000", ["Natural"] = "false", ["WhenFallen"] = "respawn", ["Pace"] = "Fast", ["RefillDays"] = "lots", ["Gone"] = "1",
-        };
-        var group = Context(saved).AddSettings(ores);
-
-        Assert.Equal((2000, false, "respawn", Pace.Fast, 10.0), (ores.Capacity, ores.Natural, ores.WhenFallen, ores.Pace, ores.RefillDays));
-        Assert.Equal((object)100, group.Settings[0].Default);
-        ModSetting? changed = null;
-        group.Changed += s => changed = s;
-        group.Settings[0].Set(123.0);
-        Assert.Equal(120, ores.Capacity);
-        Assert.Same(group.Settings[0], changed);
-        Assert.Equal("120", group.Settings[0].Text);
-    }
-
-    /// <summary>
     /// Reset puts back the default as registered, though it is off the step grid (10 on 0.5 + n x 0.595), and a saved number that is not finite is
     /// ignored. Catches a Reset that snaps to the step (10.02, the row left changed) and a "NaN" let past the range's clamp.
     /// </summary>

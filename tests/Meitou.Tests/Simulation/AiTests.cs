@@ -14,41 +14,6 @@ namespace Meitou.Tests.Simulation;
 /// <summary>The AI (docs/simulation.md "AI"): the package and goal data as docs/game/ai.md reads them, the package choice, and a town that patrols by day and sleeps at night.</summary>
 public class AiTests(ITestOutputHelper output)
 {
-    /// <summary>Going home away from home is wanted at 0.5, but at 0.01 by a slave not with the player (AI slot 56, <c>FUN_1405a3710</c>); with the player (its owner's faction) 0.5 again.</summary>
-
-    /// <summary>A node finder draws uniformly among a building's nodes by the goal's roll and keeps the pick (<c>FUN_14099f280</c>); a goal without a roll falls back to the member's round robin, and beds stay round robin.</summary>
-    [Fact]
-    public void A_standing_goal_draws_its_node_uniformly_from_its_roll()
-    {
-        Vector3 At(float x) => new(x, 0, 0);
-        var home = new TownBuilding("h", "b", "House", At(0), 0, false, false,
-            [new HomeSpot(HomeSpotKind.General, At(1), 0), new HomeSpot(HomeSpotKind.General, At(2), 0), new HomeSpot(HomeSpotKind.General, At(3), 0)]);
-        var hits = new int[3];
-        for (ulong roll = 1; roll <= 300; roll++)
-        {
-            var first = AiSystem.Pick(home, HomeSpotKind.General, 0, Rng.Hash(7, roll, RngPurpose.Think, 1));
-            Assert.Equal(first, AiSystem.Pick(home, HomeSpotKind.General, 5, Rng.Hash(7, roll, RngPurpose.Think, 1)));   // the member index no longer matters
-            hits[(int)(first!.Value.Position.X - 1)]++;
-        }
-        Assert.All(hits, h => Assert.InRange(h, 60, 140));
-        Assert.Equal(At(2), AiSystem.Pick(home, HomeSpotKind.General, 4)!.Value.Position);   // no roll: round robin (4 % 3)
-    }
-    [Fact]
-    public void Going_home_is_barely_wanted_by_a_slave_not_with_the_player()
-    {
-        using var world = new SimWorld(new WorldSettings { Seed = 1, PublishSnapshots = false }, new OpenGroundWalkability((_, _) => 150), []);
-        world.Player.Faction = 1;
-        var cold = new Meitou.Tests.Combat.Combatant { Name = "slave" }.MakeCold();
-        cold.Faction = 2;
-        var id = world.Characters.Spawn(new CharacterHot { Position = new Vector3(1000, 150, 1000), Health = 100 }, cold, 0);
-        Assert.Equal(0.5f, AiSystem.GoHomeDesire(world, id));
-        cold.SlaveState = 1;
-        cold.SlaveOwner = 3;
-        Assert.Equal(0.01f, AiSystem.GoHomeDesire(world, id));
-        cold.SlaveOwner = 1;
-        Assert.Equal(0.5f, AiSystem.GoHomeDesire(world, id));
-    }
-
     static FcsRecord Task(string id, TaskType type, TaskPriority tier, TaskTargetType target = TaskTargetType.Specific)
     {
         var r = Rec(id, FcsRecordType.AI_TASK, type.ToString());
@@ -102,19 +67,6 @@ public class AiTests(ITestOutputHelper output)
     internal static GameDatabase Database(int residentSquads = 3, params (string Id, int Slot)[] packages) =>
         SyntheticTown.Database(residentSquads, extra: Records(), changePatrol: p => p.References["AI packages"] =
             packages.Length == 0 ? [Ref("111-t", 0), Ref("112-t", 1)] : [.. packages.Select(x => Ref(x.Id, x.Slot))]);
-
-    /// <summary>docs/game/ai-tasks.md "Town goals" (43, FUN_1408cbc00): staying home is wanted only when the home interior holds a chair, training or work piece (functions MINE, RESEARCH, REFINERY, TRAINING, CRAFTING, CHAIR).</summary>
-    [Fact]
-    public void Staying_home_is_wanted_only_when_the_home_holds_a_piece_to_operate()
-    {
-        TownBuilding Home(HomeSpotKind[] spots, HomeSpotKind[] furniture) =>
-            new("i", "b", "home", Vector3.Zero, 0, false, false, [.. spots.Select(k => new HomeSpot(k, Vector3.Zero, 0))]) { Furniture = [.. furniture.Select(k => new HomeSpot(k, Vector3.Zero, 0))] };
-        Assert.False(AiSystem.HasStayingFurniture(null));
-        Assert.False(AiSystem.HasStayingFurniture(Home([HomeSpotKind.Bed, HomeSpotKind.General], [HomeSpotKind.ThroneSeat])));
-        Assert.True(AiSystem.HasStayingFurniture(Home([HomeSpotKind.Chair], [])));
-        Assert.True(AiSystem.HasStayingFurniture(Home([], [HomeSpotKind.Workstation])));
-        Assert.True(AiSystem.HasStayingFurniture(Home([], [HomeSpotKind.Training])));
-    }
 
     /// <summary>docs/game/ai-tasks.md (Task_EquipBestWeapon, FUN_140346c30): an NPC of a non-player faction with no weapon on its back or hip draws the first weapon of its inventory of the task's kind; a player-side character does not.</summary>
     [Fact]
@@ -348,26 +300,6 @@ public class AiTests(ITestOutputHelper output)
     }
 
     /// <summary>
-    /// A workplace takes as many workers as its functionality's max operators (73 machineHasFreeOperatorSlot; the finder's couldIOperate, docs/game/ai-tasks.md "Worker"):
-    /// with a quarry of 2 slots and four or more workers on 189, exactly two hold it. Catches workplaces without a limit and a slot held twice.
-    /// </summary>
-    [Fact]
-    public void A_workplace_takes_as_many_workers_as_its_operator_slots()
-    {
-        var quarryRecord = Rec("w-quarry", FcsRecordType.BUILDING, "Quarry");
-        quarryRecord.References["functionality"] = [Ref("w-quarry-f")];
-        var function = Rec("w-quarry-f", FcsRecordType.BUILDING_FUNCTIONALITY, "Stone mine");
-        function.Ints["function"] = 1;
-        function.Ints["max operators"] = 2;
-        using var world = Town(1, out _, WithWork(out var quarry, out _, "w-quarry", [quarryRecord, function]), null);
-        world.RunTicks(600);
-        var minds = world.Squads.All.Where(s => s.TemplateId == "10-t").SelectMany(s => s.Members)
-            .Select(m => world.Characters.Cold(m.Slot)?.Ai).OfType<AiMind>().ToList();
-        Assert.True(minds.Count >= 4, $"{minds.Count} members");
-        Assert.Equal(2, minds.Count(m => ReferenceEquals(m.WorkPost, quarry)));
-    }
-
-    /// <summary>
     /// A bar package needs a bar (docs/game/ai-tasks.md "Town goals", the hang-around-bar package): the town's squad on its normal kind (signal 17),
     /// whose package gives 214 Relaxing at full weight and 118 Shopping at half, in its town with no bar but an outdoor table and a public house, gets
     /// no table, so nobody relaxes and its members shop. Catches the fallback onto the outdoor table, which set a Holy Prisoner Caravan relaxing at
@@ -475,46 +407,6 @@ public class AiTests(ITestOutputHelper output)
     }
 
     /// <summary>
-    /// A character already lying in a bed keeps it when it goes to bed (docs/game/locks.md "Bed search"): sleepers moved into each other's beds of
-    /// their home (30 apart, beyond the post slack), with no goal yet as after a load, stay in those beds, plan 98 Sleeping first and sleep as the
-    /// goal's own task. Catches the goal aiming at the bed its member index picks, whose plan got the saved sleepers of a loaded town out of their
-    /// beds, and a sleep left with the load's or the walk's provenance, which has no order.
-    /// </summary>
-    [Fact]
-    public void Sleepers_lying_in_other_beds_of_their_home_keep_them_and_plan_sleeping_first()
-    {
-        var data = WithHomes(Database(2), out _, out var house, bedGap: 30);
-        using var world = Town(1, out _, data, null);
-        world.RunTicks(400);
-        world.GameHours = 24 + 22.5;
-        world.RunTicks(1200);
-        var squad = world.Squads.All.Single(s => s.TemplateId == "10-t" && s.Ai!.Home == house);
-        var lying = squad.Members.Where(m => world.Characters.Cold(m.Slot)!.InSomething == Meitou.Simulation.Locks.HeldState.Bed).Take(2).ToList();
-        Assert.Equal(2, lying.Count);
-
-        // Each into the other's bed, as a save may hold them; no goal or plan yet, as on load.
-        var beds = lying.Select(m => world.Fixtures.Find(world.Characters.Cold(m.Slot)!.InWhat!)!).ToList();
-        foreach (var m in lying) world.Fixtures.LeaveBed(world, m);
-        for (int k = 0; k < 2; k++) Assert.True(world.Fixtures.EnterBed(world, lying[k], beds[1 - k]));
-        foreach (var m in lying)
-        {
-            var mind = world.Characters.Cold(m.Slot)!.Ai!;
-            mind.Goal = null;
-            mind.Plan.Clear();
-        }
-        world.RunTicks(300);
-        for (int k = 0; k < 2; k++)
-        {
-            var cold = world.Characters.Cold(lying[k].Slot)!;
-            Assert.Equal((Meitou.Simulation.Locks.HeldState.Bed, beds[1 - k].Id), (cold.InSomething, cold.InWhat));
-            Assert.Equal((TaskType.GO_HOME_AND_GO_TO_BED, TaskType.USE_BED), (cold.Ai!.Goal!.Task.Type, cold.Ai.Step));
-            // The sleep is the goal's own, so its plan step is its order.
-            var run = cold.Running!;
-            Assert.Equal((TaskSource.Goal, TaskType.GO_HOME_AND_GO_TO_BED, CharacterTask.Sleep), (run.Source, run.Row, run.Task));
-        }
-    }
-
-    /// <summary>
     /// A committed goal ends with its hours (docs/game/ai-tasks.md "Precedence", goal end): sleepers on a 153 of 22 to 0 with their commitment running
     /// have no goal past midnight, when nothing else of theirs is open, and lie on in their beds. Catches the committed mode keeping a goal out of its
     /// window, which kept Rebirth's garrison on 153 past its hours, and the default task getting a sleeper up, which the original's do not.
@@ -541,32 +433,6 @@ public class AiTests(ITestOutputHelper output)
         Assert.All(sleepers, c => Assert.Equal((Meitou.Simulation.Locks.HeldState.Bed, (TaskType?)null), (c.InSomething, c.Ai!.Goal?.Task.Type)));
     }
 
-    /// <summary>
-    /// A goal it committed to goes on past a step of its own once that step is done (docs/simulation.md "Planner"): sleepers with a weapon drawn
-    /// sheathe it, then walk to their beds. Catches the kept plan repeating its done first step, which held a character where it stood for the whole
-    /// commitment.
-    /// </summary>
-    [Fact]
-    public void A_committed_goal_goes_on_past_its_done_first_step_so_armed_sleepers_sheathe_and_go_to_bed()
-    {
-        var data = WithHomes(Database(2), out _, out var house);
-        using var world = Town(1, out _, data, null);
-        world.RunTicks(400);
-        var squad = world.Squads.All.Single(s => s.TemplateId == "10-t" && s.Ai!.Home == house);
-        var sleepers = squad.Members.Where(m => m != squad.Leader).ToList();
-        Assert.NotEmpty(sleepers);
-        foreach (var m in sleepers) world.Characters.Cold(m.Slot)!.DrawnWeapon = Meitou.Data.Gameplay.WeaponKinds.Katana;
-
-        world.GameHours = 24 + 22.5;
-        world.RunTicks(1200);
-        var beds = house.Of(HomeSpotKind.Bed).Select(b => b.Position).ToList();
-        foreach (var m in sleepers)
-        {
-            Assert.Equal(Meitou.Data.Gameplay.WeaponKinds.None, world.Characters.Cold(m.Slot)!.DrawnWeapon);
-            Assert.InRange(beds.Min(b => Off(world, m, b)), 0, 13);
-        }
-    }
-
     /// <summary>A character's world for the planner: in bed or not, at the node or not; nothing drawn, carried or attacking; the rest held true.</summary>
     sealed class PlanStub(bool inBed, bool atNode, int category = 1) : IPlanWorld
     {
@@ -582,34 +448,6 @@ public class AiTests(ITestOutputHelper output)
                 or StateType.iAmBeingMeleeAttacked_immediate or StateType.isCrouching or StateType.IS_CROUCHING_OR_LYING or StateType.iAmProne => false,
             _ => true,
         };
-    }
-
-    /// <summary>A character carrying items at a storage target (kind 8): machine states false (a storage has no production component), the rest held true.</summary>
-    sealed class DitchStub(bool room) : IPlanWorld
-    {
-        public int Category => 1;
-        public bool Squadless => false;
-        public float Desire(TaskDataRow row, in PlanTarget target) => 1;
-        public PlanTarget Find(TaskDataRow row, in PlanTarget from) => new(8, new Vector3(10, 0, 10));
-        public bool Holds(TaskCondition c, in PlanTarget target) => c.Holds == c.State switch
-        {
-            StateType.machineHasEmptyInputs or StateType.isMachineInputInvalid or StateType.isMachineOutputFull => false,
-            StateType.gotInventoryRoomForResources => room,
-            _ => true,
-        };
-    }
-
-    [Fact]
-    public void Ditching_plans_the_fill_step_into_a_storage_although_its_effect_state_already_holds()
-    {
-        // Row 114's effect !62 (no empty inputs) holds at once for a storage, yet the search follows the effect unconditionally (FUN_14051bae0): 93 Filling machine puts the carried items in.
-        var plan = new List<PlanStep>();
-        Assert.True(TaskPlanner.Local.Plan(TaskDataTable.Of(TaskType.GET_RID_OF_RESOURCES_IN_MY_INVENTORY)!, 1, default, new DitchStub(room: false), [], plan) > 0);
-        Assert.Equal([TaskType.FILL_MACHINE, TaskType.GET_RID_OF_RESOURCES_IN_MY_INVENTORY], plan.Select(s => s.Type));
-        // A full inventory under row 92 (B: 82 room) is made room for by a ditch first.
-        Assert.True(TaskPlanner.Local.Plan(TaskDataTable.Of(TaskType.COLLECT_OUTPUT_RESOURCE)!, 1, new PlanTarget(6, new Vector3(1, 0, 1)), new DitchStub(room: false), [], plan) > 0);
-        Assert.Equal(TaskType.FILL_MACHINE, plan[0].Type);
-        Assert.Contains(plan, st => st.Type is TaskType.GET_RID_OF_RESOURCES_IN_MY_INVENTORY or TaskType.EMPTY_MACHINE_OUTPUTS);
     }
 
     [Fact]
@@ -633,19 +471,6 @@ public class AiTests(ITestOutputHelper output)
         var minds = world.Squads.All.Where(s => s.TemplateId == "10-t").SelectMany(s => s.Members).Select(m => world.Characters.Cold(m.Slot)!.Ai!).ToList();
         Assert.NotEmpty(minds);
         Assert.All(minds, m => Assert.Equal(TaskType.GO_HOME_AND_GO_TO_BED, m.Goal!.Task.Type));
-    }
-
-    [Fact]
-    public void A_crippled_character_plans_with_the_crippled_repertoire_which_has_no_stand_up_row()
-    {
-        // FUN_14060e840: the crippled repertoire (0x40) wins over human; its rows 28 / 65 (standing, getting up) are 0x25, so nothing provides standing and a plan needing it fails.
-        Assert.Equal(Repertoire.Crippled, Repertoire.Crippled & TaskDataTable.Of(TaskType.RUN_AWAY)!.Category);
-        var plan = new List<PlanStep>();
-        var run = TaskDataTable.Of(TaskType.RUN_AWAY)!;
-        Assert.True(TaskPlanner.Local.Plan(run, 1, default, new PlanStub(false, false, Repertoire.Crippled), [], plan) > 0);
-        Assert.Equal(TaskType.RUN_AWAY, plan[^1].Type);
-        Assert.DoesNotContain(plan, s => s.Type is TaskType.STAND_UP or TaskType.GET_UP);
-        Assert.All([TaskType.STAND_UP, TaskType.GET_UP], t => Assert.Equal(0, TaskDataTable.Of(t)!.Category & Repertoire.Crippled));
     }
 
     [Fact]

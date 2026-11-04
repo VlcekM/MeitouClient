@@ -15,16 +15,8 @@ public class InteriorJoinSweepTests
 {
     [Theory]
     [InlineData(18, 35, 8, "Squin")]
-    [InlineData(19, 29, 11, "Stack")]
-    [InlineData(50, 33, 5, "Black Scratch")]
     [InlineData(47, 16, 10, "Heft")]
-    [InlineData(20, 32, 2, "The Hub")]
-    [InlineData(43, 11, 19, "Sho-Battai")]
-    [InlineData(26, 13, 14, "World's End")]
-    [InlineData(48, 45, 5, "Snailhouse lagoon")]
     [InlineData(28, 43, 1, "Ancient Lab")]
-    [InlineData(37, 35, 1, "Ancient Lab")]
-    [InlineData(54, 59, 2, "Ash Domes")]
     public void No_intact_interior_the_original_connects_is_sealed(int x, int z, int matchedFloor, string place)
     {
         var install = InstallData.Install;

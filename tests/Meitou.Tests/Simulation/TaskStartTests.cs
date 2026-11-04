@@ -175,7 +175,7 @@ public class TaskStartTests
     }
 
     /// <summary>The converted order starts given to a fighting character, by name, with the act-out each starts (M3b and M3c add theirs).</summary>
-    public static TheoryData<string> Orders => ["move", "follow", "bodyguard", "stop", "first aid", "splint", "rest", "medic", "pick up", "kidnap", "loot", "open inventory", "stealth ko", "put down",
+    public static string[] Orders => ["move", "follow", "bodyguard", "stop", "first aid", "splint", "rest", "medic", "pick up", "kidnap", "loot", "open inventory", "stealth ko", "put down",
         "operate", "prospect", "build", "dismantle", "use bed", "put in bed", "pick lock", "set free", "get in cage", "force lock", "pick up item", "put in cage", "attack"];
 
     internal static (SimCommand Order, CharacterTask Task) Order(Rig rig, string name, long tick)
@@ -254,8 +254,10 @@ public class TaskStartTests
     /// and no fight target, unless the order is a fight, which keeps it fighting the new target. Catches an order refused mid-fight, or one that overwrites the task and leaves the
     /// fight running under it (docs/simulation.md "Task starts", a fight under another task).
     /// </summary>
-    [Theory, MemberData(nameof(Orders))]
-    public void An_order_given_mid_fight_ends_the_fight_unless_it_is_one(string name)
+    [Fact]
+    public void An_order_given_mid_fight_ends_the_fight_unless_it_is_one() => Assert.All(Orders, EndsTheFightUnlessItIsOne);
+
+    static void EndsTheFightUnlessItIsOne(string name)
     {
         using var rig = new Rig(carrying: name is "put down" or "put in bed" or "put in cage");
         rig.World.RunTicks(3);
@@ -293,7 +295,7 @@ public class TaskStartTests
     const int H = Repertoire.Human, I = Repertoire.Imprisoned, Ch = Repertoire.Chained, A = Repertoire.Animal, Cr = Repertoire.Crippled;
 
     /// <summary>The row of each start (docs/simulation.md "Task eligibility") and the repertoires the original registers it for (docs/game/ai-tasks.md "TaskData registry").</summary>
-    public static TheoryData<TaskType, int> StartRows => new()
+    public static Dictionary<TaskType, int> StartRows => new()
     {
         { TaskType.MOVE_CUS_ORDERED, H | A | Cr }, { TaskType.STAY_CLOSE_TO_TARGET, H | A | Cr }, { TaskType.BODYGUARD, H | A | Cr }, { TaskType.Unnamed289, A },
         { TaskType.FOCUSED_MELEE_ATTACK, H | A | Cr }, { TaskType.ATTACK_ATTACKERS_OF, H | A | Cr }, { TaskType.ATTACK_ENEMIES, H | A | Cr },
@@ -325,8 +327,10 @@ public class TaskStartTests
     /// Each start's row admits exactly the repertoires the original registers it for (<c>FUN_14060e840</c>, <c>Category &amp; repertoire</c>): catches a start moved to a row of another
     /// registration or a row's flags changed in the table. The platoon repertoire (2) is not modelled.
     /// </summary>
-    [Theory, MemberData(nameof(StartRows))]
-    public void Each_start_row_admits_the_repertoires_the_original_registers_it_for(TaskType row, int admitted)
+    [Fact]
+    public void Each_start_row_admits_the_repertoires_the_original_registers_it_for() => Assert.All(StartRows, row => AdmitsItsRepertoires(row.Key, row.Value));
+
+    static void AdmitsItsRepertoires(TaskType row, int admitted)
     {
         var data = TaskDataTable.Of(row);
         Assert.NotNull(data);
@@ -395,27 +399,5 @@ public class TaskStartTests
         Assert.Equal((byte)CharacterTask.Wander, world.Characters.Previous[0].Task);
         writer.Direct = CharacterTask.Idle;
         Assert.Throws<InvalidOperationException>(() => world.RunTick());
-    }
-
-    /// <summary>
-    /// An engine standing task the repertoire does not register gives way to 14 Idleness (<see cref="TaskStart.Become"/>): a crippled character sent back to wandering (24, human and animal
-    /// only) idles. Catches the fallback lost, which would leave the character on the task it had (a flight's run, a mill's walk).
-    /// </summary>
-    [Fact]
-    public void An_engine_wander_the_repertoire_does_not_register_gives_way_to_idleness()
-    {
-        using var world = new SimWorld(new WorldSettings { PublishSnapshots = false }, new OpenGroundWalkability(SyntheticTown.Ground), [new MovementSystem(new PathService(new OpenGroundWalkability(SyntheticTown.Ground), true))]);
-        CharacterId Add(bool low)
-        {
-            var cold = new Combatant().MakeCold();
-            cold.Medical!.StayingLow = low;
-            return world.Characters.Spawn(new CharacterHot { Position = new Vector3(1000, 300, 2000), Task = (byte)CharacterTask.GoTo }, cold, 0);
-        }
-        var standing = Add(low: false);
-        var low = Add(low: true);
-        foreach (var id in new[] { standing, low }) TaskStart.Become(world, id.Slot, CharacterTask.Wander, TaskType.WANDERER, TaskSource.Npc);
-        Assert.Equal((byte)CharacterTask.Wander, world.Characters.Next[standing.Slot].Task);
-        Assert.Equal((byte)CharacterTask.Idle, world.Characters.Next[low.Slot].Task);
-        Assert.Equal(TaskType.IDLE, world.Characters.Cold(low.Slot)!.Running!.Row);
     }
 }

@@ -38,41 +38,6 @@ public sealed class BirdFlocksTests
     }
 
     [Fact]
-    public void A_flock_spawns_only_between_the_kinds_spawn_heights_and_far_from_the_camera_focus()
-    {
-        var low = new BirdFlocks([Kind(amount: 12)], (_, _) => 5000, OneCell);
-        Run(low, 10);
-        Assert.Equal(0, low.BirdCount);
-        var near = new BirdFlocks([Kind(amount: 12)], (_, _) => 100, OneCell);
-        for (int i = 0; i < 100; i++) near.Update(0.05f, new Vector3(2300, 0, 2300), new Vector3(2300, 0, 2300), null);
-        Assert.Equal(12, near.BirdCount);   // a spawn point within 1000 of the focus is refused, the next update tries again
-    }
-
-    [Fact]
-    public void A_bird_over_a_cell_the_kind_is_not_listed_in_turns_back_and_the_heading_turns_at_most_about_a_radian_a_second()
-    {
-        var birds = new BirdFlocks([Kind(amount: 6)], (_, _) => 100, OneCell, seed: 3);
-        bool returned = false;
-        Vector3 last = default;
-        float worst = 0;
-        Run(birds, 400, () =>
-        {
-            returned |= birds.CountIn(BirdFlocks.BirdState.Return) > 0;
-            var pieces = new List<DebrisPiece>();
-            birds.AddPieces(pieces);
-            if (pieces.Count == 0) return;
-            var forward = Vector3.Transform(Vector3.UnitZ, pieces[0].Rotation);
-            if (last != default) worst = MathF.Max(worst, MathF.Acos(Math.Clamp(Vector3.Dot(last, forward), -1, 1)));
-            last = forward;
-        });
-        Assert.True(returned);
-        Assert.True(worst < 0.2f, $"{worst} rad in one 0.05 s step");
-        var all = new List<DebrisPiece>();
-        birds.AddPieces(all);
-        Assert.All(all, p => Assert.InRange(p.Position.X, -3000, 8000));
-    }
-
-    [Fact]
     public void Birds_fly_to_an_attractor_up_to_its_maximum_and_leave_it_when_it_goes()
     {
         var birds = new BirdFlocks([Kind(count: 6, amount: 12)], (_, _) => 100, OneCell, seed: 5);

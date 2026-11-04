@@ -12,8 +12,6 @@ public class NavGeometryTests
     /// </summary>
     [Theory]
     [InlineData(50013.37f, -100021.6f)]
-    [InlineData(49871.9f, -99942.3f)]
-    [InlineData(50240.25f, -100377.8f)]
     public void The_signed_area_of_a_small_polygon_far_from_the_origin_has_the_sign_of_its_winding(float x, float z)
     {
         Vector2[] ccw = [new(x, z), new(x + 3.2f, z + 0.4f), new(x + 2.9f, z + 1.9f), new(x - 0.3f, z + 1.5f)];

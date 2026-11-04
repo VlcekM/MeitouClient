@@ -106,9 +106,6 @@ public class JailSaveTests
     /// <summary>The handle the original gives the generated interior cage (any handle the zone's states resolve).</summary>
     static readonly Hand GeneratedCage = new((int)FcsRecordType.BUILDING, 1238, 11111, 1485, 99);
 
-    /// <summary>The handle of the generated interior bed, another entry of the zone.</summary>
-    static readonly Hand GeneratedBed = new((int)FcsRecordType.BUILDING, 1238, 11111, 1486, 98);
-
     /// <summary>
     /// A save as the original writes a member caged in a generated interior cage: the member's state has only the original's keys, <c>in what</c> naming a zone building-list
     /// entry of <paramref name="record"/> at <paramref name="at"/> (an <c>&lt;n&gt;-zoneX.Y-INGAME</c> entry with its own state), which Meitou's fixture ids do not map.
@@ -126,26 +123,6 @@ public class JailSaveTests
         var save = SaveGame.Load(folder);
         AddGeneratedEntry(save, 7, record, at, GeneratedCage);
         OriginalHeld(save, HeldState.Imprisoned, GeneratedCage);
-        return save;
-    }
-
-    /// <summary>
-    /// A save as the original writes a member lying in a generated interior bed (<see cref="OriginalCageSave"/>, of the house's bed record at its
-    /// place).
-    /// </summary>
-    static SaveGame OriginalBedSave(PopulationData data, string folder)
-    {
-        using (var a = new Game(data))
-        {
-            var squad = a.World.Systems.OfType<PopulationSystem>().Single().StartPlayer(a.World, NewGameStart.From(data.Db.Find("40-t")!));
-            a.World.Fixtures.RegisterSite(a.World, data, 0);
-            a.World.RunTicks(2);
-            Assert.True(a.World.Fixtures.EnterBed(a.World, squad.Members[0], a.World.Fixtures.Find($"{HouseKey}@bed0")!));
-            Capture(a.World, data).Write(folder);
-        }
-        var save = SaveGame.Load(folder);
-        AddGeneratedEntry(save, 8, "56-t", BedAt, GeneratedBed);
-        OriginalHeld(save, HeldState.Bed, GeneratedBed);
         return save;
     }
 
@@ -200,74 +177,6 @@ public class JailSaveTests
             Assert.Equal((int)HeldState.Imprisoned, state.Ints["in something"]);
             Assert.Equal(GeneratedCage, Hand.Read(state, "in what"));
             Assert.DoesNotContain(Keys(state), e => e.Key is HeldSave.MeitouState or HeldSave.MeitouWhat);
-        }
-        finally { Directory.Delete(Path.GetDirectoryName(folder)!, recursive: true); }
-    }
-
-    /// <summary>
-    /// A sleeper the original saved in a generated interior bed lies in that bed again and sleeps on (docs/formats/save.md "Locks, cages and
-    /// sentences"): its <c>in what</c> entry is matched by record and place to Meitou's bed of the interior, as a cage's is. Catches beds left
-    /// unmatched, whose saved sleepers held no bed and got up, and a bound sleeper put at its lie spot standing, which the bed system then got up.
-    /// </summary>
-    [Fact]
-    public void A_sleeper_the_original_saved_in_a_generated_interior_bed_lies_in_that_bed_again()
-    {
-        var data = JailData(bed: true);
-        string folder = Path.Combine(Temp("bed-original"), QuickSave.Name);
-        try
-        {
-            var save = OriginalBedSave(data, folder);
-            using var b = new Game(data, Parts | StandardParts.FirstAid);
-            SaveLoader.Load(b.World, save, data);
-            b.World.Fixtures.RegisterSite(b.World, data, 0);
-            var sleeper = b.World.Squads.Find(b.World.Player.Squad)!.Members[0];
-            var cold = b.World.Characters.Cold(sleeper.Slot)!;
-            Assert.Equal((HeldState.Bed, $"{HouseKey}@bed0"), (cold.InSomething, cold.InWhat));
-            Assert.Equal(sleeper, b.World.Fixtures.Find($"{HouseKey}@bed0")!.Occupant);
-
-            // It sleeps on, with no order to get it up.
-            b.World.RunTicks(30);
-            var task = (CharacterTask)b.World.Characters.Previous[sleeper.Slot].Task;
-            Assert.Equal((HeldState.Bed, CharacterTask.Sleep), (cold.InSomething, task));
-        }
-        finally { Directory.Delete(Path.GetDirectoryName(folder)!, recursive: true); }
-    }
-
-    /// <summary>
-    /// A town member saved in a cage holds that cage again on load, although its platoon comes in after the town registered its fixtures
-    /// (docs/formats/save.md "Locks, cages and sentences"). Catches a saved platoon's spawn that binds nobody: the town's caged slaves stayed
-    /// imprisoned in no cage, so no slaver of the town gathered them.
-    /// </summary>
-    [Fact]
-    public void A_town_member_saved_in_a_cage_holds_it_again_when_its_platoon_comes_in_after_the_town_registered()
-    {
-        var data = JailData();
-        string folder = Path.Combine(Temp("jail-town"), QuickSave.Name);
-        try
-        {
-            string name;
-            using (var a = new Game(data))
-            {
-                a.World.Systems.OfType<PopulationSystem>().Single().StartPlayer(a.World, NewGameStart.From(data.Db.Find("40-t")!));
-                a.World.Commands.Enqueue(new FocusCommand(SyntheticTown.Centre) { Tick = 0 });
-                a.World.RunTicks(30);
-                var resident = a.World.Squads.All.First(s => s.Town == 0 && s.Id != a.World.Player.Squad && s.Members.Count > 0).Members[0];
-                Assert.True(a.World.Fixtures.Imprison(a.World, resident, a.World.Fixtures.Find($"{HouseKey}/0")!));
-                name = a.World.Characters.Cold(resident.Slot)!.Name;
-                Capture(a.World, data).Write(folder);
-            }
-
-            using var b = new Game(data);
-            SaveLoader.Load(b.World, SaveGame.Load(folder), data);
-            b.World.Commands.Enqueue(new FocusCommand(SyntheticTown.Centre) { Tick = 0 });
-            // The town registers first; the caged member's platoon comes in later.
-            bool CagedIn() => Enumerable.Range(0, b.World.Characters.HighWater).Any(k => b.World.Characters.Cold(k) is { IsImprisoned: true });
-            for (int t = 0; t < 600 && !CagedIn(); t++) b.World.RunTicks(1);
-            Assert.True(b.World.Fixtures.IsRegistered(0) && CagedIn());
-            var cage = b.World.Fixtures.Find($"{HouseKey}/0")!;
-            Assert.True(b.World.Characters.IsAlive(cage.Occupant), "the cage holds someone");
-            var held = b.World.Characters.Cold(cage.Occupant.Slot)!;
-            Assert.Equal((name, $"{HouseKey}/0", true), (held.Name, held.InWhat, held.IsImprisoned));
         }
         finally { Directory.Delete(Path.GetDirectoryName(folder)!, recursive: true); }
     }

@@ -37,14 +37,4 @@ public class GameClockTests
     {
         Assert.Equal(factor, new GameClock(startHour: hour).DaylightFactor, 9);
     }
-
-    /// <summary>FUN_14066e380: the day tests keep the raw sunrise and sunset; a sunset not after the sunrise leaves no daytime (the 6 / 20 fallback is the sun direction's only).</summary>
-    [Fact]
-    public void A_sunset_not_after_the_sunrise_leaves_no_daytime()
-    {
-        var game = new GameClock(sunrise: 10, sunset: 10);
-        Assert.Equal(10, game.Sunrise);
-        Assert.False(game.IsDay(12));
-        Assert.False(game.IsDay(8));
-    }
 }

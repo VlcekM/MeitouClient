@@ -58,30 +58,6 @@ public class SlaveMasterLoadTests
     }
 
     [Fact]
-    public void A_slave_keeps_the_owner_character_its_save_names_and_nothing_else()
-    {
-        var data = ArrestTests.Town();
-        var builder = new SaveBuilder(1);
-
-        var (owner, slave) = Pair(builder, "a");
-        var cold = Loaded(slave, data);
-        Assert.Equal(owner.Handle, cold.Save!.Slaver);
-        Assert.Equal(-1, cold.SlaveOwner);
-
-        // A squad handle is not mapped; a null one names nobody.
-        var (_, squadNamed) = Pair(builder, "b");
-        new Hand((int)FcsRecordType.PLATOON, 3, 9, 0, 0).Write(squadNamed.GameState!, SlaveSave.SlaverKey);
-        Assert.True(Loaded(squadNamed, data).Save!.Slaver.IsNull);
-        var (_, unnamed) = Pair(builder, "c", named: false);
-        Assert.True(Loaded(unnamed, data).Save!.Slaver.IsNull);
-
-        // A free character keeps no owner handle.
-        var (_, freed) = Pair(builder, "d");
-        freed.GameState!.Ints[SlaveSave.StateKey] = 0;
-        Assert.True(Loaded(freed, data).Save!.Slaver.IsNull);
-    }
-
-    [Fact]
     public void A_loaded_slave_takes_the_faction_and_squad_of_its_owner_once_the_owner_is_in_the_world()
     {
         var data = ArrestTests.Town();

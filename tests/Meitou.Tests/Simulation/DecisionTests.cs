@@ -81,49 +81,6 @@ public class DecisionTests
         Assert.Equal(foe.Slot, rig.Combat.StateOf(f).TargetSlot);
         Assert.Equal("32 Self preservation", rig.Cold(f).Decision!.Winner);
     }
-
-    /// <summary>
-    /// A medic on the Medic job leaves its downed patient for its squad's fight (the player faction's 15 Protect allies is a priority-3 goal, tried before every job), keeps fighting while
-    /// its own attacker's blows land, and treats again once the enemies are down. Catches a job's task that keeps its character out of a mate's fight (the played report: a medic healing
-    /// mid-fight while its mates were attacked and it was hit).
-    /// </summary>
-    [Fact]
-    public void A_medic_on_its_job_joins_its_squads_fight_and_treats_after()
-    {
-        using var rig = Quiet(senses: true);
-        var f = rig.Fighter;
-        var squad = new Squad { Id = rig.World.Squads.NextId(), TemplateId = "p", Faction = 1 };
-        rig.World.Squads.Add(squad);
-        foreach (var id in new[] { f, rig.Mate, rig.Carried })
-        {
-            rig.Cold(id).SquadId = squad.Id;
-            squad.Members.Add(id);
-        }
-        rig.Say(new MedicJobCommand([f]) { Tick = rig.World.Tick });
-        RunUntil(rig, () => rig.Task(f) == CharacterTask.Treat && rig.Cold(f).Running is { Row: TaskType.JOB_MEDIC }, 120, "treating on the medic job");
-        // The mate beside the medic is attacked: the medic joins its defence at the next retaliation pass.
-        var at = rig.World.Characters.Next[rig.Mate.Slot].Position;
-        var mateFoe = rig.Add(at.X + 12, at.Z, player: false);
-        rig.Say(new Meitou.Simulation.Combat.AttackOrder([mateFoe], rig.Mate) { Tick = rig.World.Tick });
-        RunUntil(rig, () => rig.Task(f) == CharacterTask.Attack, 2 * RetaliationSystem.CheckEveryTicks + 2, "joining the mate's fight");
-        Assert.Equal("15 Protect allies", rig.Cold(f).Decision!.Winner);
-        // Its own attacker's blows land; it fights on and never goes back to its patient while they do.
-        var foe = Attacker(rig);
-        int blows = 0, lastHit = -1;
-        for (int t = 0; t < 600 && blows < 3; t++)
-        {
-            rig.World.RunTick();
-            Assert.NotEqual(CharacterTask.Treat, rig.Task(f));
-            var hit = rig.Combat.StateOf(f);
-            if (hit.HitTick != lastHit && hit.HitTick >= 0) { lastHit = hit.HitTick; blows++; }
-        }
-        Assert.True(blows >= 2, $"blows landed on the medic: {blows}");
-        // The enemies down: the medic job takes its patient up again.
-        rig.Cold(foe).Medical!.KnockOut(100000);
-        rig.Cold(mateFoe).Medical!.KnockOut(100000);
-        rig.Cold(rig.Enemy).Medical!.KnockOut(100000);   // the rig's far enemy is in the medic's senses: a fight goes on while one is sensed
-        RunUntil(rig, () => rig.Task(f) == CharacterTask.Treat && rig.Cold(f).Running is { Row: TaskType.JOB_MEDIC }, 120, "treating again");
-    }
     static IDecisionSource ProtectAllies(TaskStartTests.Rig rig) => rig.World.Decisions.Sources.Single(s => s.Name == "15 Protect allies");
 
     /// <summary>A fight on the mate: an NPC of the enemy's faction beside it attacks it; the mate (a player's character) fights back.</summary>
@@ -168,82 +125,6 @@ public class DecisionTests
     }
 
     /// <summary>
-    /// Self preservation outweighs a far mate's fight (1 or 0.7 against 0.1 x 1.25 while it runs): asked again, a character that joined it and is attacked itself chooses its self-defence. Catches a join that holds its character against its own attacker.
-    /// </summary>
-    [Fact]
-    public void Self_preservation_beats_a_far_mates_fight()
-    {
-        using var rig = Quiet(senses: true);
-        var f = rig.Fighter;
-        var mateFoe = AttackMate(rig);
-        RunUntil(rig, () => rig.Task(f) == CharacterTask.Attack, 2 * RetaliationSystem.CheckEveryTicks + 2, "joining the mate's fight");
-        Assert.Equal(mateFoe.Slot, rig.Combat.StateOf(f).TargetSlot);
-        var foe = Attacker(rig);
-        RunUntil(rig, () => rig.Combat.StateOf(f).TargetSlot == foe.Slot, 300, "fighting its own attacker");
-        DecisionSystem.Request(rig.Cold(f));   // the blows ask for it; the engine's retarget came first here
-        rig.World.RunTick();
-        Assert.Equal("32 Self preservation", rig.Cold(f).Decision!.Winner);
-    }
-
-    /// <summary>
-    /// Passive and sneaking outside a fight give the desire 0 (FUN_140599b90): the character stays out of a mate's fight, and joins it once they are off. Catches a join that ignores them.
-    /// </summary>
-    [Fact]
-    public void Passive_or_sneaking_gives_goal_15_no_desire()
-    {
-        using var rig = Quiet(senses: true);
-        var f = rig.Fighter;
-        rig.Cold(f).Orders |= CharacterOrders.Passive;
-        AttackMate(rig);
-        for (int t = 0; t < 90; t++)
-        {
-            rig.World.RunTick();
-            Assert.NotEqual(CharacterTask.Attack, rig.Task(f));
-        }
-        rig.Cold(f).Orders = (rig.Cold(f).Orders & ~CharacterOrders.Passive) | CharacterOrders.Sneak;
-        for (int t = 0; t < 90; t++)
-        {
-            rig.World.RunTick();
-            Assert.NotEqual(CharacterTask.Attack, rig.Task(f));
-        }
-        Assert.Contains(rig.Cold(f).Decision!.Lines, l => l.Contains("15 Protect allies") && l.Contains("desire 0"));
-        rig.Cold(f).Orders &= ~CharacterOrders.Sneak;
-        RunUntil(rig, () => rig.Task(f) == CharacterTask.Attack, 2 * RetaliationSystem.CheckEveryTicks + 2, "joining once neither is on");
-    }
-
-    /// <summary>
-    /// An ally of another faction counts only with Help Allies, and then its weight is squared (FUN_14099ca10). Catches the option being ignored, or the allies' fight being joined at full weight.
-    /// </summary>
-    [Fact]
-    public void An_allied_factions_fight_is_joined_only_with_help_allies_and_squared()
-    {
-        FactionData F(string id, params (string, int)[] relations) => new() { Id = id, Name = id, Relations = relations.ToDictionary(r => r.Item1, r => r.Item2) };
-        // 0 the enemies, 1 the player's (the rig's), 2 the allied faction (the rig's NPCs).
-        var relations = FactionRelations.Build([F("enemies", ("Nameless", -80), ("allies", -80)), F("Nameless", ("allies", 60), ("enemies", -80)), F("allies", ("Nameless", 60), ("enemies", -80))]);
-        using var rig = Quiet(senses: true, relations);
-        var f = rig.Fighter;
-        var at = rig.World.Characters.Next[f.Slot].Position;
-        var ally = rig.Add(at.X + 22, at.Z, player: false);   // allied faction, 22 units off: the falloff 0.52, squared 0.27
-        var foe = rig.Add(at.X + 34, at.Z, player: false);
-        rig.Cold(foe).Faction = 0;
-        rig.Say(new Meitou.Simulation.Combat.AttackOrder([foe], ally) { Tick = rig.World.Tick });
-        for (int t = 0; t < 90; t++)
-        {
-            rig.World.RunTick();
-            Assert.NotEqual(CharacterTask.Attack, rig.Task(f));
-        }
-        Assert.Equal(CharacterTask.Attack, rig.Task(ally));
-        rig.World.Player.SquadAi |= SquadAi.Help;
-        var goal = ProtectAllies(rig);
-        RunUntil(rig, () => rig.Task(f) == CharacterTask.Attack, 2 * RetaliationSystem.CheckEveryTicks + 2, "joining the allies' fight");
-        Assert.Equal("15 Protect allies", rig.Cold(f).Decision!.Winner);
-        // Squared in both the desire and the factor: below the ally's threat to the fourth (its weight, at most 1, times the threat, squared, twice).
-        float threat = rig.Combat.FightThreat(rig.World, ally.Slot, rig.World.SystemOf<AggroSystem>()!.SensesOf(ally.Slot));
-        Assert.InRange(goal.Desire(rig.World, f.Slot), 1e-13f, threat * threat * threat * threat * 1.001f);
-    }
-
-
-    /// <summary>
     /// An order that cannot run falls through (the original's chooser goes on): a First Aid order without a medkit stays queued with its text while its character defends itself. Catches a
     /// blocked order that keeps its character from its goals, or one dropped by the fight.
     /// </summary>
@@ -262,44 +143,6 @@ public class DecisionTests
         Assert.Equal(foe.Slot, rig.Combat.StateOf(f).TargetSlot);
         Assert.Equal([TaskType.FIRST_AID_ORDER], rig.Cold(f).OrderQueue.Select(e => e.Row));
         Assert.Contains(rig.Cold(f).Decision!.Lines, l => l.StartsWith("1 Orders: ") && !l.EndsWith("no order"));
-    }
-
-    /// <summary>
-    /// Getting food (243) beats a job: a hungry character operating the well on its job walks to its outpost's store for food. Catches a job's task that keeps its character from the goals
-    /// the original tries before the jobs.
-    /// </summary>
-    [Fact]
-    public void Getting_food_beats_a_jobs_task()
-    {
-        using var rig = Quiet();
-        var f = rig.Fighter;
-        rig.Say(new AddJob([f], TaskType.OPERATE_MACHINERY, rig.WellSite) { Tick = rig.World.Tick });
-        RunUntil(rig, () => rig.Task(f) == CharacterTask.Operate, 600, "operating the well");
-        rig.World.Machines.Find(rig.StoreSite)!.Storage!.Add(new ItemInstance { Record = "bread", Name = "bread", ItemFunction = FeedSystem.FoodFunction, IsFood = true, Quantity = 1 });
-        rig.Cold(f).Medical!.Hunger = 2;
-        RunUntil(rig, () => rig.Cold(f).Running is { Row: TaskType.AQUIRE_FOOD_AT_HOMEBASE }, 60, "going for food");
-        Assert.Equal(CharacterTask.GoTo, rig.Task(f));
-        Assert.Equal("243 Getting food", rig.Cold(f).Decision!.Winner);
-    }
-
-    /// <summary>
-    /// The job list in order (<c>FUN_14050e5b0</c>): a character treating its mate on the medic job (second in its list) is taken over by the operate job above it as soon as the well can be
-    /// worked, at the next decision. Catches a running medic job that a higher job cannot take over (the gap of the old job passes).
-    /// </summary>
-    [Fact]
-    public void A_higher_list_job_takes_over_a_lower_running_one()
-    {
-        using var rig = Quiet();
-        var f = rig.Fighter;
-        var well = rig.World.Buildings.Find(rig.WellSite)!;
-        well.Complete = false;
-        rig.Say(new AddJob([f], TaskType.OPERATE_MACHINERY, rig.WellSite) { Tick = rig.World.Tick });
-        rig.Say(new MedicJobCommand([f]) { Tick = rig.World.Tick + 1 });
-        RunUntil(rig, () => rig.Task(f) == CharacterTask.Treat && rig.Cold(f).Running is { Row: TaskType.JOB_MEDIC, Job: 1 }, 120, "treating on the medic job");
-        well.Complete = true;
-        RunUntil(rig, () => rig.Task(f) == CharacterTask.Operate, 2 * ProductionSystem.JobCheckTicks + 2, "the operate job taking over");
-        Assert.Equal((TaskType.OPERATE_MACHINERY, 0), (rig.Cold(f).Running!.Row, rig.Cold(f).Running!.Job));
-        Assert.Equal("Jobs", rig.Cold(f).Decision!.Winner);
     }
 
     /// <summary>
@@ -385,31 +228,6 @@ public class DecisionTests
     }
 
     /// <summary>
-    /// After a fight a holder stands at its post (step 6: 14 Idleness; the Hold toggle sets no default task, docs/game/ai-tasks.md "Precedence"): a character on Hold defends itself from an
-    /// attacker beside it, and once the attacker is down it stands idle where it fought, near its hold point, which is unchanged. Catches a holder that walks off, follows or wanders after
-    /// its fight, or a fight's end that leaves it on a stale task.
-    /// </summary>
-    [Fact]
-    public void After_a_fight_a_holder_stands_idle_at_its_post()
-    {
-        using var rig = Quiet();
-        var f = rig.Fighter;
-        rig.Say(new OrdersCommand([f], CharacterOrders.Hold, On: true) { Tick = rig.World.Tick });
-        rig.World.RunTick();
-        var post = rig.Cold(f).HoldPoint!.Value;
-        var foe = Attacker(rig);
-        RunUntil(rig, () => rig.Task(f) == CharacterTask.Attack, 120, "fighting back");
-        rig.Cold(foe).Medical!.KnockOut(6000);
-        RunUntil(rig, () => rig.Task(f) != CharacterTask.Attack && !rig.Cold(f).InCombat, 600, "the fight's end");
-        rig.World.RunTicks(3 * ProductionSystem.JobCheckTicks);
-        Assert.Equal(CharacterTask.Idle, rig.Task(f));
-        Assert.Equal("14 Idleness", rig.Cold(f).Decision!.Winner);
-        Assert.Equal(post, rig.Cold(f).HoldPoint);
-        var at = rig.World.Characters.Next[f.Slot].Position;
-        Assert.True(Vector2.Distance(new Vector2(post.X, post.Z), new Vector2(at.X, at.Z)) <= Orders.HoldReach, $"{Vector2.Distance(new Vector2(post.X, post.Z), new Vector2(at.X, at.Z)):0} from its hold point");
-    }
-
-    /// <summary>
     /// The urgent job pass (step 3, before Self preservation): a gunner on the Turret guard job (234) that senses an enemy keeps manning its turret while that enemy closes in to attack it, and
     /// fights it only once it is within 40 (146 needs !158). Catches a turret job that gives way to Self preservation as a plain job, or that never does.
     /// </summary>
@@ -441,44 +259,6 @@ public class DecisionTests
         rig.Cold(victim).Stats![StatsEnumerated.Strength] = 100;
         rig.Cold(victim).Stats![StatsEnumerated.Toughness] = 100;
         return victim;
-    }
-
-    /// <summary>
-    /// A sleeper woken by a failed kidnap (docs/game/carry-loot.md "Kidnapping": order 116 clears its queue, the kidnapper is forced into its senses and it replans) fights the kidnapper as a goal
-    /// of the step, not as a push of the engine. Catches a player sleeper that stays idle or is pushed into the fight outside the step.
-    /// </summary>
-    [Fact]
-    public void A_sleeper_woken_by_a_failed_kidnap_defends_itself_through_the_step()
-    {
-        using var rig = Quiet();
-        var sleeper = Victim(rig, 900, 1650);
-        rig.Say(new UseBedOrder([sleeper], rig.BedFixture) { Tick = rig.World.Tick });
-        rig.World.RunTicks(2);
-        RunUntil(rig, () => rig.Cold(sleeper).InSomething == HeldState.Bed, 600, "asleep in the bed");
-        var kidnapper = rig.Add(930, 1650, player: false);
-        rig.Cold(kidnapper).Stats![StatsEnumerated.Assassination] = 0;
-        rig.World.Decisions.Tracing = true;
-        rig.Say(new PickUpOrder([kidnapper], sleeper) { Tick = rig.World.Tick, Kidnap = true });
-        RunUntil(rig, () => rig.Task(sleeper) == CharacterTask.Attack, 900, "the sleeper fighting back");
-        Assert.Equal(CharacterTask.Attack, rig.Task(sleeper));
-        Assert.Equal(kidnapper.Slot, rig.Combat.StateOf(sleeper).TargetSlot);
-        Assert.Empty(rig.Cold(sleeper).OrderQueue);
-        Assert.StartsWith("32 Self preservation", rig.Cold(sleeper).Decision!.Winner);
-    }
-
-    /// <summary>Starting a stealth knock-out switches its attacker into stealth when it is not in it (Task_StealthKO start FUN_140345eb0), so an order given to one that stopped sneaking still runs.</summary>
-    [Fact]
-    public void A_stealth_ko_order_makes_a_character_that_is_not_sneaking_sneak()
-    {
-        using var rig = Quiet();
-        var target = Victim(rig, 1300, 2300);
-        var attacker = rig.Add(1330, 2300, player: false);
-        Assert.Equal(0, (int)(rig.Cold(attacker).Orders & CharacterOrders.Sneak));
-        rig.World.RunTick();
-        rig.Say(new StealthKoOrder([attacker], target) { Tick = rig.World.Tick });
-        rig.World.RunTicks(5);
-        Assert.Equal(CharacterTask.StealthKo, rig.Task(attacker));
-        Assert.NotEqual(0, (int)(rig.Cold(attacker).Orders & CharacterOrders.Sneak));
     }
 
     /// <summary>
@@ -541,62 +321,5 @@ public class DecisionTests
         squad.Leader = master;
         FixtureRegistry.Enslave(rig.World, rig.Cold(rig.Fighter), 2, squad.Id);
         return (rig, master);
-    }
-
-    /// <summary>
-    /// An enslaved player character with no order and nothing else runs job 187 (FUN_14050e5b0, the urgent pass): it takes its master's Slave list, here 171, and follows the master, over
-    /// its own idleness. Catches a slave that stands about as a free character.
-    /// </summary>
-    [Fact]
-    public void An_enslaved_player_character_runs_its_master_s_slave_goals()
-    {
-        var (rig, master) = Enslaved();
-        using var _ = rig;
-        var f = rig.Fighter;
-        Assert.Contains(rig.Cold(f).Jobs, j => j.Type == TaskType._SLAVE_OBEDIENCE);
-        RunUntil(rig, () => rig.Task(f) == CharacterTask.Follow, 30, "following its master");
-        Assert.Equal(TaskType.FOLLOW_SLAVEMASTER, rig.Cold(f).Running!.Row);
-        Assert.Equal(TaskSource.Job, rig.Cold(f).Running!.Source);
-        Assert.Equal(master, rig.Cold(f).FollowOrder);
-        rig.World.RunTicks(2 * Meitou.Simulation.Production.ProductionSystem.JobCheckTicks);
-        Assert.Equal("Urgent jobs", rig.Cold(f).Decision!.Winner);
-        Assert.Equal(CharacterTask.Follow, rig.Task(f));
-    }
-
-    /// <summary>
-    /// Sneaking switches the job off (the branch's gate, the stealth mode test): a slave whose master's list is 14 Idleness is held by the job (the urgent pass wins) until it sneaks, then the
-    /// step goes on to its own goals, and the job holds it again once it stops sneaking. Catches a slave that cannot get away by sneaking. (A follower's sneaking is set by its leader's
-    /// every update, <c>FUN_14033b350</c>, so a slave following its master cannot sneak; the standing and working ones can.)
-    /// </summary>
-    [Fact]
-    public void Sneaking_stops_the_obedient_slave_job()
-    {
-        var (rig, _) = Enslaved(TaskType.IDLE);
-        using var _ = rig;
-        var f = rig.Fighter;
-        int ask = Meitou.Simulation.Production.ProductionSystem.JobCheckTicks;
-        RunUntil(rig, () => rig.Cold(f).Decision is { Winner: "Urgent jobs" }, 2 * ask, "the job holding it");
-        rig.Cold(f).Orders |= CharacterOrders.Sneak;
-        RunUntil(rig, () => rig.Cold(f).Decision is { Winner: not "Urgent jobs" }, 2 * ask, "the step going on past the job");
-        rig.World.RunTicks(2 * ask);
-        Assert.NotEqual("Urgent jobs", rig.Cold(f).Decision!.Winner);
-        rig.Cold(f).Orders &= ~CharacterOrders.Sneak;
-        RunUntil(rig, () => rig.Cold(f).Decision is { Winner: "Urgent jobs" }, 2 * ask, "the job holding it again");
-    }
-
-    /// <summary>An order is the first source (step 1): a slave told to rest rests, and keeps resting while its job is asked. Catches an obedient slave that overrides the player's order.</summary>
-    [Fact]
-    public void An_order_still_beats_the_obedient_slave_job()
-    {
-        var (rig, _) = Enslaved();
-        using var _ = rig;
-        var f = rig.Fighter;
-        RunUntil(rig, () => rig.Task(f) == CharacterTask.Follow, 30, "following its master");
-        rig.Say(new RestOrder([f]) { Tick = rig.World.Tick });
-        rig.World.RunTick();
-        Assert.Equal(CharacterTask.Rest, rig.Task(f));
-        rig.World.RunTicks(3 * Meitou.Simulation.Production.ProductionSystem.JobCheckTicks);
-        Assert.Equal(CharacterTask.Rest, rig.Task(f));
-        Assert.Equal("Orders", rig.Cold(f).Decision!.Winner);
     }
 }

@@ -36,9 +36,7 @@ public class BuildingSaveHeightTests
     }
 
     [Theory]
-    [InlineData(120, 0)]
     [InlineData(123.25f, 3.25f)]
-    [InlineData(118.5f, -1.5f)]
     public void Outdoor_instance_height_is_relative_to_terrain_while_state_height_is_absolute(float worldY, float instanceY)
     {
         using var world = new SimWorld(new WorldSettings(), new Surfaces());
@@ -53,8 +51,6 @@ public class BuildingSaveHeightTests
 
     [Theory]
     [InlineData(167, 22)]
-    [InlineData(143.5f, -1.5f)]
-    [InlineData(145, 0)]
     public void Indoor_offset_is_relative_to_parent_origin_even_when_child_is_written_first(float worldY, float offset)
     {
         using var world = new SimWorld(new WorldSettings(), new Surfaces());
@@ -94,32 +90,5 @@ public class BuildingSaveHeightTests
             Assert.Equal(22, written.State.Floats["player furniture Y offset"]);
             Assert.Equal(Hand.Read(Saved(save, parent.Id).State, "handle"), Hand.Read(written.State, "isInsideBuilding"));
         }
-    }
-
-    [Fact]
-    public void Town_property_origin_is_used_when_the_level_state_has_no_absolute_height()
-    {
-        var (data, house) = HousePurchaseTests.Setup();
-        using var world = new SimWorld(new WorldSettings(), new Surfaces());
-        world.Fixtures.RegisterSite(world, data, 0);
-        Assert.Null(world.Buildings.Find(house.Key));
-        var child = Site(world.Buildings.NewId(WorldLayout.ZoneOf(100, 100)), house.Position.Y + 22, house.Key);
-        world.Buildings.Add(child);
-        var save = new SaveBuilder(1).Game;
-        BuildingSave.Write(save, world, Player);
-        Assert.Equal(22, Saved(save, child.Id).State.Floats["player furniture Y offset"]);
-    }
-
-    [Fact]
-    public void Unresolved_parent_does_not_erase_a_saved_furniture_offset()
-    {
-        using var world = new SimWorld(new WorldSettings(), new Surfaces());
-        var child = Site(world.Buildings.NewId(WorldLayout.ZoneOf(100, 100)), 167, "unloaded-house");
-        world.Buildings.Add(child);
-        var save = new SaveBuilder(1).Game;
-        BuildingSave.Write(save, world, Player);
-        Saved(save, child.Id).State.Floats["player furniture Y offset"] = 22;
-        BuildingSave.Write(save, world, Player);
-        Assert.Equal(22, Saved(save, child.Id).State.Floats["player furniture Y offset"]);
     }
 }

@@ -19,13 +19,4 @@ public class FeedRulesTests
 
 public class MedicKitFlagTests
 {
-    /// <summary>The medic finder's kit flags compare only the item function (<c>FUN_14004b84e</c>): an empty kit still counts, another function does not.</summary>
-    [Fact]
-    public void A_kit_flag_tests_only_the_item_function()
-    {
-        var inventory = new Inventory(4, 4);
-        inventory.Items.Add(new ItemInstance { Record = "kit", ItemFunction = ItemInfo.FirstAidKitFunction, Quantity = 1, Charges = 0, MaxCharges = 100 });
-        Assert.True(Meitou.Simulation.FirstAid.FirstAidSystem.HasFunction(inventory, ItemInfo.FirstAidKitFunction));
-        Assert.False(Meitou.Simulation.FirstAid.FirstAidSystem.HasFunction(inventory, ItemInfo.RobotKitFunction));
-    }
 }

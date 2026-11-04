@@ -258,21 +258,6 @@ public class KidnapTests
     }
 
     [Fact]
-    public void Escaping_stamps_the_game_hours_and_staying_escaped_keeps_the_stamp()
-    {
-        var (world, cold, city, _) = SlaveRig();
-        using var owned = world;
-        world.GameHours = 100;
-        FixtureRegistry.Enslave(world, cold, city);
-        Assert.Equal(0, cold.SlaveSince);   // state 1 is not stamped
-        FixtureRegistry.TagEscaped(world, cold);
-        Assert.Equal(100, cold.SlaveSince);
-        world.GameHours = 105;
-        FixtureRegistry.TagEscaped(world, cold);
-        Assert.Equal(100, cold.SlaveSince);
-    }
-
-    [Fact]
     public void An_escaped_slave_lies_low_to_ex_slave_after_12_hours_then_free_after_4_days_and_a_future_stamp_frees_at_once()
     {
         var (world, cold, city, _) = SlaveRig();

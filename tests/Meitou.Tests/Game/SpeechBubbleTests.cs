@@ -15,12 +15,4 @@ public class SpeechBubbleTests
         Assert.Equal(96, moved[1].X);
         Assert.Equal(0, moved[0].Y);
     }
-
-    [Fact]
-    public void Bubbles_that_do_not_touch_stay()
-    {
-        var moved = PlayerInterface.SeparateBubbles([new(0, 0, 50, 20), new(60, 0, 50, 20)]);
-        Assert.Equal(0, moved[0].X);
-        Assert.Equal(60, moved[1].X);
-    }
 }

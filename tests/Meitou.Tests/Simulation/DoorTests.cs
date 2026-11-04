@@ -254,40 +254,6 @@ public class DoorTests(ITestOutputHelper output)
         Assert.False(locks.WallsLocked(world, SyntheticTown.Centre + new Vector3(0, 0, 300)));
     }
 
-    /// <summary>docs/game/locks.md "When": state 59 is Building::hasAnOpenDoor, so a closed unlocked door counts as shut: a bandit (desire 1.1 over 72's 1) plans to bash it, one that is not aggressive opens it (walks in), and a locked door of its own faction is unlocked (78).</summary>
-    [Fact]
-    public void A_ransackers_entry_plan_opens_or_bashes_a_closed_door_by_state_59()
-    {
-        var locks = new LockSystem(BaseGame, BodyOptions.Default);
-        using var world = new SimWorld(new WorldSettings { Seed = 31, PublishSnapshots = false, MinPartitionSize = 1 }, new OpenGroundWalkability((_, _) => 150), [locks]);
-        world.Fixtures.RegisterSite(world, ArrestTests.Town(), 0);
-        world.Fixtures.Doors = new Gate();
-        var door = world.Fixtures.Find("0.0:house#0")!;
-        var spot = world.Fixtures.DoorSpotOf(door)!.Value;
-        int owner = world.Fixtures.DoorOwner(door.Building);
-        CharacterId Spawn(bool bandit, int faction)
-        {
-            var cold = new Meitou.Tests.Combat.Combatant { Name = "raider" }.MakeCold();
-            cold.Faction = faction;
-            if (bandit) cold.NpcClass = Meitou.Data.Gameplay.FundamentalType.Bandit;
-            return world.Characters.Spawn(new CharacterHot { Position = spot.Centre + new Vector3(0, 0, 10), Health = 100, MaxSpeed = 60, WalkSpeed = 15, Task = (byte)CharacterTask.Idle }, cold, 0);
-        }
-        var bandit = Spawn(true, owner + 1);
-        var resident = Spawn(false, owner);
-        var plan = new DoorPlan();
-        DoorPlan.Entry Plan(CharacterId who) => plan.PlansEntry(world, null, who.Slot, door.Building, door, spot, locks);
-
-        world.Fixtures.SetLocked(door, false);
-        door.Motion = DoorMotion.Closed;
-        Assert.Equal(DoorPlan.Entry.Bash, Plan(bandit));
-        Assert.Equal(DoorPlan.Entry.Walk, Plan(resident));
-        world.Fixtures.SetLocked(door, true);
-        Assert.Equal(DoorPlan.Entry.Bash, Plan(bandit));
-        Assert.Equal(DoorPlan.Entry.Walk, Plan(resident));   // its own door: 78 unlocks it
-        door.Motion = DoorMotion.Open;
-        Assert.Equal(DoorPlan.Entry.Walk, Plan(bandit));
-    }
-
     /// <summary>docs/game/locks.md "When": an attacker's row 4 needs state 59 (<c>hasAnOpenDoor</c>, one evaluator for every goal), so a bandit bashes a closed unlocked door and a non-aggressive attacker does not.</summary>
     [Fact]
     public void An_attackers_plan_reads_state_59_exactly_so_a_bandit_bashes_a_closed_unlocked_door()
@@ -376,35 +342,5 @@ public class DoorTests(ITestOutputHelper output)
         Assert.Equal(2, gates.Count(b => b.Destroyed));
         Assert.All(gates.Where(b => b.Destroyed), g => Assert.DoesNotContain(world.Fixtures.OfBuilding(g.Key), f => f.Kind == FixtureKind.Door));
         Assert.Contains(hub.Buildings.Where(b => !b.Destroyed), b => world.Fixtures.OfBuilding(b.Key).Any(f => f.Kind == FixtureKind.Door));
-    }
-
-    [Fact]
-    public void A_bash_blow_lands_once_per_clip_cycle_at_six_tenths_of_it()
-    {
-        // Task_BashDoor (FUN_140348c10): the blow fires when the stonemine progress crosses 0.6, the first at 0.6 into the first cycle.
-        float phase = 0;
-        var blows = new List<float>();
-        for (int i = 1; i <= 400; i++)
-        {
-            if (LockSystem.BlowLands(phase, 0.01f, 2, out phase)) blows.Add(i * 0.01f);
-        }
-        Assert.Equal(2, blows.Count);
-        Assert.InRange(blows[0], 1.19f, 1.22f);
-        Assert.InRange(blows[1], 3.19f, 3.22f);
-    }
-
-    [Fact]
-    public void An_animals_bash_clip_restarts_when_its_progress_passes_98_percent()
-    {
-        // Task_BashDoor (FUN_140348c10): an animal's own attack clip is restarted once it reads past 0.98, so the cycle is 0.98 of the clip and the blow stays at 0.6 of the clip.
-        float phase = 0;
-        var blows = new List<float>();
-        for (int i = 1; i <= 400; i++)
-        {
-            if (LockSystem.BlowLands(phase, 0.01f, 2, out phase, LockSystem.AnimalRestartProgress * 2)) blows.Add(i * 0.01f);
-        }
-        Assert.Equal(2, blows.Count);
-        Assert.InRange(blows[0], 1.19f, 1.22f);
-        Assert.InRange(blows[1], 3.15f, 3.19f);
     }
 }

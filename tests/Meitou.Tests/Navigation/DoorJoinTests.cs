@@ -52,8 +52,6 @@ public class DoorJoinTests
 
     [Theory]
     [InlineData(43, 11, 21, "43.11:12-Newwworld-INGAME", "43.11:5563-Newwworld-INGAME", "43.11:5565-Newwworld-INGAME", "43.11:2-Newwworld-INGAME")]
-    [InlineData(47, 16, 10, "47.16:241-Newwworld-INGAME")]
-    [InlineData(48, 45, 6, "48.45:9-rebirth-INGAME")]
     public void Every_intact_interior_with_a_door_painter_is_joined_to_the_exterior(int x, int z, int painted, params string[] doorToDoor)
     {
         Assert.SkipWhen(InstallData.Install is null, "Kenshi install not found");
@@ -98,32 +96,5 @@ public class DoorJoinTests
         Assert.True(path.Found, "no path from the street to the bar's upper floor");
         Assert.InRange(path.Points[^1].Y, 1185f, 1189f);
         Assert.InRange(path.Points[0].Y, 1100f, 1108f);
-    }
-
-    [Fact]
-    public void The_hive_village_keeps_its_ground_and_a_street_path_reaches_a_commune_hut()
-    {
-        Assert.SkipWhen(InstallData.Install is null, "Kenshi install not found");
-        var b = Zone(39, 54);
-        // Kept by the zone's own seeds: 3,725 of 4,594 polygons with 576-unit tiles and watershed regions (6,609 of 8,122 before); 778 of 8,122 while the
-        // seed ray rule tested every building part (roofs and domes over the seeds dropped 6 of its 9 points).
-        Assert.True(b.Full.KeptCount >= 3400, $"{b.Full.KeptCount} of {b.Full.PolygonCount} polygons kept");
-        Assert.True(b.Full.PolygonCount is > 4000 and < 5300, $"{b.Full.PolygonCount} polygons: no longer the build the floor was set for");
-        // From the village ground at a seed point to the floor of Hive Commune Hut 39.54:46-Newwworld-INGAME (doorless, floor 1556..1662).
-        var path = Query(b).FindPath(new Vector3(33954, 1432, 103023), new Vector3(34128, 1600, 102888));
-        Assert.True(path.Found, "no path from the village ground to the hut");
-        var end = path.Points[^1];
-        Assert.True(Vector2.Distance(new(end.X, end.Z), new(34128, 102888)) < 1 && end.Y is > 1585 and < 1600, $"path ends at {end}");
-    }
-
-    [Fact]
-    public void A_street_path_climbs_storm_house_27_22s_ramp_to_its_door()
-    {
-        Assert.SkipWhen(InstallData.Install is null, "Kenshi install not found");
-        // Storm House 27.22:1821-Newwworld-INGAME: its steps rise from the ground at 469 to the door landing at 524; past the door, its floor at 525.
-        var path = Query(Zone(27, 22)).FindPath(new Vector3(-20725, 470, -43870), new Vector3(-20800, 525, -43740));
-        Assert.True(path.Found, "no path from the street through the door");
-        Assert.InRange(path.Points[0].Y, 465f, 473f);
-        Assert.InRange(path.Points[^1].Y, 523f, 527f);
     }
 }

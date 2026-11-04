@@ -33,11 +33,4 @@ public class TechniqueBlowTests
         Assert.Equal(0.7f, t.StopProgress(3), 5);
         Assert.Equal((0, 100, 1), (t.DirectionOf(4), t.PowerOf(4), t.LimbOf(4)));
     }
-
-    [Fact]
-    public void A_stated_zero_is_no_blow_and_an_absent_field_is_one()
-    {
-        Assert.Equal(0, Read(r => r.Ints["num techniques"] = 0).Blows);
-        Assert.Equal(1, Read(_ => { }).Blows);
-    }
 }

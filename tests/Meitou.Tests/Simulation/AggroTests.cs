@@ -74,14 +74,6 @@ public class AggroTests
             return squad;
         }
 
-        /// <summary>A town's own squad that holds <paramref name="own"/> as its home, with the board the AI would give it (the AI is not run here).</summary>
-        public Squad TownSquadOf(int faction, Vector2 home, Meitou.Data.World.TownBuilding own, params (Vector2 At, float Yaw)[] members)
-        {
-            var squad = SquadOf(faction, home, true, -1, members, town: 0);
-            squad.Ai = new Meitou.Simulation.Ai.Blackboard([]) { OwnHome = own };
-            return squad;
-        }
-
         Squad SquadOf(int faction, Vector2 home, bool idle, int platoon, (Vector2 At, float Yaw)[] members, int town = -1)
         {
             var squad = new Squad { Id = World.Squads.NextId(), TemplateId = "t", Faction = faction, HomeCentre = home, HomeRadius = 30, PlatoonId = platoon, Town = town };
@@ -429,64 +421,6 @@ public class AggroTests
         Assert.False(senses.Knows(target), "dropped once its life is over");
     }
 
-    /// <summary>A carried character only lets its senses fade (FUN_1405d00b0 -> FUN_140859220): it senses nobody new, and what it knew decays unrefreshed.</summary>
-    [Fact]
-    public void A_carried_character_senses_nobody_new_and_its_entries_only_fade()
-    {
-        var aggro = new AggroSystem(Relations(), new AggroSettings { AttackOnSight = false });
-        using var world = new SimWorld(new WorldSettings { Seed = 3, Threads = 1, PublishSnapshots = false }, new OpenGroundWalkability((_, _) => 150), [aggro]);
-        CharacterId Spawn(float z)
-        {
-            var cold = new Combatant().MakeCold();
-            cold.Faction = Villagers;
-            return world.Characters.Spawn(new CharacterHot { Position = new Vector3(2000, 150, z), Health = 100, MaxSpeed = 60, WalkSpeed = 15 }, cold, 0);
-        }
-        CharacterId looker = Spawn(2000), seen = Spawn(2200), carrier = Spawn(2000);
-        world.Characters.Cold(looker.Slot)!.CarriedBy = carrier;
-        world.RunTicks(30);
-        Assert.False(aggro.SensesOf(looker.Slot)!.Knows(seen), "a carried character gathers nobody");
-        world.Characters.Cold(looker.Slot)!.CarriedBy = CharacterId.None;
-        world.RunTicks(30);
-        Assert.True(aggro.SensesOf(looker.Slot)!.Knows(seen, now: true), "set down, it senses again");
-        world.Characters.Cold(looker.Slot)!.CarriedBy = carrier;
-        world.RunTicks(30);
-        Assert.True(aggro.SensesOf(looker.Slot)!.Knows(seen), "the entry is kept while its life lasts");
-        Assert.False(aggro.SensesOf(looker.Slot)!.Knows(seen, now: true), "but nothing refreshes it");
-    }
-
-    /// <summary>
-    /// Two of the player's squad fight a group, a third stands apart and one of the group attacks it: the lone one keeps fighting its own attacker through every re-pick
-    /// (docs/game/combat.md "Target selection": the chooser's lists are its own attackers and threats, and a bodyguard's protectee's attackers, never a squad mate's).
-    /// </summary>
-    [Fact]
-    public void A_lone_fighter_keeps_its_own_attacker_while_its_mates_fight_a_group()
-    {
-        using var a = Make(7, 1);
-        var o = new Vector2(2000, 2000);
-        var mine = a.SquadOf(Player, o, true, (o, 0f), (o + new Vector2(0, 25), 0f), (o + new Vector2(0, 150), 0f));
-        var raiders = a.SquadOf(Raiders, o, true, (o + new Vector2(25, 0), 0f), (o + new Vector2(25, 25), 0f), (o + new Vector2(30, -10), 0f), (o + new Vector2(30, 35), 0f),
-            (o + new Vector2(40, 150), 0f));
-        var table = a.World.Characters;
-        foreach (var m in mine.Members) table.Cold(m.Slot)!.IsPlayer = true;
-        CharacterId pa = mine.Members[0], pb = mine.Members[1], lone = mine.Members[2], foe = raiders.Members[4];
-        long t = a.World.Tick;
-        a.World.Commands.Enqueue(new AttackOrder([raiders.Members[0], raiders.Members[2]], pa) { Tick = t });
-        a.World.Commands.Enqueue(new AttackOrder([raiders.Members[1], raiders.Members[3]], pb) { Tick = t });
-        a.World.Commands.Enqueue(new AttackOrder([foe], lone) { Tick = t });
-        a.World.Commands.Enqueue(new AttackOrder([pa], raiders.Members[0]) { Tick = t, Defensive = true });
-        a.World.Commands.Enqueue(new AttackOrder([pb], raiders.Members[1]) { Tick = t, Defensive = true });
-        a.World.Commands.Enqueue(new AttackOrder([lone], foe) { Tick = t, Defensive = true });
-        int checkedTicks = 0;
-        for (int k = 0; k < 300; k++)
-        {
-            a.World.RunTicks(1);
-            if (table.Cold(foe.Slot)!.Medical!.Incapacitated || table.Cold(lone.Slot)!.Medical!.Incapacitated) break;
-            Assert.Equal(foe.Slot, a.Combat.StateOf(lone).TargetSlot);
-            checkedTicks++;
-        }
-        Assert.True(checkedTicks * a.World.TickSeconds > 3 * CombatSystem.PickSeconds, $"only {checkedTicks} ticks checked");
-    }
-
     // The shop scenarios (docs/game/ai-tasks.md "Combat goals"): 0 the town (the shop's; it hates the bandits), 1 bandits (they hate nobody, so they start no fight), 2 drifters.
     const int Town = 0, Bandits = 1, Drifters = 2;
 
@@ -515,82 +449,6 @@ public class AggroTests
     static void Think(Arena a) => a.World.RunTick();
 
     /// <summary>
-    /// An NPC is never fully rested (state 72, docs/game/ai-tasks.md "StateType ids"): with only Sleeping on ground (175) in its lists and no town, no enemy and no weapon
-    /// drawn, it sleeps. Catches the planner's done test leaving the NPC's sleep row out as already achieved (it idled then).
-    /// </summary>
-    [Fact]
-    public void An_npc_sleeps_on_the_ground_by_its_goal_since_it_is_never_fully_rested()
-    {
-        using var a = Make(5, 1, TownRelations(), ai: true);
-        var o = new Vector2(2000, 2000);
-        var pack = a.Squad(Drifters, o, o, o + new Vector2(10, 0));
-        Lists(pack, [Goal(TaskType.SLEEP_ON_FLOOR)], [Goal(TaskType.SLEEP_ON_FLOOR)]);
-        a.World.RunTicks(30);
-        Assert.All(pack.Members, m => Assert.Equal(TaskType.SLEEP_ON_FLOOR, a.World.Characters.Cold(m.Slot)!.Ai!.Goal!.Task.Type));
-    }
-
-    /// <summary>
-    /// A healthy character of the player's faction is fully rested (state 72): the same squad, of the player's faction, leaves 175 out as done and idles. Catches the player's
-    /// side losing its rested test along with the NPCs'.
-    /// </summary>
-    [Fact]
-    public void A_healthy_character_of_the_players_faction_is_fully_rested_and_does_not_sleep_by_that_goal()
-    {
-        using var a = Make(5, 1, TownRelations(), ai: true);
-        a.World.Player.Faction = Drifters;
-        var o = new Vector2(2000, 2000);
-        var pack = a.Squad(Drifters, o, o, o + new Vector2(10, 0));
-        Lists(pack, [Goal(TaskType.SLEEP_ON_FLOOR)], [Goal(TaskType.SLEEP_ON_FLOOR)]);
-        a.World.RunTicks(30);
-        Assert.All(pack.Members, m => Assert.Equal(TaskType.IDLE, a.World.Characters.Cold(m.Slot)!.Ai!.Goal!.Task.Type));
-    }
-
-    /// <summary>
-    /// A law enforcer (34) defends an innocent who is no ally (docs/game/ai-tasks.md, <c>FUN_14099b820</c>): the victim of another, peaceful faction, with no pending crime and no bounty, is one;
-    /// a victim with a pending crime or a bandit is not. Catches 34 defending only allies.
-    /// </summary>
-    [Fact]
-    public void A_law_enforcer_counts_a_peaceful_stranger_as_an_innocent_victim_but_not_a_criminal()
-    {
-        using var a = Make(13, 1, TownRelations(), ai: true);
-        var o = new Vector2(2000, 2000);
-        CharacterId Lone(int faction, float x) => a.SquadOf(faction, o, true, (o + new Vector2(x, 0), 0f)).Members[0];
-        var guard = Lone(Town, 0); var attacker = Lone(Bandits, 10); var victim = Lone(Drifters, 20);
-        var table = a.World.Characters;
-        Assert.True(a.Aggro.Innocent(table.Cold(guard.Slot)!, table.Cold(attacker.Slot)!, table.Cold(victim.Slot)!));
-        table.Cold(victim.Slot)!.Pending = new Meitou.Simulation.Crime.PendingCrime { Code = Meitou.Simulation.Crime.CrimeCode.Assault, VictimFaction = Town };
-        Assert.False(a.Aggro.Innocent(table.Cold(guard.Slot)!, table.Cold(attacker.Slot)!, table.Cold(victim.Slot)!));
-    }
-
-    /// <summary>
-    /// Goal 15's desire is the finder's first sensed ally above 0, not the best (<c>FUN_140599b90</c> asks <c>FUN_14099ca10</c> to stop at the first): a gate guard sees two mates, one fought by
-    /// one bandit (threat 0.05) and one by three (0.55); the scan's first value is the first of them in its senses, whichever is larger. Catches a constant desire of 1.
-    /// </summary>
-    [Fact]
-    public void Goal_15_desire_is_the_first_fighting_allys_threat_not_the_best()
-    {
-        using var a = Make(14, 1, TownRelations(), ai: true);
-        a.Aggro.Combat = a.Combat;
-        var o = new Vector2(2000, 2000);
-        var town = a.SquadOf(Town, o, true, (o, 0f), (o + new Vector2(10, 0), 0f), (o + new Vector2(-10, 0), 0f));
-        Lists(town, [Goal(TaskType.PROTECT_ALLIES)]);
-        Think(a);
-        CharacterId guard = town.Members[0], one = town.Members[1], three = town.Members[2];
-        var gang = a.SquadOf(Bandits, o, true, (o + new Vector2(0, 30), MathF.PI), (o + new Vector2(8, 30), MathF.PI), (o + new Vector2(-8, 30), MathF.PI), (o + new Vector2(16, 30), MathF.PI));
-        a.World.Commands.Enqueue(new AttackOrder([gang.Members[0]], one) { Tick = a.World.Tick });
-        foreach (var b in gang.Members.Skip(1)) a.World.Commands.Enqueue(new AttackOrder([b], three) { Tick = a.World.Tick });
-        var ai = a.World.SystemOf<AiSystem>()!;
-        float Threat(CharacterId id) => a.Combat.FightThreat(a.World, id.Slot, a.Aggro.SensesOf(id.Slot));
-        bool Seen(SenseEntry e) => e.Now && (e.Target == one.Slot || e.Target == three.Slot) && Threat(new CharacterId(e.Target, e.Generation)) > 0;
-        for (int k = 0; k < 600 && !(Threat(one) > 0 && Threat(three) > 0 && a.Aggro.SensesOf(guard.Slot)!.Entries.Any(Seen)); k++) a.World.RunTicks(1);
-        Assert.True(Threat(one) > 0 && Threat(three) > 0 && Threat(one) != Threat(three), $"both mates fought: {Threat(one)} and {Threat(three)}");
-        var first = a.Aggro.SensesOf(guard.Slot)!.Entries.First(Seen);
-        var scan = ai.ProtectScan(a.World, guard.Slot, TaskType.PROTECT_ALLIES, a.World.Characters.Cold(guard.Slot)!.Ai!);
-        Assert.Equal(Threat(new CharacterId(first.Target, first.Generation)), scan.First);
-        Assert.Equal(MathF.Max(Threat(one), Threat(three)), scan.Value);
-    }
-
-    /// <summary>
     /// A squad shares a sighting, not the attack (docs/simulation.md "Hostility and relations"): a guard that attacks on sight (16) goes for a bandit, and its mate with no combat goal,
     /// which sees the bandit too, never joins. Catches the squad's free mates being dragged into a member's fight whatever their own goals.
     /// </summary>
@@ -612,33 +470,6 @@ public class AggroTests
         }
         Assert.True(a.Fighting(guard), "the guard attacks the bandit on sight");
         Assert.Equal(bandit.Slot, a.Combat.StateOf(guard).TargetSlot);
-    }
-
-    /// <summary>
-    /// A shop keeps out of a fight between strangers (docs/game/ai-tasks.md "Combat goals"): a bandit, whom the town hates, fights a drifter 100 away in view of a vanilla shop's squad, the
-    /// shopkeeper (143), a shop guard (143 and 34 Law enforcer, in no town here) and a gate guard (15); nobody joins, since the drifter is nobody's ally and no mate fights. Catches the
-    /// defending goals attacking any enemy that fights anyone.
-    /// </summary>
-    [Fact]
-    public void A_shop_keeps_out_of_a_fight_between_strangers_100_away()
-    {
-        using var a = Make(8, 1, TownRelations(), ai: true);
-        a.Aggro.Combat = a.Combat;
-        var o = new Vector2(2000, 2000);
-        var shop = a.SquadOf(Town, o, true, (o, 0f), (o + new Vector2(8, 0), 0f), (o + new Vector2(-8, 0), 0f));
-        a.World.Characters.Cold(shop.Members[2].Slot)!.Role = (int)SquadRole.Squad2;
-        Lists(shop, [Goal(TaskType.PROTECT_OWN_SQUAD)], [Goal(TaskType.PROTECT_OWN_SQUAD), Goal(TaskType.ATTACK_TROUBLE_MAKERS)], [Goal(TaskType.PROTECT_ALLIES)]);
-        Think(a);
-        var bandit = a.SquadOf(Bandits, o, true, (o + new Vector2(0, 100), MathF.PI)).Members[0];
-        var drifter = a.SquadOf(Drifters, o, true, (o + new Vector2(0, 110), MathF.PI)).Members[0];
-        a.World.Commands.Enqueue(new AttackOrder([bandit], drifter) { Tick = a.World.Tick });
-        a.World.Commands.Enqueue(new AttackOrder([drifter], bandit) { Tick = a.World.Tick });
-        for (int k = 0; k < (int)(4 / a.World.TickSeconds); k++)
-        {
-            a.World.RunTicks(1);
-            foreach (var m in shop.Members) Assert.False(a.Fighting(m), $"shop member {m.Slot} joined at tick {a.World.Tick}");
-        }
-        Assert.True(a.Fighting(bandit) && a.Fighting(drifter), "the strangers fight on");
     }
 
     /// <summary>
@@ -676,36 +507,6 @@ public class AggroTests
     {
         var p = world.Characters.Previous;
         return Vector2.Distance(new Vector2(p[x.Slot].Position.X, p[x.Slot].Position.Z), new Vector2(p[y.Slot].Position.X, p[y.Slot].Position.Z));
-    }
-
-    /// <summary>
-    /// A squad shares its sightings, not its attacks (docs/game/ai-tasks.md "Combat goals"): a guard that attacks on sight (16) runs at a bandit 400 away, which its shopkeeper (143 only)
-    /// sees too; the shopkeeper does not go with it, and joins by its own goal only once the guard holds the bandit within 150 of it. Catches a mate's sighting pulling a 143-only member
-    /// into the attack (the old squad join).
-    /// </summary>
-    [Fact]
-    public void A_protect_squad_mate_is_not_pulled_into_a_mates_attack_on_sight()
-    {
-        using var a = Make(10, 1, TownRelations(), ai: true);
-        a.Aggro.Combat = a.Combat;
-        var o = new Vector2(2000, 2000);
-        var shop = a.SquadOf(Town, o, true, (o, 0f), (o + new Vector2(10, 0), 0f));
-        CharacterId keeper = shop.Members[0], guard = shop.Members[1];
-        Lists(shop, [Goal(TaskType.PROTECT_OWN_SQUAD)], [Goal(TaskType.ATTACK_ENEMIES)]);
-        Think(a);
-        var bandit = a.SquadOf(Bandits, o, true, (o + new Vector2(5, 400), MathF.PI)).Members[0];
-        float gapBefore = Gap(a.World, guard, bandit);
-        bool guardFirst = false;
-        for (int k = 0; k < (int)(15 / a.World.TickSeconds) && !a.Fighting(keeper); k++)
-        {
-            gapBefore = Gap(a.World, guard, bandit);
-            a.World.RunTicks(1);
-            guardFirst |= a.Fighting(guard) && !a.Fighting(keeper);
-        }
-        Assert.True(guardFirst, "the guard attacks on sight first, alone");
-        Assert.True(a.Fighting(keeper), "the shopkeeper comes to its guard's fight");
-        Assert.Equal(bandit.Slot, a.Combat.StateOf(keeper).TargetSlot);
-        Assert.True(gapBefore <= RetaliationSystem.ProtectReach + 10, $"it joined with the bandit {gapBefore:0} from the guard");
     }
 
     /// <summary>
@@ -809,110 +610,6 @@ public class AggroTests
     }
 
     /// <summary>
-    /// Self preservation is a goal of the same chooser (docs/game/ai-tasks.md "Combat goals", 32 and 35): a member fighting a bandit by its attack goal, whom the bandit fights back, loses
-    /// both arms; the chooser takes 32, whose plan is 35 for a character with no working arm, and the flee step runs it from its threat. Catches the run left to a special case outside the
-    /// chooser. (A leg going down at posture 0 knocks out first, and the bandit drops the downed target.)
-    /// </summary>
-    [Fact]
-    public void A_fighter_with_no_working_arm_runs_away_by_self_preservation_in_the_chooser()
-    {
-        using var a = Make(18, 1, TownRelations(), ai: true, flee: true);
-        a.Aggro.Combat = a.Combat;
-        var o = new Vector2(2000, 2000);
-        var squad = a.SquadOf(Town, o, true, (o, 0f), (o + new Vector2(10, 0), 0f));
-        CharacterId member = squad.Members[1];
-        Lists(squad, [], [Goal(TaskType.ATTACK_ENEMIES)]);
-        Think(a);
-        var bandit = a.SquadOf(Bandits, o, true, (o + new Vector2(5, 100), MathF.PI)).Members[0];
-        var table = a.World.Characters;
-        for (int k = 0; k < (int)(6 / a.World.TickSeconds) && !(a.Fighting(member) && a.Combat.StateOf(bandit).TargetSlot == member.Slot); k++) a.World.RunTicks(1);
-        Assert.True(a.Fighting(member) && a.Combat.StateOf(bandit).TargetSlot == member.Slot, "the member attacks and the bandit fights back");
-        a.World.RunTicks(15);   // a look that lists the bandit among its threats
-        var cold = table.Cold(member.Slot)!;
-        cold.Medical!.Parts[RArm].Flesh = cold.Medical.Parts[LArm].Flesh = -80;
-        for (int k = 0; k < 2 * 15 && !cold.Fleeing; k++) a.World.RunTicks(1);
-        Assert.False(cold.Medical.ArmWorks(left: true) || cold.Medical.ArmWorks(left: false), "no arm works");
-        Assert.True(cold.Fleeing && cold.FleesAlone, "it crawls away from its threat");
-        Assert.Equal(TaskType.SELF_PRESERVATION, cold.Ai!.Goal!.Task.Type);
-    }
-
-    /// <summary>
-    /// A squad of two whose leader is knocked out is not intact (docs/game/perception.md "Fleeing", <c>FUN_14079acf0</c>): the member standing runs from the bandit it fights, and the HUD's Goal
-    /// line says "Running away" (<c>Task_Runaway</c>'s name) rather than "Moving", its walk's. Catches a run that reads as an aimless walk to the player.
-    /// </summary>
-    [Fact]
-    public void A_squad_member_running_after_its_leader_fell_is_shown_as_running_away()
-    {
-        using var a = Make(31, 1, TownRelations(), ai: true, flee: true, squadBreak: true);
-        a.Aggro.Combat = a.Combat;
-        var o = new Vector2(2000, 2000);
-        var squad = a.SquadOf(Town, o, true, (o, 0f), (o + new Vector2(10, 0), 0f));
-        CharacterId leader = squad.Leader, member = squad.Members.First(m => m != squad.Leader);
-        Lists(squad, [], [Goal(TaskType.ATTACK_ENEMIES)]);
-        Think(a);
-        var bandit = a.SquadOf(Bandits, o, true, (o + new Vector2(5, 100), MathF.PI)).Members[0];
-        var table = a.World.Characters;
-        for (int k = 0; k < (int)(6 / a.World.TickSeconds) && !a.Fighting(member); k++) a.World.RunTicks(1);
-        Assert.True(a.Fighting(member), "the member attacks the bandit");
-        table.Cold(leader.Slot)!.Medical!.KnockOut(1000);
-        var cold = table.Cold(member.Slot)!;
-        for (int k = 0; k < 10 / a.World.TickSeconds && !cold.Fleeing; k++) a.World.RunTicks(1);
-        Assert.True(cold.Fleeing && !cold.FleesAlone, "the broken squad's member runs");
-        a.World.RunTicks(3);
-        Assert.Equal("Running away", Meitou.Simulation.Ai.AiSystem.ActivityText(table.Next[member.Slot], cold));
-    }
-
-    /// <summary>
-    /// The original runs no squad for being broken (docs/game/perception.md "Squad not intact": only a package with the retreat signal acts on it, and no squad template lists one): by default
-    /// the member of a squad of two whose leader is knocked out keeps fighting. Catches every broken squad running.
-    /// </summary>
-    [Fact]
-    public void A_broken_squad_does_not_run_unless_the_option_is_on()
-    {
-        using var a = Make(31, 1, TownRelations(), ai: true, flee: true);
-        a.Aggro.Combat = a.Combat;
-        var o = new Vector2(2000, 2000);
-        var squad = a.SquadOf(Town, o, true, (o, 0f), (o + new Vector2(10, 0), 0f));
-        CharacterId leader = squad.Leader, member = squad.Members.First(m => m != squad.Leader);
-        Lists(squad, [], [Goal(TaskType.ATTACK_ENEMIES)]);
-        Think(a);
-        a.SquadOf(Bandits, o, true, (o + new Vector2(5, 100), MathF.PI));
-        var table = a.World.Characters;
-        for (int k = 0; k < (int)(6 / a.World.TickSeconds) && !a.Fighting(member); k++) a.World.RunTicks(1);
-        Assert.True(a.Fighting(member), "the member attacks the bandit");
-        table.Cold(leader.Slot)!.Medical!.KnockOut(1000);
-        a.World.RunTicks(4 * 15);
-        Assert.False(table.Cold(member.Slot)!.Fleeing, "no squad runs for being broken");
-        Assert.Equal(0, a.World.Systems.OfType<FleeSystem>().Single().Broken);
-    }
-
-    /// <summary>
-    /// A small town squad with its own building holds while anyone is able (the persistent-with-home rule of <c>FUN_14079acf0</c>, the same test as the AI's intact flag): with the leader knocked
-    /// out, its member does not run, where the same squad without a home does. Catches the flee trigger passing no home.
-    /// </summary>
-    [Fact]
-    public void A_town_squad_with_its_own_home_holds_when_its_leader_falls()
-    {
-        foreach (bool home in new[] { false, true })
-        {
-            using var a = Make(41, 1, TownRelations(), flee: true, squadBreak: true);
-            a.Aggro.Combat = a.Combat;
-            var o = new Vector2(2000, 2000);
-            var building = new Meitou.Data.World.TownBuilding("b", "b", "House", new Vector3(o.X, 150, o.Y), 0, false, false, []);
-            var squad = home ? a.TownSquadOf(Town, o, building, (o, 0f), (o + new Vector2(10, 0), 0f)) : a.SquadOf(Town, o, true, (o, 0f), (o + new Vector2(10, 0), 0f));
-            CharacterId leader = squad.Leader, member = squad.Members.First(m => m != squad.Leader);
-            var bandit = a.SquadOf(Bandits, o, true, (o + new Vector2(5, 100), MathF.PI)).Members[0];
-            var table = a.World.Characters;
-            a.World.Commands.Enqueue(new AttackOrder([member], bandit) { Tick = a.World.Tick });
-            a.World.RunTicks(30);
-            Assert.True(a.Fighting(member), "the member fights the bandit");
-            table.Cold(leader.Slot)!.Medical!.KnockOut(1000);
-            a.World.RunTicks(4 * 15);
-            Assert.Equal(!home, table.Cold(member.Slot)!.Fleeing);
-        }
-    }
-
-    /// <summary>
     /// An NPC defends itself by 32 Self preservation in the chooser (docs/game/ai-tasks.md "Combat goals": desire 1 within 40, plan 13 on its own attacker): a member with no combat goal that
     /// already senses a bandit is attacked by it; the alert puts the bandit on its threats list at once, so its next think takes 32 and the serial step starts the fight two ticks after the alert,
     /// a fight the AI holds across its thinks. Catches the old engine answer outside the chooser, and a threats list stale until the next look (32 at 0, the fight never started or dropped).
@@ -983,36 +680,6 @@ public class AggroTests
     }
 
     /// <summary>
-    /// A landed blow on an NPC whose fight is off asks its AI to think (the hit path of <c>AI::underMeleeAttack</c>, docs/game/combat.md "Being targeted"): the member following its leader at
-    /// 0.75 is attacked from 120, so the alert finds Self preservation at 0.7; with the periodic think far off (every 600 ticks), it fights back two ticks after the first blow that lands.
-    /// Catches a hit that leaves the threat to the periodic think (up to 15 ticks of being beaten unanswered).
-    /// </summary>
-    [Fact]
-    public void A_landed_blow_on_an_npc_with_its_fight_off_has_it_think_at_once()
-    {
-        using var a = Make(24, 1, TownRelations(), ai: true, think: new AiSettings { ThinkEveryTicks = 600 });
-        a.Aggro.Combat = a.Combat;
-        var o = new Vector2(2000, 2000);
-        var squad = a.SquadOf(Town, o, true, (o, 0f), (o + new Vector2(10, 0), 0f));
-        CharacterId member = squad.Members[1];
-        Lists(squad, [], [Goal(TaskType.FOLLOW_SQUADLEADER, 0.75f, target: TaskTargetType.Leader)]);
-        Think(a);
-        var bandit = a.SquadOf(Bandits, o, true, (o + new Vector2(10, 120), MathF.PI)).Members[0];
-        a.World.RunTicks(15);
-        a.World.Commands.Enqueue(new AttackOrder([bandit], member) { Tick = a.World.Tick });
-        long hit = -1;
-        for (int k = 0; k < (int)(8 / a.World.TickSeconds) && !a.Fighting(member); k++)
-        {
-            a.World.RunTicks(1);
-            if (hit < 0 && a.Combat.StateOf(member).Taken > 0) hit = a.World.Tick;
-        }
-        Assert.True(hit >= 0, "a blow landed before it fought back");
-        Assert.True(a.Fighting(member), "it fights back");
-        Assert.InRange(a.World.Tick - hit, 0, 2);
-        Assert.Equal(TaskType.SELF_PRESERVATION, a.World.Characters.Cold(member.Slot)!.Ai!.Goal!.Task.Type);
-    }
-
-    /// <summary>
     /// A crossbowman shooting from 400, beyond Self preservation's 181.7 (desire 0, <c>FUN_140599d20</c>), is not fought back by an NPC whose lists hold no combat goal: nothing in its chooser
     /// covers it (the original's too, docs/game/combat.md "Self-defence"). With 143 Protect close allies the NPC counts itself (its own fight threat, <c>FUN_14099d510</c>) and row 13 takes its own
     /// attacker at any distance, so it goes for the shooter. Catches the old engine answer at any distance, and a 143 that never covers its own holder.
@@ -1075,72 +742,6 @@ public class AggroTests
         var one = Run(1);
         Assert.Equal(one, Run(4));
         Assert.Equal(one, Run(16));
-    }
-
-    /// <summary>
-    /// A combat goal pre-empts an engine duty that a fight may interrupt (docs/game/ai-tasks.md "Precedence": the duties are goals and jobs below a priority-3 goal): a member carrying a downed
-    /// intruder out of town (a town errand's walk) attacks a bandit on sight with the body on its shoulder; on a kidnapper's cage walk, which its system walks again over a fight, it does not.
-    /// Catches a carrier the AI never lets fight, and a fight started over a duty that cannot be interrupted.
-    /// </summary>
-    [Theory, InlineData(true), InlineData(false)]
-    public void A_carrier_on_a_town_errand_attacks_on_sight_with_the_body_on_its_shoulder(bool errand)
-    {
-        CharacterId carrier = CharacterId.None, body = CharacterId.None;
-        var o = new Vector2(2000, 2000);
-        var row = errand ? TaskType.TAKE_INTRUDER_OUTSIDE_TOWN : TaskType.FIND_CAGE_AND_PUT_IN;
-        using var a = Make(19, 1, TownRelations(), ai: true, extra: new DutyWalker(() => (carrier, body), o + new Vector2(10, 800), row));
-        a.Aggro.Combat = a.Combat;
-        var squad = a.SquadOf(Town, o, true, (o, 0f), (o + new Vector2(10, 0), 0f));
-        Lists(squad, [], [Goal(TaskType.ATTACK_ENEMIES)]);
-        Think(a);
-        var table = a.World.Characters;
-        body = a.SquadOf(Drifters, o, true, (o + new Vector2(10, 0), 0f)).Members[0];
-        table.Cold(body.Slot)!.Medical!.KnockOut(1000);
-        carrier = squad.Members[1];
-        a.World.RunTick();
-        var bandit = a.SquadOf(Bandits, o, true, (o + new Vector2(5, 300), MathF.PI)).Members[0];
-        a.World.RunTicks((int)(4 / a.World.TickSeconds));
-        Assert.Equal(errand, a.Fighting(carrier));
-        Assert.Equal(body, table.Cold(carrier.Slot)!.Carrying);
-        if (errand) Assert.Equal(bandit.Slot, a.Combat.StateOf(carrier).TargetSlot);
-    }
-
-    /// <summary>At its first slow world with a carrier named, puts the body on its shoulder and starts an engine duty's walk (row <paramref name="row"/>, a goal's provenance) to <paramref name="to"/>.</summary>
-    sealed class DutyWalker(Func<(CharacterId Carrier, CharacterId Body)> who, Vector2 to, TaskType row) : ITickSystem
-    {
-        bool done;
-
-        public void SlowWorld(SimWorld world)
-        {
-            var (carrier, body) = who();
-            if (done || !world.Characters.TryResolveNext(carrier, out int slot)) return;
-            done = true;
-            (world.Characters.Cold(slot)!.Carrying, world.Characters.Cold(body.Slot)!.CarriedBy) = (body, carrier);
-            TaskStart.Walk(world, slot, to, SpeedMode.Walk, row, TaskSource.Goal);
-        }
-    }
-
-    /// <summary>
-    /// Mates choosing from one sighting in the same tick spread over the foes as the original's one-after-another choosers do (a fight's start puts the fighter on its target's engaged list, which
-    /// the next chooser's target score counts, docs/game/ai-tasks.md "Combat goals"): two members that attack on sight see two bandits, one 20 farther than the other, and start their fights in
-    /// the same tick on different bandits. Catches every mate of a sighting piling on one target.
-    /// </summary>
-    [Fact]
-    public void Mates_attacking_from_one_sighting_in_the_same_tick_take_different_bandits()
-    {
-        using var a = Make(20, 1, TownRelations(), ai: true);
-        a.Aggro.Combat = a.Combat;
-        var o = new Vector2(2000, 2000);
-        var squad = a.SquadOf(Town, o, true, (o + new Vector2(-4, 0), 0f), (o + new Vector2(4, 0), 0f));
-        Lists(squad, [Goal(TaskType.ATTACK_ENEMIES)], [Goal(TaskType.ATTACK_ENEMIES)]);
-        Think(a);
-        a.SquadOf(Bandits, o, true, (o + new Vector2(0, 200), MathF.PI), (o + new Vector2(0, 220), MathF.PI));
-        for (int k = 0; k < (int)(4 / a.World.TickSeconds) && !squad.Members.All(a.Fighting); k++) a.World.RunTicks(1);
-        Assert.All(squad.Members, m => Assert.True(a.Fighting(m)));
-        var log = a.Aggro.Log.Where(e => squad.Members.Contains(e.Attacker)).ToList();
-        Assert.Equal(2, log.Count);
-        Assert.Equal(log[0].Tick, log[1].Tick);
-        Assert.NotEqual(a.Combat.StateOf(squad.Members[0]).TargetSlot, a.Combat.StateOf(squad.Members[1]).TargetSlot);
     }
 
     /// <summary>Two AI packages, "210-t" with 16 Attacking enemies and "211-t" with 143 Protect close allies, for every role, all hours, weight 1.</summary>

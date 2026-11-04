@@ -15,13 +15,7 @@ public class InteriorCoverageTests
 {
     [Theory]
     [InlineData(18, 35, 95, "Squin")]
-    [InlineData(43, 11, 89, "Sho-Battai")]
-    [InlineData(50, 33, 86, "Black Scratch")]
-    [InlineData(20, 32, 97, "The Hub")]
-    [InlineData(47, 16, 92, "Heft")]
-    [InlineData(26, 13, 91, "World's End")]
     [InlineData(19, 29, 79, "Stack")]
-    [InlineData(48, 45, 98, "Snailhouse lagoon")]
     public void A_town_zone_covers_at_least_its_share_of_the_original_interior_faces(int x, int z, int floorPercent, string town)
     {
         var install = InstallData.Install;

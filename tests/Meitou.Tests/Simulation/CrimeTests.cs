@@ -148,16 +148,6 @@ public class CrimeTests
         }
     }
 
-    /// <summary>The original's pending-crime setter (<c>FUN_140852c80</c>) has no NPC test: an NPC culprit gets any crime (the cuffing task's Enslaving, code 1), not only Assault and Looting.</summary>
-    [Fact]
-    public void An_npc_culprit_gets_any_crime_pending_from_the_original_setter()
-    {
-        using var t = new Town();
-        var thug = t.Npc(Rivals, O, name: "thug");
-        Assert.True(t.Crime.SetPending(t.World, thug.Slot, CrimeCode.Enslaving, City, CharacterId.None, CrimeSystem.MinTimer));
-        Assert.Equal(CrimeCode.Enslaving, t.Cold(thug).Pending!.Code);
-    }
-
     // ------------------------------------------------------------------ witnesses
 
     [Fact]

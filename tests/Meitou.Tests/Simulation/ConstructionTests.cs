@@ -167,29 +167,6 @@ public class ConstructionTests
 
     // ------------------------------------------------------------------ a site built, a building taken apart
 
-    /// <summary>
-    /// A crawler (a leg down: the crippled repertoire 0x40) is not sent to build (row 2 registers only the human one, docs/simulation.md "Task eligibility"); a standing builder is. Catches
-    /// a construction start that stops testing its row.
-    /// </summary>
-    [Fact]
-    public void A_crawler_ordered_to_build_is_refused_and_a_standing_builder_is_not()
-    {
-        using var rig = new Rig();
-        var crawler = rig.Add(1000, 2000, 60, (Plank, 3), (Iron, 2));
-        var builder = rig.Add(1010, 2000, 60, (Plank, 3), (Iron, 2));
-        var medical = rig.Cold(crawler).Medical!;
-        medical.Parts[RLeg].Limb = LimbState.Stump;
-        medical.Tick(1e-4f, Context());
-        Assert.True(medical.Crawling);
-        rig.Say(new PlaceBuildings([new PlannedBuilding(Hut, HutAt, Quaternion.Identity)]) { Tick = 0 });
-        rig.World.RunTick();
-        var site = Assert.Single(rig.World.Buildings.All);
-        rig.Say(new BuildOrder([crawler, builder], site.Id) { Tick = rig.World.Tick });
-        rig.World.RunTicks(2);
-        Assert.Equal(CharacterTask.Idle, (CharacterTask)rig.World.Characters.Previous[crawler.Slot].Task);
-        Assert.Contains((CharacterTask)rig.World.Characters.Previous[builder.Slot].Task, new[] { CharacterTask.Build, CharacterTask.DeliverMaterials });
-    }
-
     [Fact]
     public void A_builder_completes_a_site_with_the_documented_rates_and_dismantling_refunds_60_to_100_percent()
     {

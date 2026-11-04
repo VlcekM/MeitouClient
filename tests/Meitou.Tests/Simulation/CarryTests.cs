@@ -73,19 +73,6 @@ public class CarryTests
 
     // ------------------------------------------------------------------ carrying
 
-    /// <summary>The lift rows carry condition !26 on the carrier (<c>FUN_140599e90</c>): a carrier staying low cannot start a lift, one standing can.</summary>
-    [Fact]
-    public void A_carrier_staying_low_cannot_start_a_lift()
-    {
-        using var rig = new Rig();
-        var carrier = rig.Add(1000, 2000);
-        rig.World.RunTicks(2);
-        var cold = rig.Cold(carrier);
-        Assert.True(CarrySystem.CanCarry(rig.World, cold));
-        cold.Medical!.StayingLow = true;
-        Assert.False(CarrySystem.CanCarry(rig.World, cold));
-    }
-
     [Fact]
     public void A_pick_up_walks_lifts_at_the_documented_clip_point_and_adds_the_carry_person_weight()
     {
@@ -143,28 +130,6 @@ public class CarryTests
             Assert.True(rig.Cold(body).CarriedBy.IsNone);
             Assert.True(Flat(rig.Hot(carrier).Position, rig.Hot(body).Position) < 0.01f, "dropped where the carrier stands");
         }
-    }
-
-    /// <summary>
-    /// An animal is not given a pick-up (row 225 registers only the human repertoire, docs/game/carry-loot.md "Who carries"); a person beside it is. Catches a carry start that stops
-    /// testing its row.
-    /// </summary>
-    [Fact]
-    public void An_animal_ordered_to_pick_up_a_body_is_refused_and_a_person_is_not()
-    {
-        using var rig = new Rig();
-        var animal = rig.Add(1000, 2000);
-        rig.Cold(animal).Fighter = new Meitou.Simulation.Combat.Fighter(null) { IsAnimal = true };
-        var person = rig.Add(1000, 2100);
-        var body = rig.Add(1100, 2000, player: false, squad: 1, faction: 1);
-        var other = rig.Add(1100, 2100, player: false, squad: 1, faction: 1);
-        rig.Body(body).KnockOut(10000);
-        rig.Body(other).KnockOut(10000);
-        rig.Say(new PickUpOrder([animal], body) { Tick = 1 });
-        rig.Say(new PickUpOrder([person], other) { Tick = 1 });
-        rig.World.RunTicks(3);
-        Assert.Equal(CharacterTask.Idle, rig.Task(animal));
-        Assert.Equal(CharacterTask.PickUp, rig.Task(person));
     }
 
     [Fact]

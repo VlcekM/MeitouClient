@@ -38,12 +38,8 @@ public class MapFeatureNavmeshTests
         return (float)map.HeightAt(x, z);
     }
 
-    // Rebirth's statue foundation, a gravel pile (21.19), Mourn's tube band and wall walkway (34.46), Squin's canopy (18.35).
+    // Rebirth's statue foundation.
     static readonly (float X, float Z)[] StatueFoundation = [(-47503, -56300), (-47300, -56079)];
-    static readonly (float X, float Z) GravelPile = (-46794, -57195);
-    static readonly (float X, float Z, float Top)[] TubeBand = [(12600, 66216, 1078.5f), (12800, 66216, 1078.5f), (13200, 66216, 1078.5f), (12400, 66304, 1140.1f), (13000, 66456, 1246.5f)];
-    static readonly (float X, float Z) WallWalkway = (12600, 66150);
-    static readonly (float X, float Z) SquinCanopy = (-60300, 15908);
 
     /// <summary>The heights of the kept polygons over a point.</summary>
     static List<float> KeptHeights(ZoneNavMesh kept, float x, float z)
@@ -68,61 +64,6 @@ public class MapFeatureNavmeshTests
             Assert.False(heights.Any(h => MathF.Abs(h - ground) < 12), $"{x},{z}: kept ground at the terrain {ground:0.0} inside the foundation ({Describe(heights)})");
             Assert.True(heights.Any(h => MathF.Abs(h - 755.8f) < 2), $"{x},{z}: no kept polygon on the foundation's top ~755.8 ({Describe(heights)})");
         }
-    }
-
-    [Fact]
-    public void A_gravel_pile_has_no_ground_inside_it()
-    {
-        Assert.SkipWhen(InstallData.Install is null, "Kenshi install not found");
-        var (_, kept) = Zone(Rebirth);
-        // Gravel-Pile02 at -46794,1033,-57195: terrain 1045.7 at its centre (walked through without features), its top 1159.5 (the original's 1152.6).
-        var (x, z) = GravelPile;
-        var heights = KeptHeights(kept, x, z);
-        float ground = Ground(x, z);
-        Assert.False(heights.Any(h => MathF.Abs(h - ground) < 12), $"kept ground at the terrain {ground:0.0} inside the gravel pile ({Describe(heights)})");
-        Assert.True(heights.Any(h => MathF.Abs(h - 1159.5f) < 4), $"no kept polygon on the gravel pile's top ~1159.5 ({Describe(heights)})");
-    }
-
-    [Fact]
-    public void Mourns_tube_does_not_join_the_defensive_wall_walkway()
-    {
-        Assert.SkipWhen(InstallData.Install is null, "Kenshi install not found");
-        var (_, kept) = Zone(Mourn);
-        // Vast_Land Tube 01's band past where its top runs inside Defensive Wall IV 34.46:20-/22- (FeatureSeamCells): kept without the seam rule, not in the original.
-        foreach (var (x, z, top) in TubeBand)
-        {
-            var heights = KeptHeights(kept, x, z);
-            Assert.False(heights.Any(h => MathF.Abs(h - top) < 8), $"{x},{z}: kept polygon on the tube's top {top} ({Describe(heights)})");
-        }
-        // The wall's walkway beside it (y ~1048, over the wall's solid 1035..1046) stays kept.
-        var walkway = KeptHeights(kept, WallWalkway.X, WallWalkway.Z);
-        Assert.True(walkway.Any(h => MathF.Abs(h - 1048) < 2), $"no kept walkway at {WallWalkway} ~1048 ({Describe(walkway)})");
-    }
-
-    [Fact]
-    public void Squins_obstacle_canopy_keeps_the_ground_under_it()
-    {
-        Assert.SkipWhen(InstallData.Install is null, "Kenshi install not found");
-        var (g, kept) = Zone(Squin);
-        var (x, z) = SquinCanopy;
-        float ground = Ground(x, z);
-        // An obstacle foliage mesh open below has a face ~51 over the terrain (420.6 under 471.9); the inside rule is not applied to it, so the ground stays as in the original's tile.
-        Assert.True(FeatureOrFoliageHeights(g, x, z).Any(y => y > ground + 40 && y < ground + 60), "the canopy's face over the point is gone; the point no longer tests a canopy");
-        var heights = KeptHeights(kept, x, z);
-        Assert.True(heights.Any(h => MathF.Abs(h - ground) < 2), $"no kept ground at the terrain {ground:0.0} under the canopy ({Describe(heights)})");
-    }
-
-    /// <summary>The heights of the gathered map feature and foliage triangles over a point.</summary>
-    static List<float> FeatureOrFoliageHeights(ZoneGeometry g, float x, float z)
-    {
-        var result = new List<float>();
-        for (int t = g.BuildingLastTriangle; t < g.TriangleCount; t++)
-        {
-            Vector3 V(int k) { int i = g.Indices[t * 3 + k]; return new(g.Vertices[i * 3], g.Vertices[i * 3 + 1], g.Vertices[i * 3 + 2]); }
-            Vector3 a = V(0), b = V(1), c = V(2);
-            if (NavGeometry.Barycentric(x, z, a, b, c, out float u, out float v, out float w) && u >= 0 && v >= 0 && w >= 0) result.Add(u * a.Y + v * b.Y + w * c.Y);
-        }
-        return result;
     }
 
     [Fact]

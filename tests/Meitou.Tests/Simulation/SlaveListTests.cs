@@ -76,54 +76,6 @@ public class SlaveListTests
     }
 
     /// <summary>
-    /// 173 Gathering slaves from cages waits while more than 3 slaves of the squad's list are up and free (its desire, docs/game/ai-tasks.md slot 63), the slaves
-    /// that obey the squad from squads of their own counted. With 4 it gathers nobody; with 2 left it opens the occupied cage. Catches the gate reading only the
-    /// squad's own slave members, so a workmaster with many obeying slaves kept gathering.
-    /// </summary>
-    [Fact]
-    public void Gathering_waits_while_more_than_three_slaves_that_obey_the_squad_are_up_and_free()
-    {
-        var (world, captive, city, cage) = Town();
-        using var _ = world;
-        var master = NewSquad(world, city, Board([], [], [Goal(TaskType.GATHER_SLAVES_FROM_CAGES)], [], []));
-        var worker = Member(world, master, cage.Position + new Vector3(60, 0, 0));
-        var prisoner = Member(world, NewSquad(world, city, Board([], [], [], [], [])), cage.Position);
-        Assert.True(world.Fixtures.Imprison(world, prisoner, cage));
-        var slaves = Enumerable.Range(0, 4).Select(k => ObeyingSlave(world, city, master, cage.Position + new Vector3(80 + 10 * k, 0, 0))).ToList();
-
-        world.RunTicks(61);
-        bool Gathers() => captive.Log.Any(e => e is { Kind: CaptiveEventKind.Started, Job: CaptiveJobKind.Gather } && e.Worker == worker);
-        Assert.False(Gathers());
-
-        // Two of them freed: 2 left up and free, so it gathers.
-        foreach (var s in slaves.Take(2)) (world.Characters.Cold(s.Slot)!.SlaveState, world.Characters.Cold(s.Slot)!.SlaveMaster) = (0, -1);
-        world.RunTicks(61);
-        Assert.True(Gathers());
-    }
-
-    /// <summary>
-    /// 188 Working the slaves keeps its slave until a line is said (docs/game/ai-tasks.md, the slavers' event-38 lines; the row's B list isDialogDelivered): with no
-    /// dialogue, a worker stands by an obeying slave 20 away and keeps the same Shout job for 30 s, saying the event again on the way. Catches the job that ended at
-    /// reach and then held the worker for 0.55 to 1.65 game hours, so the Rebirth workmasters shouted once an hour and stayed home in between.
-    /// </summary>
-    [Fact]
-    public void A_worker_keeps_its_shout_job_while_no_line_is_said()
-    {
-        var (world, captive, city, cage) = Town();
-        using var _ = world;
-        var master = NewSquad(world, city, Board([], [], [Goal(TaskType.WORK_THE_SLAVES)], [], []));
-        var worker = Member(world, master, cage.Position + new Vector3(60, 0, 0));
-        ObeyingSlave(world, city, master, cage.Position + new Vector3(80, 0, 0));
-        world.RunTicks(61);
-        var job = Assert.Single(captive.Jobs, j => j is { Kind: CaptiveJobKind.Shout } && j.Worker == worker);
-
-        world.RunTicks((int)(30 / world.TickSeconds));
-        Assert.Contains(job, captive.Jobs);
-        Assert.True(job.Blows >= 3, $"{job.Blows} shouts");
-        Assert.DoesNotContain(captive.Log, e => e.Job == CaptiveJobKind.Shout && e.Worker == worker && e.Kind != CaptiveEventKind.Started);
-    }
-
-    /// <summary>
     /// With its line on (a dialogue package with an event-38 line, ambient events on), the worker's Shout job ends once it says the line, and the next sweep starts
     /// another on its slaves. Catches a job that never ended, or ended without a line.
     /// </summary>

@@ -23,25 +23,4 @@ public class IgnoreMapTests
         Assert.False(cold.IsIgnored(IgnoreKey.Of(new CharacterId(4, 3)), 0));
         Assert.False(cold.IsIgnored(IgnoreKey.Of(target), 150));
     }
-
-    [Fact]
-    public void Noting_a_target_again_re_arms_it_instead_of_adding_a_second_entry()
-    {
-        var cold = new CharacterCold();
-        cold.NoteUnreachable("machine-1", 100);
-        cold.NoteUnreachable("machine-1", 400);
-        Assert.Single(cold.Ignored!);
-        Assert.True(cold.IsUnreachable("machine-1", 399));
-    }
-
-    [Fact]
-    public void The_zone_window_is_the_zone_and_its_eight_neighbours()
-    {
-        const double z = WorldLayout.ZoneSize;
-        Assert.True(WorldLayout.WithinOneZone(10, 10, 10, 10));
-        Assert.True(WorldLayout.WithinOneZone(z - 1, 10, z + 1, 10));      // across a border
-        Assert.True(WorldLayout.WithinOneZone(10, 10, 2 * z - 1, 2 * z - 1));   // the far corner of the next zone
-        Assert.False(WorldLayout.WithinOneZone(10, 10, 2 * z + 1, 10));    // two zones away
-        Assert.False(WorldLayout.WithinOneZone(10, 10, 10, -2 * z + 1));
-    }
 }

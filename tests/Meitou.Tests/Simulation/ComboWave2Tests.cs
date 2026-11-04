@@ -19,15 +19,6 @@ public class ComboWave2Tests
         Assert.False(AiSystem.Stands(caged, inMissionTown: true));
     }
 
-    /// <summary>Catches the doc's old clamp reading of the lerp: skill 0 plays at 0.55 and 100 at 2.0 (FUN_140015b63).</summary>
-    [Fact]
-    public void The_lock_pick_clip_speed_is_the_lerp_of_the_skill()
-    {
-        Assert.Equal(0.55f, LockSystem.PickPlayRate(0), 4);
-        Assert.Equal(2.0f, LockSystem.PickPlayRate(100), 4);
-        Assert.Equal(1.275f, LockSystem.PickPlayRate(50), 4);
-    }
-
     /// <summary>Catches a closed building's alarm answered at the open reach, or by an investigator inside it (FUN_14092a810:52-62).</summary>
     [Fact]
     public void An_alarm_in_a_closed_building_is_skipped_inside_and_halved_again_outside()

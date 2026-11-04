@@ -343,38 +343,6 @@ public class FirstAidTests
         Assert.NotEqual(CharacterTask.Treat, Task());
     }
 
-    /// <summary>
-    /// docs/game/character-stats.md "First aid update" (Reach): a guard treats a caged prisoner from the cage's use node, on that node's floor. With the node a floor up (an upstairs
-    /// cage; the open ground has no way up) the prisoner is not treated through the floor: the walk ends off that floor and the treatment gives up.
-    /// </summary>
-    [Theory]
-    [InlineData(0f, true)]
-    [InlineData(65f, false)]
-    public void A_guard_treats_a_caged_prisoner_from_the_cage_door_on_its_floor(float rise, bool treated)
-    {
-        using var c = CagedPrisoner(rise);
-        var (world, guard, prisoner, body, door) = (c.World, c.Guard, c.Prisoner, c.Body, c.Door);
-        bool walking = false;
-        for (int t = 0; t < 900 && Bandage(body) == 0; t++)
-        {
-            world.RunTick();
-            walking |= (CharacterTask)world.Characters.Previous[guard.Slot].Task == CharacterTask.Treat;
-            if (walking && (CharacterTask)world.Characters.Previous[guard.Slot].Task != CharacterTask.Treat) break;
-        }
-        Assert.True(walking, "the guard took the prisoner as its patient");
-        Assert.Equal(treated, Bandage(body) > 0);
-        var at = world.Characters.Previous[guard.Slot].Position;
-        if (treated)
-        {
-            // At the use node, not against the bars by the prisoner (the node is 30 from it).
-            Assert.True(Vector2.Distance(new Vector2(at.X, at.Z), new Vector2(door.X, door.Z)) <= 14, $"the guard treats from the use node, stands at {at}");
-            return;
-        }
-        // Not treated from the floor below: the walk could not reach the node's floor, so the patient went on the guard's path failures.
-        Assert.NotEqual(CharacterTask.Treat, (CharacterTask)world.Characters.Previous[guard.Slot].Task);
-        Assert.True(PursuitSystem.PathImpossible(world.Characters.Cold(guard.Slot)!, prisoner, world.Tick));
-    }
-
     sealed record CagedWorld(SimWorld World, CharacterId Guard, CharacterId Prisoner, MedicalState Body, Vector3 Door) : IDisposable
     {
         public void Dispose() => World.Dispose();

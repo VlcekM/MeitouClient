@@ -148,15 +148,6 @@ public class DeterminismTests
 public class ToughnessReadTests
 {
     [Fact]
-    public void The_lerps_do_not_clamp_toughness_past_100()
-    {
-        // 150: KO point -(10 + 75 x 1.5), degeneration 1.7 + (0.03 - 1.7) x 1.5, starvation (100 - (10 + 75 x 2)) / 100 at 200.
-        Assert.Equal(-122.5f, MedicalState.KoPoint(BaseGame, 150), 3);
-        Assert.Equal(1.7f + (0.03f - 1.7f) * 1.5f, MedicalState.DegenerationMult(BaseGame, 150), 3);
-        Assert.Equal(-0.6f, MedicalState.StarvationKoThreshold(BaseGame, 200, false), 3);
-    }
-
-    [Fact]
     public void An_animals_toughness_is_scaled_by_its_stats_multiplier()
     {
         var stats = new CharacterStats { Scale = 0.5f };

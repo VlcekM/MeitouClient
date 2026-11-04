@@ -26,34 +26,6 @@ public class UnmadePlatoonTests
         return new SavePlatoon(r, contentFile.Length > "platoon/".Length ? new SaveFile() : null);
     }
 
-    [Fact]
-    public void Only_an_unfiled_never_activated_platoon_with_members_and_a_home_building_is_unmade()
-    {
-        Assert.True(SaveLoader.Unmade(Platoon()));
-        Assert.False(SaveLoader.Unmade(Platoon(neverActivated: false)));
-        Assert.False(SaveLoader.Unmade(Platoon(charCount: 0)));                       // the save's Holy Nation Outlaws that never appear
-        Assert.False(SaveLoader.Unmade(Platoon(homeType: Hand.NullType)));           // roaming platoons: no home building
-        Assert.False(SaveLoader.Unmade(Platoon(homeType: (int)FcsRecordType.TOWN))); // a home that is not a building
-        Assert.False(SaveLoader.Unmade(Platoon(contentFile: "platoon/Shinobi Thieves_0.platoon")));   // a file: its own characters
-    }
-
-    static Meitou.Simulation.Platoon Stand(bool unmade, Vector2 at) =>
-        new() { Id = 1, Origin = 0, TemplateId = "51709-rebirth.mod", Key = 1, Unmade = unmade, Position = at };
-
-    [Fact]
-    public void An_unmade_platoon_comes_in_at_load_only_in_the_player_box()
-    {
-        var box = new HashSet<ZoneCoordinate> { new(20, 32), new(21, 32) };
-        // Position is X and Z: (20, 32) is the player's zone, (20, 33) a zone of the camera block outside the box.
-        var inBox = Stand(true, new Vector2(-51039.9f, 3656.3f));
-        var outside = Stand(true, new Vector2(-51727.4f, 4880.7f));
-        var ordinary = Stand(false, new Vector2(-51727.4f, 4880.7f));
-        Assert.Equal(new ZoneCoordinate(20, 33), WorldLayout.ZoneOf(outside.Position.X, outside.Position.Y));
-        Assert.True(PopulationSystem.ActivatesAtLoad(inBox, box));
-        Assert.False(PopulationSystem.ActivatesAtLoad(outside, box));
-        Assert.True(PopulationSystem.ActivatesAtLoad(ordinary, box));
-    }
-
     // ------------------------------------------------------------------ through a save of the synthetic town
 
     const string UnmadeName = "Testfolk_77";

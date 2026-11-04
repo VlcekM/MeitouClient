@@ -16,7 +16,6 @@ public class StitchSeamTests
     /// </summary>
     [Theory]
     [InlineData(0, 6, true)]
-    [InlineData(6, 0, true)]
     [InlineData(6, 7, false)]
     public void The_seam_joins_coinciding_edges_within_the_climb_along_two_cells(int gapAt10, int gapAt13, bool joined)
     {

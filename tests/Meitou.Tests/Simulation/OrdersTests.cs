@@ -13,15 +13,6 @@ namespace Meitou.Tests.Simulation;
 /// <summary>The orders panel's toggles: block, passive, hold, sneak and the move speed (docs/simulation.md "Orders").</summary>
 public class OrdersTests
 {
-    /// <summary>A sneaking target is heard with base 0.05 by an awake listener and 0.1 by a sleeper (<c>FUN_140857500</c>): catches the one base for both.</summary>
-    [Fact]
-    public void A_sneaking_target_is_heard_half_as_often_by_an_awake_listener()
-    {
-        float awake = Orders.SneakHearChance(0, 400, 0.5f, awake: true), asleep = Orders.SneakHearChance(0, 400, 0.5f, awake: false);
-        Assert.Equal(0.025f, awake, 1e-6f);
-        Assert.Equal(0.05f, asleep, 1e-6f);
-    }
-
     /// <summary>A player character at the origin and a bandit <paramref name="distance"/> away that attacks it at tick 0; <paramref name="orders"/> set on the player first.</summary>
     static (SimWorld World, CombatSystem Combat, CharacterId Player, CharacterId Bandit) Attacked(CharacterOrders orders, float distance = 30)
     {

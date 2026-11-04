@@ -10,7 +10,7 @@ namespace Meitou.Tests.Simulation;
 /// <summary>M6: <see cref="SimWorld.CanOrder(TaskType, CharacterId, CharacterId, string?, System.Numerics.Vector3)"/> and the snapshot facts the menu reads (docs/simulation.md "Order queue", "Shared predicates").</summary>
 public class CanOrderTests
 {
-    public static TheoryData<string> States => ["standing", "down", "carried", "caged", "asleep", "animal", "crawling"];
+    static string[] States => ["standing", "down", "carried", "caged", "asleep", "animal", "crawling"];
 
     /// <summary>The order rows the menu gives, by the name <see cref="TaskStartTests.Order"/> uses, with their target and site.</summary>
     static (TaskType Row, CharacterId Target, string? Site) Row(TaskStartTests.Rig rig, string name) => name switch
@@ -30,13 +30,11 @@ public class CanOrderTests
         _ => throw new ArgumentException(name),
     };
 
-    public static TheoryData<string, string> StatesAndOrders()
+    static IEnumerable<(string State, string Order)> StatesAndOrders()
     {
-        var data = new TheoryData<string, string>();
-        foreach (string state in new[] { "standing", "down", "carried", "caged", "asleep", "animal", "crawling" })
+        foreach (string state in States)
             foreach (string order in new[] { "move", "follow", "first aid", "rest", "pick up", "loot", "stealth ko", "operate", "build", "dismantle", "use bed", "attack" })
-                data.Add(state, order);
-        return data;
+                yield return (state, order);
     }
 
     /// <summary>
@@ -44,8 +42,10 @@ public class CanOrderTests
     /// starts its act-out when given and one it refuses does not (it stays queued with its text, or leaves the queue). Catches a read that drifts from the start path (a handler testing its own
     /// precondition, a row's repertoire left out) so that a menu or the multiplayer gate would offer or refuse what the order then does otherwise.
     /// </summary>
-    [Theory, MemberData(nameof(StatesAndOrders))]
-    public void CanOrder_agrees_with_what_giving_the_order_does(string state, string name)
+    [Fact]
+    public void CanOrder_agrees_with_what_giving_the_order_does() => Assert.All(StatesAndOrders(), row => AgreesWithTheOrder(row.State, row.Order));
+
+    static void AgreesWithTheOrder(string state, string name)
     {
         using var rig = new TaskStartTests.Rig(carrying: false);
         var f = rig.Fighter;

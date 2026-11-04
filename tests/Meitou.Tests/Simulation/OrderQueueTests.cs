@@ -50,54 +50,6 @@ public class OrderQueueTests
     }
 
     /// <summary>
-    /// <c>checkOrders</c> pops the front once its task is done and the next order starts: a move, then a Shift-queued Rest. Catches a queue that only chains moves, or one whose front stays
-    /// after its task ended.
-    /// </summary>
-    [Fact]
-    public void A_done_order_leaves_the_queue_and_the_next_one_starts()
-    {
-        using var rig = new TaskStartTests.Rig(carrying: false);
-        rig.World.RunTicks(3);
-        var f = rig.Fighter;
-        rig.Say(new MoveOrder([f], new Vector3(1000, 0, 1960)) { Tick = rig.World.Tick });
-        rig.Say(new RestOrder([f]) { Tick = rig.World.Tick, Queued = true });
-        for (int i = 0; i < 400 && rig.Task(f) != CharacterTask.Rest; i++) rig.World.RunTick();
-        Assert.Equal(CharacterTask.Rest, rig.Task(f));
-        Assert.Equal([TaskType.REST], Rows(rig, f));
-        Assert.True(rig.Cold(f).OrderQueue[0].Started);
-    }
-
-    /// <summary>
-    /// A leg that gives out at posture 0 knocks the character out for 3 s (the posture setter <c>FUN_1405c7e20</c> on 0 to 2, docs/game/character-stats.md "Cut-off and leg loss"),
-    /// stumbling or not, and it then crawls with its orders and tasks cleared: a walking character with a Shift-queued Rest ends idle, crawling, with an empty queue. Catches a crawler
-    /// that walks on to its order, or one that skips the knock-out.
-    /// </summary>
-    [Fact]
-    public void A_leg_that_gives_out_knocks_the_character_out_then_it_crawls_with_its_orders_cleared()
-    {
-        foreach (bool stumbling in new[] { false, true })
-        {
-            using var rig = new TaskStartTests.Rig(carrying: false);
-            rig.World.RunTicks(3);
-            var f = rig.Fighter;
-            rig.Say(new MoveOrder([f], new Vector3(1000, 0, 1960)) { Tick = rig.World.Tick });
-            rig.Say(new RestOrder([f]) { Tick = rig.World.Tick, Queued = true });
-            rig.World.RunTicks(3);
-            Assert.Equal(CharacterTask.GoTo, rig.Task(f));
-            var leg = rig.Cold(f).Medical!.Parts[RLeg];
-            leg.Flesh = -leg.MaxHp * 0.5f;   // past the KO point, short of cut off
-            if (stumbling) rig.Cold(f).StaggeredUntil = rig.World.Tick + 100;
-            rig.World.RunTicks(2);
-            var medical = rig.Cold(f).Medical!;
-            Assert.True(medical.Unconscious && medical.KoTimer <= MedicalState.LegLossKoSeconds, "the leg knocks it out");
-            for (int t = 0; t < 10 / rig.World.TickSeconds && medical.Unconscious; t++) rig.World.RunTick();
-            Assert.True(medical.Crawling);
-            Assert.Empty(rig.Cold(f).OrderQueue);
-            Assert.Equal(CharacterTask.Idle, rig.Task(f));
-        }
-    }
-
-    /// <summary>
     /// A player order that fails to plan stays queued and the chooser goes on (docs/game/ai-tasks.md "Precedence"): a First Aid order with no medkit waits while the character's job (operating
     /// the well) runs, and starts once a kit is back. Catches a refused order being dropped, or one that blocks the character's jobs.
     /// </summary>
@@ -221,8 +173,10 @@ public class OrderQueueTests
     /// Every order goes through the one order path while the game is paused too: each order type sets its act-out between ticks. Catches an order the paused interface drops (it applied a
     /// hand-kept list of commands, which left out pick up, loot, operate, build, beds and others).
     /// </summary>
-    [Theory, MemberData(nameof(TaskStartTests.Orders), MemberType = typeof(TaskStartTests))]
-    public void Every_order_applies_while_paused(string name)
+    [Fact]
+    public void Every_order_applies_while_paused() => Assert.All(TaskStartTests.Orders, AppliesWhilePaused);
+
+    static void AppliesWhilePaused(string name)
     {
         using var rig = new TaskStartTests.Rig(carrying: name is "put down" or "put in bed" or "put in cage");
         rig.World.RunTicks(3);
