@@ -149,4 +149,5 @@ compilation and PGO off, server GC): only allowed mods with a valid
 manifest load and each refusal gives its notice; the process holds one `0Harmony` and one `Meitou.Modding` though the mod folder had its
 own `0Harmony.dll`; a prefix applies, and a throwing `Initialize` loses its patch and registrations; a mod system's state survives
 capture and restore; sidecars survive `SaveGame.Write`/`Load` and `Clone`; spliced systems land at their anchors and the standard list is
-unchanged. The dialogue hooks are built but not exercised.
+unchanged. The dialogue hooks are built but not exercised. **Verified** by `ModdingTests`: game assemblies resolve from the game, anchors,
+sidecar round trip, and a hashed mod system agreeing at 1 and 4 threads.
