@@ -760,6 +760,7 @@ sealed partial class GameHost
                         overlay.Flush(size.X, size.Y);
                         panelsBottom = top + h - 8;
                     }
+                    if (walkPaths && !covered) panelsBottom = DrawWalkPathsLabel(overlay, session.CurrentSnapshot, size.X, size.Y, panelsBottom);
                     characterBoxesToggle = walkPathsToggle = null;
                     if (statsVisible && stats.Count > 0)
                     {

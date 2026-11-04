@@ -25,17 +25,28 @@ sealed partial class GameHost
     void DrawWalkPaths(DebugOverlay overlay, WorldSnapshot snapshot, WorldCamera camera, int width, int height)
     {
         var viewProjection = camera.View * camera.Projection(width / (float)Math.Max(height, 1), camera.Near, camera.ViewDistance);
+        foreach (var c in snapshot.Characters)
+            if (c.Path.Count > 0) DrawWalkPath(overlay, c, viewProjection, width, height);
+        overlay.Flush(width, height);
+    }
+
+    /// <summary>The paths' count in a small panel at the top left, below <paramref name="panelsBottom"/>; returns the new bottom (as the fps line does).</summary>
+    static float DrawWalkPathsLabel(DebugOverlay overlay, WorldSnapshot snapshot, int width, int height, float panelsBottom)
+    {
         int shown = 0, points = 0;
         foreach (var c in snapshot.Characters)
         {
             if (c.Path.Count == 0) continue;
-            DrawWalkPath(overlay, c, viewProjection, width, height);
             shown++;
             points += c.Path.Count;
         }
         string label = shown == 0 ? "paths: select a walking character" : $"{shown} path{(shown == 1 ? "" : "s")}, {points} waypoints left";
-        overlay.Text(label, 16, height - 2 * (overlay.LineHeight + 8), PathColour);
+
+        float w = label.Length * overlay.CharWidth + 12, h = overlay.LineHeight + 8, top = panelsBottom + 8;
+        overlay.Rect(8, top, 8 + w, top + h, DebugOverlay.PanelColour);
+        overlay.Text(label, 14, top + 4, PathColour);
         overlay.Flush(width, height);
+        return top + h - 8;   // the panels add their own 16 px margin
     }
 
     /// <summary>One character's path: the legs (navmesh green, provisional orange), a square at each waypoint, the next one white and the end red.</summary>
