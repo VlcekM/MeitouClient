@@ -15,6 +15,13 @@ public static class CharacterFacts
     public static bool PostureZero(CharacterCold cold) => cold.Medical is not ({ Incapacitated: true } or { StayingLow: true } or { Crawling: true } or { PlayingDead: true });
 
     /// <summary>
+    /// State 118 TARGET_IS_UNARMED (<c>FUN_1405a2290</c>, <b>Verified</b>): the target holds no weapon in hand (vfunc <c>0x3c0</c>) and every inventory section of category 0 (the weapon sections, <c>hip</c> and
+    /// <c>back</c>) is empty, locked items included.
+    /// </summary>
+    public static bool TargetUnarmed(CharacterCold target) =>
+        target.DrawnWeapon == WeaponKinds.None && (target.Inventory is not { } inv || !inv.Items.Exists(i => i.Section is "hip" or "back"));
+
+    /// <summary>
     /// State 26 IS_CROUCHING_OR_LYING (<c>FUN_140599e90</c>, <b>Verified</b>), read by the planner and by the slave delivery: false when crippled (a crawler; an incapacitated one stands in for it), else true staying low (posture 1), playing dead (3) or in a bed. A knocked-out character is posture 4 and does not count.
     /// </summary>
     public static bool CrouchingOrLying(CharacterCold cold) =>

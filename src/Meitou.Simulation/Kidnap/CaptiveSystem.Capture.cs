@@ -236,7 +236,7 @@ public sealed partial class CaptiveSystem
         if (j.Blows == 0)
         {
             if (j.Time < Settings.StripSeconds) return true;
-            Strip(world, c, wc, cc);
+            StripWeapons(world, c, wc, cc);
             j.Blows = 1;
             j.Time = 0;
             return true;
@@ -262,7 +262,7 @@ public sealed partial class CaptiveSystem
     /// <c>Task_StripWeapons</c> once its 0.8 s are up: the items of the target's <c>hip</c> and <c>back</c> sections go to the stripper's inventory (the ground when it is full; engine choice).
     /// After each item moved the original sets the stripper's squad's short-term tag 6 on the target (<c>FUN_14034e7b0</c> calling <c>FUN_1406744a0</c>, <b>Verified</b>): <see cref="Dialogue.MemoryTag.Looted"/>, which the NPC looting finder skips.
     /// </summary>
-    void Strip(World world, int c, CharacterCold wc, CharacterCold cc)
+    public void StripWeapons(World world, int c, CharacterCold wc, CharacterCold cc)
     {
         if (cc.Inventory is not { } inv) return;
         var at = world.Characters.Next[c].Position;

@@ -302,7 +302,7 @@ public sealed partial class ArrestSystem : IOrderOwner
         var table = world.Characters;
         if (!table.TryResolveNext(guard, out int g) || table.Cold(g) is not { IsPlayer: false, Medical.Incapacitated: false, Carrying.IsNone: true } || Busy(guard)) return false;
         if (!table.TryResolveNext(target, out int t) || !table.Next[t].Alive || table.Cold(t) is not { IsImprisoned: false }) return false;   // a carried target is snatched by the capture (task 240)
-        Start(world, g, t, force: true, capture, snatch: true);
+        Start(world, g, t, force: true, capture);
         return true;
     }
 
@@ -345,7 +345,7 @@ public sealed partial class ArrestSystem : IOrderOwner
         if (!table.TryResolveNext(carrier, out int c) || table.Cold(c) is not { } cc || !table.TryResolveNext(cc.Carrying, out int t) || table.Cold(t) is not { } tc) return false;
         var target = cc.Carrying;
         Carry.LetGo(world, c);
-        var arrest = new Arrest { Guard = guard, Target = target, Faction = gc.Faction, Phase = ArrestPhase.Fight, Enslave = enslave };
+        var arrest = new Arrest { Guard = guard, Target = target, Faction = gc.Faction, Phase = ArrestPhase.Fight, Enslave = enslave, Takeover = true };
         arrests.Add(arrest);
         gc.Engaged = true;
         if (tc.Medical is { Incapacitated: true } && Carry.BeginPickUp(world, g, target, source: TaskSource.Npc, row: TaskType.ARREST_TARGETS_CARRIED_PERSON)) arrest.Phase = ArrestPhase.Lift;

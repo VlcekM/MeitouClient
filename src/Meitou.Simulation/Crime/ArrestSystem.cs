@@ -43,7 +43,12 @@ public sealed record ArrestSettings
 }
 
 /// <summary>Where an arrest is: the guard walking up to fine, fighting until the target is down, lifting it, carrying it to a cage.</summary>
-public enum ArrestPhase : byte { Fine, Fight, Lift, Walk }
+public enum ArrestPhase : byte
+{
+    Fine, Fight, Lift, Walk,
+    /// <summary>Row 181 Stripping weapons between the fight (7) and the lift (240); appended so the earlier numbers keep their meaning.</summary>
+    Strip,
+}
 
 /// <summary>One guard's arrest of one character (serial state of the <see cref="ArrestSystem"/>).</summary>
 public sealed class Arrest
@@ -62,14 +67,17 @@ public sealed class Arrest
     public string? Cage { get; set; }
     /// <summary>A slaver's take-over (<c>DA_ENSLAVE_TARGETS_CARRIED_PERSON</c>): the captive becomes the guard faction's slave when caged.</summary>
     public bool Enslave { get; init; }
-    /// <summary>A dialogue's capture (DA 29, task 240 "Capture Target"): its lift may take a target another carries (the snatch byte, <c>FUN_14032ebd0</c>).</summary>
-    public bool Capture { get; init; }
+    /// <summary>A dialogue's hand-over (DA 30 / 40): the guard takes a body over, so the planner chain's strip (181) is not part of it.</summary>
+    public bool Takeover { get; init; }
+    /// <summary>Row 181 ran: once per arrest (a locked weapon item stays on the target, which the strip does not move).</summary>
+    public bool Stripped { get; set; }
 
     internal void Hash(ref StateHasher h)
     {
         h.Add(Guard); h.Add(Target); h.Add(Faction); h.Add((int)Phase); h.Add(Time); h.Add(Fine); h.Add(Tries); h.Add(Waited); h.Add(Cage is { } c ? Rng.StableHash(c) : 0UL);
         if (Enslave) h.Add(0x536C6176);
-        if (Capture) h.Add(0x43617074);
+        if (Takeover) h.Add(0x54616B65);
+        if (Stripped) h.Add(0x53747270);
     }
 }
 
@@ -122,6 +130,8 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
     public CrimeSystem Crimes { get; } = crimes;
     /// <summary>The carry system the guards lift and carry with; null: an arrest ends when the target is down.</summary>
     public Carrying.CarrySystem? Carry { get; set; }
+    /// <summary>The strip of row 181 (the same task of the capture job); null: arrests skip it.</summary>
+    public Kidnap.CaptiveSystem? Captives { get; set; }
     /// <summary>The relation event of a caging (<see cref="FactionDeeds.Caged"/>: the captive's faction about the one who caged it); null: none.</summary>
     public FactionDeeds? Deeds { get; set; }
     public IReadOnlyList<Arrest> Arrests => arrests;
@@ -408,7 +418,7 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
     // ------------------------------------------------------------------ fine or arrest
 
     /// <summary><paramref name="capture"/> false: the guard attacks instead of arresting, in his own town too (a dialogue's animal target).</summary>
-    void Start(World world, int g, int t, bool force, bool capture = true, bool snatch = false)
+    void Start(World world, int g, int t, bool force, bool capture = true)
     {
         var table = world.Characters;
         var gc = table.Cold(g)!;
@@ -422,7 +432,7 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
             Note(world, ArrestEventKind.Attack, guard, target, gc.Faction, bounty);
             return;
         }
-        var arrest = new Arrest { Guard = guard, Target = target, Faction = gc.Faction, Capture = snatch };
+        var arrest = new Arrest { Guard = guard, Target = target, Faction = gc.Faction };
         arrests.Add(arrest);
         gc.Engaged = true;   // the AI leaves him alone until the arrest ends
         if (!force && bounty is > 0 and < FineLimit)
@@ -520,9 +530,10 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
                 {
                     if (Carry is null) return End(world, a, ArrestEventKind.GaveUp);
                     if (gc.Carrying == a.Target) { a.Phase = ArrestPhase.Lift; return true; }
-                    if (!tc.CarriedBy.IsNone && !a.Capture) return End(world, a, ArrestEventKind.GaveUp);   // a capture (240) snatches a body another carries
                     if (gc.InCombat) return true;   // still trading blows (the KO tick, a squad mate): wait
-                    if (Carry.BeginPickUp(world, g, a.Target, source: TaskSource.Npc, row: a.Capture ? TaskType.LIFT_PERSON_SNATCHING_ALLOWED_IN_TOWN_ONLY : TaskType.ARREST_TARGET)) { a.Phase = ArrestPhase.Lift; a.Waited = 0; return true; }
+                    if (NeedsStrip(a, tc)) { BeginStrip(a); return true; }   // 203 needs 118 target unarmed: its provider 181 comes before the lift
+                    // Row 240 Capture Target is the chain's lift (snatch byte set): it takes a body another carries too.
+                    if (Carry.BeginPickUp(world, g, a.Target, source: TaskSource.Npc, row: TaskType.LIFT_PERSON_SNATCHING_ALLOWED_IN_TOWN_ONLY)) { a.Phase = ArrestPhase.Lift; a.Waited = 0; return true; }
                     a.Waited += dt;
                     return a.Waited <= 10 || End(world, a, ArrestEventKind.GaveUp);
                 }
@@ -535,6 +546,7 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
                 }
                 return true;
             }
+            case ArrestPhase.Strip: return StepStrip(world, a, g, t);
             case ArrestPhase.Lift:
             {
                 if (gc.Carrying == a.Target)
@@ -581,6 +593,59 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
                 return true;
             }
         }
+        return true;
+    }
+
+    /// <summary>Row 181's step: 118 does not hold (the target wields or holds a weapon in its weapon sections) and the strip can run (needs the tool, <see cref="Captives"/>).</summary>
+    bool NeedsStrip(Arrest a, CharacterCold target) =>
+        Captives is not null && !a.Takeover && !a.Enslave && !a.Stripped && target.CarriedBy.IsNone && !CharacterFacts.TargetUnarmed(target);
+
+    /// <summary>Game seconds the guard may take to reach the target to strip it (engine choice).</summary>
+    const float StripWalkSeconds = 60;
+
+    void BeginStrip(Arrest a)
+    {
+        a.Phase = ArrestPhase.Strip;
+        a.Time = 0;
+    }
+
+    /// <summary>
+    /// Row 181 Stripping weapons (needs 38 one working arm, at location, 7 target down; <c>Task_StripWeapons</c>): the guard walks up, plays <c>medic</c> for the strip's seconds, and the target's
+    /// weapon sections go to him (<see cref="Kidnap.CaptiveSystem.StripWeapons"/>); then the chain goes on to the lift. A guard without a working arm cannot plan the chain: the arrest ends.
+    /// </summary>
+    bool StepStrip(World world, Arrest a, int g, int t)
+    {
+        var table = world.Characters;
+        var gc = table.Cold(g)!;
+        var tc = table.Cold(t)!;
+        if (tc.Medical is not { Incapacitated: true } || !tc.CarriedBy.IsNone || Captives is null) { a.Phase = ArrestPhase.Fight; a.Time = 0; return true; }
+        if (gc.Medical is { } arms && !arms.ArmWorks(left: true) && !arms.ArmWorks(left: false)) return End(world, a, ArrestEventKind.GaveUp);
+        if (gc.InCombat) return true;
+        ref var gn = ref table.Next[g];
+        var to = new Vector2(table.Next[t].Position.X, table.Next[t].Position.Z);
+        var here = new Vector2(gn.Position.X, gn.Position.Z);
+        if (Vector2.Distance(here, to) > Captives.Settings.Reach)
+        {
+            if ((world.Tick + g) % 15 == 0 && (gn.Task != (byte)CharacterTask.GoTo || Vector2.DistanceSquared(to, gn.Goal) > 20 * 20))
+                TaskStart.Walk(world, g, to, SpeedMode.Free, TaskType.STRIP_TARGETS_WEAPONS, TaskSource.Npc);
+            a.Time = 0;
+            a.Waited += world.TickSeconds;   // the walk up: the lift's patience
+            return a.Waited <= StripWalkSeconds || End(world, a, ArrestEventKind.GaveUp);
+        }
+        if (gc.ActionClip != Kidnap.CaptiveSystem.ProcessClip)
+        {
+            TaskStart.Stand(table, g);
+            gc.ActionClip = Kidnap.CaptiveSystem.ProcessClip;
+            a.Time = 0;
+            return true;
+        }
+        if (a.Time < Captives.Settings.StripSeconds) return true;
+        gc.ActionClip = null;
+        Captives.StripWeapons(world, t, gc, tc);
+        a.Stripped = true;
+        a.Phase = ArrestPhase.Fight;
+        a.Time = 0;
+        a.Waited = 0;
         return true;
     }
 
