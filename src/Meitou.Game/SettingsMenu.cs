@@ -11,7 +11,9 @@ namespace Meitou.Game;
 /// <summary>Shared settings layout and interaction; the current UI mode selects only its presentation.</summary>
 sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBindings bindings, Action save, Slider frameLimit, UserConfig config)
 {
-    static readonly string[] Pages = ["Display", "Graphics", "Interface", "Controls", "Advanced", "Audio", "Gameplay", "Fixes"];
+    static readonly string[] Pages = ["Display", "Graphics", "Interface", "Controls", "Advanced", "Audio", "Gameplay", "Fixes", "Mods"];
+    /// <summary>The MODS page (SettingsMenu.Mods.cs): it lists the loaded mods instead of settings.</summary>
+    const int ModsPage = 8;
     /// <summary>The Graphics tabs: the look tabs, then the quality tabs (SettingsMenu.Looks.cs).</summary>
     internal static readonly string[] GraphicsPages = ["Lighting", "Sky & weather", "Colour", "World", "Characters"];
     /// <summary>The Metal-only preset row (Native / MetalFX quality, balanced, performance / TAA), edited by the Metal settings panel.</summary>
@@ -492,6 +494,7 @@ sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, 
         if (!Visible) return false;
         if (editingNumber is not null || rebinding is not null || resetPending || pendingAction is not null) return true;
         if (openChoice is { } choice) choiceScroll = Math.Clamp(choiceScroll - (int)steps, 0, Math.Max(0, choice.Options().Count - 6));
+        else if (page == ModsPage && ModsDetail.Contains(pointer.X, pointer.Y)) modsDetailScroll -= steps * 40;
         else scrollTarget = Math.Clamp(scrollTarget - steps * 60 * scale, 0, maxScroll);
         return true;
     }

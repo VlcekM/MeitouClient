@@ -104,6 +104,9 @@ public sealed partial class CombatSystem
         var events = hitEvents;   // Apply is serial, so one list serves every hit
         events.Clear();
         var cover = new CoverRoll(world.Seed, Rng.Key(table.IdOf(d)), a, seq, blow);
+        bool observe = world.HasCombatHitObservers;
+        bool wasAlive = observe && !dc.Medical.Dead, wasIncapacitated = observe && dc.Medical.Incapacitated;
+        bool intended = observe && d == A.TargetSlot && prev[d].Generation == A.TargetGeneration;
         var (part, damage, absorbed) = HitResolver.LandDetailed(dc.Medical, ctx, packet, target.Armour, cover, toughness, tech.LowStrike, direction == 6, combat, events);
         FloatHit(world, d, dc, ac.IsPlayer, part, damage, absorbed);
         A.Landed++;
@@ -162,6 +165,10 @@ public sealed partial class CombatSystem
         // A unique killed: dead in the registry, with the player flag when the killer is the player's (the body pass would mark it dead without).
         if (death && world.Uniques.RecordOf(world.Characters.IdOf(d)) is { } unique) world.Uniques.Died(unique, ac.IsPlayer, dc.Faction);
         Record(now, a, d, blow, outcome, part, damage, knockout, death);
+        if (observe && part >= 0)
+            world.ObserveCombatHit(new CombatHit(world.Tick, CombatHitSource.Melee, table.IdOf(a), table.IdOf(d), seq, blow, part,
+                damage, absorbed, prev[d].Position, new(-toAttacker.X, 0, -toAttacker.Y), prev[d].Yaw,
+                direction, tech.LowStrike, intended, wasAlive, wasIncapacitated));
     }
 
     /// <summary>

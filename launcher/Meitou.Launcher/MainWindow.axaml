@@ -188,6 +188,7 @@
               <ComboBox x:Name="PresetBox" MinWidth="170" PlaceholderText="Presets" />
               <Button Content="Apply" Click="ApplyPreset_Click" />
               <Button Content="Delete" Click="DeletePreset_Click" />
+              <Button Content="From save" Click="ModsFromSave_Click" ToolTip.Tip="Take the mod list and load order a save was made with" />
             </StackPanel>
             <StackPanel Orientation="Horizontal" Spacing="6">
               <Button Content="Select all" Click="SelectAll_Click" />

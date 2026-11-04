@@ -41,11 +41,10 @@ public sealed record CaptiveSettings
     /// so about 10 s.
     /// </summary>
     public float CuffSeconds { get; init; } = 10;
-    /// <summary>A worker shouting at a slave stops walking after this many game seconds, or within <see cref="ShoutReach"/> of it (engine: the original walks on until the line is over).</summary>
+    /// <summary>A worker shouting at a slave says event 38 again after this many seconds while no line is said (<b>engine choice</b>: the original's re-plan rate is not decoded).</summary>
     public float ShoutSeconds { get; init; } = 8;
+    /// <summary>It stands within this distance of its slave and follows it when the slave moves on.</summary>
     public float ShoutReach { get; init; } = 40;
-    /// <summary>The least time between one worker's shouts (<b>engine pacing</b>: the original scores 188 at 0.25 per slave against its other goals).</summary>
-    public float ShoutCooldownSeconds { get; init; } = 120;
     /// <summary>Game hours a target stays on a worker's give-up list after a job on it failed (<b>engine choice</b>).</summary>
     public double GiveUpHours { get; init; } = 1;
     /// <summary>The eater and its meal say their lines at most this often (game seconds); the original fires them every frame and its dialogue throttles them.</summary>
@@ -1164,13 +1163,13 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
 
     public void Hash(ref StateHasher hasher)
     {
-        if (jobs.Count == 0 && killAt.Count == 0 && givenUp.Count == 0 && shoutUntil.Count == 0) return;   // only once in use, so worlds without captives hash as before
+        if (jobs.Count == 0 && killAt.Count == 0 && givenUp.Count == 0) return;   // only once in use, so worlds without captives hash as before
         hasher.Add(0x43617074);
         hasher.Add(jobs.Count);
         foreach (var j in jobs) j.Hash(ref hasher);
         hasher.Add(killAt.Count);
         foreach (var (site, at) in killAt) { hasher.Add(site); hasher.Add(at); }
         hasher.Add(timerRolls);
-        if (givenUp.Count > 0 || shoutUntil.Count > 0) HashWaits(ref hasher);
+        if (givenUp.Count > 0) HashWaits(ref hasher);
     }
 }

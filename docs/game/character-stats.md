@@ -12,6 +12,12 @@ CHARACTER `stats randomise` is an int (Hundred Guardian and Shek Warrior: 10, no
 int, default 3, "+/- this amount". Meitou reads the int, falling back to a float for mods. The original's
 random distribution is **Unknown**.
 
+**Observed** (base records): CHARACTER `stats` is a list of STATS records, one record plus three numbers per entry.
+Those numbers are the list slot, not a filter: of the 80 characters in `gamedata.base` that name one, 72 carry
+`(0, 100, 0)` and 8 `(0, 0, 0)` (`Dialogue.mod` 60/43, `rebirth.mod` 10/7, `Newwworld.mod` 2/0), and every character names
+exactly one. A character naming none uses the five group fields (`combat stats`...). What the original does with a
+character that names several is **Unknown**; Meitou takes the first that resolves.
+
 **Observed:** skills are floats, not discrete levels plus XP counters. Factory combines record
 values/randomness, race modifiers and derived stats. Core gain: `f=((cap-stat)/cap)^2`, cap101;
 add amount*f only for 0<amount<=20, 0<f<=20, reject new NaN; old NaN becomes20 (exe).
