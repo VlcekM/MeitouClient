@@ -49,7 +49,7 @@ public sealed class LoadOrder
                 order.Entries.Add(new LoadOrderEntry(name, path));
         }
 
-        var modsCfg = Path.Combine(install.DataDirectory, "mods.cfg");
+        var modsCfg = ModList.ModsCfgPath(install);
         if (!File.Exists(modsCfg))
             return order;
         var available = FindMods(install);
