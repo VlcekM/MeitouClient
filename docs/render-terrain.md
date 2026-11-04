@@ -198,12 +198,13 @@ to 14 layer samples each.
 - **Refresh**: the inputs (bindless indices, overlay window, `TerrainTextures.MaterialVersion` = writes to the biomes' parameter rows, relief settings)
   are hashed each frame; a change re-bakes every level 64 rows a frame, finest first, drawn from meanwhile.
 - **Draw**: the level whose texel is the pixel's footprint (short axis, as the layers' 8x anisotropic sampling), blended with the next coarser;
-  beyond the levels, or beyond 0.3 × the nearest resident biome's fade distance (the bake has no distance fade), the layers are shaded. The
+  beyond the levels, beyond 0.3 × the nearest resident biome's fade distance (the bake has no distance fade), or on faces with n.y ≤ 0.5
+  (an xz texel spans 1 / n.y of the face: **Observed**, cliffs smeared into vertical streaks, their parallax wavy), the layers are shaded. The
   parallax marches the cached height with the march's steps and self-shadow (the sun's from two levels coarser; where displaced, only what the level
   holds finer than one at half the mesh spacing): one read a step, no per-biome work. A per-pixel gather (cliff layers live over a cached ground,
   per-biome fade) cost as much as it saved: terrain 4.0 ms against 3.9 live.
 - **Differences** (**Observed**, viewer A/B stills, 1920x1080 DLSS): mean 0.8-1.1 / 255, 0.35-1.4% of pixels over 12; the ripples' parallax phase
-  and self-shadow shift slightly; a steep cliff's parallax follows the height field instead of its projections. After a 90 m flight at 12 units a
+  and self-shadow shift slightly; a slope's parallax (n.y over 0.5) follows the height field instead of the cliff's projections. After a 90 m flight at 12 units a
   frame: mean 1.27 against the live picture, no stale strips. The game's `--screenshot` does not run the cache (its frames skip the hook).
 - **Cost** (**Observed**, `--play-bench` on save "stutter final boss", RTX 4070, 1080p DLSS 0.83, interleaved with master): terrain 3.94 -> 2.33 ms
   idle, orbit 3.98 -> 2.23, pan 3.77 -> 1.77; GPU frame 7.85 -> 6.20; frame p99 unchanged. Viewer A/B at two views: terrain -0.39 and -0.88 ms.

@@ -1125,8 +1125,10 @@ static partial class TerrainShaders
             // The material cache (TerrainRenderer.MaterialCache): the layers' material from the level whose texel is the pixel's footprint (its short axis,
             // as the layers' anisotropic sampling takes it), blended with the next coarser, the finest holding the point; beyond them, or beyond uBakeReach,
             // the layers are shaded here. The relief march runs over the cache's height (the ground's and the cliff's relief as one height field, BakeOutput):
-            // one read a step and no per-biome work.
-            if (uBakeLevels > 0 && !uFeature && uTextured && nearWeight > 0.0 && distance < uBakeReach)
+            // one read a step and no per-biome work. Steep faces (n.y under BakeMinUp) shade the layers: an xz texel there spans 1 / n.y of the face,
+            // and their parallax runs on the cliff's projections, which a top-down height cannot hold.
+            const float BakeMinUp = 0.5;
+            if (uBakeLevels > 0 && !uFeature && uTextured && nearWeight > 0.0 && distance < uBakeReach && n.y > BakeMinUp)
             {
                 float a = max(length(texDx.xz), 1e-6), b = max(length(texDy.xz), 1e-6), hi = max(a, b), lo = min(a, b);
                 float level = log2(max(hi / min(ceil(hi / lo), 8.0), 1e-6) / uBakeOrigin[0].z);
