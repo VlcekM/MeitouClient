@@ -222,8 +222,13 @@ shows the first failing message in this order (**Verified** unless marked):
   ghost's call arguments are not in the decompile, the other callers pass type 10 = any);
   type 10 null towns have radius 0 (type 8 too), so they block only a `creates player town` building, within 2000.
   No town blocks an `is interior furniture` or `is node` ghost (ghost `+0x109`) whose footprint nodes all stand in one
-  building owned by a player faction (ghost `+0x8b`, `FUN_1404d69c0`): `FUN_1404dba40` clears the town (**Verified** by
-  decompile), so furniture goes into a bought town house. Its other owner branch (vtable `+0x330`, faction `+0x1d0`) is **Unknown**.
+  building it may be built in (ghost `+0x8b`): `FUN_1404dba40` clears the town, so furniture goes into a bought town house.
+- **Building in a building** (**Verified** by decompile, `FUN_1404d69c0`): every footprint node must stand in the same
+  building, and that building's owner (Building slot `+0x58`; none means the FACTION `nofac`, "No Faction") is a player
+  faction (`+0x250`), or the ghost is not `creates player town` and the building is destroyed (slot `+0x330`, `+0x1a1`,
+  the save's `destroyed`) or its owner faction is `not real` (`+0x1d0`, set from the record in `FUN_1407fe270`; `nofac`
+  is, so ownerless buildings qualify). Else the ghost is refused, with "Can't place in a building you don't own." when a
+  town also blocks (the text without one is **Unknown**; Meitou shows the same). Meitou: `PlacementRules.MayBuildIn`.
   **Unknown/not modelled:** the original tests only that nearest town (Meitou tests every one), and swaps it for the
   town containing the ghost (`FUN_140928890`) when inside 0.9 x its radius (0.6 x when the nearest is ruins/POI).
 - **Outposts** (**Verified**, `FUN_1404d6d90` per queued ghost on Confirm, then `FUN_1404db180`): a ghost in or on a

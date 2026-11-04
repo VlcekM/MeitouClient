@@ -336,28 +336,38 @@ sealed partial class GameHost
         return (name, type, sells);
     }
 
-    // A level building's instance id and owning faction id (its state's owner, else its town's faction), by placement key; made on first use.
-    Dictionary<string, (string Instance, string? Owner)>? levelOwners;
+    // A level building's instance id, owning faction id (its state's owner, else its town's faction) and town building, by placement key; made on first use.
+    Dictionary<string, (string Instance, string? Owner, TownBuilding Building)>? levelOwners;
 
     /// <summary>
-    /// The floor a ghost stands on in <paramref name="room"/>: a player site's, else a level building's with whether the player's faction owns it. A repaired town house is
-    /// shown as a site but stays a level building, so what is built in it names the level instance as its parent (as in any owned town building).
+    /// The floor a ghost stands on in <paramref name="room"/>: a player site's, else a level building's with what <c>PlacementRules.MayBuildIn</c> reads (whether the player's
+    /// faction owns it, whether it is a ruin, whether its owner is <c>not real</c>). A repaired town house is shown as a site but stays a level building, so what is built in it
+    /// names the level instance as its parent (as in any owned town building). A level building of no town has no owner: the original's "nofac", which is not real.
     /// </summary>
     Building.GhostFloor GhostFloorOf(InteriorVolume room, int floor)
     {
         if (shownBuildings.TryGetValue(room.PlacementId, out var shown) && shown.LevelPlacement is null) return new(room.PlacementId, room.Footprint, floor);
-        if (levelOwners is null && popData is { } d)
-        {
-            levelOwners = new(StringComparer.Ordinal);
-            foreach (var site in d.Sites)
-            {
-                string? townOwner = site.Index < d.SiteFactions.Count && d.SiteFactions[site.Index] is >= 0 and var f && f < d.Factions.Count ? d.Factions[f].Id : null;
-                foreach (var b in site.Buildings) levelOwners[b.Key] = (b.InstanceId, b.OwnerFactionId ?? townOwner);
-            }
-        }
+        if (LevelOwners()?.TryGetValue(room.PlacementId, out var level) != true) return new(room.PlacementId, room.Footprint, floor, room.PlacementId) { OwnerNotReal = true };
+
         string player = popData is { } p && p.PlayerFaction is >= 0 and var mine && mine < p.Factions.Count ? p.Factions[mine].Id : "";
-        return levelOwners?.TryGetValue(room.PlacementId, out var level) == true
-            ? new(room.PlacementId, room.Footprint, floor, level.Instance, session.CurrentSnapshot.OwnedTownBuildings.Contains(room.PlacementId) || player.Length > 0 && level.Owner == player)
-            : new(room.PlacementId, room.Footprint, floor, room.PlacementId);
+        bool owned = session.CurrentSnapshot.OwnedTownBuildings.Contains(room.PlacementId) || player.Length > 0 && level.Owner == player;
+        return new(room.PlacementId, room.Footprint, floor, level.Instance, owned)
+        {
+            Destroyed = shownRuins.TryGetValue(room.PlacementId, out var ruin) ? ruin.Destroyed : session.World.Fixtures.SavedDestroyed(level.Building),
+            OwnerNotReal = level.Owner is not { } owner || popData?.Factions.FirstOrDefault(f => f.Id == owner) is not { NotReal: false },
+        };
+    }
+
+    Dictionary<string, (string Instance, string? Owner, TownBuilding Building)>? LevelOwners()
+    {
+        if (levelOwners is not null || popData is not { } d) return levelOwners;
+
+        levelOwners = new(StringComparer.Ordinal);
+        foreach (var site in d.Sites)
+        {
+            string? townOwner = site.Index < d.SiteFactions.Count && d.SiteFactions[site.Index] is >= 0 and var f && f < d.Factions.Count ? d.Factions[f].Id : null;
+            foreach (var b in site.Buildings) levelOwners[b.Key] = (b.InstanceId, b.OwnerFactionId ?? townOwner, b);
+        }
+        return levelOwners;
     }
 }

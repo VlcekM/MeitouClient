@@ -16,6 +16,12 @@ public sealed record QueuedGhost(BuildingBuildData Building, Vector3 Position, Q
 /// </summary>
 public sealed record GhostFloor(string Building, Vector2[] Footprint, int Floor, string? Level = null, bool Owned = false)
 {
+    /// <summary>A level building that is a ruin now.</summary>
+    public bool Destroyed { get; init; }
+
+    /// <summary>A level building whose owner faction is <c>not real</c>, or that has no owner.</summary>
+    public bool OwnerNotReal { get; init; }
+
     /// <summary>The height of the building's ceiling over the floor point, null when nothing is over it (what a <c>ceiling placement</c> ghost hangs from).</summary>
     public float? Ceiling { get; init; }
 
@@ -88,16 +94,16 @@ public static class PlacementCheck
     {
         var b = q.Building;
         var at = new Vector2(q.Position.X, q.Position.Z);
-        // A site floor counts as ours, as in the "don't own" test below.
-        bool owned = q.On is { Level: null } or { Owned: true };
-        var town = PlacementRules.TownBlock(b, at, q.Towns, q.PlayerFactionId, owned);
+        // A site floor counts as ours; a level building as PlacementRules.MayBuildIn has it.
+        bool mayBuildIn = q.On is { Level: null } || q.On is { } level && PlacementRules.MayBuildIn(b, level.Owned, level.Destroyed, level.OwnerNotReal);
+        var town = PlacementRules.TownBlock(b, at, q.Towns, q.PlayerFactionId, mayBuildIn);
         if (town != PlacementFailure.None) return town;
 
         var turned = Quaternion.CreateFromAxisAngle(Vector3.UnitY, q.Yaw);
         var hull = q.Services.Footprint(b.Id) is { } footprint ? footprint.Place(q.Position, turned) : null;
-        // On a floor: the building must be ours, a level building the player's faction owns or a finished site.
+        // On a floor: a level building we may build in, or a finished site.
         string? parent = q.On?.Building;
-        if (q.On is { Level: not null, Owned: false }) return PlacementFailure.NotOwnedBuilding;
+        if (q.On is { Level: not null } && !mayBuildIn) return PlacementFailure.NotOwnedBuilding;
         if (q.On is { Level: null } && q.Sites.FirstOrDefault(s => s.Id == parent) is null) return PlacementFailure.NotOwnedBuilding;
         // The resource row comes after the first row's "don't own" text and before "incomplete".
         var resources = PlacementRules.ResourceBlock(q.Services.Readout(b.Id, q.Position));

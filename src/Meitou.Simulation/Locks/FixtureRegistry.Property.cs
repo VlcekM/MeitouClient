@@ -183,7 +183,7 @@ public sealed partial class FixtureRegistry
     /// Whether a town building is a ruin: its saved <c>destroyed</c>, but a level ruin stays one unless the player's repair saved it (<c>meitou town construction</c>):
     /// a save from before the residents' ruins were laid out (docs/game/buildings-production.md "Ruined by residents") wrote those buildings intact.
     /// </summary>
-    bool SavedDestroyed(TownBuilding b) => Saved?.GetValueOrDefault(b.Key) is not { } saved ? b.Destroyed
+    public bool SavedDestroyed(TownBuilding b) => Saved?.GetValueOrDefault(b.Key) is not { } saved ? b.Destroyed
         : saved.Bools.GetValueOrDefault("destroyed", b.Destroyed) || b.Destroyed && !saved.Bools.GetValueOrDefault("meitou town construction");
 
     void WriteProperty(string building, FcsRecord state)

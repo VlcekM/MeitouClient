@@ -36,8 +36,8 @@ public static class PlacementRules
     /// The town block of docs/game/buildings-production.md "Placement" (Towns): a town of another faction blocks within its radius (<see cref="TownData.Radius"/>, 0 for a null town
     /// which then blocks only outposts); a building that creates a player town within 2.5 x that radius (1 x for ruins and points of interest) or <see cref="OutpostMinimumDistance"/>
     /// of the centre. Nest markers (never a candidate, <c>FUN_140927f10</c>) and towns of the player's faction never block, nor does any town for interior furniture or a node
-    /// standing in a building of the player's (<paramref name="inOwnedBuilding"/>, <c>FUN_1404dba40</c>). <see cref="PlacementFailure.NotOwnedBuilding"/> (the second text of the
-    /// first row) is the host's: it needs the building under the ghost.
+    /// standing in a building it may be built in (<paramref name="inOwnedBuilding"/>, <see cref="MayBuildIn"/>; <c>FUN_1404dba40</c>). <see cref="PlacementFailure.NotOwnedBuilding"/>
+    /// (the second text of the first row) is the host's: it needs the building under the ghost.
     /// </summary>
     public static PlacementFailure TownBlock(BuildingBuildData building, Vector2 at, IReadOnlyList<PlacementTown> towns, string playerFactionId, bool inOwnedBuilding = false)
     {
@@ -60,6 +60,16 @@ public static class PlacementRules
             if (Vector2.DistanceSquared(at, placed.Position) < limit * limit) return PlacementFailure.TooCloseToTown;
         }
         return PlacementFailure.None;
+    }
+
+    /// <summary>
+    /// Whether a ghost may stand in a level building (<b>Verified</b> by decompile, <c>FUN_1404d69c0</c>): one a player faction owns; else, for a ghost that does not create a
+    /// player town, a ruin or one whose owner faction is <c>not real</c> (a building without an owner has "nofac", which is).
+    /// </summary>
+    public static bool MayBuildIn(BuildingBuildData building, bool playerOwned, bool destroyed, bool ownerNotReal)
+    {
+        ArgumentNullException.ThrowIfNull(building);
+        return playerOwned || !building.CreatesPlayerTown && (destroyed || ownerNotReal);
     }
 
     /// <summary>The resource value or crop yield below which a mine or farm is refused (<b>Verified</b>, docs/game/buildings-production.md "Placement").</summary>
