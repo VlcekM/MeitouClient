@@ -190,12 +190,12 @@ public sealed partial class LockSystem
     }
 
     /// <summary>
-    /// The start of Task_ReleasePrisoner (<c>FUN_1403570a0</c>, Verified): the prisoner is marked freed (status <c>+0xea</c>; not a kidnapped one, never booked, whose mark would drop on its next AI update),
+    /// The start of Task_ReleasePrisoner (<c>FUN_1403570a0</c>, Verified): the prisoner is marked freed (status <c>+0xea</c>, set unconditionally; the status update drops it outside every town, <see cref="Crime.ArrestSystem"/>),
     /// released, then a releaser of a faction that books bounties tells it it may go (event 46 from the releaser), else a releaser of the player's faction is thanked (event 13 from the prisoner).
     /// </summary>
     bool FreeBy(World world, CharacterId releaser, int faction, CharacterId prisoner)
     {
-        if (world.Characters.TryResolveNext(prisoner, out int p) && world.Characters.Cold(p) is { Kidnapped: false } pc) pc.Freed = true;
+        if (world.Characters.TryResolveNext(prisoner, out int p) && world.Characters.Cold(p) is { } pc) pc.Freed = true;
         if (!world.Fixtures.Release(world, prisoner, faction, Crimes)) return false;
         if (Crimes?.Factions.Books(faction) == true) world.Defer(new Dialogue.DialogueEvent(releaser, prisoner, PrisonerFreeToGo) { Tick = world.Tick + 1 });
         else if (faction == world.Player.Faction) world.Defer(new Dialogue.DialogueEvent(prisoner, releaser, UnlockMyCageOrShackles) { Tick = world.Tick + 1 });
