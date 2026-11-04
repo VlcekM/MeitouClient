@@ -367,12 +367,21 @@ original leaves Small Shack `48.13:8-` (`110371`) unconnected too; Meitou joins 
 only then compares the two tops for the walkable flag, so a floor rasterized into a taller cutting span walks that span's top, and a chain of merges carries the flag
 up further. **Observed** (Bughouse `18.35:11-`, heightfield column -62402,16498): the roof terrace (485) merged with the steep wall under the roof slope gave a
 walkable span to 492, so the wall became a walkable stair (485, 488, 492, 496) onto the slope (58°, walkable at the 60° building limit) and its wall-top ring;
-the original has neither. Walkable and cutting triangles are now rasterized into two fields and merged per column, a merged span walkable only when a walkable
-surface in it reaches within the climb of its top. **Interior survey**: `meitou-tools navmesh --survey-interiors zones|towns [--name text] [--png dir]` samples
-each intact interior's kept polygons and the original's interior faces over its hull every 2 units and sums, per building type, the area both have, only ours
-(and how much 20+ over the hull's base), only the original; `--png` draws both from above and two vertical sections. **Observed** (`towns`, 29 types): ours-only
-4.61 M to 3.83 M units² (Bughouse 563 k to 168 k, Ash Dome -40 %, Outpost s-II -31 %, Snailhouse -30 %, Hive Commune Hut -26 %), original-only +0.1 %;
-`--compare` 42.22, 20.32, 18.39: kept polygons -7 / -3 / +0 %, coverage unchanged.
+the original has neither. Walkable and cutting triangles are now rasterized into two fields and merged per column; a merged span is walkable only when a
+walkable surface in it reaches within the climb (5 cells) of its top, and then stands at that walkable top, not on the cutting part over it (cutting material
+removes the original's faces, it never makes walkable ones). **Observed** (`--survey-interiors`): lifted to the cutting top, the cells at the foot of a steep
+collar became a stair onto the dome it carries (Y-House `39.16:16-`: roof 1069, collar tops 1074, dome 1079..1096; the original has no dome); a stricter
+threshold (1..3 cells) instead drops floor cells along tilted walls, whose faces enter them (Outpost s-I `9.51:2-`: its upper storey was lost at 3).
+**Interior survey**: `meitou-tools navmesh --survey-interiors zones|towns|x,z ... [--name text] [--png dir] [--section x,z]` samples over each intact interior's
+hull every 2 units the zone's kept polygons against the original's interior faces plus its exterior polygons (the original carves its exterior with the hull's
+convex volume, so a ledge round the walls is its exterior's and our interior's) and sums, per building type, the area both have, only ours (and how much 20+
+over the hull's base), only the original. Hulls over the zone border are left out (their other part is the neighbour's). `--name` lists each matching placement
+with its hull centre and layout; `--png` writes both meshes from above, a difference image, both as OBJ and two vertical sections.
+**Tiles hold one furniture layout** (**Observed**, survey, 5 town zones): within one placement the original's interior either has a hole under nearly every
+collision shape of a layout's furniture or under almost none (39.16 `18-`: 8 % of shapes covered by a face; `16-`: 77 %; Ash Dome `54.59:4-`: upper-storey
+furniture 91 %), because homes reroll their layouts per game ([factions-squads-towns.md](factions-squads-towns.md), new game vs level data) and the tile was
+built with one of them. The survey therefore builds each interior with the layout whose shapes stand over holes most often (at least half, else none): in
+39.16 it finds a full match for 19 of 21 placements (e.g. `10-` Residential 40/40, `18-` General Shop 65/65), and ours-only there falls under 3 % for 8 of 10 types.
 **Join sweep**: `meitou-tools navmesh --compare-interiors x,z ... | towns` (`towns`: every zone holding a town placement) reports per original
 interior group whether the original connects it (mesh connections in its streaming set) and whether ours, the interior whose hull holds most of its
 faces, is reached from the street (over kept polygons, joins and links from the exterior's kept polygons once the zone's kept set is resolved alone or,
@@ -470,7 +479,9 @@ character takes the collision surface at the character's own height instead when
 rock (~1567), stranding a walker on the top; the original's cached tile has a polygon flat at 1594.8 there). A snap that took only a surface's
 edge beside the spot, more than `StandRise` off a character within `StandRise` of the terrain, takes the terrain when the mesh is within `TerrainSnapRange`
 of it (engine choice; **Observed**, zone 33.28, scratch probe: by the foot of a walkable top at ~560 west of Black Desert City, ground 537, polygons
-at ~550, walkers at 7245, -13968 stopped and dropped their order); with no layer in range, a
+at ~550, walkers at 7245, -13968 stopped and dropped their order). A polygon under the terrain, more than `StandRise` off a character standing on the terrain with no
+collision surface near it, takes the terrain however far it sags (engine choice; **Observed**, zone 19.34, `--probe -56752,9502`: a planar polygon spanning a
+hillside lies 31 under the ground, its height samples empty there, and the original's polygon 28 under it; the Hub-to-Squin walker stalled); with no layer in range, a
 polygon within `EdgeTolerance` counts. A character already off every layer near its height still steps down.
 A path walker whose step finds no layer in reach of its height, more than 4 off its path's height there (the leg to its next point), looks for one at the path's height (engine choice, `MovementSystem.CorridorHeight`; **Observed** before the seam check below, Ancient Lab `28.60:2-`: walkers stood at the edge of its stairwell both ways).
 A path point takes the height of the corridor polygon under it; of stacked ones the corridor crosses, the one nearest the point's own height (`NavQuery.OnSurface`;

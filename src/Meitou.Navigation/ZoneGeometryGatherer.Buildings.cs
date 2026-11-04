@@ -89,13 +89,44 @@ internal sealed partial class ZoneGeometryGatherer
     /// furniture of its interior layout, as the renderer lays them out. None for a destroyed building, whose layouts are not drawn either; no furniture for a bought town house
     /// (<see cref="BuildingPlacement.WithoutInterior"/>).
     /// </summary>
+    /// <summary>Debug (the interior survey): an interior layout name per placement key in place of its level state's, "" for none.</summary>
+    internal Dictionary<string, string> InteriorLayoutOverrides { get; } = [];
+
+    /// <summary>
+    /// Debug (the interior survey): each interior layout the building offers, with the middle of each collision shape of its objects that are no IGNORE
+    /// (x and z of its box's middle, y of its base).
+    /// </summary>
+    internal IEnumerable<(string Name, List<Vector3> Shapes)> InteriorLayouts(InteriorSite site)
+    {
+        foreach (var name in layouts.Names(site.Record, exterior: false))
+            if (layouts.Find(site.Record, name, exterior: false) is { } layout)
+                yield return (name, layouts.Items(layout).SelectMany(i => ShapeMiddles(site, i)).ToList());
+    }
+
+    IEnumerable<Vector3> ShapeMiddles(InteriorSite site, LayoutItem item)
+    {
+        if ((PathMode)item.Building.GetInt("path mode", (int)PathMode.Obstacle) == PathMode.Ignore) yield break;
+        var (at, rotation) = BuildingLayouts.Place(site.Position, site.Placement.Rotation, item);
+        var node = NodeMatrix(item.Building, at, rotation);
+        foreach (var mesh in WorldObjectLayout.Building(db, item.Building, item.InstanceId, at, rotation, new BuildingState(false)))
+        {
+            if (CollisionPathOf(mesh.Source, false) is not { Length: > 0 } path || collision.Get(path) is not { } prepared || mesh.Source.GetBool("passable")) continue;
+            foreach (var shape in prepared.Shapes)
+            {
+                var pts = shape.Vertices.Select(v => Vector3.Transform(v, node)).ToArray();
+                yield return new Vector3((pts.Min(p => p.X) + pts.Max(p => p.X)) / 2, pts.Min(p => p.Y), (pts.Min(p => p.Z) + pts.Max(p => p.Z)) / 2);
+            }
+        }
+    }
+
     IEnumerable<(LayoutItem Item, Vector3 Position, Quaternion Rotation)> LayoutObjects(BuildingPlacement b, GameRecord record, Vector3 position, bool destroyed)
     {
         if (destroyed || StateOf(b) is not { } state) yield break;
         foreach (bool exterior in (bool[])[true, false])
         {
             if (!exterior && b.WithoutInterior) continue;
-            if (b.LayoutName(state, exterior) is not { Length: > 0 } name || layouts.Find(record, name, exterior) is not { } layout) continue;
+            string? name = !exterior && InteriorLayoutOverrides.TryGetValue(b.Key, out var chosen) ? chosen : b.LayoutName(state, exterior);
+            if (name is not { Length: > 0 } || layouts.Find(record, name, exterior) is not { } layout) continue;
             foreach (var item in layouts.Items(layout))
             {
                 var (at, rotation) = BuildingLayouts.Place(position, b.Rotation, item);

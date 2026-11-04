@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Numerics;
 using Meitou.Content;
 using Meitou.Data;
@@ -5,10 +6,12 @@ using Meitou.Data.World;
 using Meitou.Navigation;
 
 /// <summary>
-/// <c>meitou-tools navmesh --survey-interiors zones|towns [--name text] [--png dir]</c>: for every building interior of ours, samples its kept polygons and the
-/// original tile's interior groups over its hull every <see cref="Step"/> units and counts the area both have, only ours has (by height over the hull's base)
-/// and only the original has; sums it by building type. <c>--png</c> writes a top-down image of each side per placement whose type contains <c>--name</c>,
-/// coloured by height over the base, and two vertical sections. Output goes where the user says, never into the repository.
+/// <c>meitou-tools navmesh --survey-interiors zones|towns [--name text] [--png dir] [--section x,z]</c>: for every building interior of ours, samples the zone's
+/// kept polygons and the original tile's interior groups and exterior over its hull every <see cref="Step"/> units and counts the area both have, only ours has
+/// (by height over the hull's base) and only the original has; sums it by building type and lists each placement whose type contains <c>--name</c>. Each
+/// interior is built with the layout the tile was built with (<see cref="ChooseLayouts"/>). <c>--png</c> writes per listed placement a top-down image of each
+/// side coloured by height over the base, a difference image, both meshes as OBJ, and two vertical sections through the hull's middle or <c>--section</c>.
+/// Output goes where the user says, never into the repository.
 /// </summary>
 static class InteriorSurvey
 {
@@ -25,8 +28,13 @@ static class InteriorSurvey
         public int WorstOurs;
     }
 
-    public static int Run(GameInstall install, GameDatabase db, WorldLevelData levels, List<ZoneCoordinate> zones, NavBuildSettings settings, string? name, string? png)
+    /// <summary>Where <c>--section x,z</c> puts the vertical sections; the hull's middle when null.</summary>
+    static Vector2? section;
+
+    public static int Run(GameInstall install, GameDatabase db, WorldLevelData levels, List<ZoneCoordinate> zones, NavBuildSettings settings, string? name, string? png,
+        Vector2? sectionAt = null)
     {
+        section = sectionAt;
         using var gatherer = new ZoneGeometryGatherer(install, db, levels, new CollisionCache(install));
         var tallies = new Dictionary<string, Tally>();
         foreach (var zone in zones) SurveyZone(gatherer, install, zone, settings, tallies, name, png);
@@ -44,44 +52,153 @@ static class InteriorSurvey
     {
         var groups = OriginalNavTiles.LoadInteriors(install, zone);
         if (groups.Count == 0) return;
+        var sites = InteriorJoinSweep.Sites(gatherer, zone, settings);
+        var owners = groups.Select(gr => (Group: gr, Site: InteriorJoinSweep.Owner(gr, sites))).ToList();
+        var layouts = ChooseLayouts(gatherer, zone, owners);
         var g = gatherer.Gather(zone);
         var full = NavMeshPipeline.BuildZone(gatherer, g, settings, out _, out var inner, interiors: true);
         var keep = ZoneKeptClosure.Resolve(new Dictionary<ZoneCoordinate, ZoneNavMesh> { [zone] = full }, settings)[zone];
-        var sites = InteriorJoinSweep.Sites(gatherer, zone, settings);
-        var owners = groups.Select(gr => (Group: gr, Site: InteriorJoinSweep.Owner(gr, sites))).ToList();
+        var exterior = OriginalNavTiles.LoadExterior(install, zone);
+        var everything = full.WithKept(keep);
         int offset = full.PolygonCount - inner.Sum(m => m.Mesh.PolygonCount);
         foreach (var interior in inner)
         {
             var mesh = interior.Mesh.WithKept(keep[offset..(offset + interior.Mesh.PolygonCount)]);
             offset += interior.Mesh.PolygonCount;
             var site = sites.FirstOrDefault(s => s.Key == interior.Key);
-            if (site is null || site.Destroyed) continue;
+            if (site is null || site.Destroyed || CrossesBorder(site, zone)) continue;
             var faces = owners.Where(o => o.Site == site).SelectMany(o => o.Group.Polygons.Where(p => p.Length >= 3).Select(p => p.Select(i => o.Group.Vertices[i]).ToArray())).ToList();
             if (faces.Count == 0) continue;
+            // Both sides' whole walkable ground over the hull, exterior included: the original carves its exterior with the hull's convex volume, narrower near
+            // the ground than the footprint ours cuts straight down, so a ledge round the walls is its exterior's and our interior's.
+            var ground = faces.Concat(ExteriorFaces(exterior, site)).ToList();
             var t = tallies.TryGetValue(site.Name, out var found) ? found : tallies[site.Name] = new Tally();
-            var (both, ours, upper, original) = Sample(site, mesh, faces);
+            var (both, ours, upper, original) = Sample(site, everything, ground);
             t.Placements++;
             t.Both += both;
             t.Ours += ours;
             t.OursUpper += upper;
             t.Original += original;
             if (ours > t.WorstOurs) (t.WorstOurs, t.Worst) = (ours, $"{zone}:{site.Key} {ours * Step * Step:0}");
-            if (png is not null && name is not null && site.Name.Contains(name, StringComparison.OrdinalIgnoreCase)) Pictures(gatherer, zone, settings, site, mesh, faces, png);
+            if (name is null || !site.Name.Contains(name, StringComparison.OrdinalIgnoreCase)) continue;
+            var hull = site.Hull.Polygon;
+            Console.Write($"  {zone}:{site.Key} {site.Name} at {hull.Average(p => p.X):0},{hull.Average(p => p.Y):0}");
+            Console.WriteLine($" ({(layouts.TryGetValue(site.Key, out var layout) ? layout is "" ? "no layout" : layout : "its layout")}): both {both * Step * Step:0}, ours {ours * Step * Step:0} ({upper * Step * Step:0} upper), original {original * Step * Step:0}");
+            if (png is not null) Pictures(gatherer, zone, settings, site, everything, ground, png);
         }
+    }
+
+    /// <summary>
+    /// The interior layout of each building as the original's tile was built with it: homes reroll their layouts per game, so the tile's furniture holes can
+    /// be another layout's. Per site, the layout whose objects stand most often over a hole in the original's faces (no face within reach of the object's
+    /// base), if that is at least half of them; else none (the tile has no furniture holes). Set as the gatherer's override.
+    /// </summary>
+    static Dictionary<string, string> ChooseLayouts(ZoneGeometryGatherer gatherer, ZoneCoordinate zone, List<(OriginalInterior Group, InteriorJoinSweep.Site? Site)> owners)
+    {
+        var chosen = new Dictionary<string, string>();
+        foreach (var site in gatherer.InteriorSites(zone))
+        {
+            var faces = owners.Where(o => o.Site?.Key == site.Placement.Key).SelectMany(o => o.Group.Polygons.Where(p => p.Length >= 3)
+                .Select(p => p.Select(i => o.Group.Vertices[i]).ToArray())).ToList();
+            if (faces.Count == 0) continue;
+            string best = "";
+            float bestScore = 0.5f;
+            foreach (var (name, objects) in gatherer.InteriorLayouts(site))
+            {
+                if (objects.Count == 0) continue;
+                float score = objects.Count(o => !faces.Any(f => HeightOn(f, o.X, o.Z) is { } y && MathF.Abs(y - o.Y) <= 6)) / (float)objects.Count;
+                if (score > bestScore) (best, bestScore) = (name, score);
+            }
+            chosen[site.Placement.Key] = best;
+        }
+        foreach (var (key, name) in chosen) gatherer.InteriorLayoutOverrides[key] = name;
+        return chosen;
+    }
+
+    /// <summary>
+    /// Whether the hull reaches over the zone's border: the part beyond is the neighbour zone's interior, joined through its kept border, which one zone alone
+    /// does not see (a stair over the line leaves the storeys above pruned).
+    /// </summary>
+    static bool CrossesBorder(InteriorJoinSweep.Site site, ZoneCoordinate zone)
+    {
+        var (x, z) = WorldLayout.ZoneOrigin(zone);
+        float size = (float)WorldLayout.ZoneSize;
+        return site.Hull.Polygon.Any(p => p.X < x || p.X > x + size || p.Y < z || p.Y > z + size);
     }
 
     static void Pictures(ZoneGeometryGatherer gatherer, ZoneCoordinate zone, NavBuildSettings settings, InteriorJoinSweep.Site site, ZoneNavMesh mesh, List<Vector3[]> faces, string png)
     {
         string stem = Path.Combine(png, $"{zone.X}.{zone.Y}-{Safe(site.Key)}");
         Draw(site, mesh, faces, stem);
+        Difference(site, mesh, faces, stem);
+        WriteObj(stem + ".orig.obj", faces);
+        WriteObj(stem + ".ours.obj", Enumerable.Range(0, mesh.PolygonCount).Where(p => mesh.Kept[p]).Select(p => mesh.Polygons[p].Select(i => mesh.Vertices[i]).ToArray()));
         var source = gatherer.InteriorSites(zone).First(s => s.Placement.Key == site.Key);
         if (gatherer.GatherInterior(source, NavMeshPipeline.InteriorTileStep * settings.CellSize, agentHeight: settings.AgentHeight) is { } geometry)
             Sections(site, geometry, mesh, faces, stem);
     }
 
+    /// <summary>The original exterior's polygons whose box meets the hull's.</summary>
+    static IEnumerable<Vector3[]> ExteriorFaces(OriginalNavMesh? exterior, InteriorJoinSweep.Site site)
+    {
+        if (exterior is null) yield break;
+        var hull = site.Hull.Polygon;
+        float x0 = hull.Min(p => p.X), x1 = hull.Max(p => p.X), z0 = hull.Min(p => p.Y), z1 = hull.Max(p => p.Y);
+        foreach (var poly in exterior.Polygons)
+        {
+            if (poly.Length < 3) continue;
+            var f = poly.Select(i => exterior.Vertices[i]).ToArray();
+            if (f.Max(v => v.X) >= x0 && f.Min(v => v.X) <= x1 && f.Max(v => v.Z) >= z0 && f.Min(v => v.Z) <= z1) yield return f;
+        }
+    }
+
+    /// <summary>
+    /// Writes <c>path.diff.png</c>, one 4-pixel square a sample from above: red where only ours walks (brighter higher), blue where only the original does, grey
+    /// where both do; a mismatch outdraws a match.
+    /// </summary>
+    static void Difference(InteriorJoinSweep.Site site, ZoneNavMesh mesh, List<Vector3[]> faces, string path)
+    {
+        var hull = site.Hull.Polygon;
+        float x0 = hull.Min(p => p.X), z0 = hull.Min(p => p.Y);
+        int w = (int)MathF.Ceiling((hull.Max(p => p.X) - x0) / Step), h = (int)MathF.Ceiling((hull.Max(p => p.Y) - z0) / Step);
+        var rank = new int[w * h];
+        var rgb = new byte[w * h * 48];
+        float floorY = site.Hull.YMin, span = Math.Max(1, site.Hull.YMax - floorY);
+        Sample(site, mesh, faces, (x, z, kind, y) =>
+        {
+            int cx = Math.Clamp((int)((x - x0) / Step), 0, w - 1), cz = Math.Clamp((int)((z - z0) / Step), 0, h - 1);
+            int r = kind == 'b' ? 1 : 2 + (int)(Math.Clamp((y - floorY) / span, 0, 1) * 100);
+            if (r <= rank[cx + cz * w]) return;
+            rank[cx + cz * w] = r;
+            byte v = (byte)(90 + Math.Min(165, (r - 2) * 165 / 100));
+            var c = kind == 'b' ? ((byte)70, (byte)70, (byte)70) : kind == 'o' ? (v, (byte)30, (byte)30) : ((byte)30, (byte)60, v);
+            for (int k = 0; k < 16; k++)
+            {
+                int i = ((cz * 4 + k / 4) * w * 4 + cx * 4 + k % 4) * 3;
+                (rgb[i], rgb[i + 1], rgb[i + 2]) = c;
+            }
+        });
+        WorldPng.Write(path + ".diff.png", w * 4, h * 4, rgb);
+    }
+
+    /// <summary>Writes polygons as an OBJ file, each with its own vertices.</summary>
+    static void WriteObj(string path, IEnumerable<Vector3[]> polygons)
+    {
+        using var w = new StreamWriter(path);
+        int n = 0;
+        foreach (var f in polygons)
+        {
+            foreach (var v in f) w.WriteLine(string.Create(CultureInfo.InvariantCulture, $"v {v.X:0.##} {v.Y:0.##} {v.Z:0.##}"));
+            w.WriteLine("f " + string.Join(" ", Enumerable.Range(n + 1, f.Length)));
+            n += f.Length;
+        }
+    }
+
     static string Safe(string key) => string.Concat(key.Select(c => char.IsLetterOrDigit(c) || c == '-' ? c : '_'));
 
-    static (int Both, int Ours, int Upper, int Original) Sample(InteriorJoinSweep.Site site, ZoneNavMesh mesh, List<Vector3[]> faces)
+    /// <summary>Calls <paramref name="seen"/> for each sample point's surfaces: 'b' both, 'o' only ours, 't' only the original's, with its height.</summary>
+    static (int Both, int Ours, int Upper, int Original) Sample(InteriorJoinSweep.Site site, ZoneNavMesh mesh, List<Vector3[]> faces,
+        Action<float, float, char, float>? seen = null)
     {
         var hull = site.Hull.Polygon;
         float x0 = hull.Min(p => p.X), x1 = hull.Max(p => p.X), z0 = hull.Min(p => p.Y), z1 = hull.Max(p => p.Y);
@@ -100,15 +217,24 @@ static class InteriorSurvey
                 foreach (int p in polys)
                 {
                     float y = mesh.HeightAt(p, x, z);
-                    if (theirs.Any(o => MathF.Abs(o - y) <= SameSurface)) both++;
+                    if (theirs.Any(o => MathF.Abs(o - y) <= SameSurface))
+                    {
+                        both++;
+                        seen?.Invoke(x, z, 'b', y);
+                    }
                     else
                     {
                         ours++;
+                        seen?.Invoke(x, z, 'o', y);
                         if (y - floorY > Upper) upper++;
                     }
                 }
                 foreach (float o in theirs)
-                    if (!polys.Any(p => MathF.Abs(mesh.HeightAt(p, x, z) - o) <= SameSurface)) original++;
+                    if (!polys.Any(p => MathF.Abs(mesh.HeightAt(p, x, z) - o) <= SameSurface))
+                    {
+                        original++;
+                        seen?.Invoke(x, z, 't', o);
+                    }
             }
         return (both, ours, upper, original);
     }
@@ -129,7 +255,7 @@ static class InteriorSurvey
     static void Sections(InteriorJoinSweep.Site site, ZoneGeometry g, ZoneNavMesh mesh, List<Vector3[]> faces, string path)
     {
         var hull = site.Hull.Polygon;
-        float cx = (hull.Min(p => p.X) + hull.Max(p => p.X)) / 2, cz = (hull.Min(p => p.Y) + hull.Max(p => p.Y)) / 2;
+        float cx = section?.X ?? (hull.Min(p => p.X) + hull.Max(p => p.X)) / 2, cz = section?.Y ?? (hull.Min(p => p.Y) + hull.Max(p => p.Y)) / 2;
         foreach (bool alongX in new[] { true, false })
         {
             float lo = alongX ? hull.Min(p => p.X) : hull.Min(p => p.Y), hi = alongX ? hull.Max(p => p.X) : hull.Max(p => p.Y);
