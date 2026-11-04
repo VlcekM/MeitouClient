@@ -477,7 +477,9 @@ character takes the collision surface at the character's own height instead when
 rock (~1567), stranding a walker on the top; the original's cached tile has a polygon flat at 1594.8 there). A snap that took only a surface's
 edge beside the spot, more than `StandRise` off a character within `StandRise` of the terrain, takes the terrain when the mesh is within `TerrainSnapRange`
 of it (engine choice; **Observed**, zone 33.28, scratch probe: by the foot of a walkable top at ~560 west of Black Desert City, ground 537, polygons
-at ~550, walkers at 7245, -13968 stopped and dropped their order); with no layer in range, a
+at ~550, walkers at 7245, -13968 stopped and dropped their order). A polygon under the terrain, more than `StandRise` off a character standing on the terrain with no
+collision surface near it, takes the terrain however far it sags (engine choice; **Observed**, zone 19.34, `--probe -56752,9502`: a planar polygon spanning a
+hillside lies 31 under the ground, its height samples empty there, and the original's polygon 28 under it; the Hub-to-Squin walker stalled); with no layer in range, a
 polygon within `EdgeTolerance` counts. A character already off every layer near its height still steps down.
 A path walker whose step finds no layer in reach of its height, more than 4 off its path's height there (the leg to its next point), looks for one at the path's height (engine choice, `MovementSystem.CorridorHeight`; **Observed** before the seam check below, Ancient Lab `28.60:2-`: walkers stood at the edge of its stairwell both ways).
 A path point takes the height of the corridor polygon under it; of stacked ones the corridor crosses, the one nearest the point's own height (`NavQuery.OnSurface`;
