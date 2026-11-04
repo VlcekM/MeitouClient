@@ -333,21 +333,32 @@ public static class ShopFiller
         return g;
     }
 
-    /// <summary>A grade 0..5 by the faction's <c>armors 0</c> .. <c>armors 5</c> chances (the field names as the doc gives them; the spelling in the data is <b>Unknown</b>).</summary>
+    /// <summary>
+    /// A grade 0..5 by the faction's <c>armors 0</c> .. <c>armors 5</c> chances (<c>FUN_140954c80</c> builds the table, <c>FUN_14063cea0</c> draws, <b>Verified</b>): only chances above 0 count (a faction
+    /// with none: grade 0), no faction gives 50 / 80 / 25 / 5 for grades 0..3; a single grade is taken with no draw, else one float(0, total) draw against the running sums.
+    /// </summary>
     internal static int Grade(GameRecord? faction, ref RandomStream rng)
     {
         Span<int> w = stackalloc int[6];
-        int total = 0;
-        for (int g = 0; g < 6; g++) total += w[g] = Math.Max(faction?.GetInt($"armors {g}", DefaultGradeChances[g]) ?? DefaultGradeChances[g], 0);
-        if (total <= 0) return 1;
-        int roll = rng.NextInt(total);
+        int total = 0, kinds = 0, only = 0;
         for (int g = 0; g < 6; g++)
         {
-            if (roll < w[g]) return g;
+            w[g] = Math.Max(faction is null ? NoFactionGradeChances[g] : faction.GetInt($"armors {g}", DefaultGradeChances[g]), 0);
+            total += w[g];
+            if (w[g] > 0) { kinds++; only = g; }
+        }
+        if (kinds <= 1) return only;
+        float roll = rng.NextFloat() * total;
+        for (int g = 0; g < 6; g++)
+        {
+            if (w[g] > 0 && roll < w[g]) return g;
             roll -= w[g];
         }
-        return 5;
+        return only;
     }
+
+    /// <summary>The grade chances of an item list made with no faction (<c>FUN_140954c80</c>, constants read from the exe).</summary>
+    static readonly int[] NoFactionGradeChances = [50, 80, 25, 5, 0, 0];
 
     /// <summary>A manufacturer from the list (v0, 0 counting as 100), then a model from its <c>weapon models</c> (v1, 0 counting as 100) whose v0 is the level; none or level 0: the fixed fallback model.</summary>
     internal static (GameRecord Maker, string? Model, int Level)? Maker(VendorList list, GameDatabase db, ref RandomStream rng)
