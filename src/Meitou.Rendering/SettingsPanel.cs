@@ -9,8 +9,11 @@ namespace Meitou.Rendering;
 /// <see cref="Scale"/>: what <see cref="Text"/> multiplies the value by (100 for a percentage), so a typed number is in the units shown.
 /// </summary>
 public sealed record Slider(string Label, float Min, float Max, Func<float> Get, Action<float> Set, string Format = "0.##", bool Logarithmic = false,
-    Func<float, string>? Text = null, float? Faithful = null, float? Meitou = null, bool Reversed = false, float Scale = 1)
+    Func<float, string>? Text = null, float? Faithful = null, float? Meitou = null, bool Reversed = false, float Scale = 1, float Step = 0)
 {
+    /// <summary>One arrow-key step as a fraction of the track: <see cref="Step"/> when given, else 1 on a range of 4 or less, else 2%.</summary>
+    public float KeyStep => Step > 0 ? Step / (Max - Min) : Max - Min <= 4 ? 1 / (Max - Min) : 0.02f;
+
     /// <summary>The value as the panel shows it (<see cref="Text"/> when given, else <see cref="Format"/>).</summary>
     public string Display => Text?.Invoke(Get()) ?? Get().ToString(Format, System.Globalization.CultureInfo.InvariantCulture);
 

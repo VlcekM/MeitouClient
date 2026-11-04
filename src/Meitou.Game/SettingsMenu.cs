@@ -578,7 +578,7 @@ sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, 
         {
             var hit = hits[focus];
             if (hit.Slider is { } slider && key is Key.Left or Key.Right)
-                slider.SetFraction(slider.Fraction + (key == Key.Left ? -1 : 1) * (slider.Max - slider.Min <= 4 ? 1 / (slider.Max - slider.Min) : 0.02f));
+                slider.SetFraction(slider.Fraction + (key == Key.Left ? -1 : 1) * slider.KeyStep);
             else if (key is Key.Enter or Key.Space) hit.Activate();
         }
         return true;
@@ -697,6 +697,7 @@ sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, 
         for (int i = 0; i < values.Toggles.Count; i++)
             if (values.Toggles[i].Get() != toggleDefaults[i]) values.Toggles[i].Set(toggleDefaults[i]);
         frameLimit.Set(240);
+        ResetModSettings();
         config.SplashScreens = false;
         config.MainMenuTransitions = true;
         config.InGameTransitions = true;

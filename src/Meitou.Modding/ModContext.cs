@@ -151,6 +151,8 @@ public sealed class ModContext
     {
         CheckOpen();
         ArgumentNullException.ThrowIfNull(settings);
+        if (settings.GetType().IsValueType)
+            throw new ArgumentException($"{settings.GetType().Name} is a struct: the page would change a copy. Use a class.", nameof(settings));
         if (Pending.Settings is not null) throw new InvalidOperationException($"{Id}: AddSettings is allowed once per mod.");
         var group = new ModSettingsGroup(Id, Name, settings);
         if (savedSettings is not null)

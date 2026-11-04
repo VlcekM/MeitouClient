@@ -38,6 +38,7 @@ public sealed class ModSetting
 {
     readonly object target;
     readonly PropertyInfo property;
+    readonly string[] options;
 
     internal ModSetting(ModSettingsGroup group, object target, PropertyInfo property, SettingAttribute about)
     {
@@ -48,9 +49,11 @@ public sealed class ModSetting
         Hint = about.Hint;
         var type = property.PropertyType;
         Kind = KindOf(property, type, about);
-        Options = type.IsEnum ? Enum.GetNames(type) : about.Options;
+        options = type.IsEnum ? Enum.GetNames(type) : about.Options;
         if (Kind == ModSettingKind.Slider) (Min, Max, Step) = Range(property, type, about);
         Default = Get();
+        if (Kind == ModSettingKind.List && Choice < 0)
+            throw new ArgumentException($"Setting '{property.Name}': its value '{Format(Default)}' is not one of its options.");
     }
 
     public ModSettingsGroup Group { get; }
@@ -66,29 +69,31 @@ public sealed class ModSetting
     public double Step { get; }
 
     /// <summary>A list's choices: an enum's names or the attribute's options.</summary>
-    public IReadOnlyList<string> Options { get; }
+    public IReadOnlyList<string> Options => options;
 
     /// <summary>The value when the mod registered it, before a saved value: what Reset restores.</summary>
-    public object Default { get; }
+    public object? Default { get; }
 
     /// <summary>True for an <c>int</c> slider.</summary>
     public bool Whole => property.PropertyType == typeof(int);
 
-    public object Get() => property.GetValue(target)!;
+    public object? Get() => property.GetValue(target);
 
     /// <summary>
     /// Sets the property (a number clamped to the range and to the step, a list value by name) and tells the group's
     /// <see cref="ModSettingsGroup.Changed"/>.
     /// </summary>
-    public void Set(object value)
+    public void Set(object value) => Apply(Convert(value));
+
+    /// <summary>Restores <see cref="Default"/> as it was registered, not snapped to the step.</summary>
+    public void Reset() => Apply(Default);
+
+    void Apply(object? next)
     {
-        object next = Convert(value);
         if (Equals(next, Get())) return;
         property.SetValue(target, next);
         Group.RaiseChanged(this);
     }
-
-    public void Reset() => Set(Default);
 
     /// <summary>The value as saved: invariant text (true/false, a number, a choice's name).</summary>
     public string Text => Format(Get());
@@ -96,7 +101,7 @@ public sealed class ModSetting
     public bool IsDefault => Equals(Get(), Default);
 
     /// <summary>The list's chosen index, -1 when the value is not one of <see cref="Options"/>.</summary>
-    public int Choice => Kind == ModSettingKind.List ? Options.ToList().IndexOf(Format(Get())) : -1;
+    public int Choice => Kind == ModSettingKind.List ? Array.IndexOf(options, Format(Get())) : -1;
 
     /// <summary>Sets a saved value; false (nothing changed) when the text is not a value of this setting.</summary>
     internal bool Load(string text)
@@ -127,8 +132,8 @@ public sealed class ModSetting
     object? Parse(string text) => Kind switch
     {
         ModSettingKind.Switch => bool.TryParse(text, out bool b) ? b : null,
-        ModSettingKind.Slider => double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out double d) ? d : null,
-        _ => Options.FirstOrDefault(o => string.Equals(o, text, StringComparison.Ordinal)),
+        ModSettingKind.Slider => double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out double d) && double.IsFinite(d) ? d : null,
+        _ => options.FirstOrDefault(o => string.Equals(o, text, StringComparison.Ordinal)),
     };
 
     object Convert(object value)
@@ -138,7 +143,7 @@ public sealed class ModSetting
         if (Kind == ModSettingKind.List)
         {
             string name = value is string s ? s : Format(value);
-            if (!Options.Contains(name)) throw new ArgumentException($"Setting '{Key}': '{name}' is not one of its options.");
+            if (!options.Contains(name)) throw new ArgumentException($"Setting '{Key}': '{name}' is not one of its options.");
             return type.IsEnum ? Enum.Parse(type, name) : name;
         }
         double v = Math.Clamp(System.Convert.ToDouble(value, CultureInfo.InvariantCulture), Min, Max);
@@ -147,13 +152,13 @@ public sealed class ModSetting
         return type == typeof(float) ? (float)v : Math.Round(v, 10);
     }
 
-    static string Format(object value) => value switch
+    static string Format(object? value) => value switch
     {
         bool b => b ? "true" : "false",
         float f => f.ToString("R", CultureInfo.InvariantCulture),
         double d => d.ToString("R", CultureInfo.InvariantCulture),
         IFormattable n => n.ToString(null, CultureInfo.InvariantCulture),
-        _ => value.ToString() ?? "",
+        _ => value?.ToString() ?? "",
     };
 }
 

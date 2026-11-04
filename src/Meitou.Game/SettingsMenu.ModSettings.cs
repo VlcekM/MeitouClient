@@ -45,7 +45,7 @@ sealed partial class SettingsMenu
     {
         string raw = $"{group}/{setting.Key}";
         var entry = new Entry(setting.Label, setting.Hint, Changed: !setting.IsDefault, Raw: raw, Depth: 1,
-            Reset: () => SetModSetting(setting, setting.Default));
+            Reset: () => ChangeModSetting(setting, setting.Reset));
         return setting.Kind switch
         {
             ModSettingKind.Switch => entry with { Toggle = new Toggle(raw, () => setting.Get() is true, v => SetModSetting(setting, v)) },
@@ -60,19 +60,45 @@ sealed partial class SettingsMenu
         string format = setting.Whole ? "0" : "0.##";
         float Get() => System.Convert.ToSingle(setting.Get(), System.Globalization.CultureInfo.InvariantCulture);
         return new Slider(raw, (float)setting.Min, (float)setting.Max, Get, v => SetModSetting(setting, (double)v), format,
-            Faithful: System.Convert.ToSingle(setting.Default, System.Globalization.CultureInfo.InvariantCulture));
+            Faithful: System.Convert.ToSingle(setting.Default, System.Globalization.CultureInfo.InvariantCulture), Step: (float)setting.Step);
     }
 
     void ResetModGroup(ModSettingsGroup group)
     {
         foreach (var setting in group.Settings)
-            SetModSetting(setting, setting.Default);
+            ChangeModSetting(setting, setting.Reset);
     }
 
-    /// <summary>Sets the mod's property and keeps the value in the config (a default is not kept).</summary>
-    void SetModSetting(ModSetting setting, object value)
+    /// <summary>Restore defaults: every mod's settings back to their defaults, and no saved value kept (also of mods not loaded now).</summary>
+    void ResetModSettings()
     {
-        setting.Set(value);
+        foreach (var group in ModSettings())
+            ResetModGroup(group);
+        config.ModSettings.Clear();
+    }
+
+    void SetModSetting(ModSetting setting, object value) => ChangeModSetting(setting, () => setting.Set(value));
+
+    /// <summary>
+    /// Runs a change of the mod's property and keeps the value it has then in the config (a default is not kept). The mod's setter and its
+    /// <see cref="ModSettingsGroup.Changed"/> handlers are its own code: a throw is logged and shown as the page's notice.
+    /// </summary>
+    void ChangeModSetting(ModSetting setting, Action change)
+    {
+        try
+        {
+            change();
+        }
+        catch (Exception e)
+        {
+            Console.Error.WriteLine($"mod       {setting.Group.ModId}: setting '{setting.Key}' failed: {e}");
+            notice = $"{setting.Group.Name}: {e.GetBaseException().Message}";
+        }
+        KeepModSetting(setting);
+    }
+
+    void KeepModSetting(ModSetting setting)
+    {
         string mod = setting.Group.ModId;
         if (!config.ModSettings.TryGetValue(mod, out var saved)) config.ModSettings[mod] = saved = [];
         if (setting.IsDefault) saved.Remove(setting.Key);

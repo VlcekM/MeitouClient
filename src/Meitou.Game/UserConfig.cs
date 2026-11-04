@@ -369,6 +369,9 @@ sealed class UserConfig
         MetalRenderScale = Math.Clamp(MetalRenderScale, 0.33f, 1f);
         if (!Enum.IsDefined(MetalUpscaler)) MetalUpscaler = MetalUpscalerMode.Temporal;
         if (MetalUpscaler is MetalUpscalerMode.Temporal or MetalUpscalerMode.Spatial) MetalRenderScale = Math.Clamp(MetalRenderScale, 0.4f, 1f);
+        ModSettings ??= [];
+        foreach (var (mod, saved) in ModSettings.ToList())
+            if (saved is null) ModSettings.Remove(mod);
     }
 
     public void Save()
