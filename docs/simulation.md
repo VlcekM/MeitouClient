@@ -813,7 +813,7 @@ when the host passes `CharacterRigs` (the game does; tests and goldens do not). 
   finds them. **Budgets** (engine choice; `RagdollSystem.TileBudget`, `StartBudget`, `RagdollPhysics.BuildingUnits`): a tick spends at most 8 tile units (a
   ground mesh 1, a tile's building mesh 4: a town tile's is 2 ms against the ground's 0.12, and a zone's pending tiles all got theirs in the tick its buildings
   were gathered; a tile asking for buildings not yet gathered costs nothing) and starts at most 4 whole bodies falling (a knockdown, a put-down, a stored
-  squad's downed member coming back); one whose tiles the budget did not reach starts on a later tick, the character animating meanwhile; a save's frozen
+  squad's downed member coming back); one whose tiles the budget did not reach, or whose tiles still lack their buildings (`RagdollPhysics.Covered`), starts on a later tick, the character animating meanwhile; a save's frozen
   ragdoll is not counted, and a get-up, a limb's dangle or a lift never waits. **Observed** (headless flight probe, the
   stutter save's flights): a zone's downed characters re-ragdoll when it loads, asked for 80-100 tiles and 20 builds in one tick (45-60 ms; after the budgets
   the setup loop is at most 3.4 ms a tick), and 20 whole bodies then fall for up to 7 s (the step 0.4 -> 1.3 ms a tick); a build is 0.7 ms (bodies, joints, the

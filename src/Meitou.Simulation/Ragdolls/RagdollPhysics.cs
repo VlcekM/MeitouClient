@@ -297,13 +297,16 @@ internal sealed class RagdollPhysics : IDisposable
         Cover(centre, reach, environment, tick, ref budget);
     }
 
-    /// <summary>Whether every tile round <paramref name="centre"/> within <paramref name="reach"/> exists.</summary>
+    /// <summary>
+    /// Whether every tile round <paramref name="centre"/> within <paramref name="reach"/> exists with its buildings known (not <see cref="Tile.BuildingsPending"/>): a body that starts on
+    /// a tile whose floors are not there yet falls through them to the ground below (Observed: a knocked-out character on a town gate's walkway, the zone's collision still being read).
+    /// </summary>
     public bool Covered(Vector3 centre, float reach)
     {
         var (x0, x1, z0, z1) = Span(centre, reach);
         for (int x = x0; x <= x1; x++)
             for (int z = z0; z <= z1; z++)
-                if (!tiles.ContainsKey((x, z))) return false;
+                if (!tiles.TryGetValue((x, z), out var tile) || tile.BuildingsPending) return false;
         return true;
     }
 

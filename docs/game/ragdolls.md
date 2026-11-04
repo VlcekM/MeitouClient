@@ -53,6 +53,11 @@ foliage group 6 or passable parts. A living character's only PhysX shape is its 
 body is left out of the movement avoidance list, so it blocks no walker
 ([pathfinding](pathfinding.md#bodies-in-the-way)).
 
+Meitou's building floors: **Observed** (`--load` mec-tou-nu2, a knocked-out character on The Hub's gate walkway, root 1636 over terrain 1511, per-part heights against the collision triangles at freeze):
+with the zone's building collision gathered the 13 parts end 0 below the floor (none by more than 0.3), so the group set, the shapes and the transforms are fine. When the body started while its tile
+still had ground only (the zone is gathered on a worker the first time a ragdoll moves near it, 10 ticks here), 2 parts ended up to 3.7 units under the floor. A whole body now starts only
+when every tile near it has its buildings (`RagdollPhysics.Covered`); the character animates until then.
+
 ## RagdollPart and requests
 
 `enum RagdollPart { NONE=0, WHOLE=1, RIGHT_ARM=2, LEFT_ARM=4, HEAD=8, RIGHT_LEG=16, LEFT_LEG=32,
