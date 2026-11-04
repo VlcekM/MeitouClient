@@ -93,16 +93,23 @@ sealed partial class GameHost
             if (character.Medical?.Floats.TryGetValue("hung", out float saved) == true) hunger = saved;
             var items = character.Inventory is { } inventory && platoon?.File is { } file ? SaveInventory.Read(file, inventory) : [];
             if (items.Count > 0 && SavedKit.LoadoutOf(character.Appearance, items, db, serial) is { } exactKit &&
-                appearances.Create(character.RecordId, exactKit) is { } exact) return exact;
+                appearances.Create(character.RecordId, WithSavedLimbs(exactKit, character, db)) is { } exact) return exact;
             var rolled = appearances.Create(character.RecordId, character.OwnerFactionId.Length > 0 ? character.OwnerFactionId : null, serial);
             if (rolled?.Loadout is not { } generated) return null;
-            var worn = SavedKit.Wear(generated, character.Appearance, db);
-            return worn is null ? rolled : appearances.Create(character.RecordId, worn) ?? rolled;
+            var worn = SavedKit.Wear(generated, character.Appearance, db) ?? SavedKit.Copy(generated);
+            return appearances.Create(character.RecordId, WithSavedLimbs(worn, character, db)) ?? rolled;
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or FormatException or ArgumentException or Meitou.Data.Fcs.FcsFormatException)
         {
             return null;
         }
+    }
+
+    /// <summary><paramref name="kit"/> with the character's saved stumps and prosthetics, as the world loads them (SavedLimbs).</summary>
+    static Meitou.Data.Characters.Loadout WithSavedLimbs(Meitou.Data.Characters.Loadout kit, SaveCharacter character, GameDatabase db)
+    {
+        if (character.Medical is { } medical && character.Platoon.File is { } file) SavedKit.SetLimbs(kit, file, medical, db);
+        return kit;
     }
 
     static HashSet<string> StartingCharacterRecords(GameDatabase db, string startOrTemplateId)

@@ -142,6 +142,28 @@ public static class SavedKit
         loadout.Decapitated = medical?.Decapitated == true;
     }
 
+    /// <summary>
+    /// Gives <paramref name="loadout"/> the limbs saved in <paramref name="medical"/> (a MEDICAL_STATE of <paramref name="file"/>) without a <see cref="Bodies.MedicalState"/>,
+    /// as <see cref="SavedLimbs.Apply"/> reads them: a replaced slot whose prosthetic record is missing is a stump.
+    /// </summary>
+    public static void SetLimbs(Loadout loadout, SaveFile file, FcsRecord medical, GameDatabase db)
+    {
+        int bits = medical.Ints.GetValueOrDefault(SaveLimbs.Key);
+        var fitted = SaveLimbs.Read(file, medical);
+        for (int k = 0; k < loadout.Limbs.Length; k++)
+        {
+            int state = SaveLimbs.StateOf(bits, k);
+            var prosthetic = state == 2 && fitted[k] is { } item && db.Find(item.BaseId) is { Type: FcsRecordType.LIMB_REPLACEMENT } record ? record : null;
+            loadout.Limbs[k] = state switch
+            {
+                0 => null,
+                2 when prosthetic is not null => new LoadoutLimb(2, prosthetic, fitted[k]!.Level),
+                2 => new LoadoutLimb(1),
+                _ => new LoadoutLimb(state),
+            };
+        }
+    }
+
     /// <summary>A copy of <paramref name="loadout"/> (to give it limbs without touching a look another character may share).</summary>
     public static Loadout Copy(Loadout loadout)
     {
@@ -152,6 +174,7 @@ public static class SavedKit
         };
         copy.Clothing.AddRange(loadout.Clothing);
         copy.Weapons.AddRange(loadout.Weapons);
+        copy.Carried.AddRange(loadout.Carried);
         loadout.Limbs.CopyTo(copy.Limbs, 0);
         copy.Decapitated = loadout.Decapitated;
         return copy;
