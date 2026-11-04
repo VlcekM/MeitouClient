@@ -377,7 +377,7 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
         player.DataProblems = (scene.Database?.Issues.Count ?? 0) + (scene.Objects?.Levels.Problems().Count ?? 0);
         if (scene.Database is { } db)
         {
-            player.Mods = ModReport.Build(install, db);
+            player.Mods = ModReport.Build(install, db, mods?.Refused);
             LogMods(player.Mods);
         }
         if (OpensOnTitle(interactive)) player.ShowTitle();
