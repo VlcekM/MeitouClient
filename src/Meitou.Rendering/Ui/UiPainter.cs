@@ -825,7 +825,22 @@ public sealed partial class UiPainter : IDisposable
         if ((name.StartsWith(RenderedIconPrefix, StringComparison.Ordinal) || name.StartsWith(RenderedBuildingIconPrefix, StringComparison.Ordinal)) && RenderedIcons?.Invoke(name) is { } rendered) return rendered;
         string path = resolve(name) ?? throw new FileNotFoundException($"MyGUI texture not found: {name}");
         if (stored.Remove(name, out var reading) && reading.Result is { } dds) return UploadStored(name, dds);
+        if (path.EndsWith(".dds", StringComparison.OrdinalIgnoreCase) && ReadStoredTop(path) is { } top) return UploadStored(name, top);
         return Upload(name, TextureLoader.LoadFile(path, allMips: false).Levels[0]);
+    }
+
+    /// <summary>
+    /// The top level of an S3TC (BC1-BC3) DDS file as stored, read without its mips (the overview's map: 32 MB as BC1, 256 MB as RGBA8), or null for any other file
+    /// (or one the reader cannot take: it is loaded decoded, where its error shows). Like <see cref="Prefetch"/>'s files it gets no <see cref="OpacityMask"/>.
+    /// </summary>
+    static DdsFile? ReadStoredTop(string path)
+    {
+        try
+        {
+            using var file = File.OpenHandle(Meitou.Content.GameFiles.Resolve(path));
+            return DdsReader.ReadTopSurface(file) is { Format: DdsFormat.Bc1 or DdsFormat.Bc2 or DdsFormat.Bc3, IsCubemap: false, IsVolume: false, ImageCount: 1, Width: > 0, Height: > 0 } dds ? dds : null;
+        }
+        catch (Exception) { return null; }
     }
 
     /// <summary>
