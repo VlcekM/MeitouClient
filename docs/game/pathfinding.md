@@ -370,12 +370,16 @@ walkable span to 492, so the wall became a walkable stair (485, 488, 492, 496) o
 the original has neither. Walkable and cutting triangles are now rasterized into two fields and merged per column, a merged span walkable only when a walkable
 surface in it reaches within the climb of its top (5 cells). **Observed**: 1..3 cells instead remove Y-House roof ledges but also tilted storeys inside a
 cutting slab (Outpost s-I `9.51:2-`: the upper floor, 9 k units², is lost at 3); at 1 the towns survey loses 175 k shared units² for 475 k fewer ours-only.
-**Interior survey**: `meitou-tools navmesh --survey-interiors zones|towns|x,z ... [--name text] [--png dir]` samples over each intact interior's hull every
-2 units the zone's kept polygons against the original's interior faces plus its exterior polygons (the original carves its exterior with the hull's convex volume,
-so a ledge round the walls is its exterior's and our interior's) and sums, per building type, the area both have, only ours (and how much 20+ over the hull's
-base), only the original; `--name` also lists each matching placement with its hull centre; `--png` draws both from above and two vertical sections.
-**Observed** (`towns`, 29 types): both 27.8 M units², ours-only 3.38 M, original-only 4.82 M. Largest ours-only: Y-House 382 k (39.16 `16-`: the dome top, which
-the original does not walk), Watchtower 354 k, Hive Commune Hut 271 k, Old Storm House 252 k.
+**Interior survey**: `meitou-tools navmesh --survey-interiors zones|towns|x,z ... [--name text] [--png dir] [--section x,z]` samples over each intact interior's
+hull every 2 units the zone's kept polygons against the original's interior faces plus its exterior polygons (the original carves its exterior with the hull's
+convex volume, so a ledge round the walls is its exterior's and our interior's) and sums, per building type, the area both have, only ours (and how much 20+
+over the hull's base), only the original. Hulls over the zone border are left out (their other part is the neighbour's). `--name` lists each matching placement
+with its hull centre and layout; `--png` writes both meshes from above, a difference image, both as OBJ and two vertical sections.
+**Tiles hold one furniture layout** (**Observed**, survey, 5 town zones): within one placement the original's interior either has a hole under nearly every
+collision shape of a layout's furniture or under almost none (39.16 `18-`: 8 % of shapes covered by a face; `16-`: 77 %; Ash Dome `54.59:4-`: upper-storey
+furniture 91 %), because homes reroll their layouts per game ([factions-squads-towns.md](factions-squads-towns.md), new game vs level data) and the tile was
+built with one of them. The survey therefore builds each interior with the layout whose shapes stand over holes most often (at least half, else none): in
+39.16 it finds a full match for 19 of 21 placements (e.g. `10-` Residential 40/40, `18-` General Shop 65/65), and ours-only there falls under 3 % for 8 of 10 types.
 **Join sweep**: `meitou-tools navmesh --compare-interiors x,z ... | towns` (`towns`: every zone holding a town placement) reports per original
 interior group whether the original connects it (mesh connections in its streaming set) and whether ours, the interior whose hull holds most of its
 faces, is reached from the street (over kept polygons, joins and links from the exterior's kept polygons once the zone's kept set is resolved alone or,
