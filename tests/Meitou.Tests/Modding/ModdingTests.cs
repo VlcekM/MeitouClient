@@ -62,6 +62,28 @@ public class ModdingTests
         public List<string> Names { get; set; } = [];
     }
 
+    sealed class NoChoice
+    {
+        [Setting("Mode", Options = ["a", "b"])]
+        public string Mode { get; set; } = null!;
+    }
+
+    enum Side { Left = 1, Right = 2 }
+
+    sealed class NoZeroSide
+    {
+        [Setting("Side")]
+        public Side Side { get; set; }
+    }
+
+    struct StructSettings
+    {
+        public StructSettings() { }
+
+        [Setting("On")]
+        public bool On { get; set; } = true;
+    }
+
     static ModContext Context(IReadOnlyDictionary<string, string>? saved = null) =>
         new(new LoadedMod(new ModInfo("Ores", "mods/Ores/Ores.mod", ModSource.Local),
                 new CodeModManifest("ores", ModApi.Version, ["Ores.dll"], "Ores.Mod")),
@@ -207,6 +229,25 @@ public class ModdingTests
         Assert.Equal("120", group.Settings[0].Text);
     }
 
+    /// <summary>
+    /// Reset puts back the default as registered, though it is off the step grid (10 on 0.5 + n x 0.595), and a saved number that is not finite is
+    /// ignored. Catches a Reset that snaps to the step (10.02, the row left changed) and a "NaN" let past the range's clamp.
+    /// </summary>
+    [Fact]
+    public void Reset_restores_an_off_step_default_and_a_saved_nan_is_ignored()
+    {
+        var ores = new OreSettings();
+        var group = Context(new Dictionary<string, string> { ["RefillDays"] = "NaN" }).AddSettings(ores);
+        var refill = group.Settings[1];
+        Assert.Equal(10.0, ores.RefillDays);
+
+        refill.Set(20.0);
+        Assert.False(refill.IsDefault);
+        refill.Reset();
+        Assert.Equal(10.0, ores.RefillDays);
+        Assert.True(refill.IsDefault);
+    }
+
     /// <summary>A setting the page cannot show refuses the mod with a reason that names it, rather than failing later.</summary>
     [Fact]
     public void A_bad_setting_is_refused_with_a_reason()
@@ -214,6 +255,9 @@ public class ModdingTests
         Assert.Contains("'Size'", Assert.Throws<ArgumentException>(() => Context().AddSettings(new NoRange())).Message);
         Assert.Contains("'Names'", Assert.Throws<ArgumentException>(() => Context().AddSettings(new WrongType())).Message);
         Assert.Throws<ArgumentException>(() => Context().AddSettings(new object()));
+        Assert.Contains("'Mode'", Assert.Throws<ArgumentException>(() => Context().AddSettings(new NoChoice())).Message);
+        Assert.Contains("'Side'", Assert.Throws<ArgumentException>(() => Context().AddSettings(new NoZeroSide())).Message);
+        Assert.Contains("struct", Assert.Throws<ArgumentException>(() => Context().AddSettings(new StructSettings())).Message);
         var context = Context();
         context.AddSettings(new OreSettings());
         Assert.Throws<InvalidOperationException>(() => context.AddSettings(new OreSettings()));
