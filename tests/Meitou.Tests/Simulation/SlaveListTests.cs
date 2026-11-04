@@ -48,11 +48,11 @@ public class SlaveListTests
     static CharacterId ObeyingSlave(SimWorld world, int faction, Squad master, Vector3 at) =>
         Member(world, NewSquad(world, faction, Board([], [], [], [], [])), at, c => (c.SlaveState, c.SlaveOwner, c.SlaveMaster) = (1, faction, master.Id));
 
-    static (SimWorld World, CaptiveSystem Captive, int City, Fixture Cage) Town()
+    static (SimWorld World, CaptiveSystem Captive, int City, Fixture Cage) Town(params ITickSystem[] more)
     {
         var data = ArrestTests.Town();
         var captive = new CaptiveSystem(data, null, new CaptiveSettings { RecordLog = true });
-        var world = new SimWorld(new WorldSettings { PublishSnapshots = false, StartHours = 24 + 12 }, new OpenGroundWalkability((_, _) => 150), [captive]);
+        var world = new SimWorld(new WorldSettings { PublishSnapshots = false, StartHours = 24 + 12 }, new OpenGroundWalkability((_, _) => 150), [captive, .. more]);
         world.Fixtures.RegisterSite(world, data, 0);
         return (world, captive, data.FactionIndex("50-a"), world.Fixtures.Find("0.0:cageA")!);
     }
@@ -107,5 +107,70 @@ public class SlaveListTests
         Assert.True(Logged(CaptiveEventKind.Shouted));
         Assert.True(captive.Log.Count(e => e is { Kind: CaptiveEventKind.Started, Job: CaptiveJobKind.Shout } && e.Worker == worker) >= 2);
         Assert.False(Logged(CaptiveEventKind.GaveUp));
+    }
+
+    /// <summary>Catches the dialogue events the systems fire (there is no dialogue system here).</summary>
+    sealed class EventLog : ITickSystem
+    {
+        public readonly List<Meitou.Simulation.Dialogue.DialogueEvent> Events = [];
+        public void Inputs(SimWorld world, IReadOnlyList<SimCommand> commands) => Events.AddRange(commands.OfType<Meitou.Simulation.Dialogue.DialogueEvent>());
+        public void Hash(ref StateHasher hasher) { }
+    }
+
+    /// <summary>A slave of <paramref name="owner"/> in a squad of its own, its head <paramref name="shaven"/>, wearing locked shackles when <paramref name="shackled"/>.</summary>
+    static CharacterId LooseSlave(SimWorld world, int owner, Vector3 at, bool shaven, bool shackled) =>
+        Member(world, NewSquad(world, owner, Board([], [], [], [], [])), at, c =>
+        {
+            (c.SlaveState, c.SlaveOwner, c.Shaved, c.Inventory) = (1, owner, shaven, new Meitou.Simulation.Items.Inventory());
+            if (!shackled) return;
+            var shackles = new Meitou.Simulation.Items.ItemInstance { Record = "shackles", Name = "shackles", Lock = new LockState { Locked = true, Level = 10, Hardness = 5 } };
+            c.Inventory.Add(shackles);
+            shackles.Section = "boots";
+        });
+
+    /// <summary>
+    /// 183 Watching slaves leaves a slave of its own side alone when its head is shaven and it looks like one (docs/game/ai-tasks.md "Looks like a slave": FUN_1408ca3d0 with
+    /// CharacterHuman::isHeadShaven): a shaven slave in locked shackles draws no job, and once unshaven it does. Catches the needs-processing test that took every slave of an allied
+    /// owner, which set Rebirth's guards, shopkeepers and workmasters on its 32 shaven slaves all hour.
+    /// </summary>
+    [Fact]
+    public void A_watcher_leaves_a_shaven_slave_in_shackles_alone_and_processes_it_unshaven()
+    {
+        var (world, captive, city, cage) = Town();
+        using var _ = world;
+        var watcher = Member(world, NewSquad(world, city, Board([], [], [Goal(TaskType.SLAVE_WATCHING)], [], [])), cage.Position + new Vector3(60, 0, 0));
+        var slave = LooseSlave(world, city, cage.Position + new Vector3(80, 0, 0), shaven: true, shackled: true);
+        bool Watched() => captive.Log.Any(e => e is { Kind: CaptiveEventKind.Started, Job: CaptiveJobKind.Process } && e.Worker == watcher && e.Captive == slave);
+        world.RunTicks(61);
+        Assert.False(Watched());
+
+        world.Characters.Cold(slave.Slot)!.Shaved = false;
+        world.RunTicks(61);
+        Assert.True(Watched());
+    }
+
+    /// <summary>
+    /// Processing a slave shaves its head (docs/game/ai-tasks.md "Processing a slave shaves its head", FUN_14035aa20): a watcher processes an unshaven slave of its own side, which
+    /// hears event 35 and ends shaven; one shaven already but without shackles hears 37. Catches the constant event 35 and a processing that leaves the head as it was, so the
+    /// slave it made stayed a target.
+    /// </summary>
+    [Fact]
+    public void Processing_a_slave_shaves_its_head_and_says_37_to_one_shaven_already()
+    {
+        foreach (bool shaven in new[] { false, true })
+        {
+            var log = new EventLog();
+            var (world, captive, city, cage) = Town(log);
+            using var _ = world;
+            var watcher = Member(world, NewSquad(world, city, Board([], [], [Goal(TaskType.SLAVE_WATCHING)], [], [])), cage.Position + new Vector3(60, 0, 0));
+            var slave = LooseSlave(world, city, cage.Position + new Vector3(70, 0, 0), shaven, shackled: false);
+            bool Enslaved() => captive.Log.Any(e => e is { Kind: CaptiveEventKind.Enslaved } && e.Worker == watcher && e.Captive == slave);
+            for (int t = 0; t < 1200 && !Enslaved(); t++) world.RunTicks(1);
+            Assert.True(Enslaved(), $"shaven {shaven}: not processed");
+            world.RunTicks(2);
+
+            Assert.True(world.Characters.Cold(slave.Slot)!.Shaved);
+            Assert.Contains(log.Events, e => e.Npc == watcher && e.Target == slave && e.Event == (shaven ? CaptiveSystem.RecapturedSlave : CaptiveSystem.IntroducingNewSlave));
+        }
     }
 }
