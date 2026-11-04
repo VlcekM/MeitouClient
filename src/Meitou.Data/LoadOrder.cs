@@ -49,7 +49,7 @@ public sealed class LoadOrder
                 order.Entries.Add(new LoadOrderEntry(name, path));
         }
 
-        var modsCfg = Path.Combine(install.DataDirectory, "mods.cfg");
+        var modsCfg = ModList.ModsCfgPath(install);
         if (!File.Exists(modsCfg))
             return order;
         var available = FindMods(install);
@@ -60,7 +60,7 @@ public sealed class LoadOrder
             if (available.TryGetValue(name, out var path))
                 order.Entries.Add(new LoadOrderEntry(name + ".mod", path));
             else
-                order.Issues.Add(new GameDataIssue(GameDataIssueKind.MissingFile, "mods.cfg", null, $"mod '{name}' not found"));
+                order.Issues.Add(new GameDataIssue(GameDataIssueKind.MissingFile, name + ".mod", null, "mod file not found (mods.cfg names it)"));
         }
         return order;
     }

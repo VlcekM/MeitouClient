@@ -55,8 +55,11 @@ public unsafe class PostProcessNativeTests
                 Assert.Equal((w, h), (post.RenderWidth, post.RenderHeight));
 
                 var names = device!.Allocator.Breakdown().Select(o => o.Name).ToList();
-                foreach (var name in new[] { "post scene colour", "post scene depth", "post ldr", "post ssao", "post luminance", "post exposure adapted" })
+                foreach (var name in new[] { "post scene colour", "post scene depth", "post ssao", "post luminance", "post exposure adapted" })
                     Assert.Contains(name, names);
+                // FXAA reads the LDR picture; a temporal upscaler bypasses it, so without haze its target is never made.
+                if (upscaler == UpscalerKind.Off)
+                    Assert.Contains("post ldr", names);
                 if (upscaler != UpscalerKind.Off)
                     foreach (var name in new[] { "post motion", "post upscale depth", "post reactive", "post taa history" })
                         Assert.Contains(name, names);
