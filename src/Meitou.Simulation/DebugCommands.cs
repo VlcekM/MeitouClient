@@ -135,7 +135,7 @@ static class DebugCheats
                 else if (item.Type == FcsRecordType.WEAPON && DebugGiveItem.Grade(data.Db, give.Quality) is { } grade)
                     (item.CompanyId, item.MaterialId, item.Level) = (CraftBench.PlayerWeapons, grade.Model, grade.Level);
                 else if (DebugGiveItem.QualityTypes.Contains(item.Type)) item.Level = Math.Clamp(give.Quality, 0, 100);
-                if (Items.InventoryCommands.TryEquip(inventory, item.WithQuantity(1)))
+                if (Items.InventoryCommands.TryEquip(inventory, item.WithQuantity(1), table.Cold(owner)))
                 {
                     // One unit is worn when its slot is free (as the trade window's right click); the rest of a stack goes to the grids.
                     assembly?.RefreshEquipment(table.Cold(owner)!);
