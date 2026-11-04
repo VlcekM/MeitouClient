@@ -26,7 +26,7 @@ public sealed partial class MedicalState
             if (p.Template.Side == BodySide.None) continue;
             if (RackLevel(p) <= -p.MaxHp)
             {
-                if (limbLoss && p.Limb is LimbState.Original or LimbState.Crushed) Sever(i, ctx, Standing, events);
+                if (limbLoss && p.Limb is LimbState.Original or LimbState.Crushed) Sever(i, ctx, events);
             }
             else Stretch(i, p, dt, ctx, events);
             anyFlesh |= p.Flesh > 0;
@@ -53,6 +53,7 @@ public sealed partial class MedicalState
     void Stretch(int index, HealthPart p, float dt, in MedicalContext ctx, List<MedicalEvent>? events)
     {
         p.Flesh -= dt;
-        CheckPart(index, ctx, events, inHitPath: false, Standing);
+        CheckPart(index, ctx, events, inHitPath: false);
+        LegCollapse(events);
     }
 }
