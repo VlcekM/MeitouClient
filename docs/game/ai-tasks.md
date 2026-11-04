@@ -1041,14 +1041,25 @@ update `FUN_140511130`, `Character::setupAI` `FUN_140621b70`; KenshiLib names **
     forgotten, so the next think picks a shop again). The fallback is a random public building of the town with an interior that is not a wall or ruin (`TownPlaces.Public`; the original's set, the buildings of class SHELL_WITH_INTERIOR with function id 19, is not read from data: **Observed**), not in a town of the player's faction (`AiSystem.RandomShopping`). The desire is the finder's factor (**Verified**): 1 when the pick is a shop (Meitou's shop set stands for BF_SHOP furniture), 0.4 (`ShopNoCounterFactor`) for any other building, 0 when none is found or nothing is left on the list. A shop is walked to as before (a node in it); another building within 30 of its origin on any floor, where the buy step finds no seller and the visit ends. What gates the random fallback on the town's `+0x250` (`FUN_1409997f0`) is **Unknown**.
 - **214 Relaxing** (`FUN_140998d10`): the current package's own target (package vfunc 1); none: 0. Effect `IS_WORKING`, acted out by 87 Operating
   machine, i.e. using furniture there; with no free one the plan fails and another goal wins.
-- **Hang-around-bar package** (`Package_HangAroundBar`, start vfunc 6; **Observed**): its town is the squad's home town, else the nearest friendly one
-  (`FUN_1402916b0`); only while that town's zone is loaded. The town's buildings of designation 3 (BD_BAR, the residents' template's
-  `building designation`; town vfunc `0x2d0`) are scanned cyclically from a random one; the first with a free **table** wins, that table is
-  reserved for the squad in a global table→squad map (`DAT_14212ddb8`) and becomes the package's target. A town with no bar takes a free table
-  outdoors in it; all bars full: no target. The table search (`FUN_140292de0`, `BuildingFinder_TableToSitAt` vfunc 5) keeps furniture of
-  function mask 0x10810 (BF_REFINERY, BF_CORPSE_DISPOSAL, BF_TABLE) in the town, of a faction not hostile to the squad's, inside the bar (or,
-  with no bar, inside no building), in a public building (vfunc 82) and not reserved. The outdoors variant (flag +0x151, BarOutdoors) skips the
-  bars and takes a free outdoor table. So a bar holds as many visiting squads as it has free tables.
+- **Hang-around-bar package** (`Package_HangAroundBar`, start vfunc 6; **Observed** unless marked): its town (`FUN_1402916b0`, **Verified**) is the town
+  of the platoon's home building, else its home town (platoon vfunc 0x98 `+0x30`), else the nearest town for its faction (`FUN_14004f13d`, mode 2,
+  then 0); only while that town's zone is loaded. The town's buildings of designation 3 (BD_BAR, the residents' template's `building designation`;
+  town vfunc `0x2d0`) are scanned cyclically from a random one; the first with a free **table** wins, that table is reserved for the squad in a
+  global table→squad map (`DAT_14212ddb8`) and becomes the package's target; all bars full: no target.
+  - The table search (`FUN_140292de0`, **Verified** by disassembly) asks the town (vfunc 0x2c8, `FUN_1409fc540`) for its furniture through a filter
+    (vfunc 5 `FUN_1408ca670`). It keeps a piece:
+    - of the package's town, and of a faction not hostile to the platoon's (`FUN_1406b26d0`);
+    - inside the bar when there is one (`isIndoors`, vfunc 0x1d8);
+    - **indoors for the normal kind, outdoors for the outdoors kind** (package flag +0x151, BarOutdoors);
+    - of function 16 BF_TABLE, 11 BF_CORPSE_DISPOSAL or 4 BF_REFINERY. A refinery passes only when the object of its vfunc 0x300 has 13 at
+      +0x3f8 (meaning **Unknown**). A table or corpse disposal inside a building needs that building to be the bar, public (vfunc 0x290), or
+      to pass an owner test (**Unknown**).
+  - With no bar the search then drops every piece inside a building. With its flag set it drops the pieces in the table→squad map, the only
+    reservation it reads.
+  - So a town without a bar gives the normal kind (signal 17) no table: its filter keeps indoor pieces, and the no-bar pass drops them. Only the
+    outdoors kind (26) takes a free outdoor table. A bar holds as many visiting squads as it has free tables.
+  - **Observed** (KenshiProbe state 0.5 live check, N = 1): a Holy Prisoner Caravan on signal 17 in Rebirth, which has no bar, shops all hour
+    and never relaxes.
 - **36 Patrolling town** (`Task_PatrolTown` slots 1-3 `FUN_140336370` / `FUN_1403364b0` / `FUN_1403365b0`, **Observed**, decompile): row 36 has no finder or
   effect (registration in `FUN_140319a60`) and no commitment. Start, update and resume pass modes 0/1/2 to the mover `FUN_1405c6b30` with the task target's position
   and, while the task has a target (task vfunc `0x40`), the platoon's town: the blackboard's town hand (`FUN_140269cd0`: the contract's target, else the campaign's

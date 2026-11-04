@@ -2047,8 +2047,9 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
 
     /// <summary>
     /// The table a squad starting a bar package reserves (the original's <c>Package_HangAroundBar</c> start, docs/game/ai-tasks.md "Town goals"): the town's public bars
-    /// are tried in turn from a random one (seeded by the squad and the tick), the first table of one no other squad's bar package holds wins; a town without bars, or
-    /// <paramref name="outdoors"/>, takes the first free outdoor table. Null when all are taken: the squad stays home.
+    /// are tried in turn from a random one (seeded by the squad and the tick), the first table of one no other squad's bar package holds wins; the
+    /// <paramref name="outdoors"/> kind takes the first free outdoor table instead. A town without bars gives the normal kind none, as the original's filter keeps
+    /// only indoor furniture for it. Null when there is none: the squad stays home.
     /// </summary>
     (TownBuilding Bar, int Table)? PickTable(World world, int site, Squad squad, bool outdoors)
     {
@@ -2056,19 +2057,20 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         var held = new HashSet<(TownBuilding, int)>();
         foreach (var other in world.Squads.All)
             if (other != squad && other.Ai is { BarTable: >= 0, Home: { } at } b && b.CurrentClass is PackageClass.Bar or PackageClass.BarOutdoors) held.Add((at, b.BarTable));
-        if (!outdoors && places.Bars.Count > 0)
+        if (outdoors)
         {
-            int start = Rng.Int(Rng.Hash(world.Seed, (ulong)squad.Id << 32 ^ (ulong)world.Tick, RngPurpose.Think, SeedSalts.BarPick), places.Bars.Count);
-            for (int k = 0; k < places.Bars.Count; k++)
-            {
-                var bar = places.Bars[(start + k) % places.Bars.Count];
-                for (int t = 0; t < bar.Tables.Count; t++)
-                    if (!held.Contains((bar, t))) return (bar, t);
-            }
+            foreach (var table in places.OutdoorTables)
+                if (!held.Contains((table, 0))) return (table, 0);
             return null;
         }
-        foreach (var table in places.OutdoorTables)
-            if (!held.Contains((table, 0))) return (table, 0);
+        if (places.Bars.Count == 0) return null;
+        int start = Rng.Int(Rng.Hash(world.Seed, (ulong)squad.Id << 32 ^ (ulong)world.Tick, RngPurpose.Think, SeedSalts.BarPick), places.Bars.Count);
+        for (int k = 0; k < places.Bars.Count; k++)
+        {
+            var bar = places.Bars[(start + k) % places.Bars.Count];
+            for (int t = 0; t < bar.Tables.Count; t++)
+                if (!held.Contains((bar, t))) return (bar, t);
+        }
         return null;
     }
 
