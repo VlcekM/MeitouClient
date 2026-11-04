@@ -15,6 +15,9 @@ public sealed unsafe partial class GpuContext
 {
     CommandPool[]? uploadPools;
     CommandBuffer[]? uploadBuffers;
+    /// <summary>Per slot: the upload buffers a <see cref="SubmitAndWait"/> went on in, and how many this frame used.</summary>
+    List<CommandBuffer>[]? uploadExtras;
+    int[]? uploadExtrasUsed;
     (QuerySlot Begin, QuerySlot End)[]? frameStamps;
 
     /// <summary>The last completed frame's GPU time: from the start of its uploads to the end of its last command (a frame ring late).</summary>
@@ -26,6 +29,12 @@ public sealed unsafe partial class GpuContext
     internal static bool ProfilePreFrame;
     static bool PreFrameStamps => PassStats || SpikeLog.Enabled || ProfilePreFrame;
     static readonly bool PassStats = Environment.GetEnvironmentVariable("MEITOU_PASS_STATS") == "1";
+
+    /// <summary>Diagnostic (issue #108), <c>MEITOU_DIAG_SUBMIT=1</c>: the host calls <see cref="SubmitAndWait"/> after the world and before the present.</summary>
+    public static readonly bool DiagSubmit = Environment.GetEnvironmentVariable("MEITOU_DIAG_SUBMIT") == "1";
+    /// <summary>Diagnostic (issue #108), <c>MEITOU_DIAG_IDLE=1</c>: every frame waits for all frames in flight before it begins (the CPU never records
+    /// while the GPU runs an earlier frame).</summary>
+    public static readonly bool DiagIdle = Environment.GetEnvironmentVariable("MEITOU_DIAG_IDLE") == "1";
 
     /// <summary>The first and the pre-frame-end timestamps of the frame submitted last (--log-spikes or MEITOU_PASS_STATS=1 only; the profiler keeps them to read the pre-frame GPU time when the frame has completed).</summary>
     internal (QuerySlot Begin, QuerySlot PreEnd) LastFrameStamps { get; private set; }
@@ -42,6 +51,8 @@ public sealed unsafe partial class GpuContext
         int n = Device.Frames.Count;
         uploadPools = new CommandPool[n];
         uploadBuffers = new CommandBuffer[n];
+        uploadExtras = [.. Enumerable.Range(0, n).Select(_ => new List<CommandBuffer>())];
+        uploadExtrasUsed = new int[n];
         frameStamps = new (QuerySlot, QuerySlot)[n];
         for (int i = 0; i < n; i++)
         {
@@ -61,16 +72,15 @@ public sealed unsafe partial class GpuContext
         long profileBegin = UploadProfile.Begin();
         EnsureUploadBuffers();
         long t0 = Stopwatch.GetTimestamp();
+        if (DiagIdle) Device.Frames.WaitAll();
         var cmd = Device.Frames.BeginFrame();
         FenceWaitTicks += Stopwatch.GetTimestamp() - t0;
         UploadProfile.End(UploadProfile.Part.FrameWait, t0);
         int slot = Device.Frames.Slot;
         VulkanException.Check(Device.Vk.ResetCommandPool(Device.Device, uploadPools![slot], 0), "vkResetCommandPool");
+        uploadExtrasUsed![slot] = 0;
         var upload = uploadBuffers![slot];
-        var begin = new CommandBufferBeginInfo { SType = StructureType.CommandBufferBeginInfo, Flags = CommandBufferUsageFlags.OneTimeSubmitBit };
-        VulkanException.Check(Device.Vk.BeginCommandBuffer(upload, &begin), "vkBeginCommandBuffer");
-        // Uploads may overwrite what earlier frames still read (in-place texture strips): wait for everything before.
-        FullBarrier(upload);
+        BeginUploads(upload);
         Frame.Begin(cmd, upload);
         // The slot's previous frame has completed and its timestamps were collected (Frame.Begin): its GPU time.
         ref var stamps = ref frameStamps![slot];
@@ -109,13 +119,49 @@ public sealed unsafe partial class GpuContext
         }
         if (PreFrameStamps) LastFrameStamps = (frameStamps![slot].Begin, preFrameEnd![slot]);
         Frame.End();
-        var upload = uploadBuffers![slot];
+        var upload = Frame.UploadCommands;
         FullBarrier(upload);
         VulkanException.Check(Device.Vk.EndCommandBuffer(upload), "vkEndCommandBuffer");
         long t0 = Stopwatch.GetTimestamp();
         Device.Frames.EndFrame(wait, waitStages, signal, before: upload);
         SubmitTicks += Stopwatch.GetTimestamp() - t0;
         StageClock.Lap(StageClock.Submit, gpuTimestamp: false);
+    }
+
+    void BeginUploads(CommandBuffer upload)
+    {
+        var begin = new CommandBufferBeginInfo { SType = StructureType.CommandBufferBeginInfo, Flags = CommandBufferUsageFlags.OneTimeSubmitBit };
+        VulkanException.Check(Device.Vk.BeginCommandBuffer(upload, &begin), "vkBeginCommandBuffer");
+        // Uploads may overwrite what earlier frames still read (in-place texture strips): wait for everything before.
+        FullBarrier(upload);
+    }
+
+    /// <summary>
+    /// Diagnostic (<see cref="DiagSubmit"/>, issue #108): submits the open frame's uploads and commands so far and waits for the GPU to finish them; the
+    /// frame goes on in fresh command buffers of the same slot (same constants, same swapchain image). Nothing outside a frame or inside a pass or segment.
+    /// </summary>
+    public void SubmitAndWait()
+    {
+        if (!Frame.Open || PassOpen || SegmentOpen) return;
+        int slot = Device.Frames.Slot;
+        var upload = Frame.UploadCommands;
+        FullBarrier(upload);
+        VulkanException.Check(Device.Vk.EndCommandBuffer(upload), "vkEndCommandBuffer");
+        Bindless?.EndFrame();   // what the frame registered so far, into its set before the submit
+        var commands = Device.Frames.SubmitAndWait(before: upload);
+        var extras = uploadExtras![slot];
+        if (uploadExtrasUsed![slot] == extras.Count) extras.Add(AllocateUploadBuffer(uploadPools![slot]));
+        var next = extras[uploadExtrasUsed[slot]++];
+        BeginUploads(next);
+        Frame.Continue(commands, next);
+    }
+
+    CommandBuffer AllocateUploadBuffer(CommandPool pool)
+    {
+        var ai = new CommandBufferAllocateInfo { SType = StructureType.CommandBufferAllocateInfo, CommandPool = pool, Level = CommandBufferLevel.Primary, CommandBufferCount = 1 };
+        CommandBuffer cb;
+        VulkanException.Check(Device.Vk.AllocateCommandBuffers(Device.Device, &ai, &cb), "vkAllocateCommandBuffers");
+        return cb;
     }
 
     /// <summary>Submits what is recorded and waits for the GPU (readbacks); a frame is open again afterwards when one was before.</summary>

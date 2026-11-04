@@ -696,6 +696,8 @@ sealed partial class GameHost
                     tickAhead = false;
                 }
                 Meitou.Rendering.StageClock.UiPart(Meitou.Rendering.StageClock.UiWorldEnd);
+                // MEITOU_DIAG_SUBMIT=1 (issue #108): the world submitted and finished before the interface draws, and the interface before the present.
+                if (GpuContext.DiagSubmit) display.Context.SubmitAndWait();
                 // The sky arrival's fade to and from black, over the world and under everything else.
                 if (skyArrival is { Fade: > 0 } fading && overlay is not null)
                 {
@@ -793,6 +795,7 @@ sealed partial class GameHost
                 bool generating = frameGen is not null && frameGen.Finish(uiTarget);
                 var finalPicture = generating ? null : uiLayer.Composite(backbuffer);
                 Meitou.Rendering.StageClock.UiPart(Meitou.Rendering.StageClock.UiComposite);
+                if (GpuContext.DiagSubmit) display.Context.SubmitAndWait();
                 display.Present(finalPicture);
                 profiler?.EndFrame();
                 BenchLap(7);

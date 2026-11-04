@@ -152,6 +152,18 @@ public sealed unsafe class GpuFrame : IDisposable, IGpuFrame
         Open = true;
     }
 
+    /// <summary>After <see cref="GpuContext.SubmitAndWait"/>: the frame goes on in <paramref name="commands"/> and <paramref name="uploads"/> (begun), all before done.</summary>
+    internal void Continue(CommandBuffer commands, CommandBuffer uploads)
+    {
+        Commands.Handle = commands;
+        Commands.Invalidate();
+        UploadCommands = uploads;
+        PreFrame.Handle = uploads;
+        PreFrame.Invalidate();
+        States.AssumeFullBarrier();
+        ctx.Bindless?.BeginFrame(Slot);
+    }
+
     /// <summary>Called by the host before it submits the frame.</summary>
     public void End()
     {

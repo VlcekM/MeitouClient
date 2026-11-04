@@ -109,6 +109,8 @@ public sealed unsafe class VulkanDisplay : IDisposable
         // The validation mode in log.txt: a report then shows whether MEITOU_VK_VALIDATION=sync took effect.
         string validationMode = !Device.ValidationEnabled ? "" : Device.SyncValidationEnabled ? ", validation on (sync)" : ", validation on";
         Console.WriteLine($"vulkan    {Device.DeviceName}{validationMode}");
+        if (GpuContext.DiagSubmit || GpuContext.DiagIdle)
+            Console.WriteLine($"diagnostic{(GpuContext.DiagSubmit ? " MEITOU_DIAG_SUBMIT" : "")}{(GpuContext.DiagIdle ? " MEITOU_DIAG_IDLE" : "")} on (issue #108; slower frames)");
         Context = new GpuContext(Device);
         if (options is not null)
         {

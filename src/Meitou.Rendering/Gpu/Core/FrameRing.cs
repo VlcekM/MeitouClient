@@ -17,6 +17,10 @@ public sealed unsafe class FrameRing : IDisposable
         public List<Action> Deletions = new();
         public bool InFlight;
         public long Frame;
+        /// <summary>The primary being recorded: <see cref="Cmd"/>, or after a <see cref="SubmitAndWait"/> one of <see cref="Extra"/>.</summary>
+        public CommandBuffer Recording;
+        public readonly List<CommandBuffer> Extra = new();
+        public int ExtraUsed;
     }
 
     readonly VulkanDevice dev;
@@ -24,6 +28,7 @@ public sealed unsafe class FrameRing : IDisposable
     readonly FrameSlot[] slots;
     readonly object gate = new();
     int lastSubmitted = -1;
+    Fence splitFence;
     bool inFrame;
     bool disposed;
 
@@ -64,7 +69,7 @@ public sealed unsafe class FrameRing : IDisposable
     /// <summary>The newest frame whose fence has been seen signalled (all its deletions have run).</summary>
     public long CompletedFrame { get; private set; }
     public bool InFrame => inFrame;
-    public CommandBuffer Current => slots[Slot].Cmd;
+    public CommandBuffer Current => slots[Slot].Recording;
 
     /// <summary>Waits for this slot's frame from N frames ago, runs its deletions, resets and begins the command buffer.</summary>
     public CommandBuffer BeginFrame()
@@ -87,8 +92,8 @@ public sealed unsafe class FrameRing : IDisposable
             RunDeletions(s);
         }
         VulkanException.Check(vk.ResetCommandPool(dev.Device, s.Pool, 0), "vkResetCommandPool");
-        var bi = new CommandBufferBeginInfo { SType = StructureType.CommandBufferBeginInfo, Flags = CommandBufferUsageFlags.OneTimeSubmitBit };
-        VulkanException.Check(vk.BeginCommandBuffer(s.Cmd, in bi), "vkBeginCommandBuffer");
+        Begin(s.Cmd);
+        (s.Recording, s.ExtraUsed) = (s.Cmd, 0);
         FrameNumber = frame;
         Slot = index;
         s.Frame = frame;
@@ -110,13 +115,13 @@ public sealed unsafe class FrameRing : IDisposable
             throw new ArgumentException("wait and waitStages must have the same length");
         }
         var s = slots[Slot];
-        VulkanException.Check(vk.EndCommandBuffer(s.Cmd), "vkEndCommandBuffer");
+        VulkanException.Check(vk.EndCommandBuffer(s.Recording), "vkEndCommandBuffer");
         var fence = s.Fence;
         VulkanException.Check(vk.ResetFences(dev.Device, 1, in fence), "vkResetFences");
         var cmds = stackalloc CommandBuffer[2];
         uint cmdCount = 0;
         if (before.Handle != 0) cmds[cmdCount++] = before;
-        cmds[cmdCount++] = s.Cmd;
+        cmds[cmdCount++] = s.Recording;
         fixed (Silk.NET.Vulkan.Semaphore* pw = wait)
         fixed (PipelineStageFlags* pws = waitStages)
         fixed (Silk.NET.Vulkan.Semaphore* ps = signal)
@@ -143,6 +148,53 @@ public sealed unsafe class FrameRing : IDisposable
             lastSubmitted = Slot;
             inFrame = false;
         }
+    }
+
+    /// <summary>
+    /// (Diagnostic, <c>MEITOU_DIAG_SUBMIT</c>, issue #108.) Ends the frame's command buffer so far, submits it after <paramref name="before"/> (an ended
+    /// buffer) and waits for both; the frame goes on in another primary of the slot's pool, returned (begun).
+    /// </summary>
+    public CommandBuffer SubmitAndWait(CommandBuffer before)
+    {
+        if (!inFrame) throw new InvalidOperationException("SubmitAndWait without BeginFrame");
+        var s = slots[Slot];
+        VulkanException.Check(vk.EndCommandBuffer(s.Recording), "vkEndCommandBuffer");
+        SubmitWaited(before, s.Recording);
+        if (s.ExtraUsed == s.Extra.Count) s.Extra.Add(Allocate(s.Pool));
+        s.Recording = s.Extra[s.ExtraUsed++];
+        Begin(s.Recording);
+        return s.Recording;
+    }
+
+    void SubmitWaited(CommandBuffer first, CommandBuffer second)
+    {
+        if (splitFence.Handle == 0)
+        {
+            var fi = new FenceCreateInfo { SType = StructureType.FenceCreateInfo };
+            VulkanException.Check(vk.CreateFence(dev.Device, in fi, null, out splitFence), "vkCreateFence");
+        }
+        var cmds = stackalloc CommandBuffer[] { first, second };
+        var si = new SubmitInfo { SType = StructureType.SubmitInfo, CommandBufferCount = 2, PCommandBuffers = cmds };
+        lock (dev.QueueLock)
+        {
+            VulkanException.Check(vk.QueueSubmit(dev.GraphicsQueue, 1, in si, splitFence), "vkQueueSubmit");
+        }
+        var fence = splitFence;
+        VulkanException.Check(vk.WaitForFences(dev.Device, 1, in fence, true, ulong.MaxValue), "vkWaitForFences");
+        VulkanException.Check(vk.ResetFences(dev.Device, 1, in fence), "vkResetFences");
+    }
+
+    CommandBuffer Allocate(CommandPool pool)
+    {
+        var ai = new CommandBufferAllocateInfo { SType = StructureType.CommandBufferAllocateInfo, CommandPool = pool, Level = CommandBufferLevel.Primary, CommandBufferCount = 1 };
+        VulkanException.Check(vk.AllocateCommandBuffers(dev.Device, in ai, out var cb), "vkAllocateCommandBuffers");
+        return cb;
+    }
+
+    void Begin(CommandBuffer cb)
+    {
+        var bi = new CommandBufferBeginInfo { SType = StructureType.CommandBufferBeginInfo, Flags = CommandBufferUsageFlags.OneTimeSubmitBit };
+        VulkanException.Check(vk.BeginCommandBuffer(cb, in bi), "vkBeginCommandBuffer");
     }
 
     /// <summary>
@@ -263,6 +315,7 @@ public sealed unsafe class FrameRing : IDisposable
         {
             disposed = true;
         }
+        if (splitFence.Handle != 0) vk.DestroyFence(dev.Device, splitFence, null);
         foreach (var s in slots)
         {
             vk.DestroyFence(dev.Device, s.Fence, null);
