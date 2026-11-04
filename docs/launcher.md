@@ -266,7 +266,7 @@ interpolated string, which no translation could match.
 
 ## Continue
 
-**Continue** is the large middle part of the Play button, shown while a save exists, with the newest save's name under it (rescanned
+**Continue** is the middle part of the Play button, in its larger type,, shown while a save exists, with the newest save's name under it (rescanned
 when the window is activated and when the game exits); Play beside it reads **Main menu** over the version it starts. Continue starts
 the same version with `--load <folder>` (game 0.10.0 and later) for the
 newest slot From save lists (newest `quick.save` over the three roots), only when its CAMERA `mods` list holds the enabled mods, order
