@@ -706,7 +706,8 @@ Meitou: [simulation, captives](../simulation.md#captives).
 
 **Observed** (TaskData constructor `FUN_14061d350`, registrations in `FUN_140319a60` parsed for all 253 rows, scorer `FUN_14050df10`, `AITaskSytem`
 vfunc 5 `FUN_14050caf0`). TaskData fields: +0x108 desire (a member function, nearly always a virtual of the `AI` object: `mov rax,[rcx]; jmp [rax+slot*8]`);
-+0x160 target finder (returns a factor, 0 when it found nothing; the desire is multiplied by it when the row has an effect, `FUN_14060fd80`);
++0x160 target finder (returns a factor, mostly 0 when it found nothing, a constant for 38, 268 and 157 ([town goals](#town-goals)); the desire is multiplied
+by it when the row has an effect, `FUN_14060fd80`);
 +0x18 / +0x1c commitment minimum / random range in game hours; +0x20 commits; +0x34 crowd factor (default 1); +0x3c is read by the senses
 (`FUN_1408529c0`, meaning **Unknown**).
 
@@ -1009,6 +1010,27 @@ update `FUN_140511130`, `Character::setupAI` `FUN_140621b70`; KenshiLib names **
   reserved; guard posts fall back to general nodes. A node marker faces along its local −X: for 784 of 990 shopkeeper nodes in base-game town interiors,
   yaw − 90° points at the nearest Shop Counter's side the node stands on (**Verified**, layouts placed by `TownBuildings`, compared with each counter's
   yaw; the rest are corner or odd-angled counters). The engine turns a character arriving at a node that way.
+- **38 / 268 Static guard, 157 Static town guard** (**Verified**, disassembly of 1.0.65; names from KenshiLib `AI.h`, whose RVAs are
+  0x17b0 lower): 38 `findGuardNodeForBuilding_inOrOut` and 268 `_indoorOnly` call `findGuardNodeForBuilding_nearestPlayer(out,
+  indoorsOnly)` (`FUN_14099edd0`); 157 is `findGuardNodeForTown` (`FUN_14099f1a0`).
+  - **nearestPlayer**: when the home building (`StateBroadcastData` +0x48) has designation (`Building` +0xc4) BD_SHOP, BD_BAR or
+    BD_HQ, is public (vfunc 0x290 `isPublic`) and the character's faction is real (`notARealFaction` +0x1d0 clear), it draws one
+    of the characters it senses (`sensoryData.seen`, filter (2, 0x2a9) **Unknown**) that are indoors (`isIndoors`, vfunc 0x1d8,
+    compared with the home: **Observed**) and takes the home's guard post nearest them (`FUN_14038ab50`): factor 1, 0 with none.
+    Otherwise, or with nobody drawn: `AI::findNode(NODE_GUARD_POST, home only, indoorsOnly)`, factor 0.5 whatever it finds.
+  - **findGuardNodeForTown**: keeps a current target that is still a node, else `findNode(NODE_GUARD_POST, false, false)`; factor
+    1 whatever it finds.
+  - **`AI::findNode`** (`FUN_14099e920`): keeps the character's current node of the type while it is free or the character's (home
+    only: still in the home). Home only: a random node of the type in the home (`FUN_14038c2f0`; no holder test), then a general
+    node. Else a uniform draw (`FUN_14038b000`) over the node manager's list for the character's town (+0x50), of the nodes held
+    by no one (holder type 11, null) or by the character; no type test. A found node is registered with the node manager
+    (`FUN_14038a5a0`). None found: a null target, with which the plan cannot run ([planner](#planner), Can run, **Observed**).
+  - **Observed** (KenshiProbe state 0.5 live check, Rebirth Gate Guards, N = 1): the 38 holders of each Defensive Gate II stand on
+    3 or 4 guard posts of that gate, 60 to 120 from its centre, often two members on one post; no layout in the data has such nodes.
+    The 157 holders walk to posts across the town, up to about 1400 away. What the town list holds is **Unknown** (the walks fit
+    the town buildings' guard posts).
+  - Meitou: 157 holds a guard post of its town ([simulation](../simulation.md#ai)); 38 and 268 take the home's posts, a gate
+    member a flank spot; branch nearestPlayer and the factors are not modelled.
 - **118 Shopping** (`FUN_1409997f0`, **Verified**): a shop of the town selling an item on the character's shopping list (`FUN_1409fc070`), else, only when the faction of the
   shopper's town has no player flag (`+0x250` clear; the list loop runs first and a hit skips this test), a random building (`FUN_1409fc1b0`): a town of the player's faction gets
   no random shopping, only list hits; none found: 0. Factor 1 for a BF_SHOP building, 0.4 otherwise. Then 119 (`Task_Shopping`) at it. Both finders scan the zone's
@@ -1104,7 +1126,7 @@ update `FUN_140511130`, `Character::setupAI` `FUN_140621b70`; KenshiLib names **
   is a GatewayBuilding (vfunc `0x3d8`). The guard walks to its first door's point `+0x3bc` and turns along `+0x3bc - +0x3c8`. A door's
   two points (`FUN_14029cc90`) are its leaf's centre ± 15 (constant `0x14168a258`) along the leaf's thin axis, dropped to the ground;
   which side `+0x3bc` is depends on a door body offset (**Unknown**). Gate BUILDING records have no nodes (**Verified**, the merged
-  load order's Defensive Gates II-V), so the squad's guard node goals find nothing there.
+  load order's Defensive Gates II-V), yet the gate members' 38 finds 3 or 4 posts per gate at run time (Static guard above).
 
 ## Perma-jobs
 

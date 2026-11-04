@@ -455,6 +455,11 @@ public sealed class AiMind
     public bool HomeUnreachable { get; set; }
     /// <summary>Walks to its seat kept failing: it does not relax or sit there any more.</summary>
     public bool SeatUnreachable { get; set; }
+    /// <summary>
+    /// The guard post of its town it holds for 157 Static town guard (<see cref="AiSystem"/>'s serial step draws it on the package
+    /// cadence); null on another goal or when no post was free. Not saved: a load draws again (derived, not hashed).
+    /// </summary>
+    public SeatClaim? TownPost { get; set; }
     /// <summary>The sitting clip of the chair it sits on (<see cref="HomeSpot.SitClip"/>), for <see cref="AnimationSystem"/>; null when not seated. Follows from the goal and seat, so not hashed.</summary>
     public string? SitClip { get; set; }
     /// <summary>That chair's functionality <c>hunger rate</c> (<see cref="HomeSpot.HungerRate"/>; 1 when not seated). Set with <see cref="SitClip"/>, so not hashed.</summary>
