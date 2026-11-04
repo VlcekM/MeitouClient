@@ -106,7 +106,9 @@ public sealed unsafe class VulkanDisplay : IDisposable
             deviceOptions.CreateSurface = instance => surface.Create<AllocationCallbacks>(instance.ToHandle(), null).ToSurface();
         }
         Device = VulkanDevice.Create(deviceOptions);
-        Console.WriteLine($"vulkan    {Device.DeviceName}");
+        // The validation mode in log.txt: a report then shows whether MEITOU_VK_VALIDATION=sync took effect.
+        string validationMode = !Device.ValidationEnabled ? "" : Device.SyncValidationEnabled ? ", validation on (sync)" : ", validation on";
+        Console.WriteLine($"vulkan    {Device.DeviceName}{validationMode}");
         Context = new GpuContext(Device);
         if (options is not null)
         {
