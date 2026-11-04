@@ -135,16 +135,6 @@ public class PopulationRulesTests
         Assert.Equal(0, SquadGoals.Of(world).Working(1, asker, GoalTarget.Of(duty.Body)));
     }
 
-    /// <summary>Issue #134 (docs/game/character-stats.md): 1 + the window's share of the zone's class, windows 6 (unflagged) and max(4, N1 / 4) (flagged).</summary>
-    [Theory]
-    [InlineData(true, 4, 2f)]
-    [InlineData(true, 8, 1.5f)]
-    [InlineData(true, 16, 1.25f)]
-    [InlineData(false, 3, 2f)]
-    [InlineData(false, 12, 1.5f)]
-    public void The_medical_clock_adds_the_rotating_windows_share(bool flagged, int count, float factor)
-        => Assert.Equal(factor, MedicalClock.Factor(flagged, count));
-
     [Fact]
     public void A_character_is_on_screen_in_front_of_the_eye_within_the_npc_range_only()
     {

@@ -120,10 +120,9 @@ time that differs between the frames with and without a turn; not checked). The 
 is not on it (game clock). Meitou (`MedicalTimeBudget`, run by `BodySystem.Schedule`): one tick stands for one frame of the loop, the occupied slots in slot
 order for its list (the original's is a hash map's order, **Unknown**); a turn adds `TickSeconds` to `CharacterCold.MedicalBudgetSeconds`, which the body step
 adds to its own time (`MedicalContext.BudgetSeconds`) for the part, blood and KO-timer rates. The share depends only on the counts and the order, not on how long
-a frame is, so the mapping keeps the factor at any frame rate or speed. Flagged: the player's characters, and NPCs within `npc range` (3250) of `World.ViewPosition`
-(the game's in-view test has a camera frustum the simulation lacks, so a crowd round the camera counts more flagged characters than in the game; an NPC engaged
-with a player, always flagged in the game, is flagged only near the camera); NPCs never without a camera.
-`MedicalClock` (`BodySystem.UpdateTiers`, off by default) also derives a per-character `ClockFactor` from the camera frustum (`CameraViewCommand`, `FUN_1405c9f60`: the flag's frustum test); the medical update does not read it, `MedicalTimeBudget` above is what runs. The command also carries the camera to `World.View`.
+a frame is, so the mapping keeps the factor at any frame rate or speed. Flagged (`FUN_1405c9f60`, **Verified**: the squared distance to the camera against `npc range`, then the view frustum planes; `FUN_1405c79c0`: the player's faction always):
+the player's characters, and NPCs on screen by `MedicalClock.OnScreen` (the host's camera, `CameraViewCommand` -> `World.View`; the sphere round the body is an engine choice), else within `npc range` (3250) of `World.ViewPosition`;
+NPCs never without a camera. Not modelled: an NPC engaged with a player (always flagged in the game), the building and town refinements of the flag.
 
 ### Part tick (`FUN_14064f5c0`, **Verified** decompile)
 

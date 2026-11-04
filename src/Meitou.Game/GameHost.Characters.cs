@@ -26,7 +26,7 @@ sealed partial class GameHost
     /// <summary>The free camera's eye this far above the ground under it keeps the last focus: the zones load again once it comes down.</summary>
     const float FocusCeiling = Meitou.Data.World.KenshiCamera.FlightHeight;
 
-    /// <summary>Tells the world the camera it is looked at through, every frame (the medical clock's on-screen flag, <see cref="Meitou.Simulation.MedicalClock"/>).</summary>
+    /// <summary>Tells the world the camera it is looked at through, every frame (the update flag of <see cref="Meitou.Simulation.Bodies.MedicalTimeBudget"/> and the sensing hooks, <see cref="Meitou.Simulation.MedicalClock"/>).</summary>
     /// <summary>The window's aspect ratio, kept by the frame loop for <see cref="SendView"/>.</summary>
     float viewAspect = 16f / 9;
 

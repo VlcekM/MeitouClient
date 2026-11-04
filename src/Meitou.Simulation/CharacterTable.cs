@@ -479,8 +479,6 @@ public sealed class CharacterCold
     public byte SlaveState { get; set; }
     /// <summary>The game hours at which <see cref="SlaveState"/> last became 2 or 3 (status <c>+0x8</c>, saved as the float <c>ssct</c>; <see cref="Locks.FixtureRegistry.LayLow"/>). Hashed with a state above 1.</summary>
     public double SlaveSince { get; set; }
-    /// <summary>The factor of the character's medical clock (<see cref="MedicalClock"/>); 1 unless the world emulates the original's update tiers. Derived each tick, not hashed.</summary>
-    public float ClockFactor { get; set; } = 1;
     /// <summary>The faction owning a slave or escaped slave (the original keeps a <c>slaver</c> handle; -1 none). Saved as <c>meitou slave owner</c>; hashed with <see cref="SlaveState"/>.</summary>
     public int SlaveOwner { get; set; } = -1;
     /// <summary>The squad a slave obeys (the original's owner handle naming a platoon; -1 none): job 187 Obedient Slave runs that squad's <c>Slave AI Goals</c> (<see cref="Ai.AiSystem"/>).

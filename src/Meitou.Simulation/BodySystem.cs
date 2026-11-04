@@ -33,11 +33,7 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
 
     public GameConstants Constants { get; } = constants;
     public BodyOptions Options { get; } = options ?? BodyOptions.Default;
-    /// <summary>The medical clock runs as the original's update tiers give it (<see cref="MedicalClock"/>); off, every character's time is the real time (the documented rates).</summary>
-    public bool UpdateTiers { get; init; }
     CameraViewCommand? view;
-    readonly Dictionary<(int, int), (int Plain, int Flagged)> clockCounts = [];
-    readonly List<(int Slot, (int, int) Zone, bool Flagged)> clockMembers = [];
 
     public void Inputs(World world, IReadOnlyList<SimCommand> commands)
     {
@@ -115,7 +111,6 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
     public void Schedule(World world)
     {
         medicalBudget.Run(world);
-        if (UpdateTiers) MedicalClock.Refresh(world, view, clockCounts, clockMembers);
         var table = world.Characters;
         if (playDead.Length < table.HighWater) Array.Resize(ref playDead, table.HighWater);
         var combat = world.SystemOf<Combat.CombatSystem>();
@@ -203,7 +198,6 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
                 Seed = world.Seed,
                 CharacterKey = Rng.Key(table.IdOf(i)),
                 BodyTimeScale = BodyTimeScale,
-                ClockFactor = cold.ClockFactor,
                 // In a bed (state 1) a character rests: degeneration stops, the bed scales healing, blood and hunger take the resting rates; held (state 2) the organic rate doubles.
                 Bed = bed,
                 BedFactor = bedFactor,
