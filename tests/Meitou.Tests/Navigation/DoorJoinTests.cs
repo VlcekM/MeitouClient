@@ -105,10 +105,10 @@ public class DoorJoinTests
     {
         Assert.SkipWhen(InstallData.Install is null, "Kenshi install not found");
         var b = Zone(39, 54);
-        // Kept by the zone's own seeds: 6,609 of 8,122 polygons when written; 778 while the seed ray rule tested every building part (roofs and domes
-        // over the seeds dropped 6 of its 9 points).
-        Assert.True(b.Full.KeptCount >= 6000, $"{b.Full.KeptCount} of {b.Full.PolygonCount} polygons kept");
-        Assert.True(b.Full.PolygonCount is > 7000 and < 9500, $"{b.Full.PolygonCount} polygons: no longer the build the floor was set for");
+        // Kept by the zone's own seeds: 3,725 of 4,594 polygons with 576-unit tiles and watershed regions (6,609 of 8,122 before); 778 of 8,122 while the
+        // seed ray rule tested every building part (roofs and domes over the seeds dropped 6 of its 9 points).
+        Assert.True(b.Full.KeptCount >= 3400, $"{b.Full.KeptCount} of {b.Full.PolygonCount} polygons kept");
+        Assert.True(b.Full.PolygonCount is > 4000 and < 5300, $"{b.Full.PolygonCount} polygons: no longer the build the floor was set for");
         // From the village ground at a seed point to the floor of Hive Commune Hut 39.54:46-Newwworld-INGAME (doorless, floor 1556..1662).
         var path = Query(b).FindPath(new Vector3(33954, 1432, 103023), new Vector3(34128, 1600, 102888));
         Assert.True(path.Found, "no path from the village ground to the hut");

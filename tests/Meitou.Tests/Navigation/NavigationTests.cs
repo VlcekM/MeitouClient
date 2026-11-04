@@ -92,7 +92,7 @@ public class NavigationTests
         var b = new Vector3(cx + 400, 10, cz);
         var path = Route(world, a, b);
         Assert.True(path.Found);
-        Assert.True(Length(path.Points) > 800 + 40, $"length {Length(path.Points)}");
+        Assert.True(Length(path.Points) > 800 + 30, $"length {Length(path.Points)}");   // round a corner: at least 832
         // No leg of the path passes through the box.
         for (int i = 1; i < path.Points.Count; i++)
             for (int k = 0; k <= 20; k++)
@@ -195,7 +195,7 @@ public class NavigationTests
         ZoneGeometryGatherer.AddOutsideCarvers(interior, hull);
         interior.Painters.Add(new NavVolume([new(cx - 72, cz - 8), new(cx - 54, cz - 8), new(cx - 54, cz + 8), new(cx - 72, cz + 8)], 0, 40) { Owner = "house" });
         interior.Seeds.Add(new(cx, 10, cz));
-        var inside = ZoneNavMeshBuilder.Build(interior, Settings, out _);
+        var inside = ZoneNavMeshBuilder.Build(interior, Settings with { TileCells = 96 }, out _);   // one tile: the box is 192 units
         Assert.Contains(NavArea.Door, inside.Areas);
 
         var combined = NavInteriors.Combine(exterior, [new(inside)]);
@@ -262,7 +262,7 @@ public class NavigationTests
         interior.AddTriangle(a, c, b, NavArea.Ground);
         ZoneGeometryGatherer.AddOutsideCarvers(interior, hull);
         interior.Seeds.Add(new(cx, 10, cz));
-        var inside = ZoneNavMeshBuilder.Build(interior, Settings, out _);
+        var inside = ZoneNavMeshBuilder.Build(interior, Settings with { TileCells = 96 }, out _);   // one tile: the box is 192 units
         Assert.DoesNotContain(NavArea.Door, inside.Areas);
 
         var street = new Vector3(cx - 200, 10, cz);

@@ -19,12 +19,14 @@ internal static class NavMeshPipeline
         if (!interiors) return exterior;
         var watch = Stopwatch.StartNew();
         // An interior is one tile: a stair across a tile line inside a building came out cut (the two tiles' contours put their vertices at different heights
-        // along a steep ramp, docs/game/pathfinding.md "Interiors"), and the boxes are small.
+        // along a steep ramp, docs/game/pathfinding.md "Interiors"), and the boxes are small. Its regions stay monotone with edges of at most InteriorEdgeCells:
+        // watershed regions covered fewer of the original's interior faces (World's End 26.13: 89.6 % for 92.2 %), and an interior has few polygons to save.
         var geometries = gatherer.InteriorSites(geometry.Zone).Select(s => gatherer.GatherInterior(s, InteriorTileStep * settings.CellSize, agentHeight: settings.AgentHeight)).Where(g => g is not null).Select(g => g!).ToList();
         var built = new ZoneNavMesh[geometries.Count];
         Parallel.For(0, geometries.Count, new ParallelOptions { MaxDegreeOfParallelism = Math.Max(1, Environment.ProcessorCount - 1) }, i =>
         {
-            var single = settings with { Threads = 1, TileCells = (int)MathF.Round((geometries[i].ZoneMax.X - geometries[i].ZoneMin.X) / settings.CellSize) };
+            int side = (int)MathF.Round((geometries[i].ZoneMax.X - geometries[i].ZoneMin.X) / settings.CellSize);
+            var single = settings with { Threads = 1, TileCells = side, Watershed = false, MaxEdgeLength = InteriorEdgeCells };
             built[i] = ZoneNavMeshBuilder.Build(geometries[i], single, out _);
             built[i].Surfaces = new NavSurfaces(NavSurfaces.From(geometries[i], geometries[i].ZoneMin, geometries[i].ZoneMax));
         });
@@ -46,6 +48,9 @@ internal static class NavMeshPipeline
 
     /// <summary>An interior's box is rounded up to a multiple of this many cells (its one tile's side).</summary>
     public const int InteriorTileStep = 8;
+
+    /// <summary>An interior's longest contour edge in cells (the builder's default before zones went to large tiles and unlimited edges).</summary>
+    const int InteriorEdgeCells = 24;
 
     internal static void DescribeInterior(ZoneGeometry g, ZoneNavMesh m, Action<string> log)
     {

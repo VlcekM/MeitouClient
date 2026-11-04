@@ -13,7 +13,7 @@ namespace Meitou.Navigation;
 public sealed class NavMeshCache
 {
     /// <summary>Bump when the builder's output changes for the same input (a new rule in the gatherer or the pruner).</summary>
-    public const int BuilderVersion = 42;
+    public const int BuilderVersion = 43;
     const int FormatVersion = 5;
     static readonly byte[] Magic = "MNAV"u8.ToArray();
 
@@ -32,7 +32,7 @@ public sealed class NavMeshCache
         uint h = BuilderVersion;
         foreach (var v in new[] { s.CellSize, s.CellHeight, s.DoorInflateCells, s.AgentHeight, s.MaxClimb, s.MaxSimplificationError, s.SeedDistance, s.SeedHeightSlack })
             h = (h * 16777619) ^ (uint)BitConverter.SingleToInt32Bits(v);
-        foreach (var v in new[] { s.TileCells, s.MaxEdgeLength, s.MinRegionArea, s.MergeRegionArea, 0 })
+        foreach (var v in new[] { s.TileCells, s.MaxEdgeLength, s.MinRegionArea, s.MergeRegionArea, s.Watershed ? 1 : 0 })
             h = (h * 16777619) ^ (uint)v;
         return h;
     }

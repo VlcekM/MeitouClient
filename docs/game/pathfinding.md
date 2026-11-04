@@ -186,7 +186,8 @@ the centre); others the plain group speed.
 
 ## Own builder
 
-DotRecast: cells2,height1,tile48 cells,agent18/climb5,ground/water/door areas. Build asynchronously,
+DotRecast: cells2,height1,tile 288 cells (576 units),no edge limit,watershed regions,agent18/climb5,ground/water/door areas (interiors: one tile,
+monotone regions, edges 24 cells; [Search cost](#search-cost)). Build asynchronously,
 cache tiles and gate population on readiness. Query A* through portal clearance (radius per wall end; tile-border, seam
 and area-change ends are open) and water/door costs. **Observed** (zone 18.39, `meitou-tools navmesh`): a Swamp Village
 shack's stair straddles the tile line x−62208 and its foot came out as 6..8-unit portals, so a 2*radius rule kept radius-4
@@ -412,7 +413,7 @@ unjoined are linked (`Links`, not `Neighbours`) when they run opposite, share on
 lie within 1.5 of each other's line at both ends of the overlap, and are within climb + 0.5 there, by the edges' own heights or else by both polygons' surfaces (own-region samples, interpolated) at every cell along the overlap: Recast simplifies contours in X/Z only, so a long edge from flat ground up a stair runs straight in height and misses the stair beside it by a step (engine choice). **Observed** (zone 14.23, Longhouse `14.23:78-`, west door stair): the stair's lower polygon (an 88-unit edge along z -37652, 1506 to 1536) against the upper stair's edge from (-82306,1515) was 12 off by the edge, 4 at most by the surfaces; unjoined, radius-4 walkers could not reach the door (the town's residents searched 300-600 ms for its cabinet again and again), now (-82140,-37692) → (-82157,-37664) goes round to it (818). Near-miss joins in 14.23, 27.22, 21.42, 20.32, 42.22, 18.39 grew 10-20 % (28.60 none); hub path pins unchanged. A* portals for such links take the overlap
 with the door joins' 6 gap when no facing edge is within 0.2. **Observed** (zone 18.39, `meitou-tools navmesh`): the Swamp Village stair foot's edge
 (-62220,108,34088 → -62208,105,34086) against two edges meeting at (-62216,106,34086) joins both; the path (-62218,34080) → (-62216,34148)
-`--to-y 140` climbs through that vertex (length 83) instead of detouring to the tile line x−62208 (97). **Observed** (after the terrain diagonal change, the same path from z 34080 exactly on a polygon edge): 153, the funnel from a start on its first portal's line swung out to that portal's end; `NavQuery.Pull` drops a first portal the start lies on, 82.
+`--to-y 140` climbs through that vertex (length 83) instead of detouring to the tile line x−62208 (97). **Observed** (after the terrain diagonal change, the same path from z 34080 exactly on a polygon edge): 153, the funnel from a start on its first portal's line swung out to that portal's end; `NavQuery.Pull` drops a first portal the start lies on, 82. **Observed** (576-unit tiles, watershed regions): 101, by the tile line again (x−62208 is still one).
 **Tile seams** (engine choice): tiles are rasterised with a 3-cell border from their neighbours (Recast `borderSize`), so contour
 vertices on a tile's edge are kept and those edges come out as portals. Without it Recast treats the edge as a wall and simplifies across
 it (error 1.3 cells): a strip one cell deep along the edge loses its edge vertex and the stitcher finds no edge on the line. **Observed**
@@ -446,7 +447,10 @@ fallback island.
 its walkable spans every 2 cells (`HeightGrid`, bilinear); a polygon keeps the grid only when a sample leaves its plane by more than 2, and one
 whose samples all lie within 3 of the heightmap (or the water) keeps just a marker and reads the heightmap. **Observed** (headless probe, 20000 random
 points against the nearest walkable collision or terrain): mesh heights more than 5 off went from 14.4 to 2.1 % (24.27), 11 to 0.7 % (20.32) and
-9.3 to 0.5 % (18.35), at 1.5..3.3 MB of samples per zone.
+9.3 to 0.5 % (18.35), at 1.5..3.3 MB of samples per zone. DotRecast leaves the region 0 on polygons merged across regions (most of the large
+watershed ones); their regions are taken from the spans at their corners, and each sample takes the span of those nearest the plane, however far.
+**Observed** (`HubNavigationTests`, Hub to Squin): sampled only within 25 of the plane, a large slope polygon west of the Hub had no heights and the
+walker gave its order up at (-52057,1399,3131).
 **Heights**: **Observed** polygons are up to ~15 off over stairs/ramps (Hub gate), so standing
 heights snap to walkable collision (`NavSurfaces`, also its edge within `EdgeReach`: the mesh overhangs raised floors, e.g. the Hub bar landing) or zone terrain (water-surface polygons keep their height); the layer is picked by mesh or real height within
 `StandRise` of the character wins. A layer more than `StandDrop` (12) below the character is not stepped onto (engine choice: the
@@ -706,6 +710,15 @@ off-mesh start retries, then the nearest-point search, each exploring all the gr
 is remembered (goal polygon, radius, door rule; same navmesh; `NavmeshWalkability.UnreachableSeconds`), and a walker that reaches its
 remembered nearest point gets the provisional route at once; retries skip start polygons a failed search reached (same region, same
 failure). GoTo answers went from ~95 to ~17 ms on average, polygons per search ~11,000 to ~5,800.
+
+Polygon count (engine choice): 96-unit tiles with 48-unit edges cut open ground into a grid, and monotone regions into strips; 576-unit tiles, unlimited
+edges and watershed regions keep it in few polygons. **Observed** (`meitou-tools navmesh --compare`, 13 town zones): kept polygons fell 39..56 %
+(Hub 20.32 10,183 to about 6,200; the original's tile has 5,857 faces); a zone builds in about twice the time. Over 2,352 random pairs in 20.32
+(radius 4) polygons expanded per search fell 965 to 560 and search time 20..30 %, paths 1 % longer. The original's ground ours lacks stayed within 0.1
+point of its area (`orig%`) but in 18.39, 1.4 to 1.7 %: a walkable AshlandsRibs top (y ~293, -61200,35000) has no link to the ground and is pruned (whether
+the original reaches its own: **Unknown**). Interiors cover the original's interior faces as before. Watershed regions round a hole can have two
+outlines, which DotRecast refuses (Recast only warns): such a tile is built monotone. A walker shut out of its goal whose own polygon is the reachable one
+nearest the goal walks across it to the point nearest the goal; before, it got no path (`NavigationTests`: a gate's closed door, the polygon up to the wall).
 
 ## Gate codes
 

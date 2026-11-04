@@ -41,6 +41,10 @@ public sealed class NavQuery(NavWorld world, NavDoors? doors = null)
     /// (5000 Kenshi units) and the goal face within about 30 (Observed, docs/game/pathfinding.md, "Path queries").
     /// </summary>
     public const float StartSnap = 60, GoalSnap = 30;
+    /// <summary>
+    /// How near (units) a walker shut out of its goal must stand to its start polygon's point nearest the goal to have no way toward it (engine choice).
+    /// </summary>
+    const float PartialStandStill = 1;
 
     public NavWorld World { get; } = world;
     public NavDoors? Doors { get; } = doors;
@@ -185,10 +189,13 @@ public sealed class NavQuery(NavWorld world, NavDoors? doors = null)
         Interlocked.Add(ref expanded, iterations);
         if (iterations > MaxIterations) Interlocked.Increment(ref exhausted);
         scratch.Exhaustive = last is null && iterations <= MaxIterations;
-        if (last is null && partial && nearest != first)
+        // The start polygon itself can be the nearest: a large one runs up to the wall between the walker and the goal, so it walks across it unless it
+        // stands there already.
+        if (last is null && partial && NavWorld.ClosestPoint(World.Mesh(nearest.Ref.Zone), nearest.Ref.Polygon, goalPoint) is var near
+            && (nearest != first || Vector3.Distance(near, startPoint) > PartialStandStill))
         {
             last = nearest;
-            goalPoint = NavWorld.ClosestPoint(World.Mesh(nearest.Ref.Zone), nearest.Ref.Polygon, goalPoint);
+            goalPoint = near;
         }
         if (last is null) return null;
 
