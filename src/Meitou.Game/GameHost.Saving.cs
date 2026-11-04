@@ -426,6 +426,7 @@ sealed partial class GameHost
     Task NavmeshAround(Vector3 at)
     {
         if (nav is null) return Task.CompletedTask;
+        FinishNavUnload();
         long now = Stopwatch.GetTimestamp();
         var pending = new List<Task>();
         foreach (var z in ZoneActivation.ZonesAround(at, 0))

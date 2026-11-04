@@ -78,6 +78,7 @@ sealed partial class GameHost
         feedbackNavRestore = navView;
         navView = NavView.Meitou;
         overlay.Visible = true;
+        FinishNavUnload();
         long now = Stopwatch.GetTimestamp();
         var loads = new List<Task>();
         foreach (var z in Meitou.Simulation.ZoneActivation.ZonesAround(camera.Target, 1))

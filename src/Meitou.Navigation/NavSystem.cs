@@ -88,6 +88,9 @@ public sealed class NavSystem : IDisposable
     /// <summary>Drops a zone's mesh (its cache file stays). Paths already handed out stay valid as lists of points.</summary>
     public void UnloadZone(ZoneCoordinate zone) => service.Unload(zone);
 
+    /// <summary>Drops several zones' meshes with one republish of the world (callable off the main thread).</summary>
+    public void UnloadZones(IReadOnlyCollection<ZoneCoordinate> zones) => service.Unload(zones);
+
     /// <summary>
     /// A building the player placed (or finished) takes part in the navmesh from the next build of the zones it reaches; the zones loaded now are built again, and
     /// <see cref="ZoneReady"/> fires for each when it goes live.

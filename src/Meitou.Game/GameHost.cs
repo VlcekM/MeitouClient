@@ -456,15 +456,31 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
     /// Keeps the navmesh on the zones the population has active (built on the nav thread, cached), drops the ones idle for 30 s, and has the characters whose way
     /// leads through a zone whose mesh arrived ask for their paths again (their first path may have crossed a building), at most every <see cref="RepathCoalesceSeconds"/>.
     /// </summary>
+    Task navUnload = Task.CompletedTask;
+    HashSet<Meitou.Data.World.ZoneCoordinate> navUnloading = [];
+
+    /// <summary>Waits for the zones being dropped (a load right after must not be undone by it).</summary>
+    void FinishNavUnload()
+    {
+        if (navUnloading.Count == 0) return;
+        navUnload.Wait();
+        navUnloading = [];
+        relabelGates = true;
+    }
+
     void UpdateNav(bool wait = false)
     {
         if (nav is null || population is null) return;
         UpdateGateRegions(nav);
         long now = Stopwatch.GetTimestamp();
+        // Dropping zones republishes the whole mesh (tens of ms): it runs on the pool, one batch at a time, and a zone being dropped is loaded again once that is done.
+        if (navUnloading.Count > 0 && navUnload.IsCompleted) { navUnloading = []; relabelGates = true; }
+        if (wait) FinishNavUnload();
         var pending = new List<Task<Meitou.Navigation.NavZoneReady>>();
         // The population's zones, and those the walkers' long routes lead into (NavmeshWalkability.RouteZones).
         foreach (var z in population.ActiveZones.Concat(nav.Walkability.RouteZones(TimeSpan.FromSeconds(30))))
         {
+            if (navUnloading.Contains(z)) continue;
             if (!navZones.ContainsKey(z)) pending.Add(nav.LoadZone(z));
             navZones[z] = now;
         }
@@ -472,7 +488,13 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
         var stale = navZones.Where(e => Stopwatch.GetElapsedTime(e.Value, now).TotalSeconds > NavCacheSeconds).Select(e => e.Key).ToList();
         if (navZones.Count - stale.Count > NavCacheZones)
             stale.AddRange(navZones.Where(e => !stale.Contains(e.Key)).OrderBy(e => e.Value).Take(navZones.Count - stale.Count - NavCacheZones).Select(e => e.Key));
-        foreach (var z in stale) { nav.UnloadZone(z); navZones.Remove(z); relabelGates = true; }
+        if (stale.Count > 0 && navUnloading.Count == 0)
+        {
+            foreach (var z in stale) navZones.Remove(z);
+            navUnloading = [.. stale];
+            var batch = stale;
+            navUnload = Task.Run(() => nav.UnloadZones(batch));
+        }
         if (wait) Task.WaitAll([.. pending]);
         HashSet<Meitou.Data.World.ZoneCoordinate> zones;
         lock (navReady)
