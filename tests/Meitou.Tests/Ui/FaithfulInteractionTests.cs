@@ -132,7 +132,7 @@ public class FaithfulInteractionTests(ITestOutputHelper output)
         {
             ui.SetUiMode(UiMode.Faithful);
             ui.ShowUiPanel("inventory");
-            var source = ui.UiFrame.Single(c => c.Name == "inventory-item-0");
+            var source = ui.UiFrame.Single(c => c.Name == $"inventory-item-{character}-0");
             var slot = ui.UiFrame.Single(c => c.Name == "main").Bounds;
             Assert.Equal(slot.Width / 8, slot.Height / 6, 3);
             Assert.Contains(ui.UiFrame, c => c.Properties.ContainsKey("CaptionOwner") && c.Caption == "PLAYER");
@@ -164,7 +164,7 @@ public class FaithfulInteractionTests(ITestOutputHelper output)
             var main = ui.UiFrame.Single(c => c.Name == "main").Bounds;
             Assert.Equal(8, inventory.Width); Assert.Equal(10, inventory.Height);
             Assert.Equal(main.Width / 8, main.Height / 10, 3);
-            var sword = ui.UiFrame.Single(c => c.Name == "inventory-item-1").Bounds;
+            var sword = ui.UiFrame.Single(c => c.Name == $"inventory-item-{character}-1").Bounds;
             Assert.Equal(7, sword.Width / sword.Height, 3);
             Assert.Equal("normal", ui.UiFrame.Single(c => c.Name == "shirt").Properties["State"]);
             Click(ui, "OpenBagButton");

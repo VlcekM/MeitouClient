@@ -117,7 +117,7 @@ public class TradeUiTests
             // Back onto the stock: sold at the sell price.
             world.RunTick();
             var goods = world.Snapshot.Trade!.Goods.Single();
-            var own = ui.UiFrame.Single(c => c.Name == $"inventory-item-{goods.Index}");
+            var own = ui.UiFrame.Single(c => c.Name == $"inventory-item-{hero}-{goods.Index}");
             Drag(ui, Centre(own), Centre(ui.UiFrame.First(c => c.Name.StartsWith("trade-item-", StringComparison.Ordinal))));
             world.RunTick();
             Assert.Equal(100_000 - stock.Price + goods.Price, world.Player.Money);
