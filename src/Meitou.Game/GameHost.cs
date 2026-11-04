@@ -375,6 +375,11 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
                 Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "kenshi", "save")),
             assets.Find("credits.txt") is { } creditsFile ? File.ReadAllText(creditsFile) : "");
         player.DataProblems = (scene.Database?.Issues.Count ?? 0) + (scene.Objects?.Levels.Problems().Count ?? 0);
+        if (scene.Database is { } db)
+        {
+            player.Mods = ModReport.Build(install, db);
+            LogMods(player.Mods);
+        }
         if (OpensOnTitle(interactive)) player.ShowTitle();
         if (nav is not null && (start is not null || !interactive))
         {
@@ -428,6 +433,13 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
             WorldFrame.FinishLoading(context);
             ReportLoading("start");
         }
+    }
+
+    /// <summary>Logs the mod list the game data was loaded from: enabled (the names the list file gives), loaded (those whose .mod file was found), problems.</summary>
+    void LogMods(ModReport report)
+    {
+        string file = Meitou.Content.ModList.ModsCfgOverride ?? "data/mods.cfg";
+        Console.WriteLine($"mods      {report.Enabled} enabled, {report.Loaded} loaded, {report.Problems} problems, from {file}");
     }
 
     /// <summary>The game clock with sunrise, sunset and days per year from the CONSTANTS record (defaults without data).</summary>

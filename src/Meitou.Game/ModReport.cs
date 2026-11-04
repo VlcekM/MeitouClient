@@ -1,0 +1,77 @@
+using Meitou.Content;
+using Meitou.Data;
+using Meitou.Localisation;
+
+namespace Meitou.Game;
+
+/// <summary>
+/// One line of the Settings MODS page: a mod in load order with the header of its file and the data problems found in it, or a
+/// <c>[1]---[...]</c> separator of mods.cfg (<paramref name="Version"/> null, no issues). A mod whose file was not found has no version either.
+/// </summary>
+sealed record ModRow(string Name, int? Version, string Author, string Description, IReadOnlyList<string> Issues, bool Separator = false)
+{
+    /// <summary>The row of mod <paramref name="name"/>: its file's header (none when the file was not found) and the problems filed under its file.</summary>
+    public static ModRow Of(string name, GameDatabase db, ILookup<string, GameDataIssue> issues)
+    {
+        string file = name + ".mod";
+        var problems = issues[file].Select(i => i.ToString()).ToList();
+        return db.Headers.TryGetValue(file, out var header) ? new(name, header.Version, header.Author, header.Description, problems) : new(name, null, "", "", problems);
+    }
+}
+
+/// <summary>The mods the game data was loaded from, for the Settings MODS page and its summary line (docs/formats/overview.md, "Load order").</summary>
+sealed class ModReport(List<ModRow> rows, List<string> otherIssues, int enabled, int loaded, string? customList)
+{
+    public IReadOnlyList<ModRow> Rows => rows;
+
+    /// <summary>Problems in no mod's file: the core files and the translations.</summary>
+    public IReadOnlyList<string> OtherIssues => otherIssues;
+
+    /// <summary>Mods the list file names, separator files included (no duplicates or core files).</summary>
+    public int Enabled => enabled;
+
+    /// <summary>Those of them whose .mod file was found and applied; never more than <see cref="Enabled"/>.</summary>
+    public int Loaded => loaded;
+
+    /// <summary>The file name of the <c>--mods-cfg</c> list; null: the install's own data/mods.cfg.</summary>
+    public string? CustomList => customList;
+
+    public int Problems => rows.Sum(r => r.Issues.Count) + otherIssues.Count;
+
+    /// <summary>"Mods: 40 loaded", "Mods: 38 of 40 loaded", each with ", 11 problems" when there are some.</summary>
+    public string Summary
+    {
+        get
+        {
+            string text = loaded == enabled ? Loc.Tr("Mods: {1} loaded", loaded) : Loc.Tr("Mods: {1} of {2} loaded", loaded, enabled);
+            return Problems == 0 ? text : $"{text}, {Loc.Plural("{1} problem", "{1} problems", Problems, Problems)}";
+        }
+    }
+
+    public static ModReport Build(GameInstall install, GameDatabase db)
+    {
+        var issues = db.Issues.ToLookup(i => i.File, StringComparer.Ordinal);
+        var rows = new List<ModRow>();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var separators = new HashSet<string>(StringComparer.Ordinal);
+        var path = ModList.ModsCfgPath(install);
+        foreach (var line in File.Exists(path) ? File.ReadAllLines(path) : [])
+        {
+            if (line.StartsWith('['))
+            {
+                // A "[1]---[...]---.mod" separator is a dummy mod file, counted as a mod in both numbers.
+                string trimmed = line.Trim();
+                separators.Add(trimmed);
+                rows.Add(new(trimmed, null, "", "", [], true));
+            }
+            else if (ModList.ParseModsCfg([line]).FirstOrDefault() is { } name && seen.Add(name))
+                rows.Add(ModRow.Of(name, db, issues));
+        }
+
+        var shown = rows.Where(r => !r.Separator).Select(r => r.Name + ".mod").Concat(separators).ToHashSet(StringComparer.Ordinal);
+        var other = db.Issues.Where(i => !shown.Contains(i.File)).Select(i => i.ToString()).ToList();
+        int loaded = seen.Count(n => db.Headers.ContainsKey(n + ".mod")) + separators.Count(db.Headers.ContainsKey);
+        string? custom = ModList.ModsCfgOverride is { } file ? Path.GetFileName(file) : null;
+        return new(rows, other, seen.Count + separators.Count, loaded, custom);
+    }
+}

@@ -19,9 +19,9 @@ sealed partial class SettingsMenu
 
     void Rect(UiRect at, Vector4 colour, UiRect? clip = null) => controls.Add(new("settings-fill", "Panel", at, "", "", "", true, new Dictionary<string, string>(), colour, Clip: clip, Pickable: false));
 
-    void Text(string caption, UiRect at, float size = 16, Vector4? colour = null, string align = "Left VCenter", UiRect? clip = null, bool wrap = false)
+    void Text(string caption, UiRect at, float size = 16, Vector4? colour = null, string align = "Left VCenter", UiRect? clip = null, bool wrap = false, bool translate = true)
     {
-        caption = Loc.Tr(caption);
+        if (translate) caption = Loc.Tr(caption);
         var properties = new Dictionary<string, string> { ["TextAlign"] = align, ["FontName"] = "Kenshi_StandardFont", ["FontPixels"] = ((int)MathF.Round(size * scale)).ToString(System.Globalization.CultureInfo.InvariantCulture) };
         if (wrap) properties["WordWrap"] = "true";
         controls.Add(new("settings-text", "TextBox", at, caption, "", "", true, properties, Vector4.Zero, colour ?? MainInk, Clip: clip, Pickable: false, TextScale: size * scale / 16));
@@ -102,9 +102,10 @@ sealed partial class SettingsMenu
             int index = i;
             Button(Pages[i], R(20, 58 + i * 38, 156, 32), () => Navigate(index), page == i);
         }
-        Text(Meitou ? "MEITOU" : "FAITHFUL", R(28, 610, 148, 18), 11, MutedInk);
-        Text(BuildVersion.Tag, R(28, 630, 148, 16), 11, MutedInk);
-        Text(BuildVersion.Commit, R(28, 646, 148, 16), 11, MutedInk);
+        Text(Meitou ? "MEITOU" : "FAITHFUL", R(28, 592, 148, 18), 11, MutedInk);
+        Text(BuildVersion.Tag, R(28, 612, 148, 16), 11, MutedInk);
+        Text(BuildVersion.Commit, R(28, 628, 148, 16), 11, MutedInk);
+        DrawModsSummary();
         int contentStart = controls.Count;
         Surface(R(212, 56, 888, 34), "paper");
         Text(Pages[page], R(224, 56, 864, 34), 18, new(20 / 255f, 8 / 255f, 6 / 255f, 1));
@@ -123,17 +124,8 @@ sealed partial class SettingsMenu
             top = 212;
         }
         viewport = R(212, top, 888, 666 - top);
-        var entries = Entries();
-        maxScroll = Math.Max(0, entries.Sum(EntryHeight) * scale - viewport.Height);
-        AdvanceScroll();
-        float entryY = top - scroll / scale;
-        foreach (var entry in entries)
-        {
-            float row = EntryHeight(entry);
-            animationScope = entry.Label;
-            if (entryY + row >= top && entryY <= 666) DrawEntry(entry, entryY);
-            entryY += row;
-        }
+        if (page == ModsPage) DrawMods();
+        else DrawEntries(top);
         animationScope = "chrome";
         if (maxScroll > 0)
         {
@@ -159,6 +151,21 @@ sealed partial class SettingsMenu
                 });
         Opacity(0, Ease(menuProgress));
         painter.Draw(controls, width, height, pointer, null, pass: pass);
+    }
+
+    void DrawEntries(float top)
+    {
+        var entries = Entries();
+        maxScroll = Math.Max(0, entries.Sum(EntryHeight) * scale - viewport.Height);
+        AdvanceScroll();
+        float entryY = top - scroll / scale;
+        foreach (var entry in entries)
+        {
+            float row = EntryHeight(entry);
+            animationScope = entry.Label;
+            if (entryY + row >= top && entryY <= 666) DrawEntry(entry, entryY);
+            entryY += row;
+        }
     }
 
     /// <summary>Measures with the same font resource and wrapped width used by the settings text controls.</summary>
