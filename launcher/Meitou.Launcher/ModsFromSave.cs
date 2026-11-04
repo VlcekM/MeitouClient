@@ -39,7 +39,7 @@ public sealed partial class MainWindow
     {
         var list = new ListBox
         {
-            ItemsSource = slots.Select(s => $"{s.Name}  ·  {s.ModifiedUtc.ToLocalTime():g}").ToList(),
+            ItemsSource = slots.Select(s => $"{s.Name}  ·  {s.ModifiedUtc.ToLocalTime():g}  ·  {Tr(s.Source)}").ToList(),
             SelectedIndex = 0,
             MaxHeight = 320,
             Margin = new(0, 8, 0, 0),

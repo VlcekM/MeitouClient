@@ -2,8 +2,8 @@ using System.Text;
 
 namespace Meitou.Content;
 
-/// <summary>A save slot the launcher can take a mod list from: a folder holding <c>quick.save</c>.</summary>
-public sealed record SaveModSlot(string Name, string Folder, DateTime ModifiedUtc);
+/// <summary>A save slot the launcher can take a mod list from: a folder holding <c>quick.save</c>, under the root labelled <paramref name="Source"/>.</summary>
+public sealed record SaveModSlot(string Name, string Folder, DateTime ModifiedUtc, string Source);
 
 /// <summary>
 /// The mods a save was made with: the <c>mods</c> reference list of its CAMERA record (docs/formats/save.md "CAMERA"), read from
@@ -16,29 +16,30 @@ public static class SaveModList
     const int MaxCount = 64 * 1024 * 1024;
 
     /// <summary>The folders the game lists saves from: Meitou's own, the install's <c>save</c> folder and the original's per-user one.</summary>
-    public static IReadOnlyList<string> Roots(GameInstall install)
+    public static IReadOnlyList<(string Folder, string Label)> Roots(GameInstall install)
     {
         string local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        return [Path.Combine(local, "Meitou", "save"), install.SaveDirectory, Path.Combine(local, "kenshi", "save")];
+        return [(Path.Combine(local, "Meitou", "save"), "Meitou"), (install.SaveDirectory, "Kenshi"),
+            (Path.Combine(local, "kenshi", "save"), "Kenshi user")];
     }
 
     /// <summary>The save slots under <paramref name="roots"/>, newest first; a folder found twice is listed once.</summary>
-    public static IReadOnlyList<SaveModSlot> Scan(IEnumerable<string> roots)
+    public static IReadOnlyList<SaveModSlot> Scan(IEnumerable<(string Folder, string Label)> roots)
     {
         var found = new Dictionary<string, SaveModSlot>(StringComparer.OrdinalIgnoreCase);
-        foreach (string root in roots.Where(Directory.Exists))
+        foreach (var (root, label) in roots.Where(r => Directory.Exists(r.Folder)))
             foreach (string directory in Directory.EnumerateDirectories(root))
             {
                 string folder = Path.GetFullPath(directory), quick = Path.Combine(folder, "quick.save");
                 if (File.Exists(quick))
-                    found.TryAdd(folder, new SaveModSlot(Path.GetFileName(folder), folder, File.GetLastWriteTimeUtc(quick)));
+                    found.TryAdd(folder, new SaveModSlot(Path.GetFileName(folder), folder, File.GetLastWriteTimeUtc(quick), label));
             }
         return [.. found.Values.OrderByDescending(s => s.ModifiedUtc).ThenBy(s => s.Name, StringComparer.OrdinalIgnoreCase)];
     }
 
     /// <summary>
     /// The mods the save in <paramref name="folder"/> loaded, in load order, as <c>.mod</c> names without extension; the base game's
-    /// files (<c>base</c>, <see cref="ModList.CoreModNames"/>) are left out. Null when the save has no CAMERA record.
+    /// files (<c>base</c>, <see cref="ModList.CoreModNames"/>) are left out. Null when the save has no CAMERA record or it has no <c>mods</c> list.
     /// </summary>
     public static List<string>? Read(string folder)
     {
@@ -47,13 +48,13 @@ public static class SaveModList
         if (r.ReadInt32() != 15) throw new InvalidDataException("quick.save is not an FCS type 15 file.");
         r.ReadInt32(); // next id
         for (int n = ReadCount(r); n > 0; n--)
-            if (ReadRecordMods(r) is { } mods)
-                return [.. mods.Where(m => m != "base" && !ModList.CoreModNames.Contains(m))];
+            if (ReadRecordMods(r, out var mods))
+                return mods is null ? null : [.. mods.Where(m => m != "base" && !ModList.CoreModNames.Contains(m))];
         return null;
     }
 
-    // Skips one record; for the first CAMERA record, its mods list (empty without one).
-    static List<string>? ReadRecordMods(BinaryReader r)
+    // Skips one record; true for a CAMERA record, with its mods list (null without one).
+    static bool ReadRecordMods(BinaryReader r, out List<string>? mods)
     {
         r.ReadUInt32(); // byte size
         bool camera = r.ReadInt32() == CameraType;
@@ -69,9 +70,9 @@ public static class SaveModList
         SkipStringMap(r); // strings
         SkipStringMap(r); // filenames
 
-        var mods = ReadReferences(r);
+        mods = ReadReferences(r);
         SkipInstances(r);
-        return camera ? mods ?? [] : null;
+        return camera;
     }
 
     // The targets of the "mods" category, in order; null without one.
