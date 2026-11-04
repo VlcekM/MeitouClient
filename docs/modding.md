@@ -144,7 +144,8 @@ thread counts with the mods loaded (it needs a launch option, which waits for th
 
 ## Evidence
 
-**Observed** (2026-11-04, win-x64, a scratch mod and harness against the release build, outside the repo): only allowed mods with a valid
+**Observed** (2026-11-04, win-x64, a scratch mod and harness against the release build, outside the repo, run as the game runs: tiered
+compilation and PGO off, server GC): only allowed mods with a valid
 manifest load and each refusal gives its notice; the process holds one `0Harmony` and one `Meitou.Modding` though the mod folder had its
 own `0Harmony.dll`; a prefix applies, and a throwing `Initialize` loses its patch and registrations; a mod system's state survives
 capture and restore; sidecars survive `SaveGame.Write`/`Load` and `Clone`; spliced systems land at their anchors and the standard list is
