@@ -193,6 +193,9 @@ public sealed partial class DialogueSystem
                 case DialogueActions.JoinSquadWithEdit or DialogueActions.JoinSquadFast:
                     if (!Recruit(world, c, me, effect.Action == DialogueActions.JoinSquadWithEdit)) return;
                     break;
+                default:
+                    ModEffect(world, me, target, effect);
+                    break;
             }
         }
         if (takeOver) Arrests?.TakeOver(world, me, target, enslave);
@@ -206,6 +209,20 @@ public sealed partial class DialogueSystem
 
     /// <summary>The arrest system the bounty desk's effects pay and hand over through (<c>DA_PAY_BOUNTY</c>, <c>DA_ARREST_TARGETS_CARRIED_PERSON</c>); null: they do nothing.</summary>
     public Crime.ArrestSystem? Arrests { get; set; }
+
+    /// <summary>The dialogue codes code mods handle (docs/modding.md); null without mods.</summary>
+    public SimulationExtensions? Extensions { get; set; }
+
+    /// <summary>A mod's effect code (<see cref="SimulationExtensions.FirstModCode"/> and up); an unregistered code does nothing, as an unknown vanilla one.</summary>
+    void ModEffect(World world, CharacterId me, CharacterId target, DialogueEffect effect)
+    {
+        if (effect.Action >= SimulationExtensions.FirstModCode && Extensions?.DialogueEffects.GetValueOrDefault(effect.Action) is { } handler)
+            handler(new DialogueAct(world, me, target, effect));
+    }
+
+    /// <summary>A mod's condition code: the handler's answer, or "no" when no mod handles it (as an unknown vanilla code computes).</summary>
+    bool ModCondition(World world, CharacterId me, CharacterId subject, DialogueCondition dc) =>
+        Extensions?.DialogueConditions.GetValueOrDefault(dc.Condition) is { } handler ? handler(new DialogueCheck(world, me, subject, dc)) : dc.Value <= 0;
 
     /// <summary>The attack-on-sight system a massive alarm alarms each member's hearing of the target through (<see cref="AggroSystem.Alarm"/>); null: no alarm.</summary>
     public AggroSystem? Aggro { get; set; }

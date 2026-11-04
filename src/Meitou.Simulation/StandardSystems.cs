@@ -81,6 +81,8 @@ public sealed class StandardSystemOptions
     public Meitou.Data.Characters.CharacterRigs? Ragdolls { get; init; }
     /// <summary>What ragdolls fall onto (null: the walkable ground, no buildings).</summary>
     public Meitou.Simulation.Ragdolls.IRagdollEnvironment? RagdollEnvironment { get; init; }
+    /// <summary>What code mods add (docs/modding.md): extra systems spliced in at their anchors, dialogue codes. Null: the standard wiring alone.</summary>
+    public SimulationExtensions? Extensions { get; init; }
 }
 
 /// <summary>The built systems in tick order, with the ones the host talks to.</summary>
@@ -151,14 +153,14 @@ public static class StandardSystems
     {
         var o = options ?? new StandardSystemOptions();
         bool Has(StandardParts p) => (o.Parts & p) != 0;
-        var systems = new List<ITickSystem>();
+        var systems = new Wiring();
         PopulationSystem? population = null;
         MovementSystem? movement = null;
         CombatSystem? combat = null;
-        if (Has(StandardParts.Population)) systems.Add(population = new PopulationSystem(data, o.Population));
-        if (Has(StandardParts.Player)) systems.Add(new PlayerSystem(data));
+        if (Has(StandardParts.Population)) systems.Add(StandardParts.Population, population = new PopulationSystem(data, o.Population));
+        if (Has(StandardParts.Player)) systems.Add(StandardParts.Player, new PlayerSystem(data));
         Meitou.Simulation.Ai.AiSystem? ai = null;
-        if (Has(StandardParts.Ai)) systems.Add(ai = new Meitou.Simulation.Ai.AiSystem(data, o.Ai));
+        if (Has(StandardParts.Ai)) systems.Add(StandardParts.Ai, ai = new Meitou.Simulation.Ai.AiSystem(data, o.Ai));
         if (Has(StandardParts.Pursuit | StandardParts.Combat | StandardParts.Retaliation | StandardParts.Flee))
             combat = new CombatSystem(data.Combat.Techniques, data.Combat.Constants, data.Bodies.Constants, data.BodyOptions, o.AnimationLengths ?? new AnimationLengths(), o.Combat);
         // The relation events of deeds (blows, first aid, cagings) go with the live relations, which the aggro part brings.
@@ -167,11 +169,11 @@ public static class StandardSystems
         if (combat is not null) combat.Buildings = o.RagdollEnvironment;
         if (ai is not null && combat is not null) ai.ThreatSource = combat;
         if (combat is not null) (combat.TurretGuns, combat.Towns) = (new Meitou.Data.Gameplay.Combat.TurretCatalog(data.Db), data);
-        if (Has(StandardParts.Pursuit)) systems.Add(new PursuitSystem(combat!));
-        if (Has(StandardParts.Movement)) systems.Add(movement = new MovementSystem(new PathService(walkability, o.SynchronousPaths)));
-        if (Has(StandardParts.FirstAid)) systems.Add(new FirstAid.FirstAidSystem(data.Bodies.Constants, data.BodyOptions, data.Items, o.FirstAid) { Deeds = deeds, Relations = Has(StandardParts.Aggro) ? data.Relations : null });
+        if (Has(StandardParts.Pursuit)) systems.Add(StandardParts.Pursuit, new PursuitSystem(combat!));
+        if (Has(StandardParts.Movement)) systems.Add(StandardParts.Movement, movement = new MovementSystem(new PathService(walkability, o.SynchronousPaths)));
+        if (Has(StandardParts.FirstAid)) systems.Add(StandardParts.FirstAid, new FirstAid.FirstAidSystem(data.Bodies.Constants, data.BodyOptions, data.Items, o.FirstAid) { Deeds = deeds, Relations = Has(StandardParts.Aggro) ? data.Relations : null });
         WeatherSystem? weather = null;
-        if (Has(StandardParts.Body)) { systems.Add(new BodySystem(data.Bodies.Constants, data.BodyOptions, o.BodyTimeScale, data.Db)); systems.Add(weather = new WeatherSystem(data.Bodies.Constants) { Db = data.Db, Buildings = o.RagdollEnvironment }); }
+        if (Has(StandardParts.Body)) { systems.Add(StandardParts.Body, new BodySystem(data.Bodies.Constants, data.BodyOptions, o.BodyTimeScale, data.Db)); systems.Add(StandardParts.Body, weather = new WeatherSystem(data.Bodies.Constants) { Db = data.Db, Buildings = o.RagdollEnvironment }); }
         Meitou.Simulation.Carrying.CarrySystem? carry = null;
         Meitou.Simulation.Kidnap.KidnapSystem? kidnap = null;
         Meitou.Simulation.Ragdolls.RagdollSystem? ragdolls = null;
@@ -182,33 +184,33 @@ public static class StandardSystems
             if (Has(StandardParts.Aggro)) carry.Relations = data.Relations;
             carry.Assembly = new CharacterAssembly(data);
             carry.Data = data;
-            systems.Add(carry);
+            systems.Add(StandardParts.Carry, carry);
             // Raiders lifting the downed and carrying them to a cage of their faction: right after the carry system, whose lift and links it uses; it adds nothing to the hash until one runs.
-            if (population is not null) systems.Add(kidnap = new Meitou.Simulation.Kidnap.KidnapSystem(data, population, carry, o.Kidnap) { Deeds = deeds });
+            if (population is not null) systems.Add(StandardParts.Carry, kidnap = new Meitou.Simulation.Kidnap.KidnapSystem(data, population, carry, o.Kidnap) { Deeds = deeds });
             // Town goals of AI squads outside the act-outs (removing downed intruders, caging them, fetching food): after the kidnapping, with the same lift; nothing in the hash until one runs.
-            if (population is not null && Has(StandardParts.Ai)) systems.Add(new Meitou.Simulation.Kidnap.TownDutySystem(data, population, carry));
+            if (population is not null && Has(StandardParts.Ai)) systems.Add(StandardParts.Carry, new Meitou.Simulation.Kidnap.TownDutySystem(data, population, carry));
             // The zones' blood smell and the blood hunters (goal 176); nothing in the hash until a corpse has flies or someone bleeds.
-            if (Has(StandardParts.Ai)) systems.Add(new SmellSystem(data, population));
+            if (Has(StandardParts.Ai)) systems.Add(StandardParts.Carry, new SmellSystem(data, population));
         }
         // The captives' fate and the slavers' logistics: right after the kidnapping (serial, like it); nothing in the hash until a job or a town's kill timer exists.
         Meitou.Simulation.Kidnap.CaptiveSystem? captives = null;
-        if (population is not null && Has(StandardParts.Ai)) systems.Add(captives = new Meitou.Simulation.Kidnap.CaptiveSystem(data, combat, o.Captives) { Kidnap = kidnap });
+        if (population is not null && Has(StandardParts.Ai)) systems.Add(StandardParts.None, captives = new Meitou.Simulation.Kidnap.CaptiveSystem(data, combat, o.Captives) { Kidnap = kidnap });
         Meitou.Simulation.Locks.BedSystem? beds = null;
-        if (Has(StandardParts.FirstAid)) systems.Add(beds = new Meitou.Simulation.Locks.BedSystem(data) { Carry = carry });
+        if (Has(StandardParts.FirstAid)) systems.Add(StandardParts.None, beds = new Meitou.Simulation.Locks.BedSystem(data) { Carry = carry });
         Meitou.Simulation.Construction.ConstructionSystem? construction = null;
-        if (Has(StandardParts.Construction)) systems.Add(construction = new Meitou.Simulation.Construction.ConstructionSystem(data, o.Construction));
+        if (Has(StandardParts.Construction)) systems.Add(StandardParts.Construction, construction = new Meitou.Simulation.Construction.ConstructionSystem(data, o.Construction));
         if (combat is not null) combat.Construction = construction;
         Meitou.Simulation.Production.ProductionSystem? production = null;
-        if (Has(StandardParts.Production)) systems.Add(production = new Meitou.Simulation.Production.ProductionSystem(data, o.Production) { Assembly = new CharacterAssembly(data), Construction = construction, Beds = beds, Carry = carry });
-        if (Has(StandardParts.Combat)) systems.Add(combat!);
+        if (Has(StandardParts.Production)) systems.Add(StandardParts.Production, production = new Meitou.Simulation.Production.ProductionSystem(data, o.Production) { Assembly = new CharacterAssembly(data), Construction = construction, Beds = beds, Carry = carry });
+        if (Has(StandardParts.Combat)) systems.Add(StandardParts.Combat, combat!);
         if (Has(StandardParts.Animation))
         {
             var library = o.AnimationLibrary ?? AnimationLibrary.FromDatabase(data.Db);
             var lengths = o.AnimationLengths ?? new AnimationLengths();
             var animation = new AnimationSystem(library, lengths, o.AnimationBlendRate ?? 4, combat);
-            systems.Add(animation);
+            systems.Add(StandardParts.Animation, animation);
             // Ragdolls right after the animation: they start from and pin to this tick's pose, and the whole body's position is theirs before anything later reads it.
-            if (o.Ragdolls is not null) systems.Add(ragdolls = new Meitou.Simulation.Ragdolls.RagdollSystem(o.Ragdolls, o.RagdollEnvironment, data.BodyOptions));
+            if (o.Ragdolls is not null) systems.Add(StandardParts.Animation, ragdolls = new Meitou.Simulation.Ragdolls.RagdollSystem(o.Ragdolls, o.RagdollEnvironment, data.BodyOptions));
             animation.Ragdolls = ragdolls;
             // The stealth knock-out swing lasts the length of the knockout record's clip.
             if (carry is not null && library.IndexOf(Meitou.Simulation.Carrying.CarrySystem.KnockoutClip) is >= 0 and var ko) carry.KnockoutSeconds = lengths.Of(library.Definitions[ko].Clip);
@@ -219,44 +221,93 @@ public static class StandardSystems
             }
             if (captives is not null && library.IndexOf(Meitou.Simulation.Kidnap.CaptiveSystem.ChopClip) is >= 0 and var chop) captives.ChopSeconds = lengths.Of(library.Definitions[chop].Clip);
         }
-        if (Has(StandardParts.Feed)) systems.Add(new FeedSystem(data.Items, o.Feed));
-        if (Has(StandardParts.Retaliation)) systems.Add(new RetaliationSystem(combat!) { Towns = data });
+        if (Has(StandardParts.Feed)) systems.Add(StandardParts.Feed, new FeedSystem(data.Items, o.Feed));
+        if (Has(StandardParts.Retaliation)) systems.Add(StandardParts.Retaliation, new RetaliationSystem(combat!) { Towns = data });
         AggroSystem? aggro = null;
-        if (Has(StandardParts.Aggro)) systems.Add(aggro = new AggroSystem(data.Relations, o.Aggro) { Combat = combat, Towns = data, Population = population });
+        if (Has(StandardParts.Aggro)) systems.Add(StandardParts.Aggro, aggro = new AggroSystem(data.Relations, o.Aggro) { Combat = combat, Towns = data, Population = population });
         // Without the Aggro part a fight still reads the senses (target choice, threats, the fight's end): the look keeps them, and nothing else.
-        else if (combat is not null) systems.Add(new AggroSystem(data.Relations, (o.Aggro ?? new AggroSettings()) with { AttackOnSight = false }) { Combat = combat, Towns = data, Population = population });
+        else if (combat is not null) systems.Add(StandardParts.Aggro, new AggroSystem(data.Relations, (o.Aggro ?? new AggroSettings()) with { AttackOnSight = false }) { Combat = combat, Towns = data, Population = population });
         if (carry is not null) carry.Aggro = aggro;
-        if (Has(StandardParts.Flee)) systems.Add(new FleeSystem(data.Relations, combat!, o.Aggro?.SightRange ?? AggroSystem.OutdoorSight) { SquadBreak = o.SquadBreak });
+        if (Has(StandardParts.Flee)) systems.Add(StandardParts.Flee, new FleeSystem(data.Relations, combat!, o.Aggro?.SightRange ?? AggroSystem.OutdoorSight) { SquadBreak = o.SquadBreak });
         Meitou.Simulation.Crime.CrimeSystem? crime = null;
         Meitou.Simulation.Crime.ArrestSystem? arrest = null;
         Meitou.Simulation.Locks.LockSystem? locks = null;
         if (Has(StandardParts.Crime))
         {
             // Last: its sweep sees every position, task and carry link the tick left; the deeds come in from combat and carrying in their own serial steps.
-            systems.Add(crime = new Meitou.Simulation.Crime.CrimeSystem(data.Relations, o.Crime) { Xp = new Meitou.Simulation.Bodies.XpService(data.Bodies.Constants, data.BodyOptions) });
+            systems.Add(StandardParts.Crime, crime = new Meitou.Simulation.Crime.CrimeSystem(data.Relations, o.Crime) { Xp = new Meitou.Simulation.Bodies.XpService(data.Bodies.Constants, data.BodyOptions) });
             if (combat is not null) combat.Crimes = crime;
             if (carry is not null) carry.Crimes = crime;
             if (ai is not null) ai.Crimes = crime;
             // Right after it: the police act on this tick's bookings and sightings; the lock orders (picking, getting out) report their crimes to it.
-            systems.Add(arrest = new Meitou.Simulation.Crime.ArrestSystem(crime, data.Bodies.Constants, o.Arrest) { Carry = carry, Deeds = deeds, Towns = data });
-            systems.Add(locks = new Meitou.Simulation.Locks.LockSystem(data.Bodies.Constants, data.BodyOptions) { Crimes = crime, DoorsCloseBehind = o.DoorsCloseBehind, Assembly = new CharacterAssembly(data), Combat = combat, CombatConstants = data.Combat.Constants });
+            systems.Add(StandardParts.Crime, arrest = new Meitou.Simulation.Crime.ArrestSystem(crime, data.Bodies.Constants, o.Arrest) { Carry = carry, Deeds = deeds, Towns = data });
+            systems.Add(StandardParts.Crime, locks = new Meitou.Simulation.Locks.LockSystem(data.Bodies.Constants, data.BodyOptions) { Crimes = crime, DoorsCloseBehind = o.DoorsCloseBehind, Assembly = new CharacterAssembly(data), Combat = combat, CombatConstants = data.Combat.Constants });
             if (combat is not null) combat.Locks = locks;
         }
         Meitou.Simulation.Trading.TradeSystem? trade = null;
         if (Has(StandardParts.Trade))
         {
-            systems.Add(trade = new Meitou.Simulation.Trading.TradeSystem(data, o.Trade));
+            systems.Add(StandardParts.Trade, trade = new Meitou.Simulation.Trading.TradeSystem(data, o.Trade));
             trade.Crimes = crime;
         }
         Meitou.Simulation.Dialogue.DialogueSystem? talk = null;
-        if (Has(StandardParts.Dialogue)) systems.Add(talk = new Meitou.Simulation.Dialogue.DialogueSystem(data, o.Dialogue, population));
+        if (Has(StandardParts.Dialogue)) systems.Add(StandardParts.Dialogue, talk = new Meitou.Simulation.Dialogue.DialogueSystem(data, o.Dialogue, population));
         if (deeds is not null && talk is not null) (deeds.CagedHook, deeds.Memory) = (talk.Captured, talk.Memory);   // a captive's squad remembers its captor (MY_CAPTOR), blows their tags
         if (talk is not null && population is not null) (population.Announcer, population.PendingTalk) = (talk.Announce, talk.HasInterrupt);
-        if (talk is not null) talk.Arrests = arrest;
+        if (talk is not null) (talk.Arrests, talk.Extensions) = (arrest, o.Extensions);
         if (weather is not null) weather.Talk = talk;
         if (talk is not null && aggro is not null) (aggro.Memory, talk.Aggro) = (talk.Memory, aggro);
         if (talk is not null && population is not null) population.Memory = talk.Memory;
         if (arrest is not null) arrest.Talk = talk;
-        return new StandardSystemSet { Systems = systems, Population = population, Movement = movement, Combat = combat, Aggro = aggro, Carry = carry, Kidnap = kidnap, Captives = captives, Crime = crime, Arrest = arrest, Locks = locks, Beds = beds, Trade = trade, Ai = ai, Construction = construction, Production = production, Ragdolls = ragdolls, Dialogue = talk };
+        return new StandardSystemSet { Systems = Splice(systems, o.Extensions, data), Population = population, Movement = movement, Combat = combat, Aggro = aggro, Carry = carry, Kidnap = kidnap, Captives = captives, Crime = crime, Arrest = arrest, Locks = locks, Beds = beds, Trade = trade, Ai = ai, Construction = construction, Production = production, Ragdolls = ragdolls, Dialogue = talk };
+    }
+
+    /// <summary>
+    /// The standard systems with the extensions' systems spliced in (docs/modding.md "Registration surface"): each at its anchor, before the first or after the last
+    /// system of its part, at the end when the part is not built; systems at the same place in registration order. Without extensions the list is the standard one.
+    /// </summary>
+    static List<ITickSystem> Splice(Wiring wiring, SimulationExtensions? extensions, PopulationData data)
+    {
+        if (extensions is not { Systems.Count: > 0 }) return wiring.Systems;
+        var context = new SystemBuildContext(data, wiring.Systems.ToArray());
+        var placed = new List<(int Position, int Order, ITickSystem System)>();
+        for (int k = 0; k < extensions.Systems.Count; k++)
+        {
+            var factory = extensions.Systems[k];
+            var system = factory.Create(context) ?? throw new InvalidOperationException($"{factory.Owner}: the factory of system '{factory.Name}' returned null");
+            placed.Add((wiring.Position(factory.Anchor), k, system));
+        }
+        placed.Sort((a, b) => a.Position != b.Position ? a.Position.CompareTo(b.Position) : a.Order.CompareTo(b.Order));
+        var merged = new List<ITickSystem>(wiring.Systems.Count + placed.Count);
+        int next = 0;
+        for (int i = 0; i <= wiring.Systems.Count; i++)
+        {
+            while (next < placed.Count && placed[next].Position == i) merged.Add(placed[next++].System);
+            if (i < wiring.Systems.Count) merged.Add(wiring.Systems[i]);
+        }
+        return merged;
+    }
+
+    /// <summary>The wiring's systems in order, each with the part it came with (<see cref="StandardParts.None"/>: no anchor), for <see cref="Splice"/>.</summary>
+    sealed class Wiring
+    {
+        readonly List<StandardParts> parts = [];
+
+        public List<ITickSystem> Systems { get; } = [];
+
+        public void Add(StandardParts part, ITickSystem system)
+        {
+            Systems.Add(system);
+            parts.Add(part);
+        }
+
+        /// <summary>The index an anchored system goes in at: before the part's first system or after its last; the end when the part is not built.</summary>
+        public int Position(SystemAnchor anchor)
+        {
+            if (anchor.Part == StandardParts.None) return Systems.Count;
+            int first = parts.IndexOf(anchor.Part), last = parts.LastIndexOf(anchor.Part);
+            if (first < 0) return Systems.Count;
+            return anchor.After ? last + 1 : first;
+        }
     }
 }
