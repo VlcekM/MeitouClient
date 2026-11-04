@@ -67,10 +67,27 @@ public static class ModList
         return [.. mods.Values.OrderBy(m => m.Name, StringComparer.Ordinal)];
     }
 
-    /// <summary>The enabled mods named in <c>data/mods.cfg</c>, in order, without duplicates; empty when the file is missing.</summary>
+    /// <summary>The file the enabled mods are read from instead of <c>data/mods.cfg</c> (<c>--mods-cfg</c>, <see cref="UseModsCfg"/>); null: the install's own. Saving always writes the install's file.</summary>
+    public static string? ModsCfgOverride { get; private set; }
+
+    /// <summary>Reads the enabled mods from <paramref name="file"/> from now on (<c>--mods-cfg</c>, <c>MEITOU_MODS_CFG</c>); a missing file is an error, not an empty list.</summary>
+    public static void UseModsCfg(string file)
+    {
+        file = Path.GetFullPath(file);
+        if (!File.Exists(file)) throw new FileNotFoundException($"mods.cfg file not found: {file}", file);
+        ModsCfgOverride = file;
+    }
+
+    /// <summary>Back to the install's own <c>data/mods.cfg</c> (tests).</summary>
+    public static void ClearModsCfg() => ModsCfgOverride = null;
+
+    /// <summary>The file the enabled mods are read from: <see cref="ModsCfgOverride"/>, else <c>data/mods.cfg</c>.</summary>
+    public static string ModsCfgPath(GameInstall install) => ModsCfgOverride ?? Path.Combine(install.DataDirectory, "mods.cfg");
+
+    /// <summary>The enabled mods named in <c>data/mods.cfg</c> (or the <c>--mods-cfg</c> file), in order, without duplicates; empty when the file is missing.</summary>
     public static List<string> ReadEnabled(GameInstall install)
     {
-        var path = Path.Combine(install.DataDirectory, "mods.cfg");
+        var path = ModsCfgPath(install);
         return File.Exists(path) ? [.. ParseModsCfg(File.ReadAllLines(path)).Distinct(StringComparer.Ordinal)] : [];
     }
 
