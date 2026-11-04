@@ -363,6 +363,16 @@ painter (it spans 981..1028) or a centre-to-centre test. **Verified** (`tile48.1
 has the same two edges there (interior 992..995, exterior 1004..1010, 2..6 apart) and no connection: its group `150371` has no streaming set, while every
 other interior in 18.35, 19.29, 20.32, 26.13, 43.11, 47.16, 48.45, 50.33 has one (paired edges mostly within 2 in height). **Observed**: the
 original leaves Small Shack `48.13:8-` (`110371`) unconnected too; Meitou joins it.
+**Rasterization** (engine choice over a Recast fact): DotRecast's `rcAddSpan` (as Recast's) raises a new span to the top of an existing one it overlaps and
+only then compares the two tops for the walkable flag, so a floor rasterized into a taller cutting span walks that span's top, and a chain of merges carries the flag
+up further. **Observed** (Bughouse `18.35:11-`, heightfield column -62402,16498): the roof terrace (485) merged with the steep wall under the roof slope gave a
+walkable span to 492, so the wall became a walkable stair (485, 488, 492, 496) onto the slope (58°, walkable at the 60° building limit) and its wall-top ring;
+the original has neither. Walkable and cutting triangles are now rasterized into two fields and merged per column, a merged span walkable only when a walkable
+surface in it reaches within the climb of its top. **Interior survey**: `meitou-tools navmesh --survey-interiors zones|towns [--name text] [--png dir]` samples
+each intact interior's kept polygons and the original's interior faces over its hull every 2 units and sums, per building type, the area both have, only ours
+(and how much 20+ over the hull's base), only the original; `--png` draws both from above and two vertical sections. **Observed** (`towns`, 29 types): ours-only
+4.61 M to 3.83 M units² (Bughouse 563 k to 168 k, Ash Dome -40 %, Outpost s-II -31 %, Snailhouse -30 %, Hive Commune Hut -26 %), original-only +0.1 %;
+`--compare` 42.22, 20.32, 18.39: kept polygons -7 / -3 / +0 %, coverage unchanged.
 **Join sweep**: `meitou-tools navmesh --compare-interiors x,z ... | towns` (`towns`: every zone holding a town placement) reports per original
 interior group whether the original connects it (mesh connections in its streaming set) and whether ours, the interior whose hull holds most of its
 faces, is reached from the street (over kept polygons, joins and links from the exterior's kept polygons once the zone's kept set is resolved alone or,
@@ -677,6 +687,10 @@ Hub→Stack 34054; Squin→Admag at 0.8 walks 132184 for 26834 straight (short r
   | +0x190 | simplification.boundaryEdgeFilterThreshold | 0.1 | | |
   | +0x208 | overrideSettings | 4 entries, below | | per-material or per-volume overrides |
 
+`overrideSettings` (**Verified**, `FUN_1403c4a10` and the constants it reads): materials 1 and 2 at maxWalkableSlope 60° (`DAT_1416cc844`, 1.047 rad), material 3
+at 90° (`DAT_1416cc840`) with one more field set from `DAT_14167fad0` (meaning **Unknown**), material 4 at 60° with no volume; the first three share a volume made
+from the settings (`FUN_140dda150`, not traced). Meitou: building shapes walkable to `BuildingSlopeDegrees` 60, terrain and features 40; water's 90° is not used.
+
 ### Face data (per-face material, **Observed** except where marked)
 
 | value | meaning |
@@ -708,8 +722,9 @@ Unreachable goals were most of the rest. **Observed** (same run): a town's resid
 enter (radius 4 found no way in, radius 0 did: an unjoined seam on its door stair, "Inner seams"), 300-600 ms each: the exact search, up to four
 off-mesh start retries, then the nearest-point search, each exploring all the ground they reach. Engine choices since: a goal found unreachable
 is remembered (goal polygon, radius, door rule; same navmesh; `NavmeshWalkability.UnreachableSeconds`), and a walker that reaches its
-remembered nearest point gets the provisional route at once; retries skip start polygons a failed search reached (same region, same
-failure). GoTo answers went from ~95 to ~17 ms on average, polygons per search ~11,000 to ~5,800.
+remembered nearest point gets the provisional route at once, while no door was locked or unlocked since (`NavDoors.Version`: through a door unlocked since,
+walkers outside reached the corner of a locked L-House that one shut in it had found, and stood there; **Observed**, Gigachad save, 39.16); retries skip start
+polygons a failed search reached (same region, same failure). GoTo answers went from ~95 to ~17 ms on average, polygons per search ~11,000 to ~5,800.
 
 Polygon count (engine choice): 96-unit tiles with 48-unit edges cut open ground into a grid, and monotone regions into strips; 576-unit tiles, unlimited
 edges and watershed regions keep it in few polygons. **Observed** (`meitou-tools navmesh --compare`, 13 town zones): kept polygons fell 39..56 %
