@@ -162,6 +162,11 @@ sealed partial class GameHost
         {
             gameplayCharacters = characters.Source;
             characters.Source = FillTitleCharacters;
+
+            // The world's characters beyond reach are kept across frames and only the gameplay source empties them: left in, the title's view
+            // waited forever for looks it never builds (out of its reach). The gameplay source fills them again when it returns.
+            characters.Draws.BeginDistant();
+            distantFor = default;
         }
         if (ActiveFoliage is { } foliage && foliage.Shift != title.Ruins) foliage.Shift = title.Ruins;
         if (ActiveObjects is { } objects && objects.Staged != title.Staged) objects.Staged = title.Staged;
