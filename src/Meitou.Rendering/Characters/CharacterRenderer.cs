@@ -176,27 +176,37 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
     public double LastPoseMs { get; private set; }
     public double LastDrawCpuMs { get; private set; }
     public int Assets => assets.Count(a => a.Value is not null);
-    /// <summary>Loads waiting: the looks drawn this frame whose meshes are not built yet and the character textures still to stream in.</summary>
+    /// <summary>
+    /// Loads waiting: the looks drawn this frame that the last <see cref="Update"/> is going to build but has not yet, and the character textures still to stream in.
+    /// A look beyond the build reach (a far town's, listed for its portrait or a later approach) is not built until the eye comes near, so it is not counted: it
+    /// would keep the background-loading bar up for good.
+    /// </summary>
     public int PendingLoads
     {
         get
         {
             // A reused set: the background-loading bar asks every frame.
             pendingLooks.Clear();
-            // Only looks the renderer is going to build: a character beyond the build reach (a far town's, listed for its portrait or a later approach) is never built
-            // until the eye comes near, so counting it kept the background-loading bar up for good.
             foreach (var c in Draws.Items)
-                if (!assets.ContainsKey(c.Appearance) && WillBuild(c)) pendingLooks.Add(c.Appearance);
+                if (!assets.ContainsKey(c.Appearance) && BuildsLook(c, buildEye, buildReach)) pendingLooks.Add(c.Appearance);
             foreach (var c in Draws.Distant)
-                if (!assets.ContainsKey(c.Appearance) && WillBuild(c)) pendingLooks.Add(c.Appearance);
+                if (!assets.ContainsKey(c.Appearance) && BuildsLook(c, buildEye, buildReach)) pendingLooks.Add(c.Appearance);
             return pendingLooks.Count + content.Textures.AwaitedCount + content.Textures.UnresidentUsedCount;
         }
     }
-    /// <summary>Whether the last <see cref="Update"/>'s rules build the character's asset (as <see cref="AssetFor"/> decides): not deferred, and near the eye or a kept point, or a portrait.</summary>
-    bool WillBuild(in CharacterInstance c) => !Deferred(c) && (portraitKeys.Contains(c.Key) || WantsAsset(c, buildEye, buildReach));
+    readonly HashSet<CharacterAppearance> pendingLooks = new(ReferenceEqualityComparer.Instance);
+
+    /// <summary>The eye and build reach of the last <see cref="GatherLive"/>, for <see cref="PendingLoads"/> (before the first update nothing is near).</summary>
     Vector3 buildEye;
     float buildReach;
-    readonly HashSet<CharacterAppearance> pendingLooks = new(ReferenceEqualityComparer.Instance);
+
+    /// <summary>
+    /// Whether an update seeing <paramref name="eye"/> and <paramref name="reach"/> builds <paramref name="c"/>'s look when it is missing: not deferred
+    /// (<see cref="LoadingFocus"/>), and a portrait's or wanted (<see cref="WantsAsset"/>). The one rule of <see cref="AssetFor"/>, <see cref="UpdateDistant"/>
+    /// and <see cref="PendingLoads"/>.
+    /// </summary>
+    bool BuildsLook(in CharacterInstance c, Vector3 eye, float reach) => !Deferred(c) && (portraitKeys.Contains(c.Key) || WantsAsset(c, eye, reach));
+
     /// <summary>Current appearances still being prepared/uploaded, or textures still being loaded. Failed assets count as finished.</summary>
     public bool ContentPending => Draws.Items.Any(c => !Deferred(c) && !assets.ContainsKey(c.Appearance)) || Draws.Distant.Any(c => !Deferred(c) && !assets.ContainsKey(c.Appearance))
         || content.Textures.AwaitedCount > 0 || content.Textures.UnresidentUsedCount > 0;
@@ -624,8 +634,7 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
     CharacterAsset? AssetFor(in CharacterInstance inst, Vector3 eye, float reach, ref int built, ref double buildMs)
     {
         if (assets.TryGetValue(inst.Appearance, out var asset)) return asset;
-        if (Deferred(inst)) return null;
-        if (!portraitKeys.Contains(inst.Key) && !WantsAsset(inst, eye, reach)) return null;
+        if (!BuildsLook(inst, eye, reach)) return null;
 
         // Interactive: the files are read and the meshes prepared on a worker first (CharacterContent.Fetched), then a few a frame are uploaded.
         bool overBudget = !Covered && built >= LoadBudget || buildMs >= (Covered ? CoveredBudgetMs : BuildBudgetMs);
@@ -939,7 +948,7 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
             {
                 if (!assets.TryGetValue(d.Appearance, out var asset))
                 {
-                    if (!Deferred(d) && WantsAsset(d, eye, reach)) distantBuilds.Add(d.Appearance);
+                    if (BuildsLook(d, eye, reach)) distantBuilds.Add(d.Appearance);
                     continue;
                 }
                 if (asset is null) continue;
