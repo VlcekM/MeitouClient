@@ -69,7 +69,7 @@
             <!-- Continue: the newest save, when it was made with the enabled mods (ContinueSave.cs); shown while there is a save -->
             <Button x:Name="ContinueButton" Classes="paper" Click="Continue_Click" CornerRadius="0" Margin="-1,0,0,0" MinWidth="250" IsVisible="False">
               <StackPanel Orientation="Horizontal" Spacing="12">
-                <Path Data="M0,0 H4 V18 H0 Z M7,0 L7,18 L20,9 Z" VerticalAlignment="Center" />
+                <Path Data="M0,0 L0,18 L15,9 Z" VerticalAlignment="Center" />
                 <StackPanel VerticalAlignment="Center">
                   <TextBlock Text="Continue" Foreground="{StaticResource Secondary}" />
                   <TextBlock x:Name="ContinueSaveText" FontSize="11" MaxWidth="180" TextTrimming="CharacterEllipsis" Foreground="{StaticResource Secondary}" />

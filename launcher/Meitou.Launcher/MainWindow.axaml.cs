@@ -743,6 +743,9 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    static readonly Avalonia.Media.Geometry StartIcon = Avalonia.Media.Geometry.Parse("M0,0 L0,18 L15,9 Z"),
+        MenuIcon = Avalonia.Media.Geometry.Parse("M0,0 H4 V18 H0 Z M7,0 L7,18 L20,9 Z");
+
     // Beside Continue, Play is "Main menu" over the version it starts.
     void ShowPlayText()
     {
@@ -752,6 +755,7 @@ public sealed partial class MainWindow : Window
         PlayButton.Classes.Set("pending", pending);
         PlayVersionButton.Classes.Set("pending", pending);
         PlayIcon.IsVisible = !pending;
+        PlayIcon.Data = ContinueButton.IsVisible ? MenuIcon : StartIcon;
         UpdateIcon.IsVisible = pending;
         PlayText.FontSize = ContinueButton.IsVisible ? 17 : 21;
         PlaySubText.IsVisible = menu;
