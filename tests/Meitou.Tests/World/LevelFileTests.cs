@@ -57,7 +57,7 @@ public class LevelFileTests
 
         // Every placed building lies inside the zone whose file places it.
         var buildings = world.Buildings().ToList();
-        Assert.Equal(11714, buildings.Count);
+        Assert.Equal(11708, buildings.Count);   // 11714 placed, 6 below WorldLevelData.UnderGround (the original deletes them on load)
         Assert.All(buildings, b => Assert.Equal(b.Zone, WorldLayout.ZoneOf(b.Position.X, b.Position.Z)));
         // The other building-list entries sit at the origin and point at records of their own zone file.
         var local = world.BuildingListEntries().Where(e => e.TargetsZoneRecord).ToList();
