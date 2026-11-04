@@ -327,12 +327,19 @@ public sealed unsafe class DebrisRenderer : IDisposable
         // The bindless table is bound once per segment: register/update the debris textures before that bind. On Metal the
         // argument buffer must already name them when the encoder takes it.
         var standIn = gpu.StandIn2D;
+        // Pieces of one mesh come in runs (a flock of birds): the lookup is made once per run.
+        string? runName = null;
+        Mesh? runMesh = null;
         foreach (var piece in pieces)
+        {
+            if (piece.Limb is null && ReferenceEquals(piece.Mesh, runName)) continue;
             if (meshes.TryGetValue(Key(piece.Mesh, piece.Limb), out var known) && known is not null)
             {
+                if (piece.Limb is null) runName = piece.Mesh;
                 foreach (var part in known.Parts) _ = part.Diffuse?.Index;
                 if (known.Limb) { _ = known.Mask?.Index; _ = known.Normal?.Index; _ = (bloodMap ??= Texture("bloody.png"))?.Index; if (piece.Limb is { } first) _ = skinTable?.Invoke(first); }
             }
+        }
 
         // The view block carries the camera-relative projection/eye and the light direction; the frame block carries the atmosphere.
         var view = new ViewConstants
@@ -352,10 +359,17 @@ public sealed unsafe class DebrisRenderer : IDisposable
             AmbientSky = light.AmbientSky,
             AmbientGround = light.AmbientGround,
         };
+        (runName, runMesh) = (null, null);
         foreach (var piece in pieces)
         {
             // Only meshes loaded before (Extent): nothing is uploaded inside the pass.
-            if (!meshes.TryGetValue(Key(piece.Mesh, piece.Limb), out var mesh) || mesh is null) continue;
+            Mesh? mesh;
+            if (piece.Limb is null && ReferenceEquals(piece.Mesh, runName) && runMesh is not null) mesh = runMesh;
+            else
+            {
+                if (!meshes.TryGetValue(Key(piece.Mesh, piece.Limb), out mesh) || mesh is null) continue;
+                if (piece.Limb is null) (runName, runMesh) = (piece.Mesh, mesh);
+            }
             // A limb's piece is at its mesh's origin (its blood mapping reads the mesh's own x); the others are centred on their bounds.
             var middle = mesh.Limb ? piece.Position + Vector3.Transform(mesh.Centre * piece.Scale, piece.Rotation) : piece.Position;
             if (!FrustumTests.SphereVisible(frustum, middle, mesh.Extent.Length() * piece.Scale * MathF.Max(piece.Stretch, 1))) continue;
