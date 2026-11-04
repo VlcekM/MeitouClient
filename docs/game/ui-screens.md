@@ -648,7 +648,7 @@ How a building gets selected: [ui-input](ui-input.md#building-picking-and-select
   **Observed** (game data, not the decompile): many shop states carry a generic name (`Shop`, `Big Shop`, `General Shop`, `Bar`); what the
   building is lives in the SQUAD_TEMPLATE named by the state's `squad template`: `building name` ("The Dancing Skeleton") and, for a
   trader, its `vendors` VENDOR_LISTs ("medical and travel supplies"). The owner's screenshot shows "The Dancing Skeleton" in the name
-  bar with `Type:` the record. Housing sets both `squad template` and `name` ([town residents](factions-squads-towns.md#town-residents)). Meitou names the building from
+  bar with `Type:` the record. Housing sets `name` (**Verified**) and `squad template` (**Observed**, [town residents](factions-squads-towns.md#town-residents)). Meitou names the building from
   a loaded save's state, else the level state as the boot housed it: `building name` when set, else `name`, else the record; and, in the Meitou UI mode only, a trader's shop whose
   state name is only its layout's generic one ("Shop") from its first vendor list ("Medical and travel supplies"); the Faithful UI keeps "Shop".
   Meitou (`PlayerInterface.BuildingSelect.cs`): the header word (Normal, Broken, or a site's construction state); the condition rows as above, the bar
