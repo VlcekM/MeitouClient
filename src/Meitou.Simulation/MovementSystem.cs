@@ -507,23 +507,15 @@ public sealed class MovementSystem(PathService paths) : ITickSystem, IDisposable
                 // before their path comes, so a found path newer than the one followed is still taken while the latest request is on its way.
                 bool waiting = (n.Flags & (ushort)(MoveFlags.NeedPath | MoveFlags.Pending)) != 0;
                 if (!answer.Path.Found || !waiting || n.Task != (byte)CharacterTask.GoTo || answer.Id <= cold.PathApplied) continue;
-                cold.Path = [.. answer.Path.Points.Skip(1)];
-                cold.PathExact = answer.Path.IsProvisional ? answer.Path.Exact - 1 : int.MaxValue;
-                if (answer.Path.Exact > 1) cold.ProvisionalBlocked = 0;
+                TakePath(world.Walkability, ref n, cold, answer.Path);
                 cold.PathApplied = answer.Id;
-                n.PathCursor = 0;
-                n.Flags |= (ushort)MoveFlags.HasPath;
                 continue;
             }
             n.Flags = (ushort)(n.Flags & ~(ushort)MoveFlags.Pending);
             if (answer.Path.Found)
             {
                 cold.PathFailed = false;
-                cold.Path = [.. answer.Path.Points.Skip(1)];
-                cold.PathExact = answer.Path.IsProvisional ? answer.Path.Exact - 1 : int.MaxValue;
-                if (answer.Path.Exact > 1) cold.ProvisionalBlocked = 0;
-                n.PathCursor = 0;
-                n.Flags |= (ushort)MoveFlags.HasPath;
+                TakePath(world.Walkability, ref n, cold, answer.Path);
             }
             else
             {
@@ -551,6 +543,53 @@ public sealed class MovementSystem(PathService paths) : ITickSystem, IDisposable
                 }
             }
         }
+    }
+
+    /// <summary>Follows a found path from its point after the start (the start is where the walker stood when it asked), entering it at <see cref="Join"/>.</summary>
+    static void TakePath(IWalkability walk, ref CharacterHot n, CharacterCold cold, PathResult path)
+    {
+        cold.Path = [.. path.Points.Skip(1)];
+        cold.PathExact = path.IsProvisional ? path.Exact - 1 : int.MaxValue;
+        if (path.Exact > 1) cold.ProvisionalBlocked = 0;
+        n.PathCursor = Join(walk, n.Position, path.Points[0], cold.Path);
+        n.Flags |= (ushort)MoveFlags.HasPath;
+    }
+
+    /// <summary>How far (units) a walker may be off a leg of its new path to enter the path there (<see cref="Join"/>; engine choice: a stride).</summary>
+    public const float JoinSlack = ArriveRadius;
+
+    /// <summary>
+    /// The point of a new path a walker heads for first. A path asked for on the move (the provisional part of a long route asks every few seconds) starts where the walker
+    /// stood then; it has walked on meanwhile, and heading for the path's first point would turn it back and round (engine choice). So the end of the leg nearest it, among
+    /// the legs within the distance it has come, when it is within <see cref="JoinSlack"/> of that leg and can step toward its end; else 0.
+    /// </summary>
+    static int Join(IWalkability walk, Vector3 at, Vector3 start, Vector3[] path)
+    {
+        var here = new Vector2(at.X, at.Z);
+        var a = new Vector2(start.X, start.Z);
+        float reach = Vector2.Distance(a, here) + JoinSlack, along = 0, best = JoinSlack;
+        int join = 0;
+        for (int k = 0; k < path.Length && along <= reach; k++)
+        {
+            var b = new Vector2(path[k].X, path[k].Z);
+            float gap = SegmentDistance(here, a, b);
+            if (gap < best)
+            {
+                best = gap;
+                join = k;
+            }
+            along += Vector2.Distance(a, b);
+            a = b;
+        }
+        return join > 0 && CanCut(walk, at, path[join]) ? join : 0;
+    }
+
+    static float SegmentDistance(Vector2 p, Vector2 a, Vector2 b)
+    {
+        var ab = b - a;
+        float lengthSquared = ab.LengthSquared();
+        float t = lengthSquared < 1e-6f ? 0 : Math.Clamp(Vector2.Dot(p - a, ab) / lengthSquared, 0, 1);
+        return Vector2.Distance(p, a + ab * t);
     }
 
     public void Think(World world, Partition part)
