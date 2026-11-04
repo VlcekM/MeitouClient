@@ -1600,8 +1600,10 @@ per stock container, each container's window showing only its own (`Shop.ForBuil
 trader has its home's containers filled instead (`FillHome`). Only members that trade (`DialogueSystem.Trades`, [who trades](game/economy.md#who-trades)) publish `IsTrader`, the
 Trade verb and pointer. Shop state is hashed; the open trade is not, except its buyback receipts (below). A shop is saved on its platoon (`Saving/ShopSave`: stock, fill count,
 `inventory refresh time`, [economy](game/economy.md#building-shops-observed-decompile)) and kept by a saved platoon that leaves the world; a save without it gets a fresh fill.
-Customer: the original buys into the character window the stock is dropped on (`FUN_140712490`, **Observed**). Meitou keeps one customer; when it is no longer selected, the
-trade passes to a selected player character within `PassRange` 1000 of the trader (`FollowSelection`; the original's unflagged item limit, [trading range](game/economy.md#trading-range); farther the customer stays and a buy or sell is refused with "Out of trading range."; an open trade stays open within it, opening needs 30), and the inventory window shows the customer while trading.
+Customer: the original buys into the character window the stock is dropped on (`FUN_140712490`, **Observed**). Meitou keeps one customer; the inventory window shows the lead
+selected character, also while trading. A buy or sell names the window's character (`BuyItem.Into`, `SellItem.From`, a held item's window) and the trade passes to them within
+`PassRange` 1000 of the trader (`TradeWith`; the original's unflagged item limit, [trading range](game/economy.md#trading-range)); farther nothing moves and "Out of trading range."
+is posted. With no window named the trade follows the selection (`FollowSelection`). An open trade stays open within 1000; opening needs 30.
 Transfers and money changes must succeed together. Stealing from containers: [crimes](#crimes-and-bounties). Smuggling: the refusal and event 8 (`TradeSystem.Smuggling`) and the held item's prompt ([economy](game/economy.md#fencing-stealing-and-smuggling)); not built: a smuggler's own answer (read by no caller seen).
 
 Bags (engine choice; how the original trades bags and their contents is **Unknown**): a bag trades whole, the same instance with its contents grid, and only empty ("That bag

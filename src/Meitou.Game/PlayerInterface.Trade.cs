@@ -226,10 +226,10 @@ sealed partial class PlayerInterface
     /// Sends a sale. A stolen item that a shop which is no fence may catch first asks (<c>FUN_140715290</c>, <b>Observed</b> by decompile): "You have a {N}% chance of getting caught selling this
     /// stolen item.\nFence it anyway?" under the title "Fencing Item", N = 100 less the chance of getting away in per cent, rounded half up; only Yes sells.
     /// </summary>
-    void Sell(TradeView trade, InventoryItemToken token, int quantity, int? x, int y)
+    void Sell(TradeView trade, CharacterId seller, InventoryItemToken token, int quantity, int? x, int y)
     {
-        var sale = new SellItem(token, quantity) { Tick = session.World.Tick, X = x, Y = y };
-        if (trade.Goods.FirstOrDefault(g => g.Index == token.Index) is not { FenceOdds: { } odds })
+        var sale = new SellItem(token, quantity) { Tick = session.World.Tick, X = x, Y = y, From = seller };
+        if (seller != trade.Customer || trade.Goods.FirstOrDefault(g => g.Index == token.Index) is not { FenceOdds: { } odds })
         {
             Say(sale);
             return;

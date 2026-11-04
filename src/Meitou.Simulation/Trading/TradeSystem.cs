@@ -20,6 +20,8 @@ public sealed record BuyItem(InventoryItemToken Item, int Quantity) : SimCommand
     public int Y { get; init; }
     /// <summary>The window's right click (no cell chosen): one unit goes into the equipment slot that takes it when that is free, before the grids (<see cref="InventoryCommands.TryEquip"/>).</summary>
     public bool Equip { get; init; }
+    /// <summary>The character whose window it goes into: the trade passes to them (<see cref="TradeSystem.TradeWith"/>). None: the customer, or the selection's.</summary>
+    public CharacterId Into { get; init; } = CharacterId.None;
 }
 
 /// <summary>Sells <see cref="Quantity"/> units of the customer's item <see cref="Item"/> (its index in the customer's inventory) to the shop, at the stock cell dropped on when free.</summary>
@@ -27,6 +29,8 @@ public sealed record SellItem(InventoryItemToken Item, int Quantity) : SimComman
 {
     public int? X { get; init; }
     public int Y { get; init; }
+    /// <summary>The character whose window it comes from: the trade passes to them (<see cref="TradeSystem.TradeWith"/>). None: the customer, or the selection's.</summary>
+    public CharacterId From { get; init; } = CharacterId.None;
 }
 
 /// <summary>One item of a trade window, with what it costs (stock) or fetches (the customer's goods) as a whole stack.</summary>
@@ -174,10 +178,10 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
                     Close(world);
                     break;
                 case BuyItem buy when open:
-                    if (CustomerTrades(world)) Buy(world, buy);
+                    if (CustomerTrades(world, buy.Into)) Buy(world, buy);
                     break;
                 case SellItem sell when open:
-                    if (CustomerTrades(world)) Sell(world, sell);
+                    if (CustomerTrades(world, sell.From)) Sell(world, sell);
                     break;
                 case ArrangeStock when open:
                     if (Resolve(world, out _, out _, out var arranged)) InventoryCommands.Arrange(arranged!.Stock);
@@ -241,7 +245,7 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
         var selection = world.Player.Selection;
         if (selection.Count == 0 || selection.Contains(customer) || !world.Characters.TryResolveNext(trader, out int t)) return true;
         foreach (var id in selection)
-            if (world.Characters.TryResolveNext(id, out int c) && world.Characters.Cold(c) is { IsPlayer: true, Inventory: not null, Medical: not { Incapacitated: true } } && InReach(world, c, t, Settings.PassRange))
+            if (world.Characters.TryResolveNext(id, out int c) && Trades(world.Characters.Cold(c)) && InReach(world, c, t, Settings.PassRange))
             {
                 customer = id;
                 return true;
@@ -250,15 +254,35 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
     }
 
     /// <summary>
-    /// Whether a buy or sell goes ahead: the trade follows the selection, and when every selected character is out of its reach nothing moves and "Out of trading range."
-    /// is posted, as the original refuses a drop on a character window beyond the item limit (<c>FUN_140712490</c>, docs/game/economy.md "Trading range").
+    /// Whether a buy or sell goes ahead: the trade passes to the character whose window it uses (<see cref="TradeWith"/>), or with none named follows the selection; when that
+    /// character is out of reach nothing moves and "Out of trading range." is posted.
     /// </summary>
-    bool CustomerTrades(World world)
+    bool CustomerTrades(World world, CharacterId window)
     {
+        if (!window.IsNone) return TradeWith(world, window);
         if (FollowSelection(world)) return true;
         world.Post("Out of trading range.");
         return false;
     }
+
+    /// <summary>
+    /// Passes the open trade to the player's character <paramref name="who"/> whose window the stock is dropped on or taken from, when within <see cref="TradeSettings.PassRange"/>
+    /// of the trader; farther it posts "Out of trading range." (one who cannot trade, down or without an inventory, is refused silently), as the original refuses such a drop beyond the item limit (<c>FUN_140712490</c>, docs/game/economy.md "Trading range").
+    /// </summary>
+    internal bool TradeWith(World world, CharacterId who)
+    {
+        if (who == customer) return true;
+        if (!world.Characters.TryResolveNext(who, out int c) || !world.Characters.TryResolveNext(trader, out int t) || !Trades(world.Characters.Cold(c))) return false;
+        if (InReach(world, c, t, Settings.PassRange))
+        {
+            customer = who;
+            return true;
+        }
+        world.Post("Out of trading range.");
+        return false;
+    }
+
+    static bool Trades(CharacterCold? c) => c is { IsPlayer: true, Inventory: not null, Medical: not { Incapacitated: true } };
 
     internal void RefreshView(World world) =>
         view = open && Resolve(world, out int ci, out int ti, out var shop) ? Publish(world, ci, ti, shop!) : null;

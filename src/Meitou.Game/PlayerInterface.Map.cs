@@ -270,7 +270,7 @@ sealed partial class PlayerInterface
         if (trade is not null && picked.Control.Properties.TryGetValue("TradeItem", out var stockIndex))
         {
             if (trade.Stock.FirstOrDefault(i => i.Index == int.Parse(stockIndex, CultureInfo.InvariantCulture)) is not { } stock) return false;
-            Say(new BuyItem(stock.Token, shift ? stock.Quantity : 1) { Tick = session.World.Tick, Equip = true });
+            Say(new BuyItem(stock.Token, shift ? stock.Quantity : 1) { Tick = session.World.Tick, Equip = true, Into = InventoryOwner()?.Id ?? CharacterId.None });
             return true;
         }
         if (trade is null && WindowRightClick(picked.Screen, picked.Control, shift)) return true;
@@ -278,9 +278,9 @@ sealed partial class PlayerInterface
         var item = grid.Items.FirstOrDefault(i => i.Index == int.Parse(index, CultureInfo.InvariantCulture));
         if (item is null) return false;
         var token = new InventoryItemToken(item.Index, item.Record, item.Section, item.X, item.Y, item.Quantity, item.Quality);
-        if (trade is not null && trade.Customer == lead.Id && InventoryCommands.IsMovableSection(item.Section))
+        if (trade is not null && lead.IsPlayer && InventoryCommands.IsMovableSection(item.Section))
         {
-            Sell(trade, token, shift ? item.Quantity : 1, null, 0);
+            Sell(trade, lead.Id, token, shift ? item.Quantity : 1, null, 0);
             return true;
         }
         if (trade is null && OtherCharacterWindow(picked.Screen, lead.Id) is { } other)

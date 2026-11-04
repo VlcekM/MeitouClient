@@ -250,6 +250,16 @@ public sealed partial class PlayerSystem
         world.Post($"{cats} cats added.");
     }
 
+    /// <summary>A player's character window other than the customer's takes the trade over when in reach; false (after "Out of trading range.") when it is too far.</summary>
+    static bool PassTrade(World world, Trading.TradeSystem trade, ItemOwner window, ref CharacterId customer)
+    {
+        if (window.Holder != ItemHolder.Character || window.Character == customer) return true;
+        if (!world.Characters.TryResolveNext(window.Character, out int w) || world.Characters.Cold(w) is not { IsPlayer: true }) return true;
+        if (!trade.TradeWith(world, window.Character)) return false;
+        customer = window.Character;
+        return true;
+    }
+
     /// <summary>
     /// Places the held item (<c>FUN_140715560</c>, <b>Observed</b>): the section must take it (<see cref="InventoryCommands.SlotRefusal(string, FcsRecordType, string, Inventory?, bool)"/>, a worn slot only what the owner's race may wear, a limited storage its items, a prosthetic slot a
     /// stump of its side); the cell is the drop's, moved inside the section (a footprint larger than the section is refused); two or more items under it refuse it; one locked on refuses it
@@ -267,6 +277,7 @@ public sealed partial class PlayerSystem
         var trade = world.SystemOf<Trading.TradeSystem>();
         CharacterId customer = CharacterId.None;
         if ((buy || sell) && trade?.OpenStock(world, out customer) is null) { ReturnHeldItem(world); return; }
+        if ((buy || sell) && !PassTrade(world, trade!, buy ? into : held.From, ref customer)) { ReturnHeldItem(world); return; }
         // The stock trades with its customer only: stock goes into the customer's windows, the customer's own items onto the stock.
         if (buy && into != ItemOwner.Of(customer) || sell && held.From != ItemOwner.Of(customer) || Resolve(world, held, place) is not { } target)
         {
