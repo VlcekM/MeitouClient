@@ -1,95 +1,151 @@
 # Code mods (C#)
 
-**Status: shape decided (owner, 2026-11-04), not implemented.** Meitou's own in-process loader, Lib.Harmony shipped by the game as the
-sanctioned patching library, and a registration surface kept to the cases where a patch would silently break an invariant. No BepInEx. The
-RE_Kenshi decision ([rekenshi](formats/rekenshi.md)) stands and its DLLs stay ignored.
+**Status: implemented, code-mod API version 1 (2026-11-04).** Meitou's own in-process loader, Lib.Harmony shipped by the game as the
+sanctioned patching library, and a registration surface kept to the cases where a patch would silently break an invariant. No BepInEx.
+The RE_Kenshi decision ([rekenshi](formats/rekenshi.md)) stands and its DLLs stay ignored. Code: `src/Meitou.Modding` (contract and
+loader), `GameHost.Mods.cs` (host wiring), `SimulationExtensions` (engine hooks).
 
 ## Why this shape
 
-- **Not BepInEx.** Its chainloader discovers plugins from its own folder, not `mods.cfg`, so code mods would not enable, disable or order with
-  their data mod. It injects via Doorstop (proxy DLL on Windows, `LD_PRELOAD`/`DYLD_INSERT_LIBRARIES` on Unix), which fights the launcher and the
-  signed macOS build when the host is ours and can load assemblies itself. **Observed**
-  ([BepInEx.Utility.IL2CPP r2](https://github.com/BepInEx/BepInEx.Utility.IL2CPP/releases/tag/r2), 2026-06): BepInEx 6 still had no stable
+- **Not BepInEx.** Its chainloader discovers plugins from its own folder, not `mods.cfg`, so code mods would not enable, disable or order
+  with their data mod. It injects via Doorstop (proxy DLL on Windows, `LD_PRELOAD`/`DYLD_INSERT_LIBRARIES` on Unix), which fights the
+  launcher and the signed macOS build when the host is ours. **Observed**
+  ([BepInEx.Utility.IL2CPP r2](https://github.com/BepInEx/BepInEx.Utility.IL2CPP/releases/tag/r2), 2026-06): BepInEx 6 had no stable
   release; downstream projects built on `be.*` builds.
-- **Harmony is not an alternative to an API.** It works on the game's publish (Loading) whether blessed or not, so the decision is only what
-  the engine promises beyond raw patching. **Observed**: Lib.Harmony 2.4.2 added .NET 10 support
+- **Harmony is not an alternative to an API.** It works on the game's JIT publish whether blessed or not, so the decision is only what the
+  engine promises beyond raw patching. **Observed**: Lib.Harmony 2.4.2 added .NET 10 support
   ([releases](https://github.com/pardeike/Harmony/releases)).
-- **No accessor mirrors.** Mods reference `Meitou.Simulation` and the other `Meitou.*` assemblies directly, as a patch needs the types anyway.
-  Compatibility is per game version (RimWorld's model); a refactor may break a mod and that is accepted.
+- **No accessor mirrors.** Mods reference `Meitou.*` assemblies directly, as a patch needs the types anyway. Compatibility is per game
+  version (RimWorld's model).
+
+## Writing a mod
+
+A class library for `net10.0` referencing the release's `Meitou.Modding.dll`, `Meitou.Simulation.dll`, `Meitou.Core.dll`,
+`Meitou.Data.dll` (and `Meitou.Ui.dll` for interface work) and `0Harmony.dll`, all with `Private="false"`: the game supplies them.
+
+```csharp
+public sealed class MyMod : IMod
+{
+    public void Initialize(ModContext c)
+    {
+        c.AddSystem("counter", ctx => new CounterSystem(), SystemAnchor.AfterPart(StandardParts.Combat));
+        c.AddDialogueCondition(1000, check => check.Matches(/* computed answer */ true));
+        c.Harmony.PatchAll(typeof(MyMod).Assembly);
+    }
+}
+```
+
+Folder: `mods/MyMod/MyMod.mod` (the data mod, may be empty of records), `meitou.json`, `MyMod.dll`.
 
 ## Discovery
 
-- A mod carries code when its folder (next to the `.mod`) has `meitou.json`:
-  `{ "id", "apiVersion", "assemblies": ["Foo.dll"], "entry": "Foo.FooMod" }`. It may sit beside a `RE_Kenshi.json`.
-- `ModInfo` reports it beside `HasNativePlugin`; the launcher shows which mods carry code.
-- Load set: the enabled mods of `mods.cfg` (`ModList.ReadEnabled`) in order, filtered to those with a manifest. A disabled mod's DLL is never
-  opened. Enabling and disabling take effect at the next launch, like data mods.
+- A mod carries code when its folder has `meitou.json`: `{ "id", "apiVersion", "assemblies": ["Foo.dll"], "entry": "Foo.FooMod" }`
+  (`CodeModManifest`). `id`: letters, digits, `. _ -`, at most 64; it keys the mod's save data, Harmony instance and log lines.
+  `assemblies`: DLL file names in the mod folder, loaded in order. `entry`: the full name of the `IMod` type. Comments and trailing
+  commas are allowed.
+- `ModInfo.HasCode` reports it beside `HasNativePlugin`; the launcher marks such mods.
+- Load set: the enabled mods of `mods.cfg` in order, filtered to those with a manifest. A disabled mod's DLL is never opened. Changes take
+  effect at the next launch, like data mods.
+
+## Trust
+
+A workshop DLL is arbitrary code running as the user, as with RE_Kenshi. No sandboxing: .NET has none. The game loads a code mod's code
+only when its mod name is in `trustedCodeMods` of `meitou.user.json` (`UserConfig.TrustedCodeMods`); otherwise its data loads, its
+code does not, and the game shows a notice. The launcher's Play asks for each enabled code mod not yet allowed ([launcher](launcher.md)).
+The game itself cannot ask: mods initialize on the boot worker before the interface exists.
 
 ## Loading
 
-- One non-collectible `AssemblyLoadContext` per mod, loaded once at startup. No unload, no hot reload: systems are held by reference and
-  registered delegates would keep a collectible context alive.
-- Resolution by simple name: an assembly already in the default context (`Meitou.*`, the framework, shared third-party such as Bepu, and
-  `0Harmony`) comes from there, so a mod never holds a private copy of engine types; anything else comes from the mod folder, so two mods may
-  ship different versions of the same library.
+- One non-collectible `AssemblyLoadContext` per mod (`ModLoadContext`), loaded once at startup; no unload or hot reload.
+- Resolution by simple name: an assembly on the game's trusted platform list (`Meitou.*`, the framework, Bepu, `0Harmony`) comes from
+  the game even when the mod folder has a copy; anything else comes from the mod folder, so two mods may ship different versions of a
+  library. Listing a game assembly in `assemblies` refuses the mod. Native libraries resolve from the mod folder first.
 - **One Harmony, loaded by the game.** **Observed** ([pardeike/Harmony #741](https://github.com/pardeike/Harmony/issues/741), open since
-  2025-10): outside Unity, Harmony loaded in several load contexts duplicates `HarmonySharedState`, and two mods can no longer patch the same
-  method. The game therefore references Lib.Harmony, pins one version per release, and the resolution rule hands every mod that copy even when
-  the mod ships its own `0Harmony.dll`. A mod gets a `Harmony` instance whose id is its manifest id.
-- Constraint: the game stays a JIT publish, never `PublishTrimmed`, `PublishAot` or single-file. **Verified** (`tools/scripts/package-release.ps1`):
-  the game and viewer publish self-contained with `Meitou.*.dll` beside the executables. The launcher's AOT is unaffected; it loads no mod code.
-- Mods compile against the release's `Meitou.*.dll`, `0Harmony.dll` and a small `Meitou.Modding.dll` contract assembly (lifecycle,
-  registration, persistence). Open: ship reference assemblies per release so modders build without a game install.
-- Trust: a workshop DLL is arbitrary code running as the user, as with RE_Kenshi. The launcher marks code mods and the game confirms each new one
-  on first run. No sandboxing: .NET has none, and claiming one would be worse than saying so.
+  2025-10): outside Unity, Harmony loaded in several load contexts duplicates `HarmonySharedState`, and two mods can no longer patch the
+  same method. The game references Lib.Harmony 2.4.3 (`0Harmony.dll` with MonoMod merged in) and the resolution rule hands every mod
+  that copy.
+- Refusals, each a log line and a notice, the game going on: not allowed, unreadable manifest, other `apiVersion`, an id another mod
+  took, a missing DLL, an entry type that is absent, not an `IMod` or without a public parameterless constructor, a throwing
+  `Initialize`.
+- Constraint: the game stays a JIT publish, never `PublishTrimmed`, `PublishAot` or single-file. **Verified**
+  (`tools/scripts/package-release.ps1`): the game publishes self-contained with `Meitou.*.dll` beside the executable; `0Harmony.dll`
+  is there in the build output (**Observed**, 2026-11-04), not yet checked in a published zip.
 
 ## Lifecycle
 
-- `IMod.Initialize(ModContext)` in `Meitou.Modding`; the type comes from the manifest's `entry`, no reflection scan.
-- Runs after the data load and mod merge, inside the wiring at `GameHost.Saving.cs` before `StandardSystems.Build` returns, in `mods.cfg` order
-  (later mods see earlier registrations, like data overrides). Patches applied in `Initialize` are in place before the first tick.
-- `ModContext`: the merged `GameData`, the mod folder, a logger, a mod-scoped `Rng` purpose salt (hash of the manifest id), the mod's `Harmony`
-  instance, `Enqueue(SimCommand)`, and the registration surface below.
-- A throwing `Initialize` disables that mod for the session and logs; it does not stop the game.
+- `IMod.Initialize(ModContext)` runs once per session on the boot worker (`BootSimulation`), after the data load and mod merge and before
+  the first world's systems, in `mods.cfg` order. Registering is only allowed inside it. A throw drops the mod's registrations and
+  removes its Harmony patches (`UnpatchAll` of its id).
+- Worlds are built again for every new game and load, so systems are registered as factories and made per world.
+- `ModContext`: `Id`, `Name`, `Folder`, `Manifest`, the merged `Data` (`GameDatabase`), `Population` (`PopulationData`), `Log`/`LogError`,
+  `RngPurpose`, `Harmony`, `Tick` and `Enqueue(SimCommand)` for the running world (dropped and logged before the first world).
+- `RngPurpose` is `StableHash(id) | 0x80000000` cast to `RngPurpose`, so it never equals a vanilla purpose.
 
 ## Registration surface
 
-Only where a Harmony patch would break an invariant without an error. Everything else is Harmony; a new registration point is added when a
-patch in the wild keeps breaking, not ahead of demand.
+Only where a Harmony patch would break an invariant without an error; everything else is Harmony. A new point is added when a patch
+in the wild keeps breaking, not ahead of demand. Mod codes start at `SimulationExtensions.FirstModCode` (1000); a code another mod
+holds refuses the second mod.
 
-- **Tick systems:** `AddSystem(ITickSystem, Anchor)`, `Anchor` = before/after a `StandardParts` member. `StandardSystems.Build` stays the single
-  wiring authority and splices mod systems at the anchors; `IStateHashed` puts a system's state into `World.StateHash`. A prefix on a
-  parallel-phase method that writes another partition's slots corrupts the hash silently. Open: anchors from the start, or append-only first.
-- **Data-referenced codes:** dialogue condition and effect codes above the vanilla range (`DialogueSystem.Condition` switches on numeric codes)
-  and custom FCS record types, registered by number so FCS data can name them. A transpiler on a `switch` breaks on every edit of that method.
-  `FcsRecord` keeps unknown int types with their properties, so loading works; survival through merge and save is **Unknown** until tested.
-- **Persistence:** `ISaveable.Write/Read(Stream)` into a sidecar file per mod in the save folder, keyed by manifest id. Vanilla save files stay
-  byte-exact ([save](formats/save.md)); a save loaded without the mod keeps the sidecar and the original game ignores it, so saves stay portable.
-  Harmony has no persistence story; the alternative is patching the byte-exact writer.
-- **UI:** `IUiExtension` and `UiRegistration` (`Meitou.Ui`) exist: namespaced styles, controls and actions, overrides of vanilla ones, and slot
-  contributions (`UiSlots`), owned and disposable. `PlayerInterface.RegisterUiExtension` is the host entry. **Verified** (code): present, not yet
-  reachable from a mod.
-- **Commands:** console commands (`GameConsole`) and the mod's own `SimCommand` types, handled in its system's `Inputs`.
+- **Tick systems:** `AddSystem(name, factory, anchor)`. `SystemAnchor.Before(part)` goes before the first system of that
+  `StandardParts` member, `AfterPart(part)` after its last, `End` after all; a part the world does not build puts the system at the
+  end; systems at one place keep registration order. `StandardSystems.Build` builds the standard list first, then splices
+  (`Splice`), so the list without mods is the standard one. Captives and beds have no anchor of their own. A factory gets
+  `SystemBuildContext` (`Data`, the standard systems, `Find<T>()`); one that throws or returns null leaves its system out of that world
+  and logs. `IStateHashed` puts a system's state into `World.StateHash`. A mod system implementing a source interface `World` looks
+  up by first match (`IAnimationSource`, `IProjectileSource`...) and placed before the standard one would replace it.
+- **Dialogue codes:** `AddDialogueCondition(code, handler)` and `AddDialogueEffect(code, handler)`, named from FCS data in a
+  DIALOG_ACTION's `condition name` / `action name`. A condition gets `DialogueCheck` (world, speaker, the subject `who` picked, the
+  condition) with `Matches(bool)` and `Compare(double)` that apply the vanilla value and `compare by` rules; it only reads (it also runs
+  for interface previews). An effect gets `DialogueAct` (world, speaker, target, effect) in a serial step. An unregistered code
+  computes "no" / does nothing, as an unknown vanilla code.
+- **Record types:** `AddRecordType(type, name)` claims a number (not a vanilla `itemType`); `Records(type)` lists the merged records.
+  Survival of such records through the FCS merge and saves is **Unknown** until tested.
+- **Persistence:** a mod system implementing `IModSaveData` (`Write`/`Read(Stream)`) is saved under its name in the mod's sidecar file
+  ([save](formats/save.md#mod-data)), captured between ticks with the save and restored right after `SaveLoader.Load`, before the first
+  tick. `Read` runs only when the save has data for the system. Vanilla save files stay byte-exact.
+- **Interface:** `AddUi(IUiExtension)`: namespaced styles, controls, actions, overrides and slot contributions (`UiSlots`), registered
+  with each new interface (`ConfigurePlayerInterface`, Vulkan and Metal).
+- **Debug rows:** `AddDebugCommand(label, run, hasField)` adds a row to the F10 menu after the vanilla ones. `run` gets
+  `DebugCommandContext` (field, selection, camera target, tick, `Enqueue`) on the host thread while a tick may be in flight, so it must
+  not touch the world; it returns the status line, and a throw shows as the status.
+- **Commands:** a mod's own `SimCommand` types, queued with `Enqueue` and handled in its system's `Inputs`.
 
-## Versioning
+## Harmony
 
-- The manifest's `apiVersion` is checked against the game's; a mismatch refuses the mod at load with a message instead of a
-  `MissingMethodException` mid-game.
-- Harmony patches non-public members; compile-time references need public types or a publicizer. Open: which simulation types to make public,
-  or ship publicized reference assemblies.
+- With code mods enabled the JIT warm-up (`JitWarmup`) starts only after `Initialize` returns. Tiered compilation is off, so a caller
+  compiled before a patch keeps any inlined copy of its target.
+- **Observed** ([Harmony docs](https://harmony.pardeike.net/articles/patching-edgecases.html)): an inlined method cannot be patched; the
+  patch silently does nothing. Patch methods large enough not to be inlined, or their callers. `Rng` helpers are `AggressiveInlining`.
+- **Observed** (2026-11-04, scratch run): Harmony finds a patch method again by module identity, so the same DLL file loaded by two mods
+  makes their patches resolve to one copy. A helper library shared by several mods must not hold patch methods.
 
 ## Determinism contract
 
-Mod systems and patches alike obey [simulation](simulation.md) "Threading": parallel phases write only their partition's `Next`, read `Previous`
-and the grid, send cross-character effects through `EffectBuffer`; randomness through `Rng.Hash` with the mod's salt; no `World` access outside
-the tick (tick-ahead runs on `Meitou.Tick` during the draw); outside input goes through `Enqueue`. Violations break golden hashes and any future
-replay. Nothing in the API can stop a patch, so the guard is a debug mode that compares `StateHash` across a repeated run. Open: running a mod
-system twice catches API systems only; a patched vanilla method needs the whole tick replayed from a copy of `World`.
+Mod systems and patches obey [simulation](simulation.md) "Threading": parallel phases write only their partition's `Next`, read
+`Previous` and the grid, send cross-character effects through `EffectBuffer`; randomness through `Rng.Hash` with the mod's purpose;
+no `World` access outside the tick (tick-ahead runs on `Meitou.Tick` during the draw); outside input goes through `Enqueue`. Violations
+break golden hashes and any future replay. Nothing in the API can stop a patch. Not built: a debug mode that compares `StateHash` across
+thread counts with the mods loaded (it needs a launch option, which waits for the owner's approval).
+
+## Versioning
+
+- `ModApi.Version` (1) must equal the manifest's `apiVersion`; a mismatch refuses the mod at load with a message.
+- Harmony patches non-public members; compile-time references need public types or a publicizer. Open: which simulation types to make
+  public, or ship publicized reference assemblies; ship reference assemblies per release so modders build without a game install.
 
 ## Platforms
 
-- Managed DLLs run unchanged on the Windows, Linux and macOS builds. Harmony's detours come from MonoMod.Core, whose support for .NET Core on
-  Linux and macOS is **Observed** only as a fix note in [MonoMod's releases](https://github.com/MonoMod/MonoMod/releases) and for arm64 (the
-  `osx-arm64` release) only in a third-party write-up, so code mods off `win-x64` are **Unknown** until a patch is tested on each build.
-- **Observed** (Harmony 3.0 RC notes): native async methods cannot be patched (`NotSupportedException`). Irrelevant on .NET 10; a constraint if
-  the game moves to .NET 11 runtime-async.
+- Managed DLLs run unchanged on the Windows, Linux and macOS builds. Harmony's detours come from MonoMod.Core, whose support for .NET Core
+  on Linux and macOS is **Observed** only as a fix note in [MonoMod's releases](https://github.com/MonoMod/MonoMod/releases) and for arm64
+  only in a third-party write-up, so patches off `win-x64` are **Unknown** until tested on each build.
+- **Observed** (Harmony 3.0 RC notes): native async methods cannot be patched. Irrelevant on .NET 10; a constraint under .NET 11
+  runtime-async.
+
+## Evidence
+
+**Observed** (2026-11-04, win-x64, a scratch mod and harness against the release build, outside the repo): only allowed mods with a valid
+manifest load and each refusal gives its notice; the process holds one `0Harmony` and one `Meitou.Modding` though the mod folder had its
+own `0Harmony.dll`; a prefix applies, and a throwing `Initialize` loses its patch and registrations; a mod system's state survives
+capture and restore; sidecars survive `SaveGame.Write`/`Load` and `Clone`; spliced systems land at their anchors and the standard list is
+unchanged. The dialogue hooks are built but not exercised.

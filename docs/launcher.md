@@ -252,6 +252,9 @@ interpolated string, which no translation could match.
 - A preset is a named, ordered list of names with enabled flags. Applying one reorders the list. Mods the preset doesn't name go
   to the end, disabled, and mods it names that aren't on disk are reported. Applying doesn't save.
 - A mod folder with `RE_Kenshi.json` is marked as a plugin mod whose DLLs Meitou ignores ([RE_Kenshi](formats/rekenshi.md)).
+- A mod folder with `meitou.json` is marked as a code mod ([modding](modding.md)). Play asks once (Allow / Data only) for the enabled
+  code mods not yet allowed and adds the allowed names to `trustedCodeMods` in `meitou.user.json`. "Data only" writes nothing, so the
+  question comes back on the next Play. Revoking means removing the name from that list.
 
 ## News
 
