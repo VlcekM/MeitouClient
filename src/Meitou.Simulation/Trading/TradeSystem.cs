@@ -94,6 +94,11 @@ public sealed class TradeSettings
 {
     /// <summary>How close the customer must stand to the trader (the original's "Out of trading range." distance is <b>Unknown</b>; engine choice).</summary>
     public float Range { get; init; } = 30;
+    /// <summary>
+    /// How close another selected character must stand to the trader to take over the open trade: the original's item move between two characters' inventories (the stock dropped on a
+    /// character window) allows 1000 when unflagged (<c>FUN_14070d290</c>, <b>Observed</b>; whether the trade window flags it is <b>Unknown</b>, docs/game/economy.md "Trading range").
+    /// </summary>
+    public float PassRange { get; init; } = 1000;
     /// <summary>Ticks between looks at the squads for new shops and due restocks (engine choice: half a game second).</summary>
     public int CheckEveryTicks { get; init; } = 15;
     /// <summary>Game seconds the customer has to reach the trader before the opening is dropped (engine choice).</summary>
@@ -190,7 +195,7 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
         if (!customer.IsNone)
         {
             if (!Resolve(world, out int c, out int t, out _)) Close(world);
-            else if (InReach(world, c, t))
+            else if (InReach(world, c, t, open ? Settings.PassRange : Settings.Range))   // opens in reach, stays open within the pass-on reach
             {
                 open = true;
                 Hold(world, t);
@@ -229,15 +234,15 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
     }
 
     /// <summary>
-    /// The open trade passes to another selected character of the player's in reach of the trader when its customer is no longer selected (the original buys into the window the stock is
-    /// dropped on, <c>FUN_140712490</c>, <b>Observed</b>); out of reach the customer stays.
+    /// The open trade passes to another selected character of the player's within <see cref="TradeSettings.PassRange"/> of the trader when its customer is no longer selected
+    /// (the original buys into the window the stock is dropped on, <c>FUN_140712490</c>, <b>Observed</b>); farther the customer stays.
     /// </summary>
     void FollowSelection(World world)
     {
         var selection = world.Player.Selection;
         if (selection.Count == 0 || selection.Contains(customer) || !world.Characters.TryResolveNext(trader, out int t)) return;
         foreach (var id in selection)
-            if (world.Characters.TryResolveNext(id, out int c) && world.Characters.Cold(c) is { IsPlayer: true, Inventory: not null, Medical: not { Incapacitated: true } } && InReach(world, c, t))
+            if (world.Characters.TryResolveNext(id, out int c) && world.Characters.Cold(c) is { IsPlayer: true, Inventory: not null, Medical: not { Incapacitated: true } } && InReach(world, c, t, Settings.PassRange))
             {
                 customer = id;
                 return;
@@ -421,12 +426,14 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
         return shop is not null;
     }
 
-    bool InReach(World world, int c, int t)
+    bool InReach(World world, int c, int t) => InReach(world, c, t, Settings.Range);
+
+    static bool InReach(World world, int c, int t, float range)
     {
         var a = world.Characters.Next[c].Position;
         var b = world.Characters.Next[t].Position;
         float dx = a.X - b.X, dz = a.Z - b.Z;
-        return dx * dx + dz * dz <= Settings.Range * Settings.Range;
+        return dx * dx + dz * dz <= range * range;
     }
 
     static ItemInstance? Find(Inventory inventory, InventoryItemToken token)
