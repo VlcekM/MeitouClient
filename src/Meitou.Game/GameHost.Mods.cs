@@ -1,0 +1,85 @@
+using System.Numerics;
+using Meitou.Modding;
+using Meitou.Simulation;
+
+namespace Meitou.Game;
+
+/// <summary>
+/// Code mods (docs/modding.md): loaded and initialized once in <see cref="BootSimulation"/>, after the data and before the first world's systems; their simulation
+/// extensions go into every <see cref="BuildSystems"/>, their interface extensions and notices to the interface, their debug rows to the F10 menu, and their
+/// systems' save data into and out of the save's sidecar files.
+/// </summary>
+sealed partial class GameHost
+{
+    ModHost? mods;
+    // With code mods enabled the JIT warm-up starts only once they are initialized: a method compiled before a Harmony patch keeps any inlined copy
+    // of the target.
+    bool warmupAfterMods;
+
+    /// <summary>Starts the JIT warm-up now, or (with code mods enabled) once they are initialized.</summary>
+    void StartWarmup()
+    {
+        if (ModHost.EnabledCodeMods(install).Count > 0) warmupAfterMods = true;
+        else JitWarmup.Start();
+    }
+
+    void StartDeferredWarmup()
+    {
+        if (!warmupAfterMods) return;
+        warmupAfterMods = false;
+        JitWarmup.Start();
+    }
+
+    /// <summary>Loads the enabled code mods the player allowed (<see cref="UserConfig.TrustedCodeMods"/>) and runs their initialization; on the boot worker.</summary>
+    void StartMods(Meitou.Data.GameDatabase db, PopulationData data)
+    {
+        var enabled = ModHost.EnabledCodeMods(install);
+        if (enabled.Count == 0) return;
+        Console.WriteLine($"mods      {enabled.Count} code mod(s) enabled; Harmony {ModHost.HarmonyVersion}, code-mod API {ModApi.Version}");
+        var allowed = config.TrustedCodeMods.ToHashSet(StringComparer.Ordinal);
+        mods = ModHost.Load(new ModHostOptions(enabled, allowed, db, data, () => session?.World));
+    }
+
+    /// <summary>The mods' interface extensions and their load notices, for a new interface.</summary>
+    void ConnectModUi(PlayerInterface ui)
+    {
+        if (mods is null) return;
+        mods.RegisterUi(ui.RegisterUiExtension);
+        foreach (var notice in mods.Notices) ui.Notice(notice, true);
+    }
+
+    /// <summary>The save data of the world's mod systems into the save being captured; between ticks.</summary>
+    void CaptureModData(World world, Meitou.Data.Save.SaveGame game) => mods?.CaptureSaveData(world, game.ModData);
+
+    /// <summary>The save's mod data into the systems of the world just loaded from it; between ticks, before the first.</summary>
+    void RestoreModData(World world, Meitou.Data.Save.SaveGame save) => mods?.RestoreSaveData(world, save.ModData);
+
+    IReadOnlyList<ModDebugCommand> ModDebugRows => mods?.DebugCommands ?? [];
+
+    int DebugRowCount => DebugLabels.Length + ModDebugRows.Count;
+
+    string DebugLabel(int row)
+    {
+        if (row < DebugLabels.Length) return DebugLabels[row];
+        var command = ModDebugRows[row - DebugLabels.Length];
+        return $"{command.Label} [{command.Owner}]";
+    }
+
+    void EnsureDebugFields()
+    {
+        while (debugFields.Count < DebugRowCount) debugFields.Add("");
+    }
+
+    /// <summary>A mod's debug row: its handler with the field, the selection and the camera target; a throw shows as the status line.</summary>
+    string ModDebugApply(int row, string field, CharacterId[] selected, Vector3 here, long tick)
+    {
+        var command = ModDebugRows[row];
+        var context = new DebugCommandContext(field, selected, here, tick, session.World.Commands.Enqueue);
+        try { return command.Run(context) ?? ""; }
+        catch (Exception e)
+        {
+            Console.Error.WriteLine($"mod       {command.Owner}: debug command '{command.Label}' failed: {e}");
+            return $"{command.Owner}: {e.GetBaseException().Message}";
+        }
+    }
+}

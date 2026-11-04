@@ -124,7 +124,18 @@ editor-authored files. Original acceptance of a save synthesized from scratch is
   portraits_texture.png      character portrait atlas          (2048 x 2048 RGBA)
   platoon/<faction>_<n>.platoon   one file per squad           (56 files, 6-120 KB)
   zone/zone.<X>.<Y>.zone     one file per loaded zone          (13 files, 2 KB - 1.4 MB)
+  meitou-mods/<id>.dat       Meitou only: code-mod state       (see Mod data)
 ```
+
+### Mod data
+
+Meitou only ([modding](../modding.md)): each code mod with saveable systems gets `meitou-mods/<manifest id>.dat`, written with the
+save's other files into the working folder and moved with them. Layout, little-endian: magic `MTMD` (uint32 `0x444D544D`), format
+version (int32 1), entry count (int32), then per entry the system name (7-bit length-prefixed UTF-8, as .NET `BinaryWriter`), the data
+length (int32) and the mod's bytes. A loaded save keeps the files of mods not loaded now, and a save made from it writes them again.
+An import (`SaveImport.Filter`) builds a new save without them, so mods start fresh there.
+**Observed** (2026-11-04, a scratch save written and read back, win-x64). Whether the original game ignores the extra folder is
+**Unknown**.
 
 ### Save requests (`FUN_14047c310`)
 

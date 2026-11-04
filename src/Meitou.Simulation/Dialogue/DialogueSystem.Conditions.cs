@@ -31,6 +31,7 @@ public sealed partial class DialogueSystem
             other = subjectId = found;
             s = Cold(world, found);
         }
+        if (dc.Condition >= SimulationExtensions.FirstModCode) return ModCondition(world, me, s is null ? CharacterId.None : subjectId, dc);
         if (dc.Condition == 12) return Num3(world.Research.TechLevel);   // the research manager's tech level (*(*(game + 0x38) + 8), FUN_140676950), whatever the subject
         if (s is null)
         {

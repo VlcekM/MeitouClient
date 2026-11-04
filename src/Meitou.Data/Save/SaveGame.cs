@@ -39,6 +39,12 @@ public sealed partial class SaveGame
     /// <summary>The bytes of <c>portraits_texture.png</c>, if the save has one.</summary>
     public byte[]? Portraits { get; set; }
 
+    /// <summary>
+    /// Meitou's own sidecar files of code mods (<c>meitou-mods/&lt;mod id&gt;.dat</c>, docs/formats/save.md "Mod data"), by mod id. Kept for mods not loaded now, so a save
+    /// made from this one carries them on.
+    /// </summary>
+    public SortedDictionary<string, byte[]> ModData { get; } = new(StringComparer.Ordinal);
+
     /// <summary>What does not fit the format's own rules (a platoon file that is missing, a zone file the CAMERA list does not name...); loading goes on.</summary>
     public List<string> Problems { get; } = [];
 
@@ -70,6 +76,7 @@ public sealed partial class SaveGame
         foreach (var zone in folder.ZoneFiles)
             game.Zones[zone] = new SaveZone(zone, folder.ReadFile(SaveFolder.ZoneName(zone)));
         if (folder.Exists(SaveFolder.PortraitName)) game.Portraits = folder.ReadAllBytes(SaveFolder.PortraitName);
+        foreach (var (id, name) in folder.ModDataFiles) game.ModData[id] = folder.ReadAllBytes(name);
         game.Reindex();
         game.CheckZoneFiles();
         return game;
@@ -166,6 +173,7 @@ public sealed partial class SaveGame
         }
         foreach (var z in Zones.Values) copy.Zones[z.Coordinate] = new SaveZone(z.Coordinate, SaveFile.Read(z.File.ToBytes()));
         copy.Portraits = Portraits?.ToArray();
+        foreach (var (id, bytes) in ModData) copy.ModData[id] = bytes.ToArray();
         copy.Reindex();
         copy.Problems.AddRange(Problems);
         return copy;
@@ -263,6 +271,14 @@ public sealed partial class SaveGame
     /// leaves either the old save or the new one, never half of one. The old folder's contents are replaced as a whole: files the new save no longer has are gone.
     /// <paramref name="beforeInstall"/> runs between the two renames (a test uses it to fail there); the old save is then moved back.
     /// </summary>
+    void WriteModData(string work)
+    {
+        if (ModData.Count == 0) return;
+        Directory.CreateDirectory(Path.Combine(work, SaveFolder.ModDataDirectory));
+        foreach (var (id, bytes) in ModData)
+            File.WriteAllBytes(Path.Combine(work, SaveFolder.ModDataName(id).Replace('/', Path.DirectorySeparatorChar)), bytes);
+    }
+
     public void Write(string folder, Action? beforeInstall = null)
     {
         folder = Path.GetFullPath(folder);
@@ -280,6 +296,7 @@ public sealed partial class SaveGame
             foreach (var (name, file) in AllFiles())
                 file.WriteFile(Path.Combine(work, name.Replace('/', Path.DirectorySeparatorChar)));
             if (Portraits is not null) File.WriteAllBytes(Path.Combine(work, SaveFolder.PortraitName), Portraits);
+            WriteModData(work);
 
             if (Directory.Exists(folder))
             {

@@ -32,6 +32,8 @@
     <ProjectReference Include="../Meitou.Ui/Meitou.Ui.csproj" />
     <ProjectReference Include="..\Meitou.Engine\Meitou.Engine.csproj" />
     <ProjectReference Include="../Meitou.Navigation/Meitou.Navigation.csproj" />
+    <!-- Code mods (docs/modding.md); brings 0Harmony.dll into the build. -->
+    <ProjectReference Include="../Meitou.Modding/Meitou.Modding.csproj" />
     <ProjectReference Include="..\Meitou.Rendering\Meitou.Rendering.csproj" />
     <ProjectReference Include="..\Meitou.Rendering.Display\Meitou.Rendering.Display.csproj" />
     <!-- The Metal backend (macOS only: SharpMetal P/Invokes /usr/lib/libobjc.A.dylib), so the Windows build never sees it. -->

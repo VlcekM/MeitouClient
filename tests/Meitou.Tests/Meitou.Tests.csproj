@@ -21,6 +21,7 @@
     <ProjectReference Include="..\..\src\Meitou.Data\Meitou.Data.csproj" />
     <ProjectReference Include="../../src/Meitou.Ui/Meitou.Ui.csproj" />
     <ProjectReference Include="../../src/Meitou.Game/Meitou.Game.csproj" />
+    <ProjectReference Include="../../src/Meitou.Modding/Meitou.Modding.csproj" />
     <ProjectReference Include="..\..\src\Meitou.Engine\Meitou.Engine.csproj" />
     <ProjectReference Include="..\..\src\Meitou.Rendering\Meitou.Rendering.csproj" />
     <ProjectReference Include="..\..\src\Meitou.Simulation\Meitou.Simulation.csproj" />

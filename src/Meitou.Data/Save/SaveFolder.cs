@@ -14,6 +14,9 @@ public sealed partial class SaveFolder
     public const string PlatoonDirectory = "platoon";
     public const string ZoneDirectory = "zone";
     public const string PortraitName = "portraits_texture.png";
+    /// <summary>Meitou's folder of code-mod sidecar files (docs/formats/save.md "Mod data"); the original game's own files never go there.</summary>
+    public const string ModDataDirectory = "meitou-mods";
+    const string ModDataExtension = ".dat";
 
     const char Backslash = (char)92;
 
@@ -67,6 +70,16 @@ public sealed partial class SaveFolder
                 if (TryParseZoneName(n, out var zone)) yield return zone;
         }
     }
+
+    public static string ModDataName(string modId) => $"{ModDataDirectory}/{modId}{ModDataExtension}";
+
+    /// <summary>The code-mod sidecar files: (mod id, name) for each <c>meitou-mods/&lt;id&gt;.dat</c>.</summary>
+    public IEnumerable<(string Id, string Name)> ModDataFiles =>
+        Names.Where(IsModDataName).Select(n => (n[(ModDataDirectory.Length + 1)..^ModDataExtension.Length], n));
+
+    static bool IsModDataName(string name) =>
+        name.StartsWith(ModDataDirectory + "/", StringComparison.Ordinal) && name.EndsWith(ModDataExtension, StringComparison.Ordinal)
+        && name.IndexOf('/', ModDataDirectory.Length + 1) < 0;
 
     public static string ZoneName(ZoneCoordinate zone) => $"{ZoneDirectory}/zone.{zone.X}.{zone.Y}.zone";
 

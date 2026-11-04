@@ -5,60 +5,89 @@ using Avalonia.Layout;
 
 namespace Meitou.Launcher;
 
-// Yes / no questions as a plate over the dimmed window (SetupHost), placed so its Yes button is under the pointer that asked.
+// Questions as a plate over the dimmed window (SetupHost), placed so its main button is under the pointer that asked.
 public sealed partial class MainWindow
 {
     Point? pointer;   // the last pointer position over the window, in window coordinates
 
-    void TrackPointer() => AddHandler(PointerMovedEvent, (_, e) => pointer = e.GetPosition(this), Avalonia.Interactivity.RoutingStrategies.Tunnel, handledEventsToo: true);
+    void TrackPointer() =>
+        AddHandler(PointerMovedEvent, (_, e) => pointer = e.GetPosition(this), Avalonia.Interactivity.RoutingStrategies.Tunnel, handledEventsToo: true);
 
     /// <summary>Asks; true for <paramref name="yes"/>. No, Escape and closing the question answer false.</summary>
-    Task<bool> AskAsync(string title, string text, string yes, string no)
+    Task<bool> AskAsync(string title, string text, string yes, string no) =>
+        ChooseAsync(title, [Wrapped(text)], [(no, false), (yes, true)], cancel: false);
+
+    static TextBlock Wrapped(string text) =>
+        new() { Text = text, TextWrapping = Avalonia.Media.TextWrapping.Wrap, FontWeight = Avalonia.Media.FontWeight.Medium };
+
+    /// <summary>
+    /// Shows <paramref name="body"/> with a row of buttons, the last one the main one; answers the clicked button's value, or
+    /// <paramref name="cancel"/> for Escape.
+    /// </summary>
+    Task<T> ChooseAsync<T>(string title, IReadOnlyList<Control> body, IReadOnlyList<(string Label, T Value)> choices, T cancel)
     {
-        var answer = new TaskCompletionSource<bool>();
-        var yesButton = new Button { Classes = { "paper" }, Content = new TextBlock { Text = yes, Foreground = (Avalonia.Media.IBrush)this.FindResource("Secondary")! } };
-        var noButton = new Button { Content = no, Margin = new(0, 0, 8, 0) };
-        var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new(0, 16, 0, 0), Children = { noButton, yesButton } };
-        var plate = new Border
-        {
-            Classes = { "plate" }, Width = 520, Padding = new(20, 16), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top, Opacity = 0,
-            Child = new StackPanel
-            {
-                Children =
-                {
-                    new Border { Classes = { "header" }, Margin = new(0, 0, 0, 10), Child = new TextBlock { Text = title } },
-                    new TextBlock { Text = text, TextWrapping = Avalonia.Media.TextWrapping.Wrap, FontWeight = Avalonia.Media.FontWeight.Medium },
-                    buttons,
-                },
-            },
-        };
-        void Close(bool result)
+        var answer = new TaskCompletionSource<T>();
+        void Close(T result)
         {
             SetupHost.IsVisible = false;
             SetupHost.Child = null;
             answer.TrySetResult(result);
         }
-        yesButton.Click += (_, _) => Close(true);
-        noButton.Click += (_, _) => Close(false);
-        plate.KeyDown += (_, e) => { if (e.Key == Key.Escape) Close(false); };
-        // Once laid out: move the plate so Yes is centred on the pointer, kept inside the host; then show it. Without a pointer (keyboard) it
-        // sits bottom right, over the footer.
+        var buttons = MakeButtons(choices, Close);
+        var header = new Border { Classes = { "header" }, Margin = new(0, 0, 0, 10), Child = new TextBlock { Text = title } };
+        var content = new StackPanel { Children = { header } };
+        content.Children.AddRange(body);
+        var row = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new(0, 16, 0, 0) };
+        row.Children.AddRange(buttons);
+        content.Children.Add(row);
+        var plate = new Border
+        {
+            Classes = { "plate" }, Width = 520, Padding = new(20, 16), Opacity = 0, Child = content,
+            HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top,
+        };
+        plate.KeyDown += (_, e) => { if (e.Key == Key.Escape) Close(cancel); };
+        PlaceUnderPointer(plate, buttons[^1]);
+        LauncherText.TranslateTree(plate, originalUiText);
+        SetupHost.Child = plate;
+        SetupHost.IsVisible = true;
+        buttons[0].Focus();
+        return answer.Task;
+    }
+
+    List<Button> MakeButtons<T>(IReadOnlyList<(string Label, T Value)> choices, Action<T> close)
+    {
+        var buttons = new List<Button>();
+        for (int i = 0; i < choices.Count; i++)
+        {
+            var (label, value) = choices[i];
+            bool main = i == choices.Count - 1;
+            var secondary = (Avalonia.Media.IBrush)this.FindResource("Secondary")!;
+            var button = main
+                ? new Button { Classes = { "paper" }, Content = new TextBlock { Text = label, Foreground = secondary } }
+                : new Button { Content = label, Margin = new(0, 0, 8, 0) };
+            button.Click += (_, _) => close(value);
+            buttons.Add(button);
+        }
+        return buttons;
+    }
+
+    // Once laid out: move the plate so the main button is centred on the pointer, kept inside the host; then show it. Without a pointer (keyboard) it
+    // sits bottom right, over the footer.
+    void PlaceUnderPointer(Border plate, Button main)
+    {
         void Place(object? sender, EventArgs e)
         {
             if (plate.Bounds.Width <= 0) return;
             plate.LayoutUpdated -= Place;
             var host = SetupHost.Bounds.Size;
-            var yesCentre = yesButton.TranslatePoint(new Point(yesButton.Bounds.Width / 2, yesButton.Bounds.Height / 2), plate) ?? default;
-            var target = pointer is { } p && this.TranslatePoint(p, SetupHost) is { } at ? at - yesCentre
+            var centre = main.TranslatePoint(new Point(main.Bounds.Width / 2, main.Bounds.Height / 2), plate) ?? default;
+            var target = pointer is { } p && this.TranslatePoint(p, SetupHost) is { } at ? at - centre
                 : new Point(host.Width - plate.Bounds.Width - 14, host.Height - plate.Bounds.Height - 12);
-            plate.Margin = new(Math.Clamp(target.X, 0, Math.Max(0, host.Width - plate.Bounds.Width)), Math.Clamp(target.Y, 0, Math.Max(0, host.Height - plate.Bounds.Height)), 0, 0);
+            double x = Math.Clamp(target.X, 0, Math.Max(0, host.Width - plate.Bounds.Width));
+            double y = Math.Clamp(target.Y, 0, Math.Max(0, host.Height - plate.Bounds.Height));
+            plate.Margin = new(x, y, 0, 0);
             plate.Opacity = 1;
         }
         plate.LayoutUpdated += Place;
-        LauncherText.TranslateTree(plate, originalUiText);
-        SetupHost.Child = plate;
-        SetupHost.IsVisible = true;
-        noButton.Focus();
-        return answer.Task;
     }
 }

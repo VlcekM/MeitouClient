@@ -67,6 +67,8 @@ public sealed class LauncherConfig
     /// <summary>An installed launcher applies its own update at startup and restarts into it.</summary>
     public bool AutoUpdateLauncher { get; set; } = true;
     public List<ModPreset> Presets { get; set; } = [];
+    /// <summary>Code mods (by name) the player chose to run as data only (docs/modding.md "Trust"): Play does not ask about them again.</summary>
+    public List<string> DataOnlyCodeMods { get; set; } = [];
 
     public static LauncherConfig Load()
     {

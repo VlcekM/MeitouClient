@@ -14,6 +14,9 @@ public static class ModList
     /// <summary>The file in a mod's folder that makes it an RE_Kenshi plugin mod (docs/formats/rekenshi.md); Meitou ignores its DLLs.</summary>
     public const string NativePluginFile = "RE_Kenshi.json";
 
+    /// <summary>The file in a mod's folder that makes it a Meitou code mod (docs/modding.md "Discovery").</summary>
+    public const string CodeManifestFile = "meitou.json";
+
     /// <summary>
     /// Mod names (without <c>.mod</c>) from <c>mods.cfg</c>, with the game's rules: lines are taken as they are
     /// (not trimmed); empty lines and lines starting with <c>#</c>, <c>/</c> or <c>;</c> are skipped; the text
@@ -144,6 +147,7 @@ public sealed class ModInfo(string name, string path, ModSource source)
     ModHeader? header;
     bool headerRead;
     bool? nativePlugin;
+    bool? code;
 
     public string Name { get; } = name;
     public string Path { get; } = path;
@@ -152,6 +156,11 @@ public sealed class ModInfo(string name, string path, ModSource source)
 
     /// <summary>An RE_Kenshi plugin mod: its data loads in Meitou, its DLLs do not. Checked on first use.</summary>
     public bool HasNativePlugin => nativePlugin ??= File.Exists(System.IO.Path.Combine(Folder, ModList.NativePluginFile));
+
+    /// <summary>A Meitou code mod: its folder has <see cref="ModList.CodeManifestFile"/>, so it runs C# code of its own once allowed. Checked on first use.</summary>
+    public bool HasCode => code ??= File.Exists(CodeManifestPath);
+
+    public string CodeManifestPath => System.IO.Path.Combine(Folder, ModList.CodeManifestFile);
 
     /// <summary>The <c>.mod</c> file's header, read on first use; null when it is unreadable.</summary>
     public ModHeader? Header
