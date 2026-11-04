@@ -658,7 +658,7 @@ replaced, 3 crushed) and the fitted item (holder `FUN_1400cd3f0`; **Verified** b
   resolves joins the option list of limb `slot` - 50 with weight v1 (weight <= 0 dropped). v0 < 0 is a "natural limb" option; v0 >= 0 counts
   only when the record has a `material` reference (prosthetics do, stumps do not) and `RaceLimiter::canEquip` (`races`, `races exclude`)
   passes. Each limb with options picks one by weight (one option: no roll); a pick with v0 >= 0 is made by the item factory with level
-  override v0 and fitted (`setRobotLimbItem`, `FUN_140645690`). No base CHARACTER uses the list (**Verified** by probe). Which runs first,
+  override v0 and fitted (`setRobotLimbItem`, `FUN_140645690`); **Verified** in the disassembly: the call at `14062d87d` loads v0 (`14062d855`, tested for its sign) into the factory's level argument, so the item is not made at its default level. No base CHARACTER uses the list (**Verified** by probe). Which runs first,
   this or `starting health`, is **Unknown**: `FUN_140645ef0` makes any entry on a non-natural limb a stump. Meitou: rolled in
   `CharacterGenerator.RollRobotLimbs`, fitted in `CharacterAssembly.Attach` after `starting health`, so the prosthetic wins.
 - A stump shows the RACE `limb replacement` record whose `slot` is 50 + k (`uses_limb_replacement`); a crushed
