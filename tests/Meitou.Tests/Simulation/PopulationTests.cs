@@ -2,6 +2,7 @@ using System.Numerics;
 using Meitou.Data.Gameplay;
 using Meitou.Data.World;
 using Meitou.Simulation;
+using SimWorld = Meitou.Simulation.World;
 
 namespace Meitou.Tests.Simulation;
 
@@ -67,6 +68,72 @@ public class PopulationTests
         world.RunTicks(350);
         Assert.Equal(SiteStatus.Unloaded, population.StatusOf(0));
         Assert.Equal(0, table.Count);
+    }
+
+    /// <summary>The town unloads while its chaser is away: the chaser's squad is the only one kept in the world (pinned, one platoon), the others are stored.</summary>
+    static (SimWorld World, PopulationSystem Population, CharacterId Chaser, int Total) UnloadedWithChaserAway()
+    {
+        var world = SyntheticTown.World(5, 1, 3, new PopulationSettings { UnloadGraceSeconds = 10, CheckEveryTicks = 1 });
+        var population = (PopulationSystem)world.Systems[0];
+        world.RunTick();
+        var chaser = world.Squads.All.First().Members[0];
+        int total = world.Characters.Count;
+        var far = new Vector3(-50000, 0, -50000);
+        world.Commands.Enqueue(new FocusCommand(far) { Tick = world.Tick });
+        world.RunTick();
+        world.Characters.Place(chaser.Slot, far, 0);
+        world.RunTicks(350);
+        return (world, population, chaser, total);
+    }
+
+    static int LivingOf(SimWorld world) => world.Squads.All.Sum(s => s.Members.Count) + world.Platoons.All.Where(p => p.State != PlatoonState.Loaded && p.Stored is not null).Sum(p => p.Stored!.Members.Count);
+
+    [Fact]
+    public void A_town_that_unloads_keeps_only_the_squad_near_the_player_and_stores_the_rest()
+    {
+        var (world, population, chaser, total) = UnloadedWithChaserAway();
+        using var _ = world;
+        Assert.Equal(SiteStatus.Unloaded, population.StatusOf(0));
+        var kept = Assert.Single(world.Squads.All);
+        Assert.True(kept.Pinned);
+        Assert.Equal(chaser, kept.Members[0]);
+        var platoon = Assert.Single(world.Platoons.All, p => p.State == PlatoonState.Loaded);
+        Assert.Equal((kept.Id, kept.PlatoonId), (platoon.SquadId, platoon.Id));
+        Assert.True(world.Platoons.All.Count(p => p.State == PlatoonState.Unloaded && p.Stored is { Members.Count: > 0 }) >= 1);
+        Assert.Equal(total, LivingOf(world));
+    }
+
+    [Fact]
+    public void A_town_loaded_again_while_its_squad_is_still_active_does_not_make_it_twice()
+    {
+        var (world, population, chaser, total) = UnloadedWithChaserAway();
+        using var _ = world;
+        world.Commands.Enqueue(new FocusCommand(SyntheticTown.Centre) { Tick = world.Tick });
+        world.RunTick();
+        world.Characters.Place(chaser.Slot, SyntheticTown.Centre, 0);   // still in an active zone: the platoon stays loaded
+        world.RunTicks(20);
+        Assert.Equal(SiteStatus.Loaded, population.StatusOf(0));
+        Assert.Equal(total, world.Characters.Count);
+        Assert.Equal(total, LivingOf(world));
+        Assert.Single(world.Squads.All, s => s.Members.Contains(chaser));
+    }
+
+    [Fact]
+    public void A_squad_walking_home_into_an_unloaded_town_unloads_cleanly_and_comes_back_with_the_town()
+    {
+        var (world, population, chaser, total) = UnloadedWithChaserAway();
+        using var _ = world;
+        world.Characters.Place(chaser.Slot, SyntheticTown.Centre, 0);   // home, in no active zone (the player is far)
+        world.RunTicks(350);
+        Assert.Equal(0, world.Characters.Count);
+        Assert.Empty(world.Squads.All);
+        Assert.DoesNotContain(world.Platoons.All, p => p.State == PlatoonState.Loaded);
+        Assert.Equal(total, LivingOf(world));
+        world.Commands.Enqueue(new FocusCommand(SyntheticTown.Centre) { Tick = world.Tick });
+        world.RunTicks(60);
+        Assert.Equal(SiteStatus.Loaded, population.StatusOf(0));
+        Assert.Equal(total, world.Characters.Count);
+        Assert.Equal(total, LivingOf(world));
     }
 
     [Fact]
