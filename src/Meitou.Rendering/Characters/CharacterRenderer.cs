@@ -183,13 +183,19 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         {
             // A reused set: the background-loading bar asks every frame.
             pendingLooks.Clear();
+            // Only looks the renderer is going to build: a character beyond the build reach (a far town's, listed for its portrait or a later approach) is never built
+            // until the eye comes near, so counting it kept the background-loading bar up for good.
             foreach (var c in Draws.Items)
-                if (!assets.ContainsKey(c.Appearance)) pendingLooks.Add(c.Appearance);
+                if (!assets.ContainsKey(c.Appearance) && WillBuild(c)) pendingLooks.Add(c.Appearance);
             foreach (var c in Draws.Distant)
-                if (!assets.ContainsKey(c.Appearance)) pendingLooks.Add(c.Appearance);
+                if (!assets.ContainsKey(c.Appearance) && WillBuild(c)) pendingLooks.Add(c.Appearance);
             return pendingLooks.Count + content.Textures.AwaitedCount + content.Textures.UnresidentUsedCount;
         }
     }
+    /// <summary>Whether the last <see cref="Update"/>'s rules build the character's asset (as <see cref="AssetFor"/> decides): not deferred, and near the eye or a kept point, or a portrait.</summary>
+    bool WillBuild(in CharacterInstance c) => !Deferred(c) && (portraitKeys.Contains(c.Key) || WantsAsset(c, buildEye, buildReach));
+    Vector3 buildEye;
+    float buildReach;
     readonly HashSet<CharacterAppearance> pendingLooks = new(ReferenceEqualityComparer.Instance);
     /// <summary>Current appearances still being prepared/uploaded, or textures still being loaded. Failed assets count as finished.</summary>
     public bool ContentPending => Draws.Items.Any(c => !Deferred(c) && !assets.ContainsKey(c.Appearance)) || Draws.Distant.Any(c => !Deferred(c) && !assets.ContainsKey(c.Appearance))
@@ -606,6 +612,7 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
             AddLayers(ref l, in inst);
         }
 
+        (buildEye, buildReach) = (eye, reach);
         UpdateDistant(eye, reach, ref built, ref buildMs);
         return (boneTotal, partTotal);
     }
