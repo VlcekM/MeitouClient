@@ -214,6 +214,8 @@ sealed class CharacterAssembly(PopulationData data)
         if (record is { Type: Meitou.Data.Fcs.FcsRecordType.CHARACTER } && record.GetBool("wears uniform") && (uint)cold.Faction < (uint)data.Factions.Count)
             foreach (var piece in cold.Inventory.Items)
                 if (piece.Type == Meitou.Data.Fcs.FcsRecordType.ARMOUR && piece.Section != "main") piece.Uniform = data.Factions[cold.Faction].Id;
+        // CHARACTER `shaved`: a character made shaven-headed (Character vslot 124 isHeadShaven); a loaded one takes its saved state instead (Saving.SlaveSave).
+        if (record is { Type: Meitou.Data.Fcs.FcsRecordType.CHARACTER }) cold.Shaved = record.GetBool("shaved");
         FitRolledLimbs(cold.Appearance?.Loadout, cold.Inventory, medical);
         Dye(cold, cold.Inventory);
         cold.Fighter = FighterOf(record, cold.Inventory, cold.Medical, cold.Race?.StringId);

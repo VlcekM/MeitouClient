@@ -484,6 +484,12 @@ public sealed class CharacterCold
     /// <summary>The squad a slave obeys (the original's owner handle naming a platoon; -1 none): job 187 Obedient Slave runs that squad's <c>Slave AI Goals</c> (<see cref="Ai.AiSystem"/>).
     /// Runtime only (not saved, not hashed): set where the slave is made or sold.</summary>
     public int SlaveMaster { get; set; } = -1;
+    /// <summary>
+    /// Its head is shaven (<c>CharacterHuman::isHeadShaven</c>, Character vslot 124 <c>0x3e0</c>: the appearance's <c>shaved</c>, <b>Verified</b>; false in every other class).
+    /// Processing a slave shaves it and an ex-slave's hair grows back once it is free (<see cref="Kidnap.CaptiveSystem"/>, <see cref="Locks.FixtureRegistry.LayLow"/>); the watchers
+    /// leave a shaven slave that looks like one alone. From the CHARACTER's or the saved GAMESTATE_CHARACTER's <c>shaved</c> (<see cref="Saving.SlaveSave"/>); hashed while set.
+    /// </summary>
+    public bool Shaved { get; set; }
     /// <summary>Stood up from playing dead on the player's order since it went down (<c>playerWantsMeToGetUp</c>): the get-up line may be event 25. Runtime only.</summary>
     public bool OrderedUp { get; set; }
     /// <summary>The player's speed group (<c>SpeedGroup</c>, made for the selection by Group speed: the first member's slot; -1 none). Runtime only.</summary>
@@ -831,6 +837,7 @@ public sealed class CharacterTable
             if (k.Freed) hasher.Add(0x46726564);
             if (k.Ordered) hasher.Add(0x4F72646E);
             if (k.SlaveState != 0) { hasher.Add(0x536C7653); hasher.Add(k.SlaveState); hasher.Add(k.SlaveOwner); if (k.SlaveState > 1) hasher.Add(k.SlaveSince); }
+            if (k.Shaved) hasher.Add(0x53686176);
             if (k.Crouched) hasher.Add(0x43726F63);
             if (k.PickingLock is { } pick) { hasher.Add(0x5069636B); hasher.Add(Rng.StableHash(pick)); }
             if (k.Bashing is { } bash) { hasher.Add(0x42617368); hasher.Add(Rng.StableHash(bash)); hasher.Add(k.BashTime); if (k.BashOrdered) hasher.Add(0x4F726473); if (k.BashWall) hasher.Add(0x57616C6C); if (k.BashErrand) hasher.Add(0x45727264); }

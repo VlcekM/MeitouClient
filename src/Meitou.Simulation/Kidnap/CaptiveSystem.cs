@@ -142,9 +142,9 @@ public readonly record struct CaptiveEvent(long Tick, CaptiveEventKind Kind, Cap
 /// <item><b>Eat</b> (139 "Eat random prisoner", wanted always; 282 at the kill rate): the same target; the eater sheathes its weapon (B list !hasWeaponEquipped), plays <c>eat</c>,
 /// says event 52 EATING_SOMETHING_SOUNDS while the captive says 11, and the captive is eaten (<see cref="MedicalState.BeingEaten"/>) until it dies.</item>
 /// <item><b>Process</b> (260 "Watching for new slaves": an awake occupant of a cage of the town, not a slave, <c>FUN_1408cc110</c>; 183 "Watching slaves": an occupant within 180 that
-/// is no slave of its own side, <c>FUN_1408cd630</c>; both only in cages of non-player factions): the worker kneels 3 s (<c>medic</c>), then strips the captive's weapons and armour
+/// needs processing, <c>FUN_1408cd630</c>; both only in cages of non-player factions): the worker kneels 3 s (<c>medic</c>), then strips the captive's weapons and armour
 /// into its own inventory (locked shackles stay), dresses it in its faction's <c>slave clothing</c> where the slot is free, says event 35 INTRODUCING_NEW_SLAVE (37 RECAPTURED_A_SLAVE for
-/// one that was a slave before) and makes it its faction's slave (<c>Task_ProcessNewSlave</c>, <b>Observed</b>).</item>
+/// one whose head is shaven already), makes it its faction's slave and shaves its head (<c>Task_ProcessNewSlave</c>, <b>Observed</b>; the head <b>Verified</b>).</item>
 /// <item><b>Capture / Carry / Shout</b> (167, 168, 188): see <c>CaptiveSystem.Capture.cs</c>. The slaves' own work (189, 190) is not a job but the AI's <see cref="AiBehaviour.Work"/>.</item>
 /// </list>
 /// The jobs and the kill timers are not saved (the original keeps the timers in a global map it does not save, <b>Observed</b>); hashed only while any exist.
@@ -703,10 +703,35 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
 
     /// <summary>
     /// The watchers' needs-processing test (<c>FUN_1408ca3d0</c>, <b>Verified</b>) for a live character that is no animal and not carried: one without an owner needs it; one whose owner is no ally
-    /// of the watcher does not; one of an allied owner always does: the original's way out (slave state not 2 or 3, Character slot <c>0x3e0</c> true, <c>FUN_1405a6bb0</c> holds) is never taken as the
-    /// slot is the constant false. Its other test, that no other member of the platoon works the target (<c>FUN_1402690e0</c>), is the callers' <c>Busy</c>.
+    /// of the watcher does not; one of an allied owner does when it is an escaped or ex-slave (state 2, 3), and a slave unless its head is shaven (Character vslot 124 <c>0x3e0</c>,
+    /// <c>CharacterHuman::isHeadShaven</c>) and it looks like a slave (<see cref="LooksLikeASlave"/>). So a slave once processed, shaven and in its kit, is left alone. Its other test, that
+    /// no other member of the platoon works the target (<c>FUN_1402690e0</c>), is the callers' <c>Busy</c>.
     /// </summary>
-    bool NeedsProcessing(CharacterCold watcher, CharacterCold c) => c.SlaveOwner < 0 || Allied(watcher.Faction, c.SlaveOwner);
+    bool NeedsProcessing(CharacterCold watcher, CharacterCold c) =>
+        c.SlaveOwner < 0 || Allied(watcher.Faction, c.SlaveOwner) && (c.SlaveState is 2 or 3 || !c.Shaved || !LooksLikeASlave(watcher, c));
+
+    /// <summary>
+    /// The looks-like-a-slave test with the watcher's faction (<c>FUN_1405a6bb0</c>, <b>Verified</b>, docs/game/ai-tasks.md "Looks like a slave"): an animal passes and a law enforcer or a
+    /// diplomat (NPC class 1, 5) fails; without the faction's <c>allow slaves weapons</c> a weapon in hand or in a weapon section fails it; the armour and legs sections must each hold
+    /// nothing, a slave garment (<c>stigma</c> 6) or one of the faction's <c>slave clothing</c>; then the boots section passes with a locked piece, and empty only with a locked armour
+    /// piece on a shaven head.
+    /// </summary>
+    bool LooksLikeASlave(CharacterCold watcher, CharacterCold c)
+    {
+        if (c.Fighter is { IsAnimal: true }) return true;
+        if (c.NpcClass is FundamentalType.LawEnforcement or FundamentalType.Diplomat) return false;
+        var faction = (uint)watcher.Faction < (uint)data.Factions.Count ? data.Factions[watcher.Faction] : null;
+        if (faction is not { AllowSlavesWeapons: true } && !CharacterFacts.TargetUnarmed(c)) return false;
+
+        string[] clothing = faction is not null && data.Db.Find(faction.Id) is { } record ? [.. record.GetReferences("slave clothing").Select(l => l.TargetStringId)] : [];
+        var armour = c.Inventory?.Items.Find(i => i.Section == "armour");
+        if (!SlaveWear(armour, clothing) || !SlaveWear(c.Inventory?.Items.Find(i => i.Section == "legs"), clothing)) return false;
+        return c.Inventory?.Items.Find(i => i.Section == "boots") is { } boots ? boots.LockedOn : armour is { LockedOn: true } && c.Shaved;
+    }
+
+    /// <summary>An armour or legs piece a slave may wear: none, a slave garment (<c>stigma</c> 6) or one of the watcher's faction's <c>slave clothing</c>.</summary>
+    bool SlaveWear(ItemInstance? item, string[] clothing) =>
+        item is null || data.Db.Find(item.Record)?.GetInt("stigma", 0) == SlaveStigma || clothing.Contains(item.Record);
 
     /// <summary>
     /// The cage a liberator opens (276, <c>BuildingFinder_CagesToLiberate</c> <c>FUN_1408cf140</c>, <b>Observed</b>): a cage of a faction that is neither the worker's nor allied to it,
@@ -1087,7 +1112,7 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
     /// The processing of a new slave once the kneel is over (<c>Task_ProcessNewSlave</c>, <b>Verified</b>): every item of the whole inventory of record type WEAPON, then ARMOUR, ITEM and
     /// CONTAINER goes to the worker (its inventory, else the ground; engine choice for the original's storage), except locked ones and ARMOUR whose <c>stigma</c> is 6 (slave garments); a
     /// backpack goes with its content. Only when the captive's legs slot is empty is it dressed: each of its faction's <c>slave clothing</c> it does not wear already. Event 35, or 37 for
-    /// one that was a slave before, from the worker to it; it becomes the worker's faction's slave unless it has an owner already (it keeps that one), and its one-shot orders and perma-jobs are cleared.
+    /// one whose head is shaven already, from the worker to it, and its head is shaven; it becomes the worker's faction's slave unless it has an owner already (it keeps that one), and its one-shot orders and perma-jobs are cleared.
     /// </summary>
     void Process(World world, int w, CharacterCold wc, int c, CharacterCold cc)
     {
@@ -1112,8 +1137,8 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
             assembly.RefreshEquipment(cc);
         }
         assembly.RefreshEquipment(wc);
-        // Always event 35: the original's captive test (Character slot 124 `0x3e0`, FUN_1405e1f20) is the constant false in every character class, so 37 is never sent from here (FUN_14035aa20, Verified).
-        world.Defer(new Dialogue.DialogueEvent(table.IdOf(w), table.IdOf(c), IntroducingNewSlave) { Tick = world.Tick + 1 });
+        // Event 37 for a captive whose head is shaven already, a slave processed before, else 35 (FUN_14035aa20, Verified: Character vslot 124 isHeadShaven).
+        world.Defer(new Dialogue.DialogueEvent(table.IdOf(w), table.IdOf(c), cc.Shaved ? RecapturedSlave : IntroducingNewSlave) { Tick = world.Tick + 1 });
         // The owner is set only when it had none that resolves (FUN_14032e430 behind FUN_14035aa20): a recaptured slave keeps its owner and its master squad. Meitou's owner is a faction,
         // and the master squad (runtime only) stands for the handle when it is known.
         bool owned = cc.SlaveOwner >= 0 && (cc.SlaveMaster < 0 || world.Squads.Find(cc.SlaveMaster) is not null);
@@ -1121,6 +1146,8 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
         else FixtureRegistry.Enslave(world, cc, wc.Faction, wc.SquadId);
         // Then its orders object is reset: the one-shot orders and the perma-jobs are destroyed (FUN_140507530, FUN_140507280) and job 187 is added toward the owner (a player character's list; the AI's slaves run it as AiSystem.ObeyedRoles).
         ObedientSlave.Reset(world, cc);
+        // Then its head is shaven (CharacterHuman::shaveHead(true) in FUN_14035aa20, Verified); an animal has no head to shave.
+        if (cc.Fighter is not { IsAnimal: true }) cc.Shaved = true;
         world.SystemOf<Dialogue.DialogueSystem>()?.Forgive(world, w, table.IdOf(c));
     }
 
