@@ -64,5 +64,15 @@ public sealed class AssetLocator
 
     public string? Find(string name) => Find(name, out _);
 
+    /// <summary>
+    /// The file a record's path names, by its bare name in resource group <paramref name="group"/> alone (Ogre's <c>resourceExists(group, name)</c>), or null.
+    /// A bare name may be in several groups: an item's <c>Water.png</c> is in Icons, and <c>data/materials/water.png</c> in General.
+    /// </summary>
+    public string? FindInGroup(string name, string group)
+    {
+        string bare = Path.GetFileName(name.Trim().Replace('\\', '/'));
+        return Configured.Contains(bare, group) ? Configured.Find(bare, group) : null;
+    }
+
     public string Relative(string path) => Path.GetRelativePath(install.Root, path);
 }

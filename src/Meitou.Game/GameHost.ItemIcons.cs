@@ -46,7 +46,7 @@ sealed partial class GameHost
         if (scene.Database is not { } db) return null;
         string own = IconSaveDirectory(enhanced);
         ClearOldIcons(own);
-        return new(db, assets.Find, enhanced ? new ItemIconCache(own) : new ItemIconCache(Path.Combine(install.DataDirectory, "icons"), own));
+        return new(db, name => assets.FindInGroup(name, "Icons"), enhanced ? new ItemIconCache(own) : new ItemIconCache(Path.Combine(install.DataDirectory, "icons"), own));
     }
 
     /// <summary>Once a frame: when the <c>icons</c> switch has changed, the interface's icons and the renderer's save folder follow it.</summary>

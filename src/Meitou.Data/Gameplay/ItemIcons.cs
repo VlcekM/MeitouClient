@@ -13,6 +13,7 @@ public readonly record struct ItemIconChoice(ItemIconSource Source, string? File
 /// Where an inventory item's icon comes from (docs/game/ui-screens.md, "Item icons"). The game draws the icon from the item's mesh for a WEAPON or a record with
 /// <c>auto icon image</c> (<see cref="Renders"/>), saving it under <c>data/icons/</c> (<see cref="ItemIconCache"/>); any other record shows the PNG its <c>icon</c> field names
 /// (<see cref="StaticIconOf"/>), else <c>default_icon.png</c>. <see cref="Choose"/> follows that; the picture to draw is described by <see cref="ItemIconStyle"/>.
+/// <paramref name="resolve"/> finds a file by its bare name in the <c>Icons</c> resource group alone, as the game asks (a General <c>water.png</c> is not Water's icon).
 /// </summary>
 public sealed class ItemIcons(GameDatabase database, Func<string, string?> resolve, ItemIconCache cache)
 {
