@@ -354,13 +354,7 @@ public static class ShopFiller
     {
         var makers = list.Manufacturers.Select(m => (Record: db.Find(m.Id), Weight: m.V0 == 0 ? 100 : m.V0)).Where(m => m.Record is not null && m.Weight > 0).ToList();
         if (makers.Count == 0) return null;
-        int roll = rng.NextInt(makers.Sum(m => m.Weight));
-        var maker = makers[^1].Record!;
-        foreach (var m in makers)
-        {
-            if (roll < m.Weight) { maker = m.Record!; break; }
-            roll -= m.Weight;
-        }
+        var maker = PickWeighted(makers, m => m.Weight, ref rng).Record!;   // the list is not empty and every weight is above 0
         var models = maker.GetReferences("weapon models").Where(r => db.Find(r.TargetStringId) is not null).ToList();
         // No model or a model of level 0: the factory substitutes manufacturer 1057 and model 1058 (FUN_140580750, Verified).
         if (models.Count == 0 || Model(models, ref rng) is not { Values.Value0: not 0 } picked)
@@ -371,16 +365,24 @@ public static class ShopFiller
         return (maker, picked.TargetStringId, picked.Values.Value0);
     }
 
-    static GameReference Model(List<GameReference> models, ref RandomStream rng)
+    static GameReference? Model(List<GameReference> models, ref RandomStream rng) =>
+        PickWeighted(models.Where(r => r.Values.Value1 >= 0).ToList(), r => r.Values.Value1 == 0 ? 100 : r.Values.Value1, ref rng);
+
+    /// <summary>
+    /// The factory's weighted choice (<c>FUN_14057fd40</c>, <b>Verified</b>): candidates of weight above 0 (a weight of 0 counts 100); none gives none, one is taken with no draw, else one float(0, total) draw
+    /// against the running sums. Used for the manufacturer (v0) and the model (v1).
+    /// </summary>
+    static T? PickWeighted<T>(List<T> candidates, Func<T, int> weight, ref RandomStream rng)
     {
-        int total = models.Sum(r => r.Values.Value1 == 0 ? 100 : Math.Max(r.Values.Value1, 0));
-        int pick = rng.NextInt(Math.Max(total, 1));
-        foreach (var r in models)
+        var live = candidates.Where(c => weight(c) > 0).ToList();
+        if (live.Count == 0) return default;
+        if (live.Count == 1) return live[0];
+        int roll = rng.NextInt(live.Sum(weight));
+        foreach (var c in live)
         {
-            int w = r.Values.Value1 == 0 ? 100 : Math.Max(r.Values.Value1, 0);
-            if (pick < w) return r;
-            pick -= w;
+            if (roll < weight(c)) return c;
+            roll -= weight(c);
         }
-        return models[^1];
+        return live[^1];
     }
 }
