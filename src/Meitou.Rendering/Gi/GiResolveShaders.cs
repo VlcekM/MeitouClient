@@ -47,14 +47,19 @@ static partial class GiResolveShaders
     }
 
     /// <summary>The scene's position from the scene depth, shared by both passes.</summary>
-    const string Reconstruct = """
+    internal const string Reconstruct = ReconstructUniforms + ReconstructFunctions;
+
+    const string ReconstructUniforms = """
         uniform sampler2D uNearDepth;
         uniform vec2 uNearPlanes;               // near, far of the scene depth
         uniform vec2 uTan;                      // tan(fov/2) * aspect, tan(fov/2)
         uniform vec3 uRight, uUp, uBack;        // the camera's axes in the world
         uniform vec3 uGiEye;
         uniform vec2 uFullSize;                 // the render size
-        """ + DepthConvention.Glsl + """
+        """;
+
+    /// <summary>What <see cref="Reconstruct"/> computes, for a shader that declares those names itself (the lamp shadow trace).</summary>
+    internal const string ReconstructFunctions = DepthConvention.Glsl + """
 
         // The depth along the view axis at a pixel of the render size (0: the sky).
         float depthAt(ivec2 px)

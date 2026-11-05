@@ -5,6 +5,49 @@ static class GiShaders
 {
     static string F(float v) => v.ToString("0.0########", System.Globalization.CultureInfo.InvariantCulture);
 
+    /// <summary>The direction of an octahedral position (<c>giOct</c>); the surface target stores the normal so.</summary>
+    internal const string OctDirection = """
+        vec3 giOctDir(vec2 p)
+        {
+            vec3 d = vec3(p.x, 1.0 - abs(p.x) - abs(p.y), p.y);
+            if (d.y < 0.0) d.xz = (1.0 - abs(d.zx)) * vec2(d.x >= 0.0 ? 1.0 : -1.0, d.z >= 0.0 ? 1.0 : -1.0);
+            return normalize(d);
+        }
+        """;
+
+    /// <summary>A hit record in GLSL (<see cref="GeometryRecord"/>).</summary>
+    internal const string GeometryStruct = """
+        struct Geometry { uvec2 vertices; uvec2 indices; uint stride; uint kind; uint diffuse; uint alphaMap; float alphaThreshold; uint emitter; uint pad1; uint pad2; };
+        """;
+
+    /// <summary>The vertex and index data of a hit, by device address.</summary>
+    internal const string HitBuffers = """
+        layout(buffer_reference, scalar, buffer_reference_align = 4) readonly buffer Position { vec3 v; };
+        layout(buffer_reference, scalar, buffer_reference_align = 4) readonly buffer TexCoord { vec2 v; };
+        layout(buffer_reference, scalar, buffer_reference_align = 4) readonly buffer Triangle { uvec3 v; };
+        uvec2 offsetBy(uvec2 a, uint bytes) { uint lo = a.x + bytes; return uvec2(lo, a.y + (lo < a.x ? 1u : 0u)); }
+        """;
+
+    /// <summary>The cut-out test of a candidate hit. Needs <see cref="HitBuffers"/>, <c>geometries</c> and the bindless table.</summary>
+    internal static readonly string HitCutout = $$"""
+        vec2 hitUv(Geometry g, uvec3 tri, vec2 bary)
+        {
+            // The vertex texture coordinates are at byte 24 (Vertex.Uv).
+            vec2 ua = TexCoord(offsetBy(g.vertices, tri.x * g.stride + {{GpuVertex.UvOffset}}u)).v;
+            vec2 ub = TexCoord(offsetBy(g.vertices, tri.y * g.stride + {{GpuVertex.UvOffset}}u)).v;
+            vec2 uc = TexCoord(offsetBy(g.vertices, tri.z * g.stride + {{GpuVertex.UvOffset}}u)).v;
+            return ua * (1.0 - bary.x - bary.y) + ub * bary.x + uc * bary.y;
+        }
+        // A candidate hit on a cut-out geometry (leaves): kept where its map's alpha reaches the threshold, as the draws cut it.
+        bool solid(int record, int primitive, vec2 bary)
+        {
+            Geometry g = geometries[record];
+            if (g.alphaThreshold <= 0.0 || g.alphaMap == 0u) return true;
+            uvec3 tri = Triangle(offsetBy(g.indices, uint(primitive) * 12u)).v;
+            return textureLod(textures2D[nonuniformEXT(g.alphaMap)], hitUv(g, tri, bary), 2.0).a >= g.alphaThreshold;
+        }
+        """;
+
     /// <summary>
     /// The probe volume's layout and how a surface reads it (docs/render-gi.md "Probes"), shared by every world shader (through
     /// <see cref="AtmosphereShaders.Functions"/>, GLSL 330) and the probe trace (the bounces beyond the first). Needs <c>uGiParams</c>,
@@ -25,12 +68,7 @@ static class GiShaders
             if (d.y < 0.0) p = (1.0 - abs(p.yx)) * vec2(p.x >= 0.0 ? 1.0 : -1.0, p.y >= 0.0 ? 1.0 : -1.0);
             return p;
         }
-        vec3 giOctDir(vec2 p)
-        {
-            vec3 d = vec3(p.x, 1.0 - abs(p.x) - abs(p.y), p.y);
-            if (d.y < 0.0) d.xz = (1.0 - abs(d.zx)) * vec2(d.x >= 0.0 ? 1.0 : -1.0, d.z >= 0.0 ? 1.0 : -1.0);
-            return normalize(d);
-        }
+        {{OctDirection}}
         // A probe's tile: x its toroidal column, y (cascade · N + toroidal row) · layers + layer; inner texels plus a border of one.
         // oct: the direction's octahedral position in 0..1 (giOct · 0.5 + 0.5); invSize: 1 / the atlas's size.
         vec2 giUv(ivec2 tile, vec2 oct, int inner, vec2 invSize)
@@ -164,7 +202,7 @@ static class GiShaders
         {{Meitou.Rendering.Gpu.BindlessTable.Declarations(1)}}
 
         layout(set = 0, binding = 0) uniform accelerationStructureEXT uScene;
-        struct Geometry { uvec2 vertices; uvec2 indices; uint stride; uint kind; uint diffuse; uint alphaMap; float alphaThreshold; uint emitter; uint pad1; uint pad2; };
+        {{GeometryStruct}}
         layout(set = 0, binding = 1, std430) readonly buffer Geometries { Geometry geometries[]; };
         layout(set = 0, binding = 2, std430) writeonly buffer RayResults { vec4 rays[]; };
         layout(set = 0, binding = 3, std140) uniform Params
@@ -200,10 +238,7 @@ static class GiShaders
         // The bounces read the probes without the visibility test: a quarter of the fetches, and the light seen in a bounce is blurred anyway.
         #define GI_NO_VISIBILITY
         {{ProbeSampling}}
-        layout(buffer_reference, scalar, buffer_reference_align = 4) readonly buffer Position { vec3 v; };
-        layout(buffer_reference, scalar, buffer_reference_align = 4) readonly buffer TexCoord { vec2 v; };
-        layout(buffer_reference, scalar, buffer_reference_align = 4) readonly buffer Triangle { uvec3 v; };
-        uvec2 offsetBy(uvec2 a, uint bytes) { uint lo = a.x + bytes; return uvec2(lo, a.y + (lo < a.x ? 1u : 0u)); }
+        {{HitBuffers}}
 
         {{AtmosphereShaders.AmbientFloorFunction}}
         vec4 ambientMap(vec3 world)
@@ -217,22 +252,7 @@ static class GiShaders
             vec4 t = textureLod(uAtmoIrradiance, n, {{F(Meitou.Data.World.KenshiLighting.IrradianceLevel)}});
             return t.rgb * t.a * 4.0;
         }
-        vec2 hitUv(Geometry g, uvec3 tri, vec2 bary)
-        {
-            // The vertex texture coordinates are at byte 24 (Vertex.Uv).
-            vec2 ua = TexCoord(offsetBy(g.vertices, tri.x * g.stride + {{GpuVertex.UvOffset}}u)).v;
-            vec2 ub = TexCoord(offsetBy(g.vertices, tri.y * g.stride + {{GpuVertex.UvOffset}}u)).v;
-            vec2 uc = TexCoord(offsetBy(g.vertices, tri.z * g.stride + {{GpuVertex.UvOffset}}u)).v;
-            return ua * (1.0 - bary.x - bary.y) + ub * bary.x + uc * bary.y;
-        }
-        // A candidate hit on a cut-out geometry (leaves): kept where its map's alpha reaches the threshold, as the draws cut it.
-        bool solid(int record, int primitive, vec2 bary)
-        {
-            Geometry g = geometries[record];
-            if (g.alphaThreshold <= 0.0 || g.alphaMap == 0u) return true;
-            uvec3 tri = Triangle(offsetBy(g.indices, uint(primitive) * 12u)).v;
-            return textureLod(textures2D[nonuniformEXT(g.alphaMap)], hitUv(g, tri, bary), 2.0).a >= g.alphaThreshold;
-        }
+        {{HitCutout}}
         #define TRACE(q) while (rayQueryProceedEXT(q)) { if (solid(rayQueryGetIntersectionInstanceCustomIndexEXT(q, false) + rayQueryGetIntersectionGeometryIndexEXT(q, false), rayQueryGetIntersectionPrimitiveIndexEXT(q, false), rayQueryGetIntersectionBarycentricsEXT(q, false))) rayQueryConfirmIntersectionEXT(q); }
 
         float giLampVisibility(vec3 world, vec3 n, vec3 toLamp, int indoor, uint emitter)
