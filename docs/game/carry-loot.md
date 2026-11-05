@@ -19,8 +19,10 @@ are different: the menu offers Pick Up on a standing own character ([ui-input](u
 `boneWorldRot · q(w .70710677, x .70710677) · q(w .99254614, z .121869296)` (90° about x, ~14° about z); the `carry me` clip plays inside
 it. Bone = `AnimationClass+0x1b0` (`attachRootToMastersBone`, KenshiLib 1ce4a16), set by the attach `FUN_1405ced90`. `O` lerps by
 `t = 2·characterHeight_0to1` from (-1.4,0,1) to (-1.9,-1,2.6) (t<1), then to (-3,-0.4,5); `characterHeight_0to1 = (Height − 80)·0.025`,
-0.5 by default (Appearance+0x18c, `FUN_1405334d0`). Gated by `Character+0x1a9`, `AnimationClass+0x1c0` and vfunc 0x248 = 0 (meaning
-**Unknown**); otherwise the body is just put at the carrier's position.
+0.5 by default (Appearance+0x18c, `FUN_1405334d0`). Gated by `Character+0x1a9`, `AnimationClass+0x1c0` (meaning **Unknown**) and vfunc 0x248
+(`asAnimal`) = 0 (**Verified**: `CharacterAnimal` `FUN_1405e1f50` returns `this`, `Character`/`CharacterHuman` `FUN_1405e5950` 0); otherwise the body is just put at the
+carrier's position. So a carried **animal** gets neither the offset, the twist nor `carry me` here: its ragdoll's pinned carry bone holds it on the shoulder
+([ragdolls](ragdolls.md#bodies-kinematic-or-simulated), issue #307: the human rule stood a carried dog upright above its carrier's head).
 
 Lift sequence/clip/approach, reciprocal partner handles, weapon/ragdoll/state changes and unlink
 must stay ordered. **Verified** carry load is CONSTANTS30, not target's weight/race/inventory;
@@ -41,7 +43,7 @@ is that test for every lift (the rescue and leader rescue passes, kidnap, town d
 The lift rows (68, 213, 225, 240, 246, 170) carry condition `!26` on the carrier itself (**Verified**, `FUN_140599e90`: [state 26](ai-tasks.md)): a carrier staying low, playing dead or in a bed cannot start a lift (`CanCarry` tests `CharacterFacts.CrouchingOrLying`); a crawler (crippled) can.
 ### A carried body's position
 
-**Verified** (`FUN_1405cf130`, the per-frame position sync, slot 28 `0xe0`, the same function for `Character`, `CharacterHuman` and `CharacterAnimal`; `FUN_1407d1440`, `FUN_1407d16f0`): for a carried character (`+0x3d4`) the position `+0x48` is not the carrier's but the ragdoll root body's position when the ragdoll controller is valid and either its whole-ragdoll flag (`+0x59`) is set, or the character is down (vfunc `0x248` non-zero) and its carry flag (`+0x5a`) is set (a carried unconscious body); otherwise the movement position. `FUN_1405d00b0` then pushes `+0x48` into the movement. Meitou (engine choice): a carried body stays at its carrier's place with the `carry me` pose; the body's own simulated root is not followed.
+**Verified** (`FUN_1405cf130`, the per-frame position sync, slot 28 `0xe0`, the same function for `Character`, `CharacterHuman` and `CharacterAnimal`; `FUN_1407d1440`, `FUN_1407d16f0`): for a carried character (`+0x3d4`) the position `+0x48` is not the carrier's but the ragdoll root body's position when the ragdoll controller is valid and either its whole-ragdoll flag (`+0x59`) is set, or the character is an animal (vfunc `0x248` `asAnimal` non-zero) and its carry flag (`+0x5a`) is set (a carried animal); otherwise the movement position. `FUN_1405d00b0` then pushes `+0x48` into the movement. Meitou (engine choice): a carried body stays at its carrier's place with the `carry me` pose; the body's own simulated root is not followed.
 
 ### A carried body's animation
 

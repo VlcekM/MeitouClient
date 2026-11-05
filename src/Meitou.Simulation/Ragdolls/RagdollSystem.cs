@@ -249,7 +249,7 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
             }
             if (wanted != RagdollPart.None && !HasRagdoll(cold)) wanted = RagdollPart.None;
             if (r is null && wanted == RagdollPart.None) continue;
-            float scale = cold is { Fighter.IsAnimal: true, Medical: { } size } ? size.ScaleK : 1;
+            float scale = ScaleOf(cold);
             // A whole body about to fall needs the ground under it and costs a build (TileBudget, StartBudget: past them it starts next tick, its blow and saved pose kept); a frozen
             // saved one needs none, and a get-up, a limb's dangle or a lift never waits.
             bool falls = (wanted & RagdollPart.Whole) != 0 && (wanted & RagdollPart.CarryMode) == 0;
@@ -401,10 +401,37 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
         try
         {
             PoseDerived(scratch, setup, carrier);
-            return CarryPose.Attach(scratch.DerivedPosition[bone] - new Vector3(0, setup.GroundOffset, 0), scratch.DerivedRotation[bone], CarryPose.Height01(cold.Appearance));
+            var at = scratch.DerivedPosition[bone] - new Vector3(0, setup.GroundOffset, 0);
+            if (cold.Appearance is { } body && rigs.For(body) is { Animal: true } animal)
+                return AnimalAttach(cold, body, animal, at, Quaternion.Normalize(scratch.DerivedRotation[bone] * setup.Rig.BindRotationInverse[bone]));
+            return CarryPose.Attach(at, scratch.DerivedRotation[bone], CarryPose.Height01(cold.Appearance));
         }
         finally { setup.Rig.Return(scratch); }
     }
+
+    /// <summary>
+    /// A carried animal's node, placed so that the body of its carry bone sits at <paramref name="at"/> turned by <paramref name="rotation"/>: the carrier's attach bone and its turn
+    /// from the binding pose, the original's pin of that body (docs/game/ragdolls.md "Bodies: kinematic or simulated"); its other bodies hang from it. Null without the body.
+    /// </summary>
+    CarryAttach? AnimalAttach(CharacterCold cold, CharacterAppearance look, CharacterPoseSetup setup, Vector3 at, Quaternion rotation)
+    {
+        float scale = ScaleOf(cold);
+        if (DefinitionOf(look, setup.Rig, scale) is not { } definition || CarryBoneOf(look, setup.Rig) is not (>= 0 and var bone)) return null;
+        if (definition.BodyOfBone[bone] is not (>= 0 and var b)) return null;
+        var scratch = setup.Rig.Rent();
+        try
+        {
+            PoseDerived(scratch, setup, cold);
+            var boneInModel = new RigidTransform(scratch.DerivedPosition[bone] * scale, scratch.DerivedRotation[bone]);
+            var body = definition.Bodies[b].BoneInBody.Inverse().Then(boneInModel);
+            var turn = Quaternion.Normalize(rotation * Quaternion.Inverse(body.Rotation));
+            return new CarryAttach(at - Vector3.Transform(body.Position, turn), turn);
+        }
+        finally { setup.Rig.Return(scratch); }
+    }
+
+    /// <summary>The ragdoll's size: an animal's age-lerped size, 1 for a person.</summary>
+    static float ScaleOf(CharacterCold cold) => cold is { Fighter.IsAnimal: true, Medical: { } size } ? size.ScaleK : 1;
 
     /// <summary>Poses <paramref name="scratch"/> as the character's animation and its fixed posture layers do now (model space).</summary>
     void PoseDerived(PoseScratch scratch, CharacterPoseSetup setup, CharacterCold cold)
