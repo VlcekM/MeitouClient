@@ -301,7 +301,7 @@ sealed partial class PlayerInterface
     public IReadOnlyList<CharacterId> ControlSquad() => ActiveSquadMembers();
 
     /// <summary>The characters an order would go to: the world's selection, else what the last select command asked for.</summary>
-    IReadOnlyList<CharacterId> ControlOrderers()
+    internal IReadOnlyList<CharacterId> ControlOrderers()
     {
         if (controlSelectTick == session.World.Tick) return controlSelectIssued;   // the world has not run a tick since the select: its selection is still the old one
         return session.World.Player.Selection.ToArray();

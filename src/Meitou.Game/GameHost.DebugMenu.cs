@@ -175,7 +175,7 @@ sealed partial class GameHost
     CharacterId[] DebugTargets()
     {
         var player = session.World.Player;
-        var selected = player.Selection.ToArray();
+        var selected = this.player.ControlOrderers().ToArray();   // includes a select issued this tick (--setup / --exec run commands in one frame)
         return selected.Length > 0 ? selected : player.Inspected.IsNone ? [] : [player.Inspected];
     }
 
@@ -197,7 +197,7 @@ sealed partial class GameHost
         debugFailed = false;
         var world = session.World;
         long tick = world.Tick;
-        var selected = world.Player.Selection.ToArray();
+        var selected = player.ControlOrderers().ToArray();
         var targets = DebugTargets();
         var here = at ?? session.Camera.Current.Target;
         if ((int)row >= DebugLabels.Length) return ModDebugApply((int)row - DebugLabels.Length, field, selected, here, tick);
@@ -257,7 +257,7 @@ sealed partial class GameHost
     string DebugGive(string name, int quantity, int quality)
     {
         debugFailed = false;
-        var selected = session.World.Player.Selection.ToArray();
+        var selected = player.ControlOrderers().ToArray();
         if (selected.Length == 0) return DebugFail("select a character first");
         quantity = Math.Clamp(quantity, 1, 1000);
         quality = Math.Clamp(quality, 0, 100);

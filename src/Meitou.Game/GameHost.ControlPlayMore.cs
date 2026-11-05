@@ -37,7 +37,7 @@ sealed partial class GameHost
             who = [target];
             return true;
         }
-        who = session.World.Player.Selection.ToArray();
+        who = player.ControlOrderers().ToArray();
         if (who.Length == 0) { con.Error($"{verb}: select characters first (or pass --id <c:slot.gen>)"); return false; }
         return true;
     }
