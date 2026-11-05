@@ -9,7 +9,7 @@ namespace Meitou.Launcher;
 public sealed partial class MainWindow
 {
     // Options that pick the game's start themselves; the game refuses --load beside the others.
-    static readonly string[] StartOptions = ["--load", "--new-game", "--no-population", "--duel", "--sandbox", "--battle", "--terrain-sandbox"];
+    static readonly string[] StartOptions = ["--load", "--continue", "--new-game", "--no-population", "--duel", "--sandbox", "--battle", "--terrain-sandbox"];
 
     async void Continue_Click(object? sender, RoutedEventArgs e) => await StartGame(continueSave: true);
 

@@ -275,7 +275,7 @@ when the window is activated and when the game exits); Play beside it reads **Ma
 the same version with `--load <folder>` (game 0.10.0 and later) for the
 newest slot From save lists (newest `quick.save` over the three roots), only when its CAMERA `mods` list holds the enabled mods, order
 ignored, names compared case-insensitively. Otherwise it starts nothing and the status says why: other mods (which are not enabled,
-which are not in the save), no mod list, an unreadable save, or Launch arguments that already pick a start (`--load`, `--new-game`,
+which are not in the save), no mod list, an unreadable save, or Launch arguments that already pick a start (`--load`, `--continue`, `--new-game`,
 `--no-population`, `--duel`, `--sandbox`, `--battle`, `--terrain-sandbox`; the game refuses `--load` beside the others).
 
 ## News
