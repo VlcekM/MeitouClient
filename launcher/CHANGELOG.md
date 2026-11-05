@@ -2,6 +2,15 @@
 
 Released with tags `launcher-v<version>` by `.github/workflows/launcher-release.yml`; each release needs its `## v<version>` section.
 
+## v1.6.0
+
+- **Continue** on the Play button: starts the newest save straight away, with its name under the button. It only starts when the
+  save's mods are the ones you have enabled; otherwise the status says which mods differ. Play beside it reads **Main menu** over
+  the version it starts.
+- **Render scale modes** on the Graphics page, as in the game: Ultra performance to DLAA from a drop-down, or Custom with the
+  slider. The slider always shows the chosen mode's value and moves only under Custom. Ultra quality (0.83) is a mode now.
+- The default and High presets render at Quality (0.67) scale.
+
 ## v1.5.1
 
 - A mod that ships both a Meitou code mod (`meitou.json`) and an RE_Kenshi plugin no longer says its DLLs are ignored: its row
