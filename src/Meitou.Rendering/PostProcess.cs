@@ -563,6 +563,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
             Allocate(w, h);
         if (Unallocated) return;
         EnsureGi();
+        EnsureAoSize();
         Collect();
         stamps = freeStamps.Count > 0 ? freeStamps.Pop() : new StampSet();
         stamps.Count = 0;
@@ -774,7 +775,11 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         if (shaftsPending || fogPending) ApplyLayers(false);   // a caller that drew the layers without ApplySsao: the occlusion stays the composite's
 
         bool ao = needDepth;
-        if (ao && !aoApplied) RunSsao();
+        if (ao && !aoApplied)
+        {
+            if (GtaoOn) RunGtao();
+            else RunSsao();
+        }
         if (ao && !aoApplied) Stamp("ssao");
         // The upscaler: the scene at the render size becomes the display-size picture the rest of the chain reads.
         postColour = sceneColour!;
@@ -971,6 +976,11 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     public void ApplySsao()
     {
         MarkScene();
+        if (GtaoOn)
+        {
+            ApplyGtao();
+            return;
+        }
         if (MergeLayers)
         {
             ApplyLayers(Options.Ssao && haveScene && sceneColour is not null && aoA is not null);
@@ -1644,6 +1654,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         DisposeLateParticles();
         DisposeMerged();
         DisposeBloom();
+        DisposeGtao();
         Hiz?.Dispose();
         foreach (var p in new FullscreenProgram[] { ssao, ssaoMask, blur, luminancePass, adaptPass, compositePass, fxaaPass, hazePass, velocityPass, cloudMotionPass, taaPass, fogPass, particleDepthPass, particleSoftDepthPass, particleCompositePass, particleCoveragePass }) p.P.Dispose();
         smaaPasses.Dispose();
