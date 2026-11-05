@@ -2850,3 +2850,14 @@ msgstr "Vulkan（MoltenVK）"
 msgid "How to get Kenshi on this Mac"
 msgstr "如何在这台 Mac 上获取 Kenshi"
 
+
+# ---- the status lines the launcher writes while it reads and moves the versions ----
+
+msgid "Wait for the download to finish first."
+msgstr "请先等下载完成。"
+
+msgid "Moving installed versions…"
+msgstr "正在移动已安装的版本…"
+
+msgid "Choose a full path for the install folder."
+msgstr "请给安装文件夹选一个完整的路径。"
