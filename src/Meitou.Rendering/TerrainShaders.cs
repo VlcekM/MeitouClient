@@ -356,15 +356,25 @@ static partial class TerrainShaders
     /// plain patch's edge), moved by the ground's height, fading out from 60% of <c>uDisplaceEnd</c> to it. Its outputs are the patch
     /// vertex stage's, so the terrain's fragment stage is unchanged.
     /// </summary>
-    public const string PatchEvaluation = "#version 330 core\n" + HeightFunctions + ReliefFunctions + """
+    public const string PatchEvaluation = "#version 330 core\n" + HeightFunctions + ReliefFunctions + TrailFunctions + """
 
         layout(triangles, fractional_odd_spacing, ccw) in;
         layout(location = 0) in vec3 teWorld[32];   // gl_MaxPatchVertices, written out: InterfaceLocations sizes every array it reads
         uniform mat4 uViewProjection;
+        uniform float uTrailMesh;      // 1: the mesh carries the trails (displaced with no parallax to march them); the prepass runs this stage too
         out vec3 vWorld;
         out vec3 vNormal;
         out vec2 vCliffBlend;
         invariant gl_Position;
+
+        // The marks at xz, averaged over the mesh's spacing there: what it cannot carry is left out rather than aliased into spikes.
+        float trailMesh(vec2 xz, float segment)
+        {
+            float s = 0.5 * segment;
+            float sum = trailHeightAt(xz + vec2(s, s)) + trailHeightAt(xz + vec2(-s, s)) + trailHeightAt(xz + vec2(s, -s)) + trailHeightAt(xz - vec2(s, s));
+            return 0.25 * sum * trailEdge(xz);
+        }
+
         void main()
         {
             vec3 p = gl_TessCoord.x * teWorld[0] + gl_TessCoord.y * teWorld[1] + gl_TessCoord.z * teWorld[2];
@@ -381,10 +391,32 @@ static partial class TerrainShaders
                 vec3 n;
                 reliefMove(p, true, segment, ground, cliff, n);
                 p += (vec3(0.0, ground, 0.0) + n * cliff) * uDisplace * fade;
+                if (uTrailMesh > 0.0) p.y += trailMesh(vNormal.xz, segment) * fade;
             }
             vWorld = p;
             vCliffBlend = vec2(0.5);
             gl_Position = uViewProjection * vec4(p, 1.0);
+        }
+        """;
+
+    /// <summary>
+    /// The ground trails' read (<see cref="TerrainTrailRenderer"/>, docs/render-terrain.md "Ground trails"), for the evaluation stage and the colour
+    /// programs built with <c>TERRAIN_TRAILS</c>: a height in a world-anchored toroidal window round the eye.
+    /// </summary>
+    const string TrailFunctions = """
+
+        uniform sampler2D uTrails;     // the marks' height: 0 untouched, -1 pressed in full, above 0 a rim; texel = world mod side
+        uniform vec4 uTrailWindow;     // the window's centre x, z, half its side, 1 / its side
+        uniform float uTrailDepth;     // a full mark's depth in world units
+
+        // The marks' height at xz in world units (the repeat sampler wraps it).
+        float trailHeightAt(vec2 xz) { return textureLod(uTrails, xz * uTrailWindow.w, 0.0).r * uTrailDepth; }
+
+        // 1 inside the window, fading to 0 at its edge: the strips the window is about to clear are never shown.
+        float trailEdge(vec2 xz)
+        {
+            vec2 d = abs(xz - uTrailWindow.xy);
+            return 1.0 - smoothstep(0.9 * uTrailWindow.z, uTrailWindow.z, max(d.x, d.y));
         }
         """;
 
@@ -610,7 +642,8 @@ static partial class TerrainShaders
 
         """;
 
-    public static readonly string Fragment = "#version 330 core\n#extension GL_ARB_derivative_control : require\n" + VariantDefaults + HeightFunctions + ReliefDepth + AtmosphereShaders.Functions + """
+    public static readonly string Fragment = "#version 330 core\n#extension GL_ARB_derivative_control : require\n" + VariantDefaults + HeightFunctions + ReliefDepth
+        + "\n#ifdef TERRAIN_TRAILS\n" + TrailFunctions + "\n#endif\n" + AtmosphereShaders.Functions + """
 
         in vec3 vWorld;
         in vec3 vNormal;
@@ -697,6 +730,20 @@ static partial class TerrainShaders
             float sideC = uBakeOrigin[kc].z * uBakeOrigin[kc].w;
             return mix(clamp(x - textureLod(uBakeNormal, vec3(xz / sideC, float(kc)), 0.0).a + 0.5, 0.0, 1.0), x, whole);
         }
+
+        #ifdef TERRAIN_TRAILS
+        float trailShown = 0.0;     // how much the marks show at this pixel (the window's edge, steep faces): set at the top of main
+        float trailSpan = 0.0;      // the ground march's depth in world units before its distance fade; 0: the march running is not the ground's
+        vec2 trailPoint;            // where the marks are read: the material's point, moved by the march
+
+        // The cache's height with the marks in it, for both marches over it (the macro below takes the calls that follow).
+        float trailedBake(int k, int kc, float whole, vec2 xz)
+        {
+            float x = bakedHeight(k, kc, whole, xz);
+            return trailShown > 0.0 ? clamp(x + trailShown * trailHeightAt(xz) / BakeSpan, 0.0, 1.0) : x;
+        }
+        #define bakedHeight trailedBake
+        #endif
 
         vec4 P(int biome, int k) { return texelFetch(uParams, ivec2(k, biome), 0); }
 
@@ -809,7 +856,13 @@ static partial class TerrainShaders
                 }
                 h += l.w * x;
             }
-            return h / r.total;
+            h /= r.total;
+            #ifdef TERRAIN_TRAILS
+            // The marks in the ground's march, whole also where the ground is displaced (the mesh leaves them to the march); both its moves are in the
+            // unscaled coordinate (world / 5000). In the span's terms, so they fade with the distance as the relief does.
+            if (trailSpan > 0.0 && trailShown > 0.0) h = clamp(h + trailShown * trailHeightAt((r.base.p + o) * 5000.0) / trailSpan, 0.0, 1.0);
+            #endif
+            return h;
         }
 
         // The relief march (GroundRelief, docs/render-terrain.md): the offset along the view ray to where it meets the height (viewSpan: the ray's move
@@ -956,7 +1009,13 @@ static partial class TerrainShaders
                 // unscaled coordinate (uv).
                 float depth = uParallax * g.ground.total / g.share * strength / 5000.0;
                 vec2 o;
+                #ifdef TERRAIN_TRAILS
+                trailSpan = uParallax * g.ground.total / g.share;
+                #endif
                 shade = reliefMarch(g.ground, o, -v.xz / max(v.y, 0.25) * depth, sun.xz / max(sun.y, 0.15) * depth, sun.y > 0.0, strength, true);
+                #ifdef TERRAIN_TRAILS
+                trailSpan = 0.0;
+                #endif
                 res.ground = o;
             }
             if (g.cliffBiome >= 0)
@@ -1104,6 +1163,10 @@ static partial class TerrainShaders
             // Map features clamp the slope at 1, so overhangs (normal pointing down) keep the cliff layer.
             float slope = uFeature ? min(1.0, 1.0 - n.y) : 1.0 - n.y;
             vec2 world01 = (texWorld.xz + uHalfWorld) / (2.0 * uHalfWorld);
+            #ifdef TERRAIN_TRAILS
+            trailShown = trailEdge(texWorld.xz) * smoothstep(0.55, 0.7, n.y);
+            trailPoint = texWorld.xz;
+            #endif
 
             // How much of the textured shading applies: before the far distance, and inside the overlay window once the
             // maps are loaded (the window follows the eye, so its edge lies beyond the material distance).
@@ -1195,6 +1258,9 @@ static partial class TerrainShaders
                         }
                     }
                     #endif
+                    #ifdef TERRAIN_TRAILS
+                    trailPoint = at;
+                    #endif
                     float side = uBakeOrigin[k].z * uBakeOrigin[k].w;
                     vec3 c = vec3(at / side, float(k));
                     vec4 al = textureGrad(uBakeAlbedo, c, texDx.xz / side, texDy.xz / side), nb = textureGrad(uBakeNormal, c, texDx.xz / side, texDy.xz / side);
@@ -1265,6 +1331,9 @@ static partial class TerrainShaders
                         relief = pixelRelief(g, n, distance);
                     }
                     #endif
+                    #ifdef TERRAIN_TRAILS
+                    trailPoint += relief.ground * 5000.0;
+                    #endif
                     if (single >= 0)
                     {
                         // A map feature has one biome for its whole surface (the game builds its material for the biome at its origin).
@@ -1318,6 +1387,19 @@ static partial class TerrainShaders
                 albedo = mix(vec4(far, 0.2), albedo, nearWeight);
                 absorbance = mix(0.5, absorbance, nearWeight);
             }
+
+            #ifdef TERRAIN_TRAILS
+            // The ground trails (docs/render-terrain.md "Ground trails"): the marks' slopes on the shading normal, over the pixel's footprint (at least
+            // a texel and a bit) so fine marks do not shimmer, and pressed ground a little darker, which is what shows of them from afar.
+            if (trailShown > 0.0)
+            {
+                float e = clamp(max(length(texDx.xz), length(texDy.xz)), 0.35, 2.0);
+                float hx = trailHeightAt(trailPoint + vec2(e, 0.0)) - trailHeightAt(trailPoint - vec2(e, 0.0));
+                float hz = trailHeightAt(trailPoint + vec2(0.0, e)) - trailHeightAt(trailPoint - vec2(0.0, e));
+                shadingNormal = normalize(shadingNormal - vec3(hx, 0.0, hz) * 0.5 / e * trailShown);
+                albedo.rgb *= 1.0 - 0.15 * trailShown * clamp(-trailHeightAt(trailPoint) / uTrailDepth, 0.0, 1.0);
+            }
+            #endif
 
             // Blood on the ground (docs/game/blood-decals.md): the cell's decal texture over the albedo, the gloss kept (the game's TerrainBlood pass into the G-buffer).
             if (uBloodCount > 0)
@@ -1483,6 +1565,10 @@ static partial class TerrainShaders
             int bakeLevels;
             vec4 bakeOrigin[4];
             float bakeReach;
+            uint trails;
+            float trailDepth;
+            float trailMesh;
+            vec4 trailWindow;
         } terrain;
 
         """;
@@ -1523,6 +1609,7 @@ static partial class TerrainShaders
         ["uFieldTiles"] = "utextures2D[terrain.fieldTiles]", ["uFieldOrigin"] = "terrain.fieldOrigin", ["uFieldTile"] = "terrain.fieldTile",
         ["uFieldColumns"] = "terrain.fieldColumns", ["uFieldCount"] = "terrain.fieldCount", ["uMaxDepth"] = "terrain.maxDepth", ["uTargetSlope"] = "terrain.targetSlope", ["uScaleFollow"] = "terrain.scaleFollow", ["uCliffScale"] = "terrain.cliffScale", ["uRefine"] = "terrain.refine", ["uPixelScale"] = "terrain.pixelScale", ["uBroadCut"] = "terrain.broadCut", ["uReliefQuality"] = "terrain.reliefQuality",
         ["uBakeAlbedo"] = "textures2DArray[terrain.bakeAlbedo]", ["uBakeNormal"] = "textures2DArray[terrain.bakeNormal]", ["uBakeLevels"] = "terrain.bakeLevels", ["uBakeOrigin"] = "terrain.bakeOrigin", ["uBakeReach"] = "terrain.bakeReach",
+        ["uTrails"] = "textures2D[terrain.trails]", ["uTrailDepth"] = "terrain.trailDepth", ["uTrailMesh"] = "terrain.trailMesh", ["uTrailWindow"] = "terrain.trailWindow",
     };
 
     const string DerivativeControl = "#extension GL_ARB_derivative_control : require\n";
@@ -1610,10 +1697,16 @@ static partial class TerrainShaders
     public static string PatchVertexTessNative() => Native(PatchVertexTess);
     public static string PatchControlNative() => Native(PatchControl);
     public static string PatchEvaluationNative() => Native(PatchEvaluation);
-    public static string FragmentNative(bool interiorCut = false, bool march = true, bool? normalMaps = null, int? reliefQuality = null) =>
-        Gi.GiResolveShaders.WithAlbedo(Variant(Native(Baked(interiorCut ? InteriorMaskRenderer.WithCut(Marched(Fragment, march)) : Marched(Fragment, march))), normalMaps, reliefQuality));
+    public static string FragmentNative(bool interiorCut = false, bool march = true, bool? normalMaps = null, int? reliefQuality = null, bool trails = false) =>
+        Gi.GiResolveShaders.WithAlbedo(Variant(Native(Trailed(Baked(interiorCut ? InteriorMaskRenderer.WithCut(Marched(Fragment, march)) : Marched(Fragment, march)), trails)), normalMaps, reliefQuality));
+
+    /// <summary>The patches' colour program with the ground trails (<see cref="TerrainTrails"/>); without the switch none of their code is in the program.</summary>
+    public static string FragmentTrails(bool interiorCut, bool march, bool normalMaps, int reliefQuality) =>
+        FragmentNative(interiorCut, march, normalMaps, reliefQuality, trails: true);
 
     static string Baked(string fragment) => fragment.Insert(fragment.IndexOf('\n') + 1, "#define TERRAIN_BAKED\n");
+
+    static string Trailed(string fragment, bool trails) => trails ? fragment.Insert(fragment.IndexOf('\n') + 1, "#define TERRAIN_TRAILS\n") : fragment;
 
     /// <summary>The material cache's bake (TerrainRenderer.MaterialCache): a triangle over the level's image.</summary>
     public static string MaterialBakeVertexNative() => Native("""
@@ -1738,7 +1831,7 @@ static partial class TerrainShaders
 
 /// <summary>The C# side of <see cref="TerrainShaders.ConstantsBlock"/> (std140; offsets checked against the reflection by a test). GLSL bools
 /// are 32-bit (0 / 1).</summary>
-[System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Explicit, Size = 960)]
+[System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Explicit, Size = 976)]
 struct TerrainConstants
 {
     [System.Runtime.InteropServices.FieldOffset(0)] public System.Numerics.Vector4 CoarseRect;
@@ -1817,6 +1910,10 @@ struct TerrainConstants
     [System.Runtime.InteropServices.FieldOffset(876)] public int BakeLevels;
     [System.Runtime.InteropServices.FieldOffset(880)] public BakeOrigins BakeOrigin;
     [System.Runtime.InteropServices.FieldOffset(944)] public float BakeReach;
+    [System.Runtime.InteropServices.FieldOffset(948)] public uint Trails;
+    [System.Runtime.InteropServices.FieldOffset(952)] public float TrailDepth;
+    [System.Runtime.InteropServices.FieldOffset(956)] public float TrailMesh;
+    [System.Runtime.InteropServices.FieldOffset(960)] public System.Numerics.Vector4 TrailWindow;
 }
 
 /// <summary>The material cache's levels for <see cref="TerrainConstants.BakeOrigin"/> (std140 <c>vec4[4]</c>): x, z of the first texel's corner, the texel, the side (0: not valid).</summary>

@@ -37,7 +37,7 @@ sealed partial class SettingsMenu
         new("Draw distances", "Draw distances", [WorldFrame.ObjectDistanceSlider, "Landmark distance (Meitou)", "Distant towns (zones)", "Object LOD distance x",
             "Terrain detail: error px (less = finer)"]),
         new("Terrain relief", null, ["Ground parallax", "Ground parallax distance (m)", "Ground displacement (tessellation)", "Ground displacement distance (m)",
-            "Ground relief depth (cm, typical ground)", WorldFrame.GroundReliefQualitySlider, "Rock smoothing (tessellation)", "Terrain outline refinement (tessellation)"],
+            "Ground relief depth (cm, typical ground)", WorldFrame.GroundReliefQualitySlider, "Rock smoothing (tessellation)", "Terrain outline refinement (tessellation)", "Ground trails"],
             "Terrain relief", "Depth on the ground and smoother rocks and hills, from tessellation and parallax."),
         new("Foliage ranges", "Foliage ranges", ["Foliage draw distance x", "Foliage LOD distance x (lod Meitou)", "Large foliage range (F6 Meitou)",
             "Medium foliage range", "Small foliage range", "Grass draw distance x", WorldFrame.GrassDensitySlider, "Foliage levels"]),

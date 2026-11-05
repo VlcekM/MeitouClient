@@ -361,6 +361,7 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
         player.RegionAt = (x, z) => gpu.Weather?.World.RegionAt(x, z).Def is { } def ? (def.StringId, def.Name) : null;
         player.Markers = gpu.Markers ??= MarkerRenderer.Create(context, assets.Find);
         SetUpBlood(context);
+        trailContext = context;
         gpu.HoverOutline ??= new HoverOutlineRenderer(context);
         gpu.NavmeshOverlay ??= new NavmeshOverlayRenderer(context);
         navOverlayRenderer = gpu.NavmeshOverlay;
@@ -592,6 +593,7 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
         }
         Meitou.Rendering.StageClock.Lap(Meitou.Rendering.StageClock.Host);   // the profiler: the host's frame so far, then the blood marks apart from the terrain's update
         UpdateBlood();
+        UpdateTrails();
         Meitou.Rendering.StageClock.Lap(Meitou.Rendering.StageClock.Blood, "blood marks");
         birdAspect = width / (float)Math.Max(height, 1);
         UpdateBirds();

@@ -91,6 +91,7 @@ sealed partial class SettingsMenu
         "Blood on surfaces" => "Splash blood on walls, buildings and rocks as well as the ground; pools stay on floors.",
         "Skin" => "Let sunlight soften and warm under bare skin instead of ending at a hard edge.",
         "Ground parallax" => "Give the ground texture depth.",
+        "Ground trails" => "Leave footprints and drag marks in sand, mud and snow near the camera. Wind and rain wear them away.",
         "Ground displacement (tessellation)" => "Raise the nearby ground into real bumps and ridges that cast shadows.",
         "Rock smoothing (tessellation)" => "Round off the flat facets of rocks and cliffs up close.",
         "Terrain outline refinement (tessellation)" => "Smooth the outline of hills and crests against the sky.",
