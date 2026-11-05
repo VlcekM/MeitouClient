@@ -93,7 +93,9 @@ public sealed class PursuitSystem(CombatSystem combat) : ITickSystem
         // In its footwork with a clear line to the target, the fight steering moves it (docs/game/combat.md "Fight steering"): its state sets the band, no paths.
         if (Steer(world, i, ref n, cold, st, t, holding)) return;
         float stand = CombatTuning.StandGap(st.Reach, cold.Fighter?.WeaponLength ?? 0, cold.CombatRunning);
-        if (st.Down || st.AttackTech >= 0 || st.ReactTech >= 0 || world.Tick < st.StunUntil || shooting || !st.Ranged && !behind && aimGap <= stand && CombatTuning.Gap(n.Position, aim, cold, tc) <= endReach || holding)
+        bool inReach = !st.Ranged && !behind && aimGap <= stand && CombatTuning.Gap(n.Position, aim, cold, tc) <= endReach
+            && !CombatSystem.OtherFloor(world, i, n.Position, t, next[t].Position);   // a target on the floor below is walked to by the stairs (#292)
+        if (st.Down || st.AttackTech >= 0 || st.ReactTech >= 0 || world.Tick < st.StunUntil || shooting || inReach || holding)
         {
             // In reach, mid-swing or staggered (the hit reaction carries it), or holding position: stand and fight.
             if ((n.Flags & Path) != 0)

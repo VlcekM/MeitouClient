@@ -465,6 +465,8 @@ public sealed partial class CombatSystem
         if (!s.Engaged) return;   // left out by its target: it circles (PursuitSystem)
         // No one but enemies within its body room (x1.2 in state 5): the ask fails (FUN_14060c670, FUN_1402b3180).
         if (NearestFriend(world, i, in s, cold) < BodyRoom(cold) * (s.CircleState ? CircleRoomFactor : 1)) return;
+        if (OtherFloor(world, i, prev[i].Position, t, prev[t].Position)) return;   // no swing through a floor: it walks round by the stairs (PursuitSystem)
+
         var tc = table.Cold(t)!;
         var medical = cold.Medical!;
         float length = fighter.WeaponLength;
