@@ -594,6 +594,7 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
         Meitou.Rendering.StageClock.Lap(Meitou.Rendering.StageClock.Host);   // the profiler: the host's frame so far, then the blood marks apart from the terrain's update
         UpdateBlood();
         UpdateTrails();
+        UpdateWakes();
         Meitou.Rendering.StageClock.Lap(Meitou.Rendering.StageClock.Blood, "blood marks");
         birdAspect = width / (float)Math.Max(height, 1);
         UpdateBirds();

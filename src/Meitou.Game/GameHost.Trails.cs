@@ -107,8 +107,11 @@ sealed partial class GameHost
         if (moved > stepped * LiftedShare) lifted = true;
         if (!lifted || moved >= stepped * PlantedShare) return;
         lifted = false;
-        if (gpu.Characters!.BonePosition(key, toeBone) is { } toe && new Vector2(toe.X - ankle.X, toe.Z - ankle.Z) is { } foot && foot.LengthSquared() > 0.04f)
-            along = Vector2.Normalize(foot);
+        if (gpu.Characters!.BonePosition(key, toeBone) is { } toe)
+        {
+            var foot = new Vector2(toe.X - ankle.X, toe.Z - ankle.Z);
+            if (foot.LengthSquared() > 0.04f) along = Vector2.Normalize(foot);
+        }
         var sole = new Vector2(ankle.X, ankle.Z) + along * (SoleLength * 0.3f);
         Press(trails, ground, ankle, new TrailStamp(sole, along, SoleLength, SoleLength, 1, TrailKind.Foot));
     }
@@ -145,5 +148,42 @@ sealed partial class GameHost
             _ => 0,
         };
         if (soft > 0) trails.Stamp(stamp with { Strength = stamp.Strength * soft });
+    }
+
+    /// <summary>How far from the eye a character makes a wake, and the slowest it does so at (units/s).</summary>
+    const float WakeReach = 800, WakeMinSpeed = 1;
+
+    readonly Vector4[] wakeRows = new Vector4[WaterRenderer.MaxWakes];
+    readonly float[] wakeDistances = new float[WaterRenderer.MaxWakes];
+
+    /// <summary>Once a frame: the characters moving in the water nearest the eye, for the <c>contactfoam</c> switch's wakes (docs/render-water.md "Contact foam").</summary>
+    void UpdateWakes()
+    {
+        if (!WaterContact.Enabled || gpu.Water is not { } water) return;
+        IndexPrevious();
+        var eye = camera.Eye;
+        float alpha = session.SimulationAlpha, tick = session.World.TickSeconds;
+        int n = 0;
+        foreach (var c in session.CurrentSnapshot.Characters)
+        {
+            float distance = new Vector2(c.Position.X - eye.X, c.Position.Z - eye.Z).Length();
+            if (distance > WakeReach || c.Position.Y >= WorldWater.Height || c.Appearance is null || !c.CarriedBy.IsNone) continue;
+            if (!previousById.TryGetValue(c.Id, out var before)) continue;
+            var velocity = new Vector2(c.Position.X - before.Position.X, c.Position.Z - before.Position.Z) / tick;
+            if (velocity.LengthSquared() < WakeMinSpeed * WakeMinSpeed) continue;
+            var at = Vector3.Lerp(before.Position, c.Position, alpha);
+            n = AddWake(n, distance, new Vector4(at.X, at.Z, velocity.X, velocity.Y));
+        }
+        water.SetWakes(wakeRows.AsSpan(0, n));
+    }
+
+    /// <summary>A wake into the list kept nearest first; beyond its length the farthest goes. The new length.</summary>
+    int AddWake(int n, float distance, Vector4 row)
+    {
+        if (n == wakeRows.Length && distance >= wakeDistances[n - 1]) return n;
+        int at = Math.Min(n, wakeRows.Length - 1);
+        for (; at > 0 && wakeDistances[at - 1] > distance; at--) (wakeDistances[at], wakeRows[at]) = (wakeDistances[at - 1], wakeRows[at - 1]);
+        (wakeDistances[at], wakeRows[at]) = (distance, row);
+        return Math.Min(n + 1, wakeRows.Length);
     }
 }
