@@ -2857,3 +2857,50 @@ msgstr "正在移动已安装的版本…"
 
 msgid "Choose a full path for the install folder."
 msgstr "请为安装目录选择完整路径。"
+
+# ---- render scale modes, and launcher status lines that had no entry ----
+
+msgid "Ultra performance"
+msgstr "超级性能"
+
+msgid "Performance"
+msgstr "性能"
+
+msgid "Normal"
+msgstr "标准"
+
+msgid "Ultra quality"
+msgstr "超高画质"
+
+msgid "Custom value"
+msgstr "自定义值"
+
+msgid "No code mods in the list."
+msgstr "列表里没有代码模组。"
+
+msgid "No saves found."
+msgstr "没有找到存档。"
+
+msgid "Set the Kenshi folder first (Settings)."
+msgstr "请先在设置里指定 Kenshi 文件夹。"
+
+msgid "Install a version first (Versions)."
+msgstr "请先安装一个版本（版本页）。"
+
+msgid "Type a name for the preset."
+msgstr "请为预设输入名称。"
+
+msgid "Meitou is already running: close it before starting it again."
+msgstr "Meitou 已在运行：请先关闭它，再重新启动。"
+
+msgid "The launch arguments have --benchmark-baseline: the game ignores the graphics sliders while it is set."
+msgstr "启动参数中包含 --benchmark-baseline：只要它生效，游戏就会忽略画面滑块。"
+
+msgid "The Vulkan loader is already installed. Select Vulkan to use it."
+msgstr "Vulkan 加载器已安装。选择 Vulkan 即可使用。"
+
+msgid "The roadmap lists no systems."
+msgstr "路线图里没有列出任何系统。"
+
+msgid "Thanks: your report is on its way to the roadmap."
+msgstr "谢谢：你的报告正在发往路线图。"
