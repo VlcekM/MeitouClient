@@ -146,6 +146,13 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
         return MathF.Sqrt(dx * dx + dz * dz);
     }
 
+    /// <summary>
+    /// Whether <paramref name="a"/> is within <paramref name="reach"/> of <paramref name="b"/> (<see cref="Gap"/>) on its floor: no more than <see cref="MovementSystem.FloorSlack"/> apart in height,
+    /// so a body on the floor below is walked down to, not reached through the floor (#292). Outdoors at this reach the height only parts a cliff's top from its foot.
+    /// </summary>
+    static bool InReach(in CharacterHot a, in CharacterHot b, float reach) =>
+        Gap(a, b) <= reach && MathF.Abs(a.Position.Y - b.Position.Y) <= MovementSystem.FloorSlack;
+
     static IReadOnlyList<CharacterId> Who(World world, IReadOnlyList<CharacterId> ids) => ids.Count > 0 ? ids : world.Player.Selection.ToArray();
 
     // ------------------------------------------------------------------ orders
@@ -470,7 +477,7 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
                 continue;
             }
             const ushort Path = (ushort)MoveFlags.AnyPath;
-            if (Gap(next[i], next[t]) <= (lifting ? ReachOf(world, table.Cold(t)!) : Settings.Reach))
+            if (InReach(next[i], next[t], lifting ? ReachOf(world, table.Cold(t)!) : Settings.Reach))
             {
                 if ((n.Flags & Path) != 0)
                 {
@@ -489,6 +496,7 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
             bool stale = (n.Flags & (ushort)MoveFlags.HasPath) == 0 || Vector2.DistanceSquared(goal, n.Goal) > PursuitSystem.RepathDistance * PursuitSystem.RepathDistance;
             if (asking || !stale || n.TaskTime > 0) continue;
             n.Goal = goal;
+            (cold.GoalHeight, cold.GoalHeightAt) = (next[t].Position.Y, goal);   // the body's floor: one downstairs is walked to down the stairs, not to the floor above it
             n.Mode = SpeedMode.Free;
             n.Flags |= (ushort)MoveFlags.NeedPath;
             n.TaskTime = PursuitSystem.RepathSeconds;
@@ -748,7 +756,7 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
     void Loot(World world, CharacterTable table, int i, float dt)
     {
         var cold = table.Cold(i)!;
-        if (!table.TryResolveNext(cold.CarryTarget, out int t) || Gap(table.Next[i], table.Next[t]) > ReachOf(world, table.Cold(t)!)) return;   // still walking (Schedule ends a loot whose target went)
+        if (!table.TryResolveNext(cold.CarryTarget, out int t) || !InReach(table.Next[i], table.Next[t], ReachOf(world, table.Cold(t)!))) return;   // still walking (Schedule ends a loot whose target went)
         var victim = table.Cold(t)!;
         // The loot window is open: the looter stays in the task (squatting, no other task) for as long as it stays open, then ends it (Task_Loot_Order, FUN_140354ef0).
         if ((cold.LootFlags & LootStart.WindowHeld) != 0)
@@ -830,7 +838,7 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
         var table = world.Characters;
         return table.TryResolveNext(player.OpenLoot, out int t) && table.Cold(t) is { } body && Openable(table, t)
             && table.TryResolveNext(player.LootOpener, out int o) && table.Cold(o) is { Medical.Incapacitated: false, Inventory: not null } looter && looter.CarriedBy.IsNone
-            && Gap(table.Next[o], table.Next[t]) <= ReachOf(world, body) * 1.5f ? (o, t) : null;
+            && InReach(table.Next[o], table.Next[t], ReachOf(world, body) * 1.5f) ? (o, t) : null;
     }
 
     /// <summary>
