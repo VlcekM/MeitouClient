@@ -118,13 +118,14 @@ sealed partial class SettingsMenu
                 "Anti-aliasing" or "Weather particles" => "Hidden",
                 "Shadows" or "Indirect light" or "Indoor GI" or "Ambient occlusion" or "Light shafts" or "Planetshine" or WorldFrame.FifthCascadeSwitch => "Lighting",
                 "Haze" or "Night air" or "Night sky" or "Clouds" or "Cloud shadows" or "Cloud shadows in fog" or "Heat haze" or "Fog" => "Sky & weather",
-                "Tone map and grade" or "Night grading" or "Dithering" or WorldFrame.BloomSwitch => "Colour",
+                "Tone map and grade" or "Night grading" or "Dithering" or WorldFrame.BloomSwitch or WorldFrame.MotionBlurSwitch
+                    or WorldFrame.CameraEffectsSwitch => "Colour",
                 "Skin" or "Character levels" or "Item icons" => "Characters",
                 _ => "World",
             };
         if (S("Ambient") || S("Night ambient") || S("Light shafts") || S("Planetshine") || S("Shadow")) return "Lighting";
         if (S("Haze") || S("Heat haze") || WorldFrame.ParticleSliders.Contains(label)) return "Sky & weather";
-        if (S("Tone map") || S("Hybrid") || S("Grading") || S("Night grading") || S("Bloom")) return "Colour";
+        if (S("Tone map") || S("Hybrid") || S("Grading") || S("Night grading") || S("Bloom") || S("Motion blur")) return "Colour";
         return "World";
     }
 
@@ -142,7 +143,8 @@ sealed partial class SettingsMenu
                 "Anti-aliasing" or "Weather particles" => "Hidden",
                 "Shadows" or "Indirect light" or "Indoor GI" or "Ambient occlusion" or "Light shafts" or "Planetshine" => "Light",
                 "Haze" or "Night air" or "Night sky" or "Clouds" or "Cloud shadows" or "Cloud shadows in fog" or "Heat haze" or "Fog" => "Sky",
-                "Tone map and grade" or "Night grading" or "Dithering" or WorldFrame.BloomSwitch => "Colour",
+                "Tone map and grade" or "Night grading" or "Dithering" or WorldFrame.BloomSwitch or WorldFrame.MotionBlurSwitch
+                    or WorldFrame.CameraEffectsSwitch => "Colour",
                 "Water" => "Water",
                 "Skin" => "Skin",
                 "Draw distances" or "Foliage ranges" or "Far impostors" => "Distances",
@@ -150,7 +152,7 @@ sealed partial class SettingsMenu
             };
         if (S("Ambient") || S("Night ambient") || S("Light shafts") || S("Planetshine")) return "Light";
         if (S("Haze") || S("Heat haze")) return "Sky";
-        if (S("Tone map") || S("Hybrid") || S("Grading") || S("Night grading") || S("Bloom")) return "Colour";
+        if (S("Tone map") || S("Hybrid") || S("Grading") || S("Night grading") || S("Bloom") || S("Motion blur")) return "Colour";
         if (label.Contains("clarity", StringComparison.Ordinal) || label.Contains("see-through", StringComparison.Ordinal)) return "Water";
         if (label == WorldFrame.ObjectDistanceSlider || label == WorldFrame.ShadowDistanceSlider || S("Landmark") || S("Distant towns") || S("Object LOD") || S("Foliage")
             || S("Large ") || S("Medium foliage") || S("Small foliage") || S("Impostor") || S("Grass draw") || S("Terrain detail") || S("Reflection range"))
@@ -177,7 +179,7 @@ sealed partial class SettingsMenu
             or "Ground parallax distance (m)" or WorldFrame.ShadowMapSlider or "Shadow filter 0-2 (Meitou; 0 low-end)" or "Shadow cascade 5 (Meitou)"
             or "Landmark distance (Meitou)" or "Distant towns (zones)" or "Object LOD distance x" or "Foliage LOD distance x (lod Meitou)" or "Medium foliage range"
             or "Terrain detail: error px (less = finer)" or WorldFrame.GrassDensitySlider or "Impostor distance (F7 Meitou)" or "Large impostor distance (F7 Meitou)"
-            or "Reflection range x (game 0.6)" or "Anti-aliasing" or WorldFrame.ShaftQualitySlider => "Medium impact",
+            or "Reflection range x (game 0.6)" or "Anti-aliasing" or WorldFrame.ShaftQualitySlider or WorldFrame.MotionBlurSwitch => "Medium impact",
         "Cloud shadows" or "Indoor GI" or "Planetshine" or "Night air" or "Night sky" or "Skin" or "Rock smoothing (tessellation)" or "Cloud shadows in fog"
             or "Terrain outline refinement (tessellation)" or "Small foliage range" or "Bloom strength (0 = game)" or WorldFrame.BloomSwitch or "Heat haze" or "Blood cells" or "Blood on surfaces" or "Item icons" or "Fog" or "Bolt tracers"
             or "Light shafts air (0 = none)" => "Low impact",

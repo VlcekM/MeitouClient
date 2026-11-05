@@ -82,6 +82,7 @@ static class LauncherSchema
         Graphics(WorldFrame.HeatHazeStrengthSlider, 0, 3, 0.05f, Enhancements.MeitouHeatHazeStrength) with { Format = "0.00" },
         Graphics(WorldFrame.NightGradeStrengthSlider, 0, 1, 0.05f, NightGrade.MeitouStrength) with { Format = "0.00" },
         Graphics(WorldFrame.BloomStrengthSlider, 0, 0.25f, 0.005f, new PostOptions().BloomStrength) with { Format = "0.000" },
+        Graphics(WorldFrame.MotionBlurShutterSlider, 45, 360, 5, new PostOptions().MotionBlurShutter),
     ];
 
     /// <summary>The render scale's quality modes, lowest first: FSR's and DLSS's ratios, as the slider stores them (whole percent).</summary>
@@ -113,6 +114,7 @@ static class LauncherSchema
         yield return Switch(WorldFrame.FifthCascadeSwitch, "Off", "On", true);
         // An optional effect, in neither look: plain Off / On (Toggle.Optional).
         yield return Switch(WorldFrame.BloomSwitch, "Off", "On", false);
+        yield return Switch(WorldFrame.CameraEffectsSwitch, "Off", "On", false);
         foreach (var label in new[] { WorldFrame.RockSmoothingSwitch, WorldFrame.OutlineRefineSwitch })
             yield return Switch(label, "Off", "Meitou: on", true);   // Faithful / Meitou switches whose game side is off
     }

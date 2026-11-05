@@ -72,6 +72,9 @@ sealed class Cinema(Func<WorldCamera> camera, Func<float> getHour, Action<float>
     /// <summary>Called whenever the cinema puts the camera somewhere (a cut, a scrub, each frame of a flight): a host with its own camera control lets the cinema hold it.</summary>
     public Action? Moved { get; set; }
 
+    /// <summary>Called when the cinema jumps the camera to a key: a host's motion blur leaves that frame out.</summary>
+    public Action? Cut { get; set; }
+
     public bool Playing { get; private set; }
     /// <summary>Clean picture: no panels, letterbox bars (numpad *).</summary>
     public bool Clean { get; private set; }
@@ -148,6 +151,7 @@ sealed class Cinema(Func<WorldCamera> camera, Func<float> getHour, Action<float>
         k.Shot.Apply(camera());
         if (followTime) setHour?.Invoke(k.Shot.Hour);
         Moved?.Invoke();
+        Cut?.Invoke();
         (time, selected) = (k.Time, k);
     }
 

@@ -1312,6 +1312,7 @@ static partial class WorldFrame
         GradingSlider = "Grading (0 = game)",
         HeatHazeStrengthSlider = "Heat haze strength (1 = game)",
         BloomStrengthSlider = "Bloom strength (0 = game)",
+        MotionBlurShutterSlider = "Motion blur shutter (degrees at 24 fps)",
         NightGradeStrengthSlider = "Night grading strength (0 = game)",
         ShaftStrengthSlider = "Light shafts strength",
         ShaftAirSlider = "Light shafts air (0 = none)",
@@ -1320,6 +1321,8 @@ static partial class WorldFrame
     public const string
         FifthCascadeSwitch = "Shadow cascade 5 (Meitou)",
         BloomSwitch = "Bloom",
+        MotionBlurSwitch = "Motion blur",
+        CameraEffectsSwitch = "Camera effects in the strategy camera",
         // The ground relief's Faithful / Meitou switches (Enhancements "parallax", "displace"), by name.
         GroundParallaxSwitch = "Ground parallax",
         GroundDisplaceSwitch = "Ground displacement (tessellation)",
@@ -1615,6 +1618,7 @@ static partial class WorldFrame
         sliders.Add(new Slider(HeatHazeStrengthSlider, 0, 3, () => options.HeatHazeStrength, v => options.HeatHazeStrength = Round20(v), "0.00",
             Faithful: 1, Meitou: Enhancements.MeitouHeatHazeStrength));
         sliders.Add(new Slider(BloomStrengthSlider, 0, 0.25f, () => options.BloomStrength, v => options.BloomStrength = MathF.Round(v * 200) / 200, "0.000", Faithful: 0));
+        sliders.Add(new Slider(MotionBlurShutterSlider, 45, 360, () => options.MotionBlurShutter, v => options.MotionBlurShutter = MathF.Round(v / 5) * 5, "0"));
         sliders.Add(new Slider(NightGradeStrengthSlider, 0, 1, () => options.NightGradeStrength, v => options.NightGradeStrength = Round20(v), "0.00"));
 
         sliders.Add(new Slider(ShaftStrengthSlider, 0, 1, () => options.ShaftStrength, v => options.ShaftStrength = Round20(v), "0.00"));
@@ -1635,12 +1639,16 @@ static partial class WorldFrame
         var toggles = switches?
             .Where(e => e.Id != "displace" || tessellation)
             .Select(e => new Toggle(e.Name, () => e.IsMeitou, v => e.IsMeitou = v, () => e.IsMeitou ? e.Meitou : e.Faithful, Remaster: true,
-                OnOff: e.Faithful is "off" or "none"))
+                OnOff: e.Faithful is "off" or "none", Optional: e.Optional))
             .ToList() ?? [];
         if (fifthCascade is not null) toggles.Add(fifthCascade);
 
         if (g.Post is { } post)
+        {
             toggles.Add(new Toggle(BloomSwitch, () => post.Options.Bloom, v => post.Options.Bloom = v, Remaster: true, OnOff: true, Optional: true));
+            toggles.Add(new Toggle(CameraEffectsSwitch, () => post.Options.CameraEffectsEverywhere, v => post.Options.CameraEffectsEverywhere = v,
+                Remaster: true, OnOff: true, Optional: true));
+        }
         if (tessellation)
         {
             toggles.Add(new Toggle(RockSmoothingSwitch, () => RockSmoothing.TessellateActive, v => RockSmoothing.TessellateActive = v, Remaster: true, OnOff: true));
@@ -1730,9 +1738,11 @@ static partial class WorldFrame
         gpu.PostChain?.ObjectMotion = null;
         post.Particles = null;
         post.SetCloudMotion(null);
+        post.Options.CameraEffectsHeld = true;
         try { post.End(); }
         finally
         {
+            post.Options.CameraEffectsHeld = false;
             gpu.PostChain?.ObjectMotion = motion;
             post.Particles = particles;
         }

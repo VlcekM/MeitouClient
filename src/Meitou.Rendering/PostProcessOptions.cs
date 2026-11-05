@@ -81,6 +81,24 @@ public sealed class PostOptions
     public float BloomAmount => Bloom ? BloomStrength : 0;
     /// <summary>The bloom's firefly ceiling in linear scene units (a gamma-encoded 2 is 4.6, a 4 is 21): texels under a quarter of it keep their light to 0.1%, specular spikes far above scatter as if they were it.</summary>
     public const float BloomFirefly = 64;
+    /// <summary>The Meitou <c>motionblur</c> switch (docs/render-post.md "Motion blur"), off by default even in the Meitou look; needs a temporal upscaler's motion target.</summary>
+    public bool MotionBlur;
+    /// <summary>The shutter angle at <see cref="ShutterBaseRate"/> in degrees, 180 by default: the exposure is <see cref="ShutterSeconds"/>, whatever the frame rate.</summary>
+    public float MotionBlurShutter = 180;
+    public const float ShutterBaseRate = 24;
+    public float ShutterSeconds => MotionBlurShutter / 360 / ShutterBaseRate;
+    /// <summary>The longest blur either way of a pixel, as a share of the picture's height; also the tiles' size.</summary>
+    public const float MotionBlurMaxRadius = 0.04f;
+    /// <summary>The camera effects in the strategy camera as well (the player's choice, off by default): otherwise only with <see cref="CinematicView"/>.</summary>
+    public bool CameraEffectsEverywhere;
+    /// <summary>Set by the game each frame: the free camera or the cinematic one holds the view. A host without a strategy camera leaves it on.</summary>
+    public bool CinematicView = true;
+    /// <summary>Set for a frame that is no world (the loading sky): the camera effects leave it alone.</summary>
+    public bool CameraEffectsHeld;
+    /// <summary>The time this frame's motion stands for when it is not the real one (a recording's fixed step); 0: the measured frame.</summary>
+    public float FrameSeconds;
+    /// <summary>The camera jumped this frame (a cut to a key): no blur across it. The chain clears it.</summary>
+    public bool CameraCut;
     /// <summary>Linear scale of the scene before everything else. 1 keeps the shaders' brightness (the - and = keys).</summary>
     public float Exposure = 1;
     /// <summary>Presentation-only white balance: the scene's linear colour is multiplied by it before the tone map (the Meitou title warms its light with it); 1, 1, 1 in play.</summary>
@@ -121,6 +139,7 @@ public sealed class PostOptions
         ParticleDivisor = other.ParticleDivisor; Exposure = other.Exposure; ToneMap = other.ToneMap; ToneMix = other.ToneMix; Grade = other.Grade;
         HeatHazeStrength = other.HeatHazeStrength; NightGradeStrength = other.NightGradeStrength; BloomStrength = other.BloomStrength;
         MeitouHeatHaze = other.MeitouHeatHaze; ToneMapping = other.ToneMapping; NightGrade = other.NightGrade; Bloom = other.Bloom;
+        MotionBlur = other.MotionBlur; MotionBlurShutter = other.MotionBlurShutter; CameraEffectsEverywhere = other.CameraEffectsEverywhere;
     }
 
     /// <summary>Handles one command-line option; false when it is not a post-processing one.</summary>
@@ -149,6 +168,7 @@ public sealed class PostOptions
         $"ssao {(Ssao ? "on" : "off")}, shafts {(LightShafts ? $"{ShaftStrength:0.##} ({ShaftCells}x{ShaftSlices}x{ShaftSamples})" : "off")}, exposure x{Exposure:0.##}, tonemap {ToneMapUsed.ToString().ToLowerInvariant()}{(ToneMapUsed == ToneMapOperator.Hybrid ? $" {ToneMix:0.##}" : "")}, " +
         $"grade {(GradeUsed ? $"saturation {Saturation:0.##} contrast {Contrast:0.##}" : "off")}, night grade {(NightGradeAmount > 0 ? NightGradeAmount.ToString("0.##", CultureInfo.InvariantCulture) : "off")}, " +
         $"bloom {(BloomAmount > 0 ? BloomAmount.ToString("0.###", CultureInfo.InvariantCulture) : "off")}, " +
+        $"motion blur {(MotionBlur ? MotionBlurShutter.ToString("0", CultureInfo.InvariantCulture) + " deg" : "off")}, " +
         $"upscaler {Upscale.Describe()}";
 }
 

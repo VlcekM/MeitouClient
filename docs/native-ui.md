@@ -47,7 +47,7 @@ rows above its tabs:
   launcher chose) is applied at start.
 
 Effects with a strength are a switch plus a slider that keeps its value while off (haze, heat haze, tone map and grade, night
-grading, bloom). Bloom is optional (`Toggle.Optional`): off in both looks, Off | On, a preset may turn it on. Settings layout 2
+grading, bloom). Bloom and the camera effects are optional (`Toggle.Optional`): off in both looks, Off | On, a preset may turn them on. Settings layout 2
 (`UserConfig.Migrate`) drops layout 1's strengths saved at the game's value with their switch off, and a tone map of 0 (the
 clamp is now the switch's off side). **Open:** presets and saved values are keyed by labels; renaming one loses them (no stable ids).
 

@@ -5,7 +5,7 @@ namespace Meitou.Rendering;
 /// default), chosen per feature: the remaster switches. Separate from the game's own graphics settings (draw distances,
 /// shadow quality...), which keep their meaning in both. Reads and writes the live options through its delegates.
 /// </summary>
-public sealed class Enhancement(string id, string name, string faithful, string meitou, Func<bool> get, Action<bool> set, string note, Func<string>? liveMeitou = null)
+public sealed class Enhancement(string id, string name, string faithful, string meitou, Func<bool> get, Action<bool> set, string note, Func<string>? liveMeitou = null, bool optional = false)
 {
     /// <summary>The command-line name (<c>--meitou ao,haze</c>).</summary>
     public string Id { get; } = id;
@@ -18,6 +18,9 @@ public sealed class Enhancement(string id, string name, string faithful, string 
 
     /// <summary>A sentence on the difference (what the game does, what Meitou changes).</summary>
     public string Note { get; } = note;
+
+    /// <summary>An optional effect (<see cref="Toggle.Optional"/>): off in the Meitou look too, so <c>all</c> and the Meitou key leave it off; the player or its own id turns it on.</summary>
+    public bool Optional { get; } = optional;
 
     /// <summary>"Faithful (off)" or "Meitou (SSAO)".</summary>
     public string State => IsMeitou ? $"Meitou ({Meitou})" : $"Faithful ({Faithful})";
@@ -161,6 +164,10 @@ public static class Enhancements
         new("fog", "Fog", "hard-edged, flat", "soft, lit",
             () => post.MeitouFog, v => post.MeitouFog = v,
             "the game's dust and smoke sprites cut straight into the ground and walls they cross (all but its mist and steam, which fade; Faithful draws those hard-edged too); Meitou fades each sprite out over the last stretch before a surface (a quarter of its size, 0.2 to 30 m), so dust clouds meet the ground softly; the game's sprites are also flat and not fogged (one brightness in sun and shade, near and far, seen through fog banks), Meitou darkens dust and smoke where the sun is shadowed, brightens them towards the sun and puts the haze and the fog volumes in front of them over them; and it fades each effect out before the distance it stops being simulated at, where its whole cloud popped in and out (docs/render-post.md \"Fog\")"),
+        new("motionblur", "Motion blur", "off", "shutter blur",
+            () => post.MotionBlur, v => post.MotionBlur = v,
+            "the game has no motion blur; Meitou rebuilds a film shutter's blur from the upscaler's motion vectors for the free and cinematic cameras (needs a temporal upscaler; the sky stays sharp; docs/render-post.md \"Motion blur\")",
+            optional: true),
     ];
 
     /// <summary><c>--meitou</c> / <c>--faithful &lt;all|id,id...&gt;</c>: turns those switches to Meitou or to Faithful.</summary>
@@ -168,7 +175,11 @@ public static class Enhancements
     {
         foreach (var id in list.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
         {
-            if (id == "all") { foreach (var e in switches) e.IsMeitou = meitou; continue; }
+            if (id == "all")
+            {
+                foreach (var e in switches.Where(e => !meitou || !e.Optional)) e.IsMeitou = meitou;
+                continue;
+            }
             var match = switches.FirstOrDefault(e => e.Id == id)
                 ?? throw new ArgumentException($"unknown feature '{id}' ({string.Join(", ", switches.Select(e => e.Id))} or all)");
             match.IsMeitou = meitou;
@@ -195,7 +206,7 @@ public sealed class MeitouToggle(IReadOnlyList<Enhancement> switches)
         }
         else
         {
-            for (int i = 0; i < switches.Count; i++) switches[i].IsMeitou = before?[i] ?? true;
+            for (int i = 0; i < switches.Count; i++) switches[i].IsMeitou = before?[i] ?? !switches[i].Optional;
         }
         return On ? $"meitou    on: {string.Join(", ", switches.Where(e => e.IsMeitou).Select(e => e.Id))}" : "meitou    off, every switch Faithful (the game as it ships)";
     }

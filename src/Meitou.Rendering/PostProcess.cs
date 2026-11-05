@@ -398,6 +398,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         foreach (var l in lowTargets) l.Accum = l.Depth = l.Soft = null;
         giAlbedo = giLow = shaftInjected = shaftLight = shaftScatter = shaftRaw = shaftHistory = softDepth = null;
         FreeBloom();
+        FreeMotionBlur();
         adaptedValid = historyValid = shaftHistoryValid = softDepthReady = false;
         adaptedFrames = 0;
     }
@@ -780,6 +781,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         postColour = sceneColour!;
         if (Temporal) { postColour = RunUpscale(); Stamp("upscale"); }
         else ActiveUpscaler = "off";
+        postColour = RunMotionBlur(postColour);
         bool auto = AutoExposure is not null && luminance is not null;
         if (auto) RunExposure();
         if (auto) Stamp("exposure");
@@ -1225,6 +1227,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         bool reset = !historyValid || !previousValid || Vector3.Distance(eyeNow, previousEye) > 5000;
         float dt = (float)frameClock.Elapsed.TotalSeconds;
         frameClock.Restart();
+        (motionFresh, motionSeconds) = (!reset, dt);
         // post-merge: the motion, the upscalers' depth and the water's reactivity in one dispatch (the vendor upscalers take the last two; TAA only the motion target).
         // The depth image is made with TAA too (one more R32F store per pixel; the kernel has the value already): frame generation takes motion and depth whatever upscales.
         var external = ExternalFor(Options.Upscale.Kind);
@@ -1644,6 +1647,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         DisposeLateParticles();
         DisposeMerged();
         DisposeBloom();
+        DisposeMotionBlur();
         Hiz?.Dispose();
         foreach (var p in new FullscreenProgram[] { ssao, ssaoMask, blur, luminancePass, adaptPass, compositePass, fxaaPass, hazePass, velocityPass, cloudMotionPass, taaPass, fogPass, particleDepthPass, particleSoftDepthPass, particleCompositePass, particleCoveragePass }) p.P.Dispose();
         smaaPasses.Dispose();

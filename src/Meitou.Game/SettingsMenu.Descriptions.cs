@@ -57,6 +57,7 @@ sealed partial class SettingsMenu
         "Heat haze strength" => "Scale the distortion caused by hot air.",
         "Night grading strength" => "Adjust the blue shift of colours in low light.",
         "Bloom strength" => "How much of each pixel's light glows into its surroundings.",
+        "Motion blur shutter" => "How long the shutter stays open; 180 is the film look, 360 a whole film frame.",
         _ when label == WorldFrame.UpscalerSliders[0] => "How edges are smoothed.",
         _ => $"Adjust {Label(label).ToLowerInvariant()}.",
     };
@@ -85,6 +86,8 @@ sealed partial class SettingsMenu
         "Night sky" => "Draw individual stars instead of a starfield texture.",
         "Night grading" => "Shift dark scenes toward the blue of night vision.",
         "Bloom" => "Let bright light glow softly into its surroundings, as in the eye.",
+        WorldFrame.MotionBlurSwitch => "Blur what moves across the picture, as a film camera's shutter does, in the free and cinematic cameras. Needs a temporal upscaler.",
+        WorldFrame.CameraEffectsSwitch => "Use motion blur and depth of field in the strategy camera too.",
         "Clouds" => "Render clouds with volume and depth.",
         "Cloud shadows" => "Let clouds cast shadows across land and water.",
         "Cloud shadows in fog" => "Fade cloud shadows in fog, so foggy places stay lit.",

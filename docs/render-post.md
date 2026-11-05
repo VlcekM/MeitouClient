@@ -211,6 +211,31 @@ fovY. The composite reads the 1/4 level through a 4-tap cubic B-spline (no squar
 R11G11B10 targets. **Observed** (Hub, 02:00, 1600x900, DLSS): a round halo centred on the lamp
 at 0.25, frame mean linear luminance within 2.5% of off; GPU 0.07 ms on the run's average.
 
+## Camera effects order
+
+Upscaler, motion blur, depth of field, exposure, bloom, composite. A shutter and a lens act on the light before the sensor responds, so both run on the
+HDR picture and both come before the exposure's measure, which then reads the frame the player sees. Bloom is the glare of what reached the sensor, so
+it comes after both, and a defocused or streaked light keeps its glow. The blur comes before the focus because a smear outside its silhouette only lacks a
+CoC of its own, which reads as softness; the other way round the rim of a defocused foreground takes the background's motion, a sharp ring in a streak.
+Each writes its own target: the upscaler's output is the next frame's history. The world's overlays (UI, panels) draw later in their own layer.
+
+Both run only in a whole view of a scene (`PostOptions.CameraEffectsHeld`, `ViewWindow`), in the free camera, on a camera the cinema holds, with its editor (F6) open
+or recording (`PostOptions.CinematicView`, set per frame by the game), never over the title. "Camera effects in the strategy camera" (`CameraEffectsEverywhere`, off)
+adds that camera. Vulkan only; Metal ignores the options.
+
+## Motion blur
+
+Optional (`motionblur`, `PostOptions.MotionBlur`, off in every look). McGuire, Hennessy, Bukowski, Osman 2012, `PostProcess.MotionBlur.cs`: vectors at the render size from the
+motion target and depth (`log2` view depth beside them), tile maximum, neighbour maximum, then 15 taps along the longest vector at the display size in linear
+light, with static noise on the taps and the tile lookup. No history.
+Tiles are the widest blur's radius, 4 % of the picture height. The sky's vectors are zero, as its motion is a far plane's and the clouds'; water
+over the sky keeps its own. So a turning camera leaves the sky sharp and blurs what stands against it.
+
+The exposure is a time, `shutter / 360 / 24` s (`Motion blur shutter`, 45 to 360 degrees, 180 by default), so the blur's length does not follow the frame rate: the vectors are
+scaled by that time over the frame's, at most 8 frames. A recording takes its fixed step (`PostOptions.FrameSeconds`).
+Needs a temporal upscaler: without one there is no motion target and it does not run. It skips reset frames and cuts to a Cinema key (`CameraCut`). Particles have no
+motion of their own and take the surface's behind them. Look and cost **Unknown** (not run on a GPU).
+
 ## SMAA
 
 Meitou's non-temporal alternative to FXAA (`--smaa`, or anti-aliasing "SMAA" in settings). It runs on the
