@@ -64,7 +64,7 @@ sealed partial class GameHost
 
     /// <summary>
     /// The limb an animal holds in its mouth (<see cref="CharacterSnapshot.Mouth"/>), drawn at its <c>mouth</c> point by the character renderer: the item's <c>mesh</c> (the original attaches
-    /// that one, <c>FUN_1405358a0</c>) with the severed limb's look and the cut character's skin tone. Null for none, or an item without a mesh.
+    /// that one, <c>FUN_140537690</c>) with the severed limb's look and the cut character's skin tone. Null for none, or an item without a mesh.
     /// </summary>
     MouthMesh? MouthOf(CharacterSnapshot c)
     {
