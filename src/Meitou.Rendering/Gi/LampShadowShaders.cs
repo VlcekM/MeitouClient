@@ -81,7 +81,8 @@ static class LampShadowShaders
             uint flags = gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsCullBackFacingTrianglesEXT;
             if (emitter != 0u) flags |= gl_RayFlagsNoOpaqueEXT;
             rayQueryEXT shadow;
-            rayQueryInitializeEXT(shadow, uScene, flags, 0xFF, from, 0.0, ray / d, tMax);
+            // 0x0F: TracedSunShaders.GiMask, what the probes see (the small foliage and the grass are the sun's alone).
+            rayQueryInitializeEXT(shadow, uScene, flags, 0x0F, from, 0.0, ray / d, tMax);
             while (rayQueryProceedEXT(shadow))
             {
                 int record = rayQueryGetIntersectionInstanceCustomIndexEXT(shadow, false) + rayQueryGetIntersectionGeometryIndexEXT(shadow, false);

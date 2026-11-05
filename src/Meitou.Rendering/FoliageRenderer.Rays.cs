@@ -32,7 +32,8 @@ public sealed partial class FoliageRenderer
     /// Adds every laid-out instance whose bounding radius is at least <paramref name="minRadius"/> and whose bounding sphere comes within
     /// <paramref name="range"/> of <paramref name="eye"/>, with its mesh, transform and distance. Render thread (it may register bindless entries).
     /// </summary>
-    internal void RayInstances(Vector3 eye, float range, float minRadius, List<(RayMesh Mesh, Matrix4x4 Transform, float Distance)> into)
+    /// <param name="belowRadius">Instances of this radius and up are left out (the traced sun's small foliage, past what the probes hold).</param>
+    internal void RayInstances(Vector3 eye, float range, float minRadius, List<(RayMesh Mesh, Matrix4x4 Transform, float Distance)> into, float belowRadius = float.PositiveInfinity)
     {
         foreach (var zone in zones.Values)
         {
@@ -45,11 +46,51 @@ public sealed partial class FoliageRenderer
                 if (RayMeshFor(g.Asset) is not { } mesh) continue;
                 foreach (ref readonly var r in g.Instances.AsSpan())
                 {
-                    if (r.Sphere.W < minRadius) continue;
+                    if (r.Sphere.W < minRadius || r.Sphere.W >= belowRadius) continue;
                     float d = Vector3.Distance(new Vector3(r.Sphere.X, r.Sphere.Y, r.Sphere.Z), eye) - r.Sphere.W;
                     if (d <= range) into.Add((mesh, r.Transform, d));
                 }
             }
+        }
+    }
+
+    /// <summary>A grass page's patch for the traced sun (<see cref="Gi.TracedGrass"/>): its identity (a dropped page's buffer is never seen again), where its blades are in
+    /// the arena, those the density shows, the page's corner and the patch's card sizes (min width, max width, min height, max height), and this frame's sprite.</summary>
+    internal readonly record struct RayGrassPatch(object Key, uint FirstBlade, int Blades, Vector3 Corner, Vector4 Size, bool Cross, uint Sprite, float Distance);
+
+    /// <summary>The arena holding the blades (read by <see cref="Gi.TracedGrass"/>'s kernel).</summary>
+    internal (GpuBuffer Buffer, ulong Bytes) RayGrassBlades => (grassStore.BladeBuffer, grassStore.ArenaBytes);
+
+    /// <summary>A grass page's side.</summary>
+    internal const float RayGrassPageSize = PageSize;
+
+    /// <summary>The drawn grass patches of the pages within <paramref name="range"/> of <paramref name="eye"/> across the ground, nearest first. Render thread.</summary>
+    internal void RayGrass(Vector3 eye, float range, List<RayGrassPatch> into)
+    {
+        into.Clear();
+        foreach (var state in zones.Values)
+        {
+            if (state.Pages.Count == 0 || state.Patches.Count == 0) continue;
+            foreach (var (key, page) in state.Pages)
+            {
+                float x0 = state.X0 + key % PagesPerZone * PageSize, z0 = state.Z0 + key / PagesPerZone * PageSize;
+                float d = BoxDistance(x0, z0, PageSize, eye);
+                if (page.Buffers is not null && d < range) AddRayGrassPage(state, page, new Vector3(x0, 0, z0), d, into);
+            }
+        }
+        into.Sort((a, b) => a.Distance.CompareTo(b.Distance));
+    }
+
+    void AddRayGrassPage(ZoneState state, GrassPage page, Vector3 corner, float distance, List<RayGrassPatch> into)
+    {
+        for (int i = 0; i < page.Buffers!.Length && i < state.Patches.Count; i++)
+        {
+            var patch = state.Patches[i];
+            var b = Patch(page.Buffers[i], patch);
+            if (b.Shown == 0 || distance >= GrassRange(patch) || b.Sprite is not { Key: not 0 } sprite) continue;
+            var g = patch.Grass;
+            var size = new Vector4(g.QuadMinWidth, g.QuadMaxWidth, g.QuadMinHeight, g.QuadMaxHeight);
+            into.Add(new RayGrassPatch(b, b.FirstBlade, b.Shown, corner, size, g.CrossQuads, RayTexture(sprite), distance));
         }
     }
 

@@ -44,6 +44,8 @@ screenshots unless deliberately stepped. `grass-velocity` supplies sway motion o
 motion warrants it; camera reprojection handles the rest. Incorrect previous phase/camera/depth
 causes temporal ghosting. Keep blade motion consistent between colour/depth/velocity views.
 
+The traced sun builds pages near the eye into structures from the arena: [Traced sun](render-shadows.md#traced-sun).
+
 ## Visibility, depth and memory
 
 Bounds/range/frustum, Hi-Z occlusion, fog culls and projected-size LOD are distinct filters.

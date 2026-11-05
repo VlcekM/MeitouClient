@@ -393,7 +393,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     // ---- targets ----
 
     IEnumerable<Target2D> Targets() =>
-        new[] { sceneColour, sceneDepth, motion, upscaleDepth, reactive, historyA, historyB, aoA, aoB, aoMask, ldr, ldrFxaa, smaaEdges, smaaWeights, luminance, adaptA, adaptB, lowTargets[0].Accum, lowTargets[0].Depth, lowTargets[0].Soft, lowTargets[1].Accum, lowTargets[1].Depth, lowTargets[1].Soft, softDepth, rateDistance, rateImage, neutralRate, giAlbedo, giLow, lampLost, ssrHit, ssrLow, shaftInjected, shaftLight, shaftScatter, shaftRaw, shaftHistory }.OfType<Target2D>();
+        new[] { sceneColour, sceneDepth, motion, upscaleDepth, reactive, historyA, historyB, aoA, aoB, aoMask, ldr, ldrFxaa, smaaEdges, smaaWeights, luminance, adaptA, adaptB, lowTargets[0].Accum, lowTargets[0].Depth, lowTargets[0].Soft, lowTargets[1].Accum, lowTargets[1].Depth, lowTargets[1].Soft, softDepth, rateDistance, rateImage, neutralRate, giAlbedo, giLow, lampLost, ssrHit, ssrLow, shaftInjected, shaftLight, shaftScatter, shaftRaw, shaftHistory, tracedTerm, tracedMask }.OfType<Target2D>();
 
     void Free()
     {
@@ -403,7 +403,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         rateBuiltFrame = long.MinValue;
         aoA = aoB = aoMask = ldr = ldrFxaa = smaaEdges = smaaWeights = luminance = adaptA = adaptB = null;
         foreach (var l in lowTargets) l.Accum = l.Depth = l.Soft = null;
-        giAlbedo = giLow = lampLost = ssrHit = ssrLow = shaftInjected = shaftLight = shaftScatter = shaftRaw = shaftHistory = softDepth = null;
+        tracedTerm = tracedMask = giAlbedo = giLow = lampLost = ssrHit = ssrLow = shaftInjected = shaftLight = shaftScatter = shaftRaw = shaftHistory = softDepth = null;
         FreeBloom();
         FreeMotionBlur();
         FreeDepthOfField();
@@ -573,6 +573,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         if (Unallocated) return;
         EnsureGi();
         EnsureAoSize();
+        EnsureTracedSun();
         Collect();
         stamps = freeStamps.Count > 0 ? freeStamps.Pop() : new StampSet();
         stamps.Count = 0;
@@ -587,7 +588,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         JitterPixels = Temporal ? Jitter.Offset(frameIndex, JitterPhases) : Vector2.Zero;
         // Textures at the display size's detail: log2 of the scale, and one further as the vendor upscalers recommend (DECISIONS 15); TAA too.
         Gpu.LodBias = Temporal ? MathF.Log2(width / (float)displayWidth) - 1 : 0;
-        SceneTargets = PassTargets.Of(sceneColour!.Texture, sceneDepth!.Texture, GiAlbedoTarget);
+        SceneTargets = PassTargets.Of(sceneColour!.Texture, sceneDepth!.Texture, GiAlbedoTarget, TracedTermTarget);
     }
 
     // ---- temporal upscaling ----
@@ -703,7 +704,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     /// <summary>The scene's projection (call after <see cref="SetCamera"/>): sets <see cref="SceneTargets"/>, the planes and the reprojection.</summary>
     public void BeginScene(float near, float far, float fieldOfView, float aspectRatio)
     {
-        SceneTargets = PassTargets.Of(sceneColour!.Texture, sceneDepth!.Texture, GiAlbedoTarget);
+        SceneTargets = PassTargets.Of(sceneColour!.Texture, sceneDepth!.Texture, GiAlbedoTarget, TracedTermTarget);
         nearPlane = near; farPlane = far; fovY = fieldOfView; aspect = aspectRatio;
         planes = new Vector2(near, far);
         if (Temporal) toPrevious = ToPrevious(near, far);
@@ -1050,7 +1051,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         giDivisor = divisor;
         using var batch = Gpu.Uploads.Begin();
         // The lit surfaces' normal, sqrt(albedo) and take-the-probes flag, packed (AtmosphereShaders' giAlbedoOut); the low target signed (the probes' light can be below the sky's) with the view depth in alpha.
-        giAlbedo = new Target2D(batch.Create(new TextureDesc(InternalFormat.Rgba16ui, width, height, Use: TextureUse.Sampled | TextureUse.ColourTarget, Name: "post gi surface")),
+        giAlbedo = new Target2D(batch.Create(new TextureDesc(InternalFormat.Rgba32ui, width, height, Use: TextureUse.Sampled | TextureUse.ColourTarget, Name: "post gi surface")),
             TextureMinFilter.Nearest, TextureMagFilter.Nearest);
         giLow = Make(batch, (width + giDivisor - 1) / giDivisor, (height + giDivisor - 1) / giDivisor, InternalFormat.Rgba16f, TextureMinFilter.Nearest, "post gi resolve");
     }
@@ -1080,6 +1081,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     }
 
     /// <summary>The depth reconstruction and the surface target of a pass over the GI surfaces.</summary>
+    /// <summary>What a pass over the scene needs of the depth, the surface target and the camera.</summary>
     void SetGiView(GiPass g)
     {
         float tanY = MathF.Tan(fovNow * 0.5f);

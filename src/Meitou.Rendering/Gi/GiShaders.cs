@@ -210,7 +210,7 @@ static class GiShaders
             float d = length(toLamp);
             if (d <= 1.0) return 1.0;
             rayQueryEXT shadow;
-            rayQueryInitializeEXT(shadow, uScene, gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsCullBackFacingTrianglesEXT | gl_RayFlagsNoOpaqueEXT, 0xFF,
+            rayQueryInitializeEXT(shadow, uScene, gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsCullBackFacingTrianglesEXT | gl_RayFlagsNoOpaqueEXT, {{TracedSunShaders.GiMask}},
                 world - origin.xyz + n * 0.5, 0.0, toLamp / d, d - 1.0);
             while (rayQueryProceedEXT(shadow))
             {
@@ -248,7 +248,7 @@ static class GiShaders
             if (nl > 0.0)
             {
                 rayQueryEXT shadow;
-                rayQueryInitializeEXT(shadow, uScene, gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsCullBackFacingTrianglesEXT, 0xFF,
+                rayQueryInitializeEXT(shadow, uScene, gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsCullBackFacingTrianglesEXT, {{TracedSunShaders.GiMask}},
                     hit - origin.xyz + n * (0.5 + t * 0.001), 0.0, l, 1e5);
                 TRACE(shadow)
                 if (rayQueryGetIntersectionTypeEXT(shadow, true) == gl_RayQueryCommittedIntersectionNoneEXT)
@@ -398,7 +398,7 @@ static class GiShaders
             float tMax = c == 0 ? rayLength.x : rayLength.y;
 
             rayQueryEXT rq;
-            rayQueryInitializeEXT(rq, uScene, gl_RayFlagsCullBackFacingTrianglesEXT, 0xFF, world - origin.xyz, 0.0, dir, tMax);
+            rayQueryInitializeEXT(rq, uScene, gl_RayFlagsCullBackFacingTrianglesEXT, {{TracedSunShaders.GiMask}}, world - origin.xyz, 0.0, dir, tMax);
             TRACE(rq)
             float env = lightDir.w;
             vec4 am = ambientMap(world);
@@ -849,7 +849,7 @@ static class GiShaders
             vec3 world = surfacePoint + surfaceNormal * (1.0 + z * 0.001);
 
             rayQueryEXT rq;
-            rayQueryInitializeEXT(rq, uScene, gl_RayFlagsCullBackFacingTrianglesEXT, 0xFF, world - origin.xyz, 0.0, dir, {{F(ReflectionRange)}});
+            rayQueryInitializeEXT(rq, uScene, gl_RayFlagsCullBackFacingTrianglesEXT, {{TracedSunShaders.GiMask}}, world - origin.xyz, 0.0, dir, {{F(ReflectionRange)}});
             TRACE(rq)
             if (rayQueryGetIntersectionTypeEXT(rq, true) != gl_RayQueryCommittedIntersectionTriangleEXT)
             {
@@ -956,7 +956,7 @@ static class GiShaders
         bool visible(vec3 origin, vec3 dir, float tMax)
         {
             rayQueryEXT rq;
-            rayQueryInitializeEXT(rq, uScene, gl_RayFlagsOpaqueEXT | gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsCullBackFacingTrianglesEXT, 0xFF, origin, 0.0, dir, tMax);
+            rayQueryInitializeEXT(rq, uScene, gl_RayFlagsOpaqueEXT | gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsCullBackFacingTrianglesEXT, 0x0F, origin, 0.0, dir, tMax);
             while (rayQueryProceedEXT(rq)) { }
             return rayQueryGetIntersectionTypeEXT(rq, true) == gl_RayQueryCommittedIntersectionNoneEXT;
         }
@@ -978,7 +978,7 @@ static class GiShaders
                 vec4 q = p.inverse * vec4(uv * 2.0 - 1.0, DEPTH_NEAREST, 1.0);   // any point on the ray: the eye is the origin
                 vec3 dir = normalize(q.xyz / q.w);
                 rayQueryEXT rq;
-                rayQueryInitializeEXT(rq, uScene, gl_RayFlagsOpaqueEXT | gl_RayFlagsCullBackFacingTrianglesEXT, 0xFF, p.eye.xyz, 0.0, dir, 1e6);
+                rayQueryInitializeEXT(rq, uScene, gl_RayFlagsOpaqueEXT | gl_RayFlagsCullBackFacingTrianglesEXT, 0x0F, p.eye.xyz, 0.0, dir, 1e6);
                 while (rayQueryProceedEXT(rq)) { }
                 vec3 colour = vec3(0.0);
                 if (rayQueryGetIntersectionTypeEXT(rq, true) == gl_RayQueryCommittedIntersectionTriangleEXT)
@@ -1008,7 +1008,7 @@ static class GiShaders
             {
                 vec3 dir = cosineDirection(n, state);
                 rayQueryEXT rq;
-                rayQueryInitializeEXT(rq, uScene, gl_RayFlagsOpaqueEXT | gl_RayFlagsCullBackFacingTrianglesEXT, 0xFF, origin, 0.0, dir, rayLength);
+                rayQueryInitializeEXT(rq, uScene, gl_RayFlagsOpaqueEXT | gl_RayFlagsCullBackFacingTrianglesEXT, 0x0F, origin, 0.0, dir, rayLength);
                 while (rayQueryProceedEXT(rq)) { }
                 vec3 colour = vec3(0.25, 0.45, 0.8);
                 if (rayQueryGetIntersectionTypeEXT(rq, true) == gl_RayQueryCommittedIntersectionTriangleEXT)
@@ -1029,7 +1029,7 @@ static class GiShaders
             {
                 vec3 dir = cosineDirection(n, state);
                 rayQueryEXT rq;
-                rayQueryInitializeEXT(rq, uScene, gl_RayFlagsOpaqueEXT | gl_RayFlagsCullBackFacingTrianglesEXT, 0xFF, origin, 0.0, dir, rayLength);
+                rayQueryInitializeEXT(rq, uScene, gl_RayFlagsOpaqueEXT | gl_RayFlagsCullBackFacingTrianglesEXT, 0x0F, origin, 0.0, dir, rayLength);
                 while (rayQueryProceedEXT(rq)) { }
                 if (rayQueryGetIntersectionTypeEXT(rq, true) == gl_RayQueryCommittedIntersectionTriangleEXT)
                 {

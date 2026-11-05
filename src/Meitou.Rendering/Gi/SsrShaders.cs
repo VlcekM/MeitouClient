@@ -33,12 +33,12 @@ static class SsrShaders
             {
                 ivec2 q = min(base + ivec2(k & 1, k >> 1) * (div - 1), size - 1);
                 surface = texelFetch(uAlbedo, q, 0);
-                if ((surface.w >> 10) != 0u) return q;
+                if (((surface.w >> 10) & 63u) != 0u) return q;
             }
             surface = uvec4(0u);
             return ivec2(-1);
         }
-        float ssrGloss(uvec4 surface) { return float((surface.w >> 10) - 1u) / 62.0; }
+        float ssrGloss(uvec4 surface) { return float(((surface.w >> 10) & 63u) - 1u) / 62.0; }
         // How much of the sky's reflection the traced light replaces (the rest keeps the sky, occluded).
         float ssrWeight(float gloss) { return smoothstep(0.25, 0.45, gloss); }
         vec3 ssrNormal(uvec4 surface)
@@ -89,7 +89,7 @@ static class SsrShaders
         bool ssrBehind(ivec2 q, vec3 r)
         {
             uvec4 hit = texelFetch(uAlbedo, q, 0);
-            return (hit.w >> 10) != 0u && dot(ssrNormal(hit), r) > 0.2;
+            return ((hit.w >> 10) & 63u) != 0u && dot(ssrNormal(hit), r) > 0.2;
         }
         float ssrFade(vec2 uv, float travelled)
         {
@@ -215,7 +215,7 @@ static class SsrShaders
         {
             ivec2 px = ivec2(floor(gl_FragCoord.xy));
             uvec4 surface = texelFetch(uAlbedo, px, 0);
-            if ((surface.w >> 10) == 0u) discard;
+            if (((surface.w >> 10) & 63u) == 0u) discard;
             float z = depthAt(px);
             if (z <= 0.0) discard;
         {{GiResolveShaders.Upsample}}

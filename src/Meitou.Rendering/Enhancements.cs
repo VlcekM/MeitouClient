@@ -198,6 +198,9 @@ public static class Enhancements
         new("ssr", "Reflections", "sky only", "traced",
             () => post.Ssr, v => post.Ssr = v,
             "the game's glossy and rain-wet surfaces reflect one fixed sky picture, indoors and under a roof too; Meitou replaces it with what they really mirror (the screen, then a traced ray where the device has them, the sky past both), fading with roughness, and darkens the sky's reflection where the probes see no sky. Water keeps its own reflection. Off by default: not yet seen on a GPU"),
+        new("traced", "Traced sun shadows", "cascades", "ray-traced",
+            () => post.TracedSun, v => post.TracedSun = v,
+            "the game's sun shadows come from cascaded maps, soft or blocky by their texels; Meitou traces a ray to the sun from every pixel near the eye, so a shadow is as sharp as it is close to its caster, and grass shadows the ground (needs a GPU with ray tracing and Indirect light; characters stay in the cascades; off by default: not seen on a GPU yet)"),
     ];
 
     /// <summary><c>--meitou</c> / <c>--faithful &lt;all|id,id...&gt;</c>: turns those switches to Meitou or to Faithful.</summary>

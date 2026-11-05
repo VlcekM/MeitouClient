@@ -438,6 +438,7 @@ static class CharacterShaders
             giInterior = vInterior != 0u;
             skinGeometric = smoothNormal; skinCurvature = curvature; skinShare = skin; skinAlbedo = albedo;
             atmoMetalness = metal;
+            atmoReceiver = 3;
             if (view.fogDistance > 0.0 && uAtmoParams.x > 0.5)
             {
                 vec3 sunDiffuse = skinDiffuse(n, smoothNormal, uAtmoLight.xyz, curvature, skin, albedo);

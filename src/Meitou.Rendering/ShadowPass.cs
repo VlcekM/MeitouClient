@@ -158,6 +158,7 @@ public sealed unsafe partial class ShadowPass : IDisposable
         Poll();
         UploadNoise();
         Cascades = null;
+        TracedCascades = 0;
         if (!Enabled || (sunHeight ?? toSun.Y) < MinSunHeight || toSun.LengthSquared() < 1e-8f) { Disable(); return; }
         if (Meitou) { RenderMeitou(view, Vector3.Normalize(toSun), draw, landmarks, prepare); return; }
         meitouValid = false;

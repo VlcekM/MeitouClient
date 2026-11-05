@@ -191,7 +191,7 @@ static class GiNearShaders
             // Off the surface by what the depth's precision and the traced geometry's difference from the drawn one call for.
             vec3 world = p + n * (0.05 + z * 0.002);
             rayQueryEXT rq;
-            rayQueryInitializeEXT(rq, uScene, gl_RayFlagsCullBackFacingTrianglesEXT, 0xFF, world - origin.xyz, 0.0, dir, nearReach.x);
+            rayQueryInitializeEXT(rq, uScene, gl_RayFlagsCullBackFacingTrianglesEXT, {{TracedSunShaders.GiMask}}, world - origin.xyz, 0.0, dir, nearReach.x);
             TRACE(rq)
             vec3 light;
             float near = 0.0;
