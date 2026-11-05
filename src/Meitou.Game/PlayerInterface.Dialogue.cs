@@ -51,6 +51,7 @@ sealed partial class PlayerInterface
             dialogueRequestHandled = request.Id;
             if (request.Kind == DialogueRequestKind.CharacterEditor) OpenEditor(Meitou.Simulation.Editing.EditKind.Surgery, [request.Player], request.Npc, paid: true);
             else if (request.Kind == DialogueRequestKind.RecruitEditor) OpenEditor(Meitou.Simulation.Editing.EditKind.Recruit, [request.Player]);
+            else if (request.Kind == DialogueRequestKind.AnimalEditor) OpenEditor(Meitou.Simulation.Editing.EditKind.Recruit, request.Characters);
         }
     }
 

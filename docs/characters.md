@@ -241,7 +241,8 @@ exe decompile unless marked; Meitou: `CharacterDraft` (data), `EditCharacter` / 
   rows (`TabsPanelContent`), RANDOMISE, RANDOMISE ALL, RESET and every race/subrace/gender arrow, shows the RACE name as race and subrace, gender
   "-", and the race's description and stats. NameText renames whichever character is shown (`FUN_1405e9410`), animals included. CLOTHES,
   CONFIRM and CHANGE CHARACTER stay. The preview idle the original sets for an animal is **Unknown** in detail (Meitou: its world pose). Meitou:
-  `EditorSession.Animals`, `BindAnimalEditor`; an animal's rename is an `EditCharacter` with no look; in the Meitou bar an animal not shown is not
+  `EditorSession.Animals`, `BindAnimalEditor`; an animal's rename is an `EditCharacter` with no look, accepted in every kind (a bought animal's
+  goes through `EditKind.Recruit`; [animals](game/animals.md#buying-animals)); in the Meitou bar an animal not shown is not
   drawn (no seat).
 - **Races**: RACE_GROUP name on RACE, RACE name on SUBRACE; a race is listed if not an animal, in a group, has its editor limits XML, `playable`
   (mode 0) and, with a `force race` list, in it (none left: "Game start has no valid races", the list is unrestricted). Showing a character in
