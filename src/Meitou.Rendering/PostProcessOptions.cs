@@ -188,6 +188,10 @@ public sealed class PostOptions
         HeatHazeStrength = other.HeatHazeStrength; NightGradeStrength = other.NightGradeStrength; BloomStrength = other.BloomStrength;
         MeitouHeatHaze = other.MeitouHeatHaze; ToneMapping = other.ToneMapping; NightGrade = other.NightGrade; Bloom = other.Bloom;
         GiHybrid = other.GiHybrid; GiRelocate = other.GiRelocate; GiCloudShadows = other.GiCloudShadows; GiNearField = other.GiNearField;
+        MotionBlur = other.MotionBlur; MotionBlurShutter = other.MotionBlurShutter; CameraEffectsEverywhere = other.CameraEffectsEverywhere;
+        DepthOfField = other.DepthOfField; DofAperture = other.DofAperture;
+        Gtao = other.Gtao; GtaoQuality = other.GtaoQuality;
+        LampShadows = other.LampShadows; LampShadowLamps = other.LampShadowLamps;
     }
 
     /// <summary><c>--gi-hybrid &lt;parts&gt;</c>: the switch on with these parts only (comma list: <c>relocate</c>, <c>clouds</c>, <c>near</c>).</summary>
@@ -205,10 +209,6 @@ public sealed class PostOptions
             }
         }
         GiHybrid = true;
-        MotionBlur = other.MotionBlur; MotionBlurShutter = other.MotionBlurShutter; CameraEffectsEverywhere = other.CameraEffectsEverywhere;
-        DepthOfField = other.DepthOfField; DofAperture = other.DofAperture;
-        Gtao = other.Gtao; GtaoQuality = other.GtaoQuality;
-        LampShadows = other.LampShadows; LampShadowLamps = other.LampShadowLamps;
     }
 
     /// <summary>Handles one command-line option; false when it is not a post-processing one.</summary>
