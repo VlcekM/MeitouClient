@@ -264,6 +264,8 @@ public sealed partial class World
             s.Carry = cold is { CarriedBy.IsNone: false } ? cold.CarryAttach ?? Carrying.CarryPose.Fallback : null;
             s.Carrying = cold?.Carrying ?? CharacterId.None;
             s.HeldTool = state[i].Task == (byte)CharacterTask.Operate && cold is { OperateSite: not null, Appearance.Animal: null } ? cold.OperateTool : null;
+            s.Mouth = cold?.Mouth?.Record;
+            s.MouthTone = cold?.MouthTone ?? default;
             s.WorkEvents = WorkEventsOf(state[i].Task, cold);
             s.Task = (CharacterTask)state[i].Task;
             s.PickingLock = cold?.PickingLock is not null;

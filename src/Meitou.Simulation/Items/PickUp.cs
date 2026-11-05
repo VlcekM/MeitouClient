@@ -139,7 +139,7 @@ namespace Meitou.Simulation
                 if (Items.FeedSystem.CanHold(c, item.Item))
                 {
                     world.GroundItems.Take(id);
-                    Items.FeedSystem.HoldInMouth(world, s, c, item.Item);
+                    Items.FeedSystem.HoldInMouth(world, s, c, item.Item, item.Fall?.SkinTone ?? default);
                     world.EmitSound(SoundKind.PickedUp, s, next[s].Position);
                     continue;
                 }

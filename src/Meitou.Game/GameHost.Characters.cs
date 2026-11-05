@@ -329,7 +329,7 @@ sealed partial class GameHost
             var glide = player.EditorBlend(c.Id);   // after the preview, which may just have swapped the look
             list.Add(new CharacterInstance(DrawKey(c.Id), look, position, yaw, poses)
             {
-                WeaponDrawn = c.WeaponDrawn, RangedDrawn = c.RangedDrawn, BackDrawn = c.BackDrawn, Shots = c.CrossbowShots, Bolts = BoltsOf(c), Scale = c.Scale, DrawDistanceScale = c.DrawDistanceScale, Hidden = inBar is null && hiddenIndoors.Contains(c.Id), FullRateAnimation = editing is not null || fullRate.Contains(c.Id) || c.Id == sandboxHero && sandboxPicker?.Current is not null,
+                WeaponDrawn = c.WeaponDrawn, RangedDrawn = c.RangedDrawn, BackDrawn = c.BackDrawn, Shots = c.CrossbowShots, Bolts = BoltsOf(c), Mouth = MouthOf(c), Scale = c.Scale, DrawDistanceScale = c.DrawDistanceScale, Hidden = inBar is null && hiddenIndoors.Contains(c.Id), FullRateAnimation = editing is not null || fullRate.Contains(c.Id) || c.Id == sandboxHero && sandboxPicker?.Current is not null,
                 Bones = !posed ? null : Blend(before is null || Reanchored(before, c) ? null : before.Ragdoll, c.Ragdoll, alpha, ref Slot(ref ragdollsBySlot, c.Id.Slot), ref Slot(ref spareRagdollsBySlot, c.Id.Slot)),
                 BlendFrom = glide?.From, Blend = glide?.Blend ?? 0, Build = c.Build, Rotation = rotation, Blood = c.BloodAmounts,
             });

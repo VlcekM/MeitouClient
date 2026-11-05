@@ -531,6 +531,8 @@ public sealed class CharacterCold
     public Items.ItemInstance? Mouth { get; set; }
     /// <summary>The world tick at which <see cref="Mouth"/> was taken.</summary>
     public long MouthSinceTick { get; set; }
+    /// <summary>The skin tone of the character <see cref="Mouth"/> was cut from (<see cref="Items.FallSource.SkinTone"/>; 0: untinted), for its drawing only.</summary>
+    public Vector3 MouthTone { get; set; }
     /// <summary>The building site the <see cref="CharacterTask.Build"/>, <see cref="CharacterTask.Dismantle"/> or <see cref="CharacterTask.DeliverMaterials"/> task works (<see cref="Construction.BuildSite.Id"/>; null: none). Serial phases only. Hashed only while set.</summary>
     public string? BuildSite { get; set; }
     /// <summary>The material delivery bar (0 to 1, filling at 0.2 per second, <see cref="CharacterTask.DeliverMaterials"/>). Hashed with <see cref="BuildSite"/>.</summary>

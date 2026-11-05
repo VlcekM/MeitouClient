@@ -261,6 +261,8 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         public float Pixels;
         public int Shots;
         public IReadOnlyList<StuckBoltMesh> Bolts;
+        /// <summary>The limb held at its <c>mouth</c> point (<see cref="CharacterInstance.Mouth"/>; null: none).</summary>
+        public MouthMesh? Mouth;
         /// <summary>The ragdoll's bones over the animation (null: none).</summary>
         public BonePose? Bones;
         public long Key;
@@ -457,7 +459,7 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
     /// <summary>
     /// The bolts stuck in this update's posed characters (docs/game/combat.md "Bolt visuals"), as loose meshes into <paramref name="into"/> (cleared first), after <see cref="Update"/>:
     /// each fixed to its bone the first time it is seen, its +z along the flight and pulled back from the bone's origin by <see cref="BoltDepth"/>, then carried by the bone
-    /// (a ragdoll's included), as the original attaches it to the bone keeping its world orientation (<c>FUN_14052bfa0</c>).
+    /// (a ragdoll's included), as the original attaches it to the bone keeping its world orientation (<c>FUN_14052bfa0</c>). An animal's held limb comes with them (<see cref="AddMouth"/>).
     /// </summary>
     public void CollectBolts(List<DebrisPiece> into)
     {
@@ -465,6 +467,7 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         for (int i = 0; i < liveCount; i++)
         {
             ref var l = ref live[i];
+            AddMouth(ref l, into);
             var state = l.State;
             if (l.Bolts is not { Count: > 0 } bolts || l.PortraitOnly || l.Asset.IsIcon)
             {
@@ -497,6 +500,17 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
                 into.Add(new DebrisPiece(bolt.Mesh, 1, rotation, position));
             }
         }
+    }
+
+    /// <summary>
+    /// The limb an animal holds (<see cref="CharacterInstance.Mouth"/>) as a loose mesh at its posed <c>mouth</c> point (<see cref="CharacterAsset.Mouth"/>), sized with the animal; nothing
+    /// when its race has no such point (docs/game/character-stats.md "Mouth").
+    /// </summary>
+    void AddMouth(ref Live l, List<DebrisPiece> into)
+    {
+        if (l.Mouth is not { } held || l.PortraitOnly || l.Asset.IsIcon || l.Asset.Mouth is not { } mouth || l.State is not { Posed: >= 0 } state) return;
+        if (mouth.AttachIndex >= state.Attach.Length || !Matrix4x4.Decompose(state.Attach[mouth.AttachIndex] * l.World, out var scale, out var rotation, out var position)) return;
+        into.Add(new DebrisPiece(held.Mesh, scale.X, rotation, position, 1, held.Look));
     }
 
     /// <summary>The rotation that turns +z onto <paramref name="to"/> (unit length).</summary>
@@ -691,6 +705,7 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         (l.Key, l.PortraitOnly) = (inst.Key, far);
         l.World = WorldOf(in inst, asset, scale);
         (l.WeaponDrawn, l.RangedDrawn, l.BackDrawn, l.Shots, l.Bolts) = (inst.WeaponDrawn, inst.RangedDrawn, inst.BackDrawn, inst.Shots, inst.Bolts);
+        l.Mouth = inst.Mouth;
         l.Centre = centre;
         l.Radius = asset.Radius * scale;
         l.AttachBase = attachCount;
@@ -856,6 +871,7 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         foreach (var part in asset.Parts)
             if (part.AttachIndex >= 0) state.Attach[part.AttachIndex] = scratch.TagTransform(part.Bone, part.Offset);
         foreach (var lamp in asset.Lamps) state.Attach[lamp.AttachIndex] = lamp.Offset * scratch.BoneTransform(lamp.Bone);
+        if (asset.Mouth is { } mouth) state.Attach[mouth.AttachIndex] = scratch.TagTransform(mouth.Bone, mouth.Offset);
         rig.Return(scratch);
 
         if (state.Posed < 0 || l.Snap)
