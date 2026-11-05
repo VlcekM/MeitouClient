@@ -64,6 +64,17 @@ public enum MoveFlags : ushort
     AnyPath = NeedPath | Pending | HasPath,
 }
 
+/// <summary>How a character's last walk ended (<see cref="CharacterCold.WalkEnd"/>).</summary>
+public enum WalkEnd : byte
+{
+    /// <summary>Still walking, or another system stopped the walk.</summary>
+    None,
+    /// <summary>It followed its path to the last point.</summary>
+    Finished,
+    /// <summary>It gave the path up: no way there, blocked past the limit, or stopped at a locked door.</summary>
+    Failed,
+}
+
 /// <summary>Speed modes (docs/game/pathfinding.md "Speed"), also the HUD speed icon's index (Walk, Jog, Run, Group): 0 caps at the race walk speed, 1 at 55, 2 does not cap, 3 keeps to the slowest of the squad.</summary>
 public static class SpeedMode
 {

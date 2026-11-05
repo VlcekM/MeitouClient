@@ -325,6 +325,7 @@ public sealed partial class LockSystem
                     // Task_OpenDoor fails at a locked door for anyone, the owner too (docs/game/locks.md "Doors").
                     if (away > LockedReach || !Crosses(n.Position, c.Path, n.PathCursor, s.Spot, legs: 1)) return;
                     TaskStart.Stand(table, slot);
+                    c.WalkEnd = WalkEnd.Failed;
                     if (c.IsPlayer) Say(s.World, c, "It's locked.");
                     return;
                 }

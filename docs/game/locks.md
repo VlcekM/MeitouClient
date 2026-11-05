@@ -228,6 +228,7 @@ Same targets as picking; Task_CutLock / Task_BruteForceLock share the shackle ta
   its owner matches the AI's (an owner test, **Observed**), else its home; the target is the first door that is closed and not opening (the plan unlocks, then opens it). With none left
   the finder clears the squad's "house locked" flag. A = !87, so it scores only while the home counts as locked. Only squads whose packages list
   86 open up (base data: Civilian, Shop, Shop-24hr, Slaver and Storage Guard leaders, among others); the rest stay locked.
+  Meitou (`LockSystem.LockUpSweep`): the opener's round starts while the home counts as locked by either branch of 87 (the round's flag, or `FixtureRegistry.AllDoorsLocked`). **Observed** (headless, #293): the three `stolen slave clothing shop` Swamp Shacks of Slave Markets (Newwworld level data) start `locked0` true with `initial door state` 0 (CLOSED) on the template; the level state wins, so with only round-locked homes opened the shopkeeper outside could not get in, its path ended 29 units from its node behind the back wall (within the goal snap 30) and it stood there all day.
 - **Initial door state** (`FUN_140553210`, when the home building is assigned to a squad; **Verified**): CLOSED -> unlocked, not
   broken, closed; OPEN -> unlocked, open; LOCKED -> locked, closed; BROKEN -> unlocked, lock broken, door broken, pose 0 (closed). Saved buildings keep
   their saved values. The gate on building +0xa8 that allows it is **Unknown** (presumably "not restored from a save").
