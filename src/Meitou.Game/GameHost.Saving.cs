@@ -199,7 +199,7 @@ sealed partial class GameHost
         catch (Exception e)
         {
             Console.Error.WriteLine($"save      capture failed: {e}");
-            player.Notice($"Save failed: {e.Message}", true);
+            player.Notice(Loc.Tr("Save failed: {1}", e.Message), true);
             return;
         }
         double captureMs = watch.Elapsed.TotalMilliseconds;
@@ -212,7 +212,7 @@ sealed partial class GameHost
                 var written = Stopwatch.StartNew();
                 game.Write(folder);
                 Console.WriteLine($"save      {folder}: captured in {captureMs:0.0} ms{(ahead ? "" : " (the base made on the spot)")}, written in {written.ElapsedMilliseconds} ms");
-                if (!feedback) saveNotices.Enqueue(("Game saved", false));
+                if (!feedback) saveNotices.Enqueue(("Saved", false));
             }
             catch (Exception e)
             {
@@ -409,9 +409,13 @@ sealed partial class GameHost
         Console.WriteLine($"load      {summary}");
         var missing = loadedSave?.MissingMods ?? [];
         // The message panel fits a line or two: it gives the count, the message log the names.
-        if (missing.Count == 0) player.Notice(imported ? "Game imported" : "Game loaded");
-        else player.Notice(Loc.Tr("Game loaded; the save was made with {1} mod(s) not loaded now (listed in the messages)", missing.Count), true,
-            Loc.Tr("Game loaded; the save was made with mods not loaded now: {1}", string.Join(", ", missing)));
+        if (missing.Count == 0)
+        {
+            player.Notice(imported ? "Imported" : "Loaded");
+            return;
+        }
+        string panel = Loc.Tr("Loaded; the save was made with {1} mod(s) not loaded now (listed in the messages)", missing.Count);
+        player.Notice(panel, true, Loc.Tr("Loaded; the save was made with mods not loaded now: {1}", string.Join(", ", missing)));
     }
 
     /// <summary>A save loaded from the menus starts paused with <see cref="UserConfig.PauseOnLoad"/> (a player pause: the speed buttons resume it).</summary>
