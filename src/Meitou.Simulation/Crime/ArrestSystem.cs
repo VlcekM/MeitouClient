@@ -559,38 +559,55 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
                 a.Time = 0;
                 return true;
             }
-            case ArrestPhase.Walk:
-            {
-                if (gc.Carrying != a.Target)
-                {
-                    // Dropped (the guard was hit, the captive taken): lift it again while it is down and free.
-                    if (tc.Medical is { Incapacitated: true } && tc.CarriedBy.IsNone && !tc.IsImprisoned) { a.Phase = ArrestPhase.Fight; a.Time = 0; return true; }
-                    return End(world, a, ArrestEventKind.GaveUp);
-                }
-                var cage = a.Cage is { } id ? world.Fixtures.Find(id) : null;
-                if (cage is null || !FixtureRegistry.IsFree(table, cage)) return ToCage(world, a, g, t);
-                float d = Vector2.Distance(new Vector2(gn.Position.X, gn.Position.Z), new Vector2(cage.Position.X, cage.Position.Z));
-                bool walking = gn.Task == (byte)CharacterTask.GoTo;
-                if (FixtureRegistry.AtCage(cage, gn.Position, walking))
-                {
-                    TaskStart.Stand(table, g);
-                    Carry!.LetGo(world, g);
-                    if (!world.Fixtures.Imprison(world, a.Target, cage, constants.PrisonTime)) return ToCage(world, a, g, t);
-                    Deeds?.Caged(world, g, t);
-                    tc.Recognition = 0;
-                    if (a.Enslave) FixtureRegistry.Enslave(world, tc, a.Faction, table.Cold(g)?.SquadId ?? -1);
-                    else if (tc.IsPlayer) world.Post(Loc.Tr("{1} has been imprisoned by {2}", tc.Name, Crimes.Factions.NameOf(a.Faction)));
-                    return End(world, a, ArrestEventKind.Jailed);
-                }
-                if (!walking)
-                {
-                    if (++a.Tries > Settings.CageWalks) return Drop(world, a, g);
-                    TaskStart.Walk(world, g, new Vector2(cage.Position.X, cage.Position.Z), SpeedMode.Free, TaskType.FIND_CAGE_AND_PUT_IN_IF_BOUNTY, TaskSource.Npc);
-                }
-                return true;
-            }
+            case ArrestPhase.Walk: return StepWalk(world, a, g, t);
         }
         return true;
+    }
+
+    /// <summary>
+    /// The cage errand (112 / 108): the guard walks onto the cage's floor (a cage upstairs is reached by the stairs, not stood under: <see cref="FixtureRegistry.AtCage"/> tests the height) and
+    /// locks the captive up there. After <see cref="ArrestSettings.CageWalks"/> walks that end short the cage counts as unreachable for his faction and the captive is dropped.
+    /// </summary>
+    bool StepWalk(World world, Arrest a, int g, int t)
+    {
+        var table = world.Characters;
+        var gc = table.Cold(g)!;
+        var tc = table.Cold(t)!;
+        ref var gn = ref table.Next[g];
+        if (gc.Carrying != a.Target)
+        {
+            // Dropped (the guard was hit, the captive taken): lift it again while it is down and free.
+            if (tc.Medical is { Incapacitated: true } && tc.CarriedBy.IsNone && !tc.IsImprisoned) { a.Phase = ArrestPhase.Fight; a.Time = 0; return true; }
+            return End(world, a, ArrestEventKind.GaveUp);
+        }
+        var cage = a.Cage is { } id ? world.Fixtures.Find(id) : null;
+        if (cage is null || !FixtureRegistry.IsFree(table, cage)) return ToCage(world, a, g, t);
+        bool walking = gn.Task == (byte)CharacterTask.GoTo;
+        if (FixtureRegistry.AtCage(cage, gn.Position, walking)) return LockUp(world, a, g, t, cage);
+        if (walking) return true;
+        if (++a.Tries > Settings.CageWalks)
+        {
+            world.Fixtures.MarkUnreachable(world, cage, a.Faction);
+            return Drop(world, a, g);
+        }
+        TaskStart.Walk(world, g, cage.Position, SpeedMode.Free, TaskType.FIND_CAGE_AND_PUT_IN_IF_BOUNTY, TaskSource.Npc);
+        return true;
+    }
+
+    /// <summary>At the cage: the guard puts the captive down into it with its sentence (a slaver's take-over enslaves it instead of posting the arrest).</summary>
+    bool LockUp(World world, Arrest a, int g, int t, Fixture cage)
+    {
+        var table = world.Characters;
+        var tc = table.Cold(t)!;
+        TaskStart.Stand(table, g);
+        Carry!.LetGo(world, g);
+        if (!world.Fixtures.Imprison(world, a.Target, cage, constants.PrisonTime)) return ToCage(world, a, g, t);
+
+        Deeds?.Caged(world, g, t);
+        tc.Recognition = 0;
+        if (a.Enslave) FixtureRegistry.Enslave(world, tc, a.Faction, table.Cold(g)?.SquadId ?? -1);
+        else if (tc.IsPlayer) world.Post(Loc.Tr("{1} has been imprisoned by {2}", tc.Name, Crimes.Factions.NameOf(a.Faction)));
+        return End(world, a, ArrestEventKind.Jailed);
     }
 
     /// <summary>Row 181's step: 118 does not hold (the target wields or holds a weapon in its weapon sections) and the strip can run (needs the tool, <see cref="Captives"/>).</summary>
@@ -655,7 +672,7 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
         var cage = world.Fixtures.FindCage(world, gc, table.Next[g].Position, home, f => Reserved(f, a));
         if (cage is null) return Drop(world, a, g);
         a.Cage = cage.Id;
-        TaskStart.Walk(world, g, new Vector2(cage.Position.X, cage.Position.Z), SpeedMode.Free, TaskType.FIND_CAGE_AND_PUT_IN_IF_BOUNTY, TaskSource.Npc);
+        TaskStart.Walk(world, g, cage.Position, SpeedMode.Free, TaskType.FIND_CAGE_AND_PUT_IN_IF_BOUNTY, TaskSource.Npc);
         return true;
     }
 

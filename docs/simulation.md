@@ -989,8 +989,14 @@ Arrests, the recognition meter and the marker are hashed only while set. What a 
   faction's entry; else, when the target runs past 800 or after 60 s, and for any bigger bounty: arrest.
 - **Arrest**: attack until the target is down (combat ends the fight; nobody beats a downed target), lift
   (`CarrySystem.BeginPickUp`), `FindCage` from the guard (his squad's home building; other arrests' cages reserved), walk,
-  and within `use range` + 15 (or a walk that ended within 200) `LetGo` + `Imprison` (`prison time` CONSTANTS). The fight
-  stopping with the target up re-orders it within 800, else he gives up; no free cage: he drops the captive (engine).
+  and at the cage (`FixtureRegistry.AtCage`: within its `use range`, doubled standing, and under 15 above or below it) `LetGo` + `Imprison` (`prison time` CONSTANTS). The fight
+  stopping with the target up re-orders it within 800, else he gives up; no free cage: he drops the captive (engine). After 3 walks that end short the cage is
+  unreachable for his faction for 24 game hours (`MarkUnreachable`, as the kidnapper's and the town duty's) and he drops the captive (engine).
+- **Cage walks** (arrest, kidnap, town duty 112 / 281; engine): a walk onto the cage's floor (`TaskStart.Walk` with the cage's position, `MovementSystem.GoToFloor`), so a cage on
+  an upper storey is reached by the stairs. A flat goal resolves on the walker's own storey and ends under the cage, out of `AtCage`'s height. **Observed** (#314 save, Sho-Battai
+  Police Station Tower, `Outpost s-IV` `43.11:6-Newwworld-INGAME`): its 19 cages stand on the storey at y 1092, 43 above the ground floor where the guards lift raiders; the
+  guards carry all eight raiders up and cage them. Still flat (arrival by distance only, so they do not loop):
+  the captive jobs' cage walks and confiscation (212). The player's Put in Cage order (`StepTo`) is flat too but tests `AtCage`: an upper-storey cage still fails it.
 - **Release**: player and NPC prisoners alike are freed by the release rounds below.
 - **Rounds** (`LockSystem.Rounds.cs`, serial; a sweep every 30 ticks starts at most 4, at most 8 run; the worker is
   `Engaged`; each lock takes the owner's 3.3 s): **release** (211): an awake prisoner whose sentence is served is freed by an NPC of the
@@ -1119,7 +1125,7 @@ Duties are priority-2 goals (**Observed**: `FUN_140510ef0` tries orders, jobs, u
 - **273 Remove Intruder**: a free member standing in its home town, the town its occupation holds or a town of its faction lifts the nearest knocked-out character in that town's
   walls (`amInsideTownWalls` > 0: its [gate code](game/pathfinding.md#gate-codes) is a walled region, so an unwalled town removes none; where the codes are unknown, the built-up area: a
   placed town's radius, a player town's farthest building from its centre), not carried or caged (a body in a bed is lifted, `FUN_14099c250`), not of its faction or an ally.
-  A body that dies on the way is caged only with **281** listed (else let go). Any free member carrying a dead body (a kidnapper's or arrester's victim that died: they end their errand without letting go when 281 is listed) with 281 in its package takes it to a cage the same way (`LookDeadCarriers`, **Verified** `FUN_1405a1140`: no dead test); with no cage it keeps the body.
+  A body that dies on the way is caged only with **281** listed (else let go). Any free member carrying a body it holds no errand for (a kidnapper's or arrester's victim that died: they end their errand without letting go when 281 is listed; a carry a save restored) with 281 (any body) or 112 (a living one) in its package takes it to a cage the same way (`LookCarriers`, **Verified** `FUN_1405a1140`: no dead test); with no cage it keeps the body. **Observed** (#314 save): a Sho-Battai police guard loaded carrying a raider cages it.
   Carrying it: with **112** (a living body) or **281** (any body) listed and the carried-body desire above 0 (`CageDesire`: 0 for an animal or one the carrier regards as friendly, 0.1 outside a town, 1.4 police with a bounty-free slave, 0.5 dead, 2.0 alive; [ai-tasks](game/ai-tasks.md)), the best free cage in that town (the occupied town's cages are usable), where it is locked up with the usual put-in sentence (108 `Task_PutInSomething`
   sets none without a bounty, [economy 11.5](game/economy.md#115-bail-and-sentence); not `Kidnapped`, **Verified** `FUN_140358670`); else with **274** listed, to the town's exit point (`TownExit`: 200 outward from the first gate outside the walls or wall with an interior, the same for every carrier; no walkability test, **Verified** `FUN_140927120`), put down; else put down. A body put down short of its goal is left alone for 2 game hours.
   A lift whose walk to the body takes over 60 game seconds is given up the same way (engine choice: a body the carrier cannot reach would hold it forever).
