@@ -164,6 +164,9 @@ public static class Enhancements
         new("contact", "Contact shadows", "off", "on",
             () => post.ContactShadows, v => post.ContactShadows = v,
             "the game's shadows stop at the cascades' resolution, so small objects float; Meitou adds short sun shadows from the depth (needs ambient occlusion on)"),
+        new("gihybrid", "Hybrid GI", "off", "on",
+            () => post.GiHybrid, v => post.GiHybrid = v,
+            "the probes' grid leaves many probes inside walls, where they only go dark; Meitou moves them out of the geometry, lets the clouds shade the bounced light and the light shafts, and adds short traced rays per pixel for the fine indirect light the probes are too coarse for (--gi-hybrid picks the parts; docs/render-gi.md \"Hybrid GI\")"),
     ];
 
     /// <summary><c>--meitou</c> / <c>--faithful &lt;all|id,id...&gt;</c>: turns those switches to Meitou or to Faithful.</summary>

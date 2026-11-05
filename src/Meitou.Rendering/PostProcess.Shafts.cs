@@ -30,7 +30,8 @@ public sealed unsafe partial class PostProcess
     sealed class ShaftInjectPass : ShaftPass
     {
         public readonly UniformHandle Samples;
-        public ShaftInjectPass(GpuContext gpu) : base(gpu, LightShaftShaders.Inject, "post shafts inject") => Samples = P.Uniform("uShaftSamples");
+        public ShaftInjectPass(GpuContext gpu, bool clouds) : base(gpu, clouds ? LightShaftShaders.InjectClouded : LightShaftShaders.Inject, "post shafts inject") =>
+            Samples = P.Uniform("uShaftSamples");
     }
 
     sealed class ShaftResolvePass : ShaftPass
@@ -133,7 +134,7 @@ public sealed unsafe partial class PostProcess
         cmd.Order();
     }
     static readonly bool ShaftStamps = Environment.GetEnvironmentVariable("MEITOU_SHAFT_STAMPS") == "1";
-    ShaftInjectPass? shaftInject;
+    readonly ShaftInjectPass?[] shaftInjects = new ShaftInjectPass?[2];   // by whether the samples read the cloud shadows (the gihybrid switch's clouds part)
     ShaftResolvePass? shaftResolve;
     /// <summary>With a temporal upscaler: the injection's raw output and last frame's filtered atlas (<see cref="LightShaftShaders.Resolve"/>, into
     /// <see cref="shaftInjected"/>, the two swapped each frame), and last frame's camera and slices.</summary>
@@ -187,7 +188,6 @@ public sealed unsafe partial class PostProcess
             shaftLight = Make(batch, aw, ah, InternalFormat.R32f, TextureMinFilter.Linear, "post shafts light");
             shaftScatter = Make(batch, aw, ah, InternalFormat.Rgba16f, TextureMinFilter.Linear, "post shafts scatter");
         }
-        shaftInject ??= new ShaftInjectPass(Gpu);
         shaftIntegrate ??= new ShaftIntegratePass(Gpu);
         shaftApply ??= new ShaftApplyPass(Gpu);
         shaftScatterPass ??= new ShaftScatterPass(Gpu);
@@ -211,7 +211,7 @@ public sealed unsafe partial class PostProcess
             s.P.Set(s.Back, r.M13, r.M23, r.M33);
         }
 
-        var i = shaftInject;
+        var i = shaftInjects[o.GiCloudShadowing ? 1 : 0] ??= new ShaftInjectPass(Gpu, o.GiCloudShadowing);
         Common(i);
         i.P.Set(i.Samples, Math.Clamp(Options.ShaftSamples, 1, 16));
         i.P.ApplyGlobals();   // the atmosphere's uniforms and the shadow receivers, through the frame globals
@@ -305,7 +305,7 @@ public sealed unsafe partial class PostProcess
 
     void DisposeShafts()
     {
-        shaftInject?.P.Dispose();
+        foreach (var inject in shaftInjects) inject?.P.Dispose();
         shaftResolve?.P.Dispose();
         shaftIntegrate?.P.Dispose();
         shaftApply?.P.Dispose();

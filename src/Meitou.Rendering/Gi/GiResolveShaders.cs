@@ -36,7 +36,7 @@ static partial class GiResolveShaders
         {
             int line = body.IndexOf('\n');
             if (line < 0 || !body.StartsWith("#version", StringComparison.Ordinal)) throw new InvalidOperationException("WithAlbedo: no #version line");
-            body = body[..(line + 1)] + "#define GI_IN_SHADER\n" + body[(line + 1)..];
+            body = GiShaders.Relocating(body[..(line + 1)] + "#define GI_IN_SHADER\n" + body[(line + 1)..]);
         }
         return body + $$"""
 
@@ -109,6 +109,27 @@ static partial class GiResolveShaders
             fragColour = vec4((gi.rgb - sky) * share * transmittance, interior ? -z : z);
         }
         """;
+
+    const string ProbesRead = "vec4 gi = giIrradiance(p, n, v);";
+    const string ResolveUniforms = "uniform float uDiv;";
+
+    /// <summary>
+    /// <see cref="Resolve"/> for the frame's <c>gihybrid</c> parts (docs/render-gi.md "Hybrid GI"): reading relocated probes; taking the near field (<see cref="GiNearField"/>, the same
+    /// texels: its a says how much) in place of the probes' light.
+    /// </summary>
+    public static string ResolveFor(bool relocate, bool near)
+    {
+        string resolve = relocate ? GiShaders.Relocating(Resolve) : Resolve;
+        if (!near) return resolve;
+        if (!resolve.Contains(ProbesRead, StringComparison.Ordinal)) throw new InvalidOperationException("ResolveFor: no probe read");
+        const string Taken = """
+
+                vec4 field = texelFetch(uGiNear, ivec2(floor(gl_FragCoord.xy)), 0);
+                gi = vec4(mix(gi.rgb, field.rgb, field.a), mix(gi.a, 1.0, field.a));
+            """;
+        return resolve.Replace(ResolveUniforms, ResolveUniforms + "\nuniform sampler2D uGiNear;", StringComparison.Ordinal)
+            .Replace(ProbesRead, ProbesRead + Taken, StringComparison.Ordinal);
+    }
 
     /// <summary>
     /// The resolve over the scene (blend one, one; red, green and blue): per pixel that takes the probes, its four nearest low texels with their

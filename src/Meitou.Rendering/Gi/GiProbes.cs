@@ -32,8 +32,14 @@ internal sealed unsafe class GiProbes : IDisposable
     readonly GpuContext ctx;
     readonly GpuProgram invalidateProgram;
     readonly GpuComputePipeline invalidatePipeline;
-    // The trace and blend programs by the rays per probe (the workgroup size): the default, and the other one once the bench's gi-rays switch asks for it.
-    readonly Dictionary<int, (GpuProgram Trace, GpuProgram Blend, GpuComputePipeline TracePipeline, GpuComputePipeline BlendPipeline)> variants = [];
+    // The trace and blend programs by the rays per probe (the workgroup size): the default, and the other one once the bench's gi-rays switch asks for it;
+    // apart for a trace from relocated places and with the cloud shadows, made once those run.
+    readonly Dictionary<(int Rays, bool Relocate, bool Clouds), (GpuProgram Trace, GpuProgram Blend, GpuComputePipeline TracePipeline, GpuComputePipeline BlendPipeline)> variants = [];
+    // Probe relocation (docs/render-gi.md "Probe relocation"), made on first use: the offsets by tile, the pass that lists them for the shaders, the relocation by rays per probe.
+    DeviceBuffer? offsets;
+    GpuProgram publishProgram;
+    GpuComputePipeline publishPipeline;
+    readonly Dictionary<int, (GpuProgram Program, GpuComputePipeline Pipeline)> relocators = [];
     readonly GpuTexture irradiance, distance;
     readonly GpuTexture[] bases;
     readonly DeviceBuffer rays, state;
@@ -54,6 +60,8 @@ internal sealed unsafe class GiProbes : IDisposable
     readonly Random random = new(1);
     int slot;
     bool updated;
+    Constants lastConstants;
+    WorldLamps? lastLamps;
 
     /// <summary>Whether the world shaders take their ambient from the probes (the <c>gi</c> switch).</summary>
     public bool Enabled { get; set; } = true;
@@ -77,6 +85,13 @@ internal sealed unsafe class GiProbes : IDisposable
 
     /// <summary>False: indoor surfaces keep the original ambient while outdoor surfaces still use GI.</summary>
     public bool InteriorEnabled { get; set; } = true;
+
+    /// <summary>True: probes move out of geometry (the <c>gihybrid</c> switch's relocation, set per frame while the resolve runs: the programs that read relocated
+    /// probes are the resolve and the fragments that read the probes themselves; docs/render-gi.md "Probe relocation").</summary>
+    public bool Relocate { get; set; }
+
+    /// <summary>True: the cloud transmission map dims the sun at the probes' hits (the <c>gihybrid</c> switch's <c>clouds</c> part, docs/render-clouds.md).</summary>
+    public bool CloudShadows { get; set; }
 
     /// <summary>Render globals: x on/filled, y strength, z resolve, w indoor gain (0 bypasses indoor GI). The compute block carries hysteresis.</summary>
     Vector4 Params => new(Enabled && Active && Shade && !InReflection && updated ? 1 : 0, Strength, Resolve ? 1 : 0, InteriorEnabled ? MathF.Max(1, InteriorGain) : 0);
@@ -115,7 +130,7 @@ internal sealed unsafe class GiProbes : IDisposable
             (0, DescriptorType.StorageBuffer), (1, DescriptorType.UniformBuffer), (2, DescriptorType.StorageImage), (3, DescriptorType.CombinedImageSampler),
         ]);
         invalidatePipeline = ctx.Pipelines.Get(new ComputePipelineDesc(invalidateProgram, "gi probe invalidate"));
-        Variant(Rays);
+        Variant(Rays, false, false);
         int rows = Cascades * Columns * Layers;
         irradiance = ctx.CreateTexture(new TextureDesc(InternalFormat.Rgba16f, Columns * (IrradianceTexels + 2), rows * (IrradianceTexels + 2),
             Use: TextureUse.Storage | TextureUse.Sampled | TextureUse.TransferDst | TextureUse.TransferSrc, Name: "gi probe irradiance"));
@@ -124,7 +139,8 @@ internal sealed unsafe class GiProbes : IDisposable
         // One per frame slot: the CPU writes the base heights of the frame being recorded while the one before may still read its own.
         bases = new GpuTexture[ctx.Device.Frames.Count];
         for (int i = 0; i < bases.Length; i++)
-            bases[i] = ctx.CreateTexture(new TextureDesc(InternalFormat.R32f, Columns, Columns * Cascades, Use: TextureUse.Sampled | TextureUse.TransferDst, Name: "gi probe bases"));
+            bases[i] = ctx.CreateTexture(new TextureDesc(InternalFormat.R32f, Columns, Columns * Cascades * (1 + Layers),
+                Use: TextureUse.Storage | TextureUse.Sampled | TextureUse.TransferDst, Name: "gi probe bases"));
         rays = DeviceBuffer.Create(ctx, (ulong)Probes * MaxRays * 16, BufferUse.Storage, "gi probe rays");
         state = DeviceBuffer.Create(ctx, (ulong)Probes * 16, BufferUse.Storage | BufferUse.TransferDst, "gi probe state");
         lists = new BufferAllocation[ctx.Device.Frames.Count];
@@ -203,23 +219,93 @@ internal sealed unsafe class GiProbes : IDisposable
     }
 
     /// <summary>The trace and blend for <paramref name="rays"/> rays a probe (the workgroup size), made on first use.</summary>
-    (GpuProgram Trace, GpuProgram Blend, GpuComputePipeline TracePipeline, GpuComputePipeline BlendPipeline) Variant(int rays)
+    (GpuProgram Trace, GpuProgram Blend, GpuComputePipeline TracePipeline, GpuComputePipeline BlendPipeline) Variant(int rays, bool relocate, bool clouds)
     {
-        if (variants.TryGetValue(rays, out var made)) return made;
-        var trace = ctx.Shaders.Compute(GiShaders.ProbeTrace(rays), "gi probe trace " + rays,
+        if (variants.TryGetValue((rays, relocate, clouds), out var made)) return made;
+        (uint, DescriptorType)[] set0 =
         [
             (0, DescriptorType.AccelerationStructureKhr), (1, DescriptorType.StorageBuffer), (2, DescriptorType.StorageBuffer), (3, DescriptorType.UniformBuffer),
             (4, DescriptorType.CombinedImageSampler), (5, DescriptorType.CombinedImageSampler), (6, DescriptorType.CombinedImageSampler),
             (7, DescriptorType.CombinedImageSampler), (8, DescriptorType.CombinedImageSampler), (9, DescriptorType.CombinedImageSampler),
             (10, DescriptorType.CombinedImageSampler), (11, DescriptorType.CombinedImageSampler), (12, DescriptorType.CombinedImageSampler),
             (13, DescriptorType.StorageBuffer), (14, DescriptorType.StorageBuffer),
-        ], GpuSetLayout.Bindless);
+            .. clouds ? new (uint, DescriptorType)[] { (15, DescriptorType.CombinedImageSampler), (16, DescriptorType.CombinedImageSampler) } : [],
+        ];
+        var trace = ctx.Shaders.Compute(GiShaders.ProbeTrace(rays, relocate, clouds), "gi probe trace " + rays, set0, GpuSetLayout.Bindless);
         var blend = ctx.Shaders.Compute(GiShaders.ProbeBlend(rays), "gi probe blend " + rays,
         [
             (0, DescriptorType.StorageBuffer), (1, DescriptorType.StorageBuffer), (2, DescriptorType.UniformBuffer),
             (3, DescriptorType.StorageImage), (4, DescriptorType.StorageImage), (5, DescriptorType.CombinedImageSampler), (6, DescriptorType.StorageBuffer),
         ]);
-        return variants[rays] = (trace, blend, ctx.Pipelines.Get(new ComputePipelineDesc(trace, "gi probe trace " + rays)), ctx.Pipelines.Get(new ComputePipelineDesc(blend, "gi probe blend " + rays)));
+        return variants[(rays, relocate, clouds)] = (trace, blend, ctx.Pipelines.Get(new ComputePipelineDesc(trace, "gi probe trace " + rays)),
+            ctx.Pipelines.Get(new ComputePipelineDesc(blend, "gi probe blend " + rays)));
+    }
+
+    /// <summary>The offsets buffer (zero: every probe at its grid place) and the publish pass, on the first frame relocation runs.</summary>
+    void EnsureRelocation()
+    {
+        if (offsets is not null) return;
+        offsets = DeviceBuffer.Create(ctx, (ulong)Probes * 16, BufferUse.Storage | BufferUse.TransferDst, "gi probe offsets");
+        var cmd = ctx.Device.BeginImmediate();
+        ctx.Device.Vk.CmdFillBuffer(cmd, ctx.Device.BufferAt(offsets.Handle.Index), 0, offsets.Size, 0);
+        ctx.Device.EndImmediate(cmd);
+        publishProgram = ctx.Shaders.Compute(GiShaders.ProbeOffsetPublish, "gi probe offset publish",
+        [
+            (0, DescriptorType.StorageBuffer), (1, DescriptorType.UniformBuffer), (2, DescriptorType.StorageImage), (3, DescriptorType.StorageBuffer),
+        ]);
+        publishPipeline = ctx.Pipelines.Get(new ComputePipelineDesc(publishProgram, "gi probe offset publish"));
+    }
+
+    (GpuProgram Program, GpuComputePipeline Pipeline) Relocator(int rays)
+    {
+        if (relocators.TryGetValue(rays, out var made)) return made;
+        var program = ctx.Shaders.Compute(GiShaders.ProbeRelocate(rays), "gi probe relocate " + rays,
+        [
+            (0, DescriptorType.StorageBuffer), (1, DescriptorType.StorageBuffer), (2, DescriptorType.UniformBuffer),
+            (3, DescriptorType.CombinedImageSampler), (4, DescriptorType.StorageBuffer), (5, DescriptorType.StorageBuffer),
+        ]);
+        return relocators[rays] = (program, ctx.Pipelines.Get(new ComputePipelineDesc(program, "gi probe relocate " + rays)));
+    }
+
+    /// <summary>This frame's offsets into the frame slot's <c>uGiBase</c> rows, before anything reads them (<see cref="GiShaders.ProbeOffsetPublish"/>).</summary>
+    void PublishOffsets(CommandList cmd, GpuTexture slotBases, Transient block)
+    {
+        var stateInfo = new DescriptorBufferInfo(ctx.Device.BufferAt(state.Handle.Index), 0, state.Size);
+        var uniform = new DescriptorBufferInfo(ctx.Device.BufferAt(block.Handle.Index), block.Offset, (ulong)sizeof(Constants));
+        var image = new DescriptorImageInfo(default, ctx.Device.ViewAt(slotBases.View().Index), ImageLayout.General);
+        var offsetInfo = new DescriptorBufferInfo(ctx.Device.BufferAt(offsets!.Handle.Index), 0, offsets.Size);
+        var writes = stackalloc WriteDescriptorSet[4];
+        writes[0] = Buffer(0, DescriptorType.StorageBuffer, &stateInfo);
+        writes[1] = Buffer(1, DescriptorType.UniformBuffer, &uniform);
+        writes[2] = new WriteDescriptorSet { SType = StructureType.WriteDescriptorSet, DstBinding = 2, DescriptorCount = 1, DescriptorType = DescriptorType.StorageImage, PImageInfo = &image };
+        writes[3] = Buffer(3, DescriptorType.StorageBuffer, &offsetInfo);
+        cmd.BindPipeline(publishPipeline);
+        cmd.PushDescriptors(publishProgram, 0, new ReadOnlySpan<WriteDescriptorSet>(writes, 4), GpuBindPoint.Compute);
+        cmd.Dispatch((uint)(Probes / 64));
+        cmd.Barrier(ComputeAfterCompute);
+    }
+
+    /// <summary>This frame's rays move this frame's probes (<see cref="GiShaders.ProbeRelocate"/>), for the next frame's places. Before the blend: it reads the states the trace read.</summary>
+    void RelocateListed(CommandList cmd, GpuTexture slotBases, Transient block, int listed)
+    {
+        if (listed <= 0) return;
+        var (program, pipeline) = Relocator(Rays);
+        var rayInfo = new DescriptorBufferInfo(ctx.Device.BufferAt(rays.Handle.Index), 0, rays.Size);
+        var stateInfo = new DescriptorBufferInfo(ctx.Device.BufferAt(state.Handle.Index), 0, state.Size);
+        var uniform = new DescriptorBufferInfo(ctx.Device.BufferAt(block.Handle.Index), block.Offset, (ulong)sizeof(Constants));
+        var image = new DescriptorImageInfo(ctx.Device.SamplerAt(nearest.Index), ctx.Device.ViewAt(slotBases.View().Index), ImageLayout.General);
+        var listInfo = new DescriptorBufferInfo(lists[slot].Buffer, 0, (ulong)listed * 4);
+        var offsetInfo = new DescriptorBufferInfo(ctx.Device.BufferAt(offsets!.Handle.Index), 0, offsets.Size);
+        var writes = stackalloc WriteDescriptorSet[6];
+        writes[0] = Buffer(0, DescriptorType.StorageBuffer, &rayInfo);
+        writes[1] = Buffer(1, DescriptorType.StorageBuffer, &stateInfo);
+        writes[2] = Buffer(2, DescriptorType.UniformBuffer, &uniform);
+        writes[3] = new WriteDescriptorSet { SType = StructureType.WriteDescriptorSet, DstBinding = 3, DescriptorCount = 1, DescriptorType = DescriptorType.CombinedImageSampler, PImageInfo = &image };
+        writes[4] = Buffer(4, DescriptorType.StorageBuffer, &listInfo);
+        writes[5] = Buffer(5, DescriptorType.StorageBuffer, &offsetInfo);
+        cmd.BindPipeline(pipeline);
+        cmd.PushDescriptors(program, 0, new ReadOnlySpan<WriteDescriptorSet>(writes, 6), GpuBindPoint.Compute);
+        cmd.Dispatch((uint)listed);
     }
 
     /// <summary>
@@ -236,12 +322,13 @@ internal sealed unsafe class GiProbes : IDisposable
     }
 
     [StructLayout(LayoutKind.Sequential)]
-    struct Constants
+    internal struct Constants
     {
         public Vector4 Params;
         public Vector4 Grid0, Grid1, Grid2, Grid3;
         public Matrix4x4 Rotation;
         public Vector4 Origin, SunLight, LightDir, Maps, Albedo, RayLength, LightGrid, Extra;
+        public Vector4 Cloud, CloudWind, Sun;   // for a trace with the cloud shadows
     }
 
     /// <summary>
@@ -252,7 +339,8 @@ internal sealed unsafe class GiProbes : IDisposable
     {
         if (scene.Top is null) return;
         slot = ctx.Frame.Slot;
-        var variant = Variant(Rays);
+        if (Relocate) EnsureRelocation();
+        var variant = Variant(Rays, Relocate, CloudShadows);
         int phases = Phases is 1 or 2 or 4 or 8 ? Phases : 4, phase = (int)(Updates % phases);
         bool moved = false;
         int level = interiorFocus is { } focus ? (int)MathF.Floor(focus.Y / 96) : 0;
@@ -265,7 +353,7 @@ internal sealed unsafe class GiProbes : IDisposable
             var centre = c == 0 ? interiorFocus ?? eye : eye;
             int ox = (int)MathF.Floor(centre.X / s) - Columns / 2, oz = (int)MathF.Floor(centre.Z / s) - Columns / 2;
             grid[c * 2] = new Vector4(ox * s, oz * s, s, sy);
-            grid[c * 2 + 1] = new Vector4(Mod(ox, Columns), Mod(oz, Columns), 2 * s, 0);
+            grid[c * 2 + 1] = new Vector4(Mod(ox, Columns), Mod(oz, Columns), 2 * s, Relocate ? 1 : 0);
             // The bases only change when the grid scrolls or the terrain's fine window is swapped.
             bool sameHeights = ReferenceEquals(placedHeights, heights.Fine) && (c != 0 || !layoutChanged);
             if (placed[c] == (ox, oz) && sameHeights) continue;
@@ -308,9 +396,11 @@ internal sealed unsafe class GiProbes : IDisposable
             RayLength = new Vector4(Grid[0].RayLength, Grid[1].RayLength, SleepPeriod, HiddenPeriod),
             LightGrid = lamps?.Grid ?? default,
             Extra = new Vector4(0, FarPeriod > 1 ? FarPeriod : 1, 0, 0),
+            Cloud = Read<Vector4>(g, "uAtmoCloud"), CloudWind = Read<Vector4>(g, "uAtmoCloudWind"), Sun = Read<Vector4>(g, "uAtmoSun"),
         };
         var ground = g.Texture("uWeatherGround")?.Invoke() ?? default;
         constants.Albedo = new Vector4(ObjectAlbedo, ground.IsNull ? 0 : 1);
+        (lastConstants, lastLamps) = (constants, lamps);
         var block = ctx.Frame.Constants.Write<Constants>(new ReadOnlySpan<Constants>(&constants, 1), 256);
 
         var cmd = (CommandList)ctx.BeginNative("gi probes");
@@ -336,31 +426,18 @@ internal sealed unsafe class GiProbes : IDisposable
             cmd.Dispatch((uint)(Probes / 64));
             cmd.Barrier(ComputeAfterCompute);
         }
+        if (Relocate) PublishOffsets(cmd, bases, block);
         {
             var top = scene.Top.Handle;
             var asWrite = new WriteDescriptorSetAccelerationStructureKHR { SType = StructureType.WriteDescriptorSetAccelerationStructureKhr, AccelerationStructureCount = 1, PAccelerationStructures = &top };
             var records = new DescriptorBufferInfo(ctx.Device.BufferAt(scene.Records.Buffer.Index), scene.Records.Offset, scene.Records.Size);
             var rayInfo = new DescriptorBufferInfo(ctx.Device.BufferAt(rays.Handle.Index), 0, rays.Size);
             var uniform = new DescriptorBufferInfo(ctx.Device.BufferAt(block.Handle.Index), block.Offset, (ulong)sizeof(Constants));
-            var images = stackalloc DescriptorImageInfo[9];
-            images[0] = new DescriptorImageInfo(ctx.Device.SamplerAt(linear.Index), ctx.Device.ViewAt(irradiance.View().Index), ImageLayout.General);
-            images[1] = new DescriptorImageInfo(ctx.Device.SamplerAt(linear.Index), ctx.Device.ViewAt(distance.View().Index), ImageLayout.General);
-            images[2] = new DescriptorImageInfo(ctx.Device.SamplerAt(nearest.Index), ctx.Device.ViewAt(bases.View().Index), ImageLayout.General);
-            images[3] = Image(g, "uAtmoIrradiance", cube: true);
-            images[4] = Image(g, "uAtmoAmbientMap", cube: false);
-            images[5] = ground.IsNull ? images[2] : new DescriptorImageInfo(ctx.Device.SamplerAt(ground.Sampler.Index), ctx.Device.ViewAt(ground.View.Index), ImageLayout.General);
-            // The lamps' textures (a stand-in while there are none: the shader reads them only when LightGrid.w is set).
-            if (lamps is not null)
-            {
-                var (lampCells, lampIndex, lampData) = lamps.Current;
-                images[6] = new DescriptorImageInfo(ctx.Device.SamplerAt(lamps.NearestSampler.Index), ctx.Device.ViewAt(lampCells.View().Index), ImageLayout.General);
-                images[7] = new DescriptorImageInfo(ctx.Device.SamplerAt(lamps.NearestSampler.Index), ctx.Device.ViewAt(lampIndex.View().Index), ImageLayout.General);
-                images[8] = new DescriptorImageInfo(ctx.Device.SamplerAt(lamps.NearestSampler.Index), ctx.Device.ViewAt(lampData.View().Index), ImageLayout.General);
-            }
-            else images[6] = images[7] = images[8] = images[2];
+            var images = stackalloc DescriptorImageInfo[11];
+            HitImages(images, ground, lamps);
             var stateInfo = new DescriptorBufferInfo(ctx.Device.BufferAt(state.Handle.Index), 0, state.Size);
             var listInfo = new DescriptorBufferInfo(lists[slot].Buffer, 0, (ulong)Math.Max(listed, 1) * 4);
-            var writes = stackalloc WriteDescriptorSet[15];
+            var writes = stackalloc WriteDescriptorSet[17];
             writes[0] = new WriteDescriptorSet { SType = StructureType.WriteDescriptorSet, PNext = &asWrite, DstBinding = 0, DescriptorCount = 1, DescriptorType = DescriptorType.AccelerationStructureKhr };
             writes[1] = Buffer(1, DescriptorType.StorageBuffer, &records);
             writes[2] = Buffer(2, DescriptorType.StorageBuffer, &rayInfo);
@@ -369,8 +446,14 @@ internal sealed unsafe class GiProbes : IDisposable
                 writes[4 + i] = new WriteDescriptorSet { SType = StructureType.WriteDescriptorSet, DstBinding = (uint)(4 + i), DescriptorCount = 1, DescriptorType = DescriptorType.CombinedImageSampler, PImageInfo = &images[i] };
             writes[13] = Buffer(13, DescriptorType.StorageBuffer, &stateInfo);
             writes[14] = Buffer(14, DescriptorType.StorageBuffer, &listInfo);
+            int count = 15;
+            if (CloudShadows)
+            {
+                for (int i = 0; i < 2; i++)
+                    writes[count++] = new WriteDescriptorSet { SType = StructureType.WriteDescriptorSet, DstBinding = (uint)(15 + i), DescriptorCount = 1, DescriptorType = DescriptorType.CombinedImageSampler, PImageInfo = &images[9 + i] };
+            }
             cmd.BindPipeline(variant.TracePipeline);
-            cmd.PushDescriptors(variant.Trace, 0, new ReadOnlySpan<WriteDescriptorSet>(writes, 15), GpuBindPoint.Compute);
+            cmd.PushDescriptors(variant.Trace, 0, new ReadOnlySpan<WriteDescriptorSet>(writes, count), GpuBindPoint.Compute);
             // Set 1: the bindless table, for the objects' diffuse maps at the hits.
             cmd.BindBindlessTable(variant.Trace, 1, GpuBindPoint.Compute);
             if (listed > 0) cmd.Dispatch((uint)listed);
@@ -382,6 +465,7 @@ internal sealed unsafe class GiProbes : IDisposable
         StageClock.Sub("gi trace");
         cmd = (CommandList)ctx.BeginNative("gi blend");
         cmd.BeginLabel("gi blend");
+        if (Relocate) RelocateListed(cmd, bases, block, listed);
         {
             var rayInfo = new DescriptorBufferInfo(ctx.Device.BufferAt(rays.Handle.Index), 0, rays.Size);
             var stateInfo = new DescriptorBufferInfo(ctx.Device.BufferAt(state.Handle.Index), 0, state.Size);
@@ -408,6 +492,39 @@ internal sealed unsafe class GiProbes : IDisposable
         ctx.EndNative(cmd);
         updated = true;
         Updates++;
+    }
+
+    /// <summary>The samplers a hit shader reads, its bindings 4 to 12, then the cloud maps for bindings 15 and 16 (a trace's or <see cref="GiNearField"/>'s).</summary>
+    void HitImages(DescriptorImageInfo* images, SampledTexture ground, WorldLamps? lamps)
+    {
+        var g = ctx.Globals;
+        images[0] = new DescriptorImageInfo(ctx.Device.SamplerAt(linear.Index), ctx.Device.ViewAt(irradiance.View().Index), ImageLayout.General);
+        images[1] = new DescriptorImageInfo(ctx.Device.SamplerAt(linear.Index), ctx.Device.ViewAt(distance.View().Index), ImageLayout.General);
+        images[2] = new DescriptorImageInfo(ctx.Device.SamplerAt(nearest.Index), ctx.Device.ViewAt(bases[slot].View().Index), ImageLayout.General);
+        images[3] = Image(g, "uAtmoIrradiance", cube: true);
+        images[4] = Image(g, "uAtmoAmbientMap", cube: false);
+        images[5] = ground.IsNull ? images[2] : new DescriptorImageInfo(ctx.Device.SamplerAt(ground.Sampler.Index), ctx.Device.ViewAt(ground.View.Index), ImageLayout.General);
+        // The lamps' textures (a stand-in while there are none: the shader reads them only when LightGrid.w is set).
+        if (lamps is not null)
+        {
+            var (lampCells, lampIndex, lampData) = lamps.Current;
+            images[6] = new DescriptorImageInfo(ctx.Device.SamplerAt(lamps.NearestSampler.Index), ctx.Device.ViewAt(lampCells.View().Index), ImageLayout.General);
+            images[7] = new DescriptorImageInfo(ctx.Device.SamplerAt(lamps.NearestSampler.Index), ctx.Device.ViewAt(lampIndex.View().Index), ImageLayout.General);
+            images[8] = new DescriptorImageInfo(ctx.Device.SamplerAt(lamps.NearestSampler.Index), ctx.Device.ViewAt(lampData.View().Index), ImageLayout.General);
+        }
+        else images[6] = images[7] = images[8] = images[2];
+        if (!CloudShadows) return;
+        images[9] = Image(g, "uAtmoClouds", cube: false);
+        images[10] = Image(g, "uAtmoCloudsTile", cube: false);
+    }
+
+    /// <summary>This frame's update, for a later pass of the frame that shades ray hits the way the trace does (<see cref="GiNearField"/>); false before the first update.</summary>
+    internal bool HitInputs(DescriptorImageInfo* images, out Constants constants)
+    {
+        constants = lastConstants;
+        if (!updated) return false;
+        HitImages(images, ctx.Globals.Texture("uWeatherGround")?.Invoke() ?? default, lastLamps);
+        return true;
     }
 
     /// <summary>
@@ -459,6 +576,9 @@ internal sealed unsafe class GiProbes : IDisposable
         rays.Dispose();
         state.Dispose();
         foreach (var v in variants.Values) { ctx.Shaders.Dispose(v.Trace); ctx.Shaders.Dispose(v.Blend); }
+        offsets?.Dispose();
+        if (offsets is not null) ctx.Shaders.Dispose(publishProgram);
+        foreach (var r in relocators.Values) ctx.Shaders.Dispose(r.Program);
         ctx.Shaders.Dispose(invalidateProgram);
     }
 }

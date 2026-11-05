@@ -155,7 +155,7 @@ sealed partial class SettingsMenu
     internal void ApplyBenchmarkBaseline()
     {
         ApplyPreset(MediumPreset);
-        string[] off = ["Indirect light", "Indoor GI", WorldFrame.GroundParallaxSwitch, WorldFrame.GroundDisplaceSwitch, WorldFrame.RockSmoothingSwitch, WorldFrame.OutlineRefineSwitch];
+        string[] off = ["Indirect light", "Indoor GI", "Hybrid GI", WorldFrame.GroundParallaxSwitch, WorldFrame.GroundDisplaceSwitch, WorldFrame.RockSmoothingSwitch, WorldFrame.OutlineRefineSwitch];
         foreach (var toggle in values.Toggles.Where(t => off.Contains(t.Label) && t.Get())) toggle.Set(false);
         if (values.Sliders.FirstOrDefault(s => s.Label == WorldFrame.UpscalerSliders[0]) is { } antiAliasing) antiAliasing.Set(2);   // SMAA
         if (values.Sliders.FirstOrDefault(s => s.Label == WorldFrame.UpscalerSliders[1]) is { } scale) scale.Set(1);

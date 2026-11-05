@@ -94,7 +94,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     readonly CloudMotionPass cloudMotionPass;
     readonly TaaPass taaPass;
     readonly FogPass fogPass;
-    GiResolvePass? giResolvePass;   // made the first time the GI resolve runs
+    readonly GiResolvePass?[] giResolvePasses = new GiResolvePass?[4];   // made the first time the GI resolve runs, by gihybrid's parts: bit 0 relocated probes, bit 1 the near field
     GiApplyPass? giApplyPass;
     readonly ParticleDepthPass particleDepthPass;
     readonly ParticleSoftDepthPass particleSoftDepthPass;
@@ -289,7 +289,12 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         }
     }
 
-    sealed class GiResolvePass(GpuContext gpu) : GiPass(gpu, Gi.GiResolveShaders.Resolve, "post gi resolve");
+    sealed class GiResolvePass : GiPass
+    {
+        public readonly SamplerSlot Near;
+        public GiResolvePass(GpuContext gpu, bool relocate, bool near) : base(gpu, Gi.GiResolveShaders.ResolveFor(relocate, near), "post gi resolve") =>
+            Near = near ? P.Sampler("uGiNear") : default;
+    }
 
     sealed class GiApplyPass : GiPass
     {
@@ -1007,6 +1012,21 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
 
     GpuTexture? GiAlbedoTarget => GiResolve > 0 ? giAlbedo?.Texture : null;
 
+    /// <summary>The near field to run before the resolve, set before <see cref="RunGiResolve"/>'s frame by the frame (null: none; the <c>gihybrid</c> switch's <c>near</c> part).</summary>
+    internal Gi.GiNearField? GiNear { get; set; }
+
+    /// <summary>The near field for this frame's resolve, its output or null. It needs the scene's targets closed, so the open segment ends first.</summary>
+    GpuTexture? RunGiNear()
+    {
+        if (GiNear is not { } field) return null;
+        CloseSegment();
+        float tanY = MathF.Tan(fovNow * 0.5f);
+        var rot = viewRotation;
+        var view = new Gi.GiNearField.View(eyeNow, new Vector3(rot.M11, rot.M21, rot.M31), new Vector3(rot.M12, rot.M22, rot.M32), ViewWindow.BackFor(rot, fovNow, aspectNow),
+            ViewWindow.Tan(tanY * aspectNow, tanY), planes, giLow!.Width, giLow.Height, giDivisor, width, height, ViewWindow.Current.IsWhole);
+        return field.Run(sceneDepth!.Texture, giAlbedo!.Texture, view, Options.GiRelocating, Options.GiCloudShadowing);
+    }
+
     /// <summary>Makes the albedo and low targets for <see cref="GiResolve"/> (again when its divisor or the render size changed).</summary>
     void EnsureGi()
     {
@@ -1029,7 +1049,10 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     {
         if (GiResolve <= 0 || giAlbedo is null || giLow is null || sceneColour is null || !haveScene) return;
         MarkScene();
-        var r = giResolvePass ??= new GiResolvePass(Gpu);
+        var near = RunGiNear();
+        if (near is not null) Stamp("gi near");
+        bool relocate = Options.GiRelocating;
+        var r = giResolvePasses[(relocate ? 1 : 0) | (near is null ? 0 : 2)] ??= new GiResolvePass(Gpu, relocate, near is not null);
         var a = giApplyPass ??= new GiApplyPass(Gpu);
         float tanY = MathF.Tan(fovNow * 0.5f);
         var rot = viewRotation;
@@ -1047,6 +1070,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
             g.P.Set(g.Div, (float)giDivisor);
         }
         r.P.ApplyGlobals();   // the atmosphere's and the probes' uniforms, through the frame globals
+        if (near is not null) r.P.Bind(r.Near, new SampledTexture(Point(), near.View()));
         Draw(r.P, giLow);
         Bind(a.P, a.Low, giLow);
         a.P.Set(a.LowSize, (float)giLow.Width, (float)giLow.Height);
@@ -1659,7 +1683,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         Hiz?.Dispose();
         foreach (var p in new FullscreenProgram[] { ssao, ssaoMask, blur, luminancePass, adaptPass, compositePass, fxaaPass, hazePass, velocityPass, cloudMotionPass, taaPass, fogPass, particleDepthPass, particleSoftDepthPass, particleCompositePass, particleCoveragePass }) p.P.Dispose();
         smaaPasses.Dispose();
-        giResolvePass?.P.Dispose();
+        foreach (var pass in giResolvePasses) pass?.P.Dispose();
         giApplyPass?.P.Dispose();
         aoApplyPass?.P.Dispose();
         flowTexture?.Dispose();
