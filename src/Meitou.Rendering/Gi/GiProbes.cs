@@ -78,10 +78,12 @@ internal sealed unsafe class GiProbes : IDisposable
     /// <summary>False: indoor surfaces keep the original ambient while outdoor surfaces still use GI.</summary>
     public bool InteriorEnabled { get; set; } = true;
 
-    /// <summary>Render globals: x on/filled, y strength, z resolve, w indoor gain (0 bypasses indoor GI). The compute block carries hysteresis.</summary>
-    Vector4 Params => new(Enabled && Active && Shade && !InReflection && updated ? 1 : 0, Strength, Resolve ? 1 : 0, InteriorEnabled ? MathF.Max(1, InteriorGain) : 0);
+    /// <summary>Render globals: x on/filled, y strength, z 1 resolve + 2 reflections, w indoor gain (0 bypasses indoor GI). The compute block carries hysteresis.</summary>
+    Vector4 Params => new(Enabled && Active && Shade && !InReflection && updated ? 1 : 0, Strength, (Resolve ? 1 : 0) + (Reflections && !InReflection ? 2 : 0), InteriorEnabled ? MathF.Max(1, InteriorGain) : 0);
     /// <summary>True: the lit fragments write their albedo and the post pass adds the probes' light (<c>--gi-resolve</c>, docs/render-gi.md "Resolve").</summary>
     public bool Resolve { get; set; }
+    /// <summary>True: every lit fragment writes the surface target with its gloss, for the post chain's reflections (docs/render-gi.md "Reflections").</summary>
+    public bool Reflections { get; set; }
     /// <summary>True while the water reflection draws: the mirrored scene keeps the flat ambient (the frame block is re-read per segment).</summary>
     public bool InReflection { get; set; }
     /// <summary>True: the water reflection reads the probes too (off by default; the bench's gi-reflection switch).</summary>
@@ -358,6 +360,8 @@ internal sealed unsafe class GiProbes : IDisposable
                 images[8] = new DescriptorImageInfo(ctx.Device.SamplerAt(lamps.NearestSampler.Index), ctx.Device.ViewAt(lampData.View().Index), ImageLayout.General);
             }
             else images[6] = images[7] = images[8] = images[2];
+            for (int i = 0; i < traceImages.Length; i++) traceImages[i] = images[i];
+            (traceConstants, traceFrame) = (uniform, ctx.Frame.Number);
             var stateInfo = new DescriptorBufferInfo(ctx.Device.BufferAt(state.Handle.Index), 0, state.Size);
             var listInfo = new DescriptorBufferInfo(lists[slot].Buffer, 0, (ulong)Math.Max(listed, 1) * 4);
             var writes = stackalloc WriteDescriptorSet[15];
@@ -421,6 +425,85 @@ internal sealed unsafe class GiProbes : IDisposable
         DstAccess = AccessFlags2.ShaderStorageReadBit | AccessFlags2.ShaderStorageWriteBit | AccessFlags2.ShaderSampledReadBit,
     };
 
+    // What this frame's probe trace bound (samplers 4..12, its constants) for the reflections' rays, and the frame it was: the probes may not update every frame.
+    readonly DescriptorImageInfo[] traceImages = new DescriptorImageInfo[9];
+    DescriptorBufferInfo traceConstants;
+    long traceFrame = -1;
+    GpuProgram? reflectProgram;
+    GpuComputePipeline reflectPipeline;
+
+    /// <summary>What <see cref="TraceReflections"/> reads of the post chain's frame: the march's texels, the surfaces, the depth and their camera.</summary>
+    public readonly record struct ReflectionFrame(GpuTexture Hit, GpuTexture Surface, GpuTexture Depth, Vector3 Eye, Vector3 Right, Vector3 Up, Vector3 Back,
+        Vector2 Tan, Vector2 Planes, int Width, int Height, int Divisor, float Spread, float Frame);
+
+    [StructLayout(LayoutKind.Sequential)]
+    struct ReflectionCamera
+    {
+        public Vector4 Eye, Right, Up, Back, View, Sizes, Frame;
+    }
+
+    /// <summary>
+    /// The reflections' rays (<see cref="GiShaders.Reflect"/>) into <paramref name="frame"/>'s hit texels, recorded into the post chain's open segment.
+    /// Nothing when no probe trace ran this frame: the march's result stands.
+    /// </summary>
+    public void TraceReflections(CommandList cmd, GiScene scene, in ReflectionFrame frame)
+    {
+        if (scene.Top is null || traceFrame != ctx.Frame.Number) return;
+        if (reflectProgram is null)
+        {
+            reflectProgram = ctx.Shaders.Compute(GiShaders.Reflect, "gi reflect", ReflectBindings(), GpuSetLayout.Bindless);
+            reflectPipeline = ctx.Pipelines.Get(new ComputePipelineDesc(reflectProgram.Value, "gi reflect"));
+        }
+        var cameraInfo = WriteReflectionCamera(frame);
+        var top = scene.Top.Handle;
+        var asWrite = new WriteDescriptorSetAccelerationStructureKHR { SType = StructureType.WriteDescriptorSetAccelerationStructureKhr, AccelerationStructureCount = 1, PAccelerationStructures = &top };
+        var records = new DescriptorBufferInfo(ctx.Device.BufferAt(scene.Records.Buffer.Index), scene.Records.Offset, scene.Records.Size);
+        var constants = traceConstants;
+        var hit = new DescriptorImageInfo(default, ctx.Device.ViewAt(frame.Hit.View().Index), ImageLayout.General);
+        var images = stackalloc DescriptorImageInfo[11];
+        for (int i = 0; i < traceImages.Length; i++) images[i] = traceImages[i];
+        images[9] = new DescriptorImageInfo(ctx.Device.SamplerAt(nearest.Index), ctx.Device.ViewAt(frame.Surface.View().Index), ImageLayout.General);
+        images[10] = new DescriptorImageInfo(ctx.Device.SamplerAt(nearest.Index), ctx.Device.ViewAt(frame.Depth.View().Index), ImageLayout.General);
+        var writes = stackalloc WriteDescriptorSet[16];
+        writes[0] = new WriteDescriptorSet { SType = StructureType.WriteDescriptorSet, PNext = &asWrite, DstBinding = 0, DescriptorCount = 1, DescriptorType = DescriptorType.AccelerationStructureKhr };
+        writes[1] = Buffer(1, DescriptorType.StorageBuffer, &records);
+        writes[2] = new WriteDescriptorSet { SType = StructureType.WriteDescriptorSet, DstBinding = 2, DescriptorCount = 1, DescriptorType = DescriptorType.StorageImage, PImageInfo = &hit };
+        writes[3] = Buffer(3, DescriptorType.UniformBuffer, &constants);
+        for (int i = 0; i < 11; i++)
+            writes[4 + i] = new WriteDescriptorSet { SType = StructureType.WriteDescriptorSet, DstBinding = (uint)(4 + i), DescriptorCount = 1, DescriptorType = DescriptorType.CombinedImageSampler, PImageInfo = &images[i] };
+        writes[15] = Buffer(15, DescriptorType.UniformBuffer, &cameraInfo);
+        cmd.BeginLabel("gi reflect");
+        cmd.Barrier(BarrierBatch.Full);
+        cmd.BindPipeline(reflectPipeline);
+        cmd.PushDescriptors(reflectProgram.Value, 0, new ReadOnlySpan<WriteDescriptorSet>(writes, 16), GpuBindPoint.Compute);
+        cmd.BindBindlessTable(reflectProgram.Value, 1, GpuBindPoint.Compute);
+        cmd.Dispatch((uint)((frame.Hit.Desc.Width + 7) / 8), (uint)((frame.Hit.Desc.Height + 7) / 8));
+        cmd.Barrier(BarrierBatch.Full);
+        cmd.EndLabel();
+    }
+
+    DescriptorBufferInfo WriteReflectionCamera(in ReflectionFrame frame)
+    {
+        var camera = new ReflectionCamera
+        {
+            Eye = new Vector4(frame.Eye, 0), Right = new Vector4(frame.Right, 0), Up = new Vector4(frame.Up, 0), Back = new Vector4(frame.Back, 0),
+            View = new Vector4(frame.Tan, frame.Planes.X, frame.Planes.Y),
+            Sizes = new Vector4(frame.Width, frame.Height, frame.Divisor, frame.Spread),
+            Frame = new Vector4(frame.Frame, 0, 0, 0),
+        };
+        var block = ctx.Frame.Constants.Write<ReflectionCamera>(new ReadOnlySpan<ReflectionCamera>(&camera, 1), 256);
+        return new DescriptorBufferInfo(ctx.Device.BufferAt(block.Handle.Index), block.Offset, (ulong)sizeof(ReflectionCamera));
+    }
+
+    static (uint, DescriptorType)[] ReflectBindings() =>
+    [
+        (0, DescriptorType.AccelerationStructureKhr), (1, DescriptorType.StorageBuffer), (2, DescriptorType.StorageImage), (3, DescriptorType.UniformBuffer),
+        (4, DescriptorType.CombinedImageSampler), (5, DescriptorType.CombinedImageSampler), (6, DescriptorType.CombinedImageSampler),
+        (7, DescriptorType.CombinedImageSampler), (8, DescriptorType.CombinedImageSampler), (9, DescriptorType.CombinedImageSampler),
+        (10, DescriptorType.CombinedImageSampler), (11, DescriptorType.CombinedImageSampler), (12, DescriptorType.CombinedImageSampler),
+        (13, DescriptorType.CombinedImageSampler), (14, DescriptorType.CombinedImageSampler), (15, DescriptorType.UniformBuffer),
+    ];
+
     static WriteDescriptorSet Buffer(uint binding, DescriptorType type, DescriptorBufferInfo* info) =>
         new() { SType = StructureType.WriteDescriptorSet, DstBinding = binding, DescriptorCount = 1, DescriptorType = type, PBufferInfo = info };
 
@@ -460,5 +543,6 @@ internal sealed unsafe class GiProbes : IDisposable
         state.Dispose();
         foreach (var v in variants.Values) { ctx.Shaders.Dispose(v.Trace); ctx.Shaders.Dispose(v.Blend); }
         ctx.Shaders.Dispose(invalidateProgram);
+        if (reflectProgram is { } reflect) ctx.Shaders.Dispose(reflect);
     }
 }

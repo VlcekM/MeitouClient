@@ -47,7 +47,7 @@ static partial class GiResolveShaders
     }
 
     /// <summary>The scene's position from the scene depth, shared by both passes.</summary>
-    const string Reconstruct = """
+    internal const string Reconstruct = """
         uniform sampler2D uNearDepth;
         uniform vec2 uNearPlanes;               // near, far of the scene depth
         uniform vec2 uTan;                      // tan(fov/2) * aspect, tan(fov/2)
@@ -111,24 +111,10 @@ static partial class GiResolveShaders
         """;
 
     /// <summary>
-    /// The resolve over the scene (blend one, one; red, green and blue): per pixel that takes the probes, its four nearest low texels with their
-    /// bilinear weights divided by how far each one's depth is from this pixel's (relative), times the albedo.
+    /// The statements that make <c>add</c>: a low target's value at this pixel, its four nearest texels with their bilinear weights divided by how far each one's
+    /// depth is from this pixel's (relative). Needs <c>uLow</c> (alpha the signed view depth), <c>uLowSize</c>, <c>uDiv</c>, <c>surface</c>, <c>px</c>, <c>z</c>.
     /// </summary>
-    public static readonly string Apply = "#version 330 core\n" + Reconstruct + """
-        in vec2 vUv;
-        out vec4 fragColour;
-        uniform usampler2D uAlbedo;
-        uniform sampler2D uLow;
-        uniform vec2 uLowSize;
-        uniform float uDiv;
-
-        void main()
-        {
-            ivec2 px = ivec2(floor(gl_FragCoord.xy));
-            uvec4 surface = texelFetch(uAlbedo, px, 0);
-            if ((surface.w & 256u) == 0u) discard;
-            float z = depthAt(px);
-            if (z <= 0.0) discard;
+    internal const string Upsample = """
             vec2 f = (vec2(px) + 0.5) / uDiv - 0.5;
             ivec2 i0 = ivec2(floor(f));
             vec2 w = f - vec2(i0);
@@ -148,6 +134,30 @@ static partial class GiResolveShaders
                 if (rel < best) { best = rel; nearest = t.rgb; }
             }
             vec3 add = total > 1e-6 ? sum / total : nearest;
+        """;
+
+    /// <summary>
+    /// The resolve over the scene (blend one, one; red, green and blue): per pixel that takes the probes, its four nearest low texels with their
+    /// bilinear weights divided by how far each one's depth is from this pixel's (relative), times the albedo.
+    /// </summary>
+    public static readonly string Apply = "#version 330 core\n" + Reconstruct + """
+        in vec2 vUv;
+        out vec4 fragColour;
+        uniform usampler2D uAlbedo;
+        uniform sampler2D uLow;
+        uniform vec2 uLowSize;
+        uniform float uDiv;
+
+        void main()
+        {
+            ivec2 px = ivec2(floor(gl_FragCoord.xy));
+            uvec4 surface = texelFetch(uAlbedo, px, 0);
+            if ((surface.w & 256u) == 0u) discard;
+            float z = depthAt(px);
+            if (z <= 0.0) discard;
+
+        """ + Upsample + """
+
             vec3 albedo = vec3(float(surface.z & 255u), float(surface.z >> 8), float(surface.w & 255u)) / 255.0;
             fragColour = vec4(albedo * albedo * add, 0.0);
         }

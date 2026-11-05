@@ -147,26 +147,25 @@ static class GiShaders
 
         """;
 
-    /// <summary>
-    /// The probe trace (docs/render-gi.md "Probes"): one workgroup per probe, one ray per invocation (<see cref="GiProbes.Rays"/>, spherical
-    /// Fibonacci directions turned by the frame's random rotation). A ray that hits sees the surface lit as the lighting pass lights it, without
-    /// specular: a constant albedo (the terrain: the ground colour map) times the sun through a shadow ray and the probes' own irradiance of the
-    /// last frame there (the bounces beyond the first). A ray that misses sees the lighting pass's ambient in its direction. Back faces of objects
-    /// count as dark and give a negative distance (the blend marks probes that see many as inside).
-    /// </summary>
-    public static string ProbeTrace(int rays) => $$"""
-        #version 460
+    /// <summary>The extensions of a shader that traces rays and reads hit records.</summary>
+    const string TraceExtensions = """
         #extension GL_EXT_ray_query : require
         #extension GL_EXT_buffer_reference : require
         #extension GL_EXT_buffer_reference_uvec2 : require
         #extension GL_EXT_scalar_block_layout : require
-        layout(local_size_x = {{rays}}) in;
+        """;
+
+    /// <summary>The traced scene and its hit records.</summary>
+    static readonly string TraceScene = $$"""
         {{Meitou.Rendering.Gpu.BindlessTable.Declarations(1)}}
 
         layout(set = 0, binding = 0) uniform accelerationStructureEXT uScene;
         struct Geometry { uvec2 vertices; uvec2 indices; uint stride; uint kind; uint diffuse; uint alphaMap; float alphaThreshold; uint emitter; uint pad1; uint pad2; };
         layout(set = 0, binding = 1, std430) readonly buffer Geometries { Geometry geometries[]; };
-        layout(set = 0, binding = 2, std430) writeonly buffer RayResults { vec4 rays[]; };
+        """;
+
+    /// <summary>The trace's constants (<see cref="GiProbes"/>' <c>Constants</c>).</summary>
+    const string TraceParams = """
         layout(set = 0, binding = 3, std140) uniform Params
         {
             vec4 uGiParams;
@@ -181,9 +180,10 @@ static class GiShaders
             vec4 uLightGrid;    // the lamps (WorldLamps; w 0: none)
             vec4 extra;         // y: the far cascade's period
         };
-        layout(set = 0, binding = 13, std430) readonly buffer ProbeState { vec4 positions[]; };
-        layout(set = 0, binding = 14, std430) readonly buffer ProbeList { uint probeList[]; };
-        {{Sleep}}
+        """;
+
+    /// <summary>What a ray needs of the world at a hit: the probes, the lamps, the textures, the cut-out test (TRACE) and the lamps' visibility.</summary>
+    static readonly string TraceShared = $$"""
         layout(set = 0, binding = 4) uniform sampler2D uGiIrradiance;
         layout(set = 0, binding = 5) uniform sampler2D uGiDistance;
         layout(set = 0, binding = 6) uniform sampler2D uGiBase;
@@ -253,6 +253,60 @@ static class GiShaders
             }
             return rayQueryGetIntersectionTypeEXT(shadow, true) == gl_RayQueryCommittedIntersectionNoneEXT ? 1.0 : 0.0;
         }
+        """;
+
+    /// <summary>Lights the committed hit of <c>rq</c> (<c>world + dir * t</c>, record <c>g</c>) as the lighting pass does, without specular: <c>colour * (sun + ambient + lamps)</c>.</summary>
+    static readonly string TraceHitShading = $$"""
+            uvec3 tri = Triangle(offsetBy(g.indices, uint(rayQueryGetIntersectionPrimitiveIndexEXT(rq, true)) * 12u)).v;
+            vec3 a = Position(offsetBy(g.vertices, tri.x * g.stride)).v;
+            vec3 b = Position(offsetBy(g.vertices, tri.y * g.stride)).v;
+            vec3 cc = Position(offsetBy(g.vertices, tri.z * g.stride)).v;
+            vec3 n = normalize(cross(b - a, cc - a) * mat3(rayQueryGetIntersectionWorldToObjectEXT(rq, true)));
+            if (dot(n, dir) > 0.0) n = -n;
+            vec3 hit = world + dir * t;
+            vec3 colour = albedo.rgb;
+            if (g.kind == 0u && albedo.w > 0.5) colour = textureLod(uGround, (hit.xz + maps.w) / (2.0 * maps.w), 0.0).rgb;
+            else if (g.kind != 0u && g.diffuse != 0u)
+                // The object's or plant's own diffuse map at the hit, a coarse mip: the bounce takes its colour.
+                colour = textureLod(textures2D[nonuniformEXT(g.diffuse)], hitUv(g, tri, rayQueryGetIntersectionBarycentricsEXT(rq, true)), 4.0).rgb;
+            vec4 amHit = ambientMap(hit);
+            vec3 l = lightDir.xyz;
+            float nl = max(dot(n, l), 0.0);
+            vec3 sun = vec3(0.0);
+            if (nl > 0.0)
+            {
+                rayQueryEXT shadow;
+                rayQueryInitializeEXT(shadow, uScene, gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsCullBackFacingTrianglesEXT, 0xFF,
+                    hit - origin.xyz + n * (0.5 + t * 0.001), 0.0, l, 1e5);
+                TRACE(shadow)
+                if (rayQueryGetIntersectionTypeEXT(shadow, true) == gl_RayQueryCommittedIntersectionNoneEXT)
+                    sun = {{F(MathF.PI * (1 - Meitou.Data.World.KenshiLighting.DielectricSpecular))}} * nl * sunLight.rgb * amHit.a * 2.0;
+            }
+            vec4 bounce = giIrradiance(hit, n, -dir);
+            vec3 ambient = mix(skyIrradiance(n) * {{F(1 - Meitou.Data.World.KenshiLighting.DielectricSpecular)}} * amHit.rgb * env, bounce.rgb, bounce.a);
+            // The lamps around the hit; indoor sources are visibility-tested so occluded lamp light cannot bounce through walls.
+            vec3 lamps = vec3(0.0), lampSpecular = vec3(0.0);
+            if (uLightGrid.w > 0.5) lampLight(hit, n, -dir, 1.0, 1.0, lamps, lampSpecular);
+        """;
+
+    /// <summary>
+    /// The probe trace (docs/render-gi.md "Probes"): one workgroup per probe, one ray per invocation (<see cref="GiProbes.Rays"/>, spherical
+    /// Fibonacci directions turned by the frame's random rotation). A ray that hits sees the surface lit as the lighting pass lights it, without
+    /// specular: a constant albedo (the terrain: the ground colour map) times the sun through a shadow ray and the probes' own irradiance of the
+    /// last frame there (the bounces beyond the first). A ray that misses sees the lighting pass's ambient in its direction. Back faces of objects
+    /// count as dark and give a negative distance (the blend marks probes that see many as inside).
+    /// </summary>
+    public static string ProbeTrace(int rays) => $$"""
+        #version 460
+        {{TraceExtensions}}
+        layout(local_size_x = {{rays}}) in;
+        {{TraceScene}}
+        layout(set = 0, binding = 2, std430) writeonly buffer RayResults { vec4 rays[]; };
+        {{TraceParams}}
+        layout(set = 0, binding = 13, std430) readonly buffer ProbeState { vec4 positions[]; };
+        layout(set = 0, binding = 14, std430) readonly buffer ProbeList { uint probeList[]; };
+        {{Sleep}}
+        {{TraceShared}}
 
         vec3 fibonacci(uint i, uint n)
         {
@@ -299,36 +353,7 @@ static class GiShaders
                 rays[slot] = vec4(0.0, 0.0, 0.0, -0.2 * t);
                 return;
             }
-            uvec3 tri = Triangle(offsetBy(g.indices, uint(rayQueryGetIntersectionPrimitiveIndexEXT(rq, true)) * 12u)).v;
-            vec3 a = Position(offsetBy(g.vertices, tri.x * g.stride)).v;
-            vec3 b = Position(offsetBy(g.vertices, tri.y * g.stride)).v;
-            vec3 cc = Position(offsetBy(g.vertices, tri.z * g.stride)).v;
-            vec3 n = normalize(cross(b - a, cc - a) * mat3(rayQueryGetIntersectionWorldToObjectEXT(rq, true)));
-            if (dot(n, dir) > 0.0) n = -n;
-            vec3 hit = world + dir * t;
-            vec3 colour = albedo.rgb;
-            if (g.kind == 0u && albedo.w > 0.5) colour = textureLod(uGround, (hit.xz + maps.w) / (2.0 * maps.w), 0.0).rgb;
-            else if (g.kind != 0u && g.diffuse != 0u)
-                // The object's or plant's own diffuse map at the hit, a coarse mip: the bounce takes its colour.
-                colour = textureLod(textures2D[nonuniformEXT(g.diffuse)], hitUv(g, tri, rayQueryGetIntersectionBarycentricsEXT(rq, true)), 4.0).rgb;
-            vec4 amHit = ambientMap(hit);
-            vec3 l = lightDir.xyz;
-            float nl = max(dot(n, l), 0.0);
-            vec3 sun = vec3(0.0);
-            if (nl > 0.0)
-            {
-                rayQueryEXT shadow;
-                rayQueryInitializeEXT(shadow, uScene, gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsCullBackFacingTrianglesEXT, 0xFF,
-                    hit - origin.xyz + n * (0.5 + t * 0.001), 0.0, l, 1e5);
-                TRACE(shadow)
-                if (rayQueryGetIntersectionTypeEXT(shadow, true) == gl_RayQueryCommittedIntersectionNoneEXT)
-                    sun = {{F(MathF.PI * (1 - Meitou.Data.World.KenshiLighting.DielectricSpecular))}} * nl * sunLight.rgb * amHit.a * 2.0;
-            }
-            vec4 bounce = giIrradiance(hit, n, -dir);
-            vec3 ambient = mix(skyIrradiance(n) * {{F(1 - Meitou.Data.World.KenshiLighting.DielectricSpecular)}} * amHit.rgb * env, bounce.rgb, bounce.a);
-            // The lamps around the hit; indoor sources are visibility-tested so occluded lamp light cannot bounce through walls.
-            vec3 lamps = vec3(0.0), lampSpecular = vec3(0.0);
-            if (uLightGrid.w > 0.5) lampLight(hit, n, -dir, 1.0, 1.0, lamps, lampSpecular);
+        {{TraceHitShading}}
             rays[slot] = vec4(colour * (sun + ambient + lamps), t);
         }
         """;
@@ -536,6 +561,76 @@ static class GiShaders
     /// ambient-lit grey surfaces where they hit, the sky's ambient where they miss (one bounce, no denoiser). Mode 3: rays from the eye through
     /// each pixel, coloured by the hit's geometric normal: the traced scene itself, with no raster involved.
     /// </summary>
+    /// <summary>The longest reflection ray (the near cascade's reach; the traced objects end at 6000): it fades to the sky over its last quarter, the hit being unhazed.</summary>
+    public const float ReflectionRange = 4000;
+
+    /// <summary>
+    /// The reflections' rays (docs/render-gi.md "Reflections"): one per texel of <c>uHit</c> whose march (<see cref="SsrShaders.March"/>) did not settle it, the same ray,
+    /// from the block's first glossy pixel, against the traced scene, its hit lit as a probe ray's. Writes a below 0 (<see cref="SsrShaders.Shade"/>): the trace
+    /// proved the sky open past what it stored. Traced light has no characters, grass or water, and no specular.
+    /// </summary>
+    public static readonly string Reflect = $$"""
+        #version 460
+        {{TraceExtensions}}
+        layout(local_size_x = 8, local_size_y = 8) in;
+        {{TraceScene}}
+        layout(set = 0, binding = 2, rgba16f) uniform image2D uHit;
+        {{TraceParams}}
+        {{TraceShared}}
+
+        layout(set = 0, binding = 13) uniform usampler2D uAlbedo;
+        layout(set = 0, binding = 14) uniform sampler2D uNearDepth;
+        layout(set = 0, binding = 15, std140) uniform Camera
+        {
+            vec4 eye, right, up, back;
+            vec4 view;         // xy: tan(fov/2) * aspect, tan(fov/2), zw: near, far
+            vec4 sizes;        // xy: the render size, z: the block's size, w: the lobe's spread
+            vec4 frame;        // x: the frame
+        } cam;
+        {{DepthConvention.Glsl}}
+        {{SsrShaders.Common}}
+
+        void main()
+        {
+            ivec2 cell = ivec2(gl_GlobalInvocationID.xy);
+            if (any(greaterThanEqual(cell, imageSize(uHit)))) return;
+            vec4 marched = imageLoad(uHit, cell);
+            if (marched.a >= 0.99) return;
+            uvec4 surface;
+            ivec2 px = ssrPick(cell * int(cam.sizes.z), int(cam.sizes.z), ivec2(cam.sizes.xy), surface);
+            if (px.x < 0) return;
+            float gloss = ssrGloss(surface);
+            if (ssrWeight(gloss) <= 0.0) return;
+            float depth = texelFetch(uNearDepth, px, 0).r;
+            if (depthIsSky(depth)) return;
+            float z = depthViewZ(depth, cam.view.zw);
+            vec2 ndc = (vec2(px) + 0.5) / cam.sizes.xy * 2.0 - 1.0;
+            vec3 surfacePoint = cam.eye.xyz + (cam.right.xyz * ndc.x * cam.view.x + cam.up.xyz * ndc.y * cam.view.y - cam.back.xyz) * z;
+            vec3 surfaceNormal = ssrNormal(surface);
+            uint seed = ssrSeed(px, uint(cam.frame.x));
+            vec3 dir = ssrDirection(surfaceNormal, normalize(cam.eye.xyz - surfacePoint), gloss, seed, cam.sizes.w);
+            vec3 world = surfacePoint + surfaceNormal * (1.0 + z * 0.001);
+
+            rayQueryEXT rq;
+            rayQueryInitializeEXT(rq, uScene, gl_RayFlagsCullBackFacingTrianglesEXT, 0xFF, world - origin.xyz, 0.0, dir, {{F(ReflectionRange)}});
+            TRACE(rq)
+            if (rayQueryGetIntersectionTypeEXT(rq, true) != gl_RayQueryCommittedIntersectionTriangleEXT)
+            {
+                imageStore(uHit, cell, vec4(marched.rgb, -1.0 - marched.a));
+                return;
+            }
+            float t = rayQueryGetIntersectionTEXT(rq, true);
+            int record = rayQueryGetIntersectionInstanceCustomIndexEXT(rq, true) + rayQueryGetIntersectionGeometryIndexEXT(rq, true);
+            Geometry g = geometries[record];
+            float env = lightDir.w;
+        {{TraceHitShading}}
+            float reach = (1.0 - smoothstep(0.75, 1.0, t / {{F(ReflectionRange)}})) * (1.0 - marched.a);
+            float share = marched.a + reach;
+            vec3 seen = (marched.rgb * marched.a + colour * (sun + ambient + lamps) * reach) / max(share, 1e-4);
+            imageStore(uHit, cell, vec4(seen, -1.0 - share));
+        }
+        """;
+
     public const string Debug = """
         #version 460
         #extension GL_EXT_ray_query : require

@@ -33,6 +33,17 @@ static class AtmosphereShaders
         }
         """;
 
+    /// <summary>Lazarov's environment BRDF for any specular colour: <see cref="Functions"/> and the reflections' full-size pass (<see cref="Gi.SsrShaders.Apply"/>).</summary>
+    internal const string EnvBrdfFunction = """
+        // The same for a specular colour of rf0 (LazarovEnvironmentBRDF).
+        vec3 kenshiEnvBrdf(float gloss, float nv, vec3 rf0)
+        {
+            vec4 t = vec4(1.0 / 0.96, 0.475, (0.0275 - 0.25 * 0.04) / 0.96, 0.25) * gloss + vec4(0.0, 0.0, (0.015 - 0.75 * 0.04) / 0.96, 0.75);
+            float a0 = t.x * min(t.y, exp2(-9.28 * nv)) + t.z;
+            return clamp(a0 + rf0 * (t.w - a0), 0.0, 1.0);
+        }
+        """;
+
     /// <summary>What every world shader includes (fragment stage, or the grass's vertex stage).</summary>
     public static readonly string Functions = $$"""
 
@@ -90,7 +101,7 @@ static class AtmosphereShaders
         uniform vec4 uWeatherDust;    // xyz: dustAmount (current, inside, slope; docs/formats/weather.md "Dust")
         uniform sampler2D uWeatherDustNoise;   // the dust noise (Turbulent.dds), sampled at world.xz * 0.002
         uniform sampler2D uWeatherGround;      // the terrain's whole-world ground colour map: the dust colour (the BIOMES `ground colour` where the object is)
-        uniform vec4 uGiParams;       // Meitou probe GI: x on, y strength, z post resolve, w indoor surface gain (0 bypasses indoor GI; compute has its own params)
+        uniform vec4 uGiParams;       // Meitou probe GI: x on, y strength, z 1 post resolve + 2 reflections, w indoor surface gain (0 bypasses indoor GI; compute has its own params)
         uniform vec4 uGiGrid[4];      // per cascade: the grid's place and spacing (Gi.GiShaders.ProbeSampling)
         uniform sampler2D uGiIrradiance, uGiDistance, uGiBase;
         {{Gi.GiShaders.ProbeSampling}}
@@ -222,13 +233,7 @@ static class AtmosphereShaders
             float a0 = t.x * min(t.y, exp2(-9.28 * nv)) + t.z;
             return clamp(a0 + 0.04 * (t.w - a0), 0.0, 1.0);
         }
-        // The same for a specular colour of rf0 (LazarovEnvironmentBRDF).
-        vec3 kenshiEnvBrdf(float gloss, float nv, vec3 rf0)
-        {
-            vec4 t = vec4(1.0 / 0.96, 0.475, (0.0275 - 0.25 * 0.04) / 0.96, 0.25) * gloss + vec4(0.0, 0.0, (0.015 - 0.75 * 0.04) / 0.96, 0.75);
-            float a0 = t.x * min(t.y, exp2(-9.28 * nv)) + t.z;
-            return clamp(a0 + rf0 * (t.w - a0), 0.0, 1.0);
-        }
+        {{EnvBrdfFunction}}
         float atmoMetalness = 0.0;   // the surface's metalness (a worn item's colour map blue, CharacterShaders), set before kenshiLight / stageLight; 0 dielectric
         // The character editor's stage (a fog distance of -2): the game's rtt.hlsl (docs/characters.md "Character editor"): one punctual light of colour 0.6 (CalcPunctualLight: diffuse
         // pi * N.L * (1 - 0.04), GGX specular for roughness 1 - 0.99 * gloss, specular colour 0.04) plus the environment light of the irradiance and specular cubes
@@ -263,7 +268,8 @@ static class AtmosphereShaders
         }
         vec3 stageLight(vec3 albedo, vec3 n, vec3 v, vec3 l, float gloss, bool hdr) { return stageLight(albedo, n, v, l, gloss, hdr, vec3(clamp(dot(n, l), 0.0, 1.0))); }
         // What a lit fragment writes to the GI resolve's surface target (GiResolveShaders.WithAlbedo; RGBA16UI, 0: no probes here), set by kenshiLight:
-        // x, y the shading normal's octahedral position (16 bits each), z sqrt(albedo) red | green << 8, w blue | 1 << 8 | interior << 9.
+        // x, y the shading normal's octahedral position (16 bits each), z sqrt(albedo) red | green << 8, w blue | takes the probes << 8 | interior << 9 | gloss << 10
+        // (with the reflections on: 1 + gloss * 62, else 0).
         uvec4 giAlbedoOut = uvec4(0u);
         bool giInterior = false;
         float atmoSelfShadow = 1.0;   // a surface's own shadow on the sun (the terrain's relief, GroundRelief), set before kenshiLight; 1 none
@@ -298,11 +304,14 @@ static class AtmosphereShaders
             bool useGi = uGiParams.x > 0.5 && (!giInterior || uGiParams.w > 0.5);
             #ifndef GI_IN_SHADER
             // The GI resolve (uGiParams.z, docs/render-gi.md "Resolve"): the sky's ambient here, the albedo out for the post pass that swaps in the probes.
-            if (useGi && uGiParams.z > 0.5)
+            // z above 1.5: the reflections want every lit surface and its gloss too (docs/render-gi.md "Reflections").
+            if (useGi ? uGiParams.z > 0.5 : uGiParams.z > 1.5)
             {
                 uvec2 o = uvec2((giOct(n) * 0.5 + 0.5) * 65535.0 + 0.5);
                 uvec3 c = uvec3(sqrt(clamp(albedo, 0.0, 1.0)) * 255.0 + 0.5);
-                giAlbedoOut = uvec4(o, c.r | (c.g << 8), c.b | 256u | (giInterior ? 512u : 0u));
+                uint stored = c.b | (useGi ? 256u : 0u) | (giInterior ? 512u : 0u);
+                if (uGiParams.z > 1.5) stored |= (uint(gloss * 62.0 + 0.5) + 1u) << 10;
+                giAlbedoOut = uvec4(o, c.r | (c.g << 8), stored);
             }
             else
                     #endif

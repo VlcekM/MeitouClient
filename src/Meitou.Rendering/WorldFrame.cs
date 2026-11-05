@@ -277,7 +277,7 @@ sealed class WorldOptions
           --no-vsync               start with vsync off (uncapped; Tab slider)
           --grass-density <x>      grass blades x this (0.1-2, default 1; Tab slider)
           --camera-code <hex>      start at a camera code (Ctrl+C in the viewer copies one), the world loaded round it
-          --faithful <all|ao,dither,haze,aa,shadows,range,impostors,reach,water,particles,lod,gi,tonemap,shafts,heathaze,night,planetshine,stars,nightgrade,clouds,cloudshadows,cloudfog,interiorgi,charlod,skin,interiorlamps,icons,blood,bloodsurfaces,parallax,displace,weld,tracers,fog>   the game's look instead of Meitou's enhancements (default: all Meitou; --meitou <...> turns them back on; these ids also name the --ab switches)
+          --faithful <all|ao,dither,haze,aa,shadows,range,impostors,reach,water,particles,lod,gi,tonemap,shafts,heathaze,night,planetshine,stars,nightgrade,clouds,cloudshadows,cloudfog,interiorgi,charlod,skin,interiorlamps,icons,blood,bloodsurfaces,parallax,displace,weld,tracers,fog,ssr>   the game's look instead of Meitou's enhancements (default: all Meitou; --meitou <...> turns them back on; these ids also name the --ab switches)
           --show-keys              start with the key list overlay open (toggle with F10)
           --play-shots             start flying the saved camera keys (the F2 timeline) on a loop
           --log-spikes             print a line for every frame whose GPU time, or render-thread time over 20 ms, is over 1.5 x its median: stage times (GPU, render thread) and what it uploaded or rebuilt
@@ -963,6 +963,7 @@ static partial class WorldFrame
 
         b.Step("gi");
         if ((o.GiDebug > 0 || o.Gi) && context is GpuContext giContext) CreateGi(gpu, giContext, o);
+        else if (context is GpuContext plainContext) PublishReflectionSurfaces(gpu, plainContext);
         AttachGuard(gpu, context, vramSample);
         return gpu;
     }
@@ -1232,6 +1233,7 @@ static partial class WorldFrame
         if (!context.Device.HasRayQuery)
         {
             Console.WriteLine("gi        off: the device has no ray queries (VK_KHR_ray_query)");
+            PublishReflectionSurfaces(gpu, context);
             return;
         }
 
@@ -1247,7 +1249,12 @@ static partial class WorldFrame
             gpu.Probes = new Gi.GiProbes(context) { Enabled = o.GiProbes, InteriorEnabled = o.InteriorGi };
             Console.WriteLine($"gi        {gpu.Probes.Describe()}");
         }
+        else PublishReflectionSurfaces(gpu, context);
     }
+
+    /// <summary>Without probes, what they would publish for the lit fragments' surface target: only that the reflections want it (<see cref="Gi.GiProbes"/>' <c>Params</c>).</summary>
+    static void PublishReflectionSurfaces(Gpu gpu, GpuContext context) =>
+        context.Globals.PublishUniform("uGiParams", () => new System.Numerics.Vector4(0, 0, gpu.Post is { SsrSurfaces: true } ? 2 : 0, 0));
 
     /// <summary>
     /// The memory-pressure guard (VramGuard), shared by the renderers that stream: MEITOU_VRAM_GUARD=0 leaves it off. Vulkan samples its allocator;
@@ -1704,6 +1711,7 @@ static partial class WorldFrame
         gpu.Terrain.Activate();
         var post = gpu.PostChain ?? throw new InvalidOperationException("the sky frame needs the post-processing chain");
         post.GiResolve = 0;
+        if (gpu.Post is { } vulkanPost) vulkanPost.SsrSurfaces = false;
         post.Begin(width, height);
         if (post is PostProcess { Unallocated: true }) return;
         float aspect = width / (float)Math.Max(height, 1);
