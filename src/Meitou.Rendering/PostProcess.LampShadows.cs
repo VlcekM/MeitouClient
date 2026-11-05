@@ -41,7 +41,7 @@ public sealed unsafe partial class PostProcess
         trace.Run(scene, lamps, depth.Texture, surface.Texture, lost.Texture, LampShadowViewNow());
 
         var a = lampShadowApply ??= new LampShadowApplyPass(Gpu);
-        BindGiView(a);
+        SetGiView(a);
         Bind(a.P, a.Lost, lost);
         a.P.ApplyGlobals();   // the haze's uniforms
         Draw(a.P, colour.Attachment, colour.Format, width, height, width, height, LampShadowState);

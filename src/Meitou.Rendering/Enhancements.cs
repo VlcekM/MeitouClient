@@ -195,6 +195,9 @@ public static class Enhancements
         new("lampshadows", "Lamp shadows", "off", "traced",
             () => post.LampShadows, v => post.LampShadows = v,
             "the game's lamps shine through walls and everything else that stands in their way; Meitou traces a ray from each surface to the lamps that light it most and takes the light of the blocked ones back off, so buildings and rocks cast lamp shadows (needs a GPU with ray tracing and Indirect light on; characters neither cast them nor receive them; docs/render-lights.md \"Traced lamp shadows\")"),
+        new("ssr", "Reflections", "sky only", "traced",
+            () => post.Ssr, v => post.Ssr = v,
+            "the game's glossy and rain-wet surfaces reflect one fixed sky picture, indoors and under a roof too; Meitou replaces it with what they really mirror (the screen, then a traced ray where the device has them, the sky past both), fading with roughness, and darkens the sky's reflection where the probes see no sky. Water keeps its own reflection. Off by default: not yet seen on a GPU"),
     ];
 
     /// <summary><c>--meitou</c> / <c>--faithful &lt;all|id,id...&gt;</c>: turns those switches to Meitou or to Faithful.</summary>

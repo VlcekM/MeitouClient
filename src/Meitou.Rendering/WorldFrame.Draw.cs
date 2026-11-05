@@ -100,15 +100,20 @@ static partial class WorldFrame
 
         // Everything is drawn into the post-processing chain's HDR framebuffer (before the reflection pass, which restores whatever is bound).
         // The GI resolve while the probes light the world: the scene targets carry the albedo target, the lit fragments write it.
-        bool giResolve = gpu.GiResolve > 0 && gpu.GiActive && gpu.Probes is { Enabled: true, Shade: true };
+        bool probesShade = gpu.GiActive && gpu.Probes is { Enabled: true, Shade: true };
+        bool giResolve = gpu.GiResolve > 0 && probesShade;
+        // The reflections subtract the sky's reflection as the surfaces stored it: lit by the probes they need the resolve, whose fragments leave it unoccluded.
+        bool reflections = gpu.Post is { Options.Ssr: true } && (giResolve || !probesShade);
         if (gpu.Post is { } giPost)
         {
             giPost.GiResolve = giResolve ? gpu.GiResolve : 0;
+            giPost.SsrSurfaces = reflections;
             giPost.GiNear = giResolve && post.Options.GiNearFielding ? gpu.GiNear : null;
         }
         if (gpu.Probes is { } giProbes)
         {
             giProbes.Resolve = giResolve;
+            giProbes.Reflections = reflections;
             giProbes.Relocate = giResolve && post.Options.GiRelocating;
             giProbes.CloudShadows = post.Options.GiCloudShadowing;
         }
@@ -781,7 +786,7 @@ static partial class WorldFrame
     }
 
     /// <summary>
-    /// After the scene's passes, over the finished scene: the GI resolve, the Meitou light shafts (docs/render-shafts.md: the haze darkened where the sun is
+    /// After the scene's passes, over the finished scene: the GI resolve, the reflections, the Meitou light shafts (docs/render-shafts.md: the haze darkened where the sun is
     /// shadowed along the view, before the fog volumes blend over it), the placed fog volumes, then the SSAO.
     /// </summary>
     static void FinishScene(ref FrameState f)
@@ -793,6 +798,8 @@ static partial class WorldFrame
         post.RunGiResolve();
         gpu.Post?.RunLampShadows(gpu.Gi, gpu.Lamps);
         StageClock.Lap(14, "gi resolve");   // the resolve is the gi stage's (its time was the particles stage's before, with the shafts and the fog volumes)
+        gpu.Post?.RunReflections(gpu.GiActive ? gpu.Probes : null, gpu.Gi);
+        StageClock.Lap(14, "reflections");
 
         if (gpu.Shadow is { Enabled: true })
         {

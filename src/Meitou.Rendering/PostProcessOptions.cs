@@ -36,6 +36,9 @@ public sealed class PostOptions
     public bool GiRelocating => GiHybrid && GiRelocate;
     public bool GiCloudShadowing => GiHybrid && GiCloudShadows;
     public bool GiNearFielding => GiHybrid && GiNearField;
+    /// <summary>Meitou switch (<c>ssr</c>; docs/render-gi.md "Reflections"): the sky's reflection on glossy surfaces replaced by what they mirror, and occluded on all that take the
+    /// GI resolve; off by default, also in the Meitou preset.</summary>
+    public bool Ssr;
     /// <summary>How much of the haze in shadow goes, before the sun's share of the light (1: all of it; the sky's ambient light keeps the rest).</summary>
     public float ShaftStrength = 0.8f;
     /// <summary>How much the sky (which no haze covers) darkens behind shadowed air, relative to a surface at the grid's end.</summary>
@@ -186,7 +189,7 @@ public sealed class PostOptions
         ShaftStrength = other.ShaftStrength; ShaftAir = other.ShaftAir; ShaftAirDawn = other.ShaftAirDawn;
         ParticleDivisor = other.ParticleDivisor; Exposure = other.Exposure; ToneMap = other.ToneMap; ToneMix = other.ToneMix; Grade = other.Grade;
         HeatHazeStrength = other.HeatHazeStrength; NightGradeStrength = other.NightGradeStrength; BloomStrength = other.BloomStrength;
-        MeitouHeatHaze = other.MeitouHeatHaze; ToneMapping = other.ToneMapping; NightGrade = other.NightGrade; Bloom = other.Bloom;
+        MeitouHeatHaze = other.MeitouHeatHaze; ToneMapping = other.ToneMapping; NightGrade = other.NightGrade; Bloom = other.Bloom; Ssr = other.Ssr;
         GiHybrid = other.GiHybrid; GiRelocate = other.GiRelocate; GiCloudShadows = other.GiCloudShadows; GiNearField = other.GiNearField;
         MotionBlur = other.MotionBlur; MotionBlurShutter = other.MotionBlurShutter; CameraEffectsEverywhere = other.CameraEffectsEverywhere;
         DepthOfField = other.DepthOfField; DofAperture = other.DofAperture;
@@ -237,7 +240,7 @@ public sealed class PostOptions
 
     public string Describe() =>
         $"{Preset}: aa {(Upscale.Temporal ? "temporal" : Smaa ? "smaa" : Fxaa ? "fxaa" : "off")}, heat haze {(HeatHaze ? "weather" + (HeatHazeScale != 1 ? $" strength {HeatHazeScale:0.##}" : "") : "off")}, " +
-        $"ssao {(!Ssao ? "off" : Gtao ? $"gtao {GtaoSlices}x{GtaoSteps}{(GtaoFullSize ? " full" : "")}" : "on")}, contact {(ContactShadows ? "on" : "off")}, shafts {(LightShafts ? $"{ShaftStrength:0.##} ({ShaftCells}x{ShaftSlices}x{ShaftSamples})" : "off")}, exposure x{Exposure:0.##}, tonemap {ToneMapUsed.ToString().ToLowerInvariant()}{(ToneMapUsed == ToneMapOperator.Hybrid ? $" {ToneMix:0.##}" : "")}, " +
+        $"ssao {(!Ssao ? "off" : Gtao ? $"gtao {GtaoSlices}x{GtaoSteps}{(GtaoFullSize ? " full" : "")}" : "on")}, contact {(ContactShadows ? "on" : "off")}, reflections {(Ssr ? "on" : "off")}, shafts {(LightShafts ? $"{ShaftStrength:0.##} ({ShaftCells}x{ShaftSlices}x{ShaftSamples})" : "off")}, exposure x{Exposure:0.##}, tonemap {ToneMapUsed.ToString().ToLowerInvariant()}{(ToneMapUsed == ToneMapOperator.Hybrid ? $" {ToneMix:0.##}" : "")}, " +
         $"grade {(GradeUsed ? $"saturation {Saturation:0.##} contrast {Contrast:0.##}" : "off")}, night grade {(NightGradeAmount > 0 ? NightGradeAmount.ToString("0.##", CultureInfo.InvariantCulture) : "off")}, " +
         $"bloom {(BloomAmount > 0 ? BloomAmount.ToString("0.###", CultureInfo.InvariantCulture) : "off")}, " +
         $"motion blur {(MotionBlur ? MotionBlurShutter.ToString("0", CultureInfo.InvariantCulture) + " deg" : "off")}, " +
