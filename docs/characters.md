@@ -225,12 +225,13 @@ exe decompile unless marked; Meitou: `CharacterDraft` (data), `EditCharacter` / 
   (dialogue `DA_CHARACTER_EDITOR` on the talking player character; `DA_JOIN_SQUAD_WITH_EDIT` and slave purchases on the recruits). Mode 1
   hides the race, subrace and gender arrows; they are also hidden when there is no choice. Everything else works in both modes.
 - **Animals** (**Verified**, decompile): the window lists every character it is given, animals too (`FUN_1405f4dd0` copies the list unfiltered), so
-  rebirth's "Guy with a dog" start (`50299-rebirth.mod`, squad `47924-rebirth.mod`; its man and Bonedog **Observed** in a player save) shows both. An
+  rebirth's "Guy with a dog" start (`47924-rebirth.mod`, squad `47925-rebirth.mod`; its man and Bonedog **Observed** in a player save) shows both. An
   animal's page (`FUN_1405efd60`, no humanoid appearance): body view, IMPORT and EXPORT hidden; `FUN_1405ee0c0` then hides the tab buttons, the
   rows (`TabsPanelContent`), RANDOMISE, RANDOMISE ALL, RESET and every race/subrace/gender arrow, shows the RACE name as race and subrace, gender
   "-", and the race's description and stats. NameText renames whichever character is shown (`FUN_1405e9410`), animals included. CLOTHES,
-  CONFIRM and CHANGE CHARACTER stay. Meitou: `EditorSession.Animals`, `BindAnimalEditor`; an animal's rename is an `EditCharacter` with no look;
-  in the Meitou bar an animal not shown is not drawn (no seat).
+  CONFIRM and CHANGE CHARACTER stay. The preview idle the original sets for an animal is **Unknown** in detail (Meitou: its world pose). Meitou:
+  `EditorSession.Animals`, `BindAnimalEditor`; an animal's rename is an `EditCharacter` with no look; in the Meitou bar an animal not shown is not
+  drawn (no seat).
 - **Races**: RACE_GROUP name on RACE, RACE name on SUBRACE; a race is listed if not an animal, in a group, has its editor limits XML, `playable`
   (mode 0) and, with a `force race` list, in it (none left: "Game start has no valid races", the list is unrestricted). Showing a character in
   mode 0 (`FUN_1405efd60`) whose race isn't listed switches it to the first group's first race (a race missing from its group: that group's
