@@ -101,6 +101,8 @@ public sealed class CharacterCold
     public int ProvisionalBlocked { get; set; }
     /// <summary>Times the walker was stopped on the navmesh part of its path since it last reached a waypoint or was given an order (<see cref="MovementSystem.BlockedRepathLimit"/>).</summary>
     public int BlockedRepaths { get; set; }
+    /// <summary>The tick a move-order walker held blocked past those limits asks for its path again (<see cref="MovementSystem.BlockedRetrySeconds"/>); 0: not held. Not hashed.</summary>
+    public long BlockedRetryTick { get; set; }
     /// <summary>The path request in flight, so an answer to an older one is ignored.</summary>
     public long PathRequest { get; set; }
     /// <summary>
