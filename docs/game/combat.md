@@ -140,7 +140,13 @@ direction 7 (from 1) or 9 (from 2/3) (`FUN_1404356c0`). A target playing a hit r
 busy while its progress is under the marker, and the wait counts only while none is busy; a record that stores 0, as most mods' do, is never busy). While +0x144 is set the
 fighter is forced into state 6 every tick (`FUN_14060d6a0`, the pause block before the decide step), so it neither decides nor starts a defence: a blow at it in its wait is
 met with no block or dodge (state 6's "attacked" test, `FUN_1402b3800`, sets state 4 and the pause block puts it back). Only a hit reaction (`FUN_14060cf60` clears +0x144)
-or the wait's end releases it; a swing stopped at a stop frame (attacked, `FUN_14060a590`) decides again at once instead. Meitou: `CombatSlot.PauseUntil`, `CombatTuning.SwingFinished`. Before swinging, an attacker in reach asks its target
+or the wait's end releases it; a swing stopped at a stop frame (attacked, `FUN_14060a590`) decides again at once instead. Meitou: `CombatSlot.PauseUntil`, `CombatTuning.SwingFinished`.
+**Verified** (`FUN_14060d6a0`, technique +0x40 = `acceptable end time` / `num frames` from `FUN_1406684c0`): a target that goes down, dies or is caged mid-swing is dropped
+only once the clip's own progress reaches that marker; then the clip fades (`FUN_1405b3c60`), the fighter re-decides on the same tick and the chooser, its opponent pointer
+just cleared, picks a new target at once. The drop comes before 0.98 arms +0x144, so a kill has no post-swing wait: the clip's tail is the pause, and a later blow of the
+combo still resolves against the zone (the swing update runs on in state 0). Base martial-arts tails after the last blow (frames): Double strike 31→40 of 57, Double punch 23→33 of 52, kicklow 22→35 of 40,
+shotei 18→36 of 45, badpunch 24→38 of 45, mega kick 32→54 of 63, jump knee 40→75 of 80; a row with marker 0 drops at once. Meitou: `CombatSystem.FinishingSwing` (before, the
+swing was cut on the killing blow's tick and the next one started at once). Before swinging, an attacker in reach asks its target
 (`FUN_14060c670` → `FUN_140666a30`): target swinging at it → the attacker blocks; target stumbling or blocking →
 attack; otherwise an initiative roll on both attack skills (`FUN_140665370`, the skill roll above). If the asker wins,
 the target blocks. If the target wins, the asker is refused; with no free slot it is refused too, and waits

@@ -311,7 +311,8 @@ public sealed partial class CombatSystem
             // The target's fight ended since it let this one close in: its engaged list was emptied (FUN_1406659b0 mode 2), the fighter keeps its target and asks again below.
             if (s.Engaged && fighting && (uint)s.TargetSlot < (uint)prev.Length && !Listed(in s, in read[s.TargetSlot])) s.Engaged = false;
             if (fighting && !(s.TargetSlot < prev.Length && prev[s.TargetSlot].Alive && prev[s.TargetSlot].Generation == s.TargetGeneration && !read[s.TargetSlot].Down
-                && table.Cold(s.TargetSlot) is { IsImprisoned: false, CarriedBy.IsNone: true, Medical.Incapacitated: false }))
+                && table.Cold(s.TargetSlot) is { IsImprisoned: false, CarriedBy.IsNone: true, Medical.Incapacitated: false })
+                && !FinishingSwing(in s, prev, now))
             {
                 s.AttackTech = -1;
                 s.NextBlow = 0;
@@ -622,6 +623,20 @@ public sealed partial class CombatSystem
             if (v > 0 && v < 1) most = MathF.Max(most, v);
         }
         return most;
+    }
+
+    /// <summary>
+    /// Whether a swing at a target that went down, died or was caged or carried plays on before the target is dropped (<b>Verified</b>, the fight tick <c>FUN_14060d6a0</c>; docs/game/combat.md
+    /// "Pacing"): the drop waits while the clip's own progress is under the technique's <c>acceptable end time</c>, so a kill is followed by the rest of the clip before the next choice.
+    /// A swing ending now (a stop frame) or a target whose slot was reused drops at once.
+    /// </summary>
+    bool FinishingSwing(in CombatSlot s, ReadOnlySpan<CharacterHot> prev, int now)
+    {
+        if (s.AttackTech < 0 || s.AttackTicks <= 0 || now >= s.AttackEnd) return false;
+        if ((uint)s.TargetSlot >= (uint)prev.Length || prev[s.TargetSlot].Generation != s.TargetGeneration) return false;
+
+        float clip = (now - s.AttackStart) / (float)s.AttackTicks;
+        return clip < techniques[s.AttackTech].EndProgress;
     }
 
     /// <summary>
