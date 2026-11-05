@@ -1,4 +1,5 @@
 using Avalonia.Controls;
+using Avalonia.LogicalTree;
 using Avalonia.VisualTree;
 using Meitou.Content;
 using Meitou.Localisation;
@@ -55,13 +56,15 @@ static class LauncherText
     /// </summary>
     public static void TranslateTree(Control root, IDictionary<Control, string> originals)
     {
+        HashSet<Control> seen = [];
         void Visit(Control control)
         {
+            if (!seen.Add(control)) return;
             // A placeholder is a label too, even on a control whose items hold data (a combo box's list, a text box's text).
             if (control is TextBox textBox && textBox.PlaceholderText is { } placeholder) textBox.PlaceholderText = Translate(placeholder);
             else if (control is ComboBox combo && combo.PlaceholderText is { } hint) combo.PlaceholderText = Translate(hint);
             if (control is ComboBox or ListBox or ContentControl { Name: "ReleaseNotes" } or StackPanel { Name: "NewsPanel" }) return;
-            if (control is TextBlock text && text.Text is { } value)
+            if (control is TextBlock text && text.Text is { Length: > 0 } value)
             {
                 if (!originals.ContainsKey(control)) originals[control] = Source(value);
                 text.Text = Translate(originals[control]);
@@ -73,6 +76,10 @@ static class LauncherText
             }
             if (ToolTip.GetTip(control) is string tip) ToolTip.SetTip(control, Translate(tip));
             foreach (var child in control.GetVisualChildren())
+                if (child is Control nested) Visit(nested);
+            // Content of a control that has never been measured (Continue, while there is no save) is a logical child only: its
+            // template, and the text presenters inside it, are attached when it is first shown, after the translation passes.
+            foreach (var child in control.GetLogicalChildren())
                 if (child is Control nested) Visit(nested);
         }
         Visit(root);
