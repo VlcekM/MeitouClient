@@ -202,10 +202,12 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
 
     /// <summary>
     /// Whether an update seeing <paramref name="eye"/> and <paramref name="reach"/> builds <paramref name="c"/>'s look when it is missing: not deferred
-    /// (<see cref="LoadingFocus"/>), and a portrait's or wanted (<see cref="WantsAsset"/>). The one rule of <see cref="AssetFor"/>, <see cref="UpdateDistant"/>
-    /// and <see cref="PendingLoads"/>.
+    /// (<see cref="LoadingFocus"/>), and a portrait's, wanted (<see cref="WantsAsset"/>) or one the loading screen waits for (any not deferred while a focus is set:
+    /// the eye's reach is not the focus's, and one waited for but never built held the screen up for good). The one rule of <see cref="AssetFor"/>,
+    /// <see cref="UpdateDistant"/> and <see cref="PendingLoads"/>.
     /// </summary>
-    bool BuildsLook(in CharacterInstance c, Vector3 eye, float reach) => !Deferred(c) && (portraitKeys.Contains(c.Key) || WantsAsset(c, eye, reach));
+    bool BuildsLook(in CharacterInstance c, Vector3 eye, float reach) =>
+        !Deferred(c) && (LoadingFocus is not null || portraitKeys.Contains(c.Key) || WantsAsset(c, eye, reach));
 
     /// <summary>Current appearances still being prepared/uploaded, or textures still being loaded. Failed assets count as finished.</summary>
     public bool ContentPending => Draws.Items.Any(c => !Deferred(c) && !assets.ContainsKey(c.Appearance)) || Draws.Distant.Any(c => !Deferred(c) && !assets.ContainsKey(c.Appearance))
@@ -663,11 +665,12 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
 
     /// <summary>
     /// Whether the character's projected height is under <see cref="TinyOn"/> render pixels (<see cref="TinyOff"/> once it was): a speck the original draws and Meitou does not.
-    /// Never the player's, a portrait's, a hidden or an editor character, and not one near a kept point (its look is built ahead). Without a built asset the body mesh's known height is used.
+    /// Never the player's, a portrait's, a hidden or an editor character, not one near a kept point (its look is built ahead), and none under a game's loading screen (it waits
+    /// for their looks, <see cref="LoadingFocus"/>). Without a built asset the body mesh's known height is used.
     /// </summary>
     bool CullTiny(in CharacterInstance inst, Vector3 eye, CharacterAsset? asset)
     {
-        if (!viewKnown || inst.FullRateAnimation || inst.Hidden || portraitKeys.Contains(inst.Key)) return false;
+        if (!viewKnown || LoadingFocus is not null || inst.FullRateAnimation || inst.Hidden || portraitKeys.Contains(inst.Key)) return false;
         float height = asset?.Height ?? (inst.Appearance.BodyMesh is { Length: > 0 } body && bodyHeights.TryGetValue(body, out var h) ? h : 0);
         if (height <= 0) return false;
         float scale = inst.Scale > 0 ? inst.Scale : 1;
