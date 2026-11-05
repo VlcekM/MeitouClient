@@ -50,10 +50,15 @@ public sealed partial class MedicalState
     /// 0 when its flesh is gone; else it gains 1 while under 4, or, with a negative health fraction, is held to 2 and gains 1 only while under 1.
     /// Returns -1 only for a body without parts.
     /// </summary>
-    public int ChoosePart(in MedicalContext ctx, bool lowStrike = false, bool directionSix = false)
+    public int ChoosePart(in MedicalContext ctx, bool lowStrike = false, bool directionSix = false) =>
+        ChoosePart(ctx, lowStrike, directionSix, targetPart: null);
+
+    /// <summary>The same selection with an exact medical index; an out-of-range index declines instead of rolling a substitute.</summary>
+    public int ChoosePart(in MedicalContext ctx, bool lowStrike, bool directionSix, int? targetPart)
     {
         if (Parts.Count == 0) return -1;
-        int chosen = Forced(ctx.Options.ForcedHitPart);
+        if (targetPart is { } selected && (uint)selected >= (uint)Parts.Count) return -1;
+        int chosen = targetPart ?? Forced(ctx.Options.ForcedHitPart);
         if (chosen < 0) chosen = Rolled(ctx, lowStrike, directionSix);
         var p = Parts[chosen];
         float cap = float.NegativeInfinity;

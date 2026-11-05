@@ -71,8 +71,11 @@ public static class GpuVertex
         return bytes;
     }
 
-    public static byte[] PackCharacter(ReadOnlySpan<Vertex> vertices)
+    public static byte[] PackCharacter(ReadOnlySpan<Vertex> vertices) => PackCharacter(vertices, preserveRawChannels: false);
+
+    public static byte[] PackCharacter(ReadOnlySpan<Vertex> vertices, bool preserveRawChannels = false)
     {
+        if (preserveRawChannels) return MemoryMarshal.AsBytes(vertices).ToArray();
         var bytes = new byte[vertices.Length * CharacterSize];
         var packed = MemoryMarshal.Cast<byte, CharacterVertex>(bytes.AsSpan());
         for (int i = 0; i < vertices.Length; i++)
@@ -95,7 +98,15 @@ public static class GpuVertex
     ];
 
     /// <summary>The character layout's attributes at locations 0 to 6 (the object's five, bones, weights) over <paramref name="vertices"/>.</summary>
-    public static LegacyProgram.Attribute?[] CharacterAttributes(DeviceBuffer vertices) =>
+    public static LegacyProgram.Attribute?[] CharacterAttributes(DeviceBuffer vertices) => CharacterAttributes(vertices, preserveRawChannels: false);
+
+    public static LegacyProgram.Attribute?[] CharacterAttributes(DeviceBuffer vertices, bool preserveRawChannels = false) => preserveRawChannels ?
+    [
+        Attribute(vertices, 0, InternalFormat.Rgb32f, Vertex.Size), Attribute(vertices, 12, InternalFormat.Rgb32f, Vertex.Size),
+        Attribute(vertices, 24, InternalFormat.RG32f, Vertex.Size), Attribute(vertices, 32, InternalFormat.Rgba32f, Vertex.Size),
+        Attribute(vertices, 48, InternalFormat.Rgba32f, Vertex.Size), Attribute(vertices, 64, InternalFormat.Rgba8ui, Vertex.Size),
+        Attribute(vertices, 68, InternalFormat.Rgba32f, Vertex.Size),
+    ] :
     [
         Attribute(vertices, 0, InternalFormat.Rgb32f, CharacterSize), Attribute(vertices, 12, InternalFormat.Rgba16Snorm, CharacterSize),
         Attribute(vertices, 20, InternalFormat.RG32f, CharacterSize), Attribute(vertices, 28, InternalFormat.Rgba16Snorm, CharacterSize),

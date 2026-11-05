@@ -657,6 +657,7 @@ static partial class WorldFrame
         gpu.Terrain.DrawDeferred();
         if (gpu.Debris is { } debris)
         {
+            debris.PreparePipeline();
             debris.Draw(CollectionsMarshal.AsSpan(gpu.DebrisPieces), s.ViewProjection, f.Eye, s.Frustum, f.Light,
                 look => gpu.Characters is { } chars && chars.SkinOn(look.Race, look.SkinDefault) ? chars.SkinTable : 0);
             if (gpu.BirdPieces.Count > 0) debris.Draw(CollectionsMarshal.AsSpan(gpu.BirdPieces), s.ViewProjection, f.Eye, s.Frustum, f.Light);

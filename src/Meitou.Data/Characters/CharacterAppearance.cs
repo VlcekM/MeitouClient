@@ -125,15 +125,37 @@ public sealed class CharacterAppearance
     public Vector3 HairColour { get; private init; } = new(0.3f, 0.22f, 0.15f);
 
     /// <summary>Visible meshes besides the body, in attach order.</summary>
-    public List<CharacterPart> Parts { get; } = [];
-    public List<BodyLayer> BodyLayers { get; } = [];
+    public List<CharacterPart> Parts { get; private set; } = [];
+    public List<BodyLayer> BodyLayers { get; private set; } = [];
     /// <summary>The lanterns it carries (<see cref="CarriedLights"/>): worn clothing, backpacks and belt items, or an animal's backpack.</summary>
-    public List<CarriedLight> Lights { get; } = [];
+    public List<CarriedLight> Lights { get; private set; } = [];
     /// <summary>Attachment points by name: <c>hands</c> (Bip01 Prop2) plus the race's <c>attachment points</c> file.</summary>
-    public Dictionary<string, AttachmentPoint> AttachmentPoints { get; } = new(StringComparer.Ordinal);
+    public Dictionary<string, AttachmentPoint> AttachmentPoints { get; private set; } = new(StringComparer.Ordinal);
     /// <summary>Pose weights from the body file, keyed by pose name (only non-zero values).</summary>
-    public Dictionary<string, float> PoseWeights { get; } = new(StringComparer.Ordinal);
-    public List<string> Notes { get; } = [];
+    public Dictionary<string, float> PoseWeights { get; private set; } = new(StringComparer.Ordinal);
+    public List<string> Notes { get; private set; } = [];
+
+    /// <summary>A presentation copy with a different complete part list; the original appearance and its parts remain unchanged.</summary>
+    public CharacterAppearance WithParts(IEnumerable<CharacterPart> parts)
+    {
+        ArgumentNullException.ThrowIfNull(parts);
+        var result = (CharacterAppearance)MemberwiseClone();
+        result.Parts = parts.ToList();
+        return result;
+    }
+
+    /// <summary>A detached presentation snapshot: mutable appearance collections are copied; immutable content records remain shared.</summary>
+    public CharacterAppearance Snapshot()
+    {
+        var result = (CharacterAppearance)MemberwiseClone();
+        result.Parts = new(Parts);
+        result.BodyLayers = new(BodyLayers);
+        result.Lights = new(Lights);
+        result.AttachmentPoints = new(AttachmentPoints, AttachmentPoints.Comparer);
+        result.PoseWeights = new(PoseWeights, PoseWeights.Comparer);
+        result.Notes = new(Notes);
+        return result;
+    }
 
     /// <summary>Finds a record by string id, else by exact name (case-insensitive; the shown name or the data files' English one) among <paramref name="types"/>.</summary>
     public static GameRecord? Find(GameDatabase db, string nameOrId, params FcsRecordType[] types)

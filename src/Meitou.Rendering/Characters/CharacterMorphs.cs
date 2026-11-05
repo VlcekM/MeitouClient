@@ -79,6 +79,9 @@ internal sealed class MorphArena : IDisposable
     Vector4[] host;
     int used = 2;   // entries 0 and 1 are never a set's base, so a base of 0 can mean "no morph"
     readonly Dictionary<string, uint> known = [];
+    readonly Dictionary<uint, (string Key, int Count)> sets = [];
+    readonly System.Collections.Concurrent.ConcurrentQueue<(int First, int Count)> returned = new();
+    readonly List<(int First, int Count)> free = [];
 
     public MorphArena(IGpuContext gpu)
     {
@@ -98,7 +101,16 @@ internal sealed class MorphArena : IDisposable
         Write(first, deltas);
         uint baseIndex = (uint)(first - 1);   // slot 1 is entry `first`
         known[key] = baseIndex;
+        sets[baseIndex] = (key, deltas.Length);
         return baseIndex;
+    }
+
+    /// <summary>Retires an immutable set; its storage is reusable only after in-flight frames have finished.</summary>
+    public void Release(uint baseIndex)
+    {
+        if (!sets.Remove(baseIndex, out var saved)) return;
+        known.Remove(saved.Key);
+        gpu.DeferDelete(() => returned.Enqueue(((int)baseIndex + 1, saved.Count)));
     }
 
     /// <summary>Three regions of <see cref="scratchSlots"/> entries (the frames in flight and one more) that <see cref="Scratch"/> rewrites in turn.</summary>
@@ -123,6 +135,21 @@ internal sealed class MorphArena : IDisposable
     /// <summary>Makes room for <paramref name="count"/> entries at the end and returns where they start; growing makes a new buffer and rewrites every set from the host copy.</summary>
     int Reserve(int count)
     {
+        bool changed = false;
+        while (returned.TryDequeue(out var range)) { free.Add(range); changed = true; }
+        if (changed)
+        {
+            free.Sort((a, b) => a.First.CompareTo(b.First));
+            for (int i = free.Count - 2; i >= 0; i--)
+                if (free[i].First + free[i].Count == free[i + 1].First)
+                { free[i] = (free[i].First, free[i].Count + free[i + 1].Count); free.RemoveAt(i + 1); }
+        }
+        for (int i = 0; i < free.Count; i++)
+        {
+            var block = free[i]; if (block.Count < count) continue;
+            if (block.Count == count) free.RemoveAt(i); else free[i] = (block.First + count, block.Count - count);
+            return block.First;
+        }
         int first = used;
         used += count;
         if (used > host.Length)

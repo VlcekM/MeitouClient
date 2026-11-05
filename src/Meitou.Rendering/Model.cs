@@ -77,7 +77,10 @@ public sealed class Model
     /// tangent has three components; character.hlsl, skin.hlsl's skinning; docs/characters.md "Shading, poses and LOD"). Otherwise the stored w is kept (objects).</param>
     /// <param name="tangentSign">Inventory icons (rtticons.hlsl): the tangent's own w, 1 when it has three components, the stored binormals ignored (the shader takes
     /// cross(tangent, normal) x w).</param>
-    public static Model Build(OgreMesh mesh, int? boneCount, bool gameBinormals = false, bool tangentSign = false)
+    public static Model Build(OgreMesh mesh, int? boneCount, bool gameBinormals, bool tangentSign) =>
+        Build(mesh, boneCount, gameBinormals, tangentSign, preserveRawVertexChannels: false);
+
+    public static Model Build(OgreMesh mesh, int? boneCount, bool gameBinormals = false, bool tangentSign = false, bool preserveRawVertexChannels = false)
     {
         var model = new Model();
         var min = new Vector3(float.MaxValue);
@@ -91,7 +94,7 @@ public sealed class Model
             var indices = Triangulate(sub, model.Warnings, s);
             if (indices is null) continue;
 
-            var part = BuildPart(s, sub, vd, assignments, boneCount, indices, model.Warnings, gameBinormals, tangentSign);
+            var part = BuildPart(s, sub, vd, assignments, boneCount, indices, model.Warnings, gameBinormals, tangentSign, preserveRawVertexChannels);
             foreach (var v in part.Vertices)
             {
                 min = Vector3.Min(min, v.Position);
@@ -132,7 +135,7 @@ public sealed class Model
         }
     }
 
-    static ModelPart BuildPart(int s, OgreSubMesh sub, OgreVertexData vd, List<OgreBoneAssignment> assignments, int? boneCount, uint[] indices, List<string> warnings, bool gameBinormals, bool tangentSign)
+    static ModelPart BuildPart(int s, OgreSubMesh sub, OgreVertexData vd, List<OgreBoneAssignment> assignments, int? boneCount, uint[] indices, List<string> warnings, bool gameBinormals, bool tangentSign, bool preserveRawVertexChannels)
     {
         int n = (int)vd.VertexCount;
         var verts = new Vertex[n];
@@ -154,15 +157,17 @@ public sealed class Model
             {
                 var t = new Vector3(tangents[i * tc], tangents[i * tc + 1], tangents[i * tc + 2]);
                 float w = 1;
-                if (tc == 4) w = tangents[i * tc + 3] < 0 ? -1 : 1;
-                if (binormals is not null && !tangentSign && (tc != 4 || gameBinormals))
+                if (tc == 4) w = preserveRawVertexChannels ? tangents[i * tc + 3] : tangents[i * tc + 3] < 0 ? -1 : 1;
+                if (!preserveRawVertexChannels && binormals is not null && !tangentSign && (tc != 4 || gameBinormals))
                 {
                     var b = new Vector3(binormals[i * 3], binormals[i * 3 + 1], binormals[i * 3 + 2]) * w;
                     w = Vector3.Dot(Vector3.Cross(v.Normal, t), b) < 0 ? -1 : 1;
                 }
                 v.Tangent = new Vector4(t, w);
             }
-            if (colours is not null)
+            if (preserveRawVertexChannels && colours is not null && colourElement!.Type == OgreVertexElementType.Float4)
+                v.Colour = new Vector4(colours[i * 4], colours[i * 4 + 1], colours[i * 4 + 2], colours[i * 4 + 3]);
+            else if (colours is not null)
             {
                 // ARGB (and the deprecated generic colour) is stored B, G, R, A in memory; ABGR is R, G, B, A.
                 float c0 = colours[i * 4] / 255f, c1 = colours[i * 4 + 1] / 255f, c2 = colours[i * 4 + 2] / 255f, a = colours[i * 4 + 3] / 255f;
@@ -174,33 +179,49 @@ public sealed class Model
         bool skinned = boneCount is not null && assignments.Count > 0;
         if (skinned)
         {
-            int dropped = 0;
-            foreach (var group in assignments.GroupBy(a => a.VertexIndex))
+            // Dense generated raw surfaces are rigid: validate the complete ordered map before bypassing the general compiler.
+            bool rigid = preserveRawVertexChannels && assignments.Count == n;
+            for (int i = 0; rigid && i < n; i++)
             {
-                if (group.Key >= n) { dropped++; continue; }
-                var top = group.Where(a => a.BoneIndex < boneCount!.Value && a.BoneIndex < 256 && a.Weight > 0)
-                    .OrderByDescending(a => a.Weight).Take(4).ToArray();
-                dropped += group.Count(a => a.BoneIndex >= boneCount!.Value);
-                float sum = top.Sum(a => a.Weight);
-                if (sum <= 0) continue;
-                ref var v = ref verts[group.Key];
-                uint packed = 0;
-                var w = new float[4];
-                for (int k = 0; k < top.Length; k++)
-                {
-                    packed |= (uint)top[k].BoneIndex << (8 * k);
-                    w[k] = top[k].Weight / sum;
-                }
-                v.Bones = packed;
-                v.Weights = new Vector4(w[0], w[1], w[2], w[3]);
+                var assignment = assignments[i];
+                rigid = assignment.VertexIndex == (uint)i && assignment.BoneIndex < boneCount!.Value
+                    && assignment.BoneIndex < 256 && float.IsFinite(assignment.Weight) && assignment.Weight > 0;
             }
-            if (dropped > 0) warnings.Add($"submesh {s}: {dropped} bone assignments name bones past the skeleton's {boneCount} and were dropped");
-            // A vertex without assignments follows blend index 0 fully (Ogre's Mesh::compileBoneAssignments): the lowest bone the vertex data's assignments use
-            // (docs/formats/ogre-mesh.md "Bone assignments"), so a hair's unweighted cards move with its head.
-            int lowest = assignments.Where(a => a.BoneIndex < boneCount!.Value && a.BoneIndex < 256).Select(a => (int)a.BoneIndex).DefaultIfEmpty(-1).Min();
-            if (lowest >= 0)
+            if (rigid)
+            {
                 for (int i = 0; i < n; i++)
-                    if (verts[i].Weights == Vector4.Zero) (verts[i].Bones, verts[i].Weights) = ((uint)lowest, new Vector4(1, 0, 0, 0));
+                    (verts[i].Bones, verts[i].Weights) = ((uint)assignments[i].BoneIndex, new Vector4(1, 0, 0, 0));
+            }
+            else
+            {
+                int dropped = 0;
+                foreach (var group in assignments.GroupBy(a => a.VertexIndex))
+                {
+                    if (group.Key >= n) { dropped++; continue; }
+                    var top = group.Where(a => a.BoneIndex < boneCount!.Value && a.BoneIndex < 256 && a.Weight > 0)
+                        .OrderByDescending(a => a.Weight).Take(4).ToArray();
+                    dropped += group.Count(a => a.BoneIndex >= boneCount!.Value);
+                    float sum = top.Sum(a => a.Weight);
+                    if (sum <= 0) continue;
+                    ref var v = ref verts[group.Key];
+                    uint packed = 0;
+                    var w = new float[4];
+                    for (int k = 0; k < top.Length; k++)
+                    {
+                        packed |= (uint)top[k].BoneIndex << (8 * k);
+                        w[k] = top[k].Weight / sum;
+                    }
+                    v.Bones = packed;
+                    v.Weights = new Vector4(w[0], w[1], w[2], w[3]);
+                }
+                if (dropped > 0) warnings.Add($"submesh {s}: {dropped} bone assignments name bones past the skeleton's {boneCount} and were dropped");
+                // A vertex without assignments follows blend index 0 fully (Ogre's Mesh::compileBoneAssignments): the lowest bone the vertex data's assignments use
+                // (docs/formats/ogre-mesh.md "Bone assignments"), so a hair's unweighted cards move with its head.
+                int lowest = assignments.Where(a => a.BoneIndex < boneCount!.Value && a.BoneIndex < 256).Select(a => (int)a.BoneIndex).DefaultIfEmpty(-1).Min();
+                if (lowest >= 0)
+                    for (int i = 0; i < n; i++)
+                        if (verts[i].Weights == Vector4.Zero) (verts[i].Bones, verts[i].Weights) = ((uint)lowest, new Vector4(1, 0, 0, 0));
+            }
         }
 
         return new ModelPart

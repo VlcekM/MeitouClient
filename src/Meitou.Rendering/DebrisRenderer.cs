@@ -15,6 +15,9 @@ public readonly record struct DebrisPiece(string Mesh, float Scale, Quaternion R
 {
     /// <summary>A mesh named <c>file</c> + this + <c>texture</c> is drawn with that diffuse texture on every part (the birds' <c>HWBirds</c> material clone, docs/game/birds.md).</summary>
     public const char TextureMark = '?';
+
+    /// <summary>Optional RGB multiplier for an ordinary mesh, including the untextured fallback.</summary>
+    public Vector3? AlbedoTint { get; init; }
 }
 
 /// <summary>
@@ -79,7 +82,7 @@ public sealed unsafe class DebrisRenderer : IDisposable
         uniform sampler2D uBlood;        // the blood splatter map,
         uniform sampler2D uSkinTable;    // the Meitou skin scattering table (SkinScattering; the push word 0: the skin is off),
         uniform uint uLimbSkin;          // its bindless index,
-        uniform uint uLimbBlood;         // the blood colour as 8-bit RGB (above the low byte of uTextured)
+        uniform uint uPieceColour;         // packed RGB for the limb blood or ordinary albedo tint (above the low byte of uTextured)
         uniform uint uLimbTone;          // the cut character's skin tone as 8-bit RGB
         uniform int uTextured;
         uniform float uAlphaThreshold;   // > 0: the diffuse alpha is a cut-out, and the gloss fixed
@@ -102,21 +105,27 @@ public sealed unsafe class DebrisRenderer : IDisposable
             vec3 hue = albedo / max(max(albedo.r, max(albedo.g, albedo.b)), 1e-3);
             return vec3(lambert) + extra * hue * hue;
         }
+        vec3 unpackRgb(uint rgb)
+        {
+            return vec3(float((rgb >> 16) & 255u), float((rgb >> 8) & 255u), float(rgb & 255u)) / 255.0;
+        }
         void main()
         {
-            bool limb = (uTextured & 3) == 2;
+            int textureMode = uTextured & 3;
+            bool limb = textureMode == 2;
             bool hasNormal = limb && (uTextured & 4) != 0;
             float cut = limb ? 0.0 : uAlphaThreshold;
-            vec4 base = uTextured != 0 ? texture(uDiffuse, vUv) : vec4(0.78, 0.72, 0.62, 0.3);
+            vec4 base = textureMode != 0 ? texture(uDiffuse, vUv) : vec4(0.78, 0.72, 0.62, 0.3);
+            if ((uTextured & 8) != 0) base.rgb *= unpackRgb(uPieceColour);
             if (cut > 0.0 && base.a < cut) discard;
             float gloss = cut > 0.0 ? 0.3 : clamp(base.a, 0.0, 1.0);
             if (limb)
             {
                 // character.hlsl severed_limb_fs: the skin tone through the mask (colour map red), the blood (bloody.png x the race's colour, the cut end, at negative x,
                 // solid), then the body's darkening.
-                vec3 tone = vec3(float((uLimbTone >> 16) & 255u), float((uLimbTone >> 8) & 255u), float(uLimbTone & 255u)) / 255.0;
+                vec3 tone = unpackRgb(uLimbTone);
                 base.rgb *= 1.0 - tone * texture(uLimbMask, vUv).r;
-                vec3 bloodColour = vec3(float((uLimbBlood >> 16) & 255u), float((uLimbBlood >> 8) & 255u), float(uLimbBlood & 255u)) / 255.0;
+                vec3 bloodColour = unpackRgb(uPieceColour);
                 float x = vLocal.x * 0.3;
                 float turn = atan(vObjNormal.y, vObjNormal.z) / 3.14159265359 * 0.5;
                 if (vObjNormal.z < 0.0) turn = turn > 0.0 ? turn - 0.5 : turn + 0.5;
@@ -170,7 +179,7 @@ public sealed unsafe class DebrisRenderer : IDisposable
         ["uSunColour"] = "pc.sunColour",
         ["uAmbientSky"] = "pc.ambientSky",
         ["uAmbientGround"] = "pc.ambientGround",
-        ["uLimbMask"] = "textures2D[pc.limbMask]", ["uBlood"] = "textures2D[pc.limbBlood]", ["uLimbSkin"] = "pc.limbSkin", ["uSkinTable"] = "textures2D[pc.limbSkin]", ["uLimbBlood"] = "(uint(pc.textured) >> 8)", ["uLimbTone"] = "pc.limbTone", ["uLimbNormal"] = "textures2D[floatBitsToUint(pc.alphaThreshold)]",
+        ["uLimbMask"] = "textures2D[pc.limbMask]", ["uBlood"] = "textures2D[pc.limbBlood]", ["uLimbSkin"] = "pc.limbSkin", ["uSkinTable"] = "textures2D[pc.limbSkin]", ["uPieceColour"] = "(uint(pc.textured) >> 8)", ["uLimbTone"] = "pc.limbTone", ["uLimbNormal"] = "textures2D[floatBitsToUint(pc.alphaThreshold)]",
     };
 
     /// <summary>A loaded diffuse texture and its stable bindless entry. The sampler can change with the upscaler's LOD bias; the index
@@ -298,10 +307,26 @@ public sealed unsafe class DebrisRenderer : IDisposable
     public Vector3? Centre(string mesh, LimbLook? limb = null) => Load(mesh, null, limb)?.Centre;
 
     DebrisTexture? bloodMap;
+    bool pipelinePrepared;
 
     static uint Pack(Vector3 c) => (uint)(Math.Clamp((int)MathF.Round(c.X * 255), 0, 255) << 16 | Math.Clamp((int)MathF.Round(c.Y * 255), 0, 255) << 8 | Math.Clamp((int)MathF.Round(c.Z * 255), 0, 255));
 
     static string Key(string mesh, LimbLook? limb) => limb is null ? mesh : mesh + "|" + limb.Diffuse;
+
+    static DrawState DebrisState(DrawState state) => state with
+    {
+        Cull = CullMode.Back, Front = FrontFaceDirection.Ccw, DepthTest = true, DepthWrite = true,
+        Blend = BlendState.Off, ColourMask = DrawState.Rgb,
+    };
+
+    /// <summary>Compiles the opaque debris pipeline in the open scene pass before the first piece appears.</summary>
+    internal void PreparePipeline()
+    {
+        if (pipelinePrepared) return;
+        var state = DebrisState(gpu.CurrentState());
+        _ = gpu.Pipelines.Get(state.Pipeline(program.P, layout, PrimitiveType.Triangles, gpu.CurrentTargets().Formats, "debris"));
+        pipelinePrepared = true;
+    }
 
     /// <summary>
     /// Draws <paramref name="pieces"/> in the open scene pass (a guest): depth tested and written, back faces culled, colour only.
@@ -312,11 +337,7 @@ public sealed unsafe class DebrisRenderer : IDisposable
         if (pieces.IsEmpty) return;
         var cmd = gpu.BeginGuest("debris");
         var targets = gpu.CurrentTargets();
-        var state = gpu.CurrentState() with
-        {
-            Cull = CullMode.Back, Front = FrontFaceDirection.Ccw, DepthTest = true, DepthWrite = true,
-            Blend = BlendState.Off, ColourMask = DrawState.Rgb,
-        };
+        var state = DebrisState(gpu.CurrentState());
         cmd.SetViewport(targets.Viewport);
         cmd.SetScissor(targets.Scissor);
         cmd.SetRaster(state.Cull, state.Front);
@@ -395,6 +416,8 @@ public sealed unsafe class DebrisRenderer : IDisposable
                     push.LimbSkin = skinTable?.Invoke(look) ?? 0;
                     push.LimbTone = mesh.Mask is null ? 0 : Pack(look.SkinTone);
                 }
+                else if (piece.AlbedoTint is { } tint)
+                    push.Textured |= unchecked((int)(8 | Pack(tint) << 8));
                 cmd.PushConstants(program.P, GpuStage.Vertex | GpuStage.Fragment, in push);
                 cmd.DrawIndexed(part.Count, 1, part.First, part.VertexOffset);
             }

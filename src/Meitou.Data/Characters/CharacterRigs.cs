@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Numerics;
+using System.Runtime.CompilerServices;
 using Meitou.Data.Ogre;
 
 namespace Meitou.Data.Characters;
@@ -29,7 +30,7 @@ public sealed class CharacterRigs(GameDatabase db, Func<string, string?> findMes
 {
     readonly ConcurrentDictionary<string, Lazy<SkeletonRig>> rigs = new(StringComparer.OrdinalIgnoreCase);
     readonly ConcurrentDictionary<string, Lazy<string?>> skeletonNames = new(StringComparer.OrdinalIgnoreCase);
-    readonly ConcurrentDictionary<CharacterAppearance, Lazy<CharacterPoseSetup?>> setups = new(ReferenceEqualityComparer.Instance);
+    readonly ConditionalWeakTable<CharacterAppearance, Lazy<CharacterPoseSetup?>> setups = new();
 
     public GameDatabase Database => db;
 
@@ -78,7 +79,7 @@ public sealed class CharacterRigs(GameDatabase db, Func<string, string?> findMes
 
     /// <summary>The pose setup of <paramref name="c"/> (cached per appearance); null when its body mesh or skeleton cannot be found or read.</summary>
     public CharacterPoseSetup? For(CharacterAppearance c) =>
-        setups.GetOrAdd(c, static (a, self) => new Lazy<CharacterPoseSetup?>(() => self.Build(a)), this).Value;   // a static factory: nothing allocated on a hit
+        setups.GetValue(c, a => new Lazy<CharacterPoseSetup?>(() => Build(a))).Value;
 
     /// <summary>
     /// Whether the body of <paramref name="c"/> can play the ANIMATION record <paramref name="record"/>: its skeleton, with the animation files its race and record link, has the clip

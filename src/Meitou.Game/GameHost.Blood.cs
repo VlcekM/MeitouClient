@@ -34,7 +34,11 @@ sealed partial class GameHost
     /// <summary>Makes the store and the renderer when the install's <c>Blood</c> setting is on (missing: on).</summary>
     void SetUpBlood(IGpuContext context)
     {
-        gpu.Debris ??= new DebrisRenderer(context, gpu.Objects?.Resolver, assets.Find) { SharedTextures = () => gpu.Characters?.Textures };   // made now: its shaders compile here, not at the first burst
+        // Flat arenas lack the object renderer but still use the installed item materials.
+        gpu.Debris ??= new DebrisRenderer(context, gpu.Objects?.Resolver ?? new MaterialResolver(scene.Database, assets.Materials, assets), assets.Find)
+        {
+            SharedTextures = () => gpu.Characters?.Textures,
+        };
         gpu.Particles?.PrepareBursts(BurstSplash, BurstSpray, SparksSystem);
         if (gpu.Decals is not null || AudioSystem.Setting(install, "Blood", 1) == 0) return;
         var files = BloodTextureFiles(assets.Configured);

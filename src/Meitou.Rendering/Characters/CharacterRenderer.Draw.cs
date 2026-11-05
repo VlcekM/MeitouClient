@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Numerics;
 using System.Runtime.InteropServices;
 using Meitou.Data;
+using Meitou.Data.Characters;
 using Meitou.Data.Ogre;
 using Meitou.Rendering.Gpu;
 using Vk = Silk.NET.Vulkan;
@@ -18,6 +19,7 @@ internal sealed unsafe partial class CharacterRenderer
         public required GpuObjectPart Part;
         public int Level;
         public bool DoubleSided;
+        public RuntimeCharacterShaderSet? Shaders;
         public CharInstance[] Data = new CharInstance[16];
         public int Count, Offset;
 
@@ -29,8 +31,8 @@ internal sealed unsafe partial class CharacterRenderer
     }
 
     // A batch is named by an id per (mesh part, level, sidedness), the same in every view; each view keeps its own Batch per id (ViewBatches).
-    readonly Dictionary<(GpuObjectPart, int, bool), int> batchIds = [];
-    readonly List<(GpuObjectPart Part, int Level, bool TwoSided)> batchKeys = [];
+    readonly Dictionary<(GpuObjectPart, int, bool, RuntimeCharacterShaderSet?), int> batchIds = [];
+    readonly List<(GpuObjectPart Part, int Level, bool TwoSided, RuntimeCharacterShaderSet? Shaders)> batchKeys = [];
 
     /// <summary>One view's batches by id, those it fills, its chunks of gathered instances and its instance rows.</summary>
     sealed class ViewBatches
@@ -62,8 +64,8 @@ internal sealed unsafe partial class CharacterRenderer
     {
         lock (batchIds)
         {
-            var (part, level, twoSided) = batchKeys[id];
-            return new Batch { Part = part, Level = level, DoubleSided = twoSided };
+            var (part, level, twoSided, shaders) = batchKeys[id];
+            return new Batch { Part = part, Level = level, DoubleSided = twoSided, Shaders = shaders };
         }
     }
 
@@ -179,7 +181,6 @@ internal sealed unsafe partial class CharacterRenderer
     {
         var active = vb.Active;
         var instances = vb.Instances;
-        var prog = motionPass ? motionProg : depthPass ? depthProg : colourProg;
         string label = motionPass ? "characters motion" : depthPass ? "characters depth" : "characters";
         var targets = Gpu.CurrentTargets();
         var state = Gpu.CurrentState() with { Cull = CullMode.None };
@@ -187,7 +188,7 @@ internal sealed unsafe partial class CharacterRenderer
         if (!depthPass && !motionPass) state = state with { ColourMask = DrawState.Rgba };
 
         var job = drawJobs.Rent();
-        (job.Owner, job.Targets, job.State, job.Program, job.Count) = (this, targets, state, prog.P, 0);
+        (job.Owner, job.Targets, job.State, job.Count) = (this, targets, state, 0);
         job.Frame = nativeFrame.Prepare(in view, [bones.Binding, content.Materials.Binding(Gpu.Frame), content.Morphs.Binding(Gpu.Frame), previousBones.Binding]);
         job.Cull = depthPass ? CullMode.None : CullMode.Back;
         for (int a = 0; a < 9; a++) job.Rows[a] = new GpuBufferBinding(instances.Handle, instances.Offset + (ulong)(16 * a));
@@ -199,10 +200,13 @@ internal sealed unsafe partial class CharacterRenderer
         foreach (var b in active)
         {
             var part = b.Part;
-            ref var native = ref (motionPass ? ref MotionNative(part) : ref depthPass ? ref part.DepthNative : ref part.ColourNative);
+            var prog = ProgramFor(b.Shaders);
+            ref var native = ref (b.Shaders is not null ? ref RuntimeNative(part, prog)
+                : ref motionPass ? ref MotionNative(part) : ref depthPass ? ref part.DepthNative : ref part.ColourNative);
             Current(ref native, part, prog);
             job.Draws[n++] = new DrawJob.Draw
             {
+                Program = prog.P,
                 Pipeline = Gpu.Pipelines.Get(state.Pipeline(prog.P, native.Layout!, PrimitiveType.Triangles, targets.Formats, label)),
                 Vertices = native.Vertices,
                 Elements = new GpuBufferBinding(native.Elements.Buffer, native.Elements.Offset + (ulong)part.Offset[b.Level] * 4),
@@ -284,34 +288,39 @@ internal sealed unsafe partial class CharacterRenderer
         for (int p = 0; p < parts.Count; p++)
         {
             var part = parts[p];
+            if (!part.ShownAt(l.Pixels, portraitPass, depthPass)) continue;
             if (!part.ShowsWith(l.WeaponDrawn, l.RangedDrawn, l.Shots, l.BackDrawn)) continue;
             var model = part.Shared ? world : attach[l.AttachBase + part.AttachIndex] * world;
             float modelScale = part.Shared ? worldScale : model.ScaleLength();
-            if (depthPass && part.BoundsRadius * modelScale < minRadius) continue;
+            var (centre, radius, fileRadius) = PartBounds(part, in model, modelScale,
+                l.Centre - origin, l.CustomBounds && !portraitPass);
+            if (depthPass && radius < minRadius) continue;
 
-            // The model is relative to the view's eye (above), so the LOD eye is too: with the world eye every part far from the origin took its last level.
-            var centre = Vector3.Transform(part.BoundsCentre, model);
             int level;
-            if (!GeneratedLod) level = FileLevel(part, MeshLod.Value(eye - origin, centre, part.FileRadius * modelScale));
+            if (!GeneratedLod) level = FileLevel(part, MeshLod.Value(eye - origin, centre, fileRadius));
             else
             {
-                float value = MeshLod.Value(eye - origin, centre, part.BoundsRadius * modelScale, depthPass ? LodBias * ShadowLodBias : LodBias);
+                float value = MeshLod.Value(eye - origin, centre, radius, depthPass ? LodBias * ShadowLodBias : LodBias);
                 if (depthPass) value = Math.Max(HairInShadow(part, l.Asset) ? value * CharacterContent.HairLodScale : value, lodFloor);
                 level = GeneratedLevel(part, value, depthPass);
             }
+
+            if (GeneratedLod && part.ScreenLodThresholds is not null)
+                level = ScreenLevel(part, 2 * radius * viewPixelsPerRadian
+                    / MathF.Max(1, Vector3.Distance(eye - origin, centre)));
 
             var instance = new CharInstance
             {
                 Model = part.IsBody ? WithBlood(model, l.Blood) : model,
                 BoneBase = (uint)l.BoneBase,
                 Material = (uint)part.Material.Slot,
-                Flags = (interior ? 1u : 0u) | HiddenFlags(part, l.Asset),
+                Flags = (interior ? 1u : 0u) | HiddenFlags(part, l.Asset) | (!portraitPass && !l.Asset.IsIcon ? part.DrawFlags | (l.State?.ShaderData.Current?.Flags ?? 0) : 0),
                 MorphBase = part.Morphed ? l.Asset.MorphBase : 0,
             };
-            if (motionPass)
+            if (motionPass && l.State is { } state)
             {
-                var previousWorld = Relative(l.State.PreviousWorld, origin);
-                instance.PreviousModel = part.Shared ? previousWorld : l.State.PreviousAttach[part.AttachIndex] * previousWorld;
+                var previousWorld = Relative(state.PreviousWorld, origin);
+                instance.PreviousModel = part.Shared ? previousWorld : state.PreviousAttach[part.AttachIndex] * previousWorld;
             }
 
             vb.Parts++;
@@ -319,7 +328,7 @@ internal sealed unsafe partial class CharacterRenderer
             for (int g = 0; g < gps.Count; g++)
             {
                 if (GroupLevel(gps[g], level) is not int lv) continue;
-                var batch = vb.Get(BatchId(part, g, gps[g], lv, part.Material.DoubleSided), this);
+                var batch = vb.Get(BatchId(part, g, gps[g], lv, part.Material.DoubleSided, !portraitPass ? l.Shaders : null), this);
                 if (batch.Count == 0) vb.Active.Add(batch);
                 batch.Add(in instance);
             }
@@ -330,6 +339,14 @@ internal sealed unsafe partial class CharacterRenderer
     /// Faithful: the file's own level for its distance_sphere value (its stored radius, bias 1), the shadow passes as the picture (docs/characters.md
     /// "LOD of character meshes").
     /// </summary>
+    internal static int ScreenLevel(AssetPart part, float pixels)
+    {
+        int level = 0;
+        if (part.ScreenLodThresholds is { } thresholds)
+            foreach (float threshold in thresholds) { if (pixels >= threshold) break; level++; }
+        return Math.Min(level, part.Mesh.Distances.Length - 1);
+    }
+
     static int FileLevel(AssetPart part, float fileLod) =>
         part.FileDistances is { } fileLevels && MeshLod.Select(fileLevels, fileLod) is int f && f > 0 ? part.FileFirst + f - 1 : 0;
 
@@ -376,7 +393,7 @@ internal sealed unsafe partial class CharacterRenderer
     {
         public Matrix4x4 Model, PreviousModel;
         /// <summary>The model's largest axis scale.</summary>
-        public float Scale;
+        public float Scale, Radius;
         /// <summary>The LOD values at bias 1 (<see cref="MeshLod.Value"/>): by the bounds radius (the generated levels) and by the file's radius (Faithful).</summary>
         public float Lod, FileLod;
         /// <summary>Shown with the character's weapon state (<see cref="AssetPart.ShowsWith"/>); the rest is not set when not.</summary>
@@ -399,13 +416,14 @@ internal sealed unsafe partial class CharacterRenderer
         {
             var part = parts[p];
             ref var f = ref partFrames[l.PartBase + p];
-            f.Shows = part.ShowsWith(l.WeaponDrawn, l.RangedDrawn, l.Shots, l.BackDrawn);
+            f.Shows = part.ShownAt(l.Pixels) && part.ShowsWith(l.WeaponDrawn, l.RangedDrawn, l.Shots, l.BackDrawn);
             if (!f.Shows) continue;
             f.Model = part.Shared ? world : attach[l.AttachBase + part.AttachIndex] * world;
             f.Scale = part.Shared ? worldScale : f.Model.ScaleLength();
-            var centre = Vector3.Transform(part.BoundsCentre, f.Model);
-            f.Lod = MeshLod.Value(Vector3.Zero, centre, part.BoundsRadius * f.Scale);
-            f.FileLod = MeshLod.Value(Vector3.Zero, centre, part.FileRadius * f.Scale);
+            var bounds = PartBounds(part, in f.Model, f.Scale, l.Centre - origin, l.CustomBounds);
+            f.Radius = bounds.Radius;
+            f.Lod = MeshLod.Value(Vector3.Zero, bounds.Centre, bounds.Radius);
+            f.FileLod = MeshLod.Value(Vector3.Zero, bounds.Centre, bounds.FileRadius);
             if (motion) f.PreviousModel = part.Shared ? previousWorld : l.State.PreviousAttach[part.AttachIndex] * previousWorld;
         }
     }
@@ -496,12 +514,13 @@ internal sealed unsafe partial class CharacterRenderer
     /// <summary>One placed part's instance, added to the chunk of every view in <paramref name="seen"/> at the level that view chooses.</summary>
     void GatherPart(in Live l, AssetPart part, in PartFrame f, int c, uint seen, GatherView[] views, int viewCount, bool depth, bool motion, float bias)
     {
+        if (depth && !part.ShownAt(l.Pixels, depth: true)) return;
         var instance = new CharInstance
         {
             Model = part.IsBody ? WithBlood(f.Model, l.Blood) : f.Model,
             BoneBase = (uint)l.BoneBase,
             Material = (uint)part.Material.Slot,
-            Flags = (l.Interior ? 1u : 0u) | HiddenFlags(part, l.Asset),
+            Flags = (l.Interior ? 1u : 0u) | HiddenFlags(part, l.Asset) | (!l.Asset.IsIcon ? part.DrawFlags | (l.State?.ShaderData.Current?.Flags ?? 0) : 0),
             MorphBase = part.Morphed ? l.Asset.MorphBase : 0,
             PreviousModel = motion ? f.PreviousModel : default,
         };
@@ -514,13 +533,16 @@ internal sealed unsafe partial class CharacterRenderer
         {
             if ((seen & 1u << k) == 0) continue;
             ref readonly var v = ref views[k];
-            if (depth && part.BoundsRadius * f.Scale < v.MinRadius) continue;
+            if (depth && f.Radius < v.MinRadius) continue;
             int level = !GeneratedLod ? FileLevel(part, f.FileLod) : GeneratedLevel(part, depth ? Math.Max(lod, v.LodFloor) : lod, depth);
+            if (GeneratedLod && part.ScreenLodThresholds is not null)
+                level = ScreenLevel(part, 2 * f.Radius * viewPixelsPerRadian
+                    / MathF.Max(1, f.Lod + f.Radius));
 
             var chunk = v.Batches.Chunks[c];
             chunk.Parts++;
             for (int g = 0; g < gps.Count; g++)
-                if (GroupLevel(gps[g], level) is int lv) chunk.Add(BatchId(part, g, gps[g], lv, twoSided), in instance);
+                if (GroupLevel(gps[g], level) is int lv) chunk.Add(BatchId(part, g, gps[g], lv, twoSided, l.Shaders), in instance);
         }
     }
 
@@ -553,19 +575,20 @@ internal sealed unsafe partial class CharacterRenderer
     }
 
     /// <summary>The batch id of <paramref name="part"/>'s mesh part <paramref name="g"/> at level <paramref name="lv"/>: from the part's cache, else made or found under the lock (any thread).</summary>
-    int BatchId(AssetPart part, int g, GpuObjectPart gp, int lv, bool twoSided)
+    int BatchId(AssetPart part, int g, GpuObjectPart gp, int lv, bool twoSided, RuntimeCharacterShaderSet? shaders)
     {
         int slot = (g * CachedLevels + lv) * 2 + (twoSided ? 1 : 0);
-        if (lv < CachedLevels && part.Batches is { } cached && slot < cached.Length && cached[slot] > 0) return cached[slot] - 1;
+        bool cacheable = ReferenceEquals(shaders, part.Shaders);
+        if (cacheable && lv < CachedLevels && part.Batches is { } cached && slot < cached.Length && cached[slot] > 0) return cached[slot] - 1;
         lock (batchIds)
         {
-            var key = (gp, lv, twoSided);
+            var key = (gp, lv, twoSided, shaders);
             if (!batchIds.TryGetValue(key, out int id))
             {
                 batchIds[key] = id = batchKeys.Count;
                 batchKeys.Add(key);
             }
-            if (lv < CachedLevels)
+            if (cacheable && lv < CachedLevels)
             {
                 var cache = part.Batches;
                 if (cache is null || slot >= cache.Length)
@@ -659,6 +682,7 @@ internal sealed unsafe partial class CharacterRenderer
         public struct Draw
         {
             public GpuPipeline Pipeline;
+            public GpuProgram Program;
             public GpuBufferBinding[] Vertices;
             public GpuBufferBinding Elements;
             public uint IndexCount, Instances, FirstInstance;
@@ -668,7 +692,6 @@ internal sealed unsafe partial class CharacterRenderer
         public CharacterRenderer Owner = null!;
         public PassTargets Targets = null!;
         public DrawState State = null!;
-        public GpuProgram Program = default;
         public FrameBinding Frame;
         public CullMode Cull;
         public readonly GpuBufferBinding[] Rows = new GpuBufferBinding[9];
@@ -685,14 +708,21 @@ internal sealed unsafe partial class CharacterRenderer
             cmd.SetScissor(targets.Scissor);
             cmd.SetDepth(state.DepthTest, state.DepthWrite, state.Compare);
             cmd.SetDepthBias(state.BiasEnable, state.BiasConstant, state.BiasSlope);
-            NativeFrame.Record(cmd, Program, in Frame);
             cmd.BindVertexBuffers(CharacterShaders.InstanceLocation, Rows.AsSpan(0, RowCount));
             var push = Push;
-            cmd.PushConstants(Program, GpuStage.Vertex | GpuStage.Fragment, in push);
             bool? twoSided = null;
+            GpuProgram program = default;
+            bool hasProgram = false;
             for (int i = 0; i < Count; i++)
             {
                 ref readonly var d = ref Draws[i];
+                if (!hasProgram || program != d.Program)
+                {
+                    program = d.Program;
+                    hasProgram = true;
+                    NativeFrame.Record(cmd, program, in Frame);
+                    cmd.PushConstants(program, GpuStage.Vertex | GpuStage.Fragment, in push);
+                }
                 if (twoSided != d.TwoSided)
                 {
                     cmd.SetRaster(d.TwoSided ? CullMode.None : Cull, state.Front);

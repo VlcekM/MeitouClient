@@ -45,7 +45,7 @@ public readonly record struct ActiveLayer(LayerDef Def, float Time, float Weight
 /// <summary>
 /// Bone transforms in model space (the skeleton's own space, before the character's placement) that replace the animated ones when posing
 /// (<see cref="PoseScratch.PoseDerived"/>), by bone handle: a ragdoll's bodies. Only a root bone (no parent) takes <see cref="Position"/>; the others
-/// keep their offset from the parent. <see cref="Weight"/> blends from the animated pose (0) to these (1).
+/// keep their offset from the parent unless <see cref="AbsolutePositions"/> is set. <see cref="Weight"/> blends from the animated pose (0) to these (1).
 /// </summary>
 public sealed class BonePose(int boneCount)
 {
@@ -53,6 +53,11 @@ public sealed class BonePose(int boneCount)
     public readonly Quaternion[] Rotation = new Quaternion[boneCount];
     public readonly Vector3[] Position = new Vector3[boneCount];
     public float Weight = 1;
+    /// <summary>Every set bone takes its model-space position, allowing independently simulated joint chains.</summary>
+    public bool AbsolutePositions;
+    /// <summary>Optional per-bone connected-component ids, indexed by handle. Equal ids identify one connected physical piece; ids are local to this pose.
+    /// The producer publishes an immutable array of <see cref="Set"/> length; interpolation keeps the destination pose's topology rather than blending ids. Null means no component information.</summary>
+    public int[]? Components;
 }
 
 /// <summary>Kenshi's two extra per-bone vectors and the movement scale that the body-shape sliders set (<see cref="CharacterShape"/>).</summary>
@@ -343,7 +348,7 @@ public sealed class PoseScratch
                 // its manually controlled bone (docs/game/ragdolls.md, "Per frame"); the weight blends from the animated pose (the 0.75 s of getting up).
                 float w = overrides.Weight;
                 DerivedRotation[h] = w >= 1 ? overrides.Rotation[h] : Nlerp(DerivedRotation[h], overrides.Rotation[h], w);
-                if (parent < 0) DerivedPosition[h] = Vector3.Lerp(DerivedPosition[h], overrides.Position[h], Math.Clamp(w, 0, 1));
+                if (parent < 0 || overrides.AbsolutePositions) DerivedPosition[h] = Vector3.Lerp(DerivedPosition[h], overrides.Position[h], Math.Clamp(w, 0, 1));
             }
         }
     }

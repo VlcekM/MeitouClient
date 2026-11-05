@@ -1,5 +1,6 @@
 using System.Numerics;
 using Meitou.Data.Characters;
+using Meitou.Rendering.Gpu;
 
 namespace Meitou.Rendering;
 
@@ -13,6 +14,13 @@ public readonly record struct CharacterPose(string Animation, float Time, float 
 /// </summary>
 public readonly record struct CharacterInstance(long Key, CharacterAppearance Appearance, Vector3 Position, float Yaw, IReadOnlyList<CharacterPose> Poses)
 {
+    /// <summary>Optional generated body/part geometry, cached by its stable identity; null uses the appearance's files.</summary>
+    public RuntimeCharacterGeometry? Geometry { get; init; }
+    /// <summary>Optional posed world-space culling/LOD sphere; null or default-invalid retains the ordinary appearance bounds.</summary>
+    public CharacterWorldBounds? WorldBounds { get; init; }
+    /// <summary>Opaque matrices immediately before this actor's bone palette and additional instance bits; null retains the native layout.</summary>
+    public RuntimeCharacterShaderData? RuntimeShaderData { get; init; }
+
     /// <summary>Show the weapon in hand (the parts tagged <see cref="WeaponShown.Drawn"/>) instead of sheathed.</summary>
     public bool WeaponDrawn { get; init; }
     /// <summary>The weapon in hand is the crossbow: its in-hand parts (<see cref="WeaponShown.RangedDrawn"/>) show, the melee weapon's sheathed ones.</summary>
@@ -43,7 +51,7 @@ public readonly record struct CharacterInstance(long Key, CharacterAppearance Ap
     public Meitou.Data.Characters.BodyBuild? Build { get; init; }
     /// <summary>The blood each of the first 8 body parts shows, a byte each (<c>CharacterSnapshot.BloodAmounts</c>).</summary>
     public ulong Blood { get; init; }
-    /// <summary>The whole placement, in place of <see cref="Position"/>, <see cref="Yaw"/> and <see cref="Rotation"/> (a falling head's); <see cref="Position"/> still places it for culling.</summary>
+    /// <summary>The whole placement, in place of <see cref="Position"/>, <see cref="Yaw"/> and <see cref="Rotation"/> (a falling head's); <see cref="Position"/> places it for culling unless <see cref="WorldBounds"/> is supplied.</summary>
     public Matrix4x4? World { get; init; }
     /// <summary>
     /// Holds the bones of the character with this key as it was last posed, taken the first time this one is drawn and never posed again (a cut-off head keeps the pose of the
@@ -58,8 +66,43 @@ public readonly record struct CharacterInstance(long Key, CharacterAppearance Ap
 /// </summary>
 public sealed class CharacterDrawList
 {
+    /// <summary>The live renderer context, valid only on its render thread; null for a headless or unattached list.</summary>
+    public IGpuContext? Context { get; internal set; }
+    internal Func<CharacterAppearance, RuntimeCharacterGeometry?, bool>? PreparedQuery;
+    /// <summary>
+    /// Whether this exact appearance/geometry pair has an uploaded asset and, if supplied, compiled custom shader programs.
+    /// Render-thread query only: never starts or waits for preparation. False when unattached, disposed, retired, pending or failed.
+    /// A null geometry queries the native appearance, independently of other variants or loading-screen completion.
+    /// </summary>
+    public bool IsPrepared(CharacterAppearance appearance, RuntimeCharacterGeometry? geometry = null)
+    {
+        ArgumentNullException.ThrowIfNull(appearance);
+        return !resourcesDisposed && Context is not null && geometry?.IsRetired != true
+            && PreparedQuery?.Invoke(appearance, geometry) == true;
+    }
+    /// <summary>Render-thread cleanup before the live context is released. Subscriptions are cleared after the one disposal notification.</summary>
+    public event Action? Disposing;
+    bool resourcesDisposed;
+    internal void DisposeResources()
+    {
+        if (resourcesDisposed) return;
+        resourcesDisposed = true;
+        var handlers = Disposing;
+        Disposing = null;
+        try
+        {
+            if (handlers is not null)
+                foreach (Action release in handlers.GetInvocationList())
+                    try { release(); }
+                    catch (Exception error) { Console.Error.WriteLine($"warning   character resource cleanup: {error}"); }
+        }
+        finally { Disposing = null; PreparedQuery = null; Context = null; }
+    }
+
     /// <summary>The characters that may be drawn or posed this frame: emptied by the renderer (<see cref="Clear"/>) and filled again each frame.</summary>
     public List<CharacterInstance> Items { get; } = [];
+    /// <summary>Asset/program preparation requests only: never posed, picked or drawn. Processed after visible work under the shared build budget; refilled each frame.</summary>
+    public List<CharacterInstance> Preparations { get; } = [];
     /// <summary>
     /// The characters beyond the renderer's reach (<see cref="Characters.CharacterRenderer.InReach"/>), with only their look, place and what loading reads: kept across
     /// frames and filled again by the host when its simulation snapshot changes (<see cref="BeginDistant"/>), as nothing in them moves between ticks. Read only to build
@@ -68,10 +111,18 @@ public sealed class CharacterDrawList
     public List<CharacterInstance> Distant { get; } = [];
     /// <summary>Counts the refills of <see cref="Distant"/>.</summary>
     public int DistantVersion { get; private set; }
-    public void Clear() => Items.Clear();
+    public void Clear() { Items.Clear(); Preparations.Clear(); }
     public void Add(in CharacterInstance instance) => Items.Add(instance);
     /// <summary>Empties <see cref="Distant"/> to be filled again.</summary>
     public void BeginDistant() { Distant.Clear(); DistantVersion++; }
+
+    internal void CollectRuntimeGeometry(ISet<RuntimeCharacterGeometry> into)
+    {
+        foreach (var item in Items) if (item.Geometry is { } geometry) into.Add(geometry);
+        foreach (var item in Distant) if (item.Geometry is { } geometry) into.Add(geometry);
+        foreach (var item in Preparations) if (item.Geometry is { } geometry) into.Add(geometry);
+    }
+
 }
 
 /// <summary>A bolt stuck in a character: its mesh, the bone it is on and its flight direction in the character's frame (its yaw taken off) when it struck.</summary>

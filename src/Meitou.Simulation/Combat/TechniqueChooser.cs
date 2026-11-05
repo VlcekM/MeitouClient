@@ -27,6 +27,8 @@ public readonly record struct AttackQuery
     /// <summary>The fighter's last technique (index), -1 for none or a defence; it weighs x0.2 unless <see cref="TargetStaggered"/>.</summary>
     public int Previous { get; init; }
     public bool TargetStaggered { get; init; }
+    /// <summary>An admitted ground-level target: descending/low techniques with short ground reach.</summary>
+    public bool GroundTarget { get; init; }
     /// <summary>The limbs: the left and the right arm work (<c>MedicalState.ArmWorks</c>); a leg is down.</summary>
     public bool LeftArm { get; init; }
     public bool RightArm { get; init; }
@@ -80,10 +82,13 @@ public static class TechniqueChooser
             weights[i] = 0;
             var t = all[i];
             if (t.Disabled || t.IsBlock || t.IsDodge || !Fits(t, category)) continue;
+            if (q.GroundTarget && !q.Animal && !t.LowStrike && t.AttackDirection1 is not (1 or 7)
+                && !t.AnimName.Contains("down", StringComparison.OrdinalIgnoreCase) && !t.AnimName.Contains("bigchop", StringComparison.OrdinalIgnoreCase)) continue;
             if (skill > t.MaxSkill || skill < t.MinSkill || burden > t.MaxEncumbrance || t.IsProne != q.Prone) continue;
             float limbs = LimbFactor(t, q);
             if (limbs <= 0 || !hurtLimbs && limbs < 1) continue;
             float reach = t.AttackDistance + half;
+            if (q.GroundTarget) reach = MathF.Min(reach, Math.Clamp(q.WeaponLength * .30f + 1, 2, 8));
             maxReach = MathF.Max(maxReach, reach);
             if (q.Gap > reach) continue;
             // Closeness of the gap to the technique's own distance (attack distance + L / 4, times the size), both + 3: the smaller over the larger.

@@ -118,7 +118,11 @@ public sealed partial class World : IDisposable
         ragdolls = this.systems.OfType<Ragdolls.IRagdollSource>().FirstOrDefault();
         hasGoalSources = this.systems.OfType<IGoalSource>().Any();
         Claims.Configure(settings.TickSeconds);
-        for (int k = 0; k < this.systems.Count; k++) RegisterCombatHitObserver(this.systems[k], k);
+        for (int k = 0; k < this.systems.Count; k++)
+        {
+            RegisterCombatHitObserver(this.systems[k], k);
+            RegisterCombatTargetRules(this.systems[k]);
+        }
         foreach (var owner in this.systems.OfType<ITaskOwner>()) owner.RegisterTasks(Tasks);
         foreach (var owner in this.systems.OfType<IDecisionOwner>()) owner.RegisterSources(Decisions);
         for (int k = 0; k < this.systems.Count; k++) if (DecidesAfter(this.systems[k])) decideAfter = k;
@@ -298,6 +302,7 @@ public sealed partial class World : IDisposable
         dialogues ??= system as Dialogue.IDialogueSource;
         ragdolls ??= system as Ragdolls.IRagdollSource;
         RegisterCombatHitObserver(system, systems.Count - 1);
+        RegisterCombatTargetRules(system);
         if (system is IDecisionOwner owner) owner.RegisterSources(Decisions);
         if (DecidesAfter(system)) decideAfter = systems.Count - 1;
     }

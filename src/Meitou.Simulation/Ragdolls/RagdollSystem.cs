@@ -40,7 +40,7 @@ public interface IRagdollSource
 /// part mask does not simulate are pinned to the animation (kinematic). While the whole body is a ragdoll the character's position follows the root body. Runs serially in the
 /// slow-world step after carrying and animation, and steps one Bepu scene on the calling thread, so the state hash does not depend on the thread count.
 /// </summary>
-public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IRagdollSource, IDisposable
+public sealed partial class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IRagdollSource, IDisposable
 {
     /// <summary>Getting up blends from the ragdoll's pose to the animation over this many seconds (<b>Observed</b>, <c>FUN_1407d3130</c>).</summary>
     public const float GetUpBlend = 0.75f;
@@ -139,8 +139,13 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
         public RigidTransform[] Pose = [];
         public bool Frozen;
         public float Age;
+        public long LaunchTick = -1;
+        public RagdollLaunch? AppliedLaunch;
+        public RagdollAssignedLaunch?[] AssignedLaunch = [];
         /// <summary>Seconds of the get-up blend left (0: none), and the bones it blends from, in world space.</summary>
         public float BlendLeft;
+        // Only an external ownership return supplies a complete world-space pose, including nonphysical child bones.
+        public RigidTransform[]? ReturnedBones;
         /// <summary>The published bones and the placement they were made in: a frozen ragdoll still in it hands over the same object (the renderer poses it again only for new bones).</summary>
         public BonePose? Published;
         public Matrix4x4 PublishedIn;
@@ -224,6 +229,7 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
         float dt = world.TickSeconds, stepDt = RagdollPhysics.StepOf(dt, world.PhysicsSpeed);   // the timers run in game time, the physics in real time
         long tick = world.Tick;
 
+        PruneExternalClaims(world);
         // Ragdolls of characters that are gone.
         foreach (var id in order)
             if (!table.TryResolveNext(id, out _)) Destroy(ragdolls[id]);
@@ -239,6 +245,7 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
             if (!world.Steps(i) && !(ragdolls.TryGetValue(table.IdOf(i), out var moving) && !moving.Frozen && moving.Mask != RagdollPart.None)) continue;
             cold.CarryAttach = cold.CarriedBy.IsNone ? null : AttachOf(table, cold);
             var id = table.IdOf(i);
+            if (externalClaims.ContainsKey(id)) continue;
             ragdolls.TryGetValue(id, out var r);
             // The look's ragdoll file asked only of a character that wants one (two cache lookups per standing character every tick were most of this loop in a big battle).
             var wanted = cold.Appearance is null ? RagdollPart.None : Wanted(cold);
@@ -297,6 +304,8 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
                 animated = Animated(r, cold, placement);
                 bool restored = restore is not null && Fits(r, restore, next[i].Position);
                 Rebuild(r, wanted, restored ? restore!.Pose : animated, restored ? default : (launch, push), advanced, world.Seed);
+                r.LaunchTick = world.Tick;
+                r.AppliedLaunch = restored ? null : new RagdollLaunch(launch, push);
                 if (restored)
                 {
                     r.Age = restore!.Age;
@@ -362,6 +371,7 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
                 }
             }
             if (r.BlendLeft > 0) r.BlendLeft = MathF.Max(0, r.BlendLeft - dt);
+            if (r.BlendLeft <= 0) r.ReturnedBones = null;
             if (r.Mask == RagdollPart.None && r.BlendLeft <= 0) { Destroy(r); continue; }
             var placement = Placement(r, cold, hot);
             if (!r.Frozen || r.BlendLeft > 0 || r.Published is null || placement != r.PublishedIn) (r.Published, r.PublishedIn) = (Build(r, placement), placement);
@@ -513,6 +523,7 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
         r.Tag = nextTag++;
         r.Bodies = new BodyHandle?[bodies.Length];
         r.Dynamic = dynamic;
+        r.AssignedLaunch = new RagdollAssignedLaunch?[bodies.Length];
         for (int b = 0; b < bodies.Length; b++)
         {
             // A simulated body carries on from where it was simulated (a body dropped from the shoulder falls from there); anything else starts from the animation,
@@ -521,6 +532,8 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
             var pose = keep ? r.Pose[b] : lift > 0 ? animated[b] with { Position = animated[b].Position + new Vector3(0, lift, 0) } : animated[b];
             var velocity = keep ? velocities[b] : new BodyVelocity(launch, Spin(r, bodies[b].Name, b, start.Push, seed));
             if (!needed[b]) { r.Pose[b] = pose; continue; }
+            if (dynamic[b] && !keep && (mask & RagdollPart.Whole) != 0 && (mask & RagdollPart.CarryMode) == 0)
+                r.AssignedLaunch[b] = new(velocity.Linear, velocity.Angular);
             r.Pose[b] = pose;
             var rigid = new RigidPose(pose.Position, pose.Rotation);
             var collidable = RagdollPhysics.Collidable(kinds[b].Shape);
@@ -839,6 +852,18 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
     /// <summary>The bones the ragdoll sets, in the model space of <paramref name="placement"/>: the simulated bodies' bones (all of them while getting up, blended).</summary>
     static BonePose? Build(Ragdoll r, Matrix4x4 placement)
     {
+        if (r.ReturnedBones is { } returned && r.BlendLeft > 0)
+        {
+            if (!Matrix4x4.Invert(placement, out var inverse)) return null;
+            var inverseTurn = Quaternion.Inverse(Quaternion.Normalize(Quaternion.CreateFromRotationMatrix(placement with { M41 = 0, M42 = 0, M43 = 0 })));
+            var result = new BonePose(r.Setup.Rig.BoneCount) { AbsolutePositions = true, Weight = r.BlendLeft / GetUpBlend };
+            for (int b = 0; b < returned.Length; b++)
+            {
+                result.Set[b] = true; result.Position[b] = Vector3.Transform(returned[b].Position, inverse);
+                result.Rotation[b] = Quaternion.Normalize(inverseTurn * returned[b].Rotation);
+            }
+            return result;
+        }
         bool blending = r.Mask == RagdollPart.None;
         if (!blending && !r.Dynamic.Any(d => d)) return null;
         if (!Matrix4x4.Invert(placement, out var toModel)) return null;
@@ -867,6 +892,7 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
             if (r.Bodies[b] is { } handle) physics.Simulation.Bodies.Remove(handle);
         r.Bodies = [];
         r.Dynamic = [];
+        r.AssignedLaunch = [];
     }
 
     void Destroy(Ragdoll r)
@@ -877,6 +903,7 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
 
     public void Hash(ref StateHasher hasher)
     {
+        HashExternalClaims(ref hasher);
         if (ragdolls.Count == 0) return;
         hasher.Add(0x52616764);
         foreach (var id in order)
@@ -887,6 +914,12 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
             hasher.Add(r.Frozen);
             hasher.Add(r.Age);
             hasher.Add(r.BlendLeft);
+            if (r.ReturnedBones is { } returned)
+            {
+                hasher.Add(0x52616752); hasher.Add(returned.Length);
+                foreach (var bone in returned)
+                { hasher.Add(bone.Position); hasher.Add(bone.Rotation.X); hasher.Add(bone.Rotation.Y); hasher.Add(bone.Rotation.Z); hasher.Add(bone.Rotation.W); }
+            }
             foreach (var p in r.Pose)
             {
                 hasher.Add(p.Position);
@@ -899,6 +932,7 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
 
     public void Dispose()
     {
+        externalClaims.Clear();
         physics.Dispose();
         threads?.Dispose();
     }

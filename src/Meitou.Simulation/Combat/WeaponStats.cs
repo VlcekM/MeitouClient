@@ -34,6 +34,8 @@ public readonly record struct WeaponStats(float Quality, float CutMultiplier, fl
 /// <summary>A weapon in a character's hand: the record, its computed numbers, and the skill and animation kind it uses.</summary>
 public sealed class WeaponInstance(WeaponData data, WeaponStats stats)
 {
+    /// <summary>The actual inventory item used to build these weapon statistics; null for natural or synthetic weapons.</summary>
+    public Meitou.Simulation.Items.ItemInstance? SourceItem { get; init; }
     public WeaponData Data { get; } = data;
     public WeaponStats Stats { get; } = stats;
 

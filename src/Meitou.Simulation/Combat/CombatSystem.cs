@@ -251,7 +251,7 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
         if (!table.TryResolveNext(attacker, out int a) || !table.TryResolveNext(target, out int t) || a == t) return false;
         var cold = table.Cold(a)!;
         var tc = table.Cold(t)!;
-        if (cold.Fighter is null || cold.Stats is null || cold.Medical is null || cold.Race is null || tc.Medical is null || cold.Medical.Incapacitated || tc.Medical.Incapacitated) return false;
+        if (cold.Fighter is null || cold.Stats is null || cold.Medical is null || cold.Race is null || tc.Medical is null || cold.Medical.Incapacitated || !TargetAllowed(world, a, t, order.Picked, !tc.Medical.Incapacitated)) return false;
         if (!cold.CarriedBy.IsNone) return false;   // a carried mate does not fight (a prisoner neither: rows 5, 13 and 16 are not registered for the imprisoned; it may still be attacked, engine choice)
         // A fighter turns on no one it found no path to lately unless the player picked it (isPathImpossible in every finder's score, docs/game/combat.md "Target score"): a mate
         // that is called in on a sighting or an attack and cannot reach the enemy (a cage, a locked room) would otherwise stand at the nearest spot for ever.
@@ -289,7 +289,7 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
     OrderCheck IOrderOwner.CanRun(World world, int slot, OrderEntry order)
     {
         var table = world.Characters;
-        if (!table.TryResolveNext(order.Target, out int t) || t == slot || table.Cold(t)!.Medical is not { Incapacitated: false }) return OrderCheck.Gone;
+        if (!table.TryResolveNext(order.Target, out int t) || t == slot || !TargetAllowed(world, slot, t, true, table.Cold(t)!.Medical is { Incapacitated: false })) return OrderCheck.Gone;
         var cold = table.Cold(slot)!;
         return cold is { Fighter: not null, Stats: not null, Race: not null, Medical.Incapacitated: false } && cold.CarriedBy.IsNone ? OrderCheck.Run : OrderCheck.Blocked();
     }
@@ -431,7 +431,9 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
             if (t < 0 || t >= prev.Length || !prev[t].Alive || prev[t].Generation != s.TargetGeneration) continue;
             var cold = table.Cold(i)!;
             var from = new Vector2(prev[i].Position.X, prev[i].Position.Z);
-            var to = new Vector2(prev[t].Position.X, prev[t].Position.Z);
+            var aimed = TargetPoint(world, i, s, prev[t].Position);
+            bool aimedPart = TargetsPart(world, i, s);
+            var to = new Vector2(aimed.X, aimed.Z);
             var delta = to - from;
             float distance = delta.Length();
             if (distance < 1e-3f) continue;
@@ -445,8 +447,8 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
             // A crossbowman stands while it aims or reloads and walks up only while closing in.
             bool shooting = s.Ranged && s.RangedState != (byte)RangedStates.Closing;
             bool busy = s.Down || s.AttackTech >= 0 || s.ReactTech >= 0 || now < s.StunUntil || shooting;
-            float gap = distance - CombatTuning.Footprint(cold) - CombatTuning.Footprint(table.Cold(t));
-            float stand = CombatTuning.StandGap(s.Reach, cold.Fighter?.WeaponLength ?? 0, cold.CombatRunning);
+            float gap = distance - CombatTuning.Footprint(cold) - (aimedPart ? 0 : CombatTuning.Footprint(table.Cold(t)));
+            float stand = aimedPart ? 1 : CombatTuning.StandGap(s.Reach, cold.Fighter?.WeaponLength ?? 0, cold.CombatRunning);
             if (busy || gap <= stand)
             {
                 n.Velocity = default;

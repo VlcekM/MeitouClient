@@ -379,6 +379,8 @@ sealed partial class GameHost
         (kept, spare) = (spare, kept);
         if (kept is null || kept.Set.Length != to.Set.Length) kept = new Meitou.Data.Characters.BonePose(to.Set.Length);
         var pose = kept;
+        pose.AbsolutePositions = to.AbsolutePositions;
+        pose.Components = to.Components;
         pose.Weight = from.Weight + (to.Weight - from.Weight) * alpha;
         for (int h = 0; h < to.Set.Length; h++)
         {

@@ -32,6 +32,7 @@ internal sealed unsafe partial class CharacterRenderer
     readonly HashSet<long> portraitKeys = [];
     readonly Dictionary<long, int> liveByKey = [];
     int portraitLive = -1;
+    bool portraitPass;
     GpuTexture? portraitColour, portraitDepth;
     SampledTexture? portraitSampled;
     // The enhanced portraits (Look): each drawn into this half-float square, then resolved into its cell of the atlas above.
@@ -185,9 +186,10 @@ internal sealed unsafe partial class CharacterRenderer
         portraitAttach.AsSpan(0, l.Asset.AttachCount).CopyTo(attach.AsSpan(attachCount));
         (l.BoneBase, l.AttachBase, l.WeaponDrawn, l.RangedDrawn) = (0, attachCount, false, false);
         portraitLive = index;
+        portraitPass = true;
         // The shader's plain model (fixed lights: a portrait is a still and does not follow the sky), unclamped either way; enhanced, the resolve finishes it.
         try { DrawView(new ViewConstants { ViewProjection = view * projection, Eye = eye, LightDir = light }, eye, []); }
-        finally { portraitLive = -1; (bones, previousBones) = (liveBones, livePrevious); (l.BoneBase, l.AttachBase, l.WeaponDrawn, l.RangedDrawn) = (boneBase, attachBase, weapon, ranged); }
+        finally { portraitPass = false; portraitLive = -1; (bones, previousBones) = (liveBones, livePrevious); (l.BoneBase, l.AttachBase, l.WeaponDrawn, l.RangedDrawn) = (boneBase, attachBase, weapon, ranged); }
     }
 
     void DisposePortraitHdr()
