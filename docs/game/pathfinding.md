@@ -471,7 +471,11 @@ points against the nearest walkable collision or terrain): mesh heights more tha
 9.3 to 0.5 % (18.35), at 1.5..3.3 MB of samples per zone. DotRecast leaves the region 0 on polygons merged across regions (most of the large
 watershed ones); their regions are taken from the spans at their corners, and each sample takes the span of those nearest the plane, however far.
 **Observed** (`HubNavigationTests`, Hub to Squin): sampled only within 25 of the plane, a large slope polygon west of the Hub had no heights and the
-walker gave its order up at (-52057,1399,3131).
+walker gave its order up at (-52057,1399,3131). Other spans are taken within 25 of the plane; a sample left without one takes the walkable span
+within a climb a cell (10) of a sampled neighbour's height, spreading until none is added (`FillFromNeighbours`). **Observed** (zone 20.32, save
+"Gigachad", scratch probe): a polygon over a hollow north of the Hub, corners on the ground, had no samples where the ground lay ~40 under its
+plane in a region none of its corners touched; its plane was read there (1284 at -50695,807, original 1246), and a walker at -50695,805 was blocked
+on every step north and dropped each order. With the fill it reads 1248 and the walker goes.
 **Heights**: **Observed** polygons are up to ~15 off over stairs/ramps (Hub gate), so standing
 heights snap to walkable collision (`NavSurfaces`, also its edge within `EdgeReach`: the mesh overhangs raised floors, e.g. the Hub bar landing) or zone terrain (water-surface polygons keep their height); the layer is picked by mesh or real height within
 `StandRise` of the character wins. A layer more than `StandDrop` (12) below the character is not stepped onto (engine choice: the
