@@ -5,7 +5,7 @@ namespace Meitou.Simulation.Combat;
 public sealed partial class CombatSystem
 {
     /// <summary>The push a downing blow gives the ragdoll (world units/s): this much per point of damage, within these bounds, and the lift with it (engine choice).</summary>
-    const float PushPerDamage = 0.8f, PushMin = 10, PushMax = 50, PushLift = 0.2f;
+    const float PushPerDamage = 0.4f, PushMin = 10, PushMax = 100, PushLift = 0.2f;
 
     /// <summary>
     /// Meitou (<see cref="BodyOptions.AdvancedRagdolls"/>, docs/game/ragdolls.md "Initial state"): a hit that knocked the victim out or killed it leaves <see cref="CharacterCold.Blow"/>, the speed its ragdoll starts with:
