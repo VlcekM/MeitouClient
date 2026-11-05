@@ -56,7 +56,41 @@ shadowed cheek, jaw and neck); the game's stage and icons keep N·L. Lamps too: 
 `LampShaders.lampLight` takes each lamp's diffuse from `lampSkinDiffuse` (the same term, per-fragment inputs set in `main`); the specular keeps
 N·L. Faithful: push `skinLut` 0, unchanged.
 Limits: the sun shadow is not scattered, so the band past the terminator ends at the shadow edge; no back-lit
-translucency (ears).
+translucency (ears). The `chars2` switch lifts both (below).
+
+### Hair, cloth, skin and eyes (Meitou `chars2` switch, off by default)
+
+Not run on a GPU: look and cost **Unknown**. `pc.fill.a` carries the switch; `CharacterSurface` holds the GLSL and adds to `kenshiLight` and `lampLight`, for the
+character fragment only, what each light gains (`surfaceSun`, `surfaceSpecular`): the sun's after its shadow, a lamp's as is, the same function for both. World, Meitou stage
+and portraits; never the game's stage or the icons. Metal has no switch.
+
+**Hair**: two Kajiya-Kay lobes (Scheuermann's shifted pair, standing in for Marschner's R and TRT) over the game's GGX: a sharp near-white one, a wide one in the hair's own
+hue, both scaled by the game's gloss (brightness times the attachment's `specular`, so a matte style stays matte) and broken up by shifting them with the texture's brightness.
+The strand direction is the mesh's up axis laid on the surface (`vColour` outside icons), the only direction known without the UV layout: down the sides, out from the
+crown, where the highlight fades. **Unknown**: how often a style's real strands disagree (buns, swept hair). Animals keep the game's lobe: fur does not fall down
+(`CharacterShaders.Strands`). Every hair-mode fragment takes its normal on the side the camera sees (port of KenshiNative's "Hair on the side the camera sees": cards and
+inward-facing meshes went dark under GI and AO).
+
+**Cloth**: a Charlie sheen (roughness 0.6, Neubelt's visibility), in the diffuse's units, tinted √albedo, at 0.25 × the amount; its visibility is capped at 1, as uncapped and at 0.5 it reached 2 × a dark cloth's diffuse (computed over a sweep of angles); now at most 0.46, 0.27, 0.19 × the diffuse at albedo 0.1, 0.3, 0.6. Data holds no cloth mask, and worn items are matte (`glossMult` 0), so the texture's alpha says nothing. What separates them is the item: ARMOUR
+`material type` (CLOTH 1, LEATHER 0.35, CHAIN and METAL_PLATE 0, not ARMOUR 0), per worn mesh and per vest layer (`CharacterContent.ClothSheen`), mods included; `1 - metal`
+(the colour map's blue, dyed items) takes out the metal fittings of a cloth item. **Unknown**: fittings on an undyed cloth item take the sheen. Sun and lamps only, no sky term.
+
+**Skin** (where the skin switch and the race have it, so robots and races turned off take none of this; severed limbs keep the plain skin; colours are the skin's own saturated
+hue, as above): the table's band and the light through a part ask the sun's shadow a second time, where the light went in (`skinSunExtra`: the point moved towards the sun by
+the chord 2 r cos θ of a sphere of the curvature's radius, at most 1 unit, plus 0.1), so a body's own shadow no longer ends them and a real caster still does; one more shadow
+lookup, on skin near and past the terminator only. A cast shadow's penumbra warms by (√v − v) / 2. Thin parts: curvature 3 to 9 (a guess at the bake's values on ears and
+fingers: it reads the mesh's edges, so **Unknown** until measured on the meshes), facing away from the light, thickness 2 / curvature, passing exp(-thickness / 0.25) (a look,
+the idea from KenshiNative's skin3; it measures thickness with a ray, which has no characters here), 0.8 at most. Lamps: the same term through `lampSkinDiffuse`; they have no shadow, so no second lookup and the penumbra does not apply.
+
+**Eyes** (needs the skin switch and the race's skin): the game's eyeball is head texture at gloss about 0.93, a mirror of the specular cube (**Observed** by KenshiNative on its
+game data, `docs/features/characters.md` "Eyes"). Port of the surface of its eyes2: the eyeball by data (`eyeOf`: head UV, bare, no skin tone, gloss 0.5 to 0.7 up, curvature 2.5
+to 4.5 up in place of its race list; hive shells stay out by curvature, **Unknown** until measured) takes no skin terms, gloss 0.4 for the sky, and a bounded tear-film catchlight from the
+sun and the lamps. Not ported: eyes2's refracted iris and eyes3's drawn iris: KenshiNative turned them off after play (they often looked worse than the game's eye), and eyes3 needs a
+table per head mesh, against the modded-race rule.
+**Rain** (port of `makeWet`, KenshiNative's `skin-wet.md` start: Meitou's characters had no wetness): `uWeatherWet.x` on albedo and gloss, outdoors, absorbance
+(1 − gloss)(1 − metal), a fifth on skin. Not ported: its drops and film (a baked drop map, a G-buffer path) and the water line (no water height here).
+**Face shadows**: nothing to port: KenshiNative's fault was the traced hair's alpha channel, and here the shadow caster cuts by the hair's own `alphaChannel`
+(`CharacterShaders.DepthFragment`) and no ray sees characters.
 
 ## Content, LOD and memory
 
