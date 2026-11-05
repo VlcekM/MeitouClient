@@ -2730,3 +2730,9 @@ msgstr "不可用（见日志），正在使用普通交换链"
 
 msgid "[Leave]"
 msgstr "[离开]"
+
+msgid "{1} is wanted by {2} for {3}: bounty c.{4}"
+msgstr "{1}因{3}被{2}悬赏：赏金{4}开币"
+
+msgid "{1} has been caught committing {2}!"
+msgstr "{1}被抓住正在{2}！"
