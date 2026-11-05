@@ -338,6 +338,22 @@ public sealed partial class MedicalState
         PlayingDead = false;
     }
 
+    /// <summary>
+    /// Ends a knock-out (or playing dead) at once without healing anything (agent-playtest control channel: wake): the character is conscious and controllable. A flat-blood character keeps
+    /// the blood-KO flag, as after a natural waking, so it does not fall again at once; a vital part still under the KO point does put it down again on the next tick (heal first then).
+    /// False when it is dead or not unconscious.
+    /// </summary>
+    public bool WakeUp(List<MedicalEvent>? events = null)
+    {
+        if (Dead || !Unconscious) return false;
+        Unconscious = false;
+        PlayingDead = false;
+        KoTimer = 0;
+        if (Blood <= 25) BloodKo = true;
+        events?.Add(new MedicalEvent(MedicalEventKind.WokeUp));
+        return true;
+    }
+
     /// <summary>Starts the KO timer over at <paramref name="seconds"/>, also when a longer KO is running (<c>startKnockoutTimer</c> overwrites it).</summary>
     void RestartKo(float seconds, List<MedicalEvent>? events)
     {

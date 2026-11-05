@@ -75,6 +75,9 @@ public sealed record DebugKill(IReadOnlyList<CharacterId> Characters) : DebugCom
 /// <summary>Knocks the characters out for <see cref="Seconds"/> seconds of character time (<see cref="MedicalState.KnockOut"/>; agent-playtest control channel: ko), standing them down as a blow's knock-out does.</summary>
 public sealed record DebugKnockOut(IReadOnlyList<CharacterId> Characters, float Seconds) : DebugCommand;
 
+/// <summary>Wakes the unconscious characters at once (<see cref="MedicalState.WakeUp"/>; agent-playtest control channel: wake); the dead and the conscious are left alone.</summary>
+public sealed record DebugWake(IReadOnlyList<CharacterId> Characters) : DebugCommand;
+
 /// <summary>Finishes every research and repetition (<see cref="Construction.ResearchState.CompleteAll"/>).</summary>
 public sealed record DebugUnlockResearch : DebugCommand;
 
@@ -190,6 +193,10 @@ static class DebugCheats
                     m.KnockOut(knock.Seconds, knocks);
                     if (knocks.Count > 0) { TaskStart.Stand(table, down); table.Next[down].Velocity = Vector3.Zero; }
                 }
+                break;
+            case DebugWake wake:
+                foreach (var id in wake.Characters)
+                    if (table.TryResolveNext(id, out int up) && table.Cold(up)?.Medical is { } sleeper && sleeper.WakeUp()) table.Next[up].Velocity = Vector3.Zero;
                 break;
             case DebugUnlockResearch when data is not null:
                 world.Post($"Research unlocked: {world.Research.CompleteAll(data.Db)} finished.");

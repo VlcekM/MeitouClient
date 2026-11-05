@@ -156,6 +156,24 @@ sealed partial class GameHost
             con.Print($"knocked out {who.Length} for {seconds:0.#} s");
         });
 
+        add("wake", "wake [--id <c:slot.gen>]", "debug: bring the selected characters (or the one given) out of a knock-out at once, conscious and controllable, without healing them (heal first for a wounded vital part, which would put them down again); dead characters are refused, conscious ones skipped (error if none was unconscious)", (args, con) =>
+        {
+            if (!loaded(con)) return;
+            if (!ControlTargets(args, con, "wake", out var who, out var rest)) return;
+            if (rest.Count > 0) { con.Error("usage: wake [--id <c:slot.gen>]"); return; }
+            var chars = session.CurrentSnapshot.Characters;
+            var down = new List<CharacterId>();
+            foreach (var id in who)
+            {
+                var body = chars.FirstOrDefault(c => c.Id == id)?.Body;
+                if (body is { Dead: true }) { con.Error($"wake: c:{id.Slot}.{id.Generation} is dead"); return; }
+                if (body is { Unconscious: true }) down.Add(id);
+            }
+            if (down.Count == 0) { con.Error("wake: none of them is unconscious"); return; }
+            session.World.Commands.Enqueue(new DebugWake(down) { Tick = session.World.Tick });
+            con.Print($"woke {down.Count}");
+        });
+
         add("spawn-at", "spawn-at <x> <z> [record] [--ko | --dead]", "spawn a hostile character (default record 'Dust Bandit') at world X Z without a pointer; the reply has its id, state and position (a paused game steps a few ticks to make it appear); --ko / --dead leave a body to test loot, carry and first aid on", (args, con) =>
         {
             if (!loaded(con)) return;
