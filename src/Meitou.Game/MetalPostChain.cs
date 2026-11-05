@@ -167,7 +167,7 @@ sealed class MetalPostChain : IWorldPostChain, IDisposable
     {
         if (sceneColour is null || (!volumesPending && !Options.Ssao)) return;
         var cmd = (MetalCommandList)ctx.BeginNative("post scene effects");
-        composite.ApplyScene(cmd, sceneColour, ctx.Depth, Inputs, volumesPending, Options.Ssao);
+        composite.ApplyScene(cmd, sceneColour, ctx.Depth, Inputs, volumesPending, Options.Ssao, Options.ContactParams);
         ctx.EndNative(cmd);
         volumesPending = false;
     }

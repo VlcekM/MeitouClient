@@ -33,7 +33,8 @@ sealed partial class GameHost
         // The world's files are read on a worker from here on: while the window and the device are made, then behind the loading screen.
         var sceneRead = LoadScene is { } readScene ? Task.Run(readScene) : null;
         BeginAudio();
-        bool frameGenerationAtStart = config.FrameGeneration;   // read at start-up only
+        bool hdrAtStart = g.Hdr ?? config.Hdr;   // read at start-up only
+        bool frameGenerationAtStart = config.FrameGeneration && !hdrAtStart;   // read at start-up only; HDR output keeps the plain swapchain
         using var display = new VulkanDisplay(WindowOptions.Default with
         {
             Size = new Vector2D<int>(o.Width, o.Height),
@@ -42,7 +43,7 @@ sealed partial class GameHost
             IsVisible = false,
             FramesPerSecond = 0,
             UpdatesPerSecond = 0,
-        }, vsync, dlss: true, frameGeneration: frameGenerationAtStart);   // Load before the device so the settings panel can switch to DLSS without restarting.
+        }, vsync, dlss: true, frameGeneration: frameGenerationAtStart, hdr: hdrAtStart);   // Load before the device so the settings panel can switch to DLSS without restarting.
         streamline = display.Streamline;
         ngx = display.Ngx;
         var window = display.Window!;
@@ -668,6 +669,7 @@ sealed partial class GameHost
                 // The chain and the panel draw into the window's backbuffer (made again when the size changes).
                 var backbuffer = display.Backbuffer!;
                 gpu.Post!.Target = backbuffer;
+                gpu.Post.Options.HdrPeak = display.HdrActive ? PostOptions.HdrPeakFor(config.HdrPeakNits, config.HdrPaperNits) : 0;
                 // Frame generation (the setting, when the FFX layer is in use): made on the first frame; wanted except under the loading screen and for saved pictures.
                 if (frameGen is not null && display.FrameGenerationLayer is null) { frameGen.Dispose(); frameGen = null; }   // the layer fell back to the plain swapchain
                 if (!frameGenTried && display.FrameGenerationLayer is { } fgLayer)
@@ -808,10 +810,14 @@ sealed partial class GameHost
                 // world alone (the backbuffer, flipped by the present) and the layer lays the interface over every frame, generated ones too.
                 Meitou.Rendering.StageClock.UiPart(Meitou.Rendering.StageClock.UiPointer);
                 bool generating = frameGen is not null && frameGen.Finish(uiTarget);
-                var finalPicture = generating ? null : uiLayer.Composite(backbuffer);
+                bool hdrShown = display.HdrActive && !generating;
+                bool capturing = shot || feedbackShot || takeFile is not null;
+                // Pictures saved from an HDR frame are the SDR composite, the shown one the PQ composite.
+                var finalPicture = generating ? null : !hdrShown || capturing ? uiLayer.Composite(backbuffer) : null;
+                var shownPicture = hdrShown ? uiLayer.CompositeHdr(backbuffer, config.HdrPaperNits) : finalPicture;
                 Meitou.Rendering.StageClock.UiPart(Meitou.Rendering.StageClock.UiComposite);
                 if (GpuContext.DiagSubmit) display.Context.SubmitAndWait();
-                display.Present(finalPicture);
+                display.Present(shownPicture);
                 profiler?.EndFrame();
                 BenchLap(7);
                 PlayBenchRendered(Stopwatch.GetElapsedTime(t0).TotalMilliseconds, display.Context.Pipelines.LatePipelines);

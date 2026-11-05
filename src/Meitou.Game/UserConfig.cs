@@ -43,6 +43,11 @@ sealed class UserConfig
     /// <summary>Frame generation (FSR 3): the swapchain goes through AMD's frame-interpolation layer (Windows, Proton and Linux, needs <c>amd_fidelityfx_vk.dll</c> / <c>libamd_fidelityfx_vk.so</c>; read at start-up), which
     /// presents a generated frame between each two rendered ones (<c>FrameGeneration</c>). Off by default.</summary>
     public bool FrameGeneration { get; set; }
+    /// <summary>HDR10 output where the display offers it (read at start-up; not with frame generation; docs/render-post.md "HDR output"). Off by default.</summary>
+    public bool Hdr { get; set; }
+    /// <summary>HDR output: the nits of the picture's white (the interface, sunlit ground) and of the display's peak.</summary>
+    public float HdrPaperNits { get; set; } = 200;
+    public float HdrPeakNits { get; set; } = 1000;
     /// <summary>The Metal display default: MetalFX balanced (temporal at 0.50); Native is used when MetalFX is unavailable.</summary>
     public MetalUpscalerMode MetalUpscaler { get; set; } = MetalUpscalerMode.Temporal;
     /// <summary>The Metal render scale; the default 0.50 is the balanced profile. The Metal settings panel edits it live.</summary>

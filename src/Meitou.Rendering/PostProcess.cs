@@ -151,12 +151,13 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     sealed class CompositePass : FullscreenProgram
     {
         public readonly SamplerSlot Scene, Ao, Adapted, Bloom;
-        public readonly UniformHandle Auto, Exposure, UseAo, Dither, SceneSize, Sharpen, Tone, ToneMix, Grade, Saturation, Contrast, Night, Balance, BloomStrength;
+        public readonly UniformHandle Auto, Exposure, UseAo, Dither, SceneSize, Sharpen, Tone, ToneMix, Grade, Saturation, Contrast, Night, Balance, BloomStrength, HdrPeak;
         public CompositePass(GpuContext gpu) : base(gpu, PostProcessShaders.Composite, "post composite")
         {
             (Scene, Ao, Adapted) = (P.Sampler("uScene"), P.Sampler("uAo"), P.Sampler("uAdapted"));
             (SceneSize, Sharpen) = (P.Uniform("uSceneSize"), P.Uniform("uSharpen"));
             (Auto, Exposure, UseAo, Dither) = (P.Uniform("uAuto"), P.Uniform("uExposure"), P.Uniform("uUseAo"), P.Uniform("uDither"));
+            HdrPeak = P.Uniform("uHdrPeak");
             (Tone, ToneMix, Grade, Saturation, Contrast) = (P.Uniform("uTone"), P.Uniform("uToneMix"), P.Uniform("uGrade"), P.Uniform("uSaturation"), P.Uniform("uContrast"));
             (Night, Balance) = (P.Uniform("uNight"), P.Uniform("uBalance"));
             (Bloom, BloomStrength) = (P.Sampler("uBloom"), P.Uniform("uBloomStrength"));
@@ -244,13 +245,14 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     sealed class SsaoPass : FullscreenProgram
     {
         public readonly SamplerSlot Depth, Mask;
-        public readonly UniformHandle Tan, NearFar, Size, Radius, Strength, FadeStart, FadeEnd, Right, Up, Back, Eye, CharacterOccluder, WaterY;
+        public readonly UniformHandle Tan, NearFar, Size, Radius, Strength, FadeStart, FadeEnd, Right, Up, Back, Eye, CharacterOccluder, WaterY, Contact;
         public SsaoPass(GpuContext gpu) : base(gpu, PostProcessShaders.Ssao, "post ssao")
         {
             (Depth, Mask, CharacterOccluder, WaterY) = (P.Sampler("uDepth"), P.Sampler("uMask"), P.Uniform("uCharacterOccluder"), P.Uniform("uWaterY"));
             (Tan, NearFar, Size, Radius, Strength, FadeStart, FadeEnd) = (P.Uniform("uTan"), P.Uniform("uNearFar"), P.Uniform("uSize"),
                 P.Uniform("uRadius"), P.Uniform("uStrength"), P.Uniform("uFadeStart"), P.Uniform("uFadeEnd"));
             (Right, Up, Back, Eye) = (P.Uniform("uRight"), P.Uniform("uUp"), P.Uniform("uBack"), P.Uniform("uSsaoEye"));
+            Contact = P.Uniform("uContact");
         }
     }
 
@@ -804,6 +806,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         c.P.Set(c.Dither, o.Dither ? 1 : 0);
         c.P.Set(c.Tone, (int)o.ToneMapUsed);
         c.P.Set(c.ToneMix, Math.Clamp(o.ToneMix, 0, 1));
+        c.P.Set(c.HdrPeak, o.HdrPeak);
         c.P.Set(c.Grade, o.GradeUsed ? 1 : 0);
         c.P.Set(c.Saturation, PostOptions.Saturation);
         c.P.Set(c.Contrast, PostOptions.Contrast);
@@ -859,12 +862,20 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     void MakeLdrTargets(bool smaa, bool fxaa, bool haze)
     {
         bool wantLdr = smaa || fxaa || haze, wantSecond = haze && (smaa || fxaa);
+        // The pictures between the composite and the target carry the highlights in HDR output.
+        var format = Options.HdrPeak > 1 ? InternalFormat.Rgba16f : InternalFormat.Rgba8;
+        if (ldr is not null && ldr.Format != format)
+        {
+            ldr.Texture.Dispose();   // released after the frames in flight
+            ldrFxaa?.Texture.Dispose();
+            ldr = ldrFxaa = null;
+        }
         if (displayWidth <= 0 || (!wantLdr || ldr is not null) && (!wantSecond || ldrFxaa is not null) && (!smaa || smaaWeights is not null)) return;
         try
         {
             using var batch = Gpu.Uploads.Begin();
-            if (wantLdr) ldr ??= Make(batch, displayWidth, displayHeight, InternalFormat.Rgba8, TextureMinFilter.Linear, "post ldr");
-            if (wantSecond) ldrFxaa ??= Make(batch, displayWidth, displayHeight, InternalFormat.Rgba8, TextureMinFilter.Linear, "post ldr fxaa");
+            if (wantLdr) ldr ??= Make(batch, displayWidth, displayHeight, format, TextureMinFilter.Linear, "post ldr");
+            if (wantSecond) ldrFxaa ??= Make(batch, displayWidth, displayHeight, format, TextureMinFilter.Linear, "post ldr fxaa");
             if (smaa && smaaWeights is null)
             {
                 smaaEdges ??= Make(batch, displayWidth, displayHeight, InternalFormat.Rgba8, TextureMinFilter.Nearest, "post smaa edges");
@@ -1447,6 +1458,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         s.P.Set(s.Back, ViewWindow.BackFor(r, fovY, aspect));
         s.P.Set(s.Eye, eyeNow.X, eyeNow.Y, eyeNow.Z);
         s.P.Set(s.WaterY, WaterHeight ?? float.MinValue);   // the floor's occlusion fades under the water, which writes no depth
+        s.P.Set(s.Contact, Options.ContactParams);
         s.P.ApplyGlobals();   // the atmosphere's and the fog volumes' uniforms, through the frame globals
         Draw(s.P, a);
         if (SsaoStamps) Stamp("ssao gen");

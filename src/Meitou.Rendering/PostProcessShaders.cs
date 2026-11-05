@@ -27,7 +27,7 @@ static class PostProcessShaders
     /// surface is still visible through the air in front of it (haze, weather fog, fog volumes: the world position is rebuilt from depth and the
     /// frame globals' own <c>atmoApply</c> evaluated), <c>ao = 1 - (1 - ao) * visibility</c>, and by the water in front of it (<c>uWaterY</c>).
     /// </summary>
-    public static readonly string Ssao = "#version 330 core\n" + Noise + AtmosphereShaders.Functions + FogVolumeShaders.Functions + """
+    public static readonly string Ssao = "#version 330 core\n" + Noise + AtmosphereShaders.Functions + FogVolumeShaders.Functions + LightShaftShaders.SunShadow + """
 
         in vec2 vUv;
         out vec4 fragColour;
@@ -41,6 +41,7 @@ static class PostProcessShaders
         uniform vec3 uRight, uUp, uBack;   // the camera's axes in the world (view space to world offsets)
         uniform vec3 uSsaoEye;
         uniform float uWaterY;               // the water plane's height (float min: no water)
+        uniform vec4 uContact;               // contact shadows: x strength (0 off), y reach, z thickness (world units), w eye distance where they end
         """ + DepthConvention.Glsl + """
 
         // The share of a surface's occlusion the water in front of it leaves. The water writes no depth, so the floor's occlusion fell on the
@@ -74,6 +75,48 @@ static class PostProcessShaders
             return vec3((uv * 2.0 - 1.0) * uTan * z, -z);
         }
         vec3 viewPos(vec2 uv) { return viewPosAt(ivec2(floor(uv * uSize))); }
+
+        // Contact shadows (docs/render-post.md "Contact shadows"): how far along the ray towards the sun the depth first hides it, 0 none and 1 at the surface.
+        // A sample counts only within the thickness behind the depth, so a near object does not shadow all that lies far behind it on the screen.
+        float contactHit(vec3 p, vec3 l, vec3 n, float z, float noise)
+        {
+            const int N = 10;
+            vec3 start = p + n * (0.1 + 0.002 * z);
+            float thickness = uContact.z + 0.01 * z;
+            for (int i = 0; i < N; i++)
+            {
+                float t = (float(i) + noise) / float(N);
+                vec3 q = start + l * uContact.y * t;
+                if (q.z >= 0.0) return 0.0;
+                vec2 uv = q.xy / (-q.z * uTan) * 0.5 + 0.5;
+                if (any(lessThan(uv, vec2(0.0))) || any(greaterThan(uv, vec2(1.0)))) return 0.0;
+                float behind = -q.z - depthViewZ(texelFetch(uDepth, ivec2(uv * uSize), 0).r, uNearFar);
+                if (behind > 0.0 && behind < thickness) return 1.0 - t * t;
+            }
+            return 0.0;
+        }
+
+        // What a surface keeps of its light under a contact shadow: 1 - (the sun's share of its light) * strength * the hit. The sun's share keeps a contact
+        // shadow from going darker than the ambient light, and ends it under clouds and at night. Cascade shadows already took the sun away: nothing then.
+        float contactLight(vec3 p, vec3 n, float z, float noise)
+        {
+            if (uContact.x <= 0.0 || z >= uContact.w) return 1.0;
+            vec3 l = vec3(dot(uAtmoLight.xyz, uRight), dot(uAtmoLight.xyz, uUp), dot(uAtmoLight.xyz, uBack));
+            l = normalize(l);
+            float nl = dot(n, l);
+            if (nl <= 0.0) return 1.0;
+            float hit = contactHit(p, l, n, z, noise);
+            if (hit <= 0.0) return 1.0;
+            vec3 world = uSsaoEye + p.x * uRight + p.y * uUp + p.z * uBack;
+            vec3 worldNormal = n.x * uRight + n.y * uUp + n.z * uBack;
+            vec3 weights = vec3(0.2126, 0.7152, 0.0722);
+            float sun = 3.14159265 * nl * dot(uAtmoSunLight, weights) * shaftShadow(world, noise) * atmoCloudShadow(world);
+            float ambient = dot(atmoIrradiance(worldNormal), weights) * uAtmoLight.w;
+            float share = sun / max(sun + ambient, 1e-4);
+            float fade = 1.0 - smoothstep(0.6 * uContact.w, uContact.w, z);
+            return 1.0 - uContact.x * hit * share * fade;
+        }
+
         void main()
         {
             ivec2 c = ivec2(floor(vUv * uSize));
@@ -115,6 +158,7 @@ static class PostProcessShaders
             }
             float ao = 1.0 - clamp(uStrength * sum / float(N), 0.0, 1.0);
             ao = mix(ao, 1.0, smoothstep(uFadeStart, uFadeEnd, z));
+            ao *= contactLight(p, n, z, fract(ign(gl_FragCoord.xy) + 0.5));
             if (ao < 0.999)
             {
                 vec3 offset = p.x * uRight + p.y * uUp + p.z * uBack;
@@ -907,6 +951,7 @@ static class PostProcessShaders
         uniform float uExposure;
         uniform int uUseAo, uDither, uAuto, uTone, uGrade;
         uniform float uToneMix;    // hybrid (uTone 3): 0 the clamp, 1 ACES
+        uniform float uHdrPeak;    // HDR output: the highlights' ceiling (over 1); 0 SDR
         uniform float uSaturation, uContrast;
         uniform vec3 uBalance;     // a white balance on the scene before the tone map (PostOptions.Balance; 1, 1, 1 in play)
         uniform float uNight;      // Meitou night grading strength (the `nightgrade` switch): 0 off; needs the auto exposure's mean (uAuto)
@@ -954,6 +999,15 @@ static class PostProcessShaders
             if (m <= K) return c;
             return c * ((K + (1.0 - K) * (1.0 - exp(-(m - K) / (1.0 - K)))) / m);
         }
+        // HDR output: the shoulder with a ceiling of uHdrPeak, so the picture matches SDR below K and its highlights keep going.
+        vec3 hdrShoulder(vec3 c)
+        {
+            const float K = 0.8;
+            float m = max(c.r, max(c.g, c.b));
+            if (m <= K) return c;
+            float span = uHdrPeak - K;
+            return c * ((K + span * (1.0 - exp(-(m - K) / span))) / m);
+        }
         vec3 aces(vec3 x) { return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), 0.0, 1.0); }
 
         // Ours, not the game's (docs/render-post.md "Night grading"; the C# mirror is Meitou.Data.World.NightGrade, a test pins the constants): the scene
@@ -997,15 +1051,17 @@ static class PostProcessShaders
             float ao = texture(uAo, vUv).r;
             if (uUseAo != 0) c *= ao;
             if (uNight > 0.0 && uAuto != 0) c = nightGrade(c, dot(raw, LUM601), adapted.g);
-            if (uTone == 1) c = shoulder(c);
+            float top = uHdrPeak > 1.0 ? uHdrPeak : 1.0;
+            if (uHdrPeak > 1.0) c = hdrShoulder(c);
+            else if (uTone == 1) c = shoulder(c);
             else if (uTone == 2) c = aces(c);
             // hybrid: between the game's clip and ACES, fed 0.7 of the exposure so its mid-tones stay the clip's (0.18 -> 0.17, 0.5 -> 0.49) and only the highlights roll off
             else if (uTone == 3) c = mix(clamp(c, 0.0, 1.0), aces(c * 0.7), uToneMix);
-            c = clamp(c, 0.0, 1.0);   // Kenshi has no tone curve: values over 1 clip (docs/formats/post-processing.md)
+            c = clamp(c, 0.0, top);   // Kenshi has no tone curve: values over 1 clip (docs/formats/post-processing.md)
             if (uGrade != 0)
             {
                 c = mix(vec3(dot(c, vec3(0.299, 0.587, 0.114))), c, uSaturation);
-                c = clamp((c - 0.5) * uContrast + 0.5, 0.0, 1.0);
+                c = clamp((c - 0.5) * uContrast + 0.5, 0.0, top);
             }
             if (uDither != 0) c += (ign(gl_FragCoord.xy) + ign(gl_FragCoord.xy + 17.0) - 1.0) / 255.0;
             fragColour = vec4(c, 1.0);
