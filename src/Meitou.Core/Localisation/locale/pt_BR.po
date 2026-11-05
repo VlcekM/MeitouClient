@@ -1541,3 +1541,12 @@ msgstr "Não foi possível atualizar o idioma do Kenshi: {1}"
 
 msgid "No {1} found"
 msgstr "{1} não encontrado"
+
+msgid "[Leave]"
+msgstr "[Sair]"
+
+msgid "{1} is wanted by {2} for {3}: bounty c.{4}"
+msgstr "{1} é procurado por {2} por {3}: recompensa de c.{4}"
+
+msgid "{1} has been caught committing {2}!"
+msgstr "{1} foi pego cometendo {2}!"

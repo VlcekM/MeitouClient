@@ -337,6 +337,12 @@ Per-character hash map keyed by faction (`Character+0xf0`). Entry (`FUN_1405e7ee
 | 6 | Treason | 50000 |
 | 5, 10 (Looting), 0xe (14, Crop Theft), others | Assault, Looting, Crop Theft, default | 500 |
 
+- **Crime names are catalogue messages** (**Verified**: the zh_CN `main.po` source references cite the name table, `sensoryData.cpp` 145-177, for each name).
+  Each name is a plain `msgid`, so the player's language shows it (zh_CN: Burglary 入室偷窃, Escaping Prison 越狱). **Observed**: `Assault`, `Looting` and `Kidnapping` share their
+  `msgid` with the AI task names (zh_CN 攻击, 抢劫中, 绑架中), and the zh_CN catalogue renders `Fencing` as 剑术 (the sword skill; the translator note says "selling stolen goods"), so the
+  original shows those as well. Meitou: `CrimeTable.Name` translates at the point a message or the HUD is built;
+  the ledger and saves keep the code (the bit mask `crimes<n>`), the world hash never sees the text.
+
 - **Trespassing** (perception `FUN_140859680` -> test `FUN_140852350`, **Observed**): an NPC seeing a player character inside a
   building sets a pending Trespassing (code 11) against **its own** faction (victim: itself), fires dialogue event 17 and gives its
   faction's memory of the player (`FUN_140673a20` -> `FUN_140673930`: one entry for the whole player faction, a `SubjectiveTags`

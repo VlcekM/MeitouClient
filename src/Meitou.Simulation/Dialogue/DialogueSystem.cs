@@ -383,7 +383,7 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
             string label = Said(Expand(world, c, child, PickText(world, c.Player, child), c.Player, c.Npc)) + MoneySuffix(child);
             if (label.Length > 0) c.Choices.Add((child, label));   // a choice with no text and no cost is never offered (FUN_140680130)
         }
-        if (c.Choices.Count == 0) c.Choices.Add((null, "[Leave]"));
+        if (c.Choices.Count == 0) c.Choices.Add((null, LeaveChoice));
     }
 
     void Choose(World world, Conversation c, int index)
@@ -401,7 +401,7 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
             if (c.Ended) return;
             from = reply;
         }
-        else if (text == "[Leave]" || from is null) { c.Ended = true; return; }
+        else if (text == LeaveChoice || from is null) { c.Ended = true; return; }
         var next = Pick(world, c, from.Children);
         if (next is not { } p) { c.Ended = true; return; }
         if (IsNpcSide(p.Line.Speaker)) Say(world, c, p.Line, p.Speaker);
@@ -463,8 +463,14 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
         RefreshCharacterTrade(world);
         if (open is not { } c) { view = null; return; }
         view = new ConversationView(c.Npc, c.Player, c.Speaker, NameOf(world, c.Speaker.IsNone ? c.Npc : c.Speaker), NameOf(world, c.Player), c.Text,
-            [.. c.Choices.Select(x => x.Text)], [.. c.Log], world.Player.Money);
+            [.. c.Choices.Select(Shown)], [.. c.Log], world.Player.Money);
     }
+
+    /// <summary>The engine's own choice that ends the conversation. The simulation keeps this English marker; only the published view shows it translated.</summary>
+    internal const string LeaveChoice = "[Leave]";
+
+    /// <summary>A choice as the window shows it: the engine's [Leave] in the player's language; a reply's text is the data's own and stays as it is.</summary>
+    static string Shown((DialogueNode? Reply, string Text) choice) => choice.Reply is null && choice.Text == LeaveChoice ? Loc.Tr(LeaveChoice) : choice.Text;
 
     public ConversationView? PublishConversation() => view;
     public DialogueRequest? PublishRequest() => request;
