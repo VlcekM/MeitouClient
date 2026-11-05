@@ -176,8 +176,8 @@ sealed partial class GameHost
     }
 
     /// <summary>
-    /// Where a character being edited is drawn in the bar: the shown one where it stands, the others (up to <see cref="EditorBar.MaxSeated"/>, in the editor's order) on its
-    /// seats with their sitting clip; null when the bar is not up or the character is not one of them.
+    /// Where a character being edited is drawn in the bar: the shown one where it stands, the other people (up to <see cref="EditorBar.MaxSeated"/>, in the editor's order) on
+    /// its seats with their sitting clip; null when the bar is not up or the character is not one of them. An animal not shown is not drawn (it has no sitting clip).
     /// </summary>
     (Vector3 Position, float Yaw, string? Clip)? EditorBarPlace(CharacterId id, CharacterId shown)
     {
@@ -186,7 +186,7 @@ sealed partial class GameHost
         int seat = 0;
         foreach (var other in player.EditorCharacters)
         {
-            if (other == shown) continue;
+            if (other == shown || player.IsEditorAnimal(other)) continue;
             if (seat >= EditorBar.MaxSeated || seat >= bar.Seats.Count) return null;
             if (other == id) return (bar.Seats[seat].Position, bar.Seats[seat].Yaw, bar.Seats[seat].Clip);
             seat++;
