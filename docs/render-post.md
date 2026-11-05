@@ -238,4 +238,4 @@ named swamp screenshot test; DLSS/FSR outputs require baseline-noise comparison.
 mask, half-resolution and fog-rate changes are not blanket pixel-parity claims. Compare still
 and moving views at matched time/weather/upscaler. [bench.md](bench.md).
 **Limits:** screen-space information, temporal disocclusion, coarse fog shading,
-and lost GI specular occlusion on resolved surfaces; see feature docs for uncertainty.
+and lost GI specular occlusion on resolved surfaces without `ssr`; see feature docs for uncertainty.

@@ -85,10 +85,32 @@ resolve reconstructs position from the scene depth; full-res apply depth-weights
 Unflagged/background surfaces must remain unchanged. Every program drawing into the scene pass
 must write that target (`WithAlbedo`, `none` for unlit ones), including the GPU-indirect variants:
 an unwritten output is undefined (in practice the surface behind, whose GI then lands on the
-front fragment; seen on grass and on crossbow bolts, i.e. `DebrisRenderer`, until it used `WithAlbedo`). Resolved surfaces currently lose the
-per-fragment specular-occlusion term. Strong depth/normal discontinuities need rejection.
+front fragment; seen on grass and on crossbow bolts, i.e. `DebrisRenderer`, until it used `WithAlbedo`). Resolved surfaces lose the
+per-fragment specular-occlusion term unless [Reflections](#reflections) run. Strong depth/normal discontinuities need rejection.
 Surface bit9 marks interiors; signed low-resolution depth preserves that class (0 empty, negative
 interior). Upsampling rejects the other class so the gain cannot bleed onto outdoor surfaces.
+
+## Reflections
+
+`ssr` Enhancement, off by default, Vulkan only; `Gi/SsrShaders.cs`, `GiShaders.Reflect`, `PostProcess.Reflections.cs`. Replaces the sky cubemap's
+reflection (`uAtmoSpecular`) on surfaces that write the surface target; water writes 0 and keeps `ReflectionPass`; characters, foliage and grass write 0 too (they
+read the probes in shader), so they mirror nothing but appear in what others mirror. Runs after the resolve, before shafts, fog volumes and SSAO.
+With the switch on, `uGiParams.z` gains 2: every lit fragment writes the target, `1 + gloss * 62` in bits 10-15 and bit 8 only if it takes the probes (so
+without probes, and on interiors with **Indoor GI** off, reflections run with no resolve). Off, the words written are those of before.
+
+- **March** (resolve size, 1/2 without it): gloss above 0.25, reflected from the stored normal, 40 screen steps with inverse depth linear, 5 halvings, up to 3000 units.
+  A rejected hit: from behind (stored normal), or within 4-12 units (a normal-mapped ray under its own surface). Fades at screen edges (6%) and the last quarter.
+- **Rays** (needs a probe trace this frame and storage on RGBA16F): the same ray for what the march left, up to 4000 units, lit as a probe ray (no specular, no haze);
+  a miss proves the sky open. No characters, grass or water. No rays: the sky, occluded.
+- **Shade** (same size): `seen - sky`, hazed as the fragment was, per unit of BRDF. `sky` is `kenshiLight`'s read of the cube, recomputed, so nothing is counted twice;
+  `seen` mixes occluded sky to the hit by gloss 0.25-0.45. Every surface passes here: **specular occlusion** is recovered from the resolve's texel
+  (`1 + lum((probes - sky) * share) / lum(sky)`, clamped: `kenshiLight`'s ratio) and needs no extra read of the probes.
+- **Apply** (full size): depth-weighted upsample as the resolve's, times this pixel's Lazarov BRDF, specular colour 0.04 (only characters have metalness).
+
+A wet surface goes to gloss about 0.45 (`makeWet`). With an upscaler each frame samples the GGX lobe for TAA/DLSS to average; without one the mirror direction is used.
+GI per fragment (`--gi-resolve 0`) leaves the reflections off: its fragments already occlude a term the shade cannot recover.
+Rays and march per block use one surface; `sky` is that pixel's, so a noisy normal inside a block leaves a small error at grazing angles.
+Thresholds, range, look and cost: **Unknown** (not run on a GPU).
 
 ## Performance and verification
 
@@ -110,8 +132,8 @@ Random-ray occupancy previously replaced alpha with0/1 each update, causing visi
 
 ## Open
 
-- **Resolve:** specular occlusion for the resolved surfaces (a spare 7 bits of the surface target could carry the fragment's
-  environment specular); foliage in the resolve (its pixels' normals are noisy; it reads without the visibility test now).
+- **Resolve:** specular occlusion for the resolved surfaces with [Reflections](#reflections) off; foliage in the resolve (its pixels' normals are
+  noisy; it reads without the visibility test now).
 
 - **Terrain resolution.** The fine grid matches the drawn terrain only roughly (16 against the fine window's spacing). Building it from
   the streamed fine window directly would remove the culling workaround.
