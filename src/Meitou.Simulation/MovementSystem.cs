@@ -172,10 +172,15 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
     public const int ProvisionalBlockedLimit = 5;
     /// <summary>
     /// How many times running a walker stopped on the navmesh part of its path (no ground it can stand on ahead) asks for the path again from where it stands before it drops it
-    /// and the order (engine choice: from a slightly different spot the path can start elsewhere, docs/game/pathfinding.md "Own builder"). A block while a request is in flight
-    /// does not count: the walker stands until the answer comes.
+    /// (engine choice: from a slightly different spot the path can start elsewhere, docs/game/pathfinding.md "Own builder"). A block while a request is in flight
+    /// does not count: the walker stands until the answer comes. A player's move order (<see cref="CharacterCold.OrderMove"/>) is not dropped for it (<see cref="BlockedRetrySeconds"/>).
     /// </summary>
     public const int BlockedRepathLimit = 3;
+    /// <summary>
+    /// Seconds between the requests of a move-order walker still blocked past <see cref="BlockedRepathLimit"/> / <see cref="ProvisionalBlockedLimit"/>: it keeps the order, stands
+    /// and asks again from where it stands (the original's agent asks again after 5 s off its path and never gives the walk up; docs/game/pathfinding.md "Walls").
+    /// </summary>
+    public const float BlockedRetrySeconds = 5;
 
     public PathService Paths { get; } = paths;
 
@@ -332,6 +337,7 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
         cold.OrderMove = false;
         cold.ArriveWithin = 0;
         cold.BlockedRepaths = 0;
+        cold.BlockedRetryTick = 0;
         cold.WalkEnd = WalkEnd.None;
         n.Task = (byte)CharacterTask.GoTo;
         n.Goal = target;
@@ -1189,33 +1195,12 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
                 }
                 else
                 {
-                    // Blocked on the provisional part of a long route (the terrain-only route met a wall or a building): stand and ask again.
-                    // Blocked on its navmesh part: ask again from where it stands a few times before giving up.
-                    if (n.PathCursor >= cold.PathExact ? ++cold.ProvisionalBlocked <= ProvisionalBlockedLimit : ++cold.BlockedRepaths <= BlockedRepathLimit)
-                    {
-                        speed = 0;
-                        dir = Vector2.Zero;
-                        Reroute(world, ref n, cold, now: true);
-                        goto moved;
-                    }
-                    // Blocked (no surface to walk on there): drop the path and wait before trying again; a follower steering at its slot takes paths for a while.
+                    // Blocked (no surface to walk on there): it stands and asks for the path again, or gives the walk up.
                     speed = 0;
-                    if (n.Task == (byte)CharacterTask.Follow) cold.FollowPathTime = FollowPathSeconds;
-                    n.Flags = (ushort)(n.Flags & ~(ushort)MoveFlags.HasPath);
-                    n.TaskTime = FailedPathWait;
-                    if (n.Task == (byte)CharacterTask.GoTo)
-                    {
-                        string why = n.PathCursor >= cold.PathExact
-                            ? $"blocked {cold.ProvisionalBlocked} times on the provisional long-range part (limit {ProvisionalBlockedLimit})"
-                            : $"blocked {cold.BlockedRepaths} times on the navmesh part (limit {BlockedRepathLimit})";
-                        LogDropped(world, n, cold, $"{why}, waypoint {n.PathCursor} of {cold.Path.Length}, stuck stepping to {x:0}, {z:0}");
-                        cold.WalkEnd = WalkEnd.Failed;
-                        TaskStart.Step(table, i, CharacterTask.Idle);
-                        cold.OrderQueue.Clear();
-                    }
+                    dir = Vector2.Zero;
+                    if (!AsksAgainBlocked(world, ref n, cold)) DropBlocked(world, i, ref n, cold, x, z);
                 }
             }
-        moved:
             n.Velocity = new Vector3(dir.X * speed, 0, dir.Y * speed);
             n.Animation = (ushort)(speed < 1 ? 0 : speed <= n.WalkSpeed + 1 ? 1 : 2);
             n.AnimationTime = n.Animation == p.Animation ? p.AnimationTime + dt : 0;
@@ -1232,6 +1217,51 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
         if (cold.Race is not { } race || !cold.CarriedBy.IsNone) return 0;
         float standY = at.Y <= WorldWater.Height + Speed.WaterSlack ? MathF.Min(at.Y, walk.TerrainHeight(at.X, at.Z)) : at.Y;
         return Speed.WaterState(standY, 1, race.Swims);
+    }
+
+    /// <summary>
+    /// A walker blocked on its path (no surface to step on, no request in flight) asks for the path again from where it stands, up to <see cref="ProvisionalBlockedLimit"/> times
+    /// on the provisional part of a long route (the terrain-only route met a wall or a building) and <see cref="BlockedRepathLimit"/> on its navmesh part. Past that a player's move
+    /// order keeps its path and asks again every <see cref="BlockedRetrySeconds"/>; false: the walk is given up (<see cref="DropBlocked"/>).
+    /// </summary>
+    static bool AsksAgainBlocked(World world, ref CharacterHot n, CharacterCold cold)
+    {
+        bool provisional = n.PathCursor >= cold.PathExact;
+        bool within = provisional ? ++cold.ProvisionalBlocked <= ProvisionalBlockedLimit : ++cold.BlockedRepaths <= BlockedRepathLimit;
+        if (!within && !cold.OrderMove) return false;
+
+        if (within || world.Tick >= cold.BlockedRetryTick)
+        {
+            if (!within && cold.BlockedRetryTick == 0) LogHeld(world, n, cold, provisional);
+            cold.BlockedRetryTick = within ? 0 : world.Tick + (long)MathF.Ceiling(BlockedRetrySeconds / world.TickSeconds);
+            Reroute(world, ref n, cold, now: true);
+        }
+        return true;
+    }
+
+    /// <summary>A blocked walk given up (<see cref="AsksAgainBlocked"/>): the path is dropped and the walker waits before trying again; a follower steering at its slot takes paths for a while.</summary>
+    static void DropBlocked(World world, int slot, ref CharacterHot n, CharacterCold cold, float x, float z)
+    {
+        if (n.Task == (byte)CharacterTask.Follow) cold.FollowPathTime = FollowPathSeconds;
+        n.Flags = (ushort)(n.Flags & ~(ushort)MoveFlags.HasPath);
+        n.TaskTime = FailedPathWait;
+        if (n.Task != (byte)CharacterTask.GoTo) return;
+
+        string why = n.PathCursor >= cold.PathExact
+            ? $"blocked {cold.ProvisionalBlocked} times on the provisional long-range part (limit {ProvisionalBlockedLimit})"
+            : $"blocked {cold.BlockedRepaths} times on the navmesh part (limit {BlockedRepathLimit})";
+        LogDropped(world, n, cold, $"{why}, waypoint {n.PathCursor} of {cold.Path.Length}, stuck stepping to {x:0}, {z:0}");
+        cold.WalkEnd = WalkEnd.Failed;
+        TaskStart.Step(world.Characters, slot, CharacterTask.Idle);
+        cold.OrderQueue.Clear();
+    }
+
+    /// <summary>A player's move order held blocked past the try limit (<see cref="AsksAgainBlocked"/>): logged once per stretch of blocks (docs/game/pathfinding.md "Dropped orders").</summary>
+    static void LogHeld(World world, in CharacterHot n, CharacterCold cold, bool provisional)
+    {
+        string part = provisional ? "provisional long-range part" : "navmesh part";
+        Console.WriteLine($"order     {cold.Name} blocked on the {part} at tick {world.Tick}, keeps its move and asks again every {BlockedRetrySeconds:0} s; " +
+            $"at {n.Position.X:0}, {n.Position.Y:0}, {n.Position.Z:0}, goal {n.Goal.X:0}, {n.Goal.Y:0}");
     }
 
     /// <summary>A player's move order dropped: why and where, in the log (docs/game/pathfinding.md "Dropped orders"). Other characters' drops are not logged.</summary>

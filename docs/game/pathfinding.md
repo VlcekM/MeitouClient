@@ -90,9 +90,20 @@ Every move of the nav agent, the animation-driven one (root motion, mode 3) incl
   wall segments (0x20 bytes each, gathered by `FUN_1403a4fd0` within the agent radius `+0x70` + 6 Havok units, re-gathered when the target leaves 0.8 of that range) and returns
   the first contact's fraction and normal. Only segments the move closes on count (dot below -1e-5), and only those within 1 Havok unit (10) of the agent's height. The agent moves to
   the contact, the rest of the step is turned along the wall and swept again; with nothing gained it logs "stuck at". A step longer than 3 Havok units (30) is cut into several sweeps (their count: Observed).
-- **Observed** (decompile, `FUN_140147fd0`'s stuck branch read): it only posts the red (`0xff0000`, `FUN_1406e1e00`) " stuck at <pos>" message and sweeps a scaled step again; nothing there ends
-  the task or touches the order queue. Whether the original ever abandons a player's move order because its walker is blocked is **Unknown**; Meitou's drop after
-  `BlockedRepathLimit` ([own builder](#own-builder)) is an engine choice.
+- <a id="blocked-walkers"></a>**Verified** (decompile, `FUN_140147fd0`): the stuck branch only posts the red (`0xff0000`, `FUN_1406e1e00`) " stuck at <pos>" message and sweeps a scaled
+  step again. While it follows a path (state 1) the agent's polygon (`+0x14`, -1 off the mesh) is looked for among the path's, from the corner before the cursor to 5 past it; time
+  outside them adds up (`+0x84`, the step's dt; 0 again on one of them) and past 5 s (`DAT_141685340`) the state turns 6, so the next step asks for the whole way again from where
+  it stands (`FUN_140145cf0`). Nothing counts these asks; a walker blocked on its path's own polygons never asks.
+- **Verified** (decompile): agent state `+0x90`: 4/5 asked (`FUN_140145cf0`), 1 following and 3 no path (the answer, `FUN_140144cd0`), 6 ask again, 0 none (`FUN_140144400`).
+  CharMovement vslot `0x48` (`FUN_14065e800`) is false and `0x50` (`FUN_14065e830`) true only in state 3; `0x50` stays false during the destination setter's goal-offset retries
+  (`FUN_140661270`: `+0x370` set, `+0x368` under 16; at the 17th a player-faction walker logs "Edge target to high - Completely stuck!", an NPC tries the road network).
+  `Task_Move`'s check (vslot 5 `FUN_140332150`; rows 1, 29, 40, 67) ends the task only on `0x50` (with `notifyPathImpossible`) or on its chase addon (`+0x78`, `FUN_14033a800`,
+  NPCs with a target only); `AITaskSystem::update` `FUN_14050d970` sets its replan flag `+0x26d` on `0x50` away from the target, and `FUN_14050d920` -> `FUN_14050d080` then deletes
+  the order deque's front when it is the running task (**Observed**).
+- **Observed** (the readers above; no other found): the original gives a move up only when a path request finds no way; a walker blocked with a path keeps its task and order
+  for good. Which per-tick caller runs `Task_Move`'s vslot 5 was not traced. Meitou: a player's move order (`CharacterCold.OrderMove`, the original's Task_Move `+0x95`) blocked
+  past `BlockedRepathLimit` / `ProvisionalBlockedLimit` ([own builder](#own-builder)) keeps its path, stands and asks again every 5 s (`BlockedRetrySeconds`); a no-path answer
+  drops it as the original's state 3 does. Other walks still give up there (engine choice: an AI errand would otherwise stand at a wall for good).
 - **Observed**: the segments are the navmesh's boundary edges (the swept radius is passed in a register the decompile drops; taken as the agent radius).
 - Meitou: `IWalkability.Slide` (`NavmeshWalkability.Slide`) for root motion (`AnimationSystem.Relocate`) and the combat approach step (`CombatSystem`): the walls are the edges that lead
   nowhere (no neighbour or tile link, not the zone border, not into a closed door), within `SnapRange` (16) of the walker's height (engine choice: the mesh's own error on stairs);
@@ -202,8 +213,8 @@ in it). **Observed** (zone 39.16, Stoat, scratch probe from ground-level points 
 A walker off the mesh (engine choices): its path starts at its own position, then the nearest mesh point, which it walks to; if the nearest start polygon gives no path, or
 one whose first 10 units it cannot stand along, up to 4 next-nearest starts are tried. Movement turns early for the next waypoint (within 5) only where it can stand along
 the first 10 units of the straight line to it, else it walks to within 2 of the corner. A step blocked on the navmesh part asks for the path again from where the walker
-stands, up to 3 times since its last waypoint or order (`BlockedRepathLimit`), before the path and a GoTo order are dropped; a block while a request is in
-flight is not counted (the walker stands until the answer comes; counted per tick, 4 blocks took 0.3 s and dropped orders, **Observed** zone 21.29, save
+stands, up to 3 times since its last waypoint or order (`BlockedRepathLimit`), before the path and an engine GoTo are dropped (a player's move order is kept and
+asks again every 5 s, [walls](#blocked-walkers)); a block while a request is in flight is not counted (the walker stands until the answer comes; counted per tick, 4 blocks took 0.3 s and dropped orders, **Observed** zone 21.29, save
 "Gigachad", scratch sim). **Observed** (zone 22.10, save "stuck", scratch sim): a walker on the terrain at
 Y392 beside the Old Storm House's (`6-rebirth-INGAME`) door stair snapped to the stair's corner (Recast corner vertices take the highest neighbouring cell, 408 over
 ground at 395); that polygon's only exits were narrower than the radius, the next start's path was cut up the stair's side, and the walker stood still. With the three rules it enters in 3 s.
@@ -740,7 +751,8 @@ F11's `[ ] paths` checkbox (`GameHost.Paths.cs`) draws, over everything and stil
 ### Dropped orders
 
 A player's move order dropped by the movement system is logged (`order` lines in `log.txt`, `MovementSystem.LogDropped`): no path found (first request or
-asking again), or blocked past `ProvisionalBlockedLimit` / `BlockedRepathLimit`, with the position, goal and waypoint.
+asking again), with the position, goal and waypoint. One blocked past `ProvisionalBlockedLimit` / `BlockedRepathLimit` is kept ([walls](#blocked-walkers)) and logged
+once when it starts holding (`MovementSystem.LogHeld`).
 
 ### Search cost
 
