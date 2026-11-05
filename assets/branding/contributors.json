@@ -24,23 +24,27 @@
     "areas": "Metal rendering, Materials, Seat interaction, Mesh paths"
   },
   "crockmr": {
-    "commits": 19,
-    "areas": "Slaves, Sleep, Plans, Platoons, Prisoner care, Save files, Squads"
+    "commits": 26,
+    "areas": "Slaves, Prisoners, Saves"
   },
   "dmlen": {
     "commits": 1,
     "areas": "Projectile tracers"
   },
   "lucasskrewer": {
-    "commits": 5,
-    "areas": "Benchmarks, Animal hunger"
+    "commits": 6,
+    "areas": "Benchmarks, Animals"
   },
   "dxseba": {
-    "commits": 1,
-    "areas": "Character meshes"
+    "commits": 2,
+    "areas": "Combat, Mesh buffers"
   },
   "dfdffish": {
-    "commits": 11,
-    "areas": "Picking, Launcher, Localization"
+    "commits": 12,
+    "areas": "Stats, Locale, Picking"
+  },
+  "roscatoday": {
+    "commits": 1,
+    "areas": "Mod settings"
   }
 }
