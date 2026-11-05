@@ -411,7 +411,7 @@ sealed partial class GameHost
         // The message panel fits a line or two: it gives the count, the message log the names.
         if (missing.Count == 0)
         {
-            player.Notice(imported ? "Imported" : "Loaded");
+            player.Notice(imported ? "Imported" : Loc.TrIn("save notice", "Loaded"));
             return;
         }
         string panel = Loc.Tr("Loaded; the save was made with {1} mod(s) not loaded now (listed in the messages)", missing.Count);

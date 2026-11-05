@@ -57,8 +57,10 @@ Addresses are `kenshi_x64.exe` (1.0.68).
   keeps the English sentence as its msgid with the game's `{1}`, `{2}` placeholders (`LauncherText.Translate("Version {1} for {2}.", …)`), so
   the catalog matches it and a translation may reorder the holes. Game and simulation messages do the same (`Loc.Tr("{1} is arresting {2}!", …)`). A
   character's line in a message ("name: line", `LockSystem.Say`) keeps the line as its own game msgid ("Pick failed") inside a `{1}: {2}` frame,
-  so every language with a game catalogue translates the line. A Meitou entry cannot override a game msgid (the game's catalog is asked first):
-  so Meitou's load notice "Loaded" shows the game's ranged-weapon text (`getGUIData.cpp`, zh "已装载"; **Verified** in en_GB `main.pot`, zh_CN `main.po`).
+  so every language with a game catalogue translates the line. A Meitou entry cannot override a game msgid (the game's catalog is asked first).
+  Where the game's sense is wrong, the code asks under a `msgctxt` (`Loc.TrIn`; without a context entry it falls back to `Tr`): the load notice
+  "Loaded" is `msgctxt "save notice"`, since the game's "Loaded" is the ranged-weapon label (`getGUIData.cpp`, zh "已装载"; **Verified** in
+  en_GB `main.pot`, zh_CN `main.po`).
 - **Fonts, tips, names**: through the overlay folder (`OgreScriptResources.ForInstall`) and `Loc.FindTextFile`.
 - **New-game option help**: `NewGameHelpCatalog` reads the installed English `main.pot` source references and passes the exact msgid through `Loc.Tr`; no paraphrases or translated paragraphs are embedded. Missing translations fall back to the original English; a missing template leaves help empty. Font resources use the active locale overlay.
 - All text files are read and written as UTF-8.
