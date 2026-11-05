@@ -132,7 +132,7 @@ NPCs never without a camera. Not modelled: an NPC engaged with a player (always 
 
 ### Part tick (`FUN_14064f5c0`, **Verified** decompile)
 
-In order, per part: the hit multiplier falls 0.01 a second while h >= 0 (reset to 1 below). Self healing (RACE, conscious, alive,
+In order, per part: the hit multiplier falls 0.01 a second while h >= 0 (reset to 1 below). Self healing (RACE `self healing`: in the base data only animal races and the robot spiders, no playable race, **Verified** merged data probe; conscious, alive,
 h - s < M - b) adds 0.05 dt `heal rate mult` R 0.4 to b and skips degeneration that tick; otherwise, while h < M and h > -3M,
 h -= 0.05 dt `bodypart degeneration rate` ChanceOfDeath degMult D 1.2 with D = clamp(((M-h-b)100/M - 20)/70, 0, 1), quartered
 when h + b > 0; degMult lerps 1.7..0.03 by toughness and is 0 for a non-vital robotic part (robot race or limb replacement)

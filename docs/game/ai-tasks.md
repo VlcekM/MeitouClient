@@ -1369,7 +1369,7 @@ hand), `isGettingEaten` (+0x279), `CharStats._holdPositionMode` (+0x12b).
   `Guard building, residents`, `Guard town`, `Shop`, `Wandering from town to town`, the slaver packages; **Verified** by a data survey of the
   full load order, 2026-10-24). Its row in `FUN_140319a60` (like 57 and 250) has crowd factor `+0x34` 0.8 (**Observed**). Score = desire x weight x 0.8^n x the finder's score
   (0 for no patient). In the guard packages it is **Urgent**, weight 1, above their NonUrgent posts (`Guard building, residents`, `Guard town`, the gate and slave-catching guards,
-  bodyguards; **Verified** by a data survey of the base game, 2026-11-03), so a guard on its post leaves it to treat. Meitou scores it (`AiBehaviour.Medic`): the finder runs in the serial
+  bodyguards; **Verified** by a data survey of the base game, 2026-11-03), so a guard on its post leaves it to treat. `Shop` and `Shop-24hr` (shops and bars) list it Urgent, weight 1, hours 0-24, in all three roles; `hang out in a bar` NonUrgent; `Civilian` not at all (**Verified**, merged data probe, 2026-11-05). Meitou scores it (`AiBehaviour.Medic`): the finder runs in the serial
   `FirstAidSystem.SlowWorld` sweep on the NPC's turn and keeps its patient and score on the mind (`AiMind.MedicPatient`, `MedicScore`; it shares scratch lists, the think is parallel); the
   think weighs the goal at that score (desire 1, crowd 0.8; the desire's fight and carrying cases are gates of `FindPatient`), planned as its own step, and the serial step after the think
   runs the finder again and starts row 58's Treat. An NPC whose lists hold no 58 does not treat. NPCs the AI does not run (an engine mind, or none) keep the idle sweep (engine choice).
