@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Globalization;
+using System.Numerics;
 using Meitou.Simulation;
 
 namespace Meitou.Game;
@@ -39,6 +40,45 @@ sealed partial class GameHost
         who = session.World.Player.Selection.ToArray();
         if (who.Length == 0) { con.Error($"{verb}: select characters first (or pass --id <c:slot.gen>)"); return false; }
         return true;
+    }
+
+    /// <summary><c>kill --radius &lt;m&gt; [&lt;x&gt; &lt;z&gt;] [--animals]</c>: one DebugKill for every living, non-player character within the radius of the centre (the given point, else the selected or first squad member), from one pass over the snapshot.</summary>
+    void ControlKillArea(IReadOnlyList<string> args, DevConsole con)
+    {
+        const string usage = "usage: kill --radius <m> [<x> <z>] [--animals]";
+        float radius = 0;
+        bool animals = false;
+        bool haveRadius = false;
+        var numbers = new List<float>();
+        for (int a = 0; a < args.Count; a++)
+        {
+            if (args[a].Equals("--animals", StringComparison.OrdinalIgnoreCase)) animals = true;
+            else if (args[a].Equals("--radius", StringComparison.OrdinalIgnoreCase) && !haveRadius && a + 1 < args.Count && Num(args[a + 1], out radius)) { haveRadius = true; a++; }
+            else if (Num(args[a], out float n)) numbers.Add(n);
+            else { con.Error(usage); return; }
+        }
+        if (!haveRadius || numbers.Count is not (0 or 2)) { con.Error(usage); return; }
+        if (radius <= 0 || radius > 2000) { con.Error("kill: --radius must be above 0 and at most 2000 metres"); return; }
+        var snap = session.CurrentSnapshot;
+        float cx, cz;
+        if (numbers.Count == 2) (cx, cz) = (numbers[0], numbers[1]);
+        else
+        {
+            var lead = snap.Characters.FirstOrDefault(c => c.IsPlayer && c.Selected) ?? snap.Characters.FirstOrDefault(c => c.IsPlayer);
+            if (lead is null) { con.Error("kill: no squad member to centre on (pass <x> <z>)"); return; }
+            (cx, cz) = (lead.Position.X, lead.Position.Z);
+        }
+        int own = session.World.Player.Faction;
+        var ids = new List<CharacterId>();
+        foreach (var c in snap.Characters)
+        {
+            if (c.IsPlayer || (own >= 0 && c.Faction == own) || (c.Animal && !animals) || c.Body is { Dead: true }) continue;
+            if (Vector2.Distance(new Vector2(c.Position.X, c.Position.Z), new Vector2(cx, cz)) > radius) continue;
+            ids.Add(c.Id);
+        }
+        if (ids.Count > 0) session.World.Commands.Enqueue(new DebugKill(ids) { Tick = session.World.Tick });
+        var shown = ids.Take(20).Select(i => $"\"c:{i.Slot}.{i.Generation}\"");
+        con.Print($"{{\"killed\":{ids.Count},\"radius\":{radius.ToString(CultureInfo.InvariantCulture)},\"ids\":[{string.Join(",", shown)}],\"idsTruncated\":{(ids.Count > 20 ? "true" : "false")}}}");
     }
 
     void RegisterControlPlayMoreCommands(Action<string, string, string, Action<IReadOnlyList<string>, DevConsole>> add, Func<DevConsole, bool> loaded)

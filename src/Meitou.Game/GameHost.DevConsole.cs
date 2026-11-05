@@ -263,10 +263,11 @@ sealed partial class GameHost
         }, (i, typed) => popData is { } d
             ? ConsoleMatch(d.Sites.Where(s => s.Town.Type is not (TownType.NestMarker or TownType.Null)).Select(s => s.Town.Name).Where(n => n.Length > 0).Distinct().Order(StringComparer.OrdinalIgnoreCase), typed) : []);
 
-        Add("kill", "kill [--id <c:slot.gen>]", "kill the selected characters, or the one given by --id", (args, con) =>
+        Add("kill", "kill [--id <c:slot.gen>] | kill --radius <m> [<x> <z>] [--animals]", "kill the selected characters, or the one given by --id; --radius kills every living character within <m> metres (max 2000) of X Z, or of the selected (else first) squad member, in one command; never the player's squad or faction, animals only with --animals", (args, con) =>
         {
+            if (args.Any(a => a.Equals("--radius", StringComparison.OrdinalIgnoreCase))) { ControlKillArea(args, con); return; }
             if (!ControlTargets(args, con, "kill", out var selected, out var rest)) return;
-            if (rest.Count > 0) { con.Error("usage: kill [--id <c:slot.gen>]"); return; }
+            if (rest.Count > 0) { con.Error("usage: kill [--id <c:slot.gen>] | kill --radius <m> [<x> <z>] [--animals]"); return; }
             Send(t => new DebugKill(selected) { Tick = t });
             con.Print($"killed {selected.Length}");
         });
