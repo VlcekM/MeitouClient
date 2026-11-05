@@ -234,9 +234,15 @@ sealed partial class PlayerInterface
             Say(sale);
             return;
         }
-        int caught = 100 - (int)MathF.Floor(odds * 100 + 0.5f);
-        Confirm("FENCING ITEM", Loc.Tr("You have a {1}% chance of getting caught selling this stolen item.\nFence it anyway?", caught), () => Say(sale with { Tick = session.World.Tick }));
+        Confirm("FENCING ITEM", FenceQuestion(odds), () => Say(sale with { Tick = session.World.Tick }));
         UpdateMenuPause();
+    }
+
+    /// <summary>The fence confirmation in the player's language, for a sale with <paramref name="odds"/> of getting away (the game's msgid).</summary>
+    static string FenceQuestion(float odds)
+    {
+        int caught = 100 - (int)MathF.Floor(odds * 100 + 0.5f);
+        return Loc.Tr("You have a {1}% chance of getting caught selling this stolen item.\nFence it anyway?", caught);
     }
 
     static string Money(long cats) => cats.ToString("N0", CultureInfo.InvariantCulture);

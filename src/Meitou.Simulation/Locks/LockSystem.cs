@@ -59,7 +59,11 @@ public sealed partial class LockSystem(GameConstants constants, BodyOptions opti
                     foreach (var id in Who(world, getOut.Characters))
                     {
                         if (!table.TryResolveNext(id, out int s) || table.Cold(s) is not { IsImprisoned: true, Medical.Incapacitated: false } c) continue;
-                        if (world.Fixtures.GetOut(world, id, Crimes)) { c.PickingLock = null; if (c.IsPlayer) world.Post(Loc.Tr("{1} got out of the cage", c.Name)); }
+                        if (world.Fixtures.GetOut(world, id, Crimes))
+                        {
+                            c.PickingLock = null;
+                            if (c.IsPlayer) world.Post(Loc.Tr("{1} got out of the cage", c.Name));
+                        }
                         else if (c.IsPlayer) world.Post("It's locked.");
                     }
                     break;
@@ -156,8 +160,8 @@ public sealed partial class LockSystem(GameConstants constants, BodyOptions opti
     }
 
     /// <summary>
-    /// Posts a character's own line as "name: line" (the game's log of a lock worker: "Pick failed", "It's locked."). The line is a game msgid looked up on its own, so every
-    /// language with a game catalogue shows it translated; the "{1}: {2}" frame is Meitou's.
+    /// Posts a character's own line as "name: line" (a lock worker's "Pick failed", "It's locked."). The line is a game msgid looked up on its own,
+    /// so every language with a game catalogue shows it translated; the "{1}: {2}" frame is Meitou's.
     /// </summary>
     static void Say(World world, CharacterCold c, string line) => world.Post(Loc.Tr("{1}: {2}", c.Name, Loc.Tr(line)));
 }

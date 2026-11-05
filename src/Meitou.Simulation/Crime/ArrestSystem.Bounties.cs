@@ -256,7 +256,11 @@ public sealed partial class ArrestSystem : IOrderOwner
         {
             if (walking) TaskStart.Stand(table, s);
             Carry!.LetGo(world, s);
-            if (!world.Fixtures.Imprison(world, k.Captive, cage, constants.PrisonTime)) { world.Post(Loc.Tr("{1} could not put the captive in the cage", c.Name)); return false; }
+            if (!world.Fixtures.Imprison(world, k.Captive, cage, constants.PrisonTime))
+            {
+                world.Post(Loc.Tr("{1} could not put the captive in the cage", c.Name));
+                return false;
+            }
             Claim(world, s, k.Captive, cage);
             if (table.TryResolveNext(k.Captive, out int captive)) Deeds?.Caged(world, s, captive);   // after the claim, as the put-in task does
             return false;
