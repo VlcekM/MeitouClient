@@ -88,6 +88,7 @@ sealed partial class SettingsMenu
         "Clouds" => "Render clouds with volume and depth.",
         "Cloud shadows" => "Let clouds cast shadows across land and water.",
         "Cloud shadows in fog" => "Fade cloud shadows in fog, so foggy places stay lit.",
+        "Lamp shadows" => "Let buildings and rocks block the lamps' light. Needs ray tracing and Indirect light.",
         "Blood on surfaces" => "Splash blood on walls, buildings and rocks as well as the ground; pools stay on floors.",
         "Skin" => "Let sunlight soften and warm under bare skin instead of ending at a hard edge.",
         "Ground parallax" => "Give the ground texture depth.",

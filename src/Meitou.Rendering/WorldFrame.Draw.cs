@@ -769,6 +769,7 @@ static partial class WorldFrame
         var camera = f.Camera;
 
         post.RunGiResolve();
+        gpu.Post?.RunLampShadows(gpu.Gi, gpu.Lamps);
         StageClock.Lap(14, "gi resolve");   // the resolve is the gi stage's (its time was the particles stage's before, with the shafts and the fog volumes)
 
         if (gpu.Shadow is { Enabled: true })

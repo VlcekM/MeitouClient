@@ -386,7 +386,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     // ---- targets ----
 
     IEnumerable<Target2D> Targets() =>
-        new[] { sceneColour, sceneDepth, motion, upscaleDepth, reactive, historyA, historyB, aoA, aoB, aoMask, ldr, ldrFxaa, smaaEdges, smaaWeights, luminance, adaptA, adaptB, lowTargets[0].Accum, lowTargets[0].Depth, lowTargets[0].Soft, lowTargets[1].Accum, lowTargets[1].Depth, lowTargets[1].Soft, softDepth, rateDistance, rateImage, neutralRate, giAlbedo, giLow, shaftInjected, shaftLight, shaftScatter, shaftRaw, shaftHistory }.OfType<Target2D>();
+        new[] { sceneColour, sceneDepth, motion, upscaleDepth, reactive, historyA, historyB, aoA, aoB, aoMask, ldr, ldrFxaa, smaaEdges, smaaWeights, luminance, adaptA, adaptB, lowTargets[0].Accum, lowTargets[0].Depth, lowTargets[0].Soft, lowTargets[1].Accum, lowTargets[1].Depth, lowTargets[1].Soft, softDepth, rateDistance, rateImage, neutralRate, giAlbedo, giLow, lampLost, shaftInjected, shaftLight, shaftScatter, shaftRaw, shaftHistory }.OfType<Target2D>();
 
     void Free()
     {
@@ -396,7 +396,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         rateBuiltFrame = long.MinValue;
         aoA = aoB = aoMask = ldr = ldrFxaa = smaaEdges = smaaWeights = luminance = adaptA = adaptB = null;
         foreach (var l in lowTargets) l.Accum = l.Depth = l.Soft = null;
-        giAlbedo = giLow = shaftInjected = shaftLight = shaftScatter = shaftRaw = shaftHistory = softDepth = null;
+        giAlbedo = giLow = lampLost = shaftInjected = shaftLight = shaftScatter = shaftRaw = shaftHistory = softDepth = null;
         FreeBloom();
         adaptedValid = historyValid = shaftHistoryValid = softDepthReady = false;
         adaptedFrames = 0;
@@ -1020,21 +1020,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         MarkScene();
         var r = giResolvePass ??= new GiResolvePass(Gpu);
         var a = giApplyPass ??= new GiApplyPass(Gpu);
-        float tanY = MathF.Tan(fovNow * 0.5f);
-        var rot = viewRotation;
-        foreach (var g in (ReadOnlySpan<GiPass>)[r, a])
-        {
-            Bind(g.P, g.NearDepth, sceneDepth);
-            Bind(g.P, g.Albedo, giAlbedo);
-            g.P.Set(g.NearPlanes, planes.X, planes.Y);
-            g.P.Set(g.Tan, ViewWindow.Tan(tanY * aspectNow, tanY));
-            g.P.Set(g.Right, rot.M11, rot.M21, rot.M31);
-            g.P.Set(g.Up, rot.M12, rot.M22, rot.M32);
-            g.P.Set(g.Back, ViewWindow.BackFor(rot, fovNow, aspectNow));
-            g.P.Set(g.Eye, eyeNow.X, eyeNow.Y, eyeNow.Z);
-            g.P.Set(g.FullSize, (float)width, (float)height);
-            g.P.Set(g.Div, (float)giDivisor);
-        }
+        foreach (var g in (ReadOnlySpan<GiPass>)[r, a]) BindGiView(g);
         r.P.ApplyGlobals();   // the atmosphere's and the probes' uniforms, through the frame globals
         Draw(r.P, giLow);
         Bind(a.P, a.Low, giLow);
@@ -1044,8 +1030,38 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         CloseSegment();
     }
 
+    /// <summary>What a pass over the surface target reads the scene with: the depth, the target, the camera and the render size.</summary>
+    void BindGiView(GiPass g)
+    {
+        float tanY = MathF.Tan(fovNow * 0.5f);
+        var rot = viewRotation;
+        Bind(g.P, g.NearDepth, sceneDepth);
+        Bind(g.P, g.Albedo, giAlbedo);
+        g.P.Set(g.NearPlanes, planes.X, planes.Y);
+        g.P.Set(g.Tan, ViewWindow.Tan(tanY * aspectNow, tanY));
+        g.P.Set(g.Right, rot.M11, rot.M21, rot.M31);
+        g.P.Set(g.Up, rot.M12, rot.M22, rot.M32);
+        g.P.Set(g.Back, ViewWindow.BackFor(rot, fovNow, aspectNow));
+        g.P.Set(g.Eye, eyeNow.X, eyeNow.Y, eyeNow.Z);
+        g.P.Set(g.FullSize, (float)width, (float)height);
+        g.P.Set(g.Div, (float)giDivisor);
+    }
+
     /// <summary>The resolve added to the scene: source one, destination one; red, green and blue only (the alpha is the characters' SSAO mask).</summary>
     static readonly DrawState GiAddState = PassState with { Blend = new BlendState(true, BlendingFactor.One, BlendingFactor.One), ColourMask = DrawState.Rgb };
+
+    // Here and not in PostProcess.LampShadows.cs: static fields initialise in textual order only within one file, and these read PassState.
+    /// <summary>Scene minus source; red, green and blue only (the alpha is the characters' SSAO mask).</summary>
+    static readonly DrawState LampShadowState = PassState with
+    {
+        Blend = new BlendState(true, BlendingFactor.One, BlendingFactor.One, BlendOperation.ReverseSubtract), ColourMask = DrawState.Rgb,
+    };
+
+    /// <summary>The larger of the scene and the source; red, green and blue only.</summary>
+    static readonly DrawState LampShadowFloorState = PassState with
+    {
+        Blend = new BlendState(true, BlendingFactor.One, BlendingFactor.One, BlendOperation.Max), ColourMask = DrawState.Rgb,
+    };
 
     // ---- low-resolution particles (Meitou) ----
 
@@ -1644,6 +1660,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         DisposeLateParticles();
         DisposeMerged();
         DisposeBloom();
+        DisposeLampShadows();
         Hiz?.Dispose();
         foreach (var p in new FullscreenProgram[] { ssao, ssaoMask, blur, luminancePass, adaptPass, compositePass, fxaaPass, hazePass, velocityPass, cloudMotionPass, taaPass, fogPass, particleDepthPass, particleSoftDepthPass, particleCompositePass, particleCoveragePass }) p.P.Dispose();
         smaaPasses.Dispose();

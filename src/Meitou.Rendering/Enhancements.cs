@@ -161,6 +161,9 @@ public static class Enhancements
         new("fog", "Fog", "hard-edged, flat", "soft, lit",
             () => post.MeitouFog, v => post.MeitouFog = v,
             "the game's dust and smoke sprites cut straight into the ground and walls they cross (all but its mist and steam, which fade; Faithful draws those hard-edged too); Meitou fades each sprite out over the last stretch before a surface (a quarter of its size, 0.2 to 30 m), so dust clouds meet the ground softly; the game's sprites are also flat and not fogged (one brightness in sun and shade, near and far, seen through fog banks), Meitou darkens dust and smoke where the sun is shadowed, brightens them towards the sun and puts the haze and the fog volumes in front of them over them; and it fades each effect out before the distance it stops being simulated at, where its whole cloud popped in and out (docs/render-post.md \"Fog\")"),
+        new("lampshadows", "Lamp shadows", "off", "traced",
+            () => post.LampShadows, v => post.LampShadows = v,
+            "the game's lamps shine through walls and everything else that stands in their way; Meitou traces a ray from each surface to the lamps that light it most and takes the light of the blocked ones back off, so buildings and rocks cast lamp shadows (needs a GPU with ray tracing and Indirect light on; characters neither cast them nor receive them; docs/render-lights.md \"Traced lamp shadows\")"),
     ];
 
     /// <summary><c>--meitou</c> / <c>--faithful &lt;all|id,id...&gt;</c>: turns those switches to Meitou or to Faithful.</summary>
