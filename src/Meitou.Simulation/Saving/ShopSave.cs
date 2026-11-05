@@ -34,8 +34,9 @@ internal static class ShopSave
         var shop = (squad.HomeBuilding is { } home && template.Prisoners.Count == 0 && template.Slaves.Count == 0 ? Shop.ForBuilding(home, terms) : null) ?? new Shop { Terms = terms };
         ContainerSave.Read(text, shop.Stock, data.Items);
         shop.Fills = platoon.Ints.GetValueOrDefault(FillsKey);
-        double hours = platoon.Floats.GetValueOrDefault(RefreshKey);
-        shop.NextRestockTick = world.Tick + (long)Math.Ceiling(Math.Max(hours - world.GameHours, 0) / BodySystem.HoursPerTick);
+        // At most one refresh away (engine choice): older Meitou saves pushed it out by the save's clock at each load.
+        double hours = Math.Clamp(platoon.Floats.GetValueOrDefault(RefreshKey) - world.GameHours, 0, template.VendorsRefreshTime);
+        shop.NextRestockTick = world.Tick + (long)Math.Ceiling(hours / BodySystem.HoursPerTick);
         return shop;
     }
 }

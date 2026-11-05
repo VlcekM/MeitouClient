@@ -382,7 +382,8 @@ PLATOON keys (**Verified**):
 - `inventory refresh time` (float) is a trader platoon's next restock in absolute game hours (day x 24 + hour) (**Observed**: METARU's 107 and its quicksave's 117
   trader platoons; the largest is 200.3 at clock 177.4 and 207.7 at 186.6, about the clock + a 24 h `vendors refresh time`; three or four are 0). Meitou writes it for every
   shop with Meitou's own `meitou shop` (string: the stock as JSON, `[]` when empty, the container format of [locks](../game/locks.md)) and `meitou shop fills` (int, the next
-  fill's roll key), and restores the shop from them when it makes the platoon; without `meitou shop` the shop is filled anew. Items' stolen marks are not kept. **Observed**
+  fill's roll key), and restores the shop from them when it makes the platoon (the next restock against the current clock, which is the save's from the start of the load, and at most one
+  `vendors refresh time` away, an engine choice that repairs older Meitou saves); without `meitou shop` the shop is filled anew. Items' stolen marks are not kept. **Observed**
   (headless, real data): two squad shops (one with an item taken out) come back with the same items, cells, purse, fill count and restock tick (±1); a building shop
   (merged grid of its home's containers, wider than 18 when they are) is restored by code only, and loses the cells past 18 if its home does not resolve.
 
