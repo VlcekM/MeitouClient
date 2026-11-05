@@ -164,9 +164,9 @@ Each item instance carries a COLOR_DATA (save key `color sid`). **Observed** (de
 
 Limbs (**Verified**, decompile: `FUN_1400cfdd0` → `FUN_140535d50` → `FUN_1405358a0`; `FUN_140536210`): a fitted limb's item is attached like clothing, so a
 prosthetic takes and keeps its own colour, else the wearer's scheme. The `dont colorise` reset runs only for types 3, 46 and 6 (ARMOUR, CONTAINER, ATTACHMENT), so a
-LIMB_REPLACEMENT always shows its colour; `setupItemMaterial` dyes any attached item but an ATTACHMENT that has a colour and whose material has a `color map`.
+LIMB_REPLACEMENT always shows its colour; `setupItemMaterial` dyes any skinned attached item but an ATTACHMENT that has a colour and whose material has a `color map`.
 **Observed** (scratch probe, base data): 20 of 28 LIMB_REPLACEMENTs have a material, none with a `color map`, so vanilla prosthetics look undyed; a mod material with
-one shows the scheme (issue #279). In the owner's saves 10 of 64 saved prosthetic items carry a `color sid` (faction schemes).
+one shows the scheme (issue #279). In the owner's distinct saves 5 of 35 saved prosthetic items carry a `color sid` (4 the Player Faction Color mod's scheme, 1 `orange robes`).
 Meitou: `LoadoutLimb.Colour` (the fitted item's `ColourId`, `SavedKit.SetLimbs`), `CharacterAppearance.AddLimb`.
 
 Paint factor (**Observed**, decompile `FUN_140536210`): `paint factor 1` / `2` (the colour's alpha in the shader) are read from the float table of the attached item's own
