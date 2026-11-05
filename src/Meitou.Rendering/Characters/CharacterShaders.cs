@@ -263,7 +263,11 @@ static class CharacterShaders
         vec3 skinGeometric = vec3(0.0, 1.0, 0.0), skinAlbedo = vec3(1.0);
         float skinCurvature = 0.0, skinShare = 0.0;
         {{CharacterSurface.Functions}}
-        vec3 lampSkinDiffuse(vec3 n, vec3 l) { return skinDiffuse(n, skinGeometric, l, skinCurvature, skinShare, skinAlbedo); }
+        vec3 lampSkinDiffuse(vec3 n, vec3 l)
+        {
+            vec3 d = skinDiffuse(n, skinGeometric, l, skinCurvature, skinShare, skinAlbedo);
+            return surfaceOn ? d + skinThrough(l) : d;
+        }
 
         void main()
         {
@@ -420,7 +424,12 @@ static class CharacterShaders
             giInterior = vInterior != 0u;
             skinGeometric = smoothNormal; skinCurvature = curvature; skinShare = skin; skinAlbedo = albedo;
             atmoMetalness = metal;
-            if (view.fogDistance > 0.0 && uAtmoParams.x > 0.5) colour = kenshiLight(albedo, n, v, gloss, vWorld, skinDiffuse(n, smoothNormal, uAtmoLight.xyz, curvature, skin, albedo));
+            if (view.fogDistance > 0.0 && uAtmoParams.x > 0.5)
+            {
+                vec3 sunDiffuse = skinDiffuse(n, smoothNormal, uAtmoLight.xyz, curvature, skin, albedo);
+                skinSunBand = sunDiffuse - clamp(dot(n, uAtmoLight.xyz), 0.0, 1.0);
+                colour = kenshiLight(albedo, n, v, gloss, vWorld, sunDiffuse);
+            }
             // The editor's stage (CharacterRenderer.DrawStage, a fog distance of -2): the game's rtt.hlsl (AtmosphereShaders.stageLight); -3 the same unclamped (Meitou's stage and
             // portraits, which also take the Meitou skin; the game's stage keeps its plain N.L).
             else if (view.fogDistance < -1.5)

@@ -30,6 +30,7 @@ static class CharacterSurface
         vec3 surfaceNormal = vec3(0.0, 1.0, 0.0), surfaceView = vec3(0.0, 0.0, 1.0);
         vec3 strand = vec3(0.0), strandHue = vec3(1.0);   // hair: the strand's direction and the hair's own hue
         float strandGrain = 0.5, strandStrength = 0.0;    // hair: the texture's brightness (it shifts the lobes along the strand) and the highlight's height
+        vec3 skinSunBand = vec3(0.0);                     // skin: what the table adds to the sun's N.L (skinDiffuse)
         float clothSheen = 0.0;                           // cloth: the sheen's height (PartMaterial.Sheen, never over the metal the colour map marks)
         vec3 clothTint = vec3(1.0);
 
@@ -63,10 +64,45 @@ static class CharacterSurface
             return clothSheen * clothTint * d * vis * nl * ATMO_PI;
         }
 
+        vec3 skinHue()
+        {
+            vec3 hue = skinAlbedo / max(max(skinAlbedo.r, max(skinAlbedo.g, skinAlbedo.b)), 1e-3);
+            return hue * hue;
+        }
+        // Light through a thin part (ears, fingers), in the units of the diffuse N.L: its share of skin, facing away from the light. A thin part curves tightly and is about
+        // two radii thick (the curvature bake), and passes exp(-thickness / 0.25 units); the colour is the skin's own, as skinDiffuse's.
+        vec3 skinThrough(vec3 l)
+        {
+            float back = clamp(-dot(skinGeometric, l), 0.0, 1.0);
+            float thin = smoothstep(3.0, 9.0, skinCurvature);
+            if (skinShare <= 0.0 || back * thin <= 0.0) return vec3(0.0);
+            return skinHue() * skinShare * thin * back * exp(-8.0 / skinCurvature) * 0.8;
+        }
+        // The sun on skin beyond what kenshiLight gave it, in the units of the diffuse N.L. visible: its shadow here. In a shadow's penumbra the light under the skin bleeds
+        // into the dark side, warm. The band past the terminator and the light through a thin part entered elsewhere, so the fragment's own shadow (its own body) must not
+        // cut them: their shadow is asked where the light went in, across the part, the chord 2 r cos of a sphere of the curvature's radius. A real caster still shades them.
+        vec3 skinSunExtra(vec3 l, float visible)
+        {
+            vec3 extra = skinHue() * skinShare * clamp(dot(surfaceNormal, l), 0.0, 1.0) * 0.5 * (sqrt(visible) - visible);
+            vec3 through = skinThrough(l);
+            if (max(skinSunBand.r, max(skinSunBand.g, skinSunBand.b)) + through.r + through.g + through.b < 1e-3) return extra;
+            float chord = 2.0 * max(-dot(skinGeometric, l), 0.0) / max(skinCurvature, 0.25);
+            float entry = kenshiShadow(vWorld + l * (min(chord, 1.0) + 0.1), l);
+            return extra + skinSunBand * max(entry - visible, 0.0) + through * entry;
+        }
+
         // What a light adds besides the game's lobes, per unit of its light (the sun's after its shadow, a lamp's radiance).
         vec3 surfaceSpecular(vec3 l) { return hairLight(l) + sheenLight(l); }
 
-        vec3 surfaceSun(vec3 sun, float sunScale, vec3 diffuseAlbedo) { return sun * surfaceSpecular(uAtmoLight.xyz); }
+        vec3 surfaceSun(vec3 sun, float sunScale, vec3 diffuseAlbedo)
+        {
+            vec3 l = uAtmoLight.xyz;
+            vec3 added = sun * surfaceSpecular(l);
+            if (skinShare <= 0.0) return added;
+            vec3 open = uAtmoSunLight * sunScale * atmoCloudShadow(vWorld);
+            float visible = clamp((sun.r + sun.g + sun.b) / max(open.r + open.g + open.b, 1e-5), 0.0, 1.0);
+            return added + ATMO_PI * open * diffuseAlbedo * skinSunExtra(l, visible);
+        }
 
         // A hair fragment's inputs. The strand is the mesh's up axis (the vertex stage's vColour here) laid on the surface: down the sides, out from the crown.
         // Beards and fur use the same mode; animals (no Strands flag) keep the game's lobe, their fur does not fall down.
