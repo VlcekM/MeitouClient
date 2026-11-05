@@ -164,14 +164,9 @@ public sealed class FeedSystem(ItemFactory items, FeedSettings? settings = null)
     public static bool HasMouth(CharacterCold cold) => cold.Appearance?.AttachmentPoints.ContainsKey(MouthPoint) == true;
 
     /// <summary>
-    /// Whether an animal takes the limb into its mouth (<see cref="IsMouthPickUp"/> and <see cref="HasMouth"/>): a limb it held before is let go at its feet, the new one is taken off the
-    /// ground into <see cref="CharacterCold.Mouth"/> and eaten later (<see cref="MouthDue"/>). Engine choice: a held limb is not saved.
-    /// </summary>
-    public static bool CanHold(CharacterCold cold, ItemInstance item) => IsMouthPickUp(cold, item) && HasMouth(cold);
-
-    /// <summary>
-    /// Takes the limb into the mouth (when <see cref="CanHold"/>); the caller has taken it off the ground. <paramref name="tone"/> is the skin tone of the character it was cut from
-    /// (<see cref="FallSource.SkinTone"/>), kept for its drawing at the animal's <c>mouth</c> point.
+    /// Takes the limb into the mouth (a <see cref="IsMouthPickUp"/> by an animal that <see cref="HasMouth"/>); the caller has taken it off the ground. A limb held before is let go at its
+    /// feet; the new one is eaten later (<see cref="MouthDue"/>). <paramref name="tone"/> is the skin tone of the character it was cut from (<see cref="FallSource.SkinTone"/>), kept for
+    /// its drawing at the animal's <c>mouth</c> point. Engine choice: a held limb is not saved.
     /// </summary>
     public static void HoldInMouth(World world, int slot, CharacterCold cold, ItemInstance item, Vector3 tone = default)
     {
