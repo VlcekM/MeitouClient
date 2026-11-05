@@ -604,7 +604,7 @@ public sealed partial class PlayerSystem
     /// <summary>
     /// A right click on an item of a player character's own window (<c>FUN_140714a20</c>, <b>Observed</b>), one unit (all with <see cref="QuickMoveItem.All"/>, repeated until a move fails):
     /// money becomes cats; a worn item goes to the main grid (else the open bag); a grid item to the slot that takes it, else a prosthetic onto its stump, else from the main grid into the open
-    /// bag. A blueprint of the player's faction is read (<see cref="Production.ProductionSystem.Learn"/>) and used up when it taught something; map items are <see cref="ReadMapItem"/>.
+    /// bag, and a bag item to the main grid. A blueprint of the player's faction is read (<see cref="Production.ProductionSystem.Learn"/>) and used up when it taught something; map items are <see cref="ReadMapItem"/>.
     /// </summary>
     void QuickMove(World world, QuickMoveItem quick)
     {
@@ -660,6 +660,8 @@ public sealed partial class PlayerSystem
                 (unit.LimbDamage, unit.LimbWear, unit.LimbStun) = (0, 0, 0);
                 return true;
             }
+            if (from == "backpack_content") return root.AddTo("main", unit);   // out of the open bag into the main grid
+
             return from == "main" && bag is not null && bag.AddTo("backpack_content", unit);
         }
         int want = quick.All ? item.Quantity : 1, moved = 0;
