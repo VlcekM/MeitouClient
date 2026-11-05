@@ -23,6 +23,8 @@ public readonly record struct CharacterInstance(long Key, CharacterAppearance Ap
     public int Shots { get; init; }
     /// <summary>The bolts stuck in the character (<see cref="Characters.CharacterRenderer.CollectBolts"/>).</summary>
     public IReadOnlyList<StuckBoltMesh> Bolts { get; init; } = [];
+    /// <summary>The limb an animal holds at its <c>mouth</c> point (<see cref="Characters.CharacterRenderer.CollectBolts"/>); null: none.</summary>
+    public MouthMesh? Mouth { get; init; }
     /// <summary>The node's whole rotation, in place of <see cref="Yaw"/> (a carried body's on its carrier's shoulder); null: turned by the yaw only.</summary>
     public Quaternion? Rotation { get; init; }
     /// <summary>Uniform size the body is drawn at (an animal's age-dependent size; 1 for people).</summary>
@@ -76,3 +78,6 @@ public sealed class CharacterDrawList
 
 /// <summary>A bolt stuck in a character: its mesh, the bone it is on and its flight direction in the character's frame (its yaw taken off) when it struck.</summary>
 public readonly record struct StuckBoltMesh(int Id, string Mesh, string Bone, Vector3 Direction);
+
+/// <summary>A limb held in an animal's mouth: its mesh and its severed-limb look (null: drawn as a plain loose mesh).</summary>
+public sealed record MouthMesh(string Mesh, LimbLook? Look);

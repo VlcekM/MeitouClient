@@ -199,6 +199,10 @@ later gets ([../characters.md](../characters.md#assembly-and-generation)).
 `CharacterAppearanceTests.Weapon_attachment_points_match_the_male_skeleton` checks
 `attachments-weapons.phs` (actors `hip` on `Bip01 Pelvis`, `back`/`back2` on `Bip01 Spine2`) against
 `male_skeleton.skeleton` within 0.01 units.
+`attachments-bonedog.phs` (v1.4) has one actor, `mouth` on `Bip01 Ponytail1`, one point (**Verified**: read with
+`PhysicsAttachmentFile` from the install). Only RACE Bonedog and Boneyard Wolf name it; the other 28 races with
+`attachment points` name `attachments-weapons.phs` (no `mouth`) (**Verified**, merged base data). Its use: a held limb
+([character-stats](../game/character-stats.md#eating), "Mouth").
 
 ## Unknown
 

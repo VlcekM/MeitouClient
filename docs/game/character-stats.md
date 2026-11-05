@@ -484,12 +484,17 @@ eat task, animation or player command (a right click on food does nothing, [ui-s
   `FUN_141534950`). Only a **limb** (item function 17, item `+0x124`) picked up by an animal (vfunc 0x248 non-null) goes to the mouth; any other item, and a limb picked up
   by a person, goes into the inventory (the pickup task, below). Taking it: the limb held before is let go (`FUN_1405c8240`), the new one is flagged held (`+0xd8` = 1), attached to the
   `mouth` point and the time is stamped (`+0x6e0`). With no `mouth` attach point on the skeleton the limb is bitten on the spot instead (the same function's other branch).
+  The attach (**Verified**, decompile of `FUN_140535d50`, `FUN_14052d850`, `FUN_1405358a0`, `FUN_14052d480`, `FUN_140536210`): the race's attachment point named `mouth` gives the bone and
+  offset, the item's `mesh` is attached to that bone (`attachObjectToBone`, as a weapon), and an attached ITEM gets its item's slot 0x360, which for `SeveredLimbItem` is the
+  `SeveredLimb` material (`FUN_1400cf490`, [blood-decals](blood-decals.md#on-the-body-and-on-severed-limbs)): it looks as on the ground. Only Bonedog and Boneyard Wolf have the point
+  ([phs](../formats/phs.md#how-kenshi-uses-attachment-points-verified-decompiled)). **Unknown**: whether the limb takes the animal's size (Meitou: it does, as Ogre's tag points inherit scale).
   While the mouth is full, the character update (`FUN_1405dc650`) does nothing else about food (no auto-eat, no Feed Animals check), and t = game minutes since the stamp, f = slot 0x398
   (the age, [animals](animals.md#ageing)): an animal with f > 0.9 of the player's faction (`FACTION +0x250`) eats when the stomach (+0x4bc) is empty and hunger (+0x4b8) below 2.6, or at t > 15;
   any other eats when the stomach is empty and t > 45, or at t > 60 + 120 x (1 - f). Eating clears the mouth, the flag, and bites the limb (whole, 30).
   The goal that sends an animal to a ground limb is 277 (`AI::findLimbOnGround`, [ai-tasks](ai-tasks.md#prisoner-fate-and-slave-rows)); Meitou runs it, and the player's pickup order also fills the mouth.
-  Meitou (`FeedSystem.HoldInMouth`, `MouthDue`; `CharacterCold.Mouth`): as above. Engine choices: every animal has the `mouth` point; a held
-  limb is neither saved nor carried across a load; it goes with the animal if the animal dies or is removed.
+  Meitou (`FeedSystem.HoldInMouth`, `MouthDue`; `CharacterCold.Mouth`): as above. Drawn (`CharacterSnapshot.Mouth`, `GameHost.MouthOf`, `CharacterRenderer.AddMouth`) with the debris
+  renderer's limb look and the cut character's skin tone (`CharacterCold.MouthTone`) at the posed `mouth` point. Engine choices: every animal has the `mouth` point (one whose race has
+  none holds the limb undrawn); a held limb is neither saved nor carried across a load; it goes with the animal if the animal dies or is removed.
 - **Food on the ground** (**Verified**, decompile): `Character::setupAI` gives every animal of a player squad goal 259 EAT_FOOD_ON_GROUND (priority 3, weight 0.5; it drops race goal 230)
   and every player character 243. 259's desire: 0 unless the character wants to eat now (needs food, stomach empty, hunger < 2.5) and medical hunger <= 2.4; then 1.0 with no food in
   its inventory and no enemies, 0.1 with enemies only below 1.2. Finder `FUN_14099a930`: the nearest food it may eat (function 3, 15 for an animal or a race that lists it) on

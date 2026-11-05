@@ -154,16 +154,21 @@ public sealed class FeedSystem(ItemFactory items, FeedSettings? settings = null)
     /// <summary>
     /// An animal that picks up a limb holds it in its mouth (<c>FUN_14034f340</c>, <c>FUN_1405d0b50</c>, <b>Verified</b> decompile): a limb it held before is let go at its feet, the new one is
     /// taken off the ground into <see cref="CharacterCold.Mouth"/> and eaten later (<see cref="MouthDue"/>); anything else goes in the inventory as for anyone (<see cref="CanHold"/>). Engine
-    /// choice: every animal has the "mouth" attach point the original tests for (without one the original eats the limb on the spot); a held limb is not saved.
+    /// choice: every animal has the "mouth" attach point the original tests for (without one the original eats the limb on the spot; only the Bonedog and Boneyard Wolf races have one, so
+    /// only theirs is drawn); a held limb is not saved.
     /// </summary>
     public static bool CanHold(CharacterCold cold, ItemInstance item) => cold.Medical is { HasStatsObject: false } && item.ItemFunction == LimbFunction;
 
-    /// <summary>Takes the limb into the mouth (when <see cref="CanHold"/>); the caller has taken it off the ground.</summary>
-    public static void HoldInMouth(World world, int slot, CharacterCold cold, ItemInstance item)
+    /// <summary>
+    /// Takes the limb into the mouth (when <see cref="CanHold"/>); the caller has taken it off the ground. <paramref name="tone"/> is the skin tone of the character it was cut from
+    /// (<see cref="FallSource.SkinTone"/>), kept for its drawing at the animal's <c>mouth</c> point.
+    /// </summary>
+    public static void HoldInMouth(World world, int slot, CharacterCold cold, ItemInstance item, Vector3 tone = default)
     {
         if (cold.Mouth is { } before) world.GroundItems.Drop(before, world.Characters.Next[slot].Position, world.Characters.Next[slot].Yaw);
         cold.Mouth = item;
         cold.MouthSinceTick = world.Tick;
+        cold.MouthTone = tone;
     }
 
     /// <summary>
