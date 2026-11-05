@@ -353,6 +353,8 @@ same line (val0), gated by `DC_PLAYERMONEY` (2) strictly greater. "plastic surge
 behind `DC_FACTION_RANK`; Grey free for escaped slaves. Meitou: the surgeon is talked to; its line's DA 8 pays and DA 11 opens the editor in
 mode 1, already paid ([dialogue](game/dialogue.md#meitou-design)). An unpaid `EditCharacter` (no UI sends one) is checked against `SurgeonDialogues`:
 a line gated only by money or `DC_IS_RECRUITABLE`.
+**Observed** (the user, base game): the surgeon's editor (its `NameText`) is the only way to rename a squad member; the portrait's `NameText`
+EditBox takes no typing. Meitou matches.
 
 ## Open questions
 
