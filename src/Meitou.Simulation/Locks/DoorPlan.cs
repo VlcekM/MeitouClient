@@ -98,7 +98,7 @@ sealed class DoorPlan : IPlanWorld
         {
             // hasAnOpenDoor (FUN_140597030, the state's evaluator for every goal): a door broken, open or opening, so a closed unlocked door counts as shut.
             StateType.DESTINATION_IS_ACCESSIBLE => world.Fixtures.HasOpenDoor(building),
-            StateType.isWithin50Meters => Vector2.Distance(Flat(n.Position), Flat(destination)) <= 50,
+            StateType.isWithin50Meters => Vector2.Distance(Flat(n.Position), Flat(destination)) < Ai.AiSystem.Within50Meters,
             StateType.DOOR_IS_OPEN => door.DoorBroken || door.Motion is DoorMotion.Open or DoorMotion.Opening,
             StateType.isDoorLocked => door.Lock is { EffectivelyLocked: true } && !door.DoorBroken,
             StateType.DOOR_IS_BROKEN => door.DoorBroken,

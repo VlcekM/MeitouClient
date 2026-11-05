@@ -159,8 +159,8 @@ public sealed partial class AiSystem
             bool value = condition.State switch
             {
                 StateType.isAtLocation or StateType.isAtLocation_46 or StateType.atNode => At(target),
-                StateType.isWithin10Meters => Distance(target) <= 10,
-                StateType.isWithin50Meters => Distance(target) <= 50,
+                StateType.isWithin10Meters => Distance(target) < Within10Meters,
+                StateType.isWithin50Meters => Distance(target) < Within50Meters,
                 StateType.isNearTo => Distance(target) <= 10,
                 // 62 (slot 149), 63 (slot 175) and 64 (62 or 63) of a machine target (FUN_1405974e0, FUN_1405a2ba0, FUN_1405a2e60, Verified); false for any other target. 65 (any of the
                 // character's machines jammed) and 105 are not wired.
