@@ -98,4 +98,46 @@ public class SurgeryTests
         Attempt(near, "1-t", true, 500, accepted: false);      // another gender
         Attempt(near, "1-t", false, 500, accepted: true);
     }
+
+    /// <summary>
+    /// An animal on the new-game editor's list (docs/characters.md "Character editor", #312): a name-only edit renames it, a new look sent for it is refused and leaves it as it was.
+    /// </summary>
+    [Fact]
+    public void At_creation_a_name_only_edit_renames_an_animal_and_a_new_look_for_it_is_refused()
+    {
+        var animalRecord = Rec("87-t", FcsRecordType.ANIMAL_CHARACTER, "Hound");
+        animalRecord.References["race"] = [Ref("1-t", 100)];
+        var db = Database(extra: [animalRecord]);
+        var race = db.Find("1-t")!;
+        var data = PopulationData.Create(db, [new TownPlacement("inst", "30-t", Centre, null)], new Looks(race));
+        var walk = new OpenGroundWalkability(Ground);
+        var systems = Standard(data, walk, StandardParts.Population | StandardParts.Player, new PopulationSettings { CheckEveryTicks = 1 });
+        using var world = new SimWorld(new WorldSettings { Seed = 11, PublishSnapshots = false }, walk, systems.Systems);
+        var squad = systems.Population!.StartPlayer(world, NewGameStart.From(db.Find("40-t")!));
+        world.Commands.Enqueue(new FocusCommand(new Vector3(-90000, 0, -90000)) { Tick = 0 });
+        var dog = squad.Leader;
+        var cold = world.Characters.Cold(dog.Slot)!;
+        var look = cold.Appearance = CharacterAppearance.BuildAnimal(db, "", db.Find("87-t")!);
+        string name = cold.Name;
+        Assert.True(world.Player.InCreation);
+
+        void Edit(FcsRecord? appearance, string typed)
+        {
+            world.Commands.Enqueue(new EditCharacter(dog, appearance, typed, EditKind.Creation) { Tick = world.Tick });
+            world.RunTicks(1);
+        }
+
+        var proposed = Rec("look", FcsRecordType.CHARACTER, "Look");
+        proposed.References["race"] = [Ref("1-t")];
+        Edit(proposed, "Wrong");
+        Assert.Single(world.TakeMessages());
+        Assert.Equal(name, cold.Name);
+        Assert.Same(look, cold.Appearance);
+        Assert.False(cold.LookEdited);
+
+        Edit(null, "Rex");
+        Assert.Empty(world.TakeMessages());
+        Assert.Equal("Rex", cold.Name);
+        Assert.Same(look, cold.Appearance);
+    }
 }

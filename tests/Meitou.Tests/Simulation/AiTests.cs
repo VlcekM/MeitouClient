@@ -147,15 +147,16 @@ public class AiTests(ITestOutputHelper output)
 
     static SimWorld Town(int threads, out PopulationData data) => Town(threads, out data, null, null);
 
-    static SimWorld Town(int threads, out PopulationData data, PopulationData? given, AiSettings? settings, double startHours = 24 + 13)
+    static SimWorld Town(int threads, out PopulationData data, PopulationData? given, AiSettings? settings, double startHours = 24 + 13, ITickSystem? extra = null,
+        StandardParts more = StandardParts.None)
     {
         data = given ?? SyntheticTown.Data(Database());
         var walk = new OpenGroundWalkability(Ground);
         var systems = StandardSystems.Build(data, walk, new StandardSystemOptions
         {
-            Parts = StandardParts.Population | StandardParts.Movement | StandardParts.Ai, SynchronousPaths = true, Ai = settings,
+            Parts = StandardParts.Population | StandardParts.Movement | StandardParts.Ai | more, SynchronousPaths = true, Ai = settings,
         }).Systems;
-        var world = new SimWorld(new WorldSettings { Seed = 5, Threads = threads, StartHours = startHours, MinPartitionSize = 4 }, walk, systems);
+        var world = new SimWorld(new WorldSettings { Seed = 5, Threads = threads, StartHours = startHours, MinPartitionSize = 4 }, walk, extra is null ? systems : [.. systems, extra]);
         world.Commands.Enqueue(new FocusCommand(Centre) { Tick = 0 });
         return world;
     }
@@ -252,6 +253,82 @@ public class AiTests(ITestOutputHelper output)
             // Every bed is taken (lain in, task Sleep); the sleepers left over rest beside them.
             Assert.Equal(Math.Min(beds.Count, sleepers.Count), sleepers.Count(m => world.Characters.Cold(m.Slot)!.InSomething == Meitou.Simulation.Locks.HeldState.Bed));
         }
+    }
+
+    /// <summary>
+    /// An AI walk that another system stopped (a captive job's or lock round's stand) is neither arrival nor a failed walk (docs/game/ai-tasks.md "Planner", #314): the character walks to its
+    /// spot again. Catches such a stop counting as arrival, which left a slaver standing where a job had left it all day.
+    /// </summary>
+    [Fact]
+    public void A_walk_another_system_stopped_is_neither_arrival_nor_a_failed_walk()
+    {
+        var data = WithHomes(Database(2), out var shop, out _);
+        var outside = new Outside();
+        using var world = Town(1, out _, data, null, extra: outside);
+        var table = world.Characters;
+        world.RunTicks(400);   // the shop's leader stands at its shopkeeper node
+        var leader = world.Squads.All.Single(s => s.TemplateId == "10-t" && s.Ai!.Home == shop).Leader;
+        var mind = table.Cold(leader.Slot)!.Ai!;
+
+        outside.Next = w => w.Characters.Next[leader.Slot].Position += new Vector3(0, 0, 40);   // shoved off its node: it walks back
+        for (int t = 0; t < 60 && !mind.Walking; t++) world.RunTick();
+        Assert.True(mind.Walking);
+
+        outside.Next = w => MovementSystem.Stop(w.Characters, leader.Slot);   // another system stands it still mid-walk
+        world.RunTick();
+        Assert.Equal(CharacterTask.Idle, (CharacterTask)table.Previous[leader.Slot].Task);
+        for (int t = 0; t < 200 && (CharacterTask)table.Previous[leader.Slot].Task != CharacterTask.GoTo; t++) world.RunTick();
+
+        Assert.Equal(0, mind.FailedWalks);
+        Assert.True(mind.Walking);
+        Assert.Equal(CharacterTask.GoTo, (CharacterTask)table.Previous[leader.Slot].Task);
+    }
+
+    /// <summary>A stand-in for another system: runs one action in the next tick's inputs.</summary>
+    sealed class Outside : ITickSystem
+    {
+        public Action<SimWorld>? Next { get; set; }
+
+        public void Inputs(SimWorld world, IReadOnlyList<SimCommand> commands)
+        {
+            var act = Next;
+            Next = null;
+            act?.Invoke(world);
+        }
+    }
+
+    /// <summary>
+    /// A shopkeeper with goal 86 (Opening up) outside its own home, whose doors are all locked from the level data (no lock-up round set the house flag), has the door unlocked in its hours
+    /// and stands at its node inside (docs/game/locks.md "Lock-up", #293). Catches the opener waiting for a round-locked flag that level data never sets.
+    /// </summary>
+    [Fact]
+    public void A_shopkeeper_outside_its_home_unlocks_a_door_locked_from_level_data_and_stands_inside()
+    {
+        var open = Task("140-t", TaskType.OPEN_UP_SHOP_DOORS, TaskPriority.NonUrgent);
+        var package = Rec("141-t", FcsRecordType.AI_PACKAGE, "Shop");
+        package.References["Leader AI Goals"] = [Ref("100-t", 0, 100, 0), Ref("140-t", 6, 22, 0)];
+        var door = Rec("151-t", FcsRecordType.BUILDING, "Door");
+        var building = Rec("152-t", FcsRecordType.BUILDING, "Shed");
+        building.References["doors"] = [Ref("151-t")];
+        var db = SyntheticTown.Database(1, extra: [.. Records(), open, package, door, building], changePatrol: p => p.References["AI packages"] = [Ref("141-t", 0)]);
+        var at = Centre + new Vector3(80, 0, 0);
+        var node = at + new Vector3(0, 0, 12);
+        var shop = new TownBuilding("shop", "152-t", "Shop", at, 0, true, false, [new HomeSpot(HomeSpotKind.Shopkeeper, node, 0)]) { Zone = WorldLayout.ZoneOf(at.X, at.Z) };
+        var data = PopulationData.Create(db, [new TownPlacement("inst", "30-t", Centre, null)], buildings: new Dictionary<string, List<TownBuilding>> { ["inst"] = [shop] });
+        var outside = new Outside();
+        using var world = Town(1, out _, data, null, extra: outside, more: StandardParts.Crime);
+        world.RunTicks(2);
+        world.Fixtures.RegisterSite(world, data, 0);
+        Assert.True(world.Fixtures.SetDoorsLocked(shop.Key, true));
+        Assert.True(world.Fixtures.AllDoorsLocked(shop.Key));
+        var leader = world.Squads.All.Single(s => s.TemplateId == "10-t").Leader;
+        outside.Next = w => w.Characters.Next[leader.Slot].Position = at + new Vector3(0, 0, 150);   // outside, away from the door
+        world.RunTicks(1200);
+
+        Assert.False(world.Fixtures.AllDoorsLocked(shop.Key));
+        Assert.All(world.Fixtures.OfBuilding(shop.Key).Where(f => f.Kind == Meitou.Simulation.Locks.FixtureKind.Door), f => Assert.False(f.Lock!.Locked));
+        var p = world.Characters.Previous[leader.Slot].Position;
+        Assert.InRange(Vector2.Distance(new Vector2(p.X, p.Z), new Vector2(node.X, node.Z)), 0, 13);
     }
 
     /// <summary>
