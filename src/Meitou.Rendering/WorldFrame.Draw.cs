@@ -101,7 +101,11 @@ static partial class WorldFrame
         // Everything is drawn into the post-processing chain's HDR framebuffer (before the reflection pass, which restores whatever is bound).
         // The GI resolve while the probes light the world: the scene targets carry the albedo target, the lit fragments write it.
         bool giResolve = gpu.GiResolve > 0 && gpu.GiActive && gpu.Probes is { Enabled: true, Shade: true };
-        if (gpu.Post is { } giPost) giPost.GiResolve = giResolve ? gpu.GiResolve : 0;
+        if (gpu.Post is { } giPost)
+        {
+            giPost.GiResolve = giResolve ? gpu.GiResolve : 0;
+            giPost.GiNear = giResolve && post.Options.GiNearFielding ? gpu.GiNear : null;
+        }
         if (gpu.Probes is { } giProbes)
         {
             giProbes.Resolve = giResolve;

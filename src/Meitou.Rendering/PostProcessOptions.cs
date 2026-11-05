@@ -30,10 +30,12 @@ public sealed class PostOptions
     public bool MeitouFog = true;
     /// <summary>Meitou switch (<c>gihybrid</c>; docs/render-gi.md "Hybrid GI"), off by default: nothing it holds has been seen on a GPU. <c>--gi-hybrid</c> picks among its parts.</summary>
     public bool GiHybrid;
-    /// <summary>The parts of <see cref="GiHybrid"/>: <c>relocate</c>, probes moved out of geometry; <c>clouds</c>, the cloud shadows at the probes' hits and in the light shafts.</summary>
-    public bool GiRelocate = true, GiCloudShadows = true;
+    /// <summary>The parts of <see cref="GiHybrid"/>: <c>relocate</c>, probes moved out of geometry; <c>clouds</c>, the cloud shadows at the probes' hits and in the light shafts;
+    /// <c>near</c>, the traced near field (<c>Gi.GiNearField</c>).</summary>
+    public bool GiRelocate = true, GiCloudShadows = true, GiNearField = true;
     public bool GiRelocating => GiHybrid && GiRelocate;
     public bool GiCloudShadowing => GiHybrid && GiCloudShadows;
+    public bool GiNearFielding => GiHybrid && GiNearField;
     /// <summary>How much of the haze in shadow goes, before the sun's share of the light (1: all of it; the sky's ambient light keeps the rest).</summary>
     public float ShaftStrength = 0.8f;
     /// <summary>How much the sky (which no haze covers) darkens behind shadowed air, relative to a surface at the grid's end.</summary>
@@ -127,20 +129,21 @@ public sealed class PostOptions
         ParticleDivisor = other.ParticleDivisor; Exposure = other.Exposure; ToneMap = other.ToneMap; ToneMix = other.ToneMix; Grade = other.Grade;
         HeatHazeStrength = other.HeatHazeStrength; NightGradeStrength = other.NightGradeStrength; BloomStrength = other.BloomStrength;
         MeitouHeatHaze = other.MeitouHeatHaze; ToneMapping = other.ToneMapping; NightGrade = other.NightGrade; Bloom = other.Bloom;
-        GiHybrid = other.GiHybrid; GiRelocate = other.GiRelocate; GiCloudShadows = other.GiCloudShadows;
+        GiHybrid = other.GiHybrid; GiRelocate = other.GiRelocate; GiCloudShadows = other.GiCloudShadows; GiNearField = other.GiNearField;
     }
 
-    /// <summary><c>--gi-hybrid &lt;parts&gt;</c>: the switch on with these parts only (comma list: <c>relocate</c>, <c>clouds</c>).</summary>
+    /// <summary><c>--gi-hybrid &lt;parts&gt;</c>: the switch on with these parts only (comma list: <c>relocate</c>, <c>clouds</c>, <c>near</c>).</summary>
     void SetGiHybrid(string parts)
     {
-        GiRelocate = GiCloudShadows = false;
+        GiRelocate = GiCloudShadows = GiNearField = false;
         foreach (var part in parts.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
         {
             switch (part)
             {
                 case "relocate": GiRelocate = true; break;
                 case "clouds": GiCloudShadows = true; break;
-                default: throw new ArgumentException($"unknown --gi-hybrid part '{part}' (relocate, clouds)");
+                case "near": GiNearField = true; break;
+                default: throw new ArgumentException($"unknown --gi-hybrid part '{part}' (relocate, clouds, near)");
             }
         }
         GiHybrid = true;
@@ -175,7 +178,7 @@ public sealed class PostOptions
         $"bloom {(BloomAmount > 0 ? BloomAmount.ToString("0.###", CultureInfo.InvariantCulture) : "off")}, " +
         $"gi hybrid {(GiHybrid ? GiHybridParts : "off")}, upscaler {Upscale.Describe()}";
 
-    string GiHybridParts => string.Join(' ', new[] { GiRelocate ? "relocate" : "", GiCloudShadows ? "clouds" : "" }.Where(p => p.Length > 0));
+    string GiHybridParts => string.Join(' ', new[] { GiRelocate ? "relocate" : "", GiCloudShadows ? "clouds" : "", GiNearField ? "near" : "" }.Where(p => p.Length > 0));
 }
 
 /// <summary>The tone curve of the composite (docs/render-post.md "Tone map and grading").</summary>

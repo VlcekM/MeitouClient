@@ -92,7 +92,7 @@ interior). Upsampling rejects the other class so the gain cannot bleed onto outd
 
 ## Hybrid GI
 
-`gihybrid` (Meitou switch, **off by default**, Graphics > Lighting > Hybrid GI). `--gi-hybrid <relocate,clouds>` turns it on with
+`gihybrid` (Meitou switch, **off by default**, Graphics > Lighting > Hybrid GI). `--gi-hybrid <relocate,clouds,near>` turns it on with
 the listed parts only. Vulkan only. Look and cost **Unknown**: none of this has run on a GPU.
 
 **Probe relocation** (`relocate`; RTXGI's rule, `GiShaders.ProbeRelocate`, needs the resolve). Offsets stay in world units per atlas
@@ -109,6 +109,18 @@ The per-fragment path (`--gi-resolve 0`) and the gi-reflection bench do not read
 
 **Cloud shadows** (`clouds`). The sun at a probe's hit takes `atmoCloudShadow`, the lit fragments' own function, so shaded land stops bouncing sunlight
 and probe light follows the clouds at the hysteresis' pace. The sky seen by a miss is not dimmed. Shafts: [render-shafts](render-shafts.md).
+
+**Near field** (`near`; `GiNearField`, `GiNearShaders`, needs the resolve). The texels of the resolve's low target (same pixel of each block) trace one cosine ray,
+`Reach` 150 long, about a near probe cell, out to `Range` 4000 from the eye. A front or foliage hit is shaded as a probe ray's (`GiShaders.HitShade`: the same textures, sun ray, lamps, probes for the
+next bounce). A miss reads the probes at the ray's end with the ray's direction as the normal (the cosine-weighted light from that way, visibility tested): the
+radiance cache. A back face means the ray started inside a drawn level the trace does not have, so it reads the cache rather than black. One sample is clamped per channel to 16
+(KenshiNative's firefly clamp). The lobe and filters use the flat normal from the depth (KenshiNative: bumps are noise to both); the resolve keeps the shading normal for its sky term.
+Accumulation: each texel reprojected into last frame's surface image, four bilinear texels held by the edge weight, at most `MaxSamples` 16 (the lag in frames); no history on a cut
+(2000 units, a skipped frame, a screenshot tile). Filter: a-trous 3x3, spreads 1, 2, 4, with KenshiNative's edge weight (tangent plane in texel widths, normal power 16); the wide
+iteration also takes `exp(-16 |near share difference|)` (hits within `GuideReach`), its answer to the wide filter flattening shade under awnings.
+The resolve then takes the result over the probes' light by its alpha (full at 4 samples, fading over the last quarter of `Range`); indoor gain and haze stay the resolve's.
+Port of KenshiNative's filter ideas; the history is Meitou's (KN has none). Characters and grass are not traced and keep their in-shader probes. **Unknown:** ghosting under moving lamps and clouds
+(no history clamp), whether the probes' level and the field's agree over open ground, and the flat normal at silhouettes.
 
 ## Performance and verification
 

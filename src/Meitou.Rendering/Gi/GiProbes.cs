@@ -60,6 +60,8 @@ internal sealed unsafe class GiProbes : IDisposable
     readonly Random random = new(1);
     int slot;
     bool updated;
+    Constants lastConstants;
+    WorldLamps? lastLamps;
 
     /// <summary>Whether the world shaders take their ambient from the probes (the <c>gi</c> switch).</summary>
     public bool Enabled { get; set; } = true;
@@ -320,7 +322,7 @@ internal sealed unsafe class GiProbes : IDisposable
     }
 
     [StructLayout(LayoutKind.Sequential)]
-    struct Constants
+    internal struct Constants
     {
         public Vector4 Params;
         public Vector4 Grid0, Grid1, Grid2, Grid3;
@@ -398,6 +400,7 @@ internal sealed unsafe class GiProbes : IDisposable
         };
         var ground = g.Texture("uWeatherGround")?.Invoke() ?? default;
         constants.Albedo = new Vector4(ObjectAlbedo, ground.IsNull ? 0 : 1);
+        (lastConstants, lastLamps) = (constants, lamps);
         var block = ctx.Frame.Constants.Write<Constants>(new ReadOnlySpan<Constants>(&constants, 1), 256);
 
         var cmd = (CommandList)ctx.BeginNative("gi probes");
@@ -431,21 +434,7 @@ internal sealed unsafe class GiProbes : IDisposable
             var rayInfo = new DescriptorBufferInfo(ctx.Device.BufferAt(rays.Handle.Index), 0, rays.Size);
             var uniform = new DescriptorBufferInfo(ctx.Device.BufferAt(block.Handle.Index), block.Offset, (ulong)sizeof(Constants));
             var images = stackalloc DescriptorImageInfo[11];
-            images[0] = new DescriptorImageInfo(ctx.Device.SamplerAt(linear.Index), ctx.Device.ViewAt(irradiance.View().Index), ImageLayout.General);
-            images[1] = new DescriptorImageInfo(ctx.Device.SamplerAt(linear.Index), ctx.Device.ViewAt(distance.View().Index), ImageLayout.General);
-            images[2] = new DescriptorImageInfo(ctx.Device.SamplerAt(nearest.Index), ctx.Device.ViewAt(bases.View().Index), ImageLayout.General);
-            images[3] = Image(g, "uAtmoIrradiance", cube: true);
-            images[4] = Image(g, "uAtmoAmbientMap", cube: false);
-            images[5] = ground.IsNull ? images[2] : new DescriptorImageInfo(ctx.Device.SamplerAt(ground.Sampler.Index), ctx.Device.ViewAt(ground.View.Index), ImageLayout.General);
-            // The lamps' textures (a stand-in while there are none: the shader reads them only when LightGrid.w is set).
-            if (lamps is not null)
-            {
-                var (lampCells, lampIndex, lampData) = lamps.Current;
-                images[6] = new DescriptorImageInfo(ctx.Device.SamplerAt(lamps.NearestSampler.Index), ctx.Device.ViewAt(lampCells.View().Index), ImageLayout.General);
-                images[7] = new DescriptorImageInfo(ctx.Device.SamplerAt(lamps.NearestSampler.Index), ctx.Device.ViewAt(lampIndex.View().Index), ImageLayout.General);
-                images[8] = new DescriptorImageInfo(ctx.Device.SamplerAt(lamps.NearestSampler.Index), ctx.Device.ViewAt(lampData.View().Index), ImageLayout.General);
-            }
-            else images[6] = images[7] = images[8] = images[2];
+            HitImages(images, ground, lamps);
             var stateInfo = new DescriptorBufferInfo(ctx.Device.BufferAt(state.Handle.Index), 0, state.Size);
             var listInfo = new DescriptorBufferInfo(lists[slot].Buffer, 0, (ulong)Math.Max(listed, 1) * 4);
             var writes = stackalloc WriteDescriptorSet[17];
@@ -460,8 +449,6 @@ internal sealed unsafe class GiProbes : IDisposable
             int count = 15;
             if (CloudShadows)
             {
-                images[9] = Image(g, "uAtmoClouds", cube: false);
-                images[10] = Image(g, "uAtmoCloudsTile", cube: false);
                 for (int i = 0; i < 2; i++)
                     writes[count++] = new WriteDescriptorSet { SType = StructureType.WriteDescriptorSet, DstBinding = (uint)(15 + i), DescriptorCount = 1, DescriptorType = DescriptorType.CombinedImageSampler, PImageInfo = &images[9 + i] };
             }
@@ -505,6 +492,39 @@ internal sealed unsafe class GiProbes : IDisposable
         ctx.EndNative(cmd);
         updated = true;
         Updates++;
+    }
+
+    /// <summary>The samplers a hit shader reads, its bindings 4 to 12, then the cloud maps for bindings 15 and 16 (a trace's or <see cref="GiNearField"/>'s).</summary>
+    void HitImages(DescriptorImageInfo* images, SampledTexture ground, WorldLamps? lamps)
+    {
+        var g = ctx.Globals;
+        images[0] = new DescriptorImageInfo(ctx.Device.SamplerAt(linear.Index), ctx.Device.ViewAt(irradiance.View().Index), ImageLayout.General);
+        images[1] = new DescriptorImageInfo(ctx.Device.SamplerAt(linear.Index), ctx.Device.ViewAt(distance.View().Index), ImageLayout.General);
+        images[2] = new DescriptorImageInfo(ctx.Device.SamplerAt(nearest.Index), ctx.Device.ViewAt(bases[slot].View().Index), ImageLayout.General);
+        images[3] = Image(g, "uAtmoIrradiance", cube: true);
+        images[4] = Image(g, "uAtmoAmbientMap", cube: false);
+        images[5] = ground.IsNull ? images[2] : new DescriptorImageInfo(ctx.Device.SamplerAt(ground.Sampler.Index), ctx.Device.ViewAt(ground.View.Index), ImageLayout.General);
+        // The lamps' textures (a stand-in while there are none: the shader reads them only when LightGrid.w is set).
+        if (lamps is not null)
+        {
+            var (lampCells, lampIndex, lampData) = lamps.Current;
+            images[6] = new DescriptorImageInfo(ctx.Device.SamplerAt(lamps.NearestSampler.Index), ctx.Device.ViewAt(lampCells.View().Index), ImageLayout.General);
+            images[7] = new DescriptorImageInfo(ctx.Device.SamplerAt(lamps.NearestSampler.Index), ctx.Device.ViewAt(lampIndex.View().Index), ImageLayout.General);
+            images[8] = new DescriptorImageInfo(ctx.Device.SamplerAt(lamps.NearestSampler.Index), ctx.Device.ViewAt(lampData.View().Index), ImageLayout.General);
+        }
+        else images[6] = images[7] = images[8] = images[2];
+        if (!CloudShadows) return;
+        images[9] = Image(g, "uAtmoClouds", cube: false);
+        images[10] = Image(g, "uAtmoCloudsTile", cube: false);
+    }
+
+    /// <summary>This frame's update, for a later pass of the frame that shades ray hits the way the trace does (<see cref="GiNearField"/>); false before the first update.</summary>
+    internal bool HitInputs(DescriptorImageInfo* images, out Constants constants)
+    {
+        constants = lastConstants;
+        if (!updated) return false;
+        HitImages(images, ctx.Globals.Texture("uWeatherGround")?.Invoke() ?? default, lastLamps);
+        return true;
     }
 
     /// <summary>
