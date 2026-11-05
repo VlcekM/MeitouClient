@@ -72,6 +72,9 @@ public sealed record DebugClearBounties(IReadOnlyList<CharacterId> Characters, i
 /// <summary>Kills the characters (<see cref="MedicalState.Kill"/>), as a lethal hit would: the medical state says dead, the body pass does the rest.</summary>
 public sealed record DebugKill(IReadOnlyList<CharacterId> Characters) : DebugCommand;
 
+/// <summary>Knocks the characters out for <see cref="Seconds"/> seconds of character time (<see cref="MedicalState.KnockOut"/>; agent-playtest control channel: ko), standing them down as a blow's knock-out does.</summary>
+public sealed record DebugKnockOut(IReadOnlyList<CharacterId> Characters, float Seconds) : DebugCommand;
+
 /// <summary>Finishes every research and repetition (<see cref="Construction.ResearchState.CompleteAll"/>).</summary>
 public sealed record DebugUnlockResearch : DebugCommand;
 
@@ -83,6 +86,12 @@ public sealed record DebugSpawn(string Record, Vector2 At) : DebugCommand;
 /// (<see cref="TownBuildings.Builder"/>), joins the building list of the town with placement id <see cref="Town"/> and is registered as a loaded one (<see cref="TownEdits.Place"/>).
 /// </summary>
 public sealed record DebugPlaceBuilding(string Town, TownBuilding Building) : DebugCommand;
+
+/// <summary>Lays a loose item of record <see cref="Record"/> (<see cref="Quantity"/> in a stack) on the ground at <see cref="At"/> turned <see cref="Yaw"/> radians (agent-playtest control channel: place-item).</summary>
+public sealed record DebugPlaceItem(string Record, int Quantity, Vector3 At, float Yaw) : DebugCommand;
+
+/// <summary>Puts items into the inventory of the container fixture <see cref="Container"/> (agent-playtest control channel: container-put); what does not fit is reported.</summary>
+public sealed record DebugPutItem(string Container, string Record, int Quantity) : DebugCommand;
 
 /// <summary>A building cleared in the level editor, placed or loaded: leaves its town's list and registries (<see cref="TownEdits.Clear"/>). <see cref="Key"/> is its <see cref="TownBuilding.Key"/>.</summary>
 public sealed record DebugClearBuilding(string Key) : DebugCommand;
@@ -99,6 +108,15 @@ static class DebugCheats
                 break;
             case DebugClearBuilding clear when data is not null:
                 TownEdits.Clear(world, data, clear.Key);
+                break;
+            case DebugPlaceItem lay when data is not null:
+                if (data.Items.Create(lay.Record, lay.Quantity) is { } laid) world.GroundItems.Place(laid, lay.At, lay.Yaw, null, -1);
+                else world.Post($"No item record {lay.Record}.");
+                break;
+            case DebugPutItem put when data is not null:
+                if (world.Fixtures.Find(put.Container) is not { Contents: { } box }) world.Post($"No container {put.Container}.");
+                else if (data.Items.Create(put.Record, put.Quantity) is not { } stored) world.Post($"No item record {put.Record}.");
+                else if (!box.Add(stored)) world.Post($"{put.Quantity} x {stored.Name} did not fit into {put.Container}.");
                 break;
             case DebugMoney money:
                 world.Player.Money = Math.Max(0, world.Player.Money + money.Delta);
@@ -161,6 +179,16 @@ static class DebugCheats
                     deaths.Clear();
                     medical.Kill(deaths);
                     if (deaths.Count > 0) { MovementSystem.Stop(table, slot); table.Next[slot].Velocity = Vector3.Zero; }
+                }
+                break;
+            case DebugKnockOut knock:
+                var knocks = new List<MedicalEvent>();
+                foreach (var id in knock.Characters)
+                {
+                    if (!table.TryResolveNext(id, out int down) || table.Cold(down)?.Medical is not { } m) continue;
+                    knocks.Clear();
+                    m.KnockOut(knock.Seconds, knocks);
+                    if (knocks.Count > 0) { TaskStart.Stand(table, down); table.Next[down].Velocity = Vector3.Zero; }
                 }
                 break;
             case DebugUnlockResearch when data is not null:

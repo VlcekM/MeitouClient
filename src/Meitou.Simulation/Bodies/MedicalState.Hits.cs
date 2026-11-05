@@ -8,8 +8,8 @@ public sealed partial class MedicalState
     // ------------------------------------------------------------------ hits
 
     /// <summary>
-    /// The game's F10 debug heal (Meitou only, not the original's): every part whole (no wear, stun, bandage or splint), full blood, no wounds and no KO time left,
-    /// so the next body tick wakes the character. A dead character stays dead; a stump or crushed limb stays one (<see cref="RestoreLimbs"/> gives it back).
+    /// The game's F10 debug heal (Meitou only, not the original's): every part whole (no wear, stun, bandage or splint), full blood, no wounds and no KO time left
+    /// and awake (also a character playing dead). A dead character stays dead; a stump or crushed limb stays one (<see cref="RestoreLimbs"/> gives it back).
     /// </summary>
     public void Heal(in MedicalContext ctx)
     {
@@ -25,6 +25,9 @@ public sealed partial class MedicalState
         Blood = Capacity(ctx);
         BloodKo = false;
         KoTimer = 0;
+        // Also up from a knock-out: a character lying on "playing dead" (hostiles near) would otherwise stay down while they are, however whole it is.
+        if (PlayingDead) StandUp();
+        Unconscious = false;
     }
 
     /// <summary>The F10 debug full heal's limbs (Meitou only): every stump and crushed limb is the original again; a fitted prosthetic stays. True when one changed.</summary>

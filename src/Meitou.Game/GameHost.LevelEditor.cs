@@ -125,6 +125,9 @@ sealed partial class GameHost
         return levelPlacements.Value.ByKey;
     }
 
+    // The layout names the next LevelPlace gives its buildings (the place-building command's --interior / --exterior); null: the building's own.
+    string? placeInterior, placeExterior;
+
     void LevelPlace(IReadOnlyList<QueuedGhost> ghosts)
     {
         if (scene.Objects is not { } objects) return;
@@ -132,7 +135,7 @@ sealed partial class GameHost
         var townBuilder = MakeTownBuilder(objects);
         foreach (var ghost in ghosts)
         {
-            var placement = levelEdits.Add(ghost.Building.Id, ghost.Position, ghost.Rotation, gpu.Terrain.HeightAt(ghost.Position.X, ghost.Position.Z), objects.Levels);
+            var placement = levelEdits.Add(ghost.Building.Id, ghost.Position, ghost.Rotation, gpu.Terrain.HeightAt(ghost.Position.X, ghost.Position.Z), objects.Levels, placeInterior, placeExterior);
             ApplyPlaced(objects, placement, ghost.Building.PathMode, townBuilder);
         }
     }

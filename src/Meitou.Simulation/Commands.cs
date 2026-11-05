@@ -86,7 +86,11 @@ public sealed record FocusCommand(Vector3 Position) : SimCommand;
 /// <paramref name="Toggle"/> (shift on a single character's click, portrait or number key, <c>FUN_1407f9000</c> / <c>FUN_1407f8f60</c>): a character already selected leaves the
 /// selection unless it is the only one; one not selected joins it.
 /// </summary>
-public sealed record SelectCommand(IReadOnlyList<CharacterId> Characters, bool Additive = false, bool Toggle = false) : SimCommand;
+public sealed record SelectCommand(IReadOnlyList<CharacterId> Characters, bool Additive = false, bool Toggle = false) : SimCommand
+{
+    /// <summary>With no characters and not additive: empty the selection (agent-playtest control channel, <c>select --none</c>); the game's own empty selects change nothing.</summary>
+    public bool Clear { get; init; }
+}
 
 /// <summary>Clears order selection and shows another faction's character in the HUD panels. <see cref="CharacterId.None"/> clears inspection only.</summary>
 public sealed record InspectCommand(CharacterId Target) : SimCommand;

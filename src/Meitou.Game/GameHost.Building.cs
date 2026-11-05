@@ -273,6 +273,7 @@ sealed partial class GameHost
                 PartBounds = footprints.PartBounds,
                 LinkedAround = (centre, radius) => footprints.LinkedAround(centre, radius, (x, z) => ActiveGround((float)x, (float)z)),
                 StaticAround = footprints.StaticAround,
+                StaticPlacementsAround = (centre, radius) => footprints.PlacementsAround(centre, radius).Where(b => Pickable(b.BuildingId)),
                 StaticAlong = (origin, direction, length) => footprints.Along(origin, direction, length).Where(b => Pickable(b.Placement.BuildingId)),
                 // The movement pick's floors up to the viewed one: the build window's floor arrows choose the floor the ghost stands on.
                 FloorAlong = (origin, direction, length) => gpu.Objects?.FloorHit(origin, direction, viewedFloor, length) is { } hit

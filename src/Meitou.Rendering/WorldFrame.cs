@@ -174,6 +174,8 @@ sealed class WorldOptions
     public bool Windowed;
     /// <summary>Interactive window: never shown (<c>--hidden-window</c>, for unattended runs such as <c>--play-bench</c>); implies <see cref="Windowed"/>.</summary>
     public bool HiddenWindow;
+    /// <summary>Interactive loop without a window, swapchain or presentation (<c>--headless</c> or <c>MEITOU_HEADLESS=1</c>; the control channel and screenshots work); the size is <c>--size</c>, else 1920x1080.</summary>
+    public bool Headless;
     /// <summary>Offscreen pictures: seconds the grass sway advances every frame (tests the grass motion under a temporal upscaler; 0 holds it still).</summary>
     public float SwayStep;
     /// <summary>The character renderer's test harness (<c>--crowd N</c>, <see cref="Characters.CrowdHarness"/>): N generated characters round the start point.</summary>
@@ -242,6 +244,7 @@ sealed class WorldOptions
           --yaw <deg> --pitch <deg> --distance <units>   camera around the point (defaults 30, 35, radius)
           --screenshot <out.png> --size <W>x<H>          render offscreen to a PNG and exit
           --monitor <n>                                  open the window on monitor n (1-based)
+          --headless                                     no window, swapchain or presentation: the interactive loop draws into an offscreen picture of --size (default 1920x1080), 30 fps unless --fps-limit; for the control channel (--control-dir) and its screenshot command; env MEITOU_HEADLESS=1
           --windowed                                     a bordered window: the --size asked, else maximized (default: borderless full screen; Alt+Enter toggles)
           --no-objects             skip buildings and map features
           --no-foliage             no trees, bushes, rocks or grass (F toggles)
@@ -356,6 +359,8 @@ sealed class WorldOptions
         }
 
         if (o.Radius <= 0) throw new ArgumentException("--radius must be positive");
+        if (Environment.GetEnvironmentVariable("MEITOU_HEADLESS") == "1") o.Headless = true;
+        if (o.Headless && !o.SizeGiven) (o.Width, o.Height) = (1920, 1080);
         if (!o.SizeGiven && (o.BenchFrames > 0 || o.Ab is not null)) (o.Width, o.Height) = BenchSize;
         return o;
     }
@@ -510,6 +515,7 @@ sealed class WorldOptions
             case "--no-vsync": o.VSync = false; break;
             case "--monitor": o.Monitor = r.Int(); break;
             case "--windowed": o.Windowed = true; break;
+            case "--headless": o.Headless = true; break;
             case "--hidden-window": o.HiddenWindow = o.Windowed = true; break;
             case "--sway-step": o.SwayStep = r.Float(); break;
             case "--orbit-step": o.OrbitStep = r.Float() * MathF.PI / 180; break;

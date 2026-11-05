@@ -20,6 +20,10 @@ sealed partial class GameHost
     bool consoleRegistered;
     /// <summary>The pointer in framebuffer pixels as of the last frame, for the commands that mean the point under the cursor.</summary>
     Vector2 consolePointer;
+    /// <summary>--headless: the pointer the control channel's <c>mouse</c> command gave, in screen pixels (null until it does); a window's pointer is read from the window instead.</summary>
+    Vector2? headlessMouse;
+    /// <summary>The control channel's <c>quit</c>: the interactive loop ends at its next pass (saves the settings, disposes as on any exit).</summary>
+    bool controlQuit;
 
     bool ConsoleOpen => devConsole.Open;
 
@@ -221,20 +225,22 @@ sealed partial class GameHost
         }, (i, typed) => popData is { } d
             ? ConsoleMatch(d.Sites.Where(s => s.Town.Type is not (TownType.NestMarker or TownType.Null)).Select(s => s.Town.Name).Where(n => n.Length > 0).Distinct().Order(StringComparer.OrdinalIgnoreCase), typed) : []);
 
-        Add("kill", "kill", "kill the selected characters", (args, con) =>
+        Add("kill", "kill [--id <c:slot.gen>]", "kill the selected characters, or the one given by --id", (args, con) =>
         {
-            if (!Need(args, 0, 0, Self("kill"))) return;
-            var selected = session.World.Player.Selection.ToArray();
-            if (selected.Length == 0) { con.Error("select characters first"); return; }
+            if (!ControlTargets(args, con, "kill", out var selected, out var rest)) return;
+            if (rest.Count > 0) { con.Error("usage: kill [--id <c:slot.gen>]"); return; }
             Send(t => new DebugKill(selected) { Tick = t });
             con.Print($"killed {selected.Length}");
         });
 
-        Add("research", "research", "finish every research", (args, con) =>
+        Add("research", "research [list | queue <tech>]", "finish every research; research list shows the research state, research queue <tech> queues one the way the research window does", (args, con) =>
         {
+            if (args.Count > 0) { ControlResearch(args, con); return; }
             if (!Need(args, 0, 0, Self("research"))) return;
             Report(con, DebugApply(DebugRow.UnlockResearch, ""));
         });
+
+        RegisterControlCommands();
 
         c.Print("Dev console (Meitou only). help lists the commands, Tab completes, Up/Down is the history, Esc closes.");
     }

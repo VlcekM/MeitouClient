@@ -16,6 +16,42 @@ sealed partial class PlayerInterface
     public bool ModalOpen => UiVisible && faithfulScreens.HasModal;
     /// <summary>The faithful screens open, bottom first (the play benchmark says which modal one stopped the game).</summary>
     public IReadOnlyList<string> OpenScreens => faithfulScreens.OpenScreens;
+    /// <summary>
+    /// The widgets a click can reach in the last arranged frame (the topmost control at its own centre): the HUD and its panels in either UI mode and the open screens,
+    /// for the agent control channel (ui-tree, ui-click). Screen is the faithful screen's id, "hud" for the rest.
+    /// </summary>
+    internal IEnumerable<(string Screen, UiControl Control)> UiClickables()
+    {
+        if (!UiVisible) yield break;
+        var controls = ArrangeUi();
+        var owner = new Dictionary<UiControl, string>(ReferenceEqualityComparer.Instance);
+        foreach (var screen in faithfulScreens.LastFrame)
+            foreach (var c in screen.Controls) owner[c] = screen.Id;
+        foreach (var c in controls)
+        {
+            float cx = c.Bounds.X + c.Bounds.Width / 2, cy = c.Bounds.Y + c.Bounds.Height / 2;
+            if (!c.Enabled || c.Bounds.Width < 2 || c.Bounds.Height < 2 || cx < 0 || cy < 0 || cx > Width || cy > Height) continue;
+            if (c.Type != "Button" && c.Action.Length == 0) continue;
+            if (MyGuiPresentation.HitTest(controls, cx, cy) is { } top && ReferenceEquals(top, c)) yield return (owner.GetValueOrDefault(c, "hud"), c);
+        }
+    }
+
+    /// <summary>A left click at <paramref name="p"/> through the game's own pointer path (press and release).</summary>
+    internal void UiClickAt(Vector2 p)
+    {
+        MouseDown(MouseButton.Left, p, false);
+        MouseUp(MouseButton.Left, p, false);
+    }
+
+    /// <summary>Opens a registered faithful screen by id (the agent control channel); false when there is none.</summary>
+    internal bool OpenFaithfulScreen(string id)
+    {
+        if (!faithfulScreens.IsRegistered(id)) return false;
+        faithfulScreens.Open(id);
+        UpdateMenuPause();
+        return true;
+    }
+
     /// <summary>Keys the host keeps for itself (the sandbox's letters), so the faithful window shortcuts leave them alone.</summary>
     public HashSet<Key> ReservedKeys { get; } = [];
     void UpdateMenuPause() => session.Simulation.RequestedPause = settingsOpen || faithfulScreens.HasModal;

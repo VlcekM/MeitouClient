@@ -52,6 +52,16 @@ public sealed class ItemSlots
     /// <summary>How many slots hold an item.</summary>
     public int Filled => all.Count(s => s.Item >= 0);
 
+    /// <summary>How many item slots the building with run-time name <paramref name="buildingKey"/> has and how many hold an item.</summary>
+    public (int Total, int Filled) OfBuilding(string buildingKey)
+    {
+        string prefix = buildingKey + "/item";
+        int total = 0, filled = 0;
+        foreach (var s in all)
+            if (s.Id.StartsWith(prefix, StringComparison.Ordinal)) { total++; if (s.Item >= 0) filled++; }
+        return (total, filled);
+    }
+
     /// <summary>Registers the slots of a town's buildings once, binding the loaded items lying in them.</summary>
     public void RegisterSite(World world, PopulationData data, int site)
     {

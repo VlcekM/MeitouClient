@@ -137,6 +137,18 @@ public sealed class WorldSession : IDisposable
     }
 
     /// <summary>
+    /// Runs <paramref name="ticks"/> simulation ticks now while the clock is paused (the agent control channel's <c>step</c>); only the last two publish a snapshot. Returns the world's tick afterwards.
+    /// </summary>
+    public long Step(int ticks)
+    {
+        EnsureNotRunning();
+        if (!Simulation.IsPaused) throw new InvalidOperationException("step needs the simulation paused");
+        SettleAhead();
+        for (int i = 0; i < ticks; i++) SimulationTick(publish: i >= ticks - 2);
+        return World.Tick;
+    }
+
+    /// <summary>
     /// Starts the next simulation ticks on a thread of their own, ahead of the clock (docs/simulation.md "Tick ahead"), while the host draws the world from the
     /// shown snapshots; <see cref="EndTickAhead"/> waits for them. As many run as a frame has owed lately (at least one, at most the frame budget), so at 2x and 5x
     /// a frame's ticks overlap the draw too. Nothing may touch <see cref="World"/> in between. Does nothing while paused or with ticks already ahead.

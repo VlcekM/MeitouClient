@@ -365,6 +365,21 @@ public sealed class BuildingFootprints
             }
     }
 
+    /// <summary>The level data's building placements within <paramref name="radius"/> of <paramref name="centre"/> (X, Z); no footprint is waited for (the agent control channel lists them).</summary>
+    public IEnumerable<BuildingPlacement> PlacementsAround(Vector2 centre, float radius)
+    {
+        var map = Index();
+        var home = WorldLayout.ZoneOf(centre.X, centre.Y);
+        int span = (int)MathF.Ceiling(radius / WorldLayout.ZoneSize) + 1;
+        for (int dz = -span; dz <= span; dz++)
+            for (int dx = -span; dx <= span; dx++)
+            {
+                if (!map.TryGetValue(new ZoneCoordinate(home.X + dx, home.Y + dz), out var list)) continue;
+                foreach (var b in list)
+                    if (!b.TargetsZoneRecord && b.Position != Vector3.Zero && Vector2.DistanceSquared(new Vector2(b.Position.X, b.Position.Z), centre) <= radius * radius) yield return b;
+            }
+    }
+
     /// <summary>The footprints (those already read; the others are being read) of the level data's buildings with a placement within <paramref name="radius"/> of <paramref name="centre"/> (X, Z).</summary>
     public IEnumerable<PlacedFootprint> StaticAround(Vector2 centre, float radius)
     {

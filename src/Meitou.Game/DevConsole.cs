@@ -38,6 +38,9 @@ public sealed class DevConsole
     public IReadOnlyList<Line> Lines => lines;
     public IEnumerable<ConsoleCommand> Commands => commands.Values.OrderBy(c => c.Name, StringComparer.Ordinal);
 
+    /// <summary>Called with every non-input line printed (the agent control channel, <c>--control-dir</c>, collects a command's output through it).</summary>
+    public Action<string, Kind>? Tap { get; set; }
+
     public void Register(ConsoleCommand command) => commands[command.Name] = command;
 
     /// <summary>Adds a line to the scrollback and to log.txt.</summary>
@@ -46,6 +49,7 @@ public sealed class DevConsole
         foreach (string part in text.ReplaceLineEndings("\n").Split('\n'))
         {
             lines.Add(new Line(part, kind));
+            if (kind != Kind.Input) Tap?.Invoke(part, kind);
             Console.WriteLine($"console  {(kind == Kind.Error ? "error: " : kind == Kind.Input ? "> " : "")}{part}");
         }
         if (lines.Count > MaxLines) lines.RemoveRange(0, lines.Count - MaxLines);

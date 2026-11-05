@@ -29,7 +29,7 @@ public sealed class LevelEdits
     /// A new building at <paramref name="position"/> (absolute height): its instance id is <c>&lt;n&gt;-zone&lt;x&gt;.&lt;z&gt;-INGAME</c>, n counting on from the zone's highest
     /// <c>nextId</c> (the original's form for an id made in game, docs/formats/zones.md "Placement keys"), its state id the instance id with <c>-S23</c>.
     /// </summary>
-    public BuildingPlacement Add(string record, Vector3 position, Quaternion rotation, float ground, WorldLevelData levels)
+    public BuildingPlacement Add(string record, Vector3 position, Quaternion rotation, float ground, WorldLevelData levels, string? interiorLayout = null, string? exteriorLayout = null)
     {
         var zone = WorldLayout.ZoneOf(position.X, position.Z);
         int n = nextId.TryGetValue(zone, out int next) ? next : levels.ZoneInfo.TryGetValue(zone, out var info) ? info.NextId : 1;
@@ -37,7 +37,7 @@ public sealed class LevelEdits
         do id = $"{n++}-zone{zone.X}.{zone.Y}-INGAME";
         while (levels.Zones.TryGetValue(zone, out var db) && db.Records.Values.Any(r => r.Instances.ContainsKey(id)));
         nextId[zone] = n;
-        var placement = new BuildingPlacement(zone, id, record, new Vector3(position.X, position.Y - ground, position.Z), rotation, StateIdOf(id), position.Y);
+        var placement = new BuildingPlacement(zone, id, record, new Vector3(position.X, position.Y - ground, position.Z), rotation, StateIdOf(id), position.Y) { InteriorLayout = interiorLayout, ExteriorLayout = exteriorLayout };
         added[placement.Key] = placement;
         return placement;
     }
@@ -178,7 +178,9 @@ public sealed class LevelEdits
                 }
                 string? stateId = i.States.FirstOrDefault();
                 float? worldY = stateId is not null && states.TryGetValue(stateId, out var state) && state.Floats.TryGetValue("world Y pos", out float y) ? y : null;
-                placed.Add(new BuildingPlacement(zone, i.Id, i.Target, i.Position, i.Rotation, stateId, worldY));
+                string? interior = stateId is not null && states.TryGetValue(stateId, out var layoutState) && layoutState.Strings.TryGetValue("interior layout name", out string? il) && il.Length > 0 ? il : null;
+                string? exterior = stateId is not null && states.TryGetValue(stateId, out var layoutState2) && layoutState2.Strings.TryGetValue("exterior layout name", out string? el) && el.Length > 0 ? el : null;
+                placed.Add(new BuildingPlacement(zone, i.Id, i.Target, i.Position, i.Rotation, stateId, worldY) { InteriorLayout = interior, ExteriorLayout = exterior });
             }
         return (placed, clearedKeys);
     }
@@ -202,6 +204,9 @@ public sealed class LevelEdits
         state.Ints["floornum"] = 0;
         state.Ints["flags"] = 1;   // bit 0: outside
         state.Strings["name"] = name;
+        // The layouts the player (or the agent-playtest place-building command) chose: the keys a level building's state carries (docs/formats/zones.md).
+        if (p.InteriorLayout is { Length: > 0 } interior) state.Strings["interior layout name"] = interior;
+        if (p.ExteriorLayout is { Length: > 0 } exterior) state.Strings["exterior layout name"] = exterior;
         return state;
     }
 }

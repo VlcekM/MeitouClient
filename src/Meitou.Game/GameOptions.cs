@@ -67,6 +67,10 @@ sealed class GameOptions
     public string? Load;
     /// <summary><c>--continue</c>: start in the newest save (<see cref="Meitou.Content.SaveModList.Scan"/>), resolved into <see cref="Load"/> once the install is found.</summary>
     public bool Continue;
+    /// <summary><c>--control-dir</c> (or MEITOU_CONTROL_DIR): the folder an external agent writes console command lines to (<c>cmd</c>) and reads results from (<c>out</c>), see GameHost.Control.cs.</summary>
+    public string? ControlDir;
+    /// <summary><c>--exec "a; b"</c>: console commands run once after the world has loaded.</summary>
+    public string? Exec;
     /// <summary><c>--play-bench &lt;dir&gt;</c>: the interactive game driven by a script, every frame measured, the results written there (GameHost.PlayBench.cs).</summary>
     public string? PlayBench;
     /// <summary><c>--no-precompile</c>: the methods are compiled on their first call only, not ahead on a background thread (JitWarmup).</summary>
@@ -126,6 +130,8 @@ sealed class GameOptions
                                      quits; frame limit and vsync off; MEITOU_BENCH_ONLY=a,b keeps those segments
           --benchmark-baseline       the settings benchmarks for the site use (bench/kit): a 1920x1080 window, the Medium tier, no GI, ground parallax or tessellation, no upscaler, SMAA;
                                      like --low-end, the saved graphics are neither applied nor overwritten
+          --control-dir <dir>        agent channel (debug): polls <dir>/cmd (lines "<id> <console command>"), appends results to <dir>/out; also MEITOU_CONTROL_DIR
+          --exec "<cmd; cmd>"        console commands run once after the world has loaded
           --load <save folder>       start in a save, Meitou's or the original game's (%LOCALAPPDATA%\kenshi\save\<name>), loaded as the game menu's Load does; works with --screenshot
           --continue                 start in the newest save of Meitou's and the original game's save folders, as --load would
           --renderer <vulkan|metal>  the renderer for the whole frame: vulkan (the default) or metal (macOS: the scene, HUD and faithful panels, the port's current slice)
@@ -226,6 +232,8 @@ sealed class GameOptions
                 case "--quit-after": g.QuitAfter = double.Parse(Next(), CultureInfo.InvariantCulture); break;
                 case "--load": g.Load = Next(); break;
                 case "--continue": g.Continue = true; break;
+                case "--control-dir": g.ControlDir = Next(); break;
+                case "--exec": g.Exec = Next(); break;
                 case "--renderer":
                 {
                     string renderer = Next().ToLowerInvariant();
