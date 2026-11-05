@@ -238,7 +238,7 @@ public sealed partial class MainWindow : Window
 
     async Task LoadNewsAsync()
     {
-        NewsCount.Text = "Loading";
+        NewsCount.Text = Tr("Loading");
         var (posts, problem) = await news.FetchAsync();
         NewsPanel.Children.Clear();
         foreach (var post in posts) NewsPanel.Children.Add(PostCard(post));
@@ -421,11 +421,11 @@ public sealed partial class MainWindow : Window
 
     async void BrowseInstall_Click(object? sender, RoutedEventArgs e)
     {
-        if (download is not null) { InstallStatus.Text = "Wait for the download to finish first."; return; }
+        if (download is not null) { InstallStatus.Text = Tr("Wait for the download to finish first."); return; }
         var folders = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions { Title = "Install folder" });
         if (folders is not [var folder] || folder.TryGetLocalPath() is not { } path || path == LauncherConfig.InstallDirectory) return;
         var previous = LauncherConfig.InstallDirectory;
-        InstallStatus.Text = "Moving installed versions…";
+        InstallStatus.Text = Tr("Moving installed versions…");
         try { await Task.Run(() => Releases.MoveInstalled(previous, path)); }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -436,7 +436,7 @@ public sealed partial class MainWindow : Window
         config.InstallFolder = Path.GetFullPath(path) == Path.GetFullPath(LauncherConfig.DataDirectory) ? null : path;
         config.Save();
         InstallPathBox.Text = LauncherConfig.InstallDirectory;
-        InstallStatus.Text = "Where versions are installed; changing it moves them.";
+        InstallStatus.Text = Tr("Where versions are installed; changing it moves them.");
         RefreshInstalled();
         ShowReleases();
     }

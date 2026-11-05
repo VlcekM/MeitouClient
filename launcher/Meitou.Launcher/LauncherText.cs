@@ -1,4 +1,5 @@
 using Avalonia.Controls;
+using Avalonia.LogicalTree;
 using Avalonia.VisualTree;
 using Meitou.Content;
 using Meitou.Localisation;
@@ -48,20 +49,28 @@ static class LauncherText
     /// </summary>
     public static string Translate(string text, params object?[] args) => Loc.Format(Translate(text), args);
 
+    /// <summary>A control whose text or items are data (a list, the release notes, the news, the newest save's name), not a label.</summary>
+    static bool HoldsData(Control control) => control is ComboBox or ListBox
+        or ContentControl { Name: "ReleaseNotes" } or StackPanel { Name: "NewsPanel" } or TextBlock { Name: "ContinueSaveText" };
+
     /// <summary>
     /// Puts every label under <paramref name="root"/> in the active language; <paramref name="originals"/> remembers each control's English
-    /// so a later switch starts from it. Lists, combo boxes, the release notes and the news hold data, not labels, and are skipped, but a
-    /// placeholder and a tooltip are labels on any of them.
+    /// so a later switch starts from it. Lists, combo boxes, the release notes, the news and the newest save's name hold data, not
+    /// labels, and are skipped, but a placeholder and a tooltip are labels on any of them. A control with no visual children yet (never
+    /// shown) is reached through its logical children.
     /// </summary>
     public static void TranslateTree(Control root, IDictionary<Control, string> originals)
     {
+        HashSet<Control> seen = [];
+
         void Visit(Control control)
         {
+            if (!seen.Add(control)) return;
             // A placeholder is a label too, even on a control whose items hold data (a combo box's list, a text box's text).
             if (control is TextBox textBox && textBox.PlaceholderText is { } placeholder) textBox.PlaceholderText = Translate(placeholder);
             else if (control is ComboBox combo && combo.PlaceholderText is { } hint) combo.PlaceholderText = Translate(hint);
-            if (control is ComboBox or ListBox or ContentControl { Name: "ReleaseNotes" } or StackPanel { Name: "NewsPanel" }) return;
-            if (control is TextBlock text && text.Text is { } value)
+            if (HoldsData(control)) return;
+            if (control is TextBlock text && text.Text is { Length: > 0 } value)
             {
                 if (!originals.ContainsKey(control)) originals[control] = Source(value);
                 text.Text = Translate(originals[control]);
@@ -73,6 +82,10 @@ static class LauncherText
             }
             if (ToolTip.GetTip(control) is string tip) ToolTip.SetTip(control, Translate(tip));
             foreach (var child in control.GetVisualChildren())
+                if (child is Control nested) Visit(nested);
+            // Content of a control that has never been measured (Continue, while there is no save) is a logical child only: its
+            // template, and the text presenters inside it, are attached when it is first shown, after the translation passes.
+            foreach (var child in control.GetLogicalChildren())
                 if (child is Control nested) Visit(nested);
         }
         Visit(root);
