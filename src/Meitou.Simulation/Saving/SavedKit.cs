@@ -137,7 +137,8 @@ public static class SavedKit
     {
         for (int k = 0; k < loadout.Limbs.Length; k++)
             loadout.Limbs[k] = medical?.LimbPart(k) is { Limb: not Bodies.LimbState.Original } p
-                ? new LoadoutLimb((int)p.Limb, p.Limb == Bodies.LimbState.Replaced && p.Replacement is { } r ? db.Find(r.StringId) : null)
+                ? new LoadoutLimb((int)p.Limb, p.Limb == Bodies.LimbState.Replaced && p.Replacement is { } r ? db.Find(r.StringId) : null,
+                    Colour: ColourOf(db, p.ReplacementItem?.ColourId))
                 : null;
         loadout.Decapitated = medical?.Decapitated == true;
     }
@@ -157,12 +158,16 @@ public static class SavedKit
             loadout.Limbs[k] = state switch
             {
                 0 => null,
-                2 when prosthetic is not null => new LoadoutLimb(2, prosthetic, fitted[k]!.Level),
+                2 when prosthetic is not null => new LoadoutLimb(2, prosthetic, fitted[k]!.Level, ColourOf(db, fitted[k]!.ColourId)),
                 2 => new LoadoutLimb(1),
                 _ => new LoadoutLimb(state),
             };
         }
     }
+
+    /// <summary>The COLOR_DATA a saved or live item's <c>color sid</c> names (null: none or not in the data).</summary>
+    static GameRecord? ColourOf(GameDatabase db, string? colourId) =>
+        colourId is { Length: > 0 } && db.Find(colourId) is { Type: FcsRecordType.COLOR_DATA } colour ? colour : null;
 
     /// <summary>A copy of <paramref name="loadout"/> (to give it limbs without touching a look another character may share).</summary>
     public static Loadout Copy(Loadout loadout)

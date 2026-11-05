@@ -162,6 +162,17 @@ Each item instance carries a COLOR_DATA (save key `color sid`). **Observed** (de
 - Put on (attached) without a colour, it takes the wearer's scheme, CHARACTER `color`, else the faction's `color`, and keeps it. A looted uniform keeps its first wearer's colours.
 - Drawn: an ARMOUR or CONTAINER (the types fcs.def gives the field) whose `dont colorise` is true (default; every base record stores it) shows no colour, but its colour is still stored.
 
+Limbs (**Verified**, decompile: `FUN_1400cfdd0` → `FUN_140535d50` → `FUN_1405358a0`; `FUN_140536210`): a fitted limb's item is attached like clothing, so a
+prosthetic takes and keeps its own colour, else the wearer's scheme. The `dont colorise` reset runs only for types 3, 46 and 6 (ARMOUR, CONTAINER, ATTACHMENT), so a
+LIMB_REPLACEMENT always shows its colour; `setupItemMaterial` dyes any attached item but an ATTACHMENT that has a colour and whose material has a `color map`.
+**Observed** (scratch probe, base data): 20 of 28 LIMB_REPLACEMENTs have a material, none with a `color map`, so vanilla prosthetics look undyed; a mod material with
+one shows the scheme (issue #279). In the owner's saves 10 of 64 saved prosthetic items carry a `color sid` (faction schemes).
+Meitou: `LoadoutLimb.Colour` (the fitted item's `ColourId`, `SavedKit.SetLimbs`), `CharacterAppearance.AddLimb`.
+
+Paint factor (**Observed**, decompile `FUN_140536210`): `paint factor 1` / `2` (the colour's alpha in the shader) are read from the float table of the attached item's own
+record (the object `slot` and `is locked` come from), not its material. fcs.def defines them only on MATERIAL_SPECS_CLOTHING (11 of 150 set one) and no item record
+stores them, so the original would always pass 0 (multiply). Meitou passes the material's: an open divergence for those 11, not checked against the game's look.
+
 **Observed** in the owner's 9 saves (scratch probe of platoon files, worn ARMOUR): of 27,230 coloured pieces, 17,866 have the
 platoon faction's scheme, 7,634 the `color` of some CHARACTER (the wearer's record was not matched), 1,632 their record's own, 98 other (looted, mod colours). No uncoloured worn piece is in a faction with
 a scheme. 31 of 103 base FACTIONs have one; 42 of 142 ARMOUR records have `dont colorise` false.
