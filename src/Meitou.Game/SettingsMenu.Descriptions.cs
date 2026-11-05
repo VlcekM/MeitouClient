@@ -64,6 +64,7 @@ sealed partial class SettingsMenu
     internal static string ToggleHint(string label) => label switch
     {
         "Ambient occlusion" => "Add contact shading around nearby surfaces and creases.",
+        "Ground-truth occlusion" => "Measure that shading from each pixel's horizon instead of estimating it. Needs Ambient occlusion on.",
         "Dithering" => "Reduce visible colour bands in smooth gradients.",
         "Haze" => "Use Meitou's atmospheric haze tuning.",
         "Anti-aliasing" => "Use temporal smoothing and upscaling instead of FXAA.",
