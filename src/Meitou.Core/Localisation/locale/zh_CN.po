@@ -2727,3 +2727,89 @@ msgstr "不可用"
 
 msgid "unavailable (see the log), plain swapchain in use"
 msgstr "不可用（见日志），正在使用普通交换链"
+
+# The messages the code builds at run time: the English text with its {1} holes is the key.
+
+msgid "Started {1}"
+msgstr "已开始：{1}"
+
+msgid "Save failed: {1}"
+msgstr "保存失败：{1}"
+
+msgid "Game loaded; the save was made with {1} mod(s) not loaded now (listed in the messages)"
+msgstr "存档已读取；这个存档用到 {1} 个当前没有加载的 mod（名单在消息日志里）"
+
+msgid "Game loaded; the save was made with mods not loaded now: {1}"
+msgstr "存档已读取；这个存档用到当前没有加载的 mod：{1}"
+
+msgid "Not enough money: the bail is c.{1}."
+msgstr "钱不够：保释金要 c.{1}。"
+
+msgid "{1} paid a bail of c.{2} for {3}"
+msgstr "{1} 为 {3} 付了 c.{2} 保释金"
+
+msgid "{1}: no free cage nearby"
+msgstr "{1}：附近没有空牢笼"
+
+msgid "{1} could not put the captive in the cage"
+msgstr "{1} 没能把俘虏关进牢笼"
+
+msgid "{1} is after the bounty on {2}!"
+msgstr "{1} 盯上了 {2} 的赏金！"
+
+msgid "{1} is arresting {2}!"
+msgstr "{1} 正在逮捕 {2}！"
+
+msgid "{1} paid a fine of c.{2} to {3}; the bounty is cleared"
+msgstr "{1} 向 {3} 交了 c.{2} 罚款，通缉已撤销"
+
+msgid "{1} cannot pay the fine of c.{2}"
+msgstr "{1} 付不起 c.{2} 的罚款"
+
+msgid "{1} has been imprisoned by {2}"
+msgstr "{1} 被 {2} 关进了监狱"
+
+msgid "{1} found no free cage for {2}"
+msgstr "{1} 找不到空牢笼关押 {2}"
+
+msgid "{1} is wanted by {2} for {3}: bounty c.{4}"
+msgstr "{1} 因{3}被 {2} 通缉：赏金 c.{4}"
+
+msgid "{1} has been caught committing {2}!"
+msgstr "{1} 被当场发现{2}！"
+
+msgid "{1} is no longer wanted by {2}"
+msgstr "{1} 不再被 {2} 通缉"
+
+msgid "{1}: I don't have any tools"
+msgstr "{1}：我没有工具"
+
+msgid "{1} put {2} on {3}"
+msgstr "{1} 给 {3} 戴上了 {2}"
+
+msgid "{1} already wears something in that slot"
+msgstr "{1} 那个部位已经戴着东西了"
+
+msgid "{1}: Pick failed"
+msgstr "{1}：撬锁失败"
+
+msgid "{1}: I'm not skilled enough..."
+msgstr "{1}：我的技术还不够……"
+
+msgid "{1}: I'm not strong enough to do that"
+msgstr "{1}：我的力气不够"
+
+msgid "{1}: {2}"
+msgstr "{1}：{2}"
+
+msgid "{1} got out of the cage"
+msgstr "{1} 从笼子里出来了"
+
+msgid "{1}: Pick success!"
+msgstr "{1}：撬锁成功！"
+
+msgid "{1} bought {2} for c.{3}"
+msgstr "{1} 买下了 {2}，花了 c.{3}"
+
+msgid "{1} sold {2} for c.{3}"
+msgstr "{1} 卖出了 {2}，得到 c.{3}"

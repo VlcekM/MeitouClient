@@ -571,7 +571,7 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
         long price = Price(m, item, units, sell, shop.Terms, holder);
         if (sell) { squad.Money -= price; world.Player.Money += price; }
         else { world.Player.Money -= price; squad.Money += price; }
-        world.Post($"{cold.Name} {(sell ? "sold" : "bought")} {Units(units, item.Name)} for c.{price}");
+        world.Post(Loc.Tr(sell ? "{1} sold {2} for c.{3}" : "{1} bought {2} for c.{3}", cold.Name, Units(units, item.Name), price));
         return receipt;
     }
 
@@ -625,7 +625,7 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
         if (item.Contents is null) Take(shop.Stock, item, placed);
         world.Player.Money -= price;
         squad.Money += price;
-        world.Post($"{cold.Name} bought {Units(placed, item.Name)} for c.{price}");
+        world.Post(Loc.Tr("{1} bought {2} for c.{3}", cold.Name, Units(placed, item.Name), price));
     }
 
     void Sell(World world, SellItem sell)
@@ -671,7 +671,7 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
         if (equipped) assembly.RefreshEquipment(cold);
         squad.Money -= price;
         world.Player.Money += price;
-        world.Post($"{cold.Name} sold {Units(placed, item.Name)} for c.{price}");
+        world.Post(Loc.Tr("{1} sold {2} for c.{3}", cold.Name, Units(placed, item.Name), price));
     }
 
     /// <summary>

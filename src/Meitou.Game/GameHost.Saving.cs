@@ -212,13 +212,13 @@ sealed partial class GameHost
                 var written = Stopwatch.StartNew();
                 game.Write(folder);
                 Console.WriteLine($"save      {folder}: captured in {captureMs:0.0} ms{(ahead ? "" : " (the base made on the spot)")}, written in {written.ElapsedMilliseconds} ms");
-                if (!feedback) saveNotices.Enqueue(("Saved", false));
+                if (!feedback) saveNotices.Enqueue(("Game saved", false));
             }
             catch (Exception e)
             {
                 Console.Error.WriteLine($"save      write failed: {e}");
                 if (feedback) throw;
-                saveNotices.Enqueue(($"Save failed: {e.Message}", true));
+                saveNotices.Enqueue((Loc.Tr("Save failed: {1}", e.Message), true));
             }
         });
     }
@@ -409,9 +409,9 @@ sealed partial class GameHost
         Console.WriteLine($"load      {summary}");
         var missing = loadedSave?.MissingMods ?? [];
         // The message panel fits a line or two: it gives the count, the message log the names.
-        if (missing.Count == 0) player.Notice(imported ? "Imported" : "Loaded");
-        else player.Notice($"Loaded; the save was made with {missing.Count} mod(s) not loaded now (listed in the messages)", true,
-            $"Loaded; the save was made with mods not loaded now: {string.Join(", ", missing)}");
+        if (missing.Count == 0) player.Notice(imported ? "Game imported" : "Game loaded");
+        else player.Notice(Loc.Tr("Game loaded; the save was made with {1} mod(s) not loaded now (listed in the messages)", missing.Count), true,
+            Loc.Tr("Game loaded; the save was made with mods not loaded now: {1}", string.Join(", ", missing)));
     }
 
     /// <summary>A save loaded from the menus starts paused with <see cref="UserConfig.PauseOnLoad"/> (a player pause: the speed buttons resume it).</summary>

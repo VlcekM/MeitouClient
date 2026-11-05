@@ -59,7 +59,7 @@ public sealed partial class LockSystem(GameConstants constants, BodyOptions opti
                     foreach (var id in Who(world, getOut.Characters))
                     {
                         if (!table.TryResolveNext(id, out int s) || table.Cold(s) is not { IsImprisoned: true, Medical.Incapacitated: false } c) continue;
-                        if (world.Fixtures.GetOut(world, id, Crimes)) { c.PickingLock = null; if (c.IsPlayer) world.Post($"{c.Name} got out of the cage"); }
+                        if (world.Fixtures.GetOut(world, id, Crimes)) { c.PickingLock = null; if (c.IsPlayer) world.Post(Loc.Tr("{1} got out of the cage", c.Name)); }
                         else if (c.IsPlayer) world.Post("It's locked.");
                     }
                     break;
@@ -132,13 +132,13 @@ public sealed partial class LockSystem(GameConstants constants, BodyOptions opti
             switch (Picking.Step(world, s, f, world.TickSeconds, Crimes))
             {
                 case PickOutcome.Open: c.PickingLock = null; world.EmitSound(SoundKind.Unlocked, s, next[s].Position); break;
-                case PickOutcome.Success: c.PickingLock = null; world.Fixtures.Touch(f); world.EmitSound(SoundKind.Unlocked, s, next[s].Position); if (c.IsPlayer) world.Post($"{c.Name}: Pick success!");
+                case PickOutcome.Success: c.PickingLock = null; world.Fixtures.Touch(f); world.EmitSound(SoundKind.Unlocked, s, next[s].Position); if (c.IsPlayer) world.Post(Loc.Tr("{1}: Pick success!", c.Name));
                     if (f.Occupant is { IsNone: false } held && held != table.IdOf(s)) world.Defer(new Dialogue.DialogueEvent(held, table.IdOf(s), UnlockMyCageOrShackles) { Tick = world.Tick + 1 });   // Task_PickLock: the freed character to the picker
                     break;
-                case PickOutcome.Failed: if (c.IsPlayer) world.Post($"{c.Name}: Pick failed");
+                case PickOutcome.Failed: if (c.IsPlayer) world.Post(Loc.Tr("{1}: Pick failed", c.Name));
                     if (f.Occupant is { IsNone: false } caged && caged != table.IdOf(s)) world.Defer(new Dialogue.DialogueEvent(caged, table.IdOf(s), UnlockMyCageAttempt) { Tick = world.Tick + 1 });   // a failed roll: the captive says event 14
                     break;
-                case PickOutcome.NotAllowed: c.PickingLock = null; if (c.IsPlayer) world.Post($"{c.Name}: I'm not skilled enough..."); break;
+                case PickOutcome.NotAllowed: c.PickingLock = null; if (c.IsPlayer) world.Post(Loc.Tr("{1}: I'm not skilled enough...", c.Name)); break;
             }
         }
     }
