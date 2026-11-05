@@ -52,8 +52,17 @@ public sealed partial class World
                 observers[i] = (entry.Observer, entry.SystemIndex, false);
                 activeCombatHitObservers--;
                 faultedCombatHitObservers++;
-                Console.Error.WriteLine($"combat observer '{entry.Observer.GetType().FullName}' disabled for this world: {e.GetType().Name}: {e.Message}");
+                LogObserverFault(entry.Observer, e);
             }
         }
+    }
+
+    /// <summary>A disabled observer's log line: the mod and the name it registered the system under, as the mods' other log lines; else its type.</summary>
+    static void LogObserverFault(ICombatHitObserver observer, Exception e)
+    {
+        string fault = $"{e.GetType().Name}: {e.Message}";
+        if (SimulationExtensions.FactoryOf(observer) is { } factory)
+            Console.Error.WriteLine($"mod       {factory.Owner}: combat observer '{factory.Name}' disabled for this world: {fault}");
+        else Console.Error.WriteLine($"combat observer '{observer.GetType().FullName}' disabled for this world: {fault}");
     }
 }
