@@ -273,6 +273,12 @@ public sealed class CharacterCold
     public float TargetFleeingTime { get; set; }
     /// <summary>Its last path request came back with no way there (set by the <see cref="MovementSystem"/>, taken by the <see cref="PursuitSystem"/>).</summary>
     public bool PathFailed { get; set; }
+    /// <summary>
+    /// How its last walk (<see cref="CharacterTask.GoTo"/>) ended, set by the <see cref="MovementSystem"/>: <see cref="WalkEnd.Finished"/> when it followed its path to the
+    /// last point, <see cref="WalkEnd.Failed"/> when it gave the path up (no way there, blocked, a locked door), <see cref="WalkEnd.None"/> while walking or when another
+    /// system stopped it. What the AI's arrival reads (<c>isAtLocation</c>, docs/game/ai-tasks.md "Planner"). Not saved or hashed.
+    /// </summary>
+    public WalkEnd WalkEnd { get; set; }
     /// <summary>The target's place (height included) when the <see cref="PursuitSystem"/> last asked a path to <see cref="CharacterHot.Goal"/>: the path's end is measured against it, as the target may have moved since. Not saved.</summary>
     public Vector3 PursuitGoal { get; set; }
     /// <summary>

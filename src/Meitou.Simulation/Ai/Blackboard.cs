@@ -459,8 +459,23 @@ public sealed class AiMind
     public IReadOnlyList<AiGoal> RaceGoals { get; init; } = [];
     /// <summary>It was sent walking to a spot and has not arrived.</summary>
     public bool Walking { get; set; }
-    /// <summary>The spot its last walk ended at on its own (the path finished, no fight or flight took it, a path was found): the original counts a finished path as arrival before any distance test (<c>isAtLocation</c> <c>FUN_1405a2450</c>, Verified). Cleared when it walks again.</summary>
+    /// <summary>
+    /// The spot its last walk ended at on its own (the movement followed the path to its last point, <see cref="WalkEnd.Finished"/>, and no fight or flight took it): the original counts a finished
+    /// path as arrival before any distance test (<c>isAtLocation</c> <c>FUN_1405a2450</c>, Verified). Cleared when it walks again; <see cref="ArrivedFrom"/> is where the walk ended.
+    /// </summary>
     public Vector2? ArrivedAt { get; set; }
+    /// <summary>Where it stood when the walk to <see cref="ArrivedAt"/> finished. Not hashed: it follows the position.</summary>
+    public Vector2 ArrivedFrom { get; set; }
+
+    /// <summary>
+    /// How far (units) it may have moved from <see cref="ArrivedFrom"/> and still count as arrived at <see cref="ArrivedAt"/> (engine choice: shoves from its neighbours stay within it,
+    /// another system's walk, a round to a door, does not).
+    /// </summary>
+    public const float ArrivedDrift = 20;
+
+    /// <summary>Its last walk finished at <paramref name="target"/> and it still stands where that walk ended (<see cref="ArrivedDrift"/>).</summary>
+    public bool ArrivedThere(Vector2 target, Vector2 here) =>
+        ArrivedAt == target && Vector2.DistanceSquared(here, ArrivedFrom) <= ArrivedDrift * ArrivedDrift;
     /// <summary>Walks in a row that ended away from the spot (no way there, or interrupted); at <see cref="AiSystem.MaxFailedWalks"/> it gives the spot up.</summary>
     public int FailedWalks { get; set; }
     /// <summary>The home's spots kept failing: it uses <see cref="Post"/> instead until its home changes.</summary>

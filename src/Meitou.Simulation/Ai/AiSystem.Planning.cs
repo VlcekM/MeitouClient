@@ -123,8 +123,8 @@ public sealed partial class AiSystem
         bool At(in PlanTarget t)
         {
             if (t.IsNone) return true;
-            if (world.Characters.Cold(slot)?.Ai?.ArrivedAt is { } arrived && Flat(t.Position) == arrived) return true;   // its walk there ended on its own (isAtLocation)
             var p = Me.Position;
+            if (world.Characters.Cold(slot)?.Ai is { } mind && mind.ArrivedThere(Flat(t.Position), Flat(p))) return true;   // its walk there ended on its own (isAtLocation)
             float slack = t.Kind == Targets.Store ? StoreSlack : t.Kind == Targets.Turret ? TurretSlack : t.Kind == Targets.Work ? WorkReach : system.Settings.PostSlack;
             if (Vector2.DistanceSquared(Flat(p), Flat(t.Position)) > slack * slack) return false;
             // A spot on a floor counts on that floor only (NaN: no floor).

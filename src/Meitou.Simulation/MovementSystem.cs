@@ -332,6 +332,7 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
         cold.OrderMove = false;
         cold.ArriveWithin = 0;
         cold.BlockedRepaths = 0;
+        cold.WalkEnd = WalkEnd.None;
         n.Task = (byte)CharacterTask.GoTo;
         n.Goal = target;
         n.Mode = mode;
@@ -502,6 +503,7 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
         var cold = table.Cold(slot)!;
         cold.PathRequest = 0;
         cold.FollowHeading = Vector2.Zero;
+        cold.WalkEnd = WalkEnd.None;   // stopped from outside: neither arrived nor failed
     }
 
     public void Schedule(World world)
@@ -581,6 +583,7 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
                     if (n.Task == (byte)CharacterTask.GoTo)
                     {
                         LogDropped(world, n, cold, following ? "no path found on asking again (the path it followed is dropped)" : "no path found");
+                        cold.WalkEnd = WalkEnd.Failed;
                         TaskStart.Step(table, slot, CharacterTask.Idle);
                         cold.OrderQueue.Clear();
                     }
@@ -1070,6 +1073,7 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
                 bool replaced = ((MoveFlags)n.Flags & (MoveFlags.NeedPath | MoveFlags.Pending)) != 0;
                 if (!replaced && n.Task == (byte)CharacterTask.GoTo)
                 {
+                    cold.WalkEnd = WalkEnd.Finished;
                     // The move order leaves the queue; a queued move after it (shift + right click) starts: a path to it is asked for next tick.
                     if (!PlayerOrders.Arrived(cold, ref n)) TaskStart.Step(table, i, CharacterTask.Idle);
                 }
@@ -1205,6 +1209,7 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
                             ? $"blocked {cold.ProvisionalBlocked} times on the provisional long-range part (limit {ProvisionalBlockedLimit})"
                             : $"blocked {cold.BlockedRepaths} times on the navmesh part (limit {BlockedRepathLimit})";
                         LogDropped(world, n, cold, $"{why}, waypoint {n.PathCursor} of {cold.Path.Length}, stuck stepping to {x:0}, {z:0}");
+                        cold.WalkEnd = WalkEnd.Failed;
                         TaskStart.Step(table, i, CharacterTask.Idle);
                         cold.OrderQueue.Clear();
                     }

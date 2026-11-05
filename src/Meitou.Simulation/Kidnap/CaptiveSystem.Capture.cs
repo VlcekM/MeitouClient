@@ -227,8 +227,14 @@ public sealed partial class CaptiveSystem
     {
         var table = world.Characters;
         float dt = world.TickSeconds;
-        if (!table.TryResolveNext(j.Captive, out int c) || table.Cold(c) is not { } cc || cc.Medical is not { Dead: false } || !cc.CarriedBy.IsNone || cc.IsImprisoned)
+        if (!table.TryResolveNext(j.Captive, out int c) || table.Cold(c) is not { } cc || cc.Medical is not { Dead: false })
             return End(world, j, CaptiveEventKind.GaveUp);
+        if (!cc.CarriedBy.IsNone || cc.IsImprisoned)
+        {
+            // A capture whose target someone else took (a guard carrying it to jail): left alone for a while, so the next sweep does not send the worker after it again at once (engine choice).
+            if (j.Kind == CaptiveJobKind.Capture) SetWait(givenUp, j.Captive, world.GameHours + Settings.GiveUpHours);
+            return End(world, j, CaptiveEventKind.GaveUp);
+        }
         var to = new Vector2(table.Next[c].Position.X, table.Next[c].Position.Z);
         if (j.Kind == CaptiveJobKind.Shout) return StepShout(world, j, w, to);
         // It got up: a caged one is beaten down first (196 Beat prisoner, Task_KillPrisoner: B list 78 imprisoned, 5 weapon drawn; effect 7 target down) by an armed worker;
