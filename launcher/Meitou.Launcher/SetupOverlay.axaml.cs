@@ -1,4 +1,5 @@
 using Avalonia.Controls;
+using Avalonia.Controls.Documents;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using Meitou.Content;
@@ -73,13 +74,15 @@ public sealed partial class SetupOverlay : UserControl
     {
         if (RendererHint is null) return;
         bool vulkan = MacSupport.VulkanAvailable;
-        string effective = MacSupport.Resolve(config.Renderer);
-        RendererHint.Text = config.Renderer switch
+        string effective = MacSupport.Resolve(config.Renderer) == "metal" ? "Metal" : "Vulkan";
+        string hint = config.Renderer switch
         {
-            "auto" => $"Auto: {(effective == "metal" ? "Metal" : "Vulkan")}" + (vulkan ? " (Vulkan loader found)." : MacSupport.MetalAvailable ? " (no Vulkan loader)." : "."),
+            "auto" => vulkan ? "Auto: {1} (Vulkan loader found)." : MacSupport.MetalAvailable ? "Auto: {1} (no Vulkan loader)." : "Auto: {1}.",
             "metal" => MacSupport.MetalAvailable ? "Metal (native)." : "Metal is not available on this Mac; Auto uses Vulkan.",
             _ => vulkan ? "Vulkan (MoltenVK loader found)." : "Vulkan loader not found; choose Auto/Metal, or install it later in Settings.",
         };
+        // Inlines, not Text: a translation pass would put back the first hint it saw.
+        RendererHint.Inlines = [new Run(LauncherText.Translate(hint, effective))];
     }
 
     async void BrowseKenshi_Click(object? sender, RoutedEventArgs e)

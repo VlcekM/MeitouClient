@@ -68,13 +68,11 @@ public sealed partial class MainWindow : Window
         if (!MacSupport.MetalAvailable && config.Renderer == "metal") config.Renderer = "auto";
         RendererBox.SelectedIndex = config.Renderer switch { "metal" => 1, "vulkan" => 2, _ => 0 };
         RendererBox.SelectionChanged += Renderer_Changed;
-        UpdateRendererHint();
         MetalBudgetRow.IsVisible = OperatingSystem.IsMacOS() && MacSupport.MetalAvailable;
         MetalBudgetHighItem.IsVisible = MacSupport.CanUseHighBudget;
         if (!MacSupport.CanUseHighBudget && config.MetalMemoryBudget == 8120) config.MetalMemoryBudget = 5120;
         MetalBudgetBox.SelectedIndex = config.MetalMemoryBudget switch { 8120 => 2, 6144 => 1, _ => 0 };
         MetalBudgetBox.SelectionChanged += MetalBudget_Changed;
-        UpdateMetalBudgetHint();
         NightlyBox.IsChecked = config.IncludePrereleases;
         AutoUpdateBox.IsChecked = config.AutoUpdateLauncher;
         AutoUpdateBox.IsEnabled = updater.IsInstalled;
@@ -114,6 +112,8 @@ public sealed partial class MainWindow : Window
             LauncherUpdateButton.Content = Tr(updater.IsInstalled ? "Update to {1}" : "Get launcher {1}", version);
             TitleLauncherUpdateText.Text = Tr(updater.IsInstalled ? "Update launcher to {1}" : "Get launcher {1}", version);
         }
+        UpdateRendererHint();
+        UpdateMetalBudgetHint();
     }
 
     // ---- Language: one choice for the game (Kenshi's settings.cfg) and the launcher ----
@@ -342,12 +342,13 @@ public sealed partial class MainWindow : Window
     {
         bool vulkan = MacSupport.VulkanAvailable;
         string effective = RendererLabel(MacSupport.Resolve(config.Renderer));
-        RendererHint.Text = config.Renderer switch
+        string hint = config.Renderer switch
         {
-            "auto" => $"Auto: {effective}" + (vulkan ? " (Vulkan loader found)." : MacSupport.MetalAvailable ? " (no Vulkan loader)." : "."),
+            "auto" => vulkan ? "Auto: {1} (Vulkan loader found)." : MacSupport.MetalAvailable ? "Auto: {1} (no Vulkan loader)." : "Auto: {1}.",
             "metal" => MacSupport.MetalAvailable ? "Metal (native)." : "Metal is not available on this Mac; Auto uses Vulkan.",
             _ => vulkan ? "Vulkan (MoltenVK loader found)." : "Vulkan loader not found. Use Auto/Metal or install it with Setup.",
         };
+        SetText(RendererHint, Tr(hint, effective));
     }
 
     void MetalBudget_Changed(object? sender, SelectionChangedEventArgs e)
@@ -362,12 +363,12 @@ public sealed partial class MainWindow : Window
 
     void UpdateMetalBudgetHint()
     {
-        MetalBudgetHint.Text = config.MetalMemoryBudget switch
+        SetText(MetalBudgetHint, config.MetalMemoryBudget switch
         {
             8120 => "High: keeps the most textures, terrain and objects resident. Best on a 16 GB-or-larger Mac with other memory-heavy apps closed.",
             6144 => "Balanced: more resident detail than Safe, with some headroom for macOS and other apps.",
             _ => "Safe: the conservative default; the guard shortens ranges and evicts caches sooner.",
-        };
+        });
     }
 
     static string RendererLabel(string renderer) => renderer == "metal" ? "Metal" : "Vulkan";

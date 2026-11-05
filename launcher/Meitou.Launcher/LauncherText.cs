@@ -1,4 +1,5 @@
 using Avalonia.Controls;
+using Avalonia.Controls.Templates;
 using Avalonia.LogicalTree;
 using Avalonia.VisualTree;
 using Meitou.Content;
@@ -53,11 +54,30 @@ static class LauncherText
     static bool HoldsData(Control control) => control is ComboBox or ListBox
         or ContentControl { Name: "ReleaseNotes" } or StackPanel { Name: "NewsPanel" } or TextBlock { Name: "ContinueSaveText" };
 
+    /// <summary>Combo boxes whose items the layout writes as labels (the Mac renderer and memory choices), not data like the language list.</summary>
+    static readonly HashSet<string> LabelCombos = ["RendererBox", "MetalBudgetBox"];
+
+    /// <summary>
+    /// Translates the label items of <paramref name="combo"/>. The closed box shows the content its selected item had when chosen, so a new
+    /// selection-box template draws that content in the current language; selecting again would raise the box's change handlers.
+    /// </summary>
+    static void TranslateItems(ComboBox combo, IDictionary<Control, string> originals)
+    {
+        if (combo.Name is not { } name || !LabelCombos.Contains(name)) return;
+        foreach (var item in combo.Items)
+        {
+            if (item is not ComboBoxItem { Content: string content } entry) continue;
+            if (!originals.ContainsKey(entry)) originals[entry] = Source(content);
+            entry.Content = Translate(originals[entry]);
+        }
+        combo.SelectionBoxItemTemplate = new FuncDataTemplate<string>((text, _) => new TextBlock { Text = Translate(text) });
+    }
+
     /// <summary>
     /// Puts every label under <paramref name="root"/> in the active language; <paramref name="originals"/> remembers each control's English
-    /// so a later switch starts from it. Lists, combo boxes, the release notes, the news and the newest save's name hold data, not
-    /// labels, and are skipped, but a placeholder and a tooltip are labels on any of them. A control with no visual children yet (never
-    /// shown) is reached through its logical children.
+    /// so a later switch starts from it. Lists, combo boxes (but the items of <see cref="LabelCombos"/>), the release notes, the news and
+    /// the newest save's name hold data, not labels, and are skipped, but a placeholder and a tooltip are labels on any of them. A control
+    /// with no visual children yet (never shown) is reached through its logical children.
     /// </summary>
     public static void TranslateTree(Control root, IDictionary<Control, string> originals)
     {
@@ -68,7 +88,11 @@ static class LauncherText
             if (!seen.Add(control)) return;
             // A placeholder is a label too, even on a control whose items hold data (a combo box's list, a text box's text).
             if (control is TextBox textBox && textBox.PlaceholderText is { } placeholder) textBox.PlaceholderText = Translate(placeholder);
-            else if (control is ComboBox combo && combo.PlaceholderText is { } hint) combo.PlaceholderText = Translate(hint);
+            else if (control is ComboBox combo)
+            {
+                if (combo.PlaceholderText is { } hint) combo.PlaceholderText = Translate(hint);
+                TranslateItems(combo, originals);
+            }
             if (HoldsData(control)) return;
             if (control is TextBlock text && text.Text is { Length: > 0 } value)
             {

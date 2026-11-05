@@ -2245,6 +2245,36 @@ msgstr "安全：保守的默认值；保护机制会更早缩短距离并清出
 msgid "Auto: Vulkan."
 msgstr "自动：Vulkan。"
 
+msgid "Auto: {1} (Vulkan loader found)."
+msgstr "自动：{1}（已找到 Vulkan 加载器）。"
+
+msgid "Auto: {1} (no Vulkan loader)."
+msgstr "自动：{1}（没有 Vulkan 加载器）。"
+
+msgid "Auto: {1}."
+msgstr "自动：{1}。"
+
+msgid "Metal (native)."
+msgstr "Metal（原生）。"
+
+msgid "Metal is not available on this Mac; Auto uses Vulkan."
+msgstr "这台 Mac 不支持 Metal；自动会使用 Vulkan。"
+
+msgid "Vulkan (MoltenVK loader found)."
+msgstr "Vulkan（已找到 MoltenVK 加载器）。"
+
+msgid "Vulkan loader not found. Use Auto/Metal or install it with Setup."
+msgstr "没有找到 Vulkan 加载器。请选择自动或 Metal，或用安装向导安装它。"
+
+msgid "Vulkan loader not found; choose Auto/Metal, or install it later in Settings."
+msgstr "没有找到 Vulkan 加载器；请选择自动或 Metal，或稍后在设置里安装。"
+
+msgid "Balanced: more resident detail than Safe, with some headroom for macOS and other apps."
+msgstr "平衡：常驻细节比安全档更多，同时给 macOS 和其他应用留出一些余量。"
+
+msgid "High: keeps the most textures, terrain and objects resident. Best on a 16 GB-or-larger Mac with other memory-heavy apps closed."
+msgstr "高：常驻最多的贴图、地形和物体。最适合 16 GB 或更大内存、并已关闭其他占内存应用的 Mac。"
+
 msgid "Adjust ground relief depth."
 msgstr "调整地面浮雕深度。"
 
@@ -2921,6 +2951,11 @@ msgstr "已保存"
 
 msgid "Imported"
 msgstr "已导入"
+
+# The game translates "Loaded" as the ranged-weapon label (已装载); the load notice asks under its own context.
+msgctxt "save notice"
+msgid "Loaded"
+msgstr "已载入"
 
 msgid "Started {1}"
 msgstr "已开始：{1}"
