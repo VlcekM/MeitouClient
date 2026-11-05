@@ -30,6 +30,8 @@ static class CharacterSurface
         vec3 surfaceNormal = vec3(0.0, 1.0, 0.0), surfaceView = vec3(0.0, 0.0, 1.0);
         vec3 strand = vec3(0.0), strandHue = vec3(1.0);   // hair: the strand's direction and the hair's own hue
         float strandGrain = 0.5, strandStrength = 0.0;    // hair: the texture's brightness (it shifts the lobes along the strand) and the highlight's height
+        float clothSheen = 0.0;                           // cloth: the sheen's height (PartMaterial.Sheen, never over the metal the colour map marks)
+        vec3 clothTint = vec3(1.0);
 
         // sin(strand, half vector)^power, the strand tilted by shift along the normal (Kajiya-Kay; Scheuermann's shifted lobes).
         float strandLobe(vec3 h, float shift, float power)
@@ -49,8 +51,20 @@ static class CharacterSurface
             return strandStrength * smoothstep(0.0, 0.25, nl) * (primary * mix(vec3(1.0), strandHue, 0.3) + 0.5 * secondary * strandHue);
         }
 
+        // Cloth: the Charlie sheen (Estevez and Kulla) with Neubelt's visibility (capped: it runs away where light and view both graze), at a fixed roughness of 0.6, in the units of the diffuse term: nothing head-on, a soft
+        // bright edge at grazing angles, tinted by the cloth's own colour.
+        vec3 sheenLight(vec3 l)
+        {
+            float nl = dot(surfaceNormal, l), nv = dot(surfaceNormal, surfaceView);
+            if (clothSheen <= 0.0 || nl <= 0.0 || nv <= 0.0) return vec3(0.0);
+            float nh = clamp(dot(surfaceNormal, normalize(l + surfaceView)), 0.0, 1.0);
+            float d = (2.0 + 1.0 / 0.6) * pow(1.0 - nh * nh, 0.5 / 0.6) / (2.0 * ATMO_PI);
+            float vis = 1.0 / (4.0 * max(nl + nv - nl * nv, 0.25));
+            return clothSheen * clothTint * d * vis * nl * ATMO_PI;
+        }
+
         // What a light adds besides the game's lobes, per unit of its light (the sun's after its shadow, a lamp's radiance).
-        vec3 surfaceSpecular(vec3 l) { return hairLight(l); }
+        vec3 surfaceSpecular(vec3 l) { return hairLight(l) + sheenLight(l); }
 
         vec3 surfaceSun(vec3 sun, float sunScale, vec3 diffuseAlbedo) { return sun * surfaceSpecular(uAtmoLight.xyz); }
 

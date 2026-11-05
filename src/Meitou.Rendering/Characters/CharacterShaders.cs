@@ -227,7 +227,7 @@ static class CharacterShaders
         bool flag(uint f, uint bit) { return (f & bit) != 0u; }
 
         // A clothing "vest" layer drawn on the body (docs/characters.md): the coverage is the vest normal map's alpha (skin: what it leaves bare).
-        void vest(uint d, uint nm, uint c, bool coloured, vec3 shirt, vec2 uv, inout vec3 albedo, inout vec4 normalMap, inout float gloss, inout float skin)
+        void vest(uint d, uint nm, uint c, bool coloured, vec3 shirt, float layerSheen, vec2 uv, inout vec3 albedo, inout vec4 normalMap, inout float gloss, inout float skin, inout float sheen)
         {
             vec4 v = tex(d, uv);
             vec4 vn = tex(nm, uv);
@@ -236,6 +236,7 @@ static class CharacterShaders
             normalMap.wy = mix(normalMap.wy, vn.xy, vn.a);
             gloss = mix(gloss, v.a, vn.a);
             skin *= 1.0 - vn.a;
+            sheen = mix(sheen, layerSheen, vn.a);
         }
 
         // The Meitou skin's sun term in place of the clamped N.L (docs/character-renderer.md "Skin"; SkinScattering): the pre-integrated table at the surface's
@@ -287,6 +288,7 @@ static class CharacterShaders
             bool swizzled = flag(f, 4u);
             bool cut = false;
             float skin = 0.0;                         // how much of the fragment is bare skin (the Meitou skin switch)
+            float sheen = 0.0;                        // how much of it is cloth (chars2): for shading other than hair, diffuseChannel holds PartMaterial.Sheen
 
             if (m.shading == 2u)
             {
@@ -328,9 +330,9 @@ static class CharacterShaders
                 albedo = body.rgb;
                 gloss = body.a;
                 // vestCount: a bit per worn layer whose textures are resident (one still streaming in is left out, not drawn black).
-                if ((m.vestCount & 1u) != 0u) vest(m.tex[9], m.tex[10], m.tex[11], flag(f, 2048u), m.shirtColour.rgb, uv, albedo, nm, gloss, skin);
-                if ((m.vestCount & 2u) != 0u) vest(m.tex[12], m.tex[13], m.tex[14], flag(f, 4096u), m.shirtColour.rgb, uv, albedo, nm, gloss, skin);
-                if ((m.vestCount & 4u) != 0u) vest(m.tex[15], m.tex[16], m.tex[17], flag(f, 8192u), m.shirtColour.rgb, uv, albedo, nm, gloss, skin);
+                if ((m.vestCount & 1u) != 0u) vest(m.tex[9], m.tex[10], m.tex[11], flag(f, 2048u), m.shirtColour.rgb, m.diffuseChannel.x, uv, albedo, nm, gloss, skin, sheen);
+                if ((m.vestCount & 2u) != 0u) vest(m.tex[12], m.tex[13], m.tex[14], flag(f, 4096u), m.shirtColour.rgb, m.diffuseChannel.y, uv, albedo, nm, gloss, skin, sheen);
+                if ((m.vestCount & 4u) != 0u) vest(m.tex[15], m.tex[16], m.tex[17], flag(f, 8192u), m.shirtColour.rgb, m.diffuseChannel.z, uv, albedo, nm, gloss, skin, sheen);
                 swizzled = true;                          // character normals: X in alpha, Y in green
             }
             else
@@ -354,6 +356,7 @@ static class CharacterShaders
                 // its own mesh (the StaticObject template) keeps 1.
                 gloss = flag(f, 16384u) ? 0.0 : d.a * m.shirtColour.w;
                 if (flag(f, 16384u) && flag(f, 1024u)) metal = cm.b;
+                sheen = m.diffuseChannel.x * (1.0 - metal);
             }
             if (flag(f, 1048576u))
             {
@@ -411,6 +414,8 @@ static class CharacterShaders
             gloss = clamp(gloss, 0.0, 1.0);
             if (surfaceOn && m.shading == 2u) hairSurface(n, v, albedo, gloss, flag(f, {{Strands}}u));
             surfaceNormal = n; surfaceView = v;
+            clothSheen = surfaceOn ? sheen * 0.25 : 0.0;
+            clothTint = sqrt(clamp(albedo, 0.0, 1.0));
             vec3 colour;
             giInterior = vInterior != 0u;
             skinGeometric = smoothNormal; skinCurvature = curvature; skinShare = skin; skinAlbedo = albedo;

@@ -105,6 +105,8 @@ internal sealed class PartMaterial
     public bool Worn;
     /// <summary>A person's hair or beard: the strand highlights of the <c>chars2</c> switch.</summary>
     public bool Strands;
+    /// <summary>The cloth sheen of the <c>chars2</c> switch (<see cref="ClothSheen"/>): x a worn item's; a body's vest layers in x, y, z. Sent in the record's <c>DiffuseChannel</c>, which only hair reads.</summary>
+    public Vector4 Sheen;
     /// <summary>A person's body (not an animal's): its bare skin may scatter light under the <c>skin</c> switch (<see cref="CharacterShaders.Skin"/>), by its race's choice
     /// (<see cref="CharacterRenderer.SkinRaces"/>, else <see cref="SkinDefault"/>).</summary>
     public bool Skin, SkinDefault;
@@ -888,11 +890,18 @@ internal sealed class CharacterContent : IDisposable
             m.Tex[CharacterShaders.SlotVest + 3 * i + 2] = Texture(layer.ColourMap, true);
             m.VestCount = i + 1;
             m.VestColoured[i] = layer.ColourMap is not null && layer.Colour is not null;
+            m.Sheen[i] = ClothSheen(layer.Record);
         }
         m.Swizzled = true;
         BodyBlood(m, c);
         return m;
     }
+
+    /// <summary>
+    /// How much of a sheen a worn item takes: there is no cloth mask, so the item's own class decides, ARMOUR <c>material type</c> (docs/game/economy.md): CLOTH all,
+    /// LEATHER a third (a broad gloss more than a sheen), CHAIN and METAL_PLATE none, as anything that is not ARMOUR. The shader leaves out what the colour map marks as metal.
+    /// </summary>
+    static float ClothSheen(GameRecord item) => item.Type != FcsRecordType.ARMOUR ? 0 : item.GetInt("material type") switch { 0 => 1, 1 => 0.35f, _ => 0 };
 
     PartMaterial ItemMaterial(CharacterAppearance c, CharacterPart part, string path, LoadedMesh loaded)
     {
@@ -920,6 +929,7 @@ internal sealed class CharacterContent : IDisposable
         m.Shading = CharacterShaders.ShadeItem;
         bool worn = part.Mode == AttachMode.SharedSkeleton;
         m.Worn = worn;
+        if (worn) m.Sheen.X = ClothSheen(item);
         // Clothing: MATERIAL_SPECS_CLOTHING from "material" (female: "material female" if set), likeliest first; dye the part's colour
         // (CharacterPart.Colour: the instance's, else the wearer's scheme, none for "dont colorise").
         var refs = item.GetReferences(c.Female && item.GetReferences("material female").Count > 0 ? "material female" : "material");

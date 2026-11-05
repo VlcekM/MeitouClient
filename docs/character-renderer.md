@@ -71,6 +71,10 @@ crown, where the highlight fades. **Unknown**: how often a style's real strands 
 (`CharacterShaders.Strands`). Every hair-mode fragment takes its normal on the side the camera sees (port of KenshiNative's "Hair on the side the camera sees": cards and
 inward-facing meshes went dark under GI and AO).
 
+**Cloth**: a Charlie sheen (roughness 0.6, Neubelt's visibility), in the diffuse's units, tinted √albedo, at 0.25 × the amount; its visibility is capped at 1, as uncapped and at 0.5 it reached 2 × a dark cloth's diffuse (computed over a sweep of angles); now at most 0.46, 0.27, 0.19 × the diffuse at albedo 0.1, 0.3, 0.6. Data holds no cloth mask, and worn items are matte (`glossMult` 0), so the texture's alpha says nothing. What separates them is the item: ARMOUR
+`material type` (CLOTH 1, LEATHER 0.35, CHAIN and METAL_PLATE 0, not ARMOUR 0), per worn mesh and per vest layer (`CharacterContent.ClothSheen`), mods included; `1 - metal`
+(the colour map's blue, dyed items) takes out the metal fittings of a cloth item. **Unknown**: fittings on an undyed cloth item take the sheen. Sun and lamps only, no sky term.
+
 ## Content, LOD and memory
 
 `CharacterContent` owns buffers/textures/morph arena; worker fetching/preparation precedes render

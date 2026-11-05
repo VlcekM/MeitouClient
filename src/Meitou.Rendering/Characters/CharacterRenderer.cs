@@ -1122,7 +1122,8 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         r.SkinTone = new Vector4(m.SkinTone, has[CharacterShaders.SlotBlendNormal] ? m.MuscleBlend : 0);
         r.HairColour = new Vector4(m.HairColour, m.MipmapBias);
         r.HairAlpha = m.HairAlpha; r.HairMult = m.HairMult; r.BeardAlpha = m.BeardAlpha;
-        r.DiffuseChannel = m.DiffuseChannel; r.AlphaChannel = m.AlphaChannel;
+        r.DiffuseChannel = m.Shading == CharacterShaders.ShadeHair ? m.DiffuseChannel : m.Sheen;
+        r.AlphaChannel = m.AlphaChannel;
         r.Colour1 = m.Colour1; r.Colour2 = m.Colour2;
     }
 
