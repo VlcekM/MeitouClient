@@ -129,6 +129,19 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
     }
     bool skinShading = true;
 
+    /// <summary>The <c>chars2</c> shading (<see cref="CharacterSurface"/>, off by default). A change redraws the portraits.</summary>
+    public bool Chars2
+    {
+        get => chars2;
+        set
+        {
+            if (chars2 == value) return;
+            chars2 = value;
+            portraitShown.Clear();
+        }
+    }
+    bool chars2;
+
     /// <summary>The skin scattering table's bindless index while the Skin switch is on, else 0 (a severed limb's skin: <see cref="DebrisRenderer"/>).</summary>
     public uint SkinTable => SkinShading ? skinScattering.Index : 0;
 
@@ -1085,6 +1098,7 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         if (m.Worn) flags |= CharacterShaders.Worn;
         if (m.Skin && SkinFor(m)) flags |= CharacterShaders.Skin;
         if (m.VertexColoured) flags |= CharacterShaders.VertexColoured;
+        if (m.Strands) flags |= CharacterShaders.Strands;
         if (m.Bloody && has[CharacterShaders.SlotBlood]) flags |= CharacterShaders.Bloody | (m.BloodFull ? CharacterShaders.BloodFull : 0);
         if (m.Wound) flags |= CharacterShaders.Wound | (m.Mechanical ? CharacterShaders.Mechanical : 0);
         // Textures assigned but not resident yet: a hair's diffuse (its cut-out), a clipped item's normal map, the head's maps.

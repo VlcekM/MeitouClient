@@ -36,7 +36,9 @@ static class CharacterShaders
         // With Bloody: the whole mesh at the full amount (a stump) instead of its parts' damage (the instance carries them).
         BloodFull = 1 << 21,
         // A headless body's neck cap (NeckCap, Meitou decapitation): the wound; with Mechanical, a robot race's metal socket.
-        Wound = 1 << 22, Mechanical = 1 << 23;
+        Wound = 1 << 22, Mechanical = 1 << 23,
+        // A person's hair or beard (not an animal's fur): strand highlights (the chars2 switch, CharacterSurface).
+        Strands = 1 << 24;
     // Instance flag (CharInstance.Flags; bit 0 interior, 12-15 hidden limbs, 16-17 the boots' side, 18-27 hidden parts): a headless body (Meitou decapitation): its head
     // vertices (CharacterContent.HeadBit) are hidden.
     public const uint Headless = 1u << 28;
@@ -51,7 +53,7 @@ static class CharacterShaders
     const string PushMembers = """
             vec3 flatColour;
             uint depthIndex;
-            vec4 fill;          // rgb; a unused
+            vec4 fill;          // rgb; a: the chars2 switch (CharacterSurface)
             uint skinLut;       // the skin scattering table's bindless index (SkinScattering), 0: the switch is off
         """;
 
@@ -135,7 +137,8 @@ static class CharacterShaders
             vNormal = n * aNormal;
             vTangent = vec4(n * aTangent.xyz, aTangent.w);
             vUv = aUv;
-            vColour = aColour;   // an icon mesh's own vertex colours (a body's carry the morph slot and limb bits: only icons read them)
+            // An icon mesh's own vertex colours (a body's carry the morph slot and limb bits); elsewhere the mesh's up axis in the world, the hair's strand (CharacterSurface).
+            vColour = view.fogDistance < 0.0 && view.fogDistance > -1.5 ? aColour : vec4(n[1], 0.0);
             // character.hlsl: x = height along the mesh's Y, y = angle round it (atan2(normal.x, normal.z) / 2pi), z = the angle shifted by half a turn (the wrap), w = normal.z.
             float turn = atan(aNormal.x, aNormal.z) / 3.14159265359 * 0.5;
             vBlood = vec4(aPosition.y, turn, turn > 0.0 ? turn - 0.5 : turn + 0.5, aNormal.z);
@@ -207,7 +210,7 @@ static class CharacterShaders
 
     static string F(float v) => v.ToString("0.0########", System.Globalization.CultureInfo.InvariantCulture);
 
-    public static string Fragment(bool lateDepth = false) => "#version 450\n" + NativeShaders.Prelude(PushMembers) + "#define LAMP_SKIN\n" + NativeShaders.AtmosphereFunctions + Structs + Lookup + $$"""
+    public static string Fragment(bool lateDepth = false) => "#version 450\n" + NativeShaders.Prelude(PushMembers) + "#define LAMP_SKIN\n" + CharacterSurface.Prototypes + CharacterSurface.Lighting() + Structs + Lookup + $$"""
         in vec3 vWorld;
         in float vCurvature;
         in vec3 vNormal;
@@ -258,6 +261,7 @@ static class CharacterShaders
         // The lamps' diffuse term (LampShaders, LAMP_SKIN): the same skin as the sun's, from what main sets before lighting (no skin: plain N.L).
         vec3 skinGeometric = vec3(0.0, 1.0, 0.0), skinAlbedo = vec3(1.0);
         float skinCurvature = 0.0, skinShare = 0.0;
+        {{CharacterSurface.Functions}}
         vec3 lampSkinDiffuse(vec3 n, vec3 l) { return skinDiffuse(n, skinGeometric, l, skinCurvature, skinShare, skinAlbedo); }
 
         void main()
@@ -268,6 +272,7 @@ static class CharacterShaders
             float curvature = vCurvature;
             if (vHidden > 0.0) discard;
             if (pc.depthIndex != 0u) { fragColour = vec4(pc.flatColour, 1.0); return; }
+            surfaceOn = pc.fill.a > 0.5 && (view.fogDistance >= 0.0 || view.fogDistance < -2.5);   // the chars2 switch: never the game's own stage or an icon
             CharMaterial m = materials.items[vMaterial];
             uint f = m.flags;
             if (flag(f, 32768u)) discard;   // its cut-out is still streaming in: a solid card would show
@@ -290,6 +295,7 @@ static class CharacterShaders
                 float brightness = dot(t, m.diffuseChannel);
                 albedo = brightness * m.hairColour.rgb;
                 gloss = brightness * m.shirtColour.w;
+                strandGrain = brightness;
             }
             else if (m.shading == 1u)
             {
@@ -403,6 +409,8 @@ static class CharacterShaders
             // Lit as the world's other meshes are (Shaders.MeshFragment): the game's deferred lighting with the game's sky, else the simple model.
             vec3 v = normalize(view.eye - vWorld);
             gloss = clamp(gloss, 0.0, 1.0);
+            if (surfaceOn && m.shading == 2u) hairSurface(n, v, albedo, gloss, flag(f, {{Strands}}u));
+            surfaceNormal = n; surfaceView = v;
             vec3 colour;
             giInterior = vInterior != 0u;
             skinGeometric = smoothNormal; skinCurvature = curvature; skinShare = skin; skinAlbedo = albedo;
@@ -414,6 +422,7 @@ static class CharacterShaders
             {
                 vec3 l = normalize(view.lightDir);
                 colour = stageLight(albedo, n, v, l, gloss, view.fogDistance < -2.5, skinDiffuse(n, smoothNormal, l, curvature, view.fogDistance < -2.5 ? skin : 0.0, albedo));
+                if (surfaceOn) colour += surfaceSpecular(l) * 0.3;   // the stage light's 0.6, its exposure 0.5
             }
             else if (view.fogDistance < 0.0)
             {
@@ -449,6 +458,7 @@ static class CharacterShaders
                 float spec = pow(max(dot(n, h), 0.0), 8.0 + 56.0 * gloss) * gloss * 0.5;
                 vec3 sunLight = vec3(1.0, 0.97, 0.92);
                 colour = albedo * (ambient + diffSkin * sunLight) + spec * diff * sunLight;
+                if (surfaceOn) colour += surfaceSpecular(l) * sunLight;
             }
             // A presentation fill (CharacterRenderer.Fill, 0 in play): ambient light, stronger towards the silhouette as a back light rims it.
             if (view.fogDistance > 0.0) colour += albedo * pc.fill.rgb * (1.0 + 2.0 * pow(1.0 - max(dot(n, v), 0.0), 3.0));
@@ -538,7 +548,7 @@ struct CharacterPush
 {
     public Vector3 FlatColour;
     public uint DepthIndex;
-    /// <summary>The colour pass's fill light (<see cref="CharacterRenderer.Fill"/>; w unused).</summary>
+    /// <summary>The colour pass's fill light (<see cref="CharacterRenderer.Fill"/>; w 1 while the <c>chars2</c> switch is on).</summary>
     public Vector4 Fill;
     /// <summary>The skin scattering table's bindless index (<see cref="SkinScattering"/>), 0 while the <c>skin</c> switch is Faithful.</summary>
     public uint SkinLut;

@@ -58,6 +58,19 @@ N·L. Faithful: push `skinLut` 0, unchanged.
 Limits: the sun shadow is not scattered, so the band past the terminator ends at the shadow edge; no back-lit
 translucency (ears).
 
+### Hair, cloth, skin and eyes (Meitou `chars2` switch, off by default)
+
+Not run on a GPU: look and cost **Unknown**. `pc.fill.a` carries the switch; `CharacterSurface` holds the GLSL and adds to `kenshiLight` and `lampLight`, for the
+character fragment only, what each light gains (`surfaceSun`, `surfaceSpecular`): the sun's after its shadow, a lamp's as is, the same function for both. World, Meitou stage
+and portraits; never the game's stage or the icons. Metal has no switch.
+
+**Hair**: two Kajiya-Kay lobes (Scheuermann's shifted pair, standing in for Marschner's R and TRT) over the game's GGX: a sharp near-white one, a wide one in the hair's own
+hue, both scaled by the game's gloss (brightness times the attachment's `specular`, so a matte style stays matte) and broken up by shifting them with the texture's brightness.
+The strand direction is the mesh's up axis laid on the surface (`vColour` outside icons), the only direction known without the UV layout: down the sides, out from the
+crown, where the highlight fades. **Unknown**: how often a style's real strands disagree (buns, swept hair). Animals keep the game's lobe: fur does not fall down
+(`CharacterShaders.Strands`). Every hair-mode fragment takes its normal on the side the camera sees (port of KenshiNative's "Hair on the side the camera sees": cards and
+inward-facing meshes went dark under GI and AO).
+
 ## Content, LOD and memory
 
 `CharacterContent` owns buffers/textures/morph arena; worker fetching/preparation precedes render

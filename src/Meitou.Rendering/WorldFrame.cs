@@ -102,6 +102,8 @@ sealed class WorldOptions
     public bool CharacterLod = true;
     /// <summary>The <c>skin</c> switch's Meitou side: pre-integrated scattering on people's bare skin (<c>CharacterRenderer.SkinShading</c>).</summary>
     public bool SkinShading = true;
+    /// <summary>The <c>chars2</c> switch's Meitou side, off by default: hair, cloth, skin and eye shading (<c>CharacterRenderer.Chars2</c>).</summary>
+    public bool Chars2;
     /// <summary>The <c>interiorlamps</c> switch's Meitou side: interior lamps shine by day too (<c>WorldLamps.InteriorAllDay</c>).</summary>
     public bool InteriorLamps = true;
     /// <summary>Supersampled item icons (the <c>icons</c> switch's Meitou side, <c>CharacterRenderer.EnhancedIcons</c>); false: drawn as the game draws them.</summary>
@@ -336,7 +338,8 @@ sealed class WorldOptions
         () => o.MeitouIcons, v => o.MeitouIcons = v,
         () => o.MeitouBlood, v => o.MeitouBlood = v,
         () => o.MeitouBloodSurfaces, v => o.MeitouBloodSurfaces = v,
-        () => o.MeitouTracers, v => o.MeitouTracers = v);
+        () => o.MeitouTracers, v => o.MeitouTracers = v,
+        () => o.Chars2, v => o.Chars2 = v);
 
     /// <summary>The world options from the command line (a <c>--view</c> expanded in place first); null for <c>--help</c>.</summary>
     public static WorldOptions? Parse(string[] args)
@@ -958,7 +961,7 @@ static partial class WorldFrame
         CreateShadows(b, gpu);
 
         if (o.Crowd > 0 && scene.Database is not null) gpu.Characters = Characters.CrowdHarness.Create(context, install, scene, assets, o, interactive);
-        if (gpu.Characters is { } crowd) (crowd.GeneratedLod, crowd.SkinShading) = (o.CharacterLod, o.SkinShading);
+        if (gpu.Characters is { } crowd) (crowd.GeneratedLod, crowd.SkinShading, crowd.Chars2) = (o.CharacterLod, o.SkinShading, o.Chars2);
         gpu.DebugShadows = o.DebugShadows;
 
         b.Step("gi");
@@ -1382,7 +1385,8 @@ static partial class WorldFrame
             () => gpu()?.Characters?.EnhancedIcons ?? o.MeitouIcons, v => { o.MeitouIcons = v; if (gpu()?.Characters is { } c) c.EnhancedIcons = v; },
             () => gpu()?.Decals?.Meitou ?? o.MeitouBlood, v => { o.MeitouBlood = v; if (gpu()?.Decals is { } d) d.Meitou = v; },
             () => gpu()?.Decals?.Surfaces ?? o.MeitouBloodSurfaces, v => { o.MeitouBloodSurfaces = v; if (gpu()?.Decals is { } d) d.Surfaces = v; },
-            () => o.MeitouTracers, v => o.MeitouTracers = v);
+            () => o.MeitouTracers, v => o.MeitouTracers = v,
+            () => gpu()?.Characters?.Chars2 ?? o.Chars2, v => { o.Chars2 = v; if (gpu()?.Characters is { } c) c.Chars2 = v; });
 
     /// <summary>
     /// The Tab settings panel over <paramref name="g"/>'s renderers: the sliders (the viewer's clock, window and the render settings), the Faithful /

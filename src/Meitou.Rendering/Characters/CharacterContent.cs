@@ -103,6 +103,8 @@ internal sealed class PartMaterial
     public bool ClipOnNormalAlpha, Dyed, DoubleSided;
     /// <summary>Worn on the body's skeleton (the original's Skinned template): matte (its glossMult is 0).</summary>
     public bool Worn;
+    /// <summary>A person's hair or beard: the strand highlights of the <c>chars2</c> switch.</summary>
+    public bool Strands;
     /// <summary>A person's body (not an animal's): its bare skin may scatter light under the <c>skin</c> switch (<see cref="CharacterShaders.Skin"/>), by its race's choice
     /// (<see cref="CharacterRenderer.SkinRaces"/>, else <see cref="SkinDefault"/>).</summary>
     public bool Skin, SkinDefault;
@@ -901,6 +903,7 @@ internal sealed class CharacterContent : IDisposable
         {
             // Hair and beards: brightness and alpha are channels of the diffuse texture.
             m.Shading = CharacterShaders.ShadeHair;
+            m.Strands = c.Animal is null;
             m.GlossMult = item.GetFloat("specular");
             m.MipmapBias = item.GetFloat("mipmap bias");
             string? diffuse = Tex(item, "texture map" + f) ?? Tex(item, "texture map");
