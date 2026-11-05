@@ -360,6 +360,10 @@ sealed partial class GameHost
         return look;
     }
 
+    /// <summary>Whether the look with the operator's tool (<see cref="HeldLook"/>) is made and prepared: then it is the one drawn.</summary>
+    bool HeldPrepared(Meitou.Data.Characters.CharacterAppearance look, string? tool, Meitou.Rendering.Characters.CharacterRenderer characters) =>
+        tool is not null && heldLooks.TryGetValue(look, out var byTool) && byTool.TryGetValue(tool, out var held) && characters.IsPrepared(held);
+
     /// <summary>
     /// Whether the character's place changed meaning between the two ticks: a whole ragdoll moves it to its root body the tick it starts and back onto the ground the tick
     /// it gets up (docs/game/ragdolls.md "Per frame"), and its pose is placed there. Such a tick is drawn where it ends, not between: from the last place, the body sank by its
