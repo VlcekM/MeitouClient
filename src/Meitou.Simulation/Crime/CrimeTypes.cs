@@ -42,15 +42,15 @@ public static class CrimeTable
         _ => 500,
     };
 
-    /// <summary>The game's name of a crime (its name table; code 9 is a second "Terrorism").</summary>
-    public static string Name(CrimeCode code) => code switch
+    /// <summary>The game's name of a crime (its name table; code 9 is a second "Terrorism"), in the player's language: the original shows its own name table through the catalogue.</summary>
+    public static string Name(CrimeCode code) => Loc.Tr(code switch
     {
         CrimeCode.Terrorism2 => "Terrorism",
         CrimeCode.EscapingPrison => "Escaping Prison",
         CrimeCode.CropTheft => "Crop Theft",
         CrimeCode.UniformTheft => "Uniform Theft",
         _ => code.ToString(),
-    };
+    });
 
     /// <summary>A bounty of this amount or more never expires ("Notorious").</summary>
     public const int Notorious = 10000;

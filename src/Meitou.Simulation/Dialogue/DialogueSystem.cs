@@ -463,8 +463,11 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
         RefreshCharacterTrade(world);
         if (open is not { } c) { view = null; return; }
         view = new ConversationView(c.Npc, c.Player, c.Speaker, NameOf(world, c.Speaker.IsNone ? c.Npc : c.Speaker), NameOf(world, c.Player), c.Text,
-            [.. c.Choices.Select(x => x.Text)], [.. c.Log], world.Player.Money);
+            [.. c.Choices.Select(x => Shown(x.Text))], [.. c.Log], world.Player.Money);
     }
+
+    /// <summary>The engine's own markers are shown in the player's language; a line from the data is already the mod's own text.</summary>
+    static string Shown(string text) => text == "[Leave]" ? Loc.Tr(text) : text;
 
     public ConversationView? PublishConversation() => view;
     public DialogueRequest? PublishRequest() => request;

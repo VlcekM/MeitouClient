@@ -66,7 +66,7 @@ sealed partial class PlayerInterface
         // The choices are drawn as buttons, so the player box's template scroll bar would only be an empty track.
         foreach (var bar in faithfulScreens.Layout("dialogue").Find("PlayerDialog")?.Children.Where(w => w.Type == "ScrollBar") ?? []) b.HiddenWidgets.Add(bar);
         b.NativeScroll.Add("PlayerDialog");   // the choices are drawn against the box, not scrolled by its canvas
-        b.Text["MoneyLabelText"] = "Money:";
+        b.Text["MoneyLabelText"] = Loc.Tr("Money:");
         b.Text["MoneyAmountText"] = "c." + talk.PlayerMoney.ToString("N0", CultureInfo.InvariantCulture);
     }
 

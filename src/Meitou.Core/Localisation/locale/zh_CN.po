@@ -2727,3 +2727,6 @@ msgstr "不可用"
 
 msgid "unavailable (see the log), plain swapchain in use"
 msgstr "不可用（见日志），正在使用普通交换链"
+
+msgid "[Leave]"
+msgstr "[离开]"
