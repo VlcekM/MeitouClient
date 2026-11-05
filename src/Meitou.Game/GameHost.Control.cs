@@ -90,6 +90,8 @@ sealed partial class GameHost
         devConsole.Tap = (text, kind) => { output.Add(text); failed |= kind == DevConsole.Kind.Error; };
         try { devConsole.Execute(command); }
         finally { devConsole.Tap = null; }
+        // A paused game takes no tick: apply a debug give now so the reply (and a build right after) already sees the item.
+        if (!failed && controlDir is not null && (command == "give" || command.StartsWith("give ", StringComparison.Ordinal))) session.ApplyPausedCommandsNow();
         string result = string.Join(" | ", output);
         if (!failed && shotWaitId == id && shotPath is not null) return;   // the screenshot's frame writes this one
         if (controlReplyDeferred) { controlData = null; return; }   // wait-for answers later

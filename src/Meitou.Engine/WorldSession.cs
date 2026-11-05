@@ -149,6 +149,19 @@ public sealed class WorldSession : IDisposable
     }
 
     /// <summary>
+    /// While the clock is paused: applies the interface commands queued so far now (<see cref="World.ApplyPausedInterfaceCommands"/>) and publishes the snapshot, so the control channel's reply already shows their effect.
+    /// Returns false (nothing done) while the game runs; its next tick takes them.
+    /// </summary>
+    public bool ApplyPausedCommandsNow()
+    {
+        EnsureNotRunning();
+        if (!Simulation.IsPaused) return false;
+        SettleAhead();
+        World.ApplyPausedInterfaceCommands();
+        return true;
+    }
+
+    /// <summary>
     /// Starts the next simulation ticks on a thread of their own, ahead of the clock (docs/simulation.md "Tick ahead"), while the host draws the world from the
     /// shown snapshots; <see cref="EndTickAhead"/> waits for them. As many run as a frame has owed lately (at least one, at most the frame budget), so at 2x and 5x
     /// a frame's ticks overlap the draw too. Nothing may touch <see cref="World"/> in between. Does nothing while paused or with ticks already ahead.
