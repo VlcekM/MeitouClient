@@ -215,13 +215,14 @@ marks each bone **pinned** (kinematic, follows animation) or **simulated** and c
 
 The carry bone is a skeleton bone, not a body name: its body is the one the ragdoll file attaches to that bone (**Observed**, Pet Dog: bone `Bip01`, its ragdoll body is the unnamed "Actor"). Meitou matches by bone (`RagdollSystem.Simulates`); matching the name pinned nothing and the whole dog fell to the ground under its carrier (issue #176, parity s15-f24).
 
-**Verified** (disassembly of `ScythePhysicsT::vfunc_2` `FUN_1407d4cd0`) the carried animal's pin each frame: the pinned body (controller `+0x130`) is made kinematic and set to orientation
+**Verified** (disassembly of `ScythePhysicsT::vfunc_2` `FUN_1407d4cd0`) the carried animal's pin each frame: the pinned actor (controller `+0x130`) is made kinematic and set to orientation
 carrier node rotation x the attach bone's derived rotation x its binding-pose inverse (the bone's turn from its binding pose), position the attach bone's world position
 (`FUN_1405b1c50`, the carrier's position when zero) + the bone's world rotation x the vector at controller `+0x160`. The attach (`vfunc_15` `FUN_1407d5290`) subtracts from that vector a
 per-bone vector of the carrier's `AnimationClass` (`FUN_1405b83a0`, map entry `+0x28`, zero when the bone is missing); its starting value and meaning are **Unknown**.
-Meitou (`RagdollSystem.AnimalAttach`): places the animal's node so that its carry bone's body has exactly that pose, with the vector taken as zero (engine choice), so the body sits on the
-carrier's `L UpperArm`; the rest hangs. Headless probe (Bonedog on a Greenlander, issue #307): the dog's `Bip01` 1.7 units from the shoulder bone, head and front paws hanging 4 to 7 below it;
-with the human rule it stood 6 above the shoulder, over the head.
+Meitou (`RagdollSystem.AnimalAttach`): places the animal's node so that its carry bone's actor has exactly that pose (the actor has no rotation of its own and sits at the bone's
+binding position, [phs](../formats/phs.md); Meitou's body is its shape, placed on it), with the vector taken as zero (engine choice); the rest hangs. Headless probe (Bonedog on a
+Greenlander, issue #307): the dog's `Bip01` on the shoulder bone, its head level with it out to the carrier's left, the front paws 8 to 11 below; with the human rule it stood 6 above
+the shoulder, over the head.
 
 **Verified** (decompile of `FUN_1405b8720`, the `+0x5a` carry flag branch): a carried human keeps its animated "carry me" pose and only the two forearms and the head are simulated; every other bone,
 legs included, is pinned to the animation. The carried body's scene node is **not** moved to a ragdoll body (`FUN_1407d3c00` takes the root-body position only for WHOLE or a carried animal): the

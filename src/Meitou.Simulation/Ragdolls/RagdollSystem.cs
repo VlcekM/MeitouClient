@@ -422,10 +422,14 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
         try
         {
             PoseDerived(scratch, setup, cold);
+            // The pin places the actor, which has no rotation of its own and sits at its bone's binding position; the body is its shape, at the shape's pose on it.
+            var bind = definition.Bodies[b].Bind;
+            var onActor = new RigidTransform(bind.Position - setup.Rig.BindPosition[bone] * scale, bind.Rotation);
+            var target = onActor.Then(new RigidTransform(at, rotation));
             var boneInModel = new RigidTransform(scratch.DerivedPosition[bone] * scale, scratch.DerivedRotation[bone]);
             var body = definition.Bodies[b].BoneInBody.Inverse().Then(boneInModel);
-            var turn = Quaternion.Normalize(rotation * Quaternion.Inverse(body.Rotation));
-            return new CarryAttach(at - Vector3.Transform(body.Position, turn), turn);
+            var turn = Quaternion.Normalize(target.Rotation * Quaternion.Inverse(body.Rotation));
+            return new CarryAttach(target.Position - Vector3.Transform(body.Position, turn), turn);
         }
         finally { setup.Rig.Return(scratch); }
     }
