@@ -2739,9 +2739,6 @@ msgstr "主菜单"
 msgid "Start Meitou {1} at the main menu"
 msgstr "在主菜单启动 Meitou {1}"
 
-msgid "Client"
-msgstr "客户端"
-
 msgid "Load the newest save, {1} ({2}); its mods must be the enabled ones"
 msgstr "载入最新存档 {1}（{2}）；它用的模组必须正好是当前启用的这些"
 
@@ -2767,7 +2764,7 @@ msgid "not in the save: {1}"
 msgstr "不在该存档中：{1}"
 
 msgid "Launch arguments have {1}, which picks the start itself: remove it to continue a save."
-msgstr "启动参数里有 {1}，开局由它自己决定；要续档请先去掉它。"
+msgstr "启动参数里有 {1}，开局由它自己决定；要继续存档请先去掉它。"
 
 msgid "From save"
 msgstr "从存档"
@@ -2791,7 +2788,7 @@ msgid "No mods found"
 msgstr "没有找到模组"
 
 msgid "Set the Kenshi folder in Settings to list its mods."
-msgstr "在设置里指定 Kenshi 目录，才会列出它的模组。"
+msgstr "在设置里指定 Kenshi 文件夹，才会列出它的模组。"
 
 msgid "Code mods"
 msgstr "代码模组"
@@ -2850,7 +2847,6 @@ msgstr "Vulkan（MoltenVK）"
 msgid "How to get Kenshi on this Mac"
 msgstr "如何在这台 Mac 上获取 Kenshi"
 
-
 # ---- the status lines the launcher writes while it reads and moves the versions ----
 
 msgid "Wait for the download to finish first."
@@ -2860,4 +2856,4 @@ msgid "Moving installed versions…"
 msgstr "正在移动已安装的版本…"
 
 msgid "Choose a full path for the install folder."
-msgstr "请给安装文件夹选一个完整的路径。"
+msgstr "请为安装目录选择完整路径。"
