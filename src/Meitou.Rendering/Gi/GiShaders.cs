@@ -529,6 +529,167 @@ static class GiShaders
         }
         """;
 
+    const string CascadeAnchor = "vec4 giCascade(int c, vec3 p, vec3 n, vec3 v, float push)";
+    const string TileAnchor = "ivec2 tile = ivec2(colX, (c * GI_N + colZ) * GI_NY + layer);";
+    const string SleepAnchor = "if (giAsleep(positions[stateSlot], world, stateSlot)) return;   // the whole workgroup: the blend skips it too";
+
+    /// <summary>
+    /// A relocated probe's offset from its grid place (docs/render-gi.md "Probe relocation"): three bytes of half a cell, 127 none, as one exact
+    /// integer in <c>uGiBase</c>'s rows below the column bases, one texel per atlas tile (<see cref="ProbeOffsetPublish"/> writes them).
+    /// </summary>
+    const string OffsetLookup = """
+        vec3 giProbeOffset(ivec2 tile, float s, float sy)
+        {
+            uint code = uint(texelFetch(uGiBase, ivec2(tile.x, GI_CASCADES * GI_N + tile.y), 0).r);
+            return (vec3(float(code & 255u), float((code >> 8) & 255u), float(code >> 16)) / 127.0 - 1.0) * 0.5 * vec3(s, sy, s);
+        }
+
+        """;
+
+    /// <summary>
+    /// <paramref name="shader"/> (any text holding <see cref="ProbeSampling"/>) reading probes at their relocated places while <c>uGiGrid[2c + 1].w</c>
+    /// is set. The text of <see cref="ProbeSampling"/> stays as it is so that programs that never read relocated probes do not change.
+    /// </summary>
+    public static string Relocating(string shader)
+    {
+        if (!shader.Contains(CascadeAnchor, StringComparison.Ordinal)) return shader;
+        if (!shader.Contains(TileAnchor, StringComparison.Ordinal)) throw new InvalidOperationException("Relocating: no probe tile line");
+        return shader.Replace(CascadeAnchor, OffsetLookup + CascadeAnchor, StringComparison.Ordinal)
+            .Replace(TileAnchor, TileAnchor + "\n                    if (g1.w > 0.5) probe += giProbeOffset(tile, s, sy);", StringComparison.Ordinal);
+    }
+
+    /// <summary>The probe trace with its rays leaving from the relocated places, the bounces reading those places too.</summary>
+    public static string ProbeTrace(int rays, bool relocate)
+    {
+        string trace = ProbeTrace(rays);
+        if (!relocate) return trace;
+        if (!trace.Contains(SleepAnchor, StringComparison.Ordinal)) throw new InvalidOperationException("ProbeTrace: no sleep line");
+        return Relocating(trace).Replace(SleepAnchor,
+            SleepAnchor + "\n            world += giProbeOffset(ivec2(colX, (c * GI_N + colZ) * GI_NY + layer), g0.z, g0.w);", StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Every probe once a frame while relocation is on: a probe whose tile holds another place (it scrolled) drops its offset; every offset goes into
+    /// this frame slot's <c>uGiBase</c> rows, where the surfaces and the trace read it (<see cref="Relocating"/>).
+    /// </summary>
+    public static readonly string ProbeOffsetPublish = $$"""
+        #version 460
+        layout(local_size_x = 64) in;
+        const int GI_N = {{GiProbes.Columns}}, GI_NY = {{GiProbes.Layers}}, GI_CASCADES = {{GiProbes.Cascades}};
+        layout(set = 0, binding = 0, std430) readonly buffer ProbeState { vec4 positions[]; };
+        layout(set = 0, binding = 1, std140) uniform Params { vec4 uGiParams; vec4 uGiGrid[4]; };
+        layout(set = 0, binding = 2, r32f) uniform image2D uBases;
+        layout(set = 0, binding = 3, std430) buffer ProbeOffsets { vec4 offsets[]; };
+
+        void main()
+        {
+            uint probe = gl_GlobalInvocationID.x;
+            int layer = int(probe % uint(GI_NY)), rest = int(probe / uint(GI_NY));
+            int wx = rest % GI_N, wz = (rest / GI_N) % GI_N, c = rest / (GI_N * GI_N);
+            if (c >= GI_CASCADES) return;
+            vec4 g0 = uGiGrid[c * 2], g1 = uGiGrid[c * 2 + 1];
+            int colX = (int(g1.x) + wx) % GI_N, colZ = (int(g1.y) + wz) % GI_N;
+            float base = imageLoad(uBases, ivec2(colX, c * GI_N + colZ)).r;
+            vec3 world = vec3(g0.x + float(wx) * g0.z, base + (float(layer) + 0.5) * g0.w, g0.y + float(wz) * g0.z);
+            uint stateSlot = uint((c * GI_N + colZ) * GI_N + colX) * uint(GI_NY) + uint(layer);
+            vec4 last = positions[stateSlot];
+            if (last.w < 0.5 || distance(last.xyz, world) > 0.5) offsets[stateSlot] = vec4(0.0);
+            vec3 share = clamp(offsets[stateSlot].xyz / (0.5 * vec3(g0.z, g0.w, g0.z)), -1.0, 1.0);
+            uvec3 code = uvec3(round((share + 1.0) * 127.0));
+            imageStore(uBases, ivec2(colX, GI_CASCADES * GI_N + (c * GI_N + colZ) * GI_NY + layer), vec4(float(code.x | (code.y << 8) | (code.z << 16))));
+        }
+        """;
+
+    /// <summary>
+    /// The probe relocation (RTXGI's rule, docs/render-gi.md "Probe relocation"), before the blend while the probes' states are the ones the trace read. Inside
+    /// geometry (over a quarter of the rays hit back faces): through the closest back face. Too close to a front face: away from it, towards the
+    /// farthest open direction when that lies on the other side. Clear of everything: back towards the grid place, at most a quarter of the wanted clearance
+    /// an update, without crossing the closest surface. A move past 0.45 of a cell is not made: such a probe stays invalid (the blend's back-face count).
+    /// </summary>
+    public static string ProbeRelocate(int rays) => $$"""
+        #version 460
+        layout(local_size_x = 1) in;
+        const int GI_N = {{GiProbes.Columns}}, GI_NY = {{GiProbes.Layers}}, RAYS = {{rays}};
+        layout(set = 0, binding = 0, std430) readonly buffer RayResults { vec4 rays[]; };
+        layout(set = 0, binding = 1, std430) readonly buffer ProbeState { vec4 positions[]; };
+        layout(set = 0, binding = 2, std140) uniform Params
+        {
+            vec4 uGiParams;
+            vec4 uGiGrid[4];
+            mat4 rotation;
+            vec4 origin;
+            vec4 sunLight;
+            vec4 lightDir;
+            vec4 maps;
+            vec4 albedo;
+            vec4 rayLength;
+        };
+        layout(set = 0, binding = 3) uniform sampler2D uGiBase;
+        layout(set = 0, binding = 4, std430) readonly buffer ProbeList { uint probeList[]; };
+        layout(set = 0, binding = 5, std430) buffer ProbeOffsets { vec4 offsets[]; };
+        {{Sleep}}
+        const float BACK_SHARE = 0.25, MAX_OFFSET = 0.45;
+
+        vec3 fibonacci(uint i, uint n)
+        {
+            float k = float(i) + 0.5;
+            float y = 1.0 - 2.0 * k / float(n);
+            float r = sqrt(max(1.0 - y * y, 0.0));
+            float a = k * 2.39996323;
+            return vec3(cos(a) * r, y, sin(a) * r);
+        }
+        vec3 rayDir(uint r) { return normalize(mat3(rotation) * fibonacci(r, uint(RAYS))); }
+
+        // The offset this update wants; offset itself when it wants no move.
+        vec3 relocated(uint entry, vec3 offset, float clearance)
+        {
+            uint backs = 0u;
+            int back = -1, near = -1, far = -1;
+            float backDistance = 1e9, nearDistance = 1e9, farDistance = -1.0;
+            for (uint r = 0u; r < uint(RAYS); r++)
+            {
+                float t = rays[entry * uint(RAYS) + r].w;
+                if (t < 0.0)
+                {
+                    backs++;
+                    t *= -5.0;   // the trace stores a back face at -0.2 t
+                    if (t < backDistance) { backDistance = t; back = int(r); }
+                    continue;
+                }
+                if (t < nearDistance) { nearDistance = t; near = int(r); }
+                if (t > farDistance) { farDistance = t; far = int(r); }
+            }
+            if (back >= 0 && float(backs) > BACK_SHARE * float(RAYS))
+                return offset + rayDir(uint(back)) * (backDistance + 0.5 * clearance);
+            if (near >= 0 && nearDistance < clearance)
+            {
+                // The farthest ray is the closest one when the probe sees one surface: no way to tell where to go.
+                if (dot(rayDir(uint(near)), rayDir(uint(far))) > 0.0) return offset;
+                return offset + rayDir(uint(far)) * min(farDistance, 0.5 * clearance);
+            }
+            float reach = length(offset);
+            float home = min(min(nearDistance - clearance, reach), 0.25 * clearance);
+            return reach > 1e-3 && home > 0.0 ? offset - offset / reach * home : offset;
+        }
+
+        void main()
+        {
+            uint entry = gl_GlobalInvocationID.x, probe = probeList[entry] & 0x3FFFFFFFu;
+            int layer = int(probe % uint(GI_NY)), rest = int(probe / uint(GI_NY));
+            int wx = rest % GI_N, wz = (rest / GI_N) % GI_N, c = rest / (GI_N * GI_N);
+            vec4 g0 = uGiGrid[c * 2], g1 = uGiGrid[c * 2 + 1];
+            int colX = (int(g1.x) + wx) % GI_N, colZ = (int(g1.y) + wz) % GI_N;
+            float base = texelFetch(uGiBase, ivec2(colX, c * GI_N + colZ), 0).r;
+            vec3 world = vec3(g0.x + float(wx) * g0.z, base + (float(layer) + 0.5) * g0.w, g0.y + float(wz) * g0.z);
+            uint stateSlot = uint((c * GI_N + colZ) * GI_N + colX) * uint(GI_NY) + uint(layer);
+            if (giAsleep(positions[stateSlot], world, stateSlot)) return;   // the trace wrote no rays for it
+            vec3 spacing = vec3(g0.z, g0.w, g0.z);
+            vec3 offset = offsets[stateSlot].xyz, wanted = relocated(entry, offset, 0.2 * min(g0.z, g0.w));
+            vec3 share = wanted / spacing;
+            if (dot(share, share) < MAX_OFFSET * MAX_OFFSET) offsets[stateSlot] = vec4(wanted, 0.0);
+        }
+        """;
+
     /// <summary>
     /// The debug view (<c>--gi-debug</c>): per pixel of the scene depth, the surface's position (the depth back through the projection) and a
     /// normal from the depth's own slope, then rays into <see cref="GiScene"/>'s structure. Mode 1: one cosine-weighted ray, coloured by its hit

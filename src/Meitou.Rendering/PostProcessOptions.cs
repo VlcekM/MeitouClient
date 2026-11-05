@@ -28,6 +28,11 @@ public sealed class PostOptions
     /// <summary>Meitou switch (<c>fog</c>; docs/render-post.md "Fog"): the particle sprites fade out where they meet a surface instead of cutting into it; Faithful
     /// draws them hard-edged, as the game's particle materials are but its mist and steam (which fade; not drawn so yet).</summary>
     public bool MeitouFog = true;
+    /// <summary>Meitou switch (<c>gihybrid</c>; docs/render-gi.md "Hybrid GI"), off by default: nothing it holds has been seen on a GPU. <c>--gi-hybrid</c> picks among its parts.</summary>
+    public bool GiHybrid;
+    /// <summary>The parts of <see cref="GiHybrid"/>: <c>relocate</c>, probes moved out of geometry.</summary>
+    public bool GiRelocate = true;
+    public bool GiRelocating => GiHybrid && GiRelocate;
     /// <summary>How much of the haze in shadow goes, before the sun's share of the light (1: all of it; the sky's ambient light keeps the rest).</summary>
     public float ShaftStrength = 0.8f;
     /// <summary>How much the sky (which no haze covers) darkens behind shadowed air, relative to a surface at the grid's end.</summary>
@@ -121,6 +126,22 @@ public sealed class PostOptions
         ParticleDivisor = other.ParticleDivisor; Exposure = other.Exposure; ToneMap = other.ToneMap; ToneMix = other.ToneMix; Grade = other.Grade;
         HeatHazeStrength = other.HeatHazeStrength; NightGradeStrength = other.NightGradeStrength; BloomStrength = other.BloomStrength;
         MeitouHeatHaze = other.MeitouHeatHaze; ToneMapping = other.ToneMapping; NightGrade = other.NightGrade; Bloom = other.Bloom;
+        GiHybrid = other.GiHybrid; GiRelocate = other.GiRelocate;
+    }
+
+    /// <summary><c>--gi-hybrid &lt;parts&gt;</c>: the switch on with these parts only (comma list: <c>relocate</c>).</summary>
+    void SetGiHybrid(string parts)
+    {
+        GiRelocate = false;
+        foreach (var part in parts.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+        {
+            switch (part)
+            {
+                case "relocate": GiRelocate = true; break;
+                default: throw new ArgumentException($"unknown --gi-hybrid part '{part}' (relocate)");
+            }
+        }
+        GiHybrid = true;
     }
 
     /// <summary>Handles one command-line option; false when it is not a post-processing one.</summary>
@@ -133,6 +154,7 @@ public sealed class PostOptions
             case "--no-fxaa": Fxaa = false; return true;
             case "--smaa": Smaa = true; return true;
             case "--no-heat-haze": HeatHaze = false; return true;
+            case "--gi-hybrid": SetGiHybrid(next()); return true;
             case "--bloom": BloomStrength = Math.Clamp(float.Parse(next(), CultureInfo.InvariantCulture), 0, 0.25f); Bloom = BloomStrength > 0; return true;
             case "--upscaler":
                 Upscale.Explicit = true;
@@ -149,7 +171,9 @@ public sealed class PostOptions
         $"ssao {(Ssao ? "on" : "off")}, shafts {(LightShafts ? $"{ShaftStrength:0.##} ({ShaftCells}x{ShaftSlices}x{ShaftSamples})" : "off")}, exposure x{Exposure:0.##}, tonemap {ToneMapUsed.ToString().ToLowerInvariant()}{(ToneMapUsed == ToneMapOperator.Hybrid ? $" {ToneMix:0.##}" : "")}, " +
         $"grade {(GradeUsed ? $"saturation {Saturation:0.##} contrast {Contrast:0.##}" : "off")}, night grade {(NightGradeAmount > 0 ? NightGradeAmount.ToString("0.##", CultureInfo.InvariantCulture) : "off")}, " +
         $"bloom {(BloomAmount > 0 ? BloomAmount.ToString("0.###", CultureInfo.InvariantCulture) : "off")}, " +
-        $"upscaler {Upscale.Describe()}";
+        $"gi hybrid {(GiHybrid ? GiHybridParts : "off")}, upscaler {Upscale.Describe()}";
+
+    string GiHybridParts => GiRelocate ? "relocate" : "none";
 }
 
 /// <summary>The tone curve of the composite (docs/render-post.md "Tone map and grading").</summary>

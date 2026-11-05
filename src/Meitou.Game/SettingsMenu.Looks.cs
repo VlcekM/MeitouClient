@@ -116,7 +116,7 @@ sealed partial class SettingsMenu
             {
                 "Interior lamps" => "Advanced",
                 "Anti-aliasing" or "Weather particles" => "Hidden",
-                "Shadows" or "Indirect light" or "Indoor GI" or "Ambient occlusion" or "Light shafts" or "Planetshine" or WorldFrame.FifthCascadeSwitch => "Lighting",
+                "Shadows" or "Indirect light" or "Indoor GI" or "Hybrid GI" or "Ambient occlusion" or "Light shafts" or "Planetshine" or WorldFrame.FifthCascadeSwitch => "Lighting",
                 "Haze" or "Night air" or "Night sky" or "Clouds" or "Cloud shadows" or "Cloud shadows in fog" or "Heat haze" or "Fog" => "Sky & weather",
                 "Tone map and grade" or "Night grading" or "Dithering" or WorldFrame.BloomSwitch => "Colour",
                 "Skin" or "Character levels" or "Item icons" => "Characters",
@@ -140,7 +140,7 @@ sealed partial class SettingsMenu
             {
                 "Interior lamps" => "Advanced",
                 "Anti-aliasing" or "Weather particles" => "Hidden",
-                "Shadows" or "Indirect light" or "Indoor GI" or "Ambient occlusion" or "Light shafts" or "Planetshine" => "Light",
+                "Shadows" or "Indirect light" or "Indoor GI" or "Hybrid GI" or "Ambient occlusion" or "Light shafts" or "Planetshine" => "Light",
                 "Haze" or "Night air" or "Night sky" or "Clouds" or "Cloud shadows" or "Cloud shadows in fog" or "Heat haze" or "Fog" => "Sky",
                 "Tone map and grade" or "Night grading" or "Dithering" or WorldFrame.BloomSwitch => "Colour",
                 "Water" => "Water",
@@ -171,7 +171,7 @@ sealed partial class SettingsMenu
     /// </summary>
     internal static string? ImpactOf(string label) => label switch
     {
-        "Indirect light" or "Clouds" or "Shadows" or WorldFrame.ObjectDistanceSlider or "Foliage draw distance x" or "Grass draw distance x"
+        "Indirect light" or "Hybrid GI" or "Clouds" or "Shadows" or WorldFrame.ObjectDistanceSlider or "Foliage draw distance x" or "Grass draw distance x"
             or WorldFrame.ShadowDistanceSlider or "Large foliage range (F6 Meitou)" or WorldFrame.WaterReflectionSlider => "High impact",
         "Ambient occlusion" or "Light shafts" or "Water" or "Ground parallax" or "Ground displacement (tessellation)" or "Ground displacement distance (m)"
             or "Ground parallax distance (m)" or WorldFrame.ShadowMapSlider or "Shadow filter 0-2 (Meitou; 0 low-end)" or "Shadow cascade 5 (Meitou)"

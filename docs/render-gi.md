@@ -90,6 +90,23 @@ per-fragment specular-occlusion term. Strong depth/normal discontinuities need r
 Surface bit9 marks interiors; signed low-resolution depth preserves that class (0 empty, negative
 interior). Upsampling rejects the other class so the gain cannot bleed onto outdoor surfaces.
 
+## Hybrid GI
+
+`gihybrid` (Meitou switch, **off by default**, Graphics > Lighting > Hybrid GI). `--gi-hybrid <relocate>` turns it on with
+the listed parts only. Vulkan only. Look and cost **Unknown**: none of this has run on a GPU.
+
+**Probe relocation** (`relocate`; RTXGI's rule, `GiShaders.ProbeRelocate`, needs the resolve). Offsets stay in world units per atlas
+tile, in `offsets`; relocation reads the frame's rays before the blend. Over a quarter back faces: through the closest back face, half the
+clearance past it. A front face nearer than the clearance (0.2 of the smaller spacing): towards the farthest hit, half the clearance, when
+that lies across from the closest one. Clear: back towards the grid place by at most a quarter of the clearance an update
+(RTXGI goes all the way; single random-rotation rays make that jitter), never past the closest hit. A move past 0.45 of a cell is dropped, and that
+probe stays invalid through the blend's own count; a sleeping probe keeps its place. History is kept across a move, and a scrolled tile drops its offset.
+`GiShaders.ProbeOffsetPublish` writes three bytes (half a cell, 127 none) as one exact integer into the frame slot's `uGiBase`, in the rows below
+the column bases, and `uGiGrid[2c+1].w` says they are valid: no new binding or frame constant. `GiShaders.Relocating` patches the reads into the
+trace, the resolve and the programs that keep reading the probes themselves (`WithAlbedo(inShader: true)`), so the other world
+shaders and `ProbeSampling` keep their text; the patched programs carry one uniform test per probe while off.
+The per-fragment path (`--gi-resolve 0`) and the gi-reflection bench do not read offsets, so relocation runs only with the resolve.
+
 ## Performance and verification
 
 `gi-top-reuse`, `gi-rays`, `gi-far`, `gi-top-trace`, `gi-terrain-refit`, `gi-lazy-scene`,
@@ -118,4 +135,3 @@ Random-ray occupancy previously replaced alpha with0/1 each update, causing visi
 - **Compaction** of the object structures, if the memory grows with longer ranges.
 - **Probe update cost.** The fixed part (full barriers; the update could run on an async compute queue beside the shadow pass) and
   a cheaper bounce lookup in the trace (no visibility test at hits).
-- **Probe relocation.** DDGI moves probes out of geometry instead of only marking them invalid. In towns many probes sit inside walls.

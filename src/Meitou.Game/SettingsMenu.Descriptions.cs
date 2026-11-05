@@ -77,6 +77,7 @@ sealed partial class SettingsMenu
         "Foliage levels" => "Use generated simpler meshes for distant foliage.",
         "Indirect light" => "Use light probes for bounced and ambient lighting.",
         "Indoor GI" => "Bounced light indoors too.",
+        "Hybrid GI" => "Experimental: light probes move out of walls.",
         "Tone map and grade" => "Use hybrid tone mapping and scene colour grading.",
         "Light shafts" => "Let shadows shape the light scattered through haze.",
         "Heat haze" => "Use Meitou's reduced heat distortion strength.",

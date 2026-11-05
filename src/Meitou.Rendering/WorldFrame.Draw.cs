@@ -102,7 +102,11 @@ static partial class WorldFrame
         // The GI resolve while the probes light the world: the scene targets carry the albedo target, the lit fragments write it.
         bool giResolve = gpu.GiResolve > 0 && gpu.GiActive && gpu.Probes is { Enabled: true, Shade: true };
         if (gpu.Post is { } giPost) giPost.GiResolve = giResolve ? gpu.GiResolve : 0;
-        if (gpu.Probes is { } giProbes) giProbes.Resolve = giResolve;
+        if (gpu.Probes is { } giProbes)
+        {
+            giProbes.Resolve = giResolve;
+            giProbes.Relocate = giResolve && post.Options.GiRelocating;
+        }
         post.Begin(f.Width, f.Height);
         if (post is PostProcess { Unallocated: true })
         {

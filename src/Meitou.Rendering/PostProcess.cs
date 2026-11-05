@@ -94,7 +94,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     readonly CloudMotionPass cloudMotionPass;
     readonly TaaPass taaPass;
     readonly FogPass fogPass;
-    GiResolvePass? giResolvePass;   // made the first time the GI resolve runs
+    readonly GiResolvePass?[] giResolvePasses = new GiResolvePass?[2];   // made the first time the GI resolve runs, by whether it reads relocated probes
     GiApplyPass? giApplyPass;
     readonly ParticleDepthPass particleDepthPass;
     readonly ParticleSoftDepthPass particleSoftDepthPass;
@@ -287,7 +287,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         }
     }
 
-    sealed class GiResolvePass(GpuContext gpu) : GiPass(gpu, Gi.GiResolveShaders.Resolve, "post gi resolve");
+    sealed class GiResolvePass(GpuContext gpu, bool relocate) : GiPass(gpu, Gi.GiResolveShaders.ResolveFor(relocate), "post gi resolve");
 
     sealed class GiApplyPass : GiPass
     {
@@ -1018,7 +1018,8 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     {
         if (GiResolve <= 0 || giAlbedo is null || giLow is null || sceneColour is null || !haveScene) return;
         MarkScene();
-        var r = giResolvePass ??= new GiResolvePass(Gpu);
+        bool relocate = Options.GiRelocating;
+        var r = giResolvePasses[relocate ? 1 : 0] ??= new GiResolvePass(Gpu, relocate);
         var a = giApplyPass ??= new GiApplyPass(Gpu);
         float tanY = MathF.Tan(fovNow * 0.5f);
         var rot = viewRotation;
@@ -1647,7 +1648,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         Hiz?.Dispose();
         foreach (var p in new FullscreenProgram[] { ssao, ssaoMask, blur, luminancePass, adaptPass, compositePass, fxaaPass, hazePass, velocityPass, cloudMotionPass, taaPass, fogPass, particleDepthPass, particleSoftDepthPass, particleCompositePass, particleCoveragePass }) p.P.Dispose();
         smaaPasses.Dispose();
-        giResolvePass?.P.Dispose();
+        foreach (var pass in giResolvePasses) pass?.P.Dispose();
         giApplyPass?.P.Dispose();
         aoApplyPass?.P.Dispose();
         flowTexture?.Dispose();

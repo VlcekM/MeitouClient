@@ -36,7 +36,7 @@ static partial class GiResolveShaders
         {
             int line = body.IndexOf('\n');
             if (line < 0 || !body.StartsWith("#version", StringComparison.Ordinal)) throw new InvalidOperationException("WithAlbedo: no #version line");
-            body = body[..(line + 1)] + "#define GI_IN_SHADER\n" + body[(line + 1)..];
+            body = GiShaders.Relocating(body[..(line + 1)] + "#define GI_IN_SHADER\n" + body[(line + 1)..]);
         }
         return body + $$"""
 
@@ -109,6 +109,9 @@ static partial class GiResolveShaders
             fragColour = vec4((gi.rgb - sky) * share * transmittance, interior ? -z : z);
         }
         """;
+
+    /// <summary><see cref="Resolve"/> for the frame's GI options: reading relocated probes (docs/render-gi.md "Probe relocation").</summary>
+    public static string ResolveFor(bool relocate) => relocate ? GiShaders.Relocating(Resolve) : Resolve;
 
     /// <summary>
     /// The resolve over the scene (blend one, one; red, green and blue): per pixel that takes the probes, its four nearest low texels with their
