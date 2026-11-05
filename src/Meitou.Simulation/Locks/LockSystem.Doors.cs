@@ -219,7 +219,7 @@ public sealed partial class LockSystem
         if (n.Task == (byte)CharacterTask.GoTo) AtWork(world, s);
         player.DoorTarget = null;
         if (door.Motion is DoorMotion.Open or DoorMotion.Opening) { if (door.Motion == DoorMotion.Open) FixtureRegistry.CloseDoor(door); }
-        else if (door.Lock is { EffectivelyLocked: true }) world.Post($"{c.Name}: It's locked.");
+        else if (door.Lock is { EffectivelyLocked: true }) Say(world, c, "It's locked.");
         else FixtureRegistry.OpenDoor(door);
     }
 
@@ -319,7 +319,7 @@ public sealed partial class LockSystem
                     // Task_OpenDoor fails at a locked door for anyone, the owner too (docs/game/locks.md "Doors").
                     if (away > LockedReach || !Crosses(n.Position, c.Path, n.PathCursor, s.Spot, legs: 1)) return;
                     TaskStart.Stand(table, slot);
-                    if (c.IsPlayer) s.World.Post($"{c.Name}: It's locked.");
+                    if (c.IsPlayer) Say(s.World, c, "It's locked.");
                     return;
                 }
                 if (!Crosses(n.Position, c.Path, n.PathCursor, s.Spot, legs: 2)) return;

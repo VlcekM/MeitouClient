@@ -2913,3 +2913,74 @@ msgstr "路线图里没有列出任何系统。"
 
 msgid "Thanks: your report is on its way to the roadmap."
 msgstr "谢谢：你的报告正在发往路线图。"
+
+# ---- messages the code builds at run time (saves, crime, arrests, locks, trade): {1} holes, the game's terms and spacing ----
+
+msgid "Saved"
+msgstr "已保存"
+
+msgid "Imported"
+msgstr "已导入"
+
+msgid "Started {1}"
+msgstr "已开始：{1}"
+
+msgid "Save failed: {1}"
+msgstr "保存失败：{1}"
+
+msgid "Loaded; the save was made with {1} mod(s) not loaded now (listed in the messages)"
+msgstr "已载入；该存档用到{1}个当前未加载的模组（名单见消息日志）"
+
+msgid "Loaded; the save was made with mods not loaded now: {1}"
+msgstr "已载入；该存档用到当前未加载的模组：{1}"
+
+msgid "Not enough money: the bail is c.{1}."
+msgstr "钱不够：保释金为{1}开币。"
+
+msgid "{1} paid a bail of c.{2} for {3}"
+msgstr "{1}为{3}支付了{2}开币保释金"
+
+msgid "{1}: no free cage nearby"
+msgstr "{1}：附近没有空笼子"
+
+msgid "{1} could not put the captive in the cage"
+msgstr "{1}没能把俘虏关进笼子"
+
+msgid "{1} is after the bounty on {2}!"
+msgstr "{1}盯上了{2}的赏金！"
+
+msgid "{1} is arresting {2}!"
+msgstr "{1}正在逮捕{2}！"
+
+msgid "{1} paid a fine of c.{2} to {3}; the bounty is cleared"
+msgstr "{1}向{3}缴纳了{2}开币罚款；赏金已撤销"
+
+msgid "{1} cannot pay the fine of c.{2}"
+msgstr "{1}付不起{2}开币的罚款"
+
+msgid "{1} has been imprisoned by {2}"
+msgstr "{1}被{2}关进了监狱"
+
+msgid "{1} found no free cage for {2}"
+msgstr "{1}找不到关押{2}的空笼子"
+
+msgid "{1} is no longer wanted by {2}"
+msgstr "{1}不再被{2}悬赏"
+
+msgid "{1} put {2} on {3}"
+msgstr "{1}给{3}戴上了{2}"
+
+msgid "{1} already wears something in that slot"
+msgstr "{1}的那个部位已经戴着东西了"
+
+msgid "{1}: {2}"
+msgstr "{1}：{2}"
+
+msgid "{1} got out of the cage"
+msgstr "{1}从笼子里出来了"
+
+msgid "{1} bought {2} for c.{3}"
+msgstr "{1}花{3}开币买下了{2}"
+
+msgid "{1} sold {2} for c.{3}"
+msgstr "{1}以{3}开币卖出了{2}"

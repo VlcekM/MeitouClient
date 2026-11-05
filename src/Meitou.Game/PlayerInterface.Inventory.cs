@@ -353,8 +353,7 @@ sealed partial class PlayerInterface
                 }
                 if (sale && session.CurrentSnapshot.Trade?.Held is { FenceOdds: { } odds })
                 {
-                    int caught = 100 - (int)MathF.Floor(odds * 100 + 0.5f);
-                    Confirm("FENCING ITEM", $"You have a {caught}% chance of getting caught selling this stolen item.\nFence it anyway?", Send);
+                    Confirm("FENCING ITEM", FenceQuestion(odds), Send);
                     UpdateMenuPause();
                     return;
                 }

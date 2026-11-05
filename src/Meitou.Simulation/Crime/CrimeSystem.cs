@@ -622,7 +622,7 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
             ledger.Remove(e);
             ticks--;
             Note(world, CrimeEventKind.Expired, slot, CrimeCode.None, e.Faction, e.Amount, CharacterId.None);
-            if (c.IsPlayer) world.Post($"{c.Name} is no longer wanted by {e.FactionName}");
+            if (c.IsPlayer) world.Post(Loc.Tr("{1} is no longer wanted by {2}", c.Name, e.FactionName));
         }
         if (ledger.Count == 0) c.Bounties = null;
     }
