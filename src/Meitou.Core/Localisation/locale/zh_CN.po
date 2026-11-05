@@ -2727,3 +2727,126 @@ msgstr "不可用"
 
 msgid "unavailable (see the log), plain swapchain in use"
 msgstr "不可用（见日志），正在使用普通交换链"
+
+# ---- the launcher's 1.6.0 texts: Continue, mods from a save, code mods, the update rows ----
+
+msgid "Continue"
+msgstr "继续"
+
+msgid "Main menu"
+msgstr "主菜单"
+
+msgid "Start Meitou {1} at the main menu"
+msgstr "在主菜单启动 Meitou {1}"
+
+msgid "Client"
+msgstr "客户端"
+
+msgid "Load the newest save, {1} ({2}); its mods must be the enabled ones"
+msgstr "载入最新存档 {1}（{2}）；它用的模组必须正好是当前启用的这些"
+
+msgid "No save to continue."
+msgstr "没有可继续的存档。"
+
+msgid "Could not read the last save: {1}"
+msgstr "无法读取最近的存档：{1}"
+
+msgid " Continuing '{1}'."
+msgstr " 正在继续「{1}」。"
+
+msgid "The save '{1}' has no mod list."
+msgstr "存档「{1}」没有模组列表。"
+
+msgid "The save '{1}' was made with other mods ({2}); Mods > From save applies its list."
+msgstr "存档「{1}」是用其他模组（{2}）创建的；用「模组 > 从存档」可以套用它的列表。"
+
+msgid "not enabled: {1}"
+msgstr "未启用：{1}"
+
+msgid "not in the save: {1}"
+msgstr "不在该存档中：{1}"
+
+msgid "Launch arguments have {1}, which picks the start itself: remove it to continue a save."
+msgstr "启动参数里有 {1}，开局由它自己决定；要续档请先去掉它。"
+
+msgid "From save"
+msgstr "从存档"
+
+msgid "Mods from a save"
+msgstr "从存档取模组"
+
+msgid "Take the mod list and load order a save was made with"
+msgstr "套用某个存档创建时的模组列表与加载顺序"
+
+msgid "Take the mods and their load order from this save:"
+msgstr "从这个存档套用模组及其加载顺序："
+
+msgid "Mods of the save '{1}' applied (not saved yet)."
+msgstr "已套用存档「{1}」的模组（尚未保存）。"
+
+msgid "Could not read the save '{1}': {2}"
+msgstr "无法读取存档「{1}」：{2}"
+
+msgid "No mods found"
+msgstr "没有找到模组"
+
+msgid "Set the Kenshi folder in Settings to list its mods."
+msgstr "在设置里指定 Kenshi 目录，才会列出它的模组。"
+
+msgid "Code mods"
+msgstr "代码模组"
+
+msgid "Code mod: runs C# code of its own once allowed"
+msgstr "代码模组：允许后会运行它自己的 C# 代码"
+
+msgid "Choose which code mods may run their own C# code; the others load as data only"
+msgstr "选择哪些代码模组可以运行自己的 C# 代码；其余的只当作数据加载"
+
+msgid "Trust all"
+msgstr "全部信任"
+
+msgid "Data only all"
+msgstr "全部仅数据"
+
+msgid "Code mods: {1} allowed, {2} data only."
+msgstr "代码模组：允许 {1} 个，仅数据 {2} 个。"
+
+msgid "These mods run C# code of their own in the game, with your user's rights, like any program you install. Meitou cannot sandbox them. Ticked mods may run their code; the others load as data only."
+msgstr "这些模组会在游戏里运行自己的 C# 代码，权限与你的用户账户相同，和你安装的任何程序一样。Meitou 无法隔离它们。勾选的模组可以运行代码，其余只当作数据加载。"
+
+msgid "Latest"
+msgstr "最新"
+
+msgid "Latest (update to {1})"
+msgstr "最新（可更新到 {1}）"
+
+msgid "Update to {1}"
+msgstr "更新到 {1}"
+
+msgid "Update launcher to {1}"
+msgstr "更新启动器到 {1}"
+
+msgid "Install v{1} (skipped)"
+msgstr "安装 v{1}（已跳过）"
+
+msgid "Auto (recommended)"
+msgstr "自动（推荐）"
+
+msgid "Safe — 5120 MB (recommended)"
+msgstr "安全 — 5120 MB（推荐）"
+
+msgid "Balanced — 6144 MB"
+msgstr "平衡 — 6144 MB"
+
+msgid "High — 8120 MB (16 GB Macs)"
+msgstr "高 — 8120 MB（16 GB 内存的 Mac）"
+
+msgid "Metal (native)"
+msgstr "Metal（原生）"
+
+msgid "Vulkan (MoltenVK)"
+msgstr "Vulkan（MoltenVK）"
+
+msgid "How to get Kenshi on this Mac"
+msgstr "如何在这台 Mac 上获取 Kenshi"
+
