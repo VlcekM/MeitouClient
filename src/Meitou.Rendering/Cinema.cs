@@ -520,7 +520,8 @@ sealed class Cinema(Func<WorldCamera> camera, Func<float> getHour, Action<float>
     static string Describe(CameraShot s) =>
         $"eye {s.Eye.X:0}, {s.Eye.Y:0}, {s.Eye.Z:0}, yaw {Degrees(s.Yaw):0}, pitch {Degrees(s.Pitch):0}, lens {Degrees(s.FieldOfView):0} deg{Lens(s)}, {WorldFrame.TimeText(s.Hour)}";
 
-    static string Lens(CameraShot s) => (s.Focus is { } focus ? $", focus {focus:0}" : "") + (s.Aperture is { } aperture ? $", f/{aperture:0.0}" : "");
+    static string Lens(CameraShot s) =>
+        (s.Focus is { } focus ? $", focus {focus:0}" : "") + (s.Aperture is { } aperture ? $", f/{aperture:0.0}" : "");
 
     static void Say(string text) => Console.WriteLine($"cinema    {text}");
 

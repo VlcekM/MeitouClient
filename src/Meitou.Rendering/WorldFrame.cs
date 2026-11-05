@@ -1620,8 +1620,10 @@ static partial class WorldFrame
         sliders.Add(new Slider(HeatHazeStrengthSlider, 0, 3, () => options.HeatHazeStrength, v => options.HeatHazeStrength = Round20(v), "0.00",
             Faithful: 1, Meitou: Enhancements.MeitouHeatHazeStrength));
         sliders.Add(new Slider(BloomStrengthSlider, 0, 0.25f, () => options.BloomStrength, v => options.BloomStrength = MathF.Round(v * 200) / 200, "0.000", Faithful: 0));
-        sliders.Add(new Slider(MotionBlurShutterSlider, 45, 360, () => options.MotionBlurShutter, v => options.MotionBlurShutter = MathF.Round(v / 5) * 5, "0"));
-        sliders.Add(new Slider(DofApertureSlider, 0.25f, 22, () => options.DofAperture, v => options.DofAperture = MathF.Round(v * 20) / 20, "0.00", Logarithmic: true));
+        sliders.Add(new Slider(MotionBlurShutterSlider, 45, 360, () => options.MotionBlurShutter,
+            v => options.MotionBlurShutter = MathF.Round(v / 5) * 5, "0"));
+        sliders.Add(new Slider(DofApertureSlider, 0.25f, 22, () => options.DofAperture, v => options.DofAperture = MathF.Round(v * 20) / 20, "0.00",
+            Logarithmic: true));
         sliders.Add(new Slider(NightGradeStrengthSlider, 0, 1, () => options.NightGradeStrength, v => options.NightGradeStrength = Round20(v), "0.00"));
 
         sliders.Add(new Slider(ShaftStrengthSlider, 0, 1, () => options.ShaftStrength, v => options.ShaftStrength = Round20(v), "0.00"));

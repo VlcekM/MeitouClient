@@ -1,14 +1,17 @@
 namespace Meitou.Rendering;
 
 /// <summary>
-/// GLSL of the camera effects (docs/render-post.md "Motion blur", "Depth of field"), run with <see cref="PostProcessShaders.Vertex"/>. The picture after the upscaler is HDR at gamma 2.2
+/// GLSL of the camera effects (docs/render-post.md "Motion blur", "Depth of field"), run with <see cref="PostProcessShaders.Vertex"/>. The
+/// picture after the upscaler is HDR at gamma 2.2
 /// with no sRGB step, so every blur decodes to linear light (power 2.2), sums there and encodes back; nothing is clamped at 1.
 /// </summary>
 static class CameraEffectShaders
 {
     /// <summary>
-    /// Motion blur, first pass at the render size: RG the blur vector in display pixels (<c>uPixels</c> scales the motion target's UV over the shutter), limited to
-    /// <c>uMaxRadius</c>, B log2 of the view depth (a half float holds a world from 1 to 10^6 units to 1 %). The sky's motion is a far plane's and the clouds', so it is
+    /// Motion blur, first pass at the render size: RG the blur vector in display pixels (<c>uPixels</c> scales the motion target's UV over the
+    /// shutter), limited to
+    /// <c>uMaxRadius</c>, B log2 of the view depth (a half float holds a world from 1 to 10^6 units to 1 %). The sky's motion is a far plane's
+    /// and the clouds', so it is
     /// zero there; water over the sky keeps its motion (the velocity pass's reactivity marks it).
     /// </summary>
     public const string MotionBlurPrepare = """
@@ -33,7 +36,8 @@ static class CameraEffectShaders
         }
         """;
 
-    /// <summary>Motion blur's tile maximum (McGuire et al. 2012): the longest blur vector of each tile, the spans taken from both sizes as a tile can cover a column more.</summary>
+    /// <summary>Motion blur's tile maximum (McGuire et al. 2012): the longest blur vector of each tile, the spans taken from both sizes as a
+    /// tile can cover a column more.</summary>
     public const string MotionBlurTile = """
         #version 330 core
         in vec2 vUv;
@@ -58,7 +62,8 @@ static class CameraEffectShaders
         }
         """;
 
-    /// <summary>Motion blur's neighbour maximum: the longest vector of the 3 x 3 tiles round each tile. A tile is the widest blur's radius, so this reaches every pixel a blur can.</summary>
+    /// <summary>Motion blur's neighbour maximum: the longest vector of the 3 x 3 tiles round each tile. A tile is the widest blur's radius, so
+    /// this reaches every pixel a blur can.</summary>
     public const string MotionBlurNeighbour = """
         #version 330 core
         in vec2 vUv;
@@ -81,8 +86,10 @@ static class CameraEffectShaders
         """;
 
     /// <summary>
-    /// Motion blur's reconstruction (McGuire, Hennessy, Bukowski, Osman 2012), at the display size: 15 taps along the neighbourhood's longest vector, offset by static noise.
-    /// A tap in front of the pixel lands on it by the tap's own blur; one behind shows through the pixel's own blur; two moving ones cover each other. In linear light;
+    /// Motion blur's reconstruction (McGuire, Hennessy, Bukowski, Osman 2012), at the display size: 15 taps along the neighbourhood's longest
+    /// vector, offset by static noise.
+    /// A tap in front of the pixel lands on it by the tap's own blur; one behind shows through the pixel's own blur; two moving ones cover each
+    /// other. In linear light;
     /// a pixel no blur reaches is returned as it came, bit for bit.
     /// </summary>
     public const string MotionBlurReconstruct = """
@@ -129,7 +136,8 @@ static class CameraEffectShaders
         """;
 
     /// <summary>
-    /// The depth of field's thin lens: a point at view depth z blurs over a disc proportional to (z - s) / z, s the focus distance. The CoC is the disc's radius in half-size
+    /// The depth of field's thin lens: a point at view depth z blurs over a disc proportional to (z - s) / z, s the focus distance. The CoC is
+    /// the disc's radius in half-size
     /// pixels, positive behind the focus, negative in front, the sky at infinity. <c>uJitterUv</c> moves a picture position onto the jittered depth.
     /// </summary>
     const string DofLens = """
@@ -147,7 +155,8 @@ static class CameraEffectShaders
 
         """;
 
-    /// <summary>The gathers' rings: ring k at R k / rings holds 8 k taps, three half-size pixels apart up to R = 12, turned per pixel by static noise. Nothing reads another frame.</summary>
+    /// <summary>The gathers' rings: ring k at R k / rings holds 8 k taps, three half-size pixels apart up to R = 12, turned per pixel by static
+    /// noise. Nothing reads another frame.</summary>
     const string DofRings = """
         const float TAU = 6.2831853;
         int dofRings(float radius) { return int(clamp(ceil(radius / 3.0), 1.0, 4.0)); }
@@ -156,7 +165,8 @@ static class CameraEffectShaders
         """;
 
     /// <summary>
-    /// Depth of field, pass 1, half size: the four picture pixels under each texel averaged as light (NaN and Inf to 0: a gather would spread them over a disc), and the CoC of the
+    /// Depth of field, pass 1, half size: the four picture pixels under each texel averaged as light (NaN and Inf to 0: a gather would spread
+    /// them over a disc), and the CoC of the
     /// nearest surface of the four, so a silhouette's texel takes the subject's CoC and not a mix that names no surface.
     /// </summary>
     public const string DofPrepare = """
@@ -202,7 +212,8 @@ static class CameraEffectShaders
         }
         """;
 
-    /// <summary>Depth of field, pass 3: the largest near CoC that can reach each tile: a tile t tiles away is at least (t - 1) spans from this one, and a disc covers its CoC plus one.</summary>
+    /// <summary>Depth of field, pass 3: the largest near CoC that can reach each tile: a tile t tiles away is at least (t - 1) spans from this
+    /// one, and a disc covers its CoC plus one.</summary>
     public const string DofDilate = """
         #version 330 core
         in vec2 vUv;
@@ -225,7 +236,8 @@ static class CameraEffectShaders
         """;
 
     /// <summary>
-    /// Depth of field, pass 4, the far field, half size: scatter as gather over this texel's own CoC. A tap counts only where its own disc reaches, so a sharp subject's taps reach
+    /// Depth of field, pass 4, the far field, half size: scatter as gather over this texel's own CoC. A tap counts only where its own disc
+    /// reaches, so a sharp subject's taps reach
     /// nothing and cannot ring the blur behind it, and near taps take no part. Light in RGB, this CoC in A for the composite's upsample.
     /// </summary>
     public const string DofFar = """
@@ -262,8 +274,10 @@ static class CameraEffectShaders
         """;
 
     /// <summary>
-    /// Depth of field, pass 5, the near field, half size: each near tap spreads its light over its own disc, so its share here is its coverage times the area a tap stands for
-    /// over its disc's area. A uniform foreground covers exactly 1, half of one about half, so its edge is translucent over what is behind it. Premultiplied, so the upsample fades
+    /// Depth of field, pass 5, the near field, half size: each near tap spreads its light over its own disc, so its share here is its coverage
+    /// times the area a tap stands for
+    /// over its disc's area. A uniform foreground covers exactly 1, half of one about half, so its edge is translucent over what is behind it.
+    /// Premultiplied, so the upsample fades
     /// an edge instead of darkening it.
     /// </summary>
     public const string DofNear = """
@@ -309,7 +323,8 @@ static class CameraEffectShaders
         """;
 
     /// <summary>
-    /// Depth of field, pass 6, at the picture's size: the far field over the sharp picture by the full-size CoC, so a sharp edge stays sharp, upsampled by CoC so a subject's colour
+    /// Depth of field, pass 6, at the picture's size: the far field over the sharp picture by the full-size CoC, so a sharp edge stays sharp,
+    /// upsampled by CoC so a subject's colour
     /// does not ring the blur beside it; then the near field over both by its coverage. A pixel neither touches is returned as it came, bit for bit.
     /// </summary>
     public const string DofComposite = """

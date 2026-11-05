@@ -4,9 +4,11 @@ namespace Meitou.Rendering;
 
 /// <summary>A saved camera for <see cref="CameraPath"/>: where the eye is, where it looks, the orbit distance, the lens and the time of day; a key may also set the depth of field's
 /// focus and f-number (null: the target's distance, the player's aperture).</summary>
-public readonly record struct CameraShot(Vector3 Eye, float Yaw, float Pitch, float Distance, float FieldOfView, float Hour, float? Focus = null, float? Aperture = null)
+public readonly record struct CameraShot(Vector3 Eye, float Yaw, float Pitch, float Distance, float FieldOfView, float Hour,
+    float? Focus = null, float? Aperture = null)
 {
-    public static CameraShot Of(WorldCamera c, float hour) => new(c.Eye, c.Yaw, c.Pitch, c.Distance, c.FieldOfView, hour, c.FocusDistance, c.Aperture);
+    public static CameraShot Of(WorldCamera c, float hour) =>
+        new(c.Eye, c.Yaw, c.Pitch, c.Distance, c.FieldOfView, hour, c.FocusDistance, c.Aperture);
 
     /// <summary>Puts the camera here: the same eye and view direction, the target <see cref="Distance"/> in front.</summary>
     public void Apply(WorldCamera c)
@@ -94,6 +96,10 @@ public static class CameraPath
         }
         // Focus and aperture fly only where a key sets them: a key without one stands for the target's distance or the default, a flight with none has neither.
         var shot = Shot(r);
-        return shot with { Focus = keys.Any(k => k.Shot.Focus is not null) ? shot.Focus : null, Aperture = keys.Any(k => k.Shot.Aperture is not null) ? shot.Aperture : null };
+        return shot with
+        {
+            Focus = keys.Any(k => k.Shot.Focus is not null) ? shot.Focus : null,
+            Aperture = keys.Any(k => k.Shot.Aperture is not null) ? shot.Aperture : null,
+        };
     }
 }

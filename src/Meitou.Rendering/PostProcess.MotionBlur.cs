@@ -3,8 +3,10 @@ using Meitou.Rendering.Gpu;
 namespace Meitou.Rendering;
 
 /// <summary>
-/// Meitou motion blur (the <c>motionblur</c> switch; docs/render-post.md "Motion blur"): a shutter's blur rebuilt from the motion target, tile maximum, neighbour maximum, then
-/// reconstruction (<see cref="CameraEffectShaders"/>). After the temporal resolve, into its own target (the resolve's output is the next frame's history), before the exposure.
+/// Meitou motion blur (the <c>motionblur</c> switch; docs/render-post.md "Motion blur"): a shutter's blur rebuilt from the motion target, tile
+/// maximum, neighbour maximum, then
+/// reconstruction (<see cref="CameraEffectShaders"/>). After the temporal resolve, into its own target (the resolve's output is the next
+/// frame's history), before the exposure.
 /// Without a temporal upscaler there is no motion target and it does not run.
 /// </summary>
 public sealed unsafe partial class PostProcess
@@ -24,13 +26,15 @@ public sealed unsafe partial class PostProcess
     {
         public readonly SamplerSlot Source;
         public readonly UniformHandle Tiles;
-        public MotionBlurTilePass(GpuContext gpu) : base(gpu, CameraEffectShaders.MotionBlurTile, "post motion blur tile") => (Source, Tiles) = (P.Sampler("uSource"), P.Uniform("uTiles"));
+        public MotionBlurTilePass(GpuContext gpu) : base(gpu, CameraEffectShaders.MotionBlurTile, "post motion blur tile") =>
+            (Source, Tiles) = (P.Sampler("uSource"), P.Uniform("uTiles"));
     }
 
     sealed class MotionBlurNeighbourPass : FullscreenProgram
     {
         public readonly SamplerSlot Tile;
-        public MotionBlurNeighbourPass(GpuContext gpu) : base(gpu, CameraEffectShaders.MotionBlurNeighbour, "post motion blur neighbour") => Tile = P.Sampler("uTile");
+        public MotionBlurNeighbourPass(GpuContext gpu) : base(gpu, CameraEffectShaders.MotionBlurNeighbour, "post motion blur neighbour") =>
+            Tile = P.Sampler("uTile");
     }
 
     sealed class MotionBlurReconstructPass : FullscreenProgram
@@ -52,12 +56,15 @@ public sealed unsafe partial class PostProcess
     bool motionFresh;
     float motionSeconds;
 
-    /// <summary>Whether the camera effects may run on this frame: a whole view of a scene, in the cinematic cameras or everywhere by the player's choice.</summary>
-    bool CameraEffectsLive => haveScene && ViewWindow.Current.IsWhole && !Options.CameraEffectsHeld && (Options.CinematicView || Options.CameraEffectsEverywhere);
+    /// <summary>Whether the camera effects may run on this frame: a whole view of a scene, in the cinematic cameras or everywhere by the
+    /// player's choice.</summary>
+    bool CameraEffectsLive => haveScene && ViewWindow.Current.IsWhole && !Options.CameraEffectsHeld
+        && (Options.CinematicView || Options.CameraEffectsEverywhere);
 
     void FreeMotionBlur()
     {
-        foreach (var t in (ReadOnlySpan<Target2D?>)[blurVectors, blurTiles, blurNeighbours, blurOutput]) t?.Texture.Dispose();   // released after the frames in flight
+        // Released after the frames in flight.
+        foreach (var t in (ReadOnlySpan<Target2D?>)[blurVectors, blurTiles, blurNeighbours, blurOutput]) t?.Texture.Dispose();
         blurVectors = blurTiles = blurNeighbours = blurOutput = null;
     }
 
@@ -81,7 +88,8 @@ public sealed unsafe partial class PostProcess
         return Math.Clamp(Options.ShutterSeconds / MathF.Max(frame, 1e-4f), 0, MaxShutterFrames);
     }
 
-    /// <summary>The blurred picture, or <paramref name="scene"/> when the blur does not run (off, another camera, no motion this frame, a cut).</summary>
+    /// <summary>The blurred picture, or <paramref name="scene"/> when the blur does not run (off, another camera, no motion this frame, a
+    /// cut).</summary>
     Target2D RunMotionBlur(Target2D scene)
     {
         bool cut = Options.CameraCut;

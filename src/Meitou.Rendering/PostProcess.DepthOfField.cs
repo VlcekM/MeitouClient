@@ -3,9 +3,12 @@ using Meitou.Rendering.Gpu;
 namespace Meitou.Rendering;
 
 /// <summary>
-/// Meitou depth of field (the <c>dof</c> switch; docs/render-post.md "Depth of field"): a thin lens's circle of confusion from the camera's field of view, f-number and focus, then a
-/// half-size scatter-as-gather with a near and a far field, in linear light (<see cref="CameraEffectShaders"/>). After the upscaler and the motion blur, into its own target. No history.
-/// Port of KenshiNative's <c>docs/features/dof-rewrite.md</c> without its sparkle; KenshiNative's lens is a slider's radius, this one's is the optics.
+/// Meitou depth of field (the <c>dof</c> switch; docs/render-post.md "Depth of field"): a thin lens's circle of confusion from the camera's
+/// field of view, f-number and focus, then a
+/// half-size scatter-as-gather with a near and a far field, in linear light (<see cref="CameraEffectShaders"/>). After the upscaler and the
+/// motion blur, into its own target. No history.
+/// Port of KenshiNative's <c>docs/features/dof-rewrite.md</c> without its sparkle; KenshiNative's lens is a slider's radius, this one's is the
+/// optics.
 /// </summary>
 public sealed unsafe partial class PostProcess
 {
@@ -21,7 +24,8 @@ public sealed unsafe partial class PostProcess
         public static float FocalLength(float fieldOfView) => SensorHeight / 2 / MathF.Tan(fieldOfView / 2);
 
         /// <summary>
-        /// The radius, in half-size pixels of a picture <paramref name="height"/> high, of the disc a point at infinity blurs to with the lens focused at <paramref name="focus"/> world
+        /// The radius, in half-size pixels of a picture <paramref name="height"/> high, of the disc a point at infinity blurs to with the lens
+        /// focused at <paramref name="focus"/> world
         /// units: the aperture's diameter f / N scaled by f / (s - f), over the sensor. Nearer points take (z - s) / z of it, in the shader.
         /// </summary>
         public static float InfinityCoc(float fieldOfView, float aperture, float focus, int height)
@@ -57,14 +61,16 @@ public sealed unsafe partial class PostProcess
     {
         public readonly SamplerSlot Prepared;
         public readonly UniformHandle Tiles;
-        public DofTilePass(GpuContext gpu) : base(gpu, CameraEffectShaders.DofTile, "post dof tile") => (Prepared, Tiles) = (P.Sampler("uPrepared"), P.Uniform("uTiles"));
+        public DofTilePass(GpuContext gpu) : base(gpu, CameraEffectShaders.DofTile, "post dof tile") =>
+            (Prepared, Tiles) = (P.Sampler("uPrepared"), P.Uniform("uTiles"));
     }
 
     sealed class DofDilatePass : FullscreenProgram
     {
         public readonly SamplerSlot Tile;
         public readonly UniformHandle Reach;
-        public DofDilatePass(GpuContext gpu) : base(gpu, CameraEffectShaders.DofDilate, "post dof dilate") => (Tile, Reach) = (P.Sampler("uTile"), P.Uniform("uReach"));
+        public DofDilatePass(GpuContext gpu) : base(gpu, CameraEffectShaders.DofDilate, "post dof dilate") =>
+            (Tile, Reach) = (P.Sampler("uTile"), P.Uniform("uReach"));
     }
 
     sealed class DofFarPass : FullscreenProgram
@@ -76,7 +82,8 @@ public sealed unsafe partial class PostProcess
     sealed class DofNearPass : FullscreenProgram
     {
         public readonly SamplerSlot Prepared, Dilated;
-        public DofNearPass(GpuContext gpu) : base(gpu, CameraEffectShaders.DofNear, "post dof near") => (Prepared, Dilated) = (P.Sampler("uPrepared"), P.Sampler("uDilated"));
+        public DofNearPass(GpuContext gpu) : base(gpu, CameraEffectShaders.DofNear, "post dof near") =>
+            (Prepared, Dilated) = (P.Sampler("uPrepared"), P.Sampler("uDilated"));
     }
 
     /// <summary>Half-size pixels to a tile.</summary>
@@ -92,11 +99,13 @@ public sealed unsafe partial class PostProcess
 
     void FreeDepthOfField()
     {
-        foreach (var t in (ReadOnlySpan<Target2D?>)[dofPrepared, dofTiles, dofDilated, dofFarField, dofNearField, dofOutput]) t?.Texture.Dispose();   // released after the frames in flight
+        // Released after the frames in flight.
+        foreach (var t in (ReadOnlySpan<Target2D?>)[dofPrepared, dofTiles, dofDilated, dofFarField, dofNearField, dofOutput]) t?.Texture.Dispose();
         dofPrepared = dofTiles = dofDilated = dofFarField = dofNearField = dofOutput = null;
     }
 
-    /// <summary>The targets for a picture of this size: half size RGBA16F for linear light above 1, the near CoC's tiles, the output as the picture.</summary>
+    /// <summary>The targets for a picture of this size: half size RGBA16F for linear light above 1, the near CoC's tiles, the output as the
+    /// picture.</summary>
     void EnsureDepthOfField(Target2D scene)
     {
         if (dofOutput is not null && dofOutput.Width == scene.Width && dofOutput.Height == scene.Height) return;
