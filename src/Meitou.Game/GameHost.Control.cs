@@ -17,7 +17,9 @@ sealed partial class GameHost
     bool interfaceHidden;
     string? controlDir, execPending;
     /// <summary>When the world was first seen loaded (for the setup's settle wait), and the exit code the run ends with (0, or 3 when a setup command failed).</summary>
-    long setupLoadedAt;
+    long setupLoadedAt, shotDueAt;
+    /// <summary>--screenshot-after: the setup is done and the timer runs (shotDueAt), or the picture was asked for and its save ends the run.</summary>
+    bool autoShotTimer, autoShotAsked;
     int controlExitCode;
     long nextControlPoll;
     /// <summary>The settings window of the interactive loop (null in the one-shot modes), for the console commands.</summary>
@@ -59,6 +61,26 @@ sealed partial class GameHost
                 Console.WriteLine($"setup     setup failed: '{part}' (the rest was skipped)");
                 controlExitCode = 3;
                 break;
+            }
+        }
+        if (g.ShotAfter is { } shotDelay && !autoShotTimer && !autoShotAsked && execPending is null && controlExitCode == 0 && SetupSettled())
+        {
+            autoShotTimer = true;
+            shotDueAt = Stopwatch.GetTimestamp() + (long)(shotDelay * Stopwatch.Frequency);
+        }
+        if (controlExitCode != 0 && g.ShotAfter is not null) controlQuit = true;   // a failed setup ends a screenshot run at once
+        if (autoShotTimer && Stopwatch.GetTimestamp() >= shotDueAt)
+        {
+            autoShotTimer = false;
+            autoShotAsked = true;
+            string path = Path.GetFullPath(g.ShotOut ?? Path.Combine(controlDir ?? Directory.GetCurrentDirectory(), controlDir is null ? "meitou-shot.png" : "shot.png"));
+            try { Directory.CreateDirectory(Path.GetDirectoryName(path)!); }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException) { Console.WriteLine($"setup     screenshot failed: {e.Message}"); controlExitCode = 4; controlQuit = true; }
+            if (!controlQuit)
+            {
+                shotPath = path;
+                shotWaitId = null;
+                screenshotRequested = true;
             }
         }
         if (controlDir is null) return;
@@ -231,9 +253,12 @@ sealed partial class GameHost
             FramebufferCapture.SavePng(context, picture, path, width, height, topDown);
             Console.WriteLine($"saved     {path}");
             if (id is not null) ControlWrite(id, true, $"saved {path} {width}x{height}");
+            if (autoShotAsked) controlQuit = true;
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
+            Console.WriteLine($"setup     screenshot failed: {e.Message}");
+            if (autoShotAsked) { controlExitCode = 4; controlQuit = true; }
             if (id is not null) ControlWrite(id, false, $"screenshot failed: {e.Message}");
         }
     }
