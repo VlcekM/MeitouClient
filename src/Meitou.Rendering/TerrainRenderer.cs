@@ -304,7 +304,7 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
     /// <summary>Draws the terrain; nodes whose highest point is under <paramref name="cullBelow"/> are skipped (the reflection pass clips everything below the water). <paramref name="secondary"/>: the reflection's call, with its own quadtree for its own LOD distance.</summary>
     public void Draw(Matrix4x4 viewProjection, Vector3 eye, Vector4[] frustum, WorldRenderOptions options, WorldLighting light, float cullBelow = float.NegativeInfinity, bool secondary = false, bool defer = false)
     {
-        UseColour(GroundRelief.ParallaxActive, GroundRelief.Quality);
+        UseColour(GroundRelief.ParallaxActive, GroundRelief.Quality, Trails is not null);
         current = secondary ? spare : quadtree;
         current.SetRanges(options.TerrainLod);
         frame = new Frame(viewProjection, eye, options, light);
@@ -381,6 +381,9 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
 
     /// <summary>The blood on the ground the patches lay over their albedo (docs/game/blood-decals.md; null: none). The host records it before the scene.</summary>
     public TerrainDecalRenderer? Decals { get; set; }
+
+    /// <summary>The ground trails the patches read (docs/render-terrain.md "Ground trails"; null: none, and the colour programs carry none of their code). Set before the scene.</summary>
+    public TerrainTrailRenderer? Trails { get; set; }
 
     PatchDraw[] cutDraws = new PatchDraw[64];
     int plainCount, cutCount;
@@ -518,28 +521,52 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
         TerrainProgram Mesh, TerrainProgram MeshNoNormal, TerrainProgram MeshSolid, TerrainProgram MeshSolidNoNormal,
         TerrainProgram? PatchTess, TerrainProgram? PatchCutTess, TerrainProgram? MeshTess, TerrainProgram? MeshSolidTess) : IDisposable
     {
+        /// <summary>The trails' set: its patch programs are its own, its mesh programs the plain set's (<see cref="MakeTrailed"/>).</summary>
+        public bool SharesMeshes { get; init; }
+
         public void Dispose()
         {
-            foreach (var p in new[] { Patch, PatchNoNormal, PatchCut, PatchCutNoNormal, Mesh, MeshNoNormal, MeshSolid, MeshSolidNoNormal,
-                         PatchTess, PatchCutTess, MeshTess, MeshSolidTess }) p?.Dispose();
+            foreach (var p in new[] { Patch, PatchNoNormal, PatchCut, PatchCutNoNormal, PatchTess, PatchCutTess }) p?.Dispose();
+            if (SharesMeshes) return;
+            foreach (var p in new[] { Mesh, MeshNoNormal, MeshSolid, MeshSolidNoNormal, MeshTess, MeshSolidTess }) p?.Dispose();
         }
     }
 
-    readonly ColourSet?[] colourSets = new ColourSet?[6];
+    readonly ColourSet?[] colourSets = new ColourSet?[12];
 
     /// <summary>
-    /// Draws with the colour set of <paramref name="march"/> and the relief <paramref name="quality"/> (compiled in), made the first time it is asked for (at
-    /// load the settings'; a change in play makes the other once, and keeps it: switching back costs nothing).
+    /// Draws with the colour set of <paramref name="march"/>, the relief <paramref name="quality"/> and <paramref name="trails"/> (compiled in), made the first time it is
+    /// asked for (at load the settings'; a change in play makes the other once, and keeps it: switching back costs nothing).
     /// </summary>
     [System.Diagnostics.CodeAnalysis.MemberNotNull(nameof(patchColour), nameof(patchColourNoNormal), nameof(patchColourCut), nameof(patchColourCutNoNormal),
         nameof(meshColour), nameof(meshColourNoNormal), nameof(meshSolid), nameof(meshSolidNoNormal))]
-    void UseColour(bool march, int quality)
+    void UseColour(bool march, int quality, bool trails = false)
     {
         quality = Math.Clamp(quality, 0, 2);
-        var set = colourSets[(march ? 3 : 0) + quality] ??= MakeColour(march, quality);
+        var set = trails ? colourSets[6 + (march ? 3 : 0) + quality] ??= MakeTrailed(march, quality) : Plain(march, quality);
         (patchColour, patchColourNoNormal, patchColourCut, patchColourCutNoNormal) = (set.Patch, set.PatchNoNormal, set.PatchCut, set.PatchCutNoNormal);
         (meshColour, meshColourNoNormal, meshSolid, meshSolidNoNormal) = (set.Mesh, set.MeshNoNormal, set.MeshSolid, set.MeshSolidNoNormal);
         (patchColourTess, patchColourCutTess, meshColourTess, meshSolidTess) = (set.PatchTess, set.PatchCutTess, set.MeshTess, set.MeshSolidTess);
+    }
+
+    ColourSet Plain(bool march, int quality) => colourSets[(march ? 3 : 0) + quality] ??= MakeColour(march, quality);
+
+    /// <summary>The plain set with its patch programs built with the ground trails; the map features' meshes take no trails.</summary>
+    ColourSet MakeTrailed(bool march, int quality)
+    {
+        TerrainProgram Patch(string fragment, string name) => new(gpu, sets, TerrainShaders.PatchVertexNative(), fragment, name);
+        TerrainProgram? PatchTess(string fragment, string name) => gpu.HasTessellation
+            ? new(gpu, sets, TerrainShaders.PatchVertexTessNative(), fragment, name, TerrainShaders.PatchControlNative(), TerrainShaders.PatchEvaluationNative()) : null;
+        return Plain(march, quality) with
+        {
+            Patch = Patch(TerrainShaders.FragmentTrails(false, march, true, quality), "terrain trails"),
+            PatchNoNormal = Patch(TerrainShaders.FragmentTrails(false, march, false, quality), "terrain trails no normal"),
+            PatchCut = Patch(TerrainShaders.FragmentTrails(true, march, true, quality), "terrain trails interior cut"),
+            PatchCutNoNormal = Patch(TerrainShaders.FragmentTrails(true, march, false, quality), "terrain trails interior cut no normal"),
+            PatchTess = PatchTess(TerrainShaders.FragmentTrails(false, march, true, quality), "terrain trails relief"),
+            PatchCutTess = PatchTess(TerrainShaders.FragmentTrails(true, march, true, quality), "terrain trails relief interior cut"),
+            SharesMeshes = true,
+        };
     }
 
     ColourSet MakeColour(bool march, int quality)
@@ -684,7 +711,7 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
             Colour = standIn2D, Ground = standIn2D, WorldColour = standIn2D, Region = lastRegion, CellGrid = lastCellGrid,
             TessDetail = GroundRelief.TessDetail, RockRound = RockSmoothing.Roundness,   // the tessellation stages, the casters' too
             ReliefQuality = GroundRelief.Quality,
-            FieldTiles = standInUInt,
+            FieldTiles = standInUInt, Trails = standIn2D,
         };
         if (material)
         {
@@ -744,6 +771,7 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
                 c.Ground = Index(set.Ground, BindlessKind.Texture2D, standIn2D);
                 c.WorldColour = Index(set.WorldColour, BindlessKind.Texture2D, standIn2D);
             }
+            if (patches) Trails?.Apply(ref c);
         }
         constants = c;
     }

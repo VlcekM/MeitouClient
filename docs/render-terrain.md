@@ -209,6 +209,27 @@ to 14 layer samples each.
 - **Cost** (**Observed**, `--play-bench` on save "stutter final boss", RTX 4070, 1080p DLSS 0.83, interleaved with master): terrain 3.94 -> 2.33 ms
   idle, orbit 3.98 -> 2.23, pan 3.77 -> 1.77; GPU frame 7.85 -> 6.20; frame p99 unchanged. Viewer A/B at two views: terrain -0.39 and -0.88 ms.
 
+## Ground trails
+
+Meitou look, not in the game; the `trails` switch (Tab "Ground trails"), off by default, not yet seen on a GPU. Look and cost **Unknown**. Render side only: no gameplay
+or save change, and marks are lost when the window moves past them. Vulkan host only (`GameHost.Metal` never makes the renderer).
+
+- **Image** (`TerrainTrailRenderer`): R16F, 2048², texel 0.25 units (8 MB), a height: 0 untouched, -1 pressed in full (0.6 units, 6 cm), above 0 a rim. Addressed toroidally
+  as the material cache's levels, the origin snapped to 64 texels, so it reaches 240 units from the eye; the columns and rows the window gains are wiped, all of it after a jump.
+  Shown fading over the window's outer tenth. A frame with nothing to change records nothing.
+- **Marks** (`GameHost.Trails`, within that reach, not carried, in bed or caged): a person's posed foot presses a sole the frame it lands: it moved over 1.2 times the body's
+  speed (swinging) and now under 0.4 times (standing in the world), which needs no rig data. Its heading is the toe bone's. Animals, and people whose feet were not posed,
+  print left and right of their path by a stride, sized by `Scale`. Crawling or down and moving: a furrow every 1.2 units. Each mark is a quad blended over what is there, so a
+  foot flattens the marks under it. No stamp above 2.5 units over the terrain (floors, roofs) or under the water line.
+- **Ground** (`GroundSurfaces`, the footsteps' GroundType at the mark): sand, mud and snow in full, dirt at 0.45, nothing else. A mark under a low building floor is stamped but hidden.
+- **Shading** (colour programs built with `TERRAIN_TRAILS`; `TerrainRenderer.MakeTrailed`, the switch off: none of it is in the program): the slopes over the pixel's footprint
+  tilt the shading normal, and pressed ground is up to 15% darker. Patches only, fading from n.y 0.7 to 0.55.
+- **Relief**: with parallax the height joins the ground's march and the sun's (`reliefHeight`, `bakedHeight`), read whole where the ground is displaced, so troughs self-shadow; no
+  height layer (`g.ground.n` 0): normal only. With displacement and no parallax the mesh carries it (`uTrailMesh`), averaged over a segment, only where the relief already split the
+  mesh. The depth prepass runs the same evaluation stage. Under the cache, one march step is `BakeSpan` / 16, up to several times a mark's depth: resolved by the secant step, **Unknown** how well.
+- **Wear** (`TerrainTrailRenderer.Wear`): -ln(left) per game second is 1/900 + wind / 9000 + rain amount / 40, in steps of at least 1% (one quad over the image), and stops while paused.
+  The whole window wears alike; ground type does not change it. Tuned on paper.
+
 ## Rocks
 
 Meitou look, not in the game (`RockSmoothing`; Tab: "Rock smoothing (tessellation)"). Many TERRAIN-mode rocks have hard

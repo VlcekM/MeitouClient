@@ -10,6 +10,12 @@ using Meitou.Rendering.Gpu.Shaders;
 
 namespace Meitou.Rendering;
 
+/// <summary>The <c>contactfoam</c> switch (docs/render-water.md "Contact foam"): off, none of its code runs or is in the water's program.</summary>
+public static class WaterContact
+{
+    public static bool Enabled { get; set; }
+}
+
 /// <summary>
 /// Water as the game places it (docs/formats/terrain.md, "Water"): one surface at <see cref="WorldWater.Height"/>
 /// over the whole world, hidden wherever the terrain is higher. Shading follows the facts of Kenshi's water material:
@@ -67,13 +73,14 @@ public sealed unsafe class WaterRenderer : IDisposable
             uint heightCoarse;
             uint heightFine;
             uint sceneDepthMap;
-            uint spare1;
+            int wakeCount;
+            vec4 wakes[8];        // the contactfoam switch: a character moving in the water: x, z, velocity x, z
         } water;
 
         """;
 
     /// <summary>The C# side of <see cref="ConstantsBlock"/> (std140).</summary>
-    [StructLayout(LayoutKind.Explicit, Size = 512)]
+    [StructLayout(LayoutKind.Explicit, Size = 640)]
     struct WaterConstants
     {
         [FieldOffset(0)] public Vector4 Params;
@@ -116,8 +123,19 @@ public sealed unsafe class WaterRenderer : IDisposable
         [FieldOffset(496)] public uint HeightCoarse;
         [FieldOffset(500)] public uint HeightFine;
         [FieldOffset(504)] public uint SceneDepthMap;
-        [FieldOffset(508)] public uint Spare1;
+        [FieldOffset(508)] public int WakeCount;
+        [FieldOffset(512)] public WakeRows Wakes;
     }
+
+    /// <summary><see cref="WaterConstants.Wakes"/> (std140 <c>vec4[8]</c>).</summary>
+    [System.Runtime.CompilerServices.InlineArray(MaxWakes)]
+    struct WakeRows
+    {
+        Vector4 row;
+    }
+
+    /// <summary>The characters' wakes one frame shows (the shader's loop per pixel near the eye).</summary>
+    public const int MaxWakes = 8;
 
     const string Vertex = """
         #version 330 core
@@ -617,6 +635,41 @@ public sealed unsafe class WaterRenderer : IDisposable
             return vec2(d2 - d1, mix(0.25, 1.0, life));
         }
 
+        #ifdef WATER_CONTACT
+        uniform int uWakeCount;
+        uniform vec4 uWakes[8];         // a character moving in the water: x, z, velocity x, z
+
+        // How far from the eye the contact foam and the wakes reach, and the distance over which they fade out there.
+        const float ContactFar = 1200.0, ContactFade = 400.0;
+
+        // Foam where something stands in the water (docs/render-water.md "Contact foam"): the view ray ends close behind the surface, on something that stands above
+        // the terrain under this point (the shore has foam of its own). thick: the way through the water to it; depth: the terrain's depth here; up: the view's
+        // height; blotch: the band's edge wanders with the foam's noise.
+        float contactFoam(float thick, float depth, float up, float blotch)
+        {
+            if (thick < 0.0) return 0.0;
+            float standing = smoothstep(1.0, 3.0, depth - thick * up);
+            return 0.85 * standing * (1.0 - smoothstep(0.0, mix(1.5, 4.0, blotch), thick));
+        }
+
+        // The wakes: a ring round each body and two arms trailing it at the 19.5 degrees of a ship's wake, widening and fading with the way behind it.
+        float wakeFoam(vec2 p)
+        {
+            float sum = 0.0;
+            for (int i = 0; i < uWakeCount; i++)
+            {
+                vec2 d = p - uWakes[i].xy, v = uWakes[i].zw;
+                float speed = max(length(v), 1e-3);
+                vec2 along = v / speed;
+                float behind = -dot(d, along), across = abs(dot(d, vec2(along.y, -along.x)));
+                float length_ = clamp(speed, 6.0, 40.0);
+                float arm = (1.0 - smoothstep(0.0, 0.5 + 0.12 * max(behind, 0.0), abs(across - 1.0 - 0.35 * behind))) * step(0.0, behind) * (1.0 - smoothstep(0.0, length_, behind));
+                sum = max(sum, max(0.8 * (1.0 - smoothstep(1.2, 3.0, length(d))), 0.7 * arm));
+            }
+            return sum;
+        }
+        #endif
+
         void main()
         {
             vec2 p = vBase;
@@ -895,6 +948,14 @@ public sealed unsafe class WaterRenderer : IDisposable
                 a1 = mix(a1, r1, rw); a2 = mix(a2, r2, rw);
                 amount = max(amount, rw * (0.02 + 0.55 * rapid));
             }
+            #ifdef WATER_CONTACT
+            float contact = 0.0;
+            if (!swash && outside <= 0.0 && dist < ContactFar)
+            {
+                contact = contactFoam(thick, floorDepth, toEyeDir.y, a1.g);
+                amount = max(amount, max(contact, wakeFoam(p)) * (1.0 - smoothstep(ContactFar - ContactFade, ContactFar, dist)));
+            }
+            #endif
             float bubbles = 0.0;
             if (uLean < 0.5 || dist < 600.0)
                 bubbles = textureGrad(uFoamMap, p * 0.06 - drift * 2.0, dpx * 0.06 - driftDx * 2.0, dpy * 0.06 - driftDy * 2.0).b * (1.0 - smoothstep(150.0, 600.0, dist));
@@ -939,6 +1000,9 @@ public sealed unsafe class WaterRenderer : IDisposable
             // water): no line where the surface meets the ground (displaced or not), a rock or a leg. The swash's raised surface lies nearly
             // along the beach, so it fades over half a unit where it meets the sand.
             float edge = thick >= 0.0 ? clamp(thick / max(swash ? 0.5 : 2.0, thicknessError(dist)), 0.0, 1.0) : 1.0;
+            #ifdef WATER_CONTACT
+            edge = max(edge, contact * foam);   // the foam stays up to the line it clings to, where the water itself has faded out
+            #endif
             // Wet sand, behind the swash and under its front: darker and glossy, drying out until the next wave, faded out over the edge of its band.
             float wet = swash ? (1.0 - sinceCrest) * 0.6 * smoothstep(0.0, 0.3, max(level, wetLevel) - above) : 0.0;
             vec3 wetGloss = reflected * schlick * gloss + min(spec, 4.0) * uGlintColour * 0.15;
@@ -985,6 +1049,9 @@ public sealed unsafe class WaterRenderer : IDisposable
 
     static readonly string MeitouFragment = "#version 330 core\n" + TerrainShaders.HeightFunctions + SkyRenderer.SkyFunctions + ThicknessFunctions + MeitouMotion + MeitouBody;
 
+    /// <summary>The Meitou water with the <c>contactfoam</c> switch's foam (<see cref="WaterContact"/>); the plain program has none of its code.</summary>
+    static string MeitouContactNative() => NativeFragment(MeitouFragment.Insert(MeitouFragment.IndexOf('\n') + 1, "#define WATER_CONTACT\n"));
+
     /// <summary>The water's own uniforms in the native model: <see cref="ConstantsBlock"/> and the bindless arrays.</summary>
     static readonly Dictionary<string, string> NativeOwn = new()
     {
@@ -1006,6 +1073,7 @@ public sealed unsafe class WaterRenderer : IDisposable
         ["uReflection"] = "textures2D[water.reflectionMap]", ["uRefraction"] = "textures2D[water.refractionMap]",
         ["uOceanMaps"] = "textures2DArray[water.oceanMap]", ["uShoreField"] = "textures2D[water.shoreMap]", ["uRiverMap"] = "textures2D[water.riverMap]",
         ["uSceneDepth"] = "textures2D[water.sceneDepthMap]", ["uDepthPlanes"] = "water.depthPlanes",
+        ["uWakeCount"] = "water.wakeCount", ["uWakes"] = "water.wakes",
     };
 
     static readonly Dictionary<string, string> NativeMap = NativeShaders.Map(NativeOwn);
@@ -1033,6 +1101,10 @@ public sealed unsafe class WaterRenderer : IDisposable
     readonly NativeFrame frame;
     readonly WaterProgram faithful;
     readonly WaterProgram? meitou;
+    WaterProgram? meitouContact;
+    readonly LegacyProgram.Attribute?[] gridInputs = [];
+    readonly Vector4[] wakes = new Vector4[MaxWakes];
+    int wakeCount;
     readonly BindlessTexture[] mapTextures;
     readonly BindlessTexture oceanMap, shoreMap, reflectionMap, refractionMap, heightCoarse, heightFine, sceneDepthMap;
     readonly GpuTexture standInArrayTexture;
@@ -1054,6 +1126,17 @@ public sealed unsafe class WaterRenderer : IDisposable
 
     /// <summary>The Enhancements switch <c>water</c>: the game's flat water (Faithful) or Meitou's waves, breakers and foam (the default).</summary>
     public bool Meitou { get; set; } = true;
+
+    /// <summary>The characters moving in the water this frame (<see cref="MaxWakes"/> at most; x, z, velocity x, z), for the <c>contactfoam</c> switch.</summary>
+    public void SetWakes(ReadOnlySpan<Vector4> rows)
+    {
+        wakeCount = Math.Min(rows.Length, MaxWakes);
+        rows[..wakeCount].CopyTo(wakes);
+    }
+
+    /// <summary>The Meitou program to draw with: with the contact foam (Vulkan only: it needs the scene depth), made the first time it is asked for.</summary>
+    WaterProgram MeitouProgram() => !WaterContact.Enabled || Gpu is not GpuContext ? meitou!
+        : meitouContact ??= new WaterProgram(Gpu, frame, NativeVertex(MeitouVertex), MeitouContactNative(), "water meitou contact", PrimitiveType.Triangles, gridInputs, constantsLayout);
 
     /// <summary>The Meitou polar grid: segments round the eye (128 low, 256 default, 512 high), rings follow from it.</summary>
     public const int DefaultGridSegments = 256;
@@ -1160,6 +1243,7 @@ public sealed unsafe class WaterRenderer : IDisposable
             LegacyProgram.Attribute?[] gridAttributes = [QuadAttribute(grid)];
             meitou = new WaterProgram(gpu, frame, NativeVertex(MeitouVertex), NativeFragment(MeitouFragment), "water meitou",
                 PrimitiveType.Triangles, gridAttributes, constantsLayout);
+            gridInputs = gridAttributes;
             gridIndexCount = (uint)indices.Length;
         }
     }
@@ -1404,8 +1488,12 @@ public sealed unsafe class WaterRenderer : IDisposable
     {
         if (Gpu is not GpuContext) return false;
         if (!Meitou) return near < FaithfulOpaqueDistance && (float.IsNaN(NearestWater) || NearestWater < FaithfulOpaqueDistance);
-        return NeedsRefraction(near);   // without refraction (`--no-water-refraction`) the Meitou water keeps the slant path: no pass restart or copy
+        // Without refraction (`--no-water-refraction`) the Meitou water keeps the slant path: no pass restart or copy, unless the contact foam reads the depth.
+        return NeedsRefraction(near) || WaterContact.Enabled && near < ContactFar && (float.IsNaN(NearestWater) || NearestWater < ContactFar);
     }
+
+    /// <summary>How far from the eye the contact foam reaches (the shader's ContactFar).</summary>
+    const float ContactFar = 1200;
 
     /// <summary>Whether the scene needs <see cref="CaptureScene"/> before its water.</summary>
     internal bool NeedsCapture(float near) => NeedsRefraction(near) || NeedsDepth(near);
@@ -1472,7 +1560,7 @@ public sealed unsafe class WaterRenderer : IDisposable
     {
         var targets = Gpu.CurrentTargets();
         bool meitouWater = Meitou && meitou is not null;
-        var p = meitouWater ? meitou! : faithful;
+        var p = meitouWater ? MeitouProgram() : faithful;
         var c = PrepareConstants(meitouWater, eye, light, colours, meitouWater ? waves.NormalTime : time, extent, reflection, targets);
         var slice = Gpu.Frame.WriteConstants(MemoryMarshal.AsBytes(new ReadOnlySpan<WaterConstants>(in c)), uniformAlign);
         var set = ConstantSet(slice.Handle);
@@ -1563,6 +1651,8 @@ public sealed unsafe class WaterRenderer : IDisposable
         bool depth = sceneDepthCopy is not null && sceneDepthFrame == Gpu.Frame.Number;
         c.DepthPlanes = new Vector4(sceneDepthPlanes, depth ? 1f : 0f, 0f);
         c.SceneDepthMap = depth ? sceneDepthMap.Index(new SampledTexture(Gpu.Samplers.Get(ClampNearest), sceneDepthCopy!.View())) : Gpu.StandIn2D;
+        c.WakeCount = wakeCount;
+        for (int i = 0; i < wakeCount; i++) c.Wakes[i] = wakes[i];
         return c;
     }
 
@@ -1605,6 +1695,7 @@ public sealed unsafe class WaterRenderer : IDisposable
                 $"water     shore bake {field.LastBakeMs:F0} ms, {field.UploadedFields} fields uploaded and {field.UniformFields} uniform (one texel)"));
         faithful.Dispose();
         meitou?.Dispose();
+        meitouContact?.Dispose();
         frame.Dispose();
         quad.Dispose();
         grid?.Dispose();

@@ -21,7 +21,7 @@ exposure, with breaker/swash/foam envelopes, rather than bottom-slope distance a
 Game normal maps remain with reduced near strength. Shore-field bakes/publishing must not stall
 frames; retain ready textures until replacements finish. RiverFlowBake derives channel flow from
 heights because source flowmap RG does not follow channels; suppress ocean/surf in river channels.
-River coverage, biome scum and object-contact foam are incomplete.
+River coverage and biome scum are incomplete; object-contact foam is the off-by-default [switch below](#contact-foam).
 
 ## Shading and reflection
 
@@ -55,6 +55,16 @@ Faithful only while the nearest water is nearer than 4000 units; with reflection
 whether or not water is in view. **Observed** (2560x1440, DLSS, RTX 4090, Shark): about 0.03 ms with Meitou water (its
 pass restart was there), 0.05 ms with Faithful (a pass restart plus a full-size depth copy).
 
+## Contact foam
+
+Meitou look, not in the game; the `contactfoam` switch (Tab "Water contact foam"), off by default, not yet seen on a GPU. Look and cost **Unknown**. A second Meitou program
+(`WATER_CONTACT`, made on first use), so off the water has none of it; Vulkan only. Both reach 1200 units, fading over the last 400, and join the foam `amount`, so they take the lace, light and colour of the water's other foam.
+
+- **Contact**: `sceneThickness` under a band of 1.5 to 4 units (wandering with the foam's noise), where the ray's end stands 1 to 3 units or more above the terrain under the point:
+  rocks, posts, walls and legs; the shore keeps its own foam. Needs the scene depth: with `--no-water-refraction` the switch asks for the copy itself within its reach. The last 2 units'
+  fade (Edges) lets the foam through. Shallow bumps of displaced ground can pass the test: **Unknown** if it shows.
+- **Wakes** (`GameHost.UpdateWakes`, the 8 nearest within 800 units with feet under Y 100, moving over 1 unit/s; `WaterRenderer.SetWakes`): a ring round the body and two arms at 19.5 degrees trailing as far as the speed in units, up to 40. Live in the constants: nothing lasts on the water behind them.
+
 ## Safe work skips
 
 Surf branches only for surf/swash contribution. Zero ocean strength skips displacement/slope
@@ -72,6 +82,6 @@ near water, high-clarity far water, short-clarity shore and the15000 default bou
 check both topology/winding. **Observed** close-shore screenshots show256/128 differences;
 a still does not establish moving-wave quality. GPU savings on a shared card remain uncertain.
 Use a fixed water clock, wind, clarity, resolution/upscaler and texture quality for comparisons.
-**Unknown:** incomplete river/scum/object interactions, and behaviour over all winds/biomes. A
+**Unknown:** incomplete river and scum interactions, and behaviour over all winds/biomes. A
 shutdown VkImageView leak was observed in validation;
 zero rendering-time errors alone does not establish clean destruction.

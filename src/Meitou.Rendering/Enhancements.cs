@@ -171,6 +171,13 @@ public static class Enhancements
         new("chars2", "Character shading", "plain", "hair, cloth, skin, eyes",
             chars2 ?? (() => false), setChars2 ?? (_ => { }),
             "the game lights hair and cloth as it lights stone; Meitou draws two highlights along the strands and a soft sheen on the edges of cloth and a little on leather, and skin glows past its shadows and through ears and fingers held against the light, eyes show a small catchlight instead of a mirror of the landscape, and everything wets in the rain, in the sun and under lamps (docs/character-renderer.md \"Hair, cloth, skin and eyes\")"),
+        // Off by default, added last so the Shift+F keys do not move: not yet seen on a GPU.
+        new("trails", "Ground trails", "off", "footprints",
+            () => TerrainTrails.Enabled, v => TerrainTrails.Enabled = v,
+            "the game's characters leave nothing on the ground; Meitou presses footprints and drag marks into sand, mud, snow and, lightly, dirt near the camera, shaded as a normal and a height with the ground relief; wind and rain wear them away (visual only: not saved; docs/render-terrain.md \"Ground trails\")"),
+        new("contactfoam", "Water contact foam", "off", "foam, wakes",
+            () => WaterContact.Enabled, v => WaterContact.Enabled = v,
+            "the game's water meets what stands in it without a mark; Meitou clings foam to rocks, posts and legs at the waterline, from the scene's depth behind the surface, and trails a wake behind the characters wading or swimming near the camera (needs the depth the refraction copies; docs/render-water.md \"Contact foam\")"),
     ];
 
     /// <summary><c>--meitou</c> / <c>--faithful &lt;all|id,id...&gt;</c>: turns those switches to Meitou or to Faithful.</summary>
