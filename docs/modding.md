@@ -96,15 +96,16 @@ holds refuses the second mod.
   and logs. `IStateHashed` puts a system's state into `World.StateHash`. A mod system implementing a source interface `World` looks
   up by first match (`IAnimationSource`, `IProjectileSource`...) and placed before the standard one would replace it.
 - **Resolved combat:** a registered system implementing `ICombatHitObserver` receives `HitResolved(World, in CombatHit)` once per
-  landed melee/projectile contact, after its ordinary medical, XP, reaction, crime and log work. A fully absorbed contact counts;
-  blocks, dodges, misses, a contact that selects no medical part and a captive's execution blows (`CombatSystem.Execute`) do not. The
-  value payload has delivered damage, armour absorption, selected medical-part index, original attacker/victim generations,
-  attack/projectile sequence, approach and pre-hit life/incapacitation flags. Positions are the victim's root, not a measured surface
+  landed melee/projectile contact and execution blow on a captive (`CombatSystem.Execute`, `CombatHitSource.Execution`), after its
+  ordinary medical, XP, reaction, crime and log work. A fully absorbed contact counts; blocks, dodges, misses and a contact that selects
+  no medical part do not. The value payload has delivered damage, armour absorption, selected medical-part index, original
+  attacker/victim generations, attack/projectile sequence, approach and pre-hit life/incapacitation flags. Positions are the victim's root, not a measured surface
   collision; pre-damage part health is not supplied. Callbacks run serially in system order, may read the world and change their own
   hashed state, and queue later commands for gameplay changes; they must not mutate world state or call combat recursively. A
   throwing callback is logged and disabled for that world; others continue. Melee callbacks run in Commit, projectile callbacks in
-  `CombatSystem.Schedule` (`FlyProjectiles`); both precede every `SlowWorld` of the tick, so a system draining its own hit queue
-  there needs no anchor. Faulted registrations enter the state hash. Without observers, no payload or event queue is made and no
+  `CombatSystem.Schedule` (`FlyProjectiles`), both before every `SlowWorld` of the tick; execution callbacks run in the captives'
+  `SlowWorld`, which has no anchor, so a system draining its own hit queue in `SlowWorld` sees them the same tick only at
+  `SystemAnchor.End`, else the next tick. Faulted registrations enter the state hash. Without observers, no payload or event queue is made and no
   additional rolls occur.
 - **Dialogue codes:** `AddDialogueCondition(code, handler)` and `AddDialogueEffect(code, handler)`, named from FCS data in a
   DIALOG_ACTION's `condition name` / `action name`. A condition gets `DialogueCheck` (world, speaker, the subject `who` picked, the

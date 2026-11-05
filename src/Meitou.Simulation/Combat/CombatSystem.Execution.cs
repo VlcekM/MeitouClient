@@ -33,6 +33,7 @@ public sealed partial class CombatSystem
         events.Clear();
         ReadOnlySpan<ArmourPiece> armour = dc.Fighter is { } df ? df.Armour : default;
         var cover = new CoverRoll(world.Seed, Rng.Key(table.IdOf(d)), a, blow, 0);
+        bool wasIncapacitated = medical.Incapacitated;
         var (part, damage, absorbed) = HitResolver.LandDetailed(medical, ctx, packet, armour, cover, toughness, false, false, combat, events);
         FloatHit(world, d, dc, ac.IsPlayer, part, damage, absorbed);
         ref var D = ref write[d];
@@ -67,6 +68,17 @@ public sealed partial class CombatSystem
         if (death) Knockdown(world, d, dc, -toAttacker, damage.Cut + damage.Blunt + damage.Pierce);
         if (medical.Incapacitated) Sound(world, SoundKind.Down, d, a, prev[d].Position, fatal: death);
         if (death && world.Uniques.RecordOf(table.IdOf(d)) is { } unique) world.Uniques.Died(unique, ac.IsPlayer, dc.Faction);
+        if (part >= 0) ObserveExecution(world, a, d, blow, part, damage, absorbed, -toAttacker, wasIncapacitated);
         return death;
+    }
+
+    /// <summary>The execution blow as a <see cref="CombatHit"/> for the mods' observers: always the intended target, alive before it (<see cref="Execute"/>).</summary>
+    static void ObserveExecution(World world, int a, int d, int blow, int part, HitDamage damage, ArmourAbsorbed absorbed, Vector2 travel, bool wasIncapacitated)
+    {
+        if (!world.HasCombatHitObservers) return;
+        var table = world.Characters;
+        var victim = table.Previous[d];
+        world.ObserveCombatHit(new CombatHit(world.Tick, CombatHitSource.Execution, table.IdOf(a), table.IdOf(d), 0, blow, part,
+            damage, absorbed, victim.Position, new(travel.X, 0, travel.Y), victim.Yaw, -1, false, true, true, wasIncapacitated));
     }
 }
