@@ -559,7 +559,8 @@ sealed class SceneHost(IGpuContext ctx)
         var depth = clearDepth ? targets.Depth with { Load = LoadOp.Clear, DepthClear = DepthConvention.Clear } : targets.Depth;
         // The extra target (the GI resolve's albedo) is cleared to 0 with the colour: no surface there takes the probes' light in post.
         var extra = clearColour is not null && !targets.Extra.IsNull ? targets.Extra with { Load = LoadOp.Clear, Clear = default } : targets.Extra;
-        list.BeginRendering(new RenderingDesc(colour, depth, targets.Width, targets.Height, 0, 0, targets.ShadingRate, targets.ShadingRateTexel, extra), secondaries);
+        var extra2 = clearColour is not null && !targets.Extra2.IsNull ? targets.Extra2 with { Load = LoadOp.Clear, Clear = default } : targets.Extra2;
+        list.BeginRendering(new RenderingDesc(colour, depth, targets.Width, targets.Height, 0, 0, targets.ShadingRate, targets.ShadingRateTexel, extra, extra2), secondaries);
         ctx.BeginHostPassParallel(list, targets, DrawState.SceneDepth(targets.Formats, DrawState.Rgb), stage);   // alpha: the characters only (the SSAO character mask)
         cmd = list;
     }
@@ -819,6 +820,9 @@ static partial class WorldFrame
         public bool GiActive = true;
         /// <summary>The GI resolve's divisor (0 the lit fragments read the probes, 1 full size, 2 half; the bench's gi-resolve switch; docs/render-gi.md "Resolve").</summary>
         public int GiResolve = 2;
+        /// <summary>Whether this frame's sun is traced (<see cref="WorldFrame.BeginFrame"/>; docs/render-shadows.md "Traced sun").</summary>
+        public bool Traced;
+        internal Gi.TracedSunPass? TracedSun;
         /// <summary>The Vulkan post chain (its reflection and GI also read it); null on a backend with a seam-only chain.</summary>
         public PostProcess? Post;
         /// <summary>The chain <see cref="WorldFrame.Draw"/> runs: <see cref="Post"/> on Vulkan (also when a host sets only that), the host's seam chain on Metal.</summary>
@@ -856,6 +860,7 @@ static partial class WorldFrame
         public void Dispose()
         {
             GiDebugPass?.Dispose();
+            TracedSun?.Dispose();
             ProbeGi?.Dispose();
             Probes?.Dispose();
             Lamps?.Dispose();
@@ -1833,6 +1838,7 @@ static partial class WorldFrame
                 (_, worldToClip, planes, lodEye) => lo.DrawLandmarksDepth(worldToClip, lodEye, planes, render, gpu.Terrain))
             : (ShadowPass.LandmarkCasters?)null;
         shadow.CameraFlying = gpu.CameraFlying;
+        shadow.ActorDraw = gpu.Traced ? casters.DrawActors : null;
         shadow.Render(view, light.SunDirection, casters.Draw, sunHeight, landmarks, casters.Prepare);
         shadow.CasterStats = casters.Stats();
     }
@@ -1899,6 +1905,14 @@ static partial class WorldFrame
             cascades?.Append($" [c{cascade.Index}: texel {cascade.Texel:0.0}, terrain {(terrain.DepthTriangles - triangles) / 1000}k tri {(t1 - t0) * ms:0.00} ms, "
                 + $"objects {objectInstances} in {objectCalls} calls {(t2 - t1) * ms:0.00} ms, "
                 + $"foliage {foliageInstances} in {foliageCalls} calls {(t3 - t2) * ms:0.00} ms ({gpu.Foliage?.DepthDetail})]");
+        }
+
+        /// <summary>A cascade's character layer (the traced sun: what its rays do not hold), from the instances <see cref="Prepare"/> gathered for the cascade.</summary>
+        public void DrawActors(ShadowCascade cascade, Matrix4x4 worldToClip, Vector4[] planes, Vector3 lodEye)
+        {
+            var (floor, minRadius) = CharacterCasting(cascade);
+            gpu.Characters?.DrawDepth(worldToClip, lodEye, planes, floor, minRadius, cascade.Index);
+            StageClock.Sub("characters");
         }
 
         /// <summary>The casters drawn over the cascades and their CPU time per kind, for the statistics.</summary>

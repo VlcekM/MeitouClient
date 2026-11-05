@@ -60,7 +60,8 @@ public sealed unsafe class FoliageGrassGpu : IDisposable
             orderBindings = Bindings(vk, order!.Value);
             scratch = new FrameScratch(vk, "foliage grass scratch", BufferUse.Storage | BufferUse.Indirect | BufferUse.TransferSrc | BufferUse.TransferDst, 64ul << 20);
         }
-        arena = new BufferArena(ctx, arenaBytes, BufferUse.Vertex | BufferUse.TransferDst, "foliage grass blades");
+        // Storage: the traced sun's kernel reads the blades (Gi.TracedGrass).
+        arena = new BufferArena(ctx, arenaBytes, BufferUse.Vertex | BufferUse.TransferDst | (ctx is GpuContext ? BufferUse.Storage : 0), "foliage grass blades");
         slots = DeviceBuffer.Create(ctx, (ulong)slotCapacity * GrassSlot.Size, BufferUse.Storage | BufferUse.TransferDst, "foliage grass slots");
         prefixes = DeviceBuffer.Create(ctx, (ulong)slotCapacity * PrefixStride * 4, BufferUse.Storage | BufferUse.TransferDst, "foliage grass prefixes");
         counted = new ReadbackBuffer?[ctx.FramesInFlight];

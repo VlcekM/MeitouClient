@@ -327,6 +327,16 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         return key == 0 ? 0 : textureCache.Index(key, Gpu.LodBias, 0);
     }
 
+    /// <summary>What cuts a ray-traced part as the draws cut it, for the traced sun: its map's bindless index (0: none or not resident) and threshold.</summary>
+    internal (uint Map, float Threshold) RayCut(ObjectMaterialSet materials, int part)
+    {
+        if (materials.Parts.Length == 0) return default;
+        var pm = materials.Parts[Math.Min(part, materials.Parts.Length - 1)];
+        if (pm.Material is not { AlphaThreshold: > 0 } m) return default;
+        uint key = m.Alpha switch { AlphaSource.NormalAlpha => pm.Normal, AlphaSource.DiffuseAlpha => pm.Diffuse, _ => 0 };
+        return key == 0 ? default : (textureCache.Index(key, Gpu.LodBias, 0), m.AlphaThreshold);
+    }
+
     /// <summary>
     /// The instances the GI traces: those drawn within <paramref name="range"/>, without the construction sites, whose parts are drawn clipped at the scaffold (the
     /// rays would meet the whole building, the roof of a half-built or ruined one included, and light the open site as a closed room).

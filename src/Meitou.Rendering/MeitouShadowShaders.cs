@@ -45,10 +45,12 @@ static class MeitouShadowShaders
             vec4 uMsParams;        // x: noise offset (changes per frame under a temporal upscaler), y: shadow range, z: fade start, w: terrain term fade start
             vec4 uMsTerrain;       // xy: world x, z of the first sample, z: samples per world unit, w: 1 when the terrain term is on
             vec4 uMsTerrain2;      // x: samples per side, y: height bias, z: minimum softness (height), w: softness per unit of occluder distance
-            vec4 uMsFlags;         // x: 1 when the blocker map is valid (contact-hardening penumbrae), y: terrain term fade end, z: cascades filtered in full (the filter tier)
+            vec4 uMsFlags;         // x: 1 when the blocker map is valid (contact-hardening penumbrae), y: terrain term fade end, z: cascades filtered in full (the filter tier), w: cascades with character layers (the traced sun)
             mat4 uMsLandmarkTile;  // (world - origin) -> (u, v, depth) in the landmark map (ShadowPass.Meitou, "landmark shadows")
-            vec4 uMsLandmark;      // x: filter radius (UV), y: normal offset (world), w: 1 when the landmark map is on
+            vec4 uMsLandmark;      // x: filter radius (UV), y: normal offset (world), z: the layer of cascade 0's characters, w: 1 when the landmark map is on
         };
+        // While set (kenshiLight, the traced sun): the receiver reads the first uMsFlags.w cascades' character layers, whose casters are the ones the rays do not hold.
+        bool msActors = false;
         uniform sampler2D uShadowTerrain;   // per world grid sample: (height of the shadow's top, distance to the occluder)
         uniform sampler2DArray uShadowBlocker;   // the cascades' depth at half resolution, nearest of each 2 × 2 (raw, for the blocker search), a layer per cascade
         uniform sampler2DShadow uShadowLandmark;   // the landmarks' depth along the sun (comparison)
@@ -84,6 +86,7 @@ static class MeitouShadowShaders
         // parameters: the interface scan of the Vulkan layer would take a global-scope "out" for a stage output.)
         float msCascade(int c, vec3 world, vec3 ng, vec3 nl, float noise)
         {
+            int layer = msActors ? c + int(uMsLandmark.z) : c;
             float texel = uMsSlice[c].w;
             float cosL = clamp(-nl.z, 0.0, 1.0);
             vec3 p = world - uShadowOrigin.xyz + ng * (texel * (0.5 + 1.5 * sqrt(1.0 - cosL * cosL)));
@@ -109,7 +112,7 @@ static class MeitouShadowShaders
                     vec2 d = msDisk8[k];
                     vec2 o = vec2(rot.x * d.x - rot.y * d.y, rot.y * d.x + rot.x * d.y) * search;
                     vec2 uv = clamp(t.xy + o, vec2(0.0), vec2(1.0));
-                    float z = textureLod(uShadowBlocker, vec3(uv, float(c)), 0.0).r;
+                    float z = textureLod(uShadowBlocker, vec3(uv, float(layer)), 0.0).r;
                     float limit = t.z + dot(o, slope) - 0.0005;
                     if (z < limit) { sum += z; found += 1.0; }
                 }
@@ -127,14 +130,14 @@ static class MeitouShadowShaders
                 {
                     vec2 d = msDisk16[k];
                     vec2 o = vec2(rot.x * d.x - rot.y * d.y, rot.y * d.x + rot.x * d.y) * radius;
-                    lit += shadowLayer(t.xy + o, c, t.z + dot(o, slope));
+                    lit += shadowLayer(t.xy + o, layer, t.z + dot(o, slope));
                 }
                 if (lit == 0.0 || lit == {{F(FilterTaps / 2)}}) return lit / {{F(FilterTaps / 2)}};
                 for (int k = 1; k < {{FilterTaps}}; k += 2)
                 {
                     vec2 d = msDisk16[k];
                     vec2 o = vec2(rot.x * d.x - rot.y * d.y, rot.y * d.x + rot.x * d.y) * radius;
-                    lit += shadowLayer(t.xy + o, c, t.z + dot(o, slope));
+                    lit += shadowLayer(t.xy + o, layer, t.z + dot(o, slope));
                 }
                 return lit / {{F(FilterTaps)}};
             }
@@ -142,7 +145,7 @@ static class MeitouShadowShaders
             {
                 vec2 d = msDisk8[k];
                 vec2 o = vec2(rot.x * d.x - rot.y * d.y, rot.y * d.x + rot.x * d.y) * radius;
-                lit += shadowLayer(t.xy + o, c, t.z + dot(o, slope));
+                lit += shadowLayer(t.xy + o, layer, t.z + dot(o, slope));
             }
             return lit / {{F(FilterTaps / 2)}};
         }
@@ -182,7 +185,7 @@ static class MeitouShadowShaders
             float csm = 1.0;
             if (depth < uMsParams.y)
             {
-                int count = int(uShadowForward.w);
+                int count = msActors ? int(uMsFlags.w) : int(uShadowForward.w);
                 for (int c = 0; c < {{ShadowSettings.MaxCascades}}; c++)
                 {
                     if (c >= count || depth > uMsSlice[c].y) continue;

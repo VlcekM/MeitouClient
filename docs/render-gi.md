@@ -21,7 +21,7 @@ ray-query shaders with explicit descriptor bindings. The feature is optional for
 Fine/coarse terrain:256² quads, spacing16/160 (4096/40960 width), heights sampled on workers.
 Object range6000; resident finest mesh parts build bottom levels, max32/frame; unused600 frames
 can retire. Foliage radius>=150, range4000, max14336 instances, cached candidates invalidate by
-movement/deletion/build progress. Do not trace grass, characters or water as geometry.
+movement/deletion/build progress. Probes see no grass, characters or water (rays mask `0x0F`; the traced sun's grass and small foliage sit under masks of their own: [Traced sun](render-shadows.md#traced-sun)).
 Origin tracks eye in64-unit steps with1024-unit hysteresis; lazy scene epochs coordinate commits.
 Shared top level fits16384 instances, prefers fast trace, reuses identical instance data.
 Terrain refits unchanged topology (periodic full rebuild); retire structures after GPU consumers.
@@ -87,7 +87,7 @@ must write that target (`WithAlbedo`, `none` for unlit ones), including the GPU-
 an unwritten output is undefined (in practice the surface behind, whose GI then lands on the
 front fragment; seen on grass and on crossbow bolts, i.e. `DebrisRenderer`, until it used `WithAlbedo`). Resolved surfaces currently lose the
 per-fragment specular-occlusion term. Strong depth/normal discontinuities need rejection.
-Surface bit9 marks interiors; signed low-resolution depth preserves that class (0 empty, negative
+Surface bit9 marks interiors; bits 10-12 are the traced sun's; signed low-resolution depth preserves that class (0 empty, negative
 interior). Upsampling rejects the other class so the gain cannot bleed onto outdoor surfaces.
 
 ## Performance and verification

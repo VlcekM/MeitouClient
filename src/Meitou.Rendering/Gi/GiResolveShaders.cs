@@ -25,6 +25,7 @@ static partial class GiResolveShaders
     /// one that calls it and then writes <c>giAlbedoOut</c> (set by <c>kenshiLight</c>), so early returns and discards keep working.
     /// <paramref name="inShader"/>: the program keeps reading the probes itself (foliage, grass, characters, impostors) and writes 0;
     /// <paramref name="none"/>: a fragment without <c>kenshiLight</c> (the water) that only clears the target where it draws.
+    /// Location 2 is the traced sun's term (<c>tracedSunOut</c>, docs/render-shadows.md "Traced sun"), written the same way; it goes nowhere without that attachment.
     /// </summary>
     public static string WithAlbedo(string fragment, bool inShader = false, bool none = false)
     {
@@ -41,13 +42,14 @@ static partial class GiResolveShaders
         return body + $$"""
 
             layout(location = 1) out uvec4 oGiAlbedo;
-            void main() { giLitMain(); oGiAlbedo = {{(none ? "uvec4(0u)" : "giAlbedoOut")}}; }
+            layout(location = 2) out vec4 oTracedSun;
+            void main() { giLitMain(); oGiAlbedo = {{(none ? "uvec4(0u)" : "giAlbedoOut")}}; oTracedSun = {{(none ? "vec4(0.0)" : "vec4(tracedSunOut, 0.0)")}}; }
 
             """;
     }
 
     /// <summary>The scene's position from the scene depth, shared by both passes.</summary>
-    const string Reconstruct = """
+    internal const string Reconstruct = """
         uniform sampler2D uNearDepth;
         uniform vec2 uNearPlanes;               // near, far of the scene depth
         uniform vec2 uTan;                      // tan(fov/2) * aspect, tan(fov/2)

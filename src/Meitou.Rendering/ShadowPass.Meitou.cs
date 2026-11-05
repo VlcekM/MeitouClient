@@ -222,12 +222,36 @@ public sealed unsafe partial class ShadowPass
         LandmarkCount = landmarkSpheres.Count;
     }
 
+    /// <summary>
+    /// With the traced sun (docs/render-shadows.md "Traced sun"): draws what the rays do not hold (the characters) into a cascade's own layer of the array, past the
+    /// cascades, with the cascade's matrix; null without it. The cascades themselves stay whole: the shafts, the particles, the water's foam and the reflection read them.
+    /// </summary>
+    public CasterDraw? ActorDraw { get; set; }
+
+    /// <summary>The cascades whose character layers the receivers read (the last publish's; 0: the traced sun does not run). The traced range ends with the last one's slice.</summary>
+    public int TracedCascades { get; private set; }
+
+    /// <summary>Cascades with a character layer: all but the last two, whose texels are too coarse for the shadow of a figure, at least one.</summary>
+    static int ActorLayers(int count) => count < 2 ? 0 : Math.Max(count - 2, 1);
+
+    void DrawActorLayer(in CasterView view, int layer)
+    {
+        var (c, worldToClip, planes, lodEye) = view;
+        var host = BeginHost("shadow actors", clear: true, layer: layer);
+        SetTile(0, 0, atlasSize);
+        SetCasterBias(new Vector4(c.FixedBias, MeitouShadowFit.Slope, c.MaxSlopeBias, 1f));
+        ActorDraw!(c, worldToClip, planes, lodEye);
+        EndHost(host);
+    }
+
     void RenderMeitou(ShadowView view, Vector3 toSun, CasterDraw draw, LandmarkCasters? landmarks, CasterPrepare? prepare)
     {
         var watch = Stopwatch.StartNew();
         Array.Clear(PhaseMs);
         int count = MeitouCascades;
-        Resize(Settings.TileSize, count);
+        int actors = ActorDraw is null ? 0 : ActorLayers(count);
+        if (atlas is not null && atlasLayers != count + actors) meitouValid = false;   // a new array holds nothing: every cascade again
+        Resize(Settings.TileSize, count + actors);
         if (phases.Length != count) phases = Phases(count);
         float near = MeitouShadowFit.QuantizedNear(view.Near);
         var splits = MeitouShadowFit.Splits(near, Math.Max(EffectiveRange, near * 4), count, view.Focus);
@@ -293,13 +317,14 @@ public sealed unsafe partial class ShadowPass
             SetCasterBias(new Vector4(c.FixedBias, MeitouShadowFit.Slope, c.MaxSlopeBias, 1f));
             draw(c, worldToClip, planes, lodEye);
             EndHost(host);
+            if (i < actors) DrawActorLayer(casterViews[k], count + i);
             stored[i] = c;
             storedSunDir[i] = toSun;
             stale[i] = false;
             CascadeDraws[i]++;
         }
         Array.Clear(casterViews);
-        bool blockers = ContactHardening && filterQuality > 0 && UpdateBlockers(drawNow, count);
+        bool blockers = ContactHardening && filterQuality > 0 && UpdateBlockers(drawNow, count, actors);
         if (coarse is not null)
         {
             terrainMap ??= new TerrainShadowMap(Gpu, coarse, coarseSize);
@@ -316,6 +341,7 @@ public sealed unsafe partial class ShadowPass
         var cascades = new ShadowCascade[published];
         for (int i = 0; i < published; i++) cascades[i] = stored[i]!;
         Cascades = cascades;
+        TracedCascades = Math.Max(Math.Min(actors, published - 1), 0);   // the fade reads the slice after the last
         PublishMeitou(view, cascades, toSun, blockers);
         CpuMs = watch.Elapsed.TotalMilliseconds;
         cpuSamples.Add(CpuMs);
@@ -325,14 +351,14 @@ public sealed unsafe partial class ShadowPass
     /// Rebuilds the blocker map's layers of the cascades drawn this frame: one native segment with a rendering per layer (the layers not drawn
     /// keep what they hold), the cascade array read raw through a plain sampler (no comparison), the fullscreen triangle.
     /// </summary>
-    bool UpdateBlockers(ReadOnlySpan<bool> drawn, int count)
+    bool UpdateBlockers(ReadOnlySpan<bool> drawn, int count, int actors)
     {
         int size = atlasSize / 2;
         bool fresh = false;   // a new map: every layer
-        if (blocker is null || blocker.Desc.Width != size || blocker.Desc.Layers != count)
+        if (blocker is null || blocker.Desc.Width != size || blocker.Desc.Layers != count + actors)
         {
             blocker?.Dispose();
-            blocker = Gpu.CreateTexture(new TextureDesc(InternalFormat.R32f, size, size, Layers: count, Kind: TextureKind.Texture2DArray,
+            blocker = Gpu.CreateTexture(new TextureDesc(InternalFormat.R32f, size, size, Layers: count + actors, Kind: TextureKind.Texture2DArray,
                 Use: TextureUse.Sampled | TextureUse.ColourTarget | TextureUse.TransferSrc, Name: "shadow blocker map"));
             blockerSampled = Sampled(blocker, TextureMinFilter.Nearest, TextureMagFilter.Nearest, TextureWrapMode.ClampToEdge);
             blockerPublished = false;
@@ -344,7 +370,7 @@ public sealed unsafe partial class ShadowPass
             var p = blockerNative = LegacyProgram.Create(Gpu, ShadowShaders.FullscreenVertex, MeitouShadowShaders.BlockerFragment, "shadow blockers");
             (blockerAtlasSlot, blockerSizeHandle, blockerLayerHandle) = (p.Sampler("uAtlas"), p.Uniform("uAtlasSize"), p.Uniform("uLayer"));
         }
-        RecordBlockers(drawn, count, fresh);
+        RecordBlockers(drawn, count, actors, fresh);
         return true;
     }
 
@@ -353,7 +379,7 @@ public sealed unsafe partial class ShadowPass
         BlendState.Off, ColorMask.R | ColorMask.G | ColorMask.B | ColorMask.A,
         PolygonKind.Fill, false, false);
 
-    void RecordBlockers(ReadOnlySpan<bool> drawn, int count, bool fresh)
+    void RecordBlockers(ReadOnlySpan<bool> drawn, int count, int actors, bool fresh)
     {
         var p = blockerNative!;
         var map = blocker!;
@@ -363,9 +389,9 @@ public sealed unsafe partial class ShadowPass
         int side = map.Desc.Width;
         var whole = new PixelRect(0, 0, (uint)side, (uint)side);
         var pipeline = Gpu.Pipelines.Get(BlockerState.Pipeline(p.Program, p.VertexLayout([]), PrimitiveType.Triangles, formats, "shadow blockers"));
-        for (int i = 0; i < count; i++)
+        for (int i = 0; i < count + actors; i++)
         {
-            if (!drawn[i] && !fresh) continue;
+            if (!drawn[i < count ? i : i - count] && !fresh) continue;   // a character layer goes with its cascade
             var target = new RenderTarget(map.Attachment(0, i), LoadOp.Load, default);
             cmd.BeginRendering(new RenderingDesc(target, default, side, side));
             BlockerState.Record(cmd, new PassTargets(target, default, formats, side, side, new PixelViewport(0, 0, side, side, 0, 1), whole));
@@ -427,6 +453,8 @@ public sealed unsafe partial class ShadowPass
             Put(ms, P + 32, new Vector4(box.FilterRadius, (float)(box.Texel * 1.5), 0, 1));
             landmarkPublished = true;
         }
+        ms[P + 34] = MeitouCascades;   // uMsLandmark.z: cascade 0's character layer
+        ms[P + 15] = TracedCascades;   // uMsFlags.w
         Upload(data);
         meitouBlock.Set(ms);
         // The maps the receivers sample from now on (the GL code bound them to their units here; a unit kept what it held).

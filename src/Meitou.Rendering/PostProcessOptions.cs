@@ -25,6 +25,9 @@ public sealed class PostOptions
     /// <summary>Meitou switch (<c>shafts</c>; docs/render-shafts.md): the haze and the weather's fog darkened where the sun is shadowed along the view ray, so shadows
     /// cast light shafts through the air; Faithful leaves the haze lit everywhere, as the game does.</summary>
     public bool LightShafts = true;
+    /// <summary>Meitou switch (<c>traced</c>, off by default; docs/render-shadows.md "Traced sun"): near the eye the sun's shadow is traced, grass included, where the device
+    /// has ray queries and the GI resolve runs; everywhere else, and off, the cascades.</summary>
+    public bool TracedSun;
     /// <summary>Meitou switch (<c>fog</c>; docs/render-post.md "Fog"): the particle sprites fade out where they meet a surface instead of cutting into it; Faithful
     /// draws them hard-edged, as the game's particle materials are but its mist and steam (which fade; not drawn so yet).</summary>
     public bool MeitouFog = true;
@@ -116,7 +119,7 @@ public sealed class PostOptions
     public void CopyFrom(PostOptions other)
     {
         Preset = other.Preset; Fxaa = other.Fxaa; Smaa = other.Smaa; HeatHaze = other.HeatHaze; Ssao = other.Ssao;
-        Dither = other.Dither; LowResParticles = other.LowResParticles; LightShafts = other.LightShafts; MeitouFog = other.MeitouFog; ShaftQuality = other.ShaftQuality;
+        Dither = other.Dither; LowResParticles = other.LowResParticles; LightShafts = other.LightShafts; TracedSun = other.TracedSun; MeitouFog = other.MeitouFog; ShaftQuality = other.ShaftQuality;
         ShaftStrength = other.ShaftStrength; ShaftAir = other.ShaftAir; ShaftAirDawn = other.ShaftAirDawn;
         ParticleDivisor = other.ParticleDivisor; Exposure = other.Exposure; ToneMap = other.ToneMap; ToneMix = other.ToneMix; Grade = other.Grade;
         HeatHazeStrength = other.HeatHazeStrength; NightGradeStrength = other.NightGradeStrength; BloomStrength = other.BloomStrength;
@@ -146,7 +149,7 @@ public sealed class PostOptions
 
     public string Describe() =>
         $"{Preset}: aa {(Upscale.Temporal ? "temporal" : Smaa ? "smaa" : Fxaa ? "fxaa" : "off")}, heat haze {(HeatHaze ? "weather" + (HeatHazeScale != 1 ? $" strength {HeatHazeScale:0.##}" : "") : "off")}, " +
-        $"ssao {(Ssao ? "on" : "off")}, shafts {(LightShafts ? $"{ShaftStrength:0.##} ({ShaftCells}x{ShaftSlices}x{ShaftSamples})" : "off")}, exposure x{Exposure:0.##}, tonemap {ToneMapUsed.ToString().ToLowerInvariant()}{(ToneMapUsed == ToneMapOperator.Hybrid ? $" {ToneMix:0.##}" : "")}, " +
+        $"ssao {(Ssao ? "on" : "off")}, traced sun {(TracedSun ? "on" : "off")}, shafts {(LightShafts ? $"{ShaftStrength:0.##} ({ShaftCells}x{ShaftSlices}x{ShaftSamples})" : "off")}, exposure x{Exposure:0.##}, tonemap {ToneMapUsed.ToString().ToLowerInvariant()}{(ToneMapUsed == ToneMapOperator.Hybrid ? $" {ToneMix:0.##}" : "")}, " +
         $"grade {(GradeUsed ? $"saturation {Saturation:0.##} contrast {Contrast:0.##}" : "off")}, night grade {(NightGradeAmount > 0 ? NightGradeAmount.ToString("0.##", CultureInfo.InvariantCulture) : "off")}, " +
         $"bloom {(BloomAmount > 0 ? BloomAmount.ToString("0.###", CultureInfo.InvariantCulture) : "off")}, " +
         $"upscaler {Upscale.Describe()}";

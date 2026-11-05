@@ -264,8 +264,22 @@ static class AtmosphereShaders
         vec3 stageLight(vec3 albedo, vec3 n, vec3 v, vec3 l, float gloss, bool hdr) { return stageLight(albedo, n, v, l, gloss, hdr, vec3(clamp(dot(n, l), 0.0, 1.0))); }
         // What a lit fragment writes to the GI resolve's surface target (GiResolveShaders.WithAlbedo; RGBA16UI, 0: no probes here), set by kenshiLight:
         // x, y the shading normal's octahedral position (16 bits each), z sqrt(albedo) red | green << 8, w blue | 1 << 8 | interior << 9.
+        // With the traced sun (docs/render-shadows.md "Traced sun") also from the programs that read the probes themselves: bit 10 traced, bits 11-12 the receiver.
         uvec4 giAlbedoOut = uvec4(0u);
         bool giInterior = false;
+        // The sun term the traced sun's pass adds where its rays reach (location 2, GiResolveShaders.WithAlbedo), before the haze, and the kind of surface, set before kenshiLight:
+        // 0 solid, 1 grass, 2 foliage cards, 3 characters; below 0: stays with the cascades (impostors, whose quad is not their surface).
+        vec3 tracedSunOut = vec3(0.0);
+        int atmoReceiver = 0;
+        // How much of the sun at a world point is left to the traced sun: all of it nearer than the last cascade with character layers, none past its slice
+        // (uMsFlags.w: those cascades, uGiParams.z 2: this view traces; the traced sun is the main view's). The fade is that of the two cascades.
+        float atmoTracedShare(vec3 world)
+        {
+            if (uGiParams.z < 1.5 || uMsFlags.w < 0.5 || atmoReceiver < 0) return 0.0;
+            int last = int(uMsFlags.w);
+            float end = uMsSlice[last - 1].y;
+            return 1.0 - smoothstep(min(uMsSlice[last].x, end - 1.0), end, dot(world - uShadowOrigin.xyz, uShadowForward.xyz));
+        }
         float atmoSelfShadow = 1.0;   // a surface's own shadow on the sun (the terrain's relief, GroundRelief), set before kenshiLight; 1 none
         float atmoShadowLift = 0.0;   // world units above the point the sun shadow is looked up from (a ground trough under its flat casters, GroundRelief)
         // A surface lit as Kenshi's main lighting pass lights it (metalness atmoMetalness): HDR colour. v: towards the eye.
@@ -278,7 +292,18 @@ static class AtmosphereShaders
             float fresnelDiffuse = clamp(1.0 - dot(specColour, vec3(1.0 / 3.0)), 0.0, 1.0);
             vec4 am = atmoAmbientMapAt(world);
             vec3 l = uAtmoLight.xyz;
-            vec3 sun = uAtmoSunLight * am.a * 2.0 * atmoCloudShadow(world) * kenshiShadow(world + vec3(0.0, atmoShadowLift, 0.0), n) * atmoSelfShadow;   // the sun shadow term (deferred.hlsl: lightColor * shadow)
+            vec3 sunBase = uAtmoSunLight * am.a * 2.0 * atmoCloudShadow(world);
+            vec3 shadowPoint = world + vec3(0.0, atmoShadowLift, 0.0);
+            float tracedShare = atmoTracedShare(world);
+            // The sun shadow term (deferred.hlsl: lightColor * shadow); what the traced sun takes over leaves the colour, shadowed by the characters' layers alone.
+            vec3 sun = tracedShare < 1.0 ? sunBase * kenshiShadow(shadowPoint, n) * atmoSelfShadow * (1.0 - tracedShare) : vec3(0.0);
+            vec3 tracedSun = vec3(0.0);
+            if (tracedShare > 0.0)
+            {
+                msActors = true;
+                tracedSun = sunBase * kenshiShadow(shadowPoint, n) * atmoSelfShadow * tracedShare;
+                msActors = false;
+            }
             gloss = clamp(gloss, 0.0, 1.0);
             float roughness = 1.0 - gloss * 0.99, a = roughness * roughness, a2 = a * a;
             float nl = clamp(dot(n, l), 0.0, 1.0);
@@ -289,7 +314,14 @@ static class AtmosphereShaders
             float D = a2 / (ATMO_PI * denom * denom);
             float fresnel = exp2((-5.55473 * lh - 6.98316) * lh);
             float k = a * 0.5, vis = 1.0 / (lh * lh * (1.0 - k * k) + k * k);
-            vec3 sunSpecular = sun * (nl * D * (specColour * vis + (1.0 - specColour) * fresnel * vis)) / ATMO_PI;
+            vec3 sunGlint = nl * D * (specColour * vis + (1.0 - specColour) * fresnel * vis);
+            vec3 sunSpecular = sun * sunGlint / ATMO_PI;
+            if (tracedShare > 0.0)
+            {
+                tracedSunOut = albedo * (ATMO_PI * diffuseNl * tracedSun * fresnelDiffuse) + tracedSun * sunGlint / ATMO_PI;
+                giAlbedoOut.xy = uvec2((giOct(n) * 0.5 + 0.5) * 65535.0 + 0.5);
+                giAlbedoOut.w = (giInterior ? 512u : 0u) | 1024u | (uint(atmoReceiver) << 11);
+            }
             float env = uAtmoLight.w;
             vec3 envDiffuse = atmoIrradiance(n) * fresnelDiffuse * am.rgb * env;
             // Meitou probe GI: the probes' irradiance (sky seen past the geometry, light bounced off it) in place of the sky's, and the sky's
@@ -302,7 +334,7 @@ static class AtmosphereShaders
             {
                 uvec2 o = uvec2((giOct(n) * 0.5 + 0.5) * 65535.0 + 0.5);
                 uvec3 c = uvec3(sqrt(clamp(albedo, 0.0, 1.0)) * 255.0 + 0.5);
-                giAlbedoOut = uvec4(o, c.r | (c.g << 8), c.b | 256u | (giInterior ? 512u : 0u));
+                giAlbedoOut = uvec4(o, c.r | (c.g << 8), c.b | 256u | (giInterior ? 512u : 0u) | (giAlbedoOut.w & 7168u));
             }
             else
                     #endif

@@ -407,6 +407,7 @@ static class CharacterShaders
             giInterior = vInterior != 0u;
             skinGeometric = smoothNormal; skinCurvature = curvature; skinShare = skin; skinAlbedo = albedo;
             atmoMetalness = metal;
+            atmoReceiver = 3;
             if (view.fogDistance > 0.0 && uAtmoParams.x > 0.5) colour = kenshiLight(albedo, n, v, gloss, vWorld, skinDiffuse(n, smoothNormal, uAtmoLight.xyz, curvature, skin, albedo));
             // The editor's stage (CharacterRenderer.DrawStage, a fog distance of -2): the game's rtt.hlsl (AtmosphereShaders.stageLight); -3 the same unclamped (Meitou's stage and
             // portraits, which also take the Meitou skin; the game's stage keeps its plain N.L).

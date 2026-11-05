@@ -434,6 +434,7 @@ public static class ImpostorShaders
             float spec = pow(max(dot(n, h), 0.0), 8.0 + 56.0 * gloss) * gloss * 0.5;
             vec3 sunLight = vec3(1.0, 0.97, 0.92);
             vec3 colour = albedo * (ambient + diff * sunLight) + spec * diff * sunLight;
+            atmoReceiver = -1;   // the quad is not the surface it shows: the cascades, not a ray from it
             if (uFogDistance > 0.0 && uAtmoParams.x > 0.5) colour = kenshiLight(albedo, n, v, gloss, world);
             if (uFogDistance > 0.0) colour = atmoApply(colour, uEye, world);
             fragColour = vec4(colour, coverage);

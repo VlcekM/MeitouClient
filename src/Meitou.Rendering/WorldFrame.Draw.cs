@@ -103,6 +103,10 @@ static partial class WorldFrame
         bool giResolve = gpu.GiResolve > 0 && gpu.GiActive && gpu.Probes is { Enabled: true, Shade: true };
         if (gpu.Post is { } giPost) giPost.GiResolve = giResolve ? gpu.GiResolve : 0;
         if (gpu.Probes is { } giProbes) giProbes.Resolve = giResolve;
+        // The traced sun needs the surface target and the rays; without either the cascades light the frame as ever.
+        gpu.Traced = giResolve && gpu.Post is { Options.TracedSun: true } && gpu.Gi is not null && gpu.Shadow is { Enabled: true, Meitou: true };
+        if (gpu.Post is { } tracedPost) tracedPost.TracedSun = gpu.Traced;
+        if (gpu.Gi is { } tracedScene) tracedScene.Traced = gpu.Traced;
         post.Begin(f.Width, f.Height);
         if (post is PostProcess { Unallocated: true })
         {
@@ -369,6 +373,7 @@ static partial class WorldFrame
         if (gpu.Gi is { } gi && gpu.GiActive)
         {
             var heights = gpu.Terrain.Snapshot();
+            gi.InteriorCuts = gpu.InteriorMask?.Cuts ?? [];
             gi.Update(f.Eye, heights, objects, gpu.Foliage is { Enabled: true } giFoliage ? giFoliage : null, gpu.Lamps);
             StageClock.Sub("gi scene");
             gpu.Probes?.Update(gi, f.Eye, heights, gpu.Lamps, gpu.FogVolumes, gpu.Objects?.GiInteriorFocus(f.Camera.Target));
@@ -548,6 +553,10 @@ static partial class WorldFrame
         // the terrain's pixels to its own blood.
         bool surfaceBlood = gpu.Decals is { Surfaces: true, SurfaceCount: > 0 } bloodDecals && gpu.DecalStore is not null && bloodDecals.SurfacesNear(f.Eye);
 
+        // What the rays take over leaves the colours (kenshiLight) from here to TraceSun: the main view's opaque scene.
+        bool traced = gpu.Traced && gpu.Gi is { Top: not null } && gpu.Shadow is { TracedCascades: > 0 } && gpu.Probes is not null;
+        if (traced) gpu.Probes!.Traced = true;
+
         DrawSceneTerrain(ref f, s);
         if (surfaceBlood) CaptureDepth(ref f, 7, gpu.Decals!.CaptureTerrainDepth);
         DrawSceneObjects(ref f, s);
@@ -556,9 +565,27 @@ static partial class WorldFrame
         DrawSceneLate(ref f, s);
         if (surfaceBlood) DrawSurfaceBlood(ref f, s);
         DrawSceneCharacters(ref f, s);
+        if (traced) TraceSun(ref f, s);
         DrawWater(ref f, s.Near, s.Far, s.ViewProjection);
         KeepParticleViews(ref f, s);
         CloseScene(f.Host);
+    }
+
+    /// <summary>
+    /// The traced sun (docs/render-shadows.md "Traced sun"): over the opaque scene, before the water copies it to refract: the pass closes for the rays and the
+    /// sun they let through, and opens again for the water.
+    /// </summary>
+    static void TraceSun(ref FrameState f, in SceneView s)
+    {
+        var gpu = f.Gpu;
+        var post = gpu.Post!;
+        gpu.Probes!.Traced = false;
+        f.Host.Close();
+        gpu.TracedSun ??= new Gi.TracedSunPass(post.Gpu);
+        Matrix4x4.Invert(f.Rotation * s.Jittered, out var inverse);
+        post.RunTracedSun(gpu.TracedSun, gpu.Gi!, inverse, f.Light.SunDirection);
+        f.Host.Open(9, post.WithShadingRate(post.SceneTargets));
+        StageClock.Lap(14, "traced sun");   // the gi stage's, as the resolve
     }
 
     /// <summary>

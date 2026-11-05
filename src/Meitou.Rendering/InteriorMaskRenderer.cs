@@ -8,6 +8,17 @@ using Meitou.Rendering.Gpu.Core;
 
 namespace Meitou.Rendering;
 
+/// <summary>A drawn interior mask as a box: <see cref="ToBox"/> takes a world point to the mesh's own space, where its bounds are <see cref="Min"/>, <see cref="Max"/>;
+/// <see cref="Centre"/> and <see cref="Radius"/> are its sphere in the world.</summary>
+public readonly record struct InteriorMaskCut(Matrix4x4 ToBox, Vector3 Min, Vector3 Max, Vector3 Centre, float Radius)
+{
+    internal static InteriorMaskCut Of(in Matrix4x4 node, in Matrix4x4 toBox, Vector3 min, Vector3 max)
+    {
+        float scale = MathF.Max(new Vector3(node.M11, node.M12, node.M13).Length(), MathF.Max(new Vector3(node.M21, node.M22, node.M23).Length(), new Vector3(node.M31, node.M32, node.M33).Length()));
+        return new InteriorMaskCut(toBox, min, max, Vector3.Transform((min + max) * 0.5f, node), (max - min).Length() * 0.5f * scale);
+    }
+}
+
 /// <summary>
 /// The interior cut (docs/render-interior-cut.md): the <c>interior mask</c> meshes of the buildings near the eye drawn into a depth range of the
 /// main view, nearest front face (R) and farthest back face (A) as view depth + 1, which the terrain, the foliage and the map features read to leave out
@@ -61,6 +72,7 @@ public sealed unsafe class InteriorMaskRenderer : IDisposable
     readonly List<InteriorVolume> near = [];
     readonly List<(Vector2 Min, Vector2 Max)> boxes = [];
     readonly List<string> boxOwners = [];   // the building of each box (its PlacementId)
+    readonly List<InteriorMaskCut> cuts = [];
     readonly HashSet<string> drawnOwners = new(StringComparer.Ordinal);
     GpuTexture? target;
     (GpuTexture Texture, uint Index)? bindless;
@@ -84,6 +96,9 @@ public sealed unsafe class InteriorMaskRenderer : IDisposable
 
     /// <summary>The drawn buildings' mask meshes' X/Z bounds: terrain patches outside all of them need no cut.</summary>
     public IReadOnlyList<(Vector2 Min, Vector2 Max)> Boxes => boxes;
+
+    /// <summary>The drawn masks as boxes in their building's space (the last <see cref="Record"/>'s): what the traced sun's grass leaves out (<see cref="Gi.TracedGrass"/>).</summary>
+    public IReadOnlyList<InteriorMaskCut> Cuts => cuts;
 
     /// <summary>The meshes drawn by the last <see cref="Record"/>.</summary>
     public int Drawn { get; private set; }
@@ -154,6 +169,7 @@ public sealed unsafe class InteriorMaskRenderer : IDisposable
         boxes.Clear();
         boxOwners.Clear();
         drawnOwners.Clear();
+        cuts.Clear();
         if (width <= 0 || height <= 0) return;
         objects.InteriorMasks(eye, Range, near);
         if (near.Count == 0) return;
@@ -193,6 +209,7 @@ public sealed unsafe class InteriorMaskRenderer : IDisposable
                 cmd.Draw((uint)mesh.Count);
                 Drawn++;
                 any = true;
+                if (Matrix4x4.Invert(v.Node, out var toBox)) cuts.Add(InteriorMaskCut.Of(v.Node, toBox, mesh.Min, mesh.Max));
                 for (int c = 0; c < 8; c++)
                 {
                     var corner = Vector3.Transform(new Vector3((c & 1) == 0 ? mesh.Min.X : mesh.Max.X, (c & 2) == 0 ? mesh.Min.Y : mesh.Max.Y,

@@ -123,6 +123,7 @@ static class FoliageShaders
             }
             """, required: true);
         f = Replace(f, @"fragColour\s*=\s*vec4\s*\(\s*colour\s*,\s*1\.0\s*\)\s*;", "fragColour = vec4(colour, foliageCoverage);", required: false);
+        f = Replace(f, @"if\s*\(\s*uFogDistance\s*>\s*0\.0\s*&&\s*uAtmoParams\.x\s*>\s*0\.5\s*\)\s*colour\s*=\s*kenshiLight", "atmoReceiver = 2;\n            if (uFogDistance > 0.0 && uAtmoParams.x > 0.5) colour = kenshiLight", required: true);
         return f;
     }
 
@@ -221,6 +222,7 @@ static class FoliageShaders
             vec3 colour = albedo * (ambient + diff * sunLight);
             // World view, game sky: the game's deferred lighting of what foliage.hlsl writes for grass: normal straight up, gloss 0 (grass_fs zeroes the
             // diffuse alpha before writing it × 0.6; only rain would raise it).
+            atmoReceiver = 1;
             if (uFogDistance > 0.0 && uAtmoParams.x > 0.5) colour = kenshiLight(albedo, vec3(0.0, 1.0, 0.0), normalize(uEye - vWorld), grassGloss, vWorld);
             colour = colour * vHazeMul + vHazeAdd;
             fragColour = vec4(colour, coverage);

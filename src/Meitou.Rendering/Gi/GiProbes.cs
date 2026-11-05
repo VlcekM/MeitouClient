@@ -78,8 +78,10 @@ internal sealed unsafe class GiProbes : IDisposable
     /// <summary>False: indoor surfaces keep the original ambient while outdoor surfaces still use GI.</summary>
     public bool InteriorEnabled { get; set; } = true;
 
-    /// <summary>Render globals: x on/filled, y strength, z resolve, w indoor gain (0 bypasses indoor GI). The compute block carries hysteresis.</summary>
-    Vector4 Params => new(Enabled && Active && Shade && !InReflection && updated ? 1 : 0, Strength, Resolve ? 1 : 0, InteriorEnabled ? MathF.Max(1, InteriorGain) : 0);
+    /// <summary>Render globals: x on/filled, y strength, z resolve (2: and the traced sun), w indoor gain (0 bypasses indoor GI). The compute block carries hysteresis.</summary>
+    Vector4 Params => new(Enabled && Active && Shade && !InReflection && updated ? 1 : 0, Strength, !Resolve ? 0 : Traced ? 2 : 1, InteriorEnabled ? MathF.Max(1, InteriorGain) : 0);
+    /// <summary>True while the main view's opaque scene draws with the traced sun (<c>kenshiLight</c> reads it from <c>uGiParams.z</c>; docs/render-shadows.md "Traced sun").</summary>
+    public bool Traced { get; set; }
     /// <summary>True: the lit fragments write their albedo and the post pass adds the probes' light (<c>--gi-resolve</c>, docs/render-gi.md "Resolve").</summary>
     public bool Resolve { get; set; }
     /// <summary>True while the water reflection draws: the mirrored scene keeps the flat ambient (the frame block is re-read per segment).</summary>
