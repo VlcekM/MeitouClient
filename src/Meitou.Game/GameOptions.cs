@@ -69,7 +69,7 @@ sealed class GameOptions
     public bool Continue;
     /// <summary><c>--control-dir</c> (or MEITOU_CONTROL_DIR): the folder an external agent writes console command lines to (<c>cmd</c>) and reads results from (<c>out</c>), see GameHost.Control.cs.</summary>
     public string? ControlDir;
-    /// <summary><c>--exec "a; b"</c>: console commands run once after the world has loaded.</summary>
+    /// <summary><c>--exec "a; b"</c> (alias <c>--setup</c>): console commands run once, in order, after the world has loaded and settled (GameHost.Control.cs); the first failing command stops the list and fails the run (exit code 3).</summary>
     public string? Exec;
     /// <summary><c>--play-bench &lt;dir&gt;</c>: the interactive game driven by a script, every frame measured, the results written there (GameHost.PlayBench.cs).</summary>
     public string? PlayBench;
@@ -131,7 +131,8 @@ sealed class GameOptions
           --benchmark-baseline       the settings benchmarks for the site use (bench/kit): a 1920x1080 window, the Medium tier, no GI, ground parallax or tessellation, no upscaler, SMAA;
                                      like --low-end, the saved graphics are neither applied nor overwritten
           --control-dir <dir>        agent channel (debug): polls <dir>/cmd (lines "<id> <console command>"), appends results to <dir>/out; also MEITOU_CONTROL_DIR
-          --exec "<cmd; cmd>"        console commands run once after the world has loaded
+          --exec "<cmd; cmd>"        console commands run once, in order, after the world has loaded and settled (state.screen world, a selected character, the simulation has ticked; same as wait-ready --world); also --setup.
+                                     The first failing command is printed ("setup failed: ...") and skips the rest; the run then exits with code 3 (with --screenshot-after at once, no picture).
           --load <save folder>       start in a save, Meitou's or the original game's (%LOCALAPPDATA%\kenshi\save\<name>), loaded as the game menu's Load does; works with --screenshot
           --continue                 start in the newest save of Meitou's and the original game's save folders, as --load would
           --renderer <vulkan|metal>  the renderer for the whole frame: vulkan (the default) or metal (macOS: the scene, HUD and faithful panels, the port's current slice)
@@ -233,7 +234,7 @@ sealed class GameOptions
                 case "--load": g.Load = Next(); break;
                 case "--continue": g.Continue = true; break;
                 case "--control-dir": g.ControlDir = Next(); break;
-                case "--exec": g.Exec = Next(); break;
+                case "--exec": case "--setup": g.Exec = Next(); break;
                 case "--renderer":
                 {
                     string renderer = Next().ToLowerInvariant();

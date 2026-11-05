@@ -934,7 +934,7 @@ sealed partial class GameHost
         DisposeTitleScene();
         gpu.Dispose();
         silkInput?.Dispose();
-        return 0;
+        return controlExitCode;
 
         void SaveSettings()
         {

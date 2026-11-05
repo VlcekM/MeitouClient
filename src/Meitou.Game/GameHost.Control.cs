@@ -9,13 +9,16 @@ namespace Meitou.Game;
 /// <summary>
 /// The agent control channel (debug only, docs/procedures/todo-faster-ingame-agent-tests.md): with <c>--control-dir &lt;dir&gt;</c> (or MEITOU_CONTROL_DIR) the game polls <c>&lt;dir&gt;/cmd</c> on the game thread
 /// about four times a second; each line <c>&lt;id&gt; &lt;console command&gt;</c> is run by <see cref="DevConsole.Execute"/> (the console window need not be open), and one result line per command is appended
-/// to <c>&lt;dir&gt;/out</c> as one JSON object: <c>{"id":n,"ok":true,"data":..}</c> or <c>{"id":n,"ok":false,"error":"..","data":..}</c>; <c>data</c> is the command's structured result (state, ui-tree, ui-click candidates) or <c>{"text":".."}</c> with the printed lines joined by " | ". <c>--exec</c> runs commands once after the world has loaded. Without the flag nothing here runs.
+/// to <c>&lt;dir&gt;/out</c> as one JSON object: <c>{"id":n,"ok":true,"data":..}</c> or <c>{"id":n,"ok":false,"error":"..","data":..}</c>; <c>data</c> is the command's structured result (state, ui-tree, ui-click candidates) or <c>{"text":".."}</c> with the printed lines joined by " | ". <c>--exec</c> (or <c>--setup</c>) runs commands once, in order, after the world has loaded and settled; the first failing one stops the list and the run exits with code 3. Without the flag nothing here runs.
 /// </summary>
 sealed partial class GameHost
 {
     /// <summary>The whole interface hidden (F7, or the <c>hud hide</c> console command).</summary>
     bool interfaceHidden;
     string? controlDir, execPending;
+    /// <summary>When the world was first seen loaded (for the setup's settle wait), and the exit code the run ends with (0, or 3 when a setup command failed).</summary>
+    long setupLoadedAt;
+    int controlExitCode;
     long nextControlPoll;
     /// <summary>The settings window of the interactive loop (null in the one-shot modes), for the console commands.</summary>
     SettingsMenu? settingsPanel;
@@ -47,10 +50,16 @@ sealed partial class GameHost
     void PollControl()
     {
         if (!consoleRegistered) RegisterConsoleCommands();
-        if (execPending is { } exec && !Covered && !player.TitleOpen)
+        if (execPending is { } exec && SetupSettled())
         {
             execPending = null;
-            foreach (string part in exec.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)) RunControlLine("exec", part);
+            foreach (string part in exec.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            {
+                if (RunControlLine("exec", part)) continue;
+                Console.WriteLine($"setup     setup failed: '{part}' (the rest was skipped)");
+                controlExitCode = 3;
+                break;
+            }
         }
         if (controlDir is null) return;
         for (int i = controlSettles.Count - 1; i >= 0; i--)
@@ -79,7 +88,17 @@ sealed partial class GameHost
         }
     }
 
-    void RunControlLine(string id, string command)
+    /// <summary>The same "loaded and settled" as <c>mt-ctl --wait-ready --world</c>: a world on screen, a selected character, the simulation has ticked (or is paused). A save with no selection runs after 3 s loaded.</summary>
+    bool SetupSettled()
+    {
+        if (Covered || player.TitleOpen) { setupLoadedAt = 0; return false; }
+        if (setupLoadedAt == 0) setupLoadedAt = Stopwatch.GetTimestamp();
+        if (!session.Simulation.IsPaused && session.ShownTick < 1) return false;
+        return session.World.Player.Selection.Any() || Stopwatch.GetElapsedTime(setupLoadedAt).TotalSeconds >= 3;
+    }
+
+    /// <summary>Runs one command line as the channel does; false when the command failed (printed an error).</summary>
+    bool RunControlLine(string id, string command)
     {
         currentControlId = id;
         var output = new List<string>();
@@ -93,12 +112,14 @@ sealed partial class GameHost
         // A paused game takes no tick: apply a debug give now so the reply (and a build right after) already sees the item.
         if (!failed && controlDir is not null && (command == "give" || command.StartsWith("give ", StringComparison.Ordinal))) session.ApplyPausedCommandsNow();
         string result = string.Join(" | ", output);
-        if (!failed && shotWaitId == id && shotPath is not null) return;   // the screenshot's frame writes this one
-        if (controlReplyDeferred) { controlData = null; return; }   // wait-for answers later
+        if (failed) Console.WriteLine($"control   {id} {command}: {result}");
+        if (!failed && shotWaitId == id && shotPath is not null) return true;   // the screenshot's frame writes this one
+        if (controlReplyDeferred) { controlData = null; return !failed; }   // wait-for answers later
         if (!failed && controlDir is not null && (command.StartsWith("ui-click", StringComparison.Ordinal) || command.StartsWith("ui-open", StringComparison.Ordinal)))
             controlSettles.Add(new ControlSettle(id, result, controlData, before));   // reply after a few frames with "changed"
         else ControlWrite(id, !failed, result, controlData);
         controlData = null;
+        return !failed;
     }
 
     double ControlNow() => Math.Round(Stopwatch.GetElapsedTime(controlStart).TotalSeconds, 2);
