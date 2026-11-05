@@ -82,6 +82,16 @@ lookup, on skin near and past the terminator only. A cast shadow's penumbra warm
 fingers: it reads the mesh's edges, so **Unknown** until measured on the meshes), facing away from the light, thickness 2 / curvature, passing exp(-thickness / 0.25) (a look,
 the idea from KenshiNative's skin3; it measures thickness with a ray, which has no characters here), 0.8 at most. Lamps: the same term through `lampSkinDiffuse`; they have no shadow, so no second lookup and the penumbra does not apply.
 
+**Eyes** (needs the skin switch and the race's skin): the game's eyeball is head texture at gloss about 0.93, a mirror of the specular cube (**Observed** by KenshiNative on its
+game data, `docs/features/characters.md` "Eyes"). Port of the surface of its eyes2: the eyeball by data (`eyeOf`: head UV, bare, no skin tone, gloss 0.5 to 0.7 up, curvature 2.5
+to 4.5 up in place of its race list; hive shells stay out by curvature, **Unknown** until measured) takes no skin terms, gloss 0.4 for the sky, and a bounded tear-film catchlight from the
+sun and the lamps. Not ported: eyes2's refracted iris and eyes3's drawn iris: KenshiNative turned them off after play (they often looked worse than the game's eye), and eyes3 needs a
+table per head mesh, against the modded-race rule.
+**Rain** (port of `makeWet`, KenshiNative's `skin-wet.md` start: Meitou's characters had no wetness): `uWeatherWet.x` on albedo and gloss, outdoors, absorbance
+(1 − gloss)(1 − metal), a fifth on skin. Not ported: its drops and film (a baked drop map, a G-buffer path) and the water line (no water height here).
+**Face shadows**: nothing to port: KenshiNative's fault was the traced hair's alpha channel, and here the shadow caster cuts by the hair's own `alphaChannel`
+(`CharacterShaders.DepthFragment`) and no ray sees characters.
+
 ## Content, LOD and memory
 
 `CharacterContent` owns buffers/textures/morph arena; worker fetching/preparation precedes render

@@ -31,6 +31,7 @@ static class CharacterSurface
         vec3 strand = vec3(0.0), strandHue = vec3(1.0);   // hair: the strand's direction and the hair's own hue
         float strandGrain = 0.5, strandStrength = 0.0;    // hair: the texture's brightness (it shifts the lobes along the strand) and the highlight's height
         vec3 skinSunBand = vec3(0.0);                     // skin: what the table adds to the sun's N.L (skinDiffuse)
+        float eyeShare = 0.0, eyeWiden = 0.0;             // eyes: how much of the fragment is eyeball; the pixel's normal variance on the lobe's alpha squared
         float clothSheen = 0.0;                           // cloth: the sheen's height (PartMaterial.Sheen, never over the metal the colour map marks)
         vec3 clothTint = vec3(1.0);
 
@@ -91,8 +92,25 @@ static class CharacterSurface
             return extra + skinSunBand * max(entry - visible, 0.0) + through * entry;
         }
 
+        // The tear film's catchlight (KenshiNative's eyes2): GGX at gloss 0.95 widened to the pixel (Tokuyoshi and Kaplanyan), F0 0.025, bounded: a lobe this sharp peaks at
+        // thousands of times its source, which is a flare.
+        vec3 eyeLight(vec3 l)
+        {
+            float nl = dot(surfaceNormal, l);
+            if (eyeShare <= 0.0 || nl <= 0.0) return vec3(0.0);
+            vec3 h = normalize(l + surfaceView);
+            float nh = clamp(dot(surfaceNormal, h), 0.0, 1.0), lh = clamp(dot(l, h), 0.0, 1.0);
+            const float a = 0.0595 * 0.0595;
+            float a2 = a * a + eyeWiden;
+            float denom = max(nh * nh * (a2 - 1.0) + 1.0, 1e-6);
+            float k = sqrt(a2) * 0.5;
+            float vis = 1.0 / (lh * lh * (1.0 - k * k) + k * k);
+            float fresnel = 0.025 + 0.975 * pow(1.0 - lh, 5.0);
+            return vec3(eyeShare * min(nl * a2 / (ATMO_PI * denom * denom) * fresnel * vis / ATMO_PI, 4.0));
+        }
+
         // What a light adds besides the game's lobes, per unit of its light (the sun's after its shadow, a lamp's radiance).
-        vec3 surfaceSpecular(vec3 l) { return hairLight(l) + sheenLight(l); }
+        vec3 surfaceSpecular(vec3 l) { return hairLight(l) + sheenLight(l) + eyeLight(l); }
 
         vec3 surfaceSun(vec3 sun, float sunScale, vec3 diffuseAlbedo)
         {
@@ -102,6 +120,25 @@ static class CharacterSurface
             vec3 open = uAtmoSunLight * sunScale * atmoCloudShadow(vWorld);
             float visible = clamp((sun.r + sun.g + sun.b) / max(open.r + open.g + open.b, 1e-5), 0.0, 1.0);
             return added + ATMO_PI * open * diffuseAlbedo * skinSunExtra(l, visible);
+        }
+
+        // How much of a body fragment is eyeball (KenshiNative's knEyeWeight): a head texel, bare (share: not painted over, and only where the race's skin is on, so no robot's
+        // lens), without the skin tone, with the island's high gloss. The curvature (the ball is a small dome) keeps it off a polished head shell: no list of races.
+        float eyeOf(float v, float tone, float headGloss, float curvature, float share)
+        {
+            if (v >= 0.0) return 0.0;
+            return share * (1.0 - smoothstep(0.02, 0.1, tone)) * smoothstep(0.5, 0.7, headGloss) * smoothstep(2.5, 4.5, curvature);
+        }
+
+        // The game's wetness in the rain (common/wet.hlsl makeWet, character.hlsl: skin takes a fifth of the absorbance), as the world's objects have it; indoors dry; no water
+        // line. The eye is wet already: it keeps its colour and takes the sky's wide lobe, not the island's mirror of the landscape (KenshiNative's eyes2).
+        void wetSurface(inout vec3 albedo, inout float gloss, float metal, float skin)
+        {
+            vec4 wet = vec4(albedo, gloss);
+            if (view.fogDistance > 0.0 && vInterior == 0u && uWeatherWet.x > 0.0)
+                makeWet(wet, uWeatherWet.x, (1.0 - gloss) * (1.0 - metal) * (1.0 - 0.8 * skin), -1.0e4, 0.5);
+            albedo = mix(wet.rgb, albedo, eyeShare);
+            gloss = mix(wet.a, 0.4, eyeShare);
         }
 
         // A hair fragment's inputs. The strand is the mesh's up axis (the vertex stage's vColour here) laid on the surface: down the sides, out from the crown.

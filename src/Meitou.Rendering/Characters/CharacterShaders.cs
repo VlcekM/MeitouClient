@@ -278,6 +278,11 @@ static class CharacterShaders
             if (vHidden > 0.0) discard;
             if (pc.depthIndex != 0u) { fragColour = vec4(pc.flatColour, 1.0); return; }
             surfaceOn = pc.fill.a > 0.5 && (view.fogDistance >= 0.0 || view.fogDistance < -2.5);   // the chars2 switch: never the game's own stage or an icon
+            if (surfaceOn)
+            {
+                vec3 gx = dFdx(geometric), gy = dFdy(geometric);
+                eyeWiden = min(0.5 * (dot(gx, gx) + dot(gy, gy)), 0.18);
+            }
             CharMaterial m = materials.items[vMaterial];
             uint f = m.flags;
             if (flag(f, 32768u)) discard;   // its cut-out is still streaming in: a solid card would show
@@ -292,6 +297,7 @@ static class CharacterShaders
             bool swizzled = flag(f, 4u);
             bool cut = false;
             float skin = 0.0;                         // how much of the fragment is bare skin (the Meitou skin switch)
+            float headTone = 1.0, headGloss = 0.0;    // the body's skin-tone mask and gloss map, under the clothing (the eyeball's island)
             float sheen = 0.0;                        // how much of it is cloth (chars2): for shading other than hair, diffuseChannel holds PartMaterial.Sheen
 
             if (m.shading == 2u)
@@ -333,6 +339,8 @@ static class CharacterShaders
                 }
                 albedo = body.rgb;
                 gloss = body.a;
+                headTone = tone;
+                headGloss = body.a;
                 // vestCount: a bit per worn layer whose textures are resident (one still streaming in is left out, not drawn black).
                 if ((m.vestCount & 1u) != 0u) vest(m.tex[9], m.tex[10], m.tex[11], flag(f, 2048u), m.shirtColour.rgb, m.diffuseChannel.x, uv, albedo, nm, gloss, skin, sheen);
                 if ((m.vestCount & 2u) != 0u) vest(m.tex[12], m.tex[13], m.tex[14], flag(f, 4096u), m.shirtColour.rgb, m.diffuseChannel.y, uv, albedo, nm, gloss, skin, sheen);
@@ -416,6 +424,12 @@ static class CharacterShaders
             // Lit as the world's other meshes are (Shaders.MeshFragment): the game's deferred lighting with the game's sky, else the simple model.
             vec3 v = normalize(view.eye - vWorld);
             gloss = clamp(gloss, 0.0, 1.0);
+            if (surfaceOn)
+            {
+                eyeShare = eyeOf(uv.y, headTone, headGloss, curvature, skin);
+                skin *= 1.0 - eyeShare;
+                wetSurface(albedo, gloss, metal, skin);
+            }
             if (surfaceOn && m.shading == 2u) hairSurface(n, v, albedo, gloss, flag(f, {{Strands}}u));
             surfaceNormal = n; surfaceView = v;
             clothSheen = surfaceOn ? sheen * 0.25 : 0.0;
