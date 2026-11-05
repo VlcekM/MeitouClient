@@ -1385,11 +1385,11 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// Where 200 Task_LeaveBuilding walks (docs/game/ai-tasks.md): A + (A − B) × 1.1 of the building's first door with a known leaf, A and B its points 15 either side of the leaf
     /// (engine reading of which is outer: the side away from the building's origin). Null: no door known.
     /// </summary>
-    static Vector2? LeavePoint(World world, TownBuilding building)
+    internal static Vector2? LeavePoint(World world, TownBuilding building)
     {
         foreach (var door in world.Fixtures.DoorsByBuilding[building.Key])
         {
-            if (door.Spot is not { } s) continue;
+            if (world.Fixtures.DoorSpotOf(door) is not { } s) continue;
             return DoorExit(new Vector2(s.Centre.X, s.Centre.Z), new Vector2(s.Normal.X, s.Normal.Z), new Vector2(building.Position.X, building.Position.Z));
         }
         return null;
