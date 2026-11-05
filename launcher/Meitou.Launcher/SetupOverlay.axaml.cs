@@ -108,7 +108,11 @@ public sealed partial class SetupOverlay : UserControl
     {
         if (KenshiBox.Text is { } typed && typed != install?.Root) SetKenshi(typed);
         var folder = (InstallBox.Text ?? "").Trim().Trim('"');
-        if (folder.Length == 0 || !Path.IsPathFullyQualified(folder)) { Problem.Text = LauncherText.Translate("Choose a full path for the install folder."); return; }
+        if (folder.Length == 0 || !Path.IsPathFullyQualified(folder))
+        {
+            Problem.Text = LauncherText.Translate("Choose a full path for the install folder.");
+            return;
+        }
         var previous = LauncherConfig.InstallDirectory;
         IsEnabled = false;
         try

@@ -224,7 +224,8 @@ languages Meitou has texts for, marked when Meitou's own texts are not translate
 folder's `settings.cfg` (encoding and line endings kept) and remembers the code in `launcher.json` (`Language`, used without a Kenshi folder); at
 start the `settings.cfg` value wins. The launcher's labels come from the same `.po` catalogs as the game's Meitou texts
 ([localisation](formats/localisation.md)); a string without a translation stays English. Mod names, news and release notes are data, not translated.
-Labels the layout holds are translated by one walk of the visual tree (texts, button captions, placeholders, tooltips); a text the code
+Labels the layout holds are translated by one walk of the visual and logical trees (texts, button captions, placeholders, tooltips; a control
+never shown has only logical children); combo box items are not walked (**Verified** in `LauncherText.TranslateTree`), so the layout's Mac renderer and memory choices stay English; a text the code
 builds with a value in it is a catalog key with the game's `{1}`, `{2}` placeholders (`Tr("Downloading {1}...", title)`), never an
 interpolated string, which no translation could match.
 
