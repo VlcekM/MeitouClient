@@ -257,6 +257,7 @@ sealed partial class GameHost
         var selected = session.World.Player.Selection.ToArray();
         var first = selected.Length > 0 ? snapshot.Characters.FirstOrDefault(c => c.Id == selected[0]) : null;
         w.WriteNumber("selected", selected.Length);
+        w.WriteNumber("tick", session.ShownTick);   // wait-ready --world: the world has run
         if (first is not null)
         {
             var at = DrawnPosition(first);
