@@ -92,7 +92,7 @@ interior). Upsampling rejects the other class so the gain cannot bleed onto outd
 
 ## Hybrid GI
 
-`gihybrid` (Meitou switch, **off by default**, Graphics > Lighting > Hybrid GI). `--gi-hybrid <relocate>` turns it on with
+`gihybrid` (Meitou switch, **off by default**, Graphics > Lighting > Hybrid GI). `--gi-hybrid <relocate,clouds>` turns it on with
 the listed parts only. Vulkan only. Look and cost **Unknown**: none of this has run on a GPU.
 
 **Probe relocation** (`relocate`; RTXGI's rule, `GiShaders.ProbeRelocate`, needs the resolve). Offsets stay in world units per atlas
@@ -106,6 +106,9 @@ the column bases, and `uGiGrid[2c+1].w` says they are valid: no new binding or f
 trace, the resolve and the programs that keep reading the probes themselves (`WithAlbedo(inShader: true)`), so the other world
 shaders and `ProbeSampling` keep their text; the patched programs carry one uniform test per probe while off.
 The per-fragment path (`--gi-resolve 0`) and the gi-reflection bench do not read offsets, so relocation runs only with the resolve.
+
+**Cloud shadows** (`clouds`). The sun at a probe's hit takes `atmoCloudShadow`, the lit fragments' own function, so shaded land stops bouncing sunlight
+and probe light follows the clouds at the hysteresis' pace. The sky seen by a miss is not dimmed. Shafts: [render-shafts](render-shafts.md).
 
 ## Performance and verification
 

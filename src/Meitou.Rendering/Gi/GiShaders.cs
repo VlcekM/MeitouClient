@@ -558,10 +558,29 @@ static class GiShaders
             .Replace(TileAnchor, TileAnchor + "\n                    if (g1.w > 0.5) probe += giProbeOffset(tile, s, sy);", StringComparison.Ordinal);
     }
 
-    /// <summary>The probe trace with its rays leaving from the relocated places, the bounces reading those places too.</summary>
-    public static string ProbeTrace(int rays, bool relocate)
+    const string ParamsEnd = "vec4 extra;         // y: the far cascade's period";
+    const string SamplersEnd = "layout(set = 0, binding = 12) uniform sampler2D uLightData;";
+    const string HitSun = "* nl * sunLight.rgb * amHit.a * 2.0;";
+
+    /// <summary>
+    /// A hit shader (<see cref="ProbeTrace(int)"/>'s sun line and block) with the cloud transmission on the sun at its hits: the same function the lit
+    /// fragments use (docs/render-clouds.md), the map at bindings 15 and 16, the three values after <c>extra</c>.
+    /// </summary>
+    static string Clouded(string trace)
+    {
+        foreach (string anchor in (ReadOnlySpan<string>)[ParamsEnd, SamplersEnd, HitSun])
+            if (!trace.Contains(anchor, StringComparison.Ordinal)) throw new InvalidOperationException("Clouded: no line " + anchor);
+        const string Samplers = "\nlayout(set = 0, binding = 15) uniform sampler2D uAtmoClouds;\nlayout(set = 0, binding = 16) uniform sampler2D uAtmoCloudsTile;\n";
+        return trace.Replace(ParamsEnd, ParamsEnd + "\n    vec4 uAtmoCloud;\n    vec4 uAtmoCloudWind;\n    vec4 uAtmoSun;", StringComparison.Ordinal)
+            .Replace(SamplersEnd, SamplersEnd + Samplers + AtmosphereShaders.CloudShadow, StringComparison.Ordinal)
+            .Replace(HitSun, HitSun[..^1] + " * atmoCloudShadow(hit);", StringComparison.Ordinal);
+    }
+
+    /// <summary>The probe trace for the frame's options: rays leaving from the relocated places (the bounces reading those places too), the cloud shadows on the hits.</summary>
+    public static string ProbeTrace(int rays, bool relocate, bool clouds)
     {
         string trace = ProbeTrace(rays);
+        if (clouds) trace = Clouded(trace);
         if (!relocate) return trace;
         if (!trace.Contains(SleepAnchor, StringComparison.Ordinal)) throw new InvalidOperationException("ProbeTrace: no sleep line");
         return Relocating(trace).Replace(SleepAnchor,

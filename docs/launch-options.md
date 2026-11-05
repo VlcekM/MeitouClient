@@ -159,7 +159,7 @@ Authority: `src/Meitou.Rendering/WorldFrame.cs` (`Parse`, `Usage`), `src/Meitou.
 | `--shadow-filter <0\|1\|2>` | 0 to 2 | 2 | Meitou shadow filter (1 and 0 cheaper, for low-end GPUs). |
 | `--no-gi` | | GI on where ray queries exist | No ray-traced probe GI. |
 | `--gi-debug <0..3>` | 0 to 3 | 0 | GI debug views: 1 hit distance, 2 one-bounce lighting, 3 normals. |
-| `--gi-hybrid <parts>` | comma list: `relocate` | off | The `gihybrid` switch on with these parts only ([render-gi](render-gi.md) "Hybrid GI"). |
+| `--gi-hybrid <parts>` | comma list: `relocate`, `clouds` | off | The `gihybrid` switch on with these parts only ([render-gi](render-gi.md) "Hybrid GI"). |
 | `--fog <u>` | units | 250000 | Distance where the haze is complete. |
 | `--material-distance <u>` | units | 30000 | Beyond it, terrain shows the biomes' ground colour. |
 | `--terrain-error <px>` | pixels | 16 (Meitou), 10 (Faithful) | Terrain LOD error allowed near the eye. |

@@ -135,6 +135,19 @@ static class LightShaftShaders
         }
         """;
 
+    const string InjectSample = "lit += shaftShadow(uShaftEye + shaftRay(uv) * dist, j);";
+
+    /// <summary>
+    /// <see cref="Inject"/> with the cloud transmission map on the sun at each sample (the <c>gihybrid</c> switch's <c>clouds</c> part): a cloud's shadow on the ground
+    /// goes up the air under it (docs/render-shafts.md "Cloud cover").
+    /// </summary>
+    public static readonly string InjectClouded = Inject.Contains(InjectSample, StringComparison.Ordinal)
+        ? Inject.Replace(InjectSample, """
+            vec3 air = uShaftEye + shaftRay(uv) * dist;
+                            lit += shaftShadow(air, j) * atmoCloudShadow(air);
+            """, StringComparison.Ordinal)
+        : throw new InvalidOperationException("InjectClouded: no sample line");
+
     /// <summary>
     /// The sun's share averaged over frames (docs/render-shafts.md "Temporal"): with a temporal upscaler the injection's samples move every frame, and
     /// TAA, which clamps its history to the picture's neighbourhood, showed their noise as a shimmer in motion. Each cell's centre is taken back into

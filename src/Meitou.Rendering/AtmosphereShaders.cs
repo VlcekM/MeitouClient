@@ -33,31 +33,11 @@ static class AtmosphereShaders
         }
         """;
 
-    /// <summary>What every world shader includes (fragment stage, or the grass's vertex stage).</summary>
-    public static readonly string Functions = $$"""
-
-        const float ATMO_PI = 3.14159265358979;
-        uniform vec4 uAtmoSun;        // xyz: direction to the sun (its real height)
-        uniform vec4 uAtmoLight;      // xyz: the lighting direction (the sun's with y clamped to 0), w: the environment light's factor
-        uniform vec3 uAtmoSunLight;   // sunColour.rgb · sunColour.w (docs/formats/lighting.md); the shader adds the ambient map's alpha · 2
-        uniform vec4 uAtmoParams;     // x 1 game sky / 0 simple, y: distance where the physical haze is complete, z: scale height in world units (physical haze)
-        uniform vec4 uAtmoTau;        // physical haze: rgb Rayleigh optical depth straight up, a Mie's
-        uniform vec3 uAtmoTint;       // the weather's sky colour multiplier (a viewer stand-in, see sky.md)
-        uniform vec4 uAtmoFog;        // the weather's fog: x start, y end, z enabled
-        uniform vec3 uAtmoFogColour;
-        uniform vec4 uAtmoSimple;     // simple sky: fog colour, distance of complete fog
-        uniform vec4 uAtmoHaze;       // Kenshi haze: x 1 when on, y start, z end of the atmosphere fog, w weather fog density (1 / distance)
-        uniform vec4 uAtmoHazeCloud;  // Kenshi haze: horizonClouds, rgb the cloud colour (a stand-in), a how far the haze is pulled to it
-        uniform vec4 uAtmoAltitude;   // viewer: x the physical haze's share (0 the game's haze, 1 the physical), y haze strength (1 the game's), z how far the eye is above the game's camera heights (0 within them, 1 high above)
-        uniform vec4 uAtmoMaps;       // x irradiance cube, y specular cube, z ambient map present (0: none, else 1 + the night ambient floor); w half the world's width
-        uniform vec4 uAtmoNight;      // Meitou night air (docs/formats/sky.md "Night air"): rgb its colour at full night at the horizon, a its weight (0: Faithful, or by day)
-        uniform samplerCube uAtmoIrradiance;
-        uniform samplerCube uAtmoSpecular;
-        uniform sampler2D uAtmoAmbientMap;
-        uniform vec4 uAtmoCloud;      // x strength, y legacy density offset or volume coverage, z base height, w 1 volume transmission map
-        uniform vec4 uAtmoCloudWind;  // legacy: xy wind shift; volume: xy map origin, z map span
-        uniform sampler2D uAtmoClouds;
-        uniform sampler2D uAtmoCloudsTile;
+    /// <summary>
+    /// The clouds' shade on the sun at a world point; needs <c>uAtmoCloud</c>, <c>uAtmoCloudWind</c>, <c>uAtmoSun</c>, <c>uAtmoClouds</c> and <c>uAtmoCloudsTile</c>
+    /// (<see cref="Functions"/>, and the probe trace, which has them in its own block).
+    /// </summary>
+    internal static readonly string CloudShadow = $$"""
         // The sun light that gets past the cloud layer to a world point: the sun's ray from the point hits the world-anchored plane, where the sky pass's
         // overhead alpha (the game's second lookup and tile, the horizon band at 1, no fake volume) is read. textureLod only: the grass's vertex stage includes this.
         float atmoCloudShadow(vec3 world)
@@ -86,6 +66,34 @@ static class AtmosphereShaders
             float alpha = clamp(density * clamp(1.0 - tile + o, 0.0, 1.0), 0.0, 1.0);
             return 1.0 - uAtmoCloud.x * alpha;
         }
+        """;
+
+    /// <summary>What every world shader includes (fragment stage, or the grass's vertex stage).</summary>
+    public static readonly string Functions = $$"""
+
+        const float ATMO_PI = 3.14159265358979;
+        uniform vec4 uAtmoSun;        // xyz: direction to the sun (its real height)
+        uniform vec4 uAtmoLight;      // xyz: the lighting direction (the sun's with y clamped to 0), w: the environment light's factor
+        uniform vec3 uAtmoSunLight;   // sunColour.rgb · sunColour.w (docs/formats/lighting.md); the shader adds the ambient map's alpha · 2
+        uniform vec4 uAtmoParams;     // x 1 game sky / 0 simple, y: distance where the physical haze is complete, z: scale height in world units (physical haze)
+        uniform vec4 uAtmoTau;        // physical haze: rgb Rayleigh optical depth straight up, a Mie's
+        uniform vec3 uAtmoTint;       // the weather's sky colour multiplier (a viewer stand-in, see sky.md)
+        uniform vec4 uAtmoFog;        // the weather's fog: x start, y end, z enabled
+        uniform vec3 uAtmoFogColour;
+        uniform vec4 uAtmoSimple;     // simple sky: fog colour, distance of complete fog
+        uniform vec4 uAtmoHaze;       // Kenshi haze: x 1 when on, y start, z end of the atmosphere fog, w weather fog density (1 / distance)
+        uniform vec4 uAtmoHazeCloud;  // Kenshi haze: horizonClouds, rgb the cloud colour (a stand-in), a how far the haze is pulled to it
+        uniform vec4 uAtmoAltitude;   // viewer: x the physical haze's share (0 the game's haze, 1 the physical), y haze strength (1 the game's), z how far the eye is above the game's camera heights (0 within them, 1 high above)
+        uniform vec4 uAtmoMaps;       // x irradiance cube, y specular cube, z ambient map present (0: none, else 1 + the night ambient floor); w half the world's width
+        uniform vec4 uAtmoNight;      // Meitou night air (docs/formats/sky.md "Night air"): rgb its colour at full night at the horizon, a its weight (0: Faithful, or by day)
+        uniform samplerCube uAtmoIrradiance;
+        uniform samplerCube uAtmoSpecular;
+        uniform sampler2D uAtmoAmbientMap;
+        uniform vec4 uAtmoCloud;      // x strength, y legacy density offset or volume coverage, z base height, w 1 volume transmission map
+        uniform vec4 uAtmoCloudWind;  // legacy: xy wind shift; volume: xy map origin, z map span
+        uniform sampler2D uAtmoClouds;
+        uniform sampler2D uAtmoCloudsTile;
+        {{CloudShadow}}
         uniform vec4 uWeatherWet;     // the weather's shared surface values (WeatherSurfaces): x wetness, y rainAmount = saturate(rain / 50), z gameTime (hours)
         uniform vec4 uWeatherDust;    // xyz: dustAmount (current, inside, slope; docs/formats/weather.md "Dust")
         uniform sampler2D uWeatherDustNoise;   // the dust noise (Turbulent.dds), sampled at world.xz * 0.002

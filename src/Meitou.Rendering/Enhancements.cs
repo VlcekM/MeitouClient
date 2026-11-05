@@ -163,7 +163,7 @@ public static class Enhancements
             "the game's dust and smoke sprites cut straight into the ground and walls they cross (all but its mist and steam, which fade; Faithful draws those hard-edged too); Meitou fades each sprite out over the last stretch before a surface (a quarter of its size, 0.2 to 30 m), so dust clouds meet the ground softly; the game's sprites are also flat and not fogged (one brightness in sun and shade, near and far, seen through fog banks), Meitou darkens dust and smoke where the sun is shadowed, brightens them towards the sun and puts the haze and the fog volumes in front of them over them; and it fades each effect out before the distance it stops being simulated at, where its whole cloud popped in and out (docs/render-post.md \"Fog\")"),
         new("gihybrid", "Hybrid GI", "off", "on",
             () => post.GiHybrid, v => post.GiHybrid = v,
-            "the probes' grid leaves many probes inside walls, where they only go dark; Meitou moves them out of the geometry (--gi-hybrid picks the parts; docs/render-gi.md \"Hybrid GI\")"),
+            "the probes' grid leaves many probes inside walls, where they only go dark; Meitou moves them out of the geometry and lets the clouds shade the bounced light and the light shafts (--gi-hybrid picks the parts; docs/render-gi.md \"Hybrid GI\")"),
     ];
 
     /// <summary><c>--meitou</c> / <c>--faithful &lt;all|id,id...&gt;</c>: turns those switches to Meitou or to Faithful.</summary>

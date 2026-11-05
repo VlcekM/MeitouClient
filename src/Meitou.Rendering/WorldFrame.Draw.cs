@@ -106,6 +106,7 @@ static partial class WorldFrame
         {
             giProbes.Resolve = giResolve;
             giProbes.Relocate = giResolve && post.Options.GiRelocating;
+            giProbes.CloudShadows = post.Options.GiCloudShadowing;
         }
         post.Begin(f.Width, f.Height);
         if (post is PostProcess { Unallocated: true })

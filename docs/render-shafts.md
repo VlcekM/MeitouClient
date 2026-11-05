@@ -25,8 +25,8 @@ relying on the low tier. `--ab shafts-half` is a separate experiment for the mer
 not a quality tier.
 
 Placed fog volumes receive their own shadowed scattering, respecting plane/sphere/cylinder
-geometry and colour/additive/alpha. Cloud cover reduces appropriate sun contribution; actual
-volumetric cloud-shadow-map sampling is incomplete. Air layer is an engine near-ground term,
+geometry and colour/additive/alpha. Cloud cover reduces appropriate sun contribution. With `gihybrid`'s
+`clouds` part each sample also takes the cloud shadow (`InjectClouded`, one map read; look and cost **Unknown**). Air layer is an engine near-ground term,
 separate from original distance haze, with day/key-light-dependent strength.
 
 ## Temporal
@@ -47,4 +47,4 @@ world positions with correct near/far depth and water plane. A wrong surface dep
 horizon strips or darkens clear water. Test low sun, fog blocks, water/shore, night and clock cuts.
 Inspect inject/integrate/scatter/apply separately (`MEITOU_SHAFT_STAMPS=1`); fog-hidden work and
 no-volume views have different costs. **Observed** paired-view results are view-specific, not a
-universal GPU saving. Temporal/froxel approximations and cloud/GI integration remain limitations.
+universal GPU saving. Temporal/froxel approximations remain limitations.

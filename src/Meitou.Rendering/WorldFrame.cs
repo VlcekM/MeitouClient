@@ -311,7 +311,7 @@ sealed class WorldOptions
           --no-fxaa                the game's FXAA off when no upscaler runs (the game's own FXAA setting, default on)
           --smaa                   SMAA instead of FXAA when no upscaler runs
           --particle-divisor <0|1|2|4>   the weather's alpha and additive particles drawn at 1/n of the render size (0, the default: by sprite size; `--faithful particles` draws them full size)
-          --gi-hybrid <parts>      the gihybrid switch on with these parts only (comma list: relocate)
+          --gi-hybrid <parts>      the gihybrid switch on with these parts only (comma list: relocate, clouds)
           --no-heat-haze           no heat haze (the game's HeatHaze setting, default on: strength from the weather's `heat haze`)
           (ambient occlusion, dithering, light shafts, heat haze strength, the tone map, night grading and the rest are the switches above: --meitou / --faithful <id>; their strengths are Tab sliders)
         Keys: left drag orbit, right drag look around, wheel zoom, W/A/S/D free fly along the view, Q/E down/up (Shift faster, Ctrl slower),
