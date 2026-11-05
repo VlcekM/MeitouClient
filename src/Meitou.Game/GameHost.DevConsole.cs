@@ -137,6 +137,24 @@ sealed partial class GameHost
         return hits[0];
     }
 
+    /// <summary>Edit distance between two command names (for the "close names" hint of help).</summary>
+    static int HelpDistance(string a, string b)
+    {
+        var row = Enumerable.Range(0, b.Length + 1).ToArray();
+        for (int i = 1; i <= a.Length; i++)
+        {
+            int diagonal = row[0];
+            row[0] = i;
+            for (int j = 1; j <= b.Length; j++)
+            {
+                int above = row[j];
+                row[j] = Math.Min(Math.Min(row[j] + 1, row[j - 1] + 1), diagonal + (a[i - 1] == b[j - 1] ? 0 : 1));
+                diagonal = above;
+            }
+        }
+        return row[b.Length];
+    }
+
     void RegisterConsoleCommands()
     {
         consoleRegistered = true;
@@ -152,11 +170,31 @@ sealed partial class GameHost
         }
         ConsoleCommand Self(string name) => c.Find(name)!;
 
-        Add("help", "help [command]", "list the commands, or show one command's usage", (args, con) =>
+        Add("help", "help [command]", "list the commands with their usage, or show one command's usage and description (an unknown name lists the close ones)", (args, con) =>
         {
-            if (args.Count == 0) { foreach (var cmd in con.Commands) con.Print($"{cmd.Usage}  -  {cmd.Help}"); return; }
-            if (con.Find(args[0]) is { } one) con.Print($"{one.Usage}\n{one.Help}");
-            else con.Error($"unknown command '{args[0]}'");
+            bool channel = con.Tap is not null;   // the control channel gets the short list and the structured reply
+            if (args.Count > 1) { con.Error("usage: help [command]"); return; }
+            if (args.Count == 0)
+            {
+                if (!channel) { foreach (var cmd in con.Commands) con.Print($"{cmd.Usage}  -  {cmd.Help}"); return; }
+                var all = con.Commands.ToList();
+                controlData = System.Text.Json.JsonSerializer.Serialize(new { commands = all.Select(x => new { name = x.Name, usage = x.Usage }) });
+                foreach (var cmd in all) con.Print(cmd.Usage);
+                con.Print("help <command> shows the description");
+                return;
+            }
+            string name = args[0].ToLowerInvariant();
+            if (con.Find(name) is { } one)
+            {
+                if (channel) controlData = System.Text.Json.JsonSerializer.Serialize(new { name = one.Name, usage = one.Usage, help = one.Help });
+                con.Print($"{one.Usage}\n{one.Help}");
+                return;
+            }
+            var names = con.Commands.Select(x => x.Name).ToList();
+            var close = names.Where(n => n.StartsWith(name, StringComparison.Ordinal) || n.Contains(name, StringComparison.Ordinal) || name.Contains(n, StringComparison.Ordinal)).ToList();
+            if (close.Count == 0) close = [.. names.Where(n => HelpDistance(n, name) <= 2)];
+            if (close.Count == 0) close = [.. names.Where(n => HelpDistance(n, name) <= 3)];
+            con.Error($"unknown command '{args[0]}'" + (close.Count > 0 ? "; close names: " + string.Join(", ", close.Take(8)) : "; help lists them all"));
         }, (i, typed) => i == 0 ? c.Commands.Select(x => x.Name).Where(n => n.StartsWith(typed, StringComparison.OrdinalIgnoreCase)) : []);
 
         Add("clear", "clear", "empty the scrollback", (_, con) => con.Clear());
