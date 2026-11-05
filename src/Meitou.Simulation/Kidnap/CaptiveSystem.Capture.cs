@@ -10,7 +10,7 @@ namespace Meitou.Simulation.Kidnap;
 /// The slavers' dealings with the downed and with their slaves at work (docs/game/ai-tasks.md "Prisoner fate and slave rows" and "Slave work, shout and capture"; docs/simulation.md "Captives"):
 /// <list type="bullet">
 /// <item><b>Capture</b> (167 "Capturing slave", finder <c>FUN_1408cdd00</c>, <b>Observed</b>): the nearest downed (<see cref="Down"/>: a crawler out of combat mode too), uncarried, uncaged character
-/// in sight that is no animal, not of the capturer's faction or an ally (<b>engine reading</b> of the sensed-class masks), no slave already (slave state 1), of NPC class other than law
+/// on its sensed list (seen, so in its building or in the open; <see cref="NearestDown"/>) that is no animal, not of the capturer's faction or an ally (<b>engine reading</b> of the sensed-class masks), no slave already (slave state 1), of NPC class other than law
 /// enforcement, trader and diplomat, not maimed, and not in shackles (engine guard). The
 /// capturer walks to it, strips its weapons (the <c>hip</c> and <c>back</c> sections go to the capturer, after 0.8 s of <c>medic</c>, <c>Task_StripWeapons</c>), cuffs it
 /// (<c>Task_CuffTarget</c>: a "Restraining" bar, <c>medic</c>, event 37 to the captive when it is full; the shackles are an <b>engine choice</b>, their source in the original is <b>Unknown</b>)
@@ -85,6 +85,7 @@ public sealed partial class CaptiveSystem
     {
         public CaptiveSystem System;
         public World World;
+        public SenseBlock? Senses;
         public int Self;
         public CharacterCold Me;
         public bool Capture;
@@ -93,23 +94,49 @@ public sealed partial class CaptiveSystem
     }
 
     /// <summary>
-    /// The nearest character the capturer takes (see the class remarks): within its sight, <see cref="Down"/>, uncarried and uncaged, no animal, not already a job's or given up; for a
-    /// capture not of its own side, no slave of state 1, not law enforcement, trader or diplomat, not <see cref="Maimed"/>, not shackled (an engine guard so it is never cuffed twice);
-    /// for a carry a slave of its faction that is not just staying low (the carry finder refuses posture 1).
+    /// The nearest character the capturer takes (see the class remarks) among those on its sensed list (the finders walk it with no range limit, <b>Verified</b>; so only one it saw,
+    /// which needs the same building or the open unless either stands on top, docs/game/perception.md "Sight"): <see cref="Down"/>, uncarried and uncaged, no animal, not already a job's
+    /// or given up; for a capture not of its own side, no slave of state 1, not law enforcement, trader or diplomat, not <see cref="Maimed"/>, not shackled (an engine guard so it is
+    /// never cuffed twice); for a carry a slave of its faction that is not just staying low (the carry finder refuses posture 1). The entries its mask keeps (<see cref="ConsiderSensed"/>) come first, then whoever
+    /// within its sight the capped block lacks (<see cref="CharacterFacts.Perceives"/>); nearest by 3D distance to where it stands now.
     /// </summary>
     int NearestDown(World world, int slot, CharacterCold me, bool capture)
     {
-        var scan = new DownScan { System = this, World = world, Self = slot, Me = me, Capture = capture, Best = -1, BestD2 = float.MaxValue };
+        var scan = new DownScan { System = this, World = world, Senses = CharacterFacts.Senses(world, slot), Self = slot, Me = me, Capture = capture, Best = -1, BestD2 = float.MaxValue };
+        ConsiderSensed(ref scan);
+
         var p = world.Characters.Next[slot].Position;
         world.Grid.Query(p.X, p.Z, AggroSystem.RangeOf(me, AggroSystem.OutdoorSight), ref scan, static (int v, ref DownScan st) =>
         {
-            if (!st.System.Eligible(st.World, st.Self, st.Me, v, st.Capture)) return;
-            var a = st.World.Characters.Next[st.Self].Position;
-            var b = st.World.Characters.Next[v].Position;
-            float d2 = Vector2.DistanceSquared(new Vector2(a.X, a.Z), new Vector2(b.X, b.Z));
-            if (d2 < st.BestD2) (st.Best, st.BestD2) = (v, d2);
+            if (st.Senses?.Knows(st.World.Characters.IdOf(v)) == true || !CharacterFacts.Perceives(st.World, st.Self, v)) return;
+            Consider(ref st, v);
         });
         return scan.Best;
+    }
+
+    /// <summary>
+    /// The worker's sense entries whose character is still that slot's, less those its finder's exclude mask leaves out: for a capture ally or dead (0x11), for a carry dead or
+    /// imprisoned (0x210; its include mask 0x20 is slave state 1, which <see cref="Eligible"/> tests on the current state).
+    /// </summary>
+    static void ConsiderSensed(ref DownScan scan)
+    {
+        if (scan.Senses is not { } senses) return;
+
+        var table = scan.World.Characters;
+        var excluded = scan.Capture ? SenseTag.Ally : SenseTag.Imprisoned;
+        foreach (var e in senses.Entries)
+        {
+            if ((e.Tags & excluded) != 0 || (uint)e.Target >= (uint)table.HighWater || table.Next[e.Target].Generation != e.Generation) continue;
+            Consider(ref scan, e.Target);
+        }
+    }
+
+    static void Consider(ref DownScan st, int v)
+    {
+        if (!st.System.Eligible(st.World, st.Self, st.Me, v, st.Capture)) return;
+
+        float d2 = Vector3.DistanceSquared(st.World.Characters.Next[st.Self].Position, st.World.Characters.Next[v].Position);
+        if (d2 < st.BestD2) (st.Best, st.BestD2) = (v, d2);
     }
 
     bool Eligible(World world, int self, CharacterCold me, int v, bool capture)
