@@ -257,8 +257,8 @@ hit impulse exists. `FUN_1407d2d10` (per-limb speed caps) and `FUN_1407d2290` ha
 
 Meitou ("Advanced ragdolls", Advanced settings, on; Faithful off; `BodyOptions.AdvancedRagdolls`): a new whole-body (not carried) ragdoll starts with every new body at one speed, capped at half `RagdollPhysics.MaxSpeed`: the
 `CharacterCold.Blow` that a downing melee hit or bolt left (`CombatSystem.Knockdown`: the victim's last-tick velocity plus a push along the blow of
-0.4 x (cut + blunt + pierce) units/s, 10 to 100, with 0.2 of it upward; executions set it too; also kept as `CharacterCold.Knockdown` for a cut-off head), else the character's last-tick velocity (a bleed-out while running). Bodies kept from a
-partial ragdoll keep their own speed; a ragdoll restored from a save starts as saved.
+0.4 x (cut + blunt + pierce) units/s, 10 to 100, with 0.2 of it upward; executions set it too; also kept as `CharacterCold.Knockdown` for a cut-off head), else the character's last-tick velocity (a bleed-out while running). A blow's push
+is focused on the struck part (below). Bodies kept from a partial ragdoll keep their own speed; a ragdoll restored from a save starts as saved.
 
 ### Advanced ragdolls (Meitou)
 
@@ -271,6 +271,9 @@ Engine feature behind the same switch (`BodyOptions.AdvancedRagdolls`; Faithful:
   changes (a knocked-out body dying), removed at the freeze. Gravity beats it, so it shapes the rest pose rather than holding one.
 - **Spin on impact**: a new ragdoll started by a blow (`CharacterCold.Blow`'s push) spins its upper arms along the push and its thighs against it (the feet held the ground),
   0.15 rad/s per unit/s of push, at most 6, each limb by its own roll of 0.6 to 1.4 (`RngPurpose.RagdollSpin`).
+- **Focused push**: the struck part's LOCATIONAL_DAMAGE `bone name` (else `bone name 2`; its nearest ancestor with a body when the bone has none) names the struck body
+  (`RagdollBlow.Bone`, `RagdollSystem.Struck`). Every body starts with 0.6 of the push, the struck one also gets the other 0.4 times the ragdoll's mass over its own (at most 4x:
+  an impulse on it alone), so the body is thrown from the hit part and the joints drag the rest; each body at most half `RagdollPhysics.MaxSpeed`. No bone: the whole push on every body.
 
 ## Per frame
 

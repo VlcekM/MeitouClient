@@ -18,6 +18,12 @@ public enum RagdollPart
     Limbs = RightArm | LeftArm | Head | RightLeg | LeftLeg,
 }
 
+/// <summary>
+/// Meitou: the hit that put a character down, as its new ragdoll starts: the speed (world units/s) of its own motion then plus a push along the blow, that push alone, and
+/// the struck part's bone (null: none), whose body takes more of the push (<see cref="RagdollSystem"/>, docs/game/ragdolls.md "Advanced ragdolls").
+/// </summary>
+public readonly record struct RagdollBlow(Vector3 Velocity, Vector3 Push, string? Bone);
+
 /// <summary>What the animation system asks about ragdolls (in its parallel phase: answers are the last tick's state or fixed data).</summary>
 public interface IRagdollState
 {
@@ -268,7 +274,7 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
             }
             // Meitou (BodyOptions.AdvancedRagdolls): a new whole-body ragdoll goes on as the character moved, pushed by the blow that put it down (CombatSystem.Knockdown), else as it moved last tick.
             bool advanced = options is { AdvancedRagdolls: true };
-            var (launch, push) = !advanced ? default : cold.Blow ?? (table.Previous[i].Velocity, Vector3.Zero);
+            var blow = !advanced ? default : cold.Blow ?? new RagdollBlow(table.Previous[i].Velocity, Vector3.Zero, null);
             cold.Blow = null;
             // A ragdoll a save holds (Saving.RagdollSave): taken the first time the character is seen, used when it starts as a whole body.
             SavedRagdoll? restore = null;
@@ -296,7 +302,7 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
                     StartGetUp(world, r, ref next[i]);
                 animated = Animated(r, cold, placement);
                 bool restored = restore is not null && Fits(r, restore, next[i].Position);
-                Rebuild(r, wanted, restored ? restore!.Pose : animated, restored ? default : (launch, push), advanced, world.Seed);
+                Rebuild(r, wanted, restored ? restore!.Pose : animated, restored ? default : blow, advanced, world.Seed);
                 if (restored)
                 {
                     r.Age = restore!.Age;
@@ -505,14 +511,12 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
     /// <summary>
     /// Replaces the bodies for <paramref name="mask"/>: simulated bodies, and pinned (kinematic) ones joined to them. A body that was in the scene keeps its pose and velocity, a
     /// new one starts at the animated pose at rest (the game starts from the animated pose with no velocity and no hit impulse). Meitou: a new body of a whole (not carried)
-    /// ragdoll starts at <paramref name="start"/>'s velocity (world units/s, at most half <see cref="RagdollPhysics.MaxSpeed"/>), its arms and legs spun by the push (<see cref="Spin"/>);
-    /// with <paramref name="soft"/> its joints get soft limits (<see cref="AddJoint"/>).
+    /// ragdoll starts at <paramref name="start"/>'s velocity (<see cref="StartVelocity"/>); with <paramref name="soft"/> its joints get soft limits (<see cref="AddJoint"/>).
     /// </summary>
-    void Rebuild(Ragdoll r, RagdollPart mask, RigidTransform[] animated, (Vector3 Velocity, Vector3 Push) start = default, bool soft = false, ulong seed = 0)
+    void Rebuild(Ragdoll r, RagdollPart mask, RigidTransform[] animated, RagdollBlow start = default, bool soft = false, ulong seed = 0)
     {
-        var launch = start.Velocity;
-        if ((mask & RagdollPart.Whole) == 0 || (mask & RagdollPart.CarryMode) != 0) (launch, start.Push) = (Vector3.Zero, Vector3.Zero);
-        else if (launch.Length() > RagdollPhysics.MaxSpeed / 2) launch = Vector3.Normalize(launch) * (RagdollPhysics.MaxSpeed / 2);
+        if ((mask & RagdollPart.Whole) == 0 || (mask & RagdollPart.CarryMode) != 0) start = default;
+        var struck = Struck(r, start.Bone);
         var bodies = r.Definition.Bodies;
         var velocities = new BodyVelocity[bodies.Length];
         var had = new bool[bodies.Length];
@@ -550,7 +554,7 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
             // and so does everything when the body is lifted onto a shoulder.
             bool keep = had[b] && dynamic[b] && (mask & RagdollPart.CarryMode) == 0;
             var pose = keep ? r.Pose[b] : lift > 0 ? animated[b] with { Position = animated[b].Position + new Vector3(0, lift, 0) } : animated[b];
-            var velocity = keep ? velocities[b] : new BodyVelocity(launch, Spin(r, bodies[b].Name, b, start.Push, seed));
+            var velocity = keep ? velocities[b] : StartVelocity(r, b, start, struck, seed);
             if (!needed[b]) { r.Pose[b] = pose; continue; }
             r.Pose[b] = pose;
             var rigid = new RigidPose(pose.Position, pose.Rotation);
@@ -692,6 +696,8 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
     const float RelaxedShare = 0.6f;
     /// <summary>The spin a blow's push gives an arm or a leg: rad/s per unit/s of push, at most this, scaled by a roll of 0.6 to 1.4.</summary>
     const float SpinPerPush = 0.15f, MaxPushSpin = 6;
+    /// <summary>The share of a blow's push the struck body takes (the rest goes to the whole body), and at most this many times its own share of the body's mass.</summary>
+    const float PushFocus = 0.4f, MaxFocusGain = 4;
 
     /// <summary>The tone of a whole or carried ragdoll; none for a conscious character's collapsed limbs (a broken limb hangs loose) or without advanced ragdolls.</summary>
     static Tone ToneOf(CharacterCold cold, RagdollPart mask, bool advanced) =>
@@ -718,6 +724,40 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
             float target = j.Type == PhysicsJointType.Revolute && j.Limits ? Math.Clamp(RelaxedShare * (j.Low + j.High) / 2, j.Low, j.High) : 0;
             r.Relax.Add(physics.Simulation.Solver.Add(a, b, new TwistServo { LocalBasisA = j.BasisA, LocalBasisB = j.BasisB, TargetAngle = target, SpringSettings = spring, ServoSettings = servo }));
         }
+    }
+
+    /// <summary>
+    /// A new body's start velocity: <paramref name="start"/>'s velocity, its arms and legs spun by the push (<see cref="Spin"/>). With a struck body (<see cref="Struck"/>) every body
+    /// keeps only 1 - <see cref="PushFocus"/> of the push and the struck one gets the rest as an impulse on it alone (times the ragdoll's mass over its own, at most
+    /// <see cref="MaxFocusGain"/>), so the body is thrown from the part that was hit and its joints carry the rest along. At most half <see cref="RagdollPhysics.MaxSpeed"/>.
+    /// </summary>
+    static BodyVelocity StartVelocity(Ragdoll r, int b, RagdollBlow start, (int Body, float Gain) struck, ulong seed)
+    {
+        var linear = start.Velocity;
+        if (struck.Body >= 0)
+        {
+            linear -= start.Push * PushFocus;
+            if (b == struck.Body) linear += start.Push * (PushFocus * struck.Gain);
+        }
+        if (linear.Length() > RagdollPhysics.MaxSpeed / 2) linear = Vector3.Normalize(linear) * (RagdollPhysics.MaxSpeed / 2);
+        return new BodyVelocity(linear, Spin(r, r.Definition.Bodies[b].Name, b, start.Push, seed));
+    }
+
+    /// <summary>
+    /// The body moving <paramref name="bone"/> (else its nearest ancestor's) and the ragdoll's mass over that body's, at most <see cref="MaxFocusGain"/>; body -1 when
+    /// no bone is named or none of it moves.
+    /// </summary>
+    static (int Body, float Gain) Struck(Ragdoll r, string? bone)
+    {
+        var rig = r.Setup.Rig;
+        if (bone is null || rig.Handle(bone) is not int h) return (-1, 0);
+        while (h >= 0 && r.Definition.BodyOfBone[h] < 0) h = rig.Parent[h];
+        if (h < 0) return (-1, 0);
+        var bodies = r.Definition.Bodies;
+        int body = r.Definition.BodyOfBone[h];
+        float total = 0;
+        foreach (var each in bodies) total += each.Mass;
+        return (body, MathF.Min(total / bodies[body].Mass, MaxFocusGain));
     }
 
     /// <summary>

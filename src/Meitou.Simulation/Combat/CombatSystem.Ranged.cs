@@ -767,7 +767,7 @@ public sealed partial class CombatSystem : IProjectileSource
                     break;
             }
         }
-        if (knockout || death) Knockdown(world, v, dc, new Vector2(p.Direction.X, p.Direction.Z), damage.Cut + damage.Blunt + damage.Pierce);
+        if (knockout || death) Knockdown(world, v, dc, new Vector2(p.Direction.X, p.Direction.Z), damage.Cut + damage.Blunt + damage.Pierce, part);
         if (dc.Medical.Incapacitated)
         {
             D.Down = true;
