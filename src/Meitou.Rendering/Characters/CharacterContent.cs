@@ -948,10 +948,11 @@ internal sealed class CharacterContent : IDisposable
             m.Tex[CharacterShaders.SlotNormal] = Texture(Tex(spec, "normal map"), false);
             if (dyed)
             {
+                // Paint factors (the colours' alpha): the item's record, not the material; 0 when unset (docs/characters.md "Clothing colours").
                 m.Tex[CharacterShaders.SlotColourMap] = Texture(Tex(spec, "color map"), false);
                 m.Dyed = true;
-                m.Colour1 = new Vector4(CharacterAppearance.Rgb(dye!.GetInt("color 1")), spec.GetFloat("paint factor 1"));
-                m.Colour2 = new Vector4(CharacterAppearance.Rgb(dye.GetInt("color 2")), spec.GetFloat("paint factor 2"));
+                m.Colour1 = new Vector4(CharacterAppearance.Rgb(dye!.GetInt("color 1")), item.GetFloat("paint factor 1"));
+                m.Colour2 = new Vector4(CharacterAppearance.Rgb(dye.GetInt("color 2")), item.GetFloat("paint factor 2"));
             }
             m.ClipOnNormalAlpha = worn && Tex(spec, "normal map") is not null;
             m.DoubleSided = spec.GetInt("material type") == 2;

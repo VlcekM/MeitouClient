@@ -170,8 +170,10 @@ one shows the scheme (issue #279). In the owner's distinct saves 5 of 35 saved p
 Meitou: `LoadoutLimb.Colour` (the fitted item's `ColourId`, `SavedKit.SetLimbs`), `CharacterAppearance.AddLimb`.
 
 Paint factor (**Observed**, decompile `FUN_140536210`): `paint factor 1` / `2` (the colour's alpha in the shader) are read from the float table of the attached item's own
-record (the object `slot` and `is locked` come from), not its material. fcs.def defines them only on MATERIAL_SPECS_CLOTHING (11 of 150 set one) and no item record
-stores them, so the original would always pass 0 (multiply). Meitou passes the material's: an open divergence for those 11, not checked against the game's look.
+record (the object `slot` and `is locked` come from), not its material. The read is a map `operator[]` (`FUN_1400b0ab0`) that inserts a zero for a missing key, so the
+default is 0 (the dye multiplies into the texture). fcs.def defines them only on MATERIAL_SPECS_CLOTHING (11 of 150 set one) and no item record stores them, so the original
+always passes 0. Meitou reads them from the item record (`CharacterContent.ItemMaterial`, clothing, armour and prosthetics alike), default 0, and ignores the materials' values;
+the look of those 11 materials is not checked against the game. The icon path already passes 0.
 
 **Observed** in the owner's 9 saves (scratch probe of platoon files, worn ARMOUR): of 27,230 coloured pieces, 17,866 have the
 platoon faction's scheme, 7,634 the `color` of some CHARACTER (the wearer's record was not matched), 1,632 their record's own, 98 other (looted, mod colours). No uncoloured worn piece is in a faction with
