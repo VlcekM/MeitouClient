@@ -97,7 +97,7 @@ public sealed partial class CaptiveSystem
     /// The nearest character the capturer takes (see the class remarks) among those on its sensed list (the finders walk it with no range limit, <b>Verified</b>; so only one it saw,
     /// which needs the same building or the open unless either stands on top, docs/game/perception.md "Sight"): <see cref="Down"/>, uncarried and uncaged, no animal, not already a job's
     /// or given up; for a capture not of its own side, no slave of state 1, not law enforcement, trader or diplomat, not <see cref="Maimed"/>, not shackled (an engine guard so it is
-    /// never cuffed twice); for a carry a slave of its faction that is not just staying low (the carry finder refuses posture 1). The entries not tagged ally come first, then whoever
+    /// never cuffed twice); for a carry a slave of its faction that is not just staying low (the carry finder refuses posture 1). The entries its mask keeps (<see cref="ConsiderSensed"/>) come first, then whoever
     /// within its sight the capped block lacks (<see cref="CharacterFacts.Perceives"/>); nearest by 3D distance to where it stands now.
     /// </summary>
     int NearestDown(World world, int slot, CharacterCold me, bool capture)
@@ -114,15 +114,19 @@ public sealed partial class CaptiveSystem
         return scan.Best;
     }
 
-    /// <summary>The capturer's sense entries not tagged ally (the finders' exclude mask 0x11: ally or dead) whose character is still that slot's.</summary>
+    /// <summary>
+    /// The worker's sense entries whose character is still that slot's, less those its finder's exclude mask leaves out: for a capture ally or dead (0x11), for a carry dead or
+    /// imprisoned (0x210; its include mask 0x20 is slave state 1, which <see cref="Eligible"/> tests on the current state).
+    /// </summary>
     static void ConsiderSensed(ref DownScan scan)
     {
         if (scan.Senses is not { } senses) return;
 
         var table = scan.World.Characters;
+        var excluded = scan.Capture ? SenseTag.Ally : SenseTag.Imprisoned;
         foreach (var e in senses.Entries)
         {
-            if ((e.Tags & SenseTag.Ally) != 0 || (uint)e.Target >= (uint)table.HighWater || table.Next[e.Target].Generation != e.Generation) continue;
+            if ((e.Tags & excluded) != 0 || (uint)e.Target >= (uint)table.HighWater || table.Next[e.Target].Generation != e.Generation) continue;
             Consider(ref scan, e.Target);
         }
     }
