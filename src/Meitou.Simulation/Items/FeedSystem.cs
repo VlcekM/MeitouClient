@@ -152,12 +152,22 @@ public sealed class FeedSystem(ItemFactory items, FeedSettings? settings = null)
     public const int LimbFunction = 17;
 
     /// <summary>
-    /// An animal that picks up a limb holds it in its mouth (<c>FUN_14034f340</c>, <c>FUN_1405d0b50</c>, <b>Verified</b> decompile): a limb it held before is let go at its feet, the new one is
-    /// taken off the ground into <see cref="CharacterCold.Mouth"/> and eaten later (<see cref="MouthDue"/>); anything else goes in the inventory as for anyone (<see cref="CanHold"/>). Engine
-    /// choice: every animal has the "mouth" attach point the original tests for (without one the original eats the limb on the spot; only the Bonedog and Boneyard Wolf races have one, so
-    /// only theirs is drawn); a held limb is not saved.
+    /// Whether a pick-up of <paramref name="item"/> is a mouth pick-up (<c>FUN_14034f340</c>, <b>Verified</b> decompile): a limb picked up by an animal never goes in its inventory. It is held
+    /// in the mouth when the animal <see cref="HasMouth"/> (<see cref="HoldInMouth"/>), else it stays on the ground (<c>FUN_1405d0b50</c>). Anything else goes in the inventory as for anyone.
     /// </summary>
-    public static bool CanHold(CharacterCold cold, ItemInstance item) => cold.Medical is { HasStatsObject: false } && item.ItemFunction == LimbFunction;
+    public static bool IsMouthPickUp(CharacterCold cold, ItemInstance item) => cold.Medical is { HasStatsObject: false } && item.ItemFunction == LimbFunction;
+
+    /// <summary>The name of the attachment point a limb is held at (only the Bonedog and Boneyard Wolf races' <c>attachment points</c> file has it).</summary>
+    public const string MouthPoint = "mouth";
+
+    /// <summary>Whether the character's look has the <see cref="MouthPoint"/> attachment point (<c>FUN_1405d0b50</c> looks it up by name); false without a look.</summary>
+    public static bool HasMouth(CharacterCold cold) => cold.Appearance?.AttachmentPoints.ContainsKey(MouthPoint) == true;
+
+    /// <summary>
+    /// Whether an animal takes the limb into its mouth (<see cref="IsMouthPickUp"/> and <see cref="HasMouth"/>): a limb it held before is let go at its feet, the new one is taken off the
+    /// ground into <see cref="CharacterCold.Mouth"/> and eaten later (<see cref="MouthDue"/>). Engine choice: a held limb is not saved.
+    /// </summary>
+    public static bool CanHold(CharacterCold cold, ItemInstance item) => IsMouthPickUp(cold, item) && HasMouth(cold);
 
     /// <summary>
     /// Takes the limb into the mouth (when <see cref="CanHold"/>); the caller has taken it off the ground. <paramref name="tone"/> is the skin tone of the character it was cut from
