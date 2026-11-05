@@ -2,15 +2,17 @@ using System.Numerics;
 
 namespace Meitou.Rendering;
 
-/// <summary>A saved camera for <see cref="CameraPath"/>: where the eye is, where it looks, the orbit distance, the lens and the time of day.</summary>
-public readonly record struct CameraShot(Vector3 Eye, float Yaw, float Pitch, float Distance, float FieldOfView, float Hour)
+/// <summary>A saved camera for <see cref="CameraPath"/>: where the eye is, where it looks, the orbit distance, the lens and the time of day; a key may also set the depth of field's
+/// focus and f-number (null: the target's distance, the player's aperture).</summary>
+public readonly record struct CameraShot(Vector3 Eye, float Yaw, float Pitch, float Distance, float FieldOfView, float Hour, float? Focus = null, float? Aperture = null)
 {
-    public static CameraShot Of(WorldCamera c, float hour) => new(c.Eye, c.Yaw, c.Pitch, c.Distance, c.FieldOfView, hour);
+    public static CameraShot Of(WorldCamera c, float hour) => new(c.Eye, c.Yaw, c.Pitch, c.Distance, c.FieldOfView, hour, c.FocusDistance, c.Aperture);
 
     /// <summary>Puts the camera here: the same eye and view direction, the target <see cref="Distance"/> in front.</summary>
     public void Apply(WorldCamera c)
     {
         (c.Yaw, c.Pitch, c.Distance, c.FieldOfView) = (Yaw, Pitch, Distance, FieldOfView);
+        (c.FocusDistance, c.Aperture) = (Focus, Aperture);
         c.Target = Eye + c.Forward * Distance;
     }
 }
@@ -26,14 +28,15 @@ public readonly record struct CameraKey(CameraShot Shot, float Time, bool Ease =
 /// </summary>
 public static class CameraPath
 {
-    const int Dims = 8;   // eye x, y, z, yaw, pitch, log distance, field of view, hour
+    const int Dims = 10;   // eye x, y, z, yaw, pitch, log distance, field of view, hour, log focus, log f-number
 
-    static float[] Values(in CameraShot s) => [s.Eye.X, s.Eye.Y, s.Eye.Z, s.Yaw, s.Pitch, MathF.Log(MathF.Max(s.Distance, 1)), s.FieldOfView, s.Hour];
+    static float[] Values(in CameraShot s) => [s.Eye.X, s.Eye.Y, s.Eye.Z, s.Yaw, s.Pitch, MathF.Log(MathF.Max(s.Distance, 1)), s.FieldOfView, s.Hour,
+        MathF.Log(MathF.Max(s.Focus ?? s.Distance, 1)), MathF.Log(s.Aperture ?? PostOptions.DefaultAperture)];
 
     static CameraShot Shot(float[] v)
     {
         float hour = v[7] % 24;
-        return new(new Vector3(v[0], v[1], v[2]), v[3], v[4], MathF.Exp(v[5]), v[6], hour < 0 ? hour + 24 : hour);
+        return new(new Vector3(v[0], v[1], v[2]), v[3], v[4], MathF.Exp(v[5]), v[6], hour < 0 ? hour + 24 : hour, MathF.Exp(v[8]), MathF.Exp(v[9]));
     }
 
     /// <summary>Moves <paramref name="value"/> by whole periods to within half a period of <paramref name="near"/>.</summary>
@@ -89,6 +92,8 @@ public static class CameraPath
             float m2 = ease2 ? 0 : (p3![d] - p1[d]) / MathF.Max(tNext - t0, 1e-4f);
             r[d] = h00 * p1[d] + h10 * h * m1 + h01 * p2[d] + h11 * h * m2;
         }
-        return Shot(r);
+        // Focus and aperture fly only where a key sets them: a key without one stands for the target's distance or the default, a flight with none has neither.
+        var shot = Shot(r);
+        return shot with { Focus = keys.Any(k => k.Shot.Focus is not null) ? shot.Focus : null, Aperture = keys.Any(k => k.Shot.Aperture is not null) ? shot.Aperture : null };
     }
 }

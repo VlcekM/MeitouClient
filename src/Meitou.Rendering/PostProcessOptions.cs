@@ -89,6 +89,15 @@ public sealed class PostOptions
     public float ShutterSeconds => MotionBlurShutter / 360 / ShutterBaseRate;
     /// <summary>The longest blur either way of a pixel, as a share of the picture's height; also the tiles' size.</summary>
     public const float MotionBlurMaxRadius = 0.04f;
+    /// <summary>The Meitou <c>dof</c> switch (docs/render-post.md "Depth of field"), off by default even in the Meitou look.</summary>
+    public bool DepthOfField;
+    /// <summary>The lens's f-number where the shot does not set one (the Tab slider; <see cref="DefaultAperture"/> by default).</summary>
+    public float DofAperture = DefaultAperture;
+    public const float DefaultAperture = 1;
+    /// <summary>The largest CoC: a share of the picture's height in half-size pixels, and at most that many pixels (the gathers' four rings thin out past it).</summary>
+    public const float DofMaxCocShare = 0.015f, DofMaxCocPixels = 24;
+    /// <summary>The focus distance (world units) and f-number of the frame's camera, set by the world frame.</summary>
+    public float LensFocus = 1000, LensAperture = DefaultAperture;
     /// <summary>The camera effects in the strategy camera as well (the player's choice, off by default): otherwise only with <see cref="CinematicView"/>.</summary>
     public bool CameraEffectsEverywhere;
     /// <summary>Set by the game each frame: the free camera or the cinematic one holds the view. A host without a strategy camera leaves it on.</summary>
@@ -140,6 +149,7 @@ public sealed class PostOptions
         HeatHazeStrength = other.HeatHazeStrength; NightGradeStrength = other.NightGradeStrength; BloomStrength = other.BloomStrength;
         MeitouHeatHaze = other.MeitouHeatHaze; ToneMapping = other.ToneMapping; NightGrade = other.NightGrade; Bloom = other.Bloom;
         MotionBlur = other.MotionBlur; MotionBlurShutter = other.MotionBlurShutter; CameraEffectsEverywhere = other.CameraEffectsEverywhere;
+        DepthOfField = other.DepthOfField; DofAperture = other.DofAperture;
     }
 
     /// <summary>Handles one command-line option; false when it is not a post-processing one.</summary>
@@ -169,6 +179,7 @@ public sealed class PostOptions
         $"grade {(GradeUsed ? $"saturation {Saturation:0.##} contrast {Contrast:0.##}" : "off")}, night grade {(NightGradeAmount > 0 ? NightGradeAmount.ToString("0.##", CultureInfo.InvariantCulture) : "off")}, " +
         $"bloom {(BloomAmount > 0 ? BloomAmount.ToString("0.###", CultureInfo.InvariantCulture) : "off")}, " +
         $"motion blur {(MotionBlur ? MotionBlurShutter.ToString("0", CultureInfo.InvariantCulture) + " deg" : "off")}, " +
+        $"depth of field {(DepthOfField ? "f/" + DofAperture.ToString("0.##", CultureInfo.InvariantCulture) : "off")}, " +
         $"upscaler {Upscale.Describe()}";
 }
 

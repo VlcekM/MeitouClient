@@ -62,6 +62,8 @@ Ctrl+numpad1..9 saves; numpad1..9 cuts (in the game, outside --duel, a numpad di
 F6 editor supports scrub/retime0.05s/reorder/ease, add/update/delete and recording.
 Keys include eye,yaw,pitch,log-distance,lens,hour; Hermite time spline unwraps yaw/hour, stops
 at easing/open endpoints and joins loops. Unequal timing can overshoot; use easing where needed.
+A key may set the depth of field's focus and aperture (F6 Focus and Aperture buttons on the selected key, half a stop a press; "Focus: key" goes back to the target): log-spline
+between keys, a key without one stands for the target's distance or f/1. `Focus` and `Aperture` are optional in the file: left out while unset, skipped by older builds.
 Record-path samples manual flight each second plus endpoints. Numpad* letterbox2.39:1/clean view.
 Shift+Enter records numbered PNGs to C:/Temp/meitou-take-<time>, fixed1/60s camera/world motion;
 render duration does not alter film time. Recording excludes UI/editor and uses an open flight.

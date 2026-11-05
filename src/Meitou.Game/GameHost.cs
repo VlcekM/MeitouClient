@@ -463,6 +463,7 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
         camera.Yaw = s.Yaw;
         camera.Pitch = s.Pitch;
         camera.Distance = s.Distance;
+        (camera.FocusDistance, camera.Aperture) = (null, null);   // a cinema key's lens goes with the camera it held
     }
 
     /// <summary>

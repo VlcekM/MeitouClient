@@ -168,6 +168,10 @@ public static class Enhancements
             () => post.MotionBlur, v => post.MotionBlur = v,
             "the game has no motion blur; Meitou rebuilds a film shutter's blur from the upscaler's motion vectors for the free and cinematic cameras (needs a temporal upscaler; the sky stays sharp; docs/render-post.md \"Motion blur\")",
             optional: true),
+        new("dof", "Depth of field", "off", "thin lens",
+            () => post.DepthOfField, v => post.DepthOfField = v,
+            "the game keeps everything in focus; Meitou blurs what is away from the focus as a real lens does, by the field of view, the f-number and the distance, for the free and cinematic cameras (the cinema's keys can set focus and aperture; docs/render-post.md \"Depth of field\")",
+            optional: true),
     ];
 
     /// <summary><c>--meitou</c> / <c>--faithful &lt;all|id,id...&gt;</c>: turns those switches to Meitou or to Faithful.</summary>

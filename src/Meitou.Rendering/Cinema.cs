@@ -1,5 +1,6 @@
 using System.Numerics;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Meitou.Rendering;
 
@@ -38,6 +39,8 @@ sealed class Cinema(Func<WorldCamera> camera, Func<float> getHour, Action<float>
     public static string GameFile => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Meitou", "game-shots.json");
 
     const int MaxKeys = 999, RecordFps = 60;
+    /// <summary>One press of the focus and aperture buttons: half a stop's ratio.</summary>
+    const float LensStep = 1.1892f;
     /// <summary>Seconds between the keys a recorded camera path drops.</summary>
     const float PathStep = 1;
     const float DefaultFov = 50 * MathF.PI / 180, MinFov = 10 * MathF.PI / 180, MaxFov = 100 * MathF.PI / 180, MinGap = 0.05f;
@@ -224,6 +227,16 @@ sealed class Cinema(Func<WorldCamera> camera, Func<float> getHour, Action<float>
         Say("all keys deleted");
     }
 
+    /// <summary>Changes the selected key's lens (the depth of field's focus or f-number) and shows it.</summary>
+    void SetLens(Func<CameraShot, CameraShot> change)
+    {
+        if (selected is not { } s) { Say("no key selected"); return; }
+        s.Shot = change(s.Shot);
+        Save();
+        preview = true;
+        Say($"key {s.Label}: {Describe(s.Shot)}");
+    }
+
     void Scale(float factor)
     {
         float start = Start;
@@ -336,6 +349,11 @@ sealed class Cinema(Func<WorldCamera> camera, Func<float> getHour, Action<float>
         Button("Set key to camera", () => { if (selected is { } s) SaveKey(s.Label); else Say("no key selected"); });
         Button("Go to key", () => { if (selected is { } s) { Stop(); GoTo(s); } else Say("no key selected"); });
         Button(selected is { Ease: true } ? "Ease: on" : "Ease: off", () => { if (selected is { } s) { s.Ease = !s.Ease; Save(); preview = true; } else Say("no key selected"); });
+        Button("Focus nearer", () => SetLens(s => s with { Focus = (s.Focus ?? s.Distance) / LensStep }));
+        Button("Focus farther", () => SetLens(s => s with { Focus = (s.Focus ?? s.Distance) * LensStep }));
+        Button(selected is { Shot.Focus: not null } ? "Focus: key (to target)" : "Focus: target", () => SetLens(s => s with { Focus = null }));
+        Button("Aperture wider", () => SetLens(s => s with { Aperture = (s.Aperture ?? PostOptions.DefaultAperture) / LensStep }));
+        Button("Aperture narrower", () => SetLens(s => s with { Aperture = (s.Aperture ?? PostOptions.DefaultAperture) * LensStep }));
         Button("Delete key", DeleteSelected);
         Button(setHour is null ? "Time follows: n/a" : followTime ? "Time follows: on" : "Time follows: off", () => OnKey(CinemaKey.KeypadDivide, false, false));
         Button("Slower", () => Scale(1.25f));
@@ -500,11 +518,15 @@ sealed class Cinema(Func<WorldCamera> camera, Func<float> getHour, Action<float>
     static float Degrees(float radians) => radians * 180 / MathF.PI;
 
     static string Describe(CameraShot s) =>
-        $"eye {s.Eye.X:0}, {s.Eye.Y:0}, {s.Eye.Z:0}, yaw {Degrees(s.Yaw):0}, pitch {Degrees(s.Pitch):0}, lens {Degrees(s.FieldOfView):0} deg, {WorldFrame.TimeText(s.Hour)}";
+        $"eye {s.Eye.X:0}, {s.Eye.Y:0}, {s.Eye.Z:0}, yaw {Degrees(s.Yaw):0}, pitch {Degrees(s.Pitch):0}, lens {Degrees(s.FieldOfView):0} deg{Lens(s)}, {WorldFrame.TimeText(s.Hour)}";
+
+    static string Lens(CameraShot s) => (s.Focus is { } focus ? $", focus {focus:0}" : "") + (s.Aperture is { } aperture ? $", f/{aperture:0.0}" : "");
 
     static void Say(string text) => Console.WriteLine($"cinema    {text}");
 
-    sealed record Saved(int Slot, float[] Eye, float Yaw, float Pitch, float Distance, float FieldOfView, float Hour, float? Time = null, bool Ease = false);
+    /// <summary>A key in the file. <c>Focus</c> and <c>Aperture</c> are left out while unset, and an older build skips them, so keys stay readable both ways.</summary>
+    sealed record Saved(int Slot, float[] Eye, float Yaw, float Pitch, float Distance, float FieldOfView, float Hour, float? Time = null, bool Ease = false,
+        float? Focus = null, float? Aperture = null);
 
     void Save()
     {
@@ -512,8 +534,9 @@ sealed class Cinema(Func<WorldCamera> camera, Func<float> getHour, Action<float>
         {
             Directory.CreateDirectory(Path.GetDirectoryName(File)!);
             var list = Sorted.Select(k => new Saved(k.Label, [k.Shot.Eye.X, k.Shot.Eye.Y, k.Shot.Eye.Z], k.Shot.Yaw, k.Shot.Pitch, k.Shot.Distance,
-                k.Shot.FieldOfView, k.Shot.Hour, k.Time, k.Ease)).ToList();
-            System.IO.File.WriteAllText(File, JsonSerializer.Serialize(list, new JsonSerializerOptions { WriteIndented = true }));
+                k.Shot.FieldOfView, k.Shot.Hour, k.Time, k.Ease, k.Shot.Focus, k.Shot.Aperture)).ToList();
+            var options = new JsonSerializerOptions { WriteIndented = true, DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull };
+            System.IO.File.WriteAllText(File, JsonSerializer.Serialize(list, options));
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException) { Say($"could not save the keys to {File}: {e.Message}"); }
     }
@@ -529,7 +552,7 @@ sealed class Cinema(Func<WorldCamera> camera, Func<float> getHour, Action<float>
             foreach (var s in saved.OrderBy(s => s.Time ?? s.Slot))
             {
                 if (s.Slot is < 1 or > MaxKeys || s.Eye is not { Length: 3 } || Find(s.Slot) is not null) continue;
-                var shot = new CameraShot(new Vector3(s.Eye[0], s.Eye[1], s.Eye[2]), s.Yaw, s.Pitch, s.Distance, s.FieldOfView, s.Hour);
+                var shot = new CameraShot(new Vector3(s.Eye[0], s.Eye[1], s.Eye[2]), s.Yaw, s.Pitch, s.Distance, s.FieldOfView, s.Hour, s.Focus, s.Aperture);
                 keys.Add(new Entry(s.Slot, shot, s.Time ?? order * spacing, s.Ease));
                 order++;
             }

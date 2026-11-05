@@ -399,6 +399,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         giAlbedo = giLow = shaftInjected = shaftLight = shaftScatter = shaftRaw = shaftHistory = softDepth = null;
         FreeBloom();
         FreeMotionBlur();
+        FreeDepthOfField();
         adaptedValid = historyValid = shaftHistoryValid = softDepthReady = false;
         adaptedFrames = 0;
     }
@@ -781,7 +782,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         postColour = sceneColour!;
         if (Temporal) { postColour = RunUpscale(); Stamp("upscale"); }
         else ActiveUpscaler = "off";
-        postColour = RunMotionBlur(postColour);
+        postColour = RunDepthOfField(RunMotionBlur(postColour));
         bool auto = AutoExposure is not null && luminance is not null;
         if (auto) RunExposure();
         if (auto) Stamp("exposure");
@@ -1648,6 +1649,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         DisposeMerged();
         DisposeBloom();
         DisposeMotionBlur();
+        DisposeDepthOfField();
         Hiz?.Dispose();
         foreach (var p in new FullscreenProgram[] { ssao, ssaoMask, blur, luminancePass, adaptPass, compositePass, fxaaPass, hazePass, velocityPass, cloudMotionPass, taaPass, fogPass, particleDepthPass, particleSoftDepthPass, particleCompositePass, particleCoveragePass }) p.P.Dispose();
         smaaPasses.Dispose();

@@ -236,6 +236,28 @@ scaled by that time over the frame's, at most 8 frames. A recording takes its fi
 Needs a temporal upscaler: without one there is no motion target and it does not run. It skips reset frames and cuts to a Cinema key (`CameraCut`). Particles have no
 motion of their own and take the surface's behind them. Look and cost **Unknown** (not run on a GPU).
 
+## Depth of field
+
+Optional (`dof`, `PostOptions.DepthOfField`, off in every look). Port of KenshiNative's `docs/features/dof-rewrite.md`, without its sparkle, `PostProcess.DepthOfField.cs`:
+at the picture's size after the upscaler, in linear light, no history. Half-size prepare (RGBA16F, CoC in alpha, the nearest depth of four), near CoC tiles and dilation, far
+gather, near gather (premultiplied), full-size composite: far field by the full-size CoC with a CoC-weighted upsample, near field over it. Four rings at most.
+
+The CoC is a thin lens's, not a slider's radius (KenshiNative's). A full-frame sensor, 24 mm high (`ThinLens`), and the camera's vertical field of view give the focal length f;
+with f-number N and focus s, the disc's diameter on the sensor at depth z is `f^2 / (N (s - f)) * |z - s| / z`, the sky at infinity, in half-size pixels at most 1.5 % of the
+height and 24. 10 world units are a metre (see "Fog" above). Radius at infinity at 1080p and f/1, half-size pixels:
+
+| lens | focus 5 m | focus 20 m |
+|---|---|---|
+| 50° (25.7 mm, the default lens) | 1.5 | 0.4 |
+| 20° (68 mm) | 10.5 | 2.6 |
+
+So at the default lens a far focus is nearly sharp, as a real lens would be: the blur asks for a long lens, a near focus or a wide aperture (`Depth of field aperture`, f/0.25 to
+f/22, 1 by default; below about f/1 no real lens goes).
+
+Focus and aperture come from the key the cinema holds (`Focus`, `Aperture`, [viewer](viewer.md#cinematic-camera)), else the camera target's distance (the free camera's is the
+strategy boom it left) and the slider. Water writes no depth, so it takes the CoC of what lies under it. Particles take the surface's behind them.
+The depth is jittered: the composite shifts its tap by the jitter, and an edge may still shimmer a render pixel. Look and cost **Unknown** (not run on a GPU).
+
 ## SMAA
 
 Meitou's non-temporal alternative to FXAA (`--smaa`, or anti-aliasing "SMAA" in settings). It runs on the

@@ -83,6 +83,7 @@ static class LauncherSchema
         Graphics(WorldFrame.NightGradeStrengthSlider, 0, 1, 0.05f, NightGrade.MeitouStrength) with { Format = "0.00" },
         Graphics(WorldFrame.BloomStrengthSlider, 0, 0.25f, 0.005f, new PostOptions().BloomStrength) with { Format = "0.000" },
         Graphics(WorldFrame.MotionBlurShutterSlider, 45, 360, 5, new PostOptions().MotionBlurShutter),
+        Graphics(WorldFrame.DofApertureSlider, 0.25f, 22, 0.05f, new PostOptions().DofAperture) with { Logarithmic = true, Format = "0.00" },
     ];
 
     /// <summary>The render scale's quality modes, lowest first: FSR's and DLSS's ratios, as the slider stores them (whole percent).</summary>
