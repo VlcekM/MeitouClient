@@ -73,6 +73,7 @@ static class LauncherSchema
         Graphics(WorldFrame.ShaftAirSlider, 0, 4, 0.05f, 1) with { Format = "0.00" },
         Multiplier(WorldFrame.ShaftAirDawnSlider, 0, 6, 1) with { Step = 0.1f, Format = "0.0" },
         Graphics(WorldFrame.ShaftQualitySlider, 0, 2, 1, 2) with { Labels = LowMediumHigh },
+        Graphics(WorldFrame.GtaoQualitySlider, 0, 2, 1, 1) with { Labels = LowMediumHigh },
         // Effects
         Graphics(WorldFrame.ParticleSliders[0], 0, 4, 1, 3) with { Name = "Weather particles", Labels = ["Off", "Quarter resolution", "Half resolution", "Automatic", "Full resolution"] },
         Graphics(WorldFrame.ParticleSliders[1], 0.1f, 1, 0.05f, 1) with { Format = "0.00", Suffix = "x" },

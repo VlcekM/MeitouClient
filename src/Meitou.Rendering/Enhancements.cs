@@ -189,6 +189,9 @@ public static class Enhancements
             () => post.DepthOfField, v => post.DepthOfField = v,
             "the game keeps everything in focus; Meitou blurs what is away from the focus as a real lens does, by the field of view, the f-number and the distance, for the free and cinematic cameras (the cinema's keys can set focus and aperture; docs/render-post.md \"Depth of field\")",
             optional: true),
+        new("gtao", "Ground-truth occlusion", "SSAO", "GTAO",
+            () => post.Gtao, v => post.Gtao = v,
+            "the Ambient occlusion switch's method (it needs that switch on): Meitou's SSAO is a cheap estimate; GTAO searches each pixel's horizon, measures how much sky it really sees, and keeps the colour of the light that bounces in a corner. Costs more; off by default"),
     ];
 
     /// <summary><c>--meitou</c> / <c>--faithful &lt;all|id,id...&gt;</c>: turns those switches to Meitou or to Faithful.</summary>

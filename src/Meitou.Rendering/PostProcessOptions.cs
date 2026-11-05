@@ -139,6 +139,21 @@ public sealed class PostOptions
     /// <summary>The contact shadows' parameters for the SSAO pass; a strength of 0 turns them off.</summary>
     public System.Numerics.Vector4 ContactParams =>
         new(ContactShadows ? ContactStrength : 0, ContactReach, ContactThickness, ContactEnd);
+    /// <summary>The <c>gtao</c> switch (docs/render-post.md "GTAO"): with <see cref="Ssao"/> on, the occlusion is the horizon search instead; off by default in every preset.</summary>
+    public bool Gtao;
+    /// <summary>GTAO's budget: 0 low, 1 medium, 2 high (the Tab panel's slider). It sets the slices, the steps and whether the gather runs at the render size.</summary>
+    public int GtaoQuality = 1;
+    public int GtaoSlices => GtaoQuality switch { 0 => 2, _ => 3 };
+    public int GtaoSteps => GtaoQuality switch { 0 => 4, _ => 6 };
+    public bool GtaoFullSize => GtaoQuality >= 2;
+    /// <summary>GTAO's search radius in world units, and the bounds on what it spans as shares of the render height (the world radius gives way to them).</summary>
+    public const float GtaoRadius = 20, GtaoMaxPixels = 96f / 1440, GtaoMinPixels = 12f / 1440;
+    /// <summary>The share of the radius at full weight, and how much of a passed horizon each further tap keeps (1: every occluder is solid behind).</summary>
+    public const float GtaoFalloff = 0.17f, GtaoThickness = 0.9f;
+    /// <summary>GTAO's curve after the blur (KenshiNative's defaults): the visibility to this power, then this much of it reaches the picture.</summary>
+    public const float GtaoPower = 1.6f, GtaoStrength = 0.55f;
+    /// <summary>The albedo of GTAO's multi-bounce term where no lit fragment wrote one to the surface target.</summary>
+    public const float GtaoAlbedo = 0.35f;
     /// <summary>The upscaler (render scale, TAA / FSR / DLSS); not part of the presets.</summary>
     public readonly UpscaleOptions Upscale = new();
 
@@ -188,6 +203,7 @@ public sealed class PostOptions
         GiHybrid = true;
         MotionBlur = other.MotionBlur; MotionBlurShutter = other.MotionBlurShutter; CameraEffectsEverywhere = other.CameraEffectsEverywhere;
         DepthOfField = other.DepthOfField; DofAperture = other.DofAperture;
+        Gtao = other.Gtao; GtaoQuality = other.GtaoQuality;
     }
 
     /// <summary>Handles one command-line option; false when it is not a post-processing one.</summary>
@@ -201,6 +217,7 @@ public sealed class PostOptions
             case "--smaa": Smaa = true; return true;
             case "--no-heat-haze": HeatHaze = false; return true;
             case "--gi-hybrid": SetGiHybrid(next()); return true;
+            case "--gtao-quality": GtaoQuality = Math.Clamp(int.Parse(next(), CultureInfo.InvariantCulture), 0, 2); return true;
             case "--bloom": BloomStrength = Math.Clamp(float.Parse(next(), CultureInfo.InvariantCulture), 0, 0.25f); Bloom = BloomStrength > 0; return true;
             case "--upscaler":
                 Upscale.Explicit = true;
@@ -214,7 +231,7 @@ public sealed class PostOptions
 
     public string Describe() =>
         $"{Preset}: aa {(Upscale.Temporal ? "temporal" : Smaa ? "smaa" : Fxaa ? "fxaa" : "off")}, heat haze {(HeatHaze ? "weather" + (HeatHazeScale != 1 ? $" strength {HeatHazeScale:0.##}" : "") : "off")}, " +
-        $"ssao {(Ssao ? "on" : "off")}, contact {(ContactShadows ? "on" : "off")}, shafts {(LightShafts ? $"{ShaftStrength:0.##} ({ShaftCells}x{ShaftSlices}x{ShaftSamples})" : "off")}, exposure x{Exposure:0.##}, tonemap {ToneMapUsed.ToString().ToLowerInvariant()}{(ToneMapUsed == ToneMapOperator.Hybrid ? $" {ToneMix:0.##}" : "")}, " +
+        $"ssao {(!Ssao ? "off" : Gtao ? $"gtao {GtaoSlices}x{GtaoSteps}{(GtaoFullSize ? " full" : "")}" : "on")}, contact {(ContactShadows ? "on" : "off")}, shafts {(LightShafts ? $"{ShaftStrength:0.##} ({ShaftCells}x{ShaftSlices}x{ShaftSamples})" : "off")}, exposure x{Exposure:0.##}, tonemap {ToneMapUsed.ToString().ToLowerInvariant()}{(ToneMapUsed == ToneMapOperator.Hybrid ? $" {ToneMix:0.##}" : "")}, " +
         $"grade {(GradeUsed ? $"saturation {Saturation:0.##} contrast {Contrast:0.##}" : "off")}, night grade {(NightGradeAmount > 0 ? NightGradeAmount.ToString("0.##", CultureInfo.InvariantCulture) : "off")}, " +
         $"bloom {(BloomAmount > 0 ? BloomAmount.ToString("0.###", CultureInfo.InvariantCulture) : "off")}, " +
         $"motion blur {(MotionBlur ? MotionBlurShutter.ToString("0", CultureInfo.InvariantCulture) + " deg" : "off")}, " +
