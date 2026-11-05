@@ -105,8 +105,14 @@ holds refuses the second mod.
   throwing callback is logged and disabled for that world; others continue. Melee callbacks run in Commit, projectile callbacks in
   `CombatSystem.Schedule` (`FlyProjectiles`), both before every `SlowWorld` of the tick; execution callbacks run in the captives'
   `SlowWorld`, which has no anchor, so a system draining its own hit queue in `SlowWorld` sees them the same tick only at
-  `SystemAnchor.End`, else the next tick. Faulted registrations enter the state hash. Without observers, no payload or event queue is made and no
-  additional rolls occur.
+  `SystemAnchor.End`, else the next tick. Faulted registrations enter the state hash. Without observers or a hit feed, no payload or event
+  queue is made; either way no additional rolls occur (the pre-hit flags are reads).
+- **Hit feed:** `AddCombatHitFeed(view)`, for display (blood, gore, hit markers) without racing the tick. Once a frame on the host's thread,
+  after the blood and before the frame is drawn (Vulkan and Metal), `view` gets the hits of the ticks since the last frame, oldest first, the
+  same payloads observers get; a frame without hits does not call it. With a feed registered the host gives each world a display-only queue
+  (`World.CombatHitFeed`, like `BloodMarks`) that the simulation never reads, so it cannot change a run; a new world (load, new game) gets a
+  new queue, dropping the old world's hits. A tick may be in flight, so `view` must not touch the world; the list is reused, so copy what you
+  keep. A throw is logged with the mod id and that feed gets no more hits for the session.
 - **Dialogue codes:** `AddDialogueCondition(code, handler)` and `AddDialogueEffect(code, handler)`, named from FCS data in a
   DIALOG_ACTION's `condition name` / `action name`. A condition gets `DialogueCheck` (world, speaker, the subject `who` picked, the
   condition) with `Matches(bool)` and `Compare(double)` that apply the vanilla value and `compare by` rules; it only reads (it also runs

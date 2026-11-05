@@ -72,10 +72,14 @@ public sealed partial class CombatSystem
         return death;
     }
 
-    /// <summary>The execution blow as a <see cref="CombatHit"/> for the mods' observers: always the intended target, alive before it (<see cref="Execute"/>).</summary>
-    static void ObserveExecution(World world, int a, int d, int blow, int part, HitDamage damage, ArmourAbsorbed absorbed, Vector2 travel, bool wasIncapacitated)
+    /// <summary>
+    /// The execution blow as a <see cref="CombatHit"/> for the mods' observers and hit feeds: always the intended target, alive before it
+    /// (<see cref="Execute"/>).
+    /// </summary>
+    static void ObserveExecution(World world, int a, int d, int blow, int part, HitDamage damage, ArmourAbsorbed absorbed, Vector2 travel,
+        bool wasIncapacitated)
     {
-        if (!world.HasCombatHitObservers) return;
+        if (!world.WantsCombatHits) return;
         var table = world.Characters;
         var victim = table.Previous[d];
         world.ObserveCombatHit(new CombatHit(world.Tick, CombatHitSource.Execution, table.IdOf(a), table.IdOf(d), 0, blow, part,

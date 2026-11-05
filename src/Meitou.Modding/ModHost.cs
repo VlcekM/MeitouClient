@@ -56,6 +56,28 @@ public sealed class ModHost
     public IReadOnlyList<IUiExtension> UiExtensions => registry.Ui;
     public IReadOnlyList<ModDebugCommand> DebugCommands => registry.DebugCommands;
 
+    /// <summary>A mod registered a combat hit feed: the host then gives each world a <see cref="World.CombatHitFeed"/> and drains it every frame.</summary>
+    public bool WantsCombatHits => registry.HitFeeds.Count > 0;
+
+    /// <summary>
+    /// The hits published since the last frame to every mod's feed, in load order, on the host's thread; a feed that throws is logged and gets
+    /// no more.
+    /// </summary>
+    public void DeliverCombatHits(IReadOnlyList<Meitou.Simulation.Combat.CombatHit> hits)
+    {
+        if (hits.Count == 0) return;
+        foreach (var feed in registry.HitFeeds)
+        {
+            if (feed.Faulted) continue;
+            try { feed.Run(hits); }
+            catch (Exception e)
+            {
+                feed.Faulted = true;
+                Console.Error.WriteLine($"mod       {feed.Owner}: combat hit feed disabled: {e.GetType().Name}: {e.Message}");
+            }
+        }
+    }
+
     /// <summary>The settings the mods registered, in load order (docs/modding.md "Settings").</summary>
     public IReadOnlyList<ModSettingsGroup> Settings => registry.Settings;
 

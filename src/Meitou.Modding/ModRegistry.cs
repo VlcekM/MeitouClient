@@ -1,5 +1,6 @@
 using System.Runtime.CompilerServices;
 using Meitou.Simulation;
+using Meitou.Simulation.Combat;
 using Meitou.Ui;
 
 namespace Meitou.Modding;
@@ -15,7 +16,16 @@ sealed class ModRegistrations
     public Dictionary<int, string> RecordTypes { get; } = [];
     public List<IUiExtension> Ui { get; } = [];
     public List<ModDebugCommand> DebugCommands { get; } = [];
+    public List<ModHitFeed> HitFeeds { get; } = [];
     public ModSettingsGroup? Settings { get; set; }
+}
+
+/// <summary>A mod's host-side view of the resolved combat hits (<see cref="ModContext.AddCombatHitFeed"/>); faulted once it threw.</summary>
+sealed class ModHitFeed(string owner, Action<IReadOnlyList<CombatHit>> run)
+{
+    public string Owner => owner;
+    public Action<IReadOnlyList<CombatHit>> Run => run;
+    public bool Faulted { get; set; }
 }
 
 /// <summary>A system a mod's factory made, for its save data: the mod and the name it was registered under.</summary>
@@ -30,6 +40,7 @@ sealed class ModRegistry
     public SimulationExtensions Simulation { get; } = new();
     public List<IUiExtension> Ui { get; } = [];
     public List<ModDebugCommand> DebugCommands { get; } = [];
+    public List<ModHitFeed> HitFeeds { get; } = [];
     public Dictionary<int, string> RecordTypes { get; } = [];
     public List<ModSettingsGroup> Settings { get; } = [];
 
@@ -61,6 +72,7 @@ sealed class ModRegistry
         foreach (var (type, name) in r.RecordTypes) Claim(ModCodeKind.RecordType, type, mod, () => RecordTypes[type] = name);
         Ui.AddRange(r.Ui);
         DebugCommands.AddRange(r.DebugCommands);
+        HitFeeds.AddRange(r.HitFeeds);
         if (r.Settings is not null) Settings.Add(r.Settings);
     }
 

@@ -131,6 +131,18 @@ public sealed class ModContext
     }
 
     /// <summary>
+    /// The resolved combat hits for display (docs/modding.md "Hit feed"): once a frame on the host's thread, the hits of the ticks since the last frame,
+    /// oldest first; not called for a frame without any. A tick may be in flight, so <paramref name="view"/> must not touch the world, and the list is
+    /// reused: copy what you keep. A throw is logged and the feed gets no more hits.
+    /// </summary>
+    public void AddCombatHitFeed(Action<IReadOnlyList<Meitou.Simulation.Combat.CombatHit>> view)
+    {
+        CheckOpen();
+        ArgumentNullException.ThrowIfNull(view);
+        Pending.HitFeeds.Add(new ModHitFeed(Id, view));
+    }
+
+    /// <summary>
     /// A row of the debug menu (F10), after the vanilla rows. <paramref name="run"/> runs on the host's thread while a tick may be in flight: it must not touch the
     /// world, only read the context and queue commands; its return is the status line.
     /// </summary>

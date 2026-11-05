@@ -1376,6 +1376,7 @@ sealed partial class GameHost
             // seam's Vulkan-only gaps (no reflection, GI, low-resolution particles or fog-rate target).
             gpu.GameHours = session.Clock.HoursSinceStart;
             UpdateBlood();
+            UpdateModHits();
             if (characters is not null)
             {
                 characters.Look = Meitou.Rendering.Characters.PreviewLook.Of(o.Post);

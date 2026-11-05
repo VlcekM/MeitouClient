@@ -1,6 +1,8 @@
+using System.Collections.Concurrent;
 using System.Numerics;
 using Meitou.Modding;
 using Meitou.Simulation;
+using Meitou.Simulation.Combat;
 
 namespace Meitou.Game;
 
@@ -15,6 +17,10 @@ sealed partial class GameHost
     // With code mods enabled the JIT warm-up starts only once they are initialized: a method compiled before a Harmony patch keeps any inlined copy
     // of the target.
     bool warmupAfterMods;
+    // The mods' hit feeds: the queue the current world fills, and the frame's hits handed to them.
+    World? hitsFor;
+    ConcurrentQueue<CombatHit> hitFeed = new();
+    readonly List<CombatHit> frameHits = [];
 
     /// <summary>Starts the JIT warm-up now, or (with code mods enabled) once they are initialized.</summary>
     void StartWarmup()
@@ -47,6 +53,26 @@ sealed partial class GameHost
         if (mods is null) return;
         mods.RegisterUi(ui.RegisterUiExtension);
         foreach (var notice in mods.Notices) ui.Notice(notice, true);
+    }
+
+    /// <summary>
+    /// Once a frame, after the blood: the combat hits the world published since the last frame to the mods' feeds (docs/modding.md "Hit feed"). A new
+    /// world gets a new queue, so the old world's hits never reach it.
+    /// </summary>
+    void UpdateModHits()
+    {
+        if (mods is not { WantsCombatHits: true }) return;
+        var world = session.World;
+        if (!ReferenceEquals(hitsFor, world))
+        {
+            hitsFor = world;
+            hitFeed = new();
+            world.CombatHitFeed = hitFeed;
+            return;
+        }
+        frameHits.Clear();
+        while (hitFeed.TryDequeue(out var hit)) frameHits.Add(hit);
+        mods.DeliverCombatHits(frameHits);
     }
 
     /// <summary>The save data of the world's mod systems into the save being captured; between ticks.</summary>
