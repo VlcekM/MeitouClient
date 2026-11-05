@@ -483,7 +483,10 @@ eat task, animation or player command (a right click on food does nothing, [ui-s
 - **Mouth** (**Verified**, decompile of `FUN_14034f340`, `FUN_1405d0b50`, `FUN_1405c8240`, `FUN_1405d0d20`, `FUN_1405dc650`; the attach point is the string `mouth`,
   `FUN_141534950`). Only a **limb** (item function 17, item `+0x124`) picked up by an animal (vfunc 0x248 non-null) goes to the mouth; any other item, and a limb picked up
   by a person, goes into the inventory (the pickup task, below). Taking it: the limb held before is let go (`FUN_1405c8240`), the new one is flagged held (`+0xd8` = 1), attached to the
-  `mouth` point and the time is stamped (`+0x6e0`). With no `mouth` attach point on the skeleton the limb is bitten on the spot instead (the same function's other branch).
+  `mouth` point and the time is stamped (`+0x6e0`). With no `mouth` point (looked up by name in the character's attachment points) nothing happens: the other branch bites only what
+  `FUN_14042ee50` calls edible (function 3, or 15), never a limb, so the limb stays on the ground and the pick-up task (`Task_Pickup`, row 3, which registers animals: category 0x20) ends
+  without a sound or message (**Verified**, decompile of `FUN_1405d0b50`, `FUN_14042ee50`, `FUN_14034f340`). In base data only a player's pick-up order reaches it (goal 277 is on
+  the two races with the point); a mod race with 277 and no point would walk to the limb again and again (**Unknown**: not run).
   The attach (**Verified**, decompile of `FUN_140535d50`, `FUN_14052d850`, `FUN_140537690`, `FUN_14052d480`, `FUN_140536210`): the race's attachment point named `mouth` gives the bone and
   offset, the item's `mesh` (`mesh female` on a female look) is attached to that bone (`attachObjectToBone`, as a weapon), and an attached ITEM gets its item's slot 0x360, which for `SeveredLimbItem` is the
   `SeveredLimb` material (`FUN_1400cf490`, [blood-decals](blood-decals.md#on-the-body-and-on-severed-limbs)): it looks as on the ground. Only Bonedog and Boneyard Wolf have the point
@@ -493,8 +496,9 @@ eat task, animation or player command (a right click on food does nothing, [ui-s
   any other eats when the stomach is empty and t > 45, or at t > 60 + 120 x (1 - f). Eating clears the mouth, the flag, and bites the limb (whole, 30).
   The goal that sends an animal to a ground limb is 277 (`AI::findLimbOnGround`, [ai-tasks](ai-tasks.md#prisoner-fate-and-slave-rows)); Meitou runs it, and the player's pickup order also fills the mouth.
   Meitou (`FeedSystem.HoldInMouth`, `MouthDue`; `CharacterCold.Mouth`): as above. Drawn (`CharacterSnapshot.Mouth`, `GameHost.MouthOf`, `CharacterRenderer.AddMouth`) with the debris
-  renderer's limb look and the cut character's skin tone (`CharacterCold.MouthTone`) at the posed `mouth` point. Engine choices: every animal has the `mouth` point (one whose race has
-  none holds the limb undrawn); a held limb is neither saved nor carried across a load; it goes with the animal if the animal dies or is removed.
+  renderer's limb look and the cut character's skin tone (`CharacterCold.MouthTone`) at the posed `mouth` point. An animal without the point
+  (`FeedSystem.HasMouth`: its look's attachment points; none without a look) leaves the limb (`PlayerSystem.TakeInMouth`). Engine choices: a held limb is neither saved nor carried
+  across a load; it goes with the animal if the animal dies or is removed.
 - **Food on the ground** (**Verified**, decompile): `Character::setupAI` gives every animal of a player squad goal 259 EAT_FOOD_ON_GROUND (priority 3, weight 0.5; it drops race goal 230)
   and every player character 243. 259's desire: 0 unless the character wants to eat now (needs food, stomach empty, hunger < 2.5) and medical hunger <= 2.4; then 1.0 with no food in
   its inventory and no enemies, 0.1 with enemies only below 1.2. Finder `FUN_14099a930`: the nearest food it may eat (function 3, 15 for an animal or a race that lists it) on
