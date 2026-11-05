@@ -153,6 +153,21 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
     static bool InReach(in CharacterHot a, in CharacterHot b, float reach) =>
         Gap(a, b) <= reach && MathF.Abs(a.Position.Y - b.Position.Y) <= MovementSystem.FloorSlack;
 
+    /// <summary>
+    /// Where a carrier walks to reach a body at <paramref name="body"/>: a floor point (<see cref="IWalkability.FloorNear"/>) within <see cref="MovementSystem.FloorSlack"/> of the body's height, asked
+    /// at the body's height and then lower. A body lying on furniture (a counter, a table) is over the hole the furniture cuts in the floor, where a walker's height snaps to the storey above
+    /// (<b>Observed</b>: a body 16 over the Hub bar's floor, under its upper floor 38 over it, was walked to upstairs and never reached). The body's own point when no floor is found.
+    /// </summary>
+    static Vector3 Approach(World world, Vector3 body)
+    {
+        const float Slack = MovementSystem.FloorSlack;
+        for (float drop = 0; drop <= Slack; drop += Slack / 2)
+        {
+            if (world.Walkability.FloorNear(body.X, body.Z, body.Y - drop, Slack) is { } floor && MathF.Abs(floor.Y - body.Y) <= Slack) return floor;
+        }
+        return body;
+    }
+
     static IReadOnlyList<CharacterId> Who(World world, IReadOnlyList<CharacterId> ids) => ids.Count > 0 ? ids : world.Player.Selection.ToArray();
 
     // ------------------------------------------------------------------ orders
@@ -491,12 +506,17 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
             }
             if (lifting && cold.LiftTime >= 0) continue;   // lifting: it does not walk after the body
             n.TaskTime -= dt;
-            var goal = new Vector2(next[t].Position.X, next[t].Position.Z);
             bool asking = (n.Flags & (ushort)(MoveFlags.NeedPath | MoveFlags.Pending)) != 0;
+            if (asking || n.TaskTime > 0) continue;
+
+            // The body's floor: one downstairs is walked to down the stairs, not to the floor above it; one on furniture from the floor beside it.
+            var spot = Approach(world, next[t].Position);
+            var goal = new Vector2(spot.X, spot.Z);
             bool stale = (n.Flags & (ushort)MoveFlags.HasPath) == 0 || Vector2.DistanceSquared(goal, n.Goal) > PursuitSystem.RepathDistance * PursuitSystem.RepathDistance;
-            if (asking || !stale || n.TaskTime > 0) continue;
+            if (!stale) continue;
+
             n.Goal = goal;
-            (cold.GoalHeight, cold.GoalHeightAt) = (next[t].Position.Y, goal);   // the body's floor: one downstairs is walked to down the stairs, not to the floor above it
+            (cold.GoalHeight, cold.GoalHeightAt) = (spot.Y, goal);
             n.Mode = SpeedMode.Free;
             n.Flags |= (ushort)MoveFlags.NeedPath;
             n.TaskTime = PursuitSystem.RepathSeconds;

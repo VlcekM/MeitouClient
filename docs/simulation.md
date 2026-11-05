@@ -761,7 +761,9 @@ witness that regards the culprit as friendly takes 20 off on every sweep (`Crime
 ## Carrying, rescue and looting
 
 `CarrySystem`: serial links, pickup/put-down, dropping on KO/death/attack, rescue jobs and inventory
-looting. Carried bodies follow the carrier and affect load. The player's Pick Up also lifts an awake own character that carries no one (`CarrySystem.CanBeLifted(World, …)`);
+looting. Carried bodies follow the carrier and affect load. A lift or loot walks to a floor point within 20 of the body's height (`CarrySystem.Approach`: the floor under it, else
+the nearest floor point within 12 round it, asked at the body's height and then lower) and reaches it within 14 on that floor; a body on a counter or table, over the hole its furniture
+cuts in the floor, is reached from the floor beside it, not from the storey above (engine choice). The player's Pick Up also lifts an awake own character that carries no one (`CarrySystem.CanBeLifted(World, …)`);
 lifted by a friendly carrier it leaves its fight and task and rides (`CharacterCold.CarriedAwake`) until put down, neither fighting nor treating (engine choices; a body
 lifted down is still set down when it comes round). Loot can raise witnessed theft and
 stolen ownership marks. [carry-loot.md](game/carry-loot.md). Loot window (engine choice):
@@ -1118,7 +1120,7 @@ Duties are priority-2 goals (**Observed**: `FUN_140510ef0` tries orders, jobs, u
   A body that dies on the way is caged only with **281** listed (else let go). Any free member carrying a dead body (a kidnapper's or arrester's victim that died: they end their errand without letting go when 281 is listed) with 281 in its package takes it to a cage the same way (`LookDeadCarriers`, **Verified** `FUN_1405a1140`: no dead test); with no cage it keeps the body.
   Carrying it: with **112** (a living body) or **281** (any body) listed and the carried-body desire above 0 (`CageDesire`: 0 for an animal or one the carrier regards as friendly, 0.1 outside a town, 1.4 police with a bounty-free slave, 0.5 dead, 2.0 alive; [ai-tasks](game/ai-tasks.md)), the best free cage in that town (the occupied town's cages are usable), where it is locked up with the usual put-in sentence (108 `Task_PutInSomething`
   sets none without a bounty, [economy 11.5](game/economy.md#115-bail-and-sentence); not `Kidnapped`, **Verified** `FUN_140358670`); else with **274** listed, to the town's exit point (`TownExit`: 200 outward from the first gate outside the walls or wall with an interior, the same for every carrier; no walkability test, **Verified** `FUN_140927120`), put down; else put down. A body put down short of its goal is left alone for 2 game hours.
-  A lift whose walk to the body takes over 60 game seconds is given up the same way (engine choice: a body the carrier cannot reach, e.g. on furniture, would hold it forever).
+  A lift whose walk to the body takes over 60 game seconds is given up the same way (engine choice: a body the carrier cannot reach would hold it forever).
 - **223 Remove Home Intruder** (checked before 273): a free member of a squad with a home building lifts the nearest knocked-out, carriable character inside that building
   (`SightMap.BuildingOf`), not carried, caged or in a bed, not of its faction or an ally; within its sight stands in for the sensed list. With **224** listed it carries it to the point past the
   home's first door (`AiSystem.LeavePoint`, the same point as Leave Building's) and puts it down; without 224, or with no door known, it goes on as a 273 body (engine choice: the original's
