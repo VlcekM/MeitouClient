@@ -135,7 +135,8 @@ sealed partial class PlayerInterface
 
     /// <summary>
     /// A caged character: Talk To (12) and Loot (26). Meitou points at an occupied cage with occupant selection as its occupant and shows one menu, so the cage's own verbs come here
-    /// (engine stand-ins for the original's cage menu beside the occupant's): Pick Lock its locked cage (the prisoner its own, a mate from outside), and
+    /// (engine stand-ins for the original's cage menu beside the occupant's): Pick Lock its locked cage (the prisoner its own, a mate from outside), Use Tools and Use Strength
+    /// another faction's locked one (285, 286, from outside), and
     /// once it is open Escape (207, the prisoner when selected; an escape unless served) or Pick Up (225, a mate lifts it out; out of another faction's cage a crime, locks.md "Cages and beds").
     /// </summary>
     void PrisonerVerbs(List<(string, Action)> verbs, CharacterSnapshot target, PrisonView prison, IReadOnlyList<CharacterId> selection, bool down)
@@ -147,6 +148,12 @@ sealed partial class PlayerInterface
         if (prison.Locked)
         {
             if (!down) verbs.Add((prison.LockLevel < 0 ? "Pick Lock" : PickLockCaption(target.Position, prison.LockLevel, false), () => Say(new Meitou.Simulation.Locks.PickLockOrder(selection, id) { Tick = session.World.Tick })));
+            // Another faction's locked cage also has Use Tools and Use Strength (285, 286; FUN_1407a6bc0 tests the lock and owner, not the occupant), worked from outside.
+            if (prison.CageId is { } cage && prison.CageOwner != session.World.Player.Faction)
+            {
+                verbs.Add(("Use Tools", () => Say(new Meitou.Simulation.Locks.ForceLockOrder([], cage, Meitou.Simulation.Locks.LockForce.Tools) { Tick = session.World.Tick })));
+                verbs.Add(("Use Strength", () => Say(new Meitou.Simulation.Locks.ForceLockOrder([], cage, Meitou.Simulation.Locks.LockForce.Strength) { Tick = session.World.Tick })));
+            }
             // The player's own cage frees its prisoner while locked too (the release unlocks it); never a dead or knocked-out one (Set Free wants a conscious target, precondition 125).
             if (!selection.Contains(id) && !down && target.CarriedBy.IsNone && prison.CageOwner == session.World.Player.Faction)
                 verbs.Add(("Set Free", () => Say(new Meitou.Simulation.Locks.SetFreeOrder([], id) { Tick = session.World.Tick })));
