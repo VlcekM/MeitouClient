@@ -22,6 +22,7 @@ sealed partial class SettingsMenu
         new("Light shafts", "Light shafts", ["Light shafts strength", "Light shafts air (0 = none)", "Light shafts air at dawn and dusk (x)", WorldFrame.ShaftQualitySlider]),
         new("Ground-truth occlusion", "Ground-truth occlusion", [WorldFrame.GtaoQualitySlider]),
         new("Planetshine", "Planetshine", ["Planetshine strength (x physical)"]),
+        new("Lamp shadows", "Lamp shadows", []),
         new("Ambient light", null, ["Ambient light strength (1 = game)", "Night ambient light strength (1 = 1.2x game)"],
             "Ambient light", "The sky's light in shade, at night and indoors."),
         // Sky & weather

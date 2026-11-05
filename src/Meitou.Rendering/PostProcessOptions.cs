@@ -120,6 +120,10 @@ public sealed class PostOptions
     public float FrameSeconds;
     /// <summary>The camera jumped this frame (a cut to a key): no blur across it. The chain clears it.</summary>
     public bool CameraCut;
+    /// <summary>Meitou switch (<c>lampshadows</c>; docs/render-lights.md "Traced lamp shadows"), off by default even in the Meitou look; Faithful is the game's: lamps cast no shadows.</summary>
+    public bool LampShadows;
+    /// <summary>The most lamps a pixel traces (2 to 4, <c>--lamp-shadow-lamps</c>); read once, when the pass is made.</summary>
+    public int LampShadowLamps = 2;
     /// <summary>Linear scale of the scene before everything else. 1 keeps the shaders' brightness (the - and = keys).</summary>
     public float Exposure = 1;
     /// <summary>Presentation-only white balance: the scene's linear colour is multiplied by it before the tone map (the Meitou title warms its light with it); 1, 1, 1 in play.</summary>
@@ -163,10 +167,10 @@ public sealed class PostOptions
         switch (preset)
         {
             case "meitou": break;
-            case "off": o.Fxaa = o.HeatHaze = false; o.ContactShadows = false; o.Ssao = o.Dither = o.LowResParticles = o.LightShafts = o.MeitouFog = false; o.MeitouHeatHaze = o.ToneMapping = o.NightGrade = o.Bloom = false; break;
+            case "off": o.Fxaa = o.HeatHaze = false; o.ContactShadows = false; o.Ssao = o.Dither = o.LowResParticles = o.LightShafts = o.MeitouFog = false; o.MeitouHeatHaze = o.ToneMapping = o.NightGrade = o.Bloom = o.LampShadows = false; break;
             case "kenshi":
                 o.ContactShadows = false;
-                o.Ssao = o.Dither = o.LowResParticles = o.LightShafts = o.MeitouFog = false; o.MeitouHeatHaze = o.ToneMapping = o.NightGrade = o.Bloom = false;
+                o.Ssao = o.Dither = o.LowResParticles = o.LightShafts = o.MeitouFog = false; o.MeitouHeatHaze = o.ToneMapping = o.NightGrade = o.Bloom = o.LampShadows = false;
                 // Kenshi's chain with the shipped settings: exposure only (no curve, bloom magnitude 0, SSAO commented
                 // out), and FXAA then the heat haze on the final image.
                 break;
@@ -204,6 +208,7 @@ public sealed class PostOptions
         MotionBlur = other.MotionBlur; MotionBlurShutter = other.MotionBlurShutter; CameraEffectsEverywhere = other.CameraEffectsEverywhere;
         DepthOfField = other.DepthOfField; DofAperture = other.DofAperture;
         Gtao = other.Gtao; GtaoQuality = other.GtaoQuality;
+        LampShadows = other.LampShadows; LampShadowLamps = other.LampShadowLamps;
     }
 
     /// <summary>Handles one command-line option; false when it is not a post-processing one.</summary>
@@ -219,6 +224,7 @@ public sealed class PostOptions
             case "--gi-hybrid": SetGiHybrid(next()); return true;
             case "--gtao-quality": GtaoQuality = Math.Clamp(int.Parse(next(), CultureInfo.InvariantCulture), 0, 2); return true;
             case "--bloom": BloomStrength = Math.Clamp(float.Parse(next(), CultureInfo.InvariantCulture), 0, 0.25f); Bloom = BloomStrength > 0; return true;
+            case "--lamp-shadow-lamps": LampShadowLamps = Math.Clamp(int.Parse(next(), CultureInfo.InvariantCulture), Gi.LampShadowShaders.MinLamps, Gi.LampShadowShaders.MaxLamps); return true;
             case "--upscaler":
                 Upscale.Explicit = true;
                 Upscale.Kind = Enum.TryParse<UpscalerKind>(next(), true, out var k) ? k : throw new ArgumentException("--upscaler must be off, taa, fsr, dlss or metalfx");
@@ -236,6 +242,7 @@ public sealed class PostOptions
         $"bloom {(BloomAmount > 0 ? BloomAmount.ToString("0.###", CultureInfo.InvariantCulture) : "off")}, " +
         $"motion blur {(MotionBlur ? MotionBlurShutter.ToString("0", CultureInfo.InvariantCulture) + " deg" : "off")}, " +
         $"depth of field {(DepthOfField ? "f/" + DofAperture.ToString("0.##", CultureInfo.InvariantCulture) : "off")}, " +
+        $"lamp shadows {(LampShadows ? $"{LampShadowLamps} lamps" : "off")}, " +
         $"gi hybrid {(GiHybrid ? GiHybridParts : "off")}, upscaler {Upscale.Describe()}";
 
     string GiHybridParts => string.Join(' ', new[] { GiRelocate ? "relocate" : "", GiCloudShadows ? "clouds" : "", GiNearField ? "near" : "" }.Where(p => p.Length > 0));

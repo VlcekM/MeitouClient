@@ -192,6 +192,9 @@ public static class Enhancements
         new("gtao", "Ground-truth occlusion", "SSAO", "GTAO",
             () => post.Gtao, v => post.Gtao = v,
             "the Ambient occlusion switch's method (it needs that switch on): Meitou's SSAO is a cheap estimate; GTAO searches each pixel's horizon, measures how much sky it really sees, and keeps the colour of the light that bounces in a corner. Costs more; off by default"),
+        new("lampshadows", "Lamp shadows", "off", "traced",
+            () => post.LampShadows, v => post.LampShadows = v,
+            "the game's lamps shine through walls and everything else that stands in their way; Meitou traces a ray from each surface to the lamps that light it most and takes the light of the blocked ones back off, so buildings and rocks cast lamp shadows (needs a GPU with ray tracing and Indirect light on; characters neither cast them nor receive them; docs/render-lights.md \"Traced lamp shadows\")"),
     ];
 
     /// <summary><c>--meitou</c> / <c>--faithful &lt;all|id,id...&gt;</c>: turns those switches to Meitou or to Faithful.</summary>

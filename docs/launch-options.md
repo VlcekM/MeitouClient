@@ -181,6 +181,7 @@ Authority: `src/Meitou.Rendering/WorldFrame.cs` (`Parse`, `Usage`), `src/Meitou.
 | `--render-scale <0.25..1 or name>` | 0.25 to 1; native, ultra-quality, quality, balanced, performance, ultra | 0.67 (Quality) with an upscaler (Meitou), else 1 | Render size per axis. |
 | `--no-fxaa` | | FXAA on | Game's FXAA off when no upscaler runs. |
 | `--smaa` | | off | SMAA instead of FXAA when no upscaler runs. |
+| `--lamp-shadow-lamps <n>` | 2 to 4 | 2 | Most lamps a pixel traces with the `lampshadows` switch ([lamps](render-lights.md#traced-lamp-shadows)). |
 | `--no-heat-haze` | | on | No heat haze. |
 | `--particle-divisor <0\|1\|2\|4>` | | 0 | Weather particles drawn at 1/n of render size; 0 sizes by sprite. Rain and fire stay full size. |
 | `--gtao-quality <0\|1\|2>` | | 1 | The `gtao` switch's budget: 0 half size 2 x 4, 1 half size 3 x 6, 2 render size 3 x 6 ([post](render-post.md) "GTAO"). |
@@ -192,7 +193,7 @@ Authority: `src/Meitou.Rendering/WorldFrame.cs` (`Parse`, `Usage`), `src/Meitou.
 | `--meitou <ids>` | comma list of ids, or `all` | all | Turns the listed Meitou enhancements on. |
 | `--faithful <ids>` | comma list of ids, or `all` | | Turns the listed enhancements off, giving the game's look. |
 
-Ids (`Enhancements.cs`): `ao`, `contact`, `dither`, `haze`, `aa`, `shadows`, `range`, `impostors`, `reach`, `water`, `particles`, `lod`, `gi`, `tonemap`, `shafts`, `heathaze`, `night`, `planetshine`, `stars`, `nightgrade`, `clouds`, `cloudshadows`, `cloudfog`, `interiorgi`, `charlod`, `skin`, `interiorlamps`, `icons`, `blood`, `bloodsurfaces`, `parallax`, `displace`, `weld`, `tracers`, `fog`, `gihybrid`, `chars2` (off by default), `trails`, `contactfoam`, `motionblur`, `dof`, `gtao` (off by default, also needs `ao`; `--meitou all` turns it on). The strength of each is a Tab slider.
+Ids (`Enhancements.cs`): `ao`, `contact`, `dither`, `haze`, `aa`, `shadows`, `range`, `impostors`, `reach`, `water`, `particles`, `lod`, `gi`, `tonemap`, `shafts`, `heathaze`, `night`, `planetshine`, `stars`, `nightgrade`, `clouds`, `cloudshadows`, `cloudfog`, `interiorgi`, `charlod`, `skin`, `interiorlamps`, `icons`, `blood`, `bloodsurfaces`, `parallax`, `displace`, `weld`, `tracers`, `fog`, `gihybrid`, `chars2` (off by default), `trails`, `contactfoam`, `motionblur`, `dof`, `gtao` (off by default, also needs `ao`; `--meitou all` turns it on), `lampshadows` (off by default, in no look). The strength of each is a Tab slider.
 
 ### Benchmarks and A/B (`--screenshot`, offscreen)
 
