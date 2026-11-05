@@ -371,23 +371,42 @@ static class LightShaftShaders
         """;
     /// <summary>
     /// The placed fog volumes' shadow (included by <see cref="PostProcessShaders.FogVolumes"/> before <see cref="FogVolumeShaders.Functions"/>, which
-    /// calls it under <c>FOG_VOLUME_SHADOW</c>): the share of a volume's path from <c>near</c> to <c>far</c> the sun reaches, four reads of the first
-    /// pass's third channel along it, and the colour scale that makes of it (<c>1 − darkening × (1 − share)</c>). 1 while the shafts are off.
+    /// calls it under <c>FOG_VOLUME_SHADOW</c>): the share of a volume's path from <c>near</c> to <c>far</c> the sun reaches, the first pass's third channel
+    /// in every slice along it, and the colour scale that makes of it (<c>1 − darkening × (1 − share)</c>). 1 while the shafts are off.
     /// </summary>
     public static readonly string FogVolumeShadow = "\n#define FOG_VOLUME_SHADOW\n" + Common + """
 
         uniform sampler2D uShaftInjected;
         uniform vec4 uShaftFog;   // x darkening (0: no shadow), yz the atlas's size in texels
 
-        // The sun's share at a distance along the cell's ray: between the two nearest slices' middles (no bands at the slices' edges).
-        float fogVolumeShare(vec2 cell, float t)
+        // The sun's share over slice k of the cell's ray (bilinear across the cells).
+        float fogVolumeShare(vec2 cell, int k)
         {
-            if (t > uShaftRange.y) return 1.0;
-            int columns = int(uShaftGrid.w), last = int(uShaftGrid.z) - 1;
-            float s = clamp(shaftSlice(max(t, uShaftRange.x)) - 0.5, 0.0, float(last));
-            int k0 = int(floor(s)), k1 = min(k0 + 1, last);
-            vec2 t0 = vec2(float(k0 % columns), float(k0 / columns)) * uShaftGrid.xy, t1 = vec2(float(k1 % columns), float(k1 / columns)) * uShaftGrid.xy;
-            return mix(textureLod(uShaftInjected, (t0 + cell) / uShaftFog.yz, 0.0).b, textureLod(uShaftInjected, (t1 + cell) / uShaftFog.yz, 0.0).b, s - float(k0));
+            int columns = int(uShaftGrid.w);
+            vec2 tile = vec2(float(k % columns), float(k / columns)) * uShaftGrid.xy;
+            return textureLod(uShaftInjected, (tile + cell) / uShaftFog.yz, 0.0).b;
+        }
+
+        // The sun's share averaged over the path from near to seen: every slice it crosses, weighted by the length inside it (the part before
+        // the first slice counts as the first, the part past the grid as lit). A few fixed depths instead stamped one copy of a shadow's
+        // outline per depth across the volume (docs/render-shafts.md).
+        float fogVolumePathShare(vec2 cell, float near, float seen)
+        {
+            int last = int(uShaftGrid.z) - 1;
+            float a = max(near, uShaftRange.x), b = min(seen, uShaftRange.y);
+            float lit = max(seen - max(near, uShaftRange.y), 0.0);
+            if (b > a)
+            {
+                lit += fogVolumeShare(cell, 0) * max(uShaftRange.x - near, 0.0);
+                int k0 = clamp(int(floor(shaftSlice(a))), 0, last), k1 = clamp(int(floor(shaftSlice(b))), 0, last);
+                for (int k = k0; k <= k1; k++)
+                {
+                    float from = max(a, shaftDistance(float(k))), to = min(b, shaftDistance(float(k + 1)));
+                    lit += fogVolumeShare(cell, k) * max(to - from, 0.0);
+                }
+            }
+            else lit += fogVolumeShare(cell, 0) * max(min(seen, uShaftRange.x) - near, 0.0);
+            return lit / (seen - near);
         }
 
         // Only the part of the path the eye sees into counts: a thick volume shows its front, about 1 / density deep (its curve is
@@ -400,9 +419,8 @@ static class LightShaftShaders
             vec2 uv = vec2(dot(d, uShaftRight) / (z * uShaftTan.x), dot(d, uShaftUp) / (z * uShaftTan.y)) * 0.5 + 0.5;
             vec2 cell = clamp(uv * uShaftGrid.xy, vec2(0.5), uShaftGrid.xy - 0.5);
             float seen = min(far, near + 0.7 / max(density, 1e-7));
-            float lit = 0.0;
-            for (int i = 0; i < 4; i++) lit += fogVolumeShare(cell, mix(near, seen, (float(i) + 0.5) * 0.25));
-            return 1.0 - uShaftFog.x * (1.0 - lit * 0.25);
+            if (seen <= near) return 1.0;
+            return 1.0 - uShaftFog.x * (1.0 - fogVolumePathShare(cell, near, seen));
         }
         """;
 
