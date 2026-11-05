@@ -23,10 +23,15 @@ public sealed record ConversationView(CharacterId Npc, CharacterId Player, Chara
 
 /// <summary>
 /// What a conversation asks the host to do once it has ended: DA_CHARACTER_EDITOR, the surgeon's editor on <see cref="DialogueRequest.Player"/>, already paid; DA_JOIN_SQUAD_WITH_EDIT,
-/// the in-play editor on the recruit (<see cref="DialogueRequest.Player"/>).
+/// the in-play editor on the recruit (<see cref="DialogueRequest.Player"/>); the animal buying window's confirm, the in-play editor on the bought animals
+/// (<see cref="DialogueRequest.Characters"/>, to name them).
 /// </summary>
-public enum DialogueRequestKind : byte { CharacterEditor, RecruitEditor }
-public sealed record DialogueRequest(long Id, DialogueRequestKind Kind, CharacterId Player, CharacterId Npc);
+public enum DialogueRequestKind : byte { CharacterEditor, RecruitEditor, AnimalEditor }
+public sealed record DialogueRequest(long Id, DialogueRequestKind Kind, CharacterId Player, CharacterId Npc)
+{
+    /// <summary>The characters an <see cref="DialogueRequestKind.AnimalEditor"/> request opens the editor on.</summary>
+    public IReadOnlyList<CharacterId> Characters { get; init; } = [];
+}
 
 /// <summary>A system with a conversation to publish (the dialogue system).</summary>
 public interface IDialogueSource

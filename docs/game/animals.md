@@ -185,9 +185,15 @@ Confirm (`FUN_1406aac20`, **Observed**):
 - each bought animal: its AI orders cleared, toughness, athletics, melee defence, melee attack, martial arts, dodge, stealth, mass combat and
   swimming x 0.25 (`FUN_1406aa730`), recruited as by DA 3/18 (`FUN_140692820`, [dialogue](dialogue.md#recruiting)).
 - each item in the bought animals' backpacks goes into the backpack of the seller's platoon members (tried from the last), else is destroyed.
-- the total is taken from the player's money; the character editor opens on the bought animals (`FUN_1406e32f0` -> `FUN_1405f4dd0`, mode 1).
+- the total is taken from the player's money (the backpack items already moved); then, only when at least one animal was bought, the character
+  editor opens at once on exactly the bought animals, in mode 1 (in play; `FUN_1406e32f0(window, list, 1)` -> `FUN_1405f4dd0`), replacing any
+  editor already open. **Verified** (decompile: the call follows the money write and is skipped when the bought list is empty; mode argument 1).
+  The animal page ([characters.md](../characters.md#character-editor)) then lets the player name each one. The other mode-1 callers are
+  DA 3 recruiting (`FUN_1407ff8b0`) and `FUN_1407f3670`.
 
-Meitou: `DialogueSystem` `CharacterTradeKind.AnimalBuying`; the town test is `Squad.Town`; the editor is not opened.
+Meitou: `DialogueSystem` `CharacterTradeKind.AnimalBuying`; the town test is `Squad.Town`; the confirm publishes a `DialogueRequestKind.AnimalEditor`
+request listing the bought animals and the host opens the editor (`EditKind.Recruit`, the in-play kind) on them; the names are saved by the
+name-only `EditCharacter` ([characters.md](../characters.md#character-editor)).
 
 ## Breeding and eggs
 

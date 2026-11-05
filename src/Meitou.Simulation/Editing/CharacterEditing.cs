@@ -14,6 +14,7 @@ public enum EditKind : byte { Creation, Surgery, Recruit }
 /// Validated when applied (<see cref="CharacterEditing.Apply"/>): a player character; at creation only while the new game's editor is open
 /// (<see cref="PlayerState.InCreation"/>), in surgery only beside the <see cref="Surgeon"/> and with the race and gender unchanged. A null look renames only: an animal's
 /// page in the editor offers its name and nothing else (docs/characters.md "Character editor").
+/// Allowed in every kind: a bought animal is named through the in-play (Recruit) editor; only a creation rename needs the creation to be open.
 /// </summary>
 public sealed record EditCharacter(CharacterId Character, FcsRecord? Appearance, string Name, EditKind Kind) : SimCommand
 {
