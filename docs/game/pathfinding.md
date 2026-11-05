@@ -91,8 +91,8 @@ Every move of the nav agent, the animation-driven one (root motion, mode 3) incl
   the first contact's fraction and normal. Only segments the move closes on count (dot below -1e-5), and only those within 1 Havok unit (10) of the agent's height. The agent moves to
   the contact, the rest of the step is turned along the wall and swept again; with nothing gained it logs "stuck at". A step longer than 3 Havok units (30) is cut into several sweeps (their count: Observed).
 - <a id="blocked-walkers"></a>**Verified** (decompile, `FUN_140147fd0`): the stuck branch only posts the red (`0xff0000`, `FUN_1406e1e00`) " stuck at <pos>" message and sweeps a scaled
-  step again. While it follows a path (state 1) the agent's polygon (`+0x14`, -1 off the mesh) is looked for among the path's, from the corner before the cursor to 5 past it; time
-  outside them adds up (`+0x84`, the step's dt; 0 again on one of them) and past 5 s (`DAT_141685340`) the state turns 6, so the next step asks for the whole way again from where
+  step again. In path mode (`+0x88` 2) the agent's polygon (`+0x14`, -1 off the mesh) is looked for among the path's, from the corner before the cursor to 4 past it; time
+  outside them adds up (`+0x84`, the step's dt; 0 again on one of them) and past 5 s (`DAT_141685340`) state 1 turns 6, so the next step asks for the whole way again from where
   it stands (`FUN_140145cf0`). Nothing counts these asks; a walker blocked on its path's own polygons never asks.
 - **Verified** (decompile): agent state `+0x90`: 4/5 asked (`FUN_140145cf0`), 1 following and 3 no path (the answer, `FUN_140144cd0`), 6 ask again, 0 none (`FUN_140144400`).
   CharMovement vslot `0x48` (`FUN_14065e800`) is false and `0x50` (`FUN_14065e830`) true only in state 3; `0x50` stays false during the destination setter's goal-offset retries
