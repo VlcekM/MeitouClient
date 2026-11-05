@@ -875,7 +875,8 @@ hinting remains **Unknown**.
 ### Map
 
 MapScreen (ctor `140490210`) in the Overview's MAP tab: `MapImage` (`GUI_Map.dds`) on a 4096² `MapScrollView` canvas. **Verified** by reading the
-decompile unless marked; Meitou's adapter is `PlayerInterface.Map.cs`.
+decompile unless marked; Meitou's adapter is `PlayerInterface.Map.cs`. Zoomed out, the original shows no scroll bars (**Observed**, vanilla screenshot);
+whether they show zoomed in is **Unknown**. Meitou pans the map itself and never shows them: the client takes the bars' room.
 
 - **Projection:** the image spans world X and Z −147456…147456, world (0, 0) at its centre, +X right, **+Z down** (`14048cf70`; also checked by drawing
   the placed towns on `GUI_Map.dds`: Shark lands in the swamp, Stoat in the Great Desert, Mongrel on the Fog Islands).
