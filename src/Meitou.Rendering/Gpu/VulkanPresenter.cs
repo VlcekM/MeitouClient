@@ -43,6 +43,11 @@ public sealed unsafe class VulkanPresenter : IDisposable
     /// <summary>What the frame is drawn into (RGBA8, the window's framebuffer size; made again when the size changes): valid after <see cref="BeginFrame"/>.</summary>
     public GpuTexture? Backbuffer { get; private set; }
 
+    /// <summary>Asks for an HDR10 swapchain (read at each swapchain creation; needs VK_EXT_swapchain_colorspace, not with <see cref="FrameGeneration"/>).</summary>
+    public bool WantHdr { get; init; }
+    /// <summary>The swapchain is HDR10: the backbuffer is RGBA16F and the host presents PQ pictures (<see cref="UiLayer.CompositeHdr"/>).</summary>
+    public bool HdrActive { get; private set; }
+
     /// <summary>Stopwatch ticks spent acquiring swapchain images and presenting, since the presenter was made.</summary>
     public long AcquireTicks { get; private set; }
     public long PresentTicks { get; private set; }
@@ -72,10 +77,11 @@ public sealed unsafe class VulkanPresenter : IDisposable
     {
         if (width <= 0 || height <= 0) return false;
         if (stale || width != wantWidth || height != wantHeight) Recreate(width, height);
-        if (Backbuffer is not { } b || b.Desc.Width != width || b.Desc.Height != height)
+        var backbufferFormat = HdrActive ? InternalFormat.Rgba16f : InternalFormat.Rgba8;
+        if (Backbuffer is not { } b || b.Desc.Width != width || b.Desc.Height != height || b.Desc.Format != backbufferFormat)
         {
             Backbuffer?.Dispose();   // released after the frames in flight
-            Backbuffer = ctx.CreateTexture(new TextureDesc(InternalFormat.Rgba8, width, height,
+            Backbuffer = ctx.CreateTexture(new TextureDesc(backbufferFormat, width, height,
                 Use: TextureUse.ColourTarget | TextureUse.TransferSrc | TextureUse.TransferDst | TextureUse.Sampled, Name: "backbuffer"));
         }
         ctx.BeginFrame();
@@ -179,6 +185,11 @@ public sealed unsafe class VulkanPresenter : IDisposable
         fixed (SurfaceFormatKHR* pf = formats) surfaceExt.GetPhysicalDeviceSurfaceFormats(pd, surface, ref n, pf);
         // A UNORM format: the backbuffer holds display-ready values already (no sRGB encoding, as GL's default framebuffer did not).
         var chosen = formats.FirstOrDefault(f => f.Format is Format.B8G8R8A8Unorm or Format.R8G8B8A8Unorm, formats[0]);
+        // HDR10 where the display offers it (Windows: HDR turned on for that monitor); the SDR format otherwise.
+        var hdr = formats.FirstOrDefault(f => f.ColorSpace == ColorSpaceKHR.SpaceHdr10ST2084Ext
+            && f.Format is Format.A2B10G10R10UnormPack32 or Format.A2R10G10B10UnormPack32);
+        HdrActive = WantHdr && FrameGeneration is null && hdr.ColorSpace == ColorSpaceKHR.SpaceHdr10ST2084Ext;
+        if (HdrActive) chosen = hdr;
         surfaceExt.GetPhysicalDeviceSurfacePresentModes(pd, surface, ref n, null);
         var modes = new PresentModeKHR[n];
         fixed (PresentModeKHR* pm = modes) surfaceExt.GetPhysicalDeviceSurfacePresentModes(pd, surface, ref n, pm);
@@ -242,7 +253,7 @@ public sealed unsafe class VulkanPresenter : IDisposable
         format = chosen.Format;
         (wantWidth, wantHeight) = (width, height);
         stale = false;
-        Console.WriteLine($"swapchain {extent.Width}x{extent.Height} {format}, {imageCount} images, {mode}");
+        Console.WriteLine($"swapchain {extent.Width}x{extent.Height} {format}{(HdrActive ? " HDR10" : "")}, {imageCount} images, {mode}");
     }
 
     public void Dispose()

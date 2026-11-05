@@ -107,6 +107,22 @@ using reduced targets plus depth-aware reconstruction/mask fallback. A texel tha
 must use the full-resolution path. [Fog volumes](formats/fogfeatures.md), [shafts](render-shafts.md).
 `post-merge` fuses velocity/exposure compute groups while preserving ordering and dependencies.
 
+## Contact shadows
+
+The `contact` switch (`PostOptions.ContactShadows`, Meitou): the SSAO pass marches the depth 10 steps, 8 units towards the light, and multiplies the
+hit into its factor. A hit takes `0.85` x the sun's share of the surface's light (`sun / (sun + ambient)`, with the shadow cascades and cloud shadow in the
+sun term), so it stops at the ambient level, and there is none in cascade shadow, under clouds or at night. Fades out from 1500 to 2500 units.
+Runs only with SSAO on, and shares its half size, blur, air and water visibility and reduced strength on characters' own pixels.
+**Unknown**: look and cost; not yet run on a GPU.
+
+## HDR output
+
+`--hdr` or `hdr` in `meitou.user.json` (read at start-up, off by default; Vulkan only, frame generation stays off with it). The swapchain takes HDR10
+(10-bit PQ) when the display lists it, else stays SDR. The backbuffer and LDR targets are then RGBA16F, the composite replaces the tone curve with
+`hdrShoulder` (the SDR picture below 0.8, then a roll-off to `PostOptions.HdrPeak`), and `UiLayer.CompositeHdr` decodes gamma 2.2, places white at
+`hdrPaperNits` (200), converts to BT.2020 and encodes PQ; `hdrPeakNits` (1000) sets the ceiling. Saved pictures use the SDR composite.
+Limits: no HDR metadata; pictures presented without the interface layer (the first loading screen) show gamma values as PQ. **Unknown**: not yet run on an HDR display.
+
 ## Fog
 
 The `fog` switch (`PostOptions.MeitouFog`) changes the particle sprites only; the haze and weather fog are [sky](formats/sky.md)'s,

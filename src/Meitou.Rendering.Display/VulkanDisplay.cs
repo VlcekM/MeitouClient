@@ -46,7 +46,7 @@ public sealed unsafe class VulkanDisplay : IDisposable
     public static bool RayTracing { get; set; }
 
     /// <summary>A window created from <paramref name="options"/> (its Vulkan surface; shown), or headless when <paramref name="options"/> is null.</summary>
-    public VulkanDisplay(WindowOptions? options, bool vsync, bool dlss = false, bool frameGeneration = false)
+    public VulkanDisplay(WindowOptions? options, bool vsync, bool dlss = false, bool frameGeneration = false, bool hdr = false)
     {
         var (validation, sync, gpu) = VulkanDeviceOptions.FromEnvironment();
         validationRequested = validation == true;
@@ -102,7 +102,9 @@ public sealed unsafe class VulkanDisplay : IDisposable
             var names = surface.GetRequiredExtensions(out uint count);
             var extensions = new string[count];
             for (int i = 0; i < count; i++) extensions[i] = SilkMarshal.PtrToString((nint)names[i])!;
-            deviceOptions.InstanceExtensions = [.. extensions, .. deviceOptions.InstanceExtensions ?? []];
+            // Only then do the drivers list HDR colour spaces; a request stays a request where the loader has no such extension (no window on such a system offers HDR).
+            string[] hdrExtensions = hdr && HasInstanceExtension("VK_EXT_swapchain_colorspace") ? ["VK_EXT_swapchain_colorspace"] : [];
+            deviceOptions.InstanceExtensions = [.. extensions, .. hdrExtensions, .. deviceOptions.InstanceExtensions ?? []];
             deviceOptions.CreateSurface = instance => surface.Create<AllocationCallbacks>(instance.ToHandle(), null).ToSurface();
         }
         Device = VulkanDevice.Create(deviceOptions);
@@ -114,7 +116,11 @@ public sealed unsafe class VulkanDisplay : IDisposable
         Context = new GpuContext(Device);
         if (options is not null)
         {
-            presenter = new VulkanPresenter(Context, vsync) { PresentFunction = Streamline is { DlssSupported: true } s ? s.PresentProxy : null };
+            presenter = new VulkanPresenter(Context, vsync)
+            {
+                PresentFunction = Streamline is { DlssSupported: true } s ? s.PresentProxy : null,
+                WantHdr = hdr,
+            };
             if (wantLayer)
             {
                 var layer = FfxSwapchain.TryCreate(Device, out var why);
@@ -137,6 +143,24 @@ public sealed unsafe class VulkanDisplay : IDisposable
             window.SetWindowIcon(ref icon);
         }
         catch (Exception e) { Console.WriteLine($"window icon  {e.Message}"); }
+    }
+
+    /// <summary>The window shows HDR10: draw with <see cref="Meitou.Rendering.UiLayer.CompositeHdr"/>. Known after the first <see cref="BeginFrame"/>.</summary>
+    public bool HdrActive => presenter?.HdrActive ?? false;
+
+    static unsafe bool HasInstanceExtension(string name)
+    {
+        var vk = Vk.GetApi();
+        uint n = 0;
+        if (vk.EnumerateInstanceExtensionProperties((byte*)null, &n, null) != Result.Success) return false;
+        var properties = new ExtensionProperties[n];
+        fixed (ExtensionProperties* p = properties)
+        {
+            if (vk.EnumerateInstanceExtensionProperties((byte*)null, &n, p) != Result.Success) return false;
+            for (uint i = 0; i < n; i++)
+                if (SilkMarshal.PtrToString((nint)p[i].ExtensionName) == name) return true;
+        }
+        return false;
     }
 
     /// <summary>Starts a frame of the given size; false when nothing can be shown (a minimised window): skip drawing.</summary>

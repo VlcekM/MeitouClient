@@ -39,6 +39,7 @@ public static class GlConventions
         GLEnum.Rgba32ui => Format.R32G32B32A32Uint,
         GLEnum.Rgba32i => Format.R32G32B32A32Sint,
         GLEnum.R11fG11fB10f => Format.B10G11R11UfloatPack32,
+        GLEnum.Rgb10A2 => Format.A2B10G10R10UnormPack32,
         GLEnum.Rgba8ui => Format.R8G8B8A8Uint,
         GLEnum.DepthComponent24 or GLEnum.DepthComponent => Format.D32Sfloat,   // engine choice: 32-bit float depth for GL's 24-bit (same or finer)
         GLEnum.DepthComponent32f => Format.D32Sfloat,
@@ -378,6 +379,7 @@ public enum GLEnum : int
     Rgba16f = 0x881A,
     CompareRefToTexture = 0x884E,
     Depth24Stencil8 = 0x88F0,
+    Rgb10A2 = 0x8059,
     R11fG11fB10f = 0x8C3A,
     DepthComponent32f = 0x8CAC,
     FramebufferComplete = 0x8CD5,
@@ -426,6 +428,7 @@ public enum InternalFormat : int
     Rgba32f = 0x8814,
     Rgb32f = 0x8815,
     Rgba16f = 0x881A,
+    Rgb10A2 = 0x8059,
     R11fG11fB10f = 0x8C3A,
     Srgb8Alpha8 = 0x8C43,
     DepthComponent32f = 0x8CAC,

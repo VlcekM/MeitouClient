@@ -139,11 +139,11 @@ sealed class PostComposite : IDisposable
 
     /// <summary>The placed fog volumes, then SSAO, over the finished scene, before the temporal resolve. A separate native segment
     /// or the caller's command list may record it; the passes load the scene colour instead of clearing it.</summary>
-    public void ApplyScene(IGpuCommandList cmd, GpuTexture scene, GpuTexture depth, in SceneInputs inputs, bool volumes, bool ssaoOn)
+    public void ApplyScene(IGpuCommandList cmd, GpuTexture scene, GpuTexture depth, in SceneInputs inputs, bool volumes, bool ssaoOn, Vector4 contact = default)
     {
         EnsureScene(scene.Desc.Width, scene.Desc.Height);
         if (volumes) RunFogVolumes(cmd, scene, depth, inputs);
-        if (ssaoOn) RunSsao(cmd, scene, depth, inputs);
+        if (ssaoOn) RunSsao(cmd, scene, depth, inputs, contact);
     }
 
     /// <summary>Draws the scene through exposure and the tone map, then FXAA and the heat haze, into <paramref name="target"/>.</summary>
@@ -398,7 +398,7 @@ sealed class PostComposite : IDisposable
         Fullscreen(cmd, f.P, scene, scene.Desc.Width, scene.Desc.Height, state, LoadOp.Load);
     }
 
-    void RunSsao(IGpuCommandList cmd, GpuTexture scene, GpuTexture depth, in SceneInputs i)
+    void RunSsao(IGpuCommandList cmd, GpuTexture scene, GpuTexture depth, in SceneInputs i, Vector4 contact)
     {
         int w = Math.Max((scene.Desc.Width + 1) / 2, 1), h = Math.Max((scene.Desc.Height + 1) / 2, 1);
         if (aoA is null || aoA.Desc.Width != w || aoA.Desc.Height != h)
@@ -428,6 +428,7 @@ sealed class PostComposite : IDisposable
         s.P.Set(s.Back, ViewWindow.BackFor(r, i.FieldOfView, i.Aspect));
         s.P.Set(s.Eye, i.Eye);
         s.P.Set(s.WaterY, i.WaterHeight ?? float.MinValue);
+        s.P.Set(s.Contact, contact);
         s.P.ApplyGlobals();
         Fullscreen(cmd, s.P, aoA, w, h);
 
@@ -660,13 +661,14 @@ sealed class PostComposite : IDisposable
     sealed class SsaoPass : Pass
     {
         public readonly SamplerSlot Depth, Mask;
-        public readonly UniformHandle Tan, NearFar, Size, Radius, Strength, FadeStart, FadeEnd, Right, Up, Back, Eye, CharacterOccluder, WaterY;
+        public readonly UniformHandle Tan, NearFar, Size, Radius, Strength, FadeStart, FadeEnd, Right, Up, Back, Eye, CharacterOccluder, WaterY, Contact;
         public SsaoPass(IGpuContext ctx, string vertex) : base(ctx, vertex, PostProcessShaders.Ssao, "post ssao")
         {
             (Depth, Mask, CharacterOccluder, WaterY) = (P.Sampler("uDepth"), P.Sampler("uMask"), P.Uniform("uCharacterOccluder"), P.Uniform("uWaterY"));
             (Tan, NearFar, Size, Radius, Strength, FadeStart, FadeEnd) = (P.Uniform("uTan"), P.Uniform("uNearFar"), P.Uniform("uSize"),
                 P.Uniform("uRadius"), P.Uniform("uStrength"), P.Uniform("uFadeStart"), P.Uniform("uFadeEnd"));
             (Right, Up, Back, Eye) = (P.Uniform("uRight"), P.Uniform("uUp"), P.Uniform("uBack"), P.Uniform("uSsaoEye"));
+            Contact = P.Uniform("uContact");
         }
     }
 

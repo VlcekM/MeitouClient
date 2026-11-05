@@ -81,6 +81,10 @@ public sealed class PostOptions
     public float BloomAmount => Bloom ? BloomStrength : 0;
     /// <summary>The bloom's firefly ceiling in linear scene units (a gamma-encoded 2 is 4.6, a 4 is 21): texels under a quarter of it keep their light to 0.1%, specular spikes far above scatter as if they were it.</summary>
     public const float BloomFirefly = 64;
+    /// <summary>HDR output's highlight ceiling in the composite's gamma-encoded units (docs/render-post.md "HDR output"); 0 is SDR. Set each frame by the host, not a saved setting.</summary>
+    public float HdrPeak;
+    /// <summary>The <see cref="HdrPeak"/> for a display's peak and the picture's paper white, both in nits.</summary>
+    public static float HdrPeakFor(float peakNits, float paperNits) => MathF.Pow(MathF.Max(peakNits / paperNits, 1), 1 / 2.2f);
     /// <summary>Linear scale of the scene before everything else. 1 keeps the shaders' brightness (the - and = keys).</summary>
     public float Exposure = 1;
     /// <summary>Presentation-only white balance: the scene's linear colour is multiplied by it before the tone map (the Meitou title warms its light with it); 1, 1, 1 in play.</summary>
@@ -93,6 +97,13 @@ public sealed class PostOptions
     public const float SsaoCharacterStrength = 0.25f;
     /// <summary>How much a character counts as an occluder of the ground and things round it (Meitou): 1 as anything else. At 1 a character lying down left a dark halo as wide as itself (radius 6, strength 4) with a light seam where the half-size mask met it.</summary>
     public const float SsaoCharacterOccluder = 0.3f;
+    /// <summary>Meitou switch (<c>contact</c>; docs/render-post.md "Contact shadows"): short screen-space sun shadows, run with the SSAO and multiplied into its factor.</summary>
+    public bool ContactShadows = true;
+    /// <summary>How much of the sun's share of a surface's light a contact shadow takes; its reach and thickness in world units; the eye distance where it has faded out.</summary>
+    public const float ContactStrength = 0.85f, ContactReach = 8, ContactThickness = 3, ContactEnd = 2500;
+    /// <summary>The contact shadows' parameters for the SSAO pass; a strength of 0 turns them off.</summary>
+    public System.Numerics.Vector4 ContactParams =>
+        new(ContactShadows ? ContactStrength : 0, ContactReach, ContactThickness, ContactEnd);
     /// <summary>The upscaler (render scale, TAA / FSR / DLSS); not part of the presets.</summary>
     public readonly UpscaleOptions Upscale = new();
 
@@ -102,8 +113,9 @@ public sealed class PostOptions
         switch (preset)
         {
             case "meitou": break;
-            case "off": o.Fxaa = o.HeatHaze = false; o.Ssao = o.Dither = o.LowResParticles = o.LightShafts = o.MeitouFog = false; o.MeitouHeatHaze = o.ToneMapping = o.NightGrade = o.Bloom = false; break;
+            case "off": o.Fxaa = o.HeatHaze = false; o.ContactShadows = false; o.Ssao = o.Dither = o.LowResParticles = o.LightShafts = o.MeitouFog = false; o.MeitouHeatHaze = o.ToneMapping = o.NightGrade = o.Bloom = false; break;
             case "kenshi":
+                o.ContactShadows = false;
                 o.Ssao = o.Dither = o.LowResParticles = o.LightShafts = o.MeitouFog = false; o.MeitouHeatHaze = o.ToneMapping = o.NightGrade = o.Bloom = false;
                 // Kenshi's chain with the shipped settings: exposure only (no curve, bloom magnitude 0, SSAO commented
                 // out), and FXAA then the heat haze on the final image.
@@ -115,7 +127,7 @@ public sealed class PostOptions
 
     public void CopyFrom(PostOptions other)
     {
-        Preset = other.Preset; Fxaa = other.Fxaa; Smaa = other.Smaa; HeatHaze = other.HeatHaze; Ssao = other.Ssao;
+        Preset = other.Preset; Fxaa = other.Fxaa; Smaa = other.Smaa; HeatHaze = other.HeatHaze; Ssao = other.Ssao; ContactShadows = other.ContactShadows;
         Dither = other.Dither; LowResParticles = other.LowResParticles; LightShafts = other.LightShafts; MeitouFog = other.MeitouFog; ShaftQuality = other.ShaftQuality;
         ShaftStrength = other.ShaftStrength; ShaftAir = other.ShaftAir; ShaftAirDawn = other.ShaftAirDawn;
         ParticleDivisor = other.ParticleDivisor; Exposure = other.Exposure; ToneMap = other.ToneMap; ToneMix = other.ToneMix; Grade = other.Grade;
@@ -146,7 +158,7 @@ public sealed class PostOptions
 
     public string Describe() =>
         $"{Preset}: aa {(Upscale.Temporal ? "temporal" : Smaa ? "smaa" : Fxaa ? "fxaa" : "off")}, heat haze {(HeatHaze ? "weather" + (HeatHazeScale != 1 ? $" strength {HeatHazeScale:0.##}" : "") : "off")}, " +
-        $"ssao {(Ssao ? "on" : "off")}, shafts {(LightShafts ? $"{ShaftStrength:0.##} ({ShaftCells}x{ShaftSlices}x{ShaftSamples})" : "off")}, exposure x{Exposure:0.##}, tonemap {ToneMapUsed.ToString().ToLowerInvariant()}{(ToneMapUsed == ToneMapOperator.Hybrid ? $" {ToneMix:0.##}" : "")}, " +
+        $"ssao {(Ssao ? "on" : "off")}, contact {(ContactShadows ? "on" : "off")}, shafts {(LightShafts ? $"{ShaftStrength:0.##} ({ShaftCells}x{ShaftSlices}x{ShaftSamples})" : "off")}, exposure x{Exposure:0.##}, tonemap {ToneMapUsed.ToString().ToLowerInvariant()}{(ToneMapUsed == ToneMapOperator.Hybrid ? $" {ToneMix:0.##}" : "")}, " +
         $"grade {(GradeUsed ? $"saturation {Saturation:0.##} contrast {Contrast:0.##}" : "off")}, night grade {(NightGradeAmount > 0 ? NightGradeAmount.ToString("0.##", CultureInfo.InvariantCulture) : "off")}, " +
         $"bloom {(BloomAmount > 0 ? BloomAmount.ToString("0.###", CultureInfo.InvariantCulture) : "off")}, " +
         $"upscaler {Upscale.Describe()}";

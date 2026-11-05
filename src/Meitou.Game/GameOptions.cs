@@ -11,6 +11,7 @@ sealed class GameOptions
     /// <summary><c>--seed</c> was given: a new game from the menu keeps it instead of rolling a fresh one.</summary>
     public bool SeedGiven;
     public bool? VSync;
+    public bool? Hdr;
     public Meitou.Data.Ui.UiMode? UiMode;
     /// <summary><c>--low-end</c> (also passed on to WorldOptions): the Faithful UI for this run, whatever <c>--ui</c> or the saved mode says.</summary>
     public bool LowEnd;
@@ -158,6 +159,8 @@ sealed class GameOptions
                     break;
                 case "--vsync": g.VSync = true; break;
                 case "--no-vsync": g.VSync = false; break;
+                case "--hdr": g.Hdr = true; break;
+                case "--no-hdr": g.Hdr = false; break;
                 case "--ticks": g.Ticks = int.Parse(Next(), CultureInfo.InvariantCulture); break;
                 case "--no-population": g.NoPopulation = true; break;
                 case "--title-preview": g.TitlePreview = true; g.UiMode = Meitou.Data.Ui.UiMode.Meitou; break;

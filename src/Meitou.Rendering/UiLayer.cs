@@ -29,11 +29,37 @@ public sealed class UiLayer : IDisposable
         }
         """;
 
+    /// <summary>The same composite for HDR output (docs/render-post.md "HDR output"): the picture's gamma undone, paper white placed, BT.2020 primaries, PQ.</summary>
+    const string HdrFragment = """
+        #version 330 core
+        in vec2 vUv;
+        out vec4 fragColour;
+        uniform sampler2D uUi;
+        uniform sampler2D uBack;
+        uniform float uPaperNits;
+        vec3 pq(vec3 nits)
+        {
+            const float M1 = 0.1593017578125, M2 = 78.84375, C1 = 0.8359375, C2 = 18.8515625, C3 = 18.6875;
+            vec3 y = pow(clamp(nits / 10000.0, 0.0, 1.0), vec3(M1));
+            return pow((C1 + C2 * y) / (1.0 + C3 * y), vec3(M2));
+        }
+        void main()
+        {
+            vec2 uv = vec2(vUv.x, 1.0 - vUv.y);
+            vec4 ui = texture(uUi, uv);
+            vec3 c = ui.rgb + max(texture(uBack, uv).rgb, 0.0) * (1.0 - ui.a);
+            vec3 linear709 = pow(max(c, 0.0), vec3(2.2));
+            const mat3 TO_2020 = mat3(0.6274, 0.0691, 0.0164, 0.3293, 0.9195, 0.0880, 0.0433, 0.0114, 0.8956);
+            fragColour = vec4(pq(TO_2020 * linear709 * uPaperNits), 1.0);
+        }
+        """;
+
     readonly IGpuContext gpu;
     readonly LegacyProgram program;
+    LegacyProgram? hdrProgram;
     readonly SamplerSlot samplerUi, samplerBack;
     readonly SampledTexture pointSampler;
-    GpuTexture? texture, final;
+    GpuTexture? texture, final, hdrFinal;
 
     public UiLayer(IGpuContext gpu)
     {
@@ -70,27 +96,48 @@ public sealed class UiLayer : IDisposable
     public GpuTexture? Composite(GpuTexture world)
     {
         if (texture is null) return null;
+        final = Sized(final, InternalFormat.Rgba8, world, "final");
+        Draw(program, samplerUi, samplerBack, final, world);
+        return final;
+    }
+
+    /// <summary>As <see cref="Composite"/>, into a 10-bit PQ picture for an HDR swapchain. Screenshots still read <see cref="Composite"/>'s.</summary>
+    public GpuTexture? CompositeHdr(GpuTexture world, float paperNits)
+    {
+        if (texture is null) return null;
+        var p = hdrProgram ??= LegacyProgram.Create(gpu, PostProcessShaders.Vertex, HdrFragment, "ui composite hdr");
+        p.Set(p.Uniform("uPaperNits"), paperNits);
+        hdrFinal = Sized(hdrFinal, InternalFormat.Rgb10A2, world, "final hdr");
+        Draw(p, p.Sampler("uUi"), p.Sampler("uBack"), hdrFinal, world);
+        return hdrFinal;
+    }
+
+    /// <summary>The texture, made again when its size is not the world's.</summary>
+    GpuTexture Sized(GpuTexture? current, InternalFormat format, GpuTexture world, string name)
+    {
         int width = world.Desc.Width, height = world.Desc.Height;
-        if (final is null || final.Desc.Width != width || final.Desc.Height != height)
-        {
-            final?.Dispose();   // released after the frames in flight
-            final = gpu.CreateTexture(new TextureDesc(InternalFormat.Rgba8, width, height,
-                Use: TextureUse.ColourTarget | TextureUse.TransferSrc | TextureUse.Sampled, Name: "final"));
-        }
-        var t = PassTargets.Of(final, null).At(new PixelViewport(0, 0, width, height, 0, 1));
+        if (current is not null && current.Desc.Width == width && current.Desc.Height == height) return current;
+        current?.Dispose();   // released after the frames in flight
+        return gpu.CreateTexture(new TextureDesc(format, width, height,
+            Use: TextureUse.ColourTarget | TextureUse.TransferSrc | TextureUse.Sampled, Name: name));
+    }
+
+    void Draw(LegacyProgram program, SamplerSlot ui, SamplerSlot back, GpuTexture target, GpuTexture world)
+    {
+        int width = world.Desc.Width, height = world.Desc.Height;
+        var t = PassTargets.Of(target, null).At(new PixelViewport(0, 0, width, height, 0, 1));
         var cmd = gpu.BeginNative("ui composite");
         cmd.BeginRendering(t.Rendering);
         var state = DrawState.For(t.Formats, gpu.DepthClamp);
         state.Record(cmd, t);
         cmd.BindPipeline(gpu.Pipelines.Get(state.Pipeline(program.Program, program.VertexLayout([]), PrimitiveType.Triangles, t.Formats, "ui composite")));
-        program.Bind(samplerUi, pointSampler with { View = texture.View() });
-        program.Bind(samplerBack, pointSampler with { View = world.View() });
+        program.Bind(ui, pointSampler with { View = texture!.View() });
+        program.Bind(back, pointSampler with { View = world.View() });
         program.Flush(cmd);
         cmd.Draw(3);
         cmd.EndRendering();
         gpu.EndNative(cmd);
-        return final;
     }
 
-    public void Dispose() { texture?.Dispose(); final?.Dispose(); }
+    public void Dispose() { texture?.Dispose(); final?.Dispose(); hdrFinal?.Dispose(); hdrProgram?.Dispose(); }
 }
