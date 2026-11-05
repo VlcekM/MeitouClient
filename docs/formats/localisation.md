@@ -45,7 +45,7 @@ Addresses are `kenshi_x64.exe` (1.0.68).
 - **UI strings**: strings that exist as msgids in `main.pot` go through the catalog at central sinks: UI bindings (`UiBindings.Coded`, captions and
   combo items), HUD `AddLines`, context-menu verbs, `Notice`, `Confirm`/`UpperTr`, `PlaceTooltip` (keys and values; bracketed headings by their
   inside), stat help (`StatHelpCatalog`), the loading tip, the day text, and the interpolated simulation messages (relations, bounties, research,
-  campaigns, construction, fixtures, discoveries). Layout captions the original leaves English stay English.
+  campaigns, construction, fixtures, discoveries, crime names ([economy 11.2](../game/economy.md#112-how-a-bounty-is-gained))). The simulation keeps its English markers (the dialogue's engine `[Leave]` choice, matched by that text) and translates only the text it publishes or posts; the world hash and saves never contain translated text. Layout captions the original leaves English stay English.
 - **Meitou's own texts** (`MeitouTranslations`): the launcher, the title menu (`UpperTr`) and the settings menu's drawn captions, hints and choices
   are not in Kenshi's catalog, so after it `Loc.Tr` looks them up in a second gettext catalog: `src/Meitou.Core/Localisation/locale/<code>.po`
   (embedded; `pt_BR` and `zh_CN` so far), with `locale/<code>/meitou.po` in the Kenshi folder read over it (a user or mod adds a language or overrides a

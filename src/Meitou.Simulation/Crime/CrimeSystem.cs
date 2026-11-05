@@ -226,7 +226,11 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
             bookings.Add(new Booking(witness, world.Characters.IdOf(culprit), faction));
         }
         Note(world, CrimeEventKind.Booked, culprit, p.Code, faction, entry.Amount, witness);
-        if (c.IsPlayer) world.Post(Loc.Tr("{1} is wanted by {2} for {3}: bounty c.{4}", c.Name, entry.FactionName, Loc.Tr(CrimeTable.Name(p.Code)), entry.Amount));
+        if (c.IsPlayer)
+        {
+            world.Post(Loc.Tr("{1} is wanted by {2} for {3}: bounty c.{4}", c.Name, entry.FactionName, CrimeTable.Name(p.Code), entry.Amount));
+        }
+
         return true;
     }
 
@@ -349,7 +353,11 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
             {
                 p.Witnessed = true;
                 Note(world, CrimeEventKind.Witnessed, culprit, p.Code, wf, 0, witness);
-                if (c.IsPlayer && p.Code != CrimeCode.Looting) world.Post(Loc.Tr("{1} has been caught committing {2}!", c.Name, Loc.Tr(CrimeTable.Name(p.Code))));   // the loot already says "was seen looting"
+                // The loot already says "was seen looting".
+                if (c.IsPlayer && p.Code != CrimeCode.Looting)
+                {
+                    world.Post(Loc.Tr("{1} has been caught committing {2}!", c.Name, CrimeTable.Name(p.Code)));
+                }
             }
             // The original fires the event on every reacting run (docs/game/dialogue.md "Witnesses"). Meitou fires it once at the player's characters; at an NPC culprit again on every
             // sweep from a police-like witness not yet fighting, as the guards' lines want a culprit within talking range that does not run (engine choice: lines' repetition limits are not kept).
