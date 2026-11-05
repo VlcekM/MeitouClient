@@ -1,5 +1,7 @@
 using System.Buffers.Binary;
+using System.Globalization;
 using System.Numerics;
+using System.Text.RegularExpressions;
 
 namespace Meitou.Rendering;
 
@@ -7,6 +9,7 @@ namespace Meitou.Rendering;
 /// The world camera as a hex string, for putting two viewers (e.g. two builds being compared) at the same spot: the viewer's Ctrl+C copies
 /// it, Ctrl+V and <c>--camera-code</c> move the camera to one. Layout: byte 1 (the version), then the target X, Y, Z, yaw, pitch (radians)
 /// and distance as little-endian floats (25 bytes, 50 hex digits). The format is fixed, so a code from any build works in the others.
+/// A camera location as text (a feedback report's "target x, y, z; eye ...; yaw a, pitch b, boom d", degrees) is read as well.
 /// </summary>
 public static class WorldCameraCode
 {
@@ -14,6 +17,12 @@ public static class WorldCameraCode
     const int Bytes = 1 + 6 * 4;
 
     public readonly record struct Pose(Vector3 Target, float Yaw, float Pitch, float Distance);
+
+    const string Number = @"(-?\d+(?:\.\d+)?)";
+
+    static readonly Regex Location = new(
+        $@"target\s+{Number},\s*{Number},\s*{Number}.*?yaw\s+{Number},\s*pitch\s+{Number},\s*(?:boom|distance)\s+{Number}",
+        RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.CultureInvariant);
 
     public static string Encode(WorldCamera camera)
     {
@@ -24,8 +33,10 @@ public static class WorldCameraCode
         return Convert.ToHexString(b);
     }
 
-    /// <summary>The pose in <paramref name="text"/> (spaces ignored); null when it is not a camera code.</summary>
-    public static Pose? Decode(string? text)
+    /// <summary>The pose in <paramref name="text"/>, a code (spaces ignored) or a location as text; null when it is neither.</summary>
+    public static Pose? Decode(string? text) => DecodeHex(text) ?? DecodeLocation(text);
+
+    static Pose? DecodeHex(string? text)
     {
         string hex = new((text ?? "").Where(c => !char.IsWhiteSpace(c)).ToArray());
         if (hex.Length != 2 * Bytes) return null;
@@ -37,6 +48,17 @@ public static class WorldCameraCode
         for (int i = 0; i < 6; i++) v[i] = BinaryPrimitives.ReadSingleLittleEndian(b.AsSpan(1 + 4 * i));
         if (v.Any(x => !float.IsFinite(x)) || v[5] <= 0) return null;
         return new Pose(new Vector3(v[0], v[1], v[2]), v[3], v[4], v[5]);
+    }
+
+    /// <summary>The pose in a location as text (angles in degrees); null when <paramref name="text"/> holds none.</summary>
+    static Pose? DecodeLocation(string? text)
+    {
+        if (Location.Match(text ?? "") is not { Success: true } m) return null;
+        float At(int group) => float.Parse(m.Groups[group].Value, CultureInfo.InvariantCulture);
+        float distance = At(6);
+        if (distance <= 0) return null;
+        var target = new Vector3(At(1), At(2), At(3));
+        return new Pose(target, At(4) * MathF.PI / 180, At(5) * MathF.PI / 180, distance);
     }
 
     public static void Apply(Pose pose, WorldCamera camera) =>

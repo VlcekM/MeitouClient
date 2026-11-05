@@ -104,7 +104,7 @@ Authority: `src/Meitou.Rendering/WorldFrame.cs` (`Parse`, `Usage`), `src/Meitou.
 | `--at <x>,<z>` | world X,Z | world centre | Look at this point. |
 | `--zone <i>,<j>` | zone indices | | Centre of zone i,j (i along +X, j along +Z). |
 | `--town <name>` | part of a town name | The Hub (game) | A town whose name contains this. |
-| `--camera-code <hex>` | camera code | | Start at a camera code (the viewer's Ctrl+C); the world loads round it. |
+| `--camera-code <hex>` | camera code | | Start at a camera code (the viewer's Ctrl+C) or a feedback report's camera location ("target x, y, z; ...; yaw a, pitch b, boom d"); the world loads round it. |
 | `--radius <zones>` | zones | 1.5 | Half-size of the loaded square (4608 units per zone). |
 | `--yaw <deg>` / `--pitch <deg>` | degrees | 30 / 35 | Start heading and pitch above the horizon. |
 | `--distance <u>` | units | radius | Camera boom. |

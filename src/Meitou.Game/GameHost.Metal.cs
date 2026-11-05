@@ -890,7 +890,7 @@ sealed partial class GameHost
                 if (key == SilkKey.F12) { frameStatsVisible = !frameStatsVisible; return; }
                 if (key is SilkKey.F8 or SilkKey.PrintScreen) { screenshotNow = true; return; }
                 if (key == SilkKey.F7 && hud is not null) { hud.UiVisible = !hud.UiVisible; return; }
-                // Ctrl+C copies the free camera's position as a viewer camera code; Ctrl+V flies to the clipboard's code.
+                // Ctrl+C copies the free camera's position as a viewer camera code; Ctrl+V flies to the clipboard's code or feedback camera location.
                 if (key is SilkKey.C or SilkKey.V && session.Camera.IsFree && hud is not null && !hud.UiEditing && ctrl)
                 {
                     if (key == SilkKey.C)
@@ -908,7 +908,7 @@ sealed partial class GameHost
                         hud.Follow = null;
                         Console.WriteLine("camera    moved to the clipboard's camera code");
                     }
-                    else Console.WriteLine("camera    the clipboard holds no camera code (Ctrl+C in a viewer copies one)");
+                    else Console.WriteLine("camera    the clipboard holds no camera code (Ctrl+C in a viewer copies one) or feedback camera location");
                     return;
                 }
                 // Numpad / flies the camera across the squad in portrait order; it holds the camera like the tour on Vulkan.
