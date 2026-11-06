@@ -729,7 +729,7 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
     /// <summary>
     /// A new body's start velocity: <paramref name="start"/>'s velocity, its arms and legs spun by the push (<see cref="Spin"/>). With a struck body (<see cref="Struck"/>) the
     /// others keep only <see cref="PushSpread"/> of the push and the struck one takes the whole push as an impulse on it alone (times the ragdoll's mass over its own, at most
-    /// <see cref="MaxFocusGain"/>), so the body is thrown from the part that was hit and its joints carry the rest along. At most half <see cref="RagdollPhysics.MaxSpeed"/>.
+    /// <see cref="MaxFocusGain"/>), so the body is thrown from the part that was hit and its joints carry the rest along. Uncapped: the physics holds every body to <see cref="RagdollPhysics.MaxSpeed"/>.
     /// </summary>
     static BodyVelocity StartVelocity(Ragdoll r, int b, RagdollBlow start, (int Body, float Gain) struck, ulong seed)
     {
@@ -739,7 +739,6 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
             float share = b == struck.Body ? struck.Gain : PushSpread;
             linear += start.Push * (share - 1);
         }
-        if (linear.Length() > RagdollPhysics.MaxSpeed / 2) linear = Vector3.Normalize(linear) * (RagdollPhysics.MaxSpeed / 2);
         return new BodyVelocity(linear, Spin(r, r.Definition.Bodies[b].Name, b, start.Push, seed));
     }
 

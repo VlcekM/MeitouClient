@@ -255,9 +255,9 @@ bodies zero velocity. The setter passes the character's movement velocity (Y zer
 |v|² > 100), but slot 10 never uses it (**Verified**: its register is reused after the clamp). No
 hit impulse exists. `FUN_1407d2d10` (per-limb speed caps) and `FUN_1407d2290` have no callers.
 
-Meitou ("Advanced ragdolls", Advanced settings, on; Faithful off; `BodyOptions.AdvancedRagdolls`): a new whole-body (not carried) ragdoll starts with every new body at one speed, capped at half `RagdollPhysics.MaxSpeed`: the
+Meitou ("Advanced ragdolls", Advanced settings, on; Faithful off; `BodyOptions.AdvancedRagdolls`): a new whole-body (not carried) ragdoll starts with every new body at one speed: the
 `CharacterCold.Blow` that a downing melee hit or bolt left (`CombatSystem.Knockdown`: the victim's last-tick velocity plus a push along the blow of
-0.4 x (cut + blunt + pierce) units/s, 10 to 100, with 0.2 of it upward; executions set it too; also kept as `CharacterCold.Knockdown` for a cut-off head), else the character's last-tick velocity (a bleed-out while running). A blow's push
+0.5 x (cut + blunt + pierce) units/s, at least 12.5, uncapped, with 0.2 of it upward; executions set it too; also kept as `CharacterCold.Knockdown` for a cut-off head), else the character's last-tick velocity (a bleed-out while running). A blow's push
 is focused on the struck part (below). Bodies kept from a partial ragdoll keep their own speed; a ragdoll restored from a save starts as saved.
 
 ### Advanced ragdolls (Meitou)
@@ -273,7 +273,7 @@ Engine feature behind the same switch (`BodyOptions.AdvancedRagdolls`; Faithful:
   0.15 rad/s per unit/s of push, at most 6, each limb by its own roll of 0.6 to 1.4 (`RngPurpose.RagdollSpin`).
 - **Focused push**: the struck part's LOCATIONAL_DAMAGE `bone name` (else `bone name 2`; its nearest ancestor with a body when the bone has none) names the struck body
   (`RagdollBlow.Bone`, `RagdollSystem.Struck`). The struck body takes the whole push times the ragdoll's mass over its own (at most 4x: an impulse on it
-  alone), every other body 0.4 of it, so the body is thrown from the hit part and the joints drag the rest; each body at most half `RagdollPhysics.MaxSpeed`. No bone: the whole push on every body.
+  alone), every other body 0.4 of it, so the body is thrown from the hit part and the joints drag the rest; no start cap (the physics holds each body to `RagdollPhysics.MaxSpeed`, 200). No bone: the whole push on every body.
 
 ## Per frame
 
