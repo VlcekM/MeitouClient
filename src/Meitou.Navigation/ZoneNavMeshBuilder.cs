@@ -167,9 +167,10 @@ internal static partial class ZoneNavMeshBuilder
         foreach (int c in meshSolids) RemoveInside(g.MeshSolids[c], chf, g.Solids, solids);
         if (g.Ground is { } ground) RemoveUnderground(ground, s.AgentHeight, chf);
         foreach (int c in painters) Mark(ctx, g.Painters[c], NavArea.Door, chf, s.CellSize * s.DoorInflateCells);
+        var steps = SideSteps(chf, g.Ground);
 
         long t2 = Stopwatch.GetTimestamp();
-        var result = Partition(ctx, chf, s, ticks);
+        var result = Partition(ctx, chf, s, ticks, steps);
         long t5 = Stopwatch.GetTimestamp();
         detail = result is null ? null : SampleHeights(result, chf, border);
         long t6 = Stopwatch.GetTimestamp();
@@ -184,23 +185,25 @@ internal static partial class ZoneNavMeshBuilder
     /// search to expand; docs/game/pathfinding.md "Search cost"). DotRecast refuses some watershed contours that Recast only warns about (a region winding
     /// round a hole with two outlines, an outline simplified into a bad one): such a tile is partitioned monotone.
     /// </summary>
-    static RcPolyMesh? Partition(RcContext ctx, RcCompactHeightfield chf, NavBuildSettings s, TileTicks ticks)
+    static RcPolyMesh? Partition(RcContext ctx, RcCompactHeightfield chf, NavBuildSettings s, TileTicks ticks, List<StepLink> steps)
     {
-        if (s.Watershed && TryPartition(ctx, chf, s, ticks, watershed: true, out var mesh)) return mesh;
-        TryPartition(ctx, chf, s, ticks, watershed: false, out mesh);
+        if (s.Watershed && TryPartition(ctx, chf, s, ticks, steps, watershed: true, out var mesh)) return mesh;
+        TryPartition(ctx, chf, s, ticks, steps, watershed: false, out mesh);
         return mesh;
     }
 
-    static bool TryPartition(RcContext ctx, RcCompactHeightfield chf, NavBuildSettings s, TileTicks ticks, bool watershed, out RcPolyMesh? mesh)
+    static bool TryPartition(RcContext ctx, RcCompactHeightfield chf, NavBuildSettings s, TileTicks ticks, List<StepLink> steps, bool watershed, out RcPolyMesh? mesh)
     {
         mesh = null;
         long t0 = Stopwatch.GetTimestamp();
+        CutSteps(chf, steps);
         if (watershed)
         {
             RcRegions.BuildDistanceField(ctx, chf);
             RcRegions.BuildRegions(ctx, chf, s.MinRegionArea, s.MergeRegionArea);
         }
         else RcRegions.BuildRegionsMonotone(ctx, chf, s.MinRegionArea, s.MergeRegionArea);
+        RelinkWithinRegions(chf, steps);
         long t1 = Stopwatch.GetTimestamp();
         Interlocked.Add(ref ticks.Regions, t1 - t0);
         RcContourSet contours;
