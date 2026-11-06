@@ -479,6 +479,7 @@ sealed partial class PlayerInterface
             var at = where(lead);
             f.Add(("lead", Str(CharacterKey(lead.Id))));
             f.Add(("name", Str(lead.Name)));
+            f.Add(("squadName", Str(snap.PlayerSquads.FirstOrDefault(q => q.Members.Contains(lead.Id))?.Name)));
             f.Add(("pos", $"[{Math.Round(at.X, 1).ToString(inv)},{Math.Round(at.Z, 1).ToString(inv)}]"));
             f.Add(("state", Str(StateWord(lead))));
             double max = lead.HealthParts.Sum(p => (double)p.Maximum);

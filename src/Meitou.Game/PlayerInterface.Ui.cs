@@ -434,6 +434,18 @@ sealed partial class PlayerInterface
             minimumTextPixels: TitleOpen ? 0 : StandardPixels, pass: pass);
     }
 
+    /// <summary>With the interface hidden (F7, <c>hud hide</c>) only the speech bubbles are drawn, so a filmed clean picture keeps the <c>say</c> commentary.</summary>
+    public void DrawSpeechOnly(DebugOverlay overlay, int width, int height)
+    {
+        Width = width;
+        Height = height;
+        var controls = new List<UiControl>();
+        AddSpeech(controls);
+        if (controls.Count == 0) return;
+        uiPainter?.Draw(controls, width, height, mouse, $"meitou:speed.{Array.IndexOf(ButtonSpeeds, session.Simulation.Speed)}", minimumTextPixels: StandardPixels);
+        overlay.Flush(width, height);
+    }
+
     /// <summary>The rule-of-thirds camera grid (Shift+;, toggle_camera_grid, event 0x29: the widget "CameraGrid", <c>FUN_1406e5fc0</c>), under the interface.</summary>
     bool cameraGrid;
     int gridHold;

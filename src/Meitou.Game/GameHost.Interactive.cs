@@ -798,6 +798,7 @@ sealed partial class GameHost
                 {
                     player.Draw(overlay, size.X, size.Y);
                 }
+                else if (interfaceHidden && !cinema.Clean && !take && !covered && overlay is not null && !g.NoPopulation) player.DrawSpeechOnly(overlay, size.X, size.Y);
                 if (ui && overlay is not null && IsSandbox) DrawSandbox(overlay, size.X, size.Y);
                 if (ui && overlay is not null && IsBattle) DrawBattleCounter(overlay, size.X, size.Y);
                 Meitou.Rendering.StageClock.UiPart(Meitou.Rendering.StageClock.UiHud);
