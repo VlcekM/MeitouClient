@@ -39,11 +39,15 @@ sealed partial class GameHost
             }
             var inv = CultureInfo.InvariantCulture;
             var path = walk.FindPath(from, to);
+            // Both ends on loaded zones and the query still gave only a provisional path: the goal is cut off (a shut door, water, a wall), the path leads to the nearest point reached, then straight on.
+            bool bothLoaded = walk.World.Contains(Meitou.Data.World.WorldLayout.ZoneOf(from.X, from.Z)) && walk.World.Contains(Meitou.Data.World.WorldLayout.ZoneOf(to.X, to.Z));
+            bool cutOff = path.Found && path.IsProvisional && bothLoaded;
+            bool reachable = path.Found && !cutOff;
             using var stream = new MemoryStream();
             using (var w = new Utf8JsonWriter(stream))
             {
                 w.WriteStartObject();
-                w.WriteBoolean("reachable", path.Found);
+                w.WriteBoolean("reachable", reachable);
                 w.WriteStartArray("from"); w.WriteNumberValue(Math.Round(from.X, 1)); w.WriteNumberValue(Math.Round(from.Z, 1)); w.WriteEndArray();
                 w.WriteStartArray("to"); w.WriteNumberValue(Math.Round(to.X, 1)); w.WriteNumberValue(Math.Round(to.Z, 1)); w.WriteEndArray();
                 w.WriteNumber("straight", Math.Round(Vector2.Distance(new(from.X, from.Z), new(to.X, to.Z)), 1));
@@ -53,10 +57,11 @@ sealed partial class GameHost
                     for (int i = 1; i < path.Points.Count; i++) len += Vector3.Distance(path.Points[i - 1], path.Points[i]);
                     w.WriteNumber("length", Math.Round(len, 1));
                     w.WriteNumber("points", path.Points.Count);
-                    var end = path.Points[^1];
+                    var end = cutOff ? path.Points[Math.Min(path.Exact, path.Points.Count) - 1] : path.Points[^1];
                     w.WriteNumber("ends_short_by", Math.Round(Vector2.Distance(new(end.X, end.Z), new(to.X, to.Z)), 1));
+                    if (cutOff) w.WriteBoolean("provisional", true);
                 }
-                else
+                if (!reachable)
                 {
                     var blocking = BlockingDoors(walk, from, to, out string why);
                     w.WriteString("why", why);
@@ -87,7 +92,7 @@ sealed partial class GameHost
                 w.WriteEndObject();
             }
             controlData = System.Text.Encoding.UTF8.GetString(stream.ToArray());
-            con.Print(path.Found ? $"reachable, {path.Points.Count} points" : "no path");
+            con.Print(reachable ? $"reachable, {path.Points.Count} points" : "no path");
         });
     }
 
