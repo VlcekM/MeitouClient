@@ -2,7 +2,9 @@ using System.Numerics;
 using Meitou.Data;
 using Meitou.Data.Fcs;
 using Meitou.Data.World;
+using Meitou.Data.Gameplay.Dialogue;
 using Meitou.Simulation;
+using Meitou.Simulation.Dialogue;
 using Meitou.Simulation.Items;
 using Meitou.Simulation.Trading;
 using static Meitou.Tests.Gameplay.EconomyTests;
@@ -106,13 +108,19 @@ public class TradeTests
         public PopulationData Data { get; }
         public SimWorld World { get; }
         public TradeSystem Trade { get; }
+        /// <summary>The conversations, in a bazaar made with <c>talk</c>.</summary>
+        public DialogueSystem? Dialogue { get; }
 
-        public Bazaar(params FcsRecord[] extra)
+        public Bazaar(params FcsRecord[] extra) : this(false, extra) { }
+
+        public Bazaar(bool talk, params FcsRecord[] extra)
         {
             Data = TradeTests.Data([.. Shops, .. extra]);
             Trade = new TradeSystem(Data);
+            Dialogue = talk ? new DialogueSystem(Data) : null;
             var ground = new OpenGroundWalkability((_, _) => 150);   // above the water line
-            World = new SimWorld(new WorldSettings { Seed = 3 }, ground, [new MovementSystem(new PathService(ground, true)), Trade]);
+            ITickSystem[] systems = Dialogue is null ? [new MovementSystem(new PathService(ground, true)), Trade] : [new MovementSystem(new PathService(ground, true)), Trade, Dialogue];
+            World = new SimWorld(new WorldSettings { Seed = 3 }, ground, systems);
             World.Player.Faction = Data.PlayerFaction;
             World.Player.Money = 1000;
         }
@@ -188,6 +196,53 @@ public class TradeTests
         Assert.Null(b.World.Snapshot.Trade);
         b.World.RunTicks((int)(shop.NextRestockTick - b.World.Tick) + 15);
         Assert.Equal(2, shop.Fills);
+    }
+
+    /// <summary>
+    /// A Caravan (docs/game/economy.md "Who trades": a homeless template with <c>vendors</c> but no <c>is trader</c>): its boss's Trade line opens a trade from an empty stock that buys with the
+    /// squad's purse, and IS_A_TRADER stays false before and after. Catches the Trade line needing a shop again, and the shop it gets making the squad a trader.
+    /// </summary>
+    [Fact]
+    public void A_caravan_without_is_trader_trades_from_an_empty_stock_and_stays_no_trader()
+    {
+        using var b = new Bazaar(talk: true,
+            Rec("caravan-t", FcsRecordType.SQUAD_TEMPLATE, r => r.References["vendors"] = [Ref("vl-t", 100)]),
+            Rec("boss-t", FcsRecordType.CHARACTER, r => { r.Name = "Boss"; r.Bools["is trader"] = true; r.References["dialogue"] = [Ref("hello-t")]; }),
+            Rec("trader-c", FcsRecordType.DIALOG_ACTION, r => r.Ints["condition name"] = 9),
+            Rec("trade-a", FcsRecordType.DIALOG_ACTION, r => r.Ints["action name"] = DialogueActions.Trade),
+            Rec("hello-t", FcsRecordType.DIALOGUE, r => r.References["lines"] = [Ref("hello-l")]),
+            Rec("hello-l", FcsRecordType.DIALOGUE_LINE, r => { r.Strings["text0"] = "Supplies?"; r.References["lines"] = [Ref("trade-l"), Ref("shop-l")]; }),
+            Rec("trade-l", FcsRecordType.DIALOGUE_LINE, r => { r.Ints["speaker"] = (int)Talker.Target; r.Strings["text0"] = "Show me."; r.References["effects"] = [Ref("trade-a")]; }),
+            Rec("shop-l", FcsRecordType.DIALOGUE_LINE, r => { r.Ints["speaker"] = (int)Talker.Target; r.Strings["text0"] = "A trader!"; r.References["conditions"] = [Ref("trader-c", 1)]; }));
+        var hero = b.Spawn("hero", new Vector2(0, 0), b.Data.PlayerFaction, true);
+        var boss = b.Spawn("Boss", new Vector2(10, 0), b.Data.FactionIndex("f-t"), false, "caravan-t");
+        b.World.Characters.Cold(boss.Slot)!.RecordId = "boss-t";
+        b.SquadOf(boss).Money = 500;
+        Assert.True(b.Bag(hero).Add(new ItemInstance { Record = "cloth-t" }));
+
+        IReadOnlyList<string> Talk()
+        {
+            b.Say(new TalkOrder(hero, boss) { Tick = 0 });
+            b.World.RunTicks(2);
+            return b.Dialogue!.PublishConversation()!.Choices;
+        }
+        Assert.Equal(["Show me."], Talk());
+        b.Say(new DialogueChoice(0) { Tick = 0 });
+        b.World.RunTicks(3);
+        Assert.Empty(b.View.Stock);
+        Assert.True(b.World.Snapshot.Characters.Single(c => c.Id == boss).IsTrader);
+
+        var mine = b.View.Goods.Single();
+        b.Say(new SellItem(mine.Token, 1) { Tick = 0 });
+        b.World.RunTicks(1);
+        Assert.Equal(500 - mine.Price, b.SquadOf(boss).Money);
+        Assert.Equal(1000 + mine.Price, b.World.Player.Money);
+        Assert.Single(b.SquadOf(boss).Shop!.Stock.Items);
+
+        b.Say(new CloseTrade { Tick = 0 });
+        b.World.RunTicks(30);
+        Assert.Equal(["Show me."], Talk());   // the shop it got does not make it a trader
+        Assert.Single(b.SquadOf(boss).Shop!.Stock.Items);   // never filled
     }
 
     static FcsRecord BackpackRecord() => Rec("bag-t", FcsRecordType.CONTAINER, r =>
