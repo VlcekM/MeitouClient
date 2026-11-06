@@ -142,6 +142,7 @@ c help                                # one usage line per command; `c help <nam
 | `observe [--radius <m>] [--full]` | 4-23 KB | squad detail (selected only), `nearby.{threats,allies,neutrals,animals,traders,bodies}`, `groundItems`, buildings, research, `score` |
 | `state` | small | screen, open screens, selected/player/camera, save |
 | `world [--near <id\|x z>] [--radius] [--kind] [--limit]` | by limit | any character or building in the **loaded** zones, with state |
+| `combat-status [--id <id>]` | small, read-only | stance flags, status, target, nearest hostile, damage dealt/taken over 5 s and 30 s (approximate: hp drops sampled at the 4 Hz control poll, bleeding counts, healing not subtracted), blows thrown/landed/blocked/parried (exact counters), `warn[]`. The same data is the `combat` field of `observe --brief`. No fleeing state exists, so none is reported. The window counters start at game load |
 | `ui-tree`, `screenshot` | medium / expensive | only for UI work or when the screen is the question |
 Tips: poll with `--brief --changed`; filter big replies with `jq` before they reach your context; read numbers, not pictures; `observe` and `world` only see loaded zones (to find something far away, `tp` there, wait a few seconds, scan again). Identify characters by `.name` and `.faction`, not by `hostile` (it read false for groups that then attacked). Only SELECTED characters report limbs, inventory and skills (`select --squad`). `score.kills` counts hostile non-animal characters seen dead since the load; a knock-out (`ko`) is not a kill.
 
@@ -153,7 +154,14 @@ Tips: poll with `--brief --changed`; filter big replies with `jq` before they re
 | Fight | `order attack <id>`, `stance block\|hold\|passive\|ranged\|taunt\|sneak\|jobs [on\|off]`, `follow <id> [--guard]`, `stop` |
 | Heal / loot | `heal` (debug, also ends a knock-out), `firstaid <id>` (needs a kit in the medic's inventory), `loot <id>` (body only), `pickup <id\|nearest>` |
 | Scene | `spawn-at <x> <z> [record] [--ko\|--dead]` (default Dust Bandit, reply has the id), `kill --radius <m> [<x> <z>] [--animals]`, `kill --id <id>`, `ko`, `hurt`, `tp <x> <z> \| tp <town name>`, `give "<item record>" [qty] [quality] [--equip]`, `money <delta>`, `maxstats` |
-**Spawned NPCs may not react** (Dust Bandits at 40 m stayed idle for 8 s): start the fight with `order attack <id>`. They then flee and kite; a KO is not a kill. Do not use `kill --id` and call it a fight win.
+**Spawned NPCs may not react** (Dust Bandits at 37-45 m stayed idle for 8-10 s in every run): if nothing reacts after 10 s, start the fight with `order attack <id>`. They then flee and kite; a KO is not a kill. Do not use `kill --id` and call it a fight win. A character with block on defends and starts no attack: never leave `stance block` on for a fighter.
+
+### Self-checks (before and during every fight)
+Run `combat-status` before the fight and every few seconds during it; treat its `warn[]` as failures to fix, not to ignore:
+- `block is on while attacking`: `stance block off`, then re-check.
+- `no damage dealt in 30 s` with a hostile within 30 m: the fight is not happening (no attack order, target out of reach, fleeing): re-issue `order attack`, or report the fight as not proven. (This warning has not yet been triggered in a test.)
+- passive or hold on: `stance passive off` / `stance hold off`.
+A fight with an open warning is not a result.
 **Threat rule (for travel and look-around only, never for combat, survival or loot tests, it voids their result):** when `observe --brief` shows `threat` close, the lead is attacked, or a hostile is near: `select c:0.0`, then repeat `heal` and `kill --radius 30` (at the lead's position, no `--animals` unless an animal attacks) about every 0.25 s until no threat and no hostile within 30 m; cap 10 s real time per episode. If the lead is KO or threats keep coming, `tp` back to your start point (note `pos` from the first `observe --brief`) and stop that step.
 Placement (`build`, `place-building`) is strict: most flat ground near towns is inside a town radius (`TooCloseToTown`); place first, then send a builder; a shack footprint is large.
 
@@ -162,13 +170,13 @@ A persona is a named ability preset applied to the lead: a plain script of contr
 There is no runner in this branch; send the steps yourself (below) and check the replies.
 | Persona | Steps |
 |---|---|
-| `jackie-chan` (bare-handed martial artist) | `maxstats`, `strip-inventory`, `give "<Ninja Mask>" --equip` and the other four pieces (Ninja Rags, Martial Artist Bindings, Ninja Pants, Cloud Ninja Boots; resolve the exact records with `find-item <name> --stats`), `stance block on`, `stance passive off`, `stance hold off`; no weapon, no backpack |
+| `jackie-chan` (bare-handed martial artist) | `maxstats`, `strip-inventory`, `give "<Ninja Mask>" --equip` and the other four pieces (Ninja Rags, Martial Artist Bindings, Ninja Pants, Cloud Ninja Boots; resolve the exact records with `find-item <name> --stats`), `stance block off`, `stance passive off`, `stance hold off`, `stance ranged off`; no weapon, no backpack. **Block, passive, hold and ranged are OFF on purpose:** with block on the character defends and starts no attack (a bandit fight gave 0 blows thrown with block on, 2 landed with it off). `persona verify` prints the `combat-status` line and fails on block, passive or hold |
 | `berserk` (heavy plate) | `maxstats`, `strip-inventory`, Ancient Samurai Helmet / Armour / Legplates / Boots, Chain Shirt, Plank (heavy blade) on the back; 111 of 115 kg carried, dodge drops by 90 |
 - `find-item <text> [--type armour|weapon|item|crossbow|container] [--limit n] [--stats]` lists records with numbers; `give "<record or name>" [qty] [quality] [--equip]`; `unequip <slot|name|backpack>`; `strip-inventory`.
-- **Strip and backpack (build `33137696` and later):** `strip-inventory` **destroys** every carried item of the selected character (grids, worn gear, pack; limbs and shackles stay); `unequip backpack` destroys the pack with its contents, never drops it. Test characters only. No backpack in the data has a stealth bonus (stealth x0.0 to x1.0), a pack adds no capacity, so personas wear none.
+- **Strip and backpack (code from `33137696` on):** `strip-inventory` **destroys** every carried item of the selected character (grids, worn gear, pack; limbs and shackles stay); `unequip backpack` destroys the pack with its contents, never drops it. Test characters only. No backpack in the data has a stealth bonus (stealth x0.0 to x1.0), a pack adds no capacity, so personas wear none.
 - **Full grid:** the start character's grids are full (18 stacks). `give --equip` swaps a worn item into the grids only when there is room; with no room it changes nothing, drops nothing and posts a message (a `wear` step then fails). Strip first. Checked: both personas leave 0 ground items within 10 m (`ground-items <x> <z> <r>`, `observe.groundItemsCount`).
 - Not verified: the Windows build; a stealth pack worn for real; the "no room" message path; gloves (none in the data); real damage numbers.
-- Fights with a persona are **not proven**: berserk, 2 spawned bandits 37-45 m away: no reaction in 8 s, forced `order attack`, both ended KO within 4 s and far away (cause Unknown), 0 kills. Jackie-chan, 62 s: 0 kills, one bandit KO, the other kited at 15-30 m.
+- **Persona fights (build `acc3429d`, Steam data, 2 Dust Bandits at 37 and 45 m, `order attack` after 10 s without reaction):** jackie-chan with block off killed both in under 4 s (2 of 2 blows landed, 361 hp dealt, 0 taken); berserk with block off landed 2 blows (160 hp dealt, 0 taken) and both bandits left the world list within 4 s, but the `kills` counter did not rise for them (KO versus dead not determined). Earlier runs with block on or an unlucky spawn showed 0 kills. Each is a single run. Still unproven: berserk kills, and the earlier oddity of two bandits found KO about 2.6 km away (did not recur, cause Unknown).
 
 ## 8. The wiki: find, travel, and build your own
 **No wiki data ships with the code branch.**
@@ -220,7 +228,7 @@ A watcher is a loop that counts lines in `asks.log` and prints new ones (`sed -n
 | a line while busy | `say` "seen #2, after this" and queue it |
 | "be Jackie Chan" / "be berserk" | apply the persona (section 7), then `say` the result line (what is worn, what could not be done) |
 Tasks typed in game are **game requests only**: they never authorise anything outside the game (no push, deleting files, other machines, settings, spending). Anything else you refuse by `say` and tell the user in your normal reply.
-**Reaction delay:** floor about 6 s, because you only see an event between tool calls. Measured: with a 15 s polling sleep the first `say` came 18-20 s after the player typed; with a watcher event answered at once, shorter. **No long waits:** while waiting for player lines never sleep or run a tool call longer than 3 s; wait on the watcher event only and answer each with your own `say` in the same turn. The watchers send a canned ack (`On it.`) themselves within about 0.3 s (`ACK=0` turns it off where the watcher scripts are used); it is not your answer. Not yet measured in a live game: the ack time itself (only dry runs against a fake channel).
+**Reaction delay:** floor about 6 s, because you only see an event between tool calls. Measured: with a 15 s polling sleep the first `say` came 18-20 s after the player typed; with a watcher event answered at once, shorter. **No long waits:** while waiting for player lines never sleep or run a tool call longer than 3 s; wait on the watcher event only and answer each with your own `say` in the same turn. The watcher scripts send a canned `say` (`On it.`, `Noted, thinking...`, `Got your message.`, at most one per 3 s) as soon as an event is seen (`ACK=1` is the default, `ACK=0` turns it off); the design target is about 0.5-1 s, the squad-rename watcher polls every 0.5 s. It is not your answer: your own reply follows. Not yet measured in a live game: the ack time itself (only dry runs against a fake channel). `ask` and `task` are console lines typed by the player: the game appends them to `asks.log` and the world is not changed.
 
 ## 10. Recording and films
 Screenshots for evidence; a film only when asked.
@@ -256,12 +264,14 @@ Recorder (use the window's real size and position; Linux, `gpu-screen-recorder`)
 | Lead wanders | read `observe.origin` before `spawn-at`; distances are from the point you give |
 | Chasing | a walking NPC keeps pace with your lead (17 m after 70 s) |
 | Start pack | the start character is overloaded after `build`; speed drops |
-| Persona fights | not proven (section 7) |
+| Persona fights | single runs only; berserk kills not determined (section 7); check `combat-status` first (section 6) |
+| Block stance | block on = no attack; a fighter needs block off |
+| KO is not a kill | `score.kills` does not count a knock-out |
 | `carry`/`putdown` | did not start in a test; `trade` only refusals verified; `operate`, `craft`, `research queue` on a real machine not verified |
 | `loot` on a body | not verified with a dead spawned bandit |
-| Windows build | not tested with the persona changes |
+| Windows build | the newest builds (`acc3429d`) were built but not run on Windows; nothing here is verified there |
 | `end program` style words | a task such as "end program" is not a defined stop word: treat it as a request to stop only after saying so, say goodbye, and note it |
-| Latency | measured 18-20 s from player line to first `say` with polling; the watcher ack was only dry-run |
+| Latency | measured 18-20 s from player line to first `say` with a 15 s polling sleep; never sleep over 3 s while waiting; the watcher ack was only dry-run |
 
 ## 13. Worked example: "find Beep" (from a live session)
 Player types in the dev console: `task go find beep, then tell him we love him`.
