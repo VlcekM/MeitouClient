@@ -41,7 +41,10 @@ sealed partial class GameHost
             var path = walk.FindPath(from, to);
             // Both ends on loaded zones and the query still gave only a provisional path: the goal is cut off (a shut door, water, a wall), the path leads to the nearest point reached, then straight on.
             bool bothLoaded = walk.World.Contains(Meitou.Data.World.WorldLayout.ZoneOf(from.X, from.Z)) && walk.World.Contains(Meitou.Data.World.WorldLayout.ZoneOf(to.X, to.Z));
-            bool cutOff = path.Found && path.IsProvisional && bothLoaded;
+            // The query also answers "as near as can be got" when the goal lies within its snap distance of reachable ground (just outside a shut door): such a path ends short of the target.
+            const float EndTolerance = 1.5f;
+            var pathEnd = path.Found ? path.Points[Math.Min(path.Exact, path.Points.Count) - 1] : default;
+            bool cutOff = path.Found && bothLoaded && (path.IsProvisional || Vector2.Distance(new(pathEnd.X, pathEnd.Z), new(to.X, to.Z)) > EndTolerance);
             bool reachable = path.Found && !cutOff;
             using var stream = new MemoryStream();
             using (var w = new Utf8JsonWriter(stream))
@@ -57,7 +60,7 @@ sealed partial class GameHost
                     for (int i = 1; i < path.Points.Count; i++) len += Vector3.Distance(path.Points[i - 1], path.Points[i]);
                     w.WriteNumber("length", Math.Round(len, 1));
                     w.WriteNumber("points", path.Points.Count);
-                    var end = cutOff ? path.Points[Math.Min(path.Exact, path.Points.Count) - 1] : path.Points[^1];
+                    var end = cutOff ? pathEnd : path.Points[^1];
                     w.WriteNumber("ends_short_by", Math.Round(Vector2.Distance(new(end.X, end.Z), new(to.X, to.Z)), 1));
                     if (cutOff) w.WriteBoolean("provisional", true);
                 }
