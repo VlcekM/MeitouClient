@@ -125,6 +125,39 @@ sealed partial class GameHost
             Result(con, player.ControlPutDown(out string m), m);
         });
 
+        add("say", "say <text> [--id <c:slot.gen>]", "write in game as a character: the text (at most 200 characters) shows as a speech bubble over its head for 2 + 0.12 s per character (the game's own bubble, as an order refused is barked), visible in the normal view; speaker: --id, else the first selected character, else the first squad member; display only, the world is not changed", (args, con) =>
+        {
+            if (!loaded(con)) return;
+            var snap = session.CurrentSnapshot;
+            CharacterId who = CharacterId.None;
+            var words = new List<string>();
+            for (int a = 0; a < args.Count; a++)
+            {
+                if (args[a].Equals("--id", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (a + 1 >= args.Count || !PlayerInterface.TryParseCharacter(args[a + 1], out who)) { con.Error("say: --id needs a character id (c:<slot>.<gen>)"); return; }
+                    a++;
+                }
+                else words.Add(args[a]);
+            }
+            string text = string.Join(' ', words).Trim();
+            if (text.Length == 0) { con.Error("usage: say <text> [--id <c:slot.gen>]"); return; }
+            if (text.Length > 200) { con.Error($"say: text is {text.Length} characters, at most 200"); return; }
+            if (who != CharacterId.None)
+            {
+                if (snap.Characters.FirstOrDefault(c => c.Id == who) is not { } named) { con.Error($"say: no character c:{who.Slot}.{who.Generation}"); return; }
+                if (named.Body is { Dead: true }) { con.Error($"say: c:{who.Slot}.{who.Generation} is dead"); return; }
+            }
+            else
+            {
+                var lead = snap.Characters.FirstOrDefault(c => c.IsPlayer && c.Selected && c.Body is not { Dead: true }) ?? snap.Characters.FirstOrDefault(c => c.IsPlayer && c.Body is not { Dead: true });
+                if (lead is null) { con.Error("say: no living squad member to speak (pass --id <c:slot.gen>)"); return; }
+                who = lead.Id;
+            }
+            session.World.Commands.Enqueue(new DebugSay(who, text) { Tick = session.World.Tick });
+            con.Print($"said as c:{who.Slot}.{who.Generation}: {text}");
+        });
+
         add("trade", "trade | trade open <trader id> | trade buy|sell <item name> [n] | trade close", "without arguments: the open trade as JSON (stock, goods, prices, money); open: the first selected character walks to the trader; buy/sell: units of the named stock item or of the customer's goods; close", (args, con) =>
         {
             if (!loaded(con)) return;

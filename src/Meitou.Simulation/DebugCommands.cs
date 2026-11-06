@@ -78,6 +78,9 @@ public sealed record DebugKnockOut(IReadOnlyList<CharacterId> Characters, float 
 /// <summary>Wakes the unconscious characters at once (<see cref="MedicalState.WakeUp"/>; agent-playtest control channel: wake); the dead and the conscious are left alone.</summary>
 public sealed record DebugWake(IReadOnlyList<CharacterId> Characters) : DebugCommand;
 
+/// <summary>Says <see cref="Text"/> over the character as a speech bubble (<see cref="World.Bark"/>; agent-playtest control channel: say); display only, nothing in the world changes.</summary>
+public sealed record DebugSay(CharacterId Speaker, string Text) : DebugCommand;
+
 /// <summary>Finishes every research and repetition (<see cref="Construction.ResearchState.CompleteAll"/>).</summary>
 public sealed record DebugUnlockResearch : DebugCommand;
 
@@ -197,6 +200,9 @@ static class DebugCheats
             case DebugWake wake:
                 foreach (var id in wake.Characters)
                     if (table.TryResolveNext(id, out int up) && table.Cold(up)?.Medical is { } sleeper && sleeper.WakeUp()) table.Next[up].Velocity = Vector3.Zero;
+                break;
+            case DebugSay say:
+                if (table.TryResolveNext(say.Speaker, out _)) world.Bark(say.Speaker, say.Text);
                 break;
             case DebugUnlockResearch when data is not null:
                 world.Post($"Research unlocked: {world.Research.CompleteAll(data.Db)} finished.");
