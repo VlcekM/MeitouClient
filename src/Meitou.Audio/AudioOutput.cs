@@ -132,8 +132,43 @@ public sealed unsafe class AudioOutput : IDisposable
             // Starved (the machine stalled for longer than the queue): start again.
             al.GetSourceProperty(source, GetSourceInteger.SourceState, out int state);
             if (state != (int)SourceState.Playing) al.SourcePlay(source);
+            KeepConnected();
             Thread.Sleep(5);
         }
+    }
+
+    /// <summary>ALC_CONNECTED (ALC_EXT_disconnect): 0 once the device is gone (unplugged headset, switched or disabled output).</summary>
+    const int AlcConnected = 0x313;
+    const int ReconnectCheckMs = 500;
+    long nextReconnectCheck;
+    bool reportedDisconnect;
+
+    /// <summary>
+    /// A lost device stays silent forever in OpenAL, so every <see cref="ReconnectCheckMs"/> the device is checked and, when it is gone,
+    /// reopened on the current default output (ALC_SOFT_reopen_device); the context, source and queue survive the reopen.
+    /// </summary>
+    void KeepConnected()
+    {
+        long now = Environment.TickCount64;
+        if (now < nextReconnectCheck) return;
+        nextReconnectCheck = now + ReconnectCheckMs;
+
+        int connected = 1;
+        alc.GetContextProperty(device, (GetContextInteger)AlcConnected, 1, &connected);
+        if (connected != 0) return;
+
+        bool reopened = Reopen();
+        if (reopened || !reportedDisconnect)
+        {
+            Console.Error.WriteLine(reopened ? "audio     output device lost; reopened on the default device" : "audio     output device lost");
+        }
+        reportedDisconnect = !reopened;
+    }
+
+    bool Reopen()
+    {
+        var reopen = (delegate* unmanaged[Cdecl]<Device*, byte*, int*, byte>)alc.GetProcAddress(device, "alcReopenDeviceSOFT");
+        return reopen != null && reopen(device, null, null) != 0;
     }
 
     public void Dispose()
