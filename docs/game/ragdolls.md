@@ -272,8 +272,8 @@ Engine feature behind the same switch (`BodyOptions.AdvancedRagdolls`; Faithful:
 - **Spin on impact**: a new ragdoll started by a blow (`CharacterCold.Blow`'s push) spins its upper arms along the push and its thighs against it (the feet held the ground),
   0.15 rad/s per unit/s of push, at most 6, each limb by its own roll of 0.6 to 1.4 (`RngPurpose.RagdollSpin`).
 - **Focused push**: the struck part's LOCATIONAL_DAMAGE `bone name` (else `bone name 2`; its nearest ancestor with a body when the bone has none) names the struck body
-  (`RagdollBlow.Bone`, `RagdollSystem.Struck`). The struck body alone takes the push, times the ragdoll's mass over its own (at most 4x), the others only the motion, so the
-  body is thrown from the hit part and the joints drag the rest; each body at most half `RagdollPhysics.MaxSpeed`. No bone: the whole push on every body.
+  (`RagdollBlow.Bone`, `RagdollSystem.Struck`). Every body starts with 0.4 of the push, the struck one also gets the other 0.6 times the ragdoll's mass over its own (at most 4x:
+  an impulse on it alone), so the body is thrown from the hit part and the joints drag the rest; each body at most half `RagdollPhysics.MaxSpeed`. No bone: the whole push on every body.
 
 ## Per frame
 
