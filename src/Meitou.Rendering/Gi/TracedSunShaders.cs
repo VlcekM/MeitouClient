@@ -205,6 +205,83 @@ static class TracedSunShaders
         """;
 
     /// <summary>
+    /// The mask's temporal filter (with a temporal upscaler): each traced pixel's world point reprojected into last frame's filtered mask by the camera alone, the four texels around it
+    /// kept where their stored distance from that frame's eye is the point's (a moved or uncovered surface has none), the history clamped to the 3 x 3 neighbourhood of this frame's rays
+    /// (a shadow that moved off a lit or into a shadowed neighbourhood is dropped at once: no trail), then blended with this frame's ray. Writes the visibility and the distance.
+    /// </summary>
+    public static readonly string Filter = $$"""
+        #version 460
+        layout(local_size_x = 8, local_size_y = 8) in;
+        layout(set = 0, binding = 0) uniform sampler2D uDepth;
+        layout(set = 0, binding = 1) uniform usampler2D uSurface;
+        layout(set = 0, binding = 2) uniform sampler2D uRaw;
+        layout(set = 0, binding = 3) uniform sampler2D uHistory;
+        layout(set = 0, binding = 4, rgba16f) uniform writeonly image2D uOut;
+        layout(set = 0, binding = 5, std140) uniform Params
+        {
+            mat4 inverse;      // NDC, jittered as the frame was -> position relative to the eye
+            mat4 previous;     // position relative to last frame's eye -> last frame's clip
+            vec4 shift;        // xyz: this eye minus last frame's; w: 1 when the history is valid
+            vec4 size;         // width, height, the blend of a new ray (the response)
+        } p;
+        """ + DepthConvention.Glsl + $$"""
+
+        vec3 pointAt(ivec2 px)
+        {
+            vec4 h = p.inverse * vec4((vec2(px) + 0.5) / p.size.xy * 2.0 - 1.0, texelFetch(uDepth, px, 0).r, 1.0);
+            return h.xyz / h.w;
+        }
+
+        // Last frame's filtered visibility at a point, from the texels whose distance matches (-1: none).
+        float history(vec3 at)
+        {
+            if (p.shift.w < 0.5) return -1.0;
+            vec3 before = at + p.shift.xyz;
+            vec4 clip = p.previous * vec4(before, 1.0);
+            if (clip.w <= 0.0) return -1.0;
+            vec2 texel = (clip.xy / clip.w * 0.5 + 0.5) * p.size.xy - 0.5;
+            if (any(lessThan(texel, vec2(-0.5))) || any(greaterThan(texel, p.size.xy - 0.5))) return -1.0;
+            float expected = length(before), tolerance = expected * 0.02 + 0.5;
+            ivec2 base = ivec2(floor(texel));
+            vec2 f = texel - vec2(base);
+            float sum = 0.0, weight = 0.0;
+            for (int k = 0; k < 4; k++)
+            {
+                ivec2 o = ivec2(k & 1, k >> 1);
+                ivec2 q = clamp(base + o, ivec2(0), ivec2(p.size.xy) - 1);
+                vec2 h = texelFetch(uHistory, q, 0).rg;
+                float w = (o.x == 1 ? f.x : 1.0 - f.x) * (o.y == 1 ? f.y : 1.0 - f.y);
+                if (abs(h.g - expected) < tolerance) { sum += h.r * w; weight += w; }
+            }
+            return weight > 0.01 ? sum / weight : -1.0;
+        }
+
+        void main()
+        {
+            ivec2 px = ivec2(gl_GlobalInvocationID.xy);
+            if (px.x >= int(p.size.x) || px.y >= int(p.size.y)) return;
+            float raw = texelFetch(uRaw, px, 0).r;
+            if ((texelFetch(uSurface, px, 0).w & 65536u) == 0u)
+            {
+                imageStore(uOut, px, vec4(raw, -1.0, 0.0, 0.0));
+                return;
+            }
+            vec3 at = pointAt(px);
+            float low = raw, high = raw;
+            for (int y = -1; y <= 1; y++)
+                for (int x = -1; x <= 1; x++)
+                {
+                    float v = texelFetch(uRaw, clamp(px + ivec2(x, y), ivec2(0), ivec2(p.size.xy) - 1), 0).r;
+                    low = min(low, v);
+                    high = max(high, v);
+                }
+            float before = history(at);
+            float visibility = before < 0.0 ? raw : mix(clamp(before, low, high), raw, p.size.z);
+            imageStore(uOut, px, vec4(visibility, length(at), 0.0, 0.0));
+        }
+        """;
+
+    /// <summary>
     /// The sun over the scene (blend one, one; red, green and blue): the fragment's term, what the rays let through, and the haze the fragment's own colour went through
     /// (<c>atmoApply</c> is linear in the colour, so its multiplier is the same at this position).
     /// </summary>

@@ -71,7 +71,9 @@ shafts, the particles, the foam, the reflection and the rest of the frame read t
 The traced scene holds characters only for the lamps ([`TracedCharacters`](render-lights.md#traced-lamp-shadows)): engine choice, the layers hold every character within the traced share at the
 shadow passes' levels and their filtered bias (a character's own coarse-level triangles would shadow its skin along a ray), where the structures hold the nearest 64 within 2500.
 
-**Rays** go to a point of the sun's disc (radius tangent 0.015, KenshiNative's size; with a temporal upscaler anew each frame by interleaved noise, without one the disc's centre, hard).
+**Rays** go to a point of the sun's disc (radius tangent 0.00465, the real sun's 0.267 degrees; KenshiNative's 0.015 made every penumbra about three times too wide, which showed on far casters; with a temporal upscaler anew each frame by interleaved noise, without one the disc's centre, hard). The penumbra still widens with the caster's distance (contact hardening).
+
+**Filter** (with a temporal upscaler; `TracedSunShaders.Filter`, RGBA16F ping-pong at the render size): each traced pixel's point reprojected by the camera into last frame's filtered mask, the four texels around it kept where their stored distance from that frame's eye is within 2 % + 0.5 of the point's; that history clamped to the min and max of this frame's 3 x 3 rays, then blended with this frame's ray at 0.15. A shadow that moved over a lit (or into a shadowed) neighbourhood is clamped away at once, so a moving caster or receiver leaves at most a one-pixel band; noise in a wide penumbra is averaged over about 8 frames before the upscaler. No history after a camera jump of 500 or a frame without the trace. **Observed** (RTX 4090, 1280 x 720 with DLSS): trace 0.05-0.17 ms, filter 0.01 ms. **Unknown**: the ghosting the user reported is not reproduced offscreen (no orbit in the game's captures); the look under a moving camera is unchecked.
 There is no receiver identity as in KenshiNative's G-buffer, so what it skips by name is skipped along the ray. Solids leave the plane the depth shows by half a
 pixel's footprint, slope-scaled; cards leave from the sun's face and skip 3 footprints plus 0.5. Four queries, each after the last missed, cheapest shadow first:
 - objects, foliage, small foliage (`0x10`: radius 6 and up within 3000, the sun's alone), alpha-tested in candidates; a part an object's material cuts (its map in the record's sun fields)
@@ -90,7 +92,7 @@ fading the next 8 in by noise: the blind range covers the sway (the traced card 
 **Interiors.** The objects are `RayInstances`' (no construction sites, hidden floors, closed-around buildings), so a site casts no traced shadow.
 
 **Limits.** Blood on surfaces (`RecordSurfaces`) blends before the sun is added, which then lands on it. The objects' traced transforms and level are the GI's: rotors and doors are frozen as the GI sees them; an object's texture
-tile is not read in the alpha test. One ray a pixel relies on the upscaler: no denoiser.
+tile is not read in the alpha test. One ray a pixel, filtered as above; no spatial filter.
 
 ## Validation and limits
 

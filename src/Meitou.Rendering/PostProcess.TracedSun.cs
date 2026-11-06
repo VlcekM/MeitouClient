@@ -13,8 +13,12 @@ public sealed unsafe partial class PostProcess
     /// <summary>This frame's sun is traced (set before <see cref="Begin"/>; needs <see cref="GiResolve"/>): the scene targets carry <see cref="TracedTermTarget"/>.</summary>
     public bool TracedSun { get; set; }
 
-    Target2D? tracedTerm, tracedMask;
+    Target2D? tracedTerm, tracedMask, tracedHistoryA, tracedHistoryB;
     TracedAddPass? tracedAddPass;
+    /// <summary>The filter's last frame: its eye-relative position to clip, its eye, its frame index (the history is used only by the next frame).</summary>
+    Matrix4x4 tracedPrevious;
+    Vector3 tracedEye;
+    long tracedFrame = long.MinValue;
 
     GpuTexture? TracedTermTarget => TracedSun && GiResolve > 0 ? tracedTerm?.Texture : null;
 
@@ -27,6 +31,24 @@ public sealed unsafe partial class PostProcess
             TextureMinFilter.Nearest, TextureMagFilter.Nearest);
         tracedMask = new Target2D(batch.Create(new TextureDesc(InternalFormat.Rgba8, width, height, Use: TextureUse.Sampled | TextureUse.Storage, Name: "post traced sun mask")),
             TextureMinFilter.Nearest, TextureMagFilter.Nearest);
+    }
+
+    /// <summary>
+    /// The filtered masks, made on the first frame that traces with a temporal upscaler (and storage for RGBA16F): the one the filter writes this frame and last frame's. Null:
+    /// the raw mask is used (without an upscaler the rays go to the disc's centre and hold still).
+    /// </summary>
+    (Target2D Previous, Target2D Filtered)? TracedHistory()
+    {
+        if (!Temporal || !SupportsStorage(InternalFormat.Rgba16f)) return null;
+        if (tracedHistoryA is null)
+        {
+            using var batch = Gpu.Uploads.Begin();
+            tracedHistoryA = Make(batch, width, height, InternalFormat.Rgba16f, TextureMinFilter.Nearest, "post traced sun history");
+            tracedHistoryB = Make(batch, width, height, InternalFormat.Rgba16f, TextureMinFilter.Nearest, "post traced sun history");
+            tracedFrame = long.MinValue;
+        }
+        (tracedHistoryA, tracedHistoryB) = (tracedHistoryB!, tracedHistoryA);
+        return (tracedHistoryA, tracedHistoryB);
     }
 
     /// <summary>The sun term times the mask and the haze the fragment's colour went through, added to the scene.</summary>
@@ -44,12 +66,17 @@ public sealed unsafe partial class PostProcess
     {
         if (tracedTerm is null || tracedMask is null || giAlbedo is null || sceneColour is null || sceneDepth is null) return;
         float pixelSlope = 2 * MathF.Tan(fovNow * 0.5f) / height;
-        rays.Run(scene, new(sceneDepth.Texture, giAlbedo.Texture, tracedTerm.Texture, tracedMask.Texture, width, height), inverse, eyeNow, toSun, pixelSlope,
-            Temporal ? (uint)frameIndex : null);
+        var history = TracedHistory();
+        // Last frame's filtered mask holds while the camera has not cut (the same rule as the upscalers' reset, tighter).
+        bool valid = history is not null && tracedFrame == frameIndex - 1 && Vector3.Distance(eyeNow, tracedEye) < 500;
+        rays.Run(scene, new(sceneDepth.Texture, giAlbedo.Texture, tracedTerm.Texture, tracedMask.Texture, width, height, history?.Previous.Texture, history?.Filtered.Texture),
+            inverse, eyeNow, toSun, pixelSlope, Temporal ? (uint)frameIndex : null, new Gi.TracedSunHistory(tracedPrevious, eyeNow - tracedEye, valid));
+        Matrix4x4.Invert(inverse, out tracedPrevious);
+        (tracedEye, tracedFrame) = (eyeNow, frameIndex);
         var add = tracedAddPass ??= new TracedAddPass(Gpu);
         SetGiView(add);
         Bind(add.P, add.Term, tracedTerm);
-        Bind(add.P, add.Mask, tracedMask);
+        Bind(add.P, add.Mask, history?.Filtered ?? tracedMask);
         add.P.ApplyGlobals();   // the haze's uniforms, through the frame globals
         Draw(add.P, sceneColour.Attachment, sceneColour.Format, width, height, width, height, GiAddState);
         Stamp("traced sun");
