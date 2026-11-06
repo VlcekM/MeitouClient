@@ -23,7 +23,7 @@ Object range6000; resident finest mesh parts build bottom levels, max32/frame; u
 can retire. Foliage radius>=150, range4000, max14336 instances, cached candidates invalidate by
 movement/deletion/build progress. Probes see no grass, characters or water (rays mask `0x0F`; the grass and small foliage the traced sun and the lamp shadows add sit under masks of their own: [Traced sun](render-shadows.md#traced-sun)).
 Origin tracks eye in64-unit steps with1024-unit hysteresis; lazy scene epochs coordinate commits.
-Shared top level fits16384 instances, prefers fast trace, reuses identical instance data.
+Shared top level fits16384 instances, prefers fast trace, reuses identical instance data; with characters in it (lamp shadows) it is refitted each frame, built again every 30.
 Terrain refits unchanged topology (periodic full rebuild); retire structures after GPU consumers.
 
 Terrain rays cull back faces; objects/foliage are double-sided. **Verified** RayQueryTests winding.

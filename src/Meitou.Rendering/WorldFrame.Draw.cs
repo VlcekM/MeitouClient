@@ -390,7 +390,7 @@ static partial class WorldFrame
             gi.InteriorCuts = gpu.InteriorMask?.Cuts ?? [];
             gi.LampShadows = gpu.Post is { Options.LampShadows: true, GiResolve: > 0 } && gpu.Lamps is { Grid.W: > 0 };
             gi.GrassReach = TracedReach(ref f);
-            gi.Update(f.Eye, heights, objects, gpu.Foliage is { Enabled: true } giFoliage ? giFoliage : null, gpu.Lamps);
+            gi.Update(f.Eye, heights, objects, gpu.Foliage is { Enabled: true } giFoliage ? giFoliage : null, gpu.Lamps, gpu.Characters);
             StageClock.Sub("gi scene");
             gpu.Probes?.Update(gi, f.Eye, heights, gpu.Lamps, gpu.FogVolumes, gpu.Objects?.GiInteriorFocus(f.Camera.Target));
             StageClock.Sub("gi blend");

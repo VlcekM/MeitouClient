@@ -821,6 +821,7 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         if (partFrames.Length < partTotal) partFrames = new PartFrame[Math.Max(partTotal, partFrames.Length * 2)];
         if (liveCount > 0) Parallel.For(0, liveCount, i => PoseOne(ref live[i], bonePointer, previousPointer, motion, eye));
         (partStamp, partOrigin, partMotion) = (updateStamp, eye, motion);
+        paletteFrame = Gpu.Frame.Number;
         LastPoseMs = watch.Elapsed.TotalMilliseconds;
     }
 

@@ -65,9 +65,11 @@ position (`atmoApplyCoefficients`, one per pixel: the haze is linear in the colo
 **Range.** The share traced falls from 1 to 0 over the band where the last cascade with a character layer blends into the next, by view depth, as the cascades do:
 all but the last two cascades (`ShadowPass.ActorLayers`; five cascades: about 1500 units at range 10000, less in a close-up). Past it the cascades, terrain and landmark terms.
 
-**Characters** are not in the traced scene. Each of those cascades has a second layer in the array (past the cascades, `ActorDraw`) with its matrix and only the characters
+**Characters** cast the sun through their layers, not the rays. Each of those cascades has a second layer in the array (past the cascades, `ActorDraw`) with its matrix and only the characters
 (debris and birds cast nothing in any mode); the fragments read those layers, and their blocker layers, for the traced share (`msActors`). The cascades stay whole because the
-shafts, the particles, the foam, the reflection and the rest of the frame read them, so tracing saves none of their cost. At 4096 the three layers add 192 MB of depth and 48 MB of blockers. Skinned structures: not built.
+shafts, the particles, the foam, the reflection and the rest of the frame read them, so tracing saves none of their cost. At 4096 the three layers add 192 MB of depth and 48 MB of blockers.
+The traced scene holds characters only for the lamps ([`TracedCharacters`](render-lights.md#traced-lamp-shadows)): engine choice, the layers hold every character within the traced share at the
+shadow passes' levels and their filtered bias (a character's own coarse-level triangles would shadow its skin along a ray), where the structures hold the nearest 64 within 2500.
 
 **Rays** go to a point of the sun's disc (radius tangent 0.015, KenshiNative's size; with a temporal upscaler anew each frame by interleaved noise, without one the disc's centre, hard).
 There is no receiver identity as in KenshiNative's G-buffer, so what it skips by name is skipped along the ray. Solids leave the plane the depth shows by half a
