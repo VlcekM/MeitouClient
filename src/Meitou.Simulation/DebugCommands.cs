@@ -41,7 +41,7 @@ public sealed record DebugDamageMultiplier(float Multiplier) : DebugCommand;
 /// </summary>
 public sealed record DebugGiveItem(CharacterId Character, string Record, int Quantity, int Quality = 0) : DebugCommand
 {
-    /// <summary>Wear the unit even when its armour slot is taken: the worn item goes to the grids (dropped at the feet, with a message, when they have no room).</summary>
+    /// <summary>Wear the unit even when its armour slot is taken: the worn item goes to the grids; with no room nothing changes and nothing is dropped (a message says so). A backpack goes into the attach slot when it is free.</summary>
     public bool Equip { get; init; }
 
     /// <summary>
@@ -71,6 +71,12 @@ public sealed record DebugGiveItem(CharacterId Character, string Record, int Qua
 /// A character left without bounties is no longer recently wanted.
 /// </summary>
 public sealed record DebugClearBounties(IReadOnlyList<CharacterId> Characters, int? Faction = null) : DebugCommand;
+
+/// <summary>
+/// Destroys carried items of a character (a test character: nothing is dropped, nothing moves to a container): <see cref="BackpackOnly"/> the worn backpack with everything in it; otherwise every item in
+/// every section (grids, worn clothing and weapons, backpack with contents) except prosthetic limbs and locked-on shackles.
+/// </summary>
+public sealed record DebugStripItems(CharacterId Character, bool BackpackOnly) : DebugCommand;
 
 /// <summary>Kills the characters (<see cref="MedicalState.Kill"/>), as a lethal hit would: the medical state says dead, the body pass does the rest.</summary>
 public sealed record DebugKill(IReadOnlyList<CharacterId> Characters) : DebugCommand;
@@ -210,6 +216,12 @@ static class DebugCheats
             case DebugUnlockResearch when data is not null:
                 world.Post($"Research unlocked: {world.Research.CompleteAll(data.Db)} finished.");
                 break;
+            case DebugStripItems strip:
+                if (!table.TryResolveNext(strip.Character, out int stripped) || table.Cold(stripped)?.Inventory is not { } carried) break;
+                int gone = carried.Items.RemoveAll(i => strip.BackpackOnly ? i.Section == "backpack_attach" : !Items.InventoryCommands.IsLimbSection(i.Section) && !i.LockedOn);
+                assembly?.RefreshEquipment(table.Cold(stripped)!);
+                world.Post(strip.BackpackOnly ? (gone > 0 ? "Backpack removed and destroyed with its contents (nothing dropped)." : "No backpack worn.") : $"Inventory cleared: {gone} items destroyed (nothing dropped).");
+                break;
             case DebugGiveItem give when data is not null:
                 if (!table.TryResolveNext(give.Character, out int owner) || table.Cold(owner)?.Inventory is not { } inventory) break;
                 if (data.Items.Create(give.Record, give.Quantity) is not { } item) { world.Post($"No item record {give.Record}."); break; }
@@ -218,19 +230,25 @@ static class DebugCheats
                     (item.CompanyId, item.MaterialId, item.Level) = (CraftBench.PlayerWeapons, grade.Model, grade.Level);
                 else if (DebugGiveItem.QualityTypes.Contains(item.Type)) item.Level = Math.Clamp(give.Quality, 0, 100);
                 var wearer = table.Cold(owner);
+                if (give.Equip && item.Type == FcsRecordType.CONTAINER && item.Contents is not null)
+                {
+                    // A backpack: worn in the attach slot when it is free (strip or `unequip backpack` first); never put into the grids or dropped.
+                    if (inventory.Backpack is not null) { world.Post($"{item.Name} not worn: a backpack is already worn (remove it first); nothing dropped."); break; }
+                    (item.Section, item.X, item.Y) = ("backpack_attach", 0, 0);
+                    inventory.Items.Add(item.WithQuantity(1));
+                    assembly?.RefreshEquipment(wearer!);
+                    break;
+                }
                 bool worn = Items.InventoryCommands.TryEquip(inventory, item.WithQuantity(1), wearer);
                 if (!worn && give.Equip && item.Type is FcsRecordType.ARMOUR or FcsRecordType.ITEM && Items.InventoryCommands.IsEquipmentSection(item.EquipmentSection)
                     && item.EquipmentSection is not ("back" or "hip" or "backpack_attach") && inventory.Items.Find(i => i.Section == item.EquipmentSection) is { } displaced)
                 {
-                    // The slot is taken: take the worn item off, wear the new one, give the old one a place in the grids (else the ground, said in the log).
+                    // The slot is taken: take the worn item off, wear the new one, give the old one a place in the grids; with no room nothing changes and nothing is dropped.
+                    if (!inventory.HasRoomFor(displaced)) { world.Post($"{item.Name} not worn: the worn {displaced.Name} has no room in the grids (strip the inventory first); nothing dropped."); break; }
                     inventory.Items.Remove(displaced);
                     worn = Items.InventoryCommands.TryEquip(inventory, item.WithQuantity(1), wearer);
                     if (!worn) inventory.Items.Add(displaced);
-                    else if (!inventory.Add(displaced))
-                    {
-                        world.GroundItems.Drop(displaced, table.Next[owner].Position, 0);
-                        world.Post($"{displaced.Name} came off and did not fit the inventory; dropped on the ground.");
-                    }
+                    else if (!inventory.Add(displaced)) world.Post($"{displaced.Name} came off and did not fit the inventory; destroyed (nothing dropped).");
                 }
                 if (worn)
                 {
@@ -240,6 +258,7 @@ static class DebugCheats
                     item = item.WithQuantity(item.Quantity - 1);
                 }
                 if (inventory.Add(item)) break;
+                if (give.Equip) { world.Post($"{item.Quantity} x {item.Name} did not fit; not given (nothing dropped)."); break; }
                 world.GroundItems.Drop(item, table.Next[owner].Position, 0);
                 world.Post($"{item.Quantity} x {item.Name} did not fit; dropped on the ground.");
                 break;

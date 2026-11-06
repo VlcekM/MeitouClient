@@ -11,11 +11,31 @@ sealed partial class GameHost
 {
     void RegisterControlPersonaCommands(Action<string, string, string, Action<IReadOnlyList<string>, DevConsole>> add, Func<DevConsole, bool> loaded)
     {
-        add("unequip", "unequip <slot | item name>", "the first selected character takes a worn item off (slot: head, shirt, armour, legs, boots, back, hip, belt; or the item's name): it goes to the inventory grids; the reply cannot tell whether they had room, observe.squad[].inventory shows where it is", (args, con) =>
+        add("unequip", "unequip <slot | item name>", "(backpack: removed and destroyed with its contents, never dropped) the first selected character takes a worn item off (slot: head, shirt, armour, legs, boots, back, hip, belt; or the item's name): it goes to the inventory grids; the reply cannot tell whether they had room, observe.squad[].inventory shows where it is", (args, con) =>
         {
             if (!loaded(con)) return;
             if (args.Count == 0) { con.Error("usage: unequip <slot | item name>"); return; }
+            string what = string.Join(' ', args);
+            if (what.Equals("backpack", StringComparison.OrdinalIgnoreCase) || what.Equals("pack", StringComparison.OrdinalIgnoreCase))
+            {
+                var who = player.ControlOrderers();
+                if (who.Count == 0) { con.Error("refused: no character selected (use select first)"); return; }
+                session.World.Commands.Enqueue(new DebugStripItems(who[0], true) { Tick = session.World.Tick });
+                session.ApplyPausedCommandsNow();
+                con.Print("unequip backpack: the worn backpack is removed and destroyed with its contents (it is never dropped and never put into the grids)");
+                return;
+            }
             if (player.ControlUnequip(string.Join(' ', args), out string m)) con.Print(m); else con.Error(m);
+        });
+
+        add("strip-inventory", "strip-inventory", "the first selected character loses EVERY carried item: grids, worn clothing and weapons, the backpack with its contents are destroyed (prosthetic limbs and locked shackles stay); nothing is dropped; for test characters before a persona", (args, con) =>
+        {
+            if (!loaded(con)) return;
+            var who = player.ControlOrderers();
+            if (who.Count == 0) { con.Error("refused: no character selected (use select first)"); return; }
+            session.World.Commands.Enqueue(new DebugStripItems(who[0], false) { Tick = session.World.Tick });
+            session.ApplyPausedCommandsNow();
+            con.Print($"strip-inventory: every carried item of {who[0]} destroyed (nothing dropped)");
         });
 
         add("find-item", "find-item <text> [--type armour|weapon|item|crossbow|container] [--limit n] [--stats]", "search the item records (the ones give can hand out) whose name or key contains the text, ignoring case; reply data.items[] has record (a key give and equip take), name, type and, with --stats, the record's numbers (floats, ints) and the names its references point to; default limit 20, at most 200", (args, con) =>
