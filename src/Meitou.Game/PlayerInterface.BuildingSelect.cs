@@ -63,11 +63,13 @@ sealed partial class PlayerInterface
         float limit = GroundHit(ray.Origin, ray.Direction) is { } groundPoint ? Vector3.Distance(ray.Origin, groundPoint) : 6000;
         float bestT = limit;
         SelectedBuilding? best = null;
-        if (PickSiteAt(pixel) is { } site && site.T < bestT)
+        var site = PickSiteAt(pixel);
+        if (site is { } nearest && nearest.T < bestT)
         {
-            bestT = site.T;
-            best = SiteBuilding(site.Site);
+            bestT = nearest.T;
+            best = SiteBuilding(nearest.Site);
         }
+        Meitou.Navigation.PlacedBuilding? level = null;
         if (buildHost is { } host)
             foreach (var candidate in host.Placement.StaticAlong(ray.Origin, ray.Direction, limit))
             {
@@ -78,12 +80,26 @@ sealed partial class PlayerInterface
                     : BuildingRayT(ray, hull, candidate.Footprint.YMin, candidate.Footprint.YMax, b.BuildingId, b.Position, y, b.Rotation);
                 if (hit is not { } t || t >= bestT) continue;
                 bestT = t;
+                level = candidate;
                 var info = host.WorldInfo(b);
                 best = new(info.Name, info.Type, info.Owner, info.Town, null, b.Key, new Vector3(b.Position.X, y, b.Position.Z), hull, info.PublicDay, info.PublicNight, b.BuildingId, info.Destroyed);
             }
+        if (level is { } shown && site is { } inner && inner.T > bestT && SiteShownInside(ray, shown, inner))
+        {
+            bestT = inner.T;
+            best = SiteBuilding(inner.Site);
+        }
         if (PickRockAt(pixel) is { } rock && rock.T < bestT) best = RockBuilding(rock.Rock);
         return best;
     }
+
+    /// <summary>
+    /// Whether a site met behind a level building's hit stands inside that building and the view shows it there (furniture in a bought house): the level building is tested against its
+    /// whole collision, roof included, while the original passes a building's hidden roof and upper floors in the interior view (docs/game/ui-input.md "Building picking and selection").
+    /// </summary>
+    bool SiteShownInside((Vector3 Origin, Vector3 Direction) ray, Meitou.Navigation.PlacedBuilding level, (Meitou.Simulation.Construction.BuildingSnapshot Site, float T) site) =>
+        !level.Plot && !Hidden(ray, site.T)
+        && level.Footprint.Gap(level.Placement.Position, level.Placement.Rotation, new Vector2(site.Site.Position.X, site.Site.Position.Z)) == 0;
 
     /// <summary>The colour of the [PAUSED] caption (the exe's static <c>#777777</c>).</summary>
     const string PausedColour = "777777";
