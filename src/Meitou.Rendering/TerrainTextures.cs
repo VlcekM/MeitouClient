@@ -593,7 +593,7 @@ public sealed unsafe class TerrainTextures : IDisposable
     void GrowNear()
     {
         int want = Math.Min(Math.Min(pairs.Count, NearLayers * Math.Max(Areas, 1)), MaxNearSlots);
-        if (want <= Capacity || want >= nearRefused || inFlight > 0 || nearLoading > 0 || diffuseArray is null || normalArray is null) return;
+        if (GpuContext.DiagNoGrow || want <= Capacity || want >= nearRefused || inFlight > 0 || nearLoading > 0 || diffuseArray is null || normalArray is null) return;
         if (Guard is { } guard && !guard.Allows((ulong)Bytes(layerSize, levelCount, want)))
         {
             nearRefused = want;

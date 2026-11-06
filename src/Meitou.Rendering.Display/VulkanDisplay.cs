@@ -111,6 +111,12 @@ public sealed unsafe class VulkanDisplay : IDisposable
         Console.WriteLine($"vulkan    {Device.DeviceName}{validationMode}");
         if (GpuContext.DiagSubmit || GpuContext.DiagIdle)
             Console.WriteLine($"diagnostic{(GpuContext.DiagSubmit ? " MEITOU_DIAG_SUBMIT" : "")}{(GpuContext.DiagIdle ? " MEITOU_DIAG_IDLE" : "")} on (issue #108; slower frames)");
+        if (GpuContext.DiagNoMaterialCache || GpuContext.DiagNoGrow)
+        {
+            string cache = GpuContext.DiagNoMaterialCache ? " MEITOU_DIAG_NO_MATERIAL_CACHE" : "";
+            string grow = GpuContext.DiagNoGrow ? " MEITOU_DIAG_NO_GROW" : "";
+            Console.WriteLine($"diagnostic{cache}{grow} on (issue #319)");
+        }
         Context = new GpuContext(Device);
         if (options is not null)
         {
