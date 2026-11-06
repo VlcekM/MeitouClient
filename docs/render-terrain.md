@@ -215,7 +215,7 @@ Meitou look, not in the game; the `trails` switch (Tab "Ground trails"), off by 
 or save change, and marks are lost when the window moves past them. Vulkan host only (`GameHost.Metal` never makes the renderer).
 
 - **Image** (`TerrainTrailRenderer`): R16F, 2048², texel 0.25 units (8 MB), a height: 0 untouched, -1 pressed in full (0.6 units, 6 cm), above 0 a rim. Addressed toroidally
-  as the material cache's levels, the origin snapped to 64 texels, so it reaches 240 units from the eye; the columns and rows the window gains are wiped, all of it after a jump.
+  as the material cache's levels, the origin snapped to 64 texels, so it reaches 240 units from the camera's target (the strategy camera's pivot; not the eye, so zooming keeps the marks); the columns and rows the window gains are wiped, all of it after a jump.
   Shown fading over the window's outer tenth. A frame with nothing to change records nothing.
 - **Marks** (`GameHost.Trails`, within that reach, not carried, in bed or caged): a person's posed foot presses a sole the frame it lands: it moved over 1.2 times the body's
   speed (swinging) and now under 0.4 times (standing in the world), which needs no rig data. Its heading is the toe bone's. Animals, and people whose feet were not posed,

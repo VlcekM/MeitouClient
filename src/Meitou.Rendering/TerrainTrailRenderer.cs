@@ -20,8 +20,8 @@ public enum TrailKind { Foot, Paw, Drag }
 public readonly record struct TrailStamp(Vector2 Centre, Vector2 Along, float Length, float Width, float Strength, TrailKind Kind);
 
 /// <summary>
-/// The ground trails (docs/render-terrain.md "Ground trails"): a height in a world-anchored R16F image round the eye, addressed toroidally (texel = world mod
-/// side, as the material cache's levels), which the terrain's colour programs read as a normal and a height offset. As the eye moves the window keeps its
+/// The ground trails (docs/render-terrain.md "Ground trails"): a height in a world-anchored R16F image round the camera's target (not the eye, which zooming moves), addressed toroidally (texel = world mod
+/// side, as the material cache's levels), which the terrain's colour programs read as a normal and a height offset. As the target moves the window keeps its
 /// texels and clears the strips it gains; marks are stamped as instanced quads, and the wind and rain wear them all down by one quad blended over the
 /// image, only when enough has worn off to count, so a calm frame with nobody walking records nothing. Render side only: nothing here is saved.
 /// </summary>
@@ -34,7 +34,7 @@ public sealed unsafe class TerrainTrailRenderer : IDisposable
     /// <summary>A full mark's depth in world units (6 cm).</summary>
     public const float Depth = 0.6f;
 
-    /// <summary>How far from the eye marks are kept: the window's half side, less the snap it can lag by.</summary>
+    /// <summary>How far from the camera's target marks are kept: the window's half side, less the snap it can lag by.</summary>
     public const float Reach = (Side / 2 - Snap) * Texel;
 
     // The wearing: per game second, 1 / the time a mark takes to fall to 37%: still air, per unit of wind speed (60 units/s, the default weather's top: 150 s),
@@ -148,14 +148,14 @@ public sealed unsafe class TerrainTrailRenderer : IDisposable
     }
 
     /// <summary>
-    /// The frame's marks: the window moved to <paramref name="eye"/>, the wearing of <paramref name="gameSeconds"/> at <paramref name="rain"/> (0 to 1) and
+    /// The frame's marks: the window moved to <paramref name="centre"/>, the wearing of <paramref name="gameSeconds"/> at <paramref name="rain"/> (0 to 1) and
     /// <paramref name="wind"/> (units/s), then the queued stamps. Before the scene (outside a pass).
     /// </summary>
-    public void Record(Vector3 eye, float gameSeconds, float rain, float wind)
+    public void Record(Vector3 centre, float gameSeconds, float rain, float wind)
     {
         Ensure();
         count = 0;
-        Move(eye);
+        Move(centre);
         Wear(gameSeconds, rain, wind);
         foreach (var s in stamps) AddStamp(s);
         stamps.Clear();
@@ -172,10 +172,10 @@ public sealed unsafe class TerrainTrailRenderer : IDisposable
         fresh = true;
     }
 
-    /// <summary>The window to <paramref name="eye"/>: the columns and rows it gains are wiped (their texels held what it left behind); all of it after a jump.</summary>
-    void Move(Vector3 eye)
+    /// <summary>The window to <paramref name="centre"/>: the columns and rows it gains are wiped (their texels held what it left behind); all of it after a jump.</summary>
+    void Move(Vector3 centre)
     {
-        int x = Snapped(eye.X), z = Snapped(eye.Z);
+        int x = Snapped(centre.X), z = Snapped(centre.Z);
         if (origin is not { } was || Math.Abs(x - was.X) >= Side || Math.Abs(z - was.Z) >= Side) WipeRange(0, Side, 0, Side, 1);
         else
         {

@@ -9,7 +9,7 @@ using Meitou.Simulation;
 namespace Meitou.Game;
 
 /// <summary>
-/// The ground trails (docs/render-terrain.md "Ground trails"): with the <c>trails</c> switch on, the characters near the eye press marks into the soft ground, read from the
+/// The ground trails (docs/render-terrain.md "Ground trails"): with the <c>trails</c> switch on, the characters near what the camera looks at press marks into the soft ground, read from the
 /// shown snapshots and the posed feet only. Display only: the simulation is not affected and nothing is saved.
 /// </summary>
 sealed partial class GameHost
@@ -46,7 +46,7 @@ sealed partial class GameHost
         public int Frame;
     }
 
-    /// <summary>Once a frame, before the world is drawn: the marks the characters near the eye press this frame.</summary>
+    /// <summary>Once a frame, before the world is drawn: the marks the characters near what the camera looks at press this frame (the renderer's window is centred there).</summary>
     void UpdateTrails()
     {
         if (!TerrainTrails.Enabled || trailContext is null || scene.Database is not { } db)
@@ -64,11 +64,11 @@ sealed partial class GameHost
         }
         trailFrame++;
         IndexPrevious();
-        var eye = camera.Eye;
+        var focus = camera.Target;
         float alpha = session.SimulationAlpha;
         foreach (var c in session.CurrentSnapshot.Characters)
         {
-            var flat = new Vector2(c.Position.X - eye.X, c.Position.Z - eye.Z);
+            var flat = new Vector2(c.Position.X - focus.X, c.Position.Z - focus.Z);
             if (flat.LengthSquared() > TerrainTrailRenderer.Reach * TerrainTrailRenderer.Reach || c.Appearance is null) continue;
             if (!c.CarriedBy.IsNone || c.InBed || c.Imprisoned) continue;
             WalkTrail(trails, ground, c, previousById.TryGetValue(c.Id, out var before) ? Vector3.Lerp(before.Position, c.Position, alpha) : c.Position);
@@ -150,23 +150,23 @@ sealed partial class GameHost
         if (soft > 0) trails.Stamp(stamp with { Strength = stamp.Strength * soft });
     }
 
-    /// <summary>How far from the eye a character makes a wake, and the slowest it does so at (units/s).</summary>
+    /// <summary>How far from what the camera looks at a character makes a wake, and the slowest it does so at (units/s).</summary>
     const float WakeReach = 800, WakeMinSpeed = 1;
 
     readonly Vector4[] wakeRows = new Vector4[WaterRenderer.MaxWakes];
     readonly float[] wakeDistances = new float[WaterRenderer.MaxWakes];
 
-    /// <summary>Once a frame: the characters moving in the water nearest the eye, for the <c>contactfoam</c> switch's wakes (docs/render-water.md "Contact foam").</summary>
+    /// <summary>Once a frame: the characters moving in the water nearest what the camera looks at, for the <c>contactfoam</c> switch's wakes (docs/render-water.md "Contact foam").</summary>
     void UpdateWakes()
     {
         if (!WaterContact.Enabled || gpu.Water is not { } water) return;
         IndexPrevious();
-        var eye = camera.Eye;
+        var focus = camera.Target;
         float alpha = session.SimulationAlpha, tick = session.World.TickSeconds;
         int n = 0;
         foreach (var c in session.CurrentSnapshot.Characters)
         {
-            float distance = new Vector2(c.Position.X - eye.X, c.Position.Z - eye.Z).Length();
+            float distance = new Vector2(c.Position.X - focus.X, c.Position.Z - focus.Z).Length();
             if (distance > WakeReach || c.Position.Y >= WorldWater.Height || c.Appearance is null || !c.CarriedBy.IsNone) continue;
             if (!previousById.TryGetValue(c.Id, out var before)) continue;
             var velocity = new Vector2(c.Position.X - before.Position.X, c.Position.Z - before.Position.Z) / tick;

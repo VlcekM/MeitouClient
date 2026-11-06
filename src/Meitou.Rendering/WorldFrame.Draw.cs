@@ -411,17 +411,17 @@ static partial class WorldFrame
         if (gpu.Decals is { } decals && gpu.DecalStore is { } decalStore) decals.Record(decalStore, f.Eye);
         gpu.Terrain.RecordMaterialCache(f.Eye);
         gpu.Terrain.Decals = gpu.DecalStore is null ? null : gpu.Decals;
-        RecordTrails(gpu, f.Eye);
+        RecordTrails(gpu, f.Camera.Target);
     }
 
-    /// <summary>The ground trails near the eye (docs/render-terrain.md "Ground trails"), worn by the weather at the camera, before any terrain draw reads them.</summary>
-    static void RecordTrails(Gpu gpu, Vector3 eye)
+    /// <summary>The ground trails round what the camera looks at (docs/render-terrain.md "Ground trails"; not the eye, which zooming moves), worn by the weather, before any terrain draw reads them.</summary>
+    static void RecordTrails(Gpu gpu, Vector3 focus)
     {
         var trails = TerrainTrails.Enabled ? gpu.Trails : null;
         gpu.Terrain.Trails = trails;
         if (trails is null) return;
         var weather = gpu.Weather;
-        trails.Record(eye, weather?.Times.Game ?? 0, WeatherSurfaces.RainAmount(gpu.Surfaces?.Rain ?? 0), weather?.State.WindSpeed ?? 0);
+        trails.Record(focus, weather?.Times.Game ?? 0, WeatherSurfaces.RainAmount(gpu.Surfaces?.Rain ?? 0), weather?.State.WindSpeed ?? 0);
     }
 
     /// <summary>

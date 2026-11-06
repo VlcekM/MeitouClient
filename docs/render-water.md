@@ -63,7 +63,7 @@ Meitou look, not in the game; the `contactfoam` switch (Tab "Water contact foam"
 - **Contact**: `sceneThickness` under a band of 1.5 to 4 units (wandering with the foam's noise), where the ray's end stands 1 to 3 units or more above the terrain under the point:
   rocks, posts, walls and legs; the shore keeps its own foam. Needs the scene depth: with `--no-water-refraction` the switch asks for the copy itself within its reach. The last 2 units'
   fade (Edges) lets the foam through. Shallow bumps of displaced ground can pass the test: **Unknown** if it shows.
-- **Wakes** (`GameHost.UpdateWakes`, the 8 nearest within 800 units with feet under Y 100, moving over 1 unit/s; `WaterRenderer.SetWakes`): a ring round the body and two arms at 19.5 degrees trailing as far as the speed in units, up to 40. Live in the constants: nothing lasts on the water behind them.
+- **Wakes** (`GameHost.UpdateWakes`, the 8 nearest the camera's target within 800 units with feet under Y 100, moving over 1 unit/s; `WaterRenderer.SetWakes`): a ring round the body and two arms at 19.5 degrees trailing as far as the speed in units, up to 40. Live in the constants: nothing lasts on the water behind them.
 
 ## Safe work skips
 
