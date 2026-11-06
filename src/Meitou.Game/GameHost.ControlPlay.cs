@@ -20,18 +20,21 @@ sealed partial class GameHost
         }
         void Result(DevConsole con, bool ok, string message) { if (ok) con.Print(message); else con.Error(message); }
 
-        add("observe", "observe [--radius <m>] [--full]", "one JSON for a decision: time, speed, the squad (hp, limbs, hunger, task, inventory, skills), what is near (threats, allies, neutrals, animals, traders, bodies), loose items, buildings, containers, machines, research, score. Default radius 120; --full lifts the list caps", (args, con) =>
+        add("observe", "observe [--radius <m>] [--full] | observe --brief [--changed]", "--brief: about 200 bytes for polling (tick, clock, paused, speed, lead id/name/pos[x,z]/state/hp fraction/task/order, threat = nearest hostile distance, squad alive/total, money); --brief --changed: only the fields that differ from the last brief call (tick always). Plain: one JSON for a decision: time, speed, the squad (hp, limbs, hunger, task, inventory, skills), what is near (threats, allies, neutrals, animals, traders, bodies), loose items, buildings, containers, machines, research, score. Default radius 120; --full lifts the list caps", (args, con) =>
         {
             if (!loaded(con)) return;
             float radius = 120;
-            bool full = false;
+            bool full = false, brief = false, changed = false;
             for (int a = 0; a < args.Count; a++)
             {
                 if (args[a].Equals("--full", StringComparison.OrdinalIgnoreCase)) full = true;
+                else if (args[a].Equals("--brief", StringComparison.OrdinalIgnoreCase)) brief = true;
+                else if (args[a].Equals("--changed", StringComparison.OrdinalIgnoreCase)) changed = true;
                 else if (args[a].Equals("--radius", StringComparison.OrdinalIgnoreCase) && a + 1 < args.Count && Num(args[a + 1], out radius) && radius > 0) a++;
-                else { con.Error("usage: observe [--radius <m>] [--full]"); return; }
+                else { con.Error("usage: observe [--radius <m>] [--full] | observe --brief [--changed]"); return; }
             }
-            string json = player.ControlObserveJson(radius, full);
+            if (changed && !brief) { con.Error("usage: observe --brief [--changed]"); return; }
+            string json = brief ? player.ControlBriefJson(changed) : player.ControlObserveJson(radius, full);
             controlData = json;
             con.Print(json);
         });

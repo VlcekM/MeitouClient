@@ -452,6 +452,66 @@ sealed partial class PlayerInterface
         w.WriteEndObject();
     }
 
+    /// <summary>The values of the last <c>observe --brief</c> (raw JSON per field), for <c>--changed</c>.</summary>
+    Dictionary<string, string>? lastBrief;
+
+    /// <summary>
+    /// The terse state for polling (<c>observe --brief</c>, about 200 bytes): tick, clock, paused, speed, the lead's id, name, position [x,z], state, hp fraction, task, order, the squad as "alive/total",
+    /// the nearest hostile's distance (null: none) and money. With <paramref name="changedOnly"/> only the fields that differ from the last brief call (always <c>tick</c>); the first call gives all.
+    /// </summary>
+    public string ControlBriefJson(bool changedOnly)
+    {
+        var snap = session.CurrentSnapshot;
+        var world = session.World;
+        var squad = snap.Characters.Where(c => c.IsPlayer).ToList();
+        var lead = squad.FirstOrDefault(c => c.Selected) ?? squad.FirstOrDefault();
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        string Str(string? v) => v is null ? "null" : JsonSerializer.Serialize(v);
+        var f = new List<(string Key, string Value)>();
+        double hour = session.Clock.HourOfDay;
+        f.Add(("tick", world.Tick.ToString(inv)));
+        f.Add(("clock", Str($"{(int)hour:00}:{(int)((hour - Math.Floor(hour)) * 60):00}")));
+        f.Add(("paused", session.Simulation.IsPaused ? "true" : "false"));
+        f.Add(("speed", session.Simulation.Speed.ToString(inv)));
+        if (lead is null) { f.Add(("lead", "null")); }
+        else
+        {
+            var at = where(lead);
+            f.Add(("lead", Str(CharacterKey(lead.Id))));
+            f.Add(("name", Str(lead.Name)));
+            f.Add(("pos", $"[{Math.Round(at.X, 1).ToString(inv)},{Math.Round(at.Z, 1).ToString(inv)}]"));
+            f.Add(("state", Str(StateWord(lead))));
+            double max = lead.HealthParts.Sum(p => (double)p.Maximum);
+            f.Add(("hp", max > 0 ? Math.Round(lead.HealthParts.Sum(p => (double)Math.Max(0, p.Flesh)) / max, 2).ToString(inv) : "null"));
+            f.Add(("task", Str(lead.Task.ToString())));
+            f.Add(("order", Str(lead.Activity is { Length: > 0 } a ? a : lead.Task.ToString())));
+            var flat = new Vector2(at.X, at.Z);
+            double? threat = null;
+            foreach (var c in snap.Characters)
+            {
+                if (c.IsPlayer || c.Animal || c.Body is { Dead: true } or { Unconscious: true } || !(c.HostileToPlayer || c.FightsPlayer)) continue;
+                var p = where(c);
+                double d = Vector2.Distance(new Vector2(p.X, p.Z), flat);
+                if (threat is null || d < threat) threat = d;
+            }
+            f.Add(("threat", threat is { } t ? Math.Round(t, 1).ToString(inv) : "null"));
+        }
+        f.Add(("squad", Str($"{squad.Count(c => c.Body is { Dead: false, Unconscious: false })}/{squad.Count}")));
+        f.Add(("money", world.Player.Money.ToString(inv)));
+        var previous = lastBrief;
+        lastBrief = f.ToDictionary(x => x.Key, x => x.Value);
+        var sb = new StringBuilder("{");
+        bool first = true;
+        foreach (var (key, value) in f)
+        {
+            if (changedOnly && previous is not null && key != "tick" && previous.TryGetValue(key, out var old) && old == value) continue;
+            if (!first) sb.Append(',');
+            first = false;
+            sb.Append('"').Append(key).Append("\":").Append(value);
+        }
+        return sb.Append('}').ToString();
+    }
+
     /// <summary>
     /// The one JSON for a decision (docs/procedures/agent-play-api.md): time, speed, the squad, what is near (threats, allies, neutrals, animals, traders, bodies), loose items, buildings, containers, machines, research,
     /// resources (null: no cheap listing exists) and a score object. Lists are cut at a fixed length with the full count beside them.
