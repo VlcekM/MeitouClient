@@ -76,7 +76,7 @@ sealed partial class PlayerInterface
                 if (hit is not { } t || t >= bestT) continue;
                 bestT = t;
                 var info = host.WorldInfo(b);
-                best = new(UiMode == Meitou.Data.Ui.UiMode.Meitou && info.Sells is { } sells ? sells : info.Name, info.Type, info.Owner, info.Town, null, b.Key, new Vector3(b.Position.X, y, b.Position.Z), hull, info.PublicDay, info.PublicNight, b.BuildingId, info.Destroyed);
+                best = new(info.Name, info.Type, info.Owner, info.Town, null, b.Key, new Vector3(b.Position.X, y, b.Position.Z), hull, info.PublicDay, info.PublicNight, b.BuildingId, info.Destroyed);
             }
         if (PickRockAt(pixel) is { } rock && rock.T < bestT) best = RockBuilding(rock.Rock);
         return best;

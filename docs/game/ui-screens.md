@@ -651,8 +651,9 @@ How a building gets selected: [ui-input](ui-input.md#building-picking-and-select
   building is lives in the SQUAD_TEMPLATE named by the state's `squad template`: `building name` ("The Dancing Skeleton") and, for a
   trader, its `vendors` VENDOR_LISTs ("medical and travel supplies"). The owner's screenshot shows "The Dancing Skeleton" in the name
   bar with `Type:` the record. Housing sets `name` (**Verified**) and `squad template` (**Observed**, [town residents](factions-squads-towns.md#town-residents)). Meitou names the building from
-  a loaded save's state, else the level state as the boot housed it: `building name` when set, else `name`, else the record; and, in the Meitou UI mode only, a trader's shop whose
-  state name is only its layout's generic one ("Shop") from its first vendor list ("Medical and travel supplies"); the Faithful UI keeps "Shop".
+  a loaded save's state, else the level state as the boot housed it: `building name` when set, else `name`, else the record, in both UI modes. VENDOR_LIST names are editor
+  labels, not display text (**Observed**, base data: `weapon vendor UC big city` is the only vendor list of template `weapon vendor UC big`, whose `layout interior`
+  "Weapon Shop" names the Heng shop it houses).
   Meitou (`PlayerInterface.BuildingSelect.cs`): the header word (Normal, Broken, or a site's construction state); the condition rows as above, the bar
   in the yellow layer, a finished building's progress being its target (Meitou models no building damage) and the target of a world building or door
   the sum of its BUILDING record's materials; the player's own site gets Dismantle (the furniture text when anything stands in it, else "Are you sure?"; Yes dismantles it at once, `ConfirmDismantle`;
