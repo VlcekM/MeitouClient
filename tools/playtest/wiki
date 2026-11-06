@@ -1,0 +1,172 @@
+#!/usr/bin/env -S python3 -I
+# wiki <command>   query and extend a local agent-playtest wiki (JSON files; no data ships with the repo). python3 only, no dependencies.
+#   wiki find <text>             name/alias/id/faction/region/notes match over all files, max 10 lines: id | kind | x z | V(erified)/u | name
+#   wiki show <id>               full entry (JSON)
+#   wiki near <x> <z> [--kind K] [--n 5]   nearest entries with coordinates, by distance
+#   wiki tp <id>                 prints the exact `tp x z` line; warns (stderr, exit 3) when unverified or x/z null (exit 4 when null)
+#   wiki kinds                   kinds and counts
+#   wiki add <file.json|->       validate and append/update entries by id (object or array); never deletes; then re-syncs
+#   wiki check                   schema, duplicate ids, JSON validity; exit 1 on errors
+# Data folder: env WIKI_DIR, else <repo>/wiki (create it with: cp -r tools/playtest/wiki.example wiki). Schema and rules: docs/agent-playtest.md, section 'Build your own wiki'.
+import json, os, sys, glob, math, re
+HERE = os.path.dirname(os.path.abspath(__file__))
+ROOT = os.path.abspath(os.path.join(HERE, '..', '..'))
+W = os.environ.get('WIKI_DIR') or os.path.join(ROOT, 'wiki')
+if not os.path.isdir(W): sys.exit('wiki: no data folder %s (cp -r tools/playtest/wiki.example wiki, or set WIKI_DIR)' % W)
+FILES = ['zones', 'towns', 'npcs', 'items', 'factions']
+FIELDS = ['id', 'name', 'aliases', 'kind', 'faction', 'region', 'x', 'z', 'zone', 'verified', 'verifiedOn', 'seen', 'source', 'confidence', 'notes']
+CONF = ('Observed', 'Inferred', 'Unknown')
+PFIELDS = ['id', 'name', 'what', 'command', 'source', 'confidence', 'verifiedOn']
+
+def load(n):
+    with open(os.path.join(W, n + '.json')) as f: return json.load(f)
+def save(n, d):
+    with open(os.path.join(W, n + '.json'), 'w') as f:
+        json.dump(d, f, indent=1, ensure_ascii=False); f.write('\n')
+def entries():
+    out = []
+    for n in FILES:
+        for e in load(n): out.append((n, e))
+    return out
+def num(v): return isinstance(v, (int, float)) and not isinstance(v, bool)
+def validate(e, fname=''):
+    errs = []
+    if not isinstance(e, dict): return ['not an object']
+    for k in FIELDS:
+        if k not in e: errs.append('missing field ' + k)
+    for k in e:
+        if k not in FIELDS: errs.append('unknown field ' + k)
+    if errs: return errs
+    if not re.fullmatch(r'[a-z0-9]+(-[a-z0-9]+)*', str(e['id'])): errs.append('id must be a slug')
+    if not isinstance(e['name'], str) or not e['name']: errs.append('name must be text')
+    if not isinstance(e['aliases'], list): errs.append('aliases must be a list')
+    if not isinstance(e['kind'], str) or not e['kind']: errs.append('kind must be text')
+    for k in ('x', 'z'):
+        if e[k] is not None and not num(e[k]): errs.append(k + ' must be a number or null')
+    if (e['x'] is None) != (e['z'] is None): errs.append('x and z must both be null or both numbers')
+    if not isinstance(e['verified'], bool): errs.append('verified must be true/false')
+    if e['verified'] and not e['verifiedOn']: errs.append('verified true needs verifiedOn')
+    if e['confidence'] not in CONF: errs.append('confidence must be one of %s' % ', '.join(CONF))
+    if not e['source']: errs.append('source required')
+    for k in ('seen', 'notes'):
+        if not isinstance(e[k], str): errs.append(k + ' must be text')
+    return errs
+def xz(e): return '%s %s' % (int(e['x']), int(e['z'])) if e['x'] is not None else '-'
+def line(e): return '%s | %s | %s | %s | %s' % (e['id'], e['kind'], xz(e), 'V' if e['verified'] else 'u', e['name'])
+def all_rows():
+    rows = [(n, e) for n, e in entries()]
+    return rows
+def cmd_find(a):
+    q = ' '.join(a).lower().strip()
+    if not q: sys.exit('usage: wiki find <text>')
+    scored = []
+    for n, e in entries():
+        names = [e['name'].lower(), e['id']] + [x.lower() for x in e['aliases']]
+        s = 0
+        if q in names: s = 100
+        elif any(q in x for x in names): s = 50
+        elif any(q in (e[k] or '').lower() for k in ('faction', 'region', 'zone', 'kind')): s = 20
+        elif q in (e['notes'] + ' ' + e['seen']).lower(): s = 10
+        if s: scored.append((-s, 0 if e['verified'] else 1, e['id'], line(e)))
+    extra = []
+    for fn in ('commands', 'personas'):
+        p = os.path.join(W, fn + '.json')
+        if os.path.exists(p):
+            for e in load(fn):
+                blob = (e['id'] + ' ' + e['name'] + ' ' + e.get('usage', e.get('what', ''))).lower()
+                if q in blob: extra.append('%s | %s | %s' % (e['id'], fn[:-1], e.get('usage') or e.get('command')))
+    scored.sort()
+    out = [t[3] for t in scored][:10]
+    out += extra[:max(0, 10 - len(out))]
+    print('\n'.join(out) if out else 'no match for "%s" (try fewer words; wiki kinds)' % q)
+def get(i):
+    for n, e in entries():
+        if e['id'] == i: return n, e
+    for fn in ('commands', 'personas'):
+        if not os.path.exists(os.path.join(W, fn + '.json')): continue
+        for e in load(fn):
+            if e['id'] == i: return fn, e
+    return None, None
+def cmd_show(a):
+    if not a: sys.exit('usage: wiki show <id>')
+    n, e = get(a[0])
+    if not e: sys.exit('no entry with id "%s" (wiki find <text>)' % a[0])
+    print('# file: %s.json' % n); print(json.dumps(e, indent=1, ensure_ascii=False))
+def cmd_near(a):
+    kind = None; n = 5; pos = []
+    i = 0
+    while i < len(a):
+        if a[i] == '--kind': kind = a[i + 1]; i += 2
+        elif a[i] == '--n': n = int(a[i + 1]); i += 2
+        else: pos.append(a[i]); i += 1
+    if len(pos) != 2: sys.exit('usage: wiki near <x> <z> [--kind K] [--n 5]')
+    x, z = float(pos[0]), float(pos[1])
+    r = [(math.hypot(e['x'] - x, e['z'] - z), e) for _, e in entries() if e['x'] is not None and (not kind or e['kind'] == kind)]
+    r.sort(key=lambda t: t[0])
+    for d, e in r[:n]: print('%6d m | %s' % (d, line(e)))
+    if not r: print('none with coordinates' + (' for kind ' + kind if kind else ''))
+def cmd_tp(a):
+    if not a: sys.exit('usage: wiki tp <id>')
+    n, e = get(a[0])
+    if not e or 'x' not in e: sys.exit('no placed entry with id "%s"' % a[0])
+    if e['x'] is None:
+        print('WARNING: %s has no known position (x/z null); do not guess. Use the zone/town entry or pages/finding-npcs.md.' % e['id'], file=sys.stderr); sys.exit(4)
+    print('tp %s' % xz(e))
+    if not e['verified']:
+        print('WARNING: %s is not verified in game (confidence %s); expect to check with observe --brief and report back with wiki add.' % (e['id'], e['confidence']), file=sys.stderr); sys.exit(3)
+def merge_add(src):
+    d = json.load(sys.stdin if src == '-' else open(src))
+    if isinstance(d, dict): d = [d]
+    kinds_file = None
+    bad = 0; res = []
+    existing = {e['id']: (n, e) for n, e in entries()}
+    for e in d:
+        errs = validate(e)
+        if errs: print('REJECT %s: %s' % (e.get('id') if isinstance(e, dict) else '?', '; '.join(errs))); bad += 1; continue
+        if e['id'] in existing: fn = existing[e['id']][0]
+        else:
+            fn = {'zone': 'zones', 'quiet-spot': 'zones', 'spawn': 'zones', 'town': 'towns', 'camp': 'towns', 'bandit-hq': 'towns', 'shop': 'towns', 'npc': 'npcs', 'faction': 'factions'}.get(e['kind'])
+            if not fn: fn = 'items'
+        data = load(fn); ids = [x['id'] for x in data]
+        if e['id'] in ids: data[ids.index(e['id'])] = e; res.append('updated %s (%s.json)' % (e['id'], fn))
+        else: data.append(e); res.append('added %s (%s.json)' % (e['id'], fn))
+        save(fn, data)
+        existing[e['id']] = (fn, e)
+    print('\n'.join(res))
+    if bad: sys.exit(1)
+def cmd_add(a):
+    if not a: sys.exit('usage: wiki add <file.json|->')
+    merge_add(a[0])
+def cmd_kinds(a):
+    c = {}
+    for n, e in entries(): c.setdefault((n, e['kind']), [0, 0]); c[(n, e['kind'])][0] += 1; c[(n, e['kind'])][1] += e['verified']
+    for (n, k), (t, v) in sorted(c.items()): print('%s | %s | %d entries, %d verified' % (n, k, t, v))
+def cmd_check(a):
+    errs = []; seen = {}; names = {}
+    for n in FILES + ['personas', 'commands']:
+        if n in ('personas', 'commands') and not os.path.exists(os.path.join(W, n + '.json')): continue
+        try: d = load(n)
+        except Exception as ex: errs.append('%s.json: %s' % (n, ex)); continue
+        if not isinstance(d, list): errs.append('%s.json is not a list' % n); continue
+        for e in d:
+            if n == 'commands':
+                if not all(k in e for k in ('id', 'name', 'usage')): errs.append('commands.json: bad entry %s' % e)
+                continue
+            if n == 'personas':
+                m = [k for k in PFIELDS if k not in e]
+                if m: errs.append('personas.json %s: missing %s' % (e.get('id'), m))
+                continue
+            for x in validate(e): errs.append('%s.json %s: %s' % (n, e.get('id') if isinstance(e, dict) else '?', x))
+            i = e.get('id')
+            if i in seen: errs.append('duplicate id %s (%s.json and %s.json)' % (i, seen[i], n))
+            seen[i] = n
+            nk = (e.get('kind'), (e.get('name') or '').lower())
+            if nk in names: errs.append('duplicate name %s (%s and %s)' % (e.get('name'), names[nk], i))
+            names[nk] = i
+    print('\n'.join(errs) if errs else 'wiki ok: %d entries' % len(seen)); sys.exit(1 if errs else 0)
+def cmd_sync(a):
+    pass   # nothing to regenerate in a local wiki
+C = {'find': cmd_find, 'show': cmd_show, 'near': cmd_near, 'tp': cmd_tp, 'kinds': cmd_kinds, 'add': cmd_add, 'check': cmd_check}
+if len(sys.argv) < 2 or sys.argv[1] not in C:
+    print(open(__file__).read().split('import json')[0].replace('#!/usr/bin/env -S python3 -I\n', ''), end=''); sys.exit(2)
+C[sys.argv[1]](sys.argv[2:])
