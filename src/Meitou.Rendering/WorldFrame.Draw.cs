@@ -24,7 +24,7 @@ static partial class WorldFrame
         // BeginFrame: the render size (smaller than the display with an upscaler), the upscaler's jitter, the eye.
         public int RenderWidth, RenderHeight;
         public Vector2 Jitter;
-        public Vector3 Eye;
+        public Vector3 Eye, EyeResidual;
 
         // UpdateTerrain and PrepareSky: the ground under the eye, the floor (ground or water) under it, the sun and the sky's light.
         public float GroundUnderEye, Floor;
@@ -36,7 +36,7 @@ static partial class WorldFrame
         public bool Reflecting;
         public SceneHost Host;
         public float Aspect;
-        public Matrix4x4 View, Rotation;
+        public Matrix4x4 View, Rotation, RelativeRotation;
 
         // DrawScene, for DrawParticles: the scene's views (Near is 0 when no scene was drawn).
         public Matrix4x4 ParticleView, ParticleClose, ParticleLow, ParticleLowClose;
@@ -135,6 +135,7 @@ static partial class WorldFrame
         if (gpu.Terrain.TextureSet is { } nearRange) nearRange.PixelScale = f.Render.TerrainPixelScale;   // the terrain layers' near ranges
         f.Jitter = post.JitterPixels;
         f.Eye = f.Camera.Eye;
+        f.EyeResidual = f.Camera.EyeResidual;
         gpu.Guard?.Tick();
         return true;
     }
@@ -530,6 +531,8 @@ static partial class WorldFrame
         // Rotation only: with the eye's world position in the matrix, the directions rebuilt from it lose float
         // precision far from the origin and the sky blurs.
         var rotation = f.Rotation = view with { M41 = 0, M42 = 0, M43 = 0 };
+        // The eye-relative views (positions less f.Eye) from the precise eye: f.Eye is its float rounding, the rest a translation of under half a float step.
+        f.RelativeRotation = Matrix4x4.CreateTranslation(-f.EyeResidual) * rotation;
         var skyProjection = rotation * Jitter.Apply(camera.Projection(aspect, 1, 1000), f.Jitter, f.RenderWidth, f.RenderHeight);
 
         // The fog volume pass runs over this view's sky exactly when volumes are in view (RunFogVolumes below), so the march may leave out what they hide.
@@ -632,7 +635,7 @@ static partial class WorldFrame
         var jittered = Jitter.Apply(projection, f.Jitter, f.RenderWidth, f.RenderHeight);
         var viewProjection = f.View * jittered;
         var s = new SceneView(near, far, projection, jittered, viewProjection, WorldCamera.FrustumPlanes(viewProjection));
-        AttachMotion(ref f, s.ViewProjection, f.View * projection, s.Frustum, f.Rotation * jittered, f.Rotation * projection);
+        AttachMotion(ref f, s.ViewProjection, f.View * projection, s.Frustum, f.RelativeRotation * jittered, f.RelativeRotation * projection);
         return s;
     }
 
@@ -748,7 +751,7 @@ static partial class WorldFrame
         f.Post.CharactersDrawn = false;   // none this frame unless some are drawn below
         if (gpu.Characters is not { } characters) return;
         f.Host.Stage(StageClock.Characters);
-        characters.Draw(s.ViewProjection, f.Eye, s.Frustum, light.SunDirection, light.FogColour, light.FogDistance, f.Rotation * s.Jittered);
+        characters.Draw(s.ViewProjection, f.Eye, s.Frustum, light.SunDirection, light.FogColour, light.FogDistance, f.RelativeRotation * s.Jittered);
         f.Post.CharactersDrawn = characters.DrawnCharacters > 0;
         StageClock.Lap(StageClock.Characters);   // the colour draw; the motion draw (post chain, upscalers only) laps itself in
     }

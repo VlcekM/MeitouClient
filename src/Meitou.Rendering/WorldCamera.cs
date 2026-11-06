@@ -29,7 +29,23 @@ public sealed class WorldCamera
 
     Vector3 Back => new(MathF.Cos(Pitch) * MathF.Sin(Yaw), MathF.Sin(Pitch), MathF.Cos(Pitch) * MathF.Cos(Yaw));
 
-    public Vector3 Eye => Target + Back * Distance;
+    /// <summary>
+    /// The eye in float: the double-precision eye rounded (<see cref="EyeResidual"/> holds what the rounding left). Far from the origin a float steps by 0.004
+    /// units at 50000 and 0.016 at 200000; a target moving by less than that flipped the eye a whole step, a jump of one or two pixels for a character a few units
+    /// from it (docs/character-renderer.md "Precision").
+    /// </summary>
+    public Vector3 Eye => EyePrecise(out _);
+    /// <summary>The double-precision eye less <see cref="Eye"/>: under half a float step, exact in float. The eye-relative views take it in their translation.</summary>
+    public Vector3 EyeResidual { get { EyePrecise(out var r); return r; } }
+
+    Vector3 EyePrecise(out Vector3 residual)
+    {
+        double cp = Math.Cos(Pitch), d = Distance;
+        double x = Target.X + cp * Math.Sin(Yaw) * d, y = Target.Y + Math.Sin(Pitch) * d, z = Target.Z + cp * Math.Cos(Yaw) * d;
+        var eye = new Vector3((float)x, (float)y, (float)z);
+        residual = new Vector3((float)(x - eye.X), (float)(y - eye.Y), (float)(z - eye.Z));
+        return eye;
+    }
     public Vector3 Forward => -Back;
 
     public Matrix4x4 View => Matrix4x4.CreateLookAt(Eye, Target, Vector3.UnitY);

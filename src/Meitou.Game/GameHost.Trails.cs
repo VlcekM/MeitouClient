@@ -71,7 +71,7 @@ sealed partial class GameHost
             var flat = new Vector2(c.Position.X - focus.X, c.Position.Z - focus.Z);
             if (flat.LengthSquared() > TerrainTrailRenderer.Reach * TerrainTrailRenderer.Reach || c.Appearance is null) continue;
             if (!c.CarriedBy.IsNone || c.InBed || c.Imprisoned) continue;
-            WalkTrail(trails, ground, c, previousById.TryGetValue(c.Id, out var before) ? Vector3.Lerp(before.Position, c.Position, alpha) : c.Position);
+            WalkTrail(trails, ground, c, previousById.TryGetValue(c.Id, out var before) ? Meitou.Engine.Time.Interp.Lerp(before.Position, c.Position, alpha) : c.Position);
         }
         if (trailFrame % 256 == 0)
             foreach (var (key, w) in walkers)
@@ -171,7 +171,7 @@ sealed partial class GameHost
             if (!previousById.TryGetValue(c.Id, out var before)) continue;
             var velocity = new Vector2(c.Position.X - before.Position.X, c.Position.Z - before.Position.Z) / tick;
             if (velocity.LengthSquared() < WakeMinSpeed * WakeMinSpeed) continue;
-            var at = Vector3.Lerp(before.Position, c.Position, alpha);
+            var at = Meitou.Engine.Time.Interp.Lerp(before.Position, c.Position, alpha);
             n = AddWake(n, distance, new Vector4(at.X, at.Z, velocity.X, velocity.Y));
         }
         water.SetWakes(wakeRows.AsSpan(0, n));

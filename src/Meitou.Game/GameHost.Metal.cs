@@ -1210,7 +1210,7 @@ sealed partial class GameHost
                     var clearEye = camera.Eye;
                     float shortfall = session.Camera.EyeGroundAt(clearEye.X, clearEye.Z) +
                         Meitou.Data.World.KenshiCamera.EyeClearance(camera.Distance) - clearEye.Y;
-                    if (shortfall > 0) camera.Target += new Vector3(0, shortfall, 0);
+                    if (shortfall > 1e-3f) camera.Target += new Vector3(0, shortfall, 0);   // over a hair only (GameHost.Interactive)
                 }
                 // The pointer's Ctrl/Alt modifiers and the Highlight key (Alt): labels on the ground items near the focus, signs and the hover outlines agree.
                 ctrlHeld = Ctrl();

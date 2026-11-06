@@ -252,7 +252,7 @@ sealed partial class GameHost
         foreach (var p in now)
         {
             if (p.Mesh.Length == 0 || debris.Extent(p.Mesh, null) is null) continue;
-            var at = !p.Stuck && boltsBefore.TryGetValue(p.Id, out var b) && !b.Stuck ? Vector3.Lerp(b.Position, p.Position, alpha) : p.Position;
+            var at = !p.Stuck && boltsBefore.TryGetValue(p.Id, out var b) && !b.Stuck ? Meitou.Engine.Time.Interp.Lerp(b.Position, p.Position, alpha) : p.Position;
             // A bolt leaves the crossbow: drawn from the muzzle, it joins its simulated flight over LaunchBlend units.
             if (!p.Stuck)
             {

@@ -27,7 +27,7 @@ public readonly record struct CameraState(
         var forward = Vector3.Lerp(a.Forward, b.Forward, t);
         forward = forward.LengthSquared() < 1e-12f ? b.Forward : Vector3.Normalize(forward);
         return new CameraState(
-            Vector3.Lerp(a.Eye, b.Eye, t), forward, Vector3.UnitY, Vector3.Lerp(a.Target, b.Target, t),
+            Interp.Lerp(a.Eye, b.Eye, t), forward, Vector3.UnitY, Interp.Lerp(a.Target, b.Target, t),
             Interp.LerpAngle(a.Yaw, b.Yaw, t), Interp.LerpAngle(a.Pitch, b.Pitch, t), Interp.Lerp(a.Distance, b.Distance, t), b.IsFree);
     }
 

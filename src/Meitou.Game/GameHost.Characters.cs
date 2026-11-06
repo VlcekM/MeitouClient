@@ -82,7 +82,7 @@ sealed partial class GameHost
     Vector3 DrawnPosition(CharacterSnapshot c)
     {
         IndexPrevious();
-        var at = previousById.TryGetValue(c.Id, out var before) ? Vector3.Lerp(before.Position, c.Position, session.SimulationAlpha) : c.Position;
+        var at = previousById.TryGetValue(c.Id, out var before) ? Meitou.Engine.Time.Interp.Lerp(before.Position, c.Position, session.SimulationAlpha) : c.Position;
         return at + (c.Carry is { } carry ? MixCarry(before?.Carry, carry, session.SimulationAlpha).World(Vector3.Zero, c.Yaw).Position : Vector3.Zero);
     }
 
@@ -133,7 +133,7 @@ sealed partial class GameHost
                 before = found;
                 if (!Reanchored(found, c))
                 {
-                    position = Vector3.Lerp(found.Position, c.Position, alpha);
+                    position = Meitou.Engine.Time.Interp.Lerp(found.Position, c.Position, alpha);
                     yaw = Meitou.Engine.Time.Interp.LerpAngle(DrawnYaw(found), DrawnYaw(c), alpha);
                 }
             }
@@ -286,7 +286,7 @@ sealed partial class GameHost
                 before = found;
                 if (!Reanchored(found, c))
                 {
-                    position = Vector3.Lerp(found.Position, c.Position, alpha);
+                    position = Meitou.Engine.Time.Interp.Lerp(found.Position, c.Position, alpha);
                     yaw = Meitou.Engine.Time.Interp.LerpAngle(DrawnYaw(found), DrawnYaw(c), alpha);
                 }
             }
@@ -388,7 +388,7 @@ sealed partial class GameHost
             var b = to.Rotation[h];
             if (Quaternion.Dot(from.Rotation[h], b) < 0) b = -b;
             pose.Rotation[h] = Quaternion.Normalize(Quaternion.Lerp(from.Rotation[h], b, alpha));
-            pose.Position[h] = Vector3.Lerp(from.Position[h], to.Position[h], alpha);
+            pose.Position[h] = Meitou.Engine.Time.Interp.Lerp(from.Position[h], to.Position[h], alpha);
         }
         return pose;
     }

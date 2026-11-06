@@ -627,7 +627,9 @@ sealed partial class GameHost
             {
                 var eye = camera.Eye;
                 float shortfall = session.Camera.EyeGroundAt(eye.X, eye.Z) + Meitou.Data.World.KenshiCamera.EyeClearance(camera.Distance) - eye.Y;
-                if (shortfall > 0) camera.Target += new Vector3(0, shortfall, 0);
+                // Over a hair only: at the clearance's edge the ground read under the eye wavers by a few ten-thousandths frame to frame, and lifting by
+                // that moved the eye by a float step now and then, a jump of a pixel or two for a character close to it.
+                if (shortfall > 1e-3f) camera.Target += new Vector3(0, shortfall, 0);
             }
             var size = window.FramebufferSize;
             // Until the warm-up's frames run smoothly the water reflection draws everything and the sky its cloud volume, so their pipelines are made under the

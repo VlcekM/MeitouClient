@@ -102,7 +102,7 @@ sealed partial class GameHost
             float yaw = c.Yaw, speed = 0;
             if (previousById.TryGetValue(c.Id, out var before))
             {
-                position = Vector3.Lerp(before.Position, c.Position, alpha);
+                position = Meitou.Engine.Time.Interp.Lerp(before.Position, c.Position, alpha);
                 yaw = Meitou.Engine.Time.Interp.LerpAngle(before.Yaw, c.Yaw, alpha);
                 speed = new Vector2(c.Position.X - before.Position.X, c.Position.Z - before.Position.Z).Length() / tick;
             }

@@ -92,6 +92,18 @@ table per head mesh, against the modded-race rule.
 **Face shadows**: nothing to port: KenshiNative's fault was the traced hair's alpha channel, and here the shadow caster cuts by the hair's own `alphaChannel`
 (`CharacterShaders.DepthFragment`) and no ray sees characters.
 
+### Precision
+
+Far from the world's origin a float steps by about 0.004 units at 50000 (0.016 at 200000); a character 4 units from the eye moves 1.5 px for one step.
+**Observed** in a paused close-up at x 57000 (`siwa-test6`, offscreen frames of the live loop, no upscaler and TAA alike): the character jumped ±2 px every few
+frames while the background moved under 0.05 px. Cause: the frame's camera and characters are drawn between two ticks with `Vector3.Lerp`, which computes
+a (1 - t) + b t; with both ticks' states equal to the bit the result still landed a step off for some alphas, so a still camera (and a still character) moved
+a step as the frame's alpha changed. Everything drawn between ticks now uses `Interp.Lerp` (a + (b - a) t, exact for equal ends): the camera state, the
+characters' drawn places and ragdoll bones, trails, wakes, bolts, the characters' sounds and the squad tour. Also: `WorldCamera` forms the eye in double, `Eye` being
+its float rounding (every system's origin) and `EyeResidual` the rest, which the characters' colour and motion views take as a translation (`RelativeRotation`),
+so an orbit or zoom round a fixed target moves the eye smoothly instead of by steps; the strategy camera's eye clearance lifts the target only for a shortfall
+over 0.001 (the ground read under the eye wavers by a few ten-thousandths frame to frame). Terrain and objects still use the float world view.
+
 ## Content, LOD and memory
 
 `CharacterContent` owns buffers/textures/morph arena; worker fetching/preparation precedes render
