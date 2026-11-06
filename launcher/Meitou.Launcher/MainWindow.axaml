@@ -208,6 +208,8 @@
               <Button Content="Select all" Click="SelectAll_Click" />
               <Button Content="Select none" Click="SelectNone_Click" />
               <Button Content="Refresh" Click="RefreshMods_Click" />
+              <Button Content="Arrange" Click="ArrangeMods_Click"
+                      ToolTip.Tip="Move each code mod below the code mods it depends on; the rest of the order is kept" />
             </StackPanel>
           </DockPanel>
           <DockPanel DockPanel.Dock="Bottom" Margin="0,10,0,0">

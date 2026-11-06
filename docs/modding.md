@@ -1,6 +1,6 @@
 # Code mods (C#)
 
-**Status: implemented, code-mod API version 1 (2026-11-04).** Meitou's own in-process loader, Lib.Harmony shipped by the game as the
+**Status: implemented, code-mod API version 1 (2026-11-04); API 2 adds [dependencies](modding-dependencies.md).** Meitou's own in-process loader, Lib.Harmony shipped by the game as the
 sanctioned patching library, and a registration surface kept to the cases where a patch would silently break an invariant. No BepInEx.
 The RE_Kenshi decision ([rekenshi](formats/rekenshi.md)) stands and its DLLs stay ignored. Code: `src/Meitou.Modding` (contract and
 loader), `GameHost.Mods.cs` (host wiring), `SimulationExtensions` (engine hooks).
@@ -42,7 +42,7 @@ Folder: `mods/MyMod/MyMod.mod` (the data mod, may be empty of records), `meitou.
 - A mod carries code when its folder has `meitou.json`: `{ "id", "apiVersion", "assemblies": ["Foo.dll"], "entry": "Foo.FooMod" }`
   (`CodeModManifest`). `id`: letters, digits, `. _ -`, at most 64; it keys the mod's save data, Harmony instance and log lines.
   `assemblies`: DLL file names in the mod folder, loaded in order. `entry`: the full name of the `IMod` type. Comments and trailing
-  commas are allowed.
+  commas are allowed. API 2 adds optional `version` and `dependencies` ([dependencies](modding-dependencies.md)).
 - `ModInfo.HasCode` reports it beside `HasNativePlugin`; the launcher marks such mods.
 - Load set: the enabled mods of `mods.cfg` in order, filtered to those with a manifest. A disabled mod's DLL is never opened. Changes take
   effect at the next launch, like data mods.
@@ -60,6 +60,8 @@ The game itself cannot ask: mods initialize on the boot worker before the interf
 - Resolution by simple name: an assembly on the game's trusted platform list (`Meitou.*`, the framework, Bepu, `0Harmony`) comes from
   the game even when the mod folder has a copy; anything else comes from the mod folder, so two mods may ship different versions of a
   library. Listing a game assembly in `assemblies` refuses the mod. Native libraries resolve from the mod folder first.
+- Between the two: an assembly a declared dependency exports comes from that dependency's context, so a framework loads once
+  ([dependencies](modding-dependencies.md#assembly-resolution)).
 - **One Harmony, loaded by the game.** **Observed** ([pardeike/Harmony #741](https://github.com/pardeike/Harmony/issues/741), open since
   2025-10): outside Unity, Harmony loaded in several load contexts duplicates `HarmonySharedState`, and two mods can no longer patch the
   same method. The game references Lib.Harmony 2.4.3 (`0Harmony.dll` with MonoMod merged in) and the resolution rule hands every mod
@@ -79,7 +81,8 @@ The game itself cannot ask: mods initialize on the boot worker before the interf
   removes its Harmony patches (`UnpatchAll` of its id).
 - Worlds are built again for every new game and load, so systems are registered as factories and made per world.
 - `ModContext`: `Id`, `Name`, `Folder`, `Manifest`, the merged `Data` (`GameDatabase`), `Population` (`PopulationData`), `Log`/`LogError`,
-  `RngPurpose`, `Harmony`, `Tick` and `Enqueue(SimCommand)` for the running world (dropped and logged before the first world).
+  `RngPurpose`, `Harmony`, `Tick` and `Enqueue(SimCommand)` for the running world (dropped and logged before the first world),
+  `Dependency<T>(id)` and `HasDependency(id)` for declared dependencies ([dependencies](modding-dependencies.md#using-a-dependency)).
 - `RngPurpose` is `StableHash(id) | 0x80000000` cast to `RngPurpose`, so it never equals a vanilla purpose.
 
 ## Registration surface
@@ -149,7 +152,8 @@ holds refuses the second mod.
 - **Observed** ([Harmony docs](https://harmony.pardeike.net/articles/patching-edgecases.html)): an inlined method cannot be patched; the
   patch silently does nothing. Patch methods large enough not to be inlined, or their callers. `Rng` helpers are `AggressiveInlining`.
 - **Observed** (2026-11-04, scratch run): Harmony finds a patch method again by module identity, so the same DLL file loaded by two mods
-  makes their patches resolve to one copy. A helper library shared by several mods must not hold patch methods.
+  makes their patches resolve to one copy. A helper library copied into several mods must not hold patch methods; a framework shared
+  as a [dependency](modding-dependencies.md) loads once and may.
 
 ## Determinism contract
 
@@ -180,7 +184,8 @@ code, so `trustedCodeMods` is not consulted.
 
 ## Versioning
 
-- `ModApi.Version` (1) must equal the manifest's `apiVersion`; a mismatch refuses the mod at load with a message.
+- The manifest's `apiVersion` must lie in `ModApi.MinimumVersion` (1) to `ModApi.Version` (2); otherwise the mod is refused at load with a
+  message. 2 added `version`, `dependencies` and `ModContext.Dependency<T>`; an API 1 mod loads unchanged.
 - Harmony patches non-public members; compile-time references need public types or a publicizer. Open: which simulation types to make
   public, or ship publicized reference assemblies; ship reference assemblies per release so modders build without a game install.
 

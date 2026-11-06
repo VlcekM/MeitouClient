@@ -26,6 +26,14 @@ public interface IModSaveData
 /// <summary>The code-mod API (docs/modding.md "Versioning").</summary>
 public static class ModApi
 {
-    /// <summary>The <c>apiVersion</c> a manifest must name; a mod built for another version is refused with a message.</summary>
-    public const int Version = 1;
+    /// <summary>The newest <c>apiVersion</c> this game runs. 2 added <c>version</c>, <c>dependencies</c> and <see cref="ModContext.Dependency{T}"/>.</summary>
+    public const int Version = 2;
+
+    /// <summary>The oldest <c>apiVersion</c> this game still runs; a manifest outside <see cref="MinimumVersion"/>..<see cref="Version"/> is refused with a message.</summary>
+    public const int MinimumVersion = 1;
+
+    /// <summary>The first <c>apiVersion</c> whose manifests may declare <c>dependencies</c>; an older game would ignore them and load a private copy of the framework.</summary>
+    public const int DependenciesVersion = 2;
+
+    public static bool Supports(int apiVersion) => apiVersion is >= MinimumVersion and <= Version;
 }

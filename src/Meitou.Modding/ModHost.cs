@@ -20,6 +20,15 @@ public sealed class LoadedMod
     public CodeModManifest Manifest { get; }
     public IReadOnlyList<Assembly> Assemblies { get; internal set; } = [];
     public IMod? Instance { get; internal set; }
+
+    /// <summary>The declared dependencies that loaded (docs/modding.md "Dependencies"), in manifest order; an absent optional one is not here.</summary>
+    public IReadOnlyList<LoadedMod> Dependencies { get; internal set; } = [];
+
+    /// <summary>
+    /// What a mod depending on this one resolves from it, by simple name: this mod's own <see cref="Assemblies"/> and, transitively, what its dependencies export, so
+    /// a framework's types exist once. Other DLLs in its folder stay private.
+    /// </summary>
+    public IReadOnlyDictionary<string, Assembly> Exports { get; internal set; } = new Dictionary<string, Assembly>();
 }
 
 /// <summary>Where a <see cref="ModHost"/> loads from: the enabled mods in order, the mods the player allowed to run code, the merged data and the running world.</summary>
@@ -104,11 +113,12 @@ public sealed class ModHost
     public static ModHost Load(ModHostOptions options)
     {
         var host = new ModHost();
-        foreach (var info in options.Enabled) host.TryLoad(info, options);
+        var entries = options.Enabled.Select(m => new CodeModEntry(m.Name, CodeModDependencies.TryReadManifest(m), true)).ToList();
+        for (int i = 0; i < options.Enabled.Count; i++) host.TryLoad(options.Enabled[i], options, entries, i);
         return host;
     }
 
-    void TryLoad(ModInfo info, ModHostOptions options)
+    void TryLoad(ModInfo info, ModHostOptions options, IReadOnlyList<CodeModEntry> entries, int index)
     {
         if (!options.Allowed.Contains(info.Name))
         {
@@ -118,7 +128,7 @@ public sealed class ModHost
         LoadedMod? mod = null;
         try
         {
-            mod = Prepare(info);
+            mod = Prepare(info, entries, index);
             Initialize(mod, options);
             mods.Add(mod);
             string assemblies = string.Join(", ", mod.Assemblies.Select(a => a.GetName().Name));
@@ -143,7 +153,7 @@ public sealed class ModHost
     }
 
     /// <summary>The manifest checks, the assemblies and the entry instance.</summary>
-    LoadedMod Prepare(ModInfo info)
+    LoadedMod Prepare(ModInfo info, IReadOnlyList<CodeModEntry> entries, int index)
     {
         CodeModManifest manifest;
         try { manifest = CodeModManifest.Read(info.CodeManifestPath); }
@@ -151,19 +161,84 @@ public sealed class ModHost
         {
             throw new ModLoadException($"bad {ModList.CodeManifestFile}: {e.Message}");
         }
-        if (manifest.ApiVersion != ModApi.Version)
-            throw new ModLoadException($"built for code-mod API {manifest.ApiVersion}; this Meitou has API {ModApi.Version}");
+        if (!ModApi.Supports(manifest.ApiVersion))
+        {
+            string runs = $"API {ModApi.MinimumVersion} to {ModApi.Version}";
+            throw new ModLoadException($"built for code-mod API {manifest.ApiVersion}; this Meitou runs {runs}");
+        }
+        if (manifest.DependsOn.Count > 0 && manifest.ApiVersion < ModApi.DependenciesVersion)
+            throw new ModLoadException($"declares dependencies, which need apiVersion {ModApi.DependenciesVersion}; it names {manifest.ApiVersion}");
         if (mods.FirstOrDefault(m => m.Manifest.Id == manifest.Id) is { } twin)
             throw new ModLoadException($"id '{manifest.Id}' is taken by mod {twin.Info.Name}");
         var mod = new LoadedMod(info, manifest);
-        mod.Assemblies = LoadAssemblies(info, manifest);
+        mod.Dependencies = ResolveDependencies(manifest, entries, index);
+        var imports = Imports(mod.Dependencies);
+        mod.Assemblies = LoadAssemblies(info, manifest, imports);
+        mod.Exports = Exported(mod.Assemblies, imports);
         mod.Instance = CreateEntry(mod);
         return mod;
     }
 
-    static List<Assembly> LoadAssemblies(ModInfo info, CodeModManifest manifest)
+    /// <summary>
+    /// The loaded mods this one depends on (docs/modding.md "Dependencies"). A required dependency that is missing, disabled, later in the list, of a version out of
+    /// range or refused itself refuses this mod; an optional one that is absent or did not load is left out.
+    /// </summary>
+    List<LoadedMod> ResolveDependencies(CodeModManifest manifest, IReadOnlyList<CodeModEntry> entries, int index)
     {
-        var context = new ModLoadContext(info.Folder, manifest.Id);
+        var resolved = new List<LoadedMod>();
+        foreach (var dependency in manifest.DependsOn)
+        {
+            if (mods.FirstOrDefault(m => m.Manifest.Id == dependency.Id) is { } loaded)
+            {
+                if (!dependency.Accepts(loaded.Manifest.Version))
+                    throw new ModLoadException($"needs {loaded.Info.Name} ('{dependency.Id}') {dependency.Range}; " +
+                        $"{loaded.Manifest.Version?.ToString() ?? "a version without a number"} is installed");
+                resolved.Add(loaded);
+                continue;
+            }
+            if (CodeModDependencies.Problem(dependency, index, entries) is { } problem) throw new ModLoadException(problem);
+            if (dependency.Optional)
+            {
+                Console.WriteLine($"mod       {manifest.Id}: optional dependency '{dependency.Id}' did not load; going on without it");
+                continue;
+            }
+            throw new ModLoadException(NotLoaded(dependency, entries));
+        }
+        return resolved;
+    }
+
+    /// <summary>Why an enabled, earlier dependency is not loaded: it was refused (its reason) or its manifest could not be read.</summary>
+    string NotLoaded(CodeModDependency dependency, IReadOnlyList<CodeModEntry> entries)
+    {
+        string name = entries[CodeModDependencies.IndexOf(dependency.Id, entries)].Name;
+        string reason = refused.TryGetValue(name, out var why) ? why : "it did not load";
+        return $"needs {name} ('{dependency.Id}'), which did not load: {reason}";
+    }
+
+    /// <summary>What the dependencies export, merged; two of them exporting different assemblies under one simple name refuse the mod.</summary>
+    static Dictionary<string, Assembly> Imports(IReadOnlyList<LoadedMod> dependencies)
+    {
+        var imports = new Dictionary<string, Assembly>(StringComparer.OrdinalIgnoreCase);
+        foreach (var dependency in dependencies)
+            foreach (var (simple, assembly) in dependency.Exports)
+            {
+                if (imports.TryGetValue(simple, out var other) && !ReferenceEquals(other, assembly))
+                    throw new ModLoadException($"two of its dependencies export different {simple}.dll; it cannot use both");
+                imports[simple] = assembly;
+            }
+        return imports;
+    }
+
+    static Dictionary<string, Assembly> Exported(IReadOnlyList<Assembly> own, IReadOnlyDictionary<string, Assembly> imports)
+    {
+        var exports = new Dictionary<string, Assembly>(imports, StringComparer.OrdinalIgnoreCase);
+        foreach (var assembly in own) exports[assembly.GetName().Name!] = assembly;
+        return exports;
+    }
+
+    static List<Assembly> LoadAssemblies(ModInfo info, CodeModManifest manifest, IReadOnlyDictionary<string, Assembly> imports)
+    {
+        var context = new ModLoadContext(info.Folder, manifest.Id, imports);
         var loaded = new List<Assembly>();
         foreach (var file in manifest.Assemblies)
         {
@@ -171,6 +246,8 @@ public sealed class ModHost
             if (!File.Exists(path)) throw new ModLoadException($"{file} is missing from the mod folder");
             if (ModLoadContext.IsShipped(Path.GetFileNameWithoutExtension(file)))
                 throw new ModLoadException($"{file} is one of the game's own assemblies; list only the mod's");
+            if (imports.ContainsKey(Path.GetFileNameWithoutExtension(file)))
+                throw new ModLoadException($"{file} comes from one of its dependencies; list only the mod's own assemblies");
             loaded.Add(context.LoadFromAssemblyPath(path));
         }
         return loaded;

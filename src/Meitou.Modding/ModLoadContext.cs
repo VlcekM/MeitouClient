@@ -6,13 +6,18 @@ namespace Meitou.Modding;
 /// <summary>
 /// One mod's assemblies (docs/modding.md "Loading"): non-collectible, loaded once. An assembly the game ships (<c>Meitou.*</c>, the framework, Bepu, <c>0Harmony</c>:
 /// everything on the trusted platform list) always comes from the game, even when the mod folder has a copy, so a mod never holds a private copy of engine
-/// types or a second Harmony; anything else comes from the mod folder, so two mods may ship different versions of the same library.
+/// types or a second Harmony; next, an assembly a dependency exports (docs/modding.md "Dependencies") comes from that dependency's context, so a framework's types and
+/// statics exist once; anything else comes from the mod folder, so two mods may ship different versions of the same library.
 /// </summary>
-sealed class ModLoadContext(string folder, string name) : AssemblyLoadContext($"mod {name}", isCollectible: false)
+sealed class ModLoadContext(string folder, string name, IReadOnlyDictionary<string, Assembly>? imports = null)
+    : AssemblyLoadContext($"mod {name}", isCollectible: false)
 {
     static readonly Lazy<HashSet<string>> Shipped = new(ReadShipped);
 
     public string Folder { get; } = folder;
+
+    /// <summary>The assemblies the mod's dependencies export, by simple name (case ignored); resolved before the mod folder.</summary>
+    public IReadOnlyDictionary<string, Assembly> Imports { get; } = imports ?? new Dictionary<string, Assembly>();
 
     /// <summary>Whether the game ships an assembly of this simple name, so the default context resolves it.</summary>
     public static bool IsShipped(string simpleName) => Shipped.Value.Contains(simpleName);
@@ -20,6 +25,7 @@ sealed class ModLoadContext(string folder, string name) : AssemblyLoadContext($"
     protected override Assembly? Load(AssemblyName assemblyName)
     {
         if (assemblyName.Name is not { } simple || IsShipped(simple)) return null;
+        if (Imports.TryGetValue(simple, out var imported)) return imported;
         var path = Path.Combine(Folder, simple + ".dll");
         return File.Exists(path) ? LoadFromAssemblyPath(path) : null;
     }

@@ -6,11 +6,28 @@ using Meitou.Localisation;
 namespace Meitou.Launcher;
 
 /// <summary>A line of the Mods page.</summary>
-public sealed class ModRow(ModInfo mod, bool enabled) : INotifyPropertyChanged
+public sealed class ModRow(ModInfo mod, bool enabled, CodeModManifest? manifest = null) : INotifyPropertyChanged
 {
     public event PropertyChangedEventHandler? PropertyChanged;
 
     public ModInfo Mod { get; } = mod;
+
+    /// <summary>The code manifest (docs/modding.md "Dependencies"), read with the list; null for a data mod or one that cannot be read.</summary>
+    public CodeModManifest? Manifest { get; } = manifest;
+
+    /// <summary>What is wrong with its code-mod dependencies in the current list (<see cref="CodeModDependencies.Check"/>), one line each; empty when nothing.</summary>
+    public IReadOnlyList<string> DependencyProblems
+    {
+        get;
+        set
+        {
+            if (field.SequenceEqual(value)) return;
+            field = value;
+            Changed(nameof(Notes));
+            Changed(nameof(HasNotes));
+        }
+    } = [];
+
     public string Name => Mod.Name;
     public string Detail => LauncherText.Translate(Mod.Source == ModSource.Workshop ? "Steam workshop" : "Local mod")
         + (Mod.Header is { Author.Length: > 0 } h ? $" · {h.Author}" : "");
@@ -18,7 +35,8 @@ public sealed class ModRow(ModInfo mod, bool enabled) : INotifyPropertyChanged
     {
         Mod.HasCode ? LauncherText.Translate("Code mod: runs C# code of its own once allowed") : null,
         Mod.HasNativePlugin && !Mod.HasCode ? LauncherText.Translate("RE_Kenshi plugin: its DLLs are ignored in Meitou") : null,
-    }.OfType<string>());
+        Manifest is { DependsOn.Count: > 0 } m ? Loc.Format(LauncherText.Translate("Requires {1}"), string.Join(", ", m.DependsOn)) : null,
+    }.Concat(DependencyProblems).OfType<string>());
     public bool HasNotes => Mod.HasNativePlugin || Mod.HasCode;
 
     public bool Enabled

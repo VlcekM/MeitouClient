@@ -57,6 +57,7 @@ public sealed partial class MainWindow : Window
         PlayVersionButton.Flyout = versionMenu;
         TrackPointer();
         ModListBox.ItemsSource = mods;
+        mods.CollectionChanged += (_, _) => { if (modsReady) ShowDependencyProblems(); };   // a drag or Alt+arrow move changes what loads first
         ModListBox.AddHandler(PointerMovedEvent, ModList_PointerMoved, RoutingStrategies.Bubble, handledEventsToo: true);
         ModListBox.AddHandler(PointerReleasedEvent, ModList_PointerReleased, RoutingStrategies.Bubble, handledEventsToo: true);
         ModListBox.AddHandler(PointerCaptureLostEvent, (_, _) => EndDrag(), RoutingStrategies.Direct | RoutingStrategies.Bubble, handledEventsToo: true);
@@ -478,15 +479,15 @@ public sealed partial class MainWindow : Window
         ModsEmpty.IsVisible = false;
         ModCount.Text = Tr("Loading");
         var gameInstall = install;
-        List<ModEntry> entries;
+        List<(ModEntry Entry, CodeModManifest? Manifest)> entries;
         try
         {
             entries = gameInstall is null ? [] : await Task.Run(() =>
             {
                 var order = ModList.LauncherOrder(gameInstall, ModList.Discover(gameInstall));
-                // The rows show each mod's author and plugin note: read them here too, not on the UI thread.
-                foreach (var entry in order) { _ = entry.Mod.Header; _ = entry.Mod.HasNativePlugin; _ = entry.Mod.HasCode; }
-                return order;
+                // The rows show each mod's author, plugin note and code-mod dependencies: read them here too, not on the UI thread.
+                foreach (var entry in order) { _ = entry.Mod.Header; _ = entry.Mod.HasNativePlugin; }
+                return order.Select(e => (e, CodeModDependencies.TryReadManifest(e.Mod))).ToList();
             });
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
@@ -498,7 +499,7 @@ public sealed partial class MainWindow : Window
             return;
         }
         if (load != modsLoad) return;
-        foreach (var entry in entries) mods.Add(new ModRow(entry.Mod, entry.Enabled));
+        foreach (var (entry, manifest) in entries) mods.Add(new ModRow(entry.Mod, entry.Enabled, manifest));
         foreach (var row in mods) row.PropertyChanged += (_, _) => ShowModCount();
         modsReady = true;
         ShowModCount();
@@ -507,7 +508,32 @@ public sealed partial class MainWindow : Window
             : "No mods found in Kenshi's mods folder or among its Steam workshop items.");
     }
 
-    void ShowModCount() => ModCount.Text = mods.Count == 0 ? Tr("No mods found") : Tr("{1} of {2} enabled", mods.Count(m => m.Enabled), mods.Count);
+    void ShowModCount()
+    {
+        ModCount.Text = mods.Count == 0 ? Tr("No mods found") : Tr("{1} of {2} enabled", mods.Count(m => m.Enabled), mods.Count);
+        ShowDependencyProblems();
+    }
+
+    // The code-mod dependency rules the game applies at start (docs/modding.md "Dependencies"), shown on each row as the list changes.
+    void ShowDependencyProblems()
+    {
+        var problems = CodeModDependencies.Check(DependencyEntries());
+        foreach (var row in mods) row.DependencyProblems = problems.TryGetValue(row.Name, out var lines) ? lines : [];
+    }
+
+    List<CodeModEntry> DependencyEntries() => [.. mods.Select(m => new CodeModEntry(m.Name, m.Manifest, m.Enabled))];
+
+    // Best effort: each mod after the installed code mods it depends on, the order otherwise kept. Enables nothing; not saved until Save or Play.
+    void ArrangeMods_Click(object? sender, RoutedEventArgs e)
+    {
+        if (!ModsReady()) return;
+        var arranged = CodeModDependencies.Arrange(DependencyEntries());
+        var enabled = mods.ToDictionary(m => m.Name, m => m.Enabled, StringComparer.Ordinal);
+        ApplyOrder(arranged.Select(name => (name, enabled[name])));
+        int left = mods.Count(m => m.DependencyProblems.Count > 0);
+        Status(left == 0 ? Tr("Mods arranged by their code-mod dependencies (not saved yet).")
+            : Tr("Mods arranged by their code-mod dependencies (not saved yet); {1} still need attention.", left));
+    }
 
     // False while the list is loading or after it could not be read; Status says why.
     bool ModsReady()

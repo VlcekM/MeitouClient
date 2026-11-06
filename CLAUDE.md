@@ -52,6 +52,12 @@ drop-in replacement that runs original content and mods unchanged.
 - After merging a branch into master, remove its worktree (`git worktree remove`) and delete the branch
   (`git branch -d`) without asking, once the worktree has no uncommitted work.
 
+## Code mods
+
+- The code-mod contract is [docs/modding.md](docs/modding.md); mods that build on other mods follow
+  [docs/modding-dependencies.md](docs/modding-dependencies.md) ("Writing a framework"). A change to `CodeModManifest`, `ModHost` or
+  `ModContext` updates those docs, and bumps `ModApi.Version` when an older game would misread the new manifest.
+
 ## Build
 
 - Get the user's explicit approval before adding tests, including new cases in existing tests.
