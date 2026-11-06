@@ -6,8 +6,8 @@ namespace Meitou.Content;
 public sealed record CodeModEnvironmentEntry(string Id, string? Version, string Name);
 
 /// <summary>
-/// The code mods a save was made with, in load order, and the Meitou version (docs/formats/save.md "Mod data": <c>meitou-mods/environment.json</c>). Loading
-/// compares it with the running mods and warns; it never refuses a save, since the data mods and sidecars load as before.
+/// The code mods a save was made with, in load order, and the Meitou version (docs/formats/save.md "Mod data": <c>meitou-mods/environment.json</c>).
+/// Loading compares it with the running mods and warns; it never refuses a save, since the data mods and sidecars load as before.
 /// </summary>
 public sealed record CodeModEnvironment(string GameVersion, IReadOnlyList<CodeModEnvironmentEntry> Mods)
 {
@@ -39,7 +39,10 @@ public sealed record CodeModEnvironment(string GameVersion, IReadOnlyList<CodeMo
         w.WriteEndObject();
     }
 
-    /// <summary>Reads the file; null when it is not one this game understands (a newer format, or damaged): the save still loads, without the comparison.</summary>
+    /// <summary>
+    /// Reads the file; null when it is not one this game understands (a newer format, or damaged, an id listed twice included): the save still loads,
+    /// without the comparison.
+    /// </summary>
     public static CodeModEnvironment? TryRead(byte[] json)
     {
         try
@@ -47,9 +50,11 @@ public sealed record CodeModEnvironment(string GameVersion, IReadOnlyList<CodeMo
             using var document = JsonDocument.Parse(json);
             var root = document.RootElement;
             if (root.ValueKind != JsonValueKind.Object || Number(root, "format") != FormatVersion) return null;
-            if (Text(root, "gameVersion") is not { } game || !root.TryGetProperty("mods", out var list) || list.ValueKind != JsonValueKind.Array) return null;
+            if (Text(root, "gameVersion") is not { } game) return null;
+            if (!root.TryGetProperty("mods", out var list) || list.ValueKind != JsonValueKind.Array) return null;
             var mods = list.EnumerateArray().Select(ReadMod).ToList();
-            return mods.Contains(null) ? null : new CodeModEnvironment(game, mods!);
+            if (mods.Contains(null) || mods.DistinctBy(m => m!.Id, StringComparer.Ordinal).Count() != mods.Count) return null;   // damaged
+            return new CodeModEnvironment(game, mods!);
         }
         catch (JsonException)
         {
@@ -70,23 +75,30 @@ public sealed record CodeModEnvironment(string GameVersion, IReadOnlyList<CodeMo
         e.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.Number && v.TryGetInt32(out int n) ? n : null;
 
     /// <summary>
-    /// What changed since the save was made, one line each: a code mod gone, a version changed (a major change or a downgrade called out), the order of the mods
-    /// both have changed, a code mod added. Empty when nothing did.
+    /// What changed since the save was made, one line each: a code mod gone, a version changed (a major change or a downgrade called out), the order
+    /// of the mods both have changed, a code mod added. Empty when nothing did. An id listed twice counts once (the first).
     /// </summary>
     public List<string> ChangesTo(CodeModEnvironment now)
     {
-        var current = now.Mods.ToDictionary(m => m.Id, StringComparer.Ordinal);
-        var saved = Mods.ToDictionary(m => m.Id, StringComparer.Ordinal);
+        var current = ById(now.Mods);
+        var saved = ById(Mods);
         var lines = new List<string>();
-        foreach (var mod in Mods)
+        foreach (var mod in Mods.DistinctBy(m => m.Id))
         {
-            if (!current.TryGetValue(mod.Id, out var running)) lines.Add($"{mod.Name} ('{mod.Id}') was running when this was saved and is not now; its saved data is kept but unused");
+            if (!current.TryGetValue(mod.Id, out var running)) lines.Add(Gone(mod));
             else if (VersionChange(mod, running) is { } change) lines.Add(change);
         }
         if (OrderChanged(now, saved)) lines.Add("The code mods load in a different order than when this was saved");
-        foreach (var mod in now.Mods.Where(m => !saved.ContainsKey(m.Id))) lines.Add($"{mod.Name} ('{mod.Id}') is new to this save");
+        foreach (var mod in now.Mods.DistinctBy(m => m.Id).Where(m => !saved.ContainsKey(m.Id)))
+            lines.Add($"{mod.Name} ('{mod.Id}') is new to this save");
         return lines;
     }
+
+    static Dictionary<string, CodeModEnvironmentEntry> ById(IEnumerable<CodeModEnvironmentEntry> mods) =>
+        mods.DistinctBy(m => m.Id).ToDictionary(m => m.Id, StringComparer.Ordinal);
+
+    static string Gone(CodeModEnvironmentEntry mod) =>
+        $"{mod.Name} ('{mod.Id}') was running when this was saved and is not now; its saved data is kept but unused";
 
     static string? VersionChange(CodeModEnvironmentEntry saved, CodeModEnvironmentEntry running)
     {
@@ -102,8 +114,9 @@ public sealed record CodeModEnvironment(string GameVersion, IReadOnlyList<CodeMo
 
     bool OrderChanged(CodeModEnvironment now, Dictionary<string, CodeModEnvironmentEntry> saved)
     {
-        var before = Mods.Select(m => m.Id).Where(now.Mods.Select(n => n.Id).Contains).ToList();
-        var after = now.Mods.Select(m => m.Id).Where(saved.ContainsKey).ToList();
+        var running = now.Mods.Select(n => n.Id).ToHashSet(StringComparer.Ordinal);
+        var before = Mods.Select(m => m.Id).Distinct().Where(running.Contains).ToList();
+        var after = now.Mods.Select(m => m.Id).Distinct().Where(saved.ContainsKey).ToList();
         return !before.SequenceEqual(after);
     }
 }

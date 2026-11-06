@@ -45,7 +45,9 @@ public sealed partial class SaveGame
     /// </summary>
     public SortedDictionary<string, byte[]> ModData { get; } = new(StringComparer.Ordinal);
 
-    /// <summary>The bytes of <c>meitou-mods/environment.json</c> (the code mods the save was made with, <c>CodeModEnvironment</c>); null when it has none.</summary>
+    /// <summary>
+    /// The bytes of <c>meitou-mods/environment.json</c> (the code mods the save was made with, <c>CodeModEnvironment</c>); null when it has none.
+    /// </summary>
     public byte[]? ModEnvironment { get; set; }
 
     /// <summary>What does not fit the format's own rules (a platoon file that is missing, a zone file the CAMERA list does not name...); loading goes on.</summary>

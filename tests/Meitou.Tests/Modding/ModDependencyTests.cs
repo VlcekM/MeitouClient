@@ -5,15 +5,15 @@ using Meitou.Modding;
 
 namespace Meitou.Tests.Modding;
 
-/// <summary>Code-mod dependencies (docs/modding.md "Dependencies"): manifest keys, version ranges, the list rules, shared assemblies, refusals and the dependency accessor.</summary>
+/// <summary>
+/// Code-mod dependencies (docs/modding-dependencies.md): shared assemblies, the loader's refusals, Arrange, gameVersion and launcher/loader
+/// agreement.
+/// </summary>
 public class ModDependencyTests
 {
-    sealed class Framework : IMod
-    {
-        public void Initialize(ModContext context) { }
-    }
-
-    /// <summary>A temporary Kenshi-style mods folder: one folder per mod with its <c>.mod</c> and <c>meitou.json</c>.</summary>
+    /// <summary>
+    /// A temporary Kenshi-style mods folder: one folder per mod with its <c>meitou.json</c>; no DLL in it is ever loaded, so it deletes.
+    /// </summary>
     sealed class ModsFolder : IDisposable
     {
         public string Root { get; } = Directory.CreateTempSubdirectory("meitou-deps-").FullName;
@@ -28,253 +28,130 @@ public class ModDependencyTests
         public void Dispose() => Directory.Delete(Root, recursive: true);
     }
 
-    static string Manifest(string id, int api = 2, string? version = null, string dependencies = "[]")
+    static string Manifest(string id, int api = 2, string extra = "") =>
+        $$"""{ "id": "{{id}}", "apiVersion": {{api}}, "version": "1.0.0", "assemblies": ["{{id}}.dll"], "entry": "X.Y"{{extra}} }""";
+
+    static string Needs(string id) => $$""", "dependencies": ["{{id}}"]""";
+
+    static ModHost Load(IReadOnlyList<ModInfo> enabled, IReadOnlySet<string>? allowed = null, IReadOnlyList<ModInfo>? disabled = null)
     {
-        string versionKey = version is null ? "" : $", \"version\": \"{version}\"";
-        return $$"""{ "id": "{{id}}", "apiVersion": {{api}}, "assemblies": ["{{id}}.dll"], "entry": "X.Y"{{versionKey}}, "dependencies": {{dependencies}} }""";
+        var options = new ModHostOptions(enabled, allowed ?? enabled.Select(m => m.Name).ToHashSet(), null!, null!, () => null, Disabled: disabled);
+        return ModHost.Load(options);
     }
 
-    static ModHost Load(params ModInfo[] mods) =>
-        ModHost.Load(new ModHostOptions(mods, mods.Select(m => m.Name).ToHashSet(), null!, null!, () => null));
-
-    static CodeModManifest Parse(string json)
-    {
-        var file = Path.GetTempFileName();
-        try
-        {
-            File.WriteAllText(file, json);
-            return CodeModManifest.Read(file);
-        }
-        finally
-        {
-            File.Delete(file);
-        }
-    }
-
-    /// <summary>Writes a tiny assembly that is not on the game's list, as a framework DLL would be.</summary>
-    static void EmitLibrary(string path, string name)
+    /// <summary>A tiny assembly that is not on the game's list, as a framework DLL would be.</summary>
+    static byte[] EmitLibrary(string name)
     {
         var builder = new PersistedAssemblyBuilder(new AssemblyName(name), typeof(object).Assembly);
         var module = builder.DefineDynamicModule(name);
         module.DefineType(name + ".Ledger", TypeAttributes.Public | TypeAttributes.Class).CreateType();
-        builder.Save(path);
+        using var stream = new MemoryStream();
+        builder.Save(stream);
+        return stream.ToArray();
     }
 
-    [Fact]
-    public void The_manifest_reads_version_and_both_dependency_forms()
-    {
-        var manifest = Parse(Manifest("nemesis", version: "0.3.0-beta",
-            dependencies: """["rivalry.core", { "id": "visitors", "version": ">=1.2.0 <2.0.0", "optional": true }]"""));
-
-        Assert.Equal(new CodeModVersion(0, 3, 0) { Prerelease = "beta" }, manifest.Version);
-        Assert.Equal(["rivalry.core", "visitors"], manifest.DependsOn.Select(d => d.Id));
-        Assert.False(manifest.DependsOn[0].Optional);
-        Assert.Null(manifest.DependsOn[0].Range);
-        Assert.True(manifest.DependsOn[1].Optional);
-        Assert.Equal(">=1.2.0 <2.0.0", manifest.DependsOn[1].Range?.Text);
-    }
-
-    [Fact]
-    public void A_manifest_without_the_new_keys_reads_as_before()
-    {
-        var manifest = Parse("""{ "id": "old", "apiVersion": 1, "assemblies": ["Old.dll"], "entry": "Old.Mod" }""");
-
-        Assert.Null(manifest.Version);
-        Assert.Empty(manifest.DependsOn);
-    }
-
-    [Theory]
-    [InlineData("""["me"]""", "lists itself")]
-    [InlineData("""["a", "a"]""", "listed twice")]
-    [InlineData("""[{ "id": "a", "version": "about 2" }]""", "not a version comparator")]
-    [InlineData("""[{ "id": "a", "optional": "yes" }]""", "true or false")]
-    [InlineData("""[3]""", "neither an id nor an object")]
-    public void Bad_dependencies_refuse_the_manifest(string dependencies, string reason)
-    {
-        var e = Assert.Throws<InvalidDataException>(() => Parse(Manifest("me", dependencies: dependencies)));
-        Assert.Contains(reason, e.Message);
-    }
-
-    [Theory]
-    [InlineData(">=1.2.0 <2.0.0", "1.2.0", true)]
-    [InlineData(">=1.2.0 <2.0.0", "1.9.9", true)]
-    [InlineData(">=1.2.0 <2.0.0", "2.0.0", false)]
-    [InlineData(">=1.2.0 <2.0.0", "1.1.9", false)]
-    [InlineData(">1.0.0", "1.0.0", false)]
-    [InlineData("<=1.0.0", "1.0.0", true)]
-    [InlineData("1.4.2", "1.4.2", true)]
-    [InlineData("=1.4.2", "1.4.3", false)]
-    [InlineData(">=1.2.0", "1.2.0-beta.1", false)]   // SemVer: a pre-release is below its release
-    public void Version_ranges_match_as_documented(string range, string version, bool expected)
-    {
-        Assert.True(CodeModVersion.TryParse(version, out var v));
-        Assert.Equal(expected, CodeModVersionRange.Parse(range).Contains(v));
-    }
-
-    [Fact]
-    public void A_range_rejects_a_mod_without_a_version_and_no_range_accepts_it()
-    {
-        Assert.False(new CodeModDependency("a", CodeModVersionRange.Parse(">=1.0.0")).Accepts(null));
-        Assert.True(new CodeModDependency("a").Accepts(null));
-    }
-
-    static CodeModEntry Entry(string name, bool enabled = true, string? version = null, params CodeModDependency[] dependencies) =>
-        new(name, new CodeModManifest(name, 2, [name + ".dll"], "X.Y", version is null ? null : Version(version), dependencies), enabled);
-
-    static CodeModVersion Version(string text) => CodeModVersion.TryParse(text, out var v) ? v : throw new ArgumentException(text);
-
-    [Fact]
-    public void The_list_rules_name_each_problem()
-    {
-        var needsCore = new CodeModDependency("core");
-        Assert.Contains("not installed", CodeModDependencies.Problem(needsCore, 0, [Entry("nemesis")]));
-        Assert.Contains("not enabled", CodeModDependencies.Problem(needsCore, 1, [Entry("core", enabled: false), Entry("nemesis")]));
-        Assert.Contains("loads after it", CodeModDependencies.Problem(needsCore, 0, [Entry("nemesis"), Entry("core")]));
-        var needsTwo = new CodeModDependency("core", CodeModVersionRange.Parse(">=2.0.0"));
-        Assert.Contains("1.0.0 is installed", CodeModDependencies.Problem(needsTwo, 1, [Entry("core", version: "1.0.0"), Entry("nemesis")]));
-        Assert.Null(CodeModDependencies.Problem(needsCore, 1, [Entry("core"), Entry("nemesis")]));
-    }
-
-    [Fact]
-    public void An_absent_optional_dependency_is_fine_but_a_later_one_is_not()
-    {
-        var optional = new CodeModDependency("core", Optional: true);
-        Assert.Null(CodeModDependencies.Problem(optional, 0, [Entry("nemesis")]));
-        Assert.Null(CodeModDependencies.Problem(optional, 1, [Entry("core", enabled: false), Entry("nemesis")]));
-        Assert.Contains("loads after it", CodeModDependencies.Problem(optional, 0, [Entry("nemesis"), Entry("core")]));
-    }
-
-    [Fact]
-    public void Arrange_moves_dependencies_up_and_keeps_the_rest_in_place()
-    {
-        var list = new List<CodeModEntry>
-        {
-            new("Textures", null, true),
-            Entry("nemesis", dependencies: [new CodeModDependency("core"), new CodeModDependency("visitors", Optional: true)]),
-            Entry("visitors"),
-            Entry("core"),
-        };
-        Assert.Equal(["Textures", "visitors", "core", "nemesis"], CodeModDependencies.Arrange(list).Order);
-
-        list.Add(Entry("loopA", dependencies: new CodeModDependency("loopB")));
-        list.Add(Entry("loopB", dependencies: new CodeModDependency("loopA")));
-        var cycle = CodeModDependencies.Arrange(list);
-        Assert.Equal(list.Select(m => m.Name), cycle.Order);   // a cycle moves nothing and is reported
-        Assert.Equal(["loopA", "loopB"], cycle.Cycle.Select(c => c.After).Order());
-    }
-
-    /// <summary>The core guarantee: a dependent gets the dependency's loaded assembly, not its own copy; without the import it would get a second copy.</summary>
+    /// <summary>
+    /// The core guarantee: a dependent resolves the dependency's loaded assembly, even with a stray copy in its own folder. The framework loads from
+    /// a stream and the copy is never opened, so the folder deletes on Windows too.
+    /// </summary>
     [Fact]
     public void A_dependent_shares_the_dependency_s_loaded_assembly()
     {
         using var mods = new ModsFolder();
-        string frameworkFolder = Directory.CreateDirectory(Path.Combine(mods.Root, "Core")).FullName;
         string dependentFolder = Directory.CreateDirectory(Path.Combine(mods.Root, "Nemesis")).FullName;
-        EmitLibrary(Path.Combine(frameworkFolder, "MeitouTestFramework.dll"), "MeitouTestFramework");
-        File.Copy(Path.Combine(frameworkFolder, "MeitouTestFramework.dll"), Path.Combine(dependentFolder, "MeitouTestFramework.dll"));
-        var framework = new ModLoadContext(frameworkFolder, "core").LoadFromAssemblyPath(Path.Combine(frameworkFolder, "MeitouTestFramework.dll"));
-        var name = new AssemblyName("MeitouTestFramework");
+        var bytes = EmitLibrary("MeitouTestFramework");
+        File.WriteAllBytes(Path.Combine(dependentFolder, "MeitouTestFramework.dll"), bytes);
+        var framework = new ModLoadContext(mods.Root, "core").LoadFromStream(new MemoryStream(bytes));
+        var imports = new Dictionary<string, Assembly> { ["MeitouTestFramework"] = framework };
 
-        var shared = new ModLoadContext(dependentFolder, "nemesis", new Dictionary<string, Assembly> { ["MeitouTestFramework"] = framework });
-        var isolated = new ModLoadContext(dependentFolder, "other");
+        var shared = new ModLoadContext(dependentFolder, "nemesis", imports).LoadFromAssemblyName(new AssemblyName("MeitouTestFramework"));
 
-        Assert.Same(framework, shared.LoadFromAssemblyName(name));
-        Assert.Same(framework.GetType("MeitouTestFramework.Ledger"), shared.LoadFromAssemblyName(name).GetType("MeitouTestFramework.Ledger"));
-        Assert.NotSame(framework, isolated.LoadFromAssemblyName(name));
+        Assert.Same(framework, shared);
+        Assert.Same(framework.GetType("MeitouTestFramework.Ledger"), shared.GetType("MeitouTestFramework.Ledger"));
     }
 
+    /// <summary>Each refusal before code is opened names its fix; a refused dependency cascades with its reason; a disabled one says so.</summary>
     [Fact]
-    public void A_missing_dependency_refuses_the_mod_before_its_code_is_opened()
-    {
-        using var mods = new ModsFolder();
-        var nemesis = mods.Add("Nemesis", Manifest("nemesis", dependencies: """["core"]"""));
-
-        var host = Load(nemesis);
-
-        Assert.Contains("needs code mod 'core', which is not installed", host.Refused["Nemesis"]);
-    }
-
-    [Fact]
-    public void A_dependency_later_in_the_list_refuses_the_mod_with_the_fix()
-    {
-        using var mods = new ModsFolder();
-        var nemesis = mods.Add("Nemesis", Manifest("nemesis", dependencies: """["core"]"""));
-        var core = mods.Add("Core", Manifest("core"));
-
-        var host = Load(nemesis, core);
-
-        Assert.Contains("move Core above it", host.Refused["Nemesis"]);
-    }
-
-    [Fact]
-    public void A_refused_dependency_refuses_its_dependents_with_its_reason()
+    public void The_loader_refuses_missing_disabled_later_and_refused_dependencies()
     {
         using var mods = new ModsFolder();
         var core = mods.Add("Core", Manifest("core", api: 99));
-        var nemesis = mods.Add("Nemesis", Manifest("nemesis", dependencies: """["core"]"""));
+        var nemesis = mods.Add("Nemesis", Manifest("nemesis", extra: Needs("core")));
+        var lonely = mods.Add("Lonely", Manifest("lonely", extra: Needs("absent")));
+        var early = mods.Add("Early", Manifest("early", extra: Needs("late")));
+        var late = mods.Add("Late", Manifest("late"));
+        var waiting = mods.Add("Waiting", Manifest("waiting", extra: Needs("idle")));
+        var idle = mods.Add("Idle", Manifest("idle"));
 
-        var host = Load(core, nemesis);
+        var host = Load([core, nemesis, lonely, early, late, waiting], disabled: [idle]);
 
-        Assert.Contains("built for code-mod API 99", host.Refused["Core"]);
-        Assert.Contains("which did not load: built for code-mod API 99", host.Refused["Nemesis"]);
+        Assert.Contains("needs Core ('core'), which is refused: built for code-mod API 99", host.Refused["Nemesis"]);
+        Assert.Contains("needs code mod 'absent', which is not installed", host.Refused["Lonely"]);
+        Assert.Contains("move Late above it", host.Refused["Early"]);
+        Assert.Contains("needs Idle ('idle'), which is not enabled", host.Refused["Waiting"]);
     }
 
+    /// <summary>
+    /// A dependency moves up to its dependent, not the dependent down (data overrides keep their order); a cycle moves nothing and is shown.
+    /// </summary>
     [Fact]
-    public void Dependencies_need_api_2_and_api_1_mods_still_load_their_manifest()
+    public void Arrange_moves_a_dependency_up_and_reports_a_cycle()
+    {
+        static CodeModEntry Entry(string name, params string[] needs) =>
+            new(name, new CodeModManifest(name, 2, [name + ".dll"], "X.Y", null, [.. needs.Select(n => new CodeModDependency(n))]), true);
+
+        Assert.Equal(["C", "A", "B"], CodeModDependencies.Arrange([Entry("A", "C"), Entry("B"), Entry("C")]).Order);
+
+        List<CodeModEntry> loop = [Entry("Textures"), Entry("loopA", "loopB"), Entry("loopB", "loopA")];
+        var cycle = CodeModDependencies.Arrange(loop);
+
+        Assert.Equal(loop.Select(m => m.Name), cycle.Order);
+        Assert.Equal(["loopA", "loopB"], cycle.Cycle.Select(c => c.After).Order());
+    }
+
+    /// <summary>
+    /// gameVersion compares the build's release, so a nightly counts as the release it leads to; a range naming a pre-release is refused.
+    /// </summary>
+    [Fact]
+    public void Game_version_takes_a_nightly_as_its_release()
+    {
+        static CodeModManifest Built(string range) =>
+            new("m", 2, ["m.dll"], "X.Y", null, null) { GameVersion = CodeModVersionRange.Parse(range) };
+        static CodeModVersion V(string text) => CodeModVersion.TryParse(text, out var v) ? v : throw new ArgumentException(text);
+
+        Assert.Null(CodeModChecks.GameVersionProblem(Built(">=0.16.1"), V("0.16.1-nightly.20261106")));
+        Assert.Null(CodeModChecks.GameVersionProblem(Built(">=0.16.0 <0.17.0"), V("0.16.1-nightly.20261106.2")));
+        Assert.Contains("built for Meitou <0.17.0", CodeModChecks.GameVersionProblem(Built("<0.17.0"), V("0.17.0-nightly.20261201")));
+
+        using var mods = new ModsFolder();
+        var nightly = mods.Add("Nightly", Manifest("nightly", extra: """, "gameVersion": ">=0.16.1-nightly.1" """));
+        Assert.Contains("gameVersion: name releases only", Load([nightly]).Refused["Nightly"]);
+    }
+
+    /// <summary>
+    /// The launcher and the loader judge against what loads, not what is merely enabled: a refused (here untrusted) mod neither takes its id nor
+    /// conflicts, and a dependent names the mod that would have served.
+    /// </summary>
+    [Fact]
+    public void A_refused_mod_blocks_no_later_one_in_the_launcher_or_the_loader()
     {
         using var mods = new ModsFolder();
-        var tooOld = mods.Add("TooOld", Manifest("too.old", api: 1, dependencies: """["core"]"""));
-        var plainOld = mods.Add("PlainOld", Manifest("plain.old", api: 1));
+        ModInfo[] list =
+        [
+            mods.Add("Old", Manifest("old")),
+            mods.Add("Rival", Manifest("rival", extra: """, "incompatible": ["x"]""")),
+            mods.Add("Twin", Manifest("old")),
+            mods.Add("Needy", Manifest("needy", extra: Needs("old"))),
+            mods.Add("X", Manifest("x")),
+        ];
+        var trusted = new HashSet<string> { "Twin", "Needy", "X" };
 
-        var host = Load(tooOld, plainOld);
+        var launcher = CodeModChecks.Check([.. list.Select(m => CodeModDependencies.ReadEntry(m, enabled: true))], trusted);
+        var host = Load(list, trusted);
 
-        Assert.Contains("need apiVersion 2", host.Refused["TooOld"]);
-        Assert.Contains("plain.old.dll is missing", host.Refused["PlainOld"]);   // past the API and dependency checks, to its (absent) code
-    }
-
-    [Fact]
-    public void An_absent_optional_dependency_lets_the_mod_go_on()
-    {
-        using var mods = new ModsFolder();
-        var nemesis = mods.Add("Nemesis", Manifest("nemesis", dependencies: """[{ "id": "visitors", "optional": true }]"""));
-
-        var host = Load(nemesis);
-
-        Assert.Contains("nemesis.dll is missing", host.Refused["Nemesis"]);
-    }
-
-    static (ModContext Context, Framework Instance) DependentContext(bool loaded)
-    {
-        var core = new LoadedMod(new ModInfo("Core", "mods/Core/Core.mod", ModSource.Local), new CodeModManifest("core", 2, ["Core.dll"], "Core.Mod"))
-        {
-            Instance = new Framework(),
-        };
-        var manifest = new CodeModManifest("nemesis", 2, ["Nemesis.dll"], "Nemesis.Mod", Version: null, Dependencies: [new CodeModDependency("core", Optional: true)]);
-        var nemesis = new LoadedMod(new ModInfo("Nemesis", "mods/Nemesis/Nemesis.mod", ModSource.Local), manifest)
-        {
-            Dependencies = loaded ? [core] : [],
-        };
-        return (new ModContext(nemesis, new ModRegistry(), null!, null!, () => null), (Framework)core.Instance);
-    }
-
-    [Fact]
-    public void Dependency_gives_the_framework_s_entry_or_null_when_an_optional_one_is_absent()
-    {
-        var (context, instance) = DependentContext(loaded: true);
-        Assert.Same(instance, context.Dependency<Framework>("core"));
-        Assert.Same(instance, context.Dependency<IMod>("core"));
-        Assert.True(context.HasDependency("core"));
-
-        var (absent, _) = DependentContext(loaded: false);
-        Assert.Null(absent.Dependency<Framework>("core"));
-        Assert.False(absent.HasDependency("core"));
-    }
-
-    [Fact]
-    public void Dependency_refuses_an_undeclared_id_and_a_wrong_type()
-    {
-        var (context, _) = DependentContext(loaded: true);
-        Assert.Throws<InvalidOperationException>(() => context.Dependency<Framework>("visitors"));
-        Assert.Throws<InvalidCastException>(() => context.Dependency<ModDependencyTests>("core"));
+        Assert.Empty(launcher);
+        Assert.Contains("old.dll is missing", host.Refused["Twin"]);   // past the id check, to its (absent) code
+        Assert.Contains("x.dll is missing", host.Refused["X"]);
+        Assert.Contains("needs Twin ('old'), which is refused: old.dll is missing", host.Refused["Needy"]);
     }
 }

@@ -3,9 +3,10 @@ using System.Globalization;
 namespace Meitou.Content;
 
 /// <summary>
-/// A code mod's <c>version</c> (docs/modding-dependencies.md "Versions"): a Semantic Versioning 2.0.0 version, <c>MAJOR.MINOR.PATCH</c> with an optional
-/// pre-release (<c>-beta.1</c>) and build metadata (<c>+abc</c>). Precedence is SemVer's: a pre-release is lower than its release (<c>1.2.0-beta &lt; 1.2.0</c>),
-/// pre-release identifiers compare one by one (numbers numerically, below text), and build metadata is ignored, also by equality.
+/// A code mod's <c>version</c> (docs/modding-dependencies.md "Versions"): a Semantic Versioning 2.0.0 version, <c>MAJOR.MINOR.PATCH</c> with an
+/// optional pre-release (<c>-beta.1</c>) and build metadata (<c>+abc</c>). Precedence is SemVer's: a pre-release is lower than its release
+/// (<c>1.2.0-beta &lt; 1.2.0</c>), pre-release identifiers compare one by one (numbers numerically, below text), and build metadata is ignored, also
+/// by equality.
 /// </summary>
 public readonly record struct CodeModVersion(int Major, int Minor, int Patch) : IComparable<CodeModVersion>
 {
@@ -59,7 +60,9 @@ public readonly record struct CodeModVersion(int Major, int Minor, int Patch) : 
 
     public int CompareTo(CodeModVersion other)
     {
-        int order = Major != other.Major ? Major.CompareTo(other.Major) : Minor != other.Minor ? Minor.CompareTo(other.Minor) : Patch.CompareTo(other.Patch);
+        int order = Major != other.Major ? Major.CompareTo(other.Major)
+            : Minor != other.Minor ? Minor.CompareTo(other.Minor)
+            : Patch.CompareTo(other.Patch);
         return order != 0 ? order : ComparePrerelease(Prerelease, other.Prerelease);
     }
 
@@ -91,14 +94,20 @@ public readonly record struct CodeModVersion(int Major, int Minor, int Patch) : 
     /// <summary>Same major, minor and patch, whatever the pre-release.</summary>
     public bool SameRelease(CodeModVersion other) => Major == other.Major && Minor == other.Minor && Patch == other.Patch;
 
+    /// <summary>
+    /// The release this version leads to: <c>MAJOR.MINOR.PATCH</c> without pre-release or build (<c>0.16.1-nightly.5</c> gives <c>0.16.1</c>).
+    /// </summary>
+    public CodeModVersion Release => new(Major, Minor, Patch);
+
     public override string ToString() =>
         $"{Major}.{Minor}.{Patch}" + (IsPrerelease ? "-" + Prerelease : "") + (Build.Length > 0 ? "+" + Build : "");
 }
 
 /// <summary>
-/// A dependency's version range: comparators separated by spaces, all of which must hold (<c>&gt;=1.2.0 &lt;2.0.0</c>). Operators: <c>&gt;=</c>, <c>&gt;</c>,
-/// <c>&lt;=</c>, <c>&lt;</c>, <c>=</c>; a bare version means <c>=</c>. A pre-release is accepted only when a comparator names a pre-release of the same
-/// <c>MAJOR.MINOR.PATCH</c> (as npm and Cargo do), so <c>&lt;2.0.0</c> does not take <c>2.0.0-alpha</c> and nothing takes an unasked-for pre-release.
+/// A dependency's version range: comparators separated by spaces, all of which must hold (<c>&gt;=1.2.0 &lt;2.0.0</c>). Operators: <c>&gt;=</c>,
+/// <c>&gt;</c>, <c>&lt;=</c>, <c>&lt;</c>, <c>=</c>; a bare version means <c>=</c>. A pre-release is accepted only when a comparator names a
+/// pre-release of the same <c>MAJOR.MINOR.PATCH</c> (as npm and Cargo do), so <c>&lt;2.0.0</c> does not take <c>2.0.0-alpha</c> and nothing takes an
+/// unasked-for pre-release.
 /// </summary>
 public sealed class CodeModVersionRange
 {
@@ -120,7 +129,8 @@ public sealed class CodeModVersionRange
         {
             string op = token.StartsWith(">=") || token.StartsWith("<=") ? token[..2] : token[0] is '>' or '<' or '=' ? token[..1] : "=";
             string rest = token[0] is '>' or '<' or '=' ? token[op.Length..] : token;
-            if (!CodeModVersion.TryParse(rest, out var version)) throw new InvalidDataException($"'{token}' is not a version comparator (e.g. >=1.2.0)");
+            if (!CodeModVersion.TryParse(rest, out var version))
+                throw new InvalidDataException($"'{token}' is not a version comparator (e.g. >=1.2.0)");
             list.Add((op, version));
         }
         if (list.Count == 0) throw new InvalidDataException("an empty version range; leave \"version\" out to accept any version");
@@ -130,8 +140,8 @@ public sealed class CodeModVersionRange
     public bool Contains(CodeModVersion version) =>
         comparators.All(c => Holds(c.Op, version.CompareTo(c.Version))) && (!version.IsPrerelease || OptsIntoPrerelease(version));
 
-    /// <summary>Plain SemVer precedence without the pre-release opt-in: for <c>gameVersion</c>, where the player picks a nightly, not the mod's author.</summary>
-    public bool ContainsByPrecedence(CodeModVersion version) => comparators.All(c => Holds(c.Op, version.CompareTo(c.Version)));
+    /// <summary>Whether a comparator names a pre-release; <c>gameVersion</c> refuses such a range, as it compares releases only.</summary>
+    public bool NamesPrerelease => comparators.Any(c => c.Version.IsPrerelease);
 
     bool OptsIntoPrerelease(CodeModVersion version) => comparators.Any(c => c.Version.IsPrerelease && c.Version.SameRelease(version));
 

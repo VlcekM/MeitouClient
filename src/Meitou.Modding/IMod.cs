@@ -26,15 +26,20 @@ public interface IModSaveData
 /// <summary>The code-mod API (docs/modding.md "Versioning").</summary>
 public static class ModApi
 {
-    /// <summary>The newest <c>apiVersion</c> this game runs. 2 added <c>version</c>, <c>dependencies</c> and <see cref="ModContext.Dependency{T}"/>.</summary>
+    /// <summary>
+    /// The newest <c>apiVersion</c> this game runs. 2 added <c>version</c>, <c>dependencies</c> and <see cref="ModContext.Dependency{T}"/>.
+    /// </summary>
     public const int Version = Meitou.Content.CodeModApi.Newest;
 
-    /// <summary>The oldest <c>apiVersion</c> this game still runs; a manifest outside <see cref="MinimumVersion"/>..<see cref="Version"/> is refused with a message.</summary>
+    /// <summary>
+    /// The oldest <c>apiVersion</c> this game still runs; a manifest outside <see cref="MinimumVersion"/>..<see cref="Version"/> is refused with a
+    /// message.
+    /// </summary>
     public const int MinimumVersion = Meitou.Content.CodeModApi.Oldest;
 
     /// <summary>
-    /// The first <c>apiVersion</c> whose manifests may declare <c>dependencies</c>, <c>loadAfter</c>, <c>incompatible</c> and <c>gameVersion</c>; an older game would
-    /// ignore them (and load a private copy of a framework).
+    /// The first <c>apiVersion</c> whose manifests may declare <c>dependencies</c>, <c>loadAfter</c>, <c>incompatible</c> and <c>gameVersion</c>; an
+    /// older game would ignore them (and load a private copy of a framework).
     /// </summary>
     public const int DependenciesVersion = Meitou.Content.CodeModApi.Dependencies;
 
@@ -42,9 +47,10 @@ public static class ModApi
 }
 
 /// <summary>
-/// Implemented by a framework's entry type that takes registrations from its dependents (docs/modding-dependencies.md "Writing a framework"). When a dependent's
-/// <see cref="IMod.Initialize"/> throws, the loader removes that mod's own registrations and Harmony patches, then calls <see cref="DependentFailed"/> on every mod it
-/// depends on (directly or through others), so each framework drops what it holds for that mod id. A throw here is logged and ignored.
+/// Implemented by a framework's entry type that takes registrations from its dependents (docs/modding-dependencies.md "Writing a framework"). When a
+/// dependent's <see cref="IMod.Initialize"/> throws, the loader removes that mod's own registrations and Harmony patches, then calls
+/// <see cref="DependentFailed"/> on every mod it depends on (directly or through others), so each framework drops what it holds for that mod id. A
+/// throw here is logged and ignored.
 /// </summary>
 public interface IModDependents
 {

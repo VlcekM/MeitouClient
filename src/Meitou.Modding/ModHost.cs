@@ -21,21 +21,29 @@ public sealed class LoadedMod
     public IReadOnlyList<Assembly> Assemblies { get; internal set; } = [];
     public IMod? Instance { get; internal set; }
 
-    /// <summary>The declared dependencies that loaded (docs/modding.md "Dependencies"), in manifest order; an absent optional one is not here.</summary>
+    /// <summary>
+    /// The declared dependencies that loaded (docs/modding-dependencies.md), in manifest order; an absent optional one is not here.
+    /// </summary>
     public IReadOnlyList<LoadedMod> Dependencies { get; internal set; } = [];
 
     /// <summary>
-    /// What a mod depending on this one resolves from it, by simple name: this mod's own <see cref="Assemblies"/> and, transitively, what its dependencies export, so
-    /// a framework's types exist once. Other DLLs in its folder stay private.
+    /// What a mod depending on this one resolves from it, by simple name: this mod's own <see cref="Assemblies"/> and, transitively, what its
+    /// dependencies export, so a framework's types exist once. Other DLLs in its folder stay private.
     /// </summary>
     public IReadOnlyDictionary<string, Assembly> Exports { get; internal set; } = new Dictionary<string, Assembly>();
 }
 
-/// <summary>Where a <see cref="ModHost"/> loads from: the enabled mods in order, the mods the player allowed to run code, the merged data and the running world.</summary>
+/// <summary>
+/// Where a <see cref="ModHost"/> loads from: the enabled code mods in order, the mods the player allowed to run code, the merged data and the running
+/// world.
+/// </summary>
 /// <param name="SavedSettings">The player's saved settings of a mod by its id (setting key to text), or null.</param>
+/// <param name="GameVersion">The running Meitou for <c>gameVersion</c> ranges; null passes every range.</param>
+/// <param name="Disabled">The installed code mods not enabled, only so a dependent's refusal says "not enabled" rather than "not installed".</param>
 public sealed record ModHostOptions(
     IReadOnlyList<ModInfo> Enabled, IReadOnlySet<string> Allowed, GameDatabase Data, PopulationData Population, Func<World?> World,
-    Func<string, IReadOnlyDictionary<string, string>?>? SavedSettings = null, CodeModVersion? GameVersion = null);
+    Func<string, IReadOnlyDictionary<string, string>?>? SavedSettings = null, CodeModVersion? GameVersion = null,
+    IReadOnlyList<ModInfo>? Disabled = null);
 
 /// <summary>
 /// The code mods of a session (docs/modding.md): loads the enabled, allowed ones at startup, runs their <see cref="IMod.Initialize"/> once, and holds what they
@@ -47,7 +55,7 @@ public sealed class ModHost
     readonly ModRegistry registry = new();
     readonly List<LoadedMod> mods = [];
     readonly List<string> notices = [];
-    readonly Dictionary<string, string> refused = new(StringComparer.Ordinal);
+    readonly CodeModPass pass = new();
 
     ModHost() { }
 
@@ -57,7 +65,7 @@ public sealed class ModHost
     public IReadOnlyList<string> Notices => notices;
 
     /// <summary>The reason each refused code mod was not loaded, by mod name (the <c>.mod</c> file's stem, as in mods.cfg).</summary>
-    public IReadOnlyDictionary<string, string> Refused => refused;
+    public IReadOnlyDictionary<string, string> Refused => pass.Refusals;
 
     /// <summary>What every world is built with; null without registrations.</summary>
     public SimulationExtensions? Simulation => registry.Simulation.IsEmpty ? null : registry.Simulation;
@@ -94,18 +102,22 @@ public sealed class ModHost
     public IReadOnlyDictionary<int, string> RecordTypes => registry.RecordTypes;
 
     /// <summary>The enabled mods of <c>mods.cfg</c>, in order, that carry code (<see cref="ModInfo.HasCode"/>).</summary>
+    public static List<ModInfo> EnabledCodeMods(GameInstall install) => CodeMods(install).Enabled;
+
+    /// <summary>The code mods on disk: the enabled ones in <c>mods.cfg</c> order, then the others.</summary>
     /// <remarks>A folder that cannot be read gives none (logged): a failing scan must not stop a game that may have no code mods at all.</remarks>
-    public static List<ModInfo> EnabledCodeMods(GameInstall install)
+    public static (List<ModInfo> Enabled, List<ModInfo> Disabled) CodeMods(GameInstall install)
     {
         try
         {
-            var onDisk = ModList.Discover(install).ToDictionary(m => m.Name, StringComparer.Ordinal);
-            return [.. ModList.ReadEnabled(install).Select(n => onDisk.GetValueOrDefault(n)).OfType<ModInfo>().Where(m => m.HasCode)];
+            var onDisk = ModList.Discover(install).Where(m => m.HasCode).ToDictionary(m => m.Name, StringComparer.Ordinal);
+            List<ModInfo> enabled = [.. ModList.ReadEnabled(install).Select(n => onDisk.GetValueOrDefault(n)).OfType<ModInfo>()];
+            return (enabled, [.. onDisk.Values.Except(enabled)]);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
             Console.Error.WriteLine($"mods      the mod folders could not be read, no code mods: {e.Message}");
-            return [];
+            return ([], []);
         }
     }
 
@@ -113,7 +125,9 @@ public sealed class ModHost
     public static ModHost Load(ModHostOptions options)
     {
         var host = new ModHost();
-        var entries = options.Enabled.Select(m => new CodeModEntry(m.Name, CodeModDependencies.TryReadManifest(m), true)).ToList();
+        var entries = options.Enabled.Select(m => CodeModDependencies.ReadEntry(m, enabled: true))
+            .Concat((options.Disabled ?? []).Select(m => CodeModDependencies.ReadEntry(m, enabled: false)))
+            .ToList();
         for (int i = 0; i < options.Enabled.Count; i++) host.TryLoad(options.Enabled[i], options, entries, i);
         return host;
     }
@@ -131,6 +145,7 @@ public sealed class ModHost
             mod = Prepare(info, entries, index, options.GameVersion);
             Initialize(mod, options);
             mods.Add(mod);
+            pass.Loaded(info.Name, mod.Manifest);
             string assemblies = string.Join(", ", mod.Assemblies.Select(a => a.GetName().Name));
             Console.WriteLine($"mod       {mod.Manifest.Id}: loaded from {info.Name} ({assemblies})");
         }
@@ -149,7 +164,7 @@ public sealed class ModHost
     {
         Console.Error.WriteLine($"mod       {mod}: not loaded: {reason}");
         notices.Add($"Mod {mod} not loaded: {reason}");
-        refused[mod] = reason;
+        pass.Refused(mod, reason);
     }
 
     /// <summary>The manifest checks, the assemblies and the entry instance.</summary>
@@ -161,9 +176,9 @@ public sealed class ModHost
         {
             throw new ModLoadException($"bad {ModList.CodeManifestFile}: {e.Message}");
         }
-        CheckWithoutCode(manifest, entries, index, gameVersion);
+        if (CodeModChecks.Problems(manifest, index, entries, pass, gameVersion) is [var problem, ..]) throw new ModLoadException(problem);
         var mod = new LoadedMod(info, manifest);
-        mod.Dependencies = ResolveDependencies(manifest, entries, index);
+        mod.Dependencies = LoadedDependencies(manifest);
         var imports = Imports(mod.Dependencies);
         mod.Assemblies = LoadAssemblies(info, manifest, imports);
         mod.Exports = Exported(mod.Assemblies, imports);
@@ -172,53 +187,18 @@ public sealed class ModHost
     }
 
     /// <summary>
-    /// The rules that need none of the mod's code (CodeModChecks): API, game version, a taken id, a conflict with a loaded mod, a <c>loadAfter</c> mod later in the list.
+    /// The loaded mods this one depends on, in manifest order (docs/modding-dependencies.md "Rules"). The shared checks have already refused it for a
+    /// required one that is not loaded; an optional one that is absent or did not load is left out.
     /// </summary>
-    void CheckWithoutCode(CodeModManifest manifest, IReadOnlyList<CodeModEntry> entries, int index, CodeModVersion? gameVersion)
-    {
-        if (CodeModChecks.ApiProblem(manifest) is { } api) throw new ModLoadException(api);
-        if (CodeModChecks.GameVersionProblem(manifest, gameVersion) is { } game) throw new ModLoadException(game);
-        if (mods.FirstOrDefault(m => m.Manifest.Id == manifest.Id) is { } twin)
-            throw new ModLoadException($"id '{manifest.Id}' is taken by mod {twin.Info.Name}");
-        if (mods.FirstOrDefault(m => manifest.ConflictsWith(m.Manifest)) is { } rival)
-            throw new ModLoadException($"is incompatible with {rival.Info.Name} ('{rival.Manifest.Id}'), which loaded first; disable one of them");
-        if (CodeModChecks.LoadAfterProblem(manifest, index, entries) is { } order) throw new ModLoadException(order);
-    }
-
-    /// <summary>
-    /// The loaded mods this one depends on (docs/modding.md "Dependencies"). A required dependency that is missing, disabled, later in the list, of a version out of
-    /// range or refused itself refuses this mod; an optional one that is absent or did not load is left out.
-    /// </summary>
-    List<LoadedMod> ResolveDependencies(CodeModManifest manifest, IReadOnlyList<CodeModEntry> entries, int index)
+    List<LoadedMod> LoadedDependencies(CodeModManifest manifest)
     {
         var resolved = new List<LoadedMod>();
         foreach (var dependency in manifest.DependsOn)
         {
-            if (mods.FirstOrDefault(m => m.Manifest.Id == dependency.Id) is { } loaded)
-            {
-                if (!dependency.Accepts(loaded.Manifest.Version))
-                    throw new ModLoadException($"needs {loaded.Info.Name} ('{dependency.Id}') {dependency.Range}; " +
-                        $"{loaded.Manifest.Version?.ToString() ?? "a version without a number"} is installed");
-                resolved.Add(loaded);
-                continue;
-            }
-            if (CodeModDependencies.Problem(dependency, index, entries) is { } problem) throw new ModLoadException(problem);
-            if (dependency.Optional)
-            {
-                Console.WriteLine($"mod       {manifest.Id}: optional dependency '{dependency.Id}' did not load; going on without it");
-                continue;
-            }
-            throw new ModLoadException(NotLoaded(dependency, entries));
+            if (mods.FirstOrDefault(m => m.Manifest.Id == dependency.Id) is { } loaded) resolved.Add(loaded);
+            else Console.WriteLine($"mod       {manifest.Id}: optional dependency '{dependency.Id}' did not load; going on without it");
         }
         return resolved;
-    }
-
-    /// <summary>Why an enabled, earlier dependency is not loaded: it was refused (its reason) or its manifest could not be read.</summary>
-    string NotLoaded(CodeModDependency dependency, IReadOnlyList<CodeModEntry> entries)
-    {
-        string name = entries[CodeModDependencies.IndexOf(dependency.Id, entries)].Name;
-        string reason = refused.TryGetValue(name, out var why) ? why : "it did not load";
-        return $"needs {name} ('{dependency.Id}'), which did not load: {reason}";
     }
 
     /// <summary>What the dependencies export, merged; two of them exporting different assemblies under one simple name refuse the mod.</summary>
@@ -286,8 +266,8 @@ public sealed class ModHost
     }
 
     /// <summary>
-    /// A dependent failed in <see cref="IMod.Initialize"/>: every mod it depends on, directly or through others, that implements <see cref="IModDependents"/> drops
-    /// what it holds for it (docs/modding-dependencies.md "Failed initialization").
+    /// A dependent failed in <see cref="IMod.Initialize"/>: every mod it depends on, directly or through others, that implements
+    /// <see cref="IModDependents"/> drops what it holds for it (docs/modding-dependencies.md "Failed initialization").
     /// </summary>
     internal static void TellDependenciesItFailed(LoadedMod mod)
     {
@@ -313,9 +293,14 @@ public sealed class ModHost
         return all;
     }
 
-    /// <summary>The code mods of this session for a save (docs/formats/save.md "Mod data"): the loaded ones in load order, with ids and versions.</summary>
-    public CodeModEnvironment Environment(string gameVersion) =>
-        new(gameVersion, [.. mods.Select(m => new CodeModEnvironmentEntry(m.Manifest.Id, m.Manifest.Version?.ToString(), m.Info.Name))]);
+    /// <summary>
+    /// The code mods of this session for a save (docs/formats/save.md "Mod data"): the loaded ones in load order, with ids and versions.
+    /// </summary>
+    public CodeModEnvironment Environment(string gameVersion)
+    {
+        var entries = mods.Select(m => new CodeModEnvironmentEntry(m.Manifest.Id, m.Manifest.Version?.ToString(), m.Info.Name));
+        return new CodeModEnvironment(gameVersion, [.. entries]);
+    }
 
     /// <summary>
     /// The save data of the world's mod systems (<see cref="IModSaveData"/>) into <paramref name="files"/>, one file per mod by id; between ticks. A mod without such

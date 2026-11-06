@@ -54,9 +54,8 @@ drop-in replacement that runs original content and mods unchanged.
 
 ## Code mods
 
-- The code-mod contract is [docs/modding.md](docs/modding.md); mods that build on other mods follow
-  [docs/modding-dependencies.md](docs/modding-dependencies.md) ("Writing a framework"). A change to `CodeModManifest`, `ModHost` or
-  `ModContext` updates those docs, and bumps `ModApi.Version` when an older game would misread the new manifest.
+- Contract: [docs/modding.md](docs/modding.md) and [docs/modding-dependencies.md](docs/modding-dependencies.md). A change to
+  `CodeModManifest`, `ModHost` or `ModContext` updates them; bump `ModApi.Version` when an older game would misread the manifest.
 
 ## Build
 

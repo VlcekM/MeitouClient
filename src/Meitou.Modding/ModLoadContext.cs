@@ -4,10 +4,11 @@ using System.Runtime.Loader;
 namespace Meitou.Modding;
 
 /// <summary>
-/// One mod's assemblies (docs/modding.md "Loading"): non-collectible, loaded once. An assembly the game ships (<c>Meitou.*</c>, the framework, Bepu, <c>0Harmony</c>:
-/// everything on the trusted platform list) always comes from the game, even when the mod folder has a copy, so a mod never holds a private copy of engine
-/// types or a second Harmony; next, an assembly a dependency exports (docs/modding.md "Dependencies") comes from that dependency's context, so a framework's types and
-/// statics exist once; anything else comes from the mod folder, so two mods may ship different versions of the same library.
+/// One mod's assemblies (docs/modding.md "Loading"): non-collectible, loaded once. An assembly the game ships (<c>Meitou.*</c>, the framework, Bepu,
+/// <c>0Harmony</c>: everything on the trusted platform list) always comes from the game, even when the mod folder has a copy, so a mod never holds a
+/// private copy of engine types or a second Harmony; next, an assembly a dependency exports (docs/modding-dependencies.md "Assembly resolution")
+/// comes from that dependency's context, so a framework's types and statics exist once; anything else comes from the mod folder, so two mods may ship
+/// different versions of a library.
 /// </summary>
 sealed class ModLoadContext(string folder, string name, IReadOnlyDictionary<string, Assembly>? imports = null)
     : AssemblyLoadContext($"mod {name}", isCollectible: false)

@@ -3,11 +3,11 @@ using System.Text.Json;
 namespace Meitou.Content;
 
 /// <summary>
-/// A code mod's <c>meitou.json</c> beside its <c>.mod</c> (docs/modding.md "Discovery"): <c>id</c> (letters, digits, <c>. _ -</c>; keys its save data and its Harmony
-/// instance), <c>apiVersion</c> (the code-mod API it was built for), <c>assemblies</c> (DLL file names in the mod folder, loaded in order) and <c>entry</c> (the full name of
-/// its <c>IMod</c> type). Optional since API 2 (docs/modding.md "Dependencies"): <c>version</c> (the mod's own <see cref="CodeModVersion"/>) and <c>dependencies</c> (other code
-/// mods by id, each with an optional version range and <c>optional</c> flag), plus <c>loadAfter</c>, <c>incompatible</c> and <c>gameVersion</c>
-/// (CodeModManifest.Ordering.cs).
+/// A code mod's <c>meitou.json</c> beside its <c>.mod</c> (docs/modding.md "Discovery"): <c>id</c> (letters, digits, <c>. _ -</c>; keys its save data
+/// and its Harmony instance), <c>apiVersion</c> (the code-mod API it was built for), <c>assemblies</c> (DLL file names in the mod folder, loaded in
+/// order) and <c>entry</c> (the full name of its <c>IMod</c> type). Optional since API 2 (docs/modding-dependencies.md "Manifest"): <c>version</c>
+/// (the mod's own <see cref="CodeModVersion"/>) and <c>dependencies</c> (other code mods by id, each with an optional version range and
+/// <c>optional</c> flag), plus <c>loadAfter</c>, <c>incompatible</c> and <c>gameVersion</c> (CodeModManifest.Ordering.cs).
 /// </summary>
 public sealed partial record CodeModManifest(string Id, int ApiVersion, IReadOnlyList<string> Assemblies, string Entry,
     CodeModVersion? Version, IReadOnlyList<CodeModDependency>? Dependencies)
@@ -36,10 +36,9 @@ public sealed partial record CodeModManifest(string Id, int ApiVersion, IReadOnl
     /// </summary>
     public static CodeModManifest Read(string path)
     {
-        var options = new JsonDocumentOptions { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true };
         try
         {
-            using var json = JsonDocument.Parse(File.ReadAllBytes(path), options);
+            using var json = JsonDocument.Parse(File.ReadAllBytes(path), JsonOptions);
             return FromJson(json.RootElement);
         }
         catch (JsonException e)
@@ -50,6 +49,27 @@ public sealed partial record CodeModManifest(string Id, int ApiVersion, IReadOnl
         {
             // A JsonElement read of the wrong kind; the field checks should make this unreachable, but it stays a malformed manifest, not a crash.
             throw new InvalidDataException($"{ModList.CodeManifestFile} has a field of the wrong kind: {e.Message}", e);
+        }
+    }
+
+    static readonly JsonDocumentOptions JsonOptions = new() { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true };
+
+    /// <summary>
+    /// Only the <c>id</c> of a manifest that may be malformed otherwise, so a dependent of a broken mod names it; null when even that cannot be read.
+    /// Never throws.
+    /// </summary>
+    public static string? TryReadId(string path)
+    {
+        try
+        {
+            using var json = JsonDocument.Parse(File.ReadAllBytes(path), JsonOptions);
+            var root = json.RootElement;
+            if (root.ValueKind != JsonValueKind.Object || !root.TryGetProperty("id", out var id) || id.ValueKind != JsonValueKind.String) return null;
+            return id.GetString() is { } text && IsValidId(text) ? text : null;
+        }
+        catch (Exception e) when (e is not OutOfMemoryException)
+        {
+            return null;
         }
     }
 
@@ -125,8 +145,8 @@ public sealed partial record CodeModManifest(string Id, int ApiVersion, IReadOnl
 }
 
 /// <summary>
-/// One entry of a manifest's <c>dependencies</c> (docs/modding.md "Dependencies"): another code mod's manifest id, an optional version range, and whether the mod
-/// also loads without it. A plain string is a required dependency on any version.
+/// One entry of a manifest's <c>dependencies</c> (docs/modding-dependencies.md "Manifest"): another code mod's manifest id, an optional version
+/// range, and whether the mod also loads without it. A plain string is a required dependency on any version.
 /// </summary>
 public sealed record CodeModDependency(string Id, CodeModVersionRange? Range = null, bool Optional = false)
 {
@@ -134,7 +154,8 @@ public sealed record CodeModDependency(string Id, CodeModVersionRange? Range = n
     {
         if (item.ValueKind == JsonValueKind.String) return new CodeModDependency(CheckedId(item.GetString(), key));
         if (item.ValueKind != JsonValueKind.Object) throw new InvalidDataException($"{key}: '{item}' is neither an id nor an object");
-        string id = CheckedId(item.TryGetProperty("id", out var idValue) && idValue.ValueKind == JsonValueKind.String ? idValue.GetString() : null, key);
+        string? text = item.TryGetProperty("id", out var idValue) && idValue.ValueKind == JsonValueKind.String ? idValue.GetString() : null;
+        string id = CheckedId(text, key);
         return new CodeModDependency(id, ReadRange(item, id, key), ReadOptional(item, id, key));
     }
 
@@ -161,7 +182,9 @@ public sealed record CodeModDependency(string Id, CodeModVersionRange? Range = n
         return id;
     }
 
-    /// <summary>Whether an installed version satisfies the range: no range accepts anything, a mod without a version satisfies only no range.</summary>
+    /// <summary>
+    /// Whether an installed version satisfies the range: no range accepts anything, a mod without a version satisfies only no range.
+    /// </summary>
     public bool Accepts(CodeModVersion? installed) => Range is null || installed is { } v && Range.Contains(v);
 
     public override string ToString() => Range is null ? Id : $"{Id} {Range}";

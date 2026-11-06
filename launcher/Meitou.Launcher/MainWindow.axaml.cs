@@ -32,6 +32,8 @@ public sealed partial class MainWindow : Window
     bool languageReady, populatingLanguages;
     int modsLoad;
     bool modsReady;
+    // While ApplyOrder rebuilds the list: the mod count and the dependency check wait for the end.
+    bool checksSuspended;
     string? launcherUpdateVersion;   // the launcher release the update button offers, for a language switch
     static string Tr(string text, params object?[] args) => LauncherText.Translate(text, args);
 
@@ -479,7 +481,7 @@ public sealed partial class MainWindow : Window
         ModsEmpty.IsVisible = false;
         ModCount.Text = Tr("Loading");
         var gameInstall = install;
-        List<(ModEntry Entry, (CodeModManifest? Manifest, string? Error) Code)> entries;
+        List<(ModEntry Entry, CodeModEntry Code)> entries;
         try
         {
             entries = gameInstall is null ? [] : await Task.Run(() =>
@@ -487,7 +489,7 @@ public sealed partial class MainWindow : Window
                 var order = ModList.LauncherOrder(gameInstall, ModList.Discover(gameInstall));
                 // The rows show each mod's author, plugin note and code-mod dependencies: read them here too, not on the UI thread.
                 foreach (var entry in order) { _ = entry.Mod.Header; _ = entry.Mod.HasNativePlugin; }
-                return order.Select(e => (e, CodeModDependencies.ReadManifest(e.Mod))).ToList();
+                return order.Select(e => (e, CodeModDependencies.ReadEntry(e.Mod, e.Enabled))).ToList();
             });
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
@@ -499,8 +501,9 @@ public sealed partial class MainWindow : Window
             return;
         }
         if (load != modsLoad) return;
-        foreach (var (entry, code) in entries) mods.Add(new ModRow(entry.Mod, entry.Enabled, code.Manifest) { ManifestError = code.Error });
-        foreach (var row in mods) row.PropertyChanged += (_, _) => ShowModCount();
+        foreach (var (entry, code) in entries) mods.Add(new ModRow(entry.Mod, entry.Enabled, code));
+        // Only a toggle changes the count and the checks; the checks' own Notes changes must not start them again.
+        foreach (var row in mods) row.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(ModRow.Enabled)) ShowModCount(); };
         modsReady = true;
         ShowModCount();
         ModsEmpty.IsVisible = mods.Count == 0;
@@ -510,20 +513,22 @@ public sealed partial class MainWindow : Window
 
     void ShowModCount()
     {
+        if (checksSuspended) return;
         ModCount.Text = mods.Count == 0 ? Tr("No mods found") : Tr("{1} of {2} enabled", mods.Count(m => m.Enabled), mods.Count);
         ShowDependencyProblems();
     }
 
-    // The code-mod rules the game applies at start that need no code (docs/modding-dependencies.md "Launcher"), shown on each row as the list changes. A
-    // preliminary check: DLLs and initialization are tried only by the game. Mods set to data only cannot serve as dependencies.
+    // The code-mod rules the game applies at start that need no code (docs/modding-dependencies.md "Launcher"), shown on each row as the list
+    // changes. A preliminary check: DLLs and initialization are tried only by the game. Mods set to data only cannot serve as dependencies.
     void ShowDependencyProblems()
     {
+        if (checksSuspended) return;
         var problems = CodeModChecks.Check(DependencyEntries(), RunsCode());
         foreach (var row in mods) row.DependencyProblems = problems.TryGetValue(row.Name, out var lines) ? lines : [];
     }
 
     List<CodeModEntry> DependencyEntries() =>
-        [.. mods.Select(m => new CodeModEntry(m.Name, m.Manifest, m.Enabled, m.Mod.Header?.Dependencies) { ManifestError = m.ManifestError })];
+        [.. mods.Select(m => m.Code with { Enabled = m.Enabled, HeaderDependencies = m.Mod.Header?.Dependencies })];
 
     // The mods that may run code at start: all but those set to data only and not allowed since (undecided ones are asked at Play).
     HashSet<string> RunsCode()
@@ -533,8 +538,8 @@ public sealed partial class MainWindow : Window
         return mods.Select(m => m.Name).Where(n => !dataOnly.Contains(n)).ToHashSet(StringComparer.Ordinal);
     }
 
-    // One graph of the enabled mods' code and .mod header dependencies; the proposed order is shown and applied only when accepted, and is not saved until
-    // Save or Play. A contradiction is shown and changes nothing.
+    // One graph of the enabled mods' code and .mod header dependencies; the proposed order is shown and applied only when accepted, and is not
+    // saved until Save or Play. A contradiction is shown and changes nothing.
     async void ArrangeMods_Click(object? sender, RoutedEventArgs e)
     {
         if (!ModsReady()) return;
@@ -729,22 +734,32 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Puts the named mods first, in this order and with these flags, and the others after them, disabled; answers the enabled names not
-    /// on disk.
+    /// Puts the named mods first, in this order and with these flags, and the others after them, disabled; answers the enabled names not on disk.
     /// </summary>
+    /// <remarks>
+    /// The count and the dependency check are held while rows move and run once at the end, synchronously (Arrange reads the result).
+    /// </remarks>
     List<string> ApplyOrder(IEnumerable<(string Name, bool Enabled)> order)
     {
         var byName = mods.ToDictionary(m => m.Name, StringComparer.Ordinal);
         var ordered = new List<ModRow>();
         var missing = new List<string>();
-        foreach (var (name, enabled) in order)
+        checksSuspended = true;
+        try
         {
-            if (byName.Remove(name, out var row)) { row.Enabled = enabled; ordered.Add(row); }
-            else if (enabled) missing.Add(name);
+            foreach (var (name, enabled) in order)
+            {
+                if (byName.Remove(name, out var row)) { row.Enabled = enabled; ordered.Add(row); }
+                else if (enabled) missing.Add(name);
+            }
+            foreach (var row in mods.Where(m => byName.ContainsKey(m.Name))) { row.Enabled = false; ordered.Add(row); }
+            mods.Clear();
+            foreach (var row in ordered) mods.Add(row);
         }
-        foreach (var row in mods.Where(m => byName.ContainsKey(m.Name))) { row.Enabled = false; ordered.Add(row); }
-        mods.Clear();
-        foreach (var row in ordered) mods.Add(row);
+        finally
+        {
+            checksSuspended = false;
+        }
         ShowModCount();
         return missing;
     }

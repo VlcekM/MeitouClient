@@ -57,9 +57,11 @@ public sealed class ModContext
     internal bool HasHarmony => harmony is not null;
 
     /// <summary>
-    /// The entry instance of a declared dependency (docs/modding.md "Dependencies"), typed as the framework's own type or an interface it implements; null for an optional
-    /// dependency that did not load. Dependencies initialize first, so what they registered is in place. Throws for an id the manifest does not declare, or when the
-    /// entry is not a <typeparamref name="T"/>.
+    /// The entry instance of a declared dependency (docs/modding-dependencies.md "Using a dependency"), typed as the framework's own type or an
+    /// interface it implements; null for an optional dependency that did not load. Dependencies initialize first, so what they registered is in
+    /// place. Throws for an id the manifest does not declare, or when the entry is not a <typeparamref name="T"/>. For an optional one, test
+    /// <see cref="HasDependency"/> first and keep code naming its types in a separate non-inlined method: the JIT resolves a method's types when it
+    /// compiles it.
     /// </summary>
     public T? Dependency<T>(string id) where T : class
     {
@@ -71,7 +73,9 @@ public sealed class ModContext
         throw new InvalidCastException($"{Id}: dependency '{id}' has entry {actual}, which is not a {typeof(T).FullName}.");
     }
 
-    /// <summary>Whether a declared dependency loaded: always true for a required one (the mod would have been refused), false for an absent optional one.</summary>
+    /// <summary>
+    /// Whether a declared dependency loaded: always true for a required one (the mod would have been refused), false for an absent optional one.
+    /// </summary>
     public bool HasDependency(string id) => Mod.Dependencies.Any(m => m.Manifest.Id == id);
 
     /// <summary>The running world's tick, for a command's <see cref="SimCommand.Tick"/>; 0 before the first world.</summary>

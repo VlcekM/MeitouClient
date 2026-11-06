@@ -6,13 +6,20 @@ namespace Meitou.Content;
 // versions a mod was built for.
 public sealed partial record CodeModManifest
 {
-    /// <summary><c>loadAfter</c>: ids of code mods that, when enabled, must load earlier. Ordering only: nothing is imported and nothing is required.</summary>
+    /// <summary>
+    /// <c>loadAfter</c>: ids of code mods that, when enabled, must load earlier. Ordering only: nothing is imported and nothing is required.
+    /// </summary>
     public IReadOnlyList<string> LoadAfter { get; init; } = [];
 
-    /// <summary><c>incompatible</c>: code mods (by id, optionally a version range) this one refuses to run beside; whichever loads second is refused.</summary>
+    /// <summary>
+    /// <c>incompatible</c>: code mods (by id, optionally a version range) this one refuses to run beside; whichever loads second is refused.
+    /// </summary>
     public IReadOnlyList<CodeModConflict> Incompatible { get; init; } = [];
 
-    /// <summary><c>gameVersion</c>: the Meitou releases the mod was built against; null accepts any. Compared by SemVer precedence, nightlies included.</summary>
+    /// <summary>
+    /// <c>gameVersion</c>: the Meitou releases the mod was built against; null accepts any. Compared with the running build's release
+    /// (docs/modding-dependencies.md "Manifest").
+    /// </summary>
     public CodeModVersionRange? GameVersion { get; init; }
 
     /// <summary>The keys used that an API 1 game would ignore, so they need <c>apiVersion</c> 2.</summary>
@@ -60,13 +67,20 @@ public sealed partial record CodeModManifest
     static CodeModVersionRange? ReadGameVersion(JsonElement root)
     {
         if (!root.TryGetProperty("gameVersion", out var value)) return null;
-        if (value.ValueKind != JsonValueKind.String) throw new InvalidDataException("gameVersion: a range string such as \">=0.16.0 <0.17.0\" is needed");
-        try { return CodeModVersionRange.Parse(value.GetString()!); }
+        if (value.ValueKind != JsonValueKind.String)
+            throw new InvalidDataException("gameVersion: a range string such as \">=0.16.0 <0.17.0\" is needed");
+        CodeModVersionRange range;
+        try { range = CodeModVersionRange.Parse(value.GetString()!); }
         catch (InvalidDataException e) { throw new InvalidDataException($"gameVersion: {e.Message}", e); }
+        if (range.NamesPrerelease)
+            throw new InvalidDataException("gameVersion: name releases only (0.16.1, not 0.16.1-nightly.x); a nightly counts as its release");
+        return range;
     }
 }
 
-/// <summary>One entry of <c>incompatible</c>: a mod id, or an object with <c>id</c> and an optional <c>version</c> range (only those versions conflict).</summary>
+/// <summary>
+/// One entry of <c>incompatible</c>: a mod id, or an object with <c>id</c> and an optional <c>version</c> range (only those versions conflict).
+/// </summary>
 public sealed record CodeModConflict(string Id, CodeModVersionRange? Range = null)
 {
     internal static CodeModConflict FromJson(JsonElement item)

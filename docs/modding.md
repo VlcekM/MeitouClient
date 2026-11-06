@@ -1,7 +1,8 @@
 # Code mods (C#)
 
-**Status: implemented, code-mod API version 1 (2026-11-04); API 2 adds [dependencies](modding-dependencies.md).** Meitou's own in-process loader, Lib.Harmony shipped by the game as the
-sanctioned patching library, and a registration surface kept to the cases where a patch would silently break an invariant. No BepInEx.
+**Status: implemented, code-mod API version 2 (1 still runs; 2 adds [dependencies](modding-dependencies.md)).** Meitou's own in-process loader,
+Lib.Harmony shipped by the game as the sanctioned patching library, and a registration surface kept to the cases where a patch would silently
+break an invariant. No BepInEx.
 The RE_Kenshi decision ([rekenshi](formats/rekenshi.md)) stands and its DLLs stay ignored. Code: `src/Meitou.Modding` (contract and
 loader), `GameHost.Mods.cs` (host wiring), `SimulationExtensions` (engine hooks).
 
@@ -42,7 +43,8 @@ Folder: `mods/MyMod/MyMod.mod` (the data mod, may be empty of records), `meitou.
 - A mod carries code when its folder has `meitou.json`: `{ "id", "apiVersion", "assemblies": ["Foo.dll"], "entry": "Foo.FooMod" }`
   (`CodeModManifest`). `id`: letters, digits, `. _ -`, at most 64; it keys the mod's save data, Harmony instance and log lines.
   `assemblies`: DLL file names in the mod folder, loaded in order. `entry`: the full name of the `IMod` type. Comments and trailing
-  commas are allowed. API 2 adds optional `version` and `dependencies` ([dependencies](modding-dependencies.md)).
+  commas are allowed. API 2 adds optional `version`, `dependencies`, `loadAfter`, `incompatible` and `gameVersion`
+  ([dependencies](modding-dependencies.md)).
 - `ModInfo.HasCode` reports it beside `HasNativePlugin`; the launcher marks such mods.
 - Load set: the enabled mods of `mods.cfg` in order, filtered to those with a manifest. A disabled mod's DLL is never opened. Changes take
   effect at the next launch, like data mods.
