@@ -24,8 +24,8 @@ public struct GeometryRecord
     public uint SunMap;
     public float SunCut;
     public const int Size = 48;
-    /// <summary><see cref="Kind"/>: what the geometry is (the debug views colour by it; a terrain hit takes the ground colour map). Grass: the traced sun's cards (<see cref="TracedGrass"/>).</summary>
-    public const uint Terrain = 0, Object = 1, Foliage = 2, Grass = 3;
+    /// <summary><see cref="Kind"/>: what the geometry is (the debug views colour by it; a terrain hit takes the ground colour map). Grass: the traced sun's cards (<see cref="TracedGrass"/>); Character: <see cref="TracedCharacters"/>.</summary>
+    public const uint Terrain = 0, Object = 1, Foliage = 2, Grass = 3, Character = 4;
 }
 
 /// <summary>
@@ -77,14 +77,20 @@ internal sealed unsafe class GiScene : IDisposable
 
     /// <summary>
     /// This frame's sun is traced (docs/render-shadows.md "Traced sun"): what the probes do not need joins the scene under instance masks of its own (the small foliage near the
-    /// eye, the grass), and the cut-out parts of the objects report their candidates. Set before <see cref="Update"/>.
+    /// eye, the grass, the characters), and the cut-out parts of the objects report their candidates. Set before <see cref="Update"/>.
     /// </summary>
     public bool Traced { get; set; }
+    /// <summary>This frame's lamps trace their shadows (docs/render-lights.md "Traced lamp shadows"): the small foliage and the grass join the scene as for <see cref="Traced"/>. Set before <see cref="Update"/>.</summary>
+    public bool LampShadows { get; set; }
+    /// <summary>What the probes leave out is in the scene: the small foliage, the grass and the objects' cut-out maps.</summary>
+    bool Casters => Traced || LampShadows;
+    /// <summary>How far from the eye the grass is traced (<see cref="TracedGrass"/>): where the traced sun's share ends, set before <see cref="Update"/>.</summary>
+    public float GrassReach { get; set; } = TracedGrass.MinRange;
     /// <summary>The interior masks near the eye, whose grass leaves the traced scene (<see cref="InteriorMaskRenderer.Cuts"/>).</summary>
     public IReadOnlyList<InteriorMaskCut> InteriorCuts { get; set; } = [];
     TracedGrass? grass;
     /// <summary>The mask pass's <c>grass</c> constants: the reach (0: no grass this frame), the tallest blade, the blind range and its fade.</summary>
-    public Vector4 GrassRayParams => Traced && grass is not null ? grass.RayParams : default;
+    public Vector4 GrassRayParams => Casters && grass is not null ? grass.RayParams : default;
     /// <summary>Foliage under <see cref="FoliageMinSize"/> traced for the sun alone: this radius and up, this far from the eye (past the traced range by the scene's commit step).</summary>
     const float TracedFoliageRange = 3000, TracedFoliageMinSize = 6;
     /// <summary>Instances kept for the small foliage and for the grass, and records the small foliage may leave free (a foliage block past the records is not traced at all).</summary>
@@ -227,7 +233,7 @@ internal sealed unsafe class GiScene : IDisposable
             if (firstRecord + foliageRecords.Count <= MaxRecords)
             {
                 var shift = foliageOrigin - Origin;
-                int count = Math.Min(foliageBlock.Count, MaxInstances - instances.Count - (Traced ? GrassInstances : 0));
+                int count = Math.Min(foliageBlock.Count, MaxInstances - instances.Count - (Casters ? GrassInstances : 0));
                 for (int i = 0; i < count; i++)
                 {
                     var r = foliageBlock[i];
@@ -297,7 +303,7 @@ internal sealed unsafe class GiScene : IDisposable
             var record = entry.Records[k];
             record.Texture = objects.RayTexture(inst.Materials!, entry.Parts[k]);
             record.Emitter = lamps?.Emitter(inst.Placed.PlacementId) ?? 0;
-            if (Traced) (record.SunMap, record.SunCut) = objects.RayCut(inst.Materials!, entry.Parts[k]);
+            if (Casters) (record.SunMap, record.SunCut) = objects.RayCut(inst.Materials!, entry.Parts[k]);
             cut |= record.SunCut > 0;
             records.Add(record);
         }
@@ -308,13 +314,13 @@ internal sealed unsafe class GiScene : IDisposable
     /// <summary>The traced sun's grass: its structures, within their budget, and its instances (nearest first, after everything else).</summary>
     void UpdateGrass(Vector3 eye, FoliageRenderer? foliage)
     {
-        if (!Traced || foliage is null)
+        if (!Casters || foliage is null)
         {
             grass?.Release();
             return;
         }
         grass ??= new TracedGrass(ctx);
-        grass.Update(Open, foliage, eye, frame, InteriorCuts);
+        grass.Update(Open, foliage, eye, frame, InteriorCuts, GrassReach);
         grass.Emit(instances, records, Origin, MaxInstances, MaxRecords);
     }
 
@@ -393,10 +399,10 @@ internal sealed unsafe class GiScene : IDisposable
     Vector3 foliageOrigin, foliageEye;
     long foliageFrame = long.MinValue / 2;
     int foliageGeneration = -1;
-    bool foliageComplete, foliageTraced;
+    bool foliageComplete, foliageCasters;
 
     bool FoliageStale(Vector3 eye, FoliageRenderer foliage, bool lazy, bool commit) =>
-        foliageTraced != Traced || frame - foliageFrame >= 120 || (lazy ? commit : Vector3.DistanceSquared(eye, foliageEye) > 250f * 250f) || foliage.RayGeneration != foliageGeneration
+        foliageCasters != Casters || frame - foliageFrame >= 120 || (lazy ? commit : Vector3.DistanceSquared(eye, foliageEye) > 250f * 250f) || foliage.RayGeneration != foliageGeneration
         || !foliageComplete && frame - foliageFrame >= 2;
 
     /// <summary>Trees, bushes and rocks big enough to matter for the probes (FoliageRenderer.RayInstances), nearest first while the budget lasts.</summary>
@@ -408,14 +414,14 @@ internal sealed unsafe class GiScene : IDisposable
         rayFoliage.Clear();
         foliage.RayInstances(eye, FoliageRange, FoliageMinSize, rayFoliage);
         rayFoliage.Sort((a, b) => a.Distance.CompareTo(b.Distance));
-        (foliageOrigin, foliageEye, foliageFrame, foliageGeneration, foliageComplete, foliageTraced) = (Origin, eye, frame, foliage.RayGeneration, true, Traced);
-        int room = MaxInstances - 2048 - (Traced ? SmallFoliageInstances + GrassInstances : 0);   // room for the terrain and the objects
+        (foliageOrigin, foliageEye, foliageFrame, foliageGeneration, foliageComplete, foliageCasters) = (Origin, eye, frame, foliage.RayGeneration, true, Casters);
+        int room = MaxInstances - 2048 - (Casters ? SmallFoliageInstances + GrassInstances : 0);   // room for the terrain and the objects
         foreach (var (mesh, transform, _) in rayFoliage)
         {
             if (foliageBlock.Count >= room) break;
             AddFoliage(mesh, transform, TracedSunShaders.Foliage);
         }
-        if (Traced) AddSmallFoliage(eye, foliage, room + SmallFoliageInstances);
+        if (Casters) AddSmallFoliage(eye, foliage, room + SmallFoliageInstances);
         FoliageInstances = foliageBlock.Count;
     }
 

@@ -388,6 +388,8 @@ static partial class WorldFrame
         {
             var heights = gpu.Terrain.Snapshot();
             gi.InteriorCuts = gpu.InteriorMask?.Cuts ?? [];
+            gi.LampShadows = gpu.Post is { Options.LampShadows: true, GiResolve: > 0 } && gpu.Lamps is { Grid.W: > 0 };
+            gi.GrassReach = TracedReach(ref f);
             gi.Update(f.Eye, heights, objects, gpu.Foliage is { Enabled: true } giFoliage ? giFoliage : null, gpu.Lamps);
             StageClock.Sub("gi scene");
             gpu.Probes?.Update(gi, f.Eye, heights, gpu.Lamps, gpu.FogVolumes, gpu.Objects?.GiInteriorFocus(f.Camera.Target));
@@ -402,6 +404,17 @@ static partial class WorldFrame
                 StageClock.Sub("gi metal");
             }
         }
+    }
+
+    /// <summary>
+    /// How far from the eye the traced sun's share reaches (docs/render-shadows.md "Traced sun"): its end's view depth to the frame's corners. Without the traced sun, 0 (the grass
+    /// keeps its least reach for the lamps).
+    /// </summary>
+    static float TracedReach(ref FrameState f)
+    {
+        if (!f.Gpu.Traced || f.Gpu.Shadow is not { TracedDepth: > 0 } shadow) return 0;
+        float tanY = MathF.Tan(f.Camera.FieldOfView * 0.5f), tanX = tanY * f.RenderWidth / Math.Max(f.RenderHeight, 1);
+        return shadow.TracedDepth * MathF.Sqrt(1 + tanX * tanX + tanY * tanY);
     }
 
     /// <summary>The "blood" stage's ground part: the blood on the ground near the eye (docs/game/blood-decals.md), before any terrain draw reads it.</summary>

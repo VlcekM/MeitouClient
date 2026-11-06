@@ -9,9 +9,49 @@ namespace Meitou.Rendering.Gi;
 /// </summary>
 static class TracedSunShaders
 {
-    /// <summary>Instance masks in the traced scene. <see cref="GiMask"/> is what the probes see, so <see cref="SmallFoliage"/> and <see cref="Grass"/> are the sun's alone.</summary>
-    public const byte TerrainFine = 0x01, Objects = 0x02, Foliage = 0x04, TerrainCoarse = 0x08, SmallFoliage = 0x10, Grass = 0x20;
+    /// <summary>
+    /// Instance masks in the traced scene. <see cref="GiMask"/> is what the probes see, so <see cref="SmallFoliage"/>, <see cref="Grass"/> and <see cref="Characters"/> are the
+    /// casters' alone: the lamps' shadow rays see everything (<see cref="LampMask"/>).
+    /// </summary>
+    public const byte TerrainFine = 0x01, Objects = 0x02, Foliage = 0x04, TerrainCoarse = 0x08, SmallFoliage = 0x10, Grass = 0x20, Characters = 0x40;
     public const byte GiMask = TerrainFine | Objects | Foliage | TerrainCoarse;
+    public const byte LampMask = GiMask | SmallFoliage | Grass | Characters;
+
+    /// <summary>
+    /// A shadow ray's cut-out test at a candidate: kept where the map the draw cuts with reaches its threshold (an object part's own pair for the casters, else the probes'). A grass
+    /// card's coordinates are its corners' order; a character's map channel is in its record's <c>diffuse</c> (the probes never see characters). Needs <c>geometries</c>, the
+    /// bindless table, <c>TexCoord</c>, <c>Triangle</c> and <c>offsetBy</c>.
+    /// </summary>
+    internal static readonly string CasterCutout = $$"""
+        vec2 casterUv(Geometry g, uvec3 tri, vec2 bary)
+        {
+            vec2 ua, ub, uc;
+            if (g.kind == {{GeometryRecord.Grass}}u)
+            {
+                // A card's vertices are its four corners in order, u the first bit, v the second (TracedGrass).
+                ua = vec2(tri.x & 1u, (tri.x >> 1u) & 1u);
+                ub = vec2(tri.y & 1u, (tri.y >> 1u) & 1u);
+                uc = vec2(tri.z & 1u, (tri.z >> 1u) & 1u);
+            }
+            else
+            {
+                ua = TexCoord(offsetBy(g.vertices, tri.x * g.stride + {{GpuVertex.UvOffset}}u)).v;
+                ub = TexCoord(offsetBy(g.vertices, tri.y * g.stride + {{GpuVertex.UvOffset}}u)).v;
+                uc = TexCoord(offsetBy(g.vertices, tri.z * g.stride + {{GpuVertex.UvOffset}}u)).v;
+            }
+            return ua * (1.0 - bary.x - bary.y) + ub * bary.x + uc * bary.y;
+        }
+        bool casterKept(int record, int primitive, vec2 bary, float lod)
+        {
+            Geometry g = geometries[record];
+            uint map = g.sunMap != 0u ? g.sunMap : g.alphaMap;
+            float cut = g.sunMap != 0u ? g.sunCut : g.alphaThreshold;
+            if (cut <= 0.0 || map == 0u) return true;
+            uvec3 tri = Triangle(offsetBy(g.indices, uint(primitive) * 12u)).v;
+            vec4 texel = textureLod(textures2D[nonuniformEXT(map)], casterUv(g, tri, bary), lod);
+            return (g.kind == {{GeometryRecord.Character}}u ? texel[g.diffuse & 3u] : texel.a) >= cut;
+        }
+        """;
     const byte Solids = Objects | Foliage | SmallFoliage;
 
     /// <summary>Terrain nearer than this along a ray is not asked: the traced grids are coarser than the drawn ground, and a cell's own facets are not the ground's.</summary>
@@ -34,7 +74,7 @@ static class TracedSunShaders
         layout(set = 0, binding = 2) uniform sampler2D uTerm;
         layout(set = 0, binding = 3, rgba8) uniform writeonly image2D uOut;
         layout(set = 0, binding = 4) uniform accelerationStructureEXT uScene;
-        struct Geometry { uvec2 vertices; uvec2 indices; uint stride; uint kind; uint diffuse; uint alphaMap; float alphaThreshold; uint emitter; uint sunMap; float sunCut; };
+        {{GiShaders.GeometryStruct}}
         layout(set = 0, binding = 5, std430) readonly buffer Geometries { Geometry geometries[]; };
         layout(set = 0, binding = 6, std140) uniform Params
         {
@@ -76,36 +116,9 @@ static class TracedSunShaders
             return dot(g, n) < 0.0 ? -g : g;
         }
 
-        // A candidate on a cut-out surface: kept where the map the draw cuts with reaches its threshold (the objects' own pair, for the sun alone, else the probes').
-        vec2 hitUv(Geometry g, uvec3 tri, vec2 bary)
-        {
-            vec2 ua, ub, uc;
-            if (g.kind == {{GeometryRecord.Grass}}u)
-            {
-                // A card's vertices are its four corners in order, u the first bit, v the second (TracedGrass).
-                ua = vec2(tri.x & 1u, (tri.x >> 1u) & 1u);
-                ub = vec2(tri.y & 1u, (tri.y >> 1u) & 1u);
-                uc = vec2(tri.z & 1u, (tri.z >> 1u) & 1u);
-            }
-            else
-            {
-                ua = TexCoord(offsetBy(g.vertices, tri.x * g.stride + {{GpuVertex.UvOffset}}u)).v;
-                ub = TexCoord(offsetBy(g.vertices, tri.y * g.stride + {{GpuVertex.UvOffset}}u)).v;
-                uc = TexCoord(offsetBy(g.vertices, tri.z * g.stride + {{GpuVertex.UvOffset}}u)).v;
-            }
-            return ua * (1.0 - bary.x - bary.y) + ub * bary.x + uc * bary.y;
-        }
-        bool kept(int record, int primitive, vec2 bary)
-        {
-            Geometry g = geometries[record];
-            uint map = g.sunMap != 0u ? g.sunMap : g.alphaMap;
-            float cut = g.sunMap != 0u ? g.sunCut : g.alphaThreshold;
-            if (cut <= 0.0 || map == 0u) return true;
-            uvec3 tri = Triangle(offsetBy(g.indices, uint(primitive) * 12u)).v;
-            return textureLod(textures2D[nonuniformEXT(map)], hitUv(g, tri, bary), 1.0).a >= cut;
-        }
+        """ + CasterCutout + "\n" + $$"""
         #define CANDIDATE_RECORD(q) (rayQueryGetIntersectionInstanceCustomIndexEXT(q, false) + rayQueryGetIntersectionGeometryIndexEXT(q, false))
-        #define CANDIDATE_KEPT(q) kept(CANDIDATE_RECORD(q), rayQueryGetIntersectionPrimitiveIndexEXT(q, false), rayQueryGetIntersectionBarycentricsEXT(q, false))
+        #define CANDIDATE_KEPT(q) casterKept(CANDIDATE_RECORD(q), rayQueryGetIntersectionPrimitiveIndexEXT(q, false), rayQueryGetIntersectionBarycentricsEXT(q, false), 1.0)
         #define BLOCKED(q) (rayQueryGetIntersectionTypeEXT(q, true) != gl_RayQueryCommittedIntersectionNoneEXT)
 
         bool solidBlocks(vec3 o, vec3 dir, float tMin)

@@ -17,7 +17,7 @@ static class GiShaders
 
     /// <summary>A hit record in GLSL (<see cref="GeometryRecord"/>).</summary>
     internal const string GeometryStruct = """
-        struct Geometry { uvec2 vertices; uvec2 indices; uint stride; uint kind; uint diffuse; uint alphaMap; float alphaThreshold; uint emitter; uint pad1; uint pad2; };
+        struct Geometry { uvec2 vertices; uvec2 indices; uint stride; uint kind; uint diffuse; uint alphaMap; float alphaThreshold; uint emitter; uint sunMap; float sunCut; };
         """;
 
     /// <summary>The vertex and index data of a hit, by device address.</summary>

@@ -78,7 +78,9 @@ pixel's footprint, slope-scaled; cards leave from the sun's face and skip 3 foot
   room under a hillside stays dark;
 - grass (`0x20`), only as far as the ray can stay under the tallest blade, faded by noise over the last quarter of its reach.
 
-**Grass.** `TracedGrass`: patches of pages within 1200 across the ground, nearest first, at most 4 builds and 600k triangles a frame and 512 MB, 512 instances, unused for 600 frames dropped; a
+**Grass.** `TracedGrass`: patches of pages within the reach across the ground, nearest first, at most 4 builds and 600k triangles a frame and 512 MB, 1024 instances, unused for 600 frames dropped. The reach is
+where the traced share ends (`ShadowPass.TracedDepth`, its view depth taken to the frame's corners), within 1200 to 2400; the rays test the same reach by distance from the eye. **Observed** (zone 14,30, 16:00,
+boom 900, before this rule): a fixed 1200 by distance from the eye, faded from 900, left the ground round the camera's target without grass shadows while the cascades had them; now 152 patches, 90 MB there. A
 kernel expands the arena's blades at rest into a vertex buffer (65536 blades a patch at most), one rigid instance each. Blades whose foot or top is in a drawn interior mask's box (building space,
 tighter than the X/Z boxes; KenshiNative's fix, by box, not by triangle: over-cuts a non-convex mask's concavity) collapse to a point. A changed mask set or density rebuilds the page. A blade's ray ignores blades within 4 units,
 fading the next 8 in by noise: the blind range covers the sway (the traced card is at rest) and overlapping twin cards. Grass shadows do not sway. The probes never see the grass (mask `0x0F`).
