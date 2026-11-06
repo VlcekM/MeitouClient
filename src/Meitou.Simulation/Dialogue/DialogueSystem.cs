@@ -312,6 +312,7 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
         }
         open = c;
         Hold(world, n);
+        if (TaskStart.OnAiWalk(table, n)) TaskStart.Stand(table, n);   // a walking NPC stops to talk (engine choice); the approach chased it
         c.Root = p.Root;
         if (IsNpcSide(p.Line.Speaker)) Say(world, c, p.Line, p.Speaker);
         else Offer(world, c, p.Root ?? p.Line);
@@ -329,11 +330,12 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
     }
 
     /// <summary>
-    /// The character offers Trade: its squad has a shop, and its record says <c>is trader</c> or its dialogue reaches a Trade line (docs/game/economy.md "Who trades"); the
-    /// guards and other members of a trader squad do not.
+    /// The character offers Trade: its squad has a shop, or has no home building and a template with <c>vendors</c> (a Caravan, stocked at its first trade), and its record says
+    /// <c>is trader</c> or its dialogue reaches a Trade line (docs/game/economy.md "Who trades"); the guards and other members of a trader squad do not.
     /// </summary>
     public bool Trades(World world, int slot) =>
-        world.Characters.Cold(slot) is { IsPlayer: false, SquadId: >= 0 } cold && world.Squads.Find(cold.SquadId)?.Shop is not null
+        world.Characters.Cold(slot) is { IsPlayer: false, SquadId: >= 0 } cold && world.Squads.Find(cold.SquadId) is { } squad
+        && (squad.Shop is not null || squad.HomeBuilding is null && data.Db.Find(squad.TemplateId)?.GetReferences("vendors").Count > 0)
         && (data.Db.Find(cold.RecordId)?.GetBool("is trader") == true || SetOf(world, slot).Trades);
 
     public bool CanTalk(World world, int slot, CharacterId? talker = null)
