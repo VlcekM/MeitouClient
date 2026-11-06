@@ -150,40 +150,28 @@ sealed partial class GameHost
         if (soft > 0) trails.Stamp(stamp with { Strength = stamp.Strength * soft });
     }
 
-    /// <summary>How far from what the camera looks at a character makes a wake, and the slowest it does so at (units/s).</summary>
-    const float WakeReach = 800, WakeMinSpeed = 1;
+    /// <summary>How far above the water a character's feet may be and still reach it (a body lying in it, a leg stepping in).</summary>
+    const float WaterReachAbove = 2;
 
-    readonly Vector4[] wakeRows = new Vector4[WaterRenderer.MaxWakes];
-    readonly float[] wakeDistances = new float[WaterRenderer.MaxWakes];
+    readonly List<WaterBody> waterBodies = [];
 
-    /// <summary>Once a frame: the characters moving in the water nearest what the camera looks at, for the <c>contactfoam</c> switch's wakes (docs/render-water.md "Contact foam").</summary>
+    /// <summary>
+    /// Once a frame: the posed bodies near what the camera looks at that reach into the water, for the <c>contactfoam</c> switch's waves (docs/render-water.md
+    /// "Wakes and ripples"); the field's window follows the camera's target.
+    /// </summary>
     void UpdateWakes()
     {
-        if (!WaterContact.Enabled || gpu.Water is not { } water) return;
-        IndexPrevious();
+        if (!WaterContact.Enabled || gpu.Water?.Ripples is not { } ripples || gpu.Characters is not { } characters) return;
         var focus = camera.Target;
-        float alpha = session.SimulationAlpha, tick = session.World.TickSeconds;
-        int n = 0;
+        ripples.Begin(focus);
+        float reach = WaterRipples.Reach + 20;
         foreach (var c in session.CurrentSnapshot.Characters)
         {
-            float distance = new Vector2(c.Position.X - focus.X, c.Position.Z - focus.Z).Length();
-            if (distance > WakeReach || c.Position.Y >= WorldWater.Height || c.Appearance is null || !c.CarriedBy.IsNone) continue;
-            if (!previousById.TryGetValue(c.Id, out var before)) continue;
-            var velocity = new Vector2(c.Position.X - before.Position.X, c.Position.Z - before.Position.Z) / tick;
-            if (velocity.LengthSquared() < WakeMinSpeed * WakeMinSpeed) continue;
-            var at = Vector3.Lerp(before.Position, c.Position, alpha);
-            n = AddWake(n, distance, new Vector4(at.X, at.Z, velocity.X, velocity.Y));
+            if (MathF.Abs(c.Position.X - focus.X) > reach || MathF.Abs(c.Position.Z - focus.Z) > reach) continue;
+            if (c.Position.Y > WorldWater.Height + WaterReachAbove || c.Appearance is null) continue;
+            waterBodies.Clear();
+            characters.WaterCapsules(DrawKey(c.Id), WorldWater.Height, WaterRipples.BodyDepth, waterBodies);
+            ripples.AddBody(CollectionsMarshal.AsSpan(waterBodies));
         }
-        water.SetWakes(wakeRows.AsSpan(0, n));
-    }
-
-    /// <summary>A wake into the list kept nearest first; beyond its length the farthest goes. The new length.</summary>
-    int AddWake(int n, float distance, Vector4 row)
-    {
-        if (n == wakeRows.Length && distance >= wakeDistances[n - 1]) return n;
-        int at = Math.Min(n, wakeRows.Length - 1);
-        for (; at > 0 && wakeDistances[at - 1] > distance; at--) (wakeDistances[at], wakeRows[at]) = (wakeDistances[at - 1], wakeRows[at - 1]);
-        (wakeDistances[at], wakeRows[at]) = (distance, row);
-        return Math.Min(n + 1, wakeRows.Length);
     }
 }

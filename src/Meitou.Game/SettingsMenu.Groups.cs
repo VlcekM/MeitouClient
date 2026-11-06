@@ -49,7 +49,7 @@ sealed partial class SettingsMenu
         new("Mesh welding", "Mesh welding", []),
         new("Bolt tracers", "Bolt tracers", []),
         new("Water", "Water", ["Water clarity x (Meitou)", "Far water clarity (Meitou)", "Water see-through distance (Meitou, game 4000)",
-            WorldFrame.WaterReflectionSlider, WorldFrame.ReflectionRangeSlider, "Water contact foam"]),
+            WorldFrame.WaterReflectionSlider, WorldFrame.ReflectionRangeSlider, "Water contact foam, wakes and ripples"]),
         // Characters: the skin switch, then one row per race (added by Entries)
         new(SkinGroup, "Skin", []),
     ];

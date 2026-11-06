@@ -73,14 +73,15 @@ public sealed unsafe class WaterRenderer : IDisposable
             uint heightCoarse;
             uint heightFine;
             uint sceneDepthMap;
-            int wakeCount;
-            vec4 wakes[8];        // the contactfoam switch: a character moving in the water: x, z, velocity x, z
+            uint rippleMap;       // the contactfoam switch's waves (WaterRipples)
+            vec4 rippleWindow;
+            vec4 rippleShape;
         } water;
 
         """;
 
     /// <summary>The C# side of <see cref="ConstantsBlock"/> (std140).</summary>
-    [StructLayout(LayoutKind.Explicit, Size = 640)]
+    [StructLayout(LayoutKind.Explicit, Size = 544)]
     struct WaterConstants
     {
         [FieldOffset(0)] public Vector4 Params;
@@ -123,19 +124,10 @@ public sealed unsafe class WaterRenderer : IDisposable
         [FieldOffset(496)] public uint HeightCoarse;
         [FieldOffset(500)] public uint HeightFine;
         [FieldOffset(504)] public uint SceneDepthMap;
-        [FieldOffset(508)] public int WakeCount;
-        [FieldOffset(512)] public WakeRows Wakes;
+        [FieldOffset(508)] public uint RippleMap;
+        [FieldOffset(512)] public Vector4 RippleWindow;
+        [FieldOffset(528)] public Vector4 RippleShape;
     }
-
-    /// <summary><see cref="WaterConstants.Wakes"/> (std140 <c>vec4[8]</c>).</summary>
-    [System.Runtime.CompilerServices.InlineArray(MaxWakes)]
-    struct WakeRows
-    {
-        Vector4 row;
-    }
-
-    /// <summary>The characters' wakes one frame shows (the shader's loop per pixel near the eye).</summary>
-    public const int MaxWakes = 8;
 
     const string Vertex = """
         #version 330 core
@@ -474,6 +466,20 @@ public sealed unsafe class WaterRenderer : IDisposable
 
         // The steep profile the fragment shades with.
         float breakerHeight(Shore s) { return breakerScale(s) * breakerProfile(s.g, smoothstep(s.breakAt + 160.0, s.breakAt, s.dist)); }
+
+        #ifdef WATER_CONTACT
+        uniform sampler2D uRippleMap;       // WaterRipples: height, its slopes along x and z, foam; world-anchored, wrapping
+        uniform vec4 uRippleWindow;         // the window's centre (world xz) and that centre's place in the image
+        uniform vec4 uRippleShape;          // x the half side the waves show over, y 1 / the image's side in units, z a texel (units), w 1 with a field
+
+        // Where p is in the ripples' image, and how much of the field shows there (fading out over the window's last 12 units).
+        vec2 rippleUv(vec2 p) { return (p - uRippleWindow.xy) * uRippleShape.y + uRippleWindow.zw; }
+        float rippleWeight(vec2 p)
+        {
+            vec2 d = abs(p - uRippleWindow.xy);
+            return uRippleShape.w * (1.0 - smoothstep(uRippleShape.x - 12.0, uRippleShape.x, max(d.x, d.y)));
+        }
+        #endif
         """;
 
     const string MeitouVertex = "#version 330 core\n" + TerrainShaders.HeightFunctions + MeitouMotion + """
@@ -507,6 +513,11 @@ public sealed unsafe class WaterRenderer : IDisposable
                 if (uLean < 0.5 || scale > 0.0) d = oceanDisplace(p, spacing).xyz * scale;
                 w += vec3(d.x, d.y + max(hump, lift) * shoreFade, d.z);
             }
+            #ifdef WATER_CONTACT
+            // The interactive waves' height, only where the vertices are close enough to carry it (further out the fragment's normals do).
+            float rw = r < 1.0e5 ? rippleWeight(p) * (1.0 - smoothstep(1.0, 3.0, max(r, 1.0) * uGridStep / uRippleShape.z)) : 0.0;
+            if (rw > 0.0) w.y += textureLod(uRippleMap, rippleUv(p), 0.0).r * rw;
+            #endif
             vBase = p;
             vWorld = w;
             gl_Position = uViewProjection * vec4(w, 1.0);
@@ -636,9 +647,6 @@ public sealed unsafe class WaterRenderer : IDisposable
         }
 
         #ifdef WATER_CONTACT
-        uniform int uWakeCount;
-        uniform vec4 uWakes[8];         // a character moving in the water: x, z, velocity x, z
-
         // How far from the eye the contact foam and the wakes reach, and the distance over which they fade out there.
         const float ContactFar = 1200.0, ContactFade = 400.0;
 
@@ -652,22 +660,6 @@ public sealed unsafe class WaterRenderer : IDisposable
             return 0.85 * standing * (1.0 - smoothstep(0.0, mix(1.5, 4.0, blotch), thick));
         }
 
-        // The wakes: a ring round each body and two arms trailing it at the 19.5 degrees of a ship's wake, widening and fading with the way behind it.
-        float wakeFoam(vec2 p)
-        {
-            float sum = 0.0;
-            for (int i = 0; i < uWakeCount; i++)
-            {
-                vec2 d = p - uWakes[i].xy, v = uWakes[i].zw;
-                float speed = max(length(v), 1e-3);
-                vec2 along = v / speed;
-                float behind = -dot(d, along), across = abs(dot(d, vec2(along.y, -along.x)));
-                float length_ = clamp(speed, 6.0, 40.0);
-                float arm = (1.0 - smoothstep(0.0, 0.5 + 0.12 * max(behind, 0.0), abs(across - 1.0 - 0.35 * behind))) * step(0.0, behind) * (1.0 - smoothstep(0.0, length_, behind));
-                sum = max(sum, max(0.8 * (1.0 - smoothstep(1.2, 3.0, length(d))), 0.7 * arm));
-            }
-            return sum;
-        }
         #endif
 
         void main()
@@ -774,6 +766,18 @@ public sealed unsafe class WaterRenderer : IDisposable
             // The breaker's shading fades with the distance: a few pixels across its steep front only read as a dark streak.
             float near = 1.0 - smoothstep(700.0, 2500.0, dist);
             slope += s.dir * ((breakerHeight(behind) - breakerHeight(ahead)) * fade * near * 0.7 / (0.02 * uShore.z));
+            #ifdef WATER_CONTACT
+            // The interactive waves (docs/render-water.md "Wakes and ripples"): their slopes tilt the surface; their foam joins the rest below.
+            vec4 ripple = vec4(0.0);
+            float rippleW = outside <= 0.0 ? rippleWeight(p) : 0.0;
+            if (rippleW > 0.0)
+            {
+                // The field has one level: where a pixel spans several of its texels the waves are smaller than it, and fade out (the foam stays).
+                ripple = textureLod(uRippleMap, rippleUv(p), 0.0) * rippleW;
+                ripple.xyz *= 1.0 - smoothstep(1.5, 4.0, max(length(dpx), length(dpy)) / uRippleShape.z);
+            }
+            slope -= ripple.yz;
+            #endif
             vec3 n = normalize(vec3(slope.x, 1.0, slope.y));
 
             float gloss = clamp(pb.x, 0.0, 1.0);
@@ -953,7 +957,7 @@ public sealed unsafe class WaterRenderer : IDisposable
             if (!swash && outside <= 0.0 && dist < ContactFar)
             {
                 contact = contactFoam(thick, floorDepth, toEyeDir.y, a1.g);
-                amount = max(amount, max(contact, wakeFoam(p)) * (1.0 - smoothstep(ContactFar - ContactFade, ContactFar, dist)));
+                amount = max(amount, max(contact, ripple.a) * (1.0 - smoothstep(ContactFar - ContactFade, ContactFar, dist)));
             }
             #endif
             float bubbles = 0.0;
@@ -1050,7 +1054,12 @@ public sealed unsafe class WaterRenderer : IDisposable
     static readonly string MeitouFragment = "#version 330 core\n" + TerrainShaders.HeightFunctions + SkyRenderer.SkyFunctions + ThicknessFunctions + MeitouMotion + MeitouBody;
 
     /// <summary>The Meitou water with the <c>contactfoam</c> switch's foam (<see cref="WaterContact"/>); the plain program has none of its code.</summary>
-    static string MeitouContactNative() => NativeFragment(MeitouFragment.Insert(MeitouFragment.IndexOf('\n') + 1, "#define WATER_CONTACT\n"));
+    static string MeitouContactNative() => NativeFragment(WithContact(MeitouFragment));
+
+    /// <summary>The Meitou water's vertex stage with the <c>contactfoam</c> switch's waves.</summary>
+    static string MeitouContactVertex() => NativeVertex(WithContact(MeitouVertex));
+
+    static string WithContact(string source) => source.Insert(source.IndexOf('\n') + 1, "#define WATER_CONTACT\n");
 
     /// <summary>The water's own uniforms in the native model: <see cref="ConstantsBlock"/> and the bindless arrays.</summary>
     static readonly Dictionary<string, string> NativeOwn = new()
@@ -1073,7 +1082,7 @@ public sealed unsafe class WaterRenderer : IDisposable
         ["uReflection"] = "textures2D[water.reflectionMap]", ["uRefraction"] = "textures2D[water.refractionMap]",
         ["uOceanMaps"] = "textures2DArray[water.oceanMap]", ["uShoreField"] = "textures2D[water.shoreMap]", ["uRiverMap"] = "textures2D[water.riverMap]",
         ["uSceneDepth"] = "textures2D[water.sceneDepthMap]", ["uDepthPlanes"] = "water.depthPlanes",
-        ["uWakeCount"] = "water.wakeCount", ["uWakes"] = "water.wakes",
+        ["uRippleMap"] = "textures2D[water.rippleMap]", ["uRippleWindow"] = "water.rippleWindow", ["uRippleShape"] = "water.rippleShape",
     };
 
     static readonly Dictionary<string, string> NativeMap = NativeShaders.Map(NativeOwn);
@@ -1103,10 +1112,11 @@ public sealed unsafe class WaterRenderer : IDisposable
     readonly WaterProgram? meitou;
     WaterProgram? meitouContact;
     readonly LegacyProgram.Attribute?[] gridInputs = [];
-    readonly Vector4[] wakes = new Vector4[MaxWakes];
-    int wakeCount;
+    WaterRipples? ripples;
+    double rippleHours;
+    HeightSnapshot? rippleHeights;
     readonly BindlessTexture[] mapTextures;
-    readonly BindlessTexture oceanMap, shoreMap, reflectionMap, refractionMap, heightCoarse, heightFine, sceneDepthMap;
+    readonly BindlessTexture oceanMap, shoreMap, reflectionMap, refractionMap, heightCoarse, heightFine, sceneDepthMap, rippleMap;
     readonly GpuTexture standInArrayTexture;
     readonly uint standInArray;
     readonly GpuSetLayout constantsLayout;
@@ -1127,16 +1137,12 @@ public sealed unsafe class WaterRenderer : IDisposable
     /// <summary>The Enhancements switch <c>water</c>: the game's flat water (Faithful) or Meitou's waves, breakers and foam (the default).</summary>
     public bool Meitou { get; set; } = true;
 
-    /// <summary>The characters moving in the water this frame (<see cref="MaxWakes"/> at most; x, z, velocity x, z), for the <c>contactfoam</c> switch.</summary>
-    public void SetWakes(ReadOnlySpan<Vector4> rows)
-    {
-        wakeCount = Math.Min(rows.Length, MaxWakes);
-        rows[..wakeCount].CopyTo(wakes);
-    }
+    /// <summary>The <c>contactfoam</c> switch's interactive waves, made the first time they are asked for (Vulkan, Meitou water); null otherwise.</summary>
+    public WaterRipples? Ripples => WaterContact.Enabled && Meitou && meitou is not null && Gpu is GpuContext ? ripples ??= new WaterRipples(Gpu) : null;
 
     /// <summary>The Meitou program to draw with: with the contact foam (Vulkan only: it needs the scene depth), made the first time it is asked for.</summary>
     WaterProgram MeitouProgram() => !WaterContact.Enabled || Gpu is not GpuContext ? meitou!
-        : meitouContact ??= new WaterProgram(Gpu, frame, NativeVertex(MeitouVertex), MeitouContactNative(), "water meitou contact", PrimitiveType.Triangles, gridInputs, constantsLayout);
+        : meitouContact ??= new WaterProgram(Gpu, frame, MeitouContactVertex(), MeitouContactNative(), "water meitou contact", PrimitiveType.Triangles, gridInputs, constantsLayout);
 
     /// <summary>The Meitou polar grid: segments round the eye (128 low, 256 default, 512 high), rings follow from it.</summary>
     public const int DefaultGridSegments = 256;
@@ -1217,6 +1223,7 @@ public sealed unsafe class WaterRenderer : IDisposable
         reflectionMap = new BindlessTexture(gpu, BindlessKind.Texture2D);
         refractionMap = new BindlessTexture(gpu, BindlessKind.Texture2D);
         sceneDepthMap = new BindlessTexture(gpu, BindlessKind.Texture2D);
+        rippleMap = new BindlessTexture(gpu, BindlessKind.Texture2D);
         heightCoarse = new BindlessTexture(gpu, BindlessKind.Texture2D);
         heightFine = new BindlessTexture(gpu, BindlessKind.Texture2D);
         // A valid one-texel array view for the frames before the ocean's first FFT; the shader gates every read on uOcean.w.
@@ -1401,6 +1408,7 @@ public sealed unsafe class WaterRenderer : IDisposable
     {
         waves.Step(gameHours, windDirection, windSpeed);
         if (Meitou) ocean?.Update(gameHours, windDirection, windSpeed);
+        rippleHours = gameHours;
     }
 
     /// <summary>Keeps the Meitou water's shore field (<see cref="ShoreField"/>) round the eye: once a frame on the render thread, with the
@@ -1408,6 +1416,7 @@ public sealed unsafe class WaterRenderer : IDisposable
     internal void Track(Vector3 eye, HeightSnapshot heights)
     {
         if (Meitou) shore?.Update(eye, heights);
+        rippleHeights = heights;
     }
 
     /// <summary>
@@ -1417,6 +1426,9 @@ public sealed unsafe class WaterRenderer : IDisposable
     internal void PrepareFrame()
     {
         if (Meitou && OceanInView) ocean?.Record();   // the FFT only while water near enough to show its detail is in view
+        // The interactive waves only while their switch is on and water within their reach can be in view.
+        if (Meitou && WaterContact.Enabled && ripples is { } r && rippleHeights is { } heights && (float.IsNaN(NearestWater) || NearestWater < ContactFar))
+            r.Record(rippleHours, heights);
     }
 
     /// <summary>The Meitou water refracts what lies under it (<see cref="CaptureScene"/> before each of its draws); off: it blends over it as
@@ -1651,8 +1663,11 @@ public sealed unsafe class WaterRenderer : IDisposable
         bool depth = sceneDepthCopy is not null && sceneDepthFrame == Gpu.Frame.Number;
         c.DepthPlanes = new Vector4(sceneDepthPlanes, depth ? 1f : 0f, 0f);
         c.SceneDepthMap = depth ? sceneDepthMap.Index(new SampledTexture(Gpu.Samplers.Get(ClampNearest), sceneDepthCopy!.View())) : Gpu.StandIn2D;
-        c.WakeCount = wakeCount;
-        for (int i = 0; i < wakeCount; i++) c.Wakes[i] = wakes[i];
+        bool ripple = WaterContact.Enabled && ripples is { Ready: true };
+        c.RippleMap = ripple ? rippleMap.Index(ripples!.Surface) : Gpu.StandIn2D;
+        var (window, rippleHalf) = ripples?.Window ?? default;
+        c.RippleWindow = window;
+        c.RippleShape = new Vector4(rippleHalf, 1f / (WaterRipples.Side * WaterRipples.Texel), WaterRipples.Texel, ripple ? 1f : 0f);
         return c;
     }
 
@@ -1706,6 +1721,8 @@ public sealed unsafe class WaterRenderer : IDisposable
         reflectionMap.Dispose();
         refractionMap.Dispose();
         sceneDepthMap.Dispose();
+        rippleMap.Dispose();
+        ripples?.Dispose();
         heightCoarse.Dispose();
         heightFine.Dispose();
         Gpu.Bindless.Free(BindlessKind.Texture2DArray, standInArray);
