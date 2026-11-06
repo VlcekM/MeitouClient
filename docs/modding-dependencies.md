@@ -153,8 +153,8 @@ public void Initialize(ModContext c)
 - `ModApi.Version` is 2 and `ModApi.MinimumVersion` 1: the game runs manifests naming 1 or 2. API 1 manifests (no new keys) load as
   before. An API 2 mod on an API 1 game is refused with the existing message.
 - Binary: the API 1 public surface of `CodeModManifest` is kept, the four-parameter constructor and the four-part `Deconstruct` beside
-  the six-part ones. **Verified** (2026-11-06, scratch run, not in the repo): a library compiled against master's `Meitou.Core` that calls
-  both ran against this build. Other API 1 members are unchanged; `ModApi.Version` is a `const`, so an API 1 DLL keeps the 1 it was
+  the six-part ones. **Verified** (signatures) by `The_api_1_constructor_and_deconstruction_still_exist`; **Observed** (2026-11-06,
+  scratch run, not in the repo): a library compiled against master's `Meitou.Core` that calls both ran against this build. Other API 1 members are unchanged; `ModApi.Version` is a `const`, so an API 1 DLL keeps the 1 it was
   compiled with.
 - Saves: see below; each mod's sidecar stays under its own id.
 
@@ -186,7 +186,10 @@ libraries); a service registry alone (the interface type must be shared anyway; 
 
 **Verified** by `ModDependencyTests` (2026-11-06, Linux x64, .NET SDK 10.0.114): manifest keys and errors, range matching (pre-release
 below its release), list rules, Arrange order and its cycle report, shared vs isolated assembly resolution, refusals before code is opened (missing, later, refused cascade, API 1 with
-dependencies), absent optional dependency, `Dependency<T>`. **Observed** (2026-11-06, scratch run, not in the repo): `loadAfter`, `incompatible` and `gameVersion` refusals at load and in the
-launcher check (a 0.16.1 nightly passes `>=0.16.0 <0.17.0`, fails `>=0.17.0`), the data-only cascade, `DependentFailed` reaching
-direct and transitive dependencies, `environment.json` round trip and its change lines. **Unknown**: a real framework-plus-dependent
+dependencies), absent optional dependency, `Dependency<T>`. **Verified** by `ModDependencyRulesTests` (2026-11-06, same setup): wrong-kind fields refuse only their mod, SemVer §11 order and the
+pre-release opt-in, the API 1 constructor and `Deconstruct` signatures, Arrange over code and header constraints (the review's case,
+contradiction report, disabled mods, `loadAfter`), `loadAfter`/`gameVersion` refusals (a 0.16.1 nightly passes `>=0.16.0 <0.17.0`),
+`incompatible` in either direction, the preliminary check's cascade, `DependentFailed` reaching each dependency once, and the save
+record's round trip, change lines and separation from sidecars. Binary compatibility against a DLL built from master: **Observed**
+(scratch run, not in the repo). **Unknown**: a real framework-plus-dependent
 game run (shared types and state, diamond, failed initialization, save and reload) and the launcher drawn (built, not run here).

@@ -289,7 +289,7 @@ public sealed class ModHost
     /// A dependent failed in <see cref="IMod.Initialize"/>: every mod it depends on, directly or through others, that implements <see cref="IModDependents"/> drops
     /// what it holds for it (docs/modding-dependencies.md "Failed initialization").
     /// </summary>
-    static void TellDependenciesItFailed(LoadedMod mod)
+    internal static void TellDependenciesItFailed(LoadedMod mod)
     {
         foreach (var dependency in DependencyClosure(mod))
         {
