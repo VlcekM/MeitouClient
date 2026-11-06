@@ -489,7 +489,7 @@ sealed partial class PlayerInterface
             double? threat = null;
             foreach (var c in snap.Characters)
             {
-                if (c.IsPlayer || c.Animal || c.Body is { Dead: true } or { Unconscious: true } || !(c.HostileToPlayer || c.FightsPlayer)) continue;
+                if (c.IsPlayer || c.Body is { Dead: true } or { Unconscious: true } || !(c.HostileToPlayer || c.FightsPlayer)) continue;
                 var p = where(c);
                 double d = Vector2.Distance(new Vector2(p.X, p.Z), flat);
                 if (threat is null || d < threat) threat = d;
@@ -564,8 +564,8 @@ sealed partial class PlayerInterface
                 float d = D(where(c));
                 if (d > radius) continue;
                 if (c.Body is { Dead: true } or { Unconscious: true } || !c.CarriedBy.IsNone) bodies.Add((d, c));
-                else if (c.Animal) animals.Add((d, c));
-                else if (c.HostileToPlayer || c.FightsPlayer) threats.Add((d, c));
+                else if (c.HostileToPlayer || c.FightsPlayer) threats.Add((d, c));   // the game's own flags: hostile by faction relation, or fighting the player's characters; animals too (Bonedogs)
+                else if (c.Animal) animals.Add((d, c));   // passive wildlife
                 else if (c.IsTrader) traders.Add((d, c));
                 else if (lead is not null && c.Faction == lead.Faction && c.Faction >= 0) allies.Add((d, c));
                 else neutrals.Add((d, c));
