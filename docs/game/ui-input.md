@@ -385,7 +385,7 @@ interior-mask hulls); the hits are sorted nearest first (**Verified**, comparato
   below the hit's floor, the walk skips ahead to the next hit on the same building at or below it. Such a hit ends the walk (**Verified**, decompile; but past a whole-shown
   interior of the player's, above), so nothing behind or below a shown floor or wall is taken. Meitou: `Hidden` leaves out what lies past one of a building in the interior view
   (`WorldObjectRenderer.ShownInteriorHit`, its floors up to the viewed one as the movement pick has them). A level building is still hit by its whole
-  collision, roof included; a player site behind that hit, inside its hull and not `Hidden`, takes the click instead (furniture in a bought house, #320).
+  collision, roof included; a player site behind that hit, inside its hull, not `Hidden` and not above the viewed floor, takes the click instead (furniture in a bought house, #320).
 - A turret or lamp mounted on the hit building (its slot 135 handle) met within 12 units behind the hit is taken instead (`FUN_1407f2af0`).
 - Outdoor farms have no collision ([collision](../formats/collision.md)), yet the original selects them; how is **Unknown** (not in the
   `FarmBuilding` constructor). Meitou (engine choice, `BuildingFootprints.Plot`): a building without collision (a player's site of any kind,
