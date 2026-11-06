@@ -90,7 +90,15 @@ character: within `PlayerSystem.GiveRange` 1000 of its window's owner, `StealRan
 - A trade is opened by a dialogue line with effect 1 (DA_TRADE). In the data only the shopkeeper's dialogue has one (**Observed**, walk of the dialogue references): Thieves Guild, Shinobi
   Trader 3 lines, Thief Boss, Thief, Ninja Guard and the squad's `dialog squad` (TOUGH 1234) none; Skeleton Barman, Smuggler Barman, Stone Camp Trader yes; Shop Guard, Traders Guard, Slaver,
   Samurai no. Of 125 trader templates with vendors in the probe load order, 89 mark a member CHARACTER `is trader`.
-- Meitou (the right-click Trade verb, engine): a member of a shop squad whose record sets `is trader` or whose dialogue reaches a Trade line (`DialogueSet.Trades`, conditions not checked).
+- DA_TRADE needs no stock: the window shows the trader's squad stock, for a squad with no home building its members' worn bags merged ([trader window](ui-screens.md#6-inventory-trade-dialogue-build)),
+  so a squad that was never filled trades what those bags hold and buys with its purse. `Caravan` (1161, Traders Guild) and `Caravan NW` (43970) have `vendors` (`caravan (survival
+  items)`) but no `is trader`, and their boss's Trade line (48150) has no condition: in the unmodded game they open an unfilled window (**Verified**: the factory and the restock reach the
+  squad filler only through `FUN_1404ff5e0`, which refuses a homeless squad without `is trader`; the filler without that test, `FUN_1404fe970`, has no caller: no call, jump or pointer
+  to it or its thunk in the exe). **Observed**: the owner's saves with ~100 mods (1.0.65, 1.0.68) hold Caravans stocked from that list with an `inventory refresh time`, which the saver
+  writes only for `is trader` (`FUN_140372ef0`), so a mod sets it; which one is **Unknown**. Meitou: such a squad gets an empty shop, never filled, at its first trade (`TradeSystem.StockFor`);
+  a housed squad without a shop gets none (not built).
+- Meitou (the right-click Trade verb, engine): a member of a shop squad whose record sets `is trader` or whose dialogue reaches a Trade line (`DialogueSet.Trades`, conditions not checked);
+  a Caravan's boss gets it once a dialogue trade has given the squad its shop.
 - A shop squad can have several traders: Flotsam Village's armoury (50348-rebirth.mod, 3 Flotsam Ninja + 3 Flotsam Refugee) has three same-named Flotsam Refugee traders, since the
   refugee's dialogue package reaches Trade under `IS_A_TRADER` and `IN_MY_BUILDING` only (**Verified**: the original's METARU save holds the same 6 members, and the dialogue data; #180).
 - The context menu's pick-up verb tests "not a trader" with `FUN_1405cff70` itself (`FUN_140796f80`, **Verified**), so any member of a trader squad counts, guards included. Meitou: `World.VerbFactsOf` reads the squad template's `is trader`.

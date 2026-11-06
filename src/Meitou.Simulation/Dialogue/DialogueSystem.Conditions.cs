@@ -69,7 +69,7 @@ public sealed partial class DialogueSystem
             }
             case 4 or 5:
                 return Bool(Cold(world, s.Carrying) is { } body && (body.Medical?.Dead ?? false) == (dc.Condition == 5) && (body.Bounties?.BookedAmount(data.Relations, meF) ?? 0) > 0);
-            case 9: return Bool(s.SquadId >= 0 && world.Squads.Find(s.SquadId)?.Shop is not null);
+            case 9: return Bool(s.SquadId >= 0 && world.Squads.Find(s.SquadId) is { } sq && data.Db.Find(sq.TemplateId)?.GetBool("is trader") == true);   // the template's flag, not its stock
             case 14: return Bool(s.IsImprisoned);
             case 16:
             {

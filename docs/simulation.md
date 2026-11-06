@@ -1639,8 +1639,10 @@ quality, culture, market, forbidden/stolen factors follow [economy.md](game/econ
 A squad shop holds one 18 x 18 stock grid (the building storage size and the vanilla trader window width); `ArrangeStock` arranges it. A housed trader whose template makes no
 prisoners or slaves and whose home has stock containers gets a building shop instead ([building shops](game/economy.md#building-shops-observed-decompile)): one stock with a rectangle
 per stock container, each container's window showing only its own (`Shop.ForBuilding`, `Shop.Building`), its own purse rule, the containers' locks opened at each fill. Stock cells stack 50 x an item's `stackable`. A housed squad with vendors that is no
-trader has its home's containers filled instead (`FillHome`). Only members that trade (`DialogueSystem.Trades`, [who trades](game/economy.md#who-trades)) publish `IsTrader`, the
-Trade verb and pointer. Shop state is hashed; the open trade is not, except its buyback receipts (below). A shop is saved on its platoon (`Saving/ShopSave`: stock, fill count,
+trader has its home's containers filled instead (`FillHome`). A homeless squad without a shop that a Trade line opens a trade with gets an empty one, never filled (`StockFor`,
+[who trades](game/economy.md#who-trades)). A trader on a walk (a caravan's boss) stops for the trade and its AI walks on after (engine choice). Only members that trade
+(`DialogueSystem.Trades`, [who trades](game/economy.md#who-trades)) publish `IsTrader`, the Trade verb and pointer.
+Shop state is hashed; the open trade is not, except its buyback receipts (below). A shop is saved on its platoon (`Saving/ShopSave`: stock, fill count,
 `inventory refresh time`, [economy](game/economy.md#building-shops-observed-decompile)) and kept by a saved platoon that leaves the world; a save without it gets a fresh fill.
 Customer: the original buys into the character window the stock is dropped on (`FUN_140712490`, **Observed**). Meitou keeps one customer; the inventory window shows the lead
 selected character, also while trading. A buy or sell names the window's character (`BuyItem.Into`, `SellItem.From`, a held item's window) and the trade passes to them within

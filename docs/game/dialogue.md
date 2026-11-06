@@ -422,7 +422,7 @@ Talk menu's dry run is picking.
 | 4 / 5 CARRYING_BOUNTY_ALIVE / DEAD | S carries a living / dead body with a bounty for Me's faction (or a diplomat of a hostile faction) | Bool |
 | 6, 15, 34, 51 | not evaluated, always pass | - |
 | 7 / 8 IMPRISONED_BY_TARGET / OTHER | S caged (in-something state 2) by Me's faction (7) or another (8); when S is Me, by the target's faction; no target: !B | Bool |
-| 9 IS_A_TRADER | S's squad trades | Bool |
+| 9 IS_A_TRADER | S's SQUAD_TEMPLATE has `is trader`, whatever the squad stocks (`FUN_1405cff70`, [who trades](economy.md#who-trades)) | Bool |
 | 10 FACTION_RANK | the player's rank in Me's faction ([faction rank](factions-squads-towns.md#32-faction-rank)), any `who` | Num3 |
 | 11 BUILDING_IS_CLOSED_AND_SECURED | a bool at `+0xe8` of Me's platoon AI object (`FUN_140791ba0`: Character `+0x658` -> `+0x78` -> `+0xf8`; its setter **Unknown**, not built) | Bool |
 | 12 PLAYER_TECH_LEVEL | the research manager's tech level, `*(*(game + 0x38) + 8)` (**Observed**; the manager's level is the one [research](buildings-production.md#research) raises, 1 at the start), any `who` | Num3 |
@@ -528,7 +528,7 @@ squad simply takes the speaker in, unless a target flag at +0x1d0 is set):
 
 | DA | Effect |
 |---|---|
-| 1 TRADE | ends the conversation, opens trade with the speaker |
+| 1 TRADE | ends the conversation, opens trade with the speaker whatever its squad stocks (**Verified**, `FUN_140680560` case 1 → `FUN_1409524f0`: only the speaker, the target and the speaker's platoon are tested; [who trades](economy.md#who-trades)) |
 | 2 TALK_TO_LEADER | a player target: the speaker's squad leader gets task 102 on the target |
 | 3 / 18 JOIN_SQUAD_WITH_EDIT / FAST | the speaker joins the target's squad (player: recruited, its package becomes `dialogue package player`; 3 opens the editor, [characters](../characters.md)) |
 | 4 AFFECT_RELATIONS, 5 AFFECT_REPUTATION | speaker's faction toward the target's: relation += val0 (clamp ±100) / the speaker's faction's global trust += val0, no clamp, whoever the target is (slot 9, `FUN_1406b2530`) |
