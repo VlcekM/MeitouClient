@@ -334,23 +334,41 @@ sealed partial class GameHost
             con.Print(message + ": " + string.Join(' ', ids.Select(i => $"c:{i.Slot}.{i.Generation}")));
         });
 
-        Add("order", "order move <x> <z> [--queue] | order attack <id>", "give the selected characters a move or attack order through the game's own order commands (what a right click gives)", (args, con) =>
+        Add("order", "order move <x> <z> [--queue] [--wait <s> [--stuck <s>]] | order attack <id>", "give the selected characters a move or attack order through the game's own order commands (what a right click gives); move --wait <s> replies once, when the first ordered character arrives (within 4 m), is stuck (distance fell by less than 1 m for --stuck game seconds, default 10) or <s> game seconds pass: {result: arrived|stuck|timeout, pos, dist_to_target, ticks}", (args, con) =>
         {
             if (!Loaded(con)) return;
             string sub = args.Count > 0 ? args[0].ToLowerInvariant() : "";
             if (sub == "move")
             {
-                bool queue = args.Contains("--queue", StringComparer.OrdinalIgnoreCase);
-                var nums = args.Skip(1).Where(a => !a.Equals("--queue", StringComparison.OrdinalIgnoreCase)).ToList();
-                if (nums.Count != 2 || !Num(nums[0], out float x) || !Num(nums[1], out float z)) { con.Error("usage: order move <x> <z> [--queue]"); return; }
-                if (!player.ControlMove(x, z, queue, out string message)) con.Error("order: " + message); else con.Print(message);
+                bool queue = false;
+                float waitS = 0, stuckS = GameHost.MoveWaitStuckSeconds;
+                bool waited = false, stuckGiven = false;
+                var nums = new List<string>();
+                for (int i = 1; i < args.Count; i++)
+                {
+                    if (args[i].Equals("--queue", StringComparison.OrdinalIgnoreCase)) queue = true;
+                    else if (args[i].Equals("--wait", StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (i + 1 >= args.Count || !Num(args[++i], out waitS) || waitS < 0.1f || waitS > 3600) { con.Error("order: --wait needs game seconds between 0.1 and 3600"); return; }
+                        waited = true;
+                    }
+                    else if (args[i].Equals("--stuck", StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (i + 1 >= args.Count || !Num(args[++i], out stuckS) || stuckS < 0.5f || stuckS > 3600) { con.Error("order: --stuck needs game seconds between 0.5 and 3600"); return; }
+                        stuckGiven = true;
+                    }
+                    else nums.Add(args[i]);
+                }
+                if (nums.Count != 2 || !Num(nums[0], out float x) || !Num(nums[1], out float z) || (stuckGiven && !waited)) { con.Error("usage: order move <x> <z> [--queue] [--wait <s> [--stuck <s>]]"); return; }
+                if (!player.ControlMove(x, z, queue, out string message)) { con.Error("order: " + message); return; }
+                if (waited) ControlMoveWaitStart(con, x, z, waitS, stuckS); else con.Print(message);
             }
             else if (sub == "attack")
             {
                 if (args.Count != 2 || !args[1].StartsWith("c:", StringComparison.OrdinalIgnoreCase) || !PlayerInterface.TryParseCharacter(args[1], out var target)) { con.Error("usage: order attack <c:slot.gen>"); return; }
                 if (!player.ControlAttack(target, out string message)) con.Error("order: " + message); else con.Print(message);
             }
-            else con.Error("usage: order move <x> <z> [--queue] | order attack <id>");
+            else con.Error("usage: order move <x> <z> [--queue] [--wait <s> [--stuck <s>]] | order attack <id>");
         });
 
         Add("place-building", "place-building <building record id or name> <x> <z> [yawDegrees] [heightAboveGround] [--interior <layout>] [--exterior <layout>]", "place a level-editor building at world X Z on the terrain (what the F10 Tools placement does without the pointer); --interior / --exterior name the building's furniture / sign layouts (layouts lists them), which gives it containers, item slots and fixtures; prints its instance key", (args, con) =>
