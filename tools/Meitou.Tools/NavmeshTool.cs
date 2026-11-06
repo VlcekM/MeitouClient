@@ -27,7 +27,7 @@ static class NavmeshTool
         float[]? box = null, pathArg = null;
         bool doorsClosed = false, noInteriors = false; float? toY = null, fromY = null; float[]? near = null, probe = null, route = null; string? probeArg = null;
         int around = 0;
-        bool fingerprint = false, featureTops = false, ragdoll = false;
+        bool fingerprint = false, featureTops = false, regions = false, baseGame = false, ragdoll = false;
         string? interiorKey = null;
         bool compareTowns = false;
         bool ownOnly = false;
@@ -58,6 +58,8 @@ static class NavmeshTool
                 case "--repeat": repeat = int.Parse(args[++i], CultureInfo.InvariantCulture); break;
                 case "--fingerprint": fingerprint = true; break;
                 case "--feature-tops": featureTops = true; break;
+                case "--regions": regions = true; break;
+                case "--base": baseGame = true; break;
                 case "--ragdoll": ragdoll = true; break;
                 case "--route": route = args[++i].Split(',').Select(t => float.Parse(t, CultureInfo.InvariantCulture)).ToArray(); break;
                 case "--compare":
@@ -102,8 +104,9 @@ static class NavmeshTool
         }
 
         var watch = Stopwatch.StartNew();
-        var db = GameDatabase.Load(LoadOrder.FromInstall(install));
-        var levels = WorldLevelData.Load(install, includeInteriors: true);
+        // --base: the base game's files only, as the tests load them, whatever mods the install has enabled.
+        var db = GameDatabase.Load(baseGame ? LoadOrder.BaseGame(install) : LoadOrder.FromInstall(install));
+        var levels = baseGame ? WorldLevelData.LoadBaseGame(install, includeInteriors: true) : WorldLevelData.Load(install, includeInteriors: true);
         ResidentRuins.Apply(db, levels, new BuildingLayouts(db, levels.Interiors));   // the homes' ruins and layouts, as the game lays them out
         Console.WriteLine($"game data and levels loaded ({watch.ElapsedMilliseconds} ms)");
         if (compare.Count > 0) return Compare(install, db, levels, compare, settings);
@@ -191,6 +194,7 @@ static class NavmeshTool
             foreach (var point in probeArg!.Split(';').Select(t => t.Split(',').Select(v => float.Parse(v, CultureInfo.InvariantCulture)).ToArray()))
                 foreach (var line in Probe(install, gatherer, g, full[zone.Value], world, point[0], point[1])) Console.WriteLine("  " + line);
         if (probe is { Length: >= 4 }) foreach (var line in ProbeGrid(install, gatherer, g, full[zone.Value], world, probe[0], probe[1], probe[2], probe[3])) Console.WriteLine(line);
+        if (regions && world.TryGetSlot(zone.Value, out int slot)) foreach (var line in Regions(install, gatherer, g, world.Mesh(slot), box)) Console.WriteLine(line);
 
         List<Vector3>? path = null;
         if (pathArg is not null)
@@ -590,6 +594,95 @@ static class NavmeshTool
                 foreach (var p in parts)
                     yield return $"    part {p.Source.Name} [{p.Source.StringId}] floor {p.Source.GetInt("building floor")}{(p.Source.GetBool("is stairs") ? " stairs" : "")}{(p.Source.GetBool("passable") ? " passable" : "")}{(p.Source.GetBool("is unwalkable roof") ? " unwalkable-roof" : "")} mesh {p.MeshPath} collision {p.Source.GetPath("xml collision")} at {p.Transform.Translation.X:0},{p.Transform.Translation.Y:0},{p.Transform.Translation.Z:0}";
         }
+    }
+
+    /// <summary>
+    /// <c>--regions</c>: the connected regions of the original tile (joined to a neighbouring tile or not, our seeds inside) and of our kept mesh (how much of
+    /// each the original's tile covers), the islands the original has nothing of, and the bridges: where a region of ours runs on past the original's mesh end
+    /// (clustered every 96 units; inside <c>--box</c> when given). The way to find a rule the original prunes by (docs/game/pathfinding.md "Narrow portals").
+    /// </summary>
+    static IEnumerable<string> Regions(GameInstall install, ZoneGeometryGatherer gatherer, ZoneGeometry g, ZoneNavMesh mesh, float[]? box)
+    {
+        var original = OriginalNavTiles.LoadExterior(install, g.Zone);
+        if (original is null) { yield return "no original tile"; yield break; }
+        var buckets = Buckets(original);
+        int PolygonAt(float x, float z)
+        {
+            foreach (int p in buckets.GetValueOrDefault(((int)MathF.Floor(x / 64), (int)MathF.Floor(z / 64))) ?? [])
+                for (int k = 1; k + 1 < original.Polygons[p].Length; k++)
+                    if (NavGeometry.Barycentric(x, z, original.Vertices[original.Polygons[p][0]], original.Vertices[original.Polygons[p][k]], original.Vertices[original.Polygons[p][k + 1]], out float u, out float v, out float w) && u >= 0 && v >= 0 && w >= 0) return p;
+            return -1;
+        }
+        static double Area(Vector3[] v, int[] poly)
+        {
+            double area = 0;
+            for (int k = 1; k + 1 < poly.Length; k++) area += Math.Abs((v[poly[k]].X - v[poly[0]].X) * (v[poly[k + 1]].Z - v[poly[0]].Z) - (v[poly[k + 1]].X - v[poly[0]].X) * (v[poly[k]].Z - v[poly[0]].Z)) / 2;
+            return area;
+        }
+        // The original's regions: faces joined over a shared edge (the same two vertices).
+        var owner = new Dictionary<(int, int), int>();
+        var adjacent = new List<int>[original.Polygons.Length];
+        for (int p = 0; p < original.Polygons.Length; p++)
+        {
+            adjacent[p] = [];
+            var poly = original.Polygons[p];
+            for (int k = 0; k < poly.Length; k++)
+            {
+                int a = poly[k], b = poly[(k + 1) % poly.Length];
+                if (owner.TryGetValue((Math.Min(a, b), Math.Max(a, b)), out int q)) { adjacent[p].Add(q); adjacent[q].Add(p); }
+                else owner[(Math.Min(a, b), Math.Max(a, b))] = p;
+            }
+        }
+        var region = Label(original.Polygons.Length, p => adjacent[p]);
+        var regions = Enumerable.Range(0, original.Polygons.Length).GroupBy(p => region[p]).Select(r => (Id: r.Key, Polygons: r.ToList())).OrderByDescending(r => r.Polygons.Sum(p => Area(original.Vertices, original.Polygons[p]))).ToList();
+        yield return $"original regions {regions.Count}, joined to a neighbouring tile {regions.Count(r => r.Polygons.Any(p => original.Edges[p].Contains(OriginalEdge.TileBorder)))}:";
+        var seedRegion = g.Seeds.Select(s => PolygonAt(s.X, s.Z)).Select(p => p < 0 ? -1 : region[p]).ToList();
+        foreach (var r in regions.Take(10))
+        {
+            var centre = r.Polygons.Aggregate(Vector3.Zero, (acc, p) => acc + original.Vertices[original.Polygons[p][0]]) / r.Polygons.Count;
+            yield return $"  {r.Polygons.Count} polygons, {r.Polygons.Sum(p => Area(original.Vertices, original.Polygons[p])):0} sq units at {centre.X:0},{centre.Y:0},{centre.Z:0}, joined {r.Polygons.Any(p => original.Edges[p].Contains(OriginalEdge.TileBorder))}, our seeds inside {seedRegion.Count(x => x == r.Id)}";
+        }
+        yield return "  seeds with no original polygon under them: " + string.Join(" ", g.Seeds.Where((s, i) => seedRegion[i] < 0).Select(s => $"{s.X:0},{s.Y:0},{s.Z:0}"));
+        // Our regions, each polygon covered when the original has a polygon under its centre.
+        var covered = new bool[mesh.PolygonCount];
+        for (int p = 0; p < mesh.PolygonCount; p++) { var c = mesh.Centre(p); covered[p] = PolygonAt(c.X, c.Z) >= 0; }
+        var ours = Label(mesh.PolygonCount, p => mesh.NeighboursOf(p));
+        var ourRegions = Enumerable.Range(0, mesh.PolygonCount).GroupBy(p => ours[p]).Select(r => r.ToList())
+            .Select(r => (Polygons: r, Area: r.Sum(p => Area(mesh.Vertices, mesh.Polygons[p])), Uncovered: r.Where(p => !covered[p]).Sum(p => Area(mesh.Vertices, mesh.Polygons[p]))))
+            .OrderByDescending(r => r.Uncovered).ToList();
+        yield return $"our regions {ourRegions.Count}, {ourRegions.Sum(r => r.Uncovered):0} of {ourRegions.Sum(r => r.Area):0} sq units with nothing of the original under them:";
+        foreach (var r in ourRegions.Take(8))
+        {
+            var c = mesh.Centre(r.Polygons[0]);
+            yield return $"  {r.Polygons.Count} polygons, {r.Area:0} sq units, {r.Uncovered:0} uncovered{(r.Polygons.All(p => !covered[p]) ? $": an island at {c.X:0},{c.Y:0},{c.Z:0}" : "")}";
+            var bridges = new List<(Vector3 End, Vector3 On)>();
+            foreach (int p in r.Polygons)
+                if (covered[p]) foreach (int q in mesh.NeighboursOf(p)) if (!covered[q]) bridges.Add((mesh.Centre(p), mesh.Centre(q)));
+            if (box is not null) bridges = bridges.Where(b => b.On.X >= box[0] && b.On.X <= box[2] && b.On.Z >= box[1] && b.On.Z <= box[3]).ToList();
+            foreach (var cluster in bridges.GroupBy(b => ((int)MathF.Floor(b.On.X / 96), (int)MathF.Floor(b.On.Z / 96))).OrderByDescending(c => c.Count()).Take(box is null ? 6 : 40))
+            {
+                var b = cluster.First();
+                yield return $"    bridge x{cluster.Count()}: the original ends at {b.End.X:0},{b.End.Y:0},{b.End.Z:0}, ours goes on to {b.On.X:0},{b.On.Y:0},{b.On.Z:0} (terrain {gatherer.TerrainHeight(b.On.X, b.On.Z):0})";
+            }
+        }
+    }
+
+    /// <summary>Connected-component labels over <paramref name="count"/> nodes with the given adjacency.</summary>
+    static int[] Label(int count, Func<int, IEnumerable<int>> neighbours)
+    {
+        var label = new int[count];
+        Array.Fill(label, -1);
+        int next = 0;
+        var stack = new Stack<int>();
+        for (int p = 0; p < count; p++)
+        {
+            if (label[p] >= 0) continue;
+            label[p] = next;
+            stack.Push(p);
+            while (stack.Count > 0) foreach (int q in neighbours(stack.Pop())) if (label[q] < 0) { label[q] = next; stack.Push(q); }
+            next++;
+        }
+        return label;
     }
 
     /// <summary>
