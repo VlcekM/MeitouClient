@@ -422,14 +422,16 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
     public const float WallTownRange = 16000;
 
     /// <summary>
-    /// The player town a new site belongs to (docs/game/buildings-production.md "Placement", Outposts): its parent building's; else the nearest player town within
-    /// <see cref="JoinTownRange"/>; else the town of the nearest player building within <see cref="JoinBuildingRange"/>; else, for a <c>creates player town</c> building that is not a
+    /// The player town a new site belongs to (docs/game/buildings-production.md "Placement", Outposts): its parent building's (a level building's town within
+    /// <see cref="JoinTownRange"/> is not a player town: none); else the nearest player town within <see cref="JoinTownRange"/>; else the town of the nearest player building within
+    /// <see cref="JoinBuildingRange"/>; else, for a <c>creates player town</c> building that is not a
     /// wall, a new outpost at its position plus the size of the ghost's bounds box (<b>Verified</b>, <c>FUN_1404d6d90</c>: <c>Aabb::getSize</c>, the full X, Y and Z extent), which also takes in the player buildings whose nearest town within <see cref="AdoptRange"/> it is. 0 when none.
     /// </summary>
     int TownFor(World world, BuildSite site, BuildingBuildData data, Vector3 boundsSize)
     {
         var reg = world.Buildings;
-        if (site.Parent is { } parent && reg.Find(parent) is { } home) return home.Town;   // a level building's town is not a player town: the rules below
+        if (site.Parent is { } parent && reg.Find(parent) is { } home) return home.Town;
+        if (site.Parent is { } level && LevelTownOf(world, level) is { } centre && DistanceXZ(centre, site.Position) <= JoinTownRange) return 0;
         int faction = world.Player.Faction;
         PlayerTown? nearest = null;
         float best = float.MaxValue;
@@ -456,6 +458,16 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
         foreach (var s in reg.All)
             if (s.Owner == faction && NearestTown(reg, s.Position, AdoptRange) == town.Number) s.Town = town.Number;
         return town.Number;
+    }
+
+    /// <summary>The centre of the placed town a level building (its instance id, what a site built in it names as its parent) belongs to; null when it is of no town.</summary>
+    static Vector3? LevelTownOf(World world, string instance)
+    {
+        if (world.SystemOf<PopulationSystem>()?.Data is not { } data) return null;
+        foreach (var town in data.Sites)
+            foreach (var b in town.Buildings)
+                if (b.InstanceId == instance) return town.Position;
+        return null;
     }
 
     /// <summary>Confirm's second pass (<b>Verified</b>, <c>FUN_1404db180</c>): queued walls still without a town take the last player town of the queue, else the nearest town within

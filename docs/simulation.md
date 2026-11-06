@@ -1295,7 +1295,7 @@ Building inside one names the level instance as parent (as any owned town buildi
 
 **Outposts.** `World.Buildings.Towns` (`PlayerTown`: `Number` 1.., `Name`, `Position`, `Owner`, `Public`; never removed; renamed and ticked public by the [town panel](game/ui-screens.md#town-panel)) and
 `BuildSite.Town` (a number, 0 none). `PlaceBuildings` gives each new site its town by the
-[outpost rule](game/buildings-production.md#placement): the parent's; else the nearest player town within 5000 (X/Z);
+[outpost rule](game/buildings-production.md#placement): the parent's (none in a level town's building); else the nearest player town within 5000 (X/Z);
 else the town of the nearest player site within 2500; else a `creates player town` non-wall makes "Your Outpost" at its
 position, and every player site whose nearest town (level towns and outposts) within 8000 is it moves in. After the
 batch, `links together` sites still without a town take the batch's last player town, else the nearest town within 16000
