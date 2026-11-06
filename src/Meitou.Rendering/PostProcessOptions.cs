@@ -142,8 +142,9 @@ public sealed class PostOptions
     public const float SsaoCharacterStrength = 0.25f;
     /// <summary>How much a character counts as an occluder of the ground and things round it (Meitou): 1 as anything else. At 1 a character lying down left a dark halo as wide as itself (radius 6, strength 4) with a light seam where the half-size mask met it.</summary>
     public const float SsaoCharacterOccluder = 0.3f;
-    /// <summary>Meitou switch (<c>contact</c>; docs/render-post.md "Contact shadows"): short screen-space sun shadows, run with the SSAO and multiplied into its factor.</summary>
-    public bool ContactShadows = true;
+    /// <summary>Meitou switch (<c>contact</c>; docs/render-post.md "Contact shadows"): short screen-space sun shadows, run with the SSAO and multiplied into its factor. Off by default
+    /// (a screen-space guess: what the screen does not show casts nothing); the traced sun does the same exactly where the device has ray queries.</summary>
+    public bool ContactShadows;
     /// <summary>How much of the sun's share of a surface's light a contact shadow takes; its reach and thickness in world units; the eye distance where it has faded out.</summary>
     public const float ContactStrength = 0.85f, ContactReach = 8, ContactThickness = 0.6f, ContactEnd = 2500;
     /// <summary>The contact shadows' parameters for the SSAO pass; a strength of 0 turns them off.</summary>

@@ -7,7 +7,7 @@ namespace Meitou.Rendering.Characters;
 internal sealed partial class CharacterRenderer
 {
     /// <summary>
-    /// One mesh group of a character's part as the traced scene skins it: the group and its level, the part's model relative to the character's anchor, the instance flags of what the
+    /// One mesh group of a character's part as the traced scene skins it: the group and its drawn level, the part's model relative to the character's anchor, the instance flags of what the
     /// look hides (<see cref="HiddenFlags"/>), its morph base, and the cut-out the shadow draws use (map, threshold, channel: 0 none).
     /// </summary>
     internal readonly record struct RayPart(GpuObjectPart Group, int Level, Matrix4x4 Model, uint Flags, uint MorphBase, uint AlphaMap, float AlphaCut, uint Channel);
@@ -35,7 +35,7 @@ internal sealed partial class CharacterRenderer
 
     /// <summary>
     /// The characters this update placed within <paramref name="range"/> of <paramref name="eye"/> whose shadow can be in view (<see cref="Live.OffScreen"/>), nearest first, at most
-    /// <paramref name="max"/>, with their shown parts at the shadow passes' levels. The list's entries are reused. Render thread, after <see cref="Update"/>.
+    /// <paramref name="max"/>, with their shown parts at the levels the colour pass draws. The list's entries are reused. Render thread, after <see cref="Update"/>.
     /// </summary>
     internal void RayCharacters(Vector3 eye, float range, int max, List<RayCharacter> into)
     {
@@ -80,8 +80,8 @@ internal sealed partial class CharacterRenderer
         var (map, cut, channel) = RayCutout(in record);
         var model = f.Model;
         model.Translation += shift;
-        float lod = f.Lod * LodBias * ShadowLodBias * (HairInShadow(part, l.Asset) ? CharacterContent.HairLodScale : 1);
-        int level = !GeneratedLod ? FileLevel(part, f.FileLod) : GeneratedLevel(part, lod, depth: true);
+        // The drawn level (the colour pass's rule): a surface's ray leaves the same triangles it drew, so its own body shadows it only where it really does.
+        int level = !GeneratedLod ? FileLevel(part, f.FileLod) : GeneratedLevel(part, f.Lod * LodBias, depth: false);
         uint flags = HiddenFlags(part, l.Asset), morphs = part.Morphed ? l.Asset.MorphBase : 0;
         var groups = part.Mesh.Parts;
         for (int g = 0; g < groups.Count; g++)

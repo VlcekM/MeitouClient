@@ -7,11 +7,8 @@ using Silk.NET.Vulkan;
 
 namespace Meitou.Rendering.Gi;
 
-/// <summary>What the traced sun's rays read and write, all at the render size: the raw mask, and with a temporal upscaler last frame's filtered one and this frame's (<see cref="TracedSunShaders.Filter"/>).</summary>
-readonly record struct TracedSunTargets(GpuTexture Depth, GpuTexture Surface, GpuTexture Term, GpuTexture Mask, int Width, int Height, GpuTexture? History = null, GpuTexture? Filtered = null);
-
-/// <summary>The filter's reprojection: last frame's eye-relative position to its clip, this eye minus that one, and whether last frame's filtered mask is usable.</summary>
-readonly record struct TracedSunHistory(Matrix4x4 Previous, Vector3 Shift, bool Valid);
+/// <summary>What the traced sun's rays read and write, all at the render size: the rays' mask (visibility, blocker distance) and the penumbra filter's (<see cref="TracedSunShaders.Filter"/>).</summary>
+readonly record struct TracedSunTargets(GpuTexture Depth, GpuTexture Surface, GpuTexture Term, GpuTexture Mask, GpuTexture Filtered, int Width, int Height);
 
 /// <summary>
 /// The traced sun's rays (docs/render-shadows.md "Traced sun"): <see cref="TracedSunShaders.Mask"/> over the scene's depth and surface target, one ray a pixel towards
@@ -21,8 +18,6 @@ sealed unsafe class TracedSunPass : IDisposable
 {
     /// <summary>The sun's angular radius the disc is sampled over (tangent): the real sun's, 0.267 degrees (KenshiNative's 0.015, about three suns, widened far casters' penumbrae as much).</summary>
     public const float DiscTangent = 0.00465f;
-    /// <summary>The filter's blend of a new ray: about 8 frames of history where the neighbourhood keeps it.</summary>
-    const float Response = 0.15f;
     /// <summary>The longest ray, within what the traced scene holds around the eye.</summary>
     const float RayLength = 8000;
 
@@ -37,7 +32,7 @@ sealed unsafe class TracedSunPass : IDisposable
     {
         filterProgram = ctx.Shaders.Compute(TracedSunShaders.Filter, "traced sun filter",
         [
-            (0, DescriptorType.CombinedImageSampler), (1, DescriptorType.CombinedImageSampler), (2, DescriptorType.CombinedImageSampler), (3, DescriptorType.CombinedImageSampler),
+            (0, DescriptorType.CombinedImageSampler), (1, DescriptorType.CombinedImageSampler), (2, DescriptorType.CombinedImageSampler),
             (4, DescriptorType.StorageImage), (5, DescriptorType.UniformBuffer),
         ]);
         filterPipeline = ctx.Pipelines.Get(new ComputePipelineDesc(filterProgram, "traced sun filter"));
@@ -60,18 +55,18 @@ sealed unsafe class TracedSunPass : IDisposable
     }
 
     /// <summary>
-    /// Traces into <see cref="TracedSunTargets.Mask"/>. <paramref name="inverse"/>: NDC to the position relative to the eye; <paramref name="pixelSlope"/>: a pixel's
-    /// width per unit of depth; <paramref name="frame"/>: the temporal upscaler's frame (the disc is then sampled anew each frame), null: the disc's centre, a hard shadow.
+    /// Traces into <see cref="TracedSunTargets.Mask"/>, then filters it into <see cref="TracedSunTargets.Filtered"/>. <paramref name="inverse"/>: NDC to the position relative to the eye;
+    /// <paramref name="pixelSlope"/>: a pixel's width per unit of depth. Nothing depends on the frame: a still view gives the same picture.
     /// </summary>
-    public void Run(GiScene scene, in TracedSunTargets t, in Matrix4x4 inverse, Vector3 eye, Vector3 toSun, float pixelSlope, uint? frame, in TracedSunHistory history = default)
+    public void Run(GiScene scene, in TracedSunTargets t, in Matrix4x4 inverse, Vector3 eye, Vector3 toSun, float pixelSlope)
     {
         if (scene.Top is null) return;
         var parameters = new Params
         {
             Inverse = inverse,
-            Eye = new Vector4(eye - scene.Origin, frame is null ? 0 : DiscTangent),
+            Eye = new Vector4(eye - scene.Origin, 0),
             Sun = new Vector4(Vector3.Normalize(toSun), RayLength),
-            Size = new Vector4(t.Width, t.Height, (frame ?? 0) % 1024, pixelSlope),
+            Size = new Vector4(t.Width, t.Height, 0, pixelSlope),
             Grass = scene.GrassRayParams,
         };
         var constants = ctx.Frame.Constants.Write<Params>(new ReadOnlySpan<Params>(&parameters, 1), 256);
@@ -82,11 +77,8 @@ sealed unsafe class TracedSunPass : IDisposable
         cmd.BindPipeline(pipeline);
         cmd.Dispatch((uint)((t.Width + 7) / 8), (uint)((t.Height + 7) / 8));
         cmd.Barrier(BarrierBatch.Full);
-        if (t.History is { } previous && t.Filtered is { } filtered)
-        {
-            RunFilter(cmd, t, previous, filtered, inverse, history);
-            cmd.Barrier(BarrierBatch.Full);
-        }
+        RunFilter(cmd, t, inverse, pixelSlope);
+        cmd.Barrier(BarrierBatch.Full);
         cmd.EndLabel();
         ctx.EndNative(cmd);
     }
@@ -94,31 +86,27 @@ sealed unsafe class TracedSunPass : IDisposable
     [StructLayout(LayoutKind.Sequential)]
     struct FilterParams
     {
-        public Matrix4x4 Inverse, Previous;
-        public Vector4 Shift, Size;
+        public Matrix4x4 Inverse;
+        public Vector4 Size;
     }
 
-    void RunFilter(CommandList cmd, in TracedSunTargets t, GpuTexture previous, GpuTexture filtered, in Matrix4x4 inverse, in TracedSunHistory history)
+    void RunFilter(CommandList cmd, in TracedSunTargets t, in Matrix4x4 inverse, float pixelSlope)
     {
-        var parameters = new FilterParams
-        {
-            Inverse = inverse, Previous = history.Previous, Shift = new Vector4(history.Shift, history.Valid ? 1 : 0), Size = new Vector4(t.Width, t.Height, Response, 0),
-        };
+        var parameters = new FilterParams { Inverse = inverse, Size = new Vector4(t.Width, t.Height, DiscTangent, pixelSlope) };
         var constants = ctx.Frame.Constants.Write<FilterParams>(new ReadOnlySpan<FilterParams>(&parameters, 1), 256);
         DescriptorImageInfo Sampled(GpuTexture texture) => new(ctx.Device.SamplerAt(sampler.Index), ctx.Device.ViewAt(texture.View().Index), ImageLayout.General);
-        var images = stackalloc DescriptorImageInfo[5];
+        var images = stackalloc DescriptorImageInfo[4];
         images[0] = Sampled(t.Depth);
         images[1] = Sampled(t.Surface);
         images[2] = Sampled(t.Mask);
-        images[3] = Sampled(previous);
-        images[4] = new DescriptorImageInfo(default, ctx.Device.ViewAt(filtered.View().Index), ImageLayout.General);
+        images[3] = new DescriptorImageInfo(default, ctx.Device.ViewAt(t.Filtered.View().Index), ImageLayout.General);
         var uniform = new DescriptorBufferInfo(ctx.Device.BufferAt(constants.Handle.Index), constants.Offset, (ulong)sizeof(FilterParams));
-        var writes = stackalloc WriteDescriptorSet[6];
-        for (int i = 0; i < 4; i++) writes[i] = Image((uint)i, DescriptorType.CombinedImageSampler, &images[i]);
-        writes[4] = Image(4, DescriptorType.StorageImage, &images[4]);
-        writes[5] = new WriteDescriptorSet { SType = StructureType.WriteDescriptorSet, DstBinding = 5, DescriptorCount = 1, DescriptorType = DescriptorType.UniformBuffer, PBufferInfo = &uniform };
+        var writes = stackalloc WriteDescriptorSet[5];
+        for (int i = 0; i < 3; i++) writes[i] = Image((uint)i, DescriptorType.CombinedImageSampler, &images[i]);
+        writes[3] = Image(4, DescriptorType.StorageImage, &images[3]);
+        writes[4] = new WriteDescriptorSet { SType = StructureType.WriteDescriptorSet, DstBinding = 5, DescriptorCount = 1, DescriptorType = DescriptorType.UniformBuffer, PBufferInfo = &uniform };
         cmd.BindPipeline(filterPipeline);
-        cmd.PushDescriptors(filterProgram, 0, new ReadOnlySpan<WriteDescriptorSet>(writes, 6), GpuBindPoint.Compute);
+        cmd.PushDescriptors(filterProgram, 0, new ReadOnlySpan<WriteDescriptorSet>(writes, 5), GpuBindPoint.Compute);
         cmd.Dispatch((uint)((t.Width + 7) / 8), (uint)((t.Height + 7) / 8));
     }
 

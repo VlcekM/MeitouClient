@@ -52,10 +52,14 @@ static class TracedSunShaders
             return (g.kind == {{GeometryRecord.Character}}u ? texel[g.diffuse & 3u] : texel.a) >= cut;
         }
         """;
-    const byte Solids = Objects | Foliage | SmallFoliage;
+    const byte Solids = Objects | Foliage | SmallFoliage | Characters;
 
-    /// <summary>Terrain nearer than this along a ray is not asked: the traced grids are coarser than the drawn ground, and a cell's own facets are not the ground's.</summary>
-    const float FineTerrainBlind = 24, CoarseTerrainBlind = 320;
+    /// <summary>
+    /// The fine terrain grid (smooth, 8 apart: <see cref="GiScene"/>) is asked from a point this many units above the surface, plus a share of the distance, along the whole ray:
+    /// the grid is not the drawn ground (its displacement, the curved outline), so a ray from the ground itself would hit its own facets, while the 24-unit blind range it had let
+    /// the ground at a cliff's foot see the sun through the cliff. The coarse grid (160 apart) is asked from 320 along the ray.
+    /// </summary>
+    const float FineTerrainLift = 3, FineTerrainLiftPerUnit = 0.002f, CoarseTerrainBlind = 320;
 
     static string F(float v) => v.ToString("0.0########", CultureInfo.InvariantCulture);
 
@@ -72,14 +76,14 @@ static class TracedSunShaders
         layout(set = 0, binding = 0) uniform sampler2D uDepth;
         layout(set = 0, binding = 1) uniform usampler2D uSurface;
         layout(set = 0, binding = 2) uniform sampler2D uTerm;
-        layout(set = 0, binding = 3, rgba8) uniform writeonly image2D uOut;
+        layout(set = 0, binding = 3, rgba16f) uniform writeonly image2D uOut;
         layout(set = 0, binding = 4) uniform accelerationStructureEXT uScene;
         {{GiShaders.GeometryStruct}}
         layout(set = 0, binding = 5, std430) readonly buffer Geometries { Geometry geometries[]; };
         layout(set = 0, binding = 6, std140) uniform Params
         {
             mat4 inverse;      // NDC, jittered as the frame was -> position relative to the eye
-            vec4 eye;          // xyz: the eye relative to the traced origin, w: the tangent of the sun's radius (0: its centre alone)
+            vec4 eye;          // xyz: the eye relative to the traced origin
             vec4 sun;          // xyz: towards the sun, w: the ray's length
             vec4 size;         // width, height, the frame, a pixel's width per unit of depth
             vec4 grass;        // x: how far from the eye grass is traced (0: none), y: the blades' tallest, z: what a blade's own ray does not see of other blades, w: the fade past that
@@ -121,64 +125,49 @@ static class TracedSunShaders
         #define CANDIDATE_KEPT(q) casterKept(CANDIDATE_RECORD(q), rayQueryGetIntersectionPrimitiveIndexEXT(q, false), rayQueryGetIntersectionBarycentricsEXT(q, false), 1.0)
         #define BLOCKED(q) (rayQueryGetIntersectionTypeEXT(q, true) != gl_RayQueryCommittedIntersectionNoneEXT)
 
-        bool solidBlocks(vec3 o, vec3 dir, float tMin)
+        // Each query returns how far along the ray its blocker is (the penumbra filter's width), 0 when nothing blocks.
+        #define HIT_T(q) (BLOCKED(q) ? rayQueryGetIntersectionTEXT(q, true) : 0.0)
+        float solidBlocks(vec3 o, vec3 dir, float tMin)
         {
             rayQueryEXT q;
             rayQueryInitializeEXT(q, uScene, gl_RayFlagsTerminateOnFirstHitEXT, {{(int)Solids}}, o, tMin, dir, p.sun.w);
             while (rayQueryProceedEXT(q)) if (CANDIDATE_KEPT(q)) rayQueryConfirmIntersectionEXT(q);
-            return BLOCKED(q);
+            return HIT_T(q);
         }
 
         // The ground's height fields. Their back faces are skipped as the probes' rays skip them (the drawn ground lies under the grid in a hollow), but an interior's are not: a room
         // dug into a hillside lies under the ground on purpose.
-        bool terrainBlocks(vec3 o, vec3 dir, uint mask, float tMin, bool interior)
+        float terrainBlocks(vec3 o, vec3 dir, uint mask, float tMin, bool interior)
         {
             rayQueryEXT q;
             rayQueryInitializeEXT(q, uScene, gl_RayFlagsOpaqueEXT | gl_RayFlagsTerminateOnFirstHitEXT | (interior ? 0u : gl_RayFlagsCullBackFacingTrianglesEXT), mask, o, tMin, dir, 1e5);
             while (rayQueryProceedEXT(q)) { }
-            return BLOCKED(q);
+            return HIT_T(q);
         }
 
-        // Grass: only as far as a ray can stay under the tallest blade, and fading out with the distance it is traced to. A blade's own ray (card) does not see the blades within the
-        // blind range, where the drawn card has swayed from its traced copy or stands on its twin, and takes the next ones in by a share of the noise (KenshiNative's card fade).
-        bool grassBlocks(vec3 o, vec3 dir, float tMin, bool card, float dist, float noise)
+        // Grass: only as far as a ray can stay under the tallest blade. A blade's own ray (card) does not see the blades within the blind range, where the drawn card has swayed from
+        // its traced copy or stands on its twin; past it the blades count from halfway through the fade.
+        float grassBlocks(vec3 o, vec3 dir, float tMin, bool card)
         {
-            if (noise * p.grass.x < dist * 4.0 - p.grass.x * 3.0) return false;
-            float start = card ? max(tMin, p.grass.z) : tMin;
+            float start = card ? max(tMin, p.grass.z + p.grass.w * 0.5) : tMin;
             rayQueryEXT q;
             rayQueryInitializeEXT(q, uScene, gl_RayFlagsTerminateOnFirstHitEXT, {{(int)Grass}}, o, start, dir, max(start + 1.0, p.grass.y / max(dir.y, 0.05)));
-            while (rayQueryProceedEXT(q))
-            {
-                float share = card ? smoothstep(p.grass.z, p.grass.z + p.grass.w, rayQueryGetIntersectionTEXT(q, false)) : 1.0;
-                if (noise < share && CANDIDATE_KEPT(q)) rayQueryConfirmIntersectionEXT(q);
-            }
-            return BLOCKED(q);
+            while (rayQueryProceedEXT(q)) if (CANDIDATE_KEPT(q)) rayQueryConfirmIntersectionEXT(q);
+            return HIT_T(q);
         }
 
-        // Interleaved gradient noise over the screen, moved each frame: what one ray a pixel leaves, the temporal upscaler averages.
-        float pixelNoise(ivec2 px, float shift) { return fract(52.9829189 * fract(dot(vec2(px) + shift * p.size.z, vec2(0.06711056, 0.00583715)))); }
-
-        // A direction inside the sun's disc.
-        vec3 discRay(ivec2 px)
-        {
-            vec3 l = p.sun.xyz;
-            if (p.eye.w <= 0.0) return l;
-            vec3 t = normalize(abs(l.y) < 0.9 ? cross(l, vec3(0.0, 1.0, 0.0)) : cross(l, vec3(1.0, 0.0, 0.0)));
-            float r = sqrt(pixelNoise(px, 5.588238)) * p.eye.w, a = 6.2831853 * pixelNoise(px + ivec2(37, 17), 3.141593);
-            return normalize(l + (t * cos(a) + cross(l, t) * sin(a)) * r);
-        }
-
-        float visibility(ivec2 px)
+        // One ray a pixel to the sun's centre, the same every frame: x what of the sun reaches the pixel, y how far its blocker is (0: none). The disc's size is the filter's.
+        vec2 visibility(ivec2 px)
         {
             uvec4 surface = texelFetch(uSurface, px, 0);
-            if ((surface.w & 65536u) == 0u) return 1.0;
+            if ((surface.w & 65536u) == 0u) return vec2(1.0, 0.0);
             vec3 term = texelFetch(uTerm, px, 0).rgb;
-            if (max(term.r, max(term.g, term.b)) < 1e-5) return 1.0;   // no sun here to shadow: the back of a shape, the night
+            if (max(term.r, max(term.g, term.b)) < 1e-5) return vec2(1.0, 0.0);   // no sun here to shadow: the back of a shape, the night
 
             vec3 at = pointAt(px);
             float dist = length(at);
             float pixel = dist * p.size.w;
-            vec3 dir = discRay(px);
+            vec3 dir = p.sun.xyz;
             vec3 n = octDir(vec2(surface.xy) / 65535.0 * 2.0 - 1.0);
             uint receiver = (surface.w >> 17u) & 3u;
             bool blade = receiver == 1u, card = receiver == 2u, interior = (surface.w & 512u) != 0u;
@@ -189,25 +178,35 @@ static class TracedSunShaders
             vec3 o = p.eye.xyz + at + side * clearance;
             float tMin = card ? max(clearance, 0.5 + pixel * 3.0) : blade ? max(pixel * 2.0, 0.25) : clearance;
 
-            if (solidBlocks(o, dir, tMin)) return 0.0;
-            if (terrainBlocks(o, dir, {{(int)TerrainFine}}u, {{F(FineTerrainBlind)}}, interior)) return 0.0;
-            if (terrainBlocks(o, dir, {{(int)TerrainCoarse}}u, {{F(CoarseTerrainBlind)}}, interior)) return 0.0;
-            if (dist < p.grass.x && grassBlocks(o, dir, tMin, blade, dist, pixelNoise(px + ivec2(91, 53), 7.123457))) return 0.0;
-            return 1.0;
+            float t = solidBlocks(o, dir, tMin);
+            if (t <= 0.0) t = terrainBlocks(o + vec3(0.0, {{F(FineTerrainLift)}} + dist * {{F(FineTerrainLiftPerUnit)}}, 0.0), dir, {{(int)TerrainFine}}u, 0.0, interior);
+            if (t <= 0.0) t = terrainBlocks(o, dir, {{(int)TerrainCoarse}}u, {{F(CoarseTerrainBlind)}}, interior);
+            // Grass fades out over the last quarter of its reach, by how much it takes, not by noise.
+            if (t <= 0.0 && dist < p.grass.x)
+            {
+                float g = grassBlocks(o, dir, tMin, blade);
+                if (g > 0.0) return vec2(1.0 - clamp((p.grass.x - dist) / (p.grass.x * 0.25), 0.0, 1.0), g);
+            }
+            return t > 0.0 ? vec2(0.0, t) : vec2(1.0, 0.0);
         }
 
         void main()
         {
             ivec2 px = ivec2(gl_GlobalInvocationID.xy);
             if (px.x >= int(p.size.x) || px.y >= int(p.size.y)) return;
-            imageStore(uOut, px, vec4(visibility(px)));
+            imageStore(uOut, px, vec4(visibility(px), 0.0, 0.0));
         }
         """;
 
+    /// <summary>Taps of the penumbra filter's disc: a sunflower of this many points, the same every frame.</summary>
+    public const int PenumbraTaps = 16;
+    /// <summary>Pixels: the farthest a blocker is looked for round a pixel, and the widest penumbra radius.</summary>
+    public const float PenumbraSearch = 12, PenumbraMax = 16;
+
     /// <summary>
-    /// The mask's temporal filter (with a temporal upscaler): each traced pixel's world point reprojected into last frame's filtered mask by the camera alone, the four texels around it
-    /// kept where their stored distance from that frame's eye is the point's (a moved or uncovered surface has none), the history clamped to the 3 x 3 neighbourhood of this frame's rays
-    /// (a shadow that moved off a lit or into a shadowed neighbourhood is dropped at once: no trail), then blended with this frame's ray. Writes the visibility and the distance.
+    /// The penumbra filter (no history: the same picture every frame): the hard shadow of the rays to the sun's centre softened by the sun's real disc. Round each traced pixel the
+    /// blockers of the taps on its own surface (within a plane tolerance) give a mean blocker distance, the penumbra is that times the disc's diameter, and the mask is averaged over
+    /// a disc of that width on screen (PCSS's rule on the traced mask). A pixel with no blocker round it keeps its ray.
     /// </summary>
     public static readonly string Filter = $$"""
         #version 460
@@ -215,16 +214,12 @@ static class TracedSunShaders
         layout(set = 0, binding = 0) uniform sampler2D uDepth;
         layout(set = 0, binding = 1) uniform usampler2D uSurface;
         layout(set = 0, binding = 2) uniform sampler2D uRaw;
-        layout(set = 0, binding = 3) uniform sampler2D uHistory;
         layout(set = 0, binding = 4, rgba16f) uniform writeonly image2D uOut;
         layout(set = 0, binding = 5, std140) uniform Params
         {
             mat4 inverse;      // NDC, jittered as the frame was -> position relative to the eye
-            mat4 previous;     // position relative to last frame's eye -> last frame's clip
-            vec4 shift;        // xyz: this eye minus last frame's; w: 1 when the history is valid
-            vec4 size;         // width, height, the blend of a new ray (the response)
+            vec4 size;         // width, height, the tangent of the sun's radius, a pixel's width per unit of depth
         } p;
-        """ + DepthConvention.Glsl + $$"""
 
         vec3 pointAt(ivec2 px)
         {
@@ -232,52 +227,86 @@ static class TracedSunShaders
             return h.xyz / h.w;
         }
 
-        // Last frame's filtered visibility at a point, from the texels whose distance matches (-1: none).
-        float history(vec3 at)
+        vec3 octDir(vec2 e)
         {
-            if (p.shift.w < 0.5) return -1.0;
-            vec3 before = at + p.shift.xyz;
-            vec4 clip = p.previous * vec4(before, 1.0);
-            if (clip.w <= 0.0) return -1.0;
-            vec2 texel = (clip.xy / clip.w * 0.5 + 0.5) * p.size.xy - 0.5;
-            if (any(lessThan(texel, vec2(-0.5))) || any(greaterThan(texel, p.size.xy - 0.5))) return -1.0;
-            float expected = length(before), tolerance = expected * 0.02 + 0.5;
-            ivec2 base = ivec2(floor(texel));
-            vec2 f = texel - vec2(base);
-            float sum = 0.0, weight = 0.0;
-            for (int k = 0; k < 4; k++)
-            {
-                ivec2 o = ivec2(k & 1, k >> 1);
-                ivec2 q = clamp(base + o, ivec2(0), ivec2(p.size.xy) - 1);
-                vec2 h = texelFetch(uHistory, q, 0).rg;
-                float w = (o.x == 1 ? f.x : 1.0 - f.x) * (o.y == 1 ? f.y : 1.0 - f.y);
-                if (abs(h.g - expected) < tolerance) { sum += h.r * w; weight += w; }
-            }
-            return weight > 0.01 ? sum / weight : -1.0;
+            vec3 d = vec3(e.x, 1.0 - abs(e.x) - abs(e.y), e.y);
+            if (d.y < 0.0) d.xz = (1.0 - abs(d.zx)) * vec2(d.x >= 0.0 ? 1.0 : -1.0, d.z >= 0.0 ? 1.0 : -1.0);
+            return normalize(d);
+        }
+
+        // Tap k of the sunflower, radius 1.
+        vec2 tap(int k)
+        {
+            float r = sqrt((float(k) + 0.5) / {{PenumbraTaps}}.0), a = float(k) * 2.39996323;
+            return vec2(cos(a), sin(a)) * r;
+        }
+
+        // Whether a tap's point lies on the pixel's surface: within the tolerance of its plane, and traced.
+        bool onSurface(ivec2 q, vec3 at, vec3 n, float tolerance)
+        {
+            if (any(lessThan(q, ivec2(0))) || any(greaterThanEqual(q, ivec2(p.size.xy)))) return false;
+            if ((texelFetch(uSurface, q, 0).w & 65536u) == 0u) return false;
+            return abs(dot(pointAt(q) - at, n)) < tolerance;
         }
 
         void main()
         {
             ivec2 px = ivec2(gl_GlobalInvocationID.xy);
             if (px.x >= int(p.size.x) || px.y >= int(p.size.y)) return;
-            float raw = texelFetch(uRaw, px, 0).r;
-            if ((texelFetch(uSurface, px, 0).w & 65536u) == 0u)
-            {
-                imageStore(uOut, px, vec4(raw, -1.0, 0.0, 0.0));
-                return;
-            }
+            vec2 raw = texelFetch(uRaw, px, 0).rg;
+            uvec4 surface = texelFetch(uSurface, px, 0);
+            if ((surface.w & 65536u) == 0u) { imageStore(uOut, px, vec4(raw.r)); return; }
             vec3 at = pointAt(px);
-            float low = raw, high = raw;
-            for (int y = -1; y <= 1; y++)
-                for (int x = -1; x <= 1; x++)
-                {
-                    float v = texelFetch(uRaw, clamp(px + ivec2(x, y), ivec2(0), ivec2(p.size.xy) - 1), 0).r;
-                    low = min(low, v);
-                    high = max(high, v);
-                }
-            float before = history(at);
-            float visibility = before < 0.0 ? raw : mix(clamp(before, low, high), raw, p.size.z);
-            imageStore(uOut, px, vec4(visibility, length(at), 0.0, 0.0));
+            float footprint = length(at) * p.size.w;
+            vec3 n = octDir(vec2(surface.xy) / 65535.0 * 2.0 - 1.0);
+            float tolerance = max(0.25, footprint * {{F(PenumbraSearch)}} * 0.5);
+
+            // The blockers round the pixel on its own surface.
+            float blockers = raw.g, count = raw.g > 0.0 ? 1.0 : 0.0;
+            for (int k = 0; k < {{PenumbraTaps}}; k++)
+            {
+                ivec2 q = px + ivec2(round(tap(k) * {{F(PenumbraSearch)}}));
+                if (!onSurface(q, at, n, tolerance)) continue;
+                float t = texelFetch(uRaw, q, 0).g;
+                if (t > 0.0) { blockers += t; count += 1.0; }
+            }
+            if (count == 0.0) { imageStore(uOut, px, vec4(raw.r)); return; }
+
+            // The penumbra across, in pixels: the disc's diameter at the mean blocker's distance over the pixel's width.
+            float radius = min(p.size.z * (blockers / count) / footprint, {{F(PenumbraMax)}});
+            if (radius < 0.75) { imageStore(uOut, px, vec4(raw.r)); return; }
+            float sum = raw.r, weight = 1.0;
+            for (int k = 0; k < {{PenumbraTaps}}; k++)
+            {
+                ivec2 q = px + ivec2(round(tap(k) * radius));
+                if (!onSurface(q, at, n, max(0.25, footprint * radius * 0.5))) continue;
+                sum += texelFetch(uRaw, q, 0).r;
+                weight += 1.0;
+            }
+            imageStore(uOut, px, vec4(sum / weight));
+        }
+        """;
+
+    /// <summary>
+    /// <c>--debug-shadows 4</c>, over the scene in place of its colour: dark blue where the cascades light the sun (no traced share), else what the rays let through, green lit and
+    /// red shadowed, dimmed where the pixel takes no sun (its back, the night).
+    /// </summary>
+    public static readonly string Debug = "#version 330 core\n" + AtmosphereShaders.Functions + GiResolveShaders.Reconstruct + """
+        in vec2 vUv;
+        out vec4 fragColour;
+        uniform usampler2D uAlbedo;
+        uniform sampler2D uTerm;
+        uniform sampler2D uMask;
+
+        void main()
+        {
+            ivec2 px = ivec2(floor(gl_FragCoord.xy));
+            if (depthAt(px) <= 0.0) { fragColour = vec4(0.0, 0.0, 0.0, 1.0); return; }
+            if ((texelFetch(uAlbedo, px, 0).w & 65536u) == 0u) { fragColour = vec4(0.0, 0.0, 0.35, 1.0); return; }
+            float m = texelFetch(uMask, px, 0).r;
+            vec3 term = texelFetch(uTerm, px, 0).rgb;
+            float lit = max(term.r, max(term.g, term.b)) > 1e-5 ? 1.0 : 0.25;
+            fragColour = vec4(vec3(1.0 - m, m, 0.0) * lit, 1.0);
         }
         """;
 

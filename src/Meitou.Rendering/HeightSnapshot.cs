@@ -40,6 +40,48 @@ internal readonly struct HeightSnapshot
         return c + (Bilinear(fine.Raw, fine.Columns, fine.Rows, x - fx0, z - fz0, fine.Spacing) - c) * w;
     }
 
+    /// <summary>
+    /// Height at a world point through a smooth surface: Catmull-Rom over the fine window's samples (the coarse grid's bilinear outside it, blended as <see cref="HeightAt"/> blends).
+    /// The drawn ground curves its triangles' edges between the samples (the outline refinement); this follows such a curve far closer than the bilinear facets do.
+    /// </summary>
+    public float SmoothHeightAt(float x, float z)
+    {
+        float h = WorldLayout.HalfWorldSize;
+        float c = Bilinear(coarse, coarseSize, coarseSize, x + h, z + h, WorldLayout.WorldSize / (float)(coarseSize - 1));
+        float w = Math.Clamp(Math.Min(Math.Min(x - fx0, fx1 - x), Math.Min(z - fz0, fz1 - z)) / fineBand, 0, 1);
+        if (w <= 0) return c;
+        return c + (Bicubic(fine.Raw, fine.Columns, fine.Rows, x - fx0, z - fz0, fine.Spacing) - c) * w;
+    }
+
+    static float Bicubic(ushort[] raw, int cols, int rows, float x, float z, float spacing)
+    {
+        float fx = Math.Clamp(x / spacing, 0, cols - 1), fz = Math.Clamp(z / spacing, 0, rows - 1);
+        int i = Math.Clamp((int)fx, 0, Math.Max(cols - 2, 0)), j = Math.Clamp((int)fz, 0, Math.Max(rows - 2, 0));
+        float tx = fx - i, tz = fz - j;
+        float sum = 0;
+        for (int b = -1; b <= 2; b++)
+        {
+            int row = Math.Clamp(j + b, 0, rows - 1) * cols;
+            float line = 0;
+            for (int a = -1; a <= 2; a++) line += raw[row + Math.Clamp(i + a, 0, cols - 1)] * CatmullRom(a, tx);
+            sum += line * CatmullRom(b, tz);
+        }
+        return sum * (WorldLayout.MaxHeight / ushort.MaxValue);
+    }
+
+    /// <summary>The Catmull-Rom weight of sample <paramref name="k"/> (-1 to 2) at <paramref name="t"/> between samples 0 and 1.</summary>
+    static float CatmullRom(int k, float t)
+    {
+        float t2 = t * t, t3 = t2 * t;
+        return k switch
+        {
+            -1 => 0.5f * (-t3 + 2 * t2 - t),
+            0 => 0.5f * (3 * t3 - 5 * t2 + 2),
+            1 => 0.5f * (-3 * t3 + 4 * t2 + t),
+            _ => 0.5f * (t3 - t2),
+        };
+    }
+
     static float Bilinear(ushort[] raw, int cols, int rows, float x, float z, float spacing)
     {
         float fx = Math.Clamp(x / spacing, 0, cols - 1), fz = Math.Clamp(z / spacing, 0, rows - 1);
