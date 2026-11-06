@@ -1,0 +1,120 @@
+using System.Globalization;
+using System.Numerics;
+using System.Text.Json;
+using Meitou.Navigation;
+using Meitou.Simulation.Locks;
+
+namespace Meitou.Game;
+
+/// <summary>Navigation query commands of the agent control channel (docs/procedures/playtest/agent-play-api.md): <c>path-check</c>.</summary>
+sealed partial class GameHost
+{
+    void RegisterControlNavCommands(Action<string, string, string, Action<IReadOnlyList<string>, DevConsole>> add, Func<DevConsole, bool> loaded)
+    {
+        add("path-check", "path-check <x1> <z1> <x2> <z2> | path-check --id <c:slot.gen> <x> <z>", "ask the game's own navigation query (what a walking character uses, doors as they are now) whether a path exists, without walking: reachable, path length and, when none exists, the doors that block it (the nearest-first doors on the way that are closed to paths, with lock, open, broken state); blockedBy is only searched inside the query's own zone mesh", (args, con) =>
+        {
+            if (!loaded(con)) return;
+            if (nav is null) { con.Error("path-check: no navmesh in this run"); return; }
+            string? idText = null;
+            var nums = new List<string>();
+            for (int i = 0; i < args.Count; i++)
+            {
+                if (args[i].Equals("--id", StringComparison.OrdinalIgnoreCase) && i + 1 < args.Count) idText = args[++i];
+                else nums.Add(args[i]);
+            }
+            var walk = nav.Walkability;
+            Vector3 from, to;
+            float a = 0, b = 0, c = 0, d = 0;
+            if (idText is not null)
+            {
+                if (!PlayerInterface.TryParseCharacter(idText, out _) || player.ControlPosition(idText.StartsWith("c:", StringComparison.OrdinalIgnoreCase) ? idText : "c:" + idText) is not { } at) { con.Error($"path-check: unknown character '{idText}'"); return; }
+                if (nums.Count != 2 || !Num(nums[0], out a) || !Num(nums[1], out b)) { con.Error("usage: path-check --id <c:slot.gen> <x> <z>"); return; }
+                from = at; to = new Vector3(a, walk.GroundHeight(a, b), b);
+            }
+            else
+            {
+                if (nums.Count != 4 || !Num(nums[0], out a) || !Num(nums[1], out b) || !Num(nums[2], out c) || !Num(nums[3], out d)) { con.Error("usage: path-check <x1> <z1> <x2> <z2> | path-check --id <c:slot.gen> <x> <z>"); return; }
+                from = new Vector3(a, walk.GroundHeight(a, b), b); to = new Vector3(c, walk.GroundHeight(c, d), d);
+            }
+            var inv = CultureInfo.InvariantCulture;
+            var path = walk.FindPath(from, to);
+            using var stream = new MemoryStream();
+            using (var w = new Utf8JsonWriter(stream))
+            {
+                w.WriteStartObject();
+                w.WriteBoolean("reachable", path.Found);
+                w.WriteStartArray("from"); w.WriteNumberValue(Math.Round(from.X, 1)); w.WriteNumberValue(Math.Round(from.Z, 1)); w.WriteEndArray();
+                w.WriteStartArray("to"); w.WriteNumberValue(Math.Round(to.X, 1)); w.WriteNumberValue(Math.Round(to.Z, 1)); w.WriteEndArray();
+                w.WriteNumber("straight", Math.Round(Vector2.Distance(new(from.X, from.Z), new(to.X, to.Z)), 1));
+                if (path.Found)
+                {
+                    double len = 0;
+                    for (int i = 1; i < path.Points.Count; i++) len += Vector3.Distance(path.Points[i - 1], path.Points[i]);
+                    w.WriteNumber("length", Math.Round(len, 1));
+                    w.WriteNumber("points", path.Points.Count);
+                    var end = path.Points[^1];
+                    w.WriteNumber("ends_short_by", Math.Round(Vector2.Distance(new(end.X, end.Z), new(to.X, to.Z)), 1));
+                }
+                else
+                {
+                    var blocking = BlockingDoors(walk, from, to, out string why);
+                    w.WriteString("why", why);
+                    w.WriteStartArray("blockedBy");
+                    foreach (var (polygon, building, doorStates) in blocking)
+                    {
+                        w.WriteStartObject();
+                        w.WriteString("polygon", polygon);
+                        w.WriteString("building", building);
+                        w.WriteBoolean("closedForPaths", true);
+                        w.WriteStartArray("doors");
+                        foreach (var f in doorStates)
+                        {
+                            w.WriteStartObject();
+                            w.WriteString("fixture", f.Id);
+                            w.WriteString("record", f.RecordId);
+                            w.WriteBoolean("locked", f.Lock is { EffectivelyLocked: true });
+                            w.WriteBoolean("broken", f.DoorBroken);
+                            w.WriteString("motion", f.Motion.ToString().ToLowerInvariant());
+                            w.WriteNumber("openAmount", Math.Round(f.OpenAmount, 2));
+                            w.WriteEndObject();
+                        }
+                        w.WriteEndArray();
+                        w.WriteEndObject();
+                    }
+                    w.WriteEndArray();
+                }
+                w.WriteEndObject();
+            }
+            controlData = System.Text.Encoding.UTF8.GetString(stream.ToArray());
+            con.Print(path.Found ? $"reachable, {path.Points.Count} points" : "no path");
+        });
+    }
+
+    /// <summary>
+    /// Why a failed path failed: the same <see cref="NavQuery"/> with the doors table left out finds the corridor the walk would take if no door were shut; the door polygons on it that
+    /// the real doors table has closed are the blockers, in order from the start. Empty (with the reason) when the unrestricted query fails too, or the corridor crosses a zone border (only the first zone pair is searched).
+    /// </summary>
+    List<(string Polygon, string Building, List<Fixture> Doors)> BlockingDoors(NavmeshWalkability walk, Vector3 from, Vector3 to, out string why)
+    {
+        var result = new List<(string, string, List<Fixture>)>();
+        var world = walk.World;
+        var free = new NavQuery(world);   // no doors table: every door passable
+        if (!world.TryFindPolygon(from, NavQuery.StartSnap, out var start, out var startPoint)) { why = "the start is not on the navmesh"; return result; }
+        if (!world.TryFindPolygon(to, NavQuery.GoalSnap, out var goal, out var goalPoint)) { why = "the target is not on the navmesh"; return result; }
+        var corridor = free.FindCorridor(start, startPoint, goal, goalPoint, NavAgent.Human);
+        if (corridor is null) { why = "no path even with every door open (terrain, water, walls or a zone that is not loaded)"; return result; }
+        foreach (var poly in corridor.Polygons)
+        {
+            var mesh = world.Mesh(poly.Zone);
+            if (mesh.DoorOf is not { } of || mesh.DoorIds is not { } ids) continue;
+            int di = of[poly.Polygon];
+            if (di < 0) continue;
+            string building = ids[di];
+            if (!walk.Doors.IsClosed(building)) continue;
+            if (result.Any(r => r.Item2 == building)) continue;
+            result.Add(($"{poly.Zone}.{poly.Polygon}", building, session.World.Fixtures.OfBuilding(building).Where(f => f.Kind == FixtureKind.Door).ToList()));
+        }
+        why = result.Count > 0 ? "a door on the way is closed for paths" : "the path exists with every door open but no door on it is closed for paths (cause not a door)";
+        return result;
+    }
+}
