@@ -230,6 +230,8 @@ public sealed unsafe partial class ShadowPass
 
     /// <summary>The cascades whose character layers the receivers read (the last publish's; 0: the traced sun does not run). The traced range ends with the last one's slice.</summary>
     public int TracedCascades { get; private set; }
+    /// <summary>The view depth where the traced share ends (the far end of the last cascade with a character layer; 0: the traced sun does not run).</summary>
+    public float TracedDepth { get; private set; }
 
     /// <summary>Cascades with a character layer: all but the last two, whose texels are too coarse for the shadow of a figure, at least one.</summary>
     static int ActorLayers(int count) => count < 2 ? 0 : Math.Max(count - 2, 1);
@@ -342,6 +344,7 @@ public sealed unsafe partial class ShadowPass
         for (int i = 0; i < published; i++) cascades[i] = stored[i]!;
         Cascades = cascades;
         TracedCascades = Math.Max(Math.Min(actors, published - 1), 0);   // the fade reads the slice after the last
+        TracedDepth = TracedCascades > 0 ? cascades[TracedCascades - 1].FarDepth : 0;
         PublishMeitou(view, cascades, toSun, blockers);
         CpuMs = watch.Elapsed.TotalMilliseconds;
         cpuSamples.Add(CpuMs);

@@ -58,7 +58,7 @@ static class LampShadowShaders
     /// One ray per picked lamp (Port of KenshiNative's <c>knLampSample</c>, its lamp-always-soft sectors): a point of the lamp's disc as the surface sees it, the four
     /// pixels of a 2 x 2 block in the disc's four sectors, the block's rotation and radius from the R2 sequence, moved each frame under a temporal resolve.
     /// </summary>
-    const string Rays = """
+    static readonly string Rays = $$"""
         vec3 lampSample(vec3 lamp, vec3 world, ivec2 px, int id)
         {
             vec3 l = normalize(lamp - world);
@@ -81,13 +81,13 @@ static class LampShadowShaders
             uint flags = gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsCullBackFacingTrianglesEXT;
             if (emitter != 0u) flags |= gl_RayFlagsNoOpaqueEXT;
             rayQueryEXT shadow;
-            // 0x0F: TracedSunShaders.GiMask, what the probes see (the small foliage and the grass are the sun's alone).
-            rayQueryInitializeEXT(shadow, uScene, flags, 0x0F, from, 0.0, ray / d, tMax);
+            // Everything the scene holds: what the probes see, the small foliage, the grass and the characters (TracedSunShaders.LampMask).
+            rayQueryInitializeEXT(shadow, uScene, flags, {{TracedSunShaders.LampMask}}, from, 0.0, ray / d, tMax);
             while (rayQueryProceedEXT(shadow))
             {
                 int record = rayQueryGetIntersectionInstanceCustomIndexEXT(shadow, false) + rayQueryGetIntersectionGeometryIndexEXT(shadow, false);
-                if ((emitter == 0u || geometries[record].emitter != emitter) && solid(record,
-                    rayQueryGetIntersectionPrimitiveIndexEXT(shadow, false), rayQueryGetIntersectionBarycentricsEXT(shadow, false)))
+                if ((emitter == 0u || geometries[record].emitter != emitter) && casterKept(record,
+                    rayQueryGetIntersectionPrimitiveIndexEXT(shadow, false), rayQueryGetIntersectionBarycentricsEXT(shadow, false), 2.0))
                     rayQueryConfirmIntersectionEXT(shadow);
             }
             return rayQueryGetIntersectionTypeEXT(shadow, true) == gl_RayQueryCommittedIntersectionNoneEXT ? 1.0 : 0.0;
@@ -156,7 +156,7 @@ static class LampShadowShaders
         {{Constants}}{{Picks}}{{LampShaders.Defines}}{{LampShaders.Lighting}}{{GiResolveShaders.ReconstructFunctions}}
         {{GiShaders.OctDirection}}
         {{GiShaders.HitBuffers}}
-        {{GiShaders.HitCutout}}
+        {{TracedSunShaders.CasterCutout}}
         {{Rays}}
         void main()
         {

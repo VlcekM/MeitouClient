@@ -9,9 +9,49 @@ namespace Meitou.Rendering.Gi;
 /// </summary>
 static class TracedSunShaders
 {
-    /// <summary>Instance masks in the traced scene. <see cref="GiMask"/> is what the probes see, so <see cref="SmallFoliage"/> and <see cref="Grass"/> are the sun's alone.</summary>
-    public const byte TerrainFine = 0x01, Objects = 0x02, Foliage = 0x04, TerrainCoarse = 0x08, SmallFoliage = 0x10, Grass = 0x20;
+    /// <summary>
+    /// Instance masks in the traced scene. <see cref="GiMask"/> is what the probes see, so <see cref="SmallFoliage"/>, <see cref="Grass"/> and <see cref="Characters"/> are the
+    /// casters' alone: the lamps' shadow rays see everything (<see cref="LampMask"/>).
+    /// </summary>
+    public const byte TerrainFine = 0x01, Objects = 0x02, Foliage = 0x04, TerrainCoarse = 0x08, SmallFoliage = 0x10, Grass = 0x20, Characters = 0x40;
     public const byte GiMask = TerrainFine | Objects | Foliage | TerrainCoarse;
+    public const byte LampMask = GiMask | SmallFoliage | Grass | Characters;
+
+    /// <summary>
+    /// A shadow ray's cut-out test at a candidate: kept where the map the draw cuts with reaches its threshold (an object part's own pair for the casters, else the probes'). A grass
+    /// card's coordinates are its corners' order; a character's map channel is in its record's <c>diffuse</c> (the probes never see characters). Needs <c>geometries</c>, the
+    /// bindless table, <c>TexCoord</c>, <c>Triangle</c> and <c>offsetBy</c>.
+    /// </summary>
+    internal static readonly string CasterCutout = $$"""
+        vec2 casterUv(Geometry g, uvec3 tri, vec2 bary)
+        {
+            vec2 ua, ub, uc;
+            if (g.kind == {{GeometryRecord.Grass}}u)
+            {
+                // A card's vertices are its four corners in order, u the first bit, v the second (TracedGrass).
+                ua = vec2(tri.x & 1u, (tri.x >> 1u) & 1u);
+                ub = vec2(tri.y & 1u, (tri.y >> 1u) & 1u);
+                uc = vec2(tri.z & 1u, (tri.z >> 1u) & 1u);
+            }
+            else
+            {
+                ua = TexCoord(offsetBy(g.vertices, tri.x * g.stride + {{GpuVertex.UvOffset}}u)).v;
+                ub = TexCoord(offsetBy(g.vertices, tri.y * g.stride + {{GpuVertex.UvOffset}}u)).v;
+                uc = TexCoord(offsetBy(g.vertices, tri.z * g.stride + {{GpuVertex.UvOffset}}u)).v;
+            }
+            return ua * (1.0 - bary.x - bary.y) + ub * bary.x + uc * bary.y;
+        }
+        bool casterKept(int record, int primitive, vec2 bary, float lod)
+        {
+            Geometry g = geometries[record];
+            uint map = g.sunMap != 0u ? g.sunMap : g.alphaMap;
+            float cut = g.sunMap != 0u ? g.sunCut : g.alphaThreshold;
+            if (cut <= 0.0 || map == 0u) return true;
+            uvec3 tri = Triangle(offsetBy(g.indices, uint(primitive) * 12u)).v;
+            vec4 texel = textureLod(textures2D[nonuniformEXT(map)], casterUv(g, tri, bary), lod);
+            return (g.kind == {{GeometryRecord.Character}}u ? texel[g.diffuse & 3u] : texel.a) >= cut;
+        }
+        """;
     const byte Solids = Objects | Foliage | SmallFoliage;
 
     /// <summary>Terrain nearer than this along a ray is not asked: the traced grids are coarser than the drawn ground, and a cell's own facets are not the ground's.</summary>
@@ -34,7 +74,7 @@ static class TracedSunShaders
         layout(set = 0, binding = 2) uniform sampler2D uTerm;
         layout(set = 0, binding = 3, rgba8) uniform writeonly image2D uOut;
         layout(set = 0, binding = 4) uniform accelerationStructureEXT uScene;
-        struct Geometry { uvec2 vertices; uvec2 indices; uint stride; uint kind; uint diffuse; uint alphaMap; float alphaThreshold; uint emitter; uint sunMap; float sunCut; };
+        {{GiShaders.GeometryStruct}}
         layout(set = 0, binding = 5, std430) readonly buffer Geometries { Geometry geometries[]; };
         layout(set = 0, binding = 6, std140) uniform Params
         {
@@ -76,36 +116,9 @@ static class TracedSunShaders
             return dot(g, n) < 0.0 ? -g : g;
         }
 
-        // A candidate on a cut-out surface: kept where the map the draw cuts with reaches its threshold (the objects' own pair, for the sun alone, else the probes').
-        vec2 hitUv(Geometry g, uvec3 tri, vec2 bary)
-        {
-            vec2 ua, ub, uc;
-            if (g.kind == {{GeometryRecord.Grass}}u)
-            {
-                // A card's vertices are its four corners in order, u the first bit, v the second (TracedGrass).
-                ua = vec2(tri.x & 1u, (tri.x >> 1u) & 1u);
-                ub = vec2(tri.y & 1u, (tri.y >> 1u) & 1u);
-                uc = vec2(tri.z & 1u, (tri.z >> 1u) & 1u);
-            }
-            else
-            {
-                ua = TexCoord(offsetBy(g.vertices, tri.x * g.stride + {{GpuVertex.UvOffset}}u)).v;
-                ub = TexCoord(offsetBy(g.vertices, tri.y * g.stride + {{GpuVertex.UvOffset}}u)).v;
-                uc = TexCoord(offsetBy(g.vertices, tri.z * g.stride + {{GpuVertex.UvOffset}}u)).v;
-            }
-            return ua * (1.0 - bary.x - bary.y) + ub * bary.x + uc * bary.y;
-        }
-        bool kept(int record, int primitive, vec2 bary)
-        {
-            Geometry g = geometries[record];
-            uint map = g.sunMap != 0u ? g.sunMap : g.alphaMap;
-            float cut = g.sunMap != 0u ? g.sunCut : g.alphaThreshold;
-            if (cut <= 0.0 || map == 0u) return true;
-            uvec3 tri = Triangle(offsetBy(g.indices, uint(primitive) * 12u)).v;
-            return textureLod(textures2D[nonuniformEXT(map)], hitUv(g, tri, bary), 1.0).a >= cut;
-        }
+        """ + CasterCutout + "\n" + $$"""
         #define CANDIDATE_RECORD(q) (rayQueryGetIntersectionInstanceCustomIndexEXT(q, false) + rayQueryGetIntersectionGeometryIndexEXT(q, false))
-        #define CANDIDATE_KEPT(q) kept(CANDIDATE_RECORD(q), rayQueryGetIntersectionPrimitiveIndexEXT(q, false), rayQueryGetIntersectionBarycentricsEXT(q, false))
+        #define CANDIDATE_KEPT(q) casterKept(CANDIDATE_RECORD(q), rayQueryGetIntersectionPrimitiveIndexEXT(q, false), rayQueryGetIntersectionBarycentricsEXT(q, false), 1.0)
         #define BLOCKED(q) (rayQueryGetIntersectionTypeEXT(q, true) != gl_RayQueryCommittedIntersectionNoneEXT)
 
         bool solidBlocks(vec3 o, vec3 dir, float tMin)
@@ -188,6 +201,83 @@ static class TracedSunShaders
             ivec2 px = ivec2(gl_GlobalInvocationID.xy);
             if (px.x >= int(p.size.x) || px.y >= int(p.size.y)) return;
             imageStore(uOut, px, vec4(visibility(px)));
+        }
+        """;
+
+    /// <summary>
+    /// The mask's temporal filter (with a temporal upscaler): each traced pixel's world point reprojected into last frame's filtered mask by the camera alone, the four texels around it
+    /// kept where their stored distance from that frame's eye is the point's (a moved or uncovered surface has none), the history clamped to the 3 x 3 neighbourhood of this frame's rays
+    /// (a shadow that moved off a lit or into a shadowed neighbourhood is dropped at once: no trail), then blended with this frame's ray. Writes the visibility and the distance.
+    /// </summary>
+    public static readonly string Filter = $$"""
+        #version 460
+        layout(local_size_x = 8, local_size_y = 8) in;
+        layout(set = 0, binding = 0) uniform sampler2D uDepth;
+        layout(set = 0, binding = 1) uniform usampler2D uSurface;
+        layout(set = 0, binding = 2) uniform sampler2D uRaw;
+        layout(set = 0, binding = 3) uniform sampler2D uHistory;
+        layout(set = 0, binding = 4, rgba16f) uniform writeonly image2D uOut;
+        layout(set = 0, binding = 5, std140) uniform Params
+        {
+            mat4 inverse;      // NDC, jittered as the frame was -> position relative to the eye
+            mat4 previous;     // position relative to last frame's eye -> last frame's clip
+            vec4 shift;        // xyz: this eye minus last frame's; w: 1 when the history is valid
+            vec4 size;         // width, height, the blend of a new ray (the response)
+        } p;
+        """ + DepthConvention.Glsl + $$"""
+
+        vec3 pointAt(ivec2 px)
+        {
+            vec4 h = p.inverse * vec4((vec2(px) + 0.5) / p.size.xy * 2.0 - 1.0, texelFetch(uDepth, px, 0).r, 1.0);
+            return h.xyz / h.w;
+        }
+
+        // Last frame's filtered visibility at a point, from the texels whose distance matches (-1: none).
+        float history(vec3 at)
+        {
+            if (p.shift.w < 0.5) return -1.0;
+            vec3 before = at + p.shift.xyz;
+            vec4 clip = p.previous * vec4(before, 1.0);
+            if (clip.w <= 0.0) return -1.0;
+            vec2 texel = (clip.xy / clip.w * 0.5 + 0.5) * p.size.xy - 0.5;
+            if (any(lessThan(texel, vec2(-0.5))) || any(greaterThan(texel, p.size.xy - 0.5))) return -1.0;
+            float expected = length(before), tolerance = expected * 0.02 + 0.5;
+            ivec2 base = ivec2(floor(texel));
+            vec2 f = texel - vec2(base);
+            float sum = 0.0, weight = 0.0;
+            for (int k = 0; k < 4; k++)
+            {
+                ivec2 o = ivec2(k & 1, k >> 1);
+                ivec2 q = clamp(base + o, ivec2(0), ivec2(p.size.xy) - 1);
+                vec2 h = texelFetch(uHistory, q, 0).rg;
+                float w = (o.x == 1 ? f.x : 1.0 - f.x) * (o.y == 1 ? f.y : 1.0 - f.y);
+                if (abs(h.g - expected) < tolerance) { sum += h.r * w; weight += w; }
+            }
+            return weight > 0.01 ? sum / weight : -1.0;
+        }
+
+        void main()
+        {
+            ivec2 px = ivec2(gl_GlobalInvocationID.xy);
+            if (px.x >= int(p.size.x) || px.y >= int(p.size.y)) return;
+            float raw = texelFetch(uRaw, px, 0).r;
+            if ((texelFetch(uSurface, px, 0).w & 65536u) == 0u)
+            {
+                imageStore(uOut, px, vec4(raw, -1.0, 0.0, 0.0));
+                return;
+            }
+            vec3 at = pointAt(px);
+            float low = raw, high = raw;
+            for (int y = -1; y <= 1; y++)
+                for (int x = -1; x <= 1; x++)
+                {
+                    float v = texelFetch(uRaw, clamp(px + ivec2(x, y), ivec2(0), ivec2(p.size.xy) - 1), 0).r;
+                    low = min(low, v);
+                    high = max(high, v);
+                }
+            float before = history(at);
+            float visibility = before < 0.0 ? raw : mix(clamp(before, low, high), raw, p.size.z);
+            imageStore(uOut, px, vec4(visibility, length(at), 0.0, 0.0));
         }
         """;
 

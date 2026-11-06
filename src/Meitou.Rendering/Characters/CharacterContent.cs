@@ -358,8 +358,10 @@ internal sealed class CharacterContent : IDisposable
             var packed = GpuVertex.PackCharacter(part.Vertices);
             int vertexBytes = packed.Length, indexBytes = made.All.Length * 4;
             // One vertex of slack: each attribute is bound at its own offset, and AMD reads the last vertex of an exactly sized buffer as zeros, a spike from its bind pose (VlcekM/MeitouClient#168).
-            var vertices = DeviceBuffer.Create(gpu, (ulong)(vertexBytes + Vertex.Size), BufferUse.Vertex, AllocationName);
-            var indices = DeviceBuffer.Create(gpu, (ulong)indexBytes, BufferUse.Index, AllocationName);
+            // Read by address where the device traces rays: the traced scene skins them (Gi.TracedCharacters).
+            var rays = gpu.HasRayQuery ? BufferUse.RayInput : 0;
+            var vertices = DeviceBuffer.Create(gpu, (ulong)(vertexBytes + Vertex.Size), BufferUse.Vertex | rays, AllocationName);
+            var indices = DeviceBuffer.Create(gpu, (ulong)indexBytes, BufferUse.Index | rays, AllocationName);
             uploads.Write(vertices, 0, packed);
             uploads.Write(indices, 0, MemoryMarshal.AsBytes(made.All.AsSpan()));
             var gp = new GpuObjectPart

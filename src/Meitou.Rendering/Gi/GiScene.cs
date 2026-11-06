@@ -24,8 +24,8 @@ public struct GeometryRecord
     public uint SunMap;
     public float SunCut;
     public const int Size = 48;
-    /// <summary><see cref="Kind"/>: what the geometry is (the debug views colour by it; a terrain hit takes the ground colour map). Grass: the traced sun's cards (<see cref="TracedGrass"/>).</summary>
-    public const uint Terrain = 0, Object = 1, Foliage = 2, Grass = 3;
+    /// <summary><see cref="Kind"/>: what the geometry is (the debug views colour by it; a terrain hit takes the ground colour map). Grass: the traced sun's cards (<see cref="TracedGrass"/>); Character: <see cref="TracedCharacters"/>.</summary>
+    public const uint Terrain = 0, Object = 1, Foliage = 2, Grass = 3, Character = 4;
 }
 
 /// <summary>
@@ -77,18 +77,29 @@ internal sealed unsafe class GiScene : IDisposable
 
     /// <summary>
     /// This frame's sun is traced (docs/render-shadows.md "Traced sun"): what the probes do not need joins the scene under instance masks of its own (the small foliage near the
-    /// eye, the grass), and the cut-out parts of the objects report their candidates. Set before <see cref="Update"/>.
+    /// eye, the grass, the characters), and the cut-out parts of the objects report their candidates. Set before <see cref="Update"/>.
     /// </summary>
     public bool Traced { get; set; }
+    /// <summary>This frame's lamps trace their shadows (docs/render-lights.md "Traced lamp shadows"): the small foliage and the grass join the scene as for <see cref="Traced"/>. Set before <see cref="Update"/>.</summary>
+    public bool LampShadows { get; set; }
+    /// <summary>The characters' share of the last <see cref="Update"/> (<see cref="TracedCharacters"/>), for the statistics.</summary>
+    public string CharacterStats => people?.Describe() ?? "none";
+    /// <summary>What the probes leave out is in the scene: the small foliage, the grass and the objects' cut-out maps.</summary>
+    bool Casters => Traced || LampShadows;
+    /// <summary>How far from the eye the grass is traced (<see cref="TracedGrass"/>): where the traced sun's share ends, set before <see cref="Update"/>.</summary>
+    public float GrassReach { get; set; } = TracedGrass.MinRange;
     /// <summary>The interior masks near the eye, whose grass leaves the traced scene (<see cref="InteriorMaskRenderer.Cuts"/>).</summary>
     public IReadOnlyList<InteriorMaskCut> InteriorCuts { get; set; } = [];
     TracedGrass? grass;
+    TracedCharacters? people;
     /// <summary>The mask pass's <c>grass</c> constants: the reach (0: no grass this frame), the tallest blade, the blind range and its fade.</summary>
-    public Vector4 GrassRayParams => Traced && grass is not null ? grass.RayParams : default;
+    public Vector4 GrassRayParams => Casters && grass is not null ? grass.RayParams : default;
     /// <summary>Foliage under <see cref="FoliageMinSize"/> traced for the sun alone: this radius and up, this far from the eye (past the traced range by the scene's commit step).</summary>
     const float TracedFoliageRange = 3000, TracedFoliageMinSize = 6;
     /// <summary>Instances kept for the small foliage and for the grass, and records the small foliage may leave free (a foliage block past the records is not traced at all).</summary>
     const int SmallFoliageInstances = 5000, GrassInstances = TracedGrass.MaxInstances, RecordsKept = 24000;
+    /// <summary>Refits of the top level over moving characters before it is built again.</summary>
+    const int TopRefits = 30;
     /// <summary>A mesh's structure not used for this many frames is dropped.</summary>
     const int KeepFrames = 600;
 
@@ -136,6 +147,9 @@ internal sealed unsafe class GiScene : IDisposable
         public byte[]? BuiltBytes;
         public int BuiltLength;
         public bool BuiltTrace;
+        /// <summary>The top level was built refittable (characters in it), and how many times it was refitted since.</summary>
+        public bool BuiltUpdatable;
+        public int Refits;
     }
 
     public GiScene(GpuContext ctx)
@@ -161,7 +175,8 @@ internal sealed unsafe class GiScene : IDisposable
     /// top-level structure over the terrain and the objects of <paramref name="objects"/> near <paramref name="eye"/>. Ends with a barrier to the
     /// tracing shaders.
     /// </summary>
-    public void Update(Vector3 eye, HeightSnapshot heights, WorldObjectRenderer? objects, FoliageRenderer? foliage = null, WorldLamps? lamps = null)
+    public void Update(Vector3 eye, HeightSnapshot heights, WorldObjectRenderer? objects, FoliageRenderer? foliage = null, WorldLamps? lamps = null,
+        Characters.CharacterRenderer? characters = null)
     {
         long started = System.Diagnostics.Stopwatch.GetTimestamp();
         frame++;
@@ -227,7 +242,7 @@ internal sealed unsafe class GiScene : IDisposable
             if (firstRecord + foliageRecords.Count <= MaxRecords)
             {
                 var shift = foliageOrigin - Origin;
-                int count = Math.Min(foliageBlock.Count, MaxInstances - instances.Count - (Traced ? GrassInstances : 0));
+                int count = Math.Min(foliageBlock.Count, MaxInstances - instances.Count - (Casters ? GrassInstances + TracedCharacters.MaxCharacters : 0));
                 for (int i = 0; i < count; i++)
                 {
                     var r = foliageBlock[i];
@@ -246,12 +261,16 @@ internal sealed unsafe class GiScene : IDisposable
             }
         }
         UpdateGrass(eye, foliage);
+        UpdateCharacters(eye, characters);
         Evict();
 
         // The top level, over this frame's instances: built again only when they are not those of its slot's last build (the eye still or walking, the
         // origin and the object set hold, see ReuseTop). The instances are plain data, so equal bytes are an equal structure.
         var bytes = MemoryMarshal.AsBytes(CollectionsMarshal.AsSpan(instances));
-        bool same = ReuseTop && topSlot.BuiltTrace == TopFastTrace && topSlot.BuiltBytes is { } built && topSlot.BuiltLength == bytes.Length && bytes.SequenceEqual(built.AsSpan(0, bytes.Length));
+        bool equal = ReuseTop && topSlot.BuiltTrace == TopFastTrace && topSlot.BuiltBytes is { } built && topSlot.BuiltLength == bytes.Length && bytes.SequenceEqual(built.AsSpan(0, bytes.Length));
+        // Characters move: their structures were refitted this frame, so the top level is refitted over them (built again now and then, as it loses quality).
+        bool moving = (people?.Shown ?? 0) > 0, same = equal && !moving;
+        bool refitTop = equal && moving && topSlot.BuiltUpdatable && topSlot.Refits < TopRefits;
         TopReused = same;
         if (!same)
         {
@@ -261,7 +280,9 @@ internal sealed unsafe class GiScene : IDisposable
             if (split) { cmd.EndLabel(); ctx.EndNative(cmd); StageClock.Sub("gi scene blas"); cmd = seg = (CommandList)ctx.BeginNative("gi scene"); cmd.BeginLabel("gi scene"); }
             CollectionsMarshal.AsSpan(instances).CopyTo(new Span<InstanceRecord>(slot.Instances.Mapped, MaxInstances));
             var info = new BufferDeviceAddressInfo { SType = StructureType.BufferDeviceAddressInfo, Buffer = slot.Instances.Buffer };
-            topSlot.Top.RebuildTop(cmd, device.Vk.GetBufferDeviceAddress(device.Device, in info), (uint)instances.Count, TopFastTrace);
+            topSlot.Top.RebuildTop(cmd, device.Vk.GetBufferDeviceAddress(device.Device, in info), (uint)instances.Count, TopFastTrace, updatable: moving, refit: refitTop);
+            topSlot.Refits = refitTop ? topSlot.Refits + 1 : 0;
+            topSlot.BuiltUpdatable = moving;
             if (ReuseTop)
             {
                 if (topSlot.BuiltBytes is null || topSlot.BuiltBytes.Length < bytes.Length) topSlot.BuiltBytes = new byte[Math.Max(bytes.Length * 5 / 4, 4096)];
@@ -274,6 +295,7 @@ internal sealed unsafe class GiScene : IDisposable
         CollectionsMarshal.AsSpan(records).CopyTo(new Span<GeometryRecord>(slot.Records.Mapped, MaxRecords));
         if (seg is { } open)
         {
+            if (people is { Shown: > 0 }) people.Stamp(open, 2);
             open.Barrier(AccelerationStructure.BuildToTrace);
             open.EndLabel();
             ctx.EndNative(open);
@@ -297,7 +319,7 @@ internal sealed unsafe class GiScene : IDisposable
             var record = entry.Records[k];
             record.Texture = objects.RayTexture(inst.Materials!, entry.Parts[k]);
             record.Emitter = lamps?.Emitter(inst.Placed.PlacementId) ?? 0;
-            if (Traced) (record.SunMap, record.SunCut) = objects.RayCut(inst.Materials!, entry.Parts[k]);
+            if (Casters) (record.SunMap, record.SunCut) = objects.RayCut(inst.Materials!, entry.Parts[k]);
             cut |= record.SunCut > 0;
             records.Add(record);
         }
@@ -308,14 +330,28 @@ internal sealed unsafe class GiScene : IDisposable
     /// <summary>The traced sun's grass: its structures, within their budget, and its instances (nearest first, after everything else).</summary>
     void UpdateGrass(Vector3 eye, FoliageRenderer? foliage)
     {
-        if (!Traced || foliage is null)
+        if (!Casters || foliage is null)
         {
             grass?.Release();
             return;
         }
         grass ??= new TracedGrass(ctx);
-        grass.Update(Open, foliage, eye, frame, InteriorCuts);
+        grass.Update(Open, foliage, eye, frame, InteriorCuts, GrassReach);
         grass.Emit(instances, records, Origin, MaxInstances, MaxRecords);
+    }
+
+    /// <summary>The lamps' characters (docs/render-lights.md "Traced lamp shadows"): skinned with this update's palettes, their structures refitted, their instances last.</summary>
+    void UpdateCharacters(Vector3 eye, Characters.CharacterRenderer? characters)
+    {
+        if (!LampShadows || characters is null)
+        {
+            people?.Release();
+            return;
+        }
+        people ??= new TracedCharacters(ctx);
+        people.Stamp(Open(), 0);
+        people.Update(Open, characters, eye, frame);
+        people.Emit(instances, records, Origin, MaxInstances, MaxRecords);
     }
 
     /// <summary>This frame's native list of the scene, opened on first use (a frame that builds nothing records none) with the barrier for the frame's uploads.</summary>
@@ -393,10 +429,10 @@ internal sealed unsafe class GiScene : IDisposable
     Vector3 foliageOrigin, foliageEye;
     long foliageFrame = long.MinValue / 2;
     int foliageGeneration = -1;
-    bool foliageComplete, foliageTraced;
+    bool foliageComplete, foliageCasters;
 
     bool FoliageStale(Vector3 eye, FoliageRenderer foliage, bool lazy, bool commit) =>
-        foliageTraced != Traced || frame - foliageFrame >= 120 || (lazy ? commit : Vector3.DistanceSquared(eye, foliageEye) > 250f * 250f) || foliage.RayGeneration != foliageGeneration
+        foliageCasters != Casters || frame - foliageFrame >= 120 || (lazy ? commit : Vector3.DistanceSquared(eye, foliageEye) > 250f * 250f) || foliage.RayGeneration != foliageGeneration
         || !foliageComplete && frame - foliageFrame >= 2;
 
     /// <summary>Trees, bushes and rocks big enough to matter for the probes (FoliageRenderer.RayInstances), nearest first while the budget lasts.</summary>
@@ -408,14 +444,14 @@ internal sealed unsafe class GiScene : IDisposable
         rayFoliage.Clear();
         foliage.RayInstances(eye, FoliageRange, FoliageMinSize, rayFoliage);
         rayFoliage.Sort((a, b) => a.Distance.CompareTo(b.Distance));
-        (foliageOrigin, foliageEye, foliageFrame, foliageGeneration, foliageComplete, foliageTraced) = (Origin, eye, frame, foliage.RayGeneration, true, Traced);
-        int room = MaxInstances - 2048 - (Traced ? SmallFoliageInstances + GrassInstances : 0);   // room for the terrain and the objects
+        (foliageOrigin, foliageEye, foliageFrame, foliageGeneration, foliageComplete, foliageCasters) = (Origin, eye, frame, foliage.RayGeneration, true, Casters);
+        int room = MaxInstances - 2048 - (Casters ? SmallFoliageInstances + GrassInstances + TracedCharacters.MaxCharacters : 0);   // room for the terrain and the objects
         foreach (var (mesh, transform, _) in rayFoliage)
         {
             if (foliageBlock.Count >= room) break;
             AddFoliage(mesh, transform, TracedSunShaders.Foliage);
         }
-        if (Traced) AddSmallFoliage(eye, foliage, room + SmallFoliageInstances);
+        if (Casters) AddSmallFoliage(eye, foliage, room + SmallFoliageInstances);
         FoliageInstances = foliageBlock.Count;
     }
 
@@ -487,12 +523,13 @@ internal sealed unsafe class GiScene : IDisposable
     }
 
     public string Describe() =>
-        $"{UpdateMs:0.00} ms{(TopReused ? " (top level as it was)" : "")}, {InstanceCount} instances ({FoliageInstances} foliage), {meshes.Count} object structures ({MeshBytes / (1024 * 1024)} MB), {BuiltThisFrame} built this frame, terrain {string.Join(" + ", terrain.Select(t => t.Describe()))}{(grass is { } g ? $", {g.Describe()}" : "")}";
+        $"{UpdateMs:0.00} ms{(TopReused ? " (top level as it was)" : "")}, {InstanceCount} instances ({FoliageInstances} foliage), {meshes.Count} object structures ({MeshBytes / (1024 * 1024)} MB), {BuiltThisFrame} built this frame, terrain {string.Join(" + ", terrain.Select(t => t.Describe()))}{(grass is { } g ? $", {g.Describe()}" : "")}{(people is { } c ? $", {c.Describe()}" : "")}";
 
     public void Dispose()
     {
         foreach (var t in terrain) t.Dispose();
         grass?.Dispose();
+        people?.Dispose();
         foreach (var e in meshes.Values) e.Blas.Dispose();
         meshes.Clear();
         foreach (var s in slots)

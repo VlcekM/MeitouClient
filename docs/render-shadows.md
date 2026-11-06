@@ -65,11 +65,15 @@ position (`atmoApplyCoefficients`, one per pixel: the haze is linear in the colo
 **Range.** The share traced falls from 1 to 0 over the band where the last cascade with a character layer blends into the next, by view depth, as the cascades do:
 all but the last two cascades (`ShadowPass.ActorLayers`; five cascades: about 1500 units at range 10000, less in a close-up). Past it the cascades, terrain and landmark terms.
 
-**Characters** are not in the traced scene. Each of those cascades has a second layer in the array (past the cascades, `ActorDraw`) with its matrix and only the characters
+**Characters** cast the sun through their layers, not the rays. Each of those cascades has a second layer in the array (past the cascades, `ActorDraw`) with its matrix and only the characters
 (debris and birds cast nothing in any mode); the fragments read those layers, and their blocker layers, for the traced share (`msActors`). The cascades stay whole because the
-shafts, the particles, the foam, the reflection and the rest of the frame read them, so tracing saves none of their cost. At 4096 the three layers add 192 MB of depth and 48 MB of blockers. Skinned structures: not built.
+shafts, the particles, the foam, the reflection and the rest of the frame read them, so tracing saves none of their cost. At 4096 the three layers add 192 MB of depth and 48 MB of blockers.
+The traced scene holds characters only for the lamps ([`TracedCharacters`](render-lights.md#traced-lamp-shadows)): engine choice, the layers hold every character within the traced share at the
+shadow passes' levels and their filtered bias (a character's own coarse-level triangles would shadow its skin along a ray), where the structures hold the nearest 64 within 2500.
 
-**Rays** go to a point of the sun's disc (radius tangent 0.015, KenshiNative's size; with a temporal upscaler anew each frame by interleaved noise, without one the disc's centre, hard).
+**Rays** go to a point of the sun's disc (radius tangent 0.00465, the real sun's 0.267 degrees; KenshiNative's 0.015 made every penumbra about three times too wide, which showed on far casters; with a temporal upscaler anew each frame by interleaved noise, without one the disc's centre, hard). The penumbra still widens with the caster's distance (contact hardening).
+
+**Filter** (with a temporal upscaler; `TracedSunShaders.Filter`, RGBA16F ping-pong at the render size): each traced pixel's point reprojected by the camera into last frame's filtered mask, the four texels around it kept where their stored distance from that frame's eye is within 2 % + 0.5 of the point's; that history clamped to the min and max of this frame's 3 x 3 rays, then blended with this frame's ray at 0.15. A shadow that moved over a lit (or into a shadowed) neighbourhood is clamped away at once, so a moving caster or receiver leaves at most a one-pixel band; noise in a wide penumbra is averaged over about 8 frames before the upscaler. No history after a camera jump of 500 or a frame without the trace. **Observed** (RTX 4090, 1280 x 720 with DLSS): trace 0.05-0.17 ms, filter 0.01 ms. **Observed** (a desert save at 08:38, the camera turned 0.015 rad a frame for 40 frames before the picture, and a staged fight): no shadow trail before or after the change, so the reported ghosting is not reproduced offscreen; **Unknown** whether the filter removes it in play.
 There is no receiver identity as in KenshiNative's G-buffer, so what it skips by name is skipped along the ray. Solids leave the plane the depth shows by half a
 pixel's footprint, slope-scaled; cards leave from the sun's face and skip 3 footprints plus 0.5. Four queries, each after the last missed, cheapest shadow first:
 - objects, foliage, small foliage (`0x10`: radius 6 and up within 3000, the sun's alone), alpha-tested in candidates; a part an object's material cuts (its map in the record's sun fields)
@@ -78,15 +82,22 @@ pixel's footprint, slope-scaled; cards leave from the sun's face and skip 3 foot
   room under a hillside stays dark;
 - grass (`0x20`), only as far as the ray can stay under the tallest blade, faded by noise over the last quarter of its reach.
 
-**Grass.** `TracedGrass`: patches of pages within 1200 across the ground, nearest first, at most 4 builds and 600k triangles a frame and 512 MB, 512 instances, unused for 600 frames dropped; a
+**Grass.** `TracedGrass`: patches of pages within the reach across the ground, nearest first, at most 4 builds and 600k triangles a frame and 512 MB, 1024 instances, unused for 600 frames dropped. The reach is
+where the traced share ends (`ShadowPass.TracedDepth`, its view depth taken to the frame's corners), within 1200 to 2400; the rays test the same reach by distance from the eye. **Observed** (zone 14,30, 16:00, before this rule):
+a fixed 1200 by distance from the eye, faded from 900, left everything past 900 without grass shadows: at boom 1400 the whole view (the cascades had them); at boom 900 the far half. Now
+152 patches, 90 MB at boom 900. A
 kernel expands the arena's blades at rest into a vertex buffer (65536 blades a patch at most), one rigid instance each. Blades whose foot or top is in a drawn interior mask's box (building space,
 tighter than the X/Z boxes; KenshiNative's fix, by box, not by triangle: over-cuts a non-convex mask's concavity) collapse to a point. A changed mask set or density rebuilds the page. A blade's ray ignores blades within 4 units,
 fading the next 8 in by noise: the blind range covers the sway (the traced card is at rest) and overlapping twin cards. Grass shadows do not sway. The probes never see the grass (mask `0x0F`).
 
 **Interiors.** The objects are `RayInstances`' (no construction sites, hidden floors, closed-around buildings), so a site casts no traced shadow.
 
+**Not traced** (inside the traced share they cast no sun shadow): construction sites (drawn clipped by their progress; the whole mesh would cast the finished building), debris
+(bolts, dropped items) and birds (no caster in any mode), particles, objects past 6000 of the eye or drawn only as impostors, foliage past 4000 (small foliage past 3000), grass past the
+reach. Characters cast through their layers (above). Carried items, weapons and animals are characters' parts and cast with them.
+
 **Limits.** Blood on surfaces (`RecordSurfaces`) blends before the sun is added, which then lands on it. The objects' traced transforms and level are the GI's: rotors and doors are frozen as the GI sees them; an object's texture
-tile is not read in the alpha test. One ray a pixel relies on the upscaler: no denoiser.
+tile is not read in the alpha test. One ray a pixel, filtered as above; no spatial filter.
 
 ## Validation and limits
 

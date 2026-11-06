@@ -14,13 +14,14 @@ namespace Meitou.Rendering.Gi;
 /// </summary>
 sealed unsafe class TracedGrass : IDisposable
 {
-    /// <summary>How far from the eye, across the ground, pages are traced.</summary>
-    const float Range = 1200;
+    /// <summary>How far from the eye, across the ground, pages are traced: the scene's reach (where the traced sun's share ends) within these.</summary>
+    public const float MinRange = 1200, MaxRange = 2400;
+    float range = MinRange;
     /// <summary>The budget: structures and triangles a frame, the bytes held, the frames an unused one is kept.</summary>
     const int MaxBuilds = 4, MaxBuildTriangles = 600_000, KeepFrames = 600;
     const long MaxBytes = 512L << 20;
     /// <summary>Most patches traced, and most blades of one (the first ones: the density's order keeps a prefix even).</summary>
-    public const int MaxInstances = 512;
+    public const int MaxInstances = 1024;
     const int MaxBlades = 1 << 16, MaxQuads = MaxBlades * 2, VerticesPerQuad = 4, IndicesPerQuad = 6, MaxCuts = 32;
     /// <summary>World units: what a blade's own ray does not see of other cards (a card's sway from its traced copy, a twin on top of it), and the fade to all of them past that.</summary>
     const float BlindRange = 4, BlindFade = 8;
@@ -138,12 +139,13 @@ sealed unsafe class TracedGrass : IDisposable
     }
 
     /// <summary>The mask pass's constants (<see cref="GiScene.GrassRayParams"/>).</summary>
-    public Vector4 RayParams => shown.Count == 0 ? default : new Vector4(Range, tallest, BlindRange, BlindFade);
+    public Vector4 RayParams => shown.Count == 0 ? default : new Vector4(range, tallest, BlindRange, BlindFade);
 
     /// <summary>The patches near the eye that are not built yet, nearest first, within the frame's budget; a built one whose blades or masks changed is built again.</summary>
-    public void Update(Func<IGpuCommandList> open, FoliageRenderer foliage, Vector3 eye, long frame, IReadOnlyList<InteriorMaskCut> cuts)
+    public void Update(Func<IGpuCommandList> open, FoliageRenderer foliage, Vector3 eye, long frame, IReadOnlyList<InteriorMaskCut> cuts, float reach)
     {
-        foliage.RayGrass(eye, Range, patches);
+        range = Math.Clamp(reach, MinRange, MaxRange);
+        foliage.RayGrass(eye, range, patches);
         shown.Clear();
         tallest = 0;
         int builds = 0, triangles = 0;
