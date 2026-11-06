@@ -110,13 +110,13 @@ The per-fragment path (`--gi-resolve 0`) and the gi-reflection bench do not read
 **Cloud shadows** (`clouds`). The sun at a probe's hit takes `atmoCloudShadow`, the lit fragments' own function, so shaded land stops bouncing sunlight
 and probe light follows the clouds at the hysteresis' pace. The sky seen by a miss is not dimmed. Shafts: [render-shafts](render-shafts.md).
 
-**Near field** (`near`; `GiNearField`, `GiNearShaders`, needs the resolve). The texels of the resolve's low target (same pixel of each block) trace one cosine ray,
+**Near field** (`near`; `GiNearField`, `GiNearShaders`, needs the resolve). The texels of the resolve's low target (same pixel of each block) trace `RaysPerTexel` 4 cosine rays a frame (consecutive points of the texel's R2 sequence),
 `Reach` 150 long, about a near probe cell, out to `Range` 4000 from the eye. A front or foliage hit is shaded as a probe ray's (`GiShaders.HitShade`: the same textures, sun ray, lamps, probes for the
 next bounce). A miss reads the probes at the ray's end with the ray's direction as the normal (the cosine-weighted light from that way, visibility tested): the
 radiance cache. A back face means the ray started inside a drawn level the trace does not have, so it reads the cache rather than black. One sample is clamped per channel to 16
 (KenshiNative's firefly clamp). The lobe and filters use the flat normal from the depth (KenshiNative: bumps are noise to both); the resolve keeps the shading normal for its sky term.
 Accumulation: each texel reprojected into last frame's surface image by the camera alone (only still surfaces write the surface target; characters do not, so no
-motion vectors are needed), four bilinear texels held by the edge weight, at most `MaxSamples` 16 (the lag in frames); no history on a cut (2000 units, a skipped frame, a
+motion vectors are needed), four bilinear texels held by the edge weight, at most `MaxSamples` 8 (the lag in frames); no history on a cut (2000 units, a skipped frame, a
 screenshot tile). With none of the four on this surface (just uncovered: a character or a thin object stood in front), or the point up to 16 texels off last frame's
 picture (a turning camera's entering edge; rings round the nearest edge texel), the same surface's history on rings of 8 texels at 2, 4, 8 and 16 (weight edge × 1/r,
 tolerance × r), its count capped at `MaxSamples`/2; the field does not trace characters, so the light behind one is its surroundings'.
@@ -129,7 +129,10 @@ Port of KenshiNative's filter ideas; the history is Meitou's (KN has none). Char
 **Observed** (Hub, new game, 1280x720, orbit 1.5 degrees a frame; a debug view of the alpha): before the fill a band about 40 low texels wide trailing a character had
 counts under 5 and alpha under 1, so the probes' (brighter, no contact shade) light showed there: the halo; the same at the picture's entering edges. With the fill,
 alpha is 1 there and the band is gone from the motion-minus-settled difference. A sun jump (14:00 to 17:30): the clamp lowered the error against the settled picture by about 3 % over the next 8 frames (most of the lag is the probes').
-Held frames: noise 0.07 to 0.08 8-bit levels mean per pixel with and without the clamp. **Observed** cost (RTX, 2560x1440, DLSS Quality, low target 854x480, quiet runs; runs beside other GPU work varied 2-5x): the `gi near` stage 0.18-0.19 ms before, 0.23 ms after (fast history, clamp pass, filtered counts).
+Rays against history (720p, no upscaler; mean / 99th percentile of |orbiting - settled| in 8-bit levels; still frame-to-frame flicker mean / 99.9th; `gi near` ms):
+1 ray x 16 frames 1.05 / 4.0, flicker 0.080 / 4.3, 0.16; 2 x 8 0.94 / 3.7, 0.087 / 4.3, 0.23; **4 x 8** 0.93 / 3.3, 0.056 / 3.0, 0.34; 4 x 4 0.88 / 3.3, 0.101 / 4.3;
+8 x 4 0.87 / 3.3, 0.073 / 4.0, 0.60. Probes only: 0.94 / 3.0, flicker 0.000; the field before these changes 1.20 / 5.3. **Observed** cost at 2560x1440, DLSS Quality
+(low target 854x480, quiet GPU; beside other GPU work the numbers varied 2-5x): `gi near` 0.18 ms before, 0.60 ms with 4 rays (0.23 ms with 1 ray x 16).
 **Unknown:** whether the probes' level and the field's agree over open ground; why shade under a table (field share 1) still reads lighter while orbiting than settled; a 1-texel-wide object (a table's leg) can find no texel of its own surface to fill from
 and shows some probe light under motion; the flat normal at silhouettes. An upscaler's jitter is not taken out of the reconstruction (taking it out changed
 held-frame flicker under DLSS by nothing measurable).

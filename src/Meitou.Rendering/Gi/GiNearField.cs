@@ -23,8 +23,10 @@ sealed unsafe class GiNearField(GpuContext ctx, GiScene scene, GiProbes probes) 
     public const float Range = 4000;
     /// <summary>The most light one sample may bring, per channel (KenshiNative's firefly clamp).</summary>
     public const float SampleClamp = 16;
-    /// <summary>The samples a texel's mean keeps at most: the light's lag in frames.</summary>
-    public const int MaxSamples = 16;
+    /// <summary>The rays a texel traces each frame (stratified): with <see cref="MaxSamples"/> 8, a still picture flickers less than with one ray and 16 frames, and the light lags half as long.</summary>
+    public const int RaysPerTexel = 4;
+    /// <summary>The frames a texel's mean keeps at most: the light's lag.</summary>
+    public const int MaxSamples = 8;
     /// <summary>The samples the fast mean keeps (its lag in frames), which the history is clamped to.</summary>
     public const int FastSamples = 4;
     /// <summary>The clamp's half width, in standard deviations of the fast means round a texel.</summary>
@@ -82,7 +84,7 @@ sealed unsafe class GiNearField(GpuContext ctx, GiScene scene, GiProbes probes) 
             (13, DescriptorType.CombinedImageSampler), (14, DescriptorType.CombinedImageSampler), (17, DescriptorType.StorageImage),
             .. clouds ? new (uint, DescriptorType)[] { (15, DescriptorType.CombinedImageSampler), (16, DescriptorType.CombinedImageSampler) } : [],
         ];
-        var program = ctx.Shaders.Compute(GiNearShaders.Trace(relocate, clouds), "gi near trace", set0, GpuSetLayout.Bindless);
+        var program = ctx.Shaders.Compute(GiNearShaders.Trace(relocate, clouds, RaysPerTexel), "gi near trace", set0, GpuSetLayout.Bindless);
         return traces[(relocate, clouds)] = (program, ctx.Pipelines.Get(new ComputePipelineDesc(program, "gi near trace")));
     }
 

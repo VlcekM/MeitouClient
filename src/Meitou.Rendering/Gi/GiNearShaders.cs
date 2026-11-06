@@ -187,40 +187,46 @@ static class GiNearShaders
                 imageStore(uRaw, low, vec4(0.0));
                 return;
             }
-            vec3 dir = cosineDirection(n, sampleAt(uvec2(low), uint(nearFrame.x)));
             // Off the surface by what the depth's precision and the traced geometry's difference from the drawn one call for.
             vec3 world = p + n * (0.05 + z * 0.002);
-            rayQueryEXT rq;
-            rayQueryInitializeEXT(rq, uScene, gl_RayFlagsCullBackFacingTrianglesEXT, {{TracedSunShaders.GiMask}}, world - origin.xyz, 0.0, dir, nearReach.x);
-            TRACE(rq)
-            vec3 light;
-            float near = 0.0;
-            if (rayQueryGetIntersectionTypeEXT(rq, true) != gl_RayQueryCommittedIntersectionTriangleEXT) light = cached(world + dir * nearReach.x, dir);
-            else
+            // NEAR_RAYS rays a frame, consecutive points of the texel's sequence (stratified among themselves).
+            vec4 result = vec4(0.0);
+            for (int ray = 0; ray < NEAR_RAYS; ray++)
             {
-                float t = rayQueryGetIntersectionTEXT(rq, true);
-                int record = rayQueryGetIntersectionInstanceCustomIndexEXT(rq, true) + rayQueryGetIntersectionGeometryIndexEXT(rq, true);
-                Geometry g = geometries[record];
-                // A ray that starts inside an object (a drawn level of it, not the traced one) learns nothing: the cache, not black.
-                if (!rayQueryGetIntersectionFrontFaceEXT(rq, true) && g.kind != {{GeometryRecord.Foliage}}u) light = cached(world, dir);
+                vec3 dir = cosineDirection(n, sampleAt(uvec2(low), uint(nearFrame.x) * uint(NEAR_RAYS) + uint(ray)));
+                rayQueryEXT rq;
+                rayQueryInitializeEXT(rq, uScene, gl_RayFlagsCullBackFacingTrianglesEXT, {{TracedSunShaders.GiMask}}, world - origin.xyz, 0.0, dir, nearReach.x);
+                TRACE(rq)
+                vec3 light;
+                float near = 0.0;
+                if (rayQueryGetIntersectionTypeEXT(rq, true) != gl_RayQueryCommittedIntersectionTriangleEXT) light = cached(world + dir * nearReach.x, dir);
                 else
                 {
-                    float env = lightDir.w;
+                    float t = rayQueryGetIntersectionTEXT(rq, true);
+                    int record = rayQueryGetIntersectionInstanceCustomIndexEXT(rq, true) + rayQueryGetIntersectionGeometryIndexEXT(rq, true);
+                    Geometry g = geometries[record];
+                    // A ray that starts inside an object (a drawn level of it, not the traced one) learns nothing: the cache, not black.
+                    if (!rayQueryGetIntersectionFrontFaceEXT(rq, true) && g.kind != {{GeometryRecord.Foliage}}u) light = cached(world, dir);
+                    else
+                    {
+                        float env = lightDir.w;
         {{GiShaders.HitShade}}
-                    light = colour * (sun + ambient + lamps);
-                    near = t < nearReach.y ? 1.0 : 0.0;
+                        light = colour * (sun + ambient + lamps);
+                        near = t < nearReach.y ? 1.0 : 0.0;
+                    }
                 }
+                result += vec4(min(light, vec3(nearReach.w)), near);
             }
-            imageStore(uRaw, low, vec4(min(light, vec3(nearReach.w)), near));
+            imageStore(uRaw, low, result / float(NEAR_RAYS));
         }
         """;
 
     static string F(float v) => v.ToString("0.0########", System.Globalization.CultureInfo.InvariantCulture);
 
-    /// <summary>The trace for the frame's options (<see cref="GiShaders.Relocating"/>, <see cref="GiShaders.Clouded"/>).</summary>
-    public static string Trace(bool relocate, bool clouds)
+    /// <summary>The trace for the frame's options (<see cref="GiShaders.Relocating"/>, <see cref="GiShaders.Clouded"/>), <paramref name="rays"/> rays a texel.</summary>
+    public static string Trace(bool relocate, bool clouds, int rays)
     {
-        string trace = Source;
+        string trace = Source.Replace("#define LAMP_DIFFUSE_ONLY", $"#define NEAR_RAYS {rays}\n#define LAMP_DIFFUSE_ONLY", StringComparison.Ordinal);
         if (clouds) trace = GiShaders.Clouded(trace.Replace("vec4 cloudSlots[3];", "", StringComparison.Ordinal));
         return relocate ? GiShaders.Relocating(trace) : trace;
     }
