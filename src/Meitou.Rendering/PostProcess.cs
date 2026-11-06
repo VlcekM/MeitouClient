@@ -260,10 +260,11 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     /// <summary>Contact shadows at the render size, multiplied into the scene (<see cref="PostProcessShaders.Contact"/>).</summary>
     sealed class ContactPass : FullscreenProgram
     {
-        public readonly SamplerSlot Depth;
-        public readonly UniformHandle Tan, NearFar, Size, Right, Up, Back, Eye, WaterY, Contact;
+        public readonly SamplerSlot Depth, Surface;
+        public readonly UniformHandle Tan, NearFar, Size, Right, Up, Back, Eye, WaterY, Contact, SurfaceOn, NoiseFrame;
         public ContactPass(GpuContext gpu) : base(gpu, PostProcessShaders.Contact, "post contact")
         {
+            (Surface, SurfaceOn, NoiseFrame) = (P.Sampler("uSurface"), P.Uniform("uSurfaceOn"), P.Uniform("uNoiseFrame"));
             (Depth, WaterY, Contact) = (P.Sampler("uDepth"), P.Uniform("uWaterY"), P.Uniform("uContact"));
             (Tan, NearFar, Size) = (P.Uniform("uTan"), P.Uniform("uNearFar"), P.Uniform("uSize"));
             (Right, Up, Back, Eye) = (P.Uniform("uRight"), P.Uniform("uUp"), P.Uniform("uBack"), P.Uniform("uSsaoEye"));
@@ -1034,6 +1035,11 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         c.P.Set(c.Eye, eyeNow.X, eyeNow.Y, eyeNow.Z);
         c.P.Set(c.WaterY, WaterHeight ?? float.MinValue);
         c.P.Set(c.Contact, Options.ContactParams);
+        // Pixels the traced sun lights (the surface target's bit 16) keep its shadow alone: it already holds the contact, and both darkened thin gaps twice.
+        bool surface = SurfaceReady;
+        Bind(c.P, c.Surface, surface ? giAlbedo : null);
+        c.P.Set(c.SurfaceOn, surface ? 1f : 0f);
+        c.P.Set(c.NoiseFrame, (float)(frameIndex % 1024));
         c.P.ApplyGlobals();
         Draw(c.P, sceneColour.Attachment, sceneColour.Format, width, height, width, height, AoMultiplyState);
         Stamp("contact");

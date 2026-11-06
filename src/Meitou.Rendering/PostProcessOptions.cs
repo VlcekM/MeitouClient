@@ -145,7 +145,7 @@ public sealed class PostOptions
     /// <summary>Meitou switch (<c>contact</c>; docs/render-post.md "Contact shadows"): short screen-space sun shadows, run with the SSAO and multiplied into its factor.</summary>
     public bool ContactShadows = true;
     /// <summary>How much of the sun's share of a surface's light a contact shadow takes; its reach and thickness in world units; the eye distance where it has faded out.</summary>
-    public const float ContactStrength = 0.85f, ContactReach = 8, ContactThickness = 3, ContactEnd = 2500;
+    public const float ContactStrength = 0.85f, ContactReach = 8, ContactThickness = 0.6f, ContactEnd = 2500;
     /// <summary>The contact shadows' parameters for the SSAO pass; a strength of 0 turns them off.</summary>
     public System.Numerics.Vector4 ContactParams =>
         new(ContactShadows ? ContactStrength : 0, ContactReach, ContactThickness, ContactEnd);

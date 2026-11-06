@@ -173,11 +173,16 @@ static class PostProcessShaders
     /// reduction on characters. Writes the light kept (1: none taken), multiplied into the scene colour.
     /// </summary>
     public static readonly string Contact = Ssao[..(Ssao.IndexOf("\nvoid main()", StringComparison.Ordinal) + 1)] + """
+        uniform usampler2D uSurface;   // the GI surface target: a pixel whose bit 16 is set takes the traced sun, which already has its contact
+        uniform float uSurfaceOn;      // 1: uSurface is bound
+        uniform float uNoiseFrame;     // the frame number: the march's offset moves on per frame, so the temporal upscaler averages it
+
         void main()
         {
             ivec2 c = ivec2(floor(gl_FragCoord.xy));
             float d = texelFetch(uDepth, c, 0).r;
             if (depthIsSky(d)) { fragColour = vec4(1.0); return; }
+            if (uSurfaceOn > 0.5 && (texelFetch(uSurface, c, 0).w & 65536u) != 0u) { fragColour = vec4(1.0); return; }
             vec3 p = viewPosAt(c);
             float z = -p.z;
             if (z >= uContact.w) { fragColour = vec4(1.0); return; }
@@ -187,7 +192,7 @@ static class PostProcessShaders
             vec3 dy = abs(u.z - p.z) < abs(p.z - b.z) ? u - p : p - b;
             vec3 n = normalize(cross(dx, dy));
             if (n.z < 0.0) n = -n;
-            float kept = contactLight(p, n, z, ign(gl_FragCoord.xy));
+            float kept = contactLight(p, n, z, fract(ign(gl_FragCoord.xy) + uNoiseFrame * 0.6180339887));
             if (kept < 0.999)
             {
                 vec3 offset = p.x * uRight + p.y * uUp + p.z * uBack;
