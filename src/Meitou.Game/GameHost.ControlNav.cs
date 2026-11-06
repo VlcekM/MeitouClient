@@ -11,6 +11,7 @@ sealed partial class GameHost
 {
     void RegisterControlNavCommands(Action<string, string, string, Action<IReadOnlyList<string>, DevConsole>> add, Func<DevConsole, bool> loaded)
     {
+        RegisterControlDoorCommand(add, loaded);
         add("path-check", "path-check <x1> <z1> <x2> <z2> | path-check --id <c:slot.gen> <x> <z>", "ask the game's own navigation query (what a walking character uses, doors as they are now) whether a path exists, without walking: reachable, path length and, when none exists, the doors that block it (the nearest-first doors on the way that are closed to paths, with lock, open, broken state); blockedBy is only searched inside the query's own zone mesh", (args, con) =>
         {
             if (!loaded(con)) return;
@@ -87,6 +88,71 @@ sealed partial class GameHost
             }
             controlData = System.Text.Encoding.UTF8.GetString(stream.ToArray());
             con.Print(path.Found ? $"reachable, {path.Points.Count} points" : "no path");
+        });
+    }
+
+    /// <summary>The <c>door</c> command: sets a door fixture's state in a test save (the fields <c>path-check</c> reports) and tells navigation, so the nav door table sees it at once.</summary>
+    void RegisterControlDoorCommand(Action<string, string, string, Action<IReadOnlyList<string>, DevConsole>> add, Func<DevConsole, bool> loaded)
+    {
+        add("door", "door <fixture id> | door nearest <x> <z> [--lock] [--unlock] [--close] [--open] [--break] [--repair] [--all]", "set a door's state for a test (flags apply in the order given): --lock locks it (level at least 1, an open leaf starts closing), --unlock, --close and --open set the leaf at once, --break breaks door and lock, --repair undoes it; --all applies to every door of the building (navigation treats a building as shut only when all its doors are locked); no flag only reports; reply: JSON with the door's lock, broken, motion, openAmount and whether navigation now has the building closed", (args, con) =>
+        {
+            if (!loaded(con)) return;
+            var reg = session.World.Fixtures;
+            Fixture? door = null;
+            var flags = new List<string>();
+            var rest = new List<string>();
+            foreach (var a in args) (a.StartsWith("--", StringComparison.Ordinal) ? flags : rest).Add(a.ToLowerInvariant());
+            if (rest.Count == 1) door = reg.Find(args.First(a => !a.StartsWith("--", StringComparison.Ordinal)));
+            else if (rest.Count == 3 && rest[0] == "nearest" && Num(rest[1], out float nx) && Num(rest[2], out float nz))
+            {
+                float best = float.MaxValue;
+                foreach (var f in reg.All)
+                {
+                    if (f.Kind != FixtureKind.Door) continue;
+                    float dist = Vector2.DistanceSquared(new(f.Position.X, f.Position.Z), new(nx, nz));
+                    if (dist < best) { best = dist; door = f; }
+                }
+            }
+            else { con.Error("usage: door <fixture id> | door nearest <x> <z> [--lock] [--unlock] [--close] [--open] [--break] [--repair] [--all]"); return; }
+            if (door is null || door.Kind != FixtureKind.Door) { con.Error("door: no such door"); return; }
+            foreach (var fl in flags) if (fl is not ("--lock" or "--unlock" or "--close" or "--open" or "--break" or "--repair" or "--all")) { con.Error($"door: unknown flag {fl}"); return; }
+            var targets = flags.Contains("--all") ? reg.OfBuilding(door.Building).Where(f => f.Kind == FixtureKind.Door).ToList() : [door];
+            if (flags.Any(f => f is "--lock" or "--break") && targets.Any(t => t.Lock is null)) { con.Error("door: this door has no lock"); return; }
+            foreach (var t in targets)
+            {
+                foreach (var fl in flags)
+                {
+                    switch (fl)
+                    {
+                        case "--lock": t.Lock!.Level = Math.Max(t.Lock.Level, 1); t.Lock.Locked = true; t.Lock.Broken = false; if (t.Motion is DoorMotion.Open or DoorMotion.Opening) { t.Motion = DoorMotion.Closing; t.AutoOpened = false; } break;
+                        case "--unlock": if (t.Lock is { } ul) ul.Locked = false; break;
+                        case "--close": t.Motion = DoorMotion.Closed; t.OpenAmount = 0; break;
+                        case "--open": t.Motion = DoorMotion.Open; t.OpenAmount = 1; t.DoorProgress = 1; break;
+                        case "--break": t.DoorBroken = true; t.Lock!.Broken = true; t.Lock.Locked = false; t.DoorProgress = 0; t.Motion = DoorMotion.Closed; t.OpenAmount = 0; break;
+                        case "--repair": t.DoorBroken = false; if (t.Lock is { } rl) rl.Broken = false; t.DoorProgress = 1; break;
+                    }
+                }
+                if (flags.Count > 0) reg.Touch(t);
+            }
+            using var stream = new MemoryStream();
+            using (var w = new Utf8JsonWriter(stream))
+            {
+                w.WriteStartObject();
+                w.WriteString("fixture", door.Id);
+                w.WriteString("building", door.Building);
+                w.WriteString("record", door.RecordId);
+                w.WriteStartArray("pos"); w.WriteNumberValue(Math.Round(door.Position.X, 1)); w.WriteNumberValue(Math.Round(door.Position.Z, 1)); w.WriteEndArray();
+                w.WriteNumber("doorsInBuilding", reg.OfBuilding(door.Building).Count(f => f.Kind == FixtureKind.Door));
+                w.WriteBoolean("locked", door.Lock is { EffectivelyLocked: true });
+                w.WriteNumber("lockLevel", door.Lock?.Level ?? 0);
+                w.WriteBoolean("broken", door.DoorBroken);
+                w.WriteString("motion", door.Motion.ToString().ToLowerInvariant());
+                w.WriteNumber("openAmount", Math.Round(door.OpenAmount, 2));
+                if (nav is { } ns) w.WriteBoolean("navClosed", ns.Doors.IsClosed(door.Building));
+                w.WriteEndObject();
+            }
+            controlData = System.Text.Encoding.UTF8.GetString(stream.ToArray());
+            con.Print($"door {door.Id}");
         });
     }
 
