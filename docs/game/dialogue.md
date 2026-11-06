@@ -528,7 +528,7 @@ squad simply takes the speaker in, unless a target flag at +0x1d0 is set):
 
 | DA | Effect |
 |---|---|
-| 1 TRADE | ends the conversation, opens trade with the speaker whatever its squad stocks (**Verified**, `FUN_140680560` case 1 → `FUN_1409524f0`: only the speaker, the target and the speaker's platoon are tested; [who trades](economy.md#who-trades)) |
+| 1 TRADE | ends the conversation, opens trade with the speaker whatever its squad stocks (**Verified**, `FUN_140680560` case 1 → `FUN_1409524f0`: it tests only that the speaker, the target and the speaker's purse holder (its platoon, else its faction's, `FUN_140791b10`) exist; [who trades](economy.md#who-trades)) |
 | 2 TALK_TO_LEADER | a player target: the speaker's squad leader gets task 102 on the target |
 | 3 / 18 JOIN_SQUAD_WITH_EDIT / FAST | the speaker joins the target's squad (player: recruited, its package becomes `dialogue package player`; 3 opens the editor, [characters](../characters.md)) |
 | 4 AFFECT_RELATIONS, 5 AFFECT_REPUTATION | speaker's faction toward the target's: relation += val0 (clamp ±100) / the speaker's faction's global trust += val0, no clamp, whoever the target is (slot 9, `FUN_1406b2530`) |
