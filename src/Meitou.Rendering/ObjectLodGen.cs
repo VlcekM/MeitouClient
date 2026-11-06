@@ -18,7 +18,7 @@ public static class ObjectLodGen
     public static bool Enabled { get; set; } = true;
 
     /// <summary>Bumped when the simplifier, the steps or the error measure change (the disk cache's key).</summary>
-    public const int Version = 4;
+    public const int Version = 5;
 
     /// <summary>The steps (share of a part's triangles), floor per part, limits and the texture-coordinate guard objects are built with.</summary>
     public static readonly FoliageLodBuilder.Settings Settings = new([0.5f, 0.25f, 0.12f, 0.06f], 24, 0.25f, 3.2f, 0.85f, true, true);
