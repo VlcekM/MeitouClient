@@ -448,8 +448,15 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
         arrest.Time = 0;
         var table = world.Characters;
         if (table.Next[g].Task != (byte)CharacterTask.Attack) Attack(world, g, t);
-        if (table.Cold(t)!.IsPlayer) world.Post(Loc.Tr("{1} is arresting {2}!", table.Cold(g)!.Name, table.Cold(t)!.Name));
+        if (table.Cold(t)!.IsPlayer && !FoughtByOther(arrest)) world.Post(Loc.Tr("{1} is arresting {2}!", table.Cold(g)!.Name, table.Cold(t)!.Name));
         Note(world, ArrestEventKind.Arrest, arrest.Guard, arrest.Target, arrest.Faction, table.Cold(t)!.Bounties?.BookedAmount(Crimes.Factions.Relations, arrest.Faction) ?? 0);
+    }
+
+    /// <summary>Another guard's arrest already fights this target (several guards arresting one character post one message, engine choice).</summary>
+    bool FoughtByOther(Arrest self)
+    {
+        foreach (var a in arrests) if (!ReferenceEquals(a, self) && a.Target == self.Target && a.Phase == ArrestPhase.Fight) return true;
+        return false;
     }
 
     /// <summary>The guard and the free members of his squad within twice their sight of the target attack it from the next tick (the squad marking the target, engine reading).</summary>

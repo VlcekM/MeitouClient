@@ -62,6 +62,12 @@ public sealed record DebugGiveItem(CharacterId Character, string Record, int Qua
         [FcsRecordType.WEAPON, FcsRecordType.ARMOUR, FcsRecordType.ITEM, FcsRecordType.CONTAINER, FcsRecordType.BLUEPRINT, FcsRecordType.MAP_ITEM, FcsRecordType.CROSSBOW, FcsRecordType.LIMB_REPLACEMENT];
 }
 
+/// <summary>
+/// Removes the characters' bounties (every player character when <see cref="Characters"/> is empty): only <see cref="Faction"/>'s entry, or every entry when null.
+/// A character left without bounties is no longer recently wanted.
+/// </summary>
+public sealed record DebugClearBounties(IReadOnlyList<CharacterId> Characters, int? Faction = null) : DebugCommand;
+
 /// <summary>Finishes every research and repetition (<see cref="Construction.ResearchState.CompleteAll"/>).</summary>
 public sealed record DebugUnlockResearch : DebugCommand;
 
@@ -125,6 +131,9 @@ static class DebugCheats
             case DebugDamageMultiplier multiplier when data is not null:
                 data.BodyOptions.GlobalDamageMultiplier = multiplier.Multiplier;
                 break;
+            case DebugClearBounties clear:
+                world.Post($"Bounties cleared: {ClearBounties(world, clear)}.");
+                break;
             case DebugUnlockResearch when data is not null:
                 world.Post($"Research unlocked: {world.Research.CompleteAll(data.Db)} finished.");
                 break;
@@ -147,6 +156,41 @@ static class DebugCheats
                 world.Post($"{item.Quantity} x {item.Name} did not fit; dropped on the ground.");
                 break;
         }
+    }
+
+    /// <summary>Clears the bounties of <see cref="DebugClearBounties"/>; returns how many entries went.</summary>
+    static int ClearBounties(World world, DebugClearBounties clear)
+    {
+        int removed = 0;
+        foreach (var c in BountyTargets(world, clear.Characters))
+        {
+            if (c.Bounties is not { } ledger) continue;
+            for (int k = ledger.Count - 1; k >= 0; k--)
+            {
+                var e = ledger.Entries[k];
+                if (clear.Faction is { } only && e.Faction != only) continue;
+                ledger.Remove(e);
+                removed++;
+            }
+            if (ledger.Count > 0) continue;
+            c.Bounties = null;
+            c.RecentlyWanted = 0;
+        }
+        return removed;
+    }
+
+    /// <summary>The characters <paramref name="ids"/> names, else every player character.</summary>
+    static IEnumerable<CharacterCold> BountyTargets(World world, IReadOnlyList<CharacterId> ids)
+    {
+        var table = world.Characters;
+        if (ids.Count > 0)
+        {
+            foreach (var id in ids)
+                if (table.TryResolveNext(id, out int slot) && table.Cold(slot) is { } c) yield return c;
+            yield break;
+        }
+        for (int s = 0; s < table.HighWater; s++)
+            if (table.Next[s].Alive && table.Cold(s) is { IsPlayer: true } c) yield return c;
     }
 
     static int DamagePart(MedicalState medical, in MedicalContext ctx, string? part)

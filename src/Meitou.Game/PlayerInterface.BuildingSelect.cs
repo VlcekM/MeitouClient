@@ -98,7 +98,7 @@ sealed partial class PlayerInterface
     /// whole collision, roof included, while the original passes a building's hidden roof and upper floors in the interior view (docs/game/ui-input.md "Building picking and selection").
     /// </summary>
     bool SiteShownInside((Vector3 Origin, Vector3 Direction) ray, Meitou.Navigation.PlacedBuilding level, (Meitou.Simulation.Construction.BuildingSnapshot Site, float T) site) =>
-        !level.Plot && !Hidden(ray, site.T)
+        !level.Plot && !Hidden(ray, site.T) && AboveViewedFloor?.Invoke(site.Site.Position) != true
         && level.Footprint.Gap(level.Placement.Position, level.Placement.Rotation, new Vector2(site.Site.Position.X, site.Site.Position.Z)) == 0;
 
     /// <summary>The colour of the [PAUSED] caption (the exe's static <c>#777777</c>).</summary>

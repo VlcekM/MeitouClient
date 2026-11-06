@@ -65,7 +65,7 @@ decode its tiles again.
 
 Meitou look, not in the game (`GroundRelief`). The parallax and the displacement are Faithful/Meitou switches `parallax` and
 `displace` (Tab "Ground parallax", "Ground displacement (tessellation)"; Faithful: flat ground, as the game). Tab toggles "Terrain outline
-refinement (tessellation)", "Rock smoothing (tessellation)"; sliders "Ground relief quality" (High by default; Medium and Low reduce
+refinement (tessellation)" and "Rock smoothing (tessellation)" (both off by default, on at the Ultra preset); sliders "Ground relief quality" (High by default; Medium and Low reduce
 the march; compiled into the colour programs, one set per quality made on first use: a uniform quality cost High 12% of the terrain's
 GPU time, **Verified** by swamp-low A/B), "Ground relief depth (cm, typical ground)" (default 30), "Ground displacement distance (m)" (100), "Ground parallax
 distance (m)" (60); all on the settings' Graphics > World page, where quality and depth hide while parallax and displacement are both
@@ -211,7 +211,7 @@ to 14 layer samples each.
 
 ## Rocks
 
-Meitou look, not in the game (`RockSmoothing`; Tab: "Rock smoothing (tessellation)"). Many TERRAIN-mode rocks have hard
+Meitou look, not in the game (`RockSmoothing`; Tab: "Rock smoothing (tessellation)", off by default, on at the Ultra preset; the welded normals are always made). Many TERRAIN-mode rocks have hard
 edges ([foliage](formats/foliage.md), "Expression reference"). At decode (`FoliageRenderer.DecodeTrimmed`, not the leaves) a
 position whose copies' normals disagree gets, per corner, the area-weighted normals of the faces round it turning less than 60°
 from the corner's own; positions that agree keep theirs. Every position also gets one geometry normal (all its faces, or the

@@ -42,9 +42,9 @@ public static class GroundRelief
     /// <summary>
     /// The terrain's outline refinement (docs/render-terrain.md, "Refinement"): every main-view patch is tessellated, an edge split where the terrain
     /// leaves it by more than this many pixels and the new points put on the terrain, so crests stay smooth over a coarse mesh; 0 off (the Tab
-    /// panel's toggle). Needs tessellation.
+    /// panel's toggle). Needs tessellation. Off by default (on from the Ultra preset): about 0.5 ms of GPU time for crests a pixel or two apart.
     /// </summary>
-    public static float RefinePixels { get; set; } = DefaultRefinePixels;
+    public static float RefinePixels { get; set; }
 
     /// <summary><see cref="RefinePixels"/> when the refinement is on.</summary>
     public const float DefaultRefinePixels = 0.5f;

@@ -243,7 +243,17 @@ face. Recast's default, the full agent height for the shared space, drops a line
 leaning wall rises per cell by more than the margin, although each cell has the headroom on its own. **Observed** (`meitou-tools navmesh --interior`):
 Sho-Battai's Longhouse `43.11:5565-Newwworld-INGAME` ramp under its upper floor, Black Scratch's bar `50.33:324-` and Squin's Watchtower
 `18.35:29-rebirth-INGAME` (placed rolled 12°, as the original's tile `18.35` has it too, its walls leaning over the spiral ramp) keep their upper storeys
-with the rule and lose them with Recast's default (issues #139, #142, #147). **Interiors are one tile** (engine choice): in the zone's 48-cell tiles a stair across a tile line inside a building comes out cut (Stack's Longhouse
+with the rule and lose them with Recast's default (issues #139, #142, #147).
+<a id="side-steps"></a>**Side steps** (engine choice, `ZoneNavMeshBuilder.SideSteps`): Recast joins any two neighbouring cells within the climb, so a flat ledge
+beside a stair ramp joined the ramp where the ramp rose to within 5 of it. Before the regions are built a link is cut when it is a step (the height jumps 3+
+beyond what both surfaces' own slopes explain), the two surfaces rise along its edge at more than ~37° to each other (each slope over 3+ cells of its own
+surface) and neither cell is within 4 of the terrain; a cut whose two cells still end in one region is linked again (a slit inside a region made Recast's
+triangulation drop it). An unseeded surface reached only over such a step is then pruned. **Observed** (zone 42.22, Storm House `3251-rebirth-INGAME`,
+`--probe`): the top of its foundation (1429) beside the door stair joined the 45° ramp at one cell pair (1429/1425) and was walkable; `tile42.22.hkt`
+has no faces there (its stair faces end at x 49395). Over 10 zones (`--compare`, `--compare-interiors`) area against the original is unchanged within
+0.1 % and kept polygons grow 0..0.4 %; with a 26° limit Ancient Lab `28.60`'s spiral stair top (28°) was cut from its floor. Which field of the
+original's generation edge matching rejects such joins is **Unknown** (its alignment values were not read; the stitch's are in the Generator table).
+**Interiors are one tile** (engine choice): in the zone's 48-cell tiles a stair across a tile line inside a building comes out cut (Stack's Longhouse
 `19.29:6-`; the two tiles' contours put their vertices at different heights along the ramp). **Interior coverage**: `meitou-tools navmesh --compare-interiors`
 counts an original tile's interior face covered when a kept polygon within 12 of its centre's height lies over the centre or within 3 units of it
 (`OriginalNavTiles.CoverInteriors`; the original's slivers along a mesh end sit a unit or two past ours). **Observed** over the centre only: 18.35 68→86 %,
@@ -255,6 +265,9 @@ furniture: without it (`--own-only` in every interior) 99.3..99.8 % but 19.29 (8
 `3324-` reach their upper storey by stairs in 19.28/20.29, so alone (the border rule keeps ground-level regions only) it is pruned; with its neighbours
 (`--around 1`), as loaded in play, 19.29 is 91.2 %.
 **Shells and open structures**: a building is a shell with an interior (the original's class 12; its mask carves the exterior, its inside is an interior
+**Observed** (zone 54.58, `--probe`, issue #222): Ash Dome Ruin `54.58:9-rebirth-INGAME` lies under the terrain, which rises above its floors
+(3755 over 3632..3705); its upper exterior and ruin walls (`AshDomeWalls_EXT_01/02`, `AshDome-RUIN-WallS-*`) have no collision, and the original's tile
+walks that terrain through the walls as ours does (`--probe` radius 200: 1647 samples both, 11 original only, 6 ours only).
 **Shells and open structures**: as the original (**Verified** rule, "Generator" below: class, `interior` list), a building is a shell with an interior (its
 mask carves the exterior, its inside is an interior job) when its `interior` list is real, it is a plain building (class 12) and it has an interior mask
 with collision (`ZoneGeometryGatherer.IsShellWithInterior`, `InteriorOf`). A building with a blank interior has all its WALKABLE shapes walkable and its
@@ -331,7 +344,9 @@ every feature of the zone, with no `hidden` test (only the render entity, `FUN_1
 pass (`FUN_1403c8660`) takes features as owner-less group 14 (a non-BUILDING handle resolves no owner): material −1, the walkable-foliage path,
 not the building one (groups 9, 10, 13, 19 and `path mode` play no part). **Observed** (`meitou-tools navmesh --probe`, zone 21.19): the
 original's tile walks the top of `Huge_Stone_Emperor_Statue`'s foundation (y 755.8, terrain 735) and has no ground inside the gravel piles, also those placed
-scaled (1.41/1.88); without features Meitou walked the terrain through both (issue #161). **Observed** (scratch probe, zones 14.22, 14.23, 15.22): the fog camps' `Mafic_HugeRockSlabs` by the nest markers south of Mongrel have no walkable span inside them in either navmesh (issue #132's walk-through was before features were gathered). Their collision is a triangle mesh, mostly open at the bottom
+scaled (1.41/1.88); without features Meitou walked the terrain through both (issue #161). **Observed** (scratch probe, zones 14.22, 14.23, 15.22): the fog camps' `Mafic_HugeRockSlabs` by the nest markers south of Mongrel have no walkable span inside them in either navmesh (issue #132's walk-through was before features were gathered). **Observed** (`--feature-tops` over the
+neighbours' features, `--probe`, zone 33.30, issue #214): the original walks the tops of `Tarsand_Pipeline01` (380 of 1085 top samples; ours 384) and
+`FloodedForest_Rotten-Stem02` (1567 of 1766 within 8; the rest lie under the original's faces 8..10 lower), so their walkable strips are the original's. Their collision is a triangle mesh, mostly open at the bottom
 (gravel piles: 24 open edges; Hub cliff blocks closed). Engine choice: a feature's triangle mesh is a `NavMeshSolid`; a walkable span is removed when the
 nearest of its triangles above the span's floor (more than 1 over it, at the cell's middle) faces up, so the span sees its back; an overhang's underside faces
 down and keeps the ground under it. `hidden` features keep their collision (above), as in Meitou. **Observed** (`--compare`,

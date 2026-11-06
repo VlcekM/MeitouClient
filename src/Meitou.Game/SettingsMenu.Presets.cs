@@ -58,7 +58,7 @@ sealed partial class SettingsMenu
     static readonly PresetToggle[] PresetToggles =
     [
         new(WorldFrame.FifthCascadeSwitch, false, false, true),
-        new(WorldFrame.RockSmoothingSwitch, false, true, true),
+        new(WorldFrame.RockSmoothingSwitch, false, false, true),
         new(WorldFrame.OutlineRefineSwitch, false, false, true),
     ];
 

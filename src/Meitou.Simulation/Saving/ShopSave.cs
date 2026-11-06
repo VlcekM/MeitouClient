@@ -25,13 +25,13 @@ internal static class ShopSave
     }
 
     /// <summary>
-    /// The shop a Meitou save holds for <paramref name="squad"/> (made from a saved platoon, its home already set); null without one or when its housed squad trades no more. A squad with no
-    /// home whose template has no shop gets back the never-filled stock a trade gave it (<see cref="TradeSystem"/> <c>StockFor</c>).
+    /// The shop a Meitou save holds for <paramref name="squad"/> (made from a saved platoon, its home already set); null without one. A squad whose template fills no shop gets back the
+    /// stock a trade gave it (<see cref="TradeSystem.UnfilledShop"/>; a housed squad's goes back to its containers at the next stock pass).
     /// </summary>
     public static Shop? Read(World world, Squad squad, FcsRecord platoon, PopulationData data)
     {
         if (!platoon.Strings.TryGetValue(StockKey, out var text)) return null;
-        if (TradeSystem.TemplateRecord(data, squad.TemplateId) is not { HasShop: true } template) return squad.HomeBuilding is null ? Stockless(text, squad, data) : null;
+        if (TradeSystem.TemplateRecord(data, squad.TemplateId) is not { HasShop: true } template) return Unfilled(text, squad, data);
         // As the trade system makes it: a housed trader making no prisoner or slave squads has a building shop when its home has stock containers.
         var terms = TradeSystem.TermsOf(squad, template);
         var shop = (squad.HomeBuilding is { } home && template.Prisoners.Count == 0 && template.Slaves.Count == 0 ? Shop.ForBuilding(home, terms) : null) ?? new Shop { Terms = terms };
@@ -43,10 +43,10 @@ internal static class ShopSave
         return shop;
     }
 
-    static Shop Stockless(string text, Squad squad, PopulationData data)
+    static Shop? Unfilled(string text, Squad squad, PopulationData data)
     {
-        var shop = new Shop { Terms = TradeSystem.TermsOf(squad, TradeSystem.TemplateRecord(data, squad.TemplateId)) };
-        ContainerSave.Read(text, shop.Stock, data.Items);
+        var shop = TradeSystem.UnfilledShop(squad, TradeSystem.TemplateRecord(data, squad.TemplateId));
+        if (shop is not null) ContainerSave.Read(text, shop.Stock, data.Items);
         return shop;
     }
 }
