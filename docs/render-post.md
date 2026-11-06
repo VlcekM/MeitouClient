@@ -109,10 +109,11 @@ must use the full-resolution path. [Fog volumes](formats/fogfeatures.md), [shaft
 
 ## Contact shadows
 
-The `contact` switch (`PostOptions.ContactShadows`, Meitou): the SSAO pass marches the depth 10 steps, 8 units towards the light, and multiplies the
-hit into its factor. A hit takes `0.85` x the sun's share of the surface's light (`sun / (sun + ambient)`, with the shadow cascades and cloud shadow in the
+The `contact` switch (`PostOptions.ContactShadows`, Meitou): its own full-screen pass at the render size (`PostProcessShaders.Contact`, `ApplyContactShadows`,
+after the occlusion in `ApplySsao`) marches the depth 10 steps, 8 units towards the light, and multiplies what the surface keeps into the scene colour. A hit takes `0.85` x the sun's share of the surface's light (`sun / (sun + ambient)`, with the shadow cascades and cloud shadow in the
 sun term), so it stops at the ambient level, and there is none in cascade shadow, under clouds or at night. Fades out from 1500 to 2500 units.
-Runs only with SSAO on, and shares its half size, blur, air and water visibility and reduced strength on characters' own pixels.
+Independent of the occlusion (SSAO, GTAO or none). Takes the occlusion's air and water visibility, not its half size, blur or reduced strength on characters' own
+pixels: armour layers and hair over a face keep their contact shadow. One noise offset a pixel, resolved by the temporal upscaler (without one it shows as dither).
 **Unknown**: look and cost; not yet run on a GPU.
 
 ## HDR output

@@ -257,6 +257,20 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     }
 
 
+    /// <summary>Contact shadows at the render size, multiplied into the scene (<see cref="PostProcessShaders.Contact"/>).</summary>
+    sealed class ContactPass : FullscreenProgram
+    {
+        public readonly SamplerSlot Depth;
+        public readonly UniformHandle Tan, NearFar, Size, Right, Up, Back, Eye, WaterY, Contact;
+        public ContactPass(GpuContext gpu) : base(gpu, PostProcessShaders.Contact, "post contact")
+        {
+            (Depth, WaterY, Contact) = (P.Sampler("uDepth"), P.Uniform("uWaterY"), P.Uniform("uContact"));
+            (Tan, NearFar, Size) = (P.Uniform("uTan"), P.Uniform("uNearFar"), P.Uniform("uSize"));
+            (Right, Up, Back, Eye) = (P.Uniform("uRight"), P.Uniform("uUp"), P.Uniform("uBack"), P.Uniform("uSsaoEye"));
+        }
+    }
+    ContactPass? contactPass;
+
     /// <summary>The placed fog volumes in one full-screen pass over the scene (<see cref="PostProcessShaders.FogVolumes"/>).</summary>
     sealed class FogPass : FullscreenProgram
     {
@@ -996,6 +1010,39 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     public void ApplySsao()
     {
         MarkScene();
+        ApplyOcclusion();
+        ApplyContactShadows();
+    }
+
+    /// <summary>
+    /// The contact shadows over the scene now, whatever the occlusion (SSAO, GTAO or none; docs/render-post.md "Contact shadows"), at the render size, so the
+    /// characters keep theirs in full and their fine detail.
+    /// </summary>
+    void ApplyContactShadows()
+    {
+        if (!Options.ContactShadows || !haveScene || sceneColour is null || sceneDepth is null) return;
+        var c = contactPass ??= new ContactPass(Gpu);
+        float tanY = MathF.Tan(fovY * 0.5f);
+        Bind(c.P, c.Depth, sceneDepth);
+        c.P.Set(c.Tan, ViewWindow.Tan(tanY * aspect, tanY));
+        c.P.Set(c.NearFar, nearPlane, farPlane);
+        c.P.Set(c.Size, (float)width, (float)height);
+        var r = viewRotation;
+        c.P.Set(c.Right, r.M11, r.M21, r.M31);
+        c.P.Set(c.Up, r.M12, r.M22, r.M32);
+        c.P.Set(c.Back, ViewWindow.BackFor(r, fovY, aspect));
+        c.P.Set(c.Eye, eyeNow.X, eyeNow.Y, eyeNow.Z);
+        c.P.Set(c.WaterY, WaterHeight ?? float.MinValue);
+        c.P.Set(c.Contact, Options.ContactParams);
+        c.P.ApplyGlobals();
+        Draw(c.P, sceneColour.Attachment, sceneColour.Format, width, height, width, height, AoMultiplyState);
+        Stamp("contact");
+        CloseSegment();
+    }
+
+    /// <summary>The occlusion (SSAO or GTAO) into the scene colour (<see cref="ApplySsao"/>).</summary>
+    void ApplyOcclusion()
+    {
         if (GtaoOn)
         {
             ApplyGtao();
@@ -1515,7 +1562,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         s.P.Set(s.Back, ViewWindow.BackFor(r, fovY, aspect));
         s.P.Set(s.Eye, eyeNow.X, eyeNow.Y, eyeNow.Z);
         s.P.Set(s.WaterY, WaterHeight ?? float.MinValue);   // the floor's occlusion fades under the water, which writes no depth
-        s.P.Set(s.Contact, Options.ContactParams);
+        s.P.Set(s.Contact, default(System.Numerics.Vector4));   // the contact shadows are their own pass (ApplyContactShadows)
         s.P.ApplyGlobals();   // the atmosphere's and the fog volumes' uniforms, through the frame globals
         Draw(s.P, a);
         if (SsaoStamps) Stamp("ssao gen");

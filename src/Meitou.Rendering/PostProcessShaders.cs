@@ -158,13 +158,42 @@ static class PostProcessShaders
             }
             float ao = 1.0 - clamp(uStrength * sum / float(N), 0.0, 1.0);
             ao = mix(ao, 1.0, smoothstep(uFadeStart, uFadeEnd, z));
-            ao *= contactLight(p, n, z, fract(ign(gl_FragCoord.xy) + 0.5));
             if (ao < 0.999)
             {
                 vec3 offset = p.x * uRight + p.y * uUp + p.z * uBack;
                 ao = mix(1.0, ao, airVisibility(offset) * waterVisibility(offset));   // 1 - (1 - ao) * visibility
             }
             fragColour = vec4(ao, z, 0.0, 1.0);
+        }
+        """;
+
+    /// <summary>
+    /// Contact shadows (docs/render-post.md "Contact shadows") at the render size, on their own: the <see cref="Ssao"/> source's functions with a main of their
+    /// own, so they run with SSAO, GTAO or no occlusion, keep the detail a half-size pass blurs (armour layers, hair over a face) and take none of the occlusion's
+    /// reduction on characters. Writes the light kept (1: none taken), multiplied into the scene colour.
+    /// </summary>
+    public static readonly string Contact = Ssao[..(Ssao.IndexOf("\nvoid main()", StringComparison.Ordinal) + 1)] + """
+        void main()
+        {
+            ivec2 c = ivec2(floor(gl_FragCoord.xy));
+            float d = texelFetch(uDepth, c, 0).r;
+            if (depthIsSky(d)) { fragColour = vec4(1.0); return; }
+            vec3 p = viewPosAt(c);
+            float z = -p.z;
+            if (z >= uContact.w) { fragColour = vec4(1.0); return; }
+            vec3 l = viewPosAt(c - ivec2(1, 0)), r = viewPosAt(c + ivec2(1, 0));
+            vec3 u = viewPosAt(c + ivec2(0, 1)), b = viewPosAt(c - ivec2(0, 1));
+            vec3 dx = abs(r.z - p.z) < abs(p.z - l.z) ? r - p : p - l;
+            vec3 dy = abs(u.z - p.z) < abs(p.z - b.z) ? u - p : p - b;
+            vec3 n = normalize(cross(dx, dy));
+            if (n.z < 0.0) n = -n;
+            float kept = contactLight(p, n, z, ign(gl_FragCoord.xy));
+            if (kept < 0.999)
+            {
+                vec3 offset = p.x * uRight + p.y * uUp + p.z * uBack;
+                kept = mix(1.0, kept, airVisibility(offset) * waterVisibility(offset));
+            }
+            fragColour = vec4(vec3(kept), 1.0);
         }
         """;
 
