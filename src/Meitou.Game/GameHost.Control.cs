@@ -192,7 +192,7 @@ sealed partial class GameHost
     {
         ControlCameraTick();
         var now = ControlSnapshot();
-        if (now.Loaded) { player.ControlKills(); ControlSpawnPoll(); ControlMoveWaitPoll(); }
+        if (now.Loaded) { player.ControlKills(); player.ControlCombatSample(); ControlSpawnPoll(); ControlMoveWaitPoll(); }
         if (lastSnap is { } old && controlEvents && old != now)
         {
             if (old.Screens != now.Screens) ControlEvent("screen", w => { w.WriteString("screen", now.Screen); w.WriteStartArray("screens"); foreach (string s in ControlScreenSet()) w.WriteStringValue(s); w.WriteEndArray(); });

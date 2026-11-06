@@ -496,6 +496,7 @@ sealed partial class PlayerInterface
                 if (threat is null || d < threat) threat = d;
             }
             f.Add(("threat", threat is { } t ? Math.Round(t, 1).ToString(inv) : "null"));
+            f.Add(("combat", Str(ControlCombatLine(lead))));
         }
         f.Add(("squad", Str($"{squad.Count(c => c.Body is { Dead: false, Unconscious: false })}/{squad.Count}")));
         f.Add(("money", world.Player.Money.ToString(inv)));

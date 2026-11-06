@@ -149,6 +149,7 @@ sealed partial class GameHost
         });
 
         RegisterControlPlayMoreCommands(add, loaded);
+        RegisterControlCombatCommands(add, loaded);
         RegisterControlAskCommands(add);
         RegisterControlPersonaCommands(add, loaded);
     }
