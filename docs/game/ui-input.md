@@ -340,6 +340,10 @@ mask (colour pass, live pose, picture levels, own depth planes round it) right a
 linear depth within 1 % + 1 unit of the scene depth (jittered, render size). Outline and tint take the pointer's order's colour: attack red (a hostile character as the pointer counts it above), treat green, talk gold, carry/loot blue, else white (no selection or no order). No name or goal label is shown over a character (**Observed** by the owner in play, not traced in the exe: the original shows none for ordinary NPCs, only the outline; Meitou had a plain name and goal label until 2026-10-17). Holding the Highlight key (Alt, which also lights up signs) outlines the same way every character (the squad's too, people and animals) within 500 units of the camera's focus, each in the colour hovering it would give (own hurt green, downed or carried blue, trader or someone to talk to gold, hostile red, else white; all white with no selection); one mask per colour, overlapping outline rectangles joined. The pointer and hovered character are picked again when the mouse, the camera or Ctrl/Alt changed, else every 3rd tick (engine choice; a pick costs about 0.5 ms with ~1000 characters). Off in the free camera, with the interface hidden and in
 screenshots and cinema takes. Not in the Shift+F1 switch list (a game setting, like Attackers per target).
 
+The selected building ([selection](#building-picking-and-selection)) gets the same outline and tint in white (Advanced → Building outline, `BuildingOutline`, default
+on; Meitou only), under the same conditions, but none while the interior view shows it (occupied or held open). Its mask is what the main view's colour pass drew of its
+parts and the layout objects that go with it (signs), at the levels, fades and construction clip drawn, redrawn alone after the post chain (`WorldObjectRenderer.Selection.cs`).
+
 ### Building picking and selection
 
 The original's mouse code, kenshi_x64.exe 1.0.68. The panels a selected building fills: [ui-screens](ui-screens.md#selected-building).

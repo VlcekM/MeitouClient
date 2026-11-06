@@ -653,12 +653,14 @@ sealed partial class GameHost
             player.HighlightFocus = highlighting && !screenshotRequested && takeFile is null ? camera.Target : null;
             bool pointerWorld = pointerMouse is not null && !Covered && !g.NoPopulation && !(PanelLive() && panel?.Visible == true) && !cinema.Contains(pointerAt);
             bool freeLook = pointerWorld && session.Camera.IsFree && !player.ModalOpen;
-            // Hover outline (Advanced, Meitou only): not in the free camera, with the interface hidden, or in saved pictures.
-            bool outlining = config.HoverOutline && !session.Camera.IsFree && !interfaceHidden && !cinema.Clean && !screenshotRequested && takeFile is null;
+            // Hover and building outlines (Advanced, Meitou only): not in the free camera, with the interface hidden, or in saved pictures.
+            bool outlines = !session.Camera.IsFree && !interfaceHidden && !cinema.Clean && !screenshotRequested && takeFile is null;
+            bool outlining = config.HoverOutline && outlines;
             if (outlining && highlighting)
                 gpu.HoverKeys = [.. player.HighlightTargets(camera.Target, PlayerInterface.HighlightRadius).Select(t => (DrawKey(t.Id), t.Colour))];
             else
                 gpu.HoverKeys = outlining && pointerWorld && player.HoverTarget is { } hover ? [(DrawKey(hover.Id), hover.Colour)] : [];
+            gpu.OutlinedBuilding = outlines && config.BuildingOutline ? player.OutlinedBuilding : null;
             BenchLap(5);
             bool began = display.BeginFrame(size.X, size.Y);
             if (began)

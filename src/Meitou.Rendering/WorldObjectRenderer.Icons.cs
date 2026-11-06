@@ -147,15 +147,7 @@ public sealed unsafe partial class WorldObjectRenderer
             inst.Mesh.LastUsed = now;
             Add(gpu, inst.Materials, gpu.MinLevel, inst.Transform, 0, 2, 0);
         }
-        int total = 0;
-        foreach (var b in active) { b.Offset = total; total += b.Count; }
-        if (total > 0)
-        {
-            instances = Gpu.Frame.AllocateConstants((ulong)total * InstanceStride, 16);
-            var target = new Span<byte>(instances.Pointer, total * InstanceStride);
-            foreach (var b in active)
-                System.Runtime.InteropServices.MemoryMarshal.AsBytes(b.Data.AsSpan(0, b.Count)).CopyTo(target[(b.Offset * InstanceStride)..]);
-        }
+        UploadInstances();
         var cmd = Gpu.BeginNative("building icon");
         var targets = PassTargets.Of(entry.Colour, entry.Depth);
         cmd.BeginRendering(new RenderingDesc(targets.Colour, targets.Depth with { Load = LoadOp.Clear, DepthClear = 1f }, targets.Width, targets.Height));

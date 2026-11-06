@@ -432,6 +432,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     void Update(Vector3 eye, double budgetMs)
     {
         var watch = Stopwatch.StartNew();
+        selectionDraws.Clear();   // kept for one frame's outline at most: the meshes they name may go now
         eyeNow = eye;
         meshes.LodBias = LodBias;
         if (LodPixelsPerRadian > 0) meshes.PixelsPerRadian = LodPixelsPerRadian;
@@ -1042,6 +1043,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         terrainMeshes.Clear();
         terrainMeshesCut.Clear();
         if (depthPass) ShadowCut(ref cutConstants);
+        BeginSelection();
 
         // 1. Cull and choose levels: every instance into the batch of its (mesh, materials, level) with its dither range.
         float realBand = Math.Clamp(real * 0.1f, 50, 1500);
@@ -1089,16 +1091,8 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
 
         // Nearest first: what a nearer batch covers fails the early depth test of the farther ones (the colour pass only; the depth passes have no shading to save).
         if (SortNearestFirst && !depthPass) active.Sort(static (a, b) => a.Near.CompareTo(b.Near));
-        // 2. The instances: each batch's matrices contiguous, in this frame's constants (one copy; the draws reach a batch by firstInstance).
-        int total = 0;
-        foreach (var b in active) { b.Offset = total; total += b.Count; }
-        if (total > 0)
-        {
-            instances = Gpu.Frame.AllocateConstants((ulong)(total * InstanceStride), 16);
-            var target = instances.Bytes;
-            foreach (var b in active)
-                System.Runtime.InteropServices.MemoryMarshal.AsBytes(b.Data.AsSpan(0, b.Count)).CopyTo(target[(b.Offset * InstanceStride)..]);
-        }
+        // 2. The instances.
+        UploadInstances();
 
         // 3. Draw: Prepare reads the textures (WorldTexture.Key) and makes the draw list, Record puts it into a native segment of VkGl's pass.
         var prog = depthPass ? depthProg : colourProg;
@@ -1126,8 +1120,21 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         int kind = depthPass ? 1 : 0;
         (Totals[kind, 0], Totals[kind, 1], Totals[kind, 2], Totals[kind, 3], Totals[kind, 4]) =
             (Totals[kind, 0] + DrawnInstances, Totals[kind, 1] + DrawnTriangles, Totals[kind, 2] + DrawCalls, Totals[kind, 3] + PartLimited, Totals[kind, 4] + 1);
+        selecting = null;
     }
 
+    /// <summary>The active batches' matrices, each batch's contiguous, into this frame's constants (one copy; the draws reach a batch by firstInstance).</summary>
+    void UploadInstances()
+    {
+        int total = 0;
+        foreach (var b in active) { b.Offset = total; total += b.Count; }
+        if (total == 0) return;
+
+        instances = Gpu.Frame.AllocateConstants((ulong)(total * InstanceStride), 16);
+        var target = instances.Bytes;
+        foreach (var b in active)
+            System.Runtime.InteropServices.MemoryMarshal.AsBytes(b.Data.AsSpan(0, b.Count)).CopyTo(target[(b.Offset * InstanceStride)..]);
+    }
 
     /// <summary>
     /// One real instance of <see cref="Draw"/>: culled by its range (<paramref name="range"/>, the object distance or, for a landmark, the landmark reach,
@@ -1173,7 +1180,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         Emit(inst, gpu, value, w, lodValue);
     }
 
-    /// <summary>Adds an instance at its LOD level: two batches while blending levels, the upper level taking [0, t·w) of the dither range and the lower [t·w, w).</summary>
+    /// <summary>Adds an instance at its LOD level (<see cref="AddLevels"/>).</summary>
     void Emit(ObjectStreamer.Instance inst, GpuObjectMesh gpu, float value, float weight) => Emit(inst, gpu, value, weight, value);
 
     /// <summary><paramref name="lodValue"/> picks the levels (at least <paramref name="value"/>, the distance, in a far shadow cascade).</summary>
@@ -1203,13 +1210,22 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         // In a shadow pass such a part casts nothing inside the viewed buildings' hulls (ShadowCut).
         bool cut = depthPass ? shadowCuts.Count > 0 && CutsShadow(inst)
             : InteriorCut is { Active: true } mask && (inst.Placed.Kind == PlacedKind.MapFeature ? mask.Overlaps(inst.Centre, inst.Radius) : CutsIntoViewed(inst, mask));
+        if (selecting is not null && Selects(inst.Placed, selecting))
+            selectionDraws.Add(new(gpu, inst.Materials!, blend, m, weight, value, inst.Placed.Interior, site, inst.Centre, inst.Radius));
+        AddLevels(gpu, inst.Materials!, blend, m, weight, value, inst.Placed.Interior, site, highlight, cut);
+    }
+
+    /// <summary>Adds an instance at its LOD level: two batches while blending levels, the upper level taking [0, t·w) of the dither range and the lower [t·w, w).</summary>
+    void AddLevels(GpuObjectMesh gpu, ObjectMaterialSet materials, LodBlend blend, Matrix4x4 m, float weight, float near, bool backCull, bool site,
+        bool highlight = false, bool cut = false)
+    {
         if (!blend.IsBlending)
         {
-            Add(gpu, inst.Materials!, blend.Lower, m, 0, weight >= 0.999f ? 2 : weight, value, inst.Placed.Interior, site, highlight: highlight, cut: cut);
+            Add(gpu, materials, blend.Lower, m, 0, weight >= 0.999f ? 2 : weight, near, backCull, site, highlight: highlight, cut: cut);
             return;
         }
-        Add(gpu, inst.Materials!, blend.Upper, m, 0, blend.T * weight, value, inst.Placed.Interior, site, highlight: highlight, cut: cut);
-        Add(gpu, inst.Materials!, blend.Lower, m, blend.T * weight, weight, value, inst.Placed.Interior, site, highlight: highlight, cut: cut);
+        Add(gpu, materials, blend.Upper, m, 0, blend.T * weight, near, backCull, site, highlight: highlight, cut: cut);
+        Add(gpu, materials, blend.Lower, m, blend.T * weight, weight, near, backCull, site, highlight: highlight, cut: cut);
     }
 
     /// <summary>
@@ -1728,6 +1744,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     {
         if (ObjectLodGen.Built + ObjectLodGen.Cached > 0) Console.WriteLine($"object lods  {ObjectLodGen.Built} meshes generated ({System.Diagnostics.Stopwatch.GetElapsedTime(0, ObjectLodGen.BuildTicks).TotalSeconds:0.0} s of worker time), {ObjectLodGen.Cached} read from the cache, {ObjectLodGen.Skipped} too small or not eligible");
         DisposeBuildingIcons();
+        DisposeSelection();
         colourProg.Dispose();
         solidProg.Dispose();
         depthProg.Dispose();

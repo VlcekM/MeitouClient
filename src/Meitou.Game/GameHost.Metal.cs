@@ -1328,8 +1328,8 @@ sealed partial class GameHost
                         characters.PortraitRequests.Add(new PortraitRequest(DrawKey(member.Id), cell, member.PortraitSerial));
             }
             var hoverKeys = new List<(long Key, Vector4 Colour)>();
-            bool outlining = config.HoverOutline && !session.Camera.IsFree && hud is { UiVisible: true } &&
-                !Covered && settings?.Visible != true;
+            bool outlines = !session.Camera.IsFree && hud is { UiVisible: true } && !Covered && settings?.Visible != true;
+            bool outlining = config.HoverOutline && outlines;
             if (outlining)
             {
                 if (highlighting)
@@ -1339,6 +1339,7 @@ sealed partial class GameHost
                     hoverKeys.Add((DrawKey(hover.Id), hover.Colour));
             }
             gpu.HoverKeys = hoverKeys;
+            gpu.OutlinedBuilding = outlines && config.BuildingOutline ? hud!.OutlinedBuilding : null;
             gpu.HoverOutline = hoverOutline;
             // The frame's inputs, as WorldFrame.Draw prepares them: the weather at the camera, the atmosphere's tables for the sun and the
             // eye's height, the fog distance the light ends at, and the view distance that keeps the haze complete before the far plane.

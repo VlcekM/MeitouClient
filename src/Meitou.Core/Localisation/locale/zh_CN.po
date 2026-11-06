@@ -1178,6 +1178,12 @@ msgstr "悬停描边"
 msgid "Outline and tint the character under the cursor, in the colour of what a right click would do."
 msgstr "描边并染色光标下的角色，颜色表示右键点击会做什么。"
 
+msgid "Building outline"
+msgstr "建筑描边"
+
+msgid "Outline and tint the selected building like a character under the cursor, except while its interior is shown."
+msgstr "像光标下的角色一样描边并染色选中的建筑，显示其内部时除外。"
+
 msgid "luckyren Mode"
 msgstr "luckyren 模式"
 

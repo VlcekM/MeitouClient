@@ -1173,6 +1173,12 @@ msgstr "Contorno ao passar o cursor"
 msgid "Outline and tint the character under the cursor, in the colour of what a right click would do."
 msgstr "Contorna e colore o personagem sob o cursor com a cor correspondente à ação de clicar com o botão direito."
 
+msgid "Building outline"
+msgstr "Contorno do edifício"
+
+msgid "Outline and tint the selected building like a character under the cursor, except while its interior is shown."
+msgstr "Contorna e colore o edifício selecionado como um personagem sob o cursor, exceto enquanto o seu interior é exibido."
+
 msgid "luckyren Mode"
 msgstr "Modo luckyren"
 

@@ -5,10 +5,17 @@ using Vk = Silk.NET.Vulkan;
 
 namespace Meitou.Rendering;
 
+/// <summary>One outline mask: what is outlined in one colour, drawn alone (<see cref="CharacterRenderer.DrawHoverMasks"/>, <see cref="WorldObjectRenderer.DrawSelectionMask"/>).</summary>
+/// <param name="Colour">Its colour target, alpha 1 where something outlined is.</param>
+/// <param name="Depth">Its depth, from the projection <paramref name="Near"/>..<paramref name="Far"/>.</param>
+/// <param name="Tint">The outline's and tint's colour (alpha: their strength).</param>
+/// <param name="Spheres">The bounding spheres of what is in it.</param>
+public readonly record struct HoverMask(GpuTexture Colour, GpuTexture Depth, float Near, float Far, Vector4 Tint, IReadOnlyList<(Vector3 Centre, float Radius)> Spheres);
+
 /// <summary>
 /// The hover outline (Meitou only, docs/game/ui-input.md "Hover outline"): the character under the mouse (and, with Alt held, those
-/// near), drawn alone into masks (<see cref="CharacterRenderer.DrawHoverMasks"/>), are outlined in their colours and their visible parts tinted in them, over the finished picture.
-/// The outline shows through walls; the tint only where the scene's depth does not cover the character.
+/// near) and the selected building, drawn alone into masks (<see cref="CharacterRenderer.DrawHoverMasks"/>, <see cref="WorldObjectRenderer.DrawSelectionMask"/>), are outlined
+/// in their colours and their visible parts tinted in them, over the finished picture. The outline shows through walls; the tint only where the scene's depth does not cover them.
 /// </summary>
 public sealed class HoverOutlineRenderer
 {

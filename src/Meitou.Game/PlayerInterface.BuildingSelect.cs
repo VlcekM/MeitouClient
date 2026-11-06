@@ -37,6 +37,9 @@ sealed partial class PlayerInterface
         return selectedBuilding;
     }
 
+    /// <summary>The selected building to outline (docs/game/ui-input.md "Hover outline"): its placement key and the outline's colour, white as a hovered character's; null: none.</summary>
+    public (string Key, Vector4 Colour)? OutlinedBuilding => selectedBuilding is { } b ? (b.Instance, WhiteOutline) : null;
+
     /// <summary>A site of the player's as a selected building (what a left click on it selects).</summary>
     SelectedBuilding SiteBuilding(Meitou.Simulation.Construction.BuildingSnapshot site) =>
         new(SiteName(site), null, FactionName?.Invoke(session.World.Player.Faction), null, site.Id, site.Id, site.Position,
