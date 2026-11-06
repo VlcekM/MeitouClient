@@ -97,6 +97,20 @@ sealed partial class PlayerInterface
         return true;
     }
 
+    /// <summary>Takes a worn item off: <paramref name="what"/> is a slot (head, shirt, armour, legs, boots, back, hip, belt) or an item name; the right click of a worn item sends it to the grids (the reply cannot know if they had room: observe.squad[].inventory shows).</summary>
+    public bool ControlUnequip(string what, out string message)
+    {
+        var who = ControlOrderers();
+        if (who.Count == 0) { message = "refused: no character selected (use select first)"; return false; }
+        if (ControlCharacter(who[0])?.ItemGrid is not { } grid) { message = "refused: the inventory is not published yet (step a tick)"; return false; }
+        var worn = grid.Items.Where(i => Meitou.Simulation.Items.InventoryCommands.IsEquipmentSection(i.Section) && i.Section != "backpack_attach").ToList();
+        var item = worn.FirstOrDefault(i => i.Section.Equals(what, StringComparison.OrdinalIgnoreCase)) ?? worn.FirstOrDefault(i => i.Name.Equals(what, StringComparison.OrdinalIgnoreCase)) ?? worn.FirstOrDefault(i => i.Name.Contains(what, StringComparison.OrdinalIgnoreCase));
+        if (item is null) { message = $"refused: {CharacterKey(who[0])} wears nothing matching '{what}' (worn slots: {string.Join(", ", worn.Select(i => i.Section))})"; return false; }
+        Say(new QuickMoveItem(who[0], new InventoryItemToken(item.Index, item.Record, item.Section, item.X, item.Y, item.Quantity, item.Quality), false, false) { Tick = session.World.Tick });
+        message = $"unequip (right click) {item.Name} [{item.Section}] of {CharacterKey(who[0])}";
+        return true;
+    }
+
     /// <summary>PickUpOrder: the selection lifts a downed character (carry them, or kidnap a stranger).</summary>
     public bool ControlCarry(CharacterId target, out string message)
     {

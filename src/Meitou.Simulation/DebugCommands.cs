@@ -41,6 +41,9 @@ public sealed record DebugDamageMultiplier(float Multiplier) : DebugCommand;
 /// </summary>
 public sealed record DebugGiveItem(CharacterId Character, string Record, int Quantity, int Quality = 0) : DebugCommand
 {
+    /// <summary>Wear the unit even when its armour slot is taken: the worn item goes to the grids (dropped at the feet, with a message, when they have no room).</summary>
+    public bool Equip { get; init; }
+
     /// <summary>
     /// The record types whose items have a quality (grade): armour's is <see cref="Items.ItemInstance.Quality"/>, the others' the <see cref="Items.ItemInstance.Level"/> their stats read.
     /// A weapon gets the model of <see cref="Grade"/> instead, so its name shows the grade.
@@ -214,7 +217,22 @@ static class DebugCheats
                 else if (item.Type == FcsRecordType.WEAPON && DebugGiveItem.Grade(data.Db, give.Quality) is { } grade)
                     (item.CompanyId, item.MaterialId, item.Level) = (CraftBench.PlayerWeapons, grade.Model, grade.Level);
                 else if (DebugGiveItem.QualityTypes.Contains(item.Type)) item.Level = Math.Clamp(give.Quality, 0, 100);
-                if (Items.InventoryCommands.TryEquip(inventory, item.WithQuantity(1), table.Cold(owner)))
+                var wearer = table.Cold(owner);
+                bool worn = Items.InventoryCommands.TryEquip(inventory, item.WithQuantity(1), wearer);
+                if (!worn && give.Equip && item.Type is FcsRecordType.ARMOUR or FcsRecordType.ITEM && Items.InventoryCommands.IsEquipmentSection(item.EquipmentSection)
+                    && item.EquipmentSection is not ("back" or "hip" or "backpack_attach") && inventory.Items.Find(i => i.Section == item.EquipmentSection) is { } displaced)
+                {
+                    // The slot is taken: take the worn item off, wear the new one, give the old one a place in the grids (else the ground, said in the log).
+                    inventory.Items.Remove(displaced);
+                    worn = Items.InventoryCommands.TryEquip(inventory, item.WithQuantity(1), wearer);
+                    if (!worn) inventory.Items.Add(displaced);
+                    else if (!inventory.Add(displaced))
+                    {
+                        world.GroundItems.Drop(displaced, table.Next[owner].Position, 0);
+                        world.Post($"{displaced.Name} came off and did not fit the inventory; dropped on the ground.");
+                    }
+                }
+                if (worn)
                 {
                     // One unit is worn when its slot is free (as the trade window's right click); the rest of a stack goes to the grids.
                     assembly?.RefreshEquipment(table.Cold(owner)!);

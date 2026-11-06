@@ -254,7 +254,7 @@ sealed partial class GameHost
 
 
     /// <summary>Puts items on the first selected character (the menu's Give item row; the console's <c>give</c>): the record by name, the quantity 1 to 1000, the quality 0 to 100.</summary>
-    string DebugGive(string name, int quantity, int quality)
+    string DebugGive(string name, int quantity, int quality, bool equip = false)
     {
         debugFailed = false;
         var selected = player.ControlOrderers().ToArray();
@@ -262,7 +262,7 @@ sealed partial class GameHost
         quantity = Math.Clamp(quantity, 1, 1000);
         quality = Math.Clamp(quality, 0, 100);
         if (DebugRecord(name, character: false) is not { } item) return DebugFail($"no item record matches '{name}'");
-        session.World.Commands.Enqueue(new DebugGiveItem(selected[0], item.Id, quantity, quality) { Tick = session.World.Tick });
+        session.World.Commands.Enqueue(new DebugGiveItem(selected[0], item.Id, quantity, quality) { Tick = session.World.Tick, Equip = equip });
         if (scene.Database is { } db && db.Find(item.Id)?.Type == Meitou.Data.Fcs.FcsRecordType.WEAPON && DebugGiveItem.Grade(db, quality) is { } grade)
             return $"gave {quantity} x {grade.Name} {item.Name} (level {grade.Level})";
         return $"gave {quantity} x {item.Name}{(DebugHasQuality(item.Id) ? $" (quality {quality})" : "")}";

@@ -226,13 +226,15 @@ sealed partial class GameHost
             Report(con, DebugApply(DebugRow.MaxSkills, ""));
         });
 
-        Add("give", "give \"<item record>\" [qty] [quality]", "put items on the first selected character; quality 0-100 (armour, weapons, crossbows, limbs)", (args, con) =>
+        Add("give", "give \"<item record>\" [qty] [quality] [--equip]", "put items on the first selected character; quality 0-100 (armour, weapons, crossbows, limbs); one unit is worn when its slot is free; --equip also wears it when the slot is taken (the worn item goes to the inventory, else the ground)", (args, con) =>
         {
+            bool equipFlag = args.Any(a => a.Equals("--equip", StringComparison.OrdinalIgnoreCase));
+            if (equipFlag) args = [.. args.Where(a => !a.Equals("--equip", StringComparison.OrdinalIgnoreCase))];
             if (!Need(args, 1, 3, Self("give"))) return;
             int quantity = 1, quality = 0;
             if (args.Count > 1 && !int.TryParse(args[1], NumberStyles.None, CultureInfo.InvariantCulture, out quantity)) { con.Error($"give: quantity '{args[1]}' is not a whole number"); return; }
             if (args.Count > 2 && !int.TryParse(args[2], NumberStyles.None, CultureInfo.InvariantCulture, out quality)) { con.Error($"give: quality '{args[2]}' is not a whole number"); return; }
-            Report(con, DebugGive(args[0], quantity, quality));
+            Report(con, DebugGive(args[0], quantity, quality, equipFlag));
             // A paused game takes no tick: apply the give now so the reply (and a build right after) already sees the item.
             if (!debugFailed) session.ApplyPausedCommandsNow();
         }, (i, typed) => i == 0 ? ConsoleMatch(ConsoleRecordNames(character: false), typed) : []);
