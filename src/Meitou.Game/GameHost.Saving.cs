@@ -366,6 +366,7 @@ sealed partial class GameHost
         loadedSave = loaded;
         preparedBase = null;
         worldEpoch++;
+        NoticeModChanges(read.Result);
         var world = session.World;
         BloodForNewWorld(read.Result.Decals);
         session.Clock.SetTime(loaded!.Clock.Day, loaded.Clock.HourOfDay);

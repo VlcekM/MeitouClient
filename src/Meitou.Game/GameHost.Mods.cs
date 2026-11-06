@@ -44,7 +44,7 @@ sealed partial class GameHost
         Console.WriteLine($"mods      {enabled.Count} code mod(s) enabled; Harmony {ModHost.HarmonyVersion}, code-mod API {ModApi.Version}");
         var allowed = config.TrustedCodeMods.ToHashSet(StringComparer.Ordinal);
         mods = ModHost.Load(new ModHostOptions(enabled, allowed, db, data, () => session?.World,
-            id => config.ModSettings.TryGetValue(id, out var saved) ? saved : null));
+            id => config.ModSettings.TryGetValue(id, out var saved) ? saved : null, RunningVersion()));
     }
 
     /// <summary>The mods' interface extensions and their load notices, for a new interface.</summary>
@@ -75,8 +75,38 @@ sealed partial class GameHost
         mods.DeliverCombatHits(frameHits);
     }
 
-    /// <summary>The save data of the world's mod systems into the save being captured; between ticks.</summary>
-    void CaptureModData(World world, Meitou.Data.Save.SaveGame game) => mods?.CaptureSaveData(world, game.ModData);
+    /// <summary>This Meitou's release as a version for <c>gameVersion</c> ranges; null for an untagged (local) build, which passes every range.</summary>
+    static Meitou.Content.CodeModVersion? RunningVersion() =>
+        Meitou.Content.CodeModVersion.TryParse(BuildVersion.Tag.TrimStart('v'), out var version) ? version : null;
+
+    Meitou.Content.CodeModEnvironment CurrentModEnvironment() => mods?.Environment(BuildVersion.Tag) ?? new(BuildVersion.Tag, []);
+
+    /// <summary>
+    /// The save data of the world's mod systems and the code mods running (<c>meitou-mods/environment.json</c>) into the save being captured; between ticks. A
+    /// game without code mods writes the environment only over a save that had one, so it then records that none run.
+    /// </summary>
+    void CaptureModData(World world, Meitou.Data.Save.SaveGame game)
+    {
+        mods?.CaptureSaveData(world, game.ModData);
+        if (mods is not null || game.ModEnvironment is not null || loadedSave?.Source.ModEnvironment is not null)
+            game.ModEnvironment = CurrentModEnvironment().ToJson();
+    }
+
+    /// <summary>After a load: what changed in the code mods since the save was made, as notices (docs/modding-dependencies.md "Saves"). Never refuses.</summary>
+    void NoticeModChanges(Meitou.Data.Save.SaveGame save)
+    {
+        if (save.ModEnvironment is not { } bytes) return;
+        if (Meitou.Content.CodeModEnvironment.TryRead(bytes) is not { } saved)
+        {
+            Console.Error.WriteLine("mods      the save's code-mod record could not be read; not compared");
+            return;
+        }
+        foreach (var line in saved.ChangesTo(CurrentModEnvironment()))
+        {
+            Console.WriteLine($"mods      save: {line}");
+            player.Notice(line, true);
+        }
+    }
 
     /// <summary>The save's mod data into the systems of the world just loaded from it; between ticks, before the first.</summary>
     void RestoreModData(World world, Meitou.Data.Save.SaveGame save) => mods?.RestoreSaveData(world, save.ModData);

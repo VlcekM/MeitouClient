@@ -45,6 +45,9 @@ public sealed partial class SaveGame
     /// </summary>
     public SortedDictionary<string, byte[]> ModData { get; } = new(StringComparer.Ordinal);
 
+    /// <summary>The bytes of <c>meitou-mods/environment.json</c> (the code mods the save was made with, <c>CodeModEnvironment</c>); null when it has none.</summary>
+    public byte[]? ModEnvironment { get; set; }
+
     /// <summary>What does not fit the format's own rules (a platoon file that is missing, a zone file the CAMERA list does not name...); loading goes on.</summary>
     public List<string> Problems { get; } = [];
 
@@ -77,6 +80,7 @@ public sealed partial class SaveGame
             game.Zones[zone] = new SaveZone(zone, folder.ReadFile(SaveFolder.ZoneName(zone)));
         if (folder.Exists(SaveFolder.PortraitName)) game.Portraits = folder.ReadAllBytes(SaveFolder.PortraitName);
         foreach (var (id, name) in folder.ModDataFiles) game.ModData[id] = folder.ReadAllBytes(name);
+        if (folder.Exists(SaveFolder.ModEnvironmentName)) game.ModEnvironment = folder.ReadAllBytes(SaveFolder.ModEnvironmentName);
         game.Reindex();
         game.CheckZoneFiles();
         return game;
@@ -174,6 +178,7 @@ public sealed partial class SaveGame
         foreach (var z in Zones.Values) copy.Zones[z.Coordinate] = new SaveZone(z.Coordinate, SaveFile.Read(z.File.ToBytes()));
         copy.Portraits = Portraits?.ToArray();
         foreach (var (id, bytes) in ModData) copy.ModData[id] = bytes.ToArray();
+        copy.ModEnvironment = ModEnvironment?.ToArray();
         copy.Reindex();
         copy.Problems.AddRange(Problems);
         return copy;
@@ -273,10 +278,12 @@ public sealed partial class SaveGame
     /// </summary>
     void WriteModData(string work)
     {
-        if (ModData.Count == 0) return;
+        if (ModData.Count == 0 && ModEnvironment is null) return;
         Directory.CreateDirectory(Path.Combine(work, SaveFolder.ModDataDirectory));
         foreach (var (id, bytes) in ModData)
             File.WriteAllBytes(Path.Combine(work, SaveFolder.ModDataName(id).Replace('/', Path.DirectorySeparatorChar)), bytes);
+        if (ModEnvironment is not null)
+            File.WriteAllBytes(Path.Combine(work, SaveFolder.ModEnvironmentName.Replace('/', Path.DirectorySeparatorChar)), ModEnvironment);
     }
 
     public void Write(string folder, Action? beforeInstall = null)

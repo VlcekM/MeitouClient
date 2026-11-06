@@ -15,6 +15,9 @@ public sealed class ModRow(ModInfo mod, bool enabled, CodeModManifest? manifest 
     /// <summary>The code manifest (docs/modding.md "Dependencies"), read with the list; null for a data mod or one that cannot be read.</summary>
     public CodeModManifest? Manifest { get; } = manifest;
 
+    /// <summary>Why its <c>meitou.json</c> could not be read; null when it was or it has none.</summary>
+    public string? ManifestError { get; init; }
+
     /// <summary>What is wrong with its code-mod dependencies in the current list (<see cref="CodeModDependencies.Check"/>), one line each; empty when nothing.</summary>
     public IReadOnlyList<string> DependencyProblems
     {
@@ -36,7 +39,10 @@ public sealed class ModRow(ModInfo mod, bool enabled, CodeModManifest? manifest 
         Mod.HasCode ? LauncherText.Translate("Code mod: runs C# code of its own once allowed") : null,
         Mod.HasNativePlugin && !Mod.HasCode ? LauncherText.Translate("RE_Kenshi plugin: its DLLs are ignored in Meitou") : null,
         Manifest is { DependsOn.Count: > 0 } m ? Loc.Format(LauncherText.Translate("Requires {1}"), string.Join(", ", m.DependsOn)) : null,
-    }.Concat(DependencyProblems).OfType<string>());
+        Manifest is { LoadAfter.Count: > 0 } a ? Loc.Format(LauncherText.Translate("Loads after {1}"), string.Join(", ", a.LoadAfter)) : null,
+        Manifest is { Incompatible.Count: > 0 } c ? Loc.Format(LauncherText.Translate("Incompatible with {1}"), string.Join(", ", c.Incompatible)) : null,
+        Manifest is { GameVersion: { } g } ? Loc.Format(LauncherText.Translate("Built for Meitou {1} (checked when the game starts)"), g) : null,
+    }.Concat(DependencyProblems.Select(p => Loc.Format(LauncherText.Translate("Will not load: {1}"), p))).OfType<string>());
     public bool HasNotes => Mod.HasNativePlugin || Mod.HasCode;
 
     public bool Enabled

@@ -17,6 +17,8 @@ public sealed partial class SaveFolder
     /// <summary>Meitou's folder of code-mod sidecar files (docs/formats/save.md "Mod data"); the original game's own files never go there.</summary>
     public const string ModDataDirectory = "meitou-mods";
     const string ModDataExtension = ".dat";
+    /// <summary>The code mods the save was made with (docs/formats/save.md "Mod data"); not a sidecar, its extension keeps it out of <see cref="ModDataFiles"/>.</summary>
+    public const string ModEnvironmentName = ModDataDirectory + "/environment.json";
 
     const char Backslash = (char)92;
 

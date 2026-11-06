@@ -479,7 +479,7 @@ public sealed partial class MainWindow : Window
         ModsEmpty.IsVisible = false;
         ModCount.Text = Tr("Loading");
         var gameInstall = install;
-        List<(ModEntry Entry, CodeModManifest? Manifest)> entries;
+        List<(ModEntry Entry, (CodeModManifest? Manifest, string? Error) Code)> entries;
         try
         {
             entries = gameInstall is null ? [] : await Task.Run(() =>
@@ -487,7 +487,7 @@ public sealed partial class MainWindow : Window
                 var order = ModList.LauncherOrder(gameInstall, ModList.Discover(gameInstall));
                 // The rows show each mod's author, plugin note and code-mod dependencies: read them here too, not on the UI thread.
                 foreach (var entry in order) { _ = entry.Mod.Header; _ = entry.Mod.HasNativePlugin; }
-                return order.Select(e => (e, CodeModDependencies.TryReadManifest(e.Mod))).ToList();
+                return order.Select(e => (e, CodeModDependencies.ReadManifest(e.Mod))).ToList();
             });
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
@@ -499,7 +499,7 @@ public sealed partial class MainWindow : Window
             return;
         }
         if (load != modsLoad) return;
-        foreach (var (entry, manifest) in entries) mods.Add(new ModRow(entry.Mod, entry.Enabled, manifest));
+        foreach (var (entry, code) in entries) mods.Add(new ModRow(entry.Mod, entry.Enabled, code.Manifest) { ManifestError = code.Error });
         foreach (var row in mods) row.PropertyChanged += (_, _) => ShowModCount();
         modsReady = true;
         ShowModCount();
@@ -514,14 +514,24 @@ public sealed partial class MainWindow : Window
         ShowDependencyProblems();
     }
 
-    // The code-mod dependency rules the game applies at start (docs/modding.md "Dependencies"), shown on each row as the list changes.
+    // The code-mod rules the game applies at start that need no code (docs/modding-dependencies.md "Launcher"), shown on each row as the list changes. A
+    // preliminary check: DLLs and initialization are tried only by the game. Mods set to data only cannot serve as dependencies.
     void ShowDependencyProblems()
     {
-        var problems = CodeModDependencies.Check(DependencyEntries());
+        var problems = CodeModChecks.Check(DependencyEntries(), RunsCode());
         foreach (var row in mods) row.DependencyProblems = problems.TryGetValue(row.Name, out var lines) ? lines : [];
     }
 
-    List<CodeModEntry> DependencyEntries() => [.. mods.Select(m => new CodeModEntry(m.Name, m.Manifest, m.Enabled, m.Mod.Header?.Dependencies))];
+    List<CodeModEntry> DependencyEntries() =>
+        [.. mods.Select(m => new CodeModEntry(m.Name, m.Manifest, m.Enabled, m.Mod.Header?.Dependencies) { ManifestError = m.ManifestError })];
+
+    // The mods that may run code at start: all but those set to data only and not allowed since (undecided ones are asked at Play).
+    HashSet<string> RunsCode()
+    {
+        var trusted = game.GetStrings(TrustedCodeModsKey).ToHashSet(StringComparer.Ordinal);
+        var dataOnly = config.DataOnlyCodeMods.Where(n => !trusted.Contains(n)).ToHashSet(StringComparer.Ordinal);
+        return mods.Select(m => m.Name).Where(n => !dataOnly.Contains(n)).ToHashSet(StringComparer.Ordinal);
+    }
 
     // One graph of the enabled mods' code and .mod header dependencies; the proposed order is shown and applied only when accepted, and is not saved until
     // Save or Play. A contradiction is shown and changes nothing.

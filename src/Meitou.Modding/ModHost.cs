@@ -35,7 +35,7 @@ public sealed class LoadedMod
 /// <param name="SavedSettings">The player's saved settings of a mod by its id (setting key to text), or null.</param>
 public sealed record ModHostOptions(
     IReadOnlyList<ModInfo> Enabled, IReadOnlySet<string> Allowed, GameDatabase Data, PopulationData Population, Func<World?> World,
-    Func<string, IReadOnlyDictionary<string, string>?>? SavedSettings = null);
+    Func<string, IReadOnlyDictionary<string, string>?>? SavedSettings = null, CodeModVersion? GameVersion = null);
 
 /// <summary>
 /// The code mods of a session (docs/modding.md): loads the enabled, allowed ones at startup, runs their <see cref="IMod.Initialize"/> once, and holds what they
@@ -128,7 +128,7 @@ public sealed class ModHost
         LoadedMod? mod = null;
         try
         {
-            mod = Prepare(info, entries, index);
+            mod = Prepare(info, entries, index, options.GameVersion);
             Initialize(mod, options);
             mods.Add(mod);
             string assemblies = string.Join(", ", mod.Assemblies.Select(a => a.GetName().Name));
@@ -153,7 +153,7 @@ public sealed class ModHost
     }
 
     /// <summary>The manifest checks, the assemblies and the entry instance.</summary>
-    LoadedMod Prepare(ModInfo info, IReadOnlyList<CodeModEntry> entries, int index)
+    LoadedMod Prepare(ModInfo info, IReadOnlyList<CodeModEntry> entries, int index, CodeModVersion? gameVersion)
     {
         CodeModManifest manifest;
         try { manifest = CodeModManifest.Read(info.CodeManifestPath); }
@@ -161,15 +161,7 @@ public sealed class ModHost
         {
             throw new ModLoadException($"bad {ModList.CodeManifestFile}: {e.Message}");
         }
-        if (!ModApi.Supports(manifest.ApiVersion))
-        {
-            string runs = $"API {ModApi.MinimumVersion} to {ModApi.Version}";
-            throw new ModLoadException($"built for code-mod API {manifest.ApiVersion}; this Meitou runs {runs}");
-        }
-        if (manifest.DependsOn.Count > 0 && manifest.ApiVersion < ModApi.DependenciesVersion)
-            throw new ModLoadException($"declares dependencies, which need apiVersion {ModApi.DependenciesVersion}; it names {manifest.ApiVersion}");
-        if (mods.FirstOrDefault(m => m.Manifest.Id == manifest.Id) is { } twin)
-            throw new ModLoadException($"id '{manifest.Id}' is taken by mod {twin.Info.Name}");
+        CheckWithoutCode(manifest, entries, index, gameVersion);
         var mod = new LoadedMod(info, manifest);
         mod.Dependencies = ResolveDependencies(manifest, entries, index);
         var imports = Imports(mod.Dependencies);
@@ -177,6 +169,20 @@ public sealed class ModHost
         mod.Exports = Exported(mod.Assemblies, imports);
         mod.Instance = CreateEntry(mod);
         return mod;
+    }
+
+    /// <summary>
+    /// The rules that need none of the mod's code (CodeModChecks): API, game version, a taken id, a conflict with a loaded mod, a <c>loadAfter</c> mod later in the list.
+    /// </summary>
+    void CheckWithoutCode(CodeModManifest manifest, IReadOnlyList<CodeModEntry> entries, int index, CodeModVersion? gameVersion)
+    {
+        if (CodeModChecks.ApiProblem(manifest) is { } api) throw new ModLoadException(api);
+        if (CodeModChecks.GameVersionProblem(manifest, gameVersion) is { } game) throw new ModLoadException(game);
+        if (mods.FirstOrDefault(m => m.Manifest.Id == manifest.Id) is { } twin)
+            throw new ModLoadException($"id '{manifest.Id}' is taken by mod {twin.Info.Name}");
+        if (mods.FirstOrDefault(m => manifest.ConflictsWith(m.Manifest)) is { } rival)
+            throw new ModLoadException($"is incompatible with {rival.Info.Name} ('{rival.Manifest.Id}'), which loaded first; disable one of them");
+        if (CodeModChecks.LoadAfterProblem(manifest, index, entries) is { } order) throw new ModLoadException(order);
     }
 
     /// <summary>
@@ -272,11 +278,44 @@ public sealed class ModHost
         catch
         {
             if (context.HasHarmony) context.Harmony.UnpatchAll(context.Id);
+            TellDependenciesItFailed(mod);
             throw;
         }
         finally { context.Open = false; }
         registry.Commit(context.Id, context.Pending);
     }
+
+    /// <summary>
+    /// A dependent failed in <see cref="IMod.Initialize"/>: every mod it depends on, directly or through others, that implements <see cref="IModDependents"/> drops
+    /// what it holds for it (docs/modding-dependencies.md "Failed initialization").
+    /// </summary>
+    static void TellDependenciesItFailed(LoadedMod mod)
+    {
+        foreach (var dependency in DependencyClosure(mod))
+        {
+            if (dependency.Instance is not IModDependents framework) continue;
+            try { framework.DependentFailed(mod.Manifest.Id); }
+            catch (Exception e) { Console.Error.WriteLine($"mod       {dependency.Manifest.Id}: cleanup after {mod.Manifest.Id} failed: {e}"); }
+        }
+    }
+
+    /// <summary>The mods <paramref name="mod"/> depends on, transitively, each once, nearest first.</summary>
+    static List<LoadedMod> DependencyClosure(LoadedMod mod)
+    {
+        var all = new List<LoadedMod>();
+        var queue = new Queue<LoadedMod>(mod.Dependencies);
+        while (queue.TryDequeue(out var next))
+        {
+            if (all.Contains(next)) continue;
+            all.Add(next);
+            foreach (var deeper in next.Dependencies) queue.Enqueue(deeper);
+        }
+        return all;
+    }
+
+    /// <summary>The code mods of this session for a save (docs/formats/save.md "Mod data"): the loaded ones in load order, with ids and versions.</summary>
+    public CodeModEnvironment Environment(string gameVersion) =>
+        new(gameVersion, [.. mods.Select(m => new CodeModEnvironmentEntry(m.Manifest.Id, m.Manifest.Version?.ToString(), m.Info.Name))]);
 
     /// <summary>
     /// The save data of the world's mod systems (<see cref="IModSaveData"/>) into <paramref name="files"/>, one file per mod by id; between ticks. A mod without such

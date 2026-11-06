@@ -130,6 +130,9 @@ public sealed class CodeModVersionRange
     public bool Contains(CodeModVersion version) =>
         comparators.All(c => Holds(c.Op, version.CompareTo(c.Version))) && (!version.IsPrerelease || OptsIntoPrerelease(version));
 
+    /// <summary>Plain SemVer precedence without the pre-release opt-in: for <c>gameVersion</c>, where the player picks a nightly, not the mod's author.</summary>
+    public bool ContainsByPrecedence(CodeModVersion version) => comparators.All(c => Holds(c.Op, version.CompareTo(c.Version)));
+
     bool OptsIntoPrerelease(CodeModVersion version) => comparators.Any(c => c.Version.IsPrerelease && c.Version.SameRelease(version));
 
     static bool Holds(string op, int order) => op switch

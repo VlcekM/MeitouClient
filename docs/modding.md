@@ -185,7 +185,8 @@ code, so `trustedCodeMods` is not consulted.
 ## Versioning
 
 - The manifest's `apiVersion` must lie in `ModApi.MinimumVersion` (1) to `ModApi.Version` (2); otherwise the mod is refused at load with a
-  message. 2 added `version`, `dependencies` and `ModContext.Dependency<T>`; an API 1 mod loads unchanged.
+  message. 2 added `version`, `dependencies`, `loadAfter`, `incompatible`, `gameVersion`, `ModContext.Dependency<T>` and
+  `IModDependents`; an API 1 mod loads unchanged. `gameVersion` ties a mod to the engine releases it was built against.
 - Harmony patches non-public members; compile-time references need public types or a publicizer. Open: which simulation types to make
   public, or ship publicized reference assemblies; ship reference assemblies per release so modders build without a game install.
 

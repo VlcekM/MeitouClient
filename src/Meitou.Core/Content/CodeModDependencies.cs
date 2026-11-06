@@ -4,7 +4,11 @@ namespace Meitou.Content;
 /// A mod of the mod list as the dependency rules see it: its name, its code manifest (null: data only or unreadable), whether it is enabled and its FCS header
 /// <c>dependencies</c> (<c>.mod</c> file names; docs/formats/fcs-mod.md "File"), which only <see cref="CodeModDependencies.Arrange"/> reads.
 /// </summary>
-public sealed record CodeModEntry(string Name, CodeModManifest? Manifest, bool Enabled, IReadOnlyList<string>? HeaderDependencies = null);
+public sealed record CodeModEntry(string Name, CodeModManifest? Manifest, bool Enabled, IReadOnlyList<string>? HeaderDependencies = null)
+{
+    /// <summary>Why the mod's <c>meitou.json</c> could not be read; null when it was, or when the mod has none.</summary>
+    public string? ManifestError { get; init; }
+}
 
 /// <summary>One ordering constraint of <see cref="CodeModDependencies.Arrange"/>: <see cref="Before"/> must load before <see cref="After"/>, for <see cref="Why"/>.</summary>
 public sealed record OrderConstraint(string Before, string After, string Why)
@@ -42,23 +46,6 @@ public static class CodeModDependencies
         return null;
     }
 
-    /// <summary>Every problem of every enabled code mod in <paramref name="list"/>, by mod name; mods without problems are absent.</summary>
-    public static Dictionary<string, List<string>> Check(IReadOnlyList<CodeModEntry> list)
-    {
-        var problems = new Dictionary<string, List<string>>(StringComparer.Ordinal);
-        for (int i = 0; i < list.Count; i++)
-        {
-            if (!list[i].Enabled || list[i].Manifest is not { } manifest) continue;
-            foreach (var dependency in manifest.DependsOn)
-                if (Problem(dependency, i, list) is { } problem)
-                {
-                    if (!problems.TryGetValue(list[i].Name, out var lines)) problems[list[i].Name] = lines = [];
-                    lines.Add(problem);
-                }
-        }
-        return problems;
-    }
-
     /// <summary>
     /// The launcher's Arrange: one graph of every constraint between enabled mods, the code-mod <c>dependencies</c> (optional ones too, as a present one must load
     /// first) and the FCS header <c>dependencies</c>, then the order that keeps the current one as far as the constraints allow (each step takes the earliest mod
@@ -85,6 +72,9 @@ public static class CodeModDependencies
             foreach (var dependency in list[i].Manifest?.DependsOn ?? [])
                 if (EnabledIndexOf(m => m.Manifest?.Id == dependency.Id, list) is var at and >= 0 && at != i)
                     constraints.Add((at, i, $"code: needs '{dependency.Id}'"));
+            foreach (var id in list[i].Manifest?.LoadAfter ?? [])
+                if (EnabledIndexOf(m => m.Manifest?.Id == id, list) is var at and >= 0 && at != i)
+                    constraints.Add((at, i, $"code: loads after '{id}'"));
             foreach (var file in list[i].HeaderDependencies ?? [])
                 if (EnabledIndexOf(m => m.Name + ".mod" == file, list) is var at and >= 0 && at != i)
                     constraints.Add((at, i, $"data: its .mod header needs {file}"));
@@ -147,13 +137,19 @@ public static class CodeModDependencies
         return first;
     }
 
+    /// <summary>A mod's manifest, or why it cannot be read; both null for a mod without one. Never throws.</summary>
+    public static (CodeModManifest? Manifest, string? Error) ReadManifest(ModInfo mod)
+    {
+        try { return mod.HasCode ? (CodeModManifest.Read(mod.CodeManifestPath), null) : (null, null); }
+        catch (Exception e) when (e is not OutOfMemoryException) { return (null, e.Message); }
+    }
+
     /// <summary>
     /// Reads a mod's manifest for the rules, or null when it has none or it cannot be read (the loader reports that itself, per mod). A scan over many mods
     /// must survive any one of them, so no failure of this mod's manifest escapes.
     /// </summary>
     public static CodeModManifest? TryReadManifest(ModInfo mod)
     {
-        try { return mod.HasCode ? CodeModManifest.Read(mod.CodeManifestPath) : null; }
-        catch (Exception e) when (e is not OutOfMemoryException) { return null; }
+        return ReadManifest(mod).Manifest;
     }
 }

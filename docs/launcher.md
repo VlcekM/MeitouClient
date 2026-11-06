@@ -267,7 +267,8 @@ interpolated string, which no translation could match.
   question has a box per mod (ticked: allowed now) and three answers: Data only all, Trust all, Apply (the ticks). Escape decides
   nothing. Allowed names go to `trustedCodeMods` in `meitou.user.json` (kept by game releases since 2026-10-20, which keep unknown
   keys); data-only names go to the launcher's `DataOnlyCodeMods`, so Play does not ask about them again.
-- A code mod's row lists the code mods it requires and each dependency problem the game would refuse at start; **Arrange** proposes an
+- A code mod's row lists what it requires, loads after and conflicts with, and each refusal the game would make without its code
+  (preliminary: DLLs and initialization are checked only at start); **Arrange** proposes an
   order meeting the enabled mods' code and `.mod` header dependencies, applied only when accepted and saved only by Save or Play; a
   contradiction moves nothing and is shown ([dependencies](modding-dependencies.md#launcher)).
 
