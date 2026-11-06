@@ -1308,6 +1308,10 @@ public sealed partial class FixtureRegistry
         }
     }
 
+    /// <summary>Whether any container of a registered building holds items (what <see cref="WriteBuilding"/> would store as container text).</summary>
+    public bool HasContents(string buildingInstance) =>
+        byBuilding.TryGetValue(buildingInstance, out var list) && list.Any(f => f.Contents is { } grid && ContainerSave.Write(grid) is not null);
+
     /// <summary>Writes a registered building's lock and door state into its saved state record (the keys of <see cref="Restore"/>; <c>locked</c> true only when effectively locked). False when the building is not registered.</summary>
     public bool WriteBuilding(string buildingInstance, FcsRecord state)
     {
