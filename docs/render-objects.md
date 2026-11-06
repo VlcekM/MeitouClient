@@ -31,6 +31,13 @@ and generated levels use projected demand with stable transitions. Do not treat 
 range as an accidental renderer limit: it can be original fidelity. Visibility/depth/shadow/
 reflection and streaming residency need consistent bounds.
 
+Generated object levels (`ObjectLodGen`, `MeshSimplifier.Chain` with the texture guard): a collapse re-points a corner at a vertex
+of the new point, so the texture coordinate jumps unless that vertex is chosen by the triangle's own mapping. A guard that only
+compared the jump with the part's mean UV density let tiled decks (Shield Bridge, tread squares) pick another UV island, showing
+planks and diagonal patches from about 700 units. Now a corner takes the vertex whose UV best matches the triangle's mapping
+extended to the new position, and the collapse is refused when none is within 0.01 UV. **Verified** (Shield Bridge at 34816,-112031,
+offscreen at distance 700: the deck matches a build without generated levels). Cost: such meshes keep about half their triangles at most.
+
 ## Arrival prefetch
 
 During a character flight or squad tour hop ([viewer.md](viewer.md#squad-tour)) the host sets `WorldFrame` `Ahead` to the landing

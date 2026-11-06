@@ -10,12 +10,15 @@ namespace Meitou.Rendering.Characters;
 /// </summary>
 internal static class MeshSimplifier
 {
+    /// <summary>With the texture guard: the most a corner's texture coordinate may differ from what its triangle's mapping gives at the corner's new position (texture units).</summary>
+    const float UvTolerance = 0.01f;
+
     /// <summary>
     /// The triangle lists after reducing to each of <paramref name="fractions"/> of the input triangles (descending), in one run: a list
     /// is a snapshot, so each is the previous one reduced further. Stops early at <paramref name="floor"/> triangles (the remaining
-    /// lists then repeat the last). With <paramref name="uvPerWorld"/> above 0 (texture-coordinate units per world unit of the part's surface, <see cref="UvPerWorld"/>) a collapse
-    /// is refused when a corner it moves has no vertex at the new point whose texture coordinate is about as far from its own as the move is long: that is a jump to
-    /// another UV island, which a texture would show as a smear.
+    /// lists then repeat the last). With <paramref name="uvPerWorld"/> above 0 (a switch; <see cref="UvPerWorld"/> gives the part's value) a collapse is refused when a corner it moves has no vertex at the
+    /// new point whose texture coordinate is within <see cref="UvTolerance"/> of what the corner's triangle mapping gives there, and the corner takes the best such vertex: a texture would show a jump
+    /// to another UV island, or a stretched mapping, as a smear.
     /// </summary>
     public static uint[][] Chain(Vertex[] vertices, uint[] indices, float[] fractions, int floor, float uvPerWorld = 0)
     {
@@ -36,6 +39,7 @@ internal static class MeshSimplifier
         int groups = groupVertices.Count;
         var tg = new int[triCount * 3];
         var tv = new int[triCount * 3];
+        int[]? cv = null;
         var alive = new bool[triCount];
         var position = new Vector3[groups];
         for (int g = 0; g < groups; g++) position[g] = vertices[groupVertices[g][0]].Position;
@@ -55,6 +59,8 @@ internal static class MeshSimplifier
             live++;
             for (int k = 0; k < 3; k++) incident[tg[t * 3 + k]].Add(t);
         }
+
+        if (uvPerWorld > 0) cv = (int[])tv.Clone();
 
         // Quadrics: the planes of the triangles at each point, and heavy planes along open edges (silhouettes and cut-outs).
         var q = new Quadric[groups];
@@ -119,16 +125,19 @@ internal static class MeshSimplifier
             else queue.Enqueue((b, a, version[b], version[a]), backward);
         }
 
+        int moving = -1;
+
         // A collapse is refused when it would flip or crush a surviving triangle.
         bool CanCollapse(int from, int to)
         {
-            if (uvPerWorld > 0 && !UvConsistent(from, to)) return false;
+            moving = from;
             foreach (int t in incident[from])
             {
                 if (!alive[t]) continue;
                 bool both = false;
                 for (int k = 0; k < 3; k++) if (tg[t * 3 + k] == to) both = true;
                 if (both) continue;
+                if (cv is not null && !UvHolds(t, to)) return false;
                 Vector3 p0 = position[tg[t * 3]], p1 = position[tg[t * 3 + 1]], p2 = position[tg[t * 3 + 2]];
                 Vector3 m0 = tg[t * 3] == from ? position[to] : p0, m1 = tg[t * 3 + 1] == from ? position[to] : p1, m2 = tg[t * 3 + 2] == from ? position[to] : p2;
                 var before = Vector3.Cross(p1 - p0, p2 - p0);
@@ -139,23 +148,44 @@ internal static class MeshSimplifier
             return true;
         }
 
-        // The vertices whose corners sit on each point now (the point's own and those of the points collapsed into it), for the UV check.
-        List<int>[]? members = null;
-        bool UvConsistent(int from, int to)
+        // The texture guard: a corner moved onto point `to` takes the vertex there whose texture coordinate best matches what the triangle's own mapping
+        // (extended over its plane) gives at that position, and the collapse is refused when even that one is further off than UvTolerance.
+        (int Vertex, float Error) MoveCorner(int t, int k, int to)
         {
-            members ??= [.. groupVertices.Select(g => new List<int>(g))];
-            float allow = uvPerWorld * (position[from] - position[to]).Length() * 1.5f + 0.004f;
-            float allowSquared = allow * allow;
-            var targets = groupVertices[to];
-            var list = members[from];
-            for (int i = 0; i < list.Count && i < 32; i++)
+            var p0 = position[tg[t * 3]];
+            var e1 = position[tg[t * 3 + 1]] - p0;
+            var e2 = position[tg[t * 3 + 2]] - p0;
+            var q = position[to] - p0;
+            float d00 = Vector3.Dot(e1, e1), d01 = Vector3.Dot(e1, e2), d11 = Vector3.Dot(e2, e2);
+            float den = d00 * d11 - d01 * d01;
+            var own = vertices[cv![t * 3 + k]];
+            var expected = own.Uv;
+            if (den > 1e-20f * Math.Max(1f, d00 * d11))
             {
-                float best = float.MaxValue;
-                foreach (int c in targets) best = Math.Min(best, Vector2.DistanceSquared(vertices[c].Uv, vertices[list[i]].Uv));
-                if (best > allowSquared) return false;
+                float d20 = Vector3.Dot(q, e1), d21 = Vector3.Dot(q, e2);
+                float s = (d11 * d20 - d01 * d21) / den, u = (d00 * d21 - d01 * d20) / den;
+                var uv0 = vertices[cv[t * 3]].Uv;
+                expected = uv0 + s * (vertices[cv[t * 3 + 1]].Uv - uv0) + u * (vertices[cv[t * 3 + 2]].Uv - uv0);
             }
+            int best = groupVertices[to][0];
+            float bestKey = float.MaxValue, bestError = float.MaxValue;
+            foreach (int c in groupVertices[to])
+            {
+                float error = Vector2.Distance(vertices[c].Uv, expected);
+                float key = (error > UvTolerance ? 1000f + error : 0f) + Vector3.DistanceSquared(vertices[c].Normal, own.Normal);
+                if (key < bestKey) { bestKey = key; best = c; bestError = error; }
+            }
+            return (best, bestError);
+        }
+
+        bool UvHolds(int t, int to)
+        {
+            for (int k = 0; k < 3; k++)
+                if (tg[t * 3 + k] != to && alive[t] && IsFrom(t, k) && MoveCorner(t, k, to).Error > UvTolerance) return false;
             return true;
         }
+
+        bool IsFrom(int t, int k) => tg[t * 3 + k] == moving;
 
         // With the texture guard (buildings: front and back of a sheet sit on one point with the same UV and opposite normals) the normal counts as much as the UV.
         float normalWeight = uvPerWorld > 0 ? 1f : 0.05f;
@@ -181,8 +211,8 @@ internal static class MeshSimplifier
                 int c0 = 0, c1 = 0, c2 = 0;
                 for (int k = 0; k < 3; k++)
                 {
-                    int g = tg[t * 3 + k], v = tv[t * 3 + k];
-                    if (groupOf[v] != g)
+                    int g = tg[t * 3 + k], v = cv is null ? tv[t * 3 + k] : cv[t * 3 + k];
+                    if (cv is null && groupOf[v] != g)
                     {
                         if (!pick.TryGetValue((v, g), out int chosen)) pick[(v, g)] = chosen = Nearest(vertices[v], groupVertices[g]);
                         v = chosen;
@@ -221,12 +251,16 @@ internal static class MeshSimplifier
                 bool both = false;
                 for (int k = 0; k < 3; k++) if (tg[t * 3 + k] == to) both = true;
                 if (both) { alive[t] = false; live--; continue; }
-                for (int k = 0; k < 3; k++) if (tg[t * 3 + k] == from) tg[t * 3 + k] = to;
+                for (int k = 0; k < 3; k++)
+                {
+                    if (tg[t * 3 + k] != from) continue;
+                    if (cv is not null) { moving = from; cv[t * 3 + k] = MoveCorner(t, k, to).Vertex; }
+                    tg[t * 3 + k] = to;
+                }
                 incident[to].Add(t);
             }
             incident[from] = [];
             valid[from] = false;
-            if (members is not null) { members[to].AddRange(members[from]); members[from] = []; }
             q[to].Add(q[from]);
             version[to]++;
             incident[to].RemoveAll(t => !alive[t]);
