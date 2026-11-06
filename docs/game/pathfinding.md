@@ -264,10 +264,6 @@ furniture: without it (`--own-only` in every interior) 99.3..99.8 % but 19.29 (8
 `50.33:324-`: 13 of 26), so those tiles were built with another or no interior layout (`--verbose` lists it). 19.29: its Bughouse `8-` and Longhouses `4-`,
 `3324-` reach their upper storey by stairs in 19.28/20.29, so alone (the border rule keeps ground-level regions only) it is pruned; with its neighbours
 (`--around 1`), as loaded in play, 19.29 is 91.2 %.
-**Shells and open structures**: a building is a shell with an interior (the original's class 12; its mask carves the exterior, its inside is an interior
-**Observed** (zone 54.58, `--probe`, issue #222): Ash Dome Ruin `54.58:9-rebirth-INGAME` lies under the terrain, which rises above its floors
-(3755 over 3632..3705); its upper exterior and ruin walls (`AshDomeWalls_EXT_01/02`, `AshDome-RUIN-WallS-*`) have no collision, and the original's tile
-walks that terrain through the walls as ours does (`--probe` radius 200: 1647 samples both, 11 original only, 6 ours only).
 **Shells and open structures**: as the original (**Verified** rule, "Generator" below: class, `interior` list), a building is a shell with an interior (its
 mask carves the exterior, its inside is an interior job) when its `interior` list is real, it is a plain building (class 12) and it has an interior mask
 with collision (`ZoneGeometryGatherer.IsShellWithInterior`, `InteriorOf`). A building with a blank interior has all its WALKABLE shapes walkable and its
@@ -283,12 +279,14 @@ original's is (**Verified**, probe: of the original exterior's 211 polygons over
 walkboard mesh's deck height, to 0.1; 142 lie on the terrain under the bridge, 1040..1180, the rest on the end ramps), and paths run along it at
 `y` 1292..1305 as the original's deck polygons do.
 **Observed** (zone 13.12, `--probe`): the Metal Warehouse `14-rebirth-INGAME` has a blank interior, so it is open; the ground of its aisle under the
-roof is kept and the original's tile has it too (issue #157, filed before the shell rule). **Observed** (issue #222, the Ash Dome Ruins; `--compare` per placement, footprint
-only, 320 round the origin): the ruin is open (blank interior); at 54.58 `9-` the reported spot's meshes are the same (2,022 samples both, 0 either only): its
-level-0 wall, the only outer wall with collision (`AshDome_Level_00_EXT_COL`, local y −77..181), lies 30+ under the hillside that runs through the dome, and the
-upper walls (`AshDomeWalls_EXT_01/02`, the RUIN walls) have no collision, so both navmeshes run through them. 8 of the 12 ruins match within 30 samples; at
-54.58 `15-`, 54.57 `2-`, 54.59 `9-` and `18-` the tile has 290..1,000 fewer samples inside the ring on bare terrain with no geometry at the mesh end, as a tile built
-with the dome carved; the tiles hold no interior group there (**Unknown** which placement they were built with).
+roof is kept and the original's tile has it too (issue #157, filed before the shell rule).
+**Observed** (issue #222, the Ash Dome Ruins, open: blank interior; `--probe`, and `--compare` per placement over the footprint, 320 round the origin): Ash
+Dome Ruin `54.58:9-rebirth-INGAME` lies under the terrain, which rises above its floors (3755 over 3632..3705). Its level-0 wall, the only outer wall with
+collision (`AshDome_Level_00_EXT_COL`, local y −77..181), lies 30+ under that hillside, and the upper exterior and ruin walls (`AshDomeWalls_EXT_01/02`,
+`AshDome-RUIN-WallS-*`) have no collision, so the original's tile walks the terrain through the walls as ours does (2,022 samples both, 0 either only;
+`--probe` radius 200: 1647 both, 11 original only, 6 ours only). 8 of the 12 ruins match within 30 samples; at 54.58 `15-`, 54.57 `2-`, 54.59 `9-` and `18-`
+the tile has 290..1,000 fewer samples inside the ring on bare terrain with no geometry at the mesh end, as a tile built with the dome carved; the tiles hold
+no interior group there (**Unknown** which placement they were built with).
 **Interior parts**: the `interior` list (laid out like `parts` after the same position-seeded reseed, as drawn) is collision too,
 none when destroyed; it holds interior stairs and upper floors. **Verified** (tile20.32 interior `600815`, the Hub Storm House
 `4933-Newwworld-INGAME`): the original mesh ramps +4→+68 over (+30..+65, −45..−5) from the origin to the roof storey at +69..+72,
@@ -344,9 +342,9 @@ every feature of the zone, with no `hidden` test (only the render entity, `FUN_1
 pass (`FUN_1403c8660`) takes features as owner-less group 14 (a non-BUILDING handle resolves no owner): material −1, the walkable-foliage path,
 not the building one (groups 9, 10, 13, 19 and `path mode` play no part). **Observed** (`meitou-tools navmesh --probe`, zone 21.19): the
 original's tile walks the top of `Huge_Stone_Emperor_Statue`'s foundation (y 755.8, terrain 735) and has no ground inside the gravel piles, also those placed
-scaled (1.41/1.88); without features Meitou walked the terrain through both (issue #161). **Observed** (scratch probe, zones 14.22, 14.23, 15.22): the fog camps' `Mafic_HugeRockSlabs` by the nest markers south of Mongrel have no walkable span inside them in either navmesh (issue #132's walk-through was before features were gathered). **Observed** (`--feature-tops` over the
-neighbours' features, `--probe`, zone 33.30, issue #214): the original walks the tops of `Tarsand_Pipeline01` (380 of 1085 top samples; ours 384) and
-`FloodedForest_Rotten-Stem02` (1567 of 1766 within 8; the rest lie under the original's faces 8..10 lower), so their walkable strips are the original's. Their collision is a triangle mesh, mostly open at the bottom
+scaled (1.41/1.88); without features Meitou walked the terrain through both (issue #161). **Observed** (scratch probe, zones 14.22, 14.23, 15.22):
+the fog camps' `Mafic_HugeRockSlabs` by the nest markers south of Mongrel have no walkable span inside them in either navmesh (issue #132's walk-through
+was before features were gathered). Their collision is a triangle mesh, mostly open at the bottom
 (gravel piles: 24 open edges; Hub cliff blocks closed). Engine choice: a feature's triangle mesh is a `NavMeshSolid`; a walkable span is removed when the
 nearest of its triangles above the span's floor (more than 1 over it, at the cell's middle) faces up, so the span sees its back; an overhang's underside faces
 down and keeps the ground under it. `hidden` features keep their collision (above), as in Meitou. **Observed** (`--compare`,
@@ -359,9 +357,11 @@ z 66,200..66,500 reached where the tube's 24° top rises out of the wall walkway
 **Unknown** (both walkable; Havok joins faces by edge matching, not by voxel steps). Engine choice: where a feature's upward surface runs inside a building's
 solid, its surface within 2 cells (`FeatureSeamCells`) is removed, so the walkway and the feature are not neighbours; the tube then keeps 1,328 samples,
 34.46's floors under floors 5,183 → 544 (510 before features), other zones within 0.1 %. Features are obstacles of the long routes too (below) and ragdolls land
-on them ([simulation](../simulation.md)). **Observed** (issue #214, Black Desert 33.30 at 6791,-5404): the original walks the pipeline `Tarsand_Pipeline01`
-(a 1,436-unit triangle mesh placed in 33.31) and the fallen `FloodedForest_Rotten-Stem02` (three convex boxes, `--feature-tops` 1,567 of 1,766 top samples) as
-Meitou does, and both cut the same square holes at the rocks' foliage cutters; the only differences round the spot were the strips above.
+on them ([simulation](../simulation.md)).
+**Observed** (issue #214, Black Desert 33.30 at 6791,-5404; `--feature-tops` over the neighbours' features, `--probe`): the original walks the tops of the
+pipeline `Tarsand_Pipeline01` (a 1,436-unit triangle mesh placed in 33.31; 380 of 1,085 top samples, ours 384) and of the fallen
+`FloodedForest_Rotten-Stem02` (three convex boxes; 1,567 of 1,766 within 8, the rest under the original's faces 8..10 lower) as Meitou does
+(`--probe 6791,-5404,200,8`, ground samples: 1,975 both, 1 original only, 255 ours only).
 **Foliage meshes**: the same inside test applies to the triangle meshes of walkable foliage (FOLIAGE_MESH `walkable`), not to obstacle foliage (engine choice
 from the tiles). **Observed** (`--compare`): in 18.39 (Swamp Village; 371 of 383 foliage shapes are meshes, open below) the water and ground under walkable
 foliage domes (e.g. -60348,34444: water 100 under a face at 205) are ours only; with the test ours-only falls 6.6 → 5.0 %, floors under floors 395 → 286,
@@ -448,8 +448,9 @@ original's exterior has the door landing at ~121 outside the hull, ours only a p
 original's stitch (10 in height, 2 apart, Generator) could not join our geometry either: their door steps are 12..17, as in `48.13:12-` (step 12..15),
 which the original leaves unconnected.
 **Unseeded interiors** (engine choice): an interior is joined whatever its own pruning kept, to exterior polygons the exterior's pruning kept, and
-every region joined to a kept polygon is kept (`NavInteriors.CarryKeep`); exterior polygons stay limited to kept ones, else a door joined to a pruned
-landing satisfied the door and skipped the doorway's kept ground (Storm House Lagoon `40.41:10-`, Metal Wallhouse `51.43:1281-Dialogue-INGAME`).
+every region joined to a kept polygon is kept (`NavInteriors.CarryKeep`, not over narrow exterior edges: "Narrow portals"); exterior polygons stay
+limited to kept ones, else a door joined to a pruned landing satisfied the door and skipped the doorway's kept ground (Storm House Lagoon `40.41:10-`,
+Metal Wallhouse `51.43:1281-Dialogue-INGAME`).
 **Doorless interiors** (engine choice): an intact building with an interior mask and no `doors` (an open doorway) links its interior's open edges
 to the exterior's that run along them within `NavInteriors.HullJoinDistance` (2.5; both are cut on the hull's line); ruins likewise ("Ruin joins").
 **Observed** (zone 7.30, Hive Village, `meitou-tools navmesh`, issue #71): the Hive Commune Huts had no door join, so no path from the street
@@ -500,17 +501,30 @@ seed keeps nothing (no largest-region fallback) and is kept through the closure 
 doors in 20.29; built only in 19.29 they had no door join and their 20.29 half was invisible to point queries. Now a path from the
 street reaches the door and the far end of the Y-House. Doorless interiors on a border (20.32/21.32 `20-`, `26-Newwworld`) lose their
 fallback island.
-**Narrow portals** (engine choice): the seed flood (`SeedPruner.Spread`: own seeds, `KeepAt`, the border rule, the neighbours' kept edges) does not pass a
-polygon edge shorter than `SeedPruner.MinPortalWidth` 9, the generator's `minCharacterWidth`; edges with links (tile seams, inner seams, door joins) are not
-tested. The original joins faces over their shared edges, so two walkable terrain triangles that touch at a corner stay apart; Recast's cells join them by a neck a
-cell or two wide, and the ground behind it stayed kept though no walker fits through (the query refuses portals narrower than the radius at each wall end).
-**Observed** (scratch measure, zones 33.30, 54.58, 20.32, 21.19, 18.39: walkable 36-unit terrain triangles away from any building, feature or foliage, by how many
-of their three edge-neighbours are walkable): the original's tile covers none of the 120 with no walkable neighbour, 57 % of the 658 with one, 86 % of the
-3,183 with two and 98 % of the 27,433 with three; Meitou covered 38 %, 74 %, 90 % and 99 %, with the rule 6 %, 62 %, 87 % and 98 %. **Observed** (`--compare`, 16 zones:
-the eleven above, 33.30, 54.58, 21.19, 13.12, 42.22; `--base`): ours-only area 4.32 → 4.01 % of the original's, original-only 0.91 → 0.92 %; 33.30 3.3 → 1.3 % (a 146,000
-sq unit basin at 7139,-8543 and a 58,000 one at 7682,-7702 reached only over one-triangle strips along a 40° band, `--regions`), 21.19 10.6 → 6.8 %, the other
-zones within 0.1 %; with the install's mods loaded 4.33 → 4.02 %, where a 4-unit width gives 4.04 %, 12 gives 4.01 % and 9 with the links tested too 4.02 %. The original's 36-grid heights are the heightmap's (4,914 of 4,924 vertices on
-36-unit nodes within 1.5 of the sample) and its 40° cut is ours (0 of 7,000 samples over 40° covered in either), so the strips are a join question, not a slope one.
+**Narrow portals** (engine choice): between exterior polygons the kept set does not spread over an edge shorter than `SeedPruner.MinPortalWidth` 9 (in
+plan): not in the seed flood (`SeedPruner.Spread`: own seeds, `KeepAt`, the border rule, the neighbours' kept edges), not in the largest-region
+fallback's regions and not in the interiors' carry (`NavInteriors.CarryKeep`). Links (tile seams, inner seams, door and hull joins) and interior edges
+(`ZoneNavMesh.InteriorStart` on) are not tested, so interior doorways and stairs stay whole. What it stands in for is Havok's join by shared edges:
+the original's faces join only over an edge both have, so two walkable terrain triangles touching at a corner stay apart; Recast's cells join them by
+a neck a cell or two wide, and the ground behind it stayed kept though no walker fits through (the query refuses portals narrower than the radius at
+each wall end). The 9 is ours: the original's `minCharacterWidth` 9 drives BLOCK_EDGES (Generator table), and the tiles' edges carry no blocked flags
+("Terrain" above).
+**Observed** (scratch measure before the rule, zones 33.30, 54.58, 20.32, 21.19, 18.39: walkable 36-unit terrain triangles away from any building,
+feature or foliage, by how many of their three edge-neighbours are walkable): the original's tile covers none of the 120 with no walkable neighbour,
+57 % of the 658 with one, 86 % of the 3,183 with two and 98 % of the 27,433 with three; Meitou covered 38 %, 74 %, 90 % and 99 %.
+**Observed** (`--compare`, width 0 → 9, the same with and without `--base`, this install's mods changing none of these zones; zones 24.27, 20.32,
+21.32, 18.35, 19.29, 21.42, 21.31, 10.31, 18.39, 20.29, 23.22, 33.30, 54.58, 21.19, 13.12, 42.22): ours-only area 4.32 → 3.49 % of the original's,
+original-only 0.91 → 0.99 %; 33.30 3.3 → 1.3 % (`--regions`: its main region's uncovered area 346,000 → 35,000 sq units; scratch measure: the largest
+pieces cut, 96,000 at 7139,-8543 and 32,000 at 7682,-7702, meet the rest only over edges under 9), 21.19 10.6 → 5.9 %, 21.32 4.8 → 2.8 %, 42.22 8.0 →
+6.3 %. Width 4 gives 3.64 / 0.92 %, 12 gives 3.43 / 1.08 %: most of the cut comes at any width, and a wider one trades ours-only for original-only.
+**Observed** (the original-only ground the rule cuts; `--probe`, `--near`, scratch measure of the necks): the tile joins it over a whole
+terrain-triangle edge where ours, cut by an obstacle, keeps a neck of 2..4 units; both polygons of every neck inspected share the same edge (no
+edge-matching gap). 21.31 (original-only 0.81 → 1.36 %): a 76,000 sq unit hillside at -48900,-950 whose one shared terrain edge to the kept ground
+runs under a convex solid (-49027..-48995, -1029..-996) with its underside 7 over the terrain, where the tile has ground; 33.30: pockets at 8340,-6508
+and 8600,-7036 under foliage or feature triangles; 42.22: terrain beside Defensive Gate IV `2893-` (50300,-42404); 13.12: the Metal Warehouse `14-`
+upper walkways (y 1271..1301), which ours narrows to 4-unit strips between sections. The original's 36-grid heights are the heightmap's (4,914 of
+4,924 vertices on 36-unit nodes within 1.5 of the sample) and its 40° cut is ours (0 of 7,000 samples over 40° covered in either), so the
+corner-touching triangles are a join question, not a slope one.
 **Polygon heights** (engine choice): a polygon's plane can be ~25 off its surface (Recast polygons span ramps and terrain folds), so each tile samples
 its walkable spans every 2 cells (`HeightGrid`, bilinear); a polygon keeps the grid only when a sample leaves its plane by more than 2, and one
 whose samples all lie within 3 of the heightmap (or the water) keeps just a marker and reads the heightmap. **Observed** (headless probe, 20000 random
@@ -594,7 +608,8 @@ lose the collision too once a destroyed one was made; Meitou clears it per place
   - **Terrain** (FUN_1403c16c0): the zone's height grid (FUN_140a08a20) as an N × N vertex grid over the zone, two
     triangles per cell, material −1. FUN_140a08a20 was not traced, but **Observed** (`tile20.32.hkt`): the cliff outlines step on every second
     heightmap sample, a 36-unit grid (N 128) from the zone origin, cut diagonally from (i, j) to (i+1, j+1) (see **Terrain** under "Own builder"); of the tile's 8642
-    mesh-end vertices 2739 lie on a 36-unit line and 2740 on an 18-unit one (chance ~1600), so the odd samples are not used. Faces join over shared edges only: a walkable triangle whose three neighbours are steep is never in a tile (**Observed**, "Narrow portals" above).
+    mesh-end vertices 2739 lie on a 36-unit line and 2740 on an 18-unit one (chance ~1600), so the odd samples are not used. Faces join over shared
+    edges only: a walkable triangle whose three neighbours are steep is never in a tile (**Observed**, "Narrow portals" under "Own builder").
   - **Water** (FUN_1403c0250): one quad over the zone at the water level (from the node DAT_142135c48, 100 in the base game,
     [../formats/terrain.md](../formats/terrain.md)), material 3, only when the water level is above the lowest terrain
     vertex of the zone.
@@ -672,9 +687,10 @@ lose the collision too once a destroyed one was made; Meitou clears it per place
       Y 9000 against floor-0/1 building parts (FUN_1403d4dd0, groups 9 and 10): a point with no height that hits a
       building is moved onto it; a point with a height that hits a building is dropped; others are kept as stored, so a Y = −99 point
       that hits nothing goes in at Y −9.9 Havok (what Havok makes of it is **Unknown**). A
-      zone with no `seeds.def` points gets a 3 × 3 grid of ground seeds over its box instead (Meitou: at 1/6, 3/6 and 5/6 of the zone; **Observed**, 3,432 such zones' tiles: of the 15,098
-grid points on open walkable terrain 14,802 have a polygon under them, and 56 of the tiles' 329 enclosed regions (25 of their 28 million sq units) hold one; 296 have none,
-among them 54.58's 105216,120576, whose enclosed basin of 390,000 sq units Meitou keeps and the tile lacks, with nothing in the column: **Unknown** what its ray hit). Then the midpoints of the
+      zone with no `seeds.def` points gets a 3 × 3 grid of ground seeds over its box instead (Meitou: at 1/6, 3/6 and 5/6 of the zone;
+      **Observed**, 3,432 such zones' tiles: of the 15,098 grid points on open walkable terrain 14,802 have a polygon under them, and 56 of the tiles'
+      329 enclosed regions (25 of their 28 million sq units) hold one; 296 points have none, among them 54.58's 105216,120576, whose enclosed basin of
+      390,000 sq units Meitou keeps and the tile lacks, with nothing in the column: **Unknown** what its ray hit). Then the midpoints of the
       open border edges of each already built neighbour zone (FUN_1403c9820, the four neighbours) so regions connect
       across zone borders; points of a global list (DAT_14212f470, not identified) inside the box; and linked wall
       sections (class 9 WALL with `link length` > 0): three seeds on top of WALKABLE walls (ray hits) and, for walls that
@@ -866,7 +882,9 @@ Current Recast parameters are authoritative in `NavBuildSettings`, `ZoneGeometry
 **Unknown** original linked-wall seed fractions (Meitou uses 0.15/0.5/0.85).
 **Observed** original start snap500 Havok units and goal snap about30 Kenshi units;
 Meitou uses60/30 Kenshi units. Original height/climb1.8/0.5 Havok correspond to18/5 Kenshi, width 0.9 to 9 (Meitou radius 4); its stitch
-step/separation 1.0/0.2 to 10/2 (**Verified**, Generator); Meitou's interior joins use height 12 and gaps 6 (doors), 2.5 (doorless hulls), 5 (ruins); its seed flood stops at edges under 9 (`SeedPruner.MinPortalWidth`).
+step/separation 1.0/0.2 to 10/2 (**Verified**, Generator); Meitou's interior joins use height 12 and gaps 6 (doors), 2.5 (doorless hulls), 5 (ruins);
+its kept set stops at exterior edges under 9 (`SeedPruner.MinPortalWidth`, an engine choice, not the original's `minCharacterWidth` BLOCK_EDGES; "Narrow
+portals").
 ## Expression reference
 
 - Tile files: `h ^= v + 0x9e3779b9 + (h<<6) + (h>>2)`

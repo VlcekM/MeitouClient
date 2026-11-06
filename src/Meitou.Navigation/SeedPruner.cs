@@ -23,6 +23,9 @@ internal static class SeedPruner
         if (n == 0) return 0;
         var keep = new bool[n];
         var queue = new Queue<int>();
+        // An interior's own pruning does not test portal widths: its doorways and stairs are joined whole (CarryKeep; docs/game/pathfinding.md
+        // "Narrow portals").
+        int portalsBelow = g.InteriorOf is null ? int.MaxValue : 0;
         int matched = Match(mesh, g.Seeds, s, keep, queue);
         if (matched == 0 && g.NodeSeeds.Count > 0) matched = Match(mesh, g.NodeSeeds, s, keep, queue);
         // Regions reaching the zone's border at ground level are kept when the zone is published, toward the sides whose neighbour is not loaded
@@ -33,8 +36,8 @@ internal static class SeedPruner
             // A destroyed building's interior: the regions its seed reaches (the original's ray onto its floor, ZoneGeometryGatherer.OriginRaySeed), and its
             // ground floor, every region starting within DestroyedFloorBand of the lowest polygon (engine choice: our mesh can split a ruin's floor that the
             // original keeps whole, the Hub L-House 4645-). Its largest region can be an upper floor or wall tops under a roof whose intact collision stays.
-            if (matched > 0) Spread(mesh, keep, queue);
-            var component = Components(mesh);
+            if (matched > 0) Spread(mesh, keep, queue, portalsBelow);
+            var component = Components(mesh, portalsBelow);
             var bottom = new Dictionary<int, float>();
             for (int p = 0; p < n; p++)
             {
@@ -54,14 +57,14 @@ internal static class SeedPruner
         if (matched == 0)
         {
             // "All regions are below the area threshold and too far from a seed point. Keeping the largest region."
-            var component = Components(mesh);
+            var component = Components(mesh, portalsBelow);
             int best = component.GroupBy(c => c).OrderByDescending(c => c.Count()).First().Key;
             for (int p = 0; p < n; p++) if (component[p] == best) { keep[p] = true; }
             for (int p = 0; p < n; p++) mesh.Kept[p] = keep[p];
             return 0;
         }
 
-        Spread(mesh, keep, queue);
+        Spread(mesh, keep, queue, portalsBelow);
         for (int p = 0; p < n; p++) mesh.Kept[p] = keep[p];
         return matched;
     }
@@ -73,7 +76,7 @@ internal static class SeedPruner
         var queue = new Queue<int>();
         Match(mesh, seeds, s, keep, queue);
         if (queue.Count == 0) return false;
-        Spread(mesh, keep, queue);
+        Spread(mesh, keep, queue, mesh.InteriorStart);
         return true;
     }
 
@@ -100,7 +103,7 @@ internal static class SeedPruner
             queue.Enqueue(p);
         }
         if (queue.Count == 0) return false;
-        Spread(mesh, keep, queue);
+        Spread(mesh, keep, queue, mesh.InteriorStart);
         return true;
     }
 
@@ -143,42 +146,56 @@ internal static class SeedPruner
     public const float BorderGroundSlack = 30;
 
     /// <summary>
-    /// The narrowest portal (units) the kept set spreads through: the original generator's <c>minCharacterWidth</c> 9 (docs/game/pathfinding.md, "Narrow
-    /// portals"). The original joins faces by their shared edges, so two walkable terrain triangles touching at a corner stay apart; Recast's cells join them by a
-    /// neck a cell or two wide, and the region behind it stayed kept though no walker fits through (Observed: of the walkable terrain triangles with no walkable
-    /// edge-neighbour, the original keeps none, Meitou kept 38 %, with the rule 6 %). Edges with links (tile seams, inner seams, door joins) are not tested.
+    /// The narrowest portal (units) the kept set spreads through between exterior polygons (engine choice; docs/game/pathfinding.md "Narrow portals"). The
+    /// original joins faces only over shared edges, so two walkable terrain triangles touching at a corner stay apart; Recast's cells join them by a neck a
+    /// cell or two wide, and the region behind it stayed kept though no walker fits through. Links (tile seams, inner seams, door joins) and interior edges
+    /// are not tested.
     /// </summary>
     public const float MinPortalWidth = 9;
 
-    static void Spread(ZoneNavMesh mesh, bool[] keep, Queue<int> queue)
+    /// <summary>Whether the edge from <paramref name="a"/> to <paramref name="b"/> is narrower in plan than <see cref="MinPortalWidth"/>.</summary>
+    internal static bool Narrow(Vector3 a, Vector3 b)
+    {
+        float dx = b.X - a.X;
+        float dz = b.Z - a.Z;
+        return dx * dx + dz * dz < MinPortalWidth * MinPortalWidth;
+    }
+
+    /// <summary>Whether polygon <paramref name="p"/>'s edge <paramref name="k"/> is a narrow portal (tested below <paramref name="portalsBelow"/>).</summary>
+    static bool Narrow(ZoneNavMesh mesh, int p, int k, int portalsBelow)
+    {
+        if (p >= portalsBelow) return false;
+        var poly = mesh.Polygons[p];
+        return Narrow(mesh.Vertices[poly[k]], mesh.Vertices[poly[(k + 1) % poly.Length]]);
+    }
+
+    /// <summary>The polygons behind <paramref name="p"/>'s edges wide enough to pass, then across its links.</summary>
+    static IEnumerable<int> PassableNeighbours(ZoneNavMesh mesh, int p, int portalsBelow)
+    {
+        var nb = mesh.Neighbours[p];
+        for (int k = 0; k < nb.Length; k++)
+            if (nb[k] >= 0 && !Narrow(mesh, p, k, portalsBelow)) yield return nb[k];
+        var links = mesh.Links is { } all && all[p] is { } own ? own : [];
+        for (int i = 1; i < links.Length; i += 2) yield return links[i];
+    }
+
+    /// <summary>
+    /// Keeps what the queued polygons reach, not through edges narrower than <see cref="MinPortalWidth"/> of the polygons below
+    /// <paramref name="portalsBelow"/> (the exterior's).
+    /// </summary>
+    static void Spread(ZoneNavMesh mesh, bool[] keep, Queue<int> queue, int portalsBelow)
     {
         while (queue.Count > 0)
-        {
-            int p = queue.Dequeue();
-            var poly = mesh.Polygons[p];
-            var nb = mesh.Neighbours[p];
-            for (int k = 0; k < nb.Length; k++)
+            foreach (int q in PassableNeighbours(mesh, queue.Dequeue(), portalsBelow))
             {
-                int q = nb[k];
-                if (q < 0 || keep[q] || EdgeLength(mesh, poly, k) < MinPortalWidth) continue;
+                if (keep[q]) continue;
                 keep[q] = true;
                 queue.Enqueue(q);
             }
-            var links = mesh.LinksOf(p);
-            for (int i = 1; i < links.Length; i += 2)
-                if (!keep[links[i]]) { keep[links[i]] = true; queue.Enqueue(links[i]); }
-        }
     }
 
-    static float EdgeLength(ZoneNavMesh mesh, int[] poly, int k)
-    {
-        var a = mesh.Vertices[poly[k]];
-        var b = mesh.Vertices[poly[(k + 1) % poly.Length]];
-        float dx = b.X - a.X, dz = b.Z - a.Z;
-        return MathF.Sqrt(dx * dx + dz * dz);
-    }
-
-    static int[] Components(ZoneNavMesh mesh)
+    /// <summary>Connected-region labels per polygon, regions split at narrow portals as <see cref="Spread"/> splits them.</summary>
+    static int[] Components(ZoneNavMesh mesh, int portalsBelow)
     {
         var id = new int[mesh.PolygonCount];
         Array.Fill(id, -1);
@@ -192,7 +209,12 @@ internal static class SeedPruner
             while (stack.Count > 0)
             {
                 int c = stack.Pop();
-                foreach (int q in mesh.NeighboursOf(c)) if (id[q] < 0) { id[q] = next; stack.Push(q); }
+                foreach (int q in PassableNeighbours(mesh, c, portalsBelow))
+                {
+                    if (id[q] >= 0) continue;
+                    id[q] = next;
+                    stack.Push(q);
+                }
             }
             next++;
         }

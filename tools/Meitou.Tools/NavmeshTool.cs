@@ -604,22 +604,86 @@ static class NavmeshTool
     static IEnumerable<string> Regions(GameInstall install, ZoneGeometryGatherer gatherer, ZoneGeometry g, ZoneNavMesh mesh, float[]? box)
     {
         var original = OriginalNavTiles.LoadExterior(install, g.Zone);
-        if (original is null) { yield return "no original tile"; yield break; }
+        if (original is null) return ["no original tile"];
         var buckets = Buckets(original);
-        int PolygonAt(float x, float z)
+        return OriginalRegions(original, buckets, g.Seeds).Concat(OurRegions(gatherer, original, buckets, mesh, box));
+    }
+
+    /// <summary><c>--regions</c>: the original tile's regions, largest first, with how many of our seeds lie in each.</summary>
+    static IEnumerable<string> OriginalRegions(OriginalNavMesh original, Dictionary<(int, int), List<int>> buckets, IReadOnlyList<Vector3> seeds)
+    {
+        var adjacent = SharedEdgeAdjacency(original);
+        var region = Label(original.Polygons.Length, p => adjacent[p]);
+        var regions = Enumerable.Range(0, original.Polygons.Length).GroupBy(p => region[p]).Select(r => (Id: r.Key, Polygons: r.ToList()))
+            .OrderByDescending(r => Area(original.Vertices, original.Polygons, r.Polygons)).ToList();
+        yield return $"original regions {regions.Count}, joined to a neighbouring tile {regions.Count(r => JoinedToTile(original, r.Polygons))}:";
+
+        var seedRegion = seeds.Select(s => OriginalPolygonAt(original, buckets, s.X, s.Z)).Select(p => p < 0 ? -1 : region[p]).ToList();
+        foreach (var r in regions.Take(10))
         {
-            foreach (int p in buckets.GetValueOrDefault(((int)MathF.Floor(x / 64), (int)MathF.Floor(z / 64))) ?? [])
-                for (int k = 1; k + 1 < original.Polygons[p].Length; k++)
-                    if (NavGeometry.Barycentric(x, z, original.Vertices[original.Polygons[p][0]], original.Vertices[original.Polygons[p][k]], original.Vertices[original.Polygons[p][k + 1]], out float u, out float v, out float w) && u >= 0 && v >= 0 && w >= 0) return p;
-            return -1;
+            var centre = r.Polygons.Aggregate(Vector3.Zero, (acc, p) => acc + original.Vertices[original.Polygons[p][0]]) / r.Polygons.Count;
+            double area = Area(original.Vertices, original.Polygons, r.Polygons);
+            yield return $"  {r.Polygons.Count} polygons, {area:0} sq units at {centre.X:0},{centre.Y:0},{centre.Z:0}, "
+                + $"joined {JoinedToTile(original, r.Polygons)}, our seeds inside {seedRegion.Count(x => x == r.Id)}";
         }
-        static double Area(Vector3[] v, int[] poly)
+        var unplaced = seeds.Where((s, i) => seedRegion[i] < 0).Select(s => $"{s.X:0},{s.Y:0},{s.Z:0}");
+        yield return "  seeds with no original polygon under them: " + string.Join(" ", unplaced);
+    }
+
+    /// <summary>
+    /// <c>--regions</c>: our kept mesh's regions, most uncovered area first (a polygon is covered when the original has one under its centre), each
+    /// with its bridges.
+    /// </summary>
+    static IEnumerable<string> OurRegions(ZoneGeometryGatherer gatherer, OriginalNavMesh original, Dictionary<(int, int), List<int>> buckets,
+        ZoneNavMesh mesh, float[]? box)
+    {
+        var covered = new bool[mesh.PolygonCount];
+        for (int p = 0; p < mesh.PolygonCount; p++)
         {
-            double area = 0;
-            for (int k = 1; k + 1 < poly.Length; k++) area += Math.Abs((v[poly[k]].X - v[poly[0]].X) * (v[poly[k + 1]].Z - v[poly[0]].Z) - (v[poly[k + 1]].X - v[poly[0]].X) * (v[poly[k]].Z - v[poly[0]].Z)) / 2;
-            return area;
+            var c = mesh.Centre(p);
+            covered[p] = OriginalPolygonAt(original, buckets, c.X, c.Z) >= 0;
         }
-        // The original's regions: faces joined over a shared edge (the same two vertices).
+        var label = Label(mesh.PolygonCount, mesh.NeighboursOf);
+        var regions = Enumerable.Range(0, mesh.PolygonCount).GroupBy(p => label[p]).Select(r => r.ToList())
+            .Select(r => (Polygons: r, Area: Area(mesh.Vertices, mesh.Polygons, r),
+                Uncovered: Area(mesh.Vertices, mesh.Polygons, r.Where(p => !covered[p]))))
+            .OrderByDescending(r => r.Uncovered).ToList();
+        double uncovered = regions.Sum(r => r.Uncovered);
+        yield return $"our regions {regions.Count}, {uncovered:0} of {regions.Sum(r => r.Area):0} sq units with nothing of the original under them:";
+
+        foreach (var r in regions.Take(8))
+        {
+            var c = mesh.Centre(r.Polygons[0]);
+            string island = r.Polygons.All(p => !covered[p]) ? $": an island at {c.X:0},{c.Y:0},{c.Z:0}" : "";
+            yield return $"  {r.Polygons.Count} polygons, {r.Area:0} sq units, {r.Uncovered:0} uncovered{island}";
+            foreach (var line in Bridges(gatherer, mesh, covered, r.Polygons, box)) yield return line;
+        }
+    }
+
+    /// <summary>
+    /// <c>--regions</c>: where a region of ours runs on past the original's mesh end, clustered every 96 units (inside <c>--box</c> when given).
+    /// </summary>
+    static IEnumerable<string> Bridges(ZoneGeometryGatherer gatherer, ZoneNavMesh mesh, bool[] covered, List<int> region, float[]? box)
+    {
+        var bridges = new List<(Vector3 End, Vector3 On)>();
+        foreach (int p in region)
+            if (covered[p])
+                foreach (int q in mesh.NeighboursOf(p))
+                    if (!covered[q]) bridges.Add((mesh.Centre(p), mesh.Centre(q)));
+        if (box is not null) bridges = bridges.Where(b => b.On.X >= box[0] && b.On.X <= box[2] && b.On.Z >= box[1] && b.On.Z <= box[3]).ToList();
+
+        var clusters = bridges.GroupBy(b => ((int)MathF.Floor(b.On.X / 96), (int)MathF.Floor(b.On.Z / 96))).OrderByDescending(c => c.Count());
+        foreach (var cluster in clusters.Take(box is null ? 6 : 40))
+        {
+            var (end, on) = cluster.First();
+            yield return $"    bridge x{cluster.Count()}: the original ends at {end.X:0},{end.Y:0},{end.Z:0}, ours goes on to {on.X:0},{on.Y:0},{on.Z:0} "
+                + $"(terrain {gatherer.TerrainHeight(on.X, on.Z):0})";
+        }
+    }
+
+    /// <summary>Per original face, the faces it shares an edge (the same two vertices) with: how the original's regions join.</summary>
+    static List<int>[] SharedEdgeAdjacency(OriginalNavMesh original)
+    {
         var owner = new Dictionary<(int, int), int>();
         var adjacent = new List<int>[original.Polygons.Length];
         for (int p = 0; p < original.Polygons.Length; p++)
@@ -629,42 +693,52 @@ static class NavmeshTool
             for (int k = 0; k < poly.Length; k++)
             {
                 int a = poly[k], b = poly[(k + 1) % poly.Length];
-                if (owner.TryGetValue((Math.Min(a, b), Math.Max(a, b)), out int q)) { adjacent[p].Add(q); adjacent[q].Add(p); }
-                else owner[(Math.Min(a, b), Math.Max(a, b))] = p;
+                var key = (Math.Min(a, b), Math.Max(a, b));
+                if (owner.TryGetValue(key, out int q))
+                {
+                    adjacent[p].Add(q);
+                    adjacent[q].Add(p);
+                }
+                else owner[key] = p;
             }
         }
-        var region = Label(original.Polygons.Length, p => adjacent[p]);
-        var regions = Enumerable.Range(0, original.Polygons.Length).GroupBy(p => region[p]).Select(r => (Id: r.Key, Polygons: r.ToList())).OrderByDescending(r => r.Polygons.Sum(p => Area(original.Vertices, original.Polygons[p]))).ToList();
-        yield return $"original regions {regions.Count}, joined to a neighbouring tile {regions.Count(r => r.Polygons.Any(p => original.Edges[p].Contains(OriginalEdge.TileBorder)))}:";
-        var seedRegion = g.Seeds.Select(s => PolygonAt(s.X, s.Z)).Select(p => p < 0 ? -1 : region[p]).ToList();
-        foreach (var r in regions.Take(10))
+        return adjacent;
+    }
+
+    /// <summary>Whether one of the faces has an edge on a neighbouring tile.</summary>
+    static bool JoinedToTile(OriginalNavMesh original, List<int> polygons) => polygons.Any(p => original.Edges[p].Contains(OriginalEdge.TileBorder));
+
+    /// <summary>The original face over (x, z), −1 for none.</summary>
+    static int OriginalPolygonAt(OriginalNavMesh original, Dictionary<(int, int), List<int>> buckets, float x, float z)
+    {
+        var v = original.Vertices;
+        foreach (int p in buckets.GetValueOrDefault(((int)MathF.Floor(x / 64), (int)MathF.Floor(z / 64))) ?? [])
         {
-            var centre = r.Polygons.Aggregate(Vector3.Zero, (acc, p) => acc + original.Vertices[original.Polygons[p][0]]) / r.Polygons.Count;
-            yield return $"  {r.Polygons.Count} polygons, {r.Polygons.Sum(p => Area(original.Vertices, original.Polygons[p])):0} sq units at {centre.X:0},{centre.Y:0},{centre.Z:0}, joined {r.Polygons.Any(p => original.Edges[p].Contains(OriginalEdge.TileBorder))}, our seeds inside {seedRegion.Count(x => x == r.Id)}";
-        }
-        yield return "  seeds with no original polygon under them: " + string.Join(" ", g.Seeds.Where((s, i) => seedRegion[i] < 0).Select(s => $"{s.X:0},{s.Y:0},{s.Z:0}"));
-        // Our regions, each polygon covered when the original has a polygon under its centre.
-        var covered = new bool[mesh.PolygonCount];
-        for (int p = 0; p < mesh.PolygonCount; p++) { var c = mesh.Centre(p); covered[p] = PolygonAt(c.X, c.Z) >= 0; }
-        var ours = Label(mesh.PolygonCount, p => mesh.NeighboursOf(p));
-        var ourRegions = Enumerable.Range(0, mesh.PolygonCount).GroupBy(p => ours[p]).Select(r => r.ToList())
-            .Select(r => (Polygons: r, Area: r.Sum(p => Area(mesh.Vertices, mesh.Polygons[p])), Uncovered: r.Where(p => !covered[p]).Sum(p => Area(mesh.Vertices, mesh.Polygons[p]))))
-            .OrderByDescending(r => r.Uncovered).ToList();
-        yield return $"our regions {ourRegions.Count}, {ourRegions.Sum(r => r.Uncovered):0} of {ourRegions.Sum(r => r.Area):0} sq units with nothing of the original under them:";
-        foreach (var r in ourRegions.Take(8))
-        {
-            var c = mesh.Centre(r.Polygons[0]);
-            yield return $"  {r.Polygons.Count} polygons, {r.Area:0} sq units, {r.Uncovered:0} uncovered{(r.Polygons.All(p => !covered[p]) ? $": an island at {c.X:0},{c.Y:0},{c.Z:0}" : "")}";
-            var bridges = new List<(Vector3 End, Vector3 On)>();
-            foreach (int p in r.Polygons)
-                if (covered[p]) foreach (int q in mesh.NeighboursOf(p)) if (!covered[q]) bridges.Add((mesh.Centre(p), mesh.Centre(q)));
-            if (box is not null) bridges = bridges.Where(b => b.On.X >= box[0] && b.On.X <= box[2] && b.On.Z >= box[1] && b.On.Z <= box[3]).ToList();
-            foreach (var cluster in bridges.GroupBy(b => ((int)MathF.Floor(b.On.X / 96), (int)MathF.Floor(b.On.Z / 96))).OrderByDescending(c => c.Count()).Take(box is null ? 6 : 40))
+            var poly = original.Polygons[p];
+            for (int k = 1; k + 1 < poly.Length; k++)
             {
-                var b = cluster.First();
-                yield return $"    bridge x{cluster.Count()}: the original ends at {b.End.X:0},{b.End.Y:0},{b.End.Z:0}, ours goes on to {b.On.X:0},{b.On.Y:0},{b.On.Z:0} (terrain {gatherer.TerrainHeight(b.On.X, b.On.Z):0})";
+                bool inside = NavGeometry.Barycentric(x, z, v[poly[0]], v[poly[k]], v[poly[k + 1]], out float a, out float b, out float c);
+                if (inside && a >= 0 && b >= 0 && c >= 0) return p;
             }
         }
+        return -1;
+    }
+
+    /// <summary>The plan area of the given polygons.</summary>
+    static double Area(Vector3[] v, int[][] polygons, IEnumerable<int> ids) => ids.Sum(p => Area(v, polygons[p]));
+
+    /// <summary>The plan area of one convex polygon.</summary>
+    static double Area(Vector3[] v, int[] poly)
+    {
+        double area = 0;
+        for (int k = 1; k + 1 < poly.Length; k++)
+        {
+            var a = v[poly[0]];
+            var b = v[poly[k]];
+            var c = v[poly[k + 1]];
+            area += Math.Abs((b.X - a.X) * (c.Z - a.Z) - (c.X - a.X) * (b.Z - a.Z)) / 2;
+        }
+        return area;
     }
 
     /// <summary>Connected-component labels over <paramref name="count"/> nodes with the given adjacency.</summary>
