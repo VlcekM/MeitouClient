@@ -835,6 +835,8 @@ public static partial class SaveCapture
         state.Bools["destroyed"] = placement.DestroyedOverride ?? false;
         state.Floats["world Y pos"] = placement.WorldY ?? placement.Position.Y;
         state.Ints["flags"] = 1;   // bit 0: outside
+        if (placement.InteriorLayout is { Length: > 0 } interior) state.Strings["interior layout name"] = interior;   // as the level edits write the same placement
+        if (placement.ExteriorLayout is { Length: > 0 } exterior) state.Strings["exterior layout name"] = exterior;
         file.Records.Add(state);
         list.Instances.RemoveAll(i => i.Id == placement.InstanceId);
         var instance = new FcsInstance { Id = placement.InstanceId, Target = placement.BuildingId, Position = placement.Position, Rotation = placement.Rotation };
@@ -843,7 +845,12 @@ public static partial class SaveCapture
         return state;
     }
 
-    static int NextRecordId(SaveFile file) => file.Records.Count == 0 ? Math.Max(file.Data.NextId, 0) + 1 : Math.Max(file.Data.NextId, file.Records.Max(r => r.Id)) + 1;
+    static int NextRecordId(SaveFile file)
+    {
+        int id = file.Records.Count == 0 ? Math.Max(file.Data.NextId, 0) + 1 : Math.Max(file.Data.NextId, file.Records.Max(r => r.Id)) + 1;
+        file.Data.NextId = id;   // later writers allocate from it (BuildingSave, Wild)
+        return id;
+    }
 
     static RaceData? RaceOf(string recordId, GameDatabase db, Dictionary<string, RaceData?> cache)
     {
