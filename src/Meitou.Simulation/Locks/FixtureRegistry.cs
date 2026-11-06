@@ -595,12 +595,16 @@ public sealed partial class FixtureRegistry
             if (f.Kind != FixtureKind.Door) continue;
             if (f.Motion == DoorMotion.Opening)
             {
+                bool wasNavOpen = f.OpenAmount >= DoorLeaf.NavOpen;
                 f.OpenAmount += dt * f.Leaf.Speed;
                 if (f.OpenAmount >= 1) { f.OpenAmount = 1; f.Motion = DoorMotion.Open; }
+                if (!wasNavOpen && f.OpenAmount >= DoorLeaf.NavOpen) SyncDoors(f.Building);   // the navmesh counts it open now, locked or not
             }
             else if (f.Motion == DoorMotion.Closing)
             {
+                bool wasNavOpen = f.OpenAmount >= DoorLeaf.NavOpen;
                 f.OpenAmount -= dt * f.Leaf.Speed;
+                if (wasNavOpen && f.OpenAmount < DoorLeaf.NavOpen) SyncDoors(f.Building);
                 if (f.OpenAmount >= 0) continue;
                 f.OpenAmount = 0;
                 f.Motion = DoorMotion.Closed;
@@ -639,7 +643,7 @@ public sealed partial class FixtureRegistry
         {
             if (d.Kind != FixtureKind.Door) continue;
             any = true;
-            if (d.DoorBroken || d.Lock is not { EffectivelyLocked: true }) blocked = false;
+            if (d.DoorBroken || d.OpenAmount >= DoorLeaf.NavOpen || d.Lock is not { EffectivelyLocked: true }) blocked = false;
         }
         if (any) doors.SetDoorsBlocked(building, blocked);
     }
