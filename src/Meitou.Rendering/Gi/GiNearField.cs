@@ -25,6 +25,10 @@ sealed unsafe class GiNearField(GpuContext ctx, GiScene scene, GiProbes probes) 
     public const float SampleClamp = 16;
     /// <summary>The samples a texel's mean keeps at most: the light's lag in frames.</summary>
     public const int MaxSamples = 16;
+    /// <summary>The samples the fast mean keeps (its lag in frames), which the history is clamped to.</summary>
+    public const int FastSamples = 4;
+    /// <summary>The clamp's half width, in standard deviations of the fast means round a texel.</summary>
+    public const float ClampSigma = 1.5f;
 
     /// <summary>The frame's camera and sizes (the resolve's reconstruction).</summary>
     public readonly record struct View(Vector3 Eye, Vector3 Right, Vector3 Up, Vector3 Back, Vector2 Tan, Vector2 Planes, int Width, int Height, int Divisor,
@@ -51,15 +55,16 @@ sealed unsafe class GiNearField(GpuContext ctx, GiScene scene, GiProbes probes) 
     }
 
     readonly Dictionary<(bool Relocate, bool Clouds), (GpuProgram Program, GpuComputePipeline Pipeline)> traces = [];
-    GpuProgram temporal, filter;
-    GpuComputePipeline temporalPipeline, filterPipeline;
+    GpuProgram temporal, clamp, filter;
+    GpuComputePipeline temporalPipeline, clampPipeline, filterPipeline;
     bool made;
     readonly GpuSampler nearest = ctx.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Nearest, TextureMagFilter.Nearest, TextureWrapMode.ClampToEdge,
         TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, false, DepthFunction.Lequal, false, 1, false, 0));
 
     // Swapped each frame: index now, the other last frame's.
-    readonly GpuTexture?[] surfaces = new GpuTexture?[2], histories = new GpuTexture?[2], lengths = new GpuTexture?[2];
-    GpuTexture? raw, filteredA, filteredB;
+    readonly GpuTexture?[] surfaces = new GpuTexture?[2], histories = new GpuTexture?[2], lengths = new GpuTexture?[2], fasts = new GpuTexture?[2];
+    // filteredB first holds the unclamped history (the clamp's input); lengthA and lengthB the filter's sample counts.
+    GpuTexture? raw, filteredA, filteredB, lengthA, lengthB;
     int now;
     uint frame;
     long lastFrame = -10;
@@ -87,6 +92,8 @@ sealed unsafe class GiNearField(GpuContext ctx, GiScene scene, GiProbes probes) 
         made = true;
         temporal = ctx.Shaders.Compute(GiNearShaders.Temporal, "gi near temporal");
         temporalPipeline = ctx.Pipelines.Get(new ComputePipelineDesc(temporal, "gi near temporal"));
+        clamp = ctx.Shaders.Compute(GiNearShaders.Clamp, "gi near clamp");
+        clampPipeline = ctx.Pipelines.Get(new ComputePipelineDesc(clamp, "gi near clamp"));
         filter = ctx.Shaders.Compute(GiNearShaders.Filter, "gi near filter");
         filterPipeline = ctx.Pipelines.Get(new ComputePipelineDesc(filter, "gi near filter"));
     }
@@ -103,17 +110,20 @@ sealed unsafe class GiNearField(GpuContext ctx, GiScene scene, GiProbes probes) 
         raw = Image(InternalFormat.Rgba16f, width, height, "gi near raw");
         filteredA = Image(InternalFormat.Rgba16f, width, height, "gi near filtered");
         filteredB = Image(InternalFormat.Rgba16f, width, height, "gi near filtered");
+        lengthA = Image(InternalFormat.R16f, width, height, "gi near filtered samples");
+        lengthB = Image(InternalFormat.R16f, width, height, "gi near filtered samples");
         for (int i = 0; i < 2; i++)
         {
             surfaces[i] = Image(InternalFormat.Rgba32f, width, height, "gi near surface");
             histories[i] = Image(InternalFormat.Rgba16f, width, height, "gi near history");
             lengths[i] = Image(InternalFormat.R16f, width, height, "gi near samples");
+            fasts[i] = Image(InternalFormat.Rgba16f, width, height, "gi near fast history");
         }
     }
 
     void DisposeImages()
     {
-        foreach (var t in new[] { raw, filteredA, filteredB }.Concat(surfaces).Concat(histories).Concat(lengths)) t?.Dispose();
+        foreach (var t in new[] { raw, filteredA, filteredB, lengthA, lengthB }.Concat(surfaces).Concat(histories).Concat(lengths).Concat(fasts)) t?.Dispose();
     }
 
     /// <summary>A history lasts while the frames follow one another and the camera does not cut (a tile of a tiled screenshot is another view).</summary>
@@ -139,6 +149,8 @@ sealed unsafe class GiNearField(GpuContext ctx, GiScene scene, GiProbes probes) 
         cmd.Order();
         var filterConstants = Filtering(v);
         RunTemporal(cmd, filterConstants);
+        cmd.Order();
+        RunClamp(cmd, filterConstants);
         cmd.Order();
         RunFilter(cmd, filterConstants);
         cmd.EndLabel();
@@ -192,7 +204,7 @@ sealed unsafe class GiNearField(GpuContext ctx, GiScene scene, GiProbes probes) 
     FilterConstants Filtering(in View v) => new()
     {
         Size = new Vector4(v.Width, v.Height, MaxSamples, Continuous(v) ? 1 : 0),
-        Texel = new Vector4(2 * v.Tan.Y / v.Height, Range, 0, 0),
+        Texel = new Vector4(2 * v.Tan.Y / v.Height, Range, FastSamples, ClampSigma),
         Eye = new Vector4(v.Eye, 0), Back = new Vector4(v.Back, 0),
         PreviousEye = new Vector4(last.Eye, 0), PreviousRight = new Vector4(last.Right, 0), PreviousUp = new Vector4(last.Up, 0), PreviousBack = new Vector4(last.Back, 0),
         PreviousTan = new Vector4(last.Tan, 0, 0),
@@ -204,17 +216,34 @@ sealed unsafe class GiNearField(GpuContext ctx, GiScene scene, GiProbes probes) 
     {
         var data = ctx.Frame.Constants.Write(new ReadOnlySpan<FilterConstants>(in constants), 256);
         int previous = 1 - now;
-        var bindings = stackalloc GpuBinding[8];
+        var bindings = stackalloc GpuBinding[10];
         bindings[0] = Storage(0, surfaces[now]!);
         bindings[1] = Storage(1, surfaces[previous]!);
         bindings[2] = Storage(2, raw!);
         bindings[3] = Storage(3, histories[previous]!);
         bindings[4] = Storage(4, lengths[previous]!);
-        bindings[5] = Storage(5, histories[now]!);
-        bindings[6] = Storage(6, lengths[now]!);
-        bindings[7] = GpuBinding.Uniform(7, new GpuBufferBinding(data.Handle, data.Offset, (ulong)sizeof(FilterConstants)));
+        bindings[5] = Storage(5, fasts[previous]!);
+        bindings[6] = Storage(6, filteredB!);
+        bindings[7] = Storage(7, lengths[now]!);
+        bindings[8] = Storage(8, fasts[now]!);
+        bindings[9] = GpuBinding.Uniform(9, new GpuBufferBinding(data.Handle, data.Offset, (ulong)sizeof(FilterConstants)));
         cmd.BindPipeline(temporalPipeline);
-        cmd.BindProgramResources(temporal, 0, new ReadOnlySpan<GpuBinding>(bindings, 8));
+        cmd.BindProgramResources(temporal, 0, new ReadOnlySpan<GpuBinding>(bindings, 10));
+        cmd.Dispatch((uint)(((int)constants.Size.X + 7) / 8), (uint)(((int)constants.Size.Y + 7) / 8));
+    }
+
+    /// <summary>The unclamped history (<see cref="filteredB"/>) held to the fast means, into this frame's history (<see cref="GiNearShaders.Clamp"/>).</summary>
+    void RunClamp(CommandList cmd, in FilterConstants constants)
+    {
+        var data = ctx.Frame.Constants.Write(new ReadOnlySpan<FilterConstants>(in constants), 256);
+        var bindings = stackalloc GpuBinding[5];
+        bindings[0] = Storage(0, surfaces[now]!);
+        bindings[1] = Storage(1, filteredB!);
+        bindings[2] = Storage(2, fasts[now]!);
+        bindings[3] = Storage(3, histories[now]!);
+        bindings[4] = GpuBinding.Uniform(4, new GpuBufferBinding(data.Handle, data.Offset, (ulong)sizeof(FilterConstants)));
+        cmd.BindPipeline(clampPipeline);
+        cmd.BindProgramResources(clamp, 0, new ReadOnlySpan<GpuBinding>(bindings, 5));
         cmd.Dispatch((uint)(((int)constants.Size.X + 7) / 8), (uint)(((int)constants.Size.Y + 7) / 8));
     }
 
@@ -223,22 +252,25 @@ sealed unsafe class GiNearField(GpuContext ctx, GiScene scene, GiProbes probes) 
     {
         var data = ctx.Frame.Constants.Write(new ReadOnlySpan<FilterConstants>(in constants), 256);
         var input = histories[now]!;
-        GpuTexture[] outputs = [filteredA!, filteredB!, filteredA!];
-        var bindings = stackalloc GpuBinding[5];
+        var inputLength = lengths[now]!;
+        GpuTexture[] outputs = [filteredA!, filteredB!, filteredA!], outputLengths = [lengthA!, lengthB!, lengthA!];
+        var bindings = stackalloc GpuBinding[6];
         cmd.BindPipeline(filterPipeline);
         for (int i = 0; i < 3; i++)
         {
             bindings[0] = Storage(0, surfaces[now]!);
             bindings[1] = Storage(1, input);
-            bindings[2] = Storage(2, lengths[now]!);
+            bindings[2] = Storage(2, inputLength);
             bindings[3] = Storage(3, outputs[i]);
             bindings[4] = GpuBinding.Uniform(4, new GpuBufferBinding(data.Handle, data.Offset, (ulong)sizeof(FilterConstants)));
-            cmd.BindProgramResources(filter, 0, new ReadOnlySpan<GpuBinding>(bindings, 5));
+            bindings[5] = Storage(5, outputLengths[i]);
+            cmd.BindProgramResources(filter, 0, new ReadOnlySpan<GpuBinding>(bindings, 6));
             var iteration = new Iteration { Spread = 1 << i, Guided = i == 2 ? 1 : 0, Last = i == 2 ? 1 : 0 };
             cmd.PushConstants(filter, GpuStage.Compute, in iteration);
             cmd.Dispatch((uint)(((int)constants.Size.X + 7) / 8), (uint)(((int)constants.Size.Y + 7) / 8));
             cmd.Order();
             input = outputs[i];
+            inputLength = outputLengths[i];
         }
     }
 
@@ -248,6 +280,7 @@ sealed unsafe class GiNearField(GpuContext ctx, GiScene scene, GiProbes probes) 
         foreach (var t in traces.Values) ctx.Shaders.Dispose(t.Program);
         if (!made) return;
         ctx.Shaders.Dispose(temporal);
+        ctx.Shaders.Dispose(clamp);
         ctx.Shaders.Dispose(filter);
     }
 }
