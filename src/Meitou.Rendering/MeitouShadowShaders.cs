@@ -47,10 +47,10 @@ static class MeitouShadowShaders
             vec4 uMsTerrain2;      // x: samples per side, y: height bias, z: minimum softness (height), w: softness per unit of occluder distance
             vec4 uMsFlags;         // x: 1 when the blocker map is valid (contact-hardening penumbrae), y: terrain term fade end, z: cascades filtered in full (the filter tier), w: cascades with character layers (the traced sun)
             mat4 uMsLandmarkTile;  // (world - origin) -> (u, v, depth) in the landmark map (ShadowPass.Meitou, "landmark shadows")
-            vec4 uMsLandmark;      // x: filter radius (UV), y: normal offset (world), z: the layer of cascade 0's characters, w: 1 when the landmark map is on
+            vec4 uMsLandmark;      // x: filter radius (UV), y: normal offset (world), z: unused, w: 1 when the landmark map is on
         };
-        // While set (kenshiLight, the traced sun): the receiver reads the first uMsFlags.w cascades' character layers, whose casters are the ones the rays do not hold.
-        bool msActors = false;
+        // While set (kenshiLight, the traced sun's term): the cascades are left out; the rays hold their casters.
+        bool msTraced = false;
         uniform sampler2D uShadowTerrain;   // per world grid sample: (height of the shadow's top, distance to the occluder)
         uniform sampler2DArray uShadowBlocker;   // the cascades' depth at half resolution, nearest of each 2 × 2 (raw, for the blocker search), a layer per cascade
         uniform sampler2DShadow uShadowLandmark;   // the landmarks' depth along the sun (comparison)
@@ -86,7 +86,7 @@ static class MeitouShadowShaders
         // parameters: the interface scan of the Vulkan layer would take a global-scope "out" for a stage output.)
         float msCascade(int c, vec3 world, vec3 ng, vec3 nl, float noise)
         {
-            int layer = msActors ? c + int(uMsLandmark.z) : c;
+            int layer = c;
             float texel = uMsSlice[c].w;
             float cosL = clamp(-nl.z, 0.0, 1.0);
             vec3 p = world - uShadowOrigin.xyz + ng * (texel * (0.5 + 1.5 * sqrt(1.0 - cosL * cosL)));
@@ -183,9 +183,10 @@ static class MeitouShadowShaders
             float noise = msNoise(gl_FragCoord.xy + uMsParams.x);
             float depth = dot(world - uShadowOrigin.xyz, uShadowForward.xyz);
             float csm = 1.0;
-            if (depth < uMsParams.y)
+            // The traced sun's term (ShadowPass.TracedWhole) takes no cascade: the rays hold everything the cascades held, the terrain and landmark maps stay.
+            if (depth < uMsParams.y && !msTraced)
             {
-                int count = msActors ? int(uMsFlags.w) : int(uShadowForward.w);
+                int count = int(uShadowForward.w);
                 for (int c = 0; c < {{ShadowSettings.MaxCascades}}; c++)
                 {
                     if (c >= count || depth > uMsSlice[c].y) continue;

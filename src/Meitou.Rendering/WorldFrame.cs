@@ -264,7 +264,7 @@ sealed class WorldOptions
           --shadow-quality <0|1|2> map side 1024/2048/4096 (default 2)   --shadow-range <u> (1000..9000, default 5000; with the Meitou shadows 1000..15000, default 10000)
           --shadow-range 0         shadows start off (the Tab slider turns them on)
           --shadow-filter <0|1|2>  Meitou shadow filter: 2 full (default), 1 the far cascades cheaper, 0 cheapest everywhere (low-end GPUs)
-          --debug-shadows <n>      1 the four cascade maps, 2 the shadow term of the surfaces by cascade, 3 the term multiplied over the picture
+          --debug-shadows <n>      1 the four cascade maps, 2 the shadow term of the surfaces by cascade, 3 the term multiplied over the picture, 4 the traced sun's share and mask
           --no-gi                  no ray-traced probe GI (default on where the GPU has ray queries; the device is then made without them)
           --gi-debug <n>           ray-traced global illumination's debug views (needs ray queries; docs/render-gi.md): 1 a bounce ray's hit distance,
                                    2 one-bounce lighting on grey surfaces, 3 the traced scene seen from the eye (normals)
@@ -1877,7 +1877,7 @@ static partial class WorldFrame
                 (_, worldToClip, planes, lodEye) => lo.DrawLandmarksDepth(worldToClip, lodEye, planes, render, gpu.Terrain))
             : (ShadowPass.LandmarkCasters?)null;
         shadow.CameraFlying = gpu.CameraFlying;
-        shadow.ActorDraw = gpu.Traced ? casters.DrawActors : null;
+        shadow.TracedWhole = gpu.Traced;   // the rays take the sun at every depth, characters included (Gi.TracedCharacters)
         shadow.Render(view, light.SunDirection, casters.Draw, sunHeight, landmarks, casters.Prepare);
         shadow.CasterStats = casters.Stats();
     }
@@ -1944,14 +1944,6 @@ static partial class WorldFrame
             cascades?.Append($" [c{cascade.Index}: texel {cascade.Texel:0.0}, terrain {(terrain.DepthTriangles - triangles) / 1000}k tri {(t1 - t0) * ms:0.00} ms, "
                 + $"objects {objectInstances} in {objectCalls} calls {(t2 - t1) * ms:0.00} ms, "
                 + $"foliage {foliageInstances} in {foliageCalls} calls {(t3 - t2) * ms:0.00} ms ({gpu.Foliage?.DepthDetail})]");
-        }
-
-        /// <summary>A cascade's character layer (the traced sun: what its rays do not hold), from the instances <see cref="Prepare"/> gathered for the cascade.</summary>
-        public void DrawActors(ShadowCascade cascade, Matrix4x4 worldToClip, Vector4[] planes, Vector3 lodEye)
-        {
-            var (floor, minRadius) = CharacterCasting(cascade);
-            gpu.Characters?.DrawDepth(worldToClip, lodEye, planes, floor, minRadius, cascade.Index);
-            StageClock.Sub("characters");
         }
 
         /// <summary>The casters drawn over the cascades and their CPU time per kind, for the statistics.</summary>

@@ -42,7 +42,9 @@ internal sealed unsafe class GiScene : IDisposable
     /// <summary>Most new object structures built in one frame (the rest wait for the next).</summary>
     public int MaxBuildsPerFrame { get; set; } = 32;
     /// <summary>Objects whose bounds come this close to the eye are in the scene.</summary>
-    public float Range { get; set; } = 6000;
+    public float Range { get; set; } = ProbeRange;
+    /// <summary>The objects' range the probes need (<see cref="Range"/>'s default; the traced sun takes it to the shadows' range).</summary>
+    public const float ProbeRange = 6000;
     /// <summary>Foliage (trees, bushes, rocks) whose bounding radius is at least <see cref="FoliageMinSize"/> (0: none) and whose bounds come within <see cref="FoliageRange"/> of the eye is in the scene.</summary>
     public float FoliageRange { get; set; } = 4000;
     public float FoliageMinSize { get; set; } = 150;
@@ -157,7 +159,8 @@ internal sealed unsafe class GiScene : IDisposable
         if (!ctx.Device.HasRayQuery) throw new NotSupportedException("the global illumination needs ray queries (VK_KHR_ray_query)");
         this.ctx = ctx;
         device = ctx.Device;
-        terrain = [new TerrainGrid(ctx, "gi terrain fine", 256, 16), new TerrainGrid(ctx, "gi terrain coarse", 256, 160)];
+        // The fine grid follows the drawn ground's smooth surface at half its samples' spacing: the heightmap's 18-unit facets (resampled at 16) cast saw-toothed shadow edges along ridges.
+        terrain = [new TerrainGrid(ctx, "gi terrain fine", 512, 8), new TerrainGrid(ctx, "gi terrain coarse", 256, 160)];
         int count = device.Frames.Count;
         slots = new FrameSlot[count];
         const BufferUsageFlags use = BufferUsageFlags.ShaderDeviceAddressBit | BufferUsageFlags.AccelerationStructureBuildInputReadOnlyBitKhr | BufferUsageFlags.StorageBufferBit;
@@ -340,10 +343,10 @@ internal sealed unsafe class GiScene : IDisposable
         grass.Emit(instances, records, Origin, MaxInstances, MaxRecords);
     }
 
-    /// <summary>The lamps' characters (docs/render-lights.md "Traced lamp shadows"): skinned with this update's palettes, their structures refitted, their instances last.</summary>
+    /// <summary>The characters of the traced sun and lamps (docs/render-lights.md "Traced lamp shadows"): skinned with this update's palettes, their structures refitted, their instances last.</summary>
     void UpdateCharacters(Vector3 eye, Characters.CharacterRenderer? characters)
     {
-        if (!LampShadows || characters is null)
+        if (!Casters || characters is null)
         {
             people?.Release();
             return;
@@ -610,7 +613,7 @@ internal sealed unsafe class GiScene : IDisposable
                 for (int i = 0; i < n; i++)
                 {
                     float x = centre.X - half + i * spacing, z = centre.Z - half + j * spacing;
-                    p[j * n + i] = new Vector3(x - centre.X, heights.HeightAt(x, z), z - centre.Z);
+                    p[j * n + i] = new Vector3(x - centre.X, Fine ? heights.SmoothHeightAt(x, z) : heights.HeightAt(x, z), z - centre.Z);
                 }
             return p;
         }

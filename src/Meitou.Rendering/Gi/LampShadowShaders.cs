@@ -9,9 +9,9 @@ static class LampShadowShaders
     /// <summary>Most lamps a pixel traces.</summary>
     public const int MinLamps = 2, MaxLamps = 4;
 
-    /// <summary>World units: the lamp's radius (KenshiNative's 10 cm) and what a ray leaves out before the lamp, for its fixture (KenshiNative's near-skip).</summary>
+    /// <summary>World units: what a ray leaves out before the lamp, for its fixture (KenshiNative's near-skip).</summary>
     const string Constants = """
-        const float LAMP_RADIUS = 1.0, LAMP_NEAR_SKIP = 15.0;
+        const float LAMP_NEAR_SKIP = 15.0;
         const float LAMP_MIN_BIAS = 0.5;
 
         """;
@@ -55,23 +55,10 @@ static class LampShadowShaders
         """;
 
     /// <summary>
-    /// One ray per picked lamp (Port of KenshiNative's <c>knLampSample</c>, its lamp-always-soft sectors): a point of the lamp's disc as the surface sees it, the four
-    /// pixels of a 2 x 2 block in the disc's four sectors, the block's rotation and radius from the R2 sequence, moved each frame under a temporal resolve.
+    /// One ray per picked lamp, to its centre: the same every frame (no noise for the upscaler to average, nothing to trail). A lamp is a point of about a decimetre, so its
+    /// shadows are near hard.
     /// </summary>
     static readonly string Rays = $$"""
-        vec3 lampSample(vec3 lamp, vec3 world, ivec2 px, int id)
-        {
-            vec3 l = normalize(lamp - world);
-            vec3 t = normalize(cross(abs(l.y) < 0.99 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0), l));
-            vec3 b = cross(l, t);
-            vec2 k = vec2(px >> 1);
-            float sector = float((px.x & 1) | ((px.y & 1) << 1));
-            float r2a = fract(0.7548776662 * k.x + 0.5698402910 * k.y + 0.6180339887 * (float(id) + uPhase));
-            float r2b = fract(0.5698402910 * k.x + 0.7548776662 * k.y + 0.4142135624 * (float(id) + uPhase));
-            float angle = (sector + r2a) * 1.5707963268;
-            float radius = LAMP_RADIUS * sqrt(fract(r2b + 0.6180339887 * sector));
-            return lamp + (t * cos(angle) + b * sin(angle)) * radius;
-        }
         // 0: something lies between the surface and the lamp. Ends short of the lamp (its fixture) and at its reach; a lamp's owner is passed through.
         float lampVisible(vec3 from, vec3 target, float reach, uint emitter)
         {
@@ -110,7 +97,7 @@ static class LampShadowShaders
             for (int i = 0; i < picked; i++)
             {
                 vec4 p = texelFetch(uLightData, ivec2(0, pickLamp[i]), 0);
-                vec3 target = lampSample(p.xyz, world, px, pickLamp[i]) - uOrigin;
+                vec3 target = p.xyz - uOrigin;   // the lamp's centre, the same every frame: a lamp a decimetre across leaves no penumbra worth a ray
                 if (lampVisible(from, target, p.w, pickEmitter[i]) < 0.5) lost += pickLight[i];
             }
             return lost * 3.14159265358979 * LAMP_DIFFUSE;

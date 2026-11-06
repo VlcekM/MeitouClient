@@ -285,14 +285,11 @@ static class AtmosphereShaders
         // 0 solid, 1 grass, 2 foliage cards, 3 characters; below 0: stays with the cascades (impostors, whose quad is not their surface).
         vec3 tracedSunOut = vec3(0.0);
         int atmoReceiver = 0;
-        // How much of the sun at a world point is left to the traced sun: all of it nearer than the last cascade with character layers, none past its slice
-        // (uMsFlags.w: those cascades, uGiParams.z bit 4: this view traces; the traced sun is the main view's). The fade is that of the two cascades.
+        // How much of the sun at a world point is left to the traced sun: all of it at every depth while this view traces (uGiParams.z bit 4, uMsFlags.w above 0; the traced sun is the
+        // main view's), on every receiver but the impostors.
         float atmoTracedShare(vec3 world)
         {
-            if ((int(uGiParams.z + 0.5) & 4) == 0 || uMsFlags.w < 0.5 || atmoReceiver < 0) return 0.0;
-            int last = int(uMsFlags.w);
-            float end = uMsSlice[last - 1].y;
-            return 1.0 - smoothstep(min(uMsSlice[last].x, end - 1.0), end, dot(world - uShadowOrigin.xyz, uShadowForward.xyz));
+            return (int(uGiParams.z + 0.5) & 4) == 0 || uMsFlags.w < 0.5 || atmoReceiver < 0 ? 0.0 : 1.0;
         }
         float atmoSelfShadow = 1.0;   // a surface's own shadow on the sun (the terrain's relief, GroundRelief), set before kenshiLight; 1 none
         float atmoShadowLift = 0.0;   // world units above the point the sun shadow is looked up from (a ground trough under its flat casters, GroundRelief)
@@ -314,9 +311,9 @@ static class AtmosphereShaders
             vec3 tracedSun = vec3(0.0);
             if (tracedShare > 0.0)
             {
-                msActors = true;
+                msTraced = true;
                 tracedSun = sunBase * kenshiShadow(shadowPoint, n) * atmoSelfShadow * tracedShare;
-                msActors = false;
+                msTraced = false;
             }
             gloss = clamp(gloss, 0.0, 1.0);
             float roughness = 1.0 - gloss * 0.99, a = roughness * roughness, a2 = a * a;

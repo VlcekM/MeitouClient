@@ -167,7 +167,7 @@ public static class Enhancements
             "the game's dust and smoke sprites cut straight into the ground and walls they cross (all but its mist and steam, which fade; Faithful draws those hard-edged too); Meitou fades each sprite out over the last stretch before a surface (a quarter of its size, 0.2 to 30 m), so dust clouds meet the ground softly; the game's sprites are also flat and not fogged (one brightness in sun and shade, near and far, seen through fog banks), Meitou darkens dust and smoke where the sun is shadowed, brightens them towards the sun and puts the haze and the fog volumes in front of them over them; and it fades each effect out before the distance it stops being simulated at, where its whole cloud popped in and out (docs/render-post.md \"Fog\")"),
         new("contact", "Contact shadows", "off", "on",
             () => post.ContactShadows, v => post.ContactShadows = v,
-            "the game's shadows stop at the cascades' resolution, so small objects float; Meitou adds short sun shadows from the depth, at full resolution, on characters too (armour layers, hair over the face)"),
+            "the game's shadows stop at the cascades' resolution, so small objects float; Meitou adds short sun shadows from the depth, at full resolution, on characters too (armour layers, hair over the face). Off by default: a screen-space guess (what the screen does not show casts nothing); for GPUs without ray tracing, where Traced sun shadows are not available"),
         new("gihybrid", "Hybrid GI", "off", "on",
             () => post.GiHybrid, v => post.GiHybrid = v,
             "the probes' grid leaves many probes inside walls, where they only go dark; Meitou moves them out of the geometry, lets the clouds shade the bounced light and the light shafts, and adds short traced rays per pixel for the fine indirect light the probes are too coarse for (--gi-hybrid picks the parts; docs/render-gi.md \"Hybrid GI\")"),
@@ -194,13 +194,13 @@ public static class Enhancements
             "the Ambient occlusion switch's method (it needs that switch on): Meitou's SSAO is a cheap estimate; GTAO searches each pixel's horizon, measures how much sky it really sees, and keeps the colour of the light that bounces in a corner. Costs more; off by default"),
         new("lampshadows", "Lamp shadows", "off", "traced",
             () => post.LampShadows, v => post.LampShadows = v,
-            "the game's lamps shine through walls and everything else that stands in their way; Meitou traces a ray from each surface to the lamps that light it most and takes the light of the blocked ones back off, so buildings and rocks cast lamp shadows (needs a GPU with ray tracing and Indirect light on; characters neither cast them nor receive them; docs/render-lights.md \"Traced lamp shadows\")"),
+            "the game's lamps shine through walls and everything else that stands in their way; Meitou traces a ray from each surface to the lamps that light it most and takes the light of the blocked ones back off, so buildings, rocks, plants, grass and characters cast lamp shadows (needs a GPU with ray tracing and Indirect light on; characters cast them but do not receive them; docs/render-lights.md \"Traced lamp shadows\")"),
         new("ssr", "Reflections", "sky only", "traced",
             () => post.Ssr, v => post.Ssr = v,
             "the game's glossy and rain-wet surfaces reflect one fixed sky picture, indoors and under a roof too; Meitou replaces it with what they really mirror (the screen, then a traced ray where the device has them, the sky past both), fading with roughness, and darkens the sky's reflection where the probes see no sky. Water keeps its own reflection. Off by default: not yet seen on a GPU"),
         new("traced", "Traced sun shadows", "cascades", "ray-traced",
             () => post.TracedSun, v => post.TracedSun = v,
-            "the game's sun shadows come from cascaded maps, soft or blocky by their texels; Meitou traces a ray to the sun from every pixel near the eye, so a shadow is as sharp as it is close to its caster, and grass shadows the ground (needs a GPU with ray tracing and Indirect light; characters stay in the cascades; off by default: not seen on a GPU yet)"),
+            "the game's sun shadows come from cascaded maps, soft or blocky by their texels; Meitou traces a ray to the sun from every lit pixel at every distance, softened by the sun's real size, the same every frame: a shadow is as sharp as it is close to its caster, characters shadow themselves exactly and grass shadows the ground (needs a GPU with ray tracing and Indirect light; off by default)"),
     ];
 
     /// <summary><c>--meitou</c> / <c>--faithful &lt;all|id,id...&gt;</c>: turns those switches to Meitou or to Faithful.</summary>

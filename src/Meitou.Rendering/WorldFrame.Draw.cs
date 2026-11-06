@@ -119,7 +119,7 @@ static partial class WorldFrame
         }
         // The traced sun needs the surface target and the rays; without either the cascades light the frame as ever.
         gpu.Traced = giResolve && gpu.Post is { Options.TracedSun: true } && gpu.Gi is not null && gpu.Shadow is { Enabled: true, Meitou: true };
-        if (gpu.Post is { } tracedPost) tracedPost.TracedSun = gpu.Traced;
+        if (gpu.Post is { } tracedPost) (tracedPost.TracedSun, tracedPost.TracedDebug) = (gpu.Traced, gpu.DebugShadows == 4);
         if (gpu.Gi is { } tracedScene) tracedScene.Traced = gpu.Traced;
         post.Begin(f.Width, f.Height);
         if (post is PostProcess { Unallocated: true })
@@ -391,6 +391,8 @@ static partial class WorldFrame
             gi.InteriorCuts = gpu.InteriorMask?.Cuts ?? [];
             gi.LampShadows = gpu.Post is { Options.LampShadows: true, GiResolve: > 0 } && gpu.Lamps is { Grid.W: > 0 };
             gi.GrassReach = TracedReach(ref f);
+            // Traced, the objects cast as far as the cascades reached (the probes see them too).
+            gi.Range = gpu.Traced && gpu.Shadow is { } reach ? Math.Max(Gi.GiScene.ProbeRange, reach.Settings.Range) : Gi.GiScene.ProbeRange;
             gi.Update(f.Eye, heights, objects, gpu.Foliage is { Enabled: true } giFoliage ? giFoliage : null, gpu.Lamps, gpu.Characters);
             StageClock.Sub("gi scene");
             gpu.Probes?.Update(gi, f.Eye, heights, gpu.Lamps, gpu.FogVolumes, gpu.Objects?.GiInteriorFocus(f.Camera.Target));
@@ -405,6 +407,16 @@ static partial class WorldFrame
                 StageClock.Sub("gi metal");
             }
         }
+    }
+
+    static int tracedLogs;
+
+    /// <summary><c>--debug-shadows 4</c>: whether this frame traces the sun, and what decides it (every 120th frame).</summary>
+    static void LogTraced(ref FrameState f, bool traced)
+    {
+        var gpu = f.Gpu;
+        Console.WriteLine($"traced    {(traced ? "on" : "off")}: switch {gpu.Post?.Options.TracedSun}, gi resolve {gpu.Post?.GiResolve}, shadows {(gpu.Shadow is { Enabled: true } s ? s.Meitou ? "meitou" : "faithful" : "off")}, " +
+            $"scene {(gpu.Gi?.Top is null ? "none" : "ready")}, traced cascades {gpu.Shadow?.TracedCascades} to view depth {gpu.Shadow?.TracedDepth:0}, grass reach {gpu.Gi?.GrassReach:0}");
     }
 
     /// <summary>
@@ -597,6 +609,7 @@ static partial class WorldFrame
         // What the rays take over leaves the colours (kenshiLight) from here to TraceSun: the main view's opaque scene.
         bool traced = gpu.Traced && gpu.Gi is { Top: not null } && gpu.Shadow is { TracedCascades: > 0 } && gpu.Probes is not null;
         if (traced) gpu.Probes!.Traced = true;
+        if (gpu.DebugShadows == 4 && tracedLogs++ % 120 == 0) LogTraced(ref f, traced);
 
         DrawSceneTerrain(ref f, s);
         if (surfaceBlood) CaptureDepth(ref f, 7, gpu.Decals!.CaptureTerrainDepth);
@@ -851,7 +864,7 @@ static partial class WorldFrame
             post.RunLightShafts(darkening, distance, f.Floor, ShaftAirByTime(post.Options, f.Scene.Clock, f.Hour));
             StageClock.Lap(StageClock.Shafts);
         }
-        if (gpu.DebugShadows >= 2 && gpu.Shadow is not null) gpu.Shadow.CaptureDepth(post.SceneDepth, f.RenderWidth, f.RenderHeight);
+        if (gpu.DebugShadows is >= 2 and < 4 && gpu.Shadow is not null) gpu.Shadow.CaptureDepth(post.SceneDepth, f.RenderWidth, f.RenderHeight);
 
         // The placed fog volumes over the finished scene (opaque, water, sky; the haze is in the shaders), one pass reading the depth, as the game's queue 82 does.
         post.RunFogVolumes(gpu.FogVolumes is { UsedData: > 0 });
@@ -949,7 +962,7 @@ static partial class WorldFrame
             outline.Record(hoverPicture, width, height, hover, post.SceneDepth, post.RenderWidth, post.RenderHeight, near, far, view * projection);
         }
 
-        if (gpu.DebugShadows > 0 && gpu.Shadow is not null)
+        if (gpu.DebugShadows is > 0 and < 4 && gpu.Shadow is not null)
             gpu.Shadow.DrawDebug(gpu.DebugShadows, post.Target!, width, height, view, SceneProjection().Projection, eye);
 
         if (gpu.GiDebug > 0 && gpu.GiActive && gpu.Gi is { } traced && gpu.GiDebugPass is { } giDebug && post.Target is { } giTarget)

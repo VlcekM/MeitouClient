@@ -18,7 +18,7 @@ ray-query shaders with explicit descriptor bindings. The feature is optional for
 
 ## Scene and lifetime
 
-Fine/coarse terrain:256² quads, spacing16/160 (4096/40960 width), heights sampled on workers.
+Fine terrain: 512² quads 8 apart (4096 wide) through a Catmull-Rom surface over the heightmap's 18-unit samples (`HeightSnapshot.SmoothHeightAt`; the drawn ground curves its edges); coarse: 256² quads 160 apart (40960 wide), bilinear. Heights sampled on workers.
 Object range6000; resident finest mesh parts build bottom levels, max32/frame; unused600 frames
 can retire. Foliage radius>=150, range4000, max14336 instances, cached candidates invalidate by
 movement/deletion/build progress. Probes see no grass, characters or water (rays mask `0x0F`; the grass and small foliage the traced sun and the lamp shadows add sit under masks of their own: [Traced sun](render-shadows.md#traced-sun)).

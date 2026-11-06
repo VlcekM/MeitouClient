@@ -16,9 +16,9 @@ namespace Meitou.Rendering.Gi;
 sealed unsafe class TracedCharacters : IDisposable
 {
     /// <summary>The budget: characters this near the eye, the nearest this many, at most this many triangles a frame.</summary>
-    public const float Range = 2500;
-    public const int MaxCharacters = 64;
-    const int MaxTriangles = 1_500_000;
+    public const float Range = 4000;
+    public const int MaxCharacters = 128;
+    const int MaxTriangles = 3_000_000;
     /// <summary>A refitted structure loses quality as the pose moves away from the one it was built over: built again after this many frames.</summary>
     const int RebuildEvery = 60;
     /// <summary>An unused character's structure is kept this many frames (it comes back without a build).</summary>
@@ -40,8 +40,9 @@ sealed unsafe class TracedCharacters : IDisposable
         layout(local_size_x = 64) in;
         layout(set = 0, binding = 0, std430) readonly buffer Palettes { mat4 bones[]; };
         layout(set = 0, binding = 1, std430) readonly buffer Morphs { vec4 deltas[]; };
-        struct Job { mat4 model; uvec2 vertices; uvec2 indices; uvec2 target; uint triangles; uint boneBase; uint morphBase; uint flags; uint pad0; uint pad1; };
+        struct Job { mat4 model; uvec2 vertices; uvec2 indices; uvec2 target; uint triangles; uint boneBase; uint morphBase; uint flags; uint first; uint pad1; };
         layout(set = 0, binding = 2, std430) readonly buffer Jobs { Job jobs[]; };
+        layout(push_constant) uniform Count { uint jobCount; uint triangleCount; } pc;
         layout(buffer_reference, scalar, buffer_reference_align = 4) readonly buffer Float3 { vec3 v; };
         layout(buffer_reference, scalar, buffer_reference_align = 4) readonly buffer Float2 { vec2 v; };
         layout(buffer_reference, scalar, buffer_reference_align = 4) readonly buffer Float4 { vec4 v; };
@@ -82,8 +83,17 @@ sealed unsafe class TracedCharacters : IDisposable
 
         void main()
         {
-            Job job = jobs[gl_WorkGroupID.y];
-            uint t = gl_GlobalInvocationID.x;
+            // One invocation a triangle over every job: the job is the last whose first triangle is at or before this one.
+            uint g = gl_GlobalInvocationID.x;
+            if (g >= pc.triangleCount) return;
+            uint lo = 0u, hi = pc.jobCount - 1u;
+            while (lo < hi)
+            {
+                uint mid = (lo + hi + 1u) / 2u;
+                if (jobs[mid].first <= g) lo = mid; else hi = mid - 1u;
+            }
+            Job job = jobs[lo];
+            uint t = g - job.first;
             if (t >= job.triangles) return;
             mat4 model = mat4(vec4(job.model[0].xyz, 0.0), vec4(job.model[1].xyz, 0.0), vec4(job.model[2].xyz, 0.0), vec4(job.model[3].xyz, 1.0));
             uvec3 tri = Corners(offsetBy(job.indices, t * 12u)).v;
@@ -111,8 +121,14 @@ sealed unsafe class TracedCharacters : IDisposable
     {
         public Matrix4x4 Model;
         public ulong Vertices, Indices, Target;
-        public uint Triangles, BoneBase, MorphBase, Flags, Pad0, Pad1;
+        public uint Triangles, BoneBase, MorphBase, Flags, First, Pad1;
         public const int Size = 112;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    struct Counts
+    {
+        public uint Jobs, Triangles;
     }
 
     /// <summary>What a character's structure was built over: per geometry its group, level, triangles and whether it is opaque.</summary>
@@ -140,7 +156,7 @@ sealed unsafe class TracedCharacters : IDisposable
     /// <summary>The index buffer every geometry shares: 0, 1, 2, ... for its corners in order.</summary>
     readonly DeviceBuffer sequence;
     long bytes;
-    int maxJobTriangles, built, refitted, triangles;
+    int jobTriangles, built, refitted, triangles;
 
     public TracedCharacters(GpuContext ctx)
     {
@@ -165,7 +181,7 @@ sealed unsafe class TracedCharacters : IDisposable
     {
         shown.Clear();
         jobs.Clear();
-        (maxJobTriangles, built, refitted, triangles) = (0, 0, 0, 0);
+        (jobTriangles, built, refitted, triangles) = (0, 0, 0, 0);
         people.RayCharacters(eye, Range, MaxCharacters, characters);
         foreach (var c in characters)
         {
@@ -232,9 +248,9 @@ sealed unsafe class TracedCharacters : IDisposable
             jobs.Add(new Job
             {
                 Model = part.Model, Vertices = ctx.Device.Address(group.Vertices.Handle), Indices = ctx.Device.Address(group.Indices.Handle) + (ulong)group.Offset[part.Level] * 4,
-                Target = g.VertexAddress, Triangles = g.TriangleCount, BoneBase = c.BoneBase, MorphBase = part.MorphBase, Flags = part.Flags,
+                Target = g.VertexAddress, Triangles = g.TriangleCount, BoneBase = c.BoneBase, MorphBase = part.MorphBase, Flags = part.Flags, First = (uint)jobTriangles,
             });
-            maxJobTriangles = Math.Max(maxJobTriangles, (int)g.TriangleCount);
+            jobTriangles += (int)g.TriangleCount;
             // The cut-out as the shadow draws make it; the channel rides in the record's diffuse index, which no probe ray reads for a character.
             (entry.Records[i].AlphaTexture, entry.Records[i].AlphaThreshold, entry.Records[i].Texture) = (part.AlphaMap, part.AlphaCut, part.Channel);
         }
@@ -256,7 +272,9 @@ sealed unsafe class TracedCharacters : IDisposable
             writes[i] = new WriteDescriptorSet { SType = StructureType.WriteDescriptorSet, DstBinding = (uint)i, DescriptorCount = 1, DescriptorType = DescriptorType.StorageBuffer, PBufferInfo = &infos[i] };
         cmd.BindPipeline(pipeline);
         cmd.PushDescriptors(program, 0, new ReadOnlySpan<WriteDescriptorSet>(writes, 3), GpuBindPoint.Compute);
-        cmd.Dispatch((uint)((maxJobTriangles + 63) / 64), (uint)jobs.Count);
+        var count = new Counts { Jobs = (uint)jobs.Count, Triangles = (uint)jobTriangles };
+        cmd.PushConstants(program, GpuStage.Compute, in count);
+        cmd.Dispatch((uint)((jobTriangles + 63) / 64));
         cmd.Barrier(BarrierBatch.Full);
         foreach (var (_, entry, fresh) in shown)
         {
