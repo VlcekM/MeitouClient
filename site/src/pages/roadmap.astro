@@ -11,6 +11,9 @@ import { history } from '../data/history';
 import { recheckBefore, reportBuilds } from '../data/releases';
 import { reports } from '../data/reports';
 
+// Entries of each "Recently fixed" list shown before the toggle; the rest sit in a <details> (all shown to a reader without a script too).
+const FIXED_SHOWN = 10;
+
 const oses: Os[] = ['win', 'linux', 'mac'];
 const osShort = { win: 'Win', linux: 'Linux', mac: 'macOS' } as const;
 const mark = { works: '✓', untested: '?', wip: '~', bug: '!', missing: '✗', na: '–' } as const;
@@ -168,12 +171,24 @@ const reportConfig = JSON.stringify({ url: reports.url.replace(/\/$/, ''), siteK
         <div>
           <h3>Fixed on master</h3>
           <p class="meta">Not yet seen in play.</p>
-          <ul class="fixlist">{fixedUnseen.map((f) => <li><span class="tag">{refUrl(f.id) ? <a href={refUrl(f.id)}>{f.id}</a> : f.id || '—'}</span><span>{f.text}</span></li>)}</ul>
+          <ul class="fixlist">{fixedUnseen.slice(0, FIXED_SHOWN).map((f) => <li><span class="tag">{refUrl(f.id) ? <a href={refUrl(f.id)}>{f.id}</a> : f.id || '—'}</span><span>{f.text}</span></li>)}</ul>
+          {fixedUnseen.length > FIXED_SHOWN && (
+            <details class="fixmore">
+              <summary><span class="more">Show all {fixedUnseen.length}</span><span class="less">Show fewer</span></summary>
+              <ul class="fixlist">{fixedUnseen.slice(FIXED_SHOWN).map((f) => <li><span class="tag">{refUrl(f.id) ? <a href={refUrl(f.id)}>{f.id}</a> : f.id || '—'}</span><span>{f.text}</span></li>)}</ul>
+            </details>
+          )}
         </div>
         <div>
           <h3>Fixed and seen in play</h3>
           <p class="meta">Merged and checked in the game.</p>
-          <ul class="fixlist">{fixedSeen.map((f) => <li><span class="tag">{refUrl(f.id) ? <a href={refUrl(f.id)}>{f.id}</a> : f.id || '—'}</span><span>{f.text}</span></li>)}</ul>
+          <ul class="fixlist">{fixedSeen.slice(0, FIXED_SHOWN).map((f) => <li><span class="tag">{refUrl(f.id) ? <a href={refUrl(f.id)}>{f.id}</a> : f.id || '—'}</span><span>{f.text}</span></li>)}</ul>
+          {fixedSeen.length > FIXED_SHOWN && (
+            <details class="fixmore">
+              <summary><span class="more">Show all {fixedSeen.length}</span><span class="less">Show fewer</span></summary>
+              <ul class="fixlist">{fixedSeen.slice(FIXED_SHOWN).map((f) => <li><span class="tag">{refUrl(f.id) ? <a href={refUrl(f.id)}>{f.id}</a> : f.id || '—'}</span><span>{f.text}</span></li>)}</ul>
+            </details>
+          )}
         </div>
       </div>
     </section>
@@ -549,6 +564,10 @@ const reportConfig = JSON.stringify({ url: reports.url.replace(/\/$/, ''), siteK
   .fixlist { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; }
   .fixlist li { display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: baseline; }
   .fixlist li > span:last-child { min-width: 0; }
+  .fixmore { margin-top: 8px; }
+  .fixmore > summary { cursor: pointer; color: var(--accent, inherit); margin-bottom: 8px; }
+  .fixmore .less, .fixmore[open] .more { display: none; }
+  .fixmore[open] .less { display: inline; }
   .tag { font-family: var(--font-mono); font-size: .78rem; color: var(--muted); white-space: nowrap; }
 
   /* Back to top: bottom right. */
