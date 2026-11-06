@@ -696,8 +696,8 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
     const float RelaxedShare = 0.6f;
     /// <summary>The spin a blow's push gives an arm or a leg: rad/s per unit/s of push, at most this, scaled by a roll of 0.6 to 1.4.</summary>
     const float SpinPerPush = 0.15f, MaxPushSpin = 6;
-    /// <summary>The share of a blow's push the struck body takes (the rest goes to the whole body), and at most this many times its own share of the body's mass.</summary>
-    const float PushFocus = 0.6f, MaxFocusGain = 4;
+    /// <summary>The share of a blow's push the other bodies take when one is struck (it takes the whole push), and at most this many times its own share of the body's mass.</summary>
+    const float PushSpread = 0.4f, MaxFocusGain = 4;
 
     /// <summary>The tone of a whole or carried ragdoll; none for a conscious character's collapsed limbs (a broken limb hangs loose) or without advanced ragdolls.</summary>
     static Tone ToneOf(CharacterCold cold, RagdollPart mask, bool advanced) =>
@@ -727,8 +727,8 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
     }
 
     /// <summary>
-    /// A new body's start velocity: <paramref name="start"/>'s velocity, its arms and legs spun by the push (<see cref="Spin"/>). With a struck body (<see cref="Struck"/>) every body
-    /// keeps only 1 - <see cref="PushFocus"/> of the push and the struck one gets the rest as an impulse on it alone (times the ragdoll's mass over its own, at most
+    /// A new body's start velocity: <paramref name="start"/>'s velocity, its arms and legs spun by the push (<see cref="Spin"/>). With a struck body (<see cref="Struck"/>) the
+    /// others keep only <see cref="PushSpread"/> of the push and the struck one takes the whole push as an impulse on it alone (times the ragdoll's mass over its own, at most
     /// <see cref="MaxFocusGain"/>), so the body is thrown from the part that was hit and its joints carry the rest along. At most half <see cref="RagdollPhysics.MaxSpeed"/>.
     /// </summary>
     static BodyVelocity StartVelocity(Ragdoll r, int b, RagdollBlow start, (int Body, float Gain) struck, ulong seed)
@@ -736,8 +736,8 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
         var linear = start.Velocity;
         if (struck.Body >= 0)
         {
-            linear -= start.Push * PushFocus;
-            if (b == struck.Body) linear += start.Push * (PushFocus * struck.Gain);
+            float share = b == struck.Body ? struck.Gain : PushSpread;
+            linear += start.Push * (share - 1);
         }
         if (linear.Length() > RagdollPhysics.MaxSpeed / 2) linear = Vector3.Normalize(linear) * (RagdollPhysics.MaxSpeed / 2);
         return new BodyVelocity(linear, Spin(r, r.Definition.Bodies[b].Name, b, start.Push, seed));
