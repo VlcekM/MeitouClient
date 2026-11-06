@@ -151,7 +151,10 @@ relief 0.86 ms at error 16 (0.96 at 8, 1.34 at 4; error 1, 41 M triangles: 15.6 
 layer: its size, not the layers sampled, set the cost); displacement +0.78 ms at 100 m (+0.9 at 25 m, +1.16 at 150 m before the
 compact `Relief`) (segments grow with distance, each
 ring adds about the same); refinement +0.38 ms at error 16, +0.24 at 32 (crests as smooth as error 4, which costs +0.48), so error
-32 with it costs less than error 16 without. Drawing the tessellated patches' colour at once instead of prepass then late colour
+32 with it costs less than error 16 without. **Observed** 2026-11-06 (separate runs alternated twice, two Hub views, RTX 4070 1080p
+DLSS, displacement on): terrain 1.31-1.49 ms at error 16 with refinement, 1.18-1.38 at error 32 with it, 0.78-0.90 at error 16 without it;
+error 32 + refinement against error 16 alone changed 0.2-1.2% of pixels over 12/255 (run-to-run noise 0-0.7%), refinement off 0.1-1.4%:
+here error 32 with refinement did not undercut error 16 without it. Drawing the tessellated patches' colour at once instead of prepass then late colour
 cost more (the bumps overdraw themselves).
 **Registers** (**Observed**, Nsight GPU Trace, 2560x1440 at render scale 1): with the march in the fragment stage the colour pass held about 220
 registers a thread and a tenth of the pixel warps (SM throughput 20%, texture 22%: latency-bound), whether the parallax ran or not (a uniform branch
