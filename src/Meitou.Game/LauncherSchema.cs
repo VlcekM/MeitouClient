@@ -113,8 +113,8 @@ static class LauncherSchema
         yield return Switch(WorldFrame.FifthCascadeSwitch, "Off", "On", true);
         // An optional effect, in neither look: plain Off / On (Toggle.Optional).
         yield return Switch(WorldFrame.BloomSwitch, "Off", "On", false);
-        // Faithful / Meitou switches whose game side is off; the refinement starts off (Ultra turns it on).
-        yield return Switch(WorldFrame.RockSmoothingSwitch, "Off", "Meitou: on", true);
+        // Faithful / Meitou switches whose game side is off; both start off (Ultra turns them on).
+        yield return Switch(WorldFrame.RockSmoothingSwitch, "Off", "Meitou: on", false);
         yield return Switch(WorldFrame.OutlineRefineSwitch, "Off", "Meitou: on", false);
     }
 

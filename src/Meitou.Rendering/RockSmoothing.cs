@@ -14,8 +14,9 @@ public static class RockSmoothing
     /// <summary>Read when a mesh is decoded (the welded normals are made then or not at all).</summary>
     public static bool Enabled { get; set; } = true;
 
-    /// <summary>Whether the rocks are drawn tessellated (where the device has tessellation shaders); the Tab panel toggles it.</summary>
-    public static bool TessellateActive { get; set; } = true;
+    /// <summary>Whether the rocks are drawn tessellated (where the device has tessellation shaders); the Tab panel toggles it. Off by default (on from
+    /// the Ultra preset): the welded normals already smooth the shading.</summary>
+    public static bool TessellateActive { get; set; }
 
     /// <summary>The Phong curve's share (0: the flat triangles, 1: the full curve; the viewer's <c>--relief Roundness=</c>).</summary>
     public static float Roundness { get; set; } = 0.75f;
