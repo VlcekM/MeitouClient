@@ -14,6 +14,8 @@ sealed partial class GameHost
     /// <summary>Progress means the distance to the target fell by at least this many metres since the last progress.</summary>
     const float MoveWaitProgressStep = 1f;
     const int MoveWaitTicksPerSecond = 30;
+    /// <summary>Most ticks a paused waited move steps in one frame (the same cap as <c>step</c>).</summary>
+    const int MoveWaitPausedTickCap = 3000;
 
     sealed class ControlMoveWait(string id, CharacterId who, float x, float z, long startTick, int timeoutTicks, int stuckTicks, float dist0)
     {
@@ -33,8 +35,14 @@ sealed partial class GameHost
             (int)MathF.Ceiling(waitSeconds * MoveWaitTicksPerSecond), (int)MathF.Ceiling(stuckSeconds * MoveWaitTicksPerSecond), Vector2.Distance(new Vector2(p0.X, p0.Z), new Vector2(x, z)));
         if (session.Simulation.IsPaused)
         {
-            // A paused game takes no ticks of its own: run them here, checking every tick.
-            for (int k = 0; k <= w.TimeoutTicks + 2 && !ControlMoveWaitProgress(w, out _); k++) session.Step(1);
+            // A paused game takes no tick of its own: run them here, checking every tick, but never more than a frame can bear (like `step`).
+            int steps = 0, cap = Math.Min(w.TimeoutTicks + 2, MoveWaitPausedTickCap);
+            while (steps < cap && !ControlMoveWaitProgress(w, out _)) { session.Step(1); steps++; }
+            if (steps >= cap && w.TimeoutTicks + 2 > cap && !ControlMoveWaitProgress(w, out _))
+            {
+                con.Error($"order: paused wait stopped after {cap} ticks without a result (cap); the move goes on - `step` and `observe`, or unpause and use wait-for");
+                return;
+            }
             controlData = ControlMoveWaitLast;
             con.Print("move wait done (paused game stepped)");
             return;
