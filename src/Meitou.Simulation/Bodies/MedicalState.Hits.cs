@@ -354,11 +354,10 @@ public sealed partial class MedicalState
         events?.Add(new MedicalEvent(MedicalEventKind.Died, Cause: cause));
     }
 
-    /// <summary>Blood rules shared by a hit and the tick: blood at 0 (or -25 once flagged) starts a KO, at -capacity the character dies, above 25 the flag clears.</summary>
+    /// <summary>Blood rules shared by a hit and the tick: blood at 0 (or -25 once flagged) starts a KO, at -capacity the character dies. The flag clears in <c>TickBlood</c>.</summary>
     void CheckBlood(in MedicalContext ctx, List<MedicalEvent>? events)
     {
         if (Dead) return;
-        if (Blood > 25) BloodKo = false;
         float cap = Capacity(ctx);
         if (Blood <= -cap) { Die(DeathCause.BloodLoss, events); return; }
         if (Blood <= 0 && !BloodKo) { BloodKo = true; StartKo(ctx, events); }

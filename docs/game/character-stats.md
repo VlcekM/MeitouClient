@@ -183,19 +183,22 @@ Death: vital h-s<-M, blood<=-capacity or hunger<=0. Preserve KO/coma/death disti
   conscious character. A part going under 0 in the tick starts nothing.
 - `reassessCollapseMode` (`140649320`) rebuilds `+0x161` each update: set by a hunger KO, a KO timer > 0, a vital part at
   collapse stage 2, or blood: for a character unconscious before the update, blood < 0 (and it sets `+0x163`); for a
-  conscious one (or on the update after a fresh limb loss, `hasFreshlySeveredALimb`), blood < 0, or < -25 once `+0x163`.
+  conscious one (or with a fresh stump, below), blood < 0, or < -25 once `+0x163`.
   `+0x163` (`bloodlossTrauma`, KenshiLib 1ce4a16; medical bytes `+0x160 crippled`, `+0x161 unconcious`, `+0x162 sub50KO`, `+0x165 rightArmOk`,
   `+0x166 leftArmOk`) clears in `medicalUpdate` only on an update that finds blood below capacity and then above 25 (**Verified**, decompile of
   `FUN_140652000`: the test sits inside the recovery branch). Natural recovery passes through that window; blood written straight to capacity does not,
-  which is why issue #82 saw the HUD's "Blood loss trauma" term 142 s after the blood was back. So a character wakes once all of those are clear.
-  Meitou clears the flag whenever blood is above 25 (engine choice: the quirk needs a direct write).
+  which is why issue #82 saw the HUD's "Blood loss trauma" term 142 s after the blood was back; the test runs while bleeding too. So a character wakes once all of those are clear.
+  Meitou: the same, in `TickBlood` (and the off-screen `Recover`).
+- Fresh limb loss (**Verified**, decompile of `FUN_14064da70`, `FUN_140645350`): each medical update first checks the four limb slots for a stump
+  (limb state 1) whose h - s is under -M (M from the stump's base HP 5, so the cut part until it heals past that). If one is, it sets `+0x163` and
+  passes the flag to `reassessCollapseMode`, which then applies the conscious blood rule to an unconscious character: blood holds it down only under -25.
 - Stage of a torso/head part, v = h - s + rig: 0 when v >= 0; under the KO point 2, and a vital part sets the coma flag
   `+0x162`; between the KO point and 0, 2 for a non-vital part, and for a vital one 2 only while `+0x162` is set. `+0x162`
   clears on an update where no vital part is at stage 2. So a vital part between the KO point and 0 does not keep a
   character down; one under it does ("Recovery coma") until every vital part is back to 0. Legs use h - s + bandage
   against the KO point ([ragdolls](ragdolls.md)).
 - Save keys: `coma` = `+0x162`, `unconcious` = `+0x161`, `incapacitated` = `+0x160` (a leg-collapse part at stage > 0).
-- Meitou: `MedicalState.VitalPartsKeepDown`, `RestartKo`, the wake test `Blood >= 0`. The fresh-limb-loss case is not modelled.
+- Meitou: `MedicalState.VitalPartsKeepDown`, `RestartKo`, the wake test `Blood >= 0` (-25 with `HasFreshStump`).
 
 ### Cut-off and leg loss
 
