@@ -233,6 +233,8 @@ sealed partial class GameHost
             if (args.Count > 1 && !int.TryParse(args[1], NumberStyles.None, CultureInfo.InvariantCulture, out quantity)) { con.Error($"give: quantity '{args[1]}' is not a whole number"); return; }
             if (args.Count > 2 && !int.TryParse(args[2], NumberStyles.None, CultureInfo.InvariantCulture, out quality)) { con.Error($"give: quality '{args[2]}' is not a whole number"); return; }
             Report(con, DebugGive(args[0], quantity, quality));
+            // A paused game takes no tick: apply the give now so the reply (and a build right after) already sees the item.
+            if (!debugFailed) session.ApplyPausedCommandsNow();
         }, (i, typed) => i == 0 ? ConsoleMatch(ConsoleRecordNames(character: false), typed) : []);
 
         Add("spawn", "spawn \"<character record>\"", "spawn a hostile character at the cursor", (args, con) =>

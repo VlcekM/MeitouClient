@@ -177,8 +177,7 @@ sealed partial class GameHost
             int limit = 50;
             if (flags.TryGetValue("--limit", out var lv) && (lv.Count != 1 || !int.TryParse(lv[0], NumberStyles.None, CultureInfo.InvariantCulture, out limit) || limit < 1)) { con.Error("world: --limit needs a whole number"); return; }
             string json = player.ControlWorldJson(near, radius, kind, limit);
-            controlData = json;
-            con.Print(json);
+            PrintData(con, json);
         });
 
         Add("entity-screen", "entity-screen <id>", "the entity's on-screen rect [x,y,w,h] and centre in screen pixels, or state offscreen; characters also report occluded (something else is under the centre)", (args, con) =>
@@ -186,8 +185,7 @@ sealed partial class GameHost
             if (!Loaded(con)) return;
             if (args.Count != 1) { con.Error("usage: entity-screen <id>"); return; }
             if (player.ControlEntityScreenJson(args[0]) is not { } json) { con.Error($"no entity '{args[0]}'"); return; }
-            controlData = json;
-            con.Print(json);
+            PrintData(con, json);
         });
 
         Add("camera", "camera | camera set [--pos x z] [--yaw d] [--pitch d] [--zoom v] | rotate <deg> | pitch <deg> | zoom <v> | focus <id | x z> | orbit <id | x z> <yawDeg>  [--over <s>]",
@@ -208,7 +206,7 @@ sealed partial class GameHost
             // The end of the move: target pivot, entity to follow, absolute yaw/pitch/boom (null: unchanged), yaw as a relative amount.
             Vector2? movePivot = null; string? moveEntity = null; float? moveYaw = null, moveYawBy = null, movePitch = null, moveZoom = null; bool moveFollow = false;
             string sub = args.Count > 0 ? args[0].ToLowerInvariant() : "";
-            if (sub.Length == 0) { string json = ControlCameraJson(); controlData = json; con.Print(json); return; }
+            if (sub.Length == 0) { string json = ControlCameraJson(); PrintData(con, json); return; }
             if (cameraMove is { } running)
             {
                 cameraMove = null;

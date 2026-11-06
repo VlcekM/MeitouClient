@@ -724,6 +724,7 @@ sealed partial class GameHost
             bool began = display.BeginFrame(size.X, size.Y);
             if (began)
             {
+                shotNoFrame = 0;
                 BenchLap(6);
                 long t0 = Stopwatch.GetTimestamp();
                 // The chain and the panel draw into the window's backbuffer (made again when the size changes).
@@ -897,6 +898,7 @@ sealed partial class GameHost
                     FeedbackCaptured(FramebufferCapture.ReadPicture(display.Context, finalPicture ?? backbuffer, size.X, size.Y, topDown: finalPicture is not null), size.X, size.Y);
                 }
             }
+            else if (screenshotRequested && shotPath is not null && ++shotNoFrame >= 30) ControlShotFailed("the frame cannot be drawn (window minimised or device lost)");
             statsTimer += dt;
             if (statsTimer >= 1)
             {

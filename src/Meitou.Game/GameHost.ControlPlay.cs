@@ -35,8 +35,7 @@ sealed partial class GameHost
             }
             if (changed && !brief) { con.Error("usage: observe --brief [--changed]"); return; }
             string json = brief ? player.ControlBriefJson(changed) : player.ControlObserveJson(radius, full);
-            controlData = json;
-            con.Print(json);
+            PrintData(con, json);
         });
 
         add("stop", "stop", "stop the selected characters (the Stop order: drops their orders and queue)", (args, con) =>
@@ -96,8 +95,7 @@ sealed partial class GameHost
                 words.Add(args[a]);
             }
             string json = player.ControlBuildListJson(string.Join(' ', words), all, Math.Clamp(limit, 1, 300));
-            controlData = json;
-            con.Print(json);
+            PrintData(con, json);
         });
 
         add("build", "build <type> <x> <z> [rotationDegrees] [--anyway]", "real build mode: judge the spot by the placement rules, then confirm a construction site (PlaceBuildings) and send the selected characters to build it; refused with the reason for a locked type, a bad spot or missing materials (--anyway places the site regardless, for a base store to supply). Types: build-list", (args, con) =>
@@ -158,7 +156,7 @@ sealed partial class GameHost
     {
         if (Covered || player.TitleOpen) { con.Error("no world is loaded yet"); return; }
         string sub = args[0].ToLowerInvariant();
-        if (sub == "list" && args.Count == 1) { string json = player.ControlResearchJson(); controlData = json; con.Print(json); return; }
+        if (sub == "list" && args.Count == 1) { string json = player.ControlResearchJson(); PrintData(con, json); return; }
         if (sub == "queue" && args.Count >= 2)
         {
             if (player.ControlQueueResearch(string.Join(' ', args.Skip(1)), out string m)) con.Print(m); else con.Error(m);

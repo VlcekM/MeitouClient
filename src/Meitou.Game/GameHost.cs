@@ -79,6 +79,8 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
     Meitou.Rendering.Upscalers.Streamline? streamline;
     Meitou.Rendering.Upscalers.Ngx? ngx;
     bool screenshotRequested;
+    /// <summary>Frames in a row that could not be drawn while a control screenshot waits; at 30 the screenshot is answered with an error.</summary>
+    int shotNoFrame;
     // The interactive run's animation clock (foliage sway, clouds, water): the frame steps, which are exact while the cinema records; off, the real time.
     double animSeconds;
     bool animClock;

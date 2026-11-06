@@ -55,15 +55,10 @@ sealed partial class GameHost
         if (execPending is { } exec && SetupSettled())
         {
             execPending = null;
-            foreach (string part in exec.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-            {
-                if (RunControlLine("exec", part)) continue;
-                Console.WriteLine($"setup     setup failed: '{part}' (the rest was skipped)");
-                controlExitCode = 3;
-                break;
-            }
+            foreach (string part in exec.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)) execQueue.Enqueue(part);
         }
-        if (g.ShotAfter is { } shotDelay && !autoShotTimer && !autoShotAsked && execPending is null && controlExitCode == 0 && SetupSettled())
+        PumpExec();
+        if (g.ShotAfter is { } shotDelay && !autoShotTimer && !autoShotAsked && execPending is null && execQueue.Count == 0 && execWaitingFor is null && controlExitCode == 0 && SetupSettled())
         {
             autoShotTimer = true;
             shotDueAt = Stopwatch.GetTimestamp() + (long)(shotDelay * Stopwatch.Frequency);
@@ -110,6 +105,34 @@ sealed partial class GameHost
         }
     }
 
+    readonly Queue<string> execQueue = new();
+    /// <summary>The setup command whose deferred reply (wait-for, order move --wait, spawn-at) is still pending; the setup list goes on when it arrives.</summary>
+    string? execWaitingFor;
+
+    /// <summary>Runs the setup list one command at a time; a deferred command is waited on, and its failure ends the list (exit 3).</summary>
+    void PumpExec()
+    {
+        while (execWaitingFor is null && execQueue.Count > 0)
+        {
+            string part = execQueue.Dequeue();
+            bool ok = RunControlLine("exec", part);
+            if (ok && controlReplyDeferred)
+            {
+                if (controlDir is null) { Console.WriteLine($"setup     '{part}' answers later and needs --control-dir to be waited on"); ok = false; }
+                else { execWaitingFor = part; return; }
+            }
+            if (!ok) { ExecFailed(part); return; }
+        }
+    }
+
+    void ExecFailed(string part)
+    {
+        Console.WriteLine($"setup     setup failed: '{part}' (the rest was skipped)");
+        controlExitCode = 3;
+        execQueue.Clear();
+        execWaitingFor = null;
+    }
+
     /// <summary>The same "loaded and settled" as <c>mt-ctl --wait-ready --world</c>: a world on screen, a selected character, the simulation has ticked (or is paused). A save with no selection runs after 3 s loaded.</summary>
     bool SetupSettled()
     {
@@ -131,8 +154,6 @@ sealed partial class GameHost
         devConsole.Tap = (text, kind) => { output.Add(text); failed |= kind == DevConsole.Kind.Error; };
         try { devConsole.Execute(command); }
         finally { devConsole.Tap = null; }
-        // A paused game takes no tick: apply a debug give now so the reply (and a build right after) already sees the item.
-        if (!failed && controlDir is not null && (command == "give" || command.StartsWith("give ", StringComparison.Ordinal))) session.ApplyPausedCommandsNow();
         string result = string.Join(" | ", output);
         if (failed) Console.WriteLine($"control   {id} {command}: {result}");
         if (!failed && shotWaitId == id && shotPath is not null) return true;   // the screenshot's frame writes this one
@@ -142,6 +163,13 @@ sealed partial class GameHost
         else ControlWrite(id, !failed, result, controlData);
         controlData = null;
         return !failed;
+    }
+
+    /// <summary>Hands a JSON answer to the reply (<see cref="controlData"/>); without a control channel the console prints it instead. The log gets only its size, not up to 23 KB per call.</summary>
+    void PrintData(DevConsole con, string json)
+    {
+        controlData = json;
+        con.Print(controlDir is null ? json : $"{json.Length} bytes of JSON");
     }
 
     double ControlNow() => Math.Round(Stopwatch.GetElapsedTime(controlStart).TotalSeconds, 2);
@@ -224,6 +252,14 @@ sealed partial class GameHost
     /// <summary>Appends one reply object to out: id (a number when it is one), ok, data (the raw JSON given, else {"text":..}) and, on failure, error.</summary>
     void ControlWrite(string id, bool ok, string text, string? dataJson = null, bool? changed = null)
     {
+        if (id == "exec" && execWaitingFor is { } waited)   // the deferred reply of a setup command
+        {
+            if (ok && dataJson is not null && dataJson.Contains("\"result\":\"", StringComparison.Ordinal) && !dataJson.Contains("\"result\":\"arrived\"", StringComparison.Ordinal))
+            { ok = false; text = $"waited move did not arrive: {dataJson}"; }   // a waited move that ended stuck, timed out or lost the walker
+            if (!ok) Console.WriteLine($"setup     '{waited}': {text}");
+            execWaitingFor = null;
+            if (!ok) ExecFailed(waited);
+        }
         if (controlDir is null) return;
         using var stream = new MemoryStream();
         using (var w = new Utf8JsonWriter(stream))
@@ -255,12 +291,20 @@ sealed partial class GameHost
             if (id is not null) ControlWrite(id, true, $"saved {path} {width}x{height}");
             if (autoShotAsked) controlQuit = true;
         }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        catch (Exception e)   // a failed capture (GPU read-back, encoder) must answer too, not leave the client waiting
         {
-            Console.WriteLine($"setup     screenshot failed: {e.Message}");
-            if (autoShotAsked) { controlExitCode = 4; controlQuit = true; }
-            if (id is not null) ControlWrite(id, false, $"screenshot failed: {e.Message}");
+            ControlShotFailed(e.Message, id);
         }
+    }
+
+    /// <summary>A requested control screenshot could not be made: say why to the waiting client, and end a <c>--screenshot-after</c> run with exit 4.</summary>
+    void ControlShotFailed(string why, string? id = null)
+    {
+        if (id is null) { id = shotWaitId; screenshotRequested = false; }
+        shotPath = shotWaitId = null;
+        Console.WriteLine($"setup     screenshot failed: {why}");
+        if (autoShotAsked) { controlExitCode = 4; controlQuit = true; }
+        if (id is not null) ControlWrite(id, false, $"screenshot failed: {why}");
     }
 
     // ---- commands
@@ -328,7 +372,7 @@ sealed partial class GameHost
         void Add(string name, string usage, string help, Action<IReadOnlyList<string>, DevConsole> run, Func<int, string, IEnumerable<string>>? complete = null) =>
             c.Register(new ConsoleCommand(name, usage, help, run) { Complete = complete });
 
-        Add("state", "state", "one line of JSON: screen, open settings page, player position, loaded save", (_, con) => { string json = ControlState(); controlData = json; con.Print(json); });
+        Add("state", "state", "one line of JSON: screen, open settings page, player position, loaded save", (_, con) => { string json = ControlState(); PrintData(con, json); });
 
         Add("screenshot", "screenshot <png path>", "save the next frame (interface included, no debug overlays or pointer) to the file", (args, con) =>
         {
@@ -406,7 +450,7 @@ sealed partial class GameHost
 
         Add("ui-set", "ui-set <label|index> <0..1> | ui-set [--id ..] [--label ..] [--screen ..] [--index ..] <0..1>", "move a settings slider to a position on its track (0 left, 1 right)", (args, con) => ControlUiSet(args, con));
 
-        Add("clipboard", "clipboard", "print the game's clipboard text as a JSON string (null when it holds none)", (_, con) => { string json = JsonSerializer.Serialize(player.ClipboardRead?.Invoke()); controlData = json; con.Print(json); });
+        Add("clipboard", "clipboard", "print the game's clipboard text as a JSON string (null when it holds none)", (_, con) => { string json = JsonSerializer.Serialize(player.ClipboardRead?.Invoke()); PrintData(con, json); });
 
         Add("ui-open", "ui-open settings[:<page>]", "open the settings window, on a page (" + string.Join(", ", SettingsMenu.PageNames) + ")", (args, con) =>
         {
