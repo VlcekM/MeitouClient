@@ -40,8 +40,8 @@
     "areas": "Combat, Mesh buffers"
   },
   "dfdffish": {
-    "commits": 12,
-    "areas": "Stats, Locale, Picking"
+    "commits": 17,
+    "areas": "Localisation, Launcher"
   },
   "roscatoday": {
     "commits": 1,
