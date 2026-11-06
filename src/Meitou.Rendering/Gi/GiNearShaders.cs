@@ -187,47 +187,54 @@ static class GiNearShaders
                 imageStore(uRaw, low, vec4(0.0));
                 return;
             }
-            vec3 dir = cosineDirection(n, sampleAt(uvec2(low), uint(nearFrame.x)));
             // Off the surface by what the depth's precision and the traced geometry's difference from the drawn one call for.
             vec3 world = p + n * (0.05 + z * 0.002);
-            rayQueryEXT rq;
-            rayQueryInitializeEXT(rq, uScene, gl_RayFlagsCullBackFacingTrianglesEXT, {{TracedSunShaders.GiMask}}, world - origin.xyz, 0.0, dir, nearReach.x);
-            TRACE(rq)
-            vec3 light;
-            float near = 0.0;
-            if (rayQueryGetIntersectionTypeEXT(rq, true) != gl_RayQueryCommittedIntersectionTriangleEXT) light = cached(world + dir * nearReach.x, dir);
-            else
+            // NEAR_RAYS rays a frame, consecutive points of the texel's sequence (stratified among themselves).
+            vec4 result = vec4(0.0);
+            for (int ray = 0; ray < NEAR_RAYS; ray++)
             {
-                float t = rayQueryGetIntersectionTEXT(rq, true);
-                int record = rayQueryGetIntersectionInstanceCustomIndexEXT(rq, true) + rayQueryGetIntersectionGeometryIndexEXT(rq, true);
-                Geometry g = geometries[record];
-                // A ray that starts inside an object (a drawn level of it, not the traced one) learns nothing: the cache, not black.
-                if (!rayQueryGetIntersectionFrontFaceEXT(rq, true) && g.kind != {{GeometryRecord.Foliage}}u) light = cached(world, dir);
+                vec3 dir = cosineDirection(n, sampleAt(uvec2(low), uint(nearFrame.x) * uint(NEAR_RAYS) + uint(ray)));
+                rayQueryEXT rq;
+                rayQueryInitializeEXT(rq, uScene, gl_RayFlagsCullBackFacingTrianglesEXT, {{TracedSunShaders.GiMask}}, world - origin.xyz, 0.0, dir, nearReach.x);
+                TRACE(rq)
+                vec3 light;
+                float near = 0.0;
+                if (rayQueryGetIntersectionTypeEXT(rq, true) != gl_RayQueryCommittedIntersectionTriangleEXT) light = cached(world + dir * nearReach.x, dir);
                 else
                 {
-                    float env = lightDir.w;
+                    float t = rayQueryGetIntersectionTEXT(rq, true);
+                    int record = rayQueryGetIntersectionInstanceCustomIndexEXT(rq, true) + rayQueryGetIntersectionGeometryIndexEXT(rq, true);
+                    Geometry g = geometries[record];
+                    // A ray that starts inside an object (a drawn level of it, not the traced one) learns nothing: the cache, not black.
+                    if (!rayQueryGetIntersectionFrontFaceEXT(rq, true) && g.kind != {{GeometryRecord.Foliage}}u) light = cached(world, dir);
+                    else
+                    {
+                        float env = lightDir.w;
         {{GiShaders.HitShade}}
-                    light = colour * (sun + ambient + lamps);
-                    near = t < nearReach.y ? 1.0 : 0.0;
+                        light = colour * (sun + ambient + lamps);
+                        near = t < nearReach.y ? 1.0 : 0.0;
+                    }
                 }
+                result += vec4(min(light, vec3(nearReach.w)), near);
             }
-            imageStore(uRaw, low, vec4(min(light, vec3(nearReach.w)), near));
+            imageStore(uRaw, low, result / float(NEAR_RAYS));
         }
         """;
 
     static string F(float v) => v.ToString("0.0########", System.Globalization.CultureInfo.InvariantCulture);
 
-    /// <summary>The trace for the frame's options (<see cref="GiShaders.Relocating"/>, <see cref="GiShaders.Clouded"/>).</summary>
-    public static string Trace(bool relocate, bool clouds)
+    /// <summary>The trace for the frame's options (<see cref="GiShaders.Relocating"/>, <see cref="GiShaders.Clouded"/>), <paramref name="rays"/> rays a texel.</summary>
+    public static string Trace(bool relocate, bool clouds, int rays)
     {
-        string trace = Source;
+        string trace = Source.Replace("#define LAMP_DIFFUSE_ONLY", $"#define NEAR_RAYS {rays}\n#define LAMP_DIFFUSE_ONLY", StringComparison.Ordinal);
         if (clouds) trace = GiShaders.Clouded(trace.Replace("vec4 cloudSlots[3];", "", StringComparison.Ordinal));
         return relocate ? GiShaders.Relocating(trace) : trace;
     }
 
     /// <summary>
-    /// The accumulation: each texel's point back in last frame's picture, the surface images' four texels round it weighted by the bilinear weights and
-    /// <see cref="EdgeWeight"/>; with any left, this frame's sample takes 1 / (samples so far) of the mean, down to 1 / <c>size.z</c>. Out: rgb the light, a the share of near hits; the sample count apart.
+    /// The accumulation: each texel's point back in last frame's picture (the camera's motion alone: only still surfaces write the surface target), the surface images' four texels round it
+    /// weighted by the bilinear weights and <see cref="EdgeWeight"/>; with any left, this frame's sample takes 1 / (samples so far) of the mean, down to 1 / <c>size.z</c>, and 1 / <c>texel.z</c>
+    /// of a fast mean kept beside it, which <see cref="Clamp"/> holds the long one to. Out: the long mean (rgb the light, a the share of near hits), unclamped; the sample count; the fast mean.
     /// </summary>
     public const string Temporal = """
         #version 450
@@ -237,25 +244,29 @@ static class GiNearShaders
         layout(set = 0, binding = 2, rgba16f) uniform readonly image2D uRaw;
         layout(set = 0, binding = 3, rgba16f) uniform readonly image2D uPreviousHistory;
         layout(set = 0, binding = 4, r16f) uniform readonly image2D uPreviousLength;
-        layout(set = 0, binding = 5, rgba16f) uniform writeonly image2D uHistory;
-        layout(set = 0, binding = 6, r16f) uniform writeonly image2D uLength;
-        layout(set = 0, binding = 7, std140) uniform Params
+        layout(set = 0, binding = 5, rgba16f) uniform readonly image2D uPreviousFast;
+        layout(set = 0, binding = 6, rgba16f) uniform writeonly image2D uHistory;
+        layout(set = 0, binding = 7, r16f) uniform writeonly image2D uLength;
+        layout(set = 0, binding = 8, rgba16f) uniform writeonly image2D uFast;
+        layout(set = 0, binding = 9, std140) uniform Params
         {
             vec4 size;      // x, y the low target, z the most samples a texel keeps, w 1 with a history
-            vec4 texel;     // x a low texel's width in world units at distance 1
+            vec4 texel;     // x a low texel's width in world units at distance 1, z the fast mean's samples
             vec4 eye, back; // this frame's, for the fade
             vec4 previousEye, previousRight, previousUp, previousBack;
             vec4 previousTan;
         };
 
         """ + EdgeWeight + """
+        const ivec2 RING[8] = ivec2[8](ivec2(-1, -1), ivec2(0, -1), ivec2(1, -1), ivec2(-1, 0), ivec2(1, 0), ivec2(-1, 1), ivec2(0, 1), ivec2(1, 1));
+
         void main()
         {
             ivec2 px = ivec2(gl_GlobalInvocationID.xy);
             if (any(greaterThanEqual(px, ivec2(size.xy)))) return;
             vec4 surface = imageLoad(uSurface, px);
             vec4 raw = imageLoad(uRaw, px);
-            vec4 history = vec4(0.0);
+            vec4 history = vec4(0.0), fast = vec4(0.0);
             float samples = 0.0;
             if (surface.w != 0.0 && size.w > 0.5)
             {
@@ -263,37 +274,118 @@ static class GiNearShaders
                 vec3 v = surface.xyz - previousEye.xyz;
                 float z = dot(v, -previousBack.xyz);
                 vec2 ndc = vec2(dot(v, previousRight.xyz) / max(z * previousTan.x, 1e-6), dot(v, previousUp.xyz) / max(z * previousTan.y, 1e-6));
-                if (z > 0.0 && all(lessThan(abs(ndc), vec2(1.0))))
+                vec2 f = (ndc * 0.5 + 0.5) * size.xy - 0.5;
+                // Off last frame's picture by up to 16 texels (a turning camera's entering edge): the fill below, from the picture's edge.
+                vec2 onPicture = clamp(f, vec2(0.0), size.xy - 1.0);
+                if (z > 0.0 && all(lessThanEqual(abs(f - onPicture), vec2(16.0))))
                 {
-                    vec2 f = (ndc * 0.5 + 0.5) * size.xy - 0.5;
                     ivec2 i0 = ivec2(floor(f));
                     vec2 w = f - vec2(i0);
                     float tolerance = max(length(surface.xyz - eye.xyz), 1.0) * texel.x, total = 0.0;
-                    for (int k = 0; k < 4; k++)
+                    for (int k = 0; k < 4 && f == onPicture; k++)
                     {
                         ivec2 o = ivec2(k & 1, k >> 1), q = clamp(i0 + o, ivec2(0), ivec2(size.xy) - 1);
                         float weight = (o.x == 1 ? w.x : 1.0 - w.x) * (o.y == 1 ? w.y : 1.0 - w.y);
                         weight *= edgeWeight(surface, n, imageLoad(uPreviousSurface, q), tolerance);
                         if (weight <= 1e-4) continue;
                         history += imageLoad(uPreviousHistory, q) * weight;
+                        fast += imageLoad(uPreviousFast, q) * weight;
                         samples += imageLoad(uPreviousLength, q).r * weight;
                         total += weight;
                     }
-                    if (total > 1e-3) { history /= total; samples /= total; }
-                    else { history = vec4(0.0); samples = 0.0; }
+                    if (total > 1e-3) samples /= total;
+                    else
+                    {
+                        // Uncovered (last frame a character or a thin object stood in front, or off the picture): the same surface's history on rings 2, 4, 8 and 16 texels round the point,
+                        // the nearer the more, its count at most half the most a texel keeps (halving it each time would decay it along a trail uncovered frame after
+                        // frame). The near field does not trace characters, so the light behind one is its surroundings'.
+                        history = fast = vec4(0.0);
+                        samples = total = 0.0;
+                        ivec2 centre = ivec2(floor(onPicture + 0.5));
+                        for (int k = 0; k < 32; k++)
+                        {
+                            int r = 2 << (k >> 3);
+                            ivec2 q = centre + RING[k & 7] * r;
+                            if (any(lessThan(q, ivec2(0))) || any(greaterThanEqual(q, ivec2(size.xy)))) continue;
+                            float weight = edgeWeight(surface, n, imageLoad(uPreviousSurface, q), tolerance * float(r)) / float(r);
+                            if (weight <= 1e-4) continue;
+                            history += imageLoad(uPreviousHistory, q) * weight;
+                            fast += imageLoad(uPreviousFast, q) * weight;
+                            samples += imageLoad(uPreviousLength, q).r * weight;
+                            total += weight;
+                        }
+                        samples = total > 1e-3 ? min(samples / total, 0.5 * size.z) : 0.0;
+                    }
+                    if (total > 1e-3) { history /= total; fast /= total; }
+                    else { history = fast = vec4(0.0); samples = 0.0; }
                 }
             }
             samples = surface.w == 0.0 ? 0.0 : min(samples + 1.0, size.z);
             imageStore(uHistory, px, samples > 0.0 ? mix(history, raw, 1.0 / samples) : vec4(0.0));
+            imageStore(uFast, px, samples > 0.0 ? mix(fast, raw, 1.0 / min(samples, texel.z)) : vec4(0.0));
             imageStore(uLength, px, vec4(samples));
+        }
+        """;
+
+    /// <summary>
+    /// The history clamp: the long mean's light held within <c>texel.w</c> standard deviations of the fast means' 3 x 3 neighbourhood (on the same surface, <see cref="EdgeWeight"/>; in YCoCg), so a
+    /// change of light (a lamp, a cloud, the probes) or a history taken from another surface is followed at the fast mean's pace, while that neighbourhood is smooth enough that one
+    /// sample's noise is not clamped back in (ReBLUR's fast-history clamp). The result is the history the next frame reprojects.
+    /// </summary>
+    public const string Clamp = """
+        #version 450
+        layout(local_size_x = 8, local_size_y = 8) in;
+        layout(set = 0, binding = 0, rgba32f) uniform readonly image2D uSurface;
+        layout(set = 0, binding = 1, rgba16f) uniform readonly image2D uPending;
+        layout(set = 0, binding = 2, rgba16f) uniform readonly image2D uFast;
+        layout(set = 0, binding = 3, rgba16f) uniform writeonly image2D uHistory;
+        layout(set = 0, binding = 4, std140) uniform Params
+        {
+            vec4 size;
+            vec4 texel;     // x a low texel's width in world units at distance 1, w the clamp's half width in standard deviations
+            vec4 eye, back;
+        };
+
+        """ + EdgeWeight + """
+        vec3 toYCoCg(vec3 c) { return vec3(0.25 * c.r + 0.5 * c.g + 0.25 * c.b, 0.5 * c.r - 0.5 * c.b, -0.25 * c.r + 0.5 * c.g - 0.25 * c.b); }
+        vec3 fromYCoCg(vec3 c) { return vec3(c.x + c.y - c.z, c.x + c.z, c.x - c.y - c.z); }
+
+        void main()
+        {
+            ivec2 px = ivec2(gl_GlobalInvocationID.xy);
+            if (any(greaterThanEqual(px, ivec2(size.xy)))) return;
+            vec4 history = imageLoad(uPending, px);
+            vec4 surface = imageLoad(uSurface, px);
+            if (surface.w == 0.0) { imageStore(uHistory, px, history); return; }
+            vec3 n = surfaceNormal(surface.w);
+            float tolerance = max(length(surface.xyz - eye.xyz), 1.0) * texel.x;
+            vec3 m1 = vec3(0.0), m2 = vec3(0.0);
+            float total = 0.0;
+            for (int y = -1; y <= 1; y++)
+                for (int x = -1; x <= 1; x++)
+                {
+                    ivec2 q = clamp(px + ivec2(x, y), ivec2(0), ivec2(size.xy) - 1);
+                    float weight = edgeWeight(surface, n, imageLoad(uSurface, q), tolerance);
+                    if (weight <= 1e-3) continue;
+                    vec3 c = toYCoCg(imageLoad(uFast, q).rgb);
+                    m1 += c * weight;
+                    m2 += c * c * weight;
+                    total += weight;
+                }
+            m1 /= total;
+            vec3 sigma = sqrt(max(m2 / total - m1 * m1, 0.0)) * texel.w;
+            history.rgb = max(fromYCoCg(clamp(toYCoCg(history.rgb), m1 - sigma, m1 + sigma)), 0.0);
+            imageStore(uHistory, px, history);
         }
         """;
 
     /// <summary>
     /// One a-trous iteration (non-separable, a 3 x 3 kernel, as KenshiNative's: a separable one turns a bright sample into a rectangle) over the accumulated light, held to the surface by
     /// <see cref="EdgeWeight"/>. The wide iteration is also held by the share of near hits, as ground under an awning and the open ground next to it are one plane (KenshiNative's
-    /// <c>gi-denoise</c>: unguided, the wide steps flatten that contact shade; the narrow ones need no guide). On the last iteration a becomes how much of this
-    /// texel the resolve takes: full after a few samples, fading out towards the end of the field.
+    /// <c>gi-denoise</c>: unguided, the wide steps flatten that contact shade; the narrow ones need no guide). Each tap's light counts by its sample count, so a texel just uncovered
+    /// takes its light from its neighbours' histories; the counts are filtered alongside (not weighted by themselves). On the last iteration a becomes how much of this texel the resolve
+    /// takes: by the filtered count, full at 4, fading out towards the end of the field. So a narrow strip just uncovered (beside a character that moved) is taken at once instead of
+    /// showing the probes' light through for a few frames.
     /// </summary>
     public const string Filter = """
         #version 450
@@ -308,6 +400,7 @@ static class GiNearShaders
             vec4 texel;     // x a low texel's width in world units at distance 1, y the eye distance the field ends at
             vec4 eye, back;
         };
+        layout(set = 0, binding = 5, r16f) uniform writeonly image2D uLengthOut;
         layout(push_constant) uniform Iteration { int spread; int guided; int last; };
 
         """ + EdgeWeight + """
@@ -318,12 +411,12 @@ static class GiNearShaders
             ivec2 px = ivec2(gl_GlobalInvocationID.xy);
             if (any(greaterThanEqual(px, ivec2(size.xy)))) return;
             vec4 surface = imageLoad(uSurface, px);
-            if (surface.w == 0.0) { imageStore(uOut, px, vec4(0.0)); return; }
+            if (surface.w == 0.0) { imageStore(uOut, px, vec4(0.0)); imageStore(uLengthOut, px, vec4(0.0)); return; }
             vec3 n = surfaceNormal(surface.w);
             vec4 centre = imageLoad(uIn, px);
             float distanceToEye = length(surface.xyz - eye.xyz), tolerance = distanceToEye * texel.x * float(spread);
             vec4 sum = vec4(0.0);
-            float total = 0.0;
+            float total = 0.0, lengthSum = 0.0, lengthTotal = 0.0;
             for (int y = -1; y <= 1; y++)
                 for (int x = -1; x <= 1; x++)
                 {
@@ -332,17 +425,22 @@ static class GiNearShaders
                     if (weight <= 0.0) continue;
                     vec4 tap = imageLoad(uIn, q);
                     if (guided != 0) weight *= exp(-16.0 * abs(centre.a - tap.a));
-                    sum += tap * weight;
-                    total += weight;
+                    float samples = imageLoad(uLength, q).r;
+                    lengthSum += samples * weight;
+                    lengthTotal += weight;
+                    sum += tap * (weight * samples);
+                    total += weight * samples;
                 }
             vec4 result = total > 1e-5 ? sum / total : centre;
+            float samples = lengthTotal > 1e-5 ? lengthSum / lengthTotal : imageLoad(uLength, px).r;
             if (last != 0)
             {
                 float z = dot(surface.xyz - eye.xyz, -back.xyz);
                 float fade = 1.0 - smoothstep(0.75 * texel.y, texel.y, z);
-                result.a = fade * clamp(imageLoad(uLength, px).r / 4.0, 0.0, 1.0);
+                result.a = fade * clamp(samples / 4.0, 0.0, 1.0);
             }
             imageStore(uOut, px, result);
+            imageStore(uLengthOut, px, vec4(samples));
         }
         """;
 }
