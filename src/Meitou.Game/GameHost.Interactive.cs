@@ -408,41 +408,45 @@ sealed partial class GameHost
                 if (IsBattle && key == EngineKey.Backspace) battleRestartRequested = true;
             }
         }
+        // The press and release of a pointer button, shared by the window's events and the control channel's `click` (which injects them at a pixel).
+        void PointerDown(EngineButton? physical, Vector2 at)
+        {
+            player.UiVisible = PanelLive() && !g.NoPopulation;
+            bool select = physical is { } pressed && PlayerButton(pressed) == EngineButton.Left;   // the Select button, whichever it is bound to
+            if (PanelLive() && physical is { } settingsButton && panel?.MouseDown(at, settingsButton) == true) { panelDrag = true; return; }
+            if (PanelLive() && panel?.Contains(at) == true) return;
+            if (select && PanelLive() && !config.SandboxPanelCollapsed && sandboxPicker?.MouseDown(at) == true) return;
+            if (select && PanelLive() && SandboxToggleClick(at)) return;
+            if (select && profiler?.Click(at) == true) { profilerClick = true; return; }   // F12's legend opens and closes rows
+            if (select && StatsToggleClick(at)) { profilerClick = true; return; }   // F11's character boxes and paths
+            // The cinema's editor: its clicks never select or move characters.
+            if (select && cinema.MouseDown(at)) return;
+            if (cinema.Contains(at)) return;
+            if (physical is { } button)
+            {
+                // Ctrl and Alt with the right button: pick up / put down and loot (docs/game/ui-input.md, Meitou's carry bindings).
+                bool Held(SilkKey a, SilkKey b) => keyboards.Any(k => k.IsKeyPressed(a) || k.IsKeyPressed(b));
+                if (player.MouseDown(PlayerButton(button), at, shiftDown, Held(SilkKey.ControlLeft, SilkKey.ControlRight), Held(SilkKey.AltLeft, SilkKey.AltRight))) return;
+                session.Input.SetMouseButton(button, true);
+            }
+        }
+        void PointerUp(EngineButton? physical, Vector2 at)
+        {
+            bool cinemaDrag = cinema.MouseUp();
+            if (!Covered && !cinemaDrag && !panelDrag && !profilerClick && panel?.Visible != true && physical is { } released) player.MouseUp(PlayerButton(released), at, shiftDown);
+            profilerClick = false;
+            panel?.MouseUp();
+            panelDrag = false;
+            if (physical is { } button) session.Input.SetMouseButton(button, false);
+        }
         foreach (var mouse in mice)
         {
             mouse.MouseDown += (m, b) =>
             {
                 if (Covered) { loading?.SkipSplash(); return; }
-                player.UiVisible = PanelLive() && !g.NoPopulation;
-                var at = Pixels(orbitAnchor ?? m.Position);
-                var physical = KeyMap.Map(b);
-                bool select = physical is { } pressed && PlayerButton(pressed) == EngineButton.Left;   // the Select button, whichever it is bound to
-                if (PanelLive() && physical is { } settingsButton && panel?.MouseDown(at, settingsButton) == true) { panelDrag = true; return; }
-                if (PanelLive() && panel?.Contains(at) == true) return;
-                if (select && PanelLive() && !config.SandboxPanelCollapsed && sandboxPicker?.MouseDown(at) == true) return;
-                if (select && PanelLive() && SandboxToggleClick(at)) return;
-                if (select && profiler?.Click(at) == true) { profilerClick = true; return; }   // F12's legend opens and closes rows
-                if (select && StatsToggleClick(at)) { profilerClick = true; return; }   // F11's character boxes and paths
-                // The cinema's editor: its clicks never select or move characters.
-                if (select && cinema.MouseDown(at)) return;
-                if (cinema.Contains(at)) return;
-                if (physical is { } button)
-                {
-                    // Ctrl and Alt with the right button: pick up / put down and loot (docs/game/ui-input.md, Meitou's carry bindings).
-                    bool Held(SilkKey a, SilkKey b) => keyboards.Any(k => k.IsKeyPressed(a) || k.IsKeyPressed(b));
-                    if (player.MouseDown(PlayerButton(button), at, shiftDown, Held(SilkKey.ControlLeft, SilkKey.ControlRight), Held(SilkKey.AltLeft, SilkKey.AltRight))) return;
-                    session.Input.SetMouseButton(button, true);
-                }
+                PointerDown(KeyMap.Map(b), Pixels(orbitAnchor ?? m.Position));
             };
-            mouse.MouseUp += (m, b) =>
-            {
-                bool cinemaDrag = cinema.MouseUp();
-                if (!Covered && !cinemaDrag && !panelDrag && !profilerClick && panel?.Visible != true && KeyMap.Map(b) is { } released) player.MouseUp(PlayerButton(released), Pixels(orbitAnchor ?? m.Position), shiftDown);
-                profilerClick = false;
-                panel?.MouseUp();
-                panelDrag = false;
-                if (KeyMap.Map(b) is { } button) session.Input.SetMouseButton(button, false);
-            };
+            mouse.MouseUp += (m, b) => PointerUp(KeyMap.Map(b), Pixels(orbitAnchor ?? m.Position));
             mouse.MouseMove += (m, p) =>
             {
                 if (orbitAnchor is not null)
@@ -671,6 +675,21 @@ sealed partial class GameHost
                 appliedHeadlessMouse = fedMouse;
                 session.Input.SetMousePosition(fedMouse.X, fedMouse.Y);
                 if (!Covered && !(PanelLive() && panel?.MouseMove(fedMouse) == true) && !cinema.MouseMove(fedMouse)) player.MouseMove(fedMouse);
+            }
+            // The control channel's `click`: one step per frame (move, a frame for the ghost and hover to follow, press, release), through the same press and release as the window's.
+            if (pointerSteps.Count > 0)
+            {
+                var (kind, right, at) = pointerSteps.Dequeue();
+                switch (kind)
+                {
+                    case 'm':
+                        if (headless) headlessMouse = at;
+                        session.Input.SetMousePosition(at.X, at.Y);
+                        if (!Covered && !(PanelLive() && panel?.MouseMove(at) == true) && !cinema.MouseMove(at)) player.MouseMove(at);
+                        break;
+                    case 'd': if (!Covered) PointerDown(KeyMap.Map(right ? SilkButton.Right : SilkButton.Left), at); break;
+                    case 'u': if (!Covered) PointerUp(KeyMap.Map(right ? SilkButton.Right : SilkButton.Left), at); break;
+                }
             }
             // Rotation over on Linux: the pointer is let go where it was locked, in the cursor mode it had before, and before its position is read
             // (still locked, GLFW reports its virtual position, and the pointer was drawn there for a frame). The next move starts afresh.

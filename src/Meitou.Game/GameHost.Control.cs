@@ -351,6 +351,24 @@ sealed partial class GameHost
             con.Print($"pointer {x:0} {y:0}");
         });
 
+        Add("click", "click <x> <y> [--button left|right] [--double]", "press and release a pointer button at screen pixel x y through the game's own input path (widgets, world picking, build-mode placement behave as for a user click); windowed and headless; played over the next frames, the reply says it was queued (the window's real pointer is not moved)", (args, con) =>
+        {
+            bool right = false, dbl = false;
+            var pos = new List<string>();
+            for (int i = 0; i < args.Count; i++)
+            {
+                if (args[i] == "--double") dbl = true;
+                else if (args[i] == "--button" && i + 1 < args.Count && args[i + 1] is "left" or "right") right = args[++i] == "right";
+                else pos.Add(args[i]);
+            }
+            if (pos.Count != 2 || !float.TryParse(pos[0], System.Globalization.CultureInfo.InvariantCulture, out float x) || !float.TryParse(pos[1], System.Globalization.CultureInfo.InvariantCulture, out float y)) { con.Error("usage: click <x> <y> [--button left|right] [--double]"); return; }
+            var at = new System.Numerics.Vector2(x, y);
+            pointerSteps.Enqueue(('m', right, at));
+            pointerSteps.Enqueue(('i', right, at));
+            for (int n = 0; n < (dbl ? 2 : 1); n++) { pointerSteps.Enqueue(('d', right, at)); pointerSteps.Enqueue(('u', right, at)); }
+            con.Print($"queued {(right ? "right" : "left")}{(dbl ? " double" : "")} click at {x:0} {y:0}");
+        });
+
         Add("events", "events on|off", "switch the event lines in out on or off (default on)", (args, con) =>
         {
             if (args.Count != 1 || args[0] is not ("on" or "off")) { con.Error("usage: events on|off"); return; }

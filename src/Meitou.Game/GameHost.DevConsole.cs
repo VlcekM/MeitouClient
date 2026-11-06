@@ -22,6 +22,8 @@ sealed partial class GameHost
     Vector2 consolePointer;
     /// <summary>--headless: the pointer the control channel's <c>mouse</c> command gave, in screen pixels (null until it does); a window's pointer is read from the window instead.</summary>
     Vector2? headlessMouse;
+    /// <summary>The control channel's <c>click</c>: steps the interactive loop plays one per frame ('m' move, 'i' idle, 'd' press, 'u' release; right button; pixel).</summary>
+    readonly Queue<(char Kind, bool Right, Vector2 At)> pointerSteps = new();
     /// <summary>The control channel's <c>quit</c>: the interactive loop ends at its next pass (saves the settings, disposes as on any exit).</summary>
     bool controlQuit;
 
