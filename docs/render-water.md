@@ -21,7 +21,15 @@ exposure, with breaker/swash/foam envelopes, rather than bottom-slope distance a
 Game normal maps remain with reduced near strength. Shore-field bakes/publishing must not stall
 frames; retain ready textures until replacements finish. RiverFlowBake derives channel flow from
 heights because source flowmap RG does not follow channels; suppress ocean/surf in river channels.
-River coverage and biome scum are incomplete; object-contact foam is the off-by-default [switch below](#contact-foam).
+Shore waves (Meitou look, not in the game): offshore the baked distance is eased towards a ~105-unit Gaussian blur of itself (three
+10-texel box passes) from 40 to 250 units out, not within 32 texels of the field's edge (`ShoreBake.Relax`); the exact distance creases
+where the nearest shore switches (a bay's middle, off a point or a pier), and the crests that follow its lines kinked there while their
+foam's frame flipped along a straight seam. Where the field's slope over 24 units is under about 0.8 (two fronts meeting) a crest keeps
+30% of its size. Along each crest its size varies 0.5 to 1 (240-unit noise, a pattern of its own per wave). Each wave's run-up varies
+0.55 to 1 along the beach (70-unit tongues) and the wet line 0.7 to 1; the swash front's foam band wanders from 0.04 to 0.3 of the
+run-up (40-unit noise), thins in over its edge and takes the finer lace without the cell holes (a tiled pattern on the sand).
+**Observed** (Bark lake by the pier, offscreen sequences): the straight seam is gone and crests bend and fade there; swash close-ups
+**Unknown** (no swash on sand was caught in the test views). River coverage and biome scum are incomplete; object-contact foam and character wakes are the off-by-default [switch below](#contact-foam-wakes-and-ripples).
 
 ## Shading and reflection
 
@@ -55,15 +63,37 @@ Faithful only while the nearest water is nearer than 4000 units; with reflection
 whether or not water is in view. **Observed** (2560x1440, DLSS, RTX 4090, Shark): about 0.03 ms with Meitou water (its
 pass restart was there), 0.05 ms with Faithful (a pass restart plus a full-size depth copy).
 
-## Contact foam
+## Contact foam, wakes and ripples
 
-Meitou look, not in the game; the `contactfoam` switch (Tab "Water contact foam"), off by default, not yet seen on a GPU. Look and cost **Unknown**. A second Meitou program
-(`WATER_CONTACT`, made on first use), so off the water has none of it; Vulkan only. Both reach 1200 units, fading over the last 400, and join the foam `amount`, so they take the lace, light and colour of the water's other foam.
+Meitou look, not in the game; the `contactfoam` switch (Tab "Water contact foam, wakes and ripples"), off by default. Vulkan only. A second Meitou program pair
+(`WATER_CONTACT`, made on first use), so off the water has none of it. Contact foam and the field's foam reach 1200 units, fading over the last 400, and join the foam
+`amount`, so they take the lace, light and colour of the water's other foam.
 
 - **Contact**: `sceneThickness` under a band of 1.5 to 4 units (wandering with the foam's noise), where the ray's end stands 1 to 3 units or more above the terrain under the point:
   rocks, posts, walls and legs; the shore keeps its own foam. Needs the scene depth: with `--no-water-refraction` the switch asks for the copy itself within its reach. The last 2 units'
   fade (Edges) lets the foam through. Shallow bumps of displaced ground can pass the test: **Unknown** if it shows.
-- **Wakes** (`GameHost.UpdateWakes`, the 8 nearest the camera's target within 800 units with feet under Y 100, moving over 1 unit/s; `WaterRenderer.SetWakes`): a ring round the body and two arms at 19.5 degrees trailing as far as the speed in units, up to 40. Live in the constants: nothing lasts on the water behind them.
+- **Wave field** (`WaterRipples`): a damped wave equation on a 512² window of 0.5-unit texels round the camera's target, world-anchored and toroidal as the
+  [ground trails](render-terrain.md#ground-trails) (snap 32 texels; gained strips wiped, all after a jump; a 24-texel sponge at the edge, so waves show within 104 units).
+  State per texel (halves): height, its rate, foam, the water the bodies took. Symplectic Euler, isotropic nine-point Laplacian, fixed 1/90 s steps of game time (at most 6 a
+  frame, none while paused). Speed sqrt(g d), g 98.1 units/s², d the water depth clamped to 0.4..3 units (6 to 17 units/s), from a 128² depth map baked on the CPU from the
+  frame's terrain heights when the window moves; height and rate 0 on land, so waves stop at the shore and slow in the shallows. Damping 0.5/s on the rate, viscosity 0.12 units²/s.
+- **Sources** (`GameHost.UpdateWakes`, `CharacterRenderer.WaterCapsules`): every character in the window with feet below Y 102, its posed body as one capsule per skinned
+  bone (round the bone's pick boxes over all skinned parts, along their longest side; bones under 0.5 units skipped), those reaching the top 3 units of water. Each step that
+  starts a frame, a texel takes the capsules' chord through the top of its column (`min(depth, 3)`, four samples, a texel's soft edge); 0.4 of the change since the last push
+  goes into the height. So a moving leg raises a bow and leaves a hollow, stepping in or falling in raises a mound, a standing body makes only its idle motion's ripples, and the
+  V of a wake is the waves' own: a Mach cone when faster than the waves (derived: asin(17/30), 35 degrees each side for a 30 units/s walk). **Observed** (sandbox floor 5
+  units under water, 30 units/s walk): a bow wave, a V of ripples spreading behind and foam along the legs' path.
+- **Foam**: renewed in a 1.2-unit ring where a moving body cuts the surface (by the rate it displaces water) and where the slope passes 0.45 (full at 0.9, at most 0.7);
+  spreads a little and fades to a third in 2.5 s.
+- **Shading**: written each frame into an RGBA16F storage image (height, slopes, foam; one level); the water's vertex stage adds the height where its vertices are under 3 texels apart, the
+  fragment subtracts the slopes from its own (reflection, refraction, glint and the floor's bend follow) and adds the foam; all fade over the window's last 12 units.
+  Where a pixel spans 1.5 to 4 texels the height and slopes fade out (the foam stays): the field has no mips.
+- **Cost** **Observed** (NVIDIA RTX, offscreen 1280x720, sandbox walk, GPU timestamps round the compute, `water ripples:` line at exit): 5 to 10 us a step, about
+  5 us for the write-out; 19 to 35 us for the 3 steps of a 1/30 s frame (about half that per frame at 60 fps). The water fragment's extra cost (one bilinear fetch and
+  a few operations) is **Unknown**, not measured apart. Nothing runs while the switch is off, no water lies in the window, the nearest water in view is past 1200
+  units, or no body has been in the water for 20 game seconds (the field is then left as it is). The depth map is baked again every 120 frames (terrain streaming).
+- **Unknown**: capsules from axis-aligned pick boxes are rough for bones slanted in the binding pose; no splash particles; objects and projectiles do not push the water;
+  the fixed wave speed cap gives shallow-water (non-dispersive) wakes in deep water too, not the 19.5-degree Kelvin wedge.
 
 ## Safe work skips
 
