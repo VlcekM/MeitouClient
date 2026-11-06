@@ -364,6 +364,8 @@ public sealed unsafe class WaterRenderer : IDisposable
             float n = (wNoise(q / 620.0 + o) - 0.5) * 1.6 + 0.71 + 0.3 * (group - 0.5);
             brk = smoothstep(0.2, 0.6, n);
             size = mix(0.55, 1.6, group) * (0.8 + 0.4 * wNoise(q / 800.0 + o + 40.0)) * mix(0.7, 1.0, brk);
+            // A crest is not one line round the shore: along it, it swells and fades over a few hundred units, each wave in its own places.
+            size *= mix(0.5, 1.0, smoothstep(0.15, 0.65, wNoise(q / 240.0 + o * 1.7 + 70.0)));
         }
 
         vec2 shoreField(vec2 uv) { return textureLod(uShoreField, uv, 0.0).rg; }
@@ -437,6 +439,10 @@ public sealed unsafe class WaterRenderer : IDisposable
                 r.size = mix(1.0, mix(s1, s0, t), trust);
                 r.brk = mix(1.0, mix(b1, b0, t), trust);
                 r.sizeWet = mix(1.0, fract(x) >= 0.5 ? s0 : s1, trust);   // the wet sand remembers the last crest that passed
+                // Where the field does not give one way to the shore (two fronts meet: a bay's middle, off a point or a pier), the crests fade instead of
+                // meeting in a crease.
+                r.size *= mix(0.3, 1.0, trust);
+                r.sizeWet *= mix(0.3, 1.0, trust);
             }
             r.g = fract(x);
             r.wave = mod(floor(x), 4096.0);
@@ -694,6 +700,13 @@ public sealed unsafe class WaterRenderer : IDisposable
             float sinceCrest = fract(s.g - 0.5);
             float level = runup * breakerProfile(s.g);
             float wetLevel = uShore.y * s.open * s.sizeWet * fade * smoothstep(-120.0, -40.0, s.dist) * (1.0 - 0.8 * sinceCrest);
+            // Each wave runs further up the beach in some places than in others (tongues some 70 units across), and the wet sand it leaves is as ragged,
+            // so the waterline is not one smooth copy of the shore.
+            if (runup > 0.0)
+            {
+                level *= mix(0.55, 1.0, wNoise(p / 70.0 + vec2(wHash(vec2(s.wave, 3.1)), wHash(vec2(s.wave, 8.7))) * 97.0));
+                wetLevel *= mix(0.7, 1.0, wNoise(p / 55.0 + 13.7));
+            }
             if (above > 0.0 && above >= max(level, wetLevel)) discard;
             bool swash = above > 0.0;
             float sheet = swash ? level - above : 0.0;   // the swash's thickness (negative: wet sand only)
@@ -935,7 +948,15 @@ public sealed unsafe class WaterRenderer : IDisposable
             }
             amount = max(amount, (1.0 - smoothstep(0.0, 4.0, abs(s.dist))) * (0.15 + 0.25 * s.open) * fade);
             // The swash: its front is dense, the sheet behind it thins out.
-            if (swash && sheet > 0.0) surfAmount = max(surfAmount, max(0.85 * (1.0 - smoothstep(0.0, runup * 0.2, sheet + (b1.g - 0.5) * runup * 0.3)), 0.35 * (1.0 - sinceCrest)));
+            // The swash's front: a line of foam whose width wanders along the shore (a thread here, a broad band there), thinning out at its very
+            // edge and broken by the lace, and a thin lace in the sheet behind it.
+            if (swash && sheet > 0.0)
+            {
+                float wander = wNoise(p / 40.0 + 7.3);
+                float band = runup * mix(0.04, 0.3, wander * wander);
+                float frontFoam = 0.8 * (1.0 - smoothstep(0.0, band, sheet + (b1.g - 0.5) * band)) * smoothstep(0.0, 0.03 + 0.12 * b2.g, sheet);
+                surfAmount = max(surfAmount, max(frontFoam, 0.3 * (1.0 - sinceCrest) * smoothstep(0.35, 0.75, b1.g)));
+            }
             // Foam wears away as it ages: fresh at the break, and the further the wave has run in since (travel, from the break point to the
             // waterline) and the further behind its crest, the more of it is lace with holes (on the swash too: the sheet thins as it recedes).
             float age = clamp(ageS + (0.5 - clump) * 0.5, 0.0, 1.0);
@@ -976,7 +997,9 @@ public sealed unsafe class WaterRenderer : IDisposable
                 // from its middle while the walls between the cells stay as lace; the threshold itself rises only a little with the age.
                 vec2 cell = popCells(q * 0.045);
                 float popped = smoothstep(cell.y, cell.y + 0.12, age);
-                lace -= popped * 0.45 * smoothstep(0.04, 0.3, cell.x);
+                // On the swash no cells: its thin sheet only shows the finer lace (the cells' holes read as a tiled pattern on the sand).
+                lace -= popped * 0.45 * smoothstep(0.04, 0.3, cell.x) * (swash ? 0.0 : 1.0);
+                if (swash) lace = mix(lace, b2.g * 0.5 + max(b1.r, b2.r) * 0.45 + bubbles * 0.2, 0.6);
                 float wear = 0.075 + age * 0.3;
                 float surf = surfAmount * mix(0.7, 1.0, clean);
                 foam = max(foam, smoothstep(0.95 - surf + wear, 1.3 - surf + wear + 0.2 * age, lace));
@@ -1019,7 +1042,7 @@ public sealed unsafe class WaterRenderer : IDisposable
                 {
                     // The sheet thins into the wet sand at its front, and its foam's leading edge is a few units wide. Wet sand darkens and glosses
                     // the scene under it, scene * (1 - 0.35 wet) + gloss * wet: a blend over the scene at full size (the half-size copy blurred the sand).
-                    float f = foam * smoothstep(0.0, 0.15, sheet), front = smoothstep(0.0, 0.6, sheet);
+                    float f = foam * smoothstep(0.0, 0.05 + 0.25 * b2.g, sheet), front = smoothstep(0.0, 0.3 + 0.6 * b1.g, sheet);
                     a = f + (1.0 - f) * (front + (1.0 - front) * 0.35 * wet);
                     colour = (foamColour * f + (1.0 - f) * (surface * front + (1.0 - front) * wetGloss * wet)) / max(a, 1e-4);
                 }

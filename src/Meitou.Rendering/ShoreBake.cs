@@ -159,6 +159,7 @@ internal static class ShoreBake
         var tmp = Scratch.Get(ref scratch.Tmp, n * n);
         Smooth(dist, tmp, n);
         var exposure = Exposure(dist, n, texel, maxDistance, IsletBlocks(s, seeds, n, texel, scratch), Scratch.Get(ref scratch.Exposure, n * n));
+        Relax(dist, Scratch.Get(ref scratch.Wide, n * n), tmp, n, texel);
         return new ShoreGrid(n, texel, x0, z0, maxDistance, dist, exposure);
     }
 
@@ -247,7 +248,7 @@ internal static class ShoreBake
     /// </summary>
     internal sealed class Scratch
     {
-        internal float[]? S, Dist, Tmp, Exposure;
+        internal float[]? S, Dist, Tmp, Exposure, Wide;
         internal Seed[]? Seeds;
         internal int[]? Label, Stack;
 
@@ -296,6 +297,69 @@ internal static class ShoreBake
             int jm = Math.Max(j - 1, 0), jp = Math.Min(j + 1, n - 1);
             for (int i = 0; i < n; i++)
                 a[j * n + i] = 0.25f * (tmp[jm * n + i] + 2 * tmp[j * n + i] + tmp[jp * n + i]);
+        });
+    }
+
+    /// <summary>
+    /// Offshore the distance is eased towards its blur (three box passes of <see cref="RelaxRadius"/> texels, about a 105-unit Gaussian at 10 units a texel), from
+    /// <see cref="RelaxNear"/> to <see cref="RelaxFar"/> units out, and not within <see cref="RelaxEdge"/> texels of the grid's edge (the blur's edge would bend it). The exact
+    /// distance creases where the nearest shore switches (a bay's middle, off a point or a pier's corner): the breakers' crests, which follow its lines, kinked there and
+    /// their foam's frame (the gradient) flipped along a straight seam. Eased, the crests bend round such places as refracted swell does; the waterline is unchanged.
+    /// </summary>
+    static void Relax(float[] dist, float[] wide, float[] tmp, int n, float texel)
+    {
+        Array.Copy(dist, wide, n * n);
+        for (int pass = 0; pass < 3; pass++)
+        {
+            BoxRows(wide, tmp, n);
+            BoxColumns(tmp, wide, n);
+        }
+        float near = RelaxNear, far = RelaxFar;
+        Parallel.For(0, n, j =>
+        {
+            int ej = Math.Min(j, n - 1 - j);
+            for (int i = 0; i < n; i++)
+            {
+                int k = j * n + i;
+                float w = SmoothStep(near, far, dist[k]) * SmoothStep(0, RelaxEdge, Math.Min(ej, Math.Min(i, n - 1 - i)));
+                if (w > 0) dist[k] += (wide[k] - dist[k]) * w;
+            }
+        });
+    }
+
+    const int RelaxRadius = 10, RelaxEdge = 32;
+    const float RelaxNear = 40, RelaxFar = 250;
+
+    /// <summary>One box pass of <see cref="RelaxRadius"/> along the rows (edge texels repeated), a running sum.</summary>
+    static void BoxRows(float[] a, float[] b, int n)
+    {
+        const int r = RelaxRadius;
+        Parallel.For(0, n, j =>
+        {
+            int row = j * n;
+            float sum = 0;
+            for (int k = -r; k <= r; k++) sum += a[row + Math.Clamp(k, 0, n - 1)];
+            for (int i = 0; i < n; i++)
+            {
+                b[row + i] = sum / (2 * r + 1);
+                sum += a[row + Math.Min(i + r + 1, n - 1)] - a[row + Math.Max(i - r, 0)];
+            }
+        });
+    }
+
+    /// <summary>The same along the columns.</summary>
+    static void BoxColumns(float[] a, float[] b, int n)
+    {
+        const int r = RelaxRadius;
+        Parallel.For(0, n, i =>
+        {
+            float sum = 0;
+            for (int k = -r; k <= r; k++) sum += a[Math.Clamp(k, 0, n - 1) * n + i];
+            for (int j = 0; j < n; j++)
+            {
+                b[j * n + i] = sum / (2 * r + 1);
+                sum += a[Math.Min(j + r + 1, n - 1) * n + i] - a[Math.Max(j - r, 0) * n + i];
+            }
         });
     }
 

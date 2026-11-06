@@ -21,7 +21,15 @@ exposure, with breaker/swash/foam envelopes, rather than bottom-slope distance a
 Game normal maps remain with reduced near strength. Shore-field bakes/publishing must not stall
 frames; retain ready textures until replacements finish. RiverFlowBake derives channel flow from
 heights because source flowmap RG does not follow channels; suppress ocean/surf in river channels.
-River coverage and biome scum are incomplete; object-contact foam and character wakes are the off-by-default [switch below](#contact-foam-wakes-and-ripples).
+Shore waves (Meitou look, not in the game): offshore the baked distance is eased towards a ~105-unit Gaussian blur of itself (three
+10-texel box passes) from 40 to 250 units out, not within 32 texels of the field's edge (`ShoreBake.Relax`); the exact distance creases
+where the nearest shore switches (a bay's middle, off a point or a pier), and the crests that follow its lines kinked there while their
+foam's frame flipped along a straight seam. Where the field's slope over 24 units is under about 0.8 (two fronts meeting) a crest keeps
+30% of its size. Along each crest its size varies 0.5 to 1 (240-unit noise, a pattern of its own per wave). Each wave's run-up varies
+0.55 to 1 along the beach (70-unit tongues) and the wet line 0.7 to 1; the swash front's foam band wanders from 0.04 to 0.3 of the
+run-up (40-unit noise), thins in over its edge and takes the finer lace without the cell holes (a tiled pattern on the sand).
+**Observed** (Bark lake by the pier, offscreen sequences): the straight seam is gone and crests bend and fade there; swash close-ups
+**Unknown** (no swash on sand was caught in the test views). River coverage and biome scum are incomplete; object-contact foam and character wakes are the off-by-default [switch below](#contact-foam-wakes-and-ripples).
 
 ## Shading and reflection
 
