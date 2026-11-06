@@ -142,14 +142,40 @@ internal static class SeedPruner
     /// <summary>How far (units) a border edge's middle may be from the ground (the terrain, or the water's height over it) to count as ground level (engine choice).</summary>
     public const float BorderGroundSlack = 30;
 
+    /// <summary>
+    /// The narrowest portal (units) the kept set spreads through: the original generator's <c>minCharacterWidth</c> 9 (docs/game/pathfinding.md, "Narrow
+    /// portals"). The original joins faces by their shared edges, so two walkable terrain triangles touching at a corner stay apart; Recast's cells join them by a
+    /// neck a cell or two wide, and the region behind it stayed kept though no walker fits through (Observed: of the walkable terrain triangles with no walkable
+    /// edge-neighbour, the original keeps none, Meitou kept 38 %, with the rule 6 %). Edges with links (tile seams, inner seams, door joins) are not tested.
+    /// </summary>
+    public const float MinPortalWidth = 9;
+
     static void Spread(ZoneNavMesh mesh, bool[] keep, Queue<int> queue)
     {
         while (queue.Count > 0)
         {
             int p = queue.Dequeue();
-            foreach (int q in mesh.NeighboursOf(p))
-                if (!keep[q]) { keep[q] = true; queue.Enqueue(q); }
+            var poly = mesh.Polygons[p];
+            var nb = mesh.Neighbours[p];
+            for (int k = 0; k < nb.Length; k++)
+            {
+                int q = nb[k];
+                if (q < 0 || keep[q] || EdgeLength(mesh, poly, k) < MinPortalWidth) continue;
+                keep[q] = true;
+                queue.Enqueue(q);
+            }
+            var links = mesh.LinksOf(p);
+            for (int i = 1; i < links.Length; i += 2)
+                if (!keep[links[i]]) { keep[links[i]] = true; queue.Enqueue(links[i]); }
         }
+    }
+
+    static float EdgeLength(ZoneNavMesh mesh, int[] poly, int k)
+    {
+        var a = mesh.Vertices[poly[k]];
+        var b = mesh.Vertices[poly[(k + 1) % poly.Length]];
+        float dx = b.X - a.X, dz = b.Z - a.Z;
+        return MathF.Sqrt(dx * dx + dz * dz);
     }
 
     static int[] Components(ZoneNavMesh mesh)
