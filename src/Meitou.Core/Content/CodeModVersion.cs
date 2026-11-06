@@ -3,33 +3,102 @@ using System.Globalization;
 namespace Meitou.Content;
 
 /// <summary>
-/// A code mod's <c>version</c> (docs/modding.md "Dependencies"): <c>MAJOR.MINOR.PATCH</c>, whole numbers. A pre-release or build suffix (<c>-beta.1</c>, <c>+abc</c>) is
-/// allowed and ignored when comparing, so <c>1.2.0-beta</c> satisfies <c>&gt;=1.2.0</c>.
+/// A code mod's <c>version</c> (docs/modding-dependencies.md "Versions"): a Semantic Versioning 2.0.0 version, <c>MAJOR.MINOR.PATCH</c> with an optional
+/// pre-release (<c>-beta.1</c>) and build metadata (<c>+abc</c>). Precedence is SemVer's: a pre-release is lower than its release (<c>1.2.0-beta &lt; 1.2.0</c>),
+/// pre-release identifiers compare one by one (numbers numerically, below text), and build metadata is ignored, also by equality.
 /// </summary>
 public readonly record struct CodeModVersion(int Major, int Minor, int Patch) : IComparable<CodeModVersion>
 {
+    /// <summary>The pre-release identifiers after <c>-</c>, dot-separated; empty for a release.</summary>
+    public string Prerelease { get => field ?? ""; init; }
+
+    /// <summary>The build metadata after <c>+</c>; empty when none. Kept for display, ignored when comparing.</summary>
+    public string Build { get => field ?? ""; init; }
+
+    public bool IsPrerelease => Prerelease.Length > 0;
+
     public static bool TryParse(string text, out CodeModVersion version)
     {
         version = default;
-        int end = text.IndexOfAny(['-', '+']);
-        var parts = (end < 0 ? text : text[..end]).Split('.');
-        if (parts.Length != 3) return false;
-        var numbers = new int[3];
-        for (int i = 0; i < 3; i++)
-            if (!int.TryParse(parts[i], NumberStyles.None, CultureInfo.InvariantCulture, out numbers[i])) return false;
-        version = new CodeModVersion(numbers[0], numbers[1], numbers[2]);
+        int plus = text.IndexOf('+');
+        string build = plus < 0 ? "" : text[(plus + 1)..];
+        string rest = plus < 0 ? text : text[..plus];
+        int dash = rest.IndexOf('-');
+        string prerelease = dash < 0 ? "" : rest[(dash + 1)..];
+        string core = dash < 0 ? rest : rest[..dash];
+        if (plus >= 0 && !Identifiers(build, numericRule: false)) return false;
+        if (dash >= 0 && !Identifiers(prerelease, numericRule: true)) return false;
+        if (!TryParseCore(core, out int major, out int minor, out int patch)) return false;
+        version = new CodeModVersion(major, minor, patch) { Prerelease = prerelease, Build = build };
         return true;
     }
 
-    public int CompareTo(CodeModVersion other) =>
-        Major != other.Major ? Major.CompareTo(other.Major) : Minor != other.Minor ? Minor.CompareTo(other.Minor) : Patch.CompareTo(other.Patch);
+    static bool TryParseCore(string core, out int major, out int minor, out int patch)
+    {
+        major = minor = patch = 0;
+        var parts = core.Split('.');
+        if (parts.Length != 3 || !parts.All(IsNumber)) return false;
+        return int.TryParse(parts[0], NumberStyles.None, CultureInfo.InvariantCulture, out major)
+            && int.TryParse(parts[1], NumberStyles.None, CultureInfo.InvariantCulture, out minor)
+            && int.TryParse(parts[2], NumberStyles.None, CultureInfo.InvariantCulture, out patch);
+    }
 
-    public override string ToString() => $"{Major}.{Minor}.{Patch}";
+    /// <summary>Dot-separated, non-empty identifiers of ASCII letters, digits and <c>-</c>; pre-release numbers may not have leading zeros.</summary>
+    static bool Identifiers(string text, bool numericRule)
+    {
+        foreach (var part in text.Split('.'))
+        {
+            if (part.Length == 0 || !part.All(c => char.IsAsciiLetterOrDigit(c) || c == '-')) return false;
+            if (numericRule && part.All(char.IsAsciiDigit) && !IsNumber(part)) return false;
+        }
+        return true;
+    }
+
+    /// <summary>Digits without a leading zero (a lone <c>0</c> is fine).</summary>
+    static bool IsNumber(string part) => part.Length > 0 && part.All(char.IsAsciiDigit) && (part.Length == 1 || part[0] != '0');
+
+    public int CompareTo(CodeModVersion other)
+    {
+        int order = Major != other.Major ? Major.CompareTo(other.Major) : Minor != other.Minor ? Minor.CompareTo(other.Minor) : Patch.CompareTo(other.Patch);
+        return order != 0 ? order : ComparePrerelease(Prerelease, other.Prerelease);
+    }
+
+    /// <summary>SemVer 11.3/11.4: a release beats any pre-release; otherwise identifier by identifier, and more identifiers win a tie.</summary>
+    static int ComparePrerelease(string a, string b)
+    {
+        if (a.Length == 0 || b.Length == 0) return b.Length.CompareTo(a.Length);
+        var left = a.Split('.');
+        var right = b.Split('.');
+        for (int i = 0; i < Math.Min(left.Length, right.Length); i++)
+            if (CompareIdentifier(left[i], right[i]) is var order and not 0) return order;
+        return left.Length.CompareTo(right.Length);
+    }
+
+    static int CompareIdentifier(string a, string b)
+    {
+        bool aNumber = a.All(char.IsAsciiDigit);
+        bool bNumber = b.All(char.IsAsciiDigit);
+        if (aNumber && bNumber) return a.Length != b.Length ? a.Length.CompareTo(b.Length) : string.CompareOrdinal(a, b);
+        if (aNumber != bNumber) return aNumber ? -1 : 1;
+        return Math.Sign(string.CompareOrdinal(a, b));
+    }
+
+    /// <summary>Same precedence: build metadata does not count.</summary>
+    public bool Equals(CodeModVersion other) => CompareTo(other) == 0;
+
+    public override int GetHashCode() => HashCode.Combine(Major, Minor, Patch, Prerelease);
+
+    /// <summary>Same major, minor and patch, whatever the pre-release.</summary>
+    public bool SameRelease(CodeModVersion other) => Major == other.Major && Minor == other.Minor && Patch == other.Patch;
+
+    public override string ToString() =>
+        $"{Major}.{Minor}.{Patch}" + (IsPrerelease ? "-" + Prerelease : "") + (Build.Length > 0 ? "+" + Build : "");
 }
 
 /// <summary>
 /// A dependency's version range: comparators separated by spaces, all of which must hold (<c>&gt;=1.2.0 &lt;2.0.0</c>). Operators: <c>&gt;=</c>, <c>&gt;</c>,
-/// <c>&lt;=</c>, <c>&lt;</c>, <c>=</c>; a bare version means <c>=</c>.
+/// <c>&lt;=</c>, <c>&lt;</c>, <c>=</c>; a bare version means <c>=</c>. A pre-release is accepted only when a comparator names a pre-release of the same
+/// <c>MAJOR.MINOR.PATCH</c> (as npm and Cargo do), so <c>&lt;2.0.0</c> does not take <c>2.0.0-alpha</c> and nothing takes an unasked-for pre-release.
 /// </summary>
 public sealed class CodeModVersionRange
 {
@@ -58,7 +127,10 @@ public sealed class CodeModVersionRange
         return new CodeModVersionRange(text.Trim(), list);
     }
 
-    public bool Contains(CodeModVersion version) => comparators.All(c => Holds(c.Op, version.CompareTo(c.Version)));
+    public bool Contains(CodeModVersion version) =>
+        comparators.All(c => Holds(c.Op, version.CompareTo(c.Version))) && (!version.IsPrerelease || OptsIntoPrerelease(version));
+
+    bool OptsIntoPrerelease(CodeModVersion version) => comparators.Any(c => c.Version.IsPrerelease && c.Version.SameRelease(version));
 
     static bool Holds(string op, int order) => op switch
     {

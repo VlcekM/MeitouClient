@@ -9,23 +9,46 @@ namespace Meitou.Content;
 /// mods by id, each with an optional version range and <c>optional</c> flag).
 /// </summary>
 public sealed record CodeModManifest(string Id, int ApiVersion, IReadOnlyList<string> Assemblies, string Entry,
-    CodeModVersion? Version = null, IReadOnlyList<CodeModDependency>? Dependencies = null)
+    CodeModVersion? Version, IReadOnlyList<CodeModDependency>? Dependencies)
 {
+    /// <summary>The API 1 constructor, kept so mods compiled against API 1 still bind to it (docs/modding-dependencies.md "Compatibility").</summary>
+    public CodeModManifest(string Id, int ApiVersion, IReadOnlyList<string> Assemblies, string Entry)
+        : this(Id, ApiVersion, Assemblies, Entry, null, null)
+    {
+    }
+
+    /// <summary>The API 1 deconstruction (four parts), kept beside the generated six-part one for mods compiled against API 1.</summary>
+    public void Deconstruct(out string Id, out int ApiVersion, out IReadOnlyList<string> Assemblies, out string Entry)
+    {
+        Id = this.Id;
+        ApiVersion = this.ApiVersion;
+        Assemblies = this.Assemblies;
+        Entry = this.Entry;
+    }
+
     /// <summary>The declared dependencies, in manifest order; empty when the manifest has none.</summary>
     public IReadOnlyList<CodeModDependency> DependsOn => Dependencies ?? [];
 
-    /// <summary>Reads a manifest; throws <see cref="InvalidDataException"/> with the reason when it is not a valid one.</summary>
+    /// <summary>
+    /// Reads a manifest; throws <see cref="InvalidDataException"/> with the reason when it is not a valid one, or <see cref="IOException"/> /
+    /// <see cref="UnauthorizedAccessException"/> when the file cannot be read. Every field is checked for its JSON kind before it is read.
+    /// </summary>
     public static CodeModManifest Read(string path)
     {
+        var options = new JsonDocumentOptions { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true };
         try
         {
-            var options = new JsonDocumentOptions { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true };
             using var json = JsonDocument.Parse(File.ReadAllBytes(path), options);
             return FromJson(json.RootElement);
         }
         catch (JsonException e)
         {
             throw new InvalidDataException($"{ModList.CodeManifestFile} is not valid JSON: {e.Message}", e);
+        }
+        catch (InvalidOperationException e)
+        {
+            // A JsonElement read of the wrong kind; the field checks should make this unreachable, but it stays a malformed manifest, not a crash.
+            throw new InvalidDataException($"{ModList.CodeManifestFile} has a field of the wrong kind: {e.Message}", e);
         }
     }
 
@@ -34,8 +57,7 @@ public sealed record CodeModManifest(string Id, int ApiVersion, IReadOnlyList<st
         if (root.ValueKind != JsonValueKind.Object) throw new InvalidDataException($"{ModList.CodeManifestFile} must hold an object");
         string id = Text(root, "id");
         if (!IsValidId(id)) throw new InvalidDataException($"id '{id}': use letters, digits, '.', '_' and '-', starting with a letter or digit");
-        if (!root.TryGetProperty("apiVersion", out var api) || !api.TryGetInt32(out int apiVersion))
-            throw new InvalidDataException("apiVersion: a whole number is needed");
+        int apiVersion = WholeNumber(root, "apiVersion");
         string entry = Text(root, "entry");
         return new CodeModManifest(id, apiVersion, ReadAssemblies(root), entry, ReadVersion(root), ReadDependencies(root, id));
     }
@@ -61,6 +83,13 @@ public sealed record CodeModManifest(string Id, int ApiVersion, IReadOnlyList<st
             dependencies.Add(dependency);
         }
         return dependencies;
+    }
+
+    static int WholeNumber(JsonElement root, string name)
+    {
+        if (!root.TryGetProperty(name, out var value) || value.ValueKind != JsonValueKind.Number || !value.TryGetInt32(out int number))
+            throw new InvalidDataException($"{name}: a whole number is needed, such as 2 (not \"2\")");
+        return number;
     }
 
     static string Text(JsonElement root, string name)

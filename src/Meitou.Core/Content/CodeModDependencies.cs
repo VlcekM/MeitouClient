@@ -1,11 +1,28 @@
 namespace Meitou.Content;
 
-/// <summary>A mod of the mod list as the dependency rules see it: its name, its code manifest (null: data only or unreadable) and whether it is enabled.</summary>
-public sealed record CodeModEntry(string Name, CodeModManifest? Manifest, bool Enabled);
+/// <summary>
+/// A mod of the mod list as the dependency rules see it: its name, its code manifest (null: data only or unreadable), whether it is enabled and its FCS header
+/// <c>dependencies</c> (<c>.mod</c> file names; docs/formats/fcs-mod.md "File"), which only <see cref="CodeModDependencies.Arrange"/> reads.
+/// </summary>
+public sealed record CodeModEntry(string Name, CodeModManifest? Manifest, bool Enabled, IReadOnlyList<string>? HeaderDependencies = null);
+
+/// <summary>One ordering constraint of <see cref="CodeModDependencies.Arrange"/>: <see cref="Before"/> must load before <see cref="After"/>, for <see cref="Why"/>.</summary>
+public sealed record OrderConstraint(string Before, string After, string Why)
+{
+    public override string ToString() => $"{After} after {Before} ({Why})";
+}
+
+/// <summary>
+/// What Arrange proposes: the new order, or, when the constraints contradict each other, the unchanged order and the constraints that form a cycle.
+/// </summary>
+public sealed record ArrangeResult(IReadOnlyList<string> Order, IReadOnlyList<OrderConstraint> Cycle)
+{
+    public bool HasCycle => Cycle.Count > 0;
+}
 
 /// <summary>
 /// The code-mod dependency rules shared by the game's loader and the launcher (docs/modding.md "Dependencies"). <c>mods.cfg</c> is the only load order: a dependency
-/// must be enabled, earlier in the list, and of a version its range accepts. Nothing here reorders on its own; <see cref="Arrange"/> is the launcher's best-effort fix.
+/// must be enabled, earlier in the list, and of a version its range accepts. Nothing here reorders on its own; <see cref="Arrange"/> is the launcher's proposed fix.
 /// </summary>
 public static class CodeModDependencies
 {
@@ -43,36 +60,78 @@ public static class CodeModDependencies
     }
 
     /// <summary>
-    /// A best-effort order (the launcher's Arrange button): the same names, each mod moved after the installed mods it depends on (optional ones too), otherwise
-    /// keeping the current order. Mods in a dependency cycle keep their relative order after the rest. Enables nothing and fixes no version.
+    /// The launcher's Arrange: one graph of every constraint between enabled mods, the code-mod <c>dependencies</c> (optional ones too, as a present one must load
+    /// first) and the FCS header <c>dependencies</c>, then the order that keeps the current one as far as the constraints allow (each step takes the earliest mod
+    /// whose prerequisites are placed). Disabled mods add no constraint and keep their place among the rest. A cycle, including a code constraint contradicting
+    /// a data one, changes nothing and is returned. Enables nothing and fixes no version.
     /// </summary>
-    public static List<string> Arrange(IReadOnlyList<CodeModEntry> list)
+    public static ArrangeResult Arrange(IReadOnlyList<CodeModEntry> list)
     {
-        var waiting = new List<int>();
-        for (int i = 0; i < list.Count; i++) waiting.Add(i);
+        var constraints = Constraints(list);
+        var prerequisites = list.Select((_, i) => constraints.Where(c => c.After == i).Select(c => c.Before).ToHashSet()).ToList();
+        var order = StableTopologicalOrder(prerequisites);
+        if (order.Count == list.Count) return new ArrangeResult([.. order.Select(i => list[i].Name)], []);
+        var stuck = Enumerable.Range(0, list.Count).Except(order).ToHashSet();
+        return new ArrangeResult([.. list.Select(m => m.Name)], FindCycle(stuck, constraints, list));
+    }
+
+    /// <summary>Every constraint between two enabled mods, by position, with its reason.</summary>
+    static List<(int Before, int After, string Why)> Constraints(IReadOnlyList<CodeModEntry> list)
+    {
+        var constraints = new List<(int, int, string)>();
+        for (int i = 0; i < list.Count; i++)
+        {
+            if (!list[i].Enabled) continue;
+            foreach (var dependency in list[i].Manifest?.DependsOn ?? [])
+                if (EnabledIndexOf(m => m.Manifest?.Id == dependency.Id, list) is var at and >= 0 && at != i)
+                    constraints.Add((at, i, $"code: needs '{dependency.Id}'"));
+            foreach (var file in list[i].HeaderDependencies ?? [])
+                if (EnabledIndexOf(m => m.Name + ".mod" == file, list) is var at and >= 0 && at != i)
+                    constraints.Add((at, i, $"data: its .mod header needs {file}"));
+        }
+        return constraints;
+    }
+
+    static int EnabledIndexOf(Func<CodeModEntry, bool> match, IReadOnlyList<CodeModEntry> list)
+    {
+        for (int i = 0; i < list.Count; i++)
+            if (list[i].Enabled && match(list[i])) return i;
+        return -1;
+    }
+
+    /// <summary>Positions in an order where each comes after its prerequisites, the earliest ready one first; stops short when the rest wait on each other.</summary>
+    static List<int> StableTopologicalOrder(IReadOnlyList<HashSet<int>> prerequisites)
+    {
+        var waiting = Enumerable.Range(0, prerequisites.Count).ToList();
         var placed = new HashSet<int>();
-        var order = new List<string>(list.Count);
+        var order = new List<int>(waiting.Count);
         while (waiting.Count > 0)
         {
-            int next = waiting.FindIndex(i => Prerequisites(i, list).All(placed.Contains));
+            int next = waiting.FindIndex(i => prerequisites[i].IsSubsetOf(placed));
             if (next < 0) break;
             placed.Add(waiting[next]);
-            order.Add(list[waiting[next]].Name);
+            order.Add(waiting[next]);
             waiting.RemoveAt(next);
         }
-        order.AddRange(waiting.Select(i => list[i].Name));
         return order;
     }
 
-    /// <summary>The positions of the installed mods the mod at <paramref name="self"/> depends on.</summary>
-    static IEnumerable<int> Prerequisites(int self, IReadOnlyList<CodeModEntry> list)
+    /// <summary>
+    /// One cycle among the mods that could not be placed: every one of them waits on another of them, so following prerequisites from any of them repeats.
+    /// </summary>
+    static List<OrderConstraint> FindCycle(HashSet<int> stuck, List<(int Before, int After, string Why)> constraints, IReadOnlyList<CodeModEntry> list)
     {
-        if (list[self].Manifest is not { } manifest) yield break;
-        foreach (var dependency in manifest.DependsOn)
+        var path = new List<(int Before, int After, string Why)>();
+        var seen = new Dictionary<int, int>();
+        int at = stuck.Min();
+        while (!seen.ContainsKey(at))
         {
-            int at = IndexOf(dependency.Id, list);
-            if (at >= 0 && at != self) yield return at;
+            seen[at] = path.Count;
+            var edge = constraints.First(c => c.After == at && stuck.Contains(c.Before));
+            path.Add(edge);
+            at = edge.Before;
         }
+        return [.. path.Skip(seen[at]).Reverse().Select(c => new OrderConstraint(list[c.Before].Name, list[c.After].Name, c.Why))];
     }
 
     /// <summary>The position of the mod with manifest id <paramref name="id"/>: the first enabled one, else the first; -1 when none has it.</summary>
@@ -88,11 +147,13 @@ public static class CodeModDependencies
         return first;
     }
 
-    /// <summary>Reads a mod's manifest for the rules, or null when it has none or it cannot be read (the loader reports that itself).</summary>
+    /// <summary>
+    /// Reads a mod's manifest for the rules, or null when it has none or it cannot be read (the loader reports that itself, per mod). A scan over many mods
+    /// must survive any one of them, so no failure of this mod's manifest escapes.
+    /// </summary>
     public static CodeModManifest? TryReadManifest(ModInfo mod)
     {
-        if (!mod.HasCode) return null;
-        try { return CodeModManifest.Read(mod.CodeManifestPath); }
-        catch (Exception e) when (e is InvalidDataException or IOException or UnauthorizedAccessException) { return null; }
+        try { return mod.HasCode ? CodeModManifest.Read(mod.CodeManifestPath) : null; }
+        catch (Exception e) when (e is not OutOfMemoryException) { return null; }
     }
 }

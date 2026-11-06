@@ -66,7 +66,7 @@ public class ModDependencyTests
         var manifest = Parse(Manifest("nemesis", version: "0.3.0-beta",
             dependencies: """["rivalry.core", { "id": "visitors", "version": ">=1.2.0 <2.0.0", "optional": true }]"""));
 
-        Assert.Equal(new CodeModVersion(0, 3, 0), manifest.Version);
+        Assert.Equal(new CodeModVersion(0, 3, 0) { Prerelease = "beta" }, manifest.Version);
         Assert.Equal(["rivalry.core", "visitors"], manifest.DependsOn.Select(d => d.Id));
         Assert.False(manifest.DependsOn[0].Optional);
         Assert.Null(manifest.DependsOn[0].Range);
@@ -104,7 +104,7 @@ public class ModDependencyTests
     [InlineData("<=1.0.0", "1.0.0", true)]
     [InlineData("1.4.2", "1.4.2", true)]
     [InlineData("=1.4.2", "1.4.3", false)]
-    [InlineData(">=1.2.0", "1.2.0-beta.1", true)]
+    [InlineData(">=1.2.0", "1.2.0-beta.1", false)]   // SemVer: a pre-release is below its release
     public void Version_ranges_match_as_documented(string range, string version, bool expected)
     {
         Assert.True(CodeModVersion.TryParse(version, out var v));
@@ -153,11 +153,14 @@ public class ModDependencyTests
             Entry("nemesis", dependencies: [new CodeModDependency("core"), new CodeModDependency("visitors", Optional: true)]),
             Entry("visitors"),
             Entry("core"),
-            Entry("loopA", dependencies: new CodeModDependency("loopB")),
-            Entry("loopB", dependencies: new CodeModDependency("loopA")),
         };
+        Assert.Equal(["Textures", "visitors", "core", "nemesis"], CodeModDependencies.Arrange(list).Order);
 
-        Assert.Equal(["Textures", "visitors", "core", "nemesis", "loopA", "loopB"], CodeModDependencies.Arrange(list));
+        list.Add(Entry("loopA", dependencies: new CodeModDependency("loopB")));
+        list.Add(Entry("loopB", dependencies: new CodeModDependency("loopA")));
+        var cycle = CodeModDependencies.Arrange(list);
+        Assert.Equal(list.Select(m => m.Name), cycle.Order);   // a cycle moves nothing and is reported
+        Assert.Equal(["loopA", "loopB"], cycle.Cycle.Select(c => c.After).Order());
     }
 
     /// <summary>The core guarantee: a dependent gets the dependency's loaded assembly, not its own copy; without the import it would get a second copy.</summary>
@@ -246,7 +249,7 @@ public class ModDependencyTests
         {
             Instance = new Framework(),
         };
-        var manifest = new CodeModManifest("nemesis", 2, ["Nemesis.dll"], "Nemesis.Mod", Dependencies: [new CodeModDependency("core", Optional: true)]);
+        var manifest = new CodeModManifest("nemesis", 2, ["Nemesis.dll"], "Nemesis.Mod", Version: null, Dependencies: [new CodeModDependency("core", Optional: true)]);
         var nemesis = new LoadedMod(new ModInfo("Nemesis", "mods/Nemesis/Nemesis.mod", ModSource.Local), manifest)
         {
             Dependencies = loaded ? [core] : [],

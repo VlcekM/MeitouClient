@@ -521,18 +521,49 @@ public sealed partial class MainWindow : Window
         foreach (var row in mods) row.DependencyProblems = problems.TryGetValue(row.Name, out var lines) ? lines : [];
     }
 
-    List<CodeModEntry> DependencyEntries() => [.. mods.Select(m => new CodeModEntry(m.Name, m.Manifest, m.Enabled))];
+    List<CodeModEntry> DependencyEntries() => [.. mods.Select(m => new CodeModEntry(m.Name, m.Manifest, m.Enabled, m.Mod.Header?.Dependencies))];
 
-    // Best effort: each mod after the installed code mods it depends on, the order otherwise kept. Enables nothing; not saved until Save or Play.
-    void ArrangeMods_Click(object? sender, RoutedEventArgs e)
+    // One graph of the enabled mods' code and .mod header dependencies; the proposed order is shown and applied only when accepted, and is not saved until
+    // Save or Play. A contradiction is shown and changes nothing.
+    async void ArrangeMods_Click(object? sender, RoutedEventArgs e)
     {
         if (!ModsReady()) return;
-        var arranged = CodeModDependencies.Arrange(DependencyEntries());
+        var result = CodeModDependencies.Arrange(DependencyEntries());
+        if (result.HasCycle)
+        {
+            ShowArrangeCycle(result.Cycle);
+            return;
+        }
+        var moves = ArrangeMoves(result.Order);
+        if (moves.Count == 0)
+        {
+            Status(Tr("The mod order already meets every dependency."));
+            return;
+        }
+        if (!await AskAsync(Tr("Arrange mods"), Tr("Proposed moves:") + "\n" + string.Join("\n", moves), Tr("Apply"), Tr("Cancel"))) return;
         var enabled = mods.ToDictionary(m => m.Name, m => m.Enabled, StringComparer.Ordinal);
-        ApplyOrder(arranged.Select(name => (name, enabled[name])));
+        ApplyOrder(result.Order.Select(name => (name, enabled[name])));
         int left = mods.Count(m => m.DependencyProblems.Count > 0);
-        Status(left == 0 ? Tr("Mods arranged by their code-mod dependencies (not saved yet).")
-            : Tr("Mods arranged by their code-mod dependencies (not saved yet); {1} still need attention.", left));
+        Status(left == 0 ? Tr("Mods arranged by their dependencies (not saved yet).")
+            : Tr("Mods arranged by their dependencies (not saved yet); {1} still need attention.", left));
+    }
+
+    void ShowArrangeCycle(IReadOnlyList<OrderConstraint> cycle)
+    {
+        string lines = string.Join("\n", cycle.Select(c => Tr("{1} after {2} ({3})", c.After, c.Before, c.Why)));
+        string text = Tr("These dependencies contradict each other, so nothing was moved:") + "\n" + lines;
+        _ = ChooseAsync(Tr("Arrange mods"), [Wrapped(text)], [(Tr("OK"), true)], cancel: false);
+    }
+
+    // One line per mod whose position changes, in the new order: "3 → 1  Framework"; long lists are cut.
+    List<string> ArrangeMoves(IReadOnlyList<string> order)
+    {
+        const int shown = 12;
+        var before = mods.Select((m, i) => (m.Name, i)).ToDictionary(p => p.Name, p => p.i, StringComparer.Ordinal);
+        var moves = order.Select((name, i) => (name, from: before[name], to: i)).Where(m => m.from != m.to).ToList();
+        var lines = moves.Take(shown).Select(m => $"{m.from + 1} → {m.to + 1}  {m.name}").ToList();
+        if (moves.Count > shown) lines.Add(Tr("and {1} more", moves.Count - shown));
+        return lines;
     }
 
     // False while the list is loading or after it could not be read; Status says why.

@@ -30,14 +30,26 @@ General loader contract: [modding](modding.md).
 }
 ```
 
-- `version`: `MAJOR.MINOR.PATCH`; a `-pre`/`+build` suffix is allowed and ignored when comparing. Optional; a mod without one satisfies
-  only a dependency without a range.
+- `version`: a [SemVer 2.0.0](https://semver.org/spec/v2.0.0.html) version ([Versions](#versions)). Optional; a mod without one
+  satisfies only a dependency without a range.
 - `dependencies`: other code mods by manifest `id` (the key that already names saves, Harmony and log lines; not the folder or `.mod`
   name). A string is a required dependency on any version. An object takes `id`, an optional `version` range and `optional`.
 - Range: comparators separated by spaces, all must hold: `>=`, `>`, `<=`, `<`, `=`; a bare version is `=`. Example: `>=1.2.0 <2.0.0`.
+- Every field is checked for its JSON kind; a wrong kind (`"apiVersion": "2"`) is a malformed manifest (`InvalidDataException`) that
+  refuses that mod only. The loader's and launcher's manifest pre-scan (`CodeModDependencies.TryReadManifest`) never throws: an unreadable
+  manifest reads as none there, and the loader reports it when it reaches that mod.
 - Refused at read: a mod listing itself, an id listed twice, a bad range, a non-boolean `optional`.
 - `dependencies` needs `apiVersion` 2; an API 1 manifest that declares them is refused (an older game would ignore the key and load a
   private copy, the bug this fixes).
+
+## Versions
+
+- Parsing: `MAJOR.MINOR.PATCH[-PRERELEASE][+BUILD]`, numbers without leading zeros; pre-release and build identifiers are
+  dot-separated, non-empty `[0-9A-Za-z-]`; numeric pre-release identifiers have no leading zeros.
+- Precedence (SemVer §11): a pre-release is lower than its release (`1.2.0-beta < 1.2.0`); pre-release identifiers compare one by one,
+  numbers numerically and below text, more identifiers win a tie. Build metadata is ignored, by equality too (`=1.2.0` takes `1.2.0+abc`).
+- A range accepts a pre-release only when one of its comparators names a pre-release of the same `MAJOR.MINOR.PATCH`, as npm and Cargo
+  do: `>=1.2.0` refuses `1.2.0-alpha`, `<2.0.0` refuses `2.0.0-alpha`, `>=1.2.0-beta` takes `1.2.0-beta.2` but not `1.3.0-beta`.
 
 ## Rules
 
@@ -102,15 +114,22 @@ public void Initialize(ModContext c)
 
 - A code mod's row reads "Requires ..." and, in the warning line, each problem the game would refuse at start (missing, disabled,
   later, version), refreshed as mods are toggled or moved. Same rules (`CodeModDependencies.Check`) as the game.
-- **Arrange** (beside Refresh): best effort. Moves each mod after the installed mods it depends on (optional ones too), keeping the
-  rest of the order; mods in a cycle keep their order after the rest. It enables nothing and cannot fix a version; problems that
-  remain stay marked. Not saved until Save mod list or Play.
+- **Arrange** (beside Refresh): one graph of every constraint between **enabled** mods: code `dependencies` (optional ones too, since a
+  present one must load first) and FCS `.mod` header `dependencies`. It proposes the order closest to the current one (each step takes
+  the earliest mod whose prerequisites are placed); disabled mods add no constraint and keep their place among the rest. The proposal
+  lists each move ("3 → 1  Framework") and applies only when accepted; it is not saved until Save mod list or Play. A cycle, including
+  a code constraint that contradicts a data one, moves nothing and is shown edge by edge with its reason (`code: needs 'x'`,
+  `data: its .mod header needs X.mod`). It enables nothing and cannot fix a version; problems that remain stay marked.
 - Trust is per mod: allowing a dependent never allows its dependency.
 
 ## Compatibility
 
-- `ModApi.Version` is 2 and `ModApi.MinimumVersion` 1: the game runs manifests naming 1 or 2. API 1 mods (no new keys) load exactly as
+- `ModApi.Version` is 2 and `ModApi.MinimumVersion` 1: the game runs manifests naming 1 or 2. API 1 manifests (no new keys) load as
   before. An API 2 mod on an API 1 game is refused with the existing message.
+- Binary: the API 1 public surface of `CodeModManifest` is kept, the four-parameter constructor and the four-part `Deconstruct` beside
+  the six-part ones. **Verified** (2026-11-06, scratch run, not in the repo): a library compiled against master's `Meitou.Core` that calls
+  both ran against this build. Other API 1 members are unchanged; `ModApi.Version` is a `const`, so an API 1 DLL keeps the 1 it was
+  compiled with.
 - Saves: unchanged; each mod's sidecar stays under its own id.
 - `meitou-tools mod-check --mod a --mod b`: the folders load in the order given, under the same rules, so pass a framework before its
   dependents.
@@ -130,7 +149,7 @@ libraries); a service registry alone (the interface type must be shared anyway; 
 
 ## Evidence
 
-**Verified** by `ModDependencyTests` (2026-11-06, Linux x64, .NET SDK 10.0.114): manifest keys and errors, range matching, list rules,
-Arrange order, shared vs isolated assembly resolution, refusals before code is opened (missing, later, refused cascade, API 1 with
+**Verified** by `ModDependencyTests` (2026-11-06, Linux x64, .NET SDK 10.0.114): manifest keys and errors, range matching (pre-release
+below its release), list rules, Arrange order and its cycle report, shared vs isolated assembly resolution, refusals before code is opened (missing, later, refused cascade, API 1 with
 dependencies), absent optional dependency, `Dependency<T>`. **Unknown**: a real two-mod game run and the launcher marks drawn
 (built, not run here).
