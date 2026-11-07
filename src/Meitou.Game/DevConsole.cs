@@ -10,6 +10,9 @@ public sealed record ConsoleCommand(string Name, string Usage, string Help, Acti
 {
     /// <summary>The candidates for argument <c>index</c> (0 is the first after the name) beginning with, or else containing, the text typed so far; null: none are offered.</summary>
     public Func<int, string, IEnumerable<string>>? Complete { get; init; }
+
+    /// <summary>The <c>--flags</c> the usage text names, in order (what Tab offers for a word starting with a dash, and what help lists).</summary>
+    public IReadOnlyList<string> Flags => System.Text.RegularExpressions.Regex.Matches(Usage, @"(?<![\w-])--[a-z][a-z0-9-]*").Select(m => m.Value).Distinct().ToList();
 }
 
 /// <summary>
@@ -42,6 +45,18 @@ public sealed class DevConsole
     public Action<string, Kind>? Tap { get; set; }
 
     public void Register(ConsoleCommand command) => commands[command.Name] = command;
+
+    /// <summary>Gives an already registered command an argument completer (the registration helpers of the control commands have none).</summary>
+    public void SetComplete(string name, Func<int, string, IEnumerable<string>> complete)
+    {
+        if (commands.TryGetValue(name, out var c)) commands[name] = c with { Complete = complete };
+    }
+
+    /// <summary>Candidates for the value after a flag (<c>--id</c> takes character ids); the host sets it. Gets the flag and the text typed so far.</summary>
+    public Func<string, string, IEnumerable<string>>? FlagValues { get; set; }
+
+    /// <summary>While a completer runs: the arguments before the word being completed (so a completer can tell <c>order attack</c> from <c>order move</c>).</summary>
+    public IReadOnlyList<string> CompletionArgs { get; private set; } = [];
 
     /// <summary>Adds a line to the scrollback and to log.txt.</summary>
     public void Print(string text, Kind kind = Kind.Info)
@@ -122,9 +137,36 @@ public sealed class DevConsole
         Print(line, Kind.Input);
         var tokens = Tokenize(line, out _);
         if (tokens.Count == 0) return;
-        if (!commands.TryGetValue(tokens[0].Text, out var command)) { Error($"unknown command '{tokens[0].Text}' (help lists them)"); return; }
+        if (!commands.TryGetValue(tokens[0].Text, out var command)) { Error(UnknownCommand(tokens[0].Text)); return; }
         try { command.Run([.. tokens.Skip(1).Select(t => t.Text)], this); }
         catch (Exception e) { Error($"{command.Name} failed: {e.Message}"); }
+    }
+
+    /// <summary>The error line for an unknown command, with the closest names (prefix, substring, or an edit distance of at most 2).</summary>
+    string UnknownCommand(string typed)
+    {
+        string low = typed.ToLowerInvariant();
+        var close = commands.Keys.Where(n => n.StartsWith(low, StringComparison.OrdinalIgnoreCase) || n.Contains(low, StringComparison.OrdinalIgnoreCase) || EditDistance(n, low) <= 2)
+            .OrderBy(n => EditDistance(n, low)).ThenBy(n => n, StringComparer.Ordinal).Take(5).ToList();
+        return $"unknown command '{typed}'" + (close.Count > 0 ? "; did you mean: " + string.Join(", ", close) + "?" : " (help lists them)");
+    }
+
+    /// <summary>Edit distance between two names.</summary>
+    public static int EditDistance(string a, string b)
+    {
+        var row = Enumerable.Range(0, b.Length + 1).ToArray();
+        for (int i = 1; i <= a.Length; i++)
+        {
+            int diagonal = row[0];
+            row[0] = i;
+            for (int j = 1; j <= b.Length; j++)
+            {
+                int above = row[j];
+                row[j] = Math.Min(Math.Min(row[j] + 1, row[j - 1] + 1), diagonal + (a[i - 1] == b[j - 1] ? 0 : 1));
+                diagonal = above;
+            }
+        }
+        return row[b.Length];
     }
 
     public ConsoleCommand? Find(string name) => commands.GetValueOrDefault(name);
@@ -165,7 +207,18 @@ public sealed class DevConsole
         var (typed, start) = tokens[index];
         IEnumerable<string> found;
         if (index == 0) found = commands.Keys.Where(k => k.StartsWith(typed, StringComparison.OrdinalIgnoreCase)).Order(StringComparer.Ordinal);
-        else found = commands.GetValueOrDefault(tokens[0].Text)?.Complete?.Invoke(index - 1, typed) ?? [];
+        else
+        {
+            var command = commands.GetValueOrDefault(tokens[0].Text);
+            CompletionArgs = [.. tokens.Skip(1).Take(index - 1).Select(t => t.Text)];
+            string previous = index >= 2 ? tokens[index - 1].Text : "";
+            if (command is null) found = [];
+            else if (typed.StartsWith('-')) found = command.Flags.Where(f => f.StartsWith(typed, StringComparison.OrdinalIgnoreCase));
+            else if (previous.StartsWith("--", StringComparison.Ordinal) && FlagValues?.Invoke(previous, typed) is { } values && values.Any()) found = values;
+            else found = command.Complete?.Invoke(index - 1, typed) ?? [];
+            found = found.ToList();
+            CompletionArgs = [];
+        }
         var candidates = found.Distinct().Take(500).ToList();
         if (candidates.Count == 0) return;
         string fill;

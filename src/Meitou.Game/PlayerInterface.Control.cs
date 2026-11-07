@@ -300,6 +300,36 @@ sealed partial class PlayerInterface
 
     public IReadOnlyList<CharacterId> ControlSquad() => ActiveSquadMembers();
 
+    /// <summary>Console Tab completion: character ids (c:slot.gen), the squad first, then the nearest others (at most <paramref name="limit"/> in all), from the live world; empty when none is loaded.</summary>
+    public List<string> ControlCharacterKeys(int limit = 40)
+    {
+        var snap = session.CurrentSnapshot;
+        var squad = ActiveSquadMembers();
+        var lead = Selected().FirstOrDefault() ?? snap.Characters.FirstOrDefault(c => c.IsPlayer);
+        var from = lead is null ? Vector3.Zero : where(lead);
+        var keys = squad.Select(CharacterKey).ToList();
+        keys.AddRange(snap.Characters.Where(c => !squad.Contains(c.Id)).OrderBy(c => Vector3.DistanceSquared(where(c), from)).Select(c => CharacterKey(c.Id)));
+        return [.. keys.Take(limit)];
+    }
+
+    /// <summary>Console Tab completion: the item names the first selected (else lead) character carries, once each.</summary>
+    public List<string> ControlCarriedItemNames()
+    {
+        var who = ControlOrderers();
+        var id = who.Count > 0 ? who[0] : (Selected().FirstOrDefault() ?? session.CurrentSnapshot.Characters.FirstOrDefault(c => c.IsPlayer))?.Id ?? CharacterId.None;
+        return ControlCharacter(id)?.ItemGrid is { } grid ? [.. grid.Items.Select(i => i.Name).Where(n => n.Length > 0).Distinct()] : [];
+    }
+
+    /// <summary>Console Tab completion for pickup: <c>nearest</c> and the ids of the loose items nearest to the lead (at most 20).</summary>
+    public List<string> ControlGroundItemKeys()
+    {
+        var lead = Selected().FirstOrDefault() ?? session.CurrentSnapshot.Characters.FirstOrDefault(c => c.IsPlayer);
+        var from = lead is null ? Vector3.Zero : where(lead);
+        List<string> keys = ["nearest"];
+        keys.AddRange(session.CurrentSnapshot.GroundItems.OrderBy(g => Vector3.DistanceSquared(g.Position, from)).Take(20).Select(g => g.Id.ToString(CultureInfo.InvariantCulture)));
+        return keys;
+    }
+
     /// <summary>The characters an order would go to: the world's selection, else what the last select command asked for.</summary>
     internal IReadOnlyList<CharacterId> ControlOrderers()
     {

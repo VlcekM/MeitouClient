@@ -140,21 +140,28 @@ sealed partial class GameHost
     }
 
     /// <summary>Edit distance between two command names (for the "close names" hint of help).</summary>
-    static int HelpDistance(string a, string b)
+    static int HelpDistance(string a, string b) => DevConsole.EditDistance(a, b);
+
+    /// <summary>Argument completion for the commands the control-side registration helpers add (they take no completer): character ids from the live world, carried items, flag values. Any word starting with a dash completes the command's own flags (DevConsole.Complete).</summary>
+    void RegisterConsoleCompletions()
     {
-        var row = Enumerable.Range(0, b.Length + 1).ToArray();
-        for (int i = 1; i <= a.Length; i++)
+        var c = devConsole;
+        IEnumerable<string> Starting(IEnumerable<string> names, string typed) => names.Where(n => n.StartsWith(typed, StringComparison.OrdinalIgnoreCase));
+        IEnumerable<string> Characters(string typed) => Starting(player.ControlCharacterKeys(), typed);
+        c.FlagValues = (flag, typed) => flag.ToLowerInvariant() switch
         {
-            int diagonal = row[0];
-            row[0] = i;
-            for (int j = 1; j <= b.Length; j++)
-            {
-                int above = row[j];
-                row[j] = Math.Min(Math.Min(row[j] + 1, row[j - 1] + 1), diagonal + (a[i - 1] == b[j - 1] ? 0 : 1));
-                diagonal = above;
-            }
-        }
-        return row[b.Length];
+            "--id" => Characters(typed),
+            "--aggro" => ConsoleMatch(ConsoleRecordNames(character: false), typed),
+            _ => [],
+        };
+        foreach (var name in new[] { "follow", "loot", "firstaid", "carry" }) c.SetComplete(name, (i, typed) => i == 0 ? Characters(typed) : []);
+        c.SetComplete("select", (_, typed) => Characters(typed));
+        c.SetComplete("order", (i, typed) => i == 0 ? Starting(["move", "attack"], typed) : i == 1 && c.CompletionArgs is ["attack"] ? Characters(typed) : []);
+        c.SetComplete("spawn-at", (i, typed) => i == 2 ? ConsoleMatch(ConsoleRecordNames(character: true), typed) : []);
+        c.SetComplete("equip", (i, typed) => i == 0 ? ConsoleMatch(player.ControlCarriedItemNames(), typed) : []);
+        c.SetComplete("pickup", (i, typed) => i == 0 ? Starting(player.ControlGroundItemKeys(), typed) : []);
+        c.SetComplete("door", (i, typed) => i == 0 ? Starting(["nearest"], typed) : []);
+        foreach (var name in new[] { "godmode", "guard" }) c.SetComplete(name, (i, typed) => i == 0 ? Starting(["on", "off"], typed) : []);
     }
 
     void RegisterConsoleCommands()
@@ -188,8 +195,8 @@ sealed partial class GameHost
             string name = args[0].ToLowerInvariant();
             if (con.Find(name) is { } one)
             {
-                if (channel) controlData = System.Text.Json.JsonSerializer.Serialize(new { name = one.Name, usage = one.Usage, help = one.Help });
-                con.Print($"{one.Usage}\n{one.Help}");
+                if (channel) controlData = System.Text.Json.JsonSerializer.Serialize(new { name = one.Name, usage = one.Usage, help = one.Help, flags = one.Flags });
+                con.Print($"{one.Usage}\n{one.Help}" + (one.Flags.Count > 0 ? "\nflags: " + string.Join(" ", one.Flags) : ""));
                 return;
             }
             // No exact name: search the names, usage and description text for the word (case-insensitive).
@@ -309,6 +316,7 @@ sealed partial class GameHost
         });
 
         RegisterControlCommands();
+        RegisterConsoleCompletions();
 
         c.Print("Dev console (Meitou only). help lists the commands, Tab completes, Up/Down is the history, Esc closes.");
     }
