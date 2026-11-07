@@ -307,7 +307,7 @@ public sealed unsafe class DebrisRenderer : IDisposable
     /// Draws <paramref name="pieces"/> in the open scene pass (a guest): depth tested and written, back faces culled, colour only.
     /// <paramref name="sliceViewProjection"/> is the slice's (absolute world to clip), <paramref name="frustum"/> its planes.
     /// </summary>
-    public void Draw(ReadOnlySpan<DebrisPiece> pieces, Matrix4x4 sliceViewProjection, Vector3 eye, Vector4[] frustum, in WorldLighting light, Func<LimbLook, uint>? skinTable = null)
+    public void Draw(ReadOnlySpan<DebrisPiece> pieces, Matrix4x4 sliceViewProjection, Vector3 eye, Vector4[] frustum, in WorldLighting light, Func<LimbLook, uint>? skinTable = null, Matrix4x4? relative = null)
     {
         if (pieces.IsEmpty) return;
         var cmd = gpu.BeginGuest("debris");
@@ -344,8 +344,10 @@ public sealed unsafe class DebrisRenderer : IDisposable
         // The view block carries the camera-relative projection/eye and the light direction; the frame block carries the atmosphere.
         var view = new ViewConstants
         {
-            // The model matrices are camera-relative (as the legacy path set them), so the view projection is too.
-            ViewProjection = Matrix4x4.CreateTranslation(eye) * sliceViewProjection,
+            // The model matrices are camera-relative (as the legacy path set them), so the view projection is too: the scene's rotation-only one when the caller has it
+            // (translation(eye) × the world view-projection cancels the eye's coordinates in float, a rounding that changes as the jitter does: a bolt stuck in a
+            // character visibly shook against it close up; docs/character-renderer.md "Precision").
+            ViewProjection = relative ?? Matrix4x4.CreateTranslation(eye) * sliceViewProjection,
             Eye = eye,
             LightDir = light.SunDirection,
             FogColour = light.FogColour,
