@@ -107,7 +107,7 @@ sealed class GameOptions
           --new-game [start]         a new game as the NEW_GAME_STARTOFF start (default Wanderer): the player squad at its town, camera on it
           --list-starts              print the available starts and exit
           --data-check               print every game data and level file problem of the load order (missing mod, changed record type...) and exit: 0 none, 1 some
-          --wiki-export <dir>        write the agent wiki's generated files (zones, towns, factions, squads, npcs, items, buildings as JSON) from your game data, mods included, into <dir> and exit (docs/agent-playtest.md)
+          --wiki-export <dir>        write the agent wiki's generated files (zones, towns, factions, squads, npcs, items, buildings, shops, overrides, characters, research, animals, spawns as JSON) from your game data, mods included, into <dir> and exit (docs/agent-playtest.md)
           --sandbox [n]              animation sandbox: no world, a flat 1000x1000 wireframe floor (lines every 10, bold every 100) with 1 character (n = 2: two facing each other 30 units apart; more: the rest idle in rings round them, up to 1000); Z/X/C walk/run/free, [ ] fixed speed, P patrol, G fight, Y follow; works with --screenshot --ticks
           --sandbox-character <name> the CHARACTER or ANIMAL_CHARACTER record the sandbox spawns (default: the first member of the default new-game start)
           --sandbox-mode <list>      the sandbox hero's start, comma-separated: walk, run or free, a fixed speed in u/s, patrol (the 400-unit patrol), fight (the G key, with --sandbox 2), e.g. run,patrol (with --move-to or --screenshot)

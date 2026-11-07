@@ -90,6 +90,20 @@ static partial class WikiExport
                 new SortedDictionary<string, object?> { ["towns"] = names.Count, ["file"] = zone.FileName }));
         }
 
+        // Biome groups with the squads they spawn (WikiExport.Stats.cs); the zone cells and towns carry their biome.
+        var templateById = new Dictionary<string, SquadTemplate>(StringComparer.Ordinal);
+        foreach (var t in SquadTemplate.LoadAll(db)) templateById.TryAdd(t.Id, t);
+        var spawn = Spawns(db, install, placedTowns, templateById, Id);
+        string BiomeAt(float x, float z)
+        {
+            var (cx, cz) = WeatherAreas.CellOf(x, z);
+            return spawn.Map.GroupOf(cx, cz) is >= 0 and var g ? spawn.Map.Groups[g].Name : "";
+        }
+        foreach (var z in zones)
+            if (z.X is { } zx && z.Z is { } zz && BiomeAt(zx, zz) is { Length: > 0 } zb) z.Data["biome"] = zb;
+        foreach (var t in towns)
+            if (t.X is { } tx && t.Z is { } tz && BiomeAt(tx, tz) is { Length: > 0 } tb) t.Data["biome"] = tb;
+
         // Factions.
         var factions = new List<Row>();
         var player = db.Find(FactionData.PlayerId);
@@ -128,6 +142,8 @@ static partial class WikiExport
                 foreach (var l in TownData.From(tr).Residents.Concat(TownData.From(tr).BarSquads))
                     residentOf.TryAdd(l.Id, t.TownId);
         var allSquads = SquadTemplate.LoadAll(db);
+        var townFactionOf = new Dictionary<string, string>(StringComparer.Ordinal);   // town record -> faction name
+        foreach (var t in towns) if (t.Faction is { } tf && t.Record is { } trec) townFactionOf.TryAdd(trec, tf);
         // A leader record that leads squads in several towns is a generic role (a shop trader): no position for it.
         var leaderUse = allSquads.Where(q => q.Leader is not null && residentOf.ContainsKey(q.Id)).GroupBy(q => q.Leader!.Value.Id).ToDictionary(g => g.Key, g => g.Count(), StringComparer.Ordinal);
         foreach (var squad in allSquads.OrderBy(s => s.Name, StringComparer.Ordinal).ThenBy(s => s.Id, StringComparer.Ordinal))
@@ -135,8 +151,11 @@ static partial class WikiExport
             if (squad.Name.Length == 0) continue;
             string leader = squad.Leader is { } ll && db.Find(ll.Id) is { } lc ? lc.Name : "";
             string faction = FactionName(squad.Faction);
+            string factionSource = faction.Length > 0 ? "squad template" : "";
+            if (faction.Length == 0 && residentOf.TryGetValue(squad.Id, out var ownerTown) && townFactionOf.TryGetValue(ownerTown, out var ownerFaction)) { faction = ownerFaction; factionSource = "the town that lists the squad (a template without a faction takes its town's)"; }
             var data = new SortedDictionary<string, object?>
             {
+                ["factionSource"] = factionSource,
                 ["unique"] = squad.IsUnique,
                 ["leader"] = leader,
                 ["trader"] = squad.HasShop,
@@ -155,13 +174,13 @@ static partial class WikiExport
                 var zone = WorldLayout.ZoneOf(x!.Value, z!.Value);
                 npcs.Add(new Row(Id(leader, squad.Leader!.Value.Id), leader, "npc", faction.Length == 0 ? null : faction, $"zone-{zone.X}-{zone.Y}", x, z, "Inferred",
                     $"Leader of the squad {squad.Name}, a resident of {db.Find(townRecord!)?.Name}. Position is the town's; roaming people move.", squad.Leader.Value.Id,
-                    new SortedDictionary<string, object?> { ["squad"] = squad.Name, ["town"] = db.Find(townRecord!)?.Name, ["record"] = squad.Leader.Value.Id }));
+                    new SortedDictionary<string, object?> { ["squad"] = squad.Name, ["town"] = db.Find(townRecord!)?.Name, ["factionSource"] = factionSource, ["record"] = squad.Leader.Value.Id }));
             }
         }
 
         // Character types (humans and animals), without position.
         var seenCharacters = new HashSet<string>(npcs.Select(n => n.Record ?? ""), StringComparer.Ordinal);
-        foreach (var record in db.OfType(FcsRecordType.CHARACTER).Concat(db.OfType(FcsRecordType.ANIMAL_CHARACTER)).OrderBy(r => r.Name, StringComparer.Ordinal).ThenBy(r => r.StringId, StringComparer.Ordinal))
+        foreach (var record in db.OfType(FcsRecordType.CHARACTER).OrderBy(r => r.Name, StringComparer.Ordinal).ThenBy(r => r.StringId, StringComparer.Ordinal))
         {
             if (record.Name.Length == 0 || seenCharacters.Contains(record.StringId) || characterRecords.Contains(record.StringId)) continue;
             string faction = record.GetReferences("faction") is { Count: > 0 } fl ? FactionName(fl[0].TargetStringId) : "";
@@ -171,24 +190,10 @@ static partial class WikiExport
                 new SortedDictionary<string, object?> { ["record"] = record.StringId, ["definedBy"] = record.DefinedBy }));
         }
 
-        // Items.
-        var items = new List<Row>();
-        foreach (var record in db.OfType(FcsRecordType.WEAPON).Concat(db.OfType(FcsRecordType.ARMOUR)).Concat(db.OfType(FcsRecordType.ITEM)).OrderBy(r => r.Name, StringComparer.Ordinal).ThenBy(r => r.StringId, StringComparer.Ordinal))
-        {
-            if (record.Name.Length == 0) continue;
-            string kind = record.Type switch { FcsRecordType.WEAPON => "weapon", FcsRecordType.ARMOUR => "armour", _ => "item" };
-            var data = new SortedDictionary<string, object?> { ["value"] = Num(record, "value"), ["weightKg"] = Num(record, "weight kg"), ["record"] = record.StringId };
-            if (record.Type == FcsRecordType.WEAPON)
-            {
-                data["skillCategory"] = Num(record, "skill category");
-                data["cutMult"] = Num(record, "cut damage multiplier");
-                data["bluntMult"] = Num(record, "blunt damage multiplier");
-                data["length"] = Num(record, "length");
-            }
-            else if (record.Type == FcsRecordType.ARMOUR) data["slot"] = Num(record, "slot");
-            items.Add(new Row(Id(record.Name, record.StringId), record.Name, kind, null, null, null, null, "Observed",
-                $"{kind} record, value {Num(record, "value") ?? 0}, weight {Num(record, "weight kg") ?? 0} kg.", record.StringId, data));
-        }
+        // Research tree, items with their stats and blueprints, animals (WikiExport.Stats.cs).
+        var (research, unlocks) = ResearchRows(db, Id);
+        var items = Items(db, Id, unlocks);
+        var animals = Animals(db, Id, templateById, spawn);
 
         // Buildings (named records only).
         var buildings = new List<Row>();
@@ -200,28 +205,44 @@ static partial class WikiExport
                 new SortedDictionary<string, object?> { ["record"] = record.StringId, ["definedBy"] = record.DefinedBy, ["value"] = Num(record, "value") }));
         }
 
-        var files = new (string Name, List<Row> Rows)[] { ("zones", zones), ("towns", towns), ("factions", factions), ("squads", squads), ("npcs", npcs), ("items", items), ("buildings", buildings), ("shops", detail.Shops), ("vendors", detail.Vendors), ("overrides", detail.Overrides), ("characters", detail.Characters) };
+        var files = new (string Name, List<Row> Rows)[] { ("zones", zones), ("towns", towns), ("factions", factions), ("squads", squads), ("npcs", npcs), ("items", items), ("buildings", buildings), ("shops", detail.Shops), ("vendors", detail.Vendors), ("overrides", detail.Overrides), ("characters", detail.Characters), ("research", research), ("animals", animals), ("spawns", spawn.Rows) };
         string dataDir = install.DataDirectory;
-        string loadOrder = string.Join(", ", order.Entries.Select(e => e.Name));
+        string modsCfgPath = ModList.ModsCfgPath(install);
+        var modsCfg = File.Exists(modsCfgPath) ? ModList.ParseModsCfg(File.ReadAllLines(modsCfgPath)).ToList() : [];
+        var meta = new Meta(source, dataDir, string.Join(", ", order.Entries.Select(e => e.Name)), [.. order.Entries.Select(e => e.Name).Where(n => !LoadOrder.BaseFiles.Contains(n))], modsCfg, order.Issues.Select(i => $"{i.File}: {i.Message}").ToList());
         var counts = new List<string>();
         foreach (var (name, rows) in files)
         {
-            Write(Path.Combine(outDir, name + ".json"), rows, source, dataDir, loadOrder);
+            Write(Path.Combine(outDir, name + ".json"), rows, meta);
             counts.Add($"{name} {rows.Count}");
         }
         Console.WriteLine($"wiki-export: {string.Join(", ", counts)}");
-        Console.WriteLine($"wiki-export: data {dataDir}; {order.Entries.Count} data files; wrote {outDir}");
+        Console.WriteLine($"wiki-export: data {dataDir}; {order.Entries.Count} data files; mods beyond the base game: {(meta.Mods.Count == 0 ? "none (clean install)" : string.Join(", ", meta.Mods))}; wrote {outDir}");
         return 0;
     }
 
-    static void Write(string path, List<Row> rows, string source, string dataDir, string loadOrder)
+    /// <summary>What every generated file says it was made from: the data folder, the load order, and the mods beyond the base game's four data files (<c>mods.cfg</c> applied).</summary>
+    sealed record Meta(string Source, string DataDir, string LoadOrder, List<string> Mods, List<string> ModsCfg, List<string> Issues);
+
+    static void Write(string path, List<Row> rows, Meta meta)
     {
         using var stream = File.Create(path);
         using var w = new Utf8JsonWriter(stream, WriterOptions);
         w.WriteStartObject();
-        w.WriteString("source", source);
-        w.WriteString("dataDir", dataDir);
-        w.WriteString("loadOrder", loadOrder);
+        w.WriteString("source", meta.Source);
+        w.WriteString("dataDir", meta.DataDir);
+        w.WriteString("loadOrder", meta.LoadOrder);
+        w.WriteBoolean("modded", meta.Mods.Count > 0);
+        w.WriteString("modsSummary", meta.Mods.Count == 0 ? "no mods beyond the base game (clean install)" : $"{meta.Mods.Count} mod file(s) beyond the base game, from mods.cfg");
+        w.WriteStartArray("mods");
+        foreach (string m in meta.Mods) w.WriteStringValue(m);
+        w.WriteEndArray();
+        w.WriteStartArray("modsCfg");
+        foreach (string m in meta.ModsCfg) w.WriteStringValue(m);
+        w.WriteEndArray();
+        w.WriteStartArray("loadIssues");
+        foreach (string m in meta.Issues) w.WriteStringValue(m);
+        w.WriteEndArray();
         w.WriteString("generated", DateTime.UtcNow.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", CultureInfo.InvariantCulture));
         w.WriteStartArray("entries");
         foreach (var r in rows)
@@ -266,6 +287,7 @@ static partial class WikiExport
             case int i: w.WriteNumberValue(i); break;
             case long l: w.WriteNumberValue(l); break;
             case float f: w.WriteNumberValue(MathF.Round(f * 1000) / 1000); break;
+            case double dbl: w.WriteNumberValue(Math.Round(dbl, 3)); break;
             case IDictionary<string, object?> d:
                 w.WriteStartObject();
                 foreach (var (k, x) in d) { w.WritePropertyName(k); WriteValue(w, x); }

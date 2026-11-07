@@ -78,7 +78,9 @@ static partial class WikiExport
             var homeOf = new Dictionary<string, SquadTemplate>(StringComparer.Ordinal);
             foreach (var (b, t) in housed) homeOf[b.Key] = t;
 
-            // The buildings, grouped by name and what lives in them.
+            // The building TYPES (what each housed building is used as) with counts; the exact building-to-resident pairing is only an example (below).
+            var types = new SortedDictionary<string, (int Count, string Category, int Ruins, int Sale, List<long> Prices)>(StringComparer.Ordinal);
+            // The buildings, grouped by name and what lives in them (the pairing example).
             var groups = new SortedDictionary<string, (int Count, int Ruins, int Sale, List<long> Prices, string Role, string Kind)>(StringComparer.Ordinal);
             int walls = 0, gates = 0;
             var forSale = new List<object?>();
@@ -101,6 +103,13 @@ static partial class WikiExport
                 string kind = shop ? "shop" : bar ? "bar" : home is null ? "house" : "building";
                 string name = db.Find(b.BuildingId)?.Name ?? b.Name;
                 long? price = SaleOf(db, b, home, faction, town, saleAllowedTown && !hostile, functions);
+                string type = role.Length > 0 ? role : "Unassigned building (no resident listed)";
+                string category = home is null ? "unassigned" : town.BarSquads.Any(l => l.Id == home.Id) || role.Equals("Bar", StringComparison.OrdinalIgnoreCase) ? "bar" : home.HasShop ? "shop" : SlaveShop(home) ? "slave shop" : "other";
+                var ty = types.GetValueOrDefault(type, (0, category, 0, 0, []));
+                ty.Count++;
+                if (b.Destroyed) ty.Ruins++;
+                if (price is { } tp) { ty.Sale++; ty.Prices.Add(tp); }
+                types[type] = ty;
                 string key = $"{name}|{role}|{kind}";
                 var g = groups.GetValueOrDefault(key, (0, 0, 0, [], role, kind));
                 g.Count++;
@@ -121,11 +130,10 @@ static partial class WikiExport
             // Shops: every resident or bar template that trades, with the building that houses it when the assignment gave it one.
             var traders = new List<(SquadTemplate Template, string Source)>();
             foreach (var l in ResidentHomes.Entries(town, faction).Select(e => (e, "resident")).Concat(town.BarSquads.Select(e => (e, "bar"))))
-                if (templates.TryGetValue(l.e.Id, out var tpl) && tpl.HasShop && traders.All(x => x.Template.Id != tpl.Id)) traders.Add((tpl, l.Item2));
+                if (templates.TryGetValue(l.e.Id, out var tpl) && (tpl.HasShop || SlaveShop(tpl)) && traders.All(x => x.Template.Id != tpl.Id)) traders.Add((tpl, l.Item2));
             var shopNames = new List<string>();
             foreach (var (tpl, source) in traders)
             {
-                string? building = housed.FirstOrDefault(h => h.Template.Id == tpl.Id).Building is { } hb ? db.Find(hb.BuildingId)?.Name : null;
                 var vendors = new List<object?>();
                 var listNames = new List<string>();
                 long weightSum = tpl.Vendors.Where(v => db.Find(v.Id) is { Type: FcsRecordType.VENDOR_LIST }).Sum(v => (long)(v.V0 == 0 ? 100 : v.V0));
@@ -136,15 +144,19 @@ static partial class WikiExport
                     listNames.Add(vr.Name);
                     vendors.Add(new SortedDictionary<string, object?> { ["id"] = vrow.Id, ["list"] = vr.Name, ["weight"] = v.V0 == 0 ? 100 : v.V0, ["approxItems"] = (int)Math.Round((double)(v.V0 == 0 ? 100 : v.V0) / Math.Max(1, weightSum) * tpl.VendorsFillTotalAmount) });
                 }
-                if (vendors.Count == 0) continue;
-                string label = tpl.Name + (building is null ? "" : $" ({building})");
-                shopNames.Add(label);
+                bool slaves = SlaveShop(tpl);
+                if (vendors.Count == 0 && !slaves) continue;
+                string shopType = ResidentRuins.DisplayName(tpl) ?? tpl.Name;
+                shopNames.Add(tpl.Name);
+                if (!types.Any(t => t.Key == shopType))   // a trader nobody could house still counts once
+                    types[shopType] = (1, slaves ? "slave shop" : town.BarSquads.Any(l => l.Id == tpl.Id) || shopType.Equals("Bar", StringComparison.OrdinalIgnoreCase) ? "bar" : "shop", 0, 0, []);
                 var data = new SortedDictionary<string, object?>
                 {
                     ["town"] = town.Name,
                     ["townId"] = row.Id,
                     ["squad"] = tpl.Name,
-                    ["building"] = building,
+                    ["type"] = shopType,
+                    ["slaveShop"] = slaves,
                     ["via"] = source,
                     ["vendors"] = vendors,
                     ["fillItems"] = tpl.VendorsFillTotalAmount,
@@ -154,10 +166,25 @@ static partial class WikiExport
                     ["refreshHours"] = tpl.VendorsRefreshTime,
                     ["record"] = tpl.Id,
                 };
+                if (slaves) data["slaves"] = SlavesOf(db, tpl, templates);
+                string stock = slaves ? "sells slaves (" + string.Join("; ", ((IEnumerable<object?>)data["slaves"]!).OfType<SortedDictionary<string, object?>>().Select(x => $"{x["template"]}: {x["count"]}")) + ")" + (listNames.Count > 0 ? "; also stock from " + string.Join(", ", listNames) : "") : "stock rolled from " + string.Join(", ", listNames);
                 shops.Add(new Row(id($"{tpl.Name} {town.Name}", tpl.Id), $"{tpl.Name} ({town.Name})", "trader", FactionNameOf(db, tpl.Faction) is { Length: > 0 } tf ? tf : null, row.Zone, row.X, row.Z, "Inferred",
-                    $"Trader in {town.Name}{(building is null ? "" : ", housed in " + building)}; stock rolled from {string.Join(", ", listNames)}. Position is the town's.", tpl.Id, data));
+                    $"{(slaves ? "Slave shop" : "Trader")} ({shopType}) in {town.Name}; {stock}. Position is the town's.", tpl.Id, data));
             }
-            row.Data["buildings"] = buildingRows;
+            var typeRows = new List<object?>();
+            foreach (var (type, g) in types)
+            {
+                var d = new SortedDictionary<string, object?> { ["type"] = type, ["count"] = g.Count, ["category"] = g.Category };
+                if (g.Ruins > 0) d["ruins"] = g.Ruins;
+                if (g.Sale > 0) { d["forSale"] = g.Sale; d["priceMin"] = (int)g.Prices.Min(); d["priceMax"] = (int)g.Prices.Max(); }
+                typeRows.Add(d);
+            }
+            row.Data["buildingTypes"] = typeRows;
+            row.Data["building_assignment_example"] = new SortedDictionary<string, object?>
+            {
+                ["note"] = "One possible pairing of building models with residents, as this exporter's fixed housing rule gives it. The original rerolls which building holds which shop or resident at every new game, and mods change the lists, so do not treat it as the town's layout; only the TYPES in buildingTypes are reliable.",
+                ["buildings"] = buildingRows,
+            };
             row.Data["walls"] = walls;
             row.Data["gates"] = gates;
             row.Data["shops"] = shopNames;
@@ -249,6 +276,28 @@ static partial class WikiExport
         // --- Unique and bounty characters.
         var characters = Characters(db, placed, templates, id);
         return new DetailRows(shops, [.. vendorRows.Values.OrderBy(r => r.Name, StringComparer.Ordinal).ThenBy(r => r.Id, StringComparer.Ordinal)], overrides, characters);
+    }
+
+    /// <summary>A resident template that runs a slave shop: it trades and its home is stocked with slaves (a `slaves` squad) rather than, or besides, vendor lists.</summary>
+    static bool SlaveShop(SquadTemplate t) => t.IsTrader && t.Slaves.Count > 0;
+
+    /// <summary>The squads a slave shop holds for sale: each `slaves` template with the count range its random picks give, and who they are drawn from.</summary>
+    static List<object?> SlavesOf(GameDatabase db, SquadTemplate tpl, Dictionary<string, SquadTemplate> templates)
+    {
+        var rows = new List<object?>();
+        foreach (var l in tpl.Slaves)
+        {
+            if (!templates.TryGetValue(l.Id, out var s)) continue;
+            int fixedCount = s.Squad.Concat(s.Squad2).Sum(x => Math.Max(0, x.V0));
+            int min = fixedCount + s.NumRandomChars, max = fixedCount + Math.Max(s.NumRandomChars, s.NumRandomCharsMax);
+            rows.Add(new SortedDictionary<string, object?>
+            {
+                ["template"] = s.Name,
+                ["count"] = min == max ? min.ToString(CultureInfo.InvariantCulture) : $"{min}-{max}",
+                ["drawnFrom"] = Names(db, s.Squad.Concat(s.Squad2).Concat(s.ChooseFrom).Select(x => x.Id)),
+            });
+        }
+        return rows;
     }
 
     static string FactionNameOf(GameDatabase db, string? id) => id is not null && db.Find(id) is { } f ? f.Name : "";
@@ -343,6 +392,8 @@ static partial class WikiExport
             return dialogues.Distinct().Any(Joins);
         }
 
+        var townFaction = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var pt in placed) if (pt.Row.Faction is { Length: > 0 } pf) townFaction.TryAdd(pt.Town.Name, pf);
         var rows = new List<Row>();
         foreach (var record in db.OfType(FcsRecordType.CHARACTER).Concat(db.OfType(FcsRecordType.ANIMAL_CHARACTER)).OrderBy(r => r.Name, StringComparer.Ordinal).ThenBy(r => r.StringId, StringComparer.Ordinal))
         {
@@ -351,9 +402,13 @@ static partial class WikiExport
             int chance = record.GetInt("bounty chance"), amount = record.GetInt("bounty amount"), fuzz = Math.Max(0, record.GetInt("bounty amount fuzz"));
             bool bounty = chance > 0 && amount > 0;
             if (!unique && !bounty) continue;
+            // Faction: the character record's own, else the squad they lead or belong to (a prisoner's squad belongs to the captor, so it does not count), else the faction of their home town.
             string faction = record.GetReferences("faction") is { Count: > 0 } fl ? FactionNameOf(db, fl[0].TargetStringId) : "";
+            string factionSource = faction.Length > 0 ? "character record" : "";
             var uses = usedBy.GetValueOrDefault(record.StringId) ?? [];
-            if (faction.Length == 0 && uses.Select(u => FactionNameOf(db, u.Template.Faction)).FirstOrDefault(n => n.Length > 0) is { } sf) faction = sf;
+            if (faction.Length == 0)
+                foreach (var u in uses.Where(u => u.Role != "prisoner").OrderBy(u => u.Role == "leader" ? 0 : 1))
+                    if (FactionNameOf(db, u.Template.Faction) is { Length: > 0 } sf) { faction = sf; factionSource = $"squad {u.Template.Name} ({u.Role})"; break; }
             var homes = new List<object?>();
             var seenHome = new HashSet<string>(StringComparer.Ordinal);
             (float X, float Z)? first = null;
@@ -370,6 +425,9 @@ static partial class WikiExport
                 if (firstTown.Length == 0) firstTown = town;
                 homes.Add(new SortedDictionary<string, object?> { ["town"] = town, ["x"] = (int)Math.Round(x), ["z"] = (int)Math.Round(z), ["squad"] = squad, ["role"] = role, ["via"] = via.Length == 0 ? "town lists the squad" : "town override " + via });
             }
+            if (faction.Length == 0)
+                foreach (var h in homes.OfType<SortedDictionary<string, object?>>().Where(h => (string)h["role"]! != "prisoner"))
+                    if (townFaction.GetValueOrDefault((string)h["town"]!) is { Length: > 0 } tf) { faction = tf; factionSource = $"home town {h["town"]}"; break; }
             var bountyData = new SortedDictionary<string, object?>();
             string bountyNote = "";
             if (bounty)
@@ -387,6 +445,7 @@ static partial class WikiExport
             var camps = campaignsOf.GetValueOrDefault(record.StringId) ?? [];
             var data = new SortedDictionary<string, object?>
             {
+                ["factionSource"] = factionSource,
                 ["unique"] = unique,
                 ["recruitable"] = join,
                 ["squads"] = uses.Select(u => $"{u.Template.Name} ({u.Role})").Distinct().Take(12).ToList(),
@@ -400,7 +459,7 @@ static partial class WikiExport
             string where = first is null ? " No town lists their squad in the data (roaming, campaign, or placed another way)." : homes.Count == 1 ? $" Home: {firstTown} (position is the town's, not live)." : $" Homes: {string.Join(", ", homes.OfType<SortedDictionary<string, object?>>().Select(h => (string)h["town"]!).Distinct().Take(6))} (position is the first town's, not live).";
             rows.Add(new Row(id(record.Name, record.StringId), record.Name, animal ? "animal-character" : "character", faction.Length == 0 ? null : faction, first is { } f0 ? $"zone-{WorldLayout.ZoneOf(f0.X, f0.Z).X}-{WorldLayout.ZoneOf(f0.X, f0.Z).Y}" : null,
                 first?.X, first?.Z, first is null ? "Observed" : "Inferred",
-                (unique ? "Unique character" : "Character with a spawn bounty") + (faction.Length > 0 ? $" of {faction}" : "") + "." + bountyNote + where + (join ? " Has a dialogue line that makes them join your squad (recruit or hire)." : "") + (camps.Count > 0 ? $" Special leader of campaign {camps[0]}." : ""),
+                (unique ? "Unique character" : "Character with a spawn bounty") + (faction.Length > 0 ? $" of {faction} (faction from {factionSource})" : "") + "." + bountyNote + where + (join ? " Has a dialogue line that makes them join your squad (recruit or hire)." : "") + (camps.Count > 0 ? $" Special leader of campaign {camps[0]}." : ""),
                 record.StringId, data));
         }
         return rows;
