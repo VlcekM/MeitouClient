@@ -1134,6 +1134,8 @@ static partial class TerrainShaders
                 float level = log2(max(hi / min(ceil(hi / lo), 8.0), 1e-6) / uBakeOrigin[0].z);
                 int k = clamp(int(floor(level)), 0, uBakeLevels - 1);
                 float t = clamp(level - float(k), 0.0, 1.0);
+                // A footprint finer than the finest level's texel would magnify it (a layer's texel is about a fifth of it): the layers are shaded.
+                if (level < 0.0) k = uBakeLevels;
                 while (k < uBakeLevels && !bakeHolds(k, texWorld.xz)) { k++; t = 0.0; }
                 if (k < uBakeLevels)
                 {
