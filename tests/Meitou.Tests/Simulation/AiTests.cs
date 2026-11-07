@@ -274,7 +274,7 @@ public class AiTests(ITestOutputHelper output)
         for (int t = 0; t < 60 && !mind.Walking; t++) world.RunTick();
         Assert.True(mind.Walking);
 
-        outside.Next = w => MovementSystem.Stop(w.Characters, leader.Slot);   // another system stands it still mid-walk
+        outside.Next = w => TaskStart.Stand(w.Characters, leader.Slot);   // another system stands it still mid-walk
         world.RunTick();
         Assert.Equal(CharacterTask.Idle, (CharacterTask)table.Previous[leader.Slot].Task);
         for (int t = 0; t < 200 && (CharacterTask)table.Previous[leader.Slot].Task != CharacterTask.GoTo; t++) world.RunTick();
