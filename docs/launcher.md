@@ -250,7 +250,7 @@ interpolated string, which no translation could match.
 
 - Shown as the original launcher shows it: enabled mods in `mods.cfg` order first, then the rest after their header dependencies.
   Mods in a dependency cycle are kept at the end, where the original drops them. Mods not in `__mods.list` are new and start enabled.
-- Saving (Save, Play) writes `mods.cfg` (enabled `<name>.mod`, list order, CRLF) and `__mods.list` (every listed name, plus old
+- Saving (Save, Play, ticking or unticking a mod) writes `mods.cfg` (enabled `<name>.mod`, list order, CRLF) and `__mods.list` (every listed name, plus old
   names not on disk). These are the files the original game reads, so the mod list applies to it too.
 - Discovery and the header reads run off the UI thread while the window opens; until they finish (or when they fail) Save, Play
   and the preset buttons refuse, so an unloaded list never overwrites `mods.cfg`.

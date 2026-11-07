@@ -32,6 +32,7 @@ public sealed partial class MainWindow : Window
     bool languageReady, populatingLanguages;
     int modsLoad;
     bool modsReady;
+    bool toggleSavePending;
     // While ApplyOrder rebuilds the list: the mod count and the dependency check wait for the end.
     bool checksSuspended;
     string? launcherUpdateVersion;   // the launcher release the update button offers, for a language switch
@@ -501,7 +502,7 @@ public sealed partial class MainWindow : Window
         if (load != modsLoad) return;
         foreach (var (entry, code) in entries) mods.Add(new ModRow(entry.Mod, entry.Enabled, code));
         // Only a toggle changes the checks; the checks' own Notes changes must not start them again.
-        foreach (var row in mods) row.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(ModRow.Enabled)) ShowDependencyProblems(); };
+        foreach (var row in mods) row.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(ModRow.Enabled)) ModToggled(); };
         modsReady = true;
         ShowDependencyProblems();
         ModsEmpty.IsVisible = mods.Count == 0;
@@ -593,6 +594,21 @@ public sealed partial class MainWindow : Window
             Status(Tr("Could not save the mod list: {1}", e.Message));
             return false;
         }
+    }
+
+    // A checkbox click saves mods.cfg at once, so the game reads what the list shows. Select all / none toggle many rows: one save after
+    // them. A preset or Arrange moves rows with the checks suspended and does not save (docs/launcher.md "Mod list").
+    void ModToggled()
+    {
+        ShowDependencyProblems();
+        if (checksSuspended || !modsReady || toggleSavePending) return;
+
+        toggleSavePending = true;
+        Dispatcher.UIThread.Post(() =>
+        {
+            toggleSavePending = false;
+            if (modsReady && SaveMods()) Status(Tr("Mod list saved: {1} enabled.", mods.Count(m => m.Enabled)));
+        });
     }
 
     void SaveMods_Click(object? sender, RoutedEventArgs e)
