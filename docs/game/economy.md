@@ -79,6 +79,10 @@ inventory, `uses_building_category`), or an owner of type 1 whose +0x2f8 is 2, o
 its slot +0x260 (meanings **Unknown**). Flagged: the owners must not be enemies (faction test) and must be on the same floor, and the limit is 60, or the source owner's bounds radius + 40
 when the source is a building (class 0). The limits are stored squared (1e6, 3600). Same owner: always allowed. **Unknown**: which windows the three drop callers flag; whether take-all uses the check.
 
+Opening a trade from dialogue (**Observed**, read): the Trade effect (`FUN_1409524f0`, the speaker's squad must have stock) only queues a pending open (kind 1, both
+characters) on the player interface (`FUN_140791830`; kind 3 is loot/inspect, `FUN_140354dc0`); its per-frame update (`FUN_1406ea070`) opens both inventory windows
+(`FUN_1407918a0`) with no distance test and no walk, so the trade opens where the conversation stands. Only item moves are range-checked (above).
+
 Meitou (engine choices): window moves to and from a machine or storage need the character within `ProductionSettings.TransferReach` 40 of the building's footprint hull (for the
 bounds radius + 40), to and from a container within `PlayerSystem.TradingRange` 60; both post "Out of trading range.". The loot window closes beyond 1.5 x the carry reach, or over 20 units apart in height (Meitou: the reach is on the body's floor, and the looter walks to that floor, #292; the height is the body's root or the floor under it, as a big ragdoll's root rests well off the ground: a downed Cleanser Unit 67 over the terrain, **Observed** on a player save). A held item given to a
 character: within `PlayerSystem.GiveRange` 1000 of its window's owner, `StealRange` 60 out of a non-player window. No faction or floor test, no sound (`gui_notrade` is in no bank, [audio](../audio.md)).
@@ -629,7 +633,7 @@ Meitou's reading: [simulation, slave trading](../simulation.md#arrest-and-jail).
   manufacturer form a set, a weapon outside it logs "No valid manufacturer found for weapon" and is dropped, an empty set skips the whole weapons branch); other lists are not gated.
 - **The FACTION field names of the armour vendor quality chances** (`armors 0..5` in section 9.2): read as the ints `armors 0` .. `armors 5`, falling back to the editor defaults; not
   checked against the data.
-- **Opening a trade**: Meitou opens it within 30 units and passes it to the character whose window a buy or sell uses within 1000 ([simulation](../simulation.md#trade)); the original's opening distance is not traced (the item check is in [Trading range](#trading-range)).
+- **Opening a trade**: Meitou opens it in talk range and passes it to the character whose window a buy or sell uses within 1000 ([simulation](../simulation.md#trade)); the original's direct Trade order's distance is not traced.
 
 ## Expression reference
 

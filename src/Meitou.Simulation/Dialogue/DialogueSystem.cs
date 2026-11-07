@@ -267,7 +267,7 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
     /// Whether <paramref name="talker"/> is near enough <paramref name="target"/> to talk: X/Z within the target's scaled radius (footprint x body scale) + <see cref="TalkReach"/>, twice the reach once
     /// the talker has stopped, and within <see cref="TalkHeight"/> in height.
     /// </summary>
-    static bool InTalkRange(CharacterTable table, int talker, int target)
+    internal static bool InTalkRange(CharacterTable table, int talker, int target)
     {
         var (a, b) = (table.Next[talker].Position, table.Next[target].Position);
         float reach = Combat.CombatSteering.Radius(table.Cold(target)) + TalkReach * ((table.Next[talker].Flags & (ushort)MoveFlags.AnyPath) == 0 ? 2 : 1);

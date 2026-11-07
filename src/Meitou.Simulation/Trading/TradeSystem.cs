@@ -102,8 +102,6 @@ public interface ITradeSource
 
 public sealed class TradeSettings
 {
-    /// <summary>How close the customer must stand to the trader (the original's "Out of trading range." distance is <b>Unknown</b>; engine choice).</summary>
-    public float Range { get; init; } = 30;
     /// <summary>
     /// How close another selected character must stand to the trader to take over the open trade: the original's item move between two characters' inventories (the stock dropped on a
     /// character window) allows 1000 when unflagged (<c>FUN_14070d290</c>, <b>Observed</b>; whether the trade window flags it is <b>Unknown</b>, docs/game/economy.md "Trading range").
@@ -204,8 +202,9 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
         if (!customer.IsNone)
         {
             if (!Resolve(world, out int c, out int t, out _)) Close(world);
-            else if (InReach(world, c, t, open ? Settings.PassRange : Settings.Range))   // opens in reach, stays open within the pass-on reach
+            else if (open ? InReach(world, c, t, Settings.PassRange) : InReach(world, c, t))   // opens in talk range, stays open within the pass-on reach
             {
+                if (!open) TaskStart.Stand(world.Characters, c);   // the customer stops where it stands, not at the trader's spot behind a counter
                 open = true;
                 Hold(world, t);
             }
@@ -546,7 +545,11 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
         return !AggroSystem.IsEnemy(data.Relations, cc.Faction, tc.Faction);
     }
 
-    bool InReach(World world, int c, int t) => InReach(world, c, t, Settings.Range);
+    /// <summary>
+    /// Whether the customer is near enough to open the trade: the talk range (<see cref="Dialogue.DialogueSystem.InTalkRange"/>), as the original opens a dialogue's trade where the
+    /// conversation stands, with no distance test (<c>FUN_1407918a0</c>, docs/game/economy.md "Opening a trade").
+    /// </summary>
+    static bool InReach(World world, int c, int t) => Dialogue.DialogueSystem.InTalkRange(world.Characters, c, t);
 
     static bool InReach(World world, int c, int t, float range)
     {
