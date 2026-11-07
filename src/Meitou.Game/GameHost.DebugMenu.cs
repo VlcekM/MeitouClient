@@ -100,12 +100,27 @@ sealed partial class GameHost
 
     string DebugTimeText() => DebugTimeSlider is { } s ? s.Display : "n/a";
 
-    /// <summary>Moves the time of day to the next (<paramref name="hours"/> 1) or previous (-1) whole hour, wrapping round midnight.</summary>
+    /// <summary>The whole hour the time row last stepped to (-1: none), so Left keeps going back while the clock runs on past it.</summary>
+    int debugLastHour = -1;
+
+    /// <summary>
+    /// Moves the time of day to the next whole hour (<paramref name="hours"/> 1) or back (-1): to the start of the current hour, or to the hour
+    /// before when the time is within 5 game minutes past the hour or still in the hour this row last stepped to (a running clock moves on from it).
+    /// </summary>
     void DebugStepTime(int hours)
     {
         if (DebugTimeSlider is not { } s) return;
-        float h = s.Get(), whole = hours > 0 ? MathF.Floor(h + 1e-3f) + hours : MathF.Ceiling(h - 1e-3f) + hours;
-        s.Set((whole % 24 + 24) % 24);
+        float h = s.Get();
+        int whole;
+        if (hours > 0) whole = (int)MathF.Floor(h + 1e-3f) + hours;
+        else
+        {
+            whole = (int)MathF.Floor(h);
+            if (h - whole < 5 / 60f || whole == debugLastHour) whole += hours;
+        }
+        whole = (whole % 24 + 24) % 24;
+        debugLastHour = whole;
+        s.Set(whole);
     }
 
     /// <summary>
