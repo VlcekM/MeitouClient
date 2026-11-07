@@ -26,4 +26,19 @@ public sealed partial class AiSystem
     {
         if (Interlocked.Exchange(ref capturing, 0) != 0) (captives ??= world.SystemOf<CaptiveSystem>())?.SendGoalJobs(world);
     }
+
+    /// <summary>
+    /// A captive job started (<see cref="CaptiveSystem"/>; serial): its goal becomes the mind's current goal, with a one-step plan and no
+    /// commitment, as the original's chooser holds the goal it runs. The goal it ran before ends, with its commitment (43 Staying home's), so the
+    /// think after the job chooses anew.
+    /// </summary>
+    internal static void TakeCaptiveGoal(AiMind mind, AiGoal goal)
+    {
+        mind.Goal = goal;
+        mind.Behaviour = AiBehaviour.Captive;
+        mind.Plan.Clear();
+        mind.Plan.Add(new PlanStep(goal.Task.Type, default));
+        mind.CommitUntil = 0;
+        mind.CaptiveOffers.Clear();
+    }
 }

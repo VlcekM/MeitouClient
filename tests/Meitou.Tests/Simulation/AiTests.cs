@@ -554,6 +554,58 @@ public class AiTests(ITestOutputHelper output)
     }
 
     /// <summary>
+    /// A captive job's goal is its worker's (docs/simulation.md "Captives", the job's goal is the mind's): a workmaster walking home under 43
+    /// Staying home, committed for an hour, that the sweep sets shouting at a slave of its squad holds 188 from then on. When that slave dies
+    /// as two more come, the think after the job weighs 188 again and shouts at one of them, never going back to 43. Catches the job that left 43
+    /// and its commitment in place, and the think after a job that saw no captive goal: either way Rebirth's workmasters went home to sit after
+    /// their first job.
+    /// </summary>
+    [Fact]
+    public void A_workmaster_whose_slave_dies_shouts_at_the_next_rather_than_going_home_to_sit()
+    {
+        var stay = Task("150-t", TaskType.STAY_IN_HOME, TaskPriority.NonUrgent);
+        var work = Task("151-t", TaskType.WORK_THE_SLAVES, TaskPriority.NonUrgent);
+        var package = Rec("152-t", FcsRecordType.AI_PACKAGE, "Workmasters");
+        package.References["Leader AI Goals"] = [Ref("150-t", 0, 100, 0), Ref("151-t", 0, 100, 0)];
+        package.References["Squad AI Goals"] = package.References["Squad2 AI Goals"] = [Ref("101-t", 0, 100, 0)];
+        var db = SyntheticTown.Database(2, extra: [.. Records(), stay, work, package],
+            changePatrol: p => p.References["AI packages"] = [Ref("152-t", 0)]);
+        var data = WithHomes(db, out _, out var house, chair: true);
+        using var world = Town(1, out _, data, null);
+        var captives = world.SystemOf<Meitou.Simulation.Kidnap.CaptiveSystem>()!;
+        world.RunTicks(31);
+        var squad = world.Squads.All.Single(s => s.TemplateId == "10-t" && s.Ai!.Home == house);
+        int leader = squad.Leader.Slot;
+        var mind = world.Characters.Cold(leader)!.Ai!;
+        Assert.Equal(TaskType.STAY_IN_HOME, mind.Goal?.Task.Type);
+        Assert.NotEqual(CharacterTask.Rest, (CharacterTask)world.Characters.Next[leader].Task);
+
+        // On its walk home, committed an hour more, a slave of its squad comes: the sweep sets it shouting, and 188 is its goal.
+        mind.CommitUntil = world.GameHours + 1;
+        var first = ObeyingSlave(world, squad, house.Position + new Vector3(0, 0, 30));
+        Meitou.Simulation.Kidnap.CaptiveJob? Shout() =>
+            captives.Jobs.FirstOrDefault(j => j.Kind == Meitou.Simulation.Kidnap.CaptiveJobKind.Shout && j.Worker == squad.Leader);
+        for (int t = 0; t < 300 && Shout() is null; t++) world.RunTicks(1);
+        Assert.Equal(first, Shout()?.Captive);
+        Assert.Equal(TaskType.WORK_THE_SLAVES, mind.Goal?.Task.Type);
+
+        // Right after that sweep turn, the slave dies as two more come: the job ends, and the think comes before the next turn.
+        var next = new[]
+        {
+            ObeyingSlave(world, squad, house.Position + new Vector3(10, 0, 30)), ObeyingSlave(world, squad, house.Position + new Vector3(-10, 0, 30)),
+        };
+        world.Characters.Remove(first);
+        bool ShoutsAtNext() => Shout() is { } job && next.Contains(job.Captive);
+        for (int t = 0; t < 29 && !ShoutsAtNext(); t++)
+        {
+            world.RunTicks(1);
+            Assert.NotEqual(TaskType.STAY_IN_HOME, mind.Goal?.Task.Type);
+        }
+        Assert.True(ShoutsAtNext());
+        Assert.NotEqual(CharacterTask.Rest, (CharacterTask)world.Characters.Next[leader].Task);
+    }
+
+    /// <summary>
     /// A slave of a squad of its own (idle: no goals) that obeys <paramref name="master"/>, as a town's slave squads obey their workmasters.
     /// </summary>
     static CharacterId ObeyingSlave(SimWorld world, Squad master, Vector3 at)

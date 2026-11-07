@@ -436,14 +436,15 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
         AiSystem.ObeyedRoles(world, squad, cold) ?? board.Roles[(int)AiSystem.RoleOf(squad, world.Characters.IdOf(slot), cold)];
 
     /// <summary>
-    /// Starts the job of <paramref name="goal"/> when it finds a target (<see cref="TryStart"/>); its offers go.
+    /// Starts the job of <paramref name="goal"/> when it finds a target (<see cref="TryStart"/>); the goal becomes the mind's
+    /// (<see cref="AiSystem.TakeCaptiveGoal"/>).
     /// </summary>
     bool Start(World world, Squad squad, Blackboard board, int slot, CharacterCold cold, AiGoal goal)
     {
         if (TryStart(world, squad, board, slot, cold, goal.Task.Type) is not { } job) return false;
         jobs.Add(job);
         cold.Engaged = true;
-        cold.Ai?.CaptiveOffers.Clear();
+        if (cold.Ai is { } mind) AiSystem.TakeCaptiveGoal(mind, goal);
         Note(world, CaptiveEventKind.Started, job);
         return true;
     }
