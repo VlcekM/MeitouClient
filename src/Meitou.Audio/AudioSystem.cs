@@ -90,7 +90,7 @@ public sealed class AudioSystem : IDisposable
     /// </summary>
     public static AudioSystem? TryCreate(GameInstall install, AudioSettings settings, out string? error)
     {
-        var exe = Path.Combine(install.Root, "kenshi_x64.exe");
+        var exe = install.Executable;
         var library = WwiseCodebookLibrary.Load(exe);
         if (library is null)
         {
