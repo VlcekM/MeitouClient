@@ -312,12 +312,16 @@ public sealed partial class PlayerSystem
             if (item.Width > target.Columns || item.Height > target.Rows) { ReturnHeldItem(world); return; }
             x = Math.Clamp(place.X, 0, target.Columns - item.Width);
             y = Math.Clamp(place.Y, 0, target.Rows - item.Height);
+            // On a shop's greyed cells, or across two of its containers: the nearest free cell of a container instead (engine choice, #349).
             if (!target.Grid.InRegion(x, y, item.Width, item.Height))
             {
-                // On a shop's greyed cells, or across two of its containers (engine message).
-                world.Post("No room for that item.");
-                ReturnHeldItem(world);
-                return;
+                if (NearestFreeInRegion(target, item, x, y) is not var (fx, fy))
+                {
+                    world.Post("No room for that item.");
+                    ReturnHeldItem(world);
+                    return;
+                }
+                (x, y) = (fx, fy);
             }
             under = target.Grid.Items.Where(i => i.Section == target.Section && x < i.X + i.Width && i.X < x + item.Width && y < i.Y + i.Height && i.Y < y + item.Height).ToList();
         }
@@ -390,6 +394,27 @@ public sealed partial class PlayerSystem
             if (changes) LeftLoot(world, held, death);
             Touched(world, held, target);
         }
+    }
+
+    /// <summary>The free cell nearest (<paramref name="x"/>, <paramref name="y"/>) where <paramref name="item"/> lies inside one of the grid's regions; null when none has room.</summary>
+    static (int X, int Y)? NearestFreeInRegion(Target target, ItemInstance item, int x, int y)
+    {
+        (int X, int Y)? best = null;
+        int bestDistance = int.MaxValue;
+        for (int cy = 0; cy + item.Height <= target.Rows; cy++)
+        {
+            for (int cx = 0; cx + item.Width <= target.Columns; cx++)
+            {
+                int distance = (cx - x) * (cx - x) + (cy - y) * (cy - y);
+                if (distance >= bestDistance || !target.Grid.InRegion(cx, cy, item.Width, item.Height)) continue;
+
+                bool taken = target.Grid.Items.Any(i => i.Section == target.Section && cx < i.X + i.Width && i.X < cx + item.Width && cy < i.Y + i.Height && i.Y < cy + item.Height);
+                if (taken) continue;
+
+                (best, bestDistance) = ((cx, cy), distance);
+            }
+        }
+        return best;
     }
 
     /// <summary>Puts an item into the target's section at (<paramref name="x"/>, <paramref name="y"/>); a prosthetic is fitted on its stump.</summary>
