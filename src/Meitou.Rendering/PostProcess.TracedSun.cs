@@ -13,7 +13,7 @@ public sealed unsafe partial class PostProcess
     /// <summary>This frame's sun is traced (set before <see cref="Begin"/>; needs <see cref="GiResolve"/>): the scene targets carry <see cref="TracedTermTarget"/>.</summary>
     public bool TracedSun { get; set; }
 
-    Target2D? tracedTerm, tracedMask, tracedFiltered;
+    Target2D? tracedTerm, tracedMask, tracedScratch, tracedFiltered;
     TracedAddPass? tracedAddPass;
 
     GpuTexture? TracedTermTarget => TracedSun && GiResolve > 0 ? tracedTerm?.Texture : null;
@@ -26,6 +26,7 @@ public sealed unsafe partial class PostProcess
         tracedTerm = new Target2D(batch.Create(new TextureDesc(InternalFormat.Rgba16f, width, height, Use: TextureUse.Sampled | TextureUse.ColourTarget, Name: "post traced sun term")),
             TextureMinFilter.Nearest, TextureMagFilter.Nearest);
         tracedMask = Make(batch, width, height, InternalFormat.Rgba16f, TextureMinFilter.Nearest, "post traced sun mask");
+        tracedScratch = Make(batch, width, height, InternalFormat.Rgba16f, TextureMinFilter.Nearest, "post traced sun penumbra");
         tracedFiltered = Make(batch, width, height, InternalFormat.Rgba16f, TextureMinFilter.Nearest, "post traced sun filtered");
     }
 
@@ -52,9 +53,9 @@ public sealed unsafe partial class PostProcess
     /// </summary>
     internal void RunTracedSun(Gi.TracedSunPass rays, Gi.GiScene scene, in Matrix4x4 inverse, Vector3 toSun)
     {
-        if (tracedTerm is null || tracedMask is null || tracedFiltered is null || giAlbedo is null || sceneColour is null || sceneDepth is null) return;
+        if (tracedTerm is null || tracedMask is null || tracedScratch is null || tracedFiltered is null || giAlbedo is null || sceneColour is null || sceneDepth is null) return;
         float pixelSlope = 2 * MathF.Tan(fovNow * 0.5f) / height;
-        rays.Run(scene, new(sceneDepth.Texture, giAlbedo.Texture, tracedTerm.Texture, tracedMask.Texture, tracedFiltered.Texture, width, height), inverse, eyeNow, toSun, pixelSlope);
+        rays.Run(scene, new(sceneDepth.Texture, giAlbedo.Texture, tracedTerm.Texture, tracedMask.Texture, tracedScratch.Texture, tracedFiltered.Texture, width, height), inverse, eyeNow, toSun, pixelSlope);
         var add = tracedAddPass ??= new TracedAddPass(Gpu);
         SetGiView(add);
         Bind(add.P, add.Term, tracedTerm);

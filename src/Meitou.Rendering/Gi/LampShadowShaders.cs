@@ -9,9 +9,9 @@ static class LampShadowShaders
     /// <summary>Most lamps a pixel traces.</summary>
     public const int MinLamps = 2, MaxLamps = 4;
 
-    /// <summary>World units: what a ray leaves out before the lamp, for its fixture (KenshiNative's near-skip).</summary>
+    /// <summary>World units: what a ray leaves out before the lamp, for its fixture (KenshiNative's near-skip), and the lamp's radius its penumbra is filtered for (a flame or a bulb in its glass, 20 cm).</summary>
     const string Constants = """
-        const float LAMP_NEAR_SKIP = 15.0;
+        const float LAMP_NEAR_SKIP = 15.0, LAMP_SIZE = 2.0;
         const float LAMP_MIN_BIAS = 0.5;
 
         """;
@@ -59,12 +59,12 @@ static class LampShadowShaders
     /// shadows are near hard.
     /// </summary>
     static readonly string Rays = $$"""
-        // 0: something lies between the surface and the lamp. Ends short of the lamp (its fixture) and at its reach; a lamp's owner is passed through.
-        float lampVisible(vec3 from, vec3 target, float reach, uint emitter)
+        // How far along the ray its blocker is (0: nothing between the surface and the lamp). Ends short of the lamp (its fixture) and at its reach; a lamp's owner is passed through.
+        float lampBlocker(vec3 from, vec3 target, float reach, uint emitter)
         {
             vec3 ray = target - from;
             float d = length(ray), tMax = min(d - LAMP_NEAR_SKIP, reach);
-            if (tMax <= 0.0) return 1.0;
+            if (tMax <= 0.0) return 0.0;
             uint flags = gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsCullBackFacingTrianglesEXT;
             if (emitter != 0u) flags |= gl_RayFlagsNoOpaqueEXT;
             rayQueryEXT shadow;
@@ -77,30 +77,54 @@ static class LampShadowShaders
                     rayQueryGetIntersectionPrimitiveIndexEXT(shadow, false), rayQueryGetIntersectionBarycentricsEXT(shadow, false), 2.0))
                     rayQueryConfirmIntersectionEXT(shadow);
             }
-            return rayQueryGetIntersectionTypeEXT(shadow, true) == gl_RayQueryCommittedIntersectionNoneEXT ? 1.0 : 0.0;
+            return rayQueryGetIntersectionTypeEXT(shadow, true) == gl_RayQueryCommittedIntersectionNoneEXT ? 0.0 : max(rayQueryGetIntersectionTEXT(shadow, true), 1e-3);
         }
-        // What the occluded lamps took from a pixel, per unit of albedo.
-        vec3 lostLight(ivec2 px)
+        // The drawn triangle's plane from the depth (the neighbours of the smaller step), facing like n: the ray leaves off it, not off the normal map's bumps, whose
+        // pixel-to-pixel turns moved the origins and frayed the shadows' edges.
+        vec3 lampPlane(ivec2 px, vec3 at, vec3 n)
+        {
+            vec3 q[4];
+            ivec2 o[4] = ivec2[4](ivec2(-1, 0), ivec2(1, 0), ivec2(0, -1), ivec2(0, 1));
+            for (int k = 0; k < 4; k++)
+            {
+                ivec2 s = clamp(px + o[k], ivec2(0), ivec2(uFullSize) - 1);
+                float zk = depthAt(s);
+                q[k] = zk > 0.0 ? positionAt(s, zk) : at;
+            }
+            vec3 l = at - q[0], r = q[1] - at, d = at - q[2], u = q[3] - at;
+            vec3 g = cross(dot(r, r) < dot(l, l) && dot(r, r) > 0.0 ? r : l, dot(u, u) < dot(d, d) && dot(u, u) > 0.0 ? u : d);
+            float len = length(g);
+            if (!(len > 1e-8)) return n;
+            g /= len;
+            return dot(g, n) < 0.0 ? -g : g;
+        }
+        // What the occluded lamps took from a pixel, per unit of albedo (rgb), and the widest penumbra their blockers leave at it (a: world units, 0 none; PenumbraFilter).
+        vec4 lostLight(ivec2 px)
         {
             uvec4 surface = texelFetch(uAlbedo, px, 0);
-            if ((surface.w & 256u) == 0u) return vec3(0.0);
+            if ((surface.w & 256u) == 0u) return vec4(0.0);
             float z = depthAt(px);
-            if (z <= 0.0) return vec3(0.0);
+            if (z <= 0.0) return vec4(0.0);
             vec3 world = positionAt(px, z);
             vec3 n = giOctDir(vec2(surface.xy) / 65535.0 * 2.0 - 1.0);
             vec3 diffuse = vec3(0.0), specular = vec3(0.0);
             lampLight(world, n, normalize(uGiEye - world), 1.0, 1.0, diffuse, specular);
-            if (picked == 0) return vec3(0.0);
-            // Off the surface by what its depth and the traced mesh can be wrong by: a floor, and two pixels' width there.
-            vec3 from = world - uOrigin + n * max(LAMP_MIN_BIAS, 2.0 * z * uFootprint);
+            if (picked == 0) return vec4(0.0);
+            // Off the surface's plane by what its depth and the traced mesh can be wrong by: a floor, and two pixels' width there.
+            vec3 from = world - uOrigin + lampPlane(px, world, n) * max(LAMP_MIN_BIAS, 2.0 * z * uFootprint);
             vec3 lost = vec3(0.0);
+            float spread = 0.0;
             for (int i = 0; i < picked; i++)
             {
                 vec4 p = texelFetch(uLightData, ivec2(0, pickLamp[i]), 0);
-                vec3 target = p.xyz - uOrigin;   // the lamp's centre, the same every frame: a lamp a decimetre across leaves no penumbra worth a ray
-                if (lampVisible(from, target, p.w, pickEmitter[i]) < 0.5) lost += pickLight[i];
+                vec3 target = p.xyz - uOrigin;   // the lamp's centre, the same every frame; its size is the filter's
+                float t = lampBlocker(from, target, p.w, pickEmitter[i]);
+                if (t <= 0.0) continue;
+                lost += pickLight[i];
+                // A lamp LAMP_SIZE across seen past a blocker at t of the lamp's d: the penumbra's half width at the receiver.
+                spread = max(spread, LAMP_SIZE * t / max(length(target - from) - t, 1.0));
             }
-            return lost * 3.14159265358979 * LAMP_DIFFUSE;
+            return vec4(lost * 3.14159265358979 * LAMP_DIFFUSE, spread);
         }
 
         """;
@@ -149,7 +173,7 @@ static class LampShadowShaders
         {
             ivec2 px = ivec2(gl_GlobalInvocationID.xy);
             if (px.x >= int(uFullSize.x) || px.y >= int(uFullSize.y)) return;
-            imageStore(uLost, px, vec4(lostLight(px), 0.0));
+            imageStore(uLost, px, lostLight(px));
         }
         """;
 

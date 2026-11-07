@@ -21,10 +21,12 @@ sealed unsafe class LampShadowPass : IDisposable
     readonly GpuProgram program;
     readonly GpuComputePipeline pipeline;
     readonly GpuSampler sampler;
+    readonly PenumbraFilter penumbra;
 
     public LampShadowPass(GpuContext ctx, int lamps)
     {
         this.ctx = ctx;
+        penumbra = new PenumbraFilter(ctx);
         program = ctx.Shaders.Compute(LampShadowShaders.Trace(lamps), "lamp shadow trace",
         [
             (0, DescriptorType.CombinedImageSampler), (1, DescriptorType.CombinedImageSampler), (2, DescriptorType.AccelerationStructureKhr),
@@ -42,8 +44,12 @@ sealed unsafe class LampShadowPass : IDisposable
         public Vector4 LightGrid, Right, Up, Back, Eye, Origin, PlanesTan, Size;
     }
 
-    /// <summary>Traces into <paramref name="lost"/>. <paramref name="scene"/> has this frame's top level.</summary>
-    public void Run(GiScene scene, WorldLamps lamps, GpuTexture depth, GpuTexture surface, GpuTexture lost, in LampShadowView view)
+    /// <summary>
+    /// Traces into <paramref name="lost"/>, then filters it by the lamps' size into <paramref name="filtered"/> (<see cref="PenumbraFilter"/>, through <paramref name="scratch"/>;
+    /// <paramref name="inverse"/>: NDC, jittered as the frame was, to the position relative to the eye). <paramref name="scene"/> has this frame's top level.
+    /// </summary>
+    public void Run(GiScene scene, WorldLamps lamps, GpuTexture depth, GpuTexture surface, GpuTexture lost, GpuTexture scratch, GpuTexture filtered, in LampShadowView view,
+        in Matrix4x4 inverse)
     {
         var parameters = new Params
         {
@@ -66,6 +72,7 @@ sealed unsafe class LampShadowPass : IDisposable
         cmd.BindBindlessTable(program, 1, GpuBindPoint.Compute);
         cmd.Dispatch((uint)(((int)view.Size.X + 7) / 8), (uint)(((int)view.Size.Y + 7) / 8));
         cmd.Barrier(BarrierBatch.Full);
+        penumbra.Run(cmd, new PenumbraTargets(depth, surface, lost, scratch, filtered, (int)view.Size.X, (int)view.Size.Y), inverse, view.Footprint);
         cmd.EndLabel();
         ctx.EndNative(cmd);
     }
@@ -117,5 +124,9 @@ sealed unsafe class LampShadowPass : IDisposable
         SType = StructureType.WriteDescriptorSet, DstBinding = binding, DescriptorCount = 1, DescriptorType = type, PBufferInfo = info,
     };
 
-    public void Dispose() => ctx.Shaders.Dispose(program);
+    public void Dispose()
+    {
+        ctx.Shaders.Dispose(program);
+        penumbra.Dispose();
+    }
 }

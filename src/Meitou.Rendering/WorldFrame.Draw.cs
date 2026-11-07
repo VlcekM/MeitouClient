@@ -119,7 +119,7 @@ static partial class WorldFrame
         }
         // The traced sun needs the surface target and the rays; without either the cascades light the frame as ever.
         gpu.Traced = giResolve && gpu.Post is { Options.TracedSun: true } && gpu.Gi is not null && gpu.Shadow is { Enabled: true, Meitou: true };
-        if (gpu.Post is { } tracedPost) (tracedPost.TracedSun, tracedPost.TracedDebug) = (gpu.Traced, gpu.DebugShadows == 4);
+        if (gpu.Post is { } tracedPost) (tracedPost.TracedSun, tracedPost.TracedDebug, tracedPost.SunShadowed) = (gpu.Traced, gpu.DebugShadows == 4, gpu.Shadow is { Enabled: true });
         if (gpu.Gi is { } tracedScene) tracedScene.Traced = gpu.Traced;
         post.Begin(f.Width, f.Height);
         if (post is PostProcess { Unallocated: true })
@@ -643,8 +643,7 @@ static partial class WorldFrame
         gpu.Probes!.Traced = false;
         f.Host.Close();
         gpu.TracedSun ??= new Gi.TracedSunPass(post.Gpu);
-        Matrix4x4.Invert(f.Rotation * s.Jittered, out var inverse);
-        post.RunTracedSun(gpu.TracedSun, gpu.Gi!, inverse, f.Light.SunDirection);
+        post.RunTracedSun(gpu.TracedSun, gpu.Gi!, post.SceneToEye, f.Light.SunDirection);
         f.Host.Open(9, post.WithShadingRate(post.SceneTargets));
         StageClock.Lap(14, "traced sun");   // the gi stage's, as the resolve
     }
@@ -668,6 +667,7 @@ static partial class WorldFrame
         var jittered = Jitter.Apply(projection, f.Jitter, f.RenderWidth, f.RenderHeight);
         var viewProjection = f.View * jittered;
         var s = new SceneView(near, far, projection, jittered, viewProjection, WorldCamera.FrustumPlanes(viewProjection));
+        if (f.Gpu.Post is { } tracedPost && Matrix4x4.Invert(f.Rotation * jittered, out var toEye)) tracedPost.SceneToEye = toEye;   // the traced shadows' reconstruction
         AttachMotion(ref f, s.ViewProjection, f.View * projection, s.Frustum, f.RelativeRotation * jittered, f.RelativeRotation * projection);
         return s;
     }
