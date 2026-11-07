@@ -109,6 +109,7 @@ def merged():
     _merged = [(by_id[k][0], by_id[k][1], by_id[k][1]['_layers']) for k in order]
     return _merged
 def tag(ls): return 'observed' if 'observed' in ls else 'local' if 'local' in ls else gen_label()
+def lname(ls): return [(('clean (shipped)' if gen_label() == 'clean' else 'your export') if l == 'generated' else l) for l in ls]
 def num(v): return isinstance(v, (int, float)) and not isinstance(v, bool)
 def validate(e, layer=''):
     errs = []
@@ -213,7 +214,7 @@ def cmd_show(a):
     need_data()
     n, e = get(a[0])
     if not e: sys.exit('no entry with id "%s" (wiki find <text>)' % a[0])
-    if '_layers' in e: print('# layers: %s%s' % (' + '.join(e['_layers']), ' (the later layer wins; data = numbers from your game files)' if len(e['_layers']) > 1 else ''))
+    if '_layers' in e: print('# layers: %s%s' % (' + '.join(lname(e['_layers'])), ' (the later layer wins; data = numbers from your game files)' if len(e['_layers']) > 1 else ''))
     print('# file: %s.json' % n); print(json.dumps(clean(e), indent=1, ensure_ascii=False))
     prov(); warn_missing()
 def cmd_town(a):
@@ -222,7 +223,7 @@ def cmd_town(a):
     r = best(' '.join(a), TOWNLIKE)
     if not r: sys.exit('no town, camp or ruin matching "%s" (wiki find <text>)' % ' '.join(a))
     e = r[0]; d = e.get('data') or {}
-    print('%s  [%s; id %s; %s]' % (e['name'], e['kind'], e['id'], ' + '.join(e['_layers'])))
+    print('%s  [%s; id %s; %s]' % (e['name'], e['kind'], e['id'], ' + '.join(lname(e['_layers']))))
     print('faction : %s' % (e.get('faction') or '-'))
     print('position: %s (%s)   zone: %s%s' % (xz(e), 'verified in game %s' % e['verifiedOn'] if e['verified'] else 'from game files, not checked in game', e.get('zone') or '-', '   region: %s' % e['region'] if e.get('region') else ''))
     if d.get('townType'): print('type    : %s%s' % (d['townType'], ', public' if d.get('isPublic') else ''))
@@ -336,7 +337,7 @@ def cmd_who(a):
     r = best(' '.join(a), ('character', 'animal-character', 'npc', 'group'))
     if not r: sys.exit('no character matching "%s" (wiki find <text>)' % ' '.join(a))
     e = r[0]; d = e.get('data') or {}
-    print('%s  [%s; id %s; %s]' % (e['name'], e['kind'], e['id'], ' + '.join(e['_layers'])))
+    print('%s  [%s; id %s; %s]' % (e['name'], e['kind'], e['id'], ' + '.join(lname(e['_layers']))))
     print('faction : %s%s' % (e.get('faction') or '-', ' (from %s)' % d['factionSource'] if d.get('factionSource') else (' (none found in the record, its squads or its home town)' if not e.get('faction') and 'factionSource' in d else '')))
     if 'unique' in d: print('unique  : %s   recruitable: %s' % ('yes' if d['unique'] else 'no (a bounty roll on a common type)', 'yes, a dialogue line makes them join you' if d.get('recruitable') else 'no dialogue line found'))
     b = d.get('bounty')
@@ -376,7 +377,7 @@ def cmd_faction(a):
     r = best(' '.join(a), ('faction',))
     if not r: sys.exit('no faction matching "%s"' % ' '.join(a))
     e = r[0]; d = e.get('data') or {}
-    print('%s  [faction; id %s; %s]' % (e['name'], e['id'], ' + '.join(e['_layers'])))
+    print('%s  [faction; id %s; %s]' % (e['name'], e['id'], ' + '.join(lname(e['_layers']))))
     for k, lab in (('fundamentalType', 'type'), ('defaultRelation', 'default relation'), ('offersBounties', 'books bounties'), ('notReal', 'not a real faction')):
         if k in d: print('%-17s: %s' % (lab, d[k]))
     rel = d.get('relations') or {}
@@ -392,7 +393,7 @@ def bp_text(d):
     return ', '.join('%s%s' % (x['research'], ' (repetition %d)' % x['repetition'] if x.get('repetition') else '') for x in b) + '  (research that unlocks it: wiki research <name>)'
 def item_card(e):
     d = e.get('data') or {}; k = e['kind']
-    print('%s  [%s; id %s; %s]' % (e['name'], k, e['id'], ' + '.join(e['_layers'])))
+    print('%s  [%s; id %s; %s]' % (e['name'], k, e['id'], ' + '.join(lname(e['_layers']))))
     if k == 'weapon':
         print('class   : %s (skill category %s)   value %s   weight %s kg   material cost %s' % (d.get('class'), d.get('skillCategory'), d.get('value'), d.get('weightKg'), d.get('materialCost')))
         print('damage  : cut %s, blunt %s, pierce %s; armour penetration %s; bleed %s; vs humans %s, animals %s, robots %s%s' % (mult(d.get('cutMult')), mult(d.get('bluntMult')), mult(d.get('pierceMult')), d.get('armourPenetration'), mult(d.get('bleedMult')), mult(d.get('humanMult')), mult(d.get('animalMult')), mult(d.get('robotMult')), '; min cut ' + mult(d['minCutMult']) if d.get('minCutMult') else ''))
@@ -486,7 +487,7 @@ def cmd_research(a):
     r = best(' '.join(words), ('research',))
     if not r: sys.exit('no research matching "%s" (wiki research lists the categories)' % ' '.join(words))
     e = r[0]; d = e['data']
-    print('%s  [research; %s; level %s; id %s; %s]' % (e['name'], d.get('category'), d.get('level'), e['id'], ' + '.join(e['_layers'])))
+    print('%s  [research; %s; level %s; id %s; %s]' % (e['name'], d.get('category'), d.get('level'), e['id'], ' + '.join(lname(e['_layers']))))
     print('time    : %s base hours%s%s%s' % (d.get('hours'), ('; repeatable %d more time(s), cost and time x%s each' % (d['repeats'] - 1 if d['repeats'] > 1 else 0, d.get('repeatMult'))) if d.get('repeats') else '', '; a bench level upgrade' if d.get('levelUpgrade') else '', '; blueprint only' if d.get('blueprintOnly') else ''))
     print('cost    : %s%s' % (', '.join('%s x%s' % (c['item'], c['count']) for c in d['cost']) or 'no items', '; money %s' % d['money'] if d.get('money') else ''))
     if d.get('books'): print('books   : ' + ', '.join(d['books']))
@@ -516,7 +517,7 @@ def cmd_animal(a):
         if not any(o['kind'] == 'animal-type' for _, o, _ in merged()): sys.exit('wiki animal: no animal data. ' + export_hint())
         sys.exit('no animal matching "%s" (wiki find <text> --kind animal-type)' % ' '.join(a))
     e = r[0]; d = e['data']; rc = d.get('race') or {}
-    print('%s  [animal; id %s; %s]' % (e['name'], e['id'], ' + '.join(e['_layers'])))
+    print('%s  [animal; id %s; %s]' % (e['name'], e['id'], ' + '.join(lname(e['_layers']))))
     print('faction : %s' % (e.get('faction') or '-'))
     print('stats   : combat %s, animal strength %s%s, health x%s, lifespan %s days, size %s-%s of full, %s%% female, inventory %s%s' % (d.get('combatStats'), d.get('animalStrength'), ', strength %s' % d['strength'] if d.get('strength') else '', d.get('hpMult'), d.get('lifespanDays'), d.get('scaleMin'), d.get('scaleMax'), d.get('femaleChancePct'), d.get('inventory'), '; unique' if d.get('unique') else ''))
     if rc:
@@ -540,7 +541,7 @@ def cmd_animal(a):
 def squad_line(x): return '%s | %s%% | %s | %s%s' % (x['squad'], x['sharePct'], x.get('faction') or '-', ', '.join(x.get('animals') or x.get('members') or ['-']), ' | needs: ' + ', '.join(x['worldState']) if x.get('worldState') else '')
 def biome_report(b, why, n=25):
     d = b['data']
-    print('%s  [biome group; %d zone cells, %d placed towns; %s]' % (b['name'], d['cellCount'], d.get('townCount', 0), ' + '.join(b['_layers'])))
+    print('%s  [biome group; %d zone cells, %d placed towns; %s]' % (b['name'], d['cellCount'], d.get('townCount', 0), ' + '.join(lname(b['_layers']))))
     if why: print(why)
     print('homeless squads per loaded sector: %s (times the population setting); %d nest(s) to place%s' % (d['homelessAmount'], d['numNests'], ' (at fixed markers only)' if d.get('nestsAtFixedMarkersOnly') else ''))
     sq = d.get('squads') or []
