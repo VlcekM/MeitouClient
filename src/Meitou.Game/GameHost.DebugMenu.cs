@@ -399,7 +399,7 @@ sealed partial class GameHost
             onName = centre.Name;
         }
         world.Commands.Enqueue(new DebugExplode(at, radius, force, damage, squad, onName) { Tick = tick });
-        return $"explosion at {at.X:0}, {at.Y:0}{(onName.Length > 0 ? $" (on {onName})" : "")}: radius {radius:0.#} m, force {force:0.#}, damage {damage:0.#} at the centre{(squad ? ", squad included" : "")}; the result line (hit / knocked out / killed, or nobody in range) follows in the message log (it runs in the next tick, so unpause first)";
+        return $"explode{(onName.Length > 0 ? " on " + onName : $" at {at.X:0}, {at.Y:0}")}: r={radius:0.#}, force {force:0.#}, dmg {damage:0.#}{(squad ? ", squad" : "")}; result in the log, unpause first";
     }
 
     /// <summary>
@@ -579,7 +579,7 @@ sealed partial class GameHost
             : $"Up/Down pick {((DebugRow)debugRow == DebugRow.ClearBounties ? "a faction" : "a part")}   {((DebugRow)debugRow == DebugRow.Damage ? "type the damage   " : "")}Enter apply   Esc/Left back";
         var dim = new Vector4(0.7f, 0.75f, 0.8f, 1);
         float pad = 10, y0 = top + 16;
-        int chars = Math.Max(lines.Max(l => l.Text.Length), Math.Max(info.Length, Math.Max(hint.Length, Math.Max(debugStatus.Length, 30))));
+        int chars = Math.Max(lines.Max(l => l.Text.Length), Math.Max(info.Length, Math.Max(hint.Length, 30)));
         // The title line names every switch that is on, cut with "+N more" to the panel's width.
         string title = $"Debug   ({close} closes)";
         if (onNames.Count > 0) title = DebugOnSummary(title, onNames, chars);
@@ -594,7 +594,7 @@ sealed partial class GameHost
             first = Math.Clamp(at - room / 2, 0, count - room);
             count = room;
         }
-        float h = (count + 6) * o.LineHeight + 2 * pad;
+        float h = (count + 8) * o.LineHeight + 2 * pad;
         float x0 = atRight ? Math.Max(8, width - w - 16) : 16;
         o.Rect(x0, y0, x0 + w, y0 + h, DebugOverlay.PanelColour);
         float y = y0 + pad;
@@ -617,8 +617,36 @@ sealed partial class GameHost
         y += 0.5f * o.LineHeight;
         o.Text(info, x0 + pad, y, dim);
         o.Text(hint, x0 + pad, y + o.LineHeight, dim);
-        if (debugStatus.Length > 0) o.Text(debugStatus, x0 + pad, y + 2 * o.LineHeight, new Vector4(1f, 0.9f, 0.4f, 1));
+        // The status never sets the panel's width: it wraps to it, at most three lines, cut with "...".
+        var status = WrapStatus(debugStatus, chars, 3);
+        for (int k = 0; k < status.Count; k++) o.Text(status[k], x0 + pad, y + (2 + k) * o.LineHeight, new Vector4(1f, 0.9f, 0.4f, 1));
         o.Flush(width, height);
+    }
+
+    /// <summary>Word-wraps <paramref name="text"/> to <paramref name="width"/> characters, at most <paramref name="maxLines"/> lines; the last one ends in "..." when text was left out.</summary>
+    static List<string> WrapStatus(string text, int width, int maxLines)
+    {
+        var lines = new List<string>();
+        var current = "";
+        bool cut = false;
+        foreach (var word in text.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var w = word.Length > width ? word[..Math.Max(1, width)] : word;
+            if (current.Length > 0 && current.Length + 1 + w.Length > width)
+            {
+                lines.Add(current);
+                current = "";
+                if (lines.Count == maxLines) { cut = true; break; }
+            }
+            current = current.Length == 0 ? w : current + " " + w;
+        }
+        if (!cut && current.Length > 0) lines.Add(current);
+        if (cut)
+        {
+            var last = lines[^1];
+            lines[^1] = (last.Length + 3 > width ? last[..Math.Max(0, width - 3)] : last) + "...";
+        }
+        return lines;
     }
 
     /// <summary>A switch that is on: its text colour (green) and the row's background tint.</summary>
