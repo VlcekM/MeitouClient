@@ -395,7 +395,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             // A turret is only wanted by a member that found one (the nearest unused one to it in <see cref="ClaimTurrets"/>): the finder's factor times the desire of AI slot 35.
             AiBehaviour.Turret => board.TurretClaims.ContainsKey(self.Slot) ? board.TurretFactors.GetValueOrDefault(self.Slot, 1) * TurretDesire(world, self.Slot) : 0,
             AiBehaviour.TownNode => WanderIn(board.Town, world.Characters.Previous[self.Slot].Position).Count > 0 || OccupiedBuildings(world, board) > 0 ? 1 : 0,
-            // Row 36 has no finder and no target: its update strolls round where the character stands, townless (Task_PatrolTown, docs/game/ai-tasks.md).
+            // Row 36 has no finder: its update strolls round the squad's town, or where the character stands without one (Task_PatrolTown, docs/game/ai-tasks.md).
             AiBehaviour.PatrolTown => 1,
             // Shopping is wanted while its list has something left to buy today (FUN_140999620), and there is a shop to go to.
             // The finder's factor follows its pick: 1 for a shop, 0.4 for any other public building, 0 when it finds none (FUN_1409997f0).
@@ -767,13 +767,17 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     }
 
     /// <summary>
-    /// Acts out 36 Patrolling town (<c>Task_PatrolTown</c>, docs/game/ai-tasks.md "Town goals"): strolls to a point drawn round where it stands (<see cref="PatrolPoint"/>) and, once the walk is
-    /// over, forgets it, so the next think draws another, as the original's update sends a new move each time the last one ended. The row has no target, so the town the task would patrol round is not read.
+    /// Acts out 36 Patrolling town (<c>Task_PatrolTown</c>, docs/game/ai-tasks.md "Town goals"): strolls to a point drawn round its squad's town (<see cref="PatrolArea"/>,
+    /// <see cref="PatrolPoint"/>) and, once the walk is over, forgets it, so the next think draws another, as the original's update sends a new move each time the last one ended.
     /// </summary>
     void Patrol(World world, int slot, AiMind mind, Blackboard board)
     {
         var self = world.Characters.IdOf(slot);
-        mind.Target ??= PatrolPoint(world, self, world.Characters.Previous[slot].Position);
+        if (mind.Target is null)
+        {
+            var (centre, scatter) = PatrolArea(world, board, world.Characters.Previous[slot].Position);
+            mind.Target = PatrolPoint(world, self, centre, scatter);
+        }
         if (mind.Target is not { } point)
         {
             Become(world, slot, CharacterTask.Idle);
@@ -784,23 +788,43 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         mind.Target = null;
     }
 
-    /// <summary>The scatter of a patrol order with no town (<c>FUN_1405c6b30</c>, <c>DAT_1416f190c</c>; the least, <c>DAT_14168dcf4</c>, is 500).</summary>
+    /// <summary>The scatter of a patrol order with no town (<c>FUN_1405c6b30</c>, <c>DAT_1416f190c</c>) and the least scatter of any (<c>DAT_14168dcf4</c>).</summary>
     const float PatrolScatter = 1250;
+    const float PatrolScatterMin = 500;
 
     /// <summary>
-    /// Where 36 Patrolling town walks next (<c>Task_PatrolTown</c> update through <c>FUN_1405c6b30</c> mode 1 and <c>setPatrolInput</c>, docs/game/ai-tasks.md "Town goals", Observed): its own position
-    /// moved by up to half the scatter in X and Z; of up to 10 draws the first on walkable ground (the original redraws a point near a building that is not public, allied or the player's, or under water
-    /// for a race that avoids it; Meitou tests the ground only). Null without a walkable draw.
+    /// The area order of 36 Patrolling town (<c>Task_PatrolTown</c> through <c>FUN_1405c6b30</c>, docs/game/ai-tasks.md "Town goals", <b>Verified</b>): the squad's town hand
+    /// (<c>FUN_140269cd0</c>: its mission town, else its home town) at a scatter of half the town's radius, at least 500; with neither, the character's own position at 1250.
     /// </summary>
-    Vector3? PatrolPoint(World world, CharacterId self, Vector3 from)
+    (Vector2 Centre, float Scatter) PatrolArea(World world, Blackboard board, Vector3 from)
+    {
+        var town = board.Destination.IsNone && board.Town >= 0 ? CampaignTown.OfSite(board.Town) : board.Destination;
+        if (town.Site >= 0)
+        {
+            var site = data.Sites[town.Site];
+            return (Flat(site.Position), MathF.Max(PatrolScatterMin, site.Town.Radius * 0.5f));
+        }
+        if (town.PlayerTown > 0 && world.Buildings.FindTown(town.PlayerTown) is { } player)
+        {
+            return (Flat(player.Position), MathF.Max(PatrolScatterMin, player.Radius * 0.5f));
+        }
+        return (Flat(from), PatrolScatter);
+    }
+
+    /// <summary>
+    /// Where 36 Patrolling town walks next (<c>setPatrolInput</c>, docs/game/ai-tasks.md "Town goals"): the area's centre moved by up to half the scatter in X and Z; of up to 10 draws
+    /// the first on walkable ground (the original redraws a point near a building that is not public, allied or the player's, or under water for a race that avoids it; Meitou
+    /// tests the ground only). Null without a walkable draw.
+    /// </summary>
+    Vector3? PatrolPoint(World world, CharacterId self, Vector2 centre, float scatter)
     {
         ulong roll = TargetRoll(world, self, AiBehaviour.PatrolTown);
         for (int i = 0; i < 10; i++)
         {
             roll = Rng.Mix(roll);
-            float x = from.X + (Rng.Float(roll) - 0.5f) * PatrolScatter;
+            float x = centre.X + (Rng.Float(roll) - 0.5f) * scatter;
             roll = Rng.Mix(roll);
-            float z = from.Z + (Rng.Float(roll) - 0.5f) * PatrolScatter;
+            float z = centre.Y + (Rng.Float(roll) - 0.5f) * scatter;
             if (world.Walkability.IsWalkable(x, z)) return new Vector3(x, float.NaN, z);
         }
         return null;

@@ -78,7 +78,7 @@ public enum AiBehaviour : byte
     Medic = 21,
     /// <summary>
     /// PATROL_TOWN (36, <c>Task_PatrolTown</c>, docs/game/ai-tasks.md "Town goals"): walks to a random point round its town's centre, and draws the next one each time a walk is over,
-    /// so it keeps strolling about the town (an occupier: round the complete buildings of the player town it holds).
+    /// so it keeps strolling about the town (its squad's mission town, else its home; an occupier: the player town it holds).
     /// </summary>
     PatrolTown = 22,
     /// <summary>

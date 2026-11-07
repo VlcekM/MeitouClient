@@ -1151,16 +1151,14 @@ update `FUN_140511130`, `Character::setupAI` `FUN_140621b70`; KenshiLib names **
   - **Observed** (KenshiProbe state 0.5 live check, N = 1): a Holy Prisoner Caravan on signal 17 in Rebirth, which has no bar, shops all hour
     and never relaxes.
 - **36 Patrolling town** (`Task_PatrolTown` slots 1-3 `FUN_140336370` / `FUN_1403364b0` / `FUN_1403365b0`, **Verified** by the decompile and the `FUN_1405c6b30` mover; row 36 has no finder or
-  effect, registration in `FUN_140319a60`, and no commitment). The task instance's vfunc `0x48` is the character (as in Task_Patrol and Task_Follow), `0x40` the task's target test. Start and resume
-  (modes 0 / 2) do nothing without a target; the update (mode 1) never asks, so it always runs: it hands the mover the **character's own position** and, only while the task has a target, the
-  platoon's town (the blackboard's town hand, `FUN_140269cd0`, resolved by `FUN_1409f9100`). With a town the move is an area order on the town's position with scatter max(500, 0.5 x the town's radius,
-  Town vfunc 84); without one, on the character's own position with scatter 1250 (`DAT_1416f190c`, at least 500). `setPatrolInput` draws the destination within ±scatter/2 in X and Z
-  (redraws: [patrol moves](factions-squads-towns.md#off-screen-world)); the update re-sends the order only when the mover reports idle, reached or failed.
-  Every base "Patrol hometown" AI_TASK has `targeting` SPECIFIC (0), which sets no hand at load (**Verified**, `FUN_1402704e0`), and no finder fills one, so the task has no target (**Observed**, the
-  conclusion): the character strolls in steps of up to ±625 from where it stands, after its list B is met (`atDestinationTown`, so it first travels to the destination town). It does not stand, and
-  it does not patrol round the town's centre unless a mod gives the row a target-bearing `targeting`.
-  Meitou (`AiSystem.Patrol`, `PatrolPoint`): the own-position draw above, the first of 10 draws on walkable ground (the building and water redraws are not modelled), a new draw each time a walk is
-  over; the town path (a target present) is not modelled.
+  effect, registration in `FUN_140319a60`, and no commitment). The slots get the character's `CharBody` (the task driver, `CharBody` slot 1 `FUN_1405c6d20`, calls the task's slot 2 with it),
+  whose vfunc `0x48` is the character (`FUN_1406210d0`) and `0x40` a constant true (`FUN_1406210c0`; no class overrides it), so the town branch always runs (an earlier reading of `0x40` as a target
+  test was wrong). Start and update (the update only when the mover reports idle, reached or failed; resume's mode 2 sends nothing) give the mover the platoon's town hand (`FUN_140269cd0` with the
+  home fallback: override, campaign town, mission target, else the Ownerships home town; resolved by `FUN_1409f9100`). With a town the move is an area order on the town's position with scatter
+  max(500, 0.5 x the town's radius, Town vfunc 84); with none, on the character's own position with scatter 1250 (`DAT_1416f190c`). `setPatrolInput` draws the destination within ±scatter/2 in
+  X and Z (redraws: [patrol moves](factions-squads-towns.md#off-screen-world)). So a resident strolls within ±625 of a Town's centre (±250 for a Village), after its list B is met (`atDestinationTown`).
+  Meitou (`AiSystem.PatrolArea`, `PatrolPoint`): the board's `Destination`, else its home `Town`, else the own position; the first of 10 draws on walkable ground (the building and water redraws are
+  not modelled), a new draw each time a walk is over. **Observed** (headless, #370 save, The Hub): before, residents on 36 drifted to 2479 from the centre; after 3000 ticks they end 248-556 from it.
 - Building layouts' `is bar` / `is shop` are 0 on every exterior layout of the base game and mods checked (2 interior layouts set `is bar`, 9 `is shop`),
   so they do not mark bars and shops (**Verified** over the merged `interiors.level`).
 - **43 Staying home** (`FUN_1408cbc00`): furniture in the home whose BuildingFunction is in mask 0x2049a (bits MINE, RESEARCH, REFINERY, TRAINING,

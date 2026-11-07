@@ -380,8 +380,8 @@ public sealed partial class AiSystem
     }
 
     /// <summary>
-    /// Where a town goal (36 Patrolling town, 37 Wandering town) of an occupier walks: a random complete building of the player town it holds (<b>engine choice</b>: the original's
-    /// <c>Task_PatrolTown</c> target is <b>Unknown</b>, and Meitou reads no nodes in a player town); null without one.
+    /// Where 37 Wandering town of an occupier walks: a random complete building of the player town it holds (<b>engine choice</b>: Meitou reads no nodes in a player town);
+    /// null without one. 36 Patrolling town patrols round that town's centre (<see cref="PatrolArea"/>).
     /// </summary>
     static Vector3? OccupiedSpot(World world, Blackboard board, CharacterId self)
     {

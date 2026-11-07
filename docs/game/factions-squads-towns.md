@@ -825,7 +825,7 @@ every message {1} is the campaign's name and {2} the target town's (the cancel m
   the polarity of the import handle test; other readers of `unique` (`FUN_14067b070` dialogue conditions, `FUN_1407609e0` / `FUN_140761550`) not opened.
 - Town overrides: what sets the ZoneManager +8 byte; the buildinglist entry field tested in `FUN_1409fe340` ([town overrides](#town-overrides)).
 - The direction of the town waypoint's 200 offset and whether `Town::setup` runs for the Null town type ([patrol task](#off-screen-world)).
-- Patrol routes: `Task_PatrolTown` and `GoOutOnPatrol*` were not decoded here (`Task_Patrol` is above; class mapping: [ai-tasks.md](ai-tasks.md#tasktype-to-task-class); packages: [ai.md](ai.md#signal-functions-and-the-package-classes)); no fixed route data
+- Patrol routes: `GoOutOnPatrol*` was not decoded here (`Task_Patrol` is above, `Task_PatrolTown` in [town goals](ai-tasks.md#town-goals); class mapping: [ai-tasks.md](ai-tasks.md#tasktype-to-task-class); packages: [ai.md](ai.md#signal-functions-and-the-package-classes)); no fixed route data
   was found in FCS records (squad templates only name `AI packages`; `patrol approaches towns` is a bool).
 
 ## Expression reference
