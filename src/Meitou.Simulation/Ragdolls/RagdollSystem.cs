@@ -131,6 +131,8 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
         /// actor is named <c>Actor</c> and moves <c>Bip01</c>.
         /// </summary>
         public int CarryBone = -1;
+        /// <summary>While carried: the placement it hangs in (<see cref="Placement"/>), where it falls from when set down or dropped.</summary>
+        public Matrix4x4? HungIn;
         public RagdollPart Mask;
         public int Tag;
         /// <summary>By body: its handle when it is in the scene.</summary>
@@ -300,7 +302,10 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
                 // laid in a bed or a cage, which places it).
                 if ((r.Mask & RagdollPart.Whole) != 0 && (wanted & RagdollPart.Whole) == 0 && (wanted & RagdollPart.CarryMode) == 0 && cold.InSomething == Locks.HeldState.None)
                     StartGetUp(world, r, ref next[i]);
-                animated = Animated(r, cold, placement);
+                // A body let go of falls from where it hung: the carried pose re-placed upright at its new position would hang its trunk
+                // through the floor (#327).
+                bool letGo = (r.Mask & RagdollPart.CarryMode) != 0 && (wanted & RagdollPart.CarryMode) == 0;
+                animated = Animated(r, cold, letGo && r.HungIn is { } hung ? hung : placement);
                 bool restored = restore is not null && Fits(r, restore, next[i].Position);
                 Rebuild(r, wanted, restored ? restore!.Pose : animated, restored ? default : blow, advanced, world.Seed);
                 if (restored)
@@ -311,6 +316,7 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
                 }
             }
             if (r.Mask == RagdollPart.None) continue;
+            r.HungIn = (r.Mask & RagdollPart.CarryMode) != 0 ? placement : null;
             if (cold.Launch is { } launch)
             {
                 cold.Launch = null;
