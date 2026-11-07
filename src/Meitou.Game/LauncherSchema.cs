@@ -59,7 +59,12 @@ static class LauncherSchema
         Multiplier(WorldFrame.WaterClaritySlider, 0.25f, 8, 0.5f),
         Graphics(WorldFrame.FarWaterClaritySlider, 0, 1, 0.01f, 0.25f) with { Format = "0.00" },
         Graphics(WorldFrame.WaterClearDistanceSlider, 1000, 100000, 100, 10000) with { Logarithmic = true },
-        // Lighting
+        // Lighting: the technique choices first (WorldFrame.AddChoiceSliders), their defaults as a fresh WorldOptions' switches have them
+        Graphics(WorldFrame.SunShadowsChoice, 0, 3, 1, ChoiceDefault(WorldFrame.SunShadowsChoice)) with
+            { Labels = ["Off", "Faithful cascades", "Meitou cascades", "Traced (ray tracing)"] },
+        Graphics(WorldFrame.OcclusionChoice, 0, 2, 1, ChoiceDefault(WorldFrame.OcclusionChoice)) with { Name = "Ambient occlusion", Labels = ["Off", "SSAO", "GTAO"] },
+        Graphics(WorldFrame.GiChoice, 0, 2, 1, ChoiceDefault(WorldFrame.GiChoice)) with
+            { Labels = ["Off (flat ambient)", "Probes (ray tracing)", "Probes + hybrid cache"] },
         Graphics(WorldFrame.ShadowDistanceSlider, KenshiShadows.MinRange * 0.9f, 200000, 100, Enhancements.MeitouShadowRange) with
             { Logarithmic = true, OffBelow = KenshiShadows.MinRange },
         Graphics(WorldFrame.ShadowMapSlider, 0, 2, 1, 2) with { Labels = [.. KenshiShadows.QualitySizes.Select((s, i) => $"{LowMediumHigh[i]} · {s}")] },
@@ -103,6 +108,19 @@ static class LauncherSchema
     static SettingDescription Multiplier(string label, float min, float max, float shown) =>
         Graphics(label, min, max, 0.05f, shown) with { Logarithmic = min > 0, Format = "0.00", Suffix = "x" };
 
+    /// <summary>A technique choice's value for a fresh <see cref="WorldOptions"/>'s switches (Meitou cascades, SSAO or GTAO, probes or probes + hybrid).</summary>
+    static float ChoiceDefault(string choice)
+    {
+        var on = WorldFrame.LiveSwitches(new WorldOptions(), () => null, () => null, () => null).ToDictionary(e => e.Name, e => e.IsMeitou);
+        bool On(string name) => on.TryGetValue(name, out bool v) && v;
+        return choice switch
+        {
+            WorldFrame.SunShadowsChoice => On("Traced sun shadows") ? 3 : On("Shadows") ? 2 : 1,
+            WorldFrame.OcclusionChoice => !On("Ambient occlusion") ? 0 : On("Ground-truth occlusion") ? 2 : 1,
+            _ => !On("Indirect light") ? 0 : On("Hybrid GI") ? 2 : 1,
+        };
+    }
+
     /// <summary>The Tab panel switches: the Faithful / Meitou ones (their state as a fresh <see cref="WorldOptions"/> has it) and the plain on/off ones.</summary>
     static IEnumerable<SettingDescription> Switches()
     {
@@ -111,7 +129,9 @@ static class LauncherSchema
             Key = SettingsMenu.SwitchKeyPrefix + label, Graphics = true, Kind = SettingKind.Toggle, Name = SettingsMenu.Label(label),
             Description = SettingsMenu.ToggleHint(label), Off = off, On = on, Shown = shown ? 1 : 0, Impact = SettingsMenu.ImpactOf(label),
         };
-        foreach (var e in WorldFrame.LiveSwitches(new WorldOptions(), () => null, () => null, () => null).Where(e => !SettingsMenu.HiddenSwitch(e.Name)))
+        // The switches a technique choice stands for are saved but not shown: the choice is their row (the launcher writes it, the game applies it last).
+        foreach (var e in WorldFrame.LiveSwitches(new WorldOptions(), () => null, () => null, () => null)
+                     .Where(e => !SettingsMenu.HiddenSwitch(e.Name) && !WorldFrame.ChoiceDrivenSwitches.Contains(e.Name)))
             yield return Switch(e.Name, e.Faithful is "off" or "none" ? "Off" : $"Faithful: {e.Faithful}", $"Meitou: {e.Meitou}", e.IsMeitou);
         yield return Switch(WorldFrame.FifthCascadeSwitch, "Off", "On", true);
         // An optional effect, in neither look: plain Off / On (Toggle.Optional).

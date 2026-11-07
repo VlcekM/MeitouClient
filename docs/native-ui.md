@@ -22,6 +22,12 @@ button for the selected mod and one for all problems; a summary line under the v
 Mod settings (`SettingsMenu.ModSettings.cs`) lists the settings code mods registered ([modding](modding.md), "Settings"): a group per mod in load
 order, open the first time it is shown, its rows the page's own switches, sliders and lists; a changed row is brass with a Reset link.
 
+Graphics techniques that exclude each other are one list each on the Lighting tab (`WorldFrame.AddChoiceSliders`), heading their feature group:
+Sun shadows (Off / Faithful cascades / Meitou cascades / Traced: Off is the shadow distance at its left end, Traced turns the global illumination on,
+whose rays it uses), Ambient occlusion (Off / SSAO / GTAO), Global illumination (Off / Probes / Probes + hybrid; Off leaves the cascades). Each reads
+and writes the switches it stands for, which keep their saved keys and get no rows of their own; the screen-space contact shadows, in the Shadows group,
+have no row where the device traces rays. The looks and the tiers set the switches, not the choices.
+
 Graphics (`SettingsMenu.Looks.cs`, `.Presets.cs`, `.Groups.cs`; `--settings-showcase` with `--screenshot` captures it) has two
 rows above its tabs:
 - **Look**: Faithful | Meitou (`faithfulLook`). Faithful is the game as it ships: every Faithful / Meitou effect switch off,

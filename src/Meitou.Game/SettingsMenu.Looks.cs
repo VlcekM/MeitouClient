@@ -116,13 +116,15 @@ sealed partial class SettingsMenu
             {
                 "Interior lamps" => "Advanced",
                 "Anti-aliasing" or "Weather particles" => "Hidden",
-                "Shadows" or "Indirect light" or "Indoor GI" or "Hybrid GI" or "Ambient occlusion" or "Ground-truth occlusion" or "Light shafts" or "Planetshine" or "Lamp shadows" or WorldFrame.FifthCascadeSwitch => "Lighting",
+                "Shadows" or "Indirect light" or "Indoor GI" or "Hybrid GI" or "Ambient occlusion" or "Ground-truth occlusion" or "Light shafts" or "Planetshine" or "Lamp shadows"
+                    or "Contact shadows" or WorldFrame.FifthCascadeSwitch => "Lighting",
                 "Haze" or "Night air" or "Night sky" or "Clouds" or "Cloud shadows" or "Cloud shadows in fog" or "Heat haze" or "Fog" => "Sky & weather",
                 "Tone map and grade" or "Night grading" or "Dithering" or WorldFrame.BloomSwitch or WorldFrame.MotionBlurSwitch
                     or WorldFrame.DepthOfFieldSwitch or WorldFrame.CameraEffectsSwitch => "Colour",
                 "Skin" or "Character levels" or "Item icons" => "Characters",
                 _ => "World",
             };
+        if (WorldFrame.ChoiceSliders.Contains(label)) return "Lighting";
         if (S("Ambient") || S("Night ambient") || S("Light shafts") || S("Planetshine") || S("Shadow")) return "Lighting";
         if (S("Haze") || S("Heat haze") || WorldFrame.ParticleSliders.Contains(label)) return "Sky & weather";
         if (S("Tone map") || S("Hybrid") || S("Grading") || S("Night grading") || S("Bloom") || S("Motion blur") || S("Depth of field")) return "Colour";
@@ -150,6 +152,8 @@ sealed partial class SettingsMenu
                 "Draw distances" or "Foliage ranges" or "Far impostors" => "Distances",
                 _ => "Detail",
             };
+        // The technique choices stand for switches the looks and tiers already set: not a look value of their own.
+        if (WorldFrame.ChoiceSliders.Contains(label)) return "Choice";
         if (S("Ambient") || S("Night ambient") || S("Light shafts") || S("Planetshine")) return "Light";
         if (S("Haze") || S("Heat haze")) return "Sky";
         if (S("Tone map") || S("Hybrid") || S("Grading") || S("Night grading") || S("Bloom") || S("Motion blur") || S("Depth of field")) return "Colour";

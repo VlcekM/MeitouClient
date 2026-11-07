@@ -16,11 +16,11 @@ sealed partial class SettingsMenu
     static readonly FeatureGroup[] FeatureGroups =
     [
         // Lighting
-        new("Shadows", "Shadows", [WorldFrame.ShadowDistanceSlider, WorldFrame.ShadowMapSlider, WorldFrame.ShadowFilterSlider,
-            WorldFrame.FifthCascadeSwitch]),
-        new("Indirect light", "Indirect light", ["Indoor GI", "Hybrid GI"]),
+        new("Shadows", WorldFrame.SunShadowsChoice, [WorldFrame.ShadowDistanceSlider, WorldFrame.ShadowMapSlider, WorldFrame.ShadowFilterSlider,
+            WorldFrame.FifthCascadeSwitch, "Contact shadows"]),
+        new("Indirect light", WorldFrame.GiChoice, ["Indoor GI"]),
         new("Light shafts", "Light shafts", ["Light shafts strength", "Light shafts air (0 = none)", "Light shafts air at dawn and dusk (x)", WorldFrame.ShaftQualitySlider]),
-        new("Ground-truth occlusion", "Ground-truth occlusion", [WorldFrame.GtaoQualitySlider]),
+        new("Ambient occlusion", WorldFrame.OcclusionChoice, [WorldFrame.GtaoQualitySlider]),
         new("Planetshine", "Planetshine", ["Planetshine strength (x physical)"]),
         new("Lamp shadows", "Lamp shadows", []),
         new("Ambient light", null, ["Ambient light strength (1 = game)", "Night ambient light strength (1 = 1.2x game)"],
