@@ -68,7 +68,9 @@ public static partial class MyGuiPresentation
             string? trackSkin = progress ? w.UserStrings.GetValueOrDefault("TrackSkin") : null;
             if (progress && trackSkin is null) bounds = bounds with { Width = bounds.Width * Math.Clamp(fraction, 0, 1) };
             // A caption written in the layout is the source string of the player's language (the layouts say "SKILLS", the catalog key is "Skills").
-            string caption = bindings.Coded(w.Name) ?? PartText(bindings, props) ?? Localisation.Loc.TrCaption(props.GetValueOrDefault("Caption") ?? "");
+            // MyGUI's plain Widget has no text: it ignores a layout Caption (the character trading window's TradePanel says "Character Selection").
+            string layoutCaption = w.Type == "Widget" ? "" : props.GetValueOrDefault("Caption") ?? "";
+            string caption = bindings.Coded(w.Name) ?? PartText(bindings, props) ?? Localisation.Loc.TrCaption(layoutCaption);
             if (props.TryGetValue("CaptionOwner", out string? owner))
             {
                 caption = bindings.Coded(owner) ?? Localisation.Loc.TrCaption(layout.Find(owner)?.Properties.GetValueOrDefault("Caption") ?? "");
