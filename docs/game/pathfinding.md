@@ -254,7 +254,7 @@ has no faces there (its stair faces end at x 49395). Over 10 zones (`--compare`,
 0.1 % and kept polygons grow 0..0.4 %; with a 26° limit Ancient Lab `28.60`'s spiral stair top (28°) was cut from its floor. Which field of the
 original's generation edge matching rejects such joins is **Unknown** (its alignment values were not read; the stitch's are in the Generator table).
 **Interiors are one tile** (engine choice): in the zone's 48-cell tiles a stair across a tile line inside a building comes out cut (Stack's Longhouse
-`19.29:6-`; the two tiles' contours put their vertices at different heights along the ramp). **Interior coverage**: `meitou-tools navmesh --compare-interiors`
+`19.29:6-`; the two tiles' contours put their vertices at different heights along the ramp). **Winding**: Recast's clockwise polygons are flipped by the sign of all polygons' summed area (`ZoneNavMeshBuilder.ClockwiseOverall`); the first polygon's float area alone came out wrong for Snailhouse Lagoon's interior (zone 35.42, `36-Newwworld-INGAME`), which stayed clockwise, so no point was inside it and walkers stood only within edge tolerance (**Observed**, headless probe of a save: stuck at its door before, out to the street after). **Interior coverage**: `meitou-tools navmesh --compare-interiors`
 counts an original tile's interior face covered when a kept polygon within 12 of its centre's height lies over the centre or within 3 units of it
 (`OriginalNavTiles.CoverInteriors`; the original's slivers along a mesh end sit a unit or two past ours). **Observed** over the centre only: 18.35 68→86 %,
 19.29 62→68 %, 50.33 69→71 %, 47.16 77→81 %, 20.32 88→90 % with the two rules; within 3: 18.35 96.6 %, 19.29 80.6 %, 50.33 87.2 %, 47.16 93.7 %, 20.32 98.1 %,

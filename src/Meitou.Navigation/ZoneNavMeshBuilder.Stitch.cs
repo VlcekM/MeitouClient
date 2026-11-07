@@ -211,20 +211,7 @@ internal static partial class ZoneNavMeshBuilder
             if (areas[p] != NavArea.Null && areas[q] != NavArea.Null) { neighbours[p][e] = q; neighbours[q][f] = p; }
 
         // Recast winds polygons clockwise seen from above (+Y toward the viewer, Z down the page); our tests want the other way.
-        bool flip = false;
-        if (polygons.Count > 0)
-        {
-            double area2 = 0;
-            var first = polygons.First(p => p.Length >= 3);
-            for (int k = 0; k < first.Length; k++)
-            {
-                var a = vertices[first[k]];
-                var b = vertices[first[(k + 1) % first.Length]];
-                area2 += (b.X - a.X) * (b.Z + a.Z);
-            }
-            // Positive sum of (x2 - x1)(z2 + z1) means clockwise in an (X right, Z up) plane.
-            flip = area2 > 0;
-        }
+        bool flip = ClockwiseOverall(polygons, vertices);
         if (flip)
             for (int p = 0; p < polygons.Count; p++)
             {
@@ -304,5 +291,18 @@ internal static partial class ZoneNavMeshBuilder
             BoundsMin = g.ZoneMin,
             BoundsMax = g.ZoneMax,
         };
+    }
+
+    /// <summary>
+    /// Whether the polygons wind clockwise with X right and Z up, by the sum of their signed areas (<see cref="NavGeometry.SignedArea"/>, in double from each first vertex).
+    /// The first polygon's own sign, summed in float at world coordinates, came out wrong for a thin one and left a whole interior clockwise, so no point was inside it
+    /// (Observed: Snailhouse Lagoon, zone 35.42, docs/game/pathfinding.md "Interiors").
+    /// </summary>
+    static bool ClockwiseOverall(List<int[]> polygons, List<Vector3> vertices)
+    {
+        double sum = 0;
+        foreach (var p in polygons)
+            if (p.Length >= 3) sum += NavGeometry.SignedArea([.. p.Select(i => new Vector2(vertices[i].X, vertices[i].Z))]);
+        return sum < 0;
     }
 }
