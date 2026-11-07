@@ -105,6 +105,11 @@ blades a patch at most), one rigid instance each. Blades whose foot or top is in
 non-convex mask's concavity). A changed mask set or density rebuilds the page. A blade's ray ignores blades within 8 units (the 4-unit blind range and half its fade): the
 sway (the traced card is at rest) and overlapping twin cards. Grass shadows do not sway.
 
+**Scene fill.** Objects within the probes' 6000 go in first, then the foliage, then the objects out to the shadows' range while room is left past the reserve for grass and
+characters (a longer range filled the instances and cut the trees). A foliage group's spheres and bounds are filled when the traced scene asks for them (the culls filled them
+only for groups they drew): **Observed** (Obedience, 08:00, offscreen) the block held no foliage until its 120-frame rebuild, so the trees cast neither shadows nor beams in the
+fog. The fine terrain grid's ray origin is taken down to the grid under displaced ground, never up onto it (a wall's foot against a cliff the grid passes above).
+
 **Not traced** (they cast no sun shadow while traced): construction sites (drawn clipped by their progress; the whole mesh would cast the finished building), debris
 (bolts, dropped items) and birds (no caster in any mode), particles, objects past the range or drawn only as impostors, foliage past 4000 (small foliage past 3000), grass
 past the reach, characters past the 128 nearest or 4000. Landmarks keep their map.

@@ -160,8 +160,10 @@ static class TracedSunShaders
                 vec3(0.0, -1.0, 0.0), {{F(2 * ReliefAmplitude)}});
             while (rayQueryProceedEXT(q)) { }
             if (!BLOCKED(q)) return o + lift;
+            // Only down to the grid, never up: a point the grid passes above (a wall's foot against a cliff, a room in a hillside) is under the ground the grid
+            // holds, and lifted onto it would see over the cliff.
             float grid = o.y + {{F(ReliefAmplitude)}} - rayQueryGetIntersectionTEXT(q, true);
-            return vec3(o.x, grid, o.z) + lift;
+            return vec3(o.x, min(grid, o.y), o.z) + lift;
         }
 
         // Grass: only as far as a ray can stay under the tallest blade. A blade's own ray (card) does not see the blades within the blind range, where the drawn card has swayed from

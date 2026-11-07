@@ -225,15 +225,14 @@ internal sealed unsafe class GiScene : IDisposable
         // snapped eye does, not whenever an object crosses the range, and the top level can be left as it is.
         var selectionEye = lazy ? new Vector3(epochCell.X, epochCell.Y, epochCell.Z) * EpochSize : ReuseTop ? new Vector3(MathF.Round(eye.X / SelectionSnap), MathF.Round(eye.Y / SelectionSnap), MathF.Round(eye.Z / SelectionSnap)) * SelectionSnap : eye;
         float selectionRange = ReuseTop ? Range + SelectionSnap * 0.87f : Range;
+        // The objects the probes need first (within ProbeRange); those past it (the traced sun's longer range) wait until the foliage and the casters' reserve are in, so a
+        // longer object range never pushes the trees out of the scene.
+        farObjects.Clear();
         if (objects is not null)
             foreach (var inst in objects.RayInstances(selectionEye, selectionRange))
             {
-                if (instances.Count >= MaxInstances) break;
-                var entry = EntryFor(inst.Gpu!);
-                if (entry is null) continue;
-                if (records.Count + entry.Records.Length > MaxRecords) break;
-                entry.LastUsed = frame;
-                AddObject(inst, entry, objects, lamps);
+                if (Vector3.Distance(inst.Centre, selectionEye) - inst.Radius > ProbeRange + SelectionSnap) { farObjects.Add(inst); continue; }
+                if (!TryAddObject(inst, objects, lamps, MaxInstances)) break;
             }
 
         if (foliage is not null && FoliageMinSize > 0)
@@ -262,6 +261,12 @@ internal sealed unsafe class GiScene : IDisposable
                     records.Add(record);
                 }
             }
+        }
+        if (objects is not null)
+        {
+            int room = MaxInstances - (Casters ? GrassInstances + TracedCharacters.MaxCharacters : 0);
+            foreach (var inst in farObjects)
+                if (!TryAddObject(inst, objects, lamps, room)) break;
         }
         UpdateGrass(eye, foliage);
         UpdateCharacters(eye, characters);
@@ -308,6 +313,20 @@ internal sealed unsafe class GiScene : IDisposable
         Records = new GpuBufferBinding(slot.Records.Handle, 0, (ulong)(Math.Max(records.Count, 1) * GeometryRecord.Size));
         InstanceCount = instances.Count;
         UpdateMs = (float)System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalMilliseconds;
+    }
+
+    readonly List<ObjectStreamer.Instance> farObjects = [];
+
+    /// <summary>The object into the scene when it has a structure (built now within the frame's budget) and the instances stay under <paramref name="limit"/>; false when full.</summary>
+    bool TryAddObject(ObjectStreamer.Instance inst, WorldObjectRenderer objects, WorldLamps? lamps, int limit)
+    {
+        if (instances.Count >= limit) return false;
+        var entry = EntryFor(inst.Gpu!);
+        if (entry is null) return true;
+        if (records.Count + entry.Records.Length > MaxRecords) return false;
+        entry.LastUsed = frame;
+        AddObject(inst, entry, objects, lamps);
+        return true;
     }
 
     /// <summary>An object's instance and its records. With the traced sun a part cut by its map makes the instance report candidates, whose records hold the map for the sun.</summary>
