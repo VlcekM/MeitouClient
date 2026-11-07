@@ -390,11 +390,107 @@ public sealed class AnimationSystem(AnimationLibrary library, AnimationLengths l
         });
         // The walls stop it as they stop the original's agent, which this move goes through: its circle slides along the first wall it meets (docs/game/pathfinding.md "Walls").
         var walk = world.Walkability;
+        var wanted = step;
         var moved = walk.Slide(c.Position, block.Step, block.Radius);
         float x = c.Position.X + moved.X, z = c.Position.Z + moved.Y;
-        if (!walk.IsWalkable(x, z, c.Position.Y)) return;
+        bool unwalkable = !walk.IsWalkable(x, z, c.Position.Y);
+        var made = moved;
+        if (unwalkable && walk.IsWalkable(c.Position.X, c.Position.Z, c.Position.Y))
+        {
+            // The end point has no surface a walker can stand on (a drop, a step too high, off the mesh) where the sweep saw no wall: keep the farthest part of the step that has one,
+            // instead of dropping the whole step (the original has no such test: its sweep ends where the mesh's edge is).
+            float lo = 0, hi = 1;
+            for (int k = 0; k < 6; k++)
+            {
+                float mid = (lo + hi) * 0.5f;
+                if (walk.IsWalkable(c.Position.X + moved.X * mid, c.Position.Z + moved.Y * mid, c.Position.Y)) lo = mid; else hi = mid;
+            }
+            made = moved * lo;
+            (x, z) = (c.Position.X + made.X, c.Position.Z + made.Y);
+            unwalkable = lo <= 0;
+        }
+        // Standing where no surface is (pushed onto a mesh edge, in a hole), the end point cannot be worse: the move is made (the height follows the ground).
+        else unwalkable = false;
+        RootClamp?.Invoke(self, c.Position, wanted, unwalkable ? Vector2.Zero : made, block.Step != wanted ? RootBlock.Body : made != block.Step ? RootBlock.Wall : RootBlock.None, unwalkable);
+        if (unwalkable) return;
         c.Position = new Vector3(x, walk.GroundHeight(x, z, c.Position.Y), z);
     }
+
+    /// <summary>
+    /// Debug probe (control command <c>root-probe</c>): the root-motion step of <paramref name="length"/> units from the character's spot in <paramref name="directions"/> evenly spread
+    /// headings, as <see cref="Relocate"/> would make it against the walls and the end-point test (bodies left out): one line per heading with the distance made and what stopped it.
+    /// </summary>
+    public static List<string> ProbeRoot(World world, CharacterId id, float length, int directions, Vector2? at = null)
+    {
+        var lines = new List<string>();
+        var table = world.Characters;
+        if (!table.TryResolveNext(id, out int slot)) { lines.Add("no such character"); return lines; }
+        var pos = table.Previous[slot].Position;
+        float radius = CombatTuning.Footprint(table.Cold(slot));
+        var walk = world.Walkability;
+        if (at is { } where) pos = new Vector3(where.X, walk.TryStand(where.X, where.Y, pos.Y, out float ay) ? ay : pos.Y, where.Y);
+        lines.Add($"at {pos.X:0.0} {pos.Y:0.0} {pos.Z:0.0} radius {radius:0.0} walkable-here {walk.IsWalkable(pos.X, pos.Z, pos.Y)}");
+        for (int k = 0; k < directions; k++)
+        {
+            float a = k * MathF.Tau / directions;
+            var step = new Vector2(MathF.Cos(a), MathF.Sin(a)) * length;
+            var moved = walk.Slide(pos, step, radius);
+            float x = pos.X + moved.X, z = pos.Z + moved.Y;
+            bool unwalkable = !walk.IsWalkable(x, z, pos.Y);
+            string why = unwalkable ? "UNWALKABLE-END" : moved != step ? "wall" : "free";
+            bool stand = walk.TryStand(x, z, pos.Y, out float ey);
+            lines.Add($"{a * 180 / MathF.PI,6:0} deg: slide {moved.Length():0.00}/{length:0.0}{(unwalkable ? " -> 0 (end point refused)" : "")} {why}; end any-surface {walk.IsWalkable(x, z)} stand {stand} dy {(stand ? ey - pos.Y : 0):0.0}");
+        }
+        return lines;
+    }
+
+    /// <summary>
+    /// Debug scan (control command <c>root-scan</c>): every walkable spot of a grid (<paramref name="spacing"/> apart, within <paramref name="radius"/> of the centre) is probed with 8 steps of
+    /// <paramref name="length"/> as <see cref="ProbeRoot"/>; counts the steps free, slid along a wall, cut by a wall to under half, and refused at the end point, and lists the first refused ones.
+    /// </summary>
+    public static List<string> ScanRoot(World world, CharacterId id, float cx, float cz, float radius, float spacing, float length)
+    {
+        var lines = new List<string>();
+        var table = world.Characters;
+        if (!table.TryResolveNext(id, out int slot)) { lines.Add("no such character"); return lines; }
+        float footprint = CombatTuning.Footprint(table.Cold(slot));
+        var walk = world.Walkability;
+        float y0 = table.Previous[slot].Position.Y;
+        int spots = 0, free = 0, slid = 0, halved = 0, refused = 0, refusedWouldBeFree = 0;
+        for (float dz = -radius; dz <= radius; dz += spacing)
+            for (float dx = -radius; dx <= radius; dx += spacing)
+            {
+                float x = cx + dx, z = cz + dz;
+                if (!walk.TryStand(x, z, y0, out float y)) continue;
+                var pos = new Vector3(x, y, z);
+                if (!walk.IsWalkable(x, z, y)) continue;
+                spots++;
+                for (int k = 0; k < 8; k++)
+                {
+                    float a = k * MathF.Tau / 8;
+                    var step = new Vector2(MathF.Cos(a), MathF.Sin(a)) * length;
+                    var moved = walk.Slide(pos, step, footprint);
+                    bool bad = !walk.IsWalkable(x + moved.X, z + moved.Y, y);
+                    if (bad)
+                    {
+                        refused++;
+                        if (walk.IsWalkable(x + step.X, z + step.Y, y)) refusedWouldBeFree++;
+                        if (refused <= 12) lines.Add($"refused at {x:0.0},{z:0.0} y {y:0.0} heading {a * 180 / MathF.PI:0}: slide {moved.Length():0.00} of {length:0.0}");
+                    }
+                    else if (moved == step) free++;
+                    else if (moved.Length() < length * 0.5f) halved++;
+                    else slid++;
+                }
+            }
+        lines.Add($"spots {spots} steps {spots * 8}: free {free}, slid-short {slid}, cut under half {halved}, refused {refused} (of which the unslid step would have been walkable: {refusedWouldBeFree})");
+        return lines;
+    }
+
+    /// <summary>What shortened a root-motion step (debug log, <see cref="RootClamp"/>).</summary>
+    public enum RootBlock { None, Body, Wall }
+
+    /// <summary>Debug hook: called for every root-motion step with the wanted step, the one made (both on XZ), what shortened it and whether the end point was refused as unwalkable (then nothing moved).</summary>
+    public static Action<int, Vector3, Vector2, Vector2, RootBlock, bool>? RootClamp;
 
     /// <summary>The largest footprint radius a body is tested against (a human's is 4; the biggest animals' are larger).</summary>
     const float MaxFootprint = 30;
