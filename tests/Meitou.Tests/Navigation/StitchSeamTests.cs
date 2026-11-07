@@ -45,7 +45,7 @@ public class StitchSeamTests
 
     static ZoneNavMesh StitchPair(int gapAt10, int gapAt13, HeightGrid?[]?[]? details)
     {
-        var s = new NavBuildSettings();
+        var s = new NavBuildSettings { CellHeight = 1 };
         const int nvp = 6, none = RcRecast.RC_MESH_NULL_IDX;
         // Recast winding (clockwise with X right, Z up): left (10,10) (10,13) (20,13) (20,10); right (20,10) (20,13) (30,13) (30,10).
         int[] verts =

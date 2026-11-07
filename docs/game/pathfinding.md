@@ -200,7 +200,7 @@ the centre); others the plain group speed.
 
 ## Own builder
 
-DotRecast: cells2,height1,tile 288 cells (576 units),edges 24 cells,watershed regions,agent18/climb5,ground/water/door areas (interiors: one tile,
+DotRecast: cells2,height0.5,tile 288 cells (576 units),edges 24 cells,watershed regions,agent18/climb5,ground/water/door areas (interiors: one tile,
 monotone regions, edges 24 cells; [Search cost](#search-cost)). Build asynchronously,
 cache tiles and gate population on readiness. Query A* through portal clearance (radius per wall end; tile-border, seam
 and area-change ends are open) and water/door costs. **Observed** (zone 18.39, `meitou-tools navmesh`): a Swamp Village
@@ -253,6 +253,12 @@ triangulation drop it). An unseeded surface reached only over such a step is the
 has no faces there (its stair faces end at x 49395). Over 10 zones (`--compare`, `--compare-interiors`) area against the original is unchanged within
 0.1 % and kept polygons grow 0..0.4 %; with a 26° limit Ancient Lab `28.60`'s spiral stair top (28°) was cut from its floor. Which field of the
 original's generation edge matching rejects such joins is **Unknown** (its alignment values were not read; the stitch's are in the Generator table).
+The same alignment test cuts links with no step, where two surfaces cross at one height (a ramp rising past a ledge's side). **Observed** (zone 23.22,
+Stephouse `560-Newwworld-INGAME`, `--survey-interiors 23,22 --border`): its outer steps (`Steps02`, 781..836) rose along the south wall past the wall top
+(792..797) and joined it, so the walls' tops were walkable; ours-only area there 7724 → 728, 15 zones' `--compare` unchanged within 0.1 %.
+**Cell height 0.5** (engine choice): a span's top is its surface rounded up to a cell, so at height 1 a 5.9 step could come out as the 5-cell climb.
+**Observed** (zone 23.22, Y-House `554-Newwworld-INGAME`): its walkable wall top, 5.9 above the upper floor, joined it; ours-only area 22840 → 1540. A
+climb of 4 cells instead cut Squin's rock top (18.35, RockOut_Rock at 1709) from the hillside it meets (orig-only 1115 → 7369); build time unchanged (zones 18.35, 42.22).
 **Interiors are one tile** (engine choice): in the zone's 48-cell tiles a stair across a tile line inside a building comes out cut (Stack's Longhouse
 `19.29:6-`; the two tiles' contours put their vertices at different heights along the ramp). **Winding**: Recast's clockwise polygons are flipped by the sign of all polygons' summed area (`ZoneNavMeshBuilder.ClockwiseOverall`); the first polygon's float area alone came out wrong for Snailhouse Lagoon's interior (zone 35.42, `36-Newwworld-INGAME`), which stayed clockwise, so no point was inside it and walkers stood only within edge tolerance (**Observed**, headless probe of a save: stuck at its door before, out to the street after). **Interior coverage**: `meitou-tools navmesh --compare-interiors`
 counts an original tile's interior face covered when a kept polygon within 12 of its centre's height lies over the centre or within 3 units of it

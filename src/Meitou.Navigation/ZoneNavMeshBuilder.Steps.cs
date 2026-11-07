@@ -38,8 +38,8 @@ internal static partial class ZoneNavMeshBuilder
     /// <summary>
     /// The links between neighbouring spans that meet on a step whose two edges rise differently along it. Recast joins any two cells within the climb, so a
     /// raised flat ledge joined the side of a stair ramp where the ramp came within the climb of it, and the ledge was kept with the stair; the original joins
-    /// two surfaces only along edges that run alike (docs/game/pathfinding.md, "Own builder", side steps). Cells on one smooth surface, whose height changes as
-    /// their own slopes say, and steps from the terrain keep their links.
+    /// two surfaces only along edges that run alike (docs/game/pathfinding.md, "Own builder", side steps). Cells on one smooth surface, whose height and slope
+    /// along the edge change as their own slopes say, and steps from the terrain keep their links.
     /// </summary>
     static List<StepLink> SideSteps(RcCompactHeightfield chf, HeightWindow? terrain)
     {
@@ -90,31 +90,36 @@ internal static partial class ZoneNavMeshBuilder
     }
 
     /// <summary>
-    /// Whether the link from span <paramref name="i"/> in direction <paramref name="d"/> to span <paramref name="j"/> is a step whose edges do not run alike.
+    /// Whether the link from span <paramref name="i"/> in direction <paramref name="d"/> to span <paramref name="j"/> joins edges that do not run alike: a
+    /// step the surfaces' own slopes do not explain, or two surfaces crossing at one height, such as a stair ramp rising past the side of a ledge (Stephouse,
+    /// whose outer steps passed its wall top).
     /// </summary>
     static bool IsSideStep(RcCompactHeightfield chf, int x, int z, int i, int d, int j)
     {
         if (chf.areas[i] == NavArea.Null || chf.areas[j] == NavArea.Null) return false;
 
         float jump = (chf.spans[j].y - chf.spans[i].y) * chf.ch;
-        if (MathF.Abs(jump) < StepJump) return false;
-
         int nx = x + RcRecast.GetDirOffsetX(d), nz = z + RcRecast.GetDirOffsetY(d);
+        if (MathF.Abs(jump) >= StepJump && MathF.Abs(jump - ExpectedRise(chf, x, z, i, d, nx, nz, j)) < StepJump) return false;
+
+        if (SlopeAlong(chf, x, z, i, d) is not { } here || SlopeAlong(chf, nx, nz, j, d) is not { } there) return false;
+
+        float cos = (1 + here * there) / MathF.Sqrt((1 + here * here) * (1 + there * there));
+        return cos < StepEdgeAlignment;
+    }
+
+    /// <summary>The rise across the link the two surfaces' own slopes towards it explain (their mean, or the one measured; 0 when neither is).</summary>
+    static float ExpectedRise(RcCompactHeightfield chf, int x, int z, int i, int d, int nx, int nz, int j)
+    {
         float? before = Rise(chf, x, z, i, (d + 2) % 4) is { } b ? -b : null;
         float? after = Rise(chf, nx, nz, j, d);
-        float expected = (before, after) switch
+        return (before, after) switch
         {
             ({ } p, { } q) => (p + q) / 2,
             ({ } p, null) => p,
             (null, { } q) => q,
             _ => 0,
         };
-        if (MathF.Abs(jump - expected) < StepJump) return false;
-
-        if (SlopeAlong(chf, x, z, i, d) is not { } here || SlopeAlong(chf, nx, nz, j, d) is not { } there) return false;
-
-        float cos = (1 + here * there) / MathF.Sqrt((1 + here * here) * (1 + there * there));
-        return cos < StepEdgeAlignment;
     }
 
     /// <summary>Whether either span of a link stands on the terrain: steps onto rocks, features and slabs from the ground keep Recast's links.</summary>

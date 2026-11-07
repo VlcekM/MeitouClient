@@ -36,6 +36,7 @@ static class NavmeshTool
         var survey = new List<ZoneCoordinate>();
         bool surveyTowns = false;
         string? surveyName = null;
+        bool surveyBorder = false;
         Vector2? section = null;
         for (int i = 0; i < args.Length; i++)
         {
@@ -86,11 +87,13 @@ static class NavmeshTool
                     }
                     break;
                 case "--name": surveyName = args[++i]; break;
+                case "--border": surveyBorder = true; break;
                 case "--section": { var p = args[++i].Split(','); section = new(float.Parse(p[0], CultureInfo.InvariantCulture), float.Parse(p[1], CultureInfo.InvariantCulture)); break; }
                 case "--verbose": verbose = true; break;
                 case "--interior": interiorKey = args[++i]; break;
                 case "--climb": settings = settings with { MaxClimb = float.Parse(args[++i], CultureInfo.InvariantCulture) }; break;
                 case "--cell": settings = settings with { CellSize = float.Parse(args[++i], CultureInfo.InvariantCulture) }; break;
+                case "--cell-height": settings = settings with { CellHeight = float.Parse(args[++i], CultureInfo.InvariantCulture) }; break;
                 case "--own-only": ownOnly = true; break;
                 case "--tile": settings = settings with { TileCells = int.Parse(args[++i], CultureInfo.InvariantCulture) }; break;
                 case "--edge": settings = settings with { MaxEdgeLength = int.Parse(args[++i], CultureInfo.InvariantCulture) }; break;
@@ -113,7 +116,7 @@ static class NavmeshTool
         if (compareTowns) compareInteriors.AddRange(TownZones(levels).Except(compareInteriors));
         if (compareInteriors.Count > 0) return CompareInteriors(install, db, levels, compareInteriors, settings, around);
         if (surveyTowns) survey.AddRange(TownZones(levels).Except(survey));
-        if (survey.Count > 0) return InteriorSurvey.Run(install, db, levels, survey, settings, surveyName, png, section);
+        if (survey.Count > 0) return InteriorSurvey.Run(install, db, levels, survey, settings, surveyName, png, section, surveyBorder);
         if (route is { Length: 4 }) return Route(install, db, levels, route);
         if (fingerprint) return Fingerprint(install, db, levels, zone is { } only ? [only] : [new ZoneCoordinate(20, 32), new ZoneCoordinate(21, 32)], settings);
         if (zone is null)

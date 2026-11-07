@@ -6,11 +6,13 @@ using Meitou.Data.World;
 using Meitou.Navigation;
 
 /// <summary>
-/// <c>meitou-tools navmesh --survey-interiors zones|towns [--name text] [--png dir] [--section x,z]</c>: for every building interior of ours, samples the zone's
-/// kept polygons and the original tile's interior groups and exterior over its hull every <see cref="Step"/> units and counts the area both have, only ours has
-/// (by height over the hull's base) and only the original has; sums it by building type and lists each placement whose type contains <c>--name</c>. Each
-/// interior is built with the layout the tile was built with (<see cref="ChooseLayouts"/>). <c>--png</c> writes per listed placement a top-down image of each
-/// side coloured by height over the base, a difference image, both meshes as OBJ, and two vertical sections through the hull's middle or <c>--section</c>.
+/// <c>meitou-tools navmesh --survey-interiors zones|towns [--name text] [--png dir] [--section x,z] [--border]</c>: for every building interior of
+/// ours, samples the zone's kept polygons and the original tile's interior groups and exterior over its hull every <see cref="Step"/> units and
+/// counts the area both have, only ours has (by height over the hull's base) and only the original has; sums it by building type and lists each
+/// placement whose type contains <c>--name</c>. Each interior is built with the layout the tile was built with (<see cref="ChooseLayouts"/>).
+/// <c>--png</c> writes per listed placement a top-down image of each side coloured by height over the base, a difference image, both meshes as OBJ,
+/// and two vertical sections through the hull's middle or <c>--section</c>. Hulls over the zone's border are skipped unless <c>--border</c> (their
+/// upper storeys may be reached only through the neighbour zone).
 /// Output goes where the user says, never into the repository.
 /// </summary>
 static class InteriorSurvey
@@ -31,10 +33,14 @@ static class InteriorSurvey
     /// <summary>Where <c>--section x,z</c> puts the vertical sections; the hull's middle when null.</summary>
     static Vector2? section;
 
+    /// <summary>Whether hulls over the zone's border are surveyed too (<c>--border</c>).</summary>
+    static bool border;
+
     public static int Run(GameInstall install, GameDatabase db, WorldLevelData levels, List<ZoneCoordinate> zones, NavBuildSettings settings, string? name, string? png,
-        Vector2? sectionAt = null)
+        Vector2? sectionAt = null, bool overBorder = false)
     {
         section = sectionAt;
+        border = overBorder;
         using var gatherer = new ZoneGeometryGatherer(install, db, levels, new CollisionCache(install));
         var tallies = new Dictionary<string, Tally>();
         foreach (var zone in zones) SurveyZone(gatherer, install, zone, settings, tallies, name, png);
@@ -66,7 +72,7 @@ static class InteriorSurvey
             var mesh = interior.Mesh.WithKept(keep[offset..(offset + interior.Mesh.PolygonCount)]);
             offset += interior.Mesh.PolygonCount;
             var site = sites.FirstOrDefault(s => s.Key == interior.Key);
-            if (site is null || site.Destroyed || CrossesBorder(site, zone)) continue;
+            if (site is null || site.Destroyed || !border && CrossesBorder(site, zone)) continue;
             var faces = owners.Where(o => o.Site == site).SelectMany(o => o.Group.Polygons.Where(p => p.Length >= 3).Select(p => p.Select(i => o.Group.Vertices[i]).ToArray())).ToList();
             if (faces.Count == 0) continue;
             // Both sides' whole walkable ground over the hull, exterior included: the original carves its exterior with the hull's convex volume, narrower near

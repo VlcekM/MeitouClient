@@ -125,6 +125,12 @@ internal static partial class ZoneNavMeshBuilder
         return (lo, hi);
     }
 
+    /// <summary>
+    /// Height cells a tile may span (engine choice, far over any tile's span and under DotRecast's 2^20): past it the cells grow, and the climb and agent
+    /// height counted in cells of <see cref="NavBuildSettings.CellHeight"/> no longer match them.
+    /// </summary>
+    const float MaxHeightCells = 60000;
+
     static RcPolyMesh? BuildTile(ZoneGeometry g, NavBuildSettings s, float[] verts, int[] indices, int[] areas, List<int> tris, List<int> carvers, List<int> painters, List<int> solids, List<int> meshSolids, TileTicks ticks,
         float x0, float z0, float tileWorld, out HeightGrid?[]? detail)
     {
@@ -143,7 +149,7 @@ internal static partial class ZoneNavMeshBuilder
                 yMin = Math.Min(yMin, y); yMax = Math.Max(yMax, y);
             }
         float ch = s.CellHeight;
-        if ((yMax - yMin) / ch > 8000) ch = (yMax - yMin) / 8000f;
+        if ((yMax - yMin) / ch > MaxHeightCells) ch = (yMax - yMin) / MaxHeightCells;
         // A border of cells from the neighbouring tiles: Recast then keeps the contour vertices on the tile's edge and marks those edges as portals, so a
         // narrow strip along the edge is not simplified away from it (docs/game/pathfinding.md, "Own builder", tile seams).
         int border = TileBorderCells;
