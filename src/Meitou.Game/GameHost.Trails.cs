@@ -46,6 +46,8 @@ sealed partial class GameHost
         public float Walked;
         public int Frame;
         public Contact[]? Contacts;
+        public Vector3[]? Recent;   // the last prints: x, z, length
+        public int RecentNext;
     }
 
     /// <summary>Once a frame, before the world is drawn: the marks the characters near what the camera looks at press this frame (the renderer's window is centred there).</summary>
