@@ -477,11 +477,13 @@ sealed partial class PlayerInterface
         public string Crafter { get; init; } = "";
         /// <summary>The item's <c>unique</c> flag: the [Unique] marker row.</summary>
         public bool Unique { get; init; }
+        /// <summary>How many items a bag holds (-1: not a bag): an empty one is named "{name} (empty)".</summary>
+        public int BagItems { get; init; } = -1;
         public static ItemTip NameOnly(string record, string material, string name, int quantity) => new(record, material, name, quantity, 0, 0, "", 0, 0, 0, -1, null, null) { Brief = true };
         public static ItemTip Of(InventoryItemView v, TradeItemView? trade = null, string? mapNote = null) =>
-            new(v.Record, v.Material, v.Name, v.Quantity, v.Weight, v.Quality, v.Company, v.Level, v.Charges, v.MaxCharges, v.StolenFrom, trade, mapNote) { Goods = trade is not null, Crafter = v.Crafter, Unique = v.Unique };
+            new(v.Record, v.Material, v.Name, v.Quantity, v.Weight, v.Quality, v.Company, v.Level, v.Charges, v.MaxCharges, v.StolenFrom, trade, mapNote) { Goods = trade is not null, Crafter = v.Crafter, Unique = v.Unique, BagItems = v.BagItems };
         public static ItemTip Of(TradeItemView v) =>
-            new(v.Record, v.Material, v.Name, v.Quantity, v.Weight, v.Quality, v.Company, v.Level, v.Charges, v.MaxCharges, v.StolenFrom, v, null) { Unique = v.Unique };
+            new(v.Record, v.Material, v.Name, v.Quantity, v.Weight, v.Quality, v.Company, v.Level, v.Charges, v.MaxCharges, v.StolenFrom, v, null) { Unique = v.Unique, BagItems = v.BagItems };
     }
 
     static string Number(float v) => v.ToString("0.#", CultureInfo.InvariantCulture);
@@ -519,6 +521,40 @@ sealed partial class PlayerInterface
         if (limb.UnarmedDamageBonus(t) is not 0 and var unarmed)
             yield return new("-Unarmed damage bonus", unarmed.ToString(CultureInfo.InvariantCulture), TooltipTone.Title, unarmed < 0 ? TooltipTone.Bad : TooltipTone.Good);
         yield return new("----------------", "", TooltipTone.Grey);
+    }
+
+    /// <summary>
+    /// A backpack's rows after its prices (<c>FUN_1407aa090</c>, <b>Verified</b> in the decompile): a 12-dash rule, <c>-Encumbrance reduction</c> (Good) as int((1 - <c>encumbrance
+    /// effect</c>) x 100)% (Title), <c>-Combat skills bonus</c> when not 0 (Bad, or Good with a plus), then <c>-Athletics effect</c>, <c>-Combat speed effect</c>, <c>-Stealth skill
+    /// effect</c> and <c>-Dodge skill effect</c> (both the <c>stealth mult</c>) as <c>0.00x</c>, Bad below 1, Good above, Main at 1.
+    /// </summary>
+    static IEnumerable<TooltipLine> ContainerRows(Meitou.Data.GameRecord pack)
+    {
+        yield return new("------------");
+        float encumbrance = MathF.Max(pack.GetFloat("encumbrance effect", 1), 0);
+        int reduction = (int)((1 - encumbrance) * 100);
+        yield return new("-Encumbrance reduction", reduction.ToString(CultureInfo.InvariantCulture) + "%", TooltipTone.Good, TooltipTone.Title);
+
+        int bonus = pack.GetInt("combat skill bonus", 0);
+        if (bonus != 0)
+        {
+            string text = (bonus > 0 ? "+" : "") + bonus.ToString(CultureInfo.InvariantCulture);
+            yield return new("-Combat skills bonus", text, TooltipTone.Ink, bonus > 0 ? TooltipTone.Good : TooltipTone.Bad);
+        }
+
+        // A negative stealth mult reads as 1 (FUN_140763810); zero stays.
+        float stealth = pack.GetFloat("stealth mult", 1);
+        if (stealth < 0) stealth = 1;
+        yield return Effect("-Athletics effect", pack.GetFloat("athletics mult", 1));
+        yield return Effect("-Combat speed effect", pack.GetFloat("combat speed mult", 1));
+        yield return Effect("-Stealth skill effect", stealth);
+        yield return Effect("-Dodge skill effect", stealth);
+
+        static TooltipLine Effect(string label, float factor)
+        {
+            var tone = factor < 1 ? TooltipTone.Bad : factor > 1 ? TooltipTone.Good : TooltipTone.Main;
+            return new(label, factor.ToString("0.00", CultureInfo.InvariantCulture) + "x", TooltipTone.Main, tone);
+        }
     }
 
     /// <summary>
@@ -574,6 +610,8 @@ sealed partial class PlayerInterface
         // the requirement and unlock rows follow the prices.
         var research = ItemRecordOf?.Invoke(t.Company) is { Type: Meitou.Data.Fcs.FcsRecordType.RESEARCH } r ? r : null;
         string name = research?.Name ?? (t.Brief && model is not null ? model + " " + t.Name : t.Name);
+        // An empty bag: " (" + "empty" + ")" after its name (FUN_1407aa090).
+        if (!t.Brief && t.BagItems == 0) name += " (" + Loc.Tr("empty") + ")";
         var lines = new List<TooltipLine> { new(t.Quantity > 1 ? $"{name} ({t.Quantity})" : name, "", TooltipTone.Title) };
         if (t.Trade is { Buyback: true }) lines.Add(new("Buyback", ""));
         if (t.Brief) return lines;
@@ -596,7 +634,8 @@ sealed partial class PlayerInterface
         if (armourHead is not null) { lines.Add(armourHead[0]); armourHead.RemoveAt(0); }
         if (limbRows is not null) { lines.Add(limbRows[0]); limbRows.RemoveAt(0); }
         int function = type == Meitou.Data.Fcs.FcsRecordType.ITEM ? record!.GetInt("item function") : 0;
-        float unitWeight = t.Quantity > 0 ? t.Weight / t.Quantity : t.Weight;
+        // A bag's own weight, without its contents (Item +0x120, FUN_1407aa090).
+        float unitWeight = type == Meitou.Data.Fcs.FcsRecordType.CONTAINER ? record!.GetFloat("weight kg") : t.Quantity > 0 ? t.Weight / t.Quantity : t.Weight;
         TooltipLine Row(string label, string value, TooltipTone valueTone = TooltipTone.Ink) => new("-" + label, value, TooltipTone.Ink, valueTone);
         // The kind markers in the original's order (FUN_1407ae130): Ammunition, Research Artifact (the record's artifact flag), Unique (the item's flag; both Special, #14ffdc), Book, Food.
         if (function == 16) lines.Add(new("[Ammunition]", "", TooltipTone.Main));
@@ -688,8 +727,9 @@ sealed partial class PlayerInterface
             if (armourHead is not null) lines.AddRange(armourHead);
             if (limbRows is not null) lines.AddRange(limbRows);
             // "{n} x {unit} kg ({total} kg)" for a stack.
-            // An armour piece prints whole kilograms, truncated (FUN_1407a1650, Observed).
-            weightText = armour is not null ? ((int)unitWeight).ToString(CultureInfo.InvariantCulture) + " kg"
+            // An armour piece and a backpack print whole kilograms, truncated (FUN_1407a1650, FUN_1407aa090, Observed).
+            bool wholeKg = armour is not null || type == Meitou.Data.Fcs.FcsRecordType.CONTAINER;
+            weightText = wholeKg ? ((int)unitWeight).ToString(CultureInfo.InvariantCulture) + " kg"
                 : (t.Quantity > 1 ? $"{t.Quantity} x " : "") + Number(unitWeight) + " kg" + (t.Quantity > 1 ? $" ({Number(t.Weight)} kg)" : "");
             lines.Add(Row("Weight", weightText));
             // "[Weather Protections]" (Main), then per weather kind of the piece's set, in kind order, "-{kind}" and its weather protection amount as a whole percent, both Good (FUN_1407a1650).
@@ -716,6 +756,7 @@ sealed partial class PlayerInterface
             lines.Add(new("-Value", "c." + Money(prices.Value), TooltipTone.Ink, TooltipTone.Ink));
             lines.Add(new("-Sell value", "c." + Money(prices.Sell), TooltipTone.Ink, TooltipTone.Ink));
         }
+        if (type == Meitou.Data.Fcs.FcsRecordType.CONTAINER) lines.AddRange(ContainerRows(record!));
         if (research is not null) lines.AddRange(UnlockRows(research));
         // A trade item's average price follows the prices, in and out of a trade; while trading, the mark-up of the town and trader factors, Bad above 1 and Good below (FUN_1407ae130).
         if (type == Meitou.Data.Fcs.FcsRecordType.ITEM && PricesOf?.Invoke(t) is { Average: { } average })

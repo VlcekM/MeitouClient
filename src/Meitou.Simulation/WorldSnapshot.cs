@@ -155,6 +155,8 @@ public sealed record InventoryItemView(int Index, string Record, string Name, st
     public int StolenFrom { get; init; } = -1;
     /// <summary>The item's <c>unique</c> flag (<see cref="Items.ItemInstance.Unique"/>): the tooltip's [Unique] row.</summary>
     public bool Unique { get; init; }
+    /// <summary>How many items a bag holds (-1: not a bag); an empty one's tooltip name ends in " (empty)".</summary>
+    public int BagItems { get; init; } = -1;
 }
 public sealed record InventoryView(int Width, int Height, int BagWidth, int BagHeight, IReadOnlyList<InventoryItemView> Items)
 {

@@ -30,6 +30,18 @@ public sealed class Inventory(int width, int height)
         return w;
     }
 
+    /// <summary>
+    /// <see cref="ContentWeight()"/> with the item on the mouse when it was lifted from this inventory: the original keeps counting a held item in the section it came from
+    /// (<c>FUN_140749160</c>), times the worn bag's factor when that is the bag's contents.
+    /// </summary>
+    public float ContentWeight(HeldItem? held)
+    {
+        float w = ContentWeight();
+        if (held is null || held.Grid != this || InventoryCommands.IsLimbSection(held.Section)) return w;
+        float factor = held.Section == "backpack_content" ? Backpack?.ContentsFactor ?? 1 : 1;
+        return w + held.Item.Weight * factor;
+    }
+
     /// <summary>First cell where a w x h footprint fits among the items of <paramref name="section"/>, or false.</summary>
     public bool FindCell(string section, int w, int h, out int x, out int y)
     {

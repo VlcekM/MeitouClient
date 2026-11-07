@@ -58,6 +58,8 @@ public sealed record TradeItemView(int Index, string Record, string Name, string
     public int StolenFrom { get; init; } = -1;
     /// <summary>The item's <c>unique</c> flag (<see cref="Items.ItemInstance.Unique"/>): the tooltip's [Unique] row.</summary>
     public bool Unique { get; init; }
+    /// <summary>How many items a bag holds (-1: not a bag); an empty one's tooltip name ends in " (empty)".</summary>
+    public int BagItems { get; init; } = -1;
     /// <summary>The tooltip's two prices of one unit (<c>FUN_14079e7a0</c> calls slot 81, <b>Verified</b>): what the shop asks for it (Value) and what it pays (Sell value).</summary>
     public long Value { get; init; }
     public long SellValue { get; init; }
@@ -888,7 +890,7 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
             return new(index, item.Record, item.Name, item.Section, item.X, item.Y, item.Width, item.Height, item.Quantity,
                 item.Quality, Price(m, item, item.Quantity, sell, shop.Terms, holder), Price(m, item, 1, sell, shop.Terms, holder), stolen)
             {
-                Buyback = buyback, Container = item.Contents is not null,
+                Buyback = buyback, Container = item.Contents is not null, BagItems = item.Contents?.Items.Count ?? -1,
                 Material = item.MaterialId, Colour = item.ColourId, Charge = item.ChargeFraction, Value = value, SellValue = sellValue, Weight = item.Weight, PriceFactor = m.TraderFactor(item, shop.Terms, holder),
                 MarketFactor = m.MarketFactor(shop.Terms.Site, item.Record), Company = item.CompanyId, Level = item.Level, Charges = item.Charges, MaxCharges = item.MaxCharges, StolenFrom = stolen ? item.StolenFrom : -1, Unique = item.Unique,
                 FenceChance = odds is { } shown ? Math.Clamp(shown, 0, 1) : null,
