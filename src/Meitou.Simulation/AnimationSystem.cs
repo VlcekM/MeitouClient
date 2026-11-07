@@ -492,6 +492,13 @@ public sealed class AnimationSystem(AnimationLibrary library, AnimationLengths l
             else if (LyingClip >= 0) wanted.Add((LyingClip, 1));
             a.Idle = -1;
         }
+        // Picking its cage's lock from inside: the cage's `animation lockpick`, else `medic` (FUN_140520bc0, Verified: the Prisoner Cage names none), at the picking rate (#359).
+        else if (inCage && technique < 0 && cold.PickingLock is not null && cold.PickWork.Tick >= tick - 1 && HeldClip(task, cold, tick) is >= 0 and var picking)
+        {
+            (a.HeldIndex, a.HeldRate) = (picking, cold.PickWork.Rate);
+            wanted.Add((picking, 1));
+            a.Idle = -1;
+        }
         // Awake in a cage: its `animation dazed` with a leg down (engine reading of the original's dazed test), else its `animation` (the Cage's stand 1).
         else if (inCage && technique < 0 && (crawling ? cold.CageClips.Dazed : cold.CageClips.Idle) is { } cageClip && SitClipOf(cageClip) is >= 0 and var caged)
         {
