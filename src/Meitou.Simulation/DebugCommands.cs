@@ -148,7 +148,7 @@ public sealed record DebugSay(CharacterId Speaker, string Text) : DebugCommand;
 public sealed record DebugUnlockResearch : DebugCommand;
 
 /// <summary>Spawns a character of record <see cref="Record"/> at <see cref="At"/>, alone in a squad of the first faction hostile to the player (<see cref="PopulationSystem"/> applies it).</summary>
-public sealed record DebugSpawn(string Record, Vector2 At) : DebugCommand;
+public sealed record DebugSpawn(string Record, Vector2 At, string? Faction = null) : DebugCommand;
 
 /// <summary>
 /// A building placed in the level editor (docs/game/level-editor.md "Simulation side"): <see cref="Building"/>, made by the host as the boot pass makes a level building
