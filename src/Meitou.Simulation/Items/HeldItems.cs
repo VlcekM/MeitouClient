@@ -587,12 +587,16 @@ public sealed partial class PlayerSystem
         return true;
     }
 
-    /// <summary>Each tick: the held item goes back when its window is gone (the loot, trade or container closed, its character gone) or its holder is down or gone.</summary>
+    /// <summary>
+    /// Each tick: the held item goes back when its window is gone (the loot, trade or container closed, its character gone) or its holder is gone, or down while working another's
+    /// window. A downed player character's own items still move (<b>Observed</b> in the original by a player, #329).
+    /// </summary>
     void KeepHeld(World world)
     {
         if (world.Player.Held is not { } held) return;
         var table = world.Characters;
-        bool keep = table.TryResolveNext(held.Actor, out int a) && table.Cold(a) is { } actor && actor.Medical is not { Incapacitated: true } && held.From.Holder switch
+        bool own = held.From == ItemOwner.Of(held.Actor);
+        bool keep = table.TryResolveNext(held.Actor, out int a) && table.Cold(a) is { } actor && (own || actor.Medical is not { Incapacitated: true }) && held.From.Holder switch
         {
             ItemHolder.Character => CharacterWindow(world, held.From.Character, held.Actor, out _) is not null,
             ItemHolder.Stock => world.SystemOf<Trading.TradeSystem>()?.OpenStock(world, out _) is not null,
