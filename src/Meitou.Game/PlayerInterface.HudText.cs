@@ -135,11 +135,31 @@ sealed partial class PlayerInterface
             (state, tooltip) = WeatherText(lead.WeatherNotice, lead.WeatherNoticeProtection);
             colour = lead.WeatherNoticeProtection > 0.9f && lead.WeatherNotice is not (WeatherNotice.AcidWater or WeatherNotice.AcidFeet) ? GoodColour : BadColour;
         }
-        int encumbrance = (int)((1 - Math.Clamp(lead.Hud?.Encumbrance ?? 1, 0, 1)) * 100);
-        HudLine[] rest = [new(Loc.Tr("Goal:"), lead.Activity ?? TaskText(lead.Task)),
-            new(Loc.Tr("Encumbrance:"), encumbrance.ToString(CultureInfo.InvariantCulture) + "%", ValueColour: encumbrance >= 50 ? BadColour : null)];
+        HudLine[] rest = [new(Loc.Tr("Goal:"), lead.Activity ?? TaskText(lead.Task), Tooltip: Loc.Tr("Current goal of this character.")), EncumbranceLine(lead)];
         HudLine[] lines = state is null ? rest : [new(Loc.Tr("State:"), state, ValueColour: colour, Tooltip: tooltip), .. rest];
         return body is { Dead: true } || lead.Hud?.Skill is not { } skill ? lines : [.. lines, SkillLine(skill, unit)];
+    }
+
+    /// <summary>
+    /// The Encumbrance line: (1 - f) x 100 % of the encumbrance factor f, Bad from 50 %, with the original's rows (<c>FUN_1405d4260</c> panel 3, docs/game/ui-screens.md):
+    /// the percent with the burden word, Athletics XP, Strength XP (when the extended stats are known), Run Speed Penalty and Stealth Penalty (both the same percent).
+    /// </summary>
+    static HudLine EncumbranceLine(CharacterSnapshot lead)
+    {
+        float factor = Math.Clamp(lead.Hud?.Encumbrance ?? 1, 0, 1);
+        int load = (int)((1 - factor) * 100);
+        string percent = load.ToString(CultureInfo.InvariantCulture) + "%";
+        string word = lead.Body is { Dead: true } ? Loc.Tr("Dead") : BurdenText(factor).Text[1..];
+        var rows = new List<(string, string)> { (TipTitle + Loc.Tr("Encumbrance:"), (load >= 50 ? TipBad : TipTitle) + percent + " (" + word + ")") };
+        if (lead.Hud?.Extended is { } e)
+        {
+            rows.Add((Loc.Tr("Athletics XP:"), ((int)(e.AthleticsXp * 100)).ToString(CultureInfo.InvariantCulture) + "%"));
+            rows.Add((Loc.Tr("Strength XP:"), ((int)(e.StrengthXp * 100)).ToString(CultureInfo.InvariantCulture) + "%"));
+        }
+        string penalty = (load >= 50 ? TipBad : "") + percent;
+        rows.Add((Loc.Tr("Run Speed Penalty:"), penalty));
+        rows.Add((Loc.Tr("Stealth Penalty:"), penalty));
+        return new(Loc.Tr("Encumbrance:"), percent, ValueColour: load >= 50 ? BadColour : null, TooltipRows: rows);
     }
 
     /// <summary>
@@ -164,7 +184,7 @@ sealed partial class PlayerInterface
         return new(label, value, ValueColour: colour, TooltipRows: tip);
     }
 
-    const string TipBad = "#59231a", TipGood = "#a8b774", TipMain = "#afa68b";
+    const string TipBad = "#59231a", TipGood = "#a8b774", TipMain = "#afa68b", TipTitle = "#492620";
     static string Num(float v) => ((int)v).ToString(CultureInfo.InvariantCulture);
     static string Degrees(float v) => v.ToString("0.00", CultureInfo.InvariantCulture) + Loc.Tr(" degrees");
     static string SpeedText(float unitsPerSecond, SpeedUnit unit) =>
