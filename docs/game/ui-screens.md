@@ -1235,7 +1235,8 @@ unless marked; Meitou: `PlayerInterface.Squads.cs`, commands in `SquadManagement
     `Ammunition type:` the ammo item's name, `???` with none; `Damage vs robots / humans / animals` and `Damage vs <race>` (signed percent rows as the weapon's, `FUN_14079f650`);
     a 16-dash rule; `Weight` whole kg truncated; then the shared prices (`FUN_14079e7a0`). Meitou builds all of it from the gun at the item's level × 0.01
     (**Observed**: the original reads the item's own gun; its quality input is not traced, Meitou's simulation uses the level too); `race damage` rows have no crossbow field in Meitou.
-- **Fencing prompt** (**Observed**, `FUN_140712920`), shown for a stolen item over the trader: stolen from the trader's own faction, `Fencing chance:` and `N%` (`FUN_140793490`) in Bad;
+- **Fencing prompt** (**Observed**, `FUN_140712920`, which writes it to a global string), shown for a stolen item over the trader, and in the hovered item's tooltip while trading as
+  `FENCING CHANCE:` `N%` (Bad) after the kind markers, before `Stolen from:` (**Observed**, a vanilla screenshot, #330; Meitou for the goods the shop rolls on): stolen from the trader's own faction, `Fencing chance:` and `N%` (`FUN_140793490`) in Bad;
   else (another faction, or an owner that does not resolve), when the trader's squad does not fence it (it buys stolen goods and the owner is not of that squad, [economy](economy.md#fencing-stealing-and-smuggling)),
   `Stolen goods?` / `No problem!` in Good; otherwise `Fencing chance:` too (the branch falls through, **Verified** in the decompile). Meitou (`TradeSystem.Publish`, `TradeItemView.FenceChance`): `Fencing chance:` for every stolen
   good the shop rolls on (`TradeSystem.Fences`), whoever it was stolen from, with the roll's own odds shown capped at 100% (the original prints `int(odds x 100)`, so 110% for a good nobody looks for); `Stolen goods?` when the shop does not roll. Differences left
@@ -1412,7 +1413,12 @@ Full info "separate numbers for each damage type". Built at the end of `MedicalS
   among the callers of `FUN_14073faf0` (**Observed**). The stealth KO's "*Thunk*" / "Failed!" is another caller ([combat](combat.md#stealth-knock-out)).
 
 Meitou (`PlayerInterface.AddFloaters`): text, font, motion and fade as above; colour: red when a player's character is hit, green when one lands the
-blow, else grey. No healing floater, as in the original. Drawn over the panels but under the modal screens (Esc menu, save/load, message boxes, dialogue).
+blow, else grey. No healing floater, as in the original.
+
+**Layer** (**Verified**, the install's `core_layer.xml`): floaters and speech bubbles are on `Dialog`, above `Wallpaper`, `Back` (name tags, task bars) and
+`Overlapped` but below `Middle` (the HUD, `Kenshi_MainPanel`) and every later layer, so under the HUD and all windows, the map included. The option `floaters` gates
+only the hit's numbers: of the label creator's callers only `FUN_1406508d0` reads it (`DAT_14213350c`; **Verified**, decompile). Meitou
+(`PlayerInterface.AddFrameControls`): both drawn just above the name tags; Off hides the hit numbers and a door's damage number, the other texts show.
 
 ### Tooltips
 

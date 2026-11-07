@@ -656,6 +656,9 @@ sealed partial class PlayerInterface
             var ingredients = string.Join(", ", record!.GetReferences("ingredients").Select(r => RecordName?.Invoke(r.TargetStringId)).Where(n => n is { Length: > 0 }));
             lines.Add(new("Ingredients", ingredients, TooltipTone.Ink, TooltipTone.Ink));
         }
+        // A stolen good the open shop would roll on: its fencing chance above the owner, as the sale prompt shows it (Observed, the original's trade tooltip; #330).
+        if (t.Goods && t.Trade is { FenceChance: { } fence })
+            lines.Add(new("FENCING CHANCE:", $"{(int)(fence * 100)}%", TooltipTone.Bad, TooltipTone.Bad));
         if (t.StolenFrom >= 0)
             lines.Add(FactionName?.Invoke(t.StolenFrom) is { Length: > 0 } owner ? new("Stolen from:", owner, TooltipTone.Bad, TooltipTone.Bad) : new("Stolen", "", TooltipTone.Bad));
         if (function == 16)
