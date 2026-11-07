@@ -694,6 +694,9 @@ replaced, 3 crushed) and the fitted item (holder `FUN_1400cd3f0`; **Verified** b
 | arms | `strength mult`, `dexterity mult`, `thievery mult` (applied to both 10 and 37), `ranged mult` | 1, 18, 10 and 37, 35 |
 | legs | `athletics mult`, `stealth mult` | 17, 16 |
 
+Part HP is `HP` to `HP 1` by quality (level x 0.01), rounded to the nearest 5, half up (**Verified**, `FUN_1400ce2d0` -> `FUN_1409b2310` with 5; 70..200 at level 95 gives 195).
+A race switched in the character creator keeps the prosthetics fitted at the start (Meitou, #360).
+
 ### Races
 
 RACE fields for this subsystem (loader `FUN_14042efa0`; **Verified** field by field: the reader's store offset

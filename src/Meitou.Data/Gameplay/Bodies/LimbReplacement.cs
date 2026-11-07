@@ -52,8 +52,11 @@ public sealed record LimbReplacement
         _ => "right_leg_replace",
     };
 
-    /// <summary>The part's base HP with this limb fitted at quality <paramref name="t"/> (replaces the race's base HP for that slot).</summary>
-    public float Hp(float t) => Lerp(HpLow, HpHigh, t);
+    /// <summary>
+    /// The part's base HP with this limb fitted at quality <paramref name="t"/> (replaces the race's base HP for that slot): <c>HP</c> to <c>HP 1</c>, rounded to the nearest 5, half up
+    /// (<b>Verified</b>, the limb item's setup <c>FUN_1400ce2d0</c> passes it to <c>FUN_1409b2310</c> with 5: floor((hp + 2.5) / 5) x 5; a Masterwork lifter arm's 193.5 is 195, #360).
+    /// </summary>
+    public float Hp(float t) => (float)(Math.Floor((Lerp(HpLow, HpHigh, t) + 2.5) / 5) * 5);
 
     /// <summary>The unarmed damage bonus at quality <paramref name="t"/>, truncated to an int as the original stores it.</summary>
     public int UnarmedDamageBonus(float t) => (int)Lerp(UnarmedDamageBonusLow, UnarmedDamageBonusHigh, t);

@@ -119,10 +119,12 @@ public static class CharacterEditing
         var look = cold.Appearance!;
         var record = data.Appearances?.Sanitize(appearance, proposedRace) ?? CharacterDraft.Copy(appearance);
 
-        // A new race at creation: a body of that race (its stats and limbs), its walk and footprint.
+        // A new race at creation: a body of that race (its stats and limbs, the start's prosthetics kept on it), its walk and footprint.
         if (proposedRace.StringId != look.Race.StringId)
         {
+            var prosthetics = Prosthetics(cold.Medical);
             var (raceData, stats, medical) = data.Bodies.Create(proposedRace, data.Db.Find(cold.RecordId), world.Seed, Rng.Key(id));
+            foreach (var (limb, item) in prosthetics) medical.FitReplacement(limb, item);
             cold.Race = raceData;
             cold.Stats = stats;
             cold.Medical = medical;
@@ -142,6 +144,18 @@ public static class CharacterEditing
             cold.LookEdited = true;
         }
         else world.Post("The edited look could not be made.");
+    }
+
+    /// <summary>
+    /// The prosthetics a body wears (a start's <c>robot limbs</c>), to fit on the body a race switched in the creator gives it: without them the new body has natural limbs while their
+    /// items still sit in the limb sections, so only the default race kept them (#360).
+    /// </summary>
+    static List<(Meitou.Data.Gameplay.Bodies.LimbReplacement Limb, Items.ItemInstance? Item)> Prosthetics(Bodies.MedicalState? medical)
+    {
+        var list = new List<(Meitou.Data.Gameplay.Bodies.LimbReplacement, Items.ItemInstance?)>();
+        for (int k = 0; k < 4; k++)
+            if (medical?.LimbPart(k) is { Limb: Bodies.LimbState.Replaced, Replacement: { } limb } part) list.Add((limb, part.ReplacementItem));
+        return list;
     }
 
     /// <summary>The typed name, trimmed and cut to <see cref="MaxNameLength"/>; an empty one leaves the name.</summary>
