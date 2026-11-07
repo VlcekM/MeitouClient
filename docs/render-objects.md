@@ -106,11 +106,15 @@ zone and come back by one zone test against the current ranges. **Observed** (of
 ## Batching and depth
 
 Batch compatible mesh/material/state instances; sort colour batches near-first when enabled.
-Open building meshes are double-sided. Fade uses per-instance dither lo/hi windows; solid,
+Fade uses per-instance dither lo/hi windows; solid,
 fading and distant-town batches have different coverage needs. `EarlyDepth.Enabled` selects
 opaque, discard-free colour only for no-cutout/non-fading parts. Draw solids first; retain
 cutout/dither shaders for other batches. Cache native state per program so solid/fading variants
 do not evict one another. Depth/caster coverage must remain compatible with colour.
+
+### Back faces
+
+**Verified** (docs/formats/runtime-materials.md: `DOUBLESIDED` 0x10 is set only for a FOLIAGE `material type`; building parts are StaticObject): the game culls the back faces of every building part whose material is not FOLIAGE. Meitou culls them for building parts (`Batch.BackCull`, colour and shadow passes). **Observed** (Ancient Lab with the Forgotten Buildings ceilings, `building floor` 0..2 parts without the `interior` list): drawn double-sided, the ceiling of the viewed floor covered it from above as a black disk; culled, it vanishes seen from above as in the game. Before this, only `interior` list parts were culled.
 
 ### Precision
 
