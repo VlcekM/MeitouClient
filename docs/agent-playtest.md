@@ -106,6 +106,9 @@ c help                                # one usage line per command; `c help <nam
 | `pickup` | `pickup <item id \| nearest>` |
 | `place-building` | `place-building <building record id or name> <x> <z> [yawDegrees] [heightAboveGround] [--interior <layout>] [--exterior <layout>]` |
 | `place-item` | `place-item "<item>" <x> <z> [yawDegrees] [y] [qty]` |
+| `root-probe` | `root-probe [--id c:slot.gen] [--at x z] [length] [directions]` (read-only: root-motion step from a spot in N headings, wall slide and end-point refusal) |
+| `root-log` | `root-log on\|off\|dump` (log of every shortened root-motion step) |
+| `root-scan` | `root-scan <x> <z> <radius> [spacing] [length]` (counts free/slid/cut/refused root steps over a grid) |
 | `prospect` | `prospect` |
 | `putdown` | `putdown` |
 | `quickload` | `quickload [name]` |
