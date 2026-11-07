@@ -147,8 +147,8 @@ sealed partial class GameHost
     /// <summary>The "Explode on click" switch (F10 Combat row, console <c>explode-click</c>): the world it was switched on in and the explode flags used for each click.</summary>
     World? explodeClickWorld;
     string explodeClickArgs = "";
-    /// <summary>What a click explodes with unless a flag says otherwise: twice the radius and force of a plain <c>explode</c> (15, 45) and more than twice its damage (40).</summary>
-    const string ExplodeClickDefaults = "--radius 30 --force 64 --damage 100";
+    /// <summary>What a click explodes with unless a flag says otherwise: twice the radius and 1.6 times the force of a plain <c>explode</c> (40, 100) and 2.5 times its damage (40).</summary>
+    const string ExplodeClickDefaults = "--radius 80 --force 160 --damage 100";
     bool ExplodeClickOn => explodeClickWorld is not null && ReferenceEquals(explodeClickWorld, session.World);
 
     /// <summary>
@@ -199,7 +199,7 @@ sealed partial class GameHost
     /// <summary>The hint while the switch is on.</summary>
     void DrawExplodeClickHint(DebugOverlay o, int width, int height)
     {
-        string text = $"explode-click ON: left click = explode{(explodeClickArgs.Length > 0 ? " (defaults r=30 force 64 dmg 100, then " + explodeClickArgs + ")" : " (r=30, force 64, dmg 100)")}. Switch off: explode-click off"
+        string text = $"explode-click ON: left click = explode{(explodeClickArgs.Length > 0 ? " (defaults r=80 force 160 dmg 100, then " + explodeClickArgs + ")" : " (r=80, force 160, dmg 100)")}. Switch off: explode-click off"
             + (session.Simulation.IsPaused ? "   PAUSED: unpause, the blast runs in the next tick" : "");
         float w = text.Length * o.CharWidth + 20, x = (width - w) / 2;
         o.Rect(x, 8, x + w, 8 + o.LineHeight + 12, DebugOverlay.PanelColour);
@@ -352,13 +352,16 @@ sealed partial class GameHost
     }
 
     /// <summary>
-    /// The explode row: <paramref name="field"/> is empty (15 m around the shown target, else the selected, else the first, player character) or <c>[&lt;x&gt; &lt;z&gt;] [--radius &lt;m&gt;] [--force &lt;n&gt;] [--damage &lt;n&gt;] [--squad]</c>
+    /// The explode row: <paramref name="field"/> is empty (40 m around the shown target, else the selected, else the first, player character) or <c>[&lt;x&gt; &lt;z&gt;] [--radius &lt;m&gt;] [--force &lt;n&gt;] [--damage &lt;n&gt;] [--squad]</c>
     /// as the console passes it. <see cref="DebugExplode"/> does the rest in the simulation; its summary reaches the message log.
     /// </summary>
+    /// <summary>Largest explode radius in metres (the only cap: the blast scans every living character in the world).</summary>
+    const float ExplodeMaxRadius = 500;
+
     string DebugExplodeApply(World world, string field, long tick)
     {
         const string usage = "usage: explode [<x> <z>] [--id <c:slot.gen>] [--radius <m>] [--force <n>] [--damage <n>] [--squad]";
-        float radius = 15, force = 45, damage = 40;
+        float radius = 40, force = 100, damage = 40;
         bool squad = false;
         var numbers = new List<float>();
         CharacterId? byId = null;
@@ -372,7 +375,12 @@ sealed partial class GameHost
                 if (i + 1 >= words.Length || !PlayerInterface.TryParseCharacter(words[++i], out var parsed)) return DebugFail("explode: --id needs a character id (c:<slot>.<gen>)");
                 byId = parsed;
             }
-            else if (words[i].Equals("--radius", StringComparison.OrdinalIgnoreCase) && i + 1 < words.Length && float.TryParse(words[++i], NumberStyles.Float, CultureInfo.InvariantCulture, out value) && value > 0 && value <= 500) radius = value;
+            else if (words[i].Equals("--radius", StringComparison.OrdinalIgnoreCase))
+            {
+                if (i + 1 >= words.Length || !float.TryParse(words[++i], NumberStyles.Float, CultureInfo.InvariantCulture, out value) || value <= 0) return DebugFail("explode: --radius needs a number above 0");
+                if (value > ExplodeMaxRadius) return DebugFail($"explode: --radius {value:0.#} is above the maximum of {ExplodeMaxRadius:0} m");
+                radius = value;
+            }
             else if (words[i].Equals("--force", StringComparison.OrdinalIgnoreCase) && i + 1 < words.Length && float.TryParse(words[++i], NumberStyles.Float, CultureInfo.InvariantCulture, out value) && value >= 0 && value <= 1000) force = value;
             else if (words[i].Equals("--damage", StringComparison.OrdinalIgnoreCase) && i + 1 < words.Length && float.TryParse(words[++i], NumberStyles.Float, CultureInfo.InvariantCulture, out value) && value >= 0 && value <= 10000) damage = value;
             else if (float.TryParse(words[i], NumberStyles.Float, CultureInfo.InvariantCulture, out value)) numbers.Add(value);

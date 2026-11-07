@@ -42,8 +42,8 @@ public sealed partial class CombatSystem
         return true;
     }
 
-    /// <summary>The explosion's lift, as a share of the throw speed (gravity is 98.1 units/s², so 45 out and 27 up at the centre flies about 0.55 s, 25 units before the ground slows it).</summary>
-    const float BlastLift = 0.6f;
+    /// <summary>The explosion's lift, as a share of the throw speed (gravity is 98.1 units/s², so 100 out and 15 up at the centre flies about 0.3 s, about 30 units before the ground slows it; flight range is 2 x lift x speed² / 98.1).</summary>
+    const float BlastLift = 0.15f;
 
     /// <summary>The struck part's <c>bone name</c>, else its <c>bone name 2</c>; null for no part or neither.</summary>
     static string? BoneOf(Bodies.MedicalState medical, int part)

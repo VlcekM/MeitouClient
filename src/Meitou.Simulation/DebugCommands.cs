@@ -37,9 +37,9 @@ public sealed record DebugGuard(bool On, float Radius = 30, bool Animals = false
 
 /// <summary>
 /// A debug explosion at <see cref="At"/> (X, Z): every living character within <see cref="Radius"/> metres (not the player's own unless <see cref="Squad"/>) takes <see cref="Damage"/> cut damage falling off
-/// linearly with the distance, is knocked out, and is thrown away from the centre with <see cref="Force"/> world units/s (also falling off), by the combat system's knock-down push.
+/// linearly with the distance (to 0.35 at the radius edge), is knocked out, and is thrown away from the centre with <see cref="Force"/> world units/s (also falling off), by the combat system's knock-down push.
 /// </summary>
-public sealed record DebugExplode(Vector2 At, float Radius = 15, float Force = 45, float Damage = 40, bool Squad = false, string On = "") : DebugCommand;
+public sealed record DebugExplode(Vector2 At, float Radius = 40, float Force = 100, float Damage = 40, bool Squad = false, string On = "") : DebugCommand;
 
 /// <summary>Who a radius kill hits, shared by the console's <c>kill --radius</c> and the guard: never a player character or the player's faction, never the dead, animals only when asked for.</summary>
 public static class DebugKillArea
@@ -240,6 +240,12 @@ static class DebugCheats
     /// <summary>How long the explosion keeps a survivor out, in character seconds.</summary>
     const float ExplodeKnockOutSeconds = 30;
 
+    /// <summary>Damage and throw share at the radius edge (1 at the centre, linear between), so the whole radius is affected, not a small core.</summary>
+    internal const float ExplodeEdgeFalloff = 0.35f;
+
+    /// <summary>Smallest throw speed (world units/s) given to anyone in range, capped at the blast's own force: about 2.7 m of flight for a human, so the outer ring visibly moves.</summary>
+    const float ExplodeMinThrow = 30;
+
     static void Explode(World world, PopulationData data, DebugExplode blast)
     {
         var table = world.Characters;
@@ -247,7 +253,7 @@ static class DebugCheats
         float radius = MathF.Max(blast.Radius, 0.01f);
         int hit = 0, knocked = 0, thrown = 0, killed = 0;
         var events = new List<MedicalEvent>();
-        var targets = new List<(CharacterId Id, int Slot, float Falloff, Vector2 Away, bool Dead)>();
+        var targets = new List<(CharacterId Id, int Slot, float Falloff, Vector2 Away, bool Dead, float Share)>();
         float nearest = float.MaxValue, nearestY = 0;
         int squadNear = 0;
         for (int s = 0; s < table.HighWater; s++)
@@ -262,14 +268,16 @@ static class DebugCheats
             float d = offset.Length();
             if (d < nearest) (nearest, nearestY) = (d, table.Next[s].Position.Y);
             if (d > radius) continue;
-            targets.Add((table.IdOf(s), s, 1 - d / radius, d > 1e-3f ? offset / d : new Vector2(1, 0), cold.Medical.Dead));
+            targets.Add((table.IdOf(s), s, 1 - (1 - ExplodeEdgeFalloff) * d / radius, d > 1e-3f ? offset / d : new Vector2(1, 0), cold.Medical.Dead, d / radius));
         }
-        foreach (var (id, slot, falloff, away, wasDead) in targets)
+        var bands = new int[3];
+        foreach (var (id, slot, falloff, away, wasDead, share) in targets)
         {
             if (table.Cold(slot) is not { Medical: { } medical } cold) continue;
             if (!wasDead)
             {
                 hit++;
+                bands[share < 1f / 3 ? 0 : share < 2f / 3 ? 1 : 2]++;
                 Hurt(world, data, id, blast.Damage * falloff, null);
                 if (!medical.Dead && !medical.Incapacitated)
                 {
@@ -280,13 +288,13 @@ static class DebugCheats
                 if (medical.Dead) killed++; else if (medical.Incapacitated) knocked++;
             }
             // Everyone down (just now, before, or dead) is thrown, ragdolled or not (CombatSystem.Blast).
-            if (combat is not null && combat.Blast(cold, away, blast.Force * falloff)) thrown++;
+            if (combat is not null && combat.Blast(cold, away, MathF.Max(blast.Force * falloff, MathF.Min(blast.Force, ExplodeMinThrow)))) thrown++;
         }
         string where = $"{blast.At.X:0},{blast.At.Y:0}{(blast.On.Length > 0 ? $" (on {blast.On})" : "")} r={radius:0.#}";
         if (hit == 0 && thrown == 0)
             world.Post(squadNear > 0 ? $"Explode at {where}: nobody to hit; only your own squad ({squadNear}) is in range (--squad includes it)"
                 : $"Explode at {where}: nobody in range{(nearest < float.MaxValue ? $" (nearest living character {nearest:0} m away)" : "")}; --squad includes your own");
-        else world.Post($"Explode at {where}: {hit} hit, {knocked} knocked out, {thrown} thrown, {killed} killed.");
+        else world.Post($"Explode at {where}: {hit} hit ({bands[0]} within r/3, {bands[1]} within 2r/3, {bands[2]} outer), {knocked} knocked out, {thrown} thrown, {killed} killed.");
         // A visible mark at the centre: a ring of blood splashes (display only; needs the Blood setting on).
         if (world.BloodMarks is { } marks)
         {
