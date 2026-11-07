@@ -19,7 +19,7 @@ Read it fully once (about 300 lines), then use the tables as a reference. Every 
 | Control dir | any empty folder, **absolute path** (the game's working directory is the build folder; a relative path ends up there) |
 | Saves | native: `~/.local/share/Meitou/save`; Windows build under Proton: the save folder inside the Wine prefix. `quickload` of a save outside the save folder replies ok and does nothing: start with `--load <save folder>` instead |
 | Logs | `<dir>/out` (replies and events), `<dir>/asks.log` (player lines, section 9) |
-| Scripts | `mt-ctl`, `mt-run`, `persona`, `ask-watch.sh` are helper scripts kept outside this branch; you do not need them: section 4 gives the protocol and a 15-line client. The `wiki` tool is in this branch: `tools/playtest/wiki` |
+| Scripts | `mt-ctl`, `mt-run`, `persona`, `ask-watch.sh` are helper scripts kept outside this branch; you do not need them: section 4 gives the protocol and a 15-line client. The `wiki` tool is in this branch: `tools/playtest/wiki` (section 8) |
 
 ## 3. Starting a game
 Rules first (all models): **one game at a time on the machine**; check `pgrep -a MeitouClient` before you start; never stop a process you did not start (kill by pid, never `pkill -f` with text that is also in your own command line); **windowed by default**, headless only when the user asks; no benchmarks or timing runs with the channel on.
@@ -178,32 +178,45 @@ There is no runner in this branch; send the steps yourself (below) and check the
 - Not verified: the Windows build; a stealth pack worn for real; the "no room" message path; gloves (none in the data); real damage numbers.
 - **Persona fights (build `acc3429d`, Steam data, 2 Dust Bandits at 37 and 45 m, `order attack` after 10 s without reaction):** jackie-chan with block off killed both in under 4 s (2 of 2 blows landed, 361 hp dealt, 0 taken); berserk with block off landed 2 blows (160 hp dealt, 0 taken) and both bandits left the world list within 4 s, but the `kills` counter did not rise for them (KO versus dead not determined). Earlier runs with block on or an unlucky spawn showed 0 kills. Each is a single run. Still unproven: berserk kills, and the earlier oddity of two bandits found KO about 2.6 km away (did not recur, cause Unknown).
 
-## 8. The wiki: find, travel, and build your own
-**No wiki data ships with the code branch.**
-The tool `tools/playtest/wiki` is here (python3, no dependencies, no data) and `tools/playtest/wiki.example/` is an empty skeleton (one fake entry per file).
+## 8. The wiki: find, travel, and what it is made of
+A build of this branch carries a practical wiki in `<build>/wiki/`: the query tool `wiki`, our own observations in `observed/`, and this guide. Game facts are **generated on your machine from your own game install**; nothing from the game or from third-party sites is shipped.
+
+**Layers** (the later one wins when two describe the same thing; `wiki show <id>` keeps the game-file numbers of the replaced one in `data`):
+| Layer | Folder | Where it comes from | Shipped |
+|---|---|---|---|
+| generated | `<build>/wiki/generated/` | `MeitouClient --wiki-export <dir>` reads your Kenshi folder the way the game does (`data/mods.cfg` honoured, so a modded install exports its mods): zones (grid cells that hold a town), towns, camps and ruins with position, faction, residents and bar squads, factions with their explicit relations, squad templates, character and animal records, weapons, armour and items with value and weight, building records. Each file says what it was made from (`source`, `dataDir`, `loadOrder`, date). | no |
+| observed | `<build>/wiki/observed/` | Our own in-game runs only: towns and camps confirmed by `tp` and `observe`, who stood there, flat quiet spots, where the Starving Vagrants fight happens, explode levels, the gate-guard dialogue and other pitfalls. Every entry has `observed: {date, how, build}`; where a position was first read off a public community map and then confirmed in game, `found_via` says so. Written in our own words. | yes |
+| local | `WIKI_DIR` (flat `towns.json` ... files; `cp -r wiki.example <dir>`) | Your own notes, written with `wiki add`. | no |
+
+**Generate it once per game folder or mod change** (a few seconds, no window, no game run):
+```
+wiki export                                  # native build: runs <build>/MeitouClient --wiki-export <build>/wiki/generated
+<build>/MeitouClient --wiki-export <dir>     # the same by hand; KENSHI_PATH=<kenshi folder> if the game is not found
+```
+The **Windows build** ships the same python tool (it runs from the Linux side); generate with `wiki export` from the native build, or run `MeitouClient.exe --wiki-export <dir>` under Proton, and point the tool at the result with `WIKI_GENERATED=<dir>`. Both give the same files for the same game folder and mods. Without generated data every command still answers from `observed/` and prints a note saying `wiki export`.
+
 | Command | Does |
 |---|---|
-| `wiki find <text>` | up to 10 lines `id \| kind \| x z \| V(erified)/u \| name` over names, aliases, faction, region, notes |
+| `wiki find <text> [--kind K] [--n 10]` | up to 10 lines `id \| kind \| x z \| V(erified)/u \| name \| observed/generated/local` over names, aliases, faction, zone, notes; observed first |
+| `wiki town <name>` | one town, camp or ruin: faction, position, type, residents, bar squads, what we saw there, nearest towns |
+| `wiki faction <name>` / `wiki item <name>` | a faction with type, relations, places; items, weapons and armour with their numbers |
 | `wiki show <id>` | one full entry (JSON) |
 | `wiki near <x> <z> [--kind K] [--n 5]` | nearest entries with coordinates |
-| `wiki tp <id>` | prints the exact `tp x z` line; warns on stderr when unverified (exit 3) or position null (exit 4) |
-| `wiki kinds` / `wiki check` | counts; schema, duplicate ids and names (exit 1 on errors) |
-| `wiki add <file.json\|->` | validate and add or update entries by id; never deletes |
-Run it as `WIKI_DIR=<your wiki dir> tools/playtest/wiki ...`; with no `WIKI_DIR` it reads `<repo>/wiki`.
+| `wiki tp <id>` | prints the exact `tp x z` line; warns on stderr when not verified in game (exit 3; generated positions count as not verified) or null (exit 4) |
+| `wiki kinds` / `wiki status` / `wiki check` | counts by layer; where the layers are and what the generated files were made from; schema and duplicate ids (exit 1 on errors) |
+| `wiki add <file.json\|->` | validate and add or update entries by id in your local layer (`WIKI_DIR`); never deletes |
+Run it from the build folder (`wiki/wiki find "Iron HQ"`) or the repo (`tools/playtest/wiki`, observed entries in `tools/playtest/wiki.observed`, generated files in `<repo>/wiki/generated`). `WIKI_GENERATED`, `WIKI_OBSERVED` and `WIKI_DIR` override the three folders.
 
-### Build your own wiki
-Create it: `cp -r tools/playtest/wiki.example wiki` (git-ignored by you; do not commit coordinates you cannot source), then fill it.
-Files: `zones.json`, `towns.json`, `npcs.json`, `items.json`, `factions.json` (each a JSON array). One entry, **all fields required**:
-`id` (unique slug), `name`, `aliases` (list), `kind` (`town`, `camp`, `bandit-hq`, `shop`, `npc`, `zone`, `quiet-spot`, `spawn`, `faction`, `item`...), `faction` (or null), `region` (or null), `x`, `z` (game units as `tp <x> <z>` takes them: x east, -z north; both numbers or both null), `zone` (id or null), `verified` (bool), `verifiedOn` (date and build; required when verified), `seen` (what `observe --brief` showed), `source` (URL, file or `measured`), `confidence` (`Observed` seen in game, `Inferred` derived, `Unknown`), `notes`.
-Rules:
-1. Every entry has a source and a confidence. **Never invent coordinates**: unknown is `null`.
-2. Mark `verified: true` only after `tp` to the place, `observe --brief` (and `--radius 300` for people), and the position and names match; put the date and build in `verifiedOn`.
-3. Do not hard-code what you did not see: a roaming group (Starving Vagrants, Manhunters, Slave Hunters) moves; record it as Inferred.
-Where to get information (cite it in `source`, write it in your own words, never copy a page wholesale, respect each site's terms of use):
-- The Kenshi wiki (https://kenshi.fandom.com/) for factions, towns, characters; PinDrop (https://pindrop.gg/kenshi/) for map positions of towns and camps. Public sources give names and rough places; their coordinate system is not the game's: treat a position taken from them as `Inferred` until you `tp` and see it.
-- Your **own game install**: read the game's data and map files as data (the area map and biome indexes give region names and bounds; character and town records give names and factions). Describe what you read in words; never copy code from the game's executable.
-- The game itself: `world --kind character --limit 40` after a `tp`, `find-item`, `observe`.
-How to fill it by running: `wiki find <name>`; no hit: look it up as above, add it unverified (`confidence` Inferred, x/z only if sourced); then `tp`, `observe --brief`, and update the entry with `wiki add` (verified, `verifiedOn`, `seen`). `wiki check` before you rely on it.
+**What "verified" means.** `V` is only ever set by an in-game check of ours (or yours, via `wiki add`): a `tp` to the place and an `observe` that matches. Generated positions come from the level data and have matched every spot we checked (14 of 15 towns to the unit, the 15th by 1 from rounding), but are still `u` until you see them. Generated "residents" are squad templates the game spawns there, not a list of who you will meet. Generated NPC entries take their town's position and say so: people roam.
+
+**Schema** (every entry; **all core fields required**, plus the optional `data`, `observed`, `found_via`): `id` (unique slug), `name`, `aliases` (list), `kind` (`town`, `camp`, `bandit-hq`, `ruins`, `shop`, `npc`, `animal`, `group`, `squad`, `faction`, `weapon`, `armour`, `item`, `building`, `zone`, `quiet-spot`, `note`...), `faction` (or null), `region` (or null), `x`, `z` (game units as `tp <x> <z>` takes them: x east, -z north; both numbers or both null), `zone` (a `zone-<X>-<Z>` grid cell id, 4608 units wide, or null), `verified` (bool), `verifiedOn` (date and build; required when verified), `seen` (what `observe --brief` showed), `source`, `confidence` (`Observed`, `Inferred`, `Unknown`), `notes`; `data` is a free object of numbers and lists (relations, value, weight, residents); `observed` is `{date, how, build}` and required in `observed/`; `found_via` names an outside origin of a first guess. Generated files are `{source, dataDir, loadOrder, generated, entries:[...]}`.
+
+### Adding your own entries
+Rules: (1) every entry has a source and a confidence; **never invent coordinates**, unknown is `null`. (2) `verified: true` only after `tp`, `observe --brief` (and `--radius 300` for people) match. (3) A roaming group (Starving Vagrants, Manhunters, Slave Hunters) moves: record it as a sighting, not a place. (4) Public wikis and maps may give names and rough places; write what you take from them in your own words, cite them in `source`, respect their terms, and treat a position taken from them as `Inferred` until you see it. (5) Look at the game itself first: `world --kind character --limit 40` after a `tp`, `find-item`, `observe`.
+Fill it by running: `wiki find <name>`; no hit: add it unverified (`Inferred`, x/z only if sourced) with `wiki add`; then `tp`, `observe --brief`, and update with `verified`, `verifiedOn`, `seen`. `wiki check` before you rely on it.
+
+### Legal note
+The game's data is read from the copy you own, on your machine, when you run the export; the generated files stay there and are not part of any build or repository we publish. Nothing from the game executable is used; the exporter reads data files through the same loader the game uses. The observed layer holds only facts and short descriptions from our own play, in our own words, plus plain numbers (positions) that any player can read in game.
 
 ### Finding a named NPC (procedure; example "find Beep")
 1. `wiki find <name>`. A position: `wiki tp <id>` and go. Named lords, traders and leaders often have no own position: tp to their town entry.
@@ -295,7 +308,7 @@ What happened in the live session: the first `say` (plan) came 20 s after the ty
 ```
 c say "Plan: be Jackie Chan, beat up a bandit, find Beep"
 # apply the persona steps from section 7 one by one; check each reply
-c tp <quiet spot x z>                                    # a quiet spot, not a town (`wiki near <x> <z> --kind quiet-spot` if you built one)
+c tp <quiet spot x z>                                    # a quiet spot, not a town (`wiki near <x> <z> --kind quiet-spot`)
 c spawn-at <x+40> <z> "Dust Bandit"                      # reply has the id, e.g. c:267.1; read observe.origin first
 c order attack <id>                                      # spawned NPCs may not react: you start the fight
 c observe --brief --changed                              # poll, threat rule NOT used: it is a deliberate fight
@@ -305,4 +318,4 @@ c tp Mongrel                                             # then as section 13
 Say honestly what the run showed: a KO is not a kill; the quiet spot was not a real desert; `end`-style requests were flagged. Full-grid and backpack issues are handled by `strip-inventory` (section 7).
 
 ## 15. About this guide
-No wiki data, saves, captures or measurements from any other repository ship with it. Numbers quoted (latencies, distances, counts) come from a handful of single runs on one machine and one test save: treat them as examples, not guarantees. If a command here disagrees with `help <name>` in your build, the build is right.
+Nothing from any other repository ships with it except the observed wiki entries of section 8 (our own, in our own words); no saves, captures or measurements; game data is generated on your machine, never shipped. Numbers quoted (latencies, distances, counts) come from a handful of single runs on one machine and one test save: treat them as examples, not guarantees. If a command here disagrees with `help <name>` in your build, the build is right.
