@@ -245,6 +245,8 @@ public sealed partial class MedicalState
 
         TickBlood(dtb, ctx);
         TickHunger(hours, ctx);
+        bool freshStump = HasFreshStump;
+        if (freshStump) BloodKo = true;
         CheckBlood(ctx, events);
         if (Dead) return;
         LegCollapse(events);   // after the blood rule, as after a blow: the posture's 3 s is the timer a leg going down leaves
@@ -267,14 +269,16 @@ public sealed partial class MedicalState
         if (Unconscious)
         {
             KoTimer -= medicalTime;
-            // Blood under 0 keeps an unconscious character out (reassessCollapseMode); the blood-KO flag only lowers the conscious threshold to -25 (CheckBlood).
-            if (KoTimer <= 0 && !vitalDown && Blood >= 0 && ctx.PlayDead)
+            // Blood under 0 keeps an unconscious character out (reassessCollapseMode), under -25 with a fresh stump; the blood-KO flag otherwise only lowers the
+            // conscious threshold to -25 (CheckBlood).
+            bool bloodOk = Blood >= (freshStump ? -25 : 0);
+            if (KoTimer <= 0 && !vitalDown && bloodOk && ctx.PlayDead)
             {
                 // Awake but not safe to get up: it lies on, playing dead (posture 3), until it is (docs/game/ragdolls.md "Playing dead").
                 KoTimer = 0;
                 PlayingDead = true;
             }
-            else if (KoTimer <= 0 && !vitalDown && Blood >= 0)
+            else if (KoTimer <= 0 && !vitalDown && bloodOk)
             {
                 Unconscious = false;
                 PlayingDead = false;
@@ -318,9 +322,13 @@ public sealed partial class MedicalState
         }
         wounds.Clear();
         Bleeding = 0;
-        Blood = MathF.Min(Capacity(ctx), Blood + c.BloodRecoveryRate * seconds * ctx.Race.HealRate * c.RestingHealRateMult);
-        if (Blood > 25) BloodKo = false;
-        if (Unconscious && !VitalPartsKeepDown(KoPoint(c, ctx.Toughness)) && Blood >= 0)
+        float cap = Capacity(ctx);
+        if (Blood < cap)
+        {
+            Blood = MathF.Min(cap, Blood + c.BloodRecoveryRate * seconds * ctx.Race.HealRate * c.RestingHealRateMult);
+            if (Blood > 25) BloodKo = false;
+        }
+        if (Unconscious && !VitalPartsKeepDown(KoPoint(c, ctx.Toughness)) && Blood >= WakeBloodFloor)
         {
             Unconscious = false;
             PlayingDead = false;
@@ -354,8 +362,11 @@ public sealed partial class MedicalState
         Blood -= Bleeding * dt;
         float cap = Capacity(ctx);
         Blood = MathF.Min(Blood, cap);
-        if (Bleeding <= 0 && Blood < cap)
-            Blood = MathF.Min(cap, Blood + c.BloodRecoveryRate * dt * race.HealRate * (ctx.Resting ? c.RestingHealRateMult : 1));
+        if (Blood >= cap) return;
+        if (Bleeding <= 0) Blood = MathF.Min(cap, Blood + c.BloodRecoveryRate * dt * race.HealRate * (ctx.Resting ? c.RestingHealRateMult : 1));
+
+        // The blood-loss trauma flag clears only here, on a tick that found blood below capacity, even while bleeding (medicalUpdate FUN_140652000).
+        if (Blood > 25) BloodKo = false;
     }
 
     /// <summary>

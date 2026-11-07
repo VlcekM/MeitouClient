@@ -1,0 +1,56 @@
+[
+ {
+  "id": "example-research",
+  "name": "Example Research",
+  "aliases": [],
+  "kind": "research",
+  "faction": null,
+  "region": null,
+  "x": null,
+  "z": null,
+  "zone": null,
+  "verified": false,
+  "verifiedOn": null,
+  "seen": "",
+  "source": "example entry, replace",
+  "confidence": "Unknown",
+  "notes": "Fake entry that only shows the schema. Delete it.",
+  "data": {
+   "category": "Core",
+   "level": 1,
+   "hours": 4,
+   "repeats": 0,
+   "repeatMult": 1,
+   "levelUpgrade": false,
+   "blueprintOnly": false,
+   "money": 0,
+   "requires": [
+    {
+     "id": "1-example.mod",
+     "name": "Example Parent",
+     "kind": "research",
+     "repeat": 0
+    }
+   ],
+   "cost": [
+    {
+     "item": "Book",
+     "count": 2
+    }
+   ],
+   "books": [
+    "Book"
+   ],
+   "unlocks": [
+    {
+     "kind": "buildings",
+     "name": "Example Bench",
+     "repetition": 0
+    }
+   ],
+   "leadsTo": [],
+   "description": "",
+   "record": "0-example.mod"
+  }
+ }
+]

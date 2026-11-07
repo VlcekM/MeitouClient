@@ -162,6 +162,19 @@ Each item instance carries a COLOR_DATA (save key `color sid`). **Observed** (de
 - Put on (attached) without a colour, it takes the wearer's scheme, CHARACTER `color`, else the faction's `color`, and keeps it. A looted uniform keeps its first wearer's colours.
 - Drawn: an ARMOUR or CONTAINER (the types fcs.def gives the field) whose `dont colorise` is true (default; every base record stores it) shows no colour, but its colour is still stored.
 
+Limbs (**Verified**, decompile: `FUN_1400cfdd0` → `FUN_140535d50` → `FUN_1405358a0`; `FUN_140536210`): a fitted limb's item is attached like clothing, so a
+prosthetic takes and keeps its own colour, else the wearer's scheme. The `dont colorise` reset runs only for types 3, 46 and 6 (ARMOUR, CONTAINER, ATTACHMENT), so a
+LIMB_REPLACEMENT always shows its colour; `setupItemMaterial` dyes any skinned attached item but an ATTACHMENT that has a colour and whose material has a `color map`.
+**Observed** (scratch probe, base data): 20 of 28 LIMB_REPLACEMENTs have a material, none with a `color map`, so vanilla prosthetics look undyed; a mod material with
+one shows the scheme (issue #279). In the owner's distinct saves 5 of 35 saved prosthetic items carry a `color sid` (4 the Player Faction Color mod's scheme, 1 `orange robes`).
+Meitou: `LoadoutLimb.Colour` (the fitted item's `ColourId`, `SavedKit.SetLimbs`), `CharacterAppearance.AddLimb`.
+
+Paint factor (**Observed**, decompile `FUN_140536210`): `paint factor 1` / `2` (the colour's alpha in the shader) are read from the float table of the attached item's own
+record (the object `slot` and `is locked` come from), not its material. The read is a map `operator[]` (`FUN_1400b0ab0`) that inserts a zero for a missing key, so the
+default is 0 (the dye multiplies into the texture). fcs.def defines them only on MATERIAL_SPECS_CLOTHING (11 of 150 set one) and no item record stores them, so the original
+always passes 0. Meitou reads them from the item record (`CharacterContent.ItemMaterial`, clothing, armour and prosthetics alike), default 0, and ignores the materials' values;
+the look of those 11 materials is not checked against the game. The icon path already passes 0.
+
 **Observed** in the owner's 9 saves (scratch probe of platoon files, worn ARMOUR): of 27,230 coloured pieces, 17,866 have the
 platoon faction's scheme, 7,634 the `color` of some CHARACTER (the wearer's record was not matched), 1,632 their record's own, 98 other (looted, mod colours). No uncoloured worn piece is in a faction with
 a scheme. 31 of 103 base FACTIONs have one; 42 of 142 ARMOUR records have `dont colorise` false.
@@ -224,6 +237,15 @@ exe decompile unless marked; Meitou: `CharacterDraft` (data), `EditCharacter` / 
 - **Modes**: 0 new game (`FUN_140872e00`: every player character after the start's `squad` spawns, with the start's `force race`), 1 in play
   (dialogue `DA_CHARACTER_EDITOR` on the talking player character; `DA_JOIN_SQUAD_WITH_EDIT` and slave purchases on the recruits). Mode 1
   hides the race, subrace and gender arrows; they are also hidden when there is no choice. Everything else works in both modes.
+- **Animals** (**Verified**, decompile): the window lists every character it is given, animals too (`FUN_1405f4dd0` copies the list unfiltered), so
+  rebirth's "Guy with a dog" start (`47924-rebirth.mod`, squad `47925-rebirth.mod`; its man and Bonedog **Observed** in a player save) shows both. An
+  animal's page (`FUN_1405efd60`, no humanoid appearance): body view, IMPORT and EXPORT hidden; `FUN_1405ee0c0` then hides the tab buttons, the
+  rows (`TabsPanelContent`), RANDOMISE, RANDOMISE ALL, RESET and every race/subrace/gender arrow, shows the RACE name as race and subrace, gender
+  "-", and the race's description and stats. NameText renames whichever character is shown (`FUN_1405e9410`), animals included. CLOTHES,
+  CONFIRM and CHANGE CHARACTER stay. The preview idle the original sets for an animal is **Unknown** in detail (Meitou: its world pose). Meitou:
+  `EditorSession.Animals`, `BindAnimalEditor`; an animal's rename is an `EditCharacter` with no look, accepted in every kind (a bought animal's
+  goes through `EditKind.Recruit`; [animals](game/animals.md#buying-animals)); in the Meitou bar an animal not shown is not
+  drawn (no seat).
 - **Races**: RACE_GROUP name on RACE, RACE name on SUBRACE; a race is listed if not an animal, in a group, has its editor limits XML, `playable`
   (mode 0) and, with a `force race` list, in it (none left: "Game start has no valid races", the list is unrestricted). Showing a character in
   mode 0 (`FUN_1405efd60`) whose race isn't listed switches it to the first group's first race (a race missing from its group: that group's
@@ -353,6 +375,8 @@ same line (val0), gated by `DC_PLAYERMONEY` (2) strictly greater. "plastic surge
 behind `DC_FACTION_RANK`; Grey free for escaped slaves. Meitou: the surgeon is talked to; its line's DA 8 pays and DA 11 opens the editor in
 mode 1, already paid ([dialogue](game/dialogue.md#meitou-design)). An unpaid `EditCharacter` (no UI sends one) is checked against `SurgeonDialogues`:
 a line gated only by money or `DC_IS_RECRUITABLE`.
+**Observed** (the user, base game): the surgeon's editor (its `NameText`) is the only way to rename a squad member; the portrait's `NameText`
+EditBox takes no typing. Meitou matches.
 
 ## Open questions
 

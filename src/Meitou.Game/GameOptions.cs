@@ -27,6 +27,11 @@ sealed class GameOptions
     /// <summary>With <c>--screenshot</c>: control ticks (and their real time of simulation, at speed 1) run before the picture, with no input.</summary>
     public int Ticks;
     public bool NoPopulation, NewGame, ListStarts, DataCheck;
+    /// <summary><c>--wiki-export &lt;dir&gt;</c>: write the agent wiki's generated JSON files from the game data and exit (<see cref="WikiExport"/>).</summary>
+    public string? WikiExport;
+
+    /// <summary><c>--facts-only</c> with <c>--wiki-export</c>: leave out every description text taken from the game data.</summary>
+    public bool WikiFactsOnly;
     /// <summary>The animation sandbox (<c>--sandbox [n]</c>): 0 off, else the number of characters (1 or 2) on a flat wireframe floor.</summary>
     public int Sandbox;
     /// <summary>The CHARACTER record (name or id) the sandbox spawns (null: the default new-game start's first squad member).</summary>
@@ -66,6 +71,16 @@ sealed class GameOptions
     public double? QuitAfter;
     /// <summary>A save folder (Meitou's or the original game's) started in instead of a new world, loaded as the game menu's Load does (<c>--load</c>).</summary>
     public string? Load;
+    /// <summary><c>--continue</c>: start in the newest save (<see cref="Meitou.Content.SaveModList.Scan"/>), resolved into <see cref="Load"/> once the install is found.</summary>
+    public bool Continue;
+    /// <summary><c>--control-dir</c> (or MEITOU_CONTROL_DIR): the folder an external agent writes console command lines to (<c>cmd</c>) and reads results from (<c>out</c>), see GameHost.Control.cs.</summary>
+    public string? ControlDir;
+    /// <summary><c>--exec "a; b"</c> (alias <c>--setup</c>): console commands run once, in order, after the world has loaded and settled (GameHost.Control.cs); the first failing command stops the list and fails the run (exit code 3).</summary>
+    public string? Exec;
+    /// <summary><c>--screenshot-after &lt;s&gt;</c>: once the setup is done, wait this many real seconds, save one frame (<see cref="ShotOut"/>) and quit.</summary>
+    public double? ShotAfter;
+    /// <summary><c>--screenshot-out &lt;png&gt;</c>: where <see cref="ShotAfter"/> saves (default <control-dir>/shot.png, else ./meitou-shot.png).</summary>
+    public string? ShotOut;
     /// <summary><c>--play-bench &lt;dir&gt;</c>: the interactive game driven by a script, every frame measured, the results written there (GameHost.PlayBench.cs).</summary>
     public string? PlayBench;
     /// <summary><c>--no-precompile</c>: the methods are compiled on their first call only, not ahead on a background thread (JitWarmup).</summary>
@@ -96,6 +111,8 @@ sealed class GameOptions
           --new-game [start]         a new game as the NEW_GAME_STARTOFF start (default Wanderer): the player squad at its town, camera on it
           --list-starts              print the available starts and exit
           --data-check               print every game data and level file problem of the load order (missing mod, changed record type...) and exit: 0 none, 1 some
+          --facts-only               with --wiki-export: drop all description text from the game data (names, ids, numbers, positions, conditions, relations only)
+          --wiki-export <dir>        write the agent wiki's generated files (zones, towns, factions, squads, npcs, items, buildings, shops, overrides, characters, research, animals, spawns as JSON) from your game data, mods included, into <dir> and exit (docs/agent-playtest.md)
           --sandbox [n]              animation sandbox: no world, a flat 1000x1000 wireframe floor (lines every 10, bold every 100) with 1 character (n = 2: two facing each other 30 units apart; more: the rest idle in rings round them, up to 1000); Z/X/C walk/run/free, [ ] fixed speed, P patrol, G fight, Y follow; works with --screenshot --ticks
           --sandbox-character <name> the CHARACTER or ANIMAL_CHARACTER record the sandbox spawns (default: the first member of the default new-game start)
           --sandbox-mode <list>      the sandbox hero's start, comma-separated: walk, run or free, a fixed speed in u/s, patrol (the 400-unit patrol), fight (the G key, with --sandbox 2), e.g. run,patrol (with --move-to or --screenshot)
@@ -125,14 +142,20 @@ sealed class GameOptions
                                      quits; frame limit and vsync off; MEITOU_BENCH_ONLY=a,b keeps those segments
           --benchmark-baseline       the settings benchmarks for the site use (bench/kit): a 1920x1080 window, the Medium tier, no GI, ground parallax or tessellation, no upscaler, SMAA;
                                      like --low-end, the saved graphics are neither applied nor overwritten
+          --control-dir <dir>        agent channel (debug): polls <dir>/cmd (lines "<id> <console command>"), appends results to <dir>/out; also MEITOU_CONTROL_DIR
+          --exec "<cmd; cmd>"        console commands run once, in order, after the world has loaded and settled (state.screen world, a selected character, the simulation has ticked; same as wait-ready --world); also --setup.
+                                     The first failing command is printed ("setup failed: ...") and skips the rest; the run then exits with code 3 (with --screenshot-after at once, no picture).
+          --screenshot-after <s>     after the setup: wait s real seconds (the game keeps rendering), save one frame and quit; exit 0, 3 setup command failed (no picture), 4 picture not written
+          --screenshot-out <png>     where --screenshot-after saves (default <control-dir>/shot.png, else ./meitou-shot.png)
           --load <save folder>       start in a save, Meitou's or the original game's (%LOCALAPPDATA%\kenshi\save\<name>), loaded as the game menu's Load does; works with --screenshot
+          --continue                 start in the newest save of Meitou's and the original game's save folders, as --load would
           --renderer <vulkan|metal>  the renderer for the whole frame: vulkan (the default) or metal (macOS: the scene, HUD and faithful panels, the port's current slice)
           --yaw/--pitch/--distance   start view: heading, pitch above the horizon and boom (Kenshi: 30 degrees, boom 150; clamped to 10..2000)
           world options as meitou-viewer --world: --at, --zone, --town, --radius, --time, --screenshot, --size, --no-foliage, ...
         Keys: W/A/S/D or arrows move (or the pointer at a screen edge), Q/E rotate, Comma/Period tilt, wheel or Home/End zoom, PageUp/PageDown floor up/down (lens in the free camera), middle drag or Ctrl orbit, left click or drag selects, right click moves (shift queues), 1..9, 0 / ` select, [ / ] previous / next squad member, R stops,
           numpad 0..8 Block, Hold, Passive, Ranged, Sneak, Taunt, run speed, Medic (also H), Rescue (also J), L rest, K put down, I/C/M/T/Y windows, Tab next squad (all rebindable),
           ; free camera (R/F up/down), Space pause, F2/F3/F4 speed 1x/2x/5x, F8 or PrintScreen screenshot, Ctrl+/ Metal GPU capture (MTL_CAPTURE_ENABLED=1),
-          F5 quicksave, F9 quickload (Meitou's own slot under %LOCALAPPDATA%\Meitou\save), Ctrl+F9 fps counter, F10 debug menu (teleport, spawn, items, money, heal, max skills, damage; Metal: settings), F11 statistics, F12 profiler (gpu, cpu, off), Esc game menu (save, load, exit). Shift+F1 Meitou on / off, Shift+F2 skin scattering on / off, Alt+Enter full screen,
+          F5 quicksave, F9 quickload (Meitou's own slot under %LOCALAPPDATA%\Meitou\save), Ctrl+F9 fps counter, F10 debug menu (teleport, spawn, items, money, heal, max skills, damage, bounties; the debug tools; Metal: settings), F11 statistics, F12 profiler (gpu, cpu, off), Shift+F12 level editor, Ctrl+F12 VRAM pie, Esc game menu (save, load, exit). Shift+F1 Meitou on / off, Shift+F2 skin scattering on / off, Alt+Enter full screen,
           F6 cinematic camera editor (numpad keys as in the viewer; game-shots.json; Home the lens also in the free camera), F7 hide the interface,
           Backspace restarts the --duel lap or the --battle, PageUp/PageDown narrow/widen its lens, Home resets it.
         Settings (frame limit, vsync, full screen (--windowed for one run), tick rate (tickRate), simulation threads (simThreads), the settings sliders, key bindings) are kept in meitou.user.json.
@@ -170,6 +193,8 @@ sealed class GameOptions
                     break;
                 case "--list-starts": g.ListStarts = true; break;
                 case "--data-check": g.DataCheck = true; break;
+                case "--wiki-export": g.WikiExport = Next(); break;
+                case "--facts-only": g.WikiFactsOnly = true; break;
                 case "--sandbox":
                     g.Sandbox = i + 1 < args.Length && int.TryParse(args[i + 1], NumberStyles.None, CultureInfo.InvariantCulture, out int count) ? Math.Clamp(count, 1, 1000) : 1;
                     if (i + 1 < args.Length && int.TryParse(args[i + 1], NumberStyles.None, CultureInfo.InvariantCulture, out _)) i++;
@@ -225,6 +250,11 @@ sealed class GameOptions
                 case "--move-to": g.MoveTo = (float.Parse(Next(), CultureInfo.InvariantCulture), float.Parse(Next(), CultureInfo.InvariantCulture)); break;
                 case "--quit-after": g.QuitAfter = double.Parse(Next(), CultureInfo.InvariantCulture); break;
                 case "--load": g.Load = Next(); break;
+                case "--continue": g.Continue = true; break;
+                case "--control-dir": g.ControlDir = Next(); break;
+                case "--screenshot-after": g.ShotAfter = double.Parse(Next(), CultureInfo.InvariantCulture); break;
+                case "--screenshot-out": g.ShotOut = Next(); break;
+                case "--exec": case "--setup": g.Exec = Next(); break;
                 case "--renderer":
                 {
                     string renderer = Next().ToLowerInvariant();

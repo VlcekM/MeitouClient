@@ -1,4 +1,7 @@
+using System.Numerics;
+using Meitou.Simulation;
 using Meitou.Simulation.Items;
+using SimWorld = Meitou.Simulation.World;
 
 namespace Meitou.Tests.Simulation;
 
@@ -49,5 +52,37 @@ public class InventoryCommandTests
         Assert.Equal(("back", 0, 0, "back", 5, 0), (a.Section, a.X, a.Y, b.Section, b.X, b.Y));
         Assert.Equal(("back", 0, 1, "hip", 0, 0), (c.Section, c.X, c.Y, d.Section, d.X, d.Y));
         Assert.DoesNotContain(e, inventory.Items);
+    }
+
+    /// <summary>
+    /// A right click on a non-equippable item of the open backpack (docs/game/ui-input.md) moves it to the main grid; with the main grid full it stays in the backpack (#315).
+    /// </summary>
+    [Fact]
+    public void A_quick_move_of_a_bag_item_goes_to_the_main_grid_and_stays_when_the_grid_is_full()
+    {
+        using var world = new SimWorld(new WorldSettings { Seed = 3, PublishSnapshots = false }, new OpenGroundWalkability(SyntheticTown.Ground), [new PlayerSystem()]);
+        var root = new Inventory(1, 1);
+        var bag = new Inventory(2, 2);
+        root.Items.Add(new ItemInstance { Record = "bag", Section = "backpack_attach", Contents = bag });
+        var item = new ItemInstance { Record = "food", Section = "backpack_content" };
+        bag.Items.Add(item);
+        var who = world.Characters.Spawn(new CharacterHot { Position = new Vector3(1000, 150, 1000) },
+            new CharacterCold { Name = "mover", Inventory = root, IsPlayer = true }, 0);
+
+        void RightClick()
+        {
+            int index = root.All().ToList().IndexOf(item);
+            world.Commands.Enqueue(new QuickMoveItem(who, Token(index, item), false, true) { Tick = world.Tick });
+            world.RunTick();
+        }
+
+        root.Items.Add(new ItemInstance { Record = "filler" });
+        RightClick();
+        Assert.Equal(("backpack_content", true), (item.Section, bag.Items.Contains(item)));
+
+        root.Items.RemoveAt(root.Items.Count - 1);
+        RightClick();
+        Assert.Equal(("main", true), (item.Section, root.Items.Contains(item)));
+        Assert.DoesNotContain(item, bag.Items);
     }
 }

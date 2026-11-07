@@ -51,6 +51,12 @@ public interface IWalkability
     float TerrainHeight(float x, float z) => GroundHeight(x, z);
 
     /// <summary>
+    /// What a character at height <paramref name="y"/> on the water stands on, as the original's water state reads it (docs/game/pathfinding.md "Water states"): a walkable floor or deck just
+    /// under it (a building whose ground floor lies under the water level, #345), else the terrain under the water. Default: the terrain.
+    /// </summary>
+    float WaterBed(float x, float z, float y) => TerrainHeight(x, z);
+
+    /// <summary>
     /// The floor point at or next to a spot on a floor at height <paramref name="y"/>: the spot itself where the floor under it is within <paramref name="slack"/>, else
     /// the first such point on rings of 2..<see cref="FloorSearch"/> units round it (8 directions each); null when there is none. Furniture cuts holes in a building's
     /// floor mesh and the ground below shows through them (Observed: the Hub's Storm House, its counter, tables and stools), so a node or chair there would otherwise

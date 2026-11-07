@@ -50,4 +50,13 @@ public class AnimalAnimationTests
         var source = new GeneratedAppearances(db, root);
         Assert.Same(source.Create(Bonedog, null, 1), source.Create(Bonedog, null, 2));
     }
+
+    /// <summary>The Bonedog's race names <c>attachments-bonedog.phs</c>, so its look has the <c>mouth</c> point on <c>Bip01 Ponytail1</c> where a held limb is drawn (docs/formats/phs.md, #313).</summary>
+    [Fact]
+    public void The_bonedogs_look_has_a_mouth_point_on_its_ponytail_bone()
+    {
+        var (db, root) = Install();
+        var look = CharacterAppearance.BuildAnimal(db, root, db.Find(Bonedog)!);
+        Assert.Equal("Bip01 Ponytail1", look.AttachmentPoints["mouth"].Bone);
+    }
 }

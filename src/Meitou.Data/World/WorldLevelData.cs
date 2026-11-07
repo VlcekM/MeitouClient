@@ -28,6 +28,13 @@ public sealed class WorldLevelData
     /// <summary>Whether <see cref="ResidentRuins.Apply"/> has set the ruins the residents make.</summary>
     public bool ResidentRuinsApplied { get; internal set; }
 
+    /// <summary>
+    /// The factions' building swaps and each placement's owner faction by key, once <see cref="BuildingSwapPass.ApplyBuildingSwaps"/> has run: every
+    /// <see cref="BuildingLayouts"/> read from these levels swaps its furniture with them (<see cref="BuildingLayouts.UseSwaps(WorldLevelData)"/>), so the drawn
+    /// world, the town buildings and the navmesh have the same pieces. Null: not applied, or the data has no swaps.
+    /// </summary>
+    public (Gameplay.BuildingSwaps Swaps, IReadOnlyDictionary<string, string> Owners)? FurnitureSwaps { get; internal set; }
+
     /// <summary>The keys of the buildings <see cref="ResidentRuins.Apply"/> ruined (their level files have them standing).</summary>
     public HashSet<string> ResidentRuined { get; } = new(StringComparer.Ordinal);
 
@@ -60,6 +67,22 @@ public sealed class WorldLevelData
     /// unmodded 1.0.68 layers give 4047, all of that kind, and the game plays as shipped).
     /// </summary>
     public List<GameDataIssue> Problems() => [.. Issues.Where(i => i.Kind != GameDataIssueKind.RecordAlreadyDefined)];
+
+    /// <summary>Counts the changes <see cref="ApplyEdit"/> made; an index of the buildings made earlier is stale when it differs.</summary>
+    public int EditRevision { get; private set; }
+
+    /// <summary>
+    /// Merges <paramref name="data"/> into the zone's records over everything loaded, as if another layer's zone file had been there at load (the level editor, docs/game/level-editor.md:
+    /// its placed buildings and its cleared ones, which a later layer empties). Call it on the thread that owns the world's changes; readers on other threads may meet the zone mid-change.
+    /// </summary>
+    public void ApplyEdit(ZoneCoordinate zone, FcsFile data, string name)
+    {
+        if (!Zones.TryGetValue(zone, out var db)) Zones[zone] = db = new GameDatabase();
+        db.Apply(data, name);
+        if (!ZoneInfo.TryGetValue(zone, out var info)) ZoneInfo[zone] = info = new ZoneLevelInfo();
+        info.NextId = Math.Max(info.NextId, data.NextId);
+        EditRevision++;
+    }
 
     /// <summary>
     /// The height the original stands each outdoor level building at, by <see cref="BuildingKey"/> (docs/formats/zones.md "Placement height"); filled by

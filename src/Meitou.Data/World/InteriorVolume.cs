@@ -247,8 +247,11 @@ public sealed record InteriorVolume(string PlacementId, Vector2[] Footprint, flo
 /// </summary>
 public sealed partial class FloorSurfaces
 {
-    /// <summary>One part's triangles (three corners each) with its floor, whether it is stairs, its height range and its X/Z box.</summary>
-    sealed record Surface(int Floor, bool Stairs, Vector3[] Corners, float YMin, float YMax, Vector2 Min, Vector2 Max);
+    /// <summary>One part's triangles (three corners each) with its floor, whether it is stairs, its height range, its X/Z box and its triangles binned by X/Z (<see cref="TriangleGrid"/>).</summary>
+    sealed record Surface(int Floor, bool Stairs, Vector3[] Corners, float YMin, float YMax, Vector2 Min, Vector2 Max)
+    {
+        public TriangleGrid Grid { get; } = new(Corners, Min, Max);
+    }
 
     readonly List<Surface> surfaces = [];
     /// <summary>The <c>is unwalkable roof</c> parts: no floor, only cover (<see cref="LowestAbove"/>).</summary>
@@ -321,7 +324,7 @@ public sealed partial class FloorSurfaces
         foreach (var s in surfaces)
         {
             if (q.X < s.Min.X || q.Y < s.Min.Y || q.X > s.Max.X || q.Y > s.Max.Y || s.YMin > top) continue;
-            for (int i = 0; i + 2 < s.Corners.Length; i += 3)
+            foreach (int i in s.Grid.At(q))
             {
                 if (HeightAt(s.Corners[i], s.Corners[i + 1], s.Corners[i + 2], q) is not { } y || y > top || y <= best) continue;
                 best = y;

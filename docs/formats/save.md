@@ -131,6 +131,7 @@ editor-authored files. Original acceptance of a save synthesized from scratch is
   platoon/<faction>_<n>.platoon   one file per squad           (56 files, 6-120 KB)
   zone/zone.<X>.<Y>.zone     one file per loaded zone          (13 files, 2 KB - 1.4 MB)
   meitou-mods/<id>.dat       Meitou only: code-mod state       (see Mod data)
+  meitou-mods/environment.json  Meitou only: code mods in use  (see Mod data)
 ```
 
 ### Mod data
@@ -140,6 +141,9 @@ save's other files into the working folder and moved with them. Layout, little-e
 version (int32 1), entry count (int32), then per entry the system name (7-bit length-prefixed UTF-8, as .NET `BinaryWriter`), the data
 length (int32) and the mod's bytes. A loaded save keeps the files of mods not loaded now, and a save made from it writes them again.
 An import (`SaveImport.Filter`) builds a new save without them, so mods start fresh there.
+`meitou-mods/environment.json` (not a sidecar: only `.dat` names are) records the code mods the save was made with: UTF-8 JSON
+`{ "format": 1, "gameVersion": "<Meitou tag>", "mods": [{ "id", "version"?, "name" }] }`, mods in load order
+([dependencies](../modding-dependencies.md#saves)).
 **Observed** (2026-11-04, a scratch save written and read back, win-x64). Whether the original game ignores the extra folder is
 **Unknown**.
 
@@ -382,7 +386,8 @@ PLATOON keys (**Verified**):
 - `inventory refresh time` (float) is a trader platoon's next restock in absolute game hours (day x 24 + hour) (**Observed**: METARU's 107 and its quicksave's 117
   trader platoons; the largest is 200.3 at clock 177.4 and 207.7 at 186.6, about the clock + a 24 h `vendors refresh time`; three or four are 0). Meitou writes it for every
   shop with Meitou's own `meitou shop` (string: the stock as JSON, `[]` when empty, the container format of [locks](../game/locks.md)) and `meitou shop fills` (int, the next
-  fill's roll key), and restores the shop from them when it makes the platoon; without `meitou shop` the shop is filled anew. Items' stolen marks are not kept. **Observed**
+  fill's roll key), and restores the shop from them when it makes the platoon (the next restock against the current clock, which is the save's from the start of the load, and at most one
+  `vendors refresh time` away, an engine choice that repairs older Meitou saves); without `meitou shop` the shop is filled anew. Items' stolen marks are not kept. **Observed**
   (headless, real data): two squad shops (one with an item taken out) come back with the same items, cells, purse, fill count and restock tick (±1); a building shop
   (merged grid of its home's containers, wider than 18 when they are) is restored by code only, and loses the cells past 18 if its home does not resolve.
 

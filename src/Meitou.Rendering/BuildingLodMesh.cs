@@ -247,8 +247,11 @@ sealed unsafe class ObjectMeshCache(IGpuContext gpuContext, AssetLocator assets,
     {
         if (mesh.Status != ObjectMesh.State.None) return;
         wanted[mesh] = wanted.TryGetValue(mesh, out var old) ? Math.Min(old, order) : order;
-        mesh.WantedNear = Math.Min(mesh.WantedNear, near + 600);   // the scan takes 600 off the camera's distance to the placement
+        mesh.WantedNear = Math.Min(mesh.WantedNear, near + WantedSlack);
     }
+
+    /// <summary>What <see cref="ObjectMesh.WantedNear"/> adds to a request's distance: the scan takes 600 off the camera's distance to the placement.</summary>
+    const float WantedSlack = 600;
 
     /// <summary>Starts decodes (nearest first) and queues the uploads of finished ones.</summary>
     public void Pump()
@@ -269,13 +272,15 @@ sealed unsafe class ObjectMeshCache(IGpuContext gpuContext, AssetLocator assets,
         }
         PumpReshapes();
         if (wanted.Count == 0) return;
-        if (Guard is { Streaming: false }) { wanted.Clear(); return; }   // memory pressure: nothing new is decoded (the scan asks again)
+        // Memory pressure: only what is wanted within the guard's near reach is decoded, and nothing past its priority ceiling (the scan asks again).
+        bool nearOnly = Guard is { Streaming: false };
+        if (Guard is { StreamsNear: false }) { wanted.Clear(); return; }
         var order = wanted.OrderBy(p => p.Value).Select(p => p.Key).ToList();
         wanted.Clear();
         foreach (var m in order)
         {
             if (running.Count >= MaxJobs) break;
-            if (m.Status != ObjectMesh.State.None) continue;
+            if (m.Status != ObjectMesh.State.None || nearOnly && m.WantedNear - WantedSlack > VramGuard.NearReach) continue;
             m.Status = ObjectMesh.State.Loading;
             string key = m.Key;
             bool distant = m.Distant;
@@ -536,7 +541,7 @@ sealed unsafe class ObjectMeshCache(IGpuContext gpuContext, AssetLocator assets,
     public int Areas { get; set; } = 1;
     /// <summary>In proportion to the textures' half: the marks add up, and past the budget the guard's pressure blurs everything.</summary>
     const double MaxAreaShare = 0.2;
-    /// <summary>The memory-pressure guard (<see cref="VramGuard"/>): under pressure nothing new is decoded and meshes idle for <see cref="GuardIdleSeconds"/> go.</summary>
+    /// <summary>The memory-pressure guard (<see cref="VramGuard"/>): under pressure only meshes wanted within <see cref="VramGuard.NearReach"/> are decoded and meshes idle for <see cref="GuardIdleSeconds"/> go.</summary>
     public VramGuard? Guard { get; set; }
     public double GuardIdleSeconds { get; set; } = 2;
     /// <summary>Called with every GPU mesh (manual levels included) that was deleted, so users of it can forget it.</summary>

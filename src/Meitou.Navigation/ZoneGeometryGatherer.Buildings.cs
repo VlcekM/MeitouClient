@@ -21,7 +21,7 @@ internal sealed partial class ZoneGeometryGatherer
             {
                 var z = new ZoneCoordinate(zone.X + dx, zone.Y + dz);
                 // Runtime placements replace town houses by global key, or append newly placed buildings.
-                foreach (var b in BuildingPlacements.Overlay(buildingsByZone.GetValueOrDefault(z) ?? [], runtime?.In(z) ?? []))
+                foreach (var b in BuildingPlacements.Overlay(BuildingsByZone.GetValueOrDefault(z) ?? [], runtime?.In(z) ?? []))
                 {
                     if (b.Position.X < lo.X || b.Position.X > hi.X || b.Position.Z < lo.Y || b.Position.Z > hi.Y) continue;
                     if (BuildingPlacements.Resolve(b, db, levels, terrain) is { } resolved) yield return resolved;

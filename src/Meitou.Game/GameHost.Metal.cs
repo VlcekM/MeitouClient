@@ -890,7 +890,7 @@ sealed partial class GameHost
                 if (key == SilkKey.F12) { frameStatsVisible = !frameStatsVisible; return; }
                 if (key is SilkKey.F8 or SilkKey.PrintScreen) { screenshotNow = true; return; }
                 if (key == SilkKey.F7 && hud is not null) { hud.UiVisible = !hud.UiVisible; return; }
-                // Ctrl+C copies the free camera's position as a viewer camera code; Ctrl+V flies to the clipboard's code.
+                // Ctrl+C copies the free camera's position as a viewer camera code; Ctrl+V flies to the clipboard's code or feedback camera location.
                 if (key is SilkKey.C or SilkKey.V && session.Camera.IsFree && hud is not null && !hud.UiEditing && ctrl)
                 {
                     if (key == SilkKey.C)
@@ -908,7 +908,7 @@ sealed partial class GameHost
                         hud.Follow = null;
                         Console.WriteLine("camera    moved to the clipboard's camera code");
                     }
-                    else Console.WriteLine("camera    the clipboard holds no camera code (Ctrl+C in a viewer copies one)");
+                    else Console.WriteLine("camera    the clipboard holds no camera code (Ctrl+C in a viewer copies one) or feedback camera location");
                     return;
                 }
                 // Numpad / flies the camera across the squad in portrait order; it holds the camera like the tour on Vulkan.
@@ -1328,8 +1328,8 @@ sealed partial class GameHost
                         characters.PortraitRequests.Add(new PortraitRequest(DrawKey(member.Id), cell, member.PortraitSerial));
             }
             var hoverKeys = new List<(long Key, Vector4 Colour)>();
-            bool outlining = config.HoverOutline && !session.Camera.IsFree && hud is { UiVisible: true } &&
-                !Covered && settings?.Visible != true;
+            bool outlines = !session.Camera.IsFree && hud is { UiVisible: true } && !Covered && settings?.Visible != true;
+            bool outlining = config.HoverOutline && outlines;
             if (outlining)
             {
                 if (highlighting)
@@ -1339,6 +1339,7 @@ sealed partial class GameHost
                     hoverKeys.Add((DrawKey(hover.Id), hover.Colour));
             }
             gpu.HoverKeys = hoverKeys;
+            gpu.OutlinedBuilding = outlines && config.BuildingOutline ? hud!.OutlinedBuilding : null;
             gpu.HoverOutline = hoverOutline;
             // The frame's inputs, as WorldFrame.Draw prepares them: the weather at the camera, the atmosphere's tables for the sun and the
             // eye's height, the fog distance the light ends at, and the view distance that keeps the haze complete before the far plane.
@@ -1376,6 +1377,7 @@ sealed partial class GameHost
             // seam's Vulkan-only gaps (no reflection, GI, low-resolution particles or fog-rate target).
             gpu.GameHours = session.Clock.HoursSinceStart;
             UpdateBlood();
+            UpdateModHits();
             if (characters is not null)
             {
                 characters.Look = Meitou.Rendering.Characters.PreviewLook.Of(o.Post);

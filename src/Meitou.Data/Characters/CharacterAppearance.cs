@@ -281,18 +281,9 @@ public sealed class CharacterAppearance
         foreach (var item in worn) result.AddWorn(item, female, worn, materials.GetValueOrDefault(item), Dye(item));
         foreach (var item in items.Where(i => i.Type is FcsRecordType.ATTACHMENT or FcsRecordType.CONTAINER))
             result.AddWorn(item, female, worn, colour: Dye(item));
-        foreach (var item in items.Where(i => i.Type == FcsRecordType.LIMB_REPLACEMENT))
-            result.AddLimb(item, female);
-        if (loadout is not null)
-        {
-            result.AddLimbs(db, race, female, loadout.Limbs);
-            // Boots (not `is locked`) over exactly one prosthetic leg lose that leg's half.
-            bool left = loadout.Limbs[2]?.State == 2, right = loadout.Limbs[3]?.State == 2;
-            if (left != right)
-                for (int i = 0; i < result.Parts.Count; i++)
-                    if (result.Parts[i] is { Slot: AttachSlot.Boots } boots && boots.Record.Type == FcsRecordType.ARMOUR && !boots.Record.GetBool("is locked"))
-                        result.Parts[i] = boots with { HideSide = left ? 1 : 2 };
-        }
+        // A limb's item is dyed like clothing: its own colour (a new one's: its record's), else the wearer's scheme.
+        GameRecord? LimbDye(GameRecord limb, GameRecord? own) => Gameplay.ItemColours.Shown(db, limb, own ?? Gameplay.ItemColours.Of(db, limb), character, faction);
+        result.AddLimbParts(db, race, female, items.Where(i => i.Type == FcsRecordType.LIMB_REPLACEMENT), loadout, LimbDye);
 
         // Weapons: the loadout's, else the likeliest: the first entry with quantity > 0 of the hip pool (val1 = 0) and of
         // the back pool (val1 ≠ 0), whose absolute chances make the first one win (docs/characters.md). Then --equip weapons.
@@ -391,7 +382,7 @@ public sealed class CharacterAppearance
     /// The non-natural limbs of <paramref name="limbs"/> (<c>FUN_1400d0190</c>, <c>uses_limb_replacement</c>): a stump shows the race's <c>limb replacement</c> entry whose
     /// <c>slot</c> is 50 + k, a replaced limb its prosthetic (a stump's without one); a crushed limb gets no mesh (the original attaches none for state 3) but stays hidden.
     /// </summary>
-    void AddLimbs(GameDatabase db, GameRecord race, bool female, IReadOnlyList<LoadoutLimb?> limbs)
+    void AddLimbs(GameDatabase db, GameRecord race, bool female, IReadOnlyList<LoadoutLimb?> limbs, Func<GameRecord, GameRecord?, GameRecord?> dye)
     {
         for (int k = 0; k < limbs.Count; k++)
         {
@@ -401,17 +392,39 @@ public sealed class CharacterAppearance
             var record = limb.State == 2 ? limb.Prosthetic : null;
             record ??= race.GetReferences("limb replacement").Select(r => db.Find(r.TargetStringId))
                 .FirstOrDefault(r => r is { Type: FcsRecordType.LIMB_REPLACEMENT } && r.GetInt("slot") == 50 + k);
-            if (record is not null) AddLimb(record, female);
+            if (record is not null) AddLimb(record, female, dye(record, limb.State == 2 ? limb.Colour : null));
         }
     }
 
-    /// <summary>A LIMB_REPLACEMENT mesh on the body's skeleton (<c>mesh</c> / <c>mesh female</c>); hides its slot's natural limb.</summary>
-    void AddLimb(GameRecord limb, bool female)
+    /// <summary>
+    /// The limbs: the <c>--equip</c> LIMB_REPLACEMENTs in <paramref name="equipped"/>, then <paramref name="loadout"/>'s stumps and prosthetics, each dyed by
+    /// <paramref name="dye"/> (record, the item's own colour). Boots (not <c>is locked</c>) over exactly one prosthetic leg lose that leg's half.
+    /// </summary>
+    void AddLimbParts(GameDatabase db, GameRecord race, bool female, IEnumerable<GameRecord> equipped, Loadout? loadout, Func<GameRecord, GameRecord?, GameRecord?> dye)
+    {
+        foreach (var item in equipped)
+            AddLimb(item, female, dye(item, null));
+        if (loadout is null) return;
+
+        AddLimbs(db, race, female, loadout.Limbs, dye);
+        bool left = loadout.Limbs[2]?.State == 2, right = loadout.Limbs[3]?.State == 2;
+        if (left == right) return;
+
+        for (int i = 0; i < Parts.Count; i++)
+            if (Parts[i] is { Slot: AttachSlot.Boots } boots && boots.Record.Type == FcsRecordType.ARMOUR && !boots.Record.GetBool("is locked"))
+                Parts[i] = boots with { HideSide = left ? 1 : 2 };
+    }
+
+    /// <summary>
+    /// A LIMB_REPLACEMENT mesh on the body's skeleton (<c>mesh</c> / <c>mesh female</c>), dyed with <paramref name="colour"/> when its material has a <c>color map</c>
+    /// (docs/characters.md "Clothing colours"); hides its slot's natural limb.
+    /// </summary>
+    void AddLimb(GameRecord limb, bool female, GameRecord? colour)
     {
         if (limb.GetInt("slot") - 50 is >= 0 and < 4 and var k) HiddenLimbs |= 1 << k;
         string field = female && limb.GetPath("mesh female").Length > 0 ? "mesh female" : "mesh";
         if (limb.GetPath(field) is { Length: > 0 } mesh)
-            Parts.Add(new CharacterPart { Record = limb, Mesh = mesh, Field = field, Mode = AttachMode.SharedSkeleton });
+            Parts.Add(new CharacterPart { Record = limb, Mesh = mesh, Field = field, Mode = AttachMode.SharedSkeleton, Colour = colour });
     }
 
     void AddWorn(GameRecord item, bool female, List<GameRecord> worn, GameRecord? material = null, GameRecord? colour = null)

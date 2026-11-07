@@ -1,3 +1,4 @@
+using Meitou.Data;
 using Meitou.Data.Characters;
 using Meitou.Data.Fcs;
 using Meitou.Simulation.Saving;
@@ -11,9 +12,11 @@ public enum EditKind : byte { Creation, Surgery, Recruit }
 /// <summary>
 /// The character editor's result for one character: its new look (a CHARACTER_APPEARANCE, normally a <see cref="CharacterDraft"/> of its current one) and name.
 /// Validated when applied (<see cref="CharacterEditing.Apply"/>): a player character; at creation only while the new game's editor is open
-/// (<see cref="PlayerState.InCreation"/>), in surgery only beside the <see cref="Surgeon"/> and with the race and gender unchanged.
+/// (<see cref="PlayerState.InCreation"/>), in surgery only beside the <see cref="Surgeon"/> and with the race and gender unchanged. A null look renames only: an animal's
+/// page in the editor offers its name and nothing else (docs/characters.md "Character editor").
+/// Allowed in every kind: a bought animal is named through the in-play (Recruit) editor; only a creation rename needs the creation to be open.
 /// </summary>
-public sealed record EditCharacter(CharacterId Character, FcsRecord Appearance, string Name, EditKind Kind) : SimCommand
+public sealed record EditCharacter(CharacterId Character, FcsRecord? Appearance, string Name, EditKind Kind) : SimCommand
 {
     /// <summary>The plastic surgeon doing the work (surgery only).</summary>
     public CharacterId Surgeon { get; init; } = CharacterId.None;
@@ -42,59 +45,89 @@ public static class CharacterEditing
     public static void Apply(World world, PopulationData data, EditCharacter edit)
     {
         var table = world.Characters;
-        if (!table.TryResolveNext(edit.Character, out int slot) || table.Cold(slot) is not { IsPlayer: true } cold || cold.Appearance is not { Animal: null } look)
+        if (!table.TryResolveNext(edit.Character, out int slot) || table.Cold(slot) is not { IsPlayer: true, Appearance: { } look } cold)
         {
             world.Post("That character cannot be edited.");
             return;
         }
-        var currentRace = look.Race;
-        var proposedRace = edit.Appearance.References.TryGetValue("race", out var refs) && refs.Count > 0 ? data.Db.Find(refs[0].TargetStringId) : null;
+        // A name only: an animal's page (FUN_1405e9410 renames whichever character the editor shows, animals too).
+        if (edit.Appearance is not { } appearance)
+        {
+            if (edit.Kind == EditKind.Creation && !world.Player.InCreation) { world.Post("Characters can only be made at the start of a new game."); return; }
+            Rename(cold, edit.Name);
+            return;
+        }
+        if (look.Animal is not null)
+        {
+            world.Post("That character cannot be edited.");
+            return;
+        }
+        var proposedRace = appearance.References.TryGetValue("race", out var refs) && refs.Count > 0 ? data.Db.Find(refs[0].TargetStringId) : null;
         if (proposedRace is not { Type: FcsRecordType.RACE }) { world.Post("The edited look has no race."); return; }
+        if (!Admit(world, data, edit, appearance, slot, look, proposedRace)) return;
+
+        Remake(world, data, edit.Character, slot, cold, appearance, proposedRace);
+        Rename(cold, edit.Name);
+    }
+
+    /// <summary>
+    /// Whether the edit may be made: at creation only while the editor is open and to a playable race; a recruit and a surgeon keep race and gender; a surgeon must stand by
+    /// and be paid (taken here when the dialogue has not taken it).
+    /// </summary>
+    static bool Admit(World world, PopulationData data, EditCharacter edit, FcsRecord appearance, int slot, CharacterAppearance look, GameRecord proposedRace)
+    {
+        var table = world.Characters;
+        bool sameRace = proposedRace.StringId == look.Race.StringId;
+        bool sameSex = (appearance.Bools.TryGetValue("sex female", out var f) && f) == look.Female;
         if (edit.Kind == EditKind.Creation)
         {
-            if (!world.Player.InCreation) { world.Post("Characters can only be made at the start of a new game."); return; }
-            if (!CharacterDraft.PlayableRaces(data.Db, world.Player.CreationRaces).Any(g => g.Races.Any(r => r.StringId == proposedRace.StringId)) && proposedRace.StringId != currentRace.StringId)
+            if (!world.Player.InCreation) { world.Post("Characters can only be made at the start of a new game."); return false; }
+            if (!CharacterDraft.PlayableRaces(data.Db, world.Player.CreationRaces).Any(g => g.Races.Any(r => r.StringId == proposedRace.StringId)) && !sameRace)
             {
                 world.Post($"{proposedRace.Name} is not a playable race.");
-                return;
+                return false;
             }
+            return true;
         }
-        else if (edit.Kind == EditKind.Recruit)
+        if (edit.Kind == EditKind.Recruit)
         {
-            bool female = edit.Appearance.Bools.TryGetValue("sex female", out var f) && f;
-            if (proposedRace.StringId != currentRace.StringId || female != look.Female) { world.Post("A recruit's race and gender cannot be changed."); return; }
+            if (!sameRace || !sameSex) { world.Post("A recruit's race and gender cannot be changed."); return false; }
+            return true;
         }
-        else
+        if (!table.TryResolveNext(edit.Surgeon, out int surgeon) || !table.IsAlive(edit.Surgeon) ||
+            System.Numerics.Vector3.Distance(table.Next[surgeon].Position, table.Next[slot].Position) > SurgeonReach)
         {
-            if (!table.TryResolveNext(edit.Surgeon, out int surgeon) || !table.IsAlive(edit.Surgeon) ||
-                System.Numerics.Vector3.Distance(table.Next[surgeon].Position, table.Next[slot].Position) > SurgeonReach)
-            {
-                world.Post("The surgeon is not here any more.");
-                return;
-            }
-            int? known = edit.Paid ? 0 : SurgeryCost(world, data.Surgeons, edit.Surgeon, table.Cold(surgeon)!);
-            if (known is not { } cost) { world.Post("That is not a surgeon."); return; }
-            // The dialogue's gate is DC_PLAYERMONEY > cost (strict), then DA_TAKE_MONEY takes it.
-            if (cost > 0 && world.Player.Money <= cost) { world.Post($"Surgery costs c.{cost}: not enough money."); return; }
-            bool female = edit.Appearance.Bools.TryGetValue("sex female", out var f) && f;
-            if (proposedRace.StringId != currentRace.StringId || female != look.Female)
-            {
-                world.Post("A surgeon cannot change race or gender.");
-                return;
-            }
-            world.Player.Money -= cost;
+            world.Post("The surgeon is not here any more.");
+            return false;
         }
-        var record = data.Appearances?.Sanitize(edit.Appearance, proposedRace) ?? CharacterDraft.Copy(edit.Appearance);
+        int? known = edit.Paid ? 0 : SurgeryCost(world, data.Surgeons, edit.Surgeon, table.Cold(surgeon)!);
+        if (known is not { } cost) { world.Post("That is not a surgeon."); return false; }
+        // The dialogue's gate is DC_PLAYERMONEY > cost (strict), then DA_TAKE_MONEY takes it.
+        if (cost > 0 && world.Player.Money <= cost) { world.Post($"Surgery costs c.{cost}: not enough money."); return false; }
+        if (!sameRace || !sameSex)
+        {
+            world.Post("A surgeon cannot change race or gender.");
+            return false;
+        }
+        world.Player.Money -= cost;
+        return true;
+    }
+
+    /// <summary>The character takes the edited look: a new race's body first (creation), then the look wearing what it wears now.</summary>
+    static void Remake(World world, PopulationData data, CharacterId id, int slot, CharacterCold cold, FcsRecord appearance, GameRecord proposedRace)
+    {
+        var look = cold.Appearance!;
+        var record = data.Appearances?.Sanitize(appearance, proposedRace) ?? CharacterDraft.Copy(appearance);
 
         // A new race at creation: a body of that race (its stats and limbs), its walk and footprint.
-        if (proposedRace.StringId != currentRace.StringId)
+        if (proposedRace.StringId != look.Race.StringId)
         {
-            var (raceData, stats, medical) = data.Bodies.Create(proposedRace, data.Db.Find(cold.RecordId), world.Seed, Rng.Key(edit.Character));
+            var (raceData, stats, medical) = data.Bodies.Create(proposedRace, data.Db.Find(cold.RecordId), world.Seed, Rng.Key(id));
             cold.Race = raceData;
             cold.Stats = stats;
             cold.Medical = medical;
             cold.FootprintRadius = raceData.PathfindFootprintRadius;
-            ref var hot = ref table.Next[slot];
+            ref var hot = ref world.Characters.Next[slot];
             hot.MaxSpeed = Bodies.Speed.Run(raceData, stats, medical, 1);
             hot.WalkSpeed = raceData.WalkSpeed;
         }
@@ -109,7 +142,12 @@ public static class CharacterEditing
             cold.LookEdited = true;
         }
         else world.Post("The edited look could not be made.");
-        string name = edit.Name.Trim();
+    }
+
+    /// <summary>The typed name, trimmed and cut to <see cref="MaxNameLength"/>; an empty one leaves the name.</summary>
+    static void Rename(CharacterCold cold, string typed)
+    {
+        string name = typed.Trim();
         if (name.Length > MaxNameLength) name = name[..MaxNameLength];
         if (name.Length > 0) cold.Name = name;
     }

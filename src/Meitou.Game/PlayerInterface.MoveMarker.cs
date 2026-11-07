@@ -34,12 +34,10 @@ sealed partial class PlayerInterface
         float frame = markerFrame == 0 ? 0 : (float)System.Diagnostics.Stopwatch.GetElapsedTime(markerFrame, now).TotalSeconds;
         markerFrame = now;
         if (Markers is null) return;
-        // The rotation marker: while the rotate button is held, 1 unit over the camera's pivot, flat, scaled max(3, 0.06 x distance) (FUN_1406b0f90).
-        // Not in the free camera, which turns about its own eye.
-        var pose = session.Camera.Current;
-        bool turning = !session.Camera.IsFree && session.Bindings.Get(Meitou.Engine.Input.InputAction.Orbit).Any(session.Input.IsHeld);
-        Markers.RotationAt = turning && RotationMarker ? pose.Target + Vector3.UnitY : null;
-        Markers.RotationScale = MathF.Max(3, pose.Distance * 0.06f);
+        // The rotation marker: while the rotate button is held (FUN_1406b0f90); the renderer lays it over the pivot of the camera it draws with, which a followed
+        // character moves every frame. Not in the free camera, which turns about its own eye, nor under the title or the editor, whose views are not the rig's.
+        bool orbitHeld = session.Bindings.Get(Meitou.Engine.Input.InputAction.Orbit).Any(session.Input.IsHeld);
+        Markers.Rotation = orbitHeld && RotationMarker && !session.Camera.IsFree && !TitleOpen && !EditorOpen;
         if (Markers is not { Strength: > 0 } marker) return;
         double speed = session.Simulation.Speed;
         marker.Strength = MathF.Max(0, marker.Strength - (speed > 0 ? frame * (float)speed : 0.01f));

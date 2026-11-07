@@ -1385,11 +1385,11 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// Where 200 Task_LeaveBuilding walks (docs/game/ai-tasks.md): A + (A − B) × 1.1 of the building's first door with a known leaf, A and B its points 15 either side of the leaf
     /// (engine reading of which is outer: the side away from the building's origin). Null: no door known.
     /// </summary>
-    static Vector2? LeavePoint(World world, TownBuilding building)
+    internal static Vector2? LeavePoint(World world, TownBuilding building)
     {
         foreach (var door in world.Fixtures.DoorsByBuilding[building.Key])
         {
-            if (door.Spot is not { } s) continue;
+            if (world.Fixtures.DoorSpotOf(door) is not { } s) continue;
             return DoorExit(new Vector2(s.Centre.X, s.Centre.Z), new Vector2(s.Normal.X, s.Normal.Z), new Vector2(building.Position.X, building.Position.Z));
         }
         return null;
@@ -1421,10 +1421,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         {
             // The walk is over: arrived, or it ended elsewhere (no way there, or a fight took it).
             mind.Walking = false;
-            // A walk whose path finished counts as arrival whatever the distance (isAtLocation, FUN_1405a2450); a walk without a path or one a fight or flight took is a failed one.
-            var cold0 = table.Cold(slot);
-            if (away && cold0 is { InCombat: false, Fleeing: false, PathFailed: false } && n.Task == (byte)CharacterTask.Idle) mind.ArrivedAt = target;
-            mind.FailedWalks = away && mind.ArrivedAt != target ? mind.FailedWalks + 1 : 0;
+            WalkOver(table, slot, mind, target, here, away);
             if (mind.FailedWalks >= MaxFailedWalks)
             {
                 mind.FailedWalks = 0;
@@ -1438,7 +1435,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
                 return false;   // the next think picks the new spot
             }
         }
-        if (away && mind.ArrivedAt == target) return true;   // its path ended there: arrived
+        if (away && mind.ArrivedThere(target, here)) return true;   // its path ended there and it has not been moved off since: arrived
         if (away)
         {
             WalkTo(world, slot, target, mode);
@@ -1453,6 +1450,31 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             return false;
         }
         return n.Task != (byte)CharacterTask.GoTo;   // arriving: the movement system ends the walk
+    }
+
+    /// <summary>
+    /// Books a walk to <paramref name="target"/> that is over (<c>isAtLocation</c> <c>FUN_1405a2450</c>: a finished path is arrival whatever the distance). One the movement followed to its
+    /// last point (<see cref="WalkEnd.Finished"/>) with no fight or flight taking it arrives; one it gave up (<see cref="WalkEnd.Failed"/>: no way there, blocked, a locked door) or a fight
+    /// or flight took counts toward <see cref="MaxFailedWalks"/>; one another system stopped (a captive job's or lock round's stand) is neither, so the next act-out walks again.
+    /// </summary>
+    static void WalkOver(CharacterTable table, int slot, AiMind mind, Vector2 target, Vector2 here, bool away)
+    {
+        if (!away)
+        {
+            mind.FailedWalks = 0;
+            return;
+        }
+        var cold = table.Cold(slot)!;
+        bool fought = cold.InCombat || cold.Fleeing;
+        if (!fought && cold.WalkEnd == WalkEnd.None) return;
+        if (!fought && cold.WalkEnd == WalkEnd.Finished && table.Next[slot].Task == (byte)CharacterTask.Idle)
+        {
+            mind.ArrivedAt = target;
+            mind.ArrivedFrom = here;
+            mind.FailedWalks = 0;
+            return;
+        }
+        mind.FailedWalks++;
     }
 
     // Set by a think that left a resident to be placed (<see cref="AiMind.PlaceAt"/>); the serial step looks for them only then.

@@ -1,0 +1,41 @@
+[
+ {
+  "id": "example-shop-example-town",
+  "name": "Example Shop (Example Town)",
+  "aliases": [],
+  "kind": "trader",
+  "faction": null,
+  "region": null,
+  "x": null,
+  "z": null,
+  "zone": null,
+  "verified": false,
+  "verifiedOn": null,
+  "seen": "",
+  "source": "example entry, replace",
+  "confidence": "Unknown",
+  "notes": "Fake entry that only shows the schema. Delete it.",
+  "data": {
+   "town": "Example Town",
+   "townId": "example-town",
+   "squad": "Example Shop",
+   "type": "Example Shop type",
+   "slaveShop": false,
+   "via": "resident",
+   "vendors": [
+    {
+     "id": "example-vendor-list",
+     "list": "example vendor list",
+     "weight": 100,
+     "approxItems": 40
+    }
+   ],
+   "fillItems": 40,
+   "buyMult": 1.0,
+   "buysStolen": false,
+   "buysIllegal": false,
+   "refreshHours": 24,
+   "record": "0-example.mod"
+  }
+ }
+]

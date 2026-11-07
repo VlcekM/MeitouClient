@@ -1,0 +1,50 @@
+[
+ {
+  "id": "example-town-overrides",
+  "name": "Example Town overrides",
+  "aliases": [],
+  "kind": "override",
+  "faction": null,
+  "region": null,
+  "x": null,
+  "z": null,
+  "zone": null,
+  "verified": false,
+  "verifiedOn": null,
+  "seen": "",
+  "source": "example entry, replace",
+  "confidence": "Unknown",
+  "notes": "Fake entry that only shows the schema. Delete it.",
+  "data": {
+   "town": "Example Town",
+   "townId": "example-town",
+   "variants": [
+    {
+     "becomes": "Example Town (override) ruined",
+     "type": "Ruins",
+     "faction": "Example Faction",
+     "factionChanges": true,
+     "weight": 1,
+     "when": [
+      "Example Lord is not alive"
+     ],
+     "conditions": [
+      {
+       "state": "example lord dead",
+       "mustHold": true,
+       "text": "Example Lord is dead"
+      }
+     ],
+     "record": "0-example.mod",
+     "furtherOverrides": 0
+    }
+   ],
+   "characters": [
+    "Example Lord"
+   ],
+   "factions": [],
+   "rule": "Checked when the town's zone loads; the variant with the most conditions that all hold wins.",
+   "record": "0-example.mod"
+  }
+ }
+]

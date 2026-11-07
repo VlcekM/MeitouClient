@@ -19,6 +19,9 @@ sealed partial class PlayerInterface
 
     SelectedBuilding? selectedBuilding;
 
+    /// <summary>The selected building's instance (a level building's placement key, a site's id), null when none: the building the interior editor shows.</summary>
+    public string? SelectedBuildingKey => selectedBuilding?.Instance;
+
     /// <summary>Makes <paramref name="building"/> the selected one (null: none) and tells the simulation, which then publishes its doors.</summary>
     internal void SetBuilding(SelectedBuilding? building)
     {
@@ -36,6 +39,12 @@ sealed partial class PlayerInterface
         if (selectedBuilding is { SiteId: { } id } && !Meitou.Simulation.Production.ProductionSystem.IsNatural(id) && !session.CurrentSnapshot.Buildings.Any(s => s.Id == id)) SetBuilding(null);
         return selectedBuilding;
     }
+
+    /// <summary>
+    /// The selected building to outline (docs/game/ui-input.md "Hover outline"): its placement key, its floor (the height it stands at, where the outline stops) and the
+    /// outline's colour, white as a hovered character's; null: none.
+    /// </summary>
+    public (string Key, float Floor, Vector4 Colour)? OutlinedBuilding => selectedBuilding is { } b ? (b.Instance, b.Position.Y, WhiteOutline) : null;
 
     /// <summary>A site of the player's as a selected building (what a left click on it selects).</summary>
     SelectedBuilding SiteBuilding(Meitou.Simulation.Construction.BuildingSnapshot site) =>
@@ -60,27 +69,44 @@ sealed partial class PlayerInterface
         float limit = GroundHit(ray.Origin, ray.Direction) is { } groundPoint ? Vector3.Distance(ray.Origin, groundPoint) : 6000;
         float bestT = limit;
         SelectedBuilding? best = null;
-        if (PickSiteAt(pixel) is { } site && site.T < bestT)
+        var site = PickSiteAt(pixel);
+        if (site is { } nearest && nearest.T < bestT)
         {
-            bestT = site.T;
-            best = SiteBuilding(site.Site);
+            bestT = nearest.T;
+            best = SiteBuilding(nearest.Site);
         }
+        Meitou.Navigation.PlacedBuilding? level = null;
         if (buildHost is { } host)
             foreach (var candidate in host.Placement.StaticAlong(ray.Origin, ray.Direction, limit))
             {
                 var b = candidate.Placement;
+                if (levelHost?.IsCleared(b.Key) == true) continue;   // the level editor cleared it
                 float y = b.WorldY ?? ground(b.Position.X, b.Position.Z) + b.Position.Y;
                 var hull = candidate.Footprint.Place(b.Position, b.Rotation);
                 float? hit = candidate.Plot ? PlotT(ray, hull, limit < 6000 ? limit : null)
                     : BuildingRayT(ray, hull, candidate.Footprint.YMin, candidate.Footprint.YMax, b.BuildingId, b.Position, y, b.Rotation);
                 if (hit is not { } t || t >= bestT) continue;
                 bestT = t;
+                level = candidate;
                 var info = host.WorldInfo(b);
-                best = new(UiMode == Meitou.Data.Ui.UiMode.Meitou && info.Sells is { } sells ? sells : info.Name, info.Type, info.Owner, info.Town, null, b.Key, new Vector3(b.Position.X, y, b.Position.Z), hull, info.PublicDay, info.PublicNight, b.BuildingId, info.Destroyed);
+                best = new(info.Name, info.Type, info.Owner, info.Town, null, b.Key, new Vector3(b.Position.X, y, b.Position.Z), hull, info.PublicDay, info.PublicNight, b.BuildingId, info.Destroyed);
             }
+        if (level is { } shown && site is { } inner && inner.T > bestT && SiteShownInside(ray, shown, inner))
+        {
+            bestT = inner.T;
+            best = SiteBuilding(inner.Site);
+        }
         if (PickRockAt(pixel) is { } rock && rock.T < bestT) best = RockBuilding(rock.Rock);
         return best;
     }
+
+    /// <summary>
+    /// Whether a site met behind a level building's hit stands inside that building and the view shows it there (furniture in a bought house): the level building is tested against its
+    /// whole collision, roof included, while the original passes a building's hidden roof and upper floors in the interior view (docs/game/ui-input.md "Building picking and selection").
+    /// </summary>
+    bool SiteShownInside((Vector3 Origin, Vector3 Direction) ray, Meitou.Navigation.PlacedBuilding level, (Meitou.Simulation.Construction.BuildingSnapshot Site, float T) site) =>
+        !level.Plot && !Hidden(ray, site.T) && AboveViewedFloor?.Invoke(site.Site.Position) != true
+        && level.Footprint.Gap(level.Placement.Position, level.Placement.Rotation, new Vector2(site.Site.Position.X, site.Site.Position.Z)) == 0;
 
     /// <summary>The colour of the [PAUSED] caption (the exe's static <c>#777777</c>).</summary>
     const string PausedColour = "777777";

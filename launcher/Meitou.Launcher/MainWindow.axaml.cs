@@ -32,6 +32,8 @@ public sealed partial class MainWindow : Window
     bool languageReady, populatingLanguages;
     int modsLoad;
     bool modsReady;
+    // While ApplyOrder rebuilds the list: the mod count and the dependency check wait for the end.
+    bool checksSuspended;
     string? launcherUpdateVersion;   // the launcher release the update button offers, for a language switch
     static string Tr(string text, params object?[] args) => LauncherText.Translate(text, args);
 
@@ -57,6 +59,7 @@ public sealed partial class MainWindow : Window
         PlayVersionButton.Flyout = versionMenu;
         TrackPointer();
         ModListBox.ItemsSource = mods;
+        mods.CollectionChanged += (_, _) => { if (modsReady) ShowDependencyProblems(); };   // a drag or Alt+arrow move changes what loads first
         ModListBox.AddHandler(PointerMovedEvent, ModList_PointerMoved, RoutingStrategies.Bubble, handledEventsToo: true);
         ModListBox.AddHandler(PointerReleasedEvent, ModList_PointerReleased, RoutingStrategies.Bubble, handledEventsToo: true);
         ModListBox.AddHandler(PointerCaptureLostEvent, (_, _) => EndDrag(), RoutingStrategies.Direct | RoutingStrategies.Bubble, handledEventsToo: true);
@@ -68,13 +71,11 @@ public sealed partial class MainWindow : Window
         if (!MacSupport.MetalAvailable && config.Renderer == "metal") config.Renderer = "auto";
         RendererBox.SelectedIndex = config.Renderer switch { "metal" => 1, "vulkan" => 2, _ => 0 };
         RendererBox.SelectionChanged += Renderer_Changed;
-        UpdateRendererHint();
         MetalBudgetRow.IsVisible = OperatingSystem.IsMacOS() && MacSupport.MetalAvailable;
         MetalBudgetHighItem.IsVisible = MacSupport.CanUseHighBudget;
         if (!MacSupport.CanUseHighBudget && config.MetalMemoryBudget == 8120) config.MetalMemoryBudget = 5120;
         MetalBudgetBox.SelectedIndex = config.MetalMemoryBudget switch { 8120 => 2, 6144 => 1, _ => 0 };
         MetalBudgetBox.SelectionChanged += MetalBudget_Changed;
-        UpdateMetalBudgetHint();
         NightlyBox.IsChecked = config.IncludePrereleases;
         AutoUpdateBox.IsChecked = config.AutoUpdateLauncher;
         AutoUpdateBox.IsEnabled = updater.IsInstalled;
@@ -114,6 +115,8 @@ public sealed partial class MainWindow : Window
             LauncherUpdateButton.Content = Tr(updater.IsInstalled ? "Update to {1}" : "Get launcher {1}", version);
             TitleLauncherUpdateText.Text = Tr(updater.IsInstalled ? "Update launcher to {1}" : "Get launcher {1}", version);
         }
+        UpdateRendererHint();
+        UpdateMetalBudgetHint();
     }
 
     // ---- Language: one choice for the game (Kenshi's settings.cfg) and the launcher ----
@@ -238,7 +241,7 @@ public sealed partial class MainWindow : Window
 
     async Task LoadNewsAsync()
     {
-        NewsCount.Text = "Loading";
+        NewsCount.Text = Tr("Loading");
         var (posts, problem) = await news.FetchAsync();
         NewsPanel.Children.Clear();
         foreach (var post in posts) NewsPanel.Children.Add(PostCard(post));
@@ -342,12 +345,13 @@ public sealed partial class MainWindow : Window
     {
         bool vulkan = MacSupport.VulkanAvailable;
         string effective = RendererLabel(MacSupport.Resolve(config.Renderer));
-        RendererHint.Text = config.Renderer switch
+        string hint = config.Renderer switch
         {
-            "auto" => $"Auto: {effective}" + (vulkan ? " (Vulkan loader found)." : MacSupport.MetalAvailable ? " (no Vulkan loader)." : "."),
+            "auto" => vulkan ? "Auto: {1} (Vulkan loader found)." : MacSupport.MetalAvailable ? "Auto: {1} (no Vulkan loader)." : "Auto: {1}.",
             "metal" => MacSupport.MetalAvailable ? "Metal (native)." : "Metal is not available on this Mac; Auto uses Vulkan.",
             _ => vulkan ? "Vulkan (MoltenVK loader found)." : "Vulkan loader not found. Use Auto/Metal or install it with Setup.",
         };
+        SetText(RendererHint, Tr(hint, effective));
     }
 
     void MetalBudget_Changed(object? sender, SelectionChangedEventArgs e)
@@ -362,12 +366,12 @@ public sealed partial class MainWindow : Window
 
     void UpdateMetalBudgetHint()
     {
-        MetalBudgetHint.Text = config.MetalMemoryBudget switch
+        SetText(MetalBudgetHint, config.MetalMemoryBudget switch
         {
             8120 => "High: keeps the most textures, terrain and objects resident. Best on a 16 GB-or-larger Mac with other memory-heavy apps closed.",
             6144 => "Balanced: more resident detail than Safe, with some headroom for macOS and other apps.",
             _ => "Safe: the conservative default; the guard shortens ranges and evicts caches sooner.",
-        };
+        });
     }
 
     static string RendererLabel(string renderer) => renderer == "metal" ? "Metal" : "Vulkan";
@@ -421,11 +425,11 @@ public sealed partial class MainWindow : Window
 
     async void BrowseInstall_Click(object? sender, RoutedEventArgs e)
     {
-        if (download is not null) { InstallStatus.Text = "Wait for the download to finish first."; return; }
+        if (download is not null) { InstallStatus.Text = Tr("Wait for the download to finish first."); return; }
         var folders = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions { Title = "Install folder" });
         if (folders is not [var folder] || folder.TryGetLocalPath() is not { } path || path == LauncherConfig.InstallDirectory) return;
         var previous = LauncherConfig.InstallDirectory;
-        InstallStatus.Text = "Moving installed versions…";
+        InstallStatus.Text = Tr("Moving installed versions…");
         try { await Task.Run(() => Releases.MoveInstalled(previous, path)); }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -436,7 +440,7 @@ public sealed partial class MainWindow : Window
         config.InstallFolder = Path.GetFullPath(path) == Path.GetFullPath(LauncherConfig.DataDirectory) ? null : path;
         config.Save();
         InstallPathBox.Text = LauncherConfig.InstallDirectory;
-        InstallStatus.Text = "Where versions are installed; changing it moves them.";
+        InstallStatus.Text = Tr("Where versions are installed; changing it moves them.");
         RefreshInstalled();
         ShowReleases();
     }
@@ -477,15 +481,15 @@ public sealed partial class MainWindow : Window
         ModsEmpty.IsVisible = false;
         ModCount.Text = Tr("Loading");
         var gameInstall = install;
-        List<ModEntry> entries;
+        List<(ModEntry Entry, CodeModEntry Code)> entries;
         try
         {
             entries = gameInstall is null ? [] : await Task.Run(() =>
             {
                 var order = ModList.LauncherOrder(gameInstall, ModList.Discover(gameInstall));
-                // The rows show each mod's author and plugin note: read them here too, not on the UI thread.
-                foreach (var entry in order) { _ = entry.Mod.Header; _ = entry.Mod.HasNativePlugin; _ = entry.Mod.HasCode; }
-                return order;
+                // The rows show each mod's author, plugin note and code-mod dependencies: read them here too, not on the UI thread.
+                foreach (var entry in order) { _ = entry.Mod.Header; _ = entry.Mod.HasNativePlugin; }
+                return order.Select(e => (e, CodeModDependencies.ReadEntry(e.Mod, e.Enabled))).ToList();
             });
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
@@ -497,8 +501,9 @@ public sealed partial class MainWindow : Window
             return;
         }
         if (load != modsLoad) return;
-        foreach (var entry in entries) mods.Add(new ModRow(entry.Mod, entry.Enabled));
-        foreach (var row in mods) row.PropertyChanged += (_, _) => ShowModCount();
+        foreach (var (entry, code) in entries) mods.Add(new ModRow(entry.Mod, entry.Enabled, code));
+        // Only a toggle changes the count and the checks; the checks' own Notes changes must not start them again.
+        foreach (var row in mods) row.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(ModRow.Enabled)) ShowModCount(); };
         modsReady = true;
         ShowModCount();
         ModsEmpty.IsVisible = mods.Count == 0;
@@ -506,7 +511,75 @@ public sealed partial class MainWindow : Window
             : "No mods found in Kenshi's mods folder or among its Steam workshop items.");
     }
 
-    void ShowModCount() => ModCount.Text = mods.Count == 0 ? Tr("No mods found") : Tr("{1} of {2} enabled", mods.Count(m => m.Enabled), mods.Count);
+    void ShowModCount()
+    {
+        if (checksSuspended) return;
+        ModCount.Text = mods.Count == 0 ? Tr("No mods found") : Tr("{1} of {2} enabled", mods.Count(m => m.Enabled), mods.Count);
+        ShowDependencyProblems();
+    }
+
+    // The code-mod rules the game applies at start that need no code (docs/modding-dependencies.md "Launcher"), shown on each row as the list
+    // changes. A preliminary check: DLLs and initialization are tried only by the game. Mods set to data only cannot serve as dependencies.
+    void ShowDependencyProblems()
+    {
+        if (checksSuspended) return;
+        var problems = CodeModChecks.Check(DependencyEntries(), RunsCode());
+        foreach (var row in mods) row.DependencyProblems = problems.TryGetValue(row.Name, out var lines) ? lines : [];
+    }
+
+    List<CodeModEntry> DependencyEntries() =>
+        [.. mods.Select(m => m.Code with { Enabled = m.Enabled, HeaderDependencies = m.Mod.Header?.Dependencies })];
+
+    // The mods that may run code at start: all but those set to data only and not allowed since (undecided ones are asked at Play).
+    HashSet<string> RunsCode()
+    {
+        var trusted = game.GetStrings(TrustedCodeModsKey).ToHashSet(StringComparer.Ordinal);
+        var dataOnly = config.DataOnlyCodeMods.Where(n => !trusted.Contains(n)).ToHashSet(StringComparer.Ordinal);
+        return mods.Select(m => m.Name).Where(n => !dataOnly.Contains(n)).ToHashSet(StringComparer.Ordinal);
+    }
+
+    // One graph of the enabled mods' code and .mod header dependencies; the proposed order is shown and applied only when accepted, and is not
+    // saved until Save or Play. A contradiction is shown and changes nothing.
+    async void ArrangeMods_Click(object? sender, RoutedEventArgs e)
+    {
+        if (!ModsReady()) return;
+        var result = CodeModDependencies.Arrange(DependencyEntries());
+        if (result.HasCycle)
+        {
+            ShowArrangeCycle(result.Cycle);
+            return;
+        }
+        var moves = ArrangeMoves(result.Order);
+        if (moves.Count == 0)
+        {
+            Status(Tr("The mod order already meets every dependency."));
+            return;
+        }
+        if (!await AskAsync(Tr("Arrange mods"), Tr("Proposed moves:") + "\n" + string.Join("\n", moves), Tr("Apply"), Tr("Cancel"))) return;
+        var enabled = mods.ToDictionary(m => m.Name, m => m.Enabled, StringComparer.Ordinal);
+        ApplyOrder(result.Order.Select(name => (name, enabled[name])));
+        int left = mods.Count(m => m.DependencyProblems.Count > 0);
+        Status(left == 0 ? Tr("Mods arranged by their dependencies (not saved yet).")
+            : Tr("Mods arranged by their dependencies (not saved yet); {1} still need attention.", left));
+    }
+
+    void ShowArrangeCycle(IReadOnlyList<OrderConstraint> cycle)
+    {
+        string lines = string.Join("\n", cycle.Select(c => Tr("{1} after {2} ({3})", c.After, c.Before, c.Why)));
+        string text = Tr("These dependencies contradict each other, so nothing was moved:") + "\n" + lines;
+        _ = ChooseAsync(Tr("Arrange mods"), [Wrapped(text)], [(Tr("OK"), true)], cancel: false);
+    }
+
+    // One line per mod whose position changes, in the new order: "3 → 1  Framework"; long lists are cut.
+    List<string> ArrangeMoves(IReadOnlyList<string> order)
+    {
+        const int shown = 12;
+        var before = mods.Select((m, i) => (m.Name, i)).ToDictionary(p => p.Name, p => p.i, StringComparer.Ordinal);
+        var moves = order.Select((name, i) => (name, from: before[name], to: i)).Where(m => m.from != m.to).ToList();
+        var lines = moves.Take(shown).Select(m => $"{m.from + 1} → {m.to + 1}  {m.name}").ToList();
+        if (moves.Count > shown) lines.Add(Tr("and {1} more", moves.Count - shown));
+        return lines;
+    }
 
     // False while the list is loading or after it could not be read; Status says why.
     bool ModsReady()
@@ -661,22 +734,32 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Puts the named mods first, in this order and with these flags, and the others after them, disabled; answers the enabled names not
-    /// on disk.
+    /// Puts the named mods first, in this order and with these flags, and the others after them, disabled; answers the enabled names not on disk.
     /// </summary>
+    /// <remarks>
+    /// The count and the dependency check are held while rows move and run once at the end, synchronously (Arrange reads the result).
+    /// </remarks>
     List<string> ApplyOrder(IEnumerable<(string Name, bool Enabled)> order)
     {
         var byName = mods.ToDictionary(m => m.Name, StringComparer.Ordinal);
         var ordered = new List<ModRow>();
         var missing = new List<string>();
-        foreach (var (name, enabled) in order)
+        checksSuspended = true;
+        try
         {
-            if (byName.Remove(name, out var row)) { row.Enabled = enabled; ordered.Add(row); }
-            else if (enabled) missing.Add(name);
+            foreach (var (name, enabled) in order)
+            {
+                if (byName.Remove(name, out var row)) { row.Enabled = enabled; ordered.Add(row); }
+                else if (enabled) missing.Add(name);
+            }
+            foreach (var row in mods.Where(m => byName.ContainsKey(m.Name))) { row.Enabled = false; ordered.Add(row); }
+            mods.Clear();
+            foreach (var row in ordered) mods.Add(row);
         }
-        foreach (var row in mods.Where(m => byName.ContainsKey(m.Name))) { row.Enabled = false; ordered.Add(row); }
-        mods.Clear();
-        foreach (var row in ordered) mods.Add(row);
+        finally
+        {
+            checksSuspended = false;
+        }
         ShowModCount();
         return missing;
     }

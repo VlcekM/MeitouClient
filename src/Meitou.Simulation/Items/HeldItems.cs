@@ -312,12 +312,16 @@ public sealed partial class PlayerSystem
             if (item.Width > target.Columns || item.Height > target.Rows) { ReturnHeldItem(world); return; }
             x = Math.Clamp(place.X, 0, target.Columns - item.Width);
             y = Math.Clamp(place.Y, 0, target.Rows - item.Height);
+            // On a shop's greyed cells, or across two of its containers: the nearest free cell of a container instead (engine choice, #349).
             if (!target.Grid.InRegion(x, y, item.Width, item.Height))
             {
-                // On a shop's greyed cells, or across two of its containers (engine message).
-                world.Post("No room for that item.");
-                ReturnHeldItem(world);
-                return;
+                if (NearestFreeInRegion(target, item, x, y) is not var (fx, fy))
+                {
+                    world.Post("No room for that item.");
+                    ReturnHeldItem(world);
+                    return;
+                }
+                (x, y) = (fx, fy);
             }
             under = target.Grid.Items.Where(i => i.Section == target.Section && x < i.X + i.Width && i.X < x + item.Width && y < i.Y + i.Height && i.Y < y + item.Height).ToList();
         }
@@ -390,6 +394,27 @@ public sealed partial class PlayerSystem
             if (changes) LeftLoot(world, held, death);
             Touched(world, held, target);
         }
+    }
+
+    /// <summary>The free cell nearest (<paramref name="x"/>, <paramref name="y"/>) where <paramref name="item"/> lies inside one of the grid's regions; null when none has room.</summary>
+    static (int X, int Y)? NearestFreeInRegion(Target target, ItemInstance item, int x, int y)
+    {
+        (int X, int Y)? best = null;
+        int bestDistance = int.MaxValue;
+        for (int cy = 0; cy + item.Height <= target.Rows; cy++)
+        {
+            for (int cx = 0; cx + item.Width <= target.Columns; cx++)
+            {
+                int distance = (cx - x) * (cx - x) + (cy - y) * (cy - y);
+                if (distance >= bestDistance || !target.Grid.InRegion(cx, cy, item.Width, item.Height)) continue;
+
+                bool taken = target.Grid.Items.Any(i => i.Section == target.Section && cx < i.X + i.Width && i.X < cx + item.Width && cy < i.Y + i.Height && i.Y < cy + item.Height);
+                if (taken) continue;
+
+                (best, bestDistance) = ((cx, cy), distance);
+            }
+        }
+        return best;
     }
 
     /// <summary>Puts an item into the target's section at (<paramref name="x"/>, <paramref name="y"/>); a prosthetic is fitted on its stump.</summary>
@@ -587,12 +612,16 @@ public sealed partial class PlayerSystem
         return true;
     }
 
-    /// <summary>Each tick: the held item goes back when its window is gone (the loot, trade or container closed, its character gone) or its holder is down or gone.</summary>
+    /// <summary>
+    /// Each tick: the held item goes back when its window is gone (the loot, trade or container closed, its character gone) or its holder is gone, or down while working another's
+    /// window. A downed player character's own items still move (<b>Observed</b> in the original by a player, #329).
+    /// </summary>
     void KeepHeld(World world)
     {
         if (world.Player.Held is not { } held) return;
         var table = world.Characters;
-        bool keep = table.TryResolveNext(held.Actor, out int a) && table.Cold(a) is { } actor && actor.Medical is not { Incapacitated: true } && held.From.Holder switch
+        bool own = held.From == ItemOwner.Of(held.Actor);
+        bool keep = table.TryResolveNext(held.Actor, out int a) && table.Cold(a) is { } actor && (own || actor.Medical is not { Incapacitated: true }) && held.From.Holder switch
         {
             ItemHolder.Character => CharacterWindow(world, held.From.Character, held.Actor, out _) is not null,
             ItemHolder.Stock => world.SystemOf<Trading.TradeSystem>()?.OpenStock(world, out _) is not null,
@@ -604,7 +633,7 @@ public sealed partial class PlayerSystem
     /// <summary>
     /// A right click on an item of a player character's own window (<c>FUN_140714a20</c>, <b>Observed</b>), one unit (all with <see cref="QuickMoveItem.All"/>, repeated until a move fails):
     /// money becomes cats; a worn item goes to the main grid (else the open bag); a grid item to the slot that takes it, else a prosthetic onto its stump, else from the main grid into the open
-    /// bag. A blueprint of the player's faction is read (<see cref="Production.ProductionSystem.Learn"/>) and used up when it taught something; map items are <see cref="ReadMapItem"/>.
+    /// bag, and a bag item to the main grid. A blueprint of the player's faction is read (<see cref="Production.ProductionSystem.Learn"/>) and used up when it taught something; map items are <see cref="ReadMapItem"/>.
     /// </summary>
     void QuickMove(World world, QuickMoveItem quick)
     {
@@ -660,6 +689,8 @@ public sealed partial class PlayerSystem
                 (unit.LimbDamage, unit.LimbWear, unit.LimbStun) = (0, 0, 0);
                 return true;
             }
+            if (from == "backpack_content") return root.AddTo("main", unit);   // out of the open bag into the main grid
+
             return from == "main" && bag is not null && bag.AddTo("backpack_content", unit);
         }
         int want = quick.All ? item.Quantity : 1, moved = 0;

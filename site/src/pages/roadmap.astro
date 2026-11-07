@@ -11,6 +11,14 @@ import { history } from '../data/history';
 import { recheckBefore, reportBuilds } from '../data/releases';
 import { reports } from '../data/reports';
 
+// Entries of each "Recently fixed" list shown before the toggle; the rest sit in a <details> (all shown to a reader without a script too).
+const FIXED_SHOWN = 10;
+// "Recently fixed" is one list: the fixed-on-master and the seen-in-play entries together, newest close date first (a closed
+// issue's close date, or a fix's merge date); entries without a date come last. Entries from the seen-in-play data get a badge.
+const shortTitle = (t: string) => t.split(/[:;(]/)[0].trim();
+const recentFixes = [...fixedSeen.map((f) => ({ ...f, seen: true })), ...fixedUnseen.map((f) => ({ ...f, seen: false }))]
+  .sort((x, y) => (y.closed ?? '').localeCompare(x.closed ?? ''));
+
 const oses: Os[] = ['win', 'linux', 'mac'];
 const osShort = { win: 'Win', linux: 'Linux', mac: 'macOS' } as const;
 const mark = { works: '✓', untested: '?', wip: '~', bug: '!', missing: '✗', na: '–' } as const;
@@ -164,18 +172,14 @@ const reportConfig = JSON.stringify({ url: reports.url.replace(/\/$/, ''), siteK
 
     <section aria-labelledby="fixed-h">
       <h2 id="fixed-h">Recently fixed</h2>
-      <div class="cols">
-        <div>
-          <h3>Fixed on master</h3>
-          <p class="meta">Not yet seen in play.</p>
-          <ul class="fixlist">{fixedUnseen.map((f) => <li><span class="tag">{refUrl(f.id) ? <a href={refUrl(f.id)}>{f.id}</a> : f.id || '—'}</span><span>{f.text}</span></li>)}</ul>
-        </div>
-        <div>
-          <h3>Fixed and seen in play</h3>
-          <p class="meta">Merged and checked in the game.</p>
-          <ul class="fixlist">{fixedSeen.map((f) => <li><span class="tag">{refUrl(f.id) ? <a href={refUrl(f.id)}>{f.id}</a> : f.id || '—'}</span><span>{f.text}</span></li>)}</ul>
-        </div>
-      </div>
+      <p class="meta">Newest first, by the date the issue was closed or the fix merged. Entries marked "seen in play" were checked in the game; the others are fixed on master and not yet seen in play.</p>
+      <ul class="fixlist">{recentFixes.slice(0, FIXED_SHOWN).map((f) => <li><span class="tag">{refUrl(f.id) ? <a href={refUrl(f.id)}>{f.id}</a> : f.id || '—'}</span><span>{shortTitle(f.text)}{f.seen && <span class="seen"> seen in play</span>}</span><span class="when">{f.closed ?? ''}</span></li>)}</ul>
+      {recentFixes.length > FIXED_SHOWN && (
+        <details class="fixmore">
+          <summary><span class="more">Show all {recentFixes.length}</span><span class="less">Show fewer</span></summary>
+          <ul class="fixlist">{recentFixes.slice(FIXED_SHOWN).map((f) => <li><span class="tag">{refUrl(f.id) ? <a href={refUrl(f.id)}>{f.id}</a> : f.id || '—'}</span><span>{shortTitle(f.text)}{f.seen && <span class="seen"> seen in play</span>}</span><span class="when">{f.closed ?? ''}</span></li>)}</ul>
+        </details>
+      )}
     </section>
 
     {(snaps.length > 1 || history.changes.length > 0) && (
@@ -547,8 +551,14 @@ const reportConfig = JSON.stringify({ url: reports.url.replace(/\/$/, ''), siteK
   .cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px; }
   .cols > div { display: grid; gap: 10px; min-width: 0; align-content: start; }
   .fixlist { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; }
-  .fixlist li { display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: baseline; }
+  .fixlist li { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: baseline; }
+  .fixlist .when { font-size: 0.85em; opacity: 0.7; white-space: nowrap; }
+  .fixlist .seen { font-size: 0.8em; opacity: 0.8; border: 1px solid currentColor; border-radius: 999px; padding: 0 6px; margin-left: 6px; white-space: nowrap; }
   .fixlist li > span:last-child { min-width: 0; }
+  .fixmore { margin-top: 8px; }
+  .fixmore > summary { cursor: pointer; color: var(--accent, inherit); margin-bottom: 8px; }
+  .fixmore .less, .fixmore[open] .more { display: none; }
+  .fixmore[open] .less { display: inline; }
   .tag { font-family: var(--font-mono); font-size: .78rem; color: var(--muted); white-space: nowrap; }
 
   /* Back to top: bottom right. */

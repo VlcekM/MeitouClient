@@ -34,6 +34,10 @@ sealed partial class GameHost
             // A new world (a loaded save, a new game): the old world's sites go, the new one's first snapshot carries all of its own.
             ForgetBuildings();
             buildingsWorld = session.World;
+            // The old world's level edits leave the level data, the loaded save's own (if any) are put back.
+            LevelEditsFollowWorld();
+            if (pendingLevelEdits is { Count: > 0 } edits) ReplayLevelEdits(edits);
+            pendingLevelEdits = null;
         }
         var snapshot = session.CurrentSnapshot;
         UpdateRuins(snapshot);
@@ -227,6 +231,7 @@ sealed partial class GameHost
         IReadOnlyList<Meitou.Data.Gameplay.Construction.PlacementTown>? towns = null;
         // Per level building of a town: the town, its owner's name and where it sits in the town's buildings (a relaid one takes the same place).
         Dictionary<(Meitou.Data.World.ZoneCoordinate, string), (string Town, string? Owner, int Site, int Index)>? townOf = null;
+        int townOfRevision = -1;   // the towns' building lists change when the level editor places or clears a building (PopulationData.BuildingsRevision)
         var pickable = new Dictionary<string, bool>(StringComparer.Ordinal);
         // Resource and node buildings are not selectable objects (TownBuildings leaves them out too).
         bool Pickable(string record) => pickable.TryGetValue(record, out bool known) ? known
@@ -270,6 +275,7 @@ sealed partial class GameHost
                 PartBounds = footprints.PartBounds,
                 LinkedAround = (centre, radius) => footprints.LinkedAround(centre, radius, (x, z) => ActiveGround((float)x, (float)z)),
                 StaticAround = footprints.StaticAround,
+                StaticPlacementsAround = (centre, radius) => footprints.PlacementsAround(centre, radius).Where(b => Pickable(b.BuildingId)),
                 StaticAlong = (origin, direction, length) => footprints.Along(origin, direction, length).Where(b => Pickable(b.Placement.BuildingId)),
                 // The movement pick's floors up to the viewed one: the build window's floor arrows choose the floor the ghost stands on.
                 FloorAlong = (origin, direction, length) => gpu.Objects?.FloorHit(origin, direction, viewedFloor, length) is { } hit
@@ -279,8 +285,9 @@ sealed partial class GameHost
             WorldInfo = placement =>
             {
                 var (zone, instance) = (placement.Zone, placement.InstanceId);
-                if (townOf is null && popData is { } d)
+                if ((townOf is null || townOfRevision != popData?.BuildingsRevision) && popData is { } d)
                 {
+                    townOfRevision = d.BuildingsRevision;
                     townOf = [];
                     foreach (var site in d.Sites)
                     {
@@ -300,9 +307,9 @@ sealed partial class GameHost
                 var building = info is { } at && popData is { } live && at.Site < live.Sites.Count && at.Index < live.Sites[at.Site].Buildings.Count
                     ? live.Sites[at.Site].Buildings[at.Index] : null;
                 var saved = session.World.Fixtures.Saved?.GetValueOrDefault(placement.Key);
-                var (name, type, sells) = WorldBuildingName(db, placement, state, saved, building?.Key == placement.Key ? building : null);
+                var (name, type) = WorldBuildingName(db, placement, state, saved, building?.Key == placement.Key ? building : null);
                 var (town, owner) = info is { } t ? (t.Town, t.Owner) : (null, null);
-                return new(name, type, town, owner, state?.GetBool("is public day") ?? false, state?.GetBool("is public night") ?? false, sells,
+                return new(name, type, town, owner, state?.GetBool("is public day") ?? false, state?.GetBool("is public night") ?? false,
                     shownRuins.TryGetValue(placement.Key, out var ruin) ? ruin.Destroyed : placement.DestroyedOverride ?? state?.GetBool("destroyed") ?? false);
             },
             Towns = () => towns ??= popData is { } d ? [.. d.Sites.Select(s => new Meitou.Data.Gameplay.Construction.PlacementTown(s.Town, new(s.Position.X, s.Position.Z)))] : [],
@@ -312,11 +319,11 @@ sealed partial class GameHost
     }
 
     /// <summary>
-    /// A world building's name, its <c>Type:</c> (the record's name when that differs) and, for a shop named only after its layout, what it sells (the Meitou UI's name):
-    /// read from the naming a town override's housing gave <paramref name="building"/>, else <paramref name="saved"/>, a loaded save's state, else <paramref name="state"/>,
-    /// the level state the boot's housing named (ResidentRuins).
+    /// A world building's name and its <c>Type:</c> (the record's name when that differs), as the game names it in both UI modes: read from the naming a town override's
+    /// housing gave <paramref name="building"/>, else <paramref name="saved"/>, a loaded save's state, else <paramref name="state"/>, the level state the boot's housing
+    /// named (ResidentRuins).
     /// </summary>
-    static (string Name, string? Type, string? Sells) WorldBuildingName(Meitou.Data.GameDatabase db, BuildingPlacement placement,
+    static (string Name, string? Type) WorldBuildingName(Meitou.Data.GameDatabase db, BuildingPlacement placement,
         Meitou.Data.GameRecord? state, Meitou.Data.Fcs.FcsRecord? saved, TownBuilding? building)
     {
         string StateText(string key) => building?.Naming is { } naming && key is ResidentRuins.NameKey or ResidentRuins.SquadTemplateKey
@@ -324,22 +331,16 @@ sealed partial class GameHost
             : saved is not null && saved.Strings.TryGetValue(key, out var text) ? text : state?.GetString(key) ?? "";
         string recordName = db.Find(placement.BuildingId)?.Name ?? placement.BuildingId;
 
-        // The squad template that runs it names a special building ("The Dancing Skeleton") and, for a trader, lists what it sells.
+        // The squad template that runs it names a special building ("The Dancing Skeleton").
         var squad = StateText(ResidentRuins.SquadTemplateKey) is { Length: > 0 } squadId ? db.Find(squadId) : null;
         string name = squad?.GetString("building name") is { Length: > 0 } squadName ? squadName
             : StateText(ResidentRuins.NameKey) is { Length: > 0 } own ? own : recordName;
-        string? type = name != recordName ? recordName : null;
-
-        // A shop whose state only carries its layout's generic name ("Shop", "Big Shop"): the Meitou UI calls it after what it sells.
-        string interior = building?.LayoutName(exterior: false) ?? placement.InteriorLayout ?? StateText(ResidentRuins.InteriorKey);
-        string? sells = squad is { } s && s.GetBool("is trader") && interior.Contains("Shop", StringComparison.Ordinal) && name == interior
-            && s.GetReferences("vendors").FirstOrDefault().TargetStringId is { } vendor && db.Find(vendor)?.Name is { Length: > 0 } list
-            ? char.ToUpperInvariant(list[0]) + list[1..] : null;
-        return (name, type, sells);
+        return (name, name != recordName ? recordName : null);
     }
 
     // A level building's instance id, owning faction id (its state's owner, else its town's faction) and town building, by placement key; made on first use.
     Dictionary<string, (string Instance, string? Owner, TownBuilding Building)>? levelOwners;
+    int levelOwnersRevision = -1;
 
     /// <summary>
     /// The floor a ghost stands on in <paramref name="room"/>: a player site's, else a level building's with what <c>PlacementRules.MayBuildIn</c> reads (whether the player's
@@ -362,8 +363,9 @@ sealed partial class GameHost
 
     Dictionary<string, (string Instance, string? Owner, TownBuilding Building)>? LevelOwners()
     {
-        if (levelOwners is not null || popData is not { } d) return levelOwners;
+        if (popData is not { } d || levelOwners is not null && levelOwnersRevision == d.BuildingsRevision) return levelOwners;
 
+        levelOwnersRevision = d.BuildingsRevision;
         levelOwners = new(StringComparer.Ordinal);
         foreach (var site in d.Sites)
         {

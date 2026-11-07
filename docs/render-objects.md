@@ -68,6 +68,9 @@ a texture is unloaded after 20 s unused.
 Under `VramGuard` pressure no texture is refined, but one that something draws still loads *lean*: top side at most 256
 (`WorldTextureCache.LeanSize`), while the use stays under 94.5% of the budget (`AllowsLean`). It is refined once the pressure ends. Before this, a
 6 GB laptop (3.5 GB budget, never back under 80%) drew characters with no texture at all (**Observed**, issue #135 log).
+Zones within 3000 of the camera (`VramGuard.NearReach`) are still laid out and their object meshes decoded under pressure, also while the use stays under
+94.5% (`StreamsNear`); farther ones wait for the pressure to end. Before this, a 4 GB laptop (3.4 GB budget, never back under 80%) never loaded the town the
+start put it in (**Observed**, issue #336 log).
 An allocation the driver refuses is retried after the spare blocks are freed, then (render thread only) after the submitted frames are waited for,
 their deferred frees run and the empty blocks are given back (`GpuAllocator.Reclaim`). A refusal that survives puts the guard into pressure.
 The post targets of a resize can't use that path (the old ones are released in the same frame), so when they can't be made the frame draws no world

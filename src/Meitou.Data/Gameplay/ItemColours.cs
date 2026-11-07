@@ -16,8 +16,8 @@ public static class ItemColours
     public static GameRecord? Scheme(GameDatabase db, GameRecord? character, GameRecord? faction) => Of(db, character) ?? Of(db, faction);
 
     /// <summary>
-    /// The colour a worn item shows: its own when set, else the wearer's scheme; none for an ARMOUR or CONTAINER whose <c>dont colorise</c> is true (fcs.def defines it for
-    /// those two, default true; every base record stores it).
+    /// The colour a worn item or fitted limb shows: its own when set, else the wearer's scheme; none for an ARMOUR or CONTAINER whose <c>dont colorise</c> is true (fcs.def
+    /// defines it for those two, default true; every base record stores it). A LIMB_REPLACEMENT is never exempt.
     /// </summary>
     public static GameRecord? Shown(GameDatabase db, GameRecord item, GameRecord? own, GameRecord? character, GameRecord? faction)
     {

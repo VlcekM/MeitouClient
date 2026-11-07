@@ -301,7 +301,8 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
             if (!combat || a >= 0 && b >= 0) return 0;
             return sight.BuildingOf(b >= 0 ? target : listener) is { } building && !world.Fixtures.HasOpenDoor(building) ? 0.25f : 0.5f;
         }
-        if (a >= 0 && sight.BuildingOf(listener) is { } same && sight.FloorAt(same, listenerAt) is var fa && sight.FloorAt(same, targetAt) is var fb && fa != fb)
+        // Each character's floor is kept by the sight map (the same last-tick positions): asking the building for both at every pair in a crowd was most of a tick.
+        if (a >= 0 && sight.FloorOf(listener, listenerAt) is var fa && sight.FloorOf(target, targetAt) is var fb && fa != fb)
             return combat && Math.Abs(fa - fb) <= 1 ? 1 : 0;
         sure = combat;
         return 1;
@@ -668,8 +669,9 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
             // The player's characters attack on sight with the job or Hold's goal (offered to the decision step); an NPC decides by its own goals in the chooser.
             bool targets = looks && cold.IsPlayer && (HuntsEnemies(cold) || HoldsGround(cold));
             var scan = NewScan(world, i, cold, war, MathF.Max(0, RangeOf(cold, Settings.SightRange)), effects);
-            // A carried or unconscious character only lets its senses fade (FUN_1405d00b0 runs FUN_14050c7c0 instead of the AI update when the get-up test FUN_140598c20 fails): no gather, no sighting.
-            if (!cold.CarriedBy.IsNone || cold.Medical.Incapacitated) { Fade(ref scan); continue; }
+            // A carried or knocked-out character only lets its senses fade (FUN_1405d00b0 runs FUN_14050c7c0 instead of the AI update when the get-up test FUN_140598c20 fails): no gather, no
+            // sighting. One medically awake but lying (playing dead, or its knockout about to end) looks, so the get-up test reads its enemies and allies (docs/game/ragdolls.md "Playing dead").
+            if (!cold.CarriedBy.IsNone || cold.Medical.Incapacitated && !AwakeLying(world, i, cold, every)) { Fade(ref scan); continue; }
             // Every awake NPC keeps spot meters on the sneakers it sees, not only those it would fight (the original's per-looker SpottingPeopleMgr): they feed the crime
             // witnesses, the stealth knock-out and the sneaker's arrows.
             bool picks = targets || looks && cold.Ai is not null;
@@ -679,6 +681,7 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
             scan.Far = picks || cold.InCombat || scan.FullTags;
             Look(ref scan);
             slots[i].Heard = scan.Heard;
+            if (cold.Medical.Incapacitated) continue;   // lying: senses only, no fight to pick
             if (targets)
             {
                 Pick(ref scan);
@@ -690,6 +693,17 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
                 effects.Emit(i, scan.NewEnemy, SightEffect, Vector3.Distance(prev[i].Position, prev[scan.NewEnemy].Position));
             if (scan.Meters && (scan.Spots is not null || scan.Sightings!.Count > 0)) slots[i].Spots = AdvanceSpots(scan.Spots, scan.Sightings!, every * world.TickSeconds, table);
         }
+    }
+
+    /// <summary>
+    /// A downed character the original's sense gate lets look (<c>FUN_1405d00b0</c>: the AI update runs once the medical get-up test passes): one playing dead, or (engine choice, as
+    /// <see cref="BodySystem.Schedule"/> decides on the waking tick from the last look) one whose knockout ends within two looks.
+    /// </summary>
+    static bool AwakeLying(World world, int slot, CharacterCold cold, int every)
+    {
+        var medical = cold.Medical!;
+        if (medical.Dead || cold.Animal is not null) return false;
+        return medical.PlayingDead || medical.WakesWithin((2 * every + world.StepTicks(slot)) * world.TickSeconds + cold.MedicalBudgetSeconds);
     }
 
     Scan NewScan(World world, int i, CharacterCold cold, WarTargets war, float outdoor, EffectBuffer? effects, bool keepSenses = true, FoeFinder finder = FoeFinder.Enemies)

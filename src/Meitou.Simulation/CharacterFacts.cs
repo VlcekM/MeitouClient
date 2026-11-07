@@ -106,6 +106,22 @@ public static class CharacterFacts
     /// <summary><c>FUN_140855960</c> with its flag clear (docs/game/ai-tasks.md "Combat goals"): <paramref name="looker"/> knows <paramref name="who"/>: itself, or an entry of its senses (a world without senses knows everyone).</summary>
     public static bool Knows(World world, int looker, CharacterId who) => who.Slot == looker || Senses(world, looker) is not { } b || b.Knows(who) || world.SystemOf<AggroSystem>() is null;
 
+    /// <summary>
+    /// Whether <paramref name="target"/> is on the looker's sensed list, as the original's finders that walk it (<c>FUN_140853960</c>) take their candidates: an entry of its senses, with
+    /// <paramref name="now"/> only one seen or heard at the last look. The capped block (<see cref="SenseBlock.Cap"/>) may lack a character the original's unbounded map holds, so one it
+    /// lacks is judged by the shared sight test (<see cref="SightMap.Sees"/>: same building or outdoors, unless either stands on top; engine choice). True without senses.
+    /// </summary>
+    public static bool Perceives(World world, int looker, int target, bool now = false)
+    {
+        var table = world.Characters;
+        if (Senses(world, looker) is not { } block) return true;
+        if (block.TryGet(table.IdOf(target), out var entry)) return !now || entry.Now;
+        if (table.Cold(looker) is not { } cold) return false;
+
+        float outdoor = AggroSystem.RangeOf(cold, AggroSystem.OutdoorSight);
+        return world.Sight.Sees(looker, target, table.Next[looker].Position, table.Next[target].Position, outdoor) > 0;
+    }
+
     /// <summary>The planner's <c>iAmBeingMeleeAttacked immediate</c> (<c>+0x2b0</c>, <c>FUN_1404378f0</c>, <see cref="CombatSystem.ImmediateThreat"/>).</summary>
     internal static bool ImmediateThreat(CombatSystem combat, World world, int self) => combat.ImmediateThreat(world, self);
 }

@@ -132,7 +132,7 @@ NPCs never without a camera. Not modelled: an NPC engaged with a player (always 
 
 ### Part tick (`FUN_14064f5c0`, **Verified** decompile)
 
-In order, per part: the hit multiplier falls 0.01 a second while h >= 0 (reset to 1 below). Self healing (RACE, conscious, alive,
+In order, per part: the hit multiplier falls 0.01 a second while h >= 0 (reset to 1 below). Self healing (RACE `self healing`: in the base data only animal races and the robot spiders, no playable race, **Verified** merged data probe; conscious, alive,
 h - s < M - b) adds 0.05 dt `heal rate mult` R 0.4 to b and skips degeneration that tick; otherwise, while h < M and h > -3M,
 h -= 0.05 dt `bodypart degeneration rate` ChanceOfDeath degMult D 1.2 with D = clamp(((M-h-b)100/M - 20)/70, 0, 1), quartered
 when h + b > 0; degMult lerps 1.7..0.03 by toughness and is 0 for a non-vital robotic part (robot race or limb replacement)
@@ -183,19 +183,22 @@ Death: vital h-s<-M, blood<=-capacity or hunger<=0. Preserve KO/coma/death disti
   conscious character. A part going under 0 in the tick starts nothing.
 - `reassessCollapseMode` (`140649320`) rebuilds `+0x161` each update: set by a hunger KO, a KO timer > 0, a vital part at
   collapse stage 2, or blood: for a character unconscious before the update, blood < 0 (and it sets `+0x163`); for a
-  conscious one (or on the update after a fresh limb loss, `hasFreshlySeveredALimb`), blood < 0, or < -25 once `+0x163`.
+  conscious one (or with a fresh stump, below), blood < 0, or < -25 once `+0x163`.
   `+0x163` (`bloodlossTrauma`, KenshiLib 1ce4a16; medical bytes `+0x160 crippled`, `+0x161 unconcious`, `+0x162 sub50KO`, `+0x165 rightArmOk`,
   `+0x166 leftArmOk`) clears in `medicalUpdate` only on an update that finds blood below capacity and then above 25 (**Verified**, decompile of
   `FUN_140652000`: the test sits inside the recovery branch). Natural recovery passes through that window; blood written straight to capacity does not,
-  which is why issue #82 saw the HUD's "Blood loss trauma" term 142 s after the blood was back. So a character wakes once all of those are clear.
-  Meitou clears the flag whenever blood is above 25 (engine choice: the quirk needs a direct write).
+  which is why issue #82 saw the HUD's "Blood loss trauma" term 142 s after the blood was back; the test runs while bleeding too. So a character wakes once all of those are clear.
+  Meitou: the same, in `TickBlood` (and the off-screen `Recover`).
+- Fresh limb loss (**Verified**, decompile of `FUN_14064da70`, `FUN_140645350`): each medical update first checks the four limb slots for a stump
+  (limb state 1) whose h - s is under -M (M from the stump's base HP 5, so the cut part until it heals past that). If one is, it sets `+0x163` and
+  passes the flag to `reassessCollapseMode`, which then applies the conscious blood rule to an unconscious character: blood holds it down only under -25.
 - Stage of a torso/head part, v = h - s + rig: 0 when v >= 0; under the KO point 2, and a vital part sets the coma flag
   `+0x162`; between the KO point and 0, 2 for a non-vital part, and for a vital one 2 only while `+0x162` is set. `+0x162`
   clears on an update where no vital part is at stage 2. So a vital part between the KO point and 0 does not keep a
   character down; one under it does ("Recovery coma") until every vital part is back to 0. Legs use h - s + bandage
   against the KO point ([ragdolls](ragdolls.md)).
 - Save keys: `coma` = `+0x162`, `unconcious` = `+0x161`, `incapacitated` = `+0x160` (a leg-collapse part at stage > 0).
-- Meitou: `MedicalState.VitalPartsKeepDown`, `RestartKo`, the wake test `Blood >= 0`. The fresh-limb-loss case is not modelled.
+- Meitou: `MedicalState.VitalPartsKeepDown`, `RestartKo`, the wake test `Blood >= 0` (-25 with `HasFreshStump`).
 
 ### Cut-off and leg loss
 
@@ -483,13 +486,22 @@ eat task, animation or player command (a right click on food does nothing, [ui-s
 - **Mouth** (**Verified**, decompile of `FUN_14034f340`, `FUN_1405d0b50`, `FUN_1405c8240`, `FUN_1405d0d20`, `FUN_1405dc650`; the attach point is the string `mouth`,
   `FUN_141534950`). Only a **limb** (item function 17, item `+0x124`) picked up by an animal (vfunc 0x248 non-null) goes to the mouth; any other item, and a limb picked up
   by a person, goes into the inventory (the pickup task, below). Taking it: the limb held before is let go (`FUN_1405c8240`), the new one is flagged held (`+0xd8` = 1), attached to the
-  `mouth` point and the time is stamped (`+0x6e0`). With no `mouth` attach point on the skeleton the limb is bitten on the spot instead (the same function's other branch).
+  `mouth` point and the time is stamped (`+0x6e0`). With no `mouth` point (looked up by name in the character's attachment points) nothing happens: the other branch bites only what
+  `FUN_14042ee50` calls edible (function 3, or 15), never a limb, so the limb stays on the ground and the pick-up task (`Task_Pickup`, row 3, which registers animals: category 0x20) ends
+  without a sound or message (**Verified**, decompile of `FUN_1405d0b50`, `FUN_14042ee50`, `FUN_14034f340`). In base data only a player's pick-up order reaches it (goal 277 is on
+  the two races with the point); a mod race with 277 and no point would walk to the limb again and again (**Unknown**: not run).
+  The attach (**Verified**, decompile of `FUN_140535d50`, `FUN_14052d850`, `FUN_140537690`, `FUN_14052d480`, `FUN_140536210`): the race's attachment point named `mouth` gives the bone and
+  offset, the item's `mesh` (`mesh female` on a female look) is attached to that bone (`attachObjectToBone`, as a weapon), and an attached ITEM gets its item's slot 0x360, which for `SeveredLimbItem` is the
+  `SeveredLimb` material (`FUN_1400cf490`, [blood-decals](blood-decals.md#on-the-body-and-on-severed-limbs)): it looks as on the ground. Only Bonedog and Boneyard Wolf have the point
+  ([phs](../formats/phs.md#how-kenshi-uses-attachment-points-verified-decompiled)). **Unknown**: whether the limb takes the animal's size (Meitou: it does, as Ogre's tag points inherit scale).
   While the mouth is full, the character update (`FUN_1405dc650`) does nothing else about food (no auto-eat, no Feed Animals check), and t = game minutes since the stamp, f = slot 0x398
   (the age, [animals](animals.md#ageing)): an animal with f > 0.9 of the player's faction (`FACTION +0x250`) eats when the stomach (+0x4bc) is empty and hunger (+0x4b8) below 2.6, or at t > 15;
   any other eats when the stomach is empty and t > 45, or at t > 60 + 120 x (1 - f). Eating clears the mouth, the flag, and bites the limb (whole, 30).
   The goal that sends an animal to a ground limb is 277 (`AI::findLimbOnGround`, [ai-tasks](ai-tasks.md#prisoner-fate-and-slave-rows)); Meitou runs it, and the player's pickup order also fills the mouth.
-  Meitou (`FeedSystem.HoldInMouth`, `MouthDue`; `CharacterCold.Mouth`): as above. Engine choices: every animal has the `mouth` point; a held
-  limb is neither saved nor carried across a load; it goes with the animal if the animal dies or is removed.
+  Meitou (`FeedSystem.HoldInMouth`, `MouthDue`; `CharacterCold.Mouth`): as above. Drawn (`CharacterSnapshot.Mouth`, `GameHost.MouthOf`, `CharacterRenderer.AddMouth`) with the debris
+  renderer's limb look and the cut character's skin tone (`CharacterCold.MouthTone`) at the posed `mouth` point. An animal without the point
+  (`FeedSystem.HasMouth`: its look's attachment points; none without a look) leaves the limb (`PlayerSystem.TakeInMouth`). Engine choices: a held limb is neither saved nor carried
+  across a load; it goes with the animal if the animal dies or is removed.
 - **Food on the ground** (**Verified**, decompile): `Character::setupAI` gives every animal of a player squad goal 259 EAT_FOOD_ON_GROUND (priority 3, weight 0.5; it drops race goal 230)
   and every player character 243. 259's desire: 0 unless the character wants to eat now (needs food, stomach empty, hunger < 2.5) and medical hunger <= 2.4; then 1.0 with no food in
   its inventory and no enemies, 0.1 with enemies only below 1.2. Finder `FUN_14099a930`: the nearest food it may eat (function 3, 15 for an animal or a race that lists it) on

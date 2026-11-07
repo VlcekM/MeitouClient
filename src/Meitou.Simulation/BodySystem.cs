@@ -120,7 +120,9 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
             playDead[i] = false;
             if (!table.Previous[i].Alive || table.Cold(i) is not { Animal: null, Medical: { Unconscious: true, Dead: false, HasStatsObject: true } medical } cold) continue;
             if (medical.PlayingDead && was && (world.Tick + i) % PlayDeadRecheckTicks != 0) { playDead[i] = true; continue; }
-            if (medical.PlayingDead || medical.WakesWithin(world.TickSeconds + cold.MedicalBudgetSeconds)) playDead[i] = !SafeToGetUp(world, combat, i, cold);
+            // The window is the longest step Act may take (a far or skipped character's), so the knockout cannot end unasked.
+            float step = Math.Max(world.SpeedSteps, world.StepTicks(i)) * world.TickSeconds;
+            if (medical.PlayingDead || medical.WakesWithin(step + cold.MedicalBudgetSeconds)) playDead[i] = !SafeToGetUp(world, combat, i, cold);
         }
     }
 
@@ -186,7 +188,7 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
             // The light level the stat multiplier's light term reads (the original's Character +0xd8, kept by the senses).
             medical.Light = world.Sight.Light(i);
             // The load: the inventory weight, plus carry person weight while carrying someone, against the strength the injuries leave (character-stats.md "Encumbrance and carrying").
-            float load = cold.Inventory?.ContentWeight() ?? 0;
+            float load = cold.Inventory?.ContentWeight(world.Player.Held) ?? 0;
             bool carrying = !cold.Carrying.IsNone;
             float encumbrance = load <= 0 && !carrying ? 1 : Encumbrance.Factor(Constants, load, carrying, stats.Strength, medical.StatMultiplier(Meitou.Data.Gameplay.Bodies.StatsEnumerated.Strength));
             var (bed, bedFactor) = BedOf(world, cold, in n);

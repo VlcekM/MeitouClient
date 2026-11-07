@@ -1,7 +1,8 @@
 # Code mods (C#)
 
-**Status: implemented, code-mod API version 1 (2026-11-04).** Meitou's own in-process loader, Lib.Harmony shipped by the game as the
-sanctioned patching library, and a registration surface kept to the cases where a patch would silently break an invariant. No BepInEx.
+**Status: implemented, code-mod API version 2 (1 still runs; 2 adds [dependencies](modding-dependencies.md)).** Meitou's own in-process loader,
+Lib.Harmony shipped by the game as the sanctioned patching library, and a registration surface kept to the cases where a patch would silently
+break an invariant. No BepInEx.
 The RE_Kenshi decision ([rekenshi](formats/rekenshi.md)) stands and its DLLs stay ignored. Code: `src/Meitou.Modding` (contract and
 loader), `GameHost.Mods.cs` (host wiring), `SimulationExtensions` (engine hooks).
 
@@ -42,7 +43,8 @@ Folder: `mods/MyMod/MyMod.mod` (the data mod, may be empty of records), `meitou.
 - A mod carries code when its folder has `meitou.json`: `{ "id", "apiVersion", "assemblies": ["Foo.dll"], "entry": "Foo.FooMod" }`
   (`CodeModManifest`). `id`: letters, digits, `. _ -`, at most 64; it keys the mod's save data, Harmony instance and log lines.
   `assemblies`: DLL file names in the mod folder, loaded in order. `entry`: the full name of the `IMod` type. Comments and trailing
-  commas are allowed.
+  commas are allowed. API 2 adds optional `version`, `dependencies`, `loadAfter`, `incompatible` and `gameVersion`
+  ([dependencies](modding-dependencies.md)).
 - `ModInfo.HasCode` reports it beside `HasNativePlugin`; the launcher marks such mods.
 - Load set: the enabled mods of `mods.cfg` in order, filtered to those with a manifest. A disabled mod's DLL is never opened. Changes take
   effect at the next launch, like data mods.
@@ -60,6 +62,8 @@ The game itself cannot ask: mods initialize on the boot worker before the interf
 - Resolution by simple name: an assembly on the game's trusted platform list (`Meitou.*`, the framework, Bepu, `0Harmony`) comes from
   the game even when the mod folder has a copy; anything else comes from the mod folder, so two mods may ship different versions of a
   library. Listing a game assembly in `assemblies` refuses the mod. Native libraries resolve from the mod folder first.
+- Between the two: an assembly a declared dependency exports comes from that dependency's context, so a framework loads once
+  ([dependencies](modding-dependencies.md#assembly-resolution)).
 - **One Harmony, loaded by the game.** **Observed** ([pardeike/Harmony #741](https://github.com/pardeike/Harmony/issues/741), open since
   2025-10): outside Unity, Harmony loaded in several load contexts duplicates `HarmonySharedState`, and two mods can no longer patch the
   same method. The game references Lib.Harmony 2.4.3 (`0Harmony.dll` with MonoMod merged in) and the resolution rule hands every mod
@@ -79,7 +83,8 @@ The game itself cannot ask: mods initialize on the boot worker before the interf
   removes its Harmony patches (`UnpatchAll` of its id).
 - Worlds are built again for every new game and load, so systems are registered as factories and made per world.
 - `ModContext`: `Id`, `Name`, `Folder`, `Manifest`, the merged `Data` (`GameDatabase`), `Population` (`PopulationData`), `Log`/`LogError`,
-  `RngPurpose`, `Harmony`, `Tick` and `Enqueue(SimCommand)` for the running world (dropped and logged before the first world).
+  `RngPurpose`, `Harmony`, `Tick` and `Enqueue(SimCommand)` for the running world (dropped and logged before the first world),
+  `Dependency<T>(id)` and `HasDependency(id)` for declared dependencies ([dependencies](modding-dependencies.md#using-a-dependency)).
 - `RngPurpose` is `StableHash(id) | 0x80000000` cast to `RngPurpose`, so it never equals a vanilla purpose.
 
 ## Registration surface
@@ -96,16 +101,23 @@ holds refuses the second mod.
   and logs. `IStateHashed` puts a system's state into `World.StateHash`. A mod system implementing a source interface `World` looks
   up by first match (`IAnimationSource`, `IProjectileSource`...) and placed before the standard one would replace it.
 - **Resolved combat:** a registered system implementing `ICombatHitObserver` receives `HitResolved(World, in CombatHit)` once per
-  landed melee/projectile contact, after its ordinary medical, XP, reaction, crime and log work. A fully absorbed contact counts;
-  blocks, dodges, misses, a contact that selects no medical part and a captive's execution blows (`CombatSystem.Execute`) do not. The
-  value payload has delivered damage, armour absorption, selected medical-part index, original attacker/victim generations,
-  attack/projectile sequence, approach and pre-hit life/incapacitation flags. Positions are the victim's root, not a measured surface
+  landed melee/projectile contact and execution blow on a captive (`CombatSystem.Execute`, `CombatHitSource.Execution`), after its
+  ordinary medical, XP, reaction, crime and log work. A fully absorbed contact counts; blocks, dodges, misses and a contact that selects
+  no medical part do not. The value payload has delivered damage, armour absorption, selected medical-part index, original
+  attacker/victim generations, attack/projectile sequence, approach and pre-hit life/incapacitation flags. Positions are the victim's root, not a measured surface
   collision; pre-damage part health is not supplied. Callbacks run serially in system order, may read the world and change their own
   hashed state, and queue later commands for gameplay changes; they must not mutate world state or call combat recursively. A
-  throwing callback is logged and disabled for that world; others continue. Melee callbacks run in Commit, projectile callbacks in
-  `CombatSystem.Schedule` (`FlyProjectiles`); both precede every `SlowWorld` of the tick, so a system draining its own hit queue
-  there needs no anchor. Faulted registrations enter the state hash. Without observers, no payload or event queue is made and no
-  additional rolls occur.
+  throwing callback is logged (the mod id and the system's registered name) and disabled for that world; others continue. Melee callbacks run in Commit, projectile callbacks in
+  `CombatSystem.Schedule` (`FlyProjectiles`), both before every `SlowWorld` of the tick; execution callbacks run in the captives'
+  `SlowWorld`, which has no anchor, so a system draining its own hit queue in `SlowWorld` sees them the same tick only at
+  `SystemAnchor.End`, else the next tick. Faulted registrations enter the state hash. Without observers or a hit feed, no payload or event
+  queue is made; either way no additional rolls occur (the pre-hit flags are reads).
+- **Hit feed:** `AddCombatHitFeed(view)`, for display (blood, gore, hit markers) without racing the tick. Once a frame on the host's thread,
+  after the blood and before the frame is drawn (Vulkan and Metal), `view` gets the hits of the ticks since the last frame, oldest first, the
+  same payloads observers get; a frame without hits does not call it. With a feed registered the host gives each world a display-only queue
+  (`World.CombatHitFeed`, like `BloodMarks`) that the simulation never reads, so it cannot change a run; a new world (load, new game) gets a
+  new queue, dropping the old world's hits. A tick may be in flight, so `view` must not touch the world; the list is reused, so copy what you
+  keep. A throw is logged with the mod id and that feed gets no more hits for the session.
 - **Dialogue codes:** `AddDialogueCondition(code, handler)` and `AddDialogueEffect(code, handler)`, named from FCS data in a
   DIALOG_ACTION's `condition name` / `action name`. A condition gets `DialogueCheck` (world, speaker, the subject `who` picked, the
   condition) with `Matches(bool)` and `Compare(double)` that apply the vanilla value and `compare by` rules; it only reads (it also runs
@@ -142,7 +154,8 @@ holds refuses the second mod.
 - **Observed** ([Harmony docs](https://harmony.pardeike.net/articles/patching-edgecases.html)): an inlined method cannot be patched; the
   patch silently does nothing. Patch methods large enough not to be inlined, or their callers. `Rng` helpers are `AggressiveInlining`.
 - **Observed** (2026-11-04, scratch run): Harmony finds a patch method again by module identity, so the same DLL file loaded by two mods
-  makes their patches resolve to one copy. A helper library shared by several mods must not hold patch methods.
+  makes their patches resolve to one copy. A helper library copied into several mods must not hold patch methods; a framework shared
+  as a [dependency](modding-dependencies.md) loads once and may.
 
 ## Determinism contract
 
@@ -173,7 +186,9 @@ code, so `trustedCodeMods` is not consulted.
 
 ## Versioning
 
-- `ModApi.Version` (1) must equal the manifest's `apiVersion`; a mismatch refuses the mod at load with a message.
+- The manifest's `apiVersion` must lie in `ModApi.MinimumVersion` (1) to `ModApi.Version` (2); otherwise the mod is refused at load with a
+  message. 2 added `version`, `dependencies`, `loadAfter`, `incompatible`, `gameVersion`, `ModContext.Dependency<T>` and
+  `IModDependents`; an API 1 mod loads unchanged. `gameVersion` ties a mod to the engine releases it was built against.
 - Harmony patches non-public members; compile-time references need public types or a publicizer. Open: which simulation types to make
   public, or ship publicized reference assemblies; ship reference assemblies per release so modders build without a game install.
 

@@ -85,8 +85,10 @@ sealed class ObjectStreamer(WorldObjects objects, ObjectMeshCache meshes) : IDis
 
     /// <summary>Zones laid out at once.</summary>
     public int MaxJobs { get; set; } = 3;
-    /// <summary>No new zone layouts are started (memory pressure, <see cref="VramGuard"/>); the ones in flight are taken in.</summary>
+    /// <summary>No new zone layouts are started (memory pressure, <see cref="VramGuard"/>) but within <see cref="PausedReach"/>; the ones in flight are taken in.</summary>
     public bool Paused { get; set; }
+    /// <summary>While <see cref="Paused"/>, zones this near the eye are still laid out (<see cref="VramGuard.NearReach"/>; 0: none).</summary>
+    public float PausedReach { get; set; }
 
     /// <summary>
     /// The world's landmarks as one pseudo-zone (null: landmarks are off, they stay in their zones). Placements that are landmarks are left out of the
@@ -160,23 +162,25 @@ sealed class ObjectStreamer(WorldObjects objects, ObjectMeshCache meshes) : IDis
     }
 
     /// <summary>A runtime placement was removed from <see cref="WorldObjects"/>: its instances and indoor volume leave the zone.</summary>
-    public void RemoveRuntime(string instanceId, ZoneCoordinate zone)
+    public void RemoveRuntime(string key, string instanceId, ZoneCoordinate zone)
     {
-        runtimeJobs.RemoveAll(j => j.Id == instanceId);
+        runtimeJobs.RemoveAll(j => j.Id == key);
         if (jobs.ContainsKey(zone) || fills.Any(f => f.Zone.Coordinate == zone)) { Invalidate(zone); return; }
         if (!zones.TryGetValue(zone, out var z)) return;
-        RemoveInstances(z, instanceId);
+        RemoveInstances(z, key, instanceId);
     }
 
-    void RemoveInstances(Zone z, string instanceId)
+    // The parts are named by the placement's instance id and its indoor volume by its key; a player's building has the one name for both.
+    void RemoveInstances(Zone z, string key, string? instanceId = null)
     {
-        bool Match(Instance i) => i.Placed.PlacementId == instanceId || i.Placed.ParentPlacementId == instanceId;
+        bool Named(string? id) => id is not null && (id == key || id == instanceId);   // a part with no parent is no match for a missing instance id
+        bool Match(Instance i) => Named(i.Placed.PlacementId) || Named(i.Placed.ParentPlacementId);
         z.Real.RemoveAll(Match);
         z.Stand.RemoveAll(Match);
         z.Unresolved.RemoveAll(Match);
         z.Parked.RemoveAll(Match);
         int had = z.Interiors.Length;
-        z.Interiors = [.. z.Interiors.Where(v => v.PlacementId != instanceId)];
+        z.Interiors = [.. z.Interiors.Where(v => !Named(v.PlacementId))];
         if (z.Interiors.Length != had) InteriorVersion++;
         z.GateHulls = [.. z.GateHulls.Where(v => v.PlacementId != instanceId)];
     }
@@ -213,7 +217,7 @@ sealed class ObjectStreamer(WorldObjects objects, ObjectMeshCache meshes) : IDis
             var laid = job.Result;
             // Keep the resident zone until the replacement layout is ready; only this house and its furniture change.
             if (replace) RemoveInstances(z, id);
-            else if (z.Real.Any(inst => inst.Placed.PlacementId == id)) continue;   // the zone's own layout already had it
+            else if (z.Real.Any(inst => inst.Placed.PlacementId == id || laid.Items.Count > 0 && inst.Placed.PlacementId == laid.Items[0].PlacementId)) continue;   // the zone's own layout already had it (a level-editor building's parts are named by its instance id, not its key)
             foreach (var item in laid.Items) z.Real.Add(Make(item, stand: false, z));
             foreach (var item in laid.Stand) z.Stand.Add(Make(item, stand: true, z));
             if (laid.Interiors.Count > 0) { z.Interiors = [.. z.Interiors, .. laid.Interiors]; InteriorVersion++; }
@@ -343,15 +347,17 @@ sealed class ObjectStreamer(WorldObjects objects, ObjectMeshCache meshes) : IDis
             try { Add(task.Result); }
             catch (AggregateException e) { Console.WriteLine($"warning   zone {coordinate}: {e.InnerException?.Message ?? e.Message}"); }
         }
-        var wanted = new List<(ZoneCoordinate Coordinate, float Distance)>();
+        var wanted = new List<(ZoneCoordinate Coordinate, float Rank, float Distance)>();
         foreach (var (coordinate, x0, z0) in populated)
         {
             if (zones.ContainsKey(coordinate) || jobs.ContainsKey(coordinate)) continue;
-            if (NearZone(x0, z0, eye) <= range) wanted.Add((coordinate, RankZone(x0, z0, eye, range)));
+            float distance = NearZone(x0, z0, eye);
+            if (distance <= range) wanted.Add((coordinate, RankZone(x0, z0, eye, range), distance));
         }
-        foreach (var (coordinate, _) in wanted.OrderBy(w => w.Distance))
+        foreach (var (coordinate, _, distance) in wanted.OrderBy(w => w.Rank))
         {
-            if (jobs.Count >= (covered ? Math.Max(MaxJobs, BackgroundWork.Threads) : MaxJobs) || Paused || WaitForLandmarks) break;
+            if (jobs.Count >= (covered ? Math.Max(MaxJobs, BackgroundWork.Threads) : MaxJobs) || WaitForLandmarks) break;
+            if (Paused && distance > PausedReach) continue;
             var landmarkClass = Landmarks;
             var extra = staged;
             jobs[coordinate] = BackgroundWork.Run(() =>

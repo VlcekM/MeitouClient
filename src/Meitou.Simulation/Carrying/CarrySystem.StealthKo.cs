@@ -127,7 +127,8 @@ public sealed partial class CarrySystem
                 continue;
             }
             var goal = KnockoutGoal(world, target, next[t], n);
-            if (cold.LiftTime < 0 && Vector2.Distance(new Vector2(n.Position.X, n.Position.Z), goal) < KnockoutStartRange)
+            bool sameFloor = MathF.Abs(n.Position.Y - next[t].Position.Y) <= MovementSystem.FloorSlack;   // not swung at through a floor (#292)
+            if (cold.LiftTime < 0 && sameFloor && Vector2.Distance(new Vector2(n.Position.X, n.Position.Z), goal) < KnockoutStartRange)
             {
                 // The target's sense entry: heard on this last step (the sneaking hearing roll at the step's speed; the original's pass cadence is not traced).
                 float stealth = Orders.Stealth(cold), step = new Vector2(n.Velocity.X, n.Velocity.Z).Length();
@@ -141,6 +142,7 @@ public sealed partial class CarrySystem
             bool stale = (n.Flags & (ushort)MoveFlags.HasPath) == 0 || Vector2.DistanceSquared(goal, n.Goal) > PursuitSystem.RepathDistance * PursuitSystem.RepathDistance;
             if (asking || !stale || n.TaskTime > 0) continue;
             n.Goal = goal;
+            (cold.GoalHeight, cold.GoalHeightAt) = (next[t].Position.Y, goal);   // the target's floor, not the attacker's (#292)
             n.Mode = SpeedMode.Free;
             n.Flags |= (ushort)MoveFlags.NeedPath;
             n.TaskTime = PursuitSystem.RepathSeconds;

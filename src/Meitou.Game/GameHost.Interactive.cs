@@ -24,8 +24,9 @@ sealed partial class GameHost
 {
     int Interactive()
     {
-        bool vsync = g.VSync ?? config.VSync;
-        int fpsLimit = g.FpsLimit ?? config.FpsLimit;
+        bool headless = o.Headless;   // --headless: no window, no swapchain, no input devices; the loop draws into an offscreen picture
+        bool vsync = !headless && (g.VSync ?? config.VSync);
+        int fpsLimit = g.FpsLimit ?? (headless ? 30 : config.FpsLimit);
         int initialFpsLimit = fpsLimit;
         VulkanDisplay.RayTracing = o.WantsRayTracing;
         // The game's methods compiled ahead, from now on (with code mods: once they are initialized), behind the loading.
@@ -35,7 +36,7 @@ sealed partial class GameHost
         BeginAudio();
         bool hdrAtStart = g.Hdr ?? config.Hdr;   // read at start-up only
         bool frameGenerationAtStart = config.FrameGeneration && !hdrAtStart;   // read at start-up only; HDR output keeps the plain swapchain
-        using var display = new VulkanDisplay(WindowOptions.Default with
+        using var display = new VulkanDisplay(headless ? null : WindowOptions.Default with
         {
             Size = new Vector2D<int>(o.Width, o.Height),
             Title = "MeitouClient",
@@ -46,25 +47,27 @@ sealed partial class GameHost
         }, vsync, dlss: true, frameGeneration: frameGenerationAtStart, hdr: hdrAtStart);   // Load before the device so the settings panel can switch to DLSS without restarting.
         streamline = display.Streamline;
         ngx = display.Ngx;
-        var window = display.Window!;
+        var window = headless ? null : display.Window!;
         // X11 opens it where Silk.NET asks (50,50), the desktop's corner, which can be another monitor (Observed 2026-10-26, XWayland): on the primary
         // monitor instead, the one full screen uses; leaving full screen puts it back where it was when full screen began.
-        if (window.Native?.X11 is not null) BorderlessFullScreen.MoveToPrimaryMonitor(window);
+        if (window?.Native?.X11 is not null) BorderlessFullScreen.MoveToPrimaryMonitor(window);
         // Borderless full screen as the viewer starts (Alt+Enter and the Tab panel switch it); --windowed keeps a window for
         // this run: the size asked by --size, else maximised. Sized while still hidden: resizing after it shows (maximised,
         // then borderless) flashed white and black before the first frame.
-        bool fullScreen = config.FullScreen && !o.Windowed;
+        bool fullScreen = config.FullScreen && !o.Windowed && !headless;
         bool savedVSync = vsync, savedFullScreen = fullScreen;
-        if (fullScreen) BorderlessFullScreen.Toggle(window);
+        if (window is null) { }
+        else if (fullScreen) BorderlessFullScreen.Toggle(window);
         else if (!o.SizeGiven && !o.HiddenWindow) window.WindowState = WindowState.Maximized;   // maximising would show a hidden window
         BeginLoadingScreen(display);   // its textures and fonts are made before the window shows
         // The Faithful start shows the original's splash, as the game does before its title, instead of the loading screen (unless the Interface setting turns it off).
-        if (loading is { Faithful: true } && config.SplashScreens && OpensOnTitle(interactive: true)) loading.StartSplash();
+        if (loading is { Faithful: true } && config.SplashScreens && OpensOnTitle(interactive: true) && !headless) loading.StartSplash();
         // The first loading frame is in the swapchain when the window shows, and on screen before the splash closes. Not on Wayland: a window gets its
         // shell role when it shows, and a buffer attached to the surface before that makes the compositor drop the client ("attached a buffer before
         // configure event"), so there the window shows first and takes the compositor's configure before anything is drawn.
         // --hidden-window: drawn and presented as usual, never shown (an unattended run).
-        if (o.HiddenWindow) LoadingFrame();
+        if (window is null) { }
+        else if (o.HiddenWindow) LoadingFrame();
         else if (window.Native?.Wayland is not null)
         {
             window.IsVisible = true;
@@ -99,7 +102,8 @@ sealed partial class GameHost
         if (overlay is not null) { player.CreateUiPainter(overlay, assets.Find); ConnectItemIcons(); }
         if (gpu.Characters is { } portraits) { var (atlas, sampled) = portraits.PortraitAtlas; player.SetUiTexture(PlayerInterface.PortraitTexture, atlas, sampled); }
         // The debug overlays (docs/engine.md): F10 the debug menu (GameHost.DebugMenu.cs), F11 the frame statistics, F12 the profiler chart.
-        var profiler = overlay is null ? null : new FrameProfiler(display.Context, () => display.Context.GpuFrameMs);
+        debugToolsOn = true;
+        profiler = overlay is null ? null : new FrameProfiler(display.Context, () => display.Context.GpuFrameMs);
         // --log-spikes: the run's allocations by type (the runtime's samples, one per ~100 KB), printed with the summary.
         using var spikeGc = SpikeLog.Enabled ? new BenchGcListener() : null;
         // The Faithful / Meitou switches; Shift+F1 turns Meitou off and back on (plain F2..F4 and F8 are the game's speed and screenshot keys), the Tab panel sets them one by one.
@@ -112,7 +116,7 @@ sealed partial class GameHost
         var settingsValues = overlay is null ? null : WorldFrame.CreateSettingsPanel(overlay, gpu, render,
             getHour: () => (float)session.Clock.HourOfDay, setHour: v => { session.Clock.SetHourOfDay(v); if (IsDuel) duelHour = v; },
             getVSync: () => display.VSync, setVSync: v => display.VSync = v, switches: switches,
-            getFullScreen: () => BorderlessFullScreen.IsOn(window), setFullScreen: _ => BorderlessFullScreen.Toggle(window),
+            getFullScreen: FullScreenOn, setFullScreen: _ => ToggleFullScreen(),
             extraChoices: [new PanelChoice(() => $"UI mode: {player.UiMode}", () => ["Faithful", "Meitou"], () => (int)player.UiMode,
                 index =>
                 {
@@ -182,17 +186,18 @@ sealed partial class GameHost
             panel.ApplySavedPreset();
         }
         if (g.BenchmarkBaseline) panel?.ApplyBenchmarkBaseline();
+        settingsPanel = panel;
+        InitControl();
         var stats = new List<string>();
-        bool statsVisible = false, fpsVisible = false;
         string fpsText = "";
         double fpsWindow = 0;
         int fpsWindowFrames = 0;
         // The cinematic camera (docs/viewer.md "Cinematic camera", F6 its editor): while it flies, previews or cuts to a key it holds the drawn
         // camera and the rig's state is not applied; the first camera input after that hands the camera back to the rig (CameraRig.TakeOver).
         // The hour is the game clock's (time does not follow the keys); Home puts the lens back while the editor is open, in the free camera and on a camera the cinema holds.
-        var cinema = new Cinema(() => camera, () => (float)session.Clock.HourOfDay, null, () => BorderlessFullScreen.IsOn(window), () => BorderlessFullScreen.Toggle(window),
+        var cinema = new Cinema(() => camera, () => (float)session.Clock.HourOfDay, null, FullScreenOn, ToggleFullScreen,
             Cinema.GameFile, lensKeysAlways: IsDuel);   // the duel has no floors: PageUp/PageDown zoom the lens there
-        bool cinemaHolds = false, interfaceHidden = false;
+        bool cinemaHolds = false;
         cinema.Moved = () => cinemaHolds = true;
         cinema.Cut = () => o.Post.CameraCut = true;
         // PageUp/PageDown zoom the lens and Home puts it back in these cameras; in the strategy camera PageUp/PageDown are the game's floor keys.
@@ -228,10 +233,13 @@ sealed partial class GameHost
             EndTour();
         };
 
-        var silkInput = Silk.NET.Input.InputWindowExtensions.CreateInput(window);
-        // The faithful windows' edit boxes copy and paste through the first keyboard's system clipboard.
-        player.ClipboardRead = () => silkInput.Keyboards.Count > 0 ? ClipboardText.Read(silkInput.Keyboards[0]) : null;
-        player.ClipboardWrite = text => { if (silkInput.Keyboards.Count > 0) silkInput.Keyboards[0].ClipboardText = text; };
+        var silkInput = window is null ? null : Silk.NET.Input.InputWindowExtensions.CreateInput(window);
+        IReadOnlyList<Silk.NET.Input.IKeyboard> keyboards = silkInput is null ? [] : silkInput.Keyboards;
+        IReadOnlyList<Silk.NET.Input.IMouse> mice = silkInput is null ? [] : silkInput.Mice;
+        // The faithful windows' edit boxes copy and paste through the first keyboard's system clipboard (headless: a clipboard of the game's own).
+        string? headlessClipboard = null;
+        player.ClipboardRead = () => keyboards.Count > 0 ? ClipboardText.Read(keyboards[0]) : headless ? headlessClipboard : null;
+        player.ClipboardWrite = text => { if (keyboards.Count > 0) keyboards[0].ClipboardText = text; else if (headless) headlessClipboard = text; };
         Vector2? lastMouse = null;
         // Rotating pins the pointer. Windows and macOS put it back after every move (HoldPointer); Linux locks it (GLFW's disabled cursor),
         // because putting it back over-counts the movement there:
@@ -243,13 +251,16 @@ sealed partial class GameHost
         var windowCursor = Silk.NET.Input.CursorMode.Normal;
         var cursorBeforeOrbit = windowCursor;
         bool panelDrag = false, shiftDown = false, profilerClick = false;
-        Vector2 Pixels(Vector2 p) => p * new Vector2(window.FramebufferSize.X / (float)Math.Max(window.Size.X, 1), window.FramebufferSize.Y / (float)Math.Max(window.Size.Y, 1));
+        Vector2D<int> FramebufferSizeNow() => window is null ? new Vector2D<int>(o.Width, o.Height) : window.FramebufferSize;
+        bool FullScreenOn() => window is not null && BorderlessFullScreen.IsOn(window);
+        void ToggleFullScreen() { if (window is not null) BorderlessFullScreen.Toggle(window); }
+        Vector2 Pixels(Vector2 p) => window is null ? p : p * new Vector2(window.FramebufferSize.X / (float)Math.Max(window.Size.X, 1), window.FramebufferSize.Y / (float)Math.Max(window.Size.Y, 1));
         // The settings panel takes the mouse only while it is drawn (F7 and the cinema's clean picture hide it).
         bool PanelLive() => !interfaceHidden && !cinema.Clean;
         // Silk raises KeyDown once per press (no OS key repeat), so a held erase or caret key in a text field repeats here: after 0.5 s, then
         // 30 times a second (the Windows defaults). Typed characters already repeat through KeyChar.
         (Silk.NET.Input.IKeyboard Keyboard, SilkKey Key, long Next)? heldEditKey = null;
-        bool TextFieldFocused() => panel?.Visible == true || debugMenuOpen || player.UiEditing;
+        bool TextFieldFocused() => panel?.Visible == true || debugMenuOpen || ConsoleOpen || player.UiEditing;
         void RepeatEditKey()
         {
             if (heldEditKey is not { } held || Stopwatch.GetTimestamp() < held.Next) return;
@@ -257,7 +268,7 @@ sealed partial class GameHost
             heldEditKey = held with { Next = Stopwatch.GetTimestamp() + Stopwatch.Frequency / 30 };
             OnKeyDown(held.Keyboard, held.Key);
         }
-        foreach (var kb in silkInput.Keyboards)
+        foreach (var kb in keyboards)
         {
             kb.KeyDown += (keyboard, k, _) =>
             {
@@ -274,7 +285,8 @@ sealed partial class GameHost
             kb.KeyChar += (_, value) =>
             {
                 if (Covered) return;
-                if (panel?.Visible == true) panel.TextInput(value);
+                if (ConsoleOpen) devConsole.Type(value);
+                else if (panel?.Visible == true) panel.TextInput(value);
                 else if (sandboxPicker is { Open: true }) sandboxPicker.TextInput(value);
                 else if (debugMenuOpen) DebugMenuText(value);
                 else player.UiText(value);
@@ -283,13 +295,16 @@ sealed partial class GameHost
         void OnKeyDown(Silk.NET.Input.IKeyboard keyboard, SilkKey k)
         {
             if (k is SilkKey.ShiftLeft or SilkKey.ShiftRight) { shiftDown = true; player.SlowModifier = true; }
-            if (k == SilkKey.Enter && (keyboard.IsKeyPressed(SilkKey.AltLeft) || keyboard.IsKeyPressed(SilkKey.AltRight))) { BorderlessFullScreen.Toggle(window); return; }
+            if (k == SilkKey.Enter && (keyboard.IsKeyPressed(SilkKey.AltLeft) || keyboard.IsKeyPressed(SilkKey.AltRight))) { ToggleFullScreen(); return; }
             if (Covered)
             {
                 if (k is SilkKey.Escape or SilkKey.Space) skyArrival?.Skip();
                 loading?.SkipSplash();
                 return;
             }
+            // Insert or Ctrl+` opens the dev console, which then takes every key (the settings panel's, the animation list's and the debug menu's too) until it closes.
+            if (IsConsoleToggle(k, keyboard.IsKeyPressed(SilkKey.ControlLeft) || keyboard.IsKeyPressed(SilkKey.ControlRight))) { ToggleConsole(); return; }
+            if (ConsoleOpen) { ConsoleKey(keyboard, k); return; }
             player.UiVisible = PanelLive() && !g.NoPopulation;
             if (panel?.Visible == true)
             {
@@ -313,11 +328,22 @@ sealed partial class GameHost
                 if ((k == SilkKey.KeypadEnter ? EngineKey.Enter : KeyMap.Map(k)) is { } menuKey) DebugMenuKey(menuKey);
                 return;
             }
+            // The pick & collision inspector's menu (opened from F10's Tools row, GameHost.Inspector.cs): while open it takes every key, like F10's (before the game interface, whose Esc would open the game menu instead).
+            if (inspectorMenuOpen)
+            {
+                if ((k == SilkKey.KeypadEnter ? EngineKey.Enter : KeyMap.Map(k)) is { } inspectorKey) InspectorMenuKey(inspectorKey);
+                return;
+            }
+            if (interiorEditorOpen)
+            {
+                if ((k == SilkKey.KeypadEnter ? EngineKey.Enter : KeyMap.Map(k)) is { } editorKey) InteriorEditorKey(editorKey);
+                return;
+            }
             // toggle_bar (F7, rebindable) hides the game's interface; F6 is the cinema's, and so is the numpad except the keys bound to the game's hotkeys
             // (Space, Delete and the lens keys too while its editor is open).
             if (KeyMap.Map(k) is { } hideKey && !player.UiEditing && session.Bindings.Get(InputAction.ToggleInterface).Contains(Binding.Of(hideKey)))
             { interfaceHidden = !interfaceHidden; Console.WriteLine(interfaceHidden ? "interface hidden (F7 shows it)" : "interface shown"); return; }
-            // Ctrl+C copies the free camera's position as a viewer camera code, Ctrl+V flies the free camera to the code in the clipboard.
+            // Ctrl+C copies the free camera's position as a viewer camera code, Ctrl+V flies the free camera to the code (or a feedback report's camera location) in the clipboard.
             // Only in the free camera: elsewhere Ctrl+C and Ctrl+V keep their own meaning, and so do they in a focused edit box.
             if (k is SilkKey.C or SilkKey.V && session.Camera.IsFree && !player.UiEditing && (keyboard.IsKeyPressed(SilkKey.ControlLeft) || keyboard.IsKeyPressed(SilkKey.ControlRight)))
             {
@@ -335,7 +361,7 @@ sealed partial class GameHost
                     player.Follow = null;
                     Console.WriteLine("camera    moved to the clipboard's camera code");
                 }
-                else Console.WriteLine("camera    the clipboard holds no camera code (Ctrl+C in a viewer copies one)");
+                else Console.WriteLine("camera    the clipboard holds no camera code (Ctrl+C in a viewer copies one) or feedback camera location");
                 return;
             }
             if (panel is not null && KeyMap.Map(k) is { } settingsToggle && session.Bindings.Get(InputAction.ToggleSettings).Contains(Binding.Of(settingsToggle)))
@@ -384,41 +410,45 @@ sealed partial class GameHost
                 if (IsBattle && key == EngineKey.Backspace) battleRestartRequested = true;
             }
         }
-        foreach (var mouse in silkInput.Mice)
+        // The press and release of a pointer button, shared by the window's events and the control channel's `click` (which injects them at a pixel).
+        void PointerDown(EngineButton? physical, Vector2 at)
+        {
+            player.UiVisible = PanelLive() && !g.NoPopulation;
+            bool select = physical is { } pressed && PlayerButton(pressed) == EngineButton.Left;   // the Select button, whichever it is bound to
+            if (PanelLive() && physical is { } settingsButton && panel?.MouseDown(at, settingsButton) == true) { panelDrag = true; return; }
+            if (PanelLive() && panel?.Contains(at) == true) return;
+            if (select && PanelLive() && !config.SandboxPanelCollapsed && sandboxPicker?.MouseDown(at) == true) return;
+            if (select && PanelLive() && SandboxToggleClick(at)) return;
+            if (select && profiler?.Click(at) == true) { profilerClick = true; return; }   // F12's legend opens and closes rows
+            if (select && StatsToggleClick(at)) { profilerClick = true; return; }   // F11's character boxes and paths
+            // The cinema's editor: its clicks never select or move characters.
+            if (select && cinema.MouseDown(at)) return;
+            if (cinema.Contains(at)) return;
+            if (physical is { } button)
+            {
+                // Ctrl and Alt with the right button: pick up / put down and loot (docs/game/ui-input.md, Meitou's carry bindings).
+                bool Held(SilkKey a, SilkKey b) => keyboards.Any(k => k.IsKeyPressed(a) || k.IsKeyPressed(b));
+                if (player.MouseDown(PlayerButton(button), at, shiftDown, Held(SilkKey.ControlLeft, SilkKey.ControlRight), Held(SilkKey.AltLeft, SilkKey.AltRight))) return;
+                session.Input.SetMouseButton(button, true);
+            }
+        }
+        void PointerUp(EngineButton? physical, Vector2 at)
+        {
+            bool cinemaDrag = cinema.MouseUp();
+            if (!Covered && !cinemaDrag && !panelDrag && !profilerClick && panel?.Visible != true && physical is { } released) player.MouseUp(PlayerButton(released), at, shiftDown);
+            profilerClick = false;
+            panel?.MouseUp();
+            panelDrag = false;
+            if (physical is { } button) session.Input.SetMouseButton(button, false);
+        }
+        foreach (var mouse in mice)
         {
             mouse.MouseDown += (m, b) =>
             {
                 if (Covered) { loading?.SkipSplash(); return; }
-                player.UiVisible = PanelLive() && !g.NoPopulation;
-                var at = Pixels(orbitAnchor ?? m.Position);
-                var physical = KeyMap.Map(b);
-                bool select = physical is { } pressed && PlayerButton(pressed) == EngineButton.Left;   // the Select button, whichever it is bound to
-                if (PanelLive() && physical is { } settingsButton && panel?.MouseDown(at, settingsButton) == true) { panelDrag = true; return; }
-                if (PanelLive() && panel?.Contains(at) == true) return;
-                if (select && PanelLive() && !config.SandboxPanelCollapsed && sandboxPicker?.MouseDown(at) == true) return;
-                if (select && PanelLive() && SandboxToggleClick(at)) return;
-                if (select && profiler?.Click(at) == true) { profilerClick = true; return; }   // F12's legend opens and closes rows
-                if (select && StatsToggleClick(at)) { profilerClick = true; return; }   // F11's character boxes and paths
-                // The cinema's editor: its clicks never select or move characters.
-                if (select && cinema.MouseDown(at)) return;
-                if (cinema.Contains(at)) return;
-                if (physical is { } button)
-                {
-                    // Ctrl and Alt with the right button: pick up / put down and loot (docs/game/ui-input.md, Meitou's carry bindings).
-                    bool Held(SilkKey a, SilkKey b) => silkInput.Keyboards.Any(k => k.IsKeyPressed(a) || k.IsKeyPressed(b));
-                    if (player.MouseDown(PlayerButton(button), at, shiftDown, Held(SilkKey.ControlLeft, SilkKey.ControlRight), Held(SilkKey.AltLeft, SilkKey.AltRight))) return;
-                    session.Input.SetMouseButton(button, true);
-                }
+                PointerDown(KeyMap.Map(b), Pixels(orbitAnchor ?? m.Position));
             };
-            mouse.MouseUp += (m, b) =>
-            {
-                bool cinemaDrag = cinema.MouseUp();
-                if (!Covered && !cinemaDrag && !panelDrag && !profilerClick && panel?.Visible != true && KeyMap.Map(b) is { } released) player.MouseUp(PlayerButton(released), Pixels(orbitAnchor ?? m.Position), shiftDown);
-                profilerClick = false;
-                panel?.MouseUp();
-                panelDrag = false;
-                if (KeyMap.Map(b) is { } button) session.Input.SetMouseButton(button, false);
-            };
+            mouse.MouseUp += (m, b) => PointerUp(KeyMap.Map(b), Pixels(orbitAnchor ?? m.Position));
             mouse.MouseMove += (m, p) =>
             {
                 if (orbitAnchor is not null)
@@ -479,7 +509,7 @@ sealed partial class GameHost
         bool cinemaWasPlaying = false, cinemaWasRecording = false;
         bool highlightHeld = false;
         bool windowFocused = true;
-        window.FocusChanged += focused =>
+        if (window is not null) window.FocusChanged += focused =>
         {
             windowFocused = focused;
             if (!focused) { highlightHeld = false; session.Input.ReleaseAll(); }
@@ -522,11 +552,14 @@ sealed partial class GameHost
         // The triangle counts summed over the statistics' second (the objects' from their running colour total).
         double terrainTris = 0, characterTris = 0, grassBlades = 0;
         long objectTris0 = 0;
-        while (!window.IsClosing && !quit)
+        Vector2? appliedHeadlessMouse = null;
+        GpuTexture? headlessTarget = null;
+        while (window?.IsClosing != true && !quit)
         {
             BenchLap(BenchTail);
-            window.DoEvents();
-            if (window.IsClosing) break;
+            window?.DoEvents();
+            if (window?.IsClosing == true) break;
+            if (controlQuit) { quit = true; break; }
             RepeatEditKey();
             double now = frame.Elapsed.TotalSeconds, dt = now - last;
             last = now;
@@ -569,7 +602,7 @@ sealed partial class GameHost
             }
             // Edge scrolling (the game's default): the pointer at the edge of the window pans the camera, unless something else has the pointer.
             session.Camera.Settings.EdgeScroll = config.EdgeScroll != false;
-            session.Camera.Strategy.EdgePointer = Covered || TitleVisible || panel?.Visible == true || interfaceHidden || cinemaHolds || cinema.EditorVisible ? null : WindowPointer.InWindow(window);
+            session.Camera.Strategy.EdgePointer = Covered || TitleVisible || panel?.Visible == true || interfaceHidden || cinemaHolds || cinema.EditorVisible ? null : window is null ? null : WindowPointer.InWindow(window);
             session.World.Profile.Enabled = profiler is { Showing: not FrameProfiler.Mode.Off } || g.PlayBench is not null || SpikeLog.Enabled;
             if (!Covered) session.Advance(frameDt);   // loading and arrival preserve the loaded world's exact time
             DuelHoldClock();
@@ -587,8 +620,10 @@ sealed partial class GameHost
             animClock = true;
             UpdateNav();
             UpdateNavOverlay();
+            UpdateInspectorOverlay();
             UpdateBuildings();
             BenchLap(2);
+            ControlCameraMoveTick();   // a timed `camera ... --over` move, before the camera is drawn
             if (!cinemaHolds) ApplyCamera(session.CameraAt());
             cinema.Advance(cinema.FrameTime(dt));   // a flight through the keys moves the camera (and takes it from the rig)
             // The camera effects (docs/render-post.md "Motion blur"): for these cameras, never over the title; a recording's motion is its fixed step.
@@ -601,9 +636,10 @@ sealed partial class GameHost
             gpu.Kept = !config.KeepTexturesAtCharacters ? []
                 : config.KeepTexturesAtAllSquads ? [.. session.CurrentSnapshot.PlayerSquads.SelectMany(s => s.Members).Select(TourPosition).OfType<Vector3>()]
                 : [.. player.SquadBarMembers().Select(c => TourPosition(c.Id)).OfType<Vector3>()];
+            viewAspect = FramebufferSizeNow().X / (float)Math.Max(FramebufferSizeNow().Y, 1);   // headless: no window, the size asked for
+            PollControl();
             string? takeFile = cinema.TakeFrame();
             // A flight puts the focus on where it lands from the first frame (the towns there populate during the flight), not on the arc.
-            viewAspect = window.Size.X / (float)Math.Max(window.Size.Y, 1);
             SendFocus(tour.Active && tour.Current is { } landing && TourPosition(landing) is { } landingAt ? landingAt : cinemaHolds ? camera.Target : null);
             if (!cinemaHolds) SandboxFollowCamera();
             if (!cinemaHolds) FollowCamera();
@@ -631,7 +667,7 @@ sealed partial class GameHost
                 // that moved the eye by a float step now and then, a jump of a pixel or two for a character close to it.
                 if (shortfall > 1e-3f) camera.Target += new Vector3(0, shortfall, 0);
             }
-            var size = window.FramebufferSize;
+            var size = FramebufferSizeNow();
             // Until the warm-up's frames run smoothly the water reflection draws everything and the sky its cloud volume, so their pipelines are made under the
             // cover (ReflectionPass.Warm, SkyRenderer.Warm).
             bool warmPasses = warming && smoothSeconds == 0;
@@ -639,7 +675,29 @@ sealed partial class GameHost
             gpu.Sky.Warm = warmPasses;
             UpdateView(size.X, size.Y);
             // What the mouse is over, decided once before the world is drawn: the pointer (drawn last) and the hover outline (drawn with the world) agree.
-            var pointerMouse = silkInput.Mice.FirstOrDefault();
+            var pointerMouse = mice.FirstOrDefault();
+            // Headless: the pointer is the control channel's `mouse <x> <y>` (none until it is given).
+            if (headless && headlessMouse is { } fedMouse && appliedHeadlessMouse != fedMouse)
+            {
+                appliedHeadlessMouse = fedMouse;
+                session.Input.SetMousePosition(fedMouse.X, fedMouse.Y);
+                if (!Covered && !(PanelLive() && panel?.MouseMove(fedMouse) == true) && !cinema.MouseMove(fedMouse)) player.MouseMove(fedMouse);
+            }
+            // The control channel's `click`: one step per frame (move, a frame for the ghost and hover to follow, press, release), through the same press and release as the window's.
+            if (pointerSteps.Count > 0)
+            {
+                var (kind, right, at) = pointerSteps.Dequeue();
+                switch (kind)
+                {
+                    case 'm':
+                        if (headless) headlessMouse = at;
+                        session.Input.SetMousePosition(at.X, at.Y);
+                        if (!Covered && !(PanelLive() && panel?.MouseMove(at) == true) && !cinema.MouseMove(at)) player.MouseMove(at);
+                        break;
+                    case 'd': if (!Covered) PointerDown(KeyMap.Map(right ? SilkButton.Right : SilkButton.Left), at); break;
+                    case 'u': if (!Covered) PointerUp(KeyMap.Map(right ? SilkButton.Right : SilkButton.Left), at); break;
+                }
+            }
             // Rotation over on Linux: the pointer is let go where it was locked, in the cursor mode it had before, and before its position is read
             // (still locked, GLFW reports its virtual position, and the pointer was drawn there for a frame). The next move starts afresh.
             if (orbitAnchor is not null && !OrbitHeld())
@@ -648,8 +706,9 @@ sealed partial class GameHost
                 lastMouse = null;
                 if (pointerMouse is not null) pointerMouse.Cursor.CursorMode = windowCursor = cursorBeforeOrbit;
             }
-            var pointerAt = pointerMouse is null ? Vector2.Zero : Pixels(orbitAnchor ?? pointerMouse.Position);
-            bool Held(SilkKey a, SilkKey b) => silkInput.Keyboards.Any(k => k.IsKeyPressed(a) || k.IsKeyPressed(b));
+            var pointerAt = headless ? headlessMouse ?? Vector2.Zero : pointerMouse is null ? Vector2.Zero : Pixels(orbitAnchor ?? pointerMouse.Position);
+            consolePointer = pointerAt;
+            bool Held(SilkKey a, SilkKey b) => keyboards.Any(k => k.IsKeyPressed(a) || k.IsKeyPressed(b));
             player.CtrlHeld = Held(SilkKey.ControlLeft, SilkKey.ControlRight);
             player.AltHeld = Held(SilkKey.AltLeft, SilkKey.AltRight);
             screenshotRequested = player.GateScreenshot(screenshotRequested);
@@ -658,22 +717,26 @@ sealed partial class GameHost
                 panel?.Visible != true && !interfaceHidden && !cinema.Clean && !cinemaHolds && !cinema.EditorVisible;
             if (gpu.Objects is { } signObjects) signObjects.HighlightSigns = highlighting;
             player.HighlightFocus = highlighting && !screenshotRequested && takeFile is null ? camera.Target : null;
-            bool pointerWorld = pointerMouse is not null && !Covered && !g.NoPopulation && !(PanelLive() && panel?.Visible == true) && !cinema.Contains(pointerAt);
+            bool pointerWorld = (pointerMouse is not null || headless && headlessMouse is not null) && !Covered && !g.NoPopulation && !(PanelLive() && panel?.Visible == true) && !cinema.Contains(pointerAt);
             bool freeLook = pointerWorld && session.Camera.IsFree && !player.ModalOpen;
-            // Hover outline (Advanced, Meitou only): not in the free camera, with the interface hidden, or in saved pictures.
-            bool outlining = config.HoverOutline && !session.Camera.IsFree && !interfaceHidden && !cinema.Clean && !screenshotRequested && takeFile is null;
+            // Hover and building outlines (Advanced, Meitou only): not in the free camera, with the interface hidden, or in saved pictures.
+            bool outlines = !session.Camera.IsFree && !interfaceHidden && !cinema.Clean && !screenshotRequested && takeFile is null;
+            bool outlining = config.HoverOutline && outlines;
             if (outlining && highlighting)
                 gpu.HoverKeys = [.. player.HighlightTargets(camera.Target, PlayerInterface.HighlightRadius).Select(t => (DrawKey(t.Id), t.Colour))];
             else
                 gpu.HoverKeys = outlining && pointerWorld && player.HoverTarget is { } hover ? [(DrawKey(hover.Id), hover.Colour)] : [];
+            gpu.OutlinedBuilding = outlines && config.BuildingOutline ? player.OutlinedBuilding : null;
             BenchLap(5);
             bool began = display.BeginFrame(size.X, size.Y);
             if (began)
             {
+                shotNoFrame = 0;
                 BenchLap(6);
                 long t0 = Stopwatch.GetTimestamp();
                 // The chain and the panel draw into the window's backbuffer (made again when the size changes).
-                var backbuffer = display.Backbuffer!;
+                var backbuffer = display.Backbuffer ?? (headlessTarget ??= display.Context.CreateTexture(new TextureDesc(InternalFormat.Rgba8, size.X, size.Y,
+                    Use: TextureUse.ColourTarget | TextureUse.TransferSrc | TextureUse.Sampled, Name: "headless backbuffer")));
                 gpu.Post!.Target = backbuffer;
                 gpu.Post.Options.HdrPeak = display.HdrActive ? PostOptions.HdrPeakFor(config.HdrPeakNits, config.HdrPaperNits) : 0;
                 // Frame generation (the setting, when the FFX layer is in use): made on the first frame; wanted except under the loading screen and for saved pictures.
@@ -743,6 +806,7 @@ sealed partial class GameHost
                 {
                     player.Draw(overlay, size.X, size.Y);
                 }
+                else if (interfaceHidden && !cinema.Clean && !take && !covered && overlay is not null && !g.NoPopulation) player.DrawSpeechOnly(overlay, size.X, size.Y);
                 if (ui && overlay is not null && IsSandbox) DrawSandbox(overlay, size.X, size.Y);
                 if (ui && overlay is not null && IsBattle) DrawBattleCounter(overlay, size.X, size.Y);
                 Meitou.Rendering.StageClock.UiPart(Meitou.Rendering.StageClock.UiHud);
@@ -770,13 +834,19 @@ sealed partial class GameHost
                     }
                     if (walkPaths && !covered) panelsBottom = DrawWalkPathsLabel(overlay, session.CurrentSnapshot, size.X, size.Y, panelsBottom);
                     characterBoxesToggle = walkPathsToggle = null;
+                    float menuTop = panelsBottom;   // the debug menu stands at the right beside the statistics, else below the panels
                     if (statsVisible && stats.Count > 0)
                     {
                         TickStatsToggles(stats);
                         panelsBottom = overlay.Panel(size.X, size.Y, "Meitou   (F11 hides this)", stats, panelsBottom, laidOut: statsLaidOut);
                         FindStatsToggles(overlay.CharWidth);
                     }
-                    if (debugMenuOpen) DrawDebugMenu(overlay, size.X, size.Y, panelsBottom);
+                    if (debugMenuOpen) DrawDebugMenu(overlay, size.X, size.Y, statsVisible ? menuTop : panelsBottom, atRight: statsVisible);
+                    if (player.MapPick is not null && player.MapTabShown) DrawMapPickHint(overlay, size.X, size.Y);
+                    if (ExplodeClickOn) DrawExplodeClickHint(overlay, size.X, size.Y);
+                    if (inspectorMenuOpen) DrawInspectorMenu(overlay, size.X, size.Y, panelsBottom);
+                    if (interiorEditorOpen) DrawInteriorEditor(overlay, size.X, size.Y, panelsBottom);
+                    if (ConsoleOpen) DrawConsole(overlay, size.X, size.Y);
                     profiler?.Draw(overlay, size.X, size.Y);
                     profiler?.DrawVram(overlay, size.X, size.Y);
                 }
@@ -785,10 +855,10 @@ sealed partial class GameHost
                 Meitou.Rendering.StageClock.UiPart(Meitou.Rendering.StageClock.UiSettings);
                 // Over everything: the letterbox and the cinema's editor (F6, also with F7); the game hides its status line.
                 if (overlay is not null && !covered) cinema.Draw(overlay, size.X, size.Y, shot || take || feedbackShot || (interfaceHidden && !cinema.EditorVisible), showStatus: false);
-                // F11's character boxes and paths, on top of everything; the paths stay once ticked, with the statistics hidden too.
+                // The character boxes and paths (F11's tickboxes, also F10's Overlays rows), on top of everything; both stay once ticked, with the statistics hidden too.
                 if (ui && overlay is not null && !covered && !shot && !feedbackShot)
                 {
-                    if (characterBoxes && statsVisible && gpu.Characters is { } boxed) DrawCharacterBoxes(overlay, boxed, camera, size.X, size.Y);
+                    if (characterBoxes && gpu.Characters is { } boxed) DrawCharacterBoxes(overlay, boxed, camera, size.X, size.Y);
                     if (walkPaths) DrawWalkPaths(overlay, session.CurrentSnapshot, camera, size.X, size.Y);
                 }
                 Meitou.Rendering.StageClock.UiPart(Meitou.Rendering.StageClock.UiCinema);
@@ -833,6 +903,7 @@ sealed partial class GameHost
                 characterTris += gpu.Characters?.DrawnTriangles ?? 0;
                 if (gpu.Foliage is { Enabled: true } drawnFoliage) grassBlades += drawnFoliage.DrawnBlades;
                 if (takeFile is not null) { FramebufferCapture.SavePng(display.Context, finalPicture ?? backbuffer, takeFile, size.X, size.Y, topDown: finalPicture is not null); cinema.FrameDone(); }
+                else if (shot && shotPath is not null) SaveControlShot(display.Context, finalPicture ?? backbuffer, size.X, size.Y, topDown: finalPicture is not null);
                 else if (shot && GameScreenshots.Multiplier(install.Root) is >= 2 and var multiplier) SaveSupersampled(display.Context, multiplier, size.X, size.Y);
                 else if (shot) SaveScreenshot(display.Context, finalPicture ?? backbuffer, size.X, size.Y, topDown: finalPicture is not null);
                 if (shot) player.EndScreenshot();
@@ -842,6 +913,7 @@ sealed partial class GameHost
                     FeedbackCaptured(FramebufferCapture.ReadPicture(display.Context, finalPicture ?? backbuffer, size.X, size.Y, topDown: finalPicture is not null), size.X, size.Y);
                 }
             }
+            else if (screenshotRequested && shotPath is not null && ++shotNoFrame >= 30) ControlShotFailed("the frame cannot be drawn (window minimised or device lost)");
             statsTimer += dt;
             if (statsTimer >= 1)
             {
@@ -876,7 +948,7 @@ sealed partial class GameHost
                 Limit(frame, now, (frameGen is { Enabled: true } ? 2.0 : 1.0) / fpsLimit);
             }
         }
-        WritePlayBench(window.FramebufferSize);
+        WritePlayBench(FramebufferSizeNow());
         // A save still being written finishes before the game closes (the original's quit waits while its save manager is busy, FUN_14082b6e0, Verified).
         try { saveWrite?.Wait(); } catch (AggregateException) { }
         SaveSettings();
@@ -894,19 +966,20 @@ sealed partial class GameHost
         if (gpu.Post is { } postChain) postChain.FrameGen = null;
         frameGen?.Dispose();   // before the display: it configures the layer's swapchain
         uiLayer?.Dispose();
+        headlessTarget?.Dispose();
         DisposeTitleScene();
         gpu.Dispose();
-        silkInput.Dispose();
-        return 0;
+        silkInput?.Dispose();
+        return controlExitCode;
 
         void SaveSettings()
         {
             // Command-line window/vsync overrides alone remain local to this run.
             if (display.VSync != savedVSync) config.VSync = display.VSync;
             if (fpsLimit != initialFpsLimit) config.FpsLimit = fpsLimit;
-            if (BorderlessFullScreen.IsOn(window) != savedFullScreen) config.FullScreen = BorderlessFullScreen.IsOn(window);
+            if (FullScreenOn() != savedFullScreen) config.FullScreen = FullScreenOn();
             savedVSync = display.VSync;
-            savedFullScreen = BorderlessFullScreen.IsOn(window);
+            savedFullScreen = FullScreenOn();
             initialFpsLimit = fpsLimit;
             if (panel is not null && !lowEnd)
             {
@@ -1192,6 +1265,7 @@ sealed partial class GameHost
         {
             Console.WriteLine($"relations {message}");
             player.Notice(message);
+            if (explodeAsker is { } asker && message.StartsWith("Explode at ", StringComparison.Ordinal)) { asker.Print(message); explodeAsker = null; }
         }
         foreach (var line in world.TakeSaid()) player.LogMessage(line.Owner, line.Text, line.Player ? MessageTone.Player : MessageTone.Normal);
         // Stealth knock-outs: the original's floating "*Thunk*" (a hit) or "Failed!" over the attacker, here as a notice.

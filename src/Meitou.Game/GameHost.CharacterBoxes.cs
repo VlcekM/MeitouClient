@@ -5,7 +5,7 @@ using Meitou.Rendering.Characters;
 namespace Meitou.Game;
 
 /// <summary>
-/// F11's character boxes (Meitou only): a checkbox on the statistics' characters line that outlines, over everything, each character its "drawn" count
+/// The character boxes (Meitou only; a checkbox on the F11 statistics' characters line, and the F10 Overlays row "Character boxes", one shared switch) that outline, over everything, each character its "drawn" count
 /// counts (<see cref="CharacterRenderer.CountedBoxes"/>: in the colour view's frustum and not hidden by fog, whether or not anything covers it).
 /// </summary>
 sealed partial class GameHost

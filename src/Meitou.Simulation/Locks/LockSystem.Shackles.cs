@@ -43,7 +43,7 @@ public sealed partial class LockSystem
             if (!TaskStart.Eligible(world, c, RowOf(order.Work))) continue;
             if (order.Work == ShackleWork.Cut && Lockpicking.BestTool(c) is null)
             {
-                world.Post($"{c.Name}: I don't have any tools");
+                Say(world, c, "I don't have any tools");
                 continue;
             }
             StartWork(world, s, id != order.Wearer ? CharacterTask.GoTo : CharacterTask.Idle, RowOf(order.Work), null, order.Wearer, order.Work, order.Queued);
@@ -144,27 +144,31 @@ public sealed partial class LockSystem
                     if (PutOn(world, c, wearer, item))
                     {
                         // The sound of the original's drop onto the armour slot (the interface's Item_Drop); only the player's order has one.
-                        if (c.IsPlayer) { world.Post($"{c.Name} put {item.Name} on {wearer.Name}"); world.EmitSound(SoundKind.ShacklesOn, s, next[s].Position, item.Record); }
+                        if (c.IsPlayer)
+                        {
+                            world.Post(Loc.Tr("{1} put {2} on {3}", c.Name, item.Name, wearer.Name));
+                            world.EmitSound(SoundKind.ShacklesOn, s, next[s].Position, item.Record);
+                        }
                     }
-                    else if (c.IsPlayer) world.Post($"{wearer.Name} already wears something in that slot");
+                    else if (c.IsPlayer) world.Post(Loc.Tr("{1} already wears something in that slot", wearer.Name));
                     break;
                 case ShackleWork.Pick:
                     switch (Picking.StepShackles(world, s, job.Wearer, item, world.TickSeconds, Crimes))
                     {
                         case PickOutcome.Open: c.Shackles = null; break;
                         case PickOutcome.Success: c.Shackles = null; Freed(world, s, c, job.Wearer, "Pick success!"); break;
-                        case PickOutcome.Failed: if (c.IsPlayer) world.Post($"{c.Name}: Pick failed"); FailedPick(world, s, job.Wearer); break;
-                        case PickOutcome.NotAllowed: c.Shackles = null; if (c.IsPlayer) world.Post($"{c.Name}: I'm not skilled enough..."); break;
+                        case PickOutcome.Failed: if (c.IsPlayer) Say(world, c, "Pick failed"); FailedPick(world, s, job.Wearer); break;
+                        case PickOutcome.NotAllowed: c.Shackles = null; if (c.IsPlayer) Say(world, c, "I'm not skilled enough..."); break;
                     }
                     break;
                 case ShackleWork.Cut:
-                    if (Lockpicking.BestTool(c) is null) { c.Shackles = null; if (c.IsPlayer) world.Post($"{c.Name}: I don't have any tools"); break; }
+                    if (Lockpicking.BestTool(c) is null) { c.Shackles = null; if (c.IsPlayer) Say(world, c, "I don't have any tools"); break; }
                     if (Picking.CutShackles(world, s, job.Wearer, item, world.TickSeconds, Crimes)) { c.Shackles = null; Freed(world, s, c, job.Wearer, "Shackles broken!"); }
                     break;
                 case ShackleWork.Break:
                     c.Shackles = null;
                     if (Picking.BreakShackles(world, s, job.Wearer, item, Crimes)) BruteForced(world, s, c, job.Wearer);
-                    else if (c.IsPlayer) world.Post($"{c.Name}: I'm not strong enough to do that");
+                    else if (c.IsPlayer) Say(world, c, "I'm not strong enough to do that");
                     break;
             }
         }
@@ -184,14 +188,18 @@ public sealed partial class LockSystem
     static void BruteForced(World world, int s, CharacterCold c, CharacterId freed)
     {
         world.EmitSound(SoundKind.Unlocked, s, world.Characters.Next[s].Position);
-        if (c.IsPlayer) { world.Post($"{c.Name}: Shackles broken!"); world.Post($"{c.Name}: *Crunck*"); }
+        if (c.IsPlayer)
+        {
+            Say(world, c, "Shackles broken!");
+            Say(world, c, "*Crunck*");
+        }
         Thank(world, world.Characters.IdOf(s), freed);
     }
 
     static void Freed(World world, int s, CharacterCold c, CharacterId wearer, string message)
     {
         world.EmitSound(SoundKind.Unlocked, s, world.Characters.Next[s].Position);
-        if (c.IsPlayer) world.Post($"{c.Name}: {message}");
+        if (c.IsPlayer) Say(world, c, message);
         // An NPC freed by a player character thanks it (EV_UNLOCK_MY_CAGE_OR_SHACKLES, as for a player releasing a prisoner, economy.md 11.5).
         if (c.IsPlayer) Thank(world, world.Characters.IdOf(s), wearer);
     }

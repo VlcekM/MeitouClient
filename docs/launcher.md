@@ -224,7 +224,11 @@ languages Meitou has texts for, marked when Meitou's own texts are not translate
 folder's `settings.cfg` (encoding and line endings kept) and remembers the code in `launcher.json` (`Language`, used without a Kenshi folder); at
 start the `settings.cfg` value wins. The launcher's labels come from the same `.po` catalogs as the game's Meitou texts
 ([localisation](formats/localisation.md)); a string without a translation stays English. Mod names, news and release notes are data, not translated.
-Labels the layout holds are translated by one walk of the visual tree (texts, button captions, placeholders, tooltips); a text the code
+Labels the layout holds are translated by one walk of the visual and logical trees (texts, button captions, placeholders, tooltips; a control
+never shown has only logical children). Combo box items are data and not walked, except the label items of the Mac renderer and memory
+boxes (`LabelCombos`); the closed box keeps the content its selected item had when chosen, so a selection-box template redraws it in the
+current language rather than a re-selection, which would run the box's change handlers. Texts the code sets later (hints, statuses) go in as
+inlines, which the walk leaves alone, or it would put back the first text it saw. A text the code
 builds with a value in it is a catalog key with the game's `{1}`, `{2}` placeholders (`Tr("Downloading {1}...", title)`), never an
 interpolated string, which no translation could match.
 
@@ -263,6 +267,10 @@ interpolated string, which no translation could match.
   question has a box per mod (ticked: allowed now) and three answers: Data only all, Trust all, Apply (the ticks). Escape decides
   nothing. Allowed names go to `trustedCodeMods` in `meitou.user.json` (kept by game releases since 2026-10-20, which keep unknown
   keys); data-only names go to the launcher's `DataOnlyCodeMods`, so Play does not ask about them again.
+- A code mod's row lists what it requires, loads after and conflicts with, and each refusal the game would make without its code
+  (preliminary: DLLs and initialization are checked only at start); **Arrange** proposes an
+  order meeting the enabled mods' code and `.mod` header dependencies, applied only when accepted and saved only by Save or Play; a
+  contradiction moves nothing and is shown ([dependencies](modding-dependencies.md#launcher)).
 
 ## Continue
 
@@ -271,7 +279,7 @@ when the window is activated and when the game exits); Play beside it reads **Ma
 the same version with `--load <folder>` (game 0.10.0 and later) for the
 newest slot From save lists (newest `quick.save` over the three roots), only when its CAMERA `mods` list holds the enabled mods, order
 ignored, names compared case-insensitively. Otherwise it starts nothing and the status says why: other mods (which are not enabled,
-which are not in the save), no mod list, an unreadable save, or Launch arguments that already pick a start (`--load`, `--new-game`,
+which are not in the save), no mod list, an unreadable save, or Launch arguments that already pick a start (`--load`, `--continue`, `--new-game`,
 `--no-population`, `--duel`, `--sandbox`, `--battle`, `--terrain-sandbox`; the game refuses `--load` beside the others).
 
 ## News

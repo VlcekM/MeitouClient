@@ -72,7 +72,7 @@ internal static class NavInteriors
             Join(vertices, polygons, neighbours, areas, kept, links, doorOf, doorIds, exteriorCount, offsets[k], interiors[k].Mesh.PolygonCount, interiors[k].Doorless,
                 interiors[k].Key ?? $"interior {k}", log, interiors[k].Ruin ? RuinHullJoinDistance : HullJoinDistance);
 
-        CarryKeep(polygons.Count, neighbours, links, areas, kept);
+        CarryKeep(new KeptSet(vertices, polygons, neighbours, links, areas, kept, exteriorCount));
 
         var heights = new List<HeightGrid?>();
         foreach (var m in interiors.Select(i => i.Mesh).Prepend(exterior))
@@ -85,31 +85,49 @@ internal static class NavInteriors
             Surfaces = new NavSurfaces([.. (exterior.Surfaces?.Corners ?? []).Concat(interiors.SelectMany(i => i.Mesh.Surfaces?.Corners ?? []))]),
             Terrain = exterior.Terrain,
             Heights = ZoneNavMesh.HeightsOf(heights),
+            InteriorStart = exteriorCount,
         };
     }
+
+    /// <summary>The combined mesh's lists <see cref="CarryKeep"/> reads; polygons from <paramref name="ExteriorCount"/> on are the interiors'.</summary>
+    readonly record struct KeptSet(List<Vector3> Vertices, List<int[]> Polygons, List<int[]> Neighbours, List<List<int>?> Links, List<byte> Areas,
+        List<bool> Kept, int ExteriorCount);
 
     /// <summary>
     /// An interior is joined whatever its own pruning kept (it may have no seed: an Ancient Lab or Ash Dome without doors or nodes), to exterior polygons
     /// the exterior's pruning kept, and the regions joined to a kept polygon are kept too (engine choice; the original connects these interiors,
-    /// docs/game/pathfinding.md "Door joins").
+    /// docs/game/pathfinding.md "Door joins"). Between exterior polygons it stops at edges the seed flood does not pass
+    /// (<see cref="SeedPruner.MinPortalWidth"/>).
     /// </summary>
-    static void CarryKeep(int count, List<int[]> neighbours, List<List<int>?> links, List<byte> areas, List<bool> kept)
+    static void CarryKeep(KeptSet m)
     {
         var queue = new Queue<int>();
-        for (int p = 0; p < count; p++) if (kept[p]) queue.Enqueue(p);
+        for (int p = 0; p < m.Kept.Count; p++) if (m.Kept[p]) queue.Enqueue(p);
         while (queue.Count > 0)
         {
             int p = queue.Dequeue();
-            foreach (int n in neighbours[p]) Keep(n);
-            if (links[p] is { } l) for (int i = 1; i < l.Count; i += 2) Keep(l[i]);
+            var nb = m.Neighbours[p];
+            for (int k = 0; k < nb.Length; k++)
+                if (!NarrowExteriorEdge(m, p, k)) Keep(nb[k]);
+            if (m.Links[p] is { } l) for (int i = 1; i < l.Count; i += 2) Keep(l[i]);
         }
 
         void Keep(int n)
         {
-            if (n < 0 || kept[n] || areas[n] == NavArea.Null) return;
-            kept[n] = true;
+            if (n < 0 || m.Kept[n] || m.Areas[n] == NavArea.Null) return;
+            m.Kept[n] = true;
             queue.Enqueue(n);
         }
+    }
+
+    /// <summary>
+    /// Whether exterior polygon <paramref name="p"/>'s edge <paramref name="k"/> is narrower than a portal (an exterior polygon's neighbours are exterior).
+    /// </summary>
+    static bool NarrowExteriorEdge(KeptSet m, int p, int k)
+    {
+        if (p >= m.ExteriorCount) return false;
+        var poly = m.Polygons[p];
+        return SeedPruner.Narrow(m.Vertices[poly[k]], m.Vertices[poly[(k + 1) % poly.Length]]);
     }
 
     /// <summary>Links the door polygons of one interior (polygons [first, first + count)) to the exterior's door polygons of the same door, or a doorless one along its hull.</summary>

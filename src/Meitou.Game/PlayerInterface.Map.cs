@@ -49,6 +49,8 @@ sealed partial class PlayerInterface
     static Vector3 MapWorld(Vector2 normalized) => new(normalized.X * 2 * MapExtent - MapExtent, 0, normalized.Y * 2 * MapExtent - MapExtent);
 
     float UiScale => Height / 1080f;
+    /// <summary>Whether the overview shows its Map tab now (the F10 map-teleport hint reads it).</summary>
+    public bool MapTabShown => MapTabOpen;
     bool MapTabOpen => UiVisible && faithfulScreens.IsOpen("overview") && faithfulScreens.GetTab("overview", "TabsMain") == 0;
     bool OverMap(Vector2 p) => MapTabOpen && mapViewport.Contains(p.X, p.Y) && !faithfulScreens.HasModal;
     /// <summary>The original's map scale: on-screen pixels per pixel of the 4096 canvas. The least fits the whole map, the most is 1.5 x the UI scale.</summary>
@@ -61,7 +63,32 @@ sealed partial class PlayerInterface
     bool MapPointerDown(Vector2 p)
     {
         if (!OverMap(p)) return false;
-        mapDrag = p; return true;
+        mapDrag = p; mapPickFrom = p; return true;
+    }
+
+    /// <summary>
+    /// Debug (the F10 tool "Teleport on map"): while set, a left click on the map (a press and release within <see cref="MapPickSlop"/> pixels, scaled up with the UI, so panning still works) calls it with
+    /// the world point (X, Z; Y 0). With <see cref="MapPickSticky"/> (the menu's toggle) it stays set, whether the map is open or not; otherwise the click clears it, and closing the Map tab does too.
+    /// </summary>
+    public Action<Vector3>? MapPick { get; private set; }
+    /// <summary>Whether <see cref="MapPick"/> stays armed after a click and while the map is closed (set by <see cref="ArmMapPick"/>).</summary>
+    public bool MapPickSticky { get; private set; }
+
+    /// <summary>Arms <see cref="MapPick"/> without opening the map, for every click until <see cref="DisarmMapPick"/> (the toggle "Teleport on map").</summary>
+    public void ArmMapPick(Action<Vector3> pick) { MapPick = pick; MapPickSticky = true; }
+
+    public void DisarmMapPick() { MapPick = null; MapPickSticky = false; }
+    Vector2? mapPickFrom;
+    const float MapPickSlop = 4;
+
+    /// <summary>The left button up: a click on the map (not a pan) hands its world point to <see cref="MapPick"/>.</summary>
+    void MapPickUp(Vector2 p)
+    {
+        var from = mapPickFrom;
+        mapPickFrom = null;
+        if (MapPick is not { } pick || from is not { } start || Vector2.Distance(start, p) > MapPickSlop * MathF.Max(1, UiScale) || !OverMap(p)) return;
+        if (!MapPickSticky) MapPick = null;
+        pick(MapWorld(Vector2.Clamp(mapView.At(mapViewport, p), Vector2.Zero, Vector2.One)));
     }
     bool MapPointerMove(Vector2 p)
     {
@@ -122,7 +149,7 @@ sealed partial class PlayerInterface
         }
         if (!shown && mapShown && !faithfulScreens.IsOpen("overview") && session.CurrentSnapshot.Towns.Any(t => (t & TownKnowledge.Recent) != 0))
             Say(new SeenDiscoveriesCommand { Tick = session.World.Tick });
-        if (!shown) { mapDrag = null; mapRightPressed = false; }
+        if (!shown) { mapDrag = null; mapRightPressed = false; if (!MapPickSticky) MapPick = null; mapPickFrom = null; }
         mapShown = shown;
     }
 

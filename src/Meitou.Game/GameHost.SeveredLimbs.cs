@@ -60,6 +60,22 @@ sealed partial class GameHost
     /// <summary>The look with the skin tone of the character the limb was cut from (<see cref="FallSource.SkinTone"/>; none for a limb read from a save).</summary>
     static LimbLook? ToneOf(LimbLook? look, GroundItemSnapshot g) => look is null ? null : look with { SkinTone = g.Fall?.SkinTone ?? default };
 
+    readonly Dictionary<(string Record, Vector3 Tone), MouthMesh?> mouthMeshes = [];
+
+    /// <summary>
+    /// The limb an animal holds in its mouth (<see cref="CharacterSnapshot.Mouth"/>), drawn at its <c>mouth</c> point by the character renderer: the item's <c>mesh</c> (the original attaches
+    /// that one, <c>FUN_140537690</c>) with the severed limb's look and the cut character's skin tone. Null for none, or an item without a mesh.
+    /// </summary>
+    MouthMesh? MouthOf(CharacterSnapshot c)
+    {
+        if (c.Mouth is not { } record) return null;
+        if (mouthMeshes.TryGetValue((record, c.MouthTone), out var known)) return known;
+        MouthMesh? made = null;
+        if (scene.Database?.Find(record) is { } item && item.GetPath("mesh") is { Length: > 0 } mesh)
+            made = new MouthMesh(mesh, LimbLookOf(record) is { } look ? look with { SkinTone = c.MouthTone } : null);
+        return mouthMeshes[(record, c.MouthTone)] = made;
+    }
+
     /// <summary>The position of a limb's piece: its mesh's origin (a limb keeps the mesh's own space, <see cref="DebrisRenderer"/>; the other pieces are centred on their bounds).</summary>
     static Vector3 LimbMiddle(string mesh, LimbLook? look, Quaternion rotation, Vector3 origin) => origin;
 

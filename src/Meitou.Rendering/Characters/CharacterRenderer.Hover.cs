@@ -4,13 +4,6 @@ using Silk.NET.Vulkan;
 
 namespace Meitou.Rendering.Characters;
 
-/// <summary>One hover-outline mask: the characters outlined in one colour, drawn alone (<see cref="CharacterRenderer.DrawHoverMasks"/>).</summary>
-/// <param name="Colour">Its colour target, alpha 1 where a character is.</param>
-/// <param name="Depth">Its depth, from the projection <paramref name="Near"/>..<paramref name="Far"/>.</param>
-/// <param name="Tint">The outline's and tint's colour (alpha: their strength).</param>
-/// <param name="Spheres">The bounding spheres of the characters in it.</param>
-public readonly record struct HoverMask(GpuTexture Colour, GpuTexture Depth, float Near, float Far, Vector4 Tint, IReadOnlyList<(Vector3 Centre, float Radius)> Spheres);
-
 /// <summary>The outlined characters drawn alone into masks of their own, one per colour, for the hover outline (<see cref="HoverOutlineRenderer"/>, docs/game/ui-input.md "Hover outline").</summary>
 internal sealed unsafe partial class CharacterRenderer
 {

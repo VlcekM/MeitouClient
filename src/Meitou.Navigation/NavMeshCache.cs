@@ -13,8 +13,8 @@ namespace Meitou.Navigation;
 public sealed class NavMeshCache
 {
     /// <summary>Bump when the builder's output changes for the same input (a new rule in the gatherer or the pruner).</summary>
-    public const int BuilderVersion = 45;
-    const int FormatVersion = 5;
+    public const int BuilderVersion = 50;
+    const int FormatVersion = 6;
     static readonly byte[] Magic = "MNAV"u8.ToArray();
 
     public string Directory { get; }
@@ -75,6 +75,7 @@ public sealed class NavMeshCache
             if (r.ReadInt32() != zoneX || r.ReadInt32() != zoneZ || r.ReadUInt32() != buildingHash || r.ReadUInt32() != settingsHash) return null;
             var boundsMin = new Vector2(r.ReadSingle(), r.ReadSingle());
             var boundsMax = new Vector2(r.ReadSingle(), r.ReadSingle());
+            int interiorStart = r.ReadInt32();
             var vertices = new Vector3[r.ReadInt32()];
             for (int i = 0; i < vertices.Length; i++) vertices[i] = new Vector3(r.ReadSingle(), r.ReadSingle(), r.ReadSingle());
             var doorIds = new string[r.ReadInt32()];
@@ -120,7 +121,8 @@ public sealed class NavMeshCache
                 }
             }
             if (r.ReadInt32() != count) return null; // trailer: truncated writes fail here
-            return new ZoneNavMesh { ZoneX = zoneX, ZoneZ = zoneZ, Vertices = vertices, Polygons = polygons, Neighbours = neighbours, Areas = areas, Links = links, Kept = kept, BoundsMin = boundsMin, BoundsMax = boundsMax, DoorIds = doorIds.Length > 0 ? doorIds : null, DoorOf = doorOf, Surfaces = corners.Length > 0 ? new NavSurfaces(corners) : null, Heights = heights };
+            return new ZoneNavMesh { ZoneX = zoneX, ZoneZ = zoneZ, Vertices = vertices, Polygons = polygons, Neighbours = neighbours, Areas = areas, Links = links, Kept = kept, BoundsMin = boundsMin, BoundsMax = boundsMax, DoorIds = doorIds.Length > 0 ? doorIds : null, DoorOf = doorOf, Surfaces = corners.Length > 0 ? new NavSurfaces(corners) : null, Heights = heights,
+                InteriorStart = interiorStart };
         }
         catch (Exception e) when (e is IOException or EndOfStreamException or InvalidDataException or OverflowException or OutOfMemoryException)
         {
@@ -139,6 +141,7 @@ public sealed class NavMeshCache
             w.Write(FormatVersion);
             w.Write(m.ZoneX); w.Write(m.ZoneZ); w.Write(buildingHash); w.Write(settingsHash);
             w.Write(m.BoundsMin.X); w.Write(m.BoundsMin.Y); w.Write(m.BoundsMax.X); w.Write(m.BoundsMax.Y);
+            w.Write(m.InteriorStart);
             w.Write(m.Vertices.Length);
             foreach (var v in m.Vertices) { w.Write(v.X); w.Write(v.Y); w.Write(v.Z); }
             var ids = m.DoorIds ?? [];

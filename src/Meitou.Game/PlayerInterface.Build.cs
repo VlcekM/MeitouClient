@@ -61,7 +61,7 @@ sealed partial class PlayerInterface
 
     public bool BuildModeOn => buildMode;
 
-    IReadOnlySet<string> Unlocked() => session.CurrentSnapshot.UnlockedBuildings;
+    IReadOnlySet<string> Unlocked() => levelBuild ? LevelEveryBuilding() : session.CurrentSnapshot.UnlockedBuildings;
 
     /// <summary>B: opens build mode (pausing the game and closing the inventory windows), or closes it (the queue of unconfirmed ghosts is dropped).</summary>
     public void ToggleBuildMode() => SetBuildMode(!buildMode);
@@ -105,7 +105,7 @@ sealed partial class PlayerInterface
 
     // ---- the menu's choice ----
 
-    IReadOnlyList<string> BuildCategories() => buildHost?.Menu.Categories(Unlocked()) ?? [];
+    IReadOnlyList<string> BuildCategories() => buildHost?.Menu.Categories(Unlocked()) is not { } categories ? [] : levelBuild ? [.. categories.Order(StringComparer.Ordinal)] : categories;
 
     /// <summary>The chosen category: the first that shows until one is chosen, none when nothing is unlocked.</summary>
     string? CurrentCategory()
@@ -174,6 +174,7 @@ sealed partial class PlayerInterface
     void UpdateBuild()
     {
         if (buildMode && !faithfulScreens.IsOpen("build")) SetBuildMode(false);   // Esc closed the window
+        UpdateLevelEditor();
         UpdateSite();
         UpdateStorageOpening();
         UpdateRock();
@@ -239,7 +240,7 @@ sealed partial class PlayerInterface
                 ghostMargins = settled.After;
                 query = query with { Position = position, Lift = ghostLift };
             }
-            var failure = !Unlocked().Contains(building.Id) ? PlacementFailure.NotAvailable : PlacementCheck.Evaluate(query);
+            var failure = levelBuild ? PlacementFailure.None : !Unlocked().Contains(building.Id) ? PlacementFailure.NotAvailable : PlacementCheck.Evaluate(query);
             ghost = (position, rotation, failure, building, footprint?.Place(position, Quaternion.CreateFromAxisAngle(Vector3.UnitY, yaw)), on);
         }
         buildMessage = ghost is { Failure: not PlacementFailure.None } g ? PlacementCheck.Message(g.Failure)
@@ -311,7 +312,7 @@ sealed partial class PlayerInterface
         foreach (var piece in pieces)
         {
             float yaw = PlacementCheck.YawOf(piece.Rotation);
-            var failure = !available ? PlacementFailure.NotAvailable : PlacementCheck.Evaluate(new PlacementQuery(piece.Data, piece.Position, piece.Rotation, yaw, 0, host.Parts(piece.Data.Id),
+            var failure = levelBuild ? PlacementFailure.None : !available ? PlacementFailure.NotAvailable : PlacementCheck.Evaluate(new PlacementQuery(piece.Data, piece.Position, piece.Rotation, yaw, 0, host.Parts(piece.Data.Id),
                 buildQueue, snapshot.Characters, snapshot.Buildings, towns, faction, host.Placement) { WallPiece = true, Ignore = WallIgnore(piece, joints) });
             wallPieces.Add((piece, failure, host.Placement.Footprint(piece.Data.Id)?.Place(piece.Position, Quaternion.CreateFromAxisAngle(Vector3.UnitY, yaw))));
         }
@@ -442,6 +443,7 @@ sealed partial class PlayerInterface
 
     void BuildConfirm()
     {
+        if (levelBuild) { LevelConfirm(); return; }
         if (buildQueue.Count == 0) return;
         Sound("Building_Confirm");
         Say(new PlaceBuildings([.. buildQueue.Select(q => new PlannedBuilding(q.Building.Id, q.Position, q.Rotation, q.Floor, q.Parent, GhostBoundsSize(q.Building)))]) { Tick = session.World.Tick });
@@ -477,7 +479,7 @@ sealed partial class PlayerInterface
         // The building's picture (docs/game/ui-screens.md "Building icons"): the game's saved one, else the renderer's drawing; the frame stays empty while it loads.
         if (BuildingImage(building) is { } image) b.Properties["BuildingImage"] = image;
         else b.Hidden.Add("BuildingImage");
-        b.Text["CommandsTextBox"] = BuildCommandsText();
+        b.Text["CommandsTextBox"] = levelBuild ? string.Join('\n', LevelCommandLines) : BuildCommandsText();
         b.Properties["CommandsTextBox"] = new Dictionary<string, string> { ["WordWrap"] = "true", ["TextAlign"] = "Left Top", ["TextColour"] = MyGuiColours.TemplateInk(uiResources, "Kenshi_GenericTextBox") };
         b.Text["FloorText"] = Loc.Tr("Floor {1,num}", Floor?.Get() ?? 0);
         Enable("FloorArrowUp", "FloorArrowUp");
@@ -547,6 +549,7 @@ sealed partial class PlayerInterface
                 buildMember = null;
                 break;
             case ("BuildingsList", "select"):
+                if (!buildDiscarded && (int)e.Value == buildGroup) { DropPlacementChoice(); break; }
                 buildGroup = (int)e.Value;
                 buildDiscarded = false;
                 buildMember = null;

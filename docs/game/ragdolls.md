@@ -190,7 +190,7 @@ player order gets it up (1 when sneaking), as does a thief's watcher noticing.
   event 0x18. Without the order the get-up only says 0x17 / 0x18.
 - Meitou: `MedicalState.PlayingDead` (not saved): a knockout that ends while `MedicalContext.PlayDead` is set keeps the
   character `Unconscious` (so everyone treats it as down) with no timer. The get-up line (`DialogueSystem.SeeGettingUp`) is 23 / 25 / 24 by these counts. `BodySystem.Schedule` sets it serially from the last
-  tick by the character's senses' counts (`BodySystem.Senses`, [senses](perception.md#senses)); a player
+  tick by the character's senses' counts (`BodySystem.Senses`, [senses](perception.md#senses); the character looks while playing dead or about to wake, faded counts would always read safe); the waking window is Act's longest step, so a far character is asked too; a player
   order standing it up grants the toughness (`BodySystem.GotUpByOrder`); animals never play dead. Rechecked every 15 ticks
   (engine choice). `MedicalState.StandUp` ends it. Health header: `HudText.HealthWord`.
 
@@ -213,7 +213,15 @@ marks each bone **pinned** (kinematic, follows animation) or **simulated** and c
 | CARRY_MODE, human | both Forearms, Head | the rest (animated carried pose) |
 | CARRY_MODE, animal | all but the carry bone | carry bone |
 
-The carry bone is a skeleton bone, not a body name: its body is the one the ragdoll file attaches to that bone (**Observed**, Pet Dog: bone `Bip01`, its ragdoll body is the unnamed "Actor"). Meitou matches by bone (`RagdollSystem.Simulates`); matching the name pinned nothing and the whole dog fell to the ground under its carrier (issue #176, parity s15-f24). Checked in `--sandbox`: the carried dog hangs from the shoulder.
+The carry bone is a skeleton bone, not a body name: its body is the one the ragdoll file attaches to that bone (**Observed**, Pet Dog: bone `Bip01`, its ragdoll body is the unnamed "Actor"). Meitou matches by bone (`RagdollSystem.Simulates`); matching the name pinned nothing and the whole dog fell to the ground under its carrier (issue #176, parity s15-f24).
+
+**Verified** (disassembly of `ScythePhysicsT::vfunc_2` `FUN_1407d4cd0`) the carried animal's pin each frame: the pinned actor (controller `+0x130`) is made kinematic and set to orientation
+carrier node rotation x the attach bone's derived rotation x its binding-pose inverse (the bone's turn from its binding pose), position the attach bone's world position
+(`FUN_1405b1c50`, the carrier's position when zero) + the bone's world rotation x the vector at controller `+0x160`. The attach (`vfunc_15` `FUN_1407d5290`) subtracts from that vector a
+per-bone vector of the carrier's `AnimationClass` (`FUN_1405b83a0`, map entry `+0x28`, zero when the bone is missing); its starting value and meaning are **Unknown**.
+Meitou (`RagdollSystem.AnimalAttach`): places the animal's node so that its carry bone's actor has exactly that pose (the actor has no rotation of its own, [phs](../formats/phs.md); Meitou's body is its shape, placed on it), with the vector taken as zero (engine choice); the rest hangs. Headless probe (Bonedog on a
+Greenlander, issue #307): the dog's `Bip01` on the shoulder bone, its head level with it out to the carrier's left, the front paws 8 to 11 below; with the human rule it stood 6 above
+the shoulder, over the head.
 
 **Verified** (decompile of `FUN_1405b8720`, the `+0x5a` carry flag branch): a carried human keeps its animated "carry me" pose and only the two forearms and the head are simulated; every other bone,
 legs included, is pinned to the animation. The carried body's scene node is **not** moved to a ragdoll body (`FUN_1407d3c00` takes the root-body position only for WHOLE or a carried animal): the
@@ -246,10 +254,10 @@ bodies zero velocity. The setter passes the character's movement velocity (Y zer
 |v|² > 100), but slot 10 never uses it (**Verified**: its register is reused after the clamp). No
 hit impulse exists. `FUN_1407d2d10` (per-limb speed caps) and `FUN_1407d2290` have no callers.
 
-Meitou ("Advanced ragdolls", Advanced settings, on; Faithful off; `BodyOptions.AdvancedRagdolls`): a new whole-body (not carried) ragdoll starts with every new body at one speed, capped at half `RagdollPhysics.MaxSpeed`: the
+Meitou ("Advanced ragdolls", Advanced settings, on; Faithful off; `BodyOptions.AdvancedRagdolls`): a new whole-body (not carried) ragdoll starts with every new body at one speed: the
 `CharacterCold.Blow` that a downing melee hit or bolt left (`CombatSystem.Knockdown`: the victim's last-tick velocity plus a push along the blow of
-0.4 x (cut + blunt + pierce) units/s, 10 to 50, with 0.2 of it upward; executions set it too; also kept as `CharacterCold.Knockdown` for a cut-off head), else the character's last-tick velocity (a bleed-out while running). Bodies kept from a
-partial ragdoll keep their own speed; a ragdoll restored from a save starts as saved.
+0.5 x (cut + blunt + pierce) units/s, at least 12.5, uncapped, with 0.2 of it upward; executions set it too; also kept as `CharacterCold.Knockdown` for a cut-off head), else the character's last-tick velocity (a bleed-out while running). A blow's push
+is focused on the struck part (below). Bodies kept from a partial ragdoll keep their own speed; a ragdoll restored from a save starts as saved.
 
 ### Advanced ragdolls (Meitou)
 
@@ -262,6 +270,9 @@ Engine feature behind the same switch (`BodyOptions.AdvancedRagdolls`; Faithful:
   changes (a knocked-out body dying), removed at the freeze. Gravity beats it, so it shapes the rest pose rather than holding one.
 - **Spin on impact**: a new ragdoll started by a blow (`CharacterCold.Blow`'s push) spins its upper arms along the push and its thighs against it (the feet held the ground),
   0.15 rad/s per unit/s of push, at most 6, each limb by its own roll of 0.6 to 1.4 (`RngPurpose.RagdollSpin`).
+- **Focused push**: the struck part's LOCATIONAL_DAMAGE `bone name` (else `bone name 2`; its nearest ancestor with a body when the bone has none) names the struck body
+  (`RagdollBlow.Bone`, `RagdollSystem.Struck`). The struck body takes the whole push times the ragdoll's mass over its own (at most 4x: an impulse on it
+  alone), every other body 0.4 of it, so the body is thrown from the hit part and the joints drag the rest; no start cap (the physics holds each body to `RagdollPhysics.MaxSpeed`, 200). No bone: the whole push on every body.
 
 ## Per frame
 
@@ -269,9 +280,14 @@ Driver `FUN_1405b8180` (AnimationClass), update `FUN_1407d3c00`:
 
 - Root: for WHOLE (or a carried animal) the scene node is set to the root body's position
   (`FUN_1407d1490`: the body named at RagdollAnimation `+0x48`, else the first simulated one);
-  otherwise the node keeps the movement position.
+  otherwise the node keeps the movement position. The body's position is the actor's origin (the phs actor `position`), not its shape's centre. Meitou:
+  `RagdollDefinition.RootAt`. **Observed**: whale2.phs (Big-Bones) is about 1.3 x its skeleton, so its Bip01 capsule centre lies 29 from the actor; following
+  the centre left a looter 5 m off a downed Cleanser Unit.
 - Bones (`FUN_1407d3a30`): a simulated body writes its orientation into its manually controlled Ogre
   bone (plus position for a bone without parent); a pinned body is moved to the animated pose.
+  Meitou (`RagdollBody.BoneInBody`): the bone sits at its actor's origin, so a parentless bone is drawn there and the other bones keep the skeleton's offsets; a pinned or new
+  body puts its actor on the animated bone (engine choice for the pinned case: the same convention both ways, so no jump on entering a ragdoll). Where the file and skeleton
+  differ (whale2: Bip01 actor 24 from the bone) the shapes keep their offsets from the actor, not from the skeleton's bone.
 - Carried animal: the carry-bone body is moved kinematically to the carrier's attach bone.
 - Partial (non-WHOLE) ragdolls are woken every frame (wake 20) and never freeze.
 - Water (only when byte `+0x79` of the character's race data is set): when the root is at or below

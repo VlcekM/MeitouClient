@@ -25,7 +25,11 @@ relying on the low tier. `--ab shafts-half` is a separate experiment for the mer
 not a quality tier.
 
 Placed fog volumes receive their own shadowed scattering, respecting plane/sphere/cylinder
-geometry and colour/additive/alpha. Cloud cover reduces appropriate sun contribution. With `gihybrid`'s
+geometry and colour/additive/alpha. A volume's sun share is the length-weighted average of every slice its visible path
+(near to `near + 0.7/density`) crosses: up to the slice count of reads per volume pixel. A few fixed depths instead stamp
+one copy of a shadow's outline per depth across the volume (**Observed** 2026-11-05: "slices" in a dust storm sphere; robot pit
+block, offscreen: four depths differ from a 32-depth reference by up to 21/255, the slice walk by up to 4/255).
+Cloud cover reduces appropriate sun contribution. With `gihybrid`'s
 `clouds` part each sample also takes the cloud shadow (`InjectClouded`, one map read; look and cost **Unknown**). Air layer is an engine near-ground term,
 separate from original distance haze, with day/key-light-dependent strength.
 

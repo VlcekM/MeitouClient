@@ -104,7 +104,7 @@ public sealed partial class ArrestSystem : IOrderOwner
         var table = world.Characters;
         if (!table.TryResolveNext(prisoner, out int p) || table.Cold(p) is not { IsImprisoned: true, InWhat: { } where } pc || world.Fixtures.Find(where) is not { } cage) return false;
         if (BailFor(world, pc) is not { } price || !table.TryResolveNext(payer, out int s)) return false;
-        if (world.Player.Money < price) { world.Post($"Not enough money: the bail is c.{price}."); return false; }
+        if (world.Player.Money < price) { world.Post(Loc.Tr("Not enough money: the bail is c.{1}.", price)); return false; }
         Bail(world, p, pc, cage, price, s);
         return true;
     }
@@ -128,7 +128,7 @@ public sealed partial class ArrestSystem : IOrderOwner
             if (d2 <= best) (payer, best) = (s, d2);
         }
         if (payer < 0) { world.Post("Nobody is near enough to the jail to pay the bail."); return; }
-        if (world.Player.Money < price) { world.Post($"Not enough money: the bail is c.{price}."); return; }
+        if (world.Player.Money < price) { world.Post(Loc.Tr("Not enough money: the bail is c.{1}.", price)); return; }
         Bail(world, p, pc, cage, price, payer);
     }
 
@@ -143,7 +143,7 @@ public sealed partial class ArrestSystem : IOrderOwner
             ledger.Remove(entry);
             if (ledger.Count == 0) pc.Bounties = null;
         }
-        world.Post($"{table.Cold(payer)!.Name} paid a bail of c.{price} for {pc.Name}");
+        world.Post(Loc.Tr("{1} paid a bail of c.{2} for {3}", table.Cold(payer)!.Name, price, pc.Name));
         world.Fixtures.Release(world, prisoner);
         Locks.FixtureRegistry.ClearSlave(world, pc);   // bail frees a slave (FUN_1406ae170)
         pc.Freed = true;
@@ -243,7 +243,7 @@ public sealed partial class ArrestSystem : IOrderOwner
         var cage = world.Fixtures.Find(k.Cage);
         if (cage is null || !FixtureRegistry.IsFree(table, cage))
         {
-            if (FindCageFor(world, s, c, k) is not { } other) { world.Post($"{c.Name}: no free cage nearby"); return false; }
+            if (FindCageFor(world, s, c, k) is not { } other) { world.Post(Loc.Tr("{1}: no free cage nearby", c.Name)); return false; }
             k.Cage = other.Id;
             TaskStart.StepTo(table, s, new Vector2(other.Position.X, other.Position.Z), c.RunSpeed);
             return true;
@@ -256,7 +256,11 @@ public sealed partial class ArrestSystem : IOrderOwner
         {
             if (walking) TaskStart.Stand(table, s);
             Carry!.LetGo(world, s);
-            if (!world.Fixtures.Imprison(world, k.Captive, cage, constants.PrisonTime)) { world.Post($"{c.Name} could not put the captive in the cage"); return false; }
+            if (!world.Fixtures.Imprison(world, k.Captive, cage, constants.PrisonTime))
+            {
+                world.Post(Loc.Tr("{1} could not put the captive in the cage", c.Name));
+                return false;
+            }
             Claim(world, s, k.Captive, cage);
             if (table.TryResolveNext(k.Captive, out int captive)) Deeds?.Caged(world, s, captive);   // after the claim, as the put-in task does
             return false;
@@ -382,7 +386,7 @@ public sealed partial class ArrestSystem : IOrderOwner
         hc.Engaged = true;
         hunts.Add(new Hunt { Hunter = table.IdOf(hunter), Target = table.IdOf(target) });
         Attack(world, hunter, target);
-        world.Post($"{hc.Name} is after the bounty on {table.Cold(target)!.Name}!");
+        world.Post(Loc.Tr("{1} is after the bounty on {2}!", hc.Name, table.Cold(target)!.Name));
         Note(world, ArrestEventKind.Hunt, table.IdOf(hunter), table.IdOf(target), hc.Faction, HuntBounty(table.Cold(target)!, hc.Faction));
     }
 

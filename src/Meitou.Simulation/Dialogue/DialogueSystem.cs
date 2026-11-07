@@ -23,10 +23,15 @@ public sealed record ConversationView(CharacterId Npc, CharacterId Player, Chara
 
 /// <summary>
 /// What a conversation asks the host to do once it has ended: DA_CHARACTER_EDITOR, the surgeon's editor on <see cref="DialogueRequest.Player"/>, already paid; DA_JOIN_SQUAD_WITH_EDIT,
-/// the in-play editor on the recruit (<see cref="DialogueRequest.Player"/>).
+/// the in-play editor on the recruit (<see cref="DialogueRequest.Player"/>); the animal buying window's confirm, the in-play editor on the bought animals
+/// (<see cref="DialogueRequest.Characters"/>, to name them).
 /// </summary>
-public enum DialogueRequestKind : byte { CharacterEditor, RecruitEditor }
-public sealed record DialogueRequest(long Id, DialogueRequestKind Kind, CharacterId Player, CharacterId Npc);
+public enum DialogueRequestKind : byte { CharacterEditor, RecruitEditor, AnimalEditor }
+public sealed record DialogueRequest(long Id, DialogueRequestKind Kind, CharacterId Player, CharacterId Npc)
+{
+    /// <summary>The characters an <see cref="DialogueRequestKind.AnimalEditor"/> request opens the editor on.</summary>
+    public IReadOnlyList<CharacterId> Characters { get; init; } = [];
+}
 
 /// <summary>A system with a conversation to publish (the dialogue system).</summary>
 public interface IDialogueSource
@@ -262,7 +267,7 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
     /// Whether <paramref name="talker"/> is near enough <paramref name="target"/> to talk: X/Z within the target's scaled radius (footprint x body scale) + <see cref="TalkReach"/>, twice the reach once
     /// the talker has stopped, and within <see cref="TalkHeight"/> in height.
     /// </summary>
-    static bool InTalkRange(CharacterTable table, int talker, int target)
+    internal static bool InTalkRange(CharacterTable table, int talker, int target)
     {
         var (a, b) = (table.Next[talker].Position, table.Next[target].Position);
         float reach = Combat.CombatSteering.Radius(table.Cold(target)) + TalkReach * ((table.Next[talker].Flags & (ushort)MoveFlags.AnyPath) == 0 ? 2 : 1);
@@ -307,6 +312,7 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
         }
         open = c;
         Hold(world, n);
+        if (TaskStart.OnAiWalk(table, n)) TaskStart.Stand(table, n);   // a walking NPC stops to talk (engine choice); the approach chased it
         c.Root = p.Root;
         if (IsNpcSide(p.Line.Speaker)) Say(world, c, p.Line, p.Speaker);
         else Offer(world, c, p.Root ?? p.Line);
@@ -324,11 +330,12 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
     }
 
     /// <summary>
-    /// The character offers Trade: its squad has a shop, and its record says <c>is trader</c> or its dialogue reaches a Trade line (docs/game/economy.md "Who trades"); the
-    /// guards and other members of a trader squad do not.
+    /// The character offers Trade: its squad has a shop, or has no home building and a template with <c>vendors</c> (a Caravan, stocked at its first trade), and its record says
+    /// <c>is trader</c> or its dialogue reaches a Trade line (docs/game/economy.md "Who trades"); the guards and other members of a trader squad do not.
     /// </summary>
     public bool Trades(World world, int slot) =>
-        world.Characters.Cold(slot) is { IsPlayer: false, SquadId: >= 0 } cold && world.Squads.Find(cold.SquadId)?.Shop is not null
+        world.Characters.Cold(slot) is { IsPlayer: false, SquadId: >= 0 } cold && world.Squads.Find(cold.SquadId) is { } squad
+        && (squad.Shop is not null || squad.HomeBuilding is null && data.Db.Find(squad.TemplateId)?.GetReferences("vendors").Count > 0)
         && (data.Db.Find(cold.RecordId)?.GetBool("is trader") == true || SetOf(world, slot).Trades);
 
     public bool CanTalk(World world, int slot, CharacterId? talker = null)
@@ -383,7 +390,7 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
             string label = Said(Expand(world, c, child, PickText(world, c.Player, child), c.Player, c.Npc)) + MoneySuffix(child);
             if (label.Length > 0) c.Choices.Add((child, label));   // a choice with no text and no cost is never offered (FUN_140680130)
         }
-        if (c.Choices.Count == 0) c.Choices.Add((null, "[Leave]"));
+        if (c.Choices.Count == 0) c.Choices.Add((null, LeaveChoice));
     }
 
     void Choose(World world, Conversation c, int index)
@@ -401,7 +408,7 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
             if (c.Ended) return;
             from = reply;
         }
-        else if (text == "[Leave]" || from is null) { c.Ended = true; return; }
+        else if (text == LeaveChoice || from is null) { c.Ended = true; return; }
         var next = Pick(world, c, from.Children);
         if (next is not { } p) { c.Ended = true; return; }
         if (IsNpcSide(p.Line.Speaker)) Say(world, c, p.Line, p.Speaker);
@@ -463,8 +470,14 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
         RefreshCharacterTrade(world);
         if (open is not { } c) { view = null; return; }
         view = new ConversationView(c.Npc, c.Player, c.Speaker, NameOf(world, c.Speaker.IsNone ? c.Npc : c.Speaker), NameOf(world, c.Player), c.Text,
-            [.. c.Choices.Select(x => x.Text)], [.. c.Log], world.Player.Money);
+            [.. c.Choices.Select(Shown)], [.. c.Log], world.Player.Money);
     }
+
+    /// <summary>The engine's own choice that ends the conversation. The simulation keeps this English marker; only the published view shows it translated.</summary>
+    internal const string LeaveChoice = "[Leave]";
+
+    /// <summary>A choice as the window shows it: the engine's [Leave] in the player's language; a reply's text is the data's own and stays as it is.</summary>
+    static string Shown((DialogueNode? Reply, string Text) choice) => choice.Reply is null && choice.Text == LeaveChoice ? Loc.Tr(LeaveChoice) : choice.Text;
 
     public ConversationView? PublishConversation() => view;
     public DialogueRequest? PublishRequest() => request;

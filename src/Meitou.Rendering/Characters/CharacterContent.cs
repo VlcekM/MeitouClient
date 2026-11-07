@@ -155,6 +155,8 @@ internal sealed class CharacterAsset
     public readonly List<(int Bone, Matrix4x4 Offset, int AttachIndex, Meitou.Data.World.WorldLight Light)> Lamps = [];
     /// <summary>The posture libraries (<c>postures</c>, <c>neck set</c>, <c>shoulder set</c>) held at the body file's sliders, weight 1.</summary>
     public readonly List<(LayerDef Def, float Time)> Fixed = [];
+    /// <summary>The <c>mouth</c> attachment point (an animal's held limb, <see cref="CharacterInstance.Mouth"/>): its bone, offset and attach slot; null when the race has none.</summary>
+    public (int Bone, Matrix4x4 Offset, int AttachIndex)? Mouth;
     public int AttachCount;
     /// <summary>Where the face's morph offsets start in <see cref="MorphArena"/> (0: none).</summary>
     public uint MorphBase;
@@ -819,6 +821,7 @@ internal sealed class CharacterContent : IDisposable
             var local = Vector3.Transform(carried.Light.Position - rig.BindPosition[bone], rig.BindRotationInverse[bone]) / rig.BindScale[bone];
             asset.Lamps.Add((bone, Matrix4x4.CreateTranslation(local), asset.AttachCount++, carried.Light));
         }
+        AddMouth(asset, c, rig);
 
         if (setup is not null)
         {
@@ -826,6 +829,17 @@ internal sealed class CharacterContent : IDisposable
             asset.Fixed.AddRange(setup.Fixed);
         }
         return asset;
+    }
+
+    /// <summary>
+    /// The attach slot of the race's <c>mouth</c> point, where an animal holds a limb (docs/game/character-stats.md "Mouth"): the point's bone, rotation and position, as a
+    /// weapon's (the original attaches the limb's entity to that bone with the point's offset). None when the race's attachment points have no <c>mouth</c> or the skeleton lacks its bone.
+    /// </summary>
+    static void AddMouth(CharacterAsset asset, CharacterAppearance c, SkeletonRig rig)
+    {
+        if (!c.AttachmentPoints.TryGetValue("mouth", out var point) || rig.Handle(point.Bone) is not int bone) return;
+        var offset = Matrix4x4.CreateFromQuaternion(point.Rotation) * Matrix4x4.CreateTranslation(point.Position);
+        asset.Mouth = (bone, offset, asset.AttachCount++);
     }
 
     // ---- materials (CharacterScene.BodyMaterial / PartMaterial) ----
@@ -977,10 +991,11 @@ internal sealed class CharacterContent : IDisposable
             m.Tex[CharacterShaders.SlotNormal] = Texture(Tex(spec, "normal map"), false);
             if (dyed)
             {
+                // Paint factors (the colours' alpha): the item's record, not the material; 0 when unset (docs/characters.md "Clothing colours").
                 m.Tex[CharacterShaders.SlotColourMap] = Texture(Tex(spec, "color map"), false);
                 m.Dyed = true;
-                m.Colour1 = new Vector4(CharacterAppearance.Rgb(dye!.GetInt("color 1")), spec.GetFloat("paint factor 1"));
-                m.Colour2 = new Vector4(CharacterAppearance.Rgb(dye.GetInt("color 2")), spec.GetFloat("paint factor 2"));
+                m.Colour1 = new Vector4(CharacterAppearance.Rgb(dye!.GetInt("color 1")), item.GetFloat("paint factor 1"));
+                m.Colour2 = new Vector4(CharacterAppearance.Rgb(dye.GetInt("color 2")), item.GetFloat("paint factor 2"));
             }
             m.ClipOnNormalAlpha = worn && Tex(spec, "normal map") is not null;
             m.DoubleSided = spec.GetInt("material type") == 2;

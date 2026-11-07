@@ -1,0 +1,21 @@
+[
+ {
+  "id": "example-zone",
+  "name": "Example Zone",
+  "aliases": [
+   "example"
+  ],
+  "kind": "zone",
+  "faction": null,
+  "region": null,
+  "x": null,
+  "z": null,
+  "zone": null,
+  "verified": false,
+  "verifiedOn": null,
+  "seen": "",
+  "source": "example entry, replace",
+  "confidence": "Unknown",
+  "notes": "Fake entry that only shows the schema. Delete it."
+ }
+]

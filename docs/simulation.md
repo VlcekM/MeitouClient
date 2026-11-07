@@ -138,7 +138,8 @@ factories/database/relations and lazy body/combat/item assembly. Research owns o
 `CharacterFacts` holds one member per original predicate, named and cited after it; merge by original function, not by English word. **Verified** (by reading each copy
 against the decompile): `Down` (`Character` slot 6, `FUN_1405c9e10`: out cold, dead, playing dead, carried; a whole ragdoll only ever exists for an incapacitated or carried character, so
 the ragdoll test adds nothing) is one definition for the carry, dialogue, squad-intact, combat-mode and snapshot reads; `TargetDown` (state 7, `FUN_14099a5a0`) and the capture
-finders' KO / crawling tags (`CaptiveSystem.Down`) are different originals and stay apart. `GettingUp` is `+0x278`. `RegardsEnemy` is the faction part only (engine). The UI reads
+finders' KO / crawling tags (`CaptiveSystem.Down`) are different originals and stay apart. `Perceives` stands in for "on the sensed list" (`FUN_140853960`) for finders that walk it
+(the medic's, the capture and carry finders): an entry, else the sight test for one the capped block lacks (engine). `GettingUp` is `+0x278`. `RegardsEnemy` is the faction part only (engine). The UI reads
 `CharacterSnapshot.Down`, `CombatMode`, `CanOpenInventory`, `Conscious` (Set Free's precondition 125, `FUN_14099a480`, **Verified**; also `LockSystem`'s), `Standing` (not dead or out cold), `Animal` (`SquadRegistry.IsAnimal`, the animal repertoire) and `HostileToPlayer` (the player faction's `Relations.IsHostile`, or fighting a player character; engine reading), computed once in `CharacterFacts` and published; it never re-derives them, so a replica client without systems gets them from the snapshot. The menu's own offer rules (`FUN_140796f80`, `FUN_1407a6bc0`, [ui-input](game/ui-input.md)) stay in the UI. Left as engine stand-ins, not merged: `CarrySystem.Friendly` and `CrimeSystem.Friendly` (faction-level
 "regards as friendly": the full slot 126 also reads squad memory and DC 52, `DialogueSystem.RegardsFriendly`), `IsEnemy` (looker-free), the fight flags `Fighting.cs` / `CombatSystem.Threats` computing
 the immediate-threat reach inline (Unknown whether they match `FUN_1404378f0`'s gate test).
@@ -555,6 +556,7 @@ New move orders preserve reusable paths; attack pursuit reschedules target paths
 hold translation while facing changes. Original speeds/encumbrance and research are in
 [pathfinding.md](game/pathfinding.md); footprint clearance/water costs come from nav queries.
 Heights use the character's (or clicked) Y to pick stacked floors; long paths have a provisional tail.
+A walk's end is `CharacterCold.WalkEnd`: `Finished` (the path followed to its last point), `Failed` (no path, blocked past the limit, stopped at a locked door) or `None` (still walking, or another system stopped it); the AI's arrival reads it ([isAtLocation](game/ai-tasks.md#planner)).
 Squad followers follow the original ([squads travelling together](game/pathfinding.md#squads-travelling-together)): `Formation.Layout` gives each
 member a slot by its faction's `squad formation` (`World.FactionFormations`, RANDOM without data), kept in `Squad.FormationSlots` and rebuilt in
 `MovementSystem.Inputs` (serial) when the formation, head or members change; the draws are keyed by squad and that key. A squad mate aims at its slot
@@ -579,7 +581,8 @@ areas. A* checks portal clearance (radius per wall end, default radius 4), water
 Cache key: the zone's building hash, the build settings and a content hash (the data files in load order, `seeds.def` and the
 height, blend, biome and overlay maps by size and write time, the DotRecast version). The cache holds the zone's own pruning; the kept set of every loaded
 zone is resolved again whenever one is published or unloaded (the border rule toward unloaded sides, the neighbours' kept edges, `KeepAt` points;
-[zone borders](game/pathfinding.md#own-builder)). Unloading a zone skips its queued build;
+[zone borders](game/pathfinding.md#own-builder)); the flood, the interiors' carry and the fallback region never pass an exterior edge under 9 units
+([narrow portals](game/pathfinding.md#own-builder)). Unloading a zone skips its queued build;
 a running one is still cached but not published, and its task is cancelled. A zone's tiles build in parallel on every core but one under a
 loading screen and on a quarter of the cores in play (`NavMeshService.Covered`): **Observed** (allocation trace, coming down into unbuilt zones) the tile
 builds allocated ~13 GB in 5 s and, on every core, starved every simulation system and the render thread into 100-180 ms frames.
@@ -761,7 +764,9 @@ witness that regards the culprit as friendly takes 20 off on every sweep (`Crime
 ## Carrying, rescue and looting
 
 `CarrySystem`: serial links, pickup/put-down, dropping on KO/death/attack, rescue jobs and inventory
-looting. Carried bodies follow the carrier and affect load. The player's Pick Up also lifts an awake own character that carries no one (`CarrySystem.CanBeLifted(World, …)`);
+looting. Carried bodies follow the carrier and affect load. A lift or loot walks to a floor point within 20 of the body's height (`CarrySystem.Approach`: the floor under it, else
+the nearest floor point within 12 round it, asked at the body's height and then lower) and reaches it within 14 on that floor; a body on a counter or table, over the hole its furniture
+cuts in the floor, is reached from the floor beside it, not from the storey above (engine choice). The player's Pick Up also lifts an awake own character that carries no one (`CarrySystem.CanBeLifted(World, …)`);
 lifted by a friendly carrier it leaves its fight and task and rides (`CharacterCold.CarriedAwake`) until put down, neither fighting nor treating (engine choices; a body
 lifted down is still set down when it comes round). Loot can raise witnessed theft and
 stolen ownership marks. [carry-loot.md](game/carry-loot.md). Loot window (engine choice):
@@ -984,9 +989,15 @@ Arrests, the recognition meter and the marker are hashed only while set. What a 
   (`Engaged`, so the AI leaves him alone), and within 40 takes the fine when the player's money is above it, erasing his
   faction's entry; else, when the target runs past 800 or after 60 s, and for any bigger bounty: arrest.
 - **Arrest**: attack until the target is down (combat ends the fight; nobody beats a downed target), lift
-  (`CarrySystem.BeginPickUp`), `FindCage` from the guard (his squad's home building; other arrests' cages reserved), walk,
-  and within `use range` + 15 (or a walk that ended within 200) `LetGo` + `Imprison` (`prison time` CONSTANTS). The fight
-  stopping with the target up re-orders it within 800, else he gives up; no free cage: he drops the captive (engine).
+  (`CarrySystem.BeginPickUp`), `FindCage` from the guard over his town candidates (`CageCandidates`, as kidnapping and town duty; his squad's home building; other arrests' cages reserved), walk,
+  and at the cage (`FixtureRegistry.AtCage`: within its `use range`, doubled standing, and under 15 above or below it) `LetGo` + `Imprison` (`prison time` CONSTANTS). The fight
+  stopping with the target up re-orders it within 800, else he gives up; no free cage: he drops the captive (engine); a downed target is not lifted at all with no free cage, nor from an ally who carries it (engine: guards passed bodies round a full station, #339). After 3 walks that end short the cage is
+  unreachable for his faction for 24 game hours (`MarkUnreachable`, as the kidnapper's and the town duty's) and he drops the captive (engine).
+- **Cage walks** (arrest, kidnap, town duty 112 / 281; engine): a walk onto the cage's floor (`TaskStart.Walk` with the cage's position, `MovementSystem.GoToFloor`), so a cage on
+  an upper storey is reached by the stairs. A flat goal resolves on the walker's own storey and ends under the cage, out of `AtCage`'s height. **Observed** (#314 save, Sho-Battai
+  Police Station Tower, `Outpost s-IV` `43.11:6-Newwworld-INGAME`): its 19 cages stand on the storey at y 1092, 43 above the ground floor where the guards lift raiders; the
+  guards carry all eight raiders up and cage them. Still flat (arrival by distance only, so they do not loop):
+  the captive jobs' cage walks and confiscation (212). The player's Put in Cage order (`StepTo`) is flat too but tests `AtCage`: an upper-storey cage still fails it.
 - **Release**: player and NPC prisoners alike are freed by the release rounds below.
 - **Rounds** (`LockSystem.Rounds.cs`, serial; a sweep every 30 ticks starts at most 4, at most 8 run; the worker is
   `Engaged`; each lock takes the owner's 3.3 s): **release** (211): an awake prisoner whose sentence is served is freed by an NPC of the
@@ -995,7 +1006,7 @@ Arrests, the recognition meter and the marker are hashed only while set. What a 
   3 failed walks or 120 s, and the system frees it; the cages of non-booking factions wait for a 211 holder. **Lock-up** (155, 197): while
   a member has the goal in its hours a free member with it locks every door of the home (155 only with every member
   inside, engine: within the home's farthest node + 10; neither with a stranger inside; a 197 worker prefers a member already outside and otherwise leaves the home first, then works each door within 45 of its outer point, [locks](game/locks.md)); when no member's goal is in its
-  hours, a free member with 86 Opening up in its hours unlocks what a round locked (squads without 86 stay locked, as the original). The house flag is set at each door the round locks (worker's faction's lock, no door of the home open or opening) and cleared by the unlock round (engine: the round unlocks rather than opens; a loaded night's locked homes come back flagged, `meitou house locked`). **Wardens**
+  hours, a free member with 86 Opening up in its hours unlocks the home while it counts as locked (87: a round locked it, or every door is locked and whole, as from the level state; squads without 86 stay locked, as the original). The house flag is set at each door the round locks (worker's faction's lock, no door of the home open or opening) and cleared by the unlock round (engine: the round unlocks rather than opens; a loaded night's locked homes come back flagged, `meitou house locked`). **Wardens**
   (195): occupied unlocked cages of the faction in its town are locked. **Keys** (engine): a worker whose target is behind
   its own faction's or home's shut doors unlocks them standing before it walks (the sim doesn't know door positions); an
   arrest's guard walking to such a cage has them opened at once. Rounds and locked homes are hashed only while any exist.
@@ -1115,9 +1126,14 @@ Duties are priority-2 goals (**Observed**: `FUN_140510ef0` tries orders, jobs, u
 - **273 Remove Intruder**: a free member standing in its home town, the town its occupation holds or a town of its faction lifts the nearest knocked-out character in that town's
   walls (`amInsideTownWalls` > 0: its [gate code](game/pathfinding.md#gate-codes) is a walled region, so an unwalled town removes none; where the codes are unknown, the built-up area: a
   placed town's radius, a player town's farthest building from its centre), not carried or caged (a body in a bed is lifted, `FUN_14099c250`), not of its faction or an ally.
-  A body that dies on the way is caged only with **281** listed (else let go). Any free member carrying a dead body (a kidnapper's or arrester's victim that died: they end their errand without letting go when 281 is listed) with 281 in its package takes it to a cage the same way (`LookDeadCarriers`, **Verified** `FUN_1405a1140`: no dead test); with no cage it keeps the body.
+  A body that dies on the way is caged only with **281** listed (else let go). Any free member carrying a body it holds no errand for (a kidnapper's or arrester's victim that died: they end their errand without letting go when 281 is listed; a carry a save restored) with 281 (any body) or 112 (a living one) in its package takes it to a cage the same way (`LookCarriers`, **Verified** `FUN_1405a1140`: no dead test); with no cage it keeps the body. **Observed** (#314 save): a Sho-Battai police guard loaded carrying a raider cages it.
   Carrying it: with **112** (a living body) or **281** (any body) listed and the carried-body desire above 0 (`CageDesire`: 0 for an animal or one the carrier regards as friendly, 0.1 outside a town, 1.4 police with a bounty-free slave, 0.5 dead, 2.0 alive; [ai-tasks](game/ai-tasks.md)), the best free cage in that town (the occupied town's cages are usable), where it is locked up with the usual put-in sentence (108 `Task_PutInSomething`
   sets none without a bounty, [economy 11.5](game/economy.md#115-bail-and-sentence); not `Kidnapped`, **Verified** `FUN_140358670`); else with **274** listed, to the town's exit point (`TownExit`: 200 outward from the first gate outside the walls or wall with an interior, the same for every carrier; no walkability test, **Verified** `FUN_140927120`), put down; else put down. A body put down short of its goal is left alone for 2 game hours.
+  A lift whose walk to the body takes over 60 game seconds is given up the same way (engine choice: a body the carrier cannot reach would hold it forever).
+- **223 Remove Home Intruder** (checked before 273): a free member of a squad with a home building lifts the nearest knocked-out, carriable character inside that building
+  (`SightMap.BuildingOf`), not carried, caged or in a bed, not of its faction or an ally; within its sight stands in for the sensed list. With **224** listed it carries it to the point past the
+  home's first door (`AiSystem.LeavePoint`, the same point as Leave Building's) and puts it down; without 224, or with no door known, it goes on as a 273 body (engine choice: the original's
+  carrier keeps it). A body that dies on the way is still carried out. Facts: [ai-tasks](game/ai-tasks.md) "Finders of the jobs".
 - **243 Getting food**: a member holding no food walks to the nearest store with food in the town (a player town's complete storage, else an unlocked container) and takes one item.
   Meitou's NPCs are fed by their hunger floor, so the food is not eaten.
 - **158 / 283 Shooing** (`AI::findStrangersInMyBuilding`; 283 only while the home is private): the first character in the squad's home building that is neither allied nor an
@@ -1156,7 +1172,7 @@ gather jobs while walking home under 43, and a job that waited on that walk reac
   (limbs severed unless dismemberment is Never; `DeathCause.Eaten` and "{1} has been eaten alive." when nothing is left). Events 52 and 11 every 10 s (engine throttle).
 - A captive's death by either resets the town's timer to now + uniform[1, 15) h; the first ask sets it. Timers and jobs are not saved (engine); hashed once any exists.
   **Observed** (headless probe, real data): a cannibal village kills a caged player character within 16 s of work once its timer is due; a fishman lab eats one in about 160 s.
-- **Process** (260: an awake non-slave occupant anywhere in the town; 183: first the nearest free slave of state 1 or 2 in sight that needs processing, walked to with no cage (the sensed list is the sight query of the capture finder, not caged ones; engine reading), else an occupant on the worker's floor and in its building within 180 in 3D, whose owner is an ally or none, and that needs processing: an escaped or ex-slave, or a slave not both shaven and looking like one): cages of the worker's faction or an ally,
+- **Process** (260: an awake non-slave occupant anywhere in the town; 183: first the nearest free slave of state 1 or 2 in sight that needs processing, walked to with no cage (a bare sight-range query stands in for the sensed list, no building test, not caged ones; engine reading), else an occupant on the worker's floor and in its building within 180 in 3D, whose owner is an ally or none, and that needs processing: an escaped or ex-slave, or a slave not both shaven and looking like one): cages of the worker's faction or an ally,
   not the player's. 3 s of `medic`, then the captive's worn weapons and armour (not locked shackles) go to the worker's inventory (else the ground; engine for the original's
   storage), its faction's `slave clothing` is put on where free, event 35 (37 for a shaven captive), its head is shaven, and it becomes the worker's faction's slave unless it has an owner already (a recaptured escaped slave keeps its owner and master squad); its queued orders and perma-jobs are cleared. Kidnapped player characters are
   processed too. **Observed** (probe): a player character caged next to the Slave Farm's Cage Wardens is enslaved about 7 s later.
@@ -1173,11 +1189,11 @@ gather jobs while walking home under 43, and a job that waited on that walk reac
 - **Packages** (`PackageClass` 8 to 11, rules in `AiSystem.Captives.cs` as the facts): cannibal retreat (1, 25), cannibals at home (27), prisoner gathering (10, 24), slave shipping (11,
   28; Meitou always takes the nearest slave camp not hostile to the squad, the other town rule's flag being **Unknown**); the cannibal patrol (4) does not start while the town's cages
   are full. A squad's slaves are its live slave members in slave state 1 (engine reading of the platoon's slave list).
-- **Capture** (167, `CaptiveSystem.Capture.cs`; facts: [slave work, shout and capture](game/ai-tasks.md#slave-work-shout-and-capture)): started by a standing (posture 0) capturer with one working arm (the lift needs the left); the nearest downed, uncarried, uncaged character in sight that is
-  not of the capturer's side (engine reading of the sensed-class masks), no slave (state 1), not law enforcement, trader or diplomat and not shackled. The capturer walks to it, strips the `hip` and
+- **Capture** (167, `CaptiveSystem.Capture.cs`; facts: [slave work, shout and capture](game/ai-tasks.md#slave-work-shout-and-capture)): started by a standing (posture 0) capturer with one working arm (the lift needs the left); the nearest (3D) downed, uncarried, uncaged character on its sensed list that is
+  not of the capturer's side (engine reading of the sensed-class masks; the entries not tagged ally, then whoever within sight the capped block lacks that passes `SightMap.Sees`: `CharacterFacts.Perceives`, shared with the medic finder; so none in another building unless either stands on top; 168's carry the same, its mask excluding imprisoned instead of ally), no slave (state 1), not law enforcement, trader or diplomat and not shackled. The capturer walks to it, strips the `hip` and
   `back` items into its inventory (0.8 s of `medic`), cuffs it (10 s, engine choice; locked stock `SHACKLES` put on, what it wore in that slot goes to its inventory; event 37) and has `KidnapSystem.Carry` lift
   it to a cage of its faction or an ally in range (goal 112 in the original; a capture starts only with one free, so no one is cuffed and left), where it is held as kidnapped and then enslaved by the processing jobs. **Carry** (168): the same for a downed slave of the
-  carrier's faction, without strip or cuff; not on Hold (the raw bit, even sneaking: its desire is the rescue one, [goals](game/carry-loot.md#32-goals-and-their-target-finders)). A caged target that got up is beaten down first (196, an armed capturer: a `chop down static` blow per clip, `CombatSystem.Execute`), any other is given up. A target a job gave up on is left alone for an hour (engine give-up list). **Observed** (probe, Rebirth, real data): a downed character of the player's faction
+  carrier's faction, without strip or cuff; not on Hold (the raw bit, even sneaking: its desire is the rescue one, [goals](game/carry-loot.md#32-goals-and-their-target-finders)). A caged target that got up is beaten down first (196, an armed capturer: a `chop down static` blow per clip, `CombatSystem.Execute`), any other is given up. A target a job gave up on, or that someone else carries off or jails first (a capture only), is left alone for an hour (engine give-up list). **Observed** (probe, Rebirth, real data): a downed character of the player's faction
   beside the garrison leader is stripped, shackled, carried to a cage and enslaved by the Cage Wardens in about 1250 ticks; its squad then remembers the capturer as captor. **Observed** (probe, Stoat, real data): the Slave Traders cuff a downed player character, cage it in a United Cities cage of the slave shop and enslave it in about 500 ticks.
 - **Liberate** (276): the nearest cage, in the town the worker stands in (else its squad's), of a faction neither its own nor allied, holding a live occupant that is not its
   enemy. 3 s of `medic` at the cage (engine), then `FixtureRegistry.Release` (no crime is booked for an NPC liberator).
@@ -1280,7 +1296,7 @@ Building inside one names the level instance as parent (as any owned town buildi
 
 **Outposts.** `World.Buildings.Towns` (`PlayerTown`: `Number` 1.., `Name`, `Position`, `Owner`, `Public`; never removed; renamed and ticked public by the [town panel](game/ui-screens.md#town-panel)) and
 `BuildSite.Town` (a number, 0 none). `PlaceBuildings` gives each new site its town by the
-[outpost rule](game/buildings-production.md#placement): the parent's; else the nearest player town within 5000 (X/Z);
+[outpost rule](game/buildings-production.md#placement): the parent's (none in a level town's building); else the nearest player town within 5000 (X/Z);
 else the town of the nearest player site within 2500; else a `creates player town` non-wall makes "Your Outpost" at its
 position, and every player site whose nearest town (level towns and outposts) within 8000 is it moves in. After the
 batch, `links together` sites still without a town take the batch's last player town, else the nearest town within 16000
@@ -1624,14 +1640,16 @@ quality, culture, market, forbidden/stolen factors follow [economy.md](game/econ
 A squad shop holds one 18 x 18 stock grid (the building storage size and the vanilla trader window width); `ArrangeStock` arranges it. A housed trader whose template makes no
 prisoners or slaves and whose home has stock containers gets a building shop instead ([building shops](game/economy.md#building-shops-observed-decompile)): one stock with a rectangle
 per stock container, each container's window showing only its own (`Shop.ForBuilding`, `Shop.Building`), its own purse rule, the containers' locks opened at each fill. Stock cells stack 50 x an item's `stackable`. A housed squad with vendors that is no
-trader has its home's containers filled instead (`FillHome`). Only members that trade (`DialogueSystem.Trades`, [who trades](game/economy.md#who-trades)) publish `IsTrader`, the
-Trade verb and pointer. Shop state is hashed; the open trade is not, except its buyback receipts (below). A shop is saved on its platoon (`Saving/ShopSave`: stock, fill count,
+trader has its home's containers filled instead (`FillHome`). A squad without a shop that a Trade line opens a trade with gets an empty one, never filled, or when housed its
+home's stock containers for the trade (`StockFor`, [who trades](game/economy.md#who-trades)). A trader on a walk (a caravan's boss) stops for the trade and its AI walks on after (engine choice). Only members that trade
+(`DialogueSystem.Trades`, [who trades](game/economy.md#who-trades)) publish `IsTrader`, the Trade verb and pointer.
+Shop state is hashed; the open trade is not, except its buyback receipts (below). A shop is saved on its platoon (`Saving/ShopSave`: stock, fill count,
 `inventory refresh time`, [economy](game/economy.md#building-shops-observed-decompile)) and kept by a saved platoon that leaves the world; a save without it gets a fresh fill.
 Customer: the original buys into the character window the stock is dropped on (`FUN_140712490`, **Observed**). Meitou keeps one customer; the inventory window shows the lead
 selected character, also while trading. A buy or sell names the window's character (`BuyItem.Into`, `SellItem.From`, a held item's window) and the trade passes to them within
 `PassRange` 1000 of the trader (`TradeWith`; the original's unflagged item limit, [trading range](game/economy.md#trading-range)); farther nothing moves and "Out of trading range."
 is posted. With no window named the trade follows the selection (`FollowSelection`). The view prices the goods of every player character within that reach for its seller (`TradeView.GoodsOf`),
-so any of their windows shows sell prices and the fencing prompt and asks before a risky sale. An open trade stays open within 1000; opening needs 30.
+so any of their windows shows sell prices and the fencing prompt and asks before a risky sale. An open trade stays open within 1000; opening needs the talk range (`DialogueSystem.InTalkRange`, the customer stops there, [opening a trade](game/economy.md#trading-range)).
 Transfers and money changes must succeed together. Stealing from containers: [crimes](#crimes-and-bounties). Smuggling: the refusal and event 8 (`TradeSystem.Smuggling`) and the held item's prompt ([economy](game/economy.md#fencing-stealing-and-smuggling)); not built: a smuggler's own answer (read by no caller seen).
 
 Bags (engine choice; how the original trades bags and their contents is **Unknown**): a bag trades whole, the same instance with its contents grid, and only empty ("That bag

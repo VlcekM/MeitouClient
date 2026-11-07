@@ -104,7 +104,7 @@ public sealed partial class CombatSystem
         var events = hitEvents;   // Apply is serial, so one list serves every hit
         events.Clear();
         var cover = new CoverRoll(world.Seed, Rng.Key(table.IdOf(d)), a, seq, blow);
-        bool observe = world.HasCombatHitObservers;
+        bool observe = world.WantsCombatHits;
         bool wasAlive = observe && !dc.Medical.Dead, wasIncapacitated = observe && dc.Medical.Incapacitated;
         bool intended = observe && d == A.TargetSlot && prev[d].Generation == A.TargetGeneration;
         var (part, damage, absorbed) = HitResolver.LandDetailed(dc.Medical, ctx, packet, target.Armour, cover, toughness, tech.LowStrike, direction == 6, combat, events);
@@ -151,7 +151,7 @@ public sealed partial class CombatSystem
         Punch(world, a, ac, dc, tech, blow, 2);
         Sound(world, SoundKind.Hit, d, a, prev[d].Position, heavy: D.HitHeavy, unarmed: fighter.Unarmed, robot: ac.Race.IsRobot);
         Splash(world, d, dc, -new Vector2(toAttacker.X, toAttacker.Y), damage.Cut + damage.Blunt + damage.Pierce);
-        if (knockout || death) Knockdown(world, d, dc, -toAttacker, damage.Cut + damage.Blunt + damage.Pierce);
+        if (knockout || death) Knockdown(world, d, dc, -toAttacker, damage.Cut + damage.Blunt + damage.Pierce, part);
         if (death && world.Luckyren) dc.Burst = -new Vector2(toAttacker.X, toAttacker.Y);
         if (dc.Medical.Incapacitated) Sound(world, SoundKind.Down, d, a, prev[d].Position, fatal: death);
         // The police-hit rule first (the game's hit outcome runs before the damage), then the victim's faction's relation events (docs/game/factions-squads-towns.md 3.5).

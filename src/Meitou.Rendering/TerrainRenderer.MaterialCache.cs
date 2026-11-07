@@ -3,10 +3,11 @@ using Meitou.Rendering.Gpu;
 
 namespace Meitou.Rendering;
 
-/// <summary>The terrain material cache's switch (docs/render-terrain.md "Material cache"): the A/B <c>terrain-material-cache</c> (B: every pixel shades the layers).</summary>
+/// <summary>The terrain material cache's switch (docs/render-terrain.md "Material cache"): the A/B <c>terrain-material-cache</c> (B: every pixel shades the layers);
+/// <c>MEITOU_DIAG_NO_MATERIAL_CACHE=1</c> starts it off.</summary>
 public static class TerrainMaterialCache
 {
-    public static bool Enabled { get; set; } = true;
+    public static bool Enabled { get; set; } = !GpuContext.DiagNoMaterialCache;
 }
 
 /// <summary>

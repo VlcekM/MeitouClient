@@ -20,6 +20,9 @@ Current choices; implementation details belong in the linked references.
 - **Latency:** tiered compilation/PGO off, the game's methods compiled ahead on a background thread; server GC with four unpinned heaps and a 16 MB gen0 budget cap, compacting collection after
   loading, SustainedLowLatency during play. Render jobs preserve execution order.
   [docs/engine.md](docs/engine.md), [docs/bench.md](docs/bench.md).
+- **Code mods:** Meitou's own loader with one game-shipped Harmony; `mods.cfg` is the only order for code and data. A code mod may
+  depend on others by manifest id and version range and then shares their loaded assemblies; the loader refuses, never reorders.
+  [docs/modding.md](docs/modding.md), [docs/modding-dependencies.md](docs/modding-dependencies.md).
 - **Upscaling:** single-sample jittered HDR scene; shadow maps/reused reflections unjittered.
   LOD bias `log2(scale)-1` for TAA, FSR and DLSS. [docs/render-post.md](docs/render-post.md).
 - **Vendors:** Vulkan FidelityFX API DLL from SDK 1.1.4 (Windows). DLSS on Windows: Streamline 2.14.16 manual

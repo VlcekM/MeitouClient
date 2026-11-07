@@ -215,10 +215,12 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
 
     /// <summary>
     /// Whether an update seeing <paramref name="eye"/> and <paramref name="reach"/> builds <paramref name="c"/>'s look when it is missing: not deferred
-    /// (<see cref="LoadingFocus"/>), and a portrait's or wanted (<see cref="WantsAsset"/>). The one rule of <see cref="AssetFor"/>, <see cref="UpdateDistant"/>
-    /// and <see cref="PendingLoads"/>.
+    /// (<see cref="LoadingFocus"/>), and a portrait's, wanted (<see cref="WantsAsset"/>) or one the loading screen waits for (any not deferred while a focus is set:
+    /// the eye's reach is not the focus's, and one waited for but never built held the screen up for good). The one rule of <see cref="AssetFor"/>,
+    /// <see cref="UpdateDistant"/> and <see cref="PendingLoads"/>.
     /// </summary>
-    bool BuildsLook(in CharacterInstance c, Vector3 eye, float reach) => !Deferred(c) && (portraitKeys.Contains(c.Key) || WantsAsset(c, eye, reach));
+    bool BuildsLook(in CharacterInstance c, Vector3 eye, float reach) =>
+        !Deferred(c) && (LoadingFocus is not null || portraitKeys.Contains(c.Key) || WantsAsset(c, eye, reach));
 
     /// <summary>Current appearances still being prepared/uploaded, or textures still being loaded. Failed assets count as finished.</summary>
     public bool ContentPending => Draws.Items.Any(c => !Deferred(c) && !assets.ContainsKey(c.Appearance)) || Draws.Distant.Any(c => !Deferred(c) && !assets.ContainsKey(c.Appearance))
@@ -272,6 +274,8 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         public float Pixels;
         public int Shots;
         public IReadOnlyList<StuckBoltMesh> Bolts;
+        /// <summary>The limb held at its <c>mouth</c> point (<see cref="CharacterInstance.Mouth"/>; null: none).</summary>
+        public MouthMesh? Mouth;
         /// <summary>The ragdoll's bones over the animation (null: none).</summary>
         public BonePose? Bones;
         public long Key;
@@ -468,7 +472,7 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
     /// <summary>
     /// The bolts stuck in this update's posed characters (docs/game/combat.md "Bolt visuals"), as loose meshes into <paramref name="into"/> (cleared first), after <see cref="Update"/>:
     /// each fixed to its bone the first time it is seen, its +z along the flight and pulled back from the bone's origin by <see cref="BoltDepth"/>, then carried by the bone
-    /// (a ragdoll's included), as the original attaches it to the bone keeping its world orientation (<c>FUN_14052bfa0</c>).
+    /// (a ragdoll's included), as the original attaches it to the bone keeping its world orientation (<c>FUN_14052bfa0</c>). An animal's held limb comes with them (<see cref="AddMouth"/>).
     /// </summary>
     public void CollectBolts(List<DebrisPiece> into)
     {
@@ -476,6 +480,7 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         for (int i = 0; i < liveCount; i++)
         {
             ref var l = ref live[i];
+            AddMouth(ref l, into);
             var state = l.State;
             if (l.Bolts is not { Count: > 0 } bolts || l.PortraitOnly || l.Asset.IsIcon)
             {
@@ -508,6 +513,17 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
                 into.Add(new DebrisPiece(bolt.Mesh, 1, rotation, position));
             }
         }
+    }
+
+    /// <summary>
+    /// The limb an animal holds (<see cref="CharacterInstance.Mouth"/>) as a loose mesh at its posed <c>mouth</c> point (<see cref="CharacterAsset.Mouth"/>), sized with the animal; nothing
+    /// when its race has no such point (docs/game/character-stats.md "Mouth").
+    /// </summary>
+    void AddMouth(ref Live l, List<DebrisPiece> into)
+    {
+        if (l.Mouth is not { } held || l.PortraitOnly || l.Asset.IsIcon || l.Asset.Mouth is not { } mouth || l.State is not { Posed: >= 0 } state) return;
+        if (mouth.AttachIndex >= state.Attach.Length || !Matrix4x4.Decompose(state.Attach[mouth.AttachIndex] * l.World, out var scale, out var rotation, out var position)) return;
+        into.Add(new DebrisPiece(held.Mesh, scale.X, rotation, position, 1, held.Look));
     }
 
     /// <summary>The rotation that turns +z onto <paramref name="to"/> (unit length).</summary>
@@ -676,11 +692,12 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
 
     /// <summary>
     /// Whether the character's projected height is under <see cref="TinyOn"/> render pixels (<see cref="TinyOff"/> once it was): a speck the original draws and Meitou does not.
-    /// Never the player's, a portrait's, a hidden or an editor character, and not one near a kept point (its look is built ahead). Without a built asset the body mesh's known height is used.
+    /// Never the player's, a portrait's, a hidden or an editor character, not one near a kept point (its look is built ahead), and none under a game's loading screen (it waits
+    /// for their looks, <see cref="LoadingFocus"/>). Without a built asset the body mesh's known height is used.
     /// </summary>
     bool CullTiny(in CharacterInstance inst, Vector3 eye, CharacterAsset? asset)
     {
-        if (!viewKnown || inst.FullRateAnimation || inst.Hidden || portraitKeys.Contains(inst.Key)) return false;
+        if (!viewKnown || LoadingFocus is not null || inst.FullRateAnimation || inst.Hidden || portraitKeys.Contains(inst.Key)) return false;
         float height = asset?.Height ?? (inst.Appearance.BodyMesh is { Length: > 0 } body && bodyHeights.TryGetValue(body, out var h) ? h : 0);
         if (height <= 0) return false;
         float scale = inst.Scale > 0 ? inst.Scale : 1;
@@ -701,6 +718,7 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         (l.Key, l.PortraitOnly) = (inst.Key, far);
         l.World = WorldOf(in inst, asset, scale);
         (l.WeaponDrawn, l.RangedDrawn, l.BackDrawn, l.Shots, l.Bolts) = (inst.WeaponDrawn, inst.RangedDrawn, inst.BackDrawn, inst.Shots, inst.Bolts);
+        l.Mouth = inst.Mouth;
         l.Centre = centre;
         l.Radius = asset.Radius * scale;
         l.AttachBase = attachCount;
@@ -867,6 +885,7 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         foreach (var part in asset.Parts)
             if (part.AttachIndex >= 0) state.Attach[part.AttachIndex] = scratch.TagTransform(part.Bone, part.Offset);
         foreach (var lamp in asset.Lamps) state.Attach[lamp.AttachIndex] = lamp.Offset * scratch.BoneTransform(lamp.Bone);
+        if (asset.Mouth is { } mouth) state.Attach[mouth.AttachIndex] = scratch.TagTransform(mouth.Bone, mouth.Offset);
         rig.Return(scratch);
 
         if (state.Posed < 0 || l.Snap)

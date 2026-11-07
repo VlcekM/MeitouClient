@@ -27,6 +27,7 @@ sealed partial class SettingsMenu
         new(WorldFrame.ObjectLodSlider, WorldOptions.LowEndObjectLod, 0.6f, 2),
         new(WorldFrame.TerrainErrorSlider, float.NaN, 1.5f, 0.6f, Mode: "Draw distances"),
         new(WorldFrame.GroundReliefQualitySlider, 0, 1, 2, High: 2),
+        new(WorldFrame.GroundReliefDepthSlider, float.NaN, float.NaN, float.NaN, High: 20),
         new(WorldFrame.FoliageDistanceSlider, float.NaN, 0.5f, 2, Scale: true),
         new(WorldFrame.FoliageLodSlider, float.NaN, 0.75f, 2),
         new(WorldFrame.LargeFoliageRangeSlider, LowFoliageRange, 0.5f, 1.5f, Scale: true),
@@ -58,7 +59,7 @@ sealed partial class SettingsMenu
     static readonly PresetToggle[] PresetToggles =
     [
         new(WorldFrame.FifthCascadeSwitch, false, false, true),
-        new(WorldFrame.RockSmoothingSwitch, false, true, true),
+        new(WorldFrame.RockSmoothingSwitch, false, false, true),
         new(WorldFrame.OutlineRefineSwitch, false, false, true),
     ];
 

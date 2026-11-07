@@ -587,12 +587,12 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
     /// <summary>
     /// A town squad with a living member in the loaded box of an active zone is not stored with its town: it stays in the world as a pinned platoon that unloads on its own, as the original
     /// checks each platoon by its place (<c>FUN_1404febd0</c>, after 4 s outside every loaded zone; a zone's unload touches no platoon, <c>FUN_1409fe980</c>), so a squad chasing the player
-    /// away from home does not vanish with its town. True when it was kept.
+    /// away from home does not vanish with its town. One carrying a player character is kept wherever it is (<see cref="SquadCarriesPlayer"/>). True when it was kept.
     /// </summary>
     bool KeepLoaded(World world, int site, Squad squad)
     {
         var at = PlatoonPosition(world, squad, new Vector2(squad.Position.X, squad.Position.Z));
-        if (!ZoneActivation.InLoadedBox(at.X, at.Y, active)) return false;
+        if (!ZoneActivation.InLoadedBox(at.X, at.Y, active) && !SquadCarriesPlayer(world, squad)) return false;
         var stored = new StoredSquad { Name = squad.Name, HomeBuilding = squad.HomeBuilding, Shop = squad.Shop, NextHomeFillTick = squad.NextHomeFillTick, Package = squad.Ai?.Current?.Id, Ai = Saving.AiSave.Of(squad.Ai) ?? squad.SavedAi };
         var platoon = new Platoon
         {
@@ -736,7 +736,7 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
 
     /// <summary>
     /// A squad's <c>slaves</c> (the squad factory's recursive slave squads, role 4; docs/game/factions-squads-towns.md "Squad factory"): each planned slave squad is made as a squad of its
-    /// template's <c>faction</c> (else the owner's), every member a slave (state 1) of the owner squad's faction. <b>Engine choices</b>: they are made at the owner squad's spot; with a
+    /// template's <c>faction</c> (else the owner's), every member a slave (state 1) of the owner squad's faction, shaven and chained (<b>Verified</b>). <b>Engine choices</b>: they are made at the owner squad's spot; with a
     /// home building, each goes into a random free cage of it (their package's goal is Slave get in Cage, which Meitou does not act out), those left over stand by the owner squad.
     /// Each obeys the owner squad (job 187: its Slave AI Goals, <see cref="CharacterCold.SlaveMaster"/>).
     /// </summary>
@@ -766,6 +766,9 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
                 if (table.Cold(id.Slot) is not { } c) continue;
                 // Every member, the leader too, gets member type 4 after the recursive squad is made (FUN_140583a10); the squad's leader pointer stays.
                 (c.SlaveState, c.SlaveOwner, c.SlaveMaster, c.Role) = (1, squad.Faction, squad.Id, (int)SquadRole.Slave);
+                // Then shaven and chained (FUN_140583a10: shaveHead, setChainedMode), so the owner's watchers see a processed slave and leave it be (#356).
+                if (c.Fighter is not { IsAnimal: true }) c.Shaved = true;
+                assembly.Chain(c);
                 if (cages.Count == 0) continue;
                 int pick = Rng.Int(Rng.Hash(world.Seed, ownerKey, RngPurpose.Spawn, SeedSalts.SlaveCage + (ulong)picks++), cages.Count);
                 world.Fixtures.Imprison(world, id, cages[pick]);

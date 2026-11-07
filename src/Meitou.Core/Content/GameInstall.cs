@@ -18,6 +18,13 @@ public sealed class GameInstall
     public string ModsDirectory => Path.Combine(Root, "mods");
     public string SaveDirectory => Path.Combine(Root, "save");
 
+    /// <summary>The game's exe names: Steam's, then GOG's (<c>kenshi_GOG_x64.exe</c>, #336).</summary>
+    static readonly string[] ExecutableNames = ["kenshi_x64.exe", "kenshi_GOG_x64.exe"];
+
+    /// <summary>The install's game exe: the first of <see cref="ExecutableNames"/> that exists, else the Steam name (missing).</summary>
+    public string Executable =>
+        ExecutableNames.Select(name => Path.Combine(Root, name)).FirstOrDefault(File.Exists) ?? Path.Combine(Root, ExecutableNames[0]);
+
     /// <summary>
     /// Steam workshop items of Kenshi (app 233860) in the same Steam library, if the install is a Steam one:
     /// <c>steamapps/workshop/content/233860</c> next to <c>steamapps/common/&lt;install&gt;</c>.

@@ -76,10 +76,10 @@ sealed partial class PlayerInterface
         var area = panel.Bounds;
         // The labels sit on Kenshi_GenericTextBoxFlatSkin, the help panel on Kenshi_GenericTextBoxSkin; the value boxes' skin names no text colour, so they keep the palette ink.
         string labelInk = MyGuiColours.TemplateInk(uiResources, "Kenshi_GenericTextBoxFlatSkin");
+        // The font resource's own size, so the Font size option (font size2) applies as it does to the help text below.
         Dictionary<string, string> Text(string align = "Left VCenter", bool value = false) => new()
         {
-            ["FontName"] = "Kenshi_StandardFont_Medium", ["FontPixels"] = Math.Max(8, (int)(14 * s)).ToString(CultureInfo.InvariantCulture),
-            ["TextColour"] = value ? MyGuiColours.InkText : labelInk, ["TextAlign"] = align,
+            ["FontName"] = "Kenshi_StandardFont_Medium", ["TextColour"] = value ? MyGuiColours.InkText : labelInk, ["TextAlign"] = align,
         };
         int sliders = NewGameSettings.Options.Length;
         float row = area.Height / (sliders + NewGameSettings.Ticks.Length), labelWidth = area.Width * .46f, arrow = 24 * s, valueWidth = 48 * s;

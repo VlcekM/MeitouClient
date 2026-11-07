@@ -98,10 +98,14 @@ public sealed partial class PopulationSystem
     /// <summary>
     /// The stored characters into the world as the squad of <paramref name="p"/> (serial phase), each where it stood, the leader wandering round the town and the rest
     /// following it (a roaming one waits for its orders), moved along with a stand-in that travelled; the stored list is emptied (the characters are the world's again). Null when no one is left.
+    /// One with no town (a prisoner split off a save's wild platoon keeps its <see cref="Platoon.Origin"/> -1) is homed round where it stands, as a homeless wild one is.
     /// </summary>
     Squad? SpawnStored(World world, Platoon p, StoredSquad stored)
     {
         if (stored.Members.Count == 0) return null;
+        if (p.Origin < 0 || p.Origin >= data.Sites.Count)
+            return SpawnKept(world, stored, p.TemplateId, p.Faction, -1, p.Id, p.Position, p.Position, settings.HomelessHomeRadius, p.Size);
+
         var site = data.Sites[p.Origin];
         float radius = site.Town.SizeRadius * site.Town.TownRadiusMult;
         bool resume = ResidentSchedule && stored.Pinned && world.GameHours - stored.StoredHours >= ScheduleAfterHours;

@@ -1,0 +1,72 @@
+[
+ {
+  "id": "example-animal",
+  "name": "Example Beast",
+  "aliases": [],
+  "kind": "animal-type",
+  "faction": null,
+  "region": null,
+  "x": null,
+  "z": null,
+  "zone": null,
+  "verified": false,
+  "verifiedOn": null,
+  "seen": "",
+  "source": "example entry, replace",
+  "confidence": "Unknown",
+  "notes": "Fake entry that only shows the schema. Delete it.",
+  "data": {
+   "race": {
+    "name": "Example Beast",
+    "walkSpeed": 15,
+    "maxBlood": 400,
+    "minBlood": 100,
+    "carriable": true
+   },
+   "combatStats": 35,
+   "animalStrength": 60,
+   "hpMult": 1,
+   "lifespanDays": 40,
+   "scaleMin": 0.3,
+   "scaleMax": 1,
+   "femaleChancePct": 50,
+   "inventory": "8x8",
+   "weapon": {
+    "name": "Example bite",
+    "class": "Creature attack 20",
+    "cutMult": 1,
+    "bluntMult": 1,
+    "pierceMult": 1,
+    "bleedMult": 1,
+    "length": 65
+   },
+   "deathItems": [
+    {
+     "item": "Raw Meat",
+     "count": 5
+    }
+   ],
+   "squads": [
+    {
+     "squad": "Example Pack",
+     "count": "1-3",
+     "record": "0-example.mod"
+    }
+   ],
+   "spawnsIn": {
+    "biomes": [
+     {
+      "biome": "Example Biome",
+      "sharePct": 10.0,
+      "squad": "Example Pack"
+     }
+    ],
+    "nests": [
+     "Example Den"
+    ],
+    "towns": []
+   },
+   "record": "0-example.mod"
+  }
+ }
+]

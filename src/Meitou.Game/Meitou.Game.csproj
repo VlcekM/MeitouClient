@@ -63,7 +63,8 @@
       <Output TaskParameter="ConsoleOutput" ItemName="_BuildGitCommit" />
       <Output TaskParameter="ExitCode" PropertyName="_BuildGitCommitExit" />
     </Exec>
-    <Exec Command="git describe --tags --abbrev=0" WorkingDirectory="$(MSBuildProjectDirectory)"
+    <!-- Game tags only (v*): a launcher-v* tag is not a game version, and code mods' gameVersion ranges read this (docs/modding-dependencies.md). -->
+    <Exec Command="git describe --tags --abbrev=0 --match &quot;v*&quot;" WorkingDirectory="$(MSBuildProjectDirectory)"
           ConsoleToMSBuild="true" IgnoreExitCode="true" IgnoreStandardErrorWarningFormat="true"
           StandardOutputImportance="Low" StandardErrorImportance="Low" Condition="'$(BuildGitTag)' == ''">
       <Output TaskParameter="ConsoleOutput" ItemName="_BuildGitTag" />

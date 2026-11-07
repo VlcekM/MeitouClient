@@ -74,6 +74,7 @@ public sealed unsafe partial class FoliageRenderer
     /// </summary>
     void GrowGrassStore()
     {
+        if (GpuContext.DiagNoGrow) return;
         if (GrassStoreScale(GrassRangeSetting, 0) is var wanted && (wanted <= grassStoreScale || wanted <= grassStoreRefused)) return;
         int scale = GrassStoreScale(GrassRangeSetting, guard is { BudgetBytes: > 0 } g ? (ulong)g.BudgetBytes : Gpu.VideoMemoryBudget);
         if (scale <= grassStoreScale) { grassStoreRefused = wanted; return; }   // the budget caps it where it is

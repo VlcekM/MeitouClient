@@ -17,8 +17,9 @@ public sealed record ToggleDoorLocksOrder(string Building) : SimCommand;
 public sealed record DoorOrder(IReadOnlyList<CharacterId> Characters, string Door, bool PickLock = false) : OrderCommand;
 
 /// <summary>
-/// The context menu's Lock (77) or Unlock (140) on one of the player's doors (<c>FUN_1407a6bc0</c>): the nearest of the characters (the selection when empty) walks to it and works the lock for
-/// <see cref="LockSystem.LockWorkSeconds"/> (Task_LockDoor / Task_UnlockDoor); not the panel's instant toggle (<see cref="ToggleDoorLocksOrder"/>).
+/// The context menu's Lock (77) or Unlock (140) on one of the player's doors, or Lock (77) / Unlock (78) on one of its cages (<c>FUN_1407a6bc0</c>): the nearest of the characters (the selection
+/// when empty) walks to it and works the lock for <see cref="LockSystem.LockWorkSeconds"/> (Task_LockDoor / Task_UnlockDoor, whose update closes the target's door only when it has one,
+/// <c>FUN_140337670</c>); not the panel's instant toggle (<see cref="ToggleDoorLocksOrder"/>). A cage's unlock runs row 140, whose conditions are 78's.
 /// </summary>
 public sealed record DoorLockOrder(IReadOnlyList<CharacterId> Characters, string Door, bool Lock) : OrderCommand;
 
@@ -136,7 +137,12 @@ public sealed partial class LockSystem
 
     void DoorLockInput(World world, DoorLockOrder order)
     {
-        if (world.Fixtures.Find(order.Door) is not { Kind: FixtureKind.Door, DoorBroken: false, Lock: { } l } door || door.Owner != world.Player.Faction || l.EffectivelyLocked == order.Lock) return;
+        if (world.Fixtures.Find(order.Door) is not { Kind: FixtureKind.Door or FixtureKind.Cage, DoorBroken: false, Lock: { } l } door || door.Owner != world.Player.Faction
+            || l.EffectivelyLocked == order.Lock)
+        {
+            return;
+        }
+
         var table = world.Characters;
         int best = -1;
         float bestDistance = float.MaxValue;
@@ -163,7 +169,7 @@ public sealed partial class LockSystem
         {
             if (!next[s].Alive || table.Cold(s) is not { DoorJob: { } job } c) continue;
             ref var n = ref next[s];
-            if (world.Fixtures.Find(job.Door) is not { Kind: FixtureKind.Door, DoorBroken: false, Lock: { } l } door || job.Lock == l.EffectivelyLocked
+            if (world.Fixtures.Find(job.Door) is not { Kind: FixtureKind.Door or FixtureKind.Cage, DoorBroken: false, Lock: { } l } door || job.Lock == l.EffectivelyLocked
                 || c.Medical is { Incapacitated: true } || !c.CarriedBy.IsNone || c.IsImprisoned || c.InCombat || n.Task is not ((byte)CharacterTask.Idle or (byte)CharacterTask.GoTo))
             {
                 c.DoorJob = null;
@@ -186,7 +192,7 @@ public sealed partial class LockSystem
             job.Work += world.TickSeconds;
             if (job.Work < LockWorkSeconds) continue;
             c.DoorJob = null;
-            if (job.Lock)
+            if (job.Lock && door.Kind == FixtureKind.Door)
             {
                 // Task_LockDoor closes an open door and sets the lock at once (the door finishes closing locked); `wants lock` is not touched.
                 if (door.Motion == DoorMotion.Opening) door.Motion = DoorMotion.Closing;
@@ -219,7 +225,7 @@ public sealed partial class LockSystem
         if (n.Task == (byte)CharacterTask.GoTo) AtWork(world, s);
         player.DoorTarget = null;
         if (door.Motion is DoorMotion.Open or DoorMotion.Opening) { if (door.Motion == DoorMotion.Open) FixtureRegistry.CloseDoor(door); }
-        else if (door.Lock is { EffectivelyLocked: true }) world.Post($"{c.Name}: It's locked.");
+        else if (door.Lock is { EffectivelyLocked: true }) Say(world, c, "It's locked.");
         else FixtureRegistry.OpenDoor(door);
     }
 
@@ -319,7 +325,8 @@ public sealed partial class LockSystem
                     // Task_OpenDoor fails at a locked door for anyone, the owner too (docs/game/locks.md "Doors").
                     if (away > LockedReach || !Crosses(n.Position, c.Path, n.PathCursor, s.Spot, legs: 1)) return;
                     TaskStart.Stand(table, slot);
-                    if (c.IsPlayer) s.World.Post($"{c.Name}: It's locked.");
+                    c.WalkEnd = WalkEnd.Failed;
+                    if (c.IsPlayer) Say(s.World, c, "It's locked.");
                     return;
                 }
                 if (!Crosses(n.Position, c.Path, n.PathCursor, s.Spot, legs: 2)) return;

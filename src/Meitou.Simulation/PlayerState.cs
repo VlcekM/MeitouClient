@@ -10,6 +10,14 @@ public sealed class PlayerState
     /// <summary>The player's faction, a position in the world's faction list (-1 before a game starts).</summary>
     public int Faction { get; set; } = -1;
     public bool Exists => Faction >= 0;
+    /// <summary>The debug god mode is on (<see cref="DebugGodmode"/>). Not saved and not hashed: a loaded game starts with it off and the saved (original) stats.</summary>
+    public bool Godmode { get; set; }
+    /// <summary>The debug guard is on (<see cref="DebugGuard"/>): kills hostiles within <see cref="GuardRadius"/> of the lead and heals the player's characters. Not saved: a loaded game starts with it off.</summary>
+    public bool Guard { get; set; }
+    /// <summary>The guard's radius in metres.</summary>
+    public float GuardRadius { get; set; } = 30;
+    /// <summary>The guard also kills animals that do not attack a player character.</summary>
+    public bool GuardAnimals { get; set; }
     /// <summary>
     /// The player faction's name once renamed (the faction tab's name box, <see cref="RenameFactionCommand"/>; docs/game/ui-screens.md "Faction tab"); null: the faction's own name from the data
     /// ("Nameless"). Saved as the CAMERA string <c>pfaction name</c>, the GAMESTATE_FACTION name and the player platoons' faction name. Hashed only while set.
@@ -241,7 +249,7 @@ public sealed partial class PlayerSystem(PopulationData? data = null) : ITickSys
                 case SelectCommand select:
                     var candidates = select.Characters.Where(id =>
                         table.TryResolveNext(id, out int slot) && table.Cold(slot)!.IsPlayer).ToArray();
-                    if (candidates.Length == 0) break;
+                    if (candidates.Length == 0) { if (select.Clear && !select.Additive && select.Characters.Count == 0) player.Selection.Clear(); break; }
                     // A non-additive select with any candidate clears the selection first; the gate then keeps out the dead (FUN_1407f3b50, FUN_1407f7f20).
                     if (!select.Additive && !(select.Toggle && candidates.Length == 1 && player.Selection.Contains(candidates[0]))) player.Selection.Clear();
                     var selectable = candidates.Where(id => !(table.TryResolveNext(id, out int living) && table.Cold(living)!.Medical is { Dead: true })).ToArray();
@@ -342,6 +350,8 @@ public sealed partial class PlayerSystem(PopulationData? data = null) : ITickSys
 
     public void SlowWorld(World world)
     {
+        DebugCheats.GodTick(world, data, assembly);
+        DebugCheats.GuardTick(world, data, assembly);
         SquadManagement.BuryDead(world, data?.Db);
         world.Player.Prune(world.Characters);
         SquadManagement.KeepActive(world);

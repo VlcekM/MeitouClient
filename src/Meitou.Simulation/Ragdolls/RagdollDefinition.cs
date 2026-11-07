@@ -38,8 +38,14 @@ public sealed class RagdollBody
     public float Mass { get; init; } = 1;
     /// <summary>The body in model space in the binding pose (scaled).</summary>
     public RigidTransform Bind { get; init; }
-    /// <summary>The bone's binding transform in the body's frame: bone = <c>BoneInBody.Then(body)</c>.</summary>
+    /// <summary>
+    /// The bone in the body's frame, bone = <c>BoneInBody.Then(body)</c>: at the actor's origin (the file's actor position) with the skeleton's binding rotation, as the game
+    /// pins each actor to its bone (docs/game/ragdolls.md "Bodies: kinematic or simulated"). The actor is not always at the skeleton's bone: whale2.phs is about 1.3 x the
+    /// Big-Bones skeleton, its Bip01 actor 24 from the bone.
+    /// </summary>
     public RigidTransform BoneInBody { get; init; }
+    /// <summary>The actor's origin in model space in the binding pose (scaled).</summary>
+    public Vector3 Actor { get; init; }
 }
 
 /// <summary>
@@ -81,6 +87,9 @@ public sealed class RagdollDefinition
     public required int[] BodyOfBone { get; init; }
     /// <summary>The body the character's position follows while the whole body is a ragdoll: <c>Bip01</c>'s, else the first (docs/game/ragdolls.md "Per frame").</summary>
     public int Root { get; init; }
+
+    /// <summary>Where the character stands while its whole body is a ragdoll in <paramref name="pose"/>: the root actor's origin, which is its bone's (<see cref="RagdollBody.BoneInBody"/>).</summary>
+    public Vector3 RootAt(ReadOnlySpan<RigidTransform> pose) => pose[Root].Apply(Bodies[Root].BoneInBody.Position);
     /// <summary>By body: the bodies joined to it (bit per body index, the first 64), which it does not collide with (no file joint enables collision).</summary>
     public required ulong[] Joined { get; init; }
 
@@ -103,7 +112,7 @@ public sealed class RagdollDefinition
             // One shape per actor in every shipped ragdoll; a further one would need a compound (not built: the first stands for the actor).
             var shape = actor.Shapes[0];
             var bind = new RigidTransform(shape.Position * scale, shape.Rotation);
-            var boneBind = new RigidTransform(rig.BindPosition[bone] * scale, Quaternion.Normalize(Quaternion.Inverse(rig.BindRotationInverse[bone])));
+            var boneBind = new RigidTransform(actor.Position * scale, Quaternion.Normalize(Quaternion.Inverse(rig.BindRotationInverse[bone])));
             Vector3[]? points = null;
             if (shape.Type == PhysicsShapeType.Mesh)
             {
@@ -131,7 +140,7 @@ public sealed class RagdollDefinition
             bodies.Add(new RagdollBody
             {
                 Bone = bone, Name = actor.Name, Type = shape.Type, Size = size, Hull = points, Mass = actor.Mass > 0 ? actor.Mass : 1,
-                Bind = bind, BoneInBody = boneBind.Then(bind.Inverse()),
+                Bind = bind, BoneInBody = boneBind.Then(bind.Inverse()), Actor = boneBind.Position,
             });
         }
         if (bodies.Count == 0) return null;
