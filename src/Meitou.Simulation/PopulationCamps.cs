@@ -30,16 +30,53 @@ public sealed partial class PopulationSystem
         world.NestBuildings.Remove(camp);
     }
 
-    /// <summary>A town with <c>spawn in town centre</c> scatters at its own position when made (<c>Town::setup</c> queues it), again only when its TOWN record changed since.</summary>
+    /// <summary>
+    /// A town with <c>spawn in town centre</c> scatters at its own position when made (<c>Town::setup</c> queues it), again only when its TOWN record changed since. Any town also
+    /// lays the items of its residents' nests (<see cref="ResidentNestDrops"/>) once, in a fresh zone.
+    /// </summary>
     void StandTownCamp(World world, TownSite site)
     {
         var town = site.Town;
         int camp = NestBuildings.TownCamp(site.Index);
-        if (!town.SpawnInTownCentre || world.NestBuildings.RecordOf(camp) == town.Id) return;
         var at = new Vector2(site.Position.X, site.Position.Z);
-        var layout = NestFurniture.Scatter(data.Db, town, at, world.Walkability, world.Seed, $"town{site.Index}:");
         int owner = site.Index < data.SiteFactions.Count ? data.SiteFactions[site.Index] : -1;
+        if (!town.SpawnInTownCentre)
+        {
+            LayResidentNests(world, site, camp, owner, at);
+            return;
+        }
+        if (world.NestBuildings.RecordOf(camp) == town.Id) return;
+        var layout = NestFurniture.Scatter(data.Db, town, at, world.Walkability, world.Seed, $"town{site.Index}:");
+        layout.Drops.AddRange(ResidentNestDrops(world, site, at));
         StandCamp(world, camp, layout, owner, at, town.Id, site.Index);
+    }
+
+    /// <summary>The residents' nest items of a town that stands no camp of its own, as the town's camp's items (kept past the dropped-item limit, saved with the town's handle).</summary>
+    void LayResidentNests(World world, TownSite site, int camp, int owner, Vector2 at)
+    {
+        if (world.SavedZones.Contains(WorldLayout.ZoneOf(at.X, at.Y))) return;
+        var drops = ResidentNestDrops(world, site, at);
+        if (drops.Count > 0 && world.NestBuildings.Stock(camp)) LayItems(world, camp, drops, owner, at);
+    }
+
+    /// <summary>
+    /// The items (<c>loot spawn</c>, and <c>debris</c> with physics) of each TOWN a resident template of the town names as its <c>nest</c>, rolled round the town's centre
+    /// (docs/formats/zones.md "Nest debris and loot": <b>Observed</b> in an original save; ruins such as the Old Empire Watchtowers' have no lists of their own). The nest's
+    /// buildings and meshes are not stood up (<b>Unknown</b> whether the original does).
+    /// </summary>
+    List<NestDrop> ResidentNestDrops(World world, TownSite site, Vector2 at)
+    {
+        var drops = new List<NestDrop>();
+        var nests = site.Town.Residents
+            .Select(r => data.Db.Find(r.Id)).OfType<Meitou.Data.GameRecord>()
+            .SelectMany(t => t.GetReferences("nest")).Select(n => n.TargetStringId).Distinct(StringComparer.Ordinal);
+        foreach (var id in nests)
+        {
+            if (data.Db.Find(id) is not { Type: Meitou.Data.Fcs.FcsRecordType.TOWN } nest) continue;
+            ulong seed = world.Seed ^ Rng.StableHash(id);
+            drops.AddRange(NestFurniture.Scatter(data.Db, TownData.From(nest), at, world.Walkability, seed, $"town{site.Index}:{id}:").Drops);
+        }
+        return drops;
     }
 
     /// <summary>
