@@ -165,7 +165,7 @@ public sealed partial class PopulationSystem
         var counts = new Dictionary<string, int>(StringComparer.Ordinal);
         void Add(string id) => counts[id] = counts.GetValueOrDefault(id) + 1;
         foreach (var squad in world.Squads.All)
-            if (squad.Members.Any(m => Living(world, m))) Add(squad.TemplateId);
+            if (squad.Town < 0 && squad.Members.Any(m => Living(world, m))) Add(squad.TemplateId);
         foreach (var p in world.Platoons.All)
         {
             if (p.SquadId >= 0 || p.Dead) continue;
@@ -173,7 +173,9 @@ public sealed partial class PopulationSystem
         }
         foreach (var list in keptWild.Values)
             foreach (var k in list) Add(k.TemplateId);
-        return new WorldShare(counts, Math.Max(active.Count, 1));
+        // The zone manager's loaded zones: the active ones, at least the sectors loaded (or loading) now.
+        int sectors = wildLoaded.Count(i => wildSites![i].Kind == WildKind.Sector);
+        return new WorldShare(counts, Math.Max(Math.Max(active.Count, sectors), 1));
     }
 
     WildHold? HoldOf(World world, int site)
@@ -552,7 +554,8 @@ public sealed partial class PopulationSystem
         foreach (var e in entries) sum += Math.Max(0, e.V0);
         float target = populationMultiplier * group.HomelessSpawnAmount;
         if (target <= 0 || sum <= 0) return w;
-        float k = sum / (target * Math.Max(zones, 1));
+        // Engine choice: a sector makes ceil(P x amount) squads at once, so that is the share each zone is balanced to.
+        float k = sum / (HomelessCount(group, populationMultiplier) * Math.Max(zones, 1));
         for (int i = 0; i < entries.Count; i++)
             w[i] = entries[i].V0 > 0 && usable(entries[i].Id) ? MathF.Max(0, entries[i].V0 - k * counts[i]) : 0;
         return w;
