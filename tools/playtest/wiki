@@ -1,41 +1,106 @@
 #!/usr/bin/env -S python3 -I
-# wiki <command>   query and extend a local agent-playtest wiki (JSON files; no data ships with the repo). python3 only, no dependencies.
-#   wiki find <text>             name/alias/id/faction/region/notes match over all files, max 10 lines: id | kind | x z | V(erified)/u | name
-#   wiki show <id>               full entry (JSON)
+# wiki <command>   query an agent-playtest wiki: our own in-game observations merged with data generated from YOUR game files. python3 only, no dependencies.
+#   wiki find <text> [--kind K] [--n 10]   name/alias/id/faction/zone/notes match over all layers, max 10 lines: id | kind | x z | V(erified)/u | name | observed/generated/local
+#   wiki show <id>               full entry (JSON); an observed entry also carries the generated numbers (`data`) of the same thing
+#   wiki town <name>             one town, camp or ruin: faction, position, who lives there, shops, what we saw there, neighbours
+#   wiki faction <name>          one faction: type, relations (to you and others), places
+#   wiki item <name>             items, weapons and armour matching the name, with their numbers
 #   wiki near <x> <z> [--kind K] [--n 5]   nearest entries with coordinates, by distance
-#   wiki tp <id>                 prints the exact `tp x z` line; warns (stderr, exit 3) when unverified or x/z null (exit 4 when null)
-#   wiki kinds                   kinds and counts
-#   wiki add <file.json|->       validate and append/update entries by id (object or array); never deletes; then re-syncs
+#   wiki tp <id>                 prints the exact `tp x z` line; warns (stderr, exit 3) when not verified in game or x/z null (exit 4 when null)
+#   wiki kinds                   layers, kinds and counts
+#   wiki status                  where the layers are, what the generated files were made from, what is missing
+#   wiki export [<dir>]          generate the generated layer from your game files (native build: runs MeitouClient --wiki-export)
+#   wiki add <file.json|->       validate and append/update entries by id in YOUR local layer (WIKI_DIR); never deletes
 #   wiki check                   schema, duplicate ids, JSON validity; exit 1 on errors
-# Data folder: env WIKI_DIR, else <repo>/wiki (create it with: cp -r tools/playtest/wiki.example wiki). Schema and rules: docs/agent-playtest.md, section 'Build your own wiki'.
-import json, os, sys, glob, math, re
+# Layers (later wins): generated (from your game data, never shipped), observed (our own verified runs, shipped), local (your own notes, optional).
+# Folders: <tool dir>/generated and <tool dir>/observed (inside a build's wiki/ folder); in the repo: <repo>/wiki/generated and tools/playtest/wiki.observed.
+# Env: WIKI_GENERATED, WIKI_OBSERVED override those two; WIKI_DIR is the local layer (flat zones.json, towns.json ... files; default <repo>/wiki when it has any).
+# Schema and rules: docs/agent-playtest.md ("The wiki").
+import json, os, sys, glob, math, re, subprocess
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.abspath(os.path.join(HERE, '..', '..'))
-W = os.environ.get('WIKI_DIR') or os.path.join(ROOT, 'wiki')
-if not os.path.isdir(W): sys.exit('wiki: no data folder %s (cp -r tools/playtest/wiki.example wiki, or set WIKI_DIR)' % W)
-FILES = ['zones', 'towns', 'npcs', 'items', 'factions']
-FIELDS = ['id', 'name', 'aliases', 'kind', 'faction', 'region', 'x', 'z', 'zone', 'verified', 'verifiedOn', 'seen', 'source', 'confidence', 'notes']
+IN_REPO = os.path.basename(HERE) == 'playtest' and os.path.isdir(os.path.join(ROOT, 'tools'))
+GEN = os.environ.get('WIKI_GENERATED') or (os.path.join(ROOT, 'wiki', 'generated') if IN_REPO else os.path.join(HERE, 'generated'))
+OBS = os.environ.get('WIKI_OBSERVED') or (os.path.join(HERE, 'wiki.observed') if IN_REPO else os.path.join(HERE, 'observed'))
+LOCAL = os.environ.get('WIKI_DIR') or (os.path.join(ROOT, 'wiki') if IN_REPO else None)
+LOCAL_SET = bool(os.environ.get('WIKI_DIR'))
+FILES = ['zones', 'towns', 'npcs', 'items', 'factions', 'squads', 'buildings', 'notes']
+CORE = ['id', 'name', 'aliases', 'kind', 'faction', 'region', 'x', 'z', 'zone', 'verified', 'verifiedOn', 'seen', 'source', 'confidence', 'notes']
+OPTIONAL = ['data', 'observed', 'found_via']
 CONF = ('Observed', 'Inferred', 'Unknown')
 PFIELDS = ['id', 'name', 'what', 'command', 'source', 'confidence', 'verifiedOn']
+TOWNLIKE = ('town', 'camp', 'bandit-hq', 'shop', 'ruins', 'nest', 'poi')
+ITEMLIKE = ('item', 'weapon', 'armour')
+RANK = {'town': 0, 'camp': 0, 'bandit-hq': 0, 'faction': 1, 'npc': 2, 'group': 2, 'quiet-spot': 3, 'spot': 3, 'note': 3, 'unique-squad': 4, 'squad': 5, 'weapon': 6, 'armour': 6, 'item': 7, 'animal': 7, 'ruins': 8, 'poi': 8, 'nest': 8, 'building': 9, 'zone': 9}
 
-def load(n):
-    with open(os.path.join(W, n + '.json')) as f: return json.load(f)
-def save(n, d):
-    with open(os.path.join(W, n + '.json'), 'w') as f:
-        json.dump(d, f, indent=1, ensure_ascii=False); f.write('\n')
-def entries():
-    out = []
-    for n in FILES:
-        for e in load(n): out.append((n, e))
+def read(path):
+    with open(path) as f: return json.load(f)
+def rows_of(d): return d['entries'] if isinstance(d, dict) and 'entries' in d else d
+def layer_files(folder):
+    return [(os.path.splitext(os.path.basename(p))[0], p) for p in sorted(glob.glob(os.path.join(folder, '*.json')))] if folder and os.path.isdir(folder) else []
+def layers():
+    """[(layer name, folder)] in priority order, lowest first."""
+    out = [('generated', GEN), ('observed', OBS)]
+    if LOCAL and (LOCAL_SET or any(os.path.exists(os.path.join(LOCAL, n + '.json')) for n in FILES)): out.append(('local', LOCAL))
     return out
+def entries():
+    """Every entry of every layer as (layer, file name, entry), unmerged."""
+    out = []
+    for layer, folder in layers():
+        for n, p in layer_files(folder):
+            if n in ('personas', 'commands') or n.startswith('_'): continue
+            for e in rows_of(read(p)): out.append((layer, n, e))
+    return out
+def namekey(e): return re.sub('[^a-z0-9]', '', str(e.get('name', '')).lower())
+def family(kind): return 'town' if kind in ('town', 'camp', 'bandit-hq', 'shop') else kind   # observed towns replace the generated one of the same name, never a ruin or nest
+_merged = None
+def merged():
+    """Unified entries, one per thing. Same id, or same name in the same kind family, lets the higher layer replace the lower one; the winner keeps the lower
+    layer's `data` (numbers from the game files) and lists its layers in `_layers`. An id that two different kinds share (a generated squad called like an
+    observed town) goes to the higher layer; the other entry gets the kind as suffix. Returns [(file, entry, layers)]."""
+    global _merged
+    if _merged is not None: return _merged
+    by_id, by_name, order = {}, {}, []
+    def free(i, keep=None):
+        if i in by_id and i != keep:
+            low = by_id.pop(i); nid = i + '-' + low[1]['kind']
+            while nid in by_id: nid += '-x'
+            low[1]['id'] = nid; by_id[nid] = low; order[order.index(i)] = nid
+            for k2, v2 in list(by_name.items()):
+                if v2 == i: by_name[k2] = nid
+    for layer, n, e in entries():
+        same = e['id'] in by_id and family(by_id[e['id']][1]['kind']) == family(e['kind'])
+        key = e['id'] if same else by_name.get((family(e['kind']), namekey(e))) if layer != 'generated' else None
+        if key is None:
+            free(e['id'])
+            ne = dict(e); ne['_layers'] = [layer]
+            by_id[e['id']] = [n, ne]; order.append(e['id'])
+            by_name.setdefault((family(e['kind']), namekey(e)), e['id'])
+            continue
+        old_n, old = by_id[key]
+        ne = dict(old)
+        for k, v in e.items():
+            if k == 'data' and isinstance(old.get('data'), dict) and isinstance(v, dict): ne['data'] = dict(old['data'], **v)
+            elif v is not None and v != '' and v != []: ne[k] = v
+        ne['_layers'] = old['_layers'] + [layer]
+        newid = ne['id']
+        if newid != key:   # the higher layer's id wins; the old one stays as an alias
+            free(newid, keep=key)
+            ne['aliases'] = list(dict.fromkeys(list(ne.get('aliases') or []) + [key]))
+            del by_id[key]; order[order.index(key)] = newid
+        by_id[newid] = [old_n, ne]
+        by_name[(family(ne['kind']), namekey(ne))] = newid
+    _merged = [(by_id[k][0], by_id[k][1], by_id[k][1]['_layers']) for k in order]
+    return _merged
+def tag(ls): return 'observed' if 'observed' in ls else 'local' if 'local' in ls else 'generated'
 def num(v): return isinstance(v, (int, float)) and not isinstance(v, bool)
-def validate(e, fname=''):
+def validate(e, layer=''):
     errs = []
     if not isinstance(e, dict): return ['not an object']
-    for k in FIELDS:
+    for k in CORE:
         if k not in e: errs.append('missing field ' + k)
     for k in e:
-        if k not in FIELDS: errs.append('unknown field ' + k)
+        if k not in CORE and k not in OPTIONAL: errs.append('unknown field ' + k)
     if errs: return errs
     if not re.fullmatch(r'[a-z0-9]+(-[a-z0-9]+)*', str(e['id'])): errs.append('id must be a slug')
     if not isinstance(e['name'], str) or not e['name']: errs.append('name must be text')
@@ -50,48 +115,139 @@ def validate(e, fname=''):
     if not e['source']: errs.append('source required')
     for k in ('seen', 'notes'):
         if not isinstance(e[k], str): errs.append(k + ' must be text')
+    if 'data' in e and not isinstance(e['data'], dict): errs.append('data must be an object')
+    if layer == 'observed':
+        o = e.get('observed')
+        if not isinstance(o, dict) or not all(o.get(k) for k in ('date', 'how', 'build')): errs.append('observed needs {date, how, build}')
     return errs
-def xz(e): return '%s %s' % (int(e['x']), int(e['z'])) if e['x'] is not None else '-'
-def line(e): return '%s | %s | %s | %s | %s' % (e['id'], e['kind'], xz(e), 'V' if e['verified'] else 'u', e['name'])
-def all_rows():
-    rows = [(n, e) for n, e in entries()]
-    return rows
+def xz(e): return '%s %s' % (int(e['x']), int(e['z'])) if e.get('x') is not None else '-'
+def line(e): return '%s | %s | %s | %s | %s | %s' % (e['id'], e['kind'], xz(e), 'V' if e['verified'] else 'u', e['name'], tag(e['_layers']))
+def need_data():
+    if not any(glob.glob(os.path.join(f, '*.json')) for _, f in layers() if f and os.path.isdir(f)):
+        sys.exit('wiki: no data. Looked in %s (generated) and %s (observed).' % (GEN, OBS))
+def gen_missing(): return not glob.glob(os.path.join(GEN, '*.json'))
+def native_exe():
+    for cand in (os.path.join(os.path.dirname(HERE), 'MeitouClient'), os.path.join(ROOT, 'src', 'Meitou.Game', 'bin', 'Release', 'net10.0', 'MeitouClient')):
+        if os.path.exists(cand): return cand
+    return None
+def export_hint():
+    exe = native_exe()
+    if not exe and os.path.exists(os.path.join(os.path.dirname(HERE), 'MeitouClient.exe')):
+        return 'this is a Windows build: run `wiki export` from the native Linux build (same game folder, same files), or run MeitouClient.exe --wiki-export <dir> under Proton, then set WIKI_GENERATED=<dir>'
+    return 'run `wiki export` (= %s --wiki-export %s) first; it reads your Kenshi folder and mods.cfg, needs no window and takes a few seconds' % (exe or '<build>/MeitouClient', GEN)
+def warn_missing():
+    if gen_missing(): print('note: no generated data in %s: %s' % (GEN, export_hint()), file=sys.stderr)
 def cmd_find(a):
-    q = ' '.join(a).lower().strip()
-    if not q: sys.exit('usage: wiki find <text>')
+    kind = None; n = 10; words = []
+    i = 0
+    while i < len(a):
+        if a[i] == '--kind' and i + 1 < len(a): kind = a[i + 1]; i += 2
+        elif a[i] == '--n' and i + 1 < len(a): n = int(a[i + 1]); i += 2
+        else: words.append(a[i]); i += 1
+    q = ' '.join(words).lower().strip()
+    if not q: sys.exit('usage: wiki find <text> [--kind K] [--n 10]')
+    need_data()
     scored = []
-    for n, e in entries():
+    for fn, e, ls in merged():
+        if kind and e['kind'] != kind: continue
         names = [e['name'].lower(), e['id']] + [x.lower() for x in e['aliases']]
         s = 0
         if q in names: s = 100
         elif any(q in x for x in names): s = 50
-        elif any(q in (e[k] or '').lower() for k in ('faction', 'region', 'zone', 'kind')): s = 20
+        elif any(q in (e.get(k) or '').lower() for k in ('faction', 'region', 'zone', 'kind')): s = 20
         elif q in (e['notes'] + ' ' + e['seen']).lower(): s = 10
-        if s: scored.append((-s, 0 if e['verified'] else 1, e['id'], line(e)))
+        if s: scored.append((-s, 0 if 'observed' in ls else 1, 0 if e['verified'] else 1, RANK.get(e['kind'], 9), len(e['name']), e['id'], line(e)))
     extra = []
     for fn in ('commands', 'personas'):
-        p = os.path.join(W, fn + '.json')
-        if os.path.exists(p):
-            for e in load(fn):
-                blob = (e['id'] + ' ' + e['name'] + ' ' + e.get('usage', e.get('what', ''))).lower()
-                if q in blob: extra.append('%s | %s | %s' % (e['id'], fn[:-1], e.get('usage') or e.get('command')))
+        for folder in (LOCAL, OBS):
+            p = os.path.join(folder, fn + '.json') if folder else ''
+            if p and os.path.exists(p):
+                for e in read(p):
+                    blob = (e['id'] + ' ' + e['name'] + ' ' + e.get('usage', e.get('what', ''))).lower()
+                    if q in blob: extra.append('%s | %s | %s' % (e['id'], fn[:-1], e.get('usage') or e.get('command')))
     scored.sort()
-    out = [t[3] for t in scored][:10]
-    out += extra[:max(0, 10 - len(out))]
+    out = [t[-1] for t in scored][:n]
+    out += extra[:max(0, n - len(out))]
     print('\n'.join(out) if out else 'no match for "%s" (try fewer words; wiki kinds)' % q)
+    if len(scored) > len(out): print('(%d more; add --kind K or more words, --n 30 for more)' % (len(scored) - len(out)))
+    warn_missing()
 def get(i):
-    for n, e in entries():
-        if e['id'] == i: return n, e
+    for fn, e, ls in merged():
+        if e['id'] == i or i in e.get('aliases', []): return fn, e
     for fn in ('commands', 'personas'):
-        if not os.path.exists(os.path.join(W, fn + '.json')): continue
-        for e in load(fn):
-            if e['id'] == i: return fn, e
+        for folder in (LOCAL, OBS):
+            p = os.path.join(folder, fn + '.json') if folder else ''
+            if p and os.path.exists(p):
+                for e in read(p):
+                    if e['id'] == i: return fn, e
     return None, None
+def best(q, kinds):
+    k = re.sub('[^a-z0-9]', '', q.lower())
+    c = []
+    for fn, e, ls in merged():
+        if e['kind'] not in kinds: continue
+        nk = namekey(e); names = [nk, e['id'].replace('-', '')] + [re.sub('[^a-z0-9]', '', x.lower()) for x in e['aliases']]
+        s = 100 if k in names else 50 if any(k in x for x in names) else 0
+        if s: c.append((-s, 0 if 'observed' in ls else 1, len(nk), e['id'], e))
+    c.sort(key=lambda t: t[:4])
+    return [t[4] for t in c]
+def clean(e): return {k: v for k, v in e.items() if not k.startswith('_')}
 def cmd_show(a):
     if not a: sys.exit('usage: wiki show <id>')
+    need_data()
     n, e = get(a[0])
     if not e: sys.exit('no entry with id "%s" (wiki find <text>)' % a[0])
-    print('# file: %s.json' % n); print(json.dumps(e, indent=1, ensure_ascii=False))
+    if '_layers' in e: print('# layers: %s%s' % (' + '.join(e['_layers']), ' (the later layer wins; data = numbers from your game files)' if len(e['_layers']) > 1 else ''))
+    print('# file: %s.json' % n); print(json.dumps(clean(e), indent=1, ensure_ascii=False))
+    warn_missing()
+def cmd_town(a):
+    if not a: sys.exit('usage: wiki town <name>')
+    need_data()
+    r = best(' '.join(a), TOWNLIKE)
+    if not r: sys.exit('no town, camp or ruin matching "%s" (wiki find <text>)' % ' '.join(a))
+    e = r[0]; d = e.get('data') or {}
+    print('%s  [%s; id %s; %s]' % (e['name'], e['kind'], e['id'], ' + '.join(e['_layers'])))
+    print('faction : %s' % (e.get('faction') or '-'))
+    print('position: %s (%s)   zone: %s%s' % (xz(e), 'verified in game %s' % e['verifiedOn'] if e['verified'] else 'from game files, not checked in game', e.get('zone') or '-', '   region: %s' % e['region'] if e.get('region') else ''))
+    if d.get('townType'): print('type    : %s%s' % (d['townType'], ', public' if d.get('isPublic') else ''))
+    for k, lab in (('residents', 'residents'), ('bar', 'bar squads'), ('roaming', 'roaming')):
+        if d.get(k): print('%-8s: %s' % (lab, ', '.join(d[k])))
+    if e.get('seen'): print('seen    : %s' % e['seen'])
+    print('notes   : %s' % e['notes'])
+    if e.get('found_via'): print('found via: %s' % e['found_via'])
+    if e.get('observed'): print('observed: %s, %s, build %s' % (e['observed']['date'], e['observed']['how'], e['observed']['build']))
+    if e.get('x') is not None:
+        near = sorted((math.hypot(o['x'] - e['x'], o['z'] - e['z']), o['name']) for _, o, _ in merged() if o['kind'] in ('town', 'camp', 'bandit-hq') and o['id'] != e['id'] and o.get('x') is not None)[:3]
+        if near: print('nearest : ' + '; '.join('%s %d m' % (nm, dd) for dd, nm in near))
+        print('tp      : tp %s' % xz(e))
+    if len(r) > 1: print('(other matches: %s)' % ', '.join(o['name'] for o in r[1:5]))
+    warn_missing()
+def cmd_faction(a):
+    if not a: sys.exit('usage: wiki faction <name>')
+    need_data()
+    r = best(' '.join(a), ('faction',))
+    if not r: sys.exit('no faction matching "%s"' % ' '.join(a))
+    e = r[0]; d = e.get('data') or {}
+    print('%s  [faction; id %s; %s]' % (e['name'], e['id'], ' + '.join(e['_layers'])))
+    for k, lab in (('fundamentalType', 'type'), ('defaultRelation', 'default relation'), ('offersBounties', 'books bounties'), ('notReal', 'not a real faction')):
+        if k in d: print('%-17s: %s' % (lab, d[k]))
+    rel = d.get('relations') or {}
+    if rel: print('explicit relations (-100 hostile .. 100 friendly): ' + ', '.join('%s %s' % (k, v) for k, v in sorted(rel.items(), key=lambda t: t[1])[:14]) + (' ...' if len(rel) > 14 else ''))
+    if e.get('notes'): print('notes: %s' % e['notes'])
+    ts = [o for _, o, _ in merged() if o['kind'] in ('town', 'camp', 'bandit-hq') and o.get('faction') == e['name']]
+    if ts: print('places (%d): %s' % (len(ts), ', '.join('%s %s' % (o['name'], xz(o)) for o in ts[:12]) + (' ...' if len(ts) > 12 else '')))
+    warn_missing()
+def cmd_item(a):
+    if not a: sys.exit('usage: wiki item <name>')
+    need_data()
+    r = best(' '.join(a), ITEMLIKE)
+    if not r: sys.exit('no item, weapon or armour matching "%s"' % ' '.join(a))
+    for e in r[:6]:
+        d = e.get('data') or {}
+        nums = ', '.join('%s %s' % (k, v) for k, v in d.items() if k != 'record' and v is not None)
+        print('%s | %s | %s | %s' % (e['id'], e['kind'], e['name'], nums or e['notes']))
+    if len(r) > 6: print('(%d more)' % (len(r) - 6))
+    warn_missing()
 def cmd_near(a):
     kind = None; n = 5; pos = []
     i = 0
@@ -100,73 +256,119 @@ def cmd_near(a):
         elif a[i] == '--n': n = int(a[i + 1]); i += 2
         else: pos.append(a[i]); i += 1
     if len(pos) != 2: sys.exit('usage: wiki near <x> <z> [--kind K] [--n 5]')
+    need_data()
     x, z = float(pos[0]), float(pos[1])
-    r = [(math.hypot(e['x'] - x, e['z'] - z), e) for _, e in entries() if e['x'] is not None and (not kind or e['kind'] == kind)]
+    r = [(math.hypot(e['x'] - x, e['z'] - z), e) for _, e, _ in merged() if e.get('x') is not None and (not kind or e['kind'] == kind)]
     r.sort(key=lambda t: t[0])
     for d, e in r[:n]: print('%6d m | %s' % (d, line(e)))
     if not r: print('none with coordinates' + (' for kind ' + kind if kind else ''))
+    warn_missing()
 def cmd_tp(a):
     if not a: sys.exit('usage: wiki tp <id>')
+    need_data()
     n, e = get(a[0])
     if not e or 'x' not in e: sys.exit('no placed entry with id "%s"' % a[0])
     if e['x'] is None:
         print('WARNING: %s has no known position (x/z null); do not guess. Use the zone/town entry or pages/finding-npcs.md.' % e['id'], file=sys.stderr); sys.exit(4)
     print('tp %s' % xz(e))
     if not e['verified']:
-        print('WARNING: %s is not verified in game (confidence %s); expect to check with observe --brief and report back with wiki add.' % (e['id'], e['confidence']), file=sys.stderr); sys.exit(3)
+        print('WARNING: %s is not verified in game (%s); expect to check with observe --brief and report back with wiki add.' % (e['id'], 'position from your game files' if e.get('_layers') == ['generated'] else 'confidence ' + e['confidence']), file=sys.stderr); sys.exit(3)
+def folder_entries(folder):
+    out = []
+    for n, p in layer_files(folder):
+        if n in ('personas', 'commands') or n.startswith('_'): continue
+        try:
+            for e in rows_of(read(p)): out.append((n, e))
+        except Exception: pass
+    return out
+def local_dir():
+    if not LOCAL: sys.exit('wiki add: no local layer. Set WIKI_DIR=<folder> (cp -r wiki.example <folder> for the empty skeleton)')
+    os.makedirs(LOCAL, exist_ok=True)
+    return LOCAL
+def save(folder, n, d):
+    with open(os.path.join(folder, n + '.json'), 'w') as f:
+        json.dump(d, f, indent=1, ensure_ascii=False); f.write('\n')
 def merge_add(src):
+    folder = local_dir()
     d = json.load(sys.stdin if src == '-' else open(src))
     if isinstance(d, dict): d = [d]
-    kinds_file = None
     bad = 0; res = []
-    existing = {e['id']: (n, e) for n, e in entries()}
+    existing = {e['id']: n for n, e in folder_entries(folder)}
     for e in d:
         errs = validate(e)
         if errs: print('REJECT %s: %s' % (e.get('id') if isinstance(e, dict) else '?', '; '.join(errs))); bad += 1; continue
-        if e['id'] in existing: fn = existing[e['id']][0]
-        else:
-            fn = {'zone': 'zones', 'quiet-spot': 'zones', 'spawn': 'zones', 'town': 'towns', 'camp': 'towns', 'bandit-hq': 'towns', 'shop': 'towns', 'npc': 'npcs', 'faction': 'factions'}.get(e['kind'])
-            if not fn: fn = 'items'
-        data = load(fn); ids = [x['id'] for x in data]
+        if e['id'] in existing: fn = existing[e['id']]
+        else: fn = {'zone': 'zones', 'quiet-spot': 'zones', 'spawn': 'zones', 'town': 'towns', 'camp': 'towns', 'bandit-hq': 'towns', 'shop': 'towns', 'npc': 'npcs', 'faction': 'factions', 'note': 'notes'}.get(e['kind'], 'items')
+        p = os.path.join(folder, fn + '.json')
+        data = rows_of(read(p)) if os.path.exists(p) else []
+        ids = [x['id'] for x in data]
         if e['id'] in ids: data[ids.index(e['id'])] = e; res.append('updated %s (%s.json)' % (e['id'], fn))
         else: data.append(e); res.append('added %s (%s.json)' % (e['id'], fn))
-        save(fn, data)
-        existing[e['id']] = (fn, e)
+        save(folder, fn, data)
+        existing[e['id']] = fn
     print('\n'.join(res))
     if bad: sys.exit(1)
 def cmd_add(a):
     if not a: sys.exit('usage: wiki add <file.json|->')
     merge_add(a[0])
 def cmd_kinds(a):
+    need_data()
     c = {}
-    for n, e in entries(): c.setdefault((n, e['kind']), [0, 0]); c[(n, e['kind'])][0] += 1; c[(n, e['kind'])][1] += e['verified']
-    for (n, k), (t, v) in sorted(c.items()): print('%s | %s | %d entries, %d verified' % (n, k, t, v))
+    for layer, n, e in entries():
+        k = (layer, n, e['kind']); c.setdefault(k, [0, 0]); c[k][0] += 1; c[k][1] += bool(e['verified'])
+    for (layer, n, k), (t, v) in sorted(c.items()): print('%s | %s | %s | %d entries, %d verified' % (layer, n, k, t, v))
+    warn_missing()
+def meta(folder):
+    for n, p in layer_files(folder):
+        try:
+            d = read(p)
+            if isinstance(d, dict) and 'source' in d: return d
+        except Exception: pass
+    return None
+def cmd_status(a):
+    for layer, folder in layers():
+        fs = layer_files(folder)
+        cnt = sum(len(rows_of(read(p))) for _, p in fs) if fs else 0
+        print('%-9s %s: %s' % (layer, folder, '%d files, %d entries' % (len(fs), cnt) if fs else 'missing'))
+        m = meta(folder)
+        if m: print('          %s | data %s | %s' % (m['source'], m.get('dataDir'), m.get('generated')))
+    if gen_missing(): print('generated data is missing: ' + export_hint())
+def cmd_export(a):
+    exe = native_exe()
+    if not exe: sys.exit('wiki export: ' + export_hint())
+    sys.exit(subprocess.call([exe, '--wiki-export', a[0] if a else GEN]))
 def cmd_check(a):
-    errs = []; seen = {}; names = {}
-    for n in FILES + ['personas', 'commands']:
-        if n in ('personas', 'commands') and not os.path.exists(os.path.join(W, n + '.json')): continue
-        try: d = load(n)
-        except Exception as ex: errs.append('%s.json: %s' % (n, ex)); continue
-        if not isinstance(d, list): errs.append('%s.json is not a list' % n); continue
-        for e in d:
-            if n == 'commands':
-                if not all(k in e for k in ('id', 'name', 'usage')): errs.append('commands.json: bad entry %s' % e)
+    errs = []; seen = {}; names = {}; count = 0
+    for layer, folder in layers():
+        for n, p in layer_files(folder):
+            if n.startswith('_'): continue
+            try: d = read(p)
+            except Exception as ex: errs.append('%s/%s.json: %s' % (layer, n, ex)); continue
+            if n in ('personas', 'commands'):
+                if not isinstance(d, list): errs.append('%s.json is not a list' % n); continue
+                for e in d:
+                    if n == 'commands' and not all(k in e for k in ('id', 'name', 'usage')): errs.append('commands.json: bad entry %s' % e)
+                    if n == 'personas':
+                        m = [k for k in PFIELDS if k not in e]
+                        if m: errs.append('personas.json %s: missing %s' % (e.get('id'), m))
                 continue
-            if n == 'personas':
-                m = [k for k in PFIELDS if k not in e]
-                if m: errs.append('personas.json %s: missing %s' % (e.get('id'), m))
-                continue
-            for x in validate(e): errs.append('%s.json %s: %s' % (n, e.get('id') if isinstance(e, dict) else '?', x))
-            i = e.get('id')
-            if i in seen: errs.append('duplicate id %s (%s.json and %s.json)' % (i, seen[i], n))
-            seen[i] = n
-            nk = (e.get('kind'), (e.get('name') or '').lower())
-            if nk in names: errs.append('duplicate name %s (%s and %s)' % (e.get('name'), names[nk], i))
-            names[nk] = i
-    print('\n'.join(errs) if errs else 'wiki ok: %d entries' % len(seen)); sys.exit(1 if errs else 0)
-def cmd_sync(a):
-    pass   # nothing to regenerate in a local wiki
-C = {'find': cmd_find, 'show': cmd_show, 'near': cmd_near, 'tp': cmd_tp, 'kinds': cmd_kinds, 'add': cmd_add, 'check': cmd_check}
+            rows = rows_of(d)
+            if not isinstance(rows, list): errs.append('%s/%s.json is not a list' % (layer, n)); continue
+            for e in rows:
+                for x in validate(e, layer): errs.append('%s/%s.json %s: %s' % (layer, n, e.get('id') if isinstance(e, dict) else '?', x))
+                if not isinstance(e, dict): continue
+                i = e.get('id')
+                if (layer, i) in seen: errs.append('duplicate id %s in layer %s (%s.json and %s.json)' % (i, layer, seen[(layer, i)], n))
+                seen[(layer, i)] = n; count += 1
+                if layer != 'generated':   # generated data repeats names (many records are called "Bandit"); ids stay unique
+                    nk = (layer, e.get('kind'), (e.get('name') or '').lower())
+                    if nk in names: errs.append('duplicate name %s (%s and %s)' % (e.get('name'), names[nk], i))
+                    names[nk] = i
+    print('\n'.join(errs[:40]) if errs else 'wiki ok: %d entries in %d layers' % (count, len([1 for l, f in layers() if layer_files(f)])))
+    if len(errs) > 40: print('... %d more errors' % (len(errs) - 40))
+    warn_missing()
+    sys.exit(1 if errs else 0)
+C = {'find': cmd_find, 'show': cmd_show, 'town': cmd_town, 'faction': cmd_faction, 'item': cmd_item, 'near': cmd_near, 'tp': cmd_tp, 'kinds': cmd_kinds, 'status': cmd_status, 'export': cmd_export, 'add': cmd_add, 'check': cmd_check}
 if len(sys.argv) < 2 or sys.argv[1] not in C:
     print(open(__file__).read().split('import json')[0].replace('#!/usr/bin/env -S python3 -I\n', ''), end=''); sys.exit(2)
 C[sys.argv[1]](sys.argv[2:])

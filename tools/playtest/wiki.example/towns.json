@@ -16,6 +16,18 @@
   "seen": "",
   "source": "example entry, replace",
   "confidence": "Unknown",
-  "notes": "Fake entry that only shows the schema. Delete it."
+  "notes": "Fake entry that only shows the schema. Delete it.",
+  "data": {
+   "townType": "Town",
+   "residents": [
+    "Example Squad"
+   ]
+  },
+  "found_via": "optional: where the position first came from, if an outside source; leave out otherwise",
+  "observed": {
+   "date": "2026-01-01",
+   "how": "tp then observe --radius 300",
+   "build": "agent-playtest <commit>"
+  }
  }
 ]
