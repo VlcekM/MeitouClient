@@ -140,13 +140,13 @@ public sealed partial class LockSystem(GameConstants constants, BodyOptions opti
                     c.PickingLock = null;
                     world.Fixtures.Touch(f);
                     world.EmitSound(SoundKind.Unlocked, s, next[s].Position);
-                    if (c.IsPlayer) Say(world, c, "Pick success!");
+                    PickFloater(world, s, true);
                     // Task_PickLock: the freed character to the picker.
                     if (f.Occupant is { IsNone: false } held && held != table.IdOf(s))
                         world.Defer(new Dialogue.DialogueEvent(held, table.IdOf(s), UnlockMyCageOrShackles) { Tick = world.Tick + 1 });
                     break;
                 case PickOutcome.Failed:
-                    if (c.IsPlayer) Say(world, c, "Pick failed");
+                    PickFloater(world, s, false);
                     // A failed roll: the captive says event 14.
                     if (f.Occupant is { IsNone: false } caged && caged != table.IdOf(s))
                         world.Defer(new Dialogue.DialogueEvent(caged, table.IdOf(s), UnlockMyCageAttempt) { Tick = world.Tick + 1 });
@@ -160,7 +160,16 @@ public sealed partial class LockSystem(GameConstants constants, BodyOptions opti
     }
 
     /// <summary>
-    /// Posts a character's own line as "name: line" (a lock worker's "Pick failed", "It's locked."). The line is a game msgid looked up on its own,
+    /// A pick roll's result floating over the picker, any picker, after every roll (Task_PickLock update <c>FUN_140359160</c>, <b>Verified</b>): "Pick success!" or "Pick failed".
+    /// </summary>
+    static void PickFloater(World world, int s, bool success)
+    {
+        var text = Loc.Tr(success ? "Pick success!" : "Pick failed");
+        world.Floaters?.Enqueue(Floater.Pick(world.Characters.IdOf(s), world.Characters.Next[s].Position, text, success));
+    }
+
+    /// <summary>
+    /// Posts a character's own line as "name: line" (a lock worker's "It's locked."). The line is a game msgid looked up on its own,
     /// so every language with a game catalogue shows it translated; the "{1}: {2}" frame is Meitou's.
     /// </summary>
     static void Say(World world, CharacterCold c, string line) => world.Post(Loc.Tr("{1}: {2}", c.Name, Loc.Tr(line)));

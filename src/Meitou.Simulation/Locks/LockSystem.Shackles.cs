@@ -156,8 +156,8 @@ public sealed partial class LockSystem
                     switch (Picking.StepShackles(world, s, job.Wearer, item, world.TickSeconds, Crimes))
                     {
                         case PickOutcome.Open: c.Shackles = null; break;
-                        case PickOutcome.Success: c.Shackles = null; Freed(world, s, c, job.Wearer, "Pick success!"); break;
-                        case PickOutcome.Failed: if (c.IsPlayer) Say(world, c, "Pick failed"); FailedPick(world, s, job.Wearer); break;
+                        case PickOutcome.Success: c.Shackles = null; PickFloater(world, s, true); Freed(world, s, c, job.Wearer, null); break;
+                        case PickOutcome.Failed: PickFloater(world, s, false); FailedPick(world, s, job.Wearer); break;
                         case PickOutcome.NotAllowed: c.Shackles = null; if (c.IsPlayer) Say(world, c, "I'm not skilled enough..."); break;
                     }
                     break;
@@ -196,10 +196,10 @@ public sealed partial class LockSystem
         Thank(world, world.Characters.IdOf(s), freed);
     }
 
-    static void Freed(World world, int s, CharacterCold c, CharacterId wearer, string message)
+    static void Freed(World world, int s, CharacterCold c, CharacterId wearer, string? message)
     {
         world.EmitSound(SoundKind.Unlocked, s, world.Characters.Next[s].Position);
-        if (c.IsPlayer) Say(world, c, message);
+        if (c.IsPlayer && message is not null) Say(world, c, message);
         // An NPC freed by a player character thanks it (EV_UNLOCK_MY_CAGE_OR_SHACKLES, as for a player releasing a prisoner, economy.md 11.5).
         if (c.IsPlayer) Thank(world, world.Characters.IdOf(s), wearer);
     }

@@ -17,6 +17,10 @@ public enum FloaterKind : byte
     StealthMiss,
     /// <summary>A building's damage number (<see cref="Floater.Part"/>, the int of the clamped damage) at the point hit, grey (<c>FUN_14029d2b0</c>: a door's bashing blow; a wall's is not built).</summary>
     Building,
+    /// <summary>A lock pick roll's "Pick success!" (<see cref="Floater.Part"/>) over the picker, in the stealth hit's green (Task_PickLock update <c>FUN_140359160</c>).</summary>
+    PickSuccess,
+    /// <summary>A lock pick roll's "Pick failed" (<see cref="Floater.Part"/>) over the picker, in the stealth miss's red-grey (<c>FUN_140359160</c>).</summary>
+    PickFailed,
 }
 
 /// <summary>
@@ -40,6 +44,9 @@ public readonly record struct Floater(FloaterKind Kind, CharacterId Target, Vect
 
     public static Floater Strike(CharacterId attacker, Vector3 position, string text, bool hit) =>
         new(hit ? FloaterKind.StealthHit : FloaterKind.StealthMiss, attacker, position, false, false, text, default, default);
+
+    public static Floater Pick(CharacterId picker, Vector3 position, string text, bool success) =>
+        new(success ? FloaterKind.PickSuccess : FloaterKind.PickFailed, picker, position, false, false, text, default, default);
 
     public static Floater BuildingHit(Vector3 position, int amount) =>
         new(FloaterKind.Building, CharacterId.None, position, false, false, amount.ToString(System.Globalization.CultureInfo.InvariantCulture), default, default);

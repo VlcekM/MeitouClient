@@ -19,7 +19,8 @@ static class FloaterText
     /// </summary>
     public static string? Format(in Floater f, FloaterMode mode)
     {
-        if (f.Kind is FloaterKind.Text or FloaterKind.Label or FloaterKind.StealthHit or FloaterKind.StealthMiss or FloaterKind.Building) return f.Part.Length > 0 ? f.Part : null;   // the eating text and machine labels (Meitou draws it with the damage floaters, so it shows only while they are on)
+        // The eating text, machine labels and pick results (Meitou draws them with the damage floaters, so they show only while those are on).
+        if (f.Kind is not FloaterKind.Damage) return f.Part.Length > 0 ? f.Part : null;
         if (mode == FloaterMode.Off) return null;
         var d = f.Damage;
         var a = f.Absorbed;
@@ -47,8 +48,8 @@ static class FloaterText
     {
         FloaterKind.Text => White,
         FloaterKind.Label or FloaterKind.Building => LabelGrey,
-        FloaterKind.StealthHit => StealthHit,
-        FloaterKind.StealthMiss => StealthMiss,
+        FloaterKind.StealthHit or FloaterKind.PickSuccess => StealthHit,
+        FloaterKind.StealthMiss or FloaterKind.PickFailed => StealthMiss,
         _ => HitColour(f),
     };
 
@@ -58,7 +59,10 @@ static class FloaterText
     /// </summary>
     static Vector4 HitColour(in Floater f) => f.TargetIsPlayer || f.TargetTempAlly ? Red : f.SourceIsPlayer || f.TargetTempEnemy ? Green : Grey;
 
-    /// <summary>A stealth knock-out's result colours (<c>FUN_14034cd80</c>, <b>Verified</b> literals): "*Thunk*" (0.4, 0.8, 0.4) at 0.9 alpha, "Failed!" (0.7, 0.4, 0.4) at 0.7.</summary>
+    /// <summary>
+    /// A stealth knock-out's result colours (<c>FUN_14034cd80</c>, <b>Verified</b> literals): "*Thunk*" (0.4, 0.8, 0.4) at 0.9 alpha, "Failed!" (0.7, 0.4, 0.4) at 0.7. A lock pick roll's
+    /// "Pick success!" / "Pick failed" use the same constants (<c>FUN_140359160</c>, <b>Verified</b>).
+    /// </summary>
     public static readonly Vector4 StealthHit = new(0.4f, 0.8f, 0.4f, 0.9f), StealthMiss = new(0.7f, 0.4f, 0.4f, 0.7f);
 
     /// <summary>The text floaters' colour: white at 0.9 alpha (<c>FUN_1405d0780</c>).</summary>
