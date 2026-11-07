@@ -1252,6 +1252,7 @@ sealed partial class GameHost
         {
             Console.WriteLine($"relations {message}");
             player.Notice(message);
+            if (explodeAsker is { } asker && message.StartsWith("Explode at ", StringComparison.Ordinal)) { asker.Print(message); explodeAsker = null; }
         }
         foreach (var line in world.TakeSaid()) player.LogMessage(line.Owner, line.Text, line.Player ? MessageTone.Player : MessageTone.Normal);
         // Stealth knock-outs: the original's floating "*Thunk*" (a hit) or "Failed!" over the attacker, here as a notice.

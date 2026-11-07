@@ -16,6 +16,9 @@ namespace Meitou.Game;
 sealed partial class GameHost
 {
     readonly DevConsole devConsole = new();
+
+    /// <summary>The console that ran <c>explode</c> and waits for its result line (see <see cref="WorldNews"/>).</summary>
+    DevConsole? explodeAsker;
     readonly Dictionary<bool, List<string>> consoleNames = [];
     bool consoleRegistered;
     /// <summary>The pointer in framebuffer pixels as of the last frame, for the commands that mean the point under the cursor.</summary>
@@ -265,6 +268,7 @@ sealed partial class GameHost
         Add("explode", "explode [<x> <z>] [--radius <m>=15] [--force <n>=30] [--damage <n>=40] [--squad]", "debug blast (default: at the selected, else first, squad member): every living character within the radius, except your squad unless --squad, takes cut damage falling off linearly with distance (damage at the centre), is knocked out for 30 s if it survives, and is thrown away from the centre (force = speed in world units/s at the centre, falling off the same way). The result line (hit / knocked out / killed, or nobody in range) goes to the message log and a blood ring marks the centre (Blood setting on). Runs in the simulation, so not while the game is paused", (args, con) =>
         {
             Report(con, DebugApply(DebugRow.Explode, string.Join(' ', args)));
+            if (!debugFailed) explodeAsker = con;   // the result line (made in the next tick) is printed here too
         });
 
         Add("maxstats", "maxstats", "every stat to 100 for the selected characters (else the inspected one)", (args, con) =>
