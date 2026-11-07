@@ -262,7 +262,7 @@ sealed partial class GameHost
             Report(con, DebugApply(DebugRow.Guard, string.Join(' ', args)));
         });
 
-        Add("explode", "explode [<x> <z>] [--radius <m>=15] [--force <n>=20] [--damage <n>=40] [--squad]", "debug blast (default: at the selected, else first, squad member): every living character within the radius, except your squad unless --squad, takes cut damage falling off linearly with distance (damage at the centre), is knocked out for 30 s if it survives, and is thrown away from the centre (force = speed in world units/s at the centre, falling off the same way). The result line (hit / knocked out / killed) goes to the message log", (args, con) =>
+        Add("explode", "explode [<x> <z>] [--radius <m>=15] [--force <n>=30] [--damage <n>=40] [--squad]", "debug blast (default: at the selected, else first, squad member): every living character within the radius, except your squad unless --squad, takes cut damage falling off linearly with distance (damage at the centre), is knocked out for 30 s if it survives, and is thrown away from the centre (force = speed in world units/s at the centre, falling off the same way). The result line (hit / knocked out / killed, or nobody in range) goes to the message log and a blood ring marks the centre (Blood setting on). Runs in the simulation, so not while the game is paused", (args, con) =>
         {
             Report(con, DebugApply(DebugRow.Explode, string.Join(' ', args)));
         });

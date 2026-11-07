@@ -39,7 +39,7 @@ public sealed record DebugGuard(bool On, float Radius = 30, bool Animals = false
 /// A debug explosion at <see cref="At"/> (X, Z): every living character within <see cref="Radius"/> metres (not the player's own unless <see cref="Squad"/>) takes <see cref="Damage"/> cut damage falling off
 /// linearly with the distance, is knocked out, and is thrown away from the centre with <see cref="Force"/> world units/s (also falling off), by the combat system's knock-down push.
 /// </summary>
-public sealed record DebugExplode(Vector2 At, float Radius = 15, float Force = 20, float Damage = 40, bool Squad = false) : DebugCommand;
+public sealed record DebugExplode(Vector2 At, float Radius = 15, float Force = 30, float Damage = 40, bool Squad = false) : DebugCommand;
 
 /// <summary>Who a radius kill hits, shared by the console's <c>kill --radius</c> and the guard: never a player character or the player's faction, never the dead, animals only when asked for.</summary>
 public static class DebugKillArea
@@ -248,12 +248,19 @@ static class DebugCheats
         int hit = 0, knocked = 0, killed = 0;
         var events = new List<MedicalEvent>();
         var targets = new List<(CharacterId Id, int Slot, float Falloff, Vector2 Away)>();
+        float nearest = float.MaxValue, nearestY = 0;
+        int squadNear = 0;
         for (int s = 0; s < table.HighWater; s++)
         {
             if (!table.Next[s].Alive || table.Cold(s) is not { } cold || cold.Medical is not { Dead: false }) continue;
-            if (!blast.Squad && !DebugKillArea.Hits(cold.IsPlayer, cold.Faction, world.Player.Faction, false, false, true)) continue;
+            if (!blast.Squad && !DebugKillArea.Hits(cold.IsPlayer, cold.Faction, world.Player.Faction, false, false, true))
+            {
+                if (Vector2.Distance(new Vector2(table.Next[s].Position.X, table.Next[s].Position.Z), blast.At) <= radius) squadNear++;
+                continue;
+            }
             var offset = new Vector2(table.Next[s].Position.X - blast.At.X, table.Next[s].Position.Z - blast.At.Y);
             float d = offset.Length();
+            if (d < nearest) (nearest, nearestY) = (d, table.Next[s].Position.Y);
             if (d > radius) continue;
             targets.Add((table.IdOf(s), s, 1 - d / radius, d > 1e-3f ? offset / d : new Vector2(1, 0)));
         }
@@ -271,7 +278,21 @@ static class DebugCheats
             if (medical.Dead) killed++; else if (medical.Incapacitated) knocked++;
             combat?.Blast(world, slot, cold, away, blast.Force * falloff);
         }
-        world.Post($"Explosion: {hit} hit, {knocked} knocked out, {killed} killed.");
+        string where = $"{blast.At.X:0},{blast.At.Y:0} r={radius:0.#}";
+        if (hit == 0)
+            world.Post(squadNear > 0 ? $"Explode at {where}: nobody to hit; only your own squad ({squadNear}) is in range (--squad includes it)"
+                : $"Explode at {where}: nobody in range{(nearest < float.MaxValue ? $" (nearest living character {nearest:0} m away)" : "")}; --squad includes your own");
+        else world.Post($"Explode at {where}: {hit} hit, {knocked} knocked out, {killed} killed.");
+        // A visible mark at the centre: a ring of blood splashes (display only; needs the Blood setting on).
+        if (world.BloodMarks is { } marks)
+        {
+            var centre = new Vector3(blast.At.X, nearest < float.MaxValue ? nearestY : 0, blast.At.Y);
+            for (int k = 0; k < 8; k++)
+            {
+                float a = k * MathF.PI / 4;
+                marks.Enqueue(new BloodMark(BloodMarkKind.Splash, default, centre, new Vector2(MathF.Cos(a), MathF.Sin(a)) * 3, 1, 0x8A0303));
+            }
+        }
     }
 
     static void Kill(World world, PopulationData data, IEnumerable<CharacterId> characters)

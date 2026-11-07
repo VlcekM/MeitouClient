@@ -12,7 +12,7 @@ public sealed partial class CombatSystem
     /// the victim's own motion of the last tick plus a push along the blow's <paramref name="direction"/> (X/Z) sized by the <paramref name="damage"/>, and the struck
     /// <paramref name="part"/>'s bone, which the ragdoll takes more of the push on.
     /// </summary>
-    void Knockdown(World world, int victim, CharacterCold vc, Vector2 direction, float damage, int part)
+    void Knockdown(World world, int victim, CharacterCold vc, Vector2 direction, float damage, int part, float lift = PushLift)
     {
         if (vc.Medical is not { Incapacitated: true }) return;
         if (!options.AdvancedRagdolls) { vc.Knockdown = Vector3.Zero; return; }
@@ -22,7 +22,7 @@ public sealed partial class CombatSystem
         {
             direction = Vector2.Normalize(direction);
             float speed = MathF.Max(damage * PushPerDamage, PushMin);
-            push = new Vector3(direction.X, PushLift, direction.Y) * speed;
+            push = new Vector3(direction.X, lift, direction.Y) * speed;
         }
         vc.Blow = new Ragdolls.RagdollBlow(motion + push, push, BoneOf(vc.Medical, part));
         vc.Knockdown = motion + push;
@@ -33,7 +33,10 @@ public sealed partial class CombatSystem
     /// <c>2 x force</c> damage would (so a <paramref name="force"/> of 12.5 or more is the speed in world units/s). Does nothing unless the victim is knocked out or dead.
     /// </summary>
     internal void Blast(World world, int victim, CharacterCold vc, Vector2 direction, float force) =>
-        Knockdown(world, victim, vc, direction, force / PushPerDamage, -1);
+        Knockdown(world, victim, vc, direction, force / PushPerDamage, -1, BlastLift);
+
+    /// <summary>The explosion's lift, as a share of the throw speed (a clear hop: 30 m/s out, 9 m/s up).</summary>
+    const float BlastLift = 0.3f;
 
     /// <summary>The struck part's <c>bone name</c>, else its <c>bone name 2</c>; null for no part or neither.</summary>
     static string? BoneOf(Bodies.MedicalState medical, int part)

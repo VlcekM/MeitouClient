@@ -293,7 +293,7 @@ sealed partial class GameHost
     string DebugExplodeApply(World world, string field, long tick)
     {
         const string usage = "usage: explode [<x> <z>] [--radius <m>] [--force <n>] [--damage <n>] [--squad]";
-        float radius = 15, force = 20, damage = 40;
+        float radius = 15, force = 30, damage = 40;
         bool squad = false;
         var numbers = new List<float>();
         var words = field.Split(' ', StringSplitOptions.RemoveEmptyEntries);
@@ -318,7 +318,7 @@ sealed partial class GameHost
             at = new Vector2(lead.Position.X, lead.Position.Z);
         }
         world.Commands.Enqueue(new DebugExplode(at, radius, force, damage, squad) { Tick = tick });
-        return $"explosion at {at.X:0}, {at.Y:0}: radius {radius:0.#} m, force {force:0.#}, damage {damage:0.#} at the centre{(squad ? ", squad included" : "")}; the result line follows in the message log";
+        return $"explosion at {at.X:0}, {at.Y:0}: radius {radius:0.#} m, force {force:0.#}, damage {damage:0.#} at the centre{(squad ? ", squad included" : "")}; the result line (hit / knocked out / killed, or nobody in range) follows in the message log (it runs in the next tick, so unpause first)";
     }
 
     /// <summary>
