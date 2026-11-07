@@ -301,7 +301,8 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
             if (!combat || a >= 0 && b >= 0) return 0;
             return sight.BuildingOf(b >= 0 ? target : listener) is { } building && !world.Fixtures.HasOpenDoor(building) ? 0.25f : 0.5f;
         }
-        if (a >= 0 && sight.BuildingOf(listener) is { } same && sight.FloorAt(same, listenerAt) is var fa && sight.FloorAt(same, targetAt) is var fb && fa != fb)
+        // Each character's floor is kept by the sight map (the same last-tick positions): asking the building for both at every pair in a crowd was most of a tick.
+        if (a >= 0 && sight.FloorOf(listener, listenerAt) is var fa && sight.FloorOf(target, targetAt) is var fb && fa != fb)
             return combat && Math.Abs(fa - fb) <= 1 ? 1 : 0;
         sure = combat;
         return 1;
