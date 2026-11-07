@@ -33,7 +33,7 @@ GLOBAL_POINT rings are different. Coordinate basis and previous camera movement 
 Meitou pools simulations/content and warms new weather groups on workers. Region swaps debounce2s;
 in-region weather changes warm without that wait. Publish prepared groups between frames;
 old particles can remain while new content loads. Missing textures fall back to white, not proof
-of original appearance. Reduced-resolution particles use depth-aware composition; density
+of original appearance. Reduced-resolution particles use depth-aware composition and spare detailed textures; density
 changes emission/population. [Post](../render-post.md), [weather](weather.md).
 
 ### Grammar (Verified)

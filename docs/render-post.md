@@ -152,7 +152,12 @@ terrain can be original ambient-map colour rather than lamp/emissive input. Haze
 and sun; Meitou default strength0.5, game1, slider0..3.
 
 Weather particle resolution: off/quarter/half/auto/full; density multiplies emission and changes
-appearance/population, not just shading cost. Both chains draw the reduced-resolution particles twice, against each block's
+appearance/population, not just shading cost. Auto sends a technique's draw to the half or quarter target by its sprites' mean
+screen size (20 / 80 px), but only while each sprite keeps the pixels its texture needs (`ParticleTextureDetail`: the texture's side
+over its largest reduction, up to 32, that changes its premultiplied brightness by at most 10 %). **Observed** (the install's
+textures): soft dust and smoke (`Sand-Wisp`, `smoke_trans1`, `DustMite`) 16 px, `Snake-Wisps01` 128, ash flakes 128, the dust
+swirls' twig debris (`Ticker01`-`03`, 5 to 20 units, dark) 256, so the debris stays full size: a few flying close had sent the whole
+draw to quarter size, which blurred them into dark smudges (user report, Squin). Both chains draw the reduced-resolution particles twice, against each block's
 nearest depth and against its farthest (`ParticleTargetsFar`), and the composite and the reactive mask take, from each of the four
 nearest texels, both draws weighted bilinearly and by how close each draw's depth is to the pixel's (`ParticleUpsample`): on a
 ridge the near draw's, on the land behind it the far draw's, which holds what lies between them. A farthest-only reduction let dust

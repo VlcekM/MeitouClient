@@ -207,6 +207,8 @@ public sealed unsafe class ParticleRenderer : IDisposable
     readonly SamplerSlot textureSlot, softDepthSlot;
     readonly SampledImage white;
     readonly Dictionary<string, SampledImage?> textures = new(StringComparer.OrdinalIgnoreCase);
+    /// <summary>A texture's name to the pixels across its sprites need to keep their detail (<see cref="ParticleTextureDetail"/>; missing: 1).</summary>
+    readonly Dictionary<string, float> pixelsNeeded = new(StringComparer.OrdinalIgnoreCase);
     readonly WeatherGroups weatherGroups;
     readonly EffectSimulator simulator = new();
     readonly List<EffectGroup> placerGroups = [];
@@ -729,8 +731,9 @@ public sealed unsafe class ParticleRenderer : IDisposable
                 bool fire = placed && material.Blend == ParticleBlend.Add;
                 if (pixelsPerUnit > 0 && !rain && !fire && (material.Blend == ParticleBlend.Alpha || material.Blend == ParticleBlend.Add))
                 {
+                    float needed = material.Texture is { } name && pixelsNeeded.TryGetValue(name, out float texels) ? texels : 1;
                     (divisor, fill) = DivisorFor(scratch.AsSpan(0, written), forward, nearPlane, pixelsPerUnit, screenPixels, forcedDivisor,
-                        lastDivisors.TryGetValue((u, t), out int last) ? last : 0);
+                        lastDivisors.TryGetValue((u, t), out int last) ? last : 0, needed);
                     nextDivisors[(u, t)] = divisor;
                 }
                 draws.Add(new DrawItem { Instances = instances, Count = written, Close = close, Technique = def, Material = material, Texture = texture, Divisor = divisor, Fill = fill, Rain = rain, Fire = fire });
@@ -833,9 +836,12 @@ public sealed unsafe class ParticleRenderer : IDisposable
     /// <summary>
     /// The size a draw of these particles gets: the larger their mean screen size, the smaller the target (soft big sprites lose nothing at a fraction of the
     /// pixels; thin streaks keep their full size). With <paramref name="last"/> (the size the same technique of the same unit had last frame) a size is
-    /// left only 15 % past its threshold, so a draw near one does not flip between sizes, which looked different, as the camera moves.
+    /// left only 15 % past its threshold, so a draw near one does not flip between sizes, which looked different, as the camera moves. A smaller target
+    /// must also leave the sprites the pixels their texture needs (<paramref name="needed"/>, <see cref="ParticleTextureDetail"/>): the Border Zone's dust
+    /// swirls carry crisp dark twigs, 5 to 20 units, that a quarter-size target blurred into smudges whenever a few flew close to the camera.
     /// </summary>
-    static (int Divisor, float Fill) DivisorFor(ReadOnlySpan<ParticleInstance> instances, Vector3 forward, float nearPlane, float pixelsPerUnit, float screenPixels, int forced, int last = 0)
+    static (int Divisor, float Fill) DivisorFor(ReadOnlySpan<ParticleInstance> instances, Vector3 forward, float nearPlane, float pixelsPerUnit, float screenPixels, int forced, int last = 0,
+        float needed = 1)
     {
         double area = 0;
         foreach (ref readonly var p in instances)
@@ -851,6 +857,7 @@ public sealed unsafe class ParticleRenderer : IDisposable
         else if (last >= 2 && divisor < 2 && size >= HalfPixels * 0.85) divisor = 2;
         else if (last == 2 && divisor == 4 && size < QuarterPixels * 1.15) divisor = 2;
         else if (last == 1 && divisor == 2 && size < HalfPixels * 1.15) divisor = 1;
+        while (divisor > 1 && size / divisor < needed * (last >= divisor ? 0.85 : 1)) divisor /= 2;
         return (divisor, fill);
     }
 
@@ -980,18 +987,22 @@ public sealed unsafe class ParticleRenderer : IDisposable
     };
 
     /// <summary>The decodes of the particle textures in flight (<see cref="BackgroundWork"/>): a file is read and decoded off the render thread; the upload is quick.</summary>
-    readonly Dictionary<string, (Task<RgbaImage?> Task, long Started)> decoding = new(StringComparer.OrdinalIgnoreCase);
+    readonly Dictionary<string, (Task<(RgbaImage Image, float PixelsNeeded)?> Task, long Started)> decoding = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>A preloaded decode not drawn this long after it started is dropped (a decoded 2048² texture is 16 MB; a later first sight decodes it again).</summary>
     const long PreloadKeepMilliseconds = 30_000;
 
-    Task<RgbaImage?> StartDecode(string name)
+    Task<(RgbaImage Image, float PixelsNeeded)?> StartDecode(string name)
     {
         string? path = findTexture(name);
-        var task = BackgroundWork.Run<RgbaImage?>(() =>
+        var task = BackgroundWork.Run<(RgbaImage, float)?>(() =>
         {
             if (path is null || !File.Exists(path)) return null;
-            try { return TextureLoader.LoadFile(path, allMips: false).Levels[0]; }
+            try
+            {
+                var image = TextureLoader.LoadFile(path, allMips: false).Levels[0];
+                return (image, ParticleTextureDetail.PixelsNeeded(image));
+            }
             catch (Exception e) when (e is IOException or InvalidDataException or NotSupportedException)
             {
                 Console.WriteLine($"warning   particle texture {name}: {e.Message}");
@@ -1039,7 +1050,11 @@ public sealed unsafe class ParticleRenderer : IDisposable
         decoding.Remove(name);
         SampledImage? image = null;
         if (task.IsFaulted) Console.WriteLine($"warning   particle texture {name}: {task.Exception?.GetBaseException().Message}");
-        else if (task.Result is { } decoded) image = SampledImage.Rgba8(gpu, decoded, repeat: !material.Clamp, mipmaps: true, "particle " + name);
+        else if (task.Result is { } decoded)
+        {
+            image = SampledImage.Rgba8(gpu, decoded.Image, repeat: !material.Clamp, mipmaps: true, "particle " + name);
+            pixelsNeeded[name] = decoded.PixelsNeeded;
+        }
         textures[name] = image;
         return image ?? white;
     }
