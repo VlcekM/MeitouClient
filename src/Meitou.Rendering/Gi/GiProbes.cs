@@ -501,7 +501,7 @@ internal sealed unsafe class GiProbes : IDisposable
         Updates++;
     }
 
-    /// <summary>The samplers a hit shader reads, its bindings 4 to 12, then the cloud maps for bindings 15 and 16 (a trace's or <see cref="GiNearField"/>'s).</summary>
+    /// <summary>The samplers a hit shader reads, its bindings 4 to 12, then the cloud maps for bindings 15 and 16 (a trace's or <see cref="GiCache"/>'s).</summary>
     void HitImages(DescriptorImageInfo* images, SampledTexture ground, WorldLamps? lamps)
     {
         var g = ctx.Globals;
@@ -525,7 +525,7 @@ internal sealed unsafe class GiProbes : IDisposable
         images[10] = Image(g, "uAtmoCloudsTile", cube: false);
     }
 
-    /// <summary>This frame's update, for a later pass of the frame that shades ray hits the way the trace does (<see cref="GiNearField"/>); false before the first update.</summary>
+    /// <summary>This frame's update, for a later pass of the frame that shades ray hits the way the trace does (<see cref="GiCache"/>); false before the first update.</summary>
     internal bool HitInputs(DescriptorImageInfo* images, out Constants constants)
     {
         constants = lastConstants;
