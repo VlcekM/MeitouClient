@@ -281,7 +281,9 @@ Driver `FUN_1405b8180` (AnimationClass), update `FUN_1407d3c00`:
 
 - Root: for WHOLE (or a carried animal) the scene node is set to the root body's position
   (`FUN_1407d1490`: the body named at RagdollAnimation `+0x48`, else the first simulated one);
-  otherwise the node keeps the movement position.
+  otherwise the node keeps the movement position. The body's position is the actor's origin (the phs actor `position`), not its shape's centre. Meitou:
+  `RagdollDefinition.RootAt`. **Observed**: whale2.phs (Big-Bones) is about 1.3 x its skeleton, so its Bip01 capsule centre lies 29 from the actor and 51 from the bone; following
+  the centre left a looter 5 m off a downed Cleanser Unit.
 - Bones (`FUN_1407d3a30`): a simulated body writes its orientation into its manually controlled Ogre
   bone (plus position for a bone without parent); a pinned body is moved to the animated pose.
 - Carried animal: the carry-bone body is moved kinematically to the carrier's attach bone.

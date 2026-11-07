@@ -40,6 +40,11 @@ public sealed class RagdollBody
     public RigidTransform Bind { get; init; }
     /// <summary>The bone's binding transform in the body's frame: bone = <c>BoneInBody.Then(body)</c>.</summary>
     public RigidTransform BoneInBody { get; init; }
+    /// <summary>
+    /// The actor's origin (the file's actor position) in the body's frame: where the game's node follows the root (docs/game/ragdolls.md "Per frame"). Neither the shape's centre
+    /// nor always the bone: whale2.phs is about 1.3 x the Big-Bones skeleton, its Bip01 capsule centre 29 from the actor and 51 from the bone.
+    /// </summary>
+    public Vector3 ActorInBody { get; init; }
 }
 
 /// <summary>
@@ -81,6 +86,9 @@ public sealed class RagdollDefinition
     public required int[] BodyOfBone { get; init; }
     /// <summary>The body the character's position follows while the whole body is a ragdoll: <c>Bip01</c>'s, else the first (docs/game/ragdolls.md "Per frame").</summary>
     public int Root { get; init; }
+
+    /// <summary>Where the character stands while its whole body is a ragdoll in <paramref name="pose"/>: the root actor's origin (<see cref="RagdollBody.ActorInBody"/>).</summary>
+    public Vector3 RootAt(ReadOnlySpan<RigidTransform> pose) => pose[Root].Apply(Bodies[Root].ActorInBody);
     /// <summary>By body: the bodies joined to it (bit per body index, the first 64), which it does not collide with (no file joint enables collision).</summary>
     public required ulong[] Joined { get; init; }
 
@@ -131,7 +139,7 @@ public sealed class RagdollDefinition
             bodies.Add(new RagdollBody
             {
                 Bone = bone, Name = actor.Name, Type = shape.Type, Size = size, Hull = points, Mass = actor.Mass > 0 ? actor.Mass : 1,
-                Bind = bind, BoneInBody = boneBind.Then(bind.Inverse()),
+                Bind = bind, BoneInBody = boneBind.Then(bind.Inverse()), ActorInBody = bind.Inverse().Apply(actor.Position * scale),
             });
         }
         if (bodies.Count == 0) return null;

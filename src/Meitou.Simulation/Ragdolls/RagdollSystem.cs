@@ -307,13 +307,14 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
                 {
                     r.Age = restore!.Age;
                     if (restore.Frozen) Freeze(r);
+                    next[i].Position = r.Definition.RootAt(r.Pose);   // a frozen one is never read back
                 }
             }
             if (r.Mask == RagdollPart.None) continue;
             if (!r.Frozen && ToneOf(cold, r.Mask, advanced) is var tone && tone != r.Tone) SetTone(r, tone);
             if (!r.Frozen && r.Dynamic.Any(d => !d))
                 Pin(r, animated ?? Animated(r, cold, placement), dt);
-            if (!r.Frozen) physics.Cover(r.Pose[r.Definition.Root].Position, TileReach * r.Scale, env, tick, ref tilesLeft);
+            if (!r.Frozen) physics.Cover(r.Definition.RootAt(r.Pose), TileReach * r.Scale, env, tick, ref tilesLeft);
         }
 
         world.Profile.Part("rag setup");   // F12: the masks, the builds, the pins and the ground tiles
@@ -355,14 +356,14 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
                 r.Age += Afloat(world, r) ? dt * 0.5f : dt;
                 if ((r.Mask & RagdollPart.Whole) != 0)
                 {
-                    var root = r.Pose[r.Definition.Root].Position;
+                    var root = r.Definition.RootAt(r.Pose);
                     float ground = env.GroundHeight(root.X, root.Z, root.Y);
                     // A root far under the ground is lifted back onto it (FUN_1407d4470: more than 200 below), and frozen.
                     if (root.Y < ground - 200) { Shift(r, new Vector3(0, ground + 2 - root.Y, 0)); Freeze(r); }
                     // At once when the terrain tile under it is not loaded (FUN_1405b8180 -> FUN_1407d1f70): a zone outside the active set, or off the grid.
                     else if (world.ActiveZones is { } loaded && !loaded.Contains(Meitou.Data.World.WorldLayout.ZoneOf(root.X, root.Z))) Freeze(r);
                     else if (r.Age >= FreezeLatest || r.Age >= FreezeEarliest && StillShare(r) >= FreezeShare) Freeze(r);
-                    hot.Position = r.Pose[r.Definition.Root].Position;
+                    hot.Position = r.Definition.RootAt(r.Pose);
                     hot.Velocity = Vector3.Zero;
                     if (cold.CarriedBy.IsNone) StandOn(cold, ground);
                 }
@@ -454,13 +455,18 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
         scratch.PoseDerived(setup.Shape, System.Runtime.InteropServices.CollectionsMarshal.AsSpan(layers));
     }
 
-    /// <summary>Whether a saved ragdoll belongs to this one: a pose for each body, its root where the character stands (a platoon that travelled since moves its characters).</summary>
+    /// <summary>
+    /// Whether a saved ragdoll belongs to this one: a pose for each body, its root where the character stands (a platoon that travelled since moves its characters). Saves made
+    /// before the root followed the actor's origin hold the root shape's centre as the character's place; either fits.
+    /// </summary>
     static bool Fits(Ragdoll r, SavedRagdoll saved, Vector3 at)
     {
         if (saved.Pose.Length != r.Definition.Bodies.Length) return false;
-        var root = saved.Pose[r.Definition.Root].Position;
-        return Vector2.DistanceSquared(new Vector2(root.X, root.Z), new Vector2(at.X, at.Z)) <= 20 * 20 && MathF.Abs(root.Y - at.Y) <= 50;
+        return Near(r.Definition.RootAt(saved.Pose), at) || Near(saved.Pose[r.Definition.Root].Position, at);
     }
+
+    static bool Near(Vector3 root, Vector3 at) =>
+        Vector2.DistanceSquared(new Vector2(root.X, root.Z), new Vector2(at.X, at.Z)) <= 20 * 20 && MathF.Abs(root.Y - at.Y) <= 50;
 
     /// <summary>A whole-body ragdoll's state for a save (<see cref="RagdollSave"/>); null when the character has none or only a carried or limb ragdoll.</summary>
     public SavedRagdoll? SaveState(CharacterId id) =>
@@ -840,7 +846,7 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
 
     /// <summary>A ragdoll of a race that <c>swims</c> (race byte <c>+0x79</c>) whose root is at or under the water level (docs/game/ragdolls.md "Bodies: kinematic or simulated").</summary>
     static bool Afloat(World world, Ragdoll r) =>
-        r.Pose.Length > 0 && r.Pose[r.Definition.Root].Position.Y <= Meitou.Data.World.WorldWater.Height
+        r.Pose.Length > 0 && r.Definition.RootAt(r.Pose).Y <= Meitou.Data.World.WorldWater.Height
         && world.Characters.TryResolveNext(r.Id, out int slot) && world.Characters.Cold(slot)?.Race is { Swims: true };
 
     /// <summary>
@@ -895,7 +901,7 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
     void StartGetUp(World world, Ragdoll r, ref CharacterHot hot)
     {
         var rig = r.Setup.Rig;
-        var root = r.Pose[r.Definition.Root].Position;
+        var root = r.Definition.RootAt(r.Pose);
         if (rig.Handle("Bip01 Head") is int head && r.Definition.BodyOfBone[head] is int hb and >= 0)
         {
             var toward = r.Pose[hb].Position - root;
