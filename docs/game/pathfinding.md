@@ -461,9 +461,12 @@ load (no group has its intact hash); against the tile its upper floors counted a
 contents, which a ruin has none of).
 **Observed** (zone 45.9, Y-House `3-Dialogue-INGAME`, tilted ~7°, `--survey-interiors`): its wall top joined the upper floor through a near-seam
 whose ends were 5.5 apart (the slack was still the half of a 1-unit cell); with half of 0.5 the band is cut off and pruned, ours only 29,548 → 8,068.
-The rest is the central roof cap (walkable top at 1177.7, sides ~25°, riser faces ~64°): one upper-floor polygon spans the floor and the cap by a
-4..5 step somewhere on its rim (`--climb 4` drops it). The original has a hole there, with the ground floor beneath; why its generator rejects that
-step (perhaps the riser's ~2-unit run against `maxSeparation` 0.2) is **Unknown**.
+The rest was its central roof cap (walkable top 1177.7, sides ~25°, a cutting riser of ~64° below them): Recast's low-obstacle filter walked
+the riser's cells, whose cutting tops stood exactly the climb over the floor beside them, so they climbed floor 1157.4 → 1162.4 → the cap's slope
+at 1166.4; the original has no faces on the riser and a hole over the cap, the ground floor beneath. **Low obstacles** (engine choice,
+`FilterLowHangingWalkableObstacles`): a cutting top is walked only under the climb (9 cells, 4.5), not at it: 45.9's ours only 8,068 → 1,860;
+over 15 zones (`--compare`) ours only −371, original only +139 (0.5 %); towns' interiors ours only −19.3k, original only +1.75k. Without the
+filter the towns' ours only falls 70.6k but original only rises 9.1k, so some low obstacle the original walks over (which, **Unknown**) needs it.
 **Unseeded interiors** (engine choice): an interior is joined whatever its own pruning kept, to exterior polygons the exterior's pruning kept, and
 every region joined to a kept polygon is kept (`NavInteriors.CarryKeep`, not over narrow exterior edges: "Narrow portals"); exterior polygons stay
 limited to kept ones, else a door joined to a pruned landing satisfied the door and skipped the doorway's kept ground (Storm House Lagoon `40.41:10-`,

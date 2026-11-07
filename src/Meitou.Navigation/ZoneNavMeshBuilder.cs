@@ -159,7 +159,9 @@ internal static partial class ZoneNavMeshBuilder
         int cells = s.TileCells + 2 * border;
         RcHeightfield Field() => new(cells, cells, bmin, bmax, s.CellSize, ch, border);
         var hf = Rasterize(ctx, verts, indices, areas, tris, Field, walkableClimb);
-        RcFilters.FilterLowHangingWalkableObstacles(ctx, walkableClimb, hf);
+        // Recast walks the top of a cutting span within the climb over a walkable one; the original has no face there. Only a top under the climb is lifted:
+        // one cell at it was the steep riser beside a roof cap, a stair of riser cells up to the cap (docs/game/pathfinding.md, "Own builder", low obstacles).
+        RcFilters.FilterLowHangingWalkableObstacles(ctx, walkableClimb - 1, hf);
         RcFilters.FilterWalkableLowHeightSpans(ctx, walkableHeight, hf);
         long t1 = Stopwatch.GetTimestamp();
         // Recast connects two neighbouring spans only when the free space they share (above the higher floor, below the lower ceiling) is the agent height, so a
