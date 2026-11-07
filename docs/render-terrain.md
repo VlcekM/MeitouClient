@@ -248,16 +248,6 @@ or save change, and marks are lost when the window moves past them. Vulkan host 
 - **Wear** (`TerrainTrailRenderer.Wear`): -ln(left) per game second is 1/900 + wind / 9000 + rain amount / 40, in steps of at least 1% (one quad over the image), and stops while paused.
   The whole window wears alike; ground type does not change it. Tuned on paper.
 
-## Close-up detail
-
-Meitou look, not in the game (`groundDetail`, Tab switch "Ground close-up detail", `GroundRelief.DetailActive`, on by default in Meitou). The layers are as sharp as their textures
-(2048² over a tile), so close to the camera a texel covers many pixels. Where the base layer's level is under 0 (full below -0.5, gone at 1) and the ground is not steep, the shading
-adds three octaves of value noise on a world-space lattice (wavelengths 0.5, 0.25 and 0.125 units = 5, 2.5 and 1.25 cm; a world unit is 10 cm), each rotated by its own angle and
-faded out as a pixel covers more than a third of its wavelength (smoothstep 0.12 to 0.36), so it never aliases and never moves with the camera (**Verified** on siwa-test6 sand,
-same frames before and after: grain and micro relief appear, no block or seam). The noise's slope tilts the shading normal, scaled by the layer's own roughness (its normal's tilt);
-its value modulates the albedo by up to about 5 %. The integer lattice hash keeps its bits at the world's far edges; the float world position itself has a step of 0.016 units out
-there, which is why no octave is finer than 0.125. No textures: nothing to ship, 0 bytes of video memory. Rock cracks and per-material grain are **Unknown** (one generic grain for all).
-
 ## Rocks
 
 Meitou look, not in the game (`RockSmoothing`; Tab: "Rock smoothing (tessellation)", off by default, on at the Ultra preset; the welded normals are always made). Many TERRAIN-mode rocks have hard

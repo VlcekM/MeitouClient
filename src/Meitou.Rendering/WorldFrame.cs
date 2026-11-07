@@ -1367,7 +1367,6 @@ static partial class WorldFrame
         // The ground relief's Faithful / Meitou switches (Enhancements "parallax", "displace"), by name.
         GroundParallaxSwitch = "Ground parallax",
         GroundDisplaceSwitch = "Ground displacement (tessellation)",
-        GroundDetailSwitch = "Ground close-up detail",
         RockSmoothingSwitch = "Rock smoothing (tessellation)",
         OutlineRefineSwitch = "Terrain outline refinement (tessellation)";
     /// <summary>The weather particles slider's position for the renderer's state: 0 off, 1 quarter, 2 half, 3 by sprite size (auto), 4 full size.</summary>

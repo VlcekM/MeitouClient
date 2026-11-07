@@ -26,9 +26,6 @@ public static class GroundRelief
     /// <summary>Whether the ground near the eye is moved for real (tessellated patches, where the device has tessellation shaders; the Tab panel's toggle).</summary>
     public static bool DisplaceActive { get; set; } = true;
 
-    /// <summary>Whether the ground gets Meitou's fine detail where a layer's texel covers more than a pixel or two (the Tab panel's toggle; docs/render-terrain.md "Close-up detail").</summary>
-    public static bool DetailActive { get; set; } = true;
-
     /// <summary>The depth scale in world units (1 unit = 10 cm; the Tab panel's slider, default 20 cm, the High preset's): each layer's depth (<see cref="LayerDepthCm"/>) times
     /// this over <see cref="ReferenceDepth"/>.</summary>
     public static float Depth { get; set; } = 2;
