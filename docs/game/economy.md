@@ -196,7 +196,8 @@ town not owned by the player that has a building in a zone made for the first ti
 1. Its candidates (`FUN_1408cba20` over the town's loaded zones, `FUN_1408d10f0`): its buildings with an interior holding at least one object, not the player's, whose resident template
    has a non-zero SQUAD_TEMPLATE `item artifacts base value` (for items) or `gear artifacts base value` (gear), ordered by that value, highest first. With none at all the list
    is kept.
-2. Each unit of each entry is made as an item at the entry's level (a weapon of the entry's maker and model) and flagged unique; the list is emptied. Items are ordered by value,
+2. Each unit of each entry is made as an item at the entry's level (a weapon of the entry's maker and model) and flagged unique (`FUN_1400b8710` sets `+0x12a`, the
+   tooltip's `[Unique]`: plain AI Cores and Catun No.1 weapons show it too, #344); the list is emptied. Items are ordered by value,
    highest first.
 3. A new `mt19937(11667085)`: each item, items then gear, goes to a building picked by `uniform_int` among the first ones whose base value is at least the item's; with none it is
    destroyed (debug log "[Town] Artifact '<name>' has no building to be put in. Value: <v>").
