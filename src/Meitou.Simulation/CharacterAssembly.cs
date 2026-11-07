@@ -208,8 +208,10 @@ sealed class CharacterAssembly(PopulationData data)
         cold.Stats = stats;
         cold.Medical = medical;
         if (AnimalData.From(record) is { } animal) (cold.Animal, cold.ShownAge) = (animal, age);
-        cold.Inventory = data.Items.Build(record, cold.Appearance?.Loadout, seed, Rng.Key(id));
-        if (!cold.IsPlayer && (data.PlayerFaction < 0 || cold.Faction != data.PlayerFaction)) data.Items.AddSpawnMoney(cold.Inventory, record, seed, Rng.Key(id));
+        // One made for the player has no death items (engine choice, docs/game/animals.md "Death items": a start's dog had its meat and skins, #341).
+        bool npc = !cold.IsPlayer && (data.PlayerFaction < 0 || cold.Faction != data.PlayerFaction);
+        cold.Inventory = data.Items.Build(record, cold.Appearance?.Loadout, seed, Rng.Key(id), deathItems: npc);
+        if (npc) data.Items.AddSpawnMoney(cold.Inventory, record, seed, Rng.Key(id));
         // CHARACTER `wears uniform` (CharacterHuman::setupInventorySections, Verified read; Observed use): the armour it is made wearing is its faction's uniform.
         if (record is { Type: Meitou.Data.Fcs.FcsRecordType.CHARACTER } && record.GetBool("wears uniform") && (uint)cold.Faction < (uint)data.Factions.Count)
             foreach (var piece in cold.Inventory.Items)
