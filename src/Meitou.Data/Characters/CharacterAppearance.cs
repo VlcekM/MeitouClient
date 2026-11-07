@@ -341,7 +341,9 @@ public sealed class CharacterAppearance
     /// </summary>
     public static CharacterAppearance BuildAnimal(GameDatabase db, string installRoot, GameRecord animal)
     {
-        var race = AnimalRaceId(animal) is { } raceId && db.Find(raceId) is { Type: FcsRecordType.RACE } found ? found : throw new KeyNotFoundException($"'{animal.Name}' has no race.");
+        // No race: the original logs "Missing race" and uses the Greenlander RACE by id (docs/characters.md "Generating a character").
+        var race = AnimalRaceId(animal) is { } raceId && db.Find(raceId) is { Type: FcsRecordType.RACE } found ? found
+            : db.Find(CharacterGenerator.DefaultRaceId) is { Type: FcsRecordType.RACE } fallback ? fallback : throw new KeyNotFoundException($"'{animal.Name}' has no race.");
         var result = new CharacterAppearance
         {
             Animal = animal, Race = race, Female = false,
