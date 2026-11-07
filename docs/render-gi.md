@@ -114,16 +114,19 @@ and probe light follows the clouds at the hysteresis' pace. The sky seen by a mi
 consecutive ones; 152 bytes a slot, about 40 MB), keyed by the cell (position / size, floored), its level and the axis nearest the surface's normal (six, interiors apart).
 Size `FinestCell` 4 units, doubled per level so a cell keeps about 1/`CellsPerHeight` (96) of the view's height at its eye distance (the whole view's angle, so screenshot
 tiles agree); the next coarser level blends in over the top 40 % of each level's distances, the second-nearest axis within 0.2 of the diagonal. Out to `Range` 4000.
-Per frame (`gi cache`): **evict** slots no texel touched for 600 frames (120 past half full, 30 past 5/8); **touch**: each low texel of the resolve (same pixel and flat
-normal from the depth as before) makes its cells (two levels x two axes at most) and adds its position and normal into their sums (12-bit fixed point within the cell),
+Per frame (`gi cache`): **evict** slots no texel touched for 600 frames (120 past half full, 30 past 5/8); **touch**: each low texel of the resolve (same pixel; the flat
+normal from the depth, but where it turns over 45 degrees from the stored shading normal (a silhouette, a crest, a pixel-thin part) the plane through one neighbour
+per axis nearest that normal, else the shading normal: no texel takes a plane it is not on) makes its cells (two levels x two axes at most) and adds its position and normal into their sums (12-bit fixed point within the cell),
 listing each cell once; **trace**: one workgroup per listed cell, `RaysPerCell` 32 cosine rays from its surface point (the texels' mean, averaged over up to 64 frames),
 `Reach` 150, shaded as a probe ray's (`GiShaders.HitShade`; a miss reads the probes at the ray's end in its direction, a back face the probes where it started; clamp 16
 a channel). Each frame traces one of `Ring` 16 direction subsets (a Fibonacci lattice shifted by the subset's R2 point and a per-cell random shift); its mean replaces
 that subset's slot (E5B9G9R9 word) and the cell's light is the mean of the subsets it holds. A still scene's cell therefore holds a fixed set of 512 rays and does not
-change; a change of light is followed linearly over 16 frames; a new cell traces `FirstSubsets` 4 subsets at once. **gather**: per low texel, per level and axis, the 8
+change; a change of light is followed linearly over 16 frames, except that a subset traced again whose light moved by over `ChangeShare` 25 % of the cell's (in a
+still scene the same directions give the same light) drops the cell's other subsets, and a cell holding fewer than `FirstSubsets` 4 traces 4 at once (as a new one). **gather**: per low texel, per level and axis, the 8
 cells whose centres surround it, weighted trilinearly x exp(-|tangent-plane distance of the cell's point| / half a cell) x facing^8 x subsets held; alpha = the
 subsets' share x 4 (full from 4), x the found weight over `MatchFloor` 0.25 of the found cells' trilinear weight (cells only on another plane or facing away leave the
-texel to the probes; at 0.05 the cache took the cloth and stalls' edges and a still picture changed more, 0.052), fading over the last quarter of `Range`. The resolve takes it over the probes' light by alpha, as before (indoor gain, haze unchanged).
+texel to the probes; at 0.05 the cache took the cloth and stalls' edges and a still picture changed more, 0.052), fading over the last quarter of `Range`. The resolve takes it over the probes' light by alpha (indoor gain, haze unchanged); the probes' share is first capped at the cache's own light there (fading to
+the probes alone over the last quarter of `Range`): the probes do not see contact shade, so where the cache is unsure they may darken a texel, never brighten it.
 No screen-space history: a surface uncovered by a character or turned back into view finds its cells as they were (kept while untouched); only never-seen surfaces start
 new cells. The cache does not trace characters (`GiMask`), so they leave no trail in it; characters and grass keep their in-shader probes.
 **Observed** (8-bit mean |difference| with 99th percentile; 1280x720, no upscaler; probes only / the former screen-space near field / the cache).
@@ -136,7 +139,7 @@ Sun jump 14:00 to 17:30: within 0.2 of the near field's error each frame (most o
 all three). About 20,000 cells listed a frame and 47,000 held after an orbit (Hub). Cost at 2560x1440, DLSS Quality (low target 854x480), quiet GPU: `gi cache`
 0.36-0.37 ms, `gi near` 0.55-0.57 ms. `interior` save (17:14, rain): the room's surfaces read the game's ambient (the GI is below it, Indoor GI's floor), the same with all
 three; `gi-grain`: still 0.115 / 0.132 / 0.104, pixels changing beyond the probes' 7.0 % / 0.9 %.
-**Unknown:** an interior lit above the ambient floor (the `gi-interior2` save renders black offscreen at night); the flat normal at silhouettes and dune crests (thin lines there keep part of the probes' light, alpha 0.3-1); thin surfaces sharing a coarse cell with the floor
+**Unknown:** an interior lit above the ambient floor (the `gi-interior2` save renders black offscreen at night); dune crests (thin lines there keep alpha 0.3-1: the cells' facing weight; with the probes capped at the cache's light they can only darken there); thin surfaces sharing a coarse cell with the floor
 beside them (the plane weight keeps other cells off, not the cell's own mean point).
 ## Reflections
 

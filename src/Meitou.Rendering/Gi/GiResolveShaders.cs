@@ -129,10 +129,14 @@ static partial class GiResolveShaders
         string resolve = relocate ? GiShaders.Relocating(Resolve) : Resolve;
         if (!cache) return resolve;
         if (!resolve.Contains(ProbesRead, StringComparison.Ordinal)) throw new InvalidOperationException("ResolveFor: no probe read");
-        const string Taken = """
+        string Taken = $$"""
 
                 vec4 cached = texelFetch(uGiCache, ivec2(floor(gl_FragCoord.xy)), 0);
-                gi = vec4(mix(gi.rgb, cached.rgb, cached.a), mix(gi.a, 1.0, cached.a));
+                // Where the cache is unsure (a below 1: cells just made, cells only on another plane) the probes fill in, but no brighter than the cache's own light
+                // there (they do not see the texel's contact shade), fading to the probes alone towards the cache's end.
+                float bound = cached.a > 0.0 ? 1.0 - smoothstep({{F(0.75f * GiCache.Range)}}, {{F(GiCache.Range)}}, length(p - uGiEye)) : 0.0;
+                vec3 fill = mix(gi.rgb, min(gi.rgb, cached.rgb), bound);
+                gi = vec4(mix(fill, cached.rgb, cached.a), mix(gi.a, 1.0, cached.a));
             """;
         return resolve.Replace(ResolveUniforms, ResolveUniforms + "\nuniform sampler2D uGiCache;", StringComparison.Ordinal)
             .Replace(ProbesRead, ProbesRead + Taken, StringComparison.Ordinal);
