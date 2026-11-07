@@ -197,7 +197,9 @@ to 14 layer samples each.
   share with the cliff's (its projections' heights along the normal, ÷ n.y, held at n.y 0.3).
 - **Refresh**: the inputs (bindless indices, overlay window, `TerrainTextures.MaterialVersion` = writes to the biomes' parameter rows, relief settings)
   are hashed each frame; a change re-bakes every level 64 rows a frame, finest first, drawn from meanwhile.
-- **Draw**: the level whose texel is the pixel's footprint (short axis, as the layers' 8x anisotropic sampling), blended with the next coarser;
+- **Draw**: the level whose texel is the pixel's footprint (short axis, as the layers' 8x anisotropic sampling), blended with the next coarser.
+  A pixel finer than level 0's texel (a close-up: about 0.02 units a pixel at 1080p near a character, level -3.6) shades the layers, mixed with
+  the cache over the half level below 0: read magnified, level 0 was a blurred ground (**Observed**, user report, the sand beside a character);
   beyond the levels, beyond 0.3 × the nearest resident biome's fade distance (the bake has no distance fade), or on faces with n.y ≤ 0.5
   (an xz texel spans 1 / n.y of the face: **Observed**, cliffs smeared into vertical streaks, their parallax wavy), the layers are shaded. The
   parallax marches the cached height with the march's steps and self-shadow (the sun's from two levels coarser; where displaced, only what the level

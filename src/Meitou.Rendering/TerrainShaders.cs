@@ -1184,6 +1184,12 @@ static partial class TerrainShaders
             float reliefShade = 1.0;   // the relief's own shadow on the sun (GroundRelief), given to the lighting
             vec3 shadingNormal = n;
             bool baked = false;
+            // The cache's share where a pixel is finer than level 0's texel (a close-up): there the cache, magnified, came out blurred, so the layers are
+            // shaded, both mixed over the half level up to it (cacheLive: the layers' share of that mix; 0 none).
+            float cacheLive = 0.0;
+            vec4 cacheAlbedo = vec4(0.0);
+            vec3 cacheNormal = n;
+            float cacheAbsorbance = 0.5, cacheShade = 1.0;
             #ifdef TERRAIN_BAKED
             // The material cache (TerrainRenderer.MaterialCache): the layers' material from the level whose texel is the pixel's footprint (its short axis,
             // as the layers' anisotropic sampling takes it), blended with the next coarser, the finest holding the point; beyond them, or beyond uBakeReach,
@@ -1195,9 +1201,11 @@ static partial class TerrainShaders
             {
                 float a = max(length(texDx.xz), 1e-6), b = max(length(texDy.xz), 1e-6), hi = max(a, b), lo = min(a, b);
                 float level = log2(max(hi / min(ceil(hi / lo), 8.0), 1e-6) / uBakeOrigin[0].z);
+                cacheLive = clamp(-2.0 * level, 0.0, 1.0);
                 int k = clamp(int(floor(level)), 0, uBakeLevels - 1);
                 float t = clamp(level - float(k), 0.0, 1.0);
                 while (k < uBakeLevels && !bakeHolds(k, texWorld.xz)) { k++; t = 0.0; }
+                if (cacheLive >= 1.0) k = uBakeLevels;
                 if (k < uBakeLevels)
                 {
                     vec2 at = texWorld.xz;
@@ -1283,7 +1291,13 @@ static partial class TerrainShaders
                         shadingNormal = normalize(mix(n, normalize(tg * tn.x + bn * tn.y + n * tn.z), nearWeight));
                     }
                     baked = true;
+                    if (cacheLive > 0.0)
+                    {
+                        cacheAlbedo = albedo; cacheNormal = shadingNormal; cacheAbsorbance = absorbance; cacheShade = reliefShade;
+                        shadingNormal = n; reliefShade = 1.0; baked = false;
+                    }
                 }
+                else cacheLive = 0.0;
             }
             #endif
             if (!baked && nearWeight > 0.0)
@@ -1378,6 +1392,13 @@ static partial class TerrainShaders
                     }
                 }
                 else albedo = vec4(uHasMaps ? colour.rgb / 1.2 : heightTint(vWorld.y), 0.2);
+            }
+            if (cacheLive > 0.0)
+            {
+                albedo = mix(cacheAlbedo, albedo, cacheLive);
+                absorbance = mix(cacheAbsorbance, absorbance, cacheLive);
+                reliefShade = mix(cacheShade, reliefShade, cacheLive);
+                shadingNormal = normalize(mix(cacheNormal, shadingNormal, cacheLive));
             }
             if (nearWeight < 1.0)
             {
