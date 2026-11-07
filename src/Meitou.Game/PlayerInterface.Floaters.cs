@@ -24,32 +24,19 @@ sealed partial class PlayerInterface
 
     readonly List<Live> floaters = [];
 
-    /// <summary>The "Show damage floaters" option; Off stops the world from queueing them.</summary>
-    public FloaterMode Floaters
-    {
-        get => floaterMode;
-        set
-        {
-            floaterMode = value;
-            session.World.Floaters = value == FloaterMode.Off ? null : session.World.Floaters ?? new();
-        }
-    }
-
-    FloaterMode floaterMode = FloaterMode.Simple;
+    /// <summary>
+    /// The "Show damage floaters" option. Off hides the damage numbers only: the original's texts (a pick roll, a stealth knock-out, "Ate", a machine label) read no option
+    /// (<b>Verified</b>: of the label creator's callers only the hit's <c>FUN_1406508d0</c> reads it). Meitou keeps a door's damage number with the option too.
+    /// </summary>
+    public FloaterMode Floaters { get; set; } = FloaterMode.Simple;
 
     void DrawFloaters(DebugOverlay o)
     {
-        var world = session.World;
-        if (Floaters == FloaterMode.Off)
-        {
-            world.Floaters = null;
-            floaters.Clear();
-            return;
-        }
-        var queue = world.Floaters ??= new();
+        var queue = session.World.Floaters ??= new();
         long now = System.Diagnostics.Stopwatch.GetTimestamp();
         while (queue.TryDequeue(out var f))
         {
+            if (Floaters == FloaterMode.Off && f.Kind is FloaterKind.Damage or FloaterKind.Building) continue;
             if (f.Kind == FloaterKind.Damage && Vector3.DistanceSquared(Eye, f.Position) >= FloaterRangeSquared) continue;
             if (FloaterText.Format(f, Floaters) is not { } text) continue;
             // A machine label starts at its own point.

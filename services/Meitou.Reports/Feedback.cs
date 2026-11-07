@@ -15,7 +15,7 @@ namespace Meitou.Reports;
 sealed class Feedback(Store store, Config config, GithubAuth github, IHttpClientFactory http, ILogger<Feedback> log)
 {
     public static readonly string[] Kinds = ["screenshot", "navmesh", "save", "log"];
-    const int TitleMax = 100, BodyMax = 5000, VersionMax = 64, LocationMax = 200, ModsMax = 1000, PerDay = 10;
+    const int TitleMax = 100, BodyMax = 5000, VersionMax = 64, LocationMax = 200, ModsMax = 1000, PerDay = 20;
 
     /// <summary>The largest upload of a kind: Cloudflare in front of the service takes at most 100 MB a request.</summary>
     public static long MaxBytes(string kind) => kind == "save" ? 95_000_000 : 16 << 20;

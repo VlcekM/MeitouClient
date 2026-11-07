@@ -22,8 +22,8 @@ builder.Services.AddRateLimiter(o =>
 {
     o.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
     o.AddPolicy("post", ctx => RateLimitPartition.GetFixedWindowLimiter(ClientIp(ctx), _ => new() { PermitLimit = 10, Window = TimeSpan.FromMinutes(10) }));
-    // A feedback report is up to five requests (start, three files, send); the 10 a day per person is counted on the forms.
-    o.AddPolicy("feedback", ctx => RateLimitPartition.GetFixedWindowLimiter(ClientIp(ctx), _ => new() { PermitLimit = 30, Window = TimeSpan.FromMinutes(10) }));
+    // A feedback report is up to five requests (start, three files, send); the 20 a day per person is counted on the forms.
+    o.AddPolicy("feedback", ctx => RateLimitPartition.GetFixedWindowLimiter(ClientIp(ctx), _ => new() { PermitLimit = 60, Window = TimeSpan.FromMinutes(10) }));
 });
 
 var app = builder.Build();

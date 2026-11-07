@@ -92,7 +92,7 @@ Save sample (autosave of the owner's game, 51 zone files): `lock lvl` values spa
 - **Messages/sounds** (**Verified** `FUN_140359160`): after every roll, success or failure, any picker (no player check) gets a
   floating label (`FUN_14073faf0`, font 0 small) 15 units over it: "Pick success!" (0.4, 0.8, 0.4, alpha 0.9) or "Pick failed"
   (0.7, 0.4, 0.4, alpha 0.7), the stealth KO's colours; no name, no log line. Success also plays `Character_Unlock_Success`.
-  Its rise-speed argument is **Unknown** (Meitou: the hit's 4/s). Meitou: `LockSystem.PickFloater`, drawn with the damage floaters, so only while that option is on. Wwise events: [audio](../audio.md#characters-footsteps-combat-voices).
+  Its rise-speed argument is **Unknown** (Meitou: the hit's 4/s). Meitou: `LockSystem.PickFloater`, shown whatever the floaters option. Wwise events: [audio](../audio.md#characters-footsteps-combat-voices).
 - **Target** (`Task_PickLock` slot 5): a building handle (a door resolves to its lock-owning object) or a **character**, meaning
   that character's cage (only when they are in a building prison). Shackles: the item handle, or a character, meaning their
   worn shackles. Self-targets are allowed: the caged character picks its own cage, a shackled one its own shackles (both

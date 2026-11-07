@@ -212,8 +212,8 @@ sealed partial class PlayerInterface
         bool hud = !TitleOpen && !EditorOpen && !conversationShown;   // the conversation panel covers the HUD bar (engine reading of its layout)
         SyncTownPanel(hud);
         if (!TitleOpen) ReleaseTitleLogo();
-        var (controls, modalFrom) = ArrangedBase(hud);
-        AddFrameControls(controls, hud, modalFrom);
+        var controls = ArrangedBase(hud);
+        AddFrameControls(controls, hud);
         pointerOverUi = faithfulScreens.Contains(mouse) || MyGuiPresentation.HitTest(controls, mouse.X, mouse.Y) is not null;
         AddHoverLabel(controls);
         AddInspectorPanel(controls);
@@ -236,10 +236,9 @@ sealed partial class PlayerInterface
     }
 
     /// <summary>
-    /// The interface's base (<see cref="ArrangedBase"/>): the HUD and its slots, the squad bar, the HUD text, the tutorial panel and the open screens; with where
-    /// the first modal screen (the Esc menu, save and load, message boxes) starts, -1 for none.
+    /// The interface's base (<see cref="ArrangedBase"/>): the HUD and its slots, the squad bar, the HUD text, the tutorial panel and the open screens.
     /// </summary>
-    (List<UiControl> Controls, int ModalFrom) ArrangeBase(bool hud)
+    List<UiControl> ArrangeBase(bool hud)
     {
         var b = BindUi();
         var controls = hud ? ArrangeHud(b) : [];
@@ -257,24 +256,21 @@ sealed partial class PlayerInterface
         AddHudText(controls);
         AddJobRemoveButtons(controls);
         if (hud) AddTutorialPanel(controls);
-        int modalFrom = AddScreens(controls);
-        return (controls, modalFrom);
+        AddScreens(controls);
+        return controls;
     }
 
-    /// <summary>The open screens over <paramref name="controls"/>; returns where the first modal one starts (-1: none).</summary>
-    int AddScreens(List<UiControl> controls)
+    /// <summary>The open screens over <paramref name="controls"/>.</summary>
+    void AddScreens(List<UiControl> controls)
     {
-        int modalFrom = -1;
         foreach (var screen in faithfulScreens.Arrange(Width, Height, BindFaithfulScreen, AddFaithfulContent))
         {
             if (ShotWithoutMenus && FeedbackShotHides.Contains(screen.Id)) continue;
-            if (modalFrom < 0 && faithfulScreens.IsModal(screen.Id)) modalFrom = controls.Count;
             if (screen.Id == "editor") controls.AddRange(EditorBackdrop());
             controls.AddRange(screen.Controls.Where(c => UiMode == UiMode.Faithful ||
                 !c.Properties.TryGetValue("ImageResource", out var resource) || resource != "Kenshi_TitleScreen"));
             if (screen.Id == "title" && UiMode == UiMode.Meitou && !showCredits) AddTitleMark(controls);
         }
-        return modalFrom;
     }
 
     /// <summary>The Meitou title's mark, top right: the logo once it is loaded, the word until then.</summary>
@@ -294,9 +290,10 @@ sealed partial class PlayerInterface
 
     /// <summary>
     /// Every frame over the base: what moves with the camera or real time. The name tags, ground item labels and task bars go under everything (the original's
-    /// Back layer), the floaters over the panels and under the modal screens (its Dialog layer).
+    /// Back layer); the floaters and speech bubbles just over them, under the HUD and every screen, the map included (its Dialog layer, below Middle where the HUD is,
+    /// <c>core_layer.xml</c>).
     /// </summary>
-    void AddFrameControls(List<UiControl> controls, bool hud, int modalFrom)
+    void AddFrameControls(List<UiControl> controls, bool hud)
     {
         if (hud) AddTutorialHighlight(controls);
         AddNotice(controls);
@@ -306,13 +303,11 @@ sealed partial class PlayerInterface
         AddItemLabels(nameTags);
         AddNameTags(nameTags);
         AddTaskBars(nameTags);
-        controls.InsertRange(0, nameTags);
+        var dialogLayer = new List<UiControl>();
+        AddFloaters(dialogLayer);
+        AddSpeech(dialogLayer);
+        controls.InsertRange(0, [.. nameTags, .. dialogLayer]);
 
-        var floaterControls = new List<UiControl>();
-        AddFloaters(floaterControls);
-        controls.InsertRange(modalFrom < 0 ? controls.Count : modalFrom + nameTags.Count, floaterControls);
-
-        AddSpeech(controls);
         AddBuildReadout(controls);
         AddContextMenu(controls);
         AddFeedbackButton(controls);

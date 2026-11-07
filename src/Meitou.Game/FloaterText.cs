@@ -19,7 +19,7 @@ static class FloaterText
     /// </summary>
     public static string? Format(in Floater f, FloaterMode mode)
     {
-        // The eating text, machine labels and pick results (Meitou draws them with the damage floaters, so they show only while those are on).
+        // The eating text, machine labels, knock-out and pick results, door damage: the text as it is.
         if (f.Kind is not FloaterKind.Damage) return f.Part.Length > 0 ? f.Part : null;
         if (mode == FloaterMode.Off) return null;
         var d = f.Damage;

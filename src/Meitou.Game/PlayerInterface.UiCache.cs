@@ -22,14 +22,13 @@ sealed partial class PlayerInterface
     UiBaseKey? uiBaseKey;
     string[] uiBaseScreens = [];
     List<UiControl> uiBase = [];
-    int uiBaseModalFrom = -1;
     long uiBaseAt;
 
     /// <summary>
-    /// A copy of the base for this frame (the caller adds to it) and where its first modal screen starts (-1: none); made again when its key changed,
+    /// A copy of the base for this frame (the caller adds to it), made again when its key changed,
     /// something in it animates, or it is <see cref="UiReuseSeconds"/> old.
     /// </summary>
-    (List<UiControl> Controls, int ModalFrom) ArrangedBase(bool hud)
+    List<UiControl> ArrangedBase(bool hud)
     {
         var key = BaseKey(hud);
         var screens = faithfulScreens.OpenScreens.ToArray();
@@ -38,11 +37,11 @@ sealed partial class PlayerInterface
             && System.Diagnostics.Stopwatch.GetElapsedTime(uiBaseAt, now).TotalSeconds < UiReuseSeconds;
         if (!fresh)
         {
-            (uiBase, uiBaseModalFrom) = ArrangeBase(hud);
+            uiBase = ArrangeBase(hud);
             (uiBaseKey, uiBaseScreens, uiBaseAt) = (key, faithfulScreens.OpenScreens.ToArray(), now);
         }
 
-        return ([.. uiBase], uiBaseModalFrom);
+        return [.. uiBase];
     }
 
     UiBaseKey BaseKey(bool hud) => new(session.CurrentSnapshot, mouse, Width, Height, UiMode, Meitou.Localisation.Loc.Language, uiInput, shownTown,
