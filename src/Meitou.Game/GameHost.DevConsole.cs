@@ -337,6 +337,27 @@ sealed partial class GameHost
             con.Print($"killed {selected.Length}");
         });
 
+        Add("weather-sim", "weather-sim <none|dust|acid|off>", "what the simulation reads as the weather everywhere (affect type only; the sky keeps its own weather); off = the schedule's", (args, con) =>
+        {
+            Meitou.Data.World.WeatherAffecting? kind = args.Count == 1 ? args[0].ToLowerInvariant() switch { "none" => Meitou.Data.World.WeatherAffecting.None, "dust" => Meitou.Data.World.WeatherAffecting.DustStorm, "acid" => Meitou.Data.World.WeatherAffecting.Acid, _ => null } : null;
+            if (kind is null && !(args.Count == 1 && args[0].Equals("off", StringComparison.OrdinalIgnoreCase))) { con.Error("usage: weather-sim <none|dust|acid|off>"); return; }
+            if (hostWeather is null) { con.Error("no world weather yet"); return; }
+            hostWeather.Forced = kind is { } k ? new Meitou.Simulation.WeatherHere(k, k == Meitou.Data.World.WeatherAffecting.None ? 0 : 1, 0, 0) : null;
+            con.Print($"simulation weather: {args[0]}");
+        });
+
+        Add("flies", "flies","every dead character: id, position, flies, the weather there; and the fly effects shown", (args, con) =>
+        {
+            foreach (var c in session.CurrentSnapshot.Characters)
+            {
+                if (c.Body is not { Dead: true }) continue;
+                var w = session.World.Weather?.At(c.Position.X, c.Position.Z);
+                var died = session.World.Characters.Cold(c.Id.Slot)?.DiedTick ?? -2; con.Print($"{c.Id} at {c.Position.X:0},{c.Position.Z:0} died={died} now={session.World.Tick} flies={c.HasFlies} shown={flyCorpses.ContainsKey(c.Id)} weather={(w is { } h ? $"{h.Affect}/{h.Strength:0.##}" : "none")}");
+            }
+            con.Print($"building effects {gpu?.Particles?.BuildingEffectCount}");
+            if (gpu?.Particles is { } pr) foreach (var line in pr.Describe(session.Focus, 100000).Where(l => l.Contains("Fly"))) con.Print(line.Trim());
+        });
+
         Add("research", "research [list | queue <tech>]", "finish every research; research list shows the research state, research queue <tech> queues one the way the research window does", (args, con) =>
         {
             if (args.Count > 0) { ControlResearch(args, con); return; }

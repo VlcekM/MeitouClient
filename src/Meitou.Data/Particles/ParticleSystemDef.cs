@@ -70,7 +70,8 @@ public sealed class PuAffectorDef
     public bool Enabled { get; init; } = true;
     public Vector3 Position { get; init; }
     public IReadOnlyList<string> ExcludedEmitters { get; init; } = [];
-    public float MassAffector { get; init; }
+    /// <summary>The affector's own mass (<c>mass_affector</c>, default 1): the Gravity affector's pull is proportional to it (the plugin's <c>GravityAffector::_affect</c>, Verified).</summary>
+    public float MassAffector { get; init; } = 1;
     // Colour
     public IReadOnlyList<(float Time, Vector4 Colour)> TimeColours { get; init; } = [];
     public bool MultiplyColour { get; init; }
@@ -96,6 +97,8 @@ public sealed class PuAffectorDef
     // Randomiser
     public Vector3 MaxDeviation { get; init; }
     public float TimeStep { get; init; }
+    /// <summary><c>random_direction</c> (default true, no script sets it): the Randomiser kicks the velocity; false moves the position.</summary>
+    public bool RandomDirection { get; init; } = true;
     public required PuNode Source { get; init; }
 }
 
@@ -335,7 +338,7 @@ public sealed class PuSystemDef
             Enabled = a.Bool("enabled", true),
             Position = a.Vec3("position") ?? Vector3.Zero,
             ExcludedEmitters = [.. a.All("exclude_emitter").Where(p => p.Values.Length > 0).Select(p => p.Values[0])],
-            MassAffector = a.Float("mass_affector"),
+            MassAffector = a.Float("mass_affector", 1),
             TimeColours = colours,
             MultiplyColour = a.Word("colour_operation") == "multiply",
             ScaleX = a.Dynamic("x_scale"), ScaleY = a.Dynamic("y_scale"), ScaleZ = a.Dynamic("z_scale"), ScaleXyz = a.Dynamic("xyz_scale"),
@@ -347,7 +350,7 @@ public sealed class PuSystemDef
             MinFrequency = a.Float("min_frequency"), MaxFrequency = a.Float("max_frequency"),
             Axis = a.Vec3("rotation_axis") ?? Vector3.UnitY,
             MaxDeviation = new Vector3(a.Float("max_deviation_x"), a.Float("max_deviation_y"), a.Float("max_deviation_z")),
-            TimeStep = a.Float("time_step"),
+            TimeStep = a.Float("time_step"), RandomDirection = a.Bool("random_direction", true),
         };
     }
 

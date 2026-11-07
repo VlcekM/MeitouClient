@@ -88,6 +88,8 @@ c help                                # one usage line per command; `c help <nam
 | `hud` | `hud hide\|show` |
 | `hurt` | `hurt <damage> [part id] [--id <c:slot.gen>]` |
 | `kill` | `kill [--id <c:slot.gen>] \| kill --radius <m> [<x> <z>] [--animals]` |
+| `weather-sim` | `weather-sim <none|dust|acid|off>` (the weather the simulation reads everywhere; the sky keeps its own) |
+| `flies` | `flies` (each dead character: flies, effect shown, the weather there) |
 | `ko` | `ko [seconds] [--id <c:slot.gen>]` |
 | `layouts` | `layouts <building record id or name> [exterior]` |
 | `loot` | `loot <id>` |
