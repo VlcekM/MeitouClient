@@ -25,6 +25,23 @@ public sealed partial class FoliageRenderer
     }
 
     readonly Dictionary<MeshAsset, RayMesh> rayMeshes = [];
+
+    /// <summary>
+    /// A group's instance spheres and bounds, filled here when its mesh is resident and no cull has filled them yet (as the culls do: the mesh's bounds never change). The
+    /// culls fill them only for groups they draw, so right after a load or a jump the traced scene found no group ready and held no foliage until its next rebuild.
+    /// </summary>
+    static bool Bounded(Group g)
+    {
+        if (g.BoundsReady && g.SpheresReady) return true;
+        if (!g.Asset.Resident || g.Asset.Main is null) return false;
+        if (!g.SpheresReady)
+        {
+            FoliageCull.FillSpheres(g.Instances, g.Asset.Centre, g.Asset.Radius);
+            g.SpheresReady = true;
+        }
+        if (!g.BoundsReady) g.ComputeBounds();
+        return true;
+    }
     /// <summary>The usage a mesh buffer needs to be built into the traced scene (none without ray queries).</summary>
     BufferUse RayInput => Gpu.HasRayQuery ? BufferUse.RayInput : 0;
 
@@ -40,7 +57,7 @@ public sealed partial class FoliageRenderer
             if (!zone.Ready) continue;
             foreach (var g in zone.Groups)
             {
-                if (!g.BoundsReady || !g.SpheresReady || g.MaxRadius < minRadius) continue;
+                if (!Bounded(g) || g.MaxRadius < minRadius) continue;
                 var nearest = Vector3.Clamp(eye, g.BoundMin, g.BoundMax);
                 if (Vector3.Distance(nearest, eye) > range) continue;
                 if (RayMeshFor(g.Asset) is not { } mesh) continue;
