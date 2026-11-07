@@ -222,17 +222,20 @@ to 14 layer samples each.
 Meitou look, not in the game; the `trails` switch (Tab "Ground trails"), off by default, not yet seen on a GPU. Look and cost **Unknown**. Render side only: no gameplay
 or save change, and marks are lost when the window moves past them. Vulkan host only (`GameHost.Metal` never makes the renderer).
 
-- **Image** (`TerrainTrailRenderer`): R16F, 2048², texel 0.25 units (8 MB), a height: 0 untouched, -1 pressed in full (1.2 units, 12 cm), above 0 a rim. Addressed toroidally
-  as the material cache's levels, the origin snapped to 64 texels, so it reaches 240 units from the camera's target (the strategy camera's pivot; not the eye, so zooming keeps the marks); the columns and rows the window gains are wiped, all of it after a jump.
-  Shown fading over the window's outer tenth. A frame with nothing to change records nothing.
+- **Image** (`TerrainTrailRenderer`): two levels, each 2048² and addressed toroidally as the material cache's levels, the origin snapped to 64 texels. **Coarse**: R16F (8 MB), texel 0.25 units, a height: 0
+  untouched, -1 pressed in full (1.2 units, 12 cm), above 0 a rim; it reaches 240 units from the camera's target (the strategy camera's pivot; not the eye, so zooming keeps the marks) and shows fading over the
+  window's outer tenth. **Fine**: RG16F (16 MB), texel 0.0625 units (a sole is about 40 texels), 60 units from the target; its y says a mark was recorded there, and the programs blend it over the coarse by
+  that (fading at its window's edge), read through a cubic B-spline (four bilinear reads) so no texel shows in the normals. Every mark is stamped into both, with the same shape and noise (sizes scale
+  by the texel); the columns and rows a window gains are wiped (the fine image then falls back on the coarse where it recorded nothing); all of it after a jump. A frame with nothing to change records nothing.
 - **Marks** (`GameHost.Trails`, within that reach, not carried, in bed or caged): every character with a pose leaves marks from its **posed body as capsules**
   (`CharacterRenderer.ContactCapsules`: one per skinned bone, round the vertices it moves most, from the mesh's bone boxes; boxes under 0.5 units, fingers and toes, are left out).
   A capsule whose underside is within 0.5 units (5 cm) of the terrain under its ends and under 2.5 cm (sink over 0.5 of 1) is cut at that plane. Its speed over the ground, per second
   (frame rate does not matter), against the body's own: over 1.2 times (+3 units/s) it **swings**: nothing; over 0.4 times (+1 unit/s) it **slides**; else it is **planted**.
   A planted part **prints once**, and never again until it has swung, slid or left the ground (a character turning on the spot does not rewrite its prints; a lying body stamps once).
   **Upright** characters (standing, walking, all animals) only press: among their contacts one with a lower contact of the same body close beside it (a shin over a foot) is left out; a
-  capsule lying flat and over 1.4 times as long as wide is a **foot with a sole** (the old sole stamp: narrow heel, broad ball, its toe away from the body, as long as the capsule), any
-  other is a **round print** as wide as the contact (paw, hoof, a stick foot's tip). Foot and paw prints carry the image-fixed noise (ragged edge, uneven depth). **Lying** bodies
+  capsule lying flat and over 1.4 times as long as wide is a **foot with a sole** (as long as the capsule, 0.38 of its length wide at the ball, a narrow heel and a narrowing toe in one outline;
+  its toe where the foot bone points: the skeleton's chain from the bone to its child, the toe bone for a foot; without a child, its axis turned to the way the body moves), any other is a **round
+  print** as wide as the contact (paw, hoof, a stick foot's tip). Of two close contacts of one body the lower one prints, and of two at one height the longer (a toe beside its foot). Foot and paw prints carry the image-fixed noise (ragged edge, uneven depth). **Lying** bodies
   (crawling, down, dead, ragdoll) press a stadium per part (rims first, then cores, so overlapping parts leave one bowl) and **plough** (a swept stadium from last frame's contact,
   heaped front and sides, feathered rear) where a part slides. A character with no pose (not drawn) falls back to the stride's prints and the old furrow. No stamp above 2.5 units over
   the terrain (floors, roofs) or under the water line. **Observed** only on offscreen frames; the thresholds are tuned by eye. CPU **Observed**: 0.11 ms per frame for 37 characters

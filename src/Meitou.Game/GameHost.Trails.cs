@@ -46,6 +46,8 @@ sealed partial class GameHost
         public float Walked;
         public int Frame;
         public Contact[]? Contacts;
+        public Vector3[]? Recent;   // the last prints: x, z, length
+        public int RecentNext;
     }
 
     /// <summary>Once a frame, before the world is drawn: the marks the characters near what the camera looks at press this frame (the renderer's window is centred there).</summary>
@@ -94,7 +96,7 @@ sealed partial class GameHost
         float stepped = moved.Length();
         bool animal = c.Appearance!.Animal is not null;
         bool lying = c.Down || c.StayingLow || c.Ragdoll is not null || c.Body is { Crawling: true };
-        if (BodyContact(trails, ground, key, ref w, body, animal, !lying, continues && trailDt > 0 ? stepped / trailDt : 0, continues)) return;
+        if (BodyContact(trails, ground, key, ref w, body, stepped > 1e-4f && continues ? moved / stepped : Vector2.Zero, animal, !lying, continues && trailDt > 0 ? stepped / trailDt : 0, continues)) return;
         if (!continues || stepped < 1e-4f) return;
         var along = moved / stepped;
         if (c.Down || c.StayingLow || c.Body is { Crawling: true }) Drag(trails, ground, ref w, body, along, stepped);

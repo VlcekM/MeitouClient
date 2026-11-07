@@ -3,10 +3,13 @@ using System.Runtime.CompilerServices;
 
 namespace Meitou.Rendering.Characters;
 
+/// <summary>One bone of a posed body as a capsule in world space, for the ground trails: its ends, its radius and the direction its bone points in (zero: none).</summary>
+public readonly record struct BodyCapsule(Vector3 A, Vector3 B, float Radius, Vector3 Forward);
+
 internal sealed partial class CharacterRenderer
 {
     /// <summary>A bone's capsule in the binding pose's model space: round the vertices it moves most (its <see cref="PickBox"/>es, all the skinned parts' together).</summary>
-    readonly record struct BoneCapsule(int Bone, Vector3 A, Vector3 B, float Radius);
+    readonly record struct BoneCapsule(int Bone, Vector3 A, Vector3 B, float Radius, int Child);
 
     readonly ConditionalWeakTable<CharacterAsset, BoneCapsule[]> boneCapsules = [];
 
@@ -33,10 +36,10 @@ internal sealed partial class CharacterRenderer
 
     /// <summary>
     /// The posed body of the character <paramref name="key"/> as capsules for the ground trails (docs/render-terrain.md "Ground trails"): every capsule of <see cref="WaterCapsules"/>, in the
-    /// asset's fixed order (so a capsule keeps its place from frame to frame; one whose bone is not posed has radius 0). Nothing added when it was not drawn in the world in the last update.
-    /// Render thread, after <see cref="Update"/>.
+    /// asset's fixed order (so a capsule keeps its place from frame to frame; one whose bone is not posed has radius 0), each with the direction its bone points in the skeleton (to its toe
+    /// for a foot: heel to toe; to its first child bone), zero for a bone with no child. Nothing added when it was not drawn in the world in the last update. Render thread, after <see cref="Update"/>.
     /// </summary>
-    public void ContactCapsules(long key, List<WaterBody> into)
+    public void ContactCapsules(long key, List<BodyCapsule> into)
     {
         if (!states.TryGetValue(key, out var s) || s.Seen != updateStamp || !s.InWorld || s.Asset is not { IsIcon: false } asset || s.Posed < 0) return;
         foreach (var c in boneCapsules.GetValue(asset, CapsulesOf))
@@ -47,8 +50,24 @@ internal sealed partial class CharacterRenderer
                 continue;
             }
             var m = s.Bones[c.Bone] * s.World;
-            into.Add(new WaterBody(Vector3.Transform(c.A, m), Vector3.Transform(c.B, m), c.Radius * Vector3.TransformNormal(Vector3.UnitY, m).Length()));
+            var forward = Vector3.Zero;
+            if (c.Child >= 0 && c.Child < s.Bones.Length)
+                forward = Vector3.Transform(asset.Rig.BindPosition[c.Child], s.Bones[c.Child] * s.World) - Vector3.Transform(asset.Rig.BindPosition[c.Bone], m);
+            into.Add(new BodyCapsule(Vector3.Transform(c.A, m), Vector3.Transform(c.B, m), c.Radius * Vector3.TransformNormal(Vector3.UnitY, m).Length(), forward));
         }
+    }
+
+    /// <summary>The bone a bone points to: its child named for a toe, else its first child; -1 for a bone with none.</summary>
+    static int ChildOf(CharacterAsset asset, int bone)
+    {
+        int first = -1;
+        foreach (var b in asset.Rig.Skeleton.Bones)
+        {
+            if (asset.Rig.Parent[b.Handle] != bone) continue;
+            if (b.Name.Contains("toe", StringComparison.OrdinalIgnoreCase)) return b.Handle;
+            if (first < 0) first = b.Handle;
+        }
+        return first;
     }
 
     /// <summary>Each bone's capsule: along its box's longest side, as thick as the mean of the other two.</summary>
@@ -72,7 +91,7 @@ internal sealed partial class CharacterRenderer
             var along = axis == 0 ? Vector3.UnitX : axis == 1 ? Vector3.UnitY : Vector3.UnitZ;
             var centre = (min + max) / 2;
             var half = along * MathF.Max(length / 2 - radius, 0);
-            capsules.Add(new BoneCapsule(bone, centre - half, centre + half, radius));
+            capsules.Add(new BoneCapsule(bone, centre - half, centre + half, radius, ChildOf(asset, bone)));
         }
         return [.. capsules];
     }
