@@ -38,6 +38,7 @@ sealed partial class GameHost
         public float Floor;
         public bool Resting, Landed, Flesh;
         public long Born;
+        public readonly long Id = DebrisPiece.NewId();
         public uint Colour;
         /// <summary>The splash particles' colour for a race whose blood is not red (<see cref="BloodRecolour"/>).</summary>
         public Vector3? Recolour;
@@ -61,6 +62,7 @@ sealed partial class GameHost
         public required float RestY;
         public required Quaternion Hanging, Lying;
         public Vector3? Start;
+        public readonly long Id = DebrisPiece.NewId();
         public float Flight;
         public Vector2 Drift;
     }
@@ -173,7 +175,7 @@ sealed partial class GameHost
         foreach (var p in pieces)
         {
             for (int s = 0; s < steps && !p.Resting && h > 0; s++) Step(p, h);
-            gpu.DebrisPieces.Add(new DebrisPiece(p.Mesh, p.Scale, p.Rotation, p.Position));
+            gpu.DebrisPieces.Add(new DebrisPiece(p.Mesh, p.Scale, p.Rotation, p.Position, Id: p.Id));
         }
     }
 
@@ -206,13 +208,13 @@ sealed partial class GameHost
             if (elapsed < f.Flight)
             {
                 var at = new Vector3(start.X + f.Drift.X * elapsed, start.Y - 0.5f * FallGravity * elapsed * elapsed, start.Z + f.Drift.Y * elapsed);
-                gpu.DebrisPieces.Add(new DebrisPiece(f.Mesh, 1, f.Hanging, LimbMiddle(f.Mesh, f.Look, f.Hanging, at), 1, f.Look));
+                gpu.DebrisPieces.Add(new DebrisPiece(f.Mesh, 1, f.Hanging, LimbMiddle(f.Mesh, f.Look, f.Hanging, at), 1, f.Look, f.Id));
             }
             else
             {
                 float s = Math.Min(1, (elapsed - f.Flight) / FallTipTime), eased = s * s * (3 - 2 * s);
                 var turned = Quaternion.Slerp(f.Hanging, f.Lying, eased);
-                gpu.DebrisPieces.Add(new DebrisPiece(f.Mesh, 1, turned, LimbMiddle(f.Mesh, f.Look, turned, f.Rest), 1, f.Look));
+                gpu.DebrisPieces.Add(new DebrisPiece(f.Mesh, 1, turned, LimbMiddle(f.Mesh, f.Look, turned, f.Rest), 1, f.Look, f.Id));
             }
         }
     }
@@ -263,7 +265,7 @@ sealed partial class GameHost
                 boltHeads[p.Id] = (at, launch.From + launch.Gap);
             }
             else boltLaunches.Remove(p.Id);
-            gpu.DebrisPieces.Add(new DebrisPiece(p.Mesh, 1, Turn(Vector3.UnitZ, p.Direction), at, p.Stuck ? 1 : p.Stretch));
+            gpu.DebrisPieces.Add(new DebrisPiece(p.Mesh, 1, Turn(Vector3.UnitZ, p.Direction), at, p.Stuck ? 1 : p.Stretch, Id: -1 - p.Id));   // a bolt's identity is the negative of its id (the others count up)
         }
         if (boltLaunches.Count > now.Count)
             foreach (int id in boltLaunches.Keys.ToArray())

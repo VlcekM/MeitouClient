@@ -11,8 +11,13 @@ namespace Meitou.Rendering;
 /// One loose mesh in the world: its file, its size and where it is (rotation and translation, the mesh's middle at the translation); <paramref name="Stretch"/> lengthens
 /// it along its own z (a bolt in flight).
 /// </summary>
-public readonly record struct DebrisPiece(string Mesh, float Scale, Quaternion Rotation, Vector3 Position, float Stretch = 1, LimbLook? Limb = null)
+public readonly record struct DebrisPiece(string Mesh, float Scale, Quaternion Rotation, Vector3 Position, float Stretch = 1, LimbLook? Limb = null, long Id = 0)
 {
+    static long ids;
+
+    /// <summary>A new identity for a piece that moves (<see cref="Id"/>): the renderer finds its last frame's place by it and writes its motion for the temporal upscalers. 0 is no identity (a piece that does not move on its own).</summary>
+    public static long NewId() => Interlocked.Increment(ref ids);
+
     /// <summary>A mesh named <c>file</c> + this + <c>texture</c> is drawn with that diffuse texture on every part (the birds' <c>HWBirds</c> material clone, docs/game/birds.md).</summary>
     public const char TextureMark = '?';
 }
@@ -254,6 +259,7 @@ public sealed unsafe class DebrisRenderer : IDisposable
     readonly NativeFrame frame;
     readonly NativeProg program;
     readonly VertexLayout layout;
+    MotionMeshes? motionMeshes;
     readonly GpuBufferBinding[] bindings = new GpuBufferBinding[5];
     readonly Dictionary<string, Mesh?> meshes = new(StringComparer.OrdinalIgnoreCase);
     readonly Dictionary<string, DebrisTexture?> textures = new(StringComparer.OrdinalIgnoreCase);
@@ -376,6 +382,7 @@ public sealed unsafe class DebrisRenderer : IDisposable
             var middle = mesh.Limb ? piece.Position + Vector3.Transform(mesh.Centre * piece.Scale, piece.Rotation) : piece.Position;
             if (!FrustumTests.SphereVisible(frustum, middle, mesh.Extent.Length() * piece.Scale * MathF.Max(piece.Stretch, 1))) continue;
             var m = Matrix4x4.CreateScale(piece.Scale, piece.Scale, piece.Scale * piece.Stretch) * Matrix4x4.CreateFromQuaternion(piece.Rotation) * Matrix4x4.CreateTranslation(piece.Position - eye);
+            if (Motion && piece.Id != 0) NoteMotion(piece, mesh, m, eye);
             for (int k = 0; k < 5; k++) bindings[k] = new GpuBufferBinding(mesh.Vertices.Handle, (ulong)(k switch { 0 => 0, 1 => 12, 2 => 20, 3 => 36, _ => 28 }));
             cmd.BindVertexBuffers(0, bindings);
             cmd.BindIndexBuffer(new GpuBufferBinding(mesh.Indices.Handle, 0), IndexKind.U32);
@@ -402,6 +409,56 @@ public sealed unsafe class DebrisRenderer : IDisposable
             }
         }
         gpu.EndGuest(cmd);
+    }
+
+    // ---- motion vectors for the temporal upscalers: a moving piece (one with an identity) is drawn again into the motion target with this and last frame's transform ----
+
+    /// <summary>Set each frame by the world frame when a temporal upscaler runs: <see cref="Draw"/> notes the moving pieces for <see cref="DrawMotion"/> and keeps their places for the next frame.</summary>
+    public bool Motion { get; private set; }
+
+    readonly record struct Placed(Vector3 Position, Quaternion Rotation, float Stretch);
+    readonly record struct MotionDraw(Mesh Mesh, Matrix4x4 Model, Matrix4x4 Previous);
+    Dictionary<long, Placed> placedNow = [], placedBefore = [];
+    readonly List<MotionDraw> motionDraws = [];
+
+    /// <summary>Starts a frame: <paramref name="on"/> when the upscaler needs motion vectors. The pieces drawn this frame become the "last frame" of the next.</summary>
+    public void BeginMotion(bool on)
+    {
+        motionDraws.Clear();
+        (placedBefore, placedNow) = (placedNow, placedBefore);
+        placedNow.Clear();
+        Motion = on;
+        if (!on) placedBefore.Clear();
+    }
+
+    /// <summary>A piece drawn this frame: its place is kept, and with a place from last frame that differs the draw is noted. A piece with none (new) or the same (resting, or the host shows the same frame again) has no motion of its own.</summary>
+    void NoteMotion(in DebrisPiece piece, Mesh mesh, in Matrix4x4 model, Vector3 eye)
+    {
+        var placed = new Placed(piece.Position, piece.Rotation, piece.Stretch);
+        placedNow[piece.Id] = placed;
+        if (!placedBefore.TryGetValue(piece.Id, out var before) || before == placed) return;
+        var previous = Matrix4x4.CreateScale(piece.Scale, piece.Scale, piece.Scale * before.Stretch) * Matrix4x4.CreateFromQuaternion(before.Rotation) * Matrix4x4.CreateTranslation(before.Position - eye);
+        motionDraws.Add(new MotionDraw(mesh, model, previous));
+    }
+
+    /// <summary>
+    /// Draws the moving pieces of this frame into the motion target (red and green; the object-motion pass of the post chain): each with its transform now and last frame, the camera of
+    /// the two frames as the characters' motion has it (<paramref name="camera"/>), written where the piece is what the scene depth shows.
+    /// </summary>
+    internal void DrawMotion(MotionTargets targets, MotionCamera camera)
+    {
+        if (!Motion || motionDraws.Count == 0) return;
+        var m = motionMeshes ??= new MotionMeshes(gpu, frame, GpuVertex.ObjectSize);
+        m.Begin(targets, camera);
+        foreach (var d in motionDraws)
+        {
+            var mesh = d.Mesh;
+            m.Mesh(new GpuBufferBinding(mesh.Vertices.Handle, 0), new GpuBufferBinding(mesh.Vertices.Handle, 20), new GpuBufferBinding(mesh.Indices.Handle, 0));
+            foreach (var part in mesh.Parts)
+                m.Draw(part.Count, part.First, part.VertexOffset, d.Model, d.Previous, part.Diffuse is { } diffuse ? diffuse.CachedIndex : gpu.StandIn2D, part.Diffuse is null ? 0 : part.AlphaThreshold);
+        }
+        m.End();
+        motionDraws.Clear();
     }
 
     Mesh? Load(string file, string? materialOf, LimbLook? limb = null)
@@ -492,6 +549,7 @@ public sealed unsafe class DebrisRenderer : IDisposable
         }
         foreach (var image in textures.Values) image?.Dispose();
         program.Dispose();
+        motionMeshes?.Dispose();
         frame.Dispose();
     }
 }

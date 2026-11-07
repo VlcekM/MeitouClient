@@ -22,6 +22,9 @@ sealed class ObjectStreamer(WorldObjects objects, ObjectMeshCache meshes) : IDis
         public required PlacedMesh Placed;
         public required ObjectMesh Mesh;
         public Matrix4x4 Transform;
+        /// <summary>An animated part (door, turret joint, rotor): the transform it was drawn with in the last frame that wrote motion (<c>WorldObjectRenderer.NoteMotion</c>) and that frame's number.</summary>
+        public Matrix4x4 LastDrawn;
+        public long LastDrawnFrame = -2;
         /// <summary>World bounding sphere (the placement point and a guess until resolved).</summary>
         public Vector3 Centre;
         public float Radius = 400;

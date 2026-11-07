@@ -20,6 +20,7 @@ public sealed class BirdFlocks
 
     sealed class Bird
     {
+        public readonly long Id = DebrisPiece.NewId();
         public Vector3 Position, Forward, Target;
         public float Timer, Radius, Altitude, Scale;
         public BirdState State;
@@ -411,7 +412,7 @@ public sealed class BirdFlocks
         foreach (var g in groups)
         {
             if (g.Kind.Mesh.Length == 0 || g.Birds.Count == 0 || ready is not null && !ready(g.Mesh)) continue;
-            foreach (var b in g.Birds) pieces.Add(new DebrisPiece(g.Mesh, b.Scale, Orientation(b.Forward), b.Position));
+            foreach (var b in g.Birds) pieces.Add(new DebrisPiece(g.Mesh, b.Scale, Orientation(b.Forward), b.Position, Id: b.Id));
         }
     }
 
