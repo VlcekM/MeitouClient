@@ -193,12 +193,53 @@ public sealed unsafe class WaterRipples : IDisposable
                 anyWater |= d > 0;
                 depths[Wrap(dz + j, DepthSide) * DepthSide + Wrap(dx + i, DepthSide)] = d;
             }
+        Wall(dx, dz);
         (depthOrigin, sinceBake) = (origin, 0);
         using var batch = ctx.Uploads.Begin();
         batch.Write(depth, 0, MemoryMarshal.AsBytes(depths.AsSpan()));
     }
 
     static int Wrap(int v, int n) => ((v % n) + n) % n;
+
+    /// <summary>The walls and posts standing in the water (<see cref="WaterRenderer.Walls"/>); the waves do not pass them.</summary>
+    public Func<Vector2, float, IReadOnlyList<(Vector2 A, Vector2 B)>>? Walls { get; set; }
+
+    Task<IReadOnlyList<(Vector2 A, Vector2 B)>>? wallJob;
+    IReadOnlyList<(Vector2 A, Vector2 B)>? wallSegments;
+    Vector2 wallCentre;
+
+    /// <summary>How far round the window's centre the walls are read (on a worker), and how far it may move before they are read again.</summary>
+    const float WallReach = 600, WallRefresh = 250;
+
+    /// <summary>The depth map's texels the walls cross are land (depth 0): the waves stop at them as at a shore. The walls are read on a worker and kept while the window stays near.</summary>
+    void Wall(int dx, int dz)
+    {
+        var centre = new Vector2((dx + DepthSide / 2) * DepthTexel, (dz + DepthSide / 2) * DepthTexel);
+        if (wallJob is { IsCompleted: true } done)
+        {
+            wallSegments = done.IsCompletedSuccessfully ? done.Result : null;
+            wallJob = null;
+        }
+        if (Walls is { } read && wallJob is null && (wallSegments is null || Vector2.Distance(centre, wallCentre) > WallRefresh))
+        {
+            wallCentre = centre;
+            wallJob = Task.Run(() => read(centre, WallReach));
+        }
+        if (wallSegments is null) return;
+        foreach (var (a, b) in wallSegments)
+        {
+            var ta = a / DepthTexel;
+            var tb = b / DepthTexel;
+            int steps = (int)MathF.Ceiling(Vector2.Distance(ta, tb) * 4) + 1;
+            for (int k = 0; k <= steps; k++)
+            {
+                var t = Vector2.Lerp(ta, tb, k / (float)steps);
+                int i = (int)MathF.Floor(t.X), j = (int)MathF.Floor(t.Y);
+                if (i < dx || j < dz || i >= dx + DepthSide || j >= dz + DepthSide) continue;
+                depths[Wrap(j, DepthSide) * DepthSide + Wrap(i, DepthSide)] = 0;
+            }
+        }
+    }
 
     void Dispatch(int steps, bool jump, (int X, int Z) previous)
     {
@@ -392,7 +433,7 @@ public sealed unsafe class WaterRipples : IDisposable
             h *= exp(-pc.dt * SpongeRate * 0.25 * sponge);
             // Foam where the waves steepen, fading, spreading a little.
             vec2 slope = vec2(e.x - we.x, n.x - so.x) / (2.0 * Texel);
-            foam = max(foam, 0.7 * smoothstep(0.45, 0.9, length(slope)));
+            foam = max(foam, 0.7 * smoothstep(0.45, 0.9, length(slope)) * smoothstep(0.5, 2.0, column));   // no crest foam in a film
             foam = mix(foam, (n.z + so.z + e.z + we.z) * 0.25, min(pc.dt * 2.0, 1.0)) * exp(-pc.dt * 1.1 / FoamLife);
             b[at(i)] = pack(vec4(h, v, foam, took));
         }
