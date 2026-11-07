@@ -92,10 +92,17 @@
 
   <!-- The bundled port's DLL and manifest, beside the game under compat/CharactersEmotions (ModHost.BundledPorts), not among the game's own assemblies. -->
   <ItemGroup>
-    <None Include="../Meitou.Compat.CharactersEmotions/bin/$(Configuration)/$(TargetFramework)/Meitou.Compat.CharactersEmotions.dll" Link="compat/CharactersEmotions/Meitou.Compat.CharactersEmotions.dll"
-          CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" Visible="false" />
     <None Include="../Meitou.Compat.CharactersEmotions/meitou.json" Link="compat/CharactersEmotions/meitou.json"
           CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" Visible="false" />
   </ItemGroup>
+  <!-- The DLL from wherever the port project built it (its own bin, or the -o folder a build was given): asked of the project, not assumed. -->
+  <Target Name="BundledPortDll" BeforeTargets="AssignTargetPaths">
+    <MSBuild Projects="../Meitou.Compat.CharactersEmotions/Meitou.Compat.CharactersEmotions.csproj" Targets="GetTargetPath" Properties="Configuration=$(Configuration)">
+      <Output TaskParameter="TargetOutputs" ItemName="BundledPortOutput" />
+    </MSBuild>
+    <ItemGroup>
+      <None Include="@(BundledPortOutput)" Link="compat/CharactersEmotions/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" Visible="false" />
+    </ItemGroup>
+  </Target>
 
 </Project>
