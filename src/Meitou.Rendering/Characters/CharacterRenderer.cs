@@ -261,6 +261,8 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         public Matrix4x4 World;
         public Vector3 Centre;
         public float Radius;
+        /// <summary>Where the face's morph offsets start in <see cref="MorphArena"/> for this frame: the asset's, or the character's own when it has face weights.</summary>
+        public uint MorphBase;
         public int BoneBase, AttachBase, LayerStart, LayerCount;
         /// <summary>Its parts' first entry in <see cref="partFrames"/> (one per asset part).</summary>
         public int PartBase;
@@ -315,6 +317,13 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         public BonePose? PosedRagdoll;
         /// <summary>Off screen at the last update (<see cref="Live.OffScreen"/>).</summary>
         public bool OffScreen;
+        /// <summary>The runtime face morph (<see cref="CharacterInstance.Face"/>): its arena regions, the weights it was built from, the asset it was built for and the base to draw with.</summary>
+        public FaceLease? FaceLease;
+        public string[] FaceKeys = [];
+        public float[] FaceValues = [];
+        public int FaceCount;
+        public CharacterAsset? FaceAsset;
+        public uint FaceBase;
     }
 
     /// <summary>
@@ -715,6 +724,7 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         if (liveCount == live.Length) Array.Resize(ref live, liveCount * 2);
         ref var l = ref live[liveCount++];
         l.Asset = asset;
+        l.MorphBase = asset.MorphBase;
         (l.Key, l.PortraitOnly) = (inst.Key, far);
         l.World = WorldOf(in inst, asset, scale);
         (l.WeaponDrawn, l.RangedDrawn, l.BackDrawn, l.Shots, l.Bolts) = (inst.WeaponDrawn, inst.RangedDrawn, inst.BackDrawn, inst.Shots, inst.Bolts);
@@ -729,6 +739,7 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         l.LayerStart = layerCount;
         l.LayerCount = 0;
         Track(ref l, in inst, asset, far);
+        if (inst.Face is { } face && asset.Morph is not null) l.MorphBase = FaceMorph(ref l, face);
         return ref l;
     }
 
@@ -1043,7 +1054,48 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         staleKeys.Clear();
         foreach (var (key, state) in states)
             if (updateStamp - state.Seen > (state.Frozen ? 600 : 60)) staleKeys.Add(key);   // a held pose waits longer for its look to be ready
-        foreach (var key in staleKeys) states.Remove(key);
+        foreach (var key in staleKeys)
+        {
+            if (states.Remove(key, out var gone) && gone.FaceLease is { } lease) content.Morphs.Release(lease);
+        }
+    }
+
+    Vector4[] faceScratch = [];
+
+    /// <summary>The pose names (shape keys) of the look's body mesh; null when the look is not built or has no poses. Render thread.</summary>
+    public IReadOnlySet<string>? FaceKeys(CharacterAppearance look) =>
+        assets.TryGetValue(look, out var asset) ? asset?.Morph?.Poses.PoseNames : null;
+
+    /// <summary>
+    /// The base for the character's morph with <paramref name="face"/> applied to its asset (docs/face-shape-keys.md): the asset's own when the weights are
+    /// empty, else the poses summed into the character's lease, rebuilt only when the weights or the asset changed. An off-screen character keeps its last.
+    /// </summary>
+    uint FaceMorph(ref Live l, FaceWeights face)
+    {
+        var state = l.State;
+        var asset = l.Asset;
+        var source = asset.Morph!;
+        if (face.Count == 0)
+        {
+            state.FaceCount = 0;
+            return asset.MorphBase;
+        }
+        if (ReferenceEquals(state.FaceAsset, asset) && state.FaceLease is not null && face.SameAs(state.FaceKeys, state.FaceValues, state.FaceCount))
+            return state.FaceBase;
+        if (l.OffScreen && !l.MustPose && ReferenceEquals(state.FaceAsset, asset) && state.FaceLease is not null) return state.FaceBase;
+        int slots = source.Poses.SlotCount;
+        if (state.FaceLease is { } old && (old.Slots != slots))
+        {
+            content.Morphs.Release(old);
+            state.FaceLease = null;
+        }
+        state.FaceLease ??= content.Morphs.Lease(slots);
+        if (faceScratch.Length < slots) faceScratch = new Vector4[Math.Max(slots, 4096)];
+        source.Poses.Compose(faceScratch, source.Weights, source.CutHorns, face);
+        state.FaceBase = content.Morphs.Write(state.FaceLease, faceScratch);
+        state.FaceCount = face.CopyTo(ref state.FaceKeys, ref state.FaceValues);
+        state.FaceAsset = asset;
+        return state.FaceBase;
     }
 
     void AddLayer(in ActiveLayer layer)

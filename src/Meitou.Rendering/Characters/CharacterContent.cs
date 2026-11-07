@@ -775,7 +775,7 @@ internal sealed class CharacterContent : IDisposable
         {
             Label = $"body {Path.GetFileName(bodyPath)}", Mesh = body.Gpu, Shared = true, Material = BodyMaterial(c),
             BoundsCentre = body.Centre, BoundsRadius = body.Radius, PickBoxes = body.PickBoxes ?? [],
-            Morphed = asset.MorphBase != 0, ShadowDistances = body.ShadowDistances, ShadowFirst = body.ShadowFirst, IsBody = true,
+            Morphed = asset.Morph is not null, ShadowDistances = body.ShadowDistances, ShadowFirst = body.ShadowFirst, IsBody = true,
             FileDistances = body.FileDistances, FileFirst = body.FileFirst, FileRadius = body.FileRadius,
         });
         // A headless body's neck, and a cut-off head's, is closed by a cap made from the body (NeckCap), in the race's wound look.
@@ -783,7 +783,7 @@ internal sealed class CharacterContent : IDisposable
             asset.Parts.Add(new AssetPart
             {
                 Label = $"neck cap {Path.GetFileName(bodyPath)}", Mesh = cap.Gpu, Shared = true, Material = WoundMaterial(c),
-                BoundsCentre = cap.Centre, BoundsRadius = cap.Radius, Morphed = asset.MorphBase != 0,
+                BoundsCentre = cap.Centre, BoundsRadius = cap.Radius, Morphed = asset.Morph is not null,
             });
         var partLimbs = LimbHideOf(c, rig);
         foreach (var part in c.Parts)
