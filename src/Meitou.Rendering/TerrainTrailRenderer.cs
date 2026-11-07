@@ -10,8 +10,12 @@ public static class TerrainTrails
     public static bool Enabled { get; set; }
 }
 
-/// <summary>What pressed a mark: its shape in <see cref="TerrainTrailRenderer.StampFragment"/>.</summary>
-public enum TrailKind { Foot, Paw, Drag }
+/// <summary>
+/// What pressed a mark: its shape in <see cref="TerrainTrailRenderer.StampFragment"/>. <see cref="Press"/> is a stadium (a body part resting on the ground: <see cref="TrailStamp.Length"/> and
+/// <see cref="TrailStamp.Width"/> its whole size), <see cref="Plough"/> the same swept along a slide, feathered at its rear so the next sweep joins it. Their values leave room for the rim
+/// and core passes (kind and kind + 1), drawn after the other marks so a body's overlapping parts leave one imprint, not ridges.
+/// </summary>
+public enum TrailKind { Foot, Paw, Drag, Press = 4, Plough = 6 }
 
 /// <summary>
 /// One mark on the ground: <paramref name="Centre"/> in world x, z, <paramref name="Along"/> the unit direction it points in, its size in world units,
@@ -31,8 +35,8 @@ public sealed unsafe class TerrainTrailRenderer : IDisposable
     public const int Side = 2048, Snap = 64;
     public const float Texel = 0.25f;
 
-    /// <summary>A full mark's depth in world units (6 cm).</summary>
-    public const float Depth = 0.6f;
+    /// <summary>A full mark's depth in world units (8 cm).</summary>
+    public const float Depth = 0.8f;
 
     /// <summary>How far from the camera's target marks are kept: the window's half side, less the snap it can lag by.</summary>
     public const float Reach = (Side / 2 - Snap) * Texel;
@@ -44,6 +48,9 @@ public sealed unsafe class TerrainTrailRenderer : IDisposable
     /// <summary>A quad's half size over the shape's: the room for its rim (<see cref="StampFragment"/> fits the shape in 0.7 of the quad).</summary>
     const float QuadPerShape = 1 / 0.7f;
 
+    /// <summary>The room a body's stadium leaves round it for its rim, in texels (<see cref="StampFragment"/> reads the same 12).</summary>
+    const float BodyMargin = 12;
+
     /// <summary>The kind that wipes: the quad blended towards 0 by its strength, for the strips the window gains and the wearing.</summary>
     const float WipeKind = 3;
 
@@ -53,12 +60,16 @@ public sealed unsafe class TerrainTrailRenderer : IDisposable
         layout(location = 1) in vec4 aSide;   // half the across axis, strength, kind
         layout(location = 0) out vec2 vUv;    // -1..1: x across, y along
         layout(location = 1) flat out vec2 vStamp;
+        layout(location = 2) out vec2 vImg;    // the position in the image, texels
+        layout(location = 3) flat out vec2 vHalf;   // the quad's half sides in texels: across, along (1 clip unit = 1024 texels)
         void main()
         {
             vec2 q = vec2(gl_VertexIndex & 1, gl_VertexIndex >> 1) * 2.0 - 1.0;
             vUv = q;
             vStamp = aSide.zw;
             gl_Position = vec4(aQuad.xy + q.y * aQuad.zw + q.x * aSide.xy, 0.0, 1.0);
+            vImg = (gl_Position.xy * 0.5 + 0.5) * 2048.0;
+            vHalf = vec2(length(aSide.xy), length(aQuad.zw)) * 1024.0;
         }
         """;
 
@@ -70,7 +81,49 @@ public sealed unsafe class TerrainTrailRenderer : IDisposable
         #version 450
         layout(location = 0) in vec2 vUv;
         layout(location = 1) flat in vec2 vStamp;   // strength, kind
+        layout(location = 2) in vec2 vImg;
+        layout(location = 3) flat in vec2 vHalf;
         layout(location = 0) out vec4 fragColour;
+
+        // Value noise fixed to the image's texels (a cell of cs texels, cs dividing 2048, so it wraps with the image): the same ground gets the same irregularity from every stamp.
+        float lattice(vec2 c, float period)
+        {
+            c = mod(c, period);
+            return fract(sin(dot(c, vec2(127.1, 311.7))) * 43758.5453);
+        }
+
+        float vnoise(float cs)
+        {
+            vec2 x = vImg / cs;
+            vec2 i = floor(x);
+            vec2 f = fract(x);
+            f = f * f * (3.0 - 2.0 * f);
+            float period = 2048.0 / cs;
+            return mix(mix(lattice(i, period), lattice(i + vec2(1.0, 0.0), period), f.x),
+                       mix(lattice(i + vec2(0.0, 1.0), period), lattice(i + vec2(1.0, 1.0), period), f.x), f.y);
+        }
+
+        // A body part's stadium (the quad leaves 12 texels round it for the rim): kinds 4 and 6 draw the rim (a ridge of pushed-up ground, ragged), 5 and 7 the pressed core, in a later
+        // pass so that parts of one body overlapping leave one bowl. A sweep (6, 7) heaps its front and its sides higher and fades out at its rear.
+        void body(int k, float strength)
+        {
+            bool core = (k & 1) == 1, sweep = k >= 6;
+            vec2 p = vUv * vHalf;
+            float hw = vHalf.x - 12.0, seg = max(vHalf.y - 12.0 - hw, 0.0);
+            float d = length(vec2(p.x, p.y - clamp(p.y, -seg, seg))) - hw;
+            float n1 = vnoise(4.0), n2 = vnoise(16.0), n3 = vnoise(64.0);
+            d += (n1 - 0.5) * 3.0 + (n2 - 0.5) * 4.0;
+            float rear = sweep ? smoothstep(-seg - hw, -seg, p.y) : 1.0;
+            if (core)
+            {
+                float bowl = mix(0.85, 1.0, smoothstep(0.0, -hw, d)) * (0.88 + 0.12 * n2);
+                fragColour = vec4(-bowl * strength, 0.0, 0.0, smoothstep(1.5, -1.5, d) * rear);
+                return;
+            }
+            float heap = sweep ? 1.3 + smoothstep(0.0, hw, p.y - seg) : 1.0;
+            float rim = exp(-pow((d - 2.5) / 2.5, 2.0)) * (0.2 + 0.2 * n3) * heap;
+            fragColour = vec4(rim * strength, 0.0, 0.0, smoothstep(6.0, 3.5, d) * rear);
+        }
 
         // A sole, toes towards +y: a narrow heel widening to the ball (a capsule whose radius grows along it).
         float sole(vec2 q)
@@ -89,8 +142,10 @@ public sealed unsafe class TerrainTrailRenderer : IDisposable
         void main()
         {
             float strength = vStamp.x;
-            if (vStamp.y > 2.5) fragColour = vec4(0.0, 0.0, 0.0, strength);
-            else if (vStamp.y > 1.5)
+            int kind = int(vStamp.y + 0.5);
+            if (kind == 3) fragColour = vec4(0.0, 0.0, 0.0, strength);
+            else if (kind >= 4) body(kind, strength);
+            else if (kind == 2)
             {
                 // A furrow: only its section, feathered at both ends so the next one joins it.
                 float across = abs(vUv.x);
@@ -98,7 +153,7 @@ public sealed unsafe class TerrainTrailRenderer : IDisposable
                 float ends = smoothstep(1.0, 0.6, abs(vUv.y));
                 fragColour = vec4((rim - smoothstep(0.72, 0.35, across)) * strength, 0.0, 0.0, ends * smoothstep(1.0, 0.88, across));
             }
-            else if (vStamp.y > 0.5) shape(length(vUv) - 0.6, strength);
+            else if (kind == 1) shape(length(vUv) - 0.6, strength);
             else shape(sole(vUv), strength);
         }
         """;
@@ -121,6 +176,7 @@ public sealed unsafe class TerrainTrailRenderer : IDisposable
     readonly NativeFrame frame;
     readonly GpuProgram program;
     readonly List<TrailStamp> stamps = [];
+    readonly List<Row> cores = [];
     GpuPipeline? pipeline;
     GpuTexture? target;
     uint index = uint.MaxValue;
@@ -157,8 +213,10 @@ public sealed unsafe class TerrainTrailRenderer : IDisposable
         count = 0;
         Move(centre);
         Wear(gameSeconds, rain, wind);
+        cores.Clear();
         foreach (var s in stamps) AddStamp(s);
         stamps.Clear();
+        foreach (var core in cores) Add(core);
         if (count > 0 || fresh) Draw();
     }
 
@@ -225,8 +283,9 @@ public sealed unsafe class TerrainTrailRenderer : IDisposable
         var (x, z) = origin!.Value;
         float tx = s.Centre.X / Texel, tz = s.Centre.Y / Texel;
         if (tx < x || tz < z || tx >= x + Side || tz >= z + Side) return;
-        bool square = s.Kind != TrailKind.Drag;
-        float along = s.Length * 0.5f * QuadPerShape / Texel, across = (square ? s.Length * 0.5f * QuadPerShape : s.Width * 0.5f) / Texel;
+        bool body = s.Kind >= TrailKind.Press, square = s.Kind != TrailKind.Drag && !body;
+        float along = body ? s.Length * 0.5f / Texel + BodyMargin : s.Length * 0.5f * QuadPerShape / Texel;
+        float across = body ? s.Width * 0.5f / Texel + BodyMargin : (square ? s.Length * 0.5f * QuadPerShape : s.Width * 0.5f) / Texel;
         var a = s.Along * along;
         var b = new Vector2(s.Along.Y, -s.Along.X) * across;
         float reach = a.Length() + b.Length();
@@ -235,7 +294,9 @@ public sealed unsafe class TerrainTrailRenderer : IDisposable
             for (int j = iz < reach ? 1 : 0; j >= (iz > Side - reach ? -1 : 0); j--)
             {
                 var centre = new Vector2(ix + i * Side, iz + j * Side) / Side * 2 - Vector2.One;
-                Add(new Row { Quad = new Vector4(centre, a.X * 2 / Side, a.Y * 2 / Side), Across = new Vector4(b.X * 2 / Side, b.Y * 2 / Side, s.Strength, (float)s.Kind) });
+                var row = new Row { Quad = new Vector4(centre, a.X * 2 / Side, a.Y * 2 / Side), Across = new Vector4(b.X * 2 / Side, b.Y * 2 / Side, s.Strength, (float)s.Kind) };
+                Add(row);
+                if (body) cores.Add(row with { Across = row.Across with { W = row.Across.W + 1 } });
             }
     }
 

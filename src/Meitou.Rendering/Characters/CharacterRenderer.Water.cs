@@ -31,6 +31,26 @@ internal sealed partial class CharacterRenderer
         }
     }
 
+    /// <summary>
+    /// The posed body of the character <paramref name="key"/> as capsules for the ground trails (docs/render-terrain.md "Ground trails"): every capsule of <see cref="WaterCapsules"/>, in the
+    /// asset's fixed order (so a capsule keeps its place from frame to frame; one whose bone is not posed has radius 0). Nothing added when it was not drawn in the world in the last update.
+    /// Render thread, after <see cref="Update"/>.
+    /// </summary>
+    public void ContactCapsules(long key, List<WaterBody> into)
+    {
+        if (!states.TryGetValue(key, out var s) || s.Seen != updateStamp || !s.InWorld || s.Asset is not { IsIcon: false } asset || s.Posed < 0) return;
+        foreach (var c in boneCapsules.GetValue(asset, CapsulesOf))
+        {
+            if (c.Bone >= s.Bones.Length)
+            {
+                into.Add(default);
+                continue;
+            }
+            var m = s.Bones[c.Bone] * s.World;
+            into.Add(new WaterBody(Vector3.Transform(c.A, m), Vector3.Transform(c.B, m), c.Radius * Vector3.TransformNormal(Vector3.UnitY, m).Length()));
+        }
+    }
+
     /// <summary>Each bone's capsule: along its box's longest side, as thick as the mean of the other two.</summary>
     static BoneCapsule[] CapsulesOf(CharacterAsset asset)
     {
