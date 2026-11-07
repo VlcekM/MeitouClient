@@ -34,9 +34,11 @@ came from, thinned by land and walls beside its way (0.1 each, not those ahead),
 (RGBA32F). The shader's phase is the wave count at (clock − arrival): a wave every 8 s on average, in sets of seven over which the period swings ±20%
 (`waveCount`; the clock wraps at 4096 sets); the local wavelength is c times that period. Breakers break where the depth is 1/0.78 of their height (the
 break distance from the local floor slope); past the break and in a film their height is held to 0.78 of the depth. Per-wave size noise rides with the
-wave. The breaker face's glow shows only within 80 units of the break (along the whole swell it drew a band ahead of every crest).
+wave. The breaker front's slope is the height difference over 6% of a wavelength, at most 0.35 (over 2%
+it made a thin steep strip that reflected as a bright greenish line ahead of every crest; found by cutting each term in turn). The breaker face's glow shows only within 80 units of the break (along the whole swell it drew a band ahead of every crest).
 Surf foam lies where noise clumps and blotches in the wave's frame pass a narrow threshold
-(rising with its age, holes even when fresh, frayed by the rims), shaded by two turned networks of fine bubble rims (4.5 and 11.3 per 100 units) within 40 units of the eye, the foam
+(rising with its age, holes even when fresh, frayed by the rims), with streaks of the blotch noise stretched 5:1 along the waves' way; its density
+follows that texture (0.2 to 1 over its middle half), never a flat white sheet, and the thickest whitewater is capped at 0.88 so holes remain; shaded by two turned networks of fine bubble rims (4.5 and 11.3 per 100 units) within 40 units of the eye, the foam
 texture's larger rims from 150 units (fine rims average away to a flat white there; the large ones only read as cells near). The waterline: no still foam
 ring (an exposed shore gets a little with each wave). On the swash the foam's lace rides the sheet: shifted by level / beach slope along the
 waves' way, so it runs up with the uprush and back with the backwash; the sand behind dries in patches (two noises, 9 and 23 units) over the wave's cycle. Contact foam needs 2.5 to 4.5 units of standing (the ground relief made false lines). The water's

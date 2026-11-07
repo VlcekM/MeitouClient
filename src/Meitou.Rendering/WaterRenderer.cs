@@ -778,12 +778,14 @@ public sealed unsafe class WaterRenderer : IDisposable
             vec2 slope = nm.xz / max(nm.y, 0.05) - os.xy / spread;
             // The breaker's hump tilts the surface: its height falls towards the shore on the front and rises on the back.
             Shore ahead = s, behind = s;
-            ahead.g = fract(s.g - 0.01); ahead.dist -= 0.01 * s.len;
-            behind.g = fract(s.g + 0.01); behind.dist += 0.01 * s.len;
+            ahead.g = fract(s.g - 0.03); ahead.dist -= 0.03 * s.len;
+            behind.g = fract(s.g + 0.03); behind.dist += 0.03 * s.len;
             float breaker = breakerHeight(s) * fade;
             // The breaker's shading fades with the distance: a few pixels across its steep front only read as a dark streak.
             float near = 1.0 - smoothstep(700.0, 2500.0, dist);
-            slope += s.prop * ((breakerHeight(behind) - breakerHeight(ahead)) * fade * near * 0.7 / (0.02 * s.len));
+            // Over 6% of a wavelength and at most 0.35: the 2% difference made a thin, steep strip ahead of every crest, which reflected as a bright
+            // greenish line all along it.
+            slope += s.prop * clamp((breakerHeight(behind) - breakerHeight(ahead)) * fade * near * 0.7 / (0.06 * s.len), -0.35, 0.35);
             #ifdef WATER_CONTACT
             // The interactive waves (docs/render-water.md "Wakes and ripples"): their slopes tilt the surface; their foam joins the rest below.
             vec4 ripple = vec4(0.0);
@@ -969,7 +971,7 @@ public sealed unsafe class WaterRenderer : IDisposable
                 // Along the shore the breakers break harder in some stretches than others, and not at all in a few.
                 float stretch = smoothstep(0.2, 0.75, textureGrad(uFoamMap, p * 0.0011, dpx * 0.0011, dpy * 0.0011).g);
                 float surfFoam = max(max(burst * 1.3, bore * 0.9), max(trail * 1.1, feather * 0.6)) * min(s.size * 1.1, 1.3) * mix(0.275, 1.0, s.brk);
-                surfAmount = min(surfFoam * surfZone * (0.525 + 0.725 * stretch) * (0.825 + 0.4 * clump) * 1.65, 0.95);   // capped: the lace shows through even the thickest whitewater
+                surfAmount = min(surfFoam * surfZone * (0.525 + 0.725 * stretch) * (0.825 + 0.4 * clump) * 1.65, 0.88);   // capped: the lace shows through even the thickest whitewater
             }
             // At the waterline of an exposed shore a little foam comes in with each wave and wears off before the next (a pond's edge has none: it stood still).
             amount = max(amount, (1.0 - smoothstep(0.0, 4.0, abs(s.dist))) * 0.3 * s.open * (1.0 - sinceCrest) * fade);
@@ -1021,14 +1023,21 @@ public sealed unsafe class WaterRenderer : IDisposable
                 // Where the foam lies: clumps and blotches of noise in the wave's frame, the holes opening as it ages (its threshold rises). Its texture: two finer
                 // networks of bubble rims, turned and scaled against each other so neither reads as cells (one network, large, read as bricks and cracks up close),
                 // which only shade it, so even the densest whitewater is not a flat white sheet.
-                float lace = smoothstep(0.15, 0.9, clump) * 0.45 + b1.g * 0.35 + b2.g * 0.2;
+                // Streaks along the waves' way: the blotch noise stretched five to one along it.
+                vec2 along = s.prop, across = vec2(-s.prop.y, s.prop.x);
+                vec2 sk = vec2(0.006, 0.03);
+                float streak = textureGrad(uFoamMap, vec2(dot(q, along), dot(q, across)) * sk + 0.13,
+                    vec2(dot(dpx, along), dot(dpx, across)) * sk, vec2(dot(dpy, along), dot(dpy, across)) * sk).g;
+                float lace = smoothstep(0.15, 0.9, clump) * 0.35 + b1.g * 0.25 + b2.g * 0.15 + streak * 0.25;
                 float wear = 0.2 + age * 0.4;   // even fresh whitewater has holes
                 float surf = surfAmount * mix(0.7, 1.0, clean);
                 // The rims also fray its edges, which stay crisp (a narrow threshold) rather than soft blobs.
                 // Up close the fine rims; further out (where they average away to a flat white) the texture's larger rims, which only read as cells near.
                 float rims = mix(fine, max(b1.r, b2.r), smoothstep(40.0, 150.0, dist));
                 float cover = smoothstep(0.95 - surf + wear, 1.03 - surf + wear + 0.05 * age, lace + (rims - 0.3) * 0.35);
-                foam = max(foam, cover * mix(0.5, 1.0, rims * 0.6 + b2.g * 0.4));
+                // Inside, the foam's density follows its texture (bubbles, streaks), so even dense whitewater is never a flat white sheet.
+                float texture_ = rims * 0.5 + b2.g * 0.25 + streak * 0.25;
+                foam = max(foam, cover * mix(0.2, 1.0, smoothstep(0.25, 0.7, texture_)));
             }
             foam *= mix(0.8, 0.92, clean);
             // The shadow receiver takes derivatives, so it runs here and not inside the foam's branch, and only within 8000 units (where it is
