@@ -216,13 +216,21 @@ to 14 layer samples each.
 Meitou look, not in the game; the `trails` switch (Tab "Ground trails"), off by default, not yet seen on a GPU. Look and cost **Unknown**. Render side only: no gameplay
 or save change, and marks are lost when the window moves past them. Vulkan host only (`GameHost.Metal` never makes the renderer).
 
-- **Image** (`TerrainTrailRenderer`): R16F, 2048², texel 0.25 units (8 MB), a height: 0 untouched, -1 pressed in full (0.6 units, 6 cm), above 0 a rim. Addressed toroidally
+- **Image** (`TerrainTrailRenderer`): R16F, 2048², texel 0.25 units (8 MB), a height: 0 untouched, -1 pressed in full (0.8 units, 8 cm), above 0 a rim. Addressed toroidally
   as the material cache's levels, the origin snapped to 64 texels, so it reaches 240 units from the camera's target (the strategy camera's pivot; not the eye, so zooming keeps the marks); the columns and rows the window gains are wiped, all of it after a jump.
   Shown fading over the window's outer tenth. A frame with nothing to change records nothing.
-- **Marks** (`GameHost.Trails`, within that reach, not carried, in bed or caged): a person's posed foot presses a sole the frame it lands: it moved over 1.2 times the body's
-  speed (swinging) and now under 0.4 times (standing in the world), which needs no rig data. Its heading is the toe bone's. Animals, and people whose feet were not posed,
-  print left and right of their path by a stride, sized by `Scale`. Crawling or down and moving: a furrow every 1.2 units. Each mark is a quad blended over what is there, so a
-  foot flattens the marks under it. No stamp above 2.5 units over the terrain (floors, roofs) or under the water line.
+- **Marks** (`GameHost.Trails`, within that reach, not carried, in bed or caged): every character with a pose leaves marks from its **posed body as capsules**
+  (`CharacterRenderer.ContactCapsules`: one per skinned bone, round the vertices it moves most, from the mesh's bone boxes; boxes under 0.5 units, fingers and toes, are left out).
+  Foot shape, paw size and a stick-footed race's tips all come from that geometry, so a modded race needs no rule of its own. A capsule whose underside is within 0.5 units (5 cm) of the
+  terrain under its ends and under 2.5 cm (sink over 0.5 of 1) is cut at that plane: a stadium along its axis as wide as the cut (at least 0.9 of its radius and 5 cm, at most 1.2 of
+  it), sunk by how close it is times 0.9 to 1 by its radius. The capsule's speed over the frame against the body's own step: over 1.6 times (+0.25 units) it **swings**: nothing;
+  over 0.3 times (+0.12) it **slides**; else it **rests**. A resting part **presses** once, again only after moving 0.3 units or sinking 0.15 deeper, so a lying body stamps once
+  (and a dropped one leaves its imprint where it lands) and a standing character prints where each foot lands. A sliding part of a lying body (crawling, down, dead, ragdoll) **ploughs**: a
+  swept stadium from last frame's contact (heaped front and sides, feathered rear so successive sweeps join); upright characters and animals never plough. A character with no pose (not
+  drawn) falls back to the stride's prints and the old furrow. No stamp above 2.5 units over the terrain (floors, roofs) or under the water line. **Observed** only on offscreen frames; the
+  thresholds are tuned by eye. CPU **Observed**: 0.11 ms per frame for 37 characters (about 3 us each); the GPU draws a few quads.
+- **Shape**: body stadia draw as two passes after the other marks (all rims, then all cores), so parts of one body that overlap leave one bowl, not ridges. Edge, depth and rim
+  are modulated by value noise fixed to the image's texels (4, 16 and 64 texel cells), so every stamp on the same ground gets the same irregularity: no flicker, no seams between sweeps.
 - **Ground** (`GroundSurfaces`, the footsteps' GroundType at the mark): sand, mud and snow in full, dirt at 0.45, nothing else. A mark under a low building floor is stamped but hidden.
 - **Shading** (colour programs built with `TERRAIN_TRAILS`; `TerrainRenderer.MakeTrailed`, the switch off: none of it is in the program): the slopes over the pixel's footprint
   tilt the shading normal, and pressed ground is up to 15% darker. Patches only, fading from n.y 0.7 to 0.55.
