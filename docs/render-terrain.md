@@ -100,8 +100,7 @@ A biome's ground and cliff depth are then times its `GroundRelief.BiomeDepth` fa
 biome's depth can be cut without touching textures other biomes share. ForestLand (`4442-Newwworld.mod`, all of Shark's ground,
 also Ancient Labs, Farm Ruin and patches north of Shark) has 1/3: **Observed** (blend and overlay maps sampled round Shark; depths
 from `LayerDepthCm` at 30 cm) its layers came out base 37 cm (`GrassBadTestNML`), slope and dirt 67–70 (`Lichen_Rock`), cliff 85,
-the swamp biomes round it about 26; those textures are shared by 9–12 other biomes. Canyonland FlatTop (`43874-Newwworld.mod`) and Old
-Pits (`2953-Newwworld.mod`), both on base `NewGround`, have 1/2: **Observed** (owner's look, camera at −64217, 17582) its flat ground read as crumpled too deep.
+the swamp biomes round it about 26; those textures are shared by 9–12 other biomes.
 
 **Composite.** Every ground layer adds material; the relief height keeps the heaviest ground layers (base, grass, slope, dirt,
 road) by how much of the pixel each shows, from the blend map, overlay window and slope per pixel, not per patch, so neighbouring
