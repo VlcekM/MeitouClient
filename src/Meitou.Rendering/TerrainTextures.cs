@@ -304,7 +304,7 @@ public sealed unsafe class TerrainTextures : IDisposable
         // Layers are written as texture pairs arrive; the arrays are allocated whole, with every mip level: the near ones' slots handed out per pair
         // near the eye, the far ones (and the heights) at each pair's fixed index.
         diffuseArray = AllocateArray(true, Capacity, layerSize, levelCount, "terrain textures diffuse");
-        normalArray = AllocateArray(false, Capacity, layerSize, levelCount, "terrain textures normal");
+        normalArray = AllocateArray(false, Capacity, layerSize, levelCount, "terrain textures normal", near: true);
         diffuseFar = AllocateArray(true, FarSlots, farSize, farLevels, "terrain textures diffuse far");
         normalFar = AllocateArray(false, FarSlots, farSize, farLevels, "terrain textures normal far");
         if (GroundRelief.Enabled)
@@ -359,18 +359,21 @@ public sealed unsafe class TerrainTextures : IDisposable
     /// <summary>Diffuse layers are stored as BC3 (colour + gloss in alpha), normal layers as BC1 (their alpha is not used): see docs/render-terrain.md.</summary>
     static InternalFormat FormatOf(bool diffuse) => diffuse ? InternalFormat.CompressedRgbaS3TCDxt5Ext : InternalFormat.CompressedRgbS3TCDxt1Ext;
 
-    /// <summary>GPU memory of the near and far layer arrays (all slots, all mip levels; a BC3 and a BC1 block are 24 bytes).</summary>
-    public long ArrayBytes => Bytes(layerSize, levelCount, Capacity) + Bytes(farSize, farLevels, FarSlots);
+    /// <summary>The near normal layers are BC5 (x and y, z rebuilt in the shader; <see cref="LoadNearNormal"/>), the far ones BC1 as the files store them.</summary>
+    static InternalFormat NearNormalFormat => InternalFormat.CompressedRGRgtc2;
 
-    static long Bytes(int size, int levels, int slots) =>
-        Enumerable.Range(0, levels).Sum(l => { long s = Math.Max(size >> l, 1); return (s + 3) / 4 * ((s + 3) / 4) * 24; }) * Math.Max(slots, 1);
+    /// <summary>GPU memory of the near and far layer arrays (all slots, all mip levels; a BC3 and a BC5 block are 32 bytes, a BC3 and a BC1 block 24).</summary>
+    public long ArrayBytes => Bytes(layerSize, levelCount, Capacity, 32) + Bytes(farSize, farLevels, FarSlots, 24);
+
+    static long Bytes(int size, int levels, int slots, int blockPair) =>
+        Enumerable.Range(0, levels).Sum(l => { long s = Math.Max(size >> l, 1); return (s + 3) / 4 * ((s + 3) / 4) * blockPair; }) * Math.Max(slots, 1);
 
     /// <summary>One layer array of <paramref name="slots"/> slots of <paramref name="size"/>² with every mip level, trilinear and 8x anisotropic, repeating (the slices are written as pairs arrive).</summary>
-    TerrainTexture? AllocateArray(bool diffuse, int slots, int size, int levels, string name)
+    TerrainTexture? AllocateArray(bool diffuse, int slots, int size, int levels, string name, bool near = false)
     {
         try
         {
-            return MakeArray(FormatOf(diffuse), size, levels, slots, 8, name);
+            return MakeArray(near && !diffuse ? NearNormalFormat : FormatOf(diffuse), size, levels, slots, 8, name);
         }
         catch (Exception e)
         {
@@ -495,7 +498,7 @@ public sealed unsafe class TerrainTextures : IDisposable
             {
                 var local = new List<string>();
                 var d = LoadLayer(assets, pair.Diffuse, size, true, [128, 128, 128, 60], local);
-                var n = LoadLayer(assets, pair.Normal, size, false, [128, 128, 255, 255], local);
+                var n = near ? LoadNearNormal(assets, pair.Normal, size, local) : LoadLayer(assets, pair.Normal, size, false, [128, 128, 255, 255], local);
                 float steep = 0;
                 var h = !near && GroundRelief.Enabled ? LoadHeight(assets, pair.Normal, HeightSize, out steep) : null;
                 foreach (var m in local) problems.Enqueue(m);
@@ -594,14 +597,14 @@ public sealed unsafe class TerrainTextures : IDisposable
     {
         int want = Math.Min(Math.Min(pairs.Count, NearLayers * Math.Max(Areas, 1)), MaxNearSlots);
         if (GpuContext.DiagNoGrow || want <= Capacity || want >= nearRefused || inFlight > 0 || nearLoading > 0 || diffuseArray is null || normalArray is null) return;
-        if (Guard is { } guard && !guard.Allows((ulong)Bytes(layerSize, levelCount, want)))
+        if (Guard is { } guard && !guard.Allows((ulong)Bytes(layerSize, levelCount, want, 32)))
         {
             nearRefused = want;
             Console.WriteLine($"terrain   near layer slots not grown to {want}: memory budget (VramGuard)");
             return;
         }
         var diffuse = AllocateArray(true, want, layerSize, levelCount, "terrain textures diffuse");
-        var normal = AllocateArray(false, want, layerSize, levelCount, "terrain textures normal");
+        var normal = AllocateArray(false, want, layerSize, levelCount, "terrain textures normal", near: true);
         if (diffuse is null || normal is null)
         {
             diffuse?.Dispose();
@@ -617,7 +620,7 @@ public sealed unsafe class TerrainTextures : IDisposable
         nextFree = 0;
         Capacity = want;
         for (int b = 0; b < state.Length; b++) WriteNear(b);
-        Console.WriteLine($"terrain   near layer slots grown to {want} for {Areas} kept places ({Bytes(layerSize, levelCount, want) >> 20} MB)");
+        Console.WriteLine($"terrain   near layer slots grown to {want} for {Areas} kept places ({Bytes(layerSize, levelCount, want, 32) >> 20} MB)");
     }
 
     /// <summary>A free near slot, else the least recently needed one's of a pair not wanted near now (its biomes' rows drop it at once: they read the far
@@ -764,6 +767,86 @@ public sealed unsafe class TerrainTextures : IDisposable
             encoded[l] = diffuse ? BlockCompression.EncodeBc3(mips[l], s, s) : BlockCompression.EncodeBc1(mips[l], s, s);
         }
         return encoded;
+    }
+
+    /// <summary>
+    /// A near normal layer as BC5 blocks (x and y; z is rebuilt in the shader), every mip level down to 1 x 1, with the game's BC1 blocks smoothed out: the file's
+    /// 4 x 4 blocks hold four colours each (5:6:5 endpoints), so magnified the normals lit as flat facets with hard edges (docs/render-terrain.md, "BC1 normal blocks").
+    /// The level 0 normals are decoded, smoothed by a separable Gaussian (<see cref="Deblock"/>) and the levels made from that, so nothing is block-aligned.
+    /// </summary>
+    static byte[][] LoadNearNormal(AssetLocator assets, string? name, int size, List<string> problems)
+    {
+        int levelCount = (int)Math.Log2(size) + 1;
+        byte[] level0;
+        if (ReadImage(assets, name, size) is { } image) level0 = Resize(image, size);
+        else
+        {
+            if (name is not null) problems.Add($"terrain texture not found or unreadable: {name}");
+            level0 = new byte[size * size * 4];
+            for (int i = 0; i < level0.Length; i += 4) (level0[i], level0[i + 1], level0[i + 2], level0[i + 3]) = (128, 128, 255, 255);
+        }
+        Deblock(level0, size);
+        var mips = Mips(level0, size, size);
+        var encoded = new byte[mips.Length][];
+        for (int l = 0; l < mips.Length; l++) encoded[l] = EncodeBc5(mips[l], Math.Max(size >> l, 1));
+        return encoded;
+    }
+
+    /// <summary>
+    /// The red and green channels (a normal's x and y) of an RGBA8 image smoothed across the BC1 blocks: a separable Gaussian (sigma 1.5 texels, radius 4,
+    /// edges wrapping as the layers repeat). The blocks' palette steps are a few levels of 255 over four texels; a texel-scale filter flattens them and keeps the
+    /// shapes the file holds (the file cannot hold detail finer than a block anyway).
+    /// </summary>
+    internal static void Deblock(byte[] rgba, int size)
+    {
+        const int Radius = 4;
+        Span<float> kernel = stackalloc float[Radius * 2 + 1];
+        float total = 0;
+        for (int i = -Radius; i <= Radius; i++) total += kernel[i + Radius] = MathF.Exp(-i * i / (2 * 1.5f * 1.5f));
+        for (int i = 0; i < kernel.Length; i++) kernel[i] /= total;
+        var kernelArray = kernel.ToArray();
+        var temp = new float[size * size * 2];
+        Parallel.For(0, size, y =>
+        {
+            for (int x = 0; x < size; x++)
+            {
+                float r = 0, g = 0;
+                for (int k = -Radius; k <= Radius; k++)
+                {
+                    int o = (y * size + ((x + k) & (size - 1))) * 4;
+                    float w = kernelArray[k + Radius];
+                    r += rgba[o] * w; g += rgba[o + 1] * w;
+                }
+                temp[(y * size + x) * 2] = r; temp[(y * size + x) * 2 + 1] = g;
+            }
+        });
+        Parallel.For(0, size, y =>
+        {
+            for (int x = 0; x < size; x++)
+            {
+                float r = 0, g = 0;
+                for (int k = -Radius; k <= Radius; k++)
+                {
+                    int o = (((y + k) & (size - 1)) * size + x) * 2;
+                    float w = kernelArray[k + Radius];
+                    r += temp[o] * w; g += temp[o + 1] * w;
+                }
+                int d = (y * size + x) * 4;
+                rgba[d] = (byte)Math.Clamp((int)(r + 0.5f), 0, 255);
+                rgba[d + 1] = (byte)Math.Clamp((int)(g + 0.5f), 0, 255);
+            }
+        });
+    }
+
+    /// <summary>The red and green channels of a square RGBA8 level as BC5 blocks; a level under 4 x 4 is padded by repeating its edge texels.</summary>
+    static byte[] EncodeBc5(byte[] rgba, int side)
+    {
+        if (side >= 4) return Meitou.Rendering.Impostors.ImpostorEncoder.EncodeBc5(rgba, side);
+        var padded = new byte[4 * 4 * 4];
+        for (int y = 0; y < 4; y++)
+            for (int x = 0; x < 4; x++)
+                Array.Copy(rgba, (Math.Min(y, side - 1) * side + Math.Min(x, side - 1)) * 4, padded, (y * 4 + x) * 4, 4);
+        return Meitou.Rendering.Impostors.ImpostorEncoder.EncodeBc5(padded, 4);
     }
 
     /// <summary>

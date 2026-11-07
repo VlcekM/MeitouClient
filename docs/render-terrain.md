@@ -30,10 +30,12 @@ where occluders justify it. A depth prepass is extra geometry, not automatically
   `FarShift` (2) less the sampler bias it reads the near slot; otherwise, or without a slot, it reads the far array. For a DDS layer taken as stored,
   both tiers read the file's own mips, so from that level down they are the same texels. A resized layer is filtered separately at each size, so
   a faint seam is possible there (**Unknown** until seen in game).
-- **BC1 normal blocks** (`layerNormal`): a 4 x 4 block of the game's BC1 normal maps holds four colours, so magnified it lights as a flat facet with hard edges.
-  **Verified** on the siwa-test6 sand (displaced ground, DLSS and TAA): with the shading normal set to the smooth terrain normal the facets vanish, with the albedo set to a constant
-  they stay, and the facet size matches a block on screen. Where the sample's level is under 1.5 the near normal is read as a cubic B-spline of level 2 (a texel a block),
-  mixed in from 1.5 to 0. The level is given as the sampler adds its bias, so an upscaler's negative bias keeps it at 2. Detail finer than a block is lost, as in the file.
+- **BC1 normal blocks** (`TerrainTextures.LoadNearNormal`, `Deblock`): a 4 x 4 block of the game's BC1 normal maps holds four colours, so magnified it lights as a flat facet with hard edges.
+  **Verified** on the siwa-test6 sand (displaced ground, DLSS and TAA): the shading normal set to the smooth terrain normal removes the facets, a constant albedo keeps them, and the facet size
+  matches a block on screen. Reading a coarser mip with a spline (an earlier try) only makes bigger world-aligned squares, as that mip is BC1 too. So the near normal layers are decoded at load,
+  smoothed by a separable Gaussian (sigma 1.5 texels, wrapping), their mips made from that and stored as BC5 (x and y; the shader rebuilds z): no block grid is left (**Verified**, same
+  views before and after). Near arrays are 32 bytes a block pair (BC3 + BC5) instead of 24: +33 % (1024 MB at 96 slots became about 1365 MB, **Observed** from the formula). The far arrays stay
+  BC1 as stored (their texels are minified there). Detail finer than a block is not in the file; it is smoothed away, not recovered.
 - Params texels 0 and 1 hold the far indices (the relief code reads these too), texel 1's W the biome's relief factor; texels 13 and 14 hold the near slots, -1 for none.
 - Before this the arrays held a full-size slot per pair within the 30 km material distance: 128 slots, about 1.07 GB, in the Great Desert
   (**Observed**, VRAM pie and log 2026-11-01).
@@ -245,6 +247,16 @@ or save change, and marks are lost when the window moves past them. Vulkan host 
   mesh. The depth prepass runs the same evaluation stage. Under the cache, one march step is `BakeSpan` / 16, up to several times a mark's depth: resolved by the secant step, **Unknown** how well.
 - **Wear** (`TerrainTrailRenderer.Wear`): -ln(left) per game second is 1/900 + wind / 9000 + rain amount / 40, in steps of at least 1% (one quad over the image), and stops while paused.
   The whole window wears alike; ground type does not change it. Tuned on paper.
+
+## Close-up detail
+
+Meitou look, not in the game (`groundDetail`, Tab switch "Ground close-up detail", `GroundRelief.DetailActive`, on by default in Meitou). The layers are as sharp as their textures
+(2048² over a tile), so close to the camera a texel covers many pixels. Where the base layer's level is under 0 (full below -0.5, gone at 1) and the ground is not steep, the shading
+adds three octaves of value noise on a world-space lattice (wavelengths 0.5, 0.25 and 0.125 units = 5, 2.5 and 1.25 cm; a world unit is 10 cm), each rotated by its own angle and
+faded out as a pixel covers more than a third of its wavelength (smoothstep 0.12 to 0.36), so it never aliases and never moves with the camera (**Verified** on siwa-test6 sand,
+same frames before and after: grain and micro relief appear, no block or seam). The noise's slope tilts the shading normal, scaled by the layer's own roughness (its normal's tilt);
+its value modulates the albedo by up to about 5 %. The integer lattice hash keeps its bits at the world's far edges; the float world position itself has a step of 0.016 units out
+there, which is why no octave is finer than 0.125. No textures: nothing to ship, 0 bytes of video memory. Rock cracks and per-material grain are **Unknown** (one generic grain for all).
 
 ## Rocks
 

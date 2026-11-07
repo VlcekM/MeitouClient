@@ -725,6 +725,7 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
             c.WaterHeight = options.Water ? WorldWater.Height : -1e6f;
             c.HalfWorld = (float)WorldLayout.HalfWorldSize;
             c.Debug = options.Debug;
+            c.Detail = GroundRelief.DetailActive ? 1 : 0;
             c.Grid = options.Grid ? 1u : 0u;
             if (patches && TerrainLayerSkip.Enabled) c.CliffEps = TerrainLayerSkip.CliffEps;
             // The interior cut: the patches' cut variants, or a mesh draw given one (DrawMeshes, DrawMeshesIndirect).

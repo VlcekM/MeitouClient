@@ -673,6 +673,7 @@ static partial class TerrainShaders
         uniform float uFarEnd;
         uniform bool uHasGround;       // whole-world ground colour map available
         uniform bool uHasWorldColour;  // whole-world colour map available
+        uniform float uDetail;         // 1: the close-up detail (GroundRelief.DetailActive), 0 off
         uniform float uCliffEps;       // the cliff weights up to this are dropped, the next as much ramp in (0: every nonzero weight counts)
 
         uniform sampler2DArray uDiffuse;     // near arrays: the pairs near the eye at full size, by near slot (params texels 13 and 14; -1 none)
@@ -784,27 +785,13 @@ static partial class TerrainShaders
         // A layer from the near arrays where its pair has a slot there and the sample's level is under uFarLod, else from the far arrays: at uFarLod and
         // beyond the far arrays' levels are the near arrays' (docs/render-terrain.md, "Layer arrays").
         vec4 layerDiffuse(GradCoord c, float near, float far) { return near >= 0.0 && c.lod < uFarLod ? tex(uDiffuse, c, near) : tex(uDiffuseFar, c, far); }
-        // The near normal map smoothed over its compression blocks. The game's normal maps are BC1: each 4 x 4 block holds four colours, so magnified they lit as
-        // flat, hard-edged facets (visible on displaced sand). Where a block spans more than a pixel or two (the sample's level under 1.5) it is read as a cubic
-        // B-spline of level 2 (a texel a block, four bilinear taps), mixed in from level 1.5 to 0. The level is given as the sampler adds its bias
-        // (an upscaler's negative one: uFarLod = 2 less the bias), so it stays level 2.
-        vec4 bsplineNormal(vec2 p, float layer)
-        {
-            vec2 size = vec2(textureSize(uNormal, 2).xy), t = p * size - 0.5, f = fract(t), i = t - f;
-            vec2 f2 = f * f, f3 = f2 * f;
-            vec2 w0 = (1.0 - 3.0 * f + 3.0 * f2 - f3) / 6.0, w1 = (4.0 - 6.0 * f2 + 3.0 * f3) / 6.0, w2 = (1.0 + 3.0 * f + 3.0 * f2 - 3.0 * f3) / 6.0, w3 = f3 / 6.0;
-            vec2 g0 = w0 + w1, g1 = w2 + w3;
-            vec2 h0 = (i - 0.5 + w1 / g0) / size, h1 = (i + 1.5 + w3 / g1) / size;
-            float level = uFarLod;
-            return g0.y * (g0.x * textureLod(uNormal, vec3(h0.x, h0.y, layer), level) + g1.x * textureLod(uNormal, vec3(h1.x, h0.y, layer), level))
-                 + g1.y * (g0.x * textureLod(uNormal, vec3(h0.x, h1.y, layer), level) + g1.x * textureLod(uNormal, vec3(h1.x, h1.y, layer), level));
-        }
+        // A layer's normal: the near arrays hold BC5 (x and y, deblocked at load: TerrainTextures.LoadNearNormal), z is rebuilt here; the far arrays BC1 as stored.
         vec4 layerNormal(GradCoord c, float near, float far)
         {
             if (near < 0.0 || c.lod >= uFarLod) return tex(uNormalFar, c, far);
             vec4 n = tex(uNormal, c, near);
-            float soft = 1.0 - smoothstep(0.0, 1.5, c.lod);
-            return soft > 0.0 ? mix(n, bsplineNormal(c.p, near), soft) : n;
+            vec2 xy = n.rg * 2.0 - 1.0;
+            return vec4(n.rg, sqrt(max(1.0 - dot(xy, xy), 0.0)) * 0.5 + 0.5, 1.0);
         }
 
         // A layer weight with its small values dropped: 0 up to eps, rising smoothly to the weight itself at twice eps (continuous, so no seam where a
@@ -852,6 +839,8 @@ static partial class TerrainShaders
         // displaced); the view ray marches what is finer, the height less its level at that spacing, as much as 1 - reliefWhole (all of it again where the
         // displacement fades out). Set per pixel in pixelRelief().
         float reliefSegment = 0.0, reliefWhole = 1.0;
+        // The finest base-layer level the pixel's biomes read (a negative level: a texel covers more than a pixel), for the close-up detail; 9: none read (the material cache).
+        float detailLod = 9.0;
 
         // The march's steps (view ray, sun), fewer with distance (set in pixelRelief(): high 16 and 8 near, 6 and 3 at the parallax's end; medium 6 and 3
         // to 3 and 2; low 4 and 2 to 2 and 1).
@@ -1126,6 +1115,7 @@ static partial class TerrainShaders
             GradCoord base = groundCoord(sB.xy), grass = groundCoord(sB.zw), slopeUv = groundCoord(sA.xy), dirt = groundCoord(sC.xy), road = groundCoord(sC.zw);
             float far = clamp(distance * fade.a - 0.3, 0.0, 1.0);
 
+            detailLod = min(detailLod, base.lod);
             // The march's moves (pixelRelief; none without it, and adding 0 leaves a coordinate as it was).
             base.p += relief.ground * sB.xy; grass.p += relief.ground * sB.zw; slopeUv.p += relief.ground * sA.xy; dirt.p += relief.ground * sC.xy; road.p += relief.ground * sC.zw;
 
@@ -1171,6 +1161,50 @@ static partial class TerrainShaders
             float h = clamp(y / 3500.0, 0.0, 1.0);
             vec3 low = vec3(0.76, 0.70, 0.50), mid = vec3(0.55, 0.50, 0.36), high = vec3(0.62, 0.60, 0.58);
             return h < 0.5 ? mix(low, mid, h * 2.0) : mix(mid, high, h * 2.0 - 1.0);
+        }
+
+        // ---- the close-up detail (docs/render-terrain.md "Close-up detail") ----------------------------------------------------------------
+        // Value noise on a world-space lattice with its derivatives: the same at every frame and from every angle. The lattice hash is an integer one, so it
+        // does not lose bits at the world's far edges (a world unit is 10 cm; cells are 12 to 50 cm).
+        float detailHash(ivec2 i)
+        {
+            uvec2 u = uvec2(i + ivec2(1 << 20));
+            uint h = u.x * 1597334677u ^ u.y * 3812015801u;
+            h = (h ^ (h >> 15)) * 2246822519u;
+            h = (h ^ (h >> 13)) * 3266489917u;
+            return float(h ^ (h >> 16)) * (2.0 / 4294967295.0) - 1.0;
+        }
+        vec3 detailNoise(vec2 x)
+        {
+            ivec2 i = ivec2(floor(x));
+            vec2 f = fract(x), u = f * f * f * (f * (f * 6.0 - 15.0) + 10.0), du = 30.0 * f * f * (f * (f - 2.0) + 1.0);
+            float a = detailHash(i), b = detailHash(i + ivec2(1, 0)), c = detailHash(i + ivec2(0, 1)), d = detailHash(i + ivec2(1, 1));
+            float k1 = b - a, k2 = c - a, k4 = a - b - c + d;
+            return vec3(a + k1 * u.x + k2 * u.y + k4 * u.x * u.y, du * vec2(k1 + k4 * u.y, k2 + k4 * u.x));
+        }
+
+        // Fine grain and micro relief for the ground where its layers are magnified (the layer's texel covers more than a pixel or two): three octaves of
+        // wavelengths 0.5, 0.25 and 0.125 units (5, 2.5 and 1.25 cm), each rotated by its own angle (no lattice line runs the same way twice), each faded out as a pixel (pixel: the
+        // ground's footprint in units) covers more than a third of its wavelength, so nothing aliases and nothing shimmers. The normal is tilted by the noise's
+        // slope in proportion to the layer's own roughness (its normal's tilt), the colour by its value.
+        void groundDetail(inout vec3 normal, inout vec3 albedo, vec2 world, float pixel, float roughness)
+        {
+            vec2 slope = vec2(0.0);
+            float grain = 0.0;
+            const float wavelength[3] = float[3](0.5, 0.25, 0.125), strength[3] = float[3](0.10, 0.08, 0.06);
+            const mat2 turn[3] = mat2[3](mat2(1.0, 0.0, 0.0, 1.0), mat2(0.8, 0.6, -0.6, 0.8), mat2(0.28, 0.96, -0.96, 0.28));
+            for (int k = 0; k < 3; k++)
+            {
+                float visible = 1.0 - smoothstep(0.12 * wavelength[k], 0.36 * wavelength[k], pixel);
+                if (visible <= 0.0) continue;
+                float f = 1.0 / wavelength[k];
+                vec2 p = turn[k] * (world - vec2(7.31, 3.17) * float(k)) * f;
+                vec3 v = detailNoise(p);
+                slope += visible * strength[k] * (transpose(turn[k]) * v.yz) * f * wavelength[k];
+                grain += visible * strength[k] * v.x;
+            }
+            normal = normalize(normal + vec3(-slope.x, 0.0, -slope.y) * roughness);
+            albedo *= 1.0 + 0.6 * grain;
         }
 
         void main()
@@ -1421,6 +1455,20 @@ static partial class TerrainShaders
                 reliefShade = mix(cacheShade, reliefShade, cacheLive);
                 shadingNormal = normalize(mix(cacheNormal, shadingNormal, cacheLive));
             }
+            if (uDetail > 0.0 && nearWeight > 0.0 && n.y > 0.5)
+            {
+                // Where the base layer's texel covers more than a pixel or two (level under 0 to -0.5): the footprint of a pixel on the ground, in units.
+                float wanted = (1.0 - smoothstep(-0.5, 1.0, detailLod)) * nearWeight;
+                if (wanted > 0.0)
+                {
+                    vec3 detailNormal = shadingNormal;
+                    vec3 detailAlbedo = albedo.rgb;
+                    float roughness = 0.5 + 2.0 * clamp(length(shadingNormal.xz - n.xz), 0.0, 0.5);
+                    groundDetail(detailNormal, detailAlbedo, texWorld.xz, sqrt(length(texDx.xz) * length(texDy.xz)), roughness);
+                    shadingNormal = normalize(mix(shadingNormal, detailNormal, wanted));
+                    albedo.rgb = mix(albedo.rgb, detailAlbedo, wanted);
+                }
+            }
             if (nearWeight < 1.0)
             {
                 // Far: the blended biome ground colour (what the textured layers fade to), tinted by the colour map.
@@ -1611,6 +1659,7 @@ static partial class TerrainShaders
             float trailDepth;
             float trailMesh;
             vec4 trailWindow;
+            float detail;
         } terrain;
 
         """;
@@ -1651,7 +1700,7 @@ static partial class TerrainShaders
         ["uFieldTiles"] = "utextures2D[terrain.fieldTiles]", ["uFieldOrigin"] = "terrain.fieldOrigin", ["uFieldTile"] = "terrain.fieldTile",
         ["uFieldColumns"] = "terrain.fieldColumns", ["uFieldCount"] = "terrain.fieldCount", ["uMaxDepth"] = "terrain.maxDepth", ["uTargetSlope"] = "terrain.targetSlope", ["uScaleFollow"] = "terrain.scaleFollow", ["uCliffScale"] = "terrain.cliffScale", ["uRefine"] = "terrain.refine", ["uPixelScale"] = "terrain.pixelScale", ["uBroadCut"] = "terrain.broadCut", ["uReliefQuality"] = "terrain.reliefQuality",
         ["uBakeAlbedo"] = "textures2DArray[terrain.bakeAlbedo]", ["uBakeNormal"] = "textures2DArray[terrain.bakeNormal]", ["uBakeLevels"] = "terrain.bakeLevels", ["uBakeOrigin"] = "terrain.bakeOrigin", ["uBakeReach"] = "terrain.bakeReach",
-        ["uTrails"] = "textures2D[terrain.trails]", ["uTrailDepth"] = "terrain.trailDepth", ["uTrailMesh"] = "terrain.trailMesh", ["uTrailWindow"] = "terrain.trailWindow",
+        ["uTrails"] = "textures2D[terrain.trails]", ["uTrailDepth"] = "terrain.trailDepth", ["uTrailMesh"] = "terrain.trailMesh", ["uTrailWindow"] = "terrain.trailWindow", ["uDetail"] = "terrain.detail",
     };
 
     const string DerivativeControl = "#extension GL_ARB_derivative_control : require\n";
@@ -1873,7 +1922,7 @@ static partial class TerrainShaders
 
 /// <summary>The C# side of <see cref="TerrainShaders.ConstantsBlock"/> (std140; offsets checked against the reflection by a test). GLSL bools
 /// are 32-bit (0 / 1).</summary>
-[System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Explicit, Size = 976)]
+[System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Explicit, Size = 992)]
 struct TerrainConstants
 {
     [System.Runtime.InteropServices.FieldOffset(0)] public System.Numerics.Vector4 CoarseRect;
@@ -1956,6 +2005,7 @@ struct TerrainConstants
     [System.Runtime.InteropServices.FieldOffset(952)] public float TrailDepth;
     [System.Runtime.InteropServices.FieldOffset(956)] public float TrailMesh;
     [System.Runtime.InteropServices.FieldOffset(960)] public System.Numerics.Vector4 TrailWindow;
+    [System.Runtime.InteropServices.FieldOffset(976)] public float Detail;
 }
 
 /// <summary>The material cache's levels for <see cref="TerrainConstants.BakeOrigin"/> (std140 <c>vec4[4]</c>): x, z of the first texel's corner, the texel, the side (0: not valid).</summary>
