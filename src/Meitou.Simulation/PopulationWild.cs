@@ -165,7 +165,7 @@ public sealed partial class PopulationSystem
         var counts = new Dictionary<string, int>(StringComparer.Ordinal);
         void Add(string id) => counts[id] = counts.GetValueOrDefault(id) + 1;
         foreach (var squad in world.Squads.All)
-            if (squad.Town < 0 && squad.Members.Any(m => Living(world, m))) Add(squad.TemplateId);
+            if (squad.Members.Any(m => Living(world, m))) Add(squad.TemplateId);
         foreach (var p in world.Platoons.All)
         {
             if (p.SquadId >= 0 || p.Dead) continue;

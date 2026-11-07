@@ -66,13 +66,13 @@ public sealed class WeatherAreas
 
     /// <summary>
     /// The colour (0xRRGGBB) of the map's own pixel at a world position, as the spawn code reads it (<c>FUN_1408f4d70</c>, <b>Verified</b>: the pixel is
-    /// <c>trunc((coordinate + 147465) / (294930 / width))</c> per axis, clamped to the image; black means no group). Null when the map keeps no pixels.
+    /// <c>trunc((coordinate + 147456) / (294912 / width))</c> per axis, clamped to the image; black means no group). Null when the map keeps no pixels.
     /// </summary>
     public int? PixelColourAt(float x, float z)
     {
         if (pixels is null) return null;
         float span = Cells * CellSize / pixelSide;
-        int px = Math.Clamp((int)((x + CameraOrigin) / span), 0, pixelSide - 1), pz = Math.Clamp((int)((z + CameraOrigin) / span), 0, pixelSide - 1);
+        int px = Math.Clamp((int)((x + MapOrigin) / span), 0, pixelSide - 1), pz = Math.Clamp((int)((z + MapOrigin) / span), 0, pixelSide - 1);
         return pixels[pz * pixelSide + px];
     }
 
@@ -87,6 +87,8 @@ public sealed class WeatherAreas
         (Math.Clamp((int)((x + CameraOrigin) / CellSize), 0, Cells - 1), Math.Clamp((int)((z + CameraOrigin) / CellSize), 0, Cells - 1));
 
     const float CameraOrigin = 147465f;
+    /// <summary>The areas map object's own corner (<b>Verified</b>: <c>FUN_1408fb580</c> builds it from -147456 to 147456 on both axes, <c>FUN_140408fa0</c>).</summary>
+    const float MapOrigin = 147456f;
 
     public static bool InMap(int cx, int cz) => (uint)cx < Cells && (uint)cz < Cells;
 
