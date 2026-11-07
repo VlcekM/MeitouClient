@@ -536,6 +536,9 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
                     if (gc.Carrying == a.Target) { a.Phase = ArrestPhase.Lift; return true; }
                     if (gc.InCombat) return true;   // still trading blows (the KO tick, a squad mate): wait
                     if (NeedsStrip(a, tc)) { BeginStrip(a); return true; }   // 203 needs 118 target unarmed: its provider 181 comes before the lift
+                    // Not from an ally who carries it already, nor with no cage to take it to: a lift then would only be dropped again, and guards
+                    // passed the bodies round a full station (#339; the original's arrest goal wants a free cage, docs/game/economy.md "Arrest goal").
+                    if (CarriedByAlly(world, gc, tc) || !CageFor(world, a, g)) return End(world, a, ArrestEventKind.GaveUp);
                     // Row 240 Capture Target is the chain's lift (snatch byte set): it takes a body another carries too.
                     if (Carry.BeginPickUp(world, g, a.Target, source: TaskSource.Npc, row: TaskType.LIFT_PERSON_SNATCHING_ALLOWED_IN_TOWN_ONLY)) { a.Phase = ArrestPhase.Lift; a.Waited = 0; return true; }
                     a.Waited += dt;
@@ -682,6 +685,17 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
         TaskStart.Walk(world, g, cage.Position, SpeedMode.Free, TaskType.FIND_CAGE_AND_PUT_IN_IF_BOUNTY, TaskSource.Npc);
         return true;
     }
+
+    /// <summary>Whether a free cage the arrest could take its captive to exists (<see cref="ToCage"/>'s finder).</summary>
+    bool CageFor(World world, Arrest a, int g)
+    {
+        var gc = world.Characters.Cold(g)!;
+        return world.Fixtures.FindCage(world, gc, world.Characters.Next[g].Position, gc.Ai?.Squad.Ai?.Home?.Key, f => Reserved(f, a)) is not null;
+    }
+
+    /// <summary>Whether <paramref name="target"/> is carried by someone of the guard's faction.</summary>
+    static bool CarriedByAlly(World world, CharacterCold guard, CharacterCold target) =>
+        world.Characters.TryResolveNext(target.CarriedBy, out int carrier) && world.Characters.Cold(carrier) is { } c && c != guard && c.Faction == guard.Faction;
 
     bool Reserved(Fixture f, Arrest? self)
     {

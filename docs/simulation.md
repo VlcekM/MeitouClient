@@ -991,7 +991,7 @@ Arrests, the recognition meter and the marker are hashed only while set. What a 
 - **Arrest**: attack until the target is down (combat ends the fight; nobody beats a downed target), lift
   (`CarrySystem.BeginPickUp`), `FindCage` from the guard (his squad's home building; other arrests' cages reserved), walk,
   and at the cage (`FixtureRegistry.AtCage`: within its `use range`, doubled standing, and under 15 above or below it) `LetGo` + `Imprison` (`prison time` CONSTANTS). The fight
-  stopping with the target up re-orders it within 800, else he gives up; no free cage: he drops the captive (engine). After 3 walks that end short the cage is
+  stopping with the target up re-orders it within 800, else he gives up; no free cage: he drops the captive (engine); a downed target is not lifted at all with no free cage, nor from an ally who carries it (engine: guards passed bodies round a full station, #339). After 3 walks that end short the cage is
   unreachable for his faction for 24 game hours (`MarkUnreachable`, as the kidnapper's and the town duty's) and he drops the captive (engine).
 - **Cage walks** (arrest, kidnap, town duty 112 / 281; engine): a walk onto the cage's floor (`TaskStart.Walk` with the cage's position, `MovementSystem.GoToFloor`), so a cage on
   an upper storey is reached by the stairs. A flat goal resolves on the walker's own storey and ends under the cage, out of `AtCage`'s height. **Observed** (#314 save, Sho-Battai
