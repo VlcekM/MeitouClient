@@ -32,6 +32,10 @@ sealed partial class GameHost
     IGpuContext? trailContext;
     World? trailsFor;
     int trailFrame;
+    long trailLast;
+
+    /// <summary>The real seconds since the last frame the trails were updated (0 on the first), for the capsule speeds.</summary>
+    float trailDt;
     readonly Dictionary<long, Walker> walkers = [];
 
     /// <summary>A character's last frame: where its body was, its capsules' contacts (<see cref="BodyContact"/>) and the way walked since the last fallback mark.</summary>
@@ -61,6 +65,9 @@ sealed partial class GameHost
             walkers.Clear();
         }
         trailFrame++;
+        long now = System.Diagnostics.Stopwatch.GetTimestamp();
+        trailDt = trailLast == 0 ? 0 : Math.Clamp((now - trailLast) / (float)System.Diagnostics.Stopwatch.Frequency, 0.0005f, 0.1f);
+        trailLast = now;
         IndexPrevious();
         var focus = camera.Target;
         float alpha = session.SimulationAlpha;
@@ -87,7 +94,7 @@ sealed partial class GameHost
         float stepped = moved.Length();
         bool animal = c.Appearance!.Animal is not null;
         bool lying = c.Down || c.StayingLow || c.Ragdoll is not null || c.Body is { Crawling: true };
-        if (BodyContact(trails, ground, key, ref w, body, animal, !lying, continues ? stepped : 0, continues)) return;
+        if (BodyContact(trails, ground, key, ref w, body, animal, !lying, continues && trailDt > 0 ? stepped / trailDt : 0, continues)) return;
         if (!continues || stepped < 1e-4f) return;
         var along = moved / stepped;
         if (c.Down || c.StayingLow || c.Body is { Crawling: true }) Drag(trails, ground, ref w, body, along, stepped);

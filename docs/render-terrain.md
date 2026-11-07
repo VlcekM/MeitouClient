@@ -225,14 +225,16 @@ or save change, and marks are lost when the window moves past them. Vulkan host 
   Shown fading over the window's outer tenth. A frame with nothing to change records nothing.
 - **Marks** (`GameHost.Trails`, within that reach, not carried, in bed or caged): every character with a pose leaves marks from its **posed body as capsules**
   (`CharacterRenderer.ContactCapsules`: one per skinned bone, round the vertices it moves most, from the mesh's bone boxes; boxes under 0.5 units, fingers and toes, are left out).
-  Foot shape, paw size and a stick-footed race's tips all come from that geometry, so a modded race needs no rule of its own. A capsule whose underside is within 0.5 units (5 cm) of the
-  terrain under its ends and under 2.5 cm (sink over 0.5 of 1) is cut at that plane: a stadium along its axis as wide as the cut (at least 0.9 of its radius and 5 cm, at most 1.2 of
-  it), sunk by how close it is times 0.9 to 1 by its radius. The capsule's speed over the frame against the body's own step: over 1.6 times (+0.25 units) it **swings**: nothing;
-  over 0.3 times (+0.12) it **slides**; else it **rests**. A resting part **presses** once, again only after moving 0.3 units or sinking 0.15 deeper, so a lying body stamps once
-  (and a dropped one leaves its imprint where it lands) and a standing character prints where each foot lands. A sliding part of a lying body (crawling, down, dead, ragdoll) **ploughs**: a
-  swept stadium from last frame's contact (heaped front and sides, feathered rear so successive sweeps join); upright characters and animals never plough. A character with no pose (not
-  drawn) falls back to the stride's prints and the old furrow. No stamp above 2.5 units over the terrain (floors, roofs) or under the water line. **Observed** only on offscreen frames; the
-  thresholds are tuned by eye. CPU **Observed**: 0.11 ms per frame for 37 characters (about 3 us each); the GPU draws a few quads.
+  A capsule whose underside is within 0.5 units (5 cm) of the terrain under its ends and under 2.5 cm (sink over 0.5 of 1) is cut at that plane. Its speed over the ground, per second
+  (frame rate does not matter), against the body's own: over 1.2 times (+3 units/s) it **swings**: nothing; over 0.4 times (+1 unit/s) it **slides**; else it is **planted**.
+  A planted part **prints once**, and never again until it has swung, slid or left the ground (a character turning on the spot does not rewrite its prints; a lying body stamps once).
+  **Upright** characters (standing, walking, all animals) only press: among their contacts one with a lower contact of the same body close beside it (a shin over a foot) is left out; a
+  capsule lying flat and over 1.4 times as long as wide is a **foot with a sole** (the old sole stamp: narrow heel, broad ball, its toe away from the body, as long as the capsule), any
+  other is a **round print** as wide as the contact (paw, hoof, a stick foot's tip). Foot and paw prints carry the image-fixed noise (ragged edge, uneven depth). **Lying** bodies
+  (crawling, down, dead, ragdoll) press a stadium per part (rims first, then cores, so overlapping parts leave one bowl) and **plough** (a swept stadium from last frame's contact,
+  heaped front and sides, feathered rear) where a part slides. A character with no pose (not drawn) falls back to the stride's prints and the old furrow. No stamp above 2.5 units over
+  the terrain (floors, roofs) or under the water line. **Observed** only on offscreen frames; the thresholds are tuned by eye. CPU **Observed**: 0.11 ms per frame for 37 characters
+  (about 3 us each); the GPU draws a few quads.
 - **Shape**: body stadia draw as two passes after the other marks (all rims, then all cores), so parts of one body that overlap leave one bowl, not ridges. Edge, depth and rim
   are modulated by value noise fixed to the image's texels (4, 16 and 64 texel cells), so every stamp on the same ground gets the same irregularity: no flicker, no seams between sweeps.
 - **Ground** (`GroundSurfaces`, the footsteps' GroundType at the mark): sand, mud and snow in full, dirt at 0.45, nothing else. A mark under a low building floor is stamped but hidden.
