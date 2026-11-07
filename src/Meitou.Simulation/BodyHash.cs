@@ -8,7 +8,12 @@ static class BodyHash
     public static void Add(ref StateHasher h, CharacterStats? stats, MedicalState? medical)
     {
         if (stats is null) h.Add(-1);
-        else foreach (float v in stats.ToArray()) h.Add(v);
+        else
+        {
+            foreach (float v in stats.ToArray()) h.Add(v);
+            // Debug god mode keeps the real values aside; they come back on Unboost, so they are state. Only while boosted, so normal hashes are unchanged.
+            if (stats.GodOriginal is { } original) { h.Add(0x476F6444); foreach (float v in original) h.Add(v); }
+        }
         if (medical is null)
         {
             h.Add(-1);

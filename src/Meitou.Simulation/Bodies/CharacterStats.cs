@@ -51,6 +51,9 @@ public sealed class CharacterStats
     /// <summary>Whether the debug god mode (<see cref="Boost"/>) holds this character's stats raised.</summary>
     public bool Boosted => godOriginal is not null;
 
+    /// <summary>The values <see cref="Unboost"/> restores, or null while not boosted (state hash only).</summary>
+    internal float[]? GodOriginal => godOriginal;
+
     /// <summary>
     /// Debug god mode (Meitou only): keeps the current values for <see cref="Unboost"/> and sets every stat that has storage to <paramref name="value"/>. Does nothing while already boosted,
     /// so the first values stay the ones that come back. Training while boosted changes nothing visible (the XP curve gives a stat this high no gain) and anything it adds is dropped by <see cref="Unboost"/>.
