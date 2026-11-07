@@ -71,11 +71,14 @@ public static class GroundRelief
 
     /// <summary>
     /// Biomes whose relief is scaled (BIOMES string id, so a translation mod keeps it; the rest 1): ground and cliff depth times this. ForestLand, all
-    /// of Shark's ground: its layers come out 37 to 85 cm deep, the swamp round it about 26 (docs/render-terrain.md, "Depth").
+    /// of Shark's ground: its layers come out 37 to 85 cm deep, the swamp round it about 26; Canyonland FlatTop's crumpled rock ground reads as
+    /// too deep (docs/render-terrain.md, "Depth").
     /// </summary>
     public static readonly IReadOnlyDictionary<string, float> BiomeDepth = new Dictionary<string, float>
     {
         ["4442-Newwworld.mod"] = 1 / 3f,   // ForestLand
+        ["43874-Newwworld.mod"] = 0.5f,    // Canyonland FlatTop
+        ["2953-Newwworld.mod"] = 0.5f,     // Old Pits (FlatTop's NewGround base)
     };
 
     /// <summary>A biome's <see cref="BiomeDepth"/> factor, 1 when it has none.</summary>
