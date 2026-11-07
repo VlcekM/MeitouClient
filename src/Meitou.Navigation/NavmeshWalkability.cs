@@ -81,6 +81,18 @@ public sealed partial class NavmeshWalkability : IWalkability
 
     public float TerrainHeight(float x, float z) => Ground(world, x, z);
 
+    /// <summary>How far under a character a walkable collision surface is still the floor it stands on in the water (engine choice: the 5-unit climb; Observed: the Lost Armory's floor 0.3 under its mesh).</summary>
+    public const float WaterFloorReach = 5;
+
+    /// <inheritdoc cref="IWalkability.WaterBed"/>
+    public float WaterBed(float x, float z, float y)
+    {
+        var w = world;
+        float terrain = Ground(w, x, z);
+        bool floor = w.TrySurfaceNear(x, z, y, WaterFloorReach, out float s, out bool beside) && !beside && s > terrain;
+        return floor ? s : terrain;
+    }
+
     public bool IsWalkable(float x, float z)
     {
         var w = world;

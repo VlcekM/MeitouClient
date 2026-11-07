@@ -10,7 +10,7 @@ public sealed partial class World
     internal EffectBuffer BufferAt(int i) => buffers[i];
 
     /// <summary>
-    /// Where a character is drawn: a character on the water, which the simulation keeps on the navmesh's flat surface, is lowered to the seabed or, swimming, to <see cref="Bodies.Speed.WadingHeight"/>
+    /// Where a character is drawn: a character on the water, which the simulation keeps on the navmesh's flat surface, is lowered to what it stands on (<see cref="IWalkability.WaterBed"/>: a sunken floor, else the seabed) or, swimming, to <see cref="Bodies.Speed.WadingHeight"/>
     /// (the same surface test as <see cref="MovementSystem"/>'s water state: within <see cref="Bodies.Speed.WaterSlack"/> of the water level). Not a carried or a downed body.
     /// One lying in a bed is raised by <see cref="BedLift"/>.
     /// </summary>
@@ -18,8 +18,8 @@ public sealed partial class World
     {
         if (cold?.InSomething == Locks.HeldState.Bed) return at with { Y = at.Y + BedLift };
         if (cold is not { Race: { } race, Medical: not { Incapacitated: true } } || !cold.CarriedBy.IsNone || at.Y > Meitou.Data.World.WorldWater.Height + Bodies.Speed.WaterSlack) return at;
-        float terrain = Walkability.TerrainHeight(at.X, at.Z);
-        return terrain < at.Y ? at with { Y = Bodies.Speed.WadingHeight(terrain, 1, race.Swims) } : at;
+        float bed = Walkability.WaterBed(at.X, at.Z, at.Y);
+        return bed < at.Y ? at with { Y = Bodies.Speed.WadingHeight(bed, 1, race.Swims) } : at;
     }
 
     /// <summary>

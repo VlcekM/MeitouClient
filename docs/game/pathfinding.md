@@ -123,9 +123,9 @@ Every move of the nav agent, the animation-driven one (root motion, mode 3) incl
 - Animation: category 4 (SWIMMING) records (`swim`, `swim carry`, `swim carry left`, `swim idle`) are the swimming clips; getting up in deep water plays `swim idle`.
 
 **Observed/engine choice:** the original's Y is the height it stands at, in water the seabed; Meitou keeps a character on the navmesh's flat water surface (Y about 100), so the depth is read from
-the terrain under it while Y is within 2 of the water level (a deck above that is dry), and size is taken as 1. Only the drawn height follows the original's idea (`World.DrawnPosition`,
+what it stands on while Y is within 2 of the water level (a deck above that is dry): a walkable collision surface within 5 under it (`WaterBed`; a building floor under the water level, Observed 97.7 at the Lost Armory, #345, wades in state 1 as the original's stand height gives), else the terrain, and size is taken as 1. Only the drawn height follows the original's idea (`World.DrawnPosition`,
 `Speed.WadingHeight`): the seabed, and for a swimmer never below 100 - 15g = 85, exactly where the deep state begins, so wading and swimming join without a jump. **Observed** (`male_skeleton`): the swim clips' `Bip01` sits
-about 12 above the origin (`swim2` +2 over the 9.99 binding height), so a swimmer whose origin is on the surface floats; at 85 its pelvis is about 3 under the surface. A deck within 2 of the water level counts as water (engine limit).
+about 12 above the origin (`swim2` +2 over the 9.99 binding height), so a swimmer whose origin is on the surface floats; at 85 its pelvis is about 3 under the surface. A deck within 2 of the water level counts as shallow water, as the original's stand height would.
 **Unknown:** what `+0x2f8` (nonzero returns 0) and `+0x3d4` (carried) of the character are exactly; swim offset (`+0x68`) use; the HUD/AI `me swim` gating
 ([ai-tasks.md](ai-tasks.md)) and animals' swimming.
 

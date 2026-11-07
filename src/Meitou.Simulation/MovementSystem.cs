@@ -1209,13 +1209,13 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
 
     /// <summary>
     /// The water state of a character (<see cref="Speed.WaterState"/>, a race's own characters only, not a carried body): the original reads the height it stands at, which in water is the
-    /// seabed, while here a character on the water keeps the navmesh's flat water surface for its height, so the depth is taken from the terrain below while it is at the surface
-    /// (<see cref="Speed.WaterSlack"/> over the water level; a deck or floor higher up counts as dry). The race's size scale is taken as 1 (what humans have, <b>Observed</b>).
+    /// seabed, while here a character on the water keeps the navmesh's flat water surface for its height, so the depth is taken from what it stands on below (<see cref="IWalkability.WaterBed"/>: a floor just
+    /// under it, else the terrain) while it is at the surface (<see cref="Speed.WaterSlack"/> over the water level; a deck or floor higher up counts as dry). The race's size scale is taken as 1 (what humans have, <b>Observed</b>).
     /// </summary>
     internal static int WaterStateAt(IWalkability walk, Vector3 at, CharacterCold cold)
     {
         if (cold.Race is not { } race || !cold.CarriedBy.IsNone) return 0;
-        float standY = at.Y <= WorldWater.Height + Speed.WaterSlack ? MathF.Min(at.Y, walk.TerrainHeight(at.X, at.Z)) : at.Y;
+        float standY = at.Y <= WorldWater.Height + Speed.WaterSlack ? MathF.Min(at.Y, walk.WaterBed(at.X, at.Z, at.Y)) : at.Y;
         return Speed.WaterState(standY, 1, race.Swims);
     }
 

@@ -19,6 +19,7 @@ sealed class NavAdapter(NavmeshWalkability nav) : IAgentWalkability, Meitou.Simu
     public float GroundHeight(float x, float z) => nav.GroundHeight(x, z);
     public bool IsWalkable(float x, float z) => nav.IsWalkable(x, z);
     public float TerrainHeight(float x, float z) => nav.TerrainHeight(x, z);
+    public float WaterBed(float x, float z, float y) => nav.WaterBed(x, z, y);
     public float GroundHeight(float x, float z, float nearY) => nav.GroundHeight(x, z, nearY);
     public bool IsWalkable(float x, float z, float nearY) => nav.IsWalkable(x, z, nearY);
     public bool TryStand(float x, float z, float nearY, out float y) => nav.TryStand(x, z, nearY, out y);
