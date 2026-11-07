@@ -30,6 +30,10 @@ where occluders justify it. A depth prepass is extra geometry, not automatically
   `FarShift` (2) less the sampler bias it reads the near slot; otherwise, or without a slot, it reads the far array. For a DDS layer taken as stored,
   both tiers read the file's own mips, so from that level down they are the same texels. A resized layer is filtered separately at each size, so
   a faint seam is possible there (**Unknown** until seen in game).
+- **BC1 normal blocks** (`layerNormal`): a 4 x 4 block of the game's BC1 normal maps holds four colours, so magnified it lights as a flat facet with hard edges.
+  **Verified** on the siwa-test6 sand (displaced ground, DLSS and TAA): with the shading normal set to the smooth terrain normal the facets vanish, with the albedo set to a constant
+  they stay, and the facet size matches a block on screen. Where the sample's level is under 1.5 the near normal is read as a cubic B-spline of level 2 (a texel a block),
+  mixed in from 1.5 to 0. The level is given as the sampler adds its bias, so an upscaler's negative bias keeps it at 2. Detail finer than a block is lost, as in the file.
 - Params texels 0 and 1 hold the far indices (the relief code reads these too), texel 1's W the biome's relief factor; texels 13 and 14 hold the near slots, -1 for none.
 - Before this the arrays held a full-size slot per pair within the 30 km material distance: 128 slots, about 1.07 GB, in the Great Desert
   (**Observed**, VRAM pie and log 2026-11-01).

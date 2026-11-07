@@ -784,7 +784,28 @@ static partial class TerrainShaders
         // A layer from the near arrays where its pair has a slot there and the sample's level is under uFarLod, else from the far arrays: at uFarLod and
         // beyond the far arrays' levels are the near arrays' (docs/render-terrain.md, "Layer arrays").
         vec4 layerDiffuse(GradCoord c, float near, float far) { return near >= 0.0 && c.lod < uFarLod ? tex(uDiffuse, c, near) : tex(uDiffuseFar, c, far); }
-        vec4 layerNormal(GradCoord c, float near, float far) { return near >= 0.0 && c.lod < uFarLod ? tex(uNormal, c, near) : tex(uNormalFar, c, far); }
+        // The near normal map smoothed over its compression blocks. The game's normal maps are BC1: each 4 x 4 block holds four colours, so magnified they lit as
+        // flat, hard-edged facets (visible on displaced sand). Where a block spans more than a pixel or two (the sample's level under 1.5) it is read as a cubic
+        // B-spline of level 2 (a texel a block, four bilinear taps), mixed in from level 1.5 to 0. The level is given as the sampler adds its bias
+        // (an upscaler's negative one: uFarLod = 2 less the bias), so it stays level 2.
+        vec4 bsplineNormal(vec2 p, float layer)
+        {
+            vec2 size = vec2(textureSize(uNormal, 2).xy), t = p * size - 0.5, f = fract(t), i = t - f;
+            vec2 f2 = f * f, f3 = f2 * f;
+            vec2 w0 = (1.0 - 3.0 * f + 3.0 * f2 - f3) / 6.0, w1 = (4.0 - 6.0 * f2 + 3.0 * f3) / 6.0, w2 = (1.0 + 3.0 * f + 3.0 * f2 - 3.0 * f3) / 6.0, w3 = f3 / 6.0;
+            vec2 g0 = w0 + w1, g1 = w2 + w3;
+            vec2 h0 = (i - 0.5 + w1 / g0) / size, h1 = (i + 1.5 + w3 / g1) / size;
+            float level = uFarLod;
+            return g0.y * (g0.x * textureLod(uNormal, vec3(h0.x, h0.y, layer), level) + g1.x * textureLod(uNormal, vec3(h1.x, h0.y, layer), level))
+                 + g1.y * (g0.x * textureLod(uNormal, vec3(h0.x, h1.y, layer), level) + g1.x * textureLod(uNormal, vec3(h1.x, h1.y, layer), level));
+        }
+        vec4 layerNormal(GradCoord c, float near, float far)
+        {
+            if (near < 0.0 || c.lod >= uFarLod) return tex(uNormalFar, c, far);
+            vec4 n = tex(uNormal, c, near);
+            float soft = 1.0 - smoothstep(0.0, 1.5, c.lod);
+            return soft > 0.0 ? mix(n, bsplineNormal(c.p, near), soft) : n;
+        }
 
         // A layer weight with its small values dropped: 0 up to eps, rising smoothly to the weight itself at twice eps (continuous, so no seam where a
         // layer stops being sampled); eps 0 is the weight unchanged. docs/render-terrain.md, "Layer weight threshold".
