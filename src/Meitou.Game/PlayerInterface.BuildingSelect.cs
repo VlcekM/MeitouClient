@@ -19,6 +19,9 @@ sealed partial class PlayerInterface
 
     SelectedBuilding? selectedBuilding;
 
+    /// <summary>The selected building's instance (a level building's placement key, a site's id), null when none: the building the interior editor shows.</summary>
+    public string? SelectedBuildingKey => selectedBuilding?.Instance;
+
     /// <summary>Makes <paramref name="building"/> the selected one (null: none) and tells the simulation, which then publishes its doors.</summary>
     internal void SetBuilding(SelectedBuilding? building)
     {
@@ -74,6 +77,7 @@ sealed partial class PlayerInterface
             foreach (var candidate in host.Placement.StaticAlong(ray.Origin, ray.Direction, limit))
             {
                 var b = candidate.Placement;
+                if (levelHost?.IsCleared(b.Key) == true) continue;   // the level editor cleared it
                 float y = b.WorldY ?? ground(b.Position.X, b.Position.Z) + b.Position.Y;
                 var hull = candidate.Footprint.Place(b.Position, b.Rotation);
                 float? hit = candidate.Plot ? PlotT(ray, hull, limit < 6000 ? limit : null)

@@ -34,6 +34,10 @@ sealed partial class GameHost
             // A new world (a loaded save, a new game): the old world's sites go, the new one's first snapshot carries all of its own.
             ForgetBuildings();
             buildingsWorld = session.World;
+            // The old world's level edits leave the level data, the loaded save's own (if any) are put back.
+            LevelEditsFollowWorld();
+            if (pendingLevelEdits is { Count: > 0 } edits) ReplayLevelEdits(edits);
+            pendingLevelEdits = null;
         }
         var snapshot = session.CurrentSnapshot;
         UpdateRuins(snapshot);
@@ -225,6 +229,7 @@ sealed partial class GameHost
         IReadOnlyList<Meitou.Data.Gameplay.Construction.PlacementTown>? towns = null;
         // Per level building of a town: the town, its owner's name and where it sits in the town's buildings (a relaid one takes the same place).
         Dictionary<(Meitou.Data.World.ZoneCoordinate, string), (string Town, string? Owner, int Site, int Index)>? townOf = null;
+        int townOfRevision = -1;   // the towns' building lists change when the level editor places or clears a building (PopulationData.BuildingsRevision)
         var pickable = new Dictionary<string, bool>(StringComparer.Ordinal);
         // Resource and node buildings are not selectable objects (TownBuildings leaves them out too).
         bool Pickable(string record) => pickable.TryGetValue(record, out bool known) ? known
@@ -268,6 +273,7 @@ sealed partial class GameHost
                 PartBounds = footprints.PartBounds,
                 LinkedAround = (centre, radius) => footprints.LinkedAround(centre, radius, (x, z) => ActiveGround((float)x, (float)z)),
                 StaticAround = footprints.StaticAround,
+                StaticPlacementsAround = (centre, radius) => footprints.PlacementsAround(centre, radius).Where(b => Pickable(b.BuildingId)),
                 StaticAlong = (origin, direction, length) => footprints.Along(origin, direction, length).Where(b => Pickable(b.Placement.BuildingId)),
                 // The movement pick's floors up to the viewed one: the build window's floor arrows choose the floor the ghost stands on.
                 FloorAlong = (origin, direction, length) => gpu.Objects?.FloorHit(origin, direction, viewedFloor, length) is { } hit
@@ -277,8 +283,9 @@ sealed partial class GameHost
             WorldInfo = placement =>
             {
                 var (zone, instance) = (placement.Zone, placement.InstanceId);
-                if (townOf is null && popData is { } d)
+                if ((townOf is null || townOfRevision != popData?.BuildingsRevision) && popData is { } d)
                 {
+                    townOfRevision = d.BuildingsRevision;
                     townOf = [];
                     foreach (var site in d.Sites)
                     {
@@ -331,6 +338,7 @@ sealed partial class GameHost
 
     // A level building's instance id, owning faction id (its state's owner, else its town's faction) and town building, by placement key; made on first use.
     Dictionary<string, (string Instance, string? Owner, TownBuilding Building)>? levelOwners;
+    int levelOwnersRevision = -1;
 
     /// <summary>
     /// The floor a ghost stands on in <paramref name="room"/>: a player site's, else a level building's with what <c>PlacementRules.MayBuildIn</c> reads (whether the player's
@@ -353,8 +361,9 @@ sealed partial class GameHost
 
     Dictionary<string, (string Instance, string? Owner, TownBuilding Building)>? LevelOwners()
     {
-        if (levelOwners is not null || popData is not { } d) return levelOwners;
+        if (popData is not { } d || levelOwners is not null && levelOwnersRevision == d.BuildingsRevision) return levelOwners;
 
+        levelOwnersRevision = d.BuildingsRevision;
         levelOwners = new(StringComparer.Ordinal);
         foreach (var site in d.Sites)
         {

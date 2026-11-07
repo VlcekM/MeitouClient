@@ -86,12 +86,15 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
         if (EditorPointerDown(button, p)) return true;
         if (button == MouseButton.Right && CancelInventoryDrag()) return true;
         if (button == MouseButton.Right && !OverHud(p) && WallCancel()) return true;
+        if (button == MouseButton.Right && !OverHud(p) && LevelClearAt(p)) return true;
         if (button == MouseButton.Right && !OverHud(p) && BuildDiscard()) return true;
         if (button == MouseButton.Left)
         {
             if (contextMenu is not null) return true;   // an open menu takes no press: its rows act on the release, a press beside it does nothing (FUN_1407a7f10)
             if (UiMouseDown(p)) return true;
             if (OverHud(p)) return true;
+            // Debug "Explode on click": the host takes the press on the ground (the point under the cursor, if any) instead of the selection.
+            if (WorldClick is { } worldClick && !MapTabShown && worldClick(Ray(p) is { } wr ? MoveHit(wr.Origin, wr.Direction) : null)) return true;
             // A ground item's name label (shown while Highlight is held) takes the left press; its release over it is the item's pick-up (FUN_1401638f0).
             if (LabelAt(p) is { } label) { labelPress = label; return true; }
             if (BuildClick()) return true;
@@ -257,7 +260,7 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
             if (LabelAt(p) == labelled) LabelPickUp(labelled);
             return;
         }
-        if (button == MouseButton.Left) { InventoryPointerUp(p); JobDragEnd(p); SquadPointerUp(p, shift); faithfulScreens.PointerUp(); mapDrag = null; }
+        if (button == MouseButton.Left) { MapPickUp(p); InventoryPointerUp(p); JobDragEnd(p); SquadPointerUp(p, shift); faithfulScreens.PointerUp(); mapDrag = null; }
         if (button == MouseButton.Middle) mapDrag = null;
         if (button == MouseButton.Right && memberPress is { } pressed)
         {

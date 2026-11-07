@@ -94,6 +94,8 @@ Not built, by design: the original's in-game level editor and fog editor (`Kensh
 - [birds](game/birds.md)
 - [buildings-production](game/buildings-production.md)
 - [carry-loot](game/carry-loot.md)
+- [interior-editor](game/interior-editor.md): the original's layout editor, Meitou's read-only viewer (F10 Tools)
+- [level-editor](game/level-editor.md): the original's in-game level editor (top bar, buildings tool, Save Mod), Meitou's (F10 Tools)
 - [locks](game/locks.md): cages, beds, doors, lockable containers, lockpicking, shackles
 - [combat](game/combat.md)
 - [dialogue](game/dialogue.md): packages, line choice, conditions, effects, conversation window

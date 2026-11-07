@@ -611,7 +611,36 @@ Rows send `DebugCommand`s, applied in the next tick's Inputs phase: teleport the
 (own squad, first faction hostile to the player), give an item record (`name x5 q80`; quality 0-100: armour's quality, crossbows' and limbs' level, a weapon the `PLAYER_WEAPONS` model of the highest level at or below it (else the lowest) and that level; what does not fit drops at their feet) to the first selected, add or remove money (signed number),
 heal (`MedicalState.Heal`; stumps and crushed limbs stay), heal fully (its sub-row: stumps and crushed limbs become the original again first, `MedicalState.RestoreLimbs`; a fitted prosthetic stays), every stat to 100, one cut of n damage (Enter/Right opens a body part list: random as a blow picks, or a part of the first target by template id; others without it are skipped), force hits to a part (the same list from the first target; every blow, melee, bolt or execution, then lands on that template id, else on a part of that name on another body, while a blow could pick it; Off restores the roll; `BodyOptions.ForcedHitPart`, not saved), set the Global damage multiplier of the running world (0 to 100; blows and XP at once, a crossbow when next equipped; not saved), finish every RESEARCH record and repetition (queue emptied), clear bounties (Enter/Right lists each faction with a bounty and its total; All factions or one faction's entries are removed from the selected characters, else from every player character; one left with none is no longer recently wanted). Heal, stats and damage fall back to the inspected character. Names match a record's string id,
 its exact name, else the shortest name containing the text. Replaces the game's F10 key list (the viewer keeps its own).
-Code mods add rows after these ([modding](../modding.md) "Registration surface").
+Godmode (its own row, a switch) applies to every player character: all stats 1000 (10 x the maximum of 100) and a heal five times a second (`MedicalState.Heal`, stumps and crushed limbs restored, hunger refilled); off, each character gets exactly its own stats back. Boosted stats are never saved (the save writes the kept originals), a character that dies or leaves the player squad gets its stats back at once, one recruited while on is boosted on the next tick, a loaded game starts with it off; training done while on is lost. (`DebugGodmode`, `PlayerState.Godmode`, `DebugCheats.GodTick`.)
+The menu is grouped in labelled sections, each value in one column (typed fields, `on` / `off` for switches): Character (teleport, heal, heal fully, max out skills, godmode, clear bounties), World / Spawn (spawn NPC, give item, money, unlock research), Combat (damage, force hits, damage multiplier), then code mods' rows under Mods ([modding](../modding.md) "Registration surface"), then Tools and Overlays. With the F11 statistics shown the menu stands at the right edge, else below the panels; a long list scrolls to keep the highlighted row in view.
+The Tools and Overlays sections open or switch the debug tools (Enter, Space, Left or Right): the pick & collision inspector's menu (docs/viewer.md "Pick & collision inspector"),
+the interior and level editors (Shift+F12 is the original's `editor_toggle` and opens the level editor), "Teleport on map..." (a switch: while on, every left click on the open Map tab, a press and release within 4 px so panning works, teleports the selected characters there and puts the camera on the spot; it stays on until switched off in the menu; a hint line with the last result shows on the map while on), then under Overlays the navmesh view, the frame statistics, the two tickboxes of the statistics' characters line (Character boxes, Walk paths; the same switches, so panel and menu stay in step, and both stay drawn with the statistics hidden), the fps counter, the VRAM pie (Ctrl+F12) and the profiler; each keeps its own key too.
+
+### Dev console
+
+Meitou only (no original counterpart: the install's `controls.cfg` and changelog name no console or debug-menu key, only `editor_toggle`, so Insert and Ctrl+Backquote are Meitou's choice; not on the macOS Metal path yet). Insert or Ctrl+Backquote opens a panel over the top of the screen (the backquote alone is the game's select-all); Esc or the same key closes it. While open it takes every key, as the debug menu does
+(opening it closes the menu). The input line has a caret (Left/Right/Home/End/Delete, Ctrl+V pastes), Enter runs, Up/Down walk the history, Tab completes a command name or, for `give`, `spawn` and `tp`, a record or town name (one match is filled in whole, several as far as they agree and listed),
+PageUp/PageDown scroll the last 100 output lines. Arguments with spaces are quoted. Every output line is also written to log.txt (`console  ...`). An unknown command or a bad argument prints an error line.
+The target is the selected characters, or the point under the cursor.
+
+World-changing commands enqueue `DebugCommand`s (applied in the next tick's Inputs phase), never touching the world from the UI thread; money, heal, maxstats, give, spawn, tp, tpcursor and research run the F10 menu's own code (`DebugApply`, `DebugGive`), `kill` is the console's. The menu's other rows (damage, force hits, damage multiplier) have no command yet. `DevConsole` (text, history, completion and the command table of `ConsoleCommand(Name, Usage, Help, Run)` with an optional `Complete`)
+is world-free, so a mod's `AddCommand` can register into it later.
+
+| Command | Effect |
+|---|---|
+| `help [word]` | list the commands, or one command's usage; with no exact name, search names, usage and descriptions for the word |
+| `godmode [on\|off]` | god mode for all player characters (no argument toggles) |
+| `clear` | empty the scrollback |
+| `money <delta>` | add or (negative) take away cats, never below 0 |
+| `heal` | heal the selected (else the inspected) characters fully |
+| `maxstats` | every stat 100, same targets |
+| `give "<item record>" [qty] [quality]` | as the menu's give: to the first selected; name matched as the menu does |
+| `spawn "<character record>"` | a hostile character at the cursor |
+| `tpcursor` | teleport the selected to the point under the cursor |
+| `tp <x> <z>` | teleport the selected to world X Z (the camera follows the spot) |
+| `tp <town name>` | teleport the selected to a placed town, name case-insensitive, exact else shortest prefix match; its position is the town's centre in the level data (`TownSite.Position`); nest markers are skipped |
+| `kill` | kill the selected: `DebugKill` calls `MedicalState.Kill` (medical state dead, orders dropped), no entity is removed |
+| `research` | finish every research |
 
 ## Unknowns
 

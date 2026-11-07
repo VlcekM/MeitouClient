@@ -68,6 +68,7 @@ static class Program
             Console.Error.WriteLine(e.Message);
             return 2;
         }
+        if (game.WikiExport is { } wikiDir) return WikiExport.Run(wikiDir, install, game.WikiFactsOnly);
         if (game.DataCheck)
         {
             var checkedDb = Meitou.Data.GameDatabase.Load(Meitou.Data.LoadOrder.FromInstall(install));
@@ -84,9 +85,9 @@ static class Program
         }
         // Steamworks must start before Vulkan creates its device so Steam can hook the renderer for Shift+Tab. Not for pictures or a
         // listing: those must not count as Kenshi play time or get the overlay.
-        using var steam = world.Screenshot is null && !game.ListStarts ? SteamSession.TryStart(install) : null;
+        using var steam = world.Screenshot is null && !game.ListStarts && !world.Headless ? SteamSession.TryStart(install) : null;
         // A native splash at once, until the game window draws (docs/engine.md "Loading"); not for pictures, a listing or a hidden window.
-        using var splash = world.Screenshot is null && !game.ListStarts && !world.HiddenWindow ? SplashWindow.Show(install.DataDirectory) : null;
+        using var splash = world.Screenshot is null && !game.ListStarts && !world.HiddenWindow && !world.Headless ? SplashWindow.Show(install.DataDirectory) : null;
         var config = UserConfig.Load();
         Meitou.Localisation.Loc.Use(install);   // the language of settings.cfg: texts from locale/<code>/LC_MESSAGES/main.mo (docs/formats/localisation.md)
         // The saved texture quality before the world loads: the terrain's layer arrays are sized from it once (the Tab panel's restore after

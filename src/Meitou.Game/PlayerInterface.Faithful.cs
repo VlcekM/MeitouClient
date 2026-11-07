@@ -16,6 +16,42 @@ sealed partial class PlayerInterface
     public bool ModalOpen => UiVisible && faithfulScreens.HasModal;
     /// <summary>The faithful screens open, bottom first (the play benchmark says which modal one stopped the game).</summary>
     public IReadOnlyList<string> OpenScreens => faithfulScreens.OpenScreens;
+    /// <summary>
+    /// The widgets a click can reach in the last arranged frame (the topmost control at its own centre): the HUD and its panels in either UI mode and the open screens,
+    /// for the agent control channel (ui-tree, ui-click). Screen is the faithful screen's id, "hud" for the rest.
+    /// </summary>
+    internal IEnumerable<(string Screen, UiControl Control)> UiClickables()
+    {
+        if (!UiVisible) yield break;
+        var controls = ArrangeUi();
+        var owner = new Dictionary<UiControl, string>(ReferenceEqualityComparer.Instance);
+        foreach (var screen in faithfulScreens.LastFrame)
+            foreach (var c in screen.Controls) owner[c] = screen.Id;
+        foreach (var c in controls)
+        {
+            float cx = c.Bounds.X + c.Bounds.Width / 2, cy = c.Bounds.Y + c.Bounds.Height / 2;
+            if (!c.Enabled || c.Bounds.Width < 2 || c.Bounds.Height < 2 || cx < 0 || cy < 0 || cx > Width || cy > Height) continue;
+            if (c.Type != "Button" && c.Action.Length == 0) continue;
+            if (MyGuiPresentation.HitTest(controls, cx, cy) is { } top && ReferenceEquals(top, c)) yield return (owner.GetValueOrDefault(c, "hud"), c);
+        }
+    }
+
+    /// <summary>A left click at <paramref name="p"/> through the game's own pointer path (press and release).</summary>
+    internal void UiClickAt(Vector2 p)
+    {
+        MouseDown(MouseButton.Left, p, false);
+        MouseUp(MouseButton.Left, p, false);
+    }
+
+    /// <summary>Opens a registered faithful screen by id (the agent control channel); false when there is none.</summary>
+    internal bool OpenFaithfulScreen(string id)
+    {
+        if (!faithfulScreens.IsRegistered(id)) return false;
+        faithfulScreens.Open(id);
+        UpdateMenuPause();
+        return true;
+    }
+
     /// <summary>Keys the host keeps for itself (the sandbox's letters), so the faithful window shortcuts leave them alone.</summary>
     public HashSet<Key> ReservedKeys { get; } = [];
     void UpdateMenuPause() => session.Simulation.RequestedPause = settingsOpen || faithfulScreens.HasModal;
@@ -26,6 +62,7 @@ sealed partial class PlayerInterface
         if (key == Meitou.Engine.Input.Key.Escape && CancelInventoryDrag()) return true;
         // toggle_camera_grid (Shift+; fixed: a binding carries no modifier, and ; alone is the free camera's).
         if (shift && key == Meitou.Engine.Input.Key.Semicolon && !faithfulScreens.HasKeyboardFocus) { cameraGrid = !cameraGrid; return true; }
+        if (key == Meitou.Engine.Input.Key.Escape && LevelEscape()) return true;
         if (key == Meitou.Engine.Input.Key.Escape)
         {
             if (advancedOpen && faithfulScreens.OpenScreens.LastOrDefault() == "new-game") { advancedOpen = false; return true; }
@@ -122,6 +159,7 @@ sealed partial class PlayerInterface
         else if (e.Screen == "stats" && e.Action == "select") selectedStat = e.Text;
         else if (e.Screen == "stats" && e.Action.StartsWith("stat:", StringComparison.Ordinal)) selectedStat = e.Action[5..];
         else if (e.Screen == "build") BuildAction(e);
+        else if (e.Screen == "leveleditor") LevelEditorAction(e);
         else if (e.Screen == "dialogue") DialogueAction(e);
         else if (e.Screen == CharacterTradeScreen) CharacterTradeAction(e);
         else if (e.Screen == "prospect") ProspectScreenAction(e);
@@ -159,6 +197,7 @@ sealed partial class PlayerInterface
         else if (id == "tutorials") BindTutorialsWindow(b);
         else if (id == TownScreen) BindTownScreen(b);
         else if (id == "build") BindBuildScreen(b);
+        else if (id == "leveleditor") BindLevelEditorScreen(b);
         else if (id is "building" or "bench" or "storage") BindMachineScreen(id, b);
         else if (IsLootScreen(id)) BindLootScreen(id, b);
         else if (id is "inventory" or "stats" or "bag" or "limbs")

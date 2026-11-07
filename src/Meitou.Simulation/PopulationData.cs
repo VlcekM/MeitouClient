@@ -106,23 +106,29 @@ public sealed record TownSite(int Index, TownData Record, Vector3 Position, Zone
     /// The town's placed buildings with their beds and nodes (<see cref="TownBuildings"/>), the AI's homes; empty when the host gave none. A building laid out
     /// afresh (<see cref="PopulationData.Relay"/>) takes its old one's place.
     /// </summary>
-    public IReadOnlyList<TownBuilding> Buildings { get => buildings; init => buildings = [.. value]; }
-    List<TownBuilding> buildings = [];
-    // The buildings as the boot laid them out, by position, of those laid out afresh since.
-    readonly Dictionary<int, TownBuilding> booted = [];
+    public IReadOnlyList<TownBuilding> Buildings { get => Volatile.Read(ref buildings); init => buildings = value; }
+    IReadOnlyList<TownBuilding> buildings = [];
+    // The buildings as the boot laid them out, by key, of those laid out afresh since.
+    readonly Dictionary<string, TownBuilding> booted = [];
+
+    /// <summary>Swaps the list for another (copy on write: readers on other threads hold the list they took, never one being changed); only <see cref="PopulationData"/> calls it, in the serial phase.</summary>
+    internal void SetBuildings(IReadOnlyList<TownBuilding> list) => Volatile.Write(ref buildings, list);
 
     internal void Relay(TownBuilding old, TownBuilding relaid)
     {
-        int index = buildings.FindIndex(x => ReferenceEquals(x, old));
+        var list = buildings.ToList();
+        int index = list.FindIndex(x => ReferenceEquals(x, old));
         if (index < 0) return;
-        booted.TryAdd(index, old);
-        buildings[index] = relaid;
+        booted.TryAdd(old.Key, old);
+        list[index] = relaid;
+        SetBuildings(list);
     }
 
-    /// <summary>The buildings laid out afresh go back to the boot's.</summary>
+    /// <summary>The buildings laid out afresh go back to the boot's (a building the level editor cleared since stays cleared).</summary>
     internal void ClearRelays()
     {
-        foreach (var (i, b) in booted) buildings[i] = b;
+        if (booted.Count == 0) return;
+        SetBuildings([.. buildings.Select(x => booted.GetValueOrDefault(x.Key) is { } old ? old : x)]);
         booted.Clear();
     }
     /// <summary>The zones the town's level state lists, as the original files them at load, which discovery counts as well as <see cref="Zone"/> (docs/game/ui-screens.md "Map"); empty for a Nest and when the host gave none.</summary>
@@ -133,6 +139,34 @@ public sealed record TownSite(int Index, TownData Record, Vector3 Position, Zone
 public sealed class PopulationData
 {
     public required GameDatabase Db { get; init; }
+
+    int buildingsRevision;
+    /// <summary>Counts the changes of the towns' building lists after the world was made (<see cref="TownEdits"/>); the host's caches of them are rebuilt when it moves.</summary>
+    public int BuildingsRevision => Volatile.Read(ref buildingsRevision);
+
+    /// <summary>Puts <paramref name="building"/> into the list of the town with placement id <paramref name="town"/>, replacing one of its key; the town's index, -1 when there is no such town.</summary>
+    internal int PutBuilding(string town, TownBuilding building)
+    {
+        var site = Sites.FirstOrDefault(s => s.InstanceId == town);
+        if (site is null) return -1;
+        site.SetBuildings([.. site.Buildings.Where(b => b.Key != building.Key), building]);
+        Interlocked.Increment(ref buildingsRevision);
+        return site.Index;
+    }
+
+    /// <summary>Takes the building of <paramref name="key"/> out of its town's list: the town's index and the building; -1 when no town holds it.</summary>
+    internal (int Site, TownBuilding? Building) TakeBuilding(string key)
+    {
+        foreach (var site in Sites)
+        {
+            if (site.Buildings.FirstOrDefault(b => b.Key == key) is not { } found) continue;
+            site.SetBuildings([.. site.Buildings.Where(b => b.Key != key)]);
+            Interlocked.Increment(ref buildingsRevision);
+            return (site.Index, found);
+        }
+        return (-1, null);
+    }
+
     public required IReadOnlyList<TownSite> Sites { get; init; }
     public required IReadOnlyList<FactionData> Factions { get; init; }
     /// <summary>Rolls the characters' looks; null leaves them without (headless tests, markers only).</summary>

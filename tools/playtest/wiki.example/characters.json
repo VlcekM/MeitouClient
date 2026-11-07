@@ -1,0 +1,48 @@
+[
+ {
+  "id": "example-lord",
+  "name": "Example Lord",
+  "aliases": [],
+  "kind": "character",
+  "faction": "Example Faction",
+  "region": null,
+  "x": null,
+  "z": null,
+  "zone": null,
+  "verified": false,
+  "verifiedOn": null,
+  "seen": "",
+  "source": "example entry, replace",
+  "confidence": "Unknown",
+  "notes": "Fake entry that only shows the schema. Delete it.",
+  "data": {
+   "factionSource": "home town Example Town",
+   "unique": true,
+   "recruitable": false,
+   "bounty": {
+    "chancePct": 100,
+    "amount": 10000,
+    "amountMax": 10000,
+    "factions": [
+     "Example Faction"
+    ]
+   },
+   "squads": [
+    "Example Squad (leader)"
+   ],
+   "homes": [
+    {
+     "town": "Example Town",
+     "x": 0,
+     "z": 0,
+     "squad": "Example Squad",
+     "role": "leader",
+     "via": "town lists the squad"
+    }
+   ],
+   "campaigns": [],
+   "replacement": [],
+   "record": "0-example.mod"
+  }
+ }
+]

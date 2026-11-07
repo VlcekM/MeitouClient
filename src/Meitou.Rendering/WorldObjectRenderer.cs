@@ -216,7 +216,13 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     {
         if (objects.RemoveRuntime(instanceId) is not { } removed) return;
         if (removed.DestroyedOverride is not null) streamer.Reload([removed.Zone]);
-        else streamer.RemoveRuntime(instanceId, removed.Zone);
+        else streamer.RemoveRuntime(instanceId, removed.InstanceId, removed.Zone);
+    }
+
+    /// <summary>The level editor cleared a level-data building (<paramref name="on"/> false: put it back): its zone is laid out again.</summary>
+    public void SetCleared(BuildingPlacement placement, bool on)
+    {
+        if (objects.SetCleared(placement.Key, on)) streamer.Reload([placement.Zone]);
     }
 
     /// <summary>Forgets every runtime building (a loaded save replaces the world) and lays out the zones that had one again.</summary>

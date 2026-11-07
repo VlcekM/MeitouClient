@@ -79,6 +79,8 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
     Meitou.Rendering.Upscalers.Streamline? streamline;
     Meitou.Rendering.Upscalers.Ngx? ngx;
     bool screenshotRequested;
+    /// <summary>Frames in a row that could not be drawn while a control screenshot waits; at 30 the screenshot is answered with an error.</summary>
+    int shotNoFrame;
     // The interactive run's animation clock (foliage sway, clouds, water): the frame steps, which are exact while the cinema records; off, the real time.
     double animSeconds;
     bool animClock;
@@ -364,6 +366,7 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
         gpu.HoverOutline ??= new HoverOutlineRenderer(context);
         gpu.NavmeshOverlay ??= new NavmeshOverlayRenderer(context);
         navOverlayRenderer = gpu.NavmeshOverlay;
+        gpu.InspectorOverlay ??= new NavmeshOverlayRenderer(context);
         player.MeshHit = (id, origin, direction) => gpu.Characters?.RayHit(DrawKey(id), origin, direction);
         player.Floor = (() => viewedFloor, StepFloor);
         player.HiddenInWorld = hiddenIndoors.Contains;
@@ -376,6 +379,7 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
         player.ShownInteriorHit = (origin, direction, distance) => gpu.Objects?.ShownInteriorHit(origin, direction, distance);
         player.DoorShape = (record, door) => nav?.Walkability.DoorGeometry?.Shape(record, door) ?? [];
         ConfigurePlayerInterface(player);
+        player.LevelHost = MakeLevelEditorServices();
         if (IsSandbox) player.ReservedKeys.UnionWith([Meitou.Engine.Input.Key.Z, Meitou.Engine.Input.Key.X, Meitou.Engine.Input.Key.C, Meitou.Engine.Input.Key.Y, Meitou.Engine.Input.Key.P, Meitou.Engine.Input.Key.G]);
         player.ConfigureFrontend(scene.Database,
             () => Meitou.Data.Save.SaveCatalog.Scan(Meitou.Simulation.Saving.QuickSave.DefaultRoot, install.SaveDirectory,

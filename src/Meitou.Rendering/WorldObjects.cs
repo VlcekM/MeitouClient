@@ -158,6 +158,32 @@ sealed class WorldObjects : IDisposable
 
     IReadOnlyList<BuildingPlacement> RuntimeIn(ZoneCoordinate zone) => runtimeByZone.TryGetValue(zone, out var list) ? list : [];
 
+    // Level buildings the level editor cleared (docs/game/level-editor.md), by key; replaced whole on every change, like runtimeByZone.
+    volatile HashSet<string> cleared = new(StringComparer.Ordinal);
+
+    /// <summary>Takes a level-data building out of the zones laid out from now on (<paramref name="on"/> false puts it back); true when that changed anything.</summary>
+    public bool SetCleared(string key, bool on)
+    {
+        lock (runtimeLock)
+        {
+            if (cleared.Contains(key) == on) return false;
+            var next = new HashSet<string>(cleared, StringComparer.Ordinal);
+            if (on) next.Add(key); else next.Remove(key);
+            cleared = next;
+            placementVersion++;
+            return true;
+        }
+    }
+
+    /// <summary>The level-data buildings of a zone that are not cleared.</summary>
+    IEnumerable<BuildingPlacement> FixedIn(ZoneCoordinate zone)
+    {
+        var list = buildingsByZone.GetValueOrDefault(zone);
+        if (list is null) return [];
+        var gone = cleared;
+        return gone.Count == 0 ? list : list.Where(b => !gone.Contains(b.Key));
+    }
+
     volatile int placementVersion;
     BuildingFloors? floors;
 
@@ -176,7 +202,7 @@ sealed class WorldObjects : IDisposable
     {
         if (staged is not null || heights?.Value is not { } map || interiorCollisions is not { } collisions) return [];
         var result = new List<BuildingFloor>();
-        foreach (var placement in BuildingPlacements.Overlay(buildingsByZone.GetValueOrDefault(zone) ?? [], RuntimeIn(zone)))
+        foreach (var placement in BuildingPlacements.Overlay(FixedIn(zone), RuntimeIn(zone)))
         {
             if (BuildingPlacements.Resolve(placement, Database, Levels, map.HeightAt) is not { Destroyed: false } resolved || resolved.Record.Type != Meitou.Data.Fcs.FcsRecordType.BUILDING) continue;
             var (b, record, position) = (placement, resolved.Record, resolved.Position);
@@ -264,8 +290,7 @@ sealed class WorldObjects : IDisposable
     public ZoneObjects BuildZone(ZoneCoordinate zone)
     {
         if (staged is not null) return staged.GetValueOrDefault(zone) ?? new() { Zone = zone };
-        var fixedPlacements = buildingsByZone.GetValueOrDefault(zone);
-        return Lay(zone, BuildingPlacements.Overlay(fixedPlacements ?? [], RuntimeIn(zone)), withFeatures: true);
+        return Lay(zone, BuildingPlacements.Overlay(FixedIn(zone), RuntimeIn(zone)), withFeatures: true);
     }
 
     /// <summary>Lays out one runtime placement alone (a building the player placed), for a zone that is already laid out (worker threads).</summary>

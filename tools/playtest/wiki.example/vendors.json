@@ -1,0 +1,35 @@
+[
+ {
+  "id": "example-vendor-list",
+  "name": "example vendor list",
+  "aliases": [],
+  "kind": "vendor-list",
+  "faction": null,
+  "region": null,
+  "x": null,
+  "z": null,
+  "zone": null,
+  "verified": false,
+  "verifiedOn": null,
+  "seen": "",
+  "source": "example entry, replace",
+  "confidence": "Unknown",
+  "notes": "Fake entry that only shows the schema. Delete it.",
+  "data": {
+   "itemsCount": 40,
+   "itemTotal": 1,
+   "items": [
+    {
+     "item": "Example Katana",
+     "type": "weapon",
+     "pct": 100.0
+    }
+   ],
+   "moneyChance": 0,
+   "moneyMin": 0,
+   "moneyMax": 0,
+   "manufacturers": [],
+   "record": "0-example.mod"
+  }
+ }
+]

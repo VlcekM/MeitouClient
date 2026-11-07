@@ -66,7 +66,7 @@ sealed partial class SettingsMenu
         var ink = primary && Meitou ? new Vector4(20 / 255f, 8 / 255f, 6 / 255f, 1) : System.Numerics.Vector4.Lerp(MainInk, LightInk, selected ? 1 : hover);
         Text(label, new(drawn.X + 10 * scale, drawn.Y, drawn.Width - (20 + textInset) * scale, drawn.Height), primary ? 15 : 13, ink, "Center", clip);
         if (clip is null || at.Intersect(clip.Value).Height >= at.Height - 1)
-            hits.Add(new(at, action));
+            hits.Add(new(at, action, Label: label));
     }
 
     void Navigate(int next)
@@ -93,7 +93,7 @@ sealed partial class SettingsMenu
         var close = R(1069, 6, 31, 32);
         controls.Add(new("settings-close", "Button", close, "", "settings:close", "Kenshi_CloseButtonSkin", true,
             new Dictionary<string, string>(), Vector4.Zero));
-        hits.Add(new(close, () => Visible = false));
+        hits.Add(new(close, () => Visible = false, Label: "Close"));
         Rect(R(20, 44, 1080, 1), MainInk with { W = 0.12f });
         Rect(R(192, 56, 1, 610), MainInk with { W = 0.12f });
 
@@ -253,7 +253,7 @@ sealed partial class SettingsMenu
         {
             // A feature's header: the arrow, and a click anywhere on its text opens or closes its settings.
             var header = R(212, y, 456, row);
-            if (header.Intersect(viewport).Height >= header.Height - 1) hits.Add(new(header, () => ToggleGroup(group)));
+            if (header.Intersect(viewport).Height >= header.Height - 1) hits.Add(new(header, () => ToggleGroup(group), Label: entry.Label));
             var mark = R(212, y + 2, 22, entry.Hint.Length > 0 ? 20 : 32);
             Arrow(mark.X + mark.Width / 2, mark.Y + mark.Height / 2, !open, header.Contains(pointer.X, pointer.Y), viewport);
         }
@@ -269,7 +269,7 @@ sealed partial class SettingsMenu
             bool over = link.Contains(pointer.X, pointer.Y) && viewport.Contains(pointer.X, pointer.Y);
             Text("Reset", link, 11, over ? LightInk : Brass, "Right VCenter", viewport);
             Rect(new(link.X + link.Width - 30 * scale, link.Y + link.Height - scale, 30 * scale, scale), (over ? LightInk : Brass) with { W = 0.6f }, viewport);
-            if (link.Intersect(viewport).Height >= link.Height - 1) hits.Add(new(link, reset));
+            if (link.Intersect(viewport).Height >= link.Height - 1) hits.Add(new(link, reset, Label: "Reset " + entry.Label));
         }
         if (entry.Hint.Length > 0)
         {
@@ -349,7 +349,7 @@ sealed partial class SettingsMenu
             // A locked slider (a mode's value, SettingsMenu.RenderScale.cs) shows its value but takes no drag, key or typed value.
             if (entry.Locked) return;
             var hit = R(688, y + row - 16, 412, 16);
-            if (hit.Intersect(viewport).Height >= hit.Height - 1) hits.Add(new(hit, () => { }, slider, track));
+            if (hit.Intersect(viewport).Height >= hit.Height - 1) hits.Add(new(hit, () => { }, slider, track, entry.Label));
             if (valueAt.Intersect(viewport).Height >= valueAt.Height - 1) hits.Add(new(valueAt, () => BeginNumber(slider, valueAt)));
         }
         else if (entry.Binding is { } binding)
@@ -391,7 +391,7 @@ sealed partial class SettingsMenu
             if (selected == i) Rect(part with { Y = part.Y + part.Height - 2 * line, Height = 2 * line }, inks[i] with { W = 0.9f }, viewport);
             var ink = selected == i ? LightInk : Vector4.Lerp(MutedInk, MainInk, hover);
             Text(names[i], part, 12, ink, "Center", viewport);
-            if (part.Intersect(viewport).Height >= part.Height - 1) hits.Add(new(part, () => choose(index)));
+            if (part.Intersect(viewport).Height >= part.Height - 1) hits.Add(new(part, () => choose(index), Label: names[i]));
         }
         // The frame and the divider.
         var edge = MainInk with { W = 0.22f };

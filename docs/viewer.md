@@ -42,7 +42,7 @@ material distance15000, VSync off. It is a tunable preset, not an automatic hard
 
 ## Keys
 
-F10 key list is the current authority; F11 stats,F12 profiler,Shift+F12 VRAM pie,Tab settings,Alt+Enter fullscreen (a borderless window at the monitor's own corner on Windows, since GLFW's bounds are the work area and a taskbar or panel at the top or left would offset it; off Windows the window manager is asked for full screen, **Verified** on KDE: panel covered; full screen is entered and left through GLFW, on the primary monitor, keeping its own windowed place, and whether it is on is read from GLFW's window monitor: KDE keeps a maximized window maximized in full screen (**Observed** KDE Wayland and XWayland, GLFW 3.4), and Silk.NET's WindowState, which checks Maximized first, then says Maximized (**Verified** against Silk.NET 2.23's GlfwWindow.CoreWindowState)).
+F10 key list is the current authority; F11 stats,F12 profiler,Ctrl+F12 VRAM pie,Tab settings,Alt+Enter fullscreen (a borderless window at the monitor's own corner on Windows, since GLFW's bounds are the work area and a taskbar or panel at the top or left would offset it; off Windows the window manager is asked for full screen, **Verified** on KDE: panel covered; full screen is entered and left through GLFW, on the primary monitor, keeping its own windowed place, and whether it is on is read from GLFW's window monitor: KDE keeps a maximized window maximized in full screen (**Observed** KDE Wayland and XWayland, GLFW 3.4), and Silk.NET's WindowState, which checks Maximized first, then says Maximized (**Verified** against Silk.NET 2.23's GlfwWindow.CoreWindowState)).
 `PlayerInterface.OpaqueUiCoverage` (not shown on F11) is the opaque UI coverage: the share of the screen under fully opaque controls (solid
 backgrounds, alpha-255 atlas slices at alpha 1; `UiPainter.OpaqueCoverage`), overlaps counted once.
 Panel skins have ragged translucent borders around a solid middle, so a slice counts as its largest
@@ -84,3 +84,17 @@ pixel differences; temporal upscalers and evolving particles have noise. Profile
 recording/GPU/pre-frame/streaming, not serialized sums. --log-spikes helps diagnose tails.
 **Verified screenshot conventions:** right-handed/Y-up, counter-clockwise fronts, textures as
 stored; human~19.5 units and katana12.8. Unit/placement formulas have their own research scopes.
+
+## Pick & collision inspector
+
+Meitou only. Open it from the F10 debug menu's Tools row. It works like the F10 menu: Up/Down pick a row, Enter or Space switch it, Esc closes it, and while it is open it takes every key. What was switched on stays on after it closes, so the camera can fly about with it drawn.
+
+- **Info panel** (top right): the ground point under the cursor and its zone, the ray's ground distance, the building a click would select (name, record, instance, hit distance, hull corners, size and area, the number and area of the per-shape hulls and how much larger the merged hull is, the height range), the other buildings the ray passes with their distances, how many near buildings it misses, the selected building and the number of selected characters.
+- The panel also lists the resource rocks near the cursor (what a right click would mine): the rock a click mines, and for the three nearest each one's distance from the ray against its radius, to see why a rock is or is not hit.
+- **Pick hull:** the prism of every level-data building the ray's track reaches, and of every site of yours (marked `[site]`), that a click is tested against; the panel also names the site the hammer pointer comes from: red for the one a click selects (with a translucent floor), orange for the others.
+- **Collision shapes:** each collision shape's own convex hull, green, next to the merged hull.
+- **Collision mesh:** the real collision triangles of the building a click would select, cyan (at most 20000 triangles).
+- **Navmesh:** the existing Shift+F11 view (off, Meitou's, the original's, both); the row steps it.
+- Drawn like the navmesh view: over the finished picture, sorted against the scene depth.
+- **Why it exists:** picking is a ray against one convex hull of all of a building's collision shapes (docs/game/ui-input.md "Building picking and selection"), so a concave building is clickable over its whole hull. The green shapes and the cyan mesh show how much tighter per-shape picking would be.
+- Code: `GameHost.Inspector.cs` (menu, keys), `PlayerInterface.Inspector.cs` (panel, geometry), `GameHost.NavOverlay.cs` (`UpdateInspectorOverlay`), `BuildingFootprint.Shapes` and `BuildingFootprints.Mesh` (per-shape hulls, collision triangles), `WorldFrame` (`InspectorOverlay`). Not covered: the buildings' visual meshes, characters, items, the navmesh polygon under the cursor, terrain or object collision other than level-data buildings and the placed sites.

@@ -62,6 +62,7 @@ sealed partial class PlayerInterface
             if (id == "load") layout = WithSaveFilter(layout);
             if (id == "editor") (editorLayout, editorRowsShape) = (layout, "");
             if (id == "inventory") characterInventoryLayout = layout;
+            if (id == "leveleditor") layout = LevelEditorBar(layout);
             faithfulScreens.Register(id, layout, modal, centreRoot: id is "file");
         }
         animalInventoryLayout = resolve("Kenshi_InventoryAnimalWindow.layout") is { } animalWindow ? MyGuiReader.ReadLayout(animalWindow) : null;
@@ -89,7 +90,7 @@ sealed partial class PlayerInterface
         ("bag", "Kenshi_InventoryGenericWindow", false), ("loot", "Kenshi_InventoryCharacterWindow", false), ("loot-bag", "Kenshi_InventoryGenericWindow", false), ("limbs", "Kenshi_LimbReplacementWindow", false), ("trader", "Kenshi_InventoryTraderWindow", false),
         ("building", "Kenshi_GenericBuildingWindow", false), ("bench", "Kenshi_InventoryResearchWindow", false), ("storage", "Kenshi_InventoryGenericWindow", false),
         ("build", "Kenshi_BuildWindow", false), ("editor", "Kenshi_CharacterEditor", true), ("dialogue", "Kenshi_ConversationPanel", true),
-        ("file", "Kenshi_OpenSaveFileDialog", true), ("prospect", "Kenshi_ProspectingWindow", false), ("tutorials", "Kenshi_TutorialsWindow", false),
+        ("file", "Kenshi_OpenSaveFileDialog", true), ("prospect", "Kenshi_ProspectingWindow", false), ("tutorials", "Kenshi_TutorialsWindow", false), ("leveleditor", "Kenshi_LevelEditor", false),
         (CharacterTradeScreen, "Kenshi_CharacterSelectionWindow", false),
     ];
 
@@ -215,6 +216,7 @@ sealed partial class PlayerInterface
         AddFrameControls(controls, hud, modalFrom);
         pointerOverUi = faithfulScreens.Contains(mouse) || MyGuiPresentation.HitTest(controls, mouse.X, mouse.Y) is not null;
         AddHoverLabel(controls);
+        AddInspectorPanel(controls);
         return controls;
     }
 
@@ -430,6 +432,18 @@ sealed partial class PlayerInterface
         if (UiMode == UiMode.Faithful && LoadBar is { Visible: true } bar) controls = [.. controls, .. bar.Controls(uiResources, width, height)];
         uiPainter?.Draw(controls, width, height, mouse, $"meitou:speed.{Array.IndexOf(ButtonSpeeds, session.Simulation.Speed)}",
             minimumTextPixels: TitleOpen ? 0 : StandardPixels, pass: pass);
+    }
+
+    /// <summary>With the interface hidden (F7, <c>hud hide</c>) only the speech bubbles are drawn, so a filmed clean picture keeps the <c>say</c> commentary.</summary>
+    public void DrawSpeechOnly(DebugOverlay overlay, int width, int height)
+    {
+        Width = width;
+        Height = height;
+        var controls = new List<UiControl>();
+        AddSpeech(controls);
+        if (controls.Count == 0) return;
+        uiPainter?.Draw(controls, width, height, mouse, $"meitou:speed.{Array.IndexOf(ButtonSpeeds, session.Simulation.Speed)}", minimumTextPixels: StandardPixels);
+        overlay.Flush(width, height);
     }
 
     /// <summary>The rule-of-thirds camera grid (Shift+;, toggle_camera_grid, event 0x29: the widget "CameraGrid", <c>FUN_1406e5fc0</c>), under the interface.</summary>

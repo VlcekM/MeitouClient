@@ -34,7 +34,9 @@ internal sealed partial class ZoneGeometryGatherer : IDisposable
     readonly WorldLevelData levels;
     readonly CollisionCache collision;
     readonly TerrainHeightmap map;
-    readonly Dictionary<ZoneCoordinate, List<BuildingPlacement>> buildingsByZone = [];
+    // The level data's buildings by zone, made again when the level data was edited (WorldLevelData.EditRevision); one gatherer is used by one thread at a time.
+    Dictionary<ZoneCoordinate, List<BuildingPlacement>> byZone = [];
+    int indexedRevision = -1;
     readonly List<Vector3>[]? seedsByZone;
     readonly BuildingLayouts layouts;
 
@@ -48,13 +50,25 @@ internal sealed partial class ZoneGeometryGatherer : IDisposable
         this.collision = collision;
         this.runtime = runtime;
         map = TerrainHeightmap.Open(install);
-        foreach (var b in levels.Buildings())
-        {
-            if (!buildingsByZone.TryGetValue(b.Zone, out var list)) buildingsByZone[b.Zone] = list = [];
-            list.Add(b);
-        }
         seedsByZone = NavSeeds.Load(install);
         layouts = new BuildingLayouts(db, levels.Interiors);
+    }
+
+    Dictionary<ZoneCoordinate, List<BuildingPlacement>> BuildingsByZone
+    {
+        get
+        {
+            int revision = levels.EditRevision;
+            if (indexedRevision == revision) return byZone;
+            var map = new Dictionary<ZoneCoordinate, List<BuildingPlacement>>();
+            foreach (var b in levels.Buildings())
+            {
+                if (!map.TryGetValue(b.Zone, out var list)) map[b.Zone] = list = [];
+                list.Add(b);
+            }
+            (byZone, indexedRevision) = (map, revision);
+            return map;
+        }
     }
 
     /// <summary>Whether foliage collision is gathered (it needs the biome data and costs a foliage placement per zone).</summary>

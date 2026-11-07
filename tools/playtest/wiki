@@ -1,0 +1,742 @@
+#!/usr/bin/env -S python3 -I
+# wiki <command>   query an agent-playtest wiki: our own in-game observations merged with data generated from YOUR game files. python3 only, no dependencies.
+#   wiki find <text> [--kind K] [--n 10]   name/alias/id/faction/zone/notes match over all layers, max 10 lines: id | kind | x z | V(erified)/u | name | observed/generated/local
+#   wiki show <id>               full entry (JSON); an observed entry also carries the generated numbers (`data`) of the same thing
+#   wiki town <name>             one town, camp or ruin: faction, position, who lives there, building and shop TYPES with counts (slave shop included), houses for sale, traders and their stock, world-state overrides, what we saw there, neighbours
+#   wiki buy <item>              where an item can be bought: towns and shops whose stock lists can contain it, with the chance of one pick
+#   wiki overrides <name>        a character, faction or town: which world states turn which town into another variant
+#   wiki who <name>              a unique, boss or bounty character: faction, bounty, recruitable, home town(s), squads
+#   wiki bounties [--min N] [--n 20]   characters with a bounty, highest first
+#   wiki faction <name>          one faction: type, relations (to you and others), places
+#   wiki item <name>             a weapon, crossbow, armour piece or item: class/category, damage or defence numbers, weight, value, grades and makers, blueprint (the research that unlocks it)
+#   wiki research [<name>]       one research: cost (books), needs (with the whole prerequisite chain and its total cost), what it unlocks; no name: categories
+#   wiki research --needs <book> [--n 30]   every research whose cost includes that book or item
+#   wiki animal <name>           an animal: race and combat numbers, attack, drops, bounty, and where it spawns (biomes, nests, towns)
+#   wiki spawns <zone|town|biome|squad>   what spawns where: a zone cell (zone-39-16), a town's zone, a biome group, or a squad (which biomes, nests and towns spawn it)
+#   wiki near <x> <z> [--kind K] [--n 5]   nearest entries with coordinates, by distance
+#   wiki tp <id>                 prints the exact `tp x z` line; warns (stderr, exit 3) when not verified in game or x/z null (exit 4 when null)
+#   wiki kinds                   layers, kinds and counts
+#   wiki status                  where the layers are, what the generated files were made from, what is missing
+#   wiki export [<dir>]          generate the generated layer from your game files (native build: runs MeitouClient --wiki-export)
+#   wiki add <file.json|->       validate and append/update entries by id in YOUR local layer (WIKI_DIR); never deletes
+#   wiki check                   schema, duplicate ids, JSON validity; exit 1 on errors
+# Layers (later wins): the data layer, observed (our own in-game runs, private, only if a folder exists), local (your own notes, optional).
+#   The data layer is ONE of: your own export (<tool dir>/generated, made by `wiki export` from your game files and mods; wins), else the shipped clean-install wiki
+#   (<tool dir>/clean: facts only, made from a clean copy without mods, may differ from your install), else nothing. Every answer says which one it came from.
+# Folders: <tool dir>/generated, <tool dir>/clean and <tool dir>/observed (inside a build's wiki/ folder); in the repo: <repo>/wiki/generated, tools/playtest/wiki.clean and tools/playtest/wiki.observed.
+# Env: WIKI_GENERATED, WIKI_CLEAN, WIKI_OBSERVED override those folders; WIKI_DIR is the local layer (flat zones.json, towns.json ... files; default <repo>/wiki when it has any).
+# Schema and rules: docs/agent-playtest.md ("The wiki").
+import json, os, sys, glob, math, re, subprocess
+HERE = os.path.dirname(os.path.abspath(__file__))
+ROOT = os.path.abspath(os.path.join(HERE, '..', '..'))
+IN_REPO = os.path.basename(HERE) == 'playtest' and os.path.isdir(os.path.join(ROOT, 'tools'))
+GEN = os.environ.get('WIKI_GENERATED') or (os.path.join(ROOT, 'wiki', 'generated') if IN_REPO else os.path.join(HERE, 'generated'))
+CLEAN = os.environ.get('WIKI_CLEAN') or (os.path.join(HERE, 'wiki.clean') if IN_REPO else os.path.join(HERE, 'clean'))
+OBS = os.environ.get('WIKI_OBSERVED') or (os.path.join(HERE, 'wiki.observed') if IN_REPO else os.path.join(HERE, 'observed'))
+LOCAL = os.environ.get('WIKI_DIR') or (os.path.join(ROOT, 'wiki') if IN_REPO else None)
+LOCAL_SET = bool(os.environ.get('WIKI_DIR'))
+FILES = ['zones', 'towns', 'npcs', 'items', 'factions', 'squads', 'buildings', 'notes', 'shops', 'vendors', 'overrides', 'characters', 'research', 'animals', 'spawns']
+CORE = ['id', 'name', 'aliases', 'kind', 'faction', 'region', 'x', 'z', 'zone', 'verified', 'verifiedOn', 'seen', 'source', 'confidence', 'notes']
+OPTIONAL = ['data', 'observed', 'found_via']
+CONF = ('Observed', 'Inferred', 'Unknown')
+PFIELDS = ['id', 'name', 'what', 'command', 'source', 'confidence', 'verifiedOn']
+TOWNLIKE = ('town', 'camp', 'bandit-hq', 'shop', 'ruins', 'nest', 'poi')
+ITEMLIKE = ('item', 'weapon', 'armour', 'crossbow')
+RANK = {'town': 0, 'camp': 0, 'bandit-hq': 0, 'faction': 1, 'character': 2, 'npc': 2, 'group': 2, 'trader': 4, 'override': 5, 'vendor-list': 8, 'quiet-spot': 3, 'spot': 3, 'note': 3, 'unique-squad': 4, 'squad': 5, 'weapon': 6, 'armour': 6, 'crossbow': 6, 'research': 6, 'item': 7, 'animal': 7, 'animal-type': 7, 'biome': 8, 'ruins': 8, 'poi': 8, 'nest': 8, 'building': 9, 'zone': 9}
+
+def read(path):
+    with open(path) as f: return json.load(f)
+def rows_of(d): return d['entries'] if isinstance(d, dict) and 'entries' in d else d
+def layer_files(folder):
+    return [(os.path.splitext(os.path.basename(p))[0], p) for p in sorted(glob.glob(os.path.join(folder, '*.json')))] if folder and os.path.isdir(folder) else []
+def has_json(folder): return bool(folder) and bool(glob.glob(os.path.join(folder, '*.json')))
+def gen_dir():
+    """The data layer: the player's own export when it exists, else the shipped clean-install wiki, else the (missing) export folder."""
+    return GEN if has_json(GEN) else CLEAN if has_json(CLEAN) else GEN
+def gen_label(): return 'clean' if gen_dir() == CLEAN and not has_json(GEN) else 'generated'
+def layers():
+    """[(layer name, folder)] in priority order, lowest first."""
+    out = [('generated', gen_dir()), ('observed', OBS)]
+    if LOCAL and (LOCAL_SET or any(os.path.exists(os.path.join(LOCAL, n + '.json')) for n in FILES)): out.append(('local', LOCAL))
+    return out
+def entries():
+    """Every entry of every layer as (layer, file name, entry), unmerged."""
+    out = []
+    for layer, folder in layers():
+        for n, p in layer_files(folder):
+            if n in ('personas', 'commands') or n.startswith('_'): continue
+            for e in rows_of(read(p)): out.append((layer, n, e))
+    return out
+def namekey(e): return re.sub('[^a-z0-9]', '', str(e.get('name', '')).lower())
+def family(kind): return 'town' if kind in ('town', 'camp', 'bandit-hq', 'shop') else kind   # observed towns replace the generated one of the same name, never a ruin or nest
+_merged = None
+def merged():
+    """Unified entries, one per thing. Same id, or same name in the same kind family, lets the higher layer replace the lower one; the winner keeps the lower
+    layer's `data` (numbers from the game files) and lists its layers in `_layers`. An id that two different kinds share (a generated squad called like an
+    observed town) goes to the higher layer; the other entry gets the kind as suffix. Returns [(file, entry, layers)]."""
+    global _merged
+    if _merged is not None: return _merged
+    by_id, by_name, order = {}, {}, []
+    def free(i, keep=None):
+        if i in by_id and i != keep:
+            low = by_id.pop(i); nid = i + '-' + low[1]['kind']
+            while nid in by_id: nid += '-x'
+            low[1]['id'] = nid; by_id[nid] = low; order[order.index(i)] = nid
+            for k2, v2 in list(by_name.items()):
+                if v2 == i: by_name[k2] = nid
+    for layer, n, e in entries():
+        same = e['id'] in by_id and family(by_id[e['id']][1]['kind']) == family(e['kind'])
+        key = e['id'] if same else by_name.get((family(e['kind']), namekey(e))) if layer != 'generated' else None
+        if key is None:
+            free(e['id'])
+            ne = dict(e); ne['_layers'] = [layer]
+            by_id[e['id']] = [n, ne]; order.append(e['id'])
+            by_name.setdefault((family(e['kind']), namekey(e)), e['id'])
+            continue
+        old_n, old = by_id[key]
+        ne = dict(old)
+        for k, v in e.items():
+            if k == 'data' and isinstance(old.get('data'), dict) and isinstance(v, dict): ne['data'] = dict(old['data'], **v)
+            elif v is not None and v != '' and v != []: ne[k] = v
+        ne['_layers'] = old['_layers'] + [layer]
+        newid = ne['id']
+        if newid != key:   # the higher layer's id wins; the old one stays as an alias
+            free(newid, keep=key)
+            ne['aliases'] = list(dict.fromkeys(list(ne.get('aliases') or []) + [key]))
+            del by_id[key]; order[order.index(key)] = newid
+        by_id[newid] = [old_n, ne]
+        by_name[(family(ne['kind']), namekey(ne))] = newid
+    _merged = [(by_id[k][0], by_id[k][1], by_id[k][1]['_layers']) for k in order]
+    return _merged
+def tag(ls): return 'observed' if 'observed' in ls else 'local' if 'local' in ls else gen_label()
+def lname(ls): return [(('clean (shipped)' if gen_label() == 'clean' else 'your export') if l == 'generated' else l) for l in ls]
+def num(v): return isinstance(v, (int, float)) and not isinstance(v, bool)
+def validate(e, layer=''):
+    errs = []
+    if not isinstance(e, dict): return ['not an object']
+    for k in CORE:
+        if k not in e: errs.append('missing field ' + k)
+    for k in e:
+        if k not in CORE and k not in OPTIONAL: errs.append('unknown field ' + k)
+    if errs: return errs
+    if not re.fullmatch(r'[a-z0-9]+(-[a-z0-9]+)*', str(e['id'])): errs.append('id must be a slug')
+    if not isinstance(e['name'], str) or not e['name']: errs.append('name must be text')
+    if not isinstance(e['aliases'], list): errs.append('aliases must be a list')
+    if not isinstance(e['kind'], str) or not e['kind']: errs.append('kind must be text')
+    for k in ('x', 'z'):
+        if e[k] is not None and not num(e[k]): errs.append(k + ' must be a number or null')
+    if (e['x'] is None) != (e['z'] is None): errs.append('x and z must both be null or both numbers')
+    if not isinstance(e['verified'], bool): errs.append('verified must be true/false')
+    if e['verified'] and not e['verifiedOn']: errs.append('verified true needs verifiedOn')
+    if e['confidence'] not in CONF: errs.append('confidence must be one of %s' % ', '.join(CONF))
+    if not e['source']: errs.append('source required')
+    for k in ('seen', 'notes'):
+        if not isinstance(e[k], str): errs.append(k + ' must be text')
+    if 'data' in e and not isinstance(e['data'], dict): errs.append('data must be an object')
+    if layer == 'observed':
+        o = e.get('observed')
+        if not isinstance(o, dict) or not all(o.get(k) for k in ('date', 'how', 'build')): errs.append('observed needs {date, how, build}')
+    return errs
+def xz(e): return '%s %s' % (int(e['x']), int(e['z'])) if e.get('x') is not None else '-'
+def line(e): return '%s | %s | %s | %s | %s | %s' % (e['id'], e['kind'], xz(e), 'V' if e['verified'] else 'u', e['name'], tag(e['_layers']))
+def need_data():
+    if not any(glob.glob(os.path.join(f, '*.json')) for _, f in layers() if f and os.path.isdir(f)):
+        sys.exit('wiki: no data. Looked in %s (your export), %s (shipped clean wiki) and %s (observed). %s' % (GEN, CLEAN, OBS, export_hint()))
+def gen_missing(): return not has_json(GEN) and not has_json(CLEAN)
+def native_exe():
+    for cand in (os.path.join(os.path.dirname(HERE), 'MeitouClient'), os.path.join(ROOT, 'src', 'Meitou.Game', 'bin', 'Release', 'net10.0', 'MeitouClient')):
+        if os.path.exists(cand): return cand
+    return None
+def export_hint():
+    exe = native_exe()
+    if not exe and os.path.exists(os.path.join(os.path.dirname(HERE), 'MeitouClient.exe')):
+        return 'this is a Windows build: run `wiki export` from the native Linux build (same game folder, same files), or run MeitouClient.exe --wiki-export <dir> under Proton, then set WIKI_GENERATED=<dir>'
+    return 'run `wiki export` (= %s --wiki-export %s) first; it reads your Kenshi folder and mods.cfg, needs no window and takes a few seconds' % (exe or '<build>/MeitouClient', GEN)
+def warn_missing():
+    if gen_missing(): print('note: no generated data in %s: %s' % (GEN, export_hint()), file=sys.stderr)
+def cmd_find(a):
+    kind = None; n = 10; words = []
+    i = 0
+    while i < len(a):
+        if a[i] == '--kind' and i + 1 < len(a): kind = a[i + 1]; i += 2
+        elif a[i] == '--n' and i + 1 < len(a): n = int(a[i + 1]); i += 2
+        else: words.append(a[i]); i += 1
+    q = ' '.join(words).lower().strip()
+    if not q: sys.exit('usage: wiki find <text> [--kind K] [--n 10]')
+    need_data()
+    scored = []
+    for fn, e, ls in merged():
+        if kind and e['kind'] != kind: continue
+        names = [e['name'].lower(), e['id']] + [x.lower() for x in e['aliases']]
+        s = 0
+        if q in names: s = 100
+        elif any(q in x for x in names): s = 50
+        elif any(q in (e.get(k) or '').lower() for k in ('faction', 'region', 'zone', 'kind')): s = 20
+        elif q in (e['notes'] + ' ' + e['seen']).lower(): s = 10
+        if s: scored.append((-s, 0 if 'observed' in ls else 1, 0 if e['verified'] else 1, RANK.get(e['kind'], 9), len(e['name']), e['id'], line(e)))
+    extra = []
+    for fn in ('commands', 'personas'):
+        for folder in (LOCAL, OBS):
+            p = os.path.join(folder, fn + '.json') if folder else ''
+            if p and os.path.exists(p):
+                for e in read(p):
+                    blob = (e['id'] + ' ' + e['name'] + ' ' + e.get('usage', e.get('what', ''))).lower()
+                    if q in blob: extra.append('%s | %s | %s' % (e['id'], fn[:-1], e.get('usage') or e.get('command')))
+    scored.sort()
+    out = [t[-1] for t in scored][:n]
+    out += extra[:max(0, n - len(out))]
+    print('\n'.join(out) if out else 'no match for "%s" (try fewer words; wiki kinds)' % q)
+    if len(scored) > len(out): print('(%d more; add --kind K or more words, --n 30 for more)' % (len(scored) - len(out)))
+    prov(); warn_missing()
+def get(i):
+    for fn, e, ls in merged():
+        if e['id'] == i or i in e.get('aliases', []): return fn, e
+    for fn in ('commands', 'personas'):
+        for folder in (LOCAL, OBS):
+            p = os.path.join(folder, fn + '.json') if folder else ''
+            if p and os.path.exists(p):
+                for e in read(p):
+                    if e['id'] == i: return fn, e
+    return None, None
+def best(q, kinds):
+    k = re.sub('[^a-z0-9]', '', q.lower())
+    c = []
+    for fn, e, ls in merged():
+        if e['kind'] not in kinds: continue
+        nk = namekey(e); names = [nk, e['id'].replace('-', '')] + [re.sub('[^a-z0-9]', '', x.lower()) for x in e['aliases']]
+        s = 100 if k in names else 50 if any(k in x for x in names) else 0
+        if s: c.append((-s, 0 if 'observed' in ls else 1, len(nk), e['id'], e))
+    c.sort(key=lambda t: t[:4])
+    return [t[4] for t in c]
+def clean(e): return {k: v for k, v in e.items() if not k.startswith('_')}
+def cmd_show(a):
+    if not a: sys.exit('usage: wiki show <id>')
+    need_data()
+    n, e = get(a[0])
+    if not e: sys.exit('no entry with id "%s" (wiki find <text>)' % a[0])
+    if '_layers' in e: print('# layers: %s%s' % (' + '.join(lname(e['_layers'])), ' (the later layer wins; data = numbers from your game files)' if len(e['_layers']) > 1 else ''))
+    print('# file: %s.json' % n); print(json.dumps(clean(e), indent=1, ensure_ascii=False))
+    prov(); warn_missing()
+def cmd_town(a):
+    if not a: sys.exit('usage: wiki town <name>')
+    need_data()
+    r = best(' '.join(a), TOWNLIKE)
+    if not r: sys.exit('no town, camp or ruin matching "%s" (wiki find <text>)' % ' '.join(a))
+    e = r[0]; d = e.get('data') or {}
+    print('%s  [%s; id %s; %s]' % (e['name'], e['kind'], e['id'], ' + '.join(lname(e['_layers']))))
+    print('faction : %s' % (e.get('faction') or '-'))
+    print('position: %s (%s)   zone: %s%s' % (xz(e), 'verified in game %s' % e['verifiedOn'] if e['verified'] else 'from game files, not checked in game', e.get('zone') or '-', '   region: %s' % e['region'] if e.get('region') else ''))
+    if d.get('townType'): print('type    : %s%s' % (d['townType'], ', public' if d.get('isPublic') else ''))
+    for k, lab in (('residents', 'residents'), ('bar', 'bar squads'), ('roaming', 'roaming')):
+        if d.get(k): print('%-8s: %s' % (lab, ', '.join(d[k])))
+    town_detail(e, d)
+    if e.get('seen'): print('seen    : %s' % e['seen'])
+    print('notes   : %s' % e['notes'])
+    if e.get('found_via'): print('found via: %s' % e['found_via'])
+    if e.get('observed'): print('observed: %s, %s, build %s' % (e['observed']['date'], e['observed']['how'], e['observed']['build']))
+    if e.get('x') is not None:
+        near = sorted((math.hypot(o['x'] - e['x'], o['z'] - e['z']), o['name']) for _, o, _ in merged() if o['kind'] in ('town', 'camp', 'bandit-hq') and o['id'] != e['id'] and o.get('x') is not None)[:3]
+        if near: print('nearest : ' + '; '.join('%s %d m' % (nm, dd) for dd, nm in near))
+        print('tp      : tp %s' % xz(e))
+    if len(r) > 1: print('(other matches: %s)' % ', '.join(o['name'] for o in r[1:5]))
+    prov(); warn_missing()
+def money(v): return '{:,}'.format(int(v)).replace(',', ' ')
+def cnt(b, key): return '%s%s' % (b[key], '' if b['count'] == 1 else ' x%d' % b['count'])
+def town_detail(e, d):
+    """Building and shop TYPES with counts, houses for sale, traders (slave shops included) with their stock lists and world-state overrides of a generated town entry (the extra block of `wiki town`).
+    Which building model holds which shop is NOT shown: it differs per install and new game (it is kept in the JSON as building_assignment_example)."""
+    if d.get('buildingTypes'):
+        T = d['buildingTypes']
+        def fmt(b): return '%s%s' % (b['type'], '' if b['count'] == 1 else ' x%d' % b['count'])
+        for cat, lab in (('shop', 'shop types'), ('bar', 'bars'), ('slave shop', 'slave shop')):
+            xs = [b for b in T if b['category'] == cat]
+            if xs: print('%-8s: %s' % (lab, '; '.join(fmt(b) for b in xs)))
+        other = [b for b in T if b['category'] in ('other', 'unassigned')]
+        extra = '; %d walls, %d gates' % (d.get('walls', 0), d.get('gates', 0)) if d.get('walls') or d.get('gates') else ''
+        if other or extra: print('buildings: ' + '; '.join(fmt(b) for b in other) + extra)
+        print('          (building types and counts follow the resident lists; which building model holds which shop differs per install and new game, so it is not listed)')
+    elif d.get('buildings'): print('buildings: old export without building types; run wiki export')
+    if d.get('forSale'):
+        print('for sale: ' + '; '.join('%s %s%s' % (f['building'], money(f['price']), ' (ruin)' if f.get('ruin') else '') for f in d['forSale']) + '  (price as the game quotes it; the owner may refuse if hostile to you; which houses are for sale can differ per new game)')
+    elif d.get('saleNote'): print('for sale: none (%s)' % d['saleNote'])
+    mine = [o for _, o, _ in merged() if o['kind'] == 'trader' and (o.get('data') or {}).get('townId') == e['id']]
+    vl = {o['id']: o for _, o, _ in merged() if o['kind'] == 'vendor-list'}
+    for t in mine:
+        td = t['data']; parts = []
+        for v in td.get('vendors', []):
+            l = vl.get(v['id']); top = ''
+            if l: top = ' [' + ', '.join(i['item'] for i in l['data']['items'][:5]) + (', ...' if l['data'].get('itemTotal', 0) > 5 else '') + ']'
+            parts.append('%s (about %s items)%s' % (v['list'], v.get('approxItems', '?'), top))
+        if td.get('slaveShop'):
+            parts.insert(0, 'sells slaves: ' + '; '.join('%s slaves per stock "%s" (drawn from %s)' % (x['count'], x['template'], ', '.join(x['drawnFrom']) or '?') for x in td.get('slaves', [])))
+        print('%-8s: %s%s: %s' % ('slaves' if td.get('slaveShop') else 'trader', td['squad'], ' (%s)' % td['type'] if td.get('type') else '', '; '.join(parts)))
+    if mine: print('          (wiki show <trader id> or wiki buy <item> for the full lists; buys at %s x prices)' % ', '.join(sorted({str(t['data'].get('buyMult')) for t in mine})))
+    ov = next((o for _, o, _ in merged() if o['kind'] == 'override' and (o.get('data') or {}).get('townId') == e['id']), None)
+    if ov:
+        print('overrides: %d variant(s) when its zone loads (heaviest passing set wins; none if the town is yours):' % len(ov['data']['variants']))
+        for v in ov['data']['variants']: print('  -> %s [%s%s] when %s' % (v['becomes'], v['type'], ', ' + v['faction'] if v.get('factionChanges') else '', '; '.join(v['when']) or 'no condition'))
+    if d.get('biome'): print('biome   : %s (wiki spawns %s)' % (d['biome'], e['name']))
+def nk(x): return re.sub('[^a-z0-9]', '', x.lower())
+def cmd_buy(a):
+    n = 15; words = []
+    i = 0
+    while i < len(a):
+        if a[i] == '--n' and i + 1 < len(a): n = int(a[i + 1]); i += 2
+        else: words.append(a[i]); i += 1
+    q = re.sub('[^a-z0-9]', '', ' '.join(words).lower())
+    if not q: sys.exit('usage: wiki buy <item> [--n 15]')
+    need_data()
+    vl = {o['id']: o for _, o, _ in merged() if o['kind'] == 'vendor-list'}
+    if not vl: sys.exit('wiki buy: no shop data. ' + export_hint())
+    hits = {}
+    for lid, l in vl.items():
+        for it in l['data']['items']:
+            if q in re.sub('[^a-z0-9]', '', it['item'].lower()): hits.setdefault(lid, []).append(it)
+    if any(nk(i['item']) in (q, q + 's') for v in hits.values() for i in v):   # an exact item name beats the longer names that merely contain it
+        hits = {k: [i for i in v if nk(i['item']) in (q, q + 's')] for k, v in hits.items()}
+        hits = {k: v for k, v in hits.items() if v}
+    if not hits: sys.exit('no vendor list holds an item matching "%s" (wiki item <name> for the item itself)' % ' '.join(words))
+    rows = []
+    for _, o, _ in merged():
+        if o['kind'] != 'trader': continue
+        td = o['data']
+        for v in td['vendors']:
+            if v['id'] in hits:
+                best = max(hits[v['id']], key=lambda x: (nk(x['item']) in (q, q + 's'), x['type'] != 'blueprint', x['pct']))
+                exact = nk(best['item']) in (q, q + 's')
+                rows.append((-best['pct'] * v.get('approxItems', 1) - (0 if best['type'] == 'blueprint' else 1e6) - (1e9 if exact else 0), td['town'], td['squad'], v['list'], best['item'] + (' (blueprint)' if best['type'] == 'blueprint' else ''), best['pct'], v.get('approxItems', '?'), td.get('building'), td.get('buyMult')))
+    rows.sort()
+    print('%d shop(s) in %d town(s) can stock "%s" (item | town | shop | list: pick chance, about N items drawn from it):' % (len(rows), len({r[1] for r in rows}), ' '.join(words)))
+    for r in rows[:n]: print('%s | %s | %s | %s: %s%%, about %s items' % (r[4], r[1], r[2], r[3], r[5], r[6]))
+    if len(rows) > n: print('(%d more; --n 50)' % (len(rows) - n))
+    print('lists holding it: ' + ', '.join('%s (%s%%)' % (vl[k]['name'], max(i['pct'] for i in v)) for k, v in sorted(hits.items(), key=lambda kv: -max(i['pct'] for i in kv[1]))[:8]))
+    prov(); warn_missing()
+def cmd_overrides(a):
+    if not a: sys.exit('usage: wiki overrides <character, faction or town>')
+    need_data()
+    q = re.sub('[^a-z0-9]', '', ' '.join(a).lower())
+    ovs = [o for _, o, _ in merged() if o['kind'] == 'override']
+    if not ovs: sys.exit('wiki overrides: no override data. ' + export_hint())
+    def match(x): return q == re.sub('[^a-z0-9]', '', x.lower())
+    def part(x): return q in re.sub('[^a-z0-9]', '', x.lower())
+    exact = [o for o in ovs if any(match(x) for x in o['data']['characters'] + o['data']['factions'])]
+    hit = exact or [o for o in ovs if any(part(x) for x in o['data']['characters'] + o['data']['factions'])]
+    if not hit: hit = [o for o in ovs if part(o['data']['town'])]
+    if not hit: sys.exit('no override mentions or belongs to "%s"' % ' '.join(a))
+    print('%d town(s) with a variant that depends on "%s" (town | becomes | when):' % (len(hit), ' '.join(a)))
+    for o in sorted(hit, key=lambda o: o['data']['town']):
+        for v in o['data']['variants']:
+            txt = '; '.join(v['when'])
+            if hit is not ovs and not part(o['data']['town']) and not any(part(x) for x in v['when']) and not any(part(x) for x in [txt]): continue
+            print('%s | %s (%s%s) | %s' % (o['data']['town'], v['becomes'], v['type'], ', ' + v['faction'] if v.get('factionChanges') else '', txt))
+    print('(rule: checked when the town\'s zone loads; the variant with the most conditions that all hold wins; not for towns of your faction; wiki town <name> for the whole list)')
+    warn_missing()
+def cmd_who(a):
+    if not a: sys.exit('usage: wiki who <name>')
+    need_data()
+    r = best(' '.join(a), ('character', 'animal-character', 'npc', 'group'))
+    if not r: sys.exit('no character matching "%s" (wiki find <text>)' % ' '.join(a))
+    e = r[0]; d = e.get('data') or {}
+    print('%s  [%s; id %s; %s]' % (e['name'], e['kind'], e['id'], ' + '.join(lname(e['_layers']))))
+    print('faction : %s%s' % (e.get('faction') or '-', ' (from %s)' % d['factionSource'] if d.get('factionSource') else (' (none found in the record, its squads or its home town)' if not e.get('faction') and 'factionSource' in d else '')))
+    if 'unique' in d: print('unique  : %s   recruitable: %s' % ('yes' if d['unique'] else 'no (a bounty roll on a common type)', 'yes, a dialogue line makes them join you' if d.get('recruitable') else 'no dialogue line found'))
+    b = d.get('bounty')
+    if b: print('bounty  : %s%s with %s; %s' % (money(b['amount']), ' to ' + money(b['amountMax']) if b['amountMax'] != b['amount'] else '', ', '.join(b['factions']), 'always on them' if b['chancePct'] >= 100 else '%d%% of spawns carry it' % b['chancePct']))
+    for h in (d.get('homes') or [])[:6]: print('home    : %s (%s of "%s"; %s) at %s %s -- the town\'s position, not where they stand now' % (h['town'], h['role'], h['squad'], h['via'], h['x'], h['z']))
+    if 'homes' in d and not d['homes']: print('home    : no town lists their squad (roaming, campaign or placed another way)')
+    if d.get('squads'): print('squads  : %s' % ', '.join(d['squads'][:6]))
+    if d.get('campaigns'): print('campaign: special leader of %s' % ', '.join(d['campaigns']))
+    if d.get('replacement'): print('if taken: the game spawns %s instead' % ', '.join(d['replacement']))
+    if e.get('seen'): print('seen    : %s' % e['seen'])
+    print('notes   : %s' % e['notes'])
+    if e.get('x') is not None: print('tp      : tp %s   (%s)' % (xz(e), 'verified' if e['verified'] else 'town position from game files, not checked in game'))
+    ov = [o for _, o, _ in merged() if o['kind'] == 'override' and e['name'] in o['data']['characters']]
+    if ov: print('overrides: their life or death changes %d town(s): %s (wiki overrides "%s")' % (len(ov), ', '.join(sorted({o['data']['town'] for o in ov})[:6]) + (' ...' if len(ov) > 6 else ''), e['name']))
+    if len(r) > 1: print('(other matches: %s)' % ', '.join(o['name'] for o in r[1:5]))
+    prov(); warn_missing()
+def cmd_bounties(a):
+    mn = 0; n = 20
+    i = 0
+    while i < len(a):
+        if a[i] == '--min' and i + 1 < len(a): mn = int(a[i + 1]); i += 2
+        elif a[i] == '--n' and i + 1 < len(a): n = int(a[i + 1]); i += 2
+        else: sys.exit('usage: wiki bounties [--min N] [--n 20]')
+    need_data()
+    rows = [(-e['data']['bounty']['amount'], e['name'], e) for _, e, _ in merged() if e['kind'] == 'character' and (e.get('data') or {}).get('bounty') and e['data']['bounty']['amount'] >= mn]
+    if not any(e['kind'] == 'character' for _, e, _ in merged()): sys.exit('wiki bounties: no character data. ' + export_hint())
+    rows.sort(key=lambda t: t[:2])
+    print('%d character(s) with a bounty%s (name | bounty | with | chance | home | unique/recruitable):' % (len(rows), ' of at least %d' % mn if mn else ''))
+    for _, _, e in rows[:n]:
+        d = e['data']; b = d['bounty']; h = d['homes'][0]['town'] if d.get('homes') else ('at ' + xz(e) if e.get('x') is not None else 'no town')
+        print('%s | %s | %s | %s | %s | %s%s' % (e['name'], money(b['amount']) + ('-' + money(b['amountMax']) if b['amountMax'] != b['amount'] else ''), ', '.join(b['factions']), '%d%%' % b['chancePct'], h, 'unique' if d.get('unique') else 'common', ', recruitable' if d.get('recruitable') else ''))
+    if len(rows) > n: print('(%d more; --n 100)' % (len(rows) - n))
+    warn_missing()
+def cmd_faction(a):
+    if not a: sys.exit('usage: wiki faction <name>')
+    need_data()
+    r = best(' '.join(a), ('faction',))
+    if not r: sys.exit('no faction matching "%s"' % ' '.join(a))
+    e = r[0]; d = e.get('data') or {}
+    print('%s  [faction; id %s; %s]' % (e['name'], e['id'], ' + '.join(lname(e['_layers']))))
+    for k, lab in (('fundamentalType', 'type'), ('defaultRelation', 'default relation'), ('offersBounties', 'books bounties'), ('notReal', 'not a real faction')):
+        if k in d: print('%-17s: %s' % (lab, d[k]))
+    rel = d.get('relations') or {}
+    if rel: print('explicit relations (-100 hostile .. 100 friendly): ' + ', '.join('%s %s' % (k, v) for k, v in sorted(rel.items(), key=lambda t: t[1])[:14]) + (' ...' if len(rel) > 14 else ''))
+    if e.get('notes'): print('notes: %s' % e['notes'])
+    ts = [o for _, o, _ in merged() if o['kind'] in ('town', 'camp', 'bandit-hq') and o.get('faction') == e['name']]
+    if ts: print('places (%d): %s' % (len(ts), ', '.join('%s %s' % (o['name'], xz(o)) for o in ts[:12]) + (' ...' if len(ts) > 12 else '')))
+    warn_missing()
+def mult(v): return 'x%s' % v
+def bp_text(d):
+    b = d.get('blueprint')
+    if not b: return None
+    return ', '.join('%s%s' % (x['research'], ' (repetition %d)' % x['repetition'] if x.get('repetition') else '') for x in b) + '  (research that unlocks it: wiki research <name>)'
+def item_card(e):
+    d = e.get('data') or {}; k = e['kind']
+    print('%s  [%s; id %s; %s]' % (e['name'], k, e['id'], ' + '.join(lname(e['_layers']))))
+    if k == 'weapon':
+        print('class   : %s (skill category %s)   value %s   weight %s kg   material cost %s' % (d.get('class'), d.get('skillCategory'), d.get('value'), d.get('weightKg'), d.get('materialCost')))
+        print('damage  : cut %s, blunt %s, pierce %s; armour penetration %s; bleed %s; vs humans %s, animals %s, robots %s%s' % (mult(d.get('cutMult')), mult(d.get('bluntMult')), mult(d.get('pierceMult')), d.get('armourPenetration'), mult(d.get('bleedMult')), mult(d.get('humanMult')), mult(d.get('animalMult')), mult(d.get('robotMult')), '; min cut ' + mult(d['minCutMult']) if d.get('minCutMult') else ''))
+        print('handling: attack %+d, defence %+d, indoors %+d, length %s, %s' % (d.get('attackMod', 0), d.get('defenceMod', 0), d.get('indoorsMod', 0), d.get('length'), 'can block' if d.get('canBlock') else 'cannot block'))
+        if d.get('raceDamagePct'): print('per race: ' + ', '.join('%s %d%%' % (x['race'], x['pct']) for x in d['raceDamagePct']))
+        g = d.get('grades') or []
+        if g: print('grades  : ' + ', '.join('%s %s' % (x['model'], x['level']) for x in g) + '  (weapon level numbers; higher is better)')
+        mk = d.get('makers') or []
+        if mk: print('makers  : ' + '; '.join('%s (cut %s, blunt %s, price %s, weight %s)' % (m['maker'], mult(m['cutMod']), mult(m['bluntMod']), mult(m['priceMod']), mult(m['weightMod'])) for m in mk[:8]) + (' ...' if len(mk) > 8 else ''))
+        print('strength: no per-weapon strength requirement in the game files')
+    elif k == 'crossbow':
+        print('value %s (%s at the top grade)   weight %s kg   material cost %s   craft time %s h' % (d.get('value'), d.get('value_1'), d.get('weightKg'), d.get('material_cost'), d.get('craft_time_hrs')))
+        print('damage  : pierce %s-%s at the lowest grade, %s-%s at the top; bleed %s; vs humans %s, animals %s, robots %s' % (d.get('pierce_damage_min_0'), d.get('pierce_damage_max_0'), d.get('pierce_damage_min_1'), d.get('pierce_damage_max_1'), mult(d.get('bleed_mult')), mult(d.get('human_damage_mult')), mult(d.get('animal_damage_mult')), mult(d.get('robot_damage_mult'))))
+        print('shooting: range %s (%s top), reload %s-%s s (%s-%s top), shot speed %s (%s top), accuracy deviation %s deg (%s top), perfect skill %s, %s shot(s)' % (d.get('range'), d.get('range_1'), d.get('reload_time_min'), d.get('reload_time_max'), d.get('reload_time_min_1'), d.get('reload_time_max_1'), d.get('shot_speed'), d.get('shot_speed_1'), d.get('accuracy_deviation_at_0_skill'), d.get('accuracy_deviation_at_0_skill_1'), d.get('accuracy_perfect_skill'), d.get('num_shots')))
+        if d.get('ammo'): print('ammo    : ' + ', '.join(d['ammo']))
+        if d.get('ingredients'): print('crafting: ' + ', '.join('%s x%s' % (x['item'], x['count']) for x in d['ingredients']))
+    elif k == 'armour':
+        print('class   : %s%s, material %s, slot %s   value %s   weight %s kg' % (d.get('class'), ' ("%s")' % d['className'] if d.get('className') and d['className'] != d.get('class') else '', d.get('material'), d.get('slotName'), d.get('value'), d.get('weightKg')))
+        print('defence : cut %+g, blunt %+g, pierce %s; level bonus %s' % (d.get('cutDefBonus', 0), d.get('bluntDefBonus', 0), mult(d.get('pierceDefMult')), d.get('levelBonus')))
+        if d.get('coverage'): print('covers  : ' + ', '.join('%s %d%%' % (x['part'], x['pct']) for x in d['coverage']))
+        mods = d.get('modifiers') or {}
+        if mods: print('modifiers: ' + ', '.join('%s %s' % (kk, vv) for kk, vv in mods.items()))
+        print('note    : how much a piece really stops also depends on class and material tables inside the game program, which are not in the data files; compare pieces by class, material, coverage and these bonuses')
+    else:
+        print('category: %s (item function %s; %s)   value %s   weight %s kg   slot %s   stack %s%s' % (d.get('category'), d.get('itemFunction'), d.get('categoryBasis'), d.get('value'), d.get('weightKg'), d.get('slot'), d.get('stackable'), '   charges %s' % d['charges'] if d.get('charges') else ''))
+        if d.get('ingredients'): print('made from: ' + ', '.join('%s x%s' % (x['item'], x['count']) for x in d['ingredients']))
+        if d.get('artifact'): print('flags   : research artifact')
+    bp = bp_text(d)
+    if bp: print('blueprint: ' + bp)
+    if d.get('description'): print('text    : ' + d['description'])
+def cmd_item(a):
+    if not a: sys.exit('usage: wiki item <name>')
+    need_data()
+    r = best(' '.join(a), ITEMLIKE)
+    if not r: sys.exit('no item, weapon, crossbow or armour matching "%s"' % ' '.join(a))
+    item_card(r[0])
+    if len(r) > 1:
+        print('(other matches: %s)' % '; '.join('%s [%s]' % (o['name'], o['kind']) for o in r[1:9]) + (' ...' if len(r) > 9 else ''))
+    prov(); warn_missing()
+def research_index():
+    rs = [o for _, o, _ in merged() if o['kind'] == 'research']
+    byrec = {}
+    for o in rs:
+        byrec[(o.get('data') or {}).get('record')] = o
+        for al in o.get('aliases', []): byrec.setdefault(al, o)
+    return rs, byrec
+def chain_of(o, byrec):
+    """Every research that must be finished before o (transitive), each once, nearest first; plus other required records (buildings) by name."""
+    seen = {}; other = []; queue = [o]
+    while queue:
+        cur = queue.pop(0)
+        for q in (cur.get('data') or {}).get('requires', []):
+            if q['kind'] == 'research' and q['id'] in byrec:
+                x = byrec[q['id']]
+                if x['id'] not in seen and x['id'] != o['id']: seen[x['id']] = x; queue.append(x)
+            elif q['kind'] != 'research' and q['name'] not in other: other.append(q['name'])
+    return list(seen.values()), other
+def cmd_research(a):
+    need_data()
+    rs, byrec = research_index()
+    if not rs: sys.exit('wiki research: no research data. ' + export_hint())
+    n = 30; needs = None; words = []
+    i = 0
+    while i < len(a):
+        if a[i] == '--needs' and i + 1 < len(a): needs = ' '.join(a[i + 1:]); break
+        elif a[i] == '--n' and i + 1 < len(a): n = int(a[i + 1]); i += 2
+        else: words.append(a[i]); i += 1
+    if needs is not None:
+        if needs.endswith(' --n') or ' --n ' in needs:
+            parts = needs.split(' --n '); needs = parts[0]; n = int(parts[1]) if len(parts) > 1 else n
+        q = nk(needs)
+        hits = []
+        for o in rs:
+            for c in o['data'].get('cost', []):
+                if q in nk(c['item']): hits.append((c['item'], c['count'], o)); break
+        hits.sort(key=lambda t: (t[0], -t[1], t[2]['data'].get('category', ''), t[2]['name']))
+        print('%d research(es) cost "%s" (research | category | cost | needs):' % (len(hits), needs))
+        for item, count, o in hits[:n]:
+            d = o['data']
+            print('%s | %s | %s | %s' % (o['name'], d.get('category'), ', '.join('%s x%s' % (c['item'], c['count']) for c in d['cost']), ', '.join(x['name'] for x in d.get('requires', [])) or '-'))
+        if len(hits) > n: print('(%d more; --n 100)' % (len(hits) - n))
+        if not hits: print('no research costs that item (wiki research for the categories)')
+        prov(); warn_missing(); return
+    if not words:
+        cats = {}
+        for o in rs: cats.setdefault(o['data'].get('category') or '-', []).append(o['name'])
+        print('%d research entries; categories (count: first names):' % len(rs))
+        for c, xs in sorted(cats.items()): print('%s (%d): %s%s' % (c, len(xs), ', '.join(xs[:6]), ' ...' if len(xs) > 6 else ''))
+        print('usage: wiki research <name> | wiki research --needs <book>')
+        prov(); warn_missing(); return
+    r = best(' '.join(words), ('research',))
+    if not r: sys.exit('no research matching "%s" (wiki research lists the categories)' % ' '.join(words))
+    e = r[0]; d = e['data']
+    print('%s  [research; %s; level %s; id %s; %s]' % (e['name'], d.get('category'), d.get('level'), e['id'], ' + '.join(lname(e['_layers']))))
+    print('time    : %s base hours%s%s%s' % (d.get('hours'), ('; repeatable %d more time(s), cost and time x%s each' % (d['repeats'] - 1 if d['repeats'] > 1 else 0, d.get('repeatMult'))) if d.get('repeats') else '', '; a bench level upgrade' if d.get('levelUpgrade') else '', '; blueprint only' if d.get('blueprintOnly') else ''))
+    print('cost    : %s%s' % (', '.join('%s x%s' % (c['item'], c['count']) for c in d['cost']) or 'no items', '; money %s' % d['money'] if d.get('money') else ''))
+    if d.get('books'): print('books   : ' + ', '.join(d['books']))
+    req = d.get('requires') or []
+    print('needs   : %s' % ('; '.join('%s%s%s' % (q['name'], ' (%s)' % q['kind'] if q['kind'] != 'research' else '', ' repetition %d' % q['repeat'] if q['kind'] == 'research' and q['repeat'] else '') for q in req) or 'nothing'))
+    ch, other = chain_of(e, byrec)
+    if ch or other:
+        tot = {}
+        for x in ch + [e]:
+            for c in x['data'].get('cost', []): tot[c['item']] = tot.get(c['item'], 0) + c['count']
+        print('chain   : %s%s' % (' -> '.join(x['name'] for x in reversed(ch)) + (' -> ' if ch else '') + e['name'], '; also needs the buildings/records: ' + ', '.join(other) if other else ''))
+        print('total   : %s  (one pass of each research in the chain, no repeats)' % ', '.join('%s x%s' % kv for kv in sorted(tot.items())))
+    if d.get('unlocks'):
+        by = {}
+        for u in d['unlocks']: by.setdefault(u['kind'], []).append(u['name'] + (' (repetition %d)' % u['repetition'] if d.get('repeats') and u['repetition'] else ''))
+        print('unlocks : ' + '; '.join('%s: %s' % (k, ', '.join(v[:12]) + (' ...' if len(v) > 12 else '')) for k, v in by.items()))
+    if d.get('improves'): print('improves: %s%s%s%s' % (', '.join(d['improves']), '; production x%s' % d['productionMult'] if d.get('productionMult') else '', '; power +%s' % d['powerIncrease'] if d.get('powerIncrease') else '', '; capacity +%s' % d['capacityIncrease'] if d.get('capacityIncrease') else ''))
+    if d.get('leadsTo'): print('leads to: ' + ', '.join(d['leadsTo'][:12]) + (' ...' if len(d['leadsTo']) > 12 else ''))
+    if d.get('description'): print('text    : ' + d['description'])
+    if len(r) > 1: print('(other matches: %s)' % ', '.join(o['name'] for o in r[1:8]))
+    prov(); warn_missing()
+def cmd_animal(a):
+    if not a: sys.exit('usage: wiki animal <name>')
+    need_data()
+    r = best(' '.join(a), ('animal-type',))
+    if not r:
+        if not any(o['kind'] == 'animal-type' for _, o, _ in merged()): sys.exit('wiki animal: no animal data. ' + export_hint())
+        sys.exit('no animal matching "%s" (wiki find <text> --kind animal-type)' % ' '.join(a))
+    e = r[0]; d = e['data']; rc = d.get('race') or {}
+    print('%s  [animal; id %s; %s]' % (e['name'], e['id'], ' + '.join(lname(e['_layers']))))
+    print('faction : %s' % (e.get('faction') or '-'))
+    print('stats   : combat %s, animal strength %s%s, health x%s, lifespan %s days, size %s-%s of full, %s%% female, inventory %s%s' % (d.get('combatStats'), d.get('animalStrength'), ', strength %s' % d['strength'] if d.get('strength') else '', d.get('hpMult'), d.get('lifespanDays'), d.get('scaleMin'), d.get('scaleMax'), d.get('femaleChancePct'), d.get('inventory'), '; unique' if d.get('unique') else ''))
+    if rc:
+        print('race    : %s; walk speed %s%s; blood %s-%s; hunger %s, bleed %s, heal %s; extra attack slots %s; %s' % (rc['name'], rc['walkSpeed'], ' (swims x%s)' % rc['swimSpeedMult'] if rc.get('swims') else '', rc['minBlood'], rc['maxBlood'], rc['hungerRate'], rc['bleedRate'], rc['healRate'], rc['extraAttackSlots'], ', '.join(x for x in ('carriable' if rc.get('carriable') else 'cannot be carried', 'cannot enter buildings' if rc.get('cantEnterBuildings') else '', 'robot' if rc.get('isRobot') else '', 'gigantic' if rc.get('gigantic') else '') if x)))
+        if rc.get('anatomy'): print('anatomy : ' + ', '.join('%s %s' % (x['part'], x['hp']) for x in rc['anatomy']) + '  (part health, as the race lists it)')
+    w = d.get('weapon')
+    if w: print('attack  : %s (%s): cut %s, blunt %s, pierce %s, bleed %s, length %s, vs humans %s, animals %s%s' % (w['name'], w['class'], mult(w['cutMult']), mult(w['bluntMult']), mult(w['pierceMult']), mult(w['bleedMult']), w['length'], mult(w['humanMult']), mult(w['animalMult']), '; weapon level ' + d['weaponLevel'] if d.get('weaponLevel') else ''))
+    if d.get('deathItems'): print('drops   : ' + ', '.join('%s x%s' % (x['item'], x['count']) for x in d['deathItems']))
+    b = d.get('bounty')
+    if b: print('bounty  : %s%s, %d%% of spawns' % (money(b['amount']), ' to ' + money(b['amountMax']) if b['amountMax'] != b['amount'] else '', b['chancePct']))
+    if d.get('squads'): print('squads  : ' + '; '.join('%s x%s' % (x['squad'], x['count']) for x in d['squads'][:8]) + (' ...' if len(d['squads']) > 8 else ''))
+    sp = d.get('spawnsIn') or {}
+    bi = {}
+    for x in sp.get('biomes', []): bi.setdefault(x['biome'], []).append('%s %s%%' % (x['squad'], x['sharePct']))
+    if bi: print('biomes  : ' + '; '.join('%s (%s)' % (k, ', '.join(v[:3])) for k, v in list(bi.items())[:14]) + (' ...' if len(bi) > 14 else '') + '  (share = that squad\'s weight among the biome\'s homeless squads)')
+    if sp.get('nests'): print('nests   : ' + ', '.join(sp['nests']))
+    if sp.get('towns'): print('towns   : ' + ', '.join(sp['towns']) + '  (resident, bar or roaming squads of the town)')
+    if not bi and not sp.get('nests') and not sp.get('towns'): print('spawns  : no biome, nest or town list reaches it (placed by a campaign, another squad, or only by hand)')
+    if len(r) > 1: print('(other matches: %s)' % ', '.join(o['name'] for o in r[1:8]))
+    prov(); warn_missing()
+def squad_line(x): return '%s | %s%% | %s | %s%s' % (x['squad'], x['sharePct'], x.get('faction') or '-', ', '.join(x.get('animals') or x.get('members') or ['-']), ' | needs: ' + ', '.join(x['worldState']) if x.get('worldState') else '')
+def biome_report(b, why, n=25):
+    d = b['data']
+    print('%s  [biome group; %d zone cells, %d placed towns; %s]' % (b['name'], d['cellCount'], d.get('townCount', 0), ' + '.join(lname(b['_layers']))))
+    if why: print(why)
+    print('homeless squads per loaded sector: %s (times the population setting); %d nest(s) to place%s' % (d['homelessAmount'], d['numNests'], ' (at fixed markers only)' if d.get('nestsAtFixedMarkersOnly') else ''))
+    sq = d.get('squads') or []
+    print('%d squad template(s) can spawn here (squad | share of the list | faction | animals or members%s):' % (len(sq), ' | world state')) if sq else print('no homeless squads listed')
+    for x in sorted(sq, key=lambda x: -x['sharePct'])[:n]: print('  ' + squad_line(x))
+    if len(sq) > n: print('  (%d more; --n 100)' % (len(sq) - n))
+    for x in d.get('nests', []): print('nest    : %s (%s%% of the nests) with %s' % (x['nest'], x['weightPct'], ', '.join(x['squads']) or 'no roaming squads'))
+    if d.get('towns'): print('towns   : ' + ', '.join(d['towns'][:14]) + (' ...' if d.get('townCount', 0) > 14 else ''))
+def cmd_spawns(a):
+    n = 25; words = []
+    i = 0
+    while i < len(a):
+        if a[i] == '--n' and i + 1 < len(a): n = int(a[i + 1]); i += 2
+        else: words.append(a[i]); i += 1
+    q = ' '.join(words).strip()
+    if not q: sys.exit('usage: wiki spawns <zone-X-Y | town | biome | squad> [--n 25]')
+    need_data()
+    bs = [o for _, o, _ in merged() if o['kind'] == 'biome']
+    if not bs: sys.exit('wiki spawns: no spawn data. ' + export_hint())
+    m = re.fullmatch(r'(?:zone[-. ]?)?(\d+)[-. ,](\d+)', q.lower())
+    cell = '%s-%s' % m.groups() if m else None
+    why = ''
+    if cell is None:
+        t = best(q, TOWNLIKE)
+        if t and nk(t[0]['name']) == nk(q) and t[0].get('zone'):
+            zm = re.fullmatch(r'zone-(\d+)-(\d+)', t[0]['zone'])
+            if zm: cell = '%s-%s' % zm.groups(); why = '%s lies in zone %s' % (t[0]['name'], t[0]['zone'])
+    if cell:
+        hit = [b for b in bs if cell in b['data']['cells']]
+        if not hit: sys.exit('zone cell %s is outside every biome group (off the painted map)' % cell)
+        biome_report(hit[0], (why + '; ' if why else 'zone cell zone-%s: ' % cell) + 'its biome group spawns the squads below (homeless squads roam; towns have their own residents: wiki town <name>)', n)
+        prov(); warn_missing(); return
+    k = nk(q)
+    named = [b for b in bs if nk(b['name']) == k] or [b for b in bs if k in nk(b['name'])]
+    if named:
+        for b in named[:3]: biome_report(b, '', n)
+        prov(); warn_missing(); return
+    found = False
+    for b in bs:
+        for x in b['data'].get('squads', []):
+            if k in nk(x['squad']):
+                if not found: print('squads matching "%s" spawn in these biome groups (biome | squad | share | faction | animals or members):' % q)
+                found = True
+                print('%s | %s | %s%% | %s | %s%s' % (b['name'], x['squad'], x['sharePct'], x.get('faction') or '-', ', '.join(x.get('animals') or x.get('members') or ['-']), ' | needs: ' + ', '.join(x['worldState']) if x.get('worldState') else ''))
+    for _, o, _ in merged():
+        d = o.get('data') or {}
+        if o['kind'] == 'nest' and any(k in nk(x) for x in d.get('roaming', [])):
+            found = True; print('nest    : %s (%s) has roaming %s' % (o['name'], xz(o), ', '.join(x for x in d['roaming'] if k in nk(x))))
+        elif o['kind'] in ('town', 'camp') and any(k in nk(x) for x in d.get('residents', []) + d.get('bar', []) + d.get('roaming', [])):
+            found = True; print('town    : %s (%s) lists %s' % (o['name'], xz(o), ', '.join(x for x in d.get('residents', []) + d.get('bar', []) + d.get('roaming', []) if k in nk(x))))
+    if not found: sys.exit('nothing matches "%s" (try a zone like zone-39-16, a town, a biome name or a squad name)' % q)
+    prov(); warn_missing()
+def cmd_near(a):
+    kind = None; n = 5; pos = []
+    i = 0
+    while i < len(a):
+        if a[i] == '--kind': kind = a[i + 1]; i += 2
+        elif a[i] == '--n': n = int(a[i + 1]); i += 2
+        else: pos.append(a[i]); i += 1
+    if len(pos) != 2: sys.exit('usage: wiki near <x> <z> [--kind K] [--n 5]')
+    need_data()
+    x, z = float(pos[0]), float(pos[1])
+    r = [(math.hypot(e['x'] - x, e['z'] - z), e) for _, e, _ in merged() if e.get('x') is not None and (not kind or e['kind'] == kind)]
+    r.sort(key=lambda t: t[0])
+    for d, e in r[:n]: print('%6d m | %s' % (d, line(e)))
+    if not r: print('none with coordinates' + (' for kind ' + kind if kind else ''))
+    prov(); warn_missing()
+def cmd_tp(a):
+    if not a: sys.exit('usage: wiki tp <id>')
+    need_data()
+    n, e = get(a[0])
+    if not e or 'x' not in e: sys.exit('no placed entry with id "%s"' % a[0])
+    if e['x'] is None:
+        print('WARNING: %s has no known position (x/z null); do not guess. Use the zone/town entry or pages/finding-npcs.md.' % e['id'], file=sys.stderr); sys.exit(4)
+    print('tp %s' % xz(e))
+    if not e['verified']:
+        print('WARNING: %s is not verified in game (%s); expect to check with observe --brief and report back with wiki add.' % (e['id'], 'position from the game data' if e.get('_layers') == ['generated'] else 'confidence ' + e['confidence']), file=sys.stderr); sys.exit(3)
+def folder_entries(folder):
+    out = []
+    for n, p in layer_files(folder):
+        if n in ('personas', 'commands') or n.startswith('_'): continue
+        try:
+            for e in rows_of(read(p)): out.append((n, e))
+        except Exception: pass
+    return out
+def local_dir():
+    if not LOCAL: sys.exit('wiki add: no local layer. Set WIKI_DIR=<folder> (cp -r wiki.example <folder> for the empty skeleton)')
+    os.makedirs(LOCAL, exist_ok=True)
+    return LOCAL
+def save(folder, n, d):
+    with open(os.path.join(folder, n + '.json'), 'w') as f:
+        json.dump(d, f, indent=1, ensure_ascii=False); f.write('\n')
+def merge_add(src):
+    folder = local_dir()
+    d = json.load(sys.stdin if src == '-' else open(src))
+    if isinstance(d, dict): d = [d]
+    bad = 0; res = []
+    existing = {e['id']: n for n, e in folder_entries(folder)}
+    for e in d:
+        errs = validate(e)
+        if errs: print('REJECT %s: %s' % (e.get('id') if isinstance(e, dict) else '?', '; '.join(errs))); bad += 1; continue
+        if e['id'] in existing: fn = existing[e['id']]
+        else: fn = {'zone': 'zones', 'quiet-spot': 'zones', 'spawn': 'zones', 'town': 'towns', 'camp': 'towns', 'bandit-hq': 'towns', 'shop': 'towns', 'npc': 'npcs', 'character': 'characters', 'faction': 'factions', 'note': 'notes'}.get(e['kind'], 'items')
+        p = os.path.join(folder, fn + '.json')
+        data = rows_of(read(p)) if os.path.exists(p) else []
+        ids = [x['id'] for x in data]
+        if e['id'] in ids: data[ids.index(e['id'])] = e; res.append('updated %s (%s.json)' % (e['id'], fn))
+        else: data.append(e); res.append('added %s (%s.json)' % (e['id'], fn))
+        save(folder, fn, data)
+        existing[e['id']] = fn
+    print('\n'.join(res))
+    if bad: sys.exit(1)
+def cmd_add(a):
+    if not a: sys.exit('usage: wiki add <file.json|->')
+    merge_add(a[0])
+def cmd_kinds(a):
+    need_data()
+    c = {}
+    for layer, n, e in entries():
+        k = (layer, n, e['kind']); c.setdefault(k, [0, 0]); c[k][0] += 1; c[k][1] += bool(e['verified'])
+    for (layer, n, k), (t, v) in sorted(c.items()): print('%s | %s | %s | %d entries, %d verified' % (layer, n, k, t, v))
+    prov(); warn_missing()
+def meta(folder):
+    for n, p in layer_files(folder):
+        try:
+            d = read(p)
+            if isinstance(d, dict) and 'source' in d: return d
+        except Exception: pass
+    return None
+def gen_meta():
+    """The top-level provenance block of the generated layer (data dir, load order, mods), from the first generated file that has it."""
+    for n, p in layer_files(gen_dir()):
+        try:
+            d = read(p)
+            if isinstance(d, dict) and 'dataDir' in d: return d
+        except Exception: pass
+    return None
+def prov():
+    m = gen_meta()
+    if not m: return
+    mods = m.get('mods') or []
+    if gen_label() == 'clean': print('layer   : from the shipped clean-install wiki (facts only, made from a clean copy without mods; may differ if you use mods: run `wiki export` for your own data)')
+    else: print('layer   : from your game data (your own `wiki export`; it takes precedence over the shipped clean wiki)')
+    print('data    : generated from %s -- %s' % (m.get('dataDir'), 'clean install, no mods beyond the base game' if m.get('modded') is False else ('modded: %d mod file(s): %s' % (len(mods), ', '.join(mods[:6]) + (' ...' if len(mods) > 6 else ''))) if m.get('modded') else 'mod state not recorded (old export, run wiki export)'))
+def cmd_status(a):
+    print('data layer in use: %s' % ('your own export (%s)' % GEN if has_json(GEN) else 'the shipped clean-install wiki (%s)' % CLEAN if has_json(CLEAN) else 'none'))
+    for layer, folder in [('export', GEN), ('clean', CLEAN)] + [x for x in layers() if x[0] != 'generated']:
+        fs = layer_files(folder)
+        cnt = sum(len(rows_of(read(p))) for _, p in fs) if fs else 0
+        print('%-9s %s: %s' % (layer, folder, '%d files, %d entries' % (len(fs), cnt) if fs else 'missing'))
+        m = meta(folder)
+        if m:
+            print('          %s | data %s | %s%s' % (m['source'], m.get('dataDir'), m.get('generated'), ' | facts only, dropped prose: ' + ', '.join(m.get('dropped_prose_fields') or []) if m.get('factsOnly') else ''))
+            if 'modded' in m:
+                print('          mods: %s' % ('none, clean install (only the base game\'s own data files)' if not m['modded'] else '%d beyond the base game: %s' % (len(m['mods']), ', '.join(m['mods']))))
+                print('          mods.cfg: %d entries; load order: %s' % (len(m.get('modsCfg') or []), m.get('loadOrder')))
+                if m.get('loadIssues'): print('          load issues: %s' % '; '.join(m['loadIssues'][:5]))
+            else: print('          mods: not recorded (made by an older exporter; run wiki export)')
+    if gen_missing(): print('no data layer: ' + export_hint())
+def cmd_export(a):
+    exe = native_exe()
+    if not exe: sys.exit('wiki export: ' + export_hint())
+    sys.exit(subprocess.call([exe, '--wiki-export', a[0] if a else GEN]))
+def cmd_check(a):
+    errs = []; seen = {}; names = {}; count = 0
+    for layer, folder in layers():
+        for n, p in layer_files(folder):
+            if n.startswith('_'): continue
+            try: d = read(p)
+            except Exception as ex: errs.append('%s/%s.json: %s' % (layer, n, ex)); continue
+            if n in ('personas', 'commands'):
+                if not isinstance(d, list): errs.append('%s.json is not a list' % n); continue
+                for e in d:
+                    if n == 'commands' and not all(k in e for k in ('id', 'name', 'usage')): errs.append('commands.json: bad entry %s' % e)
+                    if n == 'personas':
+                        m = [k for k in PFIELDS if k not in e]
+                        if m: errs.append('personas.json %s: missing %s' % (e.get('id'), m))
+                continue
+            rows = rows_of(d)
+            if not isinstance(rows, list): errs.append('%s/%s.json is not a list' % (layer, n)); continue
+            for e in rows:
+                for x in validate(e, layer): errs.append('%s/%s.json %s: %s' % (layer, n, e.get('id') if isinstance(e, dict) else '?', x))
+                if not isinstance(e, dict): continue
+                i = e.get('id')
+                if (layer, i) in seen: errs.append('duplicate id %s in layer %s (%s.json and %s.json)' % (i, layer, seen[(layer, i)], n))
+                seen[(layer, i)] = n; count += 1
+                if layer != 'generated':   # generated data repeats names (many records are called "Bandit"); ids stay unique
+                    nk = (layer, e.get('kind'), (e.get('name') or '').lower())
+                    if nk in names: errs.append('duplicate name %s (%s and %s)' % (e.get('name'), names[nk], i))
+                    names[nk] = i
+    print('\n'.join(errs[:40]) if errs else 'wiki ok: %d entries in %d layers' % (count, len([1 for l, f in layers() if layer_files(f)])))
+    if len(errs) > 40: print('... %d more errors' % (len(errs) - 40))
+    warn_missing()
+    sys.exit(1 if errs else 0)
+C = {'find': cmd_find, 'show': cmd_show, 'town': cmd_town, 'buy': cmd_buy, 'overrides': cmd_overrides, 'who': cmd_who, 'bounties': cmd_bounties, 'faction': cmd_faction, 'item': cmd_item, 'research': cmd_research, 'animal': cmd_animal, 'spawns': cmd_spawns, 'near': cmd_near, 'tp': cmd_tp, 'kinds': cmd_kinds, 'status': cmd_status, 'export': cmd_export, 'add': cmd_add, 'check': cmd_check}
+if len(sys.argv) < 2 or sys.argv[1] not in C:
+    print(open(__file__).read().split('import json')[0].replace('#!/usr/bin/env -S python3 -I\n', ''), end=''); sys.exit(2)
+C[sys.argv[1]](sys.argv[2:])

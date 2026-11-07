@@ -17,6 +17,25 @@ sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, 
     const int ModsPage = 8;
     /// <summary>The Mod settings page (SettingsMenu.ModSettings.cs): the settings code mods registered.</summary>
     const int ModSettingsPage = 9;
+    /// <summary>The names <c>ui-open settings:&lt;name&gt;</c> takes: a page, or <c>graphics:&lt;sub-page&gt;</c>; compared ignoring case (spaces and "&amp;" count).</summary>
+    internal static IEnumerable<string> PageNames => Pages.Select(p => p.ToLowerInvariant()).Concat(GraphicsPages.Select(p => "graphics:" + p.ToLowerInvariant()));
+
+    /// <summary>The page shown now, as <see cref="PageNames"/> spells it.</summary>
+    internal string PageName => page == 1 ? "graphics:" + GraphicsPages[graphicsPage].ToLowerInvariant() : Pages[page].ToLowerInvariant();
+
+    /// <summary>Switches to a page by name (see <see cref="PageNames"/>); false when there is none.</summary>
+    internal bool TryOpenPage(string name)
+    {
+        string[] parts = name.Split(':', 2);
+        int index = Array.FindIndex(Pages, p => p.Equals(parts[0], StringComparison.OrdinalIgnoreCase));
+        if (index < 0) return false;
+        int sub = parts.Length == 2 ? Array.FindIndex(GraphicsPages, p => p.Equals(parts[1], StringComparison.OrdinalIgnoreCase)) : graphicsPage;
+        if (parts.Length == 2 && (index != 1 || sub < 0)) return false;
+        Navigate(index);
+        graphicsPage = sub;
+        return true;
+    }
+
     /// <summary>The Graphics tabs: the look tabs, then the quality tabs (SettingsMenu.Looks.cs).</summary>
     internal static readonly string[] GraphicsPages = ["Lighting", "Sky & weather", "Colour", "World", "Characters"];
     /// <summary>The Metal-only preset row (Native / MetalFX quality, balanced, performance / TAA), edited by the Metal settings panel.</summary>
@@ -122,7 +141,14 @@ sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, 
     sealed record Entry(string Label, string Hint = "", Slider? Slider = null, Toggle? Toggle = null, Choice? Choice = null,
         InputAction? Binding = null, Action? Run = null, string? Picture = null, bool Segmented = false, bool Changed = false,
         string? Impact = null, bool Warn = false, string? Raw = null, int Depth = 0, bool? Open = null, string? GroupId = null, Action? Reset = null, bool Locked = false);
-    sealed record Hit(UiRect Bounds, Action Activate, Slider? Slider = null, UiRect? Track = null);
+    sealed record Hit(UiRect Bounds, Action Activate, Slider? Slider = null, UiRect? Track = null, string Label = "");
+
+    /// <summary>The labelled clickable widgets as the last frame drew them (agent control channel: ui-tree, ui-click); sliders are left out.</summary>
+    internal IReadOnlyList<(string Label, UiRect Bounds, Action Activate)> Clickables =>
+        [.. hits.Where(h => h.Label.Length > 0 && h.Slider is null).Select(h => (h.Label, h.Bounds, h.Activate))];
+
+    /// <summary>The sliders as the last frame drew them, with the track they sit on (agent control channel: ui-tree, ui-set).</summary>
+    internal IReadOnlyList<(Slider Slider, UiRect Bounds)> SliderHits => [.. hits.Where(h => h.Slider is not null).Select(h => (h.Slider!, h.Bounds))];
 
     public IReadOnlyList<Slider> Sliders => values.Sliders;
     public IReadOnlyList<Toggle> Toggles => values.Toggles;
