@@ -68,6 +68,13 @@ journal replays at begin/before submission; freed indices wait for consumers. Up
 changes every submitted draw using it, including already-recorded draws. Use new indices for
 mid-frame binding changes. Tables/views/globals are render-thread state.
 
+### Shader overrides
+
+Debug aid (`ShaderOverrides`): with `MEITOU_SHADER_DIR=<dir>` every GLSL source given to the compiler is written once to
+`<dir>/<hash>.<stage>.glsl` (first 16 hex digits of its SHA-256; stages `vertex`, `fragment`, `compute`, `tess-control`, `tess-evaluation`),
+and a file there whose text differs from the source is compiled instead, before the SPIR-V caches are keyed. Grep the folder for a
+function, edit the file, start the game again: no rebuild. A changed C# source gets a new hash (a new file); delete the folder to start clean.
+
 ## Parallel recording and validation
 
 Recording.Mode0 inline,1 serial secondary,2 default worker secondary. ParallelPass executes

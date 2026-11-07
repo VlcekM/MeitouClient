@@ -422,6 +422,7 @@ sealed partial class GameHost
         RegisterControlBaseCommands(Add, Loaded);
         RegisterControlPlayCommands(Add, Loaded);
         RegisterControlNavCommands(Add, Loaded);
+        RegisterControlGraphicsCommands(Add);
 
         Add("terrain-height", "terrain-height <x> <z> [radius step]", "terrain height at X Z; with a radius and step, the min, max and spread over the square around it (to find flat ground)", (args, con) =>
         {

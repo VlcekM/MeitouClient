@@ -80,6 +80,7 @@ c help                                # one usage line per command; `c help <nam
 | `find-item` | `find-item <text> [--type armour\|weapon\|item\|crossbow\|container] [--limit n] [--stats]` |
 | `firstaid` | `firstaid <id>` |
 | `follow` | `follow <id> [--guard]` |
+| `gfx` | `gfx [label [value]]` (the settings window's graphics switches and sliders: list, or set one as a click would; `gfx "Time of day" 14`) |
 | `give` | `give "<item record>" [qty] [quality] [--equip]` |
 | `ground-items` | `ground-items <x> <z> <radius>` |
 | `heal` | `heal` |
