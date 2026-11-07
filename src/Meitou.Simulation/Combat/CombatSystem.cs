@@ -110,8 +110,8 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
     public const float KnockDownChance = 0.1f, KnockDownSeconds = 10;
 
     /// <summary>
-    /// <c>AI::underMeleeAttack</c> on <paramref name="t"/> getting up with its fight off (targeted by an attacker, or hit; <paramref name="counter"/> tells the attacks of one tick apart): a <see cref="KnockDownChance"/> roll knocks it out for
-    /// <see cref="KnockDownSeconds"/> (its KO timer set). Serial phases.
+    /// <c>AI::underMeleeAttack</c> on <paramref name="t"/> getting up with its fight off (targeted by a melee attacker, or hit by a blow; <paramref name="counter"/> tells the attacks of one tick apart): a <see cref="KnockDownChance"/> roll knocks it out for
+    /// <see cref="KnockDownSeconds"/> (its KO timer set). A shooter's target and a bolt go through the shot handler instead, which has no roll. Serial phases.
     /// </summary>
     internal void UnderAttackGettingUp(World world, int t, CharacterCold tc, ulong counter)
     {

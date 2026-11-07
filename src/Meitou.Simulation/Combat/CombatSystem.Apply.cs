@@ -195,8 +195,9 @@ public sealed partial class CombatSystem
     /// A hit's reaction (<b>Verified</b>, FUN_1404391f0 / FUN_140665490, docs/game/combat.md "Hit reactions"): a stumble clip is picked unless the hit is light and one is
     /// already playing; it is big when heavy and none was playing. A picked clip cancels the defender's own swing (that blow never lands) and its reaction, and holds it helpless
     /// until the clip ends (the knockback is the clip's root motion). With no clip to play the swing is still cancelled, with a short pause. Takes effect at the next Act.
+    /// A <paramref name="bolt"/> leaves one getting up alone with no knock-down roll (its shot handler <c>FUN_140999d50</c> has none).
     /// </summary>
-    void Stagger(World world, ref CombatSlot D, int d, CharacterCold dc, bool heavy, int now, ulong counter)
+    void Stagger(World world, ref CombatSlot D, int d, CharacterCold dc, bool heavy, int now, ulong counter, bool bolt = false)
     {
         // Outside a fight (docs/game/combat.md "Stagger outside a fight"): one getting up is left alone; any other drops its task, which is planned again from its start,
         // unless it mans a turret (shooting at a live target).
@@ -205,7 +206,7 @@ public sealed partial class CombatSystem
         {
             if (CharacterFacts.GettingUp(dc, now))
             {
-                UnderAttackGettingUp(world, d, dc, counter);
+                if (!bolt) UnderAttackGettingUp(world, d, dc, counter);
                 return;
             }
             if (dc.Gunning is null)

@@ -558,7 +558,9 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem, IDecis
                     // Under melee attack (Character +0x2b0) one staying low stands.
                     if (tc.Medical is { } medical) medical.StayingLow = false;
                     bool gettingUp = CharacterFacts.GettingUp(tc, world.Tick);
-                    combat.UnderAttackGettingUp(world, t, tc, (ulong)(uint)a);
+                    // Only a melee pick rolls the knock-down: a shooter's target setter calls the shot handler, which has none (docs/game/combat.md "Being targeted").
+                    bool melee = !combat.StateOf(new CharacterId(a, next[a].Generation)).Ranged;
+                    if (melee) combat.UnderAttackGettingUp(world, t, tc, (ulong)(uint)a);
                     // With its fight off it replans, unless it is getting up or is player-side and moving (docs/game/combat.md "Being targeted"): an NPC's AI thinks at the next tick,
                     // where its Self preservation takes the attacker up.
                     if (!tc.InCombat && !gettingUp && !(tc.IsPlayer && next[t].Velocity.LengthSquared() > 1))

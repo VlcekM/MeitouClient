@@ -433,10 +433,16 @@ Meitou (`CombatSystem.HasSlot` / `MayJoin`, `Fighting.Steer`):
   10% chance of its knockout timer (+0x4f8 = MedicalSystem +0xa0) being set to 10.0: knocked down again for 10 s (**Verified**). The targeting path sets the call's last flag (r9b = 1 in the disassembly), the hit path
   clears it. With the flag, when the target is the player's, or the attacker is the player's and the target is not yet aware of it, the call
   is ignored unless both are in the same building and on the same floor and the target has a clear line to the attacker. So targeting a
-  player's character through a wall, or an unaware NPC from another floor, alerts nobody until a blow lands. Meitou: `CombatSystem.Alerts`, taken by
+  player's character through a wall, or an unaware NPC from another floor, alerts nobody until a blow lands. The line test (`FUN_1408533a0`) is a ray between
+  the eyes with no length limit, so distance never matters. The melee callers are the CombatClass target setters (`FUN_140665580`, `FUN_140665650`,
+  `FUN_1406681e0`; the deciding state `FUN_14060c8b0` sets the target at the pick, before any chase), the swing start (`FUN_1402b4570`, flag clear)
+  and the stealth knock-out (`FUN_14034cd80`). A shooter never comes here: the ranged controller's target setter (`FUN_1404371f0`) only sends "stop"
+  to the old target (its one other call, `FUN_1405c68a0`, drives the shooter's own movement object), and a bolt hit (`FUN_140439c90`) calls the shot handler `FUN_140999d50`, which senses the shooter, tags it and replans a target
+  whose fight is off, but leaves one getting up (+0x278) alone, with no knock-down roll (**Verified**, decompile; the only writer of 10.0 to +0x4f8 is
+  `FUN_140999f00`). So crossbowmen picking or shooting a character that gets up never knock it down. Meitou: `CombatSystem.Alerts`, taken by
   `RetaliationSystem` the same tick (it ends sneaking, makes the attacker a threat of the target at once, `AggroSystem.Force`, and asks an NPC's AI to think at the next tick); same place by `SightMap.PlaceOf`, same floor as within 20 units of height inside, a terrain and
-  building line between the eyes; aware = fighting the attacker or hit by it (engine readings). The 10% knock-down: `CombatSystem.UnderAttackGettingUp`, from the alert and
-  from a landed blow outside a fight. A landed blow or bolt on an NPC with its fight off, not getting up, asks its AI to think again (`CombatSystem.HitReplan`).
+  building line between the eyes; aware = fighting the attacker or hit by it (engine readings). The 10% knock-down: `CombatSystem.UnderAttackGettingUp`, from the alert of
+  an attacker not in ranged mode (`CombatSlot.Ranged`) and from a landed melee blow outside a fight; a bolt's stagger skips it. A landed blow or bolt on an NPC with its fight off, not getting up, asks its AI to think again (`CombatSystem.HitReplan`).
 - **Threats.** The perception pass (`SensoryData::addToThreatsAndFlockingList`) looks at each sensed live character of another faction: its
   state broadcast's intended aggression adds to +0x90; when its intended target (+0x68) passes `AITaskSytem::intendsToAttackTarget` (prone
   state < 3 and its fight on; on Hold with the fight off, only within 40), a target that is the looker puts it on the threats list
