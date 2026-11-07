@@ -227,6 +227,12 @@ sealed partial class GameHost
             Report(con, DebugApply(DebugRow.Heal, ""));
         });
 
+        Add("godmode", "godmode [on|off]", "god mode for every player character (also later recruits): all stats 1000 (10 x the game's maximum), healed 5 times a second (parts, limbs, blood, bleeding, hunger); off restores each character's own stats; no argument toggles; reports the state", (args, con) =>
+        {
+            if (!Need(args, 0, 1, Self("godmode"))) return;
+            Report(con, DebugApply(DebugRow.Godmode, args.Count > 0 ? args[0] : ""));
+        });
+
         Add("maxstats", "maxstats", "every stat to 100 for the selected characters (else the inspected one)", (args, con) =>
         {
             if (!Need(args, 0, 0, Self("maxstats"))) return;

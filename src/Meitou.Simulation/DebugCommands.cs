@@ -24,6 +24,12 @@ public sealed record DebugHeal(IReadOnlyList<CharacterId> Characters, bool Limbs
 public sealed record DebugMaxSkills(IReadOnlyList<CharacterId> Characters) : DebugCommand;
 
 /// <summary>
+/// Turns the debug god mode on or off (<see cref="PlayerState.Godmode"/>). While on, every player character (also one recruited later) has all stats at <see cref="DebugCheats.GodStat"/>
+/// (10 x the game's maximum of 100) and is healed <see cref="DebugCheats.GodHealPerSecond"/> times a second; off, each gets back exactly the stats it had. Decisions: docs/procedures/playtest/agent-play-api.md, "godmode".
+/// </summary>
+public sealed record DebugGodmode(bool On) : DebugCommand;
+
+/// <summary>
 /// One cut of <see cref="Cut"/> damage to each character: on the part whose template string id is <see cref="Part"/> (a character without one is skipped),
 /// else on a part chosen as a blow's is.
 /// </summary>
@@ -113,6 +119,40 @@ public sealed record DebugClearBuilding(string Key) : DebugCommand;
 
 static class DebugCheats
 {
+    /// <summary>The value every stat gets in god mode: 10 x the normal maximum of 100.</summary>
+    public const float GodStat = 1000;
+    /// <summary>How often god mode heals: this many times a second (the tick is 1/30 s).</summary>
+    public const int GodHealPerSecond = 5;
+
+    /// <summary>
+    /// The god mode's upkeep (<see cref="PlayerSystem.SlowWorld"/>, every tick; the heal only on its cadence). Raises the stats of each living player character that is not yet raised, heals it
+    /// (<see cref="MedicalState.Heal"/>: parts, blood, wounds and bleeding, knock-out; stumps and crushed limbs come back; hunger refilled). A character that is dead, no longer a player character or
+    /// met while the mode is off gets its own stats back, so nothing raised outlives the mode, a death or a squad change; the save writes the kept values (<see cref="CharacterStats.WriteSave"/>).
+    /// </summary>
+    public static void GodTick(World world, PopulationData? data, CharacterAssembly? assembly, bool force = false)
+    {
+        var table = world.Characters;
+        bool on = world.Player.Godmode;
+        if (!on && !force) return;
+        int cadence = (int)Math.Max(1, MathF.Round(1 / (world.TickSeconds * GodHealPerSecond)));
+        bool heal = on && (force || world.Tick % cadence == 0);
+        for (int s = 0; s < table.HighWater; s++)
+        {
+            if (!table.Next[s].Alive || table.Cold(s) is not { Stats: { } stats } cold) continue;
+            bool wanted = on && cold.IsPlayer && cold.Medical is { Dead: false };
+            if (!wanted) { stats.Unboost(); continue; }
+            stats.Boost(GodStat);
+            if (!heal || cold.Medical is not { } medical) continue;
+            var id = table.IdOf(s);
+            if (data is not null && Body(world, data, id) is ({ } body, var ctx))
+            {
+                if (body.RestoreLimbs()) assembly?.RefreshEquipment(cold);
+                body.Heal(ctx);
+            }
+            medical.Hunger = MedicalState.MaxHunger;
+        }
+    }
+
     public static void Apply(World world, PopulationData? data, CharacterAssembly? assembly, DebugCommand command)
     {
         var table = world.Characters;
@@ -155,6 +195,10 @@ static class DebugCheats
                         if (heal.Limbs && medical.RestoreLimbs() && table.TryResolveNext(id, out int healed)) assembly?.RefreshEquipment(table.Cold(healed)!);
                         medical.Heal(ctx);
                     }
+                break;
+            case DebugGodmode god:
+                world.Player.Godmode = god.On;
+                GodTick(world, data, assembly, force: true);   // on: boosted and healed at once; off: every raised character gets its stats back
                 break;
             case DebugMaxSkills max:
                 foreach (var id in max.Characters)

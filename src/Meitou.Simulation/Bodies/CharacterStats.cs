@@ -45,6 +45,32 @@ public sealed class CharacterStats
     public float ScaledToughness => Toughness * Scale;
     public float Athletics => values[(int)StatsEnumerated.Athletics];
 
+    // The values a character had before the debug god mode raised them (null while not boosted); the save writes these, so boosted stats never reach a save.
+    float[]? godOriginal;
+
+    /// <summary>Whether the debug god mode (<see cref="Boost"/>) holds this character's stats raised.</summary>
+    public bool Boosted => godOriginal is not null;
+
+    /// <summary>
+    /// Debug god mode (Meitou only): keeps the current values for <see cref="Unboost"/> and sets every stat that has storage to <paramref name="value"/>. Does nothing while already boosted,
+    /// so the first values stay the ones that come back. Training while boosted changes nothing visible (the XP curve gives a stat this high no gain) and anything it adds is dropped by <see cref="Unboost"/>.
+    /// </summary>
+    public void Boost(float value)
+    {
+        if (godOriginal is not null) return;
+        godOriginal = (float[])values.Clone();
+        for (int i = 1; i < StatsInfo.Count; i++)
+            if (StatsInfo.StorageOf((StatsEnumerated)i) == (StatsEnumerated)i) values[i] = value;
+    }
+
+    /// <summary>Puts back exactly the values <see cref="Boost"/> kept; does nothing when not boosted.</summary>
+    public void Unboost()
+    {
+        if (godOriginal is null) return;
+        Array.Copy(godOriginal, values, values.Length);
+        godOriginal = null;
+    }
+
     /// <summary>A copy of the values by stat number.</summary>
     public float[] ToArray() => (float[])values.Clone();
 
@@ -148,8 +174,9 @@ public sealed class CharacterStats
     /// </summary>
     public void WriteSave(IDictionary<string, float> floats)
     {
+        var written = godOriginal ?? values;   // a boosted character is saved with the values it had before
         for (int i = 1; i < StatsInfo.Count; i++)
-            if (StatsInfo.FieldName((StatsEnumerated)i) is { } name) floats[name] = values[i];
+            if (StatsInfo.FieldName((StatsEnumerated)i) is { } name) floats[name] = written[i];
     }
 
     /// <summary>

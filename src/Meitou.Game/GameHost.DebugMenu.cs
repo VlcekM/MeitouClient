@@ -15,15 +15,15 @@ namespace Meitou.Game;
 /// </summary>
 sealed partial class GameHost
 {
-    enum DebugRow { Teleport, SpawnNpc, GiveItem, Money, Heal, HealFully, MaxSkills, Damage, ForceHits, DamageMultiplier, UnlockResearch, ClearBounties }
+    enum DebugRow { Teleport, SpawnNpc, GiveItem, Money, Heal, HealFully, MaxSkills, Damage, ForceHits, DamageMultiplier, UnlockResearch, ClearBounties, Godmode }
 
     static readonly string[] DebugLabels =
     [
         "Teleport selected here", "Spawn NPC (hostile)", "Give item (name x5 q80)", "Money (+/- cats)", "Heal", "  Heal fully (restore limbs)", "Max out skills", "Damage (cut)",
-        "Force hits to", "Damage multiplier", "Unlock all research", "Clear bounties",
+        "Force hits to", "Damage multiplier", "Unlock all research", "Clear bounties", "Godmode (all players)",
     ];
     // The rows' typed text: the vanilla rows', then one per code mod row (EnsureDebugFields).
-    readonly List<string> debugFields = ["", "", "", "1000", "", "", "", "20", "", "1", "", ""];
+    readonly List<string> debugFields = ["", "", "", "1000", "", "", "", "20", "", "1", "", "", ""];
     readonly Dictionary<(bool Character, string Text), (string Id, string Name)?> debugMatches = [];
     bool debugMenuOpen;
     int debugRow;
@@ -97,7 +97,7 @@ sealed partial class GameHost
     bool DebugIsTool(int row) => row >= DebugRowCount;
 
     bool DebugHasField(int row) => !DebugIsTool(row) && (row >= DebugLabels.Length ? ModDebugRows[row - DebugLabels.Length].HasField
-        : (DebugRow)row is not (DebugRow.Teleport or DebugRow.Heal or DebugRow.HealFully or DebugRow.MaxSkills or DebugRow.ForceHits or DebugRow.UnlockResearch or DebugRow.ClearBounties));
+        : (DebugRow)row is not (DebugRow.Teleport or DebugRow.Heal or DebugRow.HealFully or DebugRow.MaxSkills or DebugRow.ForceHits or DebugRow.UnlockResearch or DebugRow.ClearBounties or DebugRow.Godmode));
 
     /// <summary>The rows that open the body part list.</summary>
     bool DebugPicksPart(int row) => !DebugIsTool(row) && (DebugRow)row is DebugRow.Damage or DebugRow.ForceHits or DebugRow.ClearBounties;
@@ -245,6 +245,10 @@ sealed partial class GameHost
                 debugParts = null;
                 string whose = selected.Length > 0 ? $"{selected.Length} selected" : "your characters";
                 return faction is null ? $"every bounty cleared on {whose}" : $"{part.Name?.Split("   ")[0]} bounties cleared on {whose}";
+            case DebugRow.Godmode:
+                bool godOn = field.Trim().ToLowerInvariant() switch { "on" or "1" or "true" => true, "off" or "0" or "false" => false, _ => !world.Player.Godmode };
+                world.Commands.Enqueue(new DebugGodmode(godOn) { Tick = tick });
+                return godOn ? "godmode on: every player character has all stats 1000 and is healed 5 times a second" : "godmode off: each character has its own stats back";
             case DebugRow.UnlockResearch:
                 world.Commands.Enqueue(new DebugUnlockResearch { Tick = tick });
                 return "every research finished";
@@ -317,6 +321,7 @@ sealed partial class GameHost
                 if ((DebugRow)i is DebugRow.SpawnNpc or DebugRow.GiveItem && field.Trim().Length > 0)
                     line += DebugRecord((DebugRow)i == DebugRow.GiveItem ? DebugItemField(field.Trim()).Name : field, (DebugRow)i == DebugRow.SpawnNpc) is { } r ? $"   -> {r.Name}" : "   -> no match";
             }
+            if ((DebugRow)i == DebugRow.Godmode) line = $"{line,-26} {(session.World.Player.Godmode ? "on" : "off")}";
             if ((DebugRow)i == DebugRow.DamageMultiplier) line += $"   now x{popData?.BodyOptions.GlobalDamageMultiplier ?? 1:0.##}";
             if ((DebugRow)i == DebugRow.ForceHits) line = $"{line,-26} {popData?.BodyOptions.ForcedHitPart?.Name ?? "off"}";
             if (DebugPicksPart(i) && i == debugRow && debugParts is null) line += (DebugRow)i == DebugRow.ClearBounties ? "   Enter/Right: pick the faction" : "   Enter/Right: pick the body part";
