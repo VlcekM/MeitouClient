@@ -147,8 +147,8 @@ sealed partial class GameHost
     /// <summary>The "Explode on click" switch (F10 Combat row, console <c>explode-click</c>): the world it was switched on in and the explode flags used for each click.</summary>
     World? explodeClickWorld;
     string explodeClickArgs = "";
-    /// <summary>What a click explodes with unless a flag says otherwise: twice the radius and force of a plain <c>explode</c> (15, 30) and more than twice its damage (40).</summary>
-    const string ExplodeClickDefaults = "--radius 30 --force 60 --damage 100";
+    /// <summary>What a click explodes with unless a flag says otherwise: twice the radius and force of a plain <c>explode</c> (15, 45) and more than twice its damage (40).</summary>
+    const string ExplodeClickDefaults = "--radius 30 --force 64 --damage 100";
     bool ExplodeClickOn => explodeClickWorld is not null && ReferenceEquals(explodeClickWorld, session.World);
 
     /// <summary>
@@ -199,7 +199,7 @@ sealed partial class GameHost
     /// <summary>The hint while the switch is on.</summary>
     void DrawExplodeClickHint(DebugOverlay o, int width, int height)
     {
-        string text = $"explode-click ON: left click = explode{(explodeClickArgs.Length > 0 ? " (defaults r=30 force 60 dmg 100, then " + explodeClickArgs + ")" : " (r=30, force 60, dmg 100)")}. Switch off: explode-click off"
+        string text = $"explode-click ON: left click = explode{(explodeClickArgs.Length > 0 ? " (defaults r=30 force 64 dmg 100, then " + explodeClickArgs + ")" : " (r=30, force 64, dmg 100)")}. Switch off: explode-click off"
             + (session.Simulation.IsPaused ? "   PAUSED: unpause, the blast runs in the next tick" : "");
         float w = text.Length * o.CharWidth + 20, x = (width - w) / 2;
         o.Rect(x, 8, x + w, 8 + o.LineHeight + 12, DebugOverlay.PanelColour);
@@ -358,7 +358,7 @@ sealed partial class GameHost
     string DebugExplodeApply(World world, string field, long tick)
     {
         const string usage = "usage: explode [<x> <z>] [--id <c:slot.gen>] [--radius <m>] [--force <n>] [--damage <n>] [--squad]";
-        float radius = 15, force = 30, damage = 40;
+        float radius = 15, force = 45, damage = 40;
         bool squad = false;
         var numbers = new List<float>();
         CharacterId? byId = null;

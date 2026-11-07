@@ -35,15 +35,15 @@ public sealed partial class CombatSystem
     /// </summary>
     internal bool Blast(CharacterCold vc, Vector2 direction, float force)
     {
-        if (vc.Medical is not { Incapacitated: true }) return false;
+        if (vc.Medical is not { Incapacitated: true } || force < 0.5f) return false;
         direction = direction.LengthSquared() > 1e-6f ? Vector2.Normalize(direction) : Vector2.UnitX;
-        float speed = MathF.Max(force, PushMin);
+        float speed = force;
         vc.Launch = new Vector3(direction.X, BlastLift, direction.Y) * speed;
         return true;
     }
 
-    /// <summary>The explosion's lift, as a share of the throw speed (a clear hop: 30 m/s out, 9 m/s up).</summary>
-    const float BlastLift = 0.3f;
+    /// <summary>The explosion's lift, as a share of the throw speed (gravity is 98.1 units/s², so 45 out and 27 up at the centre flies about 0.55 s, 25 units before the ground slows it).</summary>
+    const float BlastLift = 0.6f;
 
     /// <summary>The struck part's <c>bone name</c>, else its <c>bone name 2</c>; null for no part or neither.</summary>
     static string? BoneOf(Bodies.MedicalState medical, int part)
