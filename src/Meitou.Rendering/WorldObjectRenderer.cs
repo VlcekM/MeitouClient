@@ -1183,6 +1183,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         float lodValue = shadowLodFloor > 0 ? Math.Max(value, shadowLodFloor) : value;   // a far shadow cascade: no finer a level than ShadowLod.ObjectLodFloor
         inst.Mesh.LastUsed = now;
         DrawnInstances++;
+        if (Motion && !depthPass && eye == motionEye && (inst.Placed.DoorIndex >= 0 || inst.Placed.Joints is not null)) NoteMotion(inst, gpu, lodValue);
         if (inst.TerrainMode && options.Textures)
         {
             // The terrain shader's path: one draw each, no fading, the level the game would pick.

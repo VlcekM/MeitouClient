@@ -3,11 +3,66 @@ using System.Numerics;
 using Meitou.Data.Ogre;
 using Meitou.Data.Physics;
 using Meitou.Data.World;
+using Meitou.Rendering.Gpu;
 
 namespace Meitou.Rendering;
 
 public sealed partial class WorldObjectRenderer
 {
+    // ---- motion vectors for the temporal upscalers: the animated instances (doors, turret joints, rotors) are drawn again into the motion target with this and last frame's transform ----
+
+    /// <summary>Set each frame by the world frame when a temporal upscaler runs (<see cref="BeginMotion"/>).</summary>
+    public bool Motion { get; private set; }
+
+    readonly record struct MotionDraw(MeshBindings Mesh, int IndexCount, Matrix4x4 Model, Matrix4x4 Previous);
+    readonly List<MotionDraw> motionDraws = [];
+    MotionMeshes? motionMeshes;
+    Vector3 motionEye;
+    long motionFrame;
+
+    /// <summary>Starts a frame for the scene camera at <paramref name="eye"/> (the only view that writes motion).</summary>
+    public void BeginMotion(bool on, Vector3 eye)
+    {
+        motionDraws.Clear();
+        Motion = on;
+        motionEye = eye;
+        motionFrame++;
+    }
+
+    /// <summary>
+    /// An animated instance drawn in the scene view: with a transform from the last frame that differs from this frame's, its meshes are noted with both, relative to the eye. One that
+    /// was not drawn last frame (new, or back from out of range) has no motion from before.
+    /// </summary>
+    void NoteMotion(ObjectStreamer.Instance inst, GpuObjectMesh gpu, float lodValue)
+    {
+        var now = inst.Transform;
+        var before = inst.LastDrawnFrame == motionFrame - 1 ? inst.LastDrawn : now;
+        if (inst.LastDrawnFrame != motionFrame) (inst.LastDrawn, inst.LastDrawnFrame) = (now, motionFrame);
+        if (before == now) return;
+        var toEye = Matrix4x4.CreateTranslation(-motionEye);
+        int level = gpu.Curve.Select(lodValue * LodBias);
+        var g = gpu.Manual[level] ?? gpu;
+        int lv = gpu.Manual[level] is null ? level : 0;
+        foreach (var gp in g.Parts)
+            if (gp.Count[lv] > 0) motionDraws.Add(new MotionDraw(meshes.PlainMesh(gp, lv), gp.Count[lv], now * toEye, before * toEye));
+    }
+
+    /// <summary>Draws the noted instances into the motion target (the post chain's object-motion pass).</summary>
+    internal void DrawMotion(MotionTargets targets, MotionCamera camera)
+    {
+        if (!Motion || motionDraws.Count == 0) return;
+        var m = motionMeshes ??= new MotionMeshes(Gpu, nativeFrame, GpuVertex.ObjectSize);
+        m.Begin(targets, camera);
+        foreach (var d in motionDraws)
+        {
+            if (d.Mesh.Attributes[0] is not { } position || d.Mesh.Attributes[2] is not { } uv) continue;
+            m.Mesh(position.Buffer, uv.Buffer, d.Mesh.Elements);
+            m.Draw((uint)d.IndexCount, 0, 0, d.Model, d.Previous, Gpu.StandIn2D, 0);
+        }
+        m.End();
+        motionDraws.Clear();
+    }
+
     readonly AssetLocator assets;
     readonly ConcurrentDictionary<string, DoorFrame> doorFrames = new(StringComparer.OrdinalIgnoreCase);
 

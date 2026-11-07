@@ -192,8 +192,9 @@ turret's joints; the wind generator's blades ride on its head. A part's state (`
 its meshes is first drawn and dropped 600 frames after the last; the host (`GameHost.UpdateRotors`) calls `AdvanceRotors` once a frame with real time x speed (0
 paused), the scheduled wind (`WeatherWorld.WindAt`, a forced weather does not count) and the mult (`MachineSnapshot.Rotation`, level buildings by data); construction sites stand still (`RotorUnbuilt`). A head
 hears the weather when the wind at it differs from the last frame (the original's notifications come while it interpolates). Joint meshes under a rotor are posed
-every frame: angle less the start roll (functions 1 to 3 stay at the roll until they first move). **Unknown**: not looked at in a rendered frame; shadow caches and
-motion vectors of moving parts not checked.
+every frame: angle less the start roll (functions 1 to 3 stay at the roll until they first move). **Unknown**: not looked at in a rendered frame; shadow caches not checked.
+
+Motion vectors (temporal upscalers): an instance with a door, turret joint or rotor (`PlacedMesh.DoorIndex`, `Joints`) that is drawn in the scene view notes its transform of the last frame it was drawn (`Instance.LastDrawn`); when it differs from this frame's its meshes (the LOD level the colour draw picks, `PlainMesh`) go into `MotionMeshes` with both transforms, relative to the eye, in the post chain's object-motion pass (`WorldObjectRenderer.DrawMotion`, after the characters', with the debris). One not drawn the frame before has no motion from before. Cut-out holes are not tested (the pass writes only where the depth buffer shows the part's own surface). **Observed** in live DLSS captures of a wind generator and a door; no shadow or reflection pass writes motion. Movers left without their own vectors: none known in the objects; the scene's other movers are the characters, grass sway, loose pieces ([birds](game/birds.md)), clouds and water (own paths, [render-post](render-post.md)); the foliage docs describe sway for grass only (**Unknown** for tree meshes).
 
 ## Closed interiors
 

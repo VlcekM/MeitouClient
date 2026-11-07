@@ -828,7 +828,13 @@ static partial class WorldFrame
         }
         gpu.Characters?.AttachMotion(post, gpu.Foliage, viewProjection, unjittered, f.Eye, frustum, relative, relativeUnjittered);
         gpu.Debris?.BeginMotion(post.Temporal);   // the loose pieces' (birds, bolts, thrown bones and limbs) motion rides the characters' pass
-        if (gpu.Characters is { } chars) chars.ExtraMotion = post.Temporal && gpu.Debris is { } loose ? loose.DrawMotion : null;
+        gpu.Objects?.BeginMotion(post.Temporal, f.Eye);
+        if (gpu.Characters is { } chars)
+        {
+            var loose = post.Temporal ? gpu.Debris : null;
+            var placed = post.Temporal ? gpu.Objects : null;
+            chars.ExtraMotion = loose is null && placed is null ? null : (t, c) => { loose?.DrawMotion(t, c); placed?.DrawMotion(t, c); };
+        }
     }
 
     /// <summary>
