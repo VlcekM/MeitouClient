@@ -7,10 +7,13 @@ namespace Meitou.Game;
 /// <summary>
 /// The agent control channel's graphics layer (docs/agent-playtest.md): <c>gfx</c> lists the settings window's graphics switches and sliders with
 /// their values; <c>gfx &lt;label&gt; &lt;value&gt;</c> sets one through the window's own setter, as a click or a drag would (so an A/B of an effect
-/// needs no restart). Not saved: the run's settings file is written only by the window's own save.
+/// needs no restart). Not saved: a label set here is left out of the settings file the run writes (<see cref="gfxRunOnly"/>).
 /// </summary>
 sealed partial class GameHost
 {
+    /// <summary>The settings window labels <c>gfx</c> changed this run, which the settings save leaves as they were saved.</summary>
+    readonly HashSet<string> gfxRunOnly = new(StringComparer.Ordinal);
+
     void RegisterControlGraphicsCommands(Action<string, string, string, Action<IReadOnlyList<string>, DevConsole>> add)
     {
         add("gfx", "gfx [label [value]]", "graphics switches and sliders of the settings window: none lists them with their values (a substring filters); a label (exact, the saved key \"Meitou: X\", or a unique substring) and a value (on/off/1/0 for a switch, a number for a slider) sets one as the window would", (args, con) =>
@@ -42,6 +45,7 @@ sealed partial class GameHost
                 bool? on = value.ToLowerInvariant() switch { "on" or "1" or "true" or "meitou" => true, "off" or "0" or "false" or "faithful" => false, _ => null };
                 if (on is not { } v) { con.Error("gfx: a switch takes on or off"); return; }
                 t.Set(v);
+                gfxRunOnly.Add(t.Label);
                 con.Print($"{t.Label}: {(t.Get() ? "on" : "off")}");
                 controlData = JsonSerializer.Serialize(new { label = t.Label, on = t.Get() });
                 return;
@@ -49,6 +53,7 @@ sealed partial class GameHost
             var s = sliderHits[0];
             if (!float.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out float f)) { con.Error("gfx: a slider takes a number"); return; }
             s.Set(Math.Clamp(f, s.Min, s.Max));
+            gfxRunOnly.Add(s.Label);
             con.Print(FormattableString.Invariant($"{s.Label}: {s.Get():0.###}"));
             controlData = JsonSerializer.Serialize(new { label = s.Label, value = s.Get() });
         });

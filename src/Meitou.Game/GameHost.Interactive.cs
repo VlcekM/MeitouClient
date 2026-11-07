@@ -984,9 +984,9 @@ sealed partial class GameHost
             if (panel is not null && !lowEnd)
             {
                 foreach (var slider in panel.Sliders)
-                    if (!runOnly.Contains(slider.Label)) config.Graphics[slider.Label] = slider.Get();
+                    if (!runOnly.Contains(slider.Label) && !gfxRunOnly.Contains(slider.Label)) config.Graphics[slider.Label] = slider.Get();
                 foreach (var toggle in panel.Toggles)
-                    if (!runOnly.Contains(SwitchKey(toggle.Label))) config.Graphics[SwitchKey(toggle.Label)] = toggle.Get() ? 1 : 0;
+                    if (!runOnly.Contains(SwitchKey(toggle.Label)) && !gfxRunOnly.Contains(toggle.Label)) config.Graphics[SwitchKey(toggle.Label)] = toggle.Get() ? 1 : 0;
                 panel.SavePreset();
             }
             config.Bindings = session.Bindings.ToDictionary();
