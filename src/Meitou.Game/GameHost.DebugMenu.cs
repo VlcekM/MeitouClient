@@ -445,20 +445,25 @@ sealed partial class GameHost
         var world = session.World;
         var here = session.Camera.Current.Target;
         // Each line: its text, the row it belongs to (-1 for a section title and a part list line), and whether it is the highlighted one.
-        var lines = new List<(string Text, bool Title, bool Highlight)>();
+        var lines = new List<(string Text, bool Title, bool Highlight, bool On)>();
+        var onNames = new List<string>();
         EnsureDebugFields();
         foreach (var (header, i) in DebugLayout())
         {
-            if (header is not null) lines.Add((header, true, false));
+            if (header is not null) lines.Add((header, true, false, false));
             bool current = i == debugRow;
             string mark = current && debugParts is null ? "> " : "  ";
             if (DebugIsTool(i))
             {
                 var tool = DebugTools[i - DebugRowCount];
-                lines.Add((mark + DebugColumns(tool.Label, tool.Key, tool.State()), false, current && debugParts is null));
+                string state = tool.State();
+                bool toolOn = tool.IsSwitch ? state == "on" : state is not ("" or "off");
+                if (toolOn) onNames.Add(DebugShortName(tool.Label));
+                lines.Add((mark + DebugColumns(tool.Label, tool.Key, state), false, current && debugParts is null, toolOn));
                 continue;
             }
             string value = "";
+            bool rowOn = false;
             if (DebugHasField(i))
             {
                 string field = debugFields[i];
@@ -469,16 +474,21 @@ sealed partial class GameHost
             if (i < DebugLabels.Length)
                 switch ((DebugRow)i)
                 {
-                    case DebugRow.DamageMultiplier: value += $"   now x{popData?.BodyOptions.GlobalDamageMultiplier ?? 1:0.##}"; break;
-                    case DebugRow.ForceHits: value = popData?.BodyOptions.ForcedHitPart?.Name ?? "off"; break;
-                    case DebugRow.Godmode: value = OnOff(world.Player.Godmode); break;
-                    case DebugRow.Guard: value = world.Player.Guard ? $"on, {world.Player.GuardRadius:0.#} m{(world.Player.GuardAnimals ? ", animals" : "")}" : "off"; break;
+                    case DebugRow.DamageMultiplier:
+                        float multiplier = popData?.BodyOptions.GlobalDamageMultiplier ?? 1;
+                        value += $"   now x{multiplier:0.##}";
+                        rowOn = multiplier != 1;
+                        break;
+                    case DebugRow.ForceHits: value = popData?.BodyOptions.ForcedHitPart?.Name ?? "off"; rowOn = popData?.BodyOptions.ForcedHitPart is not null; break;
+                    case DebugRow.Godmode: value = OnOff(world.Player.Godmode); rowOn = world.Player.Godmode; break;
+                    case DebugRow.Guard: rowOn = world.Player.Guard; value = world.Player.Guard ? $"on, {world.Player.GuardRadius:0.#} m{(world.Player.GuardAnimals ? ", animals" : "")}" : "off"; break;
                 }
             if (DebugPicksPart(i) && current && debugParts is null) value += (value.Length > 0 ? "   " : "") + ((DebugRow)i == DebugRow.ClearBounties ? "Enter/Right: pick the faction" : "Enter/Right: pick the body part");
-            lines.Add((mark + DebugColumns(DebugLabel(i), "", value), false, current && debugParts is null));
+            if (rowOn) onNames.Add(DebugShortName(DebugLabel(i)) + ((DebugRow)i == DebugRow.DamageMultiplier && i < DebugLabels.Length ? $" x{popData?.BodyOptions.GlobalDamageMultiplier ?? 1:0.##}" : ""));
+            lines.Add((mark + DebugColumns(DebugLabel(i), "", value), false, current && debugParts is null, rowOn));
             if (DebugPicksPart(i) && current && debugParts is { } parts)
                 for (int k = 0; k < parts.Length; k++)
-                    lines.Add(((k == debugPart ? "    > " : "      ") + parts[k].Name, false, k == debugPart));
+                    lines.Add(((k == debugPart ? "    > " : "      ") + parts[k].Name, false, k == debugPart, false));
         }
         string info = $"{world.Player.Selection.Count} selected   here {here.X:0}, {here.Z:0}   money c.{world.Player.Money.ToString("N0", CultureInfo.InvariantCulture)}";
         string hint = debugParts is null ? $"Up/Down pick   type to edit   Enter apply / switch   Esc/{close} close"
@@ -486,6 +496,10 @@ sealed partial class GameHost
         var dim = new Vector4(0.7f, 0.75f, 0.8f, 1);
         float pad = 10, y0 = top + 16;
         int chars = Math.Max(lines.Max(l => l.Text.Length), Math.Max(info.Length, Math.Max(hint.Length, Math.Max(debugStatus.Length, 30))));
+        // The title line names every switch that is on, cut with "+N more" to the panel's width.
+        string title = $"Debug   ({close} closes)";
+        if (onNames.Count > 0) title = DebugOnSummary(title, onNames, chars);
+        chars = Math.Max(chars, title.Length);
         float w = chars * o.CharWidth + 2 * pad;
         // The list scrolls when the screen is too low for all of it: the window of lines keeps the highlighted one in view (titles take a little extra height).
         int room = (int)((height - y0 - 4 * pad) / o.LineHeight) - 6;
@@ -500,24 +514,52 @@ sealed partial class GameHost
         float x0 = atRight ? Math.Max(8, width - w - 16) : 16;
         o.Rect(x0, y0, x0 + w, y0 + h, DebugOverlay.PanelColour);
         float y = y0 + pad;
-        o.Text($"Debug   ({close} closes)", x0 + pad, y, DebugOverlay.TextColour);
+        o.Text(title, x0 + pad, y, onNames.Count > 0 ? DebugOnText : DebugOverlay.TextColour);
         y += 1.5f * o.LineHeight;
         for (int i = first; i < first + count; i++, y += o.LineHeight)
         {
-            var (text, title, highlight) = lines[i];
-            if (title)
+            var (text, isTitle, highlight, on) = lines[i];
+            if (isTitle)
             {
                 o.Text("-- " + text + " --", x0 + pad, y, dim);
                 continue;
             }
+            if (on) o.Rect(x0 + 4, y, x0 + w - 4, y + o.LineHeight, DebugOnTint);
             if (highlight) o.Rect(x0 + 4, y, x0 + w - 4, y + o.LineHeight, new Vector4(0.25f, 0.4f, 0.65f, 0.6f));
-            o.Text(text, x0 + pad, y, DebugOverlay.TextColour);
+            // A switch that is on: green text, a green tint behind and a '*' in the marker column (the cursor's '>' wins on the current row).
+            if (on && !highlight && text.StartsWith("  ", StringComparison.Ordinal)) text = "* " + text[2..];
+            o.Text(text, x0 + pad, y, on ? DebugOnText : DebugOverlay.TextColour);
         }
         y += 0.5f * o.LineHeight;
         o.Text(info, x0 + pad, y, dim);
         o.Text(hint, x0 + pad, y + o.LineHeight, dim);
         if (debugStatus.Length > 0) o.Text(debugStatus, x0 + pad, y + 2 * o.LineHeight, new Vector4(1f, 0.9f, 0.4f, 1));
         o.Flush(width, height);
+    }
+
+    /// <summary>A switch that is on: its text colour (green) and the row's background tint.</summary>
+    static readonly Vector4 DebugOnText = new(0.45f, 1f, 0.5f, 1), DebugOnTint = new(0.1f, 0.5f, 0.15f, 0.35f);
+
+    /// <summary>A row label without its hint: "Godmode (all players)" is "Godmode", "Teleport on map..." is "Teleport on map".</summary>
+    static string DebugShortName(string label)
+    {
+        label = label.Trim();
+        int paren = label.IndexOf(" (", StringComparison.Ordinal);
+        if (paren > 0) label = label[..paren];
+        return label.TrimEnd('.').Trim();
+    }
+
+    /// <summary>The title with " ON: a, b" appended; when it does not fit <paramref name="maxChars"/>, the names that fit then "+N more".</summary>
+    static string DebugOnSummary(string title, List<string> names, int maxChars)
+    {
+        string head = title + "  ON: ";
+        for (int shown = names.Count; shown >= 0; shown--)
+        {
+            string text = head + string.Join(", ", names.Take(shown));
+            if (shown < names.Count) text += (shown > 0 ? ", " : "") + $"+{names.Count - shown} more";
+            if (text.Length <= maxChars || shown == 0) return text;
+        }
+        return head;
     }
 
     /// <summary>One menu line after its 2-character marker: label, key hint and value, each in its own column so every value starts at the same place.</summary>
