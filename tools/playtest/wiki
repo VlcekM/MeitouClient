@@ -2,13 +2,17 @@
 # wiki <command>   query an agent-playtest wiki: our own in-game observations merged with data generated from YOUR game files. python3 only, no dependencies.
 #   wiki find <text> [--kind K] [--n 10]   name/alias/id/faction/zone/notes match over all layers, max 10 lines: id | kind | x z | V(erified)/u | name | observed/generated/local
 #   wiki show <id>               full entry (JSON); an observed entry also carries the generated numbers (`data`) of the same thing
-#   wiki town <name>             one town, camp or ruin: faction, position, who lives there, buildings, houses for sale, shops and their stock, world-state overrides, what we saw there, neighbours
+#   wiki town <name>             one town, camp or ruin: faction, position, who lives there, building and shop TYPES with counts (slave shop included), houses for sale, traders and their stock, world-state overrides, what we saw there, neighbours
 #   wiki buy <item>              where an item can be bought: towns and shops whose stock lists can contain it, with the chance of one pick
 #   wiki overrides <name>        a character, faction or town: which world states turn which town into another variant
 #   wiki who <name>              a unique, boss or bounty character: faction, bounty, recruitable, home town(s), squads
 #   wiki bounties [--min N] [--n 20]   characters with a bounty, highest first
 #   wiki faction <name>          one faction: type, relations (to you and others), places
-#   wiki item <name>             items, weapons and armour matching the name, with their numbers
+#   wiki item <name>             a weapon, crossbow, armour piece or item: class/category, damage or defence numbers, weight, value, grades and makers, blueprint (the research that unlocks it)
+#   wiki research [<name>]       one research: cost (books), needs (with the whole prerequisite chain and its total cost), what it unlocks; no name: categories
+#   wiki research --needs <book> [--n 30]   every research whose cost includes that book or item
+#   wiki animal <name>           an animal: race and combat numbers, attack, drops, bounty, and where it spawns (biomes, nests, towns)
+#   wiki spawns <zone|town|biome|squad>   what spawns where: a zone cell (zone-39-16), a town's zone, a biome group, or a squad (which biomes, nests and towns spawn it)
 #   wiki near <x> <z> [--kind K] [--n 5]   nearest entries with coordinates, by distance
 #   wiki tp <id>                 prints the exact `tp x z` line; warns (stderr, exit 3) when not verified in game or x/z null (exit 4 when null)
 #   wiki kinds                   layers, kinds and counts
@@ -28,14 +32,14 @@ GEN = os.environ.get('WIKI_GENERATED') or (os.path.join(ROOT, 'wiki', 'generated
 OBS = os.environ.get('WIKI_OBSERVED') or (os.path.join(HERE, 'wiki.observed') if IN_REPO else os.path.join(HERE, 'observed'))
 LOCAL = os.environ.get('WIKI_DIR') or (os.path.join(ROOT, 'wiki') if IN_REPO else None)
 LOCAL_SET = bool(os.environ.get('WIKI_DIR'))
-FILES = ['zones', 'towns', 'npcs', 'items', 'factions', 'squads', 'buildings', 'notes', 'shops', 'vendors', 'overrides', 'characters']
+FILES = ['zones', 'towns', 'npcs', 'items', 'factions', 'squads', 'buildings', 'notes', 'shops', 'vendors', 'overrides', 'characters', 'research', 'animals', 'spawns']
 CORE = ['id', 'name', 'aliases', 'kind', 'faction', 'region', 'x', 'z', 'zone', 'verified', 'verifiedOn', 'seen', 'source', 'confidence', 'notes']
 OPTIONAL = ['data', 'observed', 'found_via']
 CONF = ('Observed', 'Inferred', 'Unknown')
 PFIELDS = ['id', 'name', 'what', 'command', 'source', 'confidence', 'verifiedOn']
 TOWNLIKE = ('town', 'camp', 'bandit-hq', 'shop', 'ruins', 'nest', 'poi')
-ITEMLIKE = ('item', 'weapon', 'armour')
-RANK = {'town': 0, 'camp': 0, 'bandit-hq': 0, 'faction': 1, 'character': 2, 'npc': 2, 'group': 2, 'trader': 4, 'override': 5, 'vendor-list': 8, 'quiet-spot': 3, 'spot': 3, 'note': 3, 'unique-squad': 4, 'squad': 5, 'weapon': 6, 'armour': 6, 'item': 7, 'animal': 7, 'ruins': 8, 'poi': 8, 'nest': 8, 'building': 9, 'zone': 9}
+ITEMLIKE = ('item', 'weapon', 'armour', 'crossbow')
+RANK = {'town': 0, 'camp': 0, 'bandit-hq': 0, 'faction': 1, 'character': 2, 'npc': 2, 'group': 2, 'trader': 4, 'override': 5, 'vendor-list': 8, 'quiet-spot': 3, 'spot': 3, 'note': 3, 'unique-squad': 4, 'squad': 5, 'weapon': 6, 'armour': 6, 'crossbow': 6, 'research': 6, 'item': 7, 'animal': 7, 'animal-type': 7, 'biome': 8, 'ruins': 8, 'poi': 8, 'nest': 8, 'building': 9, 'zone': 9}
 
 def read(path):
     with open(path) as f: return json.load(f)
@@ -226,19 +230,25 @@ def cmd_town(a):
         if near: print('nearest : ' + '; '.join('%s %d m' % (nm, dd) for dd, nm in near))
         print('tp      : tp %s' % xz(e))
     if len(r) > 1: print('(other matches: %s)' % ', '.join(o['name'] for o in r[1:5]))
-    warn_missing()
+    prov(); warn_missing()
 def money(v): return '{:,}'.format(int(v)).replace(',', ' ')
+def cnt(b, key): return '%s%s' % (b[key], '' if b['count'] == 1 else ' x%d' % b['count'])
 def town_detail(e, d):
-    """Buildings, houses for sale, shops with their stock lists and world-state overrides of a generated town entry (the extra block of `wiki town`)."""
-    if d.get('buildings'):
-        shops = [b for b in d['buildings'] if b['kind'] == 'shop']; bars = [b for b in d['buildings'] if b['kind'] == 'bar']
-        other = [b for b in d['buildings'] if b['kind'] not in ('shop', 'bar')]
-        def fmt(b): return '%s%s%s' % (str(b['count']) + ' x ' if b['count'] > 1 else '', b['name'], ' as ' + b['usedAs'] if b.get('usedAs') else '')
-        if shops: print('shops   : ' + '; '.join(fmt(b) for b in shops))
-        if bars: print('bars    : ' + '; '.join(fmt(b) for b in bars))
-        if other: print('buildings: ' + '; '.join(fmt(b) for b in other) + ('; %d walls, %d gates' % (d.get('walls', 0), d.get('gates', 0)) if d.get('walls') or d.get('gates') else ''))
+    """Building and shop TYPES with counts, houses for sale, traders (slave shops included) with their stock lists and world-state overrides of a generated town entry (the extra block of `wiki town`).
+    Which building model holds which shop is NOT shown: it differs per install and new game (it is kept in the JSON as building_assignment_example)."""
+    if d.get('buildingTypes'):
+        T = d['buildingTypes']
+        def fmt(b): return '%s%s' % (b['type'], '' if b['count'] == 1 else ' x%d' % b['count'])
+        for cat, lab in (('shop', 'shop types'), ('bar', 'bars'), ('slave shop', 'slave shop')):
+            xs = [b for b in T if b['category'] == cat]
+            if xs: print('%-8s: %s' % (lab, '; '.join(fmt(b) for b in xs)))
+        other = [b for b in T if b['category'] in ('other', 'unassigned')]
+        extra = '; %d walls, %d gates' % (d.get('walls', 0), d.get('gates', 0)) if d.get('walls') or d.get('gates') else ''
+        if other or extra: print('buildings: ' + '; '.join(fmt(b) for b in other) + extra)
+        print('          (building types and counts follow the resident lists; which building model holds which shop differs per install and new game, so it is not listed)')
+    elif d.get('buildings'): print('buildings: old export without building types; run wiki export')
     if d.get('forSale'):
-        print('for sale: ' + '; '.join('%s %s%s' % (f['building'], money(f['price']), ' (ruin)' if f.get('ruin') else '') for f in d['forSale']) + '  (price as the game quotes it; the owner may refuse if hostile to you)')
+        print('for sale: ' + '; '.join('%s %s%s' % (f['building'], money(f['price']), ' (ruin)' if f.get('ruin') else '') for f in d['forSale']) + '  (price as the game quotes it; the owner may refuse if hostile to you; which houses are for sale can differ per new game)')
     elif d.get('saleNote'): print('for sale: none (%s)' % d['saleNote'])
     mine = [o for _, o, _ in merged() if o['kind'] == 'trader' and (o.get('data') or {}).get('townId') == e['id']]
     vl = {o['id']: o for _, o, _ in merged() if o['kind'] == 'vendor-list'}
@@ -248,12 +258,15 @@ def town_detail(e, d):
             l = vl.get(v['id']); top = ''
             if l: top = ' [' + ', '.join(i['item'] for i in l['data']['items'][:5]) + (', ...' if l['data'].get('itemTotal', 0) > 5 else '') + ']'
             parts.append('%s (about %s items)%s' % (v['list'], v.get('approxItems', '?'), top))
-        print('trader  : %s%s: %s' % (td['squad'], ' in ' + td['building'] if td.get('building') else '', '; '.join(parts)))
+        if td.get('slaveShop'):
+            parts.insert(0, 'sells slaves: ' + '; '.join('%s slaves per stock "%s" (drawn from %s)' % (x['count'], x['template'], ', '.join(x['drawnFrom']) or '?') for x in td.get('slaves', [])))
+        print('%-8s: %s%s: %s' % ('slaves' if td.get('slaveShop') else 'trader', td['squad'], ' (%s)' % td['type'] if td.get('type') else '', '; '.join(parts)))
     if mine: print('          (wiki show <trader id> or wiki buy <item> for the full lists; buys at %s x prices)' % ', '.join(sorted({str(t['data'].get('buyMult')) for t in mine})))
     ov = next((o for _, o, _ in merged() if o['kind'] == 'override' and (o.get('data') or {}).get('townId') == e['id']), None)
     if ov:
         print('overrides: %d variant(s) when its zone loads (heaviest passing set wins; none if the town is yours):' % len(ov['data']['variants']))
         for v in ov['data']['variants']: print('  -> %s [%s%s] when %s' % (v['becomes'], v['type'], ', ' + v['faction'] if v.get('factionChanges') else '', '; '.join(v['when']) or 'no condition'))
+    if d.get('biome'): print('biome   : %s (wiki spawns %s)' % (d['biome'], e['name']))
 def nk(x): return re.sub('[^a-z0-9]', '', x.lower())
 def cmd_buy(a):
     n = 15; words = []
@@ -285,10 +298,10 @@ def cmd_buy(a):
                 rows.append((-best['pct'] * v.get('approxItems', 1) - (0 if best['type'] == 'blueprint' else 1e6) - (1e9 if exact else 0), td['town'], td['squad'], v['list'], best['item'] + (' (blueprint)' if best['type'] == 'blueprint' else ''), best['pct'], v.get('approxItems', '?'), td.get('building'), td.get('buyMult')))
     rows.sort()
     print('%d shop(s) in %d town(s) can stock "%s" (item | town | shop | list: pick chance, about N items drawn from it):' % (len(rows), len({r[1] for r in rows}), ' '.join(words)))
-    for r in rows[:n]: print('%s | %s | %s | %s: %s%%, about %s items' % (r[4], r[1], r[2] + (' in ' + r[7] if r[7] else ''), r[3], r[5], r[6]))
+    for r in rows[:n]: print('%s | %s | %s | %s: %s%%, about %s items' % (r[4], r[1], r[2], r[3], r[5], r[6]))
     if len(rows) > n: print('(%d more; --n 50)' % (len(rows) - n))
     print('lists holding it: ' + ', '.join('%s (%s%%)' % (vl[k]['name'], max(i['pct'] for i in v)) for k, v in sorted(hits.items(), key=lambda kv: -max(i['pct'] for i in kv[1]))[:8]))
-    warn_missing()
+    prov(); warn_missing()
 def cmd_overrides(a):
     if not a: sys.exit('usage: wiki overrides <character, faction or town>')
     need_data()
@@ -316,7 +329,7 @@ def cmd_who(a):
     if not r: sys.exit('no character matching "%s" (wiki find <text>)' % ' '.join(a))
     e = r[0]; d = e.get('data') or {}
     print('%s  [%s; id %s; %s]' % (e['name'], e['kind'], e['id'], ' + '.join(e['_layers'])))
-    print('faction : %s' % (e.get('faction') or '-'))
+    print('faction : %s%s' % (e.get('faction') or '-', ' (from %s)' % d['factionSource'] if d.get('factionSource') else (' (none found in the record, its squads or its home town)' if not e.get('faction') and 'factionSource' in d else '')))
     if 'unique' in d: print('unique  : %s   recruitable: %s' % ('yes' if d['unique'] else 'no (a bounty roll on a common type)', 'yes, a dialogue line makes them join you' if d.get('recruitable') else 'no dialogue line found'))
     b = d.get('bounty')
     if b: print('bounty  : %s%s with %s; %s' % (money(b['amount']), ' to ' + money(b['amountMax']) if b['amountMax'] != b['amount'] else '', ', '.join(b['factions']), 'always on them' if b['chancePct'] >= 100 else '%d%% of spawns carry it' % b['chancePct']))
@@ -331,7 +344,7 @@ def cmd_who(a):
     ov = [o for _, o, _ in merged() if o['kind'] == 'override' and e['name'] in o['data']['characters']]
     if ov: print('overrides: their life or death changes %d town(s): %s (wiki overrides "%s")' % (len(ov), ', '.join(sorted({o['data']['town'] for o in ov})[:6]) + (' ...' if len(ov) > 6 else ''), e['name']))
     if len(r) > 1: print('(other matches: %s)' % ', '.join(o['name'] for o in r[1:5]))
-    warn_missing()
+    prov(); warn_missing()
 def cmd_bounties(a):
     mn = 0; n = 20
     i = 0
@@ -364,17 +377,214 @@ def cmd_faction(a):
     ts = [o for _, o, _ in merged() if o['kind'] in ('town', 'camp', 'bandit-hq') and o.get('faction') == e['name']]
     if ts: print('places (%d): %s' % (len(ts), ', '.join('%s %s' % (o['name'], xz(o)) for o in ts[:12]) + (' ...' if len(ts) > 12 else '')))
     warn_missing()
+def mult(v): return 'x%s' % v
+def bp_text(d):
+    b = d.get('blueprint')
+    if not b: return None
+    return ', '.join('%s%s' % (x['research'], ' (repetition %d)' % x['repetition'] if x.get('repetition') else '') for x in b) + '  (research that unlocks it: wiki research <name>)'
+def item_card(e):
+    d = e.get('data') or {}; k = e['kind']
+    print('%s  [%s; id %s; %s]' % (e['name'], k, e['id'], ' + '.join(e['_layers'])))
+    if k == 'weapon':
+        print('class   : %s (skill category %s)   value %s   weight %s kg   material cost %s' % (d.get('class'), d.get('skillCategory'), d.get('value'), d.get('weightKg'), d.get('materialCost')))
+        print('damage  : cut %s, blunt %s, pierce %s; armour penetration %s; bleed %s; vs humans %s, animals %s, robots %s%s' % (mult(d.get('cutMult')), mult(d.get('bluntMult')), mult(d.get('pierceMult')), d.get('armourPenetration'), mult(d.get('bleedMult')), mult(d.get('humanMult')), mult(d.get('animalMult')), mult(d.get('robotMult')), '; min cut ' + mult(d['minCutMult']) if d.get('minCutMult') else ''))
+        print('handling: attack %+d, defence %+d, indoors %+d, length %s, %s' % (d.get('attackMod', 0), d.get('defenceMod', 0), d.get('indoorsMod', 0), d.get('length'), 'can block' if d.get('canBlock') else 'cannot block'))
+        if d.get('raceDamagePct'): print('per race: ' + ', '.join('%s %d%%' % (x['race'], x['pct']) for x in d['raceDamagePct']))
+        g = d.get('grades') or []
+        if g: print('grades  : ' + ', '.join('%s %s' % (x['model'], x['level']) for x in g) + '  (weapon level numbers; higher is better)')
+        mk = d.get('makers') or []
+        if mk: print('makers  : ' + '; '.join('%s (cut %s, blunt %s, price %s, weight %s)' % (m['maker'], mult(m['cutMod']), mult(m['bluntMod']), mult(m['priceMod']), mult(m['weightMod'])) for m in mk[:8]) + (' ...' if len(mk) > 8 else ''))
+        print('strength: no per-weapon strength requirement in the game files')
+    elif k == 'crossbow':
+        print('value %s (%s at the top grade)   weight %s kg   material cost %s   craft time %s h' % (d.get('value'), d.get('value_1'), d.get('weightKg'), d.get('material_cost'), d.get('craft_time_hrs')))
+        print('damage  : pierce %s-%s at the lowest grade, %s-%s at the top; bleed %s; vs humans %s, animals %s, robots %s' % (d.get('pierce_damage_min_0'), d.get('pierce_damage_max_0'), d.get('pierce_damage_min_1'), d.get('pierce_damage_max_1'), mult(d.get('bleed_mult')), mult(d.get('human_damage_mult')), mult(d.get('animal_damage_mult')), mult(d.get('robot_damage_mult'))))
+        print('shooting: range %s (%s top), reload %s-%s s (%s-%s top), shot speed %s (%s top), accuracy deviation %s deg (%s top), perfect skill %s, %s shot(s)' % (d.get('range'), d.get('range_1'), d.get('reload_time_min'), d.get('reload_time_max'), d.get('reload_time_min_1'), d.get('reload_time_max_1'), d.get('shot_speed'), d.get('shot_speed_1'), d.get('accuracy_deviation_at_0_skill'), d.get('accuracy_deviation_at_0_skill_1'), d.get('accuracy_perfect_skill'), d.get('num_shots')))
+        if d.get('ammo'): print('ammo    : ' + ', '.join(d['ammo']))
+        if d.get('ingredients'): print('crafting: ' + ', '.join('%s x%s' % (x['item'], x['count']) for x in d['ingredients']))
+    elif k == 'armour':
+        print('class   : %s%s, material %s, slot %s   value %s   weight %s kg' % (d.get('class'), ' ("%s")' % d['className'] if d.get('className') and d['className'] != d.get('class') else '', d.get('material'), d.get('slotName'), d.get('value'), d.get('weightKg')))
+        print('defence : cut %+g, blunt %+g, pierce %s; level bonus %s' % (d.get('cutDefBonus', 0), d.get('bluntDefBonus', 0), mult(d.get('pierceDefMult')), d.get('levelBonus')))
+        if d.get('coverage'): print('covers  : ' + ', '.join('%s %d%%' % (x['part'], x['pct']) for x in d['coverage']))
+        mods = d.get('modifiers') or {}
+        if mods: print('modifiers: ' + ', '.join('%s %s' % (kk, vv) for kk, vv in mods.items()))
+        print('note    : how much a piece really stops also depends on class and material tables inside the game program, which are not in the data files; compare pieces by class, material, coverage and these bonuses')
+    else:
+        print('category: %s (item function %s; %s)   value %s   weight %s kg   slot %s   stack %s%s' % (d.get('category'), d.get('itemFunction'), d.get('categoryBasis'), d.get('value'), d.get('weightKg'), d.get('slot'), d.get('stackable'), '   charges %s' % d['charges'] if d.get('charges') else ''))
+        if d.get('ingredients'): print('made from: ' + ', '.join('%s x%s' % (x['item'], x['count']) for x in d['ingredients']))
+        if d.get('artifact'): print('flags   : research artifact')
+    bp = bp_text(d)
+    if bp: print('blueprint: ' + bp)
+    if d.get('description'): print('text    : ' + d['description'])
 def cmd_item(a):
     if not a: sys.exit('usage: wiki item <name>')
     need_data()
     r = best(' '.join(a), ITEMLIKE)
-    if not r: sys.exit('no item, weapon or armour matching "%s"' % ' '.join(a))
-    for e in r[:6]:
-        d = e.get('data') or {}
-        nums = ', '.join('%s %s' % (k, v) for k, v in d.items() if k != 'record' and v is not None)
-        print('%s | %s | %s | %s' % (e['id'], e['kind'], e['name'], nums or e['notes']))
-    if len(r) > 6: print('(%d more)' % (len(r) - 6))
-    warn_missing()
+    if not r: sys.exit('no item, weapon, crossbow or armour matching "%s"' % ' '.join(a))
+    item_card(r[0])
+    if len(r) > 1:
+        print('(other matches: %s)' % '; '.join('%s [%s]' % (o['name'], o['kind']) for o in r[1:9]) + (' ...' if len(r) > 9 else ''))
+    prov(); warn_missing()
+def research_index():
+    rs = [o for _, o, _ in merged() if o['kind'] == 'research']
+    byrec = {}
+    for o in rs:
+        byrec[(o.get('data') or {}).get('record')] = o
+        for al in o.get('aliases', []): byrec.setdefault(al, o)
+    return rs, byrec
+def chain_of(o, byrec):
+    """Every research that must be finished before o (transitive), each once, nearest first; plus other required records (buildings) by name."""
+    seen = {}; other = []; queue = [o]
+    while queue:
+        cur = queue.pop(0)
+        for q in (cur.get('data') or {}).get('requires', []):
+            if q['kind'] == 'research' and q['id'] in byrec:
+                x = byrec[q['id']]
+                if x['id'] not in seen and x['id'] != o['id']: seen[x['id']] = x; queue.append(x)
+            elif q['kind'] != 'research' and q['name'] not in other: other.append(q['name'])
+    return list(seen.values()), other
+def cmd_research(a):
+    need_data()
+    rs, byrec = research_index()
+    if not rs: sys.exit('wiki research: no research data. ' + export_hint())
+    n = 30; needs = None; words = []
+    i = 0
+    while i < len(a):
+        if a[i] == '--needs' and i + 1 < len(a): needs = ' '.join(a[i + 1:]); break
+        elif a[i] == '--n' and i + 1 < len(a): n = int(a[i + 1]); i += 2
+        else: words.append(a[i]); i += 1
+    if needs is not None:
+        if needs.endswith(' --n') or ' --n ' in needs:
+            parts = needs.split(' --n '); needs = parts[0]; n = int(parts[1]) if len(parts) > 1 else n
+        q = nk(needs)
+        hits = []
+        for o in rs:
+            for c in o['data'].get('cost', []):
+                if q in nk(c['item']): hits.append((c['item'], c['count'], o)); break
+        hits.sort(key=lambda t: (t[0], -t[1], t[2]['data'].get('category', ''), t[2]['name']))
+        print('%d research(es) cost "%s" (research | category | cost | needs):' % (len(hits), needs))
+        for item, count, o in hits[:n]:
+            d = o['data']
+            print('%s | %s | %s | %s' % (o['name'], d.get('category'), ', '.join('%s x%s' % (c['item'], c['count']) for c in d['cost']), ', '.join(x['name'] for x in d.get('requires', [])) or '-'))
+        if len(hits) > n: print('(%d more; --n 100)' % (len(hits) - n))
+        if not hits: print('no research costs that item (wiki research for the categories)')
+        prov(); warn_missing(); return
+    if not words:
+        cats = {}
+        for o in rs: cats.setdefault(o['data'].get('category') or '-', []).append(o['name'])
+        print('%d research entries; categories (count: first names):' % len(rs))
+        for c, xs in sorted(cats.items()): print('%s (%d): %s%s' % (c, len(xs), ', '.join(xs[:6]), ' ...' if len(xs) > 6 else ''))
+        print('usage: wiki research <name> | wiki research --needs <book>')
+        prov(); warn_missing(); return
+    r = best(' '.join(words), ('research',))
+    if not r: sys.exit('no research matching "%s" (wiki research lists the categories)' % ' '.join(words))
+    e = r[0]; d = e['data']
+    print('%s  [research; %s; level %s; id %s; %s]' % (e['name'], d.get('category'), d.get('level'), e['id'], ' + '.join(e['_layers'])))
+    print('time    : %s base hours%s%s%s' % (d.get('hours'), ('; repeatable %d more time(s), cost and time x%s each' % (d['repeats'] - 1 if d['repeats'] > 1 else 0, d.get('repeatMult'))) if d.get('repeats') else '', '; a bench level upgrade' if d.get('levelUpgrade') else '', '; blueprint only' if d.get('blueprintOnly') else ''))
+    print('cost    : %s%s' % (', '.join('%s x%s' % (c['item'], c['count']) for c in d['cost']) or 'no items', '; money %s' % d['money'] if d.get('money') else ''))
+    if d.get('books'): print('books   : ' + ', '.join(d['books']))
+    req = d.get('requires') or []
+    print('needs   : %s' % ('; '.join('%s%s%s' % (q['name'], ' (%s)' % q['kind'] if q['kind'] != 'research' else '', ' repetition %d' % q['repeat'] if q['kind'] == 'research' and q['repeat'] else '') for q in req) or 'nothing'))
+    ch, other = chain_of(e, byrec)
+    if ch or other:
+        tot = {}
+        for x in ch + [e]:
+            for c in x['data'].get('cost', []): tot[c['item']] = tot.get(c['item'], 0) + c['count']
+        print('chain   : %s%s' % (' -> '.join(x['name'] for x in reversed(ch)) + (' -> ' if ch else '') + e['name'], '; also needs the buildings/records: ' + ', '.join(other) if other else ''))
+        print('total   : %s  (one pass of each research in the chain, no repeats)' % ', '.join('%s x%s' % kv for kv in sorted(tot.items())))
+    if d.get('unlocks'):
+        by = {}
+        for u in d['unlocks']: by.setdefault(u['kind'], []).append(u['name'] + (' (repetition %d)' % u['repetition'] if d.get('repeats') and u['repetition'] else ''))
+        print('unlocks : ' + '; '.join('%s: %s' % (k, ', '.join(v[:12]) + (' ...' if len(v) > 12 else '')) for k, v in by.items()))
+    if d.get('improves'): print('improves: %s%s%s%s' % (', '.join(d['improves']), '; production x%s' % d['productionMult'] if d.get('productionMult') else '', '; power +%s' % d['powerIncrease'] if d.get('powerIncrease') else '', '; capacity +%s' % d['capacityIncrease'] if d.get('capacityIncrease') else ''))
+    if d.get('leadsTo'): print('leads to: ' + ', '.join(d['leadsTo'][:12]) + (' ...' if len(d['leadsTo']) > 12 else ''))
+    if d.get('description'): print('text    : ' + d['description'])
+    if len(r) > 1: print('(other matches: %s)' % ', '.join(o['name'] for o in r[1:8]))
+    prov(); warn_missing()
+def cmd_animal(a):
+    if not a: sys.exit('usage: wiki animal <name>')
+    need_data()
+    r = best(' '.join(a), ('animal-type',))
+    if not r:
+        if not any(o['kind'] == 'animal-type' for _, o, _ in merged()): sys.exit('wiki animal: no animal data. ' + export_hint())
+        sys.exit('no animal matching "%s" (wiki find <text> --kind animal-type)' % ' '.join(a))
+    e = r[0]; d = e['data']; rc = d.get('race') or {}
+    print('%s  [animal; id %s; %s]' % (e['name'], e['id'], ' + '.join(e['_layers'])))
+    print('faction : %s' % (e.get('faction') or '-'))
+    print('stats   : combat %s, animal strength %s%s, health x%s, lifespan %s days, size %s-%s of full, %s%% female, inventory %s%s' % (d.get('combatStats'), d.get('animalStrength'), ', strength %s' % d['strength'] if d.get('strength') else '', d.get('hpMult'), d.get('lifespanDays'), d.get('scaleMin'), d.get('scaleMax'), d.get('femaleChancePct'), d.get('inventory'), '; unique' if d.get('unique') else ''))
+    if rc:
+        print('race    : %s; walk speed %s%s; blood %s-%s; hunger %s, bleed %s, heal %s; extra attack slots %s; %s' % (rc['name'], rc['walkSpeed'], ' (swims x%s)' % rc['swimSpeedMult'] if rc.get('swims') else '', rc['minBlood'], rc['maxBlood'], rc['hungerRate'], rc['bleedRate'], rc['healRate'], rc['extraAttackSlots'], ', '.join(x for x in ('carriable' if rc.get('carriable') else 'cannot be carried', 'cannot enter buildings' if rc.get('cantEnterBuildings') else '', 'robot' if rc.get('isRobot') else '', 'gigantic' if rc.get('gigantic') else '') if x)))
+        if rc.get('anatomy'): print('anatomy : ' + ', '.join('%s %s' % (x['part'], x['hp']) for x in rc['anatomy']) + '  (part health, as the race lists it)')
+    w = d.get('weapon')
+    if w: print('attack  : %s (%s): cut %s, blunt %s, pierce %s, bleed %s, length %s, vs humans %s, animals %s%s' % (w['name'], w['class'], mult(w['cutMult']), mult(w['bluntMult']), mult(w['pierceMult']), mult(w['bleedMult']), w['length'], mult(w['humanMult']), mult(w['animalMult']), '; weapon level ' + d['weaponLevel'] if d.get('weaponLevel') else ''))
+    if d.get('deathItems'): print('drops   : ' + ', '.join('%s x%s' % (x['item'], x['count']) for x in d['deathItems']))
+    b = d.get('bounty')
+    if b: print('bounty  : %s%s, %d%% of spawns' % (money(b['amount']), ' to ' + money(b['amountMax']) if b['amountMax'] != b['amount'] else '', b['chancePct']))
+    if d.get('squads'): print('squads  : ' + '; '.join('%s x%s' % (x['squad'], x['count']) for x in d['squads'][:8]) + (' ...' if len(d['squads']) > 8 else ''))
+    sp = d.get('spawnsIn') or {}
+    bi = {}
+    for x in sp.get('biomes', []): bi.setdefault(x['biome'], []).append('%s %s%%' % (x['squad'], x['sharePct']))
+    if bi: print('biomes  : ' + '; '.join('%s (%s)' % (k, ', '.join(v[:3])) for k, v in list(bi.items())[:14]) + (' ...' if len(bi) > 14 else '') + '  (share = that squad\'s weight among the biome\'s homeless squads)')
+    if sp.get('nests'): print('nests   : ' + ', '.join(sp['nests']))
+    if sp.get('towns'): print('towns   : ' + ', '.join(sp['towns']) + '  (resident, bar or roaming squads of the town)')
+    if not bi and not sp.get('nests') and not sp.get('towns'): print('spawns  : no biome, nest or town list reaches it (placed by a campaign, another squad, or only by hand)')
+    if len(r) > 1: print('(other matches: %s)' % ', '.join(o['name'] for o in r[1:8]))
+    prov(); warn_missing()
+def squad_line(x): return '%s | %s%% | %s | %s%s' % (x['squad'], x['sharePct'], x.get('faction') or '-', ', '.join(x.get('animals') or x.get('members') or ['-']), ' | needs: ' + ', '.join(x['worldState']) if x.get('worldState') else '')
+def biome_report(b, why, n=25):
+    d = b['data']
+    print('%s  [biome group; %d zone cells, %d placed towns; %s]' % (b['name'], d['cellCount'], d.get('townCount', 0), ' + '.join(b['_layers'])))
+    if why: print(why)
+    print('homeless squads per loaded sector: %s (times the population setting); %d nest(s) to place%s' % (d['homelessAmount'], d['numNests'], ' (at fixed markers only)' if d.get('nestsAtFixedMarkersOnly') else ''))
+    sq = d.get('squads') or []
+    print('%d squad template(s) can spawn here (squad | share of the list | faction | animals or members%s):' % (len(sq), ' | world state')) if sq else print('no homeless squads listed')
+    for x in sorted(sq, key=lambda x: -x['sharePct'])[:n]: print('  ' + squad_line(x))
+    if len(sq) > n: print('  (%d more; --n 100)' % (len(sq) - n))
+    for x in d.get('nests', []): print('nest    : %s (%s%% of the nests) with %s' % (x['nest'], x['weightPct'], ', '.join(x['squads']) or 'no roaming squads'))
+    if d.get('towns'): print('towns   : ' + ', '.join(d['towns'][:14]) + (' ...' if d.get('townCount', 0) > 14 else ''))
+def cmd_spawns(a):
+    n = 25; words = []
+    i = 0
+    while i < len(a):
+        if a[i] == '--n' and i + 1 < len(a): n = int(a[i + 1]); i += 2
+        else: words.append(a[i]); i += 1
+    q = ' '.join(words).strip()
+    if not q: sys.exit('usage: wiki spawns <zone-X-Y | town | biome | squad> [--n 25]')
+    need_data()
+    bs = [o for _, o, _ in merged() if o['kind'] == 'biome']
+    if not bs: sys.exit('wiki spawns: no spawn data. ' + export_hint())
+    m = re.fullmatch(r'(?:zone[-. ]?)?(\d+)[-. ,](\d+)', q.lower())
+    cell = '%s-%s' % m.groups() if m else None
+    why = ''
+    if cell is None:
+        t = best(q, TOWNLIKE)
+        if t and nk(t[0]['name']) == nk(q) and t[0].get('zone'):
+            zm = re.fullmatch(r'zone-(\d+)-(\d+)', t[0]['zone'])
+            if zm: cell = '%s-%s' % zm.groups(); why = '%s lies in zone %s' % (t[0]['name'], t[0]['zone'])
+    if cell:
+        hit = [b for b in bs if cell in b['data']['cells']]
+        if not hit: sys.exit('zone cell %s is outside every biome group (off the painted map)' % cell)
+        biome_report(hit[0], (why + '; ' if why else 'zone cell zone-%s: ' % cell) + 'its biome group spawns the squads below (homeless squads roam; towns have their own residents: wiki town <name>)', n)
+        prov(); warn_missing(); return
+    k = nk(q)
+    named = [b for b in bs if nk(b['name']) == k] or [b for b in bs if k in nk(b['name'])]
+    if named:
+        for b in named[:3]: biome_report(b, '', n)
+        prov(); warn_missing(); return
+    found = False
+    for b in bs:
+        for x in b['data'].get('squads', []):
+            if k in nk(x['squad']):
+                if not found: print('squads matching "%s" spawn in these biome groups (biome | squad | share | faction | animals or members):' % q)
+                found = True
+                print('%s | %s | %s%% | %s | %s%s' % (b['name'], x['squad'], x['sharePct'], x.get('faction') or '-', ', '.join(x.get('animals') or x.get('members') or ['-']), ' | needs: ' + ', '.join(x['worldState']) if x.get('worldState') else ''))
+    for _, o, _ in merged():
+        d = o.get('data') or {}
+        if o['kind'] == 'nest' and any(k in nk(x) for x in d.get('roaming', [])):
+            found = True; print('nest    : %s (%s) has roaming %s' % (o['name'], xz(o), ', '.join(x for x in d['roaming'] if k in nk(x))))
+        elif o['kind'] in ('town', 'camp') and any(k in nk(x) for x in d.get('residents', []) + d.get('bar', []) + d.get('roaming', [])):
+            found = True; print('town    : %s (%s) lists %s' % (o['name'], xz(o), ', '.join(x for x in d.get('residents', []) + d.get('bar', []) + d.get('roaming', []) if k in nk(x))))
+    if not found: sys.exit('nothing matches "%s" (try a zone like zone-39-16, a town, a biome name or a squad name)' % q)
+    prov(); warn_missing()
 def cmd_near(a):
     kind = None; n = 5; pos = []
     i = 0
@@ -452,13 +662,32 @@ def meta(folder):
             if isinstance(d, dict) and 'source' in d: return d
         except Exception: pass
     return None
+def gen_meta():
+    """The top-level provenance block of the generated layer (data dir, load order, mods), from the first generated file that has it."""
+    for n, p in layer_files(GEN):
+        try:
+            d = read(p)
+            if isinstance(d, dict) and 'dataDir' in d: return d
+        except Exception: pass
+    return None
+def prov():
+    m = gen_meta()
+    if not m: return
+    mods = m.get('mods') or []
+    print('data    : generated from %s -- %s' % (m.get('dataDir'), 'clean install, no mods beyond the base game' if m.get('modded') is False else ('modded: %d mod file(s): %s' % (len(mods), ', '.join(mods[:6]) + (' ...' if len(mods) > 6 else ''))) if m.get('modded') else 'mod state not recorded (old export, run wiki export)'))
 def cmd_status(a):
     for layer, folder in layers():
         fs = layer_files(folder)
         cnt = sum(len(rows_of(read(p))) for _, p in fs) if fs else 0
         print('%-9s %s: %s' % (layer, folder, '%d files, %d entries' % (len(fs), cnt) if fs else 'missing'))
         m = meta(folder)
-        if m: print('          %s | data %s | %s' % (m['source'], m.get('dataDir'), m.get('generated')))
+        if m:
+            print('          %s | data %s | %s' % (m['source'], m.get('dataDir'), m.get('generated')))
+            if 'modded' in m:
+                print('          mods: %s' % ('none, clean install (only the base game\'s own data files)' if not m['modded'] else '%d beyond the base game: %s' % (len(m['mods']), ', '.join(m['mods']))))
+                print('          mods.cfg: %d entries; load order: %s' % (len(m.get('modsCfg') or []), m.get('loadOrder')))
+                if m.get('loadIssues'): print('          load issues: %s' % '; '.join(m['loadIssues'][:5]))
+            else: print('          mods: not recorded (made by an older exporter; run wiki export)')
     if gen_missing(): print('generated data is missing: ' + export_hint())
 def cmd_export(a):
     exe = native_exe()
@@ -495,7 +724,7 @@ def cmd_check(a):
     if len(errs) > 40: print('... %d more errors' % (len(errs) - 40))
     warn_missing()
     sys.exit(1 if errs else 0)
-C = {'find': cmd_find, 'show': cmd_show, 'town': cmd_town, 'buy': cmd_buy, 'overrides': cmd_overrides, 'who': cmd_who, 'bounties': cmd_bounties, 'faction': cmd_faction, 'item': cmd_item, 'near': cmd_near, 'tp': cmd_tp, 'kinds': cmd_kinds, 'status': cmd_status, 'export': cmd_export, 'add': cmd_add, 'check': cmd_check}
+C = {'find': cmd_find, 'show': cmd_show, 'town': cmd_town, 'buy': cmd_buy, 'overrides': cmd_overrides, 'who': cmd_who, 'bounties': cmd_bounties, 'faction': cmd_faction, 'item': cmd_item, 'research': cmd_research, 'animal': cmd_animal, 'spawns': cmd_spawns, 'near': cmd_near, 'tp': cmd_tp, 'kinds': cmd_kinds, 'status': cmd_status, 'export': cmd_export, 'add': cmd_add, 'check': cmd_check}
 if len(sys.argv) < 2 or sys.argv[1] not in C:
     print(open(__file__).read().split('import json')[0].replace('#!/usr/bin/env -S python3 -I\n', ''), end=''); sys.exit(2)
 C[sys.argv[1]](sys.argv[2:])

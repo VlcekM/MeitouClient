@@ -22,22 +22,10 @@
    "residents": [
     "Example Squad"
    ],
-   "buildings": [
-    {
-     "name": "Longhouse",
-     "count": 1,
-     "kind": "shop",
-     "usedAs": "Bakery",
-     "forSale": 1,
-     "priceMin": 4000,
-     "priceMax": 4000,
-     "ruins": 0
-    }
-   ],
    "walls": 0,
    "gates": 0,
    "shops": [
-    "Example Shop (Longhouse)"
+    "Example Shop"
    ],
    "forSale": [
     {
@@ -48,7 +36,48 @@
    ],
    "overrides": [
     "Example Town (override) ruined (Ruins) when Example Lord is not alive"
-   ]
+   ],
+   "buildingTypes": [
+    {
+     "type": "Bakery",
+     "count": 1,
+     "category": "shop"
+    },
+    {
+     "type": "Barracks",
+     "count": 1,
+     "category": "other"
+    },
+    {
+     "type": "Slave Shop",
+     "count": 1,
+     "category": "slave shop"
+    },
+    {
+     "type": "Residential",
+     "count": 2,
+     "category": "other",
+     "forSale": 1,
+     "priceMin": 4000,
+     "priceMax": 4000
+    }
+   ],
+   "building_assignment_example": {
+    "note": "One possible pairing of building models with residents; the original rerolls it at every new game and mods change the lists. Only buildingTypes is reliable.",
+    "buildings": [
+     {
+      "name": "Longhouse",
+      "count": 1,
+      "kind": "shop",
+      "usedAs": "Bakery",
+      "forSale": 1,
+      "priceMin": 4000,
+      "priceMax": 4000,
+      "ruins": 0
+     }
+    ]
+   },
+   "biome": "Example Biome"
   },
   "found_via": "optional: where the position first came from, if an outside source; leave out otherwise",
   "observed": {

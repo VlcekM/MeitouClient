@@ -19,7 +19,8 @@
    "town": "Example Town",
    "townId": "example-town",
    "squad": "Example Shop",
-   "building": "Longhouse",
+   "type": "Example Shop type",
+   "slaveShop": false,
    "via": "resident",
    "vendors": [
     {

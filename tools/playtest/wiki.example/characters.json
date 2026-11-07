@@ -16,6 +16,7 @@
   "confidence": "Unknown",
   "notes": "Fake entry that only shows the schema. Delete it.",
   "data": {
+   "factionSource": "home town Example Town",
    "unique": true,
    "recruitable": false,
    "bounty": {
