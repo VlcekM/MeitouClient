@@ -219,8 +219,7 @@ The carry bone is a skeleton bone, not a body name: its body is the one the ragd
 carrier node rotation x the attach bone's derived rotation x its binding-pose inverse (the bone's turn from its binding pose), position the attach bone's world position
 (`FUN_1405b1c50`, the carrier's position when zero) + the bone's world rotation x the vector at controller `+0x160`. The attach (`vfunc_15` `FUN_1407d5290`) subtracts from that vector a
 per-bone vector of the carrier's `AnimationClass` (`FUN_1405b83a0`, map entry `+0x28`, zero when the bone is missing); its starting value and meaning are **Unknown**.
-Meitou (`RagdollSystem.AnimalAttach`): places the animal's node so that its carry bone's actor has exactly that pose (the actor has no rotation of its own and sits at the bone's
-binding position, [phs](../formats/phs.md); Meitou's body is its shape, placed on it), with the vector taken as zero (engine choice); the rest hangs. Headless probe (Bonedog on a
+Meitou (`RagdollSystem.AnimalAttach`): places the animal's node so that its carry bone's actor has exactly that pose (the actor has no rotation of its own, [phs](../formats/phs.md); Meitou's body is its shape, placed on it), with the vector taken as zero (engine choice); the rest hangs. Headless probe (Bonedog on a
 Greenlander, issue #307): the dog's `Bip01` on the shoulder bone, its head level with it out to the carrier's left, the front paws 8 to 11 below; with the human rule it stood 6 above
 the shoulder, over the head.
 
@@ -282,10 +281,13 @@ Driver `FUN_1405b8180` (AnimationClass), update `FUN_1407d3c00`:
 - Root: for WHOLE (or a carried animal) the scene node is set to the root body's position
   (`FUN_1407d1490`: the body named at RagdollAnimation `+0x48`, else the first simulated one);
   otherwise the node keeps the movement position. The body's position is the actor's origin (the phs actor `position`), not its shape's centre. Meitou:
-  `RagdollDefinition.RootAt`. **Observed**: whale2.phs (Big-Bones) is about 1.3 x its skeleton, so its Bip01 capsule centre lies 29 from the actor and 51 from the bone; following
+  `RagdollDefinition.RootAt`. **Observed**: whale2.phs (Big-Bones) is about 1.3 x its skeleton, so its Bip01 capsule centre lies 29 from the actor; following
   the centre left a looter 5 m off a downed Cleanser Unit.
 - Bones (`FUN_1407d3a30`): a simulated body writes its orientation into its manually controlled Ogre
   bone (plus position for a bone without parent); a pinned body is moved to the animated pose.
+  Meitou (`RagdollBody.BoneInBody`): the bone sits at its actor's origin, so a parentless bone is drawn there and the other bones keep the skeleton's offsets; a pinned or new
+  body puts its actor on the animated bone (engine choice for the pinned case: the same convention both ways, so no jump on entering a ragdoll). Where the file and skeleton
+  differ (whale2: Bip01 actor 24 from the bone) the shapes keep their offsets from the actor, not from the skeleton's bone.
 - Carried animal: the carry-bone body is moved kinematically to the carrier's attach bone.
 - Partial (non-WHOLE) ragdolls are woken every frame (wake 20) and never freeze.
 - Water (only when byte `+0x79` of the character's race data is set): when the root is at or below

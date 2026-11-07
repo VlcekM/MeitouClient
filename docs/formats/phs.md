@@ -46,7 +46,7 @@ int32   n, n × 0x7c bytes               loose lights (never non-empty)
 
 Actor:
   int32  shapeCount, pointCount, lightCount, unknown
-  vec3   position                       model space; equals the bone position in every ragdoll
+  vec3   position                       model space; the bone position in most ragdolls (not all, see below)
   float  garbage
   float  unknown
   bool   static                         nonzero: no body (static actor; joints treat it as the world)
