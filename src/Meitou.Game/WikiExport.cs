@@ -16,7 +16,7 @@ namespace Meitou.Game;
 /// <c>tools/playtest/wiki.example</c> plus an optional <c>data</c> object; nothing in them comes from outside the data files read
 /// (docs/agent-playtest.md, "The wiki").
 /// </summary>
-static class WikiExport
+static partial class WikiExport
 {
     const string DefaultSource = "generated from your game data";
 
@@ -29,7 +29,7 @@ static class WikiExport
         Directory.CreateDirectory(outDir);
         var order = LoadOrder.FromInstall(install);
         var db = GameDatabase.Load(order);
-        var world = WorldLevelData.Load(Path.Combine(install.DataDirectory, WorldLevelData.RelativeDirectory), order.Entries);
+        var world = WorldLevelData.Load(Path.Combine(install.DataDirectory, WorldLevelData.RelativeDirectory), order.Entries, includeInteriors: true);
         string source = $"{DefaultSource} by Meitou {BuildVersion.Tag} ({BuildVersion.Commit})";
         var used = new HashSet<string>(StringComparer.Ordinal);
         string Id(string name, string recordId)
@@ -47,6 +47,7 @@ static class WikiExport
 
         // Towns: every placed town record except nest markers and null towns.
         var towns = new List<Row>();
+        var placedTowns = new List<PlacedTown>();
         var townZones = new Dictionary<ZoneCoordinate, List<string>>();
         var townAt = new Dictionary<string, (float X, float Z)>(StringComparer.Ordinal);
         foreach (var placement in world.Towns().OrderBy(p => p.TownId, StringComparer.Ordinal).ThenBy(p => p.InstanceId, StringComparer.Ordinal))
@@ -71,6 +72,7 @@ static class WikiExport
                 faction.Length == 0 ? null : faction, zoneId, placement.Position.X, placement.Position.Z, "Observed",
                 $"{town.Type} in {zoneId}" + (faction.Length == 0 ? "" : $", faction {faction}") + ". Position as the level data places it; not checked in game.", placement.TownId, data);
             towns.Add(row);
+            placedTowns.Add(new PlacedTown(placement, town, row));
             townAt.TryAdd(placement.TownId, (placement.Position.X, placement.Position.Z));
             if (!townZones.TryGetValue(zone, out var list)) townZones[zone] = list = [];
             list.Add(town.Name);
@@ -113,6 +115,10 @@ static class WikiExport
                 $"{f.FundamentalType} faction, default relation {f.DefaultRelation}.{toPlayer}" + (f.NotReal ? " Not a real faction (wildlife, ruins, slaves)." : ""), record.StringId, data));
         }
 
+        // Town detail (buildings, shops, houses for sale), town overrides, unique and bounty characters (WikiExport.Detail.cs).
+        var detail = Detail(db, world, placedTowns, Id);
+        var characterRecords = detail.Characters.Select(c => c.Record ?? "").ToHashSet(StringComparer.Ordinal);
+
         // Squad templates and the unique characters that live in towns.
         var squads = new List<Row>();
         var npcs = new List<Row>();
@@ -144,7 +150,7 @@ static class WikiExport
                 (squad.IsUnique ? "Unique squad" : "Squad template") + (leader.Length > 0 ? $", leader {leader}" : "") + (squad.HasShop ? ", runs a shop" : "") + "." + where, squad.Id, data);
             squads.Add(row);
             // A leader who leads exactly one resident squad is a person of that town: one npc entry with the town's position.
-            if (leader.Length > 0 && home && leaderUse.GetValueOrDefault(squad.Leader!.Value.Id) == 1)
+            if (leader.Length > 0 && home && !characterRecords.Contains(squad.Leader!.Value.Id) && leaderUse.GetValueOrDefault(squad.Leader!.Value.Id) == 1)
             {
                 var zone = WorldLayout.ZoneOf(x!.Value, z!.Value);
                 npcs.Add(new Row(Id(leader, squad.Leader!.Value.Id), leader, "npc", faction.Length == 0 ? null : faction, $"zone-{zone.X}-{zone.Y}", x, z, "Inferred",
@@ -157,7 +163,7 @@ static class WikiExport
         var seenCharacters = new HashSet<string>(npcs.Select(n => n.Record ?? ""), StringComparer.Ordinal);
         foreach (var record in db.OfType(FcsRecordType.CHARACTER).Concat(db.OfType(FcsRecordType.ANIMAL_CHARACTER)).OrderBy(r => r.Name, StringComparer.Ordinal).ThenBy(r => r.StringId, StringComparer.Ordinal))
         {
-            if (record.Name.Length == 0 || seenCharacters.Contains(record.StringId)) continue;
+            if (record.Name.Length == 0 || seenCharacters.Contains(record.StringId) || characterRecords.Contains(record.StringId)) continue;
             string faction = record.GetReferences("faction") is { Count: > 0 } fl ? FactionName(fl[0].TargetStringId) : "";
             bool animal = record.Type == FcsRecordType.ANIMAL_CHARACTER;
             npcs.Add(new Row(Id(record.Name, record.StringId), record.Name, animal ? "animal" : "npc", faction.Length == 0 ? null : faction, null, null, null, "Observed",
@@ -194,7 +200,7 @@ static class WikiExport
                 new SortedDictionary<string, object?> { ["record"] = record.StringId, ["definedBy"] = record.DefinedBy, ["value"] = Num(record, "value") }));
         }
 
-        var files = new (string Name, List<Row> Rows)[] { ("zones", zones), ("towns", towns), ("factions", factions), ("squads", squads), ("npcs", npcs), ("items", items), ("buildings", buildings) };
+        var files = new (string Name, List<Row> Rows)[] { ("zones", zones), ("towns", towns), ("factions", factions), ("squads", squads), ("npcs", npcs), ("items", items), ("buildings", buildings), ("shops", detail.Shops), ("vendors", detail.Vendors), ("overrides", detail.Overrides), ("characters", detail.Characters) };
         string dataDir = install.DataDirectory;
         string loadOrder = string.Join(", ", order.Entries.Select(e => e.Name));
         var counts = new List<string>();
@@ -258,6 +264,7 @@ static class WikiExport
             case string s: w.WriteStringValue(s); break;
             case bool b: w.WriteBooleanValue(b); break;
             case int i: w.WriteNumberValue(i); break;
+            case long l: w.WriteNumberValue(l); break;
             case float f: w.WriteNumberValue(MathF.Round(f * 1000) / 1000); break;
             case IDictionary<string, object?> d:
                 w.WriteStartObject();
@@ -267,6 +274,11 @@ static class WikiExport
             case IEnumerable<string> list:
                 w.WriteStartArray();
                 foreach (var s in list) w.WriteStringValue(s);
+                w.WriteEndArray();
+                break;
+            case System.Collections.IEnumerable items:
+                w.WriteStartArray();
+                foreach (var x in items) WriteValue(w, x);
                 w.WriteEndArray();
                 break;
             default: w.WriteStringValue(Convert.ToString(v, CultureInfo.InvariantCulture)); break;
