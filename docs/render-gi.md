@@ -148,17 +148,23 @@ without probes, and on interiors with **Indoor GI** off, reflections run with no
 
 - **March** (resolve size, 1/2 without it): gloss above 0.25, reflected from the stored normal, 40 screen steps with inverse depth linear, 5 halvings, up to 3000 units.
   A rejected hit: from behind (stored normal), or within 4-12 units (a normal-mapped ray under its own surface). Fades at screen edges (6%) and the last quarter.
-- **Rays** (needs a probe trace this frame and storage on RGBA16F): the same ray for what the march left, up to 4000 units, lit as a probe ray (no specular, no haze);
-  a miss proves the sky open. No characters, grass or water. No rays: the sky, occluded.
+- **Rays** (needs a probe trace this frame and storage on RGBA16F): the same ray for every glossy texel, against the traced scene and its characters, up to 4000 units,
+  lit as a probe ray (no specular, no haze). A hit replaces the march (world space first); a miss keeps what the march found (grass, water, particles are not traced) and
+  proves the sky open past it. No rays: the march, then the sky, occluded.
 - **Shade** (same size): `seen - sky`, hazed as the fragment was, per unit of BRDF. `sky` is `kenshiLight`'s read of the cube, recomputed, so nothing is counted twice;
   `seen` mixes occluded sky to the hit by gloss 0.25-0.45. Every surface passes here: **specular occlusion** is recovered from the resolve's texel
   (`1 + lum((probes - sky) * share) / lum(sky)`, clamped: `kenshiLight`'s ratio) and needs no extra read of the probes.
 - **Apply** (full size): depth-weighted upsample as the resolve's, times this pixel's Lazarov BRDF, specular colour 0.04 (only characters have metalness).
 
-A wet surface goes to gloss about 0.45 (`makeWet`). With an upscaler each frame samples the GGX lobe for TAA/DLSS to average; without one the mirror direction is used.
+A wet surface goes to gloss about 0.45 (`makeWet`). The ray is the lobe's dominant direction (`kenshiLight`'s sky lookup: towards the normal as the surface roughens), the
+same every frame and from the march's fixed step offsets: a lobe sampled anew each frame (as before) left the upscaler noise it could not average out.
 GI per fragment (`--gi-resolve 0`) leaves the reflections off: its fragments already occlude a term the shade cannot recover.
 Rays and march per block use one surface; `sky` is that pixel's, so a noisy normal inside a block leaves a small error at grazing angles.
-Thresholds, range, look and cost: **Unknown** (not run on a GPU).
+**Observed** (`siwa-test6`, the user's settings: DLSS at 0.67, paused, hidden HUD, live frames through the control channel; mean |frame - previous| over 7 frames, 8-bit):
+the stochastic lobe 0.214 with the reflections, 0.155 without (noise on the crate's metal and the machine); the fixed direction 0.181, 0.174 without. Night town
+(`gi-fireflies`): 0.052 against 0.044. No pixel brighter than both the frames around it and its 5x5 median by 24 levels, still or orbiting, in either save, with
+any switch off (no fireflies on dry ground found; the bright points on that save's water are there with the GI off and with the game's water). Cost at 2560x1440
+DLSS: `ssr` 0.11-0.12 ms either way. Thresholds and look: **Unknown**.
 
 ## Performance and verification
 

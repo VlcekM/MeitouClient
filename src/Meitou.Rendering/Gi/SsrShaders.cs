@@ -48,21 +48,14 @@ static class SsrShaders
             if (d.y < 0.0) d.xz = (1.0 - abs(d.zx)) * vec2(d.x >= 0.0 ? 1.0 : -1.0, d.z >= 0.0 ? 1.0 : -1.0);
             return normalize(d);
         }
-        float ssrRandom(inout uint state)
+        // The reflected ray: the lobe's dominant direction, as kenshiLight reads the sky's reflection (towards the normal as the surface roughens). The same every frame:
+        // a lobe sampled anew each frame leaves the upscaler noise it cannot average away.
+        vec3 ssrDirection(vec3 n, vec3 v, float gloss)
         {
-            state ^= state >> 16; state *= 0x7feb352du; state ^= state >> 15; state *= 0x846ca68bu; state ^= state >> 16;
-            return float(state >> 8) * (1.0 / 16777216.0);
-        }
-        // The reflected ray, its normal turned by a GGX slope (spread 0: the mirror direction; with the upscaler 1, this frame's sample of the lobe, its tail cut).
-        vec3 ssrDirection(vec3 n, vec3 v, float gloss, inout uint state, float spread)
-        {
-            float rough = 1.0 - gloss * 0.99, u = ssrRandom(state) * 0.75, turn = ssrRandom(state) * 6.2831853;
-            float slope = spread * rough * rough * sqrt(u / (1.0 - u));
-            vec3 t = normalize(abs(n.y) < 0.99 ? cross(n, vec3(0.0, 1.0, 0.0)) : cross(n, vec3(1.0, 0.0, 0.0)));
-            vec3 r = reflect(-v, normalize(n + (t * cos(turn) + cross(n, t) * sin(turn)) * slope));
+            float rough = 1.0 - gloss * 0.99;
+            vec3 r = normalize(mix(n, reflect(-v, n), gloss * (sqrt(gloss) + rough)));
             return dot(r, n) > 0.0 ? r : reflect(-v, n);
         }
-        uint ssrSeed(ivec2 px, uint frame) { return uint(px.x) * 73856093u ^ uint(px.y) * 19349663u ^ frame * 83492791u; }
 
         """;
 
@@ -75,7 +68,6 @@ static class SsrShaders
         out vec4 fragColour;
         uniform sampler2D uScene;
         uniform float uDiv;
-        uniform vec2 uSsr;     // x the lobe's spread, y the frame
 
         // Where the ray's screen position leaves -1..1, as a share of the segment s0..s1.
         float ssrScreenEnd(vec2 s0, vec2 s1)
@@ -99,7 +91,7 @@ static class SsrShaders
             return smoothstep(0.0, 0.06, min(edge.x, edge.y)) * along;
         }
         // From world point p along r; returns the trust in the hit (0: none) and its uv.
-        float ssrMarch(vec3 p, vec3 r, float jitter, out vec2 uv)
+        float ssrMarch(vec3 p, vec3 r, out vec2 uv)
         {
             uv = vec2(0.0);
             mat3 toView = inverse(mat3(uRight * uTan.x, uUp * uTan.y, -uBack));
@@ -112,7 +104,7 @@ static class SsrShaders
             float k0 = 1.0 / a.z, k1 = 1.0 / b.z, end = ssrScreenEnd(s0, s1), before = 0.0;
             for (int i = 0; i < {{MarchSteps}}; i++)
             {
-                float x = (float(i) + jitter) / {{F(MarchSteps)}}, t = end * x * x;
+                float x = (float(i) + 0.5) / {{F(MarchSteps)}}, t = end * x * x;
                 float rayZ = 1.0 / mix(k0, k1, t), sceneZ = depthAt(ssrPixel(mix(s0, s1, t)));
                 float gap = rayZ - sceneZ, stepZ = abs(rayZ - 1.0 / mix(k0, k1, before));
                 if (sceneZ <= 0.0 || gap <= 0.0 || gap > max({{F(MarchThickness)}}, stepZ * 1.5)) { before = t; continue; }
@@ -140,10 +132,9 @@ static class SsrShaders
             float z = ssrWeight(gloss) > 0.0 ? depthAt(px) : 0.0;
             if (z <= 0.0) return;
             vec3 n = ssrNormal(surface), p = positionAt(px, z), v = normalize(uGiEye - p);
-            uint seed = ssrSeed(px, uint(uSsr.y));
-            vec3 r = ssrDirection(n, v, gloss, seed, uSsr.x);
+            vec3 r = ssrDirection(n, v, gloss);
             vec2 uv;
-            float trust = ssrMarch(p + n * (1.0 + z * 0.001), r, ssrRandom(seed), uv);
+            float trust = ssrMarch(p + n * (1.0 + z * 0.001), r, uv);
             if (trust > 0.0) fragColour = vec4(texture(uScene, uv).rgb, trust);
         }
         """;
