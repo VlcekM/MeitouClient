@@ -109,6 +109,15 @@ opaque, discard-free colour only for no-cutout/non-fading parts. Draw solids fir
 cutout/dither shaders for other batches. Cache native state per program so solid/fading variants
 do not evict one another. Depth/caster coverage must remain compatible with colour.
 
+### Precision
+
+The objects' vertex stage projects each vertex relative to the eye: `mat3(instance) × vertex + (instance origin − eye)`, with a
+view-projection that has no translation (the scene's `RelativeRotation × jittered`, as the characters', [character-renderer.md](character-renderer.md#precision);
+shadow cascades and the reflection take translation(eye) × theirs). The world position at tens of thousands of units steps by 0.004, and in a
+whole-world transform the layers of one mesh a hair apart can fight for depth; the origin less the eye is one exact subtraction per instance.
+Shading still uses the absolute world position. **Observed** (The Hub, offscreen, three views): the picture within 0.15/255 mean of the
+whole-world transform. **Unknown** whether this was the z-fighting the user reported on ruins (not reproduced: no location yet).
+
 ## Building sign highlight
 
 `WorldObjectRenderer.HighlightSigns` splits real parts with owning BUILDING `is sign` into yellow-tinted

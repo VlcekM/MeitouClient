@@ -1033,8 +1033,13 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     bool OutsideHidden(PlacedMesh p) =>
         p.Kind == PlacedKind.BuildingPart && p.Interior && !InteriorView.ContainsKey(p.ParentPlacementId ?? p.PlacementId);
 
-    /// <summary>Draws the objects seen from <paramref name="eye"/> through <paramref name="frustum"/>.</summary>
-    public void Draw(Matrix4x4 viewProjection, Vector3 eye, Vector4[] frustum, WorldRenderOptions options, Vector3 light, Vector3 fogColour, float fogDistance, TerrainRenderer terrain)
+    /// <summary>
+    /// Draws the objects seen from <paramref name="eye"/> through <paramref name="frustum"/>. The vertices are projected relative to the eye
+    /// (BuildingLodShaders.Vertex): <paramref name="relative"/> is the view-projection without the eye's translation when the caller has it
+    /// formed precisely (the scene's, WorldFrame), else translation(eye) × <paramref name="viewProjection"/>.
+    /// </summary>
+    public void Draw(Matrix4x4 viewProjection, Vector3 eye, Vector4[] frustum, WorldRenderOptions options, Vector3 light, Vector3 fogColour, float fogDistance, TerrainRenderer terrain,
+        Matrix4x4? relative = null)
     {
         var cpu = Stopwatch.StartNew();
         long now = Environment.TickCount64;
@@ -1115,7 +1120,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         int wireMode = debugLevels == 2 ? 2 : options.Wireframe;
         if (active.Count > 0)
         {
-            var view = new ViewConstants { ViewProjection = viewProjection, Eye = eye, LightDir = light, FogColour = fogColour, FogDistance = fogDistance };
+            var view = new ViewConstants { ViewProjection = relative ?? Matrix4x4.CreateTranslation(eye) * viewProjection, Eye = eye, LightDir = light, FogColour = fogColour, FogDistance = fogDistance };
             if (!depthPass) InteriorMaskRenderer.Apply(ref view, InteriorCut);
             else (view.CutVolumes, view.CutRanges, view.CutPlanes) = (cutConstants.CutVolumes, cutConstants.CutRanges, cutConstants.CutPlanes);
             var fadeRange = new Vector4(real - realBand, real, DistantReach - distantBand, DistantReach);

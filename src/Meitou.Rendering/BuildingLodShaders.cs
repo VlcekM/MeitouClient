@@ -28,6 +28,7 @@ static class BuildingLodShaders
             layout(location = 10) in vec4 aInstance3;
             uniform int uFadeMode;
             uniform vec3 uFadeEye;
+            uniform vec3 uEye;
             uniform vec4 uFadeRange;
             out vec2 vRange;
             flat out float vInterior;
@@ -51,6 +52,13 @@ static class BuildingLodShaders
                     float fd = length((uModel * vec4(aPosition, 1.0)).xyz - uFadeEye);
                     vRange = vec2(0.0, smoothstep(uFadeRange.x, uFadeRange.y, fd) * (1.0 - smoothstep(uFadeRange.z, uFadeRange.w, fd)));
                 }
+            """);
+        // Projected relative to the eye (uViewProjection has no translation, WorldObjectRenderer.Draw): the instance's origin less the eye is one
+        // subtraction of near values, exact, where the world position at tens of thousands of units steps by 0.004 and a mesh's layers a hair
+        // apart (a ruin's plaster over its wall, plates over planks) fought for depth (docs/render-objects.md "Precision").
+        v = Replace(v, @"gl_Position\s*=\s*uViewProjection\s*\*\s*p\s*;", """
+                vec4 local = skin * vec4(aPosition, 1.0);
+                gl_Position = uViewProjection * vec4(mat3(uModel) * local.xyz + (aInstance3.xyz - uEye), 1.0);
             """);
         return v;
     }

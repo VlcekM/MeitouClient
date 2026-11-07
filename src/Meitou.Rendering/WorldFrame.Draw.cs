@@ -704,7 +704,7 @@ static partial class WorldFrame
         {
             objects.FogCull = gpu.FogVolumes;
             objects.InteriorCut = gpu.InteriorMask;
-            if (f.Render.Objects) objects.Draw(s.ViewProjection, f.Eye, s.Frustum, f.Render, light.SunDirection, light.FogColour, light.FogDistance, gpu.Terrain);
+            if (f.Render.Objects) objects.Draw(s.ViewProjection, f.Eye, s.Frustum, f.Render, light.SunDirection, light.FogColour, light.FogDistance, gpu.Terrain, f.RelativeRotation * s.Jittered);
             objects.FogCull = null;
             objects.InteriorCut = null;
         }
