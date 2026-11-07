@@ -15,12 +15,12 @@ namespace Meitou.Game;
 /// </summary>
 sealed partial class GameHost
 {
-    enum DebugRow { Teleport, SpawnNpc, GiveItem, Money, Heal, HealFully, MaxSkills, Damage, ForceHits, DamageMultiplier, UnlockResearch, ClearBounties, Godmode, Guard }
+    enum DebugRow { Teleport, SpawnNpc, GiveItem, Money, Heal, HealFully, MaxSkills, Damage, ForceHits, DamageMultiplier, UnlockResearch, ClearBounties, Godmode, Guard, Explode }
 
     static readonly string[] DebugLabels =
     [
         "Teleport selected here", "Spawn NPC (hostile)", "Give item (name x5 q80)", "Money (+/- cats)", "Heal", "  Heal fully (restore limbs)", "Max out skills", "Damage (cut)",
-        "Force hits to", "Damage multiplier", "Unlock all research", "Clear bounties", "Godmode (all players)", "Guard (kill + heal in radius)",
+        "Force hits to", "Damage multiplier", "Unlock all research", "Clear bounties", "Godmode (all players)", "Guard (kill + heal in radius)", "Explode at selected",
     ];
 
     /// <summary>The cheat rows' sections, in the order shown (and walked by Up / Down).</summary>
@@ -28,7 +28,7 @@ sealed partial class GameHost
     [
         ("Character", [DebugRow.Teleport, DebugRow.Heal, DebugRow.HealFully, DebugRow.MaxSkills, DebugRow.Godmode, DebugRow.ClearBounties]),
         ("World / Spawn", [DebugRow.SpawnNpc, DebugRow.GiveItem, DebugRow.Money, DebugRow.UnlockResearch]),
-        ("Combat", [DebugRow.Damage, DebugRow.ForceHits, DebugRow.DamageMultiplier, DebugRow.Guard]),
+        ("Combat", [DebugRow.Damage, DebugRow.ForceHits, DebugRow.DamageMultiplier, DebugRow.Guard, DebugRow.Explode]),
     ];
 
     /// <summary>The menu's rows in display order: (section title when the row starts a section, row number: a cheat, a mod row, or <see cref="DebugRowCount"/> + the tool's index).</summary>
@@ -128,7 +128,7 @@ sealed partial class GameHost
     bool DebugIsTool(int row) => row >= DebugRowCount;
 
     bool DebugHasField(int row) => !DebugIsTool(row) && (row >= DebugLabels.Length ? ModDebugRows[row - DebugLabels.Length].HasField
-        : (DebugRow)row is not (DebugRow.Teleport or DebugRow.Heal or DebugRow.HealFully or DebugRow.MaxSkills or DebugRow.ForceHits or DebugRow.UnlockResearch or DebugRow.ClearBounties or DebugRow.Godmode or DebugRow.Guard));
+        : (DebugRow)row is not (DebugRow.Teleport or DebugRow.Heal or DebugRow.HealFully or DebugRow.MaxSkills or DebugRow.ForceHits or DebugRow.UnlockResearch or DebugRow.ClearBounties or DebugRow.Godmode or DebugRow.Guard or DebugRow.Explode));
 
     /// <summary>The rows that open the body part list.</summary>
     bool DebugPicksPart(int row) => !DebugIsTool(row) && (DebugRow)row is DebugRow.Damage or DebugRow.ForceHits or DebugRow.ClearBounties;
@@ -251,6 +251,41 @@ sealed partial class GameHost
     }
 
     /// <summary>
+    /// The explode row: <paramref name="field"/> is empty (15 m around the selected, else the first, player character) or <c>[&lt;x&gt; &lt;z&gt;] [--radius &lt;m&gt;] [--force &lt;n&gt;] [--damage &lt;n&gt;] [--squad]</c>
+    /// as the console passes it. <see cref="DebugExplode"/> does the rest in the simulation; its summary reaches the message log.
+    /// </summary>
+    string DebugExplodeApply(World world, string field, long tick)
+    {
+        const string usage = "usage: explode [<x> <z>] [--radius <m>] [--force <n>] [--damage <n>] [--squad]";
+        float radius = 15, force = 20, damage = 40;
+        bool squad = false;
+        var numbers = new List<float>();
+        var words = field.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        for (int i = 0; i < words.Length; i++)
+        {
+            float value;
+            if (words[i].Equals("--squad", StringComparison.OrdinalIgnoreCase)) squad = true;
+            else if (words[i].Equals("--radius", StringComparison.OrdinalIgnoreCase) && i + 1 < words.Length && float.TryParse(words[++i], NumberStyles.Float, CultureInfo.InvariantCulture, out value) && value > 0 && value <= 500) radius = value;
+            else if (words[i].Equals("--force", StringComparison.OrdinalIgnoreCase) && i + 1 < words.Length && float.TryParse(words[++i], NumberStyles.Float, CultureInfo.InvariantCulture, out value) && value >= 0 && value <= 1000) force = value;
+            else if (words[i].Equals("--damage", StringComparison.OrdinalIgnoreCase) && i + 1 < words.Length && float.TryParse(words[++i], NumberStyles.Float, CultureInfo.InvariantCulture, out value) && value >= 0 && value <= 10000) damage = value;
+            else if (float.TryParse(words[i], NumberStyles.Float, CultureInfo.InvariantCulture, out value)) numbers.Add(value);
+            else return DebugFail(usage);
+        }
+        if (numbers.Count is not (0 or 2)) return DebugFail(usage);
+        Vector2 at;
+        if (numbers.Count == 2) at = new Vector2(numbers[0], numbers[1]);
+        else
+        {
+            var snap = session.CurrentSnapshot;
+            var lead = snap.Characters.FirstOrDefault(c => c.IsPlayer && c.Selected) ?? snap.Characters.FirstOrDefault(c => c.IsPlayer);
+            if (lead is null) return DebugFail("explode: no squad member to centre on (pass <x> <z>)");
+            at = new Vector2(lead.Position.X, lead.Position.Z);
+        }
+        world.Commands.Enqueue(new DebugExplode(at, radius, force, damage, squad) { Tick = tick });
+        return $"explosion at {at.X:0}, {at.Y:0}: radius {radius:0.#} m, force {force:0.#}, damage {damage:0.#} at the centre{(squad ? ", squad included" : "")}; the result line follows in the message log";
+    }
+
+    /// <summary>
     /// The one implementation of the cheats, for the menu's rows and the dev console's commands (<see cref="debugFailed"/> says whether it worked). <paramref name="at"/> is where teleport and spawn go
     /// (the camera's target, the middle of the screen, without it).
     /// </summary>
@@ -313,6 +348,8 @@ sealed partial class GameHost
                 return godOn ? "godmode on: every player character has all stats 1000 and is healed 5 times a second" : "godmode off: each character has its own stats back";
             case DebugRow.Guard:
                 return DebugGuardApply(world, field, tick);
+            case DebugRow.Explode:
+                return DebugExplodeApply(world, field, tick);
             case DebugRow.UnlockResearch:
                 world.Commands.Enqueue(new DebugUnlockResearch { Tick = tick });
                 return "every research finished";

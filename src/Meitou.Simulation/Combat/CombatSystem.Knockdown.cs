@@ -28,6 +28,13 @@ public sealed partial class CombatSystem
         vc.Knockdown = motion + push;
     }
 
+    /// <summary>
+    /// The debug explosion's throw (<c>explode</c>): pushes the downed victim along <paramref name="direction"/> with the same <see cref="Knockdown"/> as a downing blow, as hard as one of
+    /// <c>2 x force</c> damage would (so a <paramref name="force"/> of 12.5 or more is the speed in world units/s). Does nothing unless the victim is knocked out or dead.
+    /// </summary>
+    internal void Blast(World world, int victim, CharacterCold vc, Vector2 direction, float force) =>
+        Knockdown(world, victim, vc, direction, force / PushPerDamage, -1);
+
     /// <summary>The struck part's <c>bone name</c>, else its <c>bone name 2</c>; null for no part or neither.</summary>
     static string? BoneOf(Bodies.MedicalState medical, int part)
     {

@@ -35,6 +35,12 @@ public sealed record DebugGodmode(bool On) : DebugCommand;
 /// </summary>
 public sealed record DebugGuard(bool On, float Radius = 30, bool Animals = false) : DebugCommand;
 
+/// <summary>
+/// A debug explosion at <see cref="At"/> (X, Z): every living character within <see cref="Radius"/> metres (not the player's own unless <see cref="Squad"/>) takes <see cref="Damage"/> cut damage falling off
+/// linearly with the distance, is knocked out, and is thrown away from the centre with <see cref="Force"/> world units/s (also falling off), by the combat system's knock-down push.
+/// </summary>
+public sealed record DebugExplode(Vector2 At, float Radius = 15, float Force = 20, float Damage = 40, bool Squad = false) : DebugCommand;
+
 /// <summary>Who a radius kill hits, shared by the console's <c>kill --radius</c> and the guard: never a player character or the player's faction, never the dead, animals only when asked for.</summary>
 public static class DebugKillArea
 {
@@ -215,6 +221,59 @@ static class DebugCheats
         if (victims.Count > 0) Kill(world, data, victims);
     }
 
+    /// <summary>One cut of damage to a character (a body part chosen as a blow's, or the named one); what a hit does only on its events is done here.</summary>
+    static bool Hurt(World world, PopulationData data, CharacterId id, float cut, string? partId)
+    {
+        var table = world.Characters;
+        if (Body(world, data, id) is not ({ } medical, var ctx) || DamagePart(medical, ctx, partId) is not (var part and >= 0) || !table.TryResolveNext(id, out int slot)) return false;
+        var events = new List<MedicalEvent>();
+        medical.ApplyHit(part, new HitDamage(cut, 0, 0), ctx, events);
+        foreach (var e in events)
+        {
+            if (e.Kind is MedicalEventKind.Died or MedicalEventKind.KnockedOut) { TaskStart.Stand(table, slot); table.Next[slot].Velocity = Vector3.Zero; }
+            else if (e.Kind == MedicalEventKind.PartSevered) table.LimbsChanged.Enqueue((slot, medical.Parts[e.Part].Template.LimbSlot));
+            else if (e.Kind == MedicalEventKind.Decapitated) table.LimbsChanged.Enqueue((slot, -1));
+        }
+        return true;
+    }
+
+    /// <summary>How long the explosion keeps a survivor out, in character seconds.</summary>
+    const float ExplodeKnockOutSeconds = 30;
+
+    static void Explode(World world, PopulationData data, DebugExplode blast)
+    {
+        var table = world.Characters;
+        var combat = world.SystemOf<Combat.CombatSystem>();
+        float radius = MathF.Max(blast.Radius, 0.01f);
+        int hit = 0, knocked = 0, killed = 0;
+        var events = new List<MedicalEvent>();
+        var targets = new List<(CharacterId Id, int Slot, float Falloff, Vector2 Away)>();
+        for (int s = 0; s < table.HighWater; s++)
+        {
+            if (!table.Next[s].Alive || table.Cold(s) is not { } cold || cold.Medical is not { Dead: false }) continue;
+            if (!blast.Squad && !DebugKillArea.Hits(cold.IsPlayer, cold.Faction, world.Player.Faction, false, false, true)) continue;
+            var offset = new Vector2(table.Next[s].Position.X - blast.At.X, table.Next[s].Position.Z - blast.At.Y);
+            float d = offset.Length();
+            if (d > radius) continue;
+            targets.Add((table.IdOf(s), s, 1 - d / radius, d > 1e-3f ? offset / d : new Vector2(1, 0)));
+        }
+        foreach (var (id, slot, falloff, away) in targets)
+        {
+            hit++;
+            Hurt(world, data, id, blast.Damage * falloff, null);
+            if (table.Cold(slot) is not { Medical: { } medical } cold) continue;
+            if (!medical.Dead && !medical.Incapacitated)
+            {
+                events.Clear();
+                medical.KnockOut(ExplodeKnockOutSeconds, events);
+                if (events.Count > 0) { TaskStart.Stand(table, slot); table.Next[slot].Velocity = Vector3.Zero; }
+            }
+            if (medical.Dead) killed++; else if (medical.Incapacitated) knocked++;
+            combat?.Blast(world, slot, cold, away, blast.Force * falloff);
+        }
+        world.Post($"Explosion: {hit} hit, {knocked} knocked out, {killed} killed.");
+    }
+
     static void Kill(World world, PopulationData data, IEnumerable<CharacterId> characters)
     {
         var table = world.Characters;
@@ -284,20 +343,10 @@ static class DebugCheats
                         for (var s = StatsEnumerated.None + 1; s < StatsEnumerated.End; s++) stats[s] = 100;
                 break;
             case DebugDamage damage when data is not null:
-                // Combat and the body pass read KO and death from the medical state; what they do only on the hit's events is done here.
-                var events = new List<MedicalEvent>();
-                foreach (var id in damage.Characters)
-                {
-                    if (Body(world, data, id) is not ({ } medical, var ctx) || DamagePart(medical, ctx, damage.Part) is not (var part and >= 0) || !table.TryResolveNext(id, out int slot)) continue;
-                    events.Clear();
-                    medical.ApplyHit(part, new HitDamage(damage.Cut, 0, 0), ctx, events);
-                    foreach (var e in events)
-                    {
-                        if (e.Kind is MedicalEventKind.Died or MedicalEventKind.KnockedOut) { TaskStart.Stand(table, slot); table.Next[slot].Velocity = Vector3.Zero; }
-                        else if (e.Kind == MedicalEventKind.PartSevered) table.LimbsChanged.Enqueue((slot, medical.Parts[e.Part].Template.LimbSlot));
-                        else if (e.Kind == MedicalEventKind.Decapitated) table.LimbsChanged.Enqueue((slot, -1));
-                    }
-                }
+                foreach (var id in damage.Characters) Hurt(world, data, id, damage.Cut, damage.Part);
+                break;
+            case DebugExplode blast when data is not null:
+                Explode(world, data, blast);
                 break;
             case DebugForceHits force when data is not null:
                 data.BodyOptions.ForcedHitPart = force.Part;

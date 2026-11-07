@@ -238,6 +238,11 @@ sealed partial class GameHost
             Report(con, DebugApply(DebugRow.Guard, string.Join(' ', args)));
         });
 
+        Add("explode", "explode [<x> <z>] [--radius <m>=15] [--force <n>=20] [--damage <n>=40] [--squad]", "debug blast (default: at the selected, else first, squad member): every living character within the radius, except your squad unless --squad, takes cut damage falling off linearly with distance (damage at the centre), is knocked out for 30 s if it survives, and is thrown away from the centre (force = speed in world units/s at the centre, falling off the same way). The result line (hit / knocked out / killed) goes to the message log", (args, con) =>
+        {
+            Report(con, DebugApply(DebugRow.Explode, string.Join(' ', args)));
+        });
+
         Add("maxstats", "maxstats", "every stat to 100 for the selected characters (else the inspected one)", (args, con) =>
         {
             if (!Need(args, 0, 0, Self("maxstats"))) return;
