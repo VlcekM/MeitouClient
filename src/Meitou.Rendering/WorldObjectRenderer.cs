@@ -818,6 +818,9 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     {
         var p = inst.Placed;
         if (p.Interior) return true;
+        // A part of an upper floor of a building in the interior view, at or below the viewed floor: its floor slab is seen from inside the cut-away room (the game lights
+        // it with the one ambient, docs/render-gi.md "Indoor"), not an outer wall of a closed building, so a hidden floor or a ceiling plane over it does not leave it black.
+        if (p.Kind == PlacedKind.BuildingPart && p.Floor > 0 && p.ParentPlacementId is null && InteriorView.TryGetValue(p.PlacementId, out int shownFloor) && p.Floor <= shownFloor) return true;
         if (p.ParentPlacementId is not null) return InInterior(inst);
         return p.Kind == PlacedKind.BuildingPart && InteriorOf(inst) is { Inside: true, Building: { } holder } && holder != p.PlacementId;
     }
