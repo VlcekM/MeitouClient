@@ -233,6 +233,11 @@ sealed partial class GameHost
             Report(con, DebugApply(DebugRow.Godmode, args.Count > 0 ? args[0] : ""));
         });
 
+        Add("guard", "guard [on|off] [--radius <m>] [--animals]", "god-mode style safety: 4 times a second kills the hostile characters within the radius (default 30 m) of the selected (else first) squad member, as kill --radius does (never the squad or its faction; animals only with --animals or while one attacks a player character), and heals the player's characters as godmode does; stays on until turned off, switches itself off when a game loads; no argument toggles. Not for combat, survival or loot-source tests", (args, con) =>
+        {
+            Report(con, DebugApply(DebugRow.Guard, string.Join(' ', args)));
+        });
+
         Add("maxstats", "maxstats", "every stat to 100 for the selected characters (else the inspected one)", (args, con) =>
         {
             if (!Need(args, 0, 0, Self("maxstats"))) return;

@@ -72,7 +72,7 @@ sealed partial class GameHost
         var ids = new List<CharacterId>();
         foreach (var c in snap.Characters)
         {
-            if (c.IsPlayer || (own >= 0 && c.Faction == own) || (c.Animal && !animals) || c.Body is { Dead: true }) continue;
+            if (!DebugKillArea.Hits(c.IsPlayer, c.Faction, own, c.Animal, c.Body is { Dead: true }, animals)) continue;
             if (Vector2.Distance(new Vector2(c.Position.X, c.Position.Z), new Vector2(cx, cz)) > radius) continue;
             ids.Add(c.Id);
         }

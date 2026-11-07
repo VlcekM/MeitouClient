@@ -30,6 +30,19 @@ public sealed record DebugMaxSkills(IReadOnlyList<CharacterId> Characters) : Deb
 public sealed record DebugGodmode(bool On) : DebugCommand;
 
 /// <summary>
+/// Turns the debug guard on or off (<see cref="PlayerState.Guard"/>): while on, four times a second the hostile characters within <see cref="Radius"/> metres of the selected (else first) player character
+/// are killed as <c>kill --radius</c> kills (<see cref="DebugKillArea"/>; animals only with <see cref="Animals"/> or while one attacks a player character) and the player characters are healed as god mode heals them.
+/// </summary>
+public sealed record DebugGuard(bool On, float Radius = 30, bool Animals = false) : DebugCommand;
+
+/// <summary>Who a radius kill hits, shared by the console's <c>kill --radius</c> and the guard: never a player character or the player's faction, never the dead, animals only when asked for.</summary>
+public static class DebugKillArea
+{
+    public static bool Hits(bool isPlayer, int faction, int playerFaction, bool animal, bool dead, bool includeAnimals) =>
+        !(isPlayer || (playerFaction >= 0 && faction == playerFaction) || (animal && !includeAnimals) || dead);
+}
+
+/// <summary>
 /// One cut of <see cref="Cut"/> damage to each character: on the part whose template string id is <see cref="Part"/> (a character without one is skipped),
 /// else on a part chosen as a blow's is.
 /// </summary>
@@ -123,6 +136,8 @@ static class DebugCheats
     public const float GodStat = 1000;
     /// <summary>How often god mode heals: this many times a second (the tick is 1/30 s).</summary>
     public const int GodHealPerSecond = 5;
+    /// <summary>How often the guard kills and heals: this many times a second.</summary>
+    public const int GuardPerSecond = 4;
 
     /// <summary>
     /// The god mode's upkeep (<see cref="PlayerSystem.SlowWorld"/>, every tick; the heal only on its cadence). Raises the stats of each living player character that is not yet raised, heals it
@@ -143,13 +158,73 @@ static class DebugCheats
             if (!wanted) { stats.Unboost(); continue; }
             stats.Boost(GodStat);
             if (!heal || cold.Medical is not { } medical) continue;
-            var id = table.IdOf(s);
-            if (data is not null && Body(world, data, id) is ({ } body, var ctx))
+            HealPlayer(world, data, assembly, table, s, cold, medical);
+        }
+    }
+
+    /// <summary>The god mode's heal of one living player character, also the guard's: parts, limbs, blood, wounds, knock-out, hunger.</summary>
+    static void HealPlayer(World world, PopulationData? data, CharacterAssembly? assembly, CharacterTable table, int slot, CharacterCold cold, MedicalState medical)
+    {
+        var id = table.IdOf(slot);
+        if (data is not null && Body(world, data, id) is ({ } body, var ctx))
+        {
+            if (body.RestoreLimbs()) assembly?.RefreshEquipment(cold);
+            body.Heal(ctx);
+        }
+        medical.Hunger = MedicalState.MaxHunger;
+    }
+
+    /// <summary>
+    /// The guard's upkeep (<see cref="PlayerSystem.SlowWorld"/>, every tick; acts on its cadence): kills the hostile characters near the lead (the selected player character, else the first) through the
+    /// same <see cref="DebugKillArea"/> test and kill as <c>kill --radius</c>, then heals every living player character. A hostile animal that does not attack a player character is spared without <c>--animals</c>.
+    /// </summary>
+    public static void GuardTick(World world, PopulationData? data, CharacterAssembly? assembly)
+    {
+        var player = world.Player;
+        if (!player.Guard || data is null) return;
+        var table = world.Characters;
+        int cadence = (int)Math.Max(1, MathF.Round(1 / (world.TickSeconds * GuardPerSecond)));
+        if (world.Tick % cadence != 0) return;
+        int lead = -1;
+        foreach (var picked in player.Selection)
+            if (table.TryResolveNext(picked, out int s) && table.Cold(s) is { IsPlayer: true, Medical: { Dead: false } }) { lead = s; break; }
+        for (int s = 0; lead < 0 && s < table.HighWater; s++)
+            if (table.Next[s].Alive && table.Cold(s) is { IsPlayer: true, Medical: { Dead: false } }) lead = s;
+        if (lead < 0) return;
+        var centre = table.Next[lead].Position;
+        float r2 = player.GuardRadius * player.GuardRadius;
+        var combat = world.SystemOf<Combat.CombatSystem>();
+        var victims = new List<CharacterId>();
+        for (int s = 0; s < table.HighWater; s++)
+        {
+            if (!table.Next[s].Alive || table.Cold(s) is not { } cold) continue;
+            if (cold.IsPlayer)
             {
-                if (body.RestoreLimbs()) assembly?.RefreshEquipment(cold);
-                body.Heal(ctx);
+                if (cold.Medical is { Dead: false } medical) HealPlayer(world, data, assembly, table, s, cold, medical);
+                continue;
             }
-            medical.Hunger = MedicalState.MaxHunger;
+            bool animal = CharacterFacts.Animal(cold);
+            if (!DebugKillArea.Hits(false, cold.Faction, player.Faction, animal, cold.Medical is { Dead: true }, player.GuardAnimals)) continue;
+            float dx = table.Next[s].Position.X - centre.X, dz = table.Next[s].Position.Z - centre.Z;
+            if (dx * dx + dz * dz > r2) continue;
+            bool fightsPlayer = cold.InCombat && combat?.StateOf(table.IdOf(s)) is { TargetSlot: >= 0 and var fought } fight
+                && fought < table.HighWater && table.Next[fought].Alive && table.Next[fought].Generation == fight.TargetGeneration && table.Cold(fought) is { IsPlayer: true };
+            if (!CharacterFacts.HostileToPlayer(data.Relations, player.Faction, cold.Faction, fightsPlayer)) continue;
+            victims.Add(table.IdOf(s));
+        }
+        if (victims.Count > 0) Kill(world, data, victims);
+    }
+
+    static void Kill(World world, PopulationData data, IEnumerable<CharacterId> characters)
+    {
+        var table = world.Characters;
+        var deaths = new List<MedicalEvent>();
+        foreach (var id in characters)
+        {
+            if (Body(world, data, id) is not ({ } medical, _) || !table.TryResolveNext(id, out int slot)) continue;
+            deaths.Clear();
+            medical.Kill(deaths);
+            if (deaths.Count > 0) { MovementSystem.Stop(table, slot); table.Next[slot].Velocity = Vector3.Zero; }
         }
     }
 
@@ -200,6 +275,9 @@ static class DebugCheats
                 world.Player.Godmode = god.On;
                 GodTick(world, data, assembly, force: true);   // on: boosted and healed at once; off: every raised character gets its stats back
                 break;
+            case DebugGuard guard:
+                (world.Player.Guard, world.Player.GuardRadius, world.Player.GuardAnimals) = (guard.On, guard.Radius, guard.Animals);
+                break;
             case DebugMaxSkills max:
                 foreach (var id in max.Characters)
                     if (table.TryResolveNext(id, out int skilled) && table.Cold(skilled)?.Stats is { } stats)
@@ -231,14 +309,7 @@ static class DebugCheats
                 world.Post($"Bounties cleared: {ClearBounties(world, clear)}.");
                 break;
             case DebugKill kill when data is not null:
-                var deaths = new List<MedicalEvent>();
-                foreach (var id in kill.Characters)
-                {
-                    if (Body(world, data, id) is not ({ } medical, _) || !table.TryResolveNext(id, out int slot)) continue;
-                    deaths.Clear();
-                    medical.Kill(deaths);
-                    if (deaths.Count > 0) { MovementSystem.Stop(table, slot); table.Next[slot].Velocity = Vector3.Zero; }
-                }
+                Kill(world, data, kill.Characters);
                 break;
             case DebugKnockOut knock:
                 var knocks = new List<MedicalEvent>();

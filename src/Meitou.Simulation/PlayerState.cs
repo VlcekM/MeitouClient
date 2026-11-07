@@ -12,6 +12,12 @@ public sealed class PlayerState
     public bool Exists => Faction >= 0;
     /// <summary>The debug god mode is on (<see cref="DebugGodmode"/>). Not saved and not hashed: a loaded game starts with it off and the saved (original) stats.</summary>
     public bool Godmode { get; set; }
+    /// <summary>The debug guard is on (<see cref="DebugGuard"/>): kills hostiles within <see cref="GuardRadius"/> of the lead and heals the player's characters. Not saved: a loaded game starts with it off.</summary>
+    public bool Guard { get; set; }
+    /// <summary>The guard's radius in metres.</summary>
+    public float GuardRadius { get; set; } = 30;
+    /// <summary>The guard also kills animals that do not attack a player character.</summary>
+    public bool GuardAnimals { get; set; }
     /// <summary>
     /// The player faction's name once renamed (the faction tab's name box, <see cref="RenameFactionCommand"/>; docs/game/ui-screens.md "Faction tab"); null: the faction's own name from the data
     /// ("Nameless"). Saved as the CAMERA string <c>pfaction name</c>, the GAMESTATE_FACTION name and the player platoons' faction name. Hashed only while set.
@@ -345,6 +351,7 @@ public sealed partial class PlayerSystem(PopulationData? data = null) : ITickSys
     public void SlowWorld(World world)
     {
         DebugCheats.GodTick(world, data, assembly);
+        DebugCheats.GuardTick(world, data, assembly);
         SquadManagement.BuryDead(world, data?.Db);
         world.Player.Prune(world.Characters);
         SquadManagement.KeepActive(world);

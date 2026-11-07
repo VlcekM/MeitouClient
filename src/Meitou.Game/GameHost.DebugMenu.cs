@@ -11,16 +11,16 @@ namespace Meitou.Game;
 /// <summary>
 /// The debug menu (F10; Ctrl+F10 on Metal, where F10 is the settings panel; docs/game/ui-input.md "Debug menu"): cheats sent to the world as
 /// <see cref="DebugCommand"/>s. Up/Down pick a row, typing fills its field, Enter applies it, Esc or the close key closes; while open it takes every key.
-/// The rows are grouped in labelled sections (<see cref="DebugCheatSections"/>: Character, World / Spawn, Combat; then Mods for code mods' rows ([modding](docs/modding.md)); then Tools and Overlays, <see cref="DebugTools"/>, whose rows also take Space, Left and Right); Up and Down walk them in the order shown. Values sit in one column: typed fields, and on / off for switches. Teleport and spawn use the camera's target (the middle of the screen); heal, max skills and damage the selected characters, else the inspected one. Heal keeps lost limbs; its sub-row Heal fully gives them back. Godmode (all player characters; see <see cref="DebugGodmode"/>) is a switch. "Teleport on map" is a switch too: while on, a click on the open map sends the selected characters there. Clear bounties clears the selected characters' (else every player character's), all or one faction's.
+/// The rows are grouped in labelled sections (<see cref="DebugCheatSections"/>: Character, World / Spawn, Combat; then Mods for code mods' rows ([modding](docs/modding.md)); then Tools and Overlays, <see cref="DebugTools"/>, whose rows also take Space, Left and Right); Up and Down walk them in the order shown. Values sit in one column: typed fields, and on / off for switches. Teleport and spawn use the camera's target (the middle of the screen); heal, max skills and damage the selected characters, else the inspected one. Heal keeps lost limbs; its sub-row Heal fully gives them back. Godmode (all player characters; see <see cref="DebugGodmode"/>) is a switch, and so is Guard (<see cref="DebugGuard"/>: kills hostiles within 30 m of the lead and heals the player's characters; it switches itself off when a game loads). "Teleport on map" is a switch too: while on, a click on the open map sends the selected characters there. Clear bounties clears the selected characters' (else every player character's), all or one faction's.
 /// </summary>
 sealed partial class GameHost
 {
-    enum DebugRow { Teleport, SpawnNpc, GiveItem, Money, Heal, HealFully, MaxSkills, Damage, ForceHits, DamageMultiplier, UnlockResearch, ClearBounties, Godmode }
+    enum DebugRow { Teleport, SpawnNpc, GiveItem, Money, Heal, HealFully, MaxSkills, Damage, ForceHits, DamageMultiplier, UnlockResearch, ClearBounties, Godmode, Guard }
 
     static readonly string[] DebugLabels =
     [
         "Teleport selected here", "Spawn NPC (hostile)", "Give item (name x5 q80)", "Money (+/- cats)", "Heal", "  Heal fully (restore limbs)", "Max out skills", "Damage (cut)",
-        "Force hits to", "Damage multiplier", "Unlock all research", "Clear bounties", "Godmode (all players)",
+        "Force hits to", "Damage multiplier", "Unlock all research", "Clear bounties", "Godmode (all players)", "Guard (kill + heal in radius)",
     ];
 
     /// <summary>The cheat rows' sections, in the order shown (and walked by Up / Down).</summary>
@@ -28,7 +28,7 @@ sealed partial class GameHost
     [
         ("Character", [DebugRow.Teleport, DebugRow.Heal, DebugRow.HealFully, DebugRow.MaxSkills, DebugRow.Godmode, DebugRow.ClearBounties]),
         ("World / Spawn", [DebugRow.SpawnNpc, DebugRow.GiveItem, DebugRow.Money, DebugRow.UnlockResearch]),
-        ("Combat", [DebugRow.Damage, DebugRow.ForceHits, DebugRow.DamageMultiplier]),
+        ("Combat", [DebugRow.Damage, DebugRow.ForceHits, DebugRow.DamageMultiplier, DebugRow.Guard]),
     ];
 
     /// <summary>The menu's rows in display order: (section title when the row starts a section, row number: a cheat, a mod row, or <see cref="DebugRowCount"/> + the tool's index).</summary>
@@ -128,7 +128,7 @@ sealed partial class GameHost
     bool DebugIsTool(int row) => row >= DebugRowCount;
 
     bool DebugHasField(int row) => !DebugIsTool(row) && (row >= DebugLabels.Length ? ModDebugRows[row - DebugLabels.Length].HasField
-        : (DebugRow)row is not (DebugRow.Teleport or DebugRow.Heal or DebugRow.HealFully or DebugRow.MaxSkills or DebugRow.ForceHits or DebugRow.UnlockResearch or DebugRow.ClearBounties or DebugRow.Godmode));
+        : (DebugRow)row is not (DebugRow.Teleport or DebugRow.Heal or DebugRow.HealFully or DebugRow.MaxSkills or DebugRow.ForceHits or DebugRow.UnlockResearch or DebugRow.ClearBounties or DebugRow.Godmode or DebugRow.Guard));
 
     /// <summary>The rows that open the body part list.</summary>
     bool DebugPicksPart(int row) => !DebugIsTool(row) && (DebugRow)row is DebugRow.Damage or DebugRow.ForceHits or DebugRow.ClearBounties;
@@ -227,6 +227,30 @@ sealed partial class GameHost
     }
 
     /// <summary>
+    /// The guard row: <paramref name="field"/> is empty (toggle, keeping the radius and animals setting), or <c>[on|off] [--radius &lt;m&gt;] [--animals]</c> as the console passes it. Without <c>--animals</c> the animals setting resets to off.
+    /// </summary>
+    string DebugGuardApply(World world, string field, long tick)
+    {
+        var player = world.Player;
+        bool? on = null;
+        float radius = player.GuardRadius;
+        bool animals = field.Length == 0 && player.GuardAnimals;
+        var words = field.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        for (int i = 0; i < words.Length; i++)
+        {
+            string w = words[i].ToLowerInvariant();
+            if (w is "on" or "1" or "true") on = true;
+            else if (w is "off" or "0" or "false") on = false;
+            else if (w == "--animals") animals = true;
+            else if (w == "--radius" && i + 1 < words.Length && float.TryParse(words[++i], NumberStyles.Float, CultureInfo.InvariantCulture, out radius) && radius > 0 && radius <= 2000) { }
+            else return DebugFail("usage: guard [on|off] [--radius <m, 0 to 2000>] [--animals]");
+        }
+        bool guardOn = on ?? !player.Guard;
+        world.Commands.Enqueue(new DebugGuard(guardOn, radius, animals) { Tick = tick });
+        return guardOn ? $"guard on: hostiles within {radius:0.#} m of the lead are killed{(animals ? " (animals too)" : "")}, player characters healed, 4 times a second; off when a game loads" : "guard off";
+    }
+
+    /// <summary>
     /// The one implementation of the cheats, for the menu's rows and the dev console's commands (<see cref="debugFailed"/> says whether it worked). <paramref name="at"/> is where teleport and spawn go
     /// (the camera's target, the middle of the screen, without it).
     /// </summary>
@@ -287,6 +311,8 @@ sealed partial class GameHost
                 bool godOn = field.Trim().ToLowerInvariant() switch { "on" or "1" or "true" => true, "off" or "0" or "false" => false, _ => !world.Player.Godmode };
                 world.Commands.Enqueue(new DebugGodmode(godOn) { Tick = tick });
                 return godOn ? "godmode on: every player character has all stats 1000 and is healed 5 times a second" : "godmode off: each character has its own stats back";
+            case DebugRow.Guard:
+                return DebugGuardApply(world, field, tick);
             case DebugRow.UnlockResearch:
                 world.Commands.Enqueue(new DebugUnlockResearch { Tick = tick });
                 return "every research finished";
@@ -373,6 +399,7 @@ sealed partial class GameHost
                     case DebugRow.DamageMultiplier: value += $"   now x{popData?.BodyOptions.GlobalDamageMultiplier ?? 1:0.##}"; break;
                     case DebugRow.ForceHits: value = popData?.BodyOptions.ForcedHitPart?.Name ?? "off"; break;
                     case DebugRow.Godmode: value = OnOff(world.Player.Godmode); break;
+                    case DebugRow.Guard: value = world.Player.Guard ? $"on, {world.Player.GuardRadius:0.#} m{(world.Player.GuardAnimals ? ", animals" : "")}" : "off"; break;
                 }
             if (DebugPicksPart(i) && current && debugParts is null) value += (value.Length > 0 ? "   " : "") + ((DebugRow)i == DebugRow.ClearBounties ? "Enter/Right: pick the faction" : "Enter/Right: pick the body part");
             lines.Add((mark + DebugColumns(DebugLabel(i), "", value), false, current && debugParts is null));
