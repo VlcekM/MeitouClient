@@ -277,6 +277,7 @@ static class DebugCheats
 
     static void Explode(World world, PopulationData data, DebugExplode blast)
     {
+        if (!float.IsFinite(blast.Radius) || !float.IsFinite(blast.Force) || !float.IsFinite(blast.Damage) || !float.IsFinite(blast.At.X) || !float.IsFinite(blast.At.Y)) return;   // non-finite input would poison positions and health: no-op
         var table = world.Characters;
         var combat = world.SystemOf<Combat.CombatSystem>();
         float radius = MathF.Max(blast.Radius, 0.01f);

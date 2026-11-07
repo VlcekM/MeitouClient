@@ -408,13 +408,17 @@ sealed partial class GameHost
             }
             else if (words[i].Equals("--radius", StringComparison.OrdinalIgnoreCase))
             {
-                if (i + 1 >= words.Length || !float.TryParse(words[++i], NumberStyles.Float, CultureInfo.InvariantCulture, out value) || value <= 0) return DebugFail("explode: --radius needs a number above 0");
+                if (i + 1 >= words.Length || !float.TryParse(words[++i], NumberStyles.Float, CultureInfo.InvariantCulture, out value) || !float.IsFinite(value) || value <= 0) return DebugFail("explode: --radius needs a finite number above 0");
                 if (value > ExplodeMaxRadius) return DebugFail($"explode: --radius {value:0.#} is above the maximum of {ExplodeMaxRadius:0} m");
                 radius = value;
             }
-            else if (words[i].Equals("--force", StringComparison.OrdinalIgnoreCase) && i + 1 < words.Length && float.TryParse(words[++i], NumberStyles.Float, CultureInfo.InvariantCulture, out value) && value >= 0 && value <= 1000) force = value;
+            else if (words[i].Equals("--force", StringComparison.OrdinalIgnoreCase) && i + 1 < words.Length && float.TryParse(words[++i], NumberStyles.Float, CultureInfo.InvariantCulture, out value) && value >= 0 && value <= 1000) force = value;   // NaN fails both bounds checks, infinity fails the upper one
             else if (words[i].Equals("--damage", StringComparison.OrdinalIgnoreCase) && i + 1 < words.Length && float.TryParse(words[++i], NumberStyles.Float, CultureInfo.InvariantCulture, out value) && value >= 0 && value <= 10000) damage = value;
-            else if (float.TryParse(words[i], NumberStyles.Float, CultureInfo.InvariantCulture, out value)) numbers.Add(value);
+            else if (float.TryParse(words[i], NumberStyles.Float, CultureInfo.InvariantCulture, out value))
+            {
+                if (!float.IsFinite(value)) return DebugFail("explode: coordinates must be finite numbers");
+                numbers.Add(value);
+            }
             else return DebugFail(usage);
         }
         if (numbers.Count is not (0 or 2)) return DebugFail(usage);
