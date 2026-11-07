@@ -29,6 +29,7 @@ Not built, by design: the original's in-game level editor and fog editor (`Kensh
 - [metal-effects-parity-plan](metal-effects-parity-plan.md): MEP-I, the remaining Metal effect-parity milestones and ship gates
 - [meitou-ui](meitou-ui.md): UI kit for the Meitou UI mode
 - [modding](modding.md): code mods: `meitou.json`, per-mod load context, one game-shipped Harmony, tick anchors, dialogue codes, sidecar saves, UI, F10 rows
+- [modding-dependencies](modding-dependencies.md): code mods building on code mods: versions, `dependencies`, shared assemblies, Arrange
 - [native-ui](native-ui.md)
 - [render-clouds](render-clouds.md)
 - [render-distance-benchmark](render-distance-benchmark.md)

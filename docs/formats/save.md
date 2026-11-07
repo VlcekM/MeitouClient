@@ -131,6 +131,7 @@ editor-authored files. Original acceptance of a save synthesized from scratch is
   platoon/<faction>_<n>.platoon   one file per squad           (56 files, 6-120 KB)
   zone/zone.<X>.<Y>.zone     one file per loaded zone          (13 files, 2 KB - 1.4 MB)
   meitou-mods/<id>.dat       Meitou only: code-mod state       (see Mod data)
+  meitou-mods/environment.json  Meitou only: code mods in use  (see Mod data)
 ```
 
 ### Mod data
@@ -140,6 +141,9 @@ save's other files into the working folder and moved with them. Layout, little-e
 version (int32 1), entry count (int32), then per entry the system name (7-bit length-prefixed UTF-8, as .NET `BinaryWriter`), the data
 length (int32) and the mod's bytes. A loaded save keeps the files of mods not loaded now, and a save made from it writes them again.
 An import (`SaveImport.Filter`) builds a new save without them, so mods start fresh there.
+`meitou-mods/environment.json` (not a sidecar: only `.dat` names are) records the code mods the save was made with: UTF-8 JSON
+`{ "format": 1, "gameVersion": "<Meitou tag>", "mods": [{ "id", "version"?, "name" }] }`, mods in load order
+([dependencies](../modding-dependencies.md#saves)).
 **Observed** (2026-11-04, a scratch save written and read back, win-x64). Whether the original game ignores the extra folder is
 **Unknown**.
 

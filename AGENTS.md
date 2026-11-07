@@ -42,6 +42,11 @@ drop-in replacement that runs original content and mods unchanged.
 - The mod editor is .NET: `ilspycmd -p -o <dir outside the repo> "<Kenshi>/forgotten construction set.exe"`
   (`dotnet tool install -g ilspycmd`). Its `GameData` class is the reference for the `.mod` format.
 
+## Code mods
+
+- Contract: [docs/modding.md](docs/modding.md) and [docs/modding-dependencies.md](docs/modding-dependencies.md). A change to
+  `CodeModManifest`, `ModHost` or `ModContext` updates them; bump `ModApi.Version` when an older game would misread the manifest.
+
 ## Build
 
 - Get the user's explicit approval before adding tests, including new cases in existing tests.

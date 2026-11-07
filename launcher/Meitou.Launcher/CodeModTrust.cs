@@ -55,6 +55,7 @@ public sealed partial class MainWindow
         game.Set(TrustedCodeModsKey, trusted.Order(StringComparer.Ordinal));
         config.DataOnlyCodeMods = [.. config.DataOnlyCodeMods.Except(names).Concat(names.Except(allow)).Order(StringComparer.Ordinal)];
         config.Save();
+        ShowDependencyProblems();
         try
         {
             game.Save(Math.Max(schemaVersion, 1));
