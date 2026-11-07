@@ -989,7 +989,7 @@ Arrests, the recognition meter and the marker are hashed only while set. What a 
   (`Engaged`, so the AI leaves him alone), and within 40 takes the fine when the player's money is above it, erasing his
   faction's entry; else, when the target runs past 800 or after 60 s, and for any bigger bounty: arrest.
 - **Arrest**: attack until the target is down (combat ends the fight; nobody beats a downed target), lift
-  (`CarrySystem.BeginPickUp`), `FindCage` from the guard (his squad's home building; other arrests' cages reserved), walk,
+  (`CarrySystem.BeginPickUp`), `FindCage` from the guard over his town candidates (`CageCandidates`, as kidnapping and town duty; his squad's home building; other arrests' cages reserved), walk,
   and at the cage (`FixtureRegistry.AtCage`: within its `use range`, doubled standing, and under 15 above or below it) `LetGo` + `Imprison` (`prison time` CONSTANTS). The fight
   stopping with the target up re-orders it within 800, else he gives up; no free cage: he drops the captive (engine); a downed target is not lifted at all with no free cage, nor from an ally who carries it (engine: guards passed bodies round a full station, #339). After 3 walks that end short the cage is
   unreachable for his faction for 24 game hours (`MarkUnreachable`, as the kidnapper's and the town duty's) and he drops the captive (engine).

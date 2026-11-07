@@ -676,10 +676,7 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
     /// <summary>Chooses the cage (the original's finder; other arrests' cages are reserved) and walks there; none: the captive is dropped.</summary>
     bool ToCage(World world, Arrest a, int g, int t)
     {
-        var table = world.Characters;
-        var gc = table.Cold(g)!;
-        string? home = gc.Ai?.Squad.Ai?.Home?.Key;
-        var cage = world.Fixtures.FindCage(world, gc, table.Next[g].Position, home, f => Reserved(f, a));
+        var cage = GuardCage(world, g, a);
         if (cage is null) return Drop(world, a, g);
         a.Cage = cage.Id;
         TaskStart.Walk(world, g, cage.Position, SpeedMode.Free, TaskType.FIND_CAGE_AND_PUT_IN_IF_BOUNTY, TaskSource.Npc);
@@ -687,10 +684,19 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
     }
 
     /// <summary>Whether a free cage the arrest could take its captive to exists (<see cref="ToCage"/>'s finder).</summary>
-    bool CageFor(World world, Arrest a, int g)
+    bool CageFor(World world, Arrest a, int g) => GuardCage(world, g, a) is not null;
+
+    /// <summary>
+    /// The guard's cage (<c>FUN_1408d0770</c> over the gatherer <c>FUN_1408cbea0</c>, economy.md 11.7): the best free one among his town candidates
+    /// (<see cref="FixtureRegistry.CageCandidates"/>), the cages of arrests other than <paramref name="self"/> reserved; every cage without town data.
+    /// </summary>
+    Fixture? GuardCage(World world, int g, Arrest? self)
     {
-        var gc = world.Characters.Cold(g)!;
-        return world.Fixtures.FindCage(world, gc, world.Characters.Next[g].Position, gc.Ai?.Squad.Ai?.Home?.Key, f => Reserved(f, a)) is not null;
+        var table = world.Characters;
+        var gc = table.Cold(g)!;
+        var at = table.Next[g].Position;
+        var candidate = Towns is { } data ? world.Fixtures.CageCandidates(world, data, gc, at) : null;
+        return world.Fixtures.FindCage(world, gc, at, gc.Ai?.Squad.Ai?.Home?.Key, f => candidate?.Invoke(f) == false || Reserved(f, self));
     }
 
     /// <summary>Whether <paramref name="target"/> is carried by someone of the guard's faction.</summary>

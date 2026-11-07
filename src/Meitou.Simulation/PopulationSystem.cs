@@ -587,12 +587,12 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
     /// <summary>
     /// A town squad with a living member in the loaded box of an active zone is not stored with its town: it stays in the world as a pinned platoon that unloads on its own, as the original
     /// checks each platoon by its place (<c>FUN_1404febd0</c>, after 4 s outside every loaded zone; a zone's unload touches no platoon, <c>FUN_1409fe980</c>), so a squad chasing the player
-    /// away from home does not vanish with its town. True when it was kept.
+    /// away from home does not vanish with its town. One carrying a player character is kept wherever it is (<see cref="SquadCarriesPlayer"/>). True when it was kept.
     /// </summary>
     bool KeepLoaded(World world, int site, Squad squad)
     {
         var at = PlatoonPosition(world, squad, new Vector2(squad.Position.X, squad.Position.Z));
-        if (!ZoneActivation.InLoadedBox(at.X, at.Y, active)) return false;
+        if (!ZoneActivation.InLoadedBox(at.X, at.Y, active) && !SquadCarriesPlayer(world, squad)) return false;
         var stored = new StoredSquad { Name = squad.Name, HomeBuilding = squad.HomeBuilding, Shop = squad.Shop, NextHomeFillTick = squad.NextHomeFillTick, Package = squad.Ai?.Current?.Id, Ai = Saving.AiSave.Of(squad.Ai) ?? squad.SavedAi };
         var platoon = new Platoon
         {

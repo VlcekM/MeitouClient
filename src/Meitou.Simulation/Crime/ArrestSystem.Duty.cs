@@ -27,15 +27,14 @@ public sealed partial class ArrestSystem
                 if (!table.TryResolveNext(member, out int g) || table.Cold(g) is not { InCombat: false } gc || !Ai.AiSystem.Holds(table.Next[g], gc) || gc.Fighter is not { CanAttack: true } || Busy(member)) continue;
                 int role = (int)Ai.AiSystem.RoleOf(squad, member, gc);
                 if (listed[role] < 0) listed[role] = population.GoalDuty(world, squad, (AiRole)role, TaskType.HUNT_BOUNTIES) ? 1 : 0;
-                if (listed[role] == 0 || !FreeCageExists(world, g, gc) || BountyTarget(world, g, gc) is not (>= 0 and var t)) continue;
+                if (listed[role] == 0 || !FreeCageExists(world, g) || BountyTarget(world, g, gc) is not (>= 0 and var t)) continue;
                 Start(world, g, t, force: true);
             }
         }
     }
 
-    /// <summary>The desire of goal 204 (slot 33): the cage finder finds a free cage for the guard (<see cref="FixtureRegistry.FindCage"/>, the cages other arrests reserved left out).</summary>
-    bool FreeCageExists(World world, int g, CharacterCold gc) =>
-        world.Fixtures.FindCage(world, gc, world.Characters.Next[g].Position, gc.Ai?.Squad.Ai?.Home?.Key, f => Reserved(f, null)) is not null;
+    /// <summary>The desire of goal 204 (slot 33): the cage finder finds a free cage for the guard (<see cref="GuardCage"/>, the cages other arrests reserved left out).</summary>
+    bool FreeCageExists(World world, int g) => GuardCage(world, g, null) is not null;
 
     /// <summary>
     /// The target finder of goal 204 (<c>FUN_14099bfc0</c>, <b>Verified</b>): the first sensed character (the nearest in sight here) that is not carried, of no <c>not real</c> faction, no animal and not
