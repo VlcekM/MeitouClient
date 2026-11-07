@@ -96,6 +96,14 @@ public sealed class BirdFlocks
 
     public int BirdCount => groups.Sum(g => g.Birds.Count);
 
+    /// <summary>Per kind (debug aid, the control channel's <c>birds</c>): the birds alive, those within <paramref name="near"/> units of <paramref name="eye"/>, the spawn rule's cell sum and listing cells in range, and the kind's data.</summary>
+    public IEnumerable<(string Kind, int Alive, int Near, int Total, int Cells, float Distance, int SpawnCount)> Stats(Vector3 eye, float near) =>
+        groups.Select(g =>
+        {
+            var range = CellsAround(g, eye);
+            return (g.Kind.Id, g.Birds.Count, g.Birds.Count(b => Vector3.Distance(b.Position, eye) <= near), range.Total, range.Matches, g.Kind.Distance, g.Kind.SpawnCount);
+        });
+
     /// <summary>The birds in state <paramref name="state"/>.</summary>
     public int CountIn(BirdState state) => groups.Sum(g => g.Birds.Count(b => b.State == state));
 

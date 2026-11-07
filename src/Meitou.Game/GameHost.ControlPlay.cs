@@ -152,6 +152,7 @@ sealed partial class GameHost
         RegisterControlCombatCommands(add, loaded);
         RegisterControlAskCommands(add);
         RegisterControlPersonaCommands(add, loaded);
+        RegisterControlSpawnCommands(add, loaded);
     }
 
     /// <summary>The <c>research</c> arguments: <c>research list</c> (JSON) and <c>research queue &lt;tech&gt;</c>; no argument is the dev console's finish-all.</summary>

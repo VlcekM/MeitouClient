@@ -498,6 +498,8 @@ public sealed partial class PopulationSystem
         }
         else squad.HomeRadius = settings.HomelessHomeRadius;
         state.Squads.Add(squad.Id);
+        if (SpawnTrace is { Count: > 0 } trace && trace[^1].SquadId == squad.Id)
+            trace[^1] = trace[^1] with { Source = site.Kind == WildKind.Nest ? "nest:" + site.Nest!.Name : "sector:" + data.Biomes!.Groups[site.Group].Name };
         if (wildLog.Count < 256) wildLog.Add(new WildSpawn(world.Tick, site.Kind, site.Kind == WildKind.Nest ? site.Nest!.Name : data.Biomes!.Groups[site.Group].Name, squad.Name, squad.Members.Count));
     }
 

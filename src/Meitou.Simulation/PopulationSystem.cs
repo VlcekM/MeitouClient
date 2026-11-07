@@ -870,8 +870,17 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
         squad.SpawnSize = squad.Members.Count;
         if (squad.Leader.IsNone) squad.Leader = SquadRegistry.Successor(squad.Members, table);
         world.Squads.Add(squad);
+        if (SpawnTrace is { } trace && !player && !idle)
+            trace.Add(new SpawnTraceEntry(world.Tick, site is not null ? "town" : "wild", squad.Id, squad.TemplateId, squad.Name, squad.Faction, squad.Members.Count, built.Position.X, built.Position.Y, PlayerSpots(world).Select(a => Vector2.Distance(a, built.Position)).DefaultIfEmpty(-1).Min(),
+                leaderPlan?.RecordId ?? builtMembers.FirstOrDefault()?.Plan.RecordId ?? ""));
         return squad;
     }
+
+    /// <summary>A squad made by the population (debug aid, the control channel's <c>spawn-trace</c>): when, from where, which template and where.</summary>
+    public readonly record struct SpawnTraceEntry(long Tick, string Source, int SquadId, string TemplateId, string Name, int Faction, int Members, float X, float Z, float PlayerDistance, string LeaderRecord);
+
+    /// <summary>When set, every squad the population makes (not the player's, not the sandbox's) is appended here (debug aid, not part of the state).</summary>
+    public List<SpawnTraceEntry>? SpawnTrace { get; set; }
 
     /// <summary>
     /// CHARACTER <c>slave</c> (SlaveStateEnum 1 slave, 2 escaped, 3 ex-slave) on a freshly made character, whatever squad it is in and with or without an owner (<c>FUN_14062b210</c>,
