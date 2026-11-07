@@ -178,6 +178,10 @@ setting reaches the launcher with its release; the launcher knows none of them. 
 - Each schema section is a tab: Display (with `tickAhead`, the world tick alongside drawing), then the game's Graphics sub-pages (Lighting, Sky & weather, Colour, World, Characters)
   as `SettingsMenu.Section` / `ToggleSection` place them, switches first. Interior lamps is not listed: it changes the stealth sight, so it
   is on the game's Advanced page only.
+- Mutually exclusive techniques are one choice each (`WorldFrame.ChoiceSliders`): `Sun shadows` (Off / Faithful cascades / Meitou cascades /
+  Traced), `Ambient occlusion type` (Off / SSAO / GTAO), `Global illumination` (Off / Probes / Probes + hybrid). The switches they stand for
+  (`WorldFrame.ChoiceDrivenSwitches`) are not listed but stay saved; the game applies a saved choice after them at start, so the launcher's choice wins
+  and an older file of switches alone keeps its look.
 - A section's `groups` (null in older schemas: flat rows) are the menu's features (`SettingsMenu.FeatureGroups`): one row headed by
   a setting (`header`) or a `title` and `description`, with an arrow folding its `members` under it (closed until opened; open ones stay
   open while the launcher runs), named without the feature's name they repeat, as in the game.

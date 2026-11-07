@@ -183,6 +183,9 @@ sealed partial class GameHost
         {
             foreach (var toggle in panel.Toggles)
                 if (!SettingsMenu.HiddenSwitch(toggle.Label) && !runOnly.Contains(SwitchKey(toggle.Label)) && config.Graphics.TryGetValue(SwitchKey(toggle.Label), out float v) && (v >= 0.5f) != toggle.Get()) toggle.Set(v >= 0.5f);
+            // The technique choices after the switches they stand for: the launcher writes the choice alone, and it wins (a file of switches only keeps them).
+            foreach (var choice in panel.Sliders.Where(s => WorldFrame.ChoiceSliders.Contains(s.Label)))
+                if (config.Graphics.TryGetValue(choice.Label, out float c) && MathF.Round(c) != MathF.Round(choice.Get())) choice.Set(Math.Clamp(c, choice.Min, choice.Max));
             panel.ApplySavedPreset();
         }
         if (g.BenchmarkBaseline) panel?.ApplyBenchmarkBaseline();

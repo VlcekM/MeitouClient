@@ -284,6 +284,14 @@ sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, 
             : new(label, hint, Slider: slider, Raw: key);
     }
 
+    /// <summary>
+    /// Whether a Graphics switch has a row: not the ones a technique choice stands for (<see cref="WorldFrame.ChoiceDrivenSwitches"/>, when the choices exist:
+    /// the Metal panel has none), nor the screen-space contact shadows where rays shadow the sun (the traced shadows have the contact detail).
+    /// </summary>
+    bool ShownSwitch(string label) =>
+        !(WorldFrame.ChoiceDrivenSwitches.Contains(label) && values.Sliders.Any(s => WorldFrame.ChoiceSliders.Contains(s.Label)))
+        && !(label == "Contact shadows" && WorldFrame.RayTracingAvailable);
+
     List<Entry> Entries()
     {
         if (page == ModSettingsPage) return ModSettingsEntries();
@@ -294,7 +302,7 @@ sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, 
         if (page == 1)
         {
             var changes = LookChanges();
-            result = values.Toggles.Where(toggle => ToggleSection(toggle.Label) == section).OrderBy(toggle => LauncherSchema.Order(SwitchKey(toggle.Label)))
+            result = values.Toggles.Where(toggle => ToggleSection(toggle.Label) == section && ShownSwitch(toggle.Label)).OrderBy(toggle => LauncherSchema.Order(SwitchKey(toggle.Label)))
                 .Select(toggle => LookRow(new Entry(Label(toggle.Label), ToggleHint(toggle.Label), Toggle: toggle), SwitchKey(toggle.Label), toggle.Label, true, changes))
                 .Concat(values.Sliders.Where(s => s.Label is not ("Time of day" or "Time speed") && Section(s.Label) == section && ReliefSliderShown(s.Label))
                     .OrderBy(s => LauncherSchema.Order(s.Label)).Select(s => LookRow(SliderEntry(s), s.Label, s.Label, false, changes)))

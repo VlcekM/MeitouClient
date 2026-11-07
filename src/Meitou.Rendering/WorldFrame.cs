@@ -1455,6 +1455,8 @@ static partial class WorldFrame
             Text: v => (1 << (int)MathF.Round(v)) + "x" + (MathF.Round(v) >= 3 ? " (as the game)" : "")));
 
         var toggles = SettingsToggles(g, switches, fifthCascade);
+        RayTracingAvailable = g.Sky.Gpu.HasRayQuery;
+        AddChoiceSliders(sliders, toggles, g);
         var actions = SettingsActions(g);
         var side = TextureSliders();
 
@@ -1462,6 +1464,55 @@ static partial class WorldFrame
         var choices = new List<PanelChoice>(extraChoices ?? []);
         if (g.Weather is { } weather) choices.Add(new PanelChoice(weather.ChoiceLabel, weather.Choices, weather.Current, weather.Choose));
         return new SettingsPanel(ui, "Settings   (Tab hides this)", sliders, toggles, "Meitou improvements (unticked: as the game)", actions, side, choices);
+    }
+
+    /// <summary>The mutually exclusive techniques as one choice each (docs/native-ui.md "Settings"), over the switches they stand for (which stay the saved state).</summary>
+    public const string SunShadowsChoice = "Sun shadows", OcclusionChoice = "Ambient occlusion type", GiChoice = "Global illumination";
+
+    /// <summary>The <see cref="SunShadowsChoice"/>, <see cref="OcclusionChoice"/> and <see cref="GiChoice"/> keys, and the switches they replace on screen.</summary>
+    public static readonly string[] ChoiceSliders = [SunShadowsChoice, OcclusionChoice, GiChoice];
+    public static readonly string[] ChoiceDrivenSwitches = ["Shadows", "Traced sun shadows", "Ambient occlusion", "Ground-truth occlusion", "Indirect light", "Hybrid GI"];
+
+    /// <summary>Whether the device traces rays (the traced sun and lamps, the GI, reflections); set when the settings panel is made.</summary>
+    public static bool RayTracingAvailable { get; private set; }
+
+    /// <summary>
+    /// Sun shadows (Off / Faithful cascades / Meitou cascades / Traced), ambient occlusion (Off / SSAO / GTAO) and global illumination (Off / Probes /
+    /// Probes + hybrid) as choices: each reads and writes the Faithful / Meitou switches and the shadow distance it stands for, so a settings file of the
+    /// switches still loads. Traced needs the indirect light (the rays use its scene), so choosing it turns the GI on, and the GI off leaves the cascades.
+    /// </summary>
+    static void AddChoiceSliders(List<Slider> sliders, List<Toggle> toggles, Gpu g)
+    {
+        Toggle? T(string label) => toggles.FirstOrDefault(t => t.Label == label);
+        bool On(string label) => T(label)?.Get() == true;
+        void Set(string label, bool on) { if (T(label) is { } t && t.Get() != on) t.Set(on); }
+        static int Index(float v) => (int)MathF.Round(v);
+        if (sliders.FirstOrDefault(s => s.Label == ShadowDistanceSlider) is { } distance && g.Shadow is { } shadow && T("Shadows") is not null)
+            sliders.Add(new Slider(SunShadowsChoice, 0, 3, () => !shadow.Enabled ? 0 : On("Traced sun shadows") ? 3 : On("Shadows") ? 2 : 1, v =>
+            {
+                int mode = Index(v);
+                Set("Traced sun shadows", mode == 3);
+                if (mode == 0) { distance.Set(distance.Min); return; }
+                // Back on at the range it had (Off keeps it), else the game's or Meitou's default.
+                if (!shadow.Enabled) distance.Set(shadow.Settings.Range >= KenshiShadows.MinRange ? shadow.Settings.Range : mode == 1 ? 5000 : Enhancements.MeitouShadowRange);
+                Set("Shadows", mode >= 2);
+                if (mode == 3) Set("Indirect light", true);
+            }, "0"));
+        if (T("Ambient occlusion") is not null)
+            sliders.Add(new Slider(OcclusionChoice, 0, 2, () => !On("Ambient occlusion") ? 0 : On("Ground-truth occlusion") ? 2 : 1, v =>
+            {
+                int mode = Index(v);
+                Set("Ambient occlusion", mode > 0);
+                if (mode > 0) Set("Ground-truth occlusion", mode == 2);
+            }, "0"));
+        if (T("Indirect light") is not null)
+            sliders.Add(new Slider(GiChoice, 0, 2, () => !On("Indirect light") ? 0 : On("Hybrid GI") ? 2 : 1, v =>
+            {
+                int mode = Index(v);
+                if (mode == 0) Set("Traced sun shadows", false);
+                Set("Indirect light", mode > 0);
+                Set("Hybrid GI", mode == 2);
+            }, "0"));
     }
 
     /// <summary>The viewer's own rows; the game passes none of them (its clock, vsync and window mode are its own settings).</summary>
