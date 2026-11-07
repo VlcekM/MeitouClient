@@ -65,7 +65,11 @@ sealed partial class GameHost
     bool debugToolsOn;
 
     /// <summary>A tool row: its section, label, key hint ("" for none), its state for the value column ("on", "off", a mode, "" for none) and what Enter does.</summary>
-    readonly record struct DebugTool(string Section, string Label, string Key, Func<string> State, Action Switch);
+    readonly record struct DebugTool(string Section, string Label, string Key, Func<string> State, Action Switch)
+    {
+        /// <summary>A plain on / off row: Left turns it off, Right on (Enter and Space flip it); other rows flip or cycle on every one of the four keys.</summary>
+        public bool IsSwitch { get; init; }
+    }
 
     static string OnOff(bool on) => on ? "on" : "off";
 
@@ -75,34 +79,59 @@ sealed partial class GameHost
         new("Tools", "Pick & collision inspector...", "", () => "", () => { debugMenuOpen = false; inspectorMenuOpen = true; }),
         new("Tools", "Interior editor...", "", () => "", OpenInteriorEditor),
         new("Tools", "Level editor...", "Shift+F12", () => "", OpenLevelEditor),
-        new("Tools", "Teleport on map...", "", () => OnOff(player.MapPickSticky), ToggleMapTeleport),
+        new("Tools", "Teleport on map...", "", () => OnOff(player.MapPickSticky), ToggleMapTeleport) { IsSwitch = true },
         new("Overlays", "Navmesh view", "Shift+F11", () => navView.ToString().ToLowerInvariant(), ToggleNavOverlay),
-        new("Overlays", "Frame statistics", "F11", () => OnOff(statsVisible), () => { statsVisible = !statsVisible; FoliageGpuCull.CountTriangles = statsVisible; }),
-        new("Overlays", "  Character boxes", "", () => OnOff(characterBoxes), () => characterBoxes = !characterBoxes),
-        new("Overlays", "  Walk paths", "", () => OnOff(walkPaths), () => walkPaths = !walkPaths),
-        new("Overlays", "Fps counter", "Ctrl+F9", () => OnOff(fpsVisible), () => fpsVisible = !fpsVisible),
-        new("Overlays", "VRAM pie", "Ctrl+F12", () => OnOff(profiler?.ShowVram == true), () => { if (profiler is not null) profiler.ShowVram = !profiler.ShowVram; }),
+        new("Overlays", "Frame statistics", "F11", () => OnOff(statsVisible), () => { statsVisible = !statsVisible; FoliageGpuCull.CountTriangles = statsVisible; }) { IsSwitch = true },
+        new("Overlays", "  Character boxes", "", () => OnOff(characterBoxes), () => characterBoxes = !characterBoxes) { IsSwitch = true },
+        new("Overlays", "  Walk paths", "", () => OnOff(walkPaths), () => walkPaths = !walkPaths) { IsSwitch = true },
+        new("Overlays", "Fps counter", "Ctrl+F9", () => OnOff(fpsVisible), () => fpsVisible = !fpsVisible) { IsSwitch = true },
+        new("Overlays", "VRAM pie", "Ctrl+F12", () => OnOff(profiler?.ShowVram == true), () => { if (profiler is not null) profiler.ShowVram = !profiler.ShowVram; }) { IsSwitch = true },
         new("Overlays", "Profiler", "F12", () => (profiler?.Showing ?? FrameProfiler.Mode.Off).ToString().ToLowerInvariant(),
             () => { if (profiler is not null) profiler.Showing = (FrameProfiler.Mode)(((int)profiler.Showing + 1) % 3); }),
     ];
     DebugTool[]? debugTools;
 
     /// <summary>
-    /// The "Teleport on map" switch. On: the map's clicks send the selected characters to the clicked spot (and the camera there) until it is switched off here; the map is opened as usual
-    /// (the menu takes every key while open, so close it first) and shows a hint while the switch is on. Off: map clicks do nothing special again. The state is the interface's (<see cref="PlayerInterface.MapPickSticky"/>).
+    /// The "Teleport on map" switch, level-triggered: on, every left click on the open Map tab sends the selected characters (else the lead) to the clicked spot, and the camera there, until it is
+    /// switched off (the menu row, or the console's <c>tpmap</c>). The state is the interface's (<see cref="PlayerInterface.MapPickSticky"/>); the map shows a hint with the last result while it is on.
     /// </summary>
-    void ToggleMapTeleport()
+    void SetMapTeleport(bool on)
     {
-        bool on = !player.MapPickSticky;
         if (on) player.ArmMapPick(TeleportToMapPoint);
         else player.DisarmMapPick();
+        mapTeleportNote = "";
         debugStatus = on ? "map teleport on: close this menu, open the map, click a spot" : "map teleport off";
     }
 
+    void ToggleMapTeleport() => SetMapTeleport(!player.MapPickSticky);
+
+    /// <summary>The result of the last map click, shown in the map's hint.</summary>
+    string mapTeleportNote = "";
+
     void TeleportToMapPoint(Vector3 at)
     {
-        debugStatus = DebugApply(DebugRow.Teleport, "", at: at);
-        if (debugFailed) return;
+        var who = player.ControlOrderers();
+        string lead = "";
+        if (who.Count == 0)
+        {
+            // Nothing selected (a click in the world deselects): the switch still teleports, the lead.
+            if (session.CurrentSnapshot.Characters.FirstOrDefault(c => c.IsPlayer) is not { } first)
+            {
+                mapTeleportNote = "no player character to teleport";
+                session.World.Post("Teleport on map: " + mapTeleportNote);
+                return;
+            }
+            session.World.Commands.Enqueue(new DebugTeleport([first.Id], at) { Tick = session.World.Tick });
+            lead = $" (nothing selected: the lead, {first.Name})";
+            debugStatus = mapTeleportNote = $"teleported 1 to {at.X:0}, {at.Z:0}{lead}";
+            session.World.Post("Teleport on map: " + mapTeleportNote);
+        }
+        else
+        {
+            debugStatus = DebugApply(DebugRow.Teleport, "", at: at);
+            mapTeleportNote = debugStatus;
+            if (debugFailed) { session.World.Post("Teleport on map: " + mapTeleportNote); return; }
+        }
         CentreCameraOn(at.X, at.Z);
     }
 
@@ -113,13 +142,15 @@ sealed partial class GameHost
         session.Camera.Place(new Vector2(x, z), view.Yaw, view.Pitch, view.Distance);
     }
 
-    /// <summary>The one-line hint while the Map tab waits for a teleport click (<see cref="BeginMapTeleport"/>).</summary>
+    /// <summary>The hint while the Map tab is open and "Teleport on map" is on: the state, how to switch it off and the last result.</summary>
     void DrawMapPickHint(DebugOverlay o, int width, int height)
     {
-        const string text = "Teleport: click the map, Esc cancels";
-        float w = text.Length * o.CharWidth + 20, x = (width - w) / 2;
-        o.Rect(x, 8, x + w, 8 + o.LineHeight + 8, DebugOverlay.PanelColour);
+        string text = "Teleport on map: ON, every click teleports (F10 > Teleport on map or 'tpmap off' ends it)";
+        string note = mapTeleportNote;
+        float w = Math.Max(text.Length, note.Length) * o.CharWidth + 20, x = (width - w) / 2, h = o.LineHeight * (note.Length > 0 ? 2 : 1) + 8;
+        o.Rect(x, 8, x + w, 8 + h + 8, DebugOverlay.PanelColour);
         o.Text(text, x + 10, 12, new Vector4(1f, 0.9f, 0.4f, 1));
+        if (note.Length > 0) o.Text(note, x + 10, 12 + o.LineHeight, new Vector4(0.8f, 0.95f, 0.8f, 1));
         o.Flush(width, height);
     }
 
@@ -166,7 +197,12 @@ sealed partial class GameHost
             case EngineKey.Escape: debugMenuOpen = false; break;
             case EngineKey.Up: debugRow = DebugStep(-1); break;
             case EngineKey.Down: debugRow = DebugStep(1); break;
-            case EngineKey.Enter or EngineKey.Space or EngineKey.Left or EngineKey.Right when DebugIsTool(debugRow): DebugTools[debugRow - DebugRowCount].Switch(); break;
+            case EngineKey.Enter or EngineKey.Space or EngineKey.Left or EngineKey.Right when DebugIsTool(debugRow):
+                var tool = DebugTools[debugRow - DebugRowCount];
+                // Left means off and Right on, so Left then Right never ends up flipping a switch twice.
+                if (tool.IsSwitch && key is EngineKey.Left or EngineKey.Right && (tool.State() == "on") == (key == EngineKey.Right)) break;
+                tool.Switch();
+                break;
             case EngineKey.Backspace when field.Length > 0: debugFields[debugRow] = field[..^1]; break;
             case EngineKey.Enter: debugStatus = DebugApply((DebugRow)debugRow, field.Trim()); break;
         }

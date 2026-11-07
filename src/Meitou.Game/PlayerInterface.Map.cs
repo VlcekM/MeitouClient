@@ -67,7 +67,7 @@ sealed partial class PlayerInterface
     }
 
     /// <summary>
-    /// Debug (the F10 tool "Teleport on map"): while set, a left click on the map (a press and release within <see cref="MapPickSlop"/> pixels, so panning still works) calls it with
+    /// Debug (the F10 tool "Teleport on map"): while set, a left click on the map (a press and release within <see cref="MapPickSlop"/> pixels, scaled up with the UI, so panning still works) calls it with
     /// the world point (X, Z; Y 0). With <see cref="MapPickSticky"/> (the menu's toggle) it stays set, whether the map is open or not; otherwise the click clears it, and closing the Map tab does too.
     /// </summary>
     public Action<Vector3>? MapPick { get; private set; }
@@ -86,7 +86,7 @@ sealed partial class PlayerInterface
     {
         var from = mapPickFrom;
         mapPickFrom = null;
-        if (MapPick is not { } pick || from is not { } start || Vector2.Distance(start, p) > MapPickSlop || !OverMap(p)) return;
+        if (MapPick is not { } pick || from is not { } start || Vector2.Distance(start, p) > MapPickSlop * MathF.Max(1, UiScale) || !OverMap(p)) return;
         if (!MapPickSticky) MapPick = null;
         pick(MapWorld(Vector2.Clamp(mapView.At(mapViewport, p), Vector2.Zero, Vector2.One)));
     }

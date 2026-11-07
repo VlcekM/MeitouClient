@@ -161,7 +161,7 @@ sealed partial class GameHost
         c.SetComplete("equip", (i, typed) => i == 0 ? ConsoleMatch(player.ControlCarriedItemNames(), typed) : []);
         c.SetComplete("pickup", (i, typed) => i == 0 ? Starting(player.ControlGroundItemKeys(), typed) : []);
         c.SetComplete("door", (i, typed) => i == 0 ? Starting(["nearest"], typed) : []);
-        foreach (var name in new[] { "godmode", "guard" }) c.SetComplete(name, (i, typed) => i == 0 ? Starting(["on", "off"], typed) : []);
+        foreach (var name in new[] { "godmode", "guard", "tpmap" }) c.SetComplete(name, (i, typed) => i == 0 ? Starting(["on", "off"], typed) : []);
     }
 
     void RegisterConsoleCommands()
@@ -238,6 +238,23 @@ sealed partial class GameHost
         {
             if (!Need(args, 0, 1, Self("godmode"))) return;
             Report(con, DebugApply(DebugRow.Godmode, args.Count > 0 ? args[0] : ""));
+        });
+
+        Add("tpmap", "tpmap [on|off]", "the F10 switch Teleport on map: while on, every left click on the open map tab teleports the selected characters (else the lead) there and puts the camera on the spot; no argument toggles; reports the state", (args, con) =>
+        {
+            if (!Need(args, 0, 1, Self("tpmap"))) return;
+            bool on = !player.MapPickSticky;
+            if (args.Count > 0)
+            {
+                switch (args[0].ToLowerInvariant())
+                {
+                    case "on" or "1" or "true": on = true; break;
+                    case "off" or "0" or "false": on = false; break;
+                    default: con.Error("tpmap: on or off"); return;
+                }
+            }
+            SetMapTeleport(on);
+            con.Print(on ? "map teleport on: open the map and click a spot" : "map teleport off");
         });
 
         Add("guard", "guard [on|off] [--radius <m>] [--animals]", "god-mode style safety: 4 times a second kills the hostile characters within the radius (default 30 m) of the selected (else first) squad member, as kill --radius does (never the squad or its faction; animals only with --animals or while one attacks a player character), and heals the player's characters as godmode does; stays on until turned off, switches itself off when a game loads; no argument toggles. Not for combat, survival or loot-source tests", (args, con) =>
