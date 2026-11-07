@@ -449,7 +449,8 @@ Meitou: [ground items](../simulation.md#items-and-eating).
   to the template's `faction` (else the town's), clears its interior and exterior objects, sets the interior layout name (LayoutInterior vfunc 12
   `FUN_14054c420`, a name only) to the template's `layout interior` and the exterior one to `layout exterior`, empty ones included, whatever the level
   state said, and reloads the exterior; ruins are not exempt. The interior loads its layout when the squad is made (`FUN_14057f820` → `FUN_1405621e0`)
-  or when it is next loaded; an empty name loads nothing (`Layout::loadLayout` `FUN_1405512a0`), nor does a name the building has no layout for
+  or when it is next loaded; an empty name loads nothing (`Layout::loadLayout` `FUN_1405512a0`; **Observed**, rebirth: template `lost armoury` names none, so the Lost Armoury's Outpost s-II at
+  -57215, -136537 stands bare, without containers for its gear artifacts, #346), nor does a name the building has no layout for
   (logged), nor any layout of a player-owned building that is not a wall (the name is cleared; when a bought house's exterior is next loaded, so whether its
   signs go, is **Unknown**: Meitou drops only its interior). With `layout interior` set, a building that does not
   offer it is not housed (`FUN_14055ad40`, before anything changes). A non-empty interior name also becomes the building's display name, then the
