@@ -200,8 +200,12 @@ Where a block's two depths lie within 4 % (or it is all sky) its farthest is wri
 shades only along depth edges; likewise the filtered composite evaluates the four render pixels' surfaces only where they differ by
 more than 4 %. **Observed** (mec-tou-nu, 2560 x 1440, DLSS, 4090): the particle draws 0.05 → 0.04 ms (master 0.02, the rest the
 lighting below), the picture within 1/255 (99th percentile); the particle passes together within the run-to-run noise of master's.
-A draw's size follows its sprites' mean screen size (half from 20 px, quarter from 80) and a size is only used from 6 screens of
-overdraw: each is left 15 % past its threshold and a size below half its overdraw, so dust near one does not flip between looks as the
+A draw's size follows its sprites' mean screen size (half from 20 px, quarter from 80), capped by its texture's detail
+(`ParticleTextureDetail`, measured at decode: the fewest pixels across, halving from the texture's size, whose box-reduced copy brought back
+up bilinearly stays within 0.04 mean premultiplied difference; a size is allowed from 2 or 4 times that), and a size is only used from 6 screens of
+overdraw. **Observed** (the game's particle textures): soft ones need 4-64 px (dust mites 32, mist 32-64, smoke 8-32, sand wisps 4-32), sharp
+ones 256-2048 (blood splats `Splatt0x` 256-1024, `BloodSplash` 2048, drifting leaves 256); the decapitation spurt (`HackBlood-system`, splats
+scaled up to 54x) was drawn at quarter size, a blurred dark blotch, and stays full size now. Each size is left 15 % past its threshold and a size below half its overdraw, so dust near one does not flip between looks as the
 view moves; with a vendor upscaler the overdraw rule is off (full-size dust would be in what DLSS upscales, and trail). With a vendor upscaler (DLSS, FSR) the low-resolution particles are
 blended over its output instead of the scene it upscales (`PostProcess.ParticlesAfterUpscale`, half then quarter size, the composite reading
 the render-size depth at `uScale` render pixels per output pixel), drawn with the unjittered projection, and left out of the reactive mask:
