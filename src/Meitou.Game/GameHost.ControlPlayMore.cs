@@ -11,7 +11,7 @@ sealed partial class GameHost
     /// <summary>A <c>spawn-at</c> waiting for its character to show up in the snapshot (a running game) and, with --ko or --dead, to go down.</summary>
     sealed class ControlSpawn(string id, HashSet<CharacterId> before, float x, float z, bool ko, bool dead, long deadline)
     {
-        public string Id = id; public HashSet<CharacterId> Before = before; public float X = x, Z = z; public bool Ko = ko, Dead = dead, Downed; public long Deadline = deadline; public CharacterId Found = CharacterId.None;
+        public string Id = id; public HashSet<CharacterId> Before = before; public float X = x, Z = z; public bool Ko = ko, Dead = dead, Downed; public long Deadline = deadline; public CharacterId Found = CharacterId.None; public string? Weapon; public bool Aggro, Armed;
     }
 
     readonly List<ControlSpawn> controlSpawns = [];
@@ -207,23 +207,41 @@ sealed partial class GameHost
             con.Print($"woke {down.Count}");
         });
 
-        add("spawn-at", "spawn-at <x> <z> [record] [--ko | --dead]", "spawn a hostile character (default record 'Dust Bandit') at world X Z without a pointer; the reply has its id, state and position (a paused game steps a few ticks to make it appear); --ko / --dead leave a body to test loot, carry and first aid on", (args, con) =>
+        add("bandits-loot", "bandits-loot [on|off]", "read the New game option \"Bandits loot the player\" (CAMERA bl) of the running world; on/off sets it (test aid)", (args, con) =>
+        {
+            if (!loaded(con)) return;
+            if (args.Count == 1 && args[0].Equals("on", StringComparison.OrdinalIgnoreCase)) session.World.Player.BanditsLoot = true;
+            else if (args.Count == 1 && args[0].Equals("off", StringComparison.OrdinalIgnoreCase)) session.World.Player.BanditsLoot = false;
+            else if (args.Count != 0) { con.Error("usage: bandits-loot [on|off]"); return; }
+            con.Print($"bandits-loot {(session.World.Player.BanditsLoot ? "on" : "off")}");
+        });
+
+        add("spawn-at", "spawn-at <x> <z> [record] [--ko | --dead] [--aggro [weapon]]", "--aggro: also arm the spawn (weapon item, default Katana) and order it to attack the lead of the squad (test aid for fights); spawn a hostile character (default record 'Dust Bandit') at world X Z without a pointer; the reply has its id, state and position (a paused game steps a few ticks to make it appear); --ko / --dead leave a body to test loot, carry and first aid on", (args, con) =>
         {
             if (!loaded(con)) return;
             bool dead = args.Contains("--dead", StringComparer.OrdinalIgnoreCase), ko = false;
             var plain = new List<string>();
+            bool aggro = false;
+            string weapon = "Katana";
             for (int a = 0; a < args.Count; a++)
             {
                 if (args[a].Equals("--dead", StringComparison.OrdinalIgnoreCase)) continue;
+                if (args[a].Equals("--aggro", StringComparison.OrdinalIgnoreCase)) { aggro = true; if (a + 1 < args.Count && !args[a + 1].StartsWith("--")) weapon = args[++a]; continue; }
                 if (args[a].Equals("--ko", StringComparison.OrdinalIgnoreCase)) { ko = true; continue; }
                 plain.Add(args[a]);
             }
-            if (plain.Count < 2 || !Num(plain[0], out float x) || !Num(plain[1], out float z) || (ko && dead)) { con.Error("usage: spawn-at <x> <z> [record] [--ko | --dead]"); return; }
+            if (plain.Count < 2 || !Num(plain[0], out float x) || !Num(plain[1], out float z) || (ko && dead) || (aggro && (ko || dead))) { con.Error("usage: spawn-at <x> <z> [record] [--ko | --dead] [--aggro [weapon]]"); return; }
             string record = plain.Count > 2 ? string.Join(' ', plain.Skip(2)) : "Dust Bandit";
             if (DebugRecord(record, character: true) is not { } npc) { con.Error($"spawn-at: no character record matches '{record}'"); return; }
+            string? weaponId = null;
+            if (aggro)
+            {
+                if (DebugRecord(weapon, character: false) is not { } w) { con.Error($"spawn-at: no item record matches '{weapon}'"); return; }
+                weaponId = w.Id;
+            }
             var before = new HashSet<CharacterId>(player.ControlCharactersNear(x, z).Select(c => c.Id));
             session.World.Commands.Enqueue(new DebugSpawn(npc.Id, new System.Numerics.Vector2(x, z)) { Tick = session.World.Tick });
-            var pending = new ControlSpawn(currentControlId ?? "0", before, x, z, ko, dead, Stopwatch.GetTimestamp() + 5 * Stopwatch.Frequency);
+            var pending = new ControlSpawn(currentControlId ?? "0", before, x, z, ko, dead, Stopwatch.GetTimestamp() + 5 * Stopwatch.Frequency) { Aggro = aggro, Weapon = weaponId };
             if (session.Simulation.IsPaused)
             {
                 for (int k = 0; k < 6 && !ControlSpawnProgress(pending, out _, out _); k++) session.Step(1);
@@ -252,6 +270,12 @@ sealed partial class GameHost
             s.Found = hits[0].Id;
         }
         var near = player.ControlCharactersNear(s.X, s.Z).FirstOrDefault(c => c.Id == s.Found);
+        if (s.Aggro && !s.Armed && player.ControlSquad() is { Count: > 0 } squad)
+        {
+            s.Armed = true;
+            session.World.Commands.Enqueue(new DebugGiveItem(s.Found, s.Weapon!, 1) { Tick = session.World.Tick });
+            session.World.Commands.Enqueue(new Meitou.Simulation.Combat.AttackOrder([s.Found], squad[0]) { Tick = session.World.Tick });
+        }
         if ((s.Ko || s.Dead) && !s.Downed)
         {
             session.World.Commands.Enqueue(s.Dead ? new DebugKill([s.Found]) { Tick = session.World.Tick } : new DebugKnockOut([s.Found], 600) { Tick = session.World.Tick });
