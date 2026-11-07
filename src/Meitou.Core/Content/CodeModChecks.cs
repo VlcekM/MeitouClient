@@ -145,11 +145,11 @@ public static class CodeModChecks
 
     /// <summary>
     /// The launcher's preliminary check: for each enabled code mod, in load order, the reasons the game would refuse it that are known without its
-    /// code, by mod name. A mod with a problem, or not allowed to run code when <paramref name="trusted"/> is given, will not load, so it serves no
+    /// code, by mod name. A mod with a problem will not load, so it serves no
     /// dependent and blocks no later mod. Passing does not promise a mod runs: its DLLs and initialization are checked only at start.
     /// </summary>
     public static Dictionary<string, List<string>> Check(
-        IReadOnlyList<CodeModEntry> list, IReadOnlySet<string>? trusted = null, CodeModVersion? game = null)
+        IReadOnlyList<CodeModEntry> list, CodeModVersion? game = null)
     {
         var problems = new Dictionary<string, List<string>>(StringComparer.Ordinal);
         var pass = new CodeModPass();
@@ -165,7 +165,6 @@ public static class CodeModChecks
                 problems[entry.Name] = lines;
                 pass.Refused(entry.Name, lines[0]);
             }
-            else if (trusted is not null && !trusted.Contains(entry.Name)) pass.Refused(entry.Name, "it is not allowed to run code");
             else pass.Loaded(entry.Name, entry.Manifest!);
         }
         return problems;

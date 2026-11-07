@@ -99,7 +99,6 @@ static class ModCheck
         return [.. mods.Where(m => m.HasCode)];
     }
 
-    /// <summary>Running this command on purpose is the player's consent, so the launcher's allowed list is not asked.</summary>
     static ModHost? LoadMods(List<ModInfo> enabled, Setup setup)
     {
         if (enabled.Count == 0)
@@ -108,8 +107,7 @@ static class ModCheck
             return null;
         }
         Console.WriteLine($"mods      running the code of {string.Join(", ", enabled.Select(m => m.Name))}");
-        var allowed = enabled.Select(m => m.Name).ToHashSet(StringComparer.Ordinal);
-        var mods = ModHost.Load(new ModHostOptions(enabled, allowed, setup.Db, setup.Data, () => current));
+        var mods = ModHost.Load(new ModHostOptions(enabled, setup.Db, setup.Data, () => current));
         foreach (var notice in mods.Notices) Console.Error.WriteLine($"mods      {notice}");
         return mods.Mods.Count > 0 ? mods : null;
     }

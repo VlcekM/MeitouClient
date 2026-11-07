@@ -51,10 +51,9 @@ Folder: `mods/MyMod/MyMod.mod` (the data mod, may be empty of records), `meitou.
 
 ## Trust
 
-A workshop DLL is arbitrary code running as the user, as with RE_Kenshi. No sandboxing: .NET has none. The game loads a code mod's code
-only when its mod name is in `trustedCodeMods` of `meitou.user.json` (`UserConfig.TrustedCodeMods`); otherwise its data loads, its
-code does not, and the game shows a notice. The launcher's **Trust code mods** box (on by default) allows every code mod in its list, or none ([launcher](launcher.md)).
-The game itself cannot ask: mods initialize on the boot worker before the interface exists.
+A workshop DLL is arbitrary code running as the user, as with RE_Kenshi. No sandboxing: .NET has none. Installing and enabling a code mod
+is the consent, as in RimWorld: the game loads every enabled code mod's code, with no allow list or question. An older game's
+`trustedCodeMods` in `meitou.user.json` is no longer read.
 
 ## Loading
 
@@ -172,8 +171,7 @@ headless with the enabled code mods, or only the `--mod` folders (their code; th
 it three times: twice on one thread and once on `--threads` (default 4), for `--ticks` (default 600). It compares `World.StateHash`
 after every tick and reports the first differing tick of each pair and the `IStateHashed` systems that differ there, a mod's by id and
 name. One-thread runs differing points at unseeded randomness or the clock; thread counts differing, at a threading mistake. On a
-difference it runs the game without mods: if that differs too, the fault is the game's. Running the command is consent to run the mods'
-code, so `trustedCodeMods` is not consulted.
+difference it runs the game without mods: if that differs too, the fault is the game's.
 
 - Walkability is the open terrain, not the navmesh (whose zones load on threads), paths are answered in the tick and the population works
   in it, so runs repeat; the world differs from play in where characters walk.

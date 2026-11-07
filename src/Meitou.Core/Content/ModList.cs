@@ -174,7 +174,7 @@ public sealed class ModInfo(string name, string path, ModSource source)
     /// <summary>An RE_Kenshi plugin mod: its data loads in Meitou, its DLLs do not. Checked on first use.</summary>
     public bool HasNativePlugin => nativePlugin ??= File.Exists(System.IO.Path.Combine(Folder, ModList.NativePluginFile));
 
-    /// <summary>A Meitou code mod: its folder has <see cref="ModList.CodeManifestFile"/>, so it runs C# code of its own once allowed. Checked on first use.</summary>
+    /// <summary>A Meitou code mod: its folder has <see cref="ModList.CodeManifestFile"/>, so it runs C# code of its own. Checked on first use.</summary>
     public bool HasCode => code ??= File.Exists(CodeManifestPath);
 
     public string CodeManifestPath => System.IO.Path.Combine(Folder, ModList.CodeManifestFile);

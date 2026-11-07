@@ -36,14 +36,13 @@ sealed partial class GameHost
         JitWarmup.Start();
     }
 
-    /// <summary>Loads the enabled code mods the player allowed (<see cref="UserConfig.TrustedCodeMods"/>) and runs their initialization; on the boot worker.</summary>
+    /// <summary>Loads the enabled code mods and runs their initialization; on the boot worker.</summary>
     void StartMods(Meitou.Data.GameDatabase db, PopulationData data)
     {
         var (enabled, disabled) = ModHost.CodeMods(install);
         if (enabled.Count == 0) return;
         Console.WriteLine($"mods      {enabled.Count} code mod(s) enabled; Harmony {ModHost.HarmonyVersion}, code-mod API {ModApi.Version}");
-        var allowed = config.TrustedCodeMods.ToHashSet(StringComparer.Ordinal);
-        mods = ModHost.Load(new ModHostOptions(enabled, allowed, db, data, () => session?.World,
+        mods = ModHost.Load(new ModHostOptions(enabled, db, data, () => session?.World,
             id => config.ModSettings.TryGetValue(id, out var saved) ? saved : null, RunningVersion(), disabled));
     }
 

@@ -193,8 +193,6 @@ sealed class UserConfig
     public int? SimThreads { get; set; }
     /// <summary>The autosave slot written last (the original's <c>settings.cfg</c> <c>autosaveindex</c>); the next autosave takes the one after.</summary>
     public int AutosaveIndex { get; set; }
-    /// <summary>The code mods (by mod name) the player allowed to run their own code (docs/modding.md "Trust"); the launcher asks and adds them. Others load as data only.</summary>
-    public List<string> TrustedCodeMods { get; set; } = [];
     /// <summary>
     /// The code mods' settings the player changed (docs/modding.md "Settings"): mod id to setting key to the value as text; a default is not kept.
     /// </summary>

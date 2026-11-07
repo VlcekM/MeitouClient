@@ -34,19 +34,18 @@ public sealed class LoadedMod
 }
 
 /// <summary>
-/// Where a <see cref="ModHost"/> loads from: the enabled code mods in order, the mods the player allowed to run code, the merged data and the running
-/// world.
+/// Where a <see cref="ModHost"/> loads from: the enabled code mods in order, the merged data and the running world.
 /// </summary>
 /// <param name="SavedSettings">The player's saved settings of a mod by its id (setting key to text), or null.</param>
 /// <param name="GameVersion">The running Meitou for <c>gameVersion</c> ranges; null passes every range.</param>
 /// <param name="Disabled">The installed code mods not enabled, only so a dependent's refusal says "not enabled" rather than "not installed".</param>
 public sealed record ModHostOptions(
-    IReadOnlyList<ModInfo> Enabled, IReadOnlySet<string> Allowed, GameDatabase Data, PopulationData Population, Func<World?> World,
+    IReadOnlyList<ModInfo> Enabled, GameDatabase Data, PopulationData Population, Func<World?> World,
     Func<string, IReadOnlyDictionary<string, string>?>? SavedSettings = null, CodeModVersion? GameVersion = null,
     IReadOnlyList<ModInfo>? Disabled = null);
 
 /// <summary>
-/// The code mods of a session (docs/modding.md): loads the enabled, allowed ones at startup, runs their <see cref="IMod.Initialize"/> once, and holds what they
+/// The code mods of a session (docs/modding.md): loads the enabled ones at startup, runs their <see cref="IMod.Initialize"/> once, and holds what they
 /// registered for the host: the simulation extensions every world is built with, the interface extensions, the debug rows, and the save data of their systems.
 /// A mod that fails anywhere is left out with a log line and a notice; the game goes on.
 /// </summary>
@@ -134,11 +133,6 @@ public sealed class ModHost
 
     void TryLoad(ModInfo info, ModHostOptions options, IReadOnlyList<CodeModEntry> entries, int index)
     {
-        if (!options.Allowed.Contains(info.Name))
-        {
-            Refuse(info.Name, "runs code of its own and has not been allowed to (allow it in the Meitou launcher)");
-            return;
-        }
         LoadedMod? mod = null;
         try
         {

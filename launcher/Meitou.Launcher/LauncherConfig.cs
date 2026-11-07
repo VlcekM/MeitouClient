@@ -67,8 +67,6 @@ public sealed class LauncherConfig
     /// <summary>An installed launcher applies its own update at startup and restarts into it.</summary>
     public bool AutoUpdateLauncher { get; set; } = true;
     public List<ModPreset> Presets { get; set; } = [];
-    /// <summary>Code mods may run their own C# code (docs/modding.md "Trust"); off, they load as data only.</summary>
-    public bool TrustCodeMods { get; set; } = true;
 
     public static LauncherConfig Load()
     {

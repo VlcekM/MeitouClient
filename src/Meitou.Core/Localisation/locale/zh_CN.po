@@ -2838,8 +2838,8 @@ msgstr "在设置里指定 Kenshi 文件夹，才会列出它的模组。"
 msgid "Code mods"
 msgstr "代码模组"
 
-msgid "Code mod: runs C# code of its own once allowed"
-msgstr "代码模组：允许后会运行它自己的 C# 代码"
+msgid "Code mod: runs C# code of its own"
+msgstr "代码模组：会运行它自己的 C# 代码"
 
 msgid "Choose which code mods may run their own C# code; the others load as data only"
 msgstr "选择哪些代码模组可以运行自己的 C# 代码；其余的只当作数据加载"

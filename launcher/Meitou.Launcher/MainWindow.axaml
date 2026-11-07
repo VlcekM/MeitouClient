@@ -213,8 +213,6 @@
             </StackPanel>
           </DockPanel>
           <DockPanel DockPanel.Dock="Bottom" Margin="0,10,0,0">
-            <CheckBox DockPanel.Dock="Left" x:Name="TrustCodeModsBox" Content="Trust code mods" Click="TrustCodeMods_Click" VerticalAlignment="Center"
-                      ToolTip.Tip="Code mods run C# code of their own in the game, with your user's rights, like any program you install; Meitou cannot sandbox them. Off: they load as data only." />
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="6">
               <TextBox x:Name="PresetName" Width="240" PlaceholderText="New preset name" />
               <Button Content="Save as preset" Click="SavePreset_Click" />

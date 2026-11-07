@@ -41,7 +41,7 @@ public sealed class ModRow(ModInfo mod, bool enabled, CodeModEntry? code = null)
         + (Mod.Header is { Author.Length: > 0 } h ? $" · {h.Author}" : "");
     public string Notes => string.Join(" · ", new[]
     {
-        Mod.HasCode ? LauncherText.Translate("Code mod: runs C# code of its own once allowed") : null,
+        Mod.HasCode ? LauncherText.Translate("Code mod: runs C# code of its own") : null,
         Mod.HasNativePlugin && !Mod.HasCode ? LauncherText.Translate("RE_Kenshi plugin: its DLLs are ignored in Meitou") : null,
         Manifest is { DependsOn.Count: > 0 } m ? Loc.Format(LauncherText.Translate("Requires {1}"), string.Join(", ", m.DependsOn)) : null,
         Manifest is { LoadAfter.Count: > 0 } a ? Loc.Format(LauncherText.Translate("Loads after {1}"), string.Join(", ", a.LoadAfter)) : null,
