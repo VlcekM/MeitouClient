@@ -11,8 +11,13 @@ namespace Meitou.Rendering;
 /// One loose mesh in the world: its file, its size and where it is (rotation and translation, the mesh's middle at the translation); <paramref name="Stretch"/> lengthens
 /// it along its own z (a bolt in flight).
 /// </summary>
-public readonly record struct DebrisPiece(string Mesh, float Scale, Quaternion Rotation, Vector3 Position, float Stretch = 1, LimbLook? Limb = null)
+public readonly record struct DebrisPiece(string Mesh, float Scale, Quaternion Rotation, Vector3 Position, float Stretch = 1, LimbLook? Limb = null, long Id = 0)
 {
+    static long ids;
+
+    /// <summary>A new identity for a piece that moves (<see cref="Id"/>): the renderer finds its last frame's place by it and writes its motion for the temporal upscalers. 0 is no identity (a piece that does not move on its own).</summary>
+    public static long NewId() => Interlocked.Increment(ref ids);
+
     /// <summary>A mesh named <c>file</c> + this + <c>texture</c> is drawn with that diffuse texture on every part (the birds' <c>HWBirds</c> material clone, docs/game/birds.md).</summary>
     public const char TextureMark = '?';
 }
@@ -146,6 +151,71 @@ public sealed unsafe class DebrisRenderer : IDisposable
         }
         """;
 
+    /// <summary>The motion pass's vertex (<see cref="DrawMotion"/>): the piece now and where it was last frame, both relative to this frame's eye.</summary>
+    const string MotionVertex = """
+        #version 330 core
+        layout(location = 0) in vec3 aPos;
+        layout(location = 2) in vec2 aUv;
+        uniform mat4 uViewProjection;            // this frame's from the camera-relative world, jittered (as the pieces were drawn)
+        uniform mat4 uPreviousViewProjection;    // last frame's, unjittered, for positions relative to this frame's eye
+        uniform mat4 uModel;
+        uniform vec4 uPrev0, uPrev1, uPrev2;     // last frame's model, the rows of its transform (x = dot(uPrev0, vec4(p, 1)))
+        out vec2 vUv;
+        out vec4 vNow;
+        out vec4 vPrevious;
+        void main()
+        {
+            vec4 p = vec4(aPos, 1.0);
+            vUv = aUv;
+            gl_Position = uViewProjection * (uModel * p);
+            vNow = gl_Position;
+            vPrevious = uPreviousViewProjection * vec4(dot(uPrev0, p), dot(uPrev1, p), dot(uPrev2, p), 1.0);
+        }
+        """;
+
+    /// <summary>The piece's motion as the characters write theirs (UV units, this frame minus last, jitter removed), where it is what the scene depth shows.</summary>
+    static readonly string MotionFragment = """
+        #version 330 core
+        in vec2 vUv;
+        in vec4 vNow;
+        in vec4 vPrevious;
+        uniform sampler2D uDiffuse;
+        uniform sampler2D uNearDepth;
+        uniform float uAlphaThreshold;
+        uniform vec2 uNearPlanes;
+        uniform vec2 uJitterNdc;
+        out vec4 fragColour;
+        """ + DepthConvention.Glsl + """
+        void main()
+        {
+            if (uAlphaThreshold > 0.0 && texture(uDiffuse, vUv).a < uAlphaThreshold) discard;
+            float stored = texelFetch(uNearDepth, ivec2(gl_FragCoord.xy), 0).r;
+            if (depthIsSky(stored)) discard;
+            float zs = depthViewZ(stored, uNearPlanes), zf = depthViewZ(gl_FragCoord.z, uNearPlanes);
+            if (abs(zs - zf) > 0.002 * zs + 0.05) discard;
+            vec2 now = vNow.xy / vNow.w - uJitterNdc, previous = vPrevious.xy / vPrevious.w;
+            fragColour = vec4((now - previous) * 0.5, 0.0, 0.0);
+        }
+        """;
+
+    /// <summary>The motion pass's push block (std430, 128 bytes): the model, last frame's as three rows, the depth and diffuse bindless indices and the cut-out.</summary>
+    const string MotionPushMembers = """
+        mat4 model;
+        vec4 prev0;
+        vec4 prev1;
+        vec4 prev2;
+        uint depth;
+        uint diffuse;
+        float alphaThreshold;
+        uint pad;
+        """;
+
+    static readonly Dictionary<string, string> MotionOwn = new()
+    {
+        ["uModel"] = "pc.model", ["uPrev0"] = "pc.prev0", ["uPrev1"] = "pc.prev1", ["uPrev2"] = "pc.prev2", ["uAlphaThreshold"] = "pc.alphaThreshold",
+        ["uNearDepth"] = "textures2D[pc.depth]", ["uDiffuse"] = "textures2D[pc.diffuse]",
+    };
+
     /// <summary>The native push block shared by the vertex and fragment stages (std430, 128 bytes): the model, the simple-sky fallback light, and the
     /// per-part bindless diffuse index and cut-out state.</summary>
     const string PushMembers = """
@@ -252,8 +322,8 @@ public sealed unsafe class DebrisRenderer : IDisposable
     readonly MaterialResolver? resolver;
     readonly Func<string, string?> find;
     readonly NativeFrame frame;
-    readonly NativeProg program;
-    readonly VertexLayout layout;
+    readonly NativeProg program, motionProgram;
+    readonly VertexLayout layout, motionLayout;
     readonly GpuBufferBinding[] bindings = new GpuBufferBinding[5];
     readonly Dictionary<string, Mesh?> meshes = new(StringComparer.OrdinalIgnoreCase);
     readonly Dictionary<string, DebrisTexture?> textures = new(StringComparer.OrdinalIgnoreCase);
@@ -282,6 +352,13 @@ public sealed unsafe class DebrisRenderer : IDisposable
             new LegacyProgram.Attribute(default, InternalFormat.RG32f, stride, false),
             new LegacyProgram.Attribute(default, InternalFormat.Rgba16f, stride, false),
             new LegacyProgram.Attribute(default, InternalFormat.Rgba16Snorm, stride, false),
+        ]);
+        motionProgram = new NativeProg(gpu, frame, NativeShaders.Port(MotionVertex, NativeShaders.Map(MotionOwn), MotionPushMembers), NativeShaders.Port(MotionFragment, NativeShaders.Map(MotionOwn), MotionPushMembers), "debris motion");
+        motionLayout = motionProgram.Layout(
+        [
+            new LegacyProgram.Attribute(default, InternalFormat.Rgb32f, stride, false),
+            null,
+            new LegacyProgram.Attribute(default, InternalFormat.RG32f, stride, false),
         ]);
         // The native model's bindless table is what keeps the full atmosphere inside Metal's direct-sampler budget.
         if (program.P.Info.FragmentReflection is { } reflection)
@@ -376,6 +453,7 @@ public sealed unsafe class DebrisRenderer : IDisposable
             var middle = mesh.Limb ? piece.Position + Vector3.Transform(mesh.Centre * piece.Scale, piece.Rotation) : piece.Position;
             if (!FrustumTests.SphereVisible(frustum, middle, mesh.Extent.Length() * piece.Scale * MathF.Max(piece.Stretch, 1))) continue;
             var m = Matrix4x4.CreateScale(piece.Scale, piece.Scale, piece.Scale * piece.Stretch) * Matrix4x4.CreateFromQuaternion(piece.Rotation) * Matrix4x4.CreateTranslation(piece.Position - eye);
+            if (Motion && piece.Id != 0) NoteMotion(piece, mesh, m, eye);
             for (int k = 0; k < 5; k++) bindings[k] = new GpuBufferBinding(mesh.Vertices.Handle, (ulong)(k switch { 0 => 0, 1 => 12, 2 => 20, 3 => 36, _ => 28 }));
             cmd.BindVertexBuffers(0, bindings);
             cmd.BindIndexBuffer(new GpuBufferBinding(mesh.Indices.Handle, 0), IndexKind.U32);
@@ -402,6 +480,84 @@ public sealed unsafe class DebrisRenderer : IDisposable
             }
         }
         gpu.EndGuest(cmd);
+    }
+
+    // ---- motion vectors for the temporal upscalers: a moving piece (one with an identity) is drawn again into the motion target with this and last frame's transform ----
+
+    /// <summary>Set each frame by the world frame when a temporal upscaler runs: <see cref="Draw"/> notes the moving pieces for <see cref="DrawMotion"/> and keeps their places for the next frame.</summary>
+    public bool Motion { get; private set; }
+
+    readonly record struct Placed(Vector3 Position, Quaternion Rotation, float Stretch);
+    readonly record struct MotionDraw(Mesh Mesh, Matrix4x4 Model, Matrix4x4 Previous);
+    Dictionary<long, Placed> placedNow = [], placedBefore = [];
+    readonly List<MotionDraw> motionDraws = [];
+    (SampledTexture Texture, uint Index)? motionDepthIndex;
+
+    /// <summary>Starts a frame: <paramref name="on"/> when the upscaler needs motion vectors. The pieces drawn this frame become the "last frame" of the next.</summary>
+    public void BeginMotion(bool on)
+    {
+        motionDraws.Clear();
+        (placedBefore, placedNow) = (placedNow, placedBefore);
+        placedNow.Clear();
+        Motion = on;
+        if (!on) placedBefore.Clear();
+    }
+
+    /// <summary>A piece drawn this frame: its place is kept, and with a place from last frame that differs the draw is noted. A piece with none (new) or the same (resting, or the host shows the same frame again) has no motion of its own.</summary>
+    void NoteMotion(in DebrisPiece piece, Mesh mesh, in Matrix4x4 model, Vector3 eye)
+    {
+        var placed = new Placed(piece.Position, piece.Rotation, piece.Stretch);
+        placedNow[piece.Id] = placed;
+        if (!placedBefore.TryGetValue(piece.Id, out var before) || before == placed) return;
+        var previous = Matrix4x4.CreateScale(piece.Scale, piece.Scale, piece.Scale * before.Stretch) * Matrix4x4.CreateFromQuaternion(before.Rotation) * Matrix4x4.CreateTranslation(before.Position - eye);
+        motionDraws.Add(new MotionDraw(mesh, model, previous));
+    }
+
+    /// <summary>
+    /// Draws the moving pieces of this frame into the motion target (red and green; the object-motion pass of the post chain): each with its transform now and last frame, the camera of
+    /// the two frames as the characters' motion has it (<paramref name="camera"/>), written where the piece is what the scene depth shows.
+    /// </summary>
+    internal void DrawMotion(MotionTargets targets, MotionCamera camera)
+    {
+        if (!Motion || motionDraws.Count == 0) return;
+        var cmd = gpu.BeginGuest("debris motion");
+        var pass = gpu.CurrentTargets();
+        var state = gpu.CurrentState() with { Cull = CullMode.None, DepthTest = false, DepthWrite = false, Blend = BlendState.Off };
+        cmd.SetViewport(pass.Viewport);
+        cmd.SetScissor(pass.Scissor);
+        cmd.SetRaster(state.Cull, state.Front);
+        cmd.SetDepth(state.DepthTest, state.DepthWrite, state.Compare);
+        cmd.SetDepthBias(false, 0, 0);
+        cmd.BindPipeline(gpu.Pipelines.Get(state.Pipeline(motionProgram.P, motionLayout, PrimitiveType.Triangles, pass.Formats, "debris motion")));
+        if (motionDepthIndex is not { } known || known.Texture != targets.Depth)
+        {
+            if (motionDepthIndex is { } old) gpu.Bindless.Free(BindlessKind.Texture2D, old.Index);
+            motionDepthIndex = (targets.Depth, gpu.Bindless.Register(BindlessKind.Texture2D, targets.Depth));
+        }
+        var view = new ViewConstants { ViewProjection = camera.Relative, PreviousViewProjection = camera.PreviousRelative, Eye = camera.Eye, NearPlanes = targets.Planes, JitterNdc = targets.JitterNdc };
+        frame.Bind(cmd, motionProgram.P, in view);
+        var binding = new GpuBufferBinding[3];
+        foreach (var d in motionDraws)
+        {
+            var mesh = d.Mesh;
+            for (int k = 0; k < 3; k++) binding[k] = new GpuBufferBinding(mesh.Vertices.Handle, (ulong)(k switch { 0 => 0, _ => 20 }));
+            cmd.BindVertexBuffers(0, binding);
+            cmd.BindIndexBuffer(new GpuBufferBinding(mesh.Indices.Handle, 0), IndexKind.U32);
+            var p = d.Previous;
+            foreach (var part in mesh.Parts)
+            {
+                var push = new MotionPush
+                {
+                    Model = d.Model, Prev0 = new Vector4(p.M11, p.M21, p.M31, p.M41), Prev1 = new Vector4(p.M12, p.M22, p.M32, p.M42), Prev2 = new Vector4(p.M13, p.M23, p.M33, p.M43),
+                    Depth = motionDepthIndex!.Value.Index, Diffuse = part.Diffuse is { } diffuse ? diffuse.CachedIndex : gpu.StandIn2D,
+                    AlphaThreshold = part.Diffuse is null ? 0 : part.AlphaThreshold,
+                };
+                cmd.PushConstants(motionProgram.P, GpuStage.Vertex | GpuStage.Fragment, in push);
+                cmd.DrawIndexed(part.Count, 1, part.First, part.VertexOffset);
+            }
+        }
+        gpu.EndGuest(cmd);
+        motionDraws.Clear();
     }
 
     Mesh? Load(string file, string? materialOf, LimbLook? limb = null)
@@ -492,6 +648,8 @@ public sealed unsafe class DebrisRenderer : IDisposable
         }
         foreach (var image in textures.Values) image?.Dispose();
         program.Dispose();
+        motionProgram.Dispose();
+        if (motionDepthIndex is { } depth) gpu.Bindless.Free(BindlessKind.Texture2D, depth.Index);
         frame.Dispose();
     }
 }
@@ -513,3 +671,17 @@ struct DebrisPush
     [FieldOffset(120)] public uint LimbSkin;
     [FieldOffset(124)] public uint LimbTone;
 }
+
+/// <summary>The C# side of <see cref="DebrisRenderer.MotionPushMembers"/> (std430 push constants, 128 bytes).</summary>
+[StructLayout(LayoutKind.Sequential)]
+struct MotionPush
+{
+    public Matrix4x4 Model;
+    public Vector4 Prev0, Prev1, Prev2;
+    public uint Depth, Diffuse;
+    public float AlphaThreshold;
+    public uint Pad;
+}
+
+/// <summary>The camera of the motion pass for pieces placed relative to this frame's eye: this frame's rotation-only view-projection as drawn (jittered), and last frame's (unjittered) after the move between the eyes.</summary>
+internal readonly record struct MotionCamera(Matrix4x4 Relative, Matrix4x4 PreviousRelative, Vector3 Eye);

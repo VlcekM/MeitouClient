@@ -18,6 +18,9 @@ internal sealed unsafe partial class CharacterRenderer
     Vector3 motionEye;
     bool motionCamera, havePreviousCamera;
     int motionCalls;
+
+    /// <summary>Called inside the motion pass after the characters' with the same camera (positions relative to the eye): the loose pieces' motion (<see cref="DebrisRenderer.DrawMotion"/>).</summary>
+    public Action<MotionTargets, MotionCamera>? ExtraMotion { get; set; }
     uint motionDepth;
     (SampledTexture Texture, uint Index)? motionDepthIndex;
 
@@ -66,7 +69,12 @@ internal sealed unsafe partial class CharacterRenderer
             (previousRelativeUnjittered, previousEye) = (motionRelativeUnjittered, motionEye);
         }
         (previousUnjittered, havePreviousCamera) = (motionUnjittered, true);
-        if (liveCount == 0) return;
+        if (liveCount > 0) DrawCharactersMotion(targets, previous, previousRelative);
+        if (previousRelative is { } behind) ExtraMotion?.Invoke(targets, new MotionCamera(motionRelative, behind, motionEye));
+    }
+
+    void DrawCharactersMotion(MotionTargets targets, Matrix4x4 previous, Matrix4x4? previousRelative)
+    {
         motionCalls++;
         if (motionDepthIndex is { } known && known.Texture == targets.Depth) motionDepth = known.Index;
         else

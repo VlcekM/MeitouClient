@@ -827,6 +827,8 @@ static partial class WorldFrame
             swaying.SetMotionCamera(viewProjection, unjittered, f.Eye, frustum);
         }
         gpu.Characters?.AttachMotion(post, gpu.Foliage, viewProjection, unjittered, f.Eye, frustum, relative, relativeUnjittered);
+        gpu.Debris?.BeginMotion(post.Temporal);   // the loose pieces' (birds, bolts, thrown bones and limbs) motion rides the characters' pass
+        if (gpu.Characters is { } chars) chars.ExtraMotion = post.Temporal && gpu.Debris is { } loose ? loose.DrawMotion : null;
     }
 
     /// <summary>
