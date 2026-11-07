@@ -209,7 +209,7 @@ static partial class WikiExport
         string dataDir = install.DataDirectory;
         string modsCfgPath = ModList.ModsCfgPath(install);
         var modsCfg = File.Exists(modsCfgPath) ? ModList.ParseModsCfg(File.ReadAllLines(modsCfgPath)).ToList() : [];
-        var meta = new Meta(source, dataDir, string.Join(", ", order.Entries.Select(e => e.Name)), [.. order.Entries.Select(e => e.Name).Where(n => !LoadOrder.BaseFiles.Contains(n))], modsCfg, order.Issues.Select(i => $"{i.File}: {i.Message}").ToList());
+        var meta = new Meta(source, dataDir, string.Join(", ", order.Entries.Select(e => e.Name)), [.. order.Entries.Select(e => e.Name).Where(n => !LoadOrder.BaseFiles.Contains(n) && !IsSeparator(n))], modsCfg, order.Issues.Select(i => $"{i.File}: {i.Message}").ToList());
         var counts = new List<string>();
         foreach (var (name, rows) in files)
         {
@@ -220,6 +220,9 @@ static partial class WikiExport
         Console.WriteLine($"wiki-export: data {dataDir}; {order.Entries.Count} data files; mods beyond the base game: {(meta.Mods.Count == 0 ? "none (clean install)" : string.Join(", ", meta.Mods))}; wrote {outDir}");
         return 0;
     }
+
+    /// <summary>The divider lines of a mod manager's load order ("[1]----------[UI]----------.mod") are entries of mods.cfg but no mod.</summary>
+    static bool IsSeparator(string name) => System.Text.RegularExpressions.Regex.IsMatch(name, @"^\[\d+\]-+\[.*\]-+\.mod$");
 
     /// <summary>What every generated file says it was made from: the data folder, the load order, and the mods beyond the base game's four data files (<c>mods.cfg</c> applied).</summary>
     sealed record Meta(string Source, string DataDir, string LoadOrder, List<string> Mods, List<string> ModsCfg, List<string> Issues);
