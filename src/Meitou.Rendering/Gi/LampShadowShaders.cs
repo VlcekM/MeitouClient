@@ -109,7 +109,9 @@ static class LampShadowShaders
             vec3 n = giOctDir(vec2(surface.xy) / 65535.0 * 2.0 - 1.0);
             vec3 diffuse = vec3(0.0), specular = vec3(0.0);
             lampLight(world, n, normalize(uGiEye - world), 1.0, 1.0, diffuse, specular);
-            if (picked == 0) return vec4(0.0);
+            // No lamp lights it (turned away from them all, or out of their reach): no receiver either. Read as unblocked, a caster's side turned from the lamp lit the
+            // shadowed ground at its foot through the penumbra filter, as the sun's did (PenumbraFilter).
+            if (picked == 0) return vec4(0.0, 0.0, 0.0, -1.0);
             // Off the surface's plane by what its depth and the traced mesh can be wrong by: a floor, and two pixels' width there.
             vec3 from = world - uOrigin + lampPlane(px, world, n) * max(LAMP_MIN_BIAS, 2.0 * z * uFootprint);
             vec3 lost = vec3(0.0);
