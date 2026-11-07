@@ -568,7 +568,7 @@ public sealed unsafe class WaterRenderer : IDisposable
         uniform vec3 uGlintColour;
         uniform sampler2D uColourMap;
         uniform sampler2D uFlowMap;
-        uniform sampler2D uFoamMap;     // WaterFoam: a lace of bubble rims in R
+        uniform sampler2D uFoamMap;     // WaterFoam: the caustics' lace in R, patches in G, bubbles in B, the froth in A
         uniform sampler2D uNormalMap;
         uniform sampler2D uRainMap;
         uniform sampler2D uParamsA;
@@ -629,7 +629,7 @@ public sealed unsafe class WaterRenderer : IDisposable
             return sum;
         }
 
-        // The foam's two blotch scales (R: lace, G: noise) stretched along the flow into streaks and carried with it, cross-faded the same way.
+        // The foam's two blotch scales (x: froth, y: noise) stretched along the flow into streaks and carried with it, cross-faded the same way.
         void riverFoam(vec2 p, vec2 flow, float speed, vec2 dpx, vec2 dpy, out vec2 a1, out vec2 a2)
         {
             a1 = vec2(0.0); a2 = vec2(0.0);
@@ -640,8 +640,8 @@ public sealed unsafe class WaterRenderer : IDisposable
                 float t = fract(uTime * 240.0 + 0.5 * float(i));
                 float w = 1.0 - abs(t * 2.0 - 1.0);
                 vec2 q = frame * (p - flow * speed * 2.5 * (t - 0.5));
-                a1 += textureGrad(uFoamMap, q * s1, frame * dpx * s1, frame * dpy * s1).rg * w;
-                a2 += textureGrad(uFoamMap, q * s2 + 0.37, frame * dpx * s2, frame * dpy * s2).rg * w;
+                a1 += textureGrad(uFoamMap, q * s1, frame * dpx * s1, frame * dpy * s1).ag * w;
+                a2 += textureGrad(uFoamMap, q * s2 + 0.37, frame * dpx * s2, frame * dpy * s2).ag * w;
             }
         }
 
@@ -955,11 +955,11 @@ public sealed unsafe class WaterRenderer : IDisposable
                 clump = textureGrad(uFoamMap, q0 * 0.0037 + vec2(0.21, 0.63), dpx * 0.0037, dpy * 0.0037).g;
                 if (fade > 0.0)
                 {
-                    b1 = textureGrad(uFoamMap, q * 0.009, gx * 0.009, gy * 0.009).rg;
-                    b2 = textureGrad(uFoamMap, q * 0.027 + 0.37, gx * 0.027, gy * 0.027).rg;
+                    b1 = textureGrad(uFoamMap, q * 0.009, gx * 0.009, gy * 0.009).ag;
+                    b2 = textureGrad(uFoamMap, q * 0.027 + 0.37, gx * 0.027, gy * 0.027).ag;
                     mat2 turnA = mat2(0.8, 0.6, -0.6, 0.8), turnB = mat2(-0.28, 0.96, -0.96, -0.28);
-                    fine = textureGrad(uFoamMap, turnA * q * 0.027 + 0.61, turnA * gx * 0.027, turnA * gy * 0.027).r * 0.5
-                         + textureGrad(uFoamMap, turnB * q * 0.045 + 0.23, turnB * gx * 0.045, turnB * gy * 0.045).r * 0.5;
+                    fine = textureGrad(uFoamMap, turnA * q * 0.027 + 0.61, turnA * gx * 0.027, turnA * gy * 0.027).a * 0.5
+                         + textureGrad(uFoamMap, turnB * q * 0.045 + 0.23, turnB * gx * 0.045, turnB * gy * 0.045).a * 0.5;
                 }
                 float gw = s.g + (clump - 0.5) * 0.22, dw = s.dist + (clump - 0.5) * 36.0;
                 float crestAt = dw - s.len * (gw - 0.5);   // the distance of the crest this point trails (or leads)
@@ -988,11 +988,13 @@ public sealed unsafe class WaterRenderer : IDisposable
             // Foam wears away as it ages: fresh at the break, and the further the wave has run in since (travel, from the break point to the
             // waterline) and the further behind its crest, the more of it is lace with holes (on the swash too: the sheet thins as it recedes).
             float age = clamp(ageS + (0.5 - clump) * 0.5, 0.0, 1.0);
-            vec2 drift = direction * speed * uTime * 0.2;
+            // Carried by the current; on still water it still wanders a little (half a unit, over about a minute), so standing foam is never frozen.
+            vec2 wander = fract(uTime * vec2(10.5, 7.93)) * 6.2832;   // phases of 57 and 76 s (uTime counts 600 s), kept small so they stay precise
+            vec2 drift = direction * speed * uTime * 0.2 + vec2(sin(wander.x), cos(wander.y)) * (0.5 * 0.009);
             vec2 driftDx = dFdx(drift), driftDy = dFdy(drift);
-            // Blotches (the multi-octave noise at two scales) with bubble rims in them; the more foam, the lower the threshold. Up close the
-            // foam shows its bubbles (B: fine cell walls), lit on their walls and darker inside.
-            vec2 a1 = texture(uFoamMap, p * 0.009 + drift).rg, a2 = texture(uFoamMap, p * 0.027 - drift * 1.3).rg;
+            // Blotches (the multi-octave noise at two scales) with the froth's holes in them; the more foam, the lower the threshold. Up close the
+            // foam shows its bubbles (B: rings of 0.13 to 0.4 units), lit on their walls and darker inside.
+            vec2 a1 = texture(uFoamMap, p * 0.009 + drift).ag, a2 = texture(uFoamMap, p * 0.027 - drift * 1.3).ag;
             if (rw > 0.01)
             {
                 // A river's foam: streaks along the current, a thin trace everywhere in it and a white rush in its rapids.
@@ -1011,14 +1013,14 @@ public sealed unsafe class WaterRenderer : IDisposable
             }
             #endif
             // Every foam pattern is in the world at fixed scales, so zooming never changes its size or shape. Detail finer than a pixel is filtered (the
-            // texture's mips), and the finest octave, the bubbles' walls (0.17 units), is faded out by the pixel's footprint rather than the eye's distance.
+            // texture's mips), and the finest octave, the bubbles' walls, is faded out by the pixel's footprint rather than the eye's distance.
             float footprint = max(length(dpx), length(dpy));
             float bubbleShow = 1.0 - smoothstep(0.12, 0.3, footprint);
             float bubbles = 0.0;
             if (bubbleShow > 0.0)
                 bubbles = textureGrad(uFoamMap, p * 0.06 - drift * 2.0, dpx * 0.06 - driftDx * 2.0, dpy * 0.06 - driftDy * 2.0).b * bubbleShow;
-            // The blotches and the finer lace only (rims of 0.8 to 1.7 units); the coarser lace (cells of 2.5 to 5 units) read as bricks and cracks up close.
-            float pattern = (a1.g * 0.6 + a2.g * 0.4) * 0.8 + a2.r * 0.3 + bubbles * 0.08;
+            // The blotches and the froth at two scales (holes of 0.4 to 9 units): organic clusters, holes and dots as the threshold rises, never a line network.
+            float pattern = (a1.g * 0.6 + a2.g * 0.4) * 0.8 + (a1.r * 0.4 + a2.r * 0.6) * 0.3 + bubbles * 0.08;
             // Dark and coloured water foams less (a thinner, more broken lace), and the foam takes its colour: white only on clear water, a dirty
             // grey-brown on black water, rust on red.
             amount *= mix(0.7, 1.0, clean);
@@ -1027,9 +1029,8 @@ public sealed unsafe class WaterRenderer : IDisposable
             float foam = smoothstep(0.95 - amount, 1.25 - amount, pattern);
             if (surfAmount > 0.0)
             {
-                // Where the foam lies: clumps and blotches of noise in the wave's frame, the holes opening as it ages (its threshold rises). Its texture: two finer
-                // networks of bubble rims, turned and scaled against each other so neither reads as cells (one network, large, read as bricks and cracks up close),
-                // which only shade it, so even the densest whitewater is not a flat white sheet.
+                // Where the foam lies: clumps and blotches of noise in the wave's frame, the holes opening as it ages (its threshold rises). Its texture: the froth at two
+                // finer scales, turned against each other, which only shades it, so even the densest whitewater is not a flat white sheet.
                 // Streaks along the waves' way: the blotch noise stretched five to one along it.
                 vec2 along = s.prop, across = vec2(-s.prop.y, s.prop.x);
                 vec2 sk = vec2(0.006, 0.03);
@@ -1039,7 +1040,7 @@ public sealed unsafe class WaterRenderer : IDisposable
                 float wear = 0.2 + age * 0.4;   // even fresh whitewater has holes
                 float surf = surfAmount * mix(0.7, 1.0, clean);
                 // The rims also fray its edges, which stay crisp (a narrow threshold) rather than soft blobs.
-                // The bubble rims at fixed world scales (cells of 0.5 to 1.7 units, two networks turned against each other); far away the mips average them.
+                // The froth at fixed world scales (holes of 0.3 to 3.5 units, two scales turned against each other); far away the mips average it.
                 float rims = fine;
                 float cover = smoothstep(0.95 - surf + wear, 1.03 - surf + wear + 0.05 * age, lace + (rims - 0.3) * 0.35);
                 // Inside, the foam's density follows its texture (bubbles, streaks), so even dense whitewater is never a flat white sheet.
