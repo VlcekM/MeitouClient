@@ -583,7 +583,7 @@ Meitou: [ground items](../simulation.md#items-and-eating).
   - Meitou (`NestFurniture`, `PopulationCamps.cs`): all of it when a nest's zone activates, removed when it unloads (NPCs in its cages let out); a
     `spawn in town centre` town's when it is made, kept (again when its TOWN record changed). Its own rolls keyed by the camp's place; the navmesh query
     is the walkability at the centre's height within 60. The items are loose ground items, laid once per camp in this world and only in a zone the
-    loaded save has no file of. A nest's cage of a kidnapper's faction is always a candidate, and a standing nest is a town for the fogman worship finder
+    loaded save has no file of. Its pieces are fixtures: cages, locked containers and beds (a bandit camp's Camp Beds, #362). A nest's cage of a kidnapper's faction is always a candidate, and a standing nest is a town for the fogman worship finder
     (nest markers skipped). Not modelled: the dedupe of a town's saved pieces (Meitou makes them again, not saving them).
 - **Homeless squads** (area tick `FUN_1408f9240`, every 2 s, per island): the island's load (sum over its loaded sectors of intact +
   0.5 × not-intact squads, [counts](#off-screen-world) above; clamped to [0, 2] for a sector with its own town or the town flag `FUN_1408f62e0` / +0x30) is compared with `FUN_1408f5ca0`, the sum of P × `homeless spawn

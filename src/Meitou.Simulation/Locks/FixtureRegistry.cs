@@ -297,13 +297,7 @@ public sealed partial class FixtureRegistry
             if (made.Lock is { } l) l.OwnerBroken = world.Machines.Find(site.Id)?.Broken == true;
             list.Add(made);
         }
-        if (bed is { } b)
-            list.Add(new Fixture
-            {
-                Id = site.Id + "@bed0", Building = site.Id, Kind = FixtureKind.Bed, Site = -1, Owner = site.Owner, Position = site.Position, Yaw = yaw,
-                Marker = Meitou.Data.World.WorldObjectLayout.PositionMarker(data.Db, record, site.Position, site.Rotation),
-                UseRange = 15, RecordId = record.StringId, HostRecordId = record.StringId, Bed = b,
-            });
+        if (bed is { } b) list.Add(BedOf(data.Db, site.Id, record, -1, site.Owner, site.Position, site.Rotation, b));
         byBuilding[site.Id] = list;
         buildings.Add(site.Id);
         foreach (var f in list) { all.Add(f); byId[f.Id] = f; }
@@ -316,24 +310,40 @@ public sealed partial class FixtureRegistry
     }
 
     /// <summary>
-    /// Registers a camp building's cage or lock (<see cref="NestBuildings"/>: a Prisoner Pole of a fog nest), owned by the camp's faction: a nest's is marked
+    /// Registers a camp building's cage, lock or bed (<see cref="NestBuildings"/>: a Prisoner Pole of a fog nest, a bandit camp's bedroll, #362), owned by the camp's faction: a nest's is marked
     /// (<see cref="Fixture.Nest"/>), a town's has the town's <paramref name="site"/>. Then binds the held characters whose <see cref="CharacterCold.InWhat"/> names it. A piece
-    /// with neither is left out.
+    /// with none is left out.
     /// </summary>
     public void RegisterNestBuilding(World world, PopulationData data, NestPiece piece, int owner, int site = -1)
     {
-        if (byBuilding.ContainsKey(piece.Id) || data.Db.Find(piece.Record) is not { } record || Lockable(data.Db, record) is not { } kind) return;
-        var faction = owner >= 0 && owner < data.Factions.Count ? data.Factions[owner] : null;
-        var made = Make(world, data.Db, kind, piece.Id, piece.Id, record, site, owner, faction, piece.Position, TownBuildings.YawOf(piece.Rotation), host: record.StringId);
-        made.Nest = site < 0;
-        byBuilding[piece.Id] = [made];
+        if (byBuilding.ContainsKey(piece.Id) || data.Db.Find(piece.Record) is not { } record) return;
+        var kind = Lockable(data.Db, record);
+        var bed = BedDataOf(data.Db, record);
+        if (kind is null && bed is null) return;
+        var list = new List<Fixture>();
+        if (kind is { } k)
+        {
+            var faction = owner >= 0 && owner < data.Factions.Count ? data.Factions[owner] : null;
+            var made = Make(world, data.Db, k, piece.Id, piece.Id, record, site, owner, faction, piece.Position, TownBuildings.YawOf(piece.Rotation), host: record.StringId);
+            made.Nest = site < 0;
+            list.Add(made);
+        }
+        if (bed is { } b) list.Add(BedOf(data.Db, piece.Id, record, site, owner, piece.Position, piece.Rotation, b));
+        byBuilding[piece.Id] = list;
         buildings.Add(piece.Id);
-        all.Add(made);
-        byId[made.Id] = made;
+        foreach (var f in list) { all.Add(f); byId[f.Id] = f; }
         containerSpots = null;
-        cageList = null; publishedCages = null;
+        cageList = null; publishedCages = null; bedSpots = null; bedList = null;
         Bind(world);
     }
+
+    /// <summary>The bed of a building standing on its own (placed by the player or by a camp): lain in at its position marker, within 15.</summary>
+    static Fixture BedOf(GameDatabase db, string id, GameRecord record, int site, int owner, Vector3 at, Quaternion rotation, BedData bed) => new()
+    {
+        Id = id + "@bed0", Building = id, Kind = FixtureKind.Bed, Site = site, Owner = owner, Position = at, Yaw = TownBuildings.YawOf(rotation),
+        Marker = Meitou.Data.World.WorldObjectLayout.PositionMarker(db, record, at, rotation),
+        UseRange = 15, RecordId = record.StringId, HostRecordId = record.StringId, Bed = bed,
+    };
 
     /// <summary>A nest's buildings leave the world: whoever its cages hold is let out first.</summary>
     public void UnregisterNestBuildings(World world, IEnumerable<NestPiece> pieces)
