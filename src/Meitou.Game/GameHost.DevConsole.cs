@@ -164,7 +164,10 @@ sealed partial class GameHost
         c.SetComplete("equip", (i, typed) => i == 0 ? ConsoleMatch(player.ControlCarriedItemNames(), typed) : []);
         c.SetComplete("pickup", (i, typed) => i == 0 ? Starting(player.ControlGroundItemKeys(), typed) : []);
         c.SetComplete("door", (i, typed) => i == 0 ? Starting(["nearest"], typed) : []);
-        foreach (var name in new[] { "godmode", "guard", "tpmap", "explode-click" }) c.SetComplete(name, (i, typed) => i == 0 ? Starting(["on", "off"], typed) : []);
+        foreach (var name in new[] { "godmode", "guard", "tpmap" }) c.SetComplete(name, (i, typed) => i == 0 ? Starting(["on", "off"], typed) : []);
+        IEnumerable<string> Levels(string typed) => Starting(["1", "2", "3", "4", "5", "underkill", "light", "normal", "overkill", "ridiculous"], typed);
+        c.SetComplete("explode-click", (i, typed) => i == 0 ? [.. Starting(["on", "off"], typed), .. Levels(typed)] : c.CompletionArgs is [.., "--level" or "--preset"] ? Levels(typed) : i == 1 && c.CompletionArgs is ["on"] ? Levels(typed) : []);
+        c.SetComplete("explode", (i, typed) => i == 0 || c.CompletionArgs is [.., "--level" or "--preset"] ? Levels(typed) : []);
     }
 
     void RegisterConsoleCommands()
@@ -265,13 +268,13 @@ sealed partial class GameHost
             Report(con, DebugApply(DebugRow.Guard, string.Join(' ', args)));
         });
 
-        Add("explode", "explode [<x> <z>] [--id <c:slot.gen>] [--radius <m>=40] [--force <n>=100] [--damage <n>=40] [--squad]", "debug blast (default centre: the character the info panel shows if it is not your squad, else the selected, else first, squad member; --id centres on a given character): every living character within the radius, except your squad unless --squad, takes cut damage falling off linearly with distance (full at the centre, 35% at the radius edge), is knocked out for 30 s if it survives, and is thrown away from the centre (force = speed in world units/s at the centre, falling off the same way). The result line (hit by distance band / knocked out / killed, or nobody in range) goes to the message log and a blood ring marks the centre (Blood setting on). Runs in the simulation, so not while the game is paused", (args, con) =>
+        Add("explode", "explode [<x> <z> | <level 1-5>] [--level <1-5|name>] [--id <c:slot.gen>] [--radius <m>=40] [--force <n>=100] [--damage <n>=40] [--squad]", "debug blast (default centre: the character the info panel shows if it is not your squad, else the selected, else first, squad member; --id centres on a given character): every living character within the radius, except your squad unless --squad, takes cut damage falling off linearly with distance (full at the centre, 35% at the radius edge), is knocked out for 30 s if it survives, and is thrown away from the centre (force = speed in world units/s at the centre, falling off the same way). The result line (hit by distance band / knocked out / killed, or nobody in range) goes to the message log and a blood ring marks the centre (Blood setting on). Runs in the simulation, so not while the game is paused", (args, con) =>
         {
             Report(con, DebugApply(DebugRow.Explode, string.Join(' ', args)));
             if (!debugFailed) explodeAsker = con;   // the result line (made in the next tick) is printed here too
         });
 
-        Add("explode-click", "explode-click [on|off] [--radius <m>=80] [--force <n>=160] [--damage <n>=100] [--squad]", "the F10 switch Explode on click: while on, a left click on the ground in the world (not on the interface, the F10 menu, the console or the map) explodes the point under the cursor like explode does (flags set the blast used for each click), and the click selects and orders nothing; no on/off argument toggles (flags alone turn it on); stays on until switched off or another game loads. Runs in the simulation, so not while the game is paused", (args, con) =>
+        Add("explode-click", "explode-click [on|off] [<level 1-5>] [--level <1-5|name>] [--radius <m>=80] [--force <n>=160] [--damage <n>=100] [--squad]", "the F10 switch Explode on click: while on, a left click on the ground in the world (not on the interface, the F10 menu, the console or the map) explodes the point under the cursor like explode does (flags set the blast used for each click), and the click selects and orders nothing; no on/off argument toggles (flags alone turn it on); stays on until switched off or another game loads. Runs in the simulation, so not while the game is paused", (args, con) =>
         {
             Report(con, DebugApply(DebugRow.ExplodeClick, string.Join(' ', args)));
         });

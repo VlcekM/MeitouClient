@@ -37,12 +37,15 @@ public sealed partial class CombatSystem
     {
         if (vc.Medical is not { Incapacitated: true } || force < 0.5f) return false;
         direction = direction.LengthSquared() > 1e-6f ? Vector2.Normalize(direction) : Vector2.UnitX;
-        float speed = force;
+        float speed = MathF.Min(force, BlastMaxSpeed);
         vc.Launch = new Vector3(direction.X, BlastLift, direction.Y) * speed;
         return true;
     }
 
     /// <summary>The explosion's lift, as a share of the throw speed (gravity is 98.1 units/s², so 100 out and 15 up at the centre flies about 0.3 s, about 30 units before the ground slows it; flight range is 2 x lift x speed² / 98.1).</summary>
+    /// <summary>Largest launch speed (world units/s) a blast gives, so a huge --force cannot break the ragdoll physics.</summary>
+    internal const float BlastMaxSpeed = 400;
+
     const float BlastLift = 0.15f;
 
     /// <summary>The struck part's <c>bone name</c>, else its <c>bone name 2</c>; null for no part or neither.</summary>

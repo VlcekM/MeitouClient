@@ -15,12 +15,12 @@ namespace Meitou.Game;
 /// </summary>
 sealed partial class GameHost
 {
-    enum DebugRow { Teleport, SpawnNpc, GiveItem, Money, Heal, HealFully, MaxSkills, Damage, ForceHits, DamageMultiplier, UnlockResearch, ClearBounties, Godmode, Guard, Explode, ExplodeClick }
+    enum DebugRow { Teleport, SpawnNpc, GiveItem, Money, Heal, HealFully, MaxSkills, Damage, ForceHits, DamageMultiplier, UnlockResearch, ClearBounties, Godmode, Guard, ExplodeLevel, Explode, ExplodeClick }
 
     static readonly string[] DebugLabels =
     [
         "Teleport selected here", "Spawn NPC (hostile)", "Give item (name x5 q80)", "Money (+/- cats)", "Heal", "  Heal fully (restore limbs)", "Max out skills", "Damage (cut)",
-        "Force hits to", "Damage multiplier", "Unlock all research", "Clear bounties", "Godmode (all players)", "Guard (kill + heal in radius)", "Explode at target", "Explode on click",
+        "Force hits to", "Damage multiplier", "Unlock all research", "Clear bounties", "Godmode (all players)", "Guard (kill + heal in radius)", "Explosion level", "Explode at target", "Explode on click",
     ];
 
     /// <summary>The cheat rows' sections, in the order shown (and walked by Up / Down).</summary>
@@ -28,7 +28,7 @@ sealed partial class GameHost
     [
         ("Character", [DebugRow.Teleport, DebugRow.Heal, DebugRow.HealFully, DebugRow.MaxSkills, DebugRow.Godmode, DebugRow.ClearBounties]),
         ("World / Spawn", [DebugRow.SpawnNpc, DebugRow.GiveItem, DebugRow.Money, DebugRow.UnlockResearch]),
-        ("Combat", [DebugRow.Damage, DebugRow.ForceHits, DebugRow.DamageMultiplier, DebugRow.Guard, DebugRow.Explode, DebugRow.ExplodeClick]),
+        ("Combat", [DebugRow.Damage, DebugRow.ForceHits, DebugRow.DamageMultiplier, DebugRow.Guard, DebugRow.ExplodeLevel, DebugRow.Explode, DebugRow.ExplodeClick]),
     ];
 
     /// <summary>The menu's rows in display order: (section title when the row starts a section, row number: a cheat, a mod row, or <see cref="DebugRowCount"/> + the tool's index).</summary>
@@ -147,17 +147,17 @@ sealed partial class GameHost
     /// <summary>The "Explode on click" switch (F10 Combat row, console <c>explode-click</c>): the world it was switched on in and the explode flags used for each click.</summary>
     World? explodeClickWorld;
     string explodeClickArgs = "";
-    /// <summary>What a click explodes with unless a flag says otherwise: twice the radius and 1.6 times the force of a plain <c>explode</c> (40, 100) and 2.5 times its damage (40).</summary>
-    const string ExplodeClickDefaults = "--radius 80 --force 160 --damage 100";
+    /// <summary>The explosion level (1 to 5, F10 "Explosion level" row) used by <c>explode</c>, the F10 row and each click unless a <c>--level</c> says otherwise; 3 is normal. A click's normal level is larger than a plain explode's (<see cref="ExplodeLevels.Values"/>).</summary>
+    int explodeLevel = ExplodeLevels.Normal;
     bool ExplodeClickOn => explodeClickWorld is not null && ReferenceEquals(explodeClickWorld, session.World);
 
     /// <summary>
-    /// <paramref name="field"/> is empty (toggle) or <c>[on|off] [--radius &lt;m&gt;] [--force &lt;n&gt;] [--damage &lt;n&gt;] [--squad]</c>. While on, a left click on the ground blows it up (<see cref="DebugExplodeApply"/>)
+    /// <paramref name="field"/> is empty (toggle) or <c>[on|off] [&lt;level 1-5&gt;] [--level &lt;1-5|name&gt;] [--radius &lt;m&gt;] [--force &lt;n&gt;] [--damage &lt;n&gt;] [--squad]</c>. While on, a left click on the ground blows it up (<see cref="DebugExplodeApply"/>)
     /// and the click is consumed; the switch is the world's, so it is off after another game loads.
     /// </summary>
     string SetExplodeClick(string field)
     {
-        const string usage = "usage: explode-click [on|off] [--radius <m>] [--force <n>] [--damage <n>] [--squad]";
+        const string usage = "usage: explode-click [on|off] [<level 1-5>] [--level <1-5|name>] [--radius <m>] [--force <n>] [--damage <n>] [--squad]";
         bool? on = null;
         var kept = new List<string>();
         var words = field.Split(' ', StringSplitOptions.RemoveEmptyEntries);
@@ -168,6 +168,8 @@ sealed partial class GameHost
             if (w is "on" or "1" or "true") on = true;
             else if (w is "off" or "0" or "false") on = false;
             else if (w == "--squad") kept.Add("--squad");
+            else if (ExplodeLevels.TryParse(w, out int level) && (w.Length > 1 || i == 0 || words[i - 1].ToLowerInvariant() is not ("--radius" or "--force" or "--damage"))) { kept.Add("--level"); kept.Add(level.ToString(CultureInfo.InvariantCulture)); }
+            else if (w is "--level" or "--preset" && i + 1 < words.Length && ExplodeLevels.TryParse(words[i + 1], out level)) { kept.Add("--level"); kept.Add(level.ToString(CultureInfo.InvariantCulture)); i++; }
             else if (w is "--radius" or "--force" or "--damage" && i + 1 < words.Length && float.TryParse(words[i + 1], NumberStyles.Float, CultureInfo.InvariantCulture, out value)
                 && value >= (w == "--radius" ? 0.01f : 0) && value <= (w == "--radius" ? 500 : w == "--force" ? 1000 : 10000))
             { kept.Add(w); kept.Add(words[++i]); }
@@ -192,14 +194,24 @@ sealed partial class GameHost
         if (!ExplodeClickOn) return false;
         if (debugMenuOpen || ConsoleOpen) return false;   // clicks on the F10 menu and the console are theirs
         if (ground is not { } at) return true;
-        debugStatus = DebugExplodeApply(session.World, string.Create(CultureInfo.InvariantCulture, $"{at.X} {at.Z} {ExplodeClickDefaults} {explodeClickArgs}"), session.World.Tick);
+        debugStatus = DebugExplodeApply(session.World, string.Create(CultureInfo.InvariantCulture, $"{at.X} {at.Z} {explodeClickArgs}"), session.World.Tick, click: true);
         return true;
+    }
+
+    /// <summary>The level each click uses: the one in the switch's flags, else the F10 row's.</summary>
+    int ExplodeClickLevel()
+    {
+        var words = explodeClickArgs.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        int at = Array.LastIndexOf(words, "--level");
+        return at >= 0 && at + 1 < words.Length && ExplodeLevels.TryParse(words[at + 1], out int level) ? level : explodeLevel;
     }
 
     /// <summary>The hint while the switch is on.</summary>
     void DrawExplodeClickHint(DebugOverlay o, int width, int height)
     {
-        string text = $"explode-click ON: left click = explode{(explodeClickArgs.Length > 0 ? " (defaults r=80 force 160 dmg 100, then " + explodeClickArgs + ")" : " (r=80, force 160, dmg 100)")}. Switch off: explode-click off"
+        int level = ExplodeClickLevel();
+        var v = ExplodeLevels.Values(level, true);
+        string text = $"explode-click ON: left click = explode, {ExplodeLevels.Label(level)} (r={v.Radius:0.#}, force {v.Force:0.#}, dmg {v.Damage:0.#}{(explodeClickArgs.Length > 0 ? ", then " + explodeClickArgs : "")}). Switch off: explode-click off"
             + (session.Simulation.IsPaused ? "   PAUSED: unpause, the blast runs in the next tick" : "");
         float w = text.Length * o.CharWidth + 20, x = (width - w) / 2;
         o.Rect(x, 8, x + w, 8 + o.LineHeight + 12, DebugOverlay.PanelColour);
@@ -224,7 +236,7 @@ sealed partial class GameHost
     bool DebugIsTool(int row) => row >= DebugRowCount;
 
     bool DebugHasField(int row) => !DebugIsTool(row) && (row >= DebugLabels.Length ? ModDebugRows[row - DebugLabels.Length].HasField
-        : (DebugRow)row is not (DebugRow.Teleport or DebugRow.Heal or DebugRow.HealFully or DebugRow.MaxSkills or DebugRow.ForceHits or DebugRow.UnlockResearch or DebugRow.ClearBounties or DebugRow.Godmode or DebugRow.Guard or DebugRow.Explode or DebugRow.ExplodeClick));
+        : (DebugRow)row is not (DebugRow.Teleport or DebugRow.Heal or DebugRow.HealFully or DebugRow.MaxSkills or DebugRow.ForceHits or DebugRow.UnlockResearch or DebugRow.ClearBounties or DebugRow.Godmode or DebugRow.Guard or DebugRow.ExplodeLevel or DebugRow.Explode or DebugRow.ExplodeClick));
 
     /// <summary>The rows that open the body part list.</summary>
     bool DebugPicksPart(int row) => !DebugIsTool(row) && (DebugRow)row is DebugRow.Damage or DebugRow.ForceHits or DebugRow.ClearBounties;
@@ -255,6 +267,11 @@ sealed partial class GameHost
         }
         switch (key)
         {
+            case EngineKey.Enter or EngineKey.Left or EngineKey.Right when debugRow < DebugLabels.Length && (DebugRow)debugRow == DebugRow.ExplodeLevel:
+                explodeLevel = key == EngineKey.Left ? Math.Max(1, explodeLevel - 1) : key == EngineKey.Right ? Math.Min(5, explodeLevel + 1) : explodeLevel % 5 + 1;
+                var shown = ExplodeLevels.Values(explodeLevel, false);
+                debugStatus = $"explosion {ExplodeLevels.Label(explodeLevel)}: r={shown.Radius:0.#}, force {shown.Force:0.#}, dmg {shown.Damage:0.#} (click: r={ExplodeLevels.Values(explodeLevel, true).Radius:0.#}, force {ExplodeLevels.Values(explodeLevel, true).Force:0.#}, dmg {ExplodeLevels.Values(explodeLevel, true).Damage:0.#})";
+                break;
             case EngineKey.Enter or EngineKey.Right when DebugPicksPart(debugRow):
                 debugParts = (DebugRow)debugRow == DebugRow.ClearBounties ? DebugBountyList() : DebugPartList();
                 if (debugParts is not null) debugPart = Math.Min(debugPart, debugParts.Length - 1);
@@ -358,18 +375,32 @@ sealed partial class GameHost
     /// <summary>Largest explode radius in metres (the only cap: the blast scans every living character in the world).</summary>
     const float ExplodeMaxRadius = 500;
 
-    string DebugExplodeApply(World world, string field, long tick)
+    string DebugExplodeApply(World world, string field, long tick, bool click = false)
     {
-        const string usage = "usage: explode [<x> <z>] [--id <c:slot.gen>] [--radius <m>] [--force <n>] [--damage <n>] [--squad]";
-        float radius = 40, force = 100, damage = 40;
+        const string usage = "usage: explode [<x> <z>|<level 1-5>] [--level <1-5|name>] [--id <c:slot.gen>] [--radius <m>] [--force <n>] [--damage <n>] [--squad]";
+        int level = explodeLevel;
+        (float radius, float force, float damage) = ExplodeLevels.Values(level, click);
         bool squad = false;
         var numbers = new List<float>();
         CharacterId? byId = null;
         var words = field.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        // A single bare integer 1-5 is a level ("explode 4"); two numbers are x z. A flag's value is not a bare number.
+        int bare = 0;
+        for (int i = 0; i < words.Length; i++)
+        {
+            if (words[i].StartsWith("--", StringComparison.Ordinal)) { if (words[i].ToLowerInvariant() is not "--squad") i++; }
+            else if (float.TryParse(words[i], NumberStyles.Float, CultureInfo.InvariantCulture, out _)) bare++;
+        }
         for (int i = 0; i < words.Length; i++)
         {
             float value;
             if (words[i].Equals("--squad", StringComparison.OrdinalIgnoreCase)) squad = true;
+            else if (words[i].Equals("--level", StringComparison.OrdinalIgnoreCase) || words[i].Equals("--preset", StringComparison.OrdinalIgnoreCase))
+            {
+                if (i + 1 >= words.Length || !ExplodeLevels.TryParse(words[++i], out level)) return DebugFail("explode: --level needs 1 to 5 or underkill, light, normal, overkill, ridiculous");
+                (radius, force, damage) = ExplodeLevels.Values(level, click);
+            }
+            else if (bare == 1 && words[i].Length == 1 && ExplodeLevels.TryParse(words[i], out level)) (radius, force, damage) = ExplodeLevels.Values(level, click);
             else if (words[i].Equals("--id", StringComparison.OrdinalIgnoreCase))
             {
                 if (i + 1 >= words.Length || !PlayerInterface.TryParseCharacter(words[++i], out var parsed)) return DebugFail("explode: --id needs a character id (c:<slot>.<gen>)");
@@ -406,8 +437,8 @@ sealed partial class GameHost
             at = new Vector2(centre.Position.X, centre.Position.Z);
             onName = centre.Name;
         }
-        world.Commands.Enqueue(new DebugExplode(at, radius, force, damage, squad, onName) { Tick = tick });
-        return $"explode{(onName.Length > 0 ? " on " + onName : $" at {at.X:0}, {at.Y:0}")}: r={radius:0.#}, force {force:0.#}, dmg {damage:0.#}{(squad ? ", squad" : "")}; result in the log, unpause first";
+        world.Commands.Enqueue(new DebugExplode(at, radius, force, damage, squad, onName, level) { Tick = tick });
+        return $"explode{(onName.Length > 0 ? " on " + onName : $" at {at.X:0}, {at.Y:0}")}: {ExplodeLevels.Label(level)}, r={radius:0.#}, force {force:0.#}, dmg {damage:0.#}{(squad ? ", squad" : "")}; result in the log, unpause first";
     }
 
     /// <summary>
@@ -571,6 +602,7 @@ sealed partial class GameHost
                         rowOn = multiplier != 1;
                         break;
                     case DebugRow.ForceHits: value = popData?.BodyOptions.ForcedHitPart?.Name ?? "off"; rowOn = popData?.BodyOptions.ForcedHitPart is not null; break;
+                    case DebugRow.ExplodeLevel: value = $"{explodeLevel} {ExplodeLevels.Names[explodeLevel - 1]}"; rowOn = explodeLevel != ExplodeLevels.Normal; break;
                     case DebugRow.Godmode: value = OnOff(world.Player.Godmode); rowOn = world.Player.Godmode; break;
                     case DebugRow.ExplodeClick: rowOn = ExplodeClickOn; value = ExplodeClickOn ? $"on{(explodeClickArgs.Length > 0 ? ", " + explodeClickArgs : "")}" : "off"; break;
                     case DebugRow.Guard: rowOn = world.Player.Guard; value = world.Player.Guard ? $"on, {world.Player.GuardRadius:0.#} m{(world.Player.GuardAnimals ? ", animals" : "")}" : "off"; break;

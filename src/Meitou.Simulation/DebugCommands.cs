@@ -39,7 +39,36 @@ public sealed record DebugGuard(bool On, float Radius = 30, bool Animals = false
 /// A debug explosion at <see cref="At"/> (X, Z): every living character within <see cref="Radius"/> metres (not the player's own unless <see cref="Squad"/>) takes <see cref="Damage"/> cut damage falling off
 /// linearly with the distance (to 0.35 at the radius edge), is knocked out, and is thrown away from the centre with <see cref="Force"/> world units/s (also falling off), by the combat system's knock-down push.
 /// </summary>
-public sealed record DebugExplode(Vector2 At, float Radius = 40, float Force = 100, float Damage = 40, bool Squad = false, string On = "") : DebugCommand;
+public sealed record DebugExplode(Vector2 At, float Radius = 40, float Force = 100, float Damage = 40, bool Squad = false, string On = "", int Level = ExplodeLevels.Normal) : DebugCommand;
+
+/// <summary>The explosion's five strength levels (<c>explode --level</c>, F10 "Explosion level"): radius m / force / damage per level; the level only sets those three numbers, flags after it override them.</summary>
+public static class ExplodeLevels
+{
+    public const int Normal = 3;
+    public static readonly string[] Names = ["underkill", "light", "normal", "overkill", "ridiculous"];
+
+    /// <summary>The blast of a level; <paramref name="click"/> is the explode-on-click variant, whose normal level is larger (80 / 160 / 100).</summary>
+    public static (float Radius, float Force, float Damage) Values(int level, bool click) => level switch
+    {
+        1 => (12, 35, 15),
+        2 => (25, 65, 35),
+        4 => (80, 200, 300),
+        5 => (250, 600, 1000),
+        _ => click ? (80, 160, 100) : (40, 100, 40),
+    };
+
+    /// <summary>A level from "1" to "5" or its name.</summary>
+    public static bool TryParse(string word, out int level)
+    {
+        level = 0;
+        if (int.TryParse(word, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out int n) && n is >= 1 and <= 5) { level = n; return true; }
+        int at = Array.FindIndex(Names, name => name.Equals(word, StringComparison.OrdinalIgnoreCase));
+        level = at + 1;
+        return at >= 0;
+    }
+
+    public static string Label(int level) => $"level {level} ({Names[Math.Clamp(level, 1, 5) - 1]})";
+}
 
 /// <summary>Who a radius kill hits, shared by the console's <c>kill --radius</c> and the guard: never a player character or the player's faction, never the dead, animals only when asked for.</summary>
 public static class DebugKillArea
@@ -290,7 +319,7 @@ static class DebugCheats
             // Everyone down (just now, before, or dead) is thrown, ragdolled or not (CombatSystem.Blast).
             if (combat is not null && combat.Blast(cold, away, MathF.Max(blast.Force * falloff, MathF.Min(blast.Force, ExplodeMinThrow)))) thrown++;
         }
-        string where = $"{blast.At.X:0},{blast.At.Y:0}{(blast.On.Length > 0 ? $" (on {blast.On})" : "")} r={radius:0.#}";
+        string where = $"{blast.At.X:0},{blast.At.Y:0}{(blast.On.Length > 0 ? $" (on {blast.On})" : "")} r={radius:0.#}, {ExplodeLevels.Label(blast.Level)}";
         if (hit == 0 && thrown == 0)
             world.Post(squadNear > 0 ? $"Explode at {where}: nobody to hit; only your own squad ({squadNear}) is in range (--squad includes it)"
                 : $"Explode at {where}: nobody in range{(nearest < float.MaxValue ? $" (nearest living character {nearest:0} m away)" : "")}; --squad includes your own");
