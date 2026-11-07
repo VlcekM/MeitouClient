@@ -171,7 +171,7 @@ sealed class ObjectStreamer(WorldObjects objects, ObjectMeshCache meshes) : IDis
     // The parts are named by the placement's instance id and its indoor volume by its key; a player's building has the one name for both.
     void RemoveInstances(Zone z, string key, string? instanceId = null)
     {
-        bool Named(string? id) => id == key || id == instanceId;
+        bool Named(string? id) => id is not null && (id == key || id == instanceId);   // a part with no parent is no match for a missing instance id
         bool Match(Instance i) => Named(i.Placed.PlacementId) || Named(i.Placed.ParentPlacementId);
         z.Real.RemoveAll(Match);
         z.Stand.RemoveAll(Match);
