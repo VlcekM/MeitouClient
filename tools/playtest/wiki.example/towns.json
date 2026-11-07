@@ -21,6 +21,33 @@
    "townType": "Town",
    "residents": [
     "Example Squad"
+   ],
+   "buildings": [
+    {
+     "name": "Longhouse",
+     "count": 1,
+     "kind": "shop",
+     "usedAs": "Bakery",
+     "forSale": 1,
+     "priceMin": 4000,
+     "priceMax": 4000,
+     "ruins": 0
+    }
+   ],
+   "walls": 0,
+   "gates": 0,
+   "shops": [
+    "Example Shop (Longhouse)"
+   ],
+   "forSale": [
+    {
+     "building": "Small Shack",
+     "price": 4000,
+     "ruin": false
+    }
+   ],
+   "overrides": [
+    "Example Town (override) ruined (Ruins) when Example Lord is not alive"
    ]
   },
   "found_via": "optional: where the position first came from, if an outside source; leave out otherwise",
