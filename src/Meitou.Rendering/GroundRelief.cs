@@ -26,9 +26,9 @@ public static class GroundRelief
     /// <summary>Whether the ground near the eye is moved for real (tessellated patches, where the device has tessellation shaders; the Tab panel's toggle).</summary>
     public static bool DisplaceActive { get; set; } = true;
 
-    /// <summary>The depth scale in world units (1 unit = 10 cm; the Tab panel's slider, default 30 cm): each layer's depth (<see cref="LayerDepthCm"/>) times
+    /// <summary>The depth scale in world units (1 unit = 10 cm; the Tab panel's slider, default 20 cm, the High preset's): each layer's depth (<see cref="LayerDepthCm"/>) times
     /// this over <see cref="ReferenceDepth"/>.</summary>
-    public static float Depth { get; set; } = 3;
+    public static float Depth { get; set; } = 2;
 
     /// <summary>The depth the tuned values are expressed at (20 cm): <see cref="Depth"/> scales every layer's depth, and <see cref="MaxDepth"/>, by itself over this.</summary>
     public const float ReferenceDepth = 2;
@@ -58,7 +58,7 @@ public static class GroundRelief
     /// </summary>
     public static float ScaleFollow { get; set; } = 0.5f;
 
-    /// <summary>The deepest a layer gets, in world units at <see cref="ReferenceDepth"/> (8: 80 cm, 120 cm at the default <see cref="Depth"/>; the characters walk
+    /// <summary>The deepest a layer gets, in world units at <see cref="ReferenceDepth"/> (8: 80 cm, also at the default <see cref="Depth"/>; the characters walk
     /// on the undisplaced ground, so deeper relief buries their feet).</summary>
     public static float MaxDepth { get; set; } = 8;
 
