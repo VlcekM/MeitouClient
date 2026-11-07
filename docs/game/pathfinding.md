@@ -453,6 +453,11 @@ i.e. its connected edge at 783 above our hull's top 773, our door at 696: a diff
 original's exterior has the door landing at ~121 outside the hull, ours only a pruned sliver at 121..123 beside deep water. Were either rebuilt, the
 original's stitch (10 in height, 2 apart, Generator) could not join our geometry either: their door steps are 12..17, as in `48.13:12-` (step 12..15),
 which the original leaves unconnected.
+**Observed** (tile 50.24, Lost Town; hashes computed from the level placements): of its 19 buildings the tile has `29-`, `33-` and `47-` standing and
+`17-` ruined, the reverse of their level states; Y-House `17-Newwworld-INGAME`, the town's only intact building (level `destroyed` false, residents
+`_totally empty`, not `building ruined`), has only a ruin's ground-floor group (`180633`, 41 faces), so the original rebuilds its interior intact at
+load (no group has its intact hash) and `--survey-interiors` against the tile counts its upper floors as ours only (86,396 units²); not a fault of our
+mesh.
 **Unseeded interiors** (engine choice): an interior is joined whatever its own pruning kept, to exterior polygons the exterior's pruning kept, and
 every region joined to a kept polygon is kept (`NavInteriors.CarryKeep`, not over narrow exterior edges: "Narrow portals"); exterior polygons stay
 limited to kept ones, else a door joined to a pruned landing satisfied the door and skipped the doorway's kept ground (Storm House Lagoon `40.41:10-`,
