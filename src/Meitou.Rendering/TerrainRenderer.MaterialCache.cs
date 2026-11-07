@@ -234,7 +234,7 @@ public sealed unsafe partial class TerrainRenderer
         bool any = false;
         for (int k = 0; k < CacheLevels; k++) { c.BakeOrigin[k] = cacheOrigin[k]; any |= cacheOrigin[k].W > 0; }
         if (!any) return;
-        (c.BakeAlbedo, c.BakeNormal, c.BakeLevels, c.BakeReach) = (cacheAlbedoIndex, cacheNormalIndex, CacheLevels, cacheReach);
+        (c.BakeAlbedo, c.BakeNormal, c.BakeLevels, c.BakeReach, c.BakeBias) = (cacheAlbedoIndex, cacheNormalIndex, CacheLevels, cacheReach, MathF.Min(gpu.LodBias, 0));
     }
 
     void DisposeMaterialCache()

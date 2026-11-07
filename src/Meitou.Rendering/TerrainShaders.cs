@@ -740,6 +740,7 @@ static partial class TerrainShaders
         uniform sampler2DArray uBakeNormal;   // its shading normal (xyz * 0.5 + 0.5) and rain absorbance
         uniform int uBakeLevels;              // its levels (0: none, every pixel shades the layers)
         uniform vec4 uBakeOrigin[4];          // per level: x, z of its first texel's corner, the texel size, the side in texels (0: not valid)
+        uniform float uBakeBias;              // the upscaler's texture bias (negative): the layers' sampler takes it, so the cache level is chosen that much finer
         uniform float uBakeReach;             // the cache is read nearer than this: beyond it a biome's distance fade (which the bake has not) may begin
 
         // The span of the cache's relief height in world units (BakeOutput): the deepest a layer gets, the cliff's scale included.
@@ -1240,12 +1241,15 @@ static partial class TerrainShaders
             if (uBakeLevels > 0 && !uFeature && uTextured && nearWeight > 0.0 && distance < uBakeReach && n.y > BakeMinUp)
             {
                 float a = max(length(texDx.xz), 1e-6), b = max(length(texDy.xz), 1e-6), hi = max(a, b), lo = min(a, b);
-                float level = log2(max(hi / min(ceil(hi / lo), 8.0), 1e-6) / uBakeOrigin[0].z);
+                float level = log2(max(hi / min(ceil(hi / lo), 8.0), 1e-6) / uBakeOrigin[0].z) + uBakeBias;
                 cacheLive = clamp(-2.0 * level, 0.0, 1.0);
                 int k = clamp(int(floor(level)), 0, uBakeLevels - 1);
                 float t = clamp(level - float(k), 0.0, 1.0);
                 while (k < uBakeLevels && !bakeHolds(k, texWorld.xz)) { k++; t = 0.0; }
                 if (cacheLive >= 1.0) k = uBakeLevels;
+                // Only a level at most twice as coarse as the biased footprint is read (the layers' sampler takes the bias, so a coarser cache is the blurry patch beside
+                // sharp layers: a close ground beyond the fine levels' square, a raised eye): beyond that the layers are shaded.
+                if (k < uBakeLevels && float(k) - level > 1.0) k = uBakeLevels;
                 if (k < uBakeLevels)
                 {
                     vec2 at = texWorld.xz;
@@ -1631,6 +1635,7 @@ static partial class TerrainShaders
             float trailMesh;
             vec4 trailWindow;
             uint trailFine;
+            float bakeBias;
             vec4 trailFineWindow;
         } terrain;
 
@@ -1671,7 +1676,7 @@ static partial class TerrainShaders
         ["uOverlayRelief"] = "terrain.overlayRelief", ["uSelfShadow"] = "terrain.selfShadow", ["uTessDetail"] = "terrain.tessDetail", ["uRockRound"] = "terrain.rockRound",
         ["uFieldTiles"] = "utextures2D[terrain.fieldTiles]", ["uFieldOrigin"] = "terrain.fieldOrigin", ["uFieldTile"] = "terrain.fieldTile",
         ["uFieldColumns"] = "terrain.fieldColumns", ["uFieldCount"] = "terrain.fieldCount", ["uMaxDepth"] = "terrain.maxDepth", ["uTargetSlope"] = "terrain.targetSlope", ["uScaleFollow"] = "terrain.scaleFollow", ["uCliffScale"] = "terrain.cliffScale", ["uRefine"] = "terrain.refine", ["uPixelScale"] = "terrain.pixelScale", ["uBroadCut"] = "terrain.broadCut", ["uReliefQuality"] = "terrain.reliefQuality",
-        ["uBakeAlbedo"] = "textures2DArray[terrain.bakeAlbedo]", ["uBakeNormal"] = "textures2DArray[terrain.bakeNormal]", ["uBakeLevels"] = "terrain.bakeLevels", ["uBakeOrigin"] = "terrain.bakeOrigin", ["uBakeReach"] = "terrain.bakeReach",
+        ["uBakeAlbedo"] = "textures2DArray[terrain.bakeAlbedo]", ["uBakeNormal"] = "textures2DArray[terrain.bakeNormal]", ["uBakeLevels"] = "terrain.bakeLevels", ["uBakeOrigin"] = "terrain.bakeOrigin", ["uBakeReach"] = "terrain.bakeReach", ["uBakeBias"] = "terrain.bakeBias",
         ["uTrails"] = "textures2D[terrain.trails]", ["uTrailDepth"] = "terrain.trailDepth", ["uTrailMesh"] = "terrain.trailMesh", ["uTrailWindow"] = "terrain.trailWindow", ["uTrailsFine"] = "textures2D[terrain.trailFine]", ["uTrailFineWindow"] = "terrain.trailFineWindow",
     };
 
@@ -1978,6 +1983,7 @@ struct TerrainConstants
     [System.Runtime.InteropServices.FieldOffset(956)] public float TrailMesh;
     [System.Runtime.InteropServices.FieldOffset(960)] public System.Numerics.Vector4 TrailWindow;
     [System.Runtime.InteropServices.FieldOffset(976)] public uint TrailFine;
+    [System.Runtime.InteropServices.FieldOffset(980)] public float BakeBias;
     [System.Runtime.InteropServices.FieldOffset(992)] public System.Numerics.Vector4 TrailFineWindow;
 }
 

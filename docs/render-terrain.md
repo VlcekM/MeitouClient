@@ -213,6 +213,7 @@ to 14 layer samples each.
   are hashed each frame; a change re-bakes every level 64 rows a frame, finest first, drawn from meanwhile.
 - **Draw**: the level whose texel is the pixel's footprint (short axis, as the layers' 8x anisotropic sampling), blended with the next coarser;
   a footprint finer than level 0's texel (within ~23 m of a 1080p camera), beyond the levels, beyond 0.3 × the nearest resident biome's fade distance (the bake has no distance fade), or on faces with n.y ≤ 0.5
+  **Observed** (title screen, DLSS 0.67, `LodBias` -1.58): the layers' sampler takes the upscaler's bias, so the live layers are sharper than a cache level at the pixel's footprint; the level is chosen with the bias (`uBakeBias`), and a level more than one level coarser than that (a close ground beyond the fine levels' square, from a raised eye: the title's nearest band read level 3 for a pixel wanting level 0.6) is not read, the layers are shaded. Edge measure of that band 4.3 (cache) to 5.9 (layers, equal to the cache off).
   (an xz texel spans 1 / n.y of the face: **Observed**, cliffs smeared into vertical streaks, their parallax wavy), the layers are shaded (the
   finer footprint mixed with the cache over the half level below 0, so no line where it switches). Level 0's
   texel is about 5x a layer's (tiling 50: 2048 texels over 100 units); read magnified it blurred the near ground (**Observed**, 2026-11-07). The
