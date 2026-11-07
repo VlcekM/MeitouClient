@@ -1339,7 +1339,7 @@ sealed partial class GameHost
                     hoverKeys.Add((DrawKey(hover.Id), hover.Colour));
             }
             gpu.HoverKeys = hoverKeys;
-            gpu.OutlinedBuilding = outlines && config.BuildingOutline ? hud!.OutlinedBuilding : null;
+            gpu.OutlinedBuildings = outlines && config.BuildingOutline ? hud!.OutlinedBuildings(hover: true) : [];
             gpu.HoverOutline = hoverOutline;
             // The frame's inputs, as WorldFrame.Draw prepares them: the weather at the camera, the atmosphere's tables for the sun and the
             // eye's height, the fog distance the light ends at, and the view distance that keeps the haze complete before the far plane.

@@ -621,11 +621,11 @@ static partial class WorldFrame
         {
             objects.FogCull = gpu.FogVolumes;
             objects.InteriorCut = gpu.InteriorMask;
-            objects.Selected = gpu.HoverOutline is null ? null : gpu.OutlinedBuilding?.Key;   // its draws kept for the outline's mask
+            objects.Selected = gpu.HoverOutline is null ? [] : gpu.OutlinedBuildings;   // their draws kept for the outline's masks
             if (f.Render.Objects) objects.Draw(s.ViewProjection, f.Eye, s.Frustum, f.Render, light.SunDirection, light.FogColour, light.FogDistance, gpu.Terrain);
             objects.FogCull = null;
             objects.InteriorCut = null;
-            objects.Selected = null;
+            objects.Selected = [];
         }
         StageClock.Lap(7);
     }
@@ -879,10 +879,10 @@ static partial class WorldFrame
         if (gpu.InspectorOverlay is { Visible: true } debugOverlay && post.Target is { } debugPicture)
             debugOverlay.Record(debugPicture, width, height, post.SceneDepth, post.RenderWidth, post.RenderHeight, view * SceneProjection().Projection, eye);
 
-        // The hover outline (Meitou only): the characters' masks drawn after the portraits, the selected building's from what the scene drew of it.
+        // The hover outline (Meitou only): the characters' masks drawn after the portraits, the outlined buildings' from what the scene drew of them.
         if (gpu.HoverOutline is { } outline && post.Target is { } hoverPicture)
         {
-            gpu.Objects?.DrawSelectionMask(gpu.OutlinedBuilding, width, height, view, camera.FieldOfView, eye, f.Render);
+            gpu.Objects?.DrawSelectionMasks(gpu.OutlinedBuildings, width, height, view, camera.FieldOfView, eye, f.Render);
             if (OutlineMasks(gpu) is { Count: > 0 } masks)
             {
                 var (near, far, projection) = SceneProjection();
@@ -901,7 +901,7 @@ static partial class WorldFrame
         }
     }
 
-    /// <summary>The hover outline's masks: the characters', then the selected building's (a list made only when both have one).</summary>
+    /// <summary>The hover outline's masks: the characters', then the outlined buildings' (a list made only when both have some).</summary>
     static IReadOnlyList<HoverMask> OutlineMasks(Gpu gpu)
     {
         IReadOnlyList<HoverMask> characters = gpu.Characters?.HoverMasks ?? [], building = gpu.Objects?.SelectionMasks ?? [];

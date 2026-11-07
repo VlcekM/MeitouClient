@@ -719,7 +719,7 @@ sealed partial class GameHost
                 gpu.HoverKeys = [.. player.HighlightTargets(camera.Target, PlayerInterface.HighlightRadius).Select(t => (DrawKey(t.Id), t.Colour))];
             else
                 gpu.HoverKeys = outlining && pointerWorld && player.HoverTarget is { } hover ? [(DrawKey(hover.Id), hover.Colour)] : [];
-            gpu.OutlinedBuilding = outlines && config.BuildingOutline ? player.OutlinedBuilding : null;
+            gpu.OutlinedBuildings = outlines && config.BuildingOutline ? player.OutlinedBuildings(hover: pointerWorld) : [];
             BenchLap(5);
             bool began = display.BeginFrame(size.X, size.Y);
             if (began)

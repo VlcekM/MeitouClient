@@ -341,7 +341,8 @@ linear depth within 1 % + 1 unit of the scene depth (jittered, render size). Out
 screenshots and cinema takes. Not in the Shift+F1 switch list (a game setting, like Attackers per target).
 
 The selected building ([selection](#building-picking-and-selection)) gets the same outline and tint in white (Advanced → Building outline, `BuildingOutline`, default
-on; Meitou only), under the same conditions, but none while the interior view shows it (occupied or held open). Its mask is what the main view's colour pass drew of its
+on; Meitou only), under the same conditions, but none while the interior view shows it (occupied or held open). The building under the cursor (no character there, picked as
+a left click picks, `HoverBuilding`) is outlined too, in its pointer's colour as a hovered character, Alt held or not; one mask per building. A building's mask is what the main view's colour pass drew of its
 parts and the layout objects that go with it (signs), at the levels, fades and construction clip drawn, redrawn alone after the post chain (`WorldObjectRenderer.Selection.cs`),
 cut at its floor: nothing at or below the height it is placed at (1 unit up, so the base slab's top goes too), so the outline stops where the building meets its base, not
 round the foundations, piers and slab under it. A house's placement height is its ground floor (**Observed**, base data: the interior hulls of `L-House`, `Swamp Shack` and

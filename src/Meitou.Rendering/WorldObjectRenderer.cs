@@ -1127,7 +1127,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         int kind = depthPass ? 1 : 0;
         (Totals[kind, 0], Totals[kind, 1], Totals[kind, 2], Totals[kind, 3], Totals[kind, 4]) =
             (Totals[kind, 0] + DrawnInstances, Totals[kind, 1] + DrawnTriangles, Totals[kind, 2] + DrawCalls, Totals[kind, 3] + PartLimited, Totals[kind, 4] + 1);
-        selecting = null;
+        selecting.Clear();
     }
 
     /// <summary>The active batches' matrices, each batch's contiguous, into this frame's constants (one copy; the draws reach a batch by firstInstance).</summary>
@@ -1217,8 +1217,8 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         // In a shadow pass such a part casts nothing inside the viewed buildings' hulls (ShadowCut).
         bool cut = depthPass ? shadowCuts.Count > 0 && CutsShadow(inst)
             : InteriorCut is { Active: true } mask && (inst.Placed.Kind == PlacedKind.MapFeature ? mask.Overlaps(inst.Centre, inst.Radius) : CutsIntoViewed(inst, mask));
-        if (selecting is not null && Selects(inst.Placed, selecting))
-            selectionDraws.Add(new(gpu, inst.Materials!, blend, m, weight, value, inst.Placed.Interior, site, inst.Centre, inst.Radius));
+        if (selecting.Count > 0 && SelectingKey(inst.Placed) is { } selectedKey)
+            selectionDraws.Add(new(selectedKey, gpu, inst.Materials!, blend, m, weight, value, inst.Placed.Interior, site, inst.Centre, inst.Radius));
         AddLevels(gpu, inst.Materials!, blend, m, weight, value, inst.Placed.Interior, site, highlight, cut);
     }
 

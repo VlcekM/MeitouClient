@@ -10,9 +10,9 @@ sealed partial class PlayerInterface
     public bool CtrlHeld, AltHeld;
     // Whether the mouse was over a control in the last arranged UI (ArrangeUi), so the pointer needs no arrange of its own.
     bool pointerOverUi;
-    // The pointer and the character it is over, chosen again when the mouse, the camera or a modifier changed, and every RepickTicks ticks while only the
+    // The pointer, the character it is over and the building (when no character), chosen again when the mouse, the camera or a modifier changed, and every RepickTicks ticks while only the
     // world moves (the picks walk every character, item and building near the ray: 0.5 ms).
-    (long Tick, Vector2 Mouse, bool Ctrl, bool Alt, string Name, CharacterId? Target) pointer = (-1, default, false, false, "arrow", null);
+    (long Tick, Vector2 Mouse, bool Ctrl, bool Alt, string Name, CharacterId? Target, SelectedBuilding? Building) pointer = (-1, default, false, false, "arrow", null, null);
     Matrix4x4 pointerView;
     const long RepickTicks = 3;
 
@@ -28,6 +28,12 @@ sealed partial class PlayerInterface
     /// green, talk gold, carry or loot blue), else any character under the cursor in white; null over the interface or nobody.
     /// </summary>
     public (CharacterId Id, Vector4 Colour)? HoverTarget => Point() is { Target: { } id } p ? (id, PointerColour(p.Name)) : null;
+
+    /// <summary>
+    /// The building under the cursor (no character there, as a left click picks it) for the building outline: its placement key, floor and the colour of what a right
+    /// click on it would do, as <see cref="HoverTarget"/>'s; null over the interface or none.
+    /// </summary>
+    public (string Key, float Floor, Vector4 Colour)? HoverBuilding => Point() is { Building: { } b } p ? (b.Instance, b.Position.Y, PointerColour(p.Name)) : null;
 
     /// <summary>The outline colour for the order a pointer shows: attack red, treat green, talk gold, carry or loot blue, else white.</summary>
     static Vector4 PointerColour(string pointer) => pointer switch
@@ -70,11 +76,12 @@ sealed partial class PlayerInterface
     bool Hostile(CharacterId id) => session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == id) is not { } c || Hostile(c);
     bool Hostile(CharacterSnapshot c) => c.HostileToPlayer;
 
-    (long Tick, Vector2 Mouse, bool Ctrl, bool Alt, string Name, CharacterId? Target) Point()
+    (long Tick, Vector2 Mouse, bool Ctrl, bool Alt, string Name, CharacterId? Target, SelectedBuilding? Building) Point()
     {
-        if (mapDrag is not null) return (-1, mouse, CtrlHeld, AltHeld, "hand", null);   // the map's pan
-        if (UiVisible && pointerOverUi || UiCapturesPointer || ContextMenuOpen || ModalOpen || dragging || settingsOpen || TitleOpen) return (-1, mouse, CtrlHeld, AltHeld, "arrow", null);
-        if (BuildPointer() is { } building) return (-1, mouse, CtrlHeld, AltHeld, building, null);
+        if (mapDrag is not null) return (-1, mouse, CtrlHeld, AltHeld, "hand", null, null);   // the map's pan
+        if (UiVisible && pointerOverUi || UiCapturesPointer || ContextMenuOpen || ModalOpen || dragging || settingsOpen || TitleOpen)
+            return (-1, mouse, CtrlHeld, AltHeld, "arrow", null, null);
+        if (BuildPointer() is { } building) return (-1, mouse, CtrlHeld, AltHeld, building, null, null);
         var snapshot = session.CurrentSnapshot;
         if (pointer.Tick >= 0 && (ulong)(snapshot.Tick - pointer.Tick) < RepickTicks && pointer.Mouse == mouse && pointer.Ctrl == CtrlHeld && pointer.Alt == AltHeld
             && pointerView == ViewProjection) return pointer;
@@ -102,7 +109,8 @@ sealed partial class PlayerInterface
             chosen.Name = "attk";
         session.World.Player.Pointed = chosen.Target ?? CharacterId.None;
         pointerView = ViewProjection;
-        return pointer = (snapshot.Tick, mouse, CtrlHeld, AltHeld, chosen.Name, chosen.Target);
+        var hovered = chosen.Target is null ? PickBuilding(mouse) : null;
+        return pointer = (snapshot.Tick, mouse, CtrlHeld, AltHeld, chosen.Name, chosen.Target, hovered);
     }
 
     /// <summary>Draws the pointer <paramref name="name"/> at <paramref name="at"/> (framebuffer pixels) over everything drawn so far; nothing without the UI painter.</summary>

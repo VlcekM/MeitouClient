@@ -175,7 +175,7 @@ sealed class UserConfig
     public bool HardwareMouse { get; set; }
     /// <summary>Outline and tint the character under the cursor (Advanced settings; Meitou only, the game has none).</summary>
     public bool HoverOutline { get; set; } = true;
-    /// <summary>Outline and tint the selected building the same way, except while its interior is shown (Advanced settings; Meitou only).</summary>
+    /// <summary>Outline and tint the selected building, and the one under the cursor, the same way, except while its interior is shown (Advanced settings; Meitou only).</summary>
     public bool BuildingOutline { get; set; } = true;
     /// <summary>A left click on the ground (nothing picked) ends the building's selection (Advanced settings; Faithful off: it stays selected, as in the game).</summary>
     public bool DeselectBuildings { get; set; } = true;

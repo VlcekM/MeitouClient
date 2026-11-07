@@ -483,7 +483,8 @@ sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, 
                 Toggle: new("Pause after loading", () => config.PauseOnLoad, v => config.PauseOnLoad = v, OnOff: true)));
             result.Add(new("Hover outline", "Outline and tint the character under the cursor, in the colour of what a right click would do.",
                 Toggle: new("Hover outline", () => config.HoverOutline, v => config.HoverOutline = v, Remaster: true, OnOff: true)));
-            result.Add(new("Building outline", "Outline and tint the selected building like a character under the cursor, except while its interior is shown.",
+            result.Add(new("Building outline", "Outline and tint the selected building, and the building under the cursor in the colour of what a right click would do, like a character under the cursor, "
+                + "except while its interior is shown.",
                 Toggle: new("Building outline", () => config.BuildingOutline, v => config.BuildingOutline = v, Remaster: true, OnOff: true)));
             result.Add(new("Click away deselects", "A left click on the ground ends the selection of the selected building and closes its panels. In the game the building stays selected.",
                 Toggle: new("Click away deselects", () => config.DeselectBuildings, v => player.DeselectBuildings = config.DeselectBuildings = v, Remaster: true, OnOff: true)));

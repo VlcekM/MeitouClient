@@ -44,10 +44,16 @@ sealed partial class PlayerInterface
     }
 
     /// <summary>
-    /// The selected building to outline (docs/game/ui-input.md "Hover outline"): its placement key, its floor (the height it stands at, where the outline stops) and the
-    /// outline's colour, white as a hovered character's; null: none.
+    /// The buildings to outline (docs/game/ui-input.md "Hover outline"): the selected one in white, then, with <paramref name="hover"/>, the one under the cursor
+    /// (<see cref="HoverBuilding"/>) unless it is the selected one; each with its placement key and its floor (the height it stands at, where the outline stops).
     /// </summary>
-    public (string Key, float Floor, Vector4 Colour)? OutlinedBuilding => selectedBuilding is { } b ? (b.Instance, b.Position.Y, WhiteOutline) : null;
+    public List<(string Key, float Floor, Vector4 Colour)> OutlinedBuildings(bool hover)
+    {
+        var list = new List<(string Key, float Floor, Vector4 Colour)>(2);
+        if (selectedBuilding is { } b) list.Add((b.Instance, b.Position.Y, WhiteOutline));
+        if (hover && HoverBuilding is { } h && h.Key != selectedBuilding?.Instance) list.Add(h);
+        return list;
+    }
 
     /// <summary>A site of the player's as a selected building (what a left click on it selects).</summary>
     SelectedBuilding SiteBuilding(Meitou.Simulation.Construction.BuildingSnapshot site) =>
