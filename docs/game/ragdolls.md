@@ -190,7 +190,7 @@ player order gets it up (1 when sneaking), as does a thief's watcher noticing.
   event 0x18. Without the order the get-up only says 0x17 / 0x18.
 - Meitou: `MedicalState.PlayingDead` (not saved): a knockout that ends while `MedicalContext.PlayDead` is set keeps the
   character `Unconscious` (so everyone treats it as down) with no timer. The get-up line (`DialogueSystem.SeeGettingUp`) is 23 / 25 / 24 by these counts. `BodySystem.Schedule` sets it serially from the last
-  tick by the character's senses' counts (`BodySystem.Senses`, [senses](perception.md#senses)); a player
+  tick by the character's senses' counts (`BodySystem.Senses`, [senses](perception.md#senses); the character looks while playing dead or about to wake, faded counts would always read safe); the waking window is Act's longest step, so a far character is asked too; a player
   order standing it up grants the toughness (`BodySystem.GotUpByOrder`); animals never play dead. Rechecked every 15 ticks
   (engine choice). `MedicalState.StandUp` ends it. Health header: `HudText.HealthWord`.
 

@@ -120,7 +120,9 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
             playDead[i] = false;
             if (!table.Previous[i].Alive || table.Cold(i) is not { Animal: null, Medical: { Unconscious: true, Dead: false, HasStatsObject: true } medical } cold) continue;
             if (medical.PlayingDead && was && (world.Tick + i) % PlayDeadRecheckTicks != 0) { playDead[i] = true; continue; }
-            if (medical.PlayingDead || medical.WakesWithin(world.TickSeconds + cold.MedicalBudgetSeconds)) playDead[i] = !SafeToGetUp(world, combat, i, cold);
+            // The window is the longest step Act may take (a far or skipped character's), so the knockout cannot end unasked.
+            float step = Math.Max(world.SpeedSteps, world.StepTicks(i)) * world.TickSeconds;
+            if (medical.PlayingDead || medical.WakesWithin(step + cold.MedicalBudgetSeconds)) playDead[i] = !SafeToGetUp(world, combat, i, cold);
         }
     }
 
