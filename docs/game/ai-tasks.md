@@ -566,8 +566,8 @@ from the decompile and agree with this table, except that the decompile shows no
 (it returns 1.0 or 0); 141 `strangers in house P` is false first when the target's building is public, else the same finder. Goals 155, 197, 158, 283 and 239 read 108, goal 153 Going to bed needs `!141`
 (the "153" in goal 132's list A is state 153, not this goal).
 - **Public test** (`FUN_140599680`, **Verified**): the target as a building, replaced by the building its vfunc `0x1d8` names when that is not empty (**Observed**: a bed's house), else the blackboard home; none of either counts as public;
-  then Building vfunc `0x290` (slot 82, `FUN_140548750`), which reads the building's flag `+0xc8`, the `public day` flag ([locks](locks.md)), of its parent when it has one. It also returns not public when the building's `+0xd8` is 1 or 0x22 and a byte `+0xe8` of an object it
-  looks up is set (which object and what the byte means: **Unknown**, not modelled).
+  then Building vfunc `0x290` (slot 82, `FUN_140548750`), which reads the building's flag `+0xc8`, the `public day` flag ([locks](locks.md)), of its parent when it has one. It also returns not public when the building's `+0xd8` is 1 or 0x22 and the "house locked" flag ([locks](locks.md#doors)) of the squad of a character it
+  looks up is set (**Verified**: `FUN_140791ba0` then `+0xe8`; which squad is **Unknown**, not modelled).
 - **Finder**: 0 with no home. Else the first of two scans:
   - the resident's sensed characters tagged SENSE_NEUTRAL (bit 1) and none of bits 3 KO, 4 dead (`+0x5bc`, `FUN_1406215b0`), 7 NPC class 1 LAW_ENFORCEMENT or 2 MILITARY (status `+0xdc` of `+0x1a0`, Character vfunc 14 `FUN_1405e1ed0`; **Verified**), 9 imprisoned
     (mask 0x298; [tags](perception.md#sense-tags-who-is-an-enemy)) that stand in the home building, are up (Character vfunc 6, `isDown` false) and are not a chained slave of the resident's faction (`FUN_14032e2a0`: chained, owner faction the resident's);

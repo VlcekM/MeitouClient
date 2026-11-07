@@ -424,7 +424,7 @@ Talk menu's dry run is picking.
 | 7 / 8 IMPRISONED_BY_TARGET / OTHER | S caged (in-something state 2) by Me's faction (7) or another (8); when S is Me, by the target's faction; no target: !B | Bool |
 | 9 IS_A_TRADER | S's SQUAD_TEMPLATE has `is trader`, whatever the squad stocks (`FUN_1405cff70`, [who trades](economy.md#who-trades)) | Bool |
 | 10 FACTION_RANK | the player's rank in Me's faction ([faction rank](factions-squads-towns.md#32-faction-rank)), any `who` | Num3 |
-| 11 BUILDING_IS_CLOSED_AND_SECURED | a bool at `+0xe8` of Me's platoon AI object (`FUN_140791ba0`: Character `+0x658` -> `+0x78` -> `+0xf8`; its setter **Unknown**, not built) | Bool |
+| 11 BUILDING_IS_CLOSED_AND_SECURED | Me's squad's "house locked" flag (`homelok`, platoon AI object `+0xe8` via `FUN_140791ba0`: Character `+0x658` -> `+0x78` -> `+0xf8`), the byte state 87 reads and Task_LockDoor sets ([locks](locks.md#doors); **Verified**: case 0xb of `FUN_140676950`, setter `FUN_1407933a0`); not built | Bool |
 | 12 PLAYER_TECH_LEVEL | the research manager's tech level, `*(*(game + 0x38) + 8)` (**Observed**; the manager's level is the one [research](buildings-production.md#research) raises, 1 at the start), any `who` | Num3 |
 | 13 NUM_DIALOG_EVENT_REPEATS | Me's counter for the current event | Num3 |
 | 14 IS_IMPRISONED | S is caged | Bool |
