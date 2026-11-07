@@ -28,6 +28,9 @@ sealed class GameOptions
     public bool NoPopulation, NewGame, ListStarts, DataCheck;
     /// <summary><c>--wiki-export &lt;dir&gt;</c>: write the agent wiki's generated JSON files from the game data and exit (<see cref="WikiExport"/>).</summary>
     public string? WikiExport;
+
+    /// <summary><c>--facts-only</c> with <c>--wiki-export</c>: leave out every description text taken from the game data.</summary>
+    public bool WikiFactsOnly;
     /// <summary>The animation sandbox (<c>--sandbox [n]</c>): 0 off, else the number of characters (1 or 2) on a flat wireframe floor.</summary>
     public int Sandbox;
     /// <summary>The CHARACTER record (name or id) the sandbox spawns (null: the default new-game start's first squad member).</summary>
@@ -107,6 +110,7 @@ sealed class GameOptions
           --new-game [start]         a new game as the NEW_GAME_STARTOFF start (default Wanderer): the player squad at its town, camera on it
           --list-starts              print the available starts and exit
           --data-check               print every game data and level file problem of the load order (missing mod, changed record type...) and exit: 0 none, 1 some
+          --facts-only               with --wiki-export: drop all description text from the game data (names, ids, numbers, positions, conditions, relations only)
           --wiki-export <dir>        write the agent wiki's generated files (zones, towns, factions, squads, npcs, items, buildings, shops, overrides, characters, research, animals, spawns as JSON) from your game data, mods included, into <dir> and exit (docs/agent-playtest.md)
           --sandbox [n]              animation sandbox: no world, a flat 1000x1000 wireframe floor (lines every 10, bold every 100) with 1 character (n = 2: two facing each other 30 units apart; more: the rest idle in rings round them, up to 1000); Z/X/C walk/run/free, [ ] fixed speed, P patrol, G fight, Y follow; works with --screenshot --ticks
           --sandbox-character <name> the CHARACTER or ANIMAL_CHARACTER record the sandbox spawns (default: the first member of the default new-game start)
@@ -187,6 +191,7 @@ sealed class GameOptions
                 case "--list-starts": g.ListStarts = true; break;
                 case "--data-check": g.DataCheck = true; break;
                 case "--wiki-export": g.WikiExport = Next(); break;
+                case "--facts-only": g.WikiFactsOnly = true; break;
                 case "--sandbox":
                     g.Sandbox = i + 1 < args.Length && int.TryParse(args[i + 1], NumberStyles.None, CultureInfo.InvariantCulture, out int count) ? Math.Clamp(count, 1, 1000) : 1;
                     if (i + 1 < args.Length && int.TryParse(args[i + 1], NumberStyles.None, CultureInfo.InvariantCulture, out _)) i++;

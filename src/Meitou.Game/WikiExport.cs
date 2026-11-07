@@ -24,8 +24,15 @@ static partial class WikiExport
 
     sealed record Row(string Id, string Name, string Kind, string? Faction, string? Zone, float? X, float? Z, string Confidence, string Notes, string? Record, SortedDictionary<string, object?> Data);
 
-    public static int Run(string outDir, GameInstall install)
+    /// <summary>Free-text fields the game data carries that <c>--facts-only</c> leaves out (item and research descriptions; the export reads no dialogue lines, lore or book texts at all).</summary>
+    static readonly string[] DroppedProseFields = ["item description", "research description", "dialogue lines (never read)", "lore and book contents (never read)", "character and squad flavour text (never read)"];
+
+    /// <summary>True under <c>--facts-only</c>: no description text from the game goes into the files.</summary>
+    static bool FactsOnly;
+
+    public static int Run(string outDir, GameInstall install, bool factsOnly = false)
     {
+        FactsOnly = factsOnly;
         Directory.CreateDirectory(outDir);
         var order = LoadOrder.FromInstall(install);
         var db = GameDatabase.Load(order);
@@ -209,7 +216,7 @@ static partial class WikiExport
         string dataDir = install.DataDirectory;
         string modsCfgPath = ModList.ModsCfgPath(install);
         var modsCfg = File.Exists(modsCfgPath) ? ModList.ParseModsCfg(File.ReadAllLines(modsCfgPath)).ToList() : [];
-        var meta = new Meta(source, dataDir, string.Join(", ", order.Entries.Select(e => e.Name)), [.. order.Entries.Select(e => e.Name).Where(n => !LoadOrder.BaseFiles.Contains(n) && !IsSeparator(n))], modsCfg, order.Issues.Select(i => $"{i.File}: {i.Message}").ToList());
+        var meta = new Meta(source, dataDir, string.Join(", ", order.Entries.Select(e => e.Name)), [.. order.Entries.Select(e => e.Name).Where(n => !LoadOrder.BaseFiles.Contains(n) && !IsSeparator(n))], modsCfg, order.Issues.Select(i => $"{i.File}: {i.Message}").ToList(), factsOnly);
         var counts = new List<string>();
         foreach (var (name, rows) in files)
         {
@@ -225,7 +232,7 @@ static partial class WikiExport
     static bool IsSeparator(string name) => System.Text.RegularExpressions.Regex.IsMatch(name, @"^\[\d+\]-+\[.*\]-+\.mod$");
 
     /// <summary>What every generated file says it was made from: the data folder, the load order, and the mods beyond the base game's four data files (<c>mods.cfg</c> applied).</summary>
-    sealed record Meta(string Source, string DataDir, string LoadOrder, List<string> Mods, List<string> ModsCfg, List<string> Issues);
+    sealed record Meta(string Source, string DataDir, string LoadOrder, List<string> Mods, List<string> ModsCfg, List<string> Issues, bool FactsOnly);
 
     static void Write(string path, List<Row> rows, Meta meta)
     {
@@ -245,6 +252,10 @@ static partial class WikiExport
         w.WriteEndArray();
         w.WriteStartArray("loadIssues");
         foreach (string m in meta.Issues) w.WriteStringValue(m);
+        w.WriteEndArray();
+        w.WriteBoolean("factsOnly", meta.FactsOnly);
+        w.WriteStartArray("dropped_prose_fields");
+        if (meta.FactsOnly) foreach (string f in DroppedProseFields) w.WriteStringValue(f);
         w.WriteEndArray();
         w.WriteString("generated", DateTime.UtcNow.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", CultureInfo.InvariantCulture));
         w.WriteStartArray("entries");

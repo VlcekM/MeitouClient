@@ -20,15 +20,18 @@
 #   wiki export [<dir>]          generate the generated layer from your game files (native build: runs MeitouClient --wiki-export)
 #   wiki add <file.json|->       validate and append/update entries by id in YOUR local layer (WIKI_DIR); never deletes
 #   wiki check                   schema, duplicate ids, JSON validity; exit 1 on errors
-# Layers (later wins): generated (from your game data, never shipped), observed (our own verified runs, shipped), local (your own notes, optional).
-# Folders: <tool dir>/generated and <tool dir>/observed (inside a build's wiki/ folder); in the repo: <repo>/wiki/generated and tools/playtest/wiki.observed.
-# Env: WIKI_GENERATED, WIKI_OBSERVED override those two; WIKI_DIR is the local layer (flat zones.json, towns.json ... files; default <repo>/wiki when it has any).
+# Layers (later wins): the data layer, observed (our own in-game runs, private, only if a folder exists), local (your own notes, optional).
+#   The data layer is ONE of: your own export (<tool dir>/generated, made by `wiki export` from your game files and mods; wins), else the shipped clean-install wiki
+#   (<tool dir>/clean: facts only, made from a clean copy without mods, may differ from your install), else nothing. Every answer says which one it came from.
+# Folders: <tool dir>/generated, <tool dir>/clean and <tool dir>/observed (inside a build's wiki/ folder); in the repo: <repo>/wiki/generated, tools/playtest/wiki.clean and tools/playtest/wiki.observed.
+# Env: WIKI_GENERATED, WIKI_CLEAN, WIKI_OBSERVED override those folders; WIKI_DIR is the local layer (flat zones.json, towns.json ... files; default <repo>/wiki when it has any).
 # Schema and rules: docs/agent-playtest.md ("The wiki").
 import json, os, sys, glob, math, re, subprocess
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.abspath(os.path.join(HERE, '..', '..'))
 IN_REPO = os.path.basename(HERE) == 'playtest' and os.path.isdir(os.path.join(ROOT, 'tools'))
 GEN = os.environ.get('WIKI_GENERATED') or (os.path.join(ROOT, 'wiki', 'generated') if IN_REPO else os.path.join(HERE, 'generated'))
+CLEAN = os.environ.get('WIKI_CLEAN') or (os.path.join(HERE, 'wiki.clean') if IN_REPO else os.path.join(HERE, 'clean'))
 OBS = os.environ.get('WIKI_OBSERVED') or (os.path.join(HERE, 'wiki.observed') if IN_REPO else os.path.join(HERE, 'observed'))
 LOCAL = os.environ.get('WIKI_DIR') or (os.path.join(ROOT, 'wiki') if IN_REPO else None)
 LOCAL_SET = bool(os.environ.get('WIKI_DIR'))
@@ -46,9 +49,14 @@ def read(path):
 def rows_of(d): return d['entries'] if isinstance(d, dict) and 'entries' in d else d
 def layer_files(folder):
     return [(os.path.splitext(os.path.basename(p))[0], p) for p in sorted(glob.glob(os.path.join(folder, '*.json')))] if folder and os.path.isdir(folder) else []
+def has_json(folder): return bool(folder) and bool(glob.glob(os.path.join(folder, '*.json')))
+def gen_dir():
+    """The data layer: the player's own export when it exists, else the shipped clean-install wiki, else the (missing) export folder."""
+    return GEN if has_json(GEN) else CLEAN if has_json(CLEAN) else GEN
+def gen_label(): return 'clean' if gen_dir() == CLEAN and not has_json(GEN) else 'generated'
 def layers():
     """[(layer name, folder)] in priority order, lowest first."""
-    out = [('generated', GEN), ('observed', OBS)]
+    out = [('generated', gen_dir()), ('observed', OBS)]
     if LOCAL and (LOCAL_SET or any(os.path.exists(os.path.join(LOCAL, n + '.json')) for n in FILES)): out.append(('local', LOCAL))
     return out
 def entries():
@@ -100,7 +108,7 @@ def merged():
         by_name[(family(ne['kind']), namekey(ne))] = newid
     _merged = [(by_id[k][0], by_id[k][1], by_id[k][1]['_layers']) for k in order]
     return _merged
-def tag(ls): return 'observed' if 'observed' in ls else 'local' if 'local' in ls else 'generated'
+def tag(ls): return 'observed' if 'observed' in ls else 'local' if 'local' in ls else gen_label()
 def num(v): return isinstance(v, (int, float)) and not isinstance(v, bool)
 def validate(e, layer=''):
     errs = []
@@ -132,8 +140,8 @@ def xz(e): return '%s %s' % (int(e['x']), int(e['z'])) if e.get('x') is not None
 def line(e): return '%s | %s | %s | %s | %s | %s' % (e['id'], e['kind'], xz(e), 'V' if e['verified'] else 'u', e['name'], tag(e['_layers']))
 def need_data():
     if not any(glob.glob(os.path.join(f, '*.json')) for _, f in layers() if f and os.path.isdir(f)):
-        sys.exit('wiki: no data. Looked in %s (generated) and %s (observed).' % (GEN, OBS))
-def gen_missing(): return not glob.glob(os.path.join(GEN, '*.json'))
+        sys.exit('wiki: no data. Looked in %s (your export), %s (shipped clean wiki) and %s (observed). %s' % (GEN, CLEAN, OBS, export_hint()))
+def gen_missing(): return not has_json(GEN) and not has_json(CLEAN)
 def native_exe():
     for cand in (os.path.join(os.path.dirname(HERE), 'MeitouClient'), os.path.join(ROOT, 'src', 'Meitou.Game', 'bin', 'Release', 'net10.0', 'MeitouClient')):
         if os.path.exists(cand): return cand
@@ -178,7 +186,7 @@ def cmd_find(a):
     out += extra[:max(0, n - len(out))]
     print('\n'.join(out) if out else 'no match for "%s" (try fewer words; wiki kinds)' % q)
     if len(scored) > len(out): print('(%d more; add --kind K or more words, --n 30 for more)' % (len(scored) - len(out)))
-    warn_missing()
+    prov(); warn_missing()
 def get(i):
     for fn, e, ls in merged():
         if e['id'] == i or i in e.get('aliases', []): return fn, e
@@ -207,7 +215,7 @@ def cmd_show(a):
     if not e: sys.exit('no entry with id "%s" (wiki find <text>)' % a[0])
     if '_layers' in e: print('# layers: %s%s' % (' + '.join(e['_layers']), ' (the later layer wins; data = numbers from your game files)' if len(e['_layers']) > 1 else ''))
     print('# file: %s.json' % n); print(json.dumps(clean(e), indent=1, ensure_ascii=False))
-    warn_missing()
+    prov(); warn_missing()
 def cmd_town(a):
     if not a: sys.exit('usage: wiki town <name>')
     need_data()
@@ -599,7 +607,7 @@ def cmd_near(a):
     r.sort(key=lambda t: t[0])
     for d, e in r[:n]: print('%6d m | %s' % (d, line(e)))
     if not r: print('none with coordinates' + (' for kind ' + kind if kind else ''))
-    warn_missing()
+    prov(); warn_missing()
 def cmd_tp(a):
     if not a: sys.exit('usage: wiki tp <id>')
     need_data()
@@ -609,7 +617,7 @@ def cmd_tp(a):
         print('WARNING: %s has no known position (x/z null); do not guess. Use the zone/town entry or pages/finding-npcs.md.' % e['id'], file=sys.stderr); sys.exit(4)
     print('tp %s' % xz(e))
     if not e['verified']:
-        print('WARNING: %s is not verified in game (%s); expect to check with observe --brief and report back with wiki add.' % (e['id'], 'position from your game files' if e.get('_layers') == ['generated'] else 'confidence ' + e['confidence']), file=sys.stderr); sys.exit(3)
+        print('WARNING: %s is not verified in game (%s); expect to check with observe --brief and report back with wiki add.' % (e['id'], 'position from the game data' if e.get('_layers') == ['generated'] else 'confidence ' + e['confidence']), file=sys.stderr); sys.exit(3)
 def folder_entries(folder):
     out = []
     for n, p in layer_files(folder):
@@ -654,7 +662,7 @@ def cmd_kinds(a):
     for layer, n, e in entries():
         k = (layer, n, e['kind']); c.setdefault(k, [0, 0]); c[k][0] += 1; c[k][1] += bool(e['verified'])
     for (layer, n, k), (t, v) in sorted(c.items()): print('%s | %s | %s | %d entries, %d verified' % (layer, n, k, t, v))
-    warn_missing()
+    prov(); warn_missing()
 def meta(folder):
     for n, p in layer_files(folder):
         try:
@@ -664,7 +672,7 @@ def meta(folder):
     return None
 def gen_meta():
     """The top-level provenance block of the generated layer (data dir, load order, mods), from the first generated file that has it."""
-    for n, p in layer_files(GEN):
+    for n, p in layer_files(gen_dir()):
         try:
             d = read(p)
             if isinstance(d, dict) and 'dataDir' in d: return d
@@ -674,21 +682,24 @@ def prov():
     m = gen_meta()
     if not m: return
     mods = m.get('mods') or []
+    if gen_label() == 'clean': print('layer   : from the shipped clean-install wiki (facts only, made from a clean copy without mods; may differ if you use mods: run `wiki export` for your own data)')
+    else: print('layer   : from your game data (your own `wiki export`; it takes precedence over the shipped clean wiki)')
     print('data    : generated from %s -- %s' % (m.get('dataDir'), 'clean install, no mods beyond the base game' if m.get('modded') is False else ('modded: %d mod file(s): %s' % (len(mods), ', '.join(mods[:6]) + (' ...' if len(mods) > 6 else ''))) if m.get('modded') else 'mod state not recorded (old export, run wiki export)'))
 def cmd_status(a):
-    for layer, folder in layers():
+    print('data layer in use: %s' % ('your own export (%s)' % GEN if has_json(GEN) else 'the shipped clean-install wiki (%s)' % CLEAN if has_json(CLEAN) else 'none'))
+    for layer, folder in [('export', GEN), ('clean', CLEAN)] + [x for x in layers() if x[0] != 'generated']:
         fs = layer_files(folder)
         cnt = sum(len(rows_of(read(p))) for _, p in fs) if fs else 0
         print('%-9s %s: %s' % (layer, folder, '%d files, %d entries' % (len(fs), cnt) if fs else 'missing'))
         m = meta(folder)
         if m:
-            print('          %s | data %s | %s' % (m['source'], m.get('dataDir'), m.get('generated')))
+            print('          %s | data %s | %s%s' % (m['source'], m.get('dataDir'), m.get('generated'), ' | facts only, dropped prose: ' + ', '.join(m.get('dropped_prose_fields') or []) if m.get('factsOnly') else ''))
             if 'modded' in m:
                 print('          mods: %s' % ('none, clean install (only the base game\'s own data files)' if not m['modded'] else '%d beyond the base game: %s' % (len(m['mods']), ', '.join(m['mods']))))
                 print('          mods.cfg: %d entries; load order: %s' % (len(m.get('modsCfg') or []), m.get('loadOrder')))
                 if m.get('loadIssues'): print('          load issues: %s' % '; '.join(m['loadIssues'][:5]))
             else: print('          mods: not recorded (made by an older exporter; run wiki export)')
-    if gen_missing(): print('generated data is missing: ' + export_hint())
+    if gen_missing(): print('no data layer: ' + export_hint())
 def cmd_export(a):
     exe = native_exe()
     if not exe: sys.exit('wiki export: ' + export_hint())

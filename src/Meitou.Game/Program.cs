@@ -68,7 +68,7 @@ static class Program
             Console.Error.WriteLine(e.Message);
             return 2;
         }
-        if (game.WikiExport is { } wikiDir) return WikiExport.Run(wikiDir, install);
+        if (game.WikiExport is { } wikiDir) return WikiExport.Run(wikiDir, install, game.WikiFactsOnly);
         if (game.DataCheck)
         {
             var checkedDb = Meitou.Data.GameDatabase.Load(Meitou.Data.LoadOrder.FromInstall(install));

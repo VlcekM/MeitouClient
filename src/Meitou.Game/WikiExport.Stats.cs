@@ -99,7 +99,7 @@ static partial class WikiExport
                 ["leadsTo"] = leadsTo.GetValueOrDefault(r.StringId)?.Distinct().Take(20).ToList() ?? [],
                 ["record"] = r.StringId,
             };
-            if (r.GetString("description") is { Length: > 0 } rdesc) data["description"] = Trim(rdesc, 300);
+            if (!FactsOnly && r.GetString("description") is { Length: > 0 } rdesc) data["description"] = Trim(rdesc, 300);
             if (improves.Count > 0)
             {
                 data["improves"] = improves;
@@ -107,7 +107,7 @@ static partial class WikiExport
                 if (r.GetInt("power increase") != 0) data["powerIncrease"] = r.GetInt("power increase");
                 if (r.GetInt("power capacity increase") != 0) data["capacityIncrease"] = r.GetInt("power capacity increase");
             }
-            string desc = r.GetString("description");
+            string desc = FactsOnly ? "" : r.GetString("description");
             string needs = cost.Count == 0 ? "no items" : string.Join(", ", cost.OfType<SortedDictionary<string, object?>>().Select(c => $"{c["count"]} {c["item"]}"));
             rows.Add(new Row(id(r.Name, r.StringId), r.Name, "research", null, null, null, null, "Observed",
                 $"Research ({r.GetString("category")}), {r.GetInt("time")} base hours, costs {needs}." + (requires.Count > 0 ? " Needs " + string.Join(", ", requires.OfType<SortedDictionary<string, object?>>().Select(q => (string)q["name"]!)) + "." : "") + (desc.Length > 0 ? " " + Trim(desc, 240) : ""),
@@ -184,7 +184,7 @@ static partial class WikiExport
         {
             var data = new SortedDictionary<string, object?> { ["value"] = Num(record, "value"), ["weightKg"] = Num(record, "weight kg"), ["record"] = record.StringId };
             string kind, summary;
-            string desc = record.GetString("description");
+            string desc = FactsOnly ? "" : record.GetString("description");
             if (record.Type == FcsRecordType.WEAPON)
             {
                 kind = "weapon";
