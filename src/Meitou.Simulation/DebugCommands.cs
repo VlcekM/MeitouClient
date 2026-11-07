@@ -245,14 +245,14 @@ static class DebugCheats
         var table = world.Characters;
         var combat = world.SystemOf<Combat.CombatSystem>();
         float radius = MathF.Max(blast.Radius, 0.01f);
-        int hit = 0, knocked = 0, killed = 0;
+        int hit = 0, knocked = 0, thrown = 0, killed = 0;
         var events = new List<MedicalEvent>();
-        var targets = new List<(CharacterId Id, int Slot, float Falloff, Vector2 Away)>();
+        var targets = new List<(CharacterId Id, int Slot, float Falloff, Vector2 Away, bool Dead)>();
         float nearest = float.MaxValue, nearestY = 0;
         int squadNear = 0;
         for (int s = 0; s < table.HighWater; s++)
         {
-            if (!table.Next[s].Alive || table.Cold(s) is not { } cold || cold.Medical is not { Dead: false }) continue;
+            if (!table.Next[s].Alive || table.Cold(s) is not { } cold || cold.Medical is null) continue;
             if (!blast.Squad && !DebugKillArea.Hits(cold.IsPlayer, cold.Faction, world.Player.Faction, false, false, true))
             {
                 if (Vector2.Distance(new Vector2(table.Next[s].Position.X, table.Next[s].Position.Z), blast.At) <= radius) squadNear++;
@@ -262,27 +262,31 @@ static class DebugCheats
             float d = offset.Length();
             if (d < nearest) (nearest, nearestY) = (d, table.Next[s].Position.Y);
             if (d > radius) continue;
-            targets.Add((table.IdOf(s), s, 1 - d / radius, d > 1e-3f ? offset / d : new Vector2(1, 0)));
+            targets.Add((table.IdOf(s), s, 1 - d / radius, d > 1e-3f ? offset / d : new Vector2(1, 0), cold.Medical.Dead));
         }
-        foreach (var (id, slot, falloff, away) in targets)
+        foreach (var (id, slot, falloff, away, wasDead) in targets)
         {
-            hit++;
-            Hurt(world, data, id, blast.Damage * falloff, null);
             if (table.Cold(slot) is not { Medical: { } medical } cold) continue;
-            if (!medical.Dead && !medical.Incapacitated)
+            if (!wasDead)
             {
-                events.Clear();
-                medical.KnockOut(ExplodeKnockOutSeconds, events);
-                if (events.Count > 0) { TaskStart.Stand(table, slot); table.Next[slot].Velocity = Vector3.Zero; }
+                hit++;
+                Hurt(world, data, id, blast.Damage * falloff, null);
+                if (!medical.Dead && !medical.Incapacitated)
+                {
+                    events.Clear();
+                    medical.KnockOut(ExplodeKnockOutSeconds, events);
+                    if (events.Count > 0) { TaskStart.Stand(table, slot); table.Next[slot].Velocity = Vector3.Zero; }
+                }
+                if (medical.Dead) killed++; else if (medical.Incapacitated) knocked++;
             }
-            if (medical.Dead) killed++; else if (medical.Incapacitated) knocked++;
-            combat?.Blast(world, slot, cold, away, blast.Force * falloff);
+            // Everyone down (just now, before, or dead) is thrown, ragdolled or not (CombatSystem.Blast).
+            if (combat is not null && combat.Blast(cold, away, blast.Force * falloff)) thrown++;
         }
         string where = $"{blast.At.X:0},{blast.At.Y:0}{(blast.On.Length > 0 ? $" (on {blast.On})" : "")} r={radius:0.#}";
-        if (hit == 0)
+        if (hit == 0 && thrown == 0)
             world.Post(squadNear > 0 ? $"Explode at {where}: nobody to hit; only your own squad ({squadNear}) is in range (--squad includes it)"
                 : $"Explode at {where}: nobody in range{(nearest < float.MaxValue ? $" (nearest living character {nearest:0} m away)" : "")}; --squad includes your own");
-        else world.Post($"Explode at {where}: {hit} hit, {knocked} knocked out, {killed} killed.");
+        else world.Post($"Explode at {where}: {hit} hit, {knocked} knocked out, {thrown} thrown, {killed} killed.");
         // A visible mark at the centre: a ring of blood splashes (display only; needs the Blood setting on).
         if (world.BloodMarks is { } marks)
         {

@@ -29,11 +29,18 @@ public sealed partial class CombatSystem
     }
 
     /// <summary>
-    /// The debug explosion's throw (<c>explode</c>): pushes the downed victim along <paramref name="direction"/> with the same <see cref="Knockdown"/> as a downing blow, as hard as one of
-    /// <c>2 x force</c> damage would (so a <paramref name="force"/> of 12.5 or more is the speed in world units/s). Does nothing unless the victim is knocked out or dead.
+    /// The debug explosion's throw (<c>explode</c>): sets <see cref="CharacterCold.Launch"/> on a knocked-out or dead victim, a push along <paramref name="direction"/> (X/Z) of
+    /// <paramref name="force"/> world units/s (at least <see cref="PushMin"/>) with the lift. <see cref="Ragdolls.RagdollSystem"/> applies it to the live ragdoll bodies (a frozen one is woken)
+    /// once the ragdoll exists, or slides a victim without a ragdoll. Independent of <see cref="BodyOptions.AdvancedRagdolls"/>. Returns false (nothing thrown) for a victim who is not down.
     /// </summary>
-    internal void Blast(World world, int victim, CharacterCold vc, Vector2 direction, float force) =>
-        Knockdown(world, victim, vc, direction, force / PushPerDamage, -1, BlastLift);
+    internal bool Blast(CharacterCold vc, Vector2 direction, float force)
+    {
+        if (vc.Medical is not { Incapacitated: true }) return false;
+        direction = direction.LengthSquared() > 1e-6f ? Vector2.Normalize(direction) : Vector2.UnitX;
+        float speed = MathF.Max(force, PushMin);
+        vc.Launch = new Vector3(direction.X, BlastLift, direction.Y) * speed;
+        return true;
+    }
 
     /// <summary>The explosion's lift, as a share of the throw speed (a clear hop: 30 m/s out, 9 m/s up).</summary>
     const float BlastLift = 0.3f;

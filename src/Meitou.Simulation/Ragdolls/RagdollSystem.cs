@@ -254,7 +254,7 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
                 if (Vector3.DistanceSquared(next[i].Position, eye) > reach * reach) wanted = RagdollPart.None;
             }
             if (wanted != RagdollPart.None && !HasRagdoll(cold)) wanted = RagdollPart.None;
-            if (r is null && wanted == RagdollPart.None) continue;
+            if (r is null && wanted == RagdollPart.None) { Slide(ref next[i], cold, env, dt); continue; }
             float scale = ScaleOf(cold);
             // A whole body about to fall needs the ground under it and costs a build (TileBudget, StartBudget: past them it starts next tick, its blow and saved pose kept); a frozen
             // saved one needs none, and a get-up, a limb's dangle or a lift never waits.
@@ -310,6 +310,11 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
                 }
             }
             if (r.Mask == RagdollPart.None) continue;
+            if (cold.Launch is { } launch)
+            {
+                cold.Launch = null;
+                if ((r.Mask & RagdollPart.Whole) != 0 && (r.Mask & RagdollPart.CarryMode) == 0) Launch(r, launch, advanced, world.Seed);
+            }
             if (!r.Frozen && ToneOf(cold, r.Mask, advanced) is var tone && tone != r.Tone) SetTone(r, tone);
             if (!r.Frozen && r.Dynamic.Any(d => !d))
                 Pin(r, animated ?? Animated(r, cold, placement), dt);
@@ -860,6 +865,49 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
             body.Velocity.Linear.Y += dt * (RagdollPhysics.Gravity + MathF.Log(level - y + 1));
             body.Awake = true;
         }
+    }
+
+    /// <summary>Drag of a slide (per second) and the flat speed below which it stops: a 30 u/s throw goes about 10 units.</summary>
+    const float SlideDrag = 3, SlideStop = 0.5f;
+
+    /// <summary>
+    /// A downed character without a ragdoll (no ragdoll file for its look): takes a pending <see cref="CharacterCold.Launch"/> as a slide, and moves along it, dragging to a stop, kept on the
+    /// ground. Not in a bed, a cage or carried.
+    /// </summary>
+    static void Slide(ref CharacterHot hot, CharacterCold cold, IRagdollEnvironment env, float dt)
+    {
+        if (cold.Launch is { } launch)
+        {
+            cold.Launch = null;
+            if (cold.InSomething == Locks.HeldState.None && cold.CarriedBy.IsNone && cold.Medical is { Incapacitated: true }) cold.Slide = new Vector3(launch.X, 0, launch.Z);
+        }
+        var v = cold.Slide;
+        if (v == default) return;
+        var at = hot.Position + v * dt;
+        hot.Position = new Vector3(at.X, env.GroundHeight(at.X, at.Z, hot.Position.Y), at.Z);
+        hot.Velocity = Vector3.Zero;
+        v *= MathF.Exp(-SlideDrag * dt);
+        cold.Slide = v.Length() < SlideStop ? default : v;
+    }
+
+    /// <summary>
+    /// Throws a whole-body ragdoll: adds <paramref name="push"/> to every simulated body (arms and legs spun by it, <see cref="StartVelocity"/>). A frozen ragdoll is rebuilt from its
+    /// pose first, so it is simulated again with its joints; the ragdoll's age starts over.
+    /// </summary>
+    void Launch(Ragdoll r, Vector3 push, bool soft, ulong seed)
+    {
+        if (r.Frozen) Rebuild(r, r.Mask, (RigidTransform[])r.Pose.Clone(), default, soft, seed);
+        var blow = new RagdollBlow(push, push, null);
+        for (int b = 0; b < r.Bodies.Length; b++)
+        {
+            if (r.Bodies[b] is not { } handle || !r.Dynamic[b]) continue;
+            var body = physics.Simulation.Bodies.GetBodyReference(handle);
+            var add = StartVelocity(r, b, blow, (-1, 0), seed);
+            body.Velocity.Linear += add.Linear;
+            body.Velocity.Angular += add.Angular;
+            body.Awake = true;
+        }
+        r.Age = 0;
     }
 
     /// <summary>Freezes a settled ragdoll: the joints go and the bodies stay as still kinematic ones, which others still land on.</summary>

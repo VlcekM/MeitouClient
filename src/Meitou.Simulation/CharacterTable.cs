@@ -204,6 +204,13 @@ public sealed class CharacterCold
     /// Meitou: the hit that put it down (<see cref="Ragdolls.RagdollBlow"/>; <see cref="Ragdolls.RagdollSystem"/> takes it and clears it). The original starts a ragdoll at rest. Not saved.
     /// </summary>
     public Ragdolls.RagdollBlow? Blow { get; set; }
+    /// <summary>
+    /// Meitou: a throw given to a downed character (the debug explosion, <c>CombatSystem.Blast</c>): world units/s. <see cref="Ragdolls.RagdollSystem"/> adds it to the ragdoll's bodies
+    /// (waking a frozen one) or, without a ragdoll, turns it into <see cref="Slide"/>, and clears it. Not hashed, not saved.
+    /// </summary>
+    public System.Numerics.Vector3? Launch { get; set; }
+    /// <summary>The flat speed (world units/s) a downed character without a ragdoll is still sliding at after a <see cref="Launch"/>; it drags to a stop. Not hashed, not saved.</summary>
+    public System.Numerics.Vector3 Slide { get; set; }
     /// <summary>The last <see cref="Blow"/> it was given, kept for the drawing (a cut-off head is thrown with it, <see cref="CharacterSnapshot.Knockdown"/>). Not hashed, not saved.</summary>
     public System.Numerics.Vector3 Knockdown { get; set; }
     /// <summary>What it carries (null for anything without a race; an animal's grid is its <c>inventory w</c> x <c>inventory h</c>, its luggage on the backpack slot):<see cref="Meitou.Simulation.Items.FeedSystem"/> eats from it, <see cref="BodySystem"/> weighs it.</summary>
