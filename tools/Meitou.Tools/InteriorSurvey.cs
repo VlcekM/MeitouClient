@@ -36,11 +36,18 @@ static class InteriorSurvey
     /// <summary>Whether hulls over the zone's border are surveyed too (<c>--border</c>).</summary>
     static bool border;
 
+    /// <summary>The level placements by building key, for their interior hashes.</summary>
+    static Dictionary<string, BuildingPlacement> placements = [];
+
+    /// <summary>The standing placements skipped because the tile has them ruined (<see cref="RebuiltAtLoad"/>).</summary>
+    static readonly List<string> rebuilt = [];
+
     public static int Run(GameInstall install, GameDatabase db, WorldLevelData levels, List<ZoneCoordinate> zones, NavBuildSettings settings, string? name, string? png,
         Vector2? sectionAt = null, bool overBorder = false)
     {
         section = sectionAt;
         border = overBorder;
+        placements = levels.Buildings().GroupBy(b => b.Key).ToDictionary(g => g.Key, g => g.First());
         using var gatherer = new ZoneGeometryGatherer(install, db, levels, new CollisionCache(install));
         var tallies = new Dictionary<string, Tally>();
         foreach (var zone in zones) SurveyZone(gatherer, install, zone, settings, tallies, name, png);
@@ -51,6 +58,7 @@ static class InteriorSurvey
             Console.WriteLine($"{type,-40} {t.Placements,4} {t.Both * Step * Step,8:0} {t.Ours * Step * Step,8:0} {t.OursUpper * Step * Step,8:0} {t.Original * Step * Step,8:0} "
                 + $"{100 * t.Ours / total,6:0.0} {100 * t.Original / total,6:0.0}  {t.Worst}");
         }
+        if (rebuilt.Count > 0) Console.WriteLine($"skipped {rebuilt.Count} standing placements the tile has as ruins (rebuilt at load): {string.Join(" ", rebuilt)}");
         return 0;
     }
 
@@ -73,6 +81,11 @@ static class InteriorSurvey
             offset += interior.Mesh.PolygonCount;
             var site = sites.FirstOrDefault(s => s.Key == interior.Key);
             if (site is null || site.Destroyed || !border && CrossesBorder(site, zone)) continue;
+            if (RebuiltAtLoad(site, groups))
+            {
+                rebuilt.Add(site.Key);
+                continue;
+            }
             var faces = owners.Where(o => o.Site == site).SelectMany(o => o.Group.Polygons.Where(p => p.Length >= 3).Select(p => p.Select(i => o.Group.Vertices[i]).ToArray())).ToList();
             if (faces.Count == 0) continue;
             // Both sides' whole walkable ground over the hull, exterior included: the original carves its exterior with the hull's convex volume, narrower near
@@ -119,6 +132,17 @@ static class InteriorSurvey
         }
         foreach (var (key, name) in chosen) gatherer.InteriorLayoutOverrides[key] = name;
         return chosen;
+    }
+
+    /// <summary>
+    /// Whether the tile holds the standing building's interior as a ruin (a group under its destroyed interior hash): the original finds no group for it at
+    /// load and builds it standing (docs/game/pathfinding.md, Lost Town), so the tile's faces are not what the game walks there.
+    /// </summary>
+    static bool RebuiltAtLoad(InteriorJoinSweep.Site site, List<OriginalInterior> groups)
+    {
+        if (!placements.TryGetValue(site.Key, out var placement)) return false;
+        uint ruin = OriginalNavTiles.InteriorHash(placement, destroyed: true);
+        return groups.Any(g => g.Hash == ruin);
     }
 
     /// <summary>

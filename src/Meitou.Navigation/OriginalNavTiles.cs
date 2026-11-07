@@ -74,8 +74,8 @@ public static class OriginalNavTiles
     }
 
     /// <summary>
-    /// The tile's interior groups (docs/formats/havok-tagfile.md: after the exterior, per interior a NavMesh and an Info <c>uidhex;x;y;z</c>; vertices are
-    /// 0.1-scale offsets from the Info point), in world coordinates. Empty when the install has no tile.
+    /// The tile's interior groups (docs/formats/havok-tagfile.md: after the exterior, per interior a NavMesh, an Info <c>uidhex;x;y;z</c> and its building's
+    /// interior hash; vertices are 0.1-scale offsets from the Info point), in world coordinates. Empty when the install has no tile.
     /// </summary>
     public static List<OriginalInterior> LoadInteriors(GameInstall install, ZoneCoordinate zone)
     {
@@ -85,25 +85,54 @@ public static class OriginalNavTiles
         var file = HavokTagfile.ReadFile(path);
         if (file.Root?["namedVariants"] is not object[] variants) return result;
         HkObject? mesh = null;
+        bool hashed = true;
         foreach (var v in variants.OfType<HkObject>())
         {
             string name = v["name"] as string ?? "";
-            if (name == "NavMesh") { mesh = v["variant"] as HkObject; continue; }
-            if (name != "Info" || v["variant"] is not HkObject info || info["string"] is not string text || mesh is null) continue;
-            var parts = text.Split(';');
-            if (parts.Length < 4) continue;
-            var origin = new Vector3(Float(parts[1]), Float(parts[2]), Float(parts[3]));
-            if (mesh["faces"] is not HkObject[] faces || mesh["edges"] is not HkObject[] edges || mesh["vertices"] is not object[] raw) continue;
-            var vertices = new Vector3[raw.Length];
-            for (int i = 0; i < raw.Length; i++)
-                if (raw[i] is float[] f) vertices[i] = origin + Scale * new Vector3(f[0], f[1], f[2]);
-            // Its door connections to the exterior: a streaming set's mesh connections (docs/formats/havok-tagfile.md, "Interior joins").
-            int connections = (mesh["streamingSets"] as HkObject[] ?? []).Sum(set => (set["meshConnections"] as HkObject[])?.Length ?? 0);
-            result.Add(new OriginalInterior(parts[0], origin, vertices, Polygons(faces, edges), connections));
-            mesh = null;
+            if (name == "NavMesh") mesh = v["variant"] as HkObject;
+            else if (name == "Hash" && !hashed && v["variant"] is HkObject { } h && h["string"] is string hex)
+            {
+                result[^1] = result[^1] with { Hash = uint.TryParse(hex, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out uint value) ? value : null };
+                hashed = true;
+            }
+            else if (name == "Info" && v["variant"] is HkObject info && info["string"] is string text && mesh is not null && Group(mesh, text) is { } group)
+            {
+                result.Add(group);
+                (mesh, hashed) = (null, false);
+            }
         }
         return result;
     }
+
+    /// <summary>An interior group from its mesh and its Info string; null when either is malformed.</summary>
+    static OriginalInterior? Group(HkObject mesh, string info)
+    {
+        var parts = info.Split(';');
+        if (parts.Length < 4) return null;
+        var origin = new Vector3(Float(parts[1]), Float(parts[2]), Float(parts[3]));
+        if (mesh["faces"] is not HkObject[] faces || mesh["edges"] is not HkObject[] edges || mesh["vertices"] is not object[] raw) return null;
+        var vertices = new Vector3[raw.Length];
+        for (int i = 0; i < raw.Length; i++)
+            if (raw[i] is float[] f) vertices[i] = origin + Scale * new Vector3(f[0], f[1], f[2]);
+        // Its door connections to the exterior: a streaming set's mesh connections (docs/formats/havok-tagfile.md, "Interior joins").
+        int connections = (mesh["streamingSets"] as HkObject[] ?? []).Sum(set => (set["meshConnections"] as HkObject[])?.Length ?? 0);
+        return new OriginalInterior(parts[0], origin, vertices, Polygons(faces, edges), connections);
+    }
+
+    /// <summary>
+    /// The interior hash the original files a building's interior group under (docs/game/pathfinding.md, "Generator", interior hash): its level position's x and
+    /// z and its rotation's x, y, z, w, each truncated to an integer, then 0x100 when destroyed. The original also hashes each content item of a standing
+    /// furnished interior, which this leaves out, so a furnished standing building's misses; a ruin's contents are gone, so a ruin's matches.
+    /// </summary>
+    public static uint InteriorHash(BuildingPlacement placement, bool destroyed)
+    {
+        uint hash = 0;
+        var (p, r) = (placement.Position, placement.Rotation);
+        foreach (float v in new[] { p.X, p.Z, r.X, r.Y, r.Z, r.W }) hash = Combine(hash, (uint)(long)v ^ 0xdeadbeef);
+        return destroyed ? Combine(hash, 0x100) : hash;
+    }
+
+    static uint Combine(uint hash, uint value) => hash ^ (value + 0x9e3779b9 + (hash << 6) + (hash >> 2));
 
     /// <summary>How far (units) above or below an original interior face's centre one of our kept polygons may lie and still cover it.</summary>
     public const float InteriorCoverHeight = 12;
@@ -158,8 +187,15 @@ public static class OriginalNavTiles
     static long Int(object? v) => v is long l ? l : 0;
 }
 
-/// <summary>One interior group of an original tile: the uid from its Info string, the Info point, its mesh in world coordinates and its mesh connections to the exterior.</summary>
-public sealed record OriginalInterior(string Uid, Vector3 Origin, Vector3[] Vertices, int[][] Polygons, int Connections = 0);
+/// <summary>
+/// One interior group of an original tile: the uid from its Info string, the Info point, its mesh in world coordinates and its mesh connections to the
+/// exterior.
+/// </summary>
+public sealed record OriginalInterior(string Uid, Vector3 Origin, Vector3[] Vertices, int[][] Polygons, int Connections = 0)
+{
+    /// <summary>The interior hash the tile files the group under (<see cref="OriginalNavTiles.InteriorHash"/>); null when the tile has none.</summary>
+    public uint? Hash { get; init; }
+}
 
 /// <summary>One original interior group against a built zone: its faces in the zone, how many are covered, and the uncovered faces' height range.</summary>
 public sealed record InteriorCoverage(OriginalInterior Group, int Faces, int Covered, float MissingLow, float MissingHigh);

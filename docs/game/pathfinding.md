@@ -456,8 +456,9 @@ which the original leaves unconnected.
 **Observed** (tile 50.24, Lost Town; hashes computed from the level placements): of its 19 buildings the tile has `29-`, `33-` and `47-` standing and
 `17-` ruined, the reverse of their level states; Y-House `17-Newwworld-INGAME`, the town's only intact building (level `destroyed` false, residents
 `_totally empty`, not `building ruined`), has only a ruin's ground-floor group (`180633`, 41 faces), so the original rebuilds its interior intact at
-load (no group has its intact hash) and `--survey-interiors` against the tile counts its upper floors as ours only (86,396 units²); not a fault of our
-mesh.
+load (no group has its intact hash); against the tile its upper floors counted as ours only (86,396 units²), not a fault of our mesh. So
+`--survey-interiors` skips a standing placement whose tile group is filed under its ruin hash (`OriginalNavTiles.InteriorHash`; it leaves out the
+contents, which a ruin has none of).
 **Unseeded interiors** (engine choice): an interior is joined whatever its own pruning kept, to exterior polygons the exterior's pruning kept, and
 every region joined to a kept polygon is kept (`NavInteriors.CarryKeep`, not over narrow exterior edges: "Narrow portals"); exterior polygons stay
 limited to kept ones, else a door joined to a pruned landing satisfied the door and skipped the doorway's kept ground (Storm House Lagoon `40.41:10-`,
