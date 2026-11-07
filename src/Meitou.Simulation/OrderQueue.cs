@@ -275,8 +275,7 @@ public static class PlayerOrders
     /// <summary>
     /// The decision step's source 1 before it is asked (<c>checkOrders</c> pops the front when done, or when its desire x finder is 0; serial): a front whose task ended leaves, gone ones
     /// leave; a running front whose row needs no melee threat (<see cref="NeedsNoThreat"/>) ends when one comes and waits unstarted (its plan fails, so the character falls through: S3,
-    /// the turret gunner); a running Loot order (26) ends under a threat within 40 (the <c>Task_Loot_Order</c> update ends on <c>+0x2b0</c>, docs/game/combat.md "Actions mid-fight") and
-    /// leaves the queue.
+    /// the turret gunner). A Loot order's threat test is its task's, once at the body (<c>CarrySystem.HoldWindow</c>), not the walk's.
     /// </summary>
     internal static void Prepare(World world, int slot)
     {
@@ -297,11 +296,6 @@ public static class PlayerOrders
                 {
                     front.Started = false;   // waits in the queue: its end below is not the order's
                     TaskStart.End(world, slot, TaskEnd.Stopped);
-                }
-                else if (front.Row == TaskType.LOOT_TARGET && world.SystemOf<Combat.CombatSystem>() is { } combat && CharacterFacts.ImmediateThreat(combat, world, slot))
-                {
-                    TaskStart.End(world, slot, TaskEnd.Done);
-                    continue;
                 }
                 return;
             }

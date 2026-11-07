@@ -316,6 +316,7 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
             case TaskType.LOOT_TARGET when order.Detail == OpenInventory:
                 Start(world, slot, CharacterTask.Loot, TaskType.LOOT_TARGET, TaskSource.Order, order.Target, CharacterTask.Idle);
                 (world.Player.OpenLoot, world.Player.OpeningLoot, world.Player.LootWalker) = (CharacterId.None, order.Target, table.IdOf(slot));
+                OpenAtBody(world, slot);
                 break;
             case TaskType.LOOT_TARGET:
                 if (world.Player.LootWalker == table.IdOf(slot)) world.Player.OpeningLoot = CharacterId.None;
@@ -439,6 +440,7 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
     {
         var cold = world.Characters.Cold(slot)!;
         if (task == CharacterTask.PutDown && world.Characters.TryResolveNext(cold.Carrying, out int body)) Unlink(world, slot, body, drop: false);   // the put-down's end handler always releases the body (FUN_1403509f0)
+        if (task == CharacterTask.Loot) CloseHeldWindow(world, slot, cold);
         cold.CarryTarget = CharacterId.None;
         cold.LiftTime = -1;
         cold.LootFlags = LootStart.None;
@@ -785,15 +787,13 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
     void Loot(World world, CharacterTable table, int i, float dt)
     {
         var cold = table.Cold(i)!;
-        if (!table.TryResolveNext(cold.CarryTarget, out int t) || !InReach(world, table.Next[i], table.Next[t], ReachOf(world, table.Cold(t)!))) return;   // still walking (Schedule ends a loot whose target went)
-        var victim = table.Cold(t)!;
-        // The loot window is open: the looter stays in the task (squatting, no other task) for as long as it stays open, then ends it (Task_Loot_Order, FUN_140354ef0).
         if ((cold.LootFlags & LootStart.WindowHeld) != 0)
         {
-            if (world.Player.OpenLoot == cold.CarryTarget && world.Player.LootOpener == table.IdOf(i)) return;
-            End(world, i);
+            HoldWindow(world, i, cold);
             return;
         }
+        if (!table.TryResolveNext(cold.CarryTarget, out int t) || !InReach(world, table.Next[i], table.Next[t], ReachOf(world, table.Cold(t)!))) return;   // still walking (Schedule ends a loot whose target went)
+        var victim = table.Cold(t)!;
         bool opening = Opening(world, i);
         if (cold.Inventory is not { } bag || !(opening ? Openable(table, t) : CanBeLooted(victim)))
         {
@@ -813,9 +813,7 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
         var player = world.Player;
         if (opening)
         {
-            // An open-loot order: the window opens instead of a take-all.
-            (player.OpenLoot, player.LootOpener, player.OpeningLoot) = (player.OpeningLoot, player.LootWalker, CharacterId.None);
-            cold.LootFlags |= LootStart.WindowHeld;
+            OpenWindow(player, cold);   // an open-loot order: the window opens instead of a take-all
             return;
         }
         int death = DeathUnits(victim.Inventory!);
@@ -830,6 +828,50 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
             if (seen) world.Post($"{cold.Name} was seen looting {victim.Name}");
         }
         End(world, i);
+    }
+
+    /// <summary>The open-loot walker's window opens: <see cref="PlayerState.OpenLoot"/> is its body, and the looter holds it (<see cref="LootStart.WindowHeld"/>).</summary>
+    static void OpenWindow(PlayerState player, CharacterCold cold)
+    {
+        (player.OpenLoot, player.LootOpener, player.OpeningLoot) = (player.OpeningLoot, player.LootWalker, CharacterId.None);
+        cold.LootFlags |= LootStart.WindowHeld;
+    }
+
+    /// <summary>
+    /// The open-loot order's start beside its body: the window opens at once, as the original's task start opens it (<c>FUN_140354dc0</c>), so it also opens while paused (the order
+    /// applies between ticks, <see cref="World.ApplyPausedInterfaceCommands"/>). Farther away the walk comes first and <see cref="Loot"/> opens it on arrival.
+    /// </summary>
+    void OpenAtBody(World world, int i)
+    {
+        var table = world.Characters;
+        var cold = table.Cold(i)!;
+        if (table.Next[i].Task != (byte)CharacterTask.Loot || !Opening(world, i) || cold.Inventory is null) return;
+        if (!table.TryResolveNext(cold.CarryTarget, out int t) || !Openable(table, t)) return;
+        if (InReach(world, table.Next[i], table.Next[t], ReachOf(world, table.Cold(t)!))) OpenWindow(world.Player, cold);
+    }
+
+    /// <summary>
+    /// The looter holding the open window (<c>Task_Loot_Order</c>'s update, <c>FUN_140354ef0</c>): it stays in the task, with no other task, while the window stays open, and ends it when
+    /// the window closes or a melee threat is within 40 (Character <c>+0x2b0</c>, <see cref="CharacterFacts.ImmediateThreat"/>). Only this held phase tests the threat, not the walk to the
+    /// body (#372). The task's end closes the window (<see cref="CloseHeldWindow"/>).
+    /// </summary>
+    static void HoldWindow(World world, int i, CharacterCold cold)
+    {
+        bool open = world.Player.OpenLoot == cold.CarryTarget && world.Player.LootOpener == world.Characters.IdOf(i);
+        bool threat = world.SystemOf<Combat.CombatSystem>() is { } combat && CharacterFacts.ImmediateThreat(combat, world, i);
+        if (open && !threat) return;
+        End(world, i);
+    }
+
+    /// <summary>
+    /// A loot task that ends while its looter holds the open window closes it (the original's task end <c>FUN_1403466a0</c> has the interface close both windows): a threat, the Stop
+    /// order or another task ends the looting and the window with it.
+    /// </summary>
+    static void CloseHeldWindow(World world, int slot, CharacterCold cold)
+    {
+        if ((cold.LootFlags & LootStart.WindowHeld) == 0) return;
+        var player = world.Player;
+        if (player.OpenLoot == cold.CarryTarget && player.LootOpener == world.Characters.IdOf(slot)) player.OpenLoot = CharacterId.None;
     }
 
     /// <summary>
