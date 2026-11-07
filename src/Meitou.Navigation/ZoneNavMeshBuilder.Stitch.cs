@@ -33,7 +33,8 @@ internal static partial class ZoneNavMeshBuilder
         var seams = new List<(int P, int E, int Q, int F)>();
         // Contour simplification can also leave a T at such a seam: one edge against two whose middle vertex is off its line. Those join as links.
         var nearSeams = new List<(int P, int E, int Q, int F)>();
-        float climb = s.MaxClimb + 0.5f;
+        // The climb and the half cell the stitched vertices stand under their span's top.
+        float climb = s.MaxClimb + s.CellHeight / 2;
 
         for (int tile = 0; tile < meshes.Length; tile++)
         {
