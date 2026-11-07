@@ -283,9 +283,9 @@ sealed partial class GameHost
             kb.KeyChar += (_, value) =>
             {
                 if (Covered) return;
-                if (panel?.Visible == true) panel.TextInput(value);
+                if (ConsoleOpen) devConsole.Type(value);
+                else if (panel?.Visible == true) panel.TextInput(value);
                 else if (sandboxPicker is { Open: true }) sandboxPicker.TextInput(value);
-                else if (ConsoleOpen) devConsole.Type(value);
                 else if (debugMenuOpen) DebugMenuText(value);
                 else player.UiText(value);
             };
@@ -300,6 +300,9 @@ sealed partial class GameHost
                 loading?.SkipSplash();
                 return;
             }
+            // Insert or Ctrl+` opens the dev console, which then takes every key (the settings panel's, the animation list's and the debug menu's too) until it closes.
+            if (IsConsoleToggle(k, keyboard.IsKeyPressed(SilkKey.ControlLeft) || keyboard.IsKeyPressed(SilkKey.ControlRight))) { ToggleConsole(); return; }
+            if (ConsoleOpen) { ConsoleKey(keyboard, k); return; }
             player.UiVisible = PanelLive() && !g.NoPopulation;
             if (panel?.Visible == true)
             {
@@ -316,9 +319,6 @@ sealed partial class GameHost
                 if ((k == SilkKey.KeypadEnter ? EngineKey.Enter : KeyMap.Map(k)) is { } pickerKey) sandboxPicker.KeyDown(pickerKey);
                 return;
             }
-            // Insert or Ctrl+` opens the dev console, which then takes every key (the debug menu's too) until it closes.
-            if (IsConsoleToggle(k, keyboard.IsKeyPressed(SilkKey.ControlLeft) || keyboard.IsKeyPressed(SilkKey.ControlRight))) { ToggleConsole(); return; }
-            if (ConsoleOpen) { ConsoleKey(keyboard, k); return; }
             // F10 (rebindable) opens the debug menu, which then takes every key until it closes.
             if (KeyMap.Map(k) is { } mapped && session.Bindings.Get(InputAction.ToggleDebugMenu).Contains(Binding.Of(mapped))) { debugMenuOpen = !debugMenuOpen; debugParts = null; return; }
             if (debugMenuOpen)
