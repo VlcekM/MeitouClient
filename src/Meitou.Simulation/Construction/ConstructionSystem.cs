@@ -694,6 +694,7 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
         if (!Arrived(world, n, (site.Position, site, ReachOf(site))))
         {
             n.Goal = new Vector2(site.Position.X, site.Position.Z);
+            (cold.GoalHeight, cold.GoalHeightAt) = (site.Position.Y, n.Goal);   // the site's floor: one upstairs is walked to, not stood under (#353)
             n.Flags |= (ushort)MoveFlags.NeedPath;
         }
         sweep = true;
@@ -811,6 +812,7 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
             n.TaskTime -= dt;
             if (n.TaskTime > 0) continue;
             n.Goal = new Vector2(goal.At.X, goal.At.Z);
+            (cold.GoalHeight, cold.GoalHeightAt) = (goal.At.Y, n.Goal);
             n.Mode = SpeedMode.Free;
             n.Flags |= (ushort)MoveFlags.NeedPath;
             n.TaskTime = PursuitSystem.RepathSeconds;
