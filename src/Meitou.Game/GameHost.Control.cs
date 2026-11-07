@@ -363,6 +363,7 @@ sealed partial class GameHost
         w.WriteNumber("x", Math.Round(camera.Target.X, 1));
         w.WriteNumber("z", Math.Round(camera.Target.Z, 1));
         w.WriteEndObject();
+        WriteInteriorState(w);
     }
 
     void RegisterControlCommands()

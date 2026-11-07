@@ -818,6 +818,9 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     {
         var p = inst.Placed;
         if (p.Interior) return true;
+        // A part of an upper floor of a building in the interior view, at or below the viewed floor: its floor slab is seen from inside the cut-away room (the game lights
+        // it with the one ambient, docs/render-gi.md "Indoor"), not an outer wall of a closed building, so a hidden floor or a ceiling plane over it does not leave it black.
+        if (p.Kind == PlacedKind.BuildingPart && p.Floor > 0 && p.ParentPlacementId is null && InteriorView.TryGetValue(p.PlacementId, out int shownFloor) && p.Floor <= shownFloor) return true;
         if (p.ParentPlacementId is not null) return InInterior(inst);
         return p.Kind == PlacedKind.BuildingPart && InteriorOf(inst) is { Inside: true, Building: { } holder } && holder != p.PlacementId;
     }
@@ -1013,7 +1016,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
             {
                 if (!InteriorView.ContainsKey(room.PlacementId) || construction is { } sites && sites.ContainsKey(room.PlacementId)) continue;
                 var p = new Vector3(target.X, Math.Clamp(target.Y, room.YMin, room.YMax), target.Z);
-                if (room.Contains(p, 64) && room.Covered(p)) return p;
+                if (room.Contains(p, 64) && room.Covered(p, InteriorDebug.CoverIgnoresHiddenFloors && InteriorView.TryGetValue(room.PlacementId, out int shown) ? shown : int.MaxValue)) return p;
             }
         return null;
     }
@@ -1029,6 +1032,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     /// </summary>
     bool InteriorHidden(PlacedMesh p)
     {
+        if (InteriorDebug.HideMesh is { } hide && p.Kind == PlacedKind.BuildingPart && p.MeshPath.Contains(hide, StringComparison.OrdinalIgnoreCase)) return true;
         if (p.Kind != PlacedKind.BuildingPart) return false;
         if (p.DoorIndex >= 0 && !p.Interior) return false;
         if (InteriorView.Count == 0 || !p.Interior && (p.Floor == 0 || AllFloors)) return p.Interior;
@@ -1168,7 +1172,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         if (!ReferenceEquals(inst.Mesh.Gpu, gpu)) { Unresolve(zone, inst); return; }
         // A shadow pass keeps what the floor view hides above the viewed floor, so a lower floor stays shaded under its ceiling (docs/render-objects.md
         // "Closed interiors"): only a closed building's interior parts stay out.
-        if ((depthPass ? OutsideHidden(inst.Placed) : InteriorHidden(inst.Placed) || StandsAbove(inst)) || ClosedAround(inst)) return;
+        if ((depthPass && !InteriorDebug.ShadowsLeaveOutHidden ? OutsideHidden(inst.Placed) : InteriorHidden(inst.Placed) || StandsAbove(inst)) || ClosedAround(inst)) return;
         if (inst.Placed.DoorIndex >= 0) PoseDoor(inst, gpu);
         if (inst.Placed.Joints is not null) PoseJoints(inst, gpu);
         float value = Vector3.Distance(inst.Centre, eye) - inst.Radius;

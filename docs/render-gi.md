@@ -67,6 +67,8 @@ up again one cell along its normal before falling back to the far cascade.
 points can sit in walls, the raised floor or furniture; the far cascade then painted them near black. GI replaces envDiffuse; per-fragment path also
 scales specular ambient by luminance ratio clamped0..1. Reflection probe use is a separate switch.
 
+Also a part of an upper floor (`building floor` 1 to 3, outside the `interior` list) of a building in the interior view, at or below the viewed floor: its slab is seen from inside the cut-away room. **Observed** (Ancient Lab with the Forgotten Buildings ceiling planes, views 1 and 2): such a slab took the raw GI, which the hidden floors above and a one-sided ceiling plane over it blackened (mean luminance 11 against 31 with Indirect light off, the game's flat ambient; **Verified**, decompiled: the game has one ambient, no indoor lighting mode, and its sun and shadow maps light a viewed floor as outdoors). Taking the indoor floor (`WorldObjectRenderer.IndoorFurniture`) brings it to 43, as with GI off; other buildings' floors are unchanged (+-1).
+
 Interior meshes, furniture inside building masks (layout furniture, and player-placed furniture/stations
 standing in another building's hull), and indoor characters take indirect light of
 luminance max(GI, original ambient); its hue mixes ambient to GI hue by smoothstep(0.1, 0.25, GI/ambient)
