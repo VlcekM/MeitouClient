@@ -409,12 +409,12 @@ sealed partial class PlayerInterface
         if (maximum <= 0) { inventoryViews.Remove("JobsPanel"); inventoryTracks.Remove("JobsPanel"); return; }
         float scroll = Math.Clamp(inventoryScroll.GetValueOrDefault("JobsPanel"), 0, maximum);
         inventoryScroll["JobsPanel"] = scroll;
-        float barWidth = 17 * InventoryScale;
-        var view = panel.Bounds with { Width = Math.Max(0, panel.Bounds.Width - barWidth) };
+        float barWidth = 17 * InventoryScale, gap = 3 * InventoryScale;
+        var view = panel.Bounds with { Width = Math.Max(0, panel.Bounds.Width - barWidth - gap) };
         inventoryViews["JobsPanel"] = (view, maximum);
         for (int i = 0; i < controls.Count; i++)
             if (controls[i].Properties.GetValueOrDefault("ListOwner") == "JobsPanel" || controls[i].Name.StartsWith("JobsPanel@row", StringComparison.Ordinal))
-                controls[i] = controls[i] with { Bounds = controls[i].Bounds with { Width = Math.Max(0, controls[i].Bounds.Width - barWidth) }, Clip = controls[i].Clip?.Intersect(view) ?? view };
+                controls[i] = controls[i] with { Bounds = controls[i].Bounds with { Width = Math.Max(0, controls[i].Bounds.Width - barWidth - gap) }, Clip = controls[i].Clip?.Intersect(view) ?? view };
         AddScrollBar("JobsPanel", controls, new(panel.Bounds.X + panel.Bounds.Width - barWidth, panel.Bounds.Y, barWidth, panel.Bounds.Height),
             view.Height, view.Height + maximum, scroll, maximum, panel.Clip, "hud-jobs");
     }

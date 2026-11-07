@@ -258,8 +258,8 @@ sealed partial class PlayerInterface
         squadBarRow = 0;
         if (controls.FirstOrDefault(c => c.Name == "SquadPanel") is { } squadPanel) AddSquadPortraits(controls, squadPanel.Bounds);
         AddHudText(controls);
-        AddJobRowParts(controls);
         if (hud) AddJobScrollBar(controls);
+        AddJobRowParts(controls);
         if (hud) AddTutorialPanel(controls);
         AddScreens(controls);
         return controls;
