@@ -38,8 +38,10 @@ wave. The breaker front's slope is the height difference over 6% of a wavelength
 it made a thin steep strip that reflected as a bright greenish line ahead of every crest; found by cutting each term in turn). The breaker face's glow shows only within 80 units of the break (along the whole swell it drew a band ahead of every crest).
 Surf foam lies where noise clumps and blotches in the wave's frame pass a narrow threshold
 (rising with its age, holes even when fresh, frayed by the rims), with streaks of the blotch noise stretched 5:1 along the waves' way; its density
-follows that texture (0.2 to 1 over its middle half), never a flat white sheet, and the thickest whitewater is capped at 0.88 so holes remain; shaded by two turned networks of fine bubble rims (4.5 and 11.3 per 100 units) within 40 units of the eye, the foam
-texture's larger rims from 150 units (fine rims average away to a flat white there; the large ones only read as cells near). The waterline: no still foam
+follows that texture linearly (0.3 to 1.2, capped at 1, so the filtered distant foam keeps its mean), never a flat white sheet, and the thickest whitewater is capped at 0.88 so holes remain; shaded by two turned networks of bubble rims at fixed world scales (cells of 0.5 to 1.7 units). Every foam
+pattern is world-space at fixed scales, so zooming never changes its size or shape: detail under a pixel is filtered by the texture's mips, and the
+finest octave (the bubbles' walls, 0.17 units) fades by the pixel's footprint (0.12 to 0.3 units), never by the eye's distance; the coarse lace (cells
+of 2.5 to 5 units, read as bricks up close) is not used. The waterline: no still foam
 ring (an exposed shore gets a little with each wave). On the swash the foam's lace rides the sheet: shifted by level / beach slope along the
 waves' way, so it runs up with the uprush and back with the backwash; the sand behind dries in patches (two noises, 9 and 23 units) over the wave's cycle. Contact foam needs 2.5 to 4.5 units of standing (the ground relief made false lines). The water's
 edge fades over 2 units along the ray and 0.6 of depth, whichever is longer (0.5 and 0.2 for the swash), smoothstepped. Ponds and sheltered water: the
@@ -102,6 +104,8 @@ Meitou look, not in the game; the `contactfoam` switch (Tab "Water contact foam,
   goes into the height. So a moving leg raises a bow and leaves a hollow, stepping in or falling in raises a mound, a standing body makes only its idle motion's ripples, and the
   V of a wake is the waves' own: a Mach cone when faster than the waves (derived: asin(17/30), 35 degrees each side for a 30 units/s walk). **Observed** (sandbox floor 5
   units under water, 30 units/s walk): a bow wave, a V of ripples spreading behind and foam along the legs' path.
+- **Shallow water**: a body's push is scaled by sqrt(3 / the column's depth) (0.5 to 3 units), so a step in ankle-deep water splashes and rings as
+  visibly as in deep water; its churn foam fills the displaced water too, and the field's foam shows through the water's fade at the waterline.
 - **Foam**: renewed in a 1.2-unit ring where a moving body cuts the surface (by the rate it displaces water) and where the slope passes 0.45 (full at 0.9, at most 0.7);
   spreads a little and fades to a third in 2.5 s.
 - **Shading**: written each frame into an RGBA16F storage image (height, slopes, foam; one level); the water's vertex stage adds the height where its vertices are under 3 texels apart, the
