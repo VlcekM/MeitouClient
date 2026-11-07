@@ -1064,7 +1064,7 @@ static partial class WorldFrame
         var textures = TerrainTextures.Create(b.Context, b.Install, scene.Database, b.Assets, layerSize, source: b.Ready(source));
         foreach (var m in textures.Messages.Take(20)) Console.WriteLine($"warning   {m}");
         Console.WriteLine($"biomes    {textures.TotalBiomes} in the world, {textures.TotalPairs} texture pairs, {textures.Capacity} near slots of {layerSize}² and "
-            + $"{textures.FarSlots} far of {textures.FarSize}², BC3+BC1, {textures.ArrayBytes / 1048576} MB ({b.Watch.ElapsedMilliseconds} ms)");
+            + $"{textures.FarSlots} far of {textures.FarSize}², near BC3+BC5, far BC3+BC1, {textures.ArrayBytes / 1048576} MB ({b.Watch.ElapsedMilliseconds} ms)");
         terrain.SetTextures(textures);
         return (terrain, textures);
     }

@@ -36,6 +36,14 @@ where occluders justify it. A depth prepass is extra geometry, not automatically
   smoothed by a separable Gaussian (sigma 1.5 texels, wrapping), their mips made from that and stored as BC5 (x and y; the shader rebuilds z): no block grid is left (**Verified**, same
   views before and after). Near arrays are 32 bytes a block pair (BC3 + BC5) instead of 24: +33 % (1024 MB at 96 slots became about 1365 MB, **Observed** from the formula). The far arrays stay
   BC1 as stored (their texels are minified there). Detail finer than a block is not in the file; it is smoothed away, not recovered.
+  **Disk cache** (`NormalCachePath`): each deblocked layer is kept in `%LOCALAPPDATA%\Meitou\terrain\normals\<hash>.bc5` (magic `MNB5`, level count, each level's length and blocks; 5.6 MB a 2048² layer),
+  hash of a version tag (`NormalCacheVersion`, bump it when `Deblock` or the encoding changes), the size and the source file's path, length and write time, so a mod's replacement gets its own
+  file; a missing or misfitting file is rebuilt and written. **Observed** (siwa-test6 start, same machine): a hit takes 3-79 ms of worker time, a miss 100-430 ms.
+  **Observed** VRAM: the log line for 32 near and 152 far slots went from 332 MB (BC3+BC1) to 417 MB with BC5 near layers; at 96 slots the formula gives about 1365 MB instead of 1024 MB.
+  **Observed** cost: the viewer bench (`--world --at 57400,-119500`, 2560x1440, FSR 0.67, sand views at distance 60 and 400) varies by streaming more than by this change (terrain stage medians
+  0.14 ms close and 0.7-0.9 ms mid with the BC5 build against 0.18 and 2.0 ms for a BC1 build of an older commit with other terrain changes): no cost from BC5 is measurable there; **Unknown** under load.
+  **Observed** BC3 diffuse blocks: over the 2048² stored diffuse of `DesertSandLoop03_DIF` the mean grey step across a 4-texel block boundary is 2.7 levels against 2.2 inside (grain dominates), `EasySand_DIF` 12.5 against 11.7,
+  `FlintCliffs_DIF` 5.7 against 4.7, `Sand3D_DIF` 1.2 against 0.35 (a smooth texture, a one-level step): no block pattern shows, the diffuse is left as stored.
 - Params texels 0 and 1 hold the far indices (the relief code reads these too), texel 1's W the biome's relief factor; texels 13 and 14 hold the near slots, -1 for none.
 - Before this the arrays held a full-size slot per pair within the 30 km material distance: 128 slots, about 1.07 GB, in the Great Desert
   (**Observed**, VRAM pie and log 2026-11-01).
