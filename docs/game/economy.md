@@ -614,8 +614,7 @@ Meitou's reading: [simulation, slave trading](../simulation.md#arrest-and-jail).
   being read for NPC purses).
 - **What `FUN_140851d10` computes** (`prison time`'s consumer is the cage sentence, 11.5).
 - **Arrest and jail gaps** (11.5, 11.7, 11.8): what a guard carrying a captive does when no cage is free (`CAGES_ARE_ALL_FULL` 97 is
-  registered but no TaskData row uses it); how `+0x110` decays; the escaped flag's expiry ("Leave town to clear this status. Expires in
-  {1}", cleared by `FUN_1404ff060` for an undecoded reason);
+  registered but no TaskData row uses it); how `+0x110` decays;
   whether NPC bounty hunters ever cage or hand in a captive; what the speaker-in-own-town branch of `DA_ARREST_TARGET` tests exactly.
 - **Research cost** beyond the bench queue cost, crafting costs, building purchase price, bed cost.
 - **The purpose of `FUN_1405d4260`** (the crime-in-progress tooltip function; its behaviour remains untraced).
