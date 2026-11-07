@@ -42,12 +42,15 @@ public sealed unsafe class WaterRipples : IDisposable
     /// <summary>The bodies one frame takes (capsules) and the characters they belong to.</summary>
     public const int MaxCapsules = 192, MaxGroups = 32;
 
+    /// <summary>The foot splashes the field keeps until a step takes them (<see cref="AddSplash"/>).</summary>
+    public const int MaxSplashes = 32;
+
     [StructLayout(LayoutKind.Sequential)]
     struct Push
     {
         public int OriginX, OriginZ;   // the window's first world texel
         public int PreviousX, PreviousZ;
-        public int Groups, Mode, Sources, Pad;
+        public int Groups, Mode, Sources, Splashes;
         public float Dt, SourceDt, Water, Pad2;
     }
 
@@ -59,9 +62,9 @@ public sealed unsafe class WaterRipples : IDisposable
     readonly GpuTexture surface;
     readonly GpuSampler sampler;
     readonly float[] depths = new float[DepthSide * DepthSide];
-    readonly Vector4[] bodies = new Vector4[MaxGroups * 2 + MaxCapsules * 2];
+    readonly Vector4[] bodies = new Vector4[MaxGroups * 2 + MaxCapsules * 2 + MaxSplashes];
     readonly List<(QuerySlot Begin, QuerySlot Mid, QuerySlot End, int Steps)> pendingTimes = [];
-    int groups, capsules, groupStart;
+    int groups, capsules, groupStart, splashes;
     Vector3 focus;
     bool focused;
     (int X, int Z)? origin, depthOrigin;
@@ -150,6 +153,21 @@ public sealed unsafe class WaterRipples : IDisposable
         groups++;
     }
 
+    /// <summary>
+    /// A foot landing in the water at <paramref name="at"/> (world x, z), <paramref name="strength"/> 0 to 1: a crown of water round a hollow that spreads as a ring, and foam that
+    /// lingers. Kept until the next step (a frame may take none).
+    /// </summary>
+    public void AddSplash(Vector2 at, float strength)
+    {
+        if (splashes == MaxSplashes || !float.IsFinite(at.X) || !float.IsFinite(at.Y) || !float.IsFinite(strength)) return;
+        if (Vector2.DistanceSquared(at, new Vector2(focus.X, focus.Z)) > Reach * Reach) return;
+        strength = Math.Clamp(strength, 0, 1);
+        bodies[MaxGroups * 2 + MaxCapsules * 2 + splashes++] = new Vector4(at, strength, SplashRadius * (0.8f + 0.4f * strength));
+    }
+
+    /// <summary>A splash's crown radius (units) at strength 0.5.</summary>
+    const float SplashRadius = 1.6f;
+
     /// <summary>A capsule the field can take: finite, a radius over 0 and under <see cref="MaxRadius"/>, and within the window's reach of its centre.</summary>
     bool Sane(in WaterBody c) =>
         float.IsFinite(c.A.X) && float.IsFinite(c.A.Y) && float.IsFinite(c.A.Z) && float.IsFinite(c.B.X) && float.IsFinite(c.B.Y) && float.IsFinite(c.B.Z)
@@ -180,10 +198,10 @@ public sealed unsafe class WaterRipples : IDisposable
         if (depthOrigin != origin || ++sinceBake >= RebakeFrames) Bake(heights);
         if (!anyWater)
         {
-            current = false;
+            (current, splashes) = (false, 0);
             return;
         }
-        quiet = groups > 0 ? 0 : quiet + seconds;
+        quiet = groups > 0 || splashes > 0 ? 0 : quiet + seconds;
         if (quiet >= QuietSeconds && current && !jump && previous == origin) return;
         owed += seconds;
         sourceOwed += seconds;
@@ -275,7 +293,7 @@ public sealed unsafe class WaterRipples : IDisposable
         var o = origin!.Value;
         var push = new Push
         {
-            OriginX = o.X, OriginZ = o.Z, PreviousX = previous.X, PreviousZ = previous.Z, Groups = groups, Dt = StepSeconds, SourceDt = Math.Max(sourceOwed, 1e-3f),
+            OriginX = o.X, OriginZ = o.Z, PreviousX = previous.X, PreviousZ = previous.Z, Groups = groups, Splashes = splashes, Dt = StepSeconds, SourceDt = Math.Max(sourceOwed, 1e-3f),
             Water = WorldWater.Height,
         };
         uint g = Side / 16;
@@ -290,7 +308,7 @@ public sealed unsafe class WaterRipples : IDisposable
             Compute(cmd);
             (now, next) = (next, now);
         }
-        if (steps > 0) sourceOwed = 0;
+        if (steps > 0) (sourceOwed, splashes) = (0, 0);
         cmd.Timestamp(ctx.Frame.Timestamps, stamps.Mid, GpuStage.Compute);
         Run(cmd, slice, push with { Mode = 2 }, g);
         cmd.Barrier([new GpuDependency(Access.StorageWrite, Access.Sampled)]);
@@ -346,7 +364,7 @@ public sealed unsafe class WaterRipples : IDisposable
         layout(std430, set = 0, binding = 2) readonly buffer Depth { float depth[]; };
         layout(std430, set = 0, binding = 3) readonly buffer Bodies { vec4 bodies[]; };
         layout(set = 0, binding = 4, rgba16f) writeonly uniform image2D field;
-        layout(push_constant) uniform Push { ivec2 origin; ivec2 previous; int groups; int mode; int sources; int pad; float dt; float sourceDt; float water; float pad2; } pc;
+        layout(push_constant) uniform Push { ivec2 origin; ivec2 previous; int groups; int mode; int sources; int splashes; float dt; float sourceDt; float water; float pad2; } pc;
 
         const int S = {{Side}};
         const int DS = {{DepthSide}};
@@ -360,6 +378,9 @@ public sealed unsafe class WaterRipples : IDisposable
         const float Push_ = 0.4;             // the share of the water a body takes or leaves that shows on the surface round it
         const float FoamLife = 2.5;          // seconds to a third
         const int Groups = {{MaxGroups}};
+        const int Splashes = {{MaxGroups * 2 + MaxCapsules * 2}};   // where the splashes start in the bodies
+        const float SplashHeight = 0.8;      // units, the crown of a strength 1 splash
+        const float SplashKick = 10.0;       // units/s, the crown's rise
 
         int wrap(int v) { return ((v % S) + S) % S; }
         int at(ivec2 i) { return wrap(i.y) * S + wrap(i.x); }
@@ -451,6 +472,18 @@ public sealed unsafe class WaterRipples : IDisposable
                 float churn = abs(change) / pc.sourceDt;
                 foam = max(foam, clamp(churn * 0.03 * shallow, 0.0, 0.9) * max(ring, 0.6 * step(0.02, abs(change))));
                 took = now;
+                // The feet landing: a crown round a hollow, rising, that runs out as a ring; foam over the patch, thickest where the foot came down.
+                for (int k = 0; k < pc.splashes; k++)
+                {
+                    vec4 sp = bodies[Splashes + k];
+                    float d = length(p - sp.xy), r = sp.w;
+                    if (d > r * 3.0) continue;
+                    float crown = exp(-pow((d - r) / (0.45 * r), 2.0)) - 0.8 * exp(-pow(d / (0.6 * r), 2.0));
+                    h += sp.z * SplashHeight * crown;
+                    v += sp.z * SplashKick * crown;
+                    float cover = exp(-pow(d / (2.0 * r), 4.0));
+                    foam = max(foam, clamp((0.75 + 0.25 * sp.z) * cover * (0.8 + 0.2 * smoothstep(0.3, 1.0, d / r)), 0.0, 0.98));
+                }
             }
             float c2 = Gravity * clamp(column, SlowDepth, FastDepth);
             ivec2 o = pc.origin;

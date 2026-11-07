@@ -70,6 +70,13 @@ public sealed class GroundSurfaces
         return biomes.TryGetValue(map.At(x, z), out var types) ? types[channel] : Sand;
     }
 
+    /// <summary>The biome index colour at a world point (<c>biomemap.png</c>, the lookup the footsteps and the water effects share, <c>FUN_140a09630</c>); null while the map loads or when it cannot be read.</summary>
+    public uint? BiomeAt(float x, float z)
+    {
+        biomeMap ??= Task.Run(() => TryLoad(() => FoliageBiomeMap.Open(install)));
+        return biomeMap.IsCompletedSuccessfully && biomeMap.Result is { } map ? map.At(x, z) : null;
+    }
+
     byte[]? ReadTile(int tx, int tz)
     {
         var image = TextureLoader.LoadImage(File.ReadAllBytes(TerrainMaps.OverlayTile(install, "new_overlay", tx, tz)));
