@@ -1136,6 +1136,7 @@ static partial class WorldFrame
         {
             var l = WorldLevelData.Load(install, includeInteriors: true);
             var layouts = new BuildingLayouts(lampDb, l.Interiors);
+            l.ApplyBuildingSwaps(lampDb, layouts);   // as the scene's objects: a swapped building or piece of furniture brings its own lamps
             ResidentRuins.Apply(lampDb, l, layouts);
             return (l, layouts);
         });

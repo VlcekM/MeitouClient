@@ -154,6 +154,14 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
         BootPlayer(display, interactive);
     }
 
+    /// <summary>Layouts of <paramref name="levels"/> read afresh (no scene objects to share), their furniture swapped as the placements were.</summary>
+    static Meitou.Data.World.BuildingLayouts LevelLayouts(Meitou.Data.GameDatabase gameDb, Meitou.Data.World.WorldLevelData levels)
+    {
+        var layouts = new Meitou.Data.World.BuildingLayouts(gameDb, levels.Interiors);
+        layouts.UseSwaps(levels);
+        return layouts;
+    }
+
     /// <summary>The level data read afresh (no scene objects to share), with the factions' building swaps applied as the scene's are.</summary>
     Meitou.Data.World.WorldLevelData LoadedLevels(Meitou.Data.GameDatabase gameDb) { var levels = Meitou.Data.World.WorldLevelData.Load(install, includeInteriors: true); Meitou.Data.World.BuildingSwapPass.ApplyBuildingSwaps(levels, gameDb); return levels; }
 
@@ -176,7 +184,7 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
             if (levels is not null)
             {
                 // The homes' ruins and layouts before anything reads the levels (done already when the renderer read them).
-                Meitou.Data.World.ResidentRuins.Apply(gameDb, levels, scene.Objects?.Layouts ?? new Meitou.Data.World.BuildingLayouts(gameDb, levels.Interiors));
+                Meitou.Data.World.ResidentRuins.Apply(gameDb, levels, scene.Objects?.Layouts ?? LevelLayouts(gameDb, levels));
                 nav = new Meitou.Navigation.NavSystem(install, gameDb, levels!, heights.HeightAt);
                 nav.ZoneReady += ready => { lock (navReady) navReady.Add(ready.Zone); };
                 walkability = new NavAdapter(nav.Walkability);
@@ -199,7 +207,7 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
             if (levels is not null)
             {
                 var watch = System.Diagnostics.Stopwatch.StartNew();
-                var layouts = scene.Objects?.Layouts ?? new Meitou.Data.World.BuildingLayouts(gameDb, levels.Interiors);
+                var layouts = scene.Objects?.Layouts ?? LevelLayouts(gameDb, levels);
                 buildings = Meitou.Data.World.TownBuildings.Build(gameDb, levels, layouts, (x, z) => heights.HeightAt((float)x, (float)z));
                 Console.WriteLine($"homes     {buildings.Values.Sum(l => l.Count)} town buildings, {buildings.Values.Sum(l => l.Sum(b => b.Beds))} beds, " +
                     $"{buildings.Values.Sum(l => l.Sum(b => b.Spots.Count - b.Beds))} nodes in {buildings.Count} towns ({watch.ElapsedMilliseconds} ms)");
@@ -208,7 +216,7 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
                 bodyOptions: Meitou.Simulation.Bodies.BodyOptions.Default with { Dismemberment = Gameplay.Dismemberment, Decapitation = config.Decapitation, AdvancedRagdolls = config.AdvancedRagdolls }, biomes: biomes, buildings: buildings, roads: levels?.Roads(), townZones: levels?.TownZones(), level: levels?.Level);
             if (levels is not null)
             {
-                data.Layouts = scene.Objects?.Layouts ?? new Meitou.Data.World.BuildingLayouts(gameDb, levels.Interiors);
+                data.Layouts = scene.Objects?.Layouts ?? LevelLayouts(gameDb, levels);
                 data.Sight = new BuildingSight(install, gameDb, levels, data.Layouts);
             }
             if (nav is not null) nav.Walkability.Roads = data.Roads;   // one network for both: on-screen long routes take the roads as the off-screen squads do

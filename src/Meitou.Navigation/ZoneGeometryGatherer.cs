@@ -52,6 +52,7 @@ internal sealed partial class ZoneGeometryGatherer : IDisposable
         map = TerrainHeightmap.Open(install);
         seedsByZone = NavSeeds.Load(install);
         layouts = new BuildingLayouts(db, levels.Interiors);
+        layouts.UseSwaps(levels);
     }
 
     Dictionary<ZoneCoordinate, List<BuildingPlacement>> BuildingsByZone

@@ -28,6 +28,13 @@ public sealed class WorldLevelData
     /// <summary>Whether <see cref="ResidentRuins.Apply"/> has set the ruins the residents make.</summary>
     public bool ResidentRuinsApplied { get; internal set; }
 
+    /// <summary>
+    /// The factions' building swaps and each placement's owner faction by key, once <see cref="BuildingSwapPass.ApplyBuildingSwaps"/> has run: every
+    /// <see cref="BuildingLayouts"/> read from these levels swaps its furniture with them (<see cref="BuildingLayouts.UseSwaps(WorldLevelData)"/>), so the drawn
+    /// world, the town buildings and the navmesh have the same pieces. Null: not applied, or the data has no swaps.
+    /// </summary>
+    public (Gameplay.BuildingSwaps Swaps, IReadOnlyDictionary<string, string> Owners)? FurnitureSwaps { get; internal set; }
+
     /// <summary>The keys of the buildings <see cref="ResidentRuins.Apply"/> ruined (their level files have them standing).</summary>
     public HashSet<string> ResidentRuined { get; } = new(StringComparer.Ordinal);
 
