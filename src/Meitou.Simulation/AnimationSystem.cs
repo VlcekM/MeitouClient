@@ -364,30 +364,14 @@ public sealed class AnimationSystem(AnimationLibrary library, AnimationLengths l
     /// Root motion: moves the character by the ground part of its relocating clips' <c>Bip01</c> track (model X and Z turned by its heading), onto
     /// the ground, unless that point is not walkable. The original moves its nav agent, so the walls of the walkable surface stop the body's circle and it slides
     /// along them (<see cref="IWalkability.Slide"/>; docs/game/pathfinding.md "Walls").
-    /// The bodies collide too (engine stand-in for the original's avoidance of the characters round it, <c>FUN_1401476f0</c>): the part of the move that would bring it nearer than
-    /// the two footprint radii to a standing character (last tick's positions) is dropped, so an attack that gains ground stops at its target instead of walking into it.
-    /// A downed, dead, carried, bedded, caged or sitting body is not in the way (<see cref="CombatSteering.OutOfFlock"/>; docs/game/pathfinding.md "Bodies in the way").
+    /// Standing bodies do not stop the step: the original's body test only pushes overlapping characters apart (<c>FUN_1401476f0</c>), which <see cref="MovementSystem"/>'s separation does
+    /// (docs/game/pathfinding.md "Bodies in the way").
     /// </summary>
     internal static void Relocate(World world, int self, ref CharacterHot c, Vector2 root)
     {
         float sin = MathF.Sin(c.Yaw), cos = MathF.Cos(c.Yaw);
         var step = new Vector2(root.X * cos + root.Y * sin, -root.X * sin + root.Y * cos);
-        var table = world.Characters;
-        var block = new BodyBlock { Table = table, Self = self, From = new Vector2(c.Position.X, c.Position.Z), Step = step, Radius = CombatTuning.Footprint(table.Cold(self)) };
-        world.Grid.Query(block.From.X, block.From.Y, block.Radius + MaxFootprint + step.Length(), ref block, static (int other, ref BodyBlock b) =>
-        {
-            var all = b.Table.Previous;
-            if (other == b.Self || !all[other].Alive || b.Table.Cold(other) is not { } them || CombatSteering.OutOfFlock(all[other], them)) return;
-            var away = b.From - new Vector2(all[other].Position.X, all[other].Position.Z);
-            float reach = b.Radius + CombatTuning.Footprint(b.Table.Cold(other));
-            if ((away + b.Step).LengthSquared() >= reach * reach) return;
-            // It would end up inside: keep only the part of the step that does not close the distance.
-            float length = away.Length();
-            if (length < 1e-4f) return;
-            var normal = away / length;
-            float closing = Vector2.Dot(b.Step, normal);
-            if (closing < 0) b.Step -= normal * closing;
-        });
+        var block = new BodyBlock { Step = step, Radius = CombatTuning.Footprint(world.Characters.Cold(self)) };
         // The walls stop it as they stop the original's agent, which this move goes through: its circle slides along the first wall it meets (docs/game/pathfinding.md "Walls").
         var walk = world.Walkability;
         var wanted = step;
@@ -411,7 +395,7 @@ public sealed class AnimationSystem(AnimationLibrary library, AnimationLengths l
         }
         // Standing where no surface is (pushed onto a mesh edge, in a hole), the end point cannot be worse: the move is made (the height follows the ground).
         else unwalkable = false;
-        RootClamp?.Invoke(self, c.Position, wanted, unwalkable ? Vector2.Zero : made, block.Step != wanted ? RootBlock.Body : made != block.Step ? RootBlock.Wall : RootBlock.None, unwalkable);
+        RootClamp?.Invoke(self, c.Position, wanted, unwalkable ? Vector2.Zero : made, made != block.Step ? RootBlock.Wall : RootBlock.None, unwalkable);
         if (unwalkable) return;
         c.Position = new Vector3(x, walk.GroundHeight(x, z, c.Position.Y), z);
     }
@@ -492,14 +476,9 @@ public sealed class AnimationSystem(AnimationLibrary library, AnimationLengths l
     /// <summary>Debug hook: called for every root-motion step with the wanted step, the one made (both on XZ), what shortened it and whether the end point was refused as unwalkable (then nothing moved).</summary>
     public static Action<int, Vector3, Vector2, Vector2, RootBlock, bool>? RootClamp;
 
-    /// <summary>The largest footprint radius a body is tested against (a human's is 4; the biggest animals' are larger).</summary>
-    const float MaxFootprint = 30;
-
     struct BodyBlock
     {
-        public CharacterTable Table;
-        public int Self;
-        public Vector2 From, Step;
+        public Vector2 Step;
         public float Radius;
     }
 

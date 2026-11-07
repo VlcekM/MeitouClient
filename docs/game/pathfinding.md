@@ -74,10 +74,10 @@ characters round its owner and tests each as a circle (its footprint radius plus
 |---|---|---|
 | Standing, walking, fighting | yes | yes |
 | Crawling / staying low (not ragdolled) | yes (`FUN_1407d1440` is false) | yes |
-| Knocked out or dead (ragdolled) | no | no: root motion, separation, contact, covered goal, fight steering (`MovementSystem`, `AnimationSystem.Relocate`, `CombatSteering.OutOfFlock`) |
+| Knocked out or dead (ragdolled) | no | no: separation, contact, covered goal, fight steering (`MovementSystem`, `AnimationSystem.Relocate`, `CombatSteering.OutOfFlock`) |
 | Carried | no | no |
-| In a bed or cage | no | no for root motion and the fight steering; engine choice: still solid to a walker's contact (a bedded body is never moved) |
-| Sitting (resting on a seat) | no | no for root motion and the fight steering; engine choice: a walker steers past a sitter (separation) but is not blocked |
+| In a bed or cage | no | no for the fight steering; engine choice: still solid to a walker's contact (a bedded body is never moved) |
+| Sitting (resting on a seat) | no | no for the fight steering; engine choice: a walker steers past a sitter (separation) but is not blocked |
 | Beyond the LOD range (`+0x1a9` clear) | no | not modelled (depends on the camera) |
 
 Not modelled: a conscious ragdolled character (a stagger that ragdolls a limb or the whole body) is left out in the original; Meitou keeps it solid unless it is incapacitated.
@@ -110,8 +110,8 @@ Every move of the nav agent, the animation-driven one (root motion, mode 3) incl
   the sweep alone keeps the agent on the mesh.
 - Meitou root motion (`AnimationSystem.Relocate`): after the slide, an end point with no stand-on surface (`IsWalkable(x, z, y)`: off the mesh, a drop or step beyond `StandRise`/`StandDrop`) keeps the
   farthest walkable part of the step (bisection) instead of dropping all of it, and a body already standing where no surface is (pushed onto a mesh edge or into a hole) is not refused at all
-  (**Observed**, siwa-test6: characters stood for 10+ ticks with every root step refused; `root-log`: 21 refusals over three fights fell to 1). The body test above remains an engine stand-in
-  (**Observed** that vanilla only pushes apart; not changed).
+  (**Observed**, siwa-test6: characters stood for 10+ ticks with every root step refused; `root-log`: 21 refusals over three fights fell to 1). Standing bodies no longer cut a root step short: the original only pushes
+  overlapping characters apart, which `MovementSystem` separation does.
 - Meitou: `IWalkability.Slide` (`NavmeshWalkability.Slide`) for root motion (`AnimationSystem.Relocate`) and the combat approach step (`CombatSystem`): the walls are the edges that lead
   nowhere (no neighbour or tile link, not the zone border, not into a closed door), within `SnapRange` (16) of the walker's height (engine choice: the mesh's own error on stairs);
   the radius is RACE `pathfind footprint radius`. Before, only the end point was tested, and with the 2-unit edge tolerance a step could cross a thin wall (Observed: on the Hub's
