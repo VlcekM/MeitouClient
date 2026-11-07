@@ -322,6 +322,18 @@ public sealed class CharacterAppearance
     }
 
     /// <summary>
+    /// The id of the race an ANIMAL_CHARACTER names: its first <c>race</c> reference with a positive chance, else (a list whose chances are all 0: mods' single-race animals such
+    /// as "Great Beak Thing") its first reference; null without any. docs/game/animals.md "Appearance".
+    /// </summary>
+    public static string? AnimalRaceId(GameRecord animal)
+    {
+        var refs = animal.GetReferences("race");
+        foreach (var r in refs)
+            if (r.Values.Value0 > 0) return r.TargetStringId;
+        return refs.Count > 0 ? refs[0].TargetStringId : null;
+    }
+
+    /// <summary>
     /// An animal's look (docs/game/animals.md "Appearance", <b>Verified</b> against the records): the ANIMAL_CHARACTER names no mesh or texture; its race does, as a
     /// person's: <c>male mesh</c> (every animal race names the same file for both genders, so the male one is used), <c>body texture male</c>, <c>nm male</c>, and the fur
     /// as its <c>hairs</c> ATTACHMENT (a mesh on the body's skeleton, coloured by the race's <c>hair colors</c>). No head, no body file, no clothing, no visible weapon (the
@@ -329,8 +341,7 @@ public sealed class CharacterAppearance
     /// </summary>
     public static CharacterAppearance BuildAnimal(GameDatabase db, string installRoot, GameRecord animal)
     {
-        var race = animal.GetReferences("race").Where(r => r.Values.Value0 > 0).Select(r => db.Find(r.TargetStringId))
-            .FirstOrDefault(r => r is { Type: FcsRecordType.RACE }) ?? throw new KeyNotFoundException($"'{animal.Name}' has no race.");
+        var race = AnimalRaceId(animal) is { } raceId && db.Find(raceId) is { Type: FcsRecordType.RACE } found ? found : throw new KeyNotFoundException($"'{animal.Name}' has no race.");
         var result = new CharacterAppearance
         {
             Animal = animal, Race = race, Female = false,

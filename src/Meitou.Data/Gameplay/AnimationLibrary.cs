@@ -466,7 +466,7 @@ public sealed class AnimationLibrary
             var listed = a.GetReferences("animations").Select(r => db.Find(r.TargetStringId))
                 .OfType<GameRecord>().Where(r => index.ContainsKey(r.StringId) && all[index[r.StringId]].StealthMode != 1).DistinctBy(r => r.StringId).ToList();
             var defs = listed.Select(r => index[r.StringId]).ToList();
-            string? race = a.GetReferences("race").Where(r => r.Values.Value0 > 0).Select(r => r.TargetStringId).FirstOrDefault();
+            string? race = Meitou.Data.Characters.CharacterAppearance.AnimalRaceId(a);
             animals[a.StringId] = new AnimalClips(
                 a.StringId, race,
                 [.. defs.Where(i => all[i].MoveSpeed != 0).OrderBy(i => all[i].Id, StringComparer.Ordinal)],
@@ -821,7 +821,7 @@ public sealed class AnimationLengths
     void LoadAnimals(string installRoot, GameDatabase db, Func<string, string?>? find)
     {
         var races = db.OfType(FcsRecordType.ANIMAL_CHARACTER)
-            .SelectMany(a => a.GetReferences("race").Where(r => r.Values.Value0 > 0).Take(1).Select(r => db.Find(r.TargetStringId)))
+            .Select(a => Meitou.Data.Characters.CharacterAppearance.AnimalRaceId(a) is { } id ? db.Find(id) : null)
             .OfType<GameRecord>().Where(r => r.Type == FcsRecordType.RACE).DistinctBy(r => r.StringId).ToList();
         var keyOf = new System.Collections.Concurrent.ConcurrentDictionary<string, (string File, string[] Linked)?>(StringComparer.Ordinal);
         Parallel.ForEach(races, race =>

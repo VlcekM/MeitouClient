@@ -70,6 +70,10 @@ static class RecordDump
             foreach (var f in r.Floats.OrderBy(f => f.Key)) Console.WriteLine($"  {f.Key} = {f.Value}");
             foreach (var f in r.Ints.OrderBy(f => f.Key)) Console.WriteLine($"  {f.Key} = {f.Value}");
             foreach (var f in r.Strings.OrderBy(f => f.Key)) Console.WriteLine($"  {f.Key} = {f.Value}");
+            foreach (var f in r.Filenames.OrderBy(f => f.Key)) Console.WriteLine($"  FILE {f.Key} = {f.Value}");
+            foreach (var f in r.Vector3s.OrderBy(f => f.Key)) Console.WriteLine($"  {f.Key} = {f.Value}");
+            foreach (var f in r.Vector4s.OrderBy(f => f.Key)) Console.WriteLine($"  {f.Key} = {f.Value}");
+            foreach (var f in r.Bools.OrderBy(f => f.Key)) Console.WriteLine($"  {f.Key} = {f.Value}");
             foreach (string list in r.ReferenceLists) Console.WriteLine($"  LIST {list}: " + string.Join(", ", r.GetReferences(list).Select(x => $"{db.Find(x.TargetStringId)?.Name ?? ("?" + x.TargetStringId)}[{db.Find(x.TargetStringId)?.Type}]={x.Values.Value0},{x.Values.Value1},{x.Values.Value2}")));
         }
         return 0;
@@ -106,6 +110,20 @@ static class ItemSurvey
             }
         }
         Console.WriteLine($"{ok} ok, {bad} with problems");
+        return 0;
+    }
+}
+
+/// <summary>The paint factors of the MATERIAL_SPECS_CLOTHING records that have a colour map: base game against mods.</summary>
+static class SpecSurvey
+{
+    public static int Run(GameInstall install)
+    {
+        var db = GameDatabase.Load(LoadOrder.FromInstall(install));
+        var groups = db.Records.Values.Where(r => r.Type == FcsRecordType.MATERIAL_SPECS_CLOTHING && r.GetPath("color map").Length > 0)
+            .GroupBy(r => (r.DefinedBy.EndsWith(".base") ? "base" : "mod", r.GetFloat("paint factor 1"), r.GetFloat("paint factor 2")))
+            .OrderBy(g => g.Key);
+        foreach (var g in groups) Console.WriteLine($"{g.Key.Item1} f1 {g.Key.Item2} f2 {g.Key.Item3}: {g.Count()}  e.g. {string.Join(", ", g.Take(3).Select(r => r.Name))}");
         return 0;
     }
 }

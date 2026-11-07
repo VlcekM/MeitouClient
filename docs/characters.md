@@ -154,6 +154,15 @@ Boots (slot 9, not `is locked`) on a character with exactly one fitted leg prost
 
 **Verified** (`skin.hlsl`): worn items always `clip(normal.a - 0.6)`, so a normal map whose alpha is low (BC1 punch-through, atlas islands) hides those texels.
 
+### Surveys
+
+`dotnet run --project tools/Meitou.Tools -- characters` builds the look of every ANIMAL_CHARACTER and of one CHARACTER per race list and reports a missing body mesh, skeleton,
+texture or part mesh; `items` resolves each worn ARMOUR/CONTAINER's material (7,370 of 13,107 mesh fields name no material list and take the mesh's own material: not a failure);
+`specs` counts the paint factors of coloured materials; `record <name|id>[|...]` prints a record. **Observed** (owner's mods): the only people/animals failing were the 4 all-0-chance
+animals (animals.md). Samurai Clothpants' `color samurai armour nopaint faction painted` has `dont colorise` false, so a worn pair takes the wearer's faction scheme (a
+white second colour for Bounty Hunters), which paints the colour map's second region white over the light texture: the same inputs the original's shader takes; whether the
+original shows it flatter is **Unknown**.
+
 ### Clothing colours
 
 Each item instance carries a COLOR_DATA (save key `color sid`). **Observed** (decompile, KenshiLib 1ce4a16 names: `Item::Item`, `AppearanceBase::createAttachedObject`

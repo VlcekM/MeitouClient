@@ -32,6 +32,10 @@ Pose/LOD distances can scale by animal size in engine, not original scheduler pr
   bounty fields, `unique`, `faction importance`, `sounds`; references `race` (every record, value 100), `weapon`,
   `weapon level`, `stats` (only the Leviathan), `faction` (only the Landbat), `animations`, `strafe anim`,
   `turning anim`, `death items`, `backpack`, `AI Goals`, `bird attractor`.
+- **Observed** (merged data of the owner's 662 mods, `meitou-tools characters`): 4 of 200 animal records with a race list give every entry chance 0 (mods'
+  single-race animals: Great Beak Thing, Whistler, Pack Bull, Oddly Friendly Great Beak Thing; one has no chance above 0 and one RACE entry). Meitou took the first entry with a
+  chance above 0, found none and built no look: the animal was invisible (a blue square far off). Now `CharacterAppearance.AnimalRaceId`: first entry with a chance above 0, else the
+  first entry. How the original draws from an all-0 list is **Unknown**; its mods work, so it still names the race.
 - The `race` is an ordinary RACE record (Beak Thing, Bonedog, Garru, Bull, Goat, Leviathan, Spider, Crab...), with
   the anatomy, blood, speeds and footprint of [character-stats.md "Races"](character-stats.md#races); the
   animals' forelegs are ARM parts ([character-stats.md](character-stats.md)).

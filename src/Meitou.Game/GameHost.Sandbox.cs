@@ -71,7 +71,7 @@ sealed partial class GameHost
     /// <summary><c>--sandbox-animals</c>: the first ANIMAL_CHARACTER record of every race animals use, by name.</summary>
     static List<(string Race, string Record)> SandboxAnimals(Meitou.Data.GameDatabase db) =>
         db.Records.Values.Where(r => r.Type == FcsRecordType.ANIMAL_CHARACTER)
-            .Select(r => (Id: r.StringId, Name: r.Name, Race: r.GetReferences("race").Where(x => x.Values.Value0 > 0).Select(x => x.TargetStringId).FirstOrDefault()))
+            .Select(r => (Id: r.StringId, Name: r.Name, Race: Meitou.Data.Characters.CharacterAppearance.AnimalRaceId(r)))
             .Where(x => x.Race is not null)
             .GroupBy(x => x.Race!).Select(grp => (Race: db.Find(grp.Key)?.Name ?? grp.Key, Record: grp.First().Id))
             .OrderBy(x => x.Race, StringComparer.Ordinal).ToList();

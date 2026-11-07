@@ -20,6 +20,7 @@ return args switch
     ["particles", "warmup", .. var warmupNames] => WithInstall(i => ParticleWarmup.Run(i, warmupNames)),
     ["record", var recordName] => WithInstall(i => RecordDump.Run(i, recordName)),
     ["items"] => WithInstall(ItemSurvey.Run),
+    ["specs"] => WithInstall(SpecSurvey.Run),
     ["characters", .. var charArgs] => WithInstall(i => CharacterSurvey.Run(i, charArgs)),
     ["navmesh", .. var navArgs] => WithInstall(i => NavmeshTool.Run(i, navArgs)),
     ["weather", .. var weatherArgs] => WithInstall(i => WeatherTool.Run(i, weatherArgs)),

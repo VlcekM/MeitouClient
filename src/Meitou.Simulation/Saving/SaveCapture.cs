@@ -889,8 +889,7 @@ public static partial class SaveCapture
         target.Vector3s["Skin Tone"] = new Vector3(0.5f, 0.5f, 0.5f);
         foreach (var k in new[] { "head", "idle stance", "beard", "hair style" }) target.Strings[k] = "";
         if (db.Find(cold.RecordId) is { } record)
-            foreach (var r in record.GetReferences("race"))
-                if (r.Values.Value0 > 0) { target.References["race"] = [new FcsReference(r.TargetStringId, 0, 0, 0)]; break; }
+            if (CharacterAssembly.RaceId(record) is { } raceId) target.References["race"] = [new FcsReference(raceId, 0, 0, 0)];
     }
 
     /// <summary>
