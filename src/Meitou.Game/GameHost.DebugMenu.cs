@@ -20,7 +20,7 @@ sealed partial class GameHost
     static readonly string[] DebugLabels =
     [
         "Teleport selected here", "Spawn NPC (hostile)", "Give item (name x5 q80)", "Money (+/- cats)", "Heal", "  Heal fully (restore limbs)", "Max out skills", "Damage (cut)",
-        "Force hits to", "Damage multiplier", "Unlock all research", "Clear bounties", "Godmode (all players)", "Guard (kill + heal in radius)", "Explode at selected",
+        "Force hits to", "Damage multiplier", "Unlock all research", "Clear bounties", "Godmode (all players)", "Guard (kill + heal in radius)", "Explode at target",
     ];
 
     /// <summary>The cheat rows' sections, in the order shown (and walked by Up / Down).</summary>
@@ -287,20 +287,26 @@ sealed partial class GameHost
     }
 
     /// <summary>
-    /// The explode row: <paramref name="field"/> is empty (15 m around the selected, else the first, player character) or <c>[&lt;x&gt; &lt;z&gt;] [--radius &lt;m&gt;] [--force &lt;n&gt;] [--damage &lt;n&gt;] [--squad]</c>
+    /// The explode row: <paramref name="field"/> is empty (15 m around the shown target, else the selected, else the first, player character) or <c>[&lt;x&gt; &lt;z&gt;] [--radius &lt;m&gt;] [--force &lt;n&gt;] [--damage &lt;n&gt;] [--squad]</c>
     /// as the console passes it. <see cref="DebugExplode"/> does the rest in the simulation; its summary reaches the message log.
     /// </summary>
     string DebugExplodeApply(World world, string field, long tick)
     {
-        const string usage = "usage: explode [<x> <z>] [--radius <m>] [--force <n>] [--damage <n>] [--squad]";
+        const string usage = "usage: explode [<x> <z>] [--id <c:slot.gen>] [--radius <m>] [--force <n>] [--damage <n>] [--squad]";
         float radius = 15, force = 30, damage = 40;
         bool squad = false;
         var numbers = new List<float>();
+        CharacterId? byId = null;
         var words = field.Split(' ', StringSplitOptions.RemoveEmptyEntries);
         for (int i = 0; i < words.Length; i++)
         {
             float value;
             if (words[i].Equals("--squad", StringComparison.OrdinalIgnoreCase)) squad = true;
+            else if (words[i].Equals("--id", StringComparison.OrdinalIgnoreCase))
+            {
+                if (i + 1 >= words.Length || !PlayerInterface.TryParseCharacter(words[++i], out var parsed)) return DebugFail("explode: --id needs a character id (c:<slot>.<gen>)");
+                byId = parsed;
+            }
             else if (words[i].Equals("--radius", StringComparison.OrdinalIgnoreCase) && i + 1 < words.Length && float.TryParse(words[++i], NumberStyles.Float, CultureInfo.InvariantCulture, out value) && value > 0 && value <= 500) radius = value;
             else if (words[i].Equals("--force", StringComparison.OrdinalIgnoreCase) && i + 1 < words.Length && float.TryParse(words[++i], NumberStyles.Float, CultureInfo.InvariantCulture, out value) && value >= 0 && value <= 1000) force = value;
             else if (words[i].Equals("--damage", StringComparison.OrdinalIgnoreCase) && i + 1 < words.Length && float.TryParse(words[++i], NumberStyles.Float, CultureInfo.InvariantCulture, out value) && value >= 0 && value <= 10000) damage = value;
@@ -309,16 +315,26 @@ sealed partial class GameHost
         }
         if (numbers.Count is not (0 or 2)) return DebugFail(usage);
         Vector2 at;
-        if (numbers.Count == 2) at = new Vector2(numbers[0], numbers[1]);
+        string onName = "";
+        var snap = session.CurrentSnapshot;
+        if (numbers.Count == 2 && byId is null) at = new Vector2(numbers[0], numbers[1]);
         else
         {
-            var snap = session.CurrentSnapshot;
-            var lead = snap.Characters.FirstOrDefault(c => c.IsPlayer && c.Selected) ?? snap.Characters.FirstOrDefault(c => c.IsPlayer);
-            if (lead is null) return DebugFail("explode: no squad member to centre on (pass <x> <z>)");
-            at = new Vector2(lead.Position.X, lead.Position.Z);
+            // Centre priority: --id; else the character the info panel shows (inspected, not one of the squad); else the selected squad character; else the first.
+            CharacterSnapshot? centre;
+            if (byId is { } wanted)
+            {
+                centre = snap.Characters.FirstOrDefault(c => c.Id == wanted);
+                if (centre is null) return DebugFail($"explode: no character c:{wanted.Slot}.{wanted.Generation}");
+            }
+            else centre = snap.Characters.FirstOrDefault(c => c.Inspected && !c.IsPlayer)
+                ?? snap.Characters.FirstOrDefault(c => c.IsPlayer && c.Selected) ?? snap.Characters.FirstOrDefault(c => c.IsPlayer);
+            if (centre is null) return DebugFail("explode: no character to centre on (pass <x> <z>)");
+            at = new Vector2(centre.Position.X, centre.Position.Z);
+            onName = centre.Name;
         }
-        world.Commands.Enqueue(new DebugExplode(at, radius, force, damage, squad) { Tick = tick });
-        return $"explosion at {at.X:0}, {at.Y:0}: radius {radius:0.#} m, force {force:0.#}, damage {damage:0.#} at the centre{(squad ? ", squad included" : "")}; the result line (hit / knocked out / killed, or nobody in range) follows in the message log (it runs in the next tick, so unpause first)";
+        world.Commands.Enqueue(new DebugExplode(at, radius, force, damage, squad, onName) { Tick = tick });
+        return $"explosion at {at.X:0}, {at.Y:0}{(onName.Length > 0 ? $" (on {onName})" : "")}: radius {radius:0.#} m, force {force:0.#}, damage {damage:0.#} at the centre{(squad ? ", squad included" : "")}; the result line (hit / knocked out / killed, or nobody in range) follows in the message log (it runs in the next tick, so unpause first)";
     }
 
     /// <summary>

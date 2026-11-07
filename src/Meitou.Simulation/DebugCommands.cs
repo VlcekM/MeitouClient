@@ -39,7 +39,7 @@ public sealed record DebugGuard(bool On, float Radius = 30, bool Animals = false
 /// A debug explosion at <see cref="At"/> (X, Z): every living character within <see cref="Radius"/> metres (not the player's own unless <see cref="Squad"/>) takes <see cref="Damage"/> cut damage falling off
 /// linearly with the distance, is knocked out, and is thrown away from the centre with <see cref="Force"/> world units/s (also falling off), by the combat system's knock-down push.
 /// </summary>
-public sealed record DebugExplode(Vector2 At, float Radius = 15, float Force = 30, float Damage = 40, bool Squad = false) : DebugCommand;
+public sealed record DebugExplode(Vector2 At, float Radius = 15, float Force = 30, float Damage = 40, bool Squad = false, string On = "") : DebugCommand;
 
 /// <summary>Who a radius kill hits, shared by the console's <c>kill --radius</c> and the guard: never a player character or the player's faction, never the dead, animals only when asked for.</summary>
 public static class DebugKillArea
@@ -278,7 +278,7 @@ static class DebugCheats
             if (medical.Dead) killed++; else if (medical.Incapacitated) knocked++;
             combat?.Blast(world, slot, cold, away, blast.Force * falloff);
         }
-        string where = $"{blast.At.X:0},{blast.At.Y:0} r={radius:0.#}";
+        string where = $"{blast.At.X:0},{blast.At.Y:0}{(blast.On.Length > 0 ? $" (on {blast.On})" : "")} r={radius:0.#}";
         if (hit == 0)
             world.Post(squadNear > 0 ? $"Explode at {where}: nobody to hit; only your own squad ({squadNear}) is in range (--squad includes it)"
                 : $"Explode at {where}: nobody in range{(nearest < float.MaxValue ? $" (nearest living character {nearest:0} m away)" : "")}; --squad includes your own");
