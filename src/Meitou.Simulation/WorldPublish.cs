@@ -97,6 +97,24 @@ public sealed partial class World
     static IReadOnlyList<HealthPartView> HealthPartsOf(Bodies.MedicalState health, RaceData anatomy) =>
         Array.AsReadOnly(health.Parts.Select(p => new HealthPartView(p.Template.StringId, p.Template.Name, p.Flesh, p.Stun, p.Bandage, p.Rig, p.MaxHp, p.IsRobotic(anatomy)) { Vital = p.Template.Vital, Type = p.Template.Type, Limb = p.Limb }).ToArray());
 
+    /// <summary>
+    /// The inventory window's view: Total Weight is the carried weight (<see cref="Bodies.Encumbrance.CarriedWeight"/>, a carried person included, as the original's panel
+    /// <c>FUN_1405d4260</c>, docs/game/ui-screens.md), the maximum and the burden factor from the holder's strength.
+    /// </summary>
+    InventoryView InventoryViewOf(CharacterCold cold, Items.Inventory grid, PopulationData? population, GameConstants? constants)
+    {
+        float items = grid.ContentWeight(Player.Held);
+        bool carrying = !cold.Carrying.IsNone;
+        float strengthMult = cold.Medical?.StatMultiplier(StatsEnumerated.Strength) ?? 1;
+        var stats = constants is null ? null : cold.Stats;
+        return new InventoryView(grid.Width, grid.Height, grid.Backpack?.Contents?.Width ?? 0, grid.Backpack?.Contents?.Height ?? 0, ItemsOf(grid, cold.Faction, population))
+        {
+            TotalWeight = constants is null ? items : Bodies.Encumbrance.CarriedWeight(constants, items, carrying),
+            CarryCapacity = stats is null ? null : Bodies.Encumbrance.WindowCapacity(constants!, stats.Strength, strengthMult),
+            Burden = stats is null || items <= 0 && !carrying ? 1 : Bodies.Encumbrance.Factor(constants!, items, carrying, stats.Strength, strengthMult),
+        };
+    }
+
     static IReadOnlyList<InventoryItemView> ItemsOf(Items.Inventory grid, int faction, PopulationData? population) =>
         Array.AsReadOnly(grid.Shown().Select(shown => new InventoryItemView(shown.Index, shown.Item.Record, shown.Item.Name, shown.Item.Section, shown.Item.X, shown.Item.Y, shown.Item.Width, shown.Item.Height, shown.Item.Quantity, shown.Item.Weight, shown.Item.Quality) { Material = shown.Item.MaterialId, Colour = shown.Item.ColourId, Charge = shown.Item.ChargeFraction, Company = shown.Item.CompanyId, Crafter = shown.Item.Crafter, Level = shown.Item.Level, Charges = shown.Item.Charges, MaxCharges = shown.Item.MaxCharges,
             StolenFrom = shown.Item.IsStolenFor(faction, population) ? shown.Item.StolenFrom : -1, Unique = shown.Item.Unique,
@@ -241,12 +259,8 @@ public sealed partial class World
             s.Knockdown = cold?.Knockdown ?? default;
             s.ClosedSlots = cold is null || !detailed ? [] : ClosedSlotsOf(cold);
             s.HealthParts = detailed && cold!.Medical is { } health && cold.Race is { } anatomy ? HealthPartsOf(health, anatomy) : [];
-            s.ItemGrid = (selected || id == Player.OpenLoot || cold is { IsPlayer: true } && Player.InventoryShown.Contains(id)) && cold!.Inventory is { } grid ? new InventoryView(grid.Width, grid.Height, grid.Backpack?.Contents?.Width ?? 0, grid.Backpack?.Contents?.Height ?? 0,
-                ItemsOf(grid, cold.Faction, population))
-                { TotalWeight = grid.ContentWeight(Player.Held), CarryCapacity = cold.Stats is { } strength && systems.OfType<BodySystem>().FirstOrDefault() is { } bodies
-                    ? Bodies.Encumbrance.WindowCapacity(bodies.Constants, strength.Strength, cold.Medical?.StatMultiplier(StatsEnumerated.Strength) ?? 1) : null,
-                    Burden = cold.Stats is { } bs && systems.OfType<BodySystem>().FirstOrDefault() is { } bb && grid.ContentWeight(Player.Held) is var bw && (bw > 0 || !cold.Carrying.IsNone)
-                    ? Bodies.Encumbrance.Factor(bb.Constants, bw, !cold.Carrying.IsNone, bs.Strength, cold.Medical?.StatMultiplier(StatsEnumerated.Strength) ?? 1) : 1 } : null;
+            s.ItemGrid = (selected || id == Player.OpenLoot || cold is { IsPlayer: true } && Player.InventoryShown.Contains(id)) && cold!.Inventory is { } grid
+                ? InventoryViewOf(cold, grid, population, bodyConstants) : null;
             s.Bounties = detailed && cold!.Bounties is not null ? Crime.CrimeSystem.Lines(cold, Tick, TickSeconds, LocalFaction(cold, state[i].Position, population)) : [];
             s.Slave = cold is { SlaveState: >= 1 and <= 3 } ? new SlaveView(cold.SlaveState, population is { Factions: { } factions } && (uint)cold.SlaveOwner < (uint)factions.Count ? factions[cold.SlaveOwner].Name : "",
                 systems.OfType<Kidnap.CaptiveSystem>().FirstOrDefault()?.LooksLikeSlaveLevel(cold) ?? 0) : null;

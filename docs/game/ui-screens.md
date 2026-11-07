@@ -1145,7 +1145,7 @@ unless marked; Meitou: `PlayerInterface.Squads.cs`, commands in `SquadManagement
   Total Weight `W/M` (**Observed** in the exe, checked on three characters of the owner's save against the original): both truncated; M = strength × its injury multiplier +
   `encumbrance base`, without `carry weight mult` (that only enters the encumbrance factor, [character-stats](character-stats.md)). A melee weapon weighs by its level, manufacturer and
   material (`WeaponStats`: the larger of `weight kg` × the maker's weight mod and 40 × blunt × `weight mult` × `weapon inventory weight mult`; a Falling Sun 30 kg), armour by its
-  coverage ([Item tooltip](#6-inventory-trade-dialogue-build)). **Unknown**: +30 while carrying a person; one character
+  coverage ([Item tooltip](#6-inventory-trade-dialogue-build)). W includes `carry person weight` while carrying someone (Character `+0x348`, **Verified** `FUN_1405d4260`: the same sum as the carried-weight function `FUN_1405c89d0`, [carry-loot](carry-loot.md)); one character
   reads 124 where the original reads 126, cause not found.
 - **Trader window** (code `PlayerInterface.Trade.cs`):
   - Layout: `Kenshi_InventoryTraderWindow` (**Verified**: `FUN_140155ee0`, class `TraderInventoryLayout`, names the file; created by `FUN_1406e6af0` for a trading character or building).
