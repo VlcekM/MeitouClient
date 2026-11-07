@@ -147,6 +147,8 @@ sealed partial class GameHost
     /// <summary>The "Explode on click" switch (F10 Combat row, console <c>explode-click</c>): the world it was switched on in and the explode flags used for each click.</summary>
     World? explodeClickWorld;
     string explodeClickArgs = "";
+    /// <summary>What a click explodes with unless a flag says otherwise: twice the radius and force of a plain <c>explode</c> (15, 30) and more than twice its damage (40).</summary>
+    const string ExplodeClickDefaults = "--radius 30 --force 60 --damage 100";
     bool ExplodeClickOn => explodeClickWorld is not null && ReferenceEquals(explodeClickWorld, session.World);
 
     /// <summary>
@@ -190,14 +192,14 @@ sealed partial class GameHost
         if (!ExplodeClickOn) return false;
         if (debugMenuOpen || ConsoleOpen) return false;   // clicks on the F10 menu and the console are theirs
         if (ground is not { } at) return true;
-        debugStatus = DebugExplodeApply(session.World, string.Create(CultureInfo.InvariantCulture, $"{at.X} {at.Z} {explodeClickArgs}"), session.World.Tick);
+        debugStatus = DebugExplodeApply(session.World, string.Create(CultureInfo.InvariantCulture, $"{at.X} {at.Z} {ExplodeClickDefaults} {explodeClickArgs}"), session.World.Tick);
         return true;
     }
 
     /// <summary>The hint while the switch is on.</summary>
     void DrawExplodeClickHint(DebugOverlay o, int width, int height)
     {
-        string text = $"explode-click ON: left click = explode{(explodeClickArgs.Length > 0 ? " (" + explodeClickArgs + ")" : " (r=15)")}. Switch off: explode-click off"
+        string text = $"explode-click ON: left click = explode{(explodeClickArgs.Length > 0 ? " (defaults r=30 force 60 dmg 100, then " + explodeClickArgs + ")" : " (r=30, force 60, dmg 100)")}. Switch off: explode-click off"
             + (session.Simulation.IsPaused ? "   PAUSED: unpause, the blast runs in the next tick" : "");
         float w = text.Length * o.CharWidth + 20, x = (width - w) / 2;
         o.Rect(x, 8, x + w, 8 + o.LineHeight + 12, DebugOverlay.PanelColour);

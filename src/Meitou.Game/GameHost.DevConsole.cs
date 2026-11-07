@@ -271,7 +271,7 @@ sealed partial class GameHost
             if (!debugFailed) explodeAsker = con;   // the result line (made in the next tick) is printed here too
         });
 
-        Add("explode-click", "explode-click [on|off] [--radius <m>=15] [--force <n>=30] [--damage <n>=40] [--squad]", "the F10 switch Explode on click: while on, a left click on the ground in the world (not on the interface, the F10 menu, the console or the map) explodes the point under the cursor like explode does (flags set the blast used for each click), and the click selects and orders nothing; no on/off argument toggles (flags alone turn it on); stays on until switched off or another game loads. Runs in the simulation, so not while the game is paused", (args, con) =>
+        Add("explode-click", "explode-click [on|off] [--radius <m>=30] [--force <n>=60] [--damage <n>=100] [--squad]", "the F10 switch Explode on click: while on, a left click on the ground in the world (not on the interface, the F10 menu, the console or the map) explodes the point under the cursor like explode does (flags set the blast used for each click), and the click selects and orders nothing; no on/off argument toggles (flags alone turn it on); stays on until switched off or another game loads. Runs in the simulation, so not while the game is paused", (args, con) =>
         {
             Report(con, DebugApply(DebugRow.ExplodeClick, string.Join(' ', args)));
         });
