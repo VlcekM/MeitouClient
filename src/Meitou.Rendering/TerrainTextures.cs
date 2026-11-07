@@ -777,6 +777,77 @@ public sealed unsafe class TerrainTextures : IDisposable
     static byte[][] LoadNearNormal(AssetLocator assets, string? name, int size, List<string> problems)
     {
         int levelCount = (int)Math.Log2(size) + 1;
+        string? cacheFile = NormalCachePath(assets, name, size);
+        if (cacheFile is not null && ReadNormalCache(cacheFile, size, levelCount) is { } cached) return cached;
+        var levels = DecodeNearNormal(assets, name, size, levelCount, problems);
+        if (cacheFile is not null) WriteNormalCache(cacheFile, levels);
+        return levels;
+    }
+
+    /// <summary>Bumped when <see cref="Deblock"/> or the BC5 encoding changes; part of the cache's file name.</summary>
+    const string NormalCacheVersion = "n1";
+
+    /// <summary>
+    /// The disk cache of a deblocked near normal layer (<c>%LOCALAPPDATA%\Meitou\terrain\normals\&lt;hash&gt;.bc5</c>): the hash covers the version tag, the layer size and the
+    /// source file's path, length and write time, so a mod's replacement gets its own file. Null for a layer without a file. Old files are never deleted.
+    /// </summary>
+    static string? NormalCachePath(AssetLocator assets, string? name, int size)
+    {
+        if (name is null) return null;
+        var path = assets.Find(name) ?? assets.Find(Path.GetFileName(name.Replace('\\', '/')));
+        if (path is null) return null;
+        try
+        {
+            var info = new FileInfo(path);
+            var key = $"{NormalCacheVersion}|{size}|{path.ToLowerInvariant()}|{info.Length}|{info.LastWriteTimeUtc.Ticks}";
+            var hash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(key)))[..24].ToLowerInvariant();
+            return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Meitou", "terrain", "normals", hash + ".bc5");
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException) { return null; }
+    }
+
+    /// <summary>The levels of a cache file (magic MNB5, level count, then each level's length and blocks), or null when it is missing or does not fit.</summary>
+    static byte[][]? ReadNormalCache(string file, int size, int levelCount)
+    {
+        try
+        {
+            if (!File.Exists(file)) return null;
+            using var stream = new BufferedStream(File.OpenRead(file), 1 << 20);
+            using var reader = new BinaryReader(stream);
+            if (reader.ReadUInt32() != 0x3542424D || reader.ReadInt32() != levelCount) return null;
+            var levels = new byte[levelCount][];
+            for (int l = 0; l < levelCount; l++)
+            {
+                int side = Math.Max(size >> l, 1), expected = (side + 3) / 4 * ((side + 3) / 4) * 16;
+                if (reader.ReadInt32() != expected) return null;
+                levels[l] = reader.ReadBytes(expected);
+                if (levels[l].Length != expected) return null;
+            }
+            return levels;
+        }
+        catch (Exception e) when (e is IOException or EndOfStreamException or UnauthorizedAccessException) { return null; }
+    }
+
+    static void WriteNormalCache(string file, byte[][] levels)
+    {
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+            var temporary = file + "." + Environment.ProcessId + "." + Environment.CurrentManagedThreadId + ".tmp";
+            using (var stream = File.Create(temporary))
+            using (var writer = new BinaryWriter(stream))
+            {
+                writer.Write(0x3542424D);
+                writer.Write(levels.Length);
+                foreach (var level in levels) { writer.Write(level.Length); writer.Write(level); }
+            }
+            File.Move(temporary, file, overwrite: true);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
+    }
+
+    static byte[][] DecodeNearNormal(AssetLocator assets, string? name, int size, int levelCount, List<string> problems)
+    {
         byte[] level0;
         if (ReadImage(assets, name, size) is { } image) level0 = Resize(image, size);
         else
