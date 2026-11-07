@@ -213,7 +213,11 @@ static partial class WikiExport
         }
 
         var files = new (string Name, List<Row> Rows)[] { ("zones", zones), ("towns", towns), ("factions", factions), ("squads", squads), ("npcs", npcs), ("items", items), ("buildings", buildings), ("shops", detail.Shops), ("vendors", detail.Vendors), ("overrides", detail.Overrides), ("characters", detail.Characters), ("research", research), ("animals", animals), ("spawns", spawn.Rows) };
-        string dataDir = install.DataDirectory;
+        var modNames = order.Entries.Select(e => e.Name).Where(n => !LoadOrder.BaseFiles.Contains(n) && !IsSeparator(n)).ToList();
+        // A facts-only export is shipped, so it names no local path: only the clean-install wording or the mod names.
+        string dataDir = factsOnly
+            ? (modNames.Count == 0 ? "clean install (base game + official DLC files only)" : "base game + mods: " + string.Join(", ", modNames))
+            : install.DataDirectory;
         string modsCfgPath = ModList.ModsCfgPath(install);
         var modsCfg = File.Exists(modsCfgPath) ? ModList.ParseModsCfg(File.ReadAllLines(modsCfgPath)).ToList() : [];
         var meta = new Meta(source, dataDir, string.Join(", ", order.Entries.Select(e => e.Name)), [.. order.Entries.Select(e => e.Name).Where(n => !LoadOrder.BaseFiles.Contains(n) && !IsSeparator(n))], modsCfg, order.Issues.Select(i => $"{i.File}: {i.Message}").ToList(), factsOnly);
