@@ -359,10 +359,15 @@ internal sealed unsafe partial class CharacterRenderer
     static uint HiddenFlags(AssetPart part, CharacterAsset asset)
     {
         uint flags = (uint)part.HideSide << 16;
-        if (!part.IsBody || asset.Appearance is not { } look) return flags;
+        if (asset.Appearance is not { } look) return flags;
+        // Headless and head only reach the worn items skinned to the body too: their head-bone vertices carry bit 14 (CharacterContent.MarkWorn).
+        if (part.IsBody || part.Shared)
+        {
+            if (look.Headless) flags |= CharacterShaders.Headless;
+            if (look.HeadOnly) flags |= CharacterShaders.HeadOnly;
+        }
+        if (!part.IsBody) return flags;
         flags |= (uint)look.HiddenLimbs << 12 | (uint)(look.HiddenParts & 0x3FF) << 18;
-        if (look.Headless) flags |= CharacterShaders.Headless;
-        if (look.HeadOnly) flags |= CharacterShaders.HeadOnly;
         return flags;
     }
 
@@ -400,6 +405,8 @@ internal sealed unsafe partial class CharacterRenderer
             var part = parts[p];
             ref var f = ref partFrames[l.PartBase + p];
             f.Shows = part.ShowsWith(l.WeaponDrawn, l.RangedDrawn, l.Shots, l.BackDrawn);
+            // Decapitation: a part on a head bone leaves the body with the head; the cut-off head keeps only those (skinned parts: their head vertices, by the shader).
+            if (f.Shows && !part.Shared && !part.IsBody && l.Asset.Appearance is { } look && (look.Headless && part.OnHead || look.HeadOnly && !part.OnHead)) f.Shows = false;
             if (!f.Shows) continue;
             f.Model = part.Shared ? world : attach[l.AttachBase + part.AttachIndex] * world;
             f.Scale = part.Shared ? worldScale : f.Model.ScaleLength();

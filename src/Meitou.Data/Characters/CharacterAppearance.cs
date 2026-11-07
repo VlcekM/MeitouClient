@@ -368,7 +368,8 @@ public sealed class CharacterAppearance
     /// <summary>A cut-off head (<see cref="SeveredHead"/>): only the body's head vertices are drawn, with the hair, beard and hat.</summary>
     public bool HeadOnly { get; private set; }
 
-    /// <summary>The head of this look as it falls when cut off (Meitou decapitation): the body (drawn head only, <see cref="HeadOnly"/>) with its hair, beard and hat.</summary>
+    /// <summary>The head of this look as it falls when cut off (Meitou decapitation): the body and every worn part, drawn head only (<see cref="HeadOnly"/>: the head bones' vertices of
+    /// skinned parts, the parts attached to a head bone), so hair, beard, hat and whatever else sits on the head (goggles in the belt slot) go with it.</summary>
     public CharacterAppearance SeveredHead()
     {
         var copy = new CharacterAppearance
@@ -377,7 +378,7 @@ public sealed class CharacterAppearance
             BodyMesh = BodyMesh, BodyTexture = BodyTexture, BodyNormal = BodyNormal, BodyNormalStrong = BodyNormalStrong, BodyNormalSkinny = BodyNormalSkinny, BodyMask = BodyMask, PartMap = PartMap, Head = Head, Hair = Hair,
             Shape = Shape, Beard = Beard, SkinToneParameter = SkinToneParameter, HairColour = HairColour, HeadOnly = true,
         };
-        copy.Parts.AddRange(Parts.Where(p => p.Record == Hair || p.Record == Beard || p.Slot == AttachSlot.Hat));
+        copy.Parts.AddRange(Parts);
         copy.BodyLayers.AddRange(BodyLayers);
         foreach (var (name, weight) in PoseWeights) copy.PoseWeights[name] = weight;
         return copy;

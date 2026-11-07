@@ -23,6 +23,8 @@ internal sealed class AssetPart
     /// <summary>Skinned by the body's bone palette (clothing, hair, beards); else placed by <see cref="Bone"/> and <see cref="Offset"/>.</summary>
     public required bool Shared;
     public int Bone = -1;
+    /// <summary>Placed on a head bone (not shared): hidden on a decapitated body, kept on its cut-off head (<see cref="CharacterContent.MarkWorn"/> for the skinned parts).</summary>
+    public bool OnHead;
     public Matrix4x4 Offset = Matrix4x4.Identity;
     /// <summary>Index among the character's bone-attached parts (the matrices <see cref="CharacterRenderer"/> keeps per frame); -1 for shared parts.</summary>
     public int AttachIndex = -1;
@@ -276,8 +278,8 @@ internal sealed class CharacterContent : IDisposable
     readonly ConcurrentDictionary<(string Path, int Bones, bool Close, string? PartMap), Lazy<Prepared>> prepared = new();
 
     /// <summary>The preparation of a mesh, made once (any thread; the first caller's level settings stand).</summary>
-    Lazy<Prepared> Prepare(string path, int? boneCount, float lodScale, bool shadowLevels, float pixelsPerRadian, LimbHide? limbs = null, bool close = false, bool icon = false, string? partMap = null) =>
-        prepared.GetOrAdd((path.ToLowerInvariant(), icon ? IconBones : boneCount ?? -1, close, partMap?.ToLowerInvariant()), _ => new Lazy<Prepared>(() => PrepareMesh(path, boneCount, lodScale, shadowLevels, pixelsPerRadian, limbs, close, icon, partMap)));
+    Lazy<Prepared> Prepare(string path, int? boneCount, float lodScale, bool shadowLevels, float pixelsPerRadian, LimbHide? limbs = null, bool close = false, bool icon = false, string? partMap = null, bool worn = false) =>
+        prepared.GetOrAdd((path.ToLowerInvariant(), icon ? IconBones : boneCount ?? -1, close, partMap?.ToLowerInvariant()), _ => new Lazy<Prepared>(() => PrepareMesh(path, boneCount, lodScale, shadowLevels, pixelsPerRadian, limbs, close, icon, partMap, worn)));
 
     /// <summary>The bone count an icon's mesh is kept under (<see cref="prepared"/>, <see cref="meshes"/>): its tangents are built the icon shader's way (<see cref="Model.Build"/>).</summary>
     const int IconBones = -2;
@@ -285,7 +287,7 @@ internal sealed class CharacterContent : IDisposable
     /// <summary>Reads a mesh file and makes its levels and index buffers (no GPU work, any thread): with its skinning weights for a skeleton of <paramref name="boneCount"/>
     /// bones (null: unskinned); its generated levels start <paramref name="lodScale"/> times farther than the rule gives. A <paramref name="close"/> mesh (the character editor's
     /// close-up) keeps only its full level: generating the others is nearly all of the time a mesh takes (a hair 1 to 2 s), and the editor shows one character up close.</summary>
-    static Prepared PrepareMesh(string path, int? boneCount, float lodScale, bool shadowLevels, float pixelsPerRadian, LimbHide? limbs, bool close, bool icon = false, string? partMap = null)
+    static Prepared PrepareMesh(string path, int? boneCount, float lodScale, bool shadowLevels, float pixelsPerRadian, LimbHide? limbs, bool close, bool icon = false, string? partMap = null, bool worn = false)
     {
         var messages = new List<string>();
         try
@@ -294,7 +296,8 @@ internal sealed class CharacterContent : IDisposable
             if (MeshWeld.Enabled) OgreMeshWeld.Apply(mesh);
             var model = Model.Build(mesh, boneCount, gameBinormals: !icon, tangentSign: icon);
             var morphs = MeshMorphs.From(mesh, model, messages, Path.GetFileName(path));
-            if (limbs is not null || partMap is not null) MarkBody(model, limbs, partMap is null ? null : PartMapImage(partMap, messages));
+            if (worn) { if (limbs is not null) MarkWorn(model, limbs); }
+            else if (limbs is not null || partMap is not null) MarkBody(model, limbs, partMap is null ? null : PartMapImage(partMap, messages));
             // Not an icon's: its colour is the mesh's own vertex colour (CharacterShaders.VertexColoured), and icons take no skin.
             if (!icon) MarkCurvature(model);
             foreach (var w in model.Warnings) messages.Add($"{Path.GetFileName(path)}: {w}");
@@ -337,11 +340,11 @@ internal sealed class CharacterContent : IDisposable
     }
 
     /// <summary>A mesh by file, uploaded the first time: prepared here unless a worker has done it (<see cref="Fetched"/>), or after waiting for the worker preparing it.</summary>
-    LoadedMesh? Mesh(string path, int? boneCount, float lodScale = 1, bool shadowLevels = false, LimbHide? limbs = null, bool close = false, bool icon = false, string? partMap = null)
+    LoadedMesh? Mesh(string path, int? boneCount, float lodScale = 1, bool shadowLevels = false, LimbHide? limbs = null, bool close = false, bool icon = false, string? partMap = null, bool worn = false)
     {
         var key = (path.ToLowerInvariant(), icon ? IconBones : boneCount ?? -1, close, partMap?.ToLowerInvariant());
         if (meshes.TryGetValue(key, out var cached)) return cached;
-        var (ready, messages) = Prepare(path, boneCount, lodScale, shadowLevels, LodPixelsPerRadian, limbs, close, icon, partMap).Value;
+        var (ready, messages) = Prepare(path, boneCount, lodScale, shadowLevels, LodPixelsPerRadian, limbs, close, icon, partMap, worn).Value;
         prepared[key] = new Lazy<Prepared>(Uploaded);
         Messages.AddRange(messages);
         return meshes[key] = ready is null ? null : Upload(ready);
@@ -483,8 +486,9 @@ internal sealed class CharacterContent : IDisposable
             try
             {
                 if (BodySkeletonName(bodyPath) is not { } name || Rig(name) is not { } rig) return true;
-                _ = Prepare(bodyPath, rig.BoneCount, 1, true, pixels, LimbHideOf(c, rig), close, partMap: partMap).Value;
-                foreach (var (path, shared, scale) in parts) _ = Prepare(path!, shared ? rig.BoneCount : null, scale, false, pixels, close: close).Value;
+                var limbs = LimbHideOf(c, rig);
+                _ = Prepare(bodyPath, rig.BoneCount, 1, true, pixels, limbs, close, partMap: partMap).Value;
+                foreach (var (path, shared, scale) in parts) _ = Prepare(path!, shared ? rig.BoneCount : null, scale, false, pixels, shared ? limbs : null, close, worn: shared).Value;
             }
             catch (Exception) { }   // a file that cannot be read: Build meets it again on the render thread and reports it
             finally { Interlocked.Decrement(ref fetchesRunning); }
@@ -589,6 +593,28 @@ internal sealed class CharacterContent : IDisposable
                     if (a > 0) bits |= PartBit(r << 16 | g << 8 | b) << 4;
                 }
                 v.Colour.Y = bits;
+            }
+    }
+
+    /// <summary>
+    /// A worn item skinned to the body's skeleton (clothing, armour, goggles in any slot): bit 14 (<see cref="HeadBit"/>) on the vertices of the head's bones, nothing else, so a
+    /// decapitation hides them with the head and the cut-off head carries them (the hat slot alone was dropped before, and a belt-slot item over the eyes stayed on the neck);
+    /// the mesh's own vertex colour no longer stands in the hide bits (a white vertex read as the left arm's).
+    /// </summary>
+    static void MarkWorn(Model model, LimbHide hide)
+    {
+        foreach (var part in model.Parts)
+            for (int i = 0; i < part.Vertices.Length; i++)
+            {
+                ref var v = ref part.Vertices[i];
+                int bone = -1;
+                float best = 0;
+                for (int k = 0; k < 4; k++)
+                {
+                    float w = v.Weights[k];
+                    if (w > best) { best = w; bone = (int)((v.Bones >> (8 * k)) & 0xFF); }
+                }
+                v.Colour.Y = (uint)bone < (uint)hide.LimbOfBone.Length && hide.LimbOfBone[bone] == HeadLimb ? HeadBit : 0;
             }
     }
 
@@ -757,13 +783,14 @@ internal sealed class CharacterContent : IDisposable
                 Label = $"neck cap {Path.GetFileName(bodyPath)}", Mesh = cap.Gpu, Shared = true, Material = WoundMaterial(c),
                 BoundsCentre = cap.Centre, BoundsRadius = cap.Radius, Morphed = asset.MorphBase != 0,
             });
+        var partLimbs = LimbHideOf(c, rig);
         foreach (var part in c.Parts)
         {
             var path = FindMesh(part.Mesh);
             if (path is null) continue;
             bool shared = part.Mode == AttachMode.SharedSkeleton;
             // An animal's fur is a shell over the whole body (5.5k triangles on the bonedog, more than its body), not a few hair cards: it takes the rule's own distances.
-            var loaded = Mesh(path, shared ? rig.BoneCount : null, PartLodScale(c, part), close: close);
+            var loaded = Mesh(path, shared ? rig.BoneCount : null, PartLodScale(c, part), limbs: shared ? partLimbs : null, close: close, worn: shared);
             if (loaded is null || loaded.Gpu.Parts.Count == 0) continue;
             var ap = new AssetPart
             {
@@ -778,6 +805,7 @@ internal sealed class CharacterContent : IDisposable
                 int bone = point is null ? -1 : rig.Handle(point.Bone) ?? -1;
                 if (bone < 0) bone = rig.Skeleton.Bones.FirstOrDefault(b => b.Parent is null)?.Handle ?? 0;
                 ap.Bone = bone;
+                ap.OnHead = partLimbs is not null && (uint)bone < (uint)partLimbs.LimbOfBone.Length && partLimbs.LimbOfBone[bone] == HeadLimb;
                 if (point is not null) ap.Offset = Matrix4x4.CreateFromQuaternion(point.Rotation) * Matrix4x4.CreateTranslation(point.Position + part.PointOffset);
                 if (part.Local is { } local) ap.Offset = local * ap.Offset;
                 ap.AttachIndex = asset.AttachCount++;
