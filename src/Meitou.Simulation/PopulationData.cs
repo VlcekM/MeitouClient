@@ -44,7 +44,7 @@ public sealed class GeneratedAppearances(GameDatabase db, string installRoot) : 
                 return animals.GetOrAdd(recordId, static (_, s) =>
                 {
                     try { return CharacterAppearance.BuildAnimal(s.db, s.installRoot, s.animal); }
-                    catch (KeyNotFoundException) { return null; }
+                    catch (KeyNotFoundException e) { Console.Error.WriteLine($"warning   no appearance for {s.animal.StringId}: {e.Message}"); return null; }
                 }, (db, installRoot, animal));
             return CharacterAppearance.Build(db, installRoot, recordId, new CharacterOptions { Seed = seed, Faction = factionId, RaceOverride = templateId is null ? null : db.Find(templateId)?.GetReferences("race override") });
         }

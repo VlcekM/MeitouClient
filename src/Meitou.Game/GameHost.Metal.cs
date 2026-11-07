@@ -408,7 +408,7 @@ sealed partial class GameHost
         var tour = new SquadTour();
         bool tourHolds = false, tourFollows = false;
         Vector3? TourPosition(CharacterId id) =>
-            session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == id) is { } c ? DrawnPosition(c) : null;
+            session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == id) is { } c ? TrackedPosition(c) : null;
         void EndTour()
         {
             tour.Stop();

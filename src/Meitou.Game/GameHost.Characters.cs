@@ -86,6 +86,25 @@ sealed partial class GameHost
         return at + (c.Carry is { } carry ? MixCarry(before?.Carry, carry, session.SimulationAlpha).World(Vector3.Zero, c.Yaw).Position : Vector3.Zero);
     }
 
+    /// <summary>
+    /// The character the camera tracks for <paramref name="c"/>: a carried body is tracked by its carrier's place, however deep the chain (the original's position getter
+    /// <c>FUN_1405ce680</c> answers the carrier's position for a carried character, docs/formats/camera.md "Focus and tracking"); anyone else is tracked as itself.
+    /// </summary>
+    CharacterSnapshot Tracked(CharacterSnapshot c)
+    {
+        for (int depth = 0; depth < 8 && !c.CarriedBy.IsNone; depth++)
+        {
+            CharacterSnapshot? carrier = null;
+            foreach (var k in session.CurrentSnapshot.Characters) if (k.Id == c.CarriedBy) { carrier = k; break; }
+            if (carrier is null) break;
+            c = carrier;
+        }
+        return c;
+    }
+
+    /// <summary>Where the camera looks for <paramref name="c"/>: <see cref="Tracked"/>'s drawn position, with no carry offset (a carried body is looked at where its carrier stands).</summary>
+    Vector3 TrackedPosition(CharacterSnapshot c) => DrawnPosition(Tracked(c));
+
     /// <summary>The drawn facing of <paramref name="body"/>'s carrier between the last two snapshots (<paramref name="fallback"/> without it).</summary>
     float CarrierYaw(WorldSnapshot now, CharacterSnapshot body, float fallback, float alpha)
     {

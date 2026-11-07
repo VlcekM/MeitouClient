@@ -51,6 +51,7 @@ Authority: `src/Meitou.Game/GameOptions.cs` (`Split`, `Usage`), `src/Meitou.Game
 | `--sandbox-character <name>` | CHARACTER or ANIMAL_CHARACTER name or id | first member of the default start | Character the sandbox spawns. |
 | `--sandbox-mode <list>` | walk, run, free, a speed in u/s, patrol, fight (comma list) | none (idle) | The sandbox hero's start state, e.g. `run,patrol`. |
 | `--sandbox-races` | | off | Adds one character of every person race in rings round the pair. |
+| `--sandbox-animals` | | off | Adds one animal of every race the ANIMAL_CHARACTER records use (the first record of each). |
 | `--terrain-sandbox [cliffs] [x,z]` | | flattest spot (38376,-8280); cliffs spot (92164,123124) | Empty world on a field of ground-texture tiles; `cliffs` uses cliff textures on a steep face. |
 | `--duel [x,z]` | | dune crest | Looping two-Samurai duel at sunset, on rails. Time held at 22:00 and weather clear unless `--time` or `--weather` is given. |
 | `--battle <n> <unit> <m> <unit> [rows]` | counts of 1 or more; CHARACTER or ANIMAL_CHARACTER name or id | rows of 25 | Two NPC blocks fight, facing each other. Excludes `--new-game`, `--load`, `--no-population`, `--duel`, `--sandbox`. Backspace restarts. |

@@ -17,9 +17,10 @@ namespace Meitou.Simulation;
 /// </summary>
 sealed class CharacterAssembly(PopulationData data)
 {
-    /// <summary>The id of the race a CHARACTER record names: its first <c>race</c> reference with a positive count; null when it has none.</summary>
+    /// <summary>The id of the race a CHARACTER record names: its first <c>race</c> reference with a positive count; null when it has none. An ANIMAL_CHARACTER: <see cref="CharacterAppearance.AnimalRaceId"/>.</summary>
     public static string? RaceId(GameRecord record)
     {
+        if (record.Type == FcsRecordType.ANIMAL_CHARACTER) return CharacterAppearance.AnimalRaceId(record);
         foreach (var r in record.GetReferences("race"))
             if (r.Values.Value0 > 0) return r.TargetStringId;
         return null;
