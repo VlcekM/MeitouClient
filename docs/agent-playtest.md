@@ -92,6 +92,8 @@ c help                                # one usage line per command; `c help <nam
 | `interior-debug` | `interior-debug <cover|shadow> <on|off>` (interior lighting debug switches; cover: the room-grid focus ignores surfaces above the viewed floor; shadow: shadow passes leave out what the view hides) |
 | `interior-view` | `interior-view <floor 0..3 | off>` (holds the interior view of the building over the camera target at a floor with no character inside; `state` lists it under `interior`) |
 | `kill` | `kill [--id <c:slot.gen>] \| kill --radius <m> [<x> <z>] [--animals]` |
+| `weather-sim` | `weather-sim <none|dust|acid|off>` (the weather the simulation reads everywhere; the sky keeps its own) |
+| `flies` | `flies` (each dead character: flies, effect shown, the weather there) |
 | `ko` | `ko [seconds] [--id <c:slot.gen>]` |
 | `layouts` | `layouts <building record id or name> [exterior]` |
 | `loot` | `loot <id>` |

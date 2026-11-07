@@ -86,6 +86,13 @@ system <name>                      // top level; <name> is one word
 | `Kenshi_Ash-Flakes` | `Kenshi_Ash-Flakes_Light` (CAMERA) → `Ash-Flakes_Light` (120; wind affected; 0.25); `poison gas [White]` (WANDERING_GAS, 70) → `Poison_Gas_White` (extent 580, wind affected): not yet |
 | `Kenshi_Ash-Flakes_BLACK_and_Rising Steam` | `Kenshi_Ash-Flakes_BLACK` (CAMERA) → `Ash_Flakez_Black` (100); `Kenshi_Rising_Steam` (POINT) |
 
+### Affectors with a plugin rule (Verified: `Plugin_ParticleUniverse_x64.dll` 1.4, decompile of the `_affect`, `_preProcessParticles`, `ParticleTechnique::_processMotion` and constructors)
+
+- **Direction and scale velocity.** A particle's `direction` holds the emitted velocity unscaled. The motion step moves it by `scale_velocity x direction x dt` (`_processMotion`); the affectors below add to the direction. Meitou stores the moved velocity (emission already x `scale_velocity`), so a direction change takes the factor too.
+- **Gravity**: with `d` the vector from the particle to the affector's place (position x system scale), the direction gains `d x (scale_velocity x gravity x particle mass x mass_affector / |d|^2) x dt`, nothing at `d` = 0. The particle mass is the emitter's `mass` (default 1), `mass_affector` defaults to 1. The pull as a velocity is `scale_velocity^2 x gravity x mass x mass_affector / |d|` a second: bounded orbits (the fly system's flies stay within a few units: median 6, 90th percentile 17 of a corpse, probe of `Fly-particle` over 10 s).
+- **Randomiser**: an update with the time since the last kick above `time_step` (every update at 0) adds, per particle, a uniform value of up to `max_deviation` per axis to the DIRECTION (`random_direction`, default true; no script sets it), not scaled by anything but the scale velocity. With `random_direction` false the position moves by it x the system scale instead. One kick per update, so the walk depends on the update rate; Meitou keeps the variance of a 60 Hz run (engine choice: x sqrt(dt x 60)).
+- **Vortex**: once per update the angle is `rotation_speed` (radians a second, read at the system's age, a `dyn_random` drawn anew each update) x dt about the axis; every particle's place about the affector's position, and its velocity, turn by it.
+
 ## Expression reference
 
 - Curves: `range = last x − first x`; `u = min(x / range, 1)`
@@ -100,13 +107,14 @@ Evidence scopes below apply only to their named sources/checks.
 - Curves (Verified: Plugin_ParticleUniverse_x64.dll `DynamicAttributeCurved::getValue` / `processControlPoints`, disassembly; OgreMain `SimpleSpline::interpolate`, `recalcTangents`)
 - Survey of the 93 scripts (Verified: `meitou-tools particles`)
 - Materials (Verified: `data/particles/materials`, `materials/forward/basic.program`, `basic.hlsl`)
+- Affector rules (Verified: the plugin's Gravity, Randomiser, Vortex and the motion step, decompiled)
 - Weather changes (`WeatherGroups`, Observed: a viewer choice)
 - What a weather gives (Verified: `meitou-tools particles effects`, merged base records)
 
 ## Unknown
 
 - The plugin's defaults other than the Verified quota500 (assumed: size100, box100, velocity100, rate10, life3); the oscillation
-  formula and phase unit, Circle (ring or disc), the Randomiser, Vortex, Gravity, SineForce rules, the unit
+  formula and phase unit, Circle (ring or disc), the SineForce rules, the unit
   of the rotation values; `oriented_shape`; mass.
 - How `sky colour multiplier` tints the particles; the group's fade-in and -out times; how often a camera group is renewed.
 - Whether the system node is nudged by the small term in `FUN_140101800` (a distance squared along the pivot-to-camera direction; not
