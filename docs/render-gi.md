@@ -92,8 +92,8 @@ interior). Upsampling rejects the other class so the gain cannot bleed onto outd
 
 ## Hybrid GI
 
-`gihybrid` (Meitou switch, **off by default**, Graphics > Lighting > Hybrid GI). `--gi-hybrid <relocate,clouds,near>` turns it on with
-the listed parts only. Vulkan only. Relocation and clouds: look and cost **Unknown**; the near field: below.
+`gihybrid` (Meitou switch, **off by default**, Graphics > Lighting > Hybrid GI). `--gi-hybrid <relocate,clouds,cache>` turns it on with
+the listed parts only. Vulkan only. Relocation and clouds: look and cost **Unknown**; the radiance cache: below.
 
 **Probe relocation** (`relocate`; RTXGI's rule, `GiShaders.ProbeRelocate`, needs the resolve). Offsets stay in world units per atlas
 tile, in `offsets`; relocation reads the frame's rays before the blend. Over a quarter back faces: through the closest back face, half the
@@ -110,32 +110,34 @@ The per-fragment path (`--gi-resolve 0`) and the gi-reflection bench do not read
 **Cloud shadows** (`clouds`). The sun at a probe's hit takes `atmoCloudShadow`, the lit fragments' own function, so shaded land stops bouncing sunlight
 and probe light follows the clouds at the hysteresis' pace. The sky seen by a miss is not dimmed. Shafts: [render-shafts](render-shafts.md).
 
-**Near field** (`near`; `GiNearField`, `GiNearShaders`, needs the resolve). The texels of the resolve's low target (same pixel of each block) trace `RaysPerTexel` 4 cosine rays a frame (consecutive points of the texel's R2 sequence),
-`Reach` 150 long, about a near probe cell, out to `Range` 4000 from the eye. A front or foliage hit is shaded as a probe ray's (`GiShaders.HitShade`: the same textures, sun ray, lamps, probes for the
-next bounce). A miss reads the probes at the ray's end with the ray's direction as the normal (the cosine-weighted light from that way, visibility tested): the
-radiance cache. A back face means the ray started inside a drawn level the trace does not have, so it reads the cache rather than black. One sample is clamped per channel to 16
-(KenshiNative's firefly clamp). The lobe and filters use the flat normal from the depth (KenshiNative: bumps are noise to both); the resolve keeps the shading normal for its sky term.
-Accumulation: each texel reprojected into last frame's surface image by the camera alone (only still surfaces write the surface target; characters do not, so no
-motion vectors are needed), four bilinear texels held by the edge weight, at most `MaxSamples` 8 (the lag in frames); no history on a cut (2000 units, a skipped frame, a
-screenshot tile). With none of the four on this surface (just uncovered: a character or a thin object stood in front), or the point up to 16 texels off last frame's
-picture (a turning camera's entering edge; rings round the nearest edge texel), the same surface's history on rings of 8 texels at 2, 4, 8 and 16 (weight edge × 1/r,
-tolerance × r), its count capped at `MaxSamples`/2; the field does not trace characters, so the light behind one is its surroundings'.
-Halving the count per fill instead decays it along a trail uncovered frame after frame. A fast mean (`FastSamples` 4) is kept beside the long one; a clamp pass holds the long
-mean within `ClampSigma` 1.5 standard deviations of the fast means' 3x3 neighbourhood on the same surface (YCoCg; ReBLUR's fast-history clamp), and that is the history reprojected next.
-Filter: a-trous 3x3, spreads 1, 2, 4, with KenshiNative's edge weight (tangent plane in texel widths, normal power 16); each tap's light weighted by its sample count, the counts
-filtered alongside (unweighted); the wide iteration also takes `exp(-16 |near share difference|)` (hits within `GuideReach`), its answer to the wide filter flattening shade under awnings.
-The resolve then takes the result over the probes' light by its alpha (the filtered count / 4, fading over the last quarter of `Range`); indoor gain and haze stay the resolve's.
-Port of KenshiNative's filter ideas; the history is Meitou's (KN has none). Characters and grass are not traced and keep their in-shader probes.
-**Observed** (Hub, new game, 1280x720, orbit 1.5 degrees a frame; a debug view of the alpha): before the fill a band about 40 low texels wide trailing a character had
-counts under 5 and alpha under 1, so the probes' (brighter, no contact shade) light showed there: the halo; the same at the picture's entering edges. With the fill,
-alpha is 1 there and the band is gone from the motion-minus-settled difference. A sun jump (14:00 to 17:30): the clamp lowered the error against the settled picture by about 3 % over the next 8 frames (most of the lag is the probes').
-Rays against history (720p, no upscaler; mean / 99th percentile of |orbiting - settled| in 8-bit levels; still frame-to-frame flicker mean / 99.9th; `gi near` ms):
-1 ray x 16 frames 1.05 / 4.0, flicker 0.080 / 4.3, 0.16; 2 x 8 0.94 / 3.7, 0.087 / 4.3, 0.23; **4 x 8** 0.93 / 3.3, 0.056 / 3.0, 0.34; 4 x 4 0.88 / 3.3, 0.101 / 4.3;
-8 x 4 0.87 / 3.3, 0.073 / 4.0, 0.60. Probes only: 0.94 / 3.0, flicker 0.000; the field before these changes 1.20 / 5.3. **Observed** cost at 2560x1440, DLSS Quality
-(low target 854x480, quiet GPU; beside other GPU work the numbers varied 2-5x): `gi near` 0.18 ms before, 0.60 ms with 4 rays (0.23 ms with 1 ray x 16).
-**Unknown:** whether the probes' level and the field's agree over open ground; why shade under a table (field share 1) still reads lighter while orbiting than settled; a 1-texel-wide object (a table's leg) can find no texel of its own surface to fill from
-and shows some probe light under motion; the flat normal at silhouettes. An upscaler's jitter is not taken out of the reconstruction (taking it out changed
-held-frame flicker under DLSS by nothing measurable).
+**Radiance cache** (`cache`; `GiCache`, `GiCacheShaders`, needs the resolve). World-space cells in a hash table (`Capacity` 2^18 slots, a key in one of 8
+consecutive ones; 152 bytes a slot, about 40 MB), keyed by the cell (position / size, floored), its level and the axis nearest the surface's normal (six, interiors apart).
+Size `FinestCell` 4 units, doubled per level so a cell keeps about 1/`CellsPerHeight` (96) of the view's height at its eye distance (the whole view's angle, so screenshot
+tiles agree); the next coarser level blends in over the top 40 % of each level's distances, the second-nearest axis within 0.2 of the diagonal. Out to `Range` 4000.
+Per frame (`gi cache`): **evict** slots no texel touched for 600 frames (120 past half full, 30 past 5/8); **touch**: each low texel of the resolve (same pixel and flat
+normal from the depth as before) makes its cells (two levels x two axes at most) and adds its position and normal into their sums (12-bit fixed point within the cell),
+listing each cell once; **trace**: one workgroup per listed cell, `RaysPerCell` 32 cosine rays from its surface point (the texels' mean, averaged over up to 64 frames),
+`Reach` 150, shaded as a probe ray's (`GiShaders.HitShade`; a miss reads the probes at the ray's end in its direction, a back face the probes where it started; clamp 16
+a channel). Each frame traces one of `Ring` 16 direction subsets (a Fibonacci lattice shifted by the subset's R2 point and a per-cell random shift); its mean replaces
+that subset's slot (E5B9G9R9 word) and the cell's light is the mean of the subsets it holds. A still scene's cell therefore holds a fixed set of 512 rays and does not
+change; a change of light is followed linearly over 16 frames; a new cell traces `FirstSubsets` 4 subsets at once. **gather**: per low texel, per level and axis, the 8
+cells whose centres surround it, weighted trilinearly x exp(-|tangent-plane distance of the cell's point| / half a cell) x facing^8 x subsets held; alpha = the
+subsets' share x 4 (full from 4), x the found weight over `MatchFloor` 0.25 of the found cells' trilinear weight (cells only on another plane or facing away leave the
+texel to the probes; at 0.05 the cache took the cloth and stalls' edges and a still picture changed more, 0.052), fading over the last quarter of `Range`. The resolve takes it over the probes' light by alpha, as before (indoor gain, haze unchanged).
+No screen-space history: a surface uncovered by a character or turned back into view finds its cells as they were (kept while untouched); only never-seen surfaces start
+new cells. The cache does not trace characters (`GiMask`), so they leave no trail in it; characters and grass keep their in-shader probes.
+**Observed** (8-bit mean |difference| with 99th percentile; 1280x720, no upscaler; probes only / the former screen-space near field / the cache).
+Hub (new game, 14:00, still camera after 600 frames, 15 frame pairs): frame-to-frame 0.059 / 0.093 / 0.044, the cache with its trace frozen 0.044 (the rest is the
+scene's own motion); pixels changing where the probes-only picture does not: 11.2 % for the near field, 1.0 % for the cache. Orbit 1.5 deg/frame, frame 24 against the
+settled picture: 0.96 / 3.3, 0.96 / 4.0 (a bright band trailing the character), 0.95 / 3.0 (none). A character running past: 2.45, 2.49, 2.51 (rows below the horizon;
+the character's own pose dominates). User saves: `siwa-test6` orbit 0.5 deg/frame 1.09 / 3.0, 0.77 / 2.0, 0.78 / 2.0; `gi-flicker` (night, lamps) still 0.025, 0.012,
+0.012 (the probes alone drift in the dark); `gi-fireflies` (night, water): the isolated bright pixels are the same count with all three (and with the GI off: not the GI's).
+Sun jump 14:00 to 17:30: within 0.2 of the near field's error each frame (most of the lag is the probes'). With DLSS (1600x900) the orbit error is the upscaler's (2.3-2.5 for
+all three). About 20,000 cells listed a frame and 47,000 held after an orbit (Hub). Cost at 2560x1440, DLSS Quality (low target 854x480), quiet GPU: `gi cache`
+0.36-0.37 ms, `gi near` 0.55-0.57 ms. `interior` save (17:14, rain): the room's surfaces read the game's ambient (the GI is below it, Indoor GI's floor), the same with all
+three; `gi-grain`: still 0.115 / 0.132 / 0.104, pixels changing beyond the probes' 7.0 % / 0.9 %.
+**Unknown:** an interior lit above the ambient floor (the `gi-interior2` save renders black offscreen at night); the flat normal at silhouettes and dune crests (thin lines there keep part of the probes' light, alpha 0.3-1); thin surfaces sharing a coarse cell with the floor
+beside them (the plane weight keeps other cells off, not the cell's own mean point).
 ## Reflections
 
 `ssr` Enhancement, off by default, Vulkan only; `Gi/SsrShaders.cs`, `GiShaders.Reflect`, `PostProcess.Reflections.cs`. Replaces the sky cubemap's

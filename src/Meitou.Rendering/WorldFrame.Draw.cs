@@ -108,7 +108,7 @@ static partial class WorldFrame
         {
             giPost.GiResolve = giResolve ? gpu.GiResolve : 0;
             giPost.SsrSurfaces = reflections;
-            giPost.GiNear = giResolve && post.Options.GiNearFielding ? gpu.GiNear : null;
+            giPost.GiCache = giResolve && post.Options.GiCaching ? gpu.GiCache : null;
         }
         if (gpu.Probes is { } giProbes)
         {

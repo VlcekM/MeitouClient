@@ -94,7 +94,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     readonly CloudMotionPass cloudMotionPass;
     readonly TaaPass taaPass;
     readonly FogPass fogPass;
-    readonly GiResolvePass?[] giResolvePasses = new GiResolvePass?[4];   // made the first time the GI resolve runs, by gihybrid's parts: bit 0 relocated probes, bit 1 the near field
+    readonly GiResolvePass?[] giResolvePasses = new GiResolvePass?[4];   // made the first time the GI resolve runs, by gihybrid's parts: bit 0 relocated probes, bit 1 the radiance cache
     GiApplyPass? giApplyPass;
     readonly ParticleDepthPass particleDepthPass;
     readonly ParticleSoftDepthPass particleSoftDepthPass;
@@ -306,9 +306,9 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
 
     sealed class GiResolvePass : GiPass
     {
-        public readonly SamplerSlot Near;
-        public GiResolvePass(GpuContext gpu, bool relocate, bool near) : base(gpu, Gi.GiResolveShaders.ResolveFor(relocate, near), "post gi resolve") =>
-            Near = near ? P.Sampler("uGiNear") : default;
+        public readonly SamplerSlot Cache;
+        public GiResolvePass(GpuContext gpu, bool relocate, bool cache) : base(gpu, Gi.GiResolveShaders.ResolveFor(relocate, cache), "post gi resolve") =>
+            Cache = cache ? P.Sampler("uGiCache") : default;
     }
 
     sealed class GiApplyPass : GiPass
@@ -1083,19 +1083,19 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
 
     GpuTexture? GiAlbedoTarget => GiResolve > 0 || SsrSurfaces ? giAlbedo?.Texture : null;
 
-    /// <summary>The near field to run before the resolve, set before <see cref="RunGiResolve"/>'s frame by the frame (null: none; the <c>gihybrid</c> switch's <c>near</c> part).</summary>
-    internal Gi.GiNearField? GiNear { get; set; }
+    /// <summary>The radiance cache to run before the resolve, set before <see cref="RunGiResolve"/>'s frame by the frame (null: none; the <c>gihybrid</c> switch's <c>cache</c> part).</summary>
+    internal Gi.GiCache? GiCache { get; set; }
 
-    /// <summary>The near field for this frame's resolve, its output or null. It needs the scene's targets closed, so the open segment ends first.</summary>
-    GpuTexture? RunGiNear()
+    /// <summary>The radiance cache for this frame's resolve, its output or null. It needs the scene's targets closed, so the open segment ends first.</summary>
+    GpuTexture? RunGiCache()
     {
-        if (GiNear is not { } field) return null;
+        if (GiCache is not { } cache) return null;
         CloseSegment();
         float tanY = MathF.Tan(fovNow * 0.5f);
         var rot = viewRotation;
-        var view = new Gi.GiNearField.View(eyeNow, new Vector3(rot.M11, rot.M21, rot.M31), new Vector3(rot.M12, rot.M22, rot.M32), ViewWindow.BackFor(rot, fovNow, aspectNow),
-            ViewWindow.Tan(tanY * aspectNow, tanY), planes, giLow!.Width, giLow.Height, giDivisor, width, height, ViewWindow.Current.IsWhole);
-        return field.Run(sceneDepth!.Texture, giAlbedo!.Texture, view, Options.GiRelocating, Options.GiCloudShadowing);
+        var view = new Gi.GiCache.View(eyeNow, new Vector3(rot.M11, rot.M21, rot.M31), new Vector3(rot.M12, rot.M22, rot.M32), ViewWindow.BackFor(rot, fovNow, aspectNow),
+            ViewWindow.Tan(tanY * aspectNow, tanY), planes, giLow!.Width, giLow.Height, giDivisor, width, height, tanY);
+        return cache.Run(sceneDepth!.Texture, giAlbedo!.Texture, view, Options.GiRelocating, Options.GiCloudShadowing);
     }
 
     /// <summary>Makes the albedo and low targets for <see cref="GiResolve"/> (again when its divisor or the render size changed).</summary>
@@ -1121,14 +1121,14 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     {
         if (GiResolve <= 0 || giAlbedo is null || giLow is null || sceneColour is null || !haveScene) return;
         MarkScene();
-        var near = RunGiNear();
-        if (near is not null) Stamp("gi near");
+        var cache = RunGiCache();
+        if (cache is not null) Stamp("gi cache");
         bool relocate = Options.GiRelocating;
-        var r = giResolvePasses[(relocate ? 1 : 0) | (near is null ? 0 : 2)] ??= new GiResolvePass(Gpu, relocate, near is not null);
+        var r = giResolvePasses[(relocate ? 1 : 0) | (cache is null ? 0 : 2)] ??= new GiResolvePass(Gpu, relocate, cache is not null);
         var a = giApplyPass ??= new GiApplyPass(Gpu);
         foreach (var g in (ReadOnlySpan<GiPass>)[r, a]) SetGiView(g);
         r.P.ApplyGlobals();   // the atmosphere's and the probes' uniforms, through the frame globals
-        if (near is not null) r.P.Bind(r.Near, new SampledTexture(Point(), near.View()));
+        if (cache is not null) r.P.Bind(r.Cache, new SampledTexture(Point(), cache.View()));
         Draw(r.P, giLow);
         Bind(a.P, a.Low, giLow);
         a.P.Set(a.LowSize, (float)giLow.Width, (float)giLow.Height);
